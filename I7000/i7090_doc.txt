@@ -1,0 +1,589 @@
+To:     Users
+From:   Richard Cornwell
+Subj:   IBM 7090 Simulator Usage
+Date:   01-Dec-2005
+
+                        COPYRIGHT NOTICE
+
+The following copyright notice applies to both the SIMH source and binary:
+
+   Original code published in 1993-2005, written by Robert M Supnik
+   Copyright (c) 1993-20054, Robert M Supnik
+   IBM 7090 simulator written by Richard Cornwell
+
+   Permission is hereby granted, free of charge, to any person obtaining a
+   copy of this software and associated documentation files (the "Software"),
+   to deal in the Software without restriction, including without limitation
+   the rights to use, copy, modify, merge, publish, distribute, sublicense,
+   and/or sell copies of the Software, and to permit persons to whom the
+   Software is furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included in
+   all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+   ROBERT M SUPNIK OR RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR
+   OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+   ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+   DEALINGS IN THE SOFTWARE.
+
+   Except as contained in this notice, the name of Robert M Supnik or Richard
+   Cornwell shall not be used in advertising or otherwise to promote the sale,
+   use or other dealings in this Software without prior written authorization
+   from both Robert M Supnik and Richard Cornwell.
+
+This memorandum documents the IBM 7090 simulator.
+
+
+1. Simulator Files
+
+To compile the IBM 7090, you must define USE_INT64 as part of the compilation
+command line.
+
+sim/            scp.h
+                sim_console.h
+                sim_defs.h
+                sim_fio.h
+                sim_rev.h
+                sim_sock.h
+                sim_tape.h
+                sim_timer.h
+                sim_tmxr.h
+                scp.c
+                sim_console.c
+                sim_fio.c
+                sim_sock.c
+                sim_tape.c
+                sim_timer.c
+                sim_tmxr.c
+
+sim/i7090/      i7090_defs.h
+                i7090_cpu.c             CPU, channel, interface
+                i7090_chan.c
+                i7090_sys.c
+                i7090_cdr.c             7090 Specific peripherals
+                i7090_cdp.c
+                i7090_drum.c
+                i7090_lpr.c
+                i7090_hdrum.c           CTSS drum
+                i7000_defs.h            Generic 7000 peripherals
+                i7000_chan.c
+                i7000_chron.c
+                i7000_com.c
+                i7000_dsk.c
+                i7000_mt.c
+                i7000_ht.c
+
+
+2. IBM 7090 Features
+
+The IBM 7090 simulator is configured as follows:
+
+device          simulates
+name(s)
+
+CPU             7090 CPU with 32KW/64KW of memory
+CLK             interval timer (RPQ F89349) and Chronolog clock
+CH0*            704 devices.
+CH1             7607 channel (required)
+CH2..CH7        additional 7607, 7289, or 7909 channels
+MTA             729 magnetic tape controller, channel A (required)
+MTB             729 additional magnetic tape controllers, channels B
+MTC             729 additional magnetic tape controllers, channels C
+MT              729 additional magnetic tape controllers, 704 devices
+HTA             7340 hypertape controller.
+HTB             7340 additional hypertape controller.
+CRn             711 card reader
+CPn             721 card punch
+LPn             716 line printer
+DR0             733 drum
+HDn             7289 fast drum control
+DKn             1301/2302/7304 disk.
+COM             7750 communications control
+COML            7750 communications lines
+
+Channels B through H, the corresponding magnetic tape controllers, and
+the file control, drum control , and communications control are initially
+set DISABLED.  The file control, drum control, and communications control
+can be assigned to any channel in the range B through H.
+
+The 7090 simulator implements several unique stop condition:
+
+        - undefined CPU instruction
+        - undefined channel instruction
+        - XEC nesting exceeds limit
+        - divide check on a divide and halt instruction
+        - select of a non-existent channel
+        - 7607 select of a 7909 channel
+        - write select of a write protected device
+        - invalid file control format
+        - invalid message to 7750
+        - no buffer storage available for input character on 7750
+        - no buffer storage available for output character on 7750
+
+The LOAD command will load a card binary image file into memory.
+
+2.1 CPU
+
+The CPU options include setting memory size and cpu type. Also the special
+features required for used by the CTSS project:
+
+        SET CPU STANDARD        Standard CPU
+        SET CPU CTSS            CTSS CPU
+
+        SET CPU 704             Sets cpu to emulate a 704
+        SET CPU 709             Sets cpu to emulate 709 instructions
+        SET CPU 7090            Sets cpu to emualte 7090.
+        SET CPU 7094            Sets cpu to emualte 7094.
+        SET CPU 4K              Sets memory to 4K
+        SET CPU 8K              Sets memory to 8K
+        SET CPU 16K             Sets memory to 16K
+        SET CPU 32K             Sets memory to 32K
+        SET CPU TRUEIO          CPU executes I/O in cpu time.
+        SET CPU FASTIO          CPU detects I/O waits and shortens them
+        SET CPU NOEFP           Disables extended presicion floating point.
+        SET CPU EFP             Enables extended presicion floating point.
+        SET CPU NOFPSM          Disables floating point signifigance mode.
+        SET CPU FPSM            Enables  floating point signifigance mode.
+        SET CPU TIMER           Enables interval timer and interupt.
+        SET CPU NOTIMER         Disables interval timer.
+
+Memory size is 32KW on a standard CPU, 64KW on a CTSS CPU. Set notes below
+on seting up for CTSS.
+
+CPU registers include the visible state of the processor as well as the
+control registers for the interrupt system.
+
+        name            size    comments
+
+        IC              15      program counter
+        AC              38      accumulator
+        MQ              36      multiplier-quotient
+        ID              36      storage indicators
+        KEYS            36      front panel keys
+        XR1..XR7        15      index registers 1..7
+        SW1..SW6        1       sense switches 1..6
+        SW              6       sense switches
+        SL1..4          1       sense lights 1..4
+        ACOVF           1       AC overflow indicator
+        MQOVF           1       MQ overflow indicator
+        DVC             1       divide check indicator
+        IOC             1       I/O check indicator
+        TM              1       transfer trap enable
+        CTM             1       copy trap enable
+        STM             1       select trap enable
+        FTM             1       floating point trap enable
+        NMODE           1       storage nullification mode enable
+        MTM             1       multiple-tag mode enable
+        ENB             36      contents of interrupt enable register
+        INST_BASE       1       (CTSS) instruction B-core flag
+        DATA_BASE       1       (CTSS) data B-core flag
+        BASE            14      (CTSS) relocation base block
+        LIMIT           14      (CTSS) address limit block
+
+The CPU can maintain a history of the most recently executed instructions.
+This is controlled by the SET CPU HISTORY and SHOW CPU HISTORY commands:
+
+        SET CPU HISTORY         clear history buffer
+        SET CPU HISTORY=0       disable history
+        SET CPU HISTORY=n       enable history, length = n
+        SHOW CPU HISTORY        print CPU history
+        SHOW CPU HISTORY=n      print first n entries of CPU history
+
+2.2 I/O Channels (CH0..CH8)
+
+The 7090 supports up to 8 channels.  Channel models include
+
+        7607            standard multiplexor channel
+        7289            high speed drum channel
+        7909            advanced capabilities channel
+
+Channel A is required and is always a 7607. Channel are represented by
+a number: A=1, B=2, C=3, D=4, E=5, F=6, G=7, H=8.
+
+        SET CHn 7607    Sets channel to be a 7607 type.
+        SET CHn 7909    Sets channel to be a 7909 type.
+        SET CHn 7289    Sets channel to be a 7289 type. (For CTSS Drum).
+
+        SET CHn FIXED   Fixes channel to specific type.
+        SET CHn AUTO    Defualt, channel configures based on devices on it.
+
+Generally there is no need to worry about channel configurations, in 
+auto mode they will configure to correct type to support devices attached
+to them. Or you will get an error when you attempt to run the simulation
+if there is a conflict.
+
+Channel 0 is a puesdo channel for 704 devices. Currently unit CR3, CP3, LP3,
+DR0, and MTD are set to this device.
+
+Channels have the following registers:
+
+        name       type         size    comments
+        ADDR       all          16      channel data address.
+        CMD        all           6      channel command. (S/1/2/3 & 18/19)
+        WC         all          15      channel word count.
+        ASM        all          36      current channel assembly register.
+        LOCATION   all          16      channel location counter.
+        STATUS     all          16      channel device status.
+        SENSE      7909         16      additional device controls.
+        COUNTER    7909          6      channel counter.
+        SMS        7909          7      channel SMS register.
+
+For meaning of bits in STATUS and SENSE see i7090_defs.h.
+
+2.3 Channel 7607 Devices and 704 devices.
+
+2.3.1 711 Card Reader (CR)
+
+The card reader (CR) reads data from a disk file.  Cards are simulated
+as ASCII lines with terminating newlines.  
+
+Card reader files can either be text (one character per column) or
+column binary (two characters per column).  The file type can be
+specified with a set command:
+
+        SET CRn FORMAT=TEXT     sets ascii text mode
+        SET CRn FORMAT=BINARY   sets for binary card images.
+        SET CRn FORMAT=BCD      sets for BCD records.
+        SET CRn FORMAT=CBN      sets for column binary BCD records.
+        SET CRn FORMAT=AUTO     Automaticly determines format.
+        SET CRn CHAN=n          Sets channel to n
+
+or in the ATTACH command:
+
+        ATT CRn <file>          attaches a file
+
+The card reader can be booted with the:
+
+        BOOT CRn                loads either the first 2 words or
+                                3 words depending on channel.
+
+Error handling is as follows:
+
+        error                   processed as
+
+        not attached            report error and stop
+
+        end of file             out of cards
+
+        OS I/O error            report error and stop
+
+2.3.2 721 Card Punch (CP)
+
+The card reader (CP) writes data to a disk file.  Cards are simulated
+as ASCII lines with terminating newlines. 
+
+Card punch files can either be text (one character per column) or
+column binary (two characters per column).  The file type can be
+specified with a set command:
+
+        SET CPn FORMAT=TEXT     sets ascii text mode
+        SET CPn FORMAT=BINARY   sets for binary card images.
+        SET CPn FORMAT=BCD      sets for BCD records.
+        SET CPn FORMAT=CBN      sets for column binary BCD records.
+        SET CPn FORMAT=AUTO     Automaticly determines format.
+        SET CPn CHAN=n          Sets channel to n
+
+or in the ATTACH command:
+
+        ATT CPn <file>          attaches a file
+
+Error handling is as follows:
+
+        error                   processed as
+
+        not attached            report error and stop
+
+        OS I/O error            report error and stop
+
+2.3.3 716 Line Printer (LP)
+
+The line printer (LP) writes data to a disk file as ASCII text with
+terminating newlines. Currently set to handle standard signals to 
+control paper advance.
+
+        SET LPn NO/ECHO         Sets echoing to console of lineprinter output.
+        SET LPn CHAN=n          sets channel for this device
+
+Error handling is as follows:
+
+        error                   processed as
+
+        not attached            report error and stop
+
+        OS I/O error            report error and stop
+
+The Printer supports the following SPRA n selection pulses for controlling
+spacing (spacing occurs before the line is printed):
+
+        SPRA    2               Single space.
+        SPRA    1               To top of form.
+        SPRA    3               Double space.
+        SPRA    4               Triple space.
+        SPRA    9               Suppress linefeed after print.
+
+        SPT                     Will skip if any printer line has been pulsed.
+
+        Defualt with no SPRA is to single space before printing.
+
+
+2.3.4 729 Magnetic Tape (MTA-D)
+
+These come in groups of 10 units each. The controller defines which channel
+the devices will be on.
+
+        SET MTx CHAN=n          Set magtape to channel n. x = A|B|C|<nothing>.
+
+Each individual tape drive support several options: MTA used as an example.
+
+        SET MTAn ONLINE         Sets the mag tape drive online.
+        SET MTAn OFFLINE        Sets the mag tape drive offline and not ready.
+        SET MTAn REWIND         Sets the mag tape to the load point.
+        SET MTAn LOCKED         Sets the mag tape to be read only.
+        SET MTAn WRITEENABLE    Sets the mag tape to be writeable.
+        SET MTAn LOW            Sets mag tape to low density.
+        SET MTAn HIGH           Sets mag tape to high density.
+
+Options: Density LOW/HIGH does not change format of how tapes are written. And
+is only for informational purposes only.
+
+Online/Offline is part of a optional RPQ for the 7090 which adds the DRS/TRS
+instructions.
+
+       DRS  drive         Will set drive to offline after current command is
+                          finished. Drive is not unloaded and can be reenabled
+                          by setting it online.
+       TRS  drive         Tests to see if the drive is online. If the drive
+                          is there and online it will skip the next instruction
+                          otherwise it takes the next instruction. 
+
+These instructions were put in since accessing a unloaded tape drive would
+hang the CPU.
+
+Tape drives can be booted with:
+        BOOT MTxn
+
+2.3.4 ChronoClock.
+
+Disabled by default. This is a special 729 tape drive which returns the 
+current time. It supports the option of setting the channel and drive
+that it will occupy. Note: You must disable the real 729 drive that is
+is replacing.
+
+        SET CHRON CHAN=n        Set channel for chrono clock.
+        SET CHRON UNIT=n        Sets the unit for the chrono clock.
+
+Example: To set Chronoclock to unit A9 do the following:
+
+        SET MTA9 DISABLE
+        SET CHRON UNIT=9 CHAN=A
+
+
+2.3.5 733 Drum (DR)
+
+This is the drum for 704/709 and possible 7090. Up to 16 units can
+be attached to the CPU, all are on puesdo channel 0. Each drum is
+2048K words in size. They are all stored in one file.
+
+       SET DR0 UNITS=n
+
+Drum unit 0 can be booted with:
+
+       BOOT DR0
+
+Drum unit can be assigned to a 7607 channel, but this is unsupported
+by the operating systems. Drum channel is changed with:
+
+       SET DR0 CHAN=n          where n is '*' or A-H. Channel '*' is
+                               the default which is the 704 psuedo channel.
+    
+
+2.4 7909 Devices
+
+These devices must be attached to a 7909 channel to work.
+
+2.4.1 1301/1302/2302/7320 Disk devices
+
+The 7631 file control supports up to ten devices, which can be 7320
+drums, 1301 disks, 1302 disks, or 2302 disks.  Unit types are specified
+with the SET command.  
+
+        SET DKn TYPE=7320       unit n is a drum 
+        SET DKn TYPE=7320-2     unit n is a drum (two modules).
+        SET DKn TYPE=1301       unit n is a 1301 disk 
+        SET DKn TYPE=130l-2     unit n is a 1301-2 disk (two modules).
+        SET DKn TYPE=1302       unit n is a 1302 disk 
+        SET DKn TYPE=1302-2     unit n is a 1302-2 disk (two modules).
+        SET DKn TYPE=2302       unit n is a 2302 disk 
+
+Units can be SET ENABLED or DISABLED.  In addition, units can be
+set to enable or disable formatting:
+
+        SET DKn FORMAT          enable formatting
+        SET DKn NOFORMAT        disable formatting
+        SET DKn HA2             enable writing of home address 2
+        SET DKn NOHA2           disable writing of home address 2
+        SET DKn MODULE=n        sets modules for unit, modules 
+                                can only be even. 0 to 8.
+        SET DKn CHAN=n          sets channel for unit (A-H).
+        SET DKn SELECT=n        sets select on channel (0 or 1).
+        SET DKn CTSS            sets disk to use CTSS bootstrap.
+        SET DKn IBSYS           sets disk to use IBSYS bootstrap.
+   
+Formatting is disabled by default.
+
+All Disk units support bootsrapping with boot command. Bootstrap code
+is build based on whether CPU is in CTSS mode or not.
+
+        BOOT DKn
+
+Error handling is as follows:
+
+        error                   processed as
+
+        not attached            report error and stop
+
+        OS I/O error            report error and stop
+
+2.4.2 Hypertape 7340 Tape drive (HTA/B)
+
+These come in groups of 10 units each. The controller defines which channel
+the devices will be on.
+
+        SET HTx CHAN=n          Set magtape to channel n. x = A|B.
+        SET HTx SELECT=n        Sets the selection mode for the channel.
+
+Each individual tape drive support several options: HTA used as an example.
+
+        SET MTAn LOCKED         Sets the mag tape to be read only.
+        SET MTAn WRITEENABLE    Sets the mag tape to be writeable.
+
+NOTE: Hypertape drives may not be working correctly since there is
+very little documentation available on them.
+
+Hypertape drives can be booted with:
+
+        BOOT    HTxn
+
+
+2.4.3 7750 Communications Controller (COM and COML)
+
+The 7750 is modelled as a terminal multiplexor with 33 lines.  It consists
+of two device: COM is the multiplexor controller, and COML is the indivdual
+lines. For the first 32 lines, the 7750 performs input and output through
+Telnet sessions connected via a user-specified listening port; the 33rd line
+is permanently attached to the simulator console window.  The ATTACH command
+specifies the port to be used for Telnet sessions:
+
+        ATTACH COM <port>       set up listening port
+
+where port is a decimal number between 1 and 65535 that is not being used
+for other TCP/IP activities.
+
+Each line (each unit of COML) can be set to one of twp modes: KSR-35 and
+KSR-37.  In KSR-35 mode, lower case input and output characters are converted
+automatically to upper case, and parity is ignored.  In KSR-37 mode, lower
+case characters are left alone, and even parity is generated on input.
+KSR-37 is the default.
+
+Once COM is attached and the simulator is running, the 7750 listens
+for connections on the specified port.  It assumes that any incoming
+connection is a Telnet connections.  The connections remain open until
+disconnected either by the Telnet client, a SET COM DISCONNECT command,
+or a DETACH COM command.
+
+The 7750 implements the following special SHOW commands
+
+        SHOW COM CONNECTIONS    displays current connections to the 7750
+        SHOW COM STATISTICS     displays statistics for active connections
+
+The 7750 implements the following special SET commands:
+
+        SET COM DISCONNECT=n    disconnect line n
+        SET COMLn LOG=filename  log output of line n to filename
+        SET COMLn NOLOG         disable logging and close log file
+        SET COMLn KSR35         set line n to KSR-35
+        SET COMLn KSR37         set line n to KSR-37
+        SET COMLn 2741          set line n to 2741
+        SET COM CHAN=n          set channel for com controller.
+
+The controller (COM) implements these registers:
+
+        name            size    comments
+
+        ENABLE          1       enable flag
+        STATE           6       controller state
+        MSGNUM          12      input message sequence number
+
+2.5 7289 High-Speed Drum (HD)
+
+The 7289 (also known as the 7320A) high-speed drum was a late
+addition to CTSS.  Very little is known about the device, other
+than what is used in the CTSS sources.
+
+The drum can be changed to different channels with the
+       SET HD0 CHAN=n         where n is A-H. The channel must be configured
+                              as a 7289 type channel. Otherwise the drum will
+                              not work.
+
+       SET HD0 UNITS=n        Sets the number of 256K drums on the unit.
+
+
+Error handling is as follows:
+
+        error                   processed as
+
+        not attached            report error and stop
+
+Drum data files are buffered in memory; therefore, end of file and OS
+I/O errors cannot occur.
+
+
+2.6 Symbolic Display and Input
+
+The IBM 7090 simulator implements symbolic display and input.  Display is
+controlled by command line switches:
+
+        -c                      display as BCD character
+        -m                      display instruction mnemonics
+        -l                      display as lisp pointer. 
+
+Input parsing is controlled by the first character typed in or by command
+line switches:
+
+        ' or -c                 BCD character
+        " or -s                 BCD string
+        alphabetic              instruction mnemonic
+        numeric                 octal number
+
+Instruction input uses standard 7090 assembler syntax.  There are two
+basic instruction classes: memory reference and index reference.
+
+Memory reference instructions have the format
+
+        memref{*} address{,tag}
+
+Index reference instructions have the format
+
+        idxref{*} address,{tag},decrement
+
+Specific instructions may disallow indirect addressing or limit the
+size of the tag, address, or decrement fields.
+
+Channel (I/O) instructions have the same basic two formats.
+
+2.7 Sim Load
+
+The load command looks at the extension of the file to determine how to
+load the file.
+
+        .crd                   Loads a card image file into memory.
+                               standard 709 format + 1 card loader.
+        .oct                   Loads an octal deck:
+                               address <blank> octal <blank> octal...
+        .sym                   Loads a 709 symbolic deck.
+                               address instruction.
+                               address BCD string
+                               address OCT octal, octal,....  

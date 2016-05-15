@@ -1,0 +1,441 @@
+To:     Users
+From:   Richard Cornwell
+Subj:   IBM 7070 Simulator Usage
+Date:   01-Dec-2006
+
+                        COPYRIGHT NOTICE
+
+The following copyright notice applies to both the SIMH source and binary:
+
+   Original code published in 1993-2007, written by Robert M Supnik
+   Copyright (c) 1993-2007, Robert M Supnik
+   IBM 7070 simulator written by Richard Cornwell
+
+   Permission is hereby granted, free of charge, to any person obtaining a
+   copy of this software and associated documentation files (the "Software"),
+   to deal in the Software without restriction, including without limitation
+   the rights to use, copy, modify, merge, publish, distribute, sublicense,
+   and/or sell copies of the Software, and to permit persons to whom the
+   Software is furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included in
+   all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+   ROBERT M SUPNIK OR RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR
+   OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+   ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+   DEALINGS IN THE SOFTWARE.
+
+   Except as contained in this notice, the name of Robert M Supnik or Richard
+   Cornwell shall not be used in advertising or otherwise to promote the sale,
+   use or other dealings in this Software without prior written authorization
+   from both Robert M Supnik and Richard Cornwell.
+
+This memorandum documents the IBM 7070 simulator.
+
+   The IBM 7070 was introduced in June 1960, as a replacement to the IBM 650.
+   It had core memory up to 10,000 10 digit words.
+   The 7072 was introduced November 1962 and the 7074 on November 1961.
+   The 7074 is a faster version of the 7070 with the addition of memory up
+   to 40,000 10 digit words. The first 100 memory locations can be used as
+   index registers. Most memory reference instructions allow for a field
+   of digits to be selected to operate on and not modify the rest.
+
+   The 7070 is a decimal machine with each word consisting of 10 digits
+   plus a sign. The sign can be plus, minus or alpha. Alpha data is stored
+   5 characters to a word (2 digits per character).
+                                                             
+
+1. Simulator Files
+
+To compile the IBM 7070, you must define USE_INT64 as part of the compilation
+command line.
+
+sim/            scp.h
+                sim_console.h
+                sim_defs.h
+                sim_fio.h
+                sim_rev.h
+                sim_sock.h
+                sim_tape.h
+                sim_timer.h
+                sim_tmxr.h
+                scp.c
+                sim_console.c
+                sim_fio.c
+                sim_sock.c
+                sim_tape.c
+                sim_timer.c
+                sim_tmxr.c
+
+sim/i7090/      i7070_defs.h
+                i7070_cpu.c             7070 CPU, Channel, interface
+                i7070_chan.c
+                i7070_sys.c
+                i7000_defs.h            Generic 7000 peripherals
+                i7000_chan.c
+                i7000_chron.c
+                i7000_com.c
+                i7000_dsk.c
+                i7000_ht.c
+                i7000_mt.c
+                i7000_urec.c
+
+2. IBM 7070 Features
+
+The IBM 7070 simulator is configured as follows:
+
+device          simulates
+name(s)
+
+CPU             7070 CPU with up to 30K of memory
+CH0*            Unit record devices.
+CH1..CH4        7604 tape channels.
+CH5..CH7        7907 channels
+MTA             729 magnetic tape controller, channel A (required)
+MTB             729 additional magnetic tape controllers, channels B
+MTC             729 additional magnetic tape controllers, channels C
+MTD             729 additional magnetic tape controllers, channels D
+HTA             7340 hypertape controller.
+HTB             7340 additional hypertape controller.
+CR              7500 card reader
+CP              7550 card punch
+LP              7400 line printer
+DKn             1301/2302/7304 disk.
+COM             7750 communications control
+COML            7750 communications lines
+
+Channels B through D, are mag tape channels 1,2,3,4.
+Channels E through H, are 7907 channels for disk, hypertape or 7750.
+
+The 7090 simulator implements several unique stop condition:
+
+        - undefined CPU instruction
+        - divide check 
+        - select of a non-existent device
+        - write select of a write protected device
+        - invalid file control format
+        - invalid message to 7750
+        - no buffer storage available for input character on 7750
+        - no buffer storage available for output character on 7750
+        - Index not plus or minus
+        - Field overflow (CPU enabled).
+        - Sign change (CPU enabled).
+
+2.1 CPU
+
+The CPU options include setting memory size and cpu type.
+
+        SET CPU 7070            Sets cpu to emualte 7070.
+        SET CPU 7074            Sets cpu to emualte 7074.
+        SET CPU 5K              Sets memory to 5K
+        SET CPU 10K             Sets memory to 10K
+        SET CPU 15K             Sets memory to 15K*
+        SET CPU 20K             Sets memory to 20K*
+        SET CPU 25K             Sets memory to 25K*
+        SET CPU 30K             Sets memory to 30K*
+        SET CPU NOFLOAT         Disables floating point.
+        SET CPU FLOAT           Enables floating point.
+        SET CPU NOEXTEND        Disables extended memory support.
+        SET CPU EXTEND          Enables extended memory support.
+        SET CPU TIMER           Enables interval timer and interupt.
+        SET CPU NOTIMER         Disables interval timer.
+
+Memory size is 10KW on a standard CPU, extended option must be enabled
+to use memory sizes over 10KW. 
+
+CPU registers include the visible state of the processor as well as the
+control registers for the interrupt system.
+
+        name            size    comments
+
+        IC              15      program counter
+        AC1             40      accumulators 1
+        AC2             40      accumulators 2
+        AC3             40      accumulators 3
+        SW1..SW4        1       sense switches 1..4
+        SW              4       sense switches
+
+The CPU can maintain a history of the most recently executed instructions.
+This is controlled by the SET CPU HISTORY and SHOW CPU HISTORY commands:
+
+        SET CPU HISTORY         clear history buffer
+        SET CPU HISTORY=0       disable history
+        SET CPU HISTORY=n       enable history, length = n
+        SHOW CPU HISTORY        print CPU history
+        SHOW CPU HISTORY=n      print first n entries of CPU history
+
+2.2 I/O Channels (CH0..CH8)
+
+The 7070 supports up to 8 channels.  Channel models include
+
+        7604            standard multiplexor channel
+        7907            advanced capabilities channel
+
+Channels are fixed on the 7070.
+
+Channel 0 is a puesdo channel for unit record devices. 
+
+Channels have the following registers:
+
+        name       type         size    comments
+        ADDR       all          16      channel data address.
+        CMD        all           8      channel command. 
+        LIMIT      all          15      channel word count.
+        ASM        all          40      current channel assembly register.
+        LOCATION   all          16      channel location counter.
+        FLAGS      all          32      channel device status.
+
+For meaning of bits in FLAGS see i7000_defs.h.
+
+2.3 Unit record devices.
+
+2.3.1 7900 Inquiry Station (CON)
+
+The console is set up as inquiry station 1. Press escape to initiate a
+priorty interupt request. Pressing escape again will cancel request.
+
+2.3.2 7500 Card Reader (CR)
+
+The card reader (CR) reads data from a disk file.  Cards are simulated
+as ASCII lines with terminating newlines.  
+
+Card reader files can either be text (one character per column) or
+column binary (two characters per column).  The file type can be
+specified with a set command:
+
+        SET CR FORMAT=TEXT      sets ascii text mode
+        SET CR FORMAT=BINARY    sets for binary card images.
+        SET CR FORMAT=BCD       sets for BCD records.
+        SET CR FORMAT=CBN       sets for column binary BCD records.
+        SET CR FORMAT=AUTO      Automaticly determines format.
+        SET CR NOATTEN          sets device to not signal ready status.
+        SET CR ATTENA           sets device to used unit A attention.
+        SET CR ATTENB           sets device to used unit B attention.
+
+or in the ATTACH command:
+
+        ATT CR <file>           attaches a file
+
+Error handling is as follows:
+
+        error                   processed as
+
+        not attached            report error and stop
+
+        end of file             out of cards
+
+        OS I/O error            report error and stop
+
+2.3.3 7550 Card Punch (CP)
+
+The card reader (CP) writes data to a disk file.  Cards are simulated
+as ASCII lines with terminating newlines. 
+
+Card punch files can either be text (one character per column) or
+column binary (two characters per column).  The file type can be
+specified with a set command:
+
+        SET CP FORMAT=TEXT      sets ascii text mode
+        SET CP FORMAT=BINARY    sets for binary card images.
+        SET CP FORMAT=BCD       sets for BCD records.
+        SET CP FORMAT=CBN       sets for column binary BCD records.
+        SET CP FORMAT=AUTO      Automaticly determines format.
+        SET CP NOATTEN          sets device to not signal ready status.
+        SET CP ATTENA           sets device to used unit A attention.
+        SET CP ATTENB           sets device to used unit B attention.
+
+or in the ATTACH command:
+
+        ATT CP <file>           attaches a file
+
+Error handling is as follows:
+
+        error                   processed as
+
+        not attached            report error and stop
+
+        OS I/O error            report error and stop
+
+2.3.4 7400 Line Printer (LP)
+
+The line printer (LP) writes data to a disk file as ASCII text with
+terminating newlines. Currently set to handle standard signals to 
+control paper advance.
+
+        SET LP NO/ECHO          Sets echoing to console of lineprinter output.
+        SET LP NOATTEN          sets device to not signal ready status.
+        SET LP LINESPERPAGE=n   Sets number of lines per page on printer.
+        SET LP ATTENA           sets device to used unit A attention.
+        SET LP ATTENB           sets device to used unit B attention.
+
+Error handling is as follows:
+
+        error                   processed as
+
+        not attached            report error and stop
+
+        OS I/O error            report error and stop
+
+
+2.4 Mass storage devices.
+
+2.4.1 729 Magnetic Tape (MTA-D)
+
+These come in groups of 10 units each. The controller defines which channel
+the devices will be on.
+
+Each individual tape drive support several options: MTA used as an example.
+
+        SET MTAn ONLINE         Sets the mag tape drive online.
+        SET MTAn OFFLINE        Sets the mag tape drive offline and not ready.
+        SET MTAn REWIND         Sets the mag tape to the load point.
+        SET MTAn LOCKED         Sets the mag tape to be read only.
+        SET MTAn WRITEENABLE    Sets the mag tape to be writeable.
+        SET MTAn LOW            Sets mag tape to low density.
+        SET MTAn HIGH           Sets mag tape to high density.
+
+Options: Density LOW/HIGH does not change format of how tapes are written. And
+is only for informational purposes only. Tapes can only be attached to 
+channels 1 through 4.
+
+Channel 1 support the read binary opcode to load binary tapes in octal format.
+
+2.4.2 ChronoClock.
+
+Disabled by default. This is a special 729 tape drive which returns the 
+current time. It supports the option of setting the channel and drive
+that it will occupy. Note: You must disable the real 729 drive that is
+is replacing.
+
+        SET CHRON CHAN=n        Set channel for chrono clock.
+        SET CHRON UNIT=n        Sets the unit for the chrono clock.
+
+Example: To set Chronoclock to unit A9 do the following:
+
+        SET MTA9 DISABLE
+        SET CHRON UNIT=9 CHAN=A
+
+
+2.5 7907 Devices
+
+These devices must be attached to a 7907 channel to work.
+
+2.5.1 1301/1302/2302/7320 Disk devices
+
+The 7631 file control supports up to ten devices, which can be 7320
+drums, 1301 disks, 1302 disks, or 2302 disks.  Unit types are specified
+with the SET command.  
+
+        SET DKn TYPE=7320       unit n is a drum 
+        SET DKn TYPE=7320-2     unit n is a drum (two modules).
+        SET DKn TYPE=1301       unit n is a 1301 disk 
+        SET DKn TYPE=130l-2     unit n is a 1301-2 disk (two modules).
+        SET DKn TYPE=1302       unit n is a 1302 disk 
+        SET DKn TYPE=1302-2     unit n is a 1302-2 disk (two modules).
+        SET DKn TYPE=2302       unit n is a 2302 disk 
+
+Units can be SET ENABLED or DISABLED.  In addition, units can be
+set to enable or disable formatting:
+
+        SET DKn FORMAT          enable formatting
+        SET DKn NOFORMAT        disable formatting
+        SET DKn HA2             enable writing of home address 2
+        SET DKn NOHA2           disable writing of home address 2
+        SET DKn MODULE=n        sets modules for unit, modules 
+                                can only be even. 0 to 8.
+        SET DKn CHAN=n          sets channel for unit (A-D).
+        SET DKn SELECT=n        sets select on channel (0 or 1).
+   
+Formatting is disabled by default.
+
+Error handling is as follows:
+
+        error                   processed as
+
+        not attached            report error and stop
+
+        OS I/O error            report error and stop
+
+2.5.2 Hypertape 7340 Tape drive (HTA/B)
+
+These come in groups of 10 units each. The controller defines which channel
+the devices will be on.
+
+        SET HTx CHAN=n          Set magtape to channel n. x = A|B.
+        SET HTx SELECT=n        Sets the selection mode for the channel.
+
+Each individual tape drive support several options: HTA used as an example.
+
+        SET MTAn LOCKED         Sets the mag tape to be read only.
+        SET MTAn WRITEENABLE    Sets the mag tape to be writeable.
+
+
+2.5.3 7750 Communications Controller (COM and COML)
+
+The 7750 is modelled as a terminal multiplexor with 33 lines.  It consists
+of two device: COM is the multiplexor controller, and COML is the indivdual
+lines. For the first 32 lines, the 7750 performs input and output through
+Telnet sessions connected via a user-specified listening port. The ATTACH command
+specifies the port to be used for Telnet sessions:
+
+        ATTACH COM <port>       set up listening port
+
+where port is a decimal number between 1 and 65535 that is not being used
+for other TCP/IP activities.
+
+Each line (each unit of COML) can be set to one of twp modes: KSR-35 and
+KSR-37.  In KSR-35 mode, lower case input and output characters are converted
+automatically to upper case, and parity is ignored.  In KSR-37 mode, lower
+case characters are left alone, and even parity is generated on input.
+KSR-37 is the default.
+
+Once COM is attached and the simulator is running, the 7750 listens
+for connections on the specified port.  It assumes that any incoming
+connection is a Telnet connections.  The connections remain open until
+disconnected either by the Telnet client, a SET COM DISCONNECT command,
+or a DETACH COM command.
+
+The 7750 implements the following special SHOW commands
+
+        SHOW COM CONNECTIONS    displays current connections to the 7750
+        SHOW COM STATISTICS     displays statistics for active connections
+
+The 7750 implements the following special SET commands:
+
+        SET COM DISCONNECT=n    disconnect line n
+        SET COMLn LOG=filename  log output of line n to filename
+        SET COMLn NOLOG         disable logging and close log file
+        SET COMLn KSR35         set line n to KSR-35
+        SET COMLn KSR37         set line n to KSR-37
+        SET COMLn 2741          set line n to 2741
+        SET COM CHAN=n          set channel for com controller.
+
+The controller (COM) implements these registers:
+
+        name            size    comments
+
+        ENABLE          1       enable flag
+        STATE           6       controller state
+        MSGNUM          12      input message sequence number
+
+
+2.6 Symbolic Display and Input
+
+The IBM 7070 simulator implements symbolic display and input.  Display is
+controlled by command line switches:
+
+        -c                      display as BCD character
+        -m                      display instruction mnemonics
+
+Input parsing is controlled by the first character typed in or by command
+line switches:
+
+        -c                      BCD character
+        -m alphabetic           instruction mnemonic
+        numeric                 decimal number.
+
+Instruction input uses standard 7070 assembler syntax.
