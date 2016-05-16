@@ -321,12 +321,12 @@ t_stat chan_boot(int32 unit_num, DEVICE *dptr);
    
 /* Sets the device onto a given channel */
 t_stat chan_set_devs(DEVICE *dptr);
-t_stat set_chan(UNIT *uptr, int32 val, char *cptr, void *desc);
-t_stat set_cchan(UNIT *uptr, int32 val, char *cptr, void *desc);
-t_stat print_chan(FILE *st, UNIT *uptr, int32 v, void *desc);
-t_stat get_chan(FILE *st, UNIT *uptr, int32 v, void *desc);
-t_stat chan9_set_select(UNIT *uptr, int32 val, char *cptr, void *desc);
-t_stat chan9_get_select(FILE *st, UNIT *uptr, int32 v, void *desc);
+t_stat set_chan(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+t_stat set_cchan(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+t_stat print_chan(FILE *st, UNIT *uptr, int32 v, CONST void *desc);
+t_stat get_chan(FILE *st, UNIT *uptr, int32 v, CONST void *desc);
+t_stat chan9_set_select(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+t_stat chan9_get_select(FILE *st, UNIT *uptr, int32 v, CONST void *desc);
 
 /* Check channel for error */
 int chan_error(int chan);

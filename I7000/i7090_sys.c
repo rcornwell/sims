@@ -24,7 +24,7 @@
 #include "i7090_defs.h"
 #include <ctype.h>
 
-t_stat  parse_sym(char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw);
+t_stat  parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw);
 
 /* SCP data structures and interface routines
 
@@ -205,7 +205,7 @@ const char          ascii_to_mem[128] = {
 /* Load a card image file into memory.  */
 
 t_stat
-sim_load(FILE * fileref, char *cptr, char *fnam, int flag)
+sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
 {
     t_uint64            wd;
     t_uint64            mask;
@@ -215,13 +215,7 @@ sim_load(FILE * fileref, char *cptr, char *fnam, int flag)
     char               *p;
     int                 i, j;
 
-    p = strrchr(fnam, '.');
-
-    if (p == NULL)
-        return SCPE_ARG;
-
-    p++;
-    if (strcasecmp(p, "crd") == 0) {
+    if (match_ext(cptr, "crd")) {
         int                 firstcard = 1;
         uint16              image[80];
         t_uint64            lbuff[24];
@@ -263,7 +257,7 @@ sim_load(FILE * fileref, char *cptr, char *fnam, int flag)
                 dlen--;
             }
         }
-    } else if (strcasecmp(p, "cbn") == 0) {
+    } else if (match_ext(cptr, "cbn")) {
         int                 firstcard = 1;
         uint16              image[80];
         t_uint64            lbuff[24];
@@ -305,7 +299,7 @@ sim_load(FILE * fileref, char *cptr, char *fnam, int flag)
                 dlen--;
             }
         }
-     } else if (strcasecmp(p, "oct") == 0) {
+     } else if (match_ext(cptr, "oct")) {
         while (fgets(buffer, 80, fileref) != 0) {
              for(p = buffer; *p == ' ' || *p == '\t'; p++);
             /* Grab address */
@@ -320,7 +314,7 @@ sim_load(FILE * fileref, char *cptr, char *fnam, int flag)
              }
         }
 
-    } else if (strcasecmp(p, "sym") == 0) {
+    } else if (match_ext(cptr, "sym")) {
         while (fgets(buffer, 80, fileref) != 0) {
              for(p = buffer; *p == ' ' || *p == '\t'; p++);
             /* Grab address */
@@ -936,7 +930,7 @@ find_opcode(char *op, t_opcode * tab)
 */
 
 t_stat
-parse_sym(char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
+parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
 {
     int                 i;
     t_value             d, tag;

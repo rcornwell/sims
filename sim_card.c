@@ -62,6 +62,8 @@
     and the backward translation table. Which is generated from the table.
 */
 
+#if defined(USE_SIM_CARD)
+
 #include <ctype.h>
 #include "sim_defs.h"
 #include "sim_card.h"
@@ -904,7 +906,7 @@ sim_punch_card(UNIT * uptr, UNIT *stkuptr)
 }
 
 /* Set card format */
-t_stat sim_card_set_fmt (UNIT *uptr, int32 val, char *cptr, void *desc)
+t_stat sim_card_set_fmt (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
     int f;
 
@@ -921,7 +923,7 @@ t_stat sim_card_set_fmt (UNIT *uptr, int32 val, char *cptr, void *desc)
 
 /* Show card format */
 
-t_stat sim_card_show_fmt (FILE *st, UNIT *uptr, int32 val, void *desc)
+t_stat sim_card_show_fmt (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
     int f;
 
@@ -937,7 +939,7 @@ t_stat sim_card_show_fmt (FILE *st, UNIT *uptr, int32 val, void *desc)
 
 
 t_stat
-sim_card_attach(UNIT * uptr, char *cptr)
+sim_card_attach(UNIT * uptr, CONST char *cptr)
 {
     t_stat              r;
     struct _card_data   *data;
@@ -1033,4 +1035,4 @@ t_stat sim_card_attach_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, cons
     return SCPE_OK;
 }
 
-
+#endif /* USE_SIM_CARD */

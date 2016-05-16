@@ -89,7 +89,7 @@ uint32              con_cmd(UNIT *, uint16, uint16);
 void                con_ini(UNIT *, t_bool);
 t_stat              con_srv(UNIT *);
 t_stat              con_reset(DEVICE *);
-t_stat              con_attach(UNIT *, char *);
+t_stat              con_attach(UNIT *, CONST char *);
 t_stat              con_detach(UNIT *);
 t_stat              con_help(FILE *, DEVICE *, UNIT *, int32, const char *);
 const char         *con_description(DEVICE *dptr);

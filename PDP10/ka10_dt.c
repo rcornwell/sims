@@ -367,7 +367,7 @@ t_stat dt_devio(uint32 dev, uint64 *data);
 int32 dt_iors (void);
 t_stat dt_svc (UNIT *uptr);
 t_stat dt_reset (DEVICE *dptr);
-t_stat dt_attach (UNIT *uptr, char *cptr);
+t_stat dt_attach (UNIT *uptr, CONST char *cptr);
 t_stat dt_detach (UNIT *uptr);
 void dt_deselect (int32 oldf);
 void dt_newsa (int32 newf);
@@ -1438,7 +1438,7 @@ return 0;
    If 18b/36b, read data into buffer
 */
 
-t_stat dt_attach (UNIT *uptr, char *cptr)
+t_stat dt_attach (UNIT *uptr, CONST char *cptr)
 {
 #if 0
 uint16 pdp8b[D8_NBSIZE];

@@ -42,8 +42,8 @@ extern uint8        chan_seek_done[NUM_CHAN];   /* Channel seek finished */
 
 #define CHAN_DEF        UNIT_DISABLE|CHAN_SET
 
-t_stat              set_urec(UNIT * uptr, int32 val, char *cptr, void *desc);
-t_stat              get_urec(FILE * st, UNIT * uptr, int32 v, void *desc);
+t_stat              set_urec(UNIT * uptr, int32 val, CONST char *cptr, void *desc);
+t_stat              get_urec(FILE * st, UNIT * uptr, int32 v, CONST void *desc);
 t_stat              chan_reset(DEVICE * dptr);
 t_stat              chan_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
                         const char *cptr);
@@ -145,7 +145,7 @@ struct {
 
 /* Sets the device that will interrupt on the channel. */
 t_stat
-set_urec(UNIT * uptr, int32 val, char *cptr, void *desc)
+set_urec(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 {
     int                 chan = UNIT_G_CHAN(uptr->flags);
     int                 i;
@@ -166,7 +166,7 @@ set_urec(UNIT * uptr, int32 val, char *cptr, void *desc)
 }
 
 t_stat
-get_urec(FILE * st, UNIT * uptr, int32 v, void *desc)
+get_urec(FILE * st, UNIT * uptr, int32 v, CONST void *desc)
 {
     int                 chan = UNIT_G_CHAN(uptr->flags);
     int                 i;
@@ -669,6 +669,7 @@ chan9_set_error(int chan, uint32 mask)
 t_stat
 chan_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
+return SCPE_OK;
 }
 
 const char *

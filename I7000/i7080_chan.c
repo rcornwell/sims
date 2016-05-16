@@ -73,7 +73,7 @@ extern uint8        ioflags[5000/8];
 
 
 
-t_stat          set_chan_type(UNIT *uptr, int32 val, char *cptr, void *desc);
+t_stat          set_chan_type(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat          chan_reset(DEVICE * dptr);
 t_stat          chan_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
                         const char *cptr);
@@ -172,7 +172,7 @@ DEVICE              chan_dev = {
 
 
 t_stat 
-set_chan_type(UNIT *uptr, int32 val, char *cptr, void *desc) {
+set_chan_type(UNIT *uptr, int32 val, CONST char *cptr, void *desc) {
     if ((uptr->flags & CHAN_MOD) == 0)
         return SCPE_ARG;
     uptr->flags &= ~CHAN_MODEL;
@@ -1217,6 +1217,7 @@ chan9_set_error(int chan, uint32 mask)
 t_stat
 chan_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
+return SCPE_OK;
 }
 
 const char *

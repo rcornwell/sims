@@ -42,9 +42,9 @@ t_stat              hsdrm_srv(UNIT *);
 void                hsdrm_ini(UNIT *, t_bool);
 t_stat              hsdrm_reset(DEVICE *);
 uint32              hsdrm_addr; /* Read/write drum address */
-t_stat              set_hunits(UNIT * uptr, int32 val, char *cptr, void *desc);
-t_stat              get_hunits(FILE * st, UNIT * uptr, int32 v, void *desc);
-t_stat              hsdrm_attach(UNIT * uptr, char *file);
+t_stat              set_hunits(UNIT * uptr, int32 val, CONST char *cptr, void *desc);
+t_stat              get_hunits(FILE * st, UNIT * uptr, int32 v, CONST void *desc);
+t_stat              hsdrm_attach(UNIT * uptr, CONST char *file);
 t_stat              hsdrm_detach(UNIT * uptr);
 t_stat              hsdrm_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
                         const char *cptr);
@@ -180,7 +180,7 @@ hsdrm_reset(DEVICE * dptr)
 
 /* Sets the number of drum units */
 t_stat
-set_hunits(UNIT * uptr, int32 val, char *cptr, void *desc)
+set_hunits(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 {
     int                 i;
 
@@ -204,7 +204,7 @@ set_hunits(UNIT * uptr, int32 val, char *cptr, void *desc)
 }
 
 t_stat
-get_hunits(FILE * st, UNIT * uptr, int32 v, void *desc)
+get_hunits(FILE * st, UNIT * uptr, int32 v, CONST void *desc)
 {
     if (uptr == NULL)
         return SCPE_IERR;
@@ -213,7 +213,7 @@ get_hunits(FILE * st, UNIT * uptr, int32 v, void *desc)
 }
 
 t_stat
-hsdrm_attach(UNIT * uptr, char *file)
+hsdrm_attach(UNIT * uptr, CONST char *file)
 {
     t_stat              r;
 

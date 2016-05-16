@@ -84,12 +84,12 @@ uint32              cdr_cmd(UNIT *, uint16, uint16);
 t_stat              cdr_boot(int32, DEVICE *);
 t_stat              cdr_srv(UNIT *);
 t_stat              cdr_reset(DEVICE *);
-t_stat              cdr_attach(UNIT *, char *);
+t_stat              cdr_attach(UNIT *, CONST char *);
 t_stat              cdr_detach(UNIT *);
 extern t_stat       chan_boot(int32, DEVICE *);
 #ifdef I7070
-t_stat              cdr_setload(UNIT *, int32, char *, void *);
-t_stat              cdr_getload(FILE *, UNIT *, int32, void *);
+t_stat              cdr_setload(UNIT *, int32, CONST char *, void *);
+t_stat              cdr_getload(FILE *, UNIT *, int32, CONST void *);
 #endif
 t_stat              cdr_help(FILE *, DEVICE *, UNIT *, int32, const char *);
 const char         *cdr_description(DEVICE *dptr);
@@ -326,7 +326,7 @@ cdr_boot(int32 unit_num, DEVICE * dptr)
 }
 
 t_stat
-cdr_attach(UNIT * uptr, char *file)
+cdr_attach(UNIT * uptr, CONST char *file)
 {
     t_stat              r;
 
@@ -342,7 +342,7 @@ cdr_attach(UNIT * uptr, char *file)
 }
 #ifdef I7070
 t_stat
-cdr_setload(UNIT *uptr, int32 val, char *cptr, void *desc) 
+cdr_setload(UNIT *uptr, int32 val, CONST char *cptr, void *desc) 
 {
     int i;
     if (cptr == NULL)
@@ -362,7 +362,7 @@ cdr_setload(UNIT *uptr, int32 val, char *cptr, void *desc)
 }
 
 t_stat
-cdr_getload(FILE *st, UNIT *uptr, int32 v, void *desc)
+cdr_getload(FILE *st, UNIT *uptr, int32 v, CONST void *desc)
 {
     if (uptr == NULL)
         return SCPE_IERR;

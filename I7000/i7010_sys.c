@@ -205,7 +205,7 @@ const char          mem_to_ascii[64] = {
 /* Load a card image file into memory.  */
 
 t_stat
-sim_load(FILE * fileref, char *cptr, char *fnam, int flag)
+sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
 {
     return SCPE_NOFNC;
 }
@@ -927,7 +927,7 @@ find_opcode(char *op, t_opcode * tab)
 */
 
 t_stat
-parse_sym(char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
+parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
 {
     int                 i;
     t_value             d;

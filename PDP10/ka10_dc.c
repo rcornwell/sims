@@ -80,7 +80,7 @@ t_stat dc_devio(uint32 dev, uint64 *data);
 t_stat dc_svc (UNIT *uptr);
 t_stat dc_doscan (UNIT *uptr);
 t_stat dc_reset (DEVICE *dptr);
-t_stat dc_attach (UNIT *uptr, char *cptr);
+t_stat dc_attach (UNIT *uptr, CONST char *cptr);
 t_stat dc_detach (UNIT *uptr);
 t_stat dc_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
         const char *cptr);
@@ -297,7 +297,7 @@ return SCPE_OK;
 
 /* Attach routine */
 
-t_stat dc_attach (UNIT *uptr, char *cptr)
+t_stat dc_attach (UNIT *uptr, CONST char *cptr)
 {
 t_stat reason;
 

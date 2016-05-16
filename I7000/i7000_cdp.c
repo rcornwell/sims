@@ -85,7 +85,7 @@ uint32              cdp_cmd(UNIT *, uint16, uint16);
 void                cdp_ini(UNIT *, t_bool);
 t_stat              cdp_srv(UNIT *);
 t_stat              cdp_reset(DEVICE *);
-t_stat              cdp_attach(UNIT *, char *);
+t_stat              cdp_attach(UNIT *, CONST char *);
 t_stat              cdp_detach(UNIT *);
 t_stat              cdp_help(FILE *, DEVICE *, UNIT *, int32, const char *);
 const char         *cdp_description(DEVICE *dptr);
@@ -300,7 +300,7 @@ cdp_ini(UNIT *uptr, t_bool f) {
 }
 
 t_stat
-cdp_attach(UNIT * uptr, char *file)
+cdp_attach(UNIT * uptr, CONST char *file)
 {
     t_stat              r;
 
