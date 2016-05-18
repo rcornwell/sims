@@ -135,10 +135,10 @@ t_stat         mt_devio(uint32 dev, uint64 *data);
 t_stat         mt_srv(UNIT *);
 t_stat         mt_boot(int32, DEVICE *);
 void           mt_ini(UNIT *, t_bool);
-t_stat         set_mta (UNIT *uptr, int32 val, char *cptr, void *desc) ;
-t_stat         show_mta (FILE *st, UNIT *uptr, int32 val, void *desc);
+t_stat         set_mta (UNIT *uptr, int32 val, CONST char *cptr, void *desc) ;
+t_stat         show_mta (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat         mt_reset(DEVICE *);
-t_stat         mt_attach(UNIT *, char *);
+t_stat         mt_attach(UNIT *, CONST char *);
 t_stat         mt_detach(UNIT *);
 t_stat         mt_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
                   const char *cptr);
@@ -745,7 +745,7 @@ mt_boot(int32 unit_num, DEVICE * dptr)
     return SCPE_OK;
 }
 
-t_stat set_mta (UNIT *uptr, int32 val, char *cptr, void *desc) 
+t_stat set_mta (UNIT *uptr, int32 val, CONST char *cptr, void *desc) 
 {
     DEVICE *dptr;
     dptr = find_dev_from_unit (uptr);
@@ -759,7 +759,7 @@ t_stat set_mta (UNIT *uptr, int32 val, char *cptr, void *desc)
     return SCPE_OK;
 }
 
-t_stat show_mta (FILE *st, UNIT *uptr, int32 val, void *desc)
+t_stat show_mta (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
    DEVICE *dptr;
 
@@ -793,7 +793,7 @@ mt_reset(DEVICE * dptr)
 }
 
 t_stat
-mt_attach(UNIT * uptr, char *file)
+mt_attach(UNIT * uptr, CONST char *file)
 {
     return sim_tape_attach(uptr, file);
 }

@@ -79,7 +79,7 @@ uint32              lpr_cmd(UNIT *, uint16, uint16);
 t_stat              lpr_srv(UNIT *);
 void                lpr_ini(UNIT *, t_bool);
 t_stat              lpr_reset(DEVICE *);
-t_stat              lpr_attach(UNIT *, char *);
+t_stat              lpr_attach(UNIT *, CONST char *);
 t_stat              lpr_detach(UNIT *);
 t_stat              lpr_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
                         const char *cptr);
@@ -577,7 +577,7 @@ lpr_reset(DEVICE * dptr)
 }
 
 t_stat
-lpr_attach(UNIT * uptr, char *file)
+lpr_attach(UNIT * uptr, CONST char *file)
 {
     t_stat              r;
 

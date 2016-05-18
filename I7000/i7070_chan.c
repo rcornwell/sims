@@ -1566,6 +1566,7 @@ chan9_set_error(int chan, uint32 mask)
 t_stat
 chan_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
+return SCPE_OK;
 }
 
 const char *

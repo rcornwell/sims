@@ -162,9 +162,9 @@ t_stat        dp_svc(UNIT *);
 t_stat        dp_boot(int32, DEVICE *);
 void          dp_ini(UNIT *, t_bool);
 t_stat        dp_reset(DEVICE *);
-t_stat        dp_attach(UNIT *, char *);
+t_stat        dp_attach(UNIT *, CONST char *);
 t_stat        dp_detach(UNIT *);
-t_stat        dp_set_type(UNIT *uptr, int32 val, char *cptr, void *desc);
+t_stat        dp_set_type(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat        dp_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, 
                  const char *cptr);
 const char    *dp_description (DEVICE *dptr);
@@ -625,7 +625,7 @@ t_stat dp_svc (UNIT *uptr)
 
 
 t_stat
-dp_set_type(UNIT *uptr, int32 val, char *cptr, void *desc)
+dp_set_type(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
     int         i;
     if (uptr == NULL) return SCPE_IERR;
@@ -684,7 +684,7 @@ dp_boot(int32 unit_num, DEVICE * dptr)
 
 /* Device attach */
 
-t_stat dp_attach (UNIT *uptr, char *cptr)
+t_stat dp_attach (UNIT *uptr, CONST char *cptr)
 {
 int32 drv, i, p;
 t_stat r;

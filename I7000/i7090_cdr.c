@@ -55,7 +55,7 @@
 t_stat              cdr_srv(UNIT *);
 t_stat              cdr_boot(int32, DEVICE *);
 t_stat              cdr_reset(DEVICE *);
-t_stat              cdr_attach(UNIT *, char *);
+t_stat              cdr_attach(UNIT *, CONST char *);
 t_stat              cdr_detach(UNIT *);
 t_stat              cdr_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
                         const char *cptr);
@@ -293,7 +293,7 @@ cdr_reset(DEVICE * dptr)
 }
 
 t_stat
-cdr_attach(UNIT * uptr, char *file)
+cdr_attach(UNIT * uptr, CONST char *file)
 {
     t_stat              r;
 

@@ -91,10 +91,10 @@ uint32              lpr_cmd(UNIT *, uint16, uint16);
 void                lpr_ini(UNIT *, t_bool);
 t_stat              lpr_srv(UNIT *);
 t_stat              lpr_reset(DEVICE *);
-t_stat              lpr_attach(UNIT *, char *);
+t_stat              lpr_attach(UNIT *, CONST char *);
 t_stat              lpr_detach(UNIT *);
-t_stat              lpr_setlpp(UNIT *, int32, char *, void *);
-t_stat              lpr_getlpp(FILE *, UNIT *, int32, void *);
+t_stat              lpr_setlpp(UNIT *, int32, CONST char *, void *);
+t_stat              lpr_getlpp(FILE *, UNIT *, int32, CONST void *);
 t_stat              lpr_help(FILE *, DEVICE *, UNIT *, int32, const char *);
 const char         *lpr_description(DEVICE *dptr);
 
@@ -142,7 +142,7 @@ DEVICE              lpr_dev = {
  */
 
 t_stat
-lpr_setlpp(UNIT *uptr, int32 val, char *cptr, void *desc) 
+lpr_setlpp(UNIT *uptr, int32 val, CONST char *cptr, void *desc) 
 {
     int i;
     if (cptr == NULL)
@@ -163,7 +163,7 @@ lpr_setlpp(UNIT *uptr, int32 val, char *cptr, void *desc)
 }
 
 t_stat
-lpr_getlpp(FILE *st, UNIT *uptr, int32 v, void *desc)
+lpr_getlpp(FILE *st, UNIT *uptr, int32 v, CONST void *desc)
 {
     if (uptr == NULL)
         return SCPE_IERR;
@@ -479,7 +479,7 @@ lpr_ini(UNIT *uptr, t_bool f) {
 }
 
 t_stat
-lpr_attach(UNIT * uptr, char *file)
+lpr_attach(UNIT * uptr, CONST char *file)
 {
     t_stat              r;
 

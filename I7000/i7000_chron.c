@@ -48,8 +48,8 @@
 uint32              chron_cmd(UNIT *, uint16, uint16);
 t_stat              chron_srv(UNIT *);
 t_stat              chron_reset(DEVICE *);
-t_stat              set_addr(UNIT * uptr, int32 val, char *cptr, void *desc);
-t_stat              get_addr(FILE * st, UNIT *uptr, int32 v, void *desc);
+t_stat              set_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc);
+t_stat              get_addr(FILE * st, UNIT *uptr, int32 v, CONST void *desc);
 t_stat              chron_help(FILE *st, DEVICE *dptr, UNIT *uptr, 
                              int32 flags, const char *ctxt);
 const char          *chron_description (DEVICE *dptr);
@@ -232,7 +232,7 @@ chron_reset(DEVICE * dptr)
 
 /* Sets the address of the chrono clock */
 t_stat
-set_addr(UNIT * uptr, int32 val, char *cptr, void *desc)
+set_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 {
     int                 i;
 
@@ -255,7 +255,7 @@ set_addr(UNIT * uptr, int32 val, char *cptr, void *desc)
 }
 
 t_stat
-get_addr(FILE * st, UNIT * uptr, int32 v, void *desc)
+get_addr(FILE * st, UNIT * uptr, int32 v, CONST void *desc)
 {
     if (uptr == NULL)
         return SCPE_IERR;

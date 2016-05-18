@@ -24,7 +24,7 @@
 #include "i7090_defs.h"
 #include <ctype.h>
 
-t_stat  parse_sym(char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw);
+t_stat  parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw);
 
 /* SCP data structures and interface routines
 
@@ -117,7 +117,7 @@ extern const char      sim_ascii_to_six[128];
 /* Load a card image file into memory.  */
 
 t_stat
-sim_load(FILE * fileref, char *cptr, char *fnam, int flag)
+sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
 {
     t_uint64            wd;
     t_uint64            mask;
@@ -214,7 +214,7 @@ sim_load(FILE * fileref, char *cptr, char *fnam, int flag)
 typedef struct _opcode
 {
     uint16              opbase;
-    char               *name;
+    CONST char          *name;
 }
 t_opcode;
 
@@ -329,7 +329,7 @@ fprint_sym(FILE * of, t_addr addr, t_value * val, UNIT * uptr, int32 sw)
     fprint_val(of, inst, 8, 36, PV_RZRO);
 
     if (sw & SWMASK('M')) {
-        int     op = (inst >> (12+18));
+        int     op = (int)(inst >> (12+18));
         int     i;
         fputs("  rt  ", of);
         if (op != (040 + 13))
@@ -401,7 +401,7 @@ find_opcode(char *op, t_opcode * tab)
 */
 
 t_stat
-parse_sym(char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
+parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
 {
     int                 i;
     int                 f;

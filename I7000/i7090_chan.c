@@ -1674,6 +1674,7 @@ chan_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
 #ifdef I7090
 #endif
+return SCPE_OK;
 }
 
 const char *
