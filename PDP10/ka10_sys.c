@@ -132,6 +132,19 @@ const char *sim_stop_messages[] = {
     "Panic stop"
      };
 
+/* Simulator debug controls */
+DEBTAB              dev_debug[] = {
+    {"CMD", DEBUG_CMD, "Show command execution to devices"},
+    {"DATA", DEBUG_DATA, "Show data transfers"},
+    {"DETAIL", DEBUG_DETAIL, "Show details about device"},
+    {"EXP", DEBUG_EXP, "Show exception information"},
+    {"CONI", DEBUG_EXP, "Show coni instructions"},
+    {"CONO", DEBUG_EXP, "Show coni instructions"},
+    {"DATAIO", DEBUG_EXP, "Show datai and datao instructions"},
+    {0, 0}
+};
+
+
 /* Binary loader, supports RIM10, SAV, EXE */
 
 #define FMT_R   1                                       /* RIM10 */

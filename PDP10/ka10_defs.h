@@ -97,6 +97,17 @@
 #define ABORT(x)        longjmp (save_env, (x))         /* abort */
 #define IORETURN(f,v)   ((f)? (v): SCPE_OK)             /* cond error return */
 
+/* Debuging controls */
+#define DEBUG_CMD       0x0000001       /* Show device commands */
+#define DEBUG_DATA      0x0000002       /* Show data transfers */
+#define DEBUG_DETAIL    0x0000004       /* Show details */
+#define DEBUG_EXP       0x0000008       /* Show error conditions */
+#define DEBUG_CONI      0x0000010       /* Show CONI instructions */
+#define DEBUG_CONO      0x0000020       /* Show CONO instructions */
+#define DEBUG_DATAIO    0x0000030       /* Show DATAI/O instructions */
+
+extern DEBTAB dev_debug[];
+
 /* Operating system flags, kept in cpu_unit.flags */
 
 #define Q_IDLE          (sim_idle_enab)

@@ -51,35 +51,37 @@
 #define CUR_CYL         u3              /* current cylinder */
 #define DATAPTR         u4              /* data pointer */
 #define UFLAGS          u5              /* Function */
+#define STATUS          u6              /* Drive status */
 #define SEEK_DONE       0100            /* Seek finished */
 #define SEEK_STATE      0200            /* Seek in progress */
-#define DIRTY           0400            /* Buffer needs writing */
+#define DONE            0400            /* Done bit */
 #define CMD_MASK        070
 #define CONTROL         007
 
 
 /* CONI/CONO Flags */
-#define SUF_ERR         0000000000100   
+#define SUF_ERR         0000000000100      
 #define SEC_ERR         0000000000200
 #define ILL_CMD         0000000000400
 #define ILL_WR          0000000001000
-#define NOT_RDY         0000000002000   /* Clear CXR */
-#define PRT_ERR         0000000004000   /* 14-17 Clear CCPE, DSPE, DISK WDPE, CDPE */
-#define NXM_ERR         0000000010000   
+#define NOT_RDY         0000000002000      /* Clear CXR */
+#define PRT_ERR         0000000004000      /* 14-17 Clear CCPE, DSPE, DISK WDPE, CDPE */
+#define NXM_ERR         0000000010000      
 #define SLW_CHN         0000000020000
 #define SRC_ERR         0000000040000
 #define PWR_FAIL        0000000100000
-#define END_CYL         0000000200000   /* No effect */
-#define SRC_DONE        0000000400000   /* No effect */
-#define DSK_PRTY        0000001000000   /* No effect */
-#define CHN_PRTY        0000002000000   /* No effect */
-#define SEC_PRTY        0000004000000   /* No effect */
-#define CCW_PRTY        0000010000000   /* No effect */
-#define B22_FLAG        0040000000000
+#define END_CYL         0000000200000      /* No effect */
+#define SRC_DONE        0000000400000      /* No effect */
+#define DSK_PRTY        0000001000000      /* No effect */
+#define CHN_PRTY        0000002000000      /* No effect */
+#define SEC_PRTY        0000004000000      /* No effect */
+#define CCW_PRTY        0000010000000      /* No effect */
+#define B22_FLAG        
 
-#define CLRMSK          0000177710
+#define CLRMSK          0000000177710
+#define CLRMSK2         0000176000000
 
-
+/* DATAI/DATAO */
 #define DWPE_STOP       0000000001000
 #define SPARE           0000000002000
 #define DSPE_STOP       0000000004000
@@ -253,6 +255,7 @@ DIB dp_dib[] = {
     {DP_DEVNUM+010, 1, &dp_devio},
     {DP_DEVNUM+014, 1, &dp_devio}};
 
+
 MTAB                dp_mod[] = {
     {UNIT_WLK, 0, "write enabled", "WRITEENABLED", NULL},
     {UNIT_WLK, UNIT_WLK, "write locked", "LOCKED", NULL},
@@ -267,8 +270,8 @@ DEVICE              dpa_dev = {
     "DPA", dp_unit, NULL, dp_mod,
     NUM_UNITS_DP, 8, 18, 1, 8, 36,
     NULL, NULL, &dp_reset, &dp_boot, &dp_attach, &dp_detach,
-    &dp_dib[0], 0, 0,
-    NULL, NULL, NULL, &dp_help, NULL, NULL, &dp_description
+    &dp_dib[0], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    NULL, NULL, &dp_help, NULL, NULL, &dp_description
 };
 
 #if (NUM_DEVS_DP > 1)
@@ -276,8 +279,8 @@ DEVICE              dpb_dev = {
     "DPB", &dp_unit[010], NULL, dp_mod,
     NUM_UNITS_DP, 8, 18, 1, 8, 36,
     NULL, NULL, &dp_reset, &dp_boot, &dp_attach, &dp_detach,
-    &dp_dib[1], 0, 0,
-    NULL, NULL, NULL, &dp_help, NULL, NULL, &dp_description
+    &dp_dib[1], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    NULL, NULL, &dp_help, NULL, NULL, &dp_description
 };
 
 #if (NUM_DEVS_DP > 2)
@@ -285,8 +288,8 @@ DEVICE              dpc_dev = {
     "DPC", &dp_unit[020], NULL, dp_mod,
     NUM_UNITS_DP, 8, 18, 1, 8, 36,
     NULL, NULL, &dp_reset, &dp_boot, &dp_attach, &dp_detach,
-    &dp_dib[2], 0, 0,
-    NULL, NULL, NULL, &dp_help, NULL, NULL, &dp_description
+    &dp_dib[2], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    NULL, NULL, &dp_help, NULL, NULL, &dp_description
 };
 
 #if (NUM_DEVS_DP > 3)
@@ -294,79 +297,100 @@ DEVICE              dpd_dev = {
     "DPD", &dp_unit[030], NULL, dp_mod,
     NUM_UNITS_DP, 8, 18, 1, 8, 36,
     NULL, NULL, &dp_reset, &dp_boot, &dp_attach, &dp_detach,
-    &dp_dib[3], 0, 0,
-    NULL, NULL, NULL, &dp_help, NULL, NULL, &dp_description
+    &dp_dib[3], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    NULL, NULL, &dp_help, NULL, NULL, &dp_description
 };
 
 #endif
 #endif
 #endif
 
+DEVICE *dp_devs[] = {
+    &dpa_dev,
+#if (NUM_DEVS_DP > 1)
+    &dpb_dev,
+#if (NUM_DEVS_DP > 2)
+    &dpc_dev,
+#if (NUM_DEVS_DP > 3)
+    &dpd_dev,
+#endif
+#endif
+#endif
+};
+
 
 t_stat dp_devio(uint32 dev, uint64 *data) {
      uint64         res;
      int            ctlr = (dev - DP_DEVNUM) >> 2;
      struct df10   *df10 = &dp_df10[ctlr];
-     UNIT           *uptr;
-     int             unit;
-     int             cyl;
-     int             tmp;
-     int             drv;
+     DEVICE        *dptr;
+     UNIT          *uptr;
+     int            unit;
+     int            cyl;
+     int            tmp;
+
      if (ctlr < 0 || ctlr > NUM_DEVS_DP)
         return SCPE_OK;
+
+     dptr = dp_devs[ctlr];
+     unit = dp_cur_unit[ctlr];
+     uptr = &dp_unit[(ctlr * NUM_UNITS_DP) + unit];
      switch(dev & 3) {
      case CONI:
-        *data = df10->status;
-#if KI10
+        *data = df10->status | uptr->STATUS;
+#ifdef KI10
         *data |= B22_FLAG;
 #endif
-//      fprintf(stderr, "DP CONI %06o PC=%o\n\r", (uint32)*data, PC);
+        sim_debug(DEBUG_CONI, dptr, "DP %03o CONI %06o %d PC=%o\n\r", dev, 
+                           (uint32)*data, ctlr, PC);
         return SCPE_OK;
 
      case CONO:
          clr_interrupt(dev);
          df10->status &= ~07LL;
          df10->status |= *data & 07LL;
-         /* Clear flags */
-         df10->status &= ~(*data & CLRMSK);
-         uptr = &dp_unit[ctlr * NUM_UNITS_DP];
          if (*data & BUSY && df10->status & BUSY) {
                 /* Stop controller */
-             unit = dp_cur_unit[ctlr] & 07;
-             drv = unit + (ctlr * NUM_UNITS_DP);
-             uptr = &dp_unit[drv];
              sim_cancel(uptr);
              df10_finish_op(df10, 0);
          }
+         /* Clear flags */
+         uptr->STATUS &= ~(*data & CLRMSK);
          if (*data & PRT_ERR) 
-            df10->status &= ~(0176000000);
+            uptr->STATUS &= ~(CLRMSK2);
          if (*data & CCW_COMP) {
             df10_writecw(df10);
             df10->status &= ~CCW_COMP;
          }
-//      fprintf(stderr, "DP CONO %06o %d PC=%o %06o\n\r", (uint32)*data, ctlr, PC, df10->status);
+         if (*data & PI_ENABLE) {
+             uptr->UFLAGS &= ~DONE;
+             /* Check if any drives still reporting seek done */
+             tmp = 1;
+             uptr = &dp_unit[ctlr * NUM_UNITS_DP];
+             for(unit = 0; unit < NUM_UNITS_DP; unit++) {
+                if (uptr->UFLAGS & (SEEK_DONE|DONE)) {
+                     tmp = 0;
+                     break;
+                }
+                uptr++;
+             }
+             if (tmp) 
+                 df10->status &= ~PI_ENABLE;
+         }
+         sim_debug(DEBUG_CONI, dptr, "DP %03o CONO %06o %d PC=%o %06o\n\r", dev,
+                 (uint32)*data, ctlr, PC, df10->status);
          return SCPE_OK;
 
      case DATAI:
-         res = 0;               /* Can't write headers. */
-         uptr = &dp_unit[ctlr * NUM_UNITS_DP];
-         for(unit = 0; unit < NUM_UNITS_DP; unit++) {
-            if (uptr->UFLAGS & SEEK_DONE)
-                res |= 0400>>unit;
-            uptr++;
-         }
-         unit = dp_cur_unit[ctlr] & 07;
-         drv = unit + (ctlr * NUM_UNITS_DP);
-         uptr = &dp_unit[drv];
-         res |= ((uint64)(unit) << 33);
-         cyl = uptr->CUR_CYL;
-         res |= WR_HD_LK;
+         res = (uint64)(unit) << 33;
+         res |= WR_HD_LK;                  /* Can't write headers. */
          if (GET_DTYPE(uptr->flags)) 
-                res |= SEL_RP03;
+             res |= SEL_RP03;
          if (uptr->flags & UNIT_DIS) {
              res |= NO_DRIVE;
          } else if (uptr->flags & UNIT_ATT) {
              res |= DRV_ONLINE;
+             cyl = uptr->CUR_CYL;
              res |= ((uint64)(cyl & 0377)) << 25;
              if (cyl & 0400) 
                 res |= SEL_CYL256;
@@ -375,89 +399,108 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
              if (uptr->flags & UNIT_WPRT) 
                 res |= RD_ONLY;
          }
- //     fprintf(stderr, "DP DATI %012llo %d  PC=%o F=%o\n\r", res, ctlr, PC, uptr->UFLAGS);
+         uptr = &dp_unit[ctlr * NUM_UNITS_DP];
+         for(unit = 0; unit < NUM_UNITS_DP; unit++) {
+            if (uptr->UFLAGS & SEEK_DONE)
+                res |= 0400>>unit;
+            uptr++;
+         }
+         sim_debug(DEBUG_DATAIO, dptr, "DP %03o DATI %012llo %d  PC=%o F=%o\n\r", 
+                 dev, res, ctlr, PC, uptr->UFLAGS);
          *data = res;
          return SCPE_OK;
 
      case DATAO:
-  //    fprintf(stderr, "DP DATO %012llo, %d PC=%o\n\r", *data, ctlr, PC);
+         sim_debug(DEBUG_DATAIO, dptr, "DP %03o DATO %012llo, %d PC=%o\n\r", 
+                 dev, *data, ctlr, PC);
          if (df10->status & BUSY) {
-            df10->status |= ILL_CMD;
+            uptr->STATUS |= ILL_CMD;
             return SCPE_OK;
          }
          clr_interrupt(dev);
          df10->status &= ~(PI_ENABLE|CCW_COMP);
          unit = (*data >> 30) & 07;
          dp_cur_unit[ctlr] = unit;
-         drv = unit + (ctlr * NUM_UNITS_DP);
-         uptr = &dp_unit[drv];
+         uptr = &dp_unit[(ctlr * NUM_UNITS_DP) + unit];
+         uptr->STATUS &= ~(SUF_ERR|SEC_ERR|SRC_ERR|NXM_ERR|ILL_WR|
+                          NO_DRIVE|NOT_RDY|ILL_CMD|END_CYL|SRC_DONE);
          cyl = ((*data >> 22) & 0377);
          if (*data & CYL256)
-                cyl += 0400;
+            cyl += 0400;
          tmp = (*data >> 33) & 07;
          switch(tmp) {
-            case WR:
-                if (uptr->flags & UNIT_WPRT) {
-                   df10->status |= ILL_WR;
-                   df10_setirq(df10);
-                   return SCPE_OK;
-                }
-            case RD:
-            case RV:
-                if (uptr->flags & UNIT_DIS) {
-                     df10->status |= NO_DRIVE;
-                     df10_setirq(df10);
-                     return SCPE_OK;
-                }
-                if ((uptr->flags & UNIT_ATT) == 0) {
-                   df10->status |= NOT_RDY;
-                   df10_setirq(df10);
-                   return SCPE_OK;
-                }
-                df10->status &= ~(SRC_DONE|END_CYL);
-                uptr->UFLAGS = ((*data & (SURFACE|SECTOR)) >> 3) | (cyl << 20);
-                uptr->UFLAGS |= (tmp << 3) | ctlr;
-                uptr->DATAPTR = 0;      /* Set no data */
-                CLR_BUF(uptr);
-                df10_setup(df10, (uint32)*data);
-                break;
-            case WH:
-                  if ((uptr->flags & UNIT_ATT) == 0) {
-                    df10->status |= NOT_RDY;
-                  } else {
-                    df10->status |= ILL_WR;
-                  }
-                  df10_setirq(df10);
-                  return SCPE_OK;
-            case RC:   cyl = 0;
-            case SK:   
-                if ((uptr->flags & UNIT_ATT) == 0) {
-                   df10->status |= NOT_RDY;
-                   return SCPE_OK;
-                }
-                uptr->UFLAGS = (cyl << 20) | (tmp<<3) | ctlr | SEEK_STATE;
-                break;
-            case CL:
-                uptr = &dp_unit[ctlr * NUM_UNITS_DP];
-                for(unit = 0; unit < NUM_UNITS_DP; unit++) {
-                   if (*data & (0400 >> unit)) 
-                      uptr->UFLAGS &= ~SEEK_DONE;
-                   uptr++;
-                }
-            case NO:
-                tmp = 0;
-                uptr = &dp_unit[ctlr * NUM_UNITS_DP];
-                for(unit = 0; unit < NUM_UNITS_DP; unit++) {
-                   if (uptr->UFLAGS & SEEK_DONE) {
-                        tmp = 1;
-                        break;
-                   }
-                   uptr++;
-                }
-                if (tmp) {
-                    df10_setirq(df10);
-                }
+         case WR:
+             if (uptr->flags & UNIT_WPRT) {
+                uptr->UFLAGS |= DONE;
+                uptr->STATUS |= ILL_WR;
+                df10_setirq(df10);
                 return SCPE_OK;
+             }
+         case RD:
+         case RV:
+             if (uptr->flags & UNIT_DIS) {
+                uptr->UFLAGS |= DONE;
+                uptr->STATUS |= NO_DRIVE;
+                df10_setirq(df10);
+                return SCPE_OK;
+             }
+             if ((uptr->flags & UNIT_ATT) == 0) {
+                uptr->UFLAGS |= DONE;
+                uptr->STATUS |= NOT_RDY;
+                df10_setirq(df10);
+                return SCPE_OK;
+             }
+             //uptr->STATUS &= ~(SRC_DONE|END_CYL);
+             uptr->UFLAGS = ((*data & (SURFACE|SECTOR)) >> 3) | (cyl << 20) 
+                              | (tmp << 3) | ctlr;
+             uptr->DATAPTR = 0;      /* Set no data */
+             CLR_BUF(uptr);
+             df10_setup(df10, (uint32)*data);
+             break;
+
+         case WH:
+             if ((uptr->flags & UNIT_ATT) == 0) {
+               uptr->STATUS |= NOT_RDY;
+             } else {
+               uptr->STATUS |= ILL_WR;
+             }
+             uptr->UFLAGS |= DONE;
+             df10_setirq(df10);
+             return SCPE_OK;
+
+         case RC:  
+             cyl = 0;
+         case SK:   
+             if ((uptr->flags & UNIT_ATT) == 0) {
+                uptr->STATUS |= NOT_RDY;
+                return SCPE_OK;
+             }
+             uptr->STATUS |= BUSY;
+             uptr->UFLAGS = (cyl << 20) | (tmp<<3) | ctlr | SEEK_STATE;
+             break;
+
+         case CL:
+             uptr->UFLAGS &= ~DONE;
+             uptr = &dp_unit[ctlr * NUM_UNITS_DP];
+             for(unit = 0; unit < NUM_UNITS_DP; unit++) {
+                if (*data & (0400 >> unit)) 
+                   uptr->UFLAGS &= ~SEEK_DONE;
+                uptr++;
+             }
+         case NO:
+             tmp = 0;
+             uptr = &dp_unit[ctlr * NUM_UNITS_DP];
+             for(unit = 0; unit < NUM_UNITS_DP; unit++) {
+                if (uptr->UFLAGS & SEEK_DONE) {
+                     tmp = 1;
+                     break;
+                }
+                uptr++;
+             }
+             if (tmp) {
+                 df10_setirq(df10);
+             }
+             return SCPE_OK;
          }
          sim_activate(uptr, 100);
          return SCPE_OK;
@@ -467,160 +510,176 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
 
 t_stat dp_svc (UNIT *uptr) 
 {
-   int dtype = GET_DTYPE(uptr->flags);
-   int ctlr  = uptr->UFLAGS & 03;
-   int cyl   = (uptr->UFLAGS >> 20) & 0777;
-   int sect  = (uptr->UFLAGS >> 9);
-   int surf  = (sect >> 5) & 037;
+   int         dtype = GET_DTYPE(uptr->flags);
+   int         ctlr  = uptr->UFLAGS & 03;
+   int         cyl   = (uptr->UFLAGS >> 20) & 0777;
+   int         cmd   = (uptr->UFLAGS & 070) >> 3;
+   int         sect  = (uptr->UFLAGS >> 9);
+   int         surf  = (sect >> 5) & 037;
+   DEVICE      *dptr = dp_devs[ctlr];
    struct df10 *df10 = &dp_df10[ctlr];
    int diff, diffs, wc;
-   t_stat err, r;
+   int         r;
    sect &= 017;
 
-   switch(uptr->UFLAGS & 0070) {
-   case WR << 3:
-   case RV << 3:
-   case RD << 3:
-                /* Cylinder, Surface, Sector all ok */
-                if (BUF_EMPTY(uptr)) {
-        //              fprintf(stderr, "DP %d cmd=%o cyl=%d (%o) sect=%d surf=%d %d\n\r", ctlr, uptr->UFLAGS, cyl, cyl, sect, surf,uptr->CUR_CYL);
-                     if (df10->status & END_CYL) {
-                          df10_finish_op(df10, 0);
-                          return SCPE_OK;
-                     }  
-                     if (sect >= dp_drv_tab[dtype].sect) {
-                          df10_finish_op(df10, SEC_ERR);
-                          return SCPE_OK;
-                     }
-                     if (surf >= dp_drv_tab[dtype].surf) {
-                          df10_finish_op(df10, SUF_ERR);
-                          return SCPE_OK;
-                     }
-                     if (cyl != uptr->CUR_CYL) {
-                          df10_finish_op(df10, SRC_ERR);
-                          return SCPE_OK;
-                     }
-                     if ((uptr->UFLAGS & 0070) != (WR << 3)) {
-                         /* Read the block */
-                         int da = ((cyl * dp_drv_tab[dtype].surf + surf) * dp_drv_tab[dtype].sect 
-                                        + sect) * RP_NUMWD;
-                         err = sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
-                         wc = sim_fread (&dp_buf[ctlr][0], sizeof(uint64), RP_NUMWD,
-                                uptr->fileref);
-//                       err = ferror(uptr->fileref);
-                         df10->status |= SRC_DONE;
-                        //fprintf(stderr, "Read %d\n\r", da);
-                         for (; wc < RP_NUMWD; wc++)
-                             dp_buf[ctlr][wc] = 0;
-                         uptr->hwmark = RP_NUMWD;
-                         uptr->DATAPTR = 0;
-                         sect = sect + 1;
-                         if (sect >= dp_drv_tab[dtype].sect) {
-                             sect = 0;
-                             surf = surf + 1;
-                             if (surf >= dp_drv_tab[dtype].surf) {
-                                df10->status|= END_CYL;
-                             } else {
-                                uptr->UFLAGS &= ~(01757000);
-                                uptr->UFLAGS |= (surf << 14);
-                             }
-                         } else {
-                             uptr->UFLAGS &= ~(017000);
-                             uptr->UFLAGS |= (sect << 9);
-                         }
-                     } else {
-                         uptr->DATAPTR = 0;
-                         CLR_BUF(uptr);
-                     }
+   switch(cmd) {
+   case WR:
+   case RV:
+   case RD:
+           /* Cylinder, Surface, Sector all ok */
+           if (BUF_EMPTY(uptr)) {
+                 sim_debug(DEBUG_DETAIL, dptr, 
+                       "DP %d cmd=%o cyl=%d (%o) sect=%d surf=%d %d\n\r",
+                        ctlr, uptr->UFLAGS, cyl, cyl, sect, surf,uptr->CUR_CYL);
+                if (uptr->STATUS & END_CYL) {
+                     uptr->UFLAGS |= DONE;
+                     df10_finish_op(df10, 0);
+                     return SCPE_OK;
+                }  
+                if (sect >= dp_drv_tab[dtype].sect) {
+                     uptr->UFLAGS |= DONE;
+                     uptr->STATUS |= SEC_ERR;
+                     df10_finish_op(df10, 0);
+                     return SCPE_OK;
                 }
-                switch(uptr->UFLAGS & 0070) {
-                case WR << 3:
-                    r = df10_read(df10);
-                    if (r)
-                        uptr->hwmark = uptr->DATAPTR;
-                    dp_buf[ctlr][uptr->DATAPTR] = df10->buf;
-                    break;
-                case RV << 3:
-                    r = 1;
-                    break;
-                case RD << 3:
-                    df10->buf = dp_buf[ctlr][uptr->DATAPTR];
-                    r = df10_write(df10);
-                    break;
-                } 
-                uptr->DATAPTR++;
-                if (uptr->DATAPTR >= RP_NUMWD || r == 0 ) {
-                    if ((uptr->UFLAGS & 0070) == (WR << 3)) {
-                         int da = ((cyl * dp_drv_tab[dtype].surf + surf) * dp_drv_tab[dtype].sect 
-                                        + sect) * RP_NUMWD;
-                 /* write block the block */
-                        //fprintf(stderr, "Write %d %d\n\r", uptr->DATAPTR, da);
-                         for (; uptr->DATAPTR < RP_NUMWD; uptr->DATAPTR++)
-                             dp_buf[ctlr][uptr->DATAPTR] = 0;
-                         err = sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
-                         wc = sim_fwrite(&dp_buf[ctlr][0],sizeof(uint64), RP_NUMWD,
-                                uptr->fileref);
-//                       err = ferror(uptr->fileref);
-                         df10->status |= SRC_DONE;
-                         sect = sect + 1;
-                         if (sect >= dp_drv_tab[dtype].sect) {
-                             sect = 0;
-                             surf = surf + 1;
-                             if (surf >= dp_drv_tab[dtype].surf) {
-                                df10->status |= END_CYL;
-                             } else {
-                                uptr->UFLAGS &= ~(01757 << 9);
-                                uptr->UFLAGS |= (surf << 14);
-                             }
-                         } else {
-                             uptr->UFLAGS &= ~(017 << 9);
-                             uptr->UFLAGS |= (sect << 9);
-                         }
-                     }
-                     uptr->DATAPTR = 0;
-                     CLR_BUF(uptr);
+                if (surf >= dp_drv_tab[dtype].surf) {
+                     uptr->UFLAGS |= DONE;
+                     uptr->STATUS |= SUF_ERR;
+                     df10_finish_op(df10, 0);
+                     return SCPE_OK;
                 }
-                if (r)
-                    sim_activate(uptr, 25);
-                break;    
-                   
-                
-    case CL<<3:
-    case WH<<3: /* Should never see these */
-    case NO<<3:
-                return SCPE_OK;
-    case RC<<3: 
-    case SK<<3:   
-                diff = cyl - uptr->CUR_CYL;
-                diffs = (diff < 0) ? -1 : 1;
-        //      fprintf(stderr, "DP Seek %d %d %d %d\n\r", ctlr, cyl, uptr->CUR_CYL, diff);
-                if (diff == 0) {
-                    uptr->UFLAGS &= 7;
-                    uptr->UFLAGS |= (NO << 3) | SEEK_DONE;
-                    df10_setirq(df10);
-                } else if (diff < 10 && diff > -10) {
-                    uptr->CUR_CYL += diffs;
-                    if (uptr->CUR_CYL < 0) {
-                        uptr->UFLAGS &= 7;
-                        uptr->UFLAGS |= (NO << 3) | SEEK_DONE;
-                        df10_setirq(df10);
-                        uptr->CUR_CYL = 0;
-                    } else if (uptr->CUR_CYL > dp_drv_tab[dtype].cyl) {
-                        uptr->UFLAGS &= 7;
-                        uptr->UFLAGS |= (NO << 3) | SEEK_DONE;
-                        df10_setirq(df10);
-                        uptr->CUR_CYL = dp_drv_tab[dtype].cyl;
-                    } else
-                         sim_activate(uptr, 500);
-                } else if (diff > 100 || diff < -100) {
-                    uptr->CUR_CYL += diffs * 100;
-                    sim_activate(uptr, 4000);
+                if (cyl != uptr->CUR_CYL) {
+                     uptr->UFLAGS |= DONE;
+                     uptr->STATUS |= SRC_ERR;
+                     df10_finish_op(df10, 0);
+                     return SCPE_OK;
+                }
+                if (cmd != WR) {
+                    /* Read the block */
+                    int da = ((cyl * dp_drv_tab[dtype].surf + surf) 
+                                   * dp_drv_tab[dtype].sect + sect) * RP_NUMWD;
+                    sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
+                    wc = sim_fread (&dp_buf[ctlr][0], sizeof(uint64), RP_NUMWD,
+                           uptr->fileref);
+                    uptr->STATUS |= SRC_DONE;
+                    for (; wc < RP_NUMWD; wc++)
+                        dp_buf[ctlr][wc] = 0;
+                    uptr->hwmark = RP_NUMWD;
+                    uptr->DATAPTR = 0;
+                    sect = sect + 1;
+                    if (sect >= dp_drv_tab[dtype].sect) {
+                        sect = 0;
+                        surf = surf + 1;
+                        if (surf >= dp_drv_tab[dtype].surf) {
+                           uptr->STATUS|= END_CYL;
+                        } else {
+                           uptr->UFLAGS &= ~(01757000);
+                           uptr->UFLAGS |= (surf << 14);
+                        }
+                    } else {
+                        uptr->UFLAGS &= ~(017000);
+                        uptr->UFLAGS |= (sect << 9);
+                    }
                 } else {
-                    uptr->CUR_CYL += diffs * 10;
-                    sim_activate(uptr, 1000);
+                    uptr->DATAPTR = 0;
+                    CLR_BUF(uptr);
                 }
-        }
-        return SCPE_OK;
+           }
+           switch(cmd) {
+           case WR:
+               r = df10_read(df10);
+               if (r)
+                   uptr->hwmark = uptr->DATAPTR;
+               dp_buf[ctlr][uptr->DATAPTR] = df10->buf;
+               break;
+           case RV:
+               r = 1;
+               break;
+           case RD:
+               df10->buf = dp_buf[ctlr][uptr->DATAPTR];
+               r = df10_write(df10);
+               break;
+           } 
+           sim_debug(DEBUG_DATA, dptr, "Xfer %d %012llo\n\r",
+                          uptr->DATAPTR, df10->buf);
+           uptr->DATAPTR++;
+           if (uptr->DATAPTR >= RP_NUMWD || r == 0 ) {
+               if (cmd == WR) {
+                    int da = ((cyl * dp_drv_tab[dtype].surf + surf)
+                                   * dp_drv_tab[dtype].sect + sect) * RP_NUMWD;
+            /* write block the block */
+                    for (; uptr->DATAPTR < RP_NUMWD; uptr->DATAPTR++)
+                        dp_buf[ctlr][uptr->DATAPTR] = 0;
+                    sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
+                    wc = sim_fwrite(&dp_buf[ctlr][0],sizeof(uint64), RP_NUMWD,
+                           uptr->fileref);
+                    uptr->STATUS |= SRC_DONE;
+                    sect = sect + 1;
+                    if (sect >= dp_drv_tab[dtype].sect) {
+                        sect = 0;
+                        surf = surf + 1;
+                        if (surf >= dp_drv_tab[dtype].surf) {
+                           uptr->STATUS |= END_CYL;
+                        } else {
+                           uptr->UFLAGS &= ~(01757 << 9);
+                           uptr->UFLAGS |= (surf << 14);
+                        }
+                    } else {
+                        uptr->UFLAGS &= ~(017 << 9);
+                        uptr->UFLAGS |= (sect << 9);
+                    }
+                }
+                uptr->DATAPTR = 0;
+                CLR_BUF(uptr);
+           }
+           if (r)
+               sim_activate(uptr, 25);
+           else
+               uptr->UFLAGS |= DONE;
+           break;    
+
+    case CL:
+    case WH: /* Should never see these */
+    case NO:
+           return SCPE_OK;
+    case RC: 
+    case SK:   
+           if(uptr->UFLAGS & SEEK_STATE) {
+               diff = cyl - uptr->CUR_CYL;
+               diffs = (diff < 0) ? -1 : 1;
+               sim_debug(DEBUG_DETAIL, dptr, "DP Seek %d %d %d %d\n\r",
+                          ctlr, cyl, uptr->CUR_CYL, diff);
+               if (diff == 0) {
+                   uptr->UFLAGS |= SEEK_DONE;
+                   uptr->UFLAGS &= ~SEEK_STATE;
+                   uptr->STATUS &= ~BUSY;
+                   df10_setirq(df10);
+               } else if (diff < 10 && diff > -10) {
+                   uptr->CUR_CYL += diffs;
+                   if (uptr->CUR_CYL < 0) {
+                       uptr->UFLAGS |= SEEK_DONE;
+                       uptr->UFLAGS &= ~SEEK_STATE;
+                       uptr->STATUS &= ~BUSY;
+                       uptr->CUR_CYL = 0;
+                       df10_setirq(df10);
+                   } else if (uptr->CUR_CYL > dp_drv_tab[dtype].cyl) {
+                       uptr->UFLAGS |= SEEK_DONE;
+                       uptr->UFLAGS &= ~SEEK_STATE;
+                       uptr->STATUS &= ~BUSY;
+                       uptr->CUR_CYL = dp_drv_tab[dtype].cyl;
+                       df10_setirq(df10);
+                   } else
+                       sim_activate(uptr, 500);
+               } else if (diff > 100 || diff < -100) {
+                   uptr->CUR_CYL += diffs * 100;
+                   sim_activate(uptr, 4000);
+               } else {
+                   uptr->CUR_CYL += diffs * 10;
+                   sim_activate(uptr, 1000);
+               }
+           }
+    }
+    return SCPE_OK;
 }
 
 
@@ -649,6 +708,7 @@ dp_reset(DEVICE * dptr)
     UNIT *uptr = dptr->units;
     for(unit = 0; unit < NUM_UNITS_DP; unit++) {
          uptr->UFLAGS  = 0;
+         uptr->STATUS  = 0;
          uptr->CUR_CYL = 0;
          uptr++;
     }

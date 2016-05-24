@@ -532,7 +532,7 @@ void set_interrupt(int dev, int lvl) {
        dev_irq[dev>>2] = 0200 >> lvl;
        pi_pending = 1;
 //       if (dev != 4 && (dev & 0774) != 0120)
- //      fprintf(stderr, "set irq %o %o\n\r", dev & 0774, lvl);
+//       fprintf(stderr, "set irq %o %o\n\r", dev & 0774, lvl);
     }
 }
 
@@ -562,14 +562,12 @@ int check_irq_level() {
      int i, lvl;
      int pi_ok, pi_t;
 
-     if (!pi_enable)
-        return 0;
-
-     pi_pending = 0;
      for(i = lvl = 0; i < 128; i++) 
         lvl |= dev_irq[i];
+     if (lvl == 0)
+        pi_pending = 0;
      PIR |= (lvl & PIE);
-//     fprintf(stderr, "PIR=%o PIE=%o\n\r", PIR, PIE);
+    // fprintf(stderr, "PIR=%o PIE=%o\n\r", PIR, PIE);
      /* Compute mask for pi_ok */
      pi_t = (~PIR & ~PIH) >> 1;
      pi_ok = 0100 & (PIR & ~PIH);
@@ -2080,7 +2078,7 @@ fnorm:
                                 sim_process_event ();
                            }
                            // Allow for interrupt
-                           if (pi_pending) {
+                           if (pi_enable && pi_pending) {
                                 pi_rq = check_irq_level();
                                 if (pi_rq) {
                                         f_pc_inh = 1;
