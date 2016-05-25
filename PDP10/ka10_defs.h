@@ -104,7 +104,7 @@
 #define DEBUG_EXP       0x0000008       /* Show error conditions */
 #define DEBUG_CONI      0x0000010       /* Show CONI instructions */
 #define DEBUG_CONO      0x0000020       /* Show CONO instructions */
-#define DEBUG_DATAIO    0x0000030       /* Show DATAI/O instructions */
+#define DEBUG_DATAIO    0x0000040       /* Show DATAI/O instructions */
 
 extern DEBTAB dev_debug[];
 

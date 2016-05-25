@@ -399,12 +399,11 @@ MTAB                rp_mod[] = {
     {0}
 };
 
-#if (NUM_DEVS_RP > 0)
 DEVICE              rpa_dev = {
     "RPA", rp_unit, NULL, rp_mod,
     NUM_UNITS_RP, 8, 18, 1, 8, 36,
     NULL, NULL, &rp_reset, &rp_boot, &rp_attach, &rp_detach,
-    &rp_dib[0], 0, 0, NULL,
+    &rp_dib[0], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &rp_help, NULL, NULL, &rp_description
 };
 
@@ -413,7 +412,7 @@ DEVICE              rpb_dev = {
     "RPB", &rp_unit[010], NULL, rp_mod,
     NUM_UNITS_RP, 8, 18, 1, 8, 36,
     NULL, NULL, &rp_reset, &rp_boot, &rp_attach, &rp_detach,
-    &rp_dib[1], 0, 0, NULL,
+    &rp_dib[1], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &rp_help, NULL, NULL, &rp_description
 };
 
@@ -422,7 +421,7 @@ DEVICE              rpc_dev = {
     "RPC", &rp_unit[020], NULL, rp_mod,
     NUM_UNITS_RP, 8, 18, 1, 8, 36,
     NULL, NULL, &rp_reset, &rp_boot, &rp_attach, &rp_detach,
-    &rp_dib[2], 0, 0, NULL,
+    &rp_dib[2], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &rp_help, NULL, NULL, &rp_description
 };
 
@@ -431,30 +430,44 @@ DEVICE              rpd_dev = {
     "RPD", &rp_unit[030], NULL, rp_mod,
     NUM_UNITS_RP, 8, 18, 1, 8, 36,
     NULL, NULL, &rp_reset, &rp_boot, &rp_attach, &rp_detach,
-    &rp_dib[3], 0, 0, NULL,
+    &rp_dib[3], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &rp_help, NULL, NULL, &rp_description
 };
 
 #endif
 #endif
 #endif
+
+DEVICE *rp_devs[] = {
+    &rpa_dev,
+#if (NUM_DEVS_RP > 1)
+    &rpb_dev,
+#if (NUM_DEVS_RP > 2)
+    &rpc_dev,
+#if (NUM_DEVS_RP > 3)
+    &rpd_dev,
 #endif
+#endif
+#endif
+};
 
 
 t_stat rp_devio(uint32 dev, uint64 *data) {
      int            ctlr = -1;
+     DEVICE        *dptr;
      struct df10   *df10;
-     UNIT           *uptr;
+     UNIT          *uptr;
      int            drive;
 
      for (drive = 0; drive < NUM_DEVS_RP; drive++) {
-        if (rp_dib[drive].dev_num == dev) {
+        if (rp_dib[drive].dev_num == (dev & 0774)) {
             ctlr = drive;
             break;
         }
      }
      if (ctlr < 0)
         return SCPE_OK;
+     dptr = rp_devs[ctlr];
      df10 = &rp_df10[ctlr];
      switch(dev & 3) {
      case CONI:
@@ -462,7 +475,8 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
 #ifdef KI10
         *data |= B22_FLAG;
 #endif
-//      fprintf(stderr, "RP CONI %06o PC=%o\n\r", (uint32)*data, PC);
+        sim_debug(DEBUG_CONI, dptr, "RP %03o CONI %06o PC=%o\n", 
+               dev, (uint32)*data, PC);
         return SCPE_OK;
 
      case CONO:
@@ -480,7 +494,8 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
             df10->status &= ~(CXR_ILFC|CXR_SD_RAE);
          if (*data & WRT_CW)
             df10_writecw(df10);
-//      fprintf(stderr, "RP CONO %06o %d PC=%o %06o\n\r", (uint32)*data, ctlr, PC, df10->status);
+         sim_debug(DEBUG_CONO, dptr, "RP %03o CONO %06o %d PC=%o %06o\n",
+               dev, (uint32)*data, ctlr, PC, df10->status);
          return SCPE_OK;
 
      case DATAI:
@@ -502,10 +517,13 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
               *data |= ((t_uint64)(rp_drive[ctlr])) << 18;
         }
         *data |= ((t_uint64)(rp_reg[ctlr])) << 30;
+        sim_debug(DEBUG_DATAIO, dptr, "RP %03o DATI %012llo, %d PC=%o\n\r", 
+                    dev, *data, ctlr, PC);
         return SCPE_OK;
 
      case DATAO:
-  //    fprintf(stderr, "RP DATO %012llo, %d PC=%o\n\r", *data, ctlr, PC);
+         sim_debug(DEBUG_DATAIO, dptr, "RP %03o DATO %012llo, %d PC=%o\n\r",
+                    dev, *data, ctlr, PC);
          if (df10->status & BUSY) {
             df10->status |= CC_CHAN_ACT;
             return SCPE_OK;
@@ -693,13 +711,14 @@ rp_read(int ctlr, int unit, int reg) {
 
 t_stat rp_svc (UNIT *uptr) 
 {
-    int dtype = GET_DTYPE(uptr->flags);
-    DEVICE *dptr;
+    int          dtype = GET_DTYPE(uptr->flags);
+    DEVICE      *dptr;
     struct df10 *df;
-    int diff, unit, ctlr, da;
-    int cyl = uptr->u4 & 01777;
-    t_stat err, r;
+    int          diff, unit, ctlr, da;
+    int          cyl = uptr->u4 & 01777;
+    t_stat       err, r;
 
+    dptr = rp_devs[ctlr];
     /* Check if seeking */
     if (uptr->u3 & DS_PIP) {
         if (cyl > rp_drv_tab[dtype].cyl) {
@@ -917,40 +936,40 @@ rp_boot(int32 unit_num, DEVICE * rptr)
 
 t_stat rp_attach (UNIT *uptr, CONST char *cptr)
 {
-int32 drv, i, p;
-t_stat r;
-DEVICE *rptr;
-DIB *dib;
-int ctlr;
+    int32 drv, i, p;
+    t_stat r;
+    DEVICE *rptr;
+    DIB *dib;
+    int ctlr;
 
-uptr->capac = rp_drv_tab[GET_DTYPE (uptr->flags)].size;
-r = attach_unit (uptr, cptr);
-if (r != SCPE_OK)
-    return r;
-rptr = find_dev_from_unit(uptr);
-if (rptr == 0)
+    uptr->capac = rp_drv_tab[GET_DTYPE (uptr->flags)].size;
+    r = attach_unit (uptr, cptr);
+    if (r != SCPE_OK)
+        return r;
+    rptr = find_dev_from_unit(uptr);
+    if (rptr == 0)
+        return SCPE_OK;
+    dib = (DIB *) rptr->ctxt;
+    ctlr = dib->dev_num & 014;
+    uptr->u4 = 0;
+    uptr->u3 &= ~DS_VV;
+    rp_df10[ctlr].status |= PI_ENABLE;
+    set_interrupt(dib->dev_num, rp_df10[ctlr].status & 7);
     return SCPE_OK;
-dib = (DIB *) rptr->ctxt;
-ctlr = dib->dev_num & 014;
-uptr->u4 = 0;
-uptr->u3 &= ~DS_VV;
-rp_df10[ctlr].status |= PI_ENABLE;
-set_interrupt(dib->dev_num, rp_df10[ctlr].status & 7);
-return SCPE_OK;
 }
 
 /* Device detach */
 
 t_stat rp_detach (UNIT *uptr)
 {
-int32 drv;
+    int32 drv;
 
-if (!(uptr->flags & UNIT_ATT))                          /* attached? */
-    return SCPE_OK;
-if (sim_is_active (uptr))                              /* unit active? */
-    sim_cancel (uptr);                                  /* cancel operation */
-uptr->u3 &= ~DS_VV;
-return detach_unit (uptr);
+    if (!(uptr->flags & UNIT_ATT))                          /* attached? */
+        return SCPE_OK;
+    if (sim_is_active (uptr))                              /* unit active? */
+        sim_cancel (uptr);                                  /* cancel operation */
+    uptr->u3 &= ~DS_VV;
+    return detach_unit (uptr);
 }
 
 t_stat rp_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
@@ -970,7 +989,7 @@ return SCPE_OK;
 
 const char *rp_description (DEVICE *dptr)
 {
-return "RP04/05/06/07 Massbus disk controller";
+    return "RP04/05/06/07 Massbus disk controller";
 }
 
 

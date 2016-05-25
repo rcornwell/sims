@@ -26,6 +26,7 @@
 void df10_setirq(struct df10 *df) {
       df->status |= PI_ENABLE;
       set_interrupt(df->devnum, df->status & API_MASK);
+//      fprintf(stderr, "df irq %06o %03o\n\r", df->status, df->devnum);
 }
 
 void df10_writecw(struct df10 *df) {
@@ -45,6 +46,7 @@ void df10_setup(struct df10 *df, uint32 addr) {
       df->ccw = df->cia;
       df->wcr = 0;
       df->status |= BUSY;
+//      fprintf(stderr, "df start %06o %06o %06o\n\r", df->status, df->wcr, df->cda);
 }
 
 int df10_fetch(struct df10 *df) {
@@ -69,7 +71,7 @@ int df10_fetch(struct df10 *df) {
       df->wcr = (data >> CSHIFT) & WMASK;
       df->cda = data &AMASK;
       df->ccw = (df->ccw + 1) & AMASK;
-//      fprintf(stderr, "hk fetch %06o %06o\n\r", df->wcr, df->cda);
+//     fprintf(stderr, "df fetch %06o %06o\n\r", df->wcr, df->cda);
       return 1;
 }
 

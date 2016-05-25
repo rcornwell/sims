@@ -341,7 +341,7 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
 #ifdef KI10
         *data |= B22_FLAG;
 #endif
-        sim_debug(DEBUG_CONI, dptr, "DP %03o CONI %06o %d PC=%o\n\r", dev, 
+        sim_debug(DEBUG_CONI, dptr, "DP %03o CONI %06o %d PC=%o\n", dev, 
                            (uint32)*data, ctlr, PC);
         return SCPE_OK;
 
@@ -377,7 +377,7 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
              if (tmp) 
                  df10->status &= ~PI_ENABLE;
          }
-         sim_debug(DEBUG_CONI, dptr, "DP %03o CONO %06o %d PC=%o %06o\n\r", dev,
+         sim_debug(DEBUG_CONI, dptr, "DP %03o CONO %06o %d PC=%o %06o\n", dev,
                  (uint32)*data, ctlr, PC, df10->status);
          return SCPE_OK;
 
@@ -405,13 +405,13 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
                 res |= 0400>>unit;
             uptr++;
          }
-         sim_debug(DEBUG_DATAIO, dptr, "DP %03o DATI %012llo %d  PC=%o F=%o\n\r", 
+         sim_debug(DEBUG_DATAIO, dptr, "DP %03o DATI %012llo %d  PC=%o F=%o\n", 
                  dev, res, ctlr, PC, uptr->UFLAGS);
          *data = res;
          return SCPE_OK;
 
      case DATAO:
-         sim_debug(DEBUG_DATAIO, dptr, "DP %03o DATO %012llo, %d PC=%o\n\r", 
+         sim_debug(DEBUG_DATAIO, dptr, "DP %03o DATO %012llo, %d PC=%o\n", 
                  dev, *data, ctlr, PC);
          if (df10->status & BUSY) {
             uptr->STATUS |= ILL_CMD;
@@ -529,7 +529,7 @@ t_stat dp_svc (UNIT *uptr)
            /* Cylinder, Surface, Sector all ok */
            if (BUF_EMPTY(uptr)) {
                  sim_debug(DEBUG_DETAIL, dptr, 
-                       "DP %d cmd=%o cyl=%d (%o) sect=%d surf=%d %d\n\r",
+                       "DP %d cmd=%o cyl=%d (%o) sect=%d surf=%d %d\n",
                         ctlr, uptr->UFLAGS, cyl, cyl, sect, surf,uptr->CUR_CYL);
                 if (uptr->STATUS & END_CYL) {
                      uptr->UFLAGS |= DONE;
@@ -600,7 +600,7 @@ t_stat dp_svc (UNIT *uptr)
                r = df10_write(df10);
                break;
            } 
-           sim_debug(DEBUG_DATA, dptr, "Xfer %d %012llo\n\r",
+           sim_debug(DEBUG_DATA, dptr, "Xfer %d %012llo\n",
                           uptr->DATAPTR, df10->buf);
            uptr->DATAPTR++;
            if (uptr->DATAPTR >= RP_NUMWD || r == 0 ) {
@@ -647,7 +647,7 @@ t_stat dp_svc (UNIT *uptr)
            if(uptr->UFLAGS & SEEK_STATE) {
                diff = cyl - uptr->CUR_CYL;
                diffs = (diff < 0) ? -1 : 1;
-               sim_debug(DEBUG_DETAIL, dptr, "DP Seek %d %d %d %d\n\r",
+               sim_debug(DEBUG_DETAIL, dptr, "DP Seek %d %d %d %d\n",
                           ctlr, cyl, uptr->CUR_CYL, diff);
                if (diff == 0) {
                    uptr->UFLAGS |= SEEK_DONE;

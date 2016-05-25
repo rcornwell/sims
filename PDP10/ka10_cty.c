@@ -29,7 +29,6 @@
 #define UNIT_DUMMY      (1 << UNIT_V_UF)
 
 extern int32 tmxr_poll;
-//int32 tmxr_poll = 16000; 
 t_stat ctyi_svc (UNIT *uptr);
 t_stat ctyo_svc (UNIT *uptr);
 t_stat cty_reset (DEVICE *dptr);
@@ -44,11 +43,11 @@ const char *cty_description (DEVICE *dptr);
    cty_unit      CTY unit descriptor
    cty_reg       CTY register list
 */
-#define TEL_RDY  0010
-#define TEL_BSY  0020
-#define KEY_RDY  0040
-#define KEY_BSY  0100
-#define KEY_TST  04000
+#define TEL_RDY           0010
+#define TEL_BSY           0020
+#define KEY_RDY           0040
+#define KEY_BSY           0100
+#define KEY_TST          04000
 #define CTY_DEVNUM       0120
 
 t_stat cty_devio(uint32 dev, uint64 *data);
@@ -121,62 +120,61 @@ t_stat cty_devio(uint32 dev, uint64 *data) {
 
 t_stat ctyo_svc (UNIT *uptr)
 {
-t_stat  r;
-int32   ch;
+    t_stat  r;
+    int32   ch;
 
-ch = sim_tt_outcvt ( uptr->u4, TT_GET_MODE (uptr->flags)) ;
-if ((r = sim_putchar_s (ch)) != SCPE_OK) {              /* output; error? */
-    sim_activate (uptr, uptr->wait);                    /* try again */
-    return ((r == SCPE_STALL)? SCPE_OK: r);             /* !stall? report */
-    }
-uptr->u3 &= ~TEL_BSY;
-uptr->u3 |= TEL_RDY;
-set_interrupt(CTY_DEVNUM, uptr->u5);
-return SCPE_OK;
+    ch = sim_tt_outcvt ( uptr->u4, TT_GET_MODE (uptr->flags)) ;
+    if ((r = sim_putchar_s (ch)) != SCPE_OK) {              /* output; error? */
+        sim_activate (uptr, uptr->wait);                    /* try again */
+        return ((r == SCPE_STALL)? SCPE_OK: r);             /* !stall? report */
+        }
+    uptr->u3 &= ~TEL_BSY;
+    uptr->u3 |= TEL_RDY;
+    set_interrupt(CTY_DEVNUM, uptr->u5);
+    return SCPE_OK;
 }
 
 t_stat ctyi_svc (UNIT *uptr)
 {
-int32 ch;
+    int32 ch;
 
-//sim_activate (uptr, KBD_WAIT (uptr->wait, tmxr_poll));  
-sim_clock_coschedule (uptr, tmxr_poll);
-                                                      /* continue poll */
-if ((ch = sim_poll_kbd ()) < SCPE_KFLAG)              /* no char or error? */
-    return ch;
-if (ch & SCPE_BREAK)                                  /* ignore break */
+    sim_clock_coschedule (uptr, tmxr_poll);
+                                                          /* continue poll */
+    if ((ch = sim_poll_kbd ()) < SCPE_KFLAG)              /* no char or error? */
+        return ch;
+    if (ch & SCPE_BREAK)                                  /* ignore break */
+        return SCPE_OK;
+    uptr->u4 = 0177 & sim_tt_inpcvt(ch, TT_GET_MODE (uptr->flags));
+    uptr->u4 = ch & 0177;
+    uptr->u3 |= KEY_RDY;
+    set_interrupt(CTY_DEVNUM, uptr->u5);
     return SCPE_OK;
-uptr->u4 = 0177 & sim_tt_inpcvt(ch, TT_GET_MODE (uptr->flags));
-uptr->u4 = ch & 0177;
-uptr->u3 |= KEY_RDY;
-set_interrupt(CTY_DEVNUM, uptr->u5);
-return SCPE_OK;
 }
 
 /* Reset */
 
 t_stat cty_reset (DEVICE *dptr)
 {
-cty_unit[0].u3 &= ~(TEL_RDY | TEL_BSY);
-cty_unit[1].u3 &= ~(KEY_RDY | KEY_BSY);
-clr_interrupt(CTY_DEVNUM);
-sim_activate (&cty_unit[1], KBD_WAIT (cty_unit[1].wait, tmxr_poll));
-return SCPE_OK;
+    cty_unit[0].u3 &= ~(TEL_RDY | TEL_BSY);
+    cty_unit[1].u3 &= ~(KEY_RDY | KEY_BSY);
+    clr_interrupt(CTY_DEVNUM);
+    sim_activate (&cty_unit[1], KBD_WAIT (cty_unit[1].wait, tmxr_poll));
+    return SCPE_OK;
 }
 
 /* Stop operating system */
 
 t_stat cty_stop_os (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
-M[CTY_SWITCH] = 1;                                 /* tell OS to stop */
-return SCPE_OK;
+    M[CTY_SWITCH] = 1;                                 /* tell OS to stop */
+    return SCPE_OK;
 }
 
 t_stat tty_set_mode (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
-cty_unit[0].flags = (cty_unit[0].flags & ~TT_MODE) | val;
-cty_unit[1].flags = (cty_unit[1].flags & ~TT_MODE) | val;
-return SCPE_OK;
+    cty_unit[0].flags = (cty_unit[0].flags & ~TT_MODE) | val;
+    cty_unit[1].flags = (cty_unit[1].flags & ~TT_MODE) | val;
+    return SCPE_OK;
 }
 
 t_stat cty_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
@@ -198,7 +196,6 @@ return SCPE_OK;
 
 const char *cty_description (DEVICE *dptr)
 {
-return "Console TTY Line";
-                        
+    return "Console TTY Line";
 }
 

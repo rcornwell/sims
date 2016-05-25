@@ -1,6 +1,6 @@
 /* ka10_dk.c: PDP-10 DK subsystem simulator
 
-   Copyright (c) 1993-2012, Richard Cornwell
+   Copyright (c) 1993-2016, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -67,7 +67,7 @@
 
 int32 clk_tps = TIM_TPS;                            /* clock ticks/sec */
 int32 tmr_poll = TIM_WAIT;                          /* clock poll */
-int32 tmxr_poll = TIM_WAIT * TIM_MULT;            /* term mux poll */
+int32 tmxr_poll = TIM_WAIT * TIM_MULT;              /* term mux poll */
 
 extern UNIT cpu_unit;
 
@@ -146,7 +146,7 @@ t_stat dk_devio(uint32 dev, uint64 *data) {
 
         if ((uptr->STAT_REG & CLK_EN) != 0) &&
                 (uptr->STAT_REG & (CLK_FLG|CLK_OVF)) {
-                set_interrupt(dev, uptr->STAT_REG & 7);
+           set_interrupt(dev, uptr->STAT_REG & 7);
         }
         break;
 
@@ -158,7 +158,7 @@ t_stat dk_devio(uint32 dev, uint64 *data) {
 
         if ((uptr->STAT_REG & CLK_EN) != 0) &&
                 (uptr->STAT_REG & (CLK_FLG|CLK_OVF)) {
-                set_interrupt(dev, uptr->STAT_REG & 7);
+           set_interrupt(dev, uptr->STAT_REG & 7);
         }
         break;
    
@@ -178,23 +178,23 @@ t_stat dk_devio(uint32 dev, uint64 *data) {
 
 t_bool rdtim (a10 ea, int32 prv)
 {
-d10 tempbase[2];
+    uint64 tempbase[2];
 
-ReadM (INCA (ea), prv);                                 /* check 2nd word */
-tempbase[0] = tim_base[0];                              /* copy time base */
-tempbase[1] = tim_base[1];
-if (tim_mult != TIM_MULT_T20) {                         /* interpolate? */
-    int32 used;
-    d10 incr;
-    used = tmr_poll - (sim_is_active (&tim_unit) - 1);
-    incr = (d10) (((double) used * TIM_HW_FREQ) /
-        ((double) tmr_poll * (double) clk_tps));
-    tim_incr_base (tempbase, incr);
-    }
-tempbase[0] = tempbase[0] & ~((d10) TIM_HWRE_MASK);     /* clear low 12b */
-Write (ea, tempbase[0], prv);
-Write (INCA(ea), tempbase[1], prv);
-return FALSE;
+    ReadM (INCA (ea), prv);                                 /* check 2nd word */
+    tempbase[0] = tim_base[0];                              /* copy time base */
+    tempbase[1] = tim_base[1];
+    if (tim_mult != TIM_MULT_T20) {                         /* interpolate? */
+        int32  used;
+        uint64 incr;
+        used = tmr_poll - (sim_is_active (&tim_unit) - 1);
+        incr = (uint64) (((double) used * TIM_HW_FREQ) /
+            ((double) tmr_poll * (double) clk_tps));
+        tim_incr_base (tempbase, incr);
+        }
+    tempbase[0] = tempbase[0] & ~((uint64) TIM_HWRE_MASK);  /* clear low 12b */
+    Write (ea, tempbase[0], prv);
+    Write (INCA(ea), tempbase[1], prv);
+    return FALSE;
 }
 
 /* Timer service - the timer is only serviced when the 'ttg' register
@@ -202,48 +202,48 @@ return FALSE;
 
 t_stat dk_svc (UNIT *uptr)
 {
-tmr_poll = sim_rtc_calb (clk_tps);                      /* calibrate */
-sim_activate (uptr, tmr_poll);                          /* reactivate unit */
-tmxr_poll = tmr_poll * tim_mult;                        /* set mux poll */
-tim_incr_base (tim_base, tim_period);                   /* incr time base */
-tim_ttg = tim_period;                                   /* reload */
-apr_flg = apr_flg | APRF_TIM;                           /* request interrupt */
-if (Q_ITS) {                                            /* ITS? */
-    if (pi_act == 0)
+    tmr_poll = sim_rtc_calb (clk_tps);                      /* calibrate */
+    sim_activate (uptr, tmr_poll);                          /* reactivate unit */
+    tmxr_poll = tmr_poll * tim_mult;                        /* set mux poll */
+    tim_incr_base (tim_base, tim_period);                   /* incr time base */
+    tim_ttg = tim_period;                                   /* reload */
+    apr_flg = apr_flg | APRF_TIM;                           /* request interrupt */
+    if (Q_ITS) {                                            /* ITS? */
+        if (pi_act == 0)
             quant = (quant + TIM_ITS_QUANT) & DMASK;
-    if (TSTS (pcst)) {                                  /* PC sampling? */
-        WriteP ((a10) pcst & AMASK, pager_PC);          /* store sample */
-        pcst = AOB (pcst);                              /* add 1,,1 */
+        if (TSTS (pcst)) {                                  /* PC sampling? */
+            WriteP ((a10) pcst & AMASK, pager_PC);          /* store sample */
+            pcst = AOB (pcst);                              /* add 1,,1 */
         }
-    }                                                   /* end ITS */
-else if (t20_idlelock && PROB (100 - tim_t20_prob))
-    t20_idlelock = 0;
-return SCPE_OK;
+    }                                                       /* end ITS */
+    else if (t20_idlelock && PROB (100 - tim_t20_prob))
+        t20_idlelock = 0;
+    return SCPE_OK;
 }
 
 /* Clock coscheduling routine */
 
 int32 clk_cosched (int32 wait)
 {
-int32 t;
+    int32 t;
 
-if (tim_mult == TIM_MULT_T20)
-    return wait;
-t = sim_is_active (&tim_unit);
-return (t? t - 1: wait);
+    if (tim_mult == TIM_MULT_T20)
+        return wait;
+    t = sim_is_active (&tim_unit);
+    return (t? t - 1: wait);
 }
 
 /* Timer reset */
 
 t_stat dk_reset (DEVICE *dptr)
 {
-tim_period = 0;                                         /* clear timer */
-tim_ttg = 0;
-apr_flg = apr_flg & ~APRF_TIM;                          /* clear interrupt */
-tmr_poll = sim_rtc_init (tim_unit.wait);                /* init timer */
-sim_activate (&tim_unit, tmr_poll);                     /* activate unit */
-tmxr_poll = tmr_poll * tim_mult;                        /* set mux poll */
-return SCPE_OK;
+    tim_period = 0;                                         /* clear timer */
+    tim_ttg = 0;
+    apr_flg = apr_flg & ~APRF_TIM;                          /* clear interrupt */
+    tmr_poll = sim_rtc_init (tim_unit.wait);                /* init timer */
+    sim_activate (&tim_unit, tmr_poll);                     /* activate unit */
+    tmxr_poll = tmr_poll * tim_mult;                        /* set mux poll */
+    return SCPE_OK;
 }
 
 

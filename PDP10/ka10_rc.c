@@ -53,7 +53,6 @@
 #define UFLAGS          u5              /* Function */
 
 
-
 #define DISK_SEL        0600000000000
 #define TRACK           0177600000000
 #define SEGMENT         0000177000000
@@ -70,7 +69,7 @@
 #define WCW             0000040
 #define SEC_SCTR        0600000
                        
-#define RST_MSK         0177710         /* CONO reset bits */
+#define RST_MSK         0000000177710   /* CONO reset bits */
 #define B22_FLAG        0040000000000   /* 22 bit controller. */
 #define MAINT_SEG       0010000000000
 #define PRTLT           0004000000000   /* Protected area less then bounds */
@@ -133,7 +132,6 @@ const char      *rc_description (DEVICE *dptr);
 
 UNIT                rc_unit[] = {
 /* Controller 1 */
-#if (NUM_DEVS_RC > 0)
     { UDATA (&rc_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
                  UNIT_ROABLE+(RD10_DTYPE << UNIT_V_DTYPE), RD10_SIZE) },
     { UDATA (&rc_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
@@ -154,7 +152,6 @@ UNIT                rc_unit[] = {
     { UDATA (&rc_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
                  UNIT_ROABLE+(RD10_DTYPE << UNIT_V_DTYPE), RD10_SIZE) },
 #endif
-#endif
 };
 
 DIB rc_dib[] = {
@@ -170,12 +167,11 @@ MTAB                rc_mod[] = {
     {0}
 };
 
-#if (NUM_DEVS_RC > 0)
 DEVICE              rca_dev = {
     "FHA", rc_unit, NULL, rc_mod,
     NUM_UNITS_RC, 8, 18, 1, 8, 36,
     NULL, NULL, &rc_reset, &rc_boot, &rc_attach, &rc_detach,
-    &rc_dib[0], 0, 0, NULL,
+    &rc_dib[0], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &rc_help, NULL, NULL, &rc_description
 };
 
@@ -184,31 +180,43 @@ DEVICE              rcb_dev = {
     "FHB", &rc_unit[010], NULL, rc_mod,
     NUM_UNITS_RC, 8, 18, 1, 8, 36,
     NULL, NULL, &rc_reset, &rc_boot, &rc_attach, &rc_detach,
-    &rc_dib[1], 0, 0, NULL,
+    &rc_dib[1], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &rc_help, NULL, NULL, &rc_description
 };
 
 #endif
+
+DEVICE *rc_devs[] = {
+    &rca_dev,
+#if (NUM_DEVS_RC > 1)
+    &rcb_dev,
 #endif
+};
+
 
 t_stat rc_devio(uint32 dev, uint64 *data) {
-     uint64     res;
-     int        ctlr = (dev - RC_DEVNUM) >> 2;
+     uint64       res;
+     int          ctlr = (dev - RC_DEVNUM) >> 2;
      struct df10 *df10 = &rc_df10[ctlr];
-     UNIT       *uptr;
-     int unit;
-     int cyl;
-     int tmp;
-     int drv;
+     UNIT        *uptr;
+     DEVICE      *dptr;
+     int          unit;
+     int          cyl;
+     int          tmp;
+     int          drv;
+
      if (ctlr < 0 || ctlr > NUM_DEVS_RC)
         return SCPE_OK;
+
+     dptr = rc_devs[ctlr];
      switch(dev & 3) {
      case CONI:
         *data = df10->status;
 #ifdef KI10
         *data |= B22_FLAG;
 #endif
- //     fprintf(stderr, "HK CONI %06o PC=%o\n\r", (uint32)*data, PC);
+        sim_debug(DEBUG_CONI, dptr, "HK %03o CONI %06o PC=%o\n", dev,
+                          (uint32)*data, PC);
         break;
      case CONO:
          if (*data & PI_ENABLE)
@@ -230,17 +238,20 @@ t_stat rc_devio(uint32 dev, uint64 *data) {
          if (*data & CCW_COMP) {
             df10_writecw(df10);
          }
-//      fprintf(stderr, "HK CONO %06o PC=%o %06o\n\r", (uint32)*data, PC, df10->status);
+         sim_debug(DEBUG_CONO, dptr, "HK %03o CONO %06o PC=%o %06o\n", dev, 
+                   (uint32)*data, PC, df10->status);
          break;
      case DATAI:
          *data = rc_ipr[ctlr];
          unit = (rc_ipr[ctlr] & SEC_SCTR) >> 16;
          uptr = &rc_unit[(ctlr * NUM_UNITS_RC) + unit];
          *data |= (uptr->UFLAGS >> 3) & 0177;
-//      fprintf(stderr, "HK DATI %012llo PC=%o F=%o\n\r", *data, PC, uptr->UFLAGS);
+         sim_debug(DEBUG_DATAIO, dptr, "HK %03o DATI %012llo PC=%o F=%o\n",
+                  dev, *data, PC, uptr->UFLAGS);
          break;
      case DATAO:
- //     fprintf(stderr, "HK DATO %012llo, PC=%o\n\r", *data, PC);
+         sim_debug(DEBUG_DATAIO, dptr, "HK %03o DATO %012llo, PC=%o\n",
+                  dev, *data, PC);
          if (df10->status & BUSY) {
             return SCPE_OK;
          }
@@ -255,22 +266,18 @@ t_stat rc_devio(uint32 dev, uint64 *data) {
          if ((uptr->flags & UNIT_ATT) == 0) {
             df10->status |= NOT_RDY;
             df10_setirq(df10);
-//          fprintf(stderr, "HK not attached\n\r");
             return SCPE_OK;
          }
          if ((uptr->flags & UNIT_WPRT) && *data & WRITE) {
             df10->status |= ILL_WR;
             df10_setirq(df10);
-//          fprintf(stderr, "HK writeprot\n\r");
             return SCPE_OK;
          }
          tmp = (uint32)(*data >> 15);
-//       fprintf(stderr, "HK location %x\n\r", tmp >> 3);
          df10_setup(df10, (uint32)*data);
          uptr->UFLAGS =  tmp | ((*data & WRITE) != 0) | (ctlr << 1);
          uptr->DATAPTR = -1;    /* Set no data */
          CLR_BUF(uptr);
-//          fprintf(stderr, "HK init %o %o\n\r", uptr->UFLAGS, df10->status);
          sim_activate(uptr, 200);
         break;
     }
@@ -280,39 +287,45 @@ t_stat rc_devio(uint32 dev, uint64 *data) {
 
 t_stat rc_svc (UNIT *uptr) 
 {
-   int dtype = GET_DTYPE(uptr->flags);
-   int ctlr = (uptr->UFLAGS >> 1) & 03;
-   int seg = (uptr->UFLAGS >> 3) & 0177;
-   int cyl = (uptr->UFLAGS >> 10) & 0777;
-   int wr = (uptr->UFLAGS & 1);
-   int seg_size = rc_drv_tab[dtype].wd_seg;
-   struct df10  *df10 = &rc_df10[ctlr];
-   int tmp, wc;
-   t_stat err, r;
+   int           dtype = GET_DTYPE(uptr->flags);
+   int           ctlr  = (uptr->UFLAGS >> 1) & 03;
+   int           seg   = (uptr->UFLAGS >> 3) & 0177;
+   int           cyl   = (uptr->UFLAGS >> 10) & 0777;
+   int           wr    = (uptr->UFLAGS & 1);
+   int           seg_size = rc_drv_tab[dtype].wd_seg;
+   struct df10  *df10  = &rc_df10[ctlr];
+   int           tmp, wc;
+   DEVICE       *dptr;
+   t_stat        err, r;
 
+   dptr = rc_devs[ctlr];
    /* Check if we need to seek */
    if (uptr->DATAPTR == -1) {
         if (((cyl & 017) > 10) || (((cyl >> 4) & 017) > 10)) {
-//      fprintf(stderr, "HK non-bcd cyl %02x %d %o\n\r", cyl, rc_drv_tab[dtype].seg, uptr->UFLAGS);
+              sim_debug(DEBUG_DETAIL, dptr, "HK %d non-bcd cyl %02x %d %o\n", 
+                        ctlr, cyl, rc_drv_tab[dtype].seg, uptr->UFLAGS);
               df10_finish_op(df10, TRK_SEL_E);
               return SCPE_OK;
         }
         cyl = (((cyl >> 4) & 017) * 10) + (cyl & 017) +
                 ((cyl & 0x100) ? 100 : 0);
         if (cyl >= rc_drv_tab[dtype].cyl) {
-//      fprintf(stderr, "HK invalid cyl %d %d %o\n\r", cyl, rc_drv_tab[dtype].cyl, uptr->UFLAGS);
+              sim_debug(DEBUG_DETAIL, dptr, "HK %d invalid cyl %d %d %o\n", 
+                       ctlr, cyl, rc_drv_tab[dtype].cyl, uptr->UFLAGS);
               df10_finish_op(df10, S_ERROR);
               return SCPE_OK;
         }
         /* Convert segment from BCD to binary */
         if ((seg & 017) > 10) {
-//      fprintf(stderr, "HK non-bcd seg %02x %d %o\n\r", seg, rc_drv_tab[dtype].seg, uptr->UFLAGS);
+              sim_debug(DEBUG_DETAIL, dptr, "HK %d non-bcd seg %02x %d %o\n",
+                       ctlr, seg, rc_drv_tab[dtype].seg, uptr->UFLAGS);
               df10_finish_op(df10, S_ERROR);
               return SCPE_OK;
         }
         seg = (((seg >> 4) & 07) * 10) + (seg & 017);
         if (seg >= rc_drv_tab[dtype].seg) {
-//      fprintf(stderr, "HK invalid sec %d %d %o\n\r", seg, rc_drv_tab[dtype].seg, uptr->UFLAGS);
+              sim_debug(DEBUG_DETAIL, dptr, "HK %d invalid sec %d %d %o\n", 
+                       ctlr, seg, rc_drv_tab[dtype].seg, uptr->UFLAGS);
               df10_finish_op(df10, S_ERROR);
               return SCPE_OK;
         }
@@ -324,7 +337,8 @@ t_stat rc_svc (UNIT *uptr)
            err = sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
            wc = sim_fread (&rc_buf[ctlr][0], sizeof(uint64), 
                         seg_size, uptr->fileref);
-//      fprintf(stderr, "HK Read %d %d %d %x\n\r", da, cyl, seg, uptr->UFLAGS << 1 );
+           sim_debug(DEBUG_DETAIL, dptr, "HK %d Read %d %d %d %x\n", 
+                ctlr, da, cyl, seg, uptr->UFLAGS << 1 );
            for (; wc < seg_size; wc++)
                 rc_buf[ctlr][wc] = 0;
          }
@@ -353,11 +367,11 @@ t_stat rc_svc (UNIT *uptr)
                  uptr->DATAPTR++;
              }
              da = ((cyl * rc_drv_tab[dtype].seg) + seg) * seg_size;
-//      fprintf(stderr, "HK Write %d %d %d %x %d\n\r", da, cyl, seg, uptr->UFLAGS << 1, uptr->hwmark );
+             sim_debug(DEBUG_DETAIL, dptr, "HK %d Write %d %d %d %x %d\n",
+                  ctlr, da, cyl, seg, uptr->UFLAGS << 1, uptr->hwmark );
              err = sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
              wc = sim_fwrite(&rc_buf[ctlr][0],sizeof(uint64), 
                         seg_size, uptr->fileref);
-//             err = ferror(uptr->fileref);
         }
         uptr->DATAPTR = -1;
         seg++;
@@ -445,8 +459,9 @@ rc_boot(int32 unit_num, DEVICE * dptr)
        fseek(uptr->fileref, (seg * wps) * sizeof(uint64), SEEK_SET);
        fxread (&rc_buf[0][0], sizeof(uint64), wps, uptr->fileref);
        ptr = 0;
-       for(wc = wps; wc > 0; wc--)
-              M[addr++] = rc_buf[0][ptr++];
+       for(wc = wps; wc > 0; wc--) {
+          M[addr++] = rc_buf[0][ptr++];
+       }
     }
     PC = MEMSIZE - 512;
     return SCPE_OK;
