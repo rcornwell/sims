@@ -243,11 +243,17 @@ MTAB cpu_mod[] = {
     { 0 }
     };
 
+/* Simulator debug controls */
+DEBTAB              cpu_debug[] = {
+    {"IRQ", DEBUG_IRQ, "Debug IRQ requests"},
+    {0, 0}
+};
+
 DEVICE cpu_dev = {
     "CPU", &cpu_unit, cpu_reg, cpu_mod,
     1, 8, 18, 1, 8, 36,
     &cpu_ex, &cpu_dep, &cpu_reset,
-    NULL, NULL, NULL, NULL, 0, 0, NULL,
+    NULL, NULL, NULL, NULL, DEV_DEBUG, 0, cpu_debug,
     NULL, NULL, &cpu_help, NULL, NULL, &cpu_description
     };
 
@@ -532,12 +538,13 @@ void set_interrupt(int dev, int lvl) {
        dev_irq[dev>>2] = 0200 >> lvl;
        pi_pending = 1;
 //       if (dev != 4 && (dev & 0774) != 0120)
-//       fprintf(stderr, "set irq %o %o\n\r", dev & 0774, lvl);
+       sim_debug(DEBUG_IRQ, &cpu_dev, "set irq %o %o\n", dev & 0774, lvl);
     }
 }
 
 void clr_interrupt(int dev) {
     dev_irq[dev>>2] = 0;
+    sim_debug(DEBUG_IRQ, &cpu_dev, "clear irq %o\n", dev & 0774);
 }
 
 void check_apr_irq() {
@@ -567,7 +574,7 @@ int check_irq_level() {
      if (lvl == 0)
         pi_pending = 0;
      PIR |= (lvl & PIE);
-    // fprintf(stderr, "PIR=%o PIE=%o\n\r", PIR, PIE);
+//     fprintf(stderr, "PIR=%o PIE=%o\n\r", PIR, PIE);
      /* Compute mask for pi_ok */
      pi_t = (~PIR & ~PIH) >> 1;
      pi_ok = 0100 & (PIR & ~PIH);

@@ -105,6 +105,7 @@
 #define DEBUG_CONI      0x0000010       /* Show CONI instructions */
 #define DEBUG_CONO      0x0000020       /* Show CONO instructions */
 #define DEBUG_DATAIO    0x0000040       /* Show DATAI/O instructions */
+#define DEBUG_IRQ       0x0000080       /* Show IRQ requests */
 
 extern DEBTAB dev_debug[];
 

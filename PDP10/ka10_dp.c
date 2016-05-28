@@ -377,7 +377,7 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
              if (tmp) 
                  df10->status &= ~PI_ENABLE;
          }
-         sim_debug(DEBUG_CONI, dptr, "DP %03o CONO %06o %d PC=%o %06o\n", dev,
+         sim_debug(DEBUG_CONO, dptr, "DP %03o CONO %06o %d PC=%o %06o\n", dev,
                  (uint32)*data, ctlr, PC, df10->status);
          return SCPE_OK;
 
