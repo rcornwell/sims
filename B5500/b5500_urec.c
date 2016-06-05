@@ -38,7 +38,7 @@
 
 /* For Card reader, when set returns end of file at end of deck. */
 /* Reset after sent to system */
-#define MODE_EOF        (0x40 << UNIT_V_MODE)
+#define MODE_EOF        (0x40 << UNIT_V_CARD_MODE)
 
 
 
