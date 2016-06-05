@@ -678,6 +678,9 @@ t_stat mt_srv(UNIT * uptr)
     extern uint8        astmode;
 #endif
 
+    /* Call channel proccess to make sure data is ready */
+    chan_proc();
+
     /* Channel has disconnected, abort current read. */
     if ((mt_chan[chan] & 037) == (MTC_SEL | unit) &&
                  chan_stat(chan, DEV_DISCO)) {

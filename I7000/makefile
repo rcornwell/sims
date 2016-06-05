@@ -25,7 +25,7 @@ LDFLAGS = -lm -lwsock32
 #NETWORK_OPT = -DUSE_NETWORK -lwpcap -lpacket
 #endif
 #endif
-CC=gcc -g -D_GNU_SOURCE -I. 
+CC=gcc -g -D_GNU_SOURCE -I. -DUSE_SIM_CARD
 LDFLAGS = -lm -lrt
 
 

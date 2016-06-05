@@ -121,8 +121,3 @@ int chan_cmd(uint16 dev, uint16 cmd, uint32 addr);
                                           /* S - Floating sub */
                                           /* M - Floating mul */
                                           /* D - Floating div */
-        
-
-
-
-

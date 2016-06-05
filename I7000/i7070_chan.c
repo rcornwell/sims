@@ -1183,22 +1183,22 @@ chan_fetch(int chan)
           chan, loc, op[chan], cmd[chan], caddr[chan], limit[chan]);
 }
 
-void chan_set_attn_a(chan) {
+void chan_set_attn_a(int chan) {
     pri_latchs[0] |= 0x002;
 }
 
-void chan_set_attn_b(chan) {
+void chan_set_attn_b(int chan) {
     pri_latchs[0] |= 0x004;
 }
 
-void chan_set_attn_inq(chan) {
+void chan_set_attn_inq(int chan) {
     if (chan == CHAN_UREC)
         pri_latchs[0] |= 0x080;
     else
         pri_latchs[0] |= 0x100;
 }
 
-void chan_clear_attn_inq(chan) {
+void chan_clear_attn_inq(int chan) {
     if (chan == CHAN_UREC)
         pri_latchs[0] &= ~0x080;
     else

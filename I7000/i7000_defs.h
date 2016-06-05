@@ -267,13 +267,17 @@ extern DEBTAB dev_debug[];
 #define UNIT_V_SET      (UNIT_V_UF + 7)
 #define CHAN_SET        (1 << UNIT_V_SET)  
 
-extern t_value assembly[NUM_CHAN];             /* Assembly register */
+extern t_value  assembly[NUM_CHAN];             /* Assembly register */
 /* I/O routine functions */
 /* Channel half of controls */
 /* Channel status */
 extern uint32   chan_flags[NUM_CHAN];           /* Channel flags */
-extern char     *chname[NUM_CHAN];              /* Channel names */
+extern char    *chname[NUM_CHAN];               /* Channel names */
 extern int      num_devs[NUM_CHAN];             /* Number devices per channel*/
+extern uint8    lpr_chan9[NUM_CHAN]; 
+#ifdef I7010
+extern uint8    lpr_chan12[NUM_CHAN]; 
+#endif
 
 /* Sense information for 7909 channels */
 #define SNS_IOCHECK     0x00000400      /* IO Check */
@@ -370,6 +374,23 @@ void chan9_set_attn(int chan, int sel);
 void chan9_set_error(int chan, uint32 mask);
 
 void chan_proc();
+
+#ifdef I7010
+/* Sets the device that will interrupt on the channel. */
+t_stat set_urec(UNIT * uptr, int32 val, CONST char *cptr, void *desc);
+t_stat get_urec(FILE * st, UNIT * uptr, int32 v, CONST void *desc);
+/* Execute the next channel instruction. */
+void chan_set_attn_urec(int chan, uint16 addr);
+void chan_set_attn_inq(int chan);
+void chan_clear_attn_inq(int chan);
+#endif
+
+#ifdef I7070
+void chan_set_attn_a(int chan);
+void chan_set_attn_b(int chan);
+void chan_set_attn_inq(int chan);
+void chan_clear_attn_inq(int chan);
+#endif
 
 /* Convert micro seconds to click ticks */
 #define us_to_ticks(us) (((us) * 10) / cycle_time)
@@ -582,5 +603,8 @@ extern DEVICE      chan_dev;
 extern UNIT        chan_unit[]; 
 extern REG         cpu_reg[];
 extern int         cycle_time;
+
+
+
 
 #endif /* _I7000_H_ */

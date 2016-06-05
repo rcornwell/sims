@@ -67,20 +67,6 @@
 #define URCSTA_NOXFER   01000   /* Don't set up to transfer after feed */
 #define URCSTA_LOAD     01000   /* Load flag for 7070 card reader */
 
-extern int32        sim_interval;
-extern void         chan_clear_attn_inq(int chan);
-extern void         chan_set_attn_inq(int chan);
-#ifdef I7070
-extern void         chan_set_attn_a(int chan);
-extern void         chan_set_attn_b(int chan);
-#endif
-extern uint8        lpr_chan9[NUM_CHAN];
-#ifdef I7010
-extern void         chan_set_attn_urec(int chan, uint16 addr);
-extern uint8        lpr_chan12[NUM_CHAN];
-#endif
-
-
 uint32              cdp_cmd(UNIT *, uint16, uint16);
 void                cdp_ini(UNIT *, t_bool);
 t_stat              cdp_srv(UNIT *);
@@ -271,7 +257,7 @@ cdp_srv(UNIT *uptr) {
         struct _card_data   *data;
         uint8               ch = 0;
 
-        data = (struct _card_data *)uptr->u3;
+        data = (struct _card_data *)uptr->up7;
 
 #ifdef I7080
         switch(chan_read_char(chan, &ch, 0)) {

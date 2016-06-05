@@ -67,19 +67,6 @@
 #define URCSTA_NOXFER   01000   /* Don't set up to transfer after feed */
 #define URCSTA_LOAD     01000   /* Load flag for 7070 card reader */
 
-extern int32        sim_interval;
-extern void         chan_clear_attn_inq(int chan);
-extern void         chan_set_attn_inq(int chan);
-#ifdef I7070
-extern void         chan_set_attn_a(int chan);
-extern void         chan_set_attn_b(int chan);
-#endif
-extern uint8        lpr_chan9[NUM_CHAN];
-#ifdef I7010
-extern void         chan_set_attn_urec(int chan, uint16 addr);
-extern uint8        lpr_chan12[NUM_CHAN];
-#endif
-
 
 struct _lpr_data
 {

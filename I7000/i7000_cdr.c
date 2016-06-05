@@ -67,19 +67,6 @@
 #define URCSTA_NOXFER   01000   /* Don't set up to transfer after feed */
 #define URCSTA_LOAD     01000   /* Load flag for 7070 card reader */
 
-extern int32        sim_interval;
-extern void         chan_clear_attn_inq(int chan);
-extern void         chan_set_attn_inq(int chan);
-#ifdef I7070
-extern void         chan_set_attn_a(int chan);
-extern void         chan_set_attn_b(int chan);
-#endif
-extern uint8        lpr_chan9[NUM_CHAN];
-#ifdef I7010
-extern void         chan_set_attn_urec(int chan, uint16 addr);
-extern uint8        lpr_chan12[NUM_CHAN];
-#endif
-
 uint32              cdr_cmd(UNIT *, uint16, uint16);
 t_stat              cdr_boot(int32, DEVICE *);
 t_stat              cdr_srv(UNIT *);
@@ -198,6 +185,8 @@ cdr_srv(UNIT *uptr) {
     int                 u = (uptr - cdr_unit);
     struct _card_data   *data;
 
+    data = (struct _card_data *)uptr->up7;
+
     /* Waiting for disconnect */
     if (uptr->u5 & URCSTA_WDISCO) {
         if (chan_stat(chan, DEV_DISCO)) {
@@ -266,7 +255,6 @@ cdr_srv(UNIT *uptr) {
     if (uptr->u5 & URCSTA_READ && uptr->u4 < 80) {
         uint8                ch = 0;
 
-        data = (struct _card_data *)uptr->u3;
 #ifdef I7080
         /* Detect RSU */
         if (data->image[uptr->u4] == 0x924) {
