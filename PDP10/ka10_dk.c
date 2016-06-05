@@ -73,7 +73,7 @@ extern UNIT cpu_unit;
 
 DEVICE dk_dev;
 t_stat dk_devio(uint32 dev, uint64 *data);
-void tim_incr_base (d10 *base, d10 incr);
+void tim_incr_base (uint64 *base, uint64 incr);
 
 /* TIM data structures
 
@@ -211,10 +211,6 @@ t_stat dk_svc (UNIT *uptr)
     if (Q_ITS) {                                            /* ITS? */
         if (pi_act == 0)
             quant = (quant + TIM_ITS_QUANT) & DMASK;
-        if (TSTS (pcst)) {                                  /* PC sampling? */
-            WriteP ((a10) pcst & AMASK, pager_PC);          /* store sample */
-            pcst = AOB (pcst);                              /* add 1,,1 */
-        }
     }                                                       /* end ITS */
     else if (t20_idlelock && PROB (100 - tim_t20_prob))
         t20_idlelock = 0;

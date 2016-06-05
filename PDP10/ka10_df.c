@@ -25,7 +25,7 @@
 
 void df10_setirq(struct df10 *df) {
       df->status |= PI_ENABLE;
-      set_interrupt(df->devnum, df->status & API_MASK);
+      set_interrupt(df->devnum, df->status);
 //      fprintf(stderr, "df irq %06o %03o\n\r", df->status, df->devnum);
 }
 

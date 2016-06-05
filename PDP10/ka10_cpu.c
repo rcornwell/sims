@@ -534,6 +534,7 @@ int opflags[] = {
     
 
 void set_interrupt(int dev, int lvl) {
+    lvl &= 07;
     if (lvl) {
        dev_irq[dev>>2] = 0200 >> lvl;
        pi_pending = 1;
@@ -2952,6 +2953,9 @@ cpu_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 #else
     fprintf(st, "KI10 CPU\n\n");
 #endif
+    fprintf(st, "To stop the cpu use the command:\n\n");
+    fprintf(st, "    sim> SET CTY STOP\n\n");
+    fprintf(st, "This will write a 1 to location %03o, causing TOPS10 to stop\n", CTY_SWITCH);
     fprint_set_help(st, dptr);
     fprint_show_help(st, dptr);
     return SCPE_OK;

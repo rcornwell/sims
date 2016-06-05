@@ -459,6 +459,7 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
      struct df10   *df10;
      UNIT          *uptr;
      int            tmp;
+     int            drive;
 
      for (drive = 0; drive < NUM_DEVS_RP; drive++) {
         if (rp_dib[drive].dev_num == (dev & 0774)) {
@@ -1030,7 +1031,7 @@ t_stat rp_attach (UNIT *uptr, CONST char *cptr)
     if (uptr->flags & UNIT_WLK) 
          uptr->u3 |= DS_WRL;
     rp_df10[ctlr].status |= PI_ENABLE;
-    set_interrupt(dib->dev_num, rp_df10[ctlr].status & 7);
+    set_interrupt(dib->dev_num, rp_df10[ctlr].status);
     return SCPE_OK;
 }
 

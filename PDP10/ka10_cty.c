@@ -48,7 +48,7 @@ const char *cty_description (DEVICE *dptr);
 #define KEY_RDY           0040
 #define KEY_BSY           0100
 #define KEY_TST          04000
-#define CTY_DEVNUM       0120
+#define CTY_DEVNUM        0120
 
 t_stat cty_devio(uint32 dev, uint64 *data);
 
@@ -179,6 +179,9 @@ t_stat tty_set_mode (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 
 t_stat cty_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
+fprintf (st, "To stop the cpu use the command:\n\n");
+fprintf (st, "    sim> SET CTY STOP\n\n");
+fprintf (st, "This will write a 1 to location %03o, causing TOPS10 to stop\n\n", CTY_SWITCH);
 fprintf (st, "The additional terminals can be set to one of four modes: UC, 7P, 7B, or 8B.\n\n");
 fprintf (st, "  mode  input characters        output characters\n\n");
 fprintf (st, "  UC    lower case converted    lower case converted to upper case,\n");

@@ -1,6 +1,6 @@
 /* ka10_pt.c: PDP-10 reader/punch simulator
 
-   Copyright (c) 1993-2011, Richard Cornwell
+   Copyright (c) 2011-2016, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -22,13 +22,6 @@
    Except as contained in this notice, the name of Richard Cornwell shall not be
    used in advertising or otherwise to promote the sale, use or other dealings
    in this Software without prior written authorization from Richard Cornwell.
-
-   lpt          LP8E line printer
-
-   19-Jan-07    RMS     Added UNIT_TEXT
-   25-Apr-03    RMS     Revised for extended file support
-   04-Oct-02    RMS     Added DIB, enable/disable, device number support
-   30-May-02    RMS     Widened POS to 32b
 */
 
 #include "ka10_defs.h"
@@ -53,24 +46,26 @@
 #define TAPE_PR     000400
 
 
-DEVICE ptp_dev;
-t_stat ptp_devio(uint32 dev, uint64 *data);
-t_stat ptp_svc (UNIT *uptr);
-t_stat ptp_reset (DEVICE *dptr);
-t_stat ptp_attach (UNIT *uptr, CONST char *cptr);
-t_stat ptp_detach (UNIT *uptr);
-t_stat ptp_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
-const char *ptp_description (DEVICE *dptr);
-int32 ptp_stopioe = 0;
-
-DEVICE ptr_dev;
-t_stat ptr_devio(uint32 dev, uint64 *data);
-t_stat ptr_svc (UNIT *uptr);
-t_stat ptr_reset (DEVICE *dptr);
-t_stat ptr_attach (UNIT *uptr, CONST char *cptr);
-t_stat ptr_detach (UNIT *uptr);
-t_stat ptr_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
-const char *ptr_description (DEVICE *dptr);
+DEVICE         ptp_dev;
+t_stat         ptp_devio(uint32 dev, uint64 *data);
+t_stat         ptp_svc (UNIT *uptr);
+t_stat         ptp_reset (DEVICE *dptr);
+t_stat         ptp_attach (UNIT *uptr, CONST char *cptr);
+t_stat         ptp_detach (UNIT *uptr);
+t_stat         ptp_help (FILE *st, DEVICE *dptr, UNIT *uptr, 
+                            int32 flag, const char *cptr);
+const char    *ptp_description (DEVICE *dptr);
+int32          ptp_stopioe = 0;
+             
+DEVICE         ptr_dev;
+t_stat         ptr_devio(uint32 dev, uint64 *data);
+t_stat         ptr_svc (UNIT *uptr);
+t_stat         ptr_reset (DEVICE *dptr);
+t_stat         ptr_attach (UNIT *uptr, CONST char *cptr);
+t_stat         ptr_detach (UNIT *uptr);
+t_stat         ptr_help (FILE *st, DEVICE *dptr, UNIT *uptr,
+                             int32 flag, const char *cptr);
+const char    *ptr_description (DEVICE *dptr);
 
 int32 ptr_stopioe = 0;
 
@@ -145,7 +140,7 @@ t_stat ptp_devio(uint32 dev, uint64 *data) {
              sim_activate (&ptp_unit, ptp_unit.wait);
          }
          if (uptr->STATUS & DONE_FLG) 
-             set_interrupt(dev, uptr->STATUS & 7);
+             set_interrupt(dev, uptr->STATUS);
          break;
 
     case DATAO:
@@ -196,32 +191,32 @@ t_stat ptp_svc (UNIT *uptr)
 
 t_stat ptp_reset (DEVICE *dptr)
 {
-UNIT *uptr = &ptp_unit;
-uptr->CHR = 0;
-uptr->CHL = 0;
-uptr->STATUS = 0;
-clr_interrupt(PP_DEVNUM);
-sim_cancel (&ptp_unit);                                 /* deactivate unit */
-return SCPE_OK;
+    UNIT *uptr = &ptp_unit;
+    uptr->CHR = 0;
+    uptr->CHL = 0;
+    uptr->STATUS = 0;
+    clr_interrupt(PP_DEVNUM);
+    sim_cancel (&ptp_unit);                                 /* deactivate unit */
+    return SCPE_OK;
 }
 
 /* Attach routine */
 
 t_stat ptp_attach (UNIT *uptr, CONST char *cptr)
 {
-t_stat reason;
+    t_stat reason;
 
-reason = attach_unit (uptr, cptr);
-uptr->STATUS &= ~NO_TAPE_PP;
-return reason;
+    reason = attach_unit (uptr, cptr);
+    uptr->STATUS &= ~NO_TAPE_PP;
+    return reason;
 }
 
 /* Detach routine */
 
 t_stat ptp_detach (UNIT *uptr)
 {
-uptr->STATUS |= NO_TAPE_PP;
-return detach_unit (uptr);
+    uptr->STATUS |= NO_TAPE_PP;
+    return detach_unit (uptr);
 }
 
 
@@ -245,7 +240,7 @@ t_stat ptr_devio(uint32 dev, uint64 *data) {
              sim_activate (&ptr_unit, ptr_unit.wait);
          }
          if (uptr->STATUS & DONE_FLG) 
-             set_interrupt(dev, uptr->STATUS & 7);
+             set_interrupt(dev, uptr->STATUS);
          break;
 
     case DATAI:
@@ -268,13 +263,13 @@ t_stat ptr_devio(uint32 dev, uint64 *data) {
 /* Unit service */
 t_stat ptr_svc (UNIT *uptr)
 {
-int32 temp;
-uint64 word;
-int     count = (uptr->STATUS & BIN_FLG) ? 6 : 1;
+    int32     temp;
+    uint64    word;
+    int       count = (uptr->STATUS & BIN_FLG) ? 6 : 1;
 
     uptr->STATUS &= ~BUSY_FLG;
     uptr->STATUS |= DONE_FLG;
-    set_interrupt(PR_DEVNUM, uptr->STATUS & 7);
+    set_interrupt(PR_DEVNUM, uptr->STATUS);
 
     if ((ptr_unit.flags & UNIT_ATT) == 0)                   /* attached? */
         return IORETURN (ptr_stopioe, SCPE_UNATT);
@@ -307,32 +302,32 @@ int     count = (uptr->STATUS & BIN_FLG) ? 6 : 1;
 
 t_stat ptr_reset (DEVICE *dptr)
 {
-UNIT *uptr = &ptr_unit;
-uptr->CHR = 0;
-uptr->CHL = 0;
-uptr->STATUS = 0;
-clr_interrupt(PR_DEVNUM);
-sim_cancel (&ptr_unit);                                 /* deactivate unit */
-return SCPE_OK;
+    UNIT *uptr = &ptr_unit;
+    uptr->CHR = 0;
+    uptr->CHL = 0;
+    uptr->STATUS = 0;
+    clr_interrupt(PR_DEVNUM);
+    sim_cancel (&ptr_unit);                                 /* deactivate unit */
+    return SCPE_OK;
 }
 
 /* Attach routine */
 
 t_stat ptr_attach (UNIT *uptr, CONST char *cptr)
 {
-t_stat reason;
+    t_stat reason;
 
-reason = attach_unit (uptr, cptr);
-uptr->STATUS |= TAPE_PR;
-return reason;
+    reason = attach_unit (uptr, cptr);
+    uptr->STATUS |= TAPE_PR;
+    return reason;
 }
 
 /* Detach routine */
 
 t_stat ptr_detach (UNIT *uptr)
 {
-uptr->STATUS &= ~TAPE_PR;
-return detach_unit (uptr);
+    uptr->STATUS &= ~TAPE_PR;
+    return detach_unit (uptr);
 }
 
 t_stat ptr_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)

@@ -1,6 +1,6 @@
 /* ka10_dp.c: Dec Data Products Disk Drive.
 
-   Copyright (c) 2013, Richard Cornwell
+   Copyright (c) 2013-2016, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -607,7 +607,7 @@ t_stat dp_svc (UNIT *uptr)
                if (cmd == WR) {
                     int da = ((cyl * dp_drv_tab[dtype].surf + surf)
                                    * dp_drv_tab[dtype].sect + sect) * RP_NUMWD;
-            /* write block the block */
+                    /* write block the block */
                     for (; uptr->DATAPTR < RP_NUMWD; uptr->DATAPTR++)
                         dp_buf[ctlr][uptr->DATAPTR] = 0;
                     sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
@@ -746,39 +746,39 @@ dp_boot(int32 unit_num, DEVICE * dptr)
 
 t_stat dp_attach (UNIT *uptr, CONST char *cptr)
 {
-int32 drv, i, p;
-t_stat r;
-DEVICE *dptr;
-DIB *dib;
-int ctlr;
+    int32 drv, i, p;
+    t_stat r;
+    DEVICE *dptr;
+    DIB *dib;
+    int ctlr;
 
-uptr->capac = dp_drv_tab[GET_DTYPE (uptr->flags)].size;
-r = attach_unit (uptr, cptr);
-if (r != SCPE_OK)
-    return r;
-dptr = find_dev_from_unit(uptr);
-if (dptr == 0)
+    uptr->capac = dp_drv_tab[GET_DTYPE (uptr->flags)].size;
+    r = attach_unit (uptr, cptr);
+    if (r != SCPE_OK)
+        return r;
+    dptr = find_dev_from_unit(uptr);
+    if (dptr == 0)
+        return SCPE_OK;
+    dib = (DIB *) dptr->ctxt;
+    ctlr = dib->dev_num & 014;
+    uptr->CUR_CYL = 0;
+    uptr->UFLAGS = (NO << 3) | SEEK_DONE | (ctlr >> 2);
+    dp_df10[ctlr].status |= PI_ENABLE;
+    set_interrupt(DP_DEVNUM + (ctlr), dp_df10[ctlr >> 2].status);
     return SCPE_OK;
-dib = (DIB *) dptr->ctxt;
-ctlr = dib->dev_num & 014;
-uptr->CUR_CYL = 0;
-uptr->UFLAGS = (NO << 3) | SEEK_DONE | (ctlr >> 2);
-dp_df10[ctlr].status |= PI_ENABLE;
-set_interrupt(DP_DEVNUM + (ctlr), dp_df10[ctlr >> 2].status & 7);
-return SCPE_OK;
 }
 
 /* Device detach */
 
 t_stat dp_detach (UNIT *uptr)
 {
-int32 drv;
+    int32 drv;
 
-if (!(uptr->flags & UNIT_ATT))                          /* attached? */
-    return SCPE_OK;
-if (sim_is_active (uptr))                              /* unit active? */
-    sim_cancel (uptr);                                  /* cancel operation */
-return detach_unit (uptr);
+    if (!(uptr->flags & UNIT_ATT))                          /* attached? */
+        return SCPE_OK;
+    if (sim_is_active (uptr))                              /* unit active? */
+        sim_cancel (uptr);                                  /* cancel operation */
+    return detach_unit (uptr);
 }
 
 t_stat dp_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
