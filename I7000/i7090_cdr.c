@@ -88,7 +88,7 @@ DEVICE              cdr_dev = {
     "CR", cdr_unit, NULL, cdr_mod,
     NUM_DEVS_CDR, 8, 15, 1, 8, 36,
     NULL, NULL, &cdr_reset, &cdr_boot, &cdr_attach, &cdr_detach,
-    &cdr_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &cdr_dib, DEV_DISABLE | DEV_DEBUG, 0, crd_debug,
     NULL, NULL, &cdr_help, NULL, NULL, &cdr_description
 };
 
@@ -124,7 +124,8 @@ t_stat cdr_srv(UNIT * uptr)
 {
     int                 chan = UNIT_G_CHAN(uptr->flags);
     int                 u = (uptr - cdr_unit);
-    int                 pos, col, bit, b;
+    int                 pos, col, b;
+    uint16              bit;
     t_uint64            mask, wd;
     struct _card_data   *data;
 
@@ -202,7 +203,7 @@ t_stat cdr_srv(UNIT * uptr)
         return SCPE_OK;
     }
 
-    data = (struct _card_data *)uptr->u3;
+    data = (struct _card_data *)uptr->up7;
     /* Bit flip into read buffer */
     bit = 1 << (pos / 2);
     mask = 1;
@@ -265,10 +266,10 @@ cdr_boot(int32 unit_num, DEVICE * dptr)
         return r;
 
 /* Copy first three records. */
-    data = (struct _card_data *)uptr->u3;
+    data = (struct _card_data *)uptr->up7;
     uptr->u5 &= ~CDRPOSMASK;
     for(pos = 0; pos <3; pos++) {
-        int             bit = 1 << (pos / 2);
+        uint16          bit = 1 << (pos / 2);
         t_uint64        mask = 1;
         int             b = (pos & 1)?36:0;
         int             col;
@@ -280,8 +281,10 @@ cdr_boot(int32 unit_num, DEVICE * dptr)
             if (data->image[col-- + b] & bit)
                  M[pos] |= mask;
         }
+        sim_debug(DEBUG_DATA, &cdr_dev, "boot read row %d %012llo\n", 
+                  pos, M[pos]);
     }
-   uptr->u5 |= pos << CDRPOSSHIFT;
+    uptr->u5 |= pos << CDRPOSSHIFT;
 /* Make sure channel is set to start reading rest. */
     return chan_boot(unit_num, dptr);
 }

@@ -224,11 +224,11 @@ typedef struct dib DIB;
 #define DEBUG_TRAP      0x0000002       /* Show CPU Traps */
 #define DEBUG_CMD       0x0000004       /* Show device commands */
 #define DEBUG_DATA      0x0000008       /* Show data transfers */
-#define DEBUG_DETAIL    0x0000010       /* Show details */
-#define DEBUG_EXP       0x0000020       /* Show error conditions */
-#define DEBUG_SNS       0x0000040       /* Shows sense data for 7909 devs */
-#define DEBUG_CTSS      0x0000080       /* Shows CTSS specail instructions */
-#define DEBUG_PROT      0x0000100       /* Protection traps */
+#define DEBUG_DETAIL    0x0000020       /* Show details */
+#define DEBUG_EXP       0x0000040       /* Show error conditions */
+#define DEBUG_SNS       0x0000080       /* Shows sense data for 7909 devs */
+#define DEBUG_CTSS      0x0000100       /* Shows CTSS specail instructions */
+#define DEBUG_PROT      0x0000200       /* Protection traps */
 
 extern DEBTAB dev_debug[];
 

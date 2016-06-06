@@ -22,6 +22,7 @@
 */
 
 #include "i7090_defs.h"
+#include "sim_card.h"
 #include <ctype.h>
 
 t_stat  parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw);
@@ -168,6 +169,17 @@ DEBTAB              dev_debug[] = {
     {"PROT", DEBUG_PROT},
     {0, 0}
 };
+
+DEBTAB              crd_debug[] = {
+    {"CHAN", DEBUG_CHAN},
+    {"CMD", DEBUG_CMD},
+    {"DATA", DEBUG_DATA},
+    {"DETAIL", DEBUG_DETAIL},
+    {"EXP", DEBUG_EXP},
+    {"CARD", DEBUG_CARD},
+    {0, 0}
+};
+
 
 /* Character conversion tables */
 const char          mem_to_ascii[64] = {

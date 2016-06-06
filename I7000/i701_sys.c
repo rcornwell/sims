@@ -22,6 +22,7 @@
 */
 
 #include "i7090_defs.h"
+#include "sim_card.h"
 #include <ctype.h>
 
 t_stat  parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw);
@@ -106,6 +107,16 @@ DEBTAB              dev_debug[] = {
     {"DETAIL", DEBUG_DETAIL, "Show detailed device information"},
     {"EXP", DEBUG_EXP, "Show device exceptions"},
     {"SENSE", DEBUG_SNS, "Show sense data on 7909 channel"},
+    {0, 0}
+};
+
+DEBTAB              crd_debug[] = {
+    {"CHAN", DEBUG_CHAN},
+    {"CMD", DEBUG_CMD},
+    {"DATA", DEBUG_DATA},
+    {"DETAIL", DEBUG_DETAIL},
+    {"EXP", DEBUG_EXP},
+    {"CARD", DEBUG_CARD},
     {0, 0}
 };
 

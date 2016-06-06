@@ -81,7 +81,7 @@ DEVICE              cdp_dev = {
     "CP", cdp_unit, NULL, cdp_mod,
     NUM_DEVS_CDP, 8, 15, 1, 8, 36,
     NULL, NULL, &cdp_reset, NULL, &cdp_attach, &cdp_detach,
-    &cdp_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &cdp_dib, DEV_DISABLE | DEV_DEBUG, 0, crd_debug,
     NULL, NULL, &cdp_help, NULL, NULL, &cdp_description
 };
 
@@ -205,7 +205,7 @@ t_stat cdp_srv(UNIT * uptr)
 
     sim_debug(DEBUG_DATA, &cdp_dev, "unit=%d write column %d ", u, pos);
     wd = 0;
-    data = (struct _card_data *)uptr->u3;
+    data = (struct _card_data *)uptr->up7;
     switch (chan_read(chan, &wd, 0)) {
     case DATA_OK:
         sim_debug(DEBUG_DATA, &cdp_dev, " %012llo\n", wd);
