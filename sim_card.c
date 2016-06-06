@@ -344,6 +344,7 @@ static struct card_formats fmts[] = {
     {MODE_BCD,   "BCD"}, 
     {MODE_CBN,   "CBN"}, 
     {MODE_EBCDIC,"EBCDIC"}, 
+    {MODE_OCTAL, "OCTAL"}, 
     {0, 0},
 };
 
