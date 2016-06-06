@@ -79,6 +79,7 @@ extern "C" {
 #define MODE_BCD        (3 << UNIT_V_CARD_MODE)
 #define MODE_CBN        (4 << UNIT_V_CARD_MODE)
 #define MODE_EBCDIC     (5 << UNIT_V_CARD_MODE)
+#define MODE_OCTAL      (6 << UNIT_V_CARD_MODE)
 /* Allow lower case letters */
 #define MODE_LOWER      (8 << UNIT_V_CARD_MODE)
 #define MODE_026        (0x10 << UNIT_V_CARD_MODE)

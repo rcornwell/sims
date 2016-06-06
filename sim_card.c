@@ -492,18 +492,18 @@ sim_read_card(UNIT * uptr)
 
     dptr = find_dev_from_unit( uptr);
     data = (struct _card_data *)uptr->up7;
-    sim_debug(DEBUG_CARD, dptr, "Read card ");
+    sim_debug(DEBUG_CARD, dptr, "Read card %d, %d", data->ptr, data->len);
 
 /* Move data to start at begining of buffer */
     if (data->ptr > 0) {
         int                 ptr = data->ptr;
         int                 start = 0;
 
-        while (ptr < sizeof(data->cbuff))
+        while (ptr < data->len)
             (data->cbuff)[start++] = (data->cbuff)[ptr++];
         data->len -= data->ptr;
         /* On eof, just return */
-        if (!feof(uptr->fileref))
+        if (!feof(uptr->fileref) && data->len < 512)
             len = sim_fread(&data->cbuff[start], 1,
                             sizeof(data->cbuff) - start, uptr->fileref);
         else
@@ -519,6 +519,7 @@ sim_read_card(UNIT * uptr)
             len = size = 0;
         data->len = size;
     }
+    sim_debug(DEBUG_CARD, dptr, " => %d, %d ", size, data->len);
 
     if ((len < 0 || size == 0) && feof(uptr->fileref)) {
         sim_debug(DEBUG_CARD, dptr, "EOF\n");
@@ -573,7 +574,7 @@ sim_read_card(UNIT * uptr)
         /* Check if modes match */
         if ((uptr->flags & UNIT_CARD_MODE) != MODE_AUTO &&
             (uptr->flags & UNIT_CARD_MODE) != mode) {
-            sim_debug(DEBUG_CARD, dptr, "invalid mode\n\r");
+            sim_debug(DEBUG_CARD, dptr, "invalid mode\n");
             return SCPE_IOERR;
         }
     } else 
@@ -657,23 +658,29 @@ sim_read_card(UNIT * uptr)
                 }
             }
         }
+        /* Scan to end of line, ignore anything after last column */
+        while (data->cbuff[i] != '\n' || data->cbuff[i] != '\r') {
+            if (i > data->len)
+               break;
+            i++;
+        }
         if (data->cbuff[i] == '\n')
             i++;
         if (data->cbuff[i] == '\r')
             i++;
-        sim_debug(DEBUG_CARD, dptr, "]\r\n");
+        sim_debug(DEBUG_CARD, dptr, "]\n");
         break;
 
     case MODE_BIN:
         temp = 0;
-        sim_debug(DEBUG_CARD, dptr, "bin\r\n");
+        sim_debug(DEBUG_CARD, dptr, "bin\n");
         if (size < 160) 
             return SCPE_IOERR;
         /* Move data to buffer */
-        for (j = i = 0; i < 160;) {
+        for (col = i = 0; i < 160;) {
             temp |= data->cbuff[i];
-            data->image[j] = (data->cbuff[i++] >> 4) & 0xF;
-            data->image[j++] |= ((uint16)data->cbuff[i++]) << 4;
+            data->image[col] = (data->cbuff[i++] >> 4) & 0xF;
+            data->image[col++] |= ((uint16)data->cbuff[i++]) << 4;
         }
         /* Check if format error */
         if (temp & 0xF) 
@@ -682,7 +689,7 @@ sim_read_card(UNIT * uptr)
         break;
 
     case MODE_CBN:
-        sim_debug(DEBUG_CARD, dptr, "cbn\r\n");
+        sim_debug(DEBUG_CARD, dptr, "cbn\n");
         /* Check if first character is a tape mark */
         if (size == 1 && ((uint8)data->cbuff[0]) == 0217) {
             r = SCPE_EOF;
@@ -693,7 +700,7 @@ sim_read_card(UNIT * uptr)
         data->cbuff[0] &= 0x7f;
             
         /* Convert card and check for errors */
-        for (j = i = 0; i < size;) {
+        for (col = i = 0; i < data->len && col < 80;) {
             uint8       c;
 
             if (data->cbuff[i] & 0x80)
@@ -701,18 +708,23 @@ sim_read_card(UNIT * uptr)
             c = data->cbuff[i] & 077;
             if (sim_parity_table[(int)c] == (data->cbuff[i++] & 0100))
                 r = SCPE_IOERR;
-            data->image[j] = ((uint16)c) << 6;
+            data->image[col] = ((uint16)c) << 6;
             if (data->cbuff[i] & 0x80)
                 break;
             c = data->cbuff[i] & 077;
             if (sim_parity_table[(int)c] == (data->cbuff[i++] & 0100))
                 r = SCPE_IOERR;
-            data->image[j++] |= c;
+            data->image[col++] |= c;
         }
 
-        /* If not full record, return error */
-        if (size != 160) {
-            r = SCPE_IOERR;
+        if (col >= 80 && (data->cbuff[i] & 0x80) == 0) {
+           r = SCPE_IOERR;
+        }
+        /* Record over length of card, skip until next */
+        while ((data->cbuff[i] & 0x80) == 0) {
+            if (i > data->len)
+               break;
+            i++;
         }
         break;
 
@@ -728,7 +740,7 @@ sim_read_card(UNIT * uptr)
         data->cbuff[0] &= 0x7f;
             
         /* Convert text line into card image */
-        for (col = 0, i = 0; col < 80 && i < size; i++) {
+        for (col = 0, i = 0; col < 80 && i < data->len; i++) {
             if (data->cbuff[i] & 0x80)
                 break;
             c = data->cbuff[i] & 077;
@@ -738,7 +750,19 @@ sim_read_card(UNIT * uptr)
             /* Convert to top column */
             data->image[col++] = sim_bcd_to_hol(c);
         }
-        sim_debug(DEBUG_CARD, dptr, "]\r\n");
+
+        if (col >= 80 && (data->cbuff[i] & 0x80) == 0) {
+           r = SCPE_IOERR;
+        }
+
+        /* Record over length of card, skip until next */
+        while ((data->cbuff[i] & 0x80) == 0) {
+            if (i > data->len)
+               break;
+            i++;
+        }
+
+        sim_debug(DEBUG_CARD, dptr, "]\n");
         break;
 
     case MODE_EBCDIC:
@@ -799,8 +823,9 @@ sim_punch_card(UNIT * uptr, UNIT *stkuptr)
 /* Else if binary or not convertable, dump as image */
 
     /* Try to convert to text */
-    uint8               out[160];
+    uint8               out[512];
     int                 i;
+    int                 outp;
     FILE                *fo = uptr->fileref;
     int                 mode = uptr->flags & UNIT_CARD_MODE;
     int                 ok = 1;
@@ -818,6 +843,7 @@ sim_punch_card(UNIT * uptr, UNIT *stkuptr)
 
     data = (struct _card_data *)uptr->up7;
     dptr = find_dev_from_unit(uptr);
+    outp = 0;
 
     /* Fix mode if in auto mode */
     if (mode == MODE_AUTO) {
@@ -828,79 +854,124 @@ sim_punch_card(UNIT * uptr, UNIT *stkuptr)
                 ok = 0;
              }
          }
-         mode = ok?MODE_TEXT:MODE_BIN;
+         mode = ok?MODE_TEXT:MODE_OCTAL;
     }
 
     switch(mode) {
     default:
     case MODE_TEXT:
-         /* Scan each column */
+        /* Scan each column */
         sim_debug(DEBUG_CARD, dptr, "text: [");
-         for (i = 0; i < 80; i++) {
-             out[i] = data->hol_to_ascii[data->image[i]];
-             if (out[i] == 0xff)
-                out[i] = '?';
-             sim_debug(DEBUG_CARD, dptr, "%c", out[i]);
+        for (i = 0; i < 80; i++, outp++) {
+            out[outp] = data->hol_to_ascii[data->image[i]];
+            if (out[outp] == 0xff) {
+               out[outp] = '?';
+            }
+            sim_debug(DEBUG_CARD, dptr, "%c", out[outp]);
         }
-        sim_debug(DEBUG_CARD, dptr, "]\r\n");
+        sim_debug(DEBUG_CARD, dptr, "]\n");
         /* Trim off trailing spaces */
-        while (i > 0 && out[--i] == ' ') ;
-        out[++i] = '\n';
-        out[++i] = '\0';
+        while (outp > 0 && out[--outp] == ' ') ;
+        out[++outp] = '\n';
+        out[++outp] = '\0';
         break;
+
+    case MODE_OCTAL:
+        sim_debug(DEBUG_CARD, dptr, "octal: [");
+        out[outp++] = '~';
+        for (i = 80; i > 0; i--) {
+            if (data->image[i] != 0) 
+               break;
+        }
+        /* Check if special card */
+        if (i == 0) {
+            out[outp++] = 'e';
+            out[outp++] = 'o';
+            if (data->image[0] == 07) {
+               out[outp++] = 'r';
+               out[outp++] = '\n';
+               sim_debug(DEBUG_CARD, dptr, "eor\n");
+               break;
+            }
+            if (data->image[0] == 015) {
+               out[outp++] = 'f';
+               out[outp++] = '\n';
+               sim_debug(DEBUG_CARD, dptr, "eof\n");
+               break;
+            }
+            if (data->image[0] == 017) {
+               out[outp++] = 'f';
+               out[outp++] = '\n';
+               sim_debug(DEBUG_CARD, dptr, "eoi\n");
+               break;
+            }
+        }
+        out[outp++] = 'r';
+        out[outp++] = 'a';
+        out[outp++] = 'w';
+        for (i = 0; i < 80; i++) {
+            uint16 col = data->image[i];
+            out[outp++] = ((col >> 9) & 07) + '0';
+            out[outp++] = ((col >> 6) & 07) + '0';
+            out[outp++] = ((col >> 3) & 07) + '0';
+            out[outp++] = (col & 07) + '0';
+        }
+        out[outp++] = '\n';
+        out[outp++] = '\0';
+        sim_debug(DEBUG_CARD, dptr, "%s", &out[4]);
+        break;
+        
+
     case MODE_BIN:
-        sim_debug(DEBUG_CARD, dptr, "bin\r\n");
+        sim_debug(DEBUG_CARD, dptr, "bin\n");
         for (i = 0; i < 80; i++) {
             uint16      col = data->image[i];
-            out[i*2] = (col & 0x00f) << 4;
-            out[i*2+1] = (col & 0xff0) >> 4;
+            out[outp++] = (col & 0x00f) << 4;
+            out[outp++] = (col & 0xff0) >> 4;
         }
-        i = 160;
         break;
 
     case MODE_CBN:
-        sim_debug(DEBUG_CARD, dptr, "cbn\r\n");
+        sim_debug(DEBUG_CARD, dptr, "cbn\n");
         /* Fill buffer */
         for (i = 0; i < 80; i++) {
             uint16      col = data->image[i];
-            out[i*2] = (col >> 6) & 077;
-            out[i*2+1] = col & 077;
+            out[outp++] = (col >> 6) & 077;
+            out[outp++] = col & 077;
         }
         /* Now set parity */
         for (i = 0; i < 160; i++) 
             out[i] |= 0100 ^ sim_parity_table[(int)out[i]];
         out[0] |= 0x80;     /* Set record mark */
-        i = 160;
         break;
 
     case MODE_BCD:
         sim_debug(DEBUG_CARD, dptr, "bcd [");
-        for (i = 0; i < 80; i++) {
-             out[i] = sim_hol_to_bcd(data->image[i]);
-             if (out[i] != 0x7f)
-                 out[i] |= sim_parity_table[(int)out[i]];
+        for (i = 0; i < 80; i++, outp++) {
+             out[outp] = sim_hol_to_bcd(data->image[i]);
+             if (out[outp] != 0x7f)
+                 out[outp] |= sim_parity_table[(int)out[outp]];
              else
-                 out[i] = 077;
+                 out[outp] = 077;
             sim_debug(DEBUG_CARD, dptr, "%c",
-                         sim_six_to_ascii[(int)out[i]]);
+                         sim_six_to_ascii[(int)out[outp]]);
         }
-        sim_debug(DEBUG_CARD, dptr, "]\r\n");
+        sim_debug(DEBUG_CARD, dptr, "]\n");
         out[0] |= 0x80;     /* Set record mark */
-        while (i > 0 && out[--i] == 0);
-        i++;
+        while (outp > 0 && out[--outp] == 0);
+        outp++;
         break;
 
     case MODE_EBCDIC:
-        sim_debug(DEBUG_CARD, dptr, "ebcdic\r\n");
+        sim_debug(DEBUG_CARD, dptr, "ebcdic\n");
         /* Fill buffer */
-        for (i = 0; i < 80; i++) {
+        for (i = 0; i < 80; i++, outp++) {
             uint16      col = data->image[i];
-            out[i] = 0xff & hol_to_ebcdic[col];
+            out[outp] = 0xff & hol_to_ebcdic[col];
         }
-        i = 80;
         break;
     }
-    sim_fwrite(out, 1, i, fo);
+    sim_fwrite(out, 1, outp, fo);
     memset(&data->image[0], 0, sizeof(data->image));
     return SCPE_OK;
 }
@@ -965,6 +1036,7 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
     } else {
         data = (struct _card_data *)uptr->up7;
     }
+    memset(data, 0, sizeof(struct _card_data));
 
     for (i = 0; i < 4096; i++) 
         hol_to_ebcdic[i] = 0x100;
@@ -996,7 +1068,6 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
          }
     }
 
-    memset(data, 0, sizeof(struct _card_data));
     data->ptr = 0;      /* Set for initial read */
     data->len = 0;
     return SCPE_OK;
