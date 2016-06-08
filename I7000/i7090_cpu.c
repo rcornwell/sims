@@ -736,8 +736,6 @@ sim_instr(void)
 
     /* Enable timer if option set */
     if (cpu_unit.flags & OPTION_TIMER) {
-//      sim_rtcn_init(cpu_unit.wait, TMR_RTC);
-//      sim_activate(&cpu_unit, cpu_unit.wait);
         sim_activate(&cpu_unit, 10000);
     }
     interval_irq = 0;
@@ -3997,7 +3995,6 @@ prottrap:
                 sim_debug(DEBUG_PROT, &cpu_dev, "TIA %07o %07o\n", IC, MA);
                 IC = MA;
                 tbase = (relo_mode)?relocaddr:0;
-//              ihold = 1;
                 break;
             case OP_TIB:
                 /* In A core xfer to B core, B core trap */
@@ -4005,7 +4002,6 @@ prottrap:
                 sim_debug(DEBUG_PROT, &cpu_dev, "TIB %07o %07o\n", IC, MA);
                 IC = MA;
                 tbase = ((relo_mode)?relocaddr:0);
-//              ihold = 1;
                 break;
             case OP_LRI:
                 /* In B core trap, else load relocation */
@@ -4171,7 +4167,6 @@ rtc_srv(UNIT * uptr)
 
         time(&nt);
         if (nt != last_sec) {
-        //    fprintf(stderr, "%d clocks per second\n", milli_time);
             milli_time = 0;
             last_sec = nt;
         }

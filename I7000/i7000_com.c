@@ -395,7 +395,6 @@ UNIT                coml_unit[] = {
     {UDATA(&como_svc, 0, 0), COML_WAIT}, /* 9 */
     {UDATA(&como_svc, 0, 0), COML_WAIT}, /* 0 */
     {UDATA(&como_svc, 0, 0), COML_WAIT}, /* 1 */
-//    {UDATA(&comto_svc, 0, 0), COML_WAIT}, /* 2 */
 };
 
 MTAB                coml_mod[] = {
@@ -505,7 +504,6 @@ t_stat com_svc(UNIT * uptr)
                 com_dflg = 0;
                 break;
             case TIME_ERROR:
-//              chan9_set_error(chan, SNS_UEND);
                 com_sense |= DATA_TIMEOUT;
             }
             sim_activate(uptr, 50);
@@ -554,7 +552,6 @@ t_stat com_svc(UNIT * uptr)
             com_dflg = 1;
             break;
         case TIME_ERROR:
-//          chan9_set_error(chan, SNS_UEND);
             com_sense |= DATA_TIMEOUT;
         }
         sim_activate(uptr, 50);
@@ -573,7 +570,6 @@ t_stat com_svc(UNIT * uptr)
                 break;
             case END_RECORD:
             case TIME_ERROR:
-//              chan9_set_error(chan, SNS_UEND);
                 com_sense |= DATA_TIMEOUT;
             }
             sim_activate(uptr, 50);
@@ -586,7 +582,6 @@ t_stat com_svc(UNIT * uptr)
                 break;
             case END_RECORD:
             case TIME_ERROR:
-//              chan9_set_error(chan, SNS_UEND);
                 com_sense |= DATA_TIMEOUT;
                 sim_activate(uptr, 50);
                 return SCPE_OK;

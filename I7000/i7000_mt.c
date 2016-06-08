@@ -697,11 +697,7 @@ t_stat mt_srv(UNIT * uptr)
                         "Write flush unit=%d %s Block %d chars\n",
                          unit, (cmd == MT_WRS) ? "BCD" : "Binary", reclen);
                  r = sim_tape_wrrecf(uptr, &mt_buffer[bufnum][0], reclen);
-          //  } else {
-                /* Write with no data generates a gap */
-        //         r = sim_tape_wrgap(uptr, 35,
-        //               (uptr->flags & MTUF_LDN) ? 200: 556);
-            mt_error(uptr, chan, r, dptr);      /* Record errors */
+                 mt_error(uptr, chan, r, dptr);      /* Record errors */
 #ifndef I7010
             }
 #endif 

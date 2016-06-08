@@ -162,7 +162,6 @@ chron_read_buff(UNIT * uptr, int cmd)
     
     ms = sim_os_msec() % 1000;
     ms /= 100;
-//    ms /= 60;
 
     /* Convert and fill buffer */
     bcd_2d(tptr->tm_mon + 1, &chron_buffer[0]);

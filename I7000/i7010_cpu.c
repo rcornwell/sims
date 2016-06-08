@@ -74,7 +74,7 @@
 struct InstHistory
 {
     uint32              ic;
-    uint8               inst[12];
+    uint8               inst[15];
     uint32              astart;
     uint32              bstart;
     uint32              aend;
@@ -232,7 +232,6 @@ DEVICE              cpu_dev = {
     &cpu_ex, &cpu_dep, &cpu_reset, NULL, NULL, NULL,
     NULL, DEV_DEBUG, 0, dev_debug, 
     NULL, NULL, &cpu_help, NULL, NULL, &cpu_description
-//    NULL, NULL, &cpu_help
 };
 
 

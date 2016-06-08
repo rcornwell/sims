@@ -908,7 +908,6 @@ chan_cmd(uint16 dev, uint16 dcmd, uint32 addr)
             AC[unit+24+5] = 10;
             store_addr(caddr[chan], 8 + unit);
             if (cmd[chan] & CHAN_RECCNT && chan_decr_reccnt(chan)) {
-            //    chan_flags[chan] |= DEV_DISCO;
                 cmd[chan] &= ~CHAN_RECCNT;
             }
             break;
@@ -1114,8 +1113,7 @@ chan_read_char(int chan, uint8 * data, int flags)
                    sim_debug(DEBUG_DATA, &chan_dev,
                                  "%d > %02o (%d)\n", chan, *data, ch);
         caddr[chan]++;
-        if ((cmd[chan] & CHAN_NOREC && (caddr[chan] % 19999) == 0)) { // ||
- //           ((cmd[chan] & CHAN_NOREC) == 0 && M[caddr[chan]] == CHR_GM)) {
+        if ((cmd[chan] & CHAN_NOREC && (caddr[chan] % 19999) == 0)) { 
             chan_flags[chan] |= DEV_WEOR;
             return END_RECORD;
         }
@@ -1158,11 +1156,6 @@ chan_read_char(int chan, uint8 * data, int flags)
         if (ch == 4) {
             cmd[chan] &= msk;
             cmd[chan] ^= CHAN_BFLAG;
-//      } else {
- //           if ((cmd[chan] & CHAN_NOREC) == 0 && AC[unit + ch + 1] == CHR_GM) {
-//             chan_flags[chan] |= DEV_WEOR;
-//             return END_RECORD;
-//          }
         }
         break;
     case CHAN_7908:

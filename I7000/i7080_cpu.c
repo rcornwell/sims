@@ -114,7 +114,6 @@ t_stat              cpu_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
 const char          *cpu_description (DEVICE *dptr);
 
 uint32 read_addr(uint8 *reg, uint8 *zone);
-//void read_zones(uint8 *reg, uint8 *zone);
 void write_addr(uint32 addr, uint8 reg, uint8 zone);
 uint32 load_addr(int loc);
 void store_addr(uint32 addr, int loc);
@@ -136,7 +135,6 @@ uint16              bstarts[16] = {
 
 uint8   bcd_bin[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0,
                                  1, 2, 3, 4, 5};
-//                               11, 12, 13, 14, 15};
 uint8   bin_bcd[21] = { 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
                                  1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
 uint32  dig2[11] = { 0, 10, 20, 30, 40, 50, 60, 70, 80, 90,0 };
@@ -218,7 +216,6 @@ uint8               intprog;                    /* Interupt program */
 uint16              stop_flags = 0;             /* Stop on error */
 uint16              selreg;                     /* Last select address */
 uint16              selreg2;                    /* RWW select address */
-uint16              anyflag;                    /* Should we set anyflag */
 int                 chwait;                     /* Channel wait register */
 uint8               ioflags[5000/8] = {0};      /* IO Error flags */
 uint16              irqflags;                   /* IRQ Flags */
@@ -388,7 +385,6 @@ sim_instr(void)
     cpu_type = CPU_MODEL;
     /* Adjust max memory and flags based on emulation mode */
     EMEMSIZE = MEMSIZE;
-    //anyflag = ANYFLAG;
     switch (cpu_type) {
     case CPU_7080:
         if ((flags & EIGHTMODE) == 0) {
@@ -642,7 +638,7 @@ stop_cpu:
                 iowait = 0;
                 sim_interval -= 5;      /* count down */
                 switch (opcode) {
-                case OP_TR:             /* TR */ // Ok
+                case OP_TR:             /* TR */ 
                         if ((MAC % 5) != 4) {
                            flags |= INSTFLAG|ANYFLAG;
                            break;
@@ -657,7 +653,7 @@ stop_cpu:
                         IC = MAC;
                         break;
 
-                case OP_HLT:    /* STOP */ // Ok
+                case OP_HLT:    /* STOP */ 
                         if ((cpu_unit.flags & NONSTOP) && (intprog == 0)
                                  && intmode != 0) {
                              /* Process as interrupt */
@@ -669,7 +665,7 @@ stop_cpu:
                              reason = STOP_HALT;
                         break;
 
-                case OP_TRH:    /* TR HI */ // Ok
+                case OP_TRH:    /* TR HI */ 
                         if ((MAC % 5) != 4) {
                             flags |= INSTFLAG|ANYFLAG;
                             break;
@@ -679,7 +675,7 @@ stop_cpu:
                         }
                         break;
 
-                case OP_TRE:    /* TR EQ */ // Ok
+                case OP_TRE:    /* TR EQ */ 
                         if ((MAC % 5) != 4) {
                             flags |= INSTFLAG|ANYFLAG;
                             break;
@@ -689,7 +685,7 @@ stop_cpu:
                         }
                         break;
 
-                case OP_TRP:    /* TR + */ // Ok
+                case OP_TRP:    /* TR + */ 
                         if ((MAC % 5) != 4) {
                             flags |= INSTFLAG|ANYFLAG;
                             break;
@@ -699,7 +695,7 @@ stop_cpu:
                         }
                         break;
 
-                case OP_TRZ:    /* TR 0 */ // Ok
+                case OP_TRZ:    /* TR 0 */ 
                         if ((MAC % 5) != 4) {
                             flags |= INSTFLAG|ANYFLAG;
                             break;
@@ -907,14 +903,14 @@ stop_cpu:
                         sim_interval --;        /* count down */
                         break;
 
-                case OP_NOP:    /* NOP */       // Ok
+                case OP_NOP:    /* NOP */       
                         break;
 
-                case OP_CMP:    /* CMP */       // Ok
+                case OP_CMP:    /* CMP */       
                         do_compare(reg, 0);
                         break;
 
-                case OP_UNL:    /* UNL */       // Ok
+                case OP_UNL:    /* UNL */       
                         addr = get_acstart(reg);
                         cr2 = AC[addr];
                         while(cr2 != 0) {
@@ -926,7 +922,7 @@ stop_cpu:
                         }
                         break;
 
-                case OP_LOD:    /* LOD */       // Ok
+                case OP_LOD:    /* LOD */       
                         addr = get_acstart(reg);
                         flags |= ZERO & fmsk;
                         /* Clear sign */
@@ -961,7 +957,6 @@ stop_cpu:
                                 }
                                 if ((cr2 & 060) == 040 || (cr2 & 060) == 020) 
                                    cr2 |= 0100;
-//                              cr2 &= 0117;
                             }
                             WriteP(MA, cr2);
                             Next(MA);
@@ -977,7 +972,7 @@ stop_cpu:
                         WriteP(MA, cr1);
                         sim_interval--; /* count down */
                         break;
-                case OP_SGN:    /* SGN */       // Ok
+                case OP_SGN:    /* SGN */       
                         cr1 = ReadP(MA, MCHCHK);
                         /* Adjust memory to zero zone or blank */
                         if (cr1 & 017) {
@@ -1221,8 +1216,6 @@ stop_cpu:
                             msign = (cr1 & 020)? 0: 1; /* + - */
                            /* Compliment if signs differ */
                             t = (msign != sign)? 1: 0; /* -+,+- --,++ */
-                           // if (t)
-                           //   cr1 ^= 020;     /* Compliment sign */
                             carry = t;
                             if (cr2 == 0) {     /* Check for storage mark */
                                 smt = 0;
@@ -2287,17 +2280,6 @@ uint32 read_addr(uint8 *reg, uint8 *zone) {
     return addr;
 }
 
-#if 0
-/* Read zone and asu of address */
-void read_zones(uint8 *reg, uint8 *zone) {
-
-    *zone =  (ReadP(MA) & 060) >> 4;
-    *reg  =  (ReadP(MA-1) & 060) >> 4;
-    *reg  |= (ReadP(MA-2) & 060) >> 2;
-    *zone |= (ReadP(MA-3) & 060) >> 2;
-}
-#endif
-
 /* Write converted address of instruction */
 void write_addr(uint32 addr, uint8 reg, uint8 zone) {
     uint8       value[4];
@@ -2838,7 +2820,6 @@ do_divide(int reg, uint16 fmsk)
 
    /* Step II, step address until we find storage mark */
 step2:
-    //fprintf(stderr, "Step2\n\r");
     while(AC[tspc] != 0) {
         AC[tspc] &= 0xf;        /* Make all numeric */
         tspc = next_addr[tspc];
@@ -2863,7 +2844,6 @@ step2:
     do {
         sim_interval --;        /* count down */
         cr1 = ReadP(MA, MCHCHK);
-        //fprintf(stderr, "MA4=%d %o cr2=%o addr=%d\n\r", MA, cr1, AC[tsac], tsac );
         if (AC[tsac] == 0) {    /* Short */
             tsac = next_addr[tsac];
             tspc = tsac;
@@ -2894,14 +2874,12 @@ step2:
 
     /* Type V, perform first subtract */
 step5:
-        //fprintf(stderr, "divide: ");
     remtrig = 0;
     MA = MAC;
     while (1) {
        /* Step V, subtract Memory from storage */
         cr1 = ReadP(MA, MCHCHK);
         cr2 = AC[tsac];
-        //fprintf(stderr, "MAV=%d %o cr2=%o addr=%d\n\r", MA, cr1, cr2, tsac );
         sim_interval --;        /* count down */
         if (cr2 == 0) {
             tspc = next_addr[tspc];
@@ -2914,7 +2892,6 @@ step5:
             cr1 = comp_bcd[cr2] + carry;
             carry = cr1 >= 10;
             AC[tsac] = bin_bcd[cr1];
-            //fprintf(stderr, " fV=%o\n\r", AC[tsac] );
             MA = MAC;
             tsac = next_half[tsac];
             at = 1;
@@ -2926,14 +2903,12 @@ step5:
         AC[tsac] = bin_bcd[cr1];
         if (AC[tsac] != 10)
             remtrig = 1;
-        //fprintf(stderr, "  V=%o\n\r", AC[tsac] );
         tsac = next_addr[tsac];
     }
 
 step6:
     cr2 = AC[tsac];
     cr1 = 1;
-    //fprintf(stderr, "step6 carry=%d remtrig=%d at=%d cr2=%o\n\r", carry, remtrig, at, cr2);
     if (carry) {
             smt = 0;
             if (remtrig) {
@@ -2942,7 +2917,6 @@ step6:
                 } else {
                    at = 1;
                 }
-        //fprintf(stderr, "  6=%o\n\r", AC[tsac] );
                 tsac = tspc;
                 goto step8;
             } else {
@@ -2953,7 +2927,6 @@ step6:
                    cr2 = bin_bcd[cr2];
                 t = cr2 + 1;
                 AC[tsac] = bin_bcd[t];
-        //fprintf(stderr, "  6=%o\n\r", AC[tsac] );
                 tsac = tspc;
                 if (t >= 10) {
                    flags |= ACOFLAG|ANYFLAG;
@@ -2972,7 +2945,6 @@ step6:
                 cr2 = bcd_bin[cr2];
             t = cr2 + 1;
             AC[tsac] = bin_bcd[t];
-        //fprintf(stderr, "  6=%o\n\r", AC[tsac] );
             tsac = tspc;
             remtrig = 0;
             at = 1;
@@ -2988,7 +2960,6 @@ step6:
         Next(MA);
         sim_interval --;        /* count down */
         cr2 = AC[tsac];
-        //fprintf(stderr, "MA7=%d %o cr2=%o addr=%d\n\r", MA, cr1, cr2, tsac );
         if (cr2 == 0) {
             smt = 1;
             goto step6;
@@ -3002,7 +2973,6 @@ step6:
             AC[tsac] = bin_bcd[cr2];
             if (AC[tsac] != 10)
                 remtrig = 1;
-            //fprintf(stderr, " f7=%o\n\r", AC[tsac] );
             MA = MAC;
             tsac = next_half[tsac];
             goto step6;
@@ -3012,7 +2982,6 @@ step6:
         AC[tsac] = bin_bcd[cr2];
         if (AC[tsac] != 10)
             remtrig = 1;
-        //fprintf(stderr, "  7=%o\n\r", AC[tsac] );
         tsac = next_addr[tsac];
     };
     goto step6;
@@ -3023,7 +2992,6 @@ step8:
         Next(MA);
         sim_interval --;        /* count down */
         cr2 = AC[tsac];
-        //fprintf(stderr, "MA8=%d %o cr2=%o addr=%d\n\r", MA, cr1, cr2, tsac );
         if (cr2 == 0)
             smt = 1;
         if (at) {
@@ -3035,7 +3003,6 @@ step8:
                 cr2 = comp_bcd[cr2] + carry;
                 carry = cr2 >= 10;
                 AC[tsac] = bin_bcd[cr2];
-                //fprintf(stderr, " f8=%o\n\r", AC[tsac] );
                 MA = MAC;
                 tsac = tspc;
                 goto step9;
@@ -3044,13 +3011,11 @@ step8:
         cr2 = comp_bcd[cr2] + bcd_bin[cr1] + carry;
         carry = cr2 >= 10;
         AC[tsac] = bin_bcd[cr2];
-        //fprintf(stderr, "  8=%o\n\r", AC[tsac] );
         tsac = next_addr[tsac];
     };
 
     /* Step 9 */
 step9:
-        //fprintf(stderr, "step 9 at= %d %d\n\r", at, tspc);
     if (at) {
         tspc = next_half[tspc];
         Next(MA);
@@ -3067,13 +3032,11 @@ step9:
 step10:
     do {
         cr1 = ReadP(MA, MCHCHK);
-        //fprintf(stderr, "MAX=%d %o\n\r", MA, cr1 );
         Next(MA);
         sim_interval --;        /* count down */
         tspc = next_addr[tspc];
     } while (cr1 > 0 && cr1 <= 10);
 done:
-        //fprintf(stderr,"divide done\n\r");
    if (CPU_MODEL == CPU_702)
        spc = tspc;
    else 
