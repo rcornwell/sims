@@ -246,19 +246,19 @@ extern DEBTAB dev_debug[];
 #define CHAN_G          7
 #define CHAN_H          8
 
-#define UNIT_V_CHAN     (UNIT_V_UF + 8)
+#define UNIT_V_CHAN     (UNIT_V_UF + 8)              /* 8 */
 #define UNIT_CHAN       (017 << UNIT_V_CHAN)
-#define UNIT_V_SELECT   (UNIT_V_CHAN + 4)
-#define UNIT_SELECT     (1 << UNIT_V_SELECT)
+#define UNIT_V_SELECT   (UNIT_V_CHAN + 4)            /* 12 */
+#define UNIT_SELECT     (1 << UNIT_V_SELECT)         /* 13 */
 #define UNIT_S_CHAN(x)  (UNIT_CHAN & ((x) << UNIT_V_CHAN))
 #define UNIT_G_CHAN(x)  ((UNIT_CHAN & (x)) >> UNIT_V_CHAN)
-#define UNIT_V_LOCAL    (UNIT_V_SELECT + 1)
+#define UNIT_V_LOCAL    (UNIT_V_SELECT + 1)          /* 14 */
 #define DEV_BUF_NUM(x)  (((x) & 07) << DEV_V_UF)
 #define GET_DEV_BUF(x)  (((x) >> DEV_V_UF) & 07)
 #define UNIT_V_MODE     (UNIT_V_LOCAL + 1)
 
 /* Specific to channel devices */
-#define UNIT_V_MODEL    (UNIT_V_MODE)
+#define UNIT_V_MODEL    (UNIT_V_CHAN)
 #define CHAN_MODEL      (07 << UNIT_V_MODEL)
 #define CHAN_S_TYPE(x)  (CHAN_MODEL & ((x) << UNIT_V_MODEL))
 #define CHAN_G_TYPE(x)  ((CHAN_MODEL & (x)) >> UNIT_V_MODEL)
@@ -388,6 +388,11 @@ void chan_clear_attn_inq(int chan);
 #ifdef I7070
 void chan_set_attn_a(int chan);
 void chan_set_attn_b(int chan);
+void chan_set_attn_inq(int chan);
+void chan_clear_attn_inq(int chan);
+#endif
+
+#ifdef I7080
 void chan_set_attn_inq(int chan);
 void chan_clear_attn_inq(int chan);
 #endif
