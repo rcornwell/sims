@@ -38,11 +38,9 @@
 
 
 /* Flags for punch and reader. */
-#define ECHO            (1 << (UNIT_V_UF+2))
-#define ATTENA          (1 << (UNIT_V_UF+3))
-#define ATTENB          (1 << (UNIT_V_UF+4))
-#define DOUBLE          (1 << (UNIT_V_UF+5))
-#define PROGRAM         (1 << (UNIT_V_UF+6))
+#define ATTENA          (1 << (UNIT_V_UF+7))
+#define ATTENB          (1 << (UNIT_V_UF+14))
+
 
 /* std devices. data structures
 
@@ -102,7 +100,7 @@ DEVICE              cdp_dev = {
     "CP", cdp_unit, NULL, cdp_mod,
     NUM_DEVS_CDP, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, NULL, &cdp_attach, &cdp_detach,
-    &cdp_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &cdp_dib, DEV_DISABLE | DEV_DEBUG, 0, crd_debug,
     NULL, NULL, &cdp_help, NULL, NULL, &cdp_description
 };
 

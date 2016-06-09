@@ -66,7 +66,7 @@ extern uint32       MAC2;
 extern uint16       irqflags;
 extern uint8        ioflags[5000/8]; 
 
-#define UNIT_V_MOD      (UNIT_V_SET + 1)
+#define UNIT_V_MOD      (UNIT_V_UF + 4)
 #define UNIT_V_HS       (UNIT_V_MOD + 1)
 #define CHAN_MOD        (1 << UNIT_V_MOD)
 #define CHAN_HS         (1 << UNIT_V_HS)

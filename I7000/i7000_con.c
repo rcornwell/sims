@@ -35,12 +35,6 @@
 
 #ifdef NUM_DEVS_CON 
 
-/* Flags for punch and reader. */
-#define ECHO            (1 << (UNIT_V_UF+2))
-#define ATTENA          (1 << (UNIT_V_UF+3))
-#define ATTENB          (1 << (UNIT_V_UF+4))
-#define DOUBLE          (1 << (UNIT_V_UF+5))
-#define PROGRAM         (1 << (UNIT_V_UF+6))
 
 /* std devices. data structures
 

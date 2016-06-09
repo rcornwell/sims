@@ -169,6 +169,17 @@ DEBTAB              dev_debug[] = {
     {0, 0}
 };
 
+DEBTAB              crd_debug[] = {
+    {"CHAN", DEBUG_CHAN},
+    {"CMD", DEBUG_CMD},
+    {"DATA", DEBUG_DATA},
+    {"DETAIL", DEBUG_DETAIL},
+    {"EXP", DEBUG_EXP},
+    {"CARD", DEBUG_CARD},
+    {0, 0}
+};
+
+
 const char          mem_to_ascii[64] = {
     'a', '1', '2', '3', '4', '5', '6', '7', 
     '8', '9', '0', '=', '\'', ':', '>', 's', 
@@ -299,7 +310,7 @@ typedef struct _opcode
 }
 t_opcode;
 
-char  *chname[NUM_CHAN] = {
+char  *chname[11] = {
     "*", "20", "21", "22", "23", "40", "41", "44", "45", "46", "47"
 };
 

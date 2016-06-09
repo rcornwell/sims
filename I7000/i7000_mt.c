@@ -46,8 +46,8 @@
 #define BUFFSIZE        (MAXMEMSIZE * CHARSPERWORD)
 #define UNIT_MT(x)      UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE | \
                         UNIT_S_CHAN(x)
-#define MTUF_LDN        (1 << UNIT_V_LOCAL)
-#define MTUF_ONLINE     (1 << (UNIT_V_LOCAL+1))
+#define MTUF_LDN        (1 << MTUF_V_UF)
+#define MTUF_ONLINE     (1 << UNIT_V_UF_31)
 #define LT              66      /* Time per char low density */
 #define HT              16      /* Time per char high density */
 
@@ -274,7 +274,7 @@ DEVICE              mtc_dev = {
 
 #if (NUM_DEVS_MT > 3)
 DEVICE              mtd_dev = {
-    "MT", &mta_unit[30], NULL, mt_mod,
+    "MTD", &mta_unit[30], NULL, mt_mod,
     NUM_UNITS_MT, 8, 15, 1, 8, 36,
     NULL, NULL, &mt_reset, &mt_boot, &mt_attach, &mt_detach,
     &mt_dib, DEV_BUF_NUM(3) | DEV_DISABLE | DEV_DEBUG, 0, dev_debug,

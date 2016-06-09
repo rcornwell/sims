@@ -148,6 +148,17 @@ DEBTAB              dev_debug[] = {
     {"SENSE", DEBUG_SNS},
     {0, 0}
 };
+
+DEBTAB              crd_debug[] = {
+    {"CHAN", DEBUG_CHAN},
+    {"CMD", DEBUG_CMD},
+    {"DATA", DEBUG_DATA},
+    {"DETAIL", DEBUG_DETAIL},
+    {"EXP", DEBUG_EXP},
+    {"CARD", DEBUG_CARD},
+    {0, 0}
+};
+
 
 /* Character conversion tables */
 extern const char    sim_six_to_ascii[64];
@@ -480,7 +491,7 @@ t_opcode  sub_ops[] = {
 };
 
 
-char  *chname[] = {
+char  *chname[11] = {
     "*", "1", "2", "3", "4", "A", "B", "C", "D"
 };
 

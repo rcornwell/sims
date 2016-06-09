@@ -22,6 +22,7 @@
 */
 
 #include "i7010_defs.h"
+#include "sim_card.h"
 #include <ctype.h>
 
 /* SCP data structures and interface routines
@@ -151,6 +152,17 @@ DEBTAB              dev_debug[] = {
     {"SENSE", DEBUG_SNS},
     {0, 0}
 };
+
+DEBTAB              crd_debug[] = {
+    {"CHAN", DEBUG_CHAN},
+    {"CMD", DEBUG_CMD},
+    {"DATA", DEBUG_DATA},
+    {"DETAIL", DEBUG_DETAIL},
+    {"EXP", DEBUG_EXP},
+    {"CARD", DEBUG_CARD},
+    {0, 0}
+};
+
 
 /* Character conversion tables */
 const char          ascii_to_six[128] = {

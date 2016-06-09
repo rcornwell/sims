@@ -78,7 +78,7 @@ chan_set_devs(DEVICE * dptr)
                     chan_unit[chan].flags |= CHAN_S_TYPE(type)|CHAN_SET;
                 }
             }
-           /* Set channel to highest type */
+            /* Set channel to highest type */
             if ((chan_unit[chan].flags & CHAN_SET) == 0) {
                 /* Set type to highest found */
                 for(type = 7; type >=0; type--)
@@ -90,7 +90,7 @@ chan_set_devs(DEVICE * dptr)
             num_devs[chan] += sim_devices[i]->numunits;
             if (dibp->ini != NULL) {
                 for (num = sim_devices[i]->numunits; num > 0; num--) {
-                    uptr->flags &= ~UNIT_S_CHAN(017);
+                    uptr->flags &= ~UNIT_CHAN;
                     uptr->flags |= UNIT_S_CHAN(chan);
                     dibp->ini(uptr++, 1);
                 }
@@ -259,13 +259,13 @@ set_chan(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
         int     unit;
         for (unit = 0; unit < dptr->numunits; unit++) {
             /* Set the new channel */
-            dptr->units[unit].flags &= ~UNIT_S_CHAN(017);
+            dptr->units[unit].flags &= ~UNIT_CHAN;
             dptr->units[unit].flags |= UNIT_S_CHAN(newch);
         }
         num_devs[newch] += dptr->numunits;
     } else {
         /* Set the new channel */
-        uptr->flags &= ~UNIT_S_CHAN(017);
+        uptr->flags &= ~UNIT_CHAN;
         uptr->flags |= UNIT_S_CHAN(newch);
         num_devs[newch]++;
     }

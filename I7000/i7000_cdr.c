@@ -38,11 +38,9 @@
                          UNIT_ROABLE | MODE_026
 
 /* Flags for punch and reader. */
-#define ECHO            (1 << (UNIT_V_UF+2))
-#define ATTENA          (1 << (UNIT_V_UF+3))
-#define ATTENB          (1 << (UNIT_V_UF+4))
-#define DOUBLE          (1 << (UNIT_V_UF+5))
-#define PROGRAM         (1 << (UNIT_V_UF+6))
+#define ATTENA          (1 << (UNIT_V_UF+7))
+#define ATTENB          (1 << (UNIT_V_UF+14))
+
 
 /* std devices. data structures
 
@@ -109,7 +107,7 @@ DEVICE              cdr_dev = {
     "CR", cdr_unit, NULL, cdr_mod,
     NUM_DEVS_CDR, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, &cdr_boot, &cdr_attach, &sim_card_detach,
-    &cdr_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &cdr_dib, DEV_DISABLE | DEV_DEBUG, 0, crd_debug,
     NULL, NULL, &cdr_help, NULL, NULL, &cdr_description
 };
 

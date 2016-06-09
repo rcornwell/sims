@@ -714,12 +714,8 @@ t_opcode            neg_760[] = {
     {0, NULL, TYPE_X}
 };
 
-char  *chname[] = {
-#if NUM_CHAN > 1
+char  *chname[11] = {
     "*", "A", "B", "C", "D", "E", "F", "G", "H"
-#else
-    "*"
-#endif
 };
 
 void

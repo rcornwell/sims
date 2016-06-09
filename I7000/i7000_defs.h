@@ -63,7 +63,7 @@ extern uint8            M[];
 /* Not yet */
 #endif
 #ifdef I7070            /* Includes 7070, 7074 */
-#define NUM_CHAN        9
+#define NUM_CHAN        8
 #define NUM_DEVS_CDR    1
 #define NUM_DEVS_CDP    1
 #define NUM_DEVS_LPR    1
@@ -80,7 +80,7 @@ extern uint8            M[];
 extern t_uint64         M[];
 #endif
 #ifdef I7080            /* Includes 702, 705-i/ii, 705-iii, 7080 */
-#define NUM_CHAN        11
+#define NUM_CHAN        9
 #define NUM_DEVS_CDR    1
 #define NUM_DEVS_CDP    1
 #define NUM_DEVS_LPR    1
@@ -231,6 +231,7 @@ typedef struct dib DIB;
 #define DEBUG_PROT      0x0000200       /* Protection traps */
 
 extern DEBTAB dev_debug[];
+extern DEBTAB crd_debug[];
 
 /* Channels */
 #define CHAN_CHPIO      0               /* Puesdo access for 704 */
@@ -246,25 +247,25 @@ extern DEBTAB dev_debug[];
 #define CHAN_G          7
 #define CHAN_H          8
 
-#define UNIT_V_CHAN     (UNIT_V_UF + 8)              /* 8 */
-#define UNIT_CHAN       (017 << UNIT_V_CHAN)
-#define UNIT_V_SELECT   (UNIT_V_CHAN + 4)            /* 12 */
-#define UNIT_SELECT     (1 << UNIT_V_SELECT)         /* 13 */
+#define UNIT_V_SELECT   (UNIT_V_UF + 9)              /* 9 */
+#define UNIT_SELECT     (1 << UNIT_V_SELECT)
+#define UNIT_V_CHAN     (UNIT_V_SELECT + 1)          /* 10 */
+#define UNIT_CHAN       (017 << UNIT_V_CHAN)         /* 10-14 */
 #define UNIT_S_CHAN(x)  (UNIT_CHAN & ((x) << UNIT_V_CHAN))
 #define UNIT_G_CHAN(x)  ((UNIT_CHAN & (x)) >> UNIT_V_CHAN)
-#define UNIT_V_LOCAL    (UNIT_V_SELECT + 1)          /* 14 */
+#define UNIT_V_LOCAL    (UNIT_V_UF + 0)              /* 0 */
 #define DEV_BUF_NUM(x)  (((x) & 07) << DEV_V_UF)
 #define GET_DEV_BUF(x)  (((x) >> DEV_V_UF) & 07)
-#define UNIT_V_MODE     (UNIT_V_LOCAL + 1)
+#define UNIT_V_MODE     (UNIT_V_LOCAL + 1)           /* 1 */
 
 /* Specific to channel devices */
-#define UNIT_V_MODEL    (UNIT_V_CHAN)
+#define UNIT_V_MODEL    (UNIT_V_UF + 0)
 #define CHAN_MODEL      (07 << UNIT_V_MODEL)
 #define CHAN_S_TYPE(x)  (CHAN_MODEL & ((x) << UNIT_V_MODEL))
 #define CHAN_G_TYPE(x)  ((CHAN_MODEL & (x)) >> UNIT_V_MODEL)
-#define UNIT_V_AUTO     (UNIT_V_UF_32)
-#define CHAN_AUTO       (1 << UNIT_V_UF_31)
-#define UNIT_V_SET      (UNIT_V_UF + 7)
+#define UNIT_V_AUTO     (UNIT_V_UF + 4)
+#define CHAN_AUTO       (1 << UNIT_V_AUTO)
+#define UNIT_V_SET      (UNIT_V_UF + 5)
 #define CHAN_SET        (1 << UNIT_V_SET)  
 
 extern t_value  assembly[NUM_CHAN];             /* Assembly register */
@@ -272,7 +273,7 @@ extern t_value  assembly[NUM_CHAN];             /* Assembly register */
 /* Channel half of controls */
 /* Channel status */
 extern uint32   chan_flags[NUM_CHAN];           /* Channel flags */
-extern char    *chname[NUM_CHAN];               /* Channel names */
+extern char    *chname[11];                     /* Channel names */
 extern int      num_devs[NUM_CHAN];             /* Number devices per channel*/
 extern uint8    lpr_chan9[NUM_CHAN]; 
 #ifdef I7010

@@ -37,12 +37,17 @@
 #define UNIT_LPR        UNIT_ATTABLE | UNIT_DISABLE
 
 
-/* Flags for punch and reader. */
-#define ECHO            (1 << (UNIT_V_UF+2))
-#define ATTENA          (1 << (UNIT_V_UF+3))
-#define ATTENB          (1 << (UNIT_V_UF+4))
-#define DOUBLE          (1 << (UNIT_V_UF+5))
-#define PROGRAM         (1 << (UNIT_V_UF+6))
+/* Flags for line printer. */
+#define ECHO            (1 << (UNIT_V_UF+0))
+#ifdef I7070
+#define ATTENA          (1 << (UNIT_V_UF+1))
+#define ATTENB          (1 << (UNIT_V_UF+2))
+#endif
+#ifdef I7080
+#define DOUBLE          (1 << (UNIT_V_UF+1))
+#define PROGRAM         (1 << (UNIT_V_UF+2))
+#endif
+
 
 /* std devices. data structures
 

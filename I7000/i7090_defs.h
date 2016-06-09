@@ -81,9 +81,6 @@ int chan_read(int chan, t_uint64 *data, int flags);
 
 void chan_proc();
 
-/* Simulator debug controls */
-extern DEBTAB crd_debug[];
-
 extern uint16    dev_pulse[NUM_CHAN];                   /* Device pulse */
 #define PUNCH_1 00001
 #define PUNCH_2 00002
