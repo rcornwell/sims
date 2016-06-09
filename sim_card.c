@@ -493,7 +493,7 @@ sim_read_card(UNIT * uptr)
 
     dptr = find_dev_from_unit( uptr);
     data = (struct _card_data *)uptr->up7;
-    sim_debug(DEBUG_CARD, dptr, "Read card %d, %d", data->ptr, data->len);
+    sim_debug(DEBUG_CARD, dptr, "Read card ");
 
 /* Move data to start at begining of buffer */
     if (data->ptr > 0) {
@@ -520,7 +520,6 @@ sim_read_card(UNIT * uptr)
             len = size = 0;
         data->len = size;
     }
-    sim_debug(DEBUG_CARD, dptr, " => %d, %d ", size, data->len);
 
     if ((len < 0 || size == 0) && feof(uptr->fileref)) {
         sim_debug(DEBUG_CARD, dptr, "EOF\n");
@@ -651,16 +650,11 @@ sim_read_card(UNIT * uptr)
                     if (temp & 0xf000)
                         r = SCPE_IOERR;
                     data->image[col++] = temp & 0xfff;
-                    /* Eat cr if line exactly 80 columns */
-                    if (col == 80) {
-                        if (data->cbuff[i + 1] == '\n')
-                            i++;
-                    }
                 }
             }
         }
         /* Scan to end of line, ignore anything after last column */
-        while (data->cbuff[i] != '\n' || data->cbuff[i] != '\r') {
+        while (data->cbuff[i] != '\n' && data->cbuff[i] != '\r') {
             if (i > data->len)
                break;
             i++;
