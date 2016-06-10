@@ -69,20 +69,13 @@ chan_set_devs(DEVICE * dptr)
                     for (num = sim_devices[i]->numunits; num > 0; num--) 
                         (uptr++)->flags |= UNIT_DIS;
                     goto nextdev;
-                } else {
-                    /* Set type to highest found */
-                    for(type = 7; type >=0; type--)
-                       if (ctype >> type)
-                         break;
-                    chan_unit[chan].flags &= ~(CHAN_MODEL);
-                    chan_unit[chan].flags |= CHAN_S_TYPE(type)|CHAN_SET;
                 }
             }
             /* Set channel to highest type */
             if ((chan_unit[chan].flags & CHAN_SET) == 0) {
                 /* Set type to highest found */
                 for(type = 7; type >=0; type--)
-                   if (ctype >> type)
+                   if (ctype & (1 << type))
                      break;
                 chan_unit[chan].flags &= ~(CHAN_MODEL);
                 chan_unit[chan].flags |= CHAN_S_TYPE(type)|CHAN_SET;
@@ -109,20 +102,13 @@ chan_set_devs(DEVICE * dptr)
                          && num_devs[chan] != 0)) {
                         uptr->flags |= UNIT_DIS;
                         goto next;
-                    } else {
-                        /* Set type to highest found */
-                        for(type = 7; type >= 0; type--)
-                           if (ctype >> type)
-                             break;
-                        chan_unit[chan].flags &= ~(CHAN_MODEL);
-                        chan_unit[chan].flags |= CHAN_S_TYPE(type)|CHAN_SET;
                     }
                 }
                 /* Set channel to highest type */
                 if ((chan_unit[chan].flags & CHAN_SET) == 0) {
                      /* Set type to highest found */
                      for(type = 7; type >=0; type--)
-                        if (ctype >> type)
+                        if (ctype & (1 << type))
                           break;
                      chan_unit[chan].flags &= ~(CHAN_MODEL);
                      chan_unit[chan].flags |= CHAN_S_TYPE(type)|CHAN_SET;

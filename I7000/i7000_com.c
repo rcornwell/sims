@@ -328,7 +328,7 @@ DEVICE              com_dev = {
     3, 10, 31, 1, 16, 8,
     &tmxr_ex, &tmxr_dep, &com_reset,
     NULL, &com_attach, &com_detach,
-    &com_dib, DEV_DIS | DEV_DISABLE| DEV_DEBUG|DEV_NET, 0, dev_debug,
+    &com_dib, DEV_DISABLE| DEV_DEBUG|DEV_NET, 0, dev_debug,
     NULL, NULL, &com_help, NULL, NULL, &com_description
 };
 
