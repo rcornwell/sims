@@ -213,6 +213,7 @@ typedef unsigned int uint18;
 
 extern uint64   M[]; 
 extern uint18   PC;
+extern uint32   FLAGS;
 
 
 extern void set_interrupt(int dev, int lvl);

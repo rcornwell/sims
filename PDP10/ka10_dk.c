@@ -41,16 +41,16 @@
 
 /* CONO */
 #define PIA             000007
-#define CLK_CLR_FLG     000010
-#define CLK_CLR_OVF     000020
-#define CLK_SET_EN      000040
-#define CLK_CLR_EN      000100
-#define CLK_SET_PI      000200
-#define CLK_CLR_PI      000400
-#define CLK_GEN_CLR     001000
-#define CLK_ADD_ONE     002000
-#define CLK_SET_FLG     004000
-#define CLK_SET_OVF     010000
+#define CLK_CLR_FLG     000010                     /* Clear Clock flag */
+#define CLK_CLR_OVF     000020                     /* Clear OVFL flag */
+#define CLK_SET_EN      000040                     /* Enable Clock */
+#define CLK_CLR_EN      000100                     /* Disable Clock */
+#define CLK_SET_PI      000200                     /* Set PI Control Flip-Flop */
+#define CLK_CLR_PI      000400                     /* Clear PI Control Flip-Flop */
+#define CLK_GEN_CLR     001000                     /* Clear control */
+#define CLK_ADD_ONE     002000                     /* Bump clock */
+#define CLK_SET_FLG     004000                     /* Set Clock Flag */
+#define CLK_SET_OVF     010000                     /* Set OVFL Flag */
 
 /* CONI */
 #define CLK_FLG         000010
@@ -60,187 +60,158 @@
 #define CLK_EXT         001000
 
 /* Invariants */
-
+#define TMR_DK          2
 #define TIM_TPS         100000
-
-/* Exported variables */
-
-int32 clk_tps = TIM_TPS;                            /* clock ticks/sec */
-int32 tmr_poll = TIM_WAIT;                          /* clock poll */
-int32 tmxr_poll = TIM_WAIT * TIM_MULT;              /* term mux poll */
 
 extern UNIT cpu_unit;
 
 DEVICE dk_dev;
 t_stat dk_devio(uint32 dev, uint64 *data);
-void tim_incr_base (uint64 *base, uint64 incr);
+void   dk_count (UNIT *uptr);
+t_stat dk_svc (UNIT *uptr);
 
-/* TIM data structures
+DIB dk_dib[] = {
+        { DK_DEVNUM, 1, &dk_devio },
+        { DK_DEVNUM + 4, 1, &dk_devio }};
 
-   tim_dev      TIM device descriptor
-   tim_unit     TIM unit descriptor
-   tim_reg      TIM register list
-*/
-
-DIB dk_dib = { DK_DEVNUM, 1, &dk_devio };
-
-UNIT dk_unit = { 
-        {UDATA (&dk_svc, UNIT_IDLE, 0), TIM_WAIT },
+UNIT dk_unit[] = { 
+        {UDATA (&dk_svc, UNIT_IDLE, TIM_TPS) },
 #if (NUM_DEVS_DK > 1)
-        {UDATA (&dk_svc, UNIT_IDLE, 0), TIM_WAIT },
+        {UDATA (&dk_svc, UNIT_IDLE, TIM_TPS) },
 #endif
         };
 
-REG dk_reg[] = {
-    { NULL }
-    };
-
-MTAB dk_mod[] = {
-    { 0 }
-    };
-
-DEVICE tim_dev = {
-    "DK", &dk_unit, dk_reg, dk_mod,
-    1, 0, 0, 0, 0, 0,
-    NULL, NULL, &dk_reset,
+DEVICE dk_dev = {
+    "DK", dk_unit, NULL, NULL,
+    NUM_DEVS_DK, 0, 0, 0, 0, 0,
     NULL, NULL, NULL,
-    &dk_dib, NULL,  0, NULL,
-    NULL, NULL, &dk_help, NULL, NULL, &dk_description
+    NULL, NULL, NULL,
+    &dk_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    NULL, NULL, NULL, NULL, NULL, NULL
     };
 
 t_stat dk_devio(uint32 dev, uint64 *data) {
     uint64      res;
     int         unit = (dev - DK_DEVNUM) >> 2;
-    UNIT        *uptr = dk_unit[unit];
+    UNIT        *uptr = &dk_unit[unit];
+    int32       t;
 
     if (unit < 0 || unit > NUM_DEVS_DK)
         return SCPE_OK;
     switch (dev & 3) {
     case CONI:
-        *data = uptr->STAT_REG;
+        *data = (uint64)(uptr->STAT_REG);
+        *data |= ((uint64)uptr->INT_REG) << 18;
+        sim_debug(DEBUG_CONI, &dk_dev, "DK  %03o CONI %06o PC=%o %06o\n",
+               dev, (uint32)*data, PC, uptr->CLK_REG);
         break;
 
     case CONO:
         /* Adjust U3 */
         clr_interrupt(dev);
         uptr->STAT_REG &= ~07;
-        if (CLK_GEN_CLR & *data) {
-            uptr->STAT_REG = 0;
-            uptr->CLK_REG = 0;
-            uptr->INT_REG = 0;
-        } else {
-            uptr->STAT_REG &= ~((CLK_CLR_FLG|CLK_CLR_OVR) & *data);
-            uptr->STAT_REG &= ~(((CLK_CLR_EN|CLK_CLR_PI) & *data) >> 1);
-            uptr->STAT_REG |= (CLK_SET_EN|CLK_SET_PI|7) & *data;
-            uptr->STAT_REG |= ((CLK_SET_FLG|CLK_SET_OVR) & *data) >> 8; 
+        if (*data & CLK_GEN_CLR) {
+           uptr->CLK_REG = 0;
+           uptr->STAT_REG = 0;
         }
-        if ((CLK_ADD_ONE & *data) && (uptr->STAT_REG & CLK_EN) == 0) {
-            uptr->CLK_REG = (uptr->CLK_REG + 1);
-            if (uptr->CLK_REG & LMASK) 
-                uptr->STAT_REG |= CLK_OVF;
-            uptr->CLK_REG &= RMASK;
-        }
-        if (uptr->CLK_REG == uptr->INT_REG) {
-            uptr->STAT_REG |= CLK_FLG;
+        uptr->STAT_REG |= (uint32)(*data & 07);
+
+        if (*data & CLK_ADD_ONE)  {
+           if ((uptr->STAT_REG & CLK_EN) == 0) {
+              dk_count(uptr);
+           }
         }
 
-        if ((uptr->STAT_REG & CLK_EN) != 0) &&
-                (uptr->STAT_REG & (CLK_FLG|CLK_OVF)) {
+        if (*data & CLK_SET_EN) 
+           uptr->STAT_REG |= CLK_EN;
+        if (*data & CLK_CLR_EN) 
+           uptr->STAT_REG &= ~CLK_EN;
+        if (*data & CLK_SET_OVF) 
+           uptr->STAT_REG |= CLK_OVF;
+        if (*data & CLK_CLR_OVF) 
+           uptr->STAT_REG &= ~CLK_OVF;
+        if (*data & CLK_SET_FLG) 
+           uptr->STAT_REG |= CLK_FLG;
+        if (*data & CLK_CLR_FLG) 
+           uptr->STAT_REG &= ~CLK_FLG;
+        if (*data & CLK_SET_PI) 
+           uptr->STAT_REG |= CLK_PI;
+        if (*data & CLK_CLR_PI) 
+           uptr->STAT_REG &= ~CLK_PI;
+        
+        if ((uptr->STAT_REG & CLK_EN) != 0 &&
+                (uptr->STAT_REG & (CLK_FLG|CLK_OVF))) {
            set_interrupt(dev, uptr->STAT_REG & 7);
         }
+  
+        if (uptr->STAT_REG & CLK_EN) {
+           if (!sim_is_active(uptr)) {
+                t = sim_rtcn_calb (uptr->capac, TMR_DK + unit);  /* calibrate */
+                sim_activate(uptr, t);
+           }
+        } else {
+           if (sim_is_active(uptr)) {
+              sim_cancel(uptr);
+           }
+        }
+        sim_debug(DEBUG_CONO, &dk_dev, "DK %03o CONO %06o PC=%06o %06o\n",
+               dev, (uint32)*data, PC, uptr->STAT_REG);
         break;
 
     case DATAO:
-        uptr->INT_REG & RMASK;
-        if (uptr->CLK_REG == uptr->INT_REG) {
-            uptr->STAT_REG |= CLK_FLG;
-        }
+        uptr->INT_REG = (uint32)(*data & RMASK);
 
-        if ((uptr->STAT_REG & CLK_EN) != 0) &&
-                (uptr->STAT_REG & (CLK_FLG|CLK_OVF)) {
+        if (uptr->STAT_REG & CLK_EN) {
+           if (uptr->INT_REG == uptr->CLK_REG) 
+               uptr->STAT_REG |= CLK_FLG;
            set_interrupt(dev, uptr->STAT_REG & 7);
         }
+        sim_debug(DEBUG_DATAIO, &dk_dev, "DK %03o DATO %012llo PC=%06o\n",
+                    dev, *data, PC);
         break;
    
     case DATAI:
-        *data = uptr->CLK_REG;
+        *data = (uint64)(uptr->CLK_REG);
+        sim_debug(DEBUG_DATAIO, &dk_dev, "DK %03o DATI %012llo PC=%06o\n",
+                    dev, *data, PC);
         break;
     }
 
     return SCPE_OK;
 }
 
-/* Timer instructions */
-
-/* Timer - if the timer is running at less than hardware frequency,
-   need to interpolate the value by calculating how much of the current
-   clock tick has elapsed, and what that equates to in msec. */
-
-t_bool rdtim (a10 ea, int32 prv)
+/* Bump counter by 1 */
+void dk_count (UNIT *uptr) 
 {
-    uint64 tempbase[2];
-
-    ReadM (INCA (ea), prv);                                 /* check 2nd word */
-    tempbase[0] = tim_base[0];                              /* copy time base */
-    tempbase[1] = tim_base[1];
-    if (tim_mult != TIM_MULT_T20) {                         /* interpolate? */
-        int32  used;
-        uint64 incr;
-        used = tmr_poll - (sim_is_active (&tim_unit) - 1);
-        incr = (uint64) (((double) used * TIM_HW_FREQ) /
-            ((double) tmr_poll * (double) clk_tps));
-        tim_incr_base (tempbase, incr);
-        }
-    tempbase[0] = tempbase[0] & ~((uint64) TIM_HWRE_MASK);  /* clear low 12b */
-    Write (ea, tempbase[0], prv);
-    Write (INCA(ea), tempbase[1], prv);
-    return FALSE;
+    int   dev;
+    uptr->CLK_REG++;
+    if (uptr->CLK_REG & (~RMASK)) 
+       uptr->STAT_REG |= CLK_OVF;
+    uptr->CLK_REG &= RMASK;
+    if (uptr->INT_REG == uptr->CLK_REG) 
+       uptr->STAT_REG |= CLK_FLG;
+    if (uptr->STAT_REG & (CLK_FLG|CLK_OVF)) {
+       dev = ((uptr - dk_unit) << 2) + DK_DEVNUM;
+       set_interrupt(dev, uptr->STAT_REG);
+    }
 }
 
-/* Timer service - the timer is only serviced when the 'ttg' register
-   has reached 0 based on the expected frequency of clock interrupts. */
-
+/* Timer service - */
 t_stat dk_svc (UNIT *uptr)
 {
-    tmr_poll = sim_rtc_calb (clk_tps);                      /* calibrate */
-    sim_activate (uptr, tmr_poll);                          /* reactivate unit */
-    tmxr_poll = tmr_poll * tim_mult;                        /* set mux poll */
-    tim_incr_base (tim_base, tim_period);                   /* incr time base */
-    tim_ttg = tim_period;                                   /* reload */
-    apr_flg = apr_flg | APRF_TIM;                           /* request interrupt */
-    if (Q_ITS) {                                            /* ITS? */
-        if (pi_act == 0)
-            quant = (quant + TIM_ITS_QUANT) & DMASK;
-    }                                                       /* end ITS */
-    else if (t20_idlelock && PROB (100 - tim_t20_prob))
-        t20_idlelock = 0;
+    int32    t;
+    if (uptr->STAT_REG & CLK_EN) {
+        t = sim_rtcn_calb (uptr->capac,
+                                  TMR_DK + (uptr - dk_unit));   /* calibrate */
+        if (uptr->STAT_REG & CLK_PI) {
+            if (FLAGS & USER)
+                dk_count(uptr);                                 /* count */
+        } else {
+            dk_count(uptr);                                     /* count */
+        }
+        sim_activate (uptr, t);                                 /* reactivate unit */
+    }
     return SCPE_OK;
 }
-
-/* Clock coscheduling routine */
-
-int32 clk_cosched (int32 wait)
-{
-    int32 t;
-
-    if (tim_mult == TIM_MULT_T20)
-        return wait;
-    t = sim_is_active (&tim_unit);
-    return (t? t - 1: wait);
-}
-
-/* Timer reset */
-
-t_stat dk_reset (DEVICE *dptr)
-{
-    tim_period = 0;                                         /* clear timer */
-    tim_ttg = 0;
-    apr_flg = apr_flg & ~APRF_TIM;                          /* clear interrupt */
-    tmr_poll = sim_rtc_init (tim_unit.wait);                /* init timer */
-    sim_activate (&tim_unit, tmr_poll);                     /* activate unit */
-    tmxr_poll = tmr_poll * tim_mult;                        /* set mux poll */
-    return SCPE_OK;
-}
-
 
 #endif
