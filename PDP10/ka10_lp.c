@@ -26,6 +26,7 @@
 */
 
 #include "ka10_defs.h"
+#include <ctype.h>
 
 #ifndef NUM_DEVS_LP
 #define NUM_DEVS_LP 0
@@ -38,6 +39,8 @@
 #define CHL      u4
 #define CHR      u5
 
+#define UNIT_V_UC    (UNIT_V_UF + 0)
+#define UNIT_UC      (1 << UNIT_V_UC)
 #define PI_DONE  000007
 #define PI_ERROR 000070
 #define DONE_FLG 000100
@@ -81,6 +84,8 @@ REG lpt_reg[] = {
 };
 
 MTAB lpt_mod[] = {
+    {UNIT_UC, 0, "Lower case", "LC", NULL},
+    {UNIT_UC, UNIT_UC, "Upper case", "UC", NULL},
     { 0 }
 };
 
@@ -100,16 +105,17 @@ t_stat lpt_devio(uint32 dev, uint64 *data) {
     switch(dev & 3) {
     case CONI:
          *data = uptr->STATUS;
+         if ((uptr->flags & UNIT_UC) == 0)
+             *data |= C96;
          if ((uptr->flags & UNIT_ATT) == 0) 
              *data |= ERR_FLG;
-         sim_debug(DEBUG_CONI, &lpt_dev, "LP CONI %012llo\n", *data);
+         sim_debug(DEBUG_CONI, &lpt_dev, "LP CONI %012llo PC=%06o\n", *data, PC);
          break;
 
     case CONO:
          clr_interrupt(dev);
-         clr_interrupt(0774);
-         sim_debug(DEBUG_CONO, &lpt_dev, "LP CONO %012llo\n", *data);
-         uptr->STATUS = C128 | ((PI_DONE|PI_ERROR|DONE_FLG|BUSY_FLG) & *data);
+         sim_debug(DEBUG_CONO, &lpt_dev, "LP CONO %012llo PC=%06o\n", *data, PC);
+         uptr->STATUS = ((PI_DONE|PI_ERROR|DONE_FLG|BUSY_FLG) & *data);
          if (*data & CLR_LPT) {
              uptr->CHR = 0;
              uptr->CHL = 0;
@@ -117,11 +123,10 @@ t_stat lpt_devio(uint32 dev, uint64 *data) {
              sim_activate (&lpt_unit, lpt_unit.wait);
          } 
          if ((uptr->flags & UNIT_ATT) == 0) {
-             uptr->STATUS |= ERR_FLG;
-             set_interrupt(0774, (uptr->STATUS >> 3));
+             set_interrupt(dev, (uptr->STATUS >> 3));
          }
          if (uptr->STATUS & DONE_FLG)
-             set_interrupt(LP_DEVNUM, uptr->STATUS);
+             set_interrupt(dev, uptr->STATUS);
          break;
 
     case DATAO:
@@ -132,9 +137,9 @@ t_stat lpt_devio(uint32 dev, uint64 *data) {
              uptr->STATUS &= ~DONE_FLG;
              clr_interrupt(dev);
              sim_activate (&lpt_unit, lpt_unit.wait);
-             sim_debug(DEBUG_DATAIO, &lpt_dev, "LP DATO %012llo, %06o %06o\n", 
-                  *data, uptr->CHL, uptr->CHR);
         }
+        sim_debug(DEBUG_DATAIO, &lpt_dev, "LP DATO %012llo, %06o %06o PC=%06o\n", 
+                  *data, uptr->CHL, uptr->CHR, PC);
          break;
     case DATAI:
          *data = 0;
@@ -148,13 +153,15 @@ t_stat lpt_devio(uint32 dev, uint64 *data) {
 t_stat lpt_output(UNIT *uptr, char c) {
     if (c == 0)
        return SCPE_OK;
+    if (uptr->flags & UNIT_UC) 
+        c = toupper(c);
     fputc (c, uptr->fileref);                       /* print char */
     uptr->pos = ftell (uptr->fileref);
     if (ferror (uptr->fileref)) {                           /* error? */
         perror ("LPT I/O error");
         clearerr (uptr->fileref);
         uptr->STATUS |= ERR_FLG;
-        set_interrupt(0774, (uptr->STATUS >> 3));
+        set_interrupt(LP_DEVNUM, (uptr->STATUS >> 3));
         return SCPE_IOERR;
     }
     return SCPE_OK;
@@ -166,8 +173,8 @@ t_stat lpt_svc (UNIT *uptr)
     char    c;
     if ((uptr->flags & UNIT_ATT) == 0) {
         uptr->STATUS |= ERR_FLG;
-        return IORETURN (lpt_stopioe, SCPE_UNATT);
-        }
+        return SCPE_OK;
+    }
     
     c = (uptr->CHL >> 14) & 0177;
     if ((r = lpt_output(uptr, c)) != SCPE_OK)
@@ -200,7 +207,6 @@ t_stat lpt_reset (DEVICE *dptr)
     uptr->CHL = 0;
     uptr->STATUS = 0;
     clr_interrupt(LP_DEVNUM);
-    clr_interrupt(0774);
     sim_cancel (&lpt_unit);                                 /* deactivate unit */
     return SCPE_OK;
 }
@@ -213,7 +219,7 @@ t_stat lpt_attach (UNIT *uptr, CONST char *cptr)
 
     reason = attach_unit (uptr, cptr);
     uptr->STATUS &= ~ERR_FLG;
-    clr_interrupt(0774);
+    clr_interrupt(LP_DEVNUM);
     return reason;
 }
 
@@ -222,7 +228,7 @@ t_stat lpt_attach (UNIT *uptr, CONST char *cptr)
 t_stat lpt_detach (UNIT *uptr)
 {
     uptr->STATUS |= ERR_FLG;
-    set_interrupt(0774, (uptr->STATUS >> 3) & 7);
+    set_interrupt(LP_DEVNUM, uptr->STATUS >> 3);
     return detach_unit (uptr);
 }
 
