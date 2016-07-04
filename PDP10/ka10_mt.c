@@ -267,7 +267,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
           res = status;
           if ((dptr->flags & MTDF_MOTION) == 0)
               res |= IDLE_UNIT;
-#ifdef KI10
+#if KI10_22BIT
           res |= B22_FLAG;
 #endif
           *data = res;

@@ -122,17 +122,7 @@ DEVICE *sim_devices[] = {
 const char *sim_stop_messages[] = {
     "Unknown error",
     "HALT instruction",
-    "Breakpoint",
-    "Illegal instruction",
-    "Illegal interrupt instruction",
-    "Paging error in interrupt",
-    "Zero vector table",
-    "NXM on UPT/EPT reference",
-    "Nested indirect address limit exceeded",
-    "Nested XCT limit exceeded",
-    "Invalid I/O controller",
-    "Address stop",
-    "Panic stop"
+    "Breakpoint"
      };
 
 /* Simulator debug controls */
@@ -227,6 +217,22 @@ for ( ;; ) {                                            /* loop until JRST */
 return SCPE_OK;
 }
 
+
+int get_word(FILE *fileref, uint64 *word) 
+{
+   char cbuf[5];
+  
+   if (sim_fread(cbuf, 1, 5, fileref) != 5) 
+       return 1;
+   *word = ((uint64)(cbuf[0]) << 29) |
+           ((uint64)(cbuf[1]) << 22) |
+           ((uint64)(cbuf[2]) << 15) |
+           ((uint64)(cbuf[3]) << 8) |
+           ((uint64)(cbuf[4] & 0177) << 1) |
+           ((uint64)(cbuf[4] & 0200) >> 7);
+    return 0;
+}
+
 /* SAV file loader
 
    SAV format is a disk file format (36b words).  It consists of
@@ -242,32 +248,31 @@ return SCPE_OK;
 
 t_stat load_sav (FILE *fileref)
 {
-uint64 count, data;
-uint32 pa;
-int32 wc, op;
+    uint64 count, data;
+    uint32 pa;
+    int32 wc, op;
 
-for ( ;; ) {                                            /* loop */
-    wc = fxread (&count, sizeof (uint64), 1, fileref);     /* read IOWD */
-    if (wc == 0)                                        /* done? */
-        return SCPE_OK;
-    if (TSTS (count)) {                                 /* IOWD? */
-        for ( ; TSTS (count); count = AOB (count)) {
-            wc = fxread (&data, sizeof (uint64), 1, fileref);
-            if (wc == 0)
-                return SCPE_FMT;
-            pa = ((uint32) count + 1) & RMASK;             /* store data */
+    for ( ;; ) {                                        /* loop */
+        if (get_word(fileref, &data))
+            return SCPE_OK;
+        wc = (int32)(data >> 18);
+        pa = (uint32) (data & RMASK);
+        if (wc == (OP_JRST << 9)) {
+            printf("Start addr=%06o\n", pa);
+            PC = pa;
+            return SCPE_OK;
+        }
+        while (wc != 0) {
+            pa++;
+            pa &= RMASK;
+            wc++;
+            wc &= RMASK;
+            if (get_word(fileref, &data))
+               return SCPE_FMT;
             M[pa] = data;
-            }                                           /* end for */
-        }                                               /* end if  count*/
-    else {
-        op = GET_OP (count);                            /* not IOWD */
-        if (op != OP_JRST)                              /* JRST? */
-            return SCPE_FMT;
-        PC = (uint32) count & RMASK;                 /* set PC */
-        break;
-        }                                               /* end else */
-    }                                                   /* end for */
-return SCPE_OK;
+        }                                              /* end if  count*/
+    }
+    return SCPE_OK;
 }
 
 /* EXE file loader

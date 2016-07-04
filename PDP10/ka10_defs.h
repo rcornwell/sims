@@ -42,6 +42,10 @@
 #define KA 0
 #endif
 
+#ifndef KI_22BIT
+#define KI_22BIT 0
+#endif
+
 /* Digital Equipment Corporation's 36b family had six implementations:
 
    name         mips    comments
@@ -82,20 +86,6 @@
 
 #define STOP_HALT       1                               /* halted */
 #define STOP_IBKPT      2                               /* breakpoint */
-#define STOP_ILLEG      3                               /* illegal instr */
-#define STOP_ILLINT     4                               /* illegal intr inst */
-#define STOP_PAGINT     5                               /* page fail in intr */
-#define STOP_ZERINT     6                               /* zero vec in intr */
-#define STOP_NXMPHY     7                               /* nxm on phys ref */
-#define STOP_IND        8                               /* indirection loop */
-#define STOP_XCT        9                               /* XCT loop */
-#define STOP_ILLIOC     10                              /* invalid UBA num */
-#define STOP_ASTOP      11                              /* address stop */
-#define STOP_UNKNOWN    12                              /* unknown stop  */
-#define PAGE_FAIL       -1                              /* page fail */
-#define INTERRUPT       -2                              /* interrupt */
-#define ABORT(x)        longjmp (save_env, (x))         /* abort */
-#define IORETURN(f,v)   ((f)? (v): SCPE_OK)             /* cond error return */
 
 /* Debuging controls */
 #define DEBUG_CMD       0x0000001       /* Show device commands */
@@ -123,14 +113,23 @@ extern DEBTAB dev_debug[];
 #define LSIGN   00000000400000LL
 #define PMASK   00007777777777LL
 #define XMASK   03777777777777LL
-#define EMASK   00776000000000LL
-#define MMASK   00001777777777LL
+#define EMASK   00777000000000LL
+#define MMASK   00000777777777LL
 #define BIT1    00200000000000LL
 #define BIT8    00001000000000LL
 #define BIT9    00000400000000LL
 #define BIT10_35 0000377777777LL
 #define MANT    00000777777777LL
 #define EXPO    00377000000000LL
+#define DFMASK  01777777777777777777777LL
+#define DSMASK  01000000000000000000000LL
+#define DCMASK   0777777777777777777777LL
+#define DNMASK   0400000000000000000000LL
+#define DXMASK   0200000000000000000000LL
+#define FPSMASK   040000000000000000000LL
+#define FPNMASK    01000000000000000000LL
+#define FPFMASK   077777777777777777777LL
+#define FPCMASK   000777777777777777777LL
 
 #define CM(x)   (FMASK ^ (x))
 
@@ -184,7 +183,7 @@ extern DEBTAB dev_debug[];
 
 #define CTY_SWITCH      030
 
-#if KI
+#if KI_22BIT
 #define MAXMEMSIZE      4096 * 1024
 #else
 #define MAXMEMSIZE      256 * 1024
@@ -192,7 +191,7 @@ extern DEBTAB dev_debug[];
 #define MEMSIZE         (cpu_unit.capac)
 
 #define ICWA            0000000000776
-#if KI
+#if KI_22BIT
 #define AMASK           0000037777777
 #define WMASK           017777
 #define CSHIFT          22
@@ -295,3 +294,5 @@ int  df10_write(struct df10 *df);
 extern t_bool sim_idle_enab;
 
 #endif
+
+

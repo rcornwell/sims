@@ -478,7 +478,7 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
            *data |= IADR_ATTN;
         if (rp_rae[ctlr] != 0 && (df10->status & IARD_RAE))
            *data |= IARD_RAE;
-#ifdef KI10
+#if KI10_22BIT
         *data |= B22_FLAG;
 #endif
         sim_debug(DEBUG_CONI, dptr, "RP %03o CONI %06o PC=%o %o\n", 

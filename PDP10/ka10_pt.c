@@ -55,7 +55,6 @@ t_stat         ptp_detach (UNIT *uptr);
 t_stat         ptp_help (FILE *st, DEVICE *dptr, UNIT *uptr, 
                             int32 flag, const char *cptr);
 const char    *ptp_description (DEVICE *dptr);
-int32          ptp_stopioe = 0;
              
 DEVICE         ptr_dev;
 t_stat         ptr_devio(uint32 dev, uint64 *data);
@@ -67,7 +66,6 @@ t_stat         ptr_help (FILE *st, DEVICE *dptr, UNIT *uptr,
                              int32 flag, const char *cptr);
 const char    *ptr_description (DEVICE *dptr);
 
-int32 ptr_stopioe = 0;
 
 DIB ptp_dib = { PP_DEVNUM, 1, &ptp_devio };
 
@@ -78,7 +76,6 @@ UNIT ptp_unit = {
 REG ptp_reg[] = {
     { DRDATA (STATUS, ptp_unit.STATUS, 18), PV_LEFT },
     { DRDATA (TIME, ptp_unit.wait, 24), PV_LEFT },
-    { FLDATA (STOP_IOE, ptp_stopioe, 0) },
     { NULL }
     };
 
@@ -104,7 +101,6 @@ UNIT ptr_unit = {
 REG ptr_reg[] = {
     { DRDATA (STATUS, ptr_unit.STATUS, 18), PV_LEFT },
     { DRDATA (TIME, ptr_unit.wait, 24), PV_LEFT },
-    { FLDATA (STOP_IOE, ptr_stopioe, 0) },
     { NULL }
     };
 
@@ -175,7 +171,7 @@ t_stat ptp_svc (UNIT *uptr)
 
     if ((uptr->flags & UNIT_ATT) == 0) {
         uptr->STATUS |= NO_TAPE_PP;
-        return IORETURN (ptp_stopioe, SCPE_UNATT);
+        return SCPE_UNATT;
     }
     fputc (uptr->CHR, uptr->fileref);                       /* print char */
     uptr->pos = ftell (uptr->fileref);
@@ -272,7 +268,7 @@ t_stat ptr_svc (UNIT *uptr)
     set_interrupt(PR_DEVNUM, uptr->STATUS);
 
     if ((ptr_unit.flags & UNIT_ATT) == 0)                   /* attached? */
-        return IORETURN (ptr_stopioe, SCPE_UNATT);
+        return SCPE_UNATT;
     word = 0;
     while (count > 0) {
         if ((temp = getc (ptr_unit.fileref)) == EOF) {

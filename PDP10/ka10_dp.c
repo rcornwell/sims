@@ -338,7 +338,7 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
      switch(dev & 3) {
      case CONI:
         *data = df10->status | uptr->STATUS;
-#ifdef KI10
+#if KI10_22BIT
         *data |= B22_FLAG;
 #endif
         sim_debug(DEBUG_CONI, dptr, "DP %03o CONI %06o %d PC=%o\n", dev, 
@@ -730,7 +730,7 @@ dp_boot(int32 unit_num, DEVICE * dptr)
     int                 sect;
     int                 wc;
 
-    addr = MEMSIZE - 512;
+    addr = (MEMSIZE - 512) & RMASK;
     for (sect = 4; sect <= 7; sect++) {
         sim_fseek(uptr->fileref, (sect * RP_NUMWD) * sizeof(uint64), SEEK_SET);
         sim_fread (&dp_buf[0][0], sizeof(uint64), RP_NUMWD, uptr->fileref);
@@ -738,7 +738,7 @@ dp_boot(int32 unit_num, DEVICE * dptr)
         for(wc = RP_NUMWD; wc > 0; wc--) 
             M[addr++] = dp_buf[0][ptr++];
     }
-    PC = MEMSIZE - 512;
+    PC = (MEMSIZE - 512) & RMASK;
     return SCPE_OK;
 }
 

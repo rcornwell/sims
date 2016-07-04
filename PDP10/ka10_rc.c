@@ -212,7 +212,7 @@ t_stat rc_devio(uint32 dev, uint64 *data) {
      switch(dev & 3) {
      case CONI:
         *data = df10->status;
-#ifdef KI10
+#if KI10_22BIT
         *data |= B22_FLAG;
 #endif
         sim_debug(DEBUG_CONI, dptr, "HK %03o CONI %06o PC=%o\n", dev,
@@ -452,7 +452,7 @@ rc_boot(int32 unit_num, DEVICE * dptr)
     int                 sect;
     uint32              ptr;
 
-   addr = MEMSIZE - 512;
+   addr = (MEMSIZE - 512) & RMASK;
    wps = rc_drv_tab[dtype].wd_seg;
    for (sect = 4; sect <= 7; sect++) {
        seg = (sect * 128) / wps;
@@ -463,7 +463,7 @@ rc_boot(int32 unit_num, DEVICE * dptr)
           M[addr++] = rc_buf[0][ptr++];
        }
     }
-    PC = MEMSIZE - 512;
+    PC = (MEMSIZE - 512) & RMASK;
     return SCPE_OK;
 }
 
