@@ -140,7 +140,7 @@ void                ht_tape_posterr(UNIT * uptr, uint32 error);
 
 /* One buffer per channel */
 uint8               ht_unit[NUM_CHAN * 2];      /* Currently selected unit */
-uint8               ht_buffer[2][BUFFSIZE];
+uint8               ht_buffer[NUM_DEVS_HT][BUFFSIZE];
 int                 ht_cmdbuffer[NUM_CHAN];     /* Buffer holding command ids */
 int                 ht_cmdcount[NUM_CHAN];      /* Count of command digits recieved */
 uint32              ht_sense[NUM_CHAN * 2];     /* Sense data for unit */
@@ -941,7 +941,7 @@ ht_reset(DEVICE * dptr)
 {
     int                 i;
 
-    for (i = 0; i < NUM_UNITS_HT; i++) {
+    for (i = 0; i < NUM_CHAN; i++) {
         ht_cmdbuffer[i] = ht_cmdcount[i] = 0;
         ht_sense[i] = 0;
     }
