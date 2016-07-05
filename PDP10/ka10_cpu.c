@@ -408,7 +408,11 @@ int opflags[] = {
         /* EXCH */        /* BLT */         /* AOBJP */     /* AOBJN */
         FAC|FCEPSE,       FAC,              FAC|SAC,        FAC|SAC,
         /* JRST */        /* JFCL */        /* XCT */       /* MAP */
+#if KI
         0,                0,                0,              SAC,
+#else
+        0,                0,                0,              0,
+#endif
         /* PUSHJ */       /* PUSH */        /* POP */       /* POPJ */
         FAC|SAC,          FAC|FCE|SAC,      FAC|SAC,        FAC|SAC,
         /* JSR */         /* JSP */         /* JSA */       /* JRA */
