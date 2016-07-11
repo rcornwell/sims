@@ -65,7 +65,6 @@
 
 extern UNIT cpu_unit;
 
-DEVICE dk_dev;
 t_stat dk_devio(uint32 dev, uint64 *data);
 void   dk_count (UNIT *uptr);
 t_stat dk_svc (UNIT *uptr);
@@ -91,7 +90,6 @@ DEVICE dk_dev = {
     };
 
 t_stat dk_devio(uint32 dev, uint64 *data) {
-    uint64      res;
     int         unit = (dev - DK_DEVNUM) >> 2;
     UNIT        *uptr = &dk_unit[unit];
     int32       t;

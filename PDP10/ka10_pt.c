@@ -46,7 +46,6 @@
 #define TAPE_PR     000400
 
 
-DEVICE         ptp_dev;
 t_stat         ptp_devio(uint32 dev, uint64 *data);
 t_stat         ptp_svc (UNIT *uptr);
 t_stat         ptp_reset (DEVICE *dptr);
@@ -56,7 +55,6 @@ t_stat         ptp_help (FILE *st, DEVICE *dptr, UNIT *uptr,
                             int32 flag, const char *cptr);
 const char    *ptp_description (DEVICE *dptr);
              
-DEVICE         ptr_dev;
 t_stat         ptr_devio(uint32 dev, uint64 *data);
 t_stat         ptr_svc (UNIT *uptr);
 t_stat         ptr_reset (DEVICE *dptr);
@@ -166,8 +164,6 @@ t_stat ptp_devio(uint32 dev, uint64 *data) {
 /* Unit service */
 t_stat ptp_svc (UNIT *uptr)
 {
-    t_stat r;
-    char c;
     uptr->STATUS &= ~BUSY_FLG;
     uptr->STATUS |= DONE_FLG;
     set_interrupt(PP_DEVNUM, uptr->STATUS & 7);
@@ -292,7 +288,7 @@ t_stat ptr_svc (UNIT *uptr)
            count--;
         } 
     }
-    uptr->CHL = (word >> 18);
+    uptr->CHL = (word >> 18) & 0777777;
     uptr->CHR = word & 0777777;
     return SCPE_OK;
 }

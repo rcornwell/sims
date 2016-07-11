@@ -213,7 +213,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
        case CONO:
           unit = (*data >> 15) & 07;
           uptr = &mt_unit[unit];
-          uptr->u3 = *data;
+          uptr->u3 = (int32)*data;
           CLR_BUF(uptr);
           dptr->flags &= ~(MTDF_BUFFUL|MTDF_STOP|MTDF_UNIT_MSK);
           dptr->flags |= (unit << MTDF_V_UNIT);
@@ -319,7 +319,6 @@ int mt_df10_fetch(DEVICE *dptr, int addr) {
 }
 
 int mt_df10_read(DEVICE *dptr, UNIT *uptr) {
-     uint64 data;
      if (dptr->flags & MTDF_TYPEB) {
          if (mt_wcr == 0) {
              if(!mt_df10_fetch(dptr, 0))
@@ -499,7 +498,7 @@ t_stat mt_srv(UNIT * uptr)
             uptr->u6 = 0;
             uptr->u5 = 0;
         }
-        if (uptr->u6 < uptr->hwmark) {
+        if ((uint32)uptr->u6 < uptr->hwmark) {
             int cc = (8 * (3 - uptr->u5)) + 4;
             uint8 ch;
             if ((cmd & 07) == CMP && uptr->u5 == 0) {
@@ -688,7 +687,6 @@ t_stat mt_srv(UNIT * uptr)
 
 void mt_read_word(UNIT *uptr) {
      int i, cc, ch;
-     uint64 buf;
    
      buf_reg = 0;
      for(i = 0; i <= 4; i++) {
@@ -729,7 +727,7 @@ mt_boot(int32 unit_num, DEVICE * dptr)
     while (wc != 0) {
         wc = (wc + 1) & RMASK;
         addr = (addr + 1) & RMASK;
-        if (uptr->u6 >= reclen) {
+        if ((uint32)uptr->u6 >= reclen) {
             r = sim_tape_rdrecf(uptr, &mt_buffer[0], &reclen, BUFFSIZE);
             if (r != SCPE_OK)
                 return r;

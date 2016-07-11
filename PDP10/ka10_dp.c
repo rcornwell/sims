@@ -69,7 +69,7 @@
 #define NXM_ERR         0000000010000      
 #define SLW_CHN         0000000020000
 #define SRC_ERR         0000000040000
-#define PWR_FAIL        0000000100000
+#define PWR_FAIL_10     0000000100000
 #define END_CYL         0000000200000      /* No effect */
 #define SRC_DONE        0000000400000      /* No effect */
 #define DSK_PRTY        0000001000000      /* No effect */
@@ -505,6 +505,7 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
          sim_activate(uptr, 100);
          return SCPE_OK;
     }
+    return SCPE_OK; /* Unreached */
 }
 
 
@@ -746,7 +747,6 @@ dp_boot(int32 unit_num, DEVICE * dptr)
 
 t_stat dp_attach (UNIT *uptr, CONST char *cptr)
 {
-    int32 drv, i, p;
     t_stat r;
     DEVICE *dptr;
     DIB *dib;
@@ -772,8 +772,6 @@ t_stat dp_attach (UNIT *uptr, CONST char *cptr)
 
 t_stat dp_detach (UNIT *uptr)
 {
-    int32 drv;
-
     if (!(uptr->flags & UNIT_ATT))                          /* attached? */
         return SCPE_OK;
     if (sim_is_active (uptr))                              /* unit active? */

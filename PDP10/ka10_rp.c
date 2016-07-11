@@ -457,8 +457,6 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
      int            ctlr = -1;
      DEVICE        *dptr;
      struct df10   *df10;
-     UNIT          *uptr;
-     int            tmp;
      int            drive;
 
      for (drive = 0; drive < NUM_DEVS_RP; drive++) {
@@ -578,6 +576,7 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
          }
          return SCPE_OK;
     }
+    return SCPE_OK; /* Unreached */
 }
 
 
@@ -754,7 +753,7 @@ t_stat rp_svc (UNIT *uptr)
     struct df10 *df;
     int          cyl = uptr->u4 & 01777;
     int          diff, da;
-    t_stat       err, r;
+    t_stat       r;
 
     /* Find dptr, and df10 */
     for (ctlr = 0; ctlr < NUM_DEVS_RP; ctlr++) {
@@ -991,7 +990,6 @@ rp_boot(int32 unit_num, DEVICE * rptr)
     UNIT               *uptr = &rptr->units[unit_num];
     uint32              addr;
     uint32              ptr;
-    int                 sect;
     int                 wc;
 
     sim_fseek(uptr->fileref, 0, SEEK_SET);
@@ -1011,7 +1009,6 @@ rp_boot(int32 unit_num, DEVICE * rptr)
 
 t_stat rp_attach (UNIT *uptr, CONST char *cptr)
 {
-    int32 drv, i, p;
     t_stat r;
     DEVICE *rptr;
     DIB *dib;
@@ -1040,8 +1037,6 @@ t_stat rp_attach (UNIT *uptr, CONST char *cptr)
 
 t_stat rp_detach (UNIT *uptr)
 {
-    int32 drv;
-
     if (!(uptr->flags & UNIT_ATT))                          /* attached? */
         return SCPE_OK;
     if (sim_is_active (uptr))                              /* unit active? */
