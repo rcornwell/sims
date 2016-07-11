@@ -36,16 +36,13 @@
 				Name="VCXMLDataGeneratorTool"
 			/>
 			<Tool
-				Name="VCWebServiceProxyGeneratorTool"
-			/>
-			<Tool
 				Name="VCMIDLTool"
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories="./;../;../PDP10/;&quot;../../windows-build/PCRE/include/&quot;"
-				PreprocessorDefinitions="KI;USE_INT64;_CRT_NONSTDC_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;SIM_NEED_GIT_COMMIT_ID;HAVE_PCREPOSIX_H;PCRE_STATIC"
+				PreprocessorDefinitions="USE_INT64;KI=1;_CRT_NONSTDC_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;SIM_NEED_GIT_COMMIT_ID;HAVE_PCREPOSIX_H;PCRE_STATIC"
 				KeepComments="false"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="0"
@@ -120,9 +117,6 @@
 				Name="VCXMLDataGeneratorTool"
 			/>
 			<Tool
-				Name="VCWebServiceProxyGeneratorTool"
-			/>
-			<Tool
 				Name="VCMIDLTool"
 			/>
 			<Tool
@@ -131,7 +125,7 @@
 				InlineFunctionExpansion="1"
 				OmitFramePointers="true"
 				AdditionalIncludeDirectories="./;../;../PDP10/;&quot;../../windows-build/PCRE/include/&quot;"
-				PreprocessorDefinitions="KI;USE_INT64;_CRT_NONSTDC_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;SIM_NEED_GIT_COMMIT_ID;HAVE_PCREPOSIX_H;PCRE_STATIC"
+				PreprocessorDefinitions="USE_INT64;KI=1;_CRT_NONSTDC_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;SIM_NEED_GIT_COMMIT_ID;HAVE_PCREPOSIX_H;PCRE_STATIC"
 				StringPooling="true"
 				RuntimeLibrary="0"
 				EnableFunctionLevelLinking="true"
@@ -195,6 +189,58 @@
 			Filter="cpp;c;cxx;def;odl;idl;hpj;bat;asm"
 			>
 			<File
+				RelativePath="..\PDP10\ka10_cpu.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ka10_cty.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ka10_dc.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ka10_df.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ka10_dk.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ka10_dp.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ka10_dt.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ka10_lp.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ka10_mt.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ka10_pt.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ka10_rc.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ka10_rp.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ka10_sys.c"
+				>
+			</File>
+			<File
 				RelativePath="..\scp.c"
 				>
 			</File>
@@ -247,6 +293,10 @@
 			Name="Header Files"
 			Filter="h;hpp;hxx;hm;inl;inc"
 			>
+			<File
+				RelativePath="..\PDP10\ka10_defs.h"
+				>
+			</File>
 			<File
 				RelativePath="..\scp.h"
 				>
