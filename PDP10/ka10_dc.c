@@ -81,7 +81,6 @@ uint32   dc_ring;                                 /* Connection pending */
 uint32   rx_conn;                                 /* Connection flags */
 extern int32 tmxr_poll;
 
-DEVICE dc_dev;
 t_stat dc_devio(uint32 dev, uint64 *data);
 t_stat dc_svc (UNIT *uptr);
 t_stat dc_doscan (UNIT *uptr);
@@ -297,7 +296,7 @@ t_stat dc_devio(uint32 dev, uint64 *data) {
 
 t_stat dc_svc (UNIT *uptr)
 {
-int32 ln, c, temp;
+int32 ln;
 
     if ((uptr->flags & UNIT_ATT) == 0)                  /* attached? */
         return SCPE_OK;
@@ -334,7 +333,6 @@ int32 ln, c, temp;
 
 /* Scan to see if something to do */
 t_stat dc_doscan (UNIT *uptr) {
-   int ln;
    int32 lmask;
 
    uptr->STATUS &= ~(RCV_PI|XMT_PI);

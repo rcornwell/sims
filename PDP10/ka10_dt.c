@@ -360,7 +360,6 @@ static const int32 map_unit[16] = {                     /* Type 550 unit map */
     0, -1, -1, -1, -1, -1, -1, -1
     };
 
-DEVICE dt_dev;
 int32 dt75 (int32 dev, int32 pulse, int32 dat);
 int32 dt76 (int32 dev, int32 pulse, int32 dat);
 t_stat dt_devio(uint32 dev, uint64 *data);
@@ -390,7 +389,6 @@ int32 dt_gethdr (UNIT *uptr, int32 blk, int32 relpos);
 DIB dt_dib = { DT_DEVNUM, 2, &dt_devio};
 
 UNIT dt_unit[] = {
-#if 0
     { UDATA (&dt_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
              UNIT_ROABLE, DT_CAPAC) },
     { UDATA (&dt_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
@@ -407,7 +405,6 @@ UNIT dt_unit[] = {
              UNIT_ROABLE, DT_CAPAC) },
     { UDATA (&dt_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
              UNIT_ROABLE, DT_CAPAC) }
-#endif
     };
 
 REG dt_reg[] = {
@@ -1581,6 +1578,8 @@ uptr->filebuf = NULL;                                   /* clear buf ptr */
 uptr->flags = uptr->flags & ~(UNIT_8FMT | UNIT_11FMT);  /* default fmt */
 uptr->capac = DT_CAPAC;                                 /* default size */
 return detach_unit (uptr);
+#else
+return SCPE_NOFNC;
 #endif
 }
 #endif

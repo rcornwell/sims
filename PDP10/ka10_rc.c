@@ -194,13 +194,11 @@ DEVICE *rc_devs[] = {
 
 
 t_stat rc_devio(uint32 dev, uint64 *data) {
-     uint64       res;
      int          ctlr = (dev - RC_DEVNUM) >> 2;
      struct df10 *df10 = &rc_df10[ctlr];
      UNIT        *uptr;
      DEVICE      *dptr;
      int          unit;
-     int          cyl;
      int          tmp;
      int          drv;
 
@@ -443,7 +441,6 @@ rc_boot(int32 unit_num, DEVICE * dptr)
 {
     UNIT               *uptr = &dptr->units[unit_num];
     int                 dtype = GET_DTYPE(uptr->flags);
-    uint64              buf_reg;
     uint32              addr;
     int                 wc;
     int                 wps;
@@ -470,7 +467,6 @@ rc_boot(int32 unit_num, DEVICE * dptr)
 
 t_stat rc_attach (UNIT *uptr, CONST char *cptr)
 {
-int32 drv, i, p;
 t_stat r;
 
 uptr->capac = rc_drv_tab[GET_DTYPE (uptr->flags)].size;
@@ -486,8 +482,6 @@ return SCPE_OK;
 
 t_stat rc_detach (UNIT *uptr)
 {
-int32 drv;
-
 if (!(uptr->flags & UNIT_ATT))                          /* attached? */
     return SCPE_OK;
 if (sim_is_active (uptr))                              /* unit active? */

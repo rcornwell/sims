@@ -52,7 +52,6 @@
 
 
 
-DEVICE          lpt_dev;
 t_stat          lpt_devio(uint32 dev, uint64 *data);
 t_stat          lpt_svc (UNIT *uptr);
 t_stat          lpt_reset (DEVICE *dptr);
@@ -131,7 +130,7 @@ t_stat lpt_devio(uint32 dev, uint64 *data) {
 
     case DATAO:
          if ((uptr->STATUS & BUSY_FLG) == 0) {
-             uptr->CHL = *data >> 15;
+             uptr->CHL = (int32)(*data >> 15);
              uptr->CHR = (*data >> 1) & 0037777;
              uptr->STATUS |= BUSY_FLG;
              uptr->STATUS &= ~DONE_FLG;

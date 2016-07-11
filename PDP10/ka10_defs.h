@@ -251,8 +251,8 @@ extern t_stat (*dev_tab[128])(uint32 dev, uint64 *data);
 #define VEC_DEVMAX      8                               /* max device vec */
 
 struct pdp_dib {
-    int                 dev_num;                        /* device address */
-    int                 num_devs;                       /* length */
+    uint32              dev_num;                        /* device address */
+    uint32              num_devs;                       /* length */
     t_stat              (*io)(uint32 dev, uint64 *data);
 };
 

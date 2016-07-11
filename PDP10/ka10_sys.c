@@ -136,7 +136,7 @@ DEBTAB              dev_debug[] = {
 #define EXE_DIR 01776                                   /* EXE directory */
 #define EXE_VEC 01775                                   /* EXE entry vec */
 #define EXE_PDV 01774                                   /* EXE ignored */
-#define EXE_END 01777                                   /* EXE end
+#define EXE_END 01777                                   /* EXE end */
 
 /* RIM10 loader
 
@@ -152,6 +152,7 @@ DEBTAB              dev_debug[] = {
         JRST start
 */
 
+#define RIM_EOF 0xFFFFFFFFFFFFFFFFLL
 uint64 getrimw (FILE *fileref)
 {
 int32 i, tmp;
@@ -160,7 +161,7 @@ uint64 word;
 word = 0;
 for (i = 0; i < 6;) {
     if ((tmp = getc (fileref)) == EOF)
-        return -1;
+        return RIM_EOF;
     if (tmp & 0200) {
         word = (word << 6) | ((uint64) tmp & 077);
         i++;
@@ -178,19 +179,19 @@ int32 op;
 
 for ( ;; ) {                                            /* loop until JRST */
     count = cksm = getrimw (fileref);                   /* get header */
-    if (count < 0)                                      /* read err? */
+    if (count == RIM_EOF)                                      /* read err? */
         return SCPE_FMT;
     if (TSTS (count)) {                                 /* hdr = IOWD? */
         for ( ; TSTS (count); count = AOB (count)) {
             data = getrimw (fileref);                   /* get data wd */
-            if (data < 0)
+            if (data == RIM_EOF)
                 return SCPE_FMT;
             cksm = cksm + data;                         /* add to cksm */
             pa = ((uint32) count + 1) & RMASK;             /* store */
             M[pa] = data;
             }                                           /* end for */
         data = getrimw (fileref);                       /* get cksm */
-        if (data < 0)
+        if (data == RIM_EOF)
             return SCPE_FMT;
         if ((cksm + data) & FMASK)                      /* test cksm */
             return SCPE_CSUM;
@@ -237,9 +238,9 @@ int get_word(FILE *fileref, uint64 *word)
 
 t_stat load_sav (FILE *fileref)
 {
-    uint64 count, data;
+    uint64 data;
     uint32 pa;
-    int32 wc, op;
+    int32 wc;
 
     for ( ;; ) {                                        /* loop */
         if (get_word(fileref, &data))

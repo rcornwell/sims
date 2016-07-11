@@ -664,7 +664,6 @@ int check_irq_level() {
 
 void restore_pi_hold() {
      int i, lvl;
-     int pi_ok, pi_t;
 
      if (!pi_enable)
         return;
@@ -739,8 +738,8 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
        *data = res;
        sim_debug(DEBUG_DATAIO, &cpu_dev, "DATAI PAG %012llo\n", *data);
        break;
-    return SCPE_OK;
     }
+    return SCPE_OK;
 }
 
 t_stat dev_apr(uint32 dev, uint64 *data) {
@@ -934,7 +933,6 @@ int page_lookup(int addr, int flag, int *loc, int wr) {
     uint64   data;
     int      base;
     int      page = addr >> 9;
-    int      pg;
     int      uf = 0;
 
     if (flag) {
@@ -1076,7 +1074,7 @@ int Mem_read(int flag) {
         sim_interval--;
         if (!page_lookup(AB, flag, &addr, 0))
             return 1;
-        if (addr > MEMSIZE) {
+        if (addr > (int)MEMSIZE) {
             nxm_flag = 1;
             set_interrupt(0, apr_irq);
             return 1;
@@ -1098,7 +1096,7 @@ int Mem_write(int flag) {
         if (private_page)
             return 1;
 #endif
-        if (addr > MEMSIZE) {
+        if (addr > (int)MEMSIZE) {
             nxm_flag = 1;
             set_interrupt(0, apr_irq);
             return 1;
@@ -1159,7 +1157,7 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
 
   while ( reason == 0) {                                /* loop until ABORT */
      if (sim_interval <= 0) {                           /* check clock queue */
-          if (reason = sim_process_event () != SCPE_OK) {    /* error?  stop sim */
+          if ((reason = sim_process_event()) != SCPE_OK) {/* error?  stop sim */
                 if (reason != SCPE_STEP || !BYF5)
                    return reason;
           }
@@ -1205,7 +1203,6 @@ fetch:
 
     /* Update history */
     if (hst_lnt) {
-            int i;
             hst_p = hst_p + 1;
             if (hst_p >= hst_lnt)
                     hst_p = 0;
@@ -1236,7 +1233,7 @@ fetch:
                  goto last;
          /* Handle events during a indirect loop */
          if (sim_interval-- <= 0) {
-              if (reason = sim_process_event () != SCPE_OK) {
+              if ((reason = sim_process_event()) != SCPE_OK) {
                  if (reason != SCPE_STEP || !BYF5)
                      return reason;
               }
@@ -2192,7 +2189,7 @@ fxnorm:
                  break;
               }
 #if !KI
-              if ((BR == SMASK))              /* Handle special case */
+              if (BR == SMASK)                /* Handle special case */
                  flag3 = !flag3;
 #endif
               MQ = AR * (BR & RMASK);         /* 36 * low 18 = 54 bits */
@@ -2295,7 +2292,6 @@ fxnorm:
                       AR = (AR + 1) & FMASK;
                   flag1 = 1;
               }
-div:
               if (BR & SMASK)
                    AD = (AR + BR) & FMASK;
               else
@@ -2507,7 +2503,7 @@ div:
               BR = AB;
               do {
                  if (sim_interval <= 0) {
-                      sim_process_event ();
+                      sim_process_event();
                  }
                  /* Allow for interrupt */
                  if (pi_enable && pi_pending) {
@@ -3528,11 +3524,8 @@ for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {
               if (dibp->io) {                           /* any dispatch? */
                    if (dev_tab[(dibp->dev_num >> 2) + j] != &null_dev) {
                                                        /* already filled? */
-                           printf ("%s device number conflict at %02o\n",
-                              sim_dname (dptr), dibp->dev_num + j << 2);
-                      if (sim_log)
-                        fprintf (sim_log, "%s device number conflict at %02o\n",
-                                   sim_dname (dptr), dibp->dev_num + j << 2);
+                       sim_printf ("%s device number conflict at %02o\n",
+                              sim_dname (dptr), dibp->dev_num + (j << 2));
                        return TRUE;
                    }
               dev_tab[(dibp->dev_num >> 2) + j] = dibp->io;  /* fill */
@@ -3566,7 +3559,7 @@ return SCPE_OK;
 t_stat cpu_show_serial (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
 fprintf (st, "Serial: " );
-if( (apr_serial == -1)) {
+if (apr_serial == -1) {
     fprintf (st, "%d (default)", DEF_SERIAL);
     return SCPE_OK;
     }
@@ -3611,7 +3604,6 @@ t_stat cpu_show_hist (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 int32 k, di, lnt;
 char *cptr = (char *) desc;
 t_stat r;
-int reg;
 t_value sim_eval;
 InstHistory *h;
 
