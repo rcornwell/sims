@@ -206,6 +206,10 @@ extern DEBTAB dev_debug[];
 #define BUSY            0000000020      /* STOP */
 #define CCW_COMP        0000000040      /* Write Final CCW */
 
+#if KI
+#define DEF_SERIAL      514             /* Default dec test machine */
+#endif
+
 
 typedef unsigned long long int uint64;
 typedef unsigned int uint18;

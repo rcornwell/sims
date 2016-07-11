@@ -1,6 +1,6 @@
-/* i7090_mt.c: IBM 7090 Magnetic tape controller
+/* ka10_mt.c: TM10A/B Magnetic tape controller
 
-   Copyright (c) 2005, Richard Cornwell
+   Copyright (c) 2016, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -60,22 +60,22 @@
 #define LT              66      /* Time per char low density */
 #define HT              16      /* Time per char high density */
 
-#define NOP_CLR         000     // Nop clear, interrupt
-#define NOP_IDLE        010     // Nop interrupt when idle
-#define REWIND          001     // Rewind
-#define UNLOAD          011     // Unload
-#define READ            002     // Read 
-#define READ_NOEOR      012     // Read no end of record.
-#define CMP             003     // Compare
-#define CMP_NOEOR       013     // Compare no end of record.
-#define WRITE           004     // Write
-#define WRITE_LONG      014     // Write with long record gap.
-#define WTM             005     // Write End of File
-#define ERG             015     // Write blank tape
-#define SPC_FWD         006     // Space forward
-#define SPC_EOF         016     // Space to end of file
-#define SPC_REV         007     // Space reverse
-#define SPC_REV_EOF     017     // Space reverse to EOF.
+#define NOP_CLR         000     /* Nop clear, interrupt */
+#define NOP_IDLE        010     /* Nop interrupt when idle */
+#define REWIND          001     /* Rewind */
+#define UNLOAD          011     /* Unload */
+#define READ            002     /* Read  */
+#define READ_NOEOR      012     /* Read no end of record. */
+#define CMP             003     /* Compare */
+#define CMP_NOEOR       013     /* Compare no end of record. */
+#define WRITE           004     /* Write */
+#define WRITE_LONG      014     /* Write with long record gap. */
+#define WTM             005     /* Write End of File */
+#define ERG             015     /* Write blank tape */
+#define SPC_FWD         006     /* Space forward */
+#define SPC_EOF         016     /* Space to end of file */
+#define SPC_REV         007     /* Space reverse */
+#define SPC_REV_EOF     017     /* Space reverse to EOF. */
 
 #define DATA_REQUEST    0000000001
 #define NEXT_UNIT       0000000002
@@ -103,29 +103,19 @@
 #define B22_FLAG        01000000000
 
 
-#define DATA_PIA        000000007       // 0
-#define FLAG_PIA        000000070       // 3
+#define DATA_PIA        000000007       /* 0 */
+#define FLAG_PIA        000000070       /* 3 */
 #define DENS_200        000000000       
 #define DENS_556        000000100
 #define DENS_800        000000200
-#define DENS_MSK        000000300       // 6
-#define NXT_UNIT_ENAB   000000400       // 8
-#define FUNCTION        000017000       // 9
-#define CORE_DUMP       000020000       //13
-#define ODD_PARITY      000040000       //14
-#define UNIT_NUM        000700000       //15
-#define NXT_UNIT        007000000       //18
+#define DENS_MSK        000000300       /* 6 */
+#define NXT_UNIT_ENAB   000000400       /* 8 */
+#define FUNCTION        000017000       /* 9 */
+#define CORE_DUMP       000020000       /*13 */
+#define ODD_PARITY      000040000       /*14 */
+#define UNIT_NUM        000700000       /*15 */
+#define NXT_UNIT        007000000       /*18 */
 
-
-#define IDLE            00      // Idle
-#define READ_RECL       01      // Reading record length
-#define READ_BLK        02      // Reading Block
-#define WRITE_RECL      03      // Write record length
-
-#define CHAR_MASK       0377    // Mask for Character.
-#define END_REC         0400    // End of record flag.
-#define END_OF_FILE     01000   // End of file recieved.
-#define END_OF_TAPE     02000   // End of tape.
 #define MT_DEVNUM       0340
 /* in u3 is device address */
 /* in u4 is current buffer position */
@@ -243,7 +233,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
           break;
 
      case DATAI:
-          // Xfer data
+          /* Xfer data */
           dptr->flags &= ~MTDF_BUFFUL;
           status &= ~DATA_REQUEST;
           if (status & JOB_DONE)
@@ -254,7 +244,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
           break;
 
      case DATAO:
-          // Xfer data
+          /* Xfer data */
           hold_reg = *data;
           dptr->flags |= MTDF_BUFFUL;
           status &= ~DATA_REQUEST;

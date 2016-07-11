@@ -1,6 +1,6 @@
-/* pdp10_sys.c: PDP-10 simulator interface
+/* ka10_sys.c: PDP-10 simulator interface
 
-   Copyright (c) 1993-2011, Robert M Supnik
+   Copyright (c) 2011-2016, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -15,28 +15,13 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-   Except as contained in this notice, the name of Robert M Supnik shall not be
+   Except as contained in this notice, the name of Richard Cornwell shall not be
    used in advertising or otherwise to promote the sale, use or other dealings
-   in this Software without prior written authorization from Robert M Supnik.
-
-   04-Apr-11    RMS     Removed DEUNA/DELUA support - never implemented
-   01-Feb-07    RMS     Added CD support
-   22-Jul-05    RMS     Fixed warning from Solaris C (from Doug Gwyn)
-   09-Jan-03    RMS     Added DEUNA/DELUA support
-   12-Sep-02    RMS     Added RX211 support
-   22-Apr-02    RMS     Removed magtape record length error
-   17-Sep-01    RMS     Removed multiconsole support
-   25-Aug-01    RMS     Enabled DZ11
-   27-May-01    RMS     Added multiconsole support
-   29-Apr-01    RMS     Fixed format for RDPCST, WRPCST
-                        Added CLRCSH for ITS
-   03-Apr-01    RMS     Added support for loading EXE files
-   19-Mar-01    RMS     Added support for loading SAV files
-   30-Oct-00    RMS     Added support for examine to file
+   in this Software without prior written authorization from Richard Cornwell.
 */
 
 #include "ka10_defs.h"
@@ -53,7 +38,11 @@
    sim_load             binary loader
 */
 
-char sim_name[] = "PDP-10";
+#if KI
+char sim_name[] = "KI-10";
+#else
+char sim_name[] = "KA-10";
+#endif
 
 extern REG cpu_reg[];
 REG *sim_PC = &cpu_reg[1];

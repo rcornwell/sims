@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -549,7 +549,8 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
                 df10_setup(df10, (uint32)(*data >> 6));
                 df10->status |= BUSY;
                 rp_write(ctlr, rp_drive[ctlr], 0, (uint32)(*data & 077));
-         sim_debug(DEBUG_DATAIO, dptr, "RP %03o command %012llo, %d[%d] PC=%06o %06o\n\r",
+                sim_debug(DEBUG_DATAIO, dptr, 
+                    "RP %03o command %012llo, %d[%d] PC=%06o %06o\n\r",
                     dev, *data, ctlr, rp_drive[ctlr], PC, df10->status);
              } else if (rp_reg[ctlr] == 044) {  
                 /* Set KI10 Irq vector */
