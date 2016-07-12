@@ -288,8 +288,8 @@ t_stat ptr_svc (UNIT *uptr)
            count--;
         } 
     }
-    uptr->CHL = (word >> 18) & 0777777;
-    uptr->CHR = word & 0777777;
+    uptr->CHL = (word >> 18) & RMASK;
+    uptr->CHR = word & RMASK;
     return SCPE_OK;
 }
 

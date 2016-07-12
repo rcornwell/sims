@@ -45,7 +45,7 @@ char sim_name[] = "KA-10";
 #endif
 
 extern REG cpu_reg[];
-REG *sim_PC = &cpu_reg[1];
+REG *sim_PC = &cpu_reg[0];
 
 int32 sim_emax = 1;
 

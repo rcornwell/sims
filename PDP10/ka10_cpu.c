@@ -158,6 +158,7 @@ char    clk_en;                               /* Enable clock interrupts */
 int     clk_irq;                              /* Clock interrupt */
 char    pi_restore;                           /* Restore previous level */
 char    pi_hold;                              /* Hold onto interrupt */
+int     pi_cycle;                             /* Executing an interrupt */
 #if KI
 uint64  ARX;                                  /* Extension to AR */
 uint64  BRX;                                  /* Extension to BR */
@@ -178,6 +179,7 @@ int     public_access;                        /* Last access from public page */
 int     private_page;                         /* Access to private page */
 uint64  fault_data;                           /* Fault data from last fault */
 int32   apr_serial = -1;                      /* CPU Serial number */
+int     trap_flag;                            /* Last instruction was trapped */
 #endif
 
 char    dev_irq[128];                         /* Pending irq by device */
@@ -608,19 +610,19 @@ void check_apr_irq() {
         clr_interrupt(0);
         clr_interrupt(4);
         if (apr_irq) {
-            flg |= ((FLAGS & OVR) != 0) & ov_irq;
-            flg |= ((FLAGS & FLTOVR) != 0) & fov_irq;
 #if KI
-            flg |= clk_flg & (clk_irq != 0);
             flg |= inout_fail | nxm_flag;
 #else
+//            flg |= clk_flg & (clk_irq != 0);
+            flg |= ((FLAGS & OVR) != 0) & ov_irq;
+            flg |= ((FLAGS & FLTOVR) != 0) & fov_irq;
             flg |= nxm_flag | mem_prot | push_ovf;
 #endif
             if (flg)
                 set_interrupt(0, apr_irq);
         }
-        if (clk_flg & clk_en)
-            set_interrupt(4, clk_irq);
+ //       if (clk_flg & clk_en)
+  //          set_interrupt(4, clk_irq);
 }
 
 int check_irq_level() {
@@ -775,6 +777,8 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
             timer_irq = 1;
         if (res & 0100000)
             timer_irq = 0;
+        if (res & 0200000)
+            reset_all(1);
         if (res & 0400000)
             timer_flg = 0;
         check_apr_irq();
@@ -950,7 +954,7 @@ int page_lookup(int addr, int flag, int *loc, int wr) {
         if (small_user && (addr & 0340000) != 0) {
             fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 28) | 060LL;
             page_fault = 1;
-            fprintf(stderr, " small fault\n\r");
+//            fprintf(stderr, " small fault\n\r");
             return 0;
         }
     } else {
@@ -960,7 +964,7 @@ int page_lookup(int addr, int flag, int *loc, int wr) {
             return 1;
         }
         /* Pages 340-377 via UBR */
-        fprintf(stderr, "xlat %06o %03o ", addr, page >> 1);
+ //       fprintf(stderr, "xlat %06o %03o ", addr, page >> 1);
         if ((page & 0740) == 0340) {
             base = ub_ptr;
             page += 01000 - 0340;
@@ -968,24 +972,24 @@ int page_lookup(int addr, int flag, int *loc, int wr) {
         } else if (page & 0400) {
             base = eb_ptr;
         } else {
-        fprintf(stderr, "\n\r");
+  //      fprintf(stderr, "\n\r");
             *loc = addr;
             return 1;
         }
     }
     data = M[base + (page >> 1)];
-        fprintf(stderr, " %06o %012llo ", base, data);
+//        fprintf(stderr, " %06o %03o %012llo ", base, page, data);
     if ((page & 1) == 0)
        data >>= 18;
     data &= RMASK;
-        fprintf(stderr, " -> %06llo wr=%o ", data, wr);
+//        fprintf(stderr, " -> %06llo wr=%o ", data, wr);
     *loc = ((data & 037777) << 9) + (addr & 0777);
-        fprintf(stderr, " -> %06o", *loc);
-    if (((FLAGS & PUBLIC) != 0) && ((data & 0200000) == 0)) {
+//        fprintf(stderr, " -> %06o", *loc);
+    if (!pi_cycle && ((FLAGS & PUBLIC) != 0) && ((data & 0200000) == 0)) {
         /* Handle public violation */
         fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 28) | 061LL;
         private_page = 1;
-        fprintf(stderr, " public");
+//        fprintf(stderr, " public");
     }
     public_access = (data & 0200000) != 0;
     if ((data & LSIGN) == 0 || (wr & ((data & 0100000) == 0))) {
@@ -995,10 +999,14 @@ int page_lookup(int addr, int flag, int *loc, int wr) {
         fault_data |= (data & 0040000) ? 002LL : 0LL;   /* S */
         fault_data |= wr;
         page_fault = 1;
+        fprintf(stderr, "xlat %06o %03o ", addr, page >> 1);
+        fprintf(stderr, " %06o %03o %012llo ", base, page, data);
+        fprintf(stderr, " -> %06llo wr=%o ", data, wr);
         fprintf(stderr, " fault\n\r");
+ //       fprintf(stderr, " fault\n\r");
         return 0;
     }
-        fprintf(stderr, "\n\r");
+  //      fprintf(stderr, "\n\r");
     return 1;
 }
 
@@ -1074,7 +1082,8 @@ int Mem_read(int flag) {
         sim_interval--;
         if (!page_lookup(AB, flag, &addr, 0))
             return 1;
-        if (addr > (int)MEMSIZE) {
+        if (addr >= (int)MEMSIZE) {
+        //    fprintf(stderr, "NXM %06o read %06o\n\r", addr, PC);
             nxm_flag = 1;
             set_interrupt(0, apr_irq);
             return 1;
@@ -1096,8 +1105,9 @@ int Mem_write(int flag) {
         if (private_page)
             return 1;
 #endif
-        if (addr > (int)MEMSIZE) {
+        if (addr >= (int)MEMSIZE) {
             nxm_flag = 1;
+         //   fprintf(stderr, "NXM %06o write %06o\n\r", addr, PC);
             set_interrupt(0, apr_irq);
             return 1;
         }
@@ -1128,7 +1138,6 @@ int     f;
 int     i_flags;
 int     pi_rq;
 int     pi_ov;
-int     pi_cycle;
 int     ind;
 int     f_load_pc;
 int     f_inst_fetch;
@@ -1175,6 +1184,7 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
         uuo_cycle = 0;
 #if KI
         xct_flag = 0;
+        trap_flag = 0;
 #endif
     }
 
@@ -1191,6 +1201,7 @@ fetch:
 #if KI
        if (public_access) 
            FLAGS |= PUBLIC;
+       FLAGS &= ~(TRP1|TRP2);
 #endif
        BYF5 = 0;
     }
@@ -1332,21 +1343,23 @@ unasign:
               MB = (FLAGS << 23) | ((PC + 1) & RMASK);
               Mem_write(uuo_cycle);
               AB = ub_ptr | 0430;
-              if ((FLAGS & (TRP1|TRP2)) != 0)
+              if (trap_flag) 
                   AB |= 1;
-              if (FLAGS & USER)
-                  AB |= 2;
               if (FLAGS & PUBLIC)
+                  AB |= 2;
+              if (FLAGS & USER)
                   AB |= 4;
               Mem_read(uuo_cycle);
-              FLAGS |= (MB >> 23) & 017777;
+              FLAGS = (MB >> 23) & 017777;
               PC = MB & RMASK;
               f_pc_inh = 1;
+              trap_flag = 0;
               break;
 #else
               uuo_cycle = 1;
 #endif
 
+              /* LUUO */
     case 0001: case 0002: case 0003:
     case 0004: case 0005: case 0006: case 0007:
     case 0010: case 0011: case 0012: case 0013:
@@ -1977,8 +1990,8 @@ fxnorm:
     case 0176:      /* FDVRM */
     case 0177:      /* FDVRB */
               flag1 = 0;
-              SC = ((BR & SMASK) ? 0777 : 0) ^ (BR >> 27);
-              SC += ((AR & SMASK) ? 0 : 0777) ^ (AR >> 27);
+              SC = (int)((((BR & SMASK) ? 0777 : 0) ^ (BR >> 27)) & 0777);
+              SC += (int)((((AR & SMASK) ? 0 : 0777) ^ (AR >> 27)) & 0777);
               SC = (SC + 0201) & 0777;
               if (BR & SMASK) {
                   BR = CM(BR) + 1;
@@ -2037,10 +2050,10 @@ fxnorm:
 
     case 0171:      /* FDVL */
               flag1 = 0;
-              SC = ((BR & SMASK) ? 0777 : 0) ^ (BR >> 27);
-              SC += ((AR & SMASK) ? 0 : 0777) ^ (AR >> 27);
+              SC = (int)((((BR & SMASK) ? 0777 : 0) ^ (BR >> 27)) & 0777);
+              SC += (int)((((AR & SMASK) ? 0 : 0777) ^ (AR >> 27)) & 0777);
               SC = (SC + 0201) & 0777;
-              FE = (((BR & SMASK) ? 0777 : 0) ^ (BR >> 27)) - 26;
+              FE = (int)((((BR & SMASK) ? 0777 : 0) ^ (BR >> 27)) & 0777) - 26;
               if (BR & SMASK) {
                   MQ = (CM(MQ) + 1) & MMASK;
                   BR = CM(BR);
@@ -2292,6 +2305,9 @@ fxnorm:
                       AR = (AR + 1) & FMASK;
                   flag1 = 1;
               }
+#if 0
+div:
+#endif
               if (BR & SMASK)
                    AD = (AR + BR) & FMASK;
               else
@@ -2417,8 +2433,8 @@ fxnorm:
                  } else {
                      MQ = (AD & SMASK) | (MQ >> SC) |
                              ((AR << (35 - SC)) & CMASK);
-                     AR = (AD & SMASK) |
-                     ((AR >> SC) | (AD << (35 - SC))) & FMASK;
+                     AR = ((AD & SMASK) |
+                             ((AR >> SC) | (AD << (35 - SC)))) & FMASK;
                  }
               } else {
                  if (SC >= 35) {
@@ -2593,7 +2609,7 @@ fxnorm:
 
     case 0255: /* JFCL */
               if ((FLAGS >> 9) & AC) {
-                  PC = AR;
+                  PC = AR & RMASK;
                   f_pc_inh = 1;
               }
               FLAGS &=  017777 ^ (AC << 9);
@@ -2692,7 +2708,7 @@ fxnorm:
               if (Mem_read(0))
                   goto last;
               AR = SOB(AR);
-              AB = BR;
+              AB = BR & RMASK;
               if (Mem_write(0))
                   goto last;
               if ((AR & C1) == 0) {
@@ -3349,17 +3365,17 @@ last:
         f_pc_inh = 1;
         f_load_pc = 0;
         uuo_cycle = 1;
+        trap_flag = 1;
         if (page_fault || private_page) {
+            page_fault = private_page = 0;
             if (pi_cycle) 
                inout_fail = 1;
             AB = ub_ptr + (FLAGS & USER) ? 0427 : 0426;
             MB = fault_data;
             Mem_write(uuo_cycle);
             AB = 0420;
-            page_fault = private_page = 0;
         } else {
             AB = 0420 + ((FLAGS & (TRP1|TRP2)) >> 2);
-            FLAGS &= ~(TRP1|TRP2);
         }
         AB += (FLAGS & USER) ? ub_ptr : eb_ptr;
 fprintf(stderr, "Trap %06o\n\r", AB);
