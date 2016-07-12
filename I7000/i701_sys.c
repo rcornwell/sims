@@ -120,11 +120,6 @@ DEBTAB              crd_debug[] = {
     {0, 0}
 };
 
-/* Character conversion tables */
-extern const char      sim_six_to_ascii[64];
-extern const char      sim_ascii_to_six[128];
-
-
 /* Load a card image file into memory.  */
 
 t_stat
@@ -136,14 +131,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
     int                 dlen = 0;
     char               *p;
 
-    p = strrchr(fnam, '.');
-
-    if (p == NULL)
-        return SCPE_ARG;
-
-    p++;
-
-    if (strcasecmp(p, "crd") == 0) {
+    if (match_ext(fnam, "crd")) {
         int                 firstcard = 1;
         uint16              buf[80];
         t_uint64            lbuff[24];
@@ -180,7 +168,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
                 dlen--;
             }
         }
-    } else if (strcasecmp(p, "oct") == 0) {
+    } else if (match_ext(fnam, "oct")) {
         char                buf[81];
 
         while (fgets(buf, 80, fileref) != 0) {
@@ -196,7 +184,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
                     M[addr++] = wd;
              }
         }
-    } else if (strcasecmp(p, "txt") == 0) {
+    } else if (match_ext(fnam, "txt")) {
         char                buf[81];
 
         while (fgets(buf, 80, fileref) != 0) {
@@ -205,10 +193,10 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
              for(addr = 0; *p >= '0' && *p <= '7'; p++) 
                 addr = (addr << 3) + *p - '0';
              while(*p == ' ' || *p == '\t') p++;
-             if(strncasecmp(p, "BCD", 3) == 0) {
+             if(sim_strncasecmp(p, "BCD", 3) == 0) {
                  p += 4;
                  parse_sym(++p, addr, &cpu_unit, &M[addr], SWMASK('C'));
-             } else if (strncasecmp(p, "OCT", 3) == 0) {
+             } else if (sim_strncasecmp(p, "OCT", 3) == 0) {
                 p += 4;
                 for(; *p == ' ' || *p == '\t'; p++);
                 parse_sym(p, addr, &cpu_unit, &M[addr], 0);
@@ -267,7 +255,7 @@ t_opcode            base_ops[] = {
     {0, NULL}
 };
 
-char *chname[] = { "*" };
+const char *chname[] = { "*" };
 
 
 
@@ -355,7 +343,7 @@ fprint_sym(FILE * of, t_addr addr, t_value * val, UNIT * uptr, int32 sw)
         if ((inst >> 18) & 0400000L)
             fputc('-', of);
         fprint_val(of, (inst >> 18) & 0000000007777L, 8, 12, PV_RZRO);
-        op = (inst >> 12);
+        op = (int)(inst >> 12);
         fputs(" lt  ", of);
         if (op != (040 + 13))
            op &= 037;

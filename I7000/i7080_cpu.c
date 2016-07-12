@@ -228,9 +228,6 @@ int                 cycle_time = 45;            /* Cycle time is 4.5us */
 int32               hst_p = 0;                  /* History pointer */
 int32               hst_lnt = 0;                /* History length */
 struct InstHistory *hst = NULL;                 /* History stack */
-extern uint32       sim_brk_summ;
-extern uint32       sim_brk_types;
-extern uint32       sim_brk_dflt;
 extern uint32       drum_addr;
 extern UNIT         chan_unit[];
 void (*sim_vm_init) (void) = &mem_init;
@@ -312,8 +309,6 @@ DEVICE              cpu_dev = {
     NULL, NULL, &cpu_help, NULL, NULL, &cpu_description
 };
 
-
-extern int32        sim_interval;
 
 /* Quick ways to wrap addresses */
 uint16          next_addr[6 * 256];     /* Next storage location */
@@ -583,7 +578,7 @@ stop_cpu:
                         temp = 10000;
                         break;
                     }
-                    while (IC >= temp)
+                    while (IC >= (uint32)temp)
                         IC -= temp;
                     /* Resolve full address and register based on cpu mode */
                     switch (cpu_type) {
@@ -3255,7 +3250,7 @@ cpu_set_size(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     size = val >> UNIT_V_MSIZE;
     size++;
     size *= 10000;
-    if ((size < 0) || (size > MAXMEMSIZE))
+    if (size > MAXMEMSIZE)
         return SCPE_ARG;
     for (i = size; i < MEMSIZE; i++)
         mc |= M[i];
@@ -3294,7 +3289,7 @@ cpu_set_hist(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
         hst = NULL;
     }
     if (lnt) {
-        hst = calloc(sizeof(struct InstHistory), lnt);
+        hst = (struct InstHistory *)calloc(sizeof(struct InstHistory), lnt);
 
         if (hst == NULL)
             return SCPE_MEM;
@@ -3314,9 +3309,6 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
     t_stat              r;
     t_value             sim_eval[6];
     struct InstHistory *h;
-    extern t_stat       fprint_sym(FILE * ofile, t_addr addr,
-                                   t_value * val, UNIT * uptr, int32 sw);
-    extern char         mem_to_ascii[64];  
 
     if (hst_lnt == 0)
         return SCPE_NOFNC;      /* enabled? */

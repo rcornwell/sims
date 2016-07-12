@@ -334,7 +334,7 @@ const uint8        sim_parity_table[64] = {
 
 struct card_formats {
     uint32      mode;
-    char        *name;
+    const char  *name;
 };
 
 static struct card_formats fmts[] = {
@@ -462,7 +462,7 @@ sim_hol_to_ebcdic(uint16 hol) {
 
 
 
-static int cmpcard(char *p, char *s) {
+static int cmpcard(const char *p, const char *s) {
    int  i;
    if (p[0] != '~') 
         return 0;
@@ -477,7 +477,7 @@ static int cmpcard(char *p, char *s) {
 t_stat
 sim_read_card(UNIT * uptr)
 {
-    int                 i, j;
+    int                 i;
     char                c;
     uint16              temp;
     int                 mode;

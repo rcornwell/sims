@@ -132,9 +132,6 @@ int                 cycle_time = 20;            /* Cycle time of 12us */
 int32               hst_p = 0;                  /* History pointer */
 int32               hst_lnt = 0;                /* History length */
 struct InstHistory *hst = NULL;                 /* History stack */
-extern uint32       sim_brk_summ;
-extern uint32       sim_brk_types;
-extern uint32       sim_brk_dflt;
 void (*sim_vm_init) (void) = &mem_init;
 
 
@@ -191,8 +188,6 @@ DEVICE              cpu_dev = {
     NULL, NULL, &cpu_help, NULL, NULL, &cpu_description
 };
 
-
-extern int32        sim_interval;
 uint32  dscale[4][16] = {
     {0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 0,0,0,0,0,0},
     {0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 0,0,0,0,0,0},
@@ -498,7 +493,7 @@ sim_instr(void)
                           }
                      } else {
                           if(dec_add(&AC[op2], MBR))
-                            inds |= 1 << (4 * (3 - op2)); /* Set overflow */
+                            inds |= 1LL << (4 * (3 - op2)); /* Set overflow */
                      }
                      AC[op2] &= DMASK;
                      if (sign & 8)
@@ -545,7 +540,7 @@ sim_instr(void)
                           }
                      } else {
                           if(dec_add(&temp, DMASK&AC[op2]))
-                            inds |= 1 << (4 * (3 - op2)); /* Set overflow */
+                            inds |= 1LL << (4 * (3 - op2)); /* Set overflow */
                      }
 
                      /* Put results back */
@@ -1554,7 +1549,7 @@ sim_instr(void)
                           break;
                      }
                      MBR |= ((t_uint64)sign) << 40;
-                     upd_idx(&MBR, temp);
+                     upd_idx(&MBR, (uint32)temp);
                      WriteP(IX, MBR);
                      if (hst_lnt) {  /* history enabled? */
                          hst[hst_p].after = MBR;
@@ -1761,7 +1756,7 @@ sim_instr(void)
                      temp = M[IX];
                      utmp = dec_bin_idx(temp);
                      do {
-                       int dst, limit;
+                       uint32 dst, limit;
                        MBR = ReadP(MA++);       /* Grab next RDW */
                        get_rdw(MBR, &dst, &limit);
                        while(dst <= limit) {
@@ -1780,7 +1775,7 @@ sim_instr(void)
                      temp = M[IX];
                      utmp = dec_bin_idx(temp);
                      do {
-                          int src, limit;
+                          uint32 src, limit;
                           MBR = ReadP(MA++);    /* Grab next RDW */
                           get_rdw(MBR, &src, &limit);
                           while(src <= limit) {
@@ -1801,7 +1796,7 @@ sim_instr(void)
                      temp = M[IX];
                      utmp = dec_bin_idx(temp);
                      do {
-                          int dst, limit;
+                          uint32 dst, limit;
                           MBR = ReadP(MA++);    /* Grab next RDW */
                           get_rdw(MBR, &dst, &limit);
                           while(dst <= limit) {
@@ -1856,7 +1851,7 @@ sim_instr(void)
                         temp = M[IX];
                         utmp = dec_bin_idx(temp);
                         do {
-                          int src, limit;
+                          uint32 src, limit;
                           MBR = ReadP(MA++);    /* Grab next RDW */
                           get_rdw(MBR, &src, &limit);
                           while(src <= limit) {
@@ -1894,7 +1889,7 @@ sim_instr(void)
                         temp = M[98];
                         utmp = dec_bin_idx(temp);
                         do {
-                          int src, limit;
+                          uint32 src, limit;
                           MBR = ReadP(MA++);    /* Grab next RDW */
                           get_rdw(MBR, &src, &limit);
                           while(src <= limit) {
@@ -2569,7 +2564,7 @@ uint32 dec_bin_lim(t_uint64 a, uint32 b) {
 }
 
 /* Extract information from a RDW */
-int get_rdw(t_uint64 a, int *base, int *limit) {
+int get_rdw(t_uint64 a, uint32 *base, uint32 *limit) {
     *base = dec_bin_idx(a);
     *limit = dec_bin_lim(a, *base);
     return (a >> 40);
@@ -2879,7 +2874,7 @@ cpu_set_hist(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
         hst = NULL;
     }
     if (lnt) {
-        hst = calloc(sizeof(struct InstHistory), lnt);
+        hst = (struct InstHistory *)calloc(sizeof(struct InstHistory), lnt);
 
         if (hst == NULL)
             return SCPE_MEM;
@@ -2898,8 +2893,6 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
     t_stat              r;
     t_value             sim_eval;
     struct InstHistory *h;
-    extern t_stat       fprint_sym(FILE * ofile, t_addr addr,
-                                   t_value * val, UNIT * uptr, int32 sw);
 
     if (hst_lnt == 0)
         return SCPE_NOFNC;      /* enabled? */

@@ -312,8 +312,8 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
             }
         }
      } else if (match_ext(cptr, "oct")) {
-        while (fgets(buffer, 80, fileref) != 0) {
-             for(p = buffer; *p == ' ' || *p == '\t'; p++);
+        while (fgets((char *)buffer, 80, fileref) != 0) {
+             for(p = (char *)buffer; *p == ' ' || *p == '\t'; p++);
             /* Grab address */
              for(addr = 0; *p >= '0' && *p <= '7'; p++)
                 addr = (addr << 3) + *p - '0';
@@ -327,16 +327,16 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
         }
 
     } else if (match_ext(cptr, "sym")) {
-        while (fgets(buffer, 80, fileref) != 0) {
-             for(p = buffer; *p == ' ' || *p == '\t'; p++);
+        while (fgets((char *)buffer, 80, fileref) != 0) {
+             for(p = (char *)buffer; *p == ' ' || *p == '\t'; p++);
             /* Grab address */
              for(addr = 0; *p >= '0' && *p <= '7'; p++)
                 addr = (addr << 3) + *p - '0';
              while(*p == ' ' || *p == '\t') p++;
-             if(strncasecmp(p, "BCD", 3) == 0) {
+             if(sim_strncasecmp(p, "BCD", 3) == 0) {
                  p += 4;
                  parse_sym(++p, addr, &cpu_unit, &M[addr], SWMASK('C'));
-             } else if (strncasecmp(p, "OCT", 3) == 0) {
+             } else if (sim_strncasecmp(p, "OCT", 3) == 0) {
                 p += 4;
                 for(; *p == ' ' || *p == '\t'; p++);
                 parse_sym(p, addr, &cpu_unit, &M[addr], 0);
@@ -354,7 +354,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
 typedef struct _opcode
 {
     uint16              opbase;
-    char               *name;
+    const char         *name;
     uint8               type;
 }
 t_opcode;
@@ -714,7 +714,7 @@ t_opcode            neg_760[] = {
     {0, NULL, TYPE_X}
 };
 
-char  *chname[11] = {
+const char *chname[11] = {
     "*", "A", "B", "C", "D", "E", "F", "G", "H"
 };
 

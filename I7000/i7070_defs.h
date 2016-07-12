@@ -99,7 +99,7 @@ void                div_step(t_uint64 b);
 void                bin_dec(t_uint64 *a, uint32 b, int s, int l);
 uint32              dec_bin_idx(t_uint64 a);
 uint32              dec_bin_lim(t_uint64 a, uint32 b);
-int                 get_rdw(t_uint64 a, int *base, int *limit);
+int                 get_rdw(t_uint64 a, uint32 *base, uint32 *limit);
 void                upd_idx(t_uint64 *a, uint32 b);
 int                 scan_irq();
 

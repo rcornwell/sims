@@ -274,9 +274,6 @@ int                 cycle_time = 12;            /* Cycle time in 100ns */
 int32               hst_p = 0;                  /* History pointer */
 int32               hst_lnt = 0;                /* History length */
 struct InstHistory *hst = NULL;                 /* History stack */
-extern uint32       sim_brk_summ;
-extern uint32       sim_brk_types;
-extern uint32       sim_brk_dflt;
 extern uint32       drum_addr;
 
 #define DP_FLOAT        1
@@ -387,8 +384,6 @@ DEVICE              cpu_dev = {
     NULL, NULL, &cpu_help, NULL, NULL, &cpu_description
 };
 
-
-extern int32        sim_interval;
 
 #define T_B     0x0001          /* Do load with indirection */
 #define T_D     0x0002          /* Do ea, but no indirection */
@@ -707,7 +702,9 @@ sim_instr(void)
 {
     t_stat              reason;
     t_uint64            temp = 0LL;
+#ifdef I7090
     t_uint64            ibr;
+#endif
     uint16              opcode;
     uint16              MA;
     uint8               tag;
@@ -750,7 +747,9 @@ sim_instr(void)
     iowait = 0;
     while (reason == 0) {       /* loop until halted */
 
+#ifdef I7090    /* I704 did not have interrupts */
    hltloop:
+#endif
 /* If doing fast I/O don't sit in idle loop */
         if (iowait && (cpu_unit.flags & UNIT_FASTIO))
             sim_interval = 0;
@@ -1053,7 +1052,6 @@ prottrap:
                 if (opcode == OP_TIA) {
                     char        name[7];
                     int i;
-                    extern char mem_to_ascii[];
                     ReadMem(0, SR);
                     for (i = 5; i >= 0; i--) {
                         int ch;
@@ -3019,7 +3017,7 @@ prottrap:
                     ReadMem(0, SR);
                     MA = (uint16)(AMASK & SR);
                     AC >>= 6;
-                    AC |= SR & (077 << 30);
+                    AC |= SR & (077LL << 30);
                     shiftcnt--;
                 }
                 /* Save XR if tag set */
@@ -4140,7 +4138,7 @@ cpu_reset(DEVICE * dptr)
     TM = STM = CTM = nmode = smode = 0;
     FTM = 1;
     itrap = 1;
-    bcore = iotraps = baseaddr = 0;
+    iotraps = baseaddr = bcore = 0;
     ioflags = 0;
     interval_irq = dcheck = acoflag = mqoflag = iocheck = 0;
     sim_brk_types = sim_brk_dflt = SWMASK('E');
@@ -4263,7 +4261,7 @@ cpu_set_hist(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
         hst = NULL;
     }
     if (lnt) {
-        hst = calloc(sizeof(struct InstHistory), lnt);
+        hst = (struct InstHistory *)calloc(sizeof(struct InstHistory), lnt);
 
         if (hst == NULL)
             return SCPE_MEM;
@@ -4282,8 +4280,6 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
     t_stat              r;
     t_value             sim_eval;
     struct InstHistory *h;
-    extern t_stat       fprint_sym(FILE * ofile, t_addr addr,
-                                   t_value * val, UNIT * uptr, int32 sw);
 
     if (hst_lnt == 0)
         return SCPE_NOFNC;      /* enabled? */

@@ -239,18 +239,10 @@ load_rec(uint8 *image) {
 t_stat
 sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
 {
-    char               *p;
     char                buffer[160];
     int                 i, j;
 
-    p = strrchr(fnam, '.');
-
-    if (p == NULL)
-        return SCPE_ARG;
-  
-    p++;
-
-    if (strcasecmp(p, "crd") == 0) {
+    if (match_ext(fnam, "crd")) {
         uint8               image[80];
 
         while (sim_fread(buffer, 1, 160, fileref) == 160) {
@@ -265,7 +257,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
                 return SCPE_OK;
         }
         return SCPE_OK;
-    } else if (strcasecmp(p, "cbn") == 0) {
+    } else if (match_ext(fnam, "cbn")) {
         uint8               image[80];
 
         while (sim_fread(buffer, 1, 160, fileref) == 160) {
@@ -280,7 +272,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
                 return SCPE_OK;
         }
         return SCPE_OK;
-     } else if (strcasecmp(p, "dck") == 0) {
+     } else if (match_ext(fnam, "dck")) {
         extern char             ascii_to_six[128];
         while (fgets(buffer, 80, fileref) != 0) {
             uint8               image[80];
@@ -305,12 +297,12 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
 typedef struct _opcode
 {
     uint32              opbase;
-    char               *name;
+    const char         *name;
     uint8               type;
 }
 t_opcode;
 
-char  *chname[11] = {
+const char *chname[11] = {
     "*", "20", "21", "22", "23", "40", "41", "44", "45", "46", "47"
 };
 

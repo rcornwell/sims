@@ -244,7 +244,7 @@ t_stat
 chan_issue_cmd(uint16 chan, uint16 dcmd, uint16 dev) {
     DEVICE            **dptr;
     DIB                *dibp;
-    int                 j;
+    uint32              j;
     UNIT               *uptr;
 
     for (dptr = sim_devices; *dptr != NULL; dptr++) {

@@ -76,9 +76,7 @@ t_stat              con_help(FILE *, DEVICE *, UNIT *, int32, const char *);
 const char         *con_description(DEVICE *dptr);
 
 extern char         ascii_to_six[128];
-extern char         mem_to_ascii[64];
 extern t_stat       chan_boot(int32, DEVICE *);
-extern const char   sim_six_to_ascii[64];
 #ifdef I7070
 t_stat              cdr_setload(UNIT *, int32, char *, void *);
 t_stat              cdr_getload(FILE *, UNIT *, int32, void *);

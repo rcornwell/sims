@@ -273,7 +273,7 @@ extern t_value  assembly[NUM_CHAN];             /* Assembly register */
 /* Channel half of controls */
 /* Channel status */
 extern uint32   chan_flags[NUM_CHAN];           /* Channel flags */
-extern char    *chname[11];                     /* Channel names */
+extern const char *chname[11];                  /* Channel names */
 extern int      num_devs[NUM_CHAN];             /* Number devices per channel*/
 extern uint8    lpr_chan9[NUM_CHAN]; 
 #ifdef I7010
@@ -610,7 +610,7 @@ extern UNIT        chan_unit[];
 extern REG         cpu_reg[];
 extern int         cycle_time;
 
-
+extern const char mem_to_ascii[64];
 
 
 #endif /* _I7000_H_ */

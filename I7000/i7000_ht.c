@@ -55,6 +55,9 @@
 #define UNIT_HT(x)      UNIT_ATTABLE|UNIT_DISABLE|UNIT_ROABLE|UNIT_S_CHAN(x)| \
                         UNIT_SELECT
 
+#if defined(HTSIZE)
+#undef HTSIZE
+#endif
 #define HTSIZE          31731000
 
 /* in u3 is device address */
@@ -140,7 +143,7 @@ void                ht_tape_posterr(UNIT * uptr, uint32 error);
 
 /* One buffer per channel */
 uint8               ht_unit[NUM_CHAN * 2];      /* Currently selected unit */
-uint8               ht_buffer[NUM_DEVS_HT][BUFFSIZE];
+uint8               ht_buffer[NUM_DEVS_HT+1][BUFFSIZE];
 int                 ht_cmdbuffer[NUM_CHAN];     /* Buffer holding command ids */
 int                 ht_cmdcount[NUM_CHAN];      /* Count of command digits recieved */
 uint32              ht_sense[NUM_CHAN * 2];     /* Sense data for unit */
@@ -175,9 +178,9 @@ UNIT                hta_unit[] = {
 };
 
 MTAB                ht_mod[] = {
-    {MTUF_WLK, 0, "write enabled", "WRITEENABLED", NULL, NULL,
+    {MTUF_WLK, 0, "write enabled", "WRITEENABLED", NULL, NULL, NULL,
      "Write ring in place"},
-    {MTUF_WLK, MTUF_WLK, "write locked", "LOCKED", NULL, NULL,
+    {MTUF_WLK, MTUF_WLK, "write locked", "LOCKED", NULL, NULL, NULL,
      "no Write ring in place"},
     {MTAB_XTD | MTAB_VUN, 0, "FORMAT", "FORMAT",
      &sim_tape_set_fmt, &sim_tape_show_fmt, NULL,
@@ -205,7 +208,7 @@ DEVICE              hta_dev = {
 
 #if NUM_DEVS_HT > 1
 DEVICE              htb_dev = {
-    "HTB", &hta_unit[11], NULL, ht_mod,
+    "HTB", &hta_unit[NUM_UNITS_HT + 1], NULL, ht_mod,
     NUM_UNITS_HT + 1, 8, 15, 1, 8, 8,
     NULL, NULL, &ht_reset, &ht_boot, &ht_attach, &ht_detach,
     &ht_dib, DEV_BUF_NUM(1) | DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
@@ -460,7 +463,7 @@ t_stat ht_srv(UNIT * uptr)
             ctlr->u5 |= HT_NOTRDY;
         }
         
-        if (uptr->u6 > uptr->hwmark) {
+        if (uptr->u6 > (int32)uptr->hwmark) {
             chan_set(chan, DEV_REOR|CTL_END);
             sim_activate(uptr, us_to_ticks(50));
             return SCPE_OK;
@@ -468,7 +471,7 @@ t_stat ht_srv(UNIT * uptr)
         ch = ht_buffer[GET_DEV_BUF(dptr->flags)][uptr->u6++];
         sim_debug(DEBUG_DATA, dptr, "data %02o\n", ch);
         switch(chan_write_char(chan, &ch, 
-                                (uptr->u6 > uptr->hwmark)?DEV_REOR:0)) {
+                                (uptr->u6 > (int32)uptr->hwmark)?DEV_REOR:0)) {
         case TIME_ERROR:
             /* Nop flag as timming error */
             ht_tape_posterr(uptr, DATA_RESPONSE);

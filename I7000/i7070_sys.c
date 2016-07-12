@@ -159,11 +159,6 @@ DEBTAB              crd_debug[] = {
     {0, 0}
 };
 
-
-/* Character conversion tables */
-extern const char    sim_six_to_ascii[64];
-extern const char    sim_ascii_to_six[128];
-
 const char          mem_to_ascii[64] = {
     ' ', '1', '2', '3', '4', '5', '6', '7',
     '8', '9', '0', '=', '\'', ':', '>', 's',
@@ -232,7 +227,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
 typedef struct _opcode
 {
     uint16              opbase;
-    char               *name;
+    const char         *name;
     uint8               type;
 }
 t_opcode;
@@ -491,7 +486,7 @@ t_opcode  sub_ops[] = {
 };
 
 
-char  *chname[11] = {
+const char *chname[11] = {
     "*", "1", "2", "3", "4", "A", "B", "C", "D"
 };
 

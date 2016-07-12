@@ -205,18 +205,18 @@ UNIT                mta_unit[] = {
 };
 
 MTAB                mt_mod[] = {
-    {MTUF_WLK, 0, "write enabled", "WRITEENABLED", NULL, NULL, 
+    {MTUF_WLK, 0, "write enabled", "WRITEENABLED", NULL, NULL, NULL,
        "Write ring in place"},
-    {MTUF_WLK, MTUF_WLK, "write locked", "LOCKED", NULL, NULL,
+    {MTUF_WLK, MTUF_WLK, "write locked", "LOCKED", NULL, NULL, NULL,
        "No write ring in place"},
-    {MTUF_LDN, 0, "high density", "HIGH", &mt_tape_density, NULL,
+    {MTUF_LDN, 0, "high density", "HIGH", &mt_tape_density, NULL, NULL,
         "556 BPI"},
-    {MTUF_LDN, MTUF_LDN, "low density", "LOW", &mt_tape_density, NULL,
+    {MTUF_LDN, MTUF_LDN, "low density", "LOW", &mt_tape_density, NULL, NULL,
         "200 BPI"},
 #ifdef I7090
-    {MTUF_ONLINE, 0, "offline", "OFFLINE", NULL, NULL, 
+    {MTUF_ONLINE, 0, "offline", "OFFLINE", NULL, NULL, NULL,
         "Tape offline"},
-    {MTUF_ONLINE, MTUF_ONLINE, "online", "ONLINE", NULL, NULL,
+    {MTUF_ONLINE, MTUF_ONLINE, "online", "ONLINE", NULL, NULL, NULL,
         "Tape Online"},
 #endif
     {MTAB_XTD | MTAB_VUN, 0, "FORMAT", "FORMAT",
@@ -592,7 +592,7 @@ mt_read_buff(UNIT * uptr, int cmd, DEVICE * dptr, t_value *word)
         mode = 0100;
         
     *word = 0;
-    for(i = CHARSPERWORD-1; i >= 0 && uptr->u6 < uptr->hwmark; i--) {
+    for(i = CHARSPERWORD-1; i >= 0 && uptr->u6 < (int32)uptr->hwmark; i--) {
         ch = mt_buffer[bufnum][uptr->u6++];
         /* Do BCD translation */
         if ((parity_table[ch & 077] ^ (ch & 0100) ^ mode) == 0) {
@@ -706,7 +706,7 @@ t_stat mt_srv(UNIT * uptr)
             uptr->u5 |= MT_RDY;
         } else if (cmd == MT_RDS || cmd == MT_RDSB) {
             /* Keep moving until end of block */
-            if (uptr->u6 < uptr->hwmark ) {
+            if (uptr->u6 < (int32)uptr->hwmark ) {
                 int i = (uptr->hwmark-uptr->u6) *
                            ((uptr->flags & MTUF_LDN) ?LT:HT);
                 uptr->u5 |= MT_SKIP;
@@ -874,9 +874,9 @@ t_stat mt_srv(UNIT * uptr)
         /* Convert one word. */
             switch (chan_write_char(chan, &ch, 
 #ifdef I7010
-                                (uptr->u6 >= uptr->hwmark) ? DEV_REOR : 0)) {
+                                (uptr->u6 >= (int32)uptr->hwmark) ? DEV_REOR : 0)) {
 #else 
-                                /*(uptr->u6 >= uptr->hwmark) ? DEV_REOR :*/ 0)) {
+                                /*(uptr->u6 >= (int32)uptr->hwmark) ? DEV_REOR :*/ 0)) {
 #endif 
             case END_RECORD:
                 sim_debug(DEBUG_DATA, dptr, "Read unit=%d EOR\n", unit);
@@ -884,7 +884,7 @@ t_stat mt_srv(UNIT * uptr)
 #ifndef I7010
                 uptr->u5 |= MT_EOR;
 #endif 
-                if (uptr->u6 < uptr->hwmark) {
+                if (uptr->u6 < (int32)uptr->hwmark) {
 #ifdef I7010
                     sim_activate(uptr, (uptr->hwmark-uptr->u6) * 20);
 #else 
@@ -910,7 +910,7 @@ t_stat mt_srv(UNIT * uptr)
             case DATA_OK:
                 sim_debug(DEBUG_DATA, dptr, "Read data unit=%d %d %02o\n",
                           unit, uptr->u6, ch);
-                if (uptr->u6 >= uptr->hwmark) { /* In IRG */
+                if (uptr->u6 >= (int32)uptr->hwmark) { /* In IRG */
 #ifndef I7010
                     uptr->u5 |= MT_EOR;
 #endif
@@ -1032,10 +1032,10 @@ t_stat mt_srv(UNIT * uptr)
 
         /* Convert one word. */
             switch (chan_write_char(chan, &ch, 
-                                (uptr->u6 >= uptr->hwmark) ? DEV_REOR : 0)) {
+                                (uptr->u6 >= (int32)uptr->hwmark) ? DEV_REOR : 0)) {
             case END_RECORD:
                 sim_debug(DEBUG_DATA, dptr, "Read unit=%d EOR\n", unit);
-                if (uptr->u6 >= uptr->hwmark) {
+                if (uptr->u6 >= (int32)uptr->hwmark) {
                     uptr->u5 &= ~MT_CMDMSK;
                     uptr->u5 |= MT_SKIP;
                     sim_activate(uptr, 
@@ -1048,7 +1048,7 @@ t_stat mt_srv(UNIT * uptr)
             case DATA_OK:
                 sim_debug(DEBUG_DATA, dptr, "Read data unit=%d %d %02o\n",
                           unit, uptr->u6, ch);
-                if (uptr->u6 >= uptr->hwmark) { /* In IRG */
+                if (uptr->u6 >= (int32)uptr->hwmark) { /* In IRG */
                     sim_activate(uptr, 
                       (uptr->flags & MTUF_LDN) ?
                             us_to_ticks(4250): us_to_ticks(2500));
@@ -1259,7 +1259,7 @@ t_stat
 mt_reset(DEVICE * dptr)
 {
     UNIT        *uptr = dptr->units;
-    int          i;
+    uint32       i;
     for (i = 0; i < dptr->numunits; i++) {
        sim_tape_set_dens (uptr, 
               ((uptr->flags & MTUF_LDN) ? MT_DENS_200 : MT_DENS_556),

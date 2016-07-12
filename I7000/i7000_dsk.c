@@ -166,7 +166,7 @@ extern uint8        chan_io_status[NUM_CHAN];   /* Channel status flags */
 
 struct disk_t
 {
-    char               *name;   /* Type Name */
+    const char         *name;   /* Type Name */
     int                 cyl;    /* Number of cylinders */
     int                 track;  /* Number of tracks/cylinder */
     unsigned int        bpt;    /* Max bytes per track */
@@ -1217,7 +1217,7 @@ disk_format(UNIT * uptr, FILE * f, int cyl, UNIT * base)
     sim_fwrite(fbuffer[u], 1, dsk->fbpt, f);
 
     /* Make sure we did not pass size of track */
-    if (out > dsk->bpt)
+    if (out > (int)dsk->bpt)
         return 1;               /* Too big for track */
     return 0;
 }

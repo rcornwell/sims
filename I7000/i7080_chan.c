@@ -254,7 +254,7 @@ t_stat
 chan_issue_cmd(uint16 chan, uint16 dcmd, uint16 dev) {
     DEVICE            **dptr;
     DIB                *dibp;
-    int                 j;
+    unsigned int        j;
     UNIT               *uptr;
 
     for (dptr = sim_devices; *dptr != NULL; dptr++) {
@@ -354,9 +354,9 @@ int chan_zero_reccnt(int chan) {
 }
 
 /* Return next channel data address, advance address by 5 if channel */
-int32   chan_next_addr(int chan) {
+uint32  chan_next_addr(int chan) {
     int         unit;
-    int32       addr = 0;
+    uint32      addr = 0;
     switch(CHAN_G_TYPE(chan_unit[chan].flags)) {
     case CHAN_754:
     case CHAN_UREC:
@@ -381,7 +381,7 @@ chan_proc()
     int                 chan;
     int                 cmask;
     int                 unit;
-    int32               addr;
+    uint32              addr;
 
     /* Scan channels looking for work */
     for (chan = 0; chan < NUM_CHAN; chan++) {
@@ -1111,7 +1111,7 @@ chan_read_char(int chan, uint8 * data, int flags)
             M[caddr[chan]] = CHR_BLANK;
         if (chan_dev.dctrl & (0x0100 << chan))
                    sim_debug(DEBUG_DATA, &chan_dev,
-                                 "%d > %02o (%d)\n", chan, *data, ch);
+                                 "%d > %02o (%d)\n", chan, *data, *data);
         caddr[chan]++;
         if ((cmd[chan] & CHAN_NOREC && (caddr[chan] % 19999) == 0)) { 
             chan_flags[chan] |= DEV_WEOR;

@@ -154,12 +154,7 @@ int                 cycle_time = 45;            /* Cycle time in 100ns */
 int32               hst_p = 0;                  /* History pointer */
 int32               hst_lnt = 0;                /* History length */
 struct InstHistory *hst = NULL;                 /* History stack */
-extern uint32       sim_brk_summ;
-extern uint32       sim_brk_types;
-extern uint32       sim_brk_dflt;
 extern UNIT         chan_unit[];
-extern int32        sim_interval;
-extern const char   sim_six_to_ascii[64];
 
 
 /* CPU data structures
@@ -343,7 +338,7 @@ uint8 FetchP(uint32 MA) {
               if (MAR > 100000)
                   MAR -= 100000;
           }
-          if (prot_enb && high_addr > 0 && MAR > high_addr) {
+          if (prot_enb && (high_addr > 0) && (MAR > (uint32)high_addr)) {
                 fault = STOP_PROT;
                 return 0;
           }
@@ -373,7 +368,7 @@ uint8 ReadP(uint32 MA) {
               if (MAR > 100000)
                   MAR -= 100000;
           }
-          if (prot_enb && high_addr > 0 && MAR > high_addr) {
+          if (prot_enb && (high_addr > 0) && (MAR > (uint32)high_addr)) {
                 fault = STOP_PROT;
                 return 0;
           }
@@ -382,8 +377,8 @@ uint8 ReadP(uint32 MA) {
                 fault = STOP_PROT;
                 return 0;
            }
-           if ((low_addr >= 0 && MAR < low_addr) || 
-                (high_addr > 0 && MAR > high_addr)) {
+           if (((low_addr >= 0) && (MAR < (uint32)low_addr)) || 
+                ((high_addr > 0) && (MAR > (uint32)high_addr))) {
                 fault = STOP_PROT;
                 return 0;
            }
@@ -407,7 +402,7 @@ void WriteP(uint32 MA, uint8 v) {
               if (MAR > 100000)
                   MAR -= 100000;
           }
-          if (prot_enb && high_addr > 0 && MAR > high_addr) {
+          if (prot_enb && (high_addr > 0) && (MAR > (uint32)high_addr)) {
                 fault = STOP_PROT;
                 return;
           }
@@ -416,8 +411,8 @@ void WriteP(uint32 MA, uint8 v) {
                 fault = STOP_PROT;
                 return;
            }
-           if ((low_addr >= 0 && MAR < low_addr) ||
-                 (high_addr > 0 && MAR > high_addr)) {
+           if (((low_addr >= 0) && (MAR < (uint32)low_addr)) ||
+                 ((high_addr > 0) && (MAR > (uint32)high_addr))) {
                 fault = STOP_PROT;
                 return;
            }
@@ -441,7 +436,7 @@ void ReplaceMask(uint32 MA, uint8 v, uint8 mask) {
               if (MAR > 100000)
                   MAR -= 100000;
           }
-          if (prot_enb && high_addr > 0 && MAR > high_addr) {
+          if (prot_enb && (high_addr > 0) && (MAR > (uint32)high_addr)) {
                 fault = STOP_PROT;
                 return;
           }
@@ -450,8 +445,8 @@ void ReplaceMask(uint32 MA, uint8 v, uint8 mask) {
                 fault = STOP_PROT;
                 return;
            }
-           if ((low_addr >= 0 && MAR < low_addr) ||
-                 (high_addr > 0 && MAR > high_addr)) {
+           if (((low_addr >= 0) && (MAR < (uint32)low_addr)) ||
+                 ((high_addr > 0) && (MAR > (uint32)high_addr))) {
                 fault = STOP_PROT;
                 return;
            }
@@ -477,7 +472,7 @@ void SetBit(uint32 MA, uint8 v) {
               if (MAR > 100000)
                   MAR -= 100000;
           }
-          if (prot_enb && high_addr > 0 && MAR > high_addr) {
+          if (prot_enb && (high_addr > 0) && (MAR > (uint32)high_addr)) {
                 fault = STOP_PROT;
                 return;
           }
@@ -486,8 +481,8 @@ void SetBit(uint32 MA, uint8 v) {
                 fault = STOP_PROT;
                 return;
            }
-           if ((low_addr >= 0 && MAR < low_addr) ||
-                 (high_addr > 0 && MAR > high_addr)) {
+           if (((low_addr >= 0) && (MAR < (uint32)low_addr)) ||
+                 ((high_addr > 0) && (MAR > (uint32)high_addr))) {
                 fault = STOP_PROT;
                 return;
            }
@@ -511,7 +506,7 @@ void ClrBit(uint32 MA, uint8 v) {
               if (MAR > 100000)
                   MAR -= 100000;
           }
-          if (prot_enb && high_addr > 0 && MAR > high_addr) {
+          if (prot_enb && (high_addr > 0) && (MAR > (uint32)high_addr)) {
                 fault = STOP_PROT;
                 return;
           }
@@ -520,8 +515,8 @@ void ClrBit(uint32 MA, uint8 v) {
                 fault = STOP_PROT;
                 return;
            }
-           if ((low_addr >= 0 && MAR < low_addr) || 
-                (high_addr > 0 && MAR > high_addr)) {
+           if (((low_addr >= 0) && (MAR < (uint32)low_addr)) || 
+                ((high_addr > 0) && (MAR > (uint32)high_addr))) {
                 fault = STOP_PROT;
                 return;
            }
@@ -3813,7 +3808,7 @@ cpu_set_hist(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
         hst = NULL;
     }
     if (lnt) {
-        hst = calloc(sizeof(struct InstHistory), lnt);
+        hst = (struct InstHistory *)calloc(sizeof(struct InstHistory), lnt);
 
         if (hst == NULL)
             return SCPE_MEM;
@@ -3832,9 +3827,6 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
     t_stat              r;
     t_value             sim_eval[15];
     struct InstHistory *h;
-    extern char         mem_to_ascii[];
-    extern t_stat       fprint_sym(FILE * ofile, t_addr addr,
-                                   t_value * val, UNIT * uptr, int32 sw);
 
     if (hst_lnt == 0)
         return SCPE_NOFNC;      /* enabled? */

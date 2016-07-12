@@ -226,7 +226,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
 typedef struct _opcode
 {
     uint16              opbase;
-    char               *name;
+    const char         *name;
     uint8               type;
 }
 t_opcode;
@@ -525,7 +525,7 @@ t_opcode            base_ops[] = {
     {0,                 NULL,           TYPE_BE},
 };
   
-char  *chname[] = {
+const char *chname[] = {
     "*", "1", "2", "3", "4"
 };
 

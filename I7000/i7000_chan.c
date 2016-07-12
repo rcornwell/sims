@@ -242,7 +242,7 @@ set_chan(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 
    /* Hook up to new channel */
     if (dibp->upc > 1) {
-        int     unit;
+        uint32  unit;
         for (unit = 0; unit < dptr->numunits; unit++) {
             /* Set the new channel */
             dptr->units[unit].flags &= ~UNIT_CHAN;
@@ -270,7 +270,7 @@ print_chan(FILE * st, UNIT * uptr, int32 v, CONST void *desc)
     for (i = 0; sim_devices[i] != NULL; i++) {
         UNIT               *u = sim_devices[i]->units;
         DIB                *dibp = (DIB *) sim_devices[i]->ctxt;
-        int                 num;
+        uint32              num;
 
         /* If no DIB, not channel device */
         if (dibp == NULL)
@@ -346,7 +346,7 @@ chan9_set_select(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 
    /* Change to new selection. */
     if (dibp->upc > 1) {
-        int     unit;
+        uint32  unit;
         for (unit = 0; unit < dptr->numunits; unit++) {
             if (newsel)
                 dptr->units[unit].flags |= UNIT_SELECT;

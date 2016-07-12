@@ -136,9 +136,6 @@ int                 cycle_time = 120;           /* Cycle time of 12us */
 int32               hst_p = 0;                  /* History pointer */
 int32               hst_lnt = 0;                /* History length */
 struct InstHistory *hst = NULL;                 /* History stack */
-extern uint32       sim_brk_summ;
-extern uint32       sim_brk_types;
-extern uint32       sim_brk_dflt;
 extern uint32       drum_addr;
 uint32              hsdrm_addr;
 extern UNIT         chan_unit[];
@@ -188,8 +185,6 @@ DEVICE              cpu_dev = {
     NULL, 0, 0, NULL, 
     NULL, NULL, &cpu_help, NULL, NULL, &cpu_description
 };
-
-extern int32        sim_interval;
 
 /* Simulate instructions */
 t_stat
@@ -839,7 +834,7 @@ cpu_set_hist(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
         hst = NULL;
     }
     if (lnt) {
-        hst = calloc(sizeof(struct InstHistory), lnt);
+        hst = (struct InstHistory *)calloc(sizeof(struct InstHistory), lnt);
 
         if (hst == NULL)
             return SCPE_MEM;
@@ -858,8 +853,6 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
     t_stat              r;
     t_value             sim_eval;
     struct InstHistory *h;
-    extern t_stat       fprint_sym(FILE * ofile, t_addr addr,
-                                   t_value * val, UNIT * uptr, int32 sw);
 
     if (hst_lnt == 0)
         return SCPE_NOFNC;      /* enabled? */

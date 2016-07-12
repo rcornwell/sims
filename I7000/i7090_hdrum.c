@@ -111,7 +111,7 @@ uint32 hsdrm_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
 t_stat hsdrm_srv(UNIT * uptr)
 {
     int                 chan = UNIT_G_CHAN(uptr->flags);
-    t_uint64           *buf = uptr->filebuf;
+    t_uint64           *buf = (t_uint64 *)uptr->filebuf;
     t_stat              r;
 
     /* Channel has disconnected, abort current read. */

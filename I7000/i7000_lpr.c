@@ -241,7 +241,7 @@ print_line(UNIT * uptr, int chan, int unit)
             sim_putchar(out[j++]);
     }
     uptr->u4++;
-    if (uptr->u4 > uptr->capac) {
+    if (uptr->u4 > (int32)uptr->capac) {
         uptr->u4 = 1;
     }
  
@@ -259,7 +259,7 @@ print_line(UNIT * uptr, int chan, int unit)
                 if (uptr->flags & ECHO) 
                     sim_putchar('\n');
                 uptr->u4++;
-                if (uptr->u4 > uptr->capac) {
+                if (uptr->u4 > (int32)uptr->capac) {
                     uptr->u4 = 1;
                 }
             }

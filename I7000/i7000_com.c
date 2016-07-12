@@ -474,7 +474,7 @@ t_stat com_svc(UNIT * uptr)
     if (chan_test(chan, CTL_READ)) {
         /* Send low order character if one */
         if (com_dflg) {
-            ch = com_data;
+            ch = com_data & 0377;
         sim_debug(DEBUG_DATA, &com_dev, "sent=%02o\n", ch);
             switch (chan_write_char(chan, &ch, (com_sta == 3)?DEV_REOR:0)) {
             case DATA_OK:

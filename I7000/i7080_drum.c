@@ -74,7 +74,7 @@ uint32 drm_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
     int                 addr = dev;
 
     addr -= drm_dib.addr * DRMCHARTRK;
-    if (addr > uptr->capac)
+    if (addr > (int32)uptr->capac)
         return SCPE_NODEV;
     if ((uptr->flags & UNIT_ATT) != 0) {
         switch (cmd) {
@@ -107,7 +107,7 @@ uint32 drm_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
 t_stat drm_srv(UNIT * uptr)
 {
     int                 chan = UNIT_G_CHAN(uptr->flags);
-    uint8               *buf = uptr->filebuf;
+    uint8               *buf = (uint8 *)uptr->filebuf;
     t_stat              r;
 
     /* Channel has disconnected, abort current read. */
@@ -121,7 +121,7 @@ t_stat drm_srv(UNIT * uptr)
     /* Check if we have a address match */
     if ((chan_flags[chan] & (STA_ACTIVE | DEV_SEL)) == (STA_ACTIVE | DEV_SEL)
          && (uptr->u5 & (DRMSTA_READ | DRMSTA_WRITE))) {
-        if (uptr->u6 > uptr->capac) {
+        if (uptr->u6 > (int32)uptr->capac) {
             uptr->u5 = DRMSTA_CMD;
             chan_set(chan, CHS_ATTN);
             sim_activate(uptr, DRMWORDTIME);

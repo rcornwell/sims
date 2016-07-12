@@ -120,7 +120,7 @@ uint32 drm_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
 t_stat drm_srv(UNIT * uptr)
 {
     int                 chan = UNIT_G_CHAN(uptr->flags);
-    t_uint64           *buf = uptr->filebuf;
+    t_uint64           *buf = (t_uint64*)uptr->filebuf;
     t_stat              r;
 
     uptr->u6++;                 /* Adjust rotation */
@@ -179,7 +179,7 @@ t_stat
 drm_boot(int32 unit_num, DEVICE * dptr)
 {
     UNIT               *uptr = &dptr->units[unit_num];
-    t_uint64           *buf = uptr->filebuf;
+    t_uint64           *buf = (t_uint64*)uptr->filebuf;
     int                 addr;
 
     if ((uptr->flags & UNIT_ATT) == 0)

@@ -117,9 +117,9 @@ t_stat sim_card_show_fmt (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat sim_card_attach_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
 
 /* Translation tables */
-const char      sim_six_to_ascii[64];
-const char      sim_ascii_to_six[128];
-const uint8     sim_parity_table[64];
+extern const char      sim_six_to_ascii[64];
+extern const char      sim_ascii_to_six[128];
+extern const uint8     sim_parity_table[64];
 
 #ifdef  __cplusplus
 }
