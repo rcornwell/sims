@@ -204,9 +204,10 @@ print_line(UNIT * uptr, int chan, int unit)
         else {
             if (bcd == 020)
                 bcd = 10;
-            if (uptr->u5 & LPRSTA_BINMODE)
-                lpr_data[unit].lbuff[i++] = (buff[i] != 0)?'1':' ';
-            else
+            if (uptr->u5 & LPRSTA_BINMODE) {
+                char ch = (buff[i] != 0) ? '1' : ' ';
+                lpr_data[unit].lbuff[i++] = ch;
+            } else
                 lpr_data[unit].lbuff[i++] = sim_six_to_ascii[bcd];
         }
     }
