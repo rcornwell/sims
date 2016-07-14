@@ -227,7 +227,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
     char               *p;
     int                 i, j;
 
-    if (match_ext(cptr, "crd")) {
+    if (match_ext(fnam, "crd")) {
         int                 firstcard = 1;
         uint16              image[80];
         t_uint64            lbuff[24];
@@ -269,7 +269,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
                 dlen--;
             }
         }
-    } else if (match_ext(cptr, "cbn")) {
+    } else if (match_ext(fnam, "cbn")) {
         int                 firstcard = 1;
         uint16              image[80];
         t_uint64            lbuff[24];
@@ -311,7 +311,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
                 dlen--;
             }
         }
-     } else if (match_ext(cptr, "oct")) {
+     } else if (match_ext(fnam, "oct")) {
         while (fgets((char *)buffer, 80, fileref) != 0) {
              for(p = (char *)buffer; *p == ' ' || *p == '\t'; p++);
             /* Grab address */
@@ -326,7 +326,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
              }
         }
 
-    } else if (match_ext(cptr, "sym")) {
+    } else if (match_ext(fnam, "sym")) {
         while (fgets((char *)buffer, 80, fileref) != 0) {
              for(p = (char *)buffer; *p == ' ' || *p == '\t'; p++);
             /* Grab address */
