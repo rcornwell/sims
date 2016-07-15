@@ -816,7 +816,7 @@ sim_instr(void)
                         sim_interval = sim_interval - 1;        /* count down */
                         temp = ReadP(MA);
                         sim_debug(DEBUG_TRAP, &cpu_dev,
-                          "Doing trap chan %c %o >%012Lo loc %o %012Lo\n",
+                          "Doing trap chan %c %o >%012llo loc %o %012llo\n",
                                   shiftcnt + 'A' - 1, f, SR, MA, temp);
                         if (hst_lnt) {  /* history enabled? */
                             hst_p = (hst_p + 1);        /* next entry */
@@ -860,7 +860,7 @@ sim_instr(void)
                 sim_interval = sim_interval - 1;        /* count down */
                 temp = ReadP(MA);
                 sim_debug(DEBUG_DETAIL, &cpu_dev,
-                          "Doing timer trap >%012Lo loc %o %012Lo\n", SR,
+                          "Doing timer trap >%012llo loc %o %012llo\n", SR,
                           MA, temp);
                 if (hst_lnt) {  /* history enabled? */
                     hst_p = (hst_p + 1);        /* next entry */
