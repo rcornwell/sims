@@ -60,37 +60,37 @@
 
 
 /* CONI/CONO Flags */
-#define SUF_ERR         0000000000100      
-#define SEC_ERR         0000000000200
-#define ILL_CMD         0000000000400
-#define ILL_WR          0000000001000
-#define NOT_RDY         0000000002000      /* Clear CXR */
-#define PRT_ERR         0000000004000      /* 14-17 Clear CCPE, DSPE, DISK WDPE, CDPE */
-#define NXM_ERR         0000000010000      
-#define SLW_CHN         0000000020000
-#define SRC_ERR         0000000040000
-#define PWR_FAIL_10     0000000100000
-#define END_CYL         0000000200000      /* No effect */
-#define SRC_DONE        0000000400000      /* No effect */
-#define DSK_PRTY        0000001000000      /* No effect */
-#define CHN_PRTY        0000002000000      /* No effect */
-#define SEC_PRTY        0000004000000      /* No effect */
-#define CCW_PRTY        0000010000000      /* No effect */
-#define B22_FLAG        
+#define SUF_ERR         0000000000100LL      
+#define SEC_ERR         0000000000200LL
+#define ILL_CMD         0000000000400LL
+#define ILL_WR          0000000001000LL
+#define NOT_RDY         0000000002000LL      /* Clear CXR */
+#define PRT_ERR         0000000004000LL      /* 14-17 Clear CCPE, DSPE, DISK WDPE, CDPE */
+#define NXM_ERR         0000000010000LL      
+#define SLW_CHN         0000000020000LL
+#define SRC_ERR         0000000040000LL
+#define PWR_FAIL_10     0000000100000LL
+#define END_CYL         0000000200000LL      /* No effect */
+#define SRC_DONE        0000000400000LL      /* No effect */
+#define DSK_PRTY        0000001000000LL      /* No effect */
+#define CHN_PRTY        0000002000000LL      /* No effect */
+#define SEC_PRTY        0000004000000LL      /* No effect */
+#define CCW_PRTY        0000010000000LL      /* No effect */
+#define B22_FLAG        0000020000000LL
 
-#define CLRMSK          0000000177710
-#define CLRMSK2         0000176000000
+#define CLRMSK          0000000177710LL
+#define CLRMSK2         0000176000000LL
 
 /* DATAI/DATAO */
-#define DWPE_STOP       0000000001000
-#define SPARE           0000000002000
-#define DSPE_STOP       0000000004000
-#define SECTOR          0000000170000
-#define CYL256          0000000200000
-#define SURFACE         0000017400000
-#define CYL             0007760000000
-#define DRIVE           0070000000000
-#define OP              0700000000000
+#define DWPE_STOP       0000000001000LL
+#define SPARE           0000000002000LL
+#define DSPE_STOP       0000000004000LL
+#define SECTOR          0000000170000LL
+#define CYL256          0000000200000LL
+#define SURFACE         0000017400000LL
+#define CYL             0007760000000LL
+#define DRIVE           0070000000000LL
+#define OP              0700000000000LL
 
 #define RD      0
 #define WR      1
@@ -101,21 +101,21 @@
 #define NO      6
 #define RC      7
 
-#define ATTN            0000000000776
-#define DEFECT          0000000001000
-#define SEL_RP03        0000000002000
-#define SEL_CYL256      0000000004000
-#define SEL_SPARE       0000000010000
-#define SEL_SEC         0000000760000
-#define WR_HD_LK        0000001000000
-#define RD_ONLY         0000002000000
-#define NO_DRIVE        0000004000000
-#define FILE_UNSAFE     0000010000000
-#define DRV_ONLINE      0000020000000
-#define ON_CYL          0000040000000
-#define SEEK_INC        0000100000000
-#define SEL_CYL         0077600000000
-#define SEL_DRIVE       0700000000000
+#define ATTN            0000000000776LL
+#define DEFECT          0000000001000LL
+#define SEL_RP03        0000000002000LL
+#define SEL_CYL256      0000000004000LL
+#define SEL_SPARE       0000000010000LL
+#define SEL_SEC         0000000760000LL
+#define WR_HD_LK        0000001000000LL
+#define RD_ONLY         0000002000000LL
+#define NO_DRIVE        0000004000000LL
+#define FILE_UNSAFE     0000010000000LL
+#define DRV_ONLINE      0000020000000LL
+#define ON_CYL          0000040000000LL
+#define SEEK_INC        0000100000000LL
+#define SEL_CYL         0077600000000LL
+#define SEL_DRIVE       0700000000000LL
 
 #define RP01_DTYPE      0
 #define RP01_SECT       5
@@ -337,12 +337,12 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
      uptr = &dp_unit[(ctlr * NUM_UNITS_DP) + unit];
      switch(dev & 3) {
      case CONI:
-        *data = df10->status | uptr->STATUS;
-#if KI10_22BIT
+        *data = (uint64)(df10->status | uptr->STATUS);
+#if KI_22BIT
         *data |= B22_FLAG;
 #endif
-        sim_debug(DEBUG_CONI, dptr, "DP %03o CONI %06o %d PC=%o\n", dev, 
-                           (uint32)*data, ctlr, PC);
+        sim_debug(DEBUG_CONI, dptr, "DP %03o CONI %012llo %d PC=%o\n", dev, 
+                           *data, ctlr, PC);
         return SCPE_OK;
 
      case CONO:

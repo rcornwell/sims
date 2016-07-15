@@ -52,39 +52,38 @@
 #define UFLAGS          u5              /* Function */
 
 
-#define DISK_SEL        0600000000000
-#define TRACK           0177600000000
-#define SEGMENT         0000177000000
-#define INIT_PAR        0000000770000   // Read
-#define DPE_STOP        0000000004000
-#define CPE_STOP        0000000002000
-#define WRITE           0000000001000
-#define ICWA            0000000000776
-#define EPAR            0000000000001
-#define SEC_SEL         0000000001400   // Read
-#define SECT_CNT        0000000000377   // Read
+#define DISK_SEL        0600000000000LL
+#define TRACK           0177600000000LL
+#define SEGMENT         0000177000000LL
+#define INIT_PAR        0000000770000LL   /* Read */
+#define DPE_STOP        0000000004000LL
+#define CPE_STOP        0000000002000LL
+#define WRITE           0000000001000LL
+#define EPAR            0000000000001LL
+#define SEC_SEL         0000000001400LL   /* Read */
+#define SECT_CNT        0000000000377LL   /* Read */
                        
 #define PI              0000007
 #define WCW             0000040
 #define SEC_SCTR        0600000
                        
-#define RST_MSK         0000000177710   /* CONO reset bits */
-#define B22_FLAG        0040000000000   /* 22 bit controller. */
-#define MAINT_SEG       0010000000000
-#define PRTLT           0004000000000   /* Protected area less then bounds */
-#define STS             0003777000000
-#define SCRCHCMP        0000000400000   /* Tranfer in progress. */
-#define S_ERROR         0000000200000   /* Segment not found */
-#define DSK_DES_E       0000000100000   /* Duplicate disk */
-#define TRK_SEL_E       0000000040000   /* Track not BCD number */
-#define NOT_RDY         0000000020000   /* Drive not ready */
-#define PSW_FAIL        0000000010000   /* Power supply fail */
-#define DSK_PAR_E       0000000004000   /* Disk Parity Error */
-#define CH_PAR_D        0000000002000   /* Channel Data Parity Error */
-#define CH_PAR_C        0000000001000   /* Channel Control Parity Error */
-#define NXM_ERR         0000000000400   /* Non existant memory */
-#define ILL_WR          0000000000200   /* Write to protected area */
-#define OVRRUN          0000000000100   /* Over run */
+#define RST_MSK         0000000177710LL   /* CONO reset bits */
+#define B22_FLAG        0040000000000LL   /* 22 bit controller. */
+#define MAINT_SEG       0010000000000LL
+#define PRTLT           0004000000000LL   /* Protected area less then bounds */
+#define STS             0003777000000LL
+#define SCRCHCMP        0000000400000LL   /* Tranfer in progress. */
+#define S_ERROR         0000000200000LL   /* Segment not found */
+#define DSK_DES_E       0000000100000LL   /* Duplicate disk */
+#define TRK_SEL_E       0000000040000LL   /* Track not BCD number */
+#define NOT_RDY         0000000020000LL   /* Drive not ready */
+#define PSW_FAIL        0000000010000LL   /* Power supply fail */
+#define DSK_PAR_E       0000000004000LL   /* Disk Parity Error */
+#define CH_PAR_D        0000000002000LL   /* Channel Data Parity Error */
+#define CH_PAR_C        0000000001000LL   /* Channel Control Parity Error */
+#define NXM_ERR         0000000000400LL   /* Non existant memory */
+#define ILL_WR          0000000000200LL   /* Write to protected area */
+#define OVRRUN          0000000000100LL   /* Over run */
 
 #define RD10_DTYPE      0
 #define RD10_WDS        32
@@ -209,7 +208,7 @@ t_stat rc_devio(uint32 dev, uint64 *data) {
      switch(dev & 3) {
      case CONI:
         *data = df10->status;
-#if KI10_22BIT
+#if KI_22BIT
         *data |= B22_FLAG;
 #endif
         sim_debug(DEBUG_CONI, dptr, "HK %03o CONI %06o PC=%o\n", dev,
