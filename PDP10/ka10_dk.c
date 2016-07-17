@@ -70,8 +70,8 @@ void   dk_count (UNIT *uptr);
 t_stat dk_svc (UNIT *uptr);
 
 DIB dk_dib[] = {
-        { DK_DEVNUM, 1, &dk_devio },
-        { DK_DEVNUM + 4, 1, &dk_devio }};
+        { DK_DEVNUM, 1, &dk_devio, NULL },
+        { DK_DEVNUM + 4, 1, &dk_devio, NULL}};
 
 UNIT dk_unit[] = { 
         {UDATA (&dk_svc, UNIT_IDLE, TIM_TPS) },

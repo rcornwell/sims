@@ -65,7 +65,7 @@ t_stat         ptr_help (FILE *st, DEVICE *dptr, UNIT *uptr,
 const char    *ptr_description (DEVICE *dptr);
 
 
-DIB ptp_dib = { PP_DEVNUM, 1, &ptp_devio };
+DIB ptp_dib = { PP_DEVNUM, 1, &ptp_devio, NULL };
 
 UNIT ptp_unit = {
     UDATA (&ptp_svc, UNIT_SEQ+UNIT_ATTABLE+UNIT_TEXT, 0), SERIAL_OUT_WAIT
@@ -90,7 +90,7 @@ DEVICE ptp_dev = {
     NULL, NULL, &ptp_help, NULL, NULL, &ptp_description
     };
 
-DIB ptr_dib = { PR_DEVNUM, 1, &ptr_devio };
+DIB ptr_dib = { PR_DEVNUM, 1, &ptr_devio, NULL };
 
 UNIT ptr_unit = {
     UDATA (&ptr_svc, UNIT_SEQ+UNIT_ATTABLE+UNIT_TEXT, 0), SERIAL_OUT_WAIT

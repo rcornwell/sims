@@ -38,10 +38,17 @@
    sim_load             binary loader
 */
 
+#if KL
+char sim_name[] = "KL-10A";
+#endif
 #if KI
 char sim_name[] = "KI-10";
-#else
+#endif
+#if KA
 char sim_name[] = "KA-10";
+#endif
+#if PDP6
+char sim_name[] = "PDP6";
 #endif
 
 extern REG cpu_reg[];
@@ -51,9 +58,6 @@ int32 sim_emax = 1;
 
 DEVICE *sim_devices[] = { 
     &cpu_dev,
-//#if (NUM_DEVS_DK > 0)
- //   &dk_dev,
-//#endif
     &cty_dev,
 #if (NUM_DEVS_PT > 0)
     &ptp_dev,
@@ -95,7 +99,7 @@ DEVICE *sim_devices[] = {
     &rcb_dev,
 #endif
 #endif
-// Insert RH RP & TM
+// Insert RH TM
 #if (NUM_DEVS_DT > 0)
     &dt_dev,
 #endif

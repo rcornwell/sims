@@ -34,16 +34,28 @@
 #error "PDP-10 does not support 64b addresses!"
 #endif
 
-#ifndef KI
-#define KI 0
+#ifndef PDP6
+#define PDP6 0
 #endif
 
 #ifndef KA
 #define KA 0
 #endif
 
+#ifndef KI
+#define KI 0
+#endif
+
+#ifndef KL              /* KL10A Only no extended addressing */
+#define KL 0
+#endif
+
+#if (PDP6 + KA + KI + KL) != 1
+#error "Please define only one type of CPU"
+#endif
+
 #ifndef KI_22BIT
-#define KI_22BIT KI
+#define KI_22BIT KI|KL
 #endif
 
 /* Digital Equipment Corporation's 36b family had six implementations:
@@ -157,7 +169,7 @@ extern DEBTAB dev_debug[];
 
 #define NODIV   000001
 #define FLTUND  000002
-#if KI
+#if KI|KL
 #define TRP1    000004
 #define TRP2    000010
 #define ADRFLT  000020
@@ -193,8 +205,8 @@ extern DEBTAB dev_debug[];
 
 #define ICWA            0000000000776
 #if KI_22BIT
-#define AMASK           0000037777777
-#define WMASK           017777
+#define AMASK           0000017777777LL
+#define WMASK           037777LL
 #define CSHIFT          22
 #else
 #define AMASK           RMASK
@@ -255,6 +267,7 @@ struct pdp_dib {
     uint32              dev_num;                        /* device address */
     uint32              num_devs;                       /* length */
     t_stat              (*io)(uint32 dev, uint64 *data);
+    int                 (*irq)(uint32 dev, int addr);
 };
 
 typedef struct pdp_dib DIB;
@@ -290,10 +303,10 @@ int  df10_write(struct df10 *df);
 #define NUM_DEVS_PT     1
 #define NUM_DEVS_DC     1
 #define NUM_DEVS_RC     1
-#define NUM_DEVS_DT     1
+#define NUM_DEVS_DT     0
 #define NUM_DEVS_DK     1
 #define NUM_DEVS_RP     1
-#define NUM_DEVS_TU     1
+#define NUM_DEVS_TU     0
 /* Global data */
 
 extern t_bool sim_idle_enab;

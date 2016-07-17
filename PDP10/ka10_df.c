@@ -59,16 +59,16 @@ int df10_fetch(struct df10 *df) {
                 df10_finish_op(df,0);
                 return 0;
           }
-          df->ccw = data & AMASK;
+          df->ccw = (uint32)(data & AMASK);
           if (df->ccw > MEMSIZE) {
                 df10_finish_op(df, 1<<df->nxmerr);
                 return 0;
           }
           data = M[df->ccw];
       }
-      df->wcr = (data >> CSHIFT) & WMASK;
-      df->cda = data &AMASK;
-      df->ccw = (df->ccw + 1) & AMASK;
+      df->wcr = (uint32)((data >> CSHIFT) & WMASK);
+      df->cda = (uint32)(data & AMASK);
+      df->ccw = (uint32)((df->ccw + 1) & AMASK);
       return 1;
 }
 
@@ -84,7 +84,7 @@ int df10_read(struct df10 *df) {
            df10_finish_op(df, 1<<df->nxmerr);
            return 0;
        }
-       df->cda = (df->cda + 1) & AMASK;
+       df->cda = (uint32)((df->cda + 1) & AMASK);
        data = M[df->cda];
     } else {
        data = 0;
@@ -101,13 +101,13 @@ int df10_write(struct df10 *df) {
           if (!df10_fetch(df))
                 return 0;
      }
-     df->wcr = (df->wcr + 1) & WMASK;
+     df->wcr = (uint32)((df->wcr + 1) & WMASK);
      if (df->cda != 0) {
        if (df->cda > MEMSIZE) {
            df10_finish_op(df, 1<<df->nxmerr);
            return 0;
        }
-       df->cda = (df->cda + 1) & AMASK;
+       df->cda = (uint32)((df->cda + 1) & AMASK);
        M[df->cda] = df->buf;
      }
      if (df->wcr == 0) {

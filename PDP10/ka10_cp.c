@@ -94,7 +94,7 @@ t_stat              cdp_help(FILE *, DEVICE *, UNIT *, int32, const char *);
 const char         *cdp_description(DEVICE *dptr);
 
 
-DIB cdp_dib = { CDP_DEVNUM, 1, cdp_devio};
+DIB cdp_dib = { CDP_DEVNUM, 1, cdp_devio, NULL};
 
 UNIT                cdp_unit[] = {
     {UDATA(cdp_srv, UNIT_S_CHAN(CHAN_CHUREC) | UNIT_CDP, 0), 600},      /* A */

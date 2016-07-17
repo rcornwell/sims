@@ -77,29 +77,29 @@
 #define SPC_REV         007     /* Space reverse */
 #define SPC_REV_EOF     017     /* Space reverse to EOF. */
 
-#define DATA_REQUEST    0000000001
-#define NEXT_UNIT       0000000002
-#define SEVEN_CHAN      0000000004
-#define WRITE_LOCK      0000000010
-#define CHAN_ERR        0000000020
-#define IDLE_UNIT       0000000040
-#define JOB_DONE        0000000100
-#define BAD_TAPE        0000000200
-#define DATA_LATE       0000000400
-#define RLC_ERR         0000001000
-#define READ_CMP        0000002000
-#define EOT_FLAG        0000004000
-#define EOF_FLAG        0000010000
-#define PARITY_ERR      0000020000
-#define ILL_OPR         0000040000
-#define BOT_FLAG        0000100000
-#define REW_FLAG        0000200000
-#define TRAN_HUNG       0000400000
-#define CHAR_COUNT      0017000000
-#define WT_CW_DONE      0020000000
-#define DATA_PARITY     0040000000
-#define NXM_ERR         0100000000
-#define CW_PAR_ERR      0200000000
+#define DATA_REQUEST    00000000001
+#define NEXT_UNIT       00000000002
+#define SEVEN_CHAN      00000000004
+#define WRITE_LOCK      00000000010
+#define CHAN_ERR        00000000020
+#define IDLE_UNIT       00000000040
+#define JOB_DONE        00000000100
+#define BAD_TAPE        00000000200
+#define DATA_LATE       00000000400
+#define RLC_ERR         00000001000
+#define READ_CMP        00000002000
+#define EOT_FLAG        00000004000
+#define EOF_FLAG        00000010000
+#define PARITY_ERR      00000020000
+#define ILL_OPR         00000040000
+#define BOT_FLAG        00000100000
+#define REW_FLAG        00000200000
+#define TRAN_HUNG       00000400000
+#define CHAR_COUNT      00017000000
+#define WT_CW_DONE      00020000000
+#define DATA_PARITY     00040000000
+#define NXM_ERR         00100000000
+#define CW_PAR_ERR      00200000000
 #define B22_FLAG        01000000000
 
 
@@ -168,7 +168,7 @@ UNIT                mt_unit[] = {
                      UNIT_ROABLE, 0)},  /* 7 */
 };
 
-DIB mt_dib = {MT_DEVNUM, 2, &mt_devio};
+DIB mt_dib = {MT_DEVNUM, 2, &mt_devio, NULL};
 
 MTAB                mt_mod[] = {
     {MTUF_WLK, 0, "write enabled", "WRITEENABLED", NULL},
@@ -258,7 +258,8 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
           if ((dptr->flags & MTDF_MOTION) == 0)
               res |= IDLE_UNIT;
 #if KI_22BIT
-          res |= B22_FLAG;
+          if (dptr->flags & MTDF_TYPEB) 
+              res |= B22_FLAG;
 #endif
           *data = res;
           sim_debug(DEBUG_CONI, dptr, "MT CONI %03o status2 %06o %o\n",
@@ -476,8 +477,6 @@ t_stat mt_srv(UNIT * uptr)
     case CMP:
     case CMP_NOEOR:
         if (BUF_EMPTY(uptr)) {
-            if ((uptr->u3 & DENS_MSK) != DENS_800) 
-                return mt_error(uptr, MTSE_FMT, dptr);
             if ((uptr->flags & UNIT_ATT) == 0)
                   return mt_error(uptr, MTSE_UNATT, dptr);      /* attached? */
             if ((uptr->u3 & DENS_MSK) != DENS_800)
@@ -553,8 +552,6 @@ t_stat mt_srv(UNIT * uptr)
     case WRITE:
     case WRITE_LONG:
          if (BUF_EMPTY(uptr)) {
-             if ((uptr->u3 & DENS_MSK) != DENS_800) 
-                    return mt_error(uptr, MTSE_FMT, dptr);
              if ((uptr->flags & UNIT_ATT) == 0)
                    return mt_error(uptr, MTSE_UNATT, dptr);     /* attached? */
              if ((uptr->u3 & DENS_MSK) != DENS_800)
@@ -613,8 +610,6 @@ t_stat mt_srv(UNIT * uptr)
          }
          break;
     case WTM:
-        if ((uptr->u3 & DENS_MSK) != DENS_800) 
-            return mt_error(uptr, MTSE_FMT, dptr);
         if ((uptr->flags & UNIT_ATT) == 0)
               return mt_error(uptr, MTSE_UNATT, dptr);  /* attached? */
         if ((uptr->u3 & DENS_MSK) != DENS_800)
@@ -624,8 +619,6 @@ t_stat mt_srv(UNIT * uptr)
         sim_debug(DEBUG_DETAIL, dptr, "MT%o WTM\n", unit);
         return mt_error(uptr, sim_tape_wrtmk(uptr), dptr);
     case ERG:
-        if ((uptr->u3 & DENS_MSK) != DENS_800) 
-            return mt_error(uptr, MTSE_FMT, dptr);
         if ((uptr->flags & UNIT_ATT) == 0)
               return mt_error(uptr, MTSE_UNATT, dptr);  /* attached? */
         if ((uptr->u3 & DENS_MSK) != DENS_800)
@@ -639,45 +632,37 @@ t_stat mt_srv(UNIT * uptr)
     case SPC_REV:
     case SPC_FWD:
         if (BUF_EMPTY(uptr)) {
-            if ((uptr->u3 & DENS_MSK) != DENS_800) 
-                return mt_error(uptr, MTSE_FMT, dptr);
             if ((uptr->flags & UNIT_ATT) == 0)
                   return mt_error(uptr, MTSE_UNATT, dptr);      /* attached? */
             if ((uptr->u3 & DENS_MSK) != DENS_800)
                   return mt_error(uptr, MTSE_FMT, dptr);        /* attached? */
         }       
         sim_debug(DEBUG_DETAIL, dptr, "MT%o space %o\n", unit, cmd);
-        /* Clear tape mark, command, idle since we will need to change dir */
-        if ((cmd & 010) == 0) {
-            if (BUF_EMPTY(uptr)) {
-                mt_df10_read(dptr, uptr);
-                status &= ~DATA_LATE;
-                uptr->hwmark = 0;
-            } else {
-                if (!mt_df10_read(dptr, uptr)) {
-                    status &= ~DATA_LATE;
-                    dptr->flags |= MTDF_MOTION;
-                    return mt_error(uptr, MTSE_OK, dptr);
-                }
-            }
-        }
         status &= ~(BOT_FLAG|EOT_FLAG);
+        /* Always skip at least one record */
         if ((cmd & 7) == SPC_FWD)
             r = sim_tape_sprecf(uptr, &reclen);
         else 
             r = sim_tape_sprecr(uptr, &reclen);
-        /* Always skip if first record is mark */
-        if ((cmd & 010) != 0 && r == MTSE_TMK && BUF_EMPTY(uptr)) {
-            r = MTSE_OK;
+        switch (r) {
+        case MTSE_OK:            /* no error */
+             break;
+        case MTSE_TMK:           /* tape mark */
+        case MTSE_BOT:           /* beginning of tape */
+        case MTSE_EOM:           /* end of medium */
+             /* Stop motion if we recieve any of these */
+             dptr->flags &= ~MTDF_MOTION;
+             return mt_error(uptr, r, dptr);
         }
-        if (cmd & 010) {
-            uptr->hwmark = 0;
+        /* Clear tape mark, command, idle since we will need to change dir */
+        if ((cmd & 010) == 0) {
+            if (!mt_df10_read(dptr, uptr)) {
+                status &= ~DATA_LATE;
+                dptr->flags |= MTDF_MOTION;
+                return mt_error(uptr, MTSE_OK, dptr);
+            }
         }
-
-        if (r != MTSE_OK) {
-            dptr->flags &= ~MTDF_MOTION;
-            return mt_error(uptr, r, dptr);
-        }
+        uptr->hwmark = 0;
         sim_activate(uptr, 5000);
         return SCPE_OK;
     }

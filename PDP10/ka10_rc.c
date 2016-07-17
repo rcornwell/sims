@@ -153,8 +153,8 @@ UNIT                rc_unit[] = {
 };
 
 DIB rc_dib[] = {
-    {RC_DEVNUM+000, 1, &rc_devio},
-    {RC_DEVNUM+004, 1, &rc_devio}
+    {RC_DEVNUM+000, 1, &rc_devio, NULL},
+    {RC_DEVNUM+004, 1, &rc_devio, NULL}
     };
 
 MTAB                rc_mod[] = {

@@ -93,7 +93,7 @@ t_stat              cdr_detach(UNIT *);
 t_stat              cdr_help(FILE *, DEVICE *, UNIT *, int32, const char *);
 const char         *cdr_description(DEVICE *dptr);
 
-DIB cdr_dib = { CDR_DEVNUM, 1, cdr_devio};
+DIB cdr_dib = { CDR_DEVNUM, 1, cdr_devio, NULL};
 
 UNIT                cdr_unit[] = {
    {UDATA(cdr_srv, UNIT_S_CHAN(CHAN_CHUREC) | UNIT_CDR, 0), 300},       /* A */

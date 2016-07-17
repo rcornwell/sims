@@ -250,10 +250,10 @@ UNIT                dp_unit[] = {
 };
 
 DIB dp_dib[] = {
-    {DP_DEVNUM+000, 1, &dp_devio},
-    {DP_DEVNUM+004, 1, &dp_devio},
-    {DP_DEVNUM+010, 1, &dp_devio},
-    {DP_DEVNUM+014, 1, &dp_devio}};
+    {DP_DEVNUM+000, 1, &dp_devio, NULL},
+    {DP_DEVNUM+004, 1, &dp_devio, NULL},
+    {DP_DEVNUM+010, 1, &dp_devio, NULL},
+    {DP_DEVNUM+014, 1, &dp_devio, NULL}};
 
 
 MTAB                dp_mod[] = {

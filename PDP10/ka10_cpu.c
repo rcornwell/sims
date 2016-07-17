@@ -136,15 +136,18 @@ int     sac_inh;                              /* Don't store AR in AC */
 int     SC;                                   /* Shift count */
 int     SCAD;                                 /* Shift count extension */
 int     FE;                                   /* Exponent */
-#if !KI
+#if KA | PDP6
 int     Pl, Ph, Rl, Rh, Pflag;                /* Protection registers */
-#endif
 char    push_ovf;                             /* Push stack overflow */
 char    mem_prot;                             /* Memory protection flag */
+#endif
 char    nxm_flag;                             /* Non-existant memory flag */
 char    clk_flg;                              /* Clock flag */
 char    ov_irq;                               /* Trap overflow */
 char    fov_irq;                              /* Trap floating overflow */
+#if PDP6
+char    pcchg_irq;                            /* PC Change flag */
+#endif
 char    PIR;                                  /* Current priority level */
 char    PIH;                                  /* Highest priority */
 char    PIE;                                  /* Priority enable mask */
@@ -592,6 +595,10 @@ int opflags[] = {
 #define SOB(x)          (x + 0777776777777LL)
 #endif
 
+/*
+ * Set device to interrupt on a given level 1-7
+ * Level 0 means that device interrupt is not enabled 
+ */
 void set_interrupt(int dev, int lvl) {
     lvl &= 07;
     if (lvl) {
@@ -601,43 +608,32 @@ void set_interrupt(int dev, int lvl) {
     }
 }
 
+/*
+ * Clear the interrupt flag for a device
+ */
 void clr_interrupt(int dev) {
     dev_irq[dev>>2] = 0;
     sim_debug(DEBUG_IRQ, &cpu_dev, "clear irq %o\n", dev & 0774);
 }
 
-void check_apr_irq() {
-        int flg = 0;
-        clr_interrupt(0);
-        clr_interrupt(4);
-        if (apr_irq) {
-#if KI
-            flg |= inout_fail | nxm_flag;
-#else
-//            flg |= clk_flg & (clk_irq != 0);
-            flg |= ((FLAGS & OVR) != 0) & ov_irq;
-            flg |= ((FLAGS & FLTOVR) != 0) & fov_irq;
-            flg |= nxm_flag | mem_prot | push_ovf;
-#endif
-            if (flg)
-                set_interrupt(0, apr_irq);
-        }
- //       if (clk_flg & clk_en)
-  //          set_interrupt(4, clk_irq);
-}
-
+/*
+ * Check if there is any pending interrupts return 0 if none,
+ * else set pi_enc to highest level and return 1.
+ */
 int check_irq_level() {
      int i, lvl;
      int pi_ok, pi_t;
 
+     /* Scan all devices */
      for(i = lvl = 0; i < 128; i++)
         lvl |= dev_irq[i];
-     if (lvl == 0)
+     if (lvl == 0) 
         pi_pending = 0;
      PIR |= (lvl & PIE);
-     /* Compute mask for pi_ok */
+     /* Handle held interrupt requests */
      pi_t = (~PIR & ~PIH) >> 1;
      pi_ok = 0100 & (PIR & ~PIH);
+     /* Still have a valid interrupt? */
      if (!pi_ok) {
         /* None at level 1, check for lower level */
          lvl = 0040;
@@ -665,6 +661,9 @@ int check_irq_level() {
      return 0;
 }
 
+/* 
+ * Recover from held interrupt.
+ */
 void restore_pi_hold() {
      int i, lvl;
 
@@ -672,7 +671,7 @@ void restore_pi_hold() {
         return;
      /* Compute mask for pi_ok */
      lvl = 0100;
-     /* None at level 1, check for lower level */
+     /* Clear HOLD flag for highest interrupt */
      for(i = 1; i <= 7; i++) {
         if (lvl & PIH) {
             PIR &= ~lvl;
@@ -681,11 +680,12 @@ void restore_pi_hold() {
          }
          lvl >>= 1;
      }
-     if (dev_irq[0])
-        check_apr_irq();
      pi_pending = 1;
 }
 
+/*
+ * Hold interrupts at the current level.
+ */
 void set_pi_hold() {
      PIH |= 0200 >> pi_enc;
      PIR &= ~(0200 >> pi_enc);
@@ -694,6 +694,9 @@ void set_pi_hold() {
 #if KI
 static int      timer_irq, timer_flg;
 
+/* 
+ * Page device for KI10.
+ */
 t_stat dev_pag(uint32 dev, uint64 *data) {
     uint64 res = 0;
     switch(dev & 03) {
@@ -745,6 +748,23 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
     return SCPE_OK;
 }
 
+/*
+ * Check if the last operation caused a APR IRQ to be generated.
+ */
+void check_apr_irq() {
+     if (apr_irq) {
+         int flg = 0;
+         clr_interrupt(0);
+         flg |= inout_fail | nxm_flag;
+         if (flg)
+             set_interrupt(0, apr_irq);
+     }
+}
+
+
+/* 
+ * APR device for KI10.
+ */
 t_stat dev_apr(uint32 dev, uint64 *data) {
     uint64 res = 0;
     switch(dev & 03) {
@@ -798,8 +818,28 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
     return SCPE_OK;
 }
 
-#else
+#endif
 
+#if KA
+/*
+ * Check if the last operation caused a APR IRQ to be generated.
+ */
+void check_apr_irq() {
+     if (apr_irq) {
+         int flg = 0;
+         clr_interrupt(0);
+         flg |= clk_en & clk_flg;
+         flg |= ((FLAGS & OVR) != 0) & ov_irq;
+         flg |= ((FLAGS & FLTOVR) != 0) & fov_irq;
+         flg |= nxm_flag | mem_prot | push_ovf;
+         if (flg)
+             set_interrupt(0, apr_irq);
+     }
+}
+
+/*
+ * APR Device for KA10.
+ */
 t_stat dev_apr(uint32 dev, uint64 *data) {
     uint64 res = 0;
     switch(dev & 03) {
@@ -869,6 +909,10 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
 }
 #endif
 
+
+/*
+ * PI device for KA and KI
+ */
 t_stat dev_pi(uint32 dev, uint64 *data) {
     uint64 res = 0;
     switch(dev & 3) {
@@ -919,6 +963,9 @@ t_stat dev_pi(uint32 dev, uint64 *data) {
     return SCPE_OK;
 }
 
+/*
+ * Non existent device
+*/
 t_stat null_dev(uint32 dev, uint64 *data) {
     switch(dev & 3) {
     case CONI:
@@ -934,6 +981,9 @@ t_stat null_dev(uint32 dev, uint64 *data) {
 }
 
 #if KI
+/* 
+ * Handle page lookup on KI10
+ */
 int page_lookup(int addr, int flag, int *loc, int wr, int fetch) {
     uint64   data;
     int      base;
@@ -1011,6 +1061,9 @@ int page_lookup(int addr, int flag, int *loc, int wr, int fetch) {
     return 1;
 }
 
+/*
+ * Register access on KI 10
+ */
 uint64 get_reg(int reg) {
     if (FLAGS & USER) 
        return FM[fm_sel|reg];
@@ -1027,6 +1080,10 @@ void   set_reg(int reg, uint64 value) {
 
 
 #else
+
+/*
+ * Translation logic for KA10
+ */
 int page_lookup(int addr, int flag, int *loc, int wr, int fetch) {
       if (!flag && (FLAGS & USER) != 0) {
           if (addr <= ((Pl << 10) + 01777))
@@ -1051,12 +1108,16 @@ int page_lookup(int addr, int flag, int *loc, int wr, int fetch) {
 #define set_reg(reg, value)          FM[(reg) & 017] = value
 #endif
 
-
+/*
+ * Read a location in memory.
+ *
+ * Return of 0 if successful, 1 if there was an error.
+ */
 int Mem_read(int flag, int fetch) {
     int addr;
 
     if (AB < 020) {
-#if KI
+#if KI | KL
         if (FLAGS & USER) {
            MB =  get_reg(AB);
            return 0;
@@ -1078,7 +1139,6 @@ read:
         if (!page_lookup(AB, flag, &addr, 0, fetch))
             return 1;
         if (addr >= (int)MEMSIZE) {
-        //    fprintf(stderr, "NXM %06o read %06o\n\r", addr, PC);
             nxm_flag = 1;
             set_interrupt(0, apr_irq);
             return 1;
@@ -1088,11 +1148,16 @@ read:
     return 0;
 }
 
+/*
+ * Write a location in memory.
+ *
+ * Return of 0 if successful, 1 if there was an error.
+ */
 int Mem_write(int flag) {
     int addr;
 
     if (AB < 020) {
-#if KI
+#if KI | KL
         if (FLAGS & USER) {
             set_reg(AB, MB);
             return 0;
@@ -1114,13 +1179,12 @@ write:
         sim_interval--;
         if (!page_lookup(AB, flag, &addr, 1, 0))
             return 1;
-#if KI
+#if KI | KL
         if (private_page)
             return 1;
 #endif
         if (addr >= (int)MEMSIZE) {
             nxm_flag = 1;
-         //   fprintf(stderr, "NXM %06o write %06o\n\r", addr, PC);
             set_interrupt(0, apr_irq);
             return 1;
         }
@@ -1161,8 +1225,8 @@ int     sac_inh;                 /* Inihibit saving AC after instruction */
 int     f;                       /* Temporary variables */
 int     flag1;
 int     flag3;
-/* Restore register state */
 
+/* Build device table */
 if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
     return reason;
 
@@ -1172,7 +1236,6 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
    f_inst_fetch = 1;
    ind = 0;
    uuo_cycle = 0;
-   push_ovf = mem_prot = nxm_flag = 0;
    pi_cycle = 0;
    pi_rq = 0;
    pi_ov = 0;
@@ -1196,7 +1259,7 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
     if (f_load_pc) {
         AB = PC;
         uuo_cycle = 0;
-#if KI
+#if KI | KL
         xct_flag = 0;
         trap_flag = 0;
 #endif
@@ -1204,7 +1267,7 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
 
     if (f_inst_fetch) {
 fetch:
-#if KI
+#if KI | KL
        private_page = 0;
        page_fault = 0;
 #endif
@@ -1212,7 +1275,7 @@ fetch:
        IR = (MB >> 27) & 0777;
        AC = (MB >> 23) & 017;
        i_flags = opflags[IR];
-#if KI
+#if KI | KL
        FLAGS &= ~(TRP1|TRP2);
 #endif
        BYF5 = 0;
@@ -1225,15 +1288,19 @@ fetch:
     }
 
     /* Update history */
-    if (hst_lnt && PC > 020 && (PC & 0777774) != 0472174) {
+    if (hst_lnt && PC > 020 && (PC & 0777774) != 0472174 && 
+		(PC & 0777700) != 023700 && (PC != 0527154)) {
             hst_p = hst_p + 1;
             if (hst_p >= hst_lnt)
                     hst_p = 0;
             hst[hst_p].pc = HIST_PC | ((BYF5)? (HIST_PC2|PC) : AB);
             hst[hst_p].ea = AB;
             hst[hst_p].ir = MB;
-            hst[hst_p].flags = (FLAGS << 5) |(clk_flg << 3) |(mem_prot << 2) |
-                               (nxm_flag << 1) | (push_ovf);
+            hst[hst_p].flags = (FLAGS << 5) |(clk_flg << 2) | (nxm_flag << 1) 
+#if KA
+                                | (mem_prot << 4) | (push_ovf << 3)
+#endif
+                       ;
             hst[hst_p].ac = get_reg(AC);
     }
 
@@ -1270,12 +1337,33 @@ fetch:
 
     /* If there is a interrupt handle it. */
     if (pi_rq) {
-        set_pi_hold();
+        set_pi_hold(); /* Hold off all lower interrupts */
         pi_cycle = 1;
         pi_rq = 0;
         pi_hold = 0;
         pi_ov = 0;
         AB = 040 | (pi_enc << 1);
+#if KI | KL
+        /*
+         * Scan through the devices and allow KI devices to have first
+         * hit at a given level.
+         */
+        for (f = 0; sim_devices[f] != NULL; f++) {
+            DEVICE *dptr = sim_devices[f];
+            DIB *dibp = (DIB *) dptr->ctxt;
+            if (dibp) {
+               if (dibp->irq) {    /* Check if KI device */
+                   int dev = dibp->dev_num >> 2;
+
+                   /* Check if this device actually posted IRQ */
+                   if (dev_irq[dev] & (0200 >> pi_enc)) {
+                        AB = dibp->irq(dev << 2, AB);
+                        break;
+                   }
+               }
+            }
+	}
+#endif
         goto fetch;
     }
 
@@ -1288,12 +1376,12 @@ fetch_opr:
     nrf = 0;
     fxu_hold_set = 0;
     sac_inh = 0;
-#if KI
+#if KI | KL
     modify = 0;
 #endif
     /* Load pseudo registers based on flags */
     if (i_flags & (FCEPSE|FCE)) {
-#if KI
+#if KI | KL
         modify = 1;
 #endif
         if (Mem_read(0, 0))
@@ -1342,18 +1430,17 @@ muuo:
     case 0074: case 0075: case 0076: case 0077:
               /* MUUO */
 
-#if KI
+#if KI | KL
     case 0100: case 0101: case 0102: case 0103:
     case 0104: case 0105: case 0106: case 0107:
     case 0123: 
 unasign:
-              uuo_cycle = 1;
               MB = ((uint64)(IR) << 27) | ((uint64)(AC) << 23) | (uint64)(AB);
               AB = ub_ptr | 0424;
-              Mem_write(uuo_cycle);
+              Mem_write(1);
               AB |= 1;
               MB = (FLAGS << 23) | ((PC + 1) & RMASK);
-              Mem_write(uuo_cycle);
+              Mem_write(1);
               AB = ub_ptr | 0430;
               if (trap_flag) 
                   AB |= 1;
@@ -1361,7 +1448,7 @@ unasign:
                   AB |= 2;
               if (FLAGS & USER)
                   AB |= 4;
-              Mem_read(uuo_cycle, 0);
+              Mem_read(1, 0);
               FLAGS = (MB >> 23) & 017777;
               PC = MB & RMASK;
               f_pc_inh = 1;
@@ -1382,7 +1469,7 @@ unasign:
     case 0034: case 0035: case 0036: case 0037:
               f_pc_inh = 1;
               MB = ((uint64)(IR) << 27) | ((uint64)(AC) << 23) | (uint64)(AB);
-#if KI
+#if KI | KL
               if (FLAGS & USER) {
                   AB = 040;
               } else {
@@ -1397,7 +1484,7 @@ unasign:
               f_load_pc = 0;
               break;
 
-#if KI
+#if KI | KL
 
     case 0110:       /* DFAD */
     case 0111:       /* DFSB */
@@ -1477,7 +1564,7 @@ dpnorm:
                  if (fxu_hold_set) {
                      FLAGS |= FLTUND;
                  }
-                 check_apr_irq();
+//                 check_apr_irq();
               }
               SCAD = SC ^ ((AR & SMASK) ? 0377 : 0);
               AR &= SMASK|MMASK;
@@ -1553,7 +1640,7 @@ dpnorm:
                       FLAGS |= OVR|FLTOVR|NODIV|TRP1;
                   AR = 0;      /* For clean history */
                   sac_inh = 1;
-                  check_apr_irq();
+//                  check_apr_irq();
                   break;
               }
 
@@ -1605,29 +1692,29 @@ dpnorm:
 
     case 0124: /* DMOVEM */
               /* Handle each half as seperate instruction */
-              if ((FLAGS & BYTI) == 0 || pi_cycle) {
+              if ((FLAGS & BYTI) == 0/* || pi_cycle*/) {
                   MB = AR;
                   if (Mem_write(0))
                       goto last;
-                  if (!pi_cycle) {
+//                  if (!pi_cycle) {
                       FLAGS |= BYTI;
-                      f_pc_inh = 1;
-                      break;
-                   }
+ //                     f_pc_inh = 1;
+  //                    break;
+//                   }
               }
-              if ((FLAGS & BYTI) || pi_cycle) {
-                   if (!pi_cycle)
-                      FLAGS &= ~BYTI;
+              if ((FLAGS & BYTI)/* || pi_cycle*/) {
                    AB = (AB + 1) & RMASK;
                    MB = MQ;
                    if (Mem_write(0))
                       goto last;
+//                   if (!pi_cycle)
+                      FLAGS &= ~BYTI;
               }
               break;
 
     case 0125: /* DMOVNM */
               /* Handle each half as seperate instruction */
-              if ((FLAGS & BYTI) == 0 || pi_cycle) {
+              if ((FLAGS & BYTI) == 0 /*|| pi_cycle*/) {
                   BR = AR = CM(AR);
                   BR = (BR + 1);
                   MQ = (((MQ & CMASK) ^ CMASK) + 1);
@@ -1637,20 +1724,20 @@ dpnorm:
                   MB = AR;
                   if (Mem_write(0))
                       goto last;
-                  if (!pi_cycle) {
-                      FLAGS |= BYTI;
-                      f_pc_inh = 1;
-                      break;
-                   }
+//                  if (!pi_cycle) {
+                  FLAGS |= BYTI;
+  //                    f_pc_inh = 1;
+   //                   break;
+    //               }
               }
-              if ((FLAGS & BYTI) || pi_cycle) {
-                   if (!pi_cycle)
-                      FLAGS &= ~BYTI;
+              if ((FLAGS & BYTI)/* || pi_cycle*/) {
                    MQ = (CM(MQ) + 1) & CMASK;
                    AB = (AB + 1) & RMASK;
                    MB = MQ;
                    if (Mem_write(0))
                       goto last;
+//                   if (!pi_cycle)
+                      FLAGS &= ~BYTI;
               }
               break;
 
@@ -1683,6 +1770,7 @@ dpnorm:
               } else {
                   if (!pi_cycle) 
                       FLAGS |= OVR|TRP1;        /* OV & T1 */
+              //    check_apr_irq();
                   sac_inh = 1;
               }
               if (flag1)
@@ -1725,7 +1813,7 @@ unasign:
                   SCAD = (((AR >> 30) & 077) + (0777 ^ SC) + 1) & 0777;
                   if (SCAD & 0400) {
                       SC = ((0777 ^ ((AR >> 24) & 077)) + 044 + 1) & 0777;
-#if KI
+#if KI | KL
                       AR = (AR & LMASK) | ((AR + 1) & RMASK);
 #else
                       AR = (AR + 1) & FMASK;
@@ -1778,6 +1866,7 @@ unasign:
               BYF5 = 0;
               break;
 
+#if !PDP6
     case 0131:/* DFN */
               AD = (CM(BR) + 1) & FMASK;
               SC = (BR >> 27) & 0777;
@@ -1792,6 +1881,7 @@ unasign:
               if (Mem_write(0))
                  goto last;
               break;
+#endif
 
     case 0132:/* FSC */
               SC = ((AB & LSIGN) ? 0400 : 0) | (AB & 0377);
@@ -2184,7 +2274,7 @@ fxnorm:
                   FLAGS |= OVR|TRP1;
                   check_apr_irq();
               }
-#if KI
+#if KI | KL
               if (AR == SMASK && !pi_cycle)
                   FLAGS |= TRP1;
 #endif
@@ -2213,7 +2303,7 @@ fxnorm:
                  AR = MQ = 0;
                  break;
               }
-#if !KI
+#if KA
               if (BR == SMASK)                /* Handle special case */
                  flag3 = !flag3;
 #endif
@@ -2257,21 +2347,6 @@ fxnorm:
     case 0231:       /* IDIVI */
     case 0232:       /* IDIVM */
     case 0233:       /* IDIVB */
-#if 0
-              flag1 = 0;
-              flag3 = 0;
-              if (AR & SMASK) {
-                  AD = (CM(AR) + 1) & FMASK;
-                  flag1 = 1;
-              } else {
-                  AD = AR;
-              }
-              AR = 0;// (AR & CMASK) == 0;
-              MQ = AD;
-
-              goto div;
-#endif
-
               flag1 = 0;
               flag3 = 0;
               if (BR & SMASK) {
@@ -2317,9 +2392,7 @@ fxnorm:
                       AR = (AR + 1) & FMASK;
                   flag1 = 1;
               }
-#if 0
-div:
-#endif
+
               if (BR & SMASK)
                    AD = (AR + BR) & FMASK;
               else
@@ -2394,7 +2467,7 @@ div:
               break;
 
     case 0241: /* ROT */
-#if KI
+#if KI | KL
               SC = (AB & LSIGN) ? 
                       ((AB & 0377) ? (((0377 ^ AB) + 1) & 0377) : 0400) : (AB & 0377);
 #else
@@ -2420,6 +2493,7 @@ div:
               break;
 
     case 0243:  /* JFFO */
+#if !PDP6
               SC = 0;
               if (AR != 0) {
                   PC = AB;
@@ -2427,6 +2501,7 @@ div:
                   SC = nlzero(AR);
               }
               set_reg(AC + 1, SC);
+#endif
               break;
 
     case 0244: /* ASHC */
@@ -2469,7 +2544,7 @@ div:
               break;
 
     case 0245: /* ROTC */
-#if KI
+#if KI | KL
               SC = (AB & LSIGN) ? 
                       ((AB & 0377) ? (((0377 ^ AB) + 1) & 0377) : 0400) : (AB & 0377);
 #else
@@ -2609,7 +2684,7 @@ div:
 
               }
               if (AC & 01) {  /* Enter User Mode */
-#if KI
+#if KI | KL
                  FLAGS &= ~PUBLIC;
                  private_page = 0;
 #else
@@ -2630,14 +2705,14 @@ div:
     case 0256: /* XCT */
               f_load_pc = 0;
               f_pc_inh = 1;
-#if KI
+#if KI | KL
               if ((FLAGS & USER) == 0)
                   xct_flag = AC;
 #endif
               break;
 
     case 0257:  /* MAP */
-#if KI
+#if KI | KL
               f = AB >> 9;
               if ((FLAGS & USER) != 0) {
                   /* Check if small user and outside range */
@@ -2676,20 +2751,21 @@ div:
 
               /* Stack, JUMP */
     case 0260:  /* PUSHJ */     /* AR Frm PC */
+              MB = ((uint64)(FLAGS) << 23) | ((PC + !pi_cycle) & RMASK);
+              FLAGS &= ~ (BYTI|ADRFLT|TRP1|TRP2);
               BR = AB;
               AR = AOB(AR);
               AB = AR & RMASK;
               if (AR & C1) {
-                 push_ovf = 1;
-#if KI
+#if KI | KL
                  if (!pi_cycle) 
                      FLAGS |= TRP2;
-#endif
+#else
+                 push_ovf = 1;
                  check_apr_irq();
+#endif
               }
               AR &= FMASK;
-              MB = ((uint64)(FLAGS) << 23) | ((PC + !pi_cycle) & RMASK);
-              FLAGS &= ~ (BYTI|ADRFLT|TRP2|TRP1);
               if (uuo_cycle | pi_cycle) {
                  FLAGS &= ~(USER|PUBLIC); /* Clear USER */
               }
@@ -2702,12 +2778,13 @@ div:
               AR = AOB(AR);
               AB = AR & RMASK;
               if (AR & C1) {
-                 push_ovf = 1;
-#if KI
+#if KI | KL
                  if (!pi_cycle) 
                      FLAGS |= TRP2;
-#endif
+#else
+                 push_ovf = 1;
                  check_apr_irq();
+#endif
               }
               AR &= FMASK;
               MB = BR;
@@ -2724,12 +2801,13 @@ div:
               if (Mem_write(0))
                   goto last;
               if ((AR & C1) == 0) {
-                  push_ovf = 1;
-#if KI
+#if KI | KL
                   if (!pi_cycle) 
                       FLAGS |= TRP2;
-#endif
+#else
+                  push_ovf = 1;
                   check_apr_irq();
+#endif
               }
               AR &= FMASK;
               break;
@@ -2741,12 +2819,13 @@ div:
               PC = MB & RMASK;
               AR = SOB(AR);
               if ((AR & C1) == 0) {
-                  push_ovf = 1;
-#if KI           
+#if KI | KL
                   if (!pi_cycle) 
                      FLAGS |= TRP2;
-#endif
+#else
+                  push_ovf = 1;
                   check_apr_irq();
+#endif
               }
               AR &= FMASK;
               f_pc_inh = 1;
@@ -2755,11 +2834,7 @@ div:
     case 0264: /* JSR */       /* AR Frm PC */
               AD = ((uint64)(FLAGS) << 23) |
                       ((PC + !pi_cycle) & RMASK);
-#if KI
-//              FLAGS &= ~ 0420;
-#else
-              FLAGS &= ~ 0434;
-#endif
+              FLAGS &= ~ (BYTI|ADRFLT|TRP1|TRP2);
               if (uuo_cycle | pi_cycle) {
                  FLAGS &= ~(USER|PUBLIC); /* Clear USER */
               }
@@ -2770,11 +2845,7 @@ div:
     case 0265: /* JSP */       /* AR Frm PC */
               AD = ((uint64)(FLAGS) << 23) |
                       ((PC + !pi_cycle) & RMASK);
-#if KI
-//              FLAGS &= ~ 0420;
-#else
-              FLAGS &= ~ 0434;
-#endif
+              FLAGS &= ~ (BYTI|ADRFLT|TRP1|TRP2);
               if (uuo_cycle | pi_cycle) {
                  FLAGS &= ~(USER|PUBLIC); /* Clear USER */
               }
@@ -2793,8 +2864,8 @@ div:
               break;
 
     case 0267: /* JRA */
-              AD = AB;        /* Not in hardware */
-              AB = (get_reg(AC) >> 18, 0) & RMASK;
+              AD = AB;   
+              AB = (get_reg(AC) >> 18) & RMASK;
               if (Mem_read(uuo_cycle | pi_cycle, 0))
                    goto last;
               set_reg(AC, MB);
@@ -2987,7 +3058,7 @@ skip_op:
               f = f & IR;
               if (((IR & 04) != 0) == (f == 0)) {
                    PC = (PC + 1) & RMASK;
-#if KI      
+#if KI | KL
               } else if (pi_cycle) {
                    pi_ov = pi_hold = 1;
 #endif      
@@ -3379,16 +3450,15 @@ test_op:
 
 last:
 
-#if KI
+#if KI | KL
     /* Handle page fault and traps */
     if (page_enable && (page_fault || private_page || (FLAGS & (TRP1|TRP2)))) {
-        f_pc_inh = 1;
-        f_load_pc = 0;
-        trap_flag = 1;
         if (page_fault || private_page) {
             page_fault = private_page = 0;
-            if (pi_cycle) 
+            if (pi_cycle) {
                inout_fail = 1;
+               goto last2;
+            }
             AB = ub_ptr + (FLAGS & USER) ? 0427 : 0426;
             MB = fault_data;
             Mem_write(1);
@@ -3396,9 +3466,14 @@ last:
         } else {
             AB = 0420 + ((FLAGS & (TRP1|TRP2)) >> 2);
         }
+        f_pc_inh = 1;
+        f_load_pc = 0;
+        trap_flag = 1;
         AB += (FLAGS & USER) ? ub_ptr : eb_ptr;
-//fprintf(stderr, "Trap %06o\n\r", AB);
     }
+
+last2:
+    check_apr_irq();
 #endif
 
     if (!f_pc_inh & !pi_cycle) {
@@ -3461,15 +3536,16 @@ t_stat cpu_reset (DEVICE *dptr)
 {
 int     i;
 BYF5 = uuo_cycle = 0;
-#if !KI
+#if KA | PDP6
 Pl = Ph = Rl = Rh = Pflag = 0;
+push_ovf = mem_prot = 0;
 #endif
-push_ovf = mem_prot = nxm_flag = clk_flg = 0;
+nxm_flag = clk_flg = 0;
 PIR = PIH = PIE = pi_enable = parity_irq = 0;
 pi_pending = pi_req = pi_enc = apr_irq = 0;
 ov_irq =fov_irq =clk_en =clk_irq = 0;
 pi_restore = pi_hold = 0;
-#if KI
+#if KI | KL
 ub_ptr = eb_ptr = 0;
 pag_reload = ac_stack = 0;
 fm_sel = small_user = user_addr_cmp = page_enable = 0;
@@ -3549,7 +3625,7 @@ for (i = 0; i < 128; i++)
     dev_tab[i] = &null_dev;
 dev_tab[0] = &dev_apr;
 dev_tab[1] = &dev_pi;
-#if KI
+#if KI | KL
 dev_tab[2] = &dev_pag;
 #endif
 for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {
@@ -3571,7 +3647,7 @@ for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {
 return FALSE;
 }
 
-#if KI
+#if KI | KL
 
 /* Set serial */
 t_stat cpu_set_serial (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
@@ -3685,11 +3761,7 @@ return SCPE_OK;
 t_stat
 cpu_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-#if !KI10
-    fprintf(st, "KA10 CPU\n\n");
-#else
-    fprintf(st, "KI10 CPU\n\n");
-#endif
+    fprintf(st, "%s\n\n", cpu_description(dptr));
     fprintf(st, "To stop the cpu use the command:\n\n");
     fprintf(st, "    sim> SET CTY STOP\n\n");
     fprintf(st, "This will write a 1 to location %03o, causing TOPS10 to stop\n", CTY_SWITCH);
@@ -3701,9 +3773,16 @@ cpu_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 const char *
 cpu_description (DEVICE *dptr)
 {
-#if !KI10
-    return "KA10 CPU";
-#else
+#if KL
+    return "KL10A CPU";
+#endif
+#if KI
     return "KI10 CPU";
+#endif
+#if KA
+    return "KA10 CPU";
+#endif
+#if PDP6
+    return "PDP6 CPU";
 #endif
 }

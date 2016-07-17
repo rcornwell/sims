@@ -69,7 +69,7 @@ int32           lpt_stopioe;
    lpt_reg      LPT register list
 */
 
-DIB lpt_dib = { LP_DEVNUM, 1, &lpt_devio };
+DIB lpt_dib = { LP_DEVNUM, 1, &lpt_devio, NULL };
 
 UNIT lpt_unit = {
     UDATA (&lpt_svc, UNIT_SEQ+UNIT_ATTABLE+UNIT_TEXT, 0), SERIAL_OUT_WAIT

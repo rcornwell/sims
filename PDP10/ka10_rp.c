@@ -294,6 +294,7 @@ int           rp_attn[NUM_DEVS_RP];
 extern int    readin_flag;
 
 t_stat        rp_devio(uint32 dev, uint64 *data);
+int           rp_devirq(uint32 dev, int addr);
 void          rp_write(int ctlr, int unit, int reg, uint32 data);
 uint32        rp_read(int ctlr, int unit, int reg);
 t_stat        rp_svc(UNIT *);
@@ -386,10 +387,10 @@ UNIT                rp_unit[] = {
 };
 
 DIB rp_dib[] = {
-    {RP_DEVNUM+0000, 1, &rp_devio},
-    {RP_DEVNUM+0004, 1, &rp_devio},
-    {RP_DEVNUM+0100, 1, &rp_devio},
-    {RP_DEVNUM+0104, 1, &rp_devio}};
+    {RP_DEVNUM+0000, 1, &rp_devio, &rp_devirq},
+    {RP_DEVNUM+0004, 1, &rp_devio, &rp_devirq},
+    {RP_DEVNUM+0100, 1, &rp_devio, &rp_devirq},
+    {RP_DEVNUM+0104, 1, &rp_devio, &rp_devirq}};
 
 MTAB                rp_mod[] = {
     {UNIT_WLK, 0, "write enabled", "WRITEENABLED", NULL},
@@ -498,6 +499,8 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
             df10->status &= ~(CXR_ILFC|CXR_SD_RAE);
          if (*data & WRT_CW)
             df10_writecw(df10);
+         if (*data & PI_ENABLE)
+            df10->status &= ~PI_ENABLE;
          sim_debug(DEBUG_CONO, dptr, "RP %03o CONO %06o %d PC=%06o %06o\n",
                dev, (uint32)*data, ctlr, PC, df10->status);
          return SCPE_OK;
@@ -521,15 +524,14 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
               *data |= ((t_uint64)(rp_drive[ctlr])) << 18;
         }
         *data |= ((t_uint64)(rp_reg[ctlr])) << 30;
-        sim_debug(DEBUG_DATAIO, dptr, "RP %03o DATI %012llo, %d %d PC=%06o\n\r", 
+        sim_debug(DEBUG_DATAIO, dptr, "RP %03o DATI %012llo, %d %d PC=%06o\n", 
                     dev, *data, ctlr, rp_drive[ctlr], PC);
         return SCPE_OK;
 
      case DATAO:
-         sim_debug(DEBUG_DATAIO, dptr, "RP %03o DATO %012llo, %d PC=%06o %06o\n\r",
+         sim_debug(DEBUG_DATAIO, dptr, "RP %03o DATO %012llo, %d PC=%06o %06o\n",
                     dev, *data, ctlr, PC, df10->status);
-         clr_interrupt(dev);
-         df10->status &= ~(PI_ENABLE|CCW_COMP_1);
+//         df10->status &= ~(PI_ENABLE|CCW_COMP_1);
          rp_reg[ctlr] = ((int)(*data >> 30)) & 077;
          if (*data & LOAD_REG) {
              if (rp_reg[ctlr] == 040) {
@@ -548,7 +550,7 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
                 df10->status |= BUSY;
                 rp_write(ctlr, rp_drive[ctlr], 0, (uint32)(*data & 077));
                 sim_debug(DEBUG_DATAIO, dptr, 
-                    "RP %03o command %012llo, %d[%d] PC=%06o %06o\n\r",
+                    "RP %03o command %012llo, %d[%d] PC=%06o %06o\n",
                     dev, *data, ctlr, rp_drive[ctlr], PC, df10->status);
              } else if (rp_reg[ctlr] == 044) {  
                 /* Set KI10 Irq vector */
@@ -559,6 +561,8 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
              } else if (rp_reg[ctlr] == 054) {
                 /* clear flags */
                 rp_rae[ctlr] &= ~(*data & 0377);
+                if (rp_rae[ctlr] == 0)
+                    clr_interrupt(dev);
              } else if ((rp_reg[ctlr] & 040) == 0) {
                 rp_drive[ctlr] = (int)(*data >> 18) & 07;
                 /* Check if access error */
@@ -579,12 +583,24 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
     return SCPE_OK; /* Unreached */
 }
 
+/* Handle KI and KL style interrupt vectors */
+int
+rp_devirq(uint32 dev, int addr) {
+     int drive;
+
+     for (drive = 0; drive < NUM_DEVS_RP; drive++) {
+        if (rp_dib[drive].dev_num == (dev & 0774)) 
+            return (rp_imode[drive] ? rp_ivect[drive] : addr);
+     }
+    return  addr;
+}
 
 void
 rp_write(int ctlr, int unit, int reg, uint32 data) {
     UNIT        *uptr = &rp_unit[(ctlr * 8) + unit];
     int          i;
     DEVICE      *dptr = rp_devs[ctlr];
+    struct df10   *df10;
 
     switch(reg) {
     case  000:  /* control */
@@ -621,6 +637,10 @@ rp_write(int ctlr, int unit, int reg, uint32 data) {
                 uptr->u3 |= DS_DRY;
                 uptr->u3 &= ~(DS_ATA|CR_GO);
                 rp_attn[ctlr] &= ~(1<<unit);
+                clr_interrupt(rp_dib[ctlr].dev_num);
+                df10 = &rp_df10[ctlr];
+                if ((df10->status & IADR_ATTN) != 0 && rp_attn[ctlr] != 0) 
+                    df10_setirq(df10);
                 break;
             case FNC_RELEASE:                              /* port release */
                 uptr->u3 |= DS_DRY;
@@ -654,6 +674,11 @@ rp_write(int ctlr, int unit, int reg, uint32 data) {
                 rp_attn[ctlr] &= ~(1<<i);
             }
         }
+        clr_interrupt(rp_dib[ctlr].dev_num);
+        df10 = &rp_df10[ctlr];
+        if ((df10->status & IADR_ATTN) != 0 && rp_attn[ctlr] != 0 ||
+             (df10->status & PI_ENABLE)) 
+            df10_setirq(df10);
         break;
     case  005:  /* sector/track */
         uptr->u4 &= 0177777;
@@ -887,7 +912,7 @@ t_stat rp_svc (UNIT *uptr)
             }
             sim_activate(uptr, 20);
         } else {
-        sim_debug(DEBUG_DETAIL, dptr, "RPA%o read done\n", unit);
+            sim_debug(DEBUG_DETAIL, dptr, "RPA%o read done\n", unit);
             uptr->u3 |= DS_DRY;
             uptr->u3 &= ~CR_GO;
             df->status &= ~BUSY;

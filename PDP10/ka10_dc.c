@@ -104,7 +104,7 @@ const char *dc_description (DEVICE *dptr);
    dc_reg      DC10 register list
 */
 
-DIB dc_dib = { DC_DEVNUM, 1, &dc_devio };
+DIB dc_dib = { DC_DEVNUM, 1, &dc_devio, NULL };
 
 UNIT dc_unit = {
     UDATA (&dc_svc, TT_MODE_7B+UNIT_IDLE+UNIT_ATTABLE, 0), KBD_POLL_WAIT 

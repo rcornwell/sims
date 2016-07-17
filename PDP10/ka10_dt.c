@@ -386,7 +386,7 @@ int32 dt_gethdr (UNIT *uptr, int32 blk, int32 relpos);
    dt_mod       DT modifier list
 */
 
-DIB dt_dib = { DT_DEVNUM, 2, &dt_devio};
+DIB dt_dib = { DT_DEVNUM, 2, &dt_devio, NULL};
 
 UNIT dt_unit[] = {
     { UDATA (&dt_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+

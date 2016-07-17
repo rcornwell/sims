@@ -52,7 +52,7 @@ const char *cty_description (DEVICE *dptr);
 
 t_stat cty_devio(uint32 dev, uint64 *data);
 
-DIB cty_dib = { CTY_DEVNUM, 1, cty_devio};
+DIB cty_dib = { CTY_DEVNUM, 1, cty_devio, NULL};
 
 UNIT cty_unit[] = {
     { UDATA (&ctyo_svc, TT_MODE_7P, 0), 100 },
