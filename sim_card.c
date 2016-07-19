@@ -625,6 +625,7 @@ sim_read_card(UNIT * uptr)
                     break;
                 case '\n':
                     col = 80;
+                    i--;
                     break;
                 case '~':               /* End of file mark */
                     if (col == 0) {
@@ -653,10 +654,10 @@ sim_read_card(UNIT * uptr)
                 }
             }
         }
+                    sim_debug(DEBUG_CARD, dptr, "-%d-", i);
+
         /* Scan to end of line, ignore anything after last column */
-        while (data->cbuff[i] != '\n' && data->cbuff[i] != '\r') {
-            if (i > data->len)
-               break;
+        while (data->cbuff[i] != '\n' && data->cbuff[i] != '\r' && i < data->len) {
             i++;
         }
         if (data->cbuff[i] == '\n')
