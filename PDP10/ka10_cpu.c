@@ -374,9 +374,9 @@ int opflags[] = {
         0,                0,                0,              0,
 #endif
         /* UFA */         /* DFN */         /* FSC */       /* IBP */
-        FCE|FBR,          FCE|FAC|SAC,      FAC|SAC,        FCEPSE,
+        FCE|FBR,          FCE|FAC|SAC,      FAC|SAC,        0,
         /* ILDB */        /* LDB */         /* IDPB */      /* DPB */
-        FCEPSE,           FCE,              FCEPSE,         FCE,
+        0,                0,                0,              0,
         /* FAD */         /* FADL */        /* FADM */      /* FADB */
         SAC|FBR|FCE,      SAC|SAC2|FBR|FCE, FCEPSE|FBR,     SAC|FBR|FCEPSE,
         /* FADR */        /* FADRI */       /* FADRM */     /* FADRB */
@@ -984,7 +984,7 @@ t_stat null_dev(uint32 dev, uint64 *data) {
 /* 
  * Handle page lookup on KI10
  */
-int page_lookup(int addr, int flag, int *loc, int wr, int fetch) {
+int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
     uint64   data;
     int      base;
     int      page = addr >> 9;
@@ -995,7 +995,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int fetch) {
     if (page_fault)
         return 0;
 
-    if (uf || ((xct_flag & 1) && !fetch && ((wr == 0) || modify)) ||
+    if (uf || ((xct_flag & 1) && !cur_context && ((wr == 0) || modify)) ||
         ((xct_flag & 2) && wr)) {
         base = ub_ptr;
         uf = 1;
@@ -1039,7 +1039,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int fetch) {
         private_page = 1;
 //        fprintf(stderr, " public");
     }
-    if (fetch && ((data & 0200000) != 0))
+    if (cur_context && ((data & 0200000) != 0))
         FLAGS |= PUBLIC;
     if ((data & LSIGN) == 0 || (wr & ((data & 0100000) == 0))) {
         fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 28) | 020LL;
@@ -1123,7 +1123,7 @@ int Mem_write_nopage() {
 /*
  * Translation logic for KA10
  */
-int page_lookup(int addr, int flag, int *loc, int wr, int fetch) {
+int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
       if (!flag && (FLAGS & USER) != 0) {
           if (addr <= ((Pl << 10) + 01777))
              *loc = (AB + (Rl << 10)) & RMASK;
@@ -1152,7 +1152,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int fetch) {
  *
  * Return of 0 if successful, 1 if there was an error.
  */
-int Mem_read(int flag, int fetch) {
+int Mem_read(int flag, int cur_context) {
     int addr;
 
     if (AB < 020) {
@@ -1160,7 +1160,7 @@ int Mem_read(int flag, int fetch) {
         if (FLAGS & USER) {
            MB =  get_reg(AB);
            return 0;
-        } else if (xct_flag & 1 && !fetch) {
+        } else if (xct_flag & 1 && !cur_context) {
            if (FLAGS & USERIO) {
               if (fm_sel == 0) 
                  goto read;
@@ -1175,7 +1175,7 @@ int Mem_read(int flag, int fetch) {
     } else {
 read:
         sim_interval--;
-        if (!page_lookup(AB, flag, &addr, 0, fetch))
+        if (!page_lookup(AB, flag, &addr, 0, cur_context))
             return 1;
         if (addr >= (int)MEMSIZE) {
             nxm_flag = 1;
@@ -1192,7 +1192,7 @@ read:
  *
  * Return of 0 if successful, 1 if there was an error.
  */
-int Mem_write(int flag) {
+int Mem_write(int flag, int cur_context) {
     int addr;
 
     if (AB < 020) {
@@ -1200,7 +1200,8 @@ int Mem_write(int flag) {
         if (FLAGS & USER) {
             set_reg(AB, MB);
             return 0;
-        } else if (((xct_flag & 1) && modify) || (xct_flag & 2)) {
+        } else if (!cur_context &&
+             ((xct_flag & 1) && modify) || (xct_flag & 2)) {
             if (FLAGS & USERIO) {
                if (fm_sel == 0) 
                   goto write;
@@ -1216,7 +1217,7 @@ int Mem_write(int flag) {
     } else {
 write:
         sim_interval--;
-        if (!page_lookup(AB, flag, &addr, 1, 0))
+        if (!page_lookup(AB, flag, &addr, 1, cur_context))
             return 1;
 #if KI | KL
         if (private_page)
@@ -1279,6 +1280,10 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
    pi_rq = 0;
    pi_ov = 0;
    BYF5 = 0;
+#if KI | KL
+   private_page = 0;
+   page_fault = 0;
+#endif
 
   while ( reason == 0) {                                /* loop until ABORT */
      if (sim_interval <= 0) {                           /* check clock queue */
@@ -1293,6 +1298,26 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
          break;
     }
 
+#if KI | KL
+    /* Handle page fault and traps */
+    if (page_enable && (page_fault || private_page || (FLAGS & (TRP1|TRP2)))) {
+        if (page_fault || private_page) {
+            page_fault = private_page = 0;
+            AB = ub_ptr + (FLAGS & USER) ? 0427 : 0426;
+            MB = fault_data;
+            Mem_write_nopage();
+            AB = 0420;
+        } else {
+            AB = 0420 + ((FLAGS & (TRP1|TRP2)) >> 2);
+            FLAGS &= ~(TRP1|TRP2);
+        }
+        f_pc_inh = 1;
+        trap_flag = 1;
+        AB += (FLAGS & USER) ? ub_ptr : eb_ptr;
+        Mem_read_nopage();
+        goto no_fetch;
+    }
+#endif
 
     /* Normal instruction */
     if (f_load_pc) {
@@ -1306,18 +1331,11 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
 
     if (f_inst_fetch) {
 fetch:
-#if KI | KL
-       private_page = 0;
-       page_fault = 0;
-#endif
        Mem_read(pi_cycle | uuo_cycle, 1);
 no_fetch:
        IR = (MB >> 27) & 0777;
        AC = (MB >> 23) & 017;
        i_flags = opflags[IR];
-#if KI | KL
-       FLAGS &= ~(TRP1|TRP2);
-#endif
        BYF5 = 0;
     }
 
@@ -1361,7 +1379,7 @@ no_fetch:
          if (IR != 0254)
              AR &= RMASK;
          if (ind & !pi_rq)
-              if (Mem_read(pi_cycle | uuo_cycle, 0)) 
+              if (Mem_read(pi_cycle | uuo_cycle, 1)) 
                  goto last;
          /* Handle events during a indirect loop */
          if (sim_interval-- <= 0) {
@@ -1418,12 +1436,14 @@ fetch_opr:
     /* Set up to execute instruction */
     f_inst_fetch = 1;
     f_load_pc = 1;
-    f_pc_inh = 0;
     nrf = 0;
     fxu_hold_set = 0;
     sac_inh = 0;
 #if KI | KL
     modify = 0;
+    f_pc_inh = trap_flag;
+#else
+    f_pc_inh = 0;
 #endif
     /* Load pseudo registers based on flags */
     if (i_flags & (FCEPSE|FCE)) {
@@ -1525,7 +1545,7 @@ unasign:
               }
 #endif
               AB = 040;
-              Mem_write(uuo_cycle);
+              Mem_write(uuo_cycle, 0);
               AB += 1;
               f_load_pc = 0;
               f_pc_inh = 1;
@@ -1739,7 +1759,7 @@ dpnorm:
               /* Handle each half as seperate instruction */
               if ((FLAGS & BYTI) == 0) {
                   MB = AR;
-                  if (Mem_write(0))
+                  if (Mem_write(0, 0))
                       goto last;
                   FLAGS |= BYTI;
 #if KI  /* KL does this in one shot */
@@ -1750,7 +1770,7 @@ dpnorm:
               if ((FLAGS & BYTI)) {
                   AB = (AB + 1) & RMASK;
                   MB = MQ;
-                  if (Mem_write(0))
+                  if (Mem_write(0, 0))
                      goto last;
                   FLAGS &= ~BYTI;
               }
@@ -1766,7 +1786,7 @@ dpnorm:
                      AR = BR;
                   AR &= FMASK;
                   MB = AR;
-                  if (Mem_write(0))
+                  if (Mem_write(0, 0))
                       goto last;
                   FLAGS |= BYTI;
 #if KI
@@ -1778,7 +1798,7 @@ dpnorm:
                   MQ = (CM(MQ) + 1) & CMASK;
                   AB = (AB + 1) & RMASK;
                   MB = MQ;
-                  if (Mem_write(0))
+                  if (Mem_write(0, 0))
                      goto last;
                   FLAGS &= ~BYTI;
               }
@@ -1840,7 +1860,7 @@ unasign:
               MB = ((uint64)(IR) << 27) | ((uint64)(AC) << 23) | (uint64)(AB);
               AB = 060;
               uuo_cycle = 1;
-              Mem_write(uuo_cycle);
+              Mem_write(uuo_cycle, 0);
               AB += 1;
               f_load_pc = 0;
               f_pc_inh = 1;
@@ -1851,6 +1871,12 @@ unasign:
     case 0134: /* ILDB */
     case 0136: /* IDPB */
               if ((FLAGS & BYTI) == 0) {      /* BYF6 */
+                  if (Mem_read(0, 1)) 
+                      goto last;
+                  AR = MB;
+#if KI | KL
+                  modify = 1;
+#endif
                   SC = (AR >> 24) & 077;
                   SCAD = (((AR >> 30) & 077) + (0777 ^ SC) + 1) & 0777;
                   if (SCAD & 0400) {
@@ -1864,6 +1890,9 @@ unasign:
                       SC = SCAD;
                   AR &= PMASK;
                   AR |= (uint64)(SC & 077) << 30;
+                  MB = AR;
+                  if (Mem_write(0, 1)) 
+                      goto last;
                   if ((IR & 04) == 0)
                       break;
               }
@@ -1871,6 +1900,9 @@ unasign:
     case 0135:/* LDB */
     case 0137:/* DPB */
               if (((FLAGS & BYTI) == 0) | !BYF5) {
+                  if (Mem_read(0, 1)) 
+                      goto last;
+                  AR = MB;
                   SC = (AR >> 30) & 077;
                   MQ = (uint64)(1) << ( 077 & (AR >> 24));
                   MQ -= 1;
@@ -1902,7 +1934,7 @@ unasign:
                   AR &= FMASK;
                   BR |= AR & MQ;
                   MB = BR;
-                  Mem_write(0);
+                  Mem_write(0, 0);
               }
               FLAGS &= ~BYTI; /* BYF6 */
               BYF5 = 0;
@@ -1920,7 +1952,7 @@ unasign:
               BR = AR;
               AR = AD;
               MB = BR;
-              if (Mem_write(0))
+              if (Mem_write(0, 0))
                  goto last;
               break;
 #endif
@@ -2665,7 +2697,7 @@ fxnorm:
                   if (Mem_read(0, 0))
                        break;
                   AB = (AR & RMASK);
-                  if (Mem_write(0))
+                  if (Mem_write(0, 0))
                        break;
                   AD = (AR & RMASK) + CM(BR) + 1;
                   AR = AOB(AR);
@@ -2811,7 +2843,7 @@ fxnorm:
               if (uuo_cycle | pi_cycle) {
                  FLAGS &= ~(USER|PUBLIC); /* Clear USER */
               }
-              Mem_write(uuo_cycle | pi_cycle);
+              Mem_write(uuo_cycle | pi_cycle, 0);
               PC = BR & RMASK;
               f_pc_inh = 1;
               break;
@@ -2830,7 +2862,7 @@ fxnorm:
               }
               AR &= FMASK;
               MB = BR;
-              if (Mem_write(0))
+              if (Mem_write(0, 0))
                  goto last;
               break;
 
@@ -2840,7 +2872,7 @@ fxnorm:
                   goto last;
               AR = SOB(AR);
               AB = BR & RMASK;
-              if (Mem_write(0))
+              if (Mem_write(0, 0))
                   goto last;
               if ((AR & C1) == 0) {
 #if KI | KL
@@ -3434,7 +3466,7 @@ test_op:
                           }
                           AR &= FMASK;
                           MB = AR;
-                          if (Mem_write(pi_cycle))
+                          if (Mem_write(pi_cycle, 0))
                               break;
                           AB = AR & RMASK;
                           goto fetch_opr;
@@ -3442,7 +3474,7 @@ test_op:
                   case 1:     /* 04 DATAI */
                           dev_tab[d](DATAI|(d<<2), &AR);
                           MB = AR;
-                          Mem_write(pi_cycle);
+                          Mem_write(pi_cycle, 0);
                           break;
                   case 3:     /* 14 DATAO */
                           if (Mem_read(pi_cycle, 0))
@@ -3456,7 +3488,7 @@ test_op:
                   case 5:     /* 24 CONI */
                           dev_tab[d](CONI|(d<<2), &AR);
                           MB = AR;
-                          Mem_write(pi_cycle);
+                          Mem_write(pi_cycle, 0);
                           break;
                   case 6:     /* 30 CONSZ */
                           dev_tab[d](CONI|(d<<2), &AR);
@@ -3474,9 +3506,10 @@ test_op:
               }
               break;
     }
+
     if (!sac_inh && (i_flags & (SCE|FCEPSE))) {
         MB = AR;
-        if (Mem_write(0))
+        if (Mem_write(0, 0))
            goto last;
     }
     if (!sac_inh && ((i_flags & SAC) || ((i_flags & SACZ) && AC != 0)))
@@ -3492,42 +3525,19 @@ test_op:
 
 last:
 
-#if KI | KL
-    /* Handle page fault and traps */
-    if (page_enable && (page_fault || private_page || (FLAGS & (TRP1|TRP2)))) {
-        if (page_fault || private_page) {
-            page_fault = private_page = 0;
-            if (pi_cycle) {
-               inout_fail = 1;
-	fprintf (stderr, "I/O Page fault PC=%06o\n", PC);
-               goto last2;
-            }
-            AB = ub_ptr + (FLAGS & USER) ? 0427 : 0426;
-            MB = fault_data;
-            Mem_write_nopage();
-            AB = 0420;
-        } else {
-            AB = 0420 + ((FLAGS & (TRP1|TRP2)) >> 2);
-        }
-        f_pc_inh = 1;
-        f_load_pc = 0;
-        f_inst_fetch = 0;
-        trap_flag = 1;
-        AB += (FLAGS & USER) ? ub_ptr : eb_ptr;
-        Mem_read_nopage();
-        goto no_fetch;
-    }
-
-last2:
-    check_apr_irq();
-#endif
-
-    if (!f_pc_inh & !pi_cycle) {
+    if (!f_pc_inh && !pi_cycle) {
         PC = (PC + 1) & RMASK;
     }
 
     /* Dismiss an interrupt */
     if (pi_cycle) {
+#if KI | KL
+       if (page_enable && (page_fault || private_page)) {
+            page_fault = private_page = 0;
+            inout_fail = 1;
+       }
+#endif
+
        if ((IR & 0700) == 0700 && ((AC & 04) == 0)) {
            pi_hold = pi_ov;
            if (!pi_hold & f_inst_fetch) {

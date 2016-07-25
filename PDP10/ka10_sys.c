@@ -25,6 +25,7 @@
 */
 
 #include "ka10_defs.h"
+#include "sim_card.h"
 #include <ctype.h>
 
 
@@ -65,6 +66,12 @@ DEVICE *sim_devices[] = {
 #endif
 #if (NUM_DEVS_LP > 0)
     &lpt_dev,
+#endif
+#if (NUM_DEVS_CR > 0)
+    &cr_dev,
+#endif
+#if (NUM_DEVS_CP > 0)
+    &cp_dev,
 #endif
 #if (NUM_DEVS_MT > 0)
     &mt_dev,
@@ -130,6 +137,18 @@ DEBTAB              dev_debug[] = {
     {0, 0}
 };
 
+/* Simulator debug controls */
+DEBTAB              crd_debug[] = {
+    {"CMD", DEBUG_CMD, "Show command execution to devices"},
+    {"DATA", DEBUG_DATA, "Show data transfers"},
+    {"DETAIL", DEBUG_DETAIL, "Show details about device"},
+    {"EXP", DEBUG_EXP, "Show exception information"},
+    {"CONI", DEBUG_CONI, "Show coni instructions"},
+    {"CONO", DEBUG_CONO, "Show coni instructions"},
+    {"DATAIO", DEBUG_DATAIO, "Show datai and datao instructions"},
+    {"CARD", DEBUG_CARD, "Show Card read/punches"},
+    {0, 0}
+};
 
 /* Binary loader, supports RIM10, SAV, EXE */
 

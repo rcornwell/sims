@@ -35,7 +35,7 @@ LDFLAGS = -lm -lrt
 BIN = ./
 SIM = ../scp.c ../sim_console.c ../sim_fio.c ../sim_timer.c ../sim_tape.c \
        ../sim_sock.c ../sim_tmxr.c ../sim_ether.c ../sim_video.c ../sim_serial.c \
-        ../sim_disk.c
+        ../sim_disk.c ../sim_card.c
 
 
 #
@@ -46,16 +46,16 @@ KA10 = ${KA10D}ka10_cpu.c ${KA10D}ka10_sys.c ${KA10D}ka10_df.c \
         ${KA10D}ka10_dp.c ${KA10D}ka10_mt.c ${KA10D}ka10_cty.c \
         ${KA10D}ka10_lp.c ${KA10D}ka10_pt.c ${KA10D}ka10_dc.c \
         ${KA10D}ka10_rp.c ${KA10D}ka10_rc.c ${KA10D}ka10_dt.c \
-        ${KA10D}ka10_dk.c
-KA10_OPT = -I.. -DUSE_INT64 -DKA=1
+        ${KA10D}ka10_dk.c ${KA10D}ka10_cr.c ${KA10D}ka10_cp.c
+KA10_OPT = -I.. -DUSE_INT64 -DKA=1 -DUSE_SIM_CARD
 
 KI10D = ./
 KI10 = ${KA10D}ka10_cpu.c ${KA10D}ka10_sys.c ${KA10D}ka10_df.c \
         ${KA10D}ka10_dp.c ${KA10D}ka10_mt.c ${KA10D}ka10_cty.c \
         ${KA10D}ka10_lp.c ${KA10D}ka10_pt.c ${KA10D}ka10_dc.c  \
         ${KA10D}ka10_rp.c ${KA10D}ka10_rc.c ${KA10D}ka10_dt.c \
-        ${KA10D}ka10_dk.c
-KI10_OPT = -I.. -DUSE_INT64 -DKI=1
+        ${KA10D}ka10_dk.c ${KA10D}ka10_cr.c ${KA10D}ka10_cp.c
+KI10_OPT = -I.. -DUSE_INT64 -DKI=1 -DUSE_SIM_CARD
 
 #
 # Build everything

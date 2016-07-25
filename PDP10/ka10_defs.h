@@ -104,12 +104,13 @@
 #define DEBUG_DATA      0x0000002       /* Show data transfers */
 #define DEBUG_DETAIL    0x0000004       /* Show details */
 #define DEBUG_EXP       0x0000008       /* Show error conditions */
-#define DEBUG_CONI      0x0000010       /* Show CONI instructions */
-#define DEBUG_CONO      0x0000020       /* Show CONO instructions */
-#define DEBUG_DATAIO    0x0000040       /* Show DATAI/O instructions */
-#define DEBUG_IRQ       0x0000080       /* Show IRQ requests */
+#define DEBUG_CONI      0x0000020       /* Show CONI instructions */
+#define DEBUG_CONO      0x0000040       /* Show CONO instructions */
+#define DEBUG_DATAIO    0x0000080       /* Show DATAI/O instructions */
+#define DEBUG_IRQ       0x0000100       /* Show IRQ requests */
 
 extern DEBTAB dev_debug[];
+extern DEBTAB crd_debug[];
 
 /* Operating system flags, kept in cpu_unit.flags */
 
@@ -253,6 +254,8 @@ extern DEVICE   rpd_dev;
 extern DEVICE   lpt_dev;
 extern DEVICE   ptp_dev;
 extern DEVICE   ptr_dev;
+extern DEVICE   cr_dev;
+extern DEVICE   cp_dev;
 extern DEVICE   rca_dev;
 extern DEVICE   rcb_dev;
 extern DEVICE   dc_dev;
@@ -301,6 +304,8 @@ int  df10_write(struct df10 *df);
 #define NUM_DEVS_DP     2
 #define NUM_DEVS_LP     1
 #define NUM_DEVS_PT     1
+#define NUM_DEVS_CR     1
+#define NUM_DEVS_CP     1
 #define NUM_DEVS_DC     1
 #define NUM_DEVS_RC     1
 #define NUM_DEVS_DT     0
