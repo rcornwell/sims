@@ -1173,7 +1173,9 @@ int Mem_read(int flag, int cur_context) {
 #endif
         MB = get_reg(AB);
     } else {
+#if KI | KL
 read:
+#endif
         sim_interval--;
         if (!page_lookup(AB, flag, &addr, 0, cur_context))
             return 1;
@@ -1215,7 +1217,9 @@ int Mem_write(int flag, int cur_context) {
 #endif
         set_reg(AB, MB);
     } else {
+#if KI | KL
 write:
+#endif
         sim_interval--;
         if (!page_lookup(AB, flag, &addr, 1, cur_context))
             return 1;
@@ -1330,9 +1334,13 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
     }
 
     if (f_inst_fetch) {
+#if !(KI | KL)
 fetch:
+#endif
        Mem_read(pi_cycle | uuo_cycle, 1);
+#if KI | KL
 no_fetch:
+#endif
        IR = (MB >> 27) & 0777;
        AC = (MB >> 23) & 017;
        i_flags = opflags[IR];

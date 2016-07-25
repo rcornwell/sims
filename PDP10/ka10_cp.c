@@ -111,7 +111,6 @@ DEVICE              cp_dev = {
 */
 
 t_stat cp_devio(uint32 dev, uint64 *data) {
-     uint64              res;
      UNIT                *uptr = &cp_unit; 
      struct _card_data   *dp;
 
