@@ -676,7 +676,7 @@ rp_write(int ctlr, int unit, int reg, uint32 data) {
         }
         clr_interrupt(rp_dib[ctlr].dev_num);
         df10 = &rp_df10[ctlr];
-        if ((df10->status & IADR_ATTN) != 0 && rp_attn[ctlr] != 0 ||
+        if (((df10->status & IADR_ATTN) != 0 && rp_attn[ctlr] != 0) ||
              (df10->status & PI_ENABLE)) 
             df10_setirq(df10);
         break;

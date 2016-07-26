@@ -990,15 +990,17 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
     int      page = addr >> 9;
     int      uf = (FLAGS & USER) != 0;
 
-    if (flag) 
-        uf = 0;
     if (page_fault)
         return 0;
 
-    if (uf || ((xct_flag & 1) && !cur_context && ((wr == 0) || modify)) ||
-        ((xct_flag & 2) && wr)) {
-        base = ub_ptr;
+    if (flag) 
+        uf = 0;
+    else if (!uf && !cur_context && ((((xct_flag & 2) != 0 && wr != 0)) ||
+              ((xct_flag & 1) != 0 && (wr == 0 || modify))))
         uf = 1;
+
+    if (uf) {
+        base = ub_ptr;
         if (small_user && (addr & 0340000) != 0) {
             fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 28) | 060LL;
             page_fault = 1;
@@ -1160,15 +1162,17 @@ int Mem_read(int flag, int cur_context) {
         if (FLAGS & USER) {
            MB =  get_reg(AB);
            return 0;
-        } else if (xct_flag & 1 && !cur_context) {
-           if (FLAGS & USERIO) {
-              if (fm_sel == 0) 
-                 goto read;
-              MB = FM[fm_sel|AB];
-              return 0;
-           }
-           MB = M[ub_ptr + ac_stack + AB];
-           return 0;
+        } else {
+            if (!cur_context && ((xct_flag & 1) != 0)) {
+               if (FLAGS & USERIO) {
+                  if (fm_sel == 0) 
+                     goto read;
+                  MB = FM[fm_sel|AB];
+                  return 0;
+               }
+               MB = M[ub_ptr + ac_stack + AB];
+               return 0;
+            }
         }
 #endif
         MB = get_reg(AB);
@@ -1202,17 +1206,20 @@ int Mem_write(int flag, int cur_context) {
         if (FLAGS & USER) {
             set_reg(AB, MB);
             return 0;
-        } else if (!cur_context &&
-             ((xct_flag & 1) && modify) || (xct_flag & 2)) {
-            if (FLAGS & USERIO) {
-               if (fm_sel == 0) 
-                  goto write;
-               else
-                  FM[fm_sel|AB] = MB;
-               return 0;
+        } else {
+            if (!cur_context && 
+                (((xct_flag & 1) != 0 && modify) ||
+                      (xct_flag & 2) != 0)) {
+                if (FLAGS & USERIO) {
+                   if (fm_sel == 0) 
+                      goto write;
+                   else
+                      FM[fm_sel|AB] = MB;
+                } else {
+                   M[ub_ptr + ac_stack + AB] = MB;
+                }
+                return 0;
             }
-            M[ub_ptr + ac_stack + AB] = MB;
-            return 0;
         }
 #endif
         set_reg(AB, MB);
@@ -1355,7 +1362,7 @@ no_fetch:
 
     /* Update history */
     if (hst_lnt && PC > 020 && (PC & 0777774) != 0472174 && 
-		(PC & 0777700) != 023700 && (PC != 0527154)) {
+            (PC & 0777700) != 023700 && (PC != 0527154)) {
             hst_p = hst_p + 1;
             if (hst_p >= hst_lnt) {
                     hst_p = 0;
@@ -1430,7 +1437,7 @@ no_fetch:
                    }
                }
             }
-	}
+        }
         AB |= eb_ptr;
         Mem_read_nopage();
         goto no_fetch;
@@ -1455,11 +1462,11 @@ fetch_opr:
 #endif
     /* Load pseudo registers based on flags */
     if (i_flags & (FCEPSE|FCE)) {
+        if (Mem_read(0, 0))
+            goto last;
 #if KI | KL
         modify = 1;
 #endif
-        if (Mem_read(0, 0))
-            goto last;
         AR = MB;
     }
 
