@@ -882,8 +882,10 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
             nxm_flag = 0;
         if (res & 020000)
             mem_prot = 0;
-        if (res & 0200000)
+        if (res & 0200000) {
             reset_all(1);
+            clk_flg = ov_irq = fov_irq = nxm_flag = mem_prot = push_ovf = 0;
+        }
         if (res & 0400000)
             push_ovf = 0;
         check_apr_irq();
@@ -997,7 +999,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
         uf = 0;
     else if (!uf && !cur_context && ((((xct_flag & 2) != 0 && wr != 0)) ||
               ((xct_flag & 1) != 0 && (wr == 0 || modify))))
-        uf = 1;
+        uf = (FLAGS & USERIO) != 0;
 
     if (uf) {
         base = ub_ptr;
@@ -1531,6 +1533,12 @@ unasign:
                   AB |= 4;
               Mem_read_nopage();
               FLAGS = (MB >> 23) & 017777;
+              /* If transistioning from user to executive adjust flags */
+              if ((FLAGS & USER) != 0 && (AB & 4) != 0) {
+                  FLAGS |= USERIO;
+                  if (AB & 2) 
+                     FLAGS |= OVR;
+              }
               PC = MB & RMASK;
               f_pc_inh = 1;
               trap_flag = 0;
@@ -1560,7 +1568,7 @@ unasign:
               }
 #endif
               AB = 040;
-              Mem_write(uuo_cycle, 0);
+              Mem_write(uuo_cycle, 1);
               AB += 1;
               f_load_pc = 0;
               f_pc_inh = 1;

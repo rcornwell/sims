@@ -168,27 +168,32 @@ extern DEBTAB crd_debug[];
 #define LRZ(x)          (((x) >> 18) & RMASK)
 
 
-#define NODIV   000001
-#define FLTUND  000002
+#define NODIV   000001        /* 000040 */
+#define FLTUND  000002        /* 000100 */
 #if KI|KL
-#define TRP1    000004
-#define TRP2    000010
-#define ADRFLT  000020
-//#define PUBLIC  000000
-#define PUBLIC  000040
+#define TRP1    000004        /* 000200 */
+#define TRP2    000010        /* 000400 */
+#define ADRFLT  000020        /* 001000 */
+#define PUBLIC  000040        /* 002000 */
 #else
-#define TRP1    000000
-#define TRP2    000000
-#define ADRFLT  000000
-#define PUBLIC  000000
+#define TRP1    000000        
+#define TRP2    000000        
+#define ADRFLT  000000        
+#define PUBLIC  000000        
 #endif
-#define USERIO  000100
-#define USER    000200
-#define BYTI    000400
-#define FLTOVR  001000
-#define CRY1    002000
-#define CRY0    004000
-#define OVR     010000
+#define USERIO  000100        /* 004000 */
+#define USER    000200        /* 010000 */
+#define BYTI    000400        /* 020000 */
+#ifdef PDP6
+#define FLTOVR  000000 
+#define PCHNG   001000        /* 040000 */
+#else
+#define FLTOVR  001000        /* 040000 */
+#define PCHNG   000000
+#endif
+#define CRY1    002000        /* 100000 */
+#define CRY0    004000        /* 200000 */
+#define OVR     010000        /* 400000 */
 
 #define DATAI   00
 #define DATAO   01
