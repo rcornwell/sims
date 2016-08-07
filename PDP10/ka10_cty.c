@@ -55,7 +55,7 @@ t_stat cty_devio(uint32 dev, uint64 *data);
 DIB cty_dib = { CTY_DEVNUM, 1, cty_devio, NULL};
 
 UNIT cty_unit[] = {
-    { UDATA (&ctyo_svc, TT_MODE_7P, 0), 100 },
+    { UDATA (&ctyo_svc, TT_MODE_7P, 0), 10000 },
     { UDATA (&ctyi_svc, TT_MODE_7P|UNIT_IDLE, 0), 0 },
     };
 
@@ -109,6 +109,7 @@ t_stat cty_devio(uint32 dev, uint64 *data) {
          break;
     case DATAO:
          cty_unit[0].u4 = *data & 0x7f;
+         cty_unit[0].u3 &= ~TEL_RDY;
          cty_unit[0].u3 |= TEL_BSY;
          sim_activate(&cty_unit[0], cty_unit[0].wait);
          break;
@@ -123,11 +124,13 @@ t_stat ctyo_svc (UNIT *uptr)
     t_stat  r;
     int32   ch;
 
+    if (uptr->u4 != 0) {
     ch = sim_tt_outcvt ( uptr->u4, TT_GET_MODE (uptr->flags)) ;
-    if ((r = sim_putchar_s (ch)) != SCPE_OK) {              /* output; error? */
-        sim_activate (uptr, uptr->wait);                    /* try again */
-        return ((r == SCPE_STALL)? SCPE_OK: r);             /* !stall? report */
+    if ((r = sim_putchar_s (ch)) != SCPE_OK) {   /* output; error? */
+        sim_activate (uptr, uptr->wait);               /* try again */
+        return ((r == SCPE_STALL)? SCPE_OK: r);        /* !stall? report */
         }
+    }
     uptr->u3 &= ~TEL_BSY;
     uptr->u3 |= TEL_RDY;
     set_interrupt(CTY_DEVNUM, uptr->u5);
@@ -139,10 +142,10 @@ t_stat ctyi_svc (UNIT *uptr)
     int32 ch;
 
     sim_clock_coschedule (uptr, tmxr_poll);
-                                                          /* continue poll */
-    if ((ch = sim_poll_kbd ()) < SCPE_KFLAG)              /* no char or error? */
+                                                       /* continue poll */
+    if ((ch = sim_poll_kbd ()) < SCPE_KFLAG)           /* no char or error? */
         return ch;
-    if (ch & SCPE_BREAK)                                  /* ignore break */
+    if (ch & SCPE_BREAK)                               /* ignore break */
         return SCPE_OK;
     uptr->u4 = 0177 & sim_tt_inpcvt(ch, TT_GET_MODE (uptr->flags));
     uptr->u4 = ch & 0177;

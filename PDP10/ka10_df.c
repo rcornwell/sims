@@ -55,7 +55,7 @@ int df10_fetch(struct df10 *df) {
       }
       data = M[df->ccw];
       while((data & (WMASK << CSHIFT)) == 0) {
-          if ((data & AMASK) == 0) {
+          if ((data & AMASK) == 0 || (uint32)(data & AMASK) == df->ccw) {
                 df10_finish_op(df,0);
                 return 0;
           }

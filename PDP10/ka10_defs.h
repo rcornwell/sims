@@ -184,7 +184,7 @@ extern DEBTAB crd_debug[];
 #define USERIO  000100        /* 004000 */
 #define USER    000200        /* 010000 */
 #define BYTI    000400        /* 020000 */
-#ifdef PDP6
+#if PDP6
 #define FLTOVR  000000 
 #define PCHNG   001000        /* 040000 */
 #else

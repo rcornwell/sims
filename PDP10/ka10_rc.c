@@ -29,9 +29,6 @@
 
 #if (NUM_DEVS_RC > 0)
 
-#define BUF_EMPTY(u)  (u->hwmark == 0xFFFFFFFF)
-#define CLR_BUF(u)     u->hwmark = 0xFFFFFFFF
-
 #define RC_DEVNUM       0170                    /* 0174 */
 #define NUM_UNITS_RC    4
 
@@ -200,6 +197,8 @@ t_stat rc_devio(uint32 dev, uint64 *data) {
      int          unit;
      int          tmp;
      int          drv;
+     int          cyl;
+     int          dtype;
 
      if (ctlr < 0 || ctlr > NUM_DEVS_RC)
         return SCPE_OK;
@@ -221,19 +220,25 @@ t_stat rc_devio(uint32 dev, uint64 *data) {
          df10->status &= ~07;
          df10->status |= *data & 07;
          df10->status &= ~(RST_MSK & *data);
-         if ((*data & BUSY) && (df10->status & BUSY)) {
+         if ((*data & BUSY) != 0) {
              unit = rc_ipr[ctlr] & 3;
              drv = unit + (ctlr * NUM_UNITS_RC);
              uptr = &rc_unit[drv];
-             sim_cancel(uptr);
-             df10_finish_op(df10, 0);
+             if ((df10->status & BUSY) != 0) {
+                  sim_cancel(uptr);
+                  df10_finish_op(df10, 0);
+             } else {
+                  df10->status &= ~BUSY;
+                  df10_setirq(df10);
+             }
          }
          rc_ipr[ctlr] &= ~SEC_SCTR;
          rc_ipr[ctlr] |= *data & SEC_SCTR;
 
-         if (*data & CCW_COMP) {
+         if ((df10->status & BUSY) != 0 && (*data & CCW_COMP) != 0) {
             df10_writecw(df10);
-         }
+         } else
+            df10->status &= ~CCW_COMP;
          sim_debug(DEBUG_CONO, dptr, "HK %03o CONO %06o PC=%o %06o\n", dev, 
                    (uint32)*data, PC, df10->status);
          break;
@@ -260,21 +265,48 @@ t_stat rc_devio(uint32 dev, uint64 *data) {
          drv = unit + (ctlr * NUM_UNITS_RC);
          uptr = &rc_unit[drv];
          if ((uptr->flags & UNIT_ATT) == 0) {
+            df10->status &= ~BUSY;
             df10->status |= NOT_RDY;
             df10_setirq(df10);
             return SCPE_OK;
          }
          if ((uptr->flags & UNIT_WPRT) && *data & WRITE) {
+            df10->status &= ~BUSY;
             df10->status |= ILL_WR;
             df10_setirq(df10);
             return SCPE_OK;
          }
-         tmp = (uint32)(*data >> 15);
          df10_setup(df10, (uint32)*data);
+         tmp = (uint32)(*data >> 15) & ~07;
+         cyl = (tmp >> 10) & 0777;
+         if (((cyl & 017) > 9) || (((cyl >> 4) & 017) > 9)) {
+              sim_debug(DEBUG_DETAIL, dptr, "HK %d non-bcd cyl %02x\n", 
+                        ctlr, cyl);
+              df10_finish_op(df10, TRK_SEL_E);
+              return SCPE_OK;
+         }
+         cyl = (((cyl >> 4) & 017) * 10) + (cyl & 017) +
+                ((cyl & 0x100) ? 100 : 0);
+         dtype = GET_DTYPE(uptr->flags);
+         if (cyl >= rc_drv_tab[dtype].cyl) {
+              sim_debug(DEBUG_DETAIL, dptr, "HK %d invalid cyl %d %d\n", 
+                       ctlr, cyl, rc_drv_tab[dtype].cyl);
+              df10_finish_op(df10, TRK_SEL_E);
+              return SCPE_OK;
+         }
+         cyl = (tmp >> 3) & 0177;
+         if ((cyl & 017) > 9) {
+              sim_debug(DEBUG_DETAIL, dptr, "HK %d non-bcd seg %02x\n",
+                       ctlr, cyl);
+              df10_finish_op(df10, TRK_SEL_E);
+              return SCPE_OK;
+         }
          uptr->UFLAGS =  tmp | ((*data & WRITE) != 0) | (ctlr << 1);
          uptr->DATAPTR = -1;    /* Set no data */
-         CLR_BUF(uptr);
-         sim_activate(uptr, 200);
+         if ((*data & WRITE) != 0)
+            df10_read(df10);
+         sim_debug(DEBUG_DETAIL, dptr, "HK %d cyl %o\n", ctlr, uptr->UFLAGS);
+         sim_activate(uptr, 100);
         break;
     }
     return SCPE_OK;
@@ -297,18 +329,12 @@ t_stat rc_svc (UNIT *uptr)
    dptr = rc_devs[ctlr];
    /* Check if we need to seek */
    if (uptr->DATAPTR == -1) {
-        if (((cyl & 017) > 10) || (((cyl >> 4) & 017) > 10)) {
-              sim_debug(DEBUG_DETAIL, dptr, "HK %d non-bcd cyl %02x %d %o\n", 
-                        ctlr, cyl, rc_drv_tab[dtype].seg, uptr->UFLAGS);
-              df10_finish_op(df10, TRK_SEL_E);
-              return SCPE_OK;
-        }
         cyl = (((cyl >> 4) & 017) * 10) + (cyl & 017) +
                 ((cyl & 0x100) ? 100 : 0);
         if (cyl >= rc_drv_tab[dtype].cyl) {
               sim_debug(DEBUG_DETAIL, dptr, "HK %d invalid cyl %d %d %o\n", 
                        ctlr, cyl, rc_drv_tab[dtype].cyl, uptr->UFLAGS);
-              df10_finish_op(df10, S_ERROR);
+              df10_finish_op(df10, TRK_SEL_E);
               return SCPE_OK;
         }
         /* Convert segment from BCD to binary */
@@ -342,12 +368,15 @@ t_stat rc_svc (UNIT *uptr)
          df10->status |= SCRCHCMP;
     }
     if (wr) {
-        r = df10_read(df10);
         rc_buf[ctlr][uptr->DATAPTR] = df10->buf;
+        r = df10_read(df10);
     } else {
         df10->buf = rc_buf[ctlr][uptr->DATAPTR];
         r = df10_write(df10);
     } 
+    sim_debug(DEBUG_DATA, dptr, "Xfer %d %012llo %06o %06o\n", uptr->DATAPTR, df10->buf,
+             df10->wcr, df10->cda);
+
     uptr->DATAPTR++;
     if (uptr->DATAPTR >= seg_size || r == 0 ) {
         /* Check if writing */
@@ -364,7 +393,7 @@ t_stat rc_svc (UNIT *uptr)
              }
              da = ((cyl * rc_drv_tab[dtype].seg) + seg) * seg_size;
              sim_debug(DEBUG_DETAIL, dptr, "HK %d Write %d %d %d %x %d\n",
-                  ctlr, da, cyl, seg, uptr->UFLAGS << 1, uptr->hwmark );
+                  ctlr, da, cyl, seg, uptr->UFLAGS << 1, uptr->DATAPTR );
              err = sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
              wc = sim_fwrite(&rc_buf[ctlr][0],sizeof(uint64), 
                         seg_size, uptr->fileref);
@@ -394,7 +423,7 @@ t_stat rc_svc (UNIT *uptr)
         uptr->UFLAGS = (uptr->UFLAGS & 7) + (seg << 3) + (cyl << 10);
     }
     if ((df10->status & PI_ENABLE) == 0) {
-        sim_activate(uptr, 25);
+        sim_activate(uptr, 20);
     }
     return SCPE_OK;
 }
@@ -427,6 +456,8 @@ rc_reset(DEVICE * dptr)
          uptr++;
     }
     for (ctlr = 0; ctlr < NUM_DEVS_RC; ctlr++) {
+        rc_ipr[ctlr] = 0;
+        rc_df10[ctlr].status = 0;
         rc_df10[ctlr].devnum = rc_dib[ctlr].dev_num;
         rc_df10[ctlr].nxmerr = 8;
         rc_df10[ctlr].ccw_comp = 5;
@@ -491,14 +522,14 @@ return detach_unit (uptr);
 t_stat rc_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
 fprintf (st, "RD10/RM10  Disk Pack Drives (RC)\n\n");
-fprintf (st, "The RC controller implements the Massbus family of large disk drives.  RP\n");
-fprintf (st, "options include the ability to set units write enabled or write locked, to\n");
-fprintf (st, "set the drive type to one of six disk types or autosize, and to write a DEC\n");
-fprintf (st, "standard 044 compliant bad block table on the last track.\n\n");
+fprintf (st, "The RC controller implements the RC-10 disk controller that talked\n");
+fprintf (st, "to either RD10 mountable pack or RM10 drum drives.\n");
+fprintf (st, "Options include the ability to set units write enabled or write locked, to\n");
+fprintf (st, "set the drive type to one of two disk types\n\n");
 fprint_set_help (st, dptr);
 fprint_show_help (st, dptr);
 fprintf (st, "\nThe type options can be used only when a unit is not attached to a file.\n");
-fprintf (st, "The RP device supports the BOOT command.\n");
+fprintf (st, "The RC device supports the BOOT command.\n");
 fprint_reg_help (st, dptr);
 return SCPE_OK;
 }

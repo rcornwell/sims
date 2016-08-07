@@ -182,6 +182,7 @@ int     private_page;                         /* Access to private page */
 uint64  fault_data;                           /* Fault data from last fault */
 int32   apr_serial = -1;                      /* CPU Serial number */
 int     trap_flag;                            /* Last instruction was trapped */
+int     last_page;                            /* Last page mapped */
 #endif
 
 char    dev_irq[128];                         /* Pending irq by device */
@@ -427,7 +428,7 @@ int opflags[] = {
         /* PUSHJ */       /* PUSH */        /* POP */       /* POPJ */
         FAC|SAC,          FAC|FCE|SAC,      FAC|SAC,        FAC|SAC,
         /* JSR */         /* JSP */         /* JSA */       /* JRA */
-        SCE,              SAC,              FBR|SCE,        0,
+        0,                SAC,              FBR|SCE,        0,
         /* ADD */         /* ADDI */        /* ADDM */      /* ADDB */
         FBR|SAC|FCE,      FBR|SAC,          FBR|FCEPSE,     FBR|SAC|FCEPSE,
         /* SUB */         /* SUBI */        /* SUBM */      /* SUBB */
@@ -702,7 +703,8 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
     switch(dev & 03) {
     case CONI:
         /* Complement of vpn */
-        *data = ((uint64)pag_reload) | 040LL;
+        *data = (uint64)(pag_reload ^ 040);
+        *data |= ((uint64)last_page) << 8;
         *data |= (uint64)((apr_serial == -1) ? DEF_SERIAL : apr_serial) << 26;
         sim_debug(DEBUG_CONI, &cpu_dev, "CONI PAG %012llo\n", *data);
         break;
@@ -710,7 +712,7 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
      case CONO:
         /* Set Stack AC and Page Table Reload Counter */
         ac_stack = (*data >> 9) & 0760;
-        pag_reload = *data & 037;
+        pag_reload = (*data & 037) | (pag_reload & 040);
         sim_debug(DEBUG_CONO, &cpu_dev, "CONI PAG %012llo\n", *data);
         break;
 
@@ -726,6 +728,7 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
        user_addr_cmp = (res & 00020000000000LL) != 0;
        small_user =    (res & 00040000000000LL) != 0;
        fm_sel = (uint8)(res >> 29) & 060;
+       pag_reload = 0;
        sim_debug(DEBUG_DATAIO, &cpu_dev, 
                     "DATAO PAG %012llo ebr=%06o ubr=%06o\n", 
                     *data, eb_ptr, ub_ptr);
@@ -759,6 +762,8 @@ void check_apr_irq() {
          if (flg)
              set_interrupt(0, apr_irq);
      }
+     if (clk_en && clk_flg)
+         set_interrupt(4, clk_irq);
 }
 
 
@@ -858,6 +863,8 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
         /* Set trap conditions */
         res = *data;
         clk_irq = apr_irq = res & 07;
+        clr_interrupt(0);
+        clr_interrupt(4);
         if (res & 010)
             FLAGS &= ~OVR;
         if (res & 020)
@@ -870,10 +877,8 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
             fov_irq = 1;
         if (res & 0400)
             fov_irq = 0;
-        if (res & 01000) {
+        if (res & 01000) 
             clk_flg = 0;
-            clr_interrupt(4);
-        }
         if (res & 02000)
             clk_en = 1;
         if (res & 04000)
@@ -988,12 +993,18 @@ t_stat null_dev(uint32 dev, uint64 *data) {
  */
 int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
     uint64   data;
-    int      base;
+    int      base = ub_ptr;
     int      page = addr >> 9;
     int      uf = (FLAGS & USER) != 0;
 
     if (page_fault)
         return 0;
+
+    /* If fetching byte data, use write access */
+    if (BYF5 && (IR & 06) == 6) 
+        wr = 1;
+
+    wr |= modify;
 
     if (flag) 
         uf = 0;
@@ -1002,11 +1013,10 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
         uf = (FLAGS & USERIO) != 0;
 
     if (uf) {
-        base = ub_ptr;
-        if (small_user && (addr & 0340000) != 0) {
-            fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 28) | 060LL;
+        if (small_user && (page & 0340) != 0) {
+            fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 27) | 020LL;
             page_fault = 1;
-//            fprintf(stderr, " small fault\n\r");
+            fprintf(stderr, " %03o small fault\n\r", page);
             return 0;
         }
     } else {
@@ -1016,15 +1026,20 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
             return 1;
         }
         /* Pages 340-377 via UBR */
- //       fprintf(stderr, "xlat %06o %03o ", addr, page >> 1);
+  //      fprintf(stderr, "xlat %06o %03o ", addr, page >> 1);
         if ((page & 0740) == 0340) {
-            base = ub_ptr;
             page += 01000 - 0340;
         /* Pages 400-777 via EBR */
         } else if (page & 0400) {
             base = eb_ptr;
         } else {
-  //      fprintf(stderr, "\n\r");
+    //    fprintf(stderr, "\n\r");
+            if (!flag && ((FLAGS & PUBLIC) != 0)) {
+               /* Handle public violation */
+                fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 27) | 021LL;
+                private_page = 1;
+               fprintf(stderr, " public");
+            }
             *loc = addr;
             return 1;
         }
@@ -1034,19 +1049,19 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
     if ((page & 1) == 0)
        data >>= 18;
     data &= RMASK;
-//        fprintf(stderr, " -> %06llo wr=%o ", data, wr);
-    *loc = ((data & 037777) << 9) + (addr & 0777);
-//        fprintf(stderr, " -> %06o", *loc);
+ //       fprintf(stderr, " -> %06llo wr=%o ", data, wr);
+    *loc = ((data & 017777) << 9) + (addr & 0777);
+  //      fprintf(stderr, " -> %06o\n", *loc);
     if (!flag && ((FLAGS & PUBLIC) != 0) && ((data & 0200000) == 0)) {
         /* Handle public violation */
-        fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 28) | 061LL;
+        fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 27) | 021LL;
         private_page = 1;
-//        fprintf(stderr, " public");
+   //     fprintf(stderr, " public");
     }
     if (cur_context && ((data & 0200000) != 0))
         FLAGS |= PUBLIC;
     if ((data & LSIGN) == 0 || (wr & ((data & 0100000) == 0))) {
-        fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 28) | 020LL;
+        fault_data = ((((uint64)(addr))<<9) | ((uint64)(uf) << 27)) & LMASK; 
         fault_data |= (data & 0400000) ? 010LL : 0LL;   /* A */
         fault_data |= (data & 0100000) ? 004LL : 0LL;   /* W */
         fault_data |= (data & 0040000) ? 002LL : 0LL;   /* S */
@@ -1054,12 +1069,11 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
         page_fault = 1;
         fprintf(stderr, "xlat %06o %03o ", addr, page >> 1);
         fprintf(stderr, " %06o %03o %012llo ", base, page, data);
-        fprintf(stderr, " -> %06llo wr=%o ", data, wr);
+        fprintf(stderr, " -> %06llo wr=%o PC=%06o ", data, wr, PC);
         fprintf(stderr, " fault\n\r");
- //       fprintf(stderr, " fault\n\r");
         return 0;
     }
-  //      fprintf(stderr, "\n\r");
+//        fprintf(stderr, "\n\r");
     return 1;
 }
 
@@ -1311,26 +1325,6 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
          break;
     }
 
-#if KI | KL
-    /* Handle page fault and traps */
-    if (page_enable && (page_fault || private_page || (FLAGS & (TRP1|TRP2)))) {
-        if (page_fault || private_page) {
-            page_fault = private_page = 0;
-            AB = ub_ptr + (FLAGS & USER) ? 0427 : 0426;
-            MB = fault_data;
-            Mem_write_nopage();
-            AB = 0420;
-        } else {
-            AB = 0420 + ((FLAGS & (TRP1|TRP2)) >> 2);
-            FLAGS &= ~(TRP1|TRP2);
-        }
-        f_pc_inh = 1;
-        trap_flag = 1;
-        AB += (FLAGS & USER) ? ub_ptr : eb_ptr;
-        Mem_read_nopage();
-        goto no_fetch;
-    }
-#endif
 
     /* Normal instruction */
     if (f_load_pc) {
@@ -1339,6 +1333,7 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
 #if KI | KL
         xct_flag = 0;
         trap_flag = 0;
+        modify = 0;
 #endif
     }
 
@@ -1346,12 +1341,15 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
 #if !(KI | KL)
 fetch:
 #endif
-       Mem_read(pi_cycle | uuo_cycle, 1);
+       if (Mem_read(pi_cycle | uuo_cycle, 1))
+           goto last;
 #if KI | KL
 no_fetch:
 #endif
        IR = (MB >> 27) & 0777;
        AC = (MB >> 23) & 017;
+       AD = MB;  /* Save for historical sake */
+
        i_flags = opflags[IR];
        BYF5 = 0;
     }
@@ -1362,28 +1360,28 @@ no_fetch:
         AB = AR & RMASK;
     }
 
-    /* Update history */
-    if (hst_lnt && PC > 020 && (PC & 0777774) != 0472174 && 
-            (PC & 0777700) != 023700 && (PC != 0527154)) {
-            hst_p = hst_p + 1;
-            if (hst_p >= hst_lnt) {
-                    hst_p = 0;
-//                    reason = STOP_IBKPT;
-            }
-            hst[hst_p].pc = HIST_PC | ((BYF5)? (HIST_PC2|PC) : AB);
-            hst[hst_p].ea = AB;
-            hst[hst_p].ir = MB;
-            hst[hst_p].flags = (FLAGS << 5) |(clk_flg << 2) | (nxm_flag << 1) 
-#if KA
-                                | (mem_prot << 4) | (push_ovf << 3)
-#endif
-                       ;
-            hst[hst_p].ac = get_reg(AC);
+#if KI | KL
+    /* Handle page fault and traps */
+    if (page_enable && trap_flag == 0 && (FLAGS & (TRP1|TRP2))) {
+        AB = 0420 + ((FLAGS & (TRP1|TRP2)) >> 2);
+        trap_flag = FLAGS & (TRP1|TRP2);
+        FLAGS &= ~(TRP1|TRP2);
+        f_pc_inh = 1;
+        pi_cycle = 1;
+        AB += (FLAGS & USER) ? ub_ptr : eb_ptr;
+        Mem_read_nopage();
+        goto no_fetch;
     }
+#endif
+
 
     /* Handle indirection repeat until no longer indirect */
     do {
-         if (pi_enable & !pi_cycle & pi_pending) {
+         if (pi_enable & !pi_cycle & pi_pending 
+#if KI | KL
+                             & trap_flag == 0
+#endif
+                             ) {
             pi_rq = check_irq_level();
          }
          ind = (MB & 020000000) != 0;
@@ -1407,10 +1405,28 @@ no_fetch:
          }
     } while (ind & !pi_rq);
 
-    /* Update final address into history. */
-    if (hst_lnt) {
-        hst[hst_p].ea = AB;
+    /* Update history */
+    if (hst_lnt && PC > 020 && (PC & 0777774) != 0472174 && 
+            (PC & 0777700) != 023700 && (PC != 0527154)) {
+            hst_p = hst_p + 1;
+            if (hst_p >= hst_lnt) {
+                    hst_p = 0;
+//                    reason = STOP_IBKPT;
+            }
+            hst[hst_p].pc = HIST_PC | ((BYF5)? (HIST_PC2|PC) : PC);
+            hst[hst_p].ea = AB;
+            hst[hst_p].ir = AD;
+            hst[hst_p].flags = (FLAGS << 5) |(clk_flg << 2) | (nxm_flag << 1) 
+#if KA
+                                | (mem_prot << 4) | (push_ovf << 3)
+#endif
+                       ;
+            hst[hst_p].ac = get_reg(AC);
     }
+//    /* Update final address into history. */
+//    if (hst_lnt) {
+//        hst[hst_p].ea = AB;
+//    }
 
     /* If there is a interrupt handle it. */
     if (pi_rq) {
@@ -1458,7 +1474,7 @@ fetch_opr:
     sac_inh = 0;
 #if KI | KL
     modify = 0;
-    f_pc_inh = trap_flag;
+    f_pc_inh = (trap_flag != 0);
 #else
     f_pc_inh = 0;
 #endif
@@ -1522,10 +1538,11 @@ unasign:
               AB = ub_ptr | 0424;
               Mem_write_nopage();
               AB |= 1;
-              MB = (FLAGS << 23) | ((PC + 1) & RMASK);
+              MB = (FLAGS << 23) | ((PC + (trap_flag == 0)) & RMASK);
               Mem_write_nopage();
+              FLAGS &= ~ (BYTI|ADRFLT|TRP1|TRP2);
               AB = ub_ptr | 0430;
-              if (trap_flag) 
+              if (trap_flag != 0) 
                   AB |= 1;
               if (FLAGS & PUBLIC)
                   AB |= 2;
@@ -1763,6 +1780,9 @@ dpnorm:
 
     case 0120: /* DMOVE */
               AB = (AB + 1) & RMASK;
+#if KI | KL
+              modify = 0;
+#endif
               if (Mem_read(0, 0))
                    goto last;
               MQ = MB;
@@ -1770,6 +1790,9 @@ dpnorm:
 
     case 0121: /* DMOVN */
               AB = (AB + 1) & RMASK;
+#if KI | KL
+              modify = 0;
+#endif
               if (Mem_read(0, 0))
                    goto last;
               MQ = ((MB & CMASK) ^ CMASK) + 1;   /* Low */
@@ -1894,12 +1917,12 @@ unasign:
     case 0134: /* ILDB */
     case 0136: /* IDPB */
               if ((FLAGS & BYTI) == 0) {      /* BYF6 */
-                  if (Mem_read(0, 1)) 
-                      goto last;
-                  AR = MB;
 #if KI | KL
                   modify = 1;
 #endif
+                  if (Mem_read(0, 1)) 
+                      goto last;
+                  AR = MB;
                   SC = (AR >> 24) & 077;
                   SCAD = (((AR >> 30) & 077) + (0777 ^ SC) + 1) & 0777;
                   if (SCAD & 0400) {
@@ -2717,11 +2740,17 @@ fxnorm:
                       }
                   }
                   AB = (AR >> 18) & RMASK;
-                  if (Mem_read(0, 0))
-                       break;
+                  if (Mem_read(0, 0)) {
+                       f_pc_inh = 1;
+                       set_reg(AC, AR);
+                       goto last;
+                  }
                   AB = (AR & RMASK);
-                  if (Mem_write(0, 0))
-                       break;
+                  if (Mem_write(0, 0)) {
+                       f_pc_inh = 1;
+                       set_reg(AC, AR);
+                       goto last;
+                  }
                   AD = (AR & RMASK) + CM(BR) + 1;
                   AR = AOB(AR);
               } while ((AD & C1) == 0);
@@ -2746,13 +2775,17 @@ fxnorm:
               break;
 
     case 0254: /* JRST */      /* AR Frm PC */
-              PC = AR & RMASK;
               if (uuo_cycle | pi_cycle) {
                  FLAGS &= ~USER; /* Clear USER */
               }
               /* JEN */
               if (AC & 010) { /* Restore interrupt level. */
+#if KI | KL
+                 if ((FLAGS & (USER|USERIO)) == USER ||
+                     (FLAGS & (USER|PUBLIC)) == PUBLIC) { 
+#else
                  if ((FLAGS & (USER|USERIO)) == USER) {
+#endif
                       goto muuo;
                  } else {
                       pi_restore = 1;
@@ -2760,23 +2793,30 @@ fxnorm:
               }
               /* HALT */
               if (AC & 04) {
+#if KI | KL
+                 if ((FLAGS & (USER|USERIO)) == USER ||
+                     (FLAGS & (USER|PUBLIC)) == PUBLIC) { 
+#else
                  if ((FLAGS & (USER|USERIO)) == USER) {
+#endif
                       goto muuo;
                  } else {
                       reason = STOP_HALT;
                  }
               }
+              PC = AR & RMASK;
               /* JRSTF */
               if (AC & 02) {
                  FLAGS &= ~(OVR|NODIV|FLTUND|BYTI|FLTOVR|CRY1|CRY0);
                  AR >>= 23; /* Move into position */
                  /* If executive mode, copy USER and UIO */
-                 if ((FLAGS & USER) == 0)
-                    FLAGS |= AR & (USER|USERIO);
+                 if ((FLAGS & (PUBLIC|USER)) == 0)
+                    FLAGS |= AR & (USER|USERIO|PUBLIC);
                  /* Can always clear UIO */
                  if ((AR & USERIO) == 0)
                     FLAGS &= ~USERIO;
-                 FLAGS |= AR & (OVR|NODIV|FLTUND|BYTI|FLTOVR|CRY1|CRY0|PUBLIC);
+                 FLAGS |= AR & (OVR|NODIV|FLTUND|BYTI|FLTOVR|CRY1|CRY0|\
+                                 TRP1|TRP2|PUBLIC);
                  check_apr_irq();
 
               }
@@ -2794,8 +2834,10 @@ fxnorm:
     case 0255: /* JFCL */
               if ((FLAGS >> 9) & AC) {
                   PC = AR & RMASK;
-                  f_pc_inh = 1;
+              } else {
+                  PC = (PC + 1) & RMASK;
               }
+              f_pc_inh = 1;
               FLAGS &=  017777 ^ (AC << 9);
               break;
 
@@ -2811,6 +2853,8 @@ fxnorm:
     case 0257:  /* MAP */
 #if KI | KL
               f = AB >> 9;
+              last_page = ((f ^ 0777) << 1); 
+              pag_reload &= 037;
               if ((FLAGS & USER) != 0) {
                   /* Check if small user and outside range */
                   if (small_user && (f & 0340) != 0) {
@@ -2835,24 +2879,34 @@ fxnorm:
                       AR = 0020000LL + f; /* direct map */
                       break;
                   }
+                  last_page |= 1;
               }
               AB = (AR + (f >> 1)) & RMASK;
+              pag_reload = ((pag_reload + 1) & 037) | 040;
               if (Mem_read(0, 0))
                   goto last;
               AR = MB;
               if ((f & 1) == 0)
                  AR >>= 18;
-              AR &= 0357777LL;
+              if ((AR & LSIGN) == 0) {
+                  AR = 0437777LL; /* Return invalid if not accessable */
+              } else {
+                  AR &= 0357777LL;
+                  if ((AR & 0100000LL) == 0)
+                      AR |= LSIGN;
+              }
 #endif
               break;
 
               /* Stack, JUMP */
     case 0260:  /* PUSHJ */     /* AR Frm PC */
               MB = ((uint64)(FLAGS) << 23) | ((PC + !pi_cycle) & RMASK);
-              FLAGS &= ~ (BYTI|ADRFLT|TRP1|TRP2);
               BR = AB;
               AR = AOB(AR);
               AB = AR & RMASK;
+              if (Mem_write(uuo_cycle | pi_cycle, 0))
+                 goto last;
+              FLAGS &= ~ (BYTI|ADRFLT|TRP1|TRP2);
               if (AR & C1) {
 #if KI | KL
                  if (!pi_cycle) 
@@ -2866,7 +2920,6 @@ fxnorm:
               if (uuo_cycle | pi_cycle) {
                  FLAGS &= ~(USER|PUBLIC); /* Clear USER */
               }
-              Mem_write(uuo_cycle | pi_cycle, 0);
               PC = BR & RMASK;
               f_pc_inh = 1;
               break;
@@ -2929,14 +2982,16 @@ fxnorm:
               break;
 
     case 0264: /* JSR */       /* AR Frm PC */
-              AD = ((uint64)(FLAGS) << 23) |
+              MB = ((uint64)(FLAGS) << 23) |
                       ((PC + !pi_cycle) & RMASK);
-              FLAGS &= ~ (BYTI|ADRFLT|TRP1|TRP2);
               if (uuo_cycle | pi_cycle) {
                  FLAGS &= ~(USER|PUBLIC); /* Clear USER */
               }
-              PC = (AR + pi_cycle) & RMASK;
-              AR = AD;
+              if (Mem_write(0, 0))
+                  goto last;
+              FLAGS &= ~ (BYTI|ADRFLT|TRP1|TRP2);
+              PC = (AR + 1) & RMASK;
+              f_pc_inh = 1;
               break;
 
     case 0265: /* JSP */       /* AR Frm PC */
@@ -3464,7 +3519,13 @@ test_op:
     case 0764: case 0765: case 0766: case 0767:
     case 0770: case 0771: case 0772: case 0773:
     case 0774: case 0775: case 0776: case 0777:
+#if KI
+              if (!pi_cycle && ((FLAGS & (USER|USERIO)) == USER && 
+                    (IR & 040) == 0 || (FLAGS & (USER|PUBLIC)) == PUBLIC)) { 
+
+#else
               if ((FLAGS & (USER|USERIO)) == USER && !pi_cycle) {
+#endif
                   /* User and not User I/O */
                   goto muuo;
               } else {
@@ -3545,8 +3606,24 @@ test_op:
         hst[hst_p].fmb = AR;
     }
 
-
 last:
+#if KI | KL
+    /* Handle page fault and traps */
+    if (page_enable && (page_fault || private_page)) {
+        page_fault = private_page = 0;
+        AB = ub_ptr + ((FLAGS & USER) ? 0427 : 0426);
+        MB = fault_data;
+        Mem_write_nopage();
+        FLAGS |= trap_flag & (TRP1|TRP2);
+        trap_flag = 1;
+        AB = 0420;
+        f_pc_inh = 1;
+        pi_cycle = 1;
+        AB += (FLAGS & USER) ? ub_ptr : eb_ptr;
+        Mem_read_nopage();
+        goto no_fetch;
+    }
+#endif
 
     if (!f_pc_inh && !pi_cycle) {
         PC = (PC + 1) & RMASK;

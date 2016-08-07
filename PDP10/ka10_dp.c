@@ -52,11 +52,12 @@
 #define DATAPTR         u4              /* data pointer */
 #define UFLAGS          u5              /* Function */
 #define STATUS          u6              /* Drive status */
+#define SECT_CNT        up7             /* Sector counter */
+#define CONTROL         007
+#define CMD_MASK        070
 #define SEEK_DONE       0100            /* Seek finished */
 #define SEEK_STATE      0200            /* Seek in progress */
 #define DONE            0400            /* Done bit */
-#define CMD_MASK        070
-#define CONTROL         007
 
 
 /* CONI/CONO Flags */
@@ -101,6 +102,7 @@
 #define NO      6
 #define RC      7
 
+/* DATAI Flags */
 #define ATTN            0000000000776LL
 #define DEFECT          0000000001000LL
 #define SEL_RP03        0000000002000LL
@@ -328,6 +330,7 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
      int            unit;
      int            cyl;
      int            tmp;
+     static int     sect_count;
 
      if (ctlr < 0 || ctlr > NUM_DEVS_DP)
         return SCPE_OK;
@@ -343,15 +346,15 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
 #endif
         sim_debug(DEBUG_CONI, dptr, "DP %03o CONI %012llo %d PC=%o\n", dev, 
                            *data, ctlr, PC);
-        return SCPE_OK;
+        break;
 
      case CONO:
          clr_interrupt(dev);
          df10->status &= ~07LL;
          df10->status |= *data & 07LL;
-         if (*data & BUSY && df10->status & BUSY) {
-                /* Stop controller */
-             sim_cancel(uptr);
+         if (*data & BUSY) {
+             /* Stop controller */
+             uptr->STATUS &= ~BUSY;
              df10_finish_op(df10, 0);
          }
          /* Clear flags */
@@ -379,7 +382,7 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
          }
          sim_debug(DEBUG_CONO, dptr, "DP %03o CONO %06o %d PC=%o %06o\n", dev,
                  (uint32)*data, ctlr, PC, df10->status);
-         return SCPE_OK;
+         break;
 
      case DATAI:
          res = (uint64)(unit) << 33;
@@ -394,6 +397,10 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
              res |= ((uint64)(cyl & 0377)) << 25;
              if (cyl & 0400) 
                 res |= SEL_CYL256;
+             if (sect_count > 20)
+                sect_count = 0;
+             res |= SEL_SEC & (uint64)(sect_count << 13);
+             sect_count++;
              if ((uptr->UFLAGS & SEEK_STATE) == 0)  
                 res |= ON_CYL;
              if (uptr->flags & UNIT_WPRT) 
@@ -405,10 +412,10 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
                 res |= 0400>>unit;
             uptr++;
          }
-         sim_debug(DEBUG_DATAIO, dptr, "DP %03o DATI %012llo %d  PC=%o F=%o\n", 
-                 dev, res, ctlr, PC, uptr->UFLAGS);
+         sim_debug(DEBUG_DATAIO, dptr, "DP %03o DATI %012llo %d  PC=%o F=%o %o\n", 
+                 dev, res, ctlr, PC, uptr->UFLAGS, sect_count);
          *data = res;
-         return SCPE_OK;
+         break;
 
      case DATAO:
          sim_debug(DEBUG_DATAIO, dptr, "DP %03o DATO %012llo, %d PC=%o\n", 
@@ -450,12 +457,12 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
                 df10_setirq(df10);
                 return SCPE_OK;
              }
-             //uptr->STATUS &= ~(SRC_DONE|END_CYL);
              uptr->UFLAGS = ((*data & (SURFACE|SECTOR)) >> 3) | (cyl << 20) 
                               | (tmp << 3) | ctlr;
              uptr->DATAPTR = 0;      /* Set no data */
              CLR_BUF(uptr);
              df10_setup(df10, (uint32)*data);
+             uptr->STATUS |= BUSY;
              break;
 
          case WH:
@@ -470,6 +477,7 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
 
          case RC:  
              cyl = 0;
+             uptr->STATUS |= NOT_RDY;
          case SK:   
              if ((uptr->flags & UNIT_ATT) == 0) {
                 uptr->STATUS |= NOT_RDY;
@@ -502,10 +510,9 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
              }
              return SCPE_OK;
          }
-         sim_activate(uptr, 100);
-         return SCPE_OK;
+         sim_activate(uptr, 150);
     }
-    return SCPE_OK; /* Unreached */
+    return SCPE_OK; 
 }
 
 
@@ -513,10 +520,10 @@ t_stat dp_svc (UNIT *uptr)
 {
    int         dtype = GET_DTYPE(uptr->flags);
    int         ctlr  = uptr->UFLAGS & 03;
-   int         cyl   = (uptr->UFLAGS >> 20) & 0777;
    int         cmd   = (uptr->UFLAGS & 070) >> 3;
    int         sect  = (uptr->UFLAGS >> 9);
    int         surf  = (sect >> 5) & 037;
+   int         cyl   = (uptr->UFLAGS >> 20) & 0777;
    DEVICE      *dptr = dp_devs[ctlr];
    struct df10 *df10 = &dp_df10[ctlr];
    int diff, diffs, wc;
@@ -532,6 +539,7 @@ t_stat dp_svc (UNIT *uptr)
                  sim_debug(DEBUG_DETAIL, dptr, 
                        "DP %d cmd=%o cyl=%d (%o) sect=%d surf=%d %d\n",
                         ctlr, uptr->UFLAGS, cyl, cyl, sect, surf,uptr->CUR_CYL);
+                uptr->STATUS |= SRC_DONE;
                 if (uptr->STATUS & END_CYL) {
                      uptr->UFLAGS |= DONE;
                      df10_finish_op(df10, 0);
@@ -555,6 +563,10 @@ t_stat dp_svc (UNIT *uptr)
                      df10_finish_op(df10, 0);
                      return SCPE_OK;
                 }
+                if ((uptr->STATUS & BUSY) == 0) {
+                    df10_finish_op(df10, 0);
+                    return SCPE_OK;
+                }
                 if (cmd != WR) {
                     /* Read the block */
                     int da = ((cyl * dp_drv_tab[dtype].surf + surf) 
@@ -562,7 +574,6 @@ t_stat dp_svc (UNIT *uptr)
                     sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
                     wc = sim_fread (&dp_buf[ctlr][0], sizeof(uint64), RP_NUMWD,
                            uptr->fileref);
-                    uptr->STATUS |= SRC_DONE;
                     for (; wc < RP_NUMWD; wc++)
                         dp_buf[ctlr][wc] = 0;
                     uptr->hwmark = RP_NUMWD;
@@ -583,8 +594,10 @@ t_stat dp_svc (UNIT *uptr)
                     }
                 } else {
                     uptr->DATAPTR = 0;
-                    CLR_BUF(uptr);
+                    uptr->hwmark = 0;
                 }
+                sim_activate(uptr, 50);
+                return SCPE_OK;
            }
            switch(cmd) {
            case WR:
@@ -594,8 +607,6 @@ t_stat dp_svc (UNIT *uptr)
                dp_buf[ctlr][uptr->DATAPTR] = df10->buf;
                break;
            case RV:
-               r = 1;
-               break;
            case RD:
                df10->buf = dp_buf[ctlr][uptr->DATAPTR];
                r = df10_write(df10);
@@ -635,8 +646,10 @@ t_stat dp_svc (UNIT *uptr)
            }
            if (r)
                sim_activate(uptr, 25);
-           else
+           else {
+               uptr->STATUS &= ~(SRC_DONE|BUSY);
                uptr->UFLAGS |= DONE;
+           }
            break;    
 
     case CL:
@@ -653,20 +666,20 @@ t_stat dp_svc (UNIT *uptr)
                if (diff == 0) {
                    uptr->UFLAGS |= SEEK_DONE;
                    uptr->UFLAGS &= ~SEEK_STATE;
-                   uptr->STATUS &= ~BUSY;
+                   uptr->STATUS &= ~(BUSY|NOT_RDY);
                    df10_setirq(df10);
                } else if (diff < 10 && diff > -10) {
                    uptr->CUR_CYL += diffs;
                    if (uptr->CUR_CYL < 0) {
                        uptr->UFLAGS |= SEEK_DONE;
                        uptr->UFLAGS &= ~SEEK_STATE;
-                       uptr->STATUS &= ~BUSY;
+                       uptr->STATUS &= ~(BUSY|NOT_RDY);
                        uptr->CUR_CYL = 0;
                        df10_setirq(df10);
                    } else if (uptr->CUR_CYL > dp_drv_tab[dtype].cyl) {
                        uptr->UFLAGS |= SEEK_DONE;
                        uptr->UFLAGS &= ~SEEK_STATE;
-                       uptr->STATUS &= ~BUSY;
+                       uptr->STATUS &= ~(BUSY|NOT_RDY);
                        uptr->CUR_CYL = dp_drv_tab[dtype].cyl;
                        df10_setirq(df10);
                    } else
@@ -714,6 +727,7 @@ dp_reset(DEVICE * dptr)
          uptr++;
     }
     for (ctlr = 0; ctlr < NUM_DEVS_DP; ctlr++) {
+        dp_df10[ctlr].status = 0;
         dp_df10[ctlr].devnum = dp_dib[ctlr].dev_num;
         dp_df10[ctlr].nxmerr = 12;
         dp_df10[ctlr].ccw_comp = 5;
@@ -782,10 +796,9 @@ t_stat dp_detach (UNIT *uptr)
 t_stat dp_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
 fprintf (st, "RP10 RP01/2/3  Disk Pack Drives (DP)\n\n");
-fprintf (st, "The DP controller implements the Massbus family of large disk drives.  RP\n");
+fprintf (st, "The DP controller implements the RP10 disk drives.  RP\n");
 fprintf (st, "options include the ability to set units write enabled or write locked, to\n");
-fprintf (st, "set the drive type to one of six disk types or autosize, and to write a DEC\n");
-fprintf (st, "standard 044 compliant bad block table on the last track.\n\n");
+fprintf (st, "set the drive type to one of three disk types.\n");
 fprint_set_help (st, dptr);
 fprint_show_help (st, dptr);
 fprintf (st, "\nThe type options can be used only when a unit is not attached to a file.\n");
