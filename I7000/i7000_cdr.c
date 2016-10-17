@@ -236,7 +236,7 @@ cdr_srv(UNIT *uptr) {
         }
 #ifdef I7070
         /* Check if load card. */
-        if (uptr->capac && (data->image[uptr->capac] & 0x800)) {
+        if (uptr->capac && (data->image[uptr->capac-1] & 0x800)) {
              uptr->u5 |= URCSTA_LOAD;
         } else {
              uptr->u5 &= ~URCSTA_LOAD;
@@ -360,14 +360,22 @@ cdr_getload(FILE *st, UNIT *uptr, int32 v, CONST void *desc)
 t_stat
 cdr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-   fprintf (st, "Card Reader\n\n");
+   fprintf (st, "%s\n\n", cdr_description(dptr));
+   sim_card_attach_help(st, dptr, uptr, flag, cptr);
    fprintf (st, "The system supports up to two card readers.\n");
 #ifdef I7070
-   fprintf (st, " Atten and LCOL\n");
+   fprintf (st, "Unit record devices can be configured to interrupt the CPU on\n");
+   fprintf (st, "one of two priority channels A or B, to set this\n\n");
+   fprintf (st, "    sim> set cp attena     to set device to raise Atten A\n\n");
+   fprintf (st, "The 7500 Card reader supported a load mode, this was\n");
+   fprintf (st, "selected by use of a 12 punch in a given column. When this\n");
+   fprintf (st, "was seen the card was read into 8 words\n");
+   fprintf (st, "    sim> set cp lcol=72    sets column to select load mode\n\n");
 #endif
 #ifdef I7010
-   fprintf (st, " channel\n");
-#endif   
+   fprintf (st, "The card punch could be attached to either channel\n\n");
+   fprintf (st, "    sim> set cp chan=1     to set the punch on channel 1\n\n");
+#endif
    fprint_set_help(st, dptr);
    fprint_show_help(st, dptr);
    return SCPE_OK;
@@ -376,7 +384,15 @@ cdr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 const char *
 cdr_description(DEVICE *dptr)
 {
-   return "Card Reader";
+#ifdef I7010
+   return "1402 Card Punch";
+#endif
+#ifdef I7070
+   return "7500 Card Reader";
+#endif
+#ifdef I7080
+   return "711 Card Reader";
+#endif
 }
 
 #endif

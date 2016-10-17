@@ -133,8 +133,7 @@ UNIT stack_unit[] = {
 DEVICE stack_dev = {
     "STKR", stack_unit, NULL, NULL,
     NUM_DEVS_CDP * 10, 10, 31, 1, 8, 7,
-    NULL, NULL, NULL,
-    NULL, NULL, NULL
+    NULL, NULL, NULL, NULL, &sim_card_attach, &sim_card_detach
     };
 #endif
 
@@ -310,10 +309,22 @@ cdp_detach(UNIT * uptr)
 t_stat
 cdp_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-   fprintf (st, "Card Punch\n\n");
+   fprintf (st, "%s\n\n", cdp_description(dptr));
+   sim_card_attach_help(st, dptr, uptr, flag, cptr);
 #ifdef STACK_DEV
-   fprintf (st, "stack device\n");
+   fprintf (st, "If the punch device is not attached and instead the %s", stack_dev.name);
+   fprintf (st, "device is attached, the cards\n will be sent out to the");
+   fprintf (st, "given stacker based on the flag set by the processor."); 
 #endif
+#ifdef I7070
+   fprintf (st, "Unit record devices can be configured to interrupt the CPU on\n");
+   fprintf (st, "one of two priority channels A or B, to set this\n\n");
+   fprintf (st, "    sim> set cp attena     to set device to raise Atten A\n\n");
+#endif
+#ifdef I7010
+   fprintf (st, "The card punch could be attached to either channel\n\n");
+   fprintf (st, "    sim> set cp chan=1     to set the punch on channel 1\n\n");
+#endif   
    fprint_set_help(st, dptr);
    fprint_show_help(st, dptr);
    return SCPE_OK;
@@ -322,7 +333,15 @@ cdp_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 const char *
 cdp_description(DEVICE *dptr)
 {
-   return "Card Punch";
+#ifdef I7010
+   return "1402 Card Punch";
+#endif
+#ifdef I7070
+   return "7550 Card Punch";
+#endif
+#ifdef I7080
+   return "721 Card Punch";
+#endif
 }
 
 #endif

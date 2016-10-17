@@ -493,7 +493,8 @@ lpr_detach(UNIT * uptr)
 t_stat
 lpr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-   fprintf (st, "Line Printer\n\n");
+
+   fprintf (st, "%s\n\n", lpr_description(dptr));
    fprintf (st, "The line printer output can be echoed to the console to check the \n");
    fprintf (st, "progress of jobs being run. This can be done with the\n");
    fprintf (st, "    sim> SET LPn ECHO\n\n");
@@ -504,10 +505,13 @@ lpr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
    fprintf (st, "Spacing control\n");
 #endif
 #ifdef I7070
-   fprintf (st, "ATTEN CONTROL\n");
+   fprintf (st, "Unit record devices can be configured to interrupt the CPU on\n");
+   fprintf (st, "one of two priority channels A or B, to set this\n\n");
+   fprintf (st, "    sim> set cp attena     to set device to raise Atten A\n\n");
 #endif
 #ifdef I7010
-   fprintf (st, "Channel\n");
+   fprintf (st, "The card punch could be attached to either channel\n\n");
+   fprintf (st, "    sim> set cp chan=1     to set the punch on channel 1\n\n");
 #endif
    fprint_set_help(st, dptr);
    fprint_show_help(st, dptr);
@@ -517,7 +521,15 @@ lpr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 const char *
 lpr_description(DEVICE *dptr)
 {
-   return "Line Printer";
+#ifdef I7010
+   return "1403 Line Printer";
+#endif
+#ifdef I7070
+   return "7400 Line Printer";
+#endif
+#ifdef I7080
+   return "716 Line Printer";
+#endif
 }
 
 #endif

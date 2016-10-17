@@ -283,7 +283,7 @@ cdp_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 const char *
 cdp_description(DEVICE *dptr)
 {
-   return "Card Punch";
+   return "721 Card Punch";
 }
 
 

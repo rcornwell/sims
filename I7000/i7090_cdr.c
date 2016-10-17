@@ -332,7 +332,7 @@ cdr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 const char *
 cdr_description(DEVICE *dptr)
 {
-   return "Card Reader";
+   return "711 Card Reader";
 }
 
 #endif 

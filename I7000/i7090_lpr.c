@@ -613,7 +613,7 @@ lpr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 const char *
 lpr_description(DEVICE *dptr)
 {
-   return "Line Printer";
+   return "716 Line Printer";
 }
 
 
