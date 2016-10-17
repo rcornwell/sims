@@ -47,16 +47,11 @@
 #define CLR_BUF(u)     u->hwmark = 0xFFFFFFFF
 
 #define MTDF_TYPEB      (1 << DEV_V_UF)
-#define MTDF_BUFFUL     (2 << DEV_V_UF)
-#define MTDF_STOP       (4 << DEV_V_UF)
-#define MTDF_MOTION     (8 << DEV_V_UF)
-#define MTDF_V_UNIT     (DEV_V_UF + 4)
-#define MTDF_UNIT_MSK   (7 << MTDF_V_UNIT)
+#define MTUF_7TRK       (1 << MTUF_V_UF)
 
 #define BUFFSIZE        (32 * 1024)
 #define UNIT_MT(x)      UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE | \
                         UNIT_S_CHAN(x)
-#define MTUF_ONLINE     (1 << UNIT_V_LOCAL)
 #define LT              66      /* Time per char low density */
 #define HT              16      /* Time per char high density */
 
@@ -109,14 +104,19 @@
 #define DENS_556        000000100
 #define DENS_800        000000200
 #define DENS_MSK        000000300       /* 6 */
-#define NXT_UNIT_ENAB   000000400       /* 8 */
+#define NEXT_UNIT_ENAB  000000400       /* 8 */
 #define FUNCTION        000017000       /* 9 */
 #define CORE_DUMP       000020000       /*13 */
 #define ODD_PARITY      000040000       /*14 */
 #define UNIT_NUM        000700000       /*15 */
-#define NXT_UNIT        007000000       /*18 */
+#define NEXT_UNIT_NUM   007000000       /*18 */
 
 #define MT_DEVNUM       0340
+#define MT_MOTION       000000001       /* Mag tape unit in motion */
+#define MT_BUSY         000000002       /* Mag tape unit is busy */
+#define MT_BUFFUL       000000004       /* Buffer full of data */
+#define MT_BRFUL        000000010       /* BR register full */
+#define MT_STOP         000000020       /* DF10 End of Channel */
 /* in u3 is device address */
 /* in u4 is current buffer position */
 /* in u5 */
@@ -135,11 +135,24 @@ t_stat         mt_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
 const char     *mt_description (DEVICE *dptr);
 
 struct df10     mt_df10;
-uint32          status;
-uint32          cflags;
-
+uint16          pia;
+uint8           unit;
+uint8           next_unit;
+uint64          status;
 uint64          hold_reg;
 int             cc;
+
+uint8                parity_table[64] = {
+    /* 0    1    2    3    4    5    6    7 */
+    0000, 0100, 0100, 0000, 0100, 0000, 0000, 0100,
+    0100, 0000, 0000, 0100, 0000, 0100, 0100, 0000,
+    0100, 0000, 0000, 0100, 0000, 0100, 0100, 0000,
+    0000, 0100, 0100, 0000, 0100, 0000, 0000, 0100,
+    0100, 0000, 0000, 0100, 0000, 0100, 0100, 0000,
+    0000, 0100, 0100, 0000, 0100, 0000, 0000, 0100,
+    0000, 0100, 0100, 0000, 0100, 0000, 0000, 0100,
+    0100, 0000, 0000, 0100, 0000, 0100, 0100, 0000
+};
 
 
 /* One buffer per channel */
@@ -171,6 +184,8 @@ MTAB                mt_mod[] = {
     {MTUF_WLK, 0, "write enabled", "WRITEENABLED", NULL},
     {MTUF_WLK, MTUF_WLK, "write locked", "LOCKED", NULL},
     {MTAB_XTD|MTAB_VDV|MTAB_VALR, MTDF_TYPEB, "TYPE", "TYPE", &set_mta, &show_mta},
+    {MTUF_7TRK, 0, "9T", "9T", NULL, NULL},
+    {MTUF_7TRK, MTUF_7TRK, "7T", "7T", NULL, NULL},
     {MTAB_XTD|MTAB_VUN, 0, "FORMAT", "FORMAT",
      &sim_tape_set_fmt, &sim_tape_show_fmt, NULL},
     {MTAB_XTD|MTAB_VUN|MTAB_VALR, 0, "LENGTH", "LENGTH",
@@ -192,100 +207,177 @@ DEVICE              mt_dev = {
 t_stat mt_devio(uint32 dev, uint64 *data) {
       uint64     res;
       DEVICE    *dptr = &mt_dev;
-      int        unit = (cflags >> MTDF_V_UNIT) & 7;
       UNIT      *uptr = &mt_unit[unit];
        
       switch(dev & 07) {
       case CONI:
-          res = (uptr->u3 & 077777);
-          res |= unit << 15;
-          res |= unit << 18;
+          res = (uint64)(pia & (NEXT_UNIT_ENAB|FLAG_PIA|DATA_PIA));
+          res |= (uint64)(uptr->u3 & 077300);
+          res |= ((uint64)unit) << 15;
+          res |= ((uint64)next_unit) << 18;
           if (dptr->flags & MTDF_TYPEB) 
-             res |= 7;  /* Force DATA PIA to 7 on type B */
+             res |= 7LL;  /* Force DATA PIA to 7 on type B */
           *data = res;
-          sim_debug(DEBUG_CONI, dptr, "MT CONI %03o status %06o %o\n",
-                      dev, (uint32)res, unit);
+          sim_debug(DEBUG_CONI, dptr, "MT CONI %03o status %06o %o %o PC=%06o\n",
+                      dev, (uint32)res, unit, pia, PC);
           break;
 
        case CONO:
-          unit = (*data >> 15) & 07;
-          uptr = &mt_unit[unit];
-          uptr->u3 = (int32)*data;
-          CLR_BUF(uptr);
-          cflags &= ~(MTDF_BUFFUL|MTDF_STOP|MTDF_UNIT_MSK);
-          cflags |= (unit << MTDF_V_UNIT);
-          sim_debug(DEBUG_CONO, dptr, "MT CONO %03o start %o %o %o\n",
-                      dev, uptr->u3, unit, (uptr->u3 & FUNCTION) >> 9);
-          if (uptr->u3 & 000007000)
-             cflags |= MTDF_MOTION;
+          clr_interrupt(MT_DEVNUM);
+          clr_interrupt(MT_DEVNUM+4);
+          next_unit = (*data >> 15) & 07;
+          pia = (uint16)(*data) & (NEXT_UNIT_ENAB|FLAG_PIA|DATA_PIA);
           status &= ~(DATA_REQUEST|CHAN_ERR|JOB_DONE|DATA_LATE| \
                       BAD_TAPE|RLC_ERR|READ_CMP|EOF_FLAG|EOT_FLAG|BOT_FLAG| \
                       PARITY_ERR|ILL_OPR|REW_FLAG|TRAN_HUNG|CHAR_COUNT| \
-                      WT_CW_DONE|DATA_PARITY|NXM_ERR|CW_PAR_ERR);
-          clr_interrupt(MT_DEVNUM);
-          clr_interrupt(MT_DEVNUM+4);
-          sim_activate(uptr, 1000);
+                      WT_CW_DONE|DATA_PARITY|NXM_ERR|CW_PAR_ERR|IDLE_UNIT| \
+                      SEVEN_CHAN|NEXT_UNIT);
+          /* Check if we can switch to new unit */
+          if (next_unit != unit) {
+               sim_cancel(uptr);
+               unit = next_unit;
+               uptr = &mt_unit[unit];
+          }
+          status |= NEXT_UNIT;
+          if (pia & NEXT_UNIT_ENAB) {
+              set_interrupt(dev, pia >> 3);
+          }
+          uptr->u3 = (int32)(*data & 077300);
+          CLR_BUF(uptr);
           mt_df10.buf = 0;
+          sim_debug(DEBUG_CONO, dptr, "MT CONO %03o start %o %o %o %012llo %012llo PC=%06o\n",
+                      dev, uptr->u3, unit, pia, *data, status, PC);
+          if ((uptr->flags & UNIT_ATT) != 0) {
+                /* Check if Write */
+                uptr->u3 &= ~(MT_BRFUL|MT_BUFFUL);
+                int  cmd = (uptr->u3 & FUNCTION) >> 9;
+                switch(cmd & 07) {
+                case NOP_IDLE:
+                case REWIND:
+                case WTM:
+                case SPC_REV:
+                case SPC_FWD:
+                       break;
+                case READ:
+                       if ((uptr->u3 & ODD_PARITY) != 0) 
+                          status |= PARITY_ERR;
+                       break;
+                case WRITE:
+                       if ((uptr->flags & MTUF_WLK) != 0) {
+                          status |= IDLE_UNIT|ILL_OPR|EOF_FLAG;
+                          break;
+                       }
+                case CMP:
+                       if ((uptr->u3 & ODD_PARITY) != 0) 
+                          status |= PARITY_ERR;
+                       if ((dptr->flags & MTDF_TYPEB) == 0) {
+                           status |= DATA_REQUEST;
+                           set_interrupt(MT_DEVNUM, pia);
+                       }
+                       CLR_BUF(uptr);
+                       uptr->u5 = 0;
+                       uptr->u6 = 0;
+                }
+ //             if (NOP_CLR != ((uptr->u3 & FUNCTION) >> 9)) {
+//                     uptr->u3 |= MT_MOTION;
+ //                  status |= JOB_DONE;
+  //                 break;
+  //            }
+              status |= IDLE_UNIT;
+              uptr->u3 |= MT_BUSY;
+              sim_activate(uptr, 100);
+          } else {
+              sim_activate(uptr, 9999999);
+          sim_debug(DEBUG_CONO, dptr, "MT CONO %03o hung PC=%06o\n",
+                      dev, PC);
+          }
           break;
 
      case DATAI:
           /* Xfer data */
-          cflags &= ~MTDF_BUFFUL;
-          status &= ~DATA_REQUEST;
-          if (status & JOB_DONE)
-              mt_df10.buf = 0;
+//          if (status & JOB_DONE)
+ //             mt_df10.buf = 0;
           clr_interrupt(MT_DEVNUM);
           *data = hold_reg;
+          if (uptr->u3 & MT_BRFUL) {
+             hold_reg = mt_df10.buf;
+             mt_df10.buf = 0;
+             uptr->u3 &= ~MT_BRFUL;
+             uptr->u3 |= MT_BUFFUL;
+             status |= DATA_REQUEST;
+             set_interrupt(MT_DEVNUM, pia & DATA_PIA);
+          } else {
+             uptr->u3 &= ~MT_BUFFUL;
+             status &= ~DATA_REQUEST;
+//             hold_reg = 0;
+          }
           sim_debug(DEBUG_DATA, dptr, "MT %03o >%012llo\n", dev, hold_reg);
           break;
 
      case DATAO:
           /* Xfer data */
           hold_reg = *data;
-          cflags |= MTDF_BUFFUL;
           status &= ~DATA_REQUEST;
           clr_interrupt(MT_DEVNUM);
-          if (status & JOB_DONE)
-              mt_df10.buf = 0;
-          sim_debug(DEBUG_DATA, dptr, "MT %03o <%012llo\n", dev, hold_reg);
+  //        if (status & JOB_DONE)
+   //           mt_df10.buf = 0;
+          if ((uptr->u3 & MT_BRFUL) == 0) {
+              mt_df10.buf = hold_reg;
+//              hold_reg = 0;
+              uptr->u3 |= MT_BRFUL;
+              uptr->u3 &= ~MT_BUFFUL;
+          } else {
+              uptr->u3 |= MT_BUFFUL;
+          }
+          sim_debug(DEBUG_DATA, dptr, "MT %03o <%012llo, %012llo\n",
+                    dev, hold_reg, mt_df10.buf);
           break;
 
      case CONI|04:
           res = status;
-          if ((cflags & MTDF_MOTION) == 0)
+          if ((uptr->flags & MTUF_7TRK) != 0)
+              res |= SEVEN_CHAN;
+          if ((uptr->flags & UNIT_ATT) != 0 && (uptr->u3 & MT_MOTION) == 0)
               res |= IDLE_UNIT;
+          if ((uptr->flags & MTUF_WLK) != 0)
+              res |= WRITE_LOCK;
 #if KI_22BIT
           if (dptr->flags & MTDF_TYPEB) 
               res |= B22_FLAG;
 #endif
           *data = res;
-          sim_debug(DEBUG_CONI, dptr, "MT CONI %03o status2 %06o %o\n",
-                      dev, (uint32)res, unit);
+          sim_debug(DEBUG_CONI, dptr, "MT CONI %03o status2 %012llo %o %012llo PC=%06o %012llo %012llo\n",
+                      dev, res, unit, status, PC, hold_reg, mt_df10.buf);
           break;
 
      case CONO|04:
           if (*data & 1) {
-              cflags |= MTDF_STOP;
-              if (status & DATA_REQUEST) {
-                  status &= ~DATA_REQUEST;
-                  clr_interrupt(MT_DEVNUM);
-              }
+              uptr->u3 |= MT_STOP;
+//              if (status & DATA_REQUEST) {
+ //                 status &= ~DATA_REQUEST;
+  //                clr_interrupt(MT_DEVNUM);
+   //           }
           }
           if (*data & 2) {
-              hold_reg = mt_df10.buf;
-              mt_df10.buf = 0;
+//              mt_df10.buf = hold_reg;
+              hold_reg ^= mt_df10.buf;
+//              hold_reg = 0;
+ //             mt_df10.buf = 0;
           }   
-          sim_debug(DEBUG_CONO, dptr, "MT CONO %03o control %o %o %o\n",
-                      dev, uptr->u3, unit, (uptr->u3 & FUNCTION) >> 9);
+          sim_debug(DEBUG_CONO, dptr, "MT CONO %03o control %o %o %012llo %012llo\n",
+                      dev, uptr->u3, unit, hold_reg, mt_df10.buf);
           break;
 
      case DATAI|04:
+          *data = 0;
           break;
 
      case DATAO|04:
           /* Set Initial CCW */
           if (dptr->flags & MTDF_TYPEB) 
               df10_setup(&mt_df10, (uint32) *data);
+          else
+              mt_df10.buf ^= hold_reg;
           sim_debug(DEBUG_DATAIO, dptr, "MT DATAO %03o %012llo\n", dev, *data);
           break;
      }
@@ -295,19 +387,24 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
 int mt_df10_read(DEVICE *dptr, UNIT *uptr) {
      if (dptr->flags & MTDF_TYPEB) {
          return df10_read(&mt_df10);
-         cflags &= ~MTDF_BUFFUL;
+         uptr->u3 &= ~MT_BUFFUL;
+         uptr->u3 |= MT_BRFUL;
      } else {
-        if (cflags & MTDF_BUFFUL) {
+        if (uptr->u3 & MT_BRFUL) {
+            return 1;
+        }
+        if (uptr->u3 & MT_BUFFUL) {
             mt_df10.buf = hold_reg;
-            cflags &= ~MTDF_BUFFUL;
-            if ((cflags & MTDF_STOP) == 0) {
+            uptr->u3 &= ~MT_BUFFUL;
+            uptr->u3 |= MT_BRFUL;
+            if ((uptr->u3 & MT_STOP) == 0) {
                 status |= DATA_REQUEST;
-                set_interrupt(MT_DEVNUM, uptr->u3 & DATA_PIA);
+                set_interrupt(MT_DEVNUM, pia & DATA_PIA);
             }
         } else {
-            if ((cflags & MTDF_STOP) == 0) {
+            if ((uptr->u3 & MT_STOP) == 0) {
                 status |= DATA_LATE;
-                cflags |= MTDF_STOP;
+                uptr->u3 |= MT_STOP;
             }
             return 0;
         }
@@ -318,20 +415,20 @@ int mt_df10_read(DEVICE *dptr, UNIT *uptr) {
 int mt_df10_write(DEVICE *dptr, UNIT *uptr) {
      if (dptr->flags & MTDF_TYPEB) {
         if (!df10_write(&mt_df10)) {
-            cflags |= MTDF_STOP;
+            uptr->u3 |= MT_STOP;
             return 0;
         }
-        cflags &= ~MTDF_BUFFUL;
+        uptr->u3 &= ~(MT_BUFFUL|MT_BRFUL);
      } else {
-        if (cflags & MTDF_BUFFUL) {
+        if (uptr->u3 & MT_BUFFUL) {
             status |= DATA_LATE;
-            cflags |= MTDF_STOP;
+            uptr->u3 |= MT_STOP;
             return 0;
         } else {
             hold_reg = mt_df10.buf;
             status |= DATA_REQUEST;
-            cflags &= ~MTDF_BUFFUL;
-            set_interrupt(MT_DEVNUM, uptr->u3 & DATA_PIA);
+            uptr->u3 &= ~MT_BUFFUL;
+            set_interrupt(MT_DEVNUM, pia & DATA_PIA);
         }
      }
      mt_df10.buf = 0;
@@ -353,6 +450,7 @@ t_stat mt_error(UNIT * uptr, t_stat r, DEVICE * dptr)
        case MTSE_WRP:           /* write protected */
             status |= WRITE_LOCK;
             break;
+
        case MTSE_UNATT:         /* unattached */
             status |= TRAN_HUNG;
             break;
@@ -361,22 +459,33 @@ t_stat mt_error(UNIT * uptr, t_stat r, DEVICE * dptr)
        case MTSE_FMT:           /* invalid format */
             status |= ILL_OPR;
             break;
+
        case MTSE_RECE:          /* error in record */
             status |= BAD_TAPE;
             break;
+
        case MTSE_BOT:           /* beginning of tape */
             status |= BOT_FLAG;
             break;
+
        case MTSE_INVRL:         /* invalid rec lnt */
             status |= RLC_ERR;
             break;
+
        case MTSE_EOM:           /* end of medium */
             status |= EOT_FLAG;
             break;
        }
-       status |= JOB_DONE|IDLE_UNIT;
-       sim_debug(DEBUG_EXP, dptr, "Setting status %o\n", status);
-       set_interrupt(MT_DEVNUM+4, (uptr->u3 & FLAG_PIA) >> 3);
+        if (next_unit != unit) {
+            unit = next_unit;
+            status |= NEXT_UNIT;
+            if (pia & NEXT_UNIT_ENAB)
+                set_interrupt(MT_DEVNUM+4, pia >> 3);
+       }
+       status |= JOB_DONE;
+       uptr->u3 &= ~MT_BUSY;
+       sim_debug(DEBUG_EXP, dptr, "Setting status %012llo\n", status);
+       set_interrupt(MT_DEVNUM+4, pia >> 3);
        return SCPE_OK;
 }
 
@@ -388,51 +497,59 @@ t_stat mt_srv(UNIT * uptr)
     int                 cmd = (uptr->u3 & FUNCTION) >> 9;
     t_mtrlnt            reclen;
     t_stat              r = SCPE_ARG;   /* Force error if not set */
+    uint8               ch;
+    int                 cc;
+    int                 cc_max;
 
+    if ((uptr->flags & UNIT_ATT) == 0) {
+       uptr->u3 &= ~MT_MOTION;
+       return mt_error(uptr, MTSE_UNATT, dptr);      /* attached? */
+    }
+
+    if ((uptr->u3 & DENS_MSK) != DENS_800) {
+       uptr->u3 &= ~MT_MOTION;
+       return mt_error(uptr, MTSE_FMT, dptr);    /* wrong density? */
+    }
+
+    if (uptr->flags & MTUF_7TRK) {
+       cc_max = 6;
+    } else {
+       cc_max = (4 + ((uptr->u3 & CORE_DUMP) != 0));
+    }
 
     switch(cmd) {
     case NOP_IDLE:
         sim_debug(DEBUG_DETAIL, dptr, "MT%o Idle\n", unit);
-        cflags &= ~MTDF_MOTION;
-        if (status & NEXT_UNIT) 
-            set_interrupt(MT_DEVNUM+4, (uptr->u3 & FLAG_PIA) >> 3);
+        uptr->u3 &= ~MT_MOTION;
         return mt_error(uptr, MTSE_OK, dptr);
 
     case NOP_CLR:
         sim_debug(DEBUG_DETAIL, dptr, "MT%o nop\n", unit);
-        return SCPE_OK;
+        return mt_error(uptr, MTSE_OK, dptr);      /* Nop */
 
     case REWIND:
+        status &= ~IDLE_UNIT;
         sim_debug(DEBUG_DETAIL, dptr, "MT%o rewind\n", unit);
-        cflags &= ~MTDF_MOTION;
+        uptr->u3 &= ~MT_MOTION;
         status |= BOT_FLAG;
-        if (status & NEXT_UNIT) 
-            set_interrupt(MT_DEVNUM+4, (uptr->u3 & FLAG_PIA) >> 3);
         return mt_error(uptr, sim_tape_rewind(uptr), dptr);
 
     case UNLOAD:
+        status &= ~IDLE_UNIT;
         sim_debug(DEBUG_DETAIL, dptr, "MT%o unload\n", unit);
-        cflags &= ~MTDF_MOTION;
-        if (status & NEXT_UNIT) 
-            set_interrupt(MT_DEVNUM+4, (uptr->u3 & FLAG_PIA) >> 3);
+        uptr->u3 &= ~MT_MOTION;
         return mt_error(uptr, sim_tape_detach(uptr), dptr);
 
     case READ:
     case READ_NOEOR:
-    case CMP:
-    case CMP_NOEOR:
-        if (cflags & MTDF_STOP) {
+        if (uptr->u3 & MT_STOP) {
              if ((uint32)uptr->u6 < uptr->hwmark) 
                  status |= RLC_ERR;
             return mt_error(uptr, MTSE_OK, dptr);
         }
         if (BUF_EMPTY(uptr)) {
-            if ((uptr->flags & UNIT_ATT) == 0)
-                  return mt_error(uptr, MTSE_UNATT, dptr);      /* attached? */
-            if ((uptr->u3 & DENS_MSK) != DENS_800)
-                  return mt_error(uptr, MTSE_FMT, dptr);        /* attached? */
-
-            status &= ~(BOT_FLAG|EOF_FLAG|EOT_FLAG);
+            uptr->u3 |= MT_MOTION;
+            status &= ~(IDLE_UNIT|BOT_FLAG|EOF_FLAG|EOT_FLAG|PARITY_ERR);
             if ((r = sim_tape_rdrecf(uptr, &mt_buffer[0], &reclen, 
                                 BUFFSIZE)) != MTSE_OK) {
                 sim_debug(DEBUG_DETAIL, dptr, "MT%o read error %d\n", unit, r);
@@ -442,39 +559,22 @@ t_stat mt_srv(UNIT * uptr)
             uptr->hwmark = reclen;
             uptr->u6 = 0;
             uptr->u5 = 0;
-            if ((cmd & 07) == CMP) {
-               if ((dptr->flags & MTDF_TYPEB) == 0) {
-                   sim_debug(DEBUG_EXP, dptr, "MT%o Init compare\n", unit);
-                   status |= DATA_REQUEST;
-                   cflags &= ~(MTDF_BUFFUL);
-                   set_interrupt(MT_DEVNUM, uptr->u3 & DATA_PIA);
-               } else {
-                   mt_df10_read(dptr, uptr);
-               }
-           }
-           sim_activate(uptr, 100);
-           return SCPE_OK;
+            sim_activate(uptr, 100);
+            return SCPE_OK;
         }
         if ((uint32)uptr->u6 < uptr->hwmark) {
-            int cc = (8 * (3 - uptr->u5)) + 4;
-            uint8 ch;
-            if ((cmd & 07) == CMP && uptr->u5 == 0) {
-                mt_df10.buf = 0;
-                if (!mt_df10_read(dptr, uptr)) {
-                    sim_activate(uptr, 1000);
-                    return SCPE_OK;
+            if (uptr->flags & MTUF_7TRK) {
+                cc = 6 * (5 - uptr->u5);
+                ch = mt_buffer[uptr->u6];
+                if ((((uptr->u3 & ODD_PARITY) ? 0x40 : 0) ^ 
+                      parity_table[ch & 0x3f]) != 0) {
+                      status |= PARITY_ERR;
                 }
-            }
-            if ((cmd & 07) == CMP) {
-                if (cc < 0) 
-                     ch = mt_df10.buf & 0x3f;
-                else
-                     ch = (mt_df10.buf >> cc) & 0xff;
-                if (ch != mt_buffer[uptr->u6]) {
-                    status |= READ_CMP;
-                    mt_error(uptr, MTSE_OK, dptr);
-                }
+                mt_df10.buf |= (uint64)(ch & 0x3f) << cc;
             } else {
+                if ((uptr->u3 & ODD_PARITY) != 0) 
+                      status |= PARITY_ERR;
+                cc = (8 * (3 - uptr->u5)) + 4;
                 ch = mt_buffer[uptr->u6];
                 if (cc < 0) 
                     mt_df10.buf |=  (uint64)(ch & 0x3f);
@@ -485,16 +585,15 @@ t_stat mt_srv(UNIT * uptr)
             uptr->u5++;
             status &= ~CHAR_COUNT;
             status |= (uint64)(uptr->u5) << 18;
-            if (uptr->u5 == (4 + ((uptr->u3 & CORE_DUMP) != 0))) {
+            if (uptr->u5 == cc_max) {
                 uptr->u5 = 0;
-                if ((cmd & 7) != CMP) {
-                    mt_df10_write(dptr, uptr);
-                }
+                uptr->u3 |= MT_BRFUL;
+                mt_df10_write(dptr, uptr);
             }
           } else {
                 if ((cmd & 010) == 0) {
-                    cflags &= ~MTDF_MOTION;
-                    cflags |= MTDF_STOP;
+                    uptr->u3 &= ~(MT_MOTION|MT_BUSY);
+                    uptr->u3 |= MT_STOP;
                     sim_activate(uptr, 1000);
                     return SCPE_OK;
                 } else {
@@ -503,42 +602,122 @@ t_stat mt_srv(UNIT * uptr)
           }
           break;
 
-    case WRITE:
-    case WRITE_LONG:
-         if (BUF_EMPTY(uptr)) {
-             if ((uptr->flags & UNIT_ATT) == 0)
-                   return mt_error(uptr, MTSE_UNATT, dptr);     /* attached? */
-             if ((uptr->u3 & DENS_MSK) != DENS_800)
-                   return mt_error(uptr, MTSE_FMT, dptr);       /* attached? */
-         }      
-         /* Writing and Type A, request first data word */
-         if (BUF_EMPTY(uptr) && (dptr->flags & MTDF_TYPEB) == 0) {
-            sim_debug(DEBUG_EXP, dptr, "MT%o Init write\n", unit);
-            status |= DATA_REQUEST;
-            cflags &= ~(MTDF_BUFFUL);
-            uptr->hwmark = 0;
-            uptr->u5 = 0;
-            uptr->u6 = 0;
-            set_interrupt(MT_DEVNUM, uptr->u3 & DATA_PIA);
-            break;
+    case CMP:
+    case CMP_NOEOR:
+         if (uptr->u3 & MT_STOP) {
+              if ((uint32)uptr->u6 < uptr->hwmark) 
+                  status |= RLC_ERR;
+             return mt_error(uptr, MTSE_OK, dptr);
          }
-         if (uptr->u5 != 0) {
+         if (BUF_EMPTY(uptr)) {
+             uptr->u3 |= MT_MOTION;
+             status &= ~(IDLE_UNIT|BOT_FLAG|EOF_FLAG|EOT_FLAG|PARITY_ERR);
+             if ((r = sim_tape_rdrecf(uptr, &mt_buffer[0], &reclen, 
+                                 BUFFSIZE)) != MTSE_OK) {
+                 sim_debug(DEBUG_DETAIL, dptr, "MT%o read error %d\n", unit, r);
+                 return mt_error(uptr, r, dptr);
+             }
+             sim_debug(DEBUG_DETAIL, dptr, "MT%o compare %d\n", unit, reclen);
+             uptr->hwmark = reclen;
+             uptr->u6 = 0;
+             uptr->u5 = 0;
+//             if ((dptr->flags & MTDF_TYPEB) == 0) {
+ //                status |= DATA_REQUEST;
+  //               uptr->u3 &= ~(MT_BUFFUL);
+   //              set_interrupt(MT_DEVNUM, pia);
+    //         } else {
+     //            mt_df10_read(dptr, uptr);
+      //       }
+             sim_activate(uptr, 100);
+             return SCPE_OK;
+         }
+         if (uptr->u6 >= uptr->hwmark) {
+            if (cmd == CMP_NOEOR) 
+               CLR_BUF(uptr);
+            else
+               uptr->u3 |= MT_STOP;
+         } else if ((uptr->u3 & MT_BRFUL) == 0) {
+            /* Write out first character. */
+            if (mt_df10_read(dptr, uptr)) {
+                uptr->u5 = 0;
+            } else {
+                uptr->u3 |= MT_STOP;
+            }
+         } 
+         if ((uptr->u3 & MT_BRFUL) != 0) {
+            if (uptr->flags & MTUF_7TRK) {
+                ch = mt_buffer[uptr->u6];
+                if ((((uptr->u3 & ODD_PARITY) ? 0x40 : 0) ^ 
+                      parity_table[ch & 0x3f]) != (ch & 0x40)) {
+                      status |= PARITY_ERR;
+                }
+                mt_buffer[uptr->u6] &= 0x3f;
+                cc = 6 * (5 - uptr->u5);
+                ch = (mt_df10.buf >> cc) & 0x3f;
+            } else {
+                if ((uptr->u3 & ODD_PARITY) != 0) 
+                      status |= PARITY_ERR;
                 /* Write next char out */
-                int cc = (8 * (3 - uptr->u5)) + 4;
-                uint8 ch;
+                cc = (8 * (3 - uptr->u5)) + 4;
                 if (cc < 0) 
                      ch = mt_df10.buf & 0x3f;
                 else
                      ch = (mt_df10.buf >> cc) & 0xff;
-                mt_buffer[uptr->u6] = ch;
-                uptr->u6++;
-                uptr->hwmark = uptr->u6;
-                uptr->u5++;
-                if (uptr->u5 == (4 + ((uptr->u3 & CORE_DUMP) != 0))) 
-                    uptr->u5 = 0;
-                status &= ~CHAR_COUNT;
-                status |= (uint64)(uptr->u5) << 18;
-         } else if (cflags & MTDF_STOP && (cflags & MTDF_BUFFUL) == 0) {
+            }
+            if (mt_buffer[uptr->u6] != ch) {
+                status |= READ_CMP;
+                if ((dptr->flags & MTDF_TYPEB) == 0) {
+                     uptr->u3 |= MT_STOP;
+                     uptr->u6 = uptr->hwmark;
+                     status &= ~CHAR_COUNT;
+                     status |= (uint64)(uptr->u5) << 18;
+                     break;
+                }
+            }
+            uptr->u6++;
+            uptr->u5++;
+            if (uptr->u5 == cc_max) {
+               uptr->u5 = 0;
+               if (uptr->u5 & MT_BUFFUL) {
+                   if ((dptr->flags & MTDF_TYPEB) == 0) {
+                       status |= DATA_REQUEST;
+                       set_interrupt(MT_DEVNUM, pia);
+                   }
+                   uptr->u3 &= ~(MT_BUFFUL);
+                   mt_df10.buf = hold_reg;
+                   uptr->u3 |= MT_BRFUL;
+               } else {
+                   uptr->u3 &= ~MT_BRFUL;
+                   if ((dptr->flags & MTDF_TYPEB) == 0) {
+                       status |= DATA_REQUEST;
+                       set_interrupt(MT_DEVNUM, pia);
+                   }
+                 //  mt_df10.buf = 0;
+               }
+            }
+            status &= ~CHAR_COUNT;
+            status |= (uint64)(uptr->u5) << 18;
+         }
+         break;
+
+    case WRITE:
+    case WRITE_LONG:
+         /* Writing and Type A, request first data word */
+         if (BUF_EMPTY(uptr)) { //&& (dptr->flags & MTDF_TYPEB) == 0) {
+       //     if ((uptr->flags & MTUF_WLK) != 0) 
+        //         return mt_error(uptr, MTSE_WRP, dptr);
+            uptr->u3 |= MT_MOTION;
+            status &= ~(IDLE_UNIT|BOT_FLAG|EOF_FLAG|EOT_FLAG|PARITY_ERR);
+            sim_debug(DEBUG_EXP, dptr, "MT%o Init write\n", unit);
+         //   status |= DATA_REQUEST;
+          //  uptr->u3 &= ~(MT_BUFFUL);
+            uptr->hwmark = 0;
+            uptr->u5 = 0;
+            uptr->u6 = 0;
+           // set_interrupt(MT_DEVNUM, pia);
+   //         break;
+         }
+         if ((uptr->u3 & MT_STOP) != 0 && (uptr->u3 & MT_BRFUL) == 0) {
                 /* Write out the block */
                 reclen = uptr->hwmark;
                 status &= ~(BOT_FLAG|EOF_FLAG|EOT_FLAG);
@@ -546,42 +725,71 @@ t_stat mt_srv(UNIT * uptr)
                 sim_debug(DEBUG_DETAIL, dptr, "MT%o Write %d\n", unit, reclen);
                 uptr->u6 = 0;
                 uptr->hwmark = 0;
-                cflags &= ~MTDF_MOTION;
+                uptr->u3 &= ~MT_MOTION;
                 return mt_error(uptr, r, dptr); /* Record errors */
-         } else {
-                /* Write out first character. */
+         }
+         if ((uptr->u3 & MT_BRFUL) == 0) {
                 if (mt_df10_read(dptr, uptr)) {
-                    uint8 ch;
-                    ch = (mt_df10.buf >> 28) & 0xff;
-                    mt_buffer[uptr->u6] = ch;
-                    uptr->u6++;
-                    uptr->hwmark = uptr->u6;
-                    uptr->u5++;
-                    status &= ~CHAR_COUNT;
-                    status |= (uint64)(uptr->u5) << 18;
+                    uptr->u5 = 0;
                 } else {
-                    cflags |= MTDF_STOP;
+                    uptr->u3 |= MT_STOP;
                 }
+         }
+         if ((uptr->u3 & MT_BRFUL) != 0) {
+            if (uptr->flags & MTUF_7TRK) {
+                cc = 6 * (5 - uptr->u5);
+                ch = (mt_df10.buf >> cc) & 0x3f;
+                ch |= ((uptr->u3 & ODD_PARITY) ? 0x40 : 0) ^ 
+                          parity_table[ch & 0x3f];
+            } else {
+                /* Write next char out */
+                cc = (8 * (3 - uptr->u5)) + 4;
+                if (cc < 0) 
+                     ch = mt_df10.buf & 0x3f;
+                else
+                     ch = (mt_df10.buf >> cc) & 0xff;
+            }
+            mt_buffer[uptr->u6] = ch;
+            uptr->u6++;
+            uptr->hwmark = uptr->u6;
+            uptr->u5++;
+            if (uptr->u5 == cc_max) {
+               uptr->u5 = 0;
+               if (uptr->u5 & MT_BUFFUL) {
+                   if ((dptr->flags & MTDF_TYPEB) == 0) {
+                       status |= DATA_REQUEST;
+                       set_interrupt(MT_DEVNUM, pia);
+                   }
+                   uptr->u3 &= ~(MT_BUFFUL);
+                   mt_df10.buf = hold_reg;
+                   uptr->u3 |= MT_BRFUL;
+               } else {
+                   uptr->u3 &= ~MT_BRFUL;
+                   if ((dptr->flags & MTDF_TYPEB) == 0) {
+                       status |= DATA_REQUEST;
+                       set_interrupt(MT_DEVNUM, pia);
+                   }
+                //   mt_df10.buf = 0;
+               }
+            }
+            status &= ~CHAR_COUNT;
+            status |= (uint64)(uptr->u5) << 18;
          }
          break;
 
     case WTM:
-        if ((uptr->flags & UNIT_ATT) == 0)
-              return mt_error(uptr, MTSE_UNATT, dptr);  /* attached? */
-        if ((uptr->u3 & DENS_MSK) != DENS_800)
-              return mt_error(uptr, MTSE_FMT, dptr);    /* attached? */
-        cflags &= ~MTDF_MOTION;
-        status &= ~(BOT_FLAG|EOT_FLAG);
+        if ((uptr->flags & MTUF_WLK) != 0) 
+            return mt_error(uptr, MTSE_WRP, dptr);
+        uptr->u3 &= ~MT_MOTION;
+        status &= ~(IDLE_UNIT|BOT_FLAG|EOT_FLAG);
         sim_debug(DEBUG_DETAIL, dptr, "MT%o WTM\n", unit);
         return mt_error(uptr, sim_tape_wrtmk(uptr), dptr);
 
     case ERG:
-        if ((uptr->flags & UNIT_ATT) == 0)
-              return mt_error(uptr, MTSE_UNATT, dptr);  /* attached? */
-        if ((uptr->u3 & DENS_MSK) != DENS_800)
-              return mt_error(uptr, MTSE_FMT, dptr);    /* attached? */
-        cflags &= ~MTDF_MOTION;
-        status &= ~(BOT_FLAG|EOT_FLAG);
+        if ((uptr->flags & MTUF_WLK) != 0) 
+            return mt_error(uptr, MTSE_WRP, dptr);
+        uptr->u3 &= ~MT_MOTION;
+        status &= ~(IDLE_UNIT|BOT_FLAG|EOT_FLAG);
         sim_debug(DEBUG_DETAIL, dptr, "MT%o ERG\n", unit);
         return mt_error(uptr, sim_tape_wrgap(uptr, 35), dptr);
 
@@ -589,14 +797,9 @@ t_stat mt_srv(UNIT * uptr)
     case SPC_EOF:
     case SPC_REV:
     case SPC_FWD:
-        if (BUF_EMPTY(uptr)) {
-            if ((uptr->flags & UNIT_ATT) == 0)
-                  return mt_error(uptr, MTSE_UNATT, dptr);      /* attached? */
-            if ((uptr->u3 & DENS_MSK) != DENS_800)
-                  return mt_error(uptr, MTSE_FMT, dptr);        /* attached? */
-        }       
         sim_debug(DEBUG_DETAIL, dptr, "MT%o space %o\n", unit, cmd);
-        status &= ~(BOT_FLAG|EOT_FLAG);
+        uptr->u3 |= MT_MOTION;
+        status &= ~(IDLE_UNIT|BOT_FLAG|EOT_FLAG);
         /* Always skip at least one record */
         if ((cmd & 7) == SPC_FWD)
             r = sim_tape_sprecf(uptr, &reclen);
@@ -609,14 +812,14 @@ t_stat mt_srv(UNIT * uptr)
         case MTSE_BOT:           /* beginning of tape */
         case MTSE_EOM:           /* end of medium */
              /* Stop motion if we recieve any of these */
-             cflags &= ~MTDF_MOTION;
+             uptr->u3 &= ~MT_MOTION;
              return mt_error(uptr, r, dptr);
         }
         /* Clear tape mark, command, idle since we will need to change dir */
         if ((cmd & 010) == 0) {
             if (!mt_df10_read(dptr, uptr)) {
                 status &= ~DATA_LATE;
-                cflags &= ~MTDF_MOTION;
+                uptr->u3 &= ~MT_MOTION;
                 return mt_error(uptr, MTSE_OK, dptr);
             }
         }
@@ -726,10 +929,17 @@ mt_reset(DEVICE * dptr)
         if (MT_DENS(uptr->dynflags) == MT_DENS_NONE)
                 uptr->dynflags = MT_200_VALID | MT_556_VALID | 
                         MT_800_VALID | (MT_DENS_800 << UNIT_V_DF_TAPE);
+        uptr->u3 = 0;
+        sim_cancel(uptr);
     }
     mt_df10.devnum = mt_dib.dev_num;
     mt_df10.nxmerr = 24;
     mt_df10.ccw_comp = 25;
+    pia = 0;
+    status = 0;
+    unit = 0;
+    next_unit = 0;
+    hold_reg = 0;
     return SCPE_OK;
 }
 
