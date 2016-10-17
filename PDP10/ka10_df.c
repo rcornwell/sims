@@ -30,7 +30,7 @@ void df10_setirq(struct df10 *df) {
 
 void df10_writecw(struct df10 *df) {
       df->status |= 1 << df->ccw_comp;
-      M[df->cia|1] = (((uint64)(df->ccw)) << CSHIFT) | ((uint64)df->cda);
+      M[df->cia|1] = ((uint64)(df->ccw & WMASK) << CSHIFT) | ((uint64)df->cda & AMASK);
 }
 
 void df10_finish_op(struct df10 *df, int flags) {
@@ -75,43 +75,43 @@ int df10_fetch(struct df10 *df) {
 int df10_read(struct df10 *df) {
      uint64 data;
      if (df->wcr == 0) {
-          if (!df10_fetch(df))
-                return 0;
+         if (!df10_fetch(df))
+             return 0;
      }
-    df->wcr = (df->wcr + 1) & WMASK;
+     df->wcr = (uint32)((df->wcr + 1) & WMASK);
      if (df->cda != 0) {
-       if (df->cda > MEMSIZE) {
-           df10_finish_op(df, 1<<df->nxmerr);
-           return 0;
-       }
-       df->cda = (uint32)((df->cda + 1) & AMASK);
-       data = M[df->cda];
-    } else {
-       data = 0;
-    }
-    df->buf = data;
-    if (df->wcr == 0) {
+        if (df->cda > MEMSIZE) {
+            df10_finish_op(df, 1<<df->nxmerr);
+            return 0;
+        }
+        df->cda = (uint32)((df->cda + 1) & AMASK);
+        data = M[df->cda];
+     } else {
+        data = 0;
+     }
+     df->buf = data;
+     if (df->wcr == 0) {
         return df10_fetch(df);
-    }
-    return 1;
+     }
+     return 1;
 }
 
 int df10_write(struct df10 *df) {
      if (df->wcr == 0) {
-          if (!df10_fetch(df))
-                return 0;
+         if (!df10_fetch(df))
+             return 0;
      }
      df->wcr = (uint32)((df->wcr + 1) & WMASK);
      if (df->cda != 0) {
-       if (df->cda > MEMSIZE) {
+        if (df->cda > MEMSIZE) {
            df10_finish_op(df, 1<<df->nxmerr);
            return 0;
-       }
-       df->cda = (uint32)((df->cda + 1) & AMASK);
-       M[df->cda] = df->buf;
+        }
+        df->cda = (uint32)((df->cda + 1) & AMASK);
+        M[df->cda] = df->buf;
      }
      if (df->wcr == 0) {
-         return df10_fetch(df);
+        return df10_fetch(df);
      }
      return 1;
 }

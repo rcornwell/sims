@@ -55,7 +55,8 @@
 #endif
 
 #ifndef KI_22BIT
-#define KI_22BIT KI|KL
+//#define KI_22BIT KI|KL
+#define KI_22BIT 0
 #endif
 
 /* Digital Equipment Corporation's 36b family had six implementations:
@@ -211,13 +212,13 @@ extern DEBTAB crd_debug[];
 
 #define ICWA            0000000000776
 #if KI_22BIT
-#define AMASK           0000017777777LL
-#define WMASK           037777LL
-#define CSHIFT          22
+#define AMASK    00000017777777LL
+#define WMASK    00777760LL
+#define CSHIFT   22
 #else
-#define AMASK           RMASK
-#define WMASK           RMASK
-#define CSHIFT          18
+#define AMASK    RMASK
+#define WMASK    RMASK
+#define CSHIFT   18
 #endif
 
 #define API_MASK        0000000007

@@ -130,6 +130,7 @@ uint32  PC;                                   /* Program counter */
 uint32  IR;                                   /* Instruction register */
 uint32  FLAGS;                                /* Flags */
 uint32  AC;                                   /* Operand accumulator */
+uint64  SW;                                   /* Switch register */
 int     BYF5;                                 /* Second half of LDB/DPB instruction */
 int     uuo_cycle;                            /* Uuo cycle in progress */
 int     sac_inh;                              /* Don't store AR in AC */
@@ -255,6 +256,7 @@ REG cpu_reg[] = {
     { ORDATA (FM17, FM[017], 36) },
     { ORDATA (PIENB, pi_enable, 7) },
     { BRDATA (REG, FM, 8, 36, 017) },
+    { ORDATAD(SW, SW, 36, "Console SW Register"), REG_FIT},
     { NULL }
     };
 
@@ -267,7 +269,7 @@ MTAB cpu_mod[] = {
     { UNIT_MSIZE, 8, "128K", "128K", &cpu_set_size },
     { UNIT_MSIZE, 12, "196K", "196K", &cpu_set_size },
     { UNIT_MSIZE, 16, "256K", "256K", &cpu_set_size },
-#if KI & KI_22BIT
+#if KI_22BIT
     { UNIT_MSIZE, 32, "512K", "512K", &cpu_set_size },
     { UNIT_MSIZE, 64, "1024K", "1024K", &cpu_set_size },
     { UNIT_MSIZE, 128, "2048K", "2048K", &cpu_set_size },
@@ -724,10 +726,10 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
         }
         if (res & SMASK) {
             ub_ptr = ((res >> 18) & 017777) << 9;
+            user_addr_cmp = (res & 00020000000000LL) != 0;
+            small_user =    (res & 00040000000000LL) != 0;
+            fm_sel = (uint8)(res >> 29) & 060;
        }
-       user_addr_cmp = (res & 00020000000000LL) != 0;
-       small_user =    (res & 00040000000000LL) != 0;
-       fm_sel = (uint8)(res >> 29) & 060;
        pag_reload = 0;
        sim_debug(DEBUG_DATAIO, &cpu_dev, 
                     "DATAO PAG %012llo ebr=%06o ubr=%06o\n", 
@@ -817,6 +819,7 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
 
     case DATAI:
         /* Read switches */
+        *data = SW;
         sim_debug(DEBUG_DATAIO, &cpu_dev, "DATAI APR %012llo\n", *data);
         break;
     }
@@ -909,6 +912,7 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
 
     case DATAI:
         /* Read switches */
+        *data = SW;
         sim_debug(DEBUG_DATAIO, &cpu_dev, "DATAI APR %012llo\n", *data);
         break;
     }
@@ -1019,6 +1023,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
             fprintf(stderr, " %03o small fault\n\r", page);
             return 0;
         }
+        data = M[base + (page >> 1)];
     } else {
         /* If paging is not enabled, address is direct */
         if (!page_enable) {
@@ -1026,14 +1031,12 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
             return 1;
         }
         /* Pages 340-377 via UBR */
-  //      fprintf(stderr, "xlat %06o %03o ", addr, page >> 1);
         if ((page & 0740) == 0340) {
             page += 01000 - 0340;
         /* Pages 400-777 via EBR */
         } else if (page & 0400) {
             base = eb_ptr;
         } else {
-    //    fprintf(stderr, "\n\r");
             if (!flag && ((FLAGS & PUBLIC) != 0)) {
                /* Handle public violation */
                 fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 27) | 021LL;
@@ -1045,18 +1048,14 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
         }
     }
     data = M[base + (page >> 1)];
-//        fprintf(stderr, " %06o %03o %012llo ", base, page, data);
     if ((page & 1) == 0)
        data >>= 18;
     data &= RMASK;
- //       fprintf(stderr, " -> %06llo wr=%o ", data, wr);
     *loc = ((data & 017777) << 9) + (addr & 0777);
-  //      fprintf(stderr, " -> %06o\n", *loc);
     if (!flag && ((FLAGS & PUBLIC) != 0) && ((data & 0200000) == 0)) {
         /* Handle public violation */
         fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 27) | 021LL;
         private_page = 1;
-   //     fprintf(stderr, " public");
     }
     if (cur_context && ((data & 0200000) != 0))
         FLAGS |= PUBLIC;
@@ -1073,7 +1072,6 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
         fprintf(stderr, " fault\n\r");
         return 0;
     }
-//        fprintf(stderr, "\n\r");
     return 1;
 }
 
@@ -1405,29 +1403,6 @@ no_fetch:
          }
     } while (ind & !pi_rq);
 
-    /* Update history */
-    if (hst_lnt && PC > 020 && (PC & 0777774) != 0472174 && 
-            (PC & 0777700) != 023700 && (PC != 0527154)) {
-            hst_p = hst_p + 1;
-            if (hst_p >= hst_lnt) {
-                    hst_p = 0;
-//                    reason = STOP_IBKPT;
-            }
-            hst[hst_p].pc = HIST_PC | ((BYF5)? (HIST_PC2|PC) : PC);
-            hst[hst_p].ea = AB;
-            hst[hst_p].ir = AD;
-            hst[hst_p].flags = (FLAGS << 5) |(clk_flg << 2) | (nxm_flag << 1) 
-#if KA
-                                | (mem_prot << 4) | (push_ovf << 3)
-#endif
-                       ;
-            hst[hst_p].ac = get_reg(AC);
-    }
-//    /* Update final address into history. */
-//    if (hst_lnt) {
-//        hst[hst_p].ea = AB;
-//    }
-
     /* If there is a interrupt handle it. */
     if (pi_rq) {
         set_pi_hold(); /* Hold off all lower interrupts */
@@ -1462,6 +1437,30 @@ no_fetch:
 #else
         goto fetch;
 #endif
+    }
+
+    /* Update history */
+#if KI
+    if (hst_lnt && (fm_sel || PC > 020) && (PC & 0777774) != 0472174 && 
+            (PC & 0777700) != 023700 && (PC != 0527154)) {
+#else
+    if (hst_lnt && PC > 020 && (PC & 0777774) != 0472174 && 
+            (PC & 0777700) != 023700 && (PC != 0527154)) {
+#endif
+            hst_p = hst_p + 1;
+            if (hst_p >= hst_lnt) {
+                    hst_p = 0;
+//                    reason = STOP_IBKPT;
+            }
+            hst[hst_p].pc = HIST_PC | ((BYF5)? (HIST_PC2|PC) : PC);
+            hst[hst_p].ea = AB;
+            hst[hst_p].ir = AD;
+            hst[hst_p].flags = (FLAGS << 5) |(clk_flg << 2) | (nxm_flag << 1) 
+#if KA
+                                | (mem_prot << 4) | (push_ovf << 3)
+#endif
+                       ;
+            hst[hst_p].ac = get_reg(AC);
     }
 
 
