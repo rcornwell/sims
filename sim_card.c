@@ -913,7 +913,6 @@ sim_punch_card(UNIT * uptr, UNIT *stkuptr)
             out[outp++] = (col & 07) + '0';
         }
         out[outp++] = '\n';
-        out[outp++] = '\0';
         sim_debug(DEBUG_CARD, dptr, "%s", &out[4]);
         break;
         
