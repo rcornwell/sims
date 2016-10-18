@@ -1012,9 +1012,12 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
 
     if (flag) 
         uf = 0;
-    else if (!uf && !cur_context && ((((xct_flag & 2) != 0 && wr != 0)) ||
-              ((xct_flag & 1) != 0 && (wr == 0 || modify))))
-        uf = (FLAGS & USERIO) != 0;
+    else if (xct_flag != 0 && !cur_context && !uf) {
+             if (((xct_flag & 2) != 0 && wr != 0) ||
+                 ((xct_flag & 1) != 0 && (wr == 0 || modify))) {
+                 uf = (FLAGS & USERIO) != 0;
+             }
+    }
 
     if (uf) {
         if (small_user && (page & 0340) != 0) {
@@ -1067,8 +1070,8 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
         fault_data |= wr;
         page_fault = 1;
         fprintf(stderr, "xlat %06o %03o ", addr, page >> 1);
-        fprintf(stderr, " %06o %03o %012llo ", base, page, data);
-        fprintf(stderr, " -> %06llo wr=%o PC=%06o ", data, wr, PC);
+        fprintf(stderr, " %06o %03o %012llo %o", base, page, data, uf);
+        fprintf(stderr, " -> %06llo wr=%o PC=%06o ", fault_data, wr, PC);
         fprintf(stderr, " fault\n\r");
         return 0;
     }
@@ -1412,6 +1415,7 @@ no_fetch:
         pi_ov = 0;
         AB = 040 | (pi_enc << 1);
 #if KI | KL
+        xct_flag = 0;
         /*
          * Scan through the devices and allow KI devices to have first
          * hit at a given level.
