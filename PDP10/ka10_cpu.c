@@ -1083,16 +1083,16 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
  */
 uint64 get_reg(int reg) {
     if (FLAGS & USER) 
-       return FM[fm_sel|reg];
+       return FM[fm_sel|(reg & 017)];
     else 
-       return FM[reg];
+       return FM[reg & 017];
 }
 
 void   set_reg(int reg, uint64 value) {
     if (FLAGS & USER) 
-        FM[fm_sel|reg] = value;
+        FM[fm_sel|(reg & 017)] = value;
     else 
-        FM[reg] = value;
+        FM[reg & 017] = value;
 }
 
 /*
@@ -1513,7 +1513,7 @@ fetch_opr:
     }
 
     if (i_flags & FAC2) {
-        MQ = get_reg((AC + 1) & 017);
+        MQ = get_reg(AC + 1);
     } else if (!BYF5) {
         MQ = 0;
     }
@@ -1530,12 +1530,14 @@ muuo:
     case 0064: case 0065: case 0066: case 0067:
     case 0070: case 0071: case 0072: case 0073:
     case 0074: case 0075: case 0076: case 0077:
+
               /* MUUO */
 
 #if KI | KL
     case 0100: case 0101: case 0102: case 0103:
     case 0104: case 0105: case 0106: case 0107:
     case 0123: 
+    case 0247: /* UUO  */
 unasign:
               MB = ((uint64)(IR) << 27) | ((uint64)(AC) << 23) | (uint64)(AB);
               AB = ub_ptr | 0424;
@@ -1783,9 +1785,7 @@ dpnorm:
 
     case 0120: /* DMOVE */
               AB = (AB + 1) & RMASK;
-#if KI | KL
               modify = 0;
-#endif
               if (Mem_read(0, 0))
                    goto last;
               MQ = MB;
@@ -1793,9 +1793,7 @@ dpnorm:
 
     case 0121: /* DMOVN */
               AB = (AB + 1) & RMASK;
-#if KI | KL
               modify = 0;
-#endif
               if (Mem_read(0, 0))
                    goto last;
               MQ = ((MB & CMASK) ^ CMASK) + 1;   /* Low */
@@ -1905,6 +1903,7 @@ dpnorm:
     case 0114: case 0115: case 0116: case 0117:
     case 0120: case 0121: case 0122: case 0123:
     case 0124: case 0125: case 0126: case 0127:
+    case 0247: /* UUO  */
 unasign:
               MB = ((uint64)(IR) << 27) | ((uint64)(AC) << 23) | (uint64)(AB);
               AB = 060;
@@ -2174,7 +2173,7 @@ fxnorm:
 
               /* Handle UFA */
               if (IR == 0130) {
-                  set_reg((AC + 1) & 017, AR);
+                  set_reg(AC + 1, AR);
                   break;
               }
               break;
@@ -2717,9 +2716,6 @@ fxnorm:
               }
               break;
 
-    case 0247: /* UUO  */
-              goto unasign;
-
           /* Branch */
     case 0250:  /* EXCH */
               set_reg(AC, BR);
@@ -2837,10 +2833,8 @@ fxnorm:
     case 0255: /* JFCL */
               if ((FLAGS >> 9) & AC) {
                   PC = AR & RMASK;
-              } else {
-                  PC = (PC + 1) & RMASK;
+                  f_pc_inh = 1;
               }
-              f_pc_inh = 1;
               FLAGS &=  017777 ^ (AC << 9);
               break;
 
@@ -3603,7 +3597,7 @@ test_op:
         set_reg(AC, AR);    /* blank, I, B */
 
     if (!sac_inh && (i_flags & SAC2))
-        set_reg((AC+1) & 017, MQ);
+        set_reg(AC+1, MQ);
 
     if (hst_lnt) {
         hst[hst_p].fmb = AR;
