@@ -249,8 +249,8 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
                       dev, uptr->u3, unit, pia, *data, status, PC);
           if ((uptr->flags & UNIT_ATT) != 0) {
                 /* Check if Write */
-                uptr->u3 &= ~(MT_BRFUL|MT_BUFFUL);
                 int  cmd = (uptr->u3 & FUNCTION) >> 9;
+                uptr->u3 &= ~(MT_BRFUL|MT_BUFFUL);
                 switch(cmd & 07) {
                 case NOP_IDLE:
                 case REWIND:
@@ -631,7 +631,7 @@ t_stat mt_srv(UNIT * uptr)
              sim_activate(uptr, 100);
              return SCPE_OK;
          }
-         if (uptr->u6 >= uptr->hwmark) {
+         if (uptr->u6 >= (int32)uptr->hwmark) {
             if (cmd == CMP_NOEOR) 
                CLR_BUF(uptr);
             else

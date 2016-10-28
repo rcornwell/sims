@@ -233,7 +233,7 @@ t_bool build_dev_tab (void);
    cpu_mod      CPU modifier list
 */
 
-UNIT cpu_unit = { UDATA (&rtc_srv, UNIT_FIX|UNIT_TWOSEG, MAXMEMSIZE) };
+UNIT cpu_unit = { UDATA (&rtc_srv, UNIT_FIX|UNIT_BINK|UNIT_TWOSEG, MAXMEMSIZE) };
 
 REG cpu_reg[] = {
     { ORDATA (PC, PC, 18) },
@@ -1293,6 +1293,7 @@ int     sac_inh;                 /* Inihibit saving AC after instruction */
 int     f;                       /* Temporary variables */
 int     flag1;
 int     flag3;
+uint32  IA;
 
 /* Build device table */
 if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
@@ -1350,6 +1351,7 @@ no_fetch:
        IR = (MB >> 27) & 0777;
        AC = (MB >> 23) & 017;
        AD = MB;  /* Save for historical sake */
+       IA = AB;
 
        i_flags = opflags[IR];
        BYF5 = 0;
@@ -1380,7 +1382,7 @@ no_fetch:
     do {
          if (pi_enable & !pi_cycle & pi_pending 
 #if KI | KL
-                             & trap_flag == 0
+                             & !trap_flag
 #endif
                              ) {
             pi_rq = check_irq_level();
@@ -1445,7 +1447,8 @@ no_fetch:
 
     /* Update history */
 #if KI
-    if (hst_lnt && (fm_sel || PC > 020) && (PC & 0777774) != 0472174 && 
+//    if (hst_lnt && PC > 020 && (FLAGS & USER) != 0) {
+    if (hst_lnt && (fm_sel || PC > 020) && (PC & 0777774) != 0777040 && 
             (PC & 0777700) != 023700 && (PC != 0527154)) {
 #else
     if (hst_lnt && PC > 020 && (PC & 0777774) != 0472174 && 
@@ -1456,7 +1459,7 @@ no_fetch:
                     hst_p = 0;
 //                    reason = STOP_IBKPT;
             }
-            hst[hst_p].pc = HIST_PC | ((BYF5)? (HIST_PC2|PC) : PC);
+            hst[hst_p].pc = HIST_PC | ((BYF5)? (HIST_PC2|PC) : IA);
             hst[hst_p].ea = AB;
             hst[hst_p].ir = AD;
             hst[hst_p].flags = (FLAGS << 5) |(clk_flg << 2) | (nxm_flag << 1) 
@@ -1538,7 +1541,7 @@ muuo:
     case 0104: case 0105: case 0106: case 0107:
     case 0123: 
     case 0247: /* UUO  */
-unasign:
+/* unasign: */ /* Place holder for unassigned instructions on KI */
               MB = ((uint64)(IR) << 27) | ((uint64)(AC) << 23) | (uint64)(AB);
               AB = ub_ptr | 0424;
               Mem_write_nopage();
@@ -3764,18 +3767,21 @@ return SCPE_OK;
 
 t_stat cpu_set_size (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
-uint64 mc = 0;
 uint32 i;
 
-if ((val <= 0) || ((val * 1024) > MAXMEMSIZE))
+if ((val <= 0) || ((val * 16 * 1024) > MAXMEMSIZE))
     return SCPE_ARG;
-for (i = val; i < MEMSIZE; i++)
-    mc = mc | M[i];
-if ((mc != 0) && (!get_yn ("Really truncate memory [N]?", FALSE)))
-    return SCPE_OK;
-MEMSIZE = val * 16 * 1024;
-for (i = MEMSIZE; i < MAXMEMSIZE; i++)
+val = val * 16 * 1024;
+if (val < MEMSIZE) {
+    uint64 mc = 0;
+    for (i = val; i < MEMSIZE; i++)
+        mc = mc | M[i];
+    if ((mc != 0) && (!get_yn ("Really truncate memory [N]?", FALSE)))
+        return SCPE_OK;
+}
+for (i = MEMSIZE; i < val; i++)
     M[i] = 0;
+MEMSIZE = val;
 return SCPE_OK;
 }
 

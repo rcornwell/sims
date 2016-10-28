@@ -213,7 +213,7 @@ extern DEBTAB crd_debug[];
 #define ICWA            0000000000776
 #if KI_22BIT
 #define AMASK    00000017777777LL
-#define WMASK    00777760LL
+#define WMASK    0037777LL
 #define CSHIFT   22
 #else
 #define AMASK    RMASK
