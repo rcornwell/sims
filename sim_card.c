@@ -584,6 +584,30 @@ sim_read_card(UNIT * uptr)
     case MODE_TEXT:
         sim_debug(DEBUG_CARD, dptr, "text: [");
         /* Check for special codes */
+        if (data->cbuff[0] == '~') { 
+            int f = 1;
+            for(col = i = 1; col < 80 && f; i++) {
+                c = data->cbuff[i];
+                switch (c) {
+                case '\n':
+                case '\0':
+                case '\r':
+                    col = 80;
+                case ' ':
+                    break;              /* Ignore these */
+                case '\t':
+                    col = (col | 7) + 1;        /* Mult of 8 */
+                    break;
+                default:
+                    f = 0;
+                    break;
+                }
+             }
+             if (f) {
+                r = SCPE_EOF;
+                goto end_card;
+             }
+        }
         if (cmpcard(&data->cbuff[0], "raw")) {
             int         j = 0;
             for(col = 0, i = 4; col < 80; i++) {
@@ -627,11 +651,6 @@ sim_read_card(UNIT * uptr)
                     col = 80;
                     i--;
                     break;
-                case '~':               /* End of file mark */
-                    if (col == 0) {
-                        r = SCPE_EOF;
-                        break;  
-                    }
                 default:
                     sim_debug(DEBUG_CARD, dptr, "%c", c);
                     if ((uptr->flags & MODE_LOWER) == 0)
@@ -654,7 +673,8 @@ sim_read_card(UNIT * uptr)
                 }
             }
         }
-                    sim_debug(DEBUG_CARD, dptr, "-%d-", i);
+    end_card:
+        sim_debug(DEBUG_CARD, dptr, "-%d-", i);
 
         /* Scan to end of line, ignore anything after last column */
         while (data->cbuff[i] != '\n' && data->cbuff[i] != '\r' && i < data->len) {
