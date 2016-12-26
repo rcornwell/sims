@@ -107,7 +107,7 @@ t_stat   sim_card_detach(UNIT *uptr);
 uint16   sim_bcd_to_hol(uint8 bcd);
 uint16   sim_ebcdic_to_hol(uint8 ebcdic);
 uint8    sim_hol_to_bcd(uint16 hol);
-uint8    sim_hol_to_ebbcd(uint16 hol);
+uint16   sim_hol_to_ebcdic(uint16 hol);
 
 /* Format control routines. */
 t_stat sim_card_set_fmt (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
