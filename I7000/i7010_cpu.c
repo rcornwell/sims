@@ -166,7 +166,7 @@ extern UNIT         chan_unit[];
 */
 
 UNIT                cpu_unit =
-    { UDATA(rtc_srv, MODEL(10)|MEMAMOUNT(9)|OPTION_PRIO|OPTION_FLOAT,
+    { UDATA(rtc_srv, MODEL(2)|MEMAMOUNT(9)|OPTION_PRIO|OPTION_FLOAT,
                  MAXMEMSIZE) };
 
 REG                 cpu_reg[] = {
