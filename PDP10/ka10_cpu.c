@@ -299,7 +299,7 @@ DEBTAB              cpu_debug[] = {
 
 DEVICE cpu_dev = {
     "CPU", &cpu_unit, cpu_reg, cpu_mod,
-    1, 8, 18, 1, 8, 36,
+    1, 8, 22, 1, 8, 36,
     &cpu_ex, &cpu_dep, &cpu_reset,
     NULL, NULL, NULL, NULL, DEV_DEBUG, 0, cpu_debug,
     NULL, NULL, &cpu_help, NULL, NULL, &cpu_description
@@ -1075,6 +1075,8 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
         fprintf(stderr, " fault\n\r");
         return 0;
     }
+//        fprintf(stderr, "xlat %06o %03o %06o %o", addr, page >> 1, *loc, uf);
+//        fprintf(stderr, " PC=%06o\n\r", PC);
     return 1;
 }
 
@@ -1541,7 +1543,7 @@ muuo:
     case 0104: case 0105: case 0106: case 0107:
     case 0123: 
     case 0247: /* UUO  */
-/* unasign: */ /* Place holder for unassigned instructions on KI */
+unasign: 
               MB = ((uint64)(IR) << 27) | ((uint64)(AC) << 23) | (uint64)(AB);
               AB = ub_ptr | 0424;
               Mem_write_nopage();
@@ -3520,8 +3522,8 @@ test_op:
     case 0770: case 0771: case 0772: case 0773:
     case 0774: case 0775: case 0776: case 0777:
 #if KI
-              if (!pi_cycle && ((FLAGS & (USER|USERIO)) == USER && 
-                    (IR & 040) == 0 || (FLAGS & (USER|PUBLIC)) == PUBLIC)) { 
+              if (!pi_cycle && ((FLAGS & (USER|USERIO)) == USER) && 
+                    (IR & 040) == 0 || ((FLAGS & (USER|PUBLIC)) == PUBLIC)) { 
 
 #else
               if ((FLAGS & (USER|USERIO)) == USER && !pi_cycle) {
