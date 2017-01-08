@@ -1556,6 +1556,13 @@ done:
 }
 
 void
+chan_set_load_mode(int chan) 
+{
+    cmd[chan] &= ~CHN_ALPHA;
+    cmd[chan] |= CHN_NUM_MODE;
+}
+   
+void
 chan9_set_error(int chan, uint32 mask)
 {
     if (chan_flags[chan] & mask)

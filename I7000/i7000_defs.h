@@ -391,6 +391,7 @@ void chan_set_attn_a(int chan);
 void chan_set_attn_b(int chan);
 void chan_set_attn_inq(int chan);
 void chan_clear_attn_inq(int chan);
+void chan_set_load_mode(int chan);
 #endif
 
 #ifdef I7080

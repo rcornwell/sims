@@ -238,6 +238,7 @@ cdr_srv(UNIT *uptr) {
         /* Check if load card. */
         if (uptr->capac && (data->image[uptr->capac-1] & 0x800)) {
              uptr->u5 |= URCSTA_LOAD;
+             chan_set_load_mode(chan);
         } else {
              uptr->u5 &= ~URCSTA_LOAD;
         }
@@ -278,6 +279,13 @@ cdr_srv(UNIT *uptr) {
              ch = 017;
 #endif
         }
+
+#ifdef I7070
+        /* During load, only sign on every 10 columns */
+        if (uptr->u5 & URCSTA_LOAD && (uptr->u4 % 10) != 9) 
+            ch &= 0xf;
+#endif
+        
         switch(chan_write_char(chan, &ch, (uptr->u4 == 79)? DEV_REOR: 0)) {
         case TIME_ERROR:
         case END_RECORD:
