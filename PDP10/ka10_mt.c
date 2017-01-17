@@ -257,8 +257,6 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
                 case WTM:
                        break;
                 case READ:
-//                       if ((uptr->u3 & ODD_PARITY) != 0) 
- //                         status |= PARITY_ERR;
                        CLR_BUF(uptr);
                        uptr->u5 = 0;
                        uptr->u6 = 0;
@@ -269,8 +267,6 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
                           break;
                        }
                 case CMP:
-  //                     if ((uptr->u3 & ODD_PARITY) != 0) 
-   //                       status |= PARITY_ERR;
                        CLR_BUF(uptr);
                        uptr->u5 = 0;
                        uptr->u6 = 0;
@@ -281,14 +277,9 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
                            set_interrupt(MT_DEVNUM, pia);
                        }
                 }
- //             if (NOP_CLR != ((uptr->u3 & FUNCTION) >> 9)) {
-//                     uptr->u3 |= MT_MOTION;
- //                  status |= JOB_DONE;
-  //                 break;
-  //            }
               status |= IDLE_UNIT;
               uptr->u3 |= MT_BUSY;
-              sim_activate(uptr, 100);
+              sim_activate(uptr, 300);
           } else {
               sim_activate(uptr, 9999999);
           sim_debug(DEBUG_CONO, dptr, "MT CONO %03o hung PC=%06o\n", dev, PC);
@@ -297,8 +288,6 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
 
      case DATAI:
           /* Xfer data */
-//          if (status & JOB_DONE)
- //             mt_df10.buf = 0;
           clr_interrupt(MT_DEVNUM);
           *data = hold_reg;
           uptr->u3 &= ~MT_BUFFUL;
@@ -321,13 +310,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
           hold_reg = *data;
           status &= ~DATA_REQUEST;
           clr_interrupt(MT_DEVNUM);
-//          if ((uptr->u3 & MT_BRFUL) == 0) {
-//              mt_df10.buf = hold_reg;
-//              uptr->u3 |= MT_BRFUL;
-//              uptr->u3 &= ~MT_BUFFUL;
-//          } else {
-              uptr->u3 |= MT_BUFFUL;
-//          }
+          uptr->u3 |= MT_BUFFUL;
           sim_debug(DEBUG_DATA, dptr, "MT %03o <%012llo, %012llo\n",
                     dev, hold_reg, mt_df10.buf);
           break;
@@ -352,17 +335,10 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
      case CONO|04:
           if (*data & 1) {
               uptr->u3 |= MT_STOP;
-//              if (status & DATA_REQUEST) {
- //                 status &= ~DATA_REQUEST;
-  //                clr_interrupt(MT_DEVNUM);
-   //           }
               sim_debug(DEBUG_DETAIL, dptr, "MT stop %03o\n", dev);
           }
           if (*data & 2) {
-//              mt_df10.buf = hold_reg;
               hold_reg ^= mt_df10.buf;
-//              hold_reg = 0;
- //             mt_df10.buf = 0;
           }   
           sim_debug(DEBUG_CONO, dptr, "MT CONO %03o control %o %o %012llo %012llo\n",
                       dev, uptr->u3, unit, hold_reg, mt_df10.buf);
@@ -384,6 +360,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
      return SCPE_OK;
 }
 
+/* Wrapper to handle reading of hold register or via DF10 */
 void mt_df10_read(DEVICE *dptr, UNIT *uptr) {
      if (dptr->flags & MTDF_TYPEB) {
          if (!df10_read(&mt_df10)) { 
@@ -410,6 +387,7 @@ void mt_df10_read(DEVICE *dptr, UNIT *uptr) {
      uptr->u5 = 0;
 }
 
+/* Wrapper to handle writing of hold register or via DF10 */
 void mt_df10_write(DEVICE *dptr, UNIT *uptr) {
      if (dptr->flags & MTDF_TYPEB) {
         if (!df10_write(&mt_df10)) {
@@ -669,21 +647,7 @@ t_stat mt_srv(UNIT * uptr)
             uptr->u5++;
             if (uptr->u5 == cc_max) {
                uptr->u5 = 0;
-//               if (uptr->u5 & MT_BUFFUL) {
- //                  if ((dptr->flags & MTDF_TYPEB) == 0) {
-  //                     status |= DATA_REQUEST;
-   //                    set_interrupt(MT_DEVNUM, pia);
-    //               }
-     //              uptr->u3 &= ~(MT_BUFFUL);
-      //             mt_df10.buf = hold_reg;
-       //            uptr->u3 |= MT_BRFUL;
-        //       } else {
-                   uptr->u3 &= ~MT_BRFUL;
-         //          if ((dptr->flags & MTDF_TYPEB) == 0) {
-          //             status |= DATA_REQUEST;
-           //            set_interrupt(MT_DEVNUM, pia);
-            //       }
-             //  }
+               uptr->u3 &= ~MT_BRFUL;
             }
             status &= ~CHAR_COUNT;
             status |= (uint64)(uptr->u5) << 18;
@@ -701,10 +665,6 @@ t_stat mt_srv(UNIT * uptr)
              uptr->hwmark = 0;
              uptr->u5 = 0;
              uptr->u6 = 0;
-//             if ((dptr->flags & MTDF_TYPEB) == 0) {
- //                status |= DATA_REQUEST;
-  //               set_interrupt(MT_DEVNUM, pia);
-   //          }
              break;
          }
          if ((uptr->u3 & MT_BRFUL) == 0) 
@@ -729,21 +689,7 @@ t_stat mt_srv(UNIT * uptr)
             uptr->u5++;
             if (uptr->u5 == cc_max) {
                uptr->u5 = 0;
-//               if (uptr->u5 & MT_BUFFUL) {
-//                   if ((dptr->flags & MTDF_TYPEB) == 0) {
- //                      status |= DATA_REQUEST;
-  //                     set_interrupt(MT_DEVNUM, pia);
-   //                }
- //                  uptr->u3 &= ~(MT_BUFFUL);
-  //                 mt_df10.buf = hold_reg;
-   //                uptr->u3 |= MT_BRFUL;
-    //           } else {
-                   uptr->u3 &= ~MT_BRFUL;
-    //               if ((dptr->flags & MTDF_TYPEB) == 0) {
-     //                  status |= DATA_REQUEST;
-      //                 set_interrupt(MT_DEVNUM, pia);
-       //            }
-     //          }
+               uptr->u3 &= ~MT_BRFUL;
             }
             status &= ~CHAR_COUNT;
             status |= (uint64)(uptr->u5) << 18;

@@ -105,7 +105,7 @@
 #define TMR_RTC         1
 
 #define UNIT_V_MSIZE    (UNIT_V_UF + 0)
-#if KI10
+#if KI
 #define UNIT_MSIZE      (0177 << UNIT_V_MSIZE)
 #else
 #define UNIT_MSIZE      (017 << UNIT_V_MSIZE)
@@ -269,7 +269,7 @@ MTAB cpu_mod[] = {
     { UNIT_MSIZE, 8, "128K", "128K", &cpu_set_size },
     { UNIT_MSIZE, 12, "196K", "196K", &cpu_set_size },
     { UNIT_MSIZE, 16, "256K", "256K", &cpu_set_size },
-#if KI_22BIT
+#if KI_22BIT|KI
     { UNIT_MSIZE, 32, "512K", "512K", &cpu_set_size },
     { UNIT_MSIZE, 64, "1024K", "1024K", &cpu_set_size },
     { UNIT_MSIZE, 128, "2048K", "2048K", &cpu_set_size },
@@ -998,18 +998,26 @@ t_stat null_dev(uint32 dev, uint64 *data) {
 int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
     uint64   data;
     int      base = ub_ptr;
-    int      page = addr >> 9;
+    int      page = (RMASK & addr) >> 9;
     int      uf = (FLAGS & USER) != 0;
 
     if (page_fault)
         return 0;
 
+    /* If paging is not enabled, address is direct */
+    if (!page_enable) {
+        *loc = addr;
+        return 1;
+    }
+
     /* If fetching byte data, use write access */
     if (BYF5 && (IR & 06) == 6) 
         wr = 1;
 
+    /* If this is modify instruction use write access */
     wr |= modify;
 
+    /* Figure out if this is a user space access */
     if (flag) 
         uf = 0;
     else if (xct_flag != 0 && !cur_context && !uf) {
@@ -1019,6 +1027,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
              }
     }
 
+    /* If user, check if small user enabled */
     if (uf) {
         if (small_user && (page & 0340) != 0) {
             fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 27) | 020LL;
@@ -1026,20 +1035,17 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
             fprintf(stderr, " %03o small fault\n\r", page);
             return 0;
         }
-        data = M[base + (page >> 1)];
     } else {
-        /* If paging is not enabled, address is direct */
-        if (!page_enable) {
-            *loc = addr;
-            return 1;
-        }
+        /* Handle system mapping */
         /* Pages 340-377 via UBR */
         if ((page & 0740) == 0340) {
             page += 01000 - 0340;
         /* Pages 400-777 via EBR */
         } else if (page & 0400) {
             base = eb_ptr;
+        /* Pages 000-037 direct map */
         } else {
+            /* Check if supervisory mode */
             if (!flag && ((FLAGS & PUBLIC) != 0)) {
                /* Handle public violation */
                 fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 27) | 021LL;
@@ -1050,11 +1056,14 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
             return 1;
         }
     }
+    /* Map the page */
     data = M[base + (page >> 1)];
+    /* Even in left half, Odd in right half. */
     if ((page & 1) == 0)
        data >>= 18;
     data &= RMASK;
     *loc = ((data & 017777) << 9) + (addr & 0777);
+    /* Access check logic */
     if (!flag && ((FLAGS & PUBLIC) != 0) && ((data & 0200000) == 0)) {
         /* Handle public violation */
         fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 27) | 021LL;

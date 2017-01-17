@@ -379,6 +379,8 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
              }
              if (tmp) 
                  df10->status &= ~PI_ENABLE;
+             else
+                 df10_setirq(df10);
          }
          sim_debug(DEBUG_CONO, dptr, "DP %03o CONO %06o %d PC=%o %06o\n", dev,
                  (uint32)*data, ctlr, PC, df10->status);
@@ -543,28 +545,33 @@ t_stat dp_svc (UNIT *uptr)
                 if (uptr->STATUS & END_CYL) {
                      uptr->UFLAGS |= DONE;
                      df10_finish_op(df10, 0);
+         sim_debug(DEBUG_DATA, dptr, "DP %03o DFS %012llo %06o %06o\n", ctlr, M[df10->cia|1], df10->ccw, df10->cda);
                      return SCPE_OK;
                 }  
                 if (sect >= dp_drv_tab[dtype].sect) {
                      uptr->UFLAGS |= DONE;
                      uptr->STATUS |= SEC_ERR;
                      df10_finish_op(df10, 0);
+         sim_debug(DEBUG_DATA, dptr, "DP %03o DFS %012llo %06o %06o\n", ctlr, M[df10->cia|1], df10->ccw, df10->cda);
                      return SCPE_OK;
                 }
                 if (surf >= dp_drv_tab[dtype].surf) {
                      uptr->UFLAGS |= DONE;
                      uptr->STATUS |= SUF_ERR;
                      df10_finish_op(df10, 0);
+         sim_debug(DEBUG_DATA, dptr, "DP %03o DFS %012llo %06o %06o\n", ctlr, M[df10->cia|1], df10->ccw, df10->cda);
                      return SCPE_OK;
                 }
                 if (cyl != uptr->CUR_CYL) {
                      uptr->UFLAGS |= DONE;
                      uptr->STATUS |= SRC_ERR;
                      df10_finish_op(df10, 0);
+         sim_debug(DEBUG_DATA, dptr, "DP %03o DFS %012llo %06o %06o\n", ctlr, M[df10->cia|1], df10->ccw, df10->cda);
                      return SCPE_OK;
                 }
                 if ((uptr->STATUS & BUSY) == 0) {
                     df10_finish_op(df10, 0);
+         sim_debug(DEBUG_DATA, dptr, "DP %03o DFS %012llo %06o %06o\n", ctlr, M[df10->cia|1], df10->ccw, df10->cda);
                     return SCPE_OK;
                 }
                 if (cmd != WR) {
@@ -647,6 +654,7 @@ t_stat dp_svc (UNIT *uptr)
            if (r)
                sim_activate(uptr, 25);
            else {
+         sim_debug(DEBUG_DATA, dptr, "DP %03o DFS %012llo %06o %06o\n", ctlr, M[df10->cia|1], df10->ccw, df10->cda);
                uptr->STATUS &= ~(SRC_DONE|BUSY);
                uptr->UFLAGS |= DONE;
            }
