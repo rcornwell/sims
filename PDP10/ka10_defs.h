@@ -55,8 +55,7 @@
 #endif
 
 #ifndef KI_22BIT
-//#define KI_22BIT KI|KL
-#define KI_22BIT 0
+#define KI_22BIT KI|KL
 #endif
 
 /* Digital Equipment Corporation's 36b family had six implementations:
@@ -203,7 +202,7 @@ extern DEBTAB crd_debug[];
 
 #define CTY_SWITCH      030
 
-#if KI_22BIT
+#if KI_22BIT|KI
 #define MAXMEMSIZE      4096 * 1024
 #else
 #define MAXMEMSIZE      256 * 1024

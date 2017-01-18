@@ -3792,7 +3792,7 @@ if (val < MEMSIZE) {
 }
 for (i = MEMSIZE; i < val; i++)
     M[i] = 0;
-MEMSIZE = val;
+cpu_unit.capac = val;
 return SCPE_OK;
 }
 
