@@ -58,6 +58,10 @@
 #define KI_22BIT KI|KL
 #endif
 
+#ifndef ITS
+#define ITS KA
+#endif
+
 /* Digital Equipment Corporation's 36b family had six implementations:
 
    name         mips    comments
@@ -123,7 +127,7 @@ extern DEBTAB crd_debug[];
 #define CMASK    00377777777777LL
 #define SMASK    00400000000000LL
 #define C1       01000000000000LL
-#define LSIGN    00000000400000LL
+#define RSIGN    00000000400000LL
 #define PMASK    00007777777777LL
 #define XMASK    03777777777777LL
 #define EMASK    00777000000000LL
@@ -176,16 +180,16 @@ extern DEBTAB crd_debug[];
 #define ADRFLT  000020        /* 001000 */
 #define PUBLIC  000040        /* 002000 */
 #else
-#define TRP1    000000        
-#define TRP2    000000        
-#define ADRFLT  000000        
-#define PUBLIC  000000        
+#define TRP1    000000
+#define TRP2    000000
+#define ADRFLT  000000
+#define PUBLIC  000000
 #endif
 #define USERIO  000100        /* 004000 */
 #define USER    000200        /* 010000 */
 #define BYTI    000400        /* 020000 */
 #if PDP6
-#define FLTOVR  000000 
+#define FLTOVR  000000
 #define PCHNG   001000        /* 040000 */
 #else
 #define FLTOVR  001000        /* 040000 */
@@ -233,7 +237,8 @@ extern DEBTAB crd_debug[];
 typedef unsigned long long int uint64;
 typedef unsigned int uint18;
 
-extern uint64   M[]; 
+extern uint64   M[];
+extern uint64   FM[];
 extern uint18   PC;
 extern uint32   FLAGS;
 

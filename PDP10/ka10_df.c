@@ -45,6 +45,7 @@ void df10_setup(struct df10 *df, uint32 addr) {
       df->ccw = df->cia;
       df->wcr = 0;
       df->status |= BUSY;
+      df->status &= ~(1 << df->ccw_comp);
 }
 
 int df10_fetch(struct df10 *df) {

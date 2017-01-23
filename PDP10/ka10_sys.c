@@ -59,7 +59,9 @@ int32 sim_emax = 1;
 
 DEVICE *sim_devices[] = { 
     &cpu_dev,
+#if PDP6 | KA | KI
     &cty_dev,
+#endif
 #if (NUM_DEVS_PT > 0)
     &ptp_dev,
     &ptr_dev,

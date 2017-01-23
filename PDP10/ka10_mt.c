@@ -812,7 +812,10 @@ mt_boot(int32 unit_num, DEVICE * dptr)
             uptr->u6 = 0;
         }
         mt_read_word(uptr);
-        M[addr] = mt_df10.buf;
+        if (addr < 020) 
+           FM[addr] = mt_df10.buf;
+        else
+           M[addr] = mt_df10.buf;
     }
     PC = addr;
     return SCPE_OK;

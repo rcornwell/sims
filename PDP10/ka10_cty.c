@@ -26,6 +26,7 @@
 */
 
 #include "ka10_defs.h"
+#if PDP6 | KA | KI
 #define UNIT_DUMMY      (1 << UNIT_V_UF)
 
 extern int32 tmxr_poll;
@@ -204,4 +205,4 @@ const char *cty_description (DEVICE *dptr)
 {
     return "Console TTY Line";
 }
-
+#endif
