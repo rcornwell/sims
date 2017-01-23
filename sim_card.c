@@ -1,4 +1,4 @@
-/* Card read/punch routines for 7000 simulators.
+/* Generic Card read/punch routines for simulators.
 
    Copyright (c) 2005, Richard Cornwell
 
@@ -680,9 +680,9 @@ sim_read_card(UNIT * uptr)
         while (data->cbuff[i] != '\n' && data->cbuff[i] != '\r' && i < data->len) {
             i++;
         }
-        if (data->cbuff[i] == '\n')
-            i++;
         if (data->cbuff[i] == '\r')
+            i++;
+        if (data->cbuff[i] == '\n')
             i++;
         sim_debug(DEBUG_CARD, dptr, "]\n");
         break;

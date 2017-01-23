@@ -1,4 +1,4 @@
-/* Card read/punch routines for 7000 simulators.
+/* Generic Card read/punch routines for simulators.
 
    Copyright (c) 2005, Richard Cornwell
 
@@ -58,8 +58,6 @@
     Auto output format is ASCII if card has only printable characters
     or card format binary.
 */
-
-
 
 #ifndef SIM_CARD_H_
 #define SIM_CARD_H_     0
