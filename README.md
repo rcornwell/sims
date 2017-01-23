@@ -1,33 +1,35 @@
+# Development Simulators.
+
 This is a working copy of my Burroughs B5500, KA10, KI10 and IBM7000 series
 simulators for SimH.
 
-B5500: 
+# Burroughs B5500
 
 This is the same version as in the current simH source tree. It is working
 correctly as far as I am able to tell. It will currently run MCP XIII and XV.
 
-KA10 & KI10:  
+# Dec KA10 & KI10
 
 These are still in the testing stages. Please report any issues that you find in them.
 
-The KA10 sim has successfully run Tops 10 5.03 and Tops 10 6.03.
-The KI10 sim has successfully passed the DBKA? through DBKE? diagnostics,
- KI10 will boot TOPS10, however it is still unstable.
+The KA10 sim has successfully run Tops 10 5.03 and Tops 10 6.03.  
+The KI10 sim has successfully run Tops 10 6.03  
+Started adding support for KA10 to boot ITS  
 
    Disk   
-     RC10 RD10/RM10  
-     RP10 RP01/RP02/RP03  
-     RH10 RP04/RP06/RP07 (RP07 not supported under 6.03).   
+   * RC10 RD10/RM10  
+   * RP10 RP01/RP02/RP03  
+   * RH10 RP04/RP06/RP07 (RP07 not supported under 6.03).   
    Tape  
-     TM10A or B  
+   * TM10A or B  
    Paper Tape  
-     Punch  
-     Reader  
+   * Punch  
+   * Reader  
    DC10E terminal mux.  
 
 
-   The RP10 supports boot (actual hardware did not), by reading in Blocks 4-7 and transfering
-to the loaded value. RC10, RH10, TM10 support readin mode. 
+   The RP10 supports boot (actual hardware did not), by reading in Blocks 4-7
+and transfering to the loaded value. RC10, RH10, TM10 support readin mode. 
 
    Todo:  
     RH10 TM03 
@@ -38,51 +40,61 @@ Todo:
    Finish KI10 support. 
    Possibly add in support for KL10A. (No extended addressing). 
 
+# IBM 7000 simulators.
 Latest status for I7000 Cpus: 
 
-i701:		Largely untested.  
+## i701
 
-i704:		SAP works.  
-		Fort2 unfinished.  
+   * Largely untested.  
 
-i7010:		Protection mode has some errors left.  
-		Protection mode does not handle setting H or L to 0.  
-		T020 tape diags fail.  
-		Disks may work.  
-		PR108 not tested.  
+## i704
+   * SAP works.  
+   * Fort2 unfinished.  
 
-i7070:		Will load Diags, need to remember how to run them to run
-		tests on machine.   
+## i7010
+   * Protection mode has some errors left.  
+   * Protection mode does not handle setting H or L to 0.  
+   * T020 tape diags fail.  
+   * Disks may work.  
+   * PR108 not tested.  
 
-i7080:		Sort of working.   
-		RWW, ECB untested.  
-		TLx instructions implimented, untested, see 8SE  
-		Will boot from card.  
-		Tape system appear to be working.  
-		    Tape system will not pass diags.  
+## i7070
+   * Will load Diags, need to remember how to run them to run
+   * tests on machine.   
 
-		8CU10B errors:  
-			410, 412, 413, 414, 418, 419, 420-427 error becuase
-				storage is not parity checked.   
-			440 divide not producing correct sign on error.  
+## i7080
+   * Sort of working.   
+   * RWW, ECB untested.  
+   * TLx instructions implimented, untested, see 8SE  
+   * Will boot from card.  
+   * Tape system appear to be working.  
+    Tape system will not pass diags.  
 
-i7090:		Working with exceptions.  
-		
-		Known bugs:  
+   * 8CU10B errors:  
+	410, 412, 413, 414, 418, 419, 420-427 error becuase
+		storage is not parity checked.   
+	440 divide not producing correct sign on error.  
 
-		DFDP/DFMP     Sometimes off by +/-1 or 2 in least signifigant
-				 part of result.  
+## i7090
+   * Working with exceptions.  
 
-		HTx	Not sure what problems are, does not quite work.  
+   Known bugs:  
 
-		DKx	Sometimes fails diagnostics with missing inhibit of
-			interrupt.   
+   DFDP/DFMP     Sometimes off by +/-1 or 2 in least signifigant
+		 part of result.  
 
-                CTSS    works.  
+   HTx	Not sure what problems are, does not quite work.  
 
-		Signifigence mode Not tested, Test Code Needed.  
+   DKx	Sometimes fails diagnostics with missing inhibit of
+	interrupt.   
 
-                    IOMC diag codes:   
-                    first keys 403030 and 001717 does channel E   
-                    first keys 203030  test channel A   
-                    016000200000  for disk test chan D   
+   * CTSS    works.  
+
+   * Signifigence mode Not tested, Test Code Needed.  
+
+          IOMC diag codes:   
+          first keys 403030 and 001717 does channel E   
+          first keys 203030  test channel A   
+          016000200000  for disk test chan D   
+
+
