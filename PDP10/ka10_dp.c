@@ -371,7 +371,7 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
              tmp = 1;
              uptr = &dp_unit[ctlr * NUM_UNITS_DP];
              for(unit = 0; unit < NUM_UNITS_DP; unit++) {
-                if (uptr->UFLAGS & (SEEK_DONE|DONE)) {
+                if (uptr->UFLAGS & SEEK_DONE) {
                      tmp = 0;
                      break;
                 }
@@ -494,7 +494,7 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
              uptr = &dp_unit[ctlr * NUM_UNITS_DP];
              for(unit = 0; unit < NUM_UNITS_DP; unit++) {
                 if (*data & (0400 >> unit)) 
-                   uptr->UFLAGS &= ~SEEK_DONE;
+                   uptr->UFLAGS &= ~(SEEK_DONE);
                 uptr++;
              }
          case NO:

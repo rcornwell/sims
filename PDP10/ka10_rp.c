@@ -547,7 +547,6 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
 
                 /* Start command */
                 df10_setup(df10, (uint32)(*data >> 6));
-                df10->status |= BUSY;
                 rp_write(ctlr, rp_drive[ctlr], 0, (uint32)(*data & 077));
                 sim_debug(DEBUG_DATAIO, dptr, 
                     "RP %03o command %012llo, %d[%d] PC=%06o %06o\n",
@@ -600,53 +599,58 @@ rp_write(int ctlr, int unit, int reg, uint32 data) {
     UNIT        *uptr = &rp_unit[(ctlr * 8) + unit];
     int          i;
     DEVICE      *dptr = rp_devs[ctlr];
-    struct df10   *df10;
+    struct df10   *df10 = &rp_df10[ctlr];
 
     switch(reg) {
     case  000:  /* control */
         sim_debug(DEBUG_DETAIL, dptr, "RPA%o %d Status=%06o\n", unit, ctlr, uptr->u3);
         if (uptr->flags & UNIT_WLK) 
            uptr->u3 |= DS_WRL;
-        if ((uptr->u3 & DS_DRY) && data & 01) {
+        df10->status &= ~(1 << df10->ccw_comp);
+        if ((data & 01) != 0 && (uptr->u3 & DS_DRY) != 0) {
             uptr->u3 &= DS_ATA|DS_VV|DS_DPR|DS_MOL|DS_WRL;
             uptr->u3 |= data & 076;
             switch (GET_FNC(data)) {
             case FNC_NOP:
                 uptr->u3 |= DS_DRY;
                 break;
-            case FNC_PRESET:                               /* read-in preset */
+            case FNC_PRESET:                      /* read-in preset */
                 uptr->u4 = 0;
-                uptr->u3 |= DS_VV;
-            case FNC_RECAL:                                /* recalibrate */
+                if ((uptr->flags & UNIT_ATT) != 0)
+                     uptr->u3 |= DS_VV;
+            case FNC_RECAL:                       /* recalibrate */
                 uptr->u4 &= ~0177777;
-            case FNC_SEARCH:                               /* search */
-            case FNC_SEEK:                                 /* seek */
-            case FNC_RETURN:                               /* return to center */
-            case FNC_OFFSET:                               /* offset */
-            case FNC_UNLOAD:                               /* unload */
+            case FNC_SEARCH:                      /* search */
+            case FNC_SEEK:                        /* seek */
+            case FNC_RETURN:                      /* return to center */
+            case FNC_OFFSET:                      /* offset */
+            case FNC_UNLOAD:                      /* unload */
                 uptr->u3 &= ~DS_OFF;
-            case FNC_WCHK:                                 /* write check */
-            case FNC_WRITE:                                /* write */
-            case FNC_WRITEH:                               /* write w/ headers */
-            case FNC_READ:                                 /* read */
-            case FNC_READH:                                /* read w/ headers */
+            case FNC_WCHK:                        /* write check */
+            case FNC_WRITE:                       /* write */
+            case FNC_WRITEH:                      /* write w/ headers */
+            case FNC_READ:                        /* read */
+            case FNC_READH:                       /* read w/ headers */
                 uptr->u3 |= DS_PIP|CR_GO;
                 uptr->u6 = 0;
                 break;
-            case FNC_DCLR:                                 /* drive clear */
+            case FNC_DCLR:                        /* drive clear */
                 uptr->u3 |= DS_DRY;
                 uptr->u3 &= ~(DS_ATA|CR_GO);
                 rp_attn[ctlr] &= ~(1<<unit);
                 clr_interrupt(rp_dib[ctlr].dev_num);
-                df10 = &rp_df10[ctlr];
                 if ((df10->status & IADR_ATTN) != 0 && rp_attn[ctlr] != 0) 
                     df10_setirq(df10);
                 break;
-            case FNC_RELEASE:                              /* port release */
+            case FNC_RELEASE:                     /* port release */
+//                if ((uptr->flags & UNIT_ATT) != 0)
+ //                   uptr->u3 |= DS_VV;
+  //              break;
+            case FNC_PACK:                        /* pack acknowledge */
+                if ((uptr->flags & UNIT_ATT) != 0)
+                    uptr->u3 |= DS_VV;
                 uptr->u3 |= DS_DRY;
-                break;
-            case FNC_PACK:                                 /* pack acknowledge */
-                uptr->u3 |= DS_VV|DS_DRY;
+                df10_setirq(df10);
                 break;
             default:
                 uptr->u3 |= DS_DRY|DS_ERR;
@@ -654,7 +658,8 @@ rp_write(int ctlr, int unit, int reg, uint32 data) {
             }
             if (uptr->u3 & DS_PIP)
                 sim_activate(uptr, 100);
-            sim_debug(DEBUG_DETAIL, dptr, "RPA%o AStatus=%06o\n", unit, uptr->u3);
+            sim_debug(DEBUG_DETAIL, dptr, "RPA%o AStatus=%06o\n", unit,
+                                      uptr->u3);
         }
         return;
     case  001:  /* status */
@@ -675,7 +680,6 @@ rp_write(int ctlr, int unit, int reg, uint32 data) {
             }
         }
         clr_interrupt(rp_dib[ctlr].dev_num);
-        df10 = &rp_df10[ctlr];
         if (((df10->status & IADR_ATTN) != 0 && rp_attn[ctlr] != 0) ||
              (df10->status & PI_ENABLE)) 
             df10_setirq(df10);
@@ -830,18 +834,18 @@ t_stat rp_svc (UNIT *uptr)
 
     switch (GET_FNC(uptr->u3)) {
     case FNC_NOP:
-    case FNC_DCLR:                                 /* drive clear */
-    case FNC_RELEASE:                              /* port release */
-    case FNC_PACK:                                 /* pack acknowledge */
+    case FNC_DCLR:                       /* drive clear */
+    case FNC_RELEASE:                    /* port release */
+    case FNC_PACK:                       /* pack acknowledge */
         break;
-    case FNC_UNLOAD:                               /* unload */
+    case FNC_UNLOAD:                     /* unload */
         rp_detach(uptr);
-    case FNC_OFFSET:                               /* offset */
+    case FNC_OFFSET:                     /* offset */
         uptr->u3 |= DS_OFF;
-    case FNC_RETURN:                               /* return to center */
-    case FNC_PRESET:                               /* read-in preset */
-    case FNC_RECAL:                                /* recalibrate */
-    case FNC_SEEK:                                 /* seek */
+    case FNC_RETURN:                     /* return to center */
+    case FNC_PRESET:                     /* read-in preset */
+    case FNC_RECAL:                      /* recalibrate */
+    case FNC_SEEK:                       /* seek */
         rp_attn[ctlr] |= 1<<unit;
         uptr->u3 |= DS_DRY|DS_ATA;
         uptr->u3 &= ~CR_GO;
@@ -851,7 +855,7 @@ t_stat rp_svc (UNIT *uptr)
         sim_debug(DEBUG_DETAIL, dptr, "RPA%o seekdone %d %o\n", unit, cyl, uptr->u3);
         break;
 
-    case FNC_SEARCH:                               /* search */
+    case FNC_SEARCH:                     /* search */
         if (GET_SC(uptr->u4) > rp_drv_tab[dtype].sect ||
             GET_SF(uptr->u4) > rp_drv_tab[dtype].surf) 
             uptr->u3 |= (ER1_IAE << 16)|DS_ERR;
@@ -864,9 +868,9 @@ t_stat rp_svc (UNIT *uptr)
         sim_debug(DEBUG_DETAIL, dptr, "RPA%o searchdone %d %o\n", unit, cyl, uptr->u3);
         break;
 
-    case FNC_READ:                                 /* read */
-    case FNC_READH:                                /* read w/ headers */
-    case FNC_WCHK:                                 /* write check */
+    case FNC_READ:                       /* read */
+    case FNC_READH:                      /* read w/ headers */
+    case FNC_WCHK:                       /* write check */
 
         if (uptr->u6 == 0) {
             int wc;
@@ -921,8 +925,8 @@ t_stat rp_svc (UNIT *uptr)
         }
         break;
 
-    case FNC_WRITE:                                /* write */
-    case FNC_WRITEH:                               /* write w/ headers */
+    case FNC_WRITE:                      /* write */
+    case FNC_WRITEH:                     /* write w/ headers */
         if (uptr->u6 == 0) {
             if (GET_SC(uptr->u4) > rp_drv_tab[dtype].sect ||
                 GET_SF(uptr->u4) > rp_drv_tab[dtype].surf) {
