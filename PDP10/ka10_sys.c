@@ -198,9 +198,26 @@ return word;
 #define AOB(x) FMASK & ((x) + 01000001LL)
 t_stat load_rim (FILE *fileref)
 {
-uint64 count, cksm, data;
-uint32 pa;
-int32 op;
+uint64        count, cksm, data;
+t_bool        its_rim;
+uint32        pa;
+int32         op, i, ldrc;
+
+data = getrimw (fileref);                               /* get first word */
+if ((data < 0) || ((data & AMASK) != 0))                /* error? SA != 0? */
+    return SCPE_FMT;
+ldrc = -((int32) ((data >> 18) & RMASK));               /* get loader count */
+if (ldrc == 016)                                        /* 16? RIM10B */
+    its_rim = FALSE;
+else if (ldrc == 017)                                   /* 17? ITS RIM */
+    its_rim = TRUE;
+else SCPE_FMT;                                          /* unknown */
+
+for (i = 0; i < ldrc; i++) {                            /* skip the loader */
+    data = getrimw (fileref);
+    if (data < 0)
+        return SCPE_FMT;
+    }
 
 for ( ;; ) {                                            /* loop until JRST */
     count = cksm = getrimw (fileref);                   /* get header */
@@ -211,6 +228,15 @@ for ( ;; ) {                                            /* loop until JRST */
             data = getrimw (fileref);                   /* get data wd */
             if (data == RIM_EOF)
                 return SCPE_FMT;
+            if (its_rim) {                              /* ITS RIM? */
+                cksm = (((cksm << 1) | (cksm >> 35))  + data) & FMASK;
+                                                        /* add to rotated cksm */
+                pa = ((uint32) count) & RMASK;             /* store */
+                }
+            else {                                      /* RIM10B */
+                cksm = (cksm + data) & FMASK;           /* add to cksm */
+                pa = ((uint32) count + 1) & RMASK;         /* store */
+                }
             cksm = cksm + data;                         /* add to cksm */
             pa = ((uint32) count + 1) & RMASK;             /* store */
             M[pa] = data;

@@ -1341,7 +1341,13 @@ int     sac_inh;                 /* Inihibit saving AC after instruction */
 int     f;                       /* Temporary variables */
 int     flag1;
 int     flag3;
+int     instr_count = 0;         /* Number of instructions to execute */
 uint32  IA;
+
+if (sim_step != 0) {
+    instr_count = sim_step;
+    sim_cancel_step();
+}
 
 /* Build device table */
 if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
@@ -1365,8 +1371,7 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
   while ( reason == 0) {                                /* loop until ABORT */
      if (sim_interval <= 0) {                           /* check clock queue */
           if ((reason = sim_process_event()) != SCPE_OK) {/* error?  stop sim */
-                if (reason != SCPE_STEP || !BYF5)
-                   return reason;
+              return reason;
           }
      }
 
@@ -1450,8 +1455,7 @@ no_fetch:
          /* Handle events during a indirect loop */
          if (sim_interval-- <= 0) {
               if ((reason = sim_process_event()) != SCPE_OK) {
-                 if (reason != SCPE_STEP || !BYF5)
-                     return reason;
+                  return reason;
               }
          }
     } while (ind & !pi_rq);
@@ -3806,6 +3810,8 @@ last:
         pi_restore = 0;
     }
     sim_interval--;
+    if (!pi_cycle && instr_count != 0 && --instr_count == 0) 
+        return SCPE_STEP;
 }
 /* Should never get here */
 

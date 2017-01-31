@@ -57,6 +57,7 @@ const char    *ptp_description (DEVICE *dptr);
              
 t_stat         ptr_devio(uint32 dev, uint64 *data);
 t_stat         ptr_svc (UNIT *uptr);
+t_stat         ptr_boot(int32 unit_num, DEVICE * dptr);
 t_stat         ptr_reset (DEVICE *dptr);
 t_stat         ptr_attach (UNIT *uptr, CONST char *cptr);
 t_stat         ptr_detach (UNIT *uptr);
@@ -84,8 +85,7 @@ MTAB ptp_mod[] = {
 DEVICE ptp_dev = {
     "PTP", &ptp_unit, ptp_reg, ptp_mod,
     1, 10, 31, 1, 8, 8,
-    NULL, NULL, &ptp_reset,
-    NULL, &ptp_attach, &ptp_detach,
+    NULL, NULL, &ptp_reset, NULL, &ptp_attach, &ptp_detach,
     &ptp_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &ptp_help, NULL, NULL, &ptp_description
     };
@@ -109,8 +109,7 @@ MTAB ptr_mod[] = {
 DEVICE ptr_dev = {
     "PTR", &ptr_unit, ptr_reg, ptr_mod,
     1, 10, 31, 1, 8, 8,
-    NULL, NULL, &ptr_reset,
-    NULL, &ptr_attach, &ptr_detach,
+    NULL, NULL, &ptr_reset, &ptr_boot, &ptr_attach, &ptr_detach,
     &ptr_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &ptr_help, NULL, NULL, &ptr_description
     };
@@ -267,12 +266,12 @@ t_stat ptr_svc (UNIT *uptr)
     uptr->STATUS |= DONE_FLG;
     set_interrupt(PR_DEVNUM, uptr->STATUS);
 
-    if ((ptr_unit.flags & UNIT_ATT) == 0)                   /* attached? */
+    if ((uptr->flags & UNIT_ATT) == 0)                   /* attached? */
         return SCPE_UNATT;
     word = 0;
     while (count > 0) {
-        if ((temp = getc (ptr_unit.fileref)) == EOF) {
-           if (feof (ptr_unit.fileref)) {
+        if ((temp = getc (uptr->fileref)) == EOF) {
+           if (feof (uptr->fileref)) {
              uptr->STATUS &= ~TAPE_PR;
              break;
            }
@@ -290,6 +289,50 @@ t_stat ptr_svc (UNIT *uptr)
     }
     uptr->CHL = (word >> 18) & RMASK;
     uptr->CHR = word & RMASK;
+    return SCPE_OK;
+}
+
+uint64
+ptr_read_word(UNIT *uptr) {
+     int i, ch;
+     uint64 word;
+   
+     for(i = 0; i <= 6;) {
+        if ((ch = getc (uptr->fileref)) == EOF) {
+           if (ch & 0200) {
+                word <<= 6;
+                word |= (uint64)(ch & 077);
+                i++;
+           }
+        }
+     }  
+     return word;
+}
+
+/* Boot from given device */
+t_stat
+ptr_boot(int32 unit_num, DEVICE * dptr)
+{
+    UNIT               *uptr = &dptr->units[unit_num];
+    uint64              word;
+    int                 wc, addr;
+
+    if ((uptr->flags & UNIT_ATT) == 0)
+        return SCPE_UNATT;      /* attached? */
+
+    word = ptr_read_word(uptr);
+    wc = (word >> 18) & RMASK;
+    addr = word & RMASK;
+    while (wc != 0) {
+        wc = (wc + 1) & RMASK;
+        addr = (addr + 1) & RMASK;
+        word = ptr_read_word(uptr);
+        if (addr < 020) 
+           FM[addr] = word;
+        else
+           M[addr] = word;
+    }
+    PC = addr;
     return SCPE_OK;
 }
 
