@@ -69,7 +69,7 @@ const char    *ptr_description (DEVICE *dptr);
 DIB ptp_dib = { PP_DEVNUM, 1, &ptp_devio, NULL };
 
 UNIT ptp_unit = {
-    UDATA (&ptp_svc, UNIT_SEQ+UNIT_ATTABLE+UNIT_TEXT, 0), SERIAL_OUT_WAIT
+    UDATA (&ptp_svc, UNIT_ATTABLE+UNIT_TEXT, 0), SERIAL_OUT_WAIT
     };
 
 REG ptp_reg[] = {
@@ -93,7 +93,7 @@ DEVICE ptp_dev = {
 DIB ptr_dib = { PR_DEVNUM, 1, &ptr_devio, NULL };
 
 UNIT ptr_unit = {
-    UDATA (&ptr_svc, UNIT_SEQ+UNIT_ATTABLE+UNIT_TEXT, 0), SERIAL_OUT_WAIT
+    UDATA (&ptr_svc, UNIT_ATTABLE+UNIT_TEXT, 0), SERIAL_OUT_WAIT
     };
 
 REG ptr_reg[] = {
@@ -295,15 +295,15 @@ t_stat ptr_svc (UNIT *uptr)
 uint64
 ptr_read_word(UNIT *uptr) {
      int i, ch;
-     uint64 word;
+     uint64 word = 0;
    
-     for(i = 0; i <= 6;) {
-        if ((ch = getc (uptr->fileref)) == EOF) {
-           if (ch & 0200) {
-                word <<= 6;
-                word |= (uint64)(ch & 077);
-                i++;
-           }
+     for(i = 0; i < 6;) {
+        if ((ch = getc (uptr->fileref)) == EOF) 
+           return word;
+        if (ch & 0200) {
+            word <<= 6;
+            word |= (uint64)(ch & 077);
+            i++;
         }
      }  
      return word;
@@ -332,7 +332,15 @@ ptr_boot(int32 unit_num, DEVICE * dptr)
         else
            M[addr] = word;
     }
-    PC = addr;
+    if (addr < 020) 
+       FM[addr] = word;
+    else
+       M[addr] = word;
+    uptr->STATUS = BUSY_FLG|BIN_FLG|TAPE_PR;
+    uptr->CHR = 0;
+    uptr->CHL = 0;
+    sim_activate (&ptr_unit, ptr_unit.wait);
+    PC = word & RMASK;
     return SCPE_OK;
 }
 

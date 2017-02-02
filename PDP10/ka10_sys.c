@@ -206,22 +206,22 @@ int32         op, i, ldrc;
 data = getrimw (fileref);                               /* get first word */
 if ((data < 0) || ((data & AMASK) != 0))                /* error? SA != 0? */
     return SCPE_FMT;
-ldrc = -((int32) ((data >> 18) & RMASK));               /* get loader count */
+ldrc = 1 + (RMASK ^ ((int32) ((data >> 18) & RMASK)));  /* get loader count */
 if (ldrc == 016)                                        /* 16? RIM10B */
     its_rim = FALSE;
 else if (ldrc == 017)                                   /* 17? ITS RIM */
     its_rim = TRUE;
-else SCPE_FMT;                                          /* unknown */
+else return SCPE_FMT;                                   /* unknown */
 
 for (i = 0; i < ldrc; i++) {                            /* skip the loader */
     data = getrimw (fileref);
-    if (data < 0)
+    if (data == RIM_EOF)
         return SCPE_FMT;
     }
 
 for ( ;; ) {                                            /* loop until JRST */
     count = cksm = getrimw (fileref);                   /* get header */
-    if (count == RIM_EOF)                                      /* read err? */
+    if (count == RIM_EOF)                               /* read err? */
         return SCPE_FMT;
     if (TSTS (count)) {                                 /* hdr = IOWD? */
         for ( ; TSTS (count); count = AOB (count)) {
@@ -229,29 +229,27 @@ for ( ;; ) {                                            /* loop until JRST */
             if (data == RIM_EOF)
                 return SCPE_FMT;
             if (its_rim) {                              /* ITS RIM? */
-                cksm = (((cksm << 1) | (cksm >> 35))  + data) & FMASK;
+                cksm = (((cksm << 1) | (cksm >> 35))) & FMASK;
                                                         /* add to rotated cksm */
-                pa = ((uint32) count) & RMASK;             /* store */
+                pa = ((uint32) count) & RMASK;          /* store */
                 }
             else {                                      /* RIM10B */
-                cksm = (cksm + data) & FMASK;           /* add to cksm */
-                pa = ((uint32) count + 1) & RMASK;         /* store */
+                pa = ((uint32) count + 1) & RMASK;      /* store */
                 }
-            cksm = cksm + data;                         /* add to cksm */
-            pa = ((uint32) count + 1) & RMASK;             /* store */
+            cksm = (cksm + data) & FMASK;               /* add to cksm */
             M[pa] = data;
             }                                           /* end for */
         data = getrimw (fileref);                       /* get cksm */
         if (data == RIM_EOF)
             return SCPE_FMT;
-        if ((cksm + data) & FMASK)                      /* test cksm */
+        if (cksm != data)                               /* test cksm */
             return SCPE_CSUM;
         }                                               /* end if count */
     else {
         op = GET_OP (count);                            /* not IOWD */
         if (op != OP_JRST)                              /* JRST? */
             return SCPE_FMT;
-        PC = (uint32) count & RMASK;                 /* set PC */
+        PC = (uint32) count & RMASK;                    /* set PC */
         break;
         }                                               /* end else */
     }                                                   /* end for */

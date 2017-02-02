@@ -50,8 +50,7 @@
 #define MTUF_7TRK       (1 << MTUF_V_UF)
 
 #define BUFFSIZE        (32 * 1024)
-#define UNIT_MT(x)      UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE | \
-                        UNIT_S_CHAN(x)
+#define UNIT_MT         UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+UNIT_ROABLE
 #define LT              66      /* Time per char low density */
 #define HT              16      /* Time per char high density */
 
@@ -160,22 +159,14 @@ uint8               mt_buffer[BUFFSIZE];
 
 UNIT                mt_unit[] = {
 /* Controller 1 */
-    {UDATA(&mt_srv,  UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                     UNIT_ROABLE, 0)},  /* 0 */
-    {UDATA(&mt_srv,  UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                     UNIT_ROABLE, 0)},  /* 1 */
-    {UDATA(&mt_srv,  UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                     UNIT_ROABLE, 0)},  /* 2 */
-    {UDATA(&mt_srv,  UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                     UNIT_ROABLE, 0)},  /* 3 */
-    {UDATA(&mt_srv,  UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                     UNIT_ROABLE, 0)},  /* 4 */
-    {UDATA(&mt_srv,  UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                     UNIT_ROABLE, 0)},  /* 5 */
-    {UDATA(&mt_srv,  UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                     UNIT_ROABLE, 0)},  /* 6 */
-    {UDATA(&mt_srv,  UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                     UNIT_ROABLE, 0)},  /* 7 */
+    {UDATA(&mt_srv,  UNIT_MT, 0)},  /* 0 */
+    {UDATA(&mt_srv,  UNIT_MT, 0)},  /* 1 */
+    {UDATA(&mt_srv,  UNIT_MT, 0)},  /* 2 */
+    {UDATA(&mt_srv,  UNIT_MT, 0)},  /* 3 */
+    {UDATA(&mt_srv,  UNIT_MT, 0)},  /* 4 */
+    {UDATA(&mt_srv,  UNIT_MT, 0)},  /* 5 */
+    {UDATA(&mt_srv,  UNIT_MT, 0)},  /* 6 */
+    {UDATA(&mt_srv,  UNIT_MT, 0)},  /* 7 */
 };
 
 DIB mt_dib = {MT_DEVNUM, 2, &mt_devio, NULL};
@@ -793,6 +784,7 @@ mt_boot(int32 unit_num, DEVICE * dptr)
     r = sim_tape_rewind(uptr);
     if (r != SCPE_OK)
         return r;
+    uptr->u3 = 022200; /* Read 800 BPI, Core */
     r = sim_tape_rdrecf(uptr, &mt_buffer[0], &reclen, BUFFSIZE);
     if (r != SCPE_OK)
         return r;
@@ -805,11 +797,12 @@ mt_boot(int32 unit_num, DEVICE * dptr)
     while (wc != 0) {
         wc = (wc + 1) & RMASK;
         addr = (addr + 1) & RMASK;
-        if ((uint32)uptr->u6 >= reclen) {
+        if ((uint32)uptr->u6 >= uptr->hwmark) {
             r = sim_tape_rdrecf(uptr, &mt_buffer[0], &reclen, BUFFSIZE);
             if (r != SCPE_OK)
                 return r;
             uptr->u6 = 0;
+            uptr->hwmark = reclen;
         }
         mt_read_word(uptr);
         if (addr < 020) 
@@ -817,7 +810,18 @@ mt_boot(int32 unit_num, DEVICE * dptr)
         else
            M[addr] = mt_df10.buf;
     }
-    PC = addr;
+    if (addr < 020) 
+        FM[addr] = mt_df10.buf;
+    else
+        M[addr] = mt_df10.buf;
+
+    /* If not at end of record and TMA continue record read */
+    if ((uptr->u6 < uptr->hwmark) && (dptr->flags & MTDF_TYPEB) == 0) {
+        uptr->u3 |= MT_MOTION|MT_BUSY;
+        uptr->u3 &= ~(MT_BRFUL|MT_BUFFUL);
+        sim_activate(uptr, 300);
+    }
+    PC = mt_df10.buf & RMASK;
     return SCPE_OK;
 }
 
