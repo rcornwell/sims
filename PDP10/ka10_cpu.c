@@ -194,6 +194,13 @@ char    xct_flag;                             /* XCT flags */
 uint32  dbr1;                                 /* User Low Page Table Address */
 uint32  dbr2;                                 /* User High Page Table Address */
 uint32  dbr3;                                 /* Exec High Page Table Address */
+uint32  jpc;                                  /* Jump program counter */
+uint8   age;                                  /* Age word */
+uint32  fault_addr;                           /* Fault address */
+uint64  opc;                                  /* Saved PC and Flags */
+uint32  mar;                                  /* Memory address compare */
+uint16  ofa;                                  /* Output fault address */
+uint32  ac_ptr;                               /* AC Pointer */
 #endif
 
 char    dev_irq[128];                         /* Pending irq by device */
@@ -732,7 +739,7 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
         res = *data;
         if (res & RSIGN) {
             eb_ptr = (res & 017777) << 9;
-            for (i = 0; i < 512; i++) 
+            for (i = 0; i < 512; i++)
                e_tlb[i] = u_tlb[i] = 0;
             for (;i < 546; i++)
                u_tlb[i] = 0;
@@ -740,7 +747,7 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
         }
         if (res & SMASK) {
             ub_ptr = ((res >> 18) & 017777) << 9;
-            for (i = 0; i < 512; i++) 
+            for (i = 0; i < 512; i++)
                e_tlb[i] = u_tlb[i] = 0;
             for (;i < 546; i++)
                u_tlb[i] = 0;
@@ -2001,7 +2008,57 @@ dpnorm:
               if ((FLAGS & USER) == 0 && cpu_unit.flags & UNIT_ITSPAGE) {
                   /* Load store ITS pager info */
                   /* AC & 1 = Store */
+                  if (AC & 1) {
+                      MB = ((uint64)age) << 27 |
+                            ((uint64)fault_addr & 0777000) << 9 |
+                            (uint64)jpc;
+                      Mem_write(1,0);
+                      AB = (AB + 1) & RMASK;
+                      MB = opc;
+                      Mem_write(1,0);
+                      AB = (AB + 1) & RMASK;
+                      MB = (uint64)mar;
+                      Mem_write(1,0);
+                      AB = (AB + 1) & RMASK;
+                      MB = 0 /* Flags | Quant */;
+                      Mem_write(1,0);
+                      AB = (AB + 1) & RMASK;
+                      MB = ((uint64)fault_addr & 0777) << 24 |
+                            (uint64)dbr1;
+                      Mem_write(1,0);
+                      AB = (AB + 1) & RMASK;
+                      MB = (uint64)dbr2;
+                      Mem_write(1,0);
+                      AB = (AB + 1) & RMASK;
+                      MB = (uint64)dbr3;
+                      Mem_write(1,0);
+                      AB = (AB + 1) & RMASK;
+                      MB = (uint64)ac_ptr;
+                      Mem_write(1,0);
+                  } else {
+                      Mem_read(1,0);
+                      age = (MB >> 27) & 017;
+                      AB = (AB + 2) & RMASK;
+                      Mem_read(1,0);
+                      mar = 03777777 & MB;
+                      AB = (AB + 2) & RMASK;
+                      Mem_read(1,0);
+                      dbr1 = ((077 << 18) | RMASK) & MB;
+                      AB = (AB + 1) & RMASK;
+                      Mem_read(1,0);
+                      dbr2 = ((077 << 18) | RMASK) & MB;
+                      AB = (AB + 1) & RMASK;
+                      Mem_read(1,0);
+                      dbr3 = ((077 << 18) | RMASK) & MB;
+                      AB = (AB + 1) & RMASK;
+                      Mem_read(1,0);
+                      ac_ptr = MB & RMASK;
+                  }
                   /* AC & 2 = Clear TLB */
+                  if (AC & 2) {
+                     for (f = 0; f < 512; f++)
+                        e_tlb[f] = u_tlb[f] = 0;
+                  }
                   /* AC & 4 = Set Prot Interrupt */
                   if (AC & 4) {
                       mem_prot = 1;
@@ -2027,7 +2084,7 @@ dpnorm:
               }
 #endif
 
-    case 0100: case 0101: 
+    case 0100: case 0101:
     case 0104: case 0105: case 0106: case 0107:
     case 0110: case 0111: case 0112: case 0113:
     case 0114: case 0115: case 0116: case 0117:
@@ -2961,7 +3018,7 @@ fxnorm:
               break;
 
     case 0255: /* JFCL */
-              if ((FLAGS >> 9) & AC) 
+              if ((FLAGS >> 9) & AC)
                   PC = AR & RMASK;
               else
                   PC = (PC + 1) & RMASK;
@@ -3725,7 +3782,7 @@ test_op:
 
     if (!sac_inh && (i_flags & (SCE|FCEPSE))) {
         MB = AR;
-        if (Mem_write(0, 0)) 
+        if (Mem_write(0, 0))
            goto last;
     }
     if (!sac_inh && ((i_flags & SAC) || ((i_flags & SACZ) && AC != 0)))
@@ -3810,7 +3867,7 @@ last:
         pi_restore = 0;
     }
     sim_interval--;
-    if (!pi_cycle && instr_count != 0 && --instr_count == 0) 
+    if (!pi_cycle && instr_count != 0 && --instr_count == 0)
         return SCPE_STEP;
 }
 /* Should never get here */
