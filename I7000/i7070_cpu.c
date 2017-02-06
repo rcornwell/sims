@@ -22,16 +22,16 @@
    cpu          IBM 7070 central processor
 
    The IBM 7070 was introduced in June 1960, as a replacement to the IBM 650.
-   It had core memory up to 10,000 10 digit words. 
+   It had core memory up to 10,000 10 digit words.
    The 7072 was introduced November 1962 and the 7074 on November 1961.
    The 7074 is a faster version of the 7070 with the addition of memory up
    to 40,000 10 digit words. The first 100 memory locations can be used as
    index registers. Most memory reference instructions allow for a field
    of digits to be selected to operate on and not modify the rest.
- 
+
    The 7070 is a decimal machine with each word consisting of 10 digits
    plus a sign. The sign can be plus, minus or alpha. Alpha data is stored
-   5 characters to a word (2 digits per character). 
+   5 characters to a word (2 digits per character).
 
    The system state for the IBM 7070 is:
 
@@ -42,10 +42,10 @@
 
    The 7070 had one basic instuction format.
 
-   <sign> 01 23 45 6789 
+   <sign> 01 23 45 6789
      <sign> and 01 are opcode. Alpha is not allowed.
      23 specify an index register from memory location 01 to 99.
-        or if extended addressing is enabled 10-99. 01-09 specify 
+        or if extended addressing is enabled 10-99. 01-09 specify
         high order digit of address.
      45 encode either a field, or operands depending on instruction.
      6789 are address in memory. If index is specified they are
@@ -198,7 +198,7 @@ uint32  dscale[4][16] = {
 
 t_uint64 fdmask[11] = {
     0x0000000000LL,
-    0xF000000000LL, 0xFF00000000LL, 0xFFF0000000LL, 0xFFFF000000LL, 
+    0xF000000000LL, 0xFF00000000LL, 0xFFF0000000LL, 0xFFFF000000LL,
     0xFFFFF00000LL, 0xFFFFFF0000LL, 0xFFFFFFF000LL, 0xFFFFFFFF00LL,
     0xFFFFFFFFF0LL, 0xFFFFFFFFFFLL
 };
@@ -291,6 +291,12 @@ sim_instr(void)
     int                 iowait = 0;     /* Wait for IO to start */
     int                 chwait = 0;     /* Wait for channel to be inactive */
     int                 sign;
+    int                 instr_count = 0; /* Number of instructions to execute */
+
+    if (sim_step != 0) {
+        instr_count = sim_step;
+        sim_cancel_step();
+    }
 
     reason = 0;
 
@@ -302,14 +308,14 @@ sim_instr(void)
     iowait = 0;
     stopnext = 0;
     while (reason == 0) {       /* loop until halted */
- 
+
 /* If doing fast I/O don't sit in idle loop */
         if (iowait == 0 && chwait == 0 && stopnext)
             return SCPE_STEP;
 
-        if (chwait != 0 && chan_active(chwait)) 
+        if (chwait != 0 && chan_active(chwait))
             sim_interval = 0;
-        else 
+        else
             chwait = 0;
 
         if (iowait)
@@ -325,8 +331,8 @@ sim_instr(void)
             }
         }
 
-        /* Only check for break points during actual fetch */ 
-        if (iowait == 0 && chwait == 0 
+        /* Only check for break points during actual fetch */
+        if (iowait == 0 && chwait == 0
                         && sim_brk_summ && sim_brk_test(IC, SWMASK('E'))) {
             reason = STOP_IBKPT;
             break;
@@ -338,8 +344,8 @@ sim_instr(void)
             if ((tmp = scan_irq()) != 0) {
                 /* Save instruction counter */
                 if (CPU_MODEL == 0x1)  /* On 7074 location 97 modified */
-                        MBR = M[97]; 
-                else 
+                        MBR = M[97];
+                else
                         MBR = 0;        /* On 7070/2 location cleared */
                 upd_idx(&MBR, IC);
                 MBR &= DMASK;
@@ -351,15 +357,15 @@ sim_instr(void)
                 pri_enb = 0;
                 IC = tmp;
                 sim_debug(DEBUG_TRAP, &cpu_dev, "IRQ= %d %d\n\r", IC, tmp);
-            } 
+            }
         }
- 
+
    /* Main instruction fetch/decode loop */
        if (chwait == 0) {
             /* Split out current instruction */
             sim_interval -= 24;         /* count down */
             /* If waiting for IO don't bump IC or create history */
-            if (iowait) 
+            if (iowait)
                 /* Don't do a fetch if waiting on I/O to be ready */
                 iowait = 0;
             else {
@@ -397,9 +403,9 @@ sim_instr(void)
                     utmp = dec_bin_idx(MBR);
                     if ((MBR & SMASK) == MSIGN) {       /* Change sign */
                         if (MA < utmp) {
-                           if (emode) 
+                           if (emode)
                                MA = 100000 - MA - utmp;
-                           else 
+                           else
                                MA = 10000 - MA - utmp;
                         } else
                            MA -= utmp;
@@ -416,7 +422,7 @@ sim_instr(void)
                         reason = STOP_INDEX;
                         break;
                     }
-                 }      
+                 }
                  IX = f2 + dscale[0][f1];
             /* Fetch data */
                  MBR = ReadP(MA);
@@ -425,7 +431,7 @@ sim_instr(void)
                      hst[hst_p].before = MBR;
                  }
              }
-    
+
              switch(opcode) {
                 /* Zero add absolute */
                 case OP_ZAA:
@@ -439,13 +445,13 @@ sim_instr(void)
                      goto set_ac;
                 /* Load AC negitive from memory */
                 case OP_ZS1: case OP_ZS2: case OP_ZS3:
-                     if ((MBR & SMASK) != ASIGN) 
+                     if ((MBR & SMASK) != ASIGN)
                         MBR ^= SMASK;
                 /* Zero add, load AC from memory */
                 case OP_ZA1: case OP_ZA2: case OP_ZA3:
         set_ac:
                      MBR = (MBR & SMASK)|((rdmask[f1] & MBR) >> ((9 - f2) * 4));
-                                                
+
                      AC[op2] = MBR;
                      sim_interval -= (CPU_MODEL == 0x0)? (f2 - f1)/3: 1;
                      if (hst_lnt) {  /* history enabled? */
@@ -477,7 +483,7 @@ sim_instr(void)
                         sign |= 8;
                      MBR = (rdmask[f1] & MBR) >> ((9 - f2) * 4);
                      sim_interval -= (CPU_MODEL == 0x0)? 4*(f2 - f1)/3: 1;
-                     if ((AC[op2] & SMASK) == MSIGN) 
+                     if ((AC[op2] & SMASK) == MSIGN)
                         sign ^= 3;
                      AC[op2] &= DMASK;
                      if (sign & 1) {
@@ -487,7 +493,7 @@ sim_instr(void)
                           if (cy == 0) {
                               AC[op2] = NINES - AC[op2];
                               dec_add(&AC[op2], 1LL);
-                              sim_interval -= (CPU_MODEL == 0x0)? 
+                              sim_interval -= (CPU_MODEL == 0x0)?
                                                         12*(f2 - f1)/3: 1;
                               sign ^= 3;
                           }
@@ -534,7 +540,7 @@ sim_instr(void)
                           if (cy == 0) {
                               temp = NINES - temp;
                               dec_add(&temp, 1LL);
-                              sim_interval -= (CPU_MODEL == 0x0)? 
+                              sim_interval -= (CPU_MODEL == 0x0)?
                                                         12*(f2 - f1)/3: 1;
                               sign ^= 3;
                           }
@@ -613,7 +619,7 @@ sim_instr(void)
                 case OP_ST1: case OP_ST2: case OP_ST3:
                      /* Check for sign change, and other data in word */
                      if ((opcode & 0x10f) == (OP_ST1 & 0x10f)) {
-                         if ((AC[op2] & SMASK) != (MBR & SMASK) && 
+                         if ((AC[op2] & SMASK) != (MBR & SMASK) &&
                              (MBR & DMASK) != 0) {
                             if (inds & 0xF000000000LL) {
                                inds &= 0xF0FFFFFFFFFLL; /* Set field */
@@ -689,8 +695,8 @@ sim_instr(void)
                          AC[1] |= (AC[2] >> 36) & 0xf;
                          AC[2] <<= 4;
                          AC[2] &= DMASK;
-                         if (digit != 0) { 
-                            sim_interval -= (CPU_MODEL == 0x0)? 
+                         if (digit != 0) {
+                            sim_interval -= (CPU_MODEL == 0x0)?
                                                         12*digit: digit;
                             /* Form product */
                             mul_step(&AC[2], MBR, digit);
@@ -708,7 +714,7 @@ sim_instr(void)
                          hst[hst_p].after = AC[1];
                      }
                      break;
-        
+
                 /* Divide */
                 case OP_D:
                      /* dividend AC[1],AC[2] */
@@ -722,7 +728,7 @@ sim_instr(void)
                      }
                      utmp = (AC[1] & SMASK) >> 40;
                     /* Compute sign */
-                     if (utmp != 3 && utmp != sign) 
+                     if (utmp != 3 && utmp != sign)
                         utmp ^= 0xf;
                     /* If any are alpha, result is alpha */
                      if (sign == 3 || utmp == 3 || utmp == 0xc)
@@ -834,7 +840,7 @@ sim_instr(void)
                         }
                         if (f1 > 5)
                            if (dec_add(&AC[2], 1LL))
-                                if (dec_add(&AC[1], 1LL)) 
+                                if (dec_add(&AC[1], 1LL))
                                     inds |= 1LL << 8; /* Set overflow */
                         break;
                      case 2:    /* Shift left coupled */
@@ -949,7 +955,7 @@ sim_instr(void)
                         inds |= 0x0000100000LL;
                      else if (MBR < f1)
                         inds |= 0x0000001000LL;
-                     else 
+                     else
                         inds |= 0x0000010000LL;
                      if (hst_lnt) {  /* history enabled? */
                          hst[hst_p].ic |= HIST_NOAFT;
@@ -998,7 +1004,7 @@ sim_instr(void)
                                    IC = MA;
                                 break;
                         case 1:
-                                emode = 0;      
+                                emode = 0;
                                 break;
                         case 2:
                                 emode = 1;
@@ -1040,9 +1046,9 @@ sim_instr(void)
                      sign = (MBR & SMASK) == MSIGN;
                      if ((AC[1] & SMASK) == MSIGN)
                          sign ^= 3;
-                     
+
                      /* Extract exponents */
-                     f1 = (((AC[1] >> 36) & 0xf) * 10) + 
+                     f1 = (((AC[1] >> 36) & 0xf) * 10) +
                                                 ((AC[1] >> 32) & 0xf);
                      tmp = (((MBR >> 36) & 0xf) * 10) + ((MBR >> 32) & 0xf);
                      tmp = 51 + (f1 - tmp);
@@ -1055,7 +1061,7 @@ sim_instr(void)
                      AC[1] &= FMASK;
                      AC[2] &= FMASK;
                      AC[1] = NINES - AC[1];  /* One's compliment AC[1]&AC[2] */
-                     AC[2] = FNINES - AC[2]; 
+                     AC[2] = FNINES - AC[2];
                      dec_add(&AC[2], 1LL);
                      if (AC[2] & EMASK) {       /* Propagate carry */
                         dec_add(&AC[1], AC[2] >> 32);
@@ -1071,10 +1077,10 @@ sim_instr(void)
                         AC[1] |= (AC[2] >> 32) & 0xf;
                         AC[2] &= FMASK;
                         tmp--;
-                     } else 
+                     } else
                         f1++;
-                     utmp = 8; 
-                     do { 
+                     utmp = 8;
+                     do {
                         int     cnt = 0;
                         /* Repeated subtract until overflow */
                         while(1) {
@@ -1099,7 +1105,7 @@ sim_instr(void)
 
                      /* Restore remainder to correct value */
                      dec_comp(&AC[1]);
-        
+
                      /* Now exchange AC1 & AC2 to get results in right place */
                      temp = AC[1];
                      AC[1] = AC[2];
@@ -1112,7 +1118,7 @@ sim_instr(void)
                      }
                     /* Save exponents */
                      bin_dec(&AC[1], tmp, 8, 2);        /* Restore exponent */
-                     if (f1 < 8) 
+                     if (f1 < 8)
                         AC[2] = 0;
                      else {
                         f1 -= 8;
@@ -1120,7 +1126,7 @@ sim_instr(void)
                         if ((AC[2] & EMASK) != 0) {
                            if (f1-- != 0)
                                AC[2] >>= 4;
-                           else 
+                           else
                                AC[2] = f1 = 0;
                         }
                         bin_dec(&AC[2], f1, 8, 2);      /* Restore exponent */
@@ -1157,9 +1163,9 @@ sim_instr(void)
                      /* Extract signs */
                      sign = (MBR & SMASK) == MSIGN;
                      sign ^= (AC[1] & SMASK) == MSIGN;
-                     
+
                      /* Extract exponents */
-                     utmp = (((AC[1] >> 36) & 0xf) * 10) + 
+                     utmp = (((AC[1] >> 36) & 0xf) * 10) +
                                                 ((AC[1] >> 32) & 0xf);
                      f1 = (((MBR >> 36) & 0xf) * 10) + ((MBR >> 32) & 0xf);
                      utmp += f1;
@@ -1178,7 +1184,7 @@ sim_instr(void)
                          AC[1] |= (AC[2] >> 28) & 0xf;
                          AC[2] <<= 4;
                          AC[2] &= FMASK;
-                         if (digit != 0) { 
+                         if (digit != 0) {
                             sim_interval -= (CPU_MODEL == 0x0)? 12*digit:digit;
                             /* Form product */
                             mul_step(&AC[2], MBR, digit);
@@ -1204,7 +1210,7 @@ sim_instr(void)
                      }
                     /* Save exponents */
                      bin_dec(&AC[1], utmp, 8, 2);       /* Restore exponent */
-                     if (utmp < 8) 
+                     if (utmp < 8)
                         AC[2] = 0;
                      else
                         bin_dec(&AC[2], utmp-8, 8, 2);  /* Restore exponent */
@@ -1307,9 +1313,9 @@ sim_instr(void)
                      /* Extract sign */
                      if ((AC[1] & SMASK) == MSIGN)
                         sign ^= 3;
-                     
+
                      /* Compare exponents */
-                     utmp = (((AC[1] >> 36) & 0xf) * 10) + 
+                     utmp = (((AC[1] >> 36) & 0xf) * 10) +
                                                 ((AC[1] >> 32) & 0xf);
                      f1 = (((MBR >> 36) & 0xf) * 10) + ((MBR >> 32) & 0xf);
                      tmp = ((signed int)utmp) - ((signed int)f1);
@@ -1355,7 +1361,7 @@ sim_instr(void)
                              dec_add(&AC[1], (AC[2] >> 32) & 0xff);
                              AC[2] &= FMASK;
                           }
-                        
+
                           if ((AC[1] & EMASK) == 0) {
                               AC[2] = FNINES - (AC[2] & FMASK);
                               AC[1] = FNINES - (AC[1] & FMASK);
@@ -1364,7 +1370,7 @@ sim_instr(void)
                                  dec_add(&AC[1], (AC[2] >> 32) & 0xff);
                                  AC[2] &= FMASK;
                               }
-                              sim_interval -= (CPU_MODEL == 0x0)? 
+                              sim_interval -= (CPU_MODEL == 0x0)?
                                                         12*(f2 - f1)/3: 1;
                               sign ^= 3;
                           }
@@ -1393,9 +1399,9 @@ sim_instr(void)
                              AC[2] &= FMASK;
                              tmp--;
                          }
-                     } 
+                     }
                      /* Set exponent if error */
-                     if (AC[1] == 0 && AC[2] == 0) 
+                     if (AC[1] == 0 && AC[2] == 0)
                         tmp = 50;
                      if (tmp < 0) {
                         inds |= 0x0010000000LL;         /* Set underflow */
@@ -1407,7 +1413,7 @@ sim_instr(void)
                      }
                     /* Restore exponents */
                      bin_dec(&AC[1], tmp, 8, 2);        /* Restore exponent */
-                     if (tmp < 8) 
+                     if (tmp < 8)
                         AC[2] = 0;
                      else
                         bin_dec(&AC[2], tmp-8, 8, 2);   /* Restore exponent */
@@ -1423,7 +1429,7 @@ sim_instr(void)
                          hst[hst_p].after = AC[1];
                      }
                      break;
-                    
+
                 /* Floating zero and add */
                 case OP_FZA: /* AC2 <- 0, AC1 <- M, norm */
                      if ((cpu_unit.flags & OPTION_FLOAT) == 0) {
@@ -1444,7 +1450,7 @@ sim_instr(void)
                              tmp--;
                              AC[1] <<= 4;
                          }
-                     } else 
+                     } else
                          tmp = 50;
                      if (tmp < 0) {
                         inds |= 0x0010000000LL;         /* Set underflow */
@@ -1463,7 +1469,7 @@ sim_instr(void)
                          reason = STOP_UUO;
                          break;
                      }
-                     if ((inds & 0x000F000000LL) != 0) 
+                     if ((inds & 0x000F000000LL) != 0)
                         IC = MA;
                      inds &= 0xFFFF0FFFFFFLL;           /* Clear flag */
                      break;
@@ -1473,7 +1479,7 @@ sim_instr(void)
                          reason = STOP_UUO;
                          break;
                      }
-                     if ((inds & 0x00F0000000LL) != 0) 
+                     if ((inds & 0x00F0000000LL) != 0)
                         IC = MA;
                      inds &= 0xFFF0FFFFFFFLL;           /* Clear flag */
                      break;
@@ -1687,9 +1693,9 @@ sim_instr(void)
                            }
                            break;
                      case 2:
-                           if ((inds & 0x0F00000000LL) == 0x0900000000LL) 
+                           if ((inds & 0x0F00000000LL) == 0x0900000000LL)
                                 reason = STOP_SIGN;
-                           else 
+                           else
                                 inds &= 0xFF0FFFFFFFFLL;
                            if (hst_lnt) {  /* history enabled? */
                                hst[hst_p].ic |= HIST_NOEA;
@@ -1704,10 +1710,10 @@ sim_instr(void)
                            inds &= 0xFFFFF000FFFLL;
                            utmp = ((MBR >> 40) & 0xf);
                            if (utmp > f1)
-                                inds |= 0x00000100000LL; 
+                                inds |= 0x00000100000LL;
                            else if (utmp < f1)
-                                inds |= 0x00000001000LL; 
-                           else 
+                                inds |= 0x00000001000LL;
+                           else
                                 inds |= 0x00000010000LL;
                            if (hst_lnt) {  /* history enabled? */
                                hst[hst_p].ic |= HIST_NOAFT;
@@ -1730,9 +1736,9 @@ sim_instr(void)
                            }
                            break;
                       case 3:
-                           if ((inds & 0xF000000000LL) == 0x9000000000LL) 
+                           if ((inds & 0xF000000000LL) == 0x9000000000LL)
                                 reason = STOP_SIGN;
-                           else 
+                           else
                                 inds &= 0xF0FFFFFFFFFLL;
                            if (hst_lnt) {  /* history enabled? */
                                hst[hst_p].ic |= HIST_NOEA|HIST_NOBEF|HIST_NOAFT;
@@ -1749,7 +1755,7 @@ sim_instr(void)
                            break;
                       }
                       break;
-                                
+
                 /* Record scatter */
                 case OP_RS:
                 /* Generate source address */
@@ -1818,14 +1824,14 @@ sim_instr(void)
                                 WriteP(dst++, buffer);
                                 if (opcode == OP_ENS) {
                                     switch(temp & SMASK) {
-                                    case ASIGN: 
+                                    case ASIGN:
                                         buffer = 0x9090909090LL|ASIGN;
                                         break;
                                     case PSIGN:
-                                        buffer = 0x9090909060LL|ASIGN; 
+                                        buffer = 0x9090909060LL|ASIGN;
                                         break;
                                     case MSIGN:
-                                        buffer = 0x9090909070LL|ASIGN; 
+                                        buffer = 0x9090909070LL|ASIGN;
                                         break;
                                     }
                                 } else
@@ -1866,7 +1872,7 @@ sim_instr(void)
                                     buffer |= (temp & dmask[tmp+1]) >> f1;
                                     f1 -= 4;
                                 }
-                                if ((temp & 0xF0LL) == 0x70LL) 
+                                if ((temp & 0xF0LL) == 0x70LL)
                                     buffer |= MSIGN;
                                 else
                                     buffer |= PSIGN;
@@ -1955,14 +1961,14 @@ sim_instr(void)
                         }
                         WriteP(opcode, MBR);
                         break;
-                        
+
                 /* Priority control */
                 case OP_PC:
                       utmp = 0;
                       temp = 0xF;
                       /* Convert digits into bits */
                       for(f1 = 0; f1 < 10; f1++) {
-                         if ((MBR & temp) != 0) 
+                         if ((MBR & temp) != 0)
                             utmp |= 1;
                          temp <<= 4;
                          utmp <<= 1;
@@ -2046,7 +2052,7 @@ sim_instr(void)
                           inds = PSIGN;
                           IC = tmp;
                       } else {
-                          if (MA == 97) 
+                          if (MA == 97)
                              IC = dec_bin_idx(MBR);
                           else
                              IC = MA;
@@ -2077,7 +2083,7 @@ sim_instr(void)
                           hst[hst_p].ic |= HIST_NOAFT|HIST_NOBEF;
                       }
                       break;
-        
+
                 /* Inquiry station */
                 case OP_INQ:
                       if (hst_lnt) { /* history enabled? */
@@ -2095,7 +2101,7 @@ sim_instr(void)
                                 reason = STOP_UUO;
                                 goto done;
                       }
-                      
+
                       /* Start off command */
                       switch (chan_cmd(4, utmp, MA)) {
                       case SCPE_BUSY:
@@ -2126,13 +2132,13 @@ sim_instr(void)
                       case 4:                                   /* TYP */
                       case 2:                                   /* UW */
                       case 3:                                   /* UWIV */
-                                utmp = (IO_WRS << 8)|CHN_ALPHA; 
+                                utmp = (IO_WRS << 8)|CHN_ALPHA;
                                 break;
                       case 9:
                                if (cpu_unit.flags & OPTION_TIMER) {
                                    if (f1 == 0)
                                         timer = 0;
-                                   else if (f1 == 1) 
+                                   else if (f1 == 1)
                                         WriteP(MA, PSIGN|timer);
                                    goto done;
                                 }
@@ -2140,7 +2146,7 @@ sim_instr(void)
                                 reason = STOP_UUO;
                                 goto done;
                       }
-                      
+
                       /* Start off command */
                       switch (chan_cmd(f1, utmp, MA)) {
                       case SCPE_BUSY:
@@ -2178,7 +2184,7 @@ sim_instr(void)
                                 if (chan_stat(0, CHS_ERR))
                                     break;
                                 IC++;
-                                if (lpr_chan9[0]) 
+                                if (lpr_chan9[0])
                                     break;
                                 IC++;
                                 break;
@@ -2218,13 +2224,13 @@ sim_instr(void)
 
                       tmp = 0;
                       switch (f2) {
-                      case 0:   
+                      case 0:
                           switch(MA % 10) {
-                          case 0: tmp = (IO_TRS << 8); 
+                          case 0: tmp = (IO_TRS << 8);
                                   utmp &= 0xfff;
                                   break;                         /* TSEL */
                           case 1: tmp = (IO_WEF << 8); break; /* TM */
-                          case 2: tmp = (IO_REW << 8); 
+                          case 2: tmp = (IO_REW << 8);
                                   utmp &= 0xfff;
                                   break;                        /* TRW */
                           case 3: tmp = (IO_RUN << 8);
@@ -2240,10 +2246,10 @@ sim_instr(void)
                                   break;                         /* TSK */
                           case 7: chan_stat(opcode & 0xf, CHS_EOF);
                                   goto done;                     /* TEF */
-                          case 8: tmp = (IO_SDL << 8); 
+                          case 8: tmp = (IO_SDL << 8);
                                   utmp &= 0xfff;
                                   break;                        /* TSDL */
-                          case 9: tmp = (IO_SDH << 8); 
+                          case 9: tmp = (IO_SDH << 8);
                                   utmp &= 0xfff;
                                   break;                        /* TSDH */
                           }
@@ -2252,13 +2258,13 @@ sim_instr(void)
                       case 2:   tmp = (IO_RDS << 8)|CHN_RECORD;
                                                       break;    /* TRR */
                       case 3:   tmp = (IO_WRS << 8);   break;   /* TW */
-                      case 4:   tmp = (IO_WRS << 8)|CHN_RECORD; 
+                      case 4:   tmp = (IO_WRS << 8)|CHN_RECORD;
                                                       break;    /* TWR */
                       case 5:   tmp = (IO_WRS << 8)|CHN_COMPRESS;
                                                       break;    /* TWZ */
-                      case 6:   tmp = (IO_WRS << 8)|CHN_COMPRESS|CHN_RECORD; 
+                      case 6:   tmp = (IO_WRS << 8)|CHN_COMPRESS|CHN_RECORD;
                                                       break;    /* TWC */
-                      case 7:   tmp = (IO_RDS << 8)|CHN_SEGMENT|CHN_ALPHA; 
+                      case 7:   tmp = (IO_RDS << 8)|CHN_SEGMENT|CHN_ALPHA;
                                                       break;    /* TSF */
                       case 8:   tmp = (IO_RDS << 8)|CHN_SEGMENT|CHN_RECORD|CHN_ALPHA;
                                                       break;    /* TSB */
@@ -2281,7 +2287,7 @@ sim_instr(void)
                            break;
                       case SCPE_OK:
                           /* Not priority transfer, wait for channel done */
-                          if ((utmp & 0x1000) == 0) 
+                          if ((utmp & 0x1000) == 0)
                               chwait = f;
                       }
                       break;
@@ -2329,7 +2335,7 @@ sim_instr(void)
                            break;
                       case SCPE_OK:
                           /* Not priority transfer, wait for channel done */
-                          if ((utmp & 0x1000) == 0) 
+                          if ((utmp & 0x1000) == 0)
                               chwait = f;
                       }
                       break;
@@ -2386,7 +2392,7 @@ sim_instr(void)
            /* Diagnostics instructions, not fully implimented */
            /* All of these errors can not occur on the simulation */
              case OP_DIAGT:
-                      if (IX == 99) {           
+                      if (IX == 99) {
                         IX = 63;
                       } else if (IX == 98) {
                         IX = 63;
@@ -2401,9 +2407,9 @@ sim_instr(void)
                       diaglatch &= ~(1LL << IX);
                       break;
              case OP_DIAGR:
-                      if (IX > 60) 
+                      if (IX > 60)
                         break;
-                      if (IX == 0) 
+                      if (IX == 0)
                         diaglatch &= 1LL << 63;
                       else
                         diaglatch &= ~(1LL << IX);
@@ -2416,6 +2422,8 @@ sim_instr(void)
 
         }
         chan_proc();            /* process any pending channel events */
+        if (instr_count != 0 && --instr_count == 0)
+            return SCPE_STEP;
     }                           /* end while */
 
 /* Simulation halted */
@@ -2426,7 +2434,7 @@ sim_instr(void)
 /* Decimal arithmetic routines */
 /* Add a to b result in a */
 int dec_add(t_uint64 *a, t_uint64 b) {
-  t_uint64      t1,t2,t3; 
+  t_uint64      t1,t2,t3;
   t1 = *a ^ b;
   t2 = *a + b;
   t3 = t2 + 0x6666666666LL;
@@ -2438,7 +2446,7 @@ int dec_add(t_uint64 *a, t_uint64 b) {
         t1 &= DMASK;
         *a = t1;
         return 1;
-  } 
+  }
   *a = t1;
   return 0;
 }
@@ -2447,7 +2455,7 @@ int dec_add(t_uint64 *a, t_uint64 b) {
 /* Add a to b result in a */
 /* Don't detect overflow, and use 2 more guard digits */
 void dec_add_noov(t_uint64 *a, t_uint64 b) {
-  t_uint64      t1,t2,t3; 
+  t_uint64      t1,t2,t3;
   t1 = *a ^ b;
   t2 = *a + b;
   t3 = t2 + 0x666666666666LL;
@@ -2467,10 +2475,10 @@ void dec_comp(t_uint64 *a) {
 
 /* Compare to words, includeing sign */
 int dec_cmp(t_uint64 a, t_uint64 b) {
-  t_uint64      t1,t2,t3; 
+  t_uint64      t1,t2,t3;
 
   a = 0x99999999999LL - a;
-  t1 = a ^ b; 
+  t1 = a ^ b;
   t2 = a + b;
   t3 = t2 + 0x66666666666LL;
   t2 = ((t2 < a) || (t3 < t2));
@@ -2482,7 +2490,7 @@ int dec_cmp(t_uint64 a, t_uint64 b) {
   }
   if ((t1 & ~(SMASK|DMASK)) != 0) {
         return 1;
-  } 
+  }
   return -1;
 }
 
@@ -2500,12 +2508,12 @@ void mul_step(t_uint64 *a, t_uint64 b, int c) {
           prod <<= i;   /* Move into place */
           dec_add_noov(a, prod);
       }
-  } 
+  }
 }
 
 void div_step(t_uint64 b) {
   t_uint64      t1,t2,t3;
-  
+
   AC[1] &= DMASK;
   AC[1] <<= 4;
   AC[1] |= (AC[2] >> 36) & 0xf;
@@ -2520,7 +2528,7 @@ void div_step(t_uint64 b) {
       t2 = ((t1 ^ t3) >> 3) | (t2 << 41);
       t2 = 0x22222222222LL & ~t2;
       t1 = t3 - (3 * t2);
-      if ((t1 & ~DMASK) == 0) 
+      if ((t1 & ~DMASK) == 0)
           return;
       AC[1] = t1 & DMASK;
       AC[2] += 1LL;
@@ -2546,7 +2554,7 @@ uint32 dec_bin_idx(t_uint64 a) {
     v += dscale[0][(a >> 20) & 0xf];
     v += dscale[1][(a >> 24) & 0xf];
     v += dscale[2][(a >> 28) & 0xf];
-    if (emode) 
+    if (emode)
         a += dscale[3][(a >> 32) & 0xf];
     return v;
 }
@@ -2758,7 +2766,7 @@ void
 mem_init() {
     int                 i;
     /* Force memory to have all valid signs */
-    for(i = 0; i < MAXMEMSIZE; i++) 
+    for(i = 0; i < MAXMEMSIZE; i++)
         M[i] = PSIGN;
 }
 

@@ -22,12 +22,12 @@
    cpu          701 central processor
 
    The IBM 701 also know as "Defense Calculator" was introduced by IBM
-   on April 7, 1953. This computer was start of IBM 700 and 7000 line. 
+   on April 7, 1953. This computer was start of IBM 700 and 7000 line.
    Memory was 2048 36 bit words. Each instruction could be signed plus
    or minus, plus would access memory as 18 bit words, minus as 36 bit
-   words. There was a expansion option to add another 2048 words of 
+   words. There was a expansion option to add another 2048 words of
    memory, but I can't find documentation on how it worked. Memory cycle
-   time was 12 microseconds. The 701 was withdrawn from the market 
+   time was 12 microseconds. The 701 was withdrawn from the market
    October 1, 1954 replaced by 704 and 702. A total of 19 machines were
    installed.
 
@@ -45,7 +45,7 @@
    The 701 had one instruction format: memory reference,
 
        00000 000011111111
-     S 12345 678901234567 
+     S 12345 678901234567
     +-+-----+------------+
     | |opcod|  address   | memory reference
     +-+-----+------------+
@@ -150,7 +150,7 @@ extern UNIT         chan_unit[];
    cpu_reg      CPU register list
    cpu_mod      CPU modifiers list
 */
-                            
+
 UNIT                cpu_unit =
     { UDATA(NULL, UNIT_BINK, MAXMEMSIZE / 2) };
 
@@ -182,7 +182,7 @@ DEVICE              cpu_dev = {
     "CPU", &cpu_unit, cpu_reg, cpu_mod,
     1, 8, 15, 1, 8, 36,
     &cpu_ex, &cpu_dep, &cpu_reset, NULL, NULL, NULL,
-    NULL, 0, 0, NULL, 
+    NULL, 0, 0, NULL,
     NULL, NULL, &cpu_help, NULL, NULL, &cpu_description
 };
 
@@ -190,15 +190,21 @@ DEVICE              cpu_dev = {
 t_stat
 sim_instr(void)
 {
-    t_stat              reason;
-    t_uint64            temp = 0;
-    t_uint64            ibr;
-    t_uint64            SR;
-    uint16              opcode;
-    uint16              MA;
-    uint8               f;
-    int                 shiftcnt;
-    int                 stopnext = 0;
+    t_stat          reason;
+    t_uint64        temp = 0;
+    t_uint64        ibr;
+    t_uint64        SR;
+    uint16          opcode;
+    uint16          MA;
+    uint8           f;
+    int             shiftcnt;
+    int             stopnext = 0;
+    int             instr_count = 0;   /* Number of instructions to execute */
+
+    if (sim_step != 0) {
+        instr_count = sim_step;
+        sim_cancel_step();
+    }
 
     reason = 0;
 
@@ -336,7 +342,7 @@ sim_instr(void)
                 break;
             case 0:     /* STOP */
                 /* Stop at HTR instruction if trapped */
-                IC--;   
+                IC--;
               halt:
                 reason = STOP_HALT;
                 /* Clear off any pending events before we halt */
@@ -671,7 +677,7 @@ store:
                     case DEV_WRITE | DEV_FULL:
                     case 0:
                         /* On EOR skip 1, on EOF skip two */
-                        if (chan_test(0, CHS_EOF|CHS_EOT|DEV_REOR)) 
+                        if (chan_test(0, CHS_EOF|CHS_EOT|DEV_REOR))
                             chan_set(0, DEV_DISCO);
                         iowait = 1;
                         break;
@@ -742,6 +748,8 @@ store:
             }
 
          chan_proc();   /* process any pending channel events */
+         if (instr_count != 0 && --instr_count == 0)
+             return SCPE_STEP;
     }                           /* end while */
 
 /* Simulation halted */
@@ -925,7 +933,7 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
 }
 
 const char *
-cpu_description (DEVICE *dptr) 
+cpu_description (DEVICE *dptr)
 {
        return "IBM 701 CPU";
 }

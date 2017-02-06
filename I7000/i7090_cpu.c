@@ -24,16 +24,16 @@
 
    The IBM 7090 was first introduced as the IBM 704. This led to the 709,
    7090, 7094, 7040 and 7044. All where 36 bit signed magnitude machines.
-   They were single address machines and had 3 or more index registers. 
+   They were single address machines and had 3 or more index registers.
    These were the first machines to include indexing. Also first machines
    to impliment indirect addressing, built in floating point, first Fortran
-   compiler, first TimeShareing Sytem CTSS. 
+   compiler, first TimeShareing Sytem CTSS.
 
      IBM 704:   Announced May 7, 1954 withdrawn April 7, 1960.
                 First floating point.
                 First index addressing.
                 Memory to 32k words.
-                
+
      IBM 709:   Announced January 2, 1957 withdrawn April 7, 1960.
                 First indirect addressing.
                 First I/O channel.
@@ -46,7 +46,7 @@
                 Added double precision floating point.
                 Added up to 7 index registers.
 
-     IBM 7040   Announced April 1961. 
+     IBM 7040   Announced April 1961.
                 Transisterize 704, with channel.
                 Character operate instructions.
                 Currently not implmented in simulator.
@@ -358,9 +358,9 @@ MTAB                cpu_mod[] = {
     {UNIT_MSIZE, MEMAMOUNT(2), "16K", "16K", &cpu_set_size},
     {UNIT_MSIZE, MEMAMOUNT(4), "32K", "32K", &cpu_set_size},
 #ifdef I7090
-    {UNIT_FASTIO, 0, NULL, "TRUEIO", NULL, NULL, NULL, 
+    {UNIT_FASTIO, 0, NULL, "TRUEIO", NULL, NULL, NULL,
        "True I/O mode"},
-    {UNIT_FASTIO, UNIT_FASTIO, "FASTIO", "FASTIO", NULL, NULL, NULL, 
+    {UNIT_FASTIO, UNIT_FASTIO, "FASTIO", "FASTIO", NULL, NULL, NULL,
        "Fast I/O mode"},
     {OPTION_EFP, 0, NULL, "NOEFP", NULL, NULL, NULL},
     {OPTION_EFP, OPTION_EFP, "EFP", "EFP", NULL, NULL, NULL, "Extended FP"},
@@ -520,7 +520,7 @@ uint16  pos_opcode_flags[01000] = {
         /*  WEF ARS     REW             AXT     DRS     SDN      */
 /* 0770 */ X_T|T_D,T_D, X_T|T_D, N,     S_X,    X_T|T_D,X_T|T_D, N
 };
- 
+
 /* Negative opcodes */
 uint16  neg_opcode_flags[01000] = {
 /* 4000 */ N,   N,      N,      N,      N,      N,      N,      N,
@@ -606,7 +606,7 @@ uint16  neg_opcode_flags[01000] = {
 /* 4650 */ N,   N,      N,      N,      N,      N,      N,      N,
 /* 4660 */ N,   N,      N,      N,      N,      N,      N,      N,
         /*      ESB     EUA     EST */
-/* 4670 */ N,   T_B,    T_B,    T_B|S_B,N,      N,      N,      N, 
+/* 4670 */ N,   T_B,    T_B,    T_B|S_B,N,      N,      N,      N,
         /* CAD */
 /* 4700 */ X_C|T_B,N,   N,      N,      N,      N,      N,      N,
 /* 4710 */ N,   N,      N,      N,      N,      N,      N,      N,
@@ -718,6 +718,12 @@ sim_instr(void)
     int                 shiftcnt;
     int                 stopnext = 0;
     int                 first_rdwr = 0;
+    int                 instr_count = 0; /* Number of instructions to execute */
+
+    if (sim_step != 0) {
+        instr_count = sim_step;
+        sim_cancel_step();
+    }
 
     /* Set cycle time for delays */
     switch(CPU_MODEL) {
@@ -810,7 +816,7 @@ sim_instr(void)
                             nmode = 0;
                         }
                         MA++;
-                        tbase = 0; 
+                        tbase = 0;
                         prot_pend = itrap = bcore = iowait = 0;
                         ihold = 1;
                         sim_interval = sim_interval - 1;        /* count down */
@@ -895,7 +901,7 @@ sim_instr(void)
                     if (mask & AMASK & ioflags) {
                         if (chan_stat(shiftcnt, CHS_EOF))
                             f = 1;      /* We have a EOF */
-                        if (iotraps & (1 << shiftcnt)) 
+                        if (iotraps & (1 << shiftcnt))
                             f = 1;      /* We have a IOCT/IORT/IOST */
                     }
                     if (mask & DMASK & ioflags && chan_stat(shiftcnt, CHS_ERR))
@@ -947,7 +953,7 @@ sim_instr(void)
             prot_pend = 0;
         }
       next_xec:
-        opcode = (uint16)(temp >> 24); 
+        opcode = (uint16)(temp >> 24);
         if (hst_lnt) {  /* history enabled? */
             hst[hst_p].op = temp;
         }
@@ -1069,7 +1075,7 @@ prottrap:
                     memmask |= 1;
                 }
                 temp = ((t_uint64) (bcore & 3) << 31) | IC;
-                tbase = 0; 
+                tbase = 0;
                 prot_pend = nmode = bcore = STM = CTM = 0;
                 WriteP(MA, temp);
                 IC = MA + 1;
@@ -1085,7 +1091,7 @@ prottrap:
                     memmask |= 1;
                 }
                 temp = ((t_uint64) (bcore & 3) << 31) | IC;
-                tbase = 0; 
+                tbase = 0;
                 prot_pend = nmode = bcore = STM = CTM = 0;
                 WriteP(MA, temp);
                 IC = MA + 1;
@@ -1100,7 +1106,7 @@ prottrap:
                     memmask |= 1;
                 }
                 temp = ((t_uint64) (bcore & 3) << 31) | IC;
-                tbase = 0; 
+                tbase = 0;
                 prot_pend = nmode = bcore = STM = CTM = 0;
                 WriteP(MA, temp);
                 IC = MA + 2;
@@ -1114,7 +1120,7 @@ prottrap:
             if ((CPU_MODEL != CPU_704) && ((decr & 060) == 060) &&
                 (opinfo & (T_B | T_T | S_B))) {
                 ReadMem(1, SR);
-                tag = (uint8)((SR >> 15) & 07); 
+                tag = (uint8)((SR >> 15) & 07);
                 xr = get_xr(tag);
                 MA = (uint16)(memmask & (SR - xr));
             }
@@ -1140,7 +1146,7 @@ prottrap:
                 case OP_RDCF:
                 case OP_RDCG:
                 case OP_RDCH:
-                    if (CPU_MODEL == CPU_704) 
+                    if (CPU_MODEL == CPU_704)
                         break;
                     if ((bcore & 4) || STM)
                         goto seltrap;
@@ -1207,7 +1213,7 @@ prottrap:
                 case OP_SLN6:
                 case OP_SLN7:
                 case OP_SLN8:
-#endif  
+#endif
                     SL |= 1 << (MA - OP_SLN1);
                     break;
                 case OP_SWT1:
@@ -1295,7 +1301,7 @@ prottrap:
                         if ((bcore & 4) || STM)
                             goto seltrap;
                         itrap = 1;
-                        if (CPU_MODEL == CPU_709) 
+                        if (CPU_MODEL == CPU_709)
                             ihold = 1;
                         else
                             ihold = 2;
@@ -1416,7 +1422,7 @@ prottrap:
                 case OP_SLT6:
                 case OP_SLT7:
                 case OP_SLT8:
-#endif  
+#endif
                     f = 1 << (MA - OP_SLN1);
                     if (SL & f)
                         IC++;
@@ -1440,7 +1446,7 @@ prottrap:
 /* Transfer opcodes */
             case OP_HTR:
                 /* Stop at HTR instruction if trapped */
-                IC--;   
+                IC--;
             case OP_HPR:
               halt:
                 hltinst = 1;
@@ -1449,7 +1455,7 @@ prottrap:
                 break;
             case OP_XEC:
                 temp = SR;
-                opcode = (uint16)(temp >> 24); 
+                opcode = (uint16)(temp >> 24);
                 if (opcode != OP_XEC) {
                     xeccnt = 15;
                     goto next_xec;
@@ -3246,7 +3252,7 @@ prottrap:
                     case DEV_WRITE | DEV_FULL:
                     case 0:
                         /* On EOR skip 1, on EOF skip two */
-                        if (chan_test(0, CHS_EOF|CHS_EOT|DEV_REOR))  
+                        if (chan_test(0, CHS_EOF|CHS_EOT|DEV_REOR))
                             chan_set(0, DEV_DISCO);
                         iowait = 1;
                         break;
@@ -3318,12 +3324,12 @@ prottrap:
                         }
                     }
                     temp <<= 1;
-                } 
+                }
                 break;
 #endif
 
             case OP_RDS:                /* Read select */
-                if (CPU_MODEL == CPU_704) 
+                if (CPU_MODEL == CPU_704)
                     MQ = 0;
                 else if (first_rdwr == 0) {
                      iotraps &= ~(1 << ((MA >> 9) & 017));
@@ -3506,10 +3512,10 @@ prottrap:
             case OP_RSCB:             /* Reset and load channel */
                 f = 2;
                 goto chanrst;
-            case OP_RSCC:            
+            case OP_RSCC:
                 f = 3;
                 goto chanrst;
-            case OP_RSCD:       
+            case OP_RSCD:
                 f = 4;
                 goto chanrst;
             case OP_RSCE:
@@ -3542,7 +3548,7 @@ prottrap:
             case OP_STCA:               /* Load channel, 7909 Start NEA */
                 f = 1;
                 goto chanst;
-            case OP_STCB:       
+            case OP_STCB:
                 f = 2;
                 goto chanst;
             case OP_STCC:
@@ -3583,7 +3589,7 @@ prottrap:
                     MA |= CORE_B;
                 chan_store(1, MA);
                 break;
-            case OP_SCHB:       
+            case OP_SCHB:
                 if (bcore & 1)
                     MA |= CORE_B;
                 chan_store(2, MA);
@@ -4103,6 +4109,8 @@ prottrap:
         }
 
         chan_proc();            /* process any pending channel events */
+        if (instr_count != 0 && --instr_count == 0)
+            return SCPE_STEP;
     }                           /* end while */
 
 /* Simulation halted */
@@ -4118,7 +4126,7 @@ uint32 cpu_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
     return -1;
 }
 
-    
+
 /* Reset routine */
 
 t_stat
@@ -4358,7 +4366,7 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
 }
 
 const char *
-cpu_description (DEVICE *dptr) 
+cpu_description (DEVICE *dptr)
 {
 #ifdef I7090
        return "IBM 709x CPU";

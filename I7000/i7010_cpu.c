@@ -22,23 +22,23 @@
    cpu          7010 central processor
 
    The IBM 1410 and 7010 were designed as enhancements to the IBM 1401,
-   these were somewhat source compatable, but not binary compatable. 
+   these were somewhat source compatable, but not binary compatable.
    The 1410 was introduced on September, 12 1960 and the 7010 in 1962.
    The 1410 was withdrawn on March 30, 1970.  The 7010 featured
    4 I/O channels where the 1410 had 2. Also the 7010 could access 100,000
    characters of memory as opposed to the 80,000 for the 1410. The 7010 also
-   featured optional decimal floating point instructions. Memory was 
+   featured optional decimal floating point instructions. Memory was
    divided into feilds seperated by a special flag called a word mark.
    Instructions end at the first character with the word mark set. They
    consist of a operation code, followed by 1 or 2 5-digit addresses, and
    an optional instruction modifier. If the 10's and 100's digit have zone
    bits set the address is modified by the contents of the five characters
    at locations 25-100. Each register is 5 characters long and word marks
-   are ignored. The 1410 and 7010 could also be optionaly equiped with 
+   are ignored. The 1410 and 7010 could also be optionaly equiped with
    priority mode to allow for device complete interupts.
 
    The 7010 or 1410 cpu has no registers. All operations on done from
-   memory. 
+   memory.
 
         i7010_defs.h    add device definitions
         i7010_sys.c     add sim_devices table entry
@@ -156,6 +156,8 @@ int32               hst_lnt = 0;                /* History length */
 struct InstHistory *hst = NULL;                 /* History stack */
 extern UNIT         chan_unit[];
 
+
+
 
 /* CPU data structures
 
@@ -225,7 +227,7 @@ DEVICE              cpu_dev = {
     "CPU", &cpu_unit, cpu_reg, cpu_mod,
     1, 10, 8, 1, 8, 8,
     &cpu_ex, &cpu_dep, &cpu_reset, NULL, NULL, NULL,
-    NULL, DEV_DEBUG, 0, dev_debug, 
+    NULL, DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &cpu_help, NULL, NULL, &cpu_description
 };
 
@@ -252,23 +254,23 @@ uint8   digit_addone[16] = {
 
 uint8  cmp_order[0100] = {
      /* b   1    2    3    4    5    6    7 */
-        0,  55,  56,  57,  58,  59,  60,  61, 
+        0,  55,  56,  57,  58,  59,  60,  61,
      /* 8   9    0    #    @    :    >    tm */
-       62,  63,  54,  20,  21,  22,  23,  24, 
+       62,  63,  54,  20,  21,  22,  23,  24,
      /*cent /    S    T    U    V    W    X */
-       19,  13,  46,  47,  48,  49,  50,  51, 
+       19,  13,  46,  47,  48,  49,  50,  51,
      /* Y   Z   rm    ,     %    =    '    " */
-       52,  53,  45,  14,  15,  16,  17,  18, 
+       52,  53,  45,  14,  15,  16,  17,  18,
      /* -   J    K    L    M    N    O    P */
-       12,  36,  37,  38,  39,  40,  41,  42, 
+       12,  36,  37,  38,  39,  40,  41,  42,
      /* Q   R    !    $    *    )    ;   del  */
-       43,  44,  35,   7,   8,   9,  10,  11, 
+       43,  44,  35,   7,   8,   9,  10,  11,
      /* &   A    B    C    D    E    F    G  */
-        6,  26,  27,  28,  29,  30,  31,  32, 
+        6,  26,  27,  28,  29,  30,  31,  32,
      /* H   I    ?    .   sq   (    <    gm  */
        33,  34,  25,   1,   2,   3,   4,   5
 };
-        
+
 
 #define O_A     001             /* Can take A */
 #define O_B     002             /* Can take B */
@@ -377,7 +379,7 @@ uint8 ReadP(uint32 MA) {
                 fault = STOP_PROT;
                 return 0;
            }
-           if (((low_addr >= 0) && (MAR < (uint32)low_addr)) || 
+           if (((low_addr >= 0) && (MAR < (uint32)low_addr)) ||
                 ((high_addr > 0) && (MAR > (uint32)high_addr))) {
                 fault = STOP_PROT;
                 return 0;
@@ -515,7 +517,7 @@ void ClrBit(uint32 MA, uint8 v) {
                 fault = STOP_PROT;
                 return;
            }
-           if (((low_addr >= 0) && (MAR < (uint32)low_addr)) || 
+           if (((low_addr >= 0) && (MAR < (uint32)low_addr)) ||
                 ((high_addr > 0) && (MAR > (uint32)high_addr))) {
                 fault = STOP_PROT;
                 return;
@@ -561,6 +563,12 @@ sim_instr(void)
     int                 cy;
     int                 i;
     int                 jump;           /* Do transfer to AAR after op */
+    int                 instr_count = 0;/* Number of instructions to execute */
+
+    if (sim_step != 0) {
+        instr_count = sim_step;
+        sim_cancel_step();
+    }
 
     reason = 0;
     fault = 0;
@@ -608,7 +616,7 @@ sim_instr(void)
             }
             op = FetchP(IAR++);
             /* Check if over the top */
-            if (fault) 
+            if (fault)
                 goto check_prot;
             if (hst_lnt)        /* History enabled? */
                 hst[hst_p].inst[0] = op;
@@ -622,7 +630,7 @@ sim_instr(void)
             state = 1;
             i = 1;
             temp = IAR + 5;     /* Save for intertupt routine */
-            while(((br = FetchP(IAR)) & WM) == 0 && op_info != 0 && fault == 0) { 
+            while(((br = FetchP(IAR)) & WM) == 0 && op_info != 0 && fault == 0) {
                  IAR++;
                  sim_interval -= 2;
                  if (hst_lnt)   /* History enabled? */
@@ -680,7 +688,7 @@ sim_instr(void)
                              ix = (ix * 5) + 24;
                              s = ((ReadP(ix) & 060) == 040)?1: 0;
                              a = bcd_bin[ReadP(ix--) & 0xf];
-                             for(j = 0; j < 4; j++) 
+                             for(j = 0; j < 4; j++)
                                  a += dscale[j][bcd_bin[ReadP(ix--) & 0xf]];
                              STAR += (s)?(99999 - a):a;
                              STAR += s;
@@ -753,7 +761,7 @@ sim_instr(void)
                              ix = (ix * 5) + 24;
                              s = ((ReadP(ix) & 060) == 040)?1: 0;
                              a = bcd_bin[ReadP(ix--) & 0xf];
-                             for(j = 0; j < 4; j++) 
+                             for(j = 0; j < 4; j++)
                                  a += dscale[j][bcd_bin[ReadP(ix--) & 0xf]];
                              STAR += (s)?(99999 - a):a;
                              STAR += s;
@@ -786,7 +794,7 @@ sim_instr(void)
                         /* 10    2000-2999 */
                         /* 11    3000-3999 */
                          ar = br;
-                         if (op_info & O_X || 
+                         if (op_info & O_X ||
                               ((op == CHR_M || op == CHR_L) && br == CHR_RPARN)) {
                               XR = br << 12;
                               op_info |= O_X;
@@ -1008,7 +1016,7 @@ sim_instr(void)
                                 /* Convert to channel instruction */
                                 if (op_mod & 02) {      /* Print line */
                                         temp = 010200;
-                                        if ((state == 2 || state == 5) 
+                                        if ((state == 2 || state == 5)
                                                 && ar == CHR_LPARN)
                                             temp |= 1;
                                         else
@@ -1050,7 +1058,7 @@ sim_instr(void)
                                 }
                             };
                             /* Handle branching */
-                            if (state == 4 || state == 5) 
+                            if (state == 4 || state == 5)
                                 jump = 1;
                             break;
 
@@ -1124,20 +1132,20 @@ sim_instr(void)
                             sim_interval--;
                             DownReg(AAR);
                             break;
-                default: 
+                default:
                            /* no change needed */
                            break;
                 }
             } else {
-                if (fault) 
+                if (fault)
                     goto check_prot;
 
                 /* Check instruction length */
                 switch(op) {
                 case OP_S:
-                case OP_A:      
+                case OP_A:
                 case OP_ZS:
-                case OP_ZA: 
+                case OP_ZA:
                 case OP_M:
                 case OP_D:
                 case OP_C:
@@ -1170,7 +1178,7 @@ sim_instr(void)
                             op_mod = ar;
                             break;
                        }
-                
+
                       /* Make sure len correct */
                        if (state != 1 && state != 6 && state != 11)
                             reason = STOP_INVLEN;
@@ -1190,7 +1198,7 @@ sim_instr(void)
                          reason = STOP_PROG;
                          break;
                      }
-    
+
                 case OP_PRI:
                 case OP_B:
                 case OP_SAR:
@@ -1205,7 +1213,7 @@ sim_instr(void)
                             op_mod = ar;
                             break;
                        }
-                
+
                       /* Make sure len correct */
                        if (state != 1 && state != 6)
                             reason = STOP_INVLEN;
@@ -1216,20 +1224,20 @@ sim_instr(void)
                          reason = STOP_PROG;
                          break;
                      }
-    
+
                     /* Valid forms */
                     /* Op */
                     /* Op AAAAA */
                        if (state != 1 && state != 6)
                             reason = STOP_INVLEN;
                        break;
-                case OP_UC: 
+                case OP_UC:
                     /* Not in protected mode */
                      if (prot_enb || reloc) {
                          reason = STOP_PROG;
                          break;
                      }
-    
+
                     /* Valid forms */
                     /* Op xxx mod */
                        /* Check for modifier */
@@ -1237,7 +1245,7 @@ sim_instr(void)
                             op_mod = ar;
                             break;
                        }
-                
+
                       /* Make sure len correct */
                        if (state != 7)
                             reason = STOP_INVLEN;
@@ -1251,7 +1259,7 @@ sim_instr(void)
                          reason = STOP_PROG;
                          break;
                      }
-    
+
                     /* Valid forms */
                     /* Op mod */
                        /* Check for modifier */
@@ -1259,11 +1267,11 @@ sim_instr(void)
                             op_mod = ar;
                             break;
                        }
-                
+
                       /* Make sure len correct */
                        reason = STOP_INVLEN;
                        break;
-    
+
                 case OP_RD:
                 case OP_RDW:
                     /* Not in protected mode */
@@ -1271,7 +1279,7 @@ sim_instr(void)
                          reason = STOP_PROG;
                          break;
                      }
-    
+
                     /* Valid forms */
                     /* Op xxx mod */
                     /* Op xxx BBBBB mod */
@@ -1280,17 +1288,17 @@ sim_instr(void)
                             op_mod = ar;
                             break;
                        }
-                
+
                        reason = STOP_INVLEN;
                        break;
                 case OP_NOP:
                        break;
                 }
-    
+
                 if (hst_lnt) {  /* History enabled? */
                     hst[hst_p].astart = AAR;
                     hst[hst_p].bstart = BAR;
-                    if (op_info & O_M && 
+                    if (op_info & O_M &&
                           (state == 1 || state == 6 || state == 11)) {
                          hst[hst_p].inst[state] = op_mod;
                          hst[hst_p].inst[state+1] = WM;
@@ -1301,8 +1309,8 @@ sim_instr(void)
                 if (reason != 0) {
                     goto check_prot;
                 }
-                   
-                /* Check to see if we should interupt */ 
+
+                /* Check to see if we should interupt */
                 if (cpu_unit.flags & OPTION_PRIO && (pri_enb || timer_enable)) {
                     int irq = inquiry;
                     int     ok_irq = 0;
@@ -1319,9 +1327,9 @@ sim_instr(void)
                     /* Check if we can interupt this opcode */
                         switch(op) {
                         case OP_S:
-                        case OP_A:      
+                        case OP_A:
                         case OP_ZS:
-                        case OP_ZA: 
+                        case OP_ZA:
                         case OP_M:
                         case OP_D:
                         case OP_SWM:
@@ -1360,13 +1368,13 @@ sim_instr(void)
                         case OP_CC2:
                         case OP_SSF1:
                         case OP_SSF2:
-                        case OP_UC: 
+                        case OP_UC:
                         case OP_PRI:
                         case OP_STS:
                         case OP_FP:
                              break;
                         }
-    
+
                         if (ok_irq) {
                             prot_enb = reloc = 0;
                             if (pri_enb && irq) {
@@ -1390,7 +1398,7 @@ sim_instr(void)
                                     hst[hst_p].inst[1] = op_mod;
                                     hst[hst_p].inst[2] = WM;
                                 }
-                            } 
+                            }
                         }
                     }
                 }
@@ -1406,7 +1414,7 @@ sim_instr(void)
                 reason = do_addsub(1);
                 break;
 
-            case OP_A:  
+            case OP_A:
                 /* Check if over the top */
                 ValidAddr(AAR);
                 ValidAddr(BAR);
@@ -1431,7 +1439,7 @@ sim_instr(void)
                 /* Check if over the top */
                 ar = ReadP(AAR);
                 DownReg(AAR);
-                if ((ar & 060) == 040) 
+                if ((ar & 060) == 040)
                     ar |= 060;
                 else {
                     ar &= 017|WM;
@@ -1439,11 +1447,11 @@ sim_instr(void)
                 }
                 goto zadd;
 
-            case OP_ZA: 
+            case OP_ZA:
                 /* Check if over the top */
                 ar = ReadP(AAR);
                 DownReg(AAR);
-                if ((ar & 060) != 040) 
+                if ((ar & 060) != 040)
                     ar |= 060;
                 else {
                     ar &= 017|WM;
@@ -1460,7 +1468,7 @@ sim_instr(void)
                     WriteP(STAR, br | bin_bcd[bcd_bin[ar & 0xf]] | (ar & 060));
                     if (bcd_bin[ar & 0xf] != 0) /* Update zero flag */
                         zind = 0;
-                    if (br & WM) 
+                    if (br & WM)
                         break;
                     sim_interval -= 4;
                     if (ar & WM)
@@ -1474,7 +1482,7 @@ sim_instr(void)
                     DownReg(BAR);
                 }
                 break;
-                    
+
             case OP_SAR:
                 if ((CAR & AMASK) < 5 || !MEM_ADDR_OK(CAR)) {
                     reason = STOP_INVADDR;
@@ -1506,7 +1514,7 @@ sim_instr(void)
                        tptr = localtime(&curtim);  /* decompose */
                        if (tptr == NULL)
                            break;                 /* error? */
-                    
+
                        /* Convert minutes to 100th hour */
                        temp = tptr->tm_min * 1000;
                        temp /= 60;
@@ -1527,7 +1535,7 @@ sim_instr(void)
                    DownReg(CAR);
                 }
                 break;
-                
+
             case OP_SWM:
                 SetBit(AAR, WM);
                 DownReg(AAR);
@@ -1550,7 +1558,7 @@ sim_instr(void)
                     WriteP(BAR, 0);
                     sim_interval -= 2;
                     if ((BAR & AMASK) == 0) {
-                        if (CPU_MODEL == 1) 
+                        if (CPU_MODEL == 1)
                            BAR = 15999;
                         else
                            BAR = MAXMEMSIZE-1;
@@ -1559,17 +1567,17 @@ sim_instr(void)
                     BAR--;
                 } while (((BAR & AMASK) % 100) != 99);
                 /* If two address, do branch */
-                if (state > 6) 
+                if (state > 6)
                    jump = 1;
                 break;
-                
+
             case OP_H:
-                if (state > 2) 
+                if (state > 2)
                    jump = 1;
                 reason = STOP_HALT;
                 break;
-        
-            /* Treat invalid op as a NOP */             
+
+            /* Treat invalid op as a NOP */
             default:
                 reason = STOP_UUO;
             case OP_NOP:
@@ -1598,7 +1606,7 @@ sim_instr(void)
                         DownReg(AAR);
                         DownReg(BAR);
                     }
-                        
+
                     switch(op_mod & 070) {
                     case 020:   /* A, No B or 8 bit */
                         if (ar & WM)    /* 1st WM - A-field */
@@ -1647,7 +1655,7 @@ sim_instr(void)
                     WriteP(STAR, br);
                 }
                 break;
-                        
+
             case OP_MSZ:
                 ar = ReadP(AAR);        /* First character, no zone, force WM */
                 WriteP(BAR,  (ar & 017) |WM);
@@ -1668,9 +1676,9 @@ sim_instr(void)
                 sim_interval -= 2;
                 while(1) {
                     ch = br & 077;
-                    if (ch > 0 && ch < 10) 
+                    if (ch > 0 && ch < 10)
                         t = 0;
-                    else if (ch == 0 || ch == 10 || ch == CHR_COM) 
+                    else if (ch == 0 || ch == 10 || ch == CHR_COM)
                         ch = (t)?0:ch;           /* B blank, zero, comma */
                     else if (ch != CHR_MINUS && ch != CHR_DOT)
                         t = 1;                  /*  B - or . */
@@ -1681,7 +1689,7 @@ sim_instr(void)
                     br = ReadP(BAR);            /* Forward one */
                 }
                 break;
-                
+
             case OP_C:
                 cind = 2;       /* Set equal */
                 do {
@@ -1697,7 +1705,7 @@ sim_instr(void)
                     DownReg(AAR);
                     DownReg(BAR);
                 } while ((br & WM) == 0 && (ar & WM) == 0);
-                if ((br & WM) == 0 && (ar & WM)) 
+                if ((br & WM) == 0 && (ar & WM))
                     cind = 4;
                 break;
 
@@ -1726,7 +1734,7 @@ sim_instr(void)
                             cind = 1;
                     }
                     /* Hit end of search argument */
-                    if (ar & WM) {      
+                    if (ar & WM) {
                         if (cind & op_mod)              /* Check if match */
                             break;
                         if (br & WM) {
@@ -1778,7 +1786,7 @@ sim_instr(void)
                             WriteP(STAR, 0);
                        break;
                     case CHR_COM:       /* , */
-                       if (cy & 0x40) 
+                       if (cy & 0x40)
                            WriteP(STAR, 0);
                        else
                            WriteP(STAR, br & 077);
@@ -1800,10 +1808,10 @@ sim_instr(void)
                         if ((br & 077) == CHR_0 && (cy & 1) == 0) {
                             ch |= WM;
                             cy |= 1;            /* Set on */
-                        } 
+                        }
                     case CHR_ABLANK:    /* blank */
                         WriteP(STAR, ch);
-                        if ((br & WM) == 0) { 
+                        if ((br & WM) == 0) {
                             if (ar & WM) {
                                 cy &= ~0x70;    /* Set Ext  */
                                 cy |= 0x40;
@@ -1842,20 +1850,20 @@ sim_instr(void)
                      case CHR_COM:      /* , */
                             if ((cy & 3) == 2) {        /* Decimal suppress */
                                 ch = (cy & 0x4)?CHR_STAR:0;     /* * or blank */
-                            } 
+                            }
                      case CHR_0:        /* 0 */
                      case CHR_ABLANK:   /* blank */
                             if ((cy & 3) == 1) {        /* Supress, no dec */
                                 ch = (cy & 0x4)?CHR_STAR:0;     /* * or blank */
-                            } 
+                            }
                             break;
                      case CHR_DOT:      /* . */
-                            if (cy & 1) 
+                            if (cy & 1)
                                 cy |= 2;                /* Set dec */
                      case CHR_MINUS:    /* - */
                             break;
                      default:
-                            if ((cy & 0x3) == 0) 
+                            if ((cy & 0x3) == 0)
                                 cy |= 1;                /* Set 0 if not dec */
                             break;
                     }
@@ -1924,13 +1932,13 @@ sim_instr(void)
                         jump = zind;
                         break;
                 case CHR_X:     /* X floating point */
-                        if ((cpu_unit.flags & OPTION_FLOAT) == 0) 
+                        if ((cpu_unit.flags & OPTION_FLOAT) == 0)
                             reason = STOP_UUO;
                         jump = euind;
                         euind = 0;
                         break;
                 case CHR_Y:     /* Y floating point */
-                        if ((cpu_unit.flags & OPTION_FLOAT) == 0) 
+                        if ((cpu_unit.flags & OPTION_FLOAT) == 0)
                             reason = STOP_UUO;
                         jump = eoind;
                         eoind = 0;
@@ -1943,7 +1951,7 @@ sim_instr(void)
                             jump = 1;
                             tind = 0;
                         } else {
-                            for(i = 1; i <= NUM_CHAN && jump == 0; i++) 
+                            for(i = 1; i <= NUM_CHAN && jump == 0; i++)
                                jump = chan_stat(i, CHS_EOF|CHS_EOT);
                         }
                         break;
@@ -1985,7 +1993,7 @@ sim_instr(void)
                         if (CPU_MODEL == 1) {
                              jump = chan_stat(1, CHS_ERR);
                              break;
-                        } 
+                        }
                         /* Try to start command */
                         switch (chan_cmd(020200, IO_TRS << 8, 0)) {
                         case SCPE_BUSY:
@@ -2094,10 +2102,10 @@ sim_instr(void)
                     jump = 1;
                 DownReg(BAR);
                 break;
-                        
+
             case OP_BBE:
                 sim_interval -= 2;
-                if (ReadP(BAR) & op_mod) 
+                if (ReadP(BAR) & op_mod)
                     jump = 1;
                 DownReg(BAR);
                 break;
@@ -2106,7 +2114,7 @@ sim_instr(void)
                 sim_interval -= 2;
                 br = ReadP(BAR);
                 if (((op_mod & 01) && (br & WM)) ||
-                    ((op_mod & 02) && (br & 060) == (op_mod & 060))) 
+                    ((op_mod & 02) && (br & 060) == (op_mod & 060)))
                     jump = 1;
                 DownReg(BAR);
                 break;
@@ -2115,7 +2123,7 @@ sim_instr(void)
             case OP_RDW:
                 /* Check if over the top */
                 ValidAddr(BAR);
-                
+
                 /* Decode operands */
                 /* X1 digit 1 == channel 034 % non-overlap */
                 /*          2 == channel 074 sq non-overlap */
@@ -2152,17 +2160,17 @@ sim_instr(void)
                         reason = STOP_IOCHECK;
                         break;
                 }
-        
+
                 temp = ch << 12;
                 if (chan_io_status[ch & 07] & 0200) {
                    reason = STOP_IOCHECK;
                    break;
                 }
-                if ((XR & 07700) == 06200) { 
+                if ((XR & 07700) == 06200) {
                    if ((XR & 017) != 10)
                       temp |= XR & 017;
                    temp |= 02420;
-                } else if ((XR & 07700) == 02400) { 
+                } else if ((XR & 07700) == 02400) {
                    if ((XR & 017) != 10)
                       temp |= XR & 017;
                    temp |= 02400;
@@ -2204,9 +2212,9 @@ sim_instr(void)
                 case SCPE_OK:
                         chan_io_status[ch & 07] = 0200;
                         sim_debug(DEBUG_CMD, &cpu_dev,
-                           "%c on %o %s %c\n\r", sim_six_to_ascii[op], ch & 07, 
+                           "%c on %o %s %c\n\r", sim_six_to_ascii[op], ch & 07,
                                 (ch & 010)?"overlap":"", sim_six_to_ascii[op_mod]);
-                            
+
                         break;
                 case SCPE_BUSY:
                         chan_io_status[ch & 07] = 0202;
@@ -2217,7 +2225,7 @@ sim_instr(void)
                         break;
                 }
                 /* Handle waiting */
-                if ((ch & 010) && (chan_io_status[ch & 07] & 3) == 0) 
+                if ((ch & 010) && (chan_io_status[ch & 07] & 3) == 0)
                     chwait = ch & 07;
                 if (CPU_MODEL == 1)
                     chan_io_status[ch & 07] &= 0177;
@@ -2231,7 +2239,7 @@ sim_instr(void)
                 switch (chan_cmd(temp, t, 0)) {
                 case SCPE_OK:
                         chan_io_status[ch & 07] = 0000;
-                        if (ch & 010) 
+                        if (ch & 010)
                             chwait = (ch & 07) | 040;
                         break;
                 case SCPE_BUSY:
@@ -2262,7 +2270,7 @@ sim_instr(void)
                 ch = 2;
                 goto chan_io;
 
-            case OP_UC: 
+            case OP_UC:
                 switch ((XR >> 12) & 077) {
                 case CHR_RPARN: ch = 011; break; /* %/) 1 - non-overlap */
                 case CHR_LPARN: ch = 012; break; /* sq  2 - non-overlap */
@@ -2312,17 +2320,17 @@ sim_instr(void)
                             chwait = (ch & 07) | 040;
                         } else {
                             /* If doing rewind and not at BOT */
-                            if (op_mod == CHR_R) 
+                            if (op_mod == CHR_R)
                                 chan_clear(ch, STA_TWAIT);
                         }
-                        if (op_mod == CHR_A || op_mod == CHR_B) 
+                        if (op_mod == CHR_A || op_mod == CHR_B)
                            tind = 1;
                         if (op_mod == CHR_M)
                             chan_io_status[ch & 07] = 0200;
                         sim_debug(DEBUG_CMD, &cpu_dev,
-                           "UC on %o %s %c\n\r", ch & 07, 
+                           "UC on %o %s %c\n\r", ch & 07,
                                 (ch & 010)?"overlap":"", sim_six_to_ascii[op_mod]);
-                            
+
                         break;
                 case SCPE_BUSY:
                         chan_io_status[ch & 07] = 0002;
@@ -2347,7 +2355,7 @@ sim_instr(void)
                 }
                 if (chan_io_status[ch] & op_mod) {
                     jump = 1;
-                } 
+                }
                 chan_io_status[ch] &= 077;      /* Clear interlock */
                 break;
 
@@ -2381,7 +2389,7 @@ sim_instr(void)
                     zind = 1;
                     ar = ReadP(AAR);
                     DownReg(AAR);
-                    if ((ar & 060) != 040) 
+                    if ((ar & 060) != 040)
                         ar |= 060;
                     else {
                         ar |= 040;
@@ -2416,7 +2424,7 @@ sim_instr(void)
                 case CHR_L:                  /* L - Floating store */
                     /* Copy two digit exponent */
                     br = ReadP(BAR--);
-                    if ((br & 060) != 040) 
+                    if ((br & 060) != 040)
                         br |= 060;
                     else {
                         br &= 017|WM;
@@ -2501,7 +2509,7 @@ sim_instr(void)
                                 zind = 0;
                             if (br & WM || ar & WM)
                                 break;
-                            if (BAR == 280) 
+                            if (BAR == 280)
                                 SetBit(BAR, WM);
                             sim_interval -= 4;
                             ar = ReadP(AAR);
@@ -2551,7 +2559,7 @@ sim_instr(void)
                             br = ReadP(BAR--);
                         }
                         /* Zero fill new locations */
-                        while(DAR != BAR) 
+                        while(DAR != BAR)
                             ReplaceMask(DAR--, 10, 077);
                         /* Copy A exponent */
                         BAR = 299;
@@ -2566,11 +2574,11 @@ sim_instr(void)
                     zind = 1;
                     DAR = BAR;
                     sim_interval -= 2;
-                    if ((ReadP(297) & 060) == 040) 
+                    if ((ReadP(297) & 060) == 040)
                         sign ^= 1;
                     cy = sign;
                     br = ReadP(STAR = BAR--);
-                
+
                     ix = 0;
                     /* Add until word mark on A or B */
                     while(1) {
@@ -2578,7 +2586,7 @@ sim_instr(void)
                         ch = bcd_bin[ar & 0xf];
                         ch = bcd_bin[br& 0xf] + ((sign)? (9 - ch):ch) + cy;
                         cy = ch > 9;    /* Update carry */
-                        ch = bin_bcd[ch]; 
+                        ch = bin_bcd[ch];
                         if (ch != CHR_0)        /* Clear zero */
                             zind = 0;
                         WriteP(STAR, (br & 0360) | ch);
@@ -2594,7 +2602,7 @@ sim_instr(void)
                         br = ReadP(STAR = BAR--);
                         sim_interval -= 4;
                     }
-    
+
                     /* If cy and qsign, tens-compliment result and flip sign */
                     if (sign && cy == 0) {
                         STAR = BAR = DAR;
@@ -2612,7 +2620,7 @@ sim_instr(void)
                         while(1) {
                             ch = (9 - bcd_bin[br& 0xf]) + cy;
                             cy = ch > 9;        /* Update carry */
-                            ch = bin_bcd[ch]; 
+                            ch = bin_bcd[ch];
                             if (ch != CHR_0)    /* Clear zero */
                                 zind = 0;
                             WriteP(STAR, (br & 0360) | ch);
@@ -2621,7 +2629,7 @@ sim_instr(void)
                             sim_interval -= 2;
                             br = ReadP(STAR = BAR--);
                         }
-                    } 
+                    }
 
                     /* If carry fix exponent and shift result */
                     if ((sign == 0 && cy) || ix == 0) {
@@ -2632,7 +2640,7 @@ sim_instr(void)
                         ar = ReadP(BAR);
                         while ((br & WM) == 0) {
                             WriteP(STAR, (ar & 017) | (br & 060));
-                            if (BAR == 279) 
+                            if (BAR == 279)
                                 break;
                             sim_interval -= 4;
                             br = ReadP(STAR = BAR--);
@@ -2719,7 +2727,7 @@ sim_instr(void)
                         if ((ar & 017) != 10)
                            qsign = 0;
                         ClrBit(DAR--, WM);      /* Clear word marks */
-                        if (ar & WM || AAR == 0) 
+                        if (ar & WM || AAR == 0)
                            break;
                         ar = ReadP(AAR);
                         DownReg(AAR);
@@ -2727,7 +2735,7 @@ sim_instr(void)
                     };
 
                     ClrBit(DAR--, WM);  /* Extra zero */
-                    if (qsign) 
+                    if (qsign)
                         goto zerofacc;
 
                     /* Scan for B word mark */
@@ -2737,14 +2745,14 @@ sim_instr(void)
                         if ((br & 017) != 10)
                            zind = 0;
                         WriteP(DAR--, br);
-                        if (br & WM || BAR == 279) 
+                        if (br & WM || BAR == 279)
                            break;
                         br = ReadP(BAR--);
                         sim_interval -= 2;
                     };
 
                     /* If B zero, scan to A word mark and set B zero */
-                    if (zind || qsign) 
+                    if (zind || qsign)
                         goto zerofacc;
 
                     temp = BAR; /* Save for later */
@@ -2753,8 +2761,8 @@ sim_instr(void)
                     reason = do_mult();
                     if (reason != SCPE_OK)
                         break;
-                   
-                    /* Count number of leading zeros */ 
+
+                    /* Count number of leading zeros */
                     ix = 0;
                     BAR++;      /* Skip first zero */
                     while (BAR != 280) {
@@ -2766,7 +2774,7 @@ sim_instr(void)
                     if (ix != 0) {
                         DAR = BAR;
                         BAR = 299;
-                        if(do_addint(-ix)) 
+                        if(do_addint(-ix))
                             goto undfacc;
                         BAR = DAR;
                     }
@@ -2786,7 +2794,7 @@ sim_instr(void)
                     SetBit(297, ReadP(279) & 060);      /* Copy sign */
                     break;
 
-                case CHR_D:                  /* D - Floating div */  
+                case CHR_D:                  /* D - Floating div */
                     temp = oind;
                     oind = 0;
                     reason = do_addsub(1);
@@ -2811,14 +2819,14 @@ sim_instr(void)
                            zind = 0;
                         if (br & WM || BAR == 279)
                            break;
-                        if (ar & WM || AAR == 0) 
+                        if (ar & WM || AAR == 0)
                            break;
                         br = ReadP(BAR--);
                         ar = ReadP(AAR);
                         DownReg(AAR);
                         sim_interval -= 4;
                     };
-        
+
                     /* Are fractions same size? */
                     if ((br & WM) && (ar & WM) == 0)
                         goto zerofacc;
@@ -2880,20 +2888,20 @@ sim_instr(void)
                         break;
                     }
 
-                    if (ch) 
+                    if (ch)
                         goto undfacc;
-                
+
                     AAR = CAR;
                     /* Do actual divide */
                     reason = do_divide();
                     if (reason != 0)
                         break;
-                   
+
                     /* Scan backward for word mark */
                     qsign = ReadP(BAR+1);
                     sim_interval -= 2;
 
-                    /* Count number of leading zeros */ 
+                    /* Count number of leading zeros */
                     ix = 0;
                     DAR = BAR+2;
                     CAR = temp+1;               /* restore address */
@@ -2915,7 +2923,7 @@ sim_instr(void)
                    /* Find end of result */
                     BAR = 297;
                     ar = ReadP(BAR--);
-                    while((ar & WM) == 0) 
+                    while((ar & WM) == 0)
                         ar = ReadP(BAR--);
                     temp = BAR;
                     br = (br & 017) | WM;
@@ -3038,7 +3046,7 @@ sim_instr(void)
                         chan_proc();
                     }
                     /* Do load or store channel */
-                    if (ch & 010) 
+                    if (ch & 010)
                         WriteP(BAR, chan_io_status[ch & 07] & 0277);
                     else
                         chan_io_status[ch] = ReadP(BAR) & 077;
@@ -3134,7 +3142,7 @@ sim_instr(void)
 
                 case CHR_9:     /* 9 Leave Prot mode */
                      if (cpu_unit.flags & OPTION_PROT) {
-                        sim_debug(DEBUG_DETAIL, &cpu_dev, 
+                        sim_debug(DEBUG_DETAIL, &cpu_dev,
                                 "Leave Protect mode %d %d %d\n\r",
                                          AAR & AMASK, prot_enb, reloc);
                         /* If in protect mode, abort */
@@ -3158,7 +3166,7 @@ sim_instr(void)
                 case CHR_P:     /* P Check Protection faults */
                      if (cpu_unit.flags & OPTION_PROT) {
                         /* If in protect mode, abort */
-                            sim_debug(DEBUG_DETAIL, &cpu_dev, 
+                            sim_debug(DEBUG_DETAIL, &cpu_dev,
                                         "Check protect fault %d %d\n\r",
                                          AAR, prot_fault&1);
                         if (prot_enb) {
@@ -3215,7 +3223,7 @@ sim_instr(void)
                         }
                      }
                      break;
-        
+
                 case CHR_DOL:   /* Enable relocation + prot mode */
                      if (cpu_unit.flags & OPTION_PROT) {
                         /* If in protect mode, abort */
@@ -3310,7 +3318,7 @@ sim_instr(void)
                    len = 0;
                    start = hst[hst_p].bstart;
                 }
-                for(i = 0; i < len; i++) 
+                for(i = 0; i < len; i++)
                     hst[hst_p].bdata[i] = ReadP(start+i);
                 hst[hst_p].dlen = len;
             }
@@ -3344,19 +3352,19 @@ check_prot:
                         reason = 0;
                         break;
             case STOP_INVLEN:
-                        sim_debug(DEBUG_DETAIL, &cpu_dev, 
+                        sim_debug(DEBUG_DETAIL, &cpu_dev,
                         "IAR = %d Invlen Op AAR=%d BAR=%d\n\r", IAR, AAR, BAR);
                         prot_fault |= 2;
                         reason = 0;
                         break;
             case STOP_IOCHECK:
-                        sim_debug(DEBUG_DETAIL, &cpu_dev, 
+                        sim_debug(DEBUG_DETAIL, &cpu_dev,
                         "IAR = %d I/O Check AAR=%d BAR=%d\n\r", IAR, AAR, BAR);
                         prot_fault |= 2;
                         reason = 0;
                         break;
             case STOP_PROG:
-                        sim_debug(DEBUG_DETAIL, &cpu_dev, 
+                        sim_debug(DEBUG_DETAIL, &cpu_dev,
                         "IAR = %d Prog check AAR=%d BAR=%d low=%d high=%d\n\r",
                                  IAR, AAR, BAR, low_addr, high_addr);
                         prot_fault |= 2;
@@ -3382,6 +3390,8 @@ check_prot:
                 IAR = AAR = 8;
             }
         }
+        if (instr_count != 0 && --instr_count == 0)
+            return SCPE_STEP;
     }                           /* end while */
 
 /* Simulation halted */
@@ -3397,7 +3407,7 @@ check_prot:
 /* Add constant, two digits only, used by FP code */
 int do_addint(int val) {
     uint8               br;
-    int                 sign; 
+    int                 sign;
     uint8               ch;
     int                 cy;
 
@@ -3411,13 +3421,13 @@ int do_addint(int val) {
     ch = val % 10;
     ch = bcd_bin[br& 0xf] + (sign?(9-ch):ch) + cy;
     cy = ch > 9;        /* Update carry */
-    ch = bin_bcd[ch]; 
+    ch = bin_bcd[ch];
     WriteP(BAR--, (br & 060) | ch);
     br = ReadP(BAR);
     ch = val / 10;
     ch = bcd_bin[br& 0xf] + (sign?(9-ch):ch) + cy;
     cy = ch > 9;        /* Update carry */
-    ch = bin_bcd[ch]; 
+    ch = bin_bcd[ch];
     WriteP(BAR--, WM | (br & 060) | ch);
     sim_interval -= 2;
     if (sign && cy == 0) {
@@ -3434,13 +3444,13 @@ int do_addint(int val) {
         /* Compliment until B word mark */
         ch = (9 - bcd_bin[br& 0xf]) + cy;
         cy = ch > 9;    /* Update carry */
-        ch = bin_bcd[ch]; 
+        ch = bin_bcd[ch];
         WriteP(BAR--, (br & 0360) | ch);
         sim_interval -= 2;
         br = ReadP(BAR);
         ch = (9 - bcd_bin[br& 0xf]) + cy;
         cy = ch > 9;    /* Update carry */
-        ch = bin_bcd[ch]; 
+        ch = bin_bcd[ch];
         WriteP(BAR--, (br & 0360) | ch);
     }
     if (sign == 0 && cy)
@@ -3451,11 +3461,11 @@ int do_addint(int val) {
 t_stat do_addsub(int mode) {
     uint8               br;
     uint8               ar;
-    int                 sign; 
+    int                 sign;
     uint8               ch;
     int                 cy;
     uint32              STAR;
-    
+
     DAR = BAR;
     ar = ReadP(AAR);
     br = ReadP(STAR = BAR);
@@ -3467,7 +3477,7 @@ t_stat do_addsub(int mode) {
     else        /* Addition */
         sign = (ar & 060) == 040;
     zind = 1;
-    if ((br & 060) == 040) 
+    if ((br & 060) == 040)
         sign ^= 1;
     cy = sign;
 
@@ -3478,13 +3488,13 @@ t_stat do_addsub(int mode) {
         ch = bcd_bin[ar & 0xf];
         ch = bcd_bin[br & 0xf] + ((sign)? (9 - ch):ch) + cy;
         cy = ch > 9;    /* Update carry */
-        ch = bin_bcd[ch]; 
+        ch = bin_bcd[ch];
         if (ch != CHR_0)        /* Clear zero */
             zind = 0;
         WriteP(STAR, (br & 0360) | ch);
         if (br & WM) {
-             if (CPU_MODEL == 1 && !sign && cy) 
-                 WriteP(STAR, 
+             if (CPU_MODEL == 1 && !sign && cy)
+                 WriteP(STAR,
                         WM | ch |(060&(br + 020)));
              break;
         }
@@ -3503,7 +3513,7 @@ t_stat do_addsub(int mode) {
                  br &= WM | 0xf;
         }
     }
-    
+
     /* If cy and qsign, tens-compliment result and flip sign */
     if (sign && cy == 0) {
         STAR = BAR = DAR;
@@ -3522,7 +3532,7 @@ t_stat do_addsub(int mode) {
         while(1) {
             ch = (9 - bcd_bin[br& 0xf]) + cy;
             cy = ch > 9;        /* Update carry */
-            ch = bin_bcd[ch]; 
+            ch = bin_bcd[ch];
             if (ch != CHR_0)    /* Clear zero */
                 zind = 0;
             WriteP(STAR, (br & 0360) | ch);
@@ -3531,23 +3541,23 @@ t_stat do_addsub(int mode) {
             br = ReadP(STAR = BAR);
             DownAddr(BAR);
             sim_interval--;
-            if (CPU_MODEL == 1) 
+            if (CPU_MODEL == 1)
                 br &= WM|0xf;
         }
-    } 
-    
+    }
+
     /* If carry set overflow */
-    if (sign == 0 && cy) 
+    if (sign == 0 && cy)
        oind = 1;
     return SCPE_OK;
 }
 
-t_stat 
+t_stat
 do_mult()
 {
     uint8               br;
     uint8               ar;
-    int                 sign; 
+    int                 sign;
     uint8               ch;
     int                 cy;
 
@@ -3562,7 +3572,7 @@ do_mult()
         WriteP(BAR, 10);
         sim_interval -= 4;
         DownAddr(BAR);
-        if (ar & WM) 
+        if (ar & WM)
             break;
         ar = ReadP(AAR);
         DownAddr(AAR);
@@ -3613,7 +3623,7 @@ do_mult()
              DownAddr(BAR);
              br = ReadP(BAR);
              ch = bcd_bin[br & 0xf];
-        } 
+        }
         WriteP(BAR, CHR_0 | (br & WM));
         DownAddr(BAR);
         SetBit(DAR, sign);
@@ -3654,7 +3664,7 @@ do_divide()
             sign ^= ((br & 060) == 040);
             sign = (sign)?040:060;
             temp = 1;           /* Set last cycle */
-        } 
+        }
         while (1) {
             sim_interval -= 4;
             t = bcd_bin[ar& 0xf];
@@ -3683,7 +3693,7 @@ do_divide()
                 ReplaceMask(BAR, bin_bcd[ch], 017);
                 DownAddr(BAR);
                 if (ch > 9) {
-                    if (CPU_MODEL == 1) 
+                    if (CPU_MODEL == 1)
                         oind = 1;
                     else
                         dind = 1;
@@ -3849,11 +3859,11 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
             fprintf(st, "%05d ", h->bstart & AMASK);
             fprintf(st, "%05d%c", h->aend & AMASK, (h->aend & BBIT)?'+':' ');
             fprintf(st, "%05d%c|", h->bend & AMASK, (h->bend & BBIT)?'+':' ');
-            for(i = 0; i < h->dlen; i++) 
+            for(i = 0; i < h->dlen; i++)
                 fputc(mem_to_ascii[h->bdata[i]&077], st);
             fputc('|', st);
             fputc(' ', st);
-            for(i = 0; i< 15; i++) 
+            for(i = 0; i< 15; i++)
                 sim_eval[i] = h->inst[i];
             fprint_sym(st, pc, sim_eval, &cpu_unit, SWMASK((h->ic & HIST_1401)?'N':'M'));
             fputc('\n', st);    /* end line */
