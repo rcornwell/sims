@@ -225,7 +225,7 @@ MTAB                cpu_mod[] = {
 
 DEVICE              cpu_dev = {
     "CPU", &cpu_unit, cpu_reg, cpu_mod,
-    1, 10, 8, 1, 8, 8,
+    1, 10, 18, 1, 8, 8,
     &cpu_ex, &cpu_dep, &cpu_reset, NULL, NULL, NULL,
     NULL, DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &cpu_help, NULL, NULL, &cpu_description
