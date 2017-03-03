@@ -22,6 +22,7 @@ Started adding support for KA10 to boot ITS
    * RH10 RP04/RP06/RP07 (RP07 not supported under 6.03).   
    Tape  
    * TM10A or B  
+   * TD10 Dectape  
    Paper Tape  
    * Punch  
    * Reader  
