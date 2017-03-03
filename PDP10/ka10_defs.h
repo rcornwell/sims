@@ -318,7 +318,7 @@ int  df10_write(struct df10 *df);
 #define NUM_DEVS_CP     1
 #define NUM_DEVS_DC     1
 #define NUM_DEVS_RC     1
-#define NUM_DEVS_DT     0
+#define NUM_DEVS_DT     1
 #define NUM_DEVS_DK     1
 #define NUM_DEVS_RP     1
 #define NUM_DEVS_TU     0
