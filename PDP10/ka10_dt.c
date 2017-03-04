@@ -249,6 +249,7 @@
 int32 dtsa = 0;                                         /* status A */
 t_uint64 dtsb = 0;                                      /* status B */
 t_uint64 dtdb = 0;                                      /* data buffer */
+#if 0
 int32 dt_ltime = 12;                                    /* interline time */
 int32 dt_dctime = 40000;                                /* decel time */
 int32 dt_substate = 0;
@@ -258,15 +259,18 @@ static const int32 map_unit[16] = {                     /* Type 550 unit map */
     -1, 1,  2,  3,  4,  5,  6,  7,
     0, -1, -1, -1, -1, -1, -1, -1
     };
+#endif
 
+t_stat         dt_devio(uint32 dev, uint64 *data);
+t_stat         dt_svc (UNIT *uptr);
+t_stat         dt_boot(int32 unit_num, DEVICE * dptr);
+t_stat         dt_reset (DEVICE *dptr);
+t_stat         dt_attach (UNIT *uptr, CONST char *cptr);
+t_stat         dt_detach (UNIT *uptr);
+#if 0
 int32 dt75 (int32 dev, int32 pulse, int32 dat);
 int32 dt76 (int32 dev, int32 pulse, int32 dat);
-t_stat dt_devio(uint32 dev, uint64 *data);
 int32 dt_iors (void);
-t_stat dt_svc (UNIT *uptr);
-t_stat dt_reset (DEVICE *dptr);
-t_stat dt_attach (UNIT *uptr, CONST char *cptr);
-t_stat dt_detach (UNIT *uptr);
 void dt_deselect (int32 oldf);
 void dt_newsa (int32 newf);
 void dt_newfnc (UNIT *uptr, int32 newsta);
@@ -276,6 +280,7 @@ void dt_seterr (UNIT *uptr, int32 e);
 int32 dt_comobv (int32 val);
 int32 dt_csum (UNIT *uptr, int32 blk);
 int32 dt_gethdr (UNIT *uptr, int32 blk, int32 relpos);
+#endif
 
 /* DT data structures
 
@@ -310,13 +315,15 @@ REG dt_reg[] = {
     { ORDATA (DTSA, dtsa, 18) },
     { ORDATA (DTSB, dtsb, 18) },
     { ORDATA (DTDB, dtdb, 18) },
+#if 0
     { DRDATA (LTIME, dt_ltime, 31), REG_NZ },
     { DRDATA (DCTIME, dt_dctime, 31), REG_NZ },
     { ORDATA (SUBSTATE, dt_substate, 2) },
     { DRDATA (LBLK, dt_logblk, 12), REG_HIDDEN },
+    { FLDATA (STOP_OFFR, dt_stopoffr, 0) },
+#endif
     { URDATA (POS, dt_unit[0].pos, 10, T_ADDR_W, 0,
               DT_NUMDR, PV_LEFT | REG_RO) },
-    { FLDATA (STOP_OFFR, dt_stopoffr, 0) },
     { NULL }
     };
 
@@ -347,8 +354,7 @@ DEBTAB dt_deb[] = {
 DEVICE dt_dev = {
     "DT", dt_unit, dt_reg, dt_mod,
     DT_NUMDR, 8, 24, 1, 8, 18,
-    NULL, NULL, &dt_reset,
-    NULL, &dt_attach, &dt_detach,
+    NULL, NULL, &dt_reset, &dt_boot, &dt_attach, &dt_detach,
     &dt_dib, DEV_DISABLE | DEV_DEBUG, 0,
     dt_deb, NULL, NULL
     };
@@ -415,7 +421,6 @@ t_stat dt_devio(uint32 dev, uint64 *data) {
                   break;
               if (*data & DTC_STSTOP) {
                    if ((dt_unit[i].u4 & (DTC_MOT)) != 0) {
-      sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o setting stop\n", i);
                        dt_unit[i].u3 |= DTC_FNC_STOP;
                    }
               } else { 
@@ -431,16 +436,13 @@ t_stat dt_devio(uint32 dev, uint64 *data) {
                    case DTC_FWDRV: 
                           if (dt_unit[i].u4 & DTC_REV)
                              dt_unit[i].u3 |= DTC_FNC_REV;
-      sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o set forward\n", i);
                           break;
                    case DTC_RVDRV: 
                           if ((dt_unit[i].u4 & DTC_REV) == 0)
                              dt_unit[i].u3 |= DTC_FNC_REV;
-      sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o set reverse\n", i);
                           break;
                    case DTC_FWDRV|DTC_RVDRV: 
                           dt_unit[i].u3 |= DTC_FNC_REV;
-      sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o set reverse\n", i);
                           break;
                    }
               }
@@ -574,7 +576,7 @@ if (uptr->u4 & DTC_MOT) {
    }
    if (uptr->u3 & DTC_FNC_REV) {
        sim_activate(uptr, 40000); 
-      sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o reversing\n", u);
+       sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o reversing\n", u);
        uptr->u3 &= ~DTC_FNC_REV;
        uptr->u4 ^= DTC_REV;
        return SCPE_OK;
@@ -594,7 +596,7 @@ if (uptr->u4 & DTC_MOT) {
       switch (uptr->u5 & 7) {
       case DTC_FEND:                           /* Tape in endzone */
            /* Set stop */
-      sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o rev forward end\n", u);
+           sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o rev forward end\n", u);
            uptr->u3 |= DTC_FNC_STOP;
            uptr->u6 = 0;     
            dtsb |= DTB_END;
@@ -614,7 +616,7 @@ if (uptr->u4 & DTC_MOT) {
                uptr->u5 = DTC_RBLK|(word << DTC_V_BLK);
            dtsb &= ~(DTB_CHK);
            dtsb |= DTB_IDL;
-      sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o rev forward block\n", u);
+           sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o rev forward block\n", u);
            switch (DTC_GETFNC(uptr->u3)) {
            case FNC_MOVE:
            case FNC_SRCH:
@@ -647,7 +649,7 @@ if (uptr->u4 & DTC_MOT) {
            break;
 
       case DTC_FCHK:                           /* In forward checksum */
-      sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o rev forward check\n", u);
+           sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o rev forward check\n", u);
            sim_activate(uptr,30000); 
            word = (uptr->u5 >> DTC_V_BLK) & DTC_M_BLK;
            uptr->u5 = DTC_FBLK|(word << DTC_V_BLK);
@@ -682,8 +684,8 @@ if (uptr->u4 & DTC_MOT) {
                 break;
            case FNC_RALL:
            case FNC_READ:
-                data = ((t_uint64)fbuf[off]);
-                data |= ((t_uint64)fbuf[off+1]) << 18;
+                data = ((t_uint64)fbuf[off]) << 18;
+                data |= ((t_uint64)fbuf[off+1]);
                 if ((dtsb & DTB_STOP) == 0)
                     dt_putword(&data);
                 break;
@@ -694,9 +696,9 @@ if (uptr->u4 & DTC_MOT) {
                     dt_getword(&data, (word != 0));
                 else 
                     data = dtdb;
-                fbuf[off] = data & RMASK;
-                fbuf[off+1] = (data >> 18) & RMASK;
-                uptr->hwmark = 1;
+                fbuf[off] = (data >> 18) & RMASK;
+                fbuf[off+1] = data & RMASK;
+                uptr->hwmark = uptr->capac;
                 break;
            }
            if (word == 0) {
@@ -887,8 +889,8 @@ if (uptr->u4 & DTC_MOT) {
                 break;
            case FNC_RALL:
            case FNC_READ:
-                data = (t_uint64)fbuf[off];
-                data |= ((t_uint64)fbuf[off+1]) << 18;
+                data = ((t_uint64)fbuf[off]) << 18;
+                data |= (t_uint64)fbuf[off+1];
                 if ((dtsb & DTB_STOP) == 0)
                     dt_putword(&data);
                 break;
@@ -897,9 +899,9 @@ if (uptr->u4 & DTC_MOT) {
                     dt_getword(&data, (word != DTC_M_WORD));
                 else 
                     data = dtdb;
-                fbuf[off] = data & RMASK;
-                fbuf[off+1] = (data >> 18) & RMASK;
-                uptr->hwmark = 1;
+                fbuf[off] = (data >> 18) & RMASK;
+                fbuf[off+1] = data & RMASK;
+                uptr->hwmark = uptr->capac;
                 break;
            case FNC_WMRK:
                 dtsb |= DTS_ILL_OP;
@@ -963,7 +965,7 @@ if (uptr->u4 & DTC_MOT) {
       case DTC_REND:                           /* In final endzone */
            /* Set stop */
            uptr->u3 |= DTC_FNC_STOP;
-      sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o reverse end\n", u);
+           sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o reverse end\n", u);
            dtsb &= ~DTB_IDL;
            dtsb |= DTB_END;
            if (dtsb & DTB_ENDENB) 
@@ -990,36 +992,52 @@ if (uptr->u4 & DTC_MOT) {
 return SCPE_OK;
 }
 
+/* Boot from given device */
+t_stat
+dt_boot(int32 unit_num, DEVICE * dptr)
+{
+    UNIT               *uptr = &dptr->units[unit_num];
+    uint32             *fbuf = (uint32 *) uptr->filebuf;    /* file buffer */
+    uint64              word;
+    int                 off;
+    int                 wc, addr;
+
+    if ((uptr->flags & UNIT_ATT) == 0)
+        return SCPE_UNATT;      /* attached? */
+
+    off = 0;
+    wc = fbuf[off++];
+    addr = fbuf[off++];
+    while (wc != 0) {
+        wc = (wc + 1) & RMASK;
+        addr = (addr + 1) & RMASK;
+        word = ((t_uint64)fbuf[off++]) << 18;
+        word |= (t_uint64)fbuf[off++];
+        if (addr < 020) 
+           FM[addr] = word;
+        else
+           M[addr] = word;
+    }
+    if (addr < 020) 
+       FM[addr] = word;
+    else
+       M[addr] = word;
+    uptr->u5 = (1 << DTC_V_BLK) | DTC_BLOCK;
+    uptr->u4 =  DTC_MOT;
+    sim_activate(uptr,30000); 
+    PC = word & RMASK;
+    return SCPE_OK;
+}
+
+
 /* Reset routine */
 
 t_stat dt_reset (DEVICE *dptr)
 {
-#if 0
-int32 i, prev_mot;
-UNIT *uptr;
-
-for (i = 0; i < DT_NUMDR; i++) {                        /* stop all drives */
-    uptr = dt_dev.units + i;
-    if (sim_is_running) {                               /* CAF? */
-        prev_mot = DTS_GETMOT (uptr->STATE);            /* get motion */
-        if ((prev_mot & ~DTS_DIR) > DTS_DECF) {         /* accel or spd? */
-            if (dt_setpos (uptr))                       /* update pos */
-                continue;
-            sim_cancel (uptr);
-            sim_activate (uptr, dt_dctime);             /* sched decel */
-            DTS_SETSTA (DTS_DECF | (prev_mot & DTS_DIR), 0);
-            }
-        }
-    else {
-        sim_cancel (uptr);                              /* sim reset */
-        uptr->STATE = 0;  
-        uptr->LASTT = sim_grtime ();
-        }
-    }
-dtsa = dtsb = 0;                                        /* clear status */
-DT_UPDINT;                                              /* reset interrupt */
-#endif
-return SCPE_OK;
+    dtsa = dtsb = 0;                                    /* clear status */
+    clr_interrupt(DT_DEVNUM);
+    clr_interrupt(DT_DEVNUM|4);
+    return SCPE_OK;
 }
 
 /* Attach routine
