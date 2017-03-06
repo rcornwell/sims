@@ -544,30 +544,35 @@ t_stat dp_svc (UNIT *uptr)
                 uptr->STATUS |= SRC_DONE;
                 if (uptr->STATUS & END_CYL) {
                      uptr->UFLAGS |= DONE;
+                     uptr->STATUS &= ~BUSY;
                      df10_finish_op(df10, 0);
                      return SCPE_OK;
                 }  
                 if (sect >= dp_drv_tab[dtype].sect) {
                      uptr->UFLAGS |= DONE;
+                     uptr->STATUS &= ~BUSY;
                      uptr->STATUS |= SEC_ERR;
                      df10_finish_op(df10, 0);
                      return SCPE_OK;
                 }
                 if (surf >= dp_drv_tab[dtype].surf) {
                      uptr->UFLAGS |= DONE;
+                     uptr->STATUS &= ~BUSY;
                      uptr->STATUS |= SUF_ERR;
                      df10_finish_op(df10, 0);
                      return SCPE_OK;
                 }
                 if (cyl != uptr->CUR_CYL) {
                      uptr->UFLAGS |= DONE;
+                     uptr->STATUS &= ~BUSY;
                      uptr->STATUS |= SRC_ERR;
                      df10_finish_op(df10, 0);
                      return SCPE_OK;
                 }
                 if ((uptr->STATUS & BUSY) == 0) {
-                    df10_finish_op(df10, 0);
-                    return SCPE_OK;
+                     uptr->STATUS &= ~BUSY;
+                     df10_finish_op(df10, 0);
+                     return SCPE_OK;
                 }
                 if (cmd != WR) {
                     /* Read the block */

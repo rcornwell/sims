@@ -523,6 +523,7 @@ t_stat mt_srv(UNIT * uptr)
             if ((r = sim_tape_rdrecf(uptr, &mt_buffer[0], &reclen, 
                                 BUFFSIZE)) != MTSE_OK) {
                 sim_debug(DEBUG_DETAIL, dptr, "MT%o read error %d\n", unit, r);
+                uptr->u3 &= ~MT_MOTION;
                 return mt_error(uptr, r, dptr);
             }
             sim_debug(DEBUG_DETAIL, dptr, "MT%o read %d\n", unit, reclen);
@@ -582,6 +583,7 @@ t_stat mt_srv(UNIT * uptr)
              if ((r = sim_tape_rdrecf(uptr, &mt_buffer[0], &reclen, 
                                  BUFFSIZE)) != MTSE_OK) {
                  sim_debug(DEBUG_DETAIL, dptr, "MT%o read error %d\n", unit, r);
+                 uptr->u3 &= ~MT_MOTION;
                  return mt_error(uptr, r, dptr);
              }
              sim_debug(DEBUG_DETAIL, dptr, "MT%o compare %d\n", unit, reclen);
