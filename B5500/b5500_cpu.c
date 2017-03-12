@@ -700,10 +700,12 @@ int mkint() {
                 B <<= 3;
                 exp_b--;
             }
+#if 0
             if (exp_b != 0) {
                 B = 0;
                 return 1;
             }
+#endif
         }
         if (f && B != 0)
             B |= MSIGN;
