@@ -53,11 +53,7 @@ extern "C" {
 
 #ifndef SIMH_SERHANDLE_DEFINED
 #define SIMH_SERHANDLE_DEFINED 0
-#if defined (_WIN32)                            /* Windows definitions */
-typedef void *SERHANDLE;
-#else                                           /* all other platforms */
-typedef int SERHANDLE;
-#endif
+typedef struct SERPORT *SERHANDLE;
 #endif
 
 #include "sim_sock.h"
@@ -65,7 +61,6 @@ typedef int SERHANDLE;
 #define TMXR_V_VALID    15
 #define TMXR_VALID      (1 << TMXR_V_VALID)
 #define TMXR_MAXBUF     256                             /* buffer size */
-#define TMXR_GUARD      12                              /* buffer guard */
 
 #define TMXR_DTR_DROP_TIME 500                          /* milliseconds to drop DTR for 'pseudo' modem control */
 #define TMXR_MODEM_RING_TIME 3                          /* seconds to wait for DTR for incoming connections */
@@ -176,6 +171,9 @@ struct tmln {
 #define TMXR_RX_BPS_UNIT_SCALE 1000000.0
     uint32              rxdelta;                        /* rcv inter character min time (usecs) */
     double              rxnexttime;                     /* min time for next receive character */
+    uint32              txbps;                          /* xmt bps speed (0 - unlimited) */
+    uint32              txdelta;                        /* xmt inter character min time (usecs) */
+    double              txnexttime;                     /* min time for next transmit character */
     uint8               *txpb;                          /* xmt packet buffer */
     uint32              txpbsize;                       /* xmt packet buffer size */
     uint32              txppsize;                       /* xmt packet packet size */
@@ -284,8 +282,8 @@ t_stat tmxr_activate_after (UNIT *uptr, uint32 usecs_walltime);
 t_stat tmxr_activate_after_abs (UNIT *uptr, uint32 usecs_walltime);
 t_stat tmxr_clock_coschedule (UNIT *uptr, int32 interval);
 t_stat tmxr_clock_coschedule_abs (UNIT *uptr, int32 interval);
-t_stat tmxr_clock_coschedule_tmr (UNIT *uptr, int32 tmr, int32 interval);
-t_stat tmxr_clock_coschedule_tmr_abs (UNIT *uptr, int32 tmr, int32 interval);
+t_stat tmxr_clock_coschedule_tmr (UNIT *uptr, int32 tmr, int32 ticks);
+t_stat tmxr_clock_coschedule_tmr_abs (UNIT *uptr, int32 tmr, int32 ticks);
 t_stat tmxr_change_async (void);
 t_stat tmxr_locate_line_send (const char *dev_line, SEND **snd);
 t_stat tmxr_locate_line_expect (const char *dev_line, EXPECT **exp);
@@ -302,7 +300,11 @@ void _tmxr_debug (uint32 dbits, TMLN *lp, const char *msg, char *buf, int bufsiz
 #define tmxr_debug_connect(mp, msg) do {if (sim_deb && (mp)->dptr && (TMXR_DBG_CON & (mp)->dptr->dctrl)) sim_debug (TMXR_DBG_CON, mp->dptr, "%s\n", (msg)); } while (0)
 #define tmxr_debug_connect_line(lp, msg) do {if (sim_deb && (lp)->mp && (lp)->mp->dptr && (TMXR_DBG_CON & (lp)->mp->dptr->dctrl)) sim_debug (TMXR_DBG_CON, (lp)->mp->dptr, "Ln%d:%s\n", (int)((lp)-(lp)->mp->ldsc), (msg)); } while (0)
 
-#if defined(SIM_ASYNCH_IO) && defined(SIM_ASYNCH_MUX)
+#if defined(SIM_ASYNCH_MUX) && !defined(SIM_ASYNCH_IO)
+#undef SIM_ASYNCH_MUX
+#endif /* defined(SIM_ASYNCH_MUX) && !defined(SIM_ASYNCH_IO) */
+
+#if defined(SIM_ASYNCH_MUX)
 #define tmxr_attach(mp, uptr, cptr) tmxr_attach_ex(mp, uptr, cptr, TRUE)
 #else
 #define tmxr_attach(mp, uptr, cptr) tmxr_attach_ex(mp, uptr, cptr, FALSE)
