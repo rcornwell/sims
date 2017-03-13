@@ -300,11 +300,6 @@ sim_instr(void)
 
     reason = 0;
 
-    if (cpu_unit.flags & OPTION_TIMER) {
-        sim_rtcn_init(cpu_unit.wait, TMR_RTC);
-        sim_activate(&cpu_unit, cpu_unit.wait);
-    }
-
     iowait = 0;
     stopnext = 0;
     while (reason == 0) {       /* loop until halted */
@@ -2782,6 +2777,10 @@ cpu_reset(DEVICE * dptr)
     inds = PSIGN;
     pri_enb = 1;
     sim_brk_types = sim_brk_dflt = SWMASK('E');
+    if (cpu_unit.flags & OPTION_TIMER) {
+        sim_rtcn_init_unit (&cpu_unit, cpu_unit.wait, TMR_RTC);
+        sim_activate(&cpu_unit, cpu_unit.wait);
+    }
     return SCPE_OK;
 }
 

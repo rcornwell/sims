@@ -4153,6 +4153,7 @@ cpu_reset(DEVICE * dptr)
     limitaddr = 077777;
     memmask = MEMMASK;
     if (cpu_unit.flags & OPTION_TIMER) {
+        sim_rtcn_init_unit (&cpu_unit, cpu_unit.wait, TMR_RTC);
         sim_activate(&cpu_unit, cpu_unit.wait);
     }
 

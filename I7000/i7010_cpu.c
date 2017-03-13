@@ -3744,6 +3744,8 @@ cpu_reset(DEVICE * dptr)
     timer_enable = 0;
     cind = 2;
     zind = oind = dind = euind = eoind = 0;
+    if (cpu_unit.flags & OPTION_PROT)
+        sim_rtcn_init_unit (&cpu_unit, cpu_unit.wait, TMR_RTC);
     return SCPE_OK;
 }
 
