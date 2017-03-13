@@ -3911,7 +3911,7 @@ fm_sel = small_user = user_addr_cmp = page_enable = 0;
 #endif
 for(i=0; i < 128; dev_irq[i++] = 0);
 sim_brk_types = sim_brk_dflt = SWMASK ('E');
-sim_rtcn_init (cpu_unit.wait, TMR_RTC);
+sim_rtcn_init_unit (&cpu_unit, cpu_unit.wait, TMR_RTC);
 sim_activate(&cpu_unit, cpu_unit.wait);
 return SCPE_OK;
 }
