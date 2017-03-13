@@ -101,7 +101,7 @@
 #define UNIT_MSIZE      (7 << UNIT_V_MSIZE)
 #define MEMAMOUNT(x)    (x << UNIT_V_MSIZE)
 
-#define TMR_RTC         1
+#define TMR_RTC         0
 
 #define HIST_MAX        5000
 #define HIST_MIN        64

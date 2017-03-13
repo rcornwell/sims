@@ -142,7 +142,6 @@ chan_advance(int chan) {
     uint16      addr = (uint16)(D[chan] & CORE);
 
     if (D[chan] & DEV_WCFLG) {
-    sim_debug(DEBUG_DETAIL, &chan_dev, "advance (%016llo %o)\n", D[chan], chan);   
         uint16   wc = WC(D[chan]);
         if (wc == 0) {
             status[chan] |= EOR;
