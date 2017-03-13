@@ -700,12 +700,6 @@ int mkint() {
                 B <<= 3;
                 exp_b--;
             }
-#if 0
-            if (exp_b != 0) {
-                B = 0;
-                return 1;
-            }
-#endif
         }
         if (f && B != 0)
             B |= MSIGN;
@@ -3857,8 +3851,7 @@ cpu_reset(DEVICE * dptr)
     sim_brk_types = sim_brk_dflt = SWMASK('E') | SWMASK('A') | SWMASK('B');
     hst_p = 0;
 
-    sim_register_clock_unit (&cpu_unit[0]);
-    sim_rtcn_init (cpu_unit[0].wait, TMR_RTC);
+    sim_rtcn_init_unit (&cpu_unit[0], cpu_unit[0].wait, TMR_RTC);
     sim_activate(&cpu_unit[0], cpu_unit[0].wait) ;
 
     return SCPE_OK;
