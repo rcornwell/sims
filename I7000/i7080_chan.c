@@ -571,7 +571,7 @@ chan_proc()
                      chan_flags[chan] &= ~(STA_WAIT);
                  }
                  continue;      /* On to next channel */
-
+             }
 
              /* If device put up EOR, terminate transfer. */
              if (chan_flags[chan] & DEV_REOR) {
