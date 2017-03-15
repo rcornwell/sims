@@ -41,7 +41,7 @@ uint32              hsdrm_cmd(UNIT *, uint16, uint16);
 t_stat              hsdrm_srv(UNIT *);
 void                hsdrm_ini(UNIT *, t_bool);
 t_stat              hsdrm_reset(DEVICE *);
-uint32              hsdrm_addr; /* Read/write drum address */
+t_uint64            hsdrm_addr; /* Read/write drum address */
 t_stat              set_hunits(UNIT * uptr, int32 val, CONST char *cptr, void *desc);
 t_stat              get_hunits(FILE * st, UNIT * uptr, int32 v, CONST void *desc);
 t_stat              hsdrm_attach(UNIT * uptr, CONST char *file);
@@ -150,7 +150,7 @@ t_stat hsdrm_srv(UNIT * uptr)
                           (uptr->u5 & DRMSTA_READ) ? "read" : "write",
                           addr, buf[addr]);
                 hsdrm_addr++;
-                hsdrm_addr &= 070007077777;
+                hsdrm_addr &= 070007077777LL;
                 if ((hsdrm_addr & (2048 - 1)) == 0)
                     chan_set(chan, DEV_REOR);
                 break;

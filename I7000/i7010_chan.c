@@ -147,7 +147,7 @@ struct urec_t {
 t_stat
 set_urec(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 {
-    int                 chan = UNIT_G_CHAN(uptr->flags);
+    int                 chan;
     int                 i;
 
     if (cptr == NULL)
@@ -155,6 +155,7 @@ set_urec(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     if (uptr == NULL)
         return SCPE_IERR;
 
+    chan = UNIT_G_CHAN(uptr->flags);
     for(i = 0; urec_devs[i].name != NULL; i++)
         if (strcmp(cptr, urec_devs[i].name) == 0)
             break;
@@ -168,11 +169,12 @@ set_urec(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 t_stat
 get_urec(FILE * st, UNIT * uptr, int32 v, CONST void *desc)
 {
-    int                 chan = UNIT_G_CHAN(uptr->flags);
+    int                 chan;
     int                 i;
 
     if (uptr == NULL)
         return SCPE_IERR;
+    chan = UNIT_G_CHAN(uptr->flags);
     if (irqdev[chan] == 0) {
         fprintf(st, "UREC=NONE");
         return SCPE_OK;

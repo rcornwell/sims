@@ -439,7 +439,7 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
             cptr = get_glyph(cptr, opcode, ',');
             tag = parse_addr(&cpu_dev, opcode, &arg);
             if (*arg != opcode[0])
-                d += (t_uint64)tag;
+                d += (t_value)tag;
         } while (*cptr == ',');
         if (*cptr != '\0')
             return STOP_UUO;

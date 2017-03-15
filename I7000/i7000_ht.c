@@ -249,7 +249,7 @@ t_stat htc_srv(UNIT * uptr)
 
     /* Handle sense on unit */
     if (chan_test(chan, CTL_SNS)) {
-        uint8           ch;
+        uint8           ch = 0;
         int             eor = 0;
         int             i;
         UNIT           *up;

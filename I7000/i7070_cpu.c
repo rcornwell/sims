@@ -163,7 +163,7 @@ REG                 cpu_reg[] = {
 MTAB                cpu_mod[] = {
     {UNIT_MODEL, MODEL(0x0), "7070", "7070", NULL, NULL, NULL},
     {UNIT_MODEL, MODEL(0x1), "7074", "7074", NULL, NULL, NULL},
-    {UNIT_MSIZE, MEMAMOUNT(0), "5K", "5K", &cpu_set_size},
+    {UNIT_MSIZE, MEMAMOUNT(0),  "5K",  "5K", &cpu_set_size},
     {UNIT_MSIZE, MEMAMOUNT(1), "10K", "10K", &cpu_set_size},
     {UNIT_MSIZE, MEMAMOUNT(2), "15K", "15K", &cpu_set_size},
     {UNIT_MSIZE, MEMAMOUNT(3), "20K", "20K", &cpu_set_size},
@@ -1015,6 +1015,7 @@ sim_instr(void)
                      /* fall through */
                 case OP_HP:
                      reason = STOP_HALT;
+                     /* fall through */
                 case OP_NOP:
                      /* fall through */
                      if (hst_lnt) {  /* history enabled? */
@@ -2818,7 +2819,7 @@ rtc_reset(DEVICE * dptr)
 t_stat
 cpu_ex(t_value * vptr, t_addr addr, UNIT * uptr, int32 sw)
 {
-    if (addr >= MEMSIZE)
+    if (addr > MEMSIZE)
         return SCPE_NXM;
     if (vptr != NULL)
         *vptr = M[addr];
@@ -2831,7 +2832,7 @@ cpu_ex(t_value * vptr, t_addr addr, UNIT * uptr, int32 sw)
 t_stat
 cpu_dep(t_value val, t_addr addr, UNIT * uptr, int32 sw)
 {
-    if (addr >= MEMSIZE)
+    if (addr > MEMSIZE)
         return SCPE_NXM;
     M[addr] = val;
     return SCPE_OK;
@@ -2849,12 +2850,12 @@ cpu_set_size(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     val = (val + 1) * 5000;
     if ((val < 0) || (val > MAXMEMSIZE))
         return SCPE_ARG;
-    for (i = val; i < MEMSIZE; i++)
+    for (i = val; i < (MEMSIZE-1); i++)
         mc |= M[i];
     if ((mc != 0) && (!get_yn("Really truncate memory [N]?", FALSE)))
         return SCPE_OK;
     MEMSIZE = val;
-    for (i = MEMSIZE; i < MAXMEMSIZE; i++)
+    for (i = MEMSIZE-1; i < (MAXMEMSIZE-1); i++)
         M[i] = 0;
     return SCPE_OK;
 }

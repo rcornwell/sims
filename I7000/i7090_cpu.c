@@ -1447,6 +1447,7 @@ prottrap:
             case OP_HTR:
                 /* Stop at HTR instruction if trapped */
                 IC--;
+                /* Fall through */
             case OP_HPR:
               halt:
                 hltinst = 1;

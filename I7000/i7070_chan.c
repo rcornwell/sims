@@ -816,7 +816,7 @@ chan_trap:
                         if (chan_flags[chan] & DEV_FULL) {
                             /* Check if record mark */
                             if ((cmd[chan] & CHN_RECORD) &&
-                                (assembly[chan] & DMASK) == ASIGN &&
+                                (assembly[chan] & SMASK) == ASIGN &&
                                 (assembly[chan] & 0xFF) == RM_CHAR) {
                                 break;
                             }

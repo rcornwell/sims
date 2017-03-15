@@ -1705,8 +1705,9 @@ stop_cpu:
                              if ((flags & LOWFLAG) == 0)
                                  break;
                              while ((cr1 = ReadP(MA, MCHCHK)) != CHR_RM ||
-                                     cr1 != CHR_GM)
+                                     cr1 != CHR_GM) {
                                  Next(MA);
+                             }
                          } while(cr1 != CHR_GM);
                          MAC2 = MA;
                          break;
@@ -2987,7 +2988,7 @@ step6:
         if (AC[tsac] != 10)
             remtrig = 1;
         tsac = next_addr[tsac];
-    };
+    }
     goto step6;
 step8:
      smt = 0;
@@ -3150,7 +3151,7 @@ void
 mem_init() {
     int                 i;
     /* Force memory to be blanks on load */
-    for(i = 0; i < MAXMEMSIZE; i++)
+    for(i = 0; i < (MAXMEMSIZE-1); i++)
         M[i] = CHR_BLANK;
     MEMSIZE = (((cpu_unit.flags & UNIT_MSIZE) >> UNIT_V_MSIZE) + 1) * 10000;
     EMEMSIZE = MEMSIZE;
@@ -3261,14 +3262,14 @@ cpu_set_size(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     size *= 10000;
     if (size > MAXMEMSIZE)
         return SCPE_ARG;
-    for (i = size; i < MEMSIZE; i++)
+    for (i = size; i < (MEMSIZE-1); i++)
         mc |= M[i];
     if ((mc != 0) && (!get_yn("Really truncate memory [N]?", FALSE)))
         return SCPE_OK;
     cpu_unit.flags &= ~UNIT_MSIZE;
     cpu_unit.flags |= val;
     EMEMSIZE = MEMSIZE = size;
-    for (i = MEMSIZE; i < MAXMEMSIZE; i++)
+    for (i = MEMSIZE - 1; i < (MAXMEMSIZE-1); i++)
         M[i] = CHR_BLANK;
     return SCPE_OK;
 }

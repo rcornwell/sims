@@ -761,14 +761,14 @@ void chan_clear_attn_inq(int chan) {
 int
 chan_cmd(uint16 dev, uint16 dcmd, uint32 addr)
 {
-    uint32              chan;
+    int                 chan;
     int                 unit;
     t_stat              r;
     int                 op;
 
     /* Find device on given channel and give it the command */
     chan = chan_mapdev(dev);
-    if (chan < 0 || chan >= NUM_CHAN)
+    if (chan < 0 || chan > NUM_CHAN)
         return SCPE_IOERR;
     /* If no channel device, quick exit */
     if (chan_unit[chan].flags & UNIT_DIS)

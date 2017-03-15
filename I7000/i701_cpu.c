@@ -434,6 +434,7 @@ store:
                 goto iadd;
             case 5:     /* SUB */
                 SR ^= MSIGN;
+                /* Fall through */
             case 9:     /* ADD */
               iadd:
                 f = 0;

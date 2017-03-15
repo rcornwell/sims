@@ -773,6 +773,8 @@ t_stat mt_srv(UNIT * uptr)
 
     case MT_RDS:
          mode = 0100;
+         /* Fall through */
+
     case MT_RDSB:
 #ifndef I7010
         /* Post EOR */
