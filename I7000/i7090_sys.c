@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -78,7 +78,7 @@ DEVICE             *sim_devices[] = {
 #endif /* 1 */
 #endif /* 0 */
 #ifdef MT_CHANNEL_ZERO
-    &mtz_dev, 
+    &mtz_dev,
 #endif
 #if NUM_DEVS_HT > 0
     &hta_dev,
@@ -119,7 +119,7 @@ DIB  cdr_dib = { CH_TYP_PIO|CH_TYP_76XX, 1, 0321, 0777, &cdr_cmd, NULL };
 DIB  lpr_dib = { CH_TYP_PIO|CH_TYP_76XX, 1, 0361, 0774, &lpr_cmd, &lpr_ini };
 #endif
 #if (NUM_DEVS_MT > 0) || defined(MT_CHANNEL_ZERO)
-DIB  mt_dib = { CH_TYP_PIO|CH_TYP_76XX, NUM_UNITS_MT, 0201, 0740, &mt_cmd, 
+DIB  mt_dib = { CH_TYP_PIO|CH_TYP_76XX, NUM_UNITS_MT, 0201, 0740, &mt_cmd,
                                                                 &mt_ini };
 #endif
 #ifdef NUM_DEVS_CHRON
@@ -848,7 +848,7 @@ fprint_sym(FILE * of, t_addr addr, t_value * val, UNIT * uptr, int32 sw)
 
     if (sw & SWMASK('L')) {
         t_uint64        v;
-      
+
         fputs("   L ", of);
         v = (inst >> 18) & AMASK;
         v = AMASK & ((AMASK ^ v) + 1);
@@ -870,7 +870,7 @@ fprint_sym(FILE * of, t_addr addr, t_value * val, UNIT * uptr, int32 sw)
         }
         fputc('\'', of);
     }
- 
+
     /* -m only valid on CPU */
     if ((uptr != NULL) && (uptr != &cpu_unit))
          return SCPE_ARG;     /* CPU? */
@@ -986,7 +986,7 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
 
         /* Collect first argument if there is one */
         cptr = get_glyph(cptr, buffer, ',');
-        tag =  get_uint (buffer, 8, 
+        tag =  get_uint (buffer, 8,
                         (op->type == TYPE_G) ? RMASK: AMASK, &r);
         if (r != SCPE_OK)
             return r;

@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -129,7 +129,7 @@ const char         *sim_stop_messages[] = {
     "7750 invalid line number",
     "7750 invalid message",
     "7750 No free output buffers",
-    "7750 No free input buffers", 
+    "7750 No free input buffers",
     "Field overflow",
     "Sign change",
     "Divide error",
@@ -170,15 +170,15 @@ const char          mem_to_ascii[64] = {
     'H', 'I', '?', '.', ')', '[', '<', '|',
                       /*Sq*/          /*RM*/
 };
- 
+
 char    mem_ascii[256] = {
-/* 00 */  ' ', '~', '~', '~', '~', '~', '~', '~', 
+/* 00 */  ' ', '~', '~', '~', '~', '~', '~', '~',
         /*                                         */
 /* 08 */  '~', '~', '~', '~', '~', '~', '~', '~',
         /*                          .    sq    ?   */
 /* 10 */  '~', '~', '~', '~', '~', '.', '[', '?',
         /*  \    #                                 */
-/* 18 */  '\\', '#', '|', '~', '~', '~', '~', '~', 
+/* 18 */  '\\', '#', '|', '~', '~', '~', '~', '~',
         /*+/-                        $    *    ?   */
 /* 20 */  '+', '~', '~', '~', '~', '$', '*', '?',
         /*  ?  +/-                                 */
@@ -532,7 +532,7 @@ print_opcode(FILE * of, t_value val, t_opcode * tab)
             case TYPE_S:
                 f1 = (MA >> 8) & 0xf;
                 for(tab = sub_ops; tab->name != NULL; tab++) {
-                   if (tab->type == type && tab->opbase == f1) 
+                   if (tab->type == type && tab->opbase == f1)
                         break;
                 }
                 if (tab->name == NULL)
@@ -558,7 +558,7 @@ print_opcode(FILE * of, t_value val, t_opcode * tab)
                 return;
             case TYPE_C:
                 for(tab = sub_ops; tab->name != NULL; tab++) {
-                   if (tab->type == type && tab->opbase == f1) 
+                   if (tab->type == type && tab->opbase == f1)
                         break;
                 }
                 if (tab->name == NULL)
@@ -573,7 +573,7 @@ print_opcode(FILE * of, t_value val, t_opcode * tab)
                 return;
             case TYPE_D:        /* Electronic switch */
                 for(tab = sub_ops; tab->name != NULL; tab++) {
-                   if (tab->type == type && tab->opbase == f2) 
+                   if (tab->type == type && tab->opbase == f2)
                         break;
                 }
                 if (tab->name == NULL)
@@ -591,7 +591,7 @@ print_opcode(FILE * of, t_value val, t_opcode * tab)
                 return;
             case TYPE_E:        /* Extended memory */
                 for(tab = sub_ops; tab->name != NULL; tab++) {
-                   if (tab->type == type && tab->opbase == f1) 
+                   if (tab->type == type && tab->opbase == f1)
                         break;
                 }
                 if (tab->name == NULL)
@@ -608,7 +608,7 @@ print_opcode(FILE * of, t_value val, t_opcode * tab)
                 return;
             case TYPE_F:        /* Branch type 2 */
                 for(tab = sub_ops; tab->name != NULL; tab++) {
-                   if (tab->type == type && tab->opbase == f2) 
+                   if (tab->type == type && tab->opbase == f2)
                         break;
                 }
                 if (tab->name == NULL)
@@ -626,7 +626,7 @@ print_opcode(FILE * of, t_value val, t_opcode * tab)
             case TYPE_Z:        /* Sign control */
                 f1 |= f2 << 4;
                 for(tab = sub_ops; tab->name != NULL; tab++) {
-                   if (tab->type == type && tab->opbase == f1) 
+                   if (tab->type == type && tab->opbase == f1)
                         break;
                 }
                 if (tab->name == NULL)
@@ -661,7 +661,7 @@ print_opcode(FILE * of, t_value val, t_opcode * tab)
                    f1 += MA & 0xf;
                 fputs(tab->name, of);
                 for(tab = sub_ops; tab->name != NULL; tab++) {
-                   if (tab->type == type && tab->opbase == f1) 
+                   if (tab->type == type && tab->opbase == f1)
                         break;
                 }
                 if (tab->name == NULL)
@@ -679,7 +679,7 @@ print_opcode(FILE * of, t_value val, t_opcode * tab)
                 return;
             case TYPE_U:        /* Unit Record Control */
                 for(tab = sub_ops; tab->name != NULL; tab++) {
-                   if (tab->type == type && tab->opbase == f2) 
+                   if (tab->type == type && tab->opbase == f2)
                         break;
                 }
                 if (tab->name == NULL)
@@ -697,7 +697,7 @@ print_opcode(FILE * of, t_value val, t_opcode * tab)
             case TYPE_V:        /* Channel Control */
                 fputs(tab->name, of);
                 for(tab = sub_ops; tab->name != NULL; tab++) {
-                   if (tab->type == type && tab->opbase == f1) 
+                   if (tab->type == type && tab->opbase == f1)
                         break;
                 }
                 if (tab->name == NULL)
@@ -719,7 +719,7 @@ print_opcode(FILE * of, t_value val, t_opcode * tab)
             case TYPE_P3:
                 if (f2 == 0)
                    t = f1;
-                else 
+                else
                    t = f2 << 4;
                 for(tab = sub_ops; tab->name != NULL; tab++) {
                    if (tab->type == type && tab->opbase == t)
@@ -738,7 +738,7 @@ print_opcode(FILE * of, t_value val, t_opcode * tab)
                 case 4:
                 case 3:
                 case 2: fputc('0' + f2 - 1, of);
-                case 1: 
+                case 1:
                 case 8:
                 case 9:
                 case 0: fputc('0' + f1, of);
@@ -753,7 +753,7 @@ print_opcode(FILE * of, t_value val, t_opcode * tab)
                 return;
             case TYPE_IQ:
                 for(tab = sub_ops; tab->name != NULL; tab++) {
-                   if (tab->type == type && tab->opbase == f2) 
+                   if (tab->type == type && tab->opbase == f2)
                         break;
                 }
                 if (tab->name == NULL)
@@ -862,7 +862,7 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
         sign = 0;
         /* Grab opcode */
         cptr = get_glyph(cptr, opcode, 0);
-        
+
         op2 = 0;
         if((op = find_opcode(opcode, base_ops)) == 0) {
             if ((op2 = find_opcode(opcode, sub_ops)) != 0) {
@@ -876,7 +876,7 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
                      (op->name != NULL) && op->name[0] == 'P';  op++);
                 if (op->name == NULL)
                     return STOP_UUO;
-            } 
+            }
         }
         if (op == 0)
             return STOP_UUO;
@@ -939,11 +939,11 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
             cptr++;
             while (*cptr >= '0' && *cptr <= '9')
                 idx = (idx << 4) + (*cptr++ - '0');
-            if (idx >= 0x100) 
+            if (idx >= 0x100)
                 return  STOP_UUO;
         }
-        
-        /* Comma, first was operand, now get address */ 
+
+        /* Comma, first was operand, now get address */
         if (*cptr == ',') {
             a = 0;
             cptr++;
@@ -966,7 +966,7 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
                 cptr++;
                 while (*cptr >= '0' && *cptr <= '9')
                     idx = (idx << 4) + (*cptr++ - '0');
-                if (idx >= 0x100) 
+                if (idx >= 0x100)
                     return  STOP_UUO;
             }
         }
@@ -997,7 +997,7 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
                     opr |= *cptr++ - '0';
                 } else
                     return STOP_UUO;
-            } else if (*cptr == ')') 
+            } else if (*cptr == ')')
                 opr |= opr << 4;
             /* Skip blanks */
             while (*cptr == ' ' || *cptr == '\t')
@@ -1006,7 +1006,7 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
                 return STOP_UUO;
         } else if (op->type == TYPE_A)
             opr = 0x09;
-        
+
         /* Skip blanks */
         while (*cptr == ' ' || *cptr == '\t')
             cptr++;
@@ -1018,9 +1018,9 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
         case TYPE_P1:
         case TYPE_P2:
         case TYPE_P3:
-                if (op2 == NULL) 
+                if (op2 == NULL)
                     d |= ((t_uint64)opr) << 16;
-                else 
+                else
                     d |= ((t_uint64)(opr + op2->opbase)) << 16;
                 break;
         case TYPE_A:
@@ -1042,13 +1042,14 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
         case TYPE_TB:
                 opr <<= 4;
                 opr |= 1;
+                /* Fall through */
         case TYPE_I:
                 d |= ((t_uint64)opr) << 16;
                 break;
         case TYPE_T:
-                if (op2->opbase & 0xf0) 
+                if (op2->opbase & 0xf0)
                     d |= ((t_uint64)op2->opbase &0xF0) << 12;
-                else 
+                else
                     d |= op2->opbase;
                 d |= ((t_uint64)opr & 0xF) << 16;
                 d += ((t_uint64)opr &0xF0) << 28;
@@ -1057,6 +1058,7 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
         case TYPE_C:
                 d |= ((t_uint64)opr) << 20;
                 d |= ((t_uint64)op2->opbase) << 16;
+                /* Fall through */
         case TYPE_IQ:
                 d |= ((t_uint64)opr) << 20;
                 break;
@@ -1064,23 +1066,24 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
     } else if (sw & SWMASK('C')) {
         extern uint8    bcd_mem[64];
         i = 0;
-        while (*cptr != '\0' && i < 9) {
+        while (*cptr != '\0' && i < 5) {
             d <<= 8;
             if (sim_ascii_to_six[0177 & *cptr] != -1)
                 d |= bcd_mem[(int)sim_ascii_to_six[0177 & *cptr]];
             cptr++;
             i++;
         }
-        d <<= 8 * (9 - i);
+        d <<= 8 * (5 - i);
         d |= ASIGN;
     } else {
         switch(*cptr) {
         case '-': sign = -1; cptr++; break;
         case '@': sign = 1; cptr++; break;
         case '+': cptr++;
+                  /* Fall through */
         default:
             sign = 0;
-        } 
+        }
         while (*cptr >= '0' && *cptr <= '9') {
             d <<= 4;
             d |= *cptr++ - '0';
@@ -1093,11 +1096,5 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
         }
     }
     *val = d;
-    return SCPE_OK;
-
-/* Symbolic input, continued */
-
-    if (*cptr != 0)
-        return SCPE_ARG;        /* junk at end? */
     return SCPE_OK;
 }

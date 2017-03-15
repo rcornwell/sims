@@ -15,11 +15,11 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-   channel              
+   channel
 
    The channel state for the IBM 705 channel is:
         705:    Polled mode transfer, unit record devices.
@@ -27,7 +27,7 @@
         7621:   Basic data channel for 729 tapes.
         7908:   Channel to talk to disk, hypertape and data com.
 
-   The 705 has 4 7621 channels. 
+   The 705 has 4 7621 channels.
    The status for these are kept in bank 2. Form as follow:
       Word 3 digits 7-6: 0
       Word 3 digit 5:  chan control digit.
@@ -40,7 +40,7 @@
       Word 0 digits 7-4: Channel Program Status.
       Word 0 digits 3-0: Record Count/Program location.
 
-   The 705 has 2 7908 channels. 
+   The 705 has 2 7908 channels.
    The status for these are kept in bank 4. Form as follow:
       Word 3 digits 7-0: 0
       Word 2 digits 7-0: 0
@@ -48,7 +48,7 @@
       Word 1 digits 3-0: Data Memory Address SMAC.
       Word 0 digits 7-4: Channel Program Status.
       Word 0 digits 3-0: Program location.
-   
+
 */
 
 #include "i7080_defs.h"
@@ -64,7 +64,7 @@ extern uint16       selreg2;
 extern uint16       flags;
 extern uint32       MAC2;
 extern uint16       irqflags;
-extern uint8        ioflags[5000/8]; 
+extern uint8        ioflags[5000/8];
 
 #define UNIT_V_MOD      (UNIT_V_UF + 4)
 #define UNIT_V_HS       (UNIT_V_MOD + 1)
@@ -171,7 +171,7 @@ DEVICE              chan_dev = {
 };
 
 
-t_stat 
+t_stat
 set_chan_type(UNIT *uptr, int32 val, CONST char *cptr, void *desc) {
     if ((uptr->flags & CHAN_MOD) == 0)
         return SCPE_ARG;
@@ -198,14 +198,14 @@ chan_reset(DEVICE * dptr)
 /* Map device to channel */
 int
 chan_mapdev(uint16 dev) {
-    
+
     switch((dev >> 8) & 0xff) {
     case 0x02: return 1 + ((dev >> 4) & 0xf);   /* Map tapes to 20-23 */
     case 0x20:
                if (CHAN_G_TYPE(chan_unit[1].flags) == CHAN_754)
                    return -1;
                return 1;        /* Channel 20 */
-    case 0x21: 
+    case 0x21:
                if (CHAN_G_TYPE(chan_unit[2].flags) == CHAN_754)
                    return -1;
                return 2;        /* Channel 21 */
@@ -219,10 +219,10 @@ chan_mapdev(uint16 dev) {
                return 4;        /* Channel 23 */
     case 0x40: return 5;        /* HS Channel 40 */
     case 0x41: return 6;        /* HS Channel 41 */
-    case 0x44: return 7;  /* Channel 44 */
-    case 0x45: return 8;  /* Channel 45 */
-    case 0x46: return 9;  /* Channel 46 */
-    case 0x47: return 10;  /* Channel 47 */
+    case 0x44: return 7;        /* Channel 44 */
+    case 0x45: return 8;        /* Channel 45 */
+    case 0x46: return 9;        /* Channel 46 */
+    case 0x47: return 10;       /* Channel 47 */
     default:
              if (dev > 0x2000)  /* Invalid if over 2000 and not selected */
                 return -1;
@@ -239,7 +239,7 @@ chan_boot(int32 unit_num, DEVICE * dptr)
     UNIT               *uptr = &dptr->units[unit_num];
     int                 chan = UNIT_G_CHAN(uptr->flags);
     extern t_stat       cpu_reset(DEVICE *);
-    
+
     cpu_reset(&cpu_dev);
     selreg = ((DIB *) dptr->ctxt)->addr + unit_num;
     chwait = chan + 1;  /* Force wait for channel */
@@ -269,18 +269,18 @@ chan_issue_cmd(uint16 chan, uint16 dcmd, uint16 dev) {
         if (dibp->ctype & CH_TYP_79XX) {
             for (j = 0; j < (*dptr)->numunits; j++, uptr++) {
                 if (UNIT_G_CHAN(uptr->flags) == chan &&
-                    (UNIT_SELECT & uptr->flags) == 0 && 
+                    (UNIT_SELECT & uptr->flags) == 0 &&
                     (dibp->addr & dibp->mask) == (dev & dibp->mask)) {
                     r = dibp->cmd(uptr, dcmd, dev);
-                    if (r != SCPE_NODEV) 
+                    if (r != SCPE_NODEV)
                         return r;
                 }
             }
         /* Handle 7621 DS units */
-        } else if (dibp->ctype & CH_TYP_76XX && 
+        } else if (dibp->ctype & CH_TYP_76XX &&
                         (UNIT_G_CHAN(uptr->flags) == chan)) {
              r = dibp->cmd(uptr, dcmd, dev);
-             if (r != SCPE_NODEV) 
+             if (r != SCPE_NODEV)
                  return r;
         /* Handle 754 and unit record devices */
         } else if ((dibp->addr & dibp->mask) == (dev & dibp->mask)) {
@@ -288,7 +288,7 @@ chan_issue_cmd(uint16 chan, uint16 dcmd, uint16 dev) {
                 for (j = 0; j < (*dptr)->numunits; j++) {
                     if (UNIT_G_CHAN(uptr->flags) == chan) {
                         r = dibp->cmd(uptr, dcmd, dev);
-                        if (r != SCPE_NODEV) 
+                        if (r != SCPE_NODEV)
                             return r;
                     }
                     uptr++;
@@ -296,7 +296,7 @@ chan_issue_cmd(uint16 chan, uint16 dcmd, uint16 dev) {
             } else {
                 if (UNIT_G_CHAN(uptr->flags) == chan) {
                     r = dibp->cmd(uptr, dcmd, dev);
-                    if (r != SCPE_NODEV) 
+                    if (r != SCPE_NODEV)
                         return r;
                 }
             }
@@ -305,7 +305,7 @@ chan_issue_cmd(uint16 chan, uint16 dcmd, uint16 dev) {
     return SCPE_NODEV;
 }
 
-/* Decrement the record count for a given channel, return 1 when 
+/* Decrement the record count for a given channel, return 1 when
    no more records to send */
 int chan_decr_reccnt(int chan) {
     int unit;
@@ -355,7 +355,7 @@ int chan_zero_reccnt(int chan) {
 
 /* Return next channel data address, advance address by 5 if channel */
 uint32  chan_next_addr(int chan) {
-    int         unit;
+    int         unit = 0;
     uint32      addr = 0;
     switch(CHAN_G_TYPE(chan_unit[chan].flags)) {
     case CHAN_754:
@@ -402,14 +402,16 @@ chan_proc()
                  int    chan2;
                  /* Find device on given channel and give it the command */
                  chan2 = chan_mapdev(selreg2 & 0x7fff);
+                 if (chan2 < 0 || chan2 >= NUM_CHAN)
+                     continue;
                  /* If no channel device, quick exit */
-                 if (chan_unit[chan2].flags & UNIT_DIS || 
+                 if (chan_unit[chan2].flags & UNIT_DIS ||
                       CHAN_G_TYPE(chan_unit[chan2].flags) != CHAN_754) {
                         flags |= 0x440; /* Set I/O Check */
                         selreg2 = 0;
                         continue;
                  }
-                      
+
                  /* Channel is busy doing something, wait */
                  if (chan_flags[chan2] & (DEV_SEL| DEV_DISCO|STA_TWAIT|STA_WAIT|
                                 STA_ACTIVE)) {
@@ -423,7 +425,7 @@ chan_proc()
                  case SCPE_BUSY:        /* Try again */
                         chan_flags[chan] |= STA_PEND;
                         break;
-                 case SCPE_NODEV: 
+                 case SCPE_NODEV:
                  case SCPE_IOERR:
                         /* Something wrong, stop */
                         flags |= 0x440; /* Set I/O Check */
@@ -433,7 +435,7 @@ chan_proc()
                         chan_flags[chan2] |= STA_ACTIVE;
                         selreg2 &= 0x7fff;
                         chwait = chan2+1;       /* Change wait channel */
-                        break;  
+                        break;
                   }
              } else {
                 /* No pending, just store last address in MAC2 */
@@ -453,7 +455,7 @@ chan_proc()
                 chan_flags[chan] |= DEV_WEOR|DEV_DISCO;
             chan_flags[chan] &= ~(SNS_UEND|CTL_END|CTL_READ|CTL_WRITE);
         }
-        
+
         /* If device requested attention, abort current command */
         if (chan_flags[chan] & CHS_ATTN) {
              if (chan_dev.dctrl & cmask)
@@ -511,7 +513,7 @@ chan_proc()
                 chan_flags[chan] |= CHS_ERR;
                 flags |= 0x400; /* Set Any flag */
             }
-            continue; 
+            continue;
         }
 
         switch(CHAN_G_TYPE(chan_unit[chan].flags)) {
@@ -537,14 +539,14 @@ chan_proc()
              if (chan_flags[chan] & STA_WAIT) {
                 if ((chan_flags[chan] & STA_TWAIT) == 0) {
                      /* Device ready, see if command under record count */
-                     if (cmd[chan] & CHAN_CMD) { 
+                     if (cmd[chan] & CHAN_CMD) {
                          /* Done if EOF set */
                          if (chan_flags[chan] & CHS_EOF) {
                               cmd[chan] &= ~(CHAN_RECCNT|CHAN_CMD);
                               chan_flags[chan] &= ~(STA_WAIT);
                               continue; /* On to next channel */
                          }
-        
+
                          /* Issue another command */
                          switch(chan_issue_cmd(chan, 0xff & (cmd[chan] >> 9),
                                 irqdev[chan])) {
@@ -558,18 +560,18 @@ chan_proc()
                                      continue;  /* On to next channel */
                                 }
                                 continue;
-                         case SCPE_NODEV: 
+                         case SCPE_NODEV:
                          case SCPE_IOERR:
                              /* Something wrong, stop */
                                 cmd[chan] &= ~(CHAN_RECCNT|CHAN_CMD);
-                                break;  
+                                break;
                          }
                          continue; /* On to next channel */
                      }
                      chan_flags[chan] &= ~(STA_WAIT);
                  }
                  continue;      /* On to next channel */
-             } 
+
 
              /* If device put up EOR, terminate transfer. */
              if (chan_flags[chan] & DEV_REOR) {
@@ -584,7 +586,7 @@ chan_proc()
                       ch = AC[unit + 5];
                       if (ch != 10) {
                         /* Yes, fill with group marks and mark as full */
-                          while(ch < 5) 
+                          while(ch < 5)
                               AC[unit+ch++] = CHR_GM;
                           cmd[chan] |= (cmd[chan] & CHAN_BFLAG)?
                                      CHAN_BFULL: CHAN_AFULL;
@@ -594,7 +596,7 @@ chan_proc()
                       if (!chan_decr_reccnt(chan)) {
                            chan_flags[chan] &= ~DEV_REOR;
                            continue;
-                      } 
+                      }
                       cmd[chan] &= ~CHAN_RECCNT;
                   }
                   chan_flags[chan] &= ~(DEV_REOR|DEV_WEOR);
@@ -622,12 +624,12 @@ chan_proc()
                      chan_flags[chan] |= (DEV_DISCO);
             }
 
-            if ((chan_flags[chan] & DEV_WRITE) && 
+            if ((chan_flags[chan] & DEV_WRITE) &&
                 (cmd[chan] & (CHAN_AFULL|CHAN_BFULL)) !=
                          (CHAN_AFULL|CHAN_BFULL)) {
                 char    ch;
                 unit = 512 + chan_unit[chan].u3 * 32;
-                if (cmd[chan] & CHAN_END) 
+                if (cmd[chan] & CHAN_END)
                     break;
                 addr = chan_next_addr(chan);
                 if ((cmd[chan] & CHAN_AFULL) == 0) {
@@ -648,7 +650,7 @@ chan_proc()
                 AC[unit+4] = M[addr++];
                 AC[unit+5] = 10;
                   if (chan_dev.dctrl & cmask)
-                         sim_debug(DEBUG_DATA, &chan_dev, 
+                         sim_debug(DEBUG_DATA, &chan_dev,
                                 "chan %d (%d) > %c %02o%02o%02o%02o%02o\n",
                                 chan, addr-5, ch,
                                 AC[unit], AC[unit+1], AC[unit+2], AC[unit+3],
@@ -659,13 +661,13 @@ chan_proc()
                 /* Wrap around if over end of memory, set error */
                 if (addr > EMEMSIZE) {
                    chan_flags[chan] |= CHS_ERR;
-                   addr -= EMEMSIZE;  
+                   addr -= EMEMSIZE;
                    if (chan_dev.dctrl & cmask)
                        sim_debug(DEBUG_EXP, &chan_dev, "write wrap %d\n", chan);
                 }
                 break;
             }
-            while ((chan_flags[chan] & DEV_WRITE) == 0&& 
+            while ((chan_flags[chan] & DEV_WRITE) == 0&&
                 (cmd[chan] & (CHAN_AFULL|CHAN_BFULL)) != 0) {
                 char    ch;
                 unit = 512 + chan_unit[chan].u3 * 32;
@@ -694,12 +696,12 @@ chan_proc()
                        sim_debug(DEBUG_EXP, &chan_dev, "read wrap %d\n", chan);
                     }
                     if (chan_dev.dctrl & cmask)
-                         sim_debug(DEBUG_DATA, &chan_dev, 
+                         sim_debug(DEBUG_DATA, &chan_dev,
                                 "chan %d (%d) < %c %02o%02o%02o%02o%02o\n",
                                  chan, addr-5, ch,
                                 AC[unit], AC[unit+1], AC[unit+2], AC[unit+3],
                                 AC[unit+4]);
-                } 
+                }
                 AC[unit+5] = 10;
             }
             break;
@@ -709,7 +711,7 @@ chan_proc()
             case DEV_WRITE|DEV_FULL:
                 continue;
             case DEV_WRITE:
-                if (cmd[chan] & CHAN_END) 
+                if (cmd[chan] & CHAN_END)
                     break;
                 unit = 1024 + chan_unit[chan].u3 * 32;
                 addr = chan_next_addr(chan);
@@ -754,7 +756,7 @@ void chan_clear_attn_inq(int chan) {
  //   inquiry = 0;
 }
 
-        
+
 /* Issue a command to a channel */
 int
 chan_cmd(uint16 dev, uint16 dcmd, uint32 addr)
@@ -766,6 +768,8 @@ chan_cmd(uint16 dev, uint16 dcmd, uint32 addr)
 
     /* Find device on given channel and give it the command */
     chan = chan_mapdev(dev);
+    if (chan < 0 || chan >= NUM_CHAN)
+        return SCPE_IOERR;
     /* If no channel device, quick exit */
     if (chan_unit[chan].flags & UNIT_DIS)
         return SCPE_IOERR;
@@ -802,7 +806,7 @@ chan_cmd(uint16 dev, uint16 dcmd, uint32 addr)
             break;
         case CHAN_7908:
             switch(dcmd & 0xf) {
-            case 1:     cmd[chan] |= CHAN_SKIP; 
+            case 1:     cmd[chan] |= CHAN_SKIP;
             case 0:     chan_flags[chan] |= CTL_READ; break;
             case 3:     chan_flags[chan] |= CTL_SNS; break; /* Do Sense */
             case 4:     /* Do control then read */
@@ -859,7 +863,7 @@ chan_cmd(uint16 dev, uint16 dcmd, uint32 addr)
         }
     }
     /* Handle initial record count of zero for special ops */
-    if (CHAN_G_TYPE(chan_unit[chan].flags) == CHAN_7621 && 
+    if (CHAN_G_TYPE(chan_unit[chan].flags) == CHAN_7621 &&
                 cmd[chan] & CHAN_RECCNT) {
         switch(op) {
         case IO_WEF:
@@ -869,7 +873,7 @@ chan_cmd(uint16 dev, uint16 dcmd, uint32 addr)
                 if (AC[unit+1] == 10 && AC[unit+2] == 10 && AC[unit+3] == 10) {
                     /* Just check if unit ready */
                     r = chan_issue_cmd(chan, OP_TRS, dev);
-                    if (r == SCPE_OK) 
+                    if (r == SCPE_OK)
                        cmd[chan] &= ~CHAN_RECCNT;
                     return r;
                 }
@@ -878,12 +882,12 @@ chan_cmd(uint16 dev, uint16 dcmd, uint32 addr)
                 break;
         }
     }
-        
+
     chan_flags[chan] &= ~(CTL_CNTL|CTL_READ|CTL_WRITE|SNS_UEND|CTL_WRITE|
                                 CTL_SNS|CHS_ATTN);
 
     r = chan_issue_cmd(chan, op, dev);
-    if (r == SCPE_OK) 
+    if (r == SCPE_OK)
         chan_flags[chan] &= ~(CHS_EOF|CHS_ERR|CHS_ATTN);
     /* Activate channel if select raised */
     if (r == SCPE_OK && chan_flags[chan] & DEV_SEL) {
@@ -915,7 +919,7 @@ chan_cmd(uint16 dev, uint16 dcmd, uint32 addr)
             store_addr(caddr[chan], 8+1024 + chan_unit[chan].u3 * 32);
             break;
         }
-    } 
+    }
     if (r == SCPE_OK && CHAN_G_TYPE(chan_unit[chan].flags) == CHAN_7621) {
         switch(op) {
         case IO_WEF:
@@ -923,11 +927,13 @@ chan_cmd(uint16 dev, uint16 dcmd, uint32 addr)
         case IO_BSR:
             if (cmd[chan] & CHAN_RECCNT && chan_decr_reccnt(chan)) {
                 cmd[chan] &= ~CHAN_RECCNT;
-            } 
+            }
             if (cmd[chan] & CHAN_RECCNT) {
                 cmd[chan] &= CHAN_RECCNT;
                 cmd[chan] |= (op << 9) | CHAN_CMD;
             }
+            /* Fall through */
+
         case IO_SKR:
         case IO_BSF:
         case IO_REW:
@@ -947,7 +953,7 @@ chan_cmd(uint16 dev, uint16 dcmd, uint32 addr)
  * Process the CHR 3 13 command and abort all channel activity
  */
 void
-chan_chr_13() 
+chan_chr_13()
 {
     int                 chan;
 
@@ -967,11 +973,11 @@ chan_chr_13()
 
         if (chan_flags[chan] & DEV_SEL)
             chan_flags[chan] |= DEV_WEOR|DEV_DISCO;
-                  
+
         chan_flags[chan] &= ~(CHS_ATTN|STA_ACTIVE|STA_WAIT);
     }
 
-    irqflags = 0;       
+    irqflags = 0;
 }
 
 
@@ -1040,7 +1046,7 @@ chan_write_char(int chan, uint8 * data, int flags)
                                  "switching buffer %d\n", chan);
         }
         ch = AC[5 + unit];
-        if (ch == 10) 
+        if (ch == 10)
             ch = 0;
         AC[unit + ch] = *data & 077;
         if (chan_dev.dctrl & (0x0100 << chan))
@@ -1072,7 +1078,7 @@ chan_write_char(int chan, uint8 * data, int flags)
     /* If device gave us an end, terminate transfer */
     if (flags & DEV_REOR) {
         chan_flags[chan] |= DEV_REOR|DEV_FULL;
-        if (chan_flags[chan] & DEV_SEL) 
+        if (chan_flags[chan] & DEV_SEL)
             chan_flags[chan] |= DEV_DISCO;
         return END_RECORD;
         /* If over size of memory, terminate */
@@ -1097,7 +1103,7 @@ chan_read_char(int chan, uint8 * data, int flags)
     uint16      msk;
 
     /* Check if he write out last data */
-    if ((chan_flags[chan] & STA_ACTIVE) == 0) 
+    if ((chan_flags[chan] & STA_ACTIVE) == 0)
         return TIME_ERROR;
 
     /* Based on channel type get next character */
@@ -1113,7 +1119,7 @@ chan_read_char(int chan, uint8 * data, int flags)
                    sim_debug(DEBUG_DATA, &chan_dev,
                                  "%d > %02o (%d)\n", chan, *data, *data);
         caddr[chan]++;
-        if ((cmd[chan] & CHAN_NOREC && (caddr[chan] % 19999) == 0)) { 
+        if ((cmd[chan] & CHAN_NOREC && (caddr[chan] % 19999) == 0)) {
             chan_flags[chan] |= DEV_WEOR;
             return END_RECORD;
         }
@@ -1144,7 +1150,7 @@ chan_read_char(int chan, uint8 * data, int flags)
                                  "switching buffer %d\n", chan);
         }
         ch = AC[5 + unit];
-        if (ch == 10) 
+        if (ch == 10)
             ch = 0;
         *data = AC[unit + ch] & 077;
         if (*data == CHR_BLANK)
@@ -1170,11 +1176,11 @@ chan_read_char(int chan, uint8 * data, int flags)
            if (chan_flags[chan] & CTL_READ) {
                 chan_next_addr(chan);
                 chan_next_addr(chan);
-           } 
+           }
            bcnt[chan] = 0;
            return END_RECORD;
         }
-            
+
         bcnt[chan]++;
         if (bcnt[chan] == 5)
            chan_flags[chan] &= ~DEV_FULL;
@@ -1184,7 +1190,7 @@ chan_read_char(int chan, uint8 * data, int flags)
     if ((cmd[chan] & CHAN_NOREC) == 0 && *data == CHR_GM) {
         chan_flags[chan] |= DEV_WEOR;
         return END_RECORD;
-    } 
+    }
 
     /* If end of record, don't transfer any data */
     if (flags & DEV_REOR) {

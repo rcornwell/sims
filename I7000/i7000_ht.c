@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -49,7 +49,7 @@
 #include "i7000_defs.h"
 #include "sim_tape.h"
 
-#ifdef NUM_DEVS_HT      
+#ifdef NUM_DEVS_HT
 #define BUFFSIZE        (MAXMEMSIZE * CHARSPERWORD)
 
 #define UNIT_HT(x)      UNIT_ATTABLE|UNIT_DISABLE|UNIT_ROABLE|UNIT_S_CHAN(x)| \
@@ -192,7 +192,7 @@ MTAB                ht_mod[] = {
      NULL, "Set Channel for device"},
 #ifndef I7010   /* Not sure 7010 ever supported hypertapes */
     {MTAB_XTD | MTAB_VDV | MTAB_VALR, 0, "SELECT", "SELECT",
-     &chan9_set_select, &chan9_get_select, NULL, 
+     &chan9_set_select, &chan9_get_select, NULL,
        "Set unit number"},
 #endif
     {0}
@@ -266,20 +266,21 @@ t_stat htc_srv(UNIT * uptr)
                 break;
         case 10:
                 eor = DEV_REOR;
+                /* Fall through */
         case 9:
         case 8:
                 i = 4 * (ht_cmdcount[chan] - 8);
                 up = &dptr->units[i];
                 ch = 0;
                 for (i = 3; i >= 0; i--, up++) {
-                    if (up->u5 & HT_ATTN) 
+                    if (up->u5 & HT_ATTN)
                         ch |= 1 << i;
                 }
                 break;
         }
 
         /* Fix out of align bit */
-        if (ch & 010) 
+        if (ch & 010)
             ch ^= 030;
 
         sim_debug(DEBUG_DATA, dptr, "sense %d %02o ", ht_cmdcount[chan], ch);
@@ -288,11 +289,12 @@ t_stat htc_srv(UNIT * uptr)
         case TIME_ERROR:
         case END_RECORD:
             ht_sense[schan] = 0;
+            /* Fall through */
         case DATA_OK:
             uptr->u5 |= HT_SNS; /* So we catch disconnect */
             if (eor) {
                ht_sense[schan] = 0;
-               for (up = dptr->units, i = NUM_UNITS_HT; i >= 0; i--, up++) 
+               for (up = dptr->units, i = NUM_UNITS_HT; i >= 0; i--, up++)
                     up->u5 &= ~HT_ATTN;
             }
             break;
@@ -360,7 +362,7 @@ t_stat ht_srv(UNIT * uptr)
             sim_debug(DEBUG_CMD, dptr,
                       "Write flush Block %d chars %d words\n", uptr->u6,
                       uptr->u6 / 6);
-            r = sim_tape_wrrecf(uptr, &ht_buffer[GET_DEV_BUF(dptr->flags)][0], 
+            r = sim_tape_wrrecf(uptr, &ht_buffer[GET_DEV_BUF(dptr->flags)][0],
                         uptr->u6);
             uptr->u5 &= ~HT_WRITE;
             if (r != MTSE_OK) {
@@ -396,7 +398,7 @@ t_stat ht_srv(UNIT * uptr)
                 ctlr->u5 |= HT_NOTRDY;
                 ht_buffer[GET_DEV_BUF(dptr->flags)][uptr->u6++] = ch;
                 sim_debug(DEBUG_DATA, dptr, " write %d \n", ch);
-                if (uptr->u6 < BUFFSIZE) 
+                if (uptr->u6 < BUFFSIZE)
                     break;
                 /* Overran tape buffer, give error */
                 ht_tape_posterr(uptr, DATA_TRACKSKEW);
@@ -405,7 +407,7 @@ t_stat ht_srv(UNIT * uptr)
                     sim_debug(DEBUG_CMD, dptr,
                           " Write Block %d chars %d words\n", uptr->u6,
                           uptr->u6 / 6);
-                    r = sim_tape_wrrecf(uptr, 
+                    r = sim_tape_wrrecf(uptr,
                                 &ht_buffer[GET_DEV_BUF(dptr->flags)][0],
                                  uptr->u6);
                     uptr->u5 &= ~HT_WRITE;
@@ -424,14 +426,14 @@ t_stat ht_srv(UNIT * uptr)
     /* Handle reading of data */
     if (chan_test(chan, CTL_READ) && (uptr->u5 & HT_CMDMSK) == (HSEL)) {
         uint8           ch;
-        
+
         if (uptr->u6 == 0) {
-            if (ht_sense[schan] & BACK_MODE) 
-                r = sim_tape_rdrecr(uptr, 
+            if (ht_sense[schan] & BACK_MODE)
+                r = sim_tape_rdrecr(uptr,
                         &ht_buffer[GET_DEV_BUF(dptr->flags)][0],
                          &reclen, BUFFSIZE);
-            else 
-                r = sim_tape_rdrecf(uptr, 
+            else
+                r = sim_tape_rdrecf(uptr,
                         &ht_buffer[GET_DEV_BUF(dptr->flags)][0],
                          &reclen, BUFFSIZE);
             if (r == MTSE_TMK)
@@ -462,7 +464,7 @@ t_stat ht_srv(UNIT * uptr)
             uptr->u5 |= HT_NOTRDY;
             ctlr->u5 |= HT_NOTRDY;
         }
-        
+
         if (uptr->u6 > (int32)uptr->hwmark) {
             chan_set(chan, DEV_REOR|CTL_END);
             sim_activate(uptr, us_to_ticks(50));
@@ -470,7 +472,7 @@ t_stat ht_srv(UNIT * uptr)
         }
         ch = ht_buffer[GET_DEV_BUF(dptr->flags)][uptr->u6++];
         sim_debug(DEBUG_DATA, dptr, "data %02o\n", ch);
-        switch(chan_write_char(chan, &ch, 
+        switch(chan_write_char(chan, &ch,
                                 (uptr->u6 > (int32)uptr->hwmark)?DEV_REOR:0)) {
         case TIME_ERROR:
             /* Nop flag as timming error */
@@ -487,7 +489,7 @@ t_stat ht_srv(UNIT * uptr)
     }
 
     /* If we have a command, keep scheduling us. */
-    if ((uptr->u5 & HT_CMDMSK) == (HSEL)) 
+    if ((uptr->u5 & HT_CMDMSK) == (HSEL))
          sim_activate(uptr, us_to_ticks(50));
     return SCPE_OK;
 }

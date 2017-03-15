@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -38,7 +38,7 @@
 #include "sim_console.h"
 #include "sim_card.h"
 
-#ifdef NUM_DEVS_LPR     
+#ifdef NUM_DEVS_LPR
 
 #define UNIT_LPR        UNIT_ATTABLE | UNIT_DISABLE
 #define ECHO            (1 << UNIT_V_LOCAL)
@@ -199,7 +199,7 @@ print_line(UNIT * uptr, int chan, int unit)
     for (i = 0; i < 72;) {
         int                 bcd = sim_hol_to_bcd(buff[i]);
 
-        if (bcd == 0x7f) 
+        if (bcd == 0x7f)
             lpr_data[unit].lbuff[i++] = 0x7f;
         else {
             if (bcd == 020)
@@ -261,7 +261,7 @@ uint32 lpr_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
     if ((dev & 03) == 0 || (dev & 03) == 3)
         return SCPE_NODEV;
     /* Check if still active */
-    if (uptr->u5 & LPRSTA_CMD) 
+    if (uptr->u5 & LPRSTA_CMD)
         return SCPE_BUSY;
     /* Check if attached */
     if ((uptr->flags & (UNIT_ATT | ECHO)) == 0) {
@@ -439,16 +439,20 @@ t_stat lpr_srv(UNIT * uptr)
             break;
         case 22:                /* Echo 8-3 */
             /* Fill for echo back */
+#if 0
             wd = lpr_data[u].wbuff[2];
             wd -= lpr_data[u].wbuff[12];
+#endif
             /* I'm not sure how these are computed */
             /* But forcing to zero works */
             wd = 0;
             action = 2;
             break;
         case 23:
+#if 0
             wd = lpr_data[u].wbuff[3];
             wd -= lpr_data[u].wbuff[13];
+#endif
             /* I'm not sure how these are computed */
             /* But forcing to zero works */
             wd = 0;
@@ -478,6 +482,8 @@ t_stat lpr_srv(UNIT * uptr)
             break;
         case 45:                /* Echo 1 */
             eor = 1;
+            /* Fall through */
+
         case 30:
         case 31:                /* Echo 8 */
         case 32:
@@ -602,7 +608,7 @@ lpr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
    fprintf (st, "by default. The Line printer can be configured to any number of\n");
    fprintf (st, "lines per page with the:\n");
    fprintf (st, "        sim> SET LPn LINESPERPAGE=n\n\n");
-   fprintf (st, "The printer acted as the console printer therefore the default is\n"); 
+   fprintf (st, "The printer acted as the console printer therefore the default is\n");
    fprintf (st, "echo to the console\n");
    fprintf (st, "The default is 59 lines per page\n\n");
    fprint_set_help(st, dptr);

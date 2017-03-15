@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -107,13 +107,13 @@ DIB  cdr_dib = { CH_TYP_UREC, 1, 0x100, 0xff00, &cdr_cmd, NULL };
 #ifdef NUM_DEVS_LPR
 DIB  lpr_dib = { CH_TYP_UREC, 1, 0x400, 0xff00, &lpr_cmd, &lpr_ini };
 #endif
-#ifdef NUM_DEVS_CON 
+#ifdef NUM_DEVS_CON
 DIB  con_dib = { CH_TYP_UREC, 1, 0x500, 0xff00, &con_cmd, &con_ini };
 #endif
 #ifdef NUM_DEVS_DR
 DIB  drm_dib = { CH_TYP_UREC, 1, 0x1000, 0xff00, &drm_cmd, &drm_ini };
 #endif
-#ifdef NUM_DEVS_MT 
+#ifdef NUM_DEVS_MT
 DIB  mt_dib = { CH_TYP_76XX|CH_TYP_754, NUM_UNITS_MT, 0x200, 0xff00, &mt_cmd, &mt_ini };
 #endif
 #ifdef NUM_DEVS_CHRON
@@ -143,9 +143,9 @@ const char         *sim_stop_messages[] = {
     "7750 invalid line number",
     "7750 invalid message",
     "7750 No free output buffers",
-    "7750 No free input buffers", 
+    "7750 No free input buffers",
     "Overflow Check",   /* Field overflow */
-    "Sign Check",       /* Sign change */ 
+    "Sign Check",       /* Sign change */
     "Divide error",
     "Error6",   /* Alpha index */ /* Not on 7080 */
     "No word mark",
@@ -181,16 +181,16 @@ DEBTAB              crd_debug[] = {
 
 
 const char          mem_to_ascii[64] = {
-    'a', '1', '2', '3', '4', '5', '6', '7', 
-    '8', '9', '0', '=', '\'', ':', '>', 's', 
-    ' ', '/', 'S', 'T', 'U', 'V', 'W', 'X', 
+    'a', '1', '2', '3', '4', '5', '6', '7',
+    '8', '9', '0', '=', '\'', ':', '>', 's',
+    ' ', '/', 'S', 'T', 'U', 'V', 'W', 'X',
     'Y', 'Z', '#', ',', '(', '`', '\\', '_',
-    '-', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 
-    'Q', 'R', '!', '$', '*', ']', ';', '^', 
-    '+', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 
-    'H', 'I', '?', '.', ')', '[', '<', '|', 
+    '-', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+    'Q', 'R', '!', '$', '*', ']', ';', '^',
+    '+', 'A', 'B', 'C', 'D', 'E', 'F', 'G',
+    'H', 'I', '?', '.', ')', '[', '<', '|',
                       /*Sq*/          /*GM*/
-}; 
+};
 
 t_stat parse_sym(CONST char *, t_addr, UNIT *, t_value *, int32);
 
@@ -205,10 +205,10 @@ load_rec(uint8 *image) {
     int                len, i;
 
     /* Convert blanks to space code */
-    for(i = 0; i < 80; i++) 
+    for(i = 0; i < 80; i++)
         if (image[i] == 0)
             image[i] = 020;
-  
+
     addr = bcd_bin[image[12] & 0xf];
     addr += 10 * bcd_bin[image[11] & 0xf];
     addr += 100 * bcd_bin[image[10] & 0xf];
@@ -288,7 +288,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
     } else
         return SCPE_ARG;
 
-    
+
 
     return SCPE_ARG;
 }
@@ -310,7 +310,7 @@ const char *chname[11] = {
 #define TYPE_B          2       /* ASU encoded operation */
 #define TYPE_C          3       /* MA encoded operation  MA < 100 */
 #define TYPE_D          4       /* MA + ASU fixed  MA < 100 */
-                      
+
 t_opcode optbl[] = {
         {OP_ADD,        "ADD",  TYPE_A},
         {OP_RAD,        "RAD",  TYPE_A},
@@ -500,9 +500,8 @@ if (sw & SWMASK ('M')) {                                /* machine code? */
     uint8       zone;
     uint8       reg;
     uint16      opvalue;
-    
+
     i = 0;
-    while ((i % 5) != 0) i++;   /* Get on correct boundry */
     op = val[i++] & 077;
     t = val[i++];       /* First address char */
     zone = (t & 060) >> 4;
@@ -564,7 +563,7 @@ if (sw & SWMASK ('M')) {                                /* machine code? */
         break;
     }
     return -(i - 1);
-} 
+}
 fprintf (of, " %02o ", val[0] & 077);
 return SCPE_OK;
 }
@@ -651,7 +650,7 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
         if (*cptr == ',') {     /* Collect a ASU */
             while(*cptr >= '0' && *cptr <= '9')
                 asu = (asu * 10) + (*cptr++ - '0');
-            
+
         }
         /* Skip blanks */
         while(isspace(*cptr))   cptr++;

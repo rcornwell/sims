@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -25,7 +25,7 @@
 
 #include "i7090_defs.h"
 
-#ifdef NUM_DEVS_HD      
+#ifdef NUM_DEVS_HD
 #define UNIT_DRM        UNIT_ATTABLE | UNIT_DISABLE | UNIT_FIX | \
                         UNIT_BUFABLE | UNIT_MUSTBUF
 
@@ -52,7 +52,7 @@ const char          *hsdrm_description (DEVICE *dptr);
 
 
 UNIT                hsdrm_unit[] = {
-    {UDATA (&hsdrm_srv, UNIT_S_CHAN(7) | UNIT_DRM, 
+    {UDATA (&hsdrm_srv, UNIT_S_CHAN(7) | UNIT_DRM,
                 NUM_UNITS_HD * 8 * 32767), 0, NUM_UNITS_HD},
 };
 
@@ -151,7 +151,7 @@ t_stat hsdrm_srv(UNIT * uptr)
                           addr, buf[addr]);
                 hsdrm_addr++;
                 hsdrm_addr &= 070007077777;
-                if ((hsdrm_addr & (2048 - 1)) == 0) 
+                if ((hsdrm_addr & (2048 - 1)) == 0)
                     chan_set(chan, DEV_REOR);
                 break;
 

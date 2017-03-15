@@ -1,6 +1,6 @@
-/* i7000_defs.h: IBM 70xx simulator definitions 
+/* i7000_defs.h: IBM 70xx simulator definitions
 
-   Copyright (c) 2005, Richard Cornwell
+   Copyright (c) 2005-2016, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -37,7 +37,7 @@
 #define NUM_DEVS_DR     1
 #define NUM_DEVS_MT     0
 #define MT_CHANNEL_ZERO
-#define NUM_UNITS_MT    5       
+#define NUM_UNITS_MT    5
 #define NUM_UNITS_DR    16
 #define MAXMEMSIZE      2048
 #define CHARSPERWORD    6
@@ -52,8 +52,8 @@ extern t_uint64         M[];
 #define NUM_DEVS_CON    1
 #define NUM_DEVS_DSK    5
 #define NUM_DEVS_COM    1
-#define NUM_DEVS_MT     3       
-#define CHAN_CHUREC     1       
+#define NUM_DEVS_MT     3
+#define CHAN_CHUREC     1
 #define NUM_UNITS_MT    10      /* A, B */
 #define MAXMEMSIZE      (100000)
 #define CHARSPERWORD    1
@@ -91,7 +91,7 @@ extern t_uint64         M[];
 #define NUM_DEVS_DSK    5
 #define NUM_DEVS_HT     0
 #define NUM_DEVS_COM    1
-#define NUM_UNITS_MT    10      
+#define NUM_UNITS_MT    10
 #define MT_CHANNEL_ZERO
 #define NUM_UNITS_HT    10
 #define MAXMEMSIZE      (160000)
@@ -105,7 +105,7 @@ extern uint8            M[];
 #define NUM_DEVS_LPR    1
 #define NUM_DEVS_DR     1
 #define NUM_DEVS_MT     0
-#define NUM_UNITS_MT    10      
+#define NUM_UNITS_MT    10
 #define MT_CHANNEL_ZERO
 #define NUM_UNITS_DR    16
 #define MAXMEMSIZE      (32*1024)
@@ -238,11 +238,11 @@ extern DEBTAB crd_debug[];
 #ifndef CHAN_CHUREC
 #define CHAN_CHUREC     0               /* Unit record devices */
 #endif
-#define CHAN_A          1               
+#define CHAN_A          1
 #define CHAN_B          2
 #define CHAN_C          3
 #define CHAN_D          4
-#define CHAN_E          5       
+#define CHAN_E          5
 #define CHAN_F          6
 #define CHAN_G          7
 #define CHAN_H          8
@@ -266,7 +266,7 @@ extern DEBTAB crd_debug[];
 #define UNIT_V_AUTO     (UNIT_V_UF + 4)
 #define CHAN_AUTO       (1 << UNIT_V_AUTO)
 #define UNIT_V_SET      (UNIT_V_UF + 5)
-#define CHAN_SET        (1 << UNIT_V_SET)  
+#define CHAN_SET        (1 << UNIT_V_SET)
 
 extern t_value  assembly[NUM_CHAN];             /* Assembly register */
 /* I/O routine functions */
@@ -275,9 +275,9 @@ extern t_value  assembly[NUM_CHAN];             /* Assembly register */
 extern uint32   chan_flags[NUM_CHAN];           /* Channel flags */
 extern const char *chname[11];                  /* Channel names */
 extern int      num_devs[NUM_CHAN];             /* Number devices per channel*/
-extern uint8    lpr_chan9[NUM_CHAN]; 
+extern uint8    lpr_chan9[NUM_CHAN];
 #ifdef I7010
-extern uint8    lpr_chan12[NUM_CHAN]; 
+extern uint8    lpr_chan12[NUM_CHAN];
 #endif
 
 /* Sense information for 7909 channels */
@@ -323,7 +323,7 @@ extern uint8    lpr_chan12[NUM_CHAN];
 
 /* Boot from given device */
 t_stat chan_boot(int32 unit_num, DEVICE *dptr);
-   
+
 /* Sets the device onto a given channel */
 t_stat chan_set_devs(DEVICE *dptr);
 t_stat set_chan(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
@@ -429,83 +429,83 @@ void chan_clear_attn_inq(int chan);
 #define IO_ERG  15      /* Erase next records from tape */
 
 /* Global device definitions */
-#ifdef NUM_DEVS_TP      
+#ifdef NUM_DEVS_TP
 extern DIB          tp_dib;
 extern uint32       tp_cmd(UNIT *, uint16, uint16);
-extern DEVICE       tpa_dev; 
+extern DEVICE       tpa_dev;
 #endif
 
 #ifdef NUM_DEVS_CDR
-extern DIB          cdr_dib; 
-extern DEVICE       cdr_dev; 
+extern DIB          cdr_dib;
+extern DEVICE       cdr_dev;
 extern uint32       cdr_cmd(UNIT *, uint16, uint16);
 #endif
 
 #ifdef NUM_DEVS_CDP
-extern DIB          cdp_dib; 
-extern DEVICE       cdp_dev; 
+extern DIB          cdp_dib;
+extern DEVICE       cdp_dev;
 extern uint32       cdp_cmd(UNIT *, uint16, uint16);
 extern void         cdp_ini(UNIT *, t_bool);
 #endif
 
 #ifdef STACK_DEV
-extern DEVICE       stack_dev; 
+extern DEVICE       stack_dev;
 #endif
 
 #ifdef NUM_DEVS_LPR
-extern DIB          lpr_dib; 
-extern DEVICE       lpr_dev; 
+extern DIB          lpr_dib;
+extern DEVICE       lpr_dev;
 extern uint32       lpr_cmd(UNIT *, uint16, uint16);
 extern void         lpr_ini(UNIT *, t_bool);
 #endif
 
 #ifdef NUM_DEVS_CON
-extern DIB          con_dib; 
-extern DEVICE       con_dev; 
+extern DIB          con_dib;
+extern DEVICE       con_dev;
 extern uint32       con_cmd(UNIT *, uint16, uint16);
 extern void         con_ini(UNIT *, t_bool);
 #endif
 
 #ifdef NUM_DEVS_CHRON
 extern DIB         chron_dib;
-extern DEVICE      chron_dev; 
+extern DEVICE      chron_dev;
 extern uint32      chron_cmd(UNIT *, uint16, uint16);
 #endif
 
 #ifdef NUM_DEVS_COM
 extern uint32      com_cmd(UNIT *, uint16, uint16);
-extern DIB         com_dib; 
-extern DEVICE      com_dev; 
-extern DEVICE      coml_dev; 
+extern DIB         com_dib;
+extern DEVICE      com_dev;
+extern DEVICE      coml_dev;
 #endif
 
-#ifdef NUM_DEVS_DR      
+#ifdef NUM_DEVS_DR
 extern uint32      drm_cmd(UNIT *, uint16, uint16);
 extern void        drm_ini(UNIT *, t_bool);
-extern DIB         drm_dib; 
-extern DEVICE      drm_dev; 
+extern DIB         drm_dib;
+extern DEVICE      drm_dev;
 #endif
 
 #ifdef NUM_DEVS_DSK
 extern uint32      dsk_cmd(UNIT *, uint16, uint16);
 extern void        dsk_ini(UNIT *, t_bool);
-extern DIB         dsk_dib; 
-extern DEVICE      dsk_dev; 
+extern DIB         dsk_dib;
+extern DEVICE      dsk_dev;
 #endif
 
 #ifdef NUM_DEVS_HD
 extern uint32      hsdrm_cmd(UNIT *, uint16, uint16);
 extern void        hsdrm_ini(UNIT *, t_bool);
 extern DIB         hsdrm_dib;
-extern DEVICE      hsdrm_dev; 
+extern DEVICE      hsdrm_dev;
 #endif
 
 #ifdef NUM_DEVS_HT
 extern DIB         ht_dib;
 extern uint32      ht_cmd(UNIT *, uint16, uint16);
-extern DEVICE      hta_dev; 
+extern DEVICE      hta_dev;
 #if NUM_DEVS_HT > 1
-extern DEVICE      htb_dev; 
+extern DEVICE      htb_dev;
 #endif
 #endif
 
@@ -514,20 +514,20 @@ extern DIB         mt_dib;
 extern uint32      mt_cmd(UNIT *, uint16, uint16);
 extern void        mt_ini(UNIT *, t_bool);
 #ifdef MT_CHANNEL_ZERO
-extern DEVICE      mtz_dev; 
+extern DEVICE      mtz_dev;
 #endif
 #if NUM_DEVS_MT > 0
-extern DEVICE      mta_dev; 
+extern DEVICE      mta_dev;
 #if NUM_DEVS_MT > 1
-extern DEVICE      mtb_dev; 
+extern DEVICE      mtb_dev;
 #if NUM_DEVS_MT > 2
-extern DEVICE      mtc_dev; 
+extern DEVICE      mtc_dev;
 #if NUM_DEVS_MT > 3
-extern DEVICE      mtd_dev; 
+extern DEVICE      mtd_dev;
 #if NUM_DEVS_MT > 4
-extern DEVICE      mte_dev; 
+extern DEVICE      mte_dev;
 #if NUM_DEVS_MT > 5
-extern DEVICE      mtf_dev; 
+extern DEVICE      mtf_dev;
 #endif  /* 5 */
 #endif  /* 4 */
 #endif  /* 3 */
@@ -602,12 +602,12 @@ extern DEVICE      mtf_dev;
 #define CHR_RBRAK       075
 #define CHR_LESS        076
 #define CHR_GM          077
-  
+
 /* Generic devices common to all */
-extern DEVICE      cpu_dev; 
-extern UNIT        cpu_unit; 
-extern DEVICE      chan_dev; 
-extern UNIT        chan_unit[]; 
+extern DEVICE      cpu_dev;
+extern UNIT        cpu_unit;
+extern DEVICE      chan_dev;
+extern UNIT        chan_unit[];
 extern REG         cpu_reg[];
 extern int         cycle_time;
 

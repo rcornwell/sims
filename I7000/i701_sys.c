@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -174,11 +174,11 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
         while (fgets(buf, 80, fileref) != 0) {
              for(p = buf; *p == ' ' || *p == '\t'; p++);
             /* Grab address */
-             for(addr = 0; *p >= '0' && *p <= '7'; p++) 
+             for(addr = 0; *p >= '0' && *p <= '7'; p++)
                 addr = (addr << 3) + *p - '0';
              while(*p != '\n' && *p != '\0') {
                 for(; *p == ' ' || *p == '\t'; p++);
-                for(wd = 0; *p >= '0' && *p <= '7'; p++) 
+                for(wd = 0; *p >= '0' && *p <= '7'; p++)
                     wd = (wd << 3) + *p - '0';
                 if (addr < MAXMEMSIZE)
                     M[addr++] = wd;
@@ -190,7 +190,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
         while (fgets(buf, 80, fileref) != 0) {
              for(p = buf; *p == ' ' || *p == '\t'; p++);
             /* Grab address */
-             for(addr = 0; *p >= '0' && *p <= '7'; p++) 
+             for(addr = 0; *p >= '0' && *p <= '7'; p++)
                 addr = (addr << 3) + *p - '0';
              while(*p == ' ' || *p == '\t') p++;
              if(sim_strncasecmp(p, "BCD", 3) == 0) {

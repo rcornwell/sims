@@ -15,11 +15,11 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-   channel              
+   channel
 
    Common routines for handling channel functions.
 
@@ -30,9 +30,9 @@
 extern DEVICE      *sim_devices[];
 
 
-        
-int     num_devs[NUM_CHAN];                    
-    
+
+int     num_devs[NUM_CHAN];
+
 
 t_stat
 chan_set_devs(DEVICE * dptr)
@@ -66,7 +66,7 @@ chan_set_devs(DEVICE * dptr)
                 if ((chan_unit[chan].flags & CHAN_SET) ||
                     ((chan_unit[chan].flags & CHAN_AUTO)
                          && num_devs[chan] != 0)) {
-                    for (num = sim_devices[i]->numunits; num > 0; num--) 
+                    for (num = sim_devices[i]->numunits; num > 0; num--)
                         (uptr++)->flags |= UNIT_DIS;
                     goto nextdev;
                 }
@@ -133,7 +133,7 @@ set_chan(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     DEVICE             *dptr;
     DIB                *dibp;
     int                 newch;
-    int                 chan = UNIT_G_CHAN(uptr->flags);
+    int                 chan;
     int                 num;
     int                 type;
     int                 ctype;
@@ -147,12 +147,13 @@ set_chan(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     if (dptr == NULL)
         return SCPE_IERR;
 
+    chan = UNIT_G_CHAN(uptr->flags);
     dibp = (DIB *) dptr->ctxt;
 
     if (dibp == NULL)
         return SCPE_IERR;
-    for(newch = 0; newch < NUM_CHAN; newch++) 
-        if (strcmp(cptr, chname[newch]) == 0) 
+    for(newch = 0; newch < NUM_CHAN; newch++)
+        if (strcmp(cptr, chname[newch]) == 0)
             break;
     if (newch == NUM_CHAN)
         return SCPE_ARG;
@@ -209,8 +210,8 @@ set_chan(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
         /* If set or no common types */
         if (chan_unit[newch].flags & CHAN_SET && compat == 0)
             return SCPE_IERR;
-        if ((chan_unit[newch].flags & CHAN_AUTO) && 
-            (compat == 0 && num_devs[newch] != 0)) 
+        if ((chan_unit[newch].flags & CHAN_AUTO) &&
+            (compat == 0 && num_devs[newch] != 0))
             return SCPE_IERR;
         else {
             /* Set type to highest compatable type */
@@ -233,7 +234,7 @@ set_chan(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     }
 
    /* Detach unit from orignal channel */
-    if (dibp->upc > 1) 
+    if (dibp->upc > 1)
         num_devs[chan] -= dptr->numunits;
     else
         num_devs[chan]--;
@@ -302,10 +303,11 @@ get_chan(FILE * st, UNIT * uptr, int32 v, CONST void *desc)
 {
     DEVICE             *dptr;
     DIB                *dibp;
-    int                 chan = UNIT_G_CHAN(uptr->flags);
+    int                 chan;
 
     if (uptr == NULL)
         return SCPE_IERR;
+    chan = UNIT_G_CHAN(uptr->flags);
     dptr = find_dev_from_unit(uptr);
     if (dptr == NULL)
         return SCPE_IERR;
@@ -393,7 +395,7 @@ int chan_stat(int chan, uint32 flag)
 /* Check channel for flag */
 int chan_test(int chan, uint32 flag)
 {
-    if (chan_flags[chan] & flag) 
+    if (chan_flags[chan] & flag)
         return 1;
     return 0;
 }
@@ -407,7 +409,7 @@ int chan_select(int chan)
 /* Check channel is active */
 int chan_active(int chan)
 {
-    return (chan_flags[chan] & 
+    return (chan_flags[chan] &
                 (DEV_DISCO |DEV_SEL | STA_ACTIVE | STA_WAIT | STA_TWAIT)) != 0;
 }
 

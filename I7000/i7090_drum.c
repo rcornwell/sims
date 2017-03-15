@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -25,7 +25,7 @@
 
 #include "i7090_defs.h"
 
-#ifdef NUM_DEVS_DR      
+#ifdef NUM_DEVS_DR
 #define UNIT_DRM        UNIT_ATTABLE | UNIT_DISABLE | UNIT_FIX | \
                         UNIT_BUFABLE | UNIT_MUSTBUF
 
@@ -167,7 +167,7 @@ t_stat drm_srv(UNIT * uptr)
         }
     }
    /* Increase delay for index time */
-    if (uptr->u6 == 0) 
+    if (uptr->u6 == 0)
         sim_activate(uptr, us_to_ticks(200));
     else
         sim_activate(uptr, DRMWORDTIME);
@@ -267,7 +267,7 @@ drm_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 
 
 const char *
-drm_description (DEVICE *dptr) 
+drm_description (DEVICE *dptr)
 {
     return "IBM 704/709 Drum";
 }

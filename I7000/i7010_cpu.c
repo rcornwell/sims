@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -169,7 +169,7 @@ extern UNIT         chan_unit[];
 
 UNIT                cpu_unit =
     { UDATA(rtc_srv, MODEL(2)|MEMAMOUNT(9)|OPTION_PRIO|OPTION_FLOAT,
-                 MAXMEMSIZE) };
+                 MAXMEMSIZE), 10000 };
 
 REG                 cpu_reg[] = {
     {DRDATAD(IAR, IAR, 18, "Instruction Address Register"), REG_FIT},
@@ -1580,6 +1580,8 @@ sim_instr(void)
             /* Treat invalid op as a NOP */
             default:
                 reason = STOP_UUO;
+                /* Fall through */
+
             case OP_NOP:
                 /* Skip until next word mark */
                 while((FetchP(IAR) & WM) == 0 && fault == 0) {
@@ -3745,7 +3747,7 @@ cpu_reset(DEVICE * dptr)
     cind = 2;
     zind = oind = dind = euind = eoind = 0;
     if (cpu_unit.flags & OPTION_PROT)
-        sim_rtcn_init_unit (&cpu_unit, cpu_unit.wait, TMR_RTC);
+        sim_rtcn_init_unit (&cpu_unit, 10000, TMR_RTC);
     return SCPE_OK;
 }
 

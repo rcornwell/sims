@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -100,7 +100,7 @@ DIB  lpr_dib = { CH_TYP_UREC, 1, 00200, 07700, &lpr_cmd, &lpr_ini };
 #ifdef NUM_DEVS_CON
 DIB  con_dib = { CH_TYP_UREC, 1, 02300, 07700, &con_cmd, &con_ini };
 #endif
-#ifdef NUM_DEVS_MT 
+#ifdef NUM_DEVS_MT
 DIB  mt_dib = { CH_TYP_76XX|CH_TYP_UREC, NUM_UNITS_MT, 02400, 07700, &mt_cmd, &mt_ini };
 #endif
 #ifdef NUM_DEVS_CHRON
@@ -128,7 +128,7 @@ const char         *sim_stop_messages[] = {
     "7750 invalid line number",
     "7750 invalid message",
     "7750 No free output buffers",
-    "7750 No free input buffers", 
+    "7750 No free input buffers",
     "Error4",   /* Field overflow */ /* Not on 7010 */
     "Error5",   /* Sign change */ /* Not on 7010 */
     "Divide error",
@@ -202,16 +202,16 @@ const char          ascii_to_six[128] = {
 
 
 const char          mem_to_ascii[64] = {
-    ' ', '1', '2', '3', '4', '5', '6', '7', 
-    '8', '9', '0', '=', '\'', ':', '>', 's', 
-    'b', '/', 'S', 'T', 'U', 'V', 'W', 'X', 
+    ' ', '1', '2', '3', '4', '5', '6', '7',
+    '8', '9', '0', '=', '\'', ':', '>', 's',
+    'b', '/', 'S', 'T', 'U', 'V', 'W', 'X',
     'Y', 'Z', 'x', ',', '(', '`', '\\', '_',
-    '-', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 
-    'Q', 'R', '!', '$', '*', ']', ';', '^', 
-    '+', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 
-    'H', 'I', '?', '.', ')', '[', '<', '|', 
+    '-', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+    'Q', 'R', '!', '$', '*', ']', ';', '^',
+    '+', 'A', 'B', 'C', 'D', 'E', 'F', 'G',
+    'H', 'I', '?', '.', ')', '[', '<', '|',
                       /*Sq*/          /*RM*/
-}; 
+};
 
 
 /* Load a card image file into memory.  */
@@ -246,7 +246,7 @@ t_opcode;
 
 #define MOD(x)  (x<<6)
 t_opcode            ops_1401[] = {
-    {CHR_A,             "A",            TYPE_2},        
+    {CHR_A,             "A",            TYPE_2},
     {OP_B|MOD(CHR_9),   "BC9",          TYPE_B},
     {OP_B|MOD(CHR_QUOT),"BCV",          TYPE_B},
     {OP_B|MOD(CHR_Z),   "BAV",          TYPE_B},
@@ -358,7 +358,7 @@ t_opcode            base_ops[] = {
     {OP_IO4|MOD(040),   "BNT4",         TYPE_B},
     {OP_IO4|MOD(000),   "BEX4",         TYPE_B},
     {OP_IO4|MOD(000),   "BEX4",         TYPE_BE},
-    {OP_A,              "A",            TYPE_2},        
+    {OP_A,              "A",            TYPE_2},
     {OP_BBE,            "BBE",          TYPE_BE},
     {OP_BCE,            "BCE",          TYPE_BE},
     {OP_B|04100,        "BPCB",         TYPE_B},
@@ -524,7 +524,7 @@ t_opcode            base_ops[] = {
     {OP_PRI|00000,      "BPI",          TYPE_Y},
     {0,                 NULL,           TYPE_BE},
 };
-  
+
 const char *chname[] = {
     "*", "1", "2", "3", "4"
 };
@@ -537,7 +537,7 @@ t_stat fprint_addr (FILE *of, uint32 addr) {
 
     reg = ((addr >> 10) & 03) | ((addr >> 14) & 014);
     addr &= 07777171777; /* Mask register bits */
-    for(i = 24; i>=0; i -= 6) 
+    for(i = 24; i>=0; i -= 6)
         fputc(mem_to_ascii[(addr >> i) & 077], of);
     if (reg != 0)
         fprintf(of, "+X%d", reg);
@@ -607,7 +607,7 @@ if (sw & SWMASK ('S')) {                                /* string? */
 if (sw & SWMASK ('N')) {                                /* 1401 machine code? */
     uint16      temp;
     t_opcode    *tab;
-    
+
     mod = 0;
     flags = 0;
     a = 0;
@@ -668,7 +668,7 @@ if (sw & SWMASK ('N')) {                                /* 1401 machine code? */
     for(tab = ops_1401; tab->name != NULL; tab++) {
         if (temp == tab->opbase)
             break;
-        if ((tab->type == TYPE_BE || tab->type == TYPE_CC) && 
+        if ((tab->type == TYPE_BE || tab->type == TYPE_CC) &&
                         (temp & 077) == tab->opbase)
            break;
         if (tab->type == TYPE_BZ && (temp & 0377) == tab->opbase)
@@ -719,13 +719,13 @@ if (sw & SWMASK ('N')) {                                /* 1401 machine code? */
         if (flags & 020)
              for (t = 18; t >= 0; t-=6)
                  fprintf (of, "%c", mem_to_ascii[(a>>t)&077]) ;
-        else if (flags & 02) 
+        else if (flags & 02)
              fprint_addr_1401(of, a);
         if (flags & 04) {
                 fputc(',', of);
                 fprint_addr_1401(of, b);
         }
-        if (flags & 010) 
+        if (flags & 010)
              fprintf (of, ",%c", mem_to_ascii[mod]);
         break;
     case TYPE_T:         /* Tape opcode, option */
@@ -779,11 +779,11 @@ if (sw & SWMASK ('N')) {                                /* 1401 machine code? */
         break;
     }
     return -(i - 1);
-} 
+}
 if (sw & SWMASK ('M')) {                                /* machine code? */
     uint16      temp;
     t_opcode    *tab;
-    
+
     mod = 0;
     flags = 0;
     a = 0;
@@ -834,7 +834,7 @@ if (sw & SWMASK ('M')) {                                /* machine code? */
     for(tab = base_ops; tab->name != NULL; tab++) {
         if (temp == tab->opbase)
             break;
-        if ((tab->type == TYPE_BE || tab->type == TYPE_CC) && 
+        if ((tab->type == TYPE_BE || tab->type == TYPE_CC) &&
                         (temp & 077) == tab->opbase)
            break;
         if (tab->type == TYPE_BZ && (temp & 0377) == tab->opbase)
@@ -862,7 +862,7 @@ if (sw & SWMASK ('M')) {                                /* machine code? */
         break;
     case TYPE_IO:        /* Tape opcode, option */
     case TYPE_T:         /* Tape opcode, option */
-        if (flags & 010) 
+        if (flags & 010)
              fprintf (of, "%c", mem_to_ascii[mod]);
         if (flags & 02)
              for (t = 18; t >= 0; t-=6)
@@ -909,7 +909,7 @@ if (sw & SWMASK ('M')) {                                /* machine code? */
         break;
     }
     return -(i - 1);
-} 
+}
 t = val[0];
 fprintf (of, (t & WM)? "~%02o ": " %02o ", t & 077);
 return 0;
@@ -985,7 +985,7 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
              return -(i - 1);
 
         case TYPE_CC:
-            if (*cptr == '\0') 
+            if (*cptr == '\0')
                 val[i++] = 10;
             else
                 val[i++] = ascii_to_six[(int)*cptr++];
@@ -1036,7 +1036,7 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
             else if (*cptr == '+' || *cptr == ',')
                 break;
         }
-        
+
         /* Convert to BCD */
         for(j = 4; j >= 0;j--) {
            buffer[j] = addr % 10;
@@ -1044,7 +1044,7 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
                 buffer[j] = 10;
            addr /= 10;
         }
-        
+
         /* Merge in index bits if any */
         if (*cptr == '+') {
             int n = 0;
@@ -1100,7 +1100,7 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
             if (*cptr == ',') {
                 val[i++] = ascii_to_six[(int)*++cptr];
                 while(isspace(*++cptr));
-            } 
+            }
             if (*cptr == '\0')
                 return -(i - 1);
             return SCPE_ARG;
@@ -1120,7 +1120,7 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
 
         /* Skip blanks */
         while(isspace(*cptr)) cptr++;
-    
+
         /* Pick up at least one address & possible index */
         addr = 0;
         while(*cptr != '\0') {
@@ -1129,7 +1129,7 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
             else if (*cptr == '+' || *cptr == ',')
                 break;
         }
-        
+
         /* Convert to BCD */
         for(j = 4; j >= 0;j--) {
            buffer[j] = addr % 10;
@@ -1137,7 +1137,7 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
                 buffer[j] = 10;
            addr /= 10;
         }
-        
+
         /* Merge in index bits if any */
         if (*cptr == '+') {
             int n = 0;
@@ -1165,6 +1165,7 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
         switch(op->type) {
         case TYPE_M:    /* Move opcode */
             val[i++] = (op->opbase >> 6) & 077;
+            /* fall through */
 
         default:
         case TYPE_IO:    /* Tape opcode, option */
@@ -1239,8 +1240,8 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
             if (*cptr == ',')
                 cptr++;
             if (sign != 0)
-                val[i-1] |= (sign)?040:060; /* Set sign last digit */
-        }                                                    
+                val[i-1] |= (sign < 0)?040:060; /* Set sign last digit */
+        }
         if (i == 0)
             return SCPE_ARG;
         return -(i - 1);

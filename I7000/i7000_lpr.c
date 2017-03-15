@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -32,7 +32,7 @@
 #include "i7000_defs.h"
 #include "sim_card.h"
 #include "sim_defs.h"
-#ifdef NUM_DEVS_LPR 
+#ifdef NUM_DEVS_LPR
 
 #define UNIT_LPR        UNIT_ATTABLE | UNIT_DISABLE
 
@@ -115,7 +115,7 @@ MTAB                lpr_mod[] = {
 #ifdef I7010
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "CHAN", "CHAN", &set_chan,
         &get_chan, NULL},
-#endif   
+#endif
     {0}
 };
 
@@ -134,7 +134,7 @@ DEVICE              lpr_dev = {
  */
 
 t_stat
-lpr_setlpp(UNIT *uptr, int32 val, CONST char *cptr, void *desc) 
+lpr_setlpp(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
     int i;
     if (cptr == NULL)
@@ -209,7 +209,7 @@ print_line(UNIT * uptr, int chan, int unit)
         /* Scan each column */
         for (i = 0; i < 143; i++) {
             int                 bcd = lpr_data[unit].lbuff[i+1] & 077;
-    
+
             out[i] = sim_six_to_ascii[bcd];
         }
      } else {
@@ -244,19 +244,19 @@ print_line(UNIT * uptr, int chan, int unit)
     if (uptr->u4 > (int32)uptr->capac) {
         uptr->u4 = 1;
     }
- 
+
     if (uptr->u5 & URCSTA_SKIPAFT) {
         i = (uptr->u5 >> 12) & 0x7f;
         if (i == 0) {
             if (uptr->flags & UNIT_ATT)
                 sim_fwrite("\r", 1, 1, uptr->fileref);
-            if (uptr->flags & ECHO) 
+            if (uptr->flags & ECHO)
                 sim_putchar('\r');
-        } else { 
+        } else {
             for (; i > 1; i--) {
                 if (uptr->flags & UNIT_ATT)
                     sim_fwrite("\n", 1, 1, uptr->fileref);
-                if (uptr->flags & ECHO) 
+                if (uptr->flags & ECHO)
                     sim_putchar('\n');
                 uptr->u4++;
                 if (uptr->u4 > (int32)uptr->capac) {
@@ -293,7 +293,7 @@ uint32 lpr_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
     switch(cmd) {
         /* Test ready */
     case IO_TRS:
-        if (uptr->flags & UNIT_ATT) 
+        if (uptr->flags & UNIT_ATT)
             return SCPE_OK;
         break;
 
@@ -323,7 +323,7 @@ uint32 lpr_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
         chan_set_sel(chan, 1);
         uptr->u5 |= URCSTA_WRITE;
         uptr->u3 = 0;
-        if ((uptr->u5 & URCSTA_BUSY) == 0) 
+        if ((uptr->u5 & URCSTA_BUSY) == 0)
             sim_activate(uptr, 50);
         return SCPE_OK;
 
@@ -421,7 +421,7 @@ lpr_srv(UNIT *uptr) {
               case SCPE_IOERR:
                   chan_set_error(chan);
                   break;
-              case SCPE_OK:     
+              case SCPE_OK:
                   break;
               }
         }
@@ -448,11 +448,11 @@ lpr_srv(UNIT *uptr) {
             uptr->u5 &= ~URCSTA_WRITE;
             break;
         case DATA_OK:
-            sim_debug(DEBUG_DATA, &lpr_dev, "%d: Char < %02o\n", u, 
+            sim_debug(DEBUG_DATA, &lpr_dev, "%d: Char < %02o\n", u,
                         lpr_data[u].lbuff[uptr->u3]);
 #ifdef I7010
             if (uptr->u5 & URCSTA_WMKS) {
-                if (lpr_data[u].lbuff[uptr->u3] & 0200) 
+                if (lpr_data[u].lbuff[uptr->u3] & 0200)
                     lpr_data[u].lbuff[uptr->u3] = 1;
                 else
                     lpr_data[u].lbuff[uptr->u3] = 012;
@@ -485,7 +485,7 @@ lpr_attach(UNIT * uptr, CONST char *file)
 t_stat
 lpr_detach(UNIT * uptr)
 {
-    if (uptr->u5 & URCSTA_FULL) 
+    if (uptr->u5 & URCSTA_FULL)
         print_line(uptr, UNIT_G_CHAN(uptr->flags), uptr - lpr_unit);
     return detach_unit(uptr);
 }

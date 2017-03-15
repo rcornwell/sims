@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -178,7 +178,7 @@
 #define CPU_7090        2
 #define CPU_7094        3
 
-#define TMR_RTC         1
+#define TMR_RTC         0
 
 #define HIST_XCT        1       /* instruction */
 #define HIST_INT        2       /* interrupt cycle */
@@ -1435,10 +1435,10 @@ prottrap:
                 case OP_SWT10:
                 case OP_SWT11:
                 case OP_SWT12:
-#endif
                     if (SW & (1 << (6 + MA - OP_SWT7)))
                         IC++;
                     break;
+#endif
                 default:
                     break;
                 }
@@ -1824,6 +1824,8 @@ prottrap:
                 goto iadd;
             case OP_SUB:
                 SR ^= MSIGN;
+                /* Fall through */
+
             case OP_ADD:
               iadd:
                 f = 0;
@@ -1863,6 +1865,8 @@ prottrap:
             case OP_MPY:
             case OP_MPR:
                 decr = 043;
+                /* Fall through */
+
             case OP_VLM + 1:
             case OP_VLM:
                 shiftcnt = decr;
@@ -1901,6 +1905,8 @@ prottrap:
             case OP_DVH:
             case OP_DVP:
                 decr = 043;
+                /* Fall through */
+
             case OP_VDH + 2:
             case OP_VDH:
             case OP_VDP + 2:

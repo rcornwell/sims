@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -1012,9 +1012,11 @@ sim_instr(void)
                      break;
                 case OP_HB:
                      IC = MA;
+                     /* fall through */
                 case OP_HP:
                      reason = STOP_HALT;
                 case OP_NOP:
+                     /* fall through */
                      if (hst_lnt) {  /* history enabled? */
                          hst[hst_p].ic |= HIST_NOBEF|HIST_NOAFT;
                      }
@@ -1810,11 +1812,11 @@ sim_instr(void)
                                 for(tmp = 9; tmp > 4; tmp--) {
                                     if (f1 == 0) {
                                         if ((temp & dmask[tmp+1]) == 0)
-                                            buffer &= ~(0xFFLL << (tmp*8));
+                                            buffer &= ~(0xFFLL << ((tmp-4)*8));
                                         else
                                             f1 = 1;
                                     }
-                                    buffer |= (temp & dmask[tmp+1]) << (tmp*8);
+                                    buffer |= (temp & dmask[tmp+1]) << ((tmp-4)*8);
                                 }
                                 WriteP(dst++, buffer);
                                 if (opcode == OP_ENS) {
@@ -2137,6 +2139,7 @@ sim_instr(void)
                                         WriteP(MA, PSIGN|timer);
                                    goto done;
                                 }
+                                /* fall through */
                       default:
                                 reason = STOP_UUO;
                                 goto done;

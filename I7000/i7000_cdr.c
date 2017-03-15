@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -88,7 +88,7 @@ UNIT                cdr_unit[] = {
 
 MTAB                cdr_mod[] = {
     {MTAB_XTD | MTAB_VUN, 0, "FORMAT", "FORMAT",
-               &sim_card_set_fmt, &sim_card_show_fmt, NULL},    
+               &sim_card_set_fmt, &sim_card_show_fmt, NULL},
 #ifdef I7070
     {ATTENA|ATTENB, 0, NULL, "NOATTEN", NULL, NULL, NULL},
     {ATTENA|ATTENB, ATTENA, "ATTENA", "ATTENA", NULL, NULL, NULL},
@@ -99,7 +99,7 @@ MTAB                cdr_mod[] = {
 #ifdef I7010
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "CHAN", "CHAN", &set_chan,
         &get_chan, NULL},
-#endif   
+#endif
     {0}
 };
 
@@ -143,7 +143,7 @@ uint32 cdr_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
     case IO_RDS:
         sim_debug(DEBUG_CMD, &cdr_dev, "%d: Cmd RDS %02o\n", u, dev & 077);
 #ifdef I7010
-        if (stk!= 9) 
+        if (stk!= 9)
 #endif
         uptr->u5 &= ~(URCSTA_CARD|URCSTA_ERR);
         break;
@@ -171,7 +171,7 @@ uint32 cdr_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
     if ((uptr->u5 & URCSTA_NOXFER) == 0)
         chan_set_sel(chan, 0);
     /* Wake it up if not busy */
-    if ((uptr->u5 & URCSTA_BUSY) == 0) 
+    if ((uptr->u5 & URCSTA_BUSY) == 0)
         sim_activate(uptr, 50);
     return SCPE_OK;
 }
@@ -227,7 +227,7 @@ cdr_srv(UNIT *uptr) {
              chan_set_attn(chan);
              chan_clear(chan, DEV_SEL);
              return SCPE_OK;
-        case SCPE_OK:   
+        case SCPE_OK:
              uptr->u5 |= URCSTA_CARD;
 #ifdef I7010
              chan_set_attn_urec(chan, cdr_dib.addr);
@@ -264,7 +264,7 @@ cdr_srv(UNIT *uptr) {
              return SCPE_OK;
         }
 #endif
-              
+
         ch = sim_hol_to_bcd(data->image[uptr->u4]);
 
         /* Handle invalid punch */
@@ -274,7 +274,6 @@ cdr_srv(UNIT *uptr) {
              chan_set_attn(chan);
              chan_clear(chan, DEV_SEL);
 #else
-             
              uptr->u5 |= URCSTA_ERR;
              ch = 017;
 #endif
@@ -282,10 +281,10 @@ cdr_srv(UNIT *uptr) {
 
 #ifdef I7070
         /* During load, only sign on every 10 columns */
-        if (uptr->u5 & URCSTA_LOAD && (uptr->u4 % 10) != 9) 
+        if (uptr->u5 & URCSTA_LOAD && (uptr->u4 % 10) != 9)
             ch &= 0xf;
 #endif
-        
+
         switch(chan_write_char(chan, &ch, (uptr->u4 == 79)? DEV_REOR: 0)) {
         case TIME_ERROR:
         case END_RECORD:
@@ -336,7 +335,7 @@ cdr_attach(UNIT * uptr, CONST char *file)
 }
 #ifdef I7070
 t_stat
-cdr_setload(UNIT *uptr, int32 val, CONST char *cptr, void *desc) 
+cdr_setload(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
     int i;
     if (cptr == NULL)

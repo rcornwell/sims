@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -390,11 +390,11 @@ sim_instr(void)
     switch (cpu_type) {
     case CPU_7080:
         if ((flags & EIGHTMODE) == 0) {
-           cpu_type = (cpu_unit.flags & EMULATE3)?0x53:0x05;
+           cpu_type = (cpu_unit.flags & EMULATE3)?CPU_7053:CPU_705;
            EMEMSIZE = MEMSIZE;
            if (cpu_unit.flags & EMULATE2 && EMEMSIZE > 40000)
               EMEMSIZE = 40000;
-           if (cpu_type == 0x05 && (cpu_unit.flags & EMULATE2) == 0
+           if (cpu_type == CPU_705 && (cpu_unit.flags & EMULATE2) == 0
                         && EMEMSIZE > 20000)
                EMEMSIZE = 20000;
            if (EMEMSIZE > 80000)
@@ -567,7 +567,7 @@ stop_cpu:
                          temp = 80000;
                          if (cpu_unit.flags & EMULATE2)
                              temp = 40000;
-                         else if (cpu_type == 0x05)
+                         else if (cpu_type == CPU_705)
                              temp = 20000;
                      }
                      break;
@@ -589,10 +589,10 @@ stop_cpu:
                      IC -= temp;
                  /* Resolve full address and register based on cpu mode */
                  switch (cpu_type) {
-                 case 0x05:  /* 705 */
-                 case 0x02:  /* 702 */
+                 case CPU_705:  /* 705 */
+                 case CPU_702:  /* 702 */
                          break;
-                 case 0x80:  /* 7080 */
+                 case CPU_7080:  /* 7080 */
                          if (indflag) {
                              indflag = 0;
                              if ((MA % 5) != 4) {
@@ -603,7 +603,7 @@ stop_cpu:
                              MA = MAC;
                          }
                          break;
-                 case 0x53:  /* 705-iii */
+                 case CPU_7053:  /* 705-iii */
                          if (zone & 04) {    /* Check indirect */
                              if ((MA % 5) != 4) {
                                 flags |= INSTFLAG|ANYFLAG;
@@ -2003,7 +2003,7 @@ stop_cpu:
 
              case OP_ULA:            /* ULA */
                      /* Unload address */
-                     if (CPU_MODEL < 0x53 || (MAC % 5) != 4) {
+                     if (CPU_MODEL < CPU_7053 || (MAC % 5) != 4) {
                           flags |= INSTFLAG|ANYFLAG;
                           break;
                      }
@@ -2857,6 +2857,7 @@ step2:
              case 000:
              case 020:
                      flags |= SGNFLAG|ANYFLAG;
+                     /* Fall through */
              case 060:
                      msign = 0;
                      break;
@@ -2964,7 +2965,7 @@ step6:
         sim_interval --;        /* count down */
         cr2 = AC[tsac];
         if (cr2 == 0) {
-            smt = 1;
+            smt = 1;            /* Check usage here */
             goto step6;
         }
         if (at) {
@@ -3315,7 +3316,7 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
     char               *cptr = (char *) desc;
     int                 len;
     t_stat              r;
-    t_value             sim_eval[6];
+    t_value             sim_eval[50];
     struct InstHistory *h;
 
     if (hst_lnt == 0)
@@ -3341,8 +3342,8 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
             sim_eval[2] = (h->inst >> (2 * 6)) & 077;
             sim_eval[3] = (h->inst >> (1 * 6)) & 077;
             sim_eval[4] = h->inst & 077;
-            fprint_sym (st, h->ic, sim_eval, &cpu_unit, SWMASK('M'));
-            for(len = 0; (h->store[len] & 077) != 0 && len < 32; len++);
+            (void)fprint_sym (st, h->ic, sim_eval, &cpu_unit, SWMASK('M'));
+            for(len = 0; len < 32 && (h->store[len] & 077) != 0; len++);
             fprintf(st, "\t%-2d %c%c %c%c %c@", len,
                     (h->flags & AZERO)?'Z':' ', (h->flags & ASIGN)?'-':'+',
                     (h->flags & BZERO)?'Z':' ', (h->flags & BSIGN)?'-':'+',

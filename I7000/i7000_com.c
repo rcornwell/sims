@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -29,7 +29,7 @@
    This module implements an abstract simulator for the IBM 7750 communications
    computer as used by the CTSS system.  The 7750 supports up to 112 lines;
    the simulator supports 33.  The 7750 can handle both high-speed lines, in
-   6b and 12b mode, and normal terminals, in 12b mode only; the simulator 
+   6b and 12b mode, and normal terminals, in 12b mode only; the simulator
    supports only terminals.  The 7750 can handle many different kinds of
    terminals; the simulator supports only a limited subset.
 
@@ -86,7 +86,7 @@
 
 #ifdef NUM_DEVS_COM
 #define COM_MLINES      32      /* mux lines */
-#define COM_TLINES      (COM_MLINES)    
+#define COM_TLINES      (COM_MLINES)
 #define COM_BUFSIZ      120     /* max chan transfer */
 #define COM_PKTSIZ      16384   /* character buffer */
 
@@ -165,7 +165,7 @@ int             in_count;    /* Number of entries in queue */
 int             in_delay = 5000;
 
 
-typedef struct 
+typedef struct
 {
     uint16              link;
     uint16              data;
@@ -255,7 +255,7 @@ static const uint8 com_2741_in[128] = {
     0372, 0306, 0246, 0000, 0000, 0000, 0000, 0177
 };
 
- 
+
 
 uint32              com_cmd(UNIT * uptr, uint16 cmd, uint16 dev);
 t_stat              com_svc(UNIT * uptr);
@@ -412,7 +412,7 @@ uint32 com_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
         sim_activate(&com_unit[COM_CIU], com_unit[COM_CIU].wait);
     if (!sim_is_active(&com_unit[COM_PLU])) {
         if (com_unit[COM_PLU].flags & UNIT_ATT) {       /* master att? */
-            int32               t = 
+            int32               t =
                 sim_rtcn_init(com_unit[COM_PLU].wait, TMR_COM);
             sim_activate(&com_unit[COM_PLU], t);
         }
@@ -487,7 +487,7 @@ t_stat com_svc(UNIT * uptr)
             sim_activate(uptr, 50);
             return SCPE_OK;
         }
-        
+
         switch (com_sta) {
         case 1:
             com_data = com_msgn;        /* 1st char is msg num */
@@ -505,7 +505,7 @@ t_stat com_svc(UNIT * uptr)
                 /* Grab next entry. */
                 in_head++;
                 /* Wrap around end of ring */
-                if (in_head >= (sizeof(in_buff)/sizeof(uint16))) 
+                if (in_head >= (sizeof(in_buff)/sizeof(uint16)))
                     in_head = 0;
                 com_data = in_buff[in_head];
                 /* Check if end of current transfer */
@@ -579,7 +579,7 @@ t_stat com_svc(UNIT * uptr)
             } else if (com_data & COMO_LINCTL) {        /* control message? */
                 ln = COMO_GETLN(com_data);      /* line number */
                 sim_debug(DEBUG_DETAIL, &com_dev, "line %d\n", ln);
-                if (ln > (COM_TLINES + COM_LBASE))      /* invalid line? */
+                if (ln >= (COM_TLINES + COM_LBASE))      /* invalid line? */
                     return STOP_INVLIN;
                 if (ln > COM_LBASE)             /* valid line? */
                      com_reset_ln(ln - COM_LBASE);
@@ -624,7 +624,7 @@ t_stat com_svc(UNIT * uptr)
                     }
                     chan_set(chan, DEV_REOR|CTL_END);   /* end, last state */
                     break;      /* EOM? */
-                } 
+                }
                 sim_debug(DEBUG_DETAIL, &com_dev, "queing %o %d\n", (com_data >> 6) & 077, com_ocnt);
                 if (com_put(ln, (com_data >> 6) & 077)) {
                     sim_debug(DEBUG_EXP, &com_dev, "Insert error\n");
@@ -668,9 +668,9 @@ comti_svc(UNIT * uptr)
     sim_activate(uptr, uptr->wait);     /* continue poll */
     c = sim_poll_kbd();         /* get character */
     if (c && (c < SCPE_KFLAG))
-        return c;               /* error? */ 
+        return c;               /* error? */
     if (((com_unit[COM_PLU].flags & UNIT_ATT) == 0) ||  /* not att, not enab, */
-        !com_enab || (c & SCPE_BREAK)) 
+        !com_enab || (c & SCPE_BREAK))
         return SCPE_OK;         /* break? done */
     c = c & 0177;
     if (c) {
@@ -699,7 +699,7 @@ comi_svc(UNIT * uptr)
         return SCPE_OK;         /* attached? */
     if (in_delay-- <= 0) {      /* Check for any inputs to send over. */
         in_delay = 50;  /* Time to wait for polling again. */
-        if (!com_active && in_count > 0) 
+        if (!com_active && in_count > 0)
            com_post_eom();
     }
     t = sim_rtcn_calb(com_tps, TMR_COM);        /* calibrate */
@@ -716,7 +716,7 @@ comi_svc(UNIT * uptr)
     tmxr_poll_rx(&com_desc);    /* poll for input */
     for (ln = 0; ln < COM_TLINES; ln++) {       /* loop thru mux */
         if (com_ldsc[ln].conn) {        /* connected? */
-            if (coml_unit[ln].NEEDID) 
+            if (coml_unit[ln].NEEDID)
                 com_send_id(ln);
             c = tmxr_getc_ln(&com_ldsc[ln]);    /* get char */
             if (c) {            /* any char? */
@@ -728,7 +728,7 @@ comi_svc(UNIT * uptr)
                     if (coml_unit[ln].flags & UNIT_K35) {       /* KSR-35? */
                         if (islower(c))
                             c = toupper(c);     /* convert LC to UC */
-                    } 
+                    }
                     tmxr_putc_ln(&com_ldsc[ln], c);     /* echo char */
                     if (c == '\r')      /* add LF after CR */
                         tmxr_putc_ln(&com_ldsc[ln], '\n');
@@ -800,7 +800,7 @@ com_send_id(uint32 ln)
     com_inp_msg(ln, COMI_DIALUP);       /* input message: */
     if (coml_unit[ln].flags & UNIT_2741)        /* dialup, ID, endID */
         com_inp_msg(ln, COMI_2741);
-    else if (coml_unit[ln].flags & UNIT_K35)    
+    else if (coml_unit[ln].flags & UNIT_K35)
         com_inp_msg(ln, COMI_K35);
     else
         com_inp_msg(ln, COMI_K37);
@@ -832,9 +832,9 @@ com_queue_in(uint32 ln, uint16 c)
         if (coml_unit[ln].flags & UNIT_K35) {   /* KSR-35? */
             if (islower(c))
                 c = toupper(c); /* convert LC to UC */
-        } 
+        }
         if ((coml_unit[ln].flags & UNIT_K35) == 0) { /* KSR-37 or 2741 */
-            if (c == '\r') 
+            if (c == '\r')
                 c = '\n';
         }
         if (coml_unit[ln].flags & UNIT_2741) {
@@ -896,17 +896,17 @@ com_queue_out(uint32 ln, uint16 * c1)
             com_out_inesc[ln] &= 3;
             switch (c) {
             case '\043':                /* Red */
-               tmxr_putc_ln(&com_ldsc[ln], '\033');     
-               tmxr_putc_ln(&com_ldsc[ln], '[');        
-               tmxr_putc_ln(&com_ldsc[ln], '3');        
-               tmxr_putc_ln(&com_ldsc[ln], '1');        
-               tmxr_putc_ln(&com_ldsc[ln], 'm');        
+               tmxr_putc_ln(&com_ldsc[ln], '\033');
+               tmxr_putc_ln(&com_ldsc[ln], '[');
+               tmxr_putc_ln(&com_ldsc[ln], '3');
+               tmxr_putc_ln(&com_ldsc[ln], '1');
+               tmxr_putc_ln(&com_ldsc[ln], 'm');
                return 0;
             case '\023':                /* Black */
-               tmxr_putc_ln(&com_ldsc[ln], '\033');     
-               tmxr_putc_ln(&com_ldsc[ln], '[');        
-               tmxr_putc_ln(&com_ldsc[ln], '0');        
-               tmxr_putc_ln(&com_ldsc[ln], 'm');        
+               tmxr_putc_ln(&com_ldsc[ln], '\033');
+               tmxr_putc_ln(&com_ldsc[ln], '[');
+               tmxr_putc_ln(&com_ldsc[ln], '0');
+               tmxr_putc_ln(&com_ldsc[ln], 'm');
                return 0;
             }
             *c1 = c;
@@ -920,7 +920,7 @@ com_queue_out(uint32 ln, uint16 * c1)
         case '\015':    coml_unit[ln].ECHO = TRUE; return 0; /* Pon */
         }
         c2 = com_2741_out[(com_out_inesc[ln]&1)? (0100|c2): c2];
-        sim_debug(DEBUG_DETAIL, &com_dev, "printing %d %04o '%c' %o\n", 
+        sim_debug(DEBUG_DETAIL, &com_dev, "printing %d %04o '%c' %o\n",
                    ln, c, (c2>= ' ')?c2: 0, com_out_inesc[ln]&1);
         if (c2 == '\n')
            *c1 = '\r';
@@ -930,17 +930,17 @@ com_queue_out(uint32 ln, uint16 * c1)
         com_out_inesc[ln] = 0;
         switch (c) {
         case '3':               /* Red */
-               tmxr_putc_ln(&com_ldsc[ln], '\033');     
-               tmxr_putc_ln(&com_ldsc[ln], '[');        
-               tmxr_putc_ln(&com_ldsc[ln], '3');        
-               tmxr_putc_ln(&com_ldsc[ln], '1');        
-               tmxr_putc_ln(&com_ldsc[ln], 'm');        
+               tmxr_putc_ln(&com_ldsc[ln], '\033');
+               tmxr_putc_ln(&com_ldsc[ln], '[');
+               tmxr_putc_ln(&com_ldsc[ln], '3');
+               tmxr_putc_ln(&com_ldsc[ln], '1');
+               tmxr_putc_ln(&com_ldsc[ln], 'm');
                return 0;
         case '4':               /* Black */
-               tmxr_putc_ln(&com_ldsc[ln], '\033');     
-               tmxr_putc_ln(&com_ldsc[ln], '[');        
-               tmxr_putc_ln(&com_ldsc[ln], '0');        
-               tmxr_putc_ln(&com_ldsc[ln], 'm');        
+               tmxr_putc_ln(&com_ldsc[ln], '\033');
+               tmxr_putc_ln(&com_ldsc[ln], '[');
+               tmxr_putc_ln(&com_ldsc[ln], '0');
+               tmxr_putc_ln(&com_ldsc[ln], 'm');
                return 0;
         case ':':               /* Poff */
                coml_unit[ln].ECHO = FALSE;
@@ -1071,7 +1071,7 @@ com_put(int ln, uint16 ch)
     }
     com_out_tail[ln] = ent;
     /* Activate line if not already running */
-    if (!sim_is_active(&coml_unit[ln])) 
+    if (!sim_is_active(&coml_unit[ln]))
         sim_activate(&coml_unit[ln], coml_unit[ln].wait);
     return FALSE;
 }
@@ -1130,7 +1130,7 @@ com_inp_msg(uint32 ln, uint16 msg)
     if (!com_active && in_count > 150) {
          com_post_eom();
     }
-    return FALSE;       
+    return FALSE;
 }
 
 /* Reset routine */
@@ -1178,7 +1178,7 @@ com_reset(DEVICE * dptr)
     }
     com_buf[com_free - 1].link = 0;     /* end of free list */
     com_free = 1;
-    
+
     return SCPE_OK;
 }
 

@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -66,9 +66,9 @@
 #define MT_RUN          10
 #define MT_SKIP         11      /* Do skip to end of record */
 #define MT_WRITE        12      /* Actual transfer operation */
-#define MT_SKR          13      
-#define MT_ERG          14      
-#define MT_RDB          15      
+#define MT_SKR          13
+#define MT_ERG          14
+#define MT_RDB          15
 #define MT_CMDMSK   000017      /* Command being run */
 #define MT_RDY      000020      /* Device is ready for command */
 #define MT_IDLE     000040      /* Tape still in motion */
@@ -220,7 +220,7 @@ MTAB                mt_mod[] = {
         "Tape Online"},
 #endif
     {MTAB_XTD | MTAB_VUN, 0, "FORMAT", "FORMAT",
-     &sim_tape_set_fmt, &sim_tape_show_fmt, NULL, 
+     &sim_tape_set_fmt, &sim_tape_show_fmt, NULL,
        "Set/Display tape format (SIMH, E11, TPC, P7B)"},
    {MTAB_XTD | MTAB_VUN, 0, "LENGTH", "LENGTH",
      &sim_tape_set_capac, &sim_tape_show_capac, NULL,
@@ -346,7 +346,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
     uptr += unit;
     /* If unit disabled return error */
     if (uptr->flags & UNIT_DIS) {
-        /* 
+        /*
         fprintf(stderr, "Attempt to access disconnected unit %s%d\n",
                 dptr->name, unit); */
         return SCPE_NODEV;
@@ -404,7 +404,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
 #endif /* TEST */
         uptr->u6 = -1;
         uptr->hwmark = -1;
-        sim_debug(DEBUG_CMD, dptr, "RDS %s unit=%d %d\n", 
+        sim_debug(DEBUG_CMD, dptr, "RDS %s unit=%d %d\n",
                   ((uptr->u5 & MT_CMDMSK) == MT_RDS) ? "BCD" : "Binary",
                          unit, dev);
         break;
@@ -511,7 +511,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
         uptr->u5 |= MT_SKR;
 #ifndef I7010
         mt_chan[chan] |= MTC_BSY;
-#endif 
+#endif
         sim_debug(DEBUG_CMD, dptr, "SKR unit=%d\n", unit);
         break;
     case IO_ERG:
@@ -590,7 +590,7 @@ mt_read_buff(UNIT * uptr, int cmd, DEVICE * dptr, t_value *word)
     uptr->u5 &= ~MT_MARK;
     if (cmd == MT_RDS)
         mode = 0100;
-        
+
     *word = 0;
     for(i = CHARSPERWORD-1; i >= 0 && uptr->u6 < (int32)uptr->hwmark; i--) {
         ch = mt_buffer[bufnum][uptr->u6++];
@@ -688,19 +688,19 @@ t_stat mt_srv(UNIT * uptr)
 #ifdef I7010
         if ((cmd == MT_WRS || cmd == MT_WRSB) && uptr->u6 > 0) {
             reclen = uptr->hwmark;
-#else 
+#else
         if (cmd == MT_WRS || cmd == MT_WRSB) {
             if (uptr->u6 > 0) {
                  reclen = uptr->hwmark;
 #endif
-                 sim_debug(DEBUG_DETAIL, dptr, 
+                 sim_debug(DEBUG_DETAIL, dptr,
                         "Write flush unit=%d %s Block %d chars\n",
                          unit, (cmd == MT_WRS) ? "BCD" : "Binary", reclen);
                  r = sim_tape_wrrecf(uptr, &mt_buffer[bufnum][0], reclen);
                  mt_error(uptr, chan, r, dptr);      /* Record errors */
 #ifndef I7010
             }
-#endif 
+#endif
             sim_activate(uptr, us_to_ticks(6000));
             mt_chan[chan] &= MTC_BSY;
             uptr->u5 |= MT_RDY;
@@ -719,8 +719,8 @@ t_stat mt_srv(UNIT * uptr)
                 /* This is due to SIMH returning mark after read */
                     (void) sim_tape_sprecr(uptr, &reclen);
                     uptr->u5 &= ~MT_MARK;
-                } 
-#endif 
+                }
+#endif
                 sim_activate(uptr, us_to_ticks(6000));
                 uptr->u5 |= MT_RDY;
                 mt_chan[chan] &= MTC_BSY;
@@ -729,7 +729,7 @@ t_stat mt_srv(UNIT * uptr)
             sim_activate(uptr, us_to_ticks(100));
 #ifndef I7010
             uptr->u5 |= MT_RDY;
-#endif 
+#endif
             mt_chan[chan] &= MTC_BSY;
         }
         uptr->u6 = 0;
@@ -767,7 +767,7 @@ t_stat mt_srv(UNIT * uptr)
 #endif /* TEST */
         mt_chan[chan] &= MTC_BSY;       /* Clear all but busy */
         sim_debug(DEBUG_DETAIL, dptr, "Skip unit=%d\n", unit);
-        sim_activate(uptr, 
+        sim_activate(uptr,
              (uptr->flags & MTUF_LDN) ? us_to_ticks(2500): us_to_ticks(4250));
         return SCPE_OK;
 
@@ -784,7 +784,7 @@ t_stat mt_srv(UNIT * uptr)
                     us_to_ticks(4250): us_to_ticks(2500));
             return SCPE_OK;
         }
-#endif 
+#endif
         /* If tape mark pending, return it */
         if (chan_test(chan, DEV_FULL) == 0 && uptr->u5 & MT_MARK) {
             sim_debug(DEBUG_DETAIL, dptr, "Read unit=%d post ", unit);
@@ -807,7 +807,7 @@ t_stat mt_srv(UNIT * uptr)
         /* If at end of record, fill buffer */
         if (uptr->u6 == uptr->hwmark) {
             sim_debug(DEBUG_DETAIL, dptr, "Read unit=%d ", unit);
-            if ((r = sim_tape_rdrecf(uptr, &mt_buffer[bufnum][0], &reclen, 
+            if ((r = sim_tape_rdrecf(uptr, &mt_buffer[bufnum][0], &reclen,
                                 BUFFSIZE)) != MTSE_OK) {
                 sim_activate(uptr, us_to_ticks(100));
                 if (r == MTSE_TMK && uptr->u6 != -1) {
@@ -816,7 +816,7 @@ t_stat mt_srv(UNIT * uptr)
                             us_to_ticks(4250): us_to_ticks(2500));
                     uptr->u5 |= MT_MARK;
                     r = MTSE_OK;
-                } else { 
+                } else {
                     uptr->u5 &= ~MT_CMDMSK;
 #ifdef I7010
                     /* Translate TM characters for 7010 */
@@ -846,12 +846,12 @@ t_stat mt_srv(UNIT * uptr)
         /* Do BCD translation */
         if ((parity_table[ch & 077] ^ (ch & 0100) ^ mode) == 0) {
 #ifdef I7010
-            if (astmode) 
+            if (astmode)
                 ch = 054;
 #endif
             chan_set_error(chan);
             chan_set_attn(chan);
-        } 
+        }
 #if I7090 | I704 | I701
         /* Not needed on decimal machines */
         if (mode) {
@@ -866,28 +866,28 @@ t_stat mt_srv(UNIT * uptr)
                      uptr->u5 |= MT_RM;
                      mt_buffer[bufnum][uptr->u6] = 0;
                 }
-            } 
+            }
         }
 #endif
         ch &= 077;
 
         /* Convert one word. */
-            switch (chan_write_char(chan, &ch, 
+            switch (chan_write_char(chan, &ch,
 #ifdef I7010
                                 (uptr->u6 >= (int32)uptr->hwmark) ? DEV_REOR : 0)) {
-#else 
+#else
                                 /*(uptr->u6 >= (int32)uptr->hwmark) ? DEV_REOR :*/ 0)) {
-#endif 
+#endif
             case END_RECORD:
                 sim_debug(DEBUG_DATA, dptr, "Read unit=%d EOR\n", unit);
                 /* If not read whole record, skip till end */
 #ifndef I7010
                 uptr->u5 |= MT_EOR;
-#endif 
+#endif
                 if (uptr->u6 < (int32)uptr->hwmark) {
 #ifdef I7010
                     sim_activate(uptr, (uptr->hwmark-uptr->u6) * 20);
-#else 
+#else
                     int i = (uptr->hwmark-uptr->u6) *
                            ((uptr->flags & MTUF_LDN) ?LT:HT);
                     i += (uptr->flags & MTUF_LDN) ? 100 : 50;
@@ -900,8 +900,8 @@ t_stat mt_srv(UNIT * uptr)
 #ifdef I7010
                     break;
                 }
-#else 
-                } else 
+#else
+                } else
                     sim_activate(uptr, (uptr->flags & MTUF_LDN) ?
                             us_to_ticks(150): us_to_ticks(100));
                 break;
@@ -914,7 +914,7 @@ t_stat mt_srv(UNIT * uptr)
 #ifndef I7010
                     uptr->u5 |= MT_EOR;
 #endif
-                    sim_activate(uptr, 
+                    sim_activate(uptr,
                       (uptr->flags & MTUF_LDN) ?
                             us_to_ticks(150): us_to_ticks(100));
                 } else
@@ -922,11 +922,11 @@ t_stat mt_srv(UNIT * uptr)
                       (uptr->flags & MTUF_LDN) ?
                           us_to_ticks(LT): us_to_ticks(HT));
                 break;
-    
+
             case TIME_ERROR:
                 uptr->u5 &= ~MT_CMDMSK;
                 uptr->u5 |= MT_SKIP;
-                sim_activate(uptr, 
+                sim_activate(uptr,
                     us_to_ticks(((uptr->flags & MTUF_LDN) ?4250:2500) +
                          ((uptr->hwmark-uptr->u6) *
                            ((uptr->flags & MTUF_LDN) ?LT:HT))));
@@ -939,6 +939,7 @@ t_stat mt_srv(UNIT * uptr)
     /* Check mode */
     case MT_WRS:
         mode = 0100;
+        /* fall through */
     case MT_WRSB:
         switch (chan_read_char(chan, &ch,
                           (uptr->u6 > BUFFSIZE) ? DEV_WEOR : 0)) {
@@ -948,12 +949,14 @@ t_stat mt_srv(UNIT * uptr)
             if (uptr->u6 == 0) {
                 r = sim_tape_wrgap(uptr, 35);
             }
-#endif 
+#endif
             chan_set_attn(chan);
+            /* fall through */
+
         case END_RECORD:
             if (uptr->u6 > 0) { /* Only if data in record */
                 reclen = uptr->hwmark;
-                sim_debug(DEBUG_DETAIL, dptr, 
+                sim_debug(DEBUG_DETAIL, dptr,
                         "Write unit=%d %s Block %d chars\n",
                          unit, (cmd == MT_WRS) ? "BCD" : "Binary", reclen);
                 r = sim_tape_wrrecf(uptr, &mt_buffer[bufnum][0], reclen);
@@ -1000,14 +1003,14 @@ t_stat mt_srv(UNIT * uptr)
         /* If at end of record, fill buffer */
         if (uptr->u6 == uptr->hwmark) {
             sim_debug(DEBUG_DETAIL, dptr, "Read unit=%d ", unit);
-            if ((r = sim_tape_rdrecr(uptr, &mt_buffer[bufnum][0], &reclen, 
+            if ((r = sim_tape_rdrecr(uptr, &mt_buffer[bufnum][0], &reclen,
                                 BUFFSIZE)) != MTSE_OK) {
                 sim_activate(uptr, us_to_ticks(100));
                 if (r == MTSE_TMK && uptr->u6 != -1) {
                     sim_debug(DEBUG_DETAIL, dptr, "pend TM\n");
                     uptr->u5 |= MT_MARK;
                     r = MTSE_OK;
-                } else { 
+                } else {
                     uptr->u5 &= ~MT_CMDMSK;
                     chan_set_attn(chan);
                     chan_clear(chan, DEV_SEL);
@@ -1027,29 +1030,31 @@ t_stat mt_srv(UNIT * uptr)
             chan_set_error(chan);
             chan_set_attn(chan);
         fprintf(stderr, "Parity error %d: %03o\n", uptr->u6-1, ch);
-        } 
+        }
         ch &= 077;
 
         /* Convert one word. */
-            switch (chan_write_char(chan, &ch, 
+            switch (chan_write_char(chan, &ch,
                                 (uptr->u6 >= (int32)uptr->hwmark) ? DEV_REOR : 0)) {
             case END_RECORD:
                 sim_debug(DEBUG_DATA, dptr, "Read unit=%d EOR\n", unit);
                 if (uptr->u6 >= (int32)uptr->hwmark) {
                     uptr->u5 &= ~MT_CMDMSK;
                     uptr->u5 |= MT_SKIP;
-                    sim_activate(uptr, 
+                    sim_activate(uptr,
                         us_to_ticks(((uptr->hwmark-uptr->u6) *
                                ((uptr->flags & MTUF_LDN) ?LT:HT))));
                     chan_set(chan, DEV_REOR);
                     uptr->u6 = uptr->hwmark;    /* Force read next record */
                     break;
                 }
+                /* fall through */
+
             case DATA_OK:
                 sim_debug(DEBUG_DATA, dptr, "Read data unit=%d %d %02o\n",
                           unit, uptr->u6, ch);
                 if (uptr->u6 >= (int32)uptr->hwmark) { /* In IRG */
-                    sim_activate(uptr, 
+                    sim_activate(uptr,
                       (uptr->flags & MTUF_LDN) ?
                             us_to_ticks(4250): us_to_ticks(2500));
                 } else
@@ -1057,11 +1062,11 @@ t_stat mt_srv(UNIT * uptr)
                       (uptr->flags & MTUF_LDN) ?
                           us_to_ticks(LT): us_to_ticks(HT));
                 break;
-    
+
             case TIME_ERROR:
                 uptr->u5 &= ~MT_CMDMSK;
                 uptr->u5 |= MT_SKIP;
-                sim_activate(uptr, 
+                sim_activate(uptr,
                         us_to_ticks(((uptr->hwmark-uptr->u6) *
                                ((uptr->flags & MTUF_LDN) ?LT:HT))));
                 uptr->u6 = uptr->hwmark;        /* Force read next record */
@@ -1103,7 +1108,7 @@ t_stat mt_srv(UNIT * uptr)
             return SCPE_OK;
         }
         sim_debug(DEBUG_DETAIL, dptr, "%d \n", reclen);
-        sim_activate(uptr, 
+        sim_activate(uptr,
              us_to_ticks(((uptr->flags & MTUF_LDN) ?4250:2500) +
                  (reclen * ((uptr->flags & MTUF_LDN) ?LT:HT))));
 #ifdef I7010
@@ -1127,7 +1132,7 @@ t_stat mt_srv(UNIT * uptr)
         chan_clear(chan, STA_TWAIT);
 #endif
         } else {
-            sim_activate(uptr, 
+            sim_activate(uptr,
                  us_to_ticks(((uptr->flags & MTUF_LDN) ?4250:2500) +
                        (reclen * ((uptr->flags & MTUF_LDN) ?LT:HT))));
         }
@@ -1147,10 +1152,10 @@ t_stat mt_srv(UNIT * uptr)
         r = sim_tape_sprecf(uptr, &reclen);
 #ifdef I7010
         mt_chan[chan] &= ~MTC_BSY;
-#else 
+#else
         /* We are like read that transfers nothing */
         chan_set(chan, DEV_REOR);
-#endif 
+#endif
         /* We don't set EOF on SKR */
         if (r == MTSE_TMK) {
             sim_debug(DEBUG_DETAIL, dptr, "MARK\n");
@@ -1161,7 +1166,7 @@ t_stat mt_srv(UNIT * uptr)
         if (r != MTSE_OK)
            reclen = 10;
         sim_debug(DEBUG_DETAIL, dptr, "%d\n", reclen);
-        sim_activate(uptr, 
+        sim_activate(uptr,
                  us_to_ticks(((uptr->flags & MTUF_LDN) ?4250:2500) +
                        (reclen * ((uptr->flags & MTUF_LDN) ?LT:HT))));
         break;
@@ -1171,9 +1176,9 @@ t_stat mt_srv(UNIT * uptr)
         uptr->u5 &= ~(MT_CMDMSK|MT_MARK);
 #ifdef I7010
         uptr->u5 |= (MT_RDY | MT_IDLE);
-#else 
+#else
         uptr->u5 |= MT_SKIP;
-#endif 
+#endif
         r = sim_tape_wrgap(uptr, 35);
         mt_chan[chan] &= ~MTC_BSY;
         sim_activate(uptr, (uptr->flags & MTUF_LDN) ?
@@ -1223,7 +1228,7 @@ mt_boot(int32 unit_num, DEVICE * dptr)
         return SCPE_UNATT;      /* attached? */
 
     /* Start a read. */
-    if (mt_cmd(dptr->units, IO_RDS, dev) != SCPE_OK) 
+    if (mt_cmd(dptr->units, IO_RDS, dev) != SCPE_OK)
         return STOP_IONRDY;
 
 #if I7090 | I704 | I701
@@ -1261,7 +1266,7 @@ mt_reset(DEVICE * dptr)
     UNIT        *uptr = dptr->units;
     uint32       i;
     for (i = 0; i < dptr->numunits; i++) {
-       sim_tape_set_dens (uptr, 
+       sim_tape_set_dens (uptr,
               ((uptr->flags & MTUF_LDN) ? MT_DENS_200 : MT_DENS_556),
               NULL, NULL);
        uptr++;

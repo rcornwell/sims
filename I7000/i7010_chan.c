@@ -15,11 +15,11 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-   channel              
+   channel
 
    The system state for the IBM 7010 channel is:
    There is only one type of channel on  7010, and it will talk to
@@ -30,7 +30,7 @@
    CMD<0:6>             Channel command.
    ASM<0:32>            Assembled data from devices.
 
-   Simulation registers to handle device handshake.  
+   Simulation registers to handle device handshake.
    STATUS<0:16>         Simulated register for basic channel status.
    SENSE<0:16>          Additional flags for 7907 channels.
 */
@@ -38,7 +38,7 @@
 #include "i7010_defs.h"
 
 extern UNIT         cpu_unit;
-extern uint8        chan_seek_done[NUM_CHAN];   /* Channel seek finished */    
+extern uint8        chan_seek_done[NUM_CHAN];   /* Channel seek finished */
 
 #define CHAN_DEF        UNIT_DISABLE|CHAN_SET
 
@@ -155,8 +155,8 @@ set_urec(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     if (uptr == NULL)
         return SCPE_IERR;
 
-    for(i = 0; urec_devs[i].name != NULL; i++) 
-        if (strcmp(cptr, urec_devs[i].name) == 0) 
+    for(i = 0; urec_devs[i].name != NULL; i++)
+        if (strcmp(cptr, urec_devs[i].name) == 0)
             break;
     if (urec_devs[i].name == NULL)
         return SCPE_ARG;
@@ -245,10 +245,10 @@ chan_issue_cmd(uint16 chan, uint16 dcmd, uint16 dev) {
         if (dibp->ctype & CH_TYP_79XX) {
             for (j = 0; j < (*dptr)->numunits; j++, uptr++) {
                 if (UNIT_G_CHAN(uptr->flags) == chan &&
-                    (UNIT_SELECT & uptr->flags) == 0 && 
+                    (UNIT_SELECT & uptr->flags) == 0 &&
                     (dibp->addr & dibp->mask) == (dev & dibp->mask)) {
                     r = dibp->cmd(uptr, dcmd, dev);
-                    if (r != SCPE_NODEV) 
+                    if (r != SCPE_NODEV)
                         return r;
                 }
             }
@@ -257,7 +257,7 @@ chan_issue_cmd(uint16 chan, uint16 dcmd, uint16 dev) {
                 for (j = 0; j < (*dptr)->numunits; j++) {
                     if (UNIT_G_CHAN(uptr->flags) == chan) {
                         r = dibp->cmd(uptr, dcmd, dev);
-                        if (r != SCPE_NODEV) 
+                        if (r != SCPE_NODEV)
                             return r;
                     }
                     uptr++;
@@ -265,7 +265,7 @@ chan_issue_cmd(uint16 chan, uint16 dcmd, uint16 dev) {
             } else {
                 if (UNIT_G_CHAN(uptr->flags) == chan) {
                     r = dibp->cmd(uptr, dcmd, dev);
-                    if (r != SCPE_NODEV) 
+                    if (r != SCPE_NODEV)
                         return r;
                 }
             }
@@ -320,7 +320,7 @@ chan_proc()
                                                 (CTL_PREAD|CTL_PWRITE))>>2;
                 chan_flags[chan] &= ~(DEV_REOR|CTL_PREAD|CTL_PWRITE|CTL_CNTL);
                 /* If no select, all done */
-                if ((chan_flags[chan] & DEV_SEL) == 0) 
+                if ((chan_flags[chan] & DEV_SEL) == 0)
                     chan_flags[chan] &= ~(CTL_READ|CTL_WRITE);
                 /* Set direction if reading */
                 if (chan_flags[chan] & CTL_READ)
@@ -360,7 +360,7 @@ chan_proc()
                 cmd[chan] &= ~CHAN_DSK_SEEK;
                 chan_io_status[chan] |= 0100;
         }
-            
+
         /* If device put up EOR, terminate transfer. */
         if (chan_flags[chan] & DEV_REOR) {
              if (chan_dev.dctrl & cmask)
@@ -401,7 +401,7 @@ chan_proc()
 }
 
 void chan_set_attn_urec(int chan, uint16 addr) {
-    if (irqdev[chan] == addr) 
+    if (irqdev[chan] == addr)
         urec_irq[chan] = 1;
 }
 
@@ -456,15 +456,15 @@ chan_cmd(uint16 dev, uint16 dcmd, uint32 addr)
            dsk_cmd = 0x100;
         } else {
            cmd[chan] |= CHAN_6BIT;
-        } 
+        }
         /* Try to start drive */
         r = chan_issue_cmd(chan, dsk_cmd, dev);
-        if (r != SCPE_OK) 
+        if (r != SCPE_OK)
             return r;
         chan_flags[chan] |= CTL_CNTL;
-        if (dcmd == IO_RDS) 
+        if (dcmd == IO_RDS)
            chan_flags[chan] |= CTL_PREAD;
-        if (dcmd == IO_WRS) 
+        if (dcmd == IO_WRS)
            chan_flags[chan] |= CTL_PWRITE;
         if (dcmd == IO_TRS)
            chan_flags[chan] |= CTL_SNS;
@@ -547,7 +547,7 @@ chan_write_char(int chan, uint8 * data, int flags)
         if (cmd[chan] & CHAN_WM && ch != 035)
             ch |= WM;
         cmd[chan] &= ~CHAN_WM;
-        if ((cmd[chan] & CHAN_LOAD) == 0) 
+        if ((cmd[chan] & CHAN_LOAD) == 0)
             ch |= M[caddr[chan]] & WM;
         M[caddr[chan]++] = ch;
     }
@@ -555,7 +555,7 @@ chan_write_char(int chan, uint8 * data, int flags)
     /* If device gave us an end, terminate transfer */
     if (flags & DEV_REOR) {
         chan_flags[chan] |= DEV_REOR;
-        if (chan_flags[chan] & DEV_SEL) 
+        if (chan_flags[chan] & DEV_SEL)
             chan_flags[chan] |= DEV_DISCO;
         chan_io_status[chan] |= 0100;
         chan_flags[chan] &= ~(DEV_WRITE|STA_ACTIVE);
@@ -598,13 +598,13 @@ chan_read_char(int chan, uint8 * data, int flags)
     }
 
     /* Check if he write out last data */
-    if ((chan_flags[chan] & STA_ACTIVE) == 0) 
+    if ((chan_flags[chan] & STA_ACTIVE) == 0)
         return TIME_ERROR;
 
     /* Send rest of command */
     if (cmd[chan] & CHAN_DSK_DATA) {
         *data = M[caddr[chan]];
-        if (*data == (WM|077)) 
+        if (*data == (WM|077))
            return END_RECORD;
         *data &= 077;
         caddr[chan]++;
@@ -632,14 +632,14 @@ chan_read_char(int chan, uint8 * data, int flags)
             chan_io_status[chan] |= 0100;
             return END_RECORD;
         }
-        if (cmd[chan] & CHAN_LOAD && 
+        if (cmd[chan] & CHAN_LOAD &&
            (assembly[chan] & WM || assembly[chan] == 035)) {
             cmd[chan] |= CHAN_WM;
             assembly[chan] &= 077;
             *data = 035;
             return DATA_OK;
         }
-        if (cmd[chan] & CHAN_6BIT) 
+        if (cmd[chan] & CHAN_6BIT)
             *data &= 077;
         *data = assembly[chan];
     }

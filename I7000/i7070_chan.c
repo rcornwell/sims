@@ -15,11 +15,11 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-   channel              
+   channel
 
    The system state for the IBM 7070 channel is:
    There are 4 types of channel:
@@ -35,7 +35,7 @@
    ASM<0:44>            Assembled data from devices.
    LOCATION<0:16>       Address of next command.
 
-   Simulation registers to handle device handshake.  
+   Simulation registers to handle device handshake.
    STATUS<0:16>         Simulated register for basic channel status.
    SENSE<0:16>          Additional flags for 7907 channels.
 */
@@ -172,13 +172,13 @@ uint8   bcd_mem[64] = {
 
 uint8   mem_bcd[256] = {
         /* sp                                      */
-/* 00 */  020, 000, 000, 000, 000, 000, 000, 000, 
+/* 00 */  020, 000, 000, 000, 000, 000, 000, 000,
         /*                                         */
 /* 08 */  000, 000, 000, 000, 000, 000, 000, 000,
         /*                               sq    ?   */
 /* 10 */  000, 000, 000, 000, 000, 073, 074, 075,
         /*  ?    ?                                 */
-/* 18 */  076, 077, 000, 000, 000, 000, 000, 000, 
+/* 18 */  076, 077, 000, 000, 000, 000, 000, 000,
         /*+/-                        $    *    ?   */
 /* 20 */  060, 000, 000, 000, 000, 053, 054, 055,
         /*  ?  +/-                                 */
@@ -258,11 +258,11 @@ chan_issue_cmd(uint16 chan, uint16 dcmd, uint16 dev) {
         /* If this is a 79XX device, check it */
         if (dibp->ctype & CH_TYP_79XX) {
             for (j = 0; j < (*dptr)->numunits; j++, uptr++) {
-                if ((uptr->flags & UNIT_DIS) == 0 && 
+                if ((uptr->flags & UNIT_DIS) == 0 &&
                     UNIT_G_CHAN(uptr->flags) == chan &&
                     (dev == ((UNIT_SELECT & uptr->flags) != 0))) {
                     r = dibp->cmd(uptr, dcmd, dev);
-                    if (r != SCPE_NODEV) 
+                    if (r != SCPE_NODEV)
                         return r;
                 }
             }
@@ -272,7 +272,7 @@ chan_issue_cmd(uint16 chan, uint16 dcmd, uint16 dev) {
                     if ((uptr->flags & UNIT_DIS) == 0 &&
                         UNIT_G_CHAN(uptr->flags) == chan) {
                         r = dibp->cmd(uptr, dcmd, dev);
-                        if (r != SCPE_NODEV) 
+                        if (r != SCPE_NODEV)
                             return r;
                     }
                     uptr++;
@@ -281,7 +281,7 @@ chan_issue_cmd(uint16 chan, uint16 dcmd, uint16 dev) {
                 if ((uptr->flags & UNIT_DIS) == 0 &&
                         UNIT_G_CHAN(uptr->flags) == chan) {
                     r = dibp->cmd(uptr, dcmd, dev);
-                    if (r != SCPE_NODEV) 
+                    if (r != SCPE_NODEV)
                         return r;
                 }
             }
@@ -337,17 +337,17 @@ chan_trap:
                        temp = 0;
                     else if (chan_flags[chan] & CHS_ERR)
                        temp = 1;
-                    else if (chan_flags[chan] & CHS_EOF) 
+                    else if (chan_flags[chan] & CHS_EOF)
                        temp = 5;
                     else if (chan_info[chan] & CHAN_SEOS)
                        temp = 6;
                     else if (chan_info[chan] & CHAN_SCLR)
                        temp = 7;
                     else if ((chan_info[chan] & CHAN_NORDW) == 0) {
-                        if ((chan_info[chan] & CHAN_SEOR) == 0 && 
+                        if ((chan_info[chan] & CHAN_SEOR) == 0 &&
                                 caddr[chan] > limit[chan])
                             temp = 4;
-                         else if (caddr[chan] < limit[chan]) 
+                         else if (caddr[chan] < limit[chan])
                             temp = 3;
                     }
                     chan_flags[chan] &= ~(CHS_ERR|CHS_EOF);
@@ -367,7 +367,7 @@ chan_trap:
                                          temp, (chan_info[chan]&CHAN_PRIO)?1:0);
                     M[adr] = temp;
                     if ((chan_info[chan] & CHAN_PRIO) ||
-                                         ((temp >> 32) & 0xf) != 2) 
+                                         ((temp >> 32) & 0xf) != 2)
                          pri_latchs[chan] |= 1 << (chan_info[chan] & 0xF);
                     chan_info[chan] &= ~CHAN_PRIO;
                 } else if (chan_dev.dctrl & cmask)
@@ -382,25 +382,25 @@ chan_trap:
             if ((chan_flags[chan] & (STA_ACTIVE | STA_WAIT)) == 0) {
                 /* This could be a no data command, if pending priorty
                    request, ask device if it is ready */
-                if ((cmd[chan] & CHN_SEGMENT) == 0 && 
+                if ((cmd[chan] & CHN_SEGMENT) == 0 &&
                      chan_info[chan] & CHAN_PRIO &&
-                     chan_issue_cmd(chan, IO_TRS, chan_info[chan]&0xf) 
+                     chan_issue_cmd(chan, IO_TRS, chan_info[chan]&0xf)
                                                         == SCPE_OK)
                    goto chan_trap;
                 continue;
             }
-        
+
             /* If first time through here, load up channel control */
             if (chan_flags[chan] & STA_ACTIVE && chan_info[chan] & CHAN_START)
                 chan_fetch(chan);
 
             /* Process reading of a segment command */
-            if ((cmd[chan] & (CHN_SEGMENT|CHN_RM_FND)) == 
-                                (CHN_SEGMENT|CHN_RM_FND)) {  
+            if ((cmd[chan] & (CHN_SEGMENT|CHN_RM_FND)) ==
+                                (CHN_SEGMENT|CHN_RM_FND)) {
               /* Two backspaces and a read */
               switch (cmd[chan] & (CHN_RM_FND|CHN_NUM_MODE|CHN_COMPRESS)) {
                  case CHN_RM_FND:
-                        if (chan_issue_cmd(chan, IO_BSR, 
+                        if (chan_issue_cmd(chan, IO_BSR,
                                  chan_info[chan]&0xf) == SCPE_OK) {
                             cmd[chan] |= CHN_COMPRESS;
                          if (chan_dev.dctrl & cmask)
@@ -409,7 +409,7 @@ chan_trap:
                         }
                         break;
                  case CHN_RM_FND|CHN_COMPRESS:
-                        if (chan_issue_cmd(chan, IO_BSR, 
+                        if (chan_issue_cmd(chan, IO_BSR,
                                  chan_info[chan]&0xf) == SCPE_OK) {
                              cmd[chan] |= CHN_NUM_MODE;
                              if (chan_dev.dctrl & cmask)
@@ -423,7 +423,7 @@ chan_trap:
                         break;
                  case CHN_RM_FND|CHN_NUM_MODE|CHN_COMPRESS:
                         chan_info[chan] &= ~(CHAN_SEOS|CHAN_FIRST);
-                        if ( chan_issue_cmd(chan, IO_RDS, 
+                        if ( chan_issue_cmd(chan, IO_RDS,
                                  chan_info[chan]&0xf) == SCPE_OK) {
                            cmd[chan] &= ~(CHN_NUM_MODE|CHN_COMPRESS|CHN_RM_FND);
                          if (chan_dev.dctrl & cmask)
@@ -450,7 +450,7 @@ chan_trap:
                 /* Device has given us a dataword */
             case DEV_FULL:
                 /* Process reading of a segment command */
-                 if (cmd[chan] & CHN_SEGMENT) {         
+                 if (cmd[chan] & CHN_SEGMENT) {
                      /* Check if hit end of record */
 #if 0           /* Check segment operation correct before removing */
                     if (chan_dev.dctrl & cmask)
@@ -458,13 +458,13 @@ chan_trap:
                                          "chk segment %d %d data = %012llx",
                                          chan, bcnt[chan], assembly[chan]);
 
-                    if ((chan_flags[chan] & (STA_WAIT|DEV_REOR)) 
+                    if ((chan_flags[chan] & (STA_WAIT|DEV_REOR))
                                 == (STA_WAIT|DEV_REOR)) {
                         chan_flags[chan] &= ~(STA_WAIT|DEV_REOR|DEV_FULL);
                         chan_info[chan] &= ~(CHAN_SEOS|CHAN_FIRST);
                         continue;
                     }
-                        
+ 
                     if (bcnt[chan] >= 6 && chan_flags[chan] & DEV_REOR) {
                        if (chan_info[chan] & CHAN_SEOS) {
                             if (chan_dev.dctrl & cmask)
@@ -481,7 +481,7 @@ chan_trap:
                         }
                         chan_info[chan] &= ~(CHAN_SEOS|CHAN_FIRST|CHAN_TWE);
                         chan_flags[chan] &= ~(DEV_FULL|DEV_REOR|CHS_ERR);
-                    } else 
+                    } else
                         if (chan_dev.dctrl & cmask)
                              sim_debug(DEBUG_DETAIL, &chan_dev, " search\n");
                     /* How about regular record */
@@ -506,8 +506,8 @@ chan_trap:
                                   chan, assembly[chan]);
                     if (caddr[chan] < MEMSIZE)
                         M[caddr[chan]] = assembly[chan];
-                
-                    if (bcnt[chan] != 0) 
+ 
+                    if (bcnt[chan] != 0)
                         chan_info[chan] |= CHAN_SCLR;
                     else
                         chan_info[chan] &= ~CHAN_SCLR;
@@ -515,9 +515,9 @@ chan_trap:
                     if (caddr[chan] >= limit[chan] && cmd[chan] & CHN_LAST) {
                         chan_flags[chan] &= ~(STA_ACTIVE);
                         chan_flags[chan] |= STA_TWAIT|STA_WAIT;
-                    } else 
+                    } else
                         caddr[chan]++;
-                
+
                     /* Update channel status word */
                     if (chan != 0 && (chan_info[chan] & CHAN_NORDW) == 0) {
                         int     adr = 100 + (chan * 10) + (chan_info[chan]&0xf);
@@ -526,13 +526,13 @@ chan_trap:
                     }
 
                     /* Check for record mark */
-                    if ((cmd[chan] & CHN_RECORD) && 
+                    if ((cmd[chan] & CHN_RECORD) &&
                         (assembly[chan] & DMASK) == ASIGN &&
                         (assembly[chan] & 0xFF) == RM_CHAR) {
                         if (cmd[chan] & CHN_LAST) {
                             chan_flags[chan] &= ~(STA_ACTIVE);
                             chan_flags[chan] |= STA_TWAIT|STA_WAIT;
-                        } else 
+                        } else
                             chan_fetch(chan);
                     }
                     bcnt[chan] = 10;
@@ -545,7 +545,7 @@ chan_trap:
             case 0:
                 if (chan_flags[chan] & DEV_REOR) {
                     /* Check EOR at end of segment */
-                    if (cmd[chan] & CHN_SEGMENT) {      
+                    if (cmd[chan] & CHN_SEGMENT) {
                         if ((chan_info[chan] & CHAN_FIRST) == 0 &&
                            bcnt[chan] == 8 &&
                           assembly[chan] == (ASIGN|(((t_uint64)SM_MEM) << 32))){
@@ -618,7 +618,7 @@ chan_trap:
                      continue;
 
                 /* Special for write segment mark command */
-                if (cmd[chan] & CHN_SEGMENT) {  
+                if (cmd[chan] & CHN_SEGMENT) {
                      /* Send one char */
                      assembly[chan] = SM_MEM;
                      bcnt[chan] = 2;
@@ -637,7 +637,7 @@ chan_trap:
                                                         | STA_ACTIVE);
                             chan_flags[chan] |= STA_TWAIT;
                             if (chan_dev.dctrl & cmask)
-                                sim_debug(DEBUG_EXP, &chan_dev, 
+                                sim_debug(DEBUG_EXP, &chan_dev,
                                     "chan %d EOR> %o\n", chan, cmd[chan] & 070);
                             continue;
                     }
@@ -655,9 +655,9 @@ chan_trap:
                     if (caddr[chan] >= limit[chan] && cmd[chan] & CHN_LAST) {
                         chan_flags[chan] &= ~(STA_ACTIVE);
                         chan_flags[chan] |= STA_TWAIT|STA_WAIT;
-                    } else 
+                    } else
                         caddr[chan]++;
-                
+ 
                     /* Update channel status word */
                     if (chan != 0 && (chan_info[chan] & CHAN_NORDW) == 0) {
                         int     adr = 100 + (chan * 10) + (chan_info[chan]&0xf);
@@ -666,13 +666,13 @@ chan_trap:
                     }
 
                    /* Check for record mark */
-                    if ((cmd[chan] & CHN_RECORD) && 
+                    if ((cmd[chan] & CHN_RECORD) &&
                         (assembly[chan] & DMASK) == ASIGN &&
                         (assembly[chan] & 0xFF) == RM_CHAR) {
                         if (cmd[chan] & CHN_LAST) {
                             chan_flags[chan] &= ~(STA_ACTIVE);
                             chan_flags[chan] |= STA_TWAIT|STA_WAIT;
-                        } else 
+                        } else
                             chan_fetch(chan);
                     }
 
@@ -694,7 +694,7 @@ chan_trap:
                     if (chan_dev.dctrl & cmask)
                         sim_debug(DEBUG_EXP, &chan_dev,
                                   "chan %d > DISCO\n", chan);
-                 } else 
+                 } else
                     chan_fetch(chan);
             }
             break;
@@ -702,12 +702,12 @@ chan_trap:
             /* If channel is disconnecting, just hold on */
             if (chan_flags[chan] & DEV_DISCO)
                 continue;
-        
+
             /* If no select, stop channel */
             if ((chan_flags[chan] & DEV_SEL) == 0
                 && (chan_flags[chan] & STA_TWAIT)) {
                 t_uint64        temp;
-                
+
                 temp = 2;
                 if (chan_info[chan] & CHAN_TWE)
                    temp = 1;
@@ -715,8 +715,8 @@ chan_trap:
                    temp = 5;
                 else if ((chan_info[chan] & CHAN_SEOR) == 0 && op[chan] == 1)
                    temp = 4;
-                else if (caddr[chan] <= limit[chan] && 
-                        (op[chan] == 1 || op[chan] == 3)) 
+                else if (caddr[chan] <= limit[chan] &&
+                        (op[chan] == 1 || op[chan] == 3))
                    temp = 3;
                 temp <<= 36;
                 chan_irq[chan] |= chan_flags[chan] & (SNS_ATTN1|SNS_ATTN2);
@@ -730,7 +730,7 @@ chan_trap:
                               chan, temp);
                 M[(chan - 4) + 300] = temp;
                 if ((chan_info[chan] & CHAN_PRIO) || ((temp >> 36) & 0xf) != 2)
-                      pri_latchs[8] |= 1<<(chan-4);
+                      pri_latchs[8] |= 1<<(4-chan);
                 chan_flags[chan] &=
                     ~(STA_START | STA_ACTIVE | STA_WAIT | STA_TWAIT);
                 chan_info[chan] &= ~CHAN_PRIO;
@@ -739,9 +739,9 @@ chan_trap:
 
             /* Check if device raised attention */
             if ((chan_flags[chan] & (STA_ACTIVE|DEV_SEL|STA_TWAIT)) == 0 &&
-                (chan_flags[chan] & (SNS_ATTN1|SNS_ATTN2))) { 
+                (chan_flags[chan] & (SNS_ATTN1|SNS_ATTN2))) {
                 t_uint64        temp;
-                
+ 
                 if (chan_dev.dctrl & cmask)
                     sim_debug(DEBUG_TRAP, &chan_dev, "chan %d Attn Trap\n",
                               chan);
@@ -755,7 +755,7 @@ chan_trap:
                 upd_idx(&temp, caddr[chan]);
                 bin_dec(&temp, location[chan], 0, 4);
                 M[(chan - 4) + 300] = temp;
-                pri_latchs[9] |= 1 << (chan - 4);
+                pri_latchs[9] |= 1 << (4 - chan);
                 continue;
             }
 
@@ -777,16 +777,16 @@ chan_trap:
                         M[caddr[chan]] = temp;
                         break;
                 case 1: /* Read */
-                        /* Check if in other mode */    
+                        /* Check if in other mode */
                         if (chan_flags[chan] & (CTL_CNTL)) {
                             if (chan_dev.dctrl & cmask)
                                     sim_debug(DEBUG_DATA, &chan_dev,
                                               "chan %d read busy %04x\n",
                                               chan, chan_flags[chan]);
                             if (chan_flags[chan] & DEV_REOR) {
-                                chan_flags[chan] &= 
+                                chan_flags[chan] &=
                                         ~(CTL_CNTL|DEV_REOR|DEV_WRITE);
-                            } else 
+                            } else
                                 continue;
                         }
                         /* Check if last command not finished */
@@ -815,11 +815,11 @@ chan_trap:
                         /* Has device given us a word */
                         if (chan_flags[chan] & DEV_FULL) {
                             /* Check if record mark */
-                            if ((cmd[chan] & CHN_RECORD) && 
+                            if ((cmd[chan] & CHN_RECORD) &&
                                 (assembly[chan] & DMASK) == ASIGN &&
                                 (assembly[chan] & 0xFF) == RM_CHAR) {
                                 break;
-                            } 
+                            }
 
 
                             /* Check if ready to transfer something */
@@ -834,14 +834,14 @@ chan_trap:
                                 assembly[chan] = 0;
                                 chan_flags[chan] &= ~DEV_FULL;
                                 /* Check if last word transfered */
-                                if (caddr[chan] > limit[chan]) 
+                                if (caddr[chan] > limit[chan])
                                     break;
                             }
-                        
+                       
                             /* Check if we still have a select signal */
                             if ((chan_flags[chan] & DEV_SEL) == 0) {
                                 chan_info[chan] |= CHAN_TWE;
-                                chan_flags[chan] &= 
+                                chan_flags[chan] &=
                                         ~(CTL_WRITE|CTL_END|STA_ACTIVE);
                                 break;
                             }
@@ -854,7 +854,7 @@ chan_trap:
                             }
                             continue;
                         }
-        
+ 
                         /* Abort if we get control end */
                         if (chan_flags[chan] & CTL_END) {
                             /* Disconnect channel if select still active */
@@ -870,7 +870,7 @@ chan_trap:
                         continue;
 
                 case 3: /* Write */
-                        /* Check if in other mode */    
+                        /* Check if in other mode */
                         if (chan_flags[chan] & (CTL_CNTL)) {
                             if (chan_dev.dctrl & cmask)
                                     sim_debug(DEBUG_DATA, &chan_dev,
@@ -879,7 +879,7 @@ chan_trap:
                             if (chan_flags[chan] & DEV_REOR) {
                                 chan_flags[chan] &=
                                          ~(CTL_CNTL|DEV_REOR|DEV_WRITE);
-                            } else 
+                            } else
                                 continue;
                         }
                         /* Check if last command not finished */
@@ -931,7 +931,7 @@ chan_trap:
                                 break;
                             }
 
-    
+ 
                             /* Check if ready to transfer something */
                             if (caddr[chan] <= limit[chan]) {
                                 assembly[chan] = M[caddr[chan]];
@@ -943,30 +943,30 @@ chan_trap:
                                 bcnt[chan] = 10;
                                 chan_flags[chan] |= DEV_FULL;
                                 /* Check if record mark */
-                                if ((cmd[chan] & CHN_RECORD) && 
-                                    (assembly[chan] & DMASK) == ASIGN &&
+                                if ((cmd[chan] & CHN_RECORD) &&
+                                    (assembly[chan] & SMASK) == ASIGN &&
                                     (assembly[chan] & 0xFF) == RM_CHAR) {
                                     chan_flags[chan] |= DEV_WEOR;
                                     break;
-                                } 
+                                }
                                 continue;
                             }
                             chan_info[chan] |= CHAN_SEOR;
                             break;
                         }
                         continue;
-    
+
                 case 5: /* Sense */
-                        /* Check if in other mode */    
+                        /* Check if in other mode */
                         if (chan_flags[chan] & (CTL_CNTL)) {
                             if (chan_dev.dctrl & cmask)
                                     sim_debug(DEBUG_DATA, &chan_dev,
                                               "chan %d sense busy %04x\n",
                                               chan, chan_flags[chan]);
                             if (chan_flags[chan] & DEV_REOR) {
-                                chan_flags[chan] &= 
+                                chan_flags[chan] &=
                                         ~(CTL_CNTL|DEV_REOR|DEV_WRITE);
-                            } else 
+                            } else
                                 continue;
                         }
                         if (chan_flags[chan] & CTL_SNS) {
@@ -1029,9 +1029,9 @@ chan_trap:
                                 break;
                             }
                             continue;
-                        } 
-                
-                        /* Check if in other mode */    
+                        }
+ 
+                        /* Check if in other mode */
                         if (chan_flags[chan] & (CTL_CNTL|CTL_READ|CTL_WRITE)) {
                             if (chan_dev.dctrl & cmask)
                                     sim_debug(DEBUG_DATA, &chan_dev,
@@ -1043,7 +1043,7 @@ chan_trap:
                             chan_flags[chan] &= ~(CTL_CNTL|CTL_READ|CTL_WRITE);
                             continue;
                         }
-    
+
                         /* Start sense command */
                         chan_flags[chan] |= CTL_SNS;
                         chan_flags[chan] &= ~(CTL_END|DEV_REOR|DEV_FULL);
@@ -1081,18 +1081,18 @@ chan_trap:
                         chan_flags[chan] |= CTL_CNTL;
                         /* Get channel ready to transfer */
                         chan_flags[chan] &= ~(CTL_END|DEV_REOR|DEV_FULL);
-    
+
                         switch(chan_issue_cmd(chan,0,chan_stat(chan,CTL_SEL))){
                         case SCPE_IOERR:
                         case SCPE_NODEV:
                                 chan_info[chan] |= CHAN_TWE;
-                                chan_flags[chan] &= 
+                                chan_flags[chan] &=
                                                 ~(CTL_SNS|CTL_CNTL|STA_ACTIVE);
                                 continue;
                             case SCPE_BUSY:
                                 /* Device not ready yet, wait */
                                 continue;
-                            case SCPE_OK:     
+                            case SCPE_OK:
                                  /* Device will be waiting for command */
                                 break;
                         }
@@ -1110,7 +1110,7 @@ chan_trap:
                         /* Wait for device to grab the command */
                         if (chan_flags[chan] & DEV_FULL)
                             continue;
-    
+ 
                         /* Check if device ready for next command word */
                         if ((chan_flags[chan] & (DEV_WRITE | DEV_FULL)) ==
                             DEV_WRITE) {
@@ -1137,20 +1137,20 @@ chan_trap:
                         chan_info[chan] |= CHAN_TWE;
                         if (chan_flags[chan] & DEV_SEL)
                              chan_flags[chan] |= DEV_DISCO;
-                        chan_flags[chan] &= 
+                        chan_flags[chan] &=
                              ~(STA_ACTIVE|CTL_WRITE|CTL_READ|CTL_CNTL|CTL_SNS);
                         break;
 
                     }
-        
+ 
                     /* If last all done */
                     if (cmd[chan] & CHN_LAST || chan_flags[chan] & (SNS_UEND)
                         || chan_info[chan] & CHAN_TWE) {
-                        if (chan_flags[chan] & DEV_SEL) 
+                        if (chan_flags[chan] & DEV_SEL)
                             chan_flags[chan] |= DEV_DISCO;
                         chan_flags[chan] &= ~(STA_ACTIVE);
                         chan_flags[chan] |= STA_TWAIT;
-                    } else 
+                    } else
                         chan_fetch(chan);
                 }
                 continue;
@@ -1224,7 +1224,7 @@ chan_cmd(uint16 dev, uint16 dcmd, uint16 addr)
         return SCPE_BUSY;
     /* Ok, try and find the unit */
     prio = (dev & 0x1000)? 1: 0;
-    dev &= 0xff; 
+    dev &= 0xff;
     location[chan] = addr;
     cmd[chan] = dcmd & 0xff;
     dcmd >>= 8;
@@ -1235,7 +1235,7 @@ chan_cmd(uint16 dev, uint16 dcmd, uint16 addr)
         chan_info[chan] |= CHAN_OUTDEV;
 
     /* Check for octal translation */
-    if (chan == 1 && dev & 020) 
+    if (chan == 1 && dev & 020)
         chan_info[chan] |= CHAN_OCTAL;
 
     /* Enable priority */
@@ -1243,7 +1243,7 @@ chan_cmd(uint16 dev, uint16 dcmd, uint16 addr)
         chan_info[chan] |= CHAN_PRIO;
     assembly[chan] = 0;
     bcnt[chan] = 10;
-    
+ 
     if (CHAN_G_TYPE(chan_unit[chan].flags) == CHAN_7907) {
         chan_flags[chan] |= STA_ACTIVE;
         if (dev & 1)
@@ -1252,7 +1252,7 @@ chan_cmd(uint16 dev, uint16 dcmd, uint16 addr)
            chan_flags[chan] &= ~CTL_SEL;
         chan_fetch(chan);
         return SCPE_OK;
-    } 
+    }
     r = chan_issue_cmd(chan, dcmd, dev);
     if (r != SCPE_OK) {
         /* No device, kill active */
@@ -1264,7 +1264,7 @@ chan_cmd(uint16 dev, uint16 dcmd, uint16 addr)
                 chan_flags[chan] |= STA_ACTIVE;
 
         if (chan_dev.dctrl & (0x0100 << chan))
-             sim_debug(DEBUG_CMD, &chan_dev, 
+             sim_debug(DEBUG_CMD, &chan_dev,
                 "chan %d cmd=%o IC=%05d addr=%05d\n\r", chan, dcmd, IC, addr);
     }
     return r;
@@ -1332,9 +1332,9 @@ chan_write_char(int chan, uint8 * data, int flags)
 #endif
 
     if (ch == DELTA_CHAR && (cmd[chan] & CHN_ALPHA) == 0) {
-        if (bcnt[chan] == 10) 
+        if (bcnt[chan] == 10)
             cmd[chan] ^= CHN_NUM_MODE;
-        else 
+        else
             chan_info[chan] |= CHAN_TWE;
     } else {
         if (chan_flags[chan] & CTL_SNS) {
@@ -1355,44 +1355,44 @@ chan_write_char(int chan, uint8 * data, int flags)
             assembly[chan] |= ((t_uint64)ch) << (4 * bcnt[chan]);
         } else if (cmd[chan] & CHN_NUM_MODE) {
             ch &= 0xf;
-            if (ch == 0 || ch > 10) 
+            if (ch == 0 || ch > 10)
               chan_info[chan] |= CHAN_TWE;
-            else if (ch == 10) 
+            else if (ch == 10)
                 ch = 0;
             bcnt[chan]--;
             assembly[chan] |= ((t_uint64)ch) << (4 * bcnt[chan])|PSIGN;
             /* Check for sign digit */
             switch(*data & 060) {
             case 0:     /* Normal digit */
-            case 020:   /* error */ 
+            case 020:   /* error */
                       if (bcnt[chan] == 0)
                           chan_info[chan] |= CHAN_TWE;
                       break;
             case 040:
                       if (bcnt[chan] > 5)
                           chan_info[chan] |= CHAN_TWE;
-                      assembly[chan] &= DMASK; 
+                      assembly[chan] &= DMASK;
                       /* Put number in right location */
                       while(bcnt[chan] != 0) {
                          bcnt[chan]--;
                          assembly[chan] >>= 4;
                       }
-                      assembly[chan] |= MSIGN; 
+                      assembly[chan] |= MSIGN;
                       break;
             case 060:
                       if (bcnt[chan] > 5)
                           chan_info[chan] |= CHAN_TWE;
-                      assembly[chan] &= DMASK; 
+                      assembly[chan] &= DMASK;
                       /* Put number in right location */
                       while(bcnt[chan] != 0) {
                          bcnt[chan]--;
                          assembly[chan] >>= 4;
                       }
-                      assembly[chan] |= PSIGN; 
+                      assembly[chan] |= PSIGN;
                       break;
             }
         } else {
-            if (chan_info[chan] & CHAN_OCTAL) 
+            if (chan_info[chan] & CHAN_OCTAL)
                 ch = ((ch & 070) << 1) | (ch & 07);
             else
                 ch = bcd_mem[ch];
@@ -1410,7 +1410,7 @@ chan_write_char(int chan, uint8 * data, int flags)
         chan_flags[chan] |= DEV_FULL|DEV_REOR;
         chan_flags[chan] &= ~DEV_WRITE;
         if (bcnt[chan] != 0 && ((cmd[chan] & (CHN_NUM_MODE)) == 0 ||
-                (cmd[chan] & (CHN_ALPHA)) != 0))  
+                (cmd[chan] & (CHN_ALPHA)) != 0)) 
            chan_info[chan] |= CHAN_SCLR;
         chan_info[chan] |= CHAN_SEOR;
         chan_proc();
@@ -1461,7 +1461,7 @@ chan_read_char(int chan, uint8 * data, int flags)
         return TIME_ERROR;
     }
 
-    /* Send control words differently */ 
+    /* Send control words differently */
     if (chan_flags[chan] & CTL_CNTL) {
         if ((assembly[chan] & SMASK) == ASIGN) {
             bcnt[chan] -= 2;
@@ -1482,11 +1482,11 @@ chan_read_char(int chan, uint8 * data, int flags)
         if (bcnt[chan] == 10 && (cmd[chan] & CHN_NUM_MODE) == 0) {
             switch(assembly[chan] & SMASK) {
             case ASIGN: break;
-            case PSIGN: *data = 060; 
+            case PSIGN: *data = 060;
                         cmd[chan] |= CHN_NUM_MODE;
                         return SCPE_OK;
             case MSIGN: *data = 040;
-                        cmd[chan] |= CHN_NUM_MODE; 
+                        cmd[chan] |= CHN_NUM_MODE;
                         return SCPE_OK;
             }
         }
@@ -1495,7 +1495,7 @@ chan_read_char(int chan, uint8 * data, int flags)
             ch = (assembly[chan] >> (4 * bcnt[chan])) & 0xf;
             if (ch == 0)
                ch = 10;
-            if (bcnt[chan] == 0) 
+            if (bcnt[chan] == 0)
                 cmd[chan] &= ~CHN_NUM_MODE;
             *data = ch;
         } else {
@@ -1517,7 +1517,7 @@ chan_read_char(int chan, uint8 * data, int flags)
              return DATA_OK;
         }
         /* Handle zero compression here */
-        if ((cmd[chan] & (CHN_NUM_MODE|CHN_COMPRESS)) == 
+        if ((cmd[chan] & (CHN_NUM_MODE|CHN_COMPRESS)) ==
                         (CHN_NUM_MODE|CHN_COMPRESS)) {
             while((assembly[chan] >> (4 * bcnt[chan]) & 0xf) == 0 &&
                 bcnt[chan] < 5)
@@ -1531,7 +1531,7 @@ chan_read_char(int chan, uint8 * data, int flags)
         ch = (assembly[chan] >> (4 * bcnt[chan])) & 0xf;
         if (ch == 0)
            ch = 10;
-        if (bcnt[chan] == 0) 
+        if (bcnt[chan] == 0)
            ch |= ((assembly[chan] & SMASK) == MSIGN)? 040: 060;
         *data = ch;
     } else {
@@ -1539,7 +1539,7 @@ chan_read_char(int chan, uint8 * data, int flags)
         ch = (assembly[chan] >> (4 * bcnt[chan])) & 0xff;
         *data = mem_bcd[ch];
     }
-        
+ 
 done:
     if (bcnt[chan] == 0) {
         chan_flags[chan] &= ~DEV_FULL;
@@ -1556,12 +1556,12 @@ done:
 }
 
 void
-chan_set_load_mode(int chan) 
+chan_set_load_mode(int chan)
 {
     cmd[chan] &= ~CHN_ALPHA;
     cmd[chan] |= CHN_NUM_MODE;
 }
-   
+
 void
 chan9_set_error(int chan, uint32 mask)
 {

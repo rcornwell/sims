@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -25,7 +25,7 @@
 #include "i7000_defs.h"
 #include <time.h>
 
-#ifdef NUM_DEVS_CHRON   
+#ifdef NUM_DEVS_CHRON
 #define BUFFSIZE        (12)
 
 #define UNIT_MT(x)      UNIT_DISABLE | UNIT_ROABLE | \
@@ -50,7 +50,7 @@ t_stat              chron_srv(UNIT *);
 t_stat              chron_reset(DEVICE *);
 t_stat              set_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc);
 t_stat              get_addr(FILE * st, UNIT *uptr, int32 v, CONST void *desc);
-t_stat              chron_help(FILE *st, DEVICE *dptr, UNIT *uptr, 
+t_stat              chron_help(FILE *st, DEVICE *dptr, UNIT *uptr,
                              int32 flags, const char *ctxt);
 const char          *chron_description (DEVICE *dptr);
 
@@ -159,7 +159,7 @@ chron_read_buff(UNIT * uptr, int cmd)
     tptr = localtime(&curtim);  /* decompose */
     if (tptr == NULL)
         return;                 /* error? */
-    
+
     ms = sim_os_msec() % 1000;
     ms /= 100;
 
@@ -279,7 +279,7 @@ chron_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 }
 
 const char *
-chron_description (DEVICE *dptr) 
+chron_description (DEVICE *dptr)
 {
    return "Chronoclock";
 }

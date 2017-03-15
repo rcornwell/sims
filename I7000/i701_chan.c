@@ -15,11 +15,11 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-   channel              
+   channel
 
    There is no channel on the 701, this module just provides basic support
    for polled mode devices.
@@ -40,7 +40,7 @@ void                chan_fetch(int chan);
 t_stat              chan_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
                         const char *cptr);
 const char          *chan_description (DEVICE *dptr);
-uint32              dly_cmd(UNIT *, uint16, uint16);  
+uint32              dly_cmd(UNIT *, uint16, uint16);
 
 /* Channel data structures
 
@@ -62,12 +62,12 @@ DIB                 dly_dib =
 
 UNIT                chan_unit[] = {
     /* Puesdo channel for 701 devices */
-    {UDATA(NULL, UNIT_DISABLE | CHAN_SET | 
+    {UDATA(NULL, UNIT_DISABLE | CHAN_SET |
                         CHAN_S_TYPE(CHAN_PIO)|UNIT_S_CHAN(0), 0)},
 };
 
 REG                 chan_reg[] = {
-    {BRDATAD(ASM, assembly, 8, 36, NUM_CHAN, "Channel Assembly Register"), 
+    {BRDATAD(ASM, assembly, 8, 36, NUM_CHAN, "Channel Assembly Register"),
            REG_RO|REG_FIT},
     {BRDATAD(FLAGS, chan_flags, 2, 32, NUM_CHAN, "Channel flags"),
            REG_RO|REG_FIT},
@@ -90,12 +90,12 @@ DEVICE              chan_dev = {
 /* Nothing special to do, just return true if cmd is write and we got here */
 uint32 dly_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
 {
-    if (cmd == IO_WRS) 
+    if (cmd == IO_WRS)
         return SCPE_OK;
     return SCPE_NODEV;
 }
-                            
-    
+
+
 
 t_stat
 chan_reset(DEVICE * dptr)
@@ -170,7 +170,7 @@ chan_cmd(uint16 dev, uint16 dcmd)
     if (chan_flags[chan] & (DEV_SEL | DEV_DISCO | STA_TWAIT | STA_WAIT))
         return SCPE_BUSY;
     /* Ok, try and find the unit */
-    dev &= 07777; 
+    dev &= 07777;
     for (dptr = sim_devices; *dptr != NULL; dptr++) {
         int                 r;
 
@@ -322,7 +322,7 @@ chan_write_char(int chan, uint8 * data, int flags)
             MQ = wd;
         else
             assembly[chan] = wd;
-        
+
         if (cnt == 0) {
             chan_flags[chan] |= DEV_FULL;
             chan_flags[chan] &= ~DEV_WRITE;

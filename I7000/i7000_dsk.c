@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNRWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -25,7 +25,7 @@
 
    Since these drives supported variable format for each cylinder the
    format is represented as one track per cylinder as follows:
-  
+
      0          data
      1          header
      2          Home Address
@@ -46,7 +46,7 @@
 
 #include "i7000_defs.h"
 
-#ifdef NUM_DEVS_DSK     
+#ifdef NUM_DEVS_DSK
 #define UNIT_DSK        UNIT_ATTABLE | UNIT_DISABLE | UNIT_FIX
 #define FORMAT_OK       (1 << (UNIT_V_LOCAL+0))
 #define HA2_OK          (1 << (UNIT_V_LOCAL+1))
@@ -192,7 +192,7 @@ disk_type[] =
 int                 unit_bit[] = {
   /*0   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F */
    19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 30, 30, 30, 30, 30, 30,
-    9,  8,  7,  6,  5,  4,  3,  2,  1,  0, 30, 30, 30, 30, 30, 30 
+    9,  8,  7,  6,  5,  4,  3,  2,  1,  0, 30, 30, 30, 30, 30, 30
 };
 
 #define DSKSTA_BSY      0x02    /* Controller busy. */
@@ -268,7 +268,7 @@ MTAB                dsk_mod[] = {
     {FORMAT_OK, FORMAT_OK, "FORMAT", "FORMAT", NULL, NULL, NULL,
              "Format allowed"},
     {HA2_OK, 0, 0, "NOHA2", NULL, NULL, NULL, "No writing of Home Address"},
-    {HA2_OK, HA2_OK, "HA2", "HA2", NULL, NULL, NULL, 
+    {HA2_OK, HA2_OK, "HA2", "HA2", NULL, NULL, NULL,
             "Allow writing of Home Address"},
 #ifdef I7090
     {CTSS_BOOT, 0, 0, "IBSYS", NULL, NULL, NULL, "IBSYS Boot Card"},
@@ -311,7 +311,7 @@ uint32 dsk_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
         sense[(chan * 2) + sel] &= ~STAT_SIXBIT;
     cmd_buffer[chan] = cmd & 0xff;
     cmd_count[chan] = 2;
-    sim_debug(DEBUG_CHAN, &dsk_dev, "unit %d = cmd=%02x\n\r", 
+    sim_debug(DEBUG_CHAN, &dsk_dev, "unit %d = cmd=%02x\n\r",
                 dev, cmd & 0xff);
 #else
     cmd_buffer[chan] = 0;
@@ -379,9 +379,10 @@ t_stat dsk_srv(UNIT * uptr)
     if (chan_test(chan, CTL_SNS)) {
         chan9_clear_error(chan, sel);
         switch(cmd_count[chan]) {
-        case 0: 
+        case 0:
                 sim_debug(DEBUG_SNS, &dsk_dev, "unit=%d chan sense=%05x\n", dev,
                          sense[schan]);
+                /* fall through */
         case 1: case 2: case 3: case 4:
                 ch = (sense[schan] >> (4 * (4 - cmd_count[chan]))) & 0xF;
                 break;
@@ -389,7 +390,8 @@ t_stat dsk_srv(UNIT * uptr)
                 sim_debug(DEBUG_SNS, &dsk_dev, "unit=%d unit sense=%08x\n", dev,
                          sense_unit[schan]);
                 eor = DEV_REOR;
-        case 5: case 6: case 7: case 8: 
+                /* fall through */
+        case 5: case 6: case 7: case 8:
                 ch = (sense_unit[schan] >> (4 * (9 - cmd_count[chan]))) & 0xF;
                 break;
         }
@@ -457,11 +459,11 @@ t_stat dsk_srv(UNIT * uptr)
                 sim_debug(DEBUG_CHAN, &dsk_dev,
                         "Disk chan %d end of track\n\r", chan);
                 if ((uptr->u5 & DSKSTA_CMSK) == DVSR &&
-                        (uptr->u5 & DSKSTA_XFER) == 0) 
+                        (uptr->u5 & DSKSTA_XFER) == 0)
                         disk_posterr(uptr, PROG_NOREC);
                 uptr->u5 &= ~(DSKSTA_SCAN | DSKSTA_XFER);
                 chan_set(chan, DEV_REOR|CTL_END);
-            } 
+            }
             sim_activate(uptr, us_to_ticks(dsk->datarate));
             return SCPE_OK;
         }
@@ -507,7 +509,7 @@ t_stat dsk_srv(UNIT * uptr)
     }
 
     /* Handle read/write without a command */
-    if (chan_test(chan, CTL_WRITE|CTL_READ) && 
+    if (chan_test(chan, CTL_WRITE|CTL_READ) &&
            (uptr->u3 & 0xff) == cmd_mod[chan] &&
            (uptr->u5 & (DSKSTA_DATA|DSKSTA_CMD)) == 0)
         disk_posterr(uptr, PROG_INVSEQ);
@@ -663,7 +665,7 @@ disk_cmd(UNIT * uptr)
     }
 
     /* Need at least two chars to determine command */
-    if (++cmd_count[chan] == 1)  
+    if (++cmd_count[chan] == 1)
         return 1;
 
     /* Check if we have enough digits */
@@ -673,15 +675,15 @@ disk_cmd(UNIT * uptr)
     case DEBM:          /* Eight Bit mode */
     case DSBM:          /* Six bit mode */
         break;          /* Yes */
-        
+
     case DSAI:          /* Set Access Inoperative */
-        if (cmd_count[chan] <= 3) 
+        if (cmd_count[chan] <= 3)
            return 1;    /* Need more */
         break;
     case DSEK:          /* Seek */
     case DWRF:          /* Prepare to Format */
     case DVHA:          /* Prepare to Verify home addr */
-        if (cmd_count[chan] <= 7) 
+        if (cmd_count[chan] <= 7)
            return 1;    /* Need more */
         break;
     case DVTA:          /* Prepare to Verify track addr */
@@ -689,7 +691,7 @@ disk_cmd(UNIT * uptr)
     case DVCY:          /* Prepare to Verify Cyl */
     case DVSR:          /* Prepare to Verify single record */
     case DWRC:          /* Prepare to Write Check */
-        if (cmd_count[chan] < 10) 
+        if (cmd_count[chan] < 10)
            return 1;
         break;
     }
@@ -735,7 +737,7 @@ clear_drive:
 
             if (xchan != chan)
                 continue;
-            for (j = 3 * NUM_DEVS_DSK + i; j >= 0; j -= NUM_DEVS_DSK) 
+            for (j = 3 * NUM_DEVS_DSK + i; j >= 0; j -= NUM_DEVS_DSK)
                 dsk_unit[j].u5 &= ~ DSKSTA_CMSK;
         }
         sim_activate(uptr, us_to_ticks(100));
@@ -750,7 +752,7 @@ clear_drive:
      case DVTA:         /* Prepare to Verify track addr */
      case DVHA:         /* Prepare to Verify home addr */
      case DSAI:         /* Set Access Inoperative */
-     case DSEK:         /* Seek */      
+     case DSEK:         /* Seek */
             break;      /* Go find unit to operate on */
      default:
             sim_debug(DEBUG_CMD, &dsk_dev, " Unknown Command\n\r");
@@ -838,7 +840,7 @@ clear_drive:
         detach_unit(base);
         disk_cmderr(up, 0);
         return 1;
-    
+
     case DSEK:          /* Seek */
         cyl = trk / disk_type[base->u4].track;
         /* Check how far we have to move */
@@ -869,16 +871,16 @@ clear_drive:
         else
             up->wait = (300);
         break;
-    
+
     case DWRF:          /* Prepare to Format */
         /* Verify ok to format */
         if ((base->flags & FORMAT_OK) == 0) {
             disk_cmderr(uptr, PROG_FMTCHK);
             return 1;
         }
-    
+
         cyl = trk / disk_type[base->u4].track;
-    
+
         /* Make sure positioned to correct track */
         if (arm_cyl[u] != cyl) {
             disk_cmderr(uptr, PROG_INVSEQ);
@@ -890,21 +892,21 @@ clear_drive:
             disk_cmderr(up, PROG_INVADDR);
             return 1;
         }
-    
+
         fmt_cyl[u] = cyl;
         sim_debug(DEBUG_CMD, &dsk_dev, "FMT unit=%d\n", u);
         up->u5 |= DSKSTA_SCAN | DSKSTA_CMD | DSKSTA_WRITE; /* Flag as write */
         up->u6 = 0;
         chan_set(chan, DEV_SEL);
         break;
-    
+
     case DVHA:          /* Prepare to Verify home addr */
         /* Verify HA2 ok to write */
         if ((base->flags & HA2_OK) == 0) {
             disk_cmderr(up, PROG_FMTCHK);
             return 1;
         }
-    
+        /* fall through */
     case DVTA:          /* Prepare to Verify track addr */
     case DVTN:          /* Prepare to Verify track no addr */
     case DVCY:          /* Prepare to Verify Cyl */
@@ -938,7 +940,7 @@ clear_drive:
         up->u6 = 0;
         chan_set(chan, DEV_SEL);
         break;
-    
+
     case DVSR:          /* Prepare to Verify single record */
         /* Start actual operations */
         up->u5 |= DSKSTA_SCAN | DSKSTA_CMD;
@@ -980,8 +982,6 @@ print_format(UNIT * uptr)
                 case FMT_HA2:
                      sim_debug(DEBUG_DETAIL, &dsk_dev, "HA2(%d) ", j);
                      break;
-                case FMT_END:
-                     break;
                 }
            }
            j = 1;
@@ -1017,16 +1017,16 @@ disk_rblock(UNIT * uptr, int trk)
     }
 
     if (arm_cyl[u] != fmt_cyl[u]) {
-        sim_fseek(f, fbase + arm_cyl[u] * dsk->fbpt, SEEK_SET);
-        sim_fread(fbuffer[u], 1, dsk->fbpt, f);
+        (void)sim_fseek(f, fbase + arm_cyl[u] * dsk->fbpt, SEEK_SET);
+        (void)sim_fread(fbuffer[u], 1, dsk->fbpt, f);
         fmt_cyl[u] = arm_cyl[u];
-        print_format(uptr); 
+        print_format(uptr);
     }
     /* Read in actualy track data */
     if (dtrack[u] != trk) {
         sim_debug(DEBUG_DETAIL, &dsk_dev, "unit=%d Read track %d\n", u,
                   trk);
-        sim_fseek(f, offset + trk * dsk->bpt, SEEK_SET);
+        (void)sim_fseek(f, offset + trk * dsk->bpt, SEEK_SET);
         if (sim_fread(dbuffer[u], 1, dsk->bpt, f) != dsk->bpt)
             memset(dbuffer[u], 0, dsk->bpt);
         dtrack[u] = trk;
@@ -1077,8 +1077,8 @@ disk_wblock(UNIT * uptr)
     sim_debug(DEBUG_DETAIL, &dsk_dev, "unit=%d Write track %d\n",
               u, dtrack[u]);
     /* Write in actualy track data */
-    sim_fseek(f, offset + dtrack[u] * dsk->bpt, SEEK_SET);
-    sim_fwrite(dbuffer[u], 1, dsk->bpt, f);
+    (void)sim_fseek(f, offset + dtrack[u] * dsk->bpt, SEEK_SET);
+    (void)sim_fwrite(dbuffer[u], 1, dsk->bpt, f);
     uptr->u5 &= ~DSKSTA_DIRTY;
     return 1;
 }
@@ -1108,20 +1108,20 @@ disk_format(UNIT * uptr, FILE * f, int cyl, UNIT * base)
 
     /* Skip initial gap */
     for (i = 0; i < MAXTRACK && dbuffer[u][i] == 04; i++) ;
-    if (i == MAXTRACK) 
+    if (i == MAXTRACK)
         return 2;               /* Failed if we hit end */
     /* HA1 Gap */
     for (j = i; i < MAXTRACK && dbuffer[u][i] == 03; i++) ;
-    if ((i - j) > 12) 
+    if ((i - j) > 12)
         return 1;               /* HA1 too big */
-    
-    if (dbuffer[u][i++] != 04) 
+
+    if (dbuffer[u][i++] != 04)
         return 2;               /* Not gap */
     for (j = i; i < MAXTRACK && dbuffer[u][i] == 03; i++) ;
-    if (i == MAXTRACK) 
+    if (i == MAXTRACK)
         return 2;               /* Failed if we hit end */
 
-    if (dbuffer[u][i++] != 04) 
+    if (dbuffer[u][i++] != 04)
         return 2;               /* Not gap */
 
     /* Size up HA2 gap */
@@ -1129,9 +1129,9 @@ disk_format(UNIT * uptr, FILE * f, int cyl, UNIT * base)
          i < MAXTRACK && (dbuffer[u][i] == 03 || dbuffer[u][i] == 01);
          i++) ;
     j = i - j;
-    if (j < 6) 
+    if (j < 6)
         return 2;
-    
+
     j -= dsk->overhd;           /* Remove overhead */
     sim_debug(DEBUG_DETAIL, &dsk_dev, "HA2(%d) ", j);
     for (; j > 0; j--)
@@ -1141,13 +1141,13 @@ disk_format(UNIT * uptr, FILE * f, int cyl, UNIT * base)
         ch = dbuffer[u][i++];
         if (ch == 0x40)
             break;              /* End of record */
-        if (ch != 04 && ch != 02) 
+        if (ch != 04 && ch != 02)
             return 2;           /* Not a gap */
 
         for (j = i; i < MAXTRACK && dbuffer[u][i] == ch; i++) ;
         ch = dbuffer[u][i];     /* Should be RA */
         /* Gap not long enough or eor */
-        if (ch == 0x40 || (i - j) < 11) 
+        if (ch == 0x40 || (i - j) < 11)
             break;
 
         /* Size up RA gap */
@@ -1155,7 +1155,7 @@ disk_format(UNIT * uptr, FILE * f, int cyl, UNIT * base)
             return 1;           /* Not header */
         for (j = i; i < MAXTRACK && dbuffer[u][i] == ch; i++) ;
         j = i - j;
-        if (j < 10) 
+        if (j < 10)
             return 2;
         j -= dsk->overhd;       /* Remove overhead */
         sim_debug(DEBUG_DETAIL, &dsk_dev, "RA(%d) ", j);
@@ -1170,7 +1170,7 @@ disk_format(UNIT * uptr, FILE * f, int cyl, UNIT * base)
         if (ch != 01 && ch != 03)
             return 1;           /* Not gap */
         for (j = i; i < MAXTRACK && dbuffer[u][i] == ch; i++) ;
-        if ((i - j) < 10) 
+        if ((i - j) < 10)
             return 2;           /* Gap not large enough */
         ch = dbuffer[u][i++];
         if (ch != 04 && ch != 02)
@@ -1213,8 +1213,8 @@ disk_format(UNIT * uptr, FILE * f, int cyl, UNIT * base)
     fbuffer[u][dsk->fbpt-1] = (FMT_END<<6)|(FMT_END<<4)|(FMT_END<<2)|FMT_END;
 
     /* Now write the buffer to the file */
-    sim_fseek(f, offset + cyl * dsk->fbpt, SEEK_SET);
-    sim_fwrite(fbuffer[u], 1, dsk->fbpt, f);
+    (void)sim_fseek(f, offset + cyl * dsk->fbpt, SEEK_SET);
+    (void)sim_fwrite(fbuffer[u], 1, dsk->fbpt, f);
 
     /* Make sure we did not pass size of track */
     if (out > (int)dsk->bpt)
@@ -1243,8 +1243,8 @@ disk_write(UNIT * uptr, uint8 data, int chan, int eor)
                         u, arm_cyl[u], cyl);
             disk_posterr(uptr, PROG_INVADDR);
             return -1;
-        } 
-    
+        }
+
         /* Verify that the home address matches */
         if (cmd != DVHA && cmd != DVSR) {
             uint16      t = cmd_option[chan] & 01717;
@@ -1262,7 +1262,7 @@ disk_write(UNIT * uptr, uint8 data, int chan, int eor)
                 t &= 077;
             if ((t & 017) == 012)
                 t &= 07700;
-    
+
             sim_debug(DEBUG_CMD, &dsk_dev, "HA %04o(c) %04o(d)\n", t, ha);
             if (ha != t) {
                 disk_posterr(uptr, PROG_NOREC);
@@ -1421,7 +1421,7 @@ disk_read(UNIT * uptr, uint8 * data, int chan)
             disk_posterr(uptr, PROG_INVADDR);
             return -1;
         }
-    
+
         /* Verify that the home address matches */
         if (cmd != DVHA && cmd != DVSR) {
             uint16      t = cmd_option[chan] & 01717;
@@ -1439,7 +1439,7 @@ disk_read(UNIT * uptr, uint8 * data, int chan)
                 t &= 077;
             if ((t & 077) == 012)
                 t &= 07700;
-    
+
             sim_debug(DEBUG_CMD, &dsk_dev, "HA %04o(c) %04o(d)\n", t, ha);
             if (ha != t) {
                 disk_posterr(uptr, PROG_NOREC);
@@ -1449,7 +1449,7 @@ disk_read(UNIT * uptr, uint8 * data, int chan)
             sim_debug(DEBUG_CMD, &dsk_dev, "HA ignored\n");
         }
     }
-    
+
     while (skip) {
         flag = fbuffer[u][uptr->u6 / 4];
         flag >>= (uptr->u6 & 03) * 2;
@@ -1576,7 +1576,7 @@ disk_read(UNIT * uptr, uint8 * data, int chan)
              UNIT               *base =
                     (u > NUM_DEVS_DSK) ? &uptr[-NUM_DEVS_DSK] : uptr;
 
-            if (((dtrack[u]+1) / disk_type[base->u4].track) != 
+            if (((dtrack[u]+1) / disk_type[base->u4].track) !=
                   (dtrack[u] / disk_type[base->u4].track)) {
                   sim_debug(DEBUG_DATA, &dsk_dev, "eor\n");
                   return 1;
@@ -1628,33 +1628,33 @@ dsk_boot(int unit_num, DEVICE * dptr)
          M[0] = 0377777000100LL;      /*  IORT    BOTTOM,,-1  */
          M[1] = 0006000000001LL;      /*   TCOA    *        */
          M[2] = 0007400400100LL;      /* START  TSX     ENTER,4 */
-         M[0100] = 0076000000350LL;  /* ENTER  RICU          */ 
+         M[0100] = 0076000000350LL;  /* ENTER  RICU          */
          M[0100] |= (chan + 1) << 9;
-         M[0101] = 0054000000120LL;   /*      RSCU    READ   */ 
+         M[0101] = 0054000000120LL;   /*      RSCU    READ   */
          M[0101] |= ((t_uint64) (msk)) << 24;
-         M[0102] = 0006000000102LL;   /*      TCOU    *      */ 
+         M[0102] = 0006000000102LL;   /*      TCOU    *      */
          M[0102] |= ((t_uint64) (chan)) << 24;
-         M[0103] = 0476100000042LL;   /*      SEB            */ 
-         M[0104] = 0450000000000LL;   /*      CAL     0      */ 
+         M[0103] = 0476100000042LL;   /*      SEB            */
+         M[0104] = 0450000000000LL;   /*      CAL     0      */
          M[0105] = 0036100477777LL;   /*      ACL     32767,4 */
          M[0106] = 0200001400105LL;   /*      TIX     *-1,4,1 */
-         M[0107] = 0476100000041LL;   /*      SEA            */ 
-         M[0110] = 0032200000131LL;   /*      ERA     CHKSUM */ 
-         M[0111] = 0450100000046LL;   /*      ORA     ULOC   */ 
-         M[0112] = 0010000000132LL;   /*      TZE     EXIT   */ 
-         M[0113] = 0000000000002LL;   /*      HTR     START  */ 
-         M[0114] = 0101212001212LL;     
+         M[0107] = 0476100000041LL;   /*      SEA            */
+         M[0110] = 0032200000131LL;   /*      ERA     CHKSUM */
+         M[0111] = 0450100000046LL;   /*      ORA     ULOC   */
+         M[0112] = 0010000000132LL;   /*      TZE     EXIT   */
+         M[0113] = 0000000000002LL;   /*      HTR     START  */
+         M[0114] = 0101212001212LL;
          M[0114] |= ((t_uint64) (dev)) << 12;
-         M[0115] = 0121212121212LL;    
-         M[0116] = 0100512001212LL;   
+         M[0115] = 0121212121212LL;
+         M[0116] = 0100512001212LL;
          M[0116] |= ((t_uint64) (dev)) << 12;
-         M[0117] = 0121267671212LL;  
+         M[0117] = 0121267671212LL;
          M[0120] = 0700000000004LL;   /*  READ   SMS     4      */
          M[0120] |= sel;
          M[0121] = 0200000000114LL;   /*         CTL     SEEK   */
          M[0122] = 0500000200122LL;   /*         TCM     *,,0   */
          M[0123] = 0200000200116LL;   /*         CTLR    CYLOP  */
-         M[0124] = 0400007000125LL;   /*         CPYP    *+1,,N */ 
+         M[0124] = 0400007000125LL;   /*         CPYP    *+1,,N */
          IC = 02;
     } else {
          /* Build IBSYS Boot program in memory */
@@ -1741,7 +1741,7 @@ dsk_reset(DEVICE * dptr)
         if (disk_type[t].mods > 1) {
             dptr->units[i + (NUM_DEVS_DSK * 2)].u3 = (i<<8) | (dptr->units[i].u3 + 1);
             if (disk_type[t].arms > 1)
-                dptr->units[i + (NUM_DEVS_DSK * 3)].u3 = (i<<8) | 0x10 | 
+                dptr->units[i + (NUM_DEVS_DSK * 3)].u3 = (i<<8) | 0x10 |
                                                         (dptr->units[i].u3 + 1);
         }
     }
@@ -1851,7 +1851,7 @@ fprintf (st, "    sim> SET DKn TYPE=type\n");
 fprintf (st, "Type can be: ");
 for (i = 0; disk_type[i].name != 0; i++) {
     fprintf(st, "%s", disk_type[i].name);
-    if (disk_type[i+1].name != 0) 
+    if (disk_type[i+1].name != 0)
         fprintf(st, ", ");
 }
 fprintf (st, ".\nEach drive has the following storage capacity:\n");

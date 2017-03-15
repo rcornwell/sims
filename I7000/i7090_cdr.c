@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -26,7 +26,7 @@
 #include "i7090_defs.h"
 #include "sim_card.h"
 
-#ifdef NUM_DEVS_CDR     
+#ifdef NUM_DEVS_CDR
 
 #define UNIT_CDR        UNIT_ATTABLE | UNIT_RO | UNIT_DISABLE | UNIT_ROABLE |\
                         MODE_026
@@ -76,8 +76,8 @@ UNIT                cdr_unit[] = {
 
 MTAB                cdr_mod[] = {
     {MTAB_XTD | MTAB_VUN, 0, "FORMAT", "FORMAT",
-               &sim_card_set_fmt, &sim_card_show_fmt, NULL},    
-#if NUM_CHAN != 1 
+               &sim_card_set_fmt, &sim_card_show_fmt, NULL},
+#if NUM_CHAN != 1
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "CHAN", "CHAN", &set_chan,
         &get_chan, NULL},
 #endif
@@ -281,7 +281,7 @@ cdr_boot(int32 unit_num, DEVICE * dptr)
             if (data->image[col-- + b] & bit)
                  M[pos] |= mask;
         }
-        sim_debug(DEBUG_DATA, &cdr_dev, "boot read row %d %012llo\n", 
+        sim_debug(DEBUG_DATA, &cdr_dev, "boot read row %d %012llo\n",
                   pos, M[pos]);
     }
     uptr->u5 |= pos << CDRPOSSHIFT;
@@ -335,4 +335,4 @@ cdr_description(DEVICE *dptr)
    return "711 Card Reader";
 }
 
-#endif 
+#endif

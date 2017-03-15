@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -83,7 +83,7 @@ UNIT                cdp_unit[] = {
 
 MTAB                cdp_mod[] = {
     {MTAB_XTD | MTAB_VUN, 0, "FORMAT", "FORMAT",
-               &sim_card_set_fmt, &sim_card_show_fmt, NULL},    
+               &sim_card_set_fmt, &sim_card_show_fmt, NULL},
 #ifdef I7070
     {ATTENA|ATTENB, 0, NULL, "NOATTEN", NULL, NULL, NULL},
     {ATTENA|ATTENB, ATTENA, "ATTENA", "ATTENA", NULL, NULL, NULL},
@@ -92,7 +92,7 @@ MTAB                cdp_mod[] = {
 #ifdef I7010
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "CHAN", "CHAN", &set_chan,
         &get_chan, NULL},
-#endif   
+#endif
     {0}
 };
 
@@ -219,7 +219,7 @@ cdp_srv(UNIT *uptr) {
         /* Done waiting, punch card */
         if (uptr->u5 & URCSTA_FULL) {
 #ifdef STACK_DEV
-              switch(sim_punch_card(uptr, 
+              switch(sim_punch_card(uptr,
                         &stack_unit[(u * 10) + ((uptr->u5 >> 16) & 0xf)])) {
 #else
               switch(sim_punch_card(uptr, NULL)) {
@@ -232,7 +232,7 @@ cdp_srv(UNIT *uptr) {
               case SCPE_IOERR:
                   chan_set_error(chan);
                   break;
-              case SCPE_OK:     
+              case SCPE_OK:
                   break;
               }
               uptr->u5 &= ~URCSTA_FULL;
@@ -296,7 +296,7 @@ cdp_attach(UNIT * uptr, CONST char *file)
 t_stat
 cdp_detach(UNIT * uptr)
 {
-    if (uptr->u5 & URCSTA_FULL) 
+    if (uptr->u5 & URCSTA_FULL)
 #ifdef STACK_DEV
         sim_punch_card(uptr, &stack_unit[
                 ((uptr - cdp_unit) * 10) + ((uptr->u5 >> 16) & 0xf)]);
@@ -314,7 +314,7 @@ cdp_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 #ifdef STACK_DEV
    fprintf (st, "If the punch device is not attached and instead the %s", stack_dev.name);
    fprintf (st, "device is attached, the cards\n will be sent out to the");
-   fprintf (st, "given stacker based on the flag set by the processor."); 
+   fprintf (st, "given stacker based on the flag set by the processor.");
 #endif
 #ifdef I7070
    fprintf (st, "Unit record devices can be configured to interrupt the CPU on\n");
@@ -324,7 +324,7 @@ cdp_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 #ifdef I7010
    fprintf (st, "The card punch could be attached to either channel\n\n");
    fprintf (st, "    sim> set cp chan=1     to set the punch on channel 1\n\n");
-#endif   
+#endif
    fprint_set_help(st, dptr);
    fprint_show_help(st, dptr);
    return SCPE_OK;

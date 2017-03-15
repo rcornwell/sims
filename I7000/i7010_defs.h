@@ -1,6 +1,6 @@
-/* i7010_defs.h: IBM 7010 simulator definitions 
+/* i7010_defs.h: IBM 7010 simulator definitions
 
-   Copyright (c) 2006, Richard Cornwell
+   Copyright (c) 2006-2016, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -94,13 +94,13 @@ int chan_cmd(uint16 dev, uint16 cmd, uint32 addr);
 #define OP_IO2 CHR_X            /* Xid */ /* NSIB    BI    NSIB */
 #define OP_IO3 CHR_3            /* 3id */ /* NSIB    BI    NSIB */
 #define OP_IO4 CHR_1            /* 1id */ /* NSIB    BI    NSIB */
-                                /* B-Wrong len, A-No Trans, 8-Condition, 
+                                /* B-Wrong len, A-No Trans, 8-Condition,
                                    4-Data Check, 2-Busy, 1- not Ready */
 #define OP_BCE CHR_B            /* Bibd */ /* NSIB    BI    B-1/NSIB */
 #define OP_BBE CHR_W            /* Wibd */ /* NSIB    BI    B-1/NSIB */
 #define OP_BWE CHR_V            /* Vibd */ /* NSIB    BI    B-1/NSIB */
-        
-#define OP_RD  CHR_M            /* Mxbd */ 
+
+#define OP_RD  CHR_M            /* Mxbd */
 #define OP_RDW CHR_L            /* Lxbd */
 #define OP_CC1 CHR_F            /* Fd */
 #define OP_CC2 CHR_2            /* 2d */

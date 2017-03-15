@@ -1,4 +1,4 @@
-/* i7000_con.c: IBM 7000 Inquiry Console. 
+/* i7000_con.c: IBM 7000 Inquiry Console.
 
    Copyright (c) 2005-2016, Richard Cornwell
 
@@ -15,7 +15,7 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
@@ -33,7 +33,7 @@
 #include "sim_card.h"
 #include "sim_defs.h"
 
-#ifdef NUM_DEVS_CON 
+#ifdef NUM_DEVS_CON
 
 
 /* std devices. data structures
@@ -96,10 +96,10 @@ DEVICE              con_dev = {
 
 
 
-/* 
+/*
  *Console printer routines.
  */
-void 
+void
 con_ini(UNIT *uptr, t_bool f) {
      int                 u = (uptr - con_unit);
      con_data[u].inptr = 0;
@@ -116,7 +116,7 @@ con_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
     /* Are we currently tranfering? */
     if (uptr->u5 & (URCSTA_READ|URCSTA_WRITE|URCSTA_BUSY))
         return SCPE_BUSY;
-    
+
     switch (cmd) {
     /* Test ready */
     case IO_TRS:
@@ -142,7 +142,7 @@ con_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
             uptr->u5 |= URCSTA_INPUT;
             sim_putchar('I');
             sim_putchar(' ');
-        }       
+        }
         sim_debug(DEBUG_CMD, &con_dev, "%d: Cmd RDS\n", u);
         chan_set_sel(chan, 1);
         uptr->u5 |= URCSTA_READ;
@@ -201,7 +201,7 @@ con_srv(UNIT *uptr) {
 
     /* Copy next column over */
     if ((uptr->u5 & URCSTA_INPUT) == 0 &&  uptr->u5 & URCSTA_READ) {
-        sim_debug(DEBUG_DATA, &con_dev, "%d: Char > %02o\n", u, 
+        sim_debug(DEBUG_DATA, &con_dev, "%d: Char > %02o\n", u,
                         con_data[u].ibuff[uptr->u3]);
         switch(chan_write_char(chan, &con_data[u].ibuff[uptr->u3],
             ((uptr->u3+1) == con_data[u].inptr)? DEV_REOR: 0)) {
