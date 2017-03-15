@@ -81,7 +81,7 @@
 #define NUM_DEVS_DT 0
 #endif
 
-#if (NUM_DEVS_DT > 0) 
+#if (NUM_DEVS_DT > 0)
 #define DT_DEVNUM       0320
 #define DT_NUMDR        8                           /* #drives */
 #define UNIT_V_WLK      (UNIT_V_UF + 0)             /* write locked */
@@ -235,7 +235,7 @@
 #define DTC_V_WORD      8                    /* Shift for word count */
 #define DTC_M_WORD      0177                 /* 128 words per block */
 #define DTC_V_BLK       16                   /* Shift for Block number */
-#define DTC_M_BLK       0777                 /* Block mask */
+#define DTC_M_BLK       01777                /* Block mask */
 
 /* Logging */
 
@@ -329,7 +329,7 @@ REG dt_reg[] = {
 
 MTAB dt_mod[] = {
     { UNIT_WLK, 0, "write enabled", "WRITEENABLED", NULL },
-    { UNIT_WLK, UNIT_WLK, "write locked", "LOCKED", NULL }, 
+    { UNIT_WLK, UNIT_WLK, "write locked", "LOCKED", NULL },
     { UNIT_8FMT + UNIT_11FMT, 0, "18b", NULL, NULL },
     { UNIT_8FMT + UNIT_11FMT, UNIT_8FMT, "12b", NULL, NULL },
     { UNIT_8FMT + UNIT_11FMT, UNIT_11FMT, "16b", NULL, NULL },
@@ -388,7 +388,7 @@ t_stat dt_devio(uint32 dev, uint64 *data) {
           if (*data & DTC_SEL) {
               dtsa |= *data & 07000;
               i = DTC_GETUNI(dtsa);
-              if (i <= DT_NUMDR && !sim_is_active(&dt_unit[i]))
+              if (i < DT_NUMDR && !sim_is_active(&dt_unit[i]))
                  sim_activate(&dt_unit[i], 1000);
               if (dt_unit[i].u4 & DTC_MOT) {
                   switch (dt_unit[i].u5 & 7) {
@@ -417,13 +417,13 @@ t_stat dt_devio(uint32 dev, uint64 *data) {
           }
           if (*data & (DTC_FWDRV|DTC_RVDRV|DTC_STSTOP)) {
               i = DTC_GETUNI(dtsa);
-              if (i > DT_NUMDR)
+              if (i >= DT_NUMDR)
                   break;
               if (*data & DTC_STSTOP) {
                    if ((dt_unit[i].u4 & (DTC_MOT)) != 0) {
                        dt_unit[i].u3 |= DTC_FNC_STOP;
                    }
-              } else { 
+              } else {
                    /* Start the unit if not already running */
                    dt_unit[i].u3 &= ~DTC_FNC_STOP;
                    if ((dt_unit[i].u4 & (DTC_MOT)) == 0) {
@@ -433,15 +433,15 @@ t_stat dt_devio(uint32 dev, uint64 *data) {
                           sim_activate(&dt_unit[i], 10000);
                    }
                    switch(*data & (DTC_FWDRV|DTC_RVDRV)) {
-                   case DTC_FWDRV: 
+                   case DTC_FWDRV:
                           if (dt_unit[i].u4 & DTC_REV)
                              dt_unit[i].u3 |= DTC_FNC_REV;
                           break;
-                   case DTC_RVDRV: 
+                   case DTC_RVDRV:
                           if ((dt_unit[i].u4 & DTC_REV) == 0)
                              dt_unit[i].u3 |= DTC_FNC_REV;
                           break;
-                   case DTC_FWDRV|DTC_RVDRV: 
+                   case DTC_FWDRV|DTC_RVDRV:
                           dt_unit[i].u3 |= DTC_FNC_REV;
                           break;
                    }
@@ -481,12 +481,12 @@ t_stat dt_devio(uint32 dev, uint64 *data) {
           if (*data & DTS_STOP_ALL) {
               /* Stop all other drives */
               for (i = 0; i < DT_NUMDR; i++) {
-                 if (i != DTC_GETUNI(dtsa) && 
-                    (dt_unit[i].u4 & DTC_MOT) != 0) 
+                 if (i != DTC_GETUNI(dtsa) &&
+                    (dt_unit[i].u4 & DTC_MOT) != 0)
                      dt_unit[i].u3 |= DTC_FNC_STOP;
               }
           }
-          if (*data & DTS_FUNC_STOP) 
+          if (*data & DTS_FUNC_STOP)
               dtsb |= DTB_STOP;
           dtsb = (uint64)((*data & (DTS_PAR_ERR|DTS_DATA_MISS|DTS_JOB_DONE| \
                      DTS_ILL_OP|DTS_END_ZONE|DTS_BLK_MISS)) << 18);
@@ -521,7 +521,7 @@ void dt_getword(t_int64 *data, int req) {
         set_interrupt(dev|4, dtsa >> 3);
     }
 }
-     
+
 void dt_putword(t_int64 *data) {
     int dev = dt_dib.dev_num;
     clr_interrupt(dev|4);
@@ -548,14 +548,14 @@ t_stat dt_svc (UNIT *uptr)
    int        blk;
    int        off;
 /*
- * Check if in motion or stopping. 
+ * Check if in motion or stopping.
  */
 if (uptr->u4 & DTC_MOT) {
    /* Check if stoping */
    if (uptr->u3 & DTC_FNC_STOP) {
       /* Stop delay */
       sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o stopping\n", u);
-      sim_activate(uptr, 40000); 
+      sim_activate(uptr, 40000);
       uptr->u3 &= ~DTC_FNC_STOP;
       uptr->u4 &= ~(DTC_MOT);
       blk = (uptr->u5 >> DTC_V_BLK) & DTC_M_BLK;
@@ -568,26 +568,26 @@ if (uptr->u4 & DTC_MOT) {
             blk--;
          }
       } else {
-         if (blk <= 01100) 
+         if (blk <= 01100)
             blk++;
       }
       uptr->u5 |= (blk << DTC_V_BLK);
       return SCPE_OK;
    }
    if (uptr->u3 & DTC_FNC_REV) {
-       sim_activate(uptr, 40000); 
+       sim_activate(uptr, 40000);
        sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o reversing\n", u);
        uptr->u3 &= ~DTC_FNC_REV;
        uptr->u4 ^= DTC_REV;
        return SCPE_OK;
    }
-    
+
    if (DTC_GETUNI(dtsa) == u)  {
        dtsb |= DTB_SPD;
        dtsb &= ~(DTB_DLY|DTB_IDL);
    }
-  /* Moving in reverse direction */ 
-  if (uptr->u4 & DTC_REV) { 
+  /* Moving in reverse direction */
+  if (uptr->u4 & DTC_REV) {
       if (DTC_GETUNI(dtsa) == u)  {
           dtsb |= DTB_REV;
           dtsa &=~ DTC_FWDRV;
@@ -598,19 +598,19 @@ if (uptr->u4 & DTC_MOT) {
            /* Set stop */
            sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o rev forward end\n", u);
            uptr->u3 |= DTC_FNC_STOP;
-           uptr->u6 = 0;     
+           uptr->u6 = 0;
            dtsb |= DTB_END;
            dtsb &= ~DTB_IDL;
-           if (dtsb & DTB_ENDENB) 
+           if (dtsb & DTB_ENDENB)
               set_interrupt(DT_DEVNUM, dtsa);
-           sim_activate(uptr, 10000); 
+           sim_activate(uptr, 10000);
            break;
 
       case DTC_FBLK:                           /* In forward block number */
-           sim_activate(uptr,30000); 
+           sim_activate(uptr,30000);
            word = (uptr->u5 >> DTC_V_BLK) & DTC_M_BLK;
            word--;
-           if (word == 0) 
+           if (word == 0)
                uptr->u5 = DTC_FEND;
            else
                uptr->u5 = DTC_RBLK|(word << DTC_V_BLK);
@@ -628,7 +628,7 @@ if (uptr->u4 & DTC_MOT) {
            case FNC_READ:
                    uptr->u3 &= 077077;
                    dtsb |= DTB_DONE;
-                   if (dtsb & DTB_JOBENB) 
+                   if (dtsb & DTB_JOBENB)
                       set_interrupt(DT_DEVNUM, dtsa);
                    dtsb &= ~DTB_STOP;
                 break;
@@ -650,7 +650,7 @@ if (uptr->u4 & DTC_MOT) {
 
       case DTC_FCHK:                           /* In forward checksum */
            sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o rev forward check\n", u);
-           sim_activate(uptr,30000); 
+           sim_activate(uptr,30000);
            word = (uptr->u5 >> DTC_V_BLK) & DTC_M_BLK;
            uptr->u5 = DTC_FBLK|(word << DTC_V_BLK);
            dtsb &= ~(DTB_DAT|DTB_FIN);
@@ -689,12 +689,12 @@ if (uptr->u4 & DTC_MOT) {
                 if ((dtsb & DTB_STOP) == 0)
                     dt_putword(&data);
                 break;
-                
+ 
            case FNC_WRIT:
            case FNC_WALL:
                 if ((dtsb & DTB_STOP) == 0)
                     dt_getword(&data, (word != 0));
-                else 
+                else
                     data = dtdb;
                 fbuf[off] = (data >> 18) & RMASK;
                 fbuf[off+1] = data & RMASK;
@@ -705,12 +705,12 @@ if (uptr->u4 & DTC_MOT) {
                dtsb &= ~DTB_DAT;
                dtsb |= DTB_FIN;
            }
-      sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o rev data word %o:%o %012llo %d %06o %06o\n", u, blk, word, data, off, 
+      sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o rev data word %o:%o %012llo %d %06o %06o\n", u, blk, word, data, off,
                      fbuf[off], fbuf[off+1]);
            break;
 
       case DTC_RCHK:                           /* In reverse checksum */
-           sim_activate(uptr,30000); 
+           sim_activate(uptr,30000);
       sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o rev reverse check\n", u);
            word = (uptr->u5 >> DTC_V_BLK) & DTC_M_BLK;
            uptr->u5 = DTC_BLOCK|(word << DTC_V_BLK)|(DTC_M_WORD << DTC_V_WORD);
@@ -733,7 +733,7 @@ if (uptr->u4 & DTC_MOT) {
            case FNC_SRCH:
                dtsb |= DTB_DONE;
                dtsb &= ~DTB_STOP;
-               if (dtsb & DTB_JOBENB) 
+               if (dtsb & DTB_JOBENB)
                   set_interrupt(DT_DEVNUM, dtsa);
                break;
            case FNC_WMRK:
@@ -746,7 +746,7 @@ if (uptr->u4 & DTC_MOT) {
            break;
 
       case DTC_RBLK:                           /* In reverse block number */
-           sim_activate(uptr,30000); 
+           sim_activate(uptr,30000);
            word = (uptr->u5 >> DTC_V_BLK) & DTC_M_BLK;
            data = (t_uint64)word;
            uptr->u5 = DTC_RCHK|(word << DTC_V_BLK)|(DTC_M_WORD << DTC_V_WORD);
@@ -777,7 +777,7 @@ if (uptr->u4 & DTC_MOT) {
            break;
 
       case DTC_REND:                           /* In final endzone */
-           sim_activate(uptr, 10000); 
+           sim_activate(uptr, 10000);
            word = (uptr->u5 >> DTC_V_BLK) & DTC_M_BLK;
            word--;
            uptr->u5 = DTC_RBLK|(word << DTC_V_BLK);
@@ -792,15 +792,15 @@ if (uptr->u4 & DTC_MOT) {
   /* Moving in forward direction */
       switch (uptr->u5 & 7) {
       case DTC_FEND:                           /* Tape in endzone */
-           sim_activate(uptr, 100000); 
+           sim_activate(uptr, 100000);
       sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o forward end\n", u);
            uptr->u5 = DTC_FBLK;                /* Move to first block */
-           uptr->u6 = 0;     
+           uptr->u6 = 0;
            dtsb &= ~DTB_IDL;
            break;
 
       case DTC_FBLK:                           /* In forward block number */
-           sim_activate(uptr,30000); 
+           sim_activate(uptr,30000);
            dtsb &= ~DTB_END;
            dtsb |= DTB_BLKRD;
            word = (uptr->u5 >> DTC_V_BLK) & DTC_M_BLK;
@@ -831,7 +831,7 @@ if (uptr->u4 & DTC_MOT) {
            break;
 
       case DTC_FCHK:                           /* In forward checksum */
-           sim_activate(uptr,30000); 
+           sim_activate(uptr,30000);
       sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o forward check\n", u);
            dtsb &= ~DTB_BLKRD;
            uptr->u5 &= ~7;
@@ -849,7 +849,7 @@ if (uptr->u4 & DTC_MOT) {
            case FNC_SRCH:
                dtsb |= DTB_DONE;
                dtsb &= ~DTB_STOP;
-               if (dtsb & DTB_JOBENB) 
+               if (dtsb & DTB_JOBENB)
                   set_interrupt(DT_DEVNUM, dtsa);
                break;
            case FNC_WMRK:
@@ -897,7 +897,7 @@ if (uptr->u4 & DTC_MOT) {
            case FNC_WRIT:
                 if ((dtsb & DTB_STOP) == 0)
                     dt_getword(&data, (word != DTC_M_WORD));
-                else 
+                else
                     data = dtdb;
                 fbuf[off] = (data >> 18) & RMASK;
                 fbuf[off+1] = data & RMASK;
@@ -911,12 +911,12 @@ if (uptr->u4 & DTC_MOT) {
                dtsb &= ~DTB_DAT;
                dtsb |= DTB_FIN;
            }
-      sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o data word %o:%o %012llo %d %06o %06o\n", u, blk, word, data, off, 
+      sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o data word %o:%o %012llo %d %06o %06o\n", u, blk, word, data, off,
                      fbuf[off], fbuf[off+1]);
            break;
 
       case DTC_RCHK:                           /* In reverse checksum */
-           sim_activate(uptr,30000); 
+           sim_activate(uptr,30000);
       sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o reverse check\n", u);
            uptr->u5 &= ~(DTC_M_WORD << DTC_V_WORD) | 7;
            uptr->u5 |= DTC_RBLK;               /* Move to end of block */
@@ -925,7 +925,7 @@ if (uptr->u4 & DTC_MOT) {
            break;
 
       case DTC_RBLK:                           /* In reverse block number */
-           sim_activate(uptr,30000); 
+           sim_activate(uptr,30000);
            dtsb &= ~(DTB_CHK);
            dtsb |= DTB_IDL;
            if (DTC_GETUNI(dtsa) == u)  {
@@ -952,7 +952,7 @@ if (uptr->u4 & DTC_MOT) {
            case FNC_WMRK:
                    uptr->u3 &= 077077;
                    dtsb |= DTB_DONE;
-                   if (dtsb & DTB_JOBENB) 
+                   if (dtsb & DTB_JOBENB)
                       set_interrupt(DT_DEVNUM, dtsa);
                    dtsb &= ~DTB_STOP;
                 break;
@@ -968,18 +968,18 @@ if (uptr->u4 & DTC_MOT) {
            sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o reverse end\n", u);
            dtsb &= ~DTB_IDL;
            dtsb |= DTB_END;
-           if (dtsb & DTB_ENDENB) 
+           if (dtsb & DTB_ENDENB)
               set_interrupt(DT_DEVNUM, dtsa);
-           sim_activate(uptr, 100000); 
+           sim_activate(uptr, 100000);
            break;
       }
   }
 /* Check if starting */
 } else if (uptr->u3 & DTC_FNC_START) {
    /* Start up delay */
-   sim_activate(uptr, 40000); 
+   sim_activate(uptr, 40000);
    uptr->u3 &= ~(0700 | DTC_FNC_START);
-   if (DTC_GETUNI(dtsa) == u) 
+   if (DTC_GETUNI(dtsa) == u)
        uptr->u3 |= dtsa & 0700;          /* Copy command */
    uptr->u4 |=  DTC_MOT;
    if (uptr->u3 & DTC_FNC_REV) {
@@ -1013,18 +1013,18 @@ dt_boot(int32 unit_num, DEVICE * dptr)
         addr = (addr + 1) & RMASK;
         word = ((t_uint64)fbuf[off++]) << 18;
         word |= (t_uint64)fbuf[off++];
-        if (addr < 020) 
+        if (addr < 020)
            FM[addr] = word;
         else
            M[addr] = word;
     }
-    if (addr < 020) 
+    if (addr < 020)
        FM[addr] = word;
     else
        M[addr] = word;
     uptr->u5 = (1 << DTC_V_BLK) | DTC_BLOCK;
     uptr->u4 =  DTC_MOT;
-    sim_activate(uptr,30000); 
+    sim_activate(uptr,30000);
     PC = word & RMASK;
     return SCPE_OK;
 }

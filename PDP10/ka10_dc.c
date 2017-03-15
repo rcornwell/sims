@@ -33,7 +33,7 @@
 #define NUM_DEVS_DC 0
 #endif
 
-#if (NUM_DEVS_DC > 0) 
+#if (NUM_DEVS_DC > 0)
 
 #define DC_DEVNUM 0240
 
@@ -107,7 +107,7 @@ const char *dc_description (DEVICE *dptr);
 DIB dc_dib = { DC_DEVNUM, 1, &dc_devio, NULL };
 
 UNIT dc_unit = {
-    UDATA (&dc_svc, TT_MODE_7B+UNIT_IDLE+UNIT_ATTABLE, 0), KBD_POLL_WAIT 
+    UDATA (&dc_svc, TT_MODE_7B+UNIT_IDLE+UNIT_ATTABLE, 0), KBD_POLL_WAIT
     };
 
 REG dc_reg[] = {
@@ -173,7 +173,7 @@ t_stat dc_devio(uint32 dev, uint64 *data) {
          /* Set PI */
          uptr->STATUS &= ~PI_CHN;
          uptr->STATUS |= PI_CHN & *data;
-         if (*data & RST_SCN) 
+         if (*data & RST_SCN)
              dc_l_count = 0;
          if (*data & DTR_SET)
              uptr->STATUS |= DTR_SET;
@@ -200,17 +200,17 @@ t_stat dc_devio(uint32 dev, uint64 *data) {
          break;
 
     case DATAO:
-         if (*data & (LFLAG << 18)) 
+         if (*data & (LFLAG << 18))
              ln = (*data >> 18) & 077;
-         else 
+         else
              ln = dc_l_count;
-         if (ln >= dc_modem) { 
-             if (*data & CAUSE_PI) 
+         if (ln >= dc_modem) {
+             if (*data & CAUSE_PI)
                 dc_l_status |= (1LL << ln);
              else
                 dc_l_status &= ~(1LL << ln);
              ln -= dc_modem;
-             sim_debug(DEBUG_DETAIL, &dc_dev, "DC line modem %d %03o\n", 
+             sim_debug(DEBUG_DETAIL, &dc_dev, "DC line modem %d %03o\n",
                    ln, (uint32)(*data & 0777));
              if ((*data & OFF_HOOK) == 0) {
                 uint32 mask = ~(1 << ln);
@@ -258,11 +258,11 @@ t_stat dc_devio(uint32 dev, uint64 *data) {
              dc_l_status &= ~(1LL << ln);
              ln = ln - dc_modem;
              lp = &dc_ldsc[ln];
-             if (dc_enable & (1 << ln)) 
+             if (dc_enable & (1 << ln))
                 *data |= FLAG|OFF_HOOK;
-             if (rx_conn & (1 << ln) && lp->conn) 
+             if (rx_conn & (1 << ln) && lp->conn)
                     *data |= FLAG|CTS;
-             if (dc_ring & (1 << ln)) 
+             if (dc_ring & (1 << ln))
                  *data |= FLAG|RES_DET;
          } else if (ln < dc_desc.lines) {
              /* Nothing happens if no recieve data, which is transmit ready */
@@ -302,7 +302,7 @@ int32 ln;
         return SCPE_OK;
     sim_clock_coschedule(uptr, tmxr_poll);              /* continue poll */
     ln = tmxr_poll_conn (&dc_desc);                     /* look for connect */
-    if (ln >= 0) {                                      /* got one? rcv enb*/ 
+    if (ln >= 0) {                                      /* got one? rcv enb*/
         dc_ldsc[ln].rcve = 1;
         dc_ring |= (1 << ln);
         dc_l_status |= (1LL << (ln + dc_modem));        /* Flag modem line */
@@ -326,7 +326,7 @@ int32 ln;
     }
 
     /* If any pending status request, raise the PI signal */
-    if (dc_l_status) 
+    if (dc_l_status)
         set_interrupt(DC_DEVNUM, uptr->STATUS);
     return SCPE_OK;
 }
@@ -347,7 +347,7 @@ t_stat dc_doscan (UNIT *uptr) {
          } else {
             /* Must be data line */
             lmask = 1 << dc_l_count;
-            if (rx_rdy & lmask) 
+            if (rx_rdy & lmask)
                 uptr->STATUS |= RCV_PI;
             if (tx_enable & lmask)
                 uptr->STATUS |= XMT_PI;
@@ -425,7 +425,7 @@ t_stat dc_setnl (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
         return r;
     if (newln > dc_modem)
         return SCPE_ARG;
-    if ((newln == 0) || (newln > DC10_MLINES) || (newln % 8) != 0)
+    if ((newln == 0) || (newln >= DC10_MLINES) || (newln % 8) != 0)
         return SCPE_ARG;
     if (newln < dc_desc.lines) {
         for (i = newln, t = 0; i < dc_desc.lines; i++)
@@ -515,7 +515,7 @@ t_stat dc_detach (UNIT *uptr)
   int32  i;
   t_stat reason;
 reason = tmxr_detach (&dc_desc, uptr);
-for (i = 0; i < dc_desc.lines; i++) 
+for (i = 0; i < dc_desc.lines; i++)
     dc_ldsc[i].rcve = 0;
 sim_cancel (uptr);
 return reason;

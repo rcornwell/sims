@@ -92,7 +92,7 @@ UNIT                cp_unit = {UDATA(cp_srv, UNIT_CDP, 0), 600 };
 
 MTAB                cp_mod[] = {
     {MTAB_XTD | MTAB_VUN, 0, "FORMAT", "FORMAT",
-               &sim_card_set_fmt, &sim_card_show_fmt, NULL},    
+               &sim_card_set_fmt, &sim_card_show_fmt, NULL},
     {0}
 };
 
@@ -111,7 +111,7 @@ DEVICE              cp_dev = {
 */
 
 t_stat cp_devio(uint32 dev, uint64 *data) {
-     UNIT                *uptr = &cp_unit; 
+     UNIT                *uptr = &cp_unit;
      struct _card_data   *dp;
 
      switch(dev & 3) {
@@ -132,7 +132,7 @@ t_stat cp_devio(uint32 dev, uint64 *data) {
              uptr->u3 |= DATA_REQ;
              set_interrupt(dev, uptr->u3);
          }
-         if (*data & CLR_DATA_REQ) 
+         if (*data & CLR_DATA_REQ)
              uptr->u3 &= ~DATA_REQ;
          if (*data & CLR_END_CARD)
              uptr->u3 &= ~END_CARD;
@@ -191,7 +191,7 @@ cp_srv(UNIT *uptr) {
            }
            sim_activate(uptr, uptr->wait);
            return SCPE_OK;
-        } 
+        }
         uptr->u4 = 0;
         uptr->u3 &= ~(PUNCH_ON|CARD_IN_PUNCH);
         uptr->u3 |= END_CARD;
@@ -204,7 +204,7 @@ cp_srv(UNIT *uptr) {
         case SCPE_IOERR:
             uptr->u3 |= EJECT_FAIL|TROUBLE;
             break;
-        case SCPE_OK:     
+        case SCPE_OK:
             break;
         }
         if ((uptr->u3 & (TROUBLE|TROUBLE_EN)) == (TROUBLE|TROUBLE_EN))
@@ -232,7 +232,7 @@ cp_attach(UNIT * uptr, CONST char *file)
 t_stat
 cp_detach(UNIT * uptr)
 {
-    if (uptr->u3 & CARD_IN_PUNCH) 
+    if (uptr->u3 & CARD_IN_PUNCH)
         sim_punch_card(uptr, NULL);
     return sim_card_detach(uptr);
 }

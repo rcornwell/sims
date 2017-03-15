@@ -32,7 +32,7 @@
 #define NUM_DEVS_LP 0
 #endif
 
-#if (NUM_DEVS_LP > 0) 
+#if (NUM_DEVS_LP > 0)
 
 #define LP_DEVNUM 0126
 #define STATUS   u3
@@ -57,7 +57,7 @@ t_stat          lpt_svc (UNIT *uptr);
 t_stat          lpt_reset (DEVICE *dptr);
 t_stat          lpt_attach (UNIT *uptr, CONST char *cptr);
 t_stat          lpt_detach (UNIT *uptr);
-t_stat          lpt_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, 
+t_stat          lpt_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
                          const char *cptr);
 const char     *lpt_description (DEVICE *dptr);
 int32           lpt_stopioe;
@@ -106,7 +106,7 @@ t_stat lpt_devio(uint32 dev, uint64 *data) {
          *data = uptr->STATUS;
          if ((uptr->flags & UNIT_UC) == 0)
              *data |= C96;
-         if ((uptr->flags & UNIT_ATT) == 0) 
+         if ((uptr->flags & UNIT_ATT) == 0)
              *data |= ERR_FLG;
          sim_debug(DEBUG_CONI, &lpt_dev, "LP CONI %012llo PC=%06o\n", *data, PC);
          break;
@@ -120,7 +120,7 @@ t_stat lpt_devio(uint32 dev, uint64 *data) {
              uptr->CHL = 0;
              uptr->STATUS |= BUSY_FLG;
              sim_activate (&lpt_unit, lpt_unit.wait);
-         } 
+         }
          if ((uptr->flags & UNIT_ATT) == 0) {
              set_interrupt(dev, (uptr->STATUS >> 3));
          }
@@ -137,7 +137,7 @@ t_stat lpt_devio(uint32 dev, uint64 *data) {
              clr_interrupt(dev);
              sim_activate (&lpt_unit, lpt_unit.wait);
         }
-        sim_debug(DEBUG_DATAIO, &lpt_dev, "LP DATO %012llo, %06o %06o PC=%06o\n", 
+        sim_debug(DEBUG_DATAIO, &lpt_dev, "LP DATO %012llo, %06o %06o PC=%06o\n",
                   *data, uptr->CHL, uptr->CHR, PC);
          break;
     case DATAI:
@@ -152,7 +152,7 @@ t_stat lpt_devio(uint32 dev, uint64 *data) {
 t_stat lpt_output(UNIT *uptr, char c) {
     if (c == 0)
        return SCPE_OK;
-    if (uptr->flags & UNIT_UC) 
+    if (uptr->flags & UNIT_UC)
         c = toupper(c);
     fputc (c, uptr->fileref);                       /* print char */
     uptr->pos = ftell (uptr->fileref);
@@ -165,7 +165,7 @@ t_stat lpt_output(UNIT *uptr, char c) {
     }
     return SCPE_OK;
 }
-    
+
 t_stat lpt_svc (UNIT *uptr)
 {
     t_stat r;
@@ -174,7 +174,7 @@ t_stat lpt_svc (UNIT *uptr)
         uptr->STATUS |= ERR_FLG;
         return SCPE_OK;
     }
-    
+
     c = (uptr->CHL >> 14) & 0177;
     if ((r = lpt_output(uptr, c)) != SCPE_OK)
        return r;

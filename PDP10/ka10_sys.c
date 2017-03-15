@@ -57,7 +57,7 @@ REG *sim_PC = &cpu_reg[0];
 
 int32 sim_emax = 1;
 
-DEVICE *sim_devices[] = { 
+DEVICE *sim_devices[] = {
     &cpu_dev,
 #if PDP6 | KA | KI
     &cty_dev,
@@ -204,7 +204,7 @@ uint32        pa;
 int32         op, i, ldrc;
 
 data = getrimw (fileref);                               /* get first word */
-if ((data < 0) || ((data & AMASK) != 0))                /* error? SA != 0? */
+if ((data & AMASK) != 0)                                /* error? SA != 0? */
     return SCPE_FMT;
 ldrc = 1 + (RMASK ^ ((int32) ((data >> 18) & RMASK)));  /* get loader count */
 if (ldrc == 016)                                        /* 16? RIM10B */
@@ -257,11 +257,11 @@ return SCPE_OK;
 }
 
 
-int get_word(FILE *fileref, uint64 *word) 
+int get_word(FILE *fileref, uint64 *word)
 {
    char cbuf[5];
-  
-   if (sim_fread(cbuf, 1, 5, fileref) != 5) 
+
+   if (sim_fread(cbuf, 1, 5, fileref) != 5)
        return 1;
    *word = ((uint64)(cbuf[0]) << 29) |
            ((uint64)(cbuf[1]) << 22) |
@@ -351,7 +351,7 @@ uint32 ma;
 ndir = entvec = 0;                                      /* no dir, entvec */
 cont = 1;
 do {
-    wc = fxread (&data, sizeof (uint64), 1, fileref);      /* read blk hdr */
+    wc = sim_fread (&data, sizeof (uint64), 1, fileref);/* read blk hdr */
     if (wc == 0)                                        /* error? */
         return SCPE_FMT;
     bsz = (int32) ((data & RMASK) - 1);                 /* get count */
@@ -363,19 +363,19 @@ do {
     case EXE_DIR:                                       /* directory */
         if (ndir)                                       /* got one */
             return SCPE_FMT;
-        ndir = fxread (dirbuf, sizeof (uint64), bsz, fileref);
+        ndir = sim_fread (dirbuf, sizeof (uint64), bsz, fileref);
         if (ndir < bsz)                                 /* error */
             return SCPE_FMT;
         break;
 
     case EXE_PDV:                                       /* ??? */
-        fseek (fileref, bsz * sizeof (uint64), SEEK_CUR);
+        (void)sim_fseek (fileref, bsz * sizeof (uint64), SEEK_CUR);
         break;
 
     case EXE_VEC:                                       /* entry vec */
         if (bsz != 2)                                   /* must be 2 wds */
             return SCPE_FMT;
-        entvec = fxread (entbuf, sizeof (uint64), bsz, fileref);
+        entvec = sim_fread (entbuf, sizeof (uint64), bsz, fileref);
         if (entvec < 2)                                 /* error? */
             return SCPE_FMT;
         cont = 0;                                       /* stop */
@@ -398,8 +398,8 @@ for (i = 0; i < ndir; i = i + 2) {                      /* loop thru dir */
     rpt = (int32) ((dirbuf[i + 1] >> 27) + 1);          /* repeat count */
     for (j = 0; j < rpt; j++, mpage++) {                /* loop thru rpts */
         if (fpage) {                                    /* file pages? */
-            fseek (fileref, (fpage << PAG_V_PN) * sizeof (uint64), SEEK_SET);
-            wc = fxread (pagbuf, sizeof (uint64), PAG_SIZE, fileref);
+            (void)sim_fseek (fileref, (fpage << PAG_V_PN) * sizeof (uint64), SEEK_SET);
+            wc = sim_fread (pagbuf, sizeof (uint64), PAG_SIZE, fileref);
             if (wc < PAG_SIZE)
                 return SCPE_FMT;
             fpage++;
@@ -479,7 +479,7 @@ return SCPE_FMT;
 static const uint64 masks[] = {
  0777000000000, 0777740000000,
  0700340000000, 0777777777777
- }; 
+ };
 
 static const char *opcode[] = {
 "PORTAL", "JRSTF", "HALT",                              /* AC defines op */
@@ -497,7 +497,7 @@ static const char *opcode[] = {
 "MUUO60", "MUUO61", "MUUO62", "MUUO63", "MUUO64", "MUUO65", "MUUO66", "MUUO67",
 "MUUO70", "MUUO71", "MUUO72", "MUUO73", "MUUO74", "MUUO75", "MUUO76", "MUUO77",
 
-"UJEN",   "MUUO101", "MUUO102", "JSYS", "MUUO104", "MUUO105", "MUUO106", 
+"UJEN",   "MUUO101", "MUUO102", "JSYS", "MUUO104", "MUUO105", "MUUO106",
 "DFAD", "DFSB", "DFMP", "DFDV", "DADD", "DSUB", "DMUL", "DDIV",
 "DMOVE", "DMOVN", "FIX", "EXTEND", "DMOVEM", "DMOVNM", "FIXR", "FLTR",
 "UFA", "DFN", "FSC", "ADJBP", "ILDB", "LDB", "IDPB", "DPB",
@@ -510,8 +510,8 @@ static const char *opcode[] = {
 "MOVN", "MOVNI", "MOVNM", "MOVNS", "MOVM", "MOVMI", "MOVMM", "MOVMS",
 "IMUL", "IMULI", "IMULM", "IMULB", "MUL", "MULI", "MULM", "MULB",
 "IDIV", "IDIVI", "IDIVM", "IDIVB", "DIV", "DIVI", "DIVM", "DIVB",
-"ASH", "ROT", "LSH", "JFFO", "ASHC", "ROTC", "LSHC", 
-"EXCH", "BLT", "AOBJP", "AOBJN", "JRST", "JFCL", "XCT", "MAP", 
+"ASH", "ROT", "LSH", "JFFO", "ASHC", "ROTC", "LSHC",
+"EXCH", "BLT", "AOBJP", "AOBJN", "JRST", "JFCL", "XCT", "MAP",
 "PUSHJ", "PUSH", "POP", "POPJ", "JSR", "JSP", "JSA", "JRA",
 "ADD", "ADDI", "ADDM", "ADDB", "SUB", "SUBI", "SUBM", "SUBB",
 
@@ -524,16 +524,16 @@ static const char *opcode[] = {
 "SOJ", "SOJL", "SOJE", "SOJLE", "SOJA", "SOJGE", "SOJN", "SOJG",
 "SOS", "SOSL", "SOSE", "SOSLE", "SOSA", "SOSGE", "SOSN", "SOSG",
 
-"SETZ", "SETZI", "SETZM", "SETZB", "AND", "ANDI", "ANDM", "ANDB", 
+"SETZ", "SETZI", "SETZM", "SETZB", "AND", "ANDI", "ANDM", "ANDB",
 "ANDCA", "ANDCAI", "ANDCAM", "ANDCAB", "SETM", "SETMI", "SETMM", "SETMB",
 "ANDCM", "ANDCMI", "ANDCMM", "ANDCMB", "SETA", "SETAI", "SETAM", "SETAB",
-"XOR", "XORI", "XORM", "XORB", "IOR", "IORI", "IORM", "IORB",  
-"ANDCB", "ANDCBI", "ANDCBM", "ANDCBB", "EQV", "EQVI", "EQVM", "EQVB", 
+"XOR", "XORI", "XORM", "XORB", "IOR", "IORI", "IORM", "IORB",
+"ANDCB", "ANDCBI", "ANDCBM", "ANDCBB", "EQV", "EQVI", "EQVM", "EQVB",
 "SETCA", "SETCAI", "SETCAM", "SETCAB", "ORCA", "ORCAI", "ORCAM", "ORCAB",
 "SETCM", "SETCMI", "SETCMM", "SETCMB", "ORCM", "ORCMI", "ORCMM", "ORCMB",
 "ORCB", "ORCBI", "ORCBM", "ORCBB", "SETO", "SETOI", "SETOM", "SETOB",
 
-"HLL", "HLLI", "HLLM", "HLLS", "HRL", "HRLI", "HRLM", "HRLS", 
+"HLL", "HLLI", "HLLM", "HLLS", "HRL", "HRLI", "HRLM", "HRLS",
 "HLLZ", "HLLZI", "HLLZM", "HLLZS", "HRLZ", "HRLZI", "HRLZM", "HRLZS",
 "HLLO", "HLLOI", "HLLOM", "HLLOS", "HRLO", "HRLOI", "HRLOM", "HRLOS",
 "HLLE", "HLLEI", "HLLEM", "HLLES", "HRLE", "HRLEI", "HRLEM", "HRLES",
@@ -609,7 +609,7 @@ static const t_int64 opc_val[] = {
  0230000000000+I_AC, 0231000000000+I_AC, 0232000000000+I_AC, 0233000000000+I_AC,
  0234000000000+I_AC, 0235000000000+I_AC, 0236000000000+I_AC, 0237000000000+I_AC,
  0240000000000+I_AC, 0241000000000+I_AC, 0242000000000+I_AC, 0243000000000+I_AC,
- 0244000000000+I_AC, 0245000000000+I_AC, 0246000000000+I_AC, 
+ 0244000000000+I_AC, 0245000000000+I_AC, 0246000000000+I_AC,
  0250000000000+I_AC, 0251000000000+I_AC, 0252000000000+I_AC, 0253000000000+I_AC,
  0254000000000+I_AC, 0255000000000+I_AC, 0256000000000+I_AC, 0257000000000+I_AC,
  0260000000000+I_AC, 0261000000000+I_AC, 0262000000000+I_AC, 0263000000000+I_AC,
@@ -687,7 +687,7 @@ static const t_int64 opc_val[] = {
 
  0700000000000+I_IO, 0700040000000+I_IO, 0700100000000+I_IO, 0700140000000+I_IO,
  0700200000000+I_IO, 0700240000000+I_IO, 0700300000000+I_IO, 0700340000000+I_IO,
- 
+
  -1
  };
 
@@ -730,7 +730,7 @@ if (sw & SWMASK ('C')) {                                /* character? */
     for (i = 30; i >= 0; i = i - 6) {
         c = (int32) ((inst >> i) & 077);
         fprintf (of, "%c", SIXTOASC (c));
-                }    
+                }
     return SCPE_OK;
     }
 if (sw & SWMASK ('P')) {                                /* packed? */
@@ -801,7 +801,7 @@ const char *tptr;
 if (*cptr == '@') {
     ind = INST_IND;
     cptr++;
-    }   
+    }
 if (*cptr == '+')
     cptr++;
 else if (*cptr == '-') {

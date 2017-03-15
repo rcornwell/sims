@@ -59,11 +59,11 @@
 #define EPAR            0000000000001LL
 #define SEC_SEL         0000000001400LL   /* Read */
 #define SECT_CNT        0000000000377LL   /* Read */
-                       
+
 #define PI              0000007
 #define WCW             0000040
 #define SEC_SCTR        0600000
-                       
+
 #define RST_MSK         0000000177710LL   /* CONO reset bits */
 #define B22_FLAG        0040000000000LL   /* 22 bit controller. */
 #define MAINT_SEG       0010000000000LL
@@ -200,7 +200,7 @@ t_stat rc_devio(uint32 dev, uint64 *data) {
      int          cyl;
      int          dtype;
 
-     if (ctlr < 0 || ctlr > NUM_DEVS_RC)
+     if (ctlr < 0 || ctlr >= NUM_DEVS_RC)
         return SCPE_OK;
 
      dptr = rc_devs[ctlr];
@@ -239,7 +239,7 @@ t_stat rc_devio(uint32 dev, uint64 *data) {
             df10_writecw(df10);
          } else
             df10->status &= ~CCW_COMP;
-         sim_debug(DEBUG_CONO, dptr, "HK %03o CONO %06o PC=%o %06o\n", dev, 
+         sim_debug(DEBUG_CONO, dptr, "HK %03o CONO %06o PC=%o %06o\n", dev,
                    (uint32)*data, PC, df10->status);
          break;
      case DATAI:
@@ -280,7 +280,7 @@ t_stat rc_devio(uint32 dev, uint64 *data) {
          tmp = (uint32)(*data >> 15) & ~07;
          cyl = (tmp >> 10) & 0777;
          if (((cyl & 017) > 9) || (((cyl >> 4) & 017) > 9)) {
-              sim_debug(DEBUG_DETAIL, dptr, "HK %d non-bcd cyl %02x\n", 
+              sim_debug(DEBUG_DETAIL, dptr, "HK %d non-bcd cyl %02x\n",
                         ctlr, cyl);
               df10_finish_op(df10, TRK_SEL_E);
               return SCPE_OK;
@@ -289,7 +289,7 @@ t_stat rc_devio(uint32 dev, uint64 *data) {
                 ((cyl & 0x100) ? 100 : 0);
          dtype = GET_DTYPE(uptr->flags);
          if (cyl >= rc_drv_tab[dtype].cyl) {
-              sim_debug(DEBUG_DETAIL, dptr, "HK %d invalid cyl %d %d\n", 
+              sim_debug(DEBUG_DETAIL, dptr, "HK %d invalid cyl %d %d\n",
                        ctlr, cyl, rc_drv_tab[dtype].cyl);
               df10_finish_op(df10, TRK_SEL_E);
               return SCPE_OK;
@@ -304,7 +304,7 @@ t_stat rc_devio(uint32 dev, uint64 *data) {
          uptr->UFLAGS =  tmp | ((*data & WRITE) != 0) | (ctlr << 1);
          uptr->DATAPTR = -1;    /* Set no data */
          if ((*data & WRITE) != 0)
-            df10_read(df10);
+            (void)df10_read(df10);
          sim_debug(DEBUG_DETAIL, dptr, "HK %d cyl %o\n", ctlr, uptr->UFLAGS);
          sim_activate(uptr, 100);
         break;
@@ -313,7 +313,7 @@ t_stat rc_devio(uint32 dev, uint64 *data) {
 }
 
 
-t_stat rc_svc (UNIT *uptr) 
+t_stat rc_svc (UNIT *uptr)
 {
    int           dtype = GET_DTYPE(uptr->flags);
    int           ctlr  = (uptr->UFLAGS >> 1) & 03;
@@ -332,7 +332,7 @@ t_stat rc_svc (UNIT *uptr)
         cyl = (((cyl >> 4) & 017) * 10) + (cyl & 017) +
                 ((cyl & 0x100) ? 100 : 0);
         if (cyl >= rc_drv_tab[dtype].cyl) {
-              sim_debug(DEBUG_DETAIL, dptr, "HK %d invalid cyl %d %d %o\n", 
+              sim_debug(DEBUG_DETAIL, dptr, "HK %d invalid cyl %d %d %o\n",
                        ctlr, cyl, rc_drv_tab[dtype].cyl, uptr->UFLAGS);
               df10_finish_op(df10, TRK_SEL_E);
               return SCPE_OK;
@@ -346,7 +346,7 @@ t_stat rc_svc (UNIT *uptr)
         }
         seg = (((seg >> 4) & 07) * 10) + (seg & 017);
         if (seg >= rc_drv_tab[dtype].seg) {
-              sim_debug(DEBUG_DETAIL, dptr, "HK %d invalid sec %d %d %o\n", 
+              sim_debug(DEBUG_DETAIL, dptr, "HK %d invalid sec %d %d %o\n",
                        ctlr, seg, rc_drv_tab[dtype].seg, uptr->UFLAGS);
               df10_finish_op(df10, S_ERROR);
               return SCPE_OK;
@@ -357,9 +357,9 @@ t_stat rc_svc (UNIT *uptr)
            int da;
            da = ((cyl * rc_drv_tab[dtype].seg) + seg) * seg_size;
            err = sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
-           wc = sim_fread (&rc_buf[ctlr][0], sizeof(uint64), 
+           wc = sim_fread (&rc_buf[ctlr][0], sizeof(uint64),
                         seg_size, uptr->fileref);
-           sim_debug(DEBUG_DETAIL, dptr, "HK %d Read %d %d %d %x\n", 
+           sim_debug(DEBUG_DETAIL, dptr, "HK %d Read %d %d %d %x\n",
                 ctlr, da, cyl, seg, uptr->UFLAGS << 1 );
            for (; wc < seg_size; wc++)
                 rc_buf[ctlr][wc] = 0;
@@ -373,7 +373,7 @@ t_stat rc_svc (UNIT *uptr)
     } else {
         df10->buf = rc_buf[ctlr][uptr->DATAPTR];
         r = df10_write(df10);
-    } 
+    }
     sim_debug(DEBUG_DATA, dptr, "Xfer %d %012llo %06o %06o\n", uptr->DATAPTR, df10->buf,
              df10->wcr, df10->cda);
 
@@ -395,7 +395,7 @@ t_stat rc_svc (UNIT *uptr)
              sim_debug(DEBUG_DETAIL, dptr, "HK %d Write %d %d %d %x %d\n",
                   ctlr, da, cyl, seg, uptr->UFLAGS << 1, uptr->DATAPTR );
              err = sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
-             wc = sim_fwrite(&rc_buf[ctlr][0],sizeof(uint64), 
+             wc = sim_fwrite(&rc_buf[ctlr][0],sizeof(uint64),
                         seg_size, uptr->fileref);
         }
         uptr->DATAPTR = -1;
@@ -403,7 +403,7 @@ t_stat rc_svc (UNIT *uptr)
         if (seg >= rc_drv_tab[dtype].seg) {
            seg = 0;
            cyl++;
-           if (cyl >= rc_drv_tab[dtype].cyl) 
+           if (cyl >= rc_drv_tab[dtype].cyl)
               cyl = 0;
         }
         /* Convert seg back to bcd */
@@ -416,7 +416,7 @@ t_stat rc_svc (UNIT *uptr)
             wr = 0x100;
             cyl -= 100;
         }
-        tmp = (cyl % 10); 
+        tmp = (cyl % 10);
         cyl /= 10;
         cyl <<= 4;
         cyl += wr + tmp;
@@ -482,8 +482,8 @@ rc_boot(int32 unit_num, DEVICE * dptr)
    wps = rc_drv_tab[dtype].wd_seg;
    for (sect = 4; sect <= 7; sect++) {
        seg = (sect * 128) / wps;
-       fseek(uptr->fileref, (seg * wps) * sizeof(uint64), SEEK_SET);
-       fxread (&rc_buf[0][0], sizeof(uint64), wps, uptr->fileref);
+       (void)sim_fseek(uptr->fileref, (seg * wps) * sizeof(uint64), SEEK_SET);
+       (void)sim_fread (&rc_buf[0][0], sizeof(uint64), wps, uptr->fileref);
        ptr = 0;
        for(wc = wps; wc > 0; wc--) {
           M[addr++] = rc_buf[0][ptr++];

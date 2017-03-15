@@ -102,7 +102,7 @@
 #define HIST_PC2        0x80000000
 #define HIST_MIN        64
 #define HIST_MAX        500000
-#define TMR_RTC         1
+#define TMR_RTC         0
 
 #define UNIT_V_MSIZE    (UNIT_V_UF + 0)
 #if KI
@@ -2242,6 +2242,7 @@ unasign:
               AD = (CM(AR) + 1) & FMASK;
               AR = BR;
               BR = AD;
+              /* Fall through */
 
     case 0130:      /* UFA */
     case 0140:      /* FAD */
@@ -3912,7 +3913,7 @@ fm_sel = small_user = user_addr_cmp = page_enable = 0;
 for(i=0; i < 128; dev_irq[i++] = 0);
 sim_brk_types = sim_brk_dflt = SWMASK ('E');
 sim_rtcn_init_unit (&cpu_unit, cpu_unit.wait, TMR_RTC);
-sim_activate(&cpu_unit, cpu_unit.wait);
+sim_activate(&cpu_unit, 10000);
 return SCPE_OK;
 }
 

@@ -41,7 +41,7 @@
 #define NUM_DEVS_MT 0
 #endif
 
-#if (NUM_DEVS_MT > 0) 
+#if (NUM_DEVS_MT > 0)
 
 #define BUF_EMPTY(u)  (u->hwmark == 0xFFFFFFFF)
 #define CLR_BUF(u)     u->hwmark = 0xFFFFFFFF
@@ -99,7 +99,7 @@
 
 #define DATA_PIA        000000007       /* 0 */
 #define FLAG_PIA        000000070       /* 3 */
-#define DENS_200        000000000       
+#define DENS_200        000000000
 #define DENS_556        000000100
 #define DENS_800        000000200
 #define DENS_MSK        000000300       /* 6 */
@@ -199,14 +199,14 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
       uint64     res;
       DEVICE    *dptr = &mt_dev;
       UNIT      *uptr = &mt_unit[unit];
-       
+
       switch(dev & 07) {
       case CONI:
           res = (uint64)(pia & (NEXT_UNIT_ENAB|FLAG_PIA|DATA_PIA));
           res |= (uint64)(uptr->u3 & 077300);
           res |= ((uint64)unit) << 15;
           res |= ((uint64)next_unit) << 18;
-          if (dptr->flags & MTDF_TYPEB) 
+          if (dptr->flags & MTDF_TYPEB)
              res |= 7LL;  /* Force DATA PIA to 7 on type B */
           *data = res;
           sim_debug(DEBUG_CONI, dptr, "MT CONI %03o status %06o %o %o PC=%06o\n",
@@ -243,7 +243,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
                 int  cmd = (uptr->u3 & FUNCTION) >> 9;
                 uptr->u3 &= ~(MT_BRFUL|MT_BUFFUL);
                 switch(cmd & 07) {
-                case NOP_IDLE:
+                case NOP_CLR:
                 case REWIND:
                 case WTM:
                        break;
@@ -257,10 +257,14 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
                           status |= IDLE_UNIT|ILL_OPR|EOF_FLAG;
                           break;
                        }
+                       /* Fall through */
+
                 case CMP:
                        CLR_BUF(uptr);
                        uptr->u5 = 0;
                        uptr->u6 = 0;
+                       /* Fall through */
+
                 case SPC_REV:
                 case SPC_FWD:
                        if ((dptr->flags & MTDF_TYPEB) == 0) {
@@ -315,7 +319,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
           if ((uptr->flags & MTUF_WLK) != 0)
               res |= WRITE_LOCK;
 #if KI_22BIT
-          if (dptr->flags & MTDF_TYPEB) 
+          if (dptr->flags & MTDF_TYPEB)
               res |= B22_FLAG;
 #endif
           *data = res;
@@ -330,7 +334,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
           }
           if (*data & 2) {
               hold_reg ^= mt_df10.buf;
-          }   
+          }
           sim_debug(DEBUG_CONO, dptr, "MT CONO %03o control %o %o %012llo %012llo\n",
                       dev, uptr->u3, unit, hold_reg, mt_df10.buf);
           break;
@@ -341,7 +345,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
 
      case DATAO|04:
           /* Set Initial CCW */
-          if (dptr->flags & MTDF_TYPEB) 
+          if (dptr->flags & MTDF_TYPEB)
               df10_setup(&mt_df10, (uint32) *data);
           else
               mt_df10.buf ^= hold_reg;
@@ -354,9 +358,9 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
 /* Wrapper to handle reading of hold register or via DF10 */
 void mt_df10_read(DEVICE *dptr, UNIT *uptr) {
      if (dptr->flags & MTDF_TYPEB) {
-         if (!df10_read(&mt_df10)) { 
+         if (!df10_read(&mt_df10)) {
              uptr->u3 |= MT_STOP;
-             return;   
+             return;
          }
      } else {
         if (uptr->u3 & MT_BUFFUL) {
@@ -412,11 +416,11 @@ t_stat mt_error(UNIT * uptr, t_stat r, DEVICE * dptr)
        switch (r) {
        case MTSE_OK:            /* no error */
             break;
-      
+
        case MTSE_TMK:           /* tape mark */
             status |= EOF_FLAG;
             break;
-      
+
        case MTSE_WRP:           /* write protected */
             status |= WRITE_LOCK;
             break;
@@ -424,7 +428,7 @@ t_stat mt_error(UNIT * uptr, t_stat r, DEVICE * dptr)
        case MTSE_UNATT:         /* unattached */
             status |= TRAN_HUNG;
             break;
-      
+
        case MTSE_IOERR:         /* IO error */
        case MTSE_FMT:           /* invalid format */
             status |= ILL_OPR;
@@ -513,14 +517,14 @@ t_stat mt_srv(UNIT * uptr)
     case READ:
     case READ_NOEOR:
         if (uptr->u3 & MT_STOP) {
-             if ((uint32)uptr->u6 < uptr->hwmark) 
+             if ((uint32)uptr->u6 < uptr->hwmark)
                  status |= RLC_ERR;
             return mt_error(uptr, MTSE_OK, dptr);
         }
         if (BUF_EMPTY(uptr)) {
             uptr->u3 |= MT_MOTION;
             status &= ~(IDLE_UNIT|BOT_FLAG|EOF_FLAG|EOT_FLAG|PARITY_ERR);
-            if ((r = sim_tape_rdrecf(uptr, &mt_buffer[0], &reclen, 
+            if ((r = sim_tape_rdrecf(uptr, &mt_buffer[0], &reclen,
                                 BUFFSIZE)) != MTSE_OK) {
                 sim_debug(DEBUG_DETAIL, dptr, "MT%o read error %d\n", unit, r);
                 uptr->u3 &= ~MT_MOTION;
@@ -537,17 +541,17 @@ t_stat mt_srv(UNIT * uptr)
             if (uptr->flags & MTUF_7TRK) {
                 cc = 6 * (5 - uptr->u5);
                 ch = mt_buffer[uptr->u6];
-                if ((((uptr->u3 & ODD_PARITY) ? 0x40 : 0) ^ 
+                if ((((uptr->u3 & ODD_PARITY) ? 0x40 : 0) ^
                       parity_table[ch & 0x3f]) != 0) {
                       status |= PARITY_ERR;
                 }
                 mt_df10.buf |= (uint64)(ch & 0x3f) << cc;
             } else {
-                if ((uptr->u3 & ODD_PARITY) == 0) 
+                if ((uptr->u3 & ODD_PARITY) == 0)
                       status |= PARITY_ERR;
                 cc = (8 * (3 - uptr->u5)) + 4;
                 ch = mt_buffer[uptr->u6];
-                if (cc < 0) 
+                if (cc < 0)
                     mt_df10.buf |=  (uint64)(ch & 0x3f);
                 else
                     mt_df10.buf |= (uint64)(ch & 0xff) << cc;
@@ -556,7 +560,7 @@ t_stat mt_srv(UNIT * uptr)
             uptr->u5++;
             status &= ~CHAR_COUNT;
             status |= (uint64)(uptr->u5) << 18;
-            if (uptr->u5 == cc_max) 
+            if (uptr->u5 == cc_max)
                 mt_df10_write(dptr, uptr);
           } else {
                 if ((cmd & 010) == 0) {
@@ -573,14 +577,14 @@ t_stat mt_srv(UNIT * uptr)
     case CMP:
     case CMP_NOEOR:
          if (uptr->u3 & MT_STOP) {
-              if ((uint32)uptr->u6 < uptr->hwmark) 
+              if ((uint32)uptr->u6 < uptr->hwmark)
                   status |= RLC_ERR;
              return mt_error(uptr, MTSE_OK, dptr);
          }
          if (BUF_EMPTY(uptr)) {
              uptr->u3 |= MT_MOTION;
              status &= ~(IDLE_UNIT|BOT_FLAG|EOF_FLAG|EOT_FLAG|PARITY_ERR);
-             if ((r = sim_tape_rdrecf(uptr, &mt_buffer[0], &reclen, 
+             if ((r = sim_tape_rdrecf(uptr, &mt_buffer[0], &reclen,
                                  BUFFSIZE)) != MTSE_OK) {
                  sim_debug(DEBUG_DETAIL, dptr, "MT%o read error %d\n", unit, r);
                  uptr->u3 &= ~MT_MOTION;
@@ -598,18 +602,18 @@ t_stat mt_srv(UNIT * uptr)
              return SCPE_OK;
          }
          if (uptr->u6 >= (int32)uptr->hwmark) {
-            if (cmd == CMP_NOEOR) 
+            if (cmd == CMP_NOEOR)
                CLR_BUF(uptr);
             else
                uptr->u3 |= MT_STOP;
          } else if ((uptr->u3 & MT_BRFUL) == 0) {
             /* Write out first character. */
             mt_df10_read(dptr, uptr);
-         } 
+         }
          if ((uptr->u3 & MT_BRFUL) != 0) {
             if (uptr->flags & MTUF_7TRK) {
                 ch = mt_buffer[uptr->u6];
-                if ((((uptr->u3 & ODD_PARITY) ? 0x40 : 0) ^ 
+                if ((((uptr->u3 & ODD_PARITY) ? 0x40 : 0) ^
                       parity_table[ch & 0x3f]) != (ch & 0x40)) {
                       status |= PARITY_ERR;
                 }
@@ -617,11 +621,11 @@ t_stat mt_srv(UNIT * uptr)
                 cc = 6 * (5 - uptr->u5);
                 ch = (mt_df10.buf >> cc) & 0x3f;
             } else {
-                if ((uptr->u3 & ODD_PARITY) == 0) 
+                if ((uptr->u3 & ODD_PARITY) == 0)
                       status |= PARITY_ERR;
                 /* Write next char out */
                 cc = (8 * (3 - uptr->u5)) + 4;
-                if (cc < 0) 
+                if (cc < 0)
                      ch = mt_df10.buf & 0x3f;
                 else
                      ch = (mt_df10.buf >> cc) & 0xff;
@@ -660,18 +664,18 @@ t_stat mt_srv(UNIT * uptr)
              uptr->u6 = 0;
              break;
          }
-         if ((uptr->u3 & MT_BRFUL) == 0) 
+         if ((uptr->u3 & MT_BRFUL) == 0)
               mt_df10_read(dptr, uptr);
          if ((uptr->u3 & MT_BRFUL) != 0) {
             if (uptr->flags & MTUF_7TRK) {
                 cc = 6 * (5 - uptr->u5);
                 ch = (mt_df10.buf >> cc) & 0x3f;
-                ch |= ((uptr->u3 & ODD_PARITY) ? 0x40 : 0) ^ 
+                ch |= ((uptr->u3 & ODD_PARITY) ? 0x40 : 0) ^
                           parity_table[ch & 0x3f];
             } else {
                 /* Write next char out */
                 cc = (8 * (3 - uptr->u5)) + 4;
-                if (cc < 0) 
+                if (cc < 0)
                      ch = mt_df10.buf & 0x3f;
                 else
                      ch = (mt_df10.buf >> cc) & 0xff;
@@ -701,7 +705,7 @@ t_stat mt_srv(UNIT * uptr)
          break;
 
     case WTM:
-        if ((uptr->flags & MTUF_WLK) != 0) 
+        if ((uptr->flags & MTUF_WLK) != 0)
             return mt_error(uptr, MTSE_WRP, dptr);
         uptr->u3 &= ~MT_MOTION;
         status &= ~(IDLE_UNIT|BOT_FLAG|EOT_FLAG);
@@ -709,7 +713,7 @@ t_stat mt_srv(UNIT * uptr)
         return mt_error(uptr, sim_tape_wrtmk(uptr), dptr);
 
     case ERG:
-        if ((uptr->flags & MTUF_WLK) != 0) 
+        if ((uptr->flags & MTUF_WLK) != 0)
             return mt_error(uptr, MTSE_WRP, dptr);
         uptr->u3 &= ~MT_MOTION;
         status &= ~(IDLE_UNIT|BOT_FLAG|EOT_FLAG);
@@ -726,7 +730,7 @@ t_stat mt_srv(UNIT * uptr)
         /* Always skip at least one record */
         if ((cmd & 7) == SPC_FWD)
             r = sim_tape_sprecf(uptr, &reclen);
-        else 
+        else
             r = sim_tape_sprecr(uptr, &reclen);
         switch (r) {
         case MTSE_OK:            /* no error */
@@ -758,17 +762,17 @@ t_stat mt_srv(UNIT * uptr)
 
 void mt_read_word(UNIT *uptr) {
      int i, cc, ch;
-   
+
      mt_df10.buf = 0;
      for(i = 0; i <= 4; i++) {
         cc = (8 * (3 - i)) + 4;
         ch = mt_buffer[uptr->u6];
-        if (cc < 0) 
+        if (cc < 0)
             mt_df10.buf |=  (uint64)(ch & 0x3f);
         else
             mt_df10.buf |= (uint64)(ch & 0xff) << cc;
         uptr->u6++;
-     }  
+     }
 }
 
 /* Boot from given device */
@@ -807,12 +811,12 @@ mt_boot(int32 unit_num, DEVICE * dptr)
             uptr->hwmark = reclen;
         }
         mt_read_word(uptr);
-        if (addr < 020) 
+        if (addr < 020)
            FM[addr] = mt_df10.buf;
         else
            M[addr] = mt_df10.buf;
     }
-    if (addr < 020) 
+    if (addr < 020)
         FM[addr] = mt_df10.buf;
     else
         M[addr] = mt_df10.buf;
@@ -827,16 +831,16 @@ mt_boot(int32 unit_num, DEVICE * dptr)
     return SCPE_OK;
 }
 
-t_stat set_mta (UNIT *uptr, int32 val, CONST char *cptr, void *desc) 
+t_stat set_mta (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
     DEVICE *dptr;
     dptr = find_dev_from_unit (uptr);
     if (dptr == NULL)
        return SCPE_IERR;
     dptr->flags &= ~MTDF_TYPEB;
-    if (*cptr == 'B') 
+    if (*cptr == 'B')
         dptr->flags |= val;
-    else if (*cptr != 'A') 
+    else if (*cptr != 'A')
         return SCPE_ARG;
     return SCPE_OK;
 }
@@ -868,7 +872,7 @@ mt_reset(DEVICE * dptr)
         UNIT    *uptr = &mt_unit[i];
 
         if (MT_DENS(uptr->dynflags) == MT_DENS_NONE)
-                uptr->dynflags = MT_200_VALID | MT_556_VALID | 
+                uptr->dynflags = MT_200_VALID | MT_556_VALID |
                         MT_800_VALID | (MT_DENS_800 << UNIT_V_DF_TAPE);
         uptr->u3 = 0;
         sim_cancel(uptr);

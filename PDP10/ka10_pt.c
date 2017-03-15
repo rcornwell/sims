@@ -30,7 +30,7 @@
 #define NUM_DEVS_PT 0
 #endif
 
-#if (NUM_DEVS_PT > 0) 
+#if (NUM_DEVS_PT > 0)
 
 #define PP_DEVNUM 0100
 #define PR_DEVNUM 0104
@@ -51,10 +51,10 @@ t_stat         ptp_svc (UNIT *uptr);
 t_stat         ptp_reset (DEVICE *dptr);
 t_stat         ptp_attach (UNIT *uptr, CONST char *cptr);
 t_stat         ptp_detach (UNIT *uptr);
-t_stat         ptp_help (FILE *st, DEVICE *dptr, UNIT *uptr, 
+t_stat         ptp_help (FILE *st, DEVICE *dptr, UNIT *uptr,
                             int32 flag, const char *cptr);
 const char    *ptp_description (DEVICE *dptr);
-             
+
 t_stat         ptr_devio(uint32 dev, uint64 *data);
 t_stat         ptr_svc (UNIT *uptr);
 t_stat         ptr_boot(int32 unit_num, DEVICE * dptr);
@@ -127,13 +127,13 @@ t_stat ptp_devio(uint32 dev, uint64 *data) {
     case CONO:
          clr_interrupt(dev);
          uptr->STATUS = (PI_DONE|DONE_FLG|BUSY_FLG|BIN_FLG) & *data;
-         if ((uptr->flags & UNIT_ATT) == 0) 
+         if ((uptr->flags & UNIT_ATT) == 0)
              uptr->STATUS |= NO_TAPE_PP;
          if (uptr->STATUS & BUSY_FLG) {
              uptr->CHR = 0;
              sim_activate (&ptp_unit, ptp_unit.wait);
          }
-         if (uptr->STATUS & DONE_FLG) 
+         if (uptr->STATUS & DONE_FLG)
              set_interrupt(dev, uptr->STATUS);
          sim_debug(DEBUG_CONO, &ptp_dev, "PP: CONO %012llo\n\r", *data);
          break;
@@ -226,14 +226,14 @@ t_stat ptr_devio(uint32 dev, uint64 *data) {
     case CONO:
          clr_interrupt(dev);
          uptr->STATUS = (PI_DONE|DONE_FLG|BUSY_FLG|BIN_FLG) & *data;
-         if ((uptr->flags & UNIT_ATT)) 
+         if ((uptr->flags & UNIT_ATT))
              uptr->STATUS |= TAPE_PR;
          if (uptr->STATUS & BUSY_FLG) {
              uptr->CHR = 0;
              uptr->CHL = 0;
              sim_activate (&ptr_unit, ptr_unit.wait);
          }
-         if (uptr->STATUS & DONE_FLG) 
+         if (uptr->STATUS & DONE_FLG)
              set_interrupt(dev, uptr->STATUS);
          sim_debug(DEBUG_CONO, &ptr_dev, "PT: CONO %012llo\n\r", *data);
          break;
@@ -285,7 +285,7 @@ t_stat ptr_svc (UNIT *uptr)
         } else {
            word |= (uint64)(temp);
            count--;
-        } 
+        }
     }
     uptr->CHL = (word >> 18) & RMASK;
     uptr->CHR = word & RMASK;
@@ -296,16 +296,16 @@ uint64
 ptr_read_word(UNIT *uptr) {
      int i, ch;
      uint64 word = 0;
-   
+
      for(i = 0; i < 6;) {
-        if ((ch = getc (uptr->fileref)) == EOF) 
+        if ((ch = getc (uptr->fileref)) == EOF)
            return word;
         if (ch & 0200) {
             word <<= 6;
             word |= (uint64)(ch & 077);
             i++;
         }
-     }  
+     }
      return word;
 }
 
@@ -327,12 +327,12 @@ ptr_boot(int32 unit_num, DEVICE * dptr)
         wc = (wc + 1) & RMASK;
         addr = (addr + 1) & RMASK;
         word = ptr_read_word(uptr);
-        if (addr < 020) 
+        if (addr < 020)
            FM[addr] = word;
         else
            M[addr] = word;
     }
-    if (addr < 020) 
+    if (addr < 020)
        FM[addr] = word;
     else
        M[addr] = word;

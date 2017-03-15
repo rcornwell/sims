@@ -87,12 +87,12 @@ const char         *cr_description(DEVICE *dptr);
 DIB cr_dib = { CR_DEVNUM, 1, cr_devio, NULL};
 
 UNIT                cr_unit = {
-   UDATA(cr_srv, UNIT_CDR, 0), 300,   
+   UDATA(cr_srv, UNIT_CDR, 0), 300,
 };
 
 MTAB                cr_mod[] = {
     {MTAB_XTD | MTAB_VUN, 0, "FORMAT", "FORMAT",
-               &sim_card_set_fmt, &sim_card_show_fmt, NULL},    
+               &sim_card_set_fmt, &sim_card_show_fmt, NULL},
     {0}
 };
 
@@ -112,7 +112,7 @@ t_stat cr_devio(uint32 dev, uint64 *data) {
     UNIT *uptr = &cr_unit;
     switch(dev & 3) {
     case CONI:
-         if (uptr->flags & UNIT_ATT && 
+         if (uptr->flags & UNIT_ATT &&
                 (uptr->u3 & (READING|CARD_IN_READ|END_CARD)) == 0)
             uptr->u3 |= RDY_READ;
          *data = uptr->u3;
@@ -132,9 +132,9 @@ t_stat cr_devio(uint32 dev, uint64 *data) {
          uptr->u3 &= ~(PIA);
          uptr->u3 |= *data & PIA;
          uptr->u3 &= ~(*data & (CLR_DRDY|CLR_END_CARD|CLR_EOF|CLR_DATA_MISS));
-         if (*data & EN_TROUBLE) 
+         if (*data & EN_TROUBLE)
              uptr->u3 |= TROUBLE_EN;
-         if (*data & EN_READY) 
+         if (*data & EN_READY)
              uptr->u3 |= RDY_READ_EN;
          if (*data & READ_CARD) {
              uptr->u3 |= READING;
@@ -142,12 +142,12 @@ t_stat cr_devio(uint32 dev, uint64 *data) {
              uptr->u4 = 0;
              sim_activate(uptr, uptr->wait);
          }
-         if (uptr->flags & UNIT_ATT && 
+         if (uptr->flags & UNIT_ATT &&
                 (uptr->u3 & (READING|CARD_IN_READ|END_CARD)) == 0)
             uptr->u3 |= RDY_READ;
          if (uptr->u3 & RDY_READ_EN && uptr->u3 & RDY_READ)
              set_interrupt(dev, uptr->u3);
-         if (uptr->u3 & TROUBLE_EN && 
+         if (uptr->u3 & TROUBLE_EN &&
              (uptr->u3 & (END_CARD|END_FILE|DATA_MISS|TROUBLE)) != 0)
              set_interrupt(dev, uptr->u3);
          break;
@@ -158,7 +158,7 @@ t_stat cr_devio(uint32 dev, uint64 *data) {
              *data = uptr->u5;
              sim_debug(DEBUG_DATAIO, &cr_dev, "CR: DATAI %012llo\n", *data);
              uptr->u3 &= ~DATA_RDY;
-         } else 
+         } else
              *data = 0;
          break;
     case DATAO:
@@ -189,7 +189,7 @@ cr_srv(UNIT *uptr) {
              if (uptr->u3 & TROUBLE_EN)
                  set_interrupt(CR_DEVNUM, uptr->u3);
              return SCPE_OK;
-        case SCPE_OK:   
+        case SCPE_OK:
              uptr->u3 |= CARD_IN_READ;
              break;
         }

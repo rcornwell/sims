@@ -99,7 +99,7 @@
 #define CR_REG          0770000000000   /* Register number */
 #define LOAD_REG        0004000000000   /* Load register */
 #define CR_MAINT_MODE   0000100000000   /* Maint mode... not implemented */
-#define CR_DRIVE        0000007000000   
+#define CR_DRIVE        0000007000000
 #define CR_GEN_EVD      0000000400000   /* Enable Parity */
 #define CR_DXES         0000000200000   /* Disable DXES errors  */
 #define CR_INAD         0000000077600
@@ -108,7 +108,7 @@
 #define CR_GO           0000000000001
 
 #define IRQ_VECT        0000000000177   /* Interupt vector */
-#define IRQ_KI10        0000002000000   
+#define IRQ_KI10        0000002000000
 #define IRQ_KA10        0000001000000
 
 /* u3  low */
@@ -304,7 +304,7 @@ t_stat        rp_reset(DEVICE *);
 t_stat        rp_attach(UNIT *, CONST char *);
 t_stat        rp_detach(UNIT *);
 t_stat        rp_set_type(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
-t_stat        rp_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, 
+t_stat        rp_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
                     const char *cptr);
 const char    *rp_description (DEVICE *dptr);
 
@@ -480,7 +480,7 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
 #if KI_22BIT
         *data |= B22_FLAG;
 #endif
-        sim_debug(DEBUG_CONI, dptr, "RP %03o CONI %06o PC=%o %o\n", 
+        sim_debug(DEBUG_CONI, dptr, "RP %03o CONI %06o PC=%o %o\n",
                dev, (uint32)*data, PC, rp_attn[ctlr]);
         return SCPE_OK;
 
@@ -513,7 +513,7 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
               *data |= ((t_uint64)(rp_drive[ctlr])) << 18;
         } else if (rp_reg[ctlr] == 044) {
               *data = (t_uint64)rp_ivect[ctlr];
-              if (rp_imode[ctlr]) 
+              if (rp_imode[ctlr])
                 *data |= IRQ_KI10;
               else
                 *data |= IRQ_KA10;
@@ -524,7 +524,7 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
               *data |= ((t_uint64)(rp_drive[ctlr])) << 18;
         }
         *data |= ((t_uint64)(rp_reg[ctlr])) << 30;
-        sim_debug(DEBUG_DATAIO, dptr, "RP %03o DATI %012llo, %d %d PC=%06o\n", 
+        sim_debug(DEBUG_DATAIO, dptr, "RP %03o DATI %012llo, %d %d PC=%06o\n",
                     dev, *data, ctlr, rp_drive[ctlr], PC);
         return SCPE_OK;
 
@@ -548,10 +548,10 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
                 /* Start command */
                 df10_setup(df10, (uint32)(*data >> 6));
                 rp_write(ctlr, rp_drive[ctlr], 0, (uint32)(*data & 077));
-                sim_debug(DEBUG_DATAIO, dptr, 
+                sim_debug(DEBUG_DATAIO, dptr,
                     "RP %03o command %012llo, %d[%d] PC=%06o %06o\n",
                     dev, *data, ctlr, rp_drive[ctlr], PC, df10->status);
-             } else if (rp_reg[ctlr] == 044) {  
+             } else if (rp_reg[ctlr] == 044) {
                 /* Set KI10 Irq vector */
                 rp_ivect[ctlr] = (int)(*data & IRQ_VECT);
                 rp_imode[ctlr] = (*data & IRQ_KI10) != 0;
@@ -569,13 +569,13 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
                     return SCPE_OK;
                 }
                 rp_drive[ctlr] = (int)(*data >> 18) & 07;
-                rp_write(ctlr, rp_drive[ctlr], rp_reg[ctlr] & 037, 
+                rp_write(ctlr, rp_drive[ctlr], rp_reg[ctlr] & 037,
                         (int)(*data & 0777777));
              }
          } else {
              if (rp_reg[ctlr] <= 040) {
                 rp_drive[ctlr] = (int)(*data >> 18) & 07;
-             } 
+             }
          }
          return SCPE_OK;
     }
@@ -588,7 +588,7 @@ rp_devirq(uint32 dev, int addr) {
      int drive;
 
      for (drive = 0; drive < NUM_DEVS_RP; drive++) {
-        if (rp_dib[drive].dev_num == (dev & 0774)) 
+        if (rp_dib[drive].dev_num == (dev & 0774))
             return (rp_imode[drive] ? rp_ivect[drive] : addr);
      }
     return  addr;
@@ -604,7 +604,7 @@ rp_write(int ctlr, int unit, int reg, uint32 data) {
     switch(reg) {
     case  000:  /* control */
         sim_debug(DEBUG_DETAIL, dptr, "RPA%o %d Status=%06o\n", unit, ctlr, uptr->u3);
-        if (uptr->flags & UNIT_WLK) 
+        if (uptr->flags & UNIT_WLK)
            uptr->u3 |= DS_WRL;
         df10->status &= ~(1 << df10->ccw_comp);
         if ((data & 01) != 0 && (uptr->u3 & DS_DRY) != 0) {
@@ -618,14 +618,20 @@ rp_write(int ctlr, int unit, int reg, uint32 data) {
                 uptr->u4 = 0;
                 if ((uptr->flags & UNIT_ATT) != 0)
                      uptr->u3 |= DS_VV;
+                 /* Fall through */
+
             case FNC_RECAL:                       /* recalibrate */
                 uptr->u4 &= ~0177777;
+                 /* Fall through */
+
             case FNC_SEARCH:                      /* search */
             case FNC_SEEK:                        /* seek */
             case FNC_RETURN:                      /* return to center */
             case FNC_OFFSET:                      /* offset */
             case FNC_UNLOAD:                      /* unload */
                 uptr->u3 &= ~DS_OFF;
+                 /* Fall through */
+
             case FNC_WCHK:                        /* write check */
             case FNC_WRITE:                       /* write */
             case FNC_WRITEH:                      /* write w/ headers */
@@ -639,7 +645,7 @@ rp_write(int ctlr, int unit, int reg, uint32 data) {
                 uptr->u3 &= ~(DS_ATA|CR_GO);
                 rp_attn[ctlr] &= ~(1<<unit);
                 clr_interrupt(rp_dib[ctlr].dev_num);
-                if ((df10->status & IADR_ATTN) != 0 && rp_attn[ctlr] != 0) 
+                if ((df10->status & IADR_ATTN) != 0 && rp_attn[ctlr] != 0)
                     df10_setirq(df10);
                 break;
             case FNC_RELEASE:                     /* port release */
@@ -681,7 +687,7 @@ rp_write(int ctlr, int unit, int reg, uint32 data) {
         }
         clr_interrupt(rp_dib[ctlr].dev_num);
         if (((df10->status & IADR_ATTN) != 0 && rp_attn[ctlr] != 0) ||
-             (df10->status & PI_ENABLE)) 
+             (df10->status & PI_ENABLE))
             df10_setirq(df10);
         break;
     case  005:  /* sector/track */
@@ -724,9 +730,9 @@ rp_read(int ctlr, int unit, int reg) {
     case  000:  /* control */
         df10 = &rp_df10[ctlr];
         temp = uptr->u3 & 076;
-        if (uptr->flags & UNIT_ATT) 
+        if (uptr->flags & UNIT_ATT)
            temp |= CS1_DVA;
-        if (df10->status & BUSY || uptr->u3 & CR_GO) 
+        if (df10->status & BUSY || uptr->u3 & CR_GO)
            temp |= CS1_GO;
         break;
     case  001:  /* status */
@@ -773,7 +779,7 @@ rp_read(int ctlr, int unit, int reg) {
 }
 
 
-t_stat rp_svc (UNIT *uptr) 
+t_stat rp_svc (UNIT *uptr)
 {
     int          dtype = GET_DTYPE(uptr->flags);
     int          ctlr;
@@ -840,8 +846,10 @@ t_stat rp_svc (UNIT *uptr)
         break;
     case FNC_UNLOAD:                     /* unload */
         rp_detach(uptr);
+        /* Fall through */
     case FNC_OFFSET:                     /* offset */
         uptr->u3 |= DS_OFF;
+        /* Fall through */
     case FNC_RETURN:                     /* return to center */
     case FNC_PRESET:                     /* read-in preset */
     case FNC_RECAL:                      /* recalibrate */
@@ -857,7 +865,7 @@ t_stat rp_svc (UNIT *uptr)
 
     case FNC_SEARCH:                     /* search */
         if (GET_SC(uptr->u4) > rp_drv_tab[dtype].sect ||
-            GET_SF(uptr->u4) > rp_drv_tab[dtype].surf) 
+            GET_SF(uptr->u4) > rp_drv_tab[dtype].surf)
             uptr->u3 |= (ER1_IAE << 16)|DS_ERR;
         rp_attn[ctlr] |= 1<<unit;
         uptr->u3 |= DS_DRY|DS_ATA;
@@ -885,13 +893,13 @@ t_stat rp_svc (UNIT *uptr)
                     df10_setirq(df);
                 return SCPE_OK;
             }
-        sim_debug(DEBUG_DETAIL, dptr, "RPA%o read (%d,%d,%d)\n", unit, cyl, 
+        sim_debug(DEBUG_DETAIL, dptr, "RPA%o read (%d,%d,%d)\n", unit, cyl,
                    GET_SC(uptr->u4), GET_SF(uptr->u4));
             da = GET_DA(uptr->u4, dtype) * RP_NUMWD;
-            sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
+            (void)sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
             wc = sim_fread (&rp_buf[ctlr][0], sizeof(uint64), RP_NUMWD,
                                 uptr->fileref);
-            while (wc < RP_NUMWD) 
+            while (wc < RP_NUMWD)
                 rp_buf[ctlr][wc++] = 0;
             uptr->hwmark = RP_NUMWD;
         }
@@ -944,13 +952,13 @@ t_stat rp_svc (UNIT *uptr)
         rp_buf[ctlr][uptr->u6++] = df->buf;
         sim_debug(DEBUG_DATA, dptr, "RPA%o write word %d %012llo\n", unit, uptr->u6, df->buf);
         if (r == 0 || uptr->u6 == RP_NUMWD) {
-            while (uptr->u6 < RP_NUMWD) 
+            while (uptr->u6 < RP_NUMWD)
                 rp_buf[ctlr][uptr->u6++] = 0;
-        sim_debug(DEBUG_DETAIL, dptr, "RPA%o write (%d,%d,%d)\n", unit, cyl, 
+        sim_debug(DEBUG_DETAIL, dptr, "RPA%o write (%d,%d,%d)\n", unit, cyl,
                    GET_SC(uptr->u4), GET_SF(uptr->u4));
             da = GET_DA(uptr->u4, dtype) * RP_NUMWD;
-            sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
-            sim_fwrite (&rp_buf[ctlr][0], sizeof(uint64), RP_NUMWD,
+            (void)sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
+            (void)sim_fwrite (&rp_buf[ctlr][0], sizeof(uint64), RP_NUMWD,
                                 uptr->fileref);
             uptr->u6 = 0;
             if (r) {
@@ -979,7 +987,7 @@ t_stat rp_svc (UNIT *uptr)
             return SCPE_OK;
         }
         break;
-    }   
+    }
     return SCPE_OK;
 }
 
@@ -1021,12 +1029,12 @@ rp_boot(int32 unit_num, DEVICE * rptr)
     uint32              ptr;
     int                 wc;
 
-    sim_fseek(uptr->fileref, 0, SEEK_SET);
-    sim_fread (&rp_buf[0][0], sizeof(uint64), RP_NUMWD, uptr->fileref);
+    (void)sim_fseek(uptr->fileref, 0, SEEK_SET);
+    (void)sim_fread (&rp_buf[0][0], sizeof(uint64), RP_NUMWD, uptr->fileref);
     addr = rp_buf[0][0] & RMASK;
     wc = (rp_buf[0][0] >> 18) & RMASK;
     ptr = 1;
-    for(; wc > 0; wc--) 
+    for(; wc > 0; wc--)
         M[addr++] = rp_buf[0][ptr++];
     addr = rp_buf[0][ptr++] & RMASK;
     M[addr] = rp_buf[0][ptr];
@@ -1055,7 +1063,7 @@ t_stat rp_attach (UNIT *uptr, CONST char *cptr)
     uptr->u4 = 0;
     uptr->u3 &= ~DS_VV;
     uptr->u3 |= DS_DPR|DS_MOL|DS_DRY;
-    if (uptr->flags & UNIT_WLK) 
+    if (uptr->flags & UNIT_WLK)
          uptr->u3 |= DS_WRL;
     rp_df10[ctlr].status |= PI_ENABLE;
     set_interrupt(dib->dev_num, rp_df10[ctlr].status);

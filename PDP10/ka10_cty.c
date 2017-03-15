@@ -96,7 +96,7 @@ t_stat cty_devio(uint32 dev, uint64 *data) {
          cty_unit[0].u3 |= (res & (TEL_RDY | TEL_BSY | KEY_TST));
          cty_unit[1].u3 &= ~((res >> 4) & (KEY_RDY | KEY_BSY));
          cty_unit[1].u3 |= (res & (KEY_RDY | KEY_BSY));
-         if ((cty_unit[0].u3 & TEL_RDY) || (cty_unit[1].u3 & KEY_RDY)) 
+         if ((cty_unit[0].u3 & TEL_RDY) || (cty_unit[1].u3 & KEY_RDY))
              set_interrupt(dev, cty_unit[0].u5);
          else
              clr_interrupt(dev);

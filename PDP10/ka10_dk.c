@@ -73,7 +73,7 @@ DIB dk_dib[] = {
         { DK_DEVNUM, 1, &dk_devio, NULL },
         { DK_DEVNUM + 4, 1, &dk_devio, NULL}};
 
-UNIT dk_unit[] = { 
+UNIT dk_unit[] = {
         {UDATA (&dk_svc, UNIT_IDLE, TIM_TPS) },
 #if (NUM_DEVS_DK > 1)
         {UDATA (&dk_svc, UNIT_IDLE, TIM_TPS) },
@@ -94,7 +94,7 @@ t_stat dk_devio(uint32 dev, uint64 *data) {
     UNIT        *uptr = &dk_unit[unit];
     int32       t;
 
-    if (unit < 0 || unit > NUM_DEVS_DK)
+    if (unit < 0 || unit >= NUM_DEVS_DK)
         return SCPE_OK;
     switch (dev & 3) {
     case CONI:
@@ -120,28 +120,28 @@ t_stat dk_devio(uint32 dev, uint64 *data) {
            }
         }
 
-        if (*data & CLK_SET_EN) 
+        if (*data & CLK_SET_EN)
            uptr->STAT_REG |= CLK_EN;
-        if (*data & CLK_CLR_EN) 
+        if (*data & CLK_CLR_EN)
            uptr->STAT_REG &= ~CLK_EN;
-        if (*data & CLK_SET_OVF) 
+        if (*data & CLK_SET_OVF)
            uptr->STAT_REG |= CLK_OVF;
-        if (*data & CLK_CLR_OVF) 
+        if (*data & CLK_CLR_OVF)
            uptr->STAT_REG &= ~CLK_OVF;
-        if (*data & CLK_SET_FLG) 
+        if (*data & CLK_SET_FLG)
            uptr->STAT_REG |= CLK_FLG;
-        if (*data & CLK_CLR_FLG) 
+        if (*data & CLK_CLR_FLG)
            uptr->STAT_REG &= ~CLK_FLG;
-        if (*data & CLK_SET_PI) 
+        if (*data & CLK_SET_PI)
            uptr->STAT_REG |= CLK_PI;
-        if (*data & CLK_CLR_PI) 
+        if (*data & CLK_CLR_PI)
            uptr->STAT_REG &= ~CLK_PI;
-        
+
         if ((uptr->STAT_REG & CLK_EN) != 0 &&
                 (uptr->STAT_REG & (CLK_FLG|CLK_OVF))) {
            set_interrupt(dev, uptr->STAT_REG & 7);
         }
-  
+
         if (uptr->STAT_REG & CLK_EN) {
            if (!sim_is_active(uptr)) {
                 t = sim_rtcn_calb (uptr->capac, TMR_DK + unit);  /* calibrate */
@@ -160,14 +160,14 @@ t_stat dk_devio(uint32 dev, uint64 *data) {
         uptr->INT_REG = (uint32)(*data & RMASK);
 
         if (uptr->STAT_REG & CLK_EN) {
-           if (uptr->INT_REG == uptr->CLK_REG) 
+           if (uptr->INT_REG == uptr->CLK_REG)
                uptr->STAT_REG |= CLK_FLG;
            set_interrupt(dev, uptr->STAT_REG & 7);
         }
         sim_debug(DEBUG_DATAIO, &dk_dev, "DK %03o DATO %012llo PC=%06o\n",
                     dev, *data, PC);
         break;
-   
+
     case DATAI:
         *data = (uint64)(uptr->CLK_REG);
         sim_debug(DEBUG_DATAIO, &dk_dev, "DK %03o DATI %012llo PC=%06o\n",
@@ -179,14 +179,14 @@ t_stat dk_devio(uint32 dev, uint64 *data) {
 }
 
 /* Bump counter by 1 */
-void dk_count (UNIT *uptr) 
+void dk_count (UNIT *uptr)
 {
     int   dev;
     uptr->CLK_REG++;
-    if (uptr->CLK_REG & (~RMASK)) 
+    if (uptr->CLK_REG & (~RMASK))
        uptr->STAT_REG |= CLK_OVF;
     uptr->CLK_REG &= RMASK;
-    if (uptr->INT_REG == uptr->CLK_REG) 
+    if (uptr->INT_REG == uptr->CLK_REG)
        uptr->STAT_REG |= CLK_FLG;
     if (uptr->STAT_REG & (CLK_FLG|CLK_OVF)) {
        dev = ((uptr - dk_unit) << 2) + DK_DEVNUM;
