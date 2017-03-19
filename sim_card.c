@@ -581,6 +581,7 @@ sim_read_card(UNIT * uptr)
         mode = uptr->flags & UNIT_CARD_MODE;
 
     switch(mode) {
+    default:
     case MODE_TEXT:
         sim_debug(DEBUG_CARD, dptr, "text: [");
         /* Check for special codes */
@@ -656,7 +657,7 @@ sim_read_card(UNIT * uptr)
                     if ((uptr->flags & MODE_LOWER) == 0)
                         c = toupper(c);
                     switch(uptr->flags & MODE_CHAR) {
-                    case 0:
+                    default:
                     case MODE_026:
                            temp = ascii_to_hol_026[(int)c];
                            break;
@@ -895,7 +896,7 @@ sim_punch_card(UNIT * uptr, UNIT *stkuptr)
     case MODE_OCTAL:
         sim_debug(DEBUG_CARD, dptr, "octal: [");
         out[outp++] = '~';
-        for (i = 80; i > 0; i--) {
+        for (i = 79; i >= 0; i--) {
             if (data->image[i] != 0) 
                break;
         }
