@@ -261,6 +261,8 @@ extern DEVICE   rpa_dev;
 extern DEVICE   rpb_dev;
 extern DEVICE   rpc_dev;
 extern DEVICE   rpd_dev;
+extern DEVICE   rsa_dev;
+extern DEVICE   tua_dev;
 extern DEVICE   lpt_dev;
 extern DEVICE   ptp_dev;
 extern DEVICE   ptr_dev;
@@ -321,6 +323,7 @@ int  df10_write(struct df10 *df);
 #define NUM_DEVS_DT     1
 #define NUM_DEVS_DK     1
 #define NUM_DEVS_RP     1
+#define NUM_DEVS_RS     0
 #define NUM_DEVS_TU     0
 /* Global data */
 

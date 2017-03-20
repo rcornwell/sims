@@ -29,9 +29,6 @@
 
 #if (NUM_DEVS_RP > 0)
 
-#define BUF_EMPTY(u)  (u->hwmark == 0xFFFFFFFF)
-#define CLR_BUF(u)     u->hwmark = 0xFFFFFFFF
-
 #define RP_NUMWD        128     /* 36bit words/sec */
 #define RP_DEVNUM       0270    /* First device number */
 #define NUM_UNITS_RP    8
@@ -43,8 +40,13 @@
 #define UNIT_M_DTYPE    7
 #define UNIT_WLK        (1 << UNIT_V_WLK)
 #define UNIT_DTYPE      (UNIT_M_DTYPE << UNIT_V_DTYPE)
+#define DTYPE(x)        (((x) & UNIT_M_DTYPE) << UNIT_V_DTYPE)
 #define GET_DTYPE(x)    (((x) >> UNIT_V_DTYPE) & UNIT_M_DTYPE)
 #define UNIT_WPRT       (UNIT_WLK | UNIT_RO)            /* write protect */
+#define CNTRL_V_CTYPE   (UNIT_V_UF + 4)
+#define CNTRL_M_CTYPE   7
+#define GET_CNTRL(x)    (((x) >> CNTRL_V_CTYPE) & CNTRL_M_CTYPE)
+#define CNTRL(x)        (((x) & CNTRL_M_CTYPE) << CNTRL_V_CTYPE)
 
 /* Parameters in the unit descriptor */
 
@@ -312,75 +314,75 @@ const char    *rp_description (DEVICE *dptr);
 UNIT                rp_unit[] = {
 /* Controller 1 */
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(0), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(0), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(0), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(0), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(0), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(0), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(0), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(0), RP06_SIZE) },
 #if (NUM_DEVS_RP > 1)
 /* Controller 2 */
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(1), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(1), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(1), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(1), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(1), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(1), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(1), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(1), RP06_SIZE) },
 #if (NUM_DEVS_RP > 2)
 /* Controller 3 */
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(2), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(2), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(2), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(2), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(2), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(2), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(2), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(2), RP06_SIZE) },
 #if (NUM_DEVS_RP > 3)
 /* Controller 4 */
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(3), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(3), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(3), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(3), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(3), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(3), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(3), RP06_SIZE) },
     { UDATA (&rp_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+
-                 UNIT_ROABLE+(RP06_DTYPE << UNIT_V_DTYPE), RP06_SIZE) },
+                 UNIT_ROABLE+DTYPE(RP06_DTYPE)+CNTRL(3), RP06_SIZE) },
 #endif
 #endif
 #endif
@@ -520,7 +522,7 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
         } else if (rp_reg[ctlr] == 054) {
                 *data = (t_uint64)(rp_rae[ctlr]);
         } else if ((rp_reg[ctlr] & 040) == 0) {
-              *data = (t_uint64)(rp_read(ctlr, rp_drive[ctlr], rp_reg[ctlr]) & 0777777);
+              *data = (t_uint64)(rp_read(ctlr, rp_drive[ctlr], rp_reg[ctlr]) & 0177777);
               *data |= ((t_uint64)(rp_drive[ctlr])) << 18;
         }
         *data |= ((t_uint64)(rp_reg[ctlr])) << 30;
@@ -538,6 +540,18 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
                 if (df10->status & BUSY) {
                     df10->status |= CC_CHAN_ACT;
                     return SCPE_OK;
+                }
+                if ((*data & 1) == 0) {
+                   return SCPE_OK;
+                }
+
+                if (((*data >> 1) & 077) < FNC_XFER) {
+                   df10->status |= CXR_ILC;
+                   df10_setirq(df10);
+                sim_debug(DEBUG_DATAIO, dptr,
+                    "RP %03o command abort %012llo, %d[%d] PC=%06o %06o\n",
+                    dev, *data, ctlr, rp_drive[ctlr], PC, df10->status);
+                   return SCPE_OK;
                 }
                 rp_drive[ctlr] = (int)(*data >> 18) & 07;
                 /* Check if access error */
@@ -573,7 +587,7 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
                         (int)(*data & 0777777));
              }
          } else {
-             if (rp_reg[ctlr] <= 040) {
+             if (rp_reg[ctlr] < 040 && rp_reg[ctlr] != 04) {
                 rp_drive[ctlr] = (int)(*data >> 18) & 07;
              }
          }
@@ -694,7 +708,7 @@ rp_write(int ctlr, int unit, int reg, uint32 data) {
         uptr->u4 &= 0177777;
         uptr->u4 |= data << 16;
         break;
-    case  010:  /* error register 2 */
+    case  014:  /* error register 2 */
         if (data != 0)
            uptr->u3 |= DS_ERR;
         uptr->u5 &= 0177777;
@@ -708,7 +722,7 @@ rp_write(int ctlr, int unit, int reg, uint32 data) {
         uptr->u4 |= data;
         break;
     case  013:  /* current cylinder */
-    case  014:  /* serial no */
+    case  010:  /* serial no */
     case  015:  /* error register 3 */
     case  016:  /* ecc position */
     case  017:  /* ecc pattern */
@@ -763,10 +777,12 @@ rp_read(int ctlr, int unit, int reg) {
     case  013:  /* current cylinder */
         temp = uptr->u5 & 0177777;
         break;
-    case  014:  /* serial no */
+    case  010:  /* serial no */
+        temp = (020 * ctlr) + (unit + 1);
+        break;
     case  003:  /* maintenance */
     case  007:  /* look ahead */
-    case  010:  /* error register 2 */
+    case  014:  /* error register 2 */
     case  015:  /* error register 3 */
     case  016:  /* ecc position */
     case  017:  /* ecc pattern */
@@ -782,7 +798,7 @@ rp_read(int ctlr, int unit, int reg) {
 t_stat rp_svc (UNIT *uptr)
 {
     int          dtype = GET_DTYPE(uptr->flags);
-    int          ctlr;
+    int          ctlr = GET_CNTRL(uptr->flags);
     int          unit;
     DEVICE      *dptr;
     struct df10 *df;
@@ -791,14 +807,8 @@ t_stat rp_svc (UNIT *uptr)
     t_stat       r;
 
     /* Find dptr, and df10 */
-    for (ctlr = 0; ctlr < NUM_DEVS_RP; ctlr++) {
-        dptr = rp_devs[ctlr];
-        unit = uptr - dptr->units;
-        if (unit < 8)
-           break;
-    }
-    if (unit > 8)
-       return SCPE_OK;
+    dptr = rp_devs[ctlr];
+    unit = uptr - dptr->units;
     df = &rp_df10[ctlr];
     /* Check if seeking */
     if (uptr->u3 & DS_PIP) {
@@ -979,7 +989,7 @@ t_stat rp_svc (UNIT *uptr)
         if (r) {
             sim_activate(uptr, 20);
         } else {
-        sim_debug(DEBUG_DETAIL, dptr, "RPA%o write done\n", unit);
+            sim_debug(DEBUG_DETAIL, dptr, "RPA%o write done\n", unit);
             uptr->u3 |= DS_DRY;
             uptr->u3 &= ~CR_GO;
             df->status &= ~BUSY;
@@ -1031,6 +1041,7 @@ rp_boot(int32 unit_num, DEVICE * rptr)
 
     (void)sim_fseek(uptr->fileref, 0, SEEK_SET);
     (void)sim_fread (&rp_buf[0][0], sizeof(uint64), RP_NUMWD, uptr->fileref);
+    uptr->u3 |= DS_VV;
     addr = rp_buf[0][0] & RMASK;
     wc = (rp_buf[0][0] >> 18) & RMASK;
     ptr = 1;

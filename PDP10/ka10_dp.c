@@ -324,7 +324,7 @@ DEVICE *dp_devs[] = {
 t_stat dp_devio(uint32 dev, uint64 *data) {
      uint64         res;
      int            ctlr = (dev - DP_DEVNUM) >> 2;
-     struct df10   *df10 = &dp_df10[ctlr];
+     struct df10   *df10;
      DEVICE        *dptr;
      UNIT          *uptr;
      int            unit;
@@ -335,6 +335,7 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
      if (ctlr < 0 || ctlr >= NUM_DEVS_DP)
         return SCPE_OK;
 
+     df10 = &dp_df10[ctlr];
      dptr = dp_devs[ctlr];
      unit = dp_cur_unit[ctlr];
      uptr = &dp_unit[(ctlr * NUM_UNITS_DP) + unit];
@@ -582,7 +583,7 @@ t_stat dp_svc (UNIT *uptr)
                     /* Read the block */
                     int da = ((cyl * dp_drv_tab[dtype].surf + surf)
                                    * dp_drv_tab[dtype].sect + sect) * RP_NUMWD;
-                    sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
+                    (void)sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
                     wc = sim_fread (&dp_buf[ctlr][0], sizeof(uint64), RP_NUMWD,
                            uptr->fileref);
                     for (; wc < RP_NUMWD; wc++)

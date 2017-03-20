@@ -102,13 +102,18 @@ DEVICE *sim_devices[] = {
 #endif
 #endif
 #endif
+#if (NUM_DEVS_RS > 0)
+    &rsa_dev,
+#endif
+#if (NUM_DEVS_TU > 0)
+    &tua_dev,
+#endif
 #if (NUM_DEVS_RC > 0)
     &rca_dev,
 #if (NUM_DEVS_RC > 1)
     &rcb_dev,
 #endif
 #endif
-// Insert RH TM
 #if (NUM_DEVS_DT > 0)
     &dt_dev,
 #endif

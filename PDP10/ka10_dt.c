@@ -417,8 +417,10 @@ t_stat dt_devio(uint32 dev, uint64 *data) {
           }
           if (*data & (DTC_FWDRV|DTC_RVDRV|DTC_STSTOP)) {
               i = DTC_GETUNI(dtsa);
+#if DT_NUMDR < 8
               if (i >= DT_NUMDR)
                   break;
+#endif
               if (*data & DTC_STSTOP) {
                    if ((dt_unit[i].u4 & (DTC_MOT)) != 0) {
                        dt_unit[i].u3 |= DTC_FNC_STOP;

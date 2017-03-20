@@ -91,11 +91,12 @@ DEVICE dk_dev = {
 
 t_stat dk_devio(uint32 dev, uint64 *data) {
     int         unit = (dev - DK_DEVNUM) >> 2;
-    UNIT        *uptr = &dk_unit[unit];
+    UNIT        *uptr;
     int32       t;
 
     if (unit < 0 || unit >= NUM_DEVS_DK)
         return SCPE_OK;
+    uptr = &dk_unit[unit];
     switch (dev & 3) {
     case CONI:
         *data = (uint64)(uptr->STAT_REG);

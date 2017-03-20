@@ -191,7 +191,7 @@ DEVICE *rc_devs[] = {
 
 t_stat rc_devio(uint32 dev, uint64 *data) {
      int          ctlr = (dev - RC_DEVNUM) >> 2;
-     struct df10 *df10 = &rc_df10[ctlr];
+     struct df10 *df10;
      UNIT        *uptr;
      DEVICE      *dptr;
      int          unit;
@@ -203,6 +203,7 @@ t_stat rc_devio(uint32 dev, uint64 *data) {
      if (ctlr < 0 || ctlr >= NUM_DEVS_RC)
         return SCPE_OK;
 
+     df10 = &rc_df10[ctlr];
      dptr = rc_devs[ctlr];
      switch(dev & 3) {
      case CONI:
