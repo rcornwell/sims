@@ -79,6 +79,10 @@ extern uint8        urec_irq[NUM_CHAN];
 #define CHAN_DSK_RD     0100            /* Command is read command */
 #define CHAN_OVLP       0200            /* Channel ran overlaped */
 
+char     *chan_type_name[] = {
+    "Polled", "Unit Record", "7010", "7010", "7010"};
+
+
 /* Map commands to channel commands */
 /* Commands are reversed to be way they are sent out */
 uint8 disk_cmdmap[16] = { 0xff, 0x82, 0x84, 0x86, 0x00, 0x89, 0x88, 0x83,
@@ -671,7 +675,14 @@ chan9_set_error(int chan, uint32 mask)
 t_stat
 chan_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-return SCPE_OK;
+    fprintf (st, "%s\n\n", chan_description(dptr));
+    fprintf (st, "The 7010 supports up to 4 channels.  Channel models include\n\n");
+    fprintf (st, "   Channel * is for unit record devices.\n");
+    fprintf (st, "   Channels 1-4 are 7010  multiplexor channel\n");
+    fprintf (st, "Channels are fixed on the 7010.\n\n");
+    fprint_set_help(st, dptr);
+    fprint_show_help(st, dptr);
+    return SCPE_OK;
 }
 
 const char *

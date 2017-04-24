@@ -1844,7 +1844,7 @@ t_stat dsk_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
 fprintf (st, "IBM 7631 Disk File Controller\n\n");
 fprintf (st, "The IBM 7631 Disk File Controller supports several types of ");
 fprintf (st, "disk drives and\ndrums. The drive must be formatted for use ");
-fprintf (st, "of the system. This is handled by utilities provided by the ");
+fprintf (st, "of the system. This is handled\nby utilities provided by the ");
 fprintf (st, "operating system. This will write a special format track.\n");
 fprintf (st, "Use:\n");
 fprintf (st, "    sim> SET DKn TYPE=type\n");
@@ -1873,6 +1873,7 @@ fprintf (st, "\nTo do this:\n");
 fprintf (st, "     sim> SET DKn FORMAT HA2\n");
 fprintf (st, "To prevent accidental formating of the drive use:\n");
 fprintf (st, "     sim> SET DKn NOFORMAT NOHA2\n");
+help_set_chan_type(st, dptr, "IBM 7631 Disk File");
 fprint_set_help (st, dptr);
 fprint_show_help (st, dptr);
 return SCPE_OK;

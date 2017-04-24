@@ -107,10 +107,10 @@ DIB  mt_dib = { CH_TYP_76XX|CH_TYP_UREC, NUM_UNITS_MT, 02400, 07700, &mt_cmd, &m
 DIB  chron_dib = { CH_TYP_76XX|CH_TYP_UREC, 1, 02400, 07700, &chron_cmd, NULL };
 #endif
 #ifdef NUM_DEVS_DSK
-DIB  dsk_dib = { CH_TYP_79XX|CH_TYP_UREC, 0, 06600, 07700, &dsk_cmd, &dsk_ini };
+DIB  dsk_dib = { CH_TYP_79XX, 0, 06600, 07700, &dsk_cmd, &dsk_ini };
 #endif
 #ifdef NUM_DEVS_COM
-DIB  com_dib = { CH_TYP_79XX|CH_TYP_UREC, 0, 04200, 07700, &com_cmd, NULL };
+DIB  com_dib = { CH_TYP_79XX, 0, 04200, 07700, &com_cmd, NULL };
 #endif
 
 

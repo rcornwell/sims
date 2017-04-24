@@ -248,7 +248,6 @@ drm_attach(UNIT * uptr, CONST char *file)
 
     if ((r = attach_unit(uptr, file)) != SCPE_OK)
         return r;
-//  sim_activate(uptr, DRMWORDTIME);
     return SCPE_OK;
 }
 
@@ -262,9 +261,20 @@ drm_detach(UNIT * uptr)
 t_stat
 drm_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
+   const char *cpu = cpu_description(&cpu_dev);
+   DIB        *dibp = (DIB *) dptr->ctxt;
+   int        ctype = dibp->ctype;
+
+   fprintf (st, "%s\n\n", drm_description(dptr));
+   fprintf (st, "Up to %d units of drum could be used\n", NUM_UNITS_DR);
+   fprintf (st, "    sim> set %s UNITS=n  to set number of units\n", dptr->name);
+   help_set_chan_type(st, dptr, "Drums");
+   fprintf (st, "Drums could be booted\n");
+   fprint_set_help(st, dptr);
+   fprint_show_help(st, dptr);
+
    return SCPE_OK;
 }
-
 
 const char *
 drm_description (DEVICE *dptr)

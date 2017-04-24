@@ -136,6 +136,11 @@ uint8               chan_irq[NUM_CHAN];       /* Channel has a irq pending */
                         ((dualcore) ? (0100000 & caddr[chan]) : 0) | \
                                 ((caddr[chan] + 1) & MEMMASK);
 
+/* Globally visible flags */
+
+char     *chan_type_name[] = {
+    "Polled", "Unit Record", "7607", "7909", "7289"};
+
 /* Delay device for IOD instruction */
 DIB                 dly_dib =
 #ifdef I701
@@ -1674,8 +1679,9 @@ chan9_set_error(int chan, uint32 mask)
 t_stat
 chan_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-#ifdef I7090
-#endif
+   fprintf(st, "%s\n\n", chan_description(dptr));
+   fprint_set_help(st, dptr);
+   fprint_show_help(st, dptr);
 return SCPE_OK;
 }
 

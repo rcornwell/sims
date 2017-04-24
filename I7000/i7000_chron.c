@@ -268,10 +268,14 @@ chron_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
   fprintf (st, "Chronoclock\n\n");
   fprintf (st, "The Chronoclock replaces one of your tape drives, and is\n");
   fprintf (st, "for CTSS operation\n\n");
-  fprintf (st, "     sim> SET CHRON ENABLE     to enable chronoclock\n");
-  fprintf (st, "The chronoclock replaces one of your tape drives, and by");
-  fprintf (st, "reading the tape drive, it will return a short record with");
-  fprintf (st, "the current date and time, no year is returned\n");
+  fprintf (st, "     sim> SET %s ENABLE   to enable chronoclock\n", dptr->name);
+  fprintf (st, "     sim> SET %s UNIT=#   sets unit to override\n\n", dptr->name);
+  help_set_chan_type(st, dptr, "Chrono clock");
+  fprintf (st, "You must disable the corrosponding tape drive in order for\n");
+  fprintf (st, "the chronoclook to be seen. The chronoclock replaces one of\n");
+  fprintf (st, "your tape drives, and by reading the tape drive, it will\n");
+  fprintf (st, "return a short record with the current date and time, no year\n");
+  fprintf (st, "is returned\n");
 
   fprint_set_help (st, dptr) ;
   fprint_show_help (st, dptr) ;

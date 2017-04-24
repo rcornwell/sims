@@ -1279,8 +1279,7 @@ com_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 fprintf (st, "IBM 7750 terminal controller, this is required for CTSS to run.\n");
 fprintf (st, "The ATTACH command specifies the port to be used:\n\n");
 tmxr_attach_help (st, dptr, uptr, flag, cptr);
-fprintf (st, "The device must be attached to a specific channel this can be done with\n");
-fprintf (st, "     sim> SET COM CHAN=a\n\n");
+help_set_chan_type(st, dptr, "IBM 7750");
 #ifndef I7010
 fprintf (st, "Each device on the channel can be at either select 0 or 1, this is set\n");
 fprintf (st, "with the\n    set SET COM SELECT=n\n\n");

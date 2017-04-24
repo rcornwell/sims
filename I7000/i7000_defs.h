@@ -613,5 +613,8 @@ extern int         cycle_time;
 
 extern const char mem_to_ascii[64];
 
+extern const char *cpu_description(DEVICE *dptr);
+extern char *chan_type_name[];
+extern void help_set_chan_type(FILE *st, DEVICE *dptr, char *name);
 
 #endif /* _I7000_H_ */

@@ -977,6 +977,7 @@ t_stat
 ht_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
    fprintf (st, "IBM 7340 Hypertape unit\n\n");
+   help_set_chan_type(st, dptr, "IBM 7340 Hypertape");
    fprint_set_help(st, dptr);
    fprint_show_help(st, dptr);
    return SCPE_OK;

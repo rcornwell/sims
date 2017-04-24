@@ -177,6 +177,9 @@ drm_ini(UNIT *uptr, t_bool f) {
 
 t_stat
 drm_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr) {
+   fprintf(st, "Drum device for IBM 702 and 705\n\n");
+   fprintf(st, "The Drum had 1000 tracks with the capacity of %d digits per", DRMCHARTRK);
+   fprintf(st, "per track\n");
    return SCPE_OK;
 }
 

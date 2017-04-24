@@ -233,6 +233,12 @@ hsdrm_detach(UNIT * uptr)
 t_stat
 hsdrm_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
+   fprintf (st, "%s\n\n", hsdrm_description(dptr));
+   fprintf (st, "The High speed drum supports up to %d units of storage\n", NUM_UNITS_HD);
+   fprintf (st, "Each unit held 265k words of data\n");
+   help_set_chan_type(st, dptr, "High speed drum");
+   fprint_set_help(st, dptr);
+   fprint_show_help(st, dptr);
    return SCPE_OK;
 }
 

@@ -497,12 +497,15 @@ lpr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
    fprintf (st, "%s\n\n", lpr_description(dptr));
    fprintf (st, "The line printer output can be echoed to the console to check the \n");
    fprintf (st, "progress of jobs being run. This can be done with the\n");
-   fprintf (st, "    sim> SET LPn ECHO\n\n");
+   fprintf (st, "    sim> SET %s ECHO\n\n", dptr->name);
    fprintf (st, "The Line printer can be configured to any number of lines per page with the:\n");
-   fprintf (st, "        sim> SET LPn LINESPERPAGE=n\n\n");
+   fprintf (st, "        sim> SET %s LINESPERPAGE=n\n\n", dptr->name);
    fprintf (st, "The default is 59 lines per page. \n");
 #ifdef I7080
-   fprintf (st, "Spacing control\n");
+   fprintf (st, "The 716 printer can operate in one of three spacing modes\n");
+   fprintf (st, "       sim> SET %s SINGLE     for single spacing\n", dptr->name);
+   fprintf (st, "       sim> SET %s DOUBLE     for double spacing\n", dptr->name);
+   fprintf (st, "       sim> SET %s PROGRAM    for program control of  spacing\n\n", dptr->name);
 #endif
 #ifdef I7070
    fprintf (st, "Unit record devices can be configured to interrupt the CPU on\n");
@@ -510,8 +513,7 @@ lpr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
    fprintf (st, "    sim> set cp attena     to set device to raise Atten A\n\n");
 #endif
 #ifdef I7010
-   fprintf (st, "The card punch could be attached to either channel\n\n");
-   fprintf (st, "    sim> set cp chan=1     to set the punch on channel 1\n\n");
+   help_set_chan_type(st, dptr, "Line printer");
 #endif
    fprint_set_help(st, dptr);
    fprint_show_help(st, dptr);

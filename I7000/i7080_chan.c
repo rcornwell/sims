@@ -101,6 +101,9 @@ extern uint8        inquiry;
 #define READ_WRD        1
 #define WRITE_WRD       2
 
+char     *chan_type_name[] = {
+    "Polled", "Unit Record", "7621", "7908", "754"};
+
 
 UNIT                chan_unit[] = {
     {UDATA(NULL, CHAN_SET | CHAN_S_TYPE(CHAN_UREC), 0)},
@@ -1216,7 +1219,18 @@ chan9_set_error(int chan, uint32 mask)
 t_stat
 chan_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-return SCPE_OK;
+    fprintf(st, "%s\n", chan_description(dptr));
+    fprintf(st, "The 7080 supports up to 10 channels. Channel 0 is for unit\n");
+    fprintf(st, "record devices.  Channels 1 through 4 are for tape drives.\n\n");
+    fprintf (st, "        7261            tapes on Data Synchronizer\n");
+    fprintf (st, "        754             Standard 705 tape drives\n\n");
+    fprintf (st, "Channels are fixed on the 7080.\n\n");
+    fprintf (st, "Channel * is a puesdo channel for unit record devices.\n");
+
+    fprintf(st, "\n"); 
+    fprint_set_help(st, dptr);
+    fprint_show_help(st, dptr);
+    return SCPE_OK;
 }
 
 const char *

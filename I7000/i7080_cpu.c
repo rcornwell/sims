@@ -1693,7 +1693,7 @@ stop_cpu:
                                  break;
                              while ((cr1 = ReadP(MA, MCHCHK)) != CHR_RM ||
                                      cr1 != CHR_GM)
-                                 Next(MA);
+                                { Next(MA); }
                          } while(cr1 != CHR_GM);
                          MAC2 = MA;
                          break;

@@ -316,14 +316,20 @@ cdr_detach(UNIT * uptr)
 t_stat
 cdr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-   fprintf (st, "Card Reader\n\n");
+   const char *cpu = cpu_description(&cpu_dev);
+
+   fprintf (st, "%s\n\n", cdr_description(dptr));
 #if NUM_DEVS_CDR > 3
-   fprintf (st, "The system supports up to three card readers\n");
+   fprintf (st, "The %s supports up to four card readers\n", cpu);
 #elif NUM_DEVS_CDR > 2
-   fprintf (st, "The system supports up to two card readers\n");
+   fprintf (st, "The %s supports up to three card readers\n", cpu);
 #elif NUM_DEVS_CDR > 1
-   fprintf (st, "The system supports up to one card reader\n");
+   fprintf (st, "The %s supports up to two card readers\n", cpu);
+#elif NUM_DEVS_CDR > 0
+   fprintf (st, "The %s supports one card reader\n", cpu);
 #endif
+   help_set_chan_type(st, dptr, "Card readers");
+   sim_card_attach_help(st, dptr, uptr, flag, cptr);
    fprint_set_help(st, dptr);
    fprint_show_help(st, dptr);
    return SCPE_OK;

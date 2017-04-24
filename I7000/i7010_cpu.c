@@ -3903,10 +3903,8 @@ fprintf (st, "   sim> SET CPU FLOAT     enables Floating Point\n");
 fprintf (st, "   sim> SET CPU NOFLOAT   disables Floating Point\n\n");
 fprintf (st, "   sim> SET CPU PROT    enables memory protection feature\n");
 fprintf (st, "   sim> SET CPU NOPROT  disables memory protection feature\n\n");
-fprintf (st, "The CPU can maintain a history of the most recently executed instructions.\n"
-);
-fprintf (st, "This is controlled by the SET CPU HISTORY and SHOW CPU HISTORY commands:\n\n"
-);
+fprintf (st, "The CPU can maintain a history of the most recently executed instructions.\n");
+fprintf (st, "This is controlled by the SET CPU HISTORY and SHOW CPU HISTORY commands:\n\n");
 fprintf (st, "   sim> SET CPU HISTORY                 clear history buffer\n");
 fprintf (st, "   sim> SET CPU HISTORY=0               disable history\n");
 fprintf (st, "   sim> SET CPU HISTORY=n{:file}        enable history, length = n\n");

@@ -368,7 +368,6 @@ t_stat
 cdr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
    fprintf (st, "%s\n\n", cdr_description(dptr));
-   sim_card_attach_help(st, dptr, uptr, flag, cptr);
    fprintf (st, "The system supports up to two card readers.\n");
 #ifdef I7070
    fprintf (st, "Unit record devices can be configured to interrupt the CPU on\n");
@@ -380,9 +379,9 @@ cdr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
    fprintf (st, "    sim> set cp lcol=72    sets column to select load mode\n\n");
 #endif
 #ifdef I7010
-   fprintf (st, "The card punch could be attached to either channel\n\n");
-   fprintf (st, "    sim> set cp chan=1     to set the punch on channel 1\n\n");
+   help_set_chan_type(st, dptr, "Card reader");
 #endif
+   sim_card_attach_help(st, dptr, uptr, flag, cptr);
    fprint_set_help(st, dptr);
    fprint_show_help(st, dptr);
    return SCPE_OK;
@@ -392,7 +391,7 @@ const char *
 cdr_description(DEVICE *dptr)
 {
 #ifdef I7010
-   return "1402 Card Punch";
+   return "1402 Card Reader";
 #endif
 #ifdef I7070
    return "7500 Card Reader";

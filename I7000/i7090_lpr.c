@@ -603,14 +603,25 @@ lpr_detach(UNIT * uptr)
 t_stat
 lpr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-   fprintf (st, "Line Printer\n\n");
-   fprintf (st, "The system supports one line printer\n");
+   const char *cpu = cpu_description(&cpu_dev);
+
+   fprintf (st, "%s\n\n", lpr_description(dptr));
+#if NUM_DEVS_LPR > 3
+   fprintf (st, "The %s supports up to four line printers\n", cpu);
+#elif NUM_DEVS_LPR > 2
+   fprintf (st, "The %s supports up to three line printers\n", cpu);
+#elif NUM_DEVS_LPR > 1
+   fprintf (st, "The %s supports up to two line printers\n", cpu);
+#elif NUM_DEVS_LPR > 0
+   fprintf (st, "The %s supports one line printer\n", cpu);
+#endif
    fprintf (st, "by default. The Line printer can be configured to any number of\n");
    fprintf (st, "lines per page with the:\n");
-   fprintf (st, "        sim> SET LPn LINESPERPAGE=n\n\n");
+   fprintf (st, "        sim> SET %s LINESPERPAGE=n\n\n", dptr->name);
    fprintf (st, "The printer acted as the console printer therefore the default is\n");
    fprintf (st, "echo to the console\n");
    fprintf (st, "The default is 59 lines per page\n\n");
+   help_set_chan_type(st, dptr, "Card readers");
    fprint_set_help(st, dptr);
    fprint_show_help(st, dptr);
    return SCPE_OK;

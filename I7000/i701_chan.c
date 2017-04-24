@@ -54,6 +54,9 @@ t_uint64            assembly[NUM_CHAN];       /* Assembly register */
 uint32              chan_flags[NUM_CHAN];     /* Unit status */
 uint8               bcnt[NUM_CHAN];           /* Character count */
 
+char     *chan_type_name[] = {
+    "Polled", "", "", "", ""};
+
 
 /* Delay device for IOD instruction */
 DIB                 dly_dib =
@@ -401,8 +404,8 @@ chan9_set_error(int chan, uint32 mask)
 t_stat
 chan_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr) {
    fprintf(st, "IBM 701 Channel\n\n");
-   fprintf(st, "Psuedo device to manage IBM 701 I/O. The IBM 701 used polled");
-   fprintf(st, "I/O, however the simulated devices want to talk to a channel.");
+   fprintf(st, "Psuedo device to manage IBM 701 I/O. The IBM 701 used polled\n");
+   fprintf(st, "I/O, however the simulated devices want to talk to a channel.\n");
    fprintf(st, "The assembly register and the flags can be displayed\n");
    return SCPE_OK;
 }

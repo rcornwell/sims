@@ -84,6 +84,10 @@ extern uint16       pri_latchs[10];
 #define CHAN_START      0x200000        /* Channel has just started */
 #define CHAN_OCTAL      0x400000        /* Octal conversion */
 
+char     *chan_type_name[] = {
+    "Polled", "Unit Record", "7604", "7907", ""};
+
+
 UNIT                chan_unit[] = {
     /* Puesdo channel for PIO devices */
     {UDATA(NULL, CHAN_SET|CHAN_S_TYPE(CHAN_UREC)|UNIT_S_CHAN(CHAN_CHUREC),0)},
@@ -667,7 +671,7 @@ chan_trap:
 
                    /* Check for record mark */
                     if ((cmd[chan] & CHN_RECORD) &&
-                        (assembly[chan] & DMASK) == ASIGN &&
+                        (assembly[chan] & SMASK) == ASIGN &&
                         (assembly[chan] & 0xFF) == RM_CHAR) {
                         if (cmd[chan] & CHN_LAST) {
                             chan_flags[chan] &= ~(STA_ACTIVE);
@@ -1573,7 +1577,15 @@ chan9_set_error(int chan, uint32 mask)
 t_stat
 chan_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-return SCPE_OK;
+   fprintf (st, "%s\n\n", chan_description(dptr));
+   fprintf (st, "The 7070 supports up to 8 channels.  Channel models include\n\n");
+   fprintf (st, "        7604            standard multiplexor channel\n");
+   fprintf (st, "        7907            advanced capabilities channel\n\n");
+   fprintf (st, "Channels are fixed on the 7070.\n\n");
+   fprintf (st, "Channel * is a puesdo channel for unit record devices.\n");
+   fprint_set_help(st, dptr);
+   fprint_show_help(st, dptr);
+   return SCPE_OK;
 }
 
 const char *

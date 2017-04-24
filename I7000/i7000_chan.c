@@ -126,6 +126,42 @@ chan_set_devs(DEVICE * dptr)
     return SCPE_OK;
 }
 
+/* Print help for "SET dev CHAN" based on allowed types */
+void help_set_chan_type(FILE *st, DEVICE *dptr, char *name) 
+{
+#if NUM_CHAN > 1
+   DIB        *dibp = (DIB *) dptr->ctxt;
+   int        ctype = dibp->ctype;
+   int        i;
+   int        m;
+
+   fprintf (st, "Devices can be moved to any channel via the command\n");
+   fprintf (st, "    sim> SET %s CHAN=x\n\n    where x is", dptr->name);
+   if (ctype & 3) {
+       if (ctype == 1 || ctype == 2)
+          fprintf(st, " only");
+       fprintf (st, " %s", chname[0]);
+       if ((ctype & ~3) != 0)
+          fprintf(st, " or");
+   } 
+   if ((ctype & ~3) != 0) 
+      fprintf(st, " %s to %s", chname[1], chname[NUM_CHAN-1]);
+   fprintf (st, "\n%s can be attached to ", name);
+   m = 1;
+   for(i = 0; ctype != 0; i++) {
+      if (ctype & m)  {
+         fprintf(st, "%s", chan_type_name[i]);
+         ctype &= ~m;
+         if (ctype != 0)
+            fprintf(st, ", or ");
+      }
+      m <<= 1;
+   }
+   fprintf(st, " channel\n");
+#endif
+}
+
+
 /* Sets the device onto a given channel */
 t_stat
 set_chan(UNIT * uptr, int32 val, CONST char *cptr, void *desc)

@@ -73,6 +73,8 @@ t_stat              cdp_attach(UNIT *, CONST char *);
 t_stat              cdp_detach(UNIT *);
 t_stat              cdp_help(FILE *, DEVICE *, UNIT *, int32, const char *);
 const char         *cdp_description(DEVICE *dptr);
+t_stat              stk_help(FILE *, DEVICE *, UNIT *, int32, const char *);
+const char         *stk_description(DEVICE *dptr);
 
 UNIT                cdp_unit[] = {
     {UDATA(cdp_srv, UNIT_S_CHAN(CHAN_CHUREC) | UNIT_CDP, 0), 600},      /* A */
@@ -133,7 +135,9 @@ UNIT stack_unit[] = {
 DEVICE stack_dev = {
     "STKR", stack_unit, NULL, NULL,
     NUM_DEVS_CDP * 10, 10, 31, 1, 8, 7,
-    NULL, NULL, NULL, NULL, &sim_card_attach, &sim_card_detach
+    NULL, NULL, NULL, NULL, &sim_card_attach, &sim_card_detach,
+    NULL, DEV_DISABLE | DEV_DEBUG, 0, crd_debug,
+    NULL, NULL, &stk_help, NULL, NULL, &stk_description
     };
 #endif
 
@@ -306,15 +310,36 @@ cdp_detach(UNIT * uptr)
     return sim_card_detach(uptr);
 }
 
+#ifdef STACK_DEV
+t_stat
+stk_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
+{
+   fprintf (st, "%s\n\n", stk_description(dptr));
+   fprintf (st, "Allows stack control functions to direct cards to specific\n");
+   fprintf (st, "bins based on stacker selection.Attach cards here if you \n");
+   fprintf (st, "wish this specific stacker select to recieve this group of cards.\n");
+   fprintf (st, "If nothing is attached cards will be punched on the default punch\n\n");
+   sim_card_attach_help(st, dptr, uptr, flag, cptr);
+   fprint_set_help(st, dptr);
+   fprint_show_help(st, dptr);
+   return SCPE_OK;
+}
+
+const char *
+stk_description(DEVICE *dptr)
+{
+   return "Card stacking device";
+}
+#endif
+
 t_stat
 cdp_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
    fprintf (st, "%s\n\n", cdp_description(dptr));
-   sim_card_attach_help(st, dptr, uptr, flag, cptr);
 #ifdef STACK_DEV
-   fprintf (st, "If the punch device is not attached and instead the %s", stack_dev.name);
-   fprintf (st, "device is attached, the cards\n will be sent out to the");
-   fprintf (st, "given stacker based on the flag set by the processor.");
+   fprintf (st, "If the punch device is not attached and instead the %s ", stack_dev.name);
+   fprintf (st, "device is attached,\nthe cards will be sent out to the ");
+   fprintf (st, "given stacker based on the flag set by\nthe processor.\n\n");
 #endif
 #ifdef I7070
    fprintf (st, "Unit record devices can be configured to interrupt the CPU on\n");
@@ -322,9 +347,9 @@ cdp_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
    fprintf (st, "    sim> set cp attena     to set device to raise Atten A\n\n");
 #endif
 #ifdef I7010
-   fprintf (st, "The card punch could be attached to either channel\n\n");
-   fprintf (st, "    sim> set cp chan=1     to set the punch on channel 1\n\n");
+   help_set_chan_type(st, dptr, "Card punches");
 #endif
+   sim_card_attach_help(st, dptr, uptr, flag, cptr);
    fprint_set_help(st, dptr);
    fprint_show_help(st, dptr);
    return SCPE_OK;

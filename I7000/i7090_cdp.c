@@ -274,7 +274,20 @@ cdp_detach(UNIT * uptr)
 t_stat
 cdp_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-   fprintf (st, "Card Punch\n\n");
+   const char *cpu = cpu_description(&cpu_dev);
+
+   fprintf (st, "%s\n\n", cdp_description(dptr));
+#if NUM_DEVS_CDP > 3
+   fprintf (st, "The %s supports up to four card punches\n", cpu);
+#elif NUM_DEVS_CDP > 2
+   fprintf (st, "The %s supports up to three card punches\n", cpu);
+#elif NUM_DEVS_CDP > 1
+   fprintf (st, "The %s supports up to two card punches\n", cpu);
+#elif NUM_DEVS_CDP > 0
+   fprintf (st, "The %s supports one card punch\n", cpu);
+#endif
+   help_set_chan_type(st, dptr, "Card punches");
+   sim_card_attach_help(st, dptr, uptr, flag, cptr);
    fprint_set_help(st, dptr);
    fprint_show_help(st, dptr);
    return SCPE_OK;
