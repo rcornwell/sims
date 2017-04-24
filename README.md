@@ -20,25 +20,22 @@ Started adding support for KA10 to boot ITS
    * RC10 RD10/RM10  
    * RP10 RP01/RP02/RP03  
    * RH10 RP04/RP06/RP07 (RP07 not supported under 6.03).   
+   * RH10 RS04  
+
    Tape  
    * TM10A or B  
+   * RH10 TM03/TU16  
    * TD10 Dectape  
+
    Paper Tape  
    * Punch  
    * Reader  
+ 
    DC10E terminal mux.  
-
 
    The RP10 supports boot (actual hardware did not), by reading in Blocks 4-7
 and transfering to the loaded value. RC10, RH10, TM10 support readin mode. 
 
-   Todo:  
-    RH10 TM03 
-   
-Todo:
-
-   Write TM03 controller. 
-   Finish KI10 support. 
    Possibly add in support for KL10A. (No extended addressing). 
 
 # IBM 7000 simulators.
