@@ -1036,7 +1036,7 @@ dt_boot(int32 unit_num, DEVICE * dptr)
 
 t_stat dt_reset (DEVICE *dptr)
 {
-    dtsa = dtsb = 0;                                    /* clear status */
+    dtsb = dtsa = 0;                                    /* clear status */
     clr_interrupt(DT_DEVNUM);
     clr_interrupt(DT_DEVNUM|4);
     return SCPE_OK;

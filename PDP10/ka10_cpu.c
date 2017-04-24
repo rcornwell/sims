@@ -4100,9 +4100,10 @@ return SCPE_OK;
 
 /* Memory size change */
 
-t_stat cpu_set_size (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+t_stat cpu_set_size (UNIT *uptr, int32 sval, CONST char *cptr, void *desc)
 {
 uint32 i;
+uint32 val = (uint32)sval;
 
 if ((val <= 0) || ((val * 16 * 1024) > MAXMEMSIZE))
     return SCPE_ARG;

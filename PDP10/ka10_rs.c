@@ -600,7 +600,7 @@ t_stat rs_svc (UNIT *uptr)
     int          unit;
     DEVICE      *dptr;
     struct df10 *df;
-    int          diff, da;
+    int          da;
     t_stat       r;
 
     /* Find dptr, and df10 */

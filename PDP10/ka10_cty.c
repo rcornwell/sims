@@ -162,7 +162,8 @@ t_stat cty_reset (DEVICE *dptr)
     cty_unit[0].u3 &= ~(TEL_RDY | TEL_BSY);
     cty_unit[1].u3 &= ~(KEY_RDY | KEY_BSY);
     clr_interrupt(CTY_DEVNUM);
-    sim_activate (&cty_unit[1], KBD_WAIT (cty_unit[1].wait, tmxr_poll));
+    sim_clock_coschedule (&cty_unit[1], tmxr_poll);
+
     return SCPE_OK;
 }
 
