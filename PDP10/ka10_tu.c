@@ -1027,7 +1027,6 @@ tu_boot(int32 unit_num, DEVICE * dptr)
     t_mtrlnt            reclen;
     t_stat              r;
     uint32              addr;
-    uint32              ptr;
     int                 wc;
 
     if ((uptr->flags & UNIT_ATT) == 0)

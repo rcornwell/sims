@@ -830,7 +830,7 @@ mt_boot(int32 unit_num, DEVICE * dptr)
         M[addr] = mt_df10.buf;
 
     /* If not at end of record and TMA continue record read */
-    if ((uptr->u6 < uptr->hwmark) && (dptr->flags & MTDF_TYPEB) == 0) {
+    if (((uint32)uptr->u6 < uptr->hwmark) && (dptr->flags & MTDF_TYPEB) == 0) {
         uptr->u3 |= MT_MOTION|MT_BUSY;
         uptr->u3 &= ~(MT_BRFUL|MT_BUFFUL);
         sim_activate(uptr, 300);
