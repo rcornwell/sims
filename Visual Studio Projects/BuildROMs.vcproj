@@ -95,6 +95,8 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
+				Description="Verify ROM data"
+				CommandLine="pushd ..&#x0D;&#x0A;&quot;$(TargetPath)&quot;&#x0D;&#x0A;popd&#x0D;&#x0A;"
 			/>
 		</Configuration>
 		<Configuration
@@ -178,6 +180,8 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
+				Description="Verify ROM data"
+				CommandLine="pushd ..&#x0D;&#x0A;&quot;$(TargetPath)&quot;&#x0D;&#x0A;popd&#x0D;&#x0A;"
 			/>
 		</Configuration>
 	</Configurations>

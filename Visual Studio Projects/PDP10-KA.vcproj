@@ -245,7 +245,15 @@
 				>
 			</File>
 			<File
+				RelativePath="..\PDP10\ka10_rs.c"
+				>
+			</File>
+			<File
 				RelativePath="..\PDP10\ka10_sys.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ka10_tu.c"
 				>
 			</File>
 			<File
