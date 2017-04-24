@@ -239,45 +239,53 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
           sim_debug(DEBUG_CONO, dptr, "MT CONO %03o start %o %o %o %012llo %012llo PC=%06o\n",
                       dev, uptr->u3, unit, pia, *data, status, PC);
           if ((uptr->flags & UNIT_ATT) != 0) {
-                /* Check if Write */
-                int  cmd = (uptr->u3 & FUNCTION) >> 9;
-                uptr->u3 &= ~(MT_BRFUL|MT_BUFFUL);
-                switch(cmd & 07) {
-                case NOP_CLR:
-                case REWIND:
-                case WTM:
-                       break;
-                case READ:
-                       CLR_BUF(uptr);
-                       uptr->u5 = 0;
-                       uptr->u6 = 0;
-                       break;
-                case WRITE:
-                       if ((uptr->flags & MTUF_WLK) != 0) {
-                          status |= IDLE_UNIT|ILL_OPR|EOF_FLAG;
-                          break;
-                       }
-                       /* Fall through */
+              /* Check if Write */
+              int  cmd = (uptr->u3 & FUNCTION) >> 9;
+              uptr->u3 &= ~(MT_BRFUL|MT_BUFFUL);
+              switch(cmd & 07) {
+              case NOP_CLR:
+                     status |= JOB_DONE;
+                     uptr->u3 &= ~MT_BUSY;
+                     sim_debug(DEBUG_EXP, dptr, "Setting status %012llo\n", status);
+                     set_interrupt(MT_DEVNUM+4, pia >> 3);
+                     return SCPE_OK;
 
-                case CMP:
-                       CLR_BUF(uptr);
-                       uptr->u5 = 0;
-                       uptr->u6 = 0;
-                       /* Fall through */
+              case REWIND:
+              case WTM:
+                     break;
 
-                case SPC_REV:
-                case SPC_FWD:
-                       if ((dptr->flags & MTDF_TYPEB) == 0) {
-                           status |= DATA_REQUEST;
-                           set_interrupt(MT_DEVNUM, pia);
-                       }
-                }
+              case READ:
+                     CLR_BUF(uptr);
+                     uptr->u5 = 0;
+                     uptr->u6 = 0;
+                     break;
+
+              case WRITE:
+                     if ((uptr->flags & MTUF_WLK) != 0) {
+                        status |= IDLE_UNIT|ILL_OPR|EOF_FLAG;
+                        break;
+                     }
+                     /* Fall through */
+
+              case CMP:
+                     CLR_BUF(uptr);
+                     uptr->u5 = 0;
+                     uptr->u6 = 0;
+                     /* Fall through */
+
+              case SPC_REV:
+              case SPC_FWD:
+                     if ((dptr->flags & MTDF_TYPEB) == 0) {
+                         status |= DATA_REQUEST;
+                         set_interrupt(MT_DEVNUM, pia);
+                     }
+              }
               status |= IDLE_UNIT;
               uptr->u3 |= MT_BUSY;
-              sim_activate(uptr, 300);
+              sim_activate(uptr, 100);
           } else {
               sim_activate(uptr, 9999999);
-          sim_debug(DEBUG_CONO, dptr, "MT CONO %03o hung PC=%06o\n", dev, PC);
+              sim_debug(DEBUG_CONO, dptr, "MT CONO %03o hung PC=%06o\n", dev, PC);
           }
           break;
 

@@ -322,9 +322,9 @@ int  df10_write(struct df10 *df);
 #define NUM_DEVS_RC     1
 #define NUM_DEVS_DT     1
 #define NUM_DEVS_DK     1
-#define NUM_DEVS_RP     1
-#define NUM_DEVS_RS     0
-#define NUM_DEVS_TU     0
+#define NUM_DEVS_RP     2
+#define NUM_DEVS_RS     1
+#define NUM_DEVS_TU     1
 /* Global data */
 
 extern t_bool sim_idle_enab;

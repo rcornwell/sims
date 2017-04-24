@@ -234,7 +234,7 @@ t_stat
 cr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
    fprintf (st, "Card Reader\n\n");
-   fprintf (st, "The system supports one card reader.\n");
+   sim_card_attach_help(st, dptr, uptr, flag, cptr);
    fprint_set_help(st, dptr);
    fprint_show_help(st, dptr);
    return SCPE_OK;
