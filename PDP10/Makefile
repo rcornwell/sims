@@ -46,7 +46,8 @@ KA10 = ${KA10D}ka10_cpu.c ${KA10D}ka10_sys.c ${KA10D}ka10_df.c \
         ${KA10D}ka10_dp.c ${KA10D}ka10_mt.c ${KA10D}ka10_cty.c \
         ${KA10D}ka10_lp.c ${KA10D}ka10_pt.c ${KA10D}ka10_dc.c \
         ${KA10D}ka10_rp.c ${KA10D}ka10_rc.c ${KA10D}ka10_dt.c \
-        ${KA10D}ka10_dk.c ${KA10D}ka10_cr.c ${KA10D}ka10_cp.c
+        ${KA10D}ka10_dk.c ${KA10D}ka10_cr.c ${KA10D}ka10_cp.c \
+        ${KA10D}ka10_rs.c ${KA10D}ka10_tu.c
 KA10_OPT = -I.. -DUSE_INT64 -DKA=1 -DUSE_SIM_CARD
 
 KI10D = ./
@@ -54,7 +55,8 @@ KI10 = ${KA10D}ka10_cpu.c ${KA10D}ka10_sys.c ${KA10D}ka10_df.c \
         ${KA10D}ka10_dp.c ${KA10D}ka10_mt.c ${KA10D}ka10_cty.c \
         ${KA10D}ka10_lp.c ${KA10D}ka10_pt.c ${KA10D}ka10_dc.c  \
         ${KA10D}ka10_rp.c ${KA10D}ka10_rc.c ${KA10D}ka10_dt.c \
-        ${KA10D}ka10_dk.c ${KA10D}ka10_cr.c ${KA10D}ka10_cp.c
+        ${KA10D}ka10_dk.c ${KA10D}ka10_cr.c ${KA10D}ka10_cp.c \
+        ${KA10D}ka10_rs.c ${KA10D}ka10_tu.c
 KI10_OPT = -I.. -DUSE_INT64 -DKI=1 -DUSE_SIM_CARD
 
 #

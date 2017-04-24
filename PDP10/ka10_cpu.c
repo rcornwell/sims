@@ -172,7 +172,6 @@ uint32  eb_ptr;                               /* Executive base pointer */
 uint8   fm_sel;                               /* User fast memory block */
 int32   apr_serial = -1;                      /* CPU Serial number */
 char    inout_fail;                           /* In out fail flag */
-int     modify;                               /* Modify cycle */
 int     public_access;                        /* Last access from public page */
 int     private_page;                         /* Access to private page */
 char    small_user;                           /* Small user flag */
@@ -188,6 +187,7 @@ uint32  pag_reload;                           /* Page reload pointer */
 uint64  fault_data;                           /* Fault data from last fault */
 int     trap_flag;                            /* Last instruction was trapped */
 int     last_page;                            /* Last page mapped */
+int     modify;                               /* Modify cycle */
 char    xct_flag;                             /* XCT flags */
 #endif
 #if ITS
@@ -1057,7 +1057,6 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
         if (small_user && (page & 0340) != 0) {
             fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 27) | 020LL;
             page_fault = 1;
- //           fprintf(stderr, " %03o small fault\n\r", page);
             return 0;
         }
     } else {
@@ -1075,7 +1074,6 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
                /* Handle public violation */
                 fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 27) | 021LL;
                 private_page = 1;
-        //       fprintf(stderr, " public");
             }
             *loc = addr;
             return 1;
@@ -1101,11 +1099,6 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
            pag_reload = ((pag_reload + 1) & 037) | 040;
         }
     }
-//    data = M[base + (page >> 1)];
-    /* Even in left half, Odd in right half. */
- //   if ((page & 1) == 0)
-  //     data >>= 18;
-   // data &= RMASK;
     *loc = ((data & 017777) << 9) + (addr & 0777);
     /* Access check logic */
     if (!flag && ((FLAGS & PUBLIC) != 0) && ((data & 0200000) == 0)) {
@@ -1122,28 +1115,28 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
         fault_data |= (data & 0040000) ? 002LL : 0LL;   /* S */
         fault_data |= wr;
         page_fault = 1;
+#if 0
         fprintf(stderr, "xlat %06o %03o ", addr, page >> 1);
         fprintf(stderr, " %06o %03o %012llo %o", base, page, data, uf);
         fprintf(stderr, " -> %06llo wr=%o PC=%06o ", fault_data, wr, PC);
         fprintf(stderr, " fault\n\r");
+#endif
         return 0;
     }
-//        fprintf(stderr, "xlat %06o %03o %06o %012llo -> %o %o", addr, page >> 1, base, data, *loc, uf);
- //       fprintf(stderr, "%06o %06o PC=%06o\n\r", eb_ptr, ub_ptr, PC);
     return 1;
 }
 
 /*
  * Register access on KI 10
  */
-uint64 get_reg(int reg) {
+uint64 get_reg(int reg, int cur_context) {
     if (FLAGS & USER)
        return FM[fm_sel|(reg & 017)];
     else
        return FM[reg & 017];
 }
 
-void   set_reg(int reg, uint64 value) {
+void   set_reg(int reg, uint64 value, int cur_context) {
     if (FLAGS & USER)
         FM[fm_sel|(reg & 017)] = value;
     else
@@ -1198,6 +1191,122 @@ int Mem_write_nopage() {
  * Translation logic for KA10
  */
 int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
+
+#if ITS
+    if (cpu_unit.flags & UNIT_ITSPAGE) {
+        uint64   data;
+        int      base = 0;
+        int      page = (RMASK & addr) >> 9;
+        int      uf = (FLAGS & USER) != 0;
+        if (page_fault)
+            return 0;
+
+        /* If paging is not enabled, address is direct */
+        if (!page_enable) {
+            *loc = addr;
+            return 1;
+        }
+
+        /* If fetching byte data, use write access */
+        if (BYF5 && (IR & 06) == 6)
+            wr = 1;
+
+        /* If this is modify instruction use write access */
+        wr |= modify;
+
+        /* Figure out if this is a user space access */
+        if (flag)
+            uf = 0;
+        else if (xct_flag != 0 && !cur_context && !uf) {
+                 if (((xct_flag & 4) != 0 && wr != 0) ||
+                     ((xct_flag & 2) != 0 && (wr == 0 || modify))) {
+                     uf = (FLAGS & USERIO) != 0;
+                 }
+        }
+
+        /* If user, check if small user enabled */
+        if (!uf) {
+            /* Handle system mapping */
+            /* Pages 400-777 via EBR */
+            if (page & 0400) {
+                base = 1;
+            } else {
+            /* Pages 000-037 direct map */
+                *loc = addr;
+                return 1;
+            }
+        }
+        /* Map the page */
+        if (base) {
+            data = e_tlb[page];
+            if (data == 0) {
+               int len = (dbr3 >> 19) & 077;
+               if ((page >> 1) > len) 
+                  goto fault;
+               data = M[(dbr3 & 01777777) + (page >> 1)];
+               e_tlb[page & 0776] = RMASK & (data >> 18);
+               e_tlb[page | 1] = RMASK & data;
+               if (page & 1) {
+                   data &= ~017000LL;
+                   data |= ((uint64)(age & 017)) << 9;
+               } else {
+                   data &= ~(017000LL << 18);
+                   data |= ((uint64)(age & 017)) << (9+18);
+               }
+               M[(dbr3 & 01777777) + (page >> 1)] = data;
+               data = e_tlb[page];
+               pag_reload = ((pag_reload + 1) & 037) | 040;
+            }
+        } else {
+            data = u_tlb[page];
+            if (data == 0) {
+               if (page & 0400) {
+                   int len = (dbr2 >> 19) & 077;
+                   if (((page & 0377) >> 1) > len) 
+                      goto fault;
+                   data = M[(dbr2 & 01777777) + ((page & 0377) >> 1)];
+               } else {
+                   int len = (dbr1 >> 19) & 077;
+                   if ((page >> 1) > len) 
+                      goto fault;
+                   data = M[(dbr1 & 01777777) + (page >> 1)];
+               }
+               if (page & 1) {
+                   data &= ~017000LL;
+                   data |= ((uint64)(age & 017)) << 9;
+               } else {
+                   data &= ~(017000LL << 18);
+                   data |= ((uint64)(age & 017)) << (9+18);
+               }
+               if (page & 0400) {
+                   M[(dbr2 & 01777777) + ((page & 0377) >> 1)] = data;
+               } else {
+                   M[(dbr1 & 01777777) + (page >> 1)] = data;
+               }
+               u_tlb[page & 01776] = RMASK & (data >> 18);
+               u_tlb[page | 1] = RMASK & data;
+               data = u_tlb[page];
+               pag_reload = ((pag_reload + 1) & 037) | 040;
+            }
+        }
+        *loc = ((data & 0777) << 9) + (addr & 0777);
+        /* Access check logic */
+
+        if ((data & 0600000) == 0 || (wr & ((data & 0600000) != 0600000))) {
+fault:
+           fault_addr = (page << 9) | ((base == 0)? 01000000 : 0) |  
+                   (data & 0777) ;
+            page_fault = 1;
+            fprintf(stderr, "xlat %06o %03o ", addr, page >> 1);
+            fprintf(stderr, " %06o %03o %012llo %o", base, page, data, uf);
+            fprintf(stderr, " -> %06o wr=%o PC=%06o ", fault_addr, wr, PC);
+            fprintf(stderr, " fault\n\r");
+            return 0;
+        }
+        return 1;
+      }
+#endif
+
       if (!flag && (FLAGS & USER) != 0) {
           if (addr <= ((Pl << 10) + 01777))
              *loc = (AB + (Rl << 10)) & RMASK;
@@ -1217,8 +1326,35 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
       return 1;
 }
 
-#define get_reg(reg)                 FM[(reg) & 017]
-#define set_reg(reg, value)          FM[(reg) & 017] = value
+/*
+ * Register access on KA 10 under ITS
+ */
+uint64 get_reg(int reg, int cur_context) {
+#if ITS
+    if (cpu_unit.flags & UNIT_ITSPAGE) {
+        if (xct_flag != 0 && !cur_context && (FLAGS & USER) == 0 &&
+           (xct_flag & 2) != 0)
+           return M[ac_ptr + (reg & 017)];
+    }
+#endif
+    return FM[reg & 017];
+}
+
+void   set_reg(int reg, uint64 value, int cur_context) {
+#if ITS
+    if (cpu_unit.flags & UNIT_ITSPAGE) {
+        if (xct_flag != 0 && !cur_context && (FLAGS & USER) == 0 && 
+           (xct_flag & 4) != 0) {
+               M[ac_ptr + (reg & 017)] = value;
+               return;
+        }
+    }
+#endif
+    FM[reg & 017] = value;
+}
+
+//#define get_reg(reg)                 FM[(reg) & 017]
+//#define set_reg(reg, value)          FM[(reg) & 017] = value
 #endif
 
 /*
@@ -1232,7 +1368,7 @@ int Mem_read(int flag, int cur_context) {
     if (AB < 020) {
 #if KI | KL
         if (FLAGS & USER) {
-           MB =  get_reg(AB);
+           MB =  get_reg(AB, cur_context);
            return 0;
         } else {
             if (!cur_context && ((xct_flag & 1) != 0)) {
@@ -1247,7 +1383,7 @@ int Mem_read(int flag, int cur_context) {
             }
         }
 #endif
-        MB = get_reg(AB);
+        MB = get_reg(AB, cur_context);
     } else {
 #if KI | KL
 read:
@@ -1276,7 +1412,7 @@ int Mem_write(int flag, int cur_context) {
     if (AB < 020) {
 #if KI | KL
         if (FLAGS & USER) {
-            set_reg(AB, MB);
+            set_reg(AB, MB, cur_context);
             return 0;
         } else {
             if (!cur_context &&
@@ -1294,7 +1430,7 @@ int Mem_write(int flag, int cur_context) {
             }
         }
 #endif
-        set_reg(AB, MB);
+        set_reg(AB, MB, cur_context);
     } else {
 #if KI | KL
 write:
@@ -1451,7 +1587,7 @@ no_fetch:
          AR = MB;
          AB = MB & RMASK;
          if (MB &  017000000) {
-             AR = MB = (AB + get_reg((MB >> 18) & 017)) & FMASK;
+             AR = MB = (AB + get_reg((MB >> 18) & 017, 1)) & FMASK;
              AB = MB & RMASK;
          }
          if (IR != 0254)
@@ -1504,13 +1640,19 @@ no_fetch:
 #endif
     }
 
+#if ITS
+    if (pi_cycle == 0 && cpu_unit.flags & UNIT_ITSPAGE) {
+       opc = PC | (FLAGS << 18);
+    }
+#endif
+
     /* Update history */
 #if KI
     if (hst_lnt && (fm_sel || PC > 020) && (PC & 0777774) != 0777040 &&
             (PC & 0777700) != 023700 && (PC != 0527154)) {
 #else
-    if (hst_lnt && PC > 020 && (PC & 0777774) != 0472174 &&
-            (PC & 0777700) != 023700 && (PC != 0527154)) {
+    if (hst_lnt && PC > 020 /*&& (PC & 0777774) != 0472174 &&
+            (PC & 0777700) != 023700 && (PC != 0527154)*/) {
 #endif
             hst_p = hst_p + 1;
             if (hst_p >= hst_lnt) {
@@ -1524,7 +1666,7 @@ no_fetch:
                                 | (mem_prot << 4) | (push_ovf << 3)
 #endif
                        ;
-            hst[hst_p].ac = get_reg(AC);
+            hst[hst_p].ac = get_reg(AC, 1);
     }
 
 
@@ -1553,7 +1695,7 @@ fetch_opr:
 
     if (i_flags & FAC) {
         BR = AR;
-        AR = get_reg(AC);
+        AR = get_reg(AC, 1);
     }
 
     if (i_flags & SWAR) {
@@ -1561,7 +1703,7 @@ fetch_opr:
     }
 
     if (i_flags & FBR) {
-        BR = get_reg(AC);
+        BR = get_reg(AC, 1);
     }
 
     if (i_flags & FMB) {
@@ -1573,7 +1715,7 @@ fetch_opr:
     }
 
     if (i_flags & FAC2) {
-        MQ = get_reg(AC + 1);
+        MQ = get_reg(AC + 1, 1);
     } else if (!BYF5) {
         MQ = 0;
     }
@@ -1667,8 +1809,8 @@ unasign:
               modify = 1;
               AR = MB;
               BR = AR;
-              AR = get_reg(AC);
-              MQ = get_reg(AC + 1);
+              AR = get_reg(AC, 1);
+              MQ = get_reg(AC + 1, 1);
 
               AB = (AB + 1) & RMASK;
               if (Mem_read(0, 0))
@@ -1750,8 +1892,8 @@ dpnorm:
                   AR |= ((uint64)(SCAD & 0377)) << 27;
 
               MQ = ARX;
-              set_reg(AC, AR);
-              set_reg(AC+1, MQ);
+              set_reg(AC, AR, 1);
+              set_reg(AC+1, MQ, 1);
               break;
 
     case 0112: /* DFMP */
@@ -1763,8 +1905,8 @@ dpnorm:
               modify = 1;
               AR = MB;
               BR = AR;
-              AR = get_reg(AC);
-              MQ = get_reg(AC + 1);
+              AR = get_reg(AC, 1);
+              MQ = get_reg(AC + 1, 1);
               AB = (AB + 1) & RMASK;
               if (Mem_read(0, 0))
                   goto last;
@@ -1807,8 +1949,8 @@ dpnorm:
               modify = 1;
               AR = MB;
               BR = AR;
-              AR = get_reg(AC);
-              MQ = get_reg(AC + 1);
+              AR = get_reg(AC, 1);
+              MQ = get_reg(AC + 1, 1);
               AB = (AB + 1) & RMASK;
               if (Mem_read(0, 0))
                   goto last;
@@ -1875,8 +2017,8 @@ dpnorm:
               if (Mem_read(0, 0))
                    goto last;
               MQ = MB;
-              set_reg(AC, AR);
-              set_reg(AC+1, MQ);
+              set_reg(AC, AR, 1);
+              set_reg(AC+1, MQ, 1);
               break;
 
     case 0121: /* DMOVN */
@@ -1891,13 +2033,13 @@ dpnorm:
               /* High */
               AR = (CM(AR) + ((MQ & SMASK) != 0)) & FMASK;
               MQ &= CMASK;
-              set_reg(AC, AR);
-              set_reg(AC+1, MQ);
+              set_reg(AC, AR, 1);
+              set_reg(AC+1, MQ, 1);
               break;
 
     case 0124: /* DMOVEM */
-              AR = get_reg(AC);
-              MQ = get_reg(AC + 1);
+              AR = get_reg(AC, 1);
+              MQ = get_reg(AC + 1, 1);
               /* Handle each half as seperate instruction */
               if ((FLAGS & BYTI) == 0) {
                   MB = AR;
@@ -1919,8 +2061,8 @@ dpnorm:
               break;
 
     case 0125: /* DMOVNM */
-              AR = get_reg(AC);
-              MQ = get_reg(AC + 1);
+              AR = get_reg(AC, 1);
+              MQ = get_reg(AC + 1, 1);
               /* Handle each half as seperate instruction */
               if ((FLAGS & BYTI) == 0) {
                   BR = AR = CM(AR);
@@ -1985,7 +2127,7 @@ dpnorm:
               if (flag1)
                  AR = (CM(AR) + 1) & FMASK;
               if (!sac_inh)
-                 set_reg(AC, AR);
+                 set_reg(AC, AR, 1);
               break;
 
     case 0127: /* FLTR */
@@ -2036,22 +2178,22 @@ dpnorm:
                       MB = (uint64)ac_ptr;
                       Mem_write(1,0);
                   } else {
-                      Mem_read(1,0);
+                      Mem_read(1,0);          /* WD 0 */
                       age = (MB >> 27) & 017;
                       AB = (AB + 2) & RMASK;
-                      Mem_read(1,0);
+                      Mem_read(1,0);          /* WD 2 */
                       mar = 03777777 & MB;
-                      AB = (AB + 2) & RMASK;
-                      Mem_read(1,0);
+                      AB = (AB + 2) & RMASK;    
+                      Mem_read(1,0);          /* WD 4 */
                       dbr1 = ((077 << 18) | RMASK) & MB;
                       AB = (AB + 1) & RMASK;
-                      Mem_read(1,0);
+                      Mem_read(1,0);          /* WD 5 */
                       dbr2 = ((077 << 18) | RMASK) & MB;
                       AB = (AB + 1) & RMASK;
-                      Mem_read(1,0);
+                      Mem_read(1,0);          /* WD 6 */
                       dbr3 = ((077 << 18) | RMASK) & MB;
                       AB = (AB + 1) & RMASK;
-                      Mem_read(1,0);
+                      Mem_read(1,0);          /* WD 7 */
                       ac_ptr = MB & RMASK;
                   }
                   /* AC & 2 = Clear TLB */
@@ -2131,6 +2273,7 @@ unasign:
                   if ((IR & 04) == 0)
                       break;
               }
+              /* Fall through */
 
     case 0135:/* LDB */
     case 0137:/* DPB */
@@ -2156,10 +2299,10 @@ unasign:
                       SC = (SC + 1) & 0777;
                   }
                   AR &= MQ;
-                  set_reg(AC, AR);
+                  set_reg(AC, AR, 1);
               } else {
                   BR = MB;
-                  AR = get_reg(AC) & MQ;
+                  AR = get_reg(AC, 1) & MQ;
                   while(SC != 0) {
                       AR <<= 1;
                       MQ <<= 1;
@@ -2361,7 +2504,7 @@ fxnorm:
 
               /* Handle UFA */
               if (IR == 0130) {
-                  set_reg(AC + 1, AR);
+                  set_reg(AC + 1, AR, 1);
                   break;
               }
               break;
@@ -2810,7 +2953,7 @@ fxnorm:
                   f_pc_inh = 1;
                   SC = nlzero(AR);
               }
-              set_reg(AC + 1, SC);
+              set_reg(AC + 1, SC, 1);
 #endif
               break;
 
@@ -2906,7 +3049,7 @@ fxnorm:
 
           /* Branch */
     case 0250:  /* EXCH */
-              set_reg(AC, BR);
+              set_reg(AC, BR, 1);
               break;
 
     case 0251: /* BLT */
@@ -2922,20 +3065,20 @@ fxnorm:
                           f_pc_inh = 1;
                           f_load_pc = 0;
                           f_inst_fetch = 0;
-                          set_reg(AC, AR);
+                          set_reg(AC, AR, 1);
                           break;
                       }
                   }
                   AB = (AR >> 18) & RMASK;
                   if (Mem_read(0, 0)) {
                        f_pc_inh = 1;
-                       set_reg(AC, AR);
+                       set_reg(AC, AR, 1);
                        goto last;
                   }
                   AB = (AR & RMASK);
                   if (Mem_write(0, 0)) {
                        f_pc_inh = 1;
-                       set_reg(AC, AR);
+                       set_reg(AC, AR, 1);
                        goto last;
                   }
                   AD = (AR & RMASK) + CM(BR) + 1;
@@ -3044,7 +3187,7 @@ fxnorm:
               /* Check if Paging Enabled */
               if (!page_enable) {
                   AR = 0020000LL + f; /* direct map */
-                  set_reg(AC, AR);
+                  set_reg(AC, AR, 1);
                   break;
               }
               AR = ub_ptr;
@@ -3052,7 +3195,7 @@ fxnorm:
                   /* Check if small user and outside range */
                   if (small_user && (f & 0340) != 0) {
                       AR = 0420000LL;   /* Page failure, no match */
-                      set_reg(AC, AR);
+                      set_reg(AC, AR, 1);
                       break;
                   }
               } else {
@@ -3064,7 +3207,7 @@ fxnorm:
                       AR = eb_ptr;
                   } else {
                       AR = 0020000LL + f; /* direct map */
-                      set_reg(AC, AR);
+                      set_reg(AC, AR, 1);
                       break;
                   }
                   last_page |= 1;
@@ -3084,7 +3227,7 @@ fxnorm:
                       AR |= RSIGN;
               }
 fprintf(stderr, "Map %06o %012llo PC=%06o\n\r", f, AR, PC);
-              set_reg(AC, AR);
+              set_reg(AC, AR, 1);
 #endif
               break;
 
@@ -3197,7 +3340,7 @@ fprintf(stderr, "Map %06o %012llo PC=%06o\n\r", f, AR, PC);
               break;
 
     case 0266: /* JSA */       /* AR Frm PC */
-              set_reg(AC, (AR << 18) | ((PC + 1) & RMASK));
+              set_reg(AC, (AR << 18) | ((PC + 1) & RMASK), 1);
               if (uuo_cycle | pi_cycle) {
                  FLAGS &= ~(USER|PUBLIC); /* Clear USER */
               }
@@ -3207,10 +3350,10 @@ fprintf(stderr, "Map %06o %012llo PC=%06o\n\r", f, AR, PC);
 
     case 0267: /* JRA */
               AD = AB;
-              AB = (get_reg(AC) >> 18) & RMASK;
+              AB = (get_reg(AC, 1) >> 18) & RMASK;
               if (Mem_read(uuo_cycle | pi_cycle, 0))
                    goto last;
-              set_reg(AC, MB);
+              set_reg(AC, MB, 1);
               PC = AD & RMASK;
               f_pc_inh = 1;
               break;
@@ -3787,10 +3930,10 @@ test_op:
            goto last;
     }
     if (!sac_inh && ((i_flags & SAC) || ((i_flags & SACZ) && AC != 0)))
-        set_reg(AC, AR);    /* blank, I, B */
+        set_reg(AC, AR, 1);    /* blank, I, B */
 
     if (!sac_inh && (i_flags & SAC2))
-        set_reg(AC+1, MQ);
+        set_reg(AC+1, MQ, 1);
 
     if (hst_lnt) {
         hst[hst_p].fmb = AR;
@@ -3997,17 +4140,17 @@ for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {
          for (j = 0; j < dibp->num_devs; j++) {         /* loop thru disp */
               if (dibp->io) {                           /* any dispatch? */
                    if (dev_tab[(dibp->dev_num >> 2) + j] != &null_dev) {
-                                                       /* already filled? */
+                                                        /* already filled? */
                        sim_printf ("%s device number conflict at %02o\n",
                               sim_dname (dptr), dibp->dev_num + (j << 2));
                        return TRUE;
                    }
-              dev_tab[(dibp->dev_num >> 2) + j] = dibp->io;  /* fill */
-             }                                       /* end if dsp */
-           }                                           /* end for j */
+                   dev_tab[(dibp->dev_num >> 2) + j] = dibp->io;  /* fill */
+              }                                         /* end if dsp */
+           }                                            /* end for j */
         }                                               /* end if enb */
     }                                                   /* end for i */
-return FALSE;
+    return FALSE;
 }
 
 #if KI | KL
