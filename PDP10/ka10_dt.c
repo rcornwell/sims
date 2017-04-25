@@ -249,17 +249,6 @@
 int32 dtsa = 0;                                         /* status A */
 t_uint64 dtsb = 0;                                      /* status B */
 t_uint64 dtdb = 0;                                      /* data buffer */
-#if 0
-int32 dt_ltime = 12;                                    /* interline time */
-int32 dt_dctime = 40000;                                /* decel time */
-int32 dt_substate = 0;
-int32 dt_logblk = 0;
-int32 dt_stopoffr = 0;                                  /* stop on off reel */
-static const int32 map_unit[16] = {                     /* Type 550 unit map */
-    -1, 1,  2,  3,  4,  5,  6,  7,
-    0, -1, -1, -1, -1, -1, -1, -1
-    };
-#endif
 
 t_stat         dt_devio(uint32 dev, uint64 *data);
 t_stat         dt_svc (UNIT *uptr);
@@ -267,20 +256,6 @@ t_stat         dt_boot(int32 unit_num, DEVICE * dptr);
 t_stat         dt_reset (DEVICE *dptr);
 t_stat         dt_attach (UNIT *uptr, CONST char *cptr);
 t_stat         dt_detach (UNIT *uptr);
-#if 0
-int32 dt75 (int32 dev, int32 pulse, int32 dat);
-int32 dt76 (int32 dev, int32 pulse, int32 dat);
-int32 dt_iors (void);
-void dt_deselect (int32 oldf);
-void dt_newsa (int32 newf);
-void dt_newfnc (UNIT *uptr, int32 newsta);
-t_bool dt_setpos (UNIT *uptr);
-void dt_schedez (UNIT *uptr, int32 dir);
-void dt_seterr (UNIT *uptr, int32 e);
-int32 dt_comobv (int32 val);
-int32 dt_csum (UNIT *uptr, int32 blk);
-int32 dt_gethdr (UNIT *uptr, int32 blk, int32 relpos);
-#endif
 
 /* DT data structures
 
@@ -315,13 +290,6 @@ REG dt_reg[] = {
     { ORDATA (DTSA, dtsa, 18) },
     { ORDATA (DTSB, dtsb, 18) },
     { ORDATA (DTDB, dtdb, 18) },
-#if 0
-    { DRDATA (LTIME, dt_ltime, 31), REG_NZ },
-    { DRDATA (DCTIME, dt_dctime, 31), REG_NZ },
-    { ORDATA (SUBSTATE, dt_substate, 2) },
-    { DRDATA (LBLK, dt_logblk, 12), REG_HIDDEN },
-    { FLDATA (STOP_OFFR, dt_stopoffr, 0) },
-#endif
     { URDATA (POS, dt_unit[0].pos, 10, T_ADDR_W, 0,
               DT_NUMDR, PV_LEFT | REG_RO) },
     { NULL }
@@ -510,7 +478,7 @@ t_stat dt_devio(uint32 dev, uint64 *data) {
      return SCPE_OK;
 }
 
-void dt_getword(t_int64 *data, int req) {
+void dt_getword(t_uint64 *data, int req) {
     int dev = dt_dib.dev_num;
     clr_interrupt(dev|4);
     if (dtsb & DTB_DATREQ) {
@@ -524,7 +492,7 @@ void dt_getword(t_int64 *data, int req) {
     }
 }
 
-void dt_putword(t_int64 *data) {
+void dt_putword(t_uint64 *data) {
     int dev = dt_dib.dev_num;
     clr_interrupt(dev|4);
     if (dtsb & DTB_DATREQ) {

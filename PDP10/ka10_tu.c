@@ -460,9 +460,9 @@ tu_devirq(uint32 dev, int addr) {
 void
 tu_write(int ctlr, int unit, int reg, uint32 data) {
     UNIT          *uptr = &tu_unit[(ctlr * 8) + (tu_tcr[ctlr] & 07)];
-    int            i;
     DEVICE        *dptr = tu_devs[ctlr];
     struct df10   *df10 = &tu_df10[ctlr];
+    int            i;
 
     if (uptr->u3 & CR_GO) {
        uptr->u5 |= (ER1_RMR);
@@ -567,13 +567,12 @@ tu_write(int ctlr, int unit, int reg, uint32 data) {
 uint32
 tu_read(int ctlr, int unit, int reg) {
     UNIT          *uptr = &tu_unit[(ctlr * 8) + (tu_tcr[ctlr] & 07)];
-    struct df10   *df10;
+    struct df10   *df10 = &tu_df10[ctlr];
     uint32        temp = 0;
     int           i;
 
     switch(reg) {
     case  000:  /* control */
-        df10 = &tu_df10[ctlr];
         temp = uptr->u3 & 076;
         if (uptr->flags & UNIT_ATT)
            temp |= CS1_DVA;
@@ -647,8 +646,7 @@ tu_read(int ctlr, int unit, int reg) {
 void tu_error(UNIT * uptr, t_stat r)
 {
     int          ctlr = GET_CNTRL(uptr->flags);
-    DEVICE      *dptr;
-    dptr = tu_devs[ctlr];
+    DEVICE      *dptr = tu_devs[ctlr];
 
     switch (r) {
     case MTSE_OK:            /* no error */
@@ -958,8 +956,11 @@ t_stat tu_srv(UNIT * uptr)
         switch (r) {
         case MTSE_OK:            /* no error */
              break;
+
         case MTSE_BOT:           /* beginning of tape */
              uptr->u5 |= ER1_NEF;
+             /* Fall Through */
+
         case MTSE_TMK:           /* tape mark */
         case MTSE_EOM:           /* end of medium */
              if (tu_frame[ctlr] != 0)

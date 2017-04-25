@@ -242,7 +242,10 @@ t_stat dc_devio(uint32 dev, uint64 *data) {
                 int32 ch = *data & DATA;
                 ch = sim_tt_outcvt(ch, TT_GET_MODE (dc_unit.flags) | TTUF_KSR);
                 tmxr_putc_ln (lp, ch);
-                tx_enable |= (1 << ln);
+                if (lp->xmte) 
+                    tx_enable |= (1 << ln);
+                else
+                    tx_enable &= ~(1 << ln);
                 dc_l_status |= (1LL << ln);
              }
          }
@@ -261,9 +264,9 @@ t_stat dc_devio(uint32 dev, uint64 *data) {
              if (dc_enable & (1 << ln))
                 *data |= FLAG|OFF_HOOK;
              if (rx_conn & (1 << ln) && lp->conn)
-                    *data |= FLAG|CTS;
+                *data |= FLAG|CTS;
              if (dc_ring & (1 << ln))
-                 *data |= FLAG|RES_DET;
+                *data |= FLAG|RES_DET;
          } else if (ln < dc_desc.lines) {
              /* Nothing happens if no recieve data, which is transmit ready */
              lp = &dc_ldsc[ln];
@@ -311,6 +314,11 @@ int32 ln;
     tmxr_poll_tx(&dc_desc);
     tmxr_poll_rx(&dc_desc);
     for (ln = 0; ln < dc_desc.lines; ln++) {
+       /* Check if buffer empty */
+       if (dc_ldsc[ln].xmte) {
+           tx_enable |= dc_l_status & (1 << ln);
+       }
+
        /* Check to see if any pending data for this line */
        if (tmxr_rqln(&dc_ldsc[ln]) > 0) {
            rx_rdy |= (1 << ln);

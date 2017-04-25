@@ -3854,7 +3854,7 @@ test_op:
     case 0774: case 0775: case 0776: case 0777:
 #if KI
               if (!pi_cycle && ((FLAGS & (USER|USERIO)) == USER) &&
-                    (IR & 040) == 0 || ((FLAGS & (USER|PUBLIC)) == PUBLIC)) {
+                    ((IR & 040) == 0 || ((FLAGS & (USER|PUBLIC)) == PUBLIC))) {
 
 #else
               if ((FLAGS & (USER|USERIO)) == USER && !pi_cycle) {
