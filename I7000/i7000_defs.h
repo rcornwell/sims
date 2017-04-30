@@ -63,7 +63,7 @@ extern uint8            M[];
 /* Not yet */
 #endif
 #ifdef I7070            /* Includes 7070, 7074 */
-#define NUM_CHAN        8
+#define NUM_CHAN        9
 #define NUM_DEVS_CDR    1
 #define NUM_DEVS_CDP    1
 #define NUM_DEVS_LPR    1
@@ -80,7 +80,7 @@ extern uint8            M[];
 extern t_uint64         M[];
 #endif
 #ifdef I7080            /* Includes 702, 705-i/ii, 705-iii, 7080 */
-#define NUM_CHAN        9
+#define NUM_CHAN        11
 #define NUM_DEVS_CDR    1
 #define NUM_DEVS_CDP    1
 #define NUM_DEVS_LPR    1
@@ -607,7 +607,7 @@ extern DEVICE      mtf_dev;
 extern DEVICE      cpu_dev;
 extern UNIT        cpu_unit;
 extern DEVICE      chan_dev;
-extern UNIT        chan_unit[];
+extern UNIT        chan_unit[NUM_CHAN];
 extern REG         cpu_reg[];
 extern int         cycle_time;
 

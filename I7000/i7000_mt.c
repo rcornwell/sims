@@ -577,7 +577,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
 #if I7090 | I704 | I701
 /* Read a word from tape, used during boot read */
 int
-mt_read_buff(UNIT * uptr, int cmd, DEVICE * dptr, t_value *word)
+mt_read_buff(UNIT * uptr, int cmd, DEVICE * dptr, t_uint64 *word)
 {
     int                 chan = UNIT_G_CHAN(uptr->flags);
     int                 bufnum = GET_DEV_BUF(dptr->flags);

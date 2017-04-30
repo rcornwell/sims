@@ -2989,6 +2989,7 @@ step6:
             remtrig = 1;
         tsac = next_addr[tsac];
     }
+    /* Not reached */
     goto step6;
 step8:
      smt = 0;

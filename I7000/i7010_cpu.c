@@ -680,7 +680,7 @@ sim_instr(void)
                              reason = STOP_INVADDR;
                              break;
                          }
-                         if (op_info & (O_C|O_A)) {  /* units */
+                         if (op_info & (O_C|O_A))    /* units */
                              STAR += bcd_bin[br & 0xf];
                          if ((op_info & O_A) && (ix != 0)) {
                              int        j, a, s;
@@ -733,7 +733,7 @@ sim_instr(void)
                      case 8:    /* Has to be B address */
                          state = 9;
                          /* hundreds */
-                         if (op_info & (O_B|O_D))
+                         if (op_info & (O_B|O_D)) {
                              STAR += dscale[1][bcd_bin[br & 0xf]];
                              ix = (br & 0x30) >> 2;
                          }
@@ -3839,7 +3839,7 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
     int32               k, i, di, lnt, pc;
     char               *cptr = (char *) desc;
     t_stat              r;
-    t_value             sim_eval[15];
+    t_value             sim_eval[50];
     struct InstHistory *h;
 
     if (hst_lnt == 0)

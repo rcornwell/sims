@@ -445,7 +445,7 @@ t_stat com_svc(UNIT * uptr)
     if (chan_test(chan, CTL_SNS)) {
         int     eor = (com_sta == 4)?DEV_REOR:0;
 
-        ch = (com_sense >> ((4 - com_sta) * 4)) & 0xf;
+        ch = (com_sense >> ((4 - (uint32)com_sta) * 4)) & 0xf;
         if (ch & 010)   /* Move A bit over one */
            ch ^= 030;
         sim_debug(DEBUG_SNS, &com_dev, "sense unit=%02x\n", ch);

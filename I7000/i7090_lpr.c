@@ -422,9 +422,11 @@ t_stat lpr_srv(UNIT * uptr)
             action = 2;
             break;
         case 19:                /* Echo 8-4 L */
+            /* I'm not sure how these are computed */
+#if 0              /* Should be correct, but force to zero works */
             wd = lpr_data[u].wbuff[3];
             wd -= lpr_data[u].wbuff[11];
-            /* I'm not sure how these are computed */
+#endif
             /* But forcing to zero works */
             wd = 0;
             action = 3;
@@ -438,12 +440,12 @@ t_stat lpr_srv(UNIT * uptr)
             action = 1;
             break;
         case 22:                /* Echo 8-3 */
+            /* I'm not sure how these are computed */
             /* Fill for echo back */
 #if 0
             wd = lpr_data[u].wbuff[2];
             wd -= lpr_data[u].wbuff[12];
 #endif
-            /* I'm not sure how these are computed */
             /* But forcing to zero works */
             wd = 0;
             action = 2;

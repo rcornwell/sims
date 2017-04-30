@@ -127,7 +127,7 @@ chan_set_devs(DEVICE * dptr)
 }
 
 /* Print help for "SET dev CHAN" based on allowed types */
-void help_set_chan_type(FILE *st, DEVICE *dptr, char *name) 
+void help_set_chan_type(FILE *st, DEVICE *dptr, char *name)
 {
 #if NUM_CHAN > 1
    DIB        *dibp = (DIB *) dptr->ctxt;
@@ -143,8 +143,8 @@ void help_set_chan_type(FILE *st, DEVICE *dptr, char *name)
        fprintf (st, " %s", chname[0]);
        if ((ctype & ~3) != 0)
           fprintf(st, " or");
-   } 
-   if ((ctype & ~3) != 0) 
+   }
+   if ((ctype & ~3) != 0)
       fprintf(st, " %s to %s", chname[1], chname[NUM_CHAN-1]);
    fprintf (st, "\n%s can be attached to ", name);
    m = 1;

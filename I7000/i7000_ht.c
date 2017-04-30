@@ -734,13 +734,13 @@ ht_tape_cmd(DEVICE * dptr, UNIT * uptr)
     case HFPN:                  /* File Protect On (Nop for now ) */
     case HEOS:                  /* End of sequence */
     case HNOP:                  /* Nop */
-        sim_debug(DEBUG_DETAIL | DEBUG_CMD, dptr, "NOP\n");
+        sim_debug((DEBUG_DETAIL | DEBUG_CMD), dptr, "NOP\n");
         up->u5 &= ~(HT_NOTRDY | HT_CMDMSK);
         chan_set(chan, DEV_REOR|CTL_END);
         return;
 
     case HRWD:                  /* Rewind */
-        sim_debug(DEBUG_DETAIL | DEBUG_CMD, dptr, "REW\n");
+        sim_debug((DEBUG_DETAIL | DEBUG_CMD), dptr, "REW\n");
         if (up->u5 & HT_BOT) {
             r = MTSE_OK;
             up->wait = 1;
@@ -754,7 +754,7 @@ ht_tape_cmd(DEVICE * dptr, UNIT * uptr)
         break;
 
     case HERG:                  /* Erase long gap */
-        sim_debug(DEBUG_DETAIL | DEBUG_CMD, dptr, "ERG\n");
+        sim_debug((DEBUG_DETAIL | DEBUG_CMD), dptr, "ERG\n");
         if (sim_tape_wrp(up)) {
             r = MTSE_WRP;
         } else {
@@ -766,7 +766,7 @@ ht_tape_cmd(DEVICE * dptr, UNIT * uptr)
         break;
 
     case HWTM:                  /* Write tape mark */
-        sim_debug(DEBUG_DETAIL | DEBUG_CMD, dptr, "WTM\n");
+        sim_debug((DEBUG_DETAIL | DEBUG_CMD), dptr, "WTM\n");
         if (sim_tape_wrp(up)) {
             r = MTSE_WRP;
         } else {
@@ -779,7 +779,7 @@ ht_tape_cmd(DEVICE * dptr, UNIT * uptr)
         break;
 
     case HBSR:                  /* Backspace */
-        sim_debug(DEBUG_DETAIL | DEBUG_CMD, dptr, "BSR\n");
+        sim_debug((DEBUG_DETAIL | DEBUG_CMD), dptr, "BSR\n");
         if (sim_tape_bot(up)) {
             r = MTSE_BOT;
             break;
@@ -801,7 +801,7 @@ ht_tape_cmd(DEVICE * dptr, UNIT * uptr)
         break;
 
     case HBSF:                  /* Backspace file */
-        sim_debug(DEBUG_DETAIL | DEBUG_CMD, dptr, "BSF\n");
+        sim_debug((DEBUG_DETAIL | DEBUG_CMD), dptr, "BSF\n");
         if (sim_tape_bot(up)) {
             r = MTSE_BOT;
             break;
@@ -825,7 +825,7 @@ ht_tape_cmd(DEVICE * dptr, UNIT * uptr)
         break;
 
     case HSKR:                  /* Space */
-        sim_debug(DEBUG_DETAIL | DEBUG_CMD, dptr, "SKR\n");
+        sim_debug((DEBUG_DETAIL | DEBUG_CMD), dptr, "SKR\n");
         r = sim_tape_sprecf(up, &reclen);
         up->u5 |= HT_PEND|HT_NOTRDY;
         uptr->u5 |= HT_NOTRDY;
@@ -839,7 +839,7 @@ ht_tape_cmd(DEVICE * dptr, UNIT * uptr)
         break;
 
     case HSKF:                  /* Space file */
-        sim_debug(DEBUG_DETAIL | DEBUG_CMD, dptr, "SKF\n");
+        sim_debug((DEBUG_DETAIL | DEBUG_CMD), dptr, "SKF\n");
         while ((r = sim_tape_sprecf(up, &reclen)) == MTSE_OK) {
             up->wait += reclen;
         }
@@ -858,7 +858,7 @@ ht_tape_cmd(DEVICE * dptr, UNIT * uptr)
     case HRUN:                  /* Rewind and unload */
     case HCHC:                  /* Change Cartridge */
     case HUNL:                  /* Unload Cartridge */
-        sim_debug(DEBUG_DETAIL | DEBUG_CMD, dptr, "RUN\n");
+        sim_debug((DEBUG_DETAIL | DEBUG_CMD), dptr, "RUN\n");
         r = sim_tape_detach(up);
         chan_set(chan, DEV_REOR|CTL_END);
         up->u5 |= HT_NOTRDY;

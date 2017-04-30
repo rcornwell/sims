@@ -771,7 +771,7 @@ chan_cmd(uint16 dev, uint16 dcmd, uint32 addr)
 
     /* Find device on given channel and give it the command */
     chan = chan_mapdev(dev);
-    if (chan < 0 || chan > NUM_CHAN)
+    if (chan < 0 || chan >= NUM_CHAN)
         return SCPE_IOERR;
     /* If no channel device, quick exit */
     if (chan_unit[chan].flags & UNIT_DIS)
@@ -1227,7 +1227,7 @@ chan_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
     fprintf (st, "Channels are fixed on the 7080.\n\n");
     fprintf (st, "Channel * is a puesdo channel for unit record devices.\n");
 
-    fprintf(st, "\n"); 
+    fprintf(st, "\n");
     fprint_set_help(st, dptr);
     fprint_show_help(st, dptr);
     return SCPE_OK;
