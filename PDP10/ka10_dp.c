@@ -549,6 +549,7 @@ t_stat dp_svc (UNIT *uptr)
                 uptr->STATUS |= SRC_DONE;
                 if (uptr->STATUS & END_CYL) {
                      uptr->UFLAGS |= DONE;
+                     uptr->STATUS &= ~END_CYL;
                      uptr->STATUS &= ~BUSY;
                      df10_finish_op(df10, 0);
                      return SCPE_OK;
@@ -595,7 +596,7 @@ t_stat dp_svc (UNIT *uptr)
                         sect = 0;
                         surf = surf + 1;
                         if (surf >= dp_drv_tab[dtype].surf) {
-                           uptr->STATUS|= END_CYL;
+                           uptr->STATUS |= END_CYL;
                         } else {
                            uptr->UFLAGS &= ~(01757000);
                            uptr->UFLAGS |= (surf << 14);

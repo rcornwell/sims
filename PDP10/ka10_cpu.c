@@ -110,9 +110,11 @@
 #else
 #define UNIT_MSIZE      (017 << UNIT_V_MSIZE)
 #endif
-#define UNIT_V_TWOSEG   (UNIT_V_MSIZE + 8)
-#define UNIT_TWOSEG     (1 << UNIT_V_TWOSEG)
-#define UNIT_ITSPAGE    (2 << UNIT_V_TWOSEG)
+#define UNIT_V_PAGE     (UNIT_V_MSIZE + 8)
+#define UNIT_TWOSEG     (1 << UNIT_V_PAGE)
+#define UNIT_ITSPAGE    (2 << UNIT_V_PAGE)
+#define UNIT_BBNPAGE    (4 << UNIT_V_PAGE)
+#define UNIT_M_PAGE     (7 << UNIT_V_PAGE)
 
 
 uint64  M[MAXMEMSIZE];                        /* Memory */
@@ -132,7 +134,7 @@ uint32  IR;                                   /* Instruction register */
 uint32  FLAGS;                                /* Flags */
 uint32  AC;                                   /* Operand accumulator */
 uint64  SW;                                   /* Switch register */
-int     BYF5;                                 /* Second half of LDB/DPB instruction */
+int     BYF5;                                 /* Flag for second half of LDB/DPB instruction */
 int     uuo_cycle;                            /* Uuo cycle in progress */
 int     sac_inh;                              /* Don't store AR in AC */
 int     SC;                                   /* Shift count */
@@ -172,12 +174,10 @@ uint32  eb_ptr;                               /* Executive base pointer */
 uint8   fm_sel;                               /* User fast memory block */
 int32   apr_serial = -1;                      /* CPU Serial number */
 char    inout_fail;                           /* In out fail flag */
-int     public_access;                        /* Last access from public page */
-int     private_page;                         /* Access to private page */
 char    small_user;                           /* Small user flag */
 char    user_addr_cmp;                        /* User address compare flag */
 #endif
-#if KI | ITS
+#if KI | ITS | BBN
 uint32  e_tlb[512];                           /* Executive TLB */
 uint32  u_tlb[546];                           /* User TLB */
 char    page_enable;                          /* Enable paging */
@@ -190,6 +190,15 @@ int     last_page;                            /* Last page mapped */
 int     modify;                               /* Modify cycle */
 char    xct_flag;                             /* XCT flags */
 #endif
+#if BBN
+int     exec_map;                             /* Enable executive mapping */
+int     next_write;                           /* Clear next write mapping */
+int     mon_base_reg;                         /* Monitor base register */
+int     ac_base;                              /* Ac base register */
+int     user_base_reg;                        /* User base register */
+int     user_limit;                           /* User limit register */
+uint64  pur;                                  /* Process use register */
+#endif
 #if ITS
 uint32  dbr1;                                 /* User Low Page Table Address */
 uint32  dbr2;                                 /* User High Page Table Address */
@@ -200,7 +209,6 @@ uint32  fault_addr;                           /* Fault address */
 uint64  opc;                                  /* Saved PC and Flags */
 uint32  mar;                                  /* Memory address compare */
 uint16  ofa;                                  /* Output fault address */
-uint32  ac_ptr;                               /* AC Pointer */
 #endif
 
 char    dev_irq[128];                         /* Pending irq by device */
@@ -297,13 +305,17 @@ MTAB cpu_mod[] = {
           &cpu_set_serial, &cpu_show_serial, NULL, "CPU Serial Number" },
 #endif
 #if !KI
-    { UNIT_ITSPAGE|UNIT_TWOSEG, 0, "ONESEG", "ONESEG", NULL, NULL, NULL,
+    { UNIT_M_PAGE, 0, "ONESEG", "ONESEG", NULL, NULL, NULL,
              "One Relocation Register"},
-    { UNIT_ITSPAGE|UNIT_TWOSEG, UNIT_TWOSEG, "TWOSEG", "TWOSEG", NULL, NULL,
+    { UNIT_M_PAGE, UNIT_TWOSEG, "TWOSEG", "TWOSEG", NULL, NULL,
               NULL, "Two Relocation Registers"},
 #if ITS
-    { UNIT_ITSPAGE|UNIT_TWOSEG, UNIT_ITSPAGE, "ITS", "ITS", NULL, NULL, NULL,
+    { UNIT_M_PAGE, UNIT_ITSPAGE, "ITS", "ITS", NULL, NULL, NULL,
               "Paging hardware for ITS"},
+#endif
+#if BBN
+    { UNIT_M_PAGE, UNIT_BBNPAGE, "BBN", "BBN", NULL, NULL, NULL,
+              "Paging hardware for TENEX"},
 #endif
 #endif
     { MTAB_XTD|MTAB_VDV|MTAB_NMO|MTAB_SHP, 0, "HISTORY", "HISTORY",
@@ -332,17 +344,16 @@ DEVICE cpu_dev = {
 #define FCE     000001   /* Fetch memory into AR */
 #define FCEPSE  000002   /* Fetch and store memory into AR */
 #define SCE     000004   /* Save AR into memory */
-#define FAC     000010   /* Fetch AC into AR */
+#define FAC     000010   /* Copy AR to BR, then Fetch AC into AR */
 #define FAC2    000020   /* Fetch AC+1 into MQ */
 #define SAC     000040   /* Save AC into AR */
 #define SACZ    000100   /* Save AC into AR if AC not 0 */
 #define SAC2    000200   /* Save MQ into AC+1 */
-#define MBR     000400   /* Load Mem to BR, AC to AR */
-#define SWAR    001000   /* Swap AR */
-#define FBR     002000   /* Load AC into BR */
-#define FMB     004000   /* Load MB into BR */
+#define SWAR    000400   /* Swap AR */
+#define FBR     001000   /* Load AC into BR */
 
 int opflags[] = {
+        /* UUO Opcodes */
         /* UUO00 */       /* LUUO01 */      /* LUUO02 */    /* LUUO03 */
         0,                0,                0,              0,
         /* LUUO04 */      /* LUUO05 */      /* LUUO06 */    /* LUUO07 */
@@ -375,6 +386,8 @@ int opflags[] = {
         0,                0,                0,              0,
         /* MUUO74 */      /* MUUO75 */      /* MUUO76 */    /* MUUO77 */
         0,                0,                0,              0,
+
+        /* Double precsision math */
         /* UJEN */        /* UUO101 */      /* GFAD */      /* GFSB */
         0,                0,                0,              0,
         /* JSYS */        /* ADJSP */       /* GFMP */      /*GFDV */
@@ -391,6 +404,8 @@ int opflags[] = {
         FCE|FBR,          FCE|FAC|SAC,      FAC|SAC,        0,
         /* ILDB */        /* LDB */         /* IDPB */      /* DPB */
         0,                0,                0,              0,
+
+        /* Floating point */
         /* FAD */         /* FADL */        /* FADM */      /* FADB */
         SAC|FBR|FCE,      SAC|SAC2|FBR|FCE, FCEPSE|FBR,     SAC|FBR|FCEPSE,
         /* FADR */        /* FADRI */       /* FADRM */     /* FADRB */
@@ -408,6 +423,7 @@ int opflags[] = {
         /* FDVR */        /* FDVRI */       /* FDVRM */     /* FDVRB */
         SAC|FBR|FCE,      SAC|FBR|SWAR,     FCEPSE|FBR,     SAC|FBR|FCEPSE,
 
+        /* Full word operators */
         /* MOVE */        /* MOVEI */       /* MOVEM */     /* MOVES */
         SAC|FCE,          SAC,              FAC|SCE,        SACZ|FCEPSE,
         /* MOVS */        /* MOVSI */       /* MOVSM */     /* MOVSS */
@@ -426,11 +442,13 @@ int opflags[] = {
         SAC2|SAC|FCE|FAC|FAC2, SAC2|SAC|FAC|FAC2,
                                           FCEPSE|FAC|FAC2, SAC2|SAC|FCEPSE|FAC\
                                                                  |FAC2,
+        /* Shift operators */
         /* ASH */         /* ROT */         /* LSH */       /* JFFO */
         FAC|SAC,          FAC|SAC,          FAC|SAC,        FAC,
         /* ASHC */        /* ROTC */        /* LSHC */      /* UUO247 */
         FAC|SAC|SAC2|FAC2, FAC|SAC|SAC2|FAC2, FAC|SAC|SAC2|FAC2,  0,
 
+        /* Branch operators */
         /* EXCH */        /* BLT */         /* AOBJP */     /* AOBJN */
         FAC|FCEPSE,       FAC,              FAC|SAC,        FAC|SAC,
         /* JRST */        /* JFCL */        /* XCT */       /* MAP */
@@ -444,6 +462,7 @@ int opflags[] = {
         /* SUB */         /* SUBI */        /* SUBM */      /* SUBB */
         FBR|SAC|FCE,      FBR|SAC,          FBR|FCEPSE,     FBR|SAC|FCEPSE,
 
+        /* Compare operators */
         /* CAI */         /* CAIL */        /* CAIE */      /* CAILE */
         FBR,              FBR,              FBR,            FBR,
         /* CAIA */        /* CAIGE */       /* CAIN */      /* CAIG */
@@ -452,6 +471,8 @@ int opflags[] = {
         FBR|FCE,          FBR|FCE,          FBR|FCE,        FBR|FCE,
         /* CAMA */        /* CAMGE */       /* CAMN */      /* CAMG */
         FBR|FCE,          FBR|FCE,          FBR|FCE,        FBR|FCE,
+
+        /* Jump and skip operators */
         /* JUMP */        /* JUMPL */       /* JUMPE */     /* JUMPLE */
         FAC,              FAC,              FAC,            FAC,
         /* JUMPA */       /* JUMPGE */      /* JUMPN */     /* JUMPG */
@@ -477,14 +498,15 @@ int opflags[] = {
         /* SOSA */        /* SOSGE */       /* SOSN */      /* SOSG */
         SACZ|FCEPSE,      SACZ|FCEPSE,      SACZ|FCEPSE,    SACZ|FCEPSE,
 
+        /* Boolean operators */
         /* SETZ */        /* SETZI */       /* SETZM */     /* SETZB */
-        FBR|SAC,          FBR|SAC,          FBR|SCE,        FBR|SAC|SCE,
+        SAC,              SAC,              SCE,            SAC|SCE,
         /* AND */         /* ANDI */        /* ANDM */      /* ANDB */
         FBR|SAC|FCE,      FBR|SAC,          FBR|FCEPSE,     FBR|SAC|FCEPSE,
         /* ANDCA */       /* ANDCAI */      /* ANDCAM */    /* ANDCAB */
         FBR|SAC|FCE,      FBR|SAC,          FBR|FCEPSE,     FBR|SAC|FCEPSE,
         /* SETM */        /* SETMI */       /* SETMM */     /* SETMB */
-        FBR|SAC|FCE,      FBR|SAC,          FBR,            FBR|SAC|FCE,
+        SAC|FCE,          SAC,              0,              SAC|FCE,
         /* ANDCM */       /* ANDCMI */      /* ANDCMM */    /* ANDCMB */
         FBR|SAC|FCE,      FBR|SAC,          FBR|FCEPSE,     FBR|SAC|FCEPSE,
         /* SETA */        /* SETAI */       /* SETAM */     /* SETAB */
@@ -502,55 +524,49 @@ int opflags[] = {
         /* ORCA */        /* ORCAI */       /* ORCAM */     /* ORCAB */
         FBR|SAC|FCE,      FBR|SAC,          FBR|FCEPSE,     FBR|SAC|FCEPSE,
         /* SETCM */       /* SETCMI */      /* SETCMM */    /* SETCMB */
-        FBR|SAC|FCE,      FBR|SAC,          FBR|FCEPSE,     FBR|SAC|FCEPSE,
+        SAC|FCE,          SAC,              FCEPSE,         SAC|FCEPSE,
         /* ORCM */        /* ORCMI */       /* ORCMM */     /* ORCMB */
         FBR|SAC|FCE,      FBR|SAC,          FBR|FCEPSE,     FBR|SAC|FCEPSE,
         /* ORCB */        /* ORCBI */       /* ORCBM */     /* ORCBB */
         FBR|SAC|FCE,      FBR|SAC,          FBR|FCEPSE,     FBR|SAC|FCEPSE,
         /* SETO */        /* SETOI */       /* SETOM */     /* SETOB */
-        FBR|SAC,          FBR|SAC,          FBR|SCE,        FBR|SAC|SCE,
+        SAC,              SAC,              SCE,            SAC|SCE,
 
+        /* Half word operators */
         /* HLL */         /* HLLI */        /* HLLM */      /* HLLS */
-        FBR|SAC|FCE,      FBR|SAC,          FAC|FMB|FCEPSE, FMB|SACZ|FCEPSE,
+        FBR|SAC|FCE,      FBR|SAC,          FAC|FCEPSE,     SACZ|FCEPSE,
         /* HRL */         /* HRLI */        /* HRLM */      /* HRLS */
-        SWAR|FBR|SAC|FCE, SWAR|FBR|SAC,     SWAR|FAC|FMB|FCEPSE,
-                                                         SWAR|FMB|SACZ|FCEPSE,
+        SWAR|FBR|SAC|FCE, SWAR|FBR|SAC,     FAC|SWAR|FCEPSE,SACZ|FCEPSE,
         /* HLLZ */        /* HLLZI */       /* HLLZM */     /* HLLZS */
-        FBR|SAC|FCE,      FBR|SAC,          FAC|FMB|FCEPSE, FMB|SACZ|FCEPSE,
+        SAC|FCE,          SAC,              FAC|SCE,        SACZ|FCEPSE,
         /* HRLZ */        /* HRLZI */       /* HRLZM */     /* HRLZS */
-        SWAR|FBR|SAC|FCE, SWAR|FBR|SAC,     SWAR|FAC|FMB|FCEPSE,
-                                                         SWAR|FMB|SACZ|FCEPSE,
+        SWAR|SAC|FCE,     SWAR|SAC,         FAC|SWAR|SCE,   SWAR|SACZ|FCEPSE,
         /* HLLO */        /* HLLOI */       /* HLLOM */     /* HLLOS */
-        FBR|SAC|FCE,      FBR|SAC,          FAC|FMB|FCEPSE, FMB|SACZ|FCEPSE,
+        SAC|FCE,          SAC,              FAC|SCE,        SACZ|FCEPSE,
         /* HRLO */        /* HRLOI */       /* HRLOM */     /* HRLOS */
-        SWAR|FBR|SAC|FCE, SWAR|FBR|SAC,     SWAR|FAC|FMB|FCEPSE,
-                                                         SWAR|FMB|SACZ|FCEPSE,
+        SWAR|SAC|FCE,     SWAR|SAC,         FAC|SWAR|SCE,   SWAR|SACZ|FCEPSE,
         /* HLLE */        /* HLLEI */       /* HLLEM */     /* HLLES */
-        FBR|SAC|FCE,      FBR|SAC,          FAC|FMB|FCEPSE, FMB|SACZ|FCEPSE,
+        SAC|FCE,          SAC,              FAC|SCE,        SACZ|FCEPSE,
         /* HRLE */        /* HRLEI */       /* HRLEM */     /* HRLES */
-        SWAR|FBR|SAC|FCE, SWAR|FBR|SAC,     SWAR|FAC|FMB|FCEPSE,
-                                                         SWAR|FMB|SACZ|FCEPSE,
+        SWAR|SAC|FCE,     SWAR|SAC,         FAC|SWAR|SCE,   SWAR|SACZ|FCEPSE,
         /* HRR */         /* HRRI */        /* HRRM */      /* HRRS */
-        FBR|SAC|FCE,      FBR|SAC,          FAC|FMB|FCEPSE, FMB|SACZ|FCEPSE,
+        FBR|SAC|FCE,      FBR|SAC,          FAC|FCEPSE,     SACZ|FCEPSE,
         /* HLR */         /* HLRI */        /* HLRM */      /* HLRS */
-        SWAR|FBR|SAC|FCE, SWAR|FBR|SAC,     SWAR|FAC|FMB|FCEPSE,
-                                                         SWAR|FMB|SACZ|FCEPSE,
+        SWAR|FBR|SAC|FCE, SWAR|FBR|SAC,     FAC|SWAR|FCEPSE,SACZ|FCEPSE,
         /* HRRZ */        /* HRRZI */       /* HRRZM */     /* HRRZS */
-        FBR|SAC|FCE,      FBR|SAC,          FAC|FMB|FCEPSE, FMB|SACZ|FCEPSE,
+        SAC|FCE,          SAC,              FAC|SCE,        SACZ|FCEPSE,
         /* HLRZ */        /* HLRZI */       /* HLRZM */     /* HLRZS */
-        SWAR|FBR|SAC|FCE, SWAR|FBR|SAC,     SWAR|FAC|FMB|FCEPSE,
-                                                         SWAR|FMB|SACZ|FCEPSE,
+        SWAR|SAC|FCE,     SWAR|SAC,         FAC|SWAR|SCE,   SWAR|SACZ|FCEPSE,
         /* HRRO */        /* HRROI */       /* HRROM */     /* HRROS */
-        FBR|SAC|FCE,      FBR|SAC,          FAC|FMB|FCEPSE, FMB|SACZ|FCEPSE,
+        SAC|FCE,          SAC,              FAC|SCE,        SACZ|FCEPSE,
         /* HLRO */        /* HLROI */       /* HLROM */     /* HLROS */
-        SWAR|FBR|SAC|FCE, SWAR|FBR|SAC,     SWAR|FAC|FMB|FCEPSE,
-                                                         SWAR|FMB|SACZ|FCEPSE,
+        SWAR|SAC|FCE,     SWAR|SAC,         FAC|SWAR|SCE,   SWAR|SACZ|FCEPSE,
         /* HRRE */        /* HRREI */       /* HRREM */     /* HRRES */
-        FBR|SAC|FCE,      FBR|SAC,          FAC|FMB|FCEPSE, FMB|SACZ|FCEPSE,
+        SAC|FCE,          SAC,              FAC|SCE,        SACZ|FCEPSE,
         /* HLRE */        /* HLREI */       /* HLREM */     /* HLRES */
-        SWAR|FBR|SAC|FCE, SWAR|FBR|SAC,     SWAR|FAC|FMB|FCEPSE,
-                                                         SWAR|FMB|SACZ|FCEPSE,
+        SWAR|SAC|FCE,     SWAR|SAC,         FAC|SWAR|SCE,   SWAR|SACZ|FCEPSE,
 
+        /* Test operators */
         /* TRN */         /* TLN */         /* TRNE */      /* TLNE */
         FBR,              FBR|SWAR,         FBR,            FBR|SWAR,
         /* TRNA */        /* TLNA */        /* TRNN */      /* TLNN */
@@ -560,29 +576,30 @@ int opflags[] = {
         /* TDNA */        /* TSNA */        /* TDNN */      /* TSNN */
         FBR|FCE,          FBR|SWAR|FCE,     FBR|FCE,        FBR|SWAR|FCE,
         /* TRZ */         /* TLZ */         /* TRZE */      /* TLZE */
-        FBR|SAC,          FBR|SAC|SWAR,     FBR|SAC,        FBR|SAC|SWAR,
+        FBR|SAC,          FBR|SWAR|SAC,     FBR|SAC,        FBR|SWAR|SAC,
         /* TRZA */        /* TLZA */        /* TRZN */      /* TLZN */
-        FBR|SAC,          FBR|SAC|SWAR,     FBR|SAC,        FBR|SAC|SWAR,
+        FBR|SAC,          FBR|SWAR|SAC,     FBR|SAC,        FBR|SWAR|SAC,
         /* TDZ */         /* TSZ */         /* TDZE */      /* TSZE */
-        FBR|SAC|FCE,      FBR|SAC|SWAR|FCE, FBR|SAC|FCE,    FBR|SAC|SWAR|FCE,
+        FBR|SAC|FCE,      FBR|SWAR|SAC|FCE, FBR|SAC|FCE,    FBR|SWAR|SAC|FCE,
         /* TDZA */        /* TSZA */        /* TDZN */      /* TSZN */
-        FBR|SAC|FCE,      FBR|SAC|SWAR|FCE, FBR|SAC|FCE,    FBR|SAC|SWAR|FCE,
+        FBR|SAC|FCE,      FBR|SWAR|SAC|FCE, FBR|SAC|FCE,    FBR|SWAR|SAC|FCE,
         /* TRC */         /* TLC */         /* TRCE */      /* TLCE */
-        FBR|SAC,          FBR|SAC|SWAR,     FBR|SAC,        FBR|SAC|SWAR,
+        FBR|SAC,          FBR|SWAR|SAC,     FBR|SAC,        FBR|SWAR|SAC,
         /* TRCA */        /* TLCA */        /* TRCN */      /* TLCN */
-        FBR|SAC,          FBR|SAC|SWAR,     FBR|SAC,        FBR|SAC|SWAR,
+        FBR|SAC,          FBR|SWAR|SAC,     FBR|SAC,        FBR|SWAR|SAC,
         /* TDC */         /* TSC */         /* TDCE */      /* TSCE */
-        FBR|SAC|FCE,      FBR|SAC|SWAR|FCE, FBR|SAC|FCE,    FBR|SAC|SWAR|FCE,
+        FBR|SAC|FCE,      FBR|SWAR|SAC|FCE, FBR|SAC|FCE,    FBR|SWAR|SAC|FCE,
         /* TDCA */        /* TSCA */        /* TDCN */      /* TSCN */
-        FBR|SAC|FCE,      FBR|SAC|SWAR|FCE, FBR|SAC|FCE,    FBR|SAC|SWAR|FCE,
+        FBR|SAC|FCE,      FBR|SWAR|SAC|FCE, FBR|SAC|FCE,    FBR|SWAR|SAC|FCE,
         /* TRO */         /* TLO */         /* TROE */      /* TLOE */
-        FBR|SAC,          FBR|SAC|SWAR,     FBR|SAC,        FBR|SAC|SWAR,
+        FBR|SAC,          FBR|SWAR|SAC,     FBR|SAC,        FBR|SWAR|SAC,
         /* TROA */        /* TLOA */        /* TRON */      /* TLON */
-        FBR|SAC,          FBR|SAC|SWAR,     FBR|SAC,        FBR|SAC|SWAR,
+        FBR|SAC,          FBR|SWAR|SAC,     FBR|SAC,        FBR|SWAR|SAC,
         /* TDO */         /* TSO */         /* TDOE */      /* TSOE */
-        FBR|SAC|FCE,      FBR|SWAR|SAC|FCE, FBR|SAC|FCE,    FBR|SAC|SWAR|FCE,
+        FBR|SAC|FCE,      FBR|SWAR|SAC|FCE, FBR|SAC|FCE,    FBR|SWAR|SAC|FCE,
         /* TDOA */        /* TSOA */        /* TDON */      /* TSON */
-        FBR|SAC|FCE,      FBR|SWAR|SAC|FCE, FBR|SAC|FCE,    FBR|SAC|SWAR|FCE,
+        FBR|SAC|FCE,      FBR|SWAR|SAC|FCE, FBR|SAC|FCE,    FBR|SWAR|SAC|FCE,
+
         /* IOT  Instructions */
         0,                0,                0,              0,
         0,                0,                0,              0,
@@ -641,41 +658,36 @@ void clr_interrupt(int dev) {
  */
 int check_irq_level() {
      int i, lvl;
-     int pi_ok, pi_t;
+
+     check_apr_irq();
+     /* If not enabled, check if any pending Processor IRQ */
+     if (pi_enable == 0) { 
+        if (PIR != 0) {
+            pi_enc = 1;
+            for(lvl = 0100; lvl != 0; lvl >>= 1) {
+                if (PIR & lvl)
+                   return 1;
+                pi_enc++;
+            }
+        }
+        return 0;
+     }
 
      /* Scan all devices */
      for(i = lvl = 0; i < 128; i++)
         lvl |= dev_irq[i];
      if (lvl == 0)
         pi_pending = 0;
-     PIR |= (lvl & PIE);
+     pi_req = (lvl & PIE) | PIR;
      /* Handle held interrupt requests */
-     pi_t = (~PIR & ~PIH) >> 1;
-     pi_ok = 0100 & (PIR & ~PIH);
-     /* Still have a valid interrupt? */
-     if (!pi_ok) {
-        /* None at level 1, check for lower level */
-         lvl = 0040;
-         for(i = 2; i <= 7; i++) {
-            if (lvl & pi_t) {
-                pi_ok |= lvl;
-                lvl >>= 1;
-            } else {
-                break;
-            }
+     i = 1;
+     for(lvl = 0100; lvl != 0; lvl >>= 1, i++) {
+         if (lvl & PIH)
+            break;
+         if (pi_req & lvl) {
+            pi_enc = i;
+            return 1;
          }
-     }
-     /* We have 1 bit for each non held interrupt. */
-     pi_req = PIR & ~PIH & pi_ok;
-     if (pi_req) {
-        int pi_r = pi_req;
-        for(lvl = i = 1; i<=7; i++, lvl++) {
-           if (pi_r & 0100)
-              break;
-           pi_r <<= 1;
-        }
-        pi_enc = lvl;
-        return 1;
      }
      return 0;
 }
@@ -688,16 +700,13 @@ void restore_pi_hold() {
 
      if (!pi_enable)
         return;
-     /* Compute mask for pi_ok */
-     lvl = 0100;
      /* Clear HOLD flag for highest interrupt */
-     for(i = 1; i <= 7; i++) {
+     for(lvl = 0100; lvl != 0; lvl >>= 1) {
         if (lvl & PIH) {
             PIR &= ~lvl;
             PIH &= ~lvl;
             break;
          }
-         lvl >>= 1;
      }
      pi_pending = 1;
 }
@@ -706,9 +715,88 @@ void restore_pi_hold() {
  * Hold interrupts at the current level.
  */
 void set_pi_hold() {
-     PIH |= 0200 >> pi_enc;
      PIR &= ~(0200 >> pi_enc);
+     if (pi_enable)
+        PIH |= (0200 >> pi_enc);
 }
+
+/*
+ * PI device for KA and KI
+ */
+t_stat dev_pi(uint32 dev, uint64 *data) {
+    uint64 res = 0;
+    switch(dev & 3) {
+    case CONO:
+        /* Set PI flags */
+        res = *data;
+        if (res & 010000) {
+           PIR = PIH = PIE = 0;
+           pi_enable = 0;
+           parity_irq = 0;
+        }
+        if (res & 0200) {
+           pi_enable = 1;
+           check_apr_irq();
+        }
+        if (res & 0400)
+           pi_enable = 0;
+        if (res & 01000)
+           PIE &= ~(*data & 0177);
+        if (res & 02000)
+           PIE |= (*data & 0177);
+        if (res & 04000) {
+           PIR |= (*data & 0177);
+           pi_pending = 1;
+        }
+#if KI
+        if (res & 020000) {
+           PIR &= ~(*data & 0177);
+        }
+#endif
+        if (res & 040000)
+           parity_irq = 1;
+        if (res & 0100000)
+           parity_irq = 0;
+        sim_debug(DEBUG_CONI, &cpu_dev, "CONI PI %012llo\n", *data);
+        break;
+
+     case CONI:
+        res = PIE;
+        res |= (pi_enable << 7);
+        res |= (PIH << 8);
+#if KI
+        res |= ((uint64)(PIR) << 18);
+#endif
+        res |= (parity_irq << 15);
+        *data = res;
+        sim_debug(DEBUG_CONO, &cpu_dev, "CONO PI %012llo\n", *data);
+        break;
+
+    case DATAO:
+        /* Set lights */
+    case DATAI:
+        break;
+    }
+    return SCPE_OK;
+}
+
+/*
+ * Non existent device
+*/
+t_stat null_dev(uint32 dev, uint64 *data) {
+    switch(dev & 3) {
+    case CONI:
+    case DATAI:
+         *data = 0;
+         break;
+
+    case CONO:
+    case DATAO:
+         break;
+    }
+    return SCPE_OK;
+}
+
 
 #if KI
 static int      timer_irq, timer_flg;
@@ -782,14 +870,14 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
  * Check if the last operation caused a APR IRQ to be generated.
  */
 void check_apr_irq() {
-     if (apr_irq) {
+     if (pi_enable && apr_irq) {
          int flg = 0;
          clr_interrupt(0);
          flg |= inout_fail | nxm_flag;
          if (flg)
              set_interrupt(0, apr_irq);
      }
-     if (clk_en && clk_flg)
+     if (pi_enable && clk_en && clk_flg)
          set_interrupt(4, clk_irq);
 }
 
@@ -854,11 +942,77 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
 #endif
 
 #if KA
+
+#if BBN
+t_stat dev_pag(uint32 dev, uint64 *data) {
+    uint64 res = 0;
+    int    i;
+    int    page_limit[] = {
+        01000, 0040, 0100, 0140, 0200, 0240, 0300, 0340};
+    switch(dev & 03) {
+    case CONI:
+        break;
+
+     case CONO:
+        switch (*data & 07) {
+        case 0:  /* Clear page tables, reload from 71 & 72 */
+                 for (i = 0; i < 512; i++)
+                    e_tlb[i] = u_tlb[i] = 0;
+                 res = M[071];
+                 mon_base_reg = (res & 0377);
+                 ac_base = (res >> 13) & 037;
+                 user_base_reg = (res >> 18) & 0377;
+                 user_limit = page_limit[(res >> 19) & 07];
+                 pur = M[072];
+                 break;
+
+        case 1:  /* Clear exec mapping */
+                 for (i = 0; i < 512; i++)
+                    e_tlb[i] = 0;
+                 break;
+
+        case 2:  /* Clear mapping for next write */
+                 next_write = 1;
+                 break;
+
+        case 3:  /* Clear user mapping */
+                 for (i = 0; i < 512; i++)
+                     u_tlb[i] = 0;
+                 break;
+
+        case 4:  /* Turn off pager */
+        case 5:  /* same as 4 */
+                 page_enable = 0;
+                 break;
+
+        case 6:  /* Pager on, no resident mapping */
+                 page_enable = 1;
+                 exec_map = 0;
+                 break;
+
+        case 7:  /* Pager on, resident mapping */
+                 page_enable = 1;
+                 exec_map = 1;
+                 break;
+        }
+        sim_debug(DEBUG_CONO, &cpu_dev, "CONO PAG %012llo\n", *data);
+        break;
+
+    case DATAO:
+       break;
+
+    case DATAI:
+       break;
+    }
+    return SCPE_OK;
+}
+#endif
+
 /*
  * Check if the last operation caused a APR IRQ to be generated.
  */
 void check_apr_irq() {
-     if (apr_irq) {
+     if (pi_enable && apr_irq) {
          int flg = 0;
          clr_interrupt(0);
          flg |= clk_en & clk_flg;
@@ -869,6 +1023,7 @@ void check_apr_irq() {
              set_interrupt(0, apr_irq);
      }
 }
+
 
 /*
  * APR Device for KA10.
@@ -915,10 +1070,8 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
             nxm_flag = 0;
         if (res & 020000)
             mem_prot = 0;
-        if (res & 0200000) {
+        if (res & 0200000) 
             reset_all(1);
-            clk_flg = ov_irq = fov_irq = nxm_flag = mem_prot = push_ovf = 0;
-        }
         if (res & 0400000)
             push_ovf = 0;
         check_apr_irq();
@@ -946,81 +1099,18 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
 #endif
 
 
-/*
- * PI device for KA and KI
- */
-t_stat dev_pi(uint32 dev, uint64 *data) {
-    uint64 res = 0;
-    switch(dev & 3) {
-    case CONO:
-        /* Set PI flags */
-        res = *data;
-        if (res & 010000) {
-           PIR = PIH = PIE = 0;
-           pi_enable = 0;
-           parity_irq = 0;
-        }
-        if (res & 0200)
-           pi_enable = 1;
-        if (res & 0400)
-           pi_enable = 0;
-        if (res & 01000)
-           PIE &= ~(*data & 0177);
-        if (res & 02000)
-           PIE |= (*data & 0177);
-        if (res & 04000) {
-           PIR |= (*data & 0177);
-           pi_pending = 1;
-        }
-        if (res & 040000)
-           parity_irq = 1;
-        if (res & 0100000)
-           parity_irq = 0;
-        sim_debug(DEBUG_CONI, &cpu_dev, "CONI PI %012llo\n", *data);
-        break;
-
-     case CONI:
-        res = PIE;
-        res |= (pi_enable << 7);
-        res |= (PIH << 8);
-#if KI
-        res |= ((uint64)(PIR) << 18);
-#endif
-        res |= (parity_irq << 15);
-        *data = res;
-        sim_debug(DEBUG_CONO, &cpu_dev, "CONO PI %012llo\n", *data);
-        break;
-
-    case DATAO:
-        /* Set lights */
-    case DATAI:
-        break;
-    }
-    return SCPE_OK;
-}
-
-/*
- * Non existent device
-*/
-t_stat null_dev(uint32 dev, uint64 *data) {
-    switch(dev & 3) {
-    case CONI:
-    case DATAI:
-         *data = 0;
-         break;
-
-    case CONO:
-    case DATAO:
-         break;
-    }
-    return SCPE_OK;
-}
-
 #if KI
 /*
  * Handle page lookup on KI10
+ *
+ * addr is address to look up.
+ * flag is set for pi cycle and user overide.
+ * loc  is final address.
+ * wr   indicates whether cycle is read or write.
+ * cur_context is set when access should ignore xct_flag
+ * fetch is set for instruction fetches.
  */
-int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
+int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch) {
     uint64   data;
     int      base = 0;
     int      page = (RMASK & addr) >> 9;
@@ -1070,12 +1160,17 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
         /* Pages 000-037 direct map */
         } else {
             /* Check if supervisory mode */
-            if (!flag && ((FLAGS & PUBLIC) != 0)) {
-               /* Handle public violation */
-                fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 27) | 021LL;
-                private_page = 1;
-            }
             *loc = addr;
+            /* If PUBLIC and private page, make sure we are fetching a Portal */
+            if (!flag && ((FLAGS & PUBLIC) != 0) &&
+                (!fetch || (M[addr] & 00777040000000LL) != 0254040000000LL)) {
+               /* Handle public violation */
+                fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 27)
+                                      | 021LL;
+                page_fault = 1;
+fprintf(stderr, "suprt PC=%06o, %012llo %06o\n\r", PC, M[addr], FLAGS << 5);
+                return !wr;
+            }
             return 1;
         }
     }
@@ -1101,10 +1196,15 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
     }
     *loc = ((data & 017777) << 9) + (addr & 0777);
     /* Access check logic */
-    if (!flag && ((FLAGS & PUBLIC) != 0) && ((data & 0200000) == 0)) {
+
+    /* If PUBLIC and private page, make sure we are fetching a Portal */
+    if (!flag && ((FLAGS & PUBLIC) != 0) && ((data & 0200000) == 0) &&
+         (!fetch || (M[*loc] & 00777040000000LL) != 0254040000000LL)) {
         /* Handle public violation */
         fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 27) | 021LL;
-        private_page = 1;
+fprintf(stderr, "pub PC=%06o, %012llo\n\r", PC, fault_data);
+        page_fault = 1;
+        return fetch;
     }
     if (cur_context && ((data & 0200000) != 0))
         FLAGS |= PUBLIC;
@@ -1115,12 +1215,10 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
         fault_data |= (data & 0040000) ? 002LL : 0LL;   /* S */
         fault_data |= wr;
         page_fault = 1;
-#if 0
         fprintf(stderr, "xlat %06o %03o ", addr, page >> 1);
-        fprintf(stderr, " %06o %03o %012llo %o", base, page, data, uf);
+        fprintf(stderr, " %06o %04o %012llo %o", base, page, data, uf);
         fprintf(stderr, " -> %06llo wr=%o PC=%06o ", fault_data, wr, PC);
         fprintf(stderr, " fault\n\r");
-#endif
         return 0;
     }
     return 1;
@@ -1129,14 +1227,14 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
 /*
  * Register access on KI 10
  */
-uint64 get_reg(int reg, int cur_context) {
+uint64 get_reg(int reg) {
     if (FLAGS & USER)
        return FM[fm_sel|(reg & 017)];
     else
        return FM[reg & 017];
 }
 
-void   set_reg(int reg, uint64 value, int cur_context) {
+void   set_reg(int reg, uint64 value) {
     if (FLAGS & USER)
         FM[fm_sel|(reg & 017)] = value;
     else
@@ -1155,7 +1253,6 @@ int Mem_read_nopage() {
         sim_interval--;
         if (AB >= (int)MEMSIZE) {
             nxm_flag = 1;
-            set_interrupt(0, apr_irq);
             return 1;
         }
         MB = M[AB];
@@ -1176,7 +1273,6 @@ int Mem_write_nopage() {
         sim_interval--;
         if (AB >= (int)MEMSIZE) {
             nxm_flag = 1;
-            set_interrupt(0, apr_irq);
             return 1;
         }
         M[AB] = MB;
@@ -1185,21 +1281,53 @@ int Mem_write_nopage() {
 }
 
 
-#else
+#endif
+
+#if KA
+#if ITS
+int its_load_tlb(uint32 reg, int page, uint32 *tlb) {
+    uint64 data;
+    int len = (reg >> 19) & 077;
+    int entry = (reg & 01777777) + ((page & 0377) >> 1);
+    if ((page >> 1) > len) {
+       fault_data |= 0200;
+       return 1;
+    }
+    if (entry > (int)MEMSIZE) {
+        nxm_flag = 1;
+        fault_data |= 0400;
+        return 1;
+    }
+    data = M[entry];
+    if (page & 1) {
+        data &= ~017000LL;
+        data |= ((uint64)(age & 017)) << 9;
+    } else {
+        data &= ~(017000LL << 18);
+        data |= ((uint64)(age & 017)) << (9+18);
+    }
+    M[entry] = data;
+    if ((page & 1) == 0)
+        data >>= 18;
+    data &= RMASK;
+    *tlb = data;
+    pag_reload = ((pag_reload + 1) & 017);
+    return 0;
+}
+#endif
 
 /*
  * Translation logic for KA10
  */
-int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
+int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch) {
 
 #if ITS
     if (cpu_unit.flags & UNIT_ITSPAGE) {
         uint64   data;
         int      base = 0;
-        int      page = (RMASK & addr) >> 9;
+        int      page = (RMASK & addr) >> 10;
+        int      entry;
         int      uf = (FLAGS & USER) != 0;
-        if (page_fault)
-            return 0;
 
         /* If paging is not enabled, address is direct */
         if (!page_enable) {
@@ -1224,79 +1352,82 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context) {
                  }
         }
 
-        /* If user, check if small user enabled */
+        /* AC & 1 = ??? */
+        /* AC & 2 = Read User */
+        /* AC & 4 = Write User */
+        /* AC & 8 = Inhibit mem protect, skip */
+
+        /* Add in MAR checking */
+        if (addr == (mar & RMASK)) {
+           switch((mar >> 18) & 03) {
+           case 0: break;
+           case 1: if (fetch) {
+                      mem_prot = 1;
+                      fault_data |= 2;
+                   }
+                   break;
+           case 2: if (!wr)
+                      break;
+                   /* Fall through */
+           case 3: mem_prot = 1;
+                   fault_data |= 2;
+                   break;
+           }
+        }
+
+        /* Map the page */
         if (!uf) {
             /* Handle system mapping */
-            /* Pages 400-777 via EBR */
-            if (page & 0400) {
-                base = 1;
-            } else {
-            /* Pages 000-037 direct map */
+            if ((page & 0400) == 0 || (fault_data & 04) == 0) {
+            /* Direct map 0-377 or all if bit 2 off */
                 *loc = addr;
                 return 1;
             }
-        }
-        /* Map the page */
-        if (base) {
-            data = e_tlb[page];
-            if (data == 0) {
-               int len = (dbr3 >> 19) & 077;
-               if ((page >> 1) > len) 
-                  goto fault;
-               data = M[(dbr3 & 01777777) + (page >> 1)];
-               e_tlb[page & 0776] = RMASK & (data >> 18);
-               e_tlb[page | 1] = RMASK & data;
-               if (page & 1) {
-                   data &= ~017000LL;
-                   data |= ((uint64)(age & 017)) << 9;
-               } else {
-                   data &= ~(017000LL << 18);
-                   data |= ((uint64)(age & 017)) << (9+18);
-               }
-               M[(dbr3 & 01777777) + (page >> 1)] = data;
-               data = e_tlb[page];
-               pag_reload = ((pag_reload + 1) & 037) | 040;
-            }
+            if (its_load_tlb(dbr3, page, &e_tlb[page]))
+                goto fault;
         } else {
             data = u_tlb[page];
             if (data == 0) {
                if (page & 0400) {
-                   int len = (dbr2 >> 19) & 077;
-                   if (((page & 0377) >> 1) > len) 
+                   if (its_load_tlb(dbr2, page, &u_tlb[page]))
                       goto fault;
-                   data = M[(dbr2 & 01777777) + ((page & 0377) >> 1)];
                } else {
-                   int len = (dbr1 >> 19) & 077;
-                   if ((page >> 1) > len) 
+                   if (its_load_tlb(dbr1, page, &u_tlb[page]))
                       goto fault;
-                   data = M[(dbr1 & 01777777) + (page >> 1)];
                }
-               if (page & 1) {
-                   data &= ~017000LL;
-                   data |= ((uint64)(age & 017)) << 9;
-               } else {
-                   data &= ~(017000LL << 18);
-                   data |= ((uint64)(age & 017)) << (9+18);
-               }
-               if (page & 0400) {
-                   M[(dbr2 & 01777777) + ((page & 0377) >> 1)] = data;
-               } else {
-                   M[(dbr1 & 01777777) + (page >> 1)] = data;
-               }
-               u_tlb[page & 01776] = RMASK & (data >> 18);
-               u_tlb[page | 1] = RMASK & data;
-               data = u_tlb[page];
-               pag_reload = ((pag_reload + 1) & 037) | 040;
             }
         }
-        *loc = ((data & 0777) << 9) + (addr & 0777);
-        /* Access check logic */
 
+        *loc = ((data & 0777) << 10) + (addr & 01777);
+        if (fetch && (FLAGS & PURE) && (data & 0600000) != 0100000) {
+            fault_data |= 020;
+            fault_addr = (page << 10) | ((base == 0)? 01000000 : 0) |
+                   (data & 01777) ;
+            if (xct_flag & 010) {
+                PC = (PC + 1) & RMASK;
+            } else {
+                mem_prot = 1;
+                fault_data |= 01000;
+            }
+            return 0;
+        }
+        /* Access check logic */
         if ((data & 0600000) == 0 || (wr & ((data & 0600000) != 0600000))) {
+            switch ((data & 0600000) >> 15) {
+            case 0: fault_data |= 0010; break;
+            case 1: fault_data |= 0100; break;
+            case 2: fault_data |= 0040; break;
+            case 3: break;
+            }
 fault:
-           fault_addr = (page << 9) | ((base == 0)? 01000000 : 0) |  
-                   (data & 0777) ;
-            page_fault = 1;
+            /* Update fault data */
+            fault_addr = (page) | ((uf)? 0400 : 0) | ((data & 0777) << 9);
+            if (xct_flag & 010) {
+                PC = (PC + 1) & RMASK;
+            } else {
+                mem_prot = 1;
+                fault_data |= 01000;
+            }
             fprintf(stderr, "xlat %06o %03o ", addr, page >> 1);
             fprintf(stderr, " %06o %03o %012llo %o", base, page, data, uf);
             fprintf(stderr, " -> %06o wr=%o PC=%06o ", fault_addr, wr, PC);
@@ -1306,55 +1437,268 @@ fault:
         return 1;
       }
 #endif
+#if BBN
+      /* Group 0, 01 = 00         
+                  bit 2 = Age 00x                                        0100000
+                  bit 3 = Age 02x                                        0040000
+                  bit 4 = Age 04x                                        0020000
+                  bit 5 = Age 06x                                        0010000
+                  bit 6 = Monitor after loading AR trap                  0004000 */    
+       /* Group 1, 01 = 01                                               0200000
+                  bit 3 = Shared page not in core                        0040000
+                  bit 4 = page table not in core (p.t.2)                 0020000
+                  bit 5 = 2nd indirect, private not in core (p.t.3)      0010000
+                  bit 6 = Indirect shared not in core (p.t.2 || p.t.3)   0004000
+                  bit 7 = Indirect page table not in core (p.t.3)        0002000
+                  bit 8 = Excessive indirect pointers (>2)               0001000 */
+       /* Group 2, 01 = 10                                               0400000
+                  bit 2 = Private not in core 
+                  bit 3 = Write copy trap (bit 9 in p.t.)
+                  bit 4 = user trap (bit 8 in p.t.)
+                  bit 5 = access trap (p.t. bit 12 = 0 or bits 10-11=3)
+                  bit 6 = illegal read or execute 
+                  bit 7 = illegal write
+                  bit 8 = address limit register violation or p.t. bits 
+                          0,1 = 3 (illegal format) */
+        /* Group 3, 01 = 11  (in 2nd or 3rd p.t.)                        060000
+                  bit 2 = private not in core 
+                  bit 3 = write copy trap (bit 9 in p.t.)
+                  bit 4 = user trap (bit 8 in p.t.)
+                  bit 5 = access trap (p.t. bit 12 = 0 or bits 10-11=3)
+                  bit 6 = illegal read or execute
+                  bit 7 = illegal write 
+                  bit 8 = address limit register violation or p.t. bits
+                          0,1 = 3 (illegal format */
+    if (cpu_unit.flags & UNIT_BBNPAGE) {
+        uint64   data;
+        uint32   tlb_data;
+        uint64   traps;
+        int      base = 0;
+        int      trap = 0;
+        int      lvl = 0;
+        int      page = (RMASK & addr) >> 9;
+        int      uf = (FLAGS & USER) != 0;
+
+        if (page_fault)
+            return 0;
+
+        /* If paging is not enabled, address is direct */
+        if (!page_enable) {
+            *loc = addr;
+            return 1;
+        }
+
+        /* If this is modify instruction use write access */
+        wr |= modify;
+
+        /* Umove instructions handled here */
+        if ((IR & 0774) == 0100 && (FLAGS & EXJSYS) == 0)
+            uf = 1;
+        /* Figure out if this is a user space access */
+        if (flag)
+            uf = 0;
+        else if ((FLAGS & EXJSYS) == 0 && xct_flag != 0) {
+             if (xct_flag & 010 && cur_context)
+                 uf = 1;
+             if (xct_flag & 004 && wr == 0)
+                 uf = 1;
+             if (xct_flag & 002 && BYF5)
+                 uf = 1;
+             if (xct_flag & 001 && wr == 1)
+                 uf = 1;
+        }
+
+        /* If not really user mode and register access */
+        if (uf && (FLAGS & USER) == 0 && addr < 020) {
+            addr |= 0775000 | (ac_base << 4);
+            uf = 0;
+        }
+
+        if (uf) {
+            if (page > user_limit) {
+                /* over limit violation */
+                fault_data = 0401000;
+                goto fault_bbn;
+            }
+            base = user_base_reg;
+            tlb_data = u_tlb[page];
+        } else {
+            /* 000 - 077 resident map */
+            /* 100 - 177 per processor map */
+            /* 200 - 577 monitor map */
+            /* 600 - 777 per process map */
+            if ((page & 0700) == 0 && exec_map == 0) {
+                 *loc = addr;
+                 return 1;
+            }
+            if ((page & 0600) == 0600)
+                 base = mon_base_reg;
+            else
+                 base = 03000;
+            tlb_data = e_tlb[page];
+        }
+        if (tlb_data != 0) {
+access:
+            *loc = ((tlb_data & 03777) << 9) + (addr & 0777);
+            /* Check access */
+            if (wr && (tlb_data & 0200000) == 0) {
+                fault_data = 0402000;
+                goto fault_bbn;
+            } else if (fetch && (tlb_data & 0100000) == 0) {
+                fault_data = 0404000;
+                goto fault_bbn;
+            } else if ((tlb_data & 0400000) == 0) {
+                fault_data = 0404000;
+                goto fault_bbn;
+            }
+            return 1;
+        }
+        traps = FMASK;
+        /* Map the page */
+map_page:
+        while (tlb_data == 0) {
+            data = M[base + page];
+
+            switch ((data >> 33) & 03) {
+            case 0:      /* Direct page */
+                 /* Bit 4 = execute */
+                 /* Bit 3 = Write */
+                 /* Bit 2 = Read */
+                 page = data & BBN_PAGE;
+                 traps &= data & (BBN_MERGE|BBN_TRPPG);
+                 tlb_data = (data & (BBN_EXEC|BBN_WRITE|BBN_READ) >> 16) | 
+                             (data & 03777);
+                 break;
+
+            case 1:      /* Shared page */
+                 /* Check trap */
+                 base = 020000;
+                 page = (data & BBN_SPT) >> 9;
+                 traps &= data & (BBN_MERGE|BBN_PAGE);
+                 data = 0;
+                 lvl ++;
+                 break;
+
+            case 2:      /* Indirect page */
+                 if (lvl == 2) {
+                     /* Trap */
+                     fault_data =  0201000;
+                     goto fault_bbn;
+                 }
+                 page = data & BBN_PN;
+                 base = 020000 + ((data & BBN_SPT) >> 9);
+                 traps &= data & (BBN_MERGE|BBN_PAGE);
+                 data = 0;
+                 lvl ++;
+                 break;
+
+            case 3:      /* Invalid page */
+                 /* Trap all  */
+                 fault_data = ((lvl != 0)? 0200000: 0)  | 0401000;
+                 goto fault_bbn;
+            }
+            if ((traps & (BBN_TRP|BBN_TRP1)) == (BBN_TRP|BBN_TRP1)) {
+               fault_data = 04000;
+               goto fault_bbn;
+            }
+        }
+        if (uf) {
+            u_tlb[page] = tlb_data; 
+        } else {
+            e_tlb[page] = tlb_data;
+        }
+        /* Handle traps */
+        if (page_fault)
+           goto fault_bbn1;
+        if (wr && (traps & BBN_TRPMOD)) {
+            fault_data = ((lvl != 0)? 0200000: 0)  | 0440000;
+            goto fault_bbn;
+        }
+        if ((traps & BBN_TRPUSR)) {
+            fault_data = ((lvl != 0)? 0200000: 0)  | 0420000;
+            goto fault_bbn;
+        }
+        if ((traps & BBN_ACC) == 0 || (traps & BBN_TRP)) {
+            fault_data = ((lvl != 0)? 0200000: 0)  | 0410000;
+            goto fault_bbn;
+        }
+        /* Update CST */
+        data = M[04000 + (tlb_data & 03777)];
+        if ((data & 00700000000000LL) == 0) {
+            fault_data = 0100000 >> ((data >> 31) & 03);
+            goto fault_bbn;
+        }
+        data &= ~00777000000000LL; /* Clear age */
+        if (wr) 
+           data |= 00000400000000LL; /* Set modify */
+        data |= pur; 
+        M[04000 + (tlb_data & 03777)] = data;
+        goto access;
+      /* Handle fault */
+fault_bbn:
+      /* Write location of trap to PSB 571 */
+      /* If write write MB to PSB 752 */
+      /* Force APR to execute at location 70 */
+
+      /* Status word */
+      /* RH = Effective address */
+      /* Bit 17 = Exec Mode        0000001 */
+      /* Bit 16 = Execute request  0000002 */
+      /* Bit 15 = Write            0000004 */
+      /* Bit 14 = Read             0000010 */
+      /* Bit 13 = Ind              0000020 */
+      /* Bit 12 = PI in progress   0000040 */
+      /* Bit 11 = Key in progress  0000100 */
+      /* Bit 10 = non-ex-mem       0000200 */
+      /* Bit  9 = Parity           0000400 */
+      /* Bit 0-8 = status */         
+      if ((FLAGS & USER) == 0)
+         fault_data |= 01;
+      if (fetch) 
+         fault_data |= 02;
+      if (wr) 
+         fault_data |= 04;
+      else
+         fault_data |= 010;
+      if (cur_context)
+         fault_data |= 020;
+      if (uuo_cycle)
+         fault_data |= 040;
+      page_fault = 1;
+      base = mon_base_reg;
+      tlb_data = e_tlb[0777];
+      page = 0777;
+      goto map_page;
+fault_bbn1:
+      M[((tlb_data & 03777) << 9) | 0571] = ((uint64)fault_data) << 18 | addr;
+      if (wr) 
+          M[((tlb_data & 03777) << 9) | 0572] = MB;
+      return 0;
+      }
+#endif
 
       if (!flag && (FLAGS & USER) != 0) {
-          if (addr <= ((Pl << 10) + 01777))
-             *loc = (AB + (Rl << 10)) & RMASK;
-          else if (cpu_unit.flags & UNIT_TWOSEG &&
-                    (!Pflag & wr) == wr &&
-                    (AB & 0400000) != 0 &&
-                    (addr <= ((Ph << 10) + 01777)))
-             *loc = (AB + (Rh << 10)) & RMASK;
-          else {
-            mem_prot = 1;
-            set_interrupt(0, apr_irq);
-            return 0;
+          if (addr <= ((Pl << 10) + 01777)) {
+             *loc = (addr + (Rl << 10)) & RMASK;
+             return 1;
           }
+          if (cpu_unit.flags & UNIT_TWOSEG &&
+             (addr & 0400000) != 0 && (addr <= ((Ph << 10) + 01777))) {
+             if ((Pflag == 0) || (Pflag == 1 && wr == 0)) {
+                *loc = (addr + (Rh << 10)) & RMASK;
+                return 1;
+             }
+          }
+          mem_prot = 1;
+          return 0;
       } else {
          *loc = addr;
       }
       return 1;
 }
 
-/*
- * Register access on KA 10 under ITS
- */
-uint64 get_reg(int reg, int cur_context) {
-#if ITS
-    if (cpu_unit.flags & UNIT_ITSPAGE) {
-        if (xct_flag != 0 && !cur_context && (FLAGS & USER) == 0 &&
-           (xct_flag & 2) != 0)
-           return M[ac_ptr + (reg & 017)];
-    }
-#endif
-    return FM[reg & 017];
-}
-
-void   set_reg(int reg, uint64 value, int cur_context) {
-#if ITS
-    if (cpu_unit.flags & UNIT_ITSPAGE) {
-        if (xct_flag != 0 && !cur_context && (FLAGS & USER) == 0 && 
-           (xct_flag & 4) != 0) {
-               M[ac_ptr + (reg & 017)] = value;
-               return;
-        }
-    }
-#endif
-    FM[reg & 017] = value;
-}
-
-//#define get_reg(reg)                 FM[(reg) & 017]
-//#define set_reg(reg, value)          FM[(reg) & 017] = value
+#define get_reg(reg)                 FM[(reg) & 017]
+#define set_reg(reg, value)          FM[(reg) & 017] = value
 #endif
 
 /*
@@ -1362,13 +1706,29 @@ void   set_reg(int reg, uint64 value, int cur_context) {
  *
  * Return of 0 if successful, 1 if there was an error.
  */
-int Mem_read(int flag, int cur_context) {
+int Mem_read(int flag, int cur_context, int fetch) {
     int addr;
 
     if (AB < 020) {
+#if ITS
+        if (cpu_unit.flags & UNIT_ITSPAGE) {
+            if (xct_flag != 0 && !cur_context && (FLAGS & USER) == 0 &&
+               (xct_flag & 2) != 0)
+               MB = M[ac_stack + AB];
+               return 0;
+        }
+#endif
+#if BBN
+        if (cpu_unit.flags & UNIT_BBNPAGE) {
+            if (xct_flag != 0 && !cur_context && (FLAGS & USER) == 0 &&
+               (xct_flag & 2) != 0)
+               MB = M[ac_stack + AB];
+               return 0;
+        }
+#endif
 #if KI | KL
         if (FLAGS & USER) {
-           MB =  get_reg(AB, cur_context);
+           MB =  get_reg(AB);
            return 0;
         } else {
             if (!cur_context && ((xct_flag & 1) != 0)) {
@@ -1383,17 +1743,16 @@ int Mem_read(int flag, int cur_context) {
             }
         }
 #endif
-        MB = get_reg(AB, cur_context);
+        MB = get_reg(AB);
     } else {
 #if KI | KL
 read:
 #endif
         sim_interval--;
-        if (!page_lookup(AB, flag, &addr, 0, cur_context))
+        if (!page_lookup(AB, flag, &addr, 0, cur_context, fetch))
             return 1;
         if (addr >= (int)MEMSIZE) {
             nxm_flag = 1;
-            set_interrupt(0, apr_irq);
             return 1;
         }
         MB = M[addr];
@@ -1410,9 +1769,27 @@ int Mem_write(int flag, int cur_context) {
     int addr;
 
     if (AB < 020) {
+#if ITS
+        if (cpu_unit.flags & UNIT_ITSPAGE) {
+            if (xct_flag != 0 && !cur_context && (FLAGS & USER) == 0 &&
+               (xct_flag & 4) != 0) {
+                   M[ac_stack + AB] = MB;
+                   return 0;
+            }
+        }
+#endif
+#if BBN
+        if (cpu_unit.flags & UNIT_BBNPAGE) {
+            if (xct_flag != 0 && !cur_context && (FLAGS & USER) == 0 &&
+               (xct_flag & 4) != 0) {
+                   M[ac_stack + AB] = MB;
+                   return 0;
+            }
+        }
+#endif
 #if KI | KL
         if (FLAGS & USER) {
-            set_reg(AB, MB, cur_context);
+            set_reg(AB, MB);
             return 0;
         } else {
             if (!cur_context &&
@@ -1430,21 +1807,16 @@ int Mem_write(int flag, int cur_context) {
             }
         }
 #endif
-        set_reg(AB, MB, cur_context);
+        set_reg(AB, MB);
     } else {
 #if KI | KL
 write:
 #endif
         sim_interval--;
-        if (!page_lookup(AB, flag, &addr, 1, cur_context))
+        if (!page_lookup(AB, flag, &addr, 1, cur_context, 0))
             return 1;
-#if KI | KL
-        if (private_page)
-            return 1;
-#endif
         if (addr >= (int)MEMSIZE) {
             nxm_flag = 1;
-            set_interrupt(0, apr_irq);
             return 1;
         }
         M[addr] = MB;
@@ -1486,6 +1858,9 @@ int     flag1;
 int     flag3;
 int     instr_count = 0;         /* Number of instructions to execute */
 uint32  IA;
+#if ITS
+char    one_p_arm;                            /* One proceed arm */
+#endif
 
 if (sim_step != 0) {
     instr_count = sim_step;
@@ -1507,8 +1882,10 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
    pi_ov = 0;
    BYF5 = 0;
 #if KI | KL
-   private_page = 0;
    page_fault = 0;
+#endif
+#if ITS
+   one_p_arm = 0;
 #endif
 
   while ( reason == 0) {                                /* loop until ABORT */
@@ -1518,45 +1895,51 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
           }
      }
 
-     if (sim_brk_summ && sim_brk_test(PC, SWMASK('E'))) {
+     if (sim_brk_summ && f_inst_fetch && sim_brk_test(PC, SWMASK('E'))) {
          reason = STOP_IBKPT;
          break;
     }
 
 
+    check_apr_irq();
     /* Normal instruction */
     if (f_load_pc) {
-        AB = PC;
-        uuo_cycle = 0;
-#if KI | KL
+#if ITS
+        if (one_p_arm) {
+           fault_data |= 02000;
+           mem_prot = 1;
+           one_p_arm = 0;
+        }
+#endif
+#if KI | KL | ITS | BBN
+        modify = 0;
         xct_flag = 0;
         trap_flag = 0;
-        modify = 0;
 #endif
+        AB = PC;
+        uuo_cycle = 0;
+        f_pc_inh = 0;
     }
 
     if (f_inst_fetch) {
 #if !(KI | KL)
 fetch:
 #endif
-       if (Mem_read(pi_cycle | uuo_cycle, 1))
+
+       if (Mem_read(pi_cycle | uuo_cycle, 1, 1)) {
+           pi_rq = check_irq_level();
+           if (pi_rq)
+              goto st_pi;
            goto last;
-#if KI | KL
+       }
+
 no_fetch:
-#endif
        IR = (MB >> 27) & 0777;
        AC = (MB >> 23) & 017;
        AD = MB;  /* Save for historical sake */
        IA = AB;
-
        i_flags = opflags[IR];
        BYF5 = 0;
-    }
-
-    /* Second half of byte instruction */
-    if (BYF5) {
-        i_flags = FCE;
-        AB = AR & RMASK;
     }
 
 #if KI | KL
@@ -1565,7 +1948,6 @@ no_fetch:
         AB = 0420 + ((FLAGS & (TRP1|TRP2)) >> 2);
         trap_flag = FLAGS & (TRP1|TRP2);
         FLAGS &= ~(TRP1|TRP2);
-        f_pc_inh = 1;
         pi_cycle = 1;
         AB += (FLAGS & USER) ? ub_ptr : eb_ptr;
         Mem_read_nopage();
@@ -1576,7 +1958,7 @@ no_fetch:
 
     /* Handle indirection repeat until no longer indirect */
     do {
-         if (pi_enable & !pi_cycle & pi_pending
+         if (!pi_cycle & pi_pending
 #if KI | KL
                              & !trap_flag
 #endif
@@ -1587,13 +1969,13 @@ no_fetch:
          AR = MB;
          AB = MB & RMASK;
          if (MB &  017000000) {
-             AR = MB = (AB + get_reg((MB >> 18) & 017, 1)) & FMASK;
+             AR = MB = (AB + get_reg((MB >> 18) & 017)) & FMASK;
              AB = MB & RMASK;
          }
          if (IR != 0254)
              AR &= RMASK;
          if (ind & !pi_rq)
-              if (Mem_read(pi_cycle | uuo_cycle, 1))
+              if (Mem_read(pi_cycle | uuo_cycle, 1, 0))
                  goto last;
          /* Handle events during a indirect loop */
          if (sim_interval-- <= 0) {
@@ -1603,8 +1985,10 @@ no_fetch:
          }
     } while (ind & !pi_rq);
 
+
     /* If there is a interrupt handle it. */
     if (pi_rq) {
+st_pi:
         set_pi_hold(); /* Hold off all lower interrupts */
         pi_cycle = 1;
         pi_rq = 0;
@@ -1640,19 +2024,32 @@ no_fetch:
 #endif
     }
 
+
+#if KI | KL
+    if (page_enable && page_fault) {
+        if (!f_pc_inh && !pi_cycle) 
+            PC = (PC + 1) & RMASK;
+        goto last;
+    }
+#endif
+
 #if ITS
     if (pi_cycle == 0 && cpu_unit.flags & UNIT_ITSPAGE) {
        opc = PC | (FLAGS << 18);
+       if (!f_pc_inh && (FLAGS & ONEP) != 0) {
+          one_p_arm = 1;
+          FLAGS &= ~ONEP;
+       }
     }
 #endif
 
     /* Update history */
 #if KI
-    if (hst_lnt && (fm_sel || PC > 020) && (PC & 0777774) != 0777040 &&
-            (PC & 0777700) != 023700 && (PC != 0527154)) {
+    if (hst_lnt && /*(fm_sel || */PC > 020 && (PC & 0777774) != 0777040 &&
+            (PC & 0777700) != 023700 && (PC != 0526772)) {
 #else
-    if (hst_lnt && PC > 020 /*&& (PC & 0777774) != 0472174 &&
-            (PC & 0777700) != 023700 && (PC != 0527154)*/) {
+    if (hst_lnt && /*(FLAGS & USER) && */ PC > 020 && /*(PC & 0777774) != 0472174 && */
+            (PC & 0777700) != 0113700 && (PC != 0527154)) {
 #endif
             hst_p = hst_p + 1;
             if (hst_p >= hst_lnt) {
@@ -1666,18 +2063,17 @@ no_fetch:
                                 | (mem_prot << 4) | (push_ovf << 3)
 #endif
                        ;
-            hst[hst_p].ac = get_reg(AC, 1);
+            hst[hst_p].ac = get_reg(AC);
     }
 
 
-fetch_opr:
     /* Set up to execute instruction */
     f_inst_fetch = 1;
     f_load_pc = 1;
     nrf = 0;
     fxu_hold_set = 0;
     sac_inh = 0;
-#if KI | KL
+#if KI | KL | ITS | BBN
     modify = 0;
     f_pc_inh = (trap_flag != 0);
 #else
@@ -1685,9 +2081,9 @@ fetch_opr:
 #endif
     /* Load pseudo registers based on flags */
     if (i_flags & (FCEPSE|FCE)) {
-        if (Mem_read(0, 0))
+        if (Mem_read(0, 0, 0))
             goto last;
-#if KI | KL
+#if KI | KL | ITS | BBN
         modify = 1;
 #endif
         AR = MB;
@@ -1695,19 +2091,11 @@ fetch_opr:
 
     if (i_flags & FAC) {
         BR = AR;
-        AR = get_reg(AC, 1);
-    }
-
-    if (i_flags & SWAR) {
-        AR = SWAP_AR;
+        AR = get_reg(AC);
     }
 
     if (i_flags & FBR) {
-        BR = get_reg(AC, 1);
-    }
-
-    if (i_flags & FMB) {
-        BR = MB;
+        BR = get_reg(AC);
     }
 
     if (hst_lnt) {
@@ -1715,9 +2103,13 @@ fetch_opr:
     }
 
     if (i_flags & FAC2) {
-        MQ = get_reg(AC + 1, 1);
+        MQ = get_reg(AC + 1);
     } else if (!BYF5) {
         MQ = 0;
+    }
+
+    if (i_flags & SWAR) {
+        AR = SWAP_AR;
     }
 
     /* Process the instruction */
@@ -1764,8 +2156,8 @@ unasign:
                      FLAGS |= OVR;
               }
               PC = MB & RMASK;
-              f_pc_inh = 1;
               trap_flag = 0;
+              f_pc_inh = 1;
               break;
 #else
               uuo_cycle = 1;
@@ -1804,16 +2196,16 @@ unasign:
               /* On Load AR,MQ has memory operand */
               /* AR,MQ = AC  BR,MB  = mem */
                     /* AR High */
-              if (Mem_read(0, 0))
+              if (Mem_read(0, 0, 0))
                   goto last;
               modify = 1;
               AR = MB;
               BR = AR;
-              AR = get_reg(AC, 1);
-              MQ = get_reg(AC + 1, 1);
+              AR = get_reg(AC);
+              MQ = get_reg(AC + 1);
 
               AB = (AB + 1) & RMASK;
-              if (Mem_read(0, 0))
+              if (Mem_read(0, 0, 0))
                   goto last;
               SC = GET_EXPO(BR);
               SMEAR_SIGN(BR);
@@ -1892,23 +2284,23 @@ dpnorm:
                   AR |= ((uint64)(SCAD & 0377)) << 27;
 
               MQ = ARX;
-              set_reg(AC, AR, 1);
-              set_reg(AC+1, MQ, 1);
+              set_reg(AC, AR);
+              set_reg(AC+1, MQ);
               break;
 
     case 0112: /* DFMP */
               /* On Load AR,MQ has memory operand */
               /* AR,MQ = AC  BR,MB  = mem */
                     /* AR High */
-              if (Mem_read(0, 0))
+              if (Mem_read(0, 0, 0))
                   goto last;
               modify = 1;
               AR = MB;
               BR = AR;
-              AR = get_reg(AC, 1);
-              MQ = get_reg(AC + 1, 1);
+              AR = get_reg(AC);
+              MQ = get_reg(AC + 1);
               AB = (AB + 1) & RMASK;
-              if (Mem_read(0, 0))
+              if (Mem_read(0, 0, 0))
                   goto last;
               SC = GET_EXPO(AR);
               SMEAR_SIGN(AR);
@@ -1944,15 +2336,15 @@ dpnorm:
               /* On Load AR,MQ has memory operand */
               /* AR,MQ = AC  BR,MB  = mem */
                     /* AR High */
-              if (Mem_read(0, 0))
+              if (Mem_read(0, 0, 0))
                   goto last;
               modify = 1;
               AR = MB;
               BR = AR;
-              AR = get_reg(AC, 1);
-              MQ = get_reg(AC + 1, 1);
+              AR = get_reg(AC);
+              MQ = get_reg(AC + 1);
               AB = (AB + 1) & RMASK;
-              if (Mem_read(0, 0))
+              if (Mem_read(0, 0, 0))
                   goto last;
               SC = GET_EXPO(AR);
               SMEAR_SIGN(AR);
@@ -2009,47 +2401,43 @@ dpnorm:
               goto unasign;
 
     case 0120: /* DMOVE */
-              if (Mem_read(0, 0))
+              if (Mem_read(0, 0, 0))
                   goto last;
               AR = MB;
               AB = (AB + 1) & RMASK;
               modify = 0;
-              if (Mem_read(0, 0))
+              if (Mem_read(0, 0, 0))
                    goto last;
               MQ = MB;
-              set_reg(AC, AR, 1);
-              set_reg(AC+1, MQ, 1);
+              set_reg(AC, AR);
+              set_reg(AC+1, MQ);
               break;
 
     case 0121: /* DMOVN */
-              if (Mem_read(0, 0))
+              if (Mem_read(0, 0, 0))
                   goto last;
               AR = MB;
               AB = (AB + 1) & RMASK;
               modify = 0;
-              if (Mem_read(0, 0))
+              if (Mem_read(0, 0, 0))
                    goto last;
               MQ = ((MB & CMASK) ^ CMASK) + 1;   /* Low */
               /* High */
               AR = (CM(AR) + ((MQ & SMASK) != 0)) & FMASK;
               MQ &= CMASK;
-              set_reg(AC, AR, 1);
-              set_reg(AC+1, MQ, 1);
+              set_reg(AC, AR);
+              set_reg(AC+1, MQ);
               break;
 
     case 0124: /* DMOVEM */
-              AR = get_reg(AC, 1);
-              MQ = get_reg(AC + 1, 1);
+              AR = get_reg(AC);
+              MQ = get_reg(AC + 1);
               /* Handle each half as seperate instruction */
               if ((FLAGS & BYTI) == 0) {
                   MB = AR;
                   if (Mem_write(0, 0))
                       goto last;
                   FLAGS |= BYTI;
-#if KI  /* KL does this in one shot */
-                  f_pc_inh = 1;
-                  break;
-#endif
               }
               if ((FLAGS & BYTI)) {
                   AB = (AB + 1) & RMASK;
@@ -2061,8 +2449,8 @@ dpnorm:
               break;
 
     case 0125: /* DMOVNM */
-              AR = get_reg(AC, 1);
-              MQ = get_reg(AC + 1, 1);
+              AR = get_reg(AC);
+              MQ = get_reg(AC + 1);
               /* Handle each half as seperate instruction */
               if ((FLAGS & BYTI) == 0) {
                   BR = AR = CM(AR);
@@ -2075,12 +2463,9 @@ dpnorm:
                   if (Mem_write(0, 0))
                       goto last;
                   FLAGS |= BYTI;
-#if KI
-                  f_pc_inh = 1;
-                  break;
-#endif
               }
               if ((FLAGS & BYTI)) {
+                  MQ = get_reg(AC + 1);
                   MQ = (CM(MQ) + 1) & CMASK;
                   AB = (AB + 1) & RMASK;
                   MB = MQ;
@@ -2092,7 +2477,7 @@ dpnorm:
 
     case 0122: /* FIX */
     case 0126: /* FIXR */
-              if (Mem_read(0, 0))
+              if (Mem_read(0, 0, 0))
                   goto last;
               AR = MB;
               MQ = 0;
@@ -2127,11 +2512,11 @@ dpnorm:
               if (flag1)
                  AR = (CM(AR) + 1) & FMASK;
               if (!sac_inh)
-                 set_reg(AC, AR, 1);
+                 set_reg(AC, AR);
               break;
 
     case 0127: /* FLTR */
-              if (Mem_read(0, 0))
+              if (Mem_read(0, 0, 0))
                   goto last;
               AR = MB;
               if (AR & SMASK) {
@@ -2144,57 +2529,98 @@ dpnorm:
               i_flags = SAC;
               goto fnorm;
 #else
-              /* MUUO */
-    case 0102: /* ITS LPM */
+    case 0100: /* TENEX UMOVE */
+#if BBN
+              if (cpu_unit.flags & UNIT_BBNPAGE) {
+                   if (Mem_read(0, 0, 0)) {
+                      IR = 0;
+                      goto last;
+                   }
+                   AR = MB;
+                   set_reg(AC, AR);    /* blank, I, B */
+                   IR = 0;
+                   break;
+              }
+#endif
+              goto unasign;
+    case 0101: /* TENEX UMOVEI */
+#if BBN
+              if (cpu_unit.flags & UNIT_BBNPAGE) {
+                   set_reg(AC, AR);    /* blank, I, B */
+                   IR = 0;
+                   break;
+              }
+#endif
+              goto unasign;
+    case 0102: /* TENEX UMOVEM */ /* ITS LPM */
 #if ITS
               if ((FLAGS & USER) == 0 && cpu_unit.flags & UNIT_ITSPAGE) {
                   /* Load store ITS pager info */
                   /* AC & 1 = Store */
                   if (AC & 1) {
+                      if ((AB + 8) > MEMSIZE) {
+                         fault_data |= 0400;
+                         mem_prot = 1;
+                         break;
+                      }
                       MB = ((uint64)age) << 27 |
-                            ((uint64)fault_addr & 0777000) << 9 |
+                            ((uint64)fault_addr & 0777) << 18 |
                             (uint64)jpc;
-                      Mem_write(1,0);
+                      M[AB] = MB;
                       AB = (AB + 1) & RMASK;
                       MB = opc;
-                      Mem_write(1,0);
+                      M[AB] = MB;
                       AB = (AB + 1) & RMASK;
-                      MB = (uint64)mar;
-                      Mem_write(1,0);
+                      MB = ((uint64)mar) | ((uint64)pag_reload) << 20;
+                      M[AB] = MB;
                       AB = (AB + 1) & RMASK;
-                      MB = 0 /* Flags | Quant */;
-                      Mem_write(1,0);
+                      MB = ((uint64)fault_data) << 18;
+                      /* Add quantum */
+                      M[AB] = MB;
                       AB = (AB + 1) & RMASK;
-                      MB = ((uint64)fault_addr & 0777) << 24 |
+                      MB = ((uint64)fault_addr & 00760000) << 12 |
                             (uint64)dbr1;
-                      Mem_write(1,0);
+                      M[AB] = MB;
                       AB = (AB + 1) & RMASK;
-                      MB = (uint64)dbr2;
-                      Mem_write(1,0);
+                      MB = ((uint64)fault_addr & 00017000) << 8 |
+                            (uint64)dbr2;
+                      M[AB] = MB;
                       AB = (AB + 1) & RMASK;
                       MB = (uint64)dbr3;
-                      Mem_write(1,0);
+                      M[AB] = MB;
                       AB = (AB + 1) & RMASK;
-                      MB = (uint64)ac_ptr;
-                      Mem_write(1,0);
+                      MB = (uint64)ac_stack;
+                      M[AB] = MB;
                   } else {
-                      Mem_read(1,0);          /* WD 0 */
+                      if ((AB + 8) > MEMSIZE) {
+                         fault_data |= 0400;
+                         mem_prot = 1;
+                         break;
+                      }
+                      MB = M[AB];                /* WD 0 */
                       age = (MB >> 27) & 017;
+                      fault_addr = 0;
                       AB = (AB + 2) & RMASK;
-                      Mem_read(1,0);          /* WD 2 */
+                      MB = M[AB];                /* WD 2 */
                       mar = 03777777 & MB;
-                      AB = (AB + 2) & RMASK;    
-                      Mem_read(1,0);          /* WD 4 */
+                      pag_reload = 0;
+                      AB = (AB + 1) & RMASK;
+                      MB = M[AB];                /* WD 3 */
+                      /* Store Quantum */
+                      fault_data = (MB >> 18) & RMASK;
+                      AB = (AB + 1) & RMASK;
+                      MB = M[AB];                /* WD 4 */
                       dbr1 = ((077 << 18) | RMASK) & MB;
                       AB = (AB + 1) & RMASK;
-                      Mem_read(1,0);          /* WD 5 */
+                      MB = M[AB];                /* WD 5 */
                       dbr2 = ((077 << 18) | RMASK) & MB;
                       AB = (AB + 1) & RMASK;
-                      Mem_read(1,0);          /* WD 6 */
+                      MB = M[AB];                /* WD 6 */
                       dbr3 = ((077 << 18) | RMASK) & MB;
                       AB = (AB + 1) & RMASK;
-                      Mem_read(1,0);          /* WD 7 */
-                      ac_ptr = MB & RMASK;
+                      MB = M[AB];                /* WD 7 */
+                      ac_stack = MB & RMASK;
+                      page_enable = 1;
                   }
                   /* AC & 2 = Clear TLB */
                   if (AC & 2) {
@@ -2208,10 +2634,22 @@ dpnorm:
                   }
                   break;
               }
-              goto unasign;
 #endif
+#if BBN
+              if (cpu_unit.flags & UNIT_BBNPAGE) {
+                   AR = get_reg(AC);
+                   MB = AR;
+                   if (Mem_write(0, 0)) {
+                      IR = 0;
+                      goto last;
+                   }
+                   IR = 0;
+                   break;
+              }
+#endif
+              goto unasign;
 
-    case 0103: /* ITS XCTR */
+    case 0103: /* TENEX UMOVES */ /* ITS XCTR */
 #if ITS
               if (cpu_unit.flags & UNIT_ITSPAGE) {
                    /* AC & 1 = ??? */
@@ -2225,9 +2663,55 @@ dpnorm:
                    break;
               }
 #endif
+#if BBN
+              if (cpu_unit.flags & UNIT_BBNPAGE) {
+                   if (Mem_read(0, 0, 0)) {
+                       IR = 0;
+                       goto last;
+                   }
+                   modify = 1;
+                   AR = MB;
+                   if (Mem_write(0, 0)) {
+                      IR = 0;
+                      goto last;
+                   }
+                   if (AC != 0)
+                       set_reg(AC, AR);    /* blank, I, B */
+                   IR = 0;
+                   break;
+              }
+#endif
+              goto unasign;
 
-    case 0100: case 0101:
-    case 0104: case 0105: case 0106: case 0107:
+              /* MUUO */
+    case 0104: /* TENEX JSYS */
+#if BBN
+              if (cpu_unit.flags & UNIT_BBNPAGE) {
+                   BR = ((uint64)(FLAGS) << 23) | ((PC + !pi_cycle) & RMASK);
+                   if (AB < 01000) {
+                      AB += 01000;
+                      if ((FLAGS & USER) == 0)
+                         FLAGS |= EXJSYS;
+                      FLAGS &= ~USER;
+                   }
+                   if (Mem_read(0, 0, 0)) {
+                       FLAGS = (uint32)(BR >> 23); /* On error restore flags */
+                       goto last;
+                   }
+                   AR = MB;
+                   AB = (AR >> 18) & RMASK;
+                   MB = BR;
+                   if (Mem_write(0, 0)) {
+                       FLAGS = (uint32)(BR >> 23); /* On error restore flags */
+                       goto last;
+                   }
+                   PC = AR & RMASK;
+                   break;
+              }
+#endif
+              goto unasign;
+
+    case 0105: case 0106: case 0107:
     case 0110: case 0111: case 0112: case 0113:
     case 0114: case 0115: case 0116: case 0117:
     case 0120: case 0121: case 0122: case 0123:
@@ -2240,7 +2724,6 @@ unasign:
               Mem_write(uuo_cycle, 0);
               AB += 1;
               f_load_pc = 0;
-              f_pc_inh = 1;
               break;
 #endif
 
@@ -2248,10 +2731,10 @@ unasign:
     case 0134: /* ILDB */
     case 0136: /* IDPB */
               if ((FLAGS & BYTI) == 0) {      /* BYF6 */
-#if KI | KL
+#if KI | KL | ITS | BBN
                   modify = 1;
 #endif
-                  if (Mem_read(0, 1))
+                  if (Mem_read(0, 1, 0))
                       goto last;
                   AR = MB;
                   SC = (AR >> 24) & 077;
@@ -2272,50 +2755,50 @@ unasign:
                       goto last;
                   if ((IR & 04) == 0)
                       break;
+                  goto ldb_ptr;
               }
               /* Fall through */
 
     case 0135:/* LDB */
     case 0137:/* DPB */
-              if (((FLAGS & BYTI) == 0) | !BYF5) {
-                  if (Mem_read(0, 1))
+              if ((FLAGS & BYTI) == 0 || !BYF5) {
+                  if (Mem_read(0, 1, 0))
                       goto last;
                   AR = MB;
+ldb_ptr:
                   SC = (AR >> 30) & 077;
                   MQ = (uint64)(1) << ( 077 & (AR >> 24));
                   MQ -= 1;
-                  SC = ((0777 ^ SC) + 1) & 0777;
                   f_load_pc = 0;
                   f_inst_fetch = 0;
                   f_pc_inh = 1;
-                  FLAGS |= BYTI;      /* BYF6 */
+                  FLAGS |= BYTI;
                   BYF5 = 1;
-                  break;
-              }
-              if ((IR & 06) == 4) {
-                  AR = MB;
-                  while(SC != 0) {
-                      AR >>= 1;
-                      SC = (SC + 1) & 0777;
-                  }
-                  AR &= MQ;
-                  set_reg(AC, AR, 1);
               } else {
-                  BR = MB;
-                  AR = get_reg(AC, 1) & MQ;
-                  while(SC != 0) {
-                      AR <<= 1;
-                      MQ <<= 1;
-                      SC = (SC + 1) & 0777;
+                  AB = AR & RMASK;
+#if KI | KL | ITS | BBN
+                  if ((IR & 06) == 6)
+                      modify = 1;
+#endif
+                  if (Mem_read(0, 0, 0))
+                      goto last;
+                  AR = MB;
+                  if ((IR & 06) == 4) {
+                      AR = AR >> SC;
+                      AR &= MQ;
+                      set_reg(AC, AR);
+                  } else {
+                      BR = get_reg(AC);
+                      BR = BR << SC;
+                      MQ = MQ << SC;
+                      AR &= CM(MQ);
+                      AR |= BR & MQ;
+                      MB = AR & FMASK;
+                      Mem_write(0, 0);
                   }
-                  BR &= CM(MQ);
-                  AR &= FMASK;
-                  BR |= AR & MQ;
-                  MB = BR;
-                  Mem_write(0, 0);
+                  FLAGS &= ~BYTI;
+                  BYF5 = 0;
               }
-              FLAGS &= ~BYTI; /* BYF6 */
-              BYF5 = 0;
               break;
 
 #if !PDP6
@@ -2504,7 +2987,7 @@ fxnorm:
 
               /* Handle UFA */
               if (IR == 0130) {
-                  set_reg(AC + 1, AR, 1);
+                  set_reg(AC + 1, AR);
                   break;
               }
               break;
@@ -2699,6 +3182,8 @@ fxnorm:
     case 0205:     /* MOVSI */
     case 0206:     /* MOVSM */
     case 0207:     /* MOVSS */
+    case 0503:     /* HLLS */
+    case 0543:     /* HRRS */
               break;
 
     case 0214:     /* MOVM */
@@ -2707,13 +3192,13 @@ fxnorm:
     case 0217:     /* MOVMS */
               if ((AR & SMASK) == 0)
                   break;
+              /* Fall though */
 
     case 0210:     /* MOVN */
     case 0211:     /* MOVNI */
     case 0212:     /* MOVNM */
     case 0213:     /* MOVNS */
               flag1 = flag3 = 0;
-              FLAGS &= 01777;
               if ((((AR & CMASK) ^ CMASK) + 1) & SMASK) {
                   FLAGS |= CRY1;
                   flag1 = 1;
@@ -2833,7 +3318,6 @@ fxnorm:
     case 0236:       /* DIVM */
     case 0237:       /* DIVB */
               flag1 = 0;
-              flag3 = 0;
               if (AR & SMASK) {
                   AD = (CM(MQ) + 1) & FMASK;
                   MQ = AR;
@@ -2949,11 +3433,16 @@ fxnorm:
 #if !PDP6
               SC = 0;
               if (AR != 0) {
+#if ITS
+                  if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+                      jpc = PC;
+                  }
+#endif
                   PC = AB;
                   f_pc_inh = 1;
                   SC = nlzero(AR);
               }
-              set_reg(AC + 1, SC, 1);
+              set_reg(AC + 1, SC);
 #endif
               break;
 
@@ -3029,11 +3518,11 @@ fxnorm:
               } else {
                   if (SC > 36) {
                      if (AB & RSIGN) {
-                         AR = MQ;
-                         MQ = 0;
-                     } else {
                          MQ = AR;
                          AR = 0;
+                     } else {
+                         AR = MQ;
+                         MQ = 0;
                      }
                      SC -= 36;
                  }
@@ -3049,7 +3538,7 @@ fxnorm:
 
           /* Branch */
     case 0250:  /* EXCH */
-              set_reg(AC, BR, 1);
+              set_reg(AC, BR);
               break;
 
     case 0251: /* BLT */
@@ -3059,26 +3548,26 @@ fxnorm:
                        sim_process_event();
                   }
                   /* Allow for interrupt */
-                  if (pi_enable && pi_pending) {
+                  if (pi_pending) {
                       pi_rq = check_irq_level();
                       if (pi_rq) {
                           f_pc_inh = 1;
                           f_load_pc = 0;
                           f_inst_fetch = 0;
-                          set_reg(AC, AR, 1);
+                          set_reg(AC, AR);
                           break;
                       }
                   }
                   AB = (AR >> 18) & RMASK;
-                  if (Mem_read(0, 0)) {
+                  if (Mem_read(0, 0, 0)) {
                        f_pc_inh = 1;
-                       set_reg(AC, AR, 1);
+                       set_reg(AC, AR);
                        goto last;
                   }
                   AB = (AR & RMASK);
                   if (Mem_write(0, 0)) {
                        f_pc_inh = 1;
-                       set_reg(AC, AR, 1);
+                       set_reg(AC, AR);
                        goto last;
                   }
                   AD = (AR & RMASK) + CM(BR) + 1;
@@ -3089,19 +3578,27 @@ fxnorm:
     case 0252: /* AOBJP */
               AR = AOB(AR);
               if ((AR & SMASK) == 0) {
+#if ITS
+                  if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+                      jpc = PC;
+                  }
+#endif
                   PC = AB;
                   f_pc_inh = 1;
               }
-              AR &= FMASK;
               break;
 
     case 0253: /* AOBJN */
               AR = AOB(AR);
               if ((AR & SMASK) != 0) {
+#if ITS
+                  if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+                      jpc = PC;
+                  }
+#endif
                   PC = AB;
                   f_pc_inh = 1;
               }
-              AR &= FMASK;
               break;
 
     case 0254: /* JRST */      /* AR Frm PC */
@@ -3134,6 +3631,11 @@ fxnorm:
                       reason = STOP_HALT;
                  }
               }
+#if ITS
+              if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+                  jpc = PC;
+              }
+#endif
               PC = AR & RMASK;
               /* JRSTF */
               if (AC & 02) {
@@ -3153,7 +3655,6 @@ fxnorm:
               if (AC & 01) {  /* Enter User Mode */
 #if KI | KL
                  FLAGS &= ~PUBLIC;
-                 private_page = 0;
 #else
                  FLAGS |= USER;
 #endif
@@ -3162,19 +3663,27 @@ fxnorm:
               break;
 
     case 0255: /* JFCL */
-              if ((FLAGS >> 9) & AC)
+              if ((FLAGS >> 9) & AC) {
+#if ITS
+                  if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+                      jpc = PC;
+                  }
+#endif
                   PC = AR & RMASK;
-              else
-                  PC = (PC + 1) & RMASK;
-              f_pc_inh = 1;
+                  f_pc_inh = 1;
+              }
               FLAGS &=  017777 ^ (AC << 9);
               break;
 
     case 0256: /* XCT */
               f_load_pc = 0;
               f_pc_inh = 1;
+#if BBN
+              if ((FLAGS & USER) == 0 && cpu_unit.flags & UNIT_BBNPAGE) 
+                   xct_flag = AC;
+#endif
 #if KI | KL
-              if ((FLAGS & USER) == 0)
+              if ((FLAGS & USER) == 0) 
                   xct_flag = AC;
 #endif
               break;
@@ -3187,7 +3696,7 @@ fxnorm:
               /* Check if Paging Enabled */
               if (!page_enable) {
                   AR = 0020000LL + f; /* direct map */
-                  set_reg(AC, AR, 1);
+                  set_reg(AC, AR);
                   break;
               }
               AR = ub_ptr;
@@ -3195,7 +3704,7 @@ fxnorm:
                   /* Check if small user and outside range */
                   if (small_user && (f & 0340) != 0) {
                       AR = 0420000LL;   /* Page failure, no match */
-                      set_reg(AC, AR, 1);
+                      set_reg(AC, AR);
                       break;
                   }
               } else {
@@ -3207,14 +3716,14 @@ fxnorm:
                       AR = eb_ptr;
                   } else {
                       AR = 0020000LL + f; /* direct map */
-                      set_reg(AC, AR, 1);
+                      set_reg(AC, AR);
                       break;
                   }
                   last_page |= 1;
               }
               AB = (AR + (f >> 1)) & RMASK;
               pag_reload = ((pag_reload + 1) & 037) | 040;
-              if (Mem_read(0, 0))
+              if (Mem_read(0, 0, 0))
                   goto last;
               AR = MB;
               if ((f & 1) == 0)
@@ -3226,8 +3735,7 @@ fxnorm:
                   if ((AR & 0100000LL) == 0)
                       AR |= RSIGN;
               }
-fprintf(stderr, "Map %06o %012llo PC=%06o\n\r", f, AR, PC);
-              set_reg(AC, AR, 1);
+              set_reg(AC, AR);
 #endif
               break;
 
@@ -3249,10 +3757,14 @@ fprintf(stderr, "Map %06o %012llo PC=%06o\n\r", f, AR, PC);
                  check_apr_irq();
 #endif
               }
-              AR &= FMASK;
               if (uuo_cycle | pi_cycle) {
                  FLAGS &= ~(USER|PUBLIC); /* Clear USER */
               }
+#if ITS
+              if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+                  jpc = PC;
+              }
+#endif
               PC = BR & RMASK;
               f_pc_inh = 1;
               break;
@@ -3269,7 +3781,6 @@ fprintf(stderr, "Map %06o %012llo PC=%06o\n\r", f, AR, PC);
                  check_apr_irq();
 #endif
               }
-              AR &= FMASK;
               MB = BR;
               if (Mem_write(0, 0))
                  goto last;
@@ -3277,7 +3788,7 @@ fprintf(stderr, "Map %06o %012llo PC=%06o\n\r", f, AR, PC);
 
     case 0262: /* POP */
               AB = AR & RMASK;
-              if (Mem_read(0, 0))
+              if (Mem_read(0, 0, 0))
                   goto last;
               AR = SOB(AR);
               AB = BR & RMASK;
@@ -3292,13 +3803,17 @@ fprintf(stderr, "Map %06o %012llo PC=%06o\n\r", f, AR, PC);
                   check_apr_irq();
 #endif
               }
-              AR &= FMASK;
               break;
 
     case 0263: /* POPJ */
               AB = AR & RMASK;
-              if (Mem_read(0, 0))
+              if (Mem_read(0, 0, 0))
                   goto last;
+#if ITS
+              if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+                  jpc = PC;
+              }
+#endif
               PC = MB & RMASK;
               AR = SOB(AR);
               if ((AR & C1) == 0) {
@@ -3310,7 +3825,6 @@ fprintf(stderr, "Map %06o %012llo PC=%06o\n\r", f, AR, PC);
                   check_apr_irq();
 #endif
               }
-              AR &= FMASK;
               f_pc_inh = 1;
               break;
 
@@ -3323,6 +3837,11 @@ fprintf(stderr, "Map %06o %012llo PC=%06o\n\r", f, AR, PC);
               if (Mem_write(0, 0))
                   goto last;
               FLAGS &= ~ (BYTI|ADRFLT|TRP1|TRP2);
+#if ITS
+              if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+                  jpc = PC;
+              }
+#endif
               PC = (AR + 1) & RMASK;
               f_pc_inh = 1;
               break;
@@ -3334,26 +3853,41 @@ fprintf(stderr, "Map %06o %012llo PC=%06o\n\r", f, AR, PC);
               if (uuo_cycle | pi_cycle) {
                  FLAGS &= ~(USER|PUBLIC); /* Clear USER */
               }
+#if ITS
+              if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+                  jpc = PC;
+              }
+#endif
               PC = AR & RMASK;
               AR = AD;
               f_pc_inh = 1;
               break;
 
     case 0266: /* JSA */       /* AR Frm PC */
-              set_reg(AC, (AR << 18) | ((PC + 1) & RMASK), 1);
+              set_reg(AC, (AR << 18) | ((PC + 1) & RMASK));
               if (uuo_cycle | pi_cycle) {
                  FLAGS &= ~(USER|PUBLIC); /* Clear USER */
               }
+#if ITS
+              if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+                  jpc = PC;
+              }
+#endif
               PC = AR & RMASK;
               AR = BR;
               break;
 
     case 0267: /* JRA */
               AD = AB;
-              AB = (get_reg(AC, 1) >> 18) & RMASK;
-              if (Mem_read(uuo_cycle | pi_cycle, 0))
+              AB = (get_reg(AC) >> 18) & RMASK;
+              if (Mem_read(uuo_cycle | pi_cycle, 0, 0))
                    goto last;
-              set_reg(AC, MB, 1);
+              set_reg(AC, MB);
+#if ITS
+              if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+                  jpc = PC;
+              }
+#endif
               PC = AD & RMASK;
               f_pc_inh = 1;
               break;
@@ -3363,14 +3897,14 @@ fprintf(stderr, "Map %06o %012llo PC=%06o\n\r", f, AR, PC);
     case 0272: /* ADDM */
     case 0273: /* ADDB */
               flag1 = flag3 = 0;
-              FLAGS &= 01777;
               if (((AR & CMASK) + (BR & CMASK)) & SMASK) {
                   FLAGS |= CRY1;
                   flag1 = 1;
               }
-              BR = AR + BR;
-              if (BR & C1) {
-                  FLAGS |= CRY0;
+              AR = AR + BR;
+              if (AR & C1) {
+                  if (!pi_cycle)
+                      FLAGS |= CRY0;
                   flag3 = 1;
               }
               if (flag1 != flag3) {
@@ -3378,8 +3912,6 @@ fprintf(stderr, "Map %06o %012llo PC=%06o\n\r", f, AR, PC);
                       FLAGS |= OVR|TRP1;
                   check_apr_irq();
               }
-              BR &= FMASK;
-              AR = BR;
               break;
 
     case 0274: /* SUB */
@@ -3387,14 +3919,14 @@ fprintf(stderr, "Map %06o %012llo PC=%06o\n\r", f, AR, PC);
     case 0276: /* SUBM */
     case 0277: /* SUBB */
               flag1 = flag3 = 0;
-              FLAGS &= 01777;
               if ((((AR & CMASK) ^ CMASK) + (BR & CMASK) + 1) & SMASK) {
                   FLAGS |= CRY1;
                   flag1 = 1;
               }
-              BR = CM(AR) + BR + 1;
-              if (BR & C1) {
-                  FLAGS |= CRY0;
+              AR = CM(AR) + BR + 1;
+              if (AR & C1) {
+                  if (!pi_cycle)
+                      FLAGS |= CRY0;
                   flag3 = 1;
               }
               if (flag1 != flag3) {
@@ -3402,27 +3934,24 @@ fprintf(stderr, "Map %06o %012llo PC=%06o\n\r", f, AR, PC);
                       FLAGS |= OVR|TRP1;
                   check_apr_irq();
               }
-              BR &= FMASK;
-              AR = BR;
               break;
 
-               /* SKIP */
-    case 0300:    /* CAI */
-    case 0301:    /* CAIL */
-    case 0302:    /* CAIE */
+    case 0300:    /* CAI   */
+    case 0301:    /* CAIL  */
+    case 0302:    /* CAIE  */
     case 0303:    /* CAILE */
-    case 0304:    /* CAIA */
+    case 0304:    /* CAIA  */
     case 0305:    /* CAIGE */
-    case 0306:    /* CAIN */
-    case 0307:    /* CAIG */
-    case 0310:    /* CAM */
-    case 0311:    /* CAML */
-    case 0312:    /* CAME */
+    case 0306:    /* CAIN  */
+    case 0307:    /* CAIG  */
+    case 0310:    /* CAM   */
+    case 0311:    /* CAML  */
+    case 0312:    /* CAME  */
     case 0313:    /* CAMLE */
-    case 0314:    /* CAMA */
+    case 0314:    /* CAMA  */
     case 0315:    /* CAMGE */
-    case 0316:    /* CAMN */
-    case 0317:    /* CAMG */
+    case 0316:    /* CAMN  */
+    case 0317:    /* CAMG  */
               f = 0;
               AD = (CM(AR) + BR) + 1;
               if (((BR & SMASK) != 0) && (AR & SMASK) == 0)
@@ -3432,61 +3961,61 @@ fprintf(stderr, "Map %06o %012llo PC=%06o\n\r", f, AR, PC);
                  f = 1;
               goto skip_op;
 
-    case 0320: /* JUMP */
-    case 0321: /* JUMPL */
-    case 0322: /* JUMPE */
-    case 0323: /* JUMPLE */
-    case 0324: /* JUMPA */
-    case 0325: /* JUMPGE */
-    case 0326: /* JUMPN */
-    case 0327: /* JUMPG */
+    case 0320:    /* JUMP   */
+    case 0321:    /* JUMPL  */
+    case 0322:    /* JUMPE  */
+    case 0323:    /* JUMPLE */
+    case 0324:    /* JUMPA  */
+    case 0325:    /* JUMPGE */
+    case 0326:    /* JUMPN  */
+    case 0327:    /* JUMPG  */
               AD = AR;
               f = ((AD & SMASK) != 0);
               goto jump_op;                   /* JUMP, SKIP */
 
-    case 0330: /* SKIP */
-    case 0331: /* SKIPL */
-    case 0332: /* SKIPE */
-    case 0333: /* SKIPLE */
-    case 0334: /* SKIPA */
-    case 0335: /* SKIPGE */
-    case 0336: /* SKIPN */
-    case 0337: /* SKIPG */
+    case 0330:    /* SKIP   */
+    case 0331:    /* SKIPL  */
+    case 0332:    /* SKIPE  */
+    case 0333:    /* SKIPLE */
+    case 0334:    /* SKIPA  */
+    case 0335:    /* SKIPGE */
+    case 0336:    /* SKIPN  */
+    case 0337:    /* SKIPG  */
               AD = AR;
               f = ((AD & SMASK) != 0);
               goto skip_op;                   /* JUMP, SKIP */
 
-    case 0340: /* AOJ */
-    case 0341: /* AOJL */
-    case 0342: /* AOJE */
-    case 0343: /* AOJLE */
-    case 0344: /* AOJA */
-    case 0345: /* AOJGE */
-    case 0346: /* AOJN */
-    case 0347: /* AOJG */
-    case 0360: /* SOJ */
-    case 0361: /* SOJL */
-    case 0362: /* SOJE */
-    case 0363: /* SOJLE */
-    case 0364: /* SOJA */
-    case 0365: /* SOJGE */
-    case 0366: /* SOJN */
-    case 0367: /* SOJG */
+    case 0340:     /* AOJ   */
+    case 0341:     /* AOJL  */
+    case 0342:     /* AOJE  */
+    case 0343:     /* AOJLE */
+    case 0344:     /* AOJA  */
+    case 0345:     /* AOJGE */
+    case 0346:     /* AOJN  */
+    case 0347:     /* AOJG  */
+    case 0360:     /* SOJ   */
+    case 0361:     /* SOJL  */
+    case 0362:     /* SOJE  */
+    case 0363:     /* SOJLE */
+    case 0364:     /* SOJA  */
+    case 0365:     /* SOJGE */
+    case 0366:     /* SOJN  */
+    case 0367:     /* SOJG  */
               flag1 = flag3 = 0;
-              FLAGS &= 01777;
               AD = (IR & 020) ? FMASK : 1;
               if (((AR & CMASK) + (AD & CMASK)) & SMASK) {
-                  FLAGS |= CRY1;
+                  if (!pi_cycle)
+                     FLAGS |= CRY1;
                   flag1 = 1;
               }
               AD = AR + AD;
               if (AD & C1) {
-                  FLAGS |= CRY0;
+                  if (!pi_cycle)
+                     FLAGS |= CRY0;
                   flag3 = 1;
               }
-              if (flag1 != flag3) {
-                  if (!pi_cycle)
-                     FLAGS |= OVR|TRP1;
+              if (flag1 != flag3  && !pi_cycle) {
+                  FLAGS |= OVR|TRP1;
                   check_apr_irq();
               }
               f = ((AD & SMASK) != 0);
@@ -3496,32 +4025,37 @@ jump_op:
               f |= ((AD == 0) << 1);
               f = f & IR;
               if (((IR & 04) != 0) == (f == 0)) {
-                    PC = AB;
-                    f_pc_inh = 1;
+#if ITS
+                  if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+                      jpc = PC;
+                  }
+#endif
+                  PC = AB;
+                  f_pc_inh = 1;
               }
               break;
 
-    case 0350: /* AOS */
-    case 0351: /* AOSL */
-    case 0352: /* AOSE */
-    case 0353: /* AOSLE */
-    case 0354: /* AOSA */
-    case 0355: /* AOSGE */
-    case 0356: /* AOSN */
-    case 0357: /* AOSG */
-    case 0370: /* SOS */
-    case 0371: /* SOSL */
-    case 0372: /* SOSE */
-    case 0373: /* SOSLE */
-    case 0374: /* SOSA */
-    case 0375: /* SOSGE */
-    case 0376: /* SOSN */
-    case 0377: /* SOSG */
+    case 0350:     /* AOS   */
+    case 0351:     /* AOSL  */
+    case 0352:     /* AOSE  */
+    case 0353:     /* AOSLE */
+    case 0354:     /* AOSA  */
+    case 0355:     /* AOSGE */
+    case 0356:     /* AOSN  */
+    case 0357:     /* AOSG  */
+    case 0370:     /* SOS   */
+    case 0371:     /* SOSL  */
+    case 0372:     /* SOSE  */
+    case 0373:     /* SOSLE */
+    case 0374:     /* SOSA  */
+    case 0375:     /* SOSGE */
+    case 0376:     /* SOSN  */
+    case 0377:     /* SOSG  */
               flag1 = flag3 = 0;
-              FLAGS &= 01777;
               AD = (IR & 020) ? FMASK : 1;
               if (((AR & CMASK) + (AD & CMASK)) & SMASK) {
-                  FLAGS |= CRY1;
+                  if (!pi_cycle)
+                     FLAGS |= CRY1;
                   flag1 = 1;
               }
               AD = AR + AD;
@@ -3530,9 +4064,8 @@ jump_op:
                       FLAGS |= CRY0;
                   flag3 = 1;
               }
-              if (flag1 != flag3) {
-                  if (!pi_cycle)
-                      FLAGS |= OVR|TRP1;
+              if (flag1 != flag3 && !pi_cycle) {
+                  FLAGS |= OVR|TRP1;
                   check_apr_irq();
               }
               f = ((AD & SMASK) != 0);
@@ -3551,281 +4084,286 @@ skip_op:
               break;
 
               /* Bool */
-    case 0400:    /* SETZ */
+    case 0400:    /* SETZ  */
     case 0401:    /* SETZI */
     case 0402:    /* SETZM */
     case 0403:    /* SETZB */
               AR = 0;                   /* SETZ */
               break;
 
-    case 0404:    /* AND */
+    case 0404:    /* AND  */
     case 0405:    /* ANDI */
     case 0406:    /* ANDM */
     case 0407:    /* ANDB */
               AR = AR & BR;             /* AND */
               break;
 
-    case 0410:    /* ANDCA */
+    case 0410:    /* ANDCA  */
     case 0411:    /* ANDCAI */
     case 0412:    /* ANDCAM */
     case 0413:    /* ANDCAB */
               AR = AR & CM(BR);         /* ANDCA */
               break;
 
-    case 0414:    /* SETM */
+    case 0414:    /* SETM  */
     case 0415:    /* SETMI */
     case 0416:    /* SETMM */
     case 0417:    /* SETMB */
                                          /* SETM */
               break;
 
-    case 0420:    /* ANDCM */
+    case 0420:    /* ANDCM  */
     case 0421:    /* ANDCMI */
     case 0422:    /* ANDCMM */
     case 0423:    /* ANDCMB */
               AR = CM(AR) & BR;         /* ANDCM */
               break;
 
-    case 0424:    /* SETA */
+    case 0424:    /* SETA  */
     case 0425:    /* SETAI */
     case 0426:    /* SETAM */
     case 0427:    /* SETAB */
               AR = BR;                  /* SETA */
               break;
 
-    case 0430:    /* XOR */
+    case 0430:    /* XOR  */
     case 0431:    /* XORI */
     case 0432:    /* XORM */
     case 0433:    /* XORB */
               AR = AR ^ BR;             /* XOR */
               break;
 
-    case 0434:    /* IOR */
+    case 0434:    /* IOR  */
     case 0435:    /* IORI */
     case 0436:    /* IORM */
     case 0437:    /* IORB */
               AR = CM(CM(AR) & CM(BR)); /* IOR */
               break;
 
-    case 0440:    /* ANDCB */
+    case 0440:    /* ANDCB  */
     case 0441:    /* ANDCBI */
     case 0442:    /* ANDCBM */
     case 0443:    /* ANDCBB */
               AR = CM(AR) & CM(BR);     /* ANDCB */
               break;
 
-    case 0444:    /* EQV */
+    case 0444:    /* EQV  */
     case 0445:    /* EQVI */
     case 0446:    /* EQVM */
     case 0447:    /* EQVB */
               AR = CM(AR ^ BR);         /* EQV */
               break;
 
-    case 0450:    /* SETCA */
+    case 0450:    /* SETCA  */
     case 0451:    /* SETCAI */
     case 0452:    /* SETCAM */
     case 0453:    /* SETCAB */
               AR = CM(BR);              /* SETCA */
               break;
 
-    case 0454:    /* ORCA */
+    case 0454:    /* ORCA  */
     case 0455:    /* ORCAI */
     case 0456:    /* ORCAM */
     case 0457:    /* ORCAB */
               AR = CM(CM(AR) & BR);     /* ORCA */
               break;
 
-    case 0460:    /* SETCM */
+    case 0460:    /* SETCM  */
     case 0461:    /* SETCMI */
     case 0462:    /* SETCMM */
     case 0463:    /* SETCMB */
               AR = CM(AR);              /* SETCM */
               break;
 
-    case 0464:    /* ORCM */
+    case 0464:    /* ORCM  */
     case 0465:    /* ORCMI */
     case 0466:    /* ORCMM */
     case 0467:    /* ORCMB */
               AR = CM(AR & CM(BR));     /* ORCM */
               break;
 
-    case 0470:    /* ORCB */
+    case 0470:    /* ORCB  */
     case 0471:    /* ORCBI */
     case 0472:    /* ORCBM */
     case 0473:    /* ORCBB */
               AR = CM(AR & BR);         /* ORCB */
               break;
 
-    case 0474:    /* SETO */
+    case 0474:    /* SETO  */
     case 0475:    /* SETOI */
     case 0476:    /* SETOM */
     case 0477:    /* SETOB */
               AR = FMASK;               /* SETO */
               break;
 
-    case 0500: /* HLL */
-    case 0501: /* HLLI */
-    case 0502: /* HLLM */
-    case 0503: /* HLLS */
-    case 0504: /* HRL */
-    case 0505: /* HRLI */
-    case 0506: /* HRLM */
-    case 0507: /* HRLS */
+
+    case 0547:    /* HLRS */
+              BR = SWAP_AR;
+              /* Fall Through */
+
+    case 0500:    /* HLL  */
+    case 0501:    /* HLLI */
+    case 0502:    /* HLLM */
+    case 0504:    /* HRL  */
+    case 0505:    /* HRLI */
+    case 0506:    /* HRLM */
               AR = (AR & LMASK) | (BR & RMASK);
               break;
 
-    case 0510: /* HLLZ */
-    case 0511: /* HLLZI */
-    case 0512: /* HLLZM */
-    case 0513: /* HLLZS */
-    case 0514: /* HRLZ */
-    case 0515: /* HRLZI */
-    case 0516: /* HRLZM */
-    case 0517: /* HRLZS */
+    case 0510:    /* HLLZ  */
+    case 0511:    /* HLLZI */
+    case 0512:    /* HLLZM */
+    case 0513:    /* HLLZS */
+    case 0514:    /* HRLZ  */
+    case 0515:    /* HRLZI */
+    case 0516:    /* HRLZM */
+    case 0517:    /* HRLZS */
               AR = (AR & LMASK);
               break;
 
-    case 0520: /* HLLO */
-    case 0521: /* HLLOI */
-    case 0522: /* HLLOM */
-    case 0523: /* HLLOS */
-    case 0524: /* HRLO */
-    case 0525: /* HRLOI */
-    case 0526: /* HRLOM */
-    case 0527: /* HRLOS */
+    case 0520:    /* HLLO  */
+    case 0521:    /* HLLOI */
+    case 0522:    /* HLLOM */
+    case 0523:    /* HLLOS */
+    case 0524:    /* HRLO  */
+    case 0525:    /* HRLOI */
+    case 0526:    /* HRLOM */
+    case 0527:    /* HRLOS */
               AR = (AR & LMASK) | RMASK;
               break;
 
-    case 0530: /* HLLE */
-    case 0531: /* HLLEI */
-    case 0532: /* HLLEM */
-    case 0533: /* HLLES */
-    case 0534: /* HRLE */
-    case 0535: /* HRLEI */
-    case 0536: /* HRLEM */
-    case 0537: /* HRLES */
+    case 0530:    /* HLLE  */
+    case 0531:    /* HLLEI */
+    case 0532:    /* HLLEM */
+    case 0533:    /* HLLES */
+    case 0534:    /* HRLE  */
+    case 0535:    /* HRLEI */
+    case 0536:    /* HRLEM */
+    case 0537:    /* HRLES */
               AD = ((AR & SMASK) != 0) ? RMASK : 0;
               AR = (AR & LMASK) | AD;
               break;
 
-    case 0540: /* HRR */
-    case 0541: /* HRRI */
-    case 0542: /* HRRM */
-    case 0543: /* HRRS */
-    case 0544: /* HLR */
-    case 0545: /* HLRI */
-    case 0546: /* HLRM */
-    case 0547: /* HLRS */
+    case 0507:    /* HRLS */
+              BR = SWAP_AR;
+              /* Fall Through */
+
+    case 0540:    /* HRR  */
+    case 0541:    /* HRRI */
+    case 0542:    /* HRRM */
+    case 0544:    /* HLR  */
+    case 0545:    /* HLRI */
+    case 0546:    /* HLRM */
               AR = (BR & LMASK) | (AR & RMASK);
               break;
 
-    case 0550: /* HRRZ */
-    case 0551: /* HRRZI */
-    case 0552: /* HRRZM */
-    case 0553: /* HRRZS */
-    case 0554: /* HLRZ */
-    case 0555: /* HLRZI */
-    case 0556: /* HLRZM */
-    case 0557: /* HLRZS */
+    case 0550:    /* HRRZ  */
+    case 0551:    /* HRRZI */
+    case 0552:    /* HRRZM */
+    case 0553:    /* HRRZS */
+    case 0554:    /* HLRZ  */
+    case 0555:    /* HLRZI */
+    case 0556:    /* HLRZM */
+    case 0557:    /* HLRZS */
               AR = (AR & RMASK);
               break;
 
-    case 0560: /* HRRO */
-    case 0561: /* HRROI */
-    case 0562: /* HRROM */
-    case 0563: /* HRROS */
-    case 0564: /* HLRO */
-    case 0565: /* HLROI */
-    case 0566: /* HLROM */
-    case 0567: /* HLROS */
+    case 0560:    /* HRRO  */
+    case 0561:    /* HRROI */
+    case 0562:    /* HRROM */
+    case 0563:    /* HRROS */
+    case 0564:    /* HLRO  */
+    case 0565:    /* HLROI */
+    case 0566:    /* HLROM */
+    case 0567:    /* HLROS */
               AR = LMASK | (AR & RMASK);
               break;
 
-    case 0570: /* HRRE */
-    case 0571: /* HRREI */
-    case 0572: /* HRREM */
-    case 0573: /* HRRES */
-    case 0574: /* HLRE */
-    case 0575: /* HLREI */
-    case 0576: /* HLREM */
-    case 0577: /* HLRES */
+    case 0570:    /* HRRE  */
+    case 0571:    /* HRREI */
+    case 0572:    /* HRREM */
+    case 0573:    /* HRRES */
+    case 0574:    /* HLRE  */
+    case 0575:    /* HLREI */
+    case 0576:    /* HLREM */
+    case 0577:    /* HLRES */
               AD = ((AR & RSIGN) != 0) ? LMASK: 0;
               AR = AD | (AR & RMASK);
               break;
 
-    case 0600: /* TxN */
-    case 0601: /* TxN */
-    case 0602: /* TxN */
-    case 0603: /* TxN */
-    case 0604: /* TxN */
-    case 0605: /* TxN */
-    case 0606: /* TxN */
-    case 0607: /* TxN */
-    case 0610:
-    case 0611:
-    case 0612:
-    case 0613:
-    case 0614:
-    case 0615:
-    case 0616:
-    case 0617:
+    case 0600:     /* TRN  */
+    case 0601:     /* TLN  */
+    case 0602:     /* TRNE */
+    case 0603:     /* TLNE */
+    case 0604:     /* TRNA */
+    case 0605:     /* TLNA */
+    case 0606:     /* TRNN */
+    case 0607:     /* TLNN */
+    case 0610:     /* TDN  */
+    case 0611:     /* TSN  */
+    case 0612:     /* TDNE */
+    case 0613:     /* TSNE */
+    case 0614:     /* TDNA */
+    case 0615:     /* TSNA */
+    case 0616:     /* TDNN */
+    case 0617:     /* TSNN */
               MQ = AR;            /* N */
               goto test_op;
 
-    case 0620: /* TxZ */
-    case 0621: /* TxZ */
-    case 0622: /* TxZ */
-    case 0623: /* TxZ */
-    case 0624: /* TxZ */
-    case 0625: /* TxZ */
-    case 0626: /* TxZ */
-    case 0627: /* TxZ */
-    case 0630:
-    case 0631:
-    case 0632:
-    case 0633:
-    case 0634:
-    case 0635:
-    case 0636:
-    case 0637:
+    case 0620:     /* TRZ  */
+    case 0621:     /* TLZ  */
+    case 0622:     /* TRZE */
+    case 0623:     /* TLZE */
+    case 0624:     /* TRZA */
+    case 0625:     /* TLZA */
+    case 0626:     /* TRZN */
+    case 0627:     /* TLZN */
+    case 0630:     /* TDZ  */
+    case 0631:     /* TSZ  */
+    case 0632:     /* TDZE */
+    case 0633:     /* TSZE */
+    case 0634:     /* TDZA */
+    case 0635:     /* TSZA */
+    case 0636:     /* TDZN */
+    case 0637:     /* TSZN */
               MQ = CM(AR) & BR;   /* Z */
               goto test_op;
 
-    case 0640: /* TxC */
-    case 0641: /* TxC */
-    case 0642: /* TxC */
-    case 0643: /* TxC */
-    case 0644: /* TxC */
-    case 0645: /* TxC */
-    case 0646: /* TxC */
-    case 0647: /* TxC */
-    case 0650:
-    case 0651:
-    case 0652:
-    case 0653:
-    case 0654:
-    case 0655:
-    case 0656:
-    case 0657:
+    case 0640:     /* TRC  */
+    case 0641:     /* TLC  */
+    case 0642:     /* TRCE */
+    case 0643:     /* TLCE */
+    case 0644:     /* TRCA */
+    case 0645:     /* TLCA */
+    case 0646:     /* TRCN */
+    case 0647:     /* TLCN */
+    case 0650:     /* TDC  */
+    case 0651:     /* TSC  */
+    case 0652:     /* TDCE */
+    case 0653:     /* TSCE */
+    case 0654:     /* TDCA */
+    case 0655:     /* TSCA */
+    case 0656:     /* TDCN */
+    case 0657:     /* TSCN */
               MQ = AR ^ BR;       /* C */
               goto test_op;
 
-    case 0660: /* TxO */
-    case 0661: /* TxO */
-    case 0662: /* TxO */
-    case 0663: /* TxO */
-    case 0664: /* TxO */
-    case 0665: /* TxO */
-    case 0666: /* TxO */
-    case 0667: /* TxO */
-    case 0670:
-    case 0671:
-    case 0672:
-    case 0673:
-    case 0674:
-    case 0675:
-    case 0676:
-    case 0677:
+    case 0660:     /* TRO  */
+    case 0661:     /* TLO  */
+    case 0662:     /* TROE */
+    case 0663:     /* TLOE */
+    case 0664:     /* TROA */
+    case 0665:     /* TLOA */
+    case 0666:     /* TRON */
+    case 0667:     /* TLON */
+    case 0670:     /* TDO  */
+    case 0671:     /* TSO  */
+    case 0672:     /* TDOE */
+    case 0673:     /* TSOE */
+    case 0674:     /* TDOA */
+    case 0675:     /* TSOA */
+    case 0676:     /* TDON */
+    case 0677:     /* TSON */
               MQ = AR | BR;       /* O */
 test_op:
               AR &= BR;
@@ -3853,8 +4391,8 @@ test_op:
     case 0770: case 0771: case 0772: case 0773:
     case 0774: case 0775: case 0776: case 0777:
 #if KI
-              if (!pi_cycle && ((FLAGS & (USER|USERIO)) == USER) &&
-                    ((IR & 040) == 0 || ((FLAGS & (USER|PUBLIC)) == PUBLIC))) {
+              if (!pi_cycle && ((((FLAGS & (USER|USERIO)) == USER) && (IR & 040) == 0)
+                    || ((FLAGS & (USER|PUBLIC)) == PUBLIC))) {
 
 #else
               if ((FLAGS & (USER|USERIO)) == USER && !pi_cycle) {
@@ -3863,39 +4401,38 @@ test_op:
                   goto muuo;
               } else {
                   int d = ((IR & 077) << 1) | ((AC & 010) != 0);
+fetch_opr:
                   switch(AC & 07) {
                   case 0:     /* 00 BLKI */
                   case 2:     /* 10 BLKO */
-                          if (Mem_read(pi_cycle, 0))
-                              break;
+                          if (Mem_read(pi_cycle, 0, 0))
+                              goto last;
                           AR = MB;
                           if (hst_lnt) {
                                   hst[hst_p].mb = AR;
                           }
                           AC |= 1;    /* Make into DATAI/DATAO */
-                          f_load_pc = 0;
-                          f_inst_fetch = 0;
                           AR = AOB(AR);
-                          if (AR & C1) {
-                              pi_ov = f_pc_inh = 1;
-                          } else if (!pi_cycle) {
+                          if (AR & C1)
+                              pi_ov = 1;
+                          else if (!pi_cycle)
                               PC = (PC + 1) & RMASK;
-                          }
                           AR &= FMASK;
                           MB = AR;
                           if (Mem_write(pi_cycle, 0))
-                              break;
+                              goto last;
                           AB = AR & RMASK;
                           goto fetch_opr;
-                          break;
+
                   case 1:     /* 04 DATAI */
                           dev_tab[d](DATAI|(d<<2), &AR);
                           MB = AR;
-                          Mem_write(pi_cycle, 0);
+                          if (Mem_write(pi_cycle, 0))
+                              goto last;
                           break;
                   case 3:     /* 14 DATAO */
-                          if (Mem_read(pi_cycle, 0))
-                             break;
+                          if (Mem_read(pi_cycle, 0, 0))
+                             goto last;
                           AR = MB;
                           dev_tab[d](DATAO|(d<<2), &AR);
                           break;
@@ -3905,7 +4442,8 @@ test_op:
                   case 5:     /* 24 CONI */
                           dev_tab[d](CONI|(d<<2), &AR);
                           MB = AR;
-                          Mem_write(pi_cycle, 0);
+                          if (Mem_write(pi_cycle, 0))
+                              goto last;
                           break;
                   case 6:     /* 30 CONSZ */
                           dev_tab[d](CONI|(d<<2), &AR);
@@ -3924,26 +4462,39 @@ test_op:
               break;
     }
 
+    AR &= FMASK;
     if (!sac_inh && (i_flags & (SCE|FCEPSE))) {
         MB = AR;
-        if (Mem_write(0, 0))
+        if (Mem_write(0, 0)) {
            goto last;
+        }
     }
     if (!sac_inh && ((i_flags & SAC) || ((i_flags & SACZ) && AC != 0)))
-        set_reg(AC, AR, 1);    /* blank, I, B */
+        set_reg(AC, AR);    /* blank, I, B */
 
-    if (!sac_inh && (i_flags & SAC2))
-        set_reg(AC+1, MQ, 1);
+    if (!sac_inh && (i_flags & SAC2)) {
+        MQ &= FMASK;
+        set_reg(AC+1, MQ);
+    }
 
     if (hst_lnt) {
         hst[hst_p].fmb = AR;
     }
 
 last:
+#if BBN
+    if ((cpu_unit.flags & UNIT_BBNPAGE) && page_fault) {
+        page_fault = 0;
+        AB = 070;
+        f_pc_inh = 1;
+        pi_cycle = 1;
+        goto fetch;
+    }
+#endif
 #if KI | KL
     /* Handle page fault and traps */
-    if (page_enable && (page_fault || private_page)) {
-        page_fault = private_page = 0;
+    if (page_enable && page_fault) {
+        page_fault = 0;
         AB = ub_ptr + ((FLAGS & USER) ? 0427 : 0426);
         MB = fault_data;
         Mem_write_nopage();
@@ -3957,16 +4508,16 @@ last:
         goto no_fetch;
     }
 #endif
+
     if (!f_pc_inh && !pi_cycle) {
         PC = (PC + 1) & RMASK;
     }
 
-
     /* Dismiss an interrupt */
     if (pi_cycle) {
 #if KI | KL
-       if (page_enable && (page_fault || private_page)) {
-            page_fault = private_page = 0;
+       if (page_enable && page_fault) {
+            page_fault = 0;
             inout_fail = 1;
        }
 #endif
@@ -3983,10 +4534,10 @@ last:
 #if KI | KL
                 AB |= eb_ptr;
                 Mem_read_nopage();
-                goto no_fetch;
 #else
-                goto fetch;
+                Mem_read(1, 0, 1);
 #endif
+                goto no_fetch;
            }
        } else if (pi_hold) {
             AB = 040 | (pi_enc << 1) | pi_ov;
@@ -3995,10 +4546,10 @@ last:
 #if KI | KL
             AB |= eb_ptr;
             Mem_read_nopage();
-            goto no_fetch;
 #else
-            goto fetch;
+            Mem_read(1, 0, 1);
 #endif
+            goto no_fetch;
        } else {
             f_inst_fetch = 1;
             f_load_pc = 1;
@@ -4134,6 +4685,10 @@ dev_tab[0] = &dev_apr;
 dev_tab[1] = &dev_pi;
 #if KI | KL
 dev_tab[2] = &dev_pag;
+#endif
+#if BBN
+if (cpu_unit.flags & UNIT_BBNPAGE)
+   dev_tab[024] = &dev_pag;
 #endif
 for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {
     dibp = (DIB *) dptr->ctxt;

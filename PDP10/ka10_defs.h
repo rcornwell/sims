@@ -58,8 +58,14 @@
 #define KI_22BIT KI|KL
 #endif
 
+/* Support for ITS Pager */
 #ifndef ITS
 #define ITS KA
+#endif
+
+/* Support for TENEX Pager */
+#ifndef BBN
+#define BBN KA
 #endif
 
 /* Digital Equipment Corporation's 36b family had six implementations:
@@ -198,6 +204,13 @@ extern DEBTAB crd_debug[];
 #define CRY1    002000        /* 100000 */
 #define CRY0    004000        /* 200000 */
 #define OVR     010000        /* 400000 */
+#ifdef BBN
+#define EXJSYS  000040        /* 002000 */
+#endif
+#ifdef ITS
+#define PURE    000040        /* 002000 */
+#define ONEP    000010        /* 000400 */
+#endif
 
 #define DATAI   00
 #define DATAO   01
@@ -233,6 +246,21 @@ extern DEBTAB crd_debug[];
 #define DEF_SERIAL      514             /* Default dec test machine */
 #endif
 
+#if BBN
+#define BBN_PAGE    0000017777777LL
+#define BBN_TRPPG   0000017000000LL
+#define BBN_SPT     0000017777000LL
+#define BBN_PN      0000000000777LL
+#define BBN_ACC     0000040000000LL
+#define BBN_TRP1    0000100000000LL
+#define BBN_TRP     0000200000000LL
+#define BBN_TRPMOD  0000400000000LL
+#define BBN_TRPUSR  0001000000000LL
+#define BBN_EXEC    0020000000000LL
+#define BBN_WRITE   0040000000000LL
+#define BBN_READ    0100000000000LL
+#define BBN_MERGE   0161740000000LL
+#endif
 
 typedef unsigned long long int uint64;
 typedef unsigned int uint18;
