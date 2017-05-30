@@ -101,8 +101,8 @@ UNIT                lpr_unit[] = {
 };
 
 MTAB                lpr_mod[] = {
-    {ECHO, 0,     NULL, "NOECHO", NULL, NULL, NULL},
-    {ECHO, ECHO, "ECHO", "ECHO", NULL, NULL, NULL},
+    {ECHO, 0,     NULL, "NOECHO", NULL, NULL, NULL, "Done echo to console"},
+    {ECHO, ECHO, "ECHO", "ECHO", NULL, NULL, NULL, "Echo output to console"},
 #if NUM_CHAN != 1
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "CHAN", "CHAN", &set_chan,
      &get_chan, NULL},
@@ -414,9 +414,11 @@ t_stat lpr_srv(UNIT * uptr)
             action = 1;
             break;
         case 18:                /* Echo 8-4 R */
+            /* I'm not sure how these are computed */
+#if 0              /* Should be correct, but force to zero works */
             wd = lpr_data[u].wbuff[2];
             wd -= lpr_data[u].wbuff[10];
-            /* I'm not sure how these are computed */
+#endif
             /* But forcing to zero works */
             wd = 0;
             action = 2;
@@ -606,24 +608,23 @@ t_stat
 lpr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
    const char *cpu = cpu_description(&cpu_dev);
+   extern void fprint_attach_help_ex (FILE *st, DEVICE *dptr, t_bool silent);
 
    fprintf (st, "%s\n\n", lpr_description(dptr));
 #if NUM_DEVS_LPR > 3
-   fprintf (st, "The %s supports up to four line printers\n", cpu);
+   fprintf (st, "The %s supports up to four line printers", cpu);
 #elif NUM_DEVS_LPR > 2
-   fprintf (st, "The %s supports up to three line printers\n", cpu);
+   fprintf (st, "The %s supports up to three line printers", cpu);
 #elif NUM_DEVS_LPR > 1
-   fprintf (st, "The %s supports up to two line printers\n", cpu);
+   fprintf (st, "The %s supports up to two line printers", cpu);
 #elif NUM_DEVS_LPR > 0
-   fprintf (st, "The %s supports one line printer\n", cpu);
+   fprintf (st, "The %s supports one line printer", cpu);
 #endif
-   fprintf (st, "by default. The Line printer can be configured to any number of\n");
-   fprintf (st, "lines per page with the:\n");
-   fprintf (st, "        sim> SET %s LINESPERPAGE=n\n\n", dptr->name);
-   fprintf (st, "The printer acted as the console printer therefore the default is\n");
-   fprintf (st, "echo to the console\n");
-   fprintf (st, "The default is 59 lines per page\n\n");
-   help_set_chan_type(st, dptr, "Card readers");
+   fprintf (st, "by default. The Line printer can\n");
+   fprintf (st, "The printer acted as the console printer:\n\n");
+   fprintf (st, "        sim> SET %s ECHO\n\n", dptr->name);
+   fprintf (st, "Causes all output sent to printer to also go to console.\n");
+   help_set_chan_type(st, dptr, "Line printers");
    fprint_set_help(st, dptr);
    fprint_show_help(st, dptr);
    return SCPE_OK;

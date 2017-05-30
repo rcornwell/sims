@@ -280,6 +280,8 @@ void                com_post_eom();
 t_bool              com_inp_msg(uint32 ln, uint16 msg);
 const char          *com_description(DEVICE *dptr);
 t_stat              com_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
+const char          *coml_description(DEVICE *dptr);
+t_stat              coml_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
 
 
 /* COM data structures
@@ -310,10 +312,10 @@ REG                 com_reg[] = {
 
 MTAB                com_mod[] = {
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "CHAN", "CHAN",
-     &set_chan, &get_chan, NULL},
+     &set_chan, &get_chan, NULL, "Set channel"},
 #ifndef I7010
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "SELECT", "SELECT",
-     &chan9_set_select, &chan9_get_select, NULL},
+     &chan9_set_select, &chan9_get_select, NULL, "Set selection channel"},
 #endif
     {UNIT_ATT, UNIT_ATT, "connections", NULL, NULL, &com_summ},
     {MTAB_XTD | MTAB_VDV | MTAB_NMO, 1, "CONNECTIONS", NULL,
@@ -376,11 +378,14 @@ UNIT                coml_unit[] = {
 };
 
 MTAB                coml_mod[] = {
-    {UNIT_K35 + UNIT_2741, 0, "KSR-37", "KSR-37", NULL},
-    {UNIT_K35 + UNIT_2741, UNIT_K35, "KSR-35", "KSR-35", NULL},
-    {UNIT_K35 + UNIT_2741, UNIT_2741, "2741", "2741", NULL},
+    {UNIT_K35 + UNIT_2741, 0, "KSR-37", "KSR-37", NULL, NULL, NULL, 
+               "Standard KSR"},
+    {UNIT_K35 + UNIT_2741, UNIT_K35, "KSR-35", "KSR-35", NULL, NULL, NULL, 
+               "Upper case only KSR"},
+    {UNIT_K35 + UNIT_2741, UNIT_2741, "2741", "2741", NULL, NULL, NULL, 
+               "IBM 2741 terminal"},
     {MTAB_XTD | MTAB_VUN, 0, NULL, "DISCONNECT",
-     &tmxr_dscln, NULL, &com_desc},
+     &tmxr_dscln, NULL, &com_desc, "Disconnect line"},
     {MTAB_XTD | MTAB_VUN | MTAB_NC, 0, "LOG", "LOG",
      &tmxr_set_log, &tmxr_show_log, &com_desc},
     {MTAB_XTD | MTAB_VUN | MTAB_NC, 0, NULL, "NOLOG",
@@ -397,9 +402,9 @@ REG                 coml_reg[] = {
 DEVICE              coml_dev = {
     "COML", coml_unit, coml_reg, coml_mod,
     COM_TLINES, 10, 31, 1, 16, 8,
-    NULL, NULL, &com_reset,
-    NULL, NULL, NULL,
-    NULL, DEV_DISABLE
+    NULL, NULL, &com_reset, NULL, NULL, NULL,
+    NULL, DEV_DISABLE, 0, NULL, NULL, 
+    NULL, &coml_help, NULL, NULL, &coml_description
 };
 
 /* COM: channel select */
@@ -445,7 +450,7 @@ t_stat com_svc(UNIT * uptr)
     if (chan_test(chan, CTL_SNS)) {
         int     eor = (com_sta == 4)?DEV_REOR:0;
 
-        ch = (com_sense >> ((4 - (uint32)com_sta) * 4)) & 0xf;
+        ch = ((uint32)com_sense >> ((4 - com_sta) * 4)) & 0xf;
         if (ch & 010)   /* Move A bit over one */
            ch ^= 030;
         sim_debug(DEBUG_SNS, &com_dev, "sense unit=%02x\n", ch);
@@ -1266,6 +1271,22 @@ com_reset_ln(uint32 ln)
         coml_unit[ln].CONN = 0;
     return;
 }
+const char *
+coml_description(DEVICE *dptr)
+{
+    return "IBM 7750 terminal";
+}
+
+t_stat
+coml_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
+{
+fprintf (st, "Each COM line can be set to a given type of terminal\n\n");
+fprintf (st, "   sim> SET COMLn KSR-37     Standard connection\n");
+fprintf (st, "   sim> SET COMLn KSR-35     Allows only upper case\n");
+fprintf (st, "   sim> SET COMLn 2741       Set to look like a 2741\n");
+fprint_set_help (st, dptr);
+fprint_show_help (st, dptr);
+}
 
 const char *
 com_description(DEVICE *dptr)
@@ -1281,13 +1302,13 @@ fprintf (st, "The ATTACH command specifies the port to be used:\n\n");
 tmxr_attach_help (st, dptr, uptr, flag, cptr);
 help_set_chan_type(st, dptr, "IBM 7750");
 #ifndef I7010
-fprintf (st, "Each device on the channel can be at either select 0 or 1, this is set\n");
-fprintf (st, "with the\n    set SET COM SELECT=n\n\n");
+fprintf (st, "Each device on the channel can be at either select 0 or 1, \n");
+fprintf (st, "this is set with the\n\n");
+fprintf (st, "   sim> SET COM SELECT=n\n\n");
 #endif
-fprintf (st, "Each COM line can be set to a given type of terminal\n");
-fprintf (st, "   sim> SET COMLn KSR-37     Standard connection\n");
-fprintf (st, "   sim> SET COMLn KSR-35     Allows only upper case\n");
-fprintf (st, "   sim> SET COMLn 2741       Set to look like a 2741\n");
+fprint_set_help (st, dptr);
+fprint_show_help (st, dptr);
+
 
 return SCPE_OK;
 }

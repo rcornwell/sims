@@ -116,7 +116,7 @@ MTAB                chan_mod[] = {
     {CHAN_MODEL, CHAN_S_TYPE(CHAN_UREC), "UREC", NULL, NULL,NULL,NULL},
     {CHAN_MODEL, CHAN_S_TYPE(CHAN_7604), "7604", NULL, NULL, NULL, NULL},
     {CHAN_MODEL, CHAN_S_TYPE(CHAN_7907), "7907", NULL, NULL, NULL, NULL},
-    {MTAB_VUN, 0, "UNITS", NULL, NULL, &print_chan, NULL},
+    {MTAB_VUN, 0, "UNITS", NULL, NULL, &print_chan, NULL, "Show units on channel"},
     {0}
 };
 
@@ -1578,11 +1578,11 @@ t_stat
 chan_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
    fprintf (st, "%s\n\n", chan_description(dptr));
-   fprintf (st, "The 7070 supports up to 8 channels.  Channel models include\n\n");
+   fprintf (st, "The 7070 supports up to 8 channels. Channel models include\n\n");
    fprintf (st, "        7604            standard multiplexor channel\n");
    fprintf (st, "        7907            advanced capabilities channel\n\n");
    fprintf (st, "Channels are fixed on the 7070.\n\n");
-   fprintf (st, "Channel * is a puesdo channel for unit record devices.\n");
+   fprintf (st, "Channel * is for unit record devices.\n");
    fprint_set_help(st, dptr);
    fprint_show_help(st, dptr);
    return SCPE_OK;

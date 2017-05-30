@@ -268,8 +268,8 @@ chron_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
   fprintf (st, "Chronoclock\n\n");
   fprintf (st, "The Chronoclock replaces one of your tape drives, and is\n");
   fprintf (st, "for CTSS operation\n\n");
-  fprintf (st, "     sim> SET %s ENABLE   to enable chronoclock\n", dptr->name);
-  fprintf (st, "     sim> SET %s UNIT=#   sets unit to override\n\n", dptr->name);
+  fprintf (st, "   sim> SET %s ENABLE     to enable chronoclock\n", dptr->name);
+  fprintf (st, "   sim> SET %s UNIT=#     sets unit to override [0-9]\n\n", dptr->name);
   help_set_chan_type(st, dptr, "Chrono clock");
   fprintf (st, "You must disable the corrosponding tape drive in order for\n");
   fprintf (st, "the chronoclook to be seen. The chronoclock replaces one of\n");

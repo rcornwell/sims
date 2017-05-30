@@ -85,7 +85,7 @@ MTAB                cdr_mod[] = {
 };
 
 DEVICE              cdr_dev = {
-    "CR", cdr_unit, NULL, cdr_mod,
+    "CDR", cdr_unit, NULL, cdr_mod,
     NUM_DEVS_CDR, 8, 15, 1, 8, 36,
     NULL, NULL, &cdr_reset, &cdr_boot, &cdr_attach, &cdr_detach,
     &cdr_dib, DEV_DISABLE | DEV_DEBUG, 0, crd_debug,
@@ -320,18 +320,19 @@ cdr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 
    fprintf (st, "%s\n\n", cdr_description(dptr));
 #if NUM_DEVS_CDR > 3
-   fprintf (st, "The %s supports up to four card readers\n", cpu);
+   fprintf (st, "The %s supports up to four card readers\n\n", cpu);
 #elif NUM_DEVS_CDR > 2
-   fprintf (st, "The %s supports up to three card readers\n", cpu);
+   fprintf (st, "The %s supports up to three card readers\n\n", cpu);
 #elif NUM_DEVS_CDR > 1
-   fprintf (st, "The %s supports up to two card readers\n", cpu);
+   fprintf (st, "The %s supports up to two card readers\n\n", cpu);
 #elif NUM_DEVS_CDR > 0
-   fprintf (st, "The %s supports one card reader\n", cpu);
+   fprintf (st, "The %s supports one card reader\n\n", cpu);
 #endif
    help_set_chan_type(st, dptr, "Card readers");
-   sim_card_attach_help(st, dptr, uptr, flag, cptr);
    fprint_set_help(st, dptr);
    fprint_show_help(st, dptr);
+   fprintf (st, "\n");
+   sim_card_attach_help(st, dptr, uptr, flag, cptr);
    return SCPE_OK;
 }
 

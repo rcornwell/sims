@@ -88,23 +88,23 @@ UNIT                cdr_unit[] = {
 
 MTAB                cdr_mod[] = {
     {MTAB_XTD | MTAB_VUN, 0, "FORMAT", "FORMAT",
-               &sim_card_set_fmt, &sim_card_show_fmt, NULL},
+               &sim_card_set_fmt, &sim_card_show_fmt, NULL, "Set card format"},
 #ifdef I7070
-    {ATTENA|ATTENB, 0, NULL, "NOATTEN", NULL, NULL, NULL},
-    {ATTENA|ATTENB, ATTENA, "ATTENA", "ATTENA", NULL, NULL, NULL},
-    {ATTENA|ATTENB, ATTENB, "ATTENB", "ATTENB", NULL, NULL, NULL},
+    {ATTENA|ATTENB, 0, NULL, "NOATTEN", NULL, NULL, NULL, "No attention signal"},
+    {ATTENA|ATTENB, ATTENA, "ATTENA", "ATTENA", NULL, NULL, NULL, "Signal Attention A"},
+    {ATTENA|ATTENB, ATTENB, "ATTENB", "ATTENB", NULL, NULL, NULL, "Signal Attention B"},
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "LCOL", "LCOL", &cdr_setload,
-        &cdr_getload, NULL},
+        &cdr_getload, NULL, "Load card column indicator"},
 #endif
 #ifdef I7010
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "CHAN", "CHAN", &set_chan,
-        &get_chan, NULL},
+        &get_chan, NULL, "Set device channel"},
 #endif
     {0}
 };
 
 DEVICE              cdr_dev = {
-    "CR", cdr_unit, NULL, cdr_mod,
+    "CDR", cdr_unit, NULL, cdr_mod,
     NUM_DEVS_CDR, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, &cdr_boot, &cdr_attach, &sim_card_detach,
     &cdr_dib, DEV_DISABLE | DEV_DEBUG, 0, crd_debug,
@@ -368,18 +368,25 @@ t_stat
 cdr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
    fprintf (st, "%s\n\n", cdr_description(dptr));
+#if NUM_DEVS_CDR > 1
    fprintf (st, "The system supports up to two card readers.\n");
+#else
+   fprintf (st, "The system supports one card reader.\n");
+#endif
 #ifdef I7070
    fprintf (st, "Unit record devices can be configured to interrupt the CPU on\n");
    fprintf (st, "one of two priority channels A or B, to set this\n\n");
-   fprintf (st, "    sim> set cp attena     to set device to raise Atten A\n\n");
+   fprintf (st, "   sim> SET %s ATTENA     To set device to raise Atten A\n\n", dptr->name);
    fprintf (st, "The 7500 Card reader supported a load mode, this was\n");
    fprintf (st, "selected by use of a 12 punch in a given column. When this\n");
-   fprintf (st, "was seen the card was read into 8 words\n");
-   fprintf (st, "    sim> set cp lcol=72    sets column to select load mode\n\n");
+   fprintf (st, "was seen the card was read into 8 words. Normal read is\n");
+   fprintf (st, "text only\n\n");
+   fprintf (st, "   sim> SET %s LCOL=72    Sets column to select load mode\n\n", dptr->name);
 #endif
+#if NUM_DEVS_CDR > 1
 #ifdef I7010
    help_set_chan_type(st, dptr, "Card reader");
+#endif
 #endif
    sim_card_attach_help(st, dptr, uptr, flag, cptr);
    fprint_set_help(st, dptr);

@@ -942,19 +942,20 @@ cpu_description (DEVICE *dptr)
 t_stat
 cpu_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-fprintf (st, "The CPU behaves as a IBM 701\n");
-fprintf (st, "These switches are recognized when examining or depositing in CPU memory:\n\n");
-fprintf (st, "      -c      examine/deposit characters, 6 per word\n");
-fprintf (st, "      -l      examine/deposit half words\n");
-fprintf (st, "      -m      examine/deposit IBM 709 instructions\n");
-fprintf (st, "The CPU can maintain a history of the most recently executed instructions.\n"
-);
-fprintf (st, "This is controlled by the SET CPU HISTORY and SHOW CPU HISTORY commands:\n\n"
-);
-fprintf (st, "   sim> SET CPU HISTORY                 clear history buffer\n");
-fprintf (st, "   sim> SET CPU HISTORY=0               disable history\n");
-fprintf (st, "   sim> SET CPU HISTORY=n{:file}        enable history, length = n\n");
-fprintf (st, "   sim> SHOW CPU HISTORY                print CPU history\n");
+    fprintf (st, "The CPU behaves as a IBM 701\n");
+    fprintf (st, "These switches are recognized when examining or depositing in CPU memory:\n\n");
+    fprintf (st, "      -c      examine/deposit characters, 6 per word\n");
+    fprintf (st, "      -l      examine/deposit half words\n");
+    fprintf (st, "      -m      examine/deposit IBM 701 instructions\n\n");
+    fprintf (st, "The CPU can maintain a history of the most recently executed instructions.\n");
+    fprintf (st, "This is controlled by the SET CPU HISTORY and SHOW CPU HISTORY commands:\n\n");
+    fprintf (st, "   sim> SET CPU HISTORY                 clear history buffer\n");
+    fprintf (st, "   sim> SET CPU HISTORY=0               disable history\n");
+    fprintf (st, "   sim> SET CPU HISTORY=n{:file}        enable history, length = n\n");
+    fprintf (st, "   sim> SHOW CPU HISTORY                print CPU history\n");
+    fprint_set_help(st, dptr);
+    fprint_show_help(st, dptr);
+
 return SCPE_OK;
 }
 

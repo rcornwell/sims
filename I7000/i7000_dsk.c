@@ -1844,9 +1844,9 @@ t_stat dsk_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
 fprintf (st, "IBM 7631 Disk File Controller\n\n");
 fprintf (st, "The IBM 7631 Disk File Controller supports several types of ");
 fprintf (st, "disk drives and\ndrums. The drive must be formatted for use ");
-fprintf (st, "of the system. This is handled\nby utilities provided by the ");
-fprintf (st, "operating system. This will write a special format track.\n");
-fprintf (st, "Use:\n");
+fprintf (st, "of the system. This is handled by\nutilities provided by the ");
+fprintf (st, "operating system. This will write a special format\ntrack.\n\n");
+fprintf (st, "Use:\n\n");
 fprintf (st, "    sim> SET DKn TYPE=type\n");
 fprintf (st, "Type can be: ");
 for (i = 0; disk_type[i].name != 0; i++) {
@@ -1854,7 +1854,7 @@ for (i = 0; disk_type[i].name != 0; i++) {
     if (disk_type[i+1].name != 0)
         fprintf(st, ", ");
 }
-fprintf (st, ".\nEach drive has the following storage capacity:\n");
+fprintf (st, ".\nEach drive has the following storage capacity:\n\n");
 for (i = 0; disk_type[i].name != 0; i++) {
     int32 size = disk_type[i].mods * disk_type[i].bpt *
                 disk_type[i].arms * disk_type[i].track * disk_type[i].cyl;
@@ -1867,12 +1867,12 @@ for (i = 0; disk_type[i].name != 0; i++) {
     fprintf(st, "      %-8s %4d%cB %d modules\n", disk_type[i].name, size, sm,
            disk_type[i].mods);
 }
-fprintf (st, "\n\nTo enable formating the format switch must be set ");
-fprintf (st, "to enable, and the Home Address 2 write must be enabled.");
-fprintf (st, "\nTo do this:\n");
-fprintf (st, "     sim> SET DKn FORMAT HA2\n");
-fprintf (st, "To prevent accidental formating of the drive use:\n");
-fprintf (st, "     sim> SET DKn NOFORMAT NOHA2\n");
+fprintf (st, "\nTo enable formating the format switch must be set ");
+fprintf (st, "to enable, and the Home\nAddress 2 write must be enabled.\n");
+fprintf (st, "To do this:\n\n");
+fprintf (st, "     sim> SET DKn FORMAT HA2\n\n");
+fprintf (st, "To prevent accidental formating of the drive use:\n\n");
+fprintf (st, "     sim> SET DKn NOFORMAT NOHA2\n\n");
 help_set_chan_type(st, dptr, "IBM 7631 Disk File");
 fprint_set_help (st, dptr);
 fprint_show_help (st, dptr);

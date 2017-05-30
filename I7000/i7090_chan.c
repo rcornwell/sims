@@ -143,11 +143,7 @@ char     *chan_type_name[] = {
 
 /* Delay device for IOD instruction */
 DIB                 dly_dib =
-#ifdef I701
-    { CH_TYP_PIO, 1, 2052, 07777, &dly_cmd, NULL };
-#else
     { CH_TYP_PIO, 1, 0333, 07777, &dly_cmd, NULL };
-#endif
 
 
 UNIT                chan_unit[] = {
@@ -1679,9 +1675,26 @@ chan9_set_error(int chan, uint32 mask)
 t_stat
 chan_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
+#ifdef I7090
    fprintf(st, "%s\n\n", chan_description(dptr));
+   fprintf (st, "The 7090 supports up to 8 channels. Channel models include\n\n");
+   fprintf (st, "        Unit record     Polled mode I/O devices\n");
+   fprintf (st, "        7607            standard multiplexor channel\n");
+   fprintf (st, "        7909            advanced capabilities channel\n");
+   fprintf (st, "        7289            special channel for high speed drum\n\n");
+   fprintf (st, "Channels can be reconfigured on the 7090, this generally ");
+   fprintf (st, "happens automatically.\nHowever at times it can be useful to ");
+   fprintf (st, "force a channel to a specific device. If\ndevices are attached");
+   fprintf (st, "to incorrect channel types an error will be reported at sim\n");
+   fprintf (st, "start. The first channel is fixed for Polled mode devices.\n\n");
    fprint_set_help(st, dptr);
    fprint_show_help(st, dptr);
+#else
+   fprintf(st, "IBM 704 Channel\n\n");
+   fprintf(st, "Psuedo device to display IBM 704 I/O. The IBM 704 used polled");
+   fprintf(st, " I/O,\nThe assembly register and the flags can be displayed\n");
+   fprintf(st, "There are no options for the this device\n");
+#endif
 return SCPE_OK;
 }
 

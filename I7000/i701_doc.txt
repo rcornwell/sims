@@ -83,8 +83,8 @@ name(s)
 CPU             701 CPU with 2KW of memory
 CH              704 devices.
 MT              729 magnetic tape controller, channel A (required)
-CR              711 card reader
-CP              721 card punch
+CDR             711 card reader
+CDP             721 card punch
 LP              716 line printer
 DR0             733 drum
 
@@ -132,28 +132,28 @@ or registers.
 
 2.3 Peripherals
 
-2.3.1 711 Card Reader (CR)
+2.3.1 711 Card Reader (CDR)
 
-The card reader (CR) reads data from a disk file.  Cards are simulated
+The card reader (CDR) reads data from a disk file.  Cards are simulated
 as ASCII lines with terminating newlines.  
 
 Card reader files can either be text (one character per column) or
 column binary (two characters per column).  The file type can be
 specified with a set command:
 
-        SET CR FORMAT=TEXT      sets ascii text mode
-        SET CR FORMAT=BINARY    sets for binary card images.
-        SET CR FORMAT=BCD       sets for BCD records.
-        SET CR FORMAT=CBN       sets for column binary BCD records.
-        SET CR FORMAT=AUTO      Automaticly determines format.
+        SET CDR FORMAT=TEXT      sets ascii text mode
+        SET CDR FORMAT=BINARY    sets for binary card images.
+        SET CDR FORMAT=BCD       sets for BCD records.
+        SET CDR FORMAT=CBN       sets for column binary BCD records.
+        SET CDR FORMAT=AUTO      Automaticly determines format.
 
 or in the ATTACH command:
 
-        ATT CR <file>           attaches a file
+        ATT CDR <file>           attaches a file
 
 The card reader can be booted with the:
 
-        BOOT CR                 loads first 3 words of card.
+        BOOT CDR                 loads first 3 words of card.
 
 Error handling is as follows:
 
@@ -165,24 +165,24 @@ Error handling is as follows:
 
         OS I/O error            report error and stop
 
-2.3.2 721 Card Punch (CP)
+2.3.2 721 Card Punch (CDP)
 
-The card reader (CP) writes data to a disk file.  Cards are simulated
+The card reader (CDP) writes data to a disk file.  Cards are simulated
 as ASCII lines with terminating newlines. 
 
 Card punch files can either be text (one character per column) or
 column binary (two characters per column).  The file type can be
 specified with a set command:
 
-        SET CR FORMAT=TEXT      sets ascii text mode
-        SET CR FORMAT=BINARY    sets for binary card images.
-        SET CR FORMAT=BCD       sets for BCD records.
-        SET CR FORMAT=CBN       sets for column binary BCD records.
-        SET CR FORMAT=AUTO      Automaticly determines format.
+        SET CDP FORMAT=TEXT      sets ascii text mode
+        SET CDP FORMAT=BINARY    sets for binary card images.
+        SET CDP FORMAT=BCD       sets for BCD records.
+        SET CDP FORMAT=CBN       sets for column binary BCD records.
+        SET CDP FORMAT=AUTO      Automaticly determines format.
 
 or in the ATTACH command:
 
-        ATT CP <file>           attaches a file
+        ATT CDP <file>           attaches a file
 
 Error handling is as follows:
 

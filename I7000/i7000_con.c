@@ -87,7 +87,7 @@ UNIT                con_unit[] = {
 };
 
 DEVICE              con_dev = {
-    "CON", con_unit, NULL, NULL,
+    "INQ", con_unit, NULL, NULL,
     NUM_DEVS_LPR, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, NULL, NULL, NULL,
     &con_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,

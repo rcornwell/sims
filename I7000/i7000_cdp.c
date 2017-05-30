@@ -85,21 +85,21 @@ UNIT                cdp_unit[] = {
 
 MTAB                cdp_mod[] = {
     {MTAB_XTD | MTAB_VUN, 0, "FORMAT", "FORMAT",
-               &sim_card_set_fmt, &sim_card_show_fmt, NULL},
+               &sim_card_set_fmt, &sim_card_show_fmt, NULL, "Set card format"},
 #ifdef I7070
-    {ATTENA|ATTENB, 0, NULL, "NOATTEN", NULL, NULL, NULL},
-    {ATTENA|ATTENB, ATTENA, "ATTENA", "ATTENA", NULL, NULL, NULL},
-    {ATTENA|ATTENB, ATTENB, "ATTENB", "ATTENB", NULL, NULL, NULL},
+    {ATTENA|ATTENB,0, NULL, "NOATTEN", NULL, NULL, NULL, "No attention signal"},
+    {ATTENA|ATTENB,ATTENA, "ATTENA", "ATTENA", NULL, NULL, NULL, "Signal Attention A"},
+    {ATTENA|ATTENB,ATTENB, "ATTENB", "ATTENB", NULL, NULL, NULL, "Signal Attention B"},
 #endif
 #ifdef I7010
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "CHAN", "CHAN", &set_chan,
-        &get_chan, NULL},
+        &get_chan, NULL, "Set device channel"},
 #endif
     {0}
 };
 
 DEVICE              cdp_dev = {
-    "CP", cdp_unit, NULL, cdp_mod,
+    "CDP", cdp_unit, NULL, cdp_mod,
     NUM_DEVS_CDP, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, NULL, &cdp_attach, &cdp_detach,
     &cdp_dib, DEV_DISABLE | DEV_DEBUG, 0, crd_debug,
@@ -315,10 +315,11 @@ t_stat
 stk_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
    fprintf (st, "%s\n\n", stk_description(dptr));
-   fprintf (st, "Allows stack control functions to direct cards to specific\n");
-   fprintf (st, "bins based on stacker selection.Attach cards here if you \n");
-   fprintf (st, "wish this specific stacker select to recieve this group of cards.\n");
-   fprintf (st, "If nothing is attached cards will be punched on the default punch\n\n");
+   fprintf (st, "Allows stack control functions to direct cards to specific ");
+   fprintf (st, "bins based on stacker\nselection. Attach cards here if you ");
+   fprintf (st, "wish this specific stacker select to recieve\nthis group of");
+   fprintf (st, " cards. If nothing is attached cards will be punched on the");
+   fprintf (st, " default\npunch\n\n");
    sim_card_attach_help(st, dptr, uptr, flag, cptr);
    fprint_set_help(st, dptr);
    fprint_show_help(st, dptr);
@@ -344,7 +345,7 @@ cdp_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 #ifdef I7070
    fprintf (st, "Unit record devices can be configured to interrupt the CPU on\n");
    fprintf (st, "one of two priority channels A or B, to set this\n\n");
-   fprintf (st, "    sim> set cp attena     to set device to raise Atten A\n\n");
+   fprintf (st, "   sim> SET %s ATTENA     to set device to raise Atten A\n\n", dptr->name);
 #endif
 #ifdef I7010
    help_set_chan_type(st, dptr, "Card punches");

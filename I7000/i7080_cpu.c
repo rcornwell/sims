@@ -3378,33 +3378,35 @@ cpu_description (DEVICE *dptr)
 t_stat
 cpu_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-fprintf (st, "The CPU can be set to a IBM 702, IBM 705, IBM 705/3 or IBM 7080\n");
-fprintf (st, "The type of CPU can be set by one of the following commands\n\n");
-fprintf (st, "   sim> set CPU 702         sets IBM 704 emulation\n");
-fprintf (st, "   sim> set CPU 705         sets IBM 705 emulation\n");
-fprintf (st, "   sim> set CPU 7053        sets IBM 705/3 emulation\n");
-fprintf (st, "   sim> set CPU 7080        sets IBM 7080 emulation\n");
-fprintf (st, "These switches are recognized when examining or depositing in CPU memory:\n\n");
-fprintf (st, "      -c      examine/deposit characters, 6 per word\n");
-fprintf (st, "      -l      examine/deposit half words\n");
-fprintf (st, "      -m      examine/deposit IBM 709 instructions\n");
-fprintf (st, "The memory of the CPU can be set in 10K incrememts from 10K to 160K with the\n\n");
-fprintf (st, "   sim> SET CPU xK\n\n");
-fprintf (st, "For the IBM 7080 the following options can be enabled\n\n");
-fprintf (st, "   sim> SET CPU EMU40K      enables memory above 40K\n");
-fprintf (st, "   sim> SET CPU NOEMU40K    disables memory above 40K\n\n");
-fprintf (st, "   sim> SET CPU EMU705     enables IBM7080 to support 705 Emulation.\n");
-fprintf (st, "   sim> SET CPU NOEMU705   disables IBM7080 to support 705 Emulation.\n\n");
-fprintf (st, "   sim> SET CPU NOSTOP    CPU will not stop on invalid conditions\n");
-fprintf (st, "   sim> SET CPU PRORAM    CPU stop under program control\n\n");
-fprintf (st, "The CPU can maintain a history of the most recently executed instructions.\n"
-);
-fprintf (st, "This is controlled by the SET CPU HISTORY and SHOW CPU HISTORY commands:\n\n"
-);
-fprintf (st, "   sim> SET CPU HISTORY                 clear history buffer\n");
-fprintf (st, "   sim> SET CPU HISTORY=0               disable history\n");
-fprintf (st, "   sim> SET CPU HISTORY=n{:file}        enable history, length = n\n");
-fprintf (st, "   sim> SHOW CPU HISTORY                print CPU history\n");
-return SCPE_OK;
+    fprintf (st, "The CPU can be set to a IBM 702, IBM 705, IBM 705/3 or IBM 7080\n");
+    fprintf (st, "The type of CPU can be set by one of the following commands\n\n");
+    fprintf (st, "   sim> set CPU 702         sets IBM 704 emulation\n");
+    fprintf (st, "   sim> set CPU 705         sets IBM 705 emulation\n");
+    fprintf (st, "   sim> set CPU 7053        sets IBM 705/3 emulation\n");
+    fprintf (st, "   sim> set CPU 7080        sets IBM 7080 emulation\n\n");
+    fprintf (st, "These switches are recognized when examining or depositing in CPU memory:\n\n");
+    fprintf (st, "      -c      examine/deposit characters\n");
+    fprintf (st, "      -s      examine 50 characters\n");
+    fprintf (st, "      -d      examine 50 characters\n");
+    fprintf (st, "      -m      examine/deposit IBM 7080 instructions\n\n");
+    fprintf (st, "The memory of the CPU can be set in 10K incrememts from 10K to 160K with the\n\n");
+    fprintf (st, "   sim> SET CPU xK\n\n");
+    fprintf (st, "For the IBM 7080 the following options can be enabled\n\n");
+    fprintf (st, "   sim> SET CPU EMU40K      enables memory above 40K\n");
+    fprintf (st, "   sim> SET CPU NOEMU40K    disables memory above 40K\n\n");
+    fprintf (st, "   sim> SET CPU EMU705     enables IBM7080 to support 705 Emulation.\n");
+    fprintf (st, "   sim> SET CPU NOEMU705   disables IBM7080 to support 705 Emulation.\n\n");
+    fprintf (st, "   sim> SET CPU NOSTOP    CPU will not stop on invalid conditions\n");
+    fprintf (st, "   sim> SET CPU PRORAM    CPU stop under program control\n\n");
+    fprintf (st, "The CPU can maintain a history of the most recently executed instructions.\n");
+    fprintf (st, "This is controlled by the SET CPU HISTORY and SHOW CPU HISTORY commands:\n\n");
+    fprintf (st, "   sim> SET CPU HISTORY                 clear history buffer\n");
+    fprintf (st, "   sim> SET CPU HISTORY=0               disable history\n");
+    fprintf (st, "   sim> SET CPU HISTORY=n{:file}        enable history, length = n\n");
+    fprintf (st, "   sim> SHOW CPU HISTORY                print CPU history\n\n");
+    fprint_set_help(st, dptr);
+    fprint_show_help(st, dptr);
+
+    return SCPE_OK;
 }
 

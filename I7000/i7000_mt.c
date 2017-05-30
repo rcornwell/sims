@@ -613,7 +613,7 @@ mt_read_buff(UNIT * uptr, int cmd, DEVICE * dptr, t_uint64 *word)
                 i--;
             }
         }
-        *word |= ((t_value) ch) << (6 * i);
+        *word |= ((t_uint64) ch) << (6 * i);
     }
 
     if (parity) {
@@ -1310,14 +1310,8 @@ mt_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
    fprintf (st, "%s\n\n", mt_description(dptr));
    fprintf (st, "The magnetic tape controller assumes that all tapes are 7 track\n");
    fprintf (st, "with valid parity. Tapes are assumed to be 555.5 characters per\n");
-   fprintf (st, "inch. To simulate a standard 2400foot tape, do:\n");
-   fprintf (st, "    sim> SET %s LENGTH 15\n\n", dptr->name);
-#ifdef I7090
-   fprintf (st, "Devices can be moved to any channel via the command\n");
-   fprintf (st, "    sim> SET %s CHAN=x\n\n", dptr->name);
-   fprintf (st, "    where x is A to G\n");
-   fprintf (st, "Mag tapes can only be attached to 7607 channels\n\n");
-#endif
+   fprintf (st, "inch. To simulate a standard 2400foot tape, do:\n\n");
+   fprintf (st, "   sim> SET %s LENGTH 15\n\n", dptr->name);
    fprintf (st, "The mag tape drives support the BOOT command\n\n");
    help_set_chan_type(st, dptr, "Mag tape");
    sim_tape_attach_help (st, dptr, uptr, flag, cptr);

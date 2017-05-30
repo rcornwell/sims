@@ -678,7 +678,7 @@ chan_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
     fprintf (st, "%s\n\n", chan_description(dptr));
     fprintf (st, "The 7010 supports up to 4 channels.  Channel models include\n\n");
     fprintf (st, "   Channel * is for unit record devices.\n");
-    fprintf (st, "   Channels 1-4 are 7010  multiplexor channel\n");
+    fprintf (st, "   Channels 1-4 are 7010  multiplexor channel\n\n");
     fprintf (st, "Channels are fixed on the 7010.\n\n");
     fprint_set_help(st, dptr);
     fprint_show_help(st, dptr);

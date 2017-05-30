@@ -135,8 +135,8 @@ void help_set_chan_type(FILE *st, DEVICE *dptr, char *name)
    int        i;
    int        m;
 
-   fprintf (st, "Devices can be moved to any channel via the command\n");
-   fprintf (st, "    sim> SET %s CHAN=x\n\n    where x is", dptr->name);
+   fprintf (st, "Devices can be moved to any channel via the command\n\n");
+   fprintf (st, "   sim> SET %s CHAN=x     where x is", dptr->name);
    if (ctype & 3) {
        if (ctype == 1 || ctype == 2)
           fprintf(st, " only");
@@ -146,7 +146,7 @@ void help_set_chan_type(FILE *st, DEVICE *dptr, char *name)
    }
    if ((ctype & ~3) != 0)
       fprintf(st, " %s to %s", chname[1], chname[NUM_CHAN-1]);
-   fprintf (st, "\n%s can be attached to ", name);
+   fprintf (st, "\n\n%s can be attached to ", name);
    m = 1;
    for(i = 0; ctype != 0; i++) {
       if (ctype & m)  {

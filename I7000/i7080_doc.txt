@@ -86,8 +86,8 @@ MTB             729 magnetic tape controller, channel 21
 MTC             729 magnetic tape controller, channel 22
 MTD             729 magnetic tape controller, channel 23
 HTA             7340 hypertape controller.
-CR              711 card reader
-CP              721 card punch
+CDR             711 card reader
+CDP             721 card punch
 LP              716 line printer
 DR              733 drum for 702/705
 DKn             1301/2302/7304 disk.
@@ -199,26 +199,26 @@ For meaning of bits in FLAGS see i7000_defs.h.
 
 2.3 Unit record devices.
 
-2.3.1 711 Card Reader (CR)
+2.3.1 711 Card Reader (CDR)
 
-The card reader (CR) reads data from a disk file.  Cards are simulated
+The card reader (CDR) reads data from a disk file.  Cards are simulated
 as ASCII lines with terminating newlines.  
 
 Card reader files can either be text (one character per column) or
 column binary (two characters per column).  The file type can be
 specified with a set command:
 
-        SET CR TEXT             set text mode
-        SET CR BINARY           set column binary mode
-        SET CR AUTO             sets auto detect binary/text data.
+        SET CDR TEXT             set text mode
+        SET CDR BINARY           set column binary mode
+        SET CDR AUTO             sets auto detect binary/text data.
 
 or in the ATTACH command:
 
-        ATT CR <file>           attaches a file
+        ATT CDR <file>           attaches a file
 
 The card reader can be booted with the:
 
-        BOOT CR         loads either the first 2 words or
+        BOOT CDR         loads either the first 2 words or
                                 3 words depending on channel.
 
 Error handling is as follows:
@@ -231,22 +231,22 @@ Error handling is as follows:
 
         OS I/O error            report error and stop
 
-2.3.2 721 Card Punch (CP)
+2.3.2 721 Card Punch (CDP)
 
-The card reader (CP) writes data to a disk file.  Cards are simulated
+The card reader (CDP) writes data to a disk file.  Cards are simulated
 as ASCII lines with terminating newlines. 
 
 Card punch files can either be text (one character per column) or
 column binary (two characters per column).  The file type can be
 specified with a set command:
 
-        SET CP TEXT             set text mode
-        SET CP BINARY           set column binary mode
-        SET CP AUTO             set auto detect binary/text data.
+        SET CDP TEXT             set text mode
+        SET CDP BINARY           set column binary mode
+        SET CDP AUTO             set auto detect binary/text data.
 
 or in the ATTACH command:
 
-        ATT CP <file>           attaches a file
+        ATT CDP <file>           attaches a file
 
 Error handling is as follows:
 

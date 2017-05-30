@@ -2961,29 +2961,30 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
 
 t_stat
 cpu_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr) {
-fprintf (st, "The CPU can be set to a IBM 7070 or IBM 7074\n");
-fprintf (st, "The type of CPU can be set by one of the following commands\n\n");
-fprintf (st, "   sim> set CPU 7070        sets IBM 7070 emulation\n");
-fprintf (st, "   sim> set CPU 7074        sets IBM 7074 emulation\n");
-fprintf (st, "These switches are recognized when examining or depositing in CPU memory:\n\n");
-fprintf (st, "      -c      examine/deposit characters, 5 per word\n");
-fprintf (st, "      -l      examine/deposit half words\n");
-fprintf (st, "      -m      examine/deposit IBM 7070 instructions\n");
-fprintf (st, "The memory of the CPU can be set in 5K incrememts from 5K to 30K with the\n\n");
-fprintf (st, "   sim> SET CPU xK\n\n");
-fprintf (st, "For the IBM 7070 the following options can be enabled\n\n");
-fprintf (st, "   sim> SET CPU FLOAT     enables Floating Point\n");
-fprintf (st, "   sim> SET CPU NOFLOAT   disables Floating Point\n\n");
-fprintf (st, "   sim> SET CPU EXTEND      enables extended memory\n");
-fprintf (st, "   sim> SET CPU NOEXTEND    disables extended memory\n\n");
-fprintf (st, "   sim> SET CPU CLOCK      enables timer clock\n");
-fprintf (st, "   sim> SET CPU NOCLOCK    disables timer clock\n\n");
-fprintf (st, "The CPU can maintain a history of the most recently executed instructions.\n");
-fprintf (st, "This is controlled by the SET CPU HISTORY and SHOW CPU HISTORY commands:\n\n");
-fprintf (st, "   sim> SET CPU HISTORY                 clear history buffer\n");
-fprintf (st, "   sim> SET CPU HISTORY=0               disable history\n");
-fprintf (st, "   sim> SET CPU HISTORY=n{:file}        enable history, length = n\n");
-fprintf (st, "   sim> SHOW CPU HISTORY                print CPU history\n");
+    fprintf (st, "The CPU can be set to a IBM 7070 or IBM 7074\n");
+    fprintf (st, "The type of CPU can be set by one of the following commands\n\n");
+    fprintf (st, "   sim> set CPU 7070        sets IBM 7070 emulation\n");
+    fprintf (st, "   sim> set CPU 7074        sets IBM 7074 emulation\n\n");
+    fprintf (st, "These switches are recognized when examining or depositing in CPU memory:\n\n");
+    fprintf (st, "      -c      examine/deposit characters, 5 per word\n");
+    fprintf (st, "      -m      examine/deposit IBM 7070 instructions\n\n");
+    fprintf (st, "The memory of the CPU can be set in 5K incrememts from 5K to 30K with the\n\n");
+    fprintf (st, "   sim> SET CPU xK\n\n");
+    fprintf (st, "For the IBM 7070 the following options can be enabled\n\n");
+    fprintf (st, "   sim> SET CPU FLOAT     enables Floating Point\n");
+    fprintf (st, "   sim> SET CPU NOFLOAT   disables Floating Point\n\n");
+    fprintf (st, "   sim> SET CPU EXTEND      enables extended memory\n");
+    fprintf (st, "   sim> SET CPU NOEXTEND    disables extended memory\n\n");
+    fprintf (st, "   sim> SET CPU CLOCK      enables timer clock\n");
+    fprintf (st, "   sim> SET CPU NOCLOCK    disables timer clock\n\n");
+    fprintf (st, "The CPU can maintain a history of the most recently executed instructions.\n");
+    fprintf (st, "This is controlled by the SET CPU HISTORY and SHOW CPU HISTORY commands:\n\n");
+    fprintf (st, "   sim> SET CPU HISTORY                 clear history buffer\n");
+    fprintf (st, "   sim> SET CPU HISTORY=0               disable history\n");
+    fprintf (st, "   sim> SET CPU HISTORY=n{:file}        enable history, length = n\n");
+    fprintf (st, "   sim> SHOW CPU HISTORY                print CPU history\n");
+    fprint_set_help(st, dptr);
+    fprint_show_help(st, dptr);
     return SCPE_OK;
 }
 

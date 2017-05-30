@@ -4392,20 +4392,22 @@ fprintf (st, "The type of CPU can be set by one of the following commands\n\n");
 fprintf (st, "   sim> set CPU 704         sets IBM 704 emulation\n");
 fprintf (st, "   sim> set CPU 709         sets IBM 709 emulation\n");
 fprintf (st, "   sim> set CPU 7090        sets IBM 7090 emulation\n");
-fprintf (st, "   sim> set CPU 7094        sets IBM 7094 emulation\n");
+fprintf (st, "   sim> set CPU 7094        sets IBM 7094 emulation\n\n");
 #else
 fprintf (st, "The CPU behaves as a IBM 704\n");
 #endif
 fprintf (st, "These switches are recognized when examining or depositing in CPU memory:\n\n");
 fprintf (st, "      -c      examine/deposit characters, 6 per word\n");
 fprintf (st, "      -l      examine/deposit half words\n");
-fprintf (st, "      -m      examine/deposit IBM 709 instructions\n");
+fprintf (st, "      -m      examine/deposit IBM 709 instructions\n\n");
 fprintf (st, "The memory of the CPU can be set in 4K incrememts from 4K to 32K with the\n\n");
 fprintf (st, "   sim> SET CPU xK\n\n");
 #ifdef I7090
 fprintf (st, "For systems like IBSYS FASTIO can be enabled. This causes the CPU to finish\n");
 fprintf (st, "all outstanding I/O requests when it detects an IDLE loop. This is detected\n");
-fprintf (st, "by a TCOx to itself. The default is TRUEIO.\n\n");
+fprintf (st, "by a TCOx to itself. TRUEIO waits until the given timeout. ");
+fprintf (st, "For faster\noperation FASTIO can speed up execution, by eliminating");
+fprintf (st, "waits on devices.\nThe default is TRUEIO.\n\n");
 fprintf (st, "For the IBM 709x the following options can be enabled\n\n");
 fprintf (st, "   sim> SET CPU EFP      enables extended Floating Point\n");
 fprintf (st, "   sim> SET CPU NOEFP    disables extended Floating Point\n\n");
@@ -4425,6 +4427,9 @@ fprintf (st, "   sim> SET CPU HISTORY                 clear history buffer\n");
 fprintf (st, "   sim> SET CPU HISTORY=0               disable history\n");
 fprintf (st, "   sim> SET CPU HISTORY=n{:file}        enable history, length = n\n");
 fprintf (st, "   sim> SHOW CPU HISTORY                print CPU history\n");
+    fprint_set_help(st, dptr);
+    fprint_show_help(st, dptr);
+
 return SCPE_OK;
 }
 

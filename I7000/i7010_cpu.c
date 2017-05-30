@@ -3886,29 +3886,32 @@ cpu_description (DEVICE *dptr)
 t_stat
 cpu_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-fprintf (st, "The CPU can be set to a IBM 1401 or IBM 1410/7010\n");
-fprintf (st, "The type of CPU can be set by one of the following commands\n\n");
-fprintf (st, "   sim> set CPU 1401        sets IBM 1401 emulation\n");
-fprintf (st, "   sim> set CPU 7010        sets IBM 1410/7010 emulation\n");
-fprintf (st, "These switches are recognized when examining or depositing in CPU memory:\n\n");
-fprintf (st, "      -c      examine/deposit characters, 6 per word\n");
-fprintf (st, "      -l      examine/deposit half words\n");
-fprintf (st, "      -m      examine/deposit IBM 709 instructions\n");
-fprintf (st, "The memory of the CPU can be set in 10K incrememts from 10K to 100K with the\n\n");
-fprintf (st, "   sim> SET CPU xK\n\n");
-fprintf (st, "For the IBM 7010 the following options can be enabled\n\n");
-fprintf (st, "   sim> SET CPU PRIORITY      enables Priority Interupts\n");
-fprintf (st, "   sim> SET CPU NOPRIORITY    disables Priority Interupts\n\n");
-fprintf (st, "   sim> SET CPU FLOAT     enables Floating Point\n");
-fprintf (st, "   sim> SET CPU NOFLOAT   disables Floating Point\n\n");
-fprintf (st, "   sim> SET CPU PROT    enables memory protection feature\n");
-fprintf (st, "   sim> SET CPU NOPROT  disables memory protection feature\n\n");
-fprintf (st, "The CPU can maintain a history of the most recently executed instructions.\n");
-fprintf (st, "This is controlled by the SET CPU HISTORY and SHOW CPU HISTORY commands:\n\n");
-fprintf (st, "   sim> SET CPU HISTORY                 clear history buffer\n");
-fprintf (st, "   sim> SET CPU HISTORY=0               disable history\n");
-fprintf (st, "   sim> SET CPU HISTORY=n{:file}        enable history, length = n\n");
-fprintf (st, "   sim> SHOW CPU HISTORY                print CPU history\n");
-return SCPE_OK;
+    fprintf (st, "The CPU can be set to a IBM 1401 or IBM 1410/7010\n");
+    fprintf (st, "The type of CPU can be set by one of the following commands\n\n");
+    fprintf (st, "   sim> set CPU 1401        sets IBM 1401 emulation\n");
+    fprintf (st, "   sim> set CPU 7010        sets IBM 1410/7010 emulation\n\n");
+    fprintf (st, "These switches are recognized when examining or depositing in CPU memory:\n\n");
+    fprintf (st, "      -c      examine/deposit characters, 6 per word\n");
+    fprintf (st, "      -l      examine/deposit half words\n");
+    fprintf (st, "      -m      examine/deposit IBM 7010 instructions\n\n");
+    fprintf (st, "The memory of the CPU can be set in 10K incrememts from 10K to 100K with the\n\n");
+    fprintf (st, "   sim> SET CPU xK\n\n");
+    fprintf (st, "For the IBM 7010 the following options can be enabled\n\n");
+    fprintf (st, "   sim> SET CPU PRIORITY      enables Priority Interupts\n");
+    fprintf (st, "   sim> SET CPU NOPRIORITY    disables Priority Interupts\n\n");
+    fprintf (st, "   sim> SET CPU FLOAT     enables Floating Point\n");
+    fprintf (st, "   sim> SET CPU NOFLOAT   disables Floating Point\n\n");
+    fprintf (st, "   sim> SET CPU PROT    enables memory protection feature\n");
+    fprintf (st, "   sim> SET CPU NOPROT  disables memory protection feature\n\n");
+    fprintf (st, "The CPU can maintain a history of the most recently executed instructions.\n");
+    fprintf (st, "This is controlled by the SET CPU HISTORY and SHOW CPU HISTORY commands:\n\n");
+    fprintf (st, "   sim> SET CPU HISTORY                 clear history buffer\n");
+    fprintf (st, "   sim> SET CPU HISTORY=0               disable history\n");
+    fprintf (st, "   sim> SET CPU HISTORY=n{:file}        enable history, length = n\n");
+    fprintf (st, "   sim> SHOW CPU HISTORY                print CPU history\n");
+    fprint_set_help(st, dptr);
+    fprint_show_help(st, dptr);
+
+    return SCPE_OK;
 }
 

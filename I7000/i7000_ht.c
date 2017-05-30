@@ -645,7 +645,7 @@ ht_tape_cmd(DEVICE * dptr, UNIT * uptr)
                 cmd = t;
             break;
         default:
-            sim_debug(DEBUG_DETAIL | DEBUG_CMD, dptr, "Invalid command %x\n",
+            sim_debug((DEBUG_DETAIL | DEBUG_CMD), dptr, "Invalid command %x\n",
                   cmd);
             ht_sense[schan] = PROG_INVCODE;
             chan_set(chan, DEV_REOR|CTL_END);
@@ -661,7 +661,7 @@ ht_tape_cmd(DEVICE * dptr, UNIT * uptr)
     if (unit <= NUM_UNITS_HT)
         ht_unit[schan] = unit;
     else {
-        sim_debug(DEBUG_DETAIL | DEBUG_CMD, dptr,
+        sim_debug((DEBUG_DETAIL | DEBUG_CMD), dptr,
                   "Invalid unit %d cmd=%x\n", unit, cmd);
         ht_sense[schan] = STAT_NOTRDY;
         chan_set(chan, DEV_REOR|CTL_END);
@@ -671,7 +671,7 @@ ht_tape_cmd(DEVICE * dptr, UNIT * uptr)
 
     if (cmd == 0xff) {
         /* command error */
-        sim_debug(DEBUG_DETAIL | DEBUG_CMD, dptr, "Invalid command %x\n",
+        sim_debug((DEBUG_DETAIL | DEBUG_CMD), dptr, "Invalid command %x\n",
                   cmd);
         ht_sense[schan] = PROG_INVCODE;
         chan_set(chan, DEV_REOR|CTL_END);
@@ -683,7 +683,7 @@ ht_tape_cmd(DEVICE * dptr, UNIT * uptr)
     up = &dptr->units[unit];
     if ((up->flags & UNIT_ATT) == 0) {
         /* Not attached! */
-        sim_debug(DEBUG_DETAIL | DEBUG_CMD, dptr, "Not ready %d cmd=%x\n",
+        sim_debug((DEBUG_DETAIL | DEBUG_CMD), dptr, "Not ready %d cmd=%x\n",
                   unit, cmd);
         ht_sense[schan] = STAT_NOTRDY;
         chan_set(chan, DEV_REOR|CTL_END);
@@ -693,14 +693,14 @@ ht_tape_cmd(DEVICE * dptr, UNIT * uptr)
 
     if (up->u5 & HT_NOTRDY || up->wait > 0) {
         /* Unit busy */
-        sim_debug(DEBUG_DETAIL | DEBUG_CMD, dptr, "Busy unit %d cmd=%x\n", unit,
+        sim_debug((DEBUG_DETAIL | DEBUG_CMD), dptr, "Busy unit %d cmd=%x\n", unit,
                   cmd);
         ht_sense[schan] = PROG_BUSY;
         chan_set(chan, DEV_REOR|CTL_END);
         chan9_set_error(chan, SNS_UEND);
         return;
     }
-    sim_debug(DEBUG_DETAIL | DEBUG_CMD, dptr, "Execute unit %d cmd=%x ",
+    sim_debug((DEBUG_DETAIL | DEBUG_CMD), dptr, "Execute unit %d cmd=%x ",
               unit, cmd);
 
     /* Ok, unit is ready and not in motion, set up to run command */
@@ -711,7 +711,7 @@ ht_tape_cmd(DEVICE * dptr, UNIT * uptr)
     r = MTSE_OK;
     switch (cmd) {
     case HSBR:                  /* Select for backwards reading */
-        sim_debug(DEBUG_DETAIL | DEBUG_CMD, dptr, "HSBR\n");
+        sim_debug((DEBUG_DETAIL | DEBUG_CMD), dptr, "HSBR\n");
         up->hwmark = -1;
         up->u6 = 0;
         ht_sense[schan] |= BACK_MODE;
@@ -721,7 +721,7 @@ ht_tape_cmd(DEVICE * dptr, UNIT * uptr)
         break;
 
     case HSEL:                  /* Select */
-        sim_debug(DEBUG_DETAIL | DEBUG_CMD, dptr, "HSEL\n");
+        sim_debug((DEBUG_DETAIL | DEBUG_CMD), dptr, "HSEL\n");
         up->hwmark = -1;
         up->u6 = 0;
         chan_set(chan, DEV_REOR|DEV_SEL);

@@ -78,7 +78,7 @@ MTAB                cdp_mod[] = {
 };
 
 DEVICE              cdp_dev = {
-    "CP", cdp_unit, NULL, cdp_mod,
+    "CDP", cdp_unit, NULL, cdp_mod,
     NUM_DEVS_CDP, 8, 15, 1, 8, 36,
     NULL, NULL, &cdp_reset, NULL, &cdp_attach, &cdp_detach,
     &cdp_dib, DEV_DISABLE | DEV_DEBUG, 0, crd_debug,
@@ -287,9 +287,10 @@ cdp_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
    fprintf (st, "The %s supports one card punch\n", cpu);
 #endif
    help_set_chan_type(st, dptr, "Card punches");
-   sim_card_attach_help(st, dptr, uptr, flag, cptr);
    fprint_set_help(st, dptr);
    fprint_show_help(st, dptr);
+   fprintf (st, "\n");
+   sim_card_attach_help(st, dptr, uptr, flag, cptr);
    return SCPE_OK;
 }
 

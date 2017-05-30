@@ -98,23 +98,23 @@ UNIT                lpr_unit[] = {
 };
 
 MTAB                lpr_mod[] = {
-    {ECHO, 0,     NULL, "NOECHO", NULL, NULL, NULL},
-    {ECHO, ECHO, "ECHO", "ECHO", NULL, NULL, NULL},
+    {ECHO, 0,     NULL, "NOECHO", NULL, NULL, NULL, "Don't echo to console"},
+    {ECHO, ECHO, "ECHO", "ECHO", NULL, NULL, NULL, "Echo to console"},
     {MTAB_XTD|MTAB_VUN|MTAB_VALR, 0, "LINESPERPAGE", "LINESPERPAGE",
-        &lpr_setlpp, &lpr_getlpp, NULL},
+        &lpr_setlpp, &lpr_getlpp, NULL, "Number of lines per page"},
 #ifdef I7080
-    {DOUBLE|PROGRAM, 0, "SINGLE", "SINGLE", NULL, NULL, NULL},
-    {DOUBLE|PROGRAM, DOUBLE, "DOUBLE", "DOUBLE", NULL, NULL, NULL},
-    {DOUBLE|PROGRAM, PROGRAM, "PROGRAM", "PROGRAM", NULL, NULL, NULL},
+    {DOUBLE|PROGRAM, 0, "SINGLE", "SINGLE", NULL, NULL, NULL, "Single space output"},
+    {DOUBLE|PROGRAM, DOUBLE, "DOUBLE", "DOUBLE", NULL, NULL, NULL, "Double space output"},
+    {DOUBLE|PROGRAM, PROGRAM, "PROGRAM", "PROGRAM", NULL, NULL, NULL, "Programatic spacing"},
 #endif
 #ifdef I7070
-    {ATTENA|ATTENB, 0, NULL, "NOATTEN", NULL, NULL, NULL},
-    {ATTENA|ATTENB, ATTENA, "ATTENA", "ATTENA", NULL, NULL, NULL},
-    {ATTENA|ATTENB, ATTENB, "ATTENB", "ATTENB", NULL, NULL, NULL},
+    {ATTENA|ATTENB, 0, NULL, "NOATTEN", NULL, NULL, NULL, "No attention signal"},
+    {ATTENA|ATTENB, ATTENA, "ATTENA", "ATTENA", NULL, NULL, NULL, "Signal Attention A"},
+    {ATTENA|ATTENB, ATTENB, "ATTENB", "ATTENB", NULL, NULL, NULL, "Signal Attention B"},
 #endif
 #ifdef I7010
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "CHAN", "CHAN", &set_chan,
-        &get_chan, NULL},
+        &get_chan, NULL, "Set device channel"},
 #endif
     {0}
 };
@@ -495,22 +495,23 @@ lpr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
 
    fprintf (st, "%s\n\n", lpr_description(dptr));
-   fprintf (st, "The line printer output can be echoed to the console to check the \n");
-   fprintf (st, "progress of jobs being run. This can be done with the\n");
-   fprintf (st, "    sim> SET %s ECHO\n\n", dptr->name);
+   fprintf (st, "The line printer output can be echoed to the console to check");
+   fprintf (st, "the \nprogress of jobs being run. This can be done with the\n");
+   fprintf (st, "        sim> SET %s ECHO       set echo to console\n\n", dptr->name);
    fprintf (st, "The Line printer can be configured to any number of lines per page with the:\n");
    fprintf (st, "        sim> SET %s LINESPERPAGE=n\n\n", dptr->name);
-   fprintf (st, "The default is 59 lines per page. \n");
+   fprintf (st, "The default is 59 lines per page.\n\n");
 #ifdef I7080
    fprintf (st, "The 716 printer can operate in one of three spacing modes\n");
-   fprintf (st, "       sim> SET %s SINGLE     for single spacing\n", dptr->name);
-   fprintf (st, "       sim> SET %s DOUBLE     for double spacing\n", dptr->name);
-   fprintf (st, "       sim> SET %s PROGRAM    for program control of  spacing\n\n", dptr->name);
+   fprintf (st, "        sim> SET %s SINGLE     for single spacing\n", dptr->name);
+   fprintf (st, "        sim> SET %s DOUBLE     for double spacing\n", dptr->name);
+   fprintf (st, "        sim> SET %s PROGRAM    for program control of  spacing\n\n", dptr->name);
 #endif
 #ifdef I7070
    fprintf (st, "Unit record devices can be configured to interrupt the CPU on\n");
    fprintf (st, "one of two priority channels A or B, to set this\n\n");
-   fprintf (st, "    sim> set cp attena     to set device to raise Atten A\n\n");
+   fprintf (st, "        sim> SET %s ATTENA     to set device to raise Atten A\n", dptr->name);
+   fprintf (st, "        sim> SET %s ATTENB     to set device to raise Atten B\n\n", dptr->name);
 #endif
 #ifdef I7010
    help_set_chan_type(st, dptr, "Line printer");

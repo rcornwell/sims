@@ -101,8 +101,8 @@ MTC             729 additional magnetic tape controllers, channels C
 MTD             729 additional magnetic tape controllers, channels D
 HTA             7340 hypertape controller.
 HTB             7340 additional hypertape controller.
-CR              7500 card reader
-CP              7550 card punch
+CDR             7500 card reader
+CDP             7550 card punch
 LP              7400 line printer
 DKn             1301/2302/7304 disk.
 COM             7750 communications control
@@ -193,32 +193,32 @@ For meaning of bits in FLAGS see i7000_defs.h.
 
 2.3 Unit record devices.
 
-2.3.1 7900 Inquiry Station (CON)
+2.3.1 7900 Inquiry Station (INQ)
 
 The console is set up as inquiry station 1. Press escape to initiate a
 priorty interupt request. Pressing escape again will cancel request.
 
-2.3.2 7500 Card Reader (CR)
+2.3.2 7500 Card Reader (CDR)
 
-The card reader (CR) reads data from a disk file.  Cards are simulated
+The card reader (CDR) reads data from a disk file.  Cards are simulated
 as ASCII lines with terminating newlines.  
 
 Card reader files can either be text (one character per column) or
 column binary (two characters per column).  The file type can be
 specified with a set command:
 
-        SET CR FORMAT=TEXT      sets ascii text mode
-        SET CR FORMAT=BINARY    sets for binary card images.
-        SET CR FORMAT=BCD       sets for BCD records.
-        SET CR FORMAT=CBN       sets for column binary BCD records.
-        SET CR FORMAT=AUTO      Automaticly determines format.
-        SET CR NOATTEN          sets device to not signal ready status.
-        SET CR ATTENA           sets device to used unit A attention.
-        SET CR ATTENB           sets device to used unit B attention.
+        SET CDR FORMAT=TEXT      sets ascii text mode
+        SET CDR FORMAT=BINARY    sets for binary card images.
+        SET CDR FORMAT=BCD       sets for BCD records.
+        SET CDR FORMAT=CBN       sets for column binary BCD records.
+        SET CDR FORMAT=AUTO      Automaticly determines format.
+        SET CDR NOATTEN          sets device to not signal ready status.
+        SET CDR ATTENA           sets device to used unit A attention.
+        SET CDR ATTENB           sets device to used unit B attention.
 
 or in the ATTACH command:
 
-        ATT CR <file>           attaches a file
+        ATT CDR <file>           attaches a file
 
 Error handling is as follows:
 
@@ -230,27 +230,27 @@ Error handling is as follows:
 
         OS I/O error            report error and stop
 
-2.3.3 7550 Card Punch (CP)
+2.3.3 7550 Card Punch (CDP)
 
-The card reader (CP) writes data to a disk file.  Cards are simulated
+The card reader (CDP) writes data to a disk file.  Cards are simulated
 as ASCII lines with terminating newlines. 
 
 Card punch files can either be text (one character per column) or
 column binary (two characters per column).  The file type can be
 specified with a set command:
 
-        SET CP FORMAT=TEXT      sets ascii text mode
-        SET CP FORMAT=BINARY    sets for binary card images.
-        SET CP FORMAT=BCD       sets for BCD records.
-        SET CP FORMAT=CBN       sets for column binary BCD records.
-        SET CP FORMAT=AUTO      Automaticly determines format.
-        SET CP NOATTEN          sets device to not signal ready status.
-        SET CP ATTENA           sets device to used unit A attention.
-        SET CP ATTENB           sets device to used unit B attention.
+        SET CDP FORMAT=TEXT      sets ascii text mode
+        SET CDP FORMAT=BINARY    sets for binary card images.
+        SET CDP FORMAT=BCD       sets for BCD records.
+        SET CDP FORMAT=CBN       sets for column binary BCD records.
+        SET CDP FORMAT=AUTO      Automaticly determines format.
+        SET CDP NOATTEN          sets device to not signal ready status.
+        SET CDP ATTENA           sets device to used unit A attention.
+        SET CDP ATTENB           sets device to used unit B attention.
 
 or in the ATTACH command:
 
-        ATT CP <file>           attaches a file
+        ATT CDP <file>           attaches a file
 
 Error handling is as follows:
 
