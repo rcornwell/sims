@@ -360,20 +360,20 @@ do {
     if (wc == 0)                                        /* error? */
         return SCPE_FMT;
     bsz = (int32) ((data & RMASK) - 1);                 /* get count */
-    if (bsz <= 0)                                       /* zero? */
+    if (bsz < 0)                                        /* zero? */
         return SCPE_FMT;
     bty = (int32) LRZ (data);                           /* get type */
     switch (bty) {                                      /* case type */
 
     case EXE_DIR:                                       /* directory */
-        if (ndir)                                       /* got one */
+        if (ndir != 0)                                  /* got one */
             return SCPE_FMT;
         ndir = sim_fread (dirbuf, sizeof (uint64), bsz, fileref);
         if (ndir < bsz)                                 /* error */
             return SCPE_FMT;
         break;
 
-    case EXE_PDV:                                       /* ??? */
+    case EXE_PDV:                                       /* optional */
         (void)sim_fseek (fileref, bsz * sizeof (uint64), SEEK_CUR);
         break;
 
@@ -400,7 +400,7 @@ do {
 for (i = 0; i < ndir; i = i + 2) {                      /* loop thru dir */
     fpage = (int32) (dirbuf[i] & RMASK);                /* file page */
     mpage = (int32) (dirbuf[i + 1] & RMASK);            /* memory page */
-    rpt = (int32) ((dirbuf[i + 1] >> 27) + 1);          /* repeat count */
+    rpt = ((int32) ((dirbuf[i + 1] >> 27) + 1)) & 0777; /* repeat count */
     for (j = 0; j < rpt; j++, mpage++) {                /* loop thru rpts */
         if (fpage) {                                    /* file pages? */
             (void)sim_fseek (fileref, (fpage << PAG_V_PN) * sizeof (uint64), SEEK_SET);
@@ -418,7 +418,7 @@ for (i = 0; i < ndir; i = i + 2) {                      /* loop thru dir */
         }                                               /* end rpt */
     }                                                   /* end directory */
 if (entvec && entbuf[1])
-    PC = (int32) entbuf[1] & RMASK;               /* start addr */
+    PC = (int32) (entbuf[1] & RMASK);               /* start addr */
 return SCPE_OK;
 }
 
@@ -444,7 +444,7 @@ else if (match_ext (fnam, "SAV"))                       /* .SAV? */
 else if (match_ext (fnam, "EXE"))                       /* .EXE? */
     fmt = FMT_E;
 else {
-    wc = fxread (&data, sizeof (uint64), 1, fileref);      /* read hdr */
+    wc = sim_fread (&data, sizeof (uint64), 1, fileref);/* read hdr */
     if (wc == 0)                                        /* error? */
         return SCPE_FMT;
     if (LRZ (data) == EXE_DIR)                          /* EXE magic? */
