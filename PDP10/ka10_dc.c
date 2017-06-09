@@ -315,8 +315,8 @@ int32 ln;
     tmxr_poll_rx(&dc_desc);
     for (ln = 0; ln < dc_desc.lines; ln++) {
        /* Check if buffer empty */
-       if (dc_ldsc[ln].xmte) {
-           tx_enable |= dc_l_status & (1 << ln);
+       if (dc_ldsc[ln].xmte && (dc_l_status & (1 << ln)) != 0) {
+           tx_enable |= 1 << ln;
        }
 
        /* Check to see if any pending data for this line */

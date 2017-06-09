@@ -512,8 +512,8 @@ void dt_putword(t_uint64 *data) {
 t_stat dt_svc (UNIT *uptr)
 {
    int        word;
-   t_uint64   data;
-   uint32     *fbuf = (uint32 *) uptr->filebuf;                        /* file buffer */
+   t_uint64   data = 0;
+   uint32     *fbuf = (uint32 *) uptr->filebuf;         /* file buffer */
    int        u = uptr-dt_unit;
    int        blk;
    int        off;
@@ -675,13 +675,14 @@ if (uptr->u4 & DTC_MOT) {
                dtsb &= ~DTB_DAT;
                dtsb |= DTB_FIN;
            }
-      sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o rev data word %o:%o %012llo %d %06o %06o\n", u, blk, word, data, off,
-                     fbuf[off], fbuf[off+1]);
+           sim_debug(DEBUG_DETAIL, &dt_dev, 
+                      "DTA %o rev data word %o:%o %012llo %d %06o %06o\n",
+                         u, blk, word, data, off, fbuf[off], fbuf[off+1]);
            break;
 
       case DTC_RCHK:                           /* In reverse checksum */
            sim_activate(uptr,30000);
-      sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o rev reverse check\n", u);
+           sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o rev reverse check\n", u);
            word = (uptr->u5 >> DTC_V_BLK) & DTC_M_BLK;
            uptr->u5 = DTC_BLOCK|(word << DTC_V_BLK)|(DTC_M_WORD << DTC_V_WORD);
            if (DTC_GETUNI(dtsa) == u)  {
@@ -720,7 +721,7 @@ if (uptr->u4 & DTC_MOT) {
            word = (uptr->u5 >> DTC_V_BLK) & DTC_M_BLK;
            data = (t_uint64)word;
            uptr->u5 = DTC_RCHK|(word << DTC_V_BLK)|(DTC_M_WORD << DTC_V_WORD);
-      sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o rev reverse block %04o\n", u, word);
+           sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o rev reverse block %04o\n", u, word);
            dtsb &= ~DTB_END;
            dtsb |= DTB_BLKRD;
            if (DTC_GETUNI(dtsa) == u)  {
@@ -763,7 +764,7 @@ if (uptr->u4 & DTC_MOT) {
       switch (uptr->u5 & 7) {
       case DTC_FEND:                           /* Tape in endzone */
            sim_activate(uptr, 100000);
-      sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o forward end\n", u);
+           sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o forward end\n", u);
            uptr->u5 = DTC_FBLK;                /* Move to first block */
            uptr->u6 = 0;
            dtsb &= ~DTB_IDL;
@@ -775,7 +776,7 @@ if (uptr->u4 & DTC_MOT) {
            dtsb |= DTB_BLKRD;
            word = (uptr->u5 >> DTC_V_BLK) & DTC_M_BLK;
            uptr->u5 = DTC_FCHK|(word << DTC_V_BLK);
-      sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o forward block %04o\n", u, word);
+           sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o forward block %04o\n", u, word);
            data = (t_uint64)word;
            if (DTC_GETUNI(dtsa) == u)  {
                uptr->u3 &= 077077;
@@ -802,7 +803,7 @@ if (uptr->u4 & DTC_MOT) {
 
       case DTC_FCHK:                           /* In forward checksum */
            sim_activate(uptr,30000);
-      sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o forward check\n", u);
+           sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o forward check\n", u);
            dtsb &= ~DTB_BLKRD;
            uptr->u5 &= ~7;
            uptr->u5 |= DTC_BLOCK;              /* Move to datablock */
@@ -881,8 +882,8 @@ if (uptr->u4 & DTC_MOT) {
                dtsb &= ~DTB_DAT;
                dtsb |= DTB_FIN;
            }
-      sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o data word %o:%o %012llo %d %06o %06o\n", u, blk, word, data, off,
-                     fbuf[off], fbuf[off+1]);
+           sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o data word %o:%o %012llo %d %06o %06o\n",
+                      u, blk, word, data, off, fbuf[off], fbuf[off+1]);
            break;
 
       case DTC_RCHK:                           /* In reverse checksum */
