@@ -226,7 +226,7 @@ t_uint64 dmask[11] = {
 t_uint64 ReadP(uint32 addr) {
     sim_interval -= (CPU_MODEL == 0x0)? 2: 1;
     if (emode) {
-        if (addr > 99990) {
+        if (addr > MAXMEMSIZE) {
             switch(addr) {
             case 99991: return AC[1];
             case 99992: return AC[2];
@@ -235,7 +235,7 @@ t_uint64 ReadP(uint32 addr) {
             }
         }
     } else {
-        if (addr > 9990) {
+        if (addr > MAXMEMSIZE) {
             switch(addr) {
             case 9991: return AC[1];
             case 9992: return AC[2];
@@ -252,7 +252,7 @@ t_uint64 ReadP(uint32 addr) {
 void WriteP(uint32 addr, t_uint64 value) {
     sim_interval -= (CPU_MODEL == 0x0)? 2: 1;
     if (emode) {
-        if (addr > 99990) {
+        if (addr > MAXMEMSIZE) {
             switch(addr) {
             case 99991: AC[1] = value; return;
             case 99992: AC[2] = value; return;
@@ -260,7 +260,7 @@ void WriteP(uint32 addr, t_uint64 value) {
             }
         }
     } else {
-        if (addr > 9990) {
+        if (addr > MAXMEMSIZE) {
             switch(addr) {
             case 9991: AC[1] = value; return;
             case 9992: AC[2] = value; return;
@@ -2844,18 +2844,18 @@ cpu_set_size(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     t_uint64            mc = 0;
     uint32              i;
 
-    cpu_unit.flags &= ~UNIT_MSIZE;
-    cpu_unit.flags |= val;
     val >>= UNIT_V_MSIZE;
     val = (val + 1) * 5000;
-    if ((val < 0) || (val > MAXMEMSIZE))
+    if ((val <= 0) || (val > MAXMEMSIZE))
         return SCPE_ARG;
-    for (i = val; i < (MEMSIZE-1); i++)
+    cpu_unit.flags &= ~UNIT_MSIZE;
+    cpu_unit.flags |= val;
+    for (i = val; i < MEMSIZE; i++)
         mc |= M[i];
     if ((mc != 0) && (!get_yn("Really truncate memory [N]?", FALSE)))
         return SCPE_OK;
     MEMSIZE = val;
-    for (i = MEMSIZE-1; i < (MAXMEMSIZE-1); i++)
+    for (i = MEMSIZE; i < MAXMEMSIZE; i++)
         M[i] = 0;
     return SCPE_OK;
 }

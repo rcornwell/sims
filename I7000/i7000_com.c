@@ -191,7 +191,7 @@ uint16              com_free;           /* free list */
 OLIST               com_buf[10240];
 TMLN                com_ldsc[COM_TLINES];       /* line descriptors */
 TMXR                com_desc = { COM_TLINES, 0, 0, com_ldsc };  /* mux descriptor */
-uint16              com_sense = 0;      /* Sense word */
+uint32              com_sense = 0;      /* Sense word */
 uint16              com_data;
 uint8               com_dflg = 0;
 
@@ -450,7 +450,7 @@ t_stat com_svc(UNIT * uptr)
     if (chan_test(chan, CTL_SNS)) {
         int     eor = (com_sta == 4)?DEV_REOR:0;
 
-        ch = ((uint32)com_sense >> ((4 - com_sta) * 4)) & 0xf;
+        ch = (com_sense >> ((4 - com_sta) * 4)) & 0xf;
         if (ch & 010)   /* Move A bit over one */
            ch ^= 030;
         sim_debug(DEBUG_SNS, &com_dev, "sense unit=%02x\n", ch);
@@ -1286,6 +1286,7 @@ fprintf (st, "   sim> SET COMLn KSR-35     Allows only upper case\n");
 fprintf (st, "   sim> SET COMLn 2741       Set to look like a 2741\n");
 fprint_set_help (st, dptr);
 fprint_show_help (st, dptr);
+return SCPE_OK;
 }
 
 const char *
@@ -1308,8 +1309,6 @@ fprintf (st, "   sim> SET COM SELECT=n\n\n");
 #endif
 fprint_set_help (st, dptr);
 fprint_show_help (st, dptr);
-
-
 return SCPE_OK;
 }
 

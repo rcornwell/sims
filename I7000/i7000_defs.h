@@ -75,8 +75,8 @@ extern uint8            M[];
 #define NUM_UNITS_HT    10
 #define NUM_UNITS_MT    10      /* A, B */
 #define NUM_DEVS_CHRON  1
-#define MAXMEMSIZE      (80000)
-#define CHARSPERWORD    6
+#define MAXMEMSIZE      (30000)
+#define CHARSPERWORD    5
 extern t_uint64         M[];
 #endif
 #ifdef I7080            /* Includes 702, 705-i/ii, 705-iii, 7080 */

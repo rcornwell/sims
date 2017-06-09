@@ -613,7 +613,8 @@ mt_read_buff(UNIT * uptr, int cmd, DEVICE * dptr, t_uint64 *word)
                 i--;
             }
         }
-        *word |= ((t_uint64) ch) << (6 * i);
+        if (i >= 0)
+            *word |= ((t_uint64) ch) << (6 * i);
     }
 
     if (parity) {

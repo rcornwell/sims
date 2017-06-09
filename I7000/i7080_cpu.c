@@ -2967,7 +2967,7 @@ step6:
         cr2 = AC[tsac];
         if (cr2 == 0) {
             smt = 1;            /* Check usage here */
-            goto step6;
+            break;              /* goto step6; */
         }
         if (at) {
             cr1 &= 017;
@@ -2980,7 +2980,7 @@ step6:
                 remtrig = 1;
             MA = MAC;
             tsac = next_half[tsac];
-            goto step6;
+            break;               /* goto step6; */
         }
         cr2 = bcd_bin[cr2] + bcd_bin[cr1] + carry;
         carry = cr2 >= 10;
@@ -2989,8 +2989,8 @@ step6:
             remtrig = 1;
         tsac = next_addr[tsac];
     }
-    /* Not reached */
     goto step6;
+
 step8:
      smt = 0;
      while(!smt) {

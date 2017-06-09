@@ -337,7 +337,7 @@ uint8 FetchP(uint32 MA) {
       if (reloc && (MA & BBIT) == 0 && MAR > 100) {
           if (low_addr > 0) {
               MAR += low_addr;
-              if (MAR > 100000)
+              if (MAR >= 100000)
                   MAR -= 100000;
           }
           if (prot_enb && (high_addr > 0) && (MAR > (uint32)high_addr)) {
@@ -367,7 +367,7 @@ uint8 ReadP(uint32 MA) {
       if (reloc && (MA & BBIT) == 0 && MAR > 100) {
           if (low_addr > 0) {
               MAR += low_addr;
-              if (MAR > 100000)
+              if (MAR >= 100000)
                   MAR -= 100000;
           }
           if (prot_enb && (high_addr > 0) && (MAR > (uint32)high_addr)) {
@@ -401,7 +401,7 @@ void WriteP(uint32 MA, uint8 v) {
       if (reloc && (MA & BBIT) == 0 && MAR > 100) {
           if (low_addr > 0) {
               MAR += low_addr;
-              if (MAR > 100000)
+              if (MAR >= 100000)
                   MAR -= 100000;
           }
           if (prot_enb && (high_addr > 0) && (MAR > (uint32)high_addr)) {
@@ -435,7 +435,7 @@ void ReplaceMask(uint32 MA, uint8 v, uint8 mask) {
       if (reloc && (MA & BBIT) == 0 && MAR > 100) {
           if (low_addr > 0) {
               MAR += low_addr;
-              if (MAR > 100000)
+              if (MAR >= 100000)
                   MAR -= 100000;
           }
           if (prot_enb && (high_addr > 0) && (MAR > (uint32)high_addr)) {
@@ -471,7 +471,7 @@ void SetBit(uint32 MA, uint8 v) {
       if (reloc && (MA & BBIT) == 0 && MAR > 100) {
           if (low_addr > 0) {
               MAR += low_addr;
-              if (MAR > 100000)
+              if (MAR >= 100000)
                   MAR -= 100000;
           }
           if (prot_enb && (high_addr > 0) && (MAR > (uint32)high_addr)) {
@@ -505,7 +505,7 @@ void ClrBit(uint32 MA, uint8 v) {
       if (reloc && (MA & BBIT) == 0 && MAR > 100) {
           if (low_addr > 0) {
               MAR += low_addr;
-              if (MAR > 100000)
+              if (MAR >= 100000)
                   MAR -= 100000;
           }
           if (prot_enb && (high_addr > 0) && (MAR > (uint32)high_addr)) {

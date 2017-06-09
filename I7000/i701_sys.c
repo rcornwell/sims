@@ -188,8 +188,9 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
         char                buf[81];
 
         while (fgets(buf, 80, fileref) != 0) {
+             buf[80] = '\0';
              for(p = buf; *p == ' ' || *p == '\t'; p++);
-            /* Grab address */
+             /* Grab address */
              for(addr = 0; *p >= '0' && *p <= '7'; p++)
                 addr = (addr << 3) + *p - '0';
              while(*p == ' ' || *p == '\t') p++;
