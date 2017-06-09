@@ -664,7 +664,7 @@ chan_proc()
                 /* Wrap around if over end of memory, set error */
                 if (addr > EMEMSIZE) {
                    chan_flags[chan] |= CHS_ERR;
-                   addr -= EMEMSIZE;
+                   /* addr -= EMEMSIZE; */
                    if (chan_dev.dctrl & cmask)
                        sim_debug(DEBUG_EXP, &chan_dev, "write wrap %d\n", chan);
                 }

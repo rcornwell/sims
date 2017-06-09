@@ -235,7 +235,7 @@ t_uint64 ReadP(uint32 addr) {
             }
         }
     } else {
-        if (addr > MAXMEMSIZE) {
+        if (addr >= 9990) {
             switch(addr) {
             case 9991: return AC[1];
             case 9992: return AC[2];
@@ -244,7 +244,7 @@ t_uint64 ReadP(uint32 addr) {
             }
         }
     }
-    if (addr < MEMSIZE)
+    if (addr < MEMSIZE && addr < MAXMEMSIZE)
         return M[addr];
     return 0LL;
 }
@@ -260,15 +260,16 @@ void WriteP(uint32 addr, t_uint64 value) {
             }
         }
     } else {
-        if (addr > MAXMEMSIZE) {
+        if (addr >= 9990) {
             switch(addr) {
             case 9991: AC[1] = value; return;
             case 9992: AC[2] = value; return;
             case 9993: AC[3] = value; return;
+            default: return;
             }
         }
     }
-    if (addr < MEMSIZE)
+    if (addr < MEMSIZE && addr < MAXMEMSIZE)
         M[addr] = value;
 }
 
