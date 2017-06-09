@@ -340,10 +340,10 @@ static SHTAB show_con_tab[] = {
     { "DEBUG", &sim_show_cons_debug, 0 },
     { "BUFFERED", &sim_show_cons_buff, 0 },
     { "EXPECT", &sim_show_cons_expect, 0 },
-    { "HALT", &sim_show_cons_expect, 0 },
+    { "HALT", &sim_show_cons_expect, -1 },
     { "INPUT", &sim_show_cons_send_input, 0 },
-    { "RESPONSE", &sim_show_cons_send_input, 0 },
-    { "DELAY", &sim_show_cons_expect, 0 },
+    { "RESPONSE", &sim_show_cons_send_input, -1 },
+    { "DELAY", &sim_show_cons_expect, -1 },
     { NULL, NULL, 0 }
     };
 
@@ -411,7 +411,8 @@ int32 i;
 
 if (*cptr == 0) {                                       /* show all */
     for (i = 0; show_con_tab[i].name; i++)
-        show_con_tab[i].action (st, dptr, uptr, show_con_tab[i].arg, cptr);
+        if (show_con_tab[i].arg != -1)
+            show_con_tab[i].action (st, dptr, uptr, show_con_tab[i].arg, cptr);
     return SCPE_OK;
     }
 while (*cptr != 0) {
@@ -509,7 +510,6 @@ REMOTE *sim_rem_consoles = NULL;
 
 static TMXR sim_rem_con_tmxr = { 0, 0, 0, NULL, NULL, &sim_remote_console };/* remote console line mux */
 static uint32 sim_rem_read_timeout = 30;    /* seconds before automatic continue */
-static uint32 *sim_rem_read_timeouts = NULL;/* per line read timeout (default from sim_rem_read_timeout) */
 static int32 sim_rem_active_number = -1;    /* -1 - not active, >= 0 is index of active console */
 int32 sim_rem_cmd_active_line = -1;         /* step in progress on line # */
 static CTAB *sim_rem_active_command = NULL; /* active command */
@@ -1349,7 +1349,7 @@ for (i=(was_active_command ? sim_rem_cmd_active_line : 0);
                     if (!master_session)
                         tmxr_linemsg (lp, "\r\nSimulator paused.\r\n");
                     if (!master_session && rem->read_timeout) {
-                        tmxr_linemsgf (lp, "Simulation will resume automatically if input is not received in %d seconds\n", sim_rem_read_timeouts[i]);
+                        tmxr_linemsgf (lp, "Simulation will resume automatically if input is not received in %d seconds\n", rem->read_timeout);
                         tmxr_linemsgf (lp, "\r\n");
                         tmxr_send_buffered_data (lp);   /* flush any buffered data */
                         }
@@ -2206,7 +2206,7 @@ if (sim_deb) {
         fprintf (st, "   Debug messages display time of day as seconds.msec%s\n", sim_deb_switches & SWMASK ('R') ? " relative to the start of debugging" : "");
     for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {
         if (!(dptr->flags & DEV_DIS) &&
-            (dptr->flags & DEV_DEBUG) &&
+            ((dptr->flags & DEV_DEBUG) || (dptr->debflags)) &&
             (dptr->dctrl)) {
             fprintf (st, "Device: %-6s ", dptr->name);
             show_dev_debug (st, dptr, NULL, 0, NULL);
@@ -2214,7 +2214,7 @@ if (sim_deb) {
         }
     for (i = 0; sim_internal_device_count && (dptr = sim_internal_devices[i]); ++i) {
         if (!(dptr->flags & DEV_DIS) &&
-            (dptr->flags & DEV_DEBUG) &&
+            ((dptr->flags & DEV_DEBUG) || (dptr->debflags)) &&
             (dptr->dctrl)) {
             fprintf (st, "Device: %-6s ", dptr->name);
             show_dev_debug (st, dptr, NULL, 0, NULL);
@@ -2433,6 +2433,7 @@ return tmxr_close_master (&sim_con_tmxr);               /* close master socket *
 
 t_stat sim_show_cons_expect (FILE *st, DEVICE *dunused, UNIT *uunused, int32 flag, CONST char *cptr)
 {
+fprintf (st, "Console Expect processing:\n");
 return sim_exp_show (st, &sim_con_expect, cptr);
 }
 
@@ -2628,6 +2629,7 @@ return &sim_con_expect;
 
 t_stat sim_show_cons_send_input (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr)
 {
+fprintf (st, "Console Send processing:\n");
 return sim_show_send_input (st, &sim_con_send);
 }
 
@@ -3229,7 +3231,8 @@ if ((std_input) &&                                      /* If Not Background pro
 if ((std_output) &&                                     /* If Not Background process? */
     (std_output != INVALID_HANDLE_VALUE)) {
     if (GetConsoleMode(std_output, &saved_output_mode))
-        SetConsoleMode(std_output, ENABLE_VIRTUAL_TERMINAL_PROCESSING|ENABLE_PROCESSED_OUTPUT);
+        if (!SetConsoleMode(std_output, ENABLE_VIRTUAL_TERMINAL_PROCESSING|ENABLE_PROCESSED_OUTPUT))
+            SetConsoleMode(std_output, ENABLE_PROCESSED_OUTPUT);
     }
 if (sim_log) {
     fflush (sim_log);

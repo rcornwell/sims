@@ -1,3 +1,6 @@
+
+[![Coverity Scan Build Status](https://scan.coverity.com/projects/12020/badge.svg)](https://scan.coverity.com/projects/rcornwell-sims)  
+
 # Development Simulators.
 
 This is a working copy of my Burroughs B5500, KA10, KI10 and IBM7000 series
@@ -14,7 +17,8 @@ These are still in the testing stages. Please report any issues that you find in
 
 The KA10 sim has successfully run Tops 10 5.03 and Tops 10 6.03.  
 The KI10 sim has successfully run Tops 10 6.03  
-Started adding support for KA10 to boot ITS  
+Support for ITS (untested).  
+Support for BBN pager (untested).  
 
    Disk   
    * RC10 RD10/RM10  
@@ -37,6 +41,10 @@ Started adding support for KA10 to boot ITS
 and transfering to the loaded value. RC10, RH10, TM10 support readin mode. 
 
    Possibly add in support for KL10A. (No extended addressing). 
+
+To do:  
+   * Add support for IBM 3330 drive to run Waits.  
+   * Add support for DC76 for ITS.  
 
 # IBM 7000 simulators.
 Latest status for I7000 Cpus: 
