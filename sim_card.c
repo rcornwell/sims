@@ -708,7 +708,9 @@ sim_read_card(UNIT * uptr)
     case MODE_CBN:
         sim_debug(DEBUG_CARD, dptr, "cbn\n");
         /* Check if first character is a tape mark */
-        if (size == 1 && ((uint8)data->cbuff[0]) == 0217) {
+        if (((uint8)data->cbuff[0]) == 0217 && 
+                   (size == 1 || (((uint8)data->cbuff[0]) & 0200) != 0)) {
+            i = 1;
             r = SCPE_EOF;
             break;
         }
@@ -748,7 +750,9 @@ sim_read_card(UNIT * uptr)
     case MODE_BCD:
         sim_debug(DEBUG_CARD, dptr, "bcd [");
         /* Check if first character is a tape mark */
-        if (size == 1 && ((uint8)data->cbuff[0]) == 0217) {
+        if (((uint8)data->cbuff[0]) == 0217 && 
+                   (size == 1 || (((uint8)data->cbuff[0]) & 0200) != 0)) {
+            i = 1;
             r = SCPE_EOF;
             break;
         }
