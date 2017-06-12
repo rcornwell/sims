@@ -4661,7 +4661,7 @@ if ((val <= 0) || ((val * 16 * 1024) > MAXMEMSIZE))
 val = val * 16 * 1024;
 if (val < MEMSIZE) {
     uint64 mc = 0;
-    for (i = val; i < MEMSIZE; i++)
+    for (i = val-1; i < MEMSIZE; i++)
         mc = mc | M[i];
     if ((mc != 0) && (!get_yn ("Really truncate memory [N]?", FALSE)))
         return SCPE_OK;
