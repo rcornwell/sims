@@ -169,9 +169,9 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
             }
         }
     } else if (match_ext(fnam, "oct")) {
-        char                buf[81];
+        char                buf[160];
 
-        while (fgets(buf, 80, fileref) != 0) {
+        while (fgets(buf, 160, fileref) != 0) {
              for(p = buf; *p == ' ' || *p == '\t'; p++);
             /* Grab address */
              for(addr = 0; *p >= '0' && *p <= '7'; p++)
@@ -185,24 +185,23 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
              }
         }
     } else if (match_ext(fnam, "txt")) {
-        char                buf[81];
+        char                buf[160];
 
-        while (fgets(buf, 80, fileref) != 0) {
-             buf[80] = '\0';
+        while (fgets(buf, 160, fileref) != 0) {
              for(p = buf; *p == ' ' || *p == '\t'; p++);
              /* Grab address */
              for(addr = 0; *p >= '0' && *p <= '7'; p++)
                 addr = (addr << 3) + *p - '0';
              while(*p == ' ' || *p == '\t') p++;
              if(sim_strncasecmp(p, "BCD", 3) == 0) {
-                 p += 4;
+                 p += 3;
                  parse_sym(++p, addr, &cpu_unit, &M[addr], SWMASK('C'));
              } else if (sim_strncasecmp(p, "OCT", 3) == 0) {
-                p += 4;
-                for(; *p == ' ' || *p == '\t'; p++);
-                parse_sym(p, addr, &cpu_unit, &M[addr], 0);
+                 p += 3;
+                 for(; *p == ' ' || *p == '\t'; p++);
+                 parse_sym(p, addr, &cpu_unit, &M[addr], 0);
              } else {
-                parse_sym(p, addr, &cpu_unit, &M[addr], SWMASK('M'));
+                 parse_sym(p, addr, &cpu_unit, &M[addr], SWMASK('M'));
              }
         }
     } else

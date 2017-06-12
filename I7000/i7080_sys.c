@@ -274,11 +274,13 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
         return SCPE_OK;
      } else if (match_ext(fnam, "dck")) {
         extern char             ascii_to_six[128];
-        while (fgets(buffer, 80, fileref) != 0) {
+        while (fgets(buffer, 160, fileref) != 0) {
             uint8               image[80];
             /* Convert bits into image */
             memset(image, 0, sizeof(image));
             for (j = 0; j < 80; j++) {
+                if (buffer[j] == '\n' || buffer[j] == '\0')
+                    break;
                 image[j] = sim_ascii_to_six[buffer[j]];
             }
             if (load_rec(image))

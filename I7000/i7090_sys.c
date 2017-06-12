@@ -119,11 +119,11 @@ DIB  cdr_dib = { CH_TYP_PIO|CH_TYP_76XX, 1, 0321, 0777, &cdr_cmd, NULL };
 DIB  lpr_dib = { CH_TYP_PIO|CH_TYP_76XX, 1, 0361, 0774, &lpr_cmd, &lpr_ini };
 #endif
 #if (NUM_DEVS_MT > 0) || defined(MT_CHANNEL_ZERO)
-DIB  mt_dib = { CH_TYP_PIO|CH_TYP_76XX, NUM_UNITS_MT, 0201, 0740, &mt_cmd,
+DIB  mt_dib = { CH_TYP_PIO|CH_TYP_76XX, NUM_UNITS_MT, 0200, 0740, &mt_cmd,
                                                                 &mt_ini };
 #endif
 #ifdef NUM_DEVS_CHRON
-DIB  chron_dib = { CH_TYP_PIO|CH_TYP_76XX, 1, 0201, 0740, &chron_cmd, NULL };
+DIB  chron_dib = { CH_TYP_PIO|CH_TYP_76XX, 1, 0200, 0740, &chron_cmd, NULL };
 #endif
 #ifdef NUM_DEVS_DSK
 DIB  dsk_dib = { CH_TYP_79XX, 0, 0, 0, &dsk_cmd, &dsk_ini };

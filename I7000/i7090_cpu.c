@@ -185,8 +185,6 @@
 #define HIST_TRP        3       /* trap cycle */
 #define HIST_MIN        64
 #define HIST_MAX        10000
-//#define HIST_MAX      65536
-//#define HIST_MAX      128000
 #define HIST_NOEA       0x40000000
 #define HIST_PC         0x10000
 
@@ -4232,21 +4230,22 @@ cpu_set_size(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 {
     t_uint64            mc = 0;
     uint32              i;
+    int32               v;
 
-    cpu_unit.flags &= ~UNIT_MSIZE;
-    cpu_unit.flags |= val;
-    val >>= UNIT_V_MSIZE;
-    val *= 8192;
-    if (val == 0)
-        val = 4096;
-    if ((val < 0) || (val > MAXMEMSIZE) || ((val & 07777) != 0))
+    v = val >> UNIT_V_MSIZE;
+    v *= 8192;
+    if (v == 0)
+        v = 4096;
+    if ((v < 0) || (v > MAXMEMSIZE) || ((v & 07777) != 0))
         return SCPE_ARG;
-    for (i = val; i < MEMSIZE; i++)
+    for (i = v-1; i < MEMSIZE; i++)
         mc |= M[i];
     if ((mc != 0) && (!get_yn("Really truncate memory [N]?", FALSE)))
         return SCPE_OK;
-    MEMSIZE = val;
-    memmask = val - 1;
+    MEMSIZE = v;
+    memmask = v - 1;
+    cpu_unit.flags &= ~UNIT_MSIZE;
+    cpu_unit.flags |= val;
     for (i = MEMSIZE; i < MAXMEMSIZE; i++)
         M[i] = 0;
     return SCPE_OK;

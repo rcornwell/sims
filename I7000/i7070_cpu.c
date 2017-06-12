@@ -2844,20 +2844,25 @@ cpu_set_size(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 {
     t_uint64            mc = 0;
     uint32              i;
+    int32               v;
 
-    val >>= UNIT_V_MSIZE;
-    val = (val + 1) * 5000;
-    if ((val <= 0) || (val > MAXMEMSIZE))
+    v = val >> UNIT_V_MSIZE;
+    v = (v + 1) * 5000;
+    if ((v <= 0) || (v > MAXMEMSIZE))
         return SCPE_ARG;
-    cpu_unit.flags &= ~UNIT_MSIZE;
-    cpu_unit.flags |= val;
-    for (i = val; i < MEMSIZE; i++)
-        mc |= M[i];
+    for (i = v-1; i < MEMSIZE; i++) {
+        if (M[i] != PSIGN) {
+           mc = 1;
+           break;
+        }
+    }
     if ((mc != 0) && (!get_yn("Really truncate memory [N]?", FALSE)))
         return SCPE_OK;
-    MEMSIZE = val;
+    cpu_unit.flags &= ~UNIT_MSIZE;
+    cpu_unit.flags |= val;
+    MEMSIZE = v;
     for (i = MEMSIZE; i < MAXMEMSIZE; i++)
-        M[i] = 0;
+        M[i] = PSIGN;
     return SCPE_OK;
 }
 

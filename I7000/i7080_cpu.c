@@ -3263,8 +3263,12 @@ cpu_set_size(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     size *= 10000;
     if (size > MAXMEMSIZE)
         return SCPE_ARG;
-    for (i = size; i < (MEMSIZE-1); i++)
-        mc |= M[i];
+    for (i = size-1; i < MEMSIZE; i++) {
+        if (M[i] != CHR_BLANK) {
+           mc = 1;
+           break;
+        }
+    }
     if ((mc != 0) && (!get_yn("Really truncate memory [N]?", FALSE)))
         return SCPE_OK;
     cpu_unit.flags &= ~UNIT_MSIZE;

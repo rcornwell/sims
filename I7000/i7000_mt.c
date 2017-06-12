@@ -340,6 +340,8 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
     int                 unit = dev & 017;
 
     unit -= mt_dib.addr & 017;  /* Adjust to origin zero */
+    if (unit == 10)
+        unit = 0;
     /* Make sure valid drive number */
     if (unit > NUM_UNITS_MT || unit < 0)
         return SCPE_NODEV;
