@@ -79,7 +79,7 @@ extern uint8        urec_irq[NUM_CHAN];
 #define CHAN_DSK_RD     0100            /* Command is read command */
 #define CHAN_OVLP       0200            /* Channel ran overlaped */
 
-char     *chan_type_name[] = {
+const char     *chan_type_name[] = {
     "Polled", "Unit Record", "7010", "7010", "7010"};
 
 

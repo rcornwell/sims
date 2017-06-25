@@ -127,7 +127,7 @@ chan_set_devs(DEVICE * dptr)
 }
 
 /* Print help for "SET dev CHAN" based on allowed types */
-void help_set_chan_type(FILE *st, DEVICE *dptr, char *name)
+void help_set_chan_type(FILE *st, DEVICE *dptr, const char *name)
 {
 #if NUM_CHAN > 1
    DIB        *dibp = (DIB *) dptr->ctxt;

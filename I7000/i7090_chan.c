@@ -138,7 +138,7 @@ uint8               chan_irq[NUM_CHAN];       /* Channel has a irq pending */
 
 /* Globally visible flags */
 
-char     *chan_type_name[] = {
+const char     *chan_type_name[] = {
     "Polled", "Unit Record", "7607", "7909", "7289"};
 
 /* Delay device for IOD instruction */

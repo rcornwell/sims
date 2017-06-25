@@ -101,7 +101,7 @@ extern uint8        inquiry;
 #define READ_WRD        1
 #define WRITE_WRD       2
 
-char     *chan_type_name[] = {
+const char     *chan_type_name[] = {
     "Polled", "Unit Record", "7621", "7908", "754"};
 
 
