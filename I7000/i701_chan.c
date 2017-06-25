@@ -54,7 +54,7 @@ t_uint64            assembly[NUM_CHAN];       /* Assembly register */
 uint32              chan_flags[NUM_CHAN];     /* Unit status */
 uint8               bcnt[NUM_CHAN];           /* Character count */
 
-char     *chan_type_name[] = {
+const char     *chan_type_name[] = {
     "Polled", "", "", "", ""};
 
 

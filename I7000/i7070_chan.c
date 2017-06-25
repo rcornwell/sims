@@ -84,7 +84,7 @@ extern uint16       pri_latchs[10];
 #define CHAN_START      0x200000        /* Channel has just started */
 #define CHAN_OCTAL      0x400000        /* Octal conversion */
 
-char     *chan_type_name[] = {
+const char     *chan_type_name[] = {
     "Polled", "Unit Record", "7604", "7907", ""};
 
 
