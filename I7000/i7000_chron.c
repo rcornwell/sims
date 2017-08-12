@@ -82,7 +82,7 @@ uint32 chron_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
 {
     int                 chan = UNIT_G_CHAN(uptr->flags);
     int                 time = 30;
-    int                 unit = (dev & 017) - 1;
+    int                 unit = (dev & 017);
 
     /* Make sure valid drive number */
     if (unit != uptr->u3)

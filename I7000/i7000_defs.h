@@ -429,6 +429,10 @@ void chan_clear_attn_inq(int chan);
 #define IO_ERG  15      /* Erase next records from tape */
 
 /* Global device definitions */
+#ifdef CPANEL
+extern DEVICE       cp_dev;
+#endif
+
 #ifdef NUM_DEVS_TP
 extern DIB          tp_dib;
 extern uint32       tp_cmd(UNIT *, uint16, uint16);

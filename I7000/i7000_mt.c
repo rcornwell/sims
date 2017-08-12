@@ -822,6 +822,7 @@ t_stat mt_srv(UNIT * uptr)
                     uptr->u5 |= MT_MARK;
                     r = MTSE_OK;
                 } else {
+                    sim_debug(DEBUG_DETAIL, dptr, "error=%d\n", r);
                     uptr->u5 &= ~MT_CMDMSK;
 #ifdef I7010
                     /* Translate TM characters for 7010 */
@@ -879,10 +880,11 @@ t_stat mt_srv(UNIT * uptr)
         /* Convert one word. */
             switch (chan_write_char(chan, &ch,
 #ifdef I7010
-                                (uptr->u6 >= (int32)uptr->hwmark) ? DEV_REOR : 0)) {
+                                (uptr->u6 >= (int32)uptr->hwmark) ? DEV_REOR : 0
 #else
-                                /*(uptr->u6 >= (int32)uptr->hwmark) ? DEV_REOR :*/ 0)) {
+                                0
 #endif
+                    )) {
             case END_RECORD:
                 sim_debug(DEBUG_DATA, dptr, "Read unit=%d EOR\n", unit);
                 /* If not read whole record, skip till end */
@@ -1016,6 +1018,7 @@ t_stat mt_srv(UNIT * uptr)
                     uptr->u5 |= MT_MARK;
                     r = MTSE_OK;
                 } else {
+                    sim_debug(DEBUG_DETAIL, dptr, "error=%d\n", r);
                     uptr->u5 &= ~MT_CMDMSK;
                     chan_set_attn(chan);
                     chan_clear(chan, DEV_SEL);
@@ -1134,7 +1137,7 @@ t_stat mt_srv(UNIT * uptr)
             sim_activate(uptr, (uptr->flags & MTUF_LDN) ?
                         us_to_ticks(4250):us_to_ticks(2500));
 #ifdef I7080
-        chan_clear(chan, STA_TWAIT);
+            chan_clear(chan, STA_TWAIT);
 #endif
         } else {
             sim_activate(uptr,

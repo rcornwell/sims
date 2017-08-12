@@ -159,6 +159,9 @@
 #include "sim_timer.h"
 #include <math.h>
 #include <time.h>
+#ifdef CPANEL
+#include "cpanel.h"
+#endif
 
 #define UNIT_V_MSIZE    (UNIT_V_UF + 0)
 #define UNIT_MSIZE      (7 << UNIT_V_MSIZE)
@@ -220,11 +223,14 @@ const char          *cpu_description (DEVICE *dptr);
 /* Interval timer option */
 t_stat              rtc_srv(UNIT * uptr);
 t_stat              rtc_reset(DEVICE * dptr);
+int32               rtc_tps = 60;
 
 t_uint64            M[MAXMEMSIZE] = { 0 };      /* memory */
 t_uint64            AC, MQ;                     /* registers */
 uint16              XR[8];                      /* Index registers */
 uint16              IC;                         /* program counter */
+uint16              IR;                         /* Instruction register */
+uint16              MA;                         /* Memory Address resister */
 t_uint64            ID;                         /* Indicator registers */
 t_uint64            SR;                         /* Internal temp register */
 t_uint64            KEYS;                       /* Console Keys */
@@ -267,6 +273,8 @@ uint8               dualcore;                   /* Set to true if dual core in
 
 uint16              dev_pulse[NUM_CHAN];        /* SPRA device pulses */
 int                 cycle_time = 12;            /* Cycle time in 100ns */
+uint8               exe_SR = 0;                 /* Execute one instruction
+                                                   from SR, used by CPANEL */
 
 /* History information */
 int32               hst_p = 0;                  /* History pointer */
@@ -296,10 +304,12 @@ UNIT                cpu_unit =
 
 REG                 cpu_reg[] = {
     {ORDATAD(IC, IC, 15, "Instruction Counter"), REG_FIT},
+    {ORDATAD(IR, IR, 10, "Instruction Register"), REG_FIT},
     {ORDATAD(AC, AC, 38, "Accumulator"), REG_FIT, 0},
     {ORDATAD(MQ, MQ, 36, "Multiplier Quotent"), REG_FIT, 0},
     {BRDATAD(XR, XR, 8, 15, 8, "Index registers"), REG_FIT},
     {ORDATAD(ID, ID, 36, "Indicator Register")},
+    {ORDATAD(MA, MA, 15, "Memory Address Register"), REG_FIT},
 #ifdef EXTRA_SL
     {ORDATAD(SL, SL, 8, "Sense Lights"), REG_FIT},
 #else
@@ -704,7 +714,6 @@ sim_instr(void)
     t_uint64            ibr;
 #endif
     uint16              opcode;
-    uint16              MA;
     uint8               tag;
     uint16              decr;
     uint16              xr;
@@ -726,10 +735,10 @@ sim_instr(void)
     /* Set cycle time for delays */
     switch(CPU_MODEL) {
     case CPU_704:
-    case CPU_709: cycle_time = 120; break;
+    case CPU_709: cycle_time = 120; break;   /* 83,333 cycles per second */
     default:
-    case CPU_7090:  cycle_time = 22; break;
-    case CPU_7094:  cycle_time = 18; break;
+    case CPU_7090:  cycle_time = 22; break;  /* 454,545 cycles per second */
+    case CPU_7094:  cycle_time = 18; break;  /* 555,555 cycles per second */
     }
 
     reason = 0;
@@ -751,6 +760,12 @@ sim_instr(void)
     iowait = 0;
     while (reason == 0) {       /* loop until halted */
 
+        if (exe_SR) {
+           hltinst = 1;
+           exe_SR = 0;
+           goto next_xec;
+        }
+
 #ifdef I7090    /* I704 did not have interrupts */
    hltloop:
 #endif
@@ -769,6 +784,20 @@ sim_instr(void)
                     break;      /* process */
             }
         }
+
+#if defined(CPANEL)
+        if (cpanel_interval > 0) {
+            if (cpanel_interval > 1) {
+                cpanel_interval--;
+            } else {
+                reason = ControlPanel_Refresh_CPU_Running();
+                /* do control panel refresh and user clicks event processing */
+                if (reason != SCPE_OK)
+                    break;
+            }
+        }
+#endif
+
 
         if (iowait == 0 && sim_brk_summ &&
                  sim_brk_test(((bcore & 2)? CORE_B:0)|IC, SWMASK('E'))) {
@@ -804,10 +833,10 @@ sim_instr(void)
                     if (f) {
                         /* HTR/HPR behave like wait if protected */
                         hltinst = 0;
-                        SR = (((t_uint64) bcore & 3) << 31) |
+                        temp = (((t_uint64) bcore & 3) << 31) |
                               (((t_uint64) f) << 18) | (IC & memmask);
                         sim_interval = sim_interval - 1;        /* count down */
-                        WriteP(MA, SR);
+                        WriteP(MA, temp);
                         if (nmode) {
                             memmask <<= 1;
                             memmask |= 1;
@@ -818,17 +847,17 @@ sim_instr(void)
                         prot_pend = itrap = bcore = iowait = 0;
                         ihold = 1;
                         sim_interval = sim_interval - 1;        /* count down */
-                        temp = ReadP(MA);
+                        SR = ReadP(MA);
                         sim_debug(DEBUG_TRAP, &cpu_dev,
                           "Doing trap chan %c %o >%012llo loc %o %012llo\n",
-                                  shiftcnt + 'A' - 1, f, SR, MA, temp);
+                                  shiftcnt + 'A' - 1, f, temp, MA, SR);
                         if (hst_lnt) {  /* history enabled? */
                             hst_p = (hst_p + 1);        /* next entry */
                             if (hst_p >= hst_lnt)
                                 hst_p = 0;
                             hst[hst_p].ic = MA | HIST_PC | (bcore << 18);
                             hst[hst_p].ea = 0;
-                            hst[hst_p].op = temp;
+                            hst[hst_p].op = SR;
                             hst[hst_p].ac = AC;
                             hst[hst_p].mq = MQ;
                             hst[hst_p].xr1 = XR[1];
@@ -847,11 +876,11 @@ sim_instr(void)
             if (interval_irq && (ioflags & 0400000)) {
                 /* HTR/HPR behave like wait if protected */
                 hltinst = 0;
-                SR = (((t_uint64) bcore & 3) << 31) | (IC & memmask) |
+                temp = (((t_uint64) bcore & 3) << 31) | (IC & memmask) |
                         (relo_mode << 21);
                 sim_interval = sim_interval - 1;        /* count down */
                 MA = 6;
-                WriteP(MA, SR);
+                WriteP(MA, temp);
                 if (nmode) {
                     memmask <<= 1;
                     memmask |= 1;
@@ -862,17 +891,17 @@ sim_instr(void)
                 interval_irq = prot_pend = itrap = bcore = iowait = 0;
                 ihold = 1;
                 sim_interval = sim_interval - 1;        /* count down */
-                temp = ReadP(MA);
+                SR = ReadP(MA);
                 sim_debug(DEBUG_DETAIL, &cpu_dev,
-                          "Doing timer trap >%012llo loc %o %012llo\n", SR,
-                          MA, temp);
+                          "Doing timer trap >%012llo loc %o %012llo\n", temp,
+                          MA, SR);
                 if (hst_lnt) {  /* history enabled? */
                     hst_p = (hst_p + 1);        /* next entry */
                     if (hst_p >= hst_lnt)
                         hst_p = 0;
                     hst[hst_p].ic = MA | HIST_PC | (bcore << 18);
                     hst[hst_p].ea = 0;
-                    hst[hst_p].op = temp;
+                    hst[hst_p].op = SR;
                     hst[hst_p].ac = AC;
                     hst[hst_p].mq = MQ;
                     hst[hst_p].xr1 = XR[1];
@@ -886,6 +915,10 @@ sim_instr(void)
 
         if (hltinst) {
              t_uint64            mask = 00000001000001LL;
+             if (CPU_MODEL == CPU_704) {
+                 reason = STOP_HALT;
+                 break;
+             }
              /* Hold out until all channels have idled out */
              sim_interval = 0;
              sim_process_event();
@@ -914,6 +947,11 @@ sim_instr(void)
              }
              goto hltloop;
         }
+#else                     /* Handle halt on 704 */
+        if (hltinst) {
+             reason = STOP_HALT;
+             break;
+        }
 #endif
 
 /* Split out current instruction */
@@ -921,6 +959,7 @@ sim_instr(void)
         if (iowait) {
             /* If we are awaiting I/O complete, don't fetch. */
             sim_interval--;
+            SR = temp;
             iowait = 0;
         } else {
             xeccnt = 15;
@@ -933,7 +972,7 @@ sim_instr(void)
                     hst_p = 0;
                 hst[hst_p].ic = MA | HIST_PC | (bcore << 18);
                 hst[hst_p].ea = 0;
-                hst[hst_p].op = temp;
+                hst[hst_p].op = SR;
                 hst[hst_p].ac = AC;
                 hst[hst_p].mq = MQ;
                 hst[hst_p].xr1 = XR[1];
@@ -951,13 +990,14 @@ sim_instr(void)
             prot_pend = 0;
         }
       next_xec:
-        opcode = (uint16)(temp >> 24);
+        opcode = (uint16)(SR >> 24);
+        IR = opcode;
         if (hst_lnt) {  /* history enabled? */
-            hst[hst_p].op = temp;
+            hst[hst_p].op = SR;
         }
-        MA = (uint16)(temp & AMASK);
-        tag = (uint8)(temp >> 15) & 07;
-        decr = (uint16)((temp >> 18) & AMASK);
+        MA = (uint16)(SR & AMASK);
+        tag = (uint8)(SR >> 15) & 07;
+        decr = (uint16)((SR >> 18) & AMASK);
                                         /* Set flags to D to start with */
         xr = get_xr(tag);
         iowait = 0;                     /* Kill iowait */
@@ -1052,21 +1092,6 @@ sim_instr(void)
             if (opinfo & (X_P|X_T) && (bcore & 4)) {
                 /* Trap to 0 and drop out of B core */
 prottrap:
-#if 0
-                if (opcode == OP_TIA) {
-                    char        name[7];
-                    int i;
-                    ReadMem(0, SR);
-                    for (i = 5; i >= 0; i--) {
-                        int ch;
-                        ch = (int)(SR >> (6 * i)) & 077;
-                        name[i] = mem_to_ascii[ch];
-                    }
-                    name[6] = '\0';
-                    sim_debug(DEBUG_CTSS, &cpu_dev,
-                           "TIA %06o %06o %6s\n", IC, MA, name);
-                }
-#endif
                 MA = 032;
                 if (nmode) {
                     memmask <<= 1;
@@ -1122,7 +1147,6 @@ prottrap:
                 xr = get_xr(tag);
                 MA = (uint16)(memmask & (SR - xr));
             }
-            SR = MA;
             MA &= memmask;
             if (opinfo & (T_B | T_F | S_F)) {
                 ReadMem(opcode == OP_XEC, SR);
@@ -1263,9 +1287,7 @@ prottrap:
                     temp = 0;
                     if (MQ & FPNBIT) {
                         /* Save everything but characterist, +1 to fraction */
-                        SR =
-                            (AC & (FPMMASK | AMSIGN | AQSIGN | APSIGN)) +
-                            1;
+                        SR = (AC & (FPMMASK | AMSIGN | AQSIGN | APSIGN)) + 1;
                         /* If overflow, normalize */
                         if (SR & FPOBIT) {
                             SR >>= 1;   /* Move right one bit */
@@ -1453,8 +1475,7 @@ prottrap:
                      IC = MA;
                 break;
             case OP_XEC:
-                temp = SR;
-                opcode = (uint16)(temp >> 24);
+                opcode = (uint16)(SR >> 24);
                 if (opcode != OP_XEC) {
                     xeccnt = 15;
                     goto next_xec;
@@ -1556,10 +1577,10 @@ prottrap:
                 ID ^= SR;
                 break;
             case OP_IIR:
-                ID ^= temp & RMASK;
+                ID ^= SR & RMASK;
                 break;
             case OP_IIL:
-                ID ^= (temp & RMASK) << 18;
+                ID ^= (SR & RMASK) << 18;
                 break;
             case OP_OAI:
                 ID |= AC & AQMASK;
@@ -1568,10 +1589,10 @@ prottrap:
                 ID |= SR;
                 break;
             case OP_SIR:
-                ID |= (temp & RMASK);
+                ID |= (SR & RMASK);
                 break;
             case OP_SIL:
-                ID |= (temp & RMASK) << 18;
+                ID |= (SR & RMASK) << 18;
                 break;
             case OP_RIA:
                 ID &= ~AC;
@@ -1580,10 +1601,10 @@ prottrap:
                 ID &= ~SR;
                 break;
             case OP_RIR:
-                ID &= ~(temp & RMASK);
+                ID &= ~(SR & RMASK);
                 break;
             case OP_RIL:
-                ID &= ~((temp & RMASK) << 18);
+                ID &= ~((SR & RMASK) << 18);
                 break;
             case OP_PIA:
                 AC = ID & AQMASK;
@@ -1606,19 +1627,19 @@ prottrap:
                     IC++;
                 break;
             case OP_RFT:
-                if (0 == (temp & ID & RMASK))
+                if (0 == (SR & ID & RMASK))
                     IC++;
                 break;
             case OP_LFT:
-                if (0 == (((temp & RMASK) << 18) & ID))
+                if (0 == (((SR & RMASK) << 18) & ID))
                     IC++;
                 break;
             case OP_RNT:
-                if ((temp & RMASK) == (temp & ID & RMASK))
+                if ((SR & RMASK) == (SR & ID & RMASK))
                     IC++;
                 break;
             case OP_LNT:
-                if ((temp & RMASK) == (temp & (ID >> 18) & RMASK))
+                if ((SR & RMASK) == (SR & (ID >> 18) & RMASK))
                     IC++;
                 break;
             case OP_TIO:
@@ -3017,7 +3038,7 @@ prottrap:
             case OP_CVR + 2:
             case OP_CVR + 1:
             case OP_CVR:
-                shiftcnt = (int)(temp >> 18L) & 0377;
+                shiftcnt = (int)(SR >> 18L) & 0377;
                 if (AC & AMSIGN) {
                     f = 1;
                     AC &= AMMASK;
@@ -3043,7 +3064,7 @@ prottrap:
             case OP_CAQ + 2:
             case OP_CAQ + 1:
             case OP_CAQ:
-                shiftcnt = (int)(temp >> 18L) & 0377;
+                shiftcnt = (int)(SR >> 18L) & 0377;
                 while (shiftcnt != 0) {
                     MA += (uint16)(MQ >> 30) & 077;
                     ReadMem(0, SR);
@@ -3063,7 +3084,7 @@ prottrap:
             case OP_CRQ + 2:
             case OP_CRQ + 1:
             case OP_CRQ:
-                shiftcnt = (int)(temp >> 18L) & 0377;
+                shiftcnt = (int)(SR >> 18L) & 0377;
                 while (shiftcnt != 0) {
                     MA += (uint16)(MQ >> 30) & 077;
                     ReadMem(0, SR);
@@ -3229,8 +3250,8 @@ prottrap:
                     sim_debug(DEBUG_DETAIL, &drm_dev,
                                  "set address %06o\n", drum_addr);
                     MQ <<= 1;
-                    chan_clear(0, DEV_FULL);    /* In case we read something before we
-                                                   got here */
+                    chan_clear(0, DEV_FULL);    /* In case we read something
+                                                   before we got here */
                 } else
                     iocheck = 1;
                 break;
@@ -4169,6 +4190,14 @@ cpu_reset(DEVICE * dptr)
 t_stat
 rtc_srv(UNIT * uptr)
 {
+    if (cpu_unit.flags & OPTION_TIMER) {
+        int32 t;
+        t = sim_rtcn_calb (rtc_tps, TMR_RTC);
+        sim_activate_after(uptr, 1000000/rtc_tps);
+        M[5] += 1;
+        if (M[5] & MSIGN)
+            interval_irq = 1;
+#if 0
     static uint32 last_ms = 0;
     static int milli_time = 0;
     static time_t last_sec = 0;
@@ -4197,6 +4226,7 @@ rtc_srv(UNIT * uptr)
             milli_time += 1;
         }
         sim_activate(&cpu_unit, 10000);
+#endif
     }
     return SCPE_OK;
 }

@@ -50,6 +50,9 @@ int32               sim_emax = 1;
 DEVICE             *sim_devices[] = {
     &cpu_dev,
     &chan_dev,
+#ifdef CPANEL
+    &cp_dev,
+#endif
 #ifdef NUM_DEVS_CDR
     &cdr_dev,
 #endif
