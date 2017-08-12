@@ -736,7 +736,7 @@ sim_read_card(UNIT * uptr)
             data->image[col++] |= c;
         }
 
-        if (col >= 80 && (data->cbuff[i] & 0x80) == 0) {
+        if (i < data->len && col >= 80 && (data->cbuff[i] & 0x80) == 0) {
            r = SCPE_IOERR;
         }
         /* Record over length of card, skip until next */
@@ -772,7 +772,7 @@ sim_read_card(UNIT * uptr)
             data->image[col++] = sim_bcd_to_hol(c);
         }
 
-        if (col >= 80 && (data->cbuff[i] & 0x80) == 0) {
+        if (i < data->len && col >= 80 && (data->cbuff[i] & 0x80) == 0) {
            r = SCPE_IOERR;
         }
 
