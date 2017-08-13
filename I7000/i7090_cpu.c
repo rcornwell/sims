@@ -273,8 +273,8 @@ uint8               dualcore;                   /* Set to true if dual core in
 
 uint16              dev_pulse[NUM_CHAN];        /* SPRA device pulses */
 int                 cycle_time = 12;            /* Cycle time in 100ns */
-uint8               exe_SR = 0;                 /* Execute one instruction
-                                                   from SR, used by CPANEL */
+uint8               exe_KEYS = 0;               /* Execute one instruction
+                                                   from KEYS, used by CPANEL */
 
 /* History information */
 int32               hst_p = 0;                  /* History pointer */
@@ -760,9 +760,10 @@ sim_instr(void)
     iowait = 0;
     while (reason == 0) {       /* loop until halted */
 
-        if (exe_SR) {
+        if (exe_KEYS) {
+           SR = KEYS;
            hltinst = 1;
-           exe_SR = 0;
+           exe_KEYS = 0;
            goto next_xec;
         }
 
