@@ -57,21 +57,6 @@
    lpr_mod      Line Printer modifiers list
 */
 
-/* Device status information stored in u5 */
-#define URCSTA_EOF      0001    /* Hit end of file */
-#define URCSTA_ERR      0002    /* Error reading record */
-#define URCSTA_CARD     0004    /* Unit has card in buffer */
-#define URCSTA_FULL     0004    /* Unit has full buffer */
-#define URCSTA_BUSY     0010    /* Device is busy */
-#define URCSTA_WDISCO   0020    /* Device is wait for disconnect */
-#define URCSTA_READ     0040    /* Device is reading channel */
-#define URCSTA_WRITE    0100    /* Device is reading channel */
-#define URCSTA_INPUT    0200    /* Console fill buffer from keyboard */
-#define URCSTA_WMKS     0400    /* Printer print WM as 1 */
-#define URCSTA_SKIPAFT  01000   /* Skip to line after printing next line */
-#define URCSTA_NOXFER   01000   /* Don't set up to transfer after feed */
-#define URCSTA_LOAD     01000   /* Load flag for 7070 card reader */
-
 
 struct _lpr_data
 {

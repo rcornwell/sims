@@ -827,9 +827,8 @@ sim_instr(void)
                             iotraps &= ~(1 << shiftcnt);
                         }
                     }
-                    if (mask & DMASK & ioflags
-                        && chan_stat(shiftcnt, CHS_ERR))
-                                 f |= 2;        /* We have device error */
+                    if (mask & DMASK & ioflags && chan_stat(shiftcnt, CHS_ERR))
+                        f |= 2;        /* We have device error */
                     /* check if we need to perform a trap */
                     if (f) {
                         /* HTR/HPR behave like wait if protected */
@@ -933,8 +932,10 @@ sim_instr(void)
                     if (mask & AMASK & ioflags) {
                         if (chan_stat(shiftcnt, CHS_EOF))
                             f = 1;      /* We have a EOF */
+#if 0
                         if (iotraps & (1 << shiftcnt))
                             f = 1;      /* We have a IOCT/IORT/IOST */
+#endif
                     }
                     if (mask & DMASK & ioflags && chan_stat(shiftcnt, CHS_ERR))
                          f = 1; /* We have device error */
@@ -3569,6 +3570,7 @@ prottrap:
                     iowait = 1;
                     break;
                 case SCPE_OK:
+                    ihold = 1;
                     break;
                 }
                 break;
@@ -3607,7 +3609,6 @@ prottrap:
                 case SCPE_BUSY:
                     iowait = 1;
                 case SCPE_OK:
-                    ihold = 1;
                     break;
                 }
                 break;
@@ -4016,6 +4017,7 @@ prottrap:
                 if ((cpu_unit.flags & OPTION_EFP) == 0)
                     break;
                 AC = ((SR & MSIGN) << 2) | (SR & PMASK);
+                MA = memmask & (MA + 1);
                 ReadMem(0, MQ);
                 break;
 

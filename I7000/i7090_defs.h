@@ -82,20 +82,21 @@ int chan_read(int chan, t_uint64 *data, int flags);
 void chan_proc();
 
 extern uint16    dev_pulse[NUM_CHAN];                   /* Device pulse */
-#define PUNCH_1 00001
-#define PUNCH_2 00002
-#define PUNCH_M 00003
-#define PRINT_I 00004
-#define PRINT_1 00010
-#define PRINT_2 00020
-#define PRINT_3 00040
-#define PRINT_4 00100
-#define PRINT_5 00200
-#define PRINT_6 00400
-#define PRINT_7 01000
-#define PRINT_8 02000
-#define PRINT_9 04000
-#define PRINT_M 07770
+#define PUNCH_1  000001
+#define PUNCH_2  000002
+#define PUNCH_M  000003
+#define PRINT_I  000004
+#define PRINT_1  000010
+#define PRINT_2  000020
+#define PRINT_3  000040
+#define PRINT_4  000100
+#define PRINT_5  000200
+#define PRINT_6  000400
+#define PRINT_7  001000
+#define PRINT_8  002000
+#define PRINT_9  004000
+#define PRINT_10 010000
+#define PRINT_M  017770
 
 /* Opcodes */
 #define OP_TXI  1

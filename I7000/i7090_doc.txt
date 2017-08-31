@@ -210,7 +210,7 @@ a number: A=1, B=2, C=3, D=4, E=5, F=6, G=7, H=8.
         SET CHn FIXED   Fixes channel to specific type.
         SET CHn AUTO    Defualt, channel configures based on devices on it.
 
-Generally there is no need to worry about channel configurations, in 
+Generally there is no need to worry about channel configurations, in
 auto mode they will configure to correct type to support devices attached
 to them. Or you will get an error when you attempt to run the simulation
 if there is a conflict.

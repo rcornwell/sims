@@ -37,14 +37,10 @@
    chan_mod     Channel modifiers list
 */
 
-#define CDPSTA_READ     000010  /* Unit is in read */
-#define CDPSTA_WRITE    000020  /* Unit is in write */
-#define CDPSTA_ON       000004  /* Unit is running */
-#define CDPSTA_IDLE     000040  /* Unit between operation */
-#define CDPSTA_CMD      000100  /* Unit has recieved a cmd */
-#define CDPSTA_PUNCH    000200  /* Punch strobe during run */
-#define CDPSTA_POSMASK  077000
-#define CDPSTA_POSSHIFT 9
+/* Device status information stored in u5 */
+#define CDPSTA_PUNCH    0004000  /* Punch strobe during run */
+#define CDPSTA_POSMASK  0770000
+#define CDPSTA_POSSHIFT 12
 
 t_stat              cdp_srv(UNIT *);
 t_stat              cdp_reset(DEVICE *);
@@ -100,15 +96,15 @@ uint32 cdp_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
 
     if ((uptr->flags & UNIT_ATT) != 0 && cmd == IO_WRS) {
         /* Start device */
-        if (!(uptr->u5 & CDPSTA_CMD)) {
+        if (!(uptr->u5 & URCSTA_CMD)) {
             dev_pulse[chan] &= ~PUNCH_M;
             uptr->u5 &= ~CDPSTA_PUNCH;
-            if ((uptr->u5 & CDPSTA_ON) == 0) {
+            if ((uptr->u5 & URCSTA_ON) == 0) {
                 uptr->wait = 330;       /* Startup delay */
-            } else if (uptr->u5 & CDPSTA_IDLE && uptr->wait <= 30) {
+            } else if (uptr->u5 & URCSTA_IDLE && uptr->wait <= 30) {
                 uptr->wait += 85;       /* Wait for next latch point */
             }
-            uptr->u5 |= (CDPSTA_WRITE | CDPSTA_CMD);
+            uptr->u5 |= (URCSTA_WRITE | URCSTA_CMD);
             uptr->u5 &= ~CDPSTA_POSMASK;
             chan_set_sel(chan, 1);
             chan_clear_status(chan);
@@ -134,13 +130,13 @@ t_stat cdp_srv(UNIT * uptr)
     struct _card_data   *data;
 
     /* Channel has disconnected, abort current card. */
-    if (uptr->u5 & CDPSTA_CMD && chan_stat(chan, DEV_DISCO)) {
+    if (uptr->u5 & URCSTA_CMD && chan_stat(chan, DEV_DISCO)) {
         if ((uptr->u5 & CDPSTA_POSMASK) != 0) {
             sim_debug(DEBUG_DETAIL, &cdp_dev, "punch card\n");
             sim_punch_card(uptr, NULL);
             uptr->u5 &= ~CDPSTA_PUNCH;
         }
-        uptr->u5 &= ~(CDPSTA_WRITE | CDPSTA_CMD | CDPSTA_POSMASK);
+        uptr->u5 &= ~(URCSTA_WRITE | URCSTA_CMD | CDPSTA_POSMASK);
         chan_clear(chan, DEV_WEOR | DEV_SEL);
         sim_debug(DEBUG_CHAN, &cdp_dev, "unit=%d disconnect\n", u);
     }
@@ -150,11 +146,11 @@ t_stat cdp_srv(UNIT * uptr)
         uptr->wait--;
         /* If at end of record and channel is still active, do another read */
         if (
-            ((uptr->u5 & (CDPSTA_CMD | CDPSTA_IDLE | CDPSTA_WRITE | CDPSTA_ON))
-                  == (CDPSTA_CMD | CDPSTA_IDLE | CDPSTA_ON)) && uptr->wait > 30
+            ((uptr->u5 & (URCSTA_CMD | URCSTA_IDLE | URCSTA_WRITE | URCSTA_ON))
+                  == (URCSTA_CMD | URCSTA_IDLE | URCSTA_ON)) && uptr->wait > 30
                   && chan_test(chan, STA_ACTIVE)) {
-            uptr->u5 |= CDPSTA_WRITE;
-            uptr->u5 &= ~CDPSTA_IDLE;
+            uptr->u5 |= URCSTA_WRITE;
+            uptr->u5 &= ~URCSTA_IDLE;
             chan_set(chan, DEV_WRITE);
             chan_clear(chan, DEV_WEOR);
             sim_debug(DEBUG_CHAN, &cdp_dev, "unit=%d restarting\n", u);
@@ -164,21 +160,21 @@ t_stat cdp_srv(UNIT * uptr)
     }
 
     /* If no write request, go to idle mode */
-    if ((uptr->u5 & CDPSTA_WRITE) == 0) {
-        if ((uptr->u5 & (CDPSTA_IDLE | CDPSTA_ON)) ==
-            (CDPSTA_IDLE | CDPSTA_ON)) {
+    if ((uptr->u5 & URCSTA_WRITE) == 0) {
+        if ((uptr->u5 & (URCSTA_IDLE | URCSTA_ON)) ==
+            (URCSTA_IDLE | URCSTA_ON)) {
             uptr->wait = 85;    /* Delay 85ms */
-            uptr->u5 &= ~CDPSTA_IDLE;   /* Not running */
+            uptr->u5 &= ~URCSTA_IDLE;   /* Not running */
             sim_activate(uptr, us_to_ticks(1000));
         } else {
-            uptr->u5 &= ~CDPSTA_ON;     /* Turn motor off */
+            uptr->u5 &= ~URCSTA_ON;     /* Turn motor off */
         }
         return SCPE_OK;
     }
 
     /* Motor is up to speed now */
-    uptr->u5 |= CDPSTA_ON;
-    uptr->u5 &= ~CDPSTA_IDLE;   /* Not running */
+    uptr->u5 |= URCSTA_ON;
+    uptr->u5 &= ~URCSTA_IDLE;   /* Not running */
 
     if (dev_pulse[chan] & PUNCH_M)
         uptr->u5 |= CDPSTA_PUNCH;
@@ -194,8 +190,8 @@ t_stat cdp_srv(UNIT * uptr)
         }
         sim_debug(DEBUG_DETAIL, &cdp_dev, "punch card\n");
         sim_punch_card(uptr, NULL);
-        uptr->u5 |= CDPSTA_IDLE;
-        uptr->u5 &= ~(CDPSTA_WRITE | CDPSTA_POSMASK | CDPSTA_PUNCH);
+        uptr->u5 |= URCSTA_IDLE;
+        uptr->u5 &= ~(URCSTA_WRITE | CDPSTA_POSMASK | CDPSTA_PUNCH);
         uptr->wait = 85;
         sim_activate(uptr, us_to_ticks(1000));
         return SCPE_OK;

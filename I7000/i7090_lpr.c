@@ -52,26 +52,24 @@
    chan_mod     Channel modifiers list
 */
 
-#define LPRSTA_READ     0x00000001      /* Unit is in read */
-#define LPRSTA_WRITE    0x00000002      /* Unit is in write */
-#define LPRSTA_ON       0x00000004      /* Unit is running */
-#define LPRSTA_EOF      0x00000008      /* Hit end of file */
-#define LPRSTA_EOR      0x00000010      /* Hit end of record */
-#define LPRSTA_IDLE     0x00000020      /* Unit between operation */
-#define LPRSTA_CMD      0x00000040      /* Unit has recieved a cmd */
-#define LPRSTA_RCMD     0x00000080      /* Restart with read */
-#define LPRSTA_WCMD     0x00000100      /* Restart with write */
-#define LPRSTA_POSMASK  0x0007f000      /* Postion data */
-#define LPRSTA_POSSHIFT 12
-#define LPRSTA_BINMODE  0x00000200      /* Line printer started in bin mode */
-#define LPRSTA_CHANGE   0x00000400      /* Turn DEV_WRITE on */
-#define LPRSTA_COLMASK  0xff000000      /* Mask to last column printed */
-#define LPRSTA_COLSHIFT 24
+/* Output selection is stored in u3 */
+/* Line count is stored in u4 */
+/* Device status information stored in u5 */
+/* Position is stored in u6 */
+#define LPRSTA_RCMD     002000          /* Read command */
+#define LPRSTA_WCMD     004000          /* Write command */
+
+#define LPRSTA_EOR      010000          /* Hit end of record */
+#define LPRSTA_BINMODE  020000          /* Line printer started in bin mode */
+#define LPRSTA_CHANGE   040000          /* Turn DEV_WRITE on */
+#define LPRSTA_COL72    0100000         /* Mask to last column printed */
+#define LPRSTA_IMAGE    0200000         /* Image to print */
+
 
 struct _lpr_data
 {
     t_uint64            wbuff[24];      /* Line buffer */
-    char                lbuff[144];     /* Output line buffer */
+    char                lbuff[74];      /* Output line buffer */
 }
 lpr_data[NUM_DEVS_LPR];
 
@@ -81,6 +79,8 @@ void                lpr_ini(UNIT *, t_bool);
 t_stat              lpr_reset(DEVICE *);
 t_stat              lpr_attach(UNIT *, CONST char *);
 t_stat              lpr_detach(UNIT *);
+t_stat              lpr_setlpp(UNIT *, int32, CONST char *, void *);
+t_stat              lpr_getlpp(FILE *, UNIT *, int32, CONST void *);
 t_stat              lpr_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
                         const char *cptr);
 const char          *lpr_description (DEVICE *dptr);
@@ -89,20 +89,22 @@ extern char         six_to_ascii[64];
 
 UNIT                lpr_unit[] = {
 #if NUM_DEVS_LPR > 1
-    {UDATA(&lpr_srv, UNIT_S_CHAN(CHAN_A) | UNIT_LPR | ECHO, 0)},        /* A */
+    {UDATA(&lpr_srv, UNIT_S_CHAN(CHAN_A) | UNIT_LPR | ECHO, 55)},        /* A */
 #endif
 #if NUM_DEVS_LPR > 2
-    {UDATA(&lpr_srv, UNIT_S_CHAN(CHAN_C) | UNIT_LPR, 0)},       /* B */
+    {UDATA(&lpr_srv, UNIT_S_CHAN(CHAN_C) | UNIT_LPR, 55)},       /* B */
 #endif
 #if NUM_DEVS_LPR > 3
-    {UDATA(&lpr_srv, UNIT_S_CHAN(CHAN_E) | UNIT_LPR | UNIT_DIS, 0)},    /* C */
+    {UDATA(&lpr_srv, UNIT_S_CHAN(CHAN_E) | UNIT_LPR | UNIT_DIS, 55)},    /* C */
 #endif
-    {UDATA(&lpr_srv, UNIT_S_CHAN(CHAN_CHPIO) | UNIT_LPR, 0)},   /* 704 */
+    {UDATA(&lpr_srv, UNIT_S_CHAN(CHAN_CHPIO) | UNIT_LPR, 55)},   /* 704 */
 };
 
 MTAB                lpr_mod[] = {
     {ECHO, 0,     NULL, "NOECHO", NULL, NULL, NULL, "Done echo to console"},
     {ECHO, ECHO, "ECHO", "ECHO", NULL, NULL, NULL, "Echo output to console"},
+    {MTAB_XTD|MTAB_VUN|MTAB_VALR, 0, "LINESPERPAGE", "LINESPERPAGE",
+        &lpr_setlpp, &lpr_getlpp, NULL, "Number of lines per page"},
 #if NUM_CHAN != 1
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "CHAN", "CHAN", &set_chan,
      &get_chan, NULL},
@@ -121,6 +123,40 @@ DEVICE              lpr_dev = {
 /* Line printer routines
 */
 
+/*
+ * Line printer routines
+ */
+
+t_stat
+lpr_setlpp(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+{
+    int i;
+    if (cptr == NULL)
+        return SCPE_ARG;
+    if (uptr == NULL)
+        return SCPE_IERR;
+    i = 0;
+    while(*cptr != '\0') {
+        if (*cptr < '0' || *cptr > '9')
+           return SCPE_ARG;
+        i = (i * 10) + (*cptr++) - '0';
+    }
+    if (i < 20 || i > 100)
+        return SCPE_ARG;
+    uptr->capac = i;
+    uptr->u4 = 0;
+    return SCPE_OK;
+}
+
+t_stat
+lpr_getlpp(FILE *st, UNIT *uptr, int32 v, CONST void *desc)
+{
+    if (uptr == NULL)
+        return SCPE_IERR;
+    fprintf(st, "linesperpage=%d", uptr->capac);
+    return SCPE_OK;
+}
+
 t_stat
 print_line(UNIT * uptr, int chan, int unit)
 {
@@ -130,11 +166,38 @@ print_line(UNIT * uptr, int chan, int unit)
 /* Else if binary or not convertable, dump as image */
 
     uint16              buff[80];       /* Temp conversion buffer */
-    int                 i;
+    int                 i, j;
     int                 outsel = uptr->u3;
+    int                 prt_flg = 1;
 
     if ((uptr->flags & (UNIT_ATT | ECHO)) == 0)
         return SCPE_UNATT;      /* attached? */
+
+    if (outsel & PRINT_3) {
+        if (uptr->flags & UNIT_ATT)
+            sim_fwrite("\n\r", 1, 4, uptr->fileref);
+        if (uptr->flags & ECHO) {
+            sim_putchar('\n');
+            sim_putchar('\r');
+        }
+        uptr->u5 &= ~LPRSTA_COL72;
+        uptr->u4++;
+    }
+
+    if (outsel & PRINT_4) {
+        if (uptr->flags & UNIT_ATT)
+            sim_fwrite("\n\r\n\r", 1, 6, uptr->fileref);
+        if (uptr->flags & ECHO) {
+            sim_putchar('\n');
+            sim_putchar('\r');
+            sim_putchar('\n');
+            sim_putchar('\r');
+        }
+        uptr->u5 &= ~LPRSTA_COL72;
+        uptr->u4++;
+        uptr->u4++;
+    }
+
 
     /* Try to convert to text */
     memset(buff, 0, sizeof(buff));
@@ -154,100 +217,95 @@ print_line(UNIT * uptr, int chan, int unit)
         lpr_data[unit].wbuff[i] = 0;
     }
 
-    /* Space printer */
-    if (outsel == 0 || outsel & PRINT_2) {
-        if (uptr->flags & UNIT_ATT)
-            sim_fwrite("\n", 1, 1, uptr->fileref);
-        if (uptr->flags & ECHO) {
-            sim_putchar('\n');
-            sim_putchar('\r');
-        }
-    }
+    /* Space out printer based on last output */
+    if ((outsel & PRINT_9)) {
+        /* Trim trailing spaces */
+        for (j = 72; j > 0 && lpr_data[unit].lbuff[j] == ' '; j--) ;
+        j++;
+        if ((uptr->u5 & LPRSTA_COL72) == 0)
+            j = 0;
 
-    if (outsel & PRINT_1) {
-        if (uptr->flags & UNIT_ATT)
-            sim_fwrite("\f\n", 1, 2, uptr->fileref);
-        if (uptr->flags & ECHO) {
-            sim_putchar('\f');
-            sim_putchar('\n');
-            sim_putchar('\r');
+        for (i = j; i < 72; i++) {
+            if (uptr->flags & UNIT_ATT)
+                sim_fwrite(" ", 1, 1, uptr->fileref);
+            if (uptr->flags & ECHO)
+                sim_putchar(' ');
         }
-    }
-
-    if (outsel & PRINT_3) {
+    } else {
         if (uptr->flags & UNIT_ATT)
-            sim_fwrite("\n\n", 1, 2, uptr->fileref);
+            sim_fwrite("\n\r", 1, 2, uptr->fileref);
         if (uptr->flags & ECHO) {
             sim_putchar('\n');
             sim_putchar('\r');
-            sim_putchar('\n');
         }
-    }
-
-    if (outsel & PRINT_4) {
-        if (uptr->flags & UNIT_ATT)
-            sim_fwrite("\n\n\n", 1, 3, uptr->fileref);
-        if (uptr->flags & ECHO) {
-            sim_putchar('\n');
-            sim_putchar('\r');
-            sim_putchar('\n');
-            sim_putchar('\n');
-        }
+        uptr->u4++;
+        uptr->u5 &= ~LPRSTA_COL72;
     }
 
     /* Scan each column */
-    for (i = 0; i < 72;) {
+    for (i = 0; i < 72; i++) {
         int                 bcd = sim_hol_to_bcd(buff[i]);
 
         if (bcd == 0x7f)
-            lpr_data[unit].lbuff[i++] = 0x7f;
+            lpr_data[unit].lbuff[i] = '{';
         else {
             if (bcd == 020)
                 bcd = 10;
             if (uptr->u5 & LPRSTA_BINMODE) {
                 char ch = (buff[i] != 0) ? '1' : ' ';
-                lpr_data[unit].lbuff[i++] = ch;
+                lpr_data[unit].lbuff[i] = ch;
             } else
-                lpr_data[unit].lbuff[i++] = sim_six_to_ascii[bcd];
+                lpr_data[unit].lbuff[i] = sim_six_to_ascii[bcd];
         }
     }
+    sim_debug(DEBUG_DETAIL, &lpr_dev, "WRS unit=%d %3o [%72s]\n", unit,
+              outsel >> 3, &lpr_data[unit].lbuff[0]);
 
     /* Trim trailing spaces */
-    for (--i; i > 0 && lpr_data[unit].lbuff[i] == ' '; i--) ;
-
-    /* Put output to column where we left off */
-    if (outsel & PRINT_9) {
-        int                 j =
-
-            (uptr->u5 & LPRSTA_COLMASK) >> LPRSTA_COLSHIFT;
-        uptr->u5 &= ~LPRSTA_COLMASK;
-
-        if (j < 71) {
-            if (uptr->flags & UNIT_ATT) {
-                char                buffer[73];
-
-                memset(buffer, ' ', 72);
-                sim_fwrite(buffer, 1, 71 - j, uptr->fileref);
-            }
-            if (uptr->flags & ECHO) {
-                while (j++ < 71)
-                    sim_putchar(' ');
-            }
-        }
-    } else {
-        uptr->u5 &= ~LPRSTA_COLMASK;
-        uptr->u5 |= (i << LPRSTA_COLSHIFT) & LPRSTA_COLMASK;
-    }
+    for (j = 71; j > 0 && lpr_data[unit].lbuff[j] == ' '; j--) ;
 
     /* Print out buffer */
     if (uptr->flags & UNIT_ATT)
-        sim_fwrite(lpr_data[unit].lbuff, 1, i + 1, uptr->fileref);
+        sim_fwrite(lpr_data[unit].lbuff, 1, j+1, uptr->fileref);
     if (uptr->flags & ECHO) {
-        int                 j = 0;
-
-        while (j <= i)
-            sim_putchar(lpr_data[unit].lbuff[j++]);
+        for(i = 0; i <= j; i++)
+            sim_putchar(lpr_data[unit].lbuff[i]);
     }
+    uptr->u5 |= LPRSTA_COL72;
+
+    /* Put output to column where we left off */
+    if (outsel != 0) {
+        uptr->u5 &= ~LPRSTA_COL72;
+    }
+
+    /* Space printer */
+    if (outsel & PRINT_2) {
+        if (uptr->flags & UNIT_ATT)
+            sim_fwrite("\n\r", 1, 2, uptr->fileref);
+        if (uptr->flags & ECHO) {
+            sim_putchar('\n');
+            sim_putchar('\r');
+        }
+        uptr->u4++;
+    }
+
+    if (outsel & PRINT_1) {
+        while (uptr->u4 < uptr->capac) {
+            if (uptr->flags & UNIT_ATT)
+                sim_fwrite("\n\r", 1, 2, uptr->fileref);
+            if (uptr->flags & ECHO) {
+                sim_putchar('\n');
+                sim_putchar('\r');
+            }
+            uptr->u4++;
+        }
+    }
+
+    if (uptr->u4 >= uptr->capac) {
+       uptr->u4 -= uptr->capac;
+       dev_pulse[chan] |= PRINT_I;
+    }
+
     return SCPE_OK;
 }
 
@@ -260,34 +318,36 @@ uint32 lpr_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
     /* Check if valid */
     if ((dev & 03) == 0 || (dev & 03) == 3)
         return SCPE_NODEV;
-    /* Check if still active */
-    if (uptr->u5 & LPRSTA_CMD)
-        return SCPE_BUSY;
     /* Check if attached */
     if ((uptr->flags & (UNIT_ATT | ECHO)) == 0) {
         chan_set_error(chan);
         sim_debug(DEBUG_EXP, &lpr_dev, "unit=%d not ready\n", u);
         return SCPE_IOERR;
     }
+    /* Check if still active */
+    if (uptr->u5 & URCSTA_CMD) {
+        sim_debug(DEBUG_EXP, &lpr_dev, "unit=%d busy\n", u);
+        return SCPE_BUSY;
+    }
     /* Ok, issue command if correct */
     if (cmd == IO_WRS || cmd == IO_RDS) {
         /* Start device */
-        if (((uptr->u5 & (LPRSTA_ON | LPRSTA_IDLE)) ==
-             (LPRSTA_ON | LPRSTA_IDLE)) && uptr->wait <= 30) {
+        if (((uptr->u5 & (URCSTA_ON | URCSTA_IDLE)) ==
+             (URCSTA_ON | URCSTA_IDLE)) && uptr->wait <= 30) {
             uptr->wait += 85;   /* Wait for next latch point */
         } else
             uptr->wait = 330;   /* Startup delay */
         for (i = 0; i < 24; lpr_data[u].wbuff[i++] = 0) ;
-        uptr->u5 &=
-            ~(LPRSTA_RCMD | LPRSTA_WCMD | LPRSTA_POSMASK | LPRSTA_WRITE |
-              LPRSTA_READ);
+        uptr->u6 = 0;
+        uptr->u5 &= ~(LPRSTA_WCMD | LPRSTA_RCMD | URCSTA_WRITE | URCSTA_READ);
         uptr->u3 = 0;
+        dev_pulse[chan] = 0;
         if (cmd == IO_WRS) {
-            sim_debug(DEBUG_CMD, &lpr_dev, "WRS %o unit=%d\n", dev, u);
-            uptr->u5 |= LPRSTA_WCMD | LPRSTA_CMD | LPRSTA_WRITE;
+            sim_debug(DEBUG_CMD, &lpr_dev, "WRS %o unit=%d %d\n", dev, u, uptr->wait);
+            uptr->u5 |= LPRSTA_WCMD | URCSTA_CMD | URCSTA_WRITE;
         } else {
-            sim_debug(DEBUG_CMD, &lpr_dev, "RDS %o unit=%d\n", dev, u);
-            uptr->u5 |= LPRSTA_RCMD | LPRSTA_CMD | LPRSTA_READ;
+            sim_debug(DEBUG_CMD, &lpr_dev, "RDS %o unit=%d %d\n", dev, u, uptr->wait);
+            uptr->u5 |= LPRSTA_RCMD | URCSTA_CMD | URCSTA_READ;
         }
         if ((dev & 03) == 2)
             uptr->u5 |= LPRSTA_BINMODE;
@@ -310,13 +370,12 @@ t_stat lpr_srv(UNIT * uptr)
     int                 pos;
     int                 r;
     int                 eor = 0;
-    int                 action = 0;
 
     /* Channel has disconnected, abort current line. */
-    if (uptr->u5 & LPRSTA_CMD && chan_stat(chan, DEV_DISCO)) {
-        if ((uptr->u5 & LPRSTA_POSMASK) != 0)
-            print_line(uptr, chan, u);
-        uptr->u5 &= ~(LPRSTA_WRITE | LPRSTA_READ | LPRSTA_CMD | LPRSTA_POSMASK);
+    if (uptr->u5 & URCSTA_CMD && chan_stat(chan, DEV_DISCO)) {
+        print_line(uptr, chan, u);
+        uptr->u5 &= ~(URCSTA_WRITE | URCSTA_READ | URCSTA_CMD | LPRSTA_EOR);
+        uptr->u6 = 0;
         chan_clear(chan, DEV_WEOR | DEV_SEL);
         sim_debug(DEBUG_CHAN, &lpr_dev, "unit=%d disconnect\n", u);
     }
@@ -343,12 +402,12 @@ t_stat lpr_srv(UNIT * uptr)
     if (uptr->wait != 0) {
         uptr->wait--;
         /* If at end of record and channel is still active, do another print */
-        if (((uptr->u5 & (LPRSTA_IDLE|LPRSTA_CMD|LPRSTA_WRITE|LPRSTA_READ|
-                 LPRSTA_ON)) == (LPRSTA_IDLE|LPRSTA_CMD|LPRSTA_ON))
-            && uptr->wait > 30 && chan_test(chan, STA_ACTIVE)) {
+        if (((uptr->u5 & (URCSTA_IDLE|URCSTA_CMD|URCSTA_WRITE|URCSTA_READ|
+                 URCSTA_ON)) == (URCSTA_IDLE|URCSTA_CMD|URCSTA_ON))
+            && uptr->wait == 1 && chan_test(chan, STA_ACTIVE)) {
             /* Restart same command */
-            uptr->u5 |= (LPRSTA_WRITE | LPRSTA_READ) & (uptr->u5 >> 7);
-            uptr->u5 &= ~(LPRSTA_POSMASK);
+            uptr->u5 |= (URCSTA_WRITE | URCSTA_READ) & (uptr->u5 >> 5);
+            uptr->u6 = 0;
             chan_set(chan, DEV_WRITE);
             sim_debug(DEBUG_CHAN, &lpr_dev, "unit=%d restarting\n", u);
         }
@@ -357,33 +416,30 @@ t_stat lpr_srv(UNIT * uptr)
     }
 
     /* If no request, go to idle mode */
-    if ((uptr->u5 & (LPRSTA_READ | LPRSTA_WRITE)) == 0) {
-        if ((uptr->u5 & (LPRSTA_IDLE | LPRSTA_ON)) ==
-            (LPRSTA_IDLE | LPRSTA_ON)) {
+    if ((uptr->u5 & (URCSTA_READ | URCSTA_WRITE)) == 0) {
+        if ((uptr->u5 & (URCSTA_IDLE | URCSTA_ON)) == (URCSTA_IDLE | URCSTA_ON)) {
             uptr->wait = 85;    /* Delay 85ms */
-            uptr->u5 &= ~LPRSTA_IDLE;   /* Not running */
+            uptr->u5 &= ~URCSTA_IDLE;   /* Not running */
             sim_activate(uptr, us_to_ticks(1000));
         } else {
             uptr->wait = 330;   /* Delay 330ms */
-            uptr->u5 &= ~LPRSTA_ON;     /* Turn motor off */
+            uptr->u5 &= ~URCSTA_ON;     /* Turn motor off */
         }
         return SCPE_OK;
     }
 
     /* Motor is on and up to speed */
-    uptr->u5 |= LPRSTA_ON;
-    uptr->u5 &= ~LPRSTA_IDLE;
-    pos = (uptr->u5 & LPRSTA_POSMASK) >> LPRSTA_POSSHIFT;
+    uptr->u5 |= URCSTA_ON;
+    uptr->u5 &= ~URCSTA_IDLE;
+    pos = uptr->u6;
 
     uptr->u3 |= dev_pulse[chan] & PRINT_M;
-    dev_pulse[chan] &= ~PRINT_M;
-    if (uptr->u3 != 0)
-        dev_pulse[chan] |= PRINT_I;
 
     /* Check if he write out last data */
-    if (uptr->u5 & LPRSTA_READ) {
+    if (uptr->u5 & URCSTA_READ) {
         int                 wrow = pos;
         t_uint64            wd = 0;
+        int                 action = 0;
 
         /* Case 0: Read word from MF memory, DEV_WRITE=1 */
         /* Case 1: Read word from MF memory, write echo back */
@@ -392,90 +448,73 @@ t_stat lpr_srv(UNIT * uptr)
         /* Case 4: No update, DEV_WRITE=1 */
         eor = (uptr->u5 & LPRSTA_BINMODE) ? 1 : 0;
         switch (pos) {
+        case 46:
+            print_line(uptr, chan, u);
+            pos = 0;
+            /* Fall through */
         case 0:
-        case 1:         /* Row 9 */
+        case 1:                 /* Row 9 */
         case 2:
-        case 3:         /* Row 8 */
+        case 3:                 /* Row 8 */
         case 4:
-        case 5:         /* Row 7 */
+        case 5:                 /* Row 7 */
         case 6:
-        case 7:         /* Row 6 */
+        case 7:                 /* Row 6 */
         case 8:
-        case 9:         /* Row 5 */
+        case 9:                 /* Row 5 */
         case 10:
         case 11:                /* Row 4 */
         case 12:
         case 13:                /* Row 3 */
         case 14:
         case 15:                /* Row 2 */
-        case 16:                /* Row 1 */
+        case 16:                /* Row 1R */
             break;
         case 17:                /* Row 1L and start Echo */
             action = 1;
             break;
         case 18:                /* Echo 8-4 R */
-            /* I'm not sure how these are computed */
-#if 0              /* Should be correct, but force to zero works */
             wd = lpr_data[u].wbuff[2];
-            wd -= lpr_data[u].wbuff[10];
-#endif
-            /* But forcing to zero works */
-            wd = 0;
+            wd &= lpr_data[u].wbuff[10];
             action = 2;
             break;
         case 19:                /* Echo 8-4 L */
-            /* I'm not sure how these are computed */
-#if 0              /* Should be correct, but force to zero works */
             wd = lpr_data[u].wbuff[3];
-            wd -= lpr_data[u].wbuff[11];
-#endif
-            /* But forcing to zero works */
-            wd = 0;
+            wd &= lpr_data[u].wbuff[11];
             action = 3;
             break;
         case 20:                /* Row 10 R */
             wrow = 18;
-            action = 0;
             break;
         case 21:                /* Row 10 L */
             wrow = 19;
             action = 1;
             break;
         case 22:                /* Echo 8-3 */
-            /* I'm not sure how these are computed */
             /* Fill for echo back */
-#if 0
-            wd = lpr_data[u].wbuff[2];
-            wd -= lpr_data[u].wbuff[12];
-#endif
-            /* But forcing to zero works */
-            wd = 0;
+            wd = lpr_data[u].wbuff[12];
+            wd &= lpr_data[u].wbuff[2];
             action = 2;
             break;
         case 23:
-#if 0
-            wd = lpr_data[u].wbuff[3];
-            wd -= lpr_data[u].wbuff[13];
-#endif
-            /* I'm not sure how these are computed */
-            /* But forcing to zero works */
-            wd = 0;
+            wd = lpr_data[u].wbuff[13];
+            wd &= lpr_data[u].wbuff[3];
             action = 3;
             break;
-        case 24:
+        case 24:                /* Row 11 R */
             wrow = 20;
             break;
-        case 25:                /* Row 11 */
+        case 25:                /* Row 11 L */
             wrow = 21;
             action = 1;
             break;
         case 26:                /* Echo 9 */
-            action = 2;
             wd = lpr_data[u].wbuff[0];
+            action = 2;
             break;
         case 27:
-            action = 3;
             wd = lpr_data[u].wbuff[1];
+            action = 3;
             break;
         case 28:
             wrow = 22;
@@ -512,57 +551,63 @@ t_stat lpr_srv(UNIT * uptr)
         if (action == 0 || action == 1) {
         /* If reading grab next word */
             r = chan_read(chan, &lpr_data[u].wbuff[wrow], 0);
+        sim_debug(DEBUG_DATA, &lpr_dev, "print read row < %d %d %012llo eor=%d\n", pos, wrow,
+                 lpr_data[u].wbuff[wrow], 0);
             if (action == 1)
                 chan_clear(chan, DEV_WRITE);
         } else { /* action == 2 || action == 3 */
         /* Place echo data in buffer */
+        sim_debug(DEBUG_DATA, &lpr_dev, "print read row > %d %d %012llo eor=%d\n", pos, wrow,
+                wd, eor);
             r = chan_write(chan, &wd, 0);
             /* Change back to reading */
             if (action == 3) {
                 uptr->wait = 650;
-                uptr->u5 &= ~(LPRSTA_POSMASK | LPRSTA_EOR);
-                uptr->u5 |= (++pos << LPRSTA_POSSHIFT) & LPRSTA_POSMASK;
+                uptr->u6 = ++pos;
+                uptr->u5 &= ~(LPRSTA_EOR);
                 uptr->u5 |= LPRSTA_CHANGE;
                 sim_activate(uptr, us_to_ticks(100));
                 return SCPE_OK;
             }
         }
     } else {
-        eor = (pos == 23 || uptr->u5 & LPRSTA_BINMODE) ? 1 : 0;
+        eor = (pos == 23 || (uptr->u5 & LPRSTA_BINMODE && pos == 1)) ? 1 : 0;
+        if (pos == 24 || (uptr->u5 & LPRSTA_BINMODE && pos == 2)) {
+            print_line(uptr, chan, u);
+            pos = 0;
+        }
         r = chan_read(chan, &lpr_data[u].wbuff[pos], 0);
+        sim_debug(DEBUG_DATA, &lpr_dev, "print row %d %012llo %d\n", pos,
+                lpr_data[u].wbuff[pos], eor);
     }
+
+    uptr->u6 = pos + 1;
     switch (r) {
     case END_RECORD:
-        if (pos != 0)
-            print_line(uptr, chan, u);
-        uptr->wait = 85;        /* Print wheel gap */
-        uptr->u5 |= LPRSTA_EOR | LPRSTA_IDLE;
-        uptr->u5 &= ~(LPRSTA_WRITE | LPRSTA_READ | LPRSTA_POSMASK);
+        uptr->wait = 100;        /* Print wheel gap */
+        uptr->u5 |= LPRSTA_EOR | URCSTA_IDLE;
+        uptr->u5 &= ~(URCSTA_WRITE | URCSTA_READ);
         chan_set(chan, DEV_REOR);
         break;
     case DATA_OK:
-        pos++;
         if (eor) {
-            print_line(uptr, chan, u);
-            uptr->wait = 85;    /* Print wheel gap */
-            uptr->u5 |= LPRSTA_EOR | LPRSTA_IDLE;
-            uptr->u5 &= ~(LPRSTA_WRITE | LPRSTA_READ | LPRSTA_POSMASK);
+            uptr->wait = 100;    /* Print wheel gap */
+            uptr->u5 |= LPRSTA_EOR | URCSTA_IDLE;
+            uptr->u5 &= ~(URCSTA_WRITE | URCSTA_READ);
             chan_set(chan, DEV_REOR);
         } else {
             uptr->wait = 0;
-            uptr->u5 &= ~(LPRSTA_POSMASK | LPRSTA_EOR);
-            uptr->u5 |= (pos << LPRSTA_POSSHIFT) & LPRSTA_POSMASK;
-            sim_activate(uptr, (pos & 1) ? us_to_ticks(300) : us_to_ticks(13000));
+            uptr->u5 &= ~(LPRSTA_EOR);
+            sim_activate(uptr, (pos & 1) ? us_to_ticks(500) : us_to_ticks(16000));
+            return SCPE_OK;
         }
         break;
     case TIME_ERROR:
-        if (pos != 0)
-            print_line(uptr, chan, u);
         chan_set_attn(chan);
         chan_set(chan, DEV_REOR);
         uptr->wait = 13 * (12 - (pos / 2)) + 85;
-        uptr->u5 &= ~(LPRSTA_READ | LPRSTA_WRITE | LPRSTA_POSMASK);
-        uptr->u5 |= LPRSTA_IDLE;
+        uptr->u5 &= ~(URCSTA_READ | URCSTA_WRITE);
+        uptr->u5 |= URCSTA_IDLE;
         break;
     }
 
@@ -576,9 +621,10 @@ lpr_ini(UNIT * uptr, t_bool f)
     int                 u = (uptr - lpr_unit);
     int                 i;
 
+    uptr->u3 = 0;
+    uptr->u4 = 0;
     uptr->u5 = 0;
-    for (i = 0; i < 140; i++)
-        lpr_data[u].lbuff[i] = ' ';
+    memset(&lpr_data[u].lbuff, ' ', sizeof(lpr_data[u].lbuff));
 }
 
 t_stat
@@ -601,6 +647,8 @@ lpr_attach(UNIT * uptr, CONST char *file)
 t_stat
 lpr_detach(UNIT * uptr)
 {
+    int                 u = (uptr - lpr_unit);
+
     return detach_unit(uptr);
 }
 

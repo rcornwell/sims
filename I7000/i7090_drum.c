@@ -128,7 +128,7 @@ t_stat drm_srv(UNIT * uptr)
     /* Channel has disconnected, abort current read. */
     if (uptr->u5 & DRMSTA_CMD && chan_stat(chan, DEV_DISCO)) {
         uptr->u5 = 0;
-        chan_clear(chan, DEV_WEOR | DEV_SEL);
+        chan_clear(chan, DEV_WEOR | DEV_SEL | STA_ACTIVE);
         sim_debug(DEBUG_CHAN, &drm_dev, "Disconnect\n");
     }
 
@@ -162,13 +162,14 @@ t_stat drm_srv(UNIT * uptr)
         case TIME_ERROR:
            /* If no data, disconnect */
             sim_debug(DEBUG_DATA, &drm_dev, "loc %6o missed\n", addr);
+            chan_clear(chan, STA_ACTIVE | DEV_SEL);
             uptr->u5 = DRMSTA_CMD;
             break;
         }
     }
    /* Increase delay for index time */
     if (uptr->u6 == 0)
-        sim_activate(uptr, us_to_ticks(200));
+        sim_activate(uptr, us_to_ticks(120));
     else
         sim_activate(uptr, DRMWORDTIME);
     return SCPE_OK;

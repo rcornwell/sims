@@ -444,14 +444,12 @@ chan_proc()
                 /* If we are not waiting EOR save it in memory */
                 if ((cmd[chan] & 1) == 0) {
                     if (chan_dev.dctrl & cmask)
-                         sim_debug(DEBUG_DATA, &chan_dev,
-                               "chan %d data < %012llo\n",
+                         sim_debug(DEBUG_DATA, &chan_dev, "chan %d data < %012llo\n",
                                chan, assembly[chan]);
                     M[caddr[chan]] = assembly[chan];
                 } else {
                     if (chan_dev.dctrl & cmask)
-                         sim_debug(DEBUG_DATA, &chan_dev,
-                               "chan %d data * %012llo\n",
+                         sim_debug(DEBUG_DATA, &chan_dev, "chan %d data * %012llo\n",
                                chan, assembly[chan]);
                 }
                 nxt_chan_addr(chan);
@@ -641,10 +639,10 @@ chan_proc()
                             sim_debug(DEBUG_DATA, &chan_dev,
                                       "chan %d data > %012llo\n", chan,
                                       assembly[chan]);
-                        nxt_chan_addr(chan);
-                        bcnt[chan] = 6;
-                        wcount[chan]--;
                     }
+                    nxt_chan_addr(chan);
+                    bcnt[chan] = 6;
+                    wcount[chan]--;
                     chan_flags[chan] |= DEV_FULL;
                     continue;   /* Don't start next command until data taken */
                 }
@@ -1294,6 +1292,9 @@ chan_cmd(uint16 dev, uint16 dcmd)
                     r = dibp->cmd(uptr, dcmd, dev);
                     if (r != SCPE_NODEV) {
                         bcnt[chan] = 6;
+                        cmd[chan] = 0;
+                        caddr[chan] = 0;
+                        location[chan] = 0;
                         return r;
                     }
                 }
@@ -1304,6 +1305,9 @@ chan_cmd(uint16 dev, uint16 dcmd)
                 r = dibp->cmd(uptr, dcmd, dev);
                 if (r != SCPE_NODEV) {
                     bcnt[chan] = 6;
+                    cmd[chan] = 0;
+                    caddr[chan] = 0;
+                    location[chan] = 0;
                     return r;
                 }
             }
@@ -1344,7 +1348,7 @@ chan_start(int chan, uint16 addr)
     /* Fetch next command */
     location[chan] = addr;
     chan_fetch(chan);
-    chan_flags[chan] &= ~(STA_PEND|STA_TWAIT|STA_WAIT|DEV_WEOR);
+    chan_flags[chan] &= ~(STA_PEND|STA_TWAIT|STA_WAIT|DEV_WEOR|DEV_FULL);
     chan_flags[chan] |= STA_START | STA_ACTIVE;
     chan_info[chan] |= CHAINF_START;
     return SCPE_OK;

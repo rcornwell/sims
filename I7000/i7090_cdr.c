@@ -41,15 +41,9 @@
 */
 
 /* Device status information stored in u5 */
-#define URCSTA_EOF      0001    /* Hit end of file */
-#define URCSTA_ERR      0002    /* Error reading record */
-#define CDRSTA_READ     000010  /* Unit is in read */
-#define CDRSTA_ON       000004  /* Unit is running */
-#define CDRSTA_EOR      000020  /* Hit end of record */
-#define CDRSTA_IDLE     000040  /* Unit between operation */
-#define CDRSTA_CMD      000100  /* Unit has recieved a cmd */
-#define CDRPOSMASK      077000  /* Bit Mask to retrive drum position */
-#define CDRPOSSHIFT     9
+#define CDRSTA_EOR      002000   /* Hit end of record */
+#define CDRPOSMASK      0770000  /* Bit Mask to retrive drum position */
+#define CDRPOSSHIFT     12
 
 
 t_stat              cdr_srv(UNIT *);
@@ -101,13 +95,13 @@ uint32 cdr_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
         int                 u = (uptr - cdr_unit);
 
         /* Start device */
-        if ((uptr->u5 & CDRSTA_CMD) == 0) {
-            if ((uptr->u5 & (CDRSTA_ON | CDRSTA_IDLE)) ==
-                 (CDRSTA_ON | CDRSTA_IDLE) && (uptr->wait <= 60)) {
+        if ((uptr->u5 & URCSTA_CMD) == 0) {
+            if ((uptr->u5 & (URCSTA_ON | URCSTA_IDLE)) ==
+                 (URCSTA_ON | URCSTA_IDLE) && (uptr->wait <= 60)) {
                 uptr->wait += 100;      /* Wait for next latch point */
             } else
                 uptr->wait = 75;        /* Startup delay */
-            uptr->u5 |= CDRSTA_READ | CDRSTA_CMD | CDRPOSMASK;
+            uptr->u5 |= URCSTA_READ | URCSTA_CMD | CDRPOSMASK;
             chan_set_sel(chan, 0);
             chan_clear_status(chan);
             sim_activate(uptr, us_to_ticks(1000));      /* activate */
@@ -130,8 +124,8 @@ t_stat cdr_srv(UNIT * uptr)
     struct _card_data   *data;
 
     /* Channel has disconnected, abort current read. */
-    if (uptr->u5 & CDRSTA_CMD && chan_stat(chan, DEV_DISCO)) {
-        uptr->u5 &= ~(CDRSTA_READ | CDRSTA_CMD);
+    if (uptr->u5 & URCSTA_CMD && chan_stat(chan, DEV_DISCO)) {
+        uptr->u5 &= ~(URCSTA_READ | URCSTA_CMD);
         uptr->u5 |= CDRPOSMASK;
         chan_clear(chan, DEV_WEOR | DEV_SEL);
         sim_debug(DEBUG_CHAN, &cdr_dev, "unit=%d disconnecting\n", u);
@@ -141,10 +135,10 @@ t_stat cdr_srv(UNIT * uptr)
     if (uptr->wait != 0) {
         /* If at end of record and channel is still active, do another read */
         if (uptr->wait == 30
-            && ((uptr->u5 & (CDRSTA_CMD|CDRSTA_IDLE|CDRSTA_READ|CDRSTA_ON))
-                 == (CDRSTA_CMD | CDRSTA_IDLE | CDRSTA_ON))
+            && ((uptr->u5 & (URCSTA_CMD|URCSTA_IDLE|URCSTA_READ|URCSTA_ON))
+                 == (URCSTA_CMD | URCSTA_IDLE | URCSTA_ON))
             && chan_test(chan, STA_ACTIVE)) {
-            uptr->u5 |= CDRSTA_READ;
+            uptr->u5 |= URCSTA_READ;
             sim_debug(DEBUG_CHAN, &cdr_dev, "unit=%d restarting\n", u);
         }
         uptr->wait--;
@@ -153,20 +147,20 @@ t_stat cdr_srv(UNIT * uptr)
     }
 
     /* If no read request, go to idle mode */
-    if ((uptr->u5 & CDRSTA_READ) == 0) {
-        if ((uptr->u5 & URCSTA_EOF) || (uptr->u5 & CDRSTA_IDLE)) {
-            uptr->u5 &= ~(CDRSTA_ON | CDRSTA_IDLE);     /* Turn motor off */
+    if ((uptr->u5 & URCSTA_READ) == 0) {
+        if ((uptr->u5 & URCSTA_EOF) || (uptr->u5 & URCSTA_IDLE)) {
+            uptr->u5 &= ~(URCSTA_ON | URCSTA_IDLE);     /* Turn motor off */
         } else {
             uptr->wait = 85;    /* Delay 85ms */
-            uptr->u5 |= CDRSTA_IDLE;    /* Go idle */
+            uptr->u5 |= URCSTA_IDLE;    /* Go idle */
             sim_activate(uptr, us_to_ticks(1000));
         }
         return SCPE_OK;
     }
 
     /* Motor is up to speed now */
-    uptr->u5 |= CDRSTA_ON;
-    uptr->u5 &= ~CDRSTA_IDLE;
+    uptr->u5 |= URCSTA_ON;
+    uptr->u5 &= ~URCSTA_IDLE;
 
     pos = (uptr->u5 & CDRPOSMASK) >> CDRPOSSHIFT;
     if (pos == (CDRPOSMASK >> CDRPOSSHIFT)) {
@@ -176,14 +170,14 @@ t_stat cdr_srv(UNIT * uptr)
             sim_debug(DEBUG_EXP, &cdr_dev, "unit=%d Setting ATTN\n", u);
             chan_set_error(chan);
             chan_set_attn(chan);
-            uptr->u5 &= ~CDRSTA_READ;
+            uptr->u5 &= ~URCSTA_READ;
             sim_activate(uptr, us_to_ticks(1000));
             return SCPE_OK;
         case SCPE_EOF:
             sim_debug(DEBUG_EXP, &cdr_dev, "unit=%d EOF\n", u);
             chan_set_eof(chan);
             chan_set_attn(chan);
-            uptr->u5 &= ~CDRSTA_READ;
+            uptr->u5 &= ~URCSTA_READ;
             sim_activate(uptr, us_to_ticks(1000));
             return SCPE_OK;
         case SCPE_OK:
@@ -196,7 +190,7 @@ t_stat cdr_srv(UNIT * uptr)
     if (pos == 24) {
         sim_debug(DEBUG_CHAN, &cdr_dev, "unit=%d set EOR\n", u);
         chan_set(chan, DEV_REOR);
-        uptr->u5 &= ~CDRSTA_READ;
+        uptr->u5 &= ~URCSTA_READ;
         uptr->u5 |= CDRSTA_EOR | CDRPOSMASK;
         uptr->wait = 86;
         sim_activate(uptr, us_to_ticks(1000));

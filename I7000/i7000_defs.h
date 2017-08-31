@@ -320,6 +320,23 @@ extern uint8    lpr_chan12[NUM_CHAN];
 #define DEV_DISCO       0x40000000      /* Channel is done with device */
 #define DEV_WEOR        0x80000000      /* Channel wants EOR written */
 
+/* Device status information stored in u5 */
+#define URCSTA_EOF      0001    /* Hit end of file */
+#define URCSTA_ERR      0002    /* Error reading record */
+#define URCSTA_CARD     0004    /* Unit has card in buffer */
+#define URCSTA_FULL     0004    /* Unit has full buffer */
+#define URCSTA_BUSY     0010    /* Device is busy */
+#define URCSTA_WDISCO   0020    /* Device is wait for disconnect */
+#define URCSTA_READ     0040    /* Device is reading channel */
+#define URCSTA_WRITE    0100    /* Device is reading channel */
+#define URCSTA_INPUT    0200    /* Console fill buffer from keyboard */
+#define URCSTA_ON       0200    /* 7090 Unit is on */
+#define URCSTA_IDLE     0400    /* 7090 Unit is idle */
+#define URCSTA_WMKS     0400    /* Printer print WM as 1 */
+#define URCSTA_SKIPAFT  01000   /* Skip to line after printing next line */
+#define URCSTA_NOXFER   01000   /* Don't set up to transfer after feed */
+#define URCSTA_LOAD     01000   /* Load flag for 7070 card reader */
+#define URCSTA_CMD      01000   /* 7090 Command recieved */
 
 /* Boot from given device */
 t_stat chan_boot(int32 unit_num, DEVICE *dptr);
