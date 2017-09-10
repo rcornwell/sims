@@ -370,8 +370,7 @@ chan_proc()
         /* If device put up EOR, terminate transfer. */
         if (chan_flags[chan] & DEV_REOR) {
              if (chan_dev.dctrl & cmask)
-                    sim_debug(DEBUG_EXP, &chan_dev, "chan %d EOR\n",
-                              chan);
+                    sim_debug(DEBUG_EXP, &chan_dev, "chan %d EOR\n", chan);
              if (chan_flags[chan] & DEV_WRITE) {
                  if ((cmd[chan] & (CHAN_LOAD|CHAN_WM)) == (CHAN_WM|CHAN_LOAD))
                     M[caddr[chan]++] = 035;
@@ -447,7 +446,7 @@ chan_cmd(uint16 dev, uint16 dcmd, uint32 addr)
         cmd[chan] |= CHAN_OVLP;
     dcmd = (dcmd >> 8) & 0x7f;
     chunit[chan] = dev;
-    chan_flags[chan] &= ~(CTL_CNTL|CTL_READ|CTL_WRITE|SNS_UEND|CTL_WRITE|CTL_SNS);
+    chan_flags[chan] &= ~(CTL_CNTL|CTL_READ|CTL_WRITE|SNS_UEND|CTL_WRITE|CTL_SNS|STA_PEND);
     /* Handle disk device special */
     if ((dsk_dib.mask & dev) == (dsk_dib.addr & dsk_dib.mask)) {
         uint16  dsk_cmd = 0;
@@ -534,14 +533,57 @@ chan_write_char(int chan, uint8 * data, int flags)
 {
     uint8       ch = *data;
 
-    /* Check if end of data */
-    if ((cmd[chan] & CHAN_NOREC) == 0 && M[caddr[chan]] == (WM|077)) {
-        caddr[chan]+=2;
+
+    /* If Writing end of record, abort */
+    if (flags & DEV_WEOR) {
+        sim_debug(DEBUG_DETAIL, &chan_dev, "chan %d WEor %d %o ->", chan, caddr[chan],
+                chan_io_status[chan]);
+        if (chan_flags[chan] & DEV_REOR) 
+            chan_io_status[chan] |= 0040;
+        else if (MEM_ADDR_OK(caddr[chan])) {
+              sim_debug(DEBUG_DETAIL, &chan_dev, "memok %02o %02o ", M[caddr[chan]], M[caddr[chan]+1]);
+    if ((cmd[chan] & CHAN_NOREC) == 0 && M[caddr[chan]] != (WM|077))  {
+              sim_debug(DEBUG_DETAIL, &chan_dev, "nogm ");
+        if (MEM_ADDR_OK(caddr[chan]+1))
+            chan_io_status[chan] |= 0040;
+            } 
+            caddr[chan]++;
+      }
+         else
+            chan_io_status[chan] |= 0040;
+
+        chan_flags[chan] |= DEV_REOR;
         if (chan_flags[chan] & DEV_SEL)
             chan_flags[chan] |= DEV_DISCO;
-        chan_flags[chan] &= ~(DEV_WRITE|STA_ACTIVE);
         chan_io_status[chan] |= 0100;
+        chan_flags[chan] &= ~(DEV_WRITE|STA_ACTIVE);
+        chan_flags[chan] &= ~(DEV_WEOR);
+        sim_debug(DEBUG_DETAIL, &chan_dev, "%d %o\n", caddr[chan], chan_io_status[chan]);
         return END_RECORD;
+    }
+
+    /* Check if end of data */
+    if ((chan_flags[chan] & DEV_REOR) == 0 &&
+        (cmd[chan] & CHAN_NOREC) == 0 && 
+        M[caddr[chan]] == (WM|077)) {
+        chan_flags[chan] |= DEV_REOR;
+        caddr[chan]++;
+        sim_debug(DEBUG_DETAIL, &chan_dev, "chan %d GEor %d %o\n", chan, caddr[chan],
+                chan_io_status[chan]);
+         return DATA_OK;
+    }
+
+    /* If over size of memory, terminate */
+    if (!MEM_ADDR_OK(caddr[chan])) {
+        chan_flags[chan] |= DEV_REOR;
+        if (chan_flags[chan] & DEV_SEL)
+            chan_flags[chan] |= DEV_DISCO;
+        chan_io_status[chan] |= 0100;
+        caddr[chan]++;
+        sim_debug(DEBUG_DETAIL, &chan_dev, "chan %d past mem %d %o\n", chan, caddr[chan],
+                chan_io_status[chan]);
+        chan_flags[chan] &= ~(DEV_WRITE|STA_ACTIVE);
+        return DATA_OK;
     }
 
     /* If we are in load mode and see word mark, save it */
@@ -555,8 +597,11 @@ chan_write_char(int chan, uint8 * data, int flags)
         cmd[chan] &= ~CHAN_WM;
         if ((cmd[chan] & CHAN_LOAD) == 0)
             ch |= M[caddr[chan]] & WM;
-        M[caddr[chan]++] = ch;
+        if ((chan_flags[chan] & DEV_REOR) == 0)
+        M[caddr[chan]] = ch;
+        caddr[chan]++;
     }
+    chan_io_status[chan] &= ~020;
 
     /* If device gave us an end, terminate transfer */
     if (flags & DEV_REOR) {
@@ -568,24 +613,13 @@ chan_write_char(int chan, uint8 * data, int flags)
         if ((cmd[chan] & (CHAN_LOAD|CHAN_WM)) == (CHAN_WM|CHAN_LOAD))
            M[caddr[chan]++] = 035;
         caddr[chan]++;
-        return END_RECORD;
-        /* If over size of memory, terminate */
-    } else if (!MEM_ADDR_OK(caddr[chan])) {
-        chan_flags[chan] |= DEV_REOR;
-        if (chan_flags[chan] & DEV_SEL)
-            chan_flags[chan] |= DEV_DISCO;
-        chan_io_status[chan] |= 0020;
-        chan_io_status[chan] |= 0100;
-        chan_flags[chan] &= ~(DEV_WRITE|STA_ACTIVE);
+        if ((cmd[chan] & CHAN_NOREC) == 0 && M[caddr[chan]+1] != (WM|077))
+            chan_io_status[chan] |= 040;
+        sim_debug(DEBUG_DETAIL, &chan_dev, "chan %d Eor %d %o %x\n", chan, caddr[chan],
+                chan_io_status[chan], chan_flags[chan]);
         return END_RECORD;
     }
 
-    /* If Writing end of record, abort */
-    if (flags & DEV_WEOR) {
-        chan_flags[chan] &= ~(DEV_WEOR);
-        chan_io_status[chan] |= 0100;
-        return END_RECORD;
-    }
 
     return DATA_OK;
 }
@@ -614,6 +648,7 @@ chan_read_char(int chan, uint8 * data, int flags)
            return END_RECORD;
         *data &= 077;
         caddr[chan]++;
+        chan_io_status[chan] &= ~020;
         return DATA_OK;
     }
 
@@ -622,14 +657,15 @@ chan_read_char(int chan, uint8 * data, int flags)
         *data = assembly[chan];
         cmd[chan] &= ~CHAN_WM;
     } else {
-        if (!MEM_ADDR_OK(caddr[chan])) {
+        if (!MEM_ADDR_OK(caddr[chan]+1)) {
             chan_flags[chan] &= ~STA_ACTIVE;
             if (chan_flags[chan] & DEV_SEL)
                 chan_flags[chan] |= DEV_DISCO;
-            chan_io_status[chan] |= 0100;
+            caddr[chan]++;
             return END_RECORD;
         }
         assembly[chan] = M[caddr[chan]++];
+        chan_io_status[chan] &= ~020;
         /* Handle end of record */
         if ((cmd[chan] & CHAN_NOREC) == 0 && assembly[chan] == (WM|077)) {
             chan_flags[chan] &= ~STA_ACTIVE;

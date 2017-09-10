@@ -932,10 +932,8 @@ sim_instr(void)
                     if (mask & AMASK & ioflags) {
                         if (chan_stat(shiftcnt, CHS_EOF))
                             f = 1;      /* We have a EOF */
-#if 0
                         if (iotraps & (1 << shiftcnt))
                             f = 1;      /* We have a IOCT/IORT/IOST */
-#endif
                     }
                     if (mask & DMASK & ioflags && chan_stat(shiftcnt, CHS_ERR))
                          f = 1; /* We have device error */

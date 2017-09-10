@@ -211,10 +211,12 @@ print_line(UNIT * uptr, int chan, int unit)
 #ifdef I7080
     }
 #endif
+
     /* Trim trailing spaces */
     for (--i; i > 0 && out[i] == ' '; i--) ;
     out[++i] = '\n';
     out[++i] = '\0';
+    sim_debug(DEBUG_DETAIL, &lpr_dev, "WRS unit=%d [%s]\n", unit, &out[0]);
 
     /* Print out buffer */
     if (uptr->flags & UNIT_ATT)

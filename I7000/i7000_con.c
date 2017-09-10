@@ -45,19 +45,6 @@
 */
 
 /* Device status information stored in u5 */
-#define URCSTA_EOF      0001    /* Hit end of file */
-#define URCSTA_ERR      0002    /* Error reading record */
-#define URCSTA_CARD     0004    /* Unit has card in buffer */
-#define URCSTA_FULL     0004    /* Unit has full buffer */
-#define URCSTA_BUSY     0010    /* Device is busy */
-#define URCSTA_WDISCO   0020    /* Device is wait for disconnect */
-#define URCSTA_READ     0040    /* Device is reading channel */
-#define URCSTA_WRITE    0100    /* Device is reading channel */
-#define URCSTA_INPUT    0200    /* Console fill buffer from keyboard */
-#define URCSTA_WMKS     0400    /* Printer print WM as 1 */
-#define URCSTA_SKIPAFT  01000   /* Skip to line after printing next line */
-#define URCSTA_NOXFER   01000   /* Don't set up to transfer after feed */
-#define URCSTA_LOAD     01000   /* Load flag for 7070 card reader */
 
 struct _con_data
 {
@@ -144,7 +131,7 @@ con_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
             sim_putchar(' ');
         }
         sim_debug(DEBUG_CMD, &con_dev, "%d: Cmd RDS\n", u);
-        chan_set_sel(chan, 1);
+        chan_set_sel(chan, 0);
         uptr->u5 |= URCSTA_READ;
         uptr->u3 = 0;
         return SCPE_OK;
@@ -201,14 +188,15 @@ con_srv(UNIT *uptr) {
 
     /* Copy next column over */
     if ((uptr->u5 & URCSTA_INPUT) == 0 &&  uptr->u5 & URCSTA_READ) {
-        sim_debug(DEBUG_DATA, &con_dev, "%d: Char > %02o\n", u,
-                        con_data[u].ibuff[uptr->u3]);
+        sim_debug(DEBUG_DATA, &con_dev, "%d: Char > %02o %x\n", u,
+                        con_data[u].ibuff[uptr->u3], chan_flags[chan]);
         switch(chan_write_char(chan, &con_data[u].ibuff[uptr->u3],
             ((uptr->u3+1) == con_data[u].inptr)? DEV_REOR: 0)) {
         case TIME_ERROR:
         case END_RECORD:
             uptr->u5 |= URCSTA_WDISCO|URCSTA_BUSY;
             uptr->u5 &= ~URCSTA_READ;
+        sim_debug(DEBUG_EXP, &con_dev, "EOR");
             chan_clear_attn_inq(chan);
             con_data[u].inptr = 0;
             break;

@@ -148,7 +148,7 @@ uint8               timer_enable = 0;           /* Interval timer enable */
 uint8               timer_interval = 0;         /* Interval timer interval */
 int                 chwait = 0;                 /* Wait for channel to finish */
 int                 io_flags = 0;               /* Io flags for 1401 */
-int                 cycle_time = 45;            /* Cycle time in 100ns */
+int                 cycle_time = 28;            /* Cycle time in 100ns */
 
 /* History information */
 int32               hst_p = 0;                  /* History pointer */
@@ -1323,6 +1323,7 @@ sim_instr(void)
                             irq = 1;
                     }
 
+
                     if (irq || (timer_enable && timer_irq == 1)) {
                     /* Check if we can interupt this opcode */
                         switch(op) {
@@ -1953,8 +1954,10 @@ sim_instr(void)
                             jump = 1;
                             tind = 0;
                         } else {
-                            for(i = 1; i <= NUM_CHAN && jump == 0; i++)
-                               jump = chan_stat(i, CHS_EOF|CHS_EOT);
+                            for(i = 1; i <= NUM_CHAN && jump == 0; i++) 
+                                 jump = chan_stat(i, STA_PEND);
+                            if (jump)
+                                sim_debug(DEBUG_CMD, &cpu_dev, "Tape Ind\n");
                         }
                         break;
                 case CHR_Q:     /* Q   Inq req ch 1 */
@@ -2212,18 +2215,18 @@ sim_instr(void)
                 /* Try to start command */
                 switch (chan_cmd(temp, t, BAR & AMASK)) {
                 case SCPE_OK:
-                        chan_io_status[ch & 07] = 0200;
+                        chan_io_status[ch & 07] = 0220;
                         sim_debug(DEBUG_CMD, &cpu_dev,
-                           "%c on %o %s %c\n\r", sim_six_to_ascii[op], ch & 07,
-                                (ch & 010)?"overlap":"", sim_six_to_ascii[op_mod]);
+                           "%d %c on %o %s %c\n", IAR, sim_six_to_ascii[op], ch & 07,
+                                (ch & 010)?"":"overlap", sim_six_to_ascii[op_mod]);
 
                         break;
                 case SCPE_BUSY:
-                        chan_io_status[ch & 07] = 0202;
+                        chan_io_status[ch & 07] = 0002;
                         break;
                 case SCPE_NODEV:
                 case SCPE_IOERR:
-                        chan_io_status[ch & 07] = 0201;
+                        chan_io_status[ch & 07] = 0001;
                         break;
                 }
                 /* Handle waiting */
@@ -2240,7 +2243,7 @@ sim_instr(void)
         chan_io:
                 switch (chan_cmd(temp, t, 0)) {
                 case SCPE_OK:
-                        chan_io_status[ch & 07] = 0000;
+                        chan_io_status[ch & 07] = 0020;
                         if (ch & 010)
                             chwait = (ch & 07) | 040;
                         break;
@@ -2320,21 +2323,15 @@ sim_instr(void)
                         chan_io_status[ch & 07] = 0000;
                         if (ch & 010) {
                             chwait = (ch & 07) | 040;
-                        } else {
-                            /* If doing rewind and not at BOT */
-                            if (op_mod == CHR_R)
-                                chan_clear(ch, STA_TWAIT);
                         }
-                        if (op_mod == CHR_A || op_mod == CHR_B)
-                           tind = 1;
-                        if (op_mod == CHR_M)
-                            chan_io_status[ch & 07] = 0200;
                         sim_debug(DEBUG_CMD, &cpu_dev,
-                           "UC on %o %s %c\n\r", ch & 07,
-                                (ch & 010)?"overlap":"", sim_six_to_ascii[op_mod]);
+                           "%d UC on %o %s %c\n", IAR, ch & 07,
+                                (ch & 010)?"": "overlap", sim_six_to_ascii[op_mod]);
 
                         break;
                 case SCPE_BUSY:
+                        sim_debug(DEBUG_CMD, &cpu_dev,
+                           "%d UC on %o %c Busy\n", IAR, ch & 07, sim_six_to_ascii[op_mod]);
                         chan_io_status[ch & 07] = 0002;
                         break;
                 case SCPE_NODEV:
@@ -2350,11 +2347,7 @@ sim_instr(void)
                 /* Wait for channel to finish before continuing */
                 ch = 1;
         checkchan:
-                while (chan_active(ch) && reason == 0) {
-                    sim_interval = 0;
-                    reason = sim_process_event();
-                    chan_proc();
-                }
+                chan_proc();
                 if (chan_io_status[ch] & op_mod) {
                     jump = 1;
                 }
@@ -3010,14 +3003,14 @@ sim_instr(void)
                         if (cpu_unit.flags & OPTION_PROT) {
                             if (prot_enb /*|| reloc != 0*/) { /* Abort */
                                 reason = STOP_PROG;
-        sim_debug(DEBUG_DETAIL, &cpu_dev, "High set in prot mode\n\r");
+        sim_debug(DEBUG_DETAIL, &cpu_dev, "High set in prot mode\n");
                             } else {
                                 temp = bcd_bin[ReadP(BAR) & 017];
                                 DownReg(BAR);
                                 temp += 10 * bcd_bin[ReadP(BAR) & 017];
                                 DownReg(BAR);
                                 high_addr = 1000 * temp;
-        sim_debug(DEBUG_DETAIL, &cpu_dev, "High set to %d\n\r", high_addr);
+        sim_debug(DEBUG_DETAIL, &cpu_dev, "High set to %d\n", high_addr);
                             }
                         }
                         break;
@@ -3025,14 +3018,14 @@ sim_instr(void)
                         if (cpu_unit.flags & OPTION_PROT) {
                             if (prot_enb || reloc != 0) { /* Abort */
                                 reason = STOP_PROG;
-        sim_debug(DEBUG_DETAIL, &cpu_dev, "Low set in prot mode\n\r");
+        sim_debug(DEBUG_DETAIL, &cpu_dev, "Low set in prot mode\n");
                             } else {
                                 temp = bcd_bin[ReadP(BAR) & 017];
                                 DownReg(BAR);
                                 temp += 10 * bcd_bin[ReadP(BAR) & 017];
                                 DownReg(BAR);
                                 low_addr = 1000 * temp;
-            sim_debug(DEBUG_DETAIL, &cpu_dev, "Low set to %d\n\r", low_addr);
+            sim_debug(DEBUG_DETAIL, &cpu_dev, "Low set to %d\n", low_addr);
                             }
                         }
                         break;
@@ -3129,7 +3122,7 @@ sim_instr(void)
                 case CHR_QUEST: /* ? Enable protection mode */
                      if (cpu_unit.flags & OPTION_PROT) {
                            sim_debug(DEBUG_DETAIL, &cpu_dev,
-                                 "Prot enter %d\n\r", AAR & AMASK);
+                                 "Prot enter %d\n", AAR & AMASK);
                         /* If in protect mode, abort */
                         if (prot_enb) {
                             reason = STOP_PROG;
@@ -3145,7 +3138,7 @@ sim_instr(void)
                 case CHR_9:     /* 9 Leave Prot mode */
                      if (cpu_unit.flags & OPTION_PROT) {
                         sim_debug(DEBUG_DETAIL, &cpu_dev,
-                                "Leave Protect mode %d %d %d\n\r",
+                                "Leave Protect mode %d %d %d\n",
                                          AAR & AMASK, prot_enb, reloc);
                         /* If in protect mode, abort */
                         if ((prot_enb /*|| reloc*/) /*&& (AAR & BBIT) == 0*/) {
@@ -3169,7 +3162,7 @@ sim_instr(void)
                      if (cpu_unit.flags & OPTION_PROT) {
                         /* If in protect mode, abort */
                             sim_debug(DEBUG_DETAIL, &cpu_dev,
-                                        "Check protect fault %d %d\n\r",
+                                        "Check protect fault %d %d\n",
                                          AAR, prot_fault&1);
                         if (prot_enb) {
                             reason = STOP_PROG;
@@ -3183,7 +3176,7 @@ sim_instr(void)
                 case CHR_H:     /* H Test for Prog faults */
                      if (cpu_unit.flags & OPTION_PROT) {
                             sim_debug(DEBUG_DETAIL, &cpu_dev,
-                                         "Check prog fault %d %d\n\r",
+                                         "Check prog fault %d %d\n",
                                          AAR, prot_fault&2);
                         /* If in protect mode, abort */
                         if (prot_enb) {
@@ -3199,7 +3192,7 @@ sim_instr(void)
                      if (cpu_unit.flags & OPTION_PROT) {
                         /* If in protect mode, abort */
                         sim_debug(DEBUG_DETAIL, &cpu_dev,
-                                         "Enable relocation %d\n\r",
+                                         "Enable relocation %d\n",
                                          AAR & AMASK);
                         if (prot_enb) {
                            reason = STOP_PROG;
@@ -3230,7 +3223,7 @@ sim_instr(void)
                      if (cpu_unit.flags & OPTION_PROT) {
                         /* If in protect mode, abort */
                         sim_debug(DEBUG_DETAIL, &cpu_dev,
-                                 "Enable relocation + prot %d\n\r",
+                                 "Enable relocation + prot %d\n",
                                  AAR & AMASK);
                         if (prot_enb) {
                             reason = STOP_PROG;
@@ -3261,7 +3254,7 @@ sim_instr(void)
                 case CHR_I:     /* I ???? */
                      if (cpu_unit.flags & OPTION_PROT) {
                         sim_debug(DEBUG_DETAIL, &cpu_dev,
-                                 "Prot opcode %02o %d\n\r", op_mod, AAR);
+                                 "Prot opcode %02o %d\n", op_mod, AAR);
                      }
                      break;
 
@@ -3270,7 +3263,7 @@ sim_instr(void)
                         jump = timer_irq;
                         timer_irq &= 1;
                         sim_debug(DEBUG_DETAIL, &cpu_dev,
-                                 "Timer release %d\n\r", jump);
+                                 "Timer release %d\n", jump);
                      }
                      break;
                 case CHR_QUOT:  /* ' Turn on 20ms timer */
@@ -3278,7 +3271,7 @@ sim_instr(void)
                         timer_enable = 1;
                         timer_interval = 20;
                         timer_irq = 0;
-                        sim_debug(DEBUG_DETAIL, &cpu_dev, "Timer start\n\r");
+                        sim_debug(DEBUG_DETAIL, &cpu_dev, "Timer start\n");
                      }
                      jump = 1;
                      break;
@@ -3287,7 +3280,7 @@ sim_instr(void)
                      if (cpu_unit.flags & OPTION_PROT) {
                         timer_enable = 0;
                         timer_irq = 0;
-                        sim_debug(DEBUG_DETAIL, &cpu_dev, "Timer stop\n\r");
+                        sim_debug(DEBUG_DETAIL, &cpu_dev, "Timer stop\n");
                      }
                      break;
                 }
@@ -3337,44 +3330,44 @@ check_prot:
              switch(reason) {
              case STOP_NOWM:
                         sim_debug(DEBUG_DETAIL, &cpu_dev,
-                         "IAR = %d No WM AAR=%d BAR=%d\n\r", IAR, AAR, BAR);
+                         "IAR = %d No WM AAR=%d BAR=%d\n", IAR, AAR, BAR);
                         prot_fault |= 2;
                         reason = 0;
                         break;
             case STOP_INVADDR:
                         sim_debug(DEBUG_DETAIL, &cpu_dev,
-                         "IAR = %d Inv Addr AAR=%d BAR=%d\n\r", IAR, AAR, BAR);
+                         "IAR = %d Inv Addr AAR=%d BAR=%d\n", IAR, AAR, BAR);
                         prot_fault |= 2;
                         reason = 0;
                         break;
             case STOP_UUO:
                         sim_debug(DEBUG_DETAIL, &cpu_dev,
-                         "IAR = %d Inv Op AAR=%d BAR=%d\n\r", IAR, AAR, BAR);
+                         "IAR = %d Inv Op AAR=%d BAR=%d\n", IAR, AAR, BAR);
                         prot_fault |= 2;
                         reason = 0;
                         break;
             case STOP_INVLEN:
                         sim_debug(DEBUG_DETAIL, &cpu_dev,
-                        "IAR = %d Invlen Op AAR=%d BAR=%d\n\r", IAR, AAR, BAR);
+                        "IAR = %d Invlen Op AAR=%d BAR=%d\n", IAR, AAR, BAR);
                         prot_fault |= 2;
                         reason = 0;
                         break;
             case STOP_IOCHECK:
                         sim_debug(DEBUG_DETAIL, &cpu_dev,
-                        "IAR = %d I/O Check AAR=%d BAR=%d\n\r", IAR, AAR, BAR);
+                        "IAR = %d I/O Check AAR=%d BAR=%d\n", IAR, AAR, BAR);
                         prot_fault |= 2;
                         reason = 0;
                         break;
             case STOP_PROG:
                         sim_debug(DEBUG_DETAIL, &cpu_dev,
-                        "IAR = %d Prog check AAR=%d BAR=%d low=%d high=%d\n\r",
+                        "IAR = %d Prog check AAR=%d BAR=%d low=%d high=%d\n",
                                  IAR, AAR, BAR, low_addr, high_addr);
                         prot_fault |= 2;
                         reason = 0;
                         break;
             case STOP_PROT:
                         sim_debug(DEBUG_DETAIL, &cpu_dev,
-                         "IAR = %d Prot check AAR=%d BAR=%d low=%d high=%d\n\r",
+                         "IAR = %d Prot check AAR=%d BAR=%d low=%d high=%d\n",
                                  IAR, AAR, BAR, low_addr, high_addr);
                         prot_fault |= 1;
                         reason = 0;
