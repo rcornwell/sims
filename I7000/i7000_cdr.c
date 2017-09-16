@@ -123,6 +123,9 @@ uint32 cdr_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
     uptr->u5 &= ~0xF0000;
     uptr->u5 |= stk << 16;
 #endif
+    if (uptr->u5 & (URCSTA_EOF|URCSTA_ERR))
+        return SCPE_IOERR;
+
     /* Process commands */
     switch(cmd) {
     case IO_RDS:
@@ -204,11 +207,12 @@ cdr_srv(UNIT *uptr) {
              chan_set_eof(chan);
              chan_set_attn(chan);
              chan_clear(chan, DEV_SEL);
-             uptr->u5 &= ~URCSTA_BUSY;
+             uptr->u5 |= URCSTA_EOF;
+             uptr->u5 &= ~(URCSTA_BUSY|URCSTA_READ);
              return SCPE_OK;
         case SCPE_IOERR:
              uptr->u5 |= URCSTA_ERR;
-             uptr->u5 &= ~URCSTA_BUSY;
+             uptr->u5 &= ~(URCSTA_BUSY|URCSTA_READ);
              chan_set_attn(chan);
              chan_clear(chan, DEV_SEL);
              return SCPE_OK;

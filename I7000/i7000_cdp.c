@@ -245,20 +245,24 @@ cdp_srv(UNIT *uptr) {
 
         data = (struct _card_data *)uptr->up7;
 
-#ifdef I7080
         switch(chan_read_char(chan, &ch, 0)) {
-#else
-        switch(chan_read_char(chan, &ch,
-                                (uptr->u4 == 79)? DEV_REOR: 0)) {
-#endif
         case TIME_ERROR:
         case END_RECORD:
              uptr->u5 |= URCSTA_WDISCO|URCSTA_BUSY|URCSTA_FULL;
              uptr->u5 &= ~URCSTA_WRITE;
              break;
         case DATA_OK:
+            if (ch == 0)
+               ch = 020;
+            else if (ch == 020)
+               ch = 0;
             sim_debug(DEBUG_DATA, &cdp_dev, "%d: Char < %02o\n", u, ch);
             data->image[uptr->u4++] = sim_bcd_to_hol(ch);
+            if (uptr->u4 == 80) {
+                chan_set(chan, DEV_REOR);
+                uptr->u5 |= URCSTA_WDISCO|URCSTA_BUSY|URCSTA_FULL;
+                uptr->u5 &= ~URCSTA_WRITE;
+            }
             break;
         }
         sim_activate(uptr, 10);

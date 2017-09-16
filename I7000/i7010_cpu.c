@@ -107,7 +107,7 @@ t_stat              do_divide();
 /* Interval timer option */
 t_stat              rtc_srv(UNIT * uptr);
 t_stat              rtc_reset(DEVICE * dptr);
-
+int32               rtc_tps = 200;
 
 
 /* General registers */
@@ -134,6 +134,7 @@ uint8               urec_irq[NUM_CHAN];         /* Unit record IRQ pending */
 uint8               astmode = 1;                /* Astrisk mode */
 uint8               chan_io_status[NUM_CHAN];   /* Channel status */
 uint8               chan_seek_done[NUM_CHAN];   /* Channel seek finished */
+uint8               chan_irq_enb[NUM_CHAN];     /* IRQ type opcode */
 uint8               lpr_chan9[NUM_CHAN];        /* Line printer at channel 9 */
 uint8               lpr_chan12[NUM_CHAN];       /* Line printer at channel 12 */
 extern uint32       caddr[NUM_CHAN];            /* Channel addresses */
@@ -145,10 +146,11 @@ uint8               prot_enb = 0;               /* Protection enables */
 uint8               relo_flags = 0;             /* Relocation flags */
 uint8               timer_irq = 0;              /* Interval timer interrupt */
 uint8               timer_enable = 0;           /* Interval timer enable */
-uint8               timer_interval = 0;         /* Interval timer interval */
+int                 timer_interval = 0;         /* Interval timer interval */
 int                 chwait = 0;                 /* Wait for channel to finish */
 int                 io_flags = 0;               /* Io flags for 1401 */
 int                 cycle_time = 28;            /* Cycle time in 100ns */
+uint8               time_digs[] = {0, 2, 3, 5, 7, 8};
 
 /* History information */
 int32               hst_p = 0;                  /* History pointer */
@@ -156,6 +158,16 @@ int32               hst_lnt = 0;                /* History length */
 struct InstHistory *hst = NULL;                 /* History stack */
 extern UNIT         chan_unit[];
 
+/* Simulator debug controls */
+DEBTAB              cpu_debug[] = {
+    {"CHANNEL", DEBUG_CHAN},
+    {"TRAP", DEBUG_TRAP},
+    {"CMD", DEBUG_CMD},
+    {"DETAIL", DEBUG_DETAIL},
+    {"EXP", DEBUG_EXP},
+    {"PRI", DEBUG_PRIO},
+    {0, 0}
+};
 
 
 
@@ -227,7 +239,7 @@ DEVICE              cpu_dev = {
     "CPU", &cpu_unit, cpu_reg, cpu_mod,
     1, 10, 18, 1, 8, 8,
     &cpu_ex, &cpu_dep, &cpu_reset, NULL, NULL, NULL,
-    NULL, DEV_DEBUG, 0, dev_debug,
+    NULL, DEV_DEBUG, 0, cpu_debug,
     NULL, NULL, &cpu_help, NULL, NULL, &cpu_description
 };
 
@@ -547,8 +559,6 @@ void ClrBit(uint32 MA, uint8 v) {
 t_stat
 sim_instr(void)
 {
-    time_t              curtim;
-    struct tm          *tptr;
     t_stat              reason;
     uint16              t;
     int                 temp;
@@ -1315,7 +1325,8 @@ sim_instr(void)
                     int irq = inquiry;
                     int     ok_irq = 0;
                     for(i = 1; i < NUM_CHAN; i++ ) {
-                        if ((chan_io_status[i] & 0300) == 0300)
+                        if ((chan_io_status[i] & 0300) == 0300 &&
+                            chan_irq_enb[i])
                             irq = 1;
                         if (chan_test(i, SNS_ATTN1))
                             irq = 1;
@@ -1377,6 +1388,7 @@ sim_instr(void)
                         }
 
                         if (ok_irq) {
+                            sim_debug(DEBUG_PRIO, &cpu_dev, "Irq IAR=%d\n",IAR);
                             prot_enb = reloc = 0;
                             if (pri_enb && irq) {
                                 IAR = temp;
@@ -1511,17 +1523,20 @@ sim_instr(void)
                 case CHR_G: temp = caddr[3]; break;     /* G */
                 case CHR_H: temp = caddr[4]; break;     /* H */
                 case CHR_T:                             /* T */
-                       curtim = time(NULL);        /* get time */
-                       tptr = localtime(&curtim);  /* decompose */
-                       if (tptr == NULL)
-                           break;                 /* error? */
+                        {
+                         time_t        curtim;
+                         struct tm    *tptr;
 
-                       /* Convert minutes to 100th hour */
-                       temp = tptr->tm_min * 1000;
-                       temp /= 60;
-                       temp += 5;       /* Round */
-                       temp /= 10;      /* Truncate low digit */
-                       temp += tptr->tm_hour * 100;
+                             temp = 99999;
+                             curtim = time(NULL);        /* get time */
+                             tptr = localtime(&curtim);  /* decompose */
+                             if (tptr != NULL && tptr->tm_sec != 59) {
+                                  /* Convert minutes to 100th hour */
+                                  temp = time_digs[tptr->tm_min % 6];
+                                  temp += 10 * (tptr->tm_min / 6);
+                                  temp += 100 * tptr->tm_hour;
+                             }
+                       }
                        break;
                 default:  temp = 0;   break;
                 }
@@ -1954,7 +1969,7 @@ sim_instr(void)
                             jump = 1;
                             tind = 0;
                         } else {
-                            for(i = 1; i <= NUM_CHAN && jump == 0; i++) 
+                            for(i = 1; i <= NUM_CHAN && jump == 0; i++)
                                  jump = chan_stat(i, STA_PEND);
                             if (jump)
                                 sim_debug(DEBUG_CMD, &cpu_dev, "Tape Ind\n");
@@ -1966,13 +1981,20 @@ sim_instr(void)
                 case CHR_STAR:  /* *   Inq req ch 2 */
                         break;
                 case CHR_1:     /* 1   Overlap in Proc Ch 1 */
-                        jump = chan_active(1);
+                        jump = ((chan_io_status[1] & 0300) == 0200) && 
+                                chan_active(1);
                         break;
                 case CHR_2:     /* 2   Overlap in Proc Ch 2 */
-                        jump = chan_active(2);
+                        jump = ((chan_io_status[2] & 0300) == 0200) && 
+                                chan_active(2);
+                        break;
+                case CHR_4:     /* 4   Channel 3 */
+                        jump = ((chan_io_status[3] & 0300) == 0200) &&
+                                chan_active(3);
                         break;
                 case CHR_RPARN: /* )   Channel 4 */
-                        jump = chan_active(4);
+                        jump = ((chan_io_status[4] & 0300) == 0200) &&
+                                chan_active(4);
                         break;
                 case CHR_9:     /* 9 Carriage 9 CH1 */ /* 1401 same */
                         jump = lpr_chan9[1];
@@ -2126,9 +2148,6 @@ sim_instr(void)
 
             case OP_RD:
             case OP_RDW:
-                /* Check if over the top */
-                ValidAddr(BAR);
-
                 /* Decode operands */
                 /* X1 digit 1 == channel 034 % non-overlap */
                 /*          2 == channel 074 sq non-overlap */
@@ -2146,7 +2165,7 @@ sim_instr(void)
                 /*          F == Disk 066 */
                 /*          K == Com 042 */
                 /* X3 digit device option or unit number */
-                /* op_mod           R == Read 051 */
+                /* op_mod   R == Read 051 */
                 /*          $ == Read 053 ignore word/group */
                 /*          W == Write 026 */
                 /*          X == Write 027 ignore word/group */
@@ -2167,10 +2186,6 @@ sim_instr(void)
                 }
 
                 temp = ch << 12;
-                if (chan_io_status[ch & 07] & 0200) {
-                   reason = STOP_IOCHECK;
-                   break;
-                }
                 if ((XR & 07700) == 06200) {
                    if ((XR & 017) != 10)
                       temp |= XR & 017;
@@ -2183,13 +2198,6 @@ sim_instr(void)
                    temp |= XR & 07777;
                 }
 
-                while (chan_active(ch & 07) && reason == 0) {
-                    sim_interval = 0;
-                    reason = sim_process_event();
-                    chan_proc();
-                }
-                if (reason != 0)
-                   break;
 
                 switch(op_mod) {
                 case CHR_R:   t = (IO_RDS << 8); break;          /* R */
@@ -2207,6 +2215,14 @@ sim_instr(void)
                 if (reason != 0)
                    break;
 
+                while (chan_active(ch & 07) && reason == 0) {
+                    sim_interval = 0;
+                    reason = sim_process_event();
+                    chan_proc();
+                }
+                if (reason != 0)
+                   break;
+
                 if (op == OP_RDW)
                    t |= 0200;
                 if ((ch & 010) == 0)
@@ -2215,23 +2231,33 @@ sim_instr(void)
                 /* Try to start command */
                 switch (chan_cmd(temp, t, BAR & AMASK)) {
                 case SCPE_OK:
-                        chan_io_status[ch & 07] = 0220;
+                        if (ch & 010) {
+                           chan_io_status[ch & 07] = 0;
+                           chwait = ch & 07;
+                           chan_irq_enb[ch & 7] = 0;
+                        } else {
+                           chan_io_status[ch & 07] = IO_CHS_OVER;
+                           chan_irq_enb[ch & 7] = 1;
+                        }
                         sim_debug(DEBUG_CMD, &cpu_dev,
-                           "%d %c on %o %s %c\n", IAR, sim_six_to_ascii[op], ch & 07,
-                                (ch & 010)?"":"overlap", sim_six_to_ascii[op_mod]);
-
+                           "%d %c on %o %o %s %c\n", IAR, sim_six_to_ascii[op],
+                                ch & 07, temp,
+                                (ch & 010)?"":"overlap",
+                                sim_six_to_ascii[op_mod]);
                         break;
                 case SCPE_BUSY:
-                        chan_io_status[ch & 07] = 0002;
+                        sim_debug(DEBUG_CMD, &cpu_dev,
+                           "%d %c Busy on %o %s %c %o\n", IAR,
+                                sim_six_to_ascii[op], ch & 07,
+                                (ch & 010)?"": "overlap",
+                             sim_six_to_ascii[op_mod], chan_io_status[ch & 07]);
+                        chan_io_status[ch & 07] = IO_CHS_BUSY;
                         break;
                 case SCPE_NODEV:
                 case SCPE_IOERR:
-                        chan_io_status[ch & 07] = 0001;
+                        chan_io_status[ch & 07] = IO_CHS_NORDY;
                         break;
                 }
-                /* Handle waiting */
-                if ((ch & 010) && (chan_io_status[ch & 07] & 3) == 0)
-                    chwait = ch & 07;
                 if (CPU_MODEL == 1)
                     chan_io_status[ch & 07] &= 0177;
                 break;
@@ -2243,16 +2269,17 @@ sim_instr(void)
         chan_io:
                 switch (chan_cmd(temp, t, 0)) {
                 case SCPE_OK:
-                        chan_io_status[ch & 07] = 0020;
+                        chan_io_status[ch & 07] = 0000;
                         if (ch & 010)
                             chwait = (ch & 07) | 040;
+                        chan_irq_enb[ch & 7] = 0;
                         break;
                 case SCPE_BUSY:
-                        chan_io_status[ch & 07] = 0002;
+                        chan_io_status[ch & 07] = IO_CHS_BUSY;
                         break;
                 case SCPE_NODEV:
                 case SCPE_IOERR:
-                        chan_io_status[ch & 07] = 0001;
+                        chan_io_status[ch & 07] = IO_CHS_NORDY;
                         break;
                 }
                 break;
@@ -2299,19 +2326,22 @@ sim_instr(void)
                 temp |= 02400;
                 t = 0;
                 switch(op_mod) {
-                case CHR_B:  t = (IO_BSR << 8); ch &= 07; break;
-                case CHR_A:  t = (IO_SKR << 8); ch &= 07; break;
-                case CHR_R:  t = (IO_REW << 8); ch &= 07; break;
-                case CHR_GT: t = (IO_RUN << 8); ch &= 07; break;
-                case CHR_E:  t = (IO_ERG << 8); ch &= 07; break;
+                case CHR_B:  t = (IO_BSR << 8); ch |= 010; break;
+                case CHR_A:  t = (IO_SKR << 8); ch |= 010; break;
+                case CHR_R:  t = (IO_REW << 8); ch |= 010; break;
+                case CHR_GT: t = (IO_RUN << 8); ch |= 010; break;
+                case CHR_E:  t = (IO_ERG << 8); ch |= 010; break;
                 case CHR_M:  t = (IO_WEF << 8); break;
                 default: t = 0; reason = STOP_UUO; break;
                 }
 
-                if (chan_io_status[ch & 07] & 0200) {
-                   reason = STOP_IOCHECK;
-                   break;
+                while (chan_active(ch & 07) && reason == 0) {
+                    sim_interval = 0;
+                    reason = sim_process_event();
+                    chan_proc();
                 }
+                if (reason != 0)
+                   break;
                 /* For nop, set command done */
                 if (t == 0) {
                     chan_io_status[ch & 07] = 0000;
@@ -2323,24 +2353,27 @@ sim_instr(void)
                         chan_io_status[ch & 07] = 0000;
                         if (ch & 010) {
                             chwait = (ch & 07) | 040;
+                        } else if (op_mod == CHR_M) {
+                            chan_io_status[ch & 07] = IO_CHS_OVER;
                         }
+                        chan_irq_enb[ch & 7] = 0;
                         sim_debug(DEBUG_CMD, &cpu_dev,
-                           "%d UC on %o %s %c\n", IAR, ch & 07,
-                                (ch & 010)?"": "overlap", sim_six_to_ascii[op_mod]);
+                           "%d UC on %o %o %s %c %o\n", IAR, ch & 07, temp,
+                             (ch & 010)?"": "overlap",
+                             sim_six_to_ascii[op_mod], chan_io_status[ch & 07]);
 
                         break;
                 case SCPE_BUSY:
-                        sim_debug(DEBUG_CMD, &cpu_dev,
-                           "%d UC on %o %c Busy\n", IAR, ch & 07, sim_six_to_ascii[op_mod]);
-                        chan_io_status[ch & 07] = 0002;
+                        chan_io_status[ch & 07] = IO_CHS_BUSY;
                         break;
                 case SCPE_NODEV:
                 case SCPE_IOERR:
-                        chan_io_status[ch & 07] = 0001;
+                        chan_io_status[ch & 07] = IO_CHS_NORDY;
                         break;
                 }
                 if (CPU_MODEL == 1)
                     chan_io_status[ch & 07] &= 0177;
+                sim_interval -= 100;
                 break;
 
             case OP_IO1:
@@ -2351,7 +2384,9 @@ sim_instr(void)
                 if (chan_io_status[ch] & op_mod) {
                     jump = 1;
                 }
-                chan_io_status[ch] &= 077;      /* Clear interlock */
+                chan_io_status[ch] &= 077;
+                sim_debug(DEBUG_CMD, &cpu_dev, "Check chan %d %o %x\n", ch,
+                        chan_io_status[ch], chan_flags[ch]);
                 break;
 
             case OP_IO2:
@@ -3051,6 +3086,7 @@ sim_instr(void)
 
             /* Priority mode operations */
             case OP_PRI:
+                jump = 0;
                 switch(op_mod) {
                 case CHR_U:     /* U branch if ch 1 i-o unit priority */
                      jump = urec_irq[1];
@@ -3061,16 +3097,20 @@ sim_instr(void)
                      urec_irq[2] = 0;
                      break;
                 case CHR_1:     /* 1 branch if ch 1 overlap priority */
-                     jump = chan_io_status[1] & 0100;
+                     if (chan_irq_enb[1]) 
+                         jump = (chan_io_status[1] & 0300) == 0300;
                      break;
                 case CHR_2:     /* 2 branch if ch 2 overlap priority */
-                     jump = chan_io_status[2] & 0100;
+                     if (chan_irq_enb[2]) 
+                         jump = (chan_io_status[2] & 0300) == 0300;
                      break;
                 case CHR_3:     /* 3 branch if ch 3 overlap priority */
-                     jump = chan_io_status[3] & 0100;
+                     if (chan_irq_enb[3]) 
+                         jump = (chan_io_status[3] & 0300) == 0300;
                      break;
                 case CHR_4:     /* 4 branch if ch 4 overlap priority */
-                     jump = chan_io_status[4] & 0100;
+                     if (chan_irq_enb[4]) 
+                         jump = (chan_io_status[4] & 0300) == 0300;
                      break;
                 case CHR_Q:     /* Q branch if inquiry ch 1 */
                      jump = inquiry;
@@ -3099,10 +3139,12 @@ sim_instr(void)
                      break;
                 case CHR_X:     /* X branch and exit */
                      pri_enb = 0;
+                sim_debug(DEBUG_PRIO, &cpu_dev, "dis irq\n");
                      jump = 1;
                      break;
                 case CHR_E:     /* E branch and enter */
                      pri_enb = 1;
+                sim_debug(DEBUG_PRIO, &cpu_dev, "enb irq\n");
                      jump = 1;
                      break;
                 case CHR_A:     /* A branch if ch1 attention */
@@ -3269,7 +3311,7 @@ sim_instr(void)
                 case CHR_QUOT:  /* ' Turn on 20ms timer */
                      if (cpu_unit.flags & OPTION_PROT) {
                         timer_enable = 1;
-                        timer_interval = 20;
+                        timer_interval = 10;
                         timer_irq = 0;
                         sim_debug(DEBUG_DETAIL, &cpu_dev, "Timer start\n");
                      }
@@ -3717,13 +3759,17 @@ do_divide()
 t_stat
 rtc_srv(UNIT * uptr)
 {
+    int32         t;
+
+    t = sim_rtcn_calb (rtc_tps, TMR_RTC);
+    sim_activate_after(uptr, 1000000/rtc_tps);
+
     if (timer_enable) {
         if (--timer_interval == 0) {
             timer_irq |= 1;
-            timer_interval = 20;
+            timer_interval = 10;
         }
     }
-    sim_activate(&cpu_unit, sim_rtcn_calb(uptr->wait, TMR_RTC));
     return SCPE_OK;
 }
 

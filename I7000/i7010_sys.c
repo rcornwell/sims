@@ -101,16 +101,16 @@ DIB  lpr_dib = { CH_TYP_UREC, 1, 00200, 07700, &lpr_cmd, &lpr_ini };
 DIB  con_dib = { CH_TYP_UREC, 1, 02300, 07700, &con_cmd, &con_ini };
 #endif
 #ifdef NUM_DEVS_MT
-DIB  mt_dib = { CH_TYP_76XX|CH_TYP_UREC, NUM_UNITS_MT, 02400, 07700, &mt_cmd, &mt_ini };
+DIB  mt_dib = { CH_TYP_UREC, NUM_UNITS_MT, 02400, 07700, &mt_cmd, &mt_ini };
 #endif
 #ifdef NUM_DEVS_CHRON
-DIB  chron_dib = { CH_TYP_76XX|CH_TYP_UREC, 1, 02400, 07700, &chron_cmd, NULL };
+DIB  chron_dib = { CH_TYP_UREC, 1, 02400, 07700, &chron_cmd, NULL };
 #endif
 #ifdef NUM_DEVS_DSK
-DIB  dsk_dib = { CH_TYP_79XX, 0, 06600, 07700, &dsk_cmd, &dsk_ini };
+DIB  dsk_dib = { CH_TYP_79XX|CH_TYP_UREC, 0, 06600, 07700, &dsk_cmd, &dsk_ini };
 #endif
 #ifdef NUM_DEVS_COM
-DIB  com_dib = { CH_TYP_79XX, 0, 04200, 07700, &com_cmd, NULL };
+DIB  com_dib = { CH_TYP_79XX|CH_TYP_UREC, 0, 04200, 07700, &com_cmd, NULL };
 #endif
 
 
@@ -336,8 +336,8 @@ t_opcode            base_ops[] = {
     {OP_IO2|MOD(002),   "BCB2",         TYPE_B},
     {OP_IO2|MOD(004),   "BER2",         TYPE_B},
     {OP_IO2|MOD(010),   "BEF2",         TYPE_B},
-    {OP_IO2|MOD(020),   "BWL2",         TYPE_B},
-    {OP_IO2|MOD(040),   "BNT2",         TYPE_B},
+    {OP_IO2|MOD(020),   "BNT2",         TYPE_B},
+    {OP_IO2|MOD(040),   "BWL2",         TYPE_B},
     {OP_IO2|MOD(000),   "BEX2",         TYPE_B},
     {OP_IO2|MOD(000),   "BEX2",         TYPE_BE},
     {OP_IO3|MOD(077),   "BA3",          TYPE_B},
@@ -345,8 +345,8 @@ t_opcode            base_ops[] = {
     {OP_IO3|MOD(002),   "BCB3",         TYPE_B},
     {OP_IO3|MOD(004),   "BER3",         TYPE_B},
     {OP_IO3|MOD(010),   "BEF3",         TYPE_B},
-    {OP_IO3|MOD(020),   "BWL3",         TYPE_B},
-    {OP_IO3|MOD(040),   "BNT3",         TYPE_B},
+    {OP_IO3|MOD(020),   "BNT3",         TYPE_B},
+    {OP_IO3|MOD(040),   "BWL3",         TYPE_B},
     {OP_IO3|MOD(000),   "BEX3",         TYPE_B},
     {OP_IO3|MOD(000),   "BEX3",         TYPE_BE},
     {OP_IO4|MOD(077),   "BA4",          TYPE_B},
@@ -354,8 +354,8 @@ t_opcode            base_ops[] = {
     {OP_IO4|MOD(002),   "BCB4",         TYPE_B},
     {OP_IO4|MOD(004),   "BER4",         TYPE_B},
     {OP_IO4|MOD(010),   "BEF4",         TYPE_B},
-    {OP_IO4|MOD(020),   "BWL4",         TYPE_B},
-    {OP_IO4|MOD(040),   "BNT4",         TYPE_B},
+    {OP_IO4|MOD(020),   "BNT4",         TYPE_B},
+    {OP_IO4|MOD(040),   "BWL4",         TYPE_B},
     {OP_IO4|MOD(000),   "BEX4",         TYPE_B},
     {OP_IO4|MOD(000),   "BEX4",         TYPE_BE},
     {OP_A,              "A",            TYPE_2},

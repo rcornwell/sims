@@ -121,3 +121,13 @@ int chan_cmd(uint16 dev, uint16 cmd, uint32 addr);
                                           /* S - Floating sub */
                                           /* M - Floating mul */
                                           /* D - Floating div */
+
+/* Flags for chan_io_status. */
+#define IO_CHS_NORDY 0001       /* Unit not Ready */
+#define IO_CHS_BUSY  0002       /* Unit or channel Busy */
+#define IO_CHS_CHECK 0004       /* Data check */
+#define IO_CHS_COND  0010       /* Condition */
+#define IO_CHS_NOTR  0020       /* No transfer */
+#define IO_CHS_WRL   0040       /* Wrong length */
+#define IO_CHS_DONE  0100       /* Device done */
+#define IO_CHS_OVER  0200       /* Channel busy on overlap processing */

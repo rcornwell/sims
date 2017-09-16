@@ -228,6 +228,7 @@ typedef struct dib DIB;
 #define DEBUG_EXP       0x0000040       /* Show error conditions */
 #define DEBUG_SNS       0x0000080       /* Shows sense data for 7909 devs */
 #define DEBUG_CTSS      0x0000100       /* Shows CTSS specail instructions */
+#define DEBUG_PRIO      0x0000100       /* Debug Priority mode on 7010 */
 #define DEBUG_PROT      0x0000200       /* Protection traps */
 
 extern DEBTAB dev_debug[];

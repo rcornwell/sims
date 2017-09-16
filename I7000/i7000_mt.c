@@ -119,8 +119,10 @@ void                mt_ini(UNIT *, t_bool);
 t_stat              mt_reset(DEVICE *);
 t_stat              mt_attach(UNIT *, CONST char *);
 t_stat              mt_detach(UNIT *);
-t_stat              mt_rew(UNIT * uptr, int32 val, CONST char *cptr, void *desc);
-t_stat              mt_tape_density(UNIT * uptr, int32 val, CONST char *cptr, void *desc);
+t_stat              mt_rew(UNIT * uptr, int32 val, CONST char *cptr,
+                        void *desc);
+t_stat              mt_tape_density(UNIT * uptr, int32 val, CONST char *cptr,
+                        void *desc);
 t_stat              mt_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
                         const char *cptr);
 const char          *mt_description (DEVICE *dptr);
@@ -388,8 +390,9 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
     /* Check status of the drive */
 
     /* Can't do nothing if controller is busy */
-    if (mt_chan[chan] & MTC_BSY)
+    if (mt_chan[chan] & MTC_BSY) {
         return SCPE_BUSY;
+    }
     /* If drive is offline or not attached return not ready */
     if ((uptr->flags & (UNIT_ATT | MTUF_ONLINE)) !=
         (UNIT_ATT | MTUF_ONLINE)) {
@@ -402,8 +405,9 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
         /* Return indication if not ready and doing TRS */
         if (cmd == IO_TRS) {
             return SCPE_IOERR;
-        } else
+        } else {
             return SCPE_BUSY;
+        }
     }
     uptr->u5 &= ~(MT_CMDMSK | MT_RDY);
     time = us_to_ticks(12000);
@@ -428,8 +432,8 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
 #endif
         chan_set_sel(chan, 0);
         chan_clear_status(chan);
-        mt_chan[chan] &= MTC_BSY;
-        mt_chan[chan] |= MTC_SEL | unit;
+        mt_chan[chan] = 0;
+        mt_chan[chan] |= MTC_BSY | MTC_SEL | unit;
         uptr->u5 &= ~(MT_RM|MT_EOR|MT_EGAP);
         uptr->u6 = -1;
         uptr->hwmark = -1;
@@ -467,8 +471,8 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
         uptr->hwmark = 0;
         chan_set_sel(chan, 1);
         chan_clear_status(chan);
-        mt_chan[chan] &= MTC_BSY;
-        mt_chan[chan] |= MTC_SEL | unit;
+        mt_chan[chan] = 0;
+        mt_chan[chan] |= MTC_BSY | MTC_SEL | unit;
         uptr->u5 &= ~(MT_MARK | MT_EOT);
 #if I7010 | I7080
         chan_set(chan, STA_TWAIT);
@@ -487,8 +491,8 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
         uptr->u5 |= MT_RDB;
         chan_set_sel(chan, 0);
         chan_clear_status(chan);
-        mt_chan[chan] &= MTC_BSY;
-        mt_chan[chan] |= MTC_SEL | unit;
+        mt_chan[chan] = 0;
+        mt_chan[chan] |= MTC_BSY | MTC_SEL | unit;
         uptr->u5 &= ~(MT_RM|MT_EOR|MT_EGAP);
         uptr->u6 = -1;
         uptr->hwmark = -1;
@@ -511,6 +515,10 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
         uptr->u5 |= MT_WEF;
         mt_chan[chan] |= MTC_BSY;
 #if I7010 | I7080
+        chan_set_sel(chan, 1);
+        chan_clear_status(chan);
+        mt_chan[chan] = 0;
+        mt_chan[chan] |= MTC_BSY | MTC_SEL | unit;
         chan_set(chan, STA_TWAIT);
 #endif
         sim_debug(DEBUG_CMD, dptr, "WEF unit=%d\n", unit);
@@ -527,7 +535,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
             return SCPE_OK;
         }
         uptr->u5 |= MT_BSR;
-        mt_chan[chan] |= MTC_BSY;
+        mt_chan[chan] = MTC_BSY;
         sim_debug(DEBUG_CMD, dptr, "BSR unit=%d\n", unit);
         break;
 
@@ -542,7 +550,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
             return SCPE_OK;
         }
         uptr->u5 |= MT_BSF;
-        mt_chan[chan] |= MTC_BSY;
+        mt_chan[chan] = MTC_BSY;
         sim_debug(DEBUG_CMD, dptr, "BSF unit=%d\n", unit);
         break;
 
@@ -551,7 +559,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
             time = us_to_ticks(21000);
         uptr->u5 &= ~(MT_MARK|MT_EGAP);
         uptr->u5 |= MT_SKR;
-        mt_chan[chan] |= MTC_BSY;
+        mt_chan[chan] = MTC_BSY;
         sim_debug(DEBUG_CMD, dptr, "SKR unit=%d\n", unit);
         break;
 
@@ -560,7 +568,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
 #ifdef I7080
         uptr->u5 &= ~(MT_MARK);
         uptr->u5 |= MT_ERG;
-        mt_chan[chan] |= MTC_BSY;
+        mt_chan[chan] = MTC_BSY;
         chan_set(chan, STA_TWAIT);
         break;
 #else
@@ -579,7 +587,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
         }
         time = 1000;
         uptr->u5 |= MT_REW;
-        mt_chan[chan] |= MTC_BSY;
+        mt_chan[chan] = MTC_BSY;
         sim_debug(DEBUG_CMD, dptr, "REW unit=%d\n", unit);
         sim_cancel(uptr);
         sim_activate(uptr, time);
@@ -589,7 +597,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
         uptr->u5 &= ~(MT_EOT|MT_MARK|MT_EGAP);
         chan_clear_status(chan);
         uptr->u5 |= MT_RUN;
-        mt_chan[chan] |= MTC_BSY;
+        mt_chan[chan] = MTC_BSY;
         time = 1000;
         sim_debug(DEBUG_CMD, dptr, "RUN unit=%d\n", unit);
         sim_cancel(uptr);
@@ -709,6 +717,9 @@ t_stat mt_error(UNIT * uptr, int chan, t_stat r, DEVICE * dptr)
     case MTSE_EOM:              /* end of medium */
         uptr->u5 |= MT_EOT;
         sim_debug(DEBUG_EXP, dptr, "EOT ");
+#ifdef I7010
+        chan_set_attn(chan);    /* Set error */
+#endif
         break;
     }
     return SCPE_OK;
@@ -735,37 +746,32 @@ t_stat mt_srv(UNIT * uptr)
 
     /* Channel has disconnected, abort current read. */
     if ((mt_chan[chan] & 037) == (MTC_SEL | unit) &&
-                 chan_stat(chan, DEV_DISCO)) {
+            chan_stat(chan, DEV_DISCO)) {
         uptr->u5 &= ~MT_CMDMSK;
-#ifdef I7010
-        if ((cmd == MT_WRS || cmd == MT_WRSB) && uptr->u6 > 0) {
-            reclen = uptr->hwmark;
-#else
         if (cmd == MT_WRS || cmd == MT_WRSB) {
             if (uptr->u6 > 0) {
                  reclen = uptr->hwmark;
-#endif
                  uptr->u3 += GAP_LEN;
                  sim_debug(DEBUG_DETAIL, dptr,
-                        "Write flush unit=%d %s Block %d chars %d\n",
-                         unit, (cmd == MT_WRS) ? "BCD" : "Binary", reclen, uptr->u3);
+                        "Write flush unit=%d %s Block %d chars\n",
+                         unit, (cmd == MT_WRS) ? "BCD" : "Binary", reclen);
                  r = sim_tape_wrrecf(uptr, &mt_buffer[bufnum][0], reclen);
                  mt_error(uptr, chan, r, dptr);      /* Record errors */
-#ifndef I7010
             }
-#endif
         } else if (cmd == MT_RDS || cmd == MT_RDSB) {
             sim_debug(DEBUG_DETAIL, dptr,
-                        "Read flush unit=%d %s Block %d chars %d\n",
-                         unit, (cmd == MT_RDS) ? "BCD" : "Binary", reclen, uptr->u3);
+                        "Read flush unit=%d %s Block %d chars\n",
+                         unit, (cmd == MT_RDS) ? "BCD" : "Binary", reclen);
             /* Keep moving until end of block */
             if (uptr->u6 < (int32)uptr->hwmark ) {
-                uptr->u3 += uptr->hwmark-uptr->u6;
+                reclen -= uptr->u6;
+                uptr->u3 += reclen;
                 uptr->u5 |= MT_SKIP|MT_IDLE;
                 uptr->u6 = 0;
                 uptr->hwmark = 0;
                 chan_clear(chan, DEV_DISCO | DEV_WEOR);
-                sim_activate(uptr, (uptr->hwmark-uptr->u6) * T1_us);
+                sim_activate(uptr, reclen * T1_us);
+                mt_chan[chan] = 0;
                 return SCPE_OK;
             } else {
 #ifndef I7010
@@ -780,12 +786,13 @@ t_stat mt_srv(UNIT * uptr)
 #endif
             }
         }
-        sim_activate(uptr, T2_us);
+        /* Allow time for tape to be restarted, before stop */
+        sim_activate(uptr,  us_to_ticks(500));
         uptr->u6 = 0;
         uptr->hwmark = 0;
         sim_debug(DEBUG_CHAN, dptr, "Disconnect unit=%d\n", unit);
         uptr->u5 |= MT_IDLE|MT_RDY;
-        mt_chan[chan] &= MTC_BSY;
+        mt_chan[chan] = 0;
         chan_clear(chan, DEV_DISCO | DEV_WEOR | DEV_SEL);
 #if I7010 | I7080
         chan_clear(chan, STA_TWAIT);
@@ -808,9 +815,10 @@ t_stat mt_srv(UNIT * uptr)
 #else
         chan_clear(chan, DEV_SEL|STA_TWAIT);
 #endif
-        mt_chan[chan] &= MTC_BSY;       /* Clear all but busy */
-        sim_debug(DEBUG_DETAIL, dptr, "Skip unit=%d %d\n", unit, uptr->u3);
-        sim_activate(uptr,  T2_us);
+        mt_chan[chan] = 0; 
+        sim_debug(DEBUG_DETAIL, dptr, "Skip unit=%d\n", unit);
+        /* Allow time for tape to be restarted, before stop */
+        sim_activate(uptr,  us_to_ticks(500));
         return SCPE_OK;
 
     case MT_RDS:
@@ -818,7 +826,6 @@ t_stat mt_srv(UNIT * uptr)
          /* Fall through */
 
     case MT_RDSB:
-#ifndef I7010
         /* Post EOR */
         if (uptr->u5 & MT_EOR) {
             sim_debug(DEBUG_DETAIL, dptr, "Read unit=%d post EOR\n", unit);
@@ -827,7 +834,7 @@ t_stat mt_srv(UNIT * uptr)
             sim_activate(uptr, T1_us);
             return SCPE_OK;
         }
-#endif
+
         /* If tape mark pending, return it */
         if (chan_test(chan, DEV_FULL) == 0 && uptr->u5 & MT_MARK) {
             sim_debug(DEBUG_DETAIL, dptr, "Read unit=%d post ", unit);
@@ -849,7 +856,7 @@ t_stat mt_srv(UNIT * uptr)
         }
         /* If at end of record, fill buffer */
         if (uptr->u6 == uptr->hwmark) {
-            sim_debug(DEBUG_DETAIL, dptr, "Read unit=%d %d", unit,uptr->u3);
+            sim_debug(DEBUG_DETAIL, dptr, "Read unit=%d ", unit);
             uptr->u3 += GAP_LEN;
             if ((r = sim_tape_rdrecf(uptr, &mt_buffer[bufnum][0], &reclen,
                                 BUFFSIZE)) != MTSE_OK) {
@@ -865,15 +872,16 @@ t_stat mt_srv(UNIT * uptr)
                     if (r == MTSE_TMK && astmode) {
                         sim_debug(DEBUG_DETAIL, dptr, "Read TM ");
                         ch = mode?017:054;
-                        chan_write_char(chan, &ch, DEV_REOR);
-                        chan_set_eof(chan);
+                        chan_write_char(chan, &ch, 0);
+                        chan_set_attn(chan);
+                        chan_set(chan, DEV_REOR);
                         chan_clear(chan, STA_TWAIT);
                         if (mode) {
                            sim_activate(uptr, T1_us);
                            return SCPE_OK;
                         }
+                        chan_set_error(chan);
                     }
-                    chan_set_error(chan);
 #else
                     chan_set_attn(chan);
 #endif
@@ -901,9 +909,9 @@ t_stat mt_srv(UNIT * uptr)
             if (astmode)
                 ch = 054;
 #else
-            chan_set_error(chan);
             chan_set_attn(chan);
 #endif
+            chan_set_error(chan);
         }
 #if I7090 | I704 | I701
         /* Not needed on decimal machines */
@@ -920,6 +928,12 @@ t_stat mt_srv(UNIT * uptr)
                      mt_buffer[bufnum][uptr->u6] = 0;
                 }
             }
+        }
+#endif
+#ifdef I7010
+        if (mode) {
+            if (ch == 0120)
+                ch = 0;
         }
 #endif
         ch &= 077;
@@ -941,14 +955,9 @@ t_stat mt_srv(UNIT * uptr)
         case DATA_OK:
             sim_debug(DEBUG_DATA, dptr, "Read data unit=%d %d %02o\n",
                       unit, uptr->u6, ch);
-            if (uptr->u6 >= (int32)uptr->hwmark) { /* In IRG */
+            if (uptr->u6 >= (int32)uptr->hwmark)  /* In IRG */
                 uptr->u5 |= MT_EOR;
-#ifdef I7010
-                (void)chan_write_char(chan, &ch, DEV_WEOR);
-#endif
-                sim_activate(uptr, T1_us);
-            } else
-                sim_activate(uptr, T1_us);
+            sim_activate(uptr, T1_us);
             break;
 
         case TIME_ERROR:
@@ -969,7 +978,7 @@ t_stat mt_srv(UNIT * uptr)
         /* fall through */
     case MT_WRSB:
         if (uptr->u5 & MT_EGAP) {
-            sim_debug(DEBUG_DETAIL, dptr, "Write extended Gap unit=%d %d\n", unit, uptr->u3);
+            sim_debug(DEBUG_DETAIL, dptr, "Write extended Gap unit=%d\n", unit);
             uptr->u5 &= ~MT_EGAP;
             r = sim_tape_wrgap(uptr, 35);
             sim_activate(uptr, 10*T3_us);
@@ -979,7 +988,7 @@ t_stat mt_srv(UNIT * uptr)
         switch (chan_read_char(chan, &ch,
                           (uptr->u6 > BUFFSIZE) ? DEV_WEOR : 0)) {
         case TIME_ERROR:
-#ifdef I7010
+#if I7090 | I701 | I704
             /* If no data was written, simulate a write gap */
             if (uptr->u6 == 0) {
                 r = sim_tape_wrgap(uptr, 35);
@@ -992,8 +1001,8 @@ t_stat mt_srv(UNIT * uptr)
             if (uptr->u6 > 0) { /* Only if data in record */
                 reclen = uptr->hwmark;
                 sim_debug(DEBUG_DETAIL, dptr,
-                        "Write unit=%d %s Block %d chars %d\n",
-                         unit, (cmd == MT_WRS) ? "BCD" : "Binary", reclen, uptr->u3);
+                        "Write unit=%d %s Block %d chars\n",
+                         unit, (cmd == MT_WRS) ? "BCD" : "Binary", reclen);
                 r = sim_tape_wrrecf(uptr, &mt_buffer[bufnum][0], reclen);
                 uptr->u3 += GAP_LEN;
                 uptr->u6 = 0;
@@ -1108,13 +1117,13 @@ t_stat mt_srv(UNIT * uptr)
 
     case MT_WEF:
         if (uptr->u5 & MT_EGAP) {
-            sim_debug(DEBUG_DETAIL, dptr, "Write extended Gap unit=%d %d\n", unit, uptr->u3);
+            sim_debug(DEBUG_DETAIL, dptr, "Write extended Gap unit=%d\n", unit);
             uptr->u5 &= ~MT_EGAP;
             r = sim_tape_wrgap(uptr, 35);
             sim_activate(uptr, 10*T3_us);
             return SCPE_OK;
         }
-        sim_debug(DEBUG_DETAIL, dptr, "Write Mark unit=%d %d\n", unit, uptr->u3);
+        sim_debug(DEBUG_DETAIL, dptr, "Write Mark unit=%d\n", unit);
         uptr->u5 &= ~(MT_CMDMSK|MT_MARK);
         uptr->u5 |= (MT_RDY);
         r = sim_tape_wrtmk(uptr);
@@ -1122,12 +1131,12 @@ t_stat mt_srv(UNIT * uptr)
         mt_chan[chan] &= ~MTC_BSY;
         sim_activate(uptr, T2_us);
 #if I7010 | I7080
-        chan_clear(chan, STA_TWAIT);
+        chan_set(chan, DEV_REOR);
 #endif
         break;
 
     case MT_BSR:
-        sim_debug(DEBUG_DETAIL, dptr, "Backspace rec unit=%d %d ", unit, uptr->u3);
+        sim_debug(DEBUG_DETAIL, dptr, "Backspace rec unit=%d ", unit);
         /* Clear tape mark, command, idle since we will need to change dir */
         uptr->u5 &= ~(MT_CMDMSK | MT_EOT | MT_RDY);
         r = sim_tape_sprecr(uptr, &reclen);
@@ -1156,8 +1165,7 @@ t_stat mt_srv(UNIT * uptr)
             uptr->u3 -= GAP_LEN;
         /* If we hit mark or end of tape */
         if (r == MTSE_TMK || r == MTSE_BOT) {
-            sim_debug(DEBUG_DETAIL, dptr, "Backspace file unit=%d %d\n",
-                      unit, uptr->u3);
+            sim_debug(DEBUG_DETAIL, dptr, "Backspace file unit=%d\n", unit);
             uptr->u5 &= ~MT_CMDMSK;
             mt_chan[chan] &= ~MTC_BSY;
             sim_activate(uptr, T2_us);
@@ -1241,7 +1249,7 @@ t_stat mt_srv(UNIT * uptr)
         return SCPE_OK;
 
     case MT_HREW:
-        sim_debug(DEBUG_DETAIL, dptr, "Rewind unit=%d HS %d\n", unit, uptr->u3);
+        sim_debug(DEBUG_DETAIL, dptr, "Rewind unit=%d HS\n", unit);
         if ((uptr->u3 / ((uptr->flags & MTUF_LDN) ? 200 : 555) / 1200) > 2) {
            uptr->u3 -= (uptr->flags & MTUF_LDN) ? 1666 :4625;
            sim_activate(uptr, us_to_ticks(16000));
@@ -1253,7 +1261,7 @@ t_stat mt_srv(UNIT * uptr)
         return SCPE_OK;
 
     case MT_LREW:
-        sim_debug(DEBUG_DETAIL, dptr, "Rewind unit=%d LS %d\n", unit, uptr->u3);
+        sim_debug(DEBUG_DETAIL, dptr, "Rewind unit=%d LS\n", unit);
         if (uptr->u3 > 0) {
            uptr->u3 -= (uptr->flags & MTUF_LDN) ? 373 :1036;
            sim_activate(uptr, us_to_ticks(16000));
@@ -1291,7 +1299,8 @@ mt_boot(int32 unit_num, DEVICE * dptr)
         return STOP_IONRDY;
 
 #if I7090 | I704 | I701
-    r = sim_tape_rdrecf(uptr, &mt_buffer[GET_DEV_BUF(dptr->flags)][0], &reclen, BUFFSIZE);
+    r = sim_tape_rdrecf(uptr, &mt_buffer[GET_DEV_BUF(dptr->flags)][0], &reclen,
+         BUFFSIZE);
     if (r != SCPE_OK)
         return r;
     uptr->u6 = 0;
