@@ -58,11 +58,11 @@ Latest status for I7000 Cpus:
    * Fort2 unfinished.  
 
 ## i7010
+   * PR155 works.
+   * PR108 works.
+   * Most Diags appear to pass without serious error.
    * Protection mode has some errors left.  
    * Protection mode does not handle setting H or L to 0.  
-   * T020 tape diags fail.  
-   * Disks may work.  
-   * PR108 not tested.  
 
 ## i7070
    * Will load Diags, need to remember how to run them to run
@@ -88,6 +88,9 @@ Latest status for I7000 Cpus:
 
    DFDP/DFMP     Sometimes off by +/-1 or 2 in least signifigant
 		 part of result.  
+   EAD           +n + -n should be -0 is +0
+
+   Not all channel controls working for 9P01C.
 
    HTx	Not sure what problems are, does not quite work.  
 
