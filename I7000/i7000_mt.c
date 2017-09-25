@@ -514,7 +514,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
         }
         uptr->u5 |= MT_WEF;
         mt_chan[chan] |= MTC_BSY;
-#if I7010 | I7080
+#if I7010 
         chan_set_sel(chan, 1);
         chan_clear_status(chan);
         mt_chan[chan] = 0;
@@ -748,9 +748,9 @@ t_stat mt_srv(UNIT * uptr)
     if ((mt_chan[chan] & 037) == (MTC_SEL | unit) &&
             chan_stat(chan, DEV_DISCO)) {
         uptr->u5 &= ~MT_CMDMSK;
+        reclen = uptr->hwmark;
         if (cmd == MT_WRS || cmd == MT_WRSB) {
             if (uptr->u6 > 0) {
-                 reclen = uptr->hwmark;
                  uptr->u3 += GAP_LEN;
                  sim_debug(DEBUG_DETAIL, dptr,
                         "Write flush unit=%d %s Block %d chars\n",

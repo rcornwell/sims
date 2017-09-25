@@ -220,8 +220,8 @@ load_rec(uint8 *image) {
     while(addr > EMEMSIZE) addr -= EMEMSIZE;    /* Wrap around */
     len = bcd_bin[image[14] & 0xf];
     len += 10 * bcd_bin[image[13] & 0xf];
-    if (len > 64)
-        len = 64;
+    if (len > 65)
+        len = 65;
     if (len == 0) {
         IC = addr;
         return 1;

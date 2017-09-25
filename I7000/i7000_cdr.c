@@ -203,6 +203,7 @@ cdr_srv(UNIT *uptr) {
                 (uptr->u5 & URCSTA_CARD) == 0) {
         switch(sim_read_card(uptr)) {
         case SCPE_EOF:
+             sim_debug(DEBUG_DETAIL, &cdr_dev, "%d: EOF\n", u);
         case SCPE_UNATT:
              chan_set_eof(chan);
              chan_set_attn(chan);
@@ -211,6 +212,7 @@ cdr_srv(UNIT *uptr) {
              uptr->u5 &= ~(URCSTA_BUSY|URCSTA_READ);
              return SCPE_OK;
         case SCPE_IOERR:
+             sim_debug(DEBUG_DETAIL, &cdr_dev, "%d: ERF\n", u);
              uptr->u5 |= URCSTA_ERR;
              uptr->u5 &= ~(URCSTA_BUSY|URCSTA_READ);
              chan_set_attn(chan);
@@ -260,7 +262,10 @@ cdr_srv(UNIT *uptr) {
         if (ch == 0x7f) {
 #ifdef I7080
              uptr->u5 &= ~(URCSTA_READ|URCSTA_BUSY);
+             sim_debug(DEBUG_DETAIL, &cdr_dev, "%d: bad punch %d\n", u,
+                       uptr->u4);
              chan_set_attn(chan);
+             chan_set_error(chan);
              chan_clear(chan, DEV_SEL);
 #else
              uptr->u5 |= URCSTA_ERR;

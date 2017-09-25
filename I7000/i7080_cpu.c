@@ -59,6 +59,7 @@
 */
 
 #include "i7080_defs.h"
+#include "sim_card.h"
 #include <math.h>
 
 #define UNIT_V_MSIZE    (UNIT_V_UF + 0)
@@ -95,7 +96,7 @@ struct InstHistory
     uint8               reg;
     uint8               op;
     uint16              flags;
-    uint8               store[32];
+    uint8               store[256];
 };
 
 t_stat              cpu_ex(t_value * vptr, t_addr addr, UNIT * uptr,
@@ -543,10 +544,12 @@ stop_cpu:
                            if (temp == 0x20) /* Channel 40 */
                                addr = 0x400;
                      }
+                     sim_debug(DEBUG_TRAP, &cpu_dev, "Trap on channel %x\n", addr);
                      irqflags &= ~temp;
                      load_cpu(addr, 0);
                      intprog = 1;
                      spc = 0x200;
+                     sim_debug(DEBUG_TRAP, &cpu_dev, "Trap to addr %d\n", IC);
                  }
                  /* Make sure IC is on correct boundry */
                  if ((IC % 5) != 4) {
@@ -877,10 +880,12 @@ stop_cpu:
                      switch(reg) {
                      case 7:      /* C */
                              /* Develop parity */
-                             t = (t ^ (t << 3)) & 070; /* 654 ^ 321 */
-                             t = (t ^ (t << 2)) & 0140; /* C6 ^ 54 */
-                             t ^= ((t << 1) & 0100);
+                             t = sim_parity_table[t & 077];
                              t ^= M[MAC % EMEMSIZE] & 0100; /* C654 */
+                             if (t == 0)
+                                 IC = MA;
+                             break;
+
                      case 1:      /* 1 */
                      case 2:      /* 2 */
                      case 3:      /* 4 */
@@ -1042,6 +1047,12 @@ stop_cpu:
                          MAC--;
                          addr = next_addr[addr];
                          sim_interval --;    /* count down */
+                         if (sim_interval <= 0) {        /* event queue? */
+                             reason = sim_process_event();
+                             if (reason != 0)
+                                break;
+                             chan_proc();
+                         }
                      }
                      /* Insert a mark at new end */
                      AC[addr] = 0;
@@ -2213,7 +2224,7 @@ stop_cpu:
              if (hst_lnt) {  /* history enabled? */
                   hst[hst_p].flags = flags;
                   addr = get_acstart(reg);
-                  for (t = 0; t < 32; t++) {
+                  for (t = 0; t < 254; t++) {
                      hst[hst_p].store[t] = AC[addr];
                      addr = next_addr[addr];
                      if (hst[hst_p].store[t] == 0)
@@ -3336,8 +3347,7 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
     di = hst_p - lnt;           /* work forward */
     if (di < 0)
         di = di + hst_lnt;
-    fprintf(st,
-"IC      OP   MA      REG\n\n");
+    fprintf(st, "IC      OP   MA      REG\n\n");
     for (k = 0; k < lnt; k++) { /* print specified */
         h = &hst[(++di) % hst_lnt];     /* entry pointer */
         if (h->ic & HIST_PC) {  /* instruction? */
@@ -3349,7 +3359,7 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
             sim_eval[3] = (h->inst >> (1 * 6)) & 077;
             sim_eval[4] = h->inst & 077;
             (void)fprint_sym (st, h->ic, sim_eval, &cpu_unit, SWMASK('M'));
-            for(len = 0; len < 32 && (h->store[len] & 077) != 0; len++);
+            for(len = 0; len < 256 && (h->store[len] & 077) != 0; len++);
             fprintf(st, "\t%-2d %c%c %c%c %c@", len,
                     (h->flags & AZERO)?'Z':' ', (h->flags & ASIGN)?'-':'+',
                     (h->flags & BZERO)?'Z':' ', (h->flags & BSIGN)?'-':'+',

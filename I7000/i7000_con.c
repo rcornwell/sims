@@ -56,18 +56,10 @@ con_data[NUM_DEVS_CON];
 uint32              con_cmd(UNIT *, uint16, uint16);
 void                con_ini(UNIT *, t_bool);
 t_stat              con_srv(UNIT *);
-t_stat              con_reset(DEVICE *);
-t_stat              con_attach(UNIT *, CONST char *);
-t_stat              con_detach(UNIT *);
 t_stat              con_help(FILE *, DEVICE *, UNIT *, int32, const char *);
 const char         *con_description(DEVICE *dptr);
 
 extern char         ascii_to_six[128];
-extern t_stat       chan_boot(int32, DEVICE *);
-#ifdef I7070
-t_stat              cdr_setload(UNIT *, int32, char *, void *);
-t_stat              cdr_getload(FILE *, UNIT *, int32, void *);
-#endif
 
 UNIT                con_unit[] = {
     {UDATA(con_srv, UNIT_S_CHAN(CHAN_CHUREC), 0), 0},   /* A */
@@ -75,7 +67,7 @@ UNIT                con_unit[] = {
 
 DEVICE              con_dev = {
     "INQ", con_unit, NULL, NULL,
-    NUM_DEVS_LPR, 8, 15, 1, 8, 8,
+    NUM_DEVS_CON, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, NULL, NULL, NULL,
     &con_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &con_help, NULL, NULL, &con_description

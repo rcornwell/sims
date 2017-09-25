@@ -338,6 +338,9 @@ int chan_decr_reccnt(int chan) {
             }
         }
    }
+    if (chan_dev.dctrl & (0x0100 << chan))
+           sim_debug(DEBUG_DETAIL, &chan_dev, "chan %d reccnt- %02o %02o %02o\n",
+                 chan, AC[unit + 3], AC[unit + 2], AC[unit + 1]);
    if (AC[unit + 1] == 10 && AC[unit + 2] == 10 && AC[unit + 3] == 10)
         return 1;
    return 0;
@@ -475,11 +478,16 @@ chan_proc()
              case CHAN_7621:
              case CHAN_7908:
                   irqflags |= 1 << chan;
+                  if (chan_dev.dctrl & cmask)
+                      sim_debug(DEBUG_EXP, &chan_dev, "chan %d IRQ %x\n",
+                              chan, irqdev[chan]);
                   break;
              }
              chan_flags[chan] &= ~(CHS_ATTN|STA_ACTIVE|STA_WAIT|DEV_WRITE);
+             cmd[chan] &= ~CHAN_RECCNT;
              unit = irqdev[chan];
-             ioflags[unit/8] |= (1 << (unit & 07));
+             if (chan_flags[chan] & CHS_EOF)
+                 ioflags[unit/8] |= (1 << (unit & 07));
              flags |= 0x400; /* Set Any flag */
              /* Disconnect if selected */
              if (chan_flags[chan] & DEV_SEL)
@@ -752,11 +760,11 @@ chan_proc()
 }
 
 void chan_set_attn_inq(int chan) {
-//    inquiry = 1;
+/*    inquiry = 1; */
 }
 
 void chan_clear_attn_inq(int chan) {
- //   inquiry = 0;
+/*    inquiry = 0; */
 }
 
 
@@ -872,8 +880,7 @@ chan_cmd(uint16 dev, uint16 dcmd, uint32 addr)
         case IO_WEF:
         case IO_ERG:
         case IO_BSR:
-                unit = 512 + chan_unit[chan].u3 * 32;
-                if (AC[unit+1] == 10 && AC[unit+2] == 10 && AC[unit+3] == 10) {
+                if (chan_zero_reccnt(chan)) {
                     /* Just check if unit ready */
                     r = chan_issue_cmd(chan, OP_TRS, dev);
                     if (r == SCPE_OK)
@@ -914,7 +921,7 @@ chan_cmd(uint16 dev, uint16 dcmd, uint32 addr)
             AC[unit+16+5] = 10; /* Set digit next to 0 */
             AC[unit+24+5] = 10;
             store_addr(caddr[chan], 8 + unit);
-            if (cmd[chan] & CHAN_RECCNT && chan_decr_reccnt(chan)) {
+            if (cmd[chan] & CHAN_RECCNT && chan_zero_reccnt(chan)) {
                 cmd[chan] &= ~CHAN_RECCNT;
             }
             break;
@@ -928,10 +935,11 @@ chan_cmd(uint16 dev, uint16 dcmd, uint32 addr)
         case IO_WEF:
         case IO_ERG:
         case IO_BSR:
-            if (cmd[chan] & CHAN_RECCNT && chan_decr_reccnt(chan)) {
+            if (cmd[chan] & CHAN_RECCNT && chan_zero_reccnt(chan)) {
                 cmd[chan] &= ~CHAN_RECCNT;
             }
             if (cmd[chan] & CHAN_RECCNT) {
+                chan_decr_reccnt(chan);
                 cmd[chan] &= CHAN_RECCNT;
                 cmd[chan] |= (op << 9) | CHAN_CMD;
             }
