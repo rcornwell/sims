@@ -147,8 +147,8 @@ static const uint16          ascii_to_hol_029[128] = {
    /* T      1      2      3      4      5      6      7   */
     0x200, 0x100, 0x080, 0x040, 0x020, 0x010, 0x008, 0x004,
    /*   8      9      :      ;      <      =      >      ? */
-   /* 8      9      58     Y68    X68   T85      68     28 */
-    0x002, 0x001, 0x012, 0x40A, 0x80A, 0x212, 0x00A, 0x082,
+   /* 8      9      58     Y68    X68    T85    T68     78 */
+    0x002, 0x001, 0x012, 0x40A, 0x80A, 0x212, 0x20A, 0x006,
    /*   @      A      B      C      D      E      F      G */
    /*  48    X1     X2     X3     X4     X5     X6     X7  */
     0x022, 0x900, 0x880, 0x840, 0x820, 0x810, 0x808, 0x804,     /* 100 - 137 */
@@ -160,7 +160,7 @@ static const uint16          ascii_to_hol_029[128] = {
     0x404, 0x402, 0x401, 0x280, 0x240, 0x220, 0x210, 0x208,
    /*   X      Y      Z      [      \      ]      ^      _ */
    /* T7     T8     T9     X48    X68    T68    T78    T58 */
-    0x204, 0x202, 0x201, 0x822, 0x20A, 0x20A, 0x406, 0xf000,
+    0x204, 0x202, 0x201, 0x822, 0x20A, 0x20A, 0x406, 0x212,
    /*   `      a      b      c      d      e      f      g */
     0xf000,0xB00, 0xA80, 0xA40, 0xA20, 0xA10, 0xA08, 0xA04,     /* 140 - 177 */
    /*   h      i      j      k      l      m      n      o */
@@ -614,6 +614,7 @@ sim_read_card(UNIT * uptr)
         }
         if (cmpcard(&data->cbuff[0], "raw")) {
             int         j = 0;
+            sim_debug(DEBUG_CARD, dptr, "-octal-");
             for(col = 0, i = 4; col < 80; i++) {
                 if (data->cbuff[i] >= '0' && data->cbuff[i] <= '7') {
                     data->image[col] = (data->image[col] << 3) |
@@ -632,12 +633,15 @@ sim_read_card(UNIT * uptr)
                 }
             }
         } else if (cmpcard(&data->cbuff[0], "eor")) {
+            sim_debug(DEBUG_CARD, dptr, "-eor-");
             data->image[0] = 07;        /* 7/8/9 punch */
             i = 4;
         } else if (cmpcard(&data->cbuff[0], "eof")) {
+            sim_debug(DEBUG_CARD, dptr, "-eof-");
             data->image[0] = 015;       /* 6/7/9 punch */
             i = 4;
         } else if (cmpcard(&data->cbuff[0], "eoi")) {
+            sim_debug(DEBUG_CARD, dptr, "-eoi-");
             data->image[0] = 017;       /* 6/7/8/9 punch */
             i = 4;
         } else {
