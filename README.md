@@ -3,7 +3,7 @@
 
 # Development Simulators.
 
-This is a working copy of my Burroughs B5500, KA10, KI10 and IBM7000 series
+This is a working copy of my Burroughs B5500, Dec KA10, KI10, IBM 360 and IBM7000 series
 simulators for SimH.
 
 # Burroughs B5500
@@ -46,6 +46,29 @@ To do:
    * Add support for IBM 3330 drive to run Waits.  
    * Add support for DC76 for ITS.  
 
+# IBM 360 simulator.
+
+This is a new simulator. There is still much work and testing that needs to be done.
+The goal is to have it run TOS, DOS and OS/360. If there is interest I might try early 
+versions of MTS, and possibly add in 370 paging support.
+
+It supports the following units:
+
+    DASD (Disk)
+    * 2301, 2302, 2303, 2305, 2311, 2314, 3330.
+    
+    Tape
+    * 2400 (7 track and 9 track).
+
+    Unit record
+    * 2540 Card reader
+    * 2540 Card punch
+    * 1403 Line Priner
+    * 1050 Console
+
+    Communications
+    * 2703 with 16 lines of 2741 or 1050. (Todo).
+
 # IBM 7000 simulators.
 Latest status for I7000 Cpus: 
 
@@ -74,7 +97,6 @@ Latest status for I7000 Cpus:
    * TLx instructions implimented, untested, see 8SE  
    * Will boot from card.  
    * Tape system appear to be working.  
-    Tape system will not pass diags.  
 
    * 8CU10B errors:  
 	410, 412, 413, 414, 418, 419, 420-427 error becuase
@@ -84,26 +106,21 @@ Latest status for I7000 Cpus:
 ## i7090
    * Working with exceptions.  
 
-   Known bugs:  
+   * Known bugs:  
 
-   DFDP/DFMP     Sometimes off by +/-1 or 2 in least signifigant
-		 part of result.  
-   EAD           +n + -n should be -0 is +0
-
-   Not all channel controls working for 9P01C.
-
-   HTx	Not sure what problems are, does not quite work.  
-
-   DKx	Sometimes fails diagnostics with missing inhibit of
-	interrupt.   
+      * DFDP/DFMP     Sometimes off by +/-1 or 2 in least signifigant part of result.  
+      * EAD           +n + -n should be -0 is +0
+      * Not all channel skips working for 9P01C.
+      * HTx	Not sure what problems are, does not quite work.  
+      * DKx	Sometimes fails diagnostics with missing inhibit of interrupt.   
 
    * CTSS    works.  
+  
+   * IBSYS   works.  
+  
+   * Stand alone assembler works.  
+
+   * Lisp 1.5 works.  
 
    * Signifigence mode Not tested, Test Code Needed.  
-
-          IOMC diag codes:   
-          first keys 403030 and 001717 does channel E   
-          first keys 203030  test channel A   
-          016000200000  for disk test chan D   
-
 
