@@ -1,0 +1,40 @@
+Current status:
+
+Operating Systems:
+TOS/360:   Will IPL, and read IPL deck. Will not run any test jobs.
+
+DOS/360:   Will IPL disk init job.
+
+OS/360:    Will IPL disk init job.
+
+ibm360_cpu.c:
+    Need to complete floating point and decimal instructions.
+
+ibm360_chan.c
+    Need to move fprintf's to sim_debug functions.
+    Add number of Channels and subchannels as option.
+
+ibm360_cdp.c:
+    Add support for binary mode.
+
+ibm360_cdr.c:
+    Add support for binary mode.
+
+ibm360_com.c:
+    Not implemented.
+
+ibm360_con.c:
+    Appears to be working.
+
+ibm360_dasd.c:
+    Need to complete.
+
+ibm360_lpr.c:
+    Need to add in support for line skip and skip control.
+
+ibm360_mt.c:
+    Appears to be working.
+
+ibm360_sys.c:
+    Need to add in deposit function.
+
