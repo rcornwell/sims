@@ -432,8 +432,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
 #endif
         chan_set_sel(chan, 0);
         chan_clear_status(chan);
-        mt_chan[chan] = 0;
-        mt_chan[chan] |= MTC_BSY | MTC_SEL | unit;
+        mt_chan[chan] = MTC_BSY | MTC_SEL | unit;
         uptr->u5 &= ~(MT_RM|MT_EOR|MT_EGAP);
         uptr->u6 = -1;
         uptr->hwmark = -1;
@@ -471,8 +470,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
         uptr->hwmark = 0;
         chan_set_sel(chan, 1);
         chan_clear_status(chan);
-        mt_chan[chan] = 0;
-        mt_chan[chan] |= MTC_BSY | MTC_SEL | unit;
+        mt_chan[chan] = MTC_BSY | MTC_SEL | unit;
         uptr->u5 &= ~(MT_MARK | MT_EOT);
 #if I7010 | I7080
         chan_set(chan, STA_TWAIT);
@@ -491,8 +489,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
         uptr->u5 |= MT_RDB;
         chan_set_sel(chan, 0);
         chan_clear_status(chan);
-        mt_chan[chan] = 0;
-        mt_chan[chan] |= MTC_BSY | MTC_SEL | unit;
+        mt_chan[chan] = MTC_BSY | MTC_SEL | unit;
         uptr->u5 &= ~(MT_RM|MT_EOR|MT_EGAP);
         uptr->u6 = -1;
         uptr->hwmark = -1;
@@ -513,13 +510,13 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
             return SCPE_IOERR;
         }
         uptr->u5 |= MT_WEF;
-        mt_chan[chan] |= MTC_BSY;
 #if I7010 
         chan_set_sel(chan, 1);
         chan_clear_status(chan);
-        mt_chan[chan] = 0;
-        mt_chan[chan] |= MTC_BSY | MTC_SEL | unit;
+        mt_chan[chan] = MTC_BSY | MTC_SEL | unit;
         chan_set(chan, STA_TWAIT);
+#else
+        mt_chan[chan] = MTC_BSY;
 #endif
         sim_debug(DEBUG_CMD, dptr, "WEF unit=%d\n", unit);
         break;
@@ -771,7 +768,6 @@ t_stat mt_srv(UNIT * uptr)
                 uptr->hwmark = 0;
                 chan_clear(chan, DEV_DISCO | DEV_WEOR);
                 sim_activate(uptr, reclen * T1_us);
-                mt_chan[chan] = 0;
                 return SCPE_OK;
             } else {
 #ifndef I7010

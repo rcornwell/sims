@@ -18,7 +18,7 @@ i7090:          Working with exceptions.
 
                 CTSS    works.
 
-                Share Lisp 1.5 does not boot.
+                Share Lisp 1.5 works.
 
                 Signifigence mode Not tested Need.
 
@@ -42,7 +42,6 @@ i7080:          Sort of working.
                 TLx instructions implimented, untested, see 8SE
                 Will boot from card.
                 Tape system appear to be working.
-                    Tape system will not pass diags.
 
                 8CU10B errors:
                         410, 412, 413, 414, 418, 419, 420-427 error becuase
