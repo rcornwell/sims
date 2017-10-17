@@ -1604,6 +1604,18 @@ I701   = ${I7000D}/i701_cpu.c ${I7000D}/i701_sys.c ${I7000D}/i701_chan.c \
 I701_OPT = -I $(I7000D) -DUSE_INT64 -DI701 -DUSE_SIM_CARD
 
 #
+# Emulator source files and compile time options
+#
+IBM360D = IBM360
+IBM360 = ${IBM360D}/ibm360_cpu.c ${IBM360D}/ibm360_sys.c \
+	 ${IBM360D}/ibm360_con.c ${IBM360D}/ibm360_chan.c \
+	 ${IBM360D}/ibm360_cdr.c ${IBM360D}/ibm360_cdp.c \
+         ${IBM360D}/ibm360_mt.c ${IBM360D}/ibm360_lpr.c \
+	 ${IBM360D}/ibm360_dasd.c ${IBM360D}/ibm360_com.c
+IBM360_OPT = -I $(IBM360D) -DIBM360 -DUSE_SIM_CARD
+
+
+#
 # Build everything (not the unsupported/incomplete or experimental simulators)
 #
 ALL = pdp1 pdp4 pdp7 pdp8 pdp9 pdp15 pdp11 pdp10 \
@@ -2044,6 +2056,12 @@ i701 : $(BIN)i701$(EXE)
 ${BIN}i701${EXE} : ${I701} ${SIM} 
 	${MKDIRBIN}
 	${CC} ${I701} ${SIM} ${I701_OPT} $(CC_OUTSPEC) ${LDFLAGS}
+
+ibm360: $(BIN)ibm360$(EXE)
+
+${BIN}ibm360${EXE}: ${IBM360} ${SIM}
+	${MKDIRBIN}
+	${CC} ${IBM360} ${SIM} ${IBM360_OPT} $(CC_OUTSPEC) ${LDFLAGS}
 
 
 

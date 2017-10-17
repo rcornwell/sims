@@ -119,6 +119,7 @@
 #include <string.h>
 #include <errno.h>
 #include <limits.h>
+#include <ctype.h>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -180,16 +181,28 @@ extern "C" {
 
 /* Length specific integer declarations */
 
+/* Handle the special/unusual cases first with everything else leveraging stdints.h */
 #if defined (VMS)
 #include <ints.h>
-#else
-typedef signed char     int8;
-typedef signed short    int16;
-typedef signed int      int32;
-typedef unsigned char   uint8;
-typedef unsigned short  uint16;
-typedef unsigned int    uint32;
-#endif
+#elif defined(_MSC_VER) && (_MSC_VER < 1600)
+typedef __int8           int8;
+typedef __int16          int16;
+typedef __int32          int32;
+typedef unsigned __int8  uint8;
+typedef unsigned __int16 uint16;
+typedef unsigned __int32 uint32;
+#else                                                   
+/* All modern/standard compiler environments */
+/* any other environment needa a special case above */
+#include <stdint.h>
+typedef int8_t          int8;
+typedef int16_t         int16;
+typedef int32_t         int32;
+typedef uint8_t         uint8;
+typedef uint16_t        uint16;
+typedef uint32_t        uint32;
+#endif                                                  /* end standard integers */
+
 typedef int             t_stat;                         /* status */
 typedef int             t_bool;                         /* boolean */
 
@@ -760,6 +773,7 @@ struct EXPTAB {
     uint32              size;                           /* match string size */
     char                *match_pattern;                 /* match pattern for format */
     int32               cnt;                            /* proceed count */
+    uint32              after;                          /* delay before halting */
     int32               switches;                       /* flags */
 #define EXP_TYP_PERSIST         (SWMASK ('P'))      /* rule persists after match, default is once a rule matches, it is removed */
 #define EXP_TYP_CLEARALL        (SWMASK ('C'))      /* clear all rules after matching this rule, default is to once a rule matches, it is removed */
@@ -779,10 +793,10 @@ struct EXPECT {
     uint32              dbit;                           /* Debugging Bit */
     EXPTAB              *rules;                         /* match rules */
     int32               size;                           /* count of match rules */
-    uint32              after;                          /* delay before halting */
     uint8               *buf;                           /* buffer of output data which has produced */
     uint32              buf_ins;                        /* buffer insertion point for the next output data */
     uint32              buf_size;                       /* buffer size */
+    uint32              buf_data;                       /* count of data in buffer */
     };
 
 /* Send Context */
