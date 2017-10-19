@@ -170,8 +170,10 @@ cdp_srv(UNIT *uptr) {
         /* If we get here, something is wrong */
         case SCPE_IOERR:
              chan_end(addr, SNS_DEVEND|SNS_UNITCHK);
+             break;
         default:
              chan_end(addr, SNS_DEVEND);
+             break;
         }
     }
 

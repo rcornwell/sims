@@ -232,13 +232,13 @@ uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     uint8          ch;
 
     if (mt_busy[GET_DEV_BUF(dptr->flags)] != 0 || (uptr->u3 & MT_CMDMSK) != 0) {
-        sim_debug(DEBUG_CMD, dptr, "CMD busy unit=%d %x", unit, cmd);
+        sim_debug(DEBUG_CMD, dptr, "CMD busy unit=%d %x\n", unit, cmd);
         uptr->flags |= MT_BUSY;   /* Flag we need to send CUE */
         mt_busy[GET_DEV_BUF(dptr->flags)] |= 2;
         return SNS_BSY;
     }
 
-    sim_debug(DEBUG_CMD, dptr, "CMD unit=%d %x", unit, cmd);
+    sim_debug(DEBUG_CMD, dptr, "CMD unit=%d %x\n", unit, cmd);
 
     switch (cmd & 0xF) {
     case 0x7:              /* Tape motion */

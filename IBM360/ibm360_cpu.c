@@ -680,7 +680,6 @@ opr:
              hst[hst_p].addr2 = addr2;
              hst[hst_p].src1 = src1;
              hst[hst_p].src2 = src2;
-             hst[hst_p].dest = dest;
         }
 
         /* Preform opcode */
@@ -1618,10 +1617,10 @@ save_dbl:
                 while(reg != 0) {
                     uint8        t;
                     uint32  temp;
-                    ReadByte(addr1, &temp);
+                    (void)ReadByte(addr1, &temp);
                     t = temp;
                     if (src1) {
-                        ReadByte(addr2, &dest);
+                        (void)ReadByte(addr2, &dest);
                         addr2--;
                         reg --;
                     }

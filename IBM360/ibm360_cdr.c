@@ -196,15 +196,17 @@ cdr_srv(UNIT *uptr) {
     if ((uptr->u3 & CDR_CMDMSK) == CDR_RD) {
         struct _card_data   *data;
         int                  u = uptr-cdr_unit;
+        uint16               xlat;
         uint8                ch = 0;
 
         data = (struct _card_data *)uptr->up7;
-        ch = sim_hol_to_ebcdic(data->image[uptr->u4]);
+        xlat = sim_hol_to_ebcdic(data->image[uptr->u4]);
 
-        if (ch == 0x100) {
+        if (xlat == 0x100) {
             uptr->u5 |= SNS_DATCHK;
             ch = 0x00;
-        }
+        } else
+            ch = (uint8)(xlat&0xff);
         if (chan_write_byte(addr, &ch)) {
            uptr->u3 &= ~(CDR_CMDMSK);
            chan_end(addr, SNS_CHNEND|SNS_DEVEND|(uptr->u5 ? SNS_UNITCHK:0));

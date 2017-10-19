@@ -1186,7 +1186,7 @@ dasd_attach(UNIT * uptr, CONST char *file)
         return SCPE_ARG;
     }
     sim_fseek(uptr->fileref, sizeof(struct dasd_header), SEEK_SET);
-    sim_fread(data->cbuf, 1, tsize * hdr.heads, uptr->fileref);
+    sim_fread(data->cbuf, 1, tsize, uptr->fileref);
     data->cpos = sizeof(struct dasd_header);
     data->ccyl = 0;
     data->cyl = 2000;
