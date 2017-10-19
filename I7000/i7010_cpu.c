@@ -3909,7 +3909,7 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
             fputc(' ', st);
             for(i = 0; i< 15; i++)
                 sim_eval[i] = h->inst[i];
-            fprint_sym(st, pc, sim_eval, &cpu_unit, SWMASK((h->ic & HIST_1401)?'N':'M'));
+            (void)fprint_sym(st, pc, sim_eval, &cpu_unit, SWMASK((h->ic & HIST_1401)?'N':'M'));
             fputc('\n', st);    /* end line */
         }                       /* end else instruction */
     }                           /* end for */

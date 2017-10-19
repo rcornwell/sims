@@ -437,7 +437,7 @@ t_stat lpr_srv(UNIT * uptr)
 
     /* Check if he write out last data */
     if (uptr->u5 & URCSTA_READ) {
-        int                 wrow = pos;
+        int                 wrow = 0;
         t_uint64            wd = 0;
         int                 action = 0;
 
@@ -469,19 +469,23 @@ t_stat lpr_srv(UNIT * uptr)
         case 14:
         case 15:                /* Row 2 */
         case 16:                /* Row 1R */
+            wrow = pos;
             break;
         case 17:                /* Row 1L and start Echo */
+            wrow = pos;
             action = 1;
             break;
         case 18:                /* Echo 8-4 R */
             wd = lpr_data[u].wbuff[2];
             wd &= lpr_data[u].wbuff[10];
             action = 2;
+            wrow = pos;
             break;
         case 19:                /* Echo 8-4 L */
             wd = lpr_data[u].wbuff[3];
             wd &= lpr_data[u].wbuff[11];
             action = 3;
+            wrow = pos;
             break;
         case 20:                /* Row 10 R */
             wrow = 18;
@@ -495,11 +499,13 @@ t_stat lpr_srv(UNIT * uptr)
             wd = lpr_data[u].wbuff[12];
             wd &= lpr_data[u].wbuff[2];
             action = 2;
+            wrow = pos;
             break;
         case 23:
             wd = lpr_data[u].wbuff[13];
             wd &= lpr_data[u].wbuff[3];
             action = 3;
+            wrow = pos;
             break;
         case 24:                /* Row 11 R */
             wrow = 20;
@@ -511,10 +517,12 @@ t_stat lpr_srv(UNIT * uptr)
         case 26:                /* Echo 9 */
             wd = lpr_data[u].wbuff[0];
             action = 2;
+            wrow = pos;
             break;
         case 27:
             wd = lpr_data[u].wbuff[1];
             action = 3;
+            wrow = pos;
             break;
         case 28:
             wrow = 22;
@@ -551,14 +559,14 @@ t_stat lpr_srv(UNIT * uptr)
         if (action == 0 || action == 1) {
         /* If reading grab next word */
             r = chan_read(chan, &lpr_data[u].wbuff[wrow], 0);
-        sim_debug(DEBUG_DATA, &lpr_dev, "print read row < %d %d %012llo eor=%d\n", pos, wrow,
-                 lpr_data[u].wbuff[wrow], 0);
+            sim_debug(DEBUG_DATA, &lpr_dev, "print read row < %d %d %012llo eor=%d\n", 
+                 pos, wrow, lpr_data[u].wbuff[wrow], 0);
             if (action == 1)
                 chan_clear(chan, DEV_WRITE);
         } else { /* action == 2 || action == 3 */
         /* Place echo data in buffer */
-        sim_debug(DEBUG_DATA, &lpr_dev, "print read row > %d %d %012llo eor=%d\n", pos, wrow,
-                wd, eor);
+            sim_debug(DEBUG_DATA, &lpr_dev, "print read row > %d %d %012llo eor=%d\n", 
+                pos, wrow, wd, eor);
             r = chan_write(chan, &wd, 0);
             /* Change back to reading */
             if (action == 3) {

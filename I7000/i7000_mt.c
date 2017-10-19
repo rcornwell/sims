@@ -988,6 +988,10 @@ t_stat mt_srv(UNIT * uptr)
             /* If no data was written, simulate a write gap */
             if (uptr->u6 == 0) {
                 r = sim_tape_wrgap(uptr, 35);
+                if (r != MTSE_OK) {
+                    mt_error(uptr, chan, r, dptr);  /* Record errors */
+                    return SCPE_OK;
+                }
             }
 #endif
             chan_set_attn(chan);

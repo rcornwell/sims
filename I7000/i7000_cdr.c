@@ -204,6 +204,8 @@ cdr_srv(UNIT *uptr) {
         switch(sim_read_card(uptr)) {
         case SCPE_EOF:
              sim_debug(DEBUG_DETAIL, &cdr_dev, "%d: EOF\n", u);
+             /* Fall through */
+
         case SCPE_UNATT:
              chan_set_eof(chan);
              chan_set_attn(chan);
