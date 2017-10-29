@@ -290,7 +290,7 @@ print_line(UNIT * uptr, int chan, int unit)
     }
 
     if (outsel & PRINT_1) {
-        while (uptr->u4 < uptr->capac) {
+        while (uptr->u4 < (uint32)uptr->capac) {
             if (uptr->flags & UNIT_ATT)
                 sim_fwrite("\n\r", 1, 2, uptr->fileref);
             if (uptr->flags & ECHO) {
@@ -301,8 +301,8 @@ print_line(UNIT * uptr, int chan, int unit)
         }
     }
 
-    if (uptr->u4 >= uptr->capac) {
-       uptr->u4 -= uptr->capac;
+    if (uptr->u4 >= (uint32)uptr->capac) {
+       uptr->u4 -= (uint32)uptr->capac;
        dev_pulse[chan] |= PRINT_I;
     }
 

@@ -4198,36 +4198,6 @@ rtc_srv(UNIT * uptr)
         M[5] += 1;
         if (M[5] & MSIGN)
             interval_irq = 1;
-#if 0
-    static uint32 last_ms = 0;
-    static int milli_time = 0;
-    static time_t last_sec = 0;
-    if (cpu_unit.flags & OPTION_TIMER) {
-        int     ms = sim_os_msec();
-        uint32  diff = ms - last_ms;
-        time_t  nt;
-
-        time(&nt);
-        if (nt != last_sec) {
-            milli_time = 0;
-            last_sec = nt;
-        }
-        while (diff > 16) {
-            /* Stop updating it over 60 in this second */
-            if (milli_time > 60) {
-                last_ms = ms;
-                diff = 0;
-                break;
-            }
-            M[5] += 1;
-            if (M[5] & MSIGN)
-                interval_irq = 1;
-            diff -= 16;
-            last_ms = ms;
-            milli_time += 1;
-        }
-        sim_activate(&cpu_unit, 10000);
-#endif
     }
     return SCPE_OK;
 }
