@@ -124,7 +124,7 @@ static const uint16          ascii_to_hol_026[128] = {
     0xC04, 0xC02, 0xC01, 0x680, 0x640, 0x620, 0x610, 0x608,
    /*   x      y      z      {      |      }      ~    del */
    /*                     Y78     X78    78     79         */
-    0x604, 0x602, 0x601, 0x206, 0x806,0x0006,0x0005,0xf000
+    0x604, 0x602, 0x601, 0x406, 0x806,0x0006,0x0005,0xf000
 };
 
 /* Set for Burrough codes */
@@ -147,8 +147,8 @@ static const uint16          ascii_to_hol_029[128] = {
    /* T      1      2      3      4      5      6      7   */
     0x200, 0x100, 0x080, 0x040, 0x020, 0x010, 0x008, 0x004,
    /*   8      9      :      ;      <      =      >      ? */
-   /* 8      9      58     Y68    X68    T85    T68     78 */
-    0x002, 0x001, 0x012, 0x40A, 0x80A, 0x212, 0x20A, 0x006,
+   /* 8      9      58     Y68    X68    T85    T68     28 */
+    0x002, 0x001, 0x012, 0x40A, 0x80A, 0x212, 0x00A, 0x082,
    /*   @      A      B      C      D      E      F      G */
    /*  48    X1     X2     X3     X4     X5     X6     X7  */
     0x022, 0x900, 0x880, 0x840, 0x820, 0x810, 0x808, 0x804,     /* 100 - 137 */
@@ -400,9 +400,6 @@ sim_bcd_to_hol(uint8 bcd) {
 uint8
 sim_hol_to_bcd(uint16 hol) {
     uint8                bcd;
-
-    if (hol == 0x82)
-       return 020;
 
     /* Convert 10,11,12 rows */
     switch (hol & 0xe00) {
