@@ -377,13 +377,11 @@ cdr_srv(UNIT *uptr) {
                                chan_set_parity(chan);
                         }
                         break;
-            case 017:
-                        if (data->image[uptr->u4] == 0x006) {
-                            ch = 0;
-                            /* Handle invalid punch */
-                            chan_set_parity(chan);
-                            break;  /* Translate ? to error*/
-                        }
+            case 0111:
+                        ch = 0;
+                        /* Handle invalid punch */
+                        chan_set_parity(chan);
+                        break;  /* Translate ? to error*/
             }
         }
         sim_debug(DEBUG_DATA, &cdr_dev, "cdr %d: Char > %03o '%c' %d\n", u, ch,
