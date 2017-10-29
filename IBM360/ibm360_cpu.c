@@ -36,7 +36,9 @@
 #define UNIT_MSIZE   (0xff << UNIT_V_MSIZE)
 #define MEMAMOUNT(x) (x << UNIT_V_MSIZE)
 
-#define HIST_MAX     50000
+#define TMR_RTC      0
+
+#define HIST_MAX     5000000
 #define HIST_MIN     64
 #define HIST_PC      0x1000000
 #define HIST_SPW     0x2000000
@@ -56,6 +58,8 @@ uint16       irqcode;              /* Interupt code */
 uint8        flags;                /* Misc flags */
 uint16       irqaddr;              /* Address of IRQ vector */
 uint16       loading;              /* Doing IPL */
+uint8        interval_irq = 0;     /* Interval timer IRQ */
+
 
 #define ASCII       0x08           /* ASCII/EBCDIC mode */
 #define MCHECK      0x04           /* Machine check flag */
@@ -143,6 +147,12 @@ const char          *cpu_description (DEVICE *dptr);
 
 t_bool build_dev_tab (void);
 
+/* Interval timer option */
+t_stat              rtc_srv(UNIT * uptr);
+t_stat              rtc_reset(DEVICE * dptr);
+int32               rtc_tps = 120;
+
+
 /* CPU data structures
 
    cpu_dev      CPU device descriptor
@@ -151,7 +161,7 @@ t_bool build_dev_tab (void);
    cpu_mod      CPU modifier list
 */
 
-UNIT cpu_unit = { UDATA (/*&rtc_srv*/NULL, UNIT_BINK, MAXMEMSIZE) };
+UNIT cpu_unit = { UDATA (&rtc_srv, UNIT_BINK, MAXMEMSIZE) };
 
 REG cpu_reg[] = {
     { HRDATA (PC, PC, 24) },
@@ -206,9 +216,9 @@ MTAB cpu_mod[] = {
 DEVICE cpu_dev = {
     "CPU", &cpu_unit, cpu_reg, cpu_mod,
     1, 16, 24, 1, 16, 8,
-    &cpu_ex, &cpu_dep, &cpu_reset,
-    NULL, NULL, NULL, NULL, 0, 0, NULL,
-    NULL, NULL, &cpu_help, NULL, NULL, &cpu_description
+    &cpu_ex, &cpu_dep, &cpu_reset, NULL, NULL, NULL,
+    NULL, DEV_DEBUG, 0, dev_debug,
+//    NULL, NULL, &cpu_help, NULL, NULL, &cpu_description
     };
 
 #if 0       /* 370 Operators */
@@ -337,9 +347,10 @@ int WriteFull(uint32 addr, uint32 data) {
         storepsw(OPPSW, IRC_ADDR);
         return 1;
      }
-//     if ((addr& 0xffff00) == 0x1800) {
-//           fprintf(stderr, "Write %x %x\n\r", addr, data);
-//     }
+
+     if ((addr & 0xfffff0) == 0xc90 && data == 0x40404040) {
+        fprintf(stderr, "Error word\n\r");
+     }
 
      offset = addr & 0x3;
      addr >>= 2;
@@ -406,9 +417,9 @@ int WriteByte(uint32 addr, uint32 data) {
         storepsw(OPPSW, IRC_ADDR);
         return 1;
      }
-//     if ((addr& 0xffff00) == 0x1800) {
-//           fprintf(stderr, "Write Byte %x %x\n\r", addr, data);
-//     }
+     if ((addr & 0xfffff0) == 0xc90 && data == 0x40) {
+        fprintf(stderr, "Error byte\n\r");
+     }
 
      offset = 8 * (3 - (addr & 0x3));
      addr >>= 2;
@@ -447,10 +458,10 @@ int WriteHalf(uint32 addr, uint32 data) {
         storepsw(OPPSW, IRC_ADDR);
         return 1;
      }
-//     if ((addr& 0xffff00) == 0x1800) {
-//           fprintf(stderr, "Write Half %x %x\n\r", addr, data);
-//     }
 
+     if ((addr & 0xfffff0) == 0xc90 && data == 0x4040) {
+        fprintf(stderr, "Error half\n\r");
+     }
      offset = addr & 0x3;
      addr >>= 2;
 
@@ -523,6 +534,12 @@ sim_instr(void)
         t_uint64        t64a;
 
         reason = SCPE_OK;
+        /* Enable timer if option set */
+        if (cpu_unit.flags & FEAT_TIMER) {
+            sim_activate(&cpu_unit, 10000);
+        }
+        interval_irq = 0;
+
         while (reason == SCPE_OK) {
 
 wait_loop:
@@ -549,8 +566,16 @@ wait_loop:
              goto supress;
         }
 
+        if (interval_irq && (sysmsk & 01)) {
+             interval_irq = 0;
+             storepsw(OEPSW, 0x40);
+             goto supress;
+        }
+
         if (loading || flags & WAIT) {
             /* CPU IDLE */
+            if (flags & WAIT && sysmsk == 0) 
+               return STOP_HALT;
             sim_interval = -1;
             goto wait_loop;
         }
@@ -780,9 +805,19 @@ opr:
                 } else if ((addr1 & 0x7) != 0) {
                     storepsw(OPPSW, IRC_SPEC);
                 } else {
-                    irqaddr = addr1;
-                    irqcode = 0;
-                    goto supress;
+                    if (ReadFull(addr1, &src1))
+                        goto supress;
+                    if (ReadFull(addr1+4, &src2))
+                        goto supress;
+        if (hst_lnt) {
+             hst_p = hst_p + 1;
+             if (hst_p >= hst_lnt)
+                hst_p = 0;
+             hst[hst_p].pc = irqaddr | HIST_LPW;
+             hst[hst_p].src1 = src1;
+             hst[hst_p].src2 = src2;
+        }
+                    goto lpsw;
                 }
                 break;
 
@@ -798,6 +833,8 @@ opr:
                     storepsw(OPPSW, IRC_PRIV);
                 else
                     cc = testio(addr1);
+//                    if (cc != 0 && hst_lnt && hst_p > 2) 
+ //                      hst_p -= 2;
                 break;
 
         case OP_HIO:
@@ -879,10 +916,8 @@ set_cc:
 set_cc3:
                     regs[reg1] = dest;
                     cc = 3;
-                    if (pmsk & FIXOVR) {
+                    if (pmsk & FIXOVR) 
                        storepsw(OPPSW, IRC_FIXOVR);
-                reason =1;
-          }
                 }
                 goto set_cc;
 
@@ -895,9 +930,9 @@ set_cc3:
         case OP_ALR:
                 dest = src1 + src2;
                 cc = 0;
-                if ((uint32)src1 > (uint32)src2)
+                if ((uint32)dest < (uint32)src1)
                    cc |= 2;
-                if (dest == 0)
+                if (dest != 0)
                    cc |= 1;
                 regs[reg1] = dest;
                 break;
@@ -1035,10 +1070,9 @@ fprintf(stderr, " %d  %08x %08x\n\r", src1, dest, src1);
                     src1 = -src1;
                 if (fill & 2)
                     src2 = -src2;
-                regs[reg1|1] = src2;
-                regs[reg1] = src1;
+                regs[reg1] = src2;
+                regs[reg1|1] = src1;
 fprintf(stderr, " %08x %08x\n\r", src1, src2);
-//                reason =1;
                 break;
 
         case OP_NR:
@@ -1147,23 +1181,31 @@ char_save:
 
         case OP_SRL:
                 dest = regs[reg1];
+                if (hst_lnt)
+                    hst[hst_p].src1 = dest;
                 dest = ((uint32)dest) >> (addr1 & 0x3f);
                 regs[reg1] = dest;
                 break;
 
         case OP_SLL:
                 dest = regs[reg1];
+                if (hst_lnt)
+                    hst[hst_p].src1 = dest;
                 dest = ((uint32)dest) << (addr1 & 0x3f);
                 regs[reg1] = dest;
                 break;
 
         case OP_SRA:
                 dest = regs[reg1];
+                if (hst_lnt)
+                    hst[hst_p].src1 = dest;
                 dest = (int32)dest >> (addr1 & 0x3f);
                 goto set_cc;
 
         case OP_SLA:
                 dest = regs[reg1];
+                if (hst_lnt)
+                    hst[hst_p].src1 = dest;
                 src2 = dest & MSIGN;
                 addr1 &= 0x3f;
                 cc = 0;
@@ -1752,12 +1794,12 @@ save_dbl:
 
                   /* Floating Store register */
         case OP_STD:
-                if (WriteFull(addr2 + 4, src1h))
+                if (WriteFull(addr1 + 4, src1h))
                     break;
                 /* Fall through */
 
         case OP_STE:
-                WriteFull(addr2, src1);
+                WriteFull(addr1, src1);
                 break;
 
                   /* Floating Compare */
@@ -1913,8 +1955,8 @@ save_dbl:
                   /* Compute sign of result */
         case OP_MP:
         case OP_DP:
-//                storepsw(OPPSW, IRC_OPR);
- //               goto supress;
+                storepsw(OPPSW, IRC_OPR);
+                goto supress;
                 break;
 
                   /* Extended precision load round */
@@ -1926,7 +1968,7 @@ save_dbl:
         case OP_MXDR:
         case OP_MXD:
         default:
-                reason=1;
+        //        reason=1;
                 storepsw(OPPSW, IRC_OPR);
                 goto supress;
         }
@@ -1951,6 +1993,7 @@ supress:
         if (hst_lnt) {
              hst[hst_p].src2 = src2;
         }
+lpsw:
              sysmsk = (src1 >> 24) & 0xff;
              st_key = (src1 >> 16) & 0xf0;
              flags = (src1 >> 16) & 0xf;
@@ -1979,6 +2022,26 @@ t_stat cpu_reset (DEVICE *dptr)
     }
     return SCPE_OK;
 }
+
+
+/* Interval timer routines */
+t_stat
+rtc_srv(UNIT * uptr)
+{
+    if (cpu_unit.flags & FEAT_TIMER) {
+        int32 t;
+        t = sim_rtcn_calb (rtc_tps, TMR_RTC);
+        sim_activate_after(uptr, 1000000/rtc_tps);
+        t = M[0x50>>2];
+        M[0x50>>2]--;
+        if (((t ^ M[0x50>>2]) & MSIGN) != 0 && (t & MSIGN) == 0)  {
+     fprintf(stderr, "Timer %08x\n\r", M[0x50>>2]);
+            interval_irq = 1;
+        }
+    }
+    return SCPE_OK;
+}
+
 
 /* Memory examine */
 

@@ -347,6 +347,7 @@ const char ebcdic_to_ascii[256];
 extern DEBTAB dev_debug[];
 extern DEBTAB crd_debug[];
 
+extern DEVICE cpu_dev;
 extern DEVICE cdp_dev;
 extern DEVICE cdr_dev;
 extern DEVICE lpr_dev;
@@ -356,6 +357,7 @@ extern DEVICE mtb_dev;
 extern DEVICE dda_dev;
 extern DEVICE ddb_dev;
 extern DEVICE com_dev;
+extern UNIT cpu_unit;
 
 #define NUM_DEVS_CDP        1
 #define NUM_DEVS_CDR        1
@@ -368,5 +370,4 @@ extern DEVICE com_dev;
 #define NUM_DEVS_COM        1
 #define NUM_UNITS_COM       16
 
-extern DEVICE cpu_dev;
 extern void fprint_inst(FILE *, uint16 *);

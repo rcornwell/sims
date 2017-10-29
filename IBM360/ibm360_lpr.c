@@ -175,7 +175,7 @@ print_line(UNIT * uptr)
 
     /* Print out buffer */
     sim_fwrite(&out, 1, i, uptr->fileref);
-fprintf(stderr, "%s", out);
+    sim_debug(DEBUG_DETAIL, &lpr_dev, "%s", out);
     uptr->u4++;
     if (uptr->u4 > uptr->capac) {
        uptr->u4 = 1;
@@ -190,20 +190,29 @@ uint8 lpr_startcmd(UNIT * uptr, uint16 chan, uint8 cmd)
     uint8   ch;
 
     if ((uptr->u3 & LPR_CMDMSK) != 0) {
-        if ((uptr->flags & UNIT_ATT) != 0)
+       if ((uptr->flags & UNIT_ATT) != 0)
             return SNS_BSY;
        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     }
 
+    sim_debug(DEBUG_CMD, &lpr_dev, "Cmd %02x\n", cmd);
+
     switch (cmd & 0x7) {
     case 1:              /* Write command */
-    case 3:
          uptr->u3 &= ~(LPR_CMDMSK);
          uptr->u3 |= (cmd & LPR_CMDMSK);
          sim_activate(uptr, 10);          /* Start unit off */
          uptr->u5 = 0;
          uptr->u6 = 0;
          return 0;
+
+    case 3:              /* Carrage control */
+         uptr->u3 &= ~(LPR_CMDMSK);
+         uptr->u3 |= (cmd & LPR_CMDMSK);
+         sim_activate(uptr, 10);          /* Start unit off */
+         uptr->u5 = 0;
+         uptr->u6 = 0;
+         return SNS_CHNEND;
 
     case 0:               /* Status */
          break;
@@ -228,33 +237,37 @@ t_stat
 lpr_srv(UNIT *uptr) {
     int             addr = GET_UADDR(uptr->u3);
     int             u = (uptr - lpr_unit);
+    int             cmd = (uptr->u3 & 0x7);
 
-    if ((uptr->u3 & 0xFF) == 4) {
+    if (cmd == 4) {
          uint8 ch = uptr->u5;
+         uptr->u3 &= ~(LPR_CMDMSK);
          chan_write_byte(GET_UADDR(uptr->u3), &ch);
          chan_end(addr, SNS_DEVEND|SNS_CHNEND);
          return SCPE_OK;
     }
 
-    if ((uptr->u3 & LPR_FULL) || (uptr->u3 & 0x7) == 0x3) {
+    if ((uptr->u3 & LPR_FULL) || cmd == 0x3) {
        print_line(uptr);
        uptr->u3 &= ~(LPR_FULL|LPR_CMDMSK);
        uptr->u6 = 0;
-           chan_end(addr, SNS_CHNEND|SNS_DEVEND);
-//       set_devattn(addr, SNS_DEVEND);
+//           chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+       set_devattn(addr, SNS_DEVEND);
+       return SCPE_OK;
     }
 
     /* Copy next column over */
-    if ((uptr->u3 & 0x7) == 1 && uptr->u6 < 144) {
-       if(chan_read_byte(addr, &lpr_data[u].lbuff[uptr->u6++])) {
+    if (cmd == 1 && (uptr->u3 & LPR_FULL) == 0) {
+       if(chan_read_byte(addr, &lpr_data[u].lbuff[uptr->u6])) {
            uptr->u3 |= LPR_FULL;
        } else {
-           sim_activate(uptr, 10);
+           sim_activate(uptr, 20);
+           uptr->u6++;
        }
-       if (uptr->u3 & LPR_FULL || uptr->u6 >= 144) {
+       if (uptr->u3 & LPR_FULL || uptr->u6 >= 132) {
            uptr->u3 |= LPR_FULL;
-//           chan_end(addr, SNS_CHNEND);
-           sim_activate(uptr, 1000);
+           chan_end(addr, SNS_CHNEND);
+           sim_activate(uptr, 3000);
        }
     }
     return SCPE_OK;

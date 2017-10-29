@@ -85,13 +85,19 @@ t_stat              con_detach(UNIT *);
 
 
 UNIT                con_unit[] = {
-    {UDATA(con_srv, 0, 0), 0, UNIT_ADDR(0x1F)},       /* A */
+    {UDATA(con_srv, UNIT_ATT, 0), 0, UNIT_ADDR(0x1F)},       /* A */
+};
+
+MTAB                con_mod[] = {
+    {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "DEV", "DEV", &set_dev_addr,
+        &show_dev_addr, NULL},
+    {0}
 };
 
 struct dib con_dib = { 0xFF, 1, NULL, con_startcmd, NULL, con_unit, con_ini};
 
 DEVICE              con_dev = {
-    "INQ", con_unit, NULL, NULL,
+    "INQ", con_unit, NULL, con_mod,
     NUM_DEVS_CON, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, NULL, NULL, NULL,
     &con_dib, DEV_UADDR | DEV_DISABLE | DEV_DEBUG, 0, dev_debug
@@ -258,7 +264,7 @@ con_srv(UNIT *uptr) {
           switch (ch) {
           case '\r':
           case '\n':
-                sim_debug(DEBUG_CMD, &con_dev, "%d: ent\n", u);
+                sim_debug(DEBUG_DATA, &con_dev, "%d: ent\n", u);
 //                if (con_data[u].inptr != 0)
                    uptr->u3 |= CON_INPUT;
                 uptr->u3 |= CON_CR;
@@ -295,7 +301,7 @@ con_srv(UNIT *uptr) {
                 break;
 
           default:
-                sim_debug(DEBUG_CMD, &con_dev, "%d: key '%c'\n", u, ch);
+                sim_debug(DEBUG_DATA, &con_dev, "%d: key '%c'\n", u, ch);
                 if (con_data[u].inptr < sizeof(con_data[u].ibuff)) {
                     ch = ascii_to_ebcdic[ch];
                     if (ch == 0xff) {
