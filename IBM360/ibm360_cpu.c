@@ -348,9 +348,9 @@ int WriteFull(uint32 addr, uint32 data) {
         return 1;
      }
 
-     if ((addr & 0xfffff0) == 0xc90 && data == 0x40404040) {
-        fprintf(stderr, "Error word\n\r");
-     }
+//     if ((addr & 0xfffff0) == 0xc90 && data == 0x40404040) {
+//        fprintf(stderr, "Error word\n\r");
+//     }
 
      offset = addr & 0x3;
      addr >>= 2;
@@ -417,9 +417,9 @@ int WriteByte(uint32 addr, uint32 data) {
         storepsw(OPPSW, IRC_ADDR);
         return 1;
      }
-     if ((addr & 0xfffff0) == 0xc90 && data == 0x40) {
-        fprintf(stderr, "Error byte\n\r");
-     }
+//     if ((addr & 0xfffff0) == 0xc90 && data == 0x40) {
+//        fprintf(stderr, "Error byte\n\r");
+//     }
 
      offset = 8 * (3 - (addr & 0x3));
      addr >>= 2;
@@ -459,9 +459,9 @@ int WriteHalf(uint32 addr, uint32 data) {
         return 1;
      }
 
-     if ((addr & 0xfffff0) == 0xc90 && data == 0x4040) {
-        fprintf(stderr, "Error half\n\r");
-     }
+//     if ((addr & 0xfffff0) == 0xc90 && data == 0x4040) {
+//        fprintf(stderr, "Error half\n\r");
+//     }
      offset = addr & 0x3;
      addr >>= 2;
 
@@ -589,12 +589,14 @@ wait_loop:
             goto supress;
         }
 
+ //       if ((PC & 0xFFFFF0) != 0xA10) {
         if (hst_lnt) {
              hst_p = hst_p + 1;
              if (hst_p >= hst_lnt)
                 hst_p = 0;
              hst[hst_p].pc = PC | HIST_PC;
         }
+//}
 
         if (ReadHalf(PC, &src1))
             goto supress;
@@ -834,7 +836,7 @@ opr:
                 else
                     cc = testio(addr1);
 //                    if (cc != 0 && hst_lnt && hst_p > 2) 
- //                      hst_p -= 2;
+//                       hst_p -= 2;
                 break;
 
         case OP_HIO:
@@ -955,7 +957,7 @@ set_cc3:
                 }
         case OP_MH:
                 fill = 0;
-                fprintf(stderr, "Mul %d x %d = ", src1, src2);
+//                fprintf(stderr, "Mul %d x %d = ", src1, src2);
 
                 if (src1 & MSIGN) {
                     fill = 1;
@@ -989,14 +991,9 @@ set_cc3:
                 } else {
                     regs[reg1] = src1;
                 }
-fprintf(stderr, " %d  %08x %08x\n\r", src1, dest, src1);
+//fprintf(stderr, " %d  %08x %08x\n\r", src1, dest, src1);
 //                reason =1;
                 break;
-
-//                dest = (uint32)((int32)src1 * (int32)src2);
- //               regs[reg1] = dest;
-  //              reason =1;
-   //             break;
 
         case OP_D:
         case OP_DR:
@@ -1008,11 +1005,11 @@ fprintf(stderr, " %d  %08x %08x\n\r", src1, dest, src1);
                 dest = src2;
                 src2 = regs[reg1|1];
                 src1 = regs[reg1];
-                fprintf(stderr, "Div %08x %08x / %08x  = ", src1, src2, dest);
+//                fprintf(stderr, "Div %08x %08x / %08x  = ", src1, src2, dest);
 
                 if (dest == 0) {
                     storepsw(OPPSW, IRC_FIXDIV);
-                    fprintf(stderr, "zero\n\r");
+ //                   fprintf(stderr, "zero\n\r");
                     break;
                 }
                 t64 = (((t_uint64)src1) << 32) | ((t_uint64)src2);
@@ -1024,13 +1021,13 @@ fprintf(stderr, " %d  %08x %08x\n\r", src1, dest, src1);
                     fill ^= 1;
                     dest = -dest;
                 }
-                fprintf(stderr, "%lld / %d   ", t64, dest);
+  //              fprintf(stderr, "%lld / %d   ", t64, dest);
                 t64a = t64 % (t_uint64)dest;
                 t64 = t64 / (t_uint64)dest;
-                fprintf(stderr, "%lld , %lld   ", t64, t64a);
+   //             fprintf(stderr, "%lld , %lld   ", t64, t64a);
                 if ((t64 & 0xffffffff80000000) != 0) {
                     storepsw(OPPSW, IRC_FIXDIV);
-                    fprintf(stderr, "zero\n\r");
+    //                fprintf(stderr, "zero\n\r");
                     break;
                 }
 
@@ -1072,7 +1069,7 @@ fprintf(stderr, " %d  %08x %08x\n\r", src1, dest, src1);
                     src2 = -src2;
                 regs[reg1] = src2;
                 regs[reg1|1] = src1;
-fprintf(stderr, " %08x %08x\n\r", src1, src2);
+//fprintf(stderr, " %08x %08x\n\r", src1, src2);
                 break;
 
         case OP_NR:

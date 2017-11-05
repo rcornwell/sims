@@ -339,9 +339,7 @@ const char ebcdic_to_ascii[256];
 #define DEBUG_DATA      0x0000002       /* Show data transfers */
 #define DEBUG_DETAIL    0x0000004       /* Show details */
 #define DEBUG_EXP       0x0000008       /* Show error conditions */
-#define DEBUG_CONI      0x0000020       /* Show CONI instructions */
-#define DEBUG_CONO      0x0000040       /* Show CONO instructions */
-#define DEBUG_DATAIO    0x0000080       /* Show DATAI/O instructions */
+#define DEBUG_POS       0x0000020       /* Show dasd position data */
 #define DEBUG_IRQ       0x0000100       /* Show IRQ requests */
 
 extern DEBTAB dev_debug[];

@@ -84,9 +84,7 @@ DEBTAB              dev_debug[] = {
     {"DATA", DEBUG_DATA, "Show data transfers"},
     {"DETAIL", DEBUG_DETAIL, "Show details about device"},
     {"EXP", DEBUG_EXP, "Show exception information"},
-    {"CONI", DEBUG_CONI, "Show coni instructions"},
-    {"CONO", DEBUG_CONO, "Show coni instructions"},
-    {"DATAIO", DEBUG_DATAIO, "Show datai and datao instructions"},
+    {"POS", DEBUG_POS, "Dasd positioning information"},
     {0, 0}
 };
 
@@ -96,9 +94,6 @@ DEBTAB              crd_debug[] = {
     {"DATA", DEBUG_DATA, "Show data transfers"},
     {"DETAIL", DEBUG_DETAIL, "Show details about device"},
     {"EXP", DEBUG_EXP, "Show exception information"},
-    {"CONI", DEBUG_CONI, "Show coni instructions"},
-    {"CONO", DEBUG_CONO, "Show coni instructions"},
-    {"DATAIO", DEBUG_DATAIO, "Show datai and datao instructions"},
     {"CARD", DEBUG_CARD, "Show Card read/punches"},
     {0, 0}
 };

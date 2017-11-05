@@ -1,0 +1,158 @@
+DOS setup:
+
+Create the ini file, you can remove the debug commands.
+dos.ini:
+
+! rm dos.log prte.txt pch.dck
+set debug dos.log
+;set mta debug=cmd;detail;exp
+set cdr debug=cmd;detail;card
+set cdp debug=cmd;detail;card
+set inq debug=cmd;detail
+set cpu debug=cmd;detail;exp;data
+set da  debug=cmd;detail
+set cpu 64k hist=500000 timer
+set da0 type=2311
+set da1 type=2311
+;set mta0 9t
+;at mta0 k360n-ma108a.tap
+at lpr prte.txt
+at cdp pch.dck
+at da0 dos0.2311.130
+at da1 dos1.2311.131
+set mta0 7t
+at mta0 -f p7b k360n-ma108a.bcd
+
+
+Initialize the disks:
+// JOB INTDSK INITIALIZE DISK PACKS
+// DATE 69032
+// ASSGN SYSOPT,X'130',D1
+// ASSGN SYS002,X'131',D1
+// ASSGN SYSLOG,X'01F',C1
+// EXEC
+// UID IR,C1
+// VTOC STRTADR=(0199000),EXTENT=(9)
+VOL1111111
+// VTOC STRTADR=(0199000),EXTENT=(9)
+VOL1111111
+// END
+
+Restore dos disks:
+// JOB DISRST
+// DATE 12004
+// ASSGN SYS000,X'130',D1
+// ASSGN SYSLST,X'00E',L1
+// ASSGN SYSLOG,X'01F',C1
+// EXEC
+
+
+First job:
+ADD X'00C',2540R
+ADD X'00D',2540P
+ADD X'00E',1403
+ADD X'01F',1050A
+ADD X'130',2311
+ADD X'131',2311
+ADD X'180',2400T7
+ADD X'181',2400T9
+SET DATE=02/01/69,CLOCK=00/00/00
+ASSGN SYSLOG,X'01F'
+LOG
+ASSGN SYSRDR,X'00C'
+ASSGN SYSIPT,X'00C'
+ASSGN SYSPCH,X'00D'
+ASSGN SYSLST,X'00E'
+ASSGN SYS001,X'131'
+ASSGN SYS002,X'131'
+ASSGN SYS003,X'131'
+// JOB DSERVSLB
+// EXEC DSERV
+ DSPLY ALL
+/*
+// EXEC SSERV
+ DSPLY A.DOSCHLV
+ DSPCH Z.ALL
+/*
+// PAUSE REMOVE CARDS FROM SYSPCH. 
+/&
+
+
+Log of setup:
+
+IBM 360 simulator V4.0-0 Beta        git commit id: $Format:
+Debug output to "dos.log"
+Mem size=10000
+LPR: creating new file
+CDP: creating new file
+CKD_P370
+ 10 4096 11 0
+CKD_P370
+ 10 4096 11 0
+sim> bo mta0
+<^E after pause>
+Simulation stopped, PC: 000000 (ff                      )
+sim> at cdr initdos.job
+CDR: unit is read only
+sim> c
+CONTROL CARD ANALYSIS AND LABEL CHECKING
+R UTILITY MODIFIER CARD
+R // UID IR,C1                                                                    
+R 0130 
+R 4444A
+I 44
+<^X after enter>
+R 0131 
+R 4444A
+I 44
+<^X after enter>
+R SURFACE ANALYSIS AND HA-R0 GENERATION
+R SYSOPT
+R SYS002
+R LAB CYL CREATION
+R SYSOPT                        
+R // VTOC STRTADR=(0199000),EXTENT=(9)                                            
+R VOL1111111                                                                      
+R SYS002                        
+R // VTOC STRTADR=(0199000),EXTENT=(9)                                            
+R VOL1111111                                                                      
+R EO
+HALT instruction, PC: 000A40 (50 20 00 90             ST 2, 90(0,0))
+sim> bo mta0
+
+<^E after pause>
+Simulation stopped, PC: 000000 (ff                      )
+sim> at cdr restdos.job
+sim> c
+R DISTRIBUTION PROGRAM
+R RESTORE FUNCTION
+R * DOS SYSTEM/360 RELEASE 26.2 SYSRES 2311 VOLUMES 1 & 2                         
+R DOS.SYSRES.FILE.VOLUME.1                    
+R THIS FILE FOR SYS000
+R 4307A
+I 22
+<^X after enter>
+R DOS.SYSRES.FILE.VOLUME.1                    
+R 015331 RECORDS RESTORED FOR ABOVE FILE
+R 3007 
+R SWITCHING TO SYS000
+R 4308A
+I 22
+<^X after enter>
+R DOS.SYSRES.FILE.VOLUME.2                    
+R THIS FILE FOR SYS000
+R 4307A
+I 22
+<^X after enter>
+R 4444A
+I 44
+<^X after enter>
+R DOS.SYSRES.FILE.VOLUME.2                    
+R 024425 RECORDS RESTORED FOR ABOVE FILE
+R 3007 
+R END OF JOB
+R 3008 
+
+HALT instruction, PC: 000D40 (50 20 00 90             ST 2, 90(0,0))
+sim> quit
+

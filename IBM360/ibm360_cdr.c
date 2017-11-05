@@ -46,7 +46,7 @@
 #define CDR_MODE       0x20       /* Mode operation */
 #define CDR_STKMSK     0xC0       /* Mask for stacker */
 #define CDP_WR         0x09       /* Punch command */
-#define CDR_CARD       0x80       /* Unit has card in buffer */
+#define CDR_CARD       0x100      /* Unit has card in buffer */
 
 
 /* in u5 packs sense byte 0,1 and 3 */
@@ -118,7 +118,7 @@ uint8  cdr_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
         return SNS_DEVEND;
     }
 
-    sim_debug(DEBUG_CMD, dptr, "CMD unit=%d %x", unit, cmd);
+    sim_debug(DEBUG_CMD, dptr, "CMD unit=%d %x\n", unit, cmd);
     switch (cmd & 0x7) {
     case 2:              /* Read command */
          if ((cmd & 0xc0) != 0xc0)
@@ -148,9 +148,10 @@ uint8  cdr_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
          break;
 
     case 4:               /* Sense */
-         ch = uptr->u5;
-         chan_write_byte(GET_UADDR(uptr->u3), &ch);
-         return SNS_CHNEND|SNS_DEVEND;
+         uptr->u3 &= ~(CDR_CMDMSK);
+         uptr->u3 |= (cmd & CDR_CMDMSK);
+         sim_activate(uptr, 10);  
+         return 0;
 
     default:              /* invalid command */
          uptr->u5 |= SNS_CMDREJ;
@@ -167,24 +168,32 @@ t_stat
 cdr_srv(UNIT *uptr) {
     int                 addr = GET_UADDR(uptr->u3);
 
+    if ((uptr->u3 & CDR_CMDMSK) == CHN_SNS) {
+         uint8 ch = uptr->u5;
+         chan_write_byte(addr, &ch);
+         chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+         uptr->u3 &= ~(CDR_CMDMSK);
+         return SCPE_OK;
+    }
+
     /* Check if new card requested. */
     if ((uptr->u3 & CDR_CARD) == 0) {
        switch(sim_read_card(uptr)) {
        case SCPE_EOF:
        case SCPE_UNATT:
-            chan_end(addr, SNS_DEVEND|SNS_UNITEXP);
+            chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
             uptr->u5 = SNS_INTVENT;
             uptr->u3 &= ~CDR_CMDMSK;
             return SCPE_OK;
        case SCPE_IOERR:
-            chan_end(addr, SNS_DEVEND|SNS_UNITCHK);
+            chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             uptr->u5 = SNS_INTVENT;
             uptr->u3 &= ~CDR_CMDMSK;
             return SCPE_OK;
        case SCPE_OK:
             uptr->u3 |= CDR_CARD;
             if ((uptr->u3 & CDR_CMDMSK) == CDR_FEED) {
-                chan_end(addr, SNS_DEVEND);
+                chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                 uptr->u3 &= ~(CDR_CMDMSK);
                 return SCPE_OK;
             }

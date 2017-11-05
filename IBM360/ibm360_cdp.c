@@ -48,8 +48,8 @@
 #define CDP_CMDMSK     0x27       /* Mask command part. */
 #define CDR_MODE       0x20       /* Mode operation */
 #define CDR_STKMSK     0xC0       /* Mask for stacker */
-#define CDP_WR         0x09       /* Punch command */
-#define CDP_CARD       0x80       /* Unit has card in buffer */
+#define CDP_WR         0x01       /* Punch command */
+#define CDP_CARD       0x100      /* Unit has card in buffer */
 
 
 /* in u5 packs sense byte 0,1 and 3 */
@@ -116,7 +116,8 @@ DEVICE              cdp_dev = {
 
 
 uint8  cdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
-
+    DEVICE         *dptr = find_dev_from_unit(uptr);
+    int            unit = (uptr - dptr->units);
     uint8   ch;
 
     if ((uptr->u3 & (CDP_CARD|CDP_CMDMSK)) != 0) {
@@ -125,11 +126,12 @@ uint8  cdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
         return SNS_DEVEND|SNS_UNITCHK;
     }
 
+    sim_debug(DEBUG_CMD, dptr, "CMD unit=%d %x\n", unit, cmd);
     switch (cmd & 0x7) {
     case 1:              /* Write command */
          uptr->u3 &= ~(CDP_CMDMSK);
          uptr->u3 |= (cmd & CDP_CMDMSK);
-         sim_activate(uptr, 1000);       /* Start unit off */
+         sim_activate(uptr, 10);       /* Start unit off */
          uptr->u4 = 0;
          uptr->u5 = 0;
          return 0;
@@ -143,10 +145,12 @@ uint8  cdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
 
     case 0:                /* Status */
          break;
+
     case 4:                /* Sense */
-         ch = uptr->u5;
-         chan_write_byte(GET_UADDR(uptr->u3), &ch);
-         return SNS_CHNEND|SNS_DEVEND;
+         uptr->u3 &= ~(CDP_CMDMSK);
+         uptr->u3 |= (cmd & CDP_CMDMSK);
+         sim_activate(uptr, 10); 
+         return 0;
 
     default:              /* invalid command */
          uptr->u5 |= SNS_CMDREJ;
@@ -157,30 +161,40 @@ uint8  cdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     return SNS_CHNEND|SNS_DEVEND;
 }
 
+
 /* Handle transfer of data for card punch */
 t_stat
 cdp_srv(UNIT *uptr) {
+    int       u = uptr-cdp_unit;
     uint16    addr = GET_UADDR(uptr->u3);
-    /* Waiting for disconnect */
 
-    if (uptr->u5 & CDP_CARD) {
+    /* Handle sense */
+    if ((uptr->u3 & CDP_CMDMSK) == 0x4) {
+         uint8 ch = uptr->u5;
+         chan_write_byte(addr, &ch);
+         chan_end(addr, SNS_DEVEND|SNS_CHNEND);
+         return SCPE_OK;
+    }
+
+    if (uptr->u3 & CDP_CARD) {
         /* Done waiting, punch card */
-        uptr->u5 &= ~CDP_CARD;
+        uptr->u3 &= ~CDP_CARD;
+        sim_debug(DEBUG_DETAIL, &cdp_dev, "unit=%d:punch\n", u);
         switch(sim_punch_card(uptr, NULL)) {
         /* If we get here, something is wrong */
         case SCPE_IOERR:
-             chan_end(addr, SNS_DEVEND|SNS_UNITCHK);
+             set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
              break;
         default:
-             chan_end(addr, SNS_DEVEND);
+             set_devattn(addr, SNS_DEVEND);
              break;
         }
+        return SCPE_OK;
     }
 
     /* Copy next column over */
     if (uptr->u4 < 80) {
         struct _card_data   *data;
-        int                 u = uptr-cdp_unit;
         uint8               ch = 0;
 
         data = (struct _card_data *)uptr->up7;
@@ -204,11 +218,7 @@ cdp_srv(UNIT *uptr) {
     return SCPE_OK;
 }
 
-
-void
-cdp_ini(UNIT *uptr, t_bool f) {
-}
-
+
 t_stat
 cdp_attach(UNIT * uptr, CONST char *file)
 {

@@ -4,11 +4,13 @@ Operating Systems:
 TOS/360:   Will IPL, and read IPL deck. Will run some jobs.
 
 DOS/360:   Will initialize disk.
-           Will not restore disk.
-           Will run 2314 distribution.
+           Will restore disk.
+           Will run basic commands. 
+           Assembly aborts with invalid instruction.
 
 OS/360:    Will initialize disk.
            Will not restore disk.
+           (Restore overwrites interupt table during load).
            Will start to IPL OS/360
 
 ibm360_cpu.c:
@@ -19,6 +21,7 @@ ibm360_chan.c
 
 ibm360_cdp.c:
     Add support for binary mode.
+    Fix translation table.
 
 ibm360_cdr.c:
     Add support for binary mode.
@@ -40,4 +43,5 @@ ibm360_mt.c:
 
 ibm360_sys.c:
     Need to add in deposit function.
+
 

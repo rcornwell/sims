@@ -169,8 +169,8 @@ print_line(UNIT * uptr)
 
     /* Trim trailing spaces */
     for (--i; i > 0 && out[i] == ' '; i--) ;
-    out[++i] = '\n';
     out[++i] = '\r';
+    out[++i] = '\n';
     out[++i] = '\0';
 
     /* Print out buffer */
@@ -242,7 +242,7 @@ lpr_srv(UNIT *uptr) {
     if (cmd == 4) {
          uint8 ch = uptr->u5;
          uptr->u3 &= ~(LPR_CMDMSK);
-         chan_write_byte(GET_UADDR(uptr->u3), &ch);
+         chan_write_byte(addr, &ch);
          chan_end(addr, SNS_DEVEND|SNS_CHNEND);
          return SCPE_OK;
     }
@@ -251,7 +251,6 @@ lpr_srv(UNIT *uptr) {
        print_line(uptr);
        uptr->u3 &= ~(LPR_FULL|LPR_CMDMSK);
        uptr->u6 = 0;
-//           chan_end(addr, SNS_CHNEND|SNS_DEVEND);
        set_devattn(addr, SNS_DEVEND);
        return SCPE_OK;
     }

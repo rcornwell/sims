@@ -232,7 +232,7 @@ uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     if (mt_busy[GET_DEV_BUF(dptr->flags)] != 0 || (uptr->u3 & MT_CMDMSK) != 0) {
         sim_debug(DEBUG_CMD, dptr, "CMD busy unit=%d %x\n", unit, cmd);
         uptr->flags |= MT_BUSY;   /* Flag we need to send CUE */
-        mt_busy[GET_DEV_BUF(dptr->flags)] |= 2;
+//        mt_busy[GET_DEV_BUF(dptr->flags)] |= 2;
         return SNS_BSY;
     }
 
