@@ -9,8 +9,7 @@ DOS/360:   Will initialize disk.
            Assembly aborts with invalid instruction.
 
 OS/360:    Will initialize disk.
-           Will not restore disk.
-           (Restore overwrites interupt table during load).
+           Will restore disk (with timer disabled)..
            Will start to IPL OS/360
 
 ibm360_cpu.c:

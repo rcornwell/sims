@@ -150,7 +150,7 @@ t_bool build_dev_tab (void);
 /* Interval timer option */
 t_stat              rtc_srv(UNIT * uptr);
 t_stat              rtc_reset(DEVICE * dptr);
-int32               rtc_tps = 120;
+int32               rtc_tps = 60;
 
 
 /* CPU data structures
@@ -204,7 +204,7 @@ MTAB cpu_mod[] = {
     { FEAT_UNIV, FEAT_UNIV, NULL, "UNIV", NULL, NULL, NULL, "Universal instruction"},
     { FEAT_STOR, 0, NULL, "NOSTORE", NULL, NULL, NULL},
     { FEAT_STOR, FEAT_STOR, "STORE", "DECIMAL", NULL, NULL, NULL, "No storage alignment"},
-    { FEAT_TIMER, 0, "NOTIMER",  NULL, NULL, NULL},
+    { FEAT_TIMER, 0, NULL,  "NOTIMER", NULL, NULL},
     { FEAT_TIMER, FEAT_TIMER, "TIMER", "TIMER", NULL, NULL, NULL, "Interval timer"},
     { EXT_IRQ, 0, "NOEXT",  NULL, NULL, NULL},
     { EXT_IRQ, EXT_IRQ, "EXT", "EXT", NULL, NULL, NULL, "External Irq"},
@@ -417,9 +417,9 @@ int WriteByte(uint32 addr, uint32 data) {
         storepsw(OPPSW, IRC_ADDR);
         return 1;
      }
-//     if ((addr & 0xfffff0) == 0xc90 && data == 0x40) {
-//        fprintf(stderr, "Error byte\n\r");
-//     }
+     if ((addr & 0xfffff0) == 0xc90 && data == 0x40) {
+        fprintf(stderr, "Error byte\n\r");
+     }
 
      offset = 8 * (3 - (addr & 0x3));
      addr >>= 2;
@@ -1647,7 +1647,8 @@ save_dbl:
 
         case OP_ED:
         case OP_EDMK:
-                ReadByte(addr1, &src1);
+                if (ReadByte(addr1, &src1))
+                    break;
                 fill = src1;
                 addr1++;
                 src2 = 0;
@@ -1656,10 +1657,12 @@ save_dbl:
                 while(reg != 0) {
                     uint8        t;
                     uint32  temp;
-                    (void)ReadByte(addr1, &temp);
+                    if (ReadByte(addr1, &temp)) 
+                        break;
                     t = temp;
                     if (src1) {
-                        (void)ReadByte(addr2, &dest);
+                        if (ReadByte(addr2, &dest))
+                            break;
                         addr2--;
                         reg --;
                     }
@@ -1682,11 +1685,13 @@ save_dbl:
                                  cc = 2;
                         } else
                              t = fill;
-                        WriteByte(addr1, t);
+                        if (WriteByte(addr1, t))
+                            break;
                     } else if (t == 0x22) {
                         src2 = 0;
                         t = fill;
-                        WriteByte(addr1, t);
+                        if (WriteByte(addr1, t))
+                            break;
                     }
                     addr1--;
                     reg --;

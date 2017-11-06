@@ -293,6 +293,8 @@ chan_read_byte(uint16 addr, uint8 *data) {
     int         k;
 
     /* Abort if we have any errors */
+    if (chan < 0)
+        return 1;
     if (chan_status[chan] & 0x7f) 
         return 1;
     if ((ccw_cmd[chan] & 0x1)  == 0) {
@@ -347,6 +349,8 @@ chan_write_byte(uint16 addr, uint8 *data) {
     uint32       mask;
 
     /* Abort if we have any errors */
+    if (chan < 0)
+        return 1;
     if (chan_status[chan] & 0x7f) 
         return 1;
     if ((ccw_cmd[chan] & 0x1)  != 0) {
@@ -441,6 +445,8 @@ void
 set_devattn(uint16 addr, uint8 flags) {
     int          chan = find_subchan(addr);
 
+    if (chan < 0)
+        return;
     if (chan_dev[chan] == addr && (chan_status[chan] & STATUS_CEND) != 0 &&
             (flags & SNS_DEVEND) != 0) {
         chan_status[chan] |= ((uint16)flags) << 8;
@@ -454,6 +460,9 @@ set_devattn(uint16 addr, uint8 flags) {
 void
 chan_end(uint16 addr, uint8 flags) {
     int         chan = find_subchan(addr);
+
+    if (chan < 0)
+        return;
 
     if (chan_byte[chan] & BUFF_DIRTY) {
         int        k;
@@ -507,10 +516,10 @@ int  startio(uint16 addr) {
     UNIT        *uptr;
     uint8        status;
 
-    sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %x %x\n", addr, chan, 
-              ccw_cmd[chan], ccw_flags[chan]);
     if (chan < 0 || dibp == 0)
         return 3;
+    sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %x %x\n", addr, chan, 
+              ccw_cmd[chan], ccw_flags[chan]);
     uptr = find_chan_dev(addr);
     if (uptr == 0)
         return 3;
@@ -610,17 +619,17 @@ int haltio(uint16 addr) {
     }
     if (dibp->halt_io != NULL)
         chan_status[chan] = dibp->halt_io(uptr) << 8;
-    if (chan_status[chan] & (STATUS_ATTN|STATUS_PCI|STATUS_EXPT|STATUS_CHECK|
-                  STATUS_PROT|STATUS_CDATA|STATUS_CCNTL|STATUS_INTER|
-                  STATUS_CHAIN))
-        return 0;
+//    if (chan_status[chan] & (STATUS_ATTN|STATUS_PCI|STATUS_EXPT|STATUS_CHECK|
+//                  STATUS_PROT|STATUS_CDATA|STATUS_CCNTL|STATUS_INTER|
+//                  STATUS_CHAIN))
+//        return 0;
     return 0;
 }
 
 int testchan(uint16 channel) {
     uint16         st = 0;
     channel >>= 8;
-    if (channel = 0)
+    if (channel == 0)
         return 0;
     if (channel > channels) 
         return 3;
@@ -705,23 +714,24 @@ uint16 scan_chan(uint8 mask) {
      if (pend) {
           irq_pend = 1;
           i = find_subchan(pend);
-          sim_debug(DEBUG_EXP, &cpu_dev, "Scan end (%x %x)\n", chan_dev[i], 
-                 pend);
-          store_csw(i);
+          if (i >= 0) {
+              sim_debug(DEBUG_EXP, &cpu_dev, "Scan end (%x %x)\n", chan_dev[i], pend);
+              store_csw(i);
+          }
           dev_status[pend] = 0;
      } else {
-          for (i = 0; i < MAX_DEV; i++) {
-             if (dev_status[i] != 0) {
-                 pend = find_subchan(i);
-                 if (ccw_cmd[pend] == 0 && mask & (0x80 >> (i >> 8))) {
+          for (pend = 0; pend < MAX_DEV; pend++) {
+             if (dev_status[pend] != 0) {
+                 i = find_subchan(pend);
+                 if (i >= 0 && ccw_cmd[i] == 0 && mask & (0x80 >> (pend >> 8))) {
                      irq_pend = 1;
-                     M[0x44 >> 2] = (((uint32)dev_status[i]) << 24);
+                     M[0x44 >> 2] = (((uint32)dev_status[pend]) << 24);
                      M[0x40>>2] = 0;
                      sim_debug(DEBUG_EXP, &cpu_dev, 
                             "Set atten %03x %02x [%08x] %08x\n",
-                            i, dev_status[i], M[0x40 >> 2], M[0x44 >> 2]);
-                     dev_status[i] = 0;
-                     return i;
+                            i, dev_status[pend], M[0x40 >> 2], M[0x44 >> 2]);
+                     dev_status[pend] = 0;
+                     return pend;
                  }
              }
          }
@@ -803,7 +813,7 @@ set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     if ((newdev >> 8) > channels) 
         return SCPE_ARG;
 
-    if (newdev > MAX_DEV)
+    if (newdev >= MAX_DEV)
         return SCPE_ARG;
 
     devaddr = GET_UADDR(uptr->u3);

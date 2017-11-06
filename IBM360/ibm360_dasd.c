@@ -192,8 +192,8 @@ struct dasd_t
 struct disk_t
 {
     char               *name;         /* Type Name */
-    int                 cyl;          /* Number of cylinders */
-    int                 heads;        /* Number of heads/cylinder */
+    unsigned int        cyl;          /* Number of cylinders */
+    unsigned int        heads;        /* Number of heads/cylinder */
     unsigned int        bpt;          /* Max bytes per track */
     uint8               dev_type;     /* Device type code */
 }
@@ -362,6 +362,8 @@ uint8  dasd_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     case 0x3:              /* Control */
          if ((cmd & 0xfc) == 0 ||  cmd == DK_RELEASE)
             return SNS_CHNEND|SNS_DEVEND;
+         /* Fall Through */
+
     case 0x1:              /* Write command */
     case 0x2:              /* Read command */
          uptr->u3 &= ~(DK_PARAM);
@@ -401,17 +403,17 @@ t_stat dasd_srv(UNIT * uptr)
 
     /* Check if read or write command, if so grab correct cylinder */
     if (rd && data->cyl != data->ccyl) {
-        int tsize = data->tsize * disk_type[type].heads;
+        uint32 tsize = data->tsize * disk_type[type].heads;
         if (uptr->u3 & DK_CYL_DIRTY) {
-              sim_fseek(uptr->fileref, data->cpos, SEEK_SET);
-              sim_fwrite(data->cbuf, 1, tsize, uptr->fileref);
+              (void)sim_fseek(uptr->fileref, data->cpos, SEEK_SET);
+              (void)sim_fwrite(data->cbuf, 1, tsize, uptr->fileref);
               uptr->u3 &= ~DK_CYL_DIRTY;
         }
         data->ccyl = data->cyl;
-    sim_debug(DEBUG_DETAIL, dptr, "Load unit=%d cyl=%d\n", unit, data->cyl);
+        sim_debug(DEBUG_DETAIL, dptr, "Load unit=%d cyl=%d\n", unit, data->cyl);
         data->cpos = sizeof(struct dasd_header) + (data->ccyl * tsize);
-        sim_fseek(uptr->fileref, data->cpos, SEEK_SET);
-        sim_fread(data->cbuf, 1, tsize, uptr->fileref);
+        (void)sim_fseek(uptr->fileref, data->cpos, SEEK_SET);
+        (void)sim_fread(data->cbuf, 1, tsize, uptr->fileref);
     }
     sim_debug(DEBUG_POS, dptr, "state unit=%d %02x %d\n", unit, state, data->tpos);
 
@@ -426,7 +428,7 @@ t_stat dasd_srv(UNIT * uptr)
          /* Read and multi-track advance to next head */
          if ((uptr->u3 & 0x83) == 0x82) {
              sim_debug(DEBUG_DETAIL, dptr, "adv head unit=%d %02x %d %d\n", unit, state,
-                   data->tpos, uptr->u4 && 0xff);
+                   data->tpos, uptr->u4 & 0xff);
              uptr->u4 ++;
              if ((uptr->u3 & 0x7) == 1 && (uptr->u3 & 0x60) != 0)
                  uptr->u3 &= ~DK_INDEX;
@@ -1324,7 +1326,7 @@ dasd_format(UNIT * uptr) {
         return 1;
     }
     memset(&hdr, 0, sizeof(struct dasd_header));
-    strncpy(&hdr.devid[0], "CKD_P370", 8);
+    memcpy(&hdr.devid[0], "CKD_P370", 8);
     hdr.heads = disk_type[type].heads;
     hdr.tracksize = (disk_type[type].bpt | 0x1ff) + 1;
     hdr.devtype = disk_type[type].dev_type;
@@ -1370,8 +1372,6 @@ dasd_format(UNIT * uptr) {
     data->cpos = sizeof(struct dasd_header);
     data->ccyl = 0;
     data->ccyl = 0;
-//    data->cyl = 2000;
-//    data->state = DK_POS_SEEK;
     set_devattn(addr, SNS_DEVEND);
     sim_activate(uptr, 100);
     fputc('\n', stderr);
@@ -1434,12 +1434,10 @@ dasd_attach(UNIT * uptr, CONST char *file)
         detach_unit(uptr);
         return SCPE_ARG;
     }
-    sim_fseek(uptr->fileref, sizeof(struct dasd_header), SEEK_SET);
-    sim_fread(data->cbuf, 1, tsize, uptr->fileref);
+    (void)sim_fseek(uptr->fileref, sizeof(struct dasd_header), SEEK_SET);
+    (void)sim_fread(data->cbuf, 1, tsize, uptr->fileref);
     data->cpos = sizeof(struct dasd_header);
     data->ccyl = 0;
-//    data->cyl = 2000;
-//    data->state = DK_POS_SEEK;
     set_devattn(addr, SNS_DEVEND);
     sim_activate(uptr, 100);
     return SCPE_OK;
@@ -1452,8 +1450,9 @@ dasd_detach(UNIT * uptr)
     int                 type = GET_TYPE(uptr->flags);
 
     if (uptr->u3 & DK_CYL_DIRTY) {
-        sim_fseek(uptr->fileref, data->cpos, SEEK_SET);
-        sim_fwrite(data->cbuf, 1, data->tsize * disk_type[type].heads, uptr->fileref);
+        (void)sim_fseek(uptr->fileref, data->cpos, SEEK_SET);
+        (void)sim_fwrite(data->cbuf, 1, 
+               data->tsize * disk_type[type].heads, uptr->fileref);
         uptr->u3 &= ~DK_CYL_DIRTY;
     }
     if (data != 0) {
