@@ -493,6 +493,16 @@ chan_end(uint16 addr, uint8 flags) {
 
     if (chan_status[chan] & (STATUS_DEND|STATUS_CEND)) {
         chan_byte[chan] = BUFF_NEWCMD;
+
+         while ((ccw_flags[chan] & FLAG_CD)) {
+            if (load_ccw(chan, 1)) 
+                break;
+            if (ccw_count[chan] != 0 &&  (ccw_flags[chan] & FLAG_SLI) == 0) {
+                sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end length\n");
+                chan_status[chan] |= STATUS_LENGTH;
+                ccw_flags[chan] = 0;
+            }
+         }
     }
 
     irq_pend = 1;

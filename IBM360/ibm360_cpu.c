@@ -53,6 +53,7 @@ uint32       cregs[16];            /* Control registers /67 or 370 only */
 uint8        sysmsk;               /* Interupt mask */
 uint8        st_key;               /* Storage key */
 uint8        cc;                   /* CC */
+uint8        ilc;                  /* Instruction length code */
 uint8        pmsk;                 /* Program mask */
 uint16       irqcode;              /* Interupt code */
 uint8        flags;                /* Misc flags */
@@ -195,6 +196,7 @@ MTAB cpu_mod[] = {
     { UNIT_MSIZE, MEMAMOUNT(12), "196K", "196K", &cpu_set_size },
     { UNIT_MSIZE, MEMAMOUNT(16), "256K", "256K", &cpu_set_size },
     { UNIT_MSIZE, MEMAMOUNT(32), "512K", "512K", &cpu_set_size },
+    { UNIT_MSIZE, MEMAMOUNT(128), "2M", "2M", &cpu_set_size },
     { FEAT_PROT, 0, NULL, "NOPROT", NULL, NULL, NULL, "No Storage protection"},
     { FEAT_PROT, FEAT_PROT, "PROT", "PROT", NULL, NULL, NULL, "Storage protection"},
     { FEAT_DEC, 0, NULL, "NODECIMAL", NULL, NULL, NULL},
@@ -248,9 +250,9 @@ void post_extirq() {
 void storepsw(uint32 addr, uint16 ircode) {
      uint32 word;
      irqaddr = addr + 0x40;
-     word = ((uint32)sysmsk) << 24 |
-            ((uint32)st_key) << 16 |
-            ((uint32)flags) << 16 |
+     word = (((uint32)sysmsk) << 24) |
+            (((uint32)st_key) << 16) |
+            (((uint32)flags) << 16) |
             ((uint32)ircode);
      M[addr >> 2] = word;
         if (hst_lnt) {
@@ -261,8 +263,9 @@ void storepsw(uint32 addr, uint16 ircode) {
              hst[hst_p].src1 = word;
         }
      addr += 4;
-     word = ((uint32)pmsk) << 24 |
-            ((uint32)cc) << 28 |
+     word = (((uint32)ilc) << 30) |
+            (((uint32)cc) << 28) |
+            (((uint32)pmsk) << 24) |
             PC;
      M[addr >> 2] = word;
         if (hst_lnt) {
@@ -536,7 +539,7 @@ sim_instr(void)
         reason = SCPE_OK;
         /* Enable timer if option set */
         if (cpu_unit.flags & FEAT_TIMER) {
-            sim_activate(&cpu_unit, 10000);
+            sim_activate(&cpu_unit, 100);
         }
         interval_irq = 0;
 
@@ -598,8 +601,10 @@ wait_loop:
         }
 //}
 
+        ilc = 0;
         if (ReadHalf(PC, &src1))
             goto supress;
+        ilc = 1;
         if (hst_lnt)
              hst[hst_p].inst[0] = src1;
         PC += 2;
@@ -613,15 +618,17 @@ wait_loop:
             pmsk += 0x40;
             if (ReadHalf(PC, &addr1))
                 goto supress;
-                if (hst_lnt)
-                     hst[hst_p].inst[1] = addr1;
+            ilc = 2;
             PC += 2;
+            if (hst_lnt)
+                hst[hst_p].inst[1] = addr1;
             /* Check if SS */
             if ((op & 0xc0) == 0xc0) {
                 pmsk += 0x40;
                 if (ReadHalf(PC, &addr2))
                     goto supress;;
                 PC += 2;
+                ilc = 3;
                 if (hst_lnt)
                      hst[hst_p].inst[2] = addr2;
             }
@@ -656,7 +663,7 @@ opr:
                 goto supress;
             }
             if (reg1 & 0x9) {
-                reason=1;
+//                reason=1;
                 storepsw(OPPSW, IRC_SPEC);
                 goto supress;
             }
@@ -720,7 +727,9 @@ opr:
 
         case OP_BALR:
         case OP_BAL:
-                dest = ((((cc & 03) << 4) | pmsk) << 24) | PC;
+                dest = (((uint32)ilc) << 30) | 
+                       ((uint32)(cc & 03) << 28) | 
+                       (((uint32)pmsk) << 24) | PC;
                 if (op != OP_BALR || (reg & 0xf))
                     PC = addr1 & 0xffffff;
                 regs[reg1] = dest;
@@ -955,9 +964,10 @@ set_cc3:
                    storepsw(OPPSW, IRC_SPEC);
                    break;
                 }
+                src1 = regs[reg1|1];
         case OP_MH:
                 fill = 0;
-//                fprintf(stderr, "Mul %d x %d = ", src1, src2);
+                fprintf(stderr, "Mul %d x %d = ", src1, src2);
 
                 if (src1 & MSIGN) {
                     fill = 1;
@@ -991,7 +1001,7 @@ set_cc3:
                 } else {
                     regs[reg1] = src1;
                 }
-//fprintf(stderr, " %d  %08x %08x\n\r", src1, dest, src1);
+fprintf(stderr, " %d  %08x %08x\n\r", src1, dest, src1);
 //                reason =1;
                 break;
 
@@ -1601,7 +1611,7 @@ save_dbl:
                 }
                 if (dest & MSIGN) {
                     storepsw(OPPSW, IRC_FIXDIV);
-                reason =1;
+//                reason =1;
 //fprintf(stderr, "\n\r");
                     break;
                 }
@@ -2034,12 +2044,11 @@ rtc_srv(UNIT * uptr)
         int32 t;
         t = sim_rtcn_calb (rtc_tps, TMR_RTC);
         sim_activate_after(uptr, 1000000/rtc_tps);
-        t = M[0x50>>2];
-        M[0x50>>2]--;
-        if (((t ^ M[0x50>>2]) & MSIGN) != 0 && (t & MSIGN) == 0)  {
+        if (M[0x50>>2] == 0)  {
      fprintf(stderr, "Timer %08x\n\r", M[0x50>>2]);
             interval_irq = 1;
         }
+        M[0x50>>2]--;
     }
     return SCPE_OK;
 }

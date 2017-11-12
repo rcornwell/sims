@@ -197,7 +197,7 @@ uint8 lpr_startcmd(UNIT * uptr, uint16 chan, uint8 cmd)
 
     sim_debug(DEBUG_CMD, &lpr_dev, "Cmd %02x\n", cmd);
 
-    switch (cmd & 0x7) {
+    switch (cmd & 0x3) {
     case 1:              /* Write command */
          uptr->u3 &= ~(LPR_CMDMSK);
          uptr->u3 |= (cmd & LPR_CMDMSK);
@@ -215,13 +215,13 @@ uint8 lpr_startcmd(UNIT * uptr, uint16 chan, uint8 cmd)
          return SNS_CHNEND;
 
     case 0:               /* Status */
+         if (cmd == 0x4) {           /* Sense */
+             uptr->u3 &= ~(LPR_CMDMSK);
+             uptr->u3 |= (cmd & LPR_CMDMSK);
+             sim_activate(uptr, 10);       /* Start unit off */
+             return 0;
+         }
          break;
-
-    case 4:              /* Sense */
-         uptr->u3 &= ~(LPR_CMDMSK);
-         uptr->u3 |= (cmd & LPR_CMDMSK);
-         sim_activate(uptr, 10);       /* Start unit off */
-         return 0;
 
     default:              /* invalid command */
          uptr->u5 |= SNS_CMDREJ;
