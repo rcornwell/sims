@@ -281,7 +281,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
             for (j = 0; j < 80; j++) {
                 if (buffer[j] == '\n' || buffer[j] == '\0')
                     break;
-                image[j] = sim_ascii_to_six[buffer[j]];
+                image[j] = sim_ascii_to_six[buffer[j]&0177];
             }
             if (load_rec(image))
                 return SCPE_OK;

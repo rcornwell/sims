@@ -130,14 +130,15 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
     int                 addr = 0;
     int                 dlen = 0;
     char               *p;
+    char                buf[160];
 
     if (match_ext(fnam, "crd")) {
         int                 firstcard = 1;
-        uint16              buf[80];
+        uint16              cbuf[80];
         t_uint64            lbuff[24];
         int                 i;
 
-        while (sim_fread(buf, 2, 80, fileref) == 80) {
+        while (sim_fread(cbuf, 2, 80, fileref) == 80) {
 
             /* Bit flip into read buffer */
             for (i = 0; i < 24; i++) {
@@ -148,7 +149,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
                 mask = 1;
                 wd = 0;
                 for (col = 35; col >= 0; mask <<= 1) {
-                    if (buf[col-- + b] & bit)
+                    if (cbuf[col-- + b] & bit)
                         wd |= mask;
                 }
                 lbuff[i] = wd;
@@ -169,10 +170,9 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
             }
         }
     } else if (match_ext(fnam, "oct")) {
-        char                buf[160];
-
-        while (fgets(buf, 160, fileref) != 0) {
-             for(p = buf; *p == ' ' || *p == '\t'; p++);
+        while (fgets(&buf[0], 160, fileref) != 0) {
+             buf[sizeof(buf)] = '\0';
+             for(p = &buf[0]; *p == ' ' || *p == '\t'; p++);
             /* Grab address */
              for(addr = 0; *p >= '0' && *p <= '7'; p++)
                 addr = (addr << 3) + *p - '0';
@@ -185,10 +185,9 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
              }
         }
     } else if (match_ext(fnam, "txt")) {
-        char                buf[160];
-
-        while (fgets(buf, 160, fileref) != 0) {
-             for(p = buf; *p == ' ' || *p == '\t'; p++);
+        while (fgets(&buf[0], 160, fileref) != 0) {
+             buf[sizeof(buf)] = '\0';
+             for(p = &buf[0]; *p == ' ' || *p == '\t'; p++);
              /* Grab address */
              for(addr = 0; *p >= '0' && *p <= '7'; p++)
                 addr = (addr << 3) + *p - '0';
