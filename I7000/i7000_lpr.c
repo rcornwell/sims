@@ -214,6 +214,7 @@ print_line(UNIT * uptr, int chan, int unit)
 
     /* Trim trailing spaces */
     for (--i; i > 0 && out[i] == ' '; i--) ;
+    out[++i] = '\r';
     out[++i] = '\n';
     out[++i] = '\0';
     sim_debug(DEBUG_DETAIL, &lpr_dev, "WRS unit=%d [%s]\n", unit, &out[0]);
@@ -236,14 +237,15 @@ print_line(UNIT * uptr, int chan, int unit)
         i = (uptr->u5 >> 12) & 0x7f;
         if (i == 0) {
             if (uptr->flags & UNIT_ATT)
-                sim_fwrite("\r", 1, 1, uptr->fileref);
+                sim_fwrite("\r\n", 1, 2, uptr->fileref);
             if (uptr->flags & ECHO)
                 sim_putchar('\r');
         } else {
             for (; i > 1; i--) {
                 if (uptr->flags & UNIT_ATT)
-                    sim_fwrite("\n", 1, 1, uptr->fileref);
+                    sim_fwrite("\r\n", 1, 2, uptr->fileref);
                 if (uptr->flags & ECHO)
+                    sim_putchar('\r');
                     sim_putchar('\n');
                 uptr->u4++;
                 if (uptr->u4 > (int32)uptr->capac) {
@@ -329,7 +331,7 @@ uint32 lpr_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
         case 040: /* Space before */
              for (i = dev & 03; i > 1; i--) {
                 if (uptr->flags & UNIT_ATT)
-                    sim_fwrite("\n", 1, 1, uptr->fileref);
+                    sim_fwrite("\r\n", 1, 2, uptr->fileref);
                 if (uptr->flags & ECHO) {
                     sim_putchar('\r');
                     sim_putchar('\n');
@@ -356,7 +358,7 @@ uint32 lpr_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
              }
              for (; i > 0; i--) {
                 if (uptr->flags & UNIT_ATT)
-                    sim_fwrite("\n", 1, 1, uptr->fileref);
+                    sim_fwrite("\r\n", 1, 2, uptr->fileref);
                 if (uptr->flags & ECHO) {
                     sim_putchar('\r');
                     sim_putchar('\n');

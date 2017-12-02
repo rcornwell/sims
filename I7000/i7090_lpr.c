@@ -175,10 +175,10 @@ print_line(UNIT * uptr, int chan, int unit)
 
     if (outsel & PRINT_3) {
         if (uptr->flags & UNIT_ATT)
-            sim_fwrite("\n\r", 1, 4, uptr->fileref);
+            sim_fwrite("\r\n", 1, 2, uptr->fileref);
         if (uptr->flags & ECHO) {
-            sim_putchar('\n');
             sim_putchar('\r');
+            sim_putchar('\n');
         }
         uptr->u5 &= ~LPRSTA_COL72;
         uptr->u4++;
@@ -186,12 +186,12 @@ print_line(UNIT * uptr, int chan, int unit)
 
     if (outsel & PRINT_4) {
         if (uptr->flags & UNIT_ATT)
-            sim_fwrite("\n\r\n\r", 1, 6, uptr->fileref);
+            sim_fwrite("\r\n\r\n", 1, 4, uptr->fileref);
         if (uptr->flags & ECHO) {
-            sim_putchar('\n');
             sim_putchar('\r');
             sim_putchar('\n');
             sim_putchar('\r');
+            sim_putchar('\n');
         }
         uptr->u5 &= ~LPRSTA_COL72;
         uptr->u4++;
@@ -281,10 +281,10 @@ print_line(UNIT * uptr, int chan, int unit)
     /* Space printer */
     if (outsel & PRINT_2) {
         if (uptr->flags & UNIT_ATT)
-            sim_fwrite("\n\r", 1, 2, uptr->fileref);
+            sim_fwrite("\r\n", 1, 2, uptr->fileref);
         if (uptr->flags & ECHO) {
-            sim_putchar('\n');
             sim_putchar('\r');
+            sim_putchar('\n');
         }
         uptr->u4++;
     }
@@ -292,10 +292,10 @@ print_line(UNIT * uptr, int chan, int unit)
     if (outsel & PRINT_1) {
         while (uptr->u4 < (int32)uptr->capac) {
             if (uptr->flags & UNIT_ATT)
-                sim_fwrite("\n\r", 1, 2, uptr->fileref);
+                sim_fwrite("\r\n", 1, 2, uptr->fileref);
             if (uptr->flags & ECHO) {
-                sim_putchar('\n');
                 sim_putchar('\r');
+                sim_putchar('\n');
             }
             uptr->u4++;
         }
