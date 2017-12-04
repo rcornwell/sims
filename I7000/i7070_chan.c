@@ -106,7 +106,7 @@ REG                 chan_reg[] = {
     {BRDATA(ADDR, caddr, 10, 18, NUM_CHAN), REG_RO|REG_FIT},
     {BRDATA(CMD, cmd, 8, 6, NUM_CHAN), REG_RO|REG_FIT},
     {BRDATA(LIMIT, limit, 10, 18, NUM_CHAN), REG_RO|REG_FIT},
-    {BRDATA(ASM, assembly, 16, 44, NUM_CHAN), REG_VMIO|REG_RO|REG_FIT, 0},
+    {BRDATA(ASM, assembly, 16, 44, NUM_CHAN), REG_VMIO|REG_RO|REG_FIT},
     {BRDATA(LOCATION, location, 10, 18, NUM_CHAN), REG_RO|REG_FIT},
     {BRDATA(FLAGS, chan_flags, 2, 32, NUM_CHAN), REG_RO|REG_FIT},
     {NULL}

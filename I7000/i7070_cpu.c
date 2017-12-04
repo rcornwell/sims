@@ -148,10 +148,10 @@ UNIT                cpu_unit =
 
 REG                 cpu_reg[] = {
     {DRDATA(IC, IC, 20), REG_FIT},
-    {HRDATA(AC1, AC[1], 44), REG_VMIO|REG_FIT, 0},
-    {HRDATA(AC2, AC[2], 44), REG_VMIO|REG_FIT, 0},
-    {HRDATA(AC3, AC[3], 44), REG_VMIO|REG_FIT, 0},
-    {HRDATA(IND, inds, 44), REG_VMIO|REG_FIT, 0},
+    {HRDATA(AC1, AC[1], 44), REG_VMIO|REG_FIT},
+    {HRDATA(AC2, AC[2], 44), REG_VMIO|REG_FIT},
+    {HRDATA(AC3, AC[3], 44), REG_VMIO|REG_FIT},
+    {HRDATA(IND, inds, 44), REG_VMIO|REG_FIT},
     {ORDATA(SW, SW, 4), REG_FIT},
     {FLDATA(SW1, SW, 0), REG_FIT},
     {FLDATA(SW2, SW, 1), REG_FIT},

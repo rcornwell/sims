@@ -305,8 +305,8 @@ UNIT                cpu_unit =
 REG                 cpu_reg[] = {
     {ORDATAD(IC, IC, 15, "Instruction Counter"), REG_FIT},
     {ORDATAD(IR, IR, 10, "Instruction Register"), REG_FIT},
-    {ORDATAD(AC, AC, 38, "Accumulator"), REG_FIT, 0},
-    {ORDATAD(MQ, MQ, 36, "Multiplier Quotent"), REG_FIT, 0},
+    {ORDATAD(AC, AC, 38, "Accumulator"), REG_FIT},
+    {ORDATAD(MQ, MQ, 36, "Multiplier Quotent"), REG_FIT},
     {BRDATAD(XR, XR, 8, 15, 8, "Index registers"), REG_FIT},
     {ORDATAD(ID, ID, 36, "Indicator Register")},
     {ORDATAD(MA, MA, 15, "Memory Address Register"), REG_FIT},
