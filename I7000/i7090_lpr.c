@@ -378,6 +378,7 @@ t_stat lpr_srv(UNIT * uptr)
         uptr->u6 = 0;
         chan_clear(chan, DEV_WEOR | DEV_SEL);
         sim_debug(DEBUG_CHAN, &lpr_dev, "unit=%d disconnect\n", u);
+        return SCPE_OK;
     }
 
     /* If change requested, do that first */

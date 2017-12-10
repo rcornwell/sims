@@ -188,7 +188,7 @@ t_stat cdp_srv(UNIT * uptr)
             chan_clear(chan, DEV_WEOR | DEV_SEL);
             sim_debug(DEBUG_CHAN, &cdp_dev, "unit=%d disconnect\n", u);
         }
-        sim_debug(DEBUG_DETAIL, &cdp_dev, "punch card\n");
+        sim_debug(DEBUG_DETAIL, &cdp_dev, "punch card full\n");
         sim_punch_card(uptr, NULL);
         uptr->u5 |= URCSTA_IDLE;
         uptr->u5 &= ~(URCSTA_WRITE | CDPSTA_POSMASK | CDPSTA_PUNCH);
@@ -228,6 +228,7 @@ t_stat cdp_srv(UNIT * uptr)
         break;
     case TIME_ERROR:
         sim_debug(DEBUG_DATA, &cdp_dev, "no data\n");
+        chan_set_attn(chan);
         uptr->wait = 8 * (12 - (pos / 2)) /*+ 85*/;
         uptr->u5 &= ~(CDPSTA_POSMASK);
         uptr->u5 |= (24 << CDPSTA_POSSHIFT) & CDPSTA_POSMASK;
