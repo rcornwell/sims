@@ -3652,6 +3652,12 @@ control:
                         do {
                             Ma = CF(B);
                             memory_cycle(5);
+                            if (sim_interval <= 0) {        /* event queue? */
+                                reason = sim_process_event();
+                                if (reason != SCPE_OK) {
+                                     break; /* process */
+                                }
+                            }
                             temp = (B & MANT) + (A & MANT);
                         } while ((temp & EXPO) == 0);
                         A = FLAG | PRESENT | toC(Ma);

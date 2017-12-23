@@ -584,7 +584,7 @@ dtco_srv(UNIT * uptr)
                  switch(c) {
                  case '\005':   /* ^E ENQ who-are-you */
                        dtc_lstatus[ln] &= ~(BufSMASK);
-                       dtc_lstatus[ln] |= BufIRQ|BufAbnormal|BufWriteRdy;
+                       dtc_lstatus[ln] |= BufIRQ|BufWriteRdy|BufAbnormal;
                        IAR |= IRQ_12;
                        sim_debug(DEBUG_DETAIL, &dtc_dev,
                                         "Datacomm recieve ENQ %d\n", ln);
