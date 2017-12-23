@@ -171,7 +171,6 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
         }
     } else if (match_ext(fnam, "oct")) {
         while (fgets(&buf[0], 160, fileref) != 0) {
-             buf[sizeof(buf)] = '\0';
              for(p = &buf[0]; *p == ' ' || *p == '\t'; p++);
             /* Grab address */
              for(addr = 0; *p >= '0' && *p <= '7'; p++)
@@ -186,7 +185,6 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
         }
     } else if (match_ext(fnam, "txt")) {
         while (fgets(&buf[0], 160, fileref) != 0) {
-             buf[sizeof(buf)] = '\0';
              for(p = &buf[0]; *p == ' ' || *p == '\t'; p++);
              /* Grab address */
              for(addr = 0; *p >= '0' && *p <= '7'; p++)
