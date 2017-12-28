@@ -56,16 +56,21 @@ echo.                                                                           
 if ERRORLEVEL 1 exit /B 1
 echo warning: Adding Windows XP suppport to all project files at %TIME%
 
-echo Set objFSO = CreateObject("Scripting.FileSystemObject")                       >>%1.fix.vbs
-echo Set objFile = objFSO.OpenTextFile(Wscript.Arguments(0), 1)                    >>%1.fix.vbs
-echo.                                                                              >>%1.fix.vbs
-echo strText = objFile.ReadAll                                                     >>%1.fix.vbs
-echo objFile.Close                                                                 >>%1.fix.vbs
-echo strNewText = Replace(strText, "</PlatformToolset>", "_xp</PlatformToolset>")  >>%1.fix.vbs
-echo.                                                                              >>%1.fix.vbs
-echo Set objFile = objFSO.OpenTextFile(Wscript.Arguments(0), 2)                    >>%1.fix.vbs
-echo objFile.Write strNewText                                                      >>%1.fix.vbs
-echo objFile.Close                                                                 >>%1.fix.vbs
+call :FindVCVersion _VC_VER
+echo Set objFSO = CreateObject("Scripting.FileSystemObject")                           >>%1.fix.vbs
+echo Set objFile = objFSO.OpenTextFile(Wscript.Arguments(0), 1)                        >>%1.fix.vbs
+echo.                                                                                  >>%1.fix.vbs
+echo strText = objFile.ReadAll                                                         >>%1.fix.vbs
+echo objFile.Close                                                                     >>%1.fix.vbs
+echo strText = Replace(strText, "</PlatformToolset>", "_xp</PlatformToolset>")         >>%1.fix.vbs
+echo.                                                                                  >>%1.fix.vbs
+if %_VC_VER% GEQ 14 echo strText = Replace(strText,                                   _>>%1.fix.vbs
+if %_VC_VER% GEQ 14 echo          "__CLEANUP_C</PreprocessorDefinitions>",            _>>%1.fix.vbs
+if %_VC_VER% GEQ 14 echo "__CLEANUP_C;_USING_V110_SDK71_</PreprocessorDefinitions>")  _>>%1.fix.vbs
+if %_VC_VER% GEQ 14 echo.                                                              >>%1.fix.vbs
+echo Set objFile = objFSO.OpenTextFile(Wscript.Arguments(0), 2)                        >>%1.fix.vbs
+echo objFile.Write strText                                                             >>%1.fix.vbs
+echo objFile.Close                                                                     >>%1.fix.vbs
 
 call :_Fix_PlatformToolset %1 %1
 for %%f in (*.vcxproj) do call :_Fix_PlatformToolset %1 %%f
@@ -118,8 +123,8 @@ if not "%_X_LIBPCRE%"   == "" set _X_BUILD=BUILD
 
 
 :_do_rom
-if "%_X_ROM%" == "" goto _done_rom
 pushd ..
+if "%_X_ROM%" == "" goto _done_rom
 SET _BLD=
 if exist BIN\NT\Win32-Debug\BuildROMs.exe SET _BLD=BIN\NT\Win32-Debug\BuildROMs.exe
 if exist BIN\NT\Win32-Release\BuildROMs.exe SET _BLD=BIN\NT\Win32-Release\BuildROMs.exe
@@ -131,8 +136,13 @@ if "%_BLD%" == "" echo ************************************************
 if "%_BLD%" == "" echo ************************************************
 if "%_BLD%" == "" exit 1
 %_BLD%
+if not errorlevel 1 goto _done_rom
+if not exist "BIN\NT\Win32-Release\BuildROMs.exe" exit 1
+del "BIN\NT\Win32-Release\BuildROMs.exe"
 popd
+goto _do_rom
 :_done_rom
+popd
 
 :_check_build
 if "%_X_BUILD%" == "" goto _done_build
@@ -152,12 +162,14 @@ if not exist ../../windows-build/pthreads/pthread.h goto _notice1
 findstr "/c:_MSC_VER >= 1900" ..\..\windows-build\pthreads\pthread.h >NUL
 if ERRORLEVEL 1 goto _notice2
 if "%_X_LIBSDL%" == "" goto _done_libsdl
-if not exist ../../windows-build/libSDL/SDL2-2.0.3/include/SDL.h goto _notice2
+if not exist ../../windows-build/libSDL/SDL2-2.0.5/include/SDL.h goto _notice2
 if not exist "..\..\windows-build\libpng-1.6.18\projects\vstudio\Release Library\*" goto _notice2
 if not exist "../../windows-build/libSDL/Microsoft DirectX SDK (June 2010)/Lib/x86/dxguid.lib" goto _notice2
 findstr "/c:LIBSDL_FTOL2_SSE" ..\..\windows-build\Windows-Build_Versions.txt >NUL
 if ERRORLEVEL 1 goto _notice2
 findstr "/c:LIBSDL_ALLMUL" ..\..\windows-build\Windows-Build_Versions.txt >NUL
+if ERRORLEVEL 1 goto _notice2
+findstr "/c:LIBSDL_ALLSHR" ..\..\windows-build\Windows-Build_Versions.txt >NUL
 if ERRORLEVEL 1 goto _notice2
 :_done_libsdl
 if "%_X_LIBPCRE%" == "" goto _done_libpcre
@@ -189,7 +201,7 @@ if %_VC_VER% GEQ 14 goto _check_new_library
 if %_LIB_VC_VER% LSS 14 goto _done_library
 goto _setup_library
 :_check_new_library
-if %_LIB_VC_VER% GEQ 14 godo _done_library
+if %_LIB_VC_VER% GEQ 14 goto _done_library
 :_setup_library
 if %_VC_VER% LSS 14 set _VCLIB_DIR_=vstudio 2008
 if %_VC_VER% GEQ 14 set _VCLIB_DIR_=vstudio

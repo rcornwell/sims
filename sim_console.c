@@ -480,6 +480,7 @@ struct BITSAMPLE {
 typedef struct BITSAMPLE_REG BITSAMPLE_REG;
 struct BITSAMPLE_REG {
     REG             *reg;           /* Register to be sampled */
+    uint32           idx;           /* Register index */
     t_bool          indirect;       /* Register value points at memory */
     DEVICE          *dptr;          /* Device register is part of */
     UNIT            *uptr;          /* Unit Register is related to */
@@ -503,6 +504,7 @@ struct REMOTE {
     t_bool          repeat_pending;         /* repeat delivery pending */
     char            *repeat_action;         /* command(s) to repeatedly execute */
     int             smp_sample_interval;    /* cycles between samples */
+    int             smp_sample_dither_pct;  /* dithering of cycles interval */
     uint32          smp_reg_count;          /* sample register count */
     BITSAMPLE_REG   *smp_regs;              /* registers being sampled */
     };
@@ -533,7 +535,10 @@ if (rem->smp_reg_count == 0) {
 for (reg = 0; reg < rem->smp_reg_count; reg++) {
     uint32 bit;
 
-    fprintf (st, "}%s %s%s %d:", rem->smp_regs[reg].dptr->name, rem->smp_regs[reg].reg->name, rem->smp_regs[reg].indirect ? " -I" : "", rem->smp_regs[reg].bits[0].depth);
+    if (rem->smp_regs[reg].reg->depth > 1)
+        fprintf (st, "}%s %s[%d] %s %d:", rem->smp_regs[reg].dptr->name, rem->smp_regs[reg].reg->name, rem->smp_regs[reg].idx, rem->smp_regs[reg].indirect ? " -I" : "", rem->smp_regs[reg].bits[0].depth);
+    else
+        fprintf (st, "}%s %s%s %d:", rem->smp_regs[reg].dptr->name, rem->smp_regs[reg].reg->name, rem->smp_regs[reg].indirect ? " -I" : "", rem->smp_regs[reg].bits[0].depth);
     for (bit = 0; bit < rem->smp_regs[reg].width; bit++)
         fprintf (st, "%s%d", (bit != 0) ? "," : "", rem->smp_regs[reg].bits[bit].tot);
     fprintf (st, "\n");
@@ -614,14 +619,20 @@ for (i=connections=0; i<sim_rem_con_tmxr.lines; i++) {
         uint32 reg;
         DEVICE *dptr = NULL;
 
-        fprintf (st, "Register Bit Sampling is occurring every %d cycles\n", rem->smp_sample_interval);
+        if (rem->smp_sample_dither_pct)
+            fprintf (st, "Register Bit Sampling is occurring every %d cycles (dithered %d percent)\n", rem->smp_sample_interval, rem->smp_sample_dither_pct);
+        else
+            fprintf (st, "Register Bit Sampling is occurring every %d cycles\n", rem->smp_sample_interval);
         fprintf (st, " Registers being sampled are: ");
         for (reg = 0; reg < rem->smp_reg_count; reg++) {
             if (rem->smp_regs[reg].indirect)
                 fprintf (st, " indirect ");
             if (dptr != rem->smp_regs[reg].dptr)
                 fprintf (st, "%s ", rem->smp_regs[reg].dptr->name);
-            fprintf (st, "%s%s", rem->smp_regs[reg].reg->name, ((reg + 1) < rem->smp_reg_count) ? ", " : "");
+            if (rem->smp_regs[reg].reg->depth > 1)
+                fprintf (st, "%s[%d]%s", rem->smp_regs[reg].reg->name, rem->smp_regs[reg].idx, ((reg + 1) < rem->smp_reg_count) ? ", " : "");
+            else
+                fprintf (st, "%s%s", rem->smp_regs[reg].reg->name, ((reg + 1) < rem->smp_reg_count) ? ", " : "");
             dptr = rem->smp_regs[reg].dptr;
             }
         fprintf (st, "\n");
@@ -875,6 +886,8 @@ stat = sim_rem_active_command->action (sim_rem_active_command->arg, cptr);/* exe
 if (stat != SCPE_OK)
     stat = _sim_rem_message (gbuf, stat);       /* display results */
 sim_last_cmd_stat = SCPE_BARE_STATUS(stat);
+if (sim_vm_post != NULL)                        /* optionally let the simulator know */
+    (*sim_vm_post) (TRUE);                      /* something might have changed */
 if (!sim_processing_event) {
     sim_ttrun ();                               /* set console mode */
     sim_cancel (rem_con_data_unit);             /* force immediate activation of sim_rem_con_data_svc */
@@ -1027,7 +1040,7 @@ return stat;
 static t_stat sim_rem_collect_cmd_setup (int32 line, CONST char **iptr)
 {
 char gbuf[CBUFSIZE];
-int32 samples, cycles;
+int32 samples, cycles, dither_pct;
 t_bool all_stop = FALSE;
 t_stat stat = SCPE_OK;
 CONST char *cptr = *iptr;
@@ -1073,6 +1086,7 @@ if ((stat != SCPE_OK) || (samples <= 0)) {      /* error? */
     }
 else {
     const char *tptr;
+    int32 event_time = rem->smp_sample_interval;
 
     cptr = get_glyph (cptr, gbuf, 0);               /* get next glyph */
     if (MATCH_CMD (gbuf, "SAMPLES") != 0) {
@@ -1095,6 +1109,23 @@ else {
         *iptr = cptr;
         return sim_messagef (SCPE_ARG, "Expected CYCLES found: %s\n", gbuf);
         }
+    cptr = get_glyph (cptr, gbuf, 0);               /* get next glyph */
+    if ((MATCH_CMD (gbuf, "DITHER") != 0) || (*cptr == 0)) {
+        *iptr = cptr;
+        return sim_messagef (SCPE_ARG, "Expected DITHER found: %s\n", gbuf);
+        }
+    cptr = get_glyph (cptr, gbuf, 0);               /* get next glyph */
+    dither_pct = (int32) get_uint (gbuf, 10, INT_MAX, &stat);
+    if ((stat != SCPE_OK) ||                        /* error? */
+        (dither_pct < 0) || (dither_pct > 25)) {
+        *iptr = cptr;
+        return sim_messagef (SCPE_ARG, "Expected value found: %s\n", gbuf);
+        }
+    cptr = get_glyph (cptr, gbuf, 0);               /* get next glyph */
+    if ((MATCH_CMD (gbuf, "PERCENT") != 0) || (*cptr == 0)) {
+        *iptr = cptr;
+        return sim_messagef (SCPE_ARG, "Expected PERCENT found: %s\n", gbuf);
+        }
     tptr = strcpy (gbuf, "STOP");                   /* Start from a clean slate */
     sim_rem_collect_cmd_setup (rem->line, &tptr);
     rem->smp_sample_interval = cycles;
@@ -1104,6 +1135,7 @@ else {
         char tbuf[2*CBUFSIZE];
         uint32 bit, width;
         REG *reg;
+        uint32 idx;
         int32 saved_switches = sim_switches;
         t_bool indirect = FALSE;
         BITSAMPLE_REG *smp_regs;
@@ -1132,6 +1164,25 @@ else {
             stat = sim_messagef (SCPE_NXREG, "Nonexistent Register: %s\n", gbuf);
             break;
             }
+        if (*tptr == '[') {                             /* subscript? */
+            const char *tgptr = ++tptr;
+
+            if (reg->depth <= 1) {                      /* array register? */
+                stat = sim_messagef (SCPE_SUB, "Not Array Register: %s\n", reg->name);
+                break;
+                }
+            idx = (uint32) strtotv (tgptr, &tptr, 10);  /* convert index */
+            if ((tgptr == tptr) || (*tptr++ != ']')) {
+                stat = sim_messagef (SCPE_SUB, "Missing or Invalid Register Subscript: %s[%s\n", reg->name, tgptr);
+                break;
+                }
+            if (idx >= reg->depth) {                    /* validate subscript */
+                stat = sim_messagef (SCPE_SUB, "Invalid Register Subscript: %s[%d]\n", reg->name, idx);
+                break;
+                }
+            }
+        else
+            idx = 0;                                    /* not array */
         smp_regs = (BITSAMPLE_REG *)realloc (rem->smp_regs, (rem->smp_reg_count + 1) * sizeof(*smp_regs));
         if (smp_regs == NULL) {
             stat = SCPE_MEM;
@@ -1139,6 +1190,7 @@ else {
             }
         rem->smp_regs = smp_regs;
         smp_regs[rem->smp_reg_count].reg = reg;
+        smp_regs[rem->smp_reg_count].idx = idx;
         smp_regs[rem->smp_reg_count].dptr = sim_dfdev;
         smp_regs[rem->smp_reg_count].uptr = sim_dfunit;
         smp_regs[rem->smp_reg_count].indirect = indirect;
@@ -1167,7 +1219,9 @@ else {
         sim_rem_collect_cmd_setup (line, &cptr);/* Cleanup mess */
         return stat;
         }
-    sim_activate (&rem_con_smp_smpl_units[rem->line], rem->smp_sample_interval);
+    if (rem->smp_sample_dither_pct)
+        event_time = (((rand() % (2 * rem->smp_sample_dither_pct)) - rem->smp_sample_dither_pct) * event_time) / 100;
+    sim_activate (&rem_con_smp_smpl_units[rem->line], event_time);
     }
 *iptr = cptr;
 return stat;
@@ -1178,7 +1232,7 @@ t_stat sim_rem_con_repeat_svc (UNIT *uptr)
 int line = uptr - rem_con_repeat_units;
 REMOTE *rem = &sim_rem_consoles[line];
 
-sim_debug (DBG_REP, &sim_remote_console, "sim_rem_con_repeat_svc(line=%d) - interval=%d\n", line, rem->repeat_interval);
+sim_debug (DBG_REP, &sim_remote_console, "sim_rem_con_repeat_svc(line=%d) - interval=%d usecs\n", line, rem->repeat_interval);
 if (rem->repeat_interval) {
     rem->repeat_pending = TRUE;
     sim_activate_after (uptr, rem->repeat_interval);        /* reschedule */
@@ -1209,7 +1263,7 @@ for (i = 0; i < bit->depth; i++)    /* set all value bits */
 static void sim_rem_collect_reg_bits (BITSAMPLE_REG *reg)
 {
 uint32 i;
-t_value val = get_rval (reg->reg, 0);
+t_value val = get_rval (reg->reg, reg->idx);
 
 if (reg->indirect)
     val = get_aval ((t_addr)val, reg->dptr, reg->uptr);
@@ -1244,10 +1298,14 @@ t_stat sim_rem_con_smp_collect_svc (UNIT *uptr)
 int line = uptr - rem_con_smp_smpl_units;
 REMOTE *rem = &sim_rem_consoles[line];
 
-sim_debug (DBG_SAM, &sim_remote_console, "sim_rem_con_smp_collect_svc(line=%d) - interval=%d\n", line, rem->smp_sample_interval);
+sim_debug (DBG_SAM, &sim_remote_console, "sim_rem_con_smp_collect_svc(line=%d) - interval=%d, dither=%d%%\n", line, rem->smp_sample_interval, rem->smp_sample_dither_pct);
 if (rem->smp_sample_interval && (rem->smp_reg_count != 0)) {
+    int32 event_time = rem->smp_sample_interval;
+
+    if (rem->smp_sample_dither_pct)
+        event_time = (((rand() % (2 * rem->smp_sample_dither_pct)) - rem->smp_sample_dither_pct) * event_time) / 100;
     sim_rem_collect_registers (rem);
-    sim_activate (uptr, rem->smp_sample_interval);        /* reschedule */
+    sim_activate (uptr, event_time);                    /* reschedule */
     }
 return SCPE_OK;
 }
@@ -1324,7 +1382,9 @@ for (i=(was_active_command ? sim_rem_cmd_active_line : 0);
             }
         }
     else {
-        if ((!rem->repeat_pending) || (rem->buf_ptr != 0)) {
+        if (((!rem->repeat_pending) && (rem->act == NULL)) ||   /* Repeat isn't pending AND no prior commands still active */
+            (rem->buf_ptr != 0) ||                              /* OR Not at beginning of line */
+            (tmxr_input_pending_ln (lp))) {                     /* OR input available to read */
             c = tmxr_getc_ln (lp);
             if (!(TMXR_VALID & c))
                 continue;
@@ -1403,10 +1463,12 @@ for (i=(was_active_command ? sim_rem_cmd_active_line : 0);
                     break;
                     }
                 else {
-                    if (rem->repeat_pending) {
+                    if ((rem->repeat_pending) &&            /* New repeat pending */
+                        (rem->act == NULL) &&               /* AND no prior still active */
+                        (!tmxr_input_pending_ln (lp))) {    /* AND no session input pending */
                         rem->repeat_pending = FALSE;
-                        sim_rem_setact (i, rem->repeat_action);
-                        sim_rem_getact (i, rem->buf, rem->buf_size);
+                        sim_rem_setact (rem-sim_rem_consoles, rem->repeat_action);
+                        sim_rem_getact (rem-sim_rem_consoles, rem->buf, rem->buf_size);
                         if (!master_session)
                             tmxr_linemsgf (lp, "%s%s\n", sim_prompt, rem->buf);
                         else
@@ -1508,7 +1570,10 @@ for (i=(was_active_command ? sim_rem_cmd_active_line : 0);
                     break;
                 }
             c = 0;
-            if ((!got_command) && (rem->single_mode) && (tmxr_input_pending_ln (lp))) {
+            if ((!got_command) &&                   /* No Command yet */
+                (rem->single_mode) &&               /* AND single command mode */
+                (tmxr_input_pending_ln (lp)) &&     /* AND something ready to read */
+                (rem->act == NULL)) {               /* AND no prior still active */
                 c = tmxr_getc_ln (lp);
                 c = c & ~TMXR_VALID;
                 }
@@ -1916,6 +1981,7 @@ if (sim_rem_master_mode) {
     sim_printf ("Command input starting on Master Remote Console Session\n");
     stat = sim_run_boot_prep (0);
     sim_rem_master_was_enabled = TRUE;
+    sim_last_cmd_stat = SCPE_OK;
     while (sim_rem_master_mode) {
         sim_rem_consoles[0].single_mode = FALSE;
         sim_cancel (rem_con_data_unit);
@@ -1925,8 +1991,14 @@ if (sim_rem_master_mode) {
             stat_nomessage = stat & SCPE_NOMESSAGE;         /* extract possible message supression flag */
             stat = _sim_rem_message ("RUN", stat);
             }
+        sim_debug (DBG_MOD, &sim_remote_console, "Master Session Returned: Status - %d Active_Line: %d, Mode: %s, Active Cmd: %s\n", stat, sim_rem_cmd_active_line, sim_rem_consoles[0].single_mode ? "Single" : "^E Stopped", sim_rem_active_command ? sim_rem_active_command->name : "");
         if (stat == SCPE_EXIT)
             sim_rem_master_mode = FALSE;
+        sim_rem_cmd_active_line = 0;                    /* Make it look like */
+        sim_rem_consoles[0].single_mode = FALSE;
+        if (stat != SCPE_STEP)
+            sim_rem_active_command = &allowed_single_remote_cmds[0];/* Dummy */
+        sim_last_cmd_stat = SCPE_BARE_STATUS(stat);     /* make exit status available to remote console */
         }
     sim_rem_master_was_enabled = FALSE;
     sim_rem_master_was_connected = FALSE;
