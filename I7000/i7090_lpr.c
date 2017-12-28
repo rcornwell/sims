@@ -374,7 +374,7 @@ t_stat lpr_srv(UNIT * uptr)
     /* Channel has disconnected, abort current line. */
     if (uptr->u5 & URCSTA_CMD && chan_stat(chan, DEV_DISCO)) {
         print_line(uptr, chan, u);
-        uptr->u5 &= ~(URCSTA_WRITE | URCSTA_READ | URCSTA_CMD | LPRSTA_EOR);
+        uptr->u5 &= ~(URCSTA_WRITE | URCSTA_READ | URCSTA_CMD | LPRSTA_EOR | LPRSTA_CHANGE);
         uptr->u6 = 0;
         chan_clear(chan, DEV_WEOR | DEV_SEL);
         sim_debug(DEBUG_CHAN, &lpr_dev, "unit=%d disconnect\n", u);

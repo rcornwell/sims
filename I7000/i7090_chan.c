@@ -583,15 +583,15 @@ chan_proc()
                                 "chan %d -Sel< %o\n", chan, cmd[chan] & 070);
                         continue;       /* Handle new command next time */
                     case IOCD:
-                        chan_flags[chan] &= ~(STA_START|STA_ACTIVE/*|STA_WAIT*/);
+                        chan_flags[chan] &= ~(STA_START|STA_ACTIVE);
                         if (chan_dev.dctrl & cmask)
                             sim_debug(DEBUG_DETAIL, &chan_dev,
                                 "chan %d -Sel< %o\n", chan, cmd[chan] & 070);
-                        continue;       /* Handle new command next time */
+                        continue;
                     case IOCT:
                     case IORT:
                     case IOST:
-                        chan_flags[chan] &= ~(STA_ACTIVE/*|STA_WAIT*/);
+                        chan_flags[chan] &= ~(STA_ACTIVE);
                         chan_flags[chan] |= STA_TWAIT;
                         if (chan_dev.dctrl & cmask)
                             sim_debug(DEBUG_DETAIL, &chan_dev,
@@ -1371,6 +1371,7 @@ chan_load(int chan, uint16 addr)
            that has not been started or is not in select state */
         if ((chan_flags[chan] & (DEV_SEL | STA_START)) != (DEV_SEL|STA_START))
             return SCPE_IOERR;
+
         /* If channel active, or waiting EOR, should hold CPU */
         if (chan_flags[chan] & (STA_ACTIVE | STA_WAIT)) {
             chan_flags[chan] |= STA_PEND;
