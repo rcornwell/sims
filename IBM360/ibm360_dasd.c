@@ -1007,7 +1007,7 @@ index:
 
     case DK_RD_CKD:          /* Read count, key and data */
          /* Wait for any count */
-         if (count == 0 && state == DK_POS_CNT) {
+         if (count == 0 && state == DK_POS_CNT && data->rec != 0) {
              uptr->u3 |= DK_PARAM;
              uptr->u3 &= ~DK_INDEX;
              sim_debug(DEBUG_DETAIL, dptr, "RD CKD unit=%d %d k=%d d=%d %02x %04x\n",
@@ -1040,9 +1040,9 @@ index:
 rd:
          if (uptr->u3 & DK_PARAM) {
              /* Check for end of file */
-             if (state == DK_POS_DATA && count == 0 && data->dlen == 0) {
-                 sim_debug(DEBUG_DETAIL, dptr, "RD EOF unit=%d %x %d %d\n",
-                          unit, state, count, data->rec);
+             if (state == DK_POS_DATA && data->dlen == 0) {
+                 sim_debug(DEBUG_DETAIL, dptr, "RD EOF unit=%d %x %d %d d=%d\n",
+                          unit, state, count, data->rec, data->dlen);
                 uptr->u3 &= ~(0xff|DK_PARAM);
                 chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
                 break;
@@ -1229,6 +1229,14 @@ wrckd:
                   uptr->u5 = SNS_TRKOVR << 8;
                   uptr->u3 &= ~(0xff|DK_PARAM);
                   chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                  break;
+             } else if ((cmd == DK_WR_KD || cmd == DK_WR_D) && state == DK_POS_DATA
+                   && data->dlen == 0) {
+                  sim_debug(DEBUG_DETAIL, dptr, "WR EOF unit=%d %x %d %d d=%d\n",
+                            unit, state, count, data->rec, data->dlen);
+                  uptr->u3 &= ~(0xff|DK_PARAM);
+                  uptr->u6 = cmd;
+                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
                   break;
              } else if (state == DK_POS_DATA && data->count == data->dlen) {
                   uptr->u6 = cmd;

@@ -351,9 +351,10 @@ int WriteFull(uint32 addr, uint32 data) {
         return 1;
      }
 
-//     if ((addr & 0xfffff0) == 0xc90 && data == 0x40404040) {
-//        fprintf(stderr, "Error word\n\r");
-//     }
+    sim_debug(DEBUG_INST, &cpu_dev, "wr fu %08x %08x ", addr, data);
+     if ((addr & 0xfffffc) == 0x03c80) {
+        fprintf(stderr, "Error word\n\r");
+     }
 
      offset = addr & 0x3;
      addr >>= 2;
@@ -420,7 +421,8 @@ int WriteByte(uint32 addr, uint32 data) {
         storepsw(OPPSW, IRC_ADDR);
         return 1;
      }
-     if ((addr & 0xfffff0) == 0xc90 && data == 0x40) {
+    sim_debug(DEBUG_INST, &cpu_dev, "wr by %08x %02x ", addr, data);
+     if ((addr & 0xfffffc) == 0x03c80) {
         fprintf(stderr, "Error byte\n\r");
      }
 
@@ -462,9 +464,10 @@ int WriteHalf(uint32 addr, uint32 data) {
         return 1;
      }
 
-//     if ((addr & 0xfffff0) == 0xc90 && data == 0x4040) {
-//        fprintf(stderr, "Error half\n\r");
-//     }
+    sim_debug(DEBUG_INST, &cpu_dev, "wr hf %08x %04x ", addr, data);
+     if ((addr & 0xfffffc) == 0x03c80) {
+        fprintf(stderr, "Error half\n\r");
+     }
      offset = addr & 0x3;
      addr >>= 2;
 
@@ -607,6 +610,8 @@ wait_loop:
         ilc = 1;
         if (hst_lnt)
              hst[hst_p].inst[0] = src1;
+        if ((PC & 0xFFFFF0) != 0xBA0)
+        sim_debug(DEBUG_INST, &cpu_dev, "%08x %04x ", PC, src1 & 0xFFFF);
         PC += 2;
         pmsk &= ~ILMASK;
         reg = (uint8)(src1 & 0xff);
@@ -622,6 +627,8 @@ wait_loop:
             PC += 2;
             if (hst_lnt)
                 hst[hst_p].inst[1] = addr1;
+        if ((PC & 0xFFFFF0) != 0xBA0)
+                sim_debug(DEBUG_INST, &cpu_dev, "%04x ", addr1 & 0xFFFF);
             /* Check if SS */
             if ((op & 0xc0) == 0xc0) {
                 pmsk += 0x40;
@@ -631,9 +638,13 @@ wait_loop:
                 ilc = 3;
                 if (hst_lnt)
                      hst[hst_p].inst[2] = addr2;
+        if ((PC & 0xFFFFF0) != 0xBA0)
+                sim_debug(DEBUG_INST, &cpu_dev, "%04x ", addr2 & 0xFFFF);
             }
         }
 
+        if ((PC & 0xFFFFF0) != 0xBA0)
+        sim_debug(DEBUG_INST, &cpu_dev, " -> ");
         /* Add in history here */
 opr:
         if (op & 0xc0) {
@@ -716,6 +727,8 @@ opr:
              hst[hst_p].src2 = src2;
         }
 
+        if ((PC & 0xFFFFF0) != 0xBA0)
+        sim_debug(DEBUG_INST, &cpu_dev, "%08x %08x - %08x %08x\n", addr1, addr2, src1, src2);
         /* Preform opcode */
         switch (op) {
         case OP_SPM:
@@ -1382,6 +1395,8 @@ save_dbl:
                    } else {
                        dest = src1;
                    }
+        if ((PC & 0xFFFFF0) != 0xBA0)
+                   sim_debug(DEBUG_INST, &cpu_dev, "%02x ", dest);
 //fprintf(stderr, " %x -> %x", src1, dest);
                    if (WriteByte(addr1, dest))
                        break;
@@ -1390,6 +1405,7 @@ save_dbl:
                    reg--;
                 } while (reg != 0xff);
 //fprintf(stderr, "\n\r");
+                   sim_debug(DEBUG_INST, &cpu_dev, "\n");
                 break;
 
         case OP_CLC:
@@ -1990,6 +2006,13 @@ save_dbl:
              hst[hst_p].cc = cc;
         }
 
+        if ((PC & 0xFFFFF0) != 0xBA0) {
+        sim_debug(DEBUG_INST, &cpu_dev, "R0=%08x R1=%08x R2=%08x R3=%08x ", regs[0], regs[1], regs[2], regs[3]);
+        sim_debug(DEBUG_INST, &cpu_dev, "R4=%08x R5=%08x R6=%08x R7=%08x\n", regs[4], regs[5], regs[6], regs[7]);
+        sim_debug(DEBUG_INST, &cpu_dev, "R8=%08x R9=%08x RA=%08x RB=%08x ", regs[8], regs[9], regs[10], regs[11]);
+        sim_debug(DEBUG_INST, &cpu_dev, "RC=%08x RD=%08x RE=%08x RF=%08x\n", regs[12], regs[13], regs[14], regs[15]);
+}
+    
         if (irqaddr != 0) {
 supress:
              src1 = M[irqaddr>>2];
