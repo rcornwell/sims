@@ -724,7 +724,7 @@ int32 i, j, c, cflag, ac, xr, y, dev;
 uint64 inst;
 
 inst = val[0];
-cflag = (uptr == NULL) || (uptr == &cpu_unit);
+cflag = (uptr == NULL) || (uptr == &cpu_unit[0]);
 if (sw & SWMASK ('A')) {                                /* ASCII? */
     if (inst > 0377)
         return SCPE_ARG;
@@ -851,7 +851,7 @@ t_value ac, dev;
 t_stat r;
 char gbuf[CBUFSIZE], cbuf[2*CBUFSIZE];
 
-cflag = (uptr == NULL) || (uptr == &cpu_unit);
+cflag = (uptr == NULL) || (uptr == &cpu_unit[0]);
 while (isspace (*cptr)) cptr++;
 memset (cbuf, '\0', sizeof(cbuf));
 strncpy (cbuf, cptr, sizeof(cbuf)-7);

@@ -103,18 +103,7 @@
 #define HIST_MIN        64
 #define HIST_MAX        500000
 #define TMR_RTC         0
-
-#define UNIT_V_MSIZE    (UNIT_V_UF + 0)
-#if KI
-#define UNIT_MSIZE      (0177 << UNIT_V_MSIZE)
-#else
-#define UNIT_MSIZE      (017 << UNIT_V_MSIZE)
-#endif
-#define UNIT_V_PAGE     (UNIT_V_MSIZE + 8)
-#define UNIT_TWOSEG     (1 << UNIT_V_PAGE)
-#define UNIT_ITSPAGE    (2 << UNIT_V_PAGE)
-#define UNIT_BBNPAGE    (4 << UNIT_V_PAGE)
-#define UNIT_M_PAGE     (7 << UNIT_V_PAGE)
+#define TMR_QUA         1
 
 
 uint64  M[MAXMEMSIZE];                        /* Memory */
@@ -209,12 +198,18 @@ uint32  fault_addr;                           /* Fault address */
 uint64  opc;                                  /* Saved PC and Flags */
 uint32  mar;                                  /* Memory address compare */
 uint16  ofa;                                  /* Output fault address */
+uint32  qua_time;                             /* Quantum clock value */
+uint8   qua_enb;                              /* Enable quantum clock */
 #endif
 
 char    dev_irq[128];                         /* Pending irq by device */
 t_stat  (*dev_tab[128])(uint32 dev, uint64 *data);
 t_stat  rtc_srv(UNIT * uptr);
 int32   rtc_tps = 60;
+#if ITS
+t_stat  qua_srv(UNIT * uptr);
+int32   qua_tps = 250000;
+#endif
 int32   tmxr_poll = 10000;
 
 typedef struct {
@@ -258,7 +253,11 @@ t_bool build_dev_tab (void);
    cpu_mod      CPU modifier list
 */
 
-UNIT cpu_unit = { UDATA (&rtc_srv, UNIT_FIX|UNIT_BINK|UNIT_TWOSEG, MAXMEMSIZE) };
+UNIT cpu_unit[] = { { UDATA (&rtc_srv, UNIT_IDLE|UNIT_FIX|UNIT_BINK|UNIT_TWOSEG, MAXMEMSIZE) },
+#if ITS
+                    { UDATA (&qua_srv, UNIT_IDLE|UNIT_DIS, 0) }
+#endif    
+                   };
 
 REG cpu_reg[] = {
     { ORDATA (PC, PC, 18) },
@@ -294,7 +293,7 @@ MTAB cpu_mod[] = {
     { UNIT_MSIZE, 8, "128K", "128K", &cpu_set_size },
     { UNIT_MSIZE, 12, "196K", "196K", &cpu_set_size },
     { UNIT_MSIZE, 16, "256K", "256K", &cpu_set_size },
-#if KI_22BIT|KI
+#if KI_22BIT|KI|ITS
     { UNIT_MSIZE, 32, "512K", "512K", &cpu_set_size },
     { UNIT_MSIZE, 64, "1024K", "1024K", &cpu_set_size },
     { UNIT_MSIZE, 128, "2048K", "2048K", &cpu_set_size },
@@ -333,7 +332,7 @@ DEBTAB              cpu_debug[] = {
 };
 
 DEVICE cpu_dev = {
-    "CPU", &cpu_unit, cpu_reg, cpu_mod,
+    "CPU", &cpu_unit[0], cpu_reg, cpu_mod,
     1, 8, 22, 1, 8, 36,
     &cpu_ex, &cpu_dep, &cpu_reset,
     NULL, NULL, NULL, NULL, DEV_DEBUG, 0, cpu_debug,
@@ -630,6 +629,8 @@ int opflags[] = {
 #define AOB(x)          (x + 01000001LL)
 #define SOB(x)          (x + 0777776777777LL)
 #endif
+#define QITS            (cpu_unit[0].flags & UNIT_ITSPAGE)
+#define QBBN            (cpu_unit[0].flags & UNIT_BBNPAGE)
 
 /*
  * Set device to interrupt on a given level 1-7
@@ -1287,7 +1288,7 @@ int Mem_write_nopage() {
 #if ITS
 int its_load_tlb(uint32 reg, int page, uint32 *tlb) {
     uint64 data;
-    int len = (reg >> 19) & 077;
+    int len = (reg >> 19) & 0177;
     int entry = (reg & 01777777) + ((page & 0377) >> 1);
     if ((page >> 1) > len) {
        fault_data |= 0200;
@@ -1322,7 +1323,7 @@ int its_load_tlb(uint32 reg, int page, uint32 *tlb) {
 int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch) {
 
 #if ITS
-    if (cpu_unit.flags & UNIT_ITSPAGE) {
+    if (QITS) {
         uint64   data;
         int      base = 0;
         int      page = (RMASK & addr) >> 10;
@@ -1346,9 +1347,9 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
         if (flag)
             uf = 0;
         else if (xct_flag != 0 && !cur_context && !uf) {
-                 if (((xct_flag & 4) != 0 && wr != 0) ||
-                     ((xct_flag & 2) != 0 && (wr == 0 || modify))) {
-                     uf = (FLAGS & USERIO) != 0;
+                 if (((xct_flag & 2) != 0 && wr != 0) ||
+                     ((xct_flag & 1) != 0 && (wr == 0 || modify))) {
+                     uf = 1;
                  }
         }
 
@@ -1378,34 +1379,41 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
         /* Map the page */
         if (!uf) {
             /* Handle system mapping */
-            if ((page & 0400) == 0 || (fault_data & 04) == 0) {
+            if ((page & 0200) == 0 || (fault_data & 04) == 0) {
             /* Direct map 0-377 or all if bit 2 off */
                 *loc = addr;
                 return 1;
             }
-            if (its_load_tlb(dbr3, page, &e_tlb[page]))
-                goto fault;
+            data = e_tlb[page - 0200];
+            if (data == 0) {
+                if (its_load_tlb(dbr3, page - 0200, &e_tlb[page - 0200]))
+                    goto fault;
+                data = e_tlb[page - 0200];
+            }
         } else {
             data = u_tlb[page];
             if (data == 0) {
-               if (page & 0400) {
-                   if (its_load_tlb(dbr2, page, &u_tlb[page]))
+               if (page & 0200) {
+                   if (its_load_tlb(dbr2, page - 0200, &u_tlb[page]))
                       goto fault;
                } else {
                    if (its_load_tlb(dbr1, page, &u_tlb[page]))
                       goto fault;
                }
+               data = u_tlb[page];
             }
         }
-
         *loc = ((data & 0777) << 10) + (addr & 01777);
+        if (uf) {
+            fprintf(stderr, "xlat %o %06o %03o ", xct_flag, addr, page >> 1);
+            fprintf(stderr, " %06o %03o %012llo %o", base, page, data, uf);
+            fprintf(stderr, " -> %06o wr=%o PC=%06o\n\r", *loc, wr, PC);
+}
         if (fetch && (FLAGS & PURE) && (data & 0600000) != 0100000) {
             fault_data |= 020;
             fault_addr = (page << 10) | ((base == 0)? 01000000 : 0) |
                    (data & 01777) ;
-            if (xct_flag & 010) {
-                PC = (PC + 1) & RMASK;
-            } else {
+            if ((xct_flag & 04) == 0) {
                 mem_prot = 1;
                 fault_data |= 01000;
             }
@@ -1422,9 +1430,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
 fault:
             /* Update fault data */
             fault_addr = (page) | ((uf)? 0400 : 0) | ((data & 0777) << 9);
-            if (xct_flag & 010) {
-                PC = (PC + 1) & RMASK;
-            } else {
+            if ((xct_flag & 04) == 0) {
                 mem_prot = 1;
                 fault_data |= 01000;
             }
@@ -1469,7 +1475,7 @@ fault:
                   bit 7 = illegal write 
                   bit 8 = address limit register violation or p.t. bits
                           0,1 = 3 (illegal format */
-    if (cpu_unit.flags & UNIT_BBNPAGE) {
+    if (QBBN) {
         uint64   data;
         uint32   tlb_data;
         uint64   traps;
@@ -1682,7 +1688,7 @@ fault_bbn1:
              *loc = (addr + (Rl << 10)) & RMASK;
              return 1;
           }
-          if (cpu_unit.flags & UNIT_TWOSEG &&
+          if (cpu_unit[0].flags & UNIT_TWOSEG &&
              (addr & 0400000) != 0 && (addr <= ((Ph << 10) + 01777))) {
              if ((Pflag == 0) || (Pflag == 1 && wr == 0)) {
                 *loc = (addr + (Rh << 10)) & RMASK;
@@ -1711,19 +1717,17 @@ int Mem_read(int flag, int cur_context, int fetch) {
 
     if (AB < 020) {
 #if ITS
-        if (cpu_unit.flags & UNIT_ITSPAGE) {
-            if (xct_flag != 0 && !cur_context && (FLAGS & USER) == 0 &&
-               (xct_flag & 2) != 0)
-               MB = M[ac_stack + AB];
-               return 0;
+//if (xct_flag != 0)
+//fprintf(stderr, "Read a=%o x=%o ac=%o c=%o\n\r", AB, xct_flag, ac_stack, cur_context);
+        if (QITS && (xct_flag & 1) != 0 && !cur_context && (FLAGS & USER) == 0) {
+           MB = M[ac_stack + AB];
+           return 0;
         }
 #endif
 #if BBN
-        if (cpu_unit.flags & UNIT_BBNPAGE) {
-            if (xct_flag != 0 && !cur_context && (FLAGS & USER) == 0 &&
-               (xct_flag & 2) != 0)
-               MB = M[ac_stack + AB];
-               return 0;
+        if (QBBN && (xct_flag & 2) != 0 && !cur_context && (FLAGS & USER) == 0) {
+           MB = M[ac_stack + AB];
+           return 0;
         }
 #endif
 #if KI | KL
@@ -1770,21 +1774,15 @@ int Mem_write(int flag, int cur_context) {
 
     if (AB < 020) {
 #if ITS
-        if (cpu_unit.flags & UNIT_ITSPAGE) {
-            if (xct_flag != 0 && !cur_context && (FLAGS & USER) == 0 &&
-               (xct_flag & 4) != 0) {
-                   M[ac_stack + AB] = MB;
-                   return 0;
-            }
+        if (QITS && (xct_flag & 2) != 0 && !cur_context && (FLAGS & USER) == 0) {
+            M[ac_stack + AB] = MB;
+            return 0;
         }
 #endif
 #if BBN
-        if (cpu_unit.flags & UNIT_BBNPAGE) {
-            if (xct_flag != 0 && !cur_context && (FLAGS & USER) == 0 &&
-               (xct_flag & 4) != 0) {
-                   M[ac_stack + AB] = MB;
-                   return 0;
-            }
+        if (QBBN && (xct_flag & 4) != 0 && !cur_context && (FLAGS & USER) == 0) {
+            M[ac_stack + AB] = MB;
+            return 0;
         }
 #endif
 #if KI | KL
@@ -2034,7 +2032,7 @@ st_pi:
 #endif
 
 #if ITS
-    if (pi_cycle == 0 && cpu_unit.flags & UNIT_ITSPAGE) {
+    if (pi_cycle == 0 && QITS) {
        opc = PC | (FLAGS << 18);
        if (!f_pc_inh && (FLAGS & ONEP) != 0) {
           one_p_arm = 1;
@@ -2531,7 +2529,7 @@ dpnorm:
 #else
     case 0100: /* TENEX UMOVE */
 #if BBN
-              if (cpu_unit.flags & UNIT_BBNPAGE) {
+              if (QBBN) {
                    if (Mem_read(0, 0, 0)) {
                       IR = 0;
                       goto last;
@@ -2545,7 +2543,7 @@ dpnorm:
               goto unasign;
     case 0101: /* TENEX UMOVEI */
 #if BBN
-              if (cpu_unit.flags & UNIT_BBNPAGE) {
+              if (QBBN) {
                    set_reg(AC, AR);    /* blank, I, B */
                    IR = 0;
                    break;
@@ -2554,7 +2552,7 @@ dpnorm:
               goto unasign;
     case 0102: /* TENEX UMOVEM */ /* ITS LPM */
 #if ITS
-              if ((FLAGS & USER) == 0 && cpu_unit.flags & UNIT_ITSPAGE) {
+              if ((FLAGS & USER) == 0 && QITS) {
                   /* Load store ITS pager info */
                   /* AC & 1 = Store */
                   if (AC & 1) {
@@ -2574,15 +2572,15 @@ dpnorm:
                       MB = ((uint64)mar) | ((uint64)pag_reload) << 20;
                       M[AB] = MB;
                       AB = (AB + 1) & RMASK;
-                      MB = ((uint64)fault_data) << 18;
+                      MB = ((uint64)qua_time) | ((uint64)fault_data) << 18;
                       /* Add quantum */
                       M[AB] = MB;
                       AB = (AB + 1) & RMASK;
-                      MB = ((uint64)fault_addr & 00760000) << 12 |
+                      MB = ((uint64)fault_addr & 00760000) << 13 |
                             (uint64)dbr1;
                       M[AB] = MB;
                       AB = (AB + 1) & RMASK;
-                      MB = ((uint64)fault_addr & 00017000) << 8 |
+                      MB = ((uint64)fault_addr & 00017000) << 17 |
                             (uint64)dbr2;
                       M[AB] = MB;
                       AB = (AB + 1) & RMASK;
@@ -2598,29 +2596,39 @@ dpnorm:
                          break;
                       }
                       MB = M[AB];                /* WD 0 */
+//fprintf(stderr, "map 0 %06o %012llo\n\r", AB, MB);
                       age = (MB >> 27) & 017;
                       fault_addr = 0;
                       AB = (AB + 2) & RMASK;
                       MB = M[AB];                /* WD 2 */
+//fprintf(stderr, "map 2 %06o %012llo\n\r", AB, MB);
                       mar = 03777777 & MB;
                       pag_reload = 0;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 3 */
+//fprintf(stderr, "map 3 %06o %012llo\n\r", AB, MB);
                       /* Store Quantum */
+                      qua_time = MB & RMASK;
                       fault_data = (MB >> 18) & RMASK;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 4 */
-                      dbr1 = ((077 << 18) | RMASK) & MB;
+//fprintf(stderr, "map 4 %06o %012llo\n\r", AB, MB);
+                      dbr1 = ((0377 << 18) | RMASK) & MB;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 5 */
-                      dbr2 = ((077 << 18) | RMASK) & MB;
+//fprintf(stderr, "map 5 %06o %012llo\n\r", AB, MB);
+                      dbr2 = ((0377 << 18) | RMASK) & MB;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 6 */
-                      dbr3 = ((077 << 18) | RMASK) & MB;
+//fprintf(stderr, "map 6 %06o %012llo\n\r", AB, MB);
+                      dbr3 = ((0377 << 18) | RMASK) & MB;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 7 */
+//fprintf(stderr, "map 7 %06o %012llo\n\r", AB, MB);
                       ac_stack = MB & RMASK;
                       page_enable = 1;
+                      qua_enb = 1;
+//fprintf(stderr, "Set map %06o %06o %06o %06llo\n\r", dbr1, dbr2, dbr3, fault_data);
                   }
                   /* AC & 2 = Clear TLB */
                   if (AC & 2) {
@@ -2636,7 +2644,7 @@ dpnorm:
               }
 #endif
 #if BBN
-              if (cpu_unit.flags & UNIT_BBNPAGE) {
+              if (QBBN) {
                    AR = get_reg(AC);
                    MB = AR;
                    if (Mem_write(0, 0)) {
@@ -2651,7 +2659,7 @@ dpnorm:
 
     case 0103: /* TENEX UMOVES */ /* ITS XCTR */
 #if ITS
-              if (cpu_unit.flags & UNIT_ITSPAGE) {
+              if (QITS) {
                    /* AC & 1 = ??? */
                    /* AC & 2 = Read User */
                    /* AC & 4 = Write User */
@@ -2664,7 +2672,7 @@ dpnorm:
               }
 #endif
 #if BBN
-              if (cpu_unit.flags & UNIT_BBNPAGE) {
+              if (QBBN) {
                    if (Mem_read(0, 0, 0)) {
                        IR = 0;
                        goto last;
@@ -2686,7 +2694,7 @@ dpnorm:
               /* MUUO */
     case 0104: /* TENEX JSYS */
 #if BBN
-              if (cpu_unit.flags & UNIT_BBNPAGE) {
+              if (QBBN) {
                    BR = ((uint64)(FLAGS) << 23) | ((PC + !pi_cycle) & RMASK);
                    if (AB < 01000) {
                       AB += 01000;
@@ -2711,12 +2719,38 @@ dpnorm:
 #endif
               goto unasign;
 
+    case 0247: /* UUO  or ITS CIRC instruction */
+              if (QITS) {
+                  BR = AR;
+                  AR = get_reg(AC);
+                  if (hst_lnt) {
+                      hst[hst_p].mb = AR;
+                  }
+                  MQ = get_reg(AC + 1);
+                  SC = ((AB & RSIGN) ? (0777 ^ AB) + 1 : AB) & 0777;
+                  if (SC == 0)
+                      break;
+                  SC = SC % 72;
+                  if (AB & RSIGN)
+                      SC = 72 - SC;
+                  /* Have to do this the long way */
+                  while (SC > 0) {
+                      AD = ((AR << 1) | (MQ & 1)) & FMASK;
+                      MQ = ((MQ >> 1) | (AR & SMASK)) & FMASK;
+                      AR = AD;
+                      SC--;
+                  }
+                  set_reg(AC, AR);  
+                  set_reg(AC+1, MQ);
+                  break;
+              }
+
+               /* UUO */
     case 0105: case 0106: case 0107:
     case 0110: case 0111: case 0112: case 0113:
     case 0114: case 0115: case 0116: case 0117:
     case 0120: case 0121: case 0122: case 0123:
     case 0124: case 0125: case 0126: case 0127:
-    case 0247: /* UUO  */
 unasign:
               MB = ((uint64)(IR) << 27) | ((uint64)(AC) << 23) | (uint64)(AB);
               AB = 060;
@@ -3434,7 +3468,7 @@ fxnorm:
               SC = 0;
               if (AR != 0) {
 #if ITS
-                  if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+                  if ((FLAGS & USER) && QITS) {
                       jpc = PC;
                   }
 #endif
@@ -3579,7 +3613,7 @@ fxnorm:
               AR = AOB(AR);
               if ((AR & SMASK) == 0) {
 #if ITS
-                  if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+                  if ((FLAGS & USER) && QITS) {
                       jpc = PC;
                   }
 #endif
@@ -3592,7 +3626,7 @@ fxnorm:
               AR = AOB(AR);
               if ((AR & SMASK) != 0) {
 #if ITS
-                  if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+                  if ((FLAGS & USER) && QITS) {
                       jpc = PC;
                   }
 #endif
@@ -3632,7 +3666,7 @@ fxnorm:
                  }
               }
 #if ITS
-              if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+              if ((FLAGS & USER) && QITS) {
                   jpc = PC;
               }
 #endif
@@ -3665,7 +3699,7 @@ fxnorm:
     case 0255: /* JFCL */
               if ((FLAGS >> 9) & AC) {
 #if ITS
-                  if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+                  if ((FLAGS & USER) && QITS) {
                       jpc = PC;
                   }
 #endif
@@ -3679,7 +3713,7 @@ fxnorm:
               f_load_pc = 0;
               f_pc_inh = 1;
 #if BBN
-              if ((FLAGS & USER) == 0 && cpu_unit.flags & UNIT_BBNPAGE) 
+              if ((FLAGS & USER) == 0 && QBBN) 
                    xct_flag = AC;
 #endif
 #if KI | KL
@@ -3761,7 +3795,7 @@ fxnorm:
                  FLAGS &= ~(USER|PUBLIC); /* Clear USER */
               }
 #if ITS
-              if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+              if ((FLAGS & USER) && QITS) {
                   jpc = PC;
               }
 #endif
@@ -3810,7 +3844,7 @@ fxnorm:
               if (Mem_read(0, 0, 0))
                   goto last;
 #if ITS
-              if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+              if ((FLAGS & USER) && QITS) {
                   jpc = PC;
               }
 #endif
@@ -3838,7 +3872,7 @@ fxnorm:
                   goto last;
               FLAGS &= ~ (BYTI|ADRFLT|TRP1|TRP2);
 #if ITS
-              if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+              if ((FLAGS & USER) && QITS) {
                   jpc = PC;
               }
 #endif
@@ -3854,7 +3888,7 @@ fxnorm:
                  FLAGS &= ~(USER|PUBLIC); /* Clear USER */
               }
 #if ITS
-              if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+              if ((FLAGS & USER) && QITS) {
                   jpc = PC;
               }
 #endif
@@ -3869,7 +3903,7 @@ fxnorm:
                  FLAGS &= ~(USER|PUBLIC); /* Clear USER */
               }
 #if ITS
-              if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+              if ((FLAGS & USER) && QITS) {
                   jpc = PC;
               }
 #endif
@@ -3884,7 +3918,7 @@ fxnorm:
                    goto last;
               set_reg(AC, MB);
 #if ITS
-              if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+              if ((FLAGS & USER) && QITS) {
                   jpc = PC;
               }
 #endif
@@ -4026,7 +4060,7 @@ jump_op:
               f = f & IR;
               if (((IR & 04) != 0) == (f == 0)) {
 #if ITS
-                  if ((FLAGS & USER) && cpu_unit.flags & UNIT_ITSPAGE) {
+                  if ((FLAGS & USER) && QITS) {
                       jpc = PC;
                   }
 #endif
@@ -4483,7 +4517,7 @@ fetch_opr:
 
 last:
 #if BBN
-    if ((cpu_unit.flags & UNIT_BBNPAGE) && page_fault) {
+    if (QBBN && page_fault) {
         page_fault = 0;
         AB = 070;
         f_pc_inh = 1;
@@ -4584,6 +4618,26 @@ rtc_srv(UNIT * uptr)
     return SCPE_OK;
 }
 
+#if ITS
+t_stat
+qua_srv(UNIT * uptr)
+{
+    int32 t;
+    t = sim_rtcn_calb (qua_tps, TMR_QUA);
+    sim_activate_after(uptr, 1000000/qua_tps);
+    if (qua_enb) {
+        qua_time += 4;
+        if ((qua_time & (RSIGN)) != 0) {
+//            mem_prot = 1;
+//            fault_data |= 1;
+            qua_enb = 0;
+        }
+    }
+    return SCPE_OK;
+}
+#endif
+
+
 /* Reset routine */
 
 t_stat cpu_reset (DEVICE *dptr)
@@ -4593,6 +4647,9 @@ BYF5 = uuo_cycle = 0;
 #if KA | PDP6
 Pl = Ph = Rl = Rh = Pflag = 0;
 push_ovf = mem_prot = 0;
+#if ITS | BBN
+page_enable = 0;
+#endif
 #endif
 nxm_flag = clk_flg = 0;
 PIR = PIH = PIE = pi_enable = parity_irq = 0;
@@ -4604,10 +4661,21 @@ ub_ptr = eb_ptr = 0;
 pag_reload = ac_stack = 0;
 fm_sel = small_user = user_addr_cmp = page_enable = 0;
 #endif
+#if BBN
+exec_map = 0;
+#endif
+
 for(i=0; i < 128; dev_irq[i++] = 0);
 sim_brk_types = sim_brk_dflt = SWMASK ('E');
-sim_rtcn_init_unit (&cpu_unit, cpu_unit.wait, TMR_RTC);
-sim_activate(&cpu_unit, 10000);
+sim_rtcn_init_unit (&cpu_unit[0], cpu_unit[0].wait, TMR_RTC);
+sim_activate(&cpu_unit[0], 10000);
+#if ITS
+qua_enb = 0;
+if (QITS) {
+    sim_rtcn_init_unit (&cpu_unit[1], cpu_unit[1].wait, TMR_RTC);
+    sim_activate(&cpu_unit[1], 10000);
+}
+#endif
 return SCPE_OK;
 }
 
@@ -4668,7 +4736,7 @@ if (val < MEMSIZE) {
 }
 for (i = MEMSIZE; i < val; i++)
     M[i] = 0;
-cpu_unit.capac = val;
+cpu_unit[0].capac = val;
 return SCPE_OK;
 }
 
@@ -4687,7 +4755,7 @@ dev_tab[1] = &dev_pi;
 dev_tab[2] = &dev_pag;
 #endif
 #if BBN
-if (cpu_unit.flags & UNIT_BBNPAGE)
+if (QBBN) 
    dev_tab[024] = &dev_pag;
 #endif
 for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {
@@ -4809,7 +4877,7 @@ for (k = 0; k < lnt; k++) {                             /* print specified */
             sim_eval = h->ir;
             fprint_val (st, sim_eval, 8, 36, PV_RZRO);
             fputs ("  ", st);
-            if ((fprint_sym (st, h->pc & RMASK, &sim_eval, &cpu_unit, SWMASK ('M'))) > 0) {
+            if ((fprint_sym (st, h->pc & RMASK, &sim_eval, &cpu_unit[0], SWMASK ('M'))) > 0) {
                 fputs ("(undefined) ", st);
                 fprint_val (st, h->ir, 8, 36, PV_RZRO);
             }

@@ -67,6 +67,15 @@ int df10_fetch(struct df10 *df) {
           }
           data = M[df->ccw];
       }
+#if KA & ITS
+      if (cpu_unit[0].flags & UNIT_ITSPAGE) {
+          df->wcr = (uint32)((data >> CSHIFT) & 0077777) | 0700000;
+          df->cda = (uint32)(data & RMASK);
+          df->cda |= (uint32)((data >> 15) & 00000007000000LL) ^ 07000000;
+          df->ccw = (uint32)((df->ccw + 1) & AMASK);
+          return 1;
+      }
+#endif
       df->wcr = (uint32)((data >> CSHIFT) & WMASK);
       df->cda = (uint32)(data & AMASK);
       df->ccw = (uint32)((df->ccw + 1) & AMASK);
@@ -85,6 +94,11 @@ int df10_read(struct df10 *df) {
             df10_finish_op(df, 1<<df->nxmerr);
             return 0;
         }
+#if KA & ITS
+        if (cpu_unit[0].flags & UNIT_ITSPAGE) 
+            df->cda = (uint32)((df->cda + 1) & RMASK) | (df->cda & 07000000);
+        else
+#endif
         df->cda = (uint32)((df->cda + 1) & AMASK);
         data = M[df->cda];
      } else {
@@ -108,6 +122,11 @@ int df10_write(struct df10 *df) {
            df10_finish_op(df, 1<<df->nxmerr);
            return 0;
         }
+#if KA & ITS
+        if (cpu_unit[0].flags & UNIT_ITSPAGE) 
+            df->cda = (uint32)((df->cda + 1) & RMASK) | (df->cda & 07000000);
+        else
+#endif
         df->cda = (uint32)((df->cda + 1) & AMASK);
         M[df->cda] = df->buf;
      }

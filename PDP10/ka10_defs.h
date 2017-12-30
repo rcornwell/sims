@@ -116,8 +116,8 @@
 #define DEBUG_EXP       0x0000008       /* Show error conditions */
 #define DEBUG_CONI      0x0000020       /* Show CONI instructions */
 #define DEBUG_CONO      0x0000040       /* Show CONO instructions */
-#define DEBUG_DATAIO    0x0000080       /* Show DATAI/O instructions */
-#define DEBUG_IRQ       0x0000100       /* Show IRQ requests */
+#define DEBUG_DATAIO    0x0000100       /* Show DATAI/O instructions */
+#define DEBUG_IRQ       0x0000200       /* Show IRQ requests */
 
 extern DEBTAB dev_debug[];
 extern DEBTAB crd_debug[];
@@ -222,9 +222,9 @@ extern DEBTAB crd_debug[];
 #if KI_22BIT|KI
 #define MAXMEMSIZE      4096 * 1024
 #else
-#define MAXMEMSIZE      256 * 1024
+#define MAXMEMSIZE      512 * 1024
 #endif
-#define MEMSIZE         (cpu_unit.capac)
+#define MEMSIZE         (cpu_unit[0].capac)
 
 #define ICWA            0000000000776
 #if KI_22BIT
@@ -262,6 +262,15 @@ extern DEBTAB crd_debug[];
 #define BBN_MERGE   0161740000000LL
 #endif
 
+/* Flags for CPU unit */
+#define UNIT_V_MSIZE    (UNIT_V_UF + 0)
+#define UNIT_MSIZE      (0177 << UNIT_V_MSIZE)
+#define UNIT_V_PAGE     (UNIT_V_MSIZE + 8)
+#define UNIT_TWOSEG     (1 << UNIT_V_PAGE)
+#define UNIT_ITSPAGE    (2 << UNIT_V_PAGE)
+#define UNIT_BBNPAGE    (4 << UNIT_V_PAGE)
+#define UNIT_M_PAGE     (7 << UNIT_V_PAGE)
+
 typedef unsigned long long int uint64;
 typedef unsigned int uint18;
 
@@ -277,7 +286,7 @@ extern void check_apr_irq();
 extern int check_irq_level();
 extern void restore_pi_hold();
 extern void set_pi_hold();
-extern UNIT     cpu_unit;
+extern UNIT     cpu_unit[];
 extern DEVICE   cpu_dev;
 extern DEVICE   cty_dev;
 extern DEVICE   mt_dev;
@@ -351,7 +360,7 @@ int  df10_write(struct df10 *df);
 #define NUM_DEVS_DT     1
 #define NUM_DEVS_DK     1
 #define NUM_DEVS_RP     2
-#define NUM_DEVS_RS     1
+#define NUM_DEVS_RS     0
 #define NUM_DEVS_TU     1
 /* Global data */
 

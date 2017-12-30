@@ -38,6 +38,7 @@
 
 /* Flags in the unit flags word */
 
+#define DEV_WHDR        (1 << DEV_V_UF)                /* Enable write headers */
 #define UNIT_V_WLK      (UNIT_V_UF + 0)                 /* write locked */
 #define UNIT_V_DTYPE    (UNIT_V_UF + 1)                 /* disk type */
 #define UNIT_M_DTYPE    3
@@ -169,6 +170,8 @@ t_stat        dp_reset(DEVICE *);
 t_stat        dp_attach(UNIT *, CONST char *);
 t_stat        dp_detach(UNIT *);
 t_stat        dp_set_type(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+t_stat        dp_set_hdr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+t_stat        dp_show_hdr(FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat        dp_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
                  const char *cptr);
 const char    *dp_description (DEVICE *dptr);
@@ -261,6 +264,10 @@ DIB dp_dib[] = {
 MTAB                dp_mod[] = {
     {UNIT_WLK, 0, "write enabled", "WRITEENABLED", NULL},
     {UNIT_WLK, UNIT_WLK, "write locked", "LOCKED", NULL},
+    {MTAB_XTD|MTAB_VDV, 0, NULL, "NOHEADERS", 
+            &dp_set_hdr, &dp_show_hdr, "No Headers", "Disable header writing"},
+    {MTAB_XTD|MTAB_VDV, DEV_WHDR, "write header", "HEADERS", 
+            &dp_set_hdr, &dp_show_hdr, "Headers", "Enable header writing"},
     {UNIT_DTYPE, (RP03_DTYPE << UNIT_V_DTYPE), "RP03", "RP03", &dp_set_type },
     {UNIT_DTYPE, (RP02_DTYPE << UNIT_V_DTYPE), "RP02", "RP02", &dp_set_type },
     {UNIT_DTYPE, (RP01_DTYPE << UNIT_V_DTYPE), "RP01", "RP01", &dp_set_type },
@@ -389,7 +396,8 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
 
      case DATAI:
          res = (uint64)(unit) << 33;
-         res |= WR_HD_LK;                  /* Can't write headers. */
+         if ((dptr->flags & DEV_WHDR) == 0)
+             res |= WR_HD_LK;                  /* Can't write headers. */
          if (GET_DTYPE(uptr->flags))
              res |= SEL_RP03;
          if (uptr->flags & UNIT_DIS) {
@@ -407,7 +415,7 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
              if ((uptr->UFLAGS & SEEK_STATE) == 0)
                 res |= ON_CYL;
              if (uptr->flags & UNIT_WPRT)
-                res |= RD_ONLY;
+                res |= RD_ONLY|WR_HD_LK;
          }
          uptr = &dp_unit[ctlr * NUM_UNITS_DP];
          for(unit = 0; unit < NUM_UNITS_DP; unit++) {
@@ -439,6 +447,16 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
             cyl += 0400;
          tmp = (*data >> 33) & 07;
          switch(tmp) {
+         case WH:
+             if ((dptr->flags & DEV_WHDR) == 0) {
+                uptr->UFLAGS |= DONE;
+                uptr->STATUS |= ILL_WR;
+                df10_setirq(df10);
+                return SCPE_OK;
+             }
+             *data &= ~SECTOR;    /* Clear sector */
+             /* Fall through */
+
          case WR:
              if (uptr->flags & UNIT_WPRT) {
                 uptr->UFLAGS |= DONE;
@@ -446,6 +464,8 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
                 df10_setirq(df10);
                 return SCPE_OK;
              }
+             /* Fall through */
+
          case RD:
          case RV:
              if (uptr->flags & UNIT_DIS) {
@@ -467,16 +487,6 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
              df10_setup(df10, (uint32)*data);
              uptr->STATUS |= BUSY;
              break;
-
-         case WH:
-             if ((uptr->flags & UNIT_ATT) == 0) {
-               uptr->STATUS |= NOT_RDY;
-             } else {
-               uptr->STATUS |= ILL_WR;
-             }
-             uptr->UFLAGS |= DONE;
-             df10_setirq(df10);
-             return SCPE_OK;
 
          case RC:
              cyl = 0;
@@ -625,8 +635,8 @@ t_stat dp_svc (UNIT *uptr)
                r = df10_write(df10);
                break;
            }
-           sim_debug(DEBUG_DATA, dptr, "Xfer %d %012llo\n",
-                          uptr->DATAPTR, df10->buf);
+           sim_debug(DEBUG_DATA, dptr, "Xfer %d %08o %012llo\n",
+                          uptr->DATAPTR, df10->cda, df10->buf);
            uptr->DATAPTR++;
            if (uptr->DATAPTR >= RP_NUMWD || r == 0 ) {
                if (cmd == WR) {
@@ -665,9 +675,80 @@ t_stat dp_svc (UNIT *uptr)
                return SCPE_OK;
            }
            break;
+   case WH:
+           /* Cylinder, Surface, Sector all ok */
+           if (BUF_EMPTY(uptr)) {
+                if (uptr->DATAPTR == 0) 
+                    sim_debug(DEBUG_DETAIL, dptr,
+                       "DP %d cmd=%o cyl=%d (%o) sect=%d surf=%d %d\n",
+                        ctlr, uptr->UFLAGS, cyl, cyl, sect, surf,uptr->CUR_CYL);
+                uptr->STATUS |= SRC_DONE;
+                if (uptr->STATUS & END_CYL) {
+                     uptr->UFLAGS |= DONE;
+                     uptr->STATUS &= ~END_CYL;
+                     uptr->STATUS &= ~BUSY;
+                     df10_finish_op(df10, 0);
+                     return SCPE_OK;
+                }
+                if (cyl != uptr->CUR_CYL) {
+                     uptr->UFLAGS |= DONE;
+                     uptr->STATUS &= ~BUSY;
+                     uptr->STATUS |= SRC_ERR;
+                     df10_finish_op(df10, 0);
+                     return SCPE_OK;
+                }
+                if ((uptr->STATUS & BUSY) == 0) {
+                     uptr->STATUS &= ~BUSY;
+                     df10_finish_op(df10, 0);
+                     return SCPE_OK;
+                }
+                r = df10_read(df10);
+                uptr->DATAPTR++;
+                sim_debug(DEBUG_DATA, dptr, "Xfer h%d %012llo\n",
+                          uptr->DATAPTR, df10->buf);
+                if (uptr->DATAPTR == 36) {
+                    uptr->DATAPTR = 0;
+                    uptr->hwmark = 0;
+                }
+           } else {
+                r = df10_read(df10);
+                if (r)
+                    uptr->hwmark = uptr->DATAPTR;
+                dp_buf[ctlr][uptr->DATAPTR] = (df10->buf << 1) & FMASK;
+                sim_debug(DEBUG_DATA, dptr, "Xfer %d %012llo\n",
+                               uptr->DATAPTR, df10->buf);
+                uptr->DATAPTR++;
+                if (uptr->DATAPTR >= RP_NUMWD || r == 0 ) {
+                     int da = ((cyl * dp_drv_tab[dtype].surf + surf)
+                                    * dp_drv_tab[dtype].sect + sect) * RP_NUMWD;
+                     /* write block the block */
+                     for (; uptr->DATAPTR < RP_NUMWD; uptr->DATAPTR++)
+                         dp_buf[ctlr][uptr->DATAPTR] = 0;
+                     (void)sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
+                     wc = sim_fwrite(&dp_buf[ctlr][0],sizeof(uint64), RP_NUMWD,
+                            uptr->fileref);
+                     uptr->STATUS |= SRC_DONE;
+                     sect = sect + 1;
+                     if (sect >= dp_drv_tab[dtype].sect) {
+                         uptr->STATUS |= END_CYL;
+                     } else {
+                         uptr->UFLAGS &= ~(017 << 9);
+                         uptr->UFLAGS |= (sect << 9);
+                     }
+                     uptr->DATAPTR = 0;
+                     CLR_BUF(uptr);
+                }
+           }
+           if (r)
+               sim_activate(uptr, 25);
+           else {
+               uptr->STATUS &= ~(SRC_DONE|END_CYL|BUSY);
+               uptr->UFLAGS |= DONE;
+               return SCPE_OK;
+           }
+           break;
 
     case CL:
-    case WH: /* Should never see these */
     case NO:
            return SCPE_OK;
     case RC:
@@ -725,6 +806,33 @@ dp_set_type(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
         }
     }
     return SCPE_IERR;
+}
+
+t_stat
+dp_set_hdr(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+{
+    DEVICE *dptr;
+    dptr = find_dev_from_unit (uptr);
+    if (dptr == NULL)
+       return SCPE_IERR;
+    dptr->flags &= ~DEV_WHDR;
+    dptr->flags |= val;
+    return SCPE_OK;
+}
+
+t_stat dp_show_hdr (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+{
+   DEVICE *dptr;
+
+   if (uptr == NULL)
+      return SCPE_IERR;
+
+   dptr = find_dev_from_unit(uptr);
+   if (dptr == NULL)
+      return SCPE_IERR;
+   if ((dptr->flags & DEV_WHDR) == val) 
+      fprintf (st, "%s", (char *)desc);
+   return SCPE_OK;
 }
 
 

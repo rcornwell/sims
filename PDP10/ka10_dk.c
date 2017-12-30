@@ -63,8 +63,6 @@
 #define TMR_DK          2
 #define TIM_TPS         100000
 
-extern UNIT cpu_unit;
-
 t_stat dk_devio(uint32 dev, uint64 *data);
 void   dk_count (UNIT *uptr);
 t_stat dk_svc (UNIT *uptr);
