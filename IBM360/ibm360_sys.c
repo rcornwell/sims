@@ -321,8 +321,8 @@ t_opcode  optab[] = {
        { OP_SSM,       "SSM",  SI|ZEROOP },
        { OP_LPSW,      "LPSW", SI|ZEROOP },
        { OP_DIAG,      "DIAG", SI },
-       { OP_BXH,       "BXH",  RS },
-       { OP_BXLE,      "BXLE", RS },
+       { OP_BXH,       "BXH",  RS|TWOOP },
+       { OP_BXLE,      "BXLE", RS|TWOOP },
        { OP_SRL,       "SRL",  RS|ZEROOP },
        { OP_SLL,       "SLL",  RS|ZEROOP },
        { OP_SRA,       "SRA",  RS|ZEROOP },
@@ -472,8 +472,16 @@ t_stat fprint_sym (FILE *of, t_addr addr, t_value *val,
 uint8           inst = *val;
 int             i;
 int             l = 1;
+int             rdx = 16;
 t_opcode        *tab;
+uint32          num;
 
+if (sw & SWMASK ('D')) 
+    rdx = 10;
+else if (sw & SWMASK ('O')) 
+    rdx = 8;
+else if (sw & SWMASK ('H')) 
+    rdx = 16;
 if (sw & SWMASK ('M')) {
     for (tab = optab; tab->name != NULL; tab++) {
        if (tab->opbase == inst) {
@@ -496,10 +504,8 @@ if (sw & SWMASK ('M')) {
      l = 4;
 } else if (sw & SWMASK('W')) {
      l = 2;
-}
-
-for(i = 0; i < l; i++) {
-   fprintf(of, "%02x ", val[i] & 0xFF);
+} else if (sw & SWMASK('B')) {
+     l = 1;
 }
 
 if (sw & SWMASK ('C')) {
@@ -512,52 +518,41 @@ if (sw & SWMASK ('C')) {
           fputc('_', of);
    }
    fputc('\'', of);
-}
-if (sw & SWMASK ('W')) {
-   if (sw & SWMASK('M')) {
-       for(i = l; i <= 6; i++) {
-          fputs("   ", of);
-          if (sw & SWMASK('C'))
-              fputs(" ", of);
-       }
-       if (sw & SWMASK('C'))
-          fputs("   ", of);
-   }
-   for(i = 0; i < l; i+=2)
-       fprintf(of, "%02x%02x ", val[i] & 0xff, val[i+1] & 0xff);
-   if (sw & SWMASK('M')) {
-       for(i = l; i <= 6; i+=2) {
-          fputs("     ", of);
-       }
-   }
-}
-
-if (sw & SWMASK ('F')) {
-   fprintf(of, "%02x%02x%02x%02x ", val[0] & 0xff, val[1] & 0xff, val[2] & 0xff, val[3] & 0xff);
-   return -3;
-}
-
-if (sw & SWMASK ('M')) {
-    fputs("   ", of);
-    if ((sw & SWMASK('W')) == 0) {
-   if (sw & SWMASK('M')) {
-       for(i = l; i <= 6; i++) {
-          fputs("   ", of);
-          if (sw & SWMASK('C'))
-              fputs(" ", of);
-       }
-       if (sw & SWMASK('C'))
-          fputs("   ", of);
-   }
-   }
+} else if (sw & SWMASK ('M')) {
     for (tab = optab; tab->name != NULL; tab++) {
        if (tab->opbase == inst) {
+          i = 0;
+          switch (tab->type & LNMSK) {
+          case SS:
+                    num = (uint32)(val[i++] << 8);
+                    num |= (uint32)val[i++];
+                    fprint_val(of, num, 16, 16, PV_RZRO);
+                    fputc(' ', of);
+                    /* Fall through */
+          case RX:
+          case RS:
+          case SI:
+                    num = (uint32)(val[i++] << 8);
+                    num |= (uint32)val[i++];
+                    fprint_val(of, num, 16, 16, PV_RZRO);
+                    fputc(' ', of);
+                    /* Fall through */
+          case RR:
+                    num = (uint32)(val[i++] << 8);
+                    num |= (uint32)val[i++];
+                    fprint_val(of, num, 16, 16, PV_RZRO);
+                    fputc(' ', of);
+                    break;
+          }
+          for(; i < 6; i+=2) 
+              fputs("     ", of);
+          fputc(' ', of);
           fputs(tab->name, of);
           fputc(' ', of);
           switch (tab->type & LNMSK) {
           case RR:
                     if (tab->type & IMDOP) {
-                        fprint_val(of, val[1], 16, 8, PV_RZRO);
+                        fprint_val(of, val[1], rdx, 8, PV_RZRO);
                     } else {
                         if (tab->type & ONEOP)
                             fprintf(of, "%d", (val[1] >> 4) & 0xf);
@@ -566,35 +561,40 @@ if (sw & SWMASK ('M')) {
                     }
                     break;
           case RX:
-                    fprintf(of, "%d, %x(", (val[1] >> 4) & 0xf, ((val[2] << 8) & 0xf00) | val[3]);
-                    fprintf(of, "%d,%d)", val[1] & 0xf, (val[2] >> 4) & 0xf);
+                    fprintf(of, "%d, ", (val[1] >> 4) & 0xf);
+                    num = ((val[2] << 8) & 0xf00) | val[3];
+                    fprint_val(of, num, rdx, 12, PV_LEFT);
+                    fprintf(of, "(%d,%d)", val[1] & 0xf, (val[2] >> 4) & 0xf);
                     break;
           case RS:
                     fprintf(of, "%d,", (val[1] >> 4) & 0xf);
                     if ((tab->type & ZEROOP) == 0)
                         fprintf(of, "%d,", val[1] & 0xf);
-                    fprintf(of, "%x", ((val[2] << 8) & 0xf00) | val[3]);
-                    if (val[2] & 0xf0)
+                    num = ((val[2] << 8) & 0xf00) | val[3];
+                    fprint_val(of, num, rdx, 12, PV_LEFT); if (val[2] & 0xf0)
                         fprintf(of, "(%d)", (val[2] >> 4) & 0xf);
                     break;
           case SI:
-                    fprintf(of, "%x", ((val[2] << 8) & 0xf00) | val[3]);
+                    num = ((val[2] << 8) & 0xf00) | val[3];
+                    fprint_val(of, num, rdx, 12, PV_LEFT);
                     if (val[2] & 0xf0)
                         fprintf(of, "(%d)", (val[2] >> 4) & 0xf);
                     if ((tab->type & ZEROOP) == 0)
                        fprintf(of, ",%2x", val[1]);
                     break;
           case SS:
-                    fprintf(of, "%x", ((val[2] << 8) & 0xf00) | val[3]);
+                    num = ((val[2] << 8) & 0xf00) | val[3];
+                    fprint_val(of, num, rdx, 12, PV_LEFT);
                     if (tab->type & TWOOP) {
                        fprintf(of, "(%d", (val[1] >> 4) & 0xf);
                     } else {
                        fprintf(of, "(%d", val[1] & 0xff);
                     }
                     if (val[2] & 0xf0)
-                        fprintf(of, ",%d", (val[1] >> 4) & 0xf);
+                        fprintf(of, ",%d", (val[2] >> 4) & 0xf);
                     fprintf(of, "),");
-                    fprintf(of, "%x", ((val[4] << 8) & 0xf00) | val[5]);
+                    num = ((val[4] << 8) & 0xf00) | val[5];
+                    fprint_val(of, num, rdx, 12, PV_LEFT);
                     if (tab->type & TWOOP) {
                        fprintf(of, "(%d,", val[1] & 0xf);
                     } else {
@@ -605,14 +605,83 @@ if (sw & SWMASK ('M')) {
           }
       }
    }
+} else {
+    num = 0;
+    for (i = 0; i < l && i < 4; i++) 
+       num |= (uint32)val[i] << ((l-i-1) * 8);
+    fprint_val(of, num, rdx, l*8, PV_RZRO);
 }
 
-//fprint_val (of, inst, 16, 8, PV_RZRO);
 return -(l-1);
-
-return SCPE_OK;
 }
 
+/*
+ * Collect register name.
+ */
+t_stat get_reg (CONST char *cptr, CONST char **tptr, int *reg) 
+{
+    while (sim_isspace (*cptr)) cptr++;
+    if ((*cptr == 'R') || (*cptr == 'r'))      /* Skip R */
+       cptr++;
+    if ((*cptr >= '0') && (*cptr <= '9')) {
+       *reg = *cptr++ - '0';
+       if ((*cptr >= '0') && (*cptr <= '9'))
+          *reg = (*reg * 10) + (*cptr++ - '0');
+       if (*reg > 0xf)
+          return SCPE_ARG;
+    } else if ((*cptr >= 'a') && (*cptr <= 'f'))
+       *reg = (*cptr++ - 'a') + 10;
+    else if ((*cptr >= 'A') && (*cptr <= 'F'))
+       *reg = (*cptr++ - 'A') + 10;
+    else 
+       return SCPE_ARG;
+    while (sim_isspace (*cptr)) cptr++;
+    *tptr = cptr;
+    return SCPE_OK;;
+}
+
+/* 
+ * Collect offset in radix.
+ */
+t_stat get_off (CONST char *cptr, CONST char **tptr, uint32 radix, uint32 *val, char *m)
+{
+t_stat r;
+
+r = SCPE_OK;
+*m = 0;
+*val = (uint32)strtotv (cptr, tptr, radix);
+if ((cptr == *tptr) || (*val > 0xfff))
+    r = SCPE_ARG;
+else {
+    cptr = *tptr;
+    while (sim_isspace (*cptr)) cptr++;
+    if (*cptr++ == '(') {
+       *m = 1;
+        while (sim_isspace (*cptr)) cptr++;
+    }
+    *tptr = cptr;
+}
+return r;
+}
+
+/* 
+ * Collect immediate in radix.
+ */
+t_stat get_imm (CONST char *cptr, CONST char **tptr, uint32 radix, uint32 *val)
+{
+t_stat r;
+
+r = SCPE_OK;
+*val = (uint32)strtotv (cptr, tptr, radix);
+if ((cptr == *tptr) || (*val > 0xff))
+    r = SCPE_ARG;
+else {
+    cptr = *tptr;
+    while (sim_isspace (*cptr)) cptr++;
+    *tptr = cptr;
+}
+return r;
+}
 
 /* Symbolic input
 
@@ -628,16 +697,216 @@ return SCPE_OK;
 
 t_stat parse_sym (CONST char *cptr, t_addr addr, UNIT *uptr, t_value *val, int32 sw)
 {
-int32 i, j, k;
-t_value d, tag;
-t_stat r;
+int             i;
+int             l = 1;
+int             rdx = 16;
+char            mod = 0;
+t_opcode        *tab;
+t_stat          r;
+uint32          num;
+uint32          max[5] = { 0, 0xff, 0xffff, 0, 0xffffffff };
+CONST char      *tptr;
+char            gbuf[CBUFSIZE];
 
-while (isspace (*cptr)) cptr++;
-    return SCPE_OK;
-
-/* Symbolic input, continued */
+if (sw & SWMASK ('D')) 
+    rdx = 10;
+else if (sw & SWMASK ('O')) 
+    rdx = 8;
+else if (sw & SWMASK ('H')) 
+    rdx = 16;
+if (sw & SWMASK('F')) {
+     l = 4;
+} else if (sw & SWMASK('W')) {
+     l = 2;
+}
 
-if (*cptr != 0) return SCPE_ARG;                     /* junk at end? */
-return SCPE_OK;
+if (sw & SWMASK ('C')) {
+   cptr = get_glyph_quoted(cptr, gbuf, 0);   /* Get string */
+   for(i = 0; gbuf[i] != 0; i++) {
+      val[i] = ascii_to_ebcdic[gbuf[i]];
+   }
+   return -(i - 1);
+}
+
+if (sw & SWMASK ('M')) {
+    cptr = get_glyph(cptr, gbuf, 0);         /* Get opcode */
+    for (tab = optab; tab->name != NULL; tab++) {
+       if (sim_strcasecmp(tab->name, gbuf) == 0) 
+          break;
+    }
+    if (tab->name == NULL)
+       return SCPE_ARG;
+    val[0] = tab->opbase;
+    switch (tab->type & LNMSK) {
+    case RR:
+           if (tab->type & IMDOP) {         /* Op number */
+               if ((r = get_imm(cptr, &tptr, rdx, &num)) != SCPE_OK)
+                   return r;
+               val[1] = num;
+           } else {                         /* Op r,r or Op r */
+               if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
+                    return r;
+               cptr = tptr;
+               val[1] = i << 4;
+               if (tab->type & ONEOP) 
+                   return -1;
+               if (*cptr != ',')
+                   return SCPE_ARG;
+               cptr++;
+               if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
+                    return r;
+               val[1] |= i;
+           }
+           return -1; 
+    case RX:                                   /* Op r,off(r,r) */
+           if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
+               return r;
+           cptr = tptr;
+           if (*cptr != ',')
+               return SCPE_ARG;
+           cptr++;
+           val[1] = i << 4;
+           if ((r = get_off(cptr, &tptr, rdx, &num, &mod)) != SCPE_OK)
+               return r;
+           cptr = tptr;
+           if (mod) {
+               if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
+                    return r;
+               cptr = tptr;
+               val[1] |= i;
+               if (*cptr == ',') {
+                  cptr++;
+                  while (sim_isspace (*cptr)) cptr++;
+                  if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
+                      return r;
+                  cptr = tptr;
+                  num |= (i << 12);
+               }
+               if (*cptr != ')') 
+                 return SCPE_ARG;
+           }
+           val[2] = (num >> 8) & 0xff;
+           val[3] = num & 0xff;
+           return -3; 
+    case RS:                            /* Op r,r,off(r) or Op r,off(r) */
+           if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
+               return r;
+           cptr = tptr;
+           val[1] = i << 4;
+           if (*cptr != ',') 
+               return SCPE_ARG;
+           cptr++;
+           if ((tab->type & ZEROOP) == 0) {
+               if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
+                   return r;
+               cptr = tptr;
+               val[1] |= i;
+               if (*cptr != ',') 
+                   return SCPE_ARG;
+               cptr++;
+               while (sim_isspace (*cptr)) cptr++;
+           }
+           if ((r = get_off(cptr, &tptr, rdx, &num, &mod)) != SCPE_OK)
+               return r;
+           cptr = tptr;
+           if (mod) {
+               if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
+                   return r;
+               cptr = tptr;
+               num |= (i << 12);
+               if (*cptr != ')') 
+                   return SCPE_ARG;
+           }
+           val[2] = (num >> 8) & 0xff;
+           val[3] = num & 0xff;
+           return -3; 
+    case SI:                               /* Op off(r),num */
+           if ((r = get_off(cptr, &tptr, rdx, &num, &mod)) != SCPE_OK)
+               return r;
+           cptr = tptr;
+           val[1] = 0;
+           if (mod) {
+               if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
+                   return r;
+               cptr = tptr;
+               num |= (i << 12);
+               if (*cptr != ')') 
+                   return SCPE_ARG;
+               cptr++;
+           }
+           if ((tab->type & ZEROOP) == 0) {
+               if (*cptr != ',') 
+                  return SCPE_ARG;
+               cptr++;
+               if ((r = get_imm(cptr, &tptr, rdx, &num)) != SCPE_OK)
+                  return r;
+               val[1] = num;
+           }
+           val[2] = (num >> 8) & 0xff;
+           val[3] = num & 0xff;
+           return -3; 
+    case SS:                          /* Op off(l,r),off(l,r) or Op off(l,r),off(r) */
+           if ((r = get_off(cptr, &tptr, rdx, &num, &mod)) != SCPE_OK)
+               return r;
+           cptr = tptr;
+           if (mod) {
+               uint32  imm;
+               if ((r = get_imm(cptr, &tptr, rdx, &imm)) != SCPE_OK)
+                  return r;
+               cptr = tptr;
+               if (tab->type & TWOOP) {
+                   if (imm > 0xf)
+                      return SCPE_ARG;
+                   imm <<= 4;
+               }
+               val[1] = imm;
+               if (*cptr == ',') {
+                   cptr++;
+                   if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
+                       return r;
+                   cptr = tptr;
+                   num |= (i << 12);
+               }
+               if (*cptr++ != ')') 
+                 return SCPE_ARG;
+               while (sim_isspace (*cptr)) cptr++;
+           }
+           if (*cptr++ != ',')
+              return SCPE_ARG;
+           val[2] = (num >> 8) & 0xff;
+           val[3] = num & 0xff;
+           if ((r = get_off(cptr, &tptr, rdx, &num, &mod)) != SCPE_OK)
+               return r;
+           cptr = tptr;
+           if (mod) {
+               if (tab->type & TWOOP) {
+                   uint32  imm;
+                   if ((r = get_imm(cptr, &tptr, rdx, &imm)) != SCPE_OK)
+                      return r;
+                   cptr = tptr;
+                   if (imm > 0xf)
+                       return SCPE_ARG;
+                   val[1] |= imm;
+                   if (*cptr++ != ',') 
+                      return SCPE_ARG;
+               }
+               if (*cptr != ')') {
+                    if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
+                        return r;
+                    cptr = tptr;
+                    num |= (i << 12);
+               }
+               if (*cptr != ')') 
+                   return SCPE_ARG;
+           }
+           val[4] = (num >> 8) & 0xff;
+           val[5] = num & 0xff;
+           return -5;
+    }
+}
+num = get_uint(cptr, rdx, max[l], &r);
+for (i = 0; i < l && i < 4; i++) 
+    val[i] = (num >> (i * 8)) & 0xff;
+return -(l-1);
 }
 

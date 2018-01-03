@@ -2081,19 +2081,19 @@ rtc_srv(UNIT * uptr)
 
 t_stat cpu_ex (t_value *vptr, t_addr exta, UNIT *uptr, int32 sw)
 {
-int32 st;
 uint32 addr = (uint32) exta;
 uint32 byte;
+uint32 offset = 8 * (3 - (addr & 0x3));
 
 if (vptr == NULL)
     return SCPE_ARG;
-     /* Ignore high order bits */
-     addr &= 0xffffff;
-     if (addr >= MEMSIZE)
-        return SCPE_NXM;
-
-     byte = M[addr >> 2] >> (8 * (3 - (addr & 0x3)));
-     byte &= 0xff;
+/* Ignore high order bits */
+addr &= 0xffffff;
+if (addr >= MEMSIZE)
+    return SCPE_NXM;
+addr >>= 2;
+byte = M[addr] >> offset;
+byte &= 0xff;
 *vptr = byte;
 return SCPE_OK;
 }
@@ -2102,11 +2102,21 @@ return SCPE_OK;
 
 t_stat cpu_dep (t_value val, t_addr exta, UNIT *uptr, int32 sw)
 {
-int32 st;
 uint32 addr = (uint32) exta;
+uint32 offset = 8 * (3 - (addr & 0x3));
+uint32 word;
+uint32 mask;
 
-if (WriteByte (addr, val))
+/* Ignore high order bits */
+addr &= 0xffffff;
+if (addr >= MEMSIZE)
     return SCPE_NXM;
+addr >>= 2;
+mask = 0xff << offset;
+word = M[addr];
+word &= ~mask;
+word |= (val & 0xff) << offset;
+M[addr] = word;
 return SCPE_OK;
 }
 
