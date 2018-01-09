@@ -959,6 +959,14 @@ static const char simh_help[] =
       "+++++++++D MQ 0\n"
       "++BREAK 100;                 delete action on break at 100\n\n"
        /***************** 80 character line width template *************************/
+#define HLP_DEBUG       "*Commands Stopping_The_Simulator User_Specified_Stop_Conditions DEBUG"
+#define HLP_NODEBUG     "*Commands Stopping_The_Simulator User_Specified_Stop_Conditions DEBUG"
+      "4Debug\n"
+      " The DEBUG snd NODEBUG commands are aliases for the \"SET DEBUG\" and\n"
+      " \"SET NODEBUG\" commands.  Additionally, support is provided that is\n"
+      " equivalent to the \"SET <dev> DEBUG=opt1{;opt2}\" and\n"
+      " \"SET <dev> NODEBUG=opt1{;opt2}\" commands.\n\n"
+       /***************** 80 character line width template *************************/
       "2Connecting and Disconnecting Devices\n"
       " Except for main memory and network devices, units are simulated as\n"
       " unstructured binary disk files in the host file system.  Before using a\n"
@@ -1611,14 +1619,56 @@ ASSERT      failure have several different actions:
 #endif
 
 
-#define HLP_ECHO        "*Commands Executing_Command_Files Displaying_Arbitrary_Text"
+#define HLP_ECHO        "*Commands Executing_Command_Files Displaying_Arbitrary_Text ECHO_Command"
        /***************** 80 character line width template *************************/
       "3Displaying Arbitrary Text\n"
-      " The ECHO command is a useful way of annotating command files.  ECHO prints\n"
-      " out its arguments on the console (and log):\n\n"
+      " The ECHO and ECHOF commands are useful ways of annotating command files.\n\n"
+      "4ECHO command\n"
+      " The ECHO command prints out its arguments on the console (and log)\n"
+      " followed by a newline:\n\n"
       "++ECHO <string>      output string to console\n\n"
       " If there is no argument, ECHO prints a blank line on the console.  This\n"
       " may be used to provide spacing in the console display or log.\n"
+       /***************** 80 character line width template *************************/
+#define HLP_ECHOF       "*Commands Executing_Command_Files Displaying_Arbitrary_Text ECHOF_Command"
+       /***************** 80 character line width template *************************/
+      "4ECHOF command\n"
+      " The ECHOF command prints out its arguments on the console (and log)\n"
+      " followed by a newline:\n\n"
+       /***************** 80 character line width template *************************/
+      "++ECHOF {-n} \"<string>\"|<string>   output string to console\n\n"
+      " If there is no argument, ECHOF prints a blank line on the console.\n"
+      " The string argument may be delimited by quote characters.  Quotes may\n"
+      " be either single or double but the opening and closing quote characters\n"
+      " must match.  If the string is enclosed in quotes, the string may\n"
+      " contain escaped character strings which is interpreted as described\n"
+      " in Quoted_String_Data and the resulting string is output.\n\n"
+      " A command alias can be used to replace the ECHO command with the ECHOF\n"
+      " command:\n\n"
+      "++sim> SET ENV ECHO=ECHOF\n"
+      "5Switches\n"
+      " Switches can be used to influence the behavior of ECHOF commands\n\n"
+      "6-n\n"
+      " The -n switch indicates that the supplied string should be output\n"
+      " without a newline after the string is written.\n"
+      "5Quoted String Data\n"
+      " String data enclosed in quotes is transformed interpreting character\n"
+      " escapes.  The following character escapes are explicitly supported:\n"
+      "++\\r  Sends the ASCII Carriage Return character (Decimal value 13)\n"
+      "++\\n  Sends the ASCII Linefeed character (Decimal value 10)\n"
+      "++\\f  Sends the ASCII Formfeed character (Decimal value 12)\n"
+      "++\\t  Sends the ASCII Horizontal Tab character (Decimal value 9)\n"
+      "++\\v  Sends the ASCII Vertical Tab character (Decimal value 11)\n"
+      "++\\b  Sends the ASCII Backspace character (Decimal value 8)\n"
+      "++\\\\  Sends the ASCII Backslash character (Decimal value 92)\n"
+      "++\\'  Sends the ASCII Single Quote character (Decimal value 39)\n"
+      "++\\\"  Sends the ASCII Double Quote character (Decimal value 34)\n"
+      "++\\?  Sends the ASCII Question Mark character (Decimal value 63)\n"
+      "++\\e  Sends the ASCII Escape character (Decimal value 27)\n"
+      " as well as octal character values of the form:\n"
+      "++\\n{n{n}} where each n is an octal digit (0-7)\n"
+      " and hext character values of the form:\n"
+      "++\\xh{h} where each h is a hex digit (0-9A-Fa-f)\n"
        /***************** 80 character line width template *************************/
 #define HLP_SEND        "*Commands Executing_Command_Files Injecting_Console_Input"
        /***************** 80 character line width template *************************/
@@ -1956,6 +2006,8 @@ static CTAB cmd_table[] = {
     { "BOOT",       &run_cmd,       RU_BOOT,    HLP_BOOT,       NULL, &run_cmd_message },
     { "BREAK",      &brk_cmd,       SSH_ST,     HLP_BREAK },
     { "NOBREAK",    &brk_cmd,       SSH_CL,     HLP_NOBREAK },
+    { "DEBUG",      &debug_cmd,     1,          HLP_DEBUG},
+    { "NODEBUG",    &debug_cmd,     0,          HLP_NODEBUG },
     { "ATTACH",     &attach_cmd,    0,          HLP_ATTACH },
     { "DETACH",     &detach_cmd,    0,          HLP_DETACH },
     { "ASSIGN",     &assign_cmd,    0,          HLP_ASSIGN },
@@ -1990,6 +2042,7 @@ static CTAB cmd_table[] = {
     { "PROCEED",    &noop_cmd,      0,          HLP_PROCEED },
     { "IGNORE",     &noop_cmd,      0,          HLP_IGNORE },
     { "ECHO",       &echo_cmd,      0,          HLP_ECHO },
+    { "ECHOF",      &echof_cmd,     0,          HLP_ECHOF },
     { "ASSERT",     &assert_cmd,    1,          HLP_ASSERT },
     { "SEND",       &send_cmd,      1,          HLP_SEND },
     { "NOSEND",     &send_cmd,      0,          HLP_SEND },
@@ -2970,6 +3023,30 @@ sim_printf ("%s\n", cptr);
 return SCPE_OK;
 }
 
+/* EchoF command */
+
+t_stat echof_cmd (int32 flag, CONST char *cptr)
+{
+char gbuf[CBUFSIZE];
+uint8 dbuf[CBUFSIZE];
+uint32 dsize = 0;
+
+GET_SWITCHES (cptr);
+if (!*cptr)
+    return SCPE_2FARG;
+if ((*cptr == '"') || (*cptr == '\'')) {
+    cptr = get_glyph_quoted (cptr, gbuf, 0);
+    if (*cptr != '\0')
+        return SCPE_2MARG;              /* No more arguments */
+    if (SCPE_OK != sim_decode_quoted_string (gbuf, dbuf, &dsize))
+        return sim_messagef (SCPE_ARG, "Invalid String\n");
+    dbuf[dsize] = 0;
+    cptr = (char *)dbuf;
+    }
+sim_printf ("%s%s", cptr, (sim_switches & SWMASK('N')) ? "" : "\n");
+return SCPE_OK;
+}
+
 /* Do command
 
    Syntax: DO {-E} {-V} <filename> {<arguments>...}
@@ -3153,7 +3230,8 @@ do {
         ((cmdp->action != &return_cmd) &&
          (cmdp->action != &goto_cmd) &&
          (cmdp->action != &on_cmd) &&
-         (cmdp->action != &echo_cmd)))
+         (cmdp->action != &echo_cmd) &&
+         (cmdp->action != &echof_cmd)))
         sim_last_cmd_stat = stat;                       /* save command error status */
     switch (stat) {
         case SCPE_AFAIL:
@@ -3297,6 +3375,26 @@ strlcpy (sim_sub_instr, instr, instr_size*sizeof(*sim_sub_instr));
 while (sim_isspace (*ip)) {                                 /* skip leading spaces */
     sim_sub_instr_off[outstr_off++] = ip - instr;
     *op++ = *ip++;
+    }
+/* If entire string is within quotes, strip the quotes */
+if ((*ip == '"') || (*ip == '\'')) {                        /* start with a quote character? */
+    const char *cptr = ip;
+    char *tp = op;              /* use remainder of output buffer as temp buffer */
+
+    cptr = get_glyph_quoted (cptr, tp, 0);                  /* get quoted string */
+    while (sim_isspace (*cptr))
+        ++cptr;                                             /* skip over trailing spaces */
+    if (*cptr == '\0') {                                    /* full string was quoted? */
+        uint32 dsize;
+
+        if (SCPE_OK == sim_decode_quoted_string (tp, (uint8 *)tp, &dsize)) {
+            tp[dsize] = '\0';
+            while (sim_isspace (*tp))
+                memmove (tp, tp + 1, strlen (tp));
+            strlcpy (ip, tp, instr_size - (ip - instr));/* copy quoted contents to input buffer */
+            strlcpy (sim_sub_instr + (ip -  instr), tp, instr_size - (ip - instr));
+            }
+        }
     }
 istart = ip;
 for (; *ip && (op < oend); ) {
@@ -5477,9 +5575,7 @@ if (dir) {
 #endif
     t_offset FileSize;
     char FileName[PATH_MAX + 1];
-#if defined (HAVE_FNMATCH)
     char *MatchName = 1 + strrchr (cptr, '/');;
-#endif
     char *p_name;
     struct tm *local;
 #if defined (HAVE_GLOB)
@@ -5493,6 +5589,9 @@ if (dir) {
     while ((ent = readdir (dir))) {
 #if defined (HAVE_FNMATCH)
         if (fnmatch(MatchName, ent->d_name, 0))
+            continue;
+#else
+        if (strcmp(MatchName, ent->d_name) != 0)
             continue;
 #endif
         sprintf (FileName, "%s/%s", DirName, ent->d_name);
@@ -5740,6 +5839,25 @@ stat = sim_dir_scan (sname, sim_copy_entry, &copy_state);
 if ((stat == SCPE_OK) && (copy_state.count))
     return sim_messagef (SCPE_OK, "      %3d file(s) copied\n", copy_state.count);
 return copy_state.stat;
+}
+
+/* Debug command */
+
+t_stat debug_cmd (int32 flg, CONST char *cptr)
+{
+char gbuf[CBUFSIZE];
+CONST char *svptr;
+DEVICE *dptr;
+
+GET_SWITCHES (cptr);                                    /* get switches */
+cptr = get_glyph (svptr = cptr, gbuf, 0);               /* get next glyph */
+if ((dptr = find_dev (gbuf)))                           /* device match? */
+return set_dev_debug (dptr, NULL, flg, *cptr ? cptr : NULL);
+cptr = svptr;
+if (flg)
+    return sim_set_debon (0, cptr);
+else
+    return sim_set_deboff (0, cptr);
 }
 
 /* Breakpoint commands */
@@ -7155,16 +7273,14 @@ if (sim_deb && (sim_deb != stdout) && (sim_deb != sim_log)) {/* debug if enabled
 
 t_stat sim_run_boot_prep (int32 flag)
 {
-UNIT *uptr;
 t_stat r;
 
 sim_interval = 0;                                       /* reset queue */
 sim_time = sim_rtime = 0;
-noqueue_time = 0;
-for (uptr = sim_clock_queue; uptr != QUEUE_LIST_END; uptr = sim_clock_queue) {
-    sim_clock_queue = uptr->next;
-    uptr->next = NULL;
-    }
+noqueue_time = 0;                                       /* reset queue */
+while (sim_clock_queue != QUEUE_LIST_END)
+    sim_cancel (sim_clock_queue);
+noqueue_time = sim_interval = 0;
 r = reset_all (0);
 if ((r == SCPE_OK) && (flag == RU_RUN)) {
     if ((run_cmd_did_reset) && (0 == (sim_switches & SWMASK ('Q')))) {
@@ -9888,6 +10004,7 @@ if (nptr != QUEUE_LIST_END)
     nptr->time += (uptr->next) ? 0 : uptr->time;
 if (!uptr->next)
     uptr->time = 0;
+uptr->usecs_remaining = 0;
 if (sim_clock_queue != QUEUE_LIST_END)
     sim_interval = sim_clock_queue->time;
 else sim_interval = noqueue_time = NOQUEUE_WAIT;
@@ -10423,7 +10540,19 @@ while (sim_isspace (*sim_brk_act[sim_do_depth]))        /* skip spaces */
 if (*sim_brk_act[sim_do_depth] == 0) {                  /* now empty? */
     return sim_brk_clract ();
     }
-if ((ep = strchr (sim_brk_act[sim_do_depth], ';'))) {   /* cmd delimiter? */
+ep = strpbrk (sim_brk_act[sim_do_depth], ";\"'");       /* search for a semicolon or single or double quote */
+if ((ep != NULL) && (*ep != ';')) {                     /* if a quoted string is present */
+    char quote = *ep++;                                 /*   then save the opening quotation mark */
+
+    while (ep [0] != '\0' && ep [0] != quote)           /* while characters remain within the quotes */
+        if (ep [0] == '\\' && ep [1] == quote)          /*   if an escaped quote sequence follows */
+            ep = ep + 2;                                /*     then skip over the pair */
+        else                                            /*   otherwise */
+            ep = ep + 1;                                /*     skip the non-quote character */  
+    ep = strchr (ep, ';');                              /* the next semicolon is outside the quotes if it exists */
+    }
+
+if (ep != NULL) {                                       /* if a semicolon is present */
     lnt = ep - sim_brk_act[sim_do_depth];               /* cmd length */
     memcpy (buf, sim_brk_act[sim_do_depth], lnt + 1);   /* copy with ; */
     buf[lnt] = 0;                                       /* erase ; */
@@ -10455,6 +10584,14 @@ if (action) {
     }
 else
     sim_brk_clract ();
+}
+
+char *sim_brk_replace_act (char *new_action)
+{
+char *old_action = sim_brk_act_buf[sim_do_depth];
+
+sim_brk_act_buf[sim_do_depth] = new_action;
+return old_action;
 }
 
 /* New PC */
@@ -10779,7 +10916,8 @@ if (switches & EXP_TYP_REGEX) {
     }
 else {
     sim_data_trace(exp->dptr, exp->dptr->units, (const uint8 *)match, "", strlen(match)+1, "Expect Match String", exp->dbit);
-    sim_decode_quoted_string (match, match_buf, &match_size);
+    /* quoted string was validated above, this decode operation will always succeed */
+    (void)sim_decode_quoted_string (match, match_buf, &match_size);
     ep->match = match_buf;
     ep->size = match_size;
     }
