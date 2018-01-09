@@ -1,6 +1,6 @@
 /* ka10_lp.c: PDP-10 line printer simulator
 
-   Copyright (c) 2011-2016, Richard Cornwell
+   Copyright (c) 2011-2017, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),

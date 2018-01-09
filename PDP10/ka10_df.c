@@ -1,6 +1,6 @@
 /* ka10_df.c: DF10 common routines.
 
-   Copyright (c) 2016, Richard Cornwell
+   Copyright (c) 2015-2017, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
