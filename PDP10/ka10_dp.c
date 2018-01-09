@@ -1,6 +1,6 @@
 /* ka10_dp.c: Dec Data Products Disk Drive.
 
-   Copyright (c) 2013-2016, Richard Cornwell
+   Copyright (c) 2013-2017, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -495,10 +495,9 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
 
          case SK:
              if ((uptr->flags & UNIT_ATT) == 0) {
-                uptr->STATUS |= NOT_RDY;
                 return SCPE_OK;
              }
-             uptr->STATUS |= BUSY;
+             uptr->STATUS |= NOT_RDY;
              uptr->UFLAGS = (cyl << 20) | (tmp<<3) | ctlr | SEEK_STATE;
              break;
 
@@ -761,20 +760,20 @@ t_stat dp_svc (UNIT *uptr)
                if (diff == 0) {
                    uptr->UFLAGS |= SEEK_DONE;
                    uptr->UFLAGS &= ~SEEK_STATE;
-                   uptr->STATUS &= ~(BUSY|NOT_RDY);
+                   uptr->STATUS &= ~(NOT_RDY);
                    df10_setirq(df10);
                } else if (diff < 10 && diff > -10) {
                    uptr->CUR_CYL += diffs;
                    if (uptr->CUR_CYL < 0) {
                        uptr->UFLAGS |= SEEK_DONE;
                        uptr->UFLAGS &= ~SEEK_STATE;
-                       uptr->STATUS &= ~(BUSY|NOT_RDY);
+                       uptr->STATUS &= ~(NOT_RDY);
                        uptr->CUR_CYL = 0;
                        df10_setirq(df10);
                    } else if (uptr->CUR_CYL > dp_drv_tab[dtype].cyl) {
                        uptr->UFLAGS |= SEEK_DONE;
                        uptr->UFLAGS &= ~SEEK_STATE;
-                       uptr->STATUS &= ~(BUSY|NOT_RDY);
+                       uptr->STATUS &= ~(NOT_RDY);
                        uptr->CUR_CYL = dp_drv_tab[dtype].cyl;
                        df10_setirq(df10);
                    } else

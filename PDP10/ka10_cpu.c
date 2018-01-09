@@ -1,6 +1,6 @@
 /* ka10_cpu.c: PDP-10 CPU simulator
 
-   Copyright (c) 2016, Richard Cornwell
+   Copyright (c) 2011-2017, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -1327,7 +1327,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
         uint64   data;
         int      base = 0;
         int      page = (RMASK & addr) >> 10;
-        int      entry;
+        int      acc;
         int      uf = (FLAGS & USER) != 0;
 
         /* If paging is not enabled, address is direct */
@@ -1404,42 +1404,51 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
             }
         }
         *loc = ((data & 0777) << 10) + (addr & 01777);
-        if (uf) {
-            fprintf(stderr, "xlat %o %06o %03o ", xct_flag, addr, page >> 1);
-            fprintf(stderr, " %06o %03o %012llo %o", base, page, data, uf);
-            fprintf(stderr, " -> %06o wr=%o PC=%06o\n\r", *loc, wr, PC);
-}
-        if (fetch && (FLAGS & PURE) && (data & 0600000) != 0100000) {
+        acc = (data >> 16) & 03;
+        if (fetch && (FLAGS & PURE) && acc == 2) {
             fault_data |= 020;
-            fault_addr = (page << 10) | ((base == 0)? 01000000 : 0) |
-                   (data & 01777) ;
+            fault_addr = (page) | ((uf)? 0400 : 0) | ((data & 0777) << 9);
             if ((xct_flag & 04) == 0) {
                 mem_prot = 1;
                 fault_data |= 01000;
-            }
+            } else
+                PC = (PC + 1) & RMASK;
             return 0;
         }
+
         /* Access check logic */
-        if ((data & 0600000) == 0 || (wr & ((data & 0600000) != 0600000))) {
-            switch ((data & 0600000) >> 15) {
+        if (acc == 0 || (wr & (acc != 3))) {
+            if (mem_prot)
+                return 0;
+            switch (acc) {
             case 0: fault_data |= 0010; break;
             case 1: fault_data |= 0100; break;
             case 2: fault_data |= 0040; break;
             case 3: break;
             }
 fault:
+            if (mem_prot)
+                return 0;
             /* Update fault data */
             fault_addr = (page) | ((uf)? 0400 : 0) | ((data & 0777) << 9);
             if ((xct_flag & 04) == 0) {
                 mem_prot = 1;
                 fault_data |= 01000;
+            } else {
+                fprintf(stderr, "skip next %o - ", PC);
+                PC = (PC + 1) & RMASK;
             }
-            fprintf(stderr, "xlat %06o %03o ", addr, page >> 1);
+            fprintf(stderr, "xlat %o %06o %03o ", xct_flag, addr, page >> 1);
             fprintf(stderr, " %06o %03o %012llo %o", base, page, data, uf);
             fprintf(stderr, " -> %06o wr=%o PC=%06o ", fault_addr, wr, PC);
             fprintf(stderr, " fault\n\r");
             return 0;
         }
+//        if (uf) {
+//            fprintf(stderr, "xlat %o %06o %03o ", xct_flag, addr, page >> 1);
+//            fprintf(stderr, " %06o %03o %012llo %o", base, page, data, uf);
+//            fprintf(stderr, " -> %06o wr=%o PC=%06o\n\r", *loc, wr, PC);
+//        }
         return 1;
       }
 #endif
@@ -1893,7 +1902,7 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
           }
      }
 
-     if (sim_brk_summ && f_inst_fetch && sim_brk_test(PC, SWMASK('E'))) {
+     if (sim_brk_summ && f_load_pc && sim_brk_test(PC, SWMASK('E'))) {
          reason = STOP_IBKPT;
          break;
     }
@@ -1902,13 +1911,6 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
     check_apr_irq();
     /* Normal instruction */
     if (f_load_pc) {
-#if ITS
-        if (one_p_arm) {
-           fault_data |= 02000;
-           mem_prot = 1;
-           one_p_arm = 0;
-        }
-#endif
 #if KI | KL | ITS | BBN
         modify = 0;
         xct_flag = 0;
@@ -1917,7 +1919,23 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
         AB = PC;
         uuo_cycle = 0;
         f_pc_inh = 0;
+#if ITS
+        if (pi_cycle == 0 && mem_prot == 0 && QITS) {
+           opc = PC | (FLAGS << 18);
+        if (one_p_arm) {
+           fault_data |= 02000;
+           mem_prot = 1;
+           one_p_arm = 0;
+        }
+        }
+#endif
     }
+#if ITS
+    if (QITS && (FLAGS & ONEP) != 0) {
+       one_p_arm = 1;
+       FLAGS &= ~ONEP;
+    }
+#endif
 
     if (f_inst_fetch) {
 #if !(KI | KL)
@@ -2031,23 +2049,13 @@ st_pi:
     }
 #endif
 
-#if ITS
-    if (pi_cycle == 0 && QITS) {
-       opc = PC | (FLAGS << 18);
-       if (!f_pc_inh && (FLAGS & ONEP) != 0) {
-          one_p_arm = 1;
-          FLAGS &= ~ONEP;
-       }
-    }
-#endif
-
     /* Update history */
 #if KI
     if (hst_lnt && /*(fm_sel || */PC > 020 && (PC & 0777774) != 0777040 &&
             (PC & 0777700) != 023700 && (PC != 0526772)) {
 #else
-    if (hst_lnt && /*(FLAGS & USER) && */ PC > 020 && /*(PC & 0777774) != 0472174 && */
-            (PC & 0777700) != 0113700 && (PC != 0527154)) {
+    if (hst_lnt && /*(FLAGS & USER) &&*/ PC > 017/* && (PC & 0777774) != 0472174 && */
+           /* (PC & 0777700) != 0113700 && (PC != 0527154)*/) {
 #endif
             hst_p = hst_p + 1;
             if (hst_p >= hst_lnt) {
@@ -2660,10 +2668,10 @@ dpnorm:
     case 0103: /* TENEX UMOVES */ /* ITS XCTR */
 #if ITS
               if (QITS) {
-                   /* AC & 1 = ??? */
-                   /* AC & 2 = Read User */
-                   /* AC & 4 = Write User */
-                   /* AC & 8 = Inhibit mem protect, skip */
+                   /* AC & 1 = Read User */
+                   /* AC & 2 = Write User */
+                   /* AC & 4 = Inhibit mem protect, skip */
+                   /* AC & 8 = ??? */
                    f_load_pc = 0;
                    f_pc_inh = 1;
                    if ((FLAGS & USER) == 0)
@@ -2768,7 +2776,7 @@ unasign:
 #if KI | KL | ITS | BBN
                   modify = 1;
 #endif
-                  if (Mem_read(0, 1, 0))
+                  if (Mem_read(0, !QITS, 0))
                       goto last;
                   AR = MB;
                   SC = (AR >> 24) & 077;
@@ -2785,7 +2793,7 @@ unasign:
                   AR &= PMASK;
                   AR |= (uint64)(SC & 077) << 30;
                   MB = AR;
-                  if (Mem_write(0, 1))
+                  if (Mem_write(0, !QITS))
                       goto last;
                   if ((IR & 04) == 0)
                       break;
@@ -2796,7 +2804,7 @@ unasign:
     case 0135:/* LDB */
     case 0137:/* DPB */
               if ((FLAGS & BYTI) == 0 || !BYF5) {
-                  if (Mem_read(0, 1, 0))
+                  if (Mem_read(0, !QITS, 0))
                       goto last;
                   AR = MB;
 ldb_ptr:
@@ -3683,8 +3691,11 @@ fxnorm:
                     FLAGS &= ~USERIO;
                  FLAGS |= AR & (OVR|NODIV|FLTUND|BYTI|FLTOVR|CRY1|CRY0|\
                                  TRP1|TRP2|PUBLIC);
+#if ITS
+                 if (QITS)
+                     FLAGS |= AR & (PURE|ONEP);
+#endif
                  check_apr_irq();
-
               }
               if (AC & 01) {  /* Enter User Mode */
 #if KI | KL
@@ -3712,6 +3723,12 @@ fxnorm:
     case 0256: /* XCT */
               f_load_pc = 0;
               f_pc_inh = 1;
+#if ITS
+              if (QITS && one_p_arm) {
+                 one_p_arm = 0;
+                 FLAGS |= ONEP;
+              }
+#endif
 #if BBN
               if ((FLAGS & USER) == 0 && QBBN) 
                    xct_flag = AC;
