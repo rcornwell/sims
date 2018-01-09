@@ -1,6 +1,6 @@
 /* ibm360_defs.h: IBM 360 simulator definitions
 
-   Copyright (c) 2005, Richard Cornwell
+   Copyright (c) 2017, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),

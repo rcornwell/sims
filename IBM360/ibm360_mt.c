@@ -1,6 +1,6 @@
 /* ibm360_mt.c: IBM 360 2400 Magnetic tape controller
 
-   Copyright (c) 2016, Richard Cornwell
+   Copyright (c) 2017, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),

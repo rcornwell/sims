@@ -1,6 +1,6 @@
-/* ibm360_urec.c: IBM 360 Line Printer
+/* ibm360_lpr.c: IBM 360 Line Printer
 
-   Copyright (c) 2016, Richard Cornwell
+   Copyright (c) 2017, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -20,7 +20,6 @@
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
    This is the standard line printer.
-   This is the standard inquiry or console interface.
 
    These units each buffer one record in local memory and signal
    ready when the buffer is full or empty. The channel must be
