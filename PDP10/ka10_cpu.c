@@ -256,7 +256,7 @@ t_bool build_dev_tab (void);
 UNIT cpu_unit[] = { { UDATA (&rtc_srv, UNIT_IDLE|UNIT_FIX|UNIT_BINK|UNIT_TWOSEG, MAXMEMSIZE) },
 #if ITS
                     { UDATA (&qua_srv, UNIT_IDLE|UNIT_DIS, 0) }
-#endif    
+#endif
                    };
 
 REG cpu_reg[] = {
@@ -660,9 +660,12 @@ void clr_interrupt(int dev) {
 int check_irq_level() {
      int i, lvl;
 
+     /* If PXCT don't check for interrupts */
+     if (xct_flag != 0)
+         return 0;
      check_apr_irq();
      /* If not enabled, check if any pending Processor IRQ */
-     if (pi_enable == 0) { 
+     if (pi_enable == 0) {
         if (PIR != 0) {
             pi_enc = 1;
             for(lvl = 0100; lvl != 0; lvl >>= 1) {
@@ -1071,7 +1074,7 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
             nxm_flag = 0;
         if (res & 020000)
             mem_prot = 0;
-        if (res & 0200000) 
+        if (res & 0200000)
             reset_all(1);
         if (res & 0400000)
             push_ovf = 0;
@@ -1405,60 +1408,64 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
         }
         *loc = ((data & 0777) << 10) + (addr & 01777);
         acc = (data >> 16) & 03;
-        if (fetch && (FLAGS & PURE) && acc == 2) {
-            fault_data |= 020;
-            fault_addr = (page) | ((uf)? 0400 : 0) | ((data & 0777) << 9);
-            if ((xct_flag & 04) == 0) {
-                mem_prot = 1;
-                fault_data |= 01000;
-            } else
-                PC = (PC + 1) & RMASK;
-            return 0;
-        }
 
         /* Access check logic */
-        if (acc == 0 || (wr & (acc != 3))) {
-            if (mem_prot)
-                return 0;
-            switch (acc) {
-            case 0: fault_data |= 0010; break;
-            case 1: fault_data |= 0100; break;
-            case 2: fault_data |= 0040; break;
-            case 3: break;
-            }
+        switch(acc) {
+        case 0:                     /* No access */
+               fault_data |= 0010;
+               break;
+        case 1:                     /* Read Only Access */
+               if (!wr)
+                   return 1;
+               fault_data |= 0100;
+               break;
+        case 2:                     /* Read write first */
+               if (fetch && (FLAGS & PURE)) {
+                   fault_data |= 0020;
+                   break;
+               }
+               if (!wr)
+                   return 1;
+               fault_data |= 040;
+               break;
+        case 3:                    /* All access */
+               if (fetch && (FLAGS & PURE)) {
+                   fault_data |= 0020;
+                   break;
+               }
+               return 1;
+       }
 fault:
-            if (mem_prot)
-                return 0;
-            /* Update fault data */
-            fault_addr = (page) | ((uf)? 0400 : 0) | ((data & 0777) << 9);
-            if ((xct_flag & 04) == 0) {
-                mem_prot = 1;
-                fault_data |= 01000;
-            } else {
-                fprintf(stderr, "skip next %o - ", PC);
-                PC = (PC + 1) & RMASK;
-            }
-            fprintf(stderr, "xlat %o %06o %03o ", xct_flag, addr, page >> 1);
-            fprintf(stderr, " %06o %03o %012llo %o", base, page, data, uf);
-            fprintf(stderr, " -> %06o wr=%o PC=%06o ", fault_addr, wr, PC);
-            fprintf(stderr, " fault\n\r");
-            return 0;
-        }
-//        if (uf) {
-//            fprintf(stderr, "xlat %o %06o %03o ", xct_flag, addr, page >> 1);
-//            fprintf(stderr, " %06o %03o %012llo %o", base, page, data, uf);
-//            fprintf(stderr, " -> %06o wr=%o PC=%06o\n\r", *loc, wr, PC);
-//        }
-        return 1;
+//       if (mem_prot)
+ //          return 0;
+       /* Update fault data */
+       fault_addr = (page) | ((uf)? 0400 : 0) | ((data & 0777) << 9);
+       if ((xct_flag & 04) == 0) {
+           mem_prot = 1;
+           fault_data |= 01000;
+       } else {
+//           fprintf(stderr, "skip next %o - ", PC);
+           PC = (PC + 1) & RMASK;
+       }
+ //      fprintf(stderr, "xlat %o %06o %03o ", xct_flag, addr, page >> 1);
+  //     fprintf(stderr, " %06o %03o %012llo %o", base, page, data, uf);
+   //    fprintf(stderr, " -> %06o wr=%o PC=%06o ", fault_addr, wr, PC);
+    //   fprintf(stderr, " fault\n\r");
+       return 0;
+//        if (xct_flag != 0) {
+ //           fprintf(stderr, "xlat %o %06o %03o ", xct_flag, addr, page >> 1);
+  //          fprintf(stderr, " %06o %03o %012llo %o", base, page, data, uf);
+   //         fprintf(stderr, " -> %06o wr=%o PC=%06o\n\r", *loc, wr, PC);
+    //    }
       }
 #endif
 #if BBN
-      /* Group 0, 01 = 00         
+      /* Group 0, 01 = 00
                   bit 2 = Age 00x                                        0100000
                   bit 3 = Age 02x                                        0040000
                   bit 4 = Age 04x                                        0020000
                   bit 5 = Age 06x                                        0010000
-                  bit 6 = Monitor after loading AR trap                  0004000 */    
+                  bit 6 = Monitor after loading AR trap                  0004000 */
        /* Group 1, 01 = 01                                               0200000
                   bit 3 = Shared page not in core                        0040000
                   bit 4 = page table not in core (p.t.2)                 0020000
@@ -1467,21 +1474,21 @@ fault:
                   bit 7 = Indirect page table not in core (p.t.3)        0002000
                   bit 8 = Excessive indirect pointers (>2)               0001000 */
        /* Group 2, 01 = 10                                               0400000
-                  bit 2 = Private not in core 
+                  bit 2 = Private not in core
                   bit 3 = Write copy trap (bit 9 in p.t.)
                   bit 4 = user trap (bit 8 in p.t.)
                   bit 5 = access trap (p.t. bit 12 = 0 or bits 10-11=3)
-                  bit 6 = illegal read or execute 
+                  bit 6 = illegal read or execute
                   bit 7 = illegal write
-                  bit 8 = address limit register violation or p.t. bits 
+                  bit 8 = address limit register violation or p.t. bits
                           0,1 = 3 (illegal format) */
         /* Group 3, 01 = 11  (in 2nd or 3rd p.t.)                        060000
-                  bit 2 = private not in core 
+                  bit 2 = private not in core
                   bit 3 = write copy trap (bit 9 in p.t.)
                   bit 4 = user trap (bit 8 in p.t.)
                   bit 5 = access trap (p.t. bit 12 = 0 or bits 10-11=3)
                   bit 6 = illegal read or execute
-                  bit 7 = illegal write 
+                  bit 7 = illegal write
                   bit 8 = address limit register violation or p.t. bits
                           0,1 = 3 (illegal format */
     if (QBBN) {
@@ -1581,7 +1588,7 @@ map_page:
                  /* Bit 2 = Read */
                  page = data & BBN_PAGE;
                  traps &= data & (BBN_MERGE|BBN_TRPPG);
-                 tlb_data = (data & (BBN_EXEC|BBN_WRITE|BBN_READ) >> 16) | 
+                 tlb_data = (data & (BBN_EXEC|BBN_WRITE|BBN_READ) >> 16) |
                              (data & 03777);
                  break;
 
@@ -1618,7 +1625,7 @@ map_page:
             }
         }
         if (uf) {
-            u_tlb[page] = tlb_data; 
+            u_tlb[page] = tlb_data;
         } else {
             e_tlb[page] = tlb_data;
         }
@@ -1644,9 +1651,9 @@ map_page:
             goto fault_bbn;
         }
         data &= ~00777000000000LL; /* Clear age */
-        if (wr) 
+        if (wr)
            data |= 00000400000000LL; /* Set modify */
-        data |= pur; 
+        data |= pur;
         M[04000 + (tlb_data & 03777)] = data;
         goto access;
       /* Handle fault */
@@ -1666,12 +1673,12 @@ fault_bbn:
       /* Bit 11 = Key in progress  0000100 */
       /* Bit 10 = non-ex-mem       0000200 */
       /* Bit  9 = Parity           0000400 */
-      /* Bit 0-8 = status */         
+      /* Bit 0-8 = status */
       if ((FLAGS & USER) == 0)
          fault_data |= 01;
-      if (fetch) 
+      if (fetch)
          fault_data |= 02;
-      if (wr) 
+      if (wr)
          fault_data |= 04;
       else
          fault_data |= 010;
@@ -1686,7 +1693,7 @@ fault_bbn:
       goto map_page;
 fault_bbn1:
       M[((tlb_data & 03777) << 9) | 0571] = ((uint64)fault_data) << 18 | addr;
-      if (wr) 
+      if (wr)
           M[((tlb_data & 03777) << 9) | 0572] = MB;
       return 0;
       }
@@ -1922,20 +1929,13 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
 #if ITS
         if (pi_cycle == 0 && mem_prot == 0 && QITS) {
            opc = PC | (FLAGS << 18);
-        if (one_p_arm) {
-           fault_data |= 02000;
-           mem_prot = 1;
-           one_p_arm = 0;
-        }
+           if ((FLAGS & ONEP) != 0) {
+              one_p_arm = 1;
+              FLAGS &= ~ONEP;
+           }
         }
 #endif
     }
-#if ITS
-    if (QITS && (FLAGS & ONEP) != 0) {
-       one_p_arm = 1;
-       FLAGS &= ~ONEP;
-    }
-#endif
 
     if (f_inst_fetch) {
 #if !(KI | KL)
@@ -2043,7 +2043,7 @@ st_pi:
 
 #if KI | KL
     if (page_enable && page_fault) {
-        if (!f_pc_inh && !pi_cycle) 
+        if (!f_pc_inh && !pi_cycle)
             PC = (PC + 1) & RMASK;
         goto last;
     }
@@ -2193,6 +2193,9 @@ unasign:
               Mem_write(uuo_cycle, 1);
               AB += 1;
               f_load_pc = 0;
+#if ITS
+              one_p_arm = 0;
+#endif
               f_pc_inh = 1;
               break;
 
@@ -2560,7 +2563,7 @@ dpnorm:
               goto unasign;
     case 0102: /* TENEX UMOVEM */ /* ITS LPM */
 #if ITS
-              if ((FLAGS & USER) == 0 && QITS) {
+              if (QITS && (FLAGS & USER) == 0) {
                   /* Load store ITS pager info */
                   /* AC & 1 = Store */
                   if (AC & 1) {
@@ -2606,8 +2609,12 @@ dpnorm:
                       MB = M[AB];                /* WD 0 */
 //fprintf(stderr, "map 0 %06o %012llo\n\r", AB, MB);
                       age = (MB >> 27) & 017;
-                      fault_addr = 0;
-                      AB = (AB + 2) & RMASK;
+                      jpc = (MB & RMASK);
+                      fault_addr = (MB >> 18) & 0777;
+                      AB = (AB + 1) & RMASK;
+                      MB = M[AB];
+                      opc = MB;
+                      AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 2 */
 //fprintf(stderr, "map 2 %06o %012llo\n\r", AB, MB);
                       mar = 03777777 & MB;
@@ -2622,9 +2629,11 @@ dpnorm:
                       MB = M[AB];                /* WD 4 */
 //fprintf(stderr, "map 4 %06o %012llo\n\r", AB, MB);
                       dbr1 = ((0377 << 18) | RMASK) & MB;
+                      fault_addr |= (MB >> 13) & 00760000;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 5 */
 //fprintf(stderr, "map 5 %06o %012llo\n\r", AB, MB);
+                      fault_addr |= (MB >> 17) & 00017000;
                       dbr2 = ((0377 << 18) | RMASK) & MB;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 6 */
@@ -2667,15 +2676,14 @@ dpnorm:
 
     case 0103: /* TENEX UMOVES */ /* ITS XCTR */
 #if ITS
-              if (QITS) {
+              if (QITS && (FLAGS & USER) == 0) {
                    /* AC & 1 = Read User */
                    /* AC & 2 = Write User */
                    /* AC & 4 = Inhibit mem protect, skip */
                    /* AC & 8 = ??? */
                    f_load_pc = 0;
                    f_pc_inh = 1;
-                   if ((FLAGS & USER) == 0)
-                      xct_flag = AC;
+                   xct_flag = AC;
                    break;
               }
 #endif
@@ -2748,7 +2756,7 @@ dpnorm:
                       AR = AD;
                       SC--;
                   }
-                  set_reg(AC, AR);  
+                  set_reg(AC, AR);
                   set_reg(AC+1, MQ);
                   break;
               }
@@ -2765,6 +2773,12 @@ unasign:
               uuo_cycle = 1;
               Mem_write(uuo_cycle, 0);
               AB += 1;
+#if ITS
+              if (one_p_arm) {
+                  FLAGS |= ONEP;
+                  one_p_arm = 0;
+              }
+#endif
               f_load_pc = 0;
               break;
 #endif
@@ -3602,12 +3616,24 @@ fxnorm:
                   }
                   AB = (AR >> 18) & RMASK;
                   if (Mem_read(0, 0, 0)) {
+#if ITS
+                       /* On ITS if access error, allow for skip */
+                       if (QITS && (xct_flag & 04) != 0)
+                            f_pc_inh =0;
+                       else
+#endif
                        f_pc_inh = 1;
                        set_reg(AC, AR);
                        goto last;
                   }
                   AB = (AR & RMASK);
                   if (Mem_write(0, 0)) {
+#if ITS
+                       /* On ITS if access error, allow for skip */
+                       if (QITS && (xct_flag & 04) != 0)
+                            f_pc_inh =0;
+                       else
+#endif
                        f_pc_inh = 1;
                        set_reg(AC, AR);
                        goto last;
@@ -3723,18 +3749,12 @@ fxnorm:
     case 0256: /* XCT */
               f_load_pc = 0;
               f_pc_inh = 1;
-#if ITS
-              if (QITS && one_p_arm) {
-                 one_p_arm = 0;
-                 FLAGS |= ONEP;
-              }
-#endif
 #if BBN
-              if ((FLAGS & USER) == 0 && QBBN) 
+              if (QBBN && (FLAGS & USER) == 0)
                    xct_flag = AC;
 #endif
 #if KI | KL
-              if ((FLAGS & USER) == 0) 
+              if ((FLAGS & USER) == 0)
                   xct_flag = AC;
 #endif
               break;
@@ -4564,6 +4584,14 @@ last:
         PC = (PC + 1) & RMASK;
     }
 
+#if ITS
+    if (QITS && one_p_arm) {
+        fault_data |= 02000;
+        mem_prot = 1;
+        one_p_arm = 0;
+    }
+#endif
+
     /* Dismiss an interrupt */
     if (pi_cycle) {
 #if KI | KL
@@ -4772,7 +4800,7 @@ dev_tab[1] = &dev_pi;
 dev_tab[2] = &dev_pag;
 #endif
 #if BBN
-if (QBBN) 
+if (QBBN)
    dev_tab[024] = &dev_pag;
 #endif
 for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {
