@@ -17,7 +17,7 @@ These are still in the testing stages. Please report any issues that you find in
 
 The KA10 sim has successfully run Tops 10 5.03 and Tops 10 6.03.  
 The KI10 sim has successfully run Tops 10 6.03  
-Support for ITS (untested).  
+The KA10 sim has successfully run ITS.
 Support for BBN pager (untested).  
 
    Disk   
@@ -43,8 +43,9 @@ and transfering to the loaded value. RC10, RH10, TM10 support readin mode.
    Possibly add in support for KL10A. (No extended addressing). 
 
 To do:  
-   * Add support for IBM 3330 drive to run Waits.  
+   * Add support for PMP IBM 3330 drive to run Waits.  
    * Add support for DC76 for ITS.  
+   * Add support for SA10 for Tymcom-X under KI.
 
 # IBM 360 simulator.
 
