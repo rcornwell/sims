@@ -96,7 +96,6 @@
 #define CW_PAR_ERR      00200000000
 #define B22_FLAG        01000000000
 
-
 #define DATA_PIA        000000007       /* 0 */
 #define FLAG_PIA        000000070       /* 3 */
 #define DENS_200        000000000
@@ -229,14 +228,14 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
                unit = next_unit;
                uptr = &mt_unit[unit];
           }
-          status |= NEXT_UNIT;
           if (pia & NEXT_UNIT_ENAB) {
               set_interrupt(dev, pia >> 3);
           }
           uptr->u3 = (int32)(*data & 077300);
           CLR_BUF(uptr);
           mt_df10.buf = 0;
-          sim_debug(DEBUG_CONO, dptr, "MT CONO %03o start %o %o %o %012llo %012llo PC=%06o\n",
+          sim_debug(DEBUG_CONO, dptr, 
+                  "MT CONO %03o start %o %o %o %012llo %012llo PC=%06o\n",
                       dev, uptr->u3, unit, pia, *data, status, PC);
           if ((uptr->flags & UNIT_ATT) != 0) {
               /* Check if Write */
@@ -244,10 +243,16 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
               uptr->u3 &= ~(MT_BRFUL|MT_BUFFUL);
               switch(cmd & 07) {
               case NOP_CLR:
-                     status |= JOB_DONE;
                      uptr->u3 &= ~MT_BUSY;
+                     if (pia & NEXT_UNIT_ENAB)
+                         status |= NEXT_UNIT;
+                     if (cmd & 010) {
+                         status |= JOB_DONE;
+                         set_interrupt(MT_DEVNUM+4, pia >> 3);
+                     } else {
+                         clr_interrupt(MT_DEVNUM+4);
+                     }
                      sim_debug(DEBUG_EXP, dptr, "Setting status %012llo\n", status);
-                     set_interrupt(MT_DEVNUM+4, pia >> 3);
                      return SCPE_OK;
 
               case REWIND:
@@ -320,6 +325,8 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
 
      case CONI|04:
           res = status;
+          if ((uptr->u3 & MT_BUSY) == 0 && (pia & NEXT_UNIT_ENAB) != 0)
+              res |= NEXT_UNIT;
           if ((uptr->flags & MTUF_7TRK) != 0)
               res |= SEVEN_CHAN;
           if ((uptr->flags & UNIT_ATT) != 0 && (uptr->u3 & MT_MOTION) == 0)
@@ -342,6 +349,12 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
           }
           if (*data & 2) {
               hold_reg ^= mt_df10.buf;
+          }
+          if (dptr->flags & MTDF_TYPEB) {
+              if (*data & 04)
+                 df10_writecw(&mt_df10);
+              if (*data & 010) 
+                  status &= ~(WT_CW_DONE);
           }
           sim_debug(DEBUG_CONO, dptr, "MT CONO %03o control %o %o %012llo %012llo\n",
                       dev, uptr->u3, unit, hold_reg, mt_df10.buf);
