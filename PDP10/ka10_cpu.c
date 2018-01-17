@@ -2194,7 +2194,10 @@ unasign:
               AB += 1;
               f_load_pc = 0;
 #if ITS
-              one_p_arm = 0;
+              if (QITS && one_p_arm) {
+                  FLAGS |= ONEP;
+                  one_p_arm = 0;
+              }
 #endif
               f_pc_inh = 1;
               break;
@@ -3672,6 +3675,12 @@ fxnorm:
     case 0254: /* JRST */      /* AR Frm PC */
               if (uuo_cycle | pi_cycle) {
                  FLAGS &= ~USER; /* Clear USER */
+#if ITS
+                 if (QITS && one_p_arm) {
+                     FLAGS |= ONEP;
+                     one_p_arm = 0;
+                 }
+#endif
               }
               /* JEN */
               if (AC & 010) { /* Restore interrupt level. */
@@ -3830,6 +3839,12 @@ fxnorm:
               }
               if (uuo_cycle | pi_cycle) {
                  FLAGS &= ~(USER|PUBLIC); /* Clear USER */
+#if ITS
+                 if (QITS && one_p_arm) {
+                     FLAGS |= ONEP;
+                     one_p_arm = 0;
+                 }
+#endif
               }
 #if ITS
               if ((FLAGS & USER) && QITS) {
@@ -4585,7 +4600,7 @@ last:
     }
 
 #if ITS
-    if (QITS && one_p_arm) {
+    if (QITS && one_p_arm && (FLAGS & BYTI) == 0) {
         fault_data |= 02000;
         mem_prot = 1;
         one_p_arm = 0;
