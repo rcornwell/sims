@@ -244,8 +244,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
               switch(cmd & 07) {
               case NOP_CLR:
                      uptr->u3 &= ~MT_BUSY;
-                     if (pia & NEXT_UNIT_ENAB)
-                         status |= NEXT_UNIT;
+                     status |= NEXT_UNIT;
                      if (cmd & 010) {
                          status |= JOB_DONE;
                          set_interrupt(MT_DEVNUM+4, pia >> 3);
@@ -325,7 +324,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
 
      case CONI|04:
           res = status;
-          if ((uptr->u3 & MT_BUSY) == 0 && (pia & NEXT_UNIT_ENAB) != 0)
+          if ((uptr->u3 & MT_BUSY) == 0)
               res |= NEXT_UNIT;
           if ((uptr->flags & MTUF_7TRK) != 0)
               res |= SEVEN_CHAN;
@@ -333,6 +332,10 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
               res |= IDLE_UNIT;
           if ((uptr->flags & MTUF_WLK) != 0)
               res |= WRITE_LOCK;
+          if (sim_tape_eot(uptr))
+              res |= BOT_FLAG;
+          if (sim_tape_bot(uptr))
+              res |= BOT_FLAG;
 #if KI_22BIT
           if (dptr->flags & MTDF_TYPEB)
               res |= B22_FLAG;
