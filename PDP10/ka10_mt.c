@@ -334,9 +334,9 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
               res |= IDLE_UNIT;
           if ((uptr->flags & MTUF_WLK) != 0)
               res |= WRITE_LOCK;
-          if (sim_tape_eot(uptr))
-              res |= BOT_FLAG;
           if (sim_tape_bot(uptr))
+              res |= BOT_FLAG;
+          if (sim_tape_eot(uptr))
               res |= EOT_FLAG;
 #if KI_22BIT
           if (dptr->flags & MTDF_TYPEB)
