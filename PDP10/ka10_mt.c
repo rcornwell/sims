@@ -326,6 +326,8 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
           res = status;
           if ((uptr->u3 & MT_BUSY) == 0)
               res |= NEXT_UNIT;
+          if ((uptr->u3 & (06000|MT_STOP)) == 02000 && (status & JOB_DONE) != 0)
+              res |= RLC_ERR;
           if ((uptr->flags & MTUF_7TRK) != 0)
               res |= SEVEN_CHAN;
           if ((uptr->flags & UNIT_ATT) != 0 && (uptr->u3 & MT_MOTION) == 0)
@@ -335,7 +337,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
           if (sim_tape_eot(uptr))
               res |= BOT_FLAG;
           if (sim_tape_bot(uptr))
-              res |= BOT_FLAG;
+              res |= EOT_FLAG;
 #if KI_22BIT
           if (dptr->flags & MTDF_TYPEB)
               res |= B22_FLAG;
@@ -589,9 +591,7 @@ t_stat mt_srv(UNIT * uptr)
           } else {
                 if ((cmd & 010) == 0) {
                     uptr->u3 &= ~(MT_MOTION|MT_BUSY);
-                    uptr->u3 |= MT_STOP;
-                    sim_activate(uptr, 1000);
-                    return SCPE_OK;
+                    return mt_error(uptr, MTSE_OK, dptr);
                 } else {
                     CLR_BUF(uptr);
                 }
@@ -628,8 +628,6 @@ t_stat mt_srv(UNIT * uptr)
          if (uptr->u6 >= (int32)uptr->hwmark) {
             if (cmd == CMP_NOEOR)
                CLR_BUF(uptr);
-            else
-               uptr->u3 |= MT_STOP;
          } else if ((uptr->u3 & MT_BRFUL) == 0) {
             /* Write out first character. */
             mt_df10_read(dptr, uptr);
@@ -657,11 +655,11 @@ t_stat mt_srv(UNIT * uptr)
             if (mt_buffer[uptr->u6] != ch) {
                 status |= READ_CMP;
                 if ((dptr->flags & MTDF_TYPEB) == 0) {
-                     uptr->u3 |= MT_STOP;
                      uptr->u6 = uptr->hwmark;
                      status &= ~CHAR_COUNT;
                      status |= (uint64)(uptr->u5) << 18;
-                     break;
+                     uptr->u3 &= ~(MT_MOTION|MT_BUSY);
+                     return mt_error(uptr, MTSE_OK, dptr);
                 }
             }
             uptr->u6++;
