@@ -199,7 +199,6 @@ uint64  opc;                                  /* Saved PC and Flags */
 uint32  mar;                                  /* Memory address compare */
 uint16  ofa;                                  /* Output fault address */
 uint32  qua_time;                             /* Quantum clock value */
-uint8   qua_enb;                              /* Enable quantum clock */
 #endif
 
 char    dev_irq[128];                         /* Pending irq by device */
@@ -208,7 +207,7 @@ t_stat  rtc_srv(UNIT * uptr);
 int32   rtc_tps = 60;
 #if ITS
 t_stat  qua_srv(UNIT * uptr);
-int32   qua_tps = 250000;
+int32   qua_tps = 125000;
 #endif
 int32   tmxr_poll = 10000;
 
@@ -1436,27 +1435,15 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
                return 1;
        }
 fault:
-//       if (mem_prot)
- //          return 0;
        /* Update fault data */
        fault_addr = (page) | ((uf)? 0400 : 0) | ((data & 0777) << 9);
        if ((xct_flag & 04) == 0) {
            mem_prot = 1;
            fault_data |= 01000;
        } else {
-//           fprintf(stderr, "skip next %o - ", PC);
            PC = (PC + 1) & RMASK;
        }
- //      fprintf(stderr, "xlat %o %06o %03o ", xct_flag, addr, page >> 1);
-  //     fprintf(stderr, " %06o %03o %012llo %o", base, page, data, uf);
-   //    fprintf(stderr, " -> %06o wr=%o PC=%06o ", fault_addr, wr, PC);
-    //   fprintf(stderr, " fault\n\r");
        return 0;
-//        if (xct_flag != 0) {
- //           fprintf(stderr, "xlat %o %06o %03o ", xct_flag, addr, page >> 1);
-  //          fprintf(stderr, " %06o %03o %012llo %o", base, page, data, uf);
-   //         fprintf(stderr, " -> %06o wr=%o PC=%06o\n\r", *loc, wr, PC);
-    //    }
       }
 #endif
 #if BBN
@@ -1733,8 +1720,6 @@ int Mem_read(int flag, int cur_context, int fetch) {
 
     if (AB < 020) {
 #if ITS
-//if (xct_flag != 0)
-//fprintf(stderr, "Read a=%o x=%o ac=%o c=%o\n\r", AB, xct_flag, ac_stack, cur_context);
         if (QITS && (xct_flag & 1) != 0 && !cur_context && (FLAGS & USER) == 0) {
            MB = M[ac_stack + AB];
            return 0;
@@ -2048,6 +2033,11 @@ st_pi:
         goto last;
     }
 #endif
+
+    /* Check if possible idle loop */
+    if (sim_idle_enab && (FLAGS & USER) != 0 && PC < 020 && AB < 020 &&
+           (IR & 0760) == 0340)
+       sim_idle (TMR_RTC, FALSE);
 
     /* Update history */
 #if KI
@@ -2587,7 +2577,6 @@ dpnorm:
                       M[AB] = MB;
                       AB = (AB + 1) & RMASK;
                       MB = ((uint64)qua_time) | ((uint64)fault_data) << 18;
-                      /* Add quantum */
                       M[AB] = MB;
                       AB = (AB + 1) & RMASK;
                       MB = ((uint64)fault_addr & 00760000) << 13 |
@@ -2610,7 +2599,6 @@ dpnorm:
                          break;
                       }
                       MB = M[AB];                /* WD 0 */
-//fprintf(stderr, "map 0 %06o %012llo\n\r", AB, MB);
                       age = (MB >> 27) & 017;
                       jpc = (MB & RMASK);
                       fault_addr = (MB >> 18) & 0777;
@@ -2619,36 +2607,31 @@ dpnorm:
                       opc = MB;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 2 */
-//fprintf(stderr, "map 2 %06o %012llo\n\r", AB, MB);
                       mar = 03777777 & MB;
                       pag_reload = 0;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 3 */
-//fprintf(stderr, "map 3 %06o %012llo\n\r", AB, MB);
                       /* Store Quantum */
                       qua_time = MB & RMASK;
                       fault_data = (MB >> 18) & RMASK;
+                      mem_prot = 0;
+                      if ((fault_data & 03773) != 0)
+                          mem_prot = 1;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 4 */
-//fprintf(stderr, "map 4 %06o %012llo\n\r", AB, MB);
                       dbr1 = ((0377 << 18) | RMASK) & MB;
                       fault_addr |= (MB >> 13) & 00760000;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 5 */
-//fprintf(stderr, "map 5 %06o %012llo\n\r", AB, MB);
                       fault_addr |= (MB >> 17) & 00017000;
                       dbr2 = ((0377 << 18) | RMASK) & MB;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 6 */
-//fprintf(stderr, "map 6 %06o %012llo\n\r", AB, MB);
                       dbr3 = ((0377 << 18) | RMASK) & MB;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 7 */
-//fprintf(stderr, "map 7 %06o %012llo\n\r", AB, MB);
                       ac_stack = MB & RMASK;
                       page_enable = 1;
-                      qua_enb = 1;
-//fprintf(stderr, "Set map %06o %06o %06o %06llo\n\r", dbr1, dbr2, dbr3, fault_data);
                   }
                   /* AC & 2 = Clear TLB */
                   if (AC & 2) {
@@ -4685,12 +4668,11 @@ qua_srv(UNIT * uptr)
     int32 t;
     t = sim_rtcn_calb (qua_tps, TMR_QUA);
     sim_activate_after(uptr, 1000000/qua_tps);
-    if (qua_enb) {
-        qua_time += 4;
-        if ((qua_time & (RSIGN)) != 0) {
-//            mem_prot = 1;
-//            fault_data |= 1;
-            qua_enb = 0;
+    if ((fault_data & 1) == 0 && pi_enable && !pi_pending && (FLAGS & USER) != 0) {
+        qua_time += 8;
+        if ((qua_time & 01000000LL) != 0) {
+            mem_prot = 1;
+            fault_data |= 1;
         }
     }
     return SCPE_OK;
@@ -4730,7 +4712,6 @@ sim_brk_types = sim_brk_dflt = SWMASK ('E');
 sim_rtcn_init_unit (&cpu_unit[0], cpu_unit[0].wait, TMR_RTC);
 sim_activate(&cpu_unit[0], 10000);
 #if ITS
-qua_enb = 0;
 if (QITS) {
     sim_rtcn_init_unit (&cpu_unit[1], cpu_unit[1].wait, TMR_RTC);
     sim_activate(&cpu_unit[1], 10000);
