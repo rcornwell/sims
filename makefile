@@ -1100,7 +1100,7 @@ KA10 = ${KA10D}/ka10_cpu.c ${KA10D}/ka10_sys.c ${KA10D}/ka10_df.c \
 	${KA10D}/ka10_lp.c ${KA10D}/ka10_pt.c ${KA10D}/ka10_dc.c \
 	${KA10D}/ka10_rp.c ${KA10D}/ka10_rc.c ${KA10D}/ka10_dt.c \
 	${KA10D}/ka10_dk.c ${KA10D}/ka10_cr.c ${KA10D}/ka10_cp.c \
-	${KA10D}/ka10_tu.c ${KA10D}/ka10_rs.c
+	${KA10D}/ka10_tu.c ${KA10D}/ka10_rs.c ${KA10D}/ka10_pd.c
 KA10_OPT = -DKA=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD
 
 
