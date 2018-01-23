@@ -122,7 +122,6 @@
 t_stat         mt_devio(uint32 dev, uint64 *data);
 t_stat         mt_srv(UNIT *);
 t_stat         mt_boot(int32, DEVICE *);
-void           mt_ini(UNIT *, t_bool);
 t_stat         set_mta (UNIT *uptr, int32 val, CONST char *cptr, void *desc) ;
 t_stat         show_mta (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat         mt_reset(DEVICE *);
