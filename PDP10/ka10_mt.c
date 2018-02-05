@@ -260,7 +260,6 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
               case READ:
                      CLR_BUF(uptr);
                      uptr->u5 = 0;
-                     uptr->u6 = 0;
                      break;
 
               case WRITE:
@@ -273,7 +272,6 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
               case CMP:
                      CLR_BUF(uptr);
                      uptr->u5 = 0;
-                     uptr->u6 = 0;
                      /* Fall through */
 
               case SPC_REV:
@@ -285,7 +283,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
               }
               status |= IDLE_UNIT;
               uptr->u3 |= MT_BUSY;
-              sim_activate(uptr, 100);
+              sim_activate(uptr, 1000);
           } else {
               sim_activate(uptr, 9999999);
               sim_debug(DEBUG_CONO, dptr, "MT CONO %03o hung PC=%06o\n", dev, PC);
@@ -356,7 +354,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
           }
           if (dptr->flags & MTDF_TYPEB) {
               if (*data & 04)
-                 df10_writecw(&mt_df10);
+                  df10_writecw(&mt_df10);
               if (*data & 010) 
                   status &= ~(WT_CW_DONE);
           }
@@ -387,6 +385,7 @@ void mt_df10_read(DEVICE *dptr, UNIT *uptr) {
              uptr->u3 |= MT_STOP;
              return;
          }
+         sim_debug(DEBUG_DATA, dptr, "MT  <%012llo %o\n", mt_df10.buf, uptr->u5);
      } else {
         if (uptr->u3 & MT_BUFFUL) {
             mt_df10.buf = hold_reg;
@@ -414,13 +413,10 @@ void mt_df10_write(DEVICE *dptr, UNIT *uptr) {
             uptr->u3 |= MT_STOP;
             return;
         }
+        sim_debug(DEBUG_DATA, dptr, "MT  >%012llo %o\n", mt_df10.buf, uptr->u5);
         uptr->u3 &= ~(MT_BUFFUL|MT_BRFUL);
      } else {
-        if (uptr->u3 & MT_BRFUL) {
-            status |= DATA_LATE;
-            uptr->u3 |= MT_STOP;
-            return;
-        } else if ((uptr->u3 & MT_BUFFUL) == 0) {
+        if ((uptr->u3 & MT_BUFFUL) == 0) {
             hold_reg = mt_df10.buf;
             status |= DATA_REQUEST;
             uptr->u3 &= ~(MT_BRFUL);
@@ -542,25 +538,33 @@ t_stat mt_srv(UNIT * uptr)
     case READ:
     case READ_NOEOR:
         if (uptr->u3 & MT_STOP) {
-             if ((uint32)uptr->u6 < uptr->hwmark)
-                 status |= RLC_ERR;
+            if ((uint32)uptr->u6 < uptr->hwmark)
+                status |= RLC_ERR;
+            if (dptr->flags & MTDF_TYPEB) 
+                df10_writecw(&mt_df10);
             return mt_error(uptr, MTSE_OK, dptr);
         }
         if (BUF_EMPTY(uptr)) {
             uptr->u3 |= MT_MOTION;
             status &= ~(IDLE_UNIT|BOT_FLAG|EOF_FLAG|EOT_FLAG|PARITY_ERR);
             if ((r = sim_tape_rdrecf(uptr, &mt_buffer[0], &reclen,
-                                BUFFSIZE)) != MTSE_OK) {
-                sim_debug(DEBUG_DETAIL, dptr, "MT%o read error %d\n", unit, r);
-                uptr->u3 &= ~MT_MOTION;
-                return mt_error(uptr, r, dptr);
+                                 BUFFSIZE)) != MTSE_OK) {
+                 sim_debug(DEBUG_DETAIL, dptr, "MT%o read error %d\n", unit, r);
+                 uptr->u3 &= ~MT_MOTION;
+                 if (dptr->flags & MTDF_TYPEB && r == MTSE_TMK)
+                      mt_df10_write(dptr, uptr);
+                 return mt_error(uptr, r, dptr);
             }
             sim_debug(DEBUG_DETAIL, dptr, "MT%o read %d\n", unit, reclen);
             uptr->hwmark = reclen;
             uptr->u6 = 0;
-            uptr->u5 = 0;
             sim_activate(uptr, 100);
             return SCPE_OK;
+        }
+        if (uptr->u3 & MT_BRFUL) {
+            status |= DATA_LATE;
+            sim_debug(DEBUG_DATA, dptr, "data late\n");
+            break;
         }
         if ((uint32)uptr->u6 < uptr->hwmark) {
             if (uptr->flags & MTUF_7TRK) {
@@ -600,23 +604,26 @@ t_stat mt_srv(UNIT * uptr)
     case CMP:
     case CMP_NOEOR:
          if (uptr->u3 & MT_STOP) {
-              if ((uint32)uptr->u6 < uptr->hwmark)
-                  status |= RLC_ERR;
+             if ((uint32)uptr->u6 < uptr->hwmark)
+                 status |= RLC_ERR;
+             if (dptr->flags & MTDF_TYPEB) 
+                 df10_writecw(&mt_df10);
              return mt_error(uptr, MTSE_OK, dptr);
          }
          if (BUF_EMPTY(uptr)) {
              uptr->u3 |= MT_MOTION;
              status &= ~(IDLE_UNIT|BOT_FLAG|EOF_FLAG|EOT_FLAG|PARITY_ERR);
              if ((r = sim_tape_rdrecf(uptr, &mt_buffer[0], &reclen,
-                                 BUFFSIZE)) != MTSE_OK) {
-                 sim_debug(DEBUG_DETAIL, dptr, "MT%o read error %d\n", unit, r);
-                 uptr->u3 &= ~MT_MOTION;
-                 return mt_error(uptr, r, dptr);
+                                  BUFFSIZE)) != MTSE_OK) {
+                  sim_debug(DEBUG_DETAIL, dptr, "MT%o read error %d\n", unit, r);
+                  uptr->u3 &= ~MT_MOTION;
+                  if (dptr->flags & MTDF_TYPEB && r == MTSE_TMK)
+                      mt_df10_read(dptr, uptr);
+                  return mt_error(uptr, r, dptr);
              }
              sim_debug(DEBUG_DETAIL, dptr, "MT%o compare %d\n", unit, reclen);
              uptr->hwmark = reclen;
              uptr->u6 = 0;
-             uptr->u5 = 0;
              if ((dptr->flags & MTDF_TYPEB) == 0) {
                  status |= DATA_REQUEST;
                  set_interrupt(MT_DEVNUM, pia);
@@ -777,7 +784,7 @@ t_stat mt_srv(UNIT * uptr)
         sim_activate(uptr, 5000);
         return SCPE_OK;
     }
-    sim_activate(uptr, 200);
+    sim_activate(uptr, 400);
     return SCPE_OK;
 }
 
