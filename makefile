@@ -1086,6 +1086,10 @@ DISPLAYD = display
 #
 # Emulator source files and compile time options
 #
+ICL1900D = ICL1900
+ICL1900 = ${ICL1900D}/icl1900_cpu.c ${ICL1900D}/icl1900_sys.c 
+ICL1900_OPT = -I $(ICL1900D) -DICL1900 -DUSE_SIM_CARD
+
 IBM360D = IBM360
 IBM360 = ${IBM360D}/ibm360_cpu.c ${IBM360D}/ibm360_sys.c \
 	${IBM360D}/ibm360_con.c ${IBM360D}/ibm360_chan.c \
@@ -1175,7 +1179,7 @@ B5500_OPT = -I.. -DUSE_INT64 -DB5500 -DUSE_SIM_CARD
 #
 # Build everything (not the unsupported/incomplete or experimental simulators)
 #
-ALL = b5500 ka10 ki10 i701 i704 i7010 i7070 i7080 i7090 ibm360
+ALL = b5500 ka10 ki10 i701 i704 i7010 i7070 i7080 i7090 ibm360 icl1900
 
 all : ${ALL}
 
@@ -1287,6 +1291,12 @@ ibm360: $(BIN)ibm360$(EXE)
 ${BIN}ibm360${EXE}: ${IBM360} ${SIM}
 	${MKDIRBIN}
 	${CC} ${IBM360} ${SIM} ${IBM360_OPT} $(CC_OUTSPEC) ${LDFLAGS}
+
+icl1900: $(BIN)icl1900$(EXE)
+
+${BIN}icl1900${EXE}: ${ICL1900} ${SIM}
+	${MKDIRBIN}
+	${CC} ${ICL1900} ${SIM} ${ICL1900_OPT} $(CC_OUTSPEC) ${LDFLAGS}
 
 
 # Front Panel API Demo/Test program
