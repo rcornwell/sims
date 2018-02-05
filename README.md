@@ -16,8 +16,8 @@ correctly as far as I am able to tell. It will currently run MCP XIII and XV.
 These are still in the testing stages. Please report any issues that you find in them.
 
 The KA10 sim has successfully run Tops 10 5.03 and Tops 10 6.03.  
-The KI10 sim has successfully run Tops 10 6.03  
-The KA10 sim has successfully run ITS.
+The KI10 sim has successfully run Tops 10 6.03   
+The KA10 sim has successfully run ITS.  
 Support for BBN pager (untested).  
 
    Disk   
@@ -46,6 +46,11 @@ To do:
    * Add support for PMP IBM 3330 drive to run Waits.  
    * Add support for DC76 for ITS.  
    * Add support for SA10 for Tymcom-X under KI.
+
+# ICL 1900 simulator.
+
+This is a new simulator. It will not quite pass instruction test. Divide does not work
+also Floating point instructions are not complete. 
 
 # IBM 360 simulator.
 
