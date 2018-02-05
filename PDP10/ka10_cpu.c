@@ -196,7 +196,7 @@ uint32  jpc;                                  /* Jump program counter */
 uint8   age;                                  /* Age word */
 uint32  fault_addr;                           /* Fault address */
 uint64  opc;                                  /* Saved PC and Flags */
-uint32  mar;                                  /* Memory address compare */
+uint64  mar;                                  /* Memory address compare */
 uint16  ofa;                                  /* Output fault address */
 uint32  qua_time;                             /* Quantum clock value */
 #endif
@@ -1721,7 +1721,7 @@ int Mem_read(int flag, int cur_context, int fetch) {
     if (AB < 020) {
 #if ITS
         if (QITS && (xct_flag & 1) != 0 && !cur_context && (FLAGS & USER) == 0) {
-           MB = M[ac_stack + AB];
+           MB = M[(ac_stack & 01777777) + AB];
            return 0;
         }
 #endif
@@ -1776,7 +1776,7 @@ int Mem_write(int flag, int cur_context) {
     if (AB < 020) {
 #if ITS
         if (QITS && (xct_flag & 2) != 0 && !cur_context && (FLAGS & USER) == 0) {
-            M[ac_stack + AB] = MB;
+            M[(ac_stack & 01777777) + AB] = MB;
             return 0;
         }
 #endif
@@ -1912,7 +1912,7 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
         uuo_cycle = 0;
         f_pc_inh = 0;
 #if ITS
-        if (pi_cycle == 0 && mem_prot == 0 && QITS) {
+        if (QITS && pi_cycle == 0 /*((FLAGS & USER) || (PC & RSIGN))*/ && mem_prot == 0) {
            opc = PC | (FLAGS << 18);
            if ((FLAGS & ONEP) != 0) {
               one_p_arm = 1;
@@ -2573,7 +2573,7 @@ dpnorm:
                       MB = opc;
                       M[AB] = MB;
                       AB = (AB + 1) & RMASK;
-                      MB = ((uint64)mar) | ((uint64)pag_reload) << 20;
+                      MB = (mar & 00777607777777LL) | ((uint64)pag_reload) << 21;
                       M[AB] = MB;
                       AB = (AB + 1) & RMASK;
                       MB = ((uint64)qua_time) | ((uint64)fault_data) << 18;
@@ -2607,7 +2607,7 @@ dpnorm:
                       opc = MB;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 2 */
-                      mar = 03777777 & MB;
+                      mar = /*03777777 &*/ MB;
                       pag_reload = 0;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 3 */
@@ -2615,7 +2615,7 @@ dpnorm:
                       qua_time = MB & RMASK;
                       fault_data = (MB >> 18) & RMASK;
                       mem_prot = 0;
-                      if ((fault_data & 03773) != 0)
+                      if ((fault_data & 03772) != 0)
                           mem_prot = 1;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 4 */
@@ -2630,13 +2630,14 @@ dpnorm:
                       dbr3 = ((0377 << 18) | RMASK) & MB;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 7 */
-                      ac_stack = MB & RMASK;
+                      ac_stack = MB;
                       page_enable = 1;
                   }
                   /* AC & 2 = Clear TLB */
                   if (AC & 2) {
                      for (f = 0; f < 512; f++)
                         e_tlb[f] = u_tlb[f] = 0;
+                     mem_prot = 0;
                   }
                   /* AC & 4 = Set Prot Interrupt */
                   if (AC & 4) {
