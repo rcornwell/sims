@@ -1331,6 +1331,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
         int      page = (RMASK & addr) >> 10;
         int      acc;
         int      uf = (FLAGS & USER) != 0;
+        int      ofd = fault_data;
 
         /* If paging is not enabled, address is direct */
         if (!page_enable) {
@@ -1378,6 +1379,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
            }
         }
 
+
         /* Map the page */
         if (!uf) {
             /* Handle system mapping */
@@ -1416,16 +1418,18 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
         case 1:                     /* Read Only Access */
                if (!wr)
                    return 1;
-               fault_data |= 0100;
+               if ((fault_data & 00770) == 0)
+                   fault_data |= 0100;
                break;
         case 2:                     /* Read write first */
                if (fetch && (FLAGS & PURE)) {
                    fault_data |= 0020;
                    break;
                }
-               if (!wr)
+               if (!wr)            /* Read is OK */
                    return 1;
-               fault_data |= 040;
+               if ((fault_data & 00770) == 0)
+                   fault_data |= 040;
                break;
         case 3:                    /* All access */
                if (fetch && (FLAGS & PURE)) {
@@ -1435,8 +1439,9 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
                return 1;
        }
 fault:
-       /* Update fault data */
-       fault_addr = (page) | ((uf)? 0400 : 0) | ((data & 0777) << 9);
+       /* Update fault data, fault address only if new fault */
+       if ((ofd & 00770) == 0)
+           fault_addr = (page) | ((uf)? 0400 : 0) | ((data & 0777) << 9);
        if ((xct_flag & 04) == 0) {
            mem_prot = 1;
            fault_data |= 01000;
@@ -1886,10 +1891,18 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
 #if ITS
    one_p_arm = 0;
 #endif
+#if ITS
+   if (QITS)
+       sim_activate(&cpu_unit[1], 10000);
+#endif
 
   while ( reason == 0) {                                /* loop until ABORT */
      if (sim_interval <= 0) {                           /* check clock queue */
           if ((reason = sim_process_event()) != SCPE_OK) {/* error?  stop sim */
+#if ITS
+              if (QITS)
+                  sim_cancel(&cpu_unit[1]);
+#endif
               return reason;
           }
      }
@@ -2036,8 +2049,17 @@ st_pi:
 
     /* Check if possible idle loop */
     if (sim_idle_enab && (FLAGS & USER) != 0 && PC < 020 && AB < 020 &&
-           (IR & 0760) == 0340)
+           (IR & 0760) == 0340) {
+#if ITS
+       if (QITS)
+           sim_cancel(&cpu_unit[1]);
+#endif
        sim_idle (TMR_RTC, FALSE);
+#if ITS
+       if (QITS)
+           sim_activate(&cpu_unit[1], 10000);
+#endif
+    }
 
     /* Update history */
 #if KI
@@ -4640,10 +4662,19 @@ last:
         pi_restore = 0;
     }
     sim_interval--;
-    if (!pi_cycle && instr_count != 0 && --instr_count == 0)
+    if (!pi_cycle && instr_count != 0 && --instr_count == 0) {
+#if ITS
+        if (QITS)
+            sim_cancel(&cpu_unit[1]);
+#endif
         return SCPE_STEP;
+    }
 }
 /* Should never get here */
+#if ITS
+if (QITS)
+    sim_cancel(&cpu_unit[1]);
+#endif
 
 return reason;
 }
@@ -4715,7 +4746,6 @@ sim_activate(&cpu_unit[0], 10000);
 #if ITS
 if (QITS) {
     sim_rtcn_init_unit (&cpu_unit[1], cpu_unit[1].wait, TMR_RTC);
-    sim_activate(&cpu_unit[1], 10000);
 }
 #endif
 return SCPE_OK;
