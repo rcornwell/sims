@@ -3536,7 +3536,7 @@ fxnorm:
                          FLAGS |= OVR|TRP1;
                          check_apr_irq();
                       }
-                      AR = (AD & SMASK) | ((AR << (SC - 35)) & CMASK);
+                      AR = (AD & SMASK) | ((MQ << (SC - 35)) & CMASK);
                       MQ = (AD & SMASK);
                  } else {
                       if ((((AD & CMASK) << SC) & ~CMASK) != ((AR << SC) & ~CMASK)) {
