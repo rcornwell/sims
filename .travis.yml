@@ -1,0 +1,7 @@
+language: c
+dist: trusty
+sudo: required
+install: true
+script:
+  - make ka10
+  - sh test/run.sh

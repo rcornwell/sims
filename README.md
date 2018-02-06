@@ -1,5 +1,6 @@
 
 [![Coverity Scan Build Status](https://scan.coverity.com/projects/12020/badge.svg)](https://scan.coverity.com/projects/rcornwell-sims)  
+[![Build and Test Status](https://travis-ci.org/rcornwell/sims.svg?branch=master)](https://travis-ci.org/rcornwell/sims)
 
 # Development Simulators.
 
