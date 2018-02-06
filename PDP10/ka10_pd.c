@@ -43,7 +43,7 @@ t_stat         pd_set_off(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat         pd_show_on(FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 
 UNIT                pd_unit[] = {
-    {UDATA(NULL, UNIT_DISABLE , 0)},  /* 0 */
+    {UDATA(NULL, UNIT_DISABLE, 0)},  /* 0 */
 };
 DIB pd_dib = {PD_DEVNUM, 1, &pd_devio, NULL};
 
@@ -57,7 +57,7 @@ DEVICE              pd_dev = {
     "PD", pd_unit, NULL, pd_mod,
     1, 8, 0, 1, 8, 36,
     NULL, NULL, NULL, NULL, NULL, NULL,
-    &pd_dib, DEV_DISABLE | DEV_DEBUG, 0, NULL,
+    &pd_dib, DEV_DISABLE | DEV_DIS | DEV_DEBUG, 0, NULL,
     NULL, NULL, NULL, NULL, NULL, &pd_description
 };
 
