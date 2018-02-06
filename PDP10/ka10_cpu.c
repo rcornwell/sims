@@ -1924,20 +1924,20 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
         AB = PC;
         uuo_cycle = 0;
         f_pc_inh = 0;
+    }
+
+    if (f_inst_fetch) {
+#if !(KI | KL)
+fetch:
+#endif
 #if ITS
-        if (QITS && pi_cycle == 0 /*((FLAGS & USER) || (PC & RSIGN))*/ && mem_prot == 0) {
+        if (QITS && pi_cycle == 0 && mem_prot == 0) {
            opc = PC | (FLAGS << 18);
            if ((FLAGS & ONEP) != 0) {
               one_p_arm = 1;
               FLAGS &= ~ONEP;
            }
         }
-#endif
-    }
-
-    if (f_inst_fetch) {
-#if !(KI | KL)
-fetch:
 #endif
 
        if (Mem_read(pi_cycle | uuo_cycle, 1, 1)) {
@@ -3536,7 +3536,7 @@ fxnorm:
                          FLAGS |= OVR|TRP1;
                          check_apr_irq();
                       }
-                      AR = (AD & SMASK) | ((AR << (SC - 35)) & CMASK);
+                      AR = (AD & SMASK) | ((MQ << (SC - 35)) & CMASK);
                       MQ = (AD & SMASK);
                  } else {
                       if ((((AD & CMASK) << SC) & ~CMASK) != ((AR << SC) & ~CMASK)) {
