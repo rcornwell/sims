@@ -277,7 +277,7 @@ uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
              if ((cmd & 0xc0) == 0xc0) {
                  uptr->u5 |= SNS_CMDREJ;
                  return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
-             } 
+             }
              switch((cmd >> 3) & 07) {
              case 0:      /* NOP */
              case 1:      /* Diagnostics */
@@ -287,19 +287,19 @@ uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
                   uptr->u3 &= ~(MT_ODD|MT_TRANS|MT_CONV|MT_MDEN_MSK);
                   uptr->u3 |= (cmd & MT_MDEN_MSK) | MT_ODD | MT_CONV;
                   break;
-             case 4:      
+             case 4:
                   uptr->u3 &= ~(MT_ODD|MT_TRANS|MT_CONV|MT_MDEN_MSK);
                   uptr->u3 |= (cmd & MT_MDEN_MSK);
                   break;
-             case 5:      
+             case 5:
                   uptr->u3 &= ~(MT_ODD|MT_TRANS|MT_CONV|MT_MDEN_MSK);
                   uptr->u3 |= (cmd & MT_MDEN_MSK) | MT_TRANS;
                   break;
-             case 6:      
+             case 6:
                   uptr->u3 &= ~(MT_ODD|MT_TRANS|MT_CONV|MT_MDEN_MSK);
                   uptr->u3 |= (cmd & MT_MDEN_MSK) | MT_ODD;
                   break;
-             case 7:      
+             case 7:
                   uptr->u3 &= ~(MT_ODD|MT_TRANS|MT_CONV|MT_MDEN_MSK);
                   uptr->u3 |= (cmd & MT_MDEN_MSK) | MT_ODD | MT_TRANS;
                   break;
@@ -874,7 +874,7 @@ mt_ini(UNIT * uptr, t_bool f)
     DEVICE             *dptr = find_dev_from_unit(uptr);
 
     uptr->u3 &= ~0xffff;
-    if ((uptr->flags & MTUF_9TR) == 0) 
+    if ((uptr->flags & MTUF_9TR) == 0)
         uptr->u3 |= MT_ODD|MT_CONV|MT_MDEN_800;
     mt_busy[GET_DEV_BUF(dptr->flags)] = 0;
 }

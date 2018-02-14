@@ -476,11 +476,11 @@ int             rdx = 16;
 t_opcode        *tab;
 uint32          num;
 
-if (sw & SWMASK ('D')) 
+if (sw & SWMASK ('D'))
     rdx = 10;
-else if (sw & SWMASK ('O')) 
+else if (sw & SWMASK ('O'))
     rdx = 8;
-else if (sw & SWMASK ('H')) 
+else if (sw & SWMASK ('H'))
     rdx = 16;
 if (sw & SWMASK ('M')) {
     for (tab = optab; tab->name != NULL; tab++) {
@@ -544,7 +544,7 @@ if (sw & SWMASK ('C')) {
                     fputc(' ', of);
                     break;
           }
-          for(; i < 6; i+=2) 
+          for(; i < 6; i+=2)
               fputs("     ", of);
           fputc(' ', of);
           fputs(tab->name, of);
@@ -607,7 +607,7 @@ if (sw & SWMASK ('C')) {
    }
 } else {
     num = 0;
-    for (i = 0; i < l && i < 4; i++) 
+    for (i = 0; i < l && i < 4; i++)
        num |= (uint32)val[i] << ((l-i-1) * 8);
     fprint_val(of, num, rdx, l*8, PV_RZRO);
 }
@@ -618,7 +618,7 @@ return -(l-1);
 /*
  * Collect register name.
  */
-t_stat get_reg (CONST char *cptr, CONST char **tptr, int *reg) 
+t_stat get_reg (CONST char *cptr, CONST char **tptr, int *reg)
 {
     while (sim_isspace (*cptr)) cptr++;
     if ((*cptr == 'R') || (*cptr == 'r'))      /* Skip R */
@@ -633,14 +633,14 @@ t_stat get_reg (CONST char *cptr, CONST char **tptr, int *reg)
        *reg = (*cptr++ - 'a') + 10;
     else if ((*cptr >= 'A') && (*cptr <= 'F'))
        *reg = (*cptr++ - 'A') + 10;
-    else 
+    else
        return SCPE_ARG;
     while (sim_isspace (*cptr)) cptr++;
     *tptr = cptr;
     return SCPE_OK;;
 }
 
-/* 
+/*
  * Collect offset in radix.
  */
 t_stat get_off (CONST char *cptr, CONST char **tptr, uint32 radix, uint32 *val, char *m)
@@ -664,7 +664,7 @@ else {
 return r;
 }
 
-/* 
+/*
  * Collect immediate in radix.
  */
 t_stat get_imm (CONST char *cptr, CONST char **tptr, uint32 radix, uint32 *val)
@@ -708,11 +708,11 @@ uint32          max[5] = { 0, 0xff, 0xffff, 0, 0xffffffff };
 CONST char      *tptr;
 char            gbuf[CBUFSIZE];
 
-if (sw & SWMASK ('D')) 
+if (sw & SWMASK ('D'))
     rdx = 10;
-else if (sw & SWMASK ('O')) 
+else if (sw & SWMASK ('O'))
     rdx = 8;
-else if (sw & SWMASK ('H')) 
+else if (sw & SWMASK ('H'))
     rdx = 16;
 if (sw & SWMASK('F')) {
      l = 4;
@@ -731,7 +731,7 @@ if (sw & SWMASK ('C')) {
 if (sw & SWMASK ('M')) {
     cptr = get_glyph(cptr, gbuf, 0);         /* Get opcode */
     for (tab = optab; tab->name != NULL; tab++) {
-       if (sim_strcasecmp(tab->name, gbuf) == 0) 
+       if (sim_strcasecmp(tab->name, gbuf) == 0)
           break;
     }
     if (tab->name == NULL)
@@ -748,7 +748,7 @@ if (sw & SWMASK ('M')) {
                     return r;
                cptr = tptr;
                val[1] = i << 4;
-               if (tab->type & ONEOP) 
+               if (tab->type & ONEOP)
                    return -1;
                if (*cptr != ',')
                    return SCPE_ARG;
@@ -757,7 +757,7 @@ if (sw & SWMASK ('M')) {
                     return r;
                val[1] |= i;
            }
-           return -1; 
+           return -1;
     case RX:                                   /* Op r,off(r,r) */
            if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
                return r;
@@ -782,18 +782,18 @@ if (sw & SWMASK ('M')) {
                   cptr = tptr;
                   num |= (i << 12);
                }
-               if (*cptr != ')') 
+               if (*cptr != ')')
                  return SCPE_ARG;
            }
            val[2] = (num >> 8) & 0xff;
            val[3] = num & 0xff;
-           return -3; 
+           return -3;
     case RS:                            /* Op r,r,off(r) or Op r,off(r) */
            if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
                return r;
            cptr = tptr;
            val[1] = i << 4;
-           if (*cptr != ',') 
+           if (*cptr != ',')
                return SCPE_ARG;
            cptr++;
            if ((tab->type & ZEROOP) == 0) {
@@ -801,7 +801,7 @@ if (sw & SWMASK ('M')) {
                    return r;
                cptr = tptr;
                val[1] |= i;
-               if (*cptr != ',') 
+               if (*cptr != ',')
                    return SCPE_ARG;
                cptr++;
                while (sim_isspace (*cptr)) cptr++;
@@ -814,12 +814,12 @@ if (sw & SWMASK ('M')) {
                    return r;
                cptr = tptr;
                num |= (i << 12);
-               if (*cptr != ')') 
+               if (*cptr != ')')
                    return SCPE_ARG;
            }
            val[2] = (num >> 8) & 0xff;
            val[3] = num & 0xff;
-           return -3; 
+           return -3;
     case SI:                               /* Op off(r),num */
            if ((r = get_off(cptr, &tptr, rdx, &num, &mod)) != SCPE_OK)
                return r;
@@ -830,12 +830,12 @@ if (sw & SWMASK ('M')) {
                    return r;
                cptr = tptr;
                num |= (i << 12);
-               if (*cptr != ')') 
+               if (*cptr != ')')
                    return SCPE_ARG;
                cptr++;
            }
            if ((tab->type & ZEROOP) == 0) {
-               if (*cptr != ',') 
+               if (*cptr != ',')
                   return SCPE_ARG;
                cptr++;
                if ((r = get_imm(cptr, &tptr, rdx, &num)) != SCPE_OK)
@@ -844,7 +844,7 @@ if (sw & SWMASK ('M')) {
            }
            val[2] = (num >> 8) & 0xff;
            val[3] = num & 0xff;
-           return -3; 
+           return -3;
     case SS:                          /* Op off(l,r),off(l,r) or Op off(l,r),off(r) */
            if ((r = get_off(cptr, &tptr, rdx, &num, &mod)) != SCPE_OK)
                return r;
@@ -867,7 +867,7 @@ if (sw & SWMASK ('M')) {
                    cptr = tptr;
                    num |= (i << 12);
                }
-               if (*cptr++ != ')') 
+               if (*cptr++ != ')')
                  return SCPE_ARG;
                while (sim_isspace (*cptr)) cptr++;
            }
@@ -887,7 +887,7 @@ if (sw & SWMASK ('M')) {
                    if (imm > 0xf)
                        return SCPE_ARG;
                    val[1] |= imm;
-                   if (*cptr++ != ',') 
+                   if (*cptr++ != ',')
                       return SCPE_ARG;
                }
                if (*cptr != ')') {
@@ -896,7 +896,7 @@ if (sw & SWMASK ('M')) {
                     cptr = tptr;
                     num |= (i << 12);
                }
-               if (*cptr != ')') 
+               if (*cptr != ')')
                    return SCPE_ARG;
            }
            val[4] = (num >> 8) & 0xff;
@@ -905,7 +905,7 @@ if (sw & SWMASK ('M')) {
     }
 }
 num = get_uint(cptr, rdx, max[l], &r);
-for (i = 0; i < l && i < 4; i++) 
+for (i = 0; i < l && i < 4; i++)
     val[i] = (num >> (i * 8)) & 0xff;
 return -(l-1);
 }

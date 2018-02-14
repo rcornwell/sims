@@ -150,7 +150,7 @@ uint8  cdr_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     case 4:               /* Sense */
          uptr->u3 &= ~(CDR_CMDMSK);
          uptr->u3 |= (cmd & CDR_CMDMSK);
-         sim_activate(uptr, 10);  
+         sim_activate(uptr, 10);
          return 0;
 
     default:              /* invalid command */
