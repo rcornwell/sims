@@ -203,6 +203,7 @@ uint32  qua_time;                             /* Quantum clock value */
 
 char    dev_irq[128];                         /* Pending irq by device */
 t_stat  (*dev_tab[128])(uint32 dev, uint64 *data);
+int     (*dev_irqv[128])(uint32 dev, int addr);
 t_stat  rtc_srv(UNIT * uptr);
 int32   rtc_tps = 60;
 #if ITS
@@ -210,6 +211,35 @@ t_stat  qua_srv(UNIT * uptr);
 int32   qua_tps = 125000;
 #endif
 int32   tmxr_poll = 10000;
+
+DEVICE *rh_devs[] = {
+#if (NUM_DEVS_RS > 0)
+    &rsa_dev,
+#endif
+#if (NUM_DEVS_RP > 0)
+    &rpa_dev,
+#if (NUM_DEVS_RP > 1)
+    &rpb_dev,
+#if (NUM_DEVS_RP > 2)
+    &rpc_dev,
+#if (NUM_DEVS_RP > 3)
+    &rpd_dev,
+#endif
+#endif
+#endif
+#endif
+#if (NUM_DEVS_TU > 0)
+    &tua_dev,
+#endif
+    NULL,
+};
+
+struct rh_dev rh[4] = {
+    { 0270, NULL, },
+    { 0274, NULL, },
+    { 0360, NULL, },
+    { 0364, NULL, },
+};
 
 typedef struct {
     uint32      pc;
@@ -221,9 +251,9 @@ typedef struct {
     uint64      fmb;
     } InstHistory;
 
-int32 hst_p = 0;                                        /* history pointer */
-int32 hst_lnt = 0;                                      /* history length */
-InstHistory *hst = NULL;                                /* instruction history */
+int32 hst_p = 0;                         /* history pointer */
+int32 hst_lnt = 0;                       /* history length */
+InstHistory *hst = NULL;                 /* instruction history */
 
 /* Forward and external declarations */
 
@@ -252,7 +282,7 @@ t_bool build_dev_tab (void);
    cpu_mod      CPU modifier list
 */
 
-UNIT cpu_unit[] = { { UDATA (&rtc_srv, UNIT_IDLE|UNIT_FIX|UNIT_BINK|UNIT_TWOSEG, MAXMEMSIZE) },
+UNIT cpu_unit[] = { { UDATA (&rtc_srv, UNIT_IDLE|UNIT_FIX|UNIT_BINK|UNIT_TWOSEG, 256 * 1024 * 1024) },
 #if ITS
                     { UDATA (&qua_srv, UNIT_IDLE|UNIT_DIS, 0) }
 #endif
@@ -2015,19 +2045,10 @@ st_pi:
          * Scan through the devices and allow KI devices to have first
          * hit at a given level.
          */
-        for (f = 0; sim_devices[f] != NULL; f++) {
-            DEVICE *dptr = sim_devices[f];
-            DIB *dibp = (DIB *) dptr->ctxt;
-            if (dibp) {
-               if (dibp->irq) {    /* Check if KI device */
-                   int dev = dibp->dev_num >> 2;
-
-                   /* Check if this device actually posted IRQ */
-                   if (dev_irq[dev] & (0200 >> pi_enc)) {
-                        AB = dibp->irq(dev << 2, AB);
-                        break;
-                   }
-               }
+        for (f = 0; f < 128; f++) {
+            if (dev_irqv[f] != 0 && dev_irq[f] & (0200 >> pi_enc)) {
+                AB = dev_irqv[f](f << 2, AB);
+                break;
             }
         }
         AB |= eb_ptr;
@@ -4816,11 +4837,15 @@ return SCPE_OK;
 t_bool build_dev_tab (void)
 {
 DEVICE *dptr;
-DIB *dibp;
-uint32 i, j;
+DIB    *dibp;
+uint32 i, j, d;
 
-for (i = 0; i < 128; i++)
+/* Clear device and interrupt table */
+for (i = 0; i < 128; i++) {
     dev_tab[i] = &null_dev;
+    dev_irqv[i] = NULL;
+}
+
 dev_tab[0] = &dev_apr;
 dev_tab[1] = &dev_pi;
 #if KI | KL
@@ -4830,18 +4855,43 @@ dev_tab[2] = &dev_pag;
 if (QBBN)
    dev_tab[024] = &dev_pag;
 #endif
+/* Assign all RH10 devices */
+for (j = i = 0; (dptr = rh_devs[i]) != NULL; i++) {
+    dibp = (DIB *) dptr->ctxt;
+    if (dibp && !(dptr->flags & DEV_DIS)) {             /* enabled? */
+        if (j == 4)
+           break;
+        d = rh[j].dev_num;
+        dev_tab[(d >> 2)] = dibp->io;
+        dev_irqv[(d >> 2)] = dibp->irq;
+        rh[j].dev = dptr;
+        j++;
+    }
+}
+
+/* Make sure all are assigned */
+if (j == 4 && rh_devs[i] != NULL) {
+    sim_printf ("To many RH10 devices %s\n", sim_dname (dptr));
+    return TRUE;
+}
+
+/* Assign all remaining devices */
 for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {
     dibp = (DIB *) dptr->ctxt;
     if (dibp && !(dptr->flags & DEV_DIS)) {             /* enabled? */
          for (j = 0; j < dibp->num_devs; j++) {         /* loop thru disp */
               if (dibp->io) {                           /* any dispatch? */
-                   if (dev_tab[(dibp->dev_num >> 2) + j] != &null_dev) {
+                   d = dibp->dev_num;
+                   if (d & RH10_DEV)                    /* Skip RH10 devices */
+                       continue;
+                   if (dev_tab[(d >> 2) + j] != &null_dev) {
                                                         /* already filled? */
                        sim_printf ("%s device number conflict at %02o\n",
-                              sim_dname (dptr), dibp->dev_num + (j << 2));
+                              sim_dname (dptr), d + (j << 2));
                        return TRUE;
                    }
-                   dev_tab[(dibp->dev_num >> 2) + j] = dibp->io;  /* fill */
+                   dev_tab[(d >> 2) + j] = dibp->io;    /* fill */
+                   dev_irqv[(d >> 2) + j] = dibp->irq;
               }                                         /* end if dsp */
            }                                            /* end for j */
         }                                               /* end if enb */

@@ -28,7 +28,6 @@
 #endif
 
 #if (NUM_DEVS_RS > 0)
-#define RS_DEVNUM       0270    /* First device number */
 
 #define RS_NUMWD        128     /* 36bit words/sec */
 #define NUM_UNITS_RS    8
@@ -107,69 +106,69 @@
 /* u3  low */
 /* RSC - 00 - control */
 
-#define CS1_GO          CR_GO                           /* go */
-#define CS1_V_FNC       1                               /* function pos */
-#define CS1_M_FNC       037                             /* function mask */
+#define CS1_GO          CR_GO           /* go */
+#define CS1_V_FNC       1               /* function pos */
+#define CS1_M_FNC       037             /* function mask */
 #define CS1_FNC         (CS1_M_FNC << CS1_V_FNC)
-#define  FNC_NOP        000                             /* no operation */
-#define  FNC_DCLR       004                             /* drive clear */
-#define  FNC_PRESET     010                             /* read-in preset */
-#define  FNC_SEARCH     014                             /* search */
-#define FNC_XFER        024                             /* >=? data xfr */
-#define  FNC_WCHK       024                             /* write check */
-#define  FNC_WRITE      030                             /* write */
-#define  FNC_READ       034                             /* read */
-#define CS1_DVA         0004000                         /* drive avail NI */
+#define  FNC_NOP        000             /* no operation */
+#define  FNC_DCLR       004             /* drive clear */
+#define  FNC_PRESET     010             /* read-in preset */
+#define  FNC_SEARCH     014             /* search */
+#define FNC_XFER        024             /* >=? data xfr */
+#define  FNC_WCHK       024             /* write check */
+#define  FNC_WRITE      030             /* write */
+#define  FNC_READ       034             /* read */
+#define CS1_DVA         0004000         /* drive avail NI */
 #define GET_FNC(x)      (((x) >> CS1_V_FNC) & CS1_M_FNC)
 
 /* u3  low */
 /* RSDS - 01 - drive status */
 
-#define DS_VV           0000000                         /* volume valid */
-#define DS_DRY          0000200                         /* drive ready */
-#define DS_DPR          0000400                         /* drive present */
-#define DS_PGM          0001000                         /* programable NI */
-#define DS_LST          0002000                         /* last sector */
-#define DS_WRL          0004000                         /* write locked */
-#define DS_MOL          0010000                         /* medium online */
-#define DS_PIP          0020000                         /* pos in progress */
-#define DS_ERR          0040000                         /* error */
-#define DS_ATA          0100000                         /* attention active */
+#define DS_VV           0000000         /* volume valid */
+#define DS_DRY          0000200         /* drive ready */
+#define DS_DPR          0000400         /* drive present */
+#define DS_PGM          0001000         /* programable NI */
+#define DS_LST          0002000         /* last sector */
+#define DS_WRL          0004000         /* write locked */
+#define DS_MOL          0010000         /* medium online */
+#define DS_PIP          0020000         /* pos in progress */
+#define DS_ERR          0040000         /* error */
+#define DS_ATA          0100000         /* attention active */
 #define DS_MBZ          0000076
 
 /* u3 high */
 /* RSER1 - 02 - error status 1 */
 
-#define ER1_ILF         0000001                         /* illegal func */
-#define ER1_ILR         0000002                         /* illegal register */
-#define ER1_RMR         0000004                         /* reg mod refused */
-#define ER1_PAR         0000010                         /* parity err */
-#define ER1_FER         0000020                         /* format err NI */
-#define ER1_WCF         0000040                         /* write clk fail NI */
-#define ER1_ECH         0000100                         /* ECC hard err NI */
-#define ER1_HCE         0000200                         /* hdr comp err NI */
-#define ER1_HCR         0000400                         /* hdr CRC err NI */
-#define ER1_AOE         0001000                         /* addr ovflo err */
-#define ER1_IAE         0002000                         /* invalid addr err */
-#define ER1_WLE         0004000                         /* write lock err */
-#define ER1_DTE         0010000                         /* drive time err NI */
-#define ER1_OPI         0020000                         /* op incomplete */
-#define ER1_UNS         0040000                         /* drive unsafe */
-#define ER1_DCK         0100000                         /* data check NI */
+#define ER1_ILF         0000001         /* illegal func */
+#define ER1_ILR         0000002         /* illegal register */
+#define ER1_RMR         0000004         /* reg mod refused */
+#define ER1_PAR         0000010         /* parity err */
+#define ER1_FER         0000020         /* format err NI */
+#define ER1_WCF         0000040         /* write clk fail NI */
+#define ER1_ECH         0000100         /* ECC hard err NI */
+#define ER1_HCE         0000200         /* hdr comp err NI */
+#define ER1_HCR         0000400         /* hdr CRC err NI */
+#define ER1_AOE         0001000         /* addr ovflo err */
+#define ER1_IAE         0002000         /* invalid addr err */
+#define ER1_WLE         0004000         /* write lock err */
+#define ER1_DTE         0010000         /* drive time err NI */
+#define ER1_OPI         0020000         /* op incomplete */
+#define ER1_UNS         0040000         /* drive unsafe */
+#define ER1_DCK         0100000         /* data check NI */
 
 /* RSMR - 03 - maintenace register */
 
 /* RSAS - 04 - attention summary */
 
-#define AS_U0           0000001                         /* unit 0 flag */
+#define AS_U0           0000001         /* unit 0 flag */
 
 /* u4 high */
 /* RSDC - 05 - desired sector */
 
-#define DA_V_SC         0                               /* sector pos */
-#define DA_M_SC         077                             /* sector mask */
-#define DA_V_SF         6                               /* track pos */
-#define DA_M_SF         077                             /* track mask */
+#define DA_V_SC         0               /* sector pos */
+#define DA_M_SC         077             /* sector mask */
+#define DA_V_SF         6               /* track pos */
+#define DA_M_SF         077             /* track mask */
 #define DA_MBZ          0170000
 #define GET_SC(x)       (((x) >> DA_V_SC) & DA_M_SC)
 #define GET_SF(x)       (((x) >> DA_V_SF) & DA_M_SF)
@@ -273,7 +272,7 @@ UNIT                rs_unit[] = {
 };
 
 DIB rs_dib[] = {
-    {RS_DEVNUM, 1, &rs_devio, &rs_devirq}
+    {RH10_DEV, 1, &rs_devio, &rs_devirq}
 };
 
 MTAB                rs_mod[] = {
@@ -288,7 +287,7 @@ DEVICE              rsa_dev = {
     "FSA", rs_unit, NULL, rs_mod,
     NUM_UNITS_RS, 8, 18, 1, 8, 36,
     NULL, NULL, &rs_reset, &rs_boot, &rs_attach, &rs_detach,
-    &rs_dib[0], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &rs_dib[0], DEV_DISABLE | DEV_DIS | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &rs_help, NULL, NULL, &rs_description
 };
 
@@ -299,19 +298,22 @@ DEVICE *rs_devs[] = {
 
 t_stat rs_devio(uint32 dev, uint64 *data) {
      int            ctlr = -1;
-     DEVICE        *dptr;
+     DEVICE        *dptr = NULL;
      struct df10   *df10;
      int            drive;
 
-     for (drive = 0; drive < NUM_DEVS_RS; drive++) {
-        if (rs_dib[drive].dev_num == (dev & 0774)) {
-            ctlr = drive;
+     for (drive = 0; drive < 4; drive++) {
+        if (rh[drive].dev_num == (dev & 0774)) {
+            dptr = rh[drive].dev;
             break;
         }
      }
-     if (ctlr < 0)
+     if (dptr == NULL)
         return SCPE_OK;
-     dptr = rs_devs[ctlr];
+     for (ctlr = 0; ctlr < NUM_DEVS_RS; ctlr++) {
+         if (dptr == rs_devs[ctlr]) 
+            break;
+     }
      df10 = &rs_df10[ctlr];
      switch(dev & 3) {
      case CONI:
@@ -440,12 +442,19 @@ t_stat rs_devio(uint32 dev, uint64 *data) {
 /* Handle KI and KL style interrupt vectors */
 int
 rs_devirq(uint32 dev, int addr) {
-     int drive;
+    DEVICE        *dptr = NULL;
+    int            drive;
 
-     for (drive = 0; drive < NUM_DEVS_RS; drive++) {
-        if (rs_dib[drive].dev_num == (dev & 0774))
-            return (rs_imode[drive] ? rs_ivect[drive] : addr);
-     }
+    for (drive = 0; drive < 4; drive++) {
+       if (rh[drive].dev_num == (dev & 0774)) {
+           dptr = rh[drive].dev;
+           break;
+       }
+    }
+    for (drive = 0; drive < NUM_DEVS_RS; drive++) {
+        if (dptr == rs_devs[drive]) 
+           return (rs_imode[drive] ? rs_ivect[drive] : addr);
+    }
     return  addr;
 }
 

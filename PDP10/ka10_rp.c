@@ -26,9 +26,6 @@
 #ifndef NUM_DEVS_RP
 #define NUM_DEVS_RP 0
 #endif
-#ifndef NUM_DEVS_RS
-#define NUM_DEVS_RS 0
-#endif
 
 #if (NUM_DEVS_RP > 0)
 #define BUF_EMPTY(u)  (u->hwmark == 0xFFFFFFFF)
@@ -111,80 +108,80 @@
 /* u3  low */
 /* RPC - 00 - control */
 
-#define CS1_GO          CR_GO                           /* go */
-#define CS1_V_FNC       1                               /* function pos */
-#define CS1_M_FNC       037                             /* function mask */
+#define CS1_GO          CR_GO           /* go */
+#define CS1_V_FNC       1               /* function pos */
+#define CS1_M_FNC       037             /* function mask */
 #define CS1_FNC         (CS1_M_FNC << CS1_V_FNC)
-#define  FNC_NOP        000                             /* no operation */
-#define  FNC_UNLOAD     001                             /* unload */
-#define  FNC_SEEK       002                             /* seek */
-#define  FNC_RECAL      003                             /* recalibrate */
-#define  FNC_DCLR       004                             /* drive clear */
-#define  FNC_RELEASE    005                             /* port release */
-#define  FNC_OFFSET     006                             /* offset */
-#define  FNC_RETURN     007                             /* return to center */
-#define  FNC_PRESET     010                             /* read-in preset */
-#define  FNC_PACK       011                             /* pack acknowledge */
-#define  FNC_SEARCH     014                             /* search */
-#define FNC_XFER        024                             /* >=? data xfr */
-#define  FNC_WCHK       024                             /* write check */
-#define  FNC_WCHKH      025                             /* write check headers */
-#define  FNC_WRITE      030                             /* write */
-#define  FNC_WRITEH     031                             /* write w/ headers */
-#define  FNC_READ       034                             /* read */
-#define  FNC_READH      035                             /* read w/ headers */
-#define CS1_DVA         0004000                         /* drive avail NI */
+#define  FNC_NOP        000             /* no operation */
+#define  FNC_UNLOAD     001             /* unload */
+#define  FNC_SEEK       002             /* seek */
+#define  FNC_RECAL      003             /* recalibrate */
+#define  FNC_DCLR       004             /* drive clear */
+#define  FNC_RELEASE    005             /* port release */
+#define  FNC_OFFSET     006             /* offset */
+#define  FNC_RETURN     007             /* return to center */
+#define  FNC_PRESET     010             /* read-in preset */
+#define  FNC_PACK       011             /* pack acknowledge */
+#define  FNC_SEARCH     014             /* search */
+#define FNC_XFER        024             /* >=? data xfr */
+#define  FNC_WCHK       024             /* write check */
+#define  FNC_WCHKH      025             /* write check headers */
+#define  FNC_WRITE      030             /* write */
+#define  FNC_WRITEH     031             /* write w/ headers */
+#define  FNC_READ       034             /* read */
+#define  FNC_READH      035             /* read w/ headers */
+#define CS1_DVA         0004000         /* drive avail NI */
 #define GET_FNC(x)      (((x) >> CS1_V_FNC) & CS1_M_FNC)
 
 /* u3  low */
 /* RPDS - 01 - drive status */
 
-#define DS_OFF          0000001                         /* offset mode */
-#define DS_VV           0000100                         /* volume valid */
-#define DS_DRY          0000200                         /* drive ready */
-#define DS_DPR          0000400                         /* drive present */
-#define DS_PGM          0001000                         /* programable NI */
-#define DS_LST          0002000                         /* last sector */
-#define DS_WRL          0004000                         /* write locked */
-#define DS_MOL          0010000                         /* medium online */
-#define DS_PIP          0020000                         /* pos in progress */
-#define DS_ERR          0040000                         /* error */
-#define DS_ATA          0100000                         /* attention active */
+#define DS_OFF          0000001         /* offset mode */
+#define DS_VV           0000100         /* volume valid */
+#define DS_DRY          0000200         /* drive ready */
+#define DS_DPR          0000400         /* drive present */
+#define DS_PGM          0001000         /* programable NI */
+#define DS_LST          0002000         /* last sector */
+#define DS_WRL          0004000         /* write locked */
+#define DS_MOL          0010000         /* medium online */
+#define DS_PIP          0020000         /* pos in progress */
+#define DS_ERR          0040000         /* error */
+#define DS_ATA          0100000         /* attention active */
 #define DS_MBZ          0000076
 
 /* u3 high */
 /* RPER1 - 02 - error status 1 */
 
-#define ER1_ILF         0000001                         /* illegal func */
-#define ER1_ILR         0000002                         /* illegal register */
-#define ER1_RMR         0000004                         /* reg mod refused */
-#define ER1_PAR         0000010                         /* parity err */
-#define ER1_FER         0000020                         /* format err NI */
-#define ER1_WCF         0000040                         /* write clk fail NI */
-#define ER1_ECH         0000100                         /* ECC hard err NI */
-#define ER1_HCE         0000200                         /* hdr comp err NI */
-#define ER1_HCR         0000400                         /* hdr CRC err NI */
-#define ER1_AOE         0001000                         /* addr ovflo err */
-#define ER1_IAE         0002000                         /* invalid addr err */
-#define ER1_WLE         0004000                         /* write lock err */
-#define ER1_DTE         0010000                         /* drive time err NI */
-#define ER1_OPI         0020000                         /* op incomplete */
-#define ER1_UNS         0040000                         /* drive unsafe */
-#define ER1_DCK         0100000                         /* data check NI */
+#define ER1_ILF         0000001         /* illegal func */
+#define ER1_ILR         0000002         /* illegal register */
+#define ER1_RMR         0000004         /* reg mod refused */
+#define ER1_PAR         0000010         /* parity err */
+#define ER1_FER         0000020         /* format err NI */
+#define ER1_WCF         0000040         /* write clk fail NI */
+#define ER1_ECH         0000100         /* ECC hard err NI */
+#define ER1_HCE         0000200         /* hdr comp err NI */
+#define ER1_HCR         0000400         /* hdr CRC err NI */
+#define ER1_AOE         0001000         /* addr ovflo err */
+#define ER1_IAE         0002000         /* invalid addr err */
+#define ER1_WLE         0004000         /* write lock err */
+#define ER1_DTE         0010000         /* drive time err NI */
+#define ER1_OPI         0020000         /* op incomplete */
+#define ER1_UNS         0040000         /* drive unsafe */
+#define ER1_DCK         0100000         /* data check NI */
 
 /* RPMR - 03 - maintenace register */
 
 /* RPAS - 04 - attention summary */
 
-#define AS_U0           0000001                         /* unit 0 flag */
+#define AS_U0           0000001         /* unit 0 flag */
 
 /* u4 high */
 /* RPDC - 05 - desired sector */
 
-#define DA_V_SC         16                              /* sector pos */
-#define DA_M_SC         077                             /* sector mask */
-#define DA_V_SF         24                              /* track pos */
-#define DA_M_SF         077                             /* track mask */
+#define DA_V_SC         16              /* sector pos */
+#define DA_M_SC         077             /* sector mask */
+#define DA_V_SF         24              /* track pos */
+#define DA_M_SF         077             /* track mask */
 #define DA_MBZ          0140300
 #define GET_SC(x)       (((x) >> DA_V_SC) & DA_M_SC)
 #define GET_SF(x)       (((x) >> DA_V_SF) & DA_M_SF)
@@ -386,12 +383,10 @@ UNIT                rp_unit[] = {
 };
 
 DIB rp_dib[] = {
-#if NUM_DEVS_RS == 0
-    {RP_DEVNUM+0000, 1, &rp_devio, &rp_devirq},
-#endif
-    {RP_DEVNUM+0004, 1, &rp_devio, &rp_devirq},
-    {RP_DEVNUM+0070, 1, &rp_devio, &rp_devirq},
-    {RP_DEVNUM+0074, 1, &rp_devio, &rp_devirq}};
+    {RH10_DEV, 1, &rp_devio, &rp_devirq},
+    {RH10_DEV, 1, &rp_devio, &rp_devirq},
+    {RH10_DEV, 1, &rp_devio, &rp_devirq},
+    {RH10_DEV, 1, &rp_devio, &rp_devirq}};
 
 MTAB                rp_mod[] = {
     {UNIT_WLK, 0, "write enabled", "WRITEENABLED", NULL},
@@ -424,7 +419,7 @@ DEVICE              rpc_dev = {
     "RPC", &rp_unit[020], NULL, rp_mod,
     NUM_UNITS_RP, 8, 18, 1, 8, 36,
     NULL, NULL, &rp_reset, &rp_boot, &rp_attach, &rp_detach,
-    &rp_dib[2], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &rp_dib[2], DEV_DISABLE | DEV_DIS | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &rp_help, NULL, NULL, &rp_description
 };
 
@@ -433,7 +428,7 @@ DEVICE              rpd_dev = {
     "RPD", &rp_unit[030], NULL, rp_mod,
     NUM_UNITS_RP, 8, 18, 1, 8, 36,
     NULL, NULL, &rp_reset, &rp_boot, &rp_attach, &rp_detach,
-    &rp_dib[3], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &rp_dib[3], DEV_DISABLE | DEV_DIS | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &rp_help, NULL, NULL, &rp_description
 };
 
@@ -457,19 +452,22 @@ DEVICE *rp_devs[] = {
 
 t_stat rp_devio(uint32 dev, uint64 *data) {
      int            ctlr = -1;
-     DEVICE        *dptr;
+     DEVICE        *dptr = NULL;
      struct df10   *df10;
      int            drive;
 
-     for (drive = 0; drive < NUM_DEVS_RP; drive++) {
-        if (rp_dib[drive].dev_num == (dev & 0774)) {
-            ctlr = drive;
+     for (drive = 0; drive < 4; drive++) {
+        if (rh[drive].dev_num == (dev & 0774)) {
+            dptr = rh[drive].dev;
             break;
         }
      }
-     if (ctlr < 0)
+     if (dptr == NULL)
         return SCPE_OK;
-     dptr = rp_devs[ctlr];
+     for (ctlr = 0; ctlr < NUM_DEVS_RP; ctlr++) {
+         if (dptr == rp_devs[ctlr])
+            break;
+     }
      df10 = &rp_df10[ctlr];
      switch(dev & 3) {
      case CONI:
@@ -597,12 +595,19 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
 /* Handle KI and KL style interrupt vectors */
 int
 rp_devirq(uint32 dev, int addr) {
-     int drive;
+    DEVICE        *dptr = NULL;
+    int            drive;
 
-     for (drive = 0; drive < NUM_DEVS_RP; drive++) {
-        if (rp_dib[drive].dev_num == (dev & 0774))
-            return (rp_imode[drive] ? rp_ivect[drive] : addr);
-     }
+    for (drive = 0; drive < 4; drive++) {
+       if (rh[drive].dev_num == (dev & 0774)) {
+           dptr = rh[drive].dev;
+           break;
+       }
+    }
+    for (drive = 0; drive < NUM_DEVS_RP; drive++) {
+        if (dptr == rp_devs[drive])  
+           return (rp_imode[drive] ? rp_ivect[drive] : addr);
+    }
     return  addr;
 }
 
@@ -813,9 +818,9 @@ t_stat rp_svc (UNIT *uptr)
     dptr = rp_devs[ctlr];
     unit = uptr - dptr->units;
     df = &rp_df10[ctlr];
-    if ((uptr->flags & UNIT_ATT) == 0) {                    /* not attached? */
-        uptr->u3 |= (ER1_UNS << 16) | DS_ATA|DS_ERR;        /* set drive error */
-        if (GET_FNC(uptr->u3) >= FNC_XFER) {                /* xfr? set done */
+    if ((uptr->flags & UNIT_ATT) == 0) {                 /* not attached? */
+        uptr->u3 |= (ER1_UNS << 16) | DS_ATA|DS_ERR;     /* set drive error */
+        if (GET_FNC(uptr->u3) >= FNC_XFER) {             /* xfr? set done */
            df->status &= ~BUSY;
            df10_setirq(df);
         }

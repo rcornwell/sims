@@ -93,6 +93,9 @@ DEVICE *sim_devices[] = {
 #endif
 #endif
 #endif
+#if (NUM_DEVS_RS > 0)
+    &rsa_dev,
+#endif
 #if (NUM_DEVS_RP > 0)
     &rpa_dev,
 #if (NUM_DEVS_RP > 1)
@@ -104,9 +107,6 @@ DEVICE *sim_devices[] = {
 #endif
 #endif
 #endif
-#endif
-#if (NUM_DEVS_RS > 0)
-    &rsa_dev,
 #endif
 #if (NUM_DEVS_TU > 0)
     &tua_dev,
