@@ -580,7 +580,7 @@ wait_loop:
 
         if (loading || flags & WAIT) {
             /* CPU IDLE */
-            if (flags & WAIT && sysmsk == 0) 
+            if (flags & WAIT && sysmsk == 0)
                return STOP_HALT;
             sim_interval = -1;
             goto wait_loop;
@@ -740,8 +740,8 @@ opr:
 
         case OP_BALR:
         case OP_BAL:
-                dest = (((uint32)ilc) << 30) | 
-                       ((uint32)(cc & 03) << 28) | 
+                dest = (((uint32)ilc) << 30) |
+                       ((uint32)(cc & 03) << 28) |
                        (((uint32)pmsk) << 24) | PC;
                 if (op != OP_BALR || (reg & 0xf))
                     PC = addr1 & 0xffffff;
@@ -857,7 +857,7 @@ opr:
                     storepsw(OPPSW, IRC_PRIV);
                 else
                     cc = testio(addr1);
-//                    if (cc != 0 && hst_lnt && hst_p > 2) 
+//                    if (cc != 0 && hst_lnt && hst_p > 2)
 //                       hst_p -= 2;
                 break;
 
@@ -940,7 +940,7 @@ set_cc:
 set_cc3:
                     regs[reg1] = dest;
                     cc = 3;
-                    if (pmsk & FIXOVR) 
+                    if (pmsk & FIXOVR)
                        storepsw(OPPSW, IRC_FIXOVR);
                 }
                 goto set_cc;
@@ -1683,7 +1683,7 @@ save_dbl:
                 while(reg != 0) {
                     uint8        t;
                     uint32  temp;
-                    if (ReadByte(addr1, &temp)) 
+                    if (ReadByte(addr1, &temp))
                         break;
                     t = temp;
                     if (src1) {
@@ -2012,7 +2012,7 @@ save_dbl:
         sim_debug(DEBUG_INST, &cpu_dev, "R8=%08x R9=%08x RA=%08x RB=%08x ", regs[8], regs[9], regs[10], regs[11]);
         sim_debug(DEBUG_INST, &cpu_dev, "RC=%08x RD=%08x RE=%08x RF=%08x\n", regs[12], regs[13], regs[14], regs[15]);
 }
-    
+
         if (irqaddr != 0) {
 supress:
              src1 = M[irqaddr>>2];

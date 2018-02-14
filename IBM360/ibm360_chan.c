@@ -274,7 +274,7 @@ loop:
         return 1;
     }
     /* Abort if we have any errors */
-    if (chan_status[chan] & 0x7f) 
+    if (chan_status[chan] & 0x7f)
         return 1;
     /* Check if we have status modifier set */
     if (chan_status[chan] & STATUS_MOD) {
@@ -366,7 +366,7 @@ chan_read_byte(uint16 addr, uint8 *data) {
     /* Abort if we have any errors */
     if (chan < 0)
         return 1;
-    if (chan_status[chan] & 0x7f) 
+    if (chan_status[chan] & 0x7f)
         return 1;
     if ((ccw_cmd[chan] & 0x1)  == 0) {
         return 1;
@@ -380,12 +380,12 @@ chan_read_byte(uint16 addr, uint8 *data) {
             sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_read_end\n");
             return 1;
          } else {
-            if (load_ccw(chan, 1)) 
+            if (load_ccw(chan, 1))
                 return 1;
          }
     }
     if (chan_byte[chan] == BUFF_EMPTY) {
-         if (readbuff(chan)) 
+         if (readbuff(chan))
             return 1;
          chan_byte[chan] = ccw_addr[chan] & 0x3;
          ccw_addr[chan] += 4 - chan_byte[chan];
@@ -409,7 +409,7 @@ chan_write_byte(uint16 addr, uint8 *data) {
     /* Abort if we have any errors */
     if (chan < 0)
         return 1;
-    if (chan_status[chan] & 0x7f) 
+    if (chan_status[chan] & 0x7f)
         return 1;
     if ((ccw_cmd[chan] & 0x1)  != 0) {
         return 1;
@@ -422,7 +422,7 @@ chan_write_byte(uint16 addr, uint8 *data) {
     }
     if (ccw_count[chan] == 0) {
         if (chan_byte[chan] & BUFF_DIRTY) {
-            if (writebuff(chan)) 
+            if (writebuff(chan))
                 return 1;
         }
         if ((ccw_flags[chan] & FLAG_CD) == 0) {
@@ -447,7 +447,7 @@ chan_write_byte(uint16 addr, uint8 *data) {
         return 0;
     }
     if (chan_byte[chan] == (BUFF_EMPTY|BUFF_DIRTY)) {
-         if (writebuff(chan)) 
+         if (writebuff(chan))
             return 1;
          if ((ccw_cmd[chan] & 0xf) == CMD_RDBWD)
             ccw_addr[chan] -= 1 + (ccw_addr[chan] & 0x3);
@@ -487,7 +487,7 @@ set_devattn(uint16 addr, uint8 flags) {
         chan_status[chan] |= ((uint16)flags) << 8;
     } else
         dev_status[addr] = flags;
-    sim_debug(DEBUG_EXP, &cpu_dev, "set_devattn(%x, %x) %x\n", 
+    sim_debug(DEBUG_EXP, &cpu_dev, "set_devattn(%x, %x) %x\n",
                  addr, flags, chan_dev[chan]);
     irq_pend = 1;
 }
@@ -521,7 +521,7 @@ chan_end(uint16 addr, uint8 flags) {
         chan_byte[chan] = BUFF_NEWCMD;
 
         while ((ccw_flags[chan] & FLAG_CD)) {
-            if (load_ccw(chan, 1)) 
+            if (load_ccw(chan, 1))
                 break;
             if ((ccw_flags[chan] & FLAG_SLI) == 0) {
                 sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end length\n");
@@ -554,7 +554,7 @@ int  startio(uint16 addr) {
 
     if (chan < 0 || dibp == 0)
         return 3;
-    sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %x %x\n", addr, chan, 
+    sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %x %x\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
     uptr = find_chan_dev(addr);
     if (uptr == 0)
@@ -612,7 +612,7 @@ int testio(uint16 addr) {
         return 3;
     if ((uptr->flags & UNIT_ATT)  == 0)
         return 3;
-    if (ccw_cmd[chan] != 0 || (ccw_flags[chan] & (FLAG_CD|FLAG_CC)) != 0) 
+    if (ccw_cmd[chan] != 0 || (ccw_flags[chan] & (FLAG_CD|FLAG_CC)) != 0)
         return 2;
     if (chan_dev[chan] != 0 && chan_dev[chan] != addr)
         return 2;
@@ -663,7 +663,7 @@ int testchan(uint16 channel) {
     channel >>= 8;
     if (channel == 0)
         return 0;
-    if (channel > channels) 
+    if (channel > channels)
         return 3;
     st = chan_status[subchannels + channel];
     if (st & STATUS_BUSY)
@@ -759,7 +759,7 @@ uint16 scan_chan(uint8 mask) {
                      irq_pend = 1;
                      M[0x44 >> 2] = (((uint32)dev_status[pend]) << 24);
                      M[0x40>>2] = 0;
-                     sim_debug(DEBUG_EXP, &cpu_dev, 
+                     sim_debug(DEBUG_EXP, &cpu_dev,
                             "Set atten %03x %02x [%08x] %08x\n",
                             i, dev_status[pend], M[0x40 >> 2], M[0x44 >> 2]);
                      dev_status[pend] = 0;
@@ -842,7 +842,7 @@ set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     if (r != SCPE_OK)
         return r;
 
-    if ((newdev >> 8) > channels) 
+    if ((newdev >> 8) > channels)
         return SCPE_ARG;
 
     if (newdev >= MAX_DEV)
