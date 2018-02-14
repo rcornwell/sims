@@ -282,7 +282,7 @@ t_bool build_dev_tab (void);
    cpu_mod      CPU modifier list
 */
 
-UNIT cpu_unit[] = { { UDATA (&rtc_srv, UNIT_IDLE|UNIT_FIX|UNIT_BINK|UNIT_TWOSEG, 256 * 1024 * 1024) },
+UNIT cpu_unit[] = { { UDATA (&rtc_srv, UNIT_IDLE|UNIT_FIX|UNIT_BINK|UNIT_TWOSEG, 256 * 1024) },
 #if ITS
                     { UDATA (&qua_srv, UNIT_IDLE|UNIT_DIS, 0) }
 #endif
