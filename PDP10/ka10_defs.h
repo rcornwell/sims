@@ -316,12 +316,19 @@ extern t_stat (*dev_tab[128])(uint32 dev, uint64 *data);
 
 #define VEC_DEVMAX      8                               /* max device vec */
 
+/* Device context block */
 struct pdp_dib {
     uint32              dev_num;                        /* device address */
     uint32              num_devs;                       /* length */
     t_stat              (*io)(uint32 dev, uint64 *data);
     int                 (*irq)(uint32 dev, int addr);
 };
+
+struct rh_dev {
+    uint32              dev_num;
+    DEVICE             *dev;
+};
+
 
 typedef struct pdp_dib DIB;
 
@@ -360,13 +367,17 @@ int  df10_write(struct df10 *df);
 #define NUM_DEVS_RC     1
 #define NUM_DEVS_DT     1
 #define NUM_DEVS_DK     1
-#define NUM_DEVS_RP     2
-#define NUM_DEVS_RS     0
+#define NUM_DEVS_RP     4
+#define NUM_DEVS_RS     1
 #define NUM_DEVS_TU     1
 #define NUM_DEVS_PD     ITS
 /* Global data */
 
+#define RH10_DEV        01000
+
 extern t_bool sim_idle_enab;
+
+struct rh_dev rh[4];
 
 #endif
 

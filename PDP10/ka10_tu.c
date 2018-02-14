@@ -27,27 +27,8 @@
 #ifndef NUM_DEVS_TU
 #define NUM_DEVS_TU 0
 #endif
-#ifndef NUM_DEVS_RP
-#define NUM_DEVS_RP 0
-#endif
-#ifndef NUM_DEVS_RS
-#define NUM_DEVS_RS 0
-#endif
 
 #if (NUM_DEVS_TU > 0)
-#define NUM_DEV (NUM_DEVS_RP + NUM_DEVS_RS)
-
-#if (NUM_DEV == 0)
-#define TU_DEVNUM       0270    /* First device number */
-#elif (NUM_DEV == 1)
-#define TU_DEVNUM       0274    /* Second device number */
-#elif (NUM_DEV == 2)
-#define TU_DEVNUM       0360    /* Third device number */
-#elif (NUM_DEV == 3)
-#define TU_DEVNUM       0364    /* Fourth device number */
-#else
-#error "Only 4 RH10 devices allowed"
-#endif
 
 #define NUM_UNITS_TU    8
 #define TU_NUMFR        (64*1024)
@@ -119,78 +100,78 @@
 /* u3  low */
 /* TUC - 00 - control */
 
-#define CS1_GO          CR_GO                           /* go */
-#define CS1_V_FNC       1                               /* function pos */
-#define CS1_M_FNC       037                             /* function mask */
+#define CS1_GO          CR_GO           /* go */
+#define CS1_V_FNC       1               /* function pos */
+#define CS1_M_FNC       037             /* function mask */
 #define CS1_FNC         (CS1_M_FNC << CS1_V_FNC)
-#define  FNC_NOP        000                             /* no operation */
-#define  FNC_UNLOAD     001                             /* unload */
-#define  FNC_REWIND     003                             /* rewind */
-#define  FNC_DCLR       004                             /* drive clear */
-#define  FNC_PRESET     010                             /* read-in preset */
-#define  FNC_ERASE      012                             /* Erase */
-#define  FNC_WTM        013                             /* Write Tape Mark */
-#define  FNC_SPACEF     014                             /* Space record forward */
-#define  FNC_SPACEB     015                             /* Space record backward */
-#define FNC_XFER        024                             /* >=? data xfr */
-#define  FNC_WCHK       024                             /* write check */
-#define  FNC_WCHKREV    027                             /* write check reverse */
-#define  FNC_WRITE      030                             /* write */
-#define  FNC_READ       034                             /* read */
-#define  FNC_READREV    037                             /* read reverse */
-#define CS1_DVA         0004000                         /* drive avail NI */
+#define  FNC_NOP        000             /* no operation */
+#define  FNC_UNLOAD     001             /* unload */
+#define  FNC_REWIND     003             /* rewind */
+#define  FNC_DCLR       004             /* drive clear */
+#define  FNC_PRESET     010             /* read-in preset */
+#define  FNC_ERASE      012             /* Erase */
+#define  FNC_WTM        013             /* Write Tape Mark */
+#define  FNC_SPACEF     014             /* Space record forward */
+#define  FNC_SPACEB     015             /* Space record backward */
+#define FNC_XFER        024             /* >=? data xfr */
+#define  FNC_WCHK       024             /* write check */
+#define  FNC_WCHKREV    027             /* write check reverse */
+#define  FNC_WRITE      030             /* write */
+#define  FNC_READ       034             /* read */
+#define  FNC_READREV    037             /* read reverse */
+#define CS1_DVA         0004000         /* drive avail NI */
 #define GET_FNC(x)      (((x) >> CS1_V_FNC) & CS1_M_FNC)
-#define CS_TM           001000                          /* Tape mark sensed */
-#define CS_MOTION       002000                          /* Tape moving */
-#define CS_PIP          004000                          /* Tape Position command */
-#define CS_ATA          010000                          /* Tape signals attention */
-#define CS_CHANGE       020000                          /* Status changed */
+#define CS_TM           001000          /* Tape mark sensed */
+#define CS_MOTION       002000          /* Tape moving */
+#define CS_PIP          004000          /* Tape Position command */
+#define CS_ATA          010000          /* Tape signals attention */
+#define CS_CHANGE       020000          /* Status changed */
 
 /* u5  low */
 /* TUDS - 01 - drive status */
 
-#define DS_SLA          0000001                         /* Drive has become ready */
-#define DS_BOT          0000002                         /* Beginning of tape */
-#define DS_TM           0000004                         /* Tape mark */
-#define DS_IDB          0000010                         /* Identification burst */
-#define DS_SDWN         0000020                         /* Tape stoped */
-#define DS_PES          0000040                         /* Phase Encoding */
-#define DS_SSC          0000100                         /* Status change */
-#define DS_DRY          0000200                         /* drive ready */
-#define DS_DPR          0000400                         /* drive present */
-#define DS_PGM          0001000                         /* programable NI */
-#define DS_EOT          0002000                         /* end of tape */
-#define DS_WRL          0004000                         /* write locked */
-#define DS_MOL          0010000                         /* medium online */
-#define DS_PIP          0020000                         /* pos in progress */
-#define DS_ERR          0040000                         /* error */
-#define DS_ATA          0100000                         /* attention active */
+#define DS_SLA          0000001         /* Drive has become ready */
+#define DS_BOT          0000002         /* Beginning of tape */
+#define DS_TM           0000004         /* Tape mark */
+#define DS_IDB          0000010         /* Identification burst */
+#define DS_SDWN         0000020         /* Tape stoped */
+#define DS_PES          0000040         /* Phase Encoding */
+#define DS_SSC          0000100         /* Status change */
+#define DS_DRY          0000200         /* drive ready */
+#define DS_DPR          0000400         /* drive present */
+#define DS_PGM          0001000         /* programable NI */
+#define DS_EOT          0002000         /* end of tape */
+#define DS_WRL          0004000         /* write locked */
+#define DS_MOL          0010000         /* medium online */
+#define DS_PIP          0020000         /* pos in progress */
+#define DS_ERR          0040000         /* error */
+#define DS_ATA          0100000         /* attention active */
 
 /* u5 high */
 /* TUER1 - 02 - error status 1 */
 
-#define ER1_ILF         0000001                         /* illegal func */
-#define ER1_ILR         0000002                         /* illegal register */
-#define ER1_RMR         0000004                         /* reg mod refused */
-#define ER1_CPAR        0000010                         /* control parity err NI */
-#define ER1_FMT         0000020                         /* format err */
-#define ER1_DPAR        0000040                         /* data parity error */
-#define ER1_INC         0000100                         /* Incorrectable data */
-#define ER1_PEF         0000200                         /* format error */
-#define ER1_NSG         0000400                         /* Nonstandard gap NI */
-#define ER1_FCE         0001000                         /* Frame count error */
-#define ER1_ITM         0002000                         /* Illegal tape mark */
-#define ER1_NEF         0004000                         /* Non executable function */
-#define ER1_DTE         0010000                         /* drive time err NI */
-#define ER1_OPI         0020000                         /* op incomplete */
-#define ER1_UNS         0040000                         /* drive unsafe */
-#define ER1_DCK         0100000                         /* data check NI */
+#define ER1_ILF         0000001         /* illegal func */
+#define ER1_ILR         0000002         /* illegal register */
+#define ER1_RMR         0000004         /* reg mod refused */
+#define ER1_CPAR        0000010         /* control parity err NI */
+#define ER1_FMT         0000020         /* format err */
+#define ER1_DPAR        0000040         /* data parity error */
+#define ER1_INC         0000100         /* Incorrectable data */
+#define ER1_PEF         0000200         /* format error */
+#define ER1_NSG         0000400         /* Nonstandard gap NI */
+#define ER1_FCE         0001000         /* Frame count error */
+#define ER1_ITM         0002000         /* Illegal tape mark */
+#define ER1_NEF         0004000         /* Non executable function */
+#define ER1_DTE         0010000         /* drive time err NI */
+#define ER1_OPI         0020000         /* op incomplete */
+#define ER1_UNS         0040000         /* drive unsafe */
+#define ER1_DCK         0100000         /* data check NI */
 
 /* TUMR - 03 - maintenace register */
 
 /* TUAS - 04 - attention summary */
 
-#define AS_U0           0000001                         /* unit 0 flag */
+#define AS_U0           0000001         /* unit 0 flag */
 
 /* TUDC - 05 - frame count */
 
@@ -270,7 +251,7 @@ UNIT                tu_unit[] = {
 };
 
 DIB tu_dib[] = {
-    {TU_DEVNUM, 1, &tu_devio, &tu_devirq}
+    {RH10_DEV, 1, &tu_devio, &tu_devirq}
 };
 
 MTAB                tu_mod[] = {
@@ -301,19 +282,23 @@ DEVICE *tu_devs[] = {
 
 t_stat tu_devio(uint32 dev, uint64 *data) {
      int            ctlr = -1;
-     DEVICE        *dptr;
+     DEVICE        *dptr = NULL;
      struct df10   *df10;
      int            drive;
 
-     for (drive = 0; drive < NUM_DEVS_TU; drive++) {
-        if (tu_dib[drive].dev_num == (dev & 0774)) {
-            ctlr = drive;
+     for (drive = 0; drive < 4; drive++) {
+        if (rh[drive].dev_num == (dev & 0774)) {
+            dptr = rh[drive].dev;
             break;
         }
      }
-     if (ctlr < 0)
-        return SCPE_OK;
-     dptr = tu_devs[ctlr];
+
+     if (dptr == NULL)
+         return SCPE_OK;
+     for (ctlr = 0; ctlr < NUM_DEVS_TU; ctlr++) {
+         if (dptr == tu_devs[ctlr])
+            break;
+     }
      df10 = &tu_df10[ctlr];
      switch(dev & 3) {
      case CONI:
@@ -448,12 +433,19 @@ t_stat tu_devio(uint32 dev, uint64 *data) {
 /* Handle KI and KL style interrupt vectors */
 int
 tu_devirq(uint32 dev, int addr) {
-     int drive;
+    DEVICE        *dptr = NULL;
+    int            drive;
 
-     for (drive = 0; drive < NUM_DEVS_TU; drive++) {
-        if (tu_dib[drive].dev_num == (dev & 0774))
-            return (tu_imode[drive] ? tu_ivect[drive] : addr);
-     }
+    for (drive = 0; drive < 4; drive++) {
+       if (rh[drive].dev_num == (dev & 0774)) {
+           dptr = rh[drive].dev;
+           break;
+       }
+    }
+    for (drive = 0; drive < NUM_DEVS_TU; drive++) {
+        if (dptr == tu_devs[drive])  
+           return (tu_imode[drive] ? tu_ivect[drive] : addr);
+    }
     return  addr;
 }
 
