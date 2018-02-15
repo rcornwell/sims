@@ -127,6 +127,8 @@ extern int sim_vax_snprintf(char *buf, size_t buf_size, const char *fmt, ...);
 
 #ifdef _WIN32
 #include <winsock2.h>
+#include <windows.h>
+#include <winerror.h>
 #undef PACKED                       /* avoid macro name collision */
 #undef ERROR                        /* avoid macro name collision */
 #undef MEM_MAPPED                   /* avoid macro name collision */
@@ -403,10 +405,10 @@ typedef uint32          t_addr;
 #define SCPE_AMBREG     (SCPE_BASE + 46)                /* ambiguous register */
 #define SCPE_REMOTE     (SCPE_BASE + 47)                /* remote console command */
 
-#define SCPE_MAX_ERR    (SCPE_BASE + 48)                /* Maximum SCPE Error Value */
-#define SCPE_KFLAG      0x1000                          /* tti data flag */
-#define SCPE_BREAK      0x2000                          /* tti break flag */
-#define SCPE_NOMESSAGE  0x10000000                      /* message display supression flag */
+#define SCPE_MAX_ERR    (SCPE_BASE + 47)                /* Maximum SCPE Error Value */
+#define SCPE_KFLAG      0x10000000                      /* tti data flag */
+#define SCPE_BREAK      0x20000000                      /* tti break flag */
+#define SCPE_NOMESSAGE  0x40000000                      /* message display supression flag */
 #define SCPE_BARE_STATUS(stat) ((stat) & ~(SCPE_NOMESSAGE|SCPE_KFLAG|SCPE_BREAK))
 
 /* Print value format codes */
