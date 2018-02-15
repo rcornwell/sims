@@ -1105,8 +1105,15 @@ KA10 = ${KA10D}/ka10_cpu.c ${KA10D}/ka10_sys.c ${KA10D}/ka10_df.c \
 	${KA10D}/ka10_rp.c ${KA10D}/ka10_rc.c ${KA10D}/ka10_dt.c \
 	${KA10D}/ka10_dk.c ${KA10D}/ka10_cr.c ${KA10D}/ka10_cp.c \
 	${KA10D}/ka10_tu.c ${KA10D}/ka10_rs.c ${KA10D}/ka10_pd.c
-KA10_OPT = -DKA=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD
+KA10_OPT = -DKA=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD -DUSE_DISPLAY
 
+ifneq ($(TYPE340),)
+# ONLY tested on Ubuntu 16.04, using X11 display support:
+KA10_DPY=-DUSE_DISPLAY \
+	${KA10D}/ka10_dpy.c display/type340.c  display/display.c \
+	display/x11.c
+KA10_DPY_LDFLAGS =-lm -lX11 -lXt
+endif
 
 KI10D = PDP10
 KI10 = ${KA10D}/ka10_cpu.c ${KA10D}/ka10_sys.c ${KA10D}/ka10_df.c \
@@ -1223,7 +1230,7 @@ pdp10-ka : ${BIN}pdp10-ka${EXE}
 
 ${BIN}pdp10-ka${EXE} : ${KA10} ${SIM}
 	${MKDIRBIN}
-	${CC} ${KA10} ${SIM} ${KA10_OPT} $(CC_OUTSPEC) ${LDFLAGS}
+	${CC} ${KA10} ${KA10_DPY} ${SIM} ${KA10_OPT} $(CC_OUTSPEC) ${LDFLAGS} ${KA10_LDFLAGS} ${KA10_DPY_LDFLAGS}
 ifeq ($(WIN32),)
 	cp ${BIN}pdp10-ka${EXE} ${BIN}ka10${EXE}
 else
