@@ -340,8 +340,8 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
               res |= B22_FLAG;
 #endif
           *data = res;
-          sim_debug(DEBUG_CONI, dptr, "MT CONI %03o status2 %012llo %o %012llo PC=%06o %012llo %012llo\n",
-                      dev, res, unit, status, PC, hold_reg, mt_df10.buf);
+          sim_debug(DEBUG_CONI, dptr, "MT CONI %03o status2 %012llo %o %012llo PC=%06o\n",
+                      dev, res, unit, status, PC);
           break;
 
      case CONO|04:
@@ -552,14 +552,12 @@ t_stat mt_srv(UNIT * uptr)
                  sim_debug(DEBUG_DETAIL, dptr, "MT%o read error %d\n", unit, r);
                  uptr->u3 &= ~MT_MOTION;
                  if (dptr->flags & MTDF_TYPEB && r == MTSE_TMK)
-                      mt_df10_write(dptr, uptr);
+                     mt_df10_write(dptr, uptr);
                  return mt_error(uptr, r, dptr);
             }
             sim_debug(DEBUG_DETAIL, dptr, "MT%o read %d\n", unit, reclen);
             uptr->hwmark = reclen;
             uptr->u6 = 0;
-            sim_activate(uptr, 100);
-            return SCPE_OK;
         }
         if (uptr->u3 & MT_BRFUL) {
             status |= DATA_LATE;
@@ -628,8 +626,6 @@ t_stat mt_srv(UNIT * uptr)
                  status |= DATA_REQUEST;
                  set_interrupt(MT_DEVNUM, pia);
              }
-             sim_activate(uptr, 100);
-             return SCPE_OK;
          }
          if (uptr->u6 >= (int32)uptr->hwmark) {
             if (cmd == CMP_NOEOR)
