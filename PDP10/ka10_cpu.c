@@ -1925,22 +1925,24 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
    one_p_arm = 0;
 #endif
 #if ITS
-   if (QITS)
+   if (QITS) {
        sim_activate(&cpu_unit[1], 10000);
+       qua_time = 0;
+   }
 #endif
 
   while ( reason == 0) {                                /* loop until ABORT */
-     if (sim_interval <= 0) {                           /* check clock queue */
-          if ((reason = sim_process_event()) != SCPE_OK) {/* error?  stop sim */
+    if (sim_interval <= 0) {                           /* check clock queue */
+         if ((reason = sim_process_event()) != SCPE_OK) {/* error?  stop sim */
 #if ITS
-              if (QITS)
-                  sim_cancel(&cpu_unit[1]);
+             if (QITS)
+                 sim_cancel(&cpu_unit[1]);
 #endif
-              return reason;
-          }
-     }
+             return reason;
+         }
+    }
 
-     if (sim_brk_summ && f_load_pc && sim_brk_test(PC, SWMASK('E'))) {
+    if (sim_brk_summ && f_load_pc && sim_brk_test(PC, SWMASK('E'))) {
          reason = STOP_IBKPT;
          break;
     }
