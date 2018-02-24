@@ -300,6 +300,7 @@ t_stat tu_devio(uint32 dev, uint64 *data) {
             break;
      }
      df10 = &tu_df10[ctlr];
+     df10->devnum = dev;
      switch(dev & 3) {
      case CONI:
         *data = df10->status & ~(IADR_ATTN|IARD_RAE);
@@ -498,7 +499,7 @@ tu_write(int ctlr, int unit, int reg, uint32 data) {
                 uptr->u3 &= ~(CS_ATA|CR_GO|CS_TM);
                 uptr->u5 = 0;
                 tu_attn[ctlr] = 0;
-                clr_interrupt(tu_dib[ctlr].dev_num);
+                clr_interrupt(df10->devnum);
                 for (i = 0; i < 8; i++) {
                     if (tu_unit[(ctlr * 8) + i].u3 & CS_ATA)
                        tu_attn[ctlr] = 1;
@@ -533,7 +534,7 @@ tu_write(int ctlr, int unit, int reg, uint32 data) {
             if (tu_unit[(ctlr * 8) + i].u3 & CS_ATA)
                tu_attn[ctlr] = 1;
         }
-        clr_interrupt(tu_dib[ctlr].dev_num);
+        clr_interrupt(df10->devnum);
         if (((df10->status & IADR_ATTN) != 0 && tu_attn[ctlr] != 0) ||
              (df10->status & PI_ENABLE))
             df10_setirq(df10);
