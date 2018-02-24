@@ -478,7 +478,7 @@ int opflags[] = {
 
         /* Branch operators */
         /* EXCH */        /* BLT */         /* AOBJP */     /* AOBJN */
-        FAC|FCEPSE,       FAC,              FAC|SAC,        FAC|SAC,
+        FAC|FCE,          FAC,              FAC|SAC,        FAC|SAC,
         /* JRST */        /* JFCL */        /* XCT */       /* MAP */
         0,                0,                0,              0,
         /* PUSHJ */       /* PUSH */        /* POP */       /* POPJ */
@@ -1048,12 +1048,14 @@ void check_apr_irq() {
      if (pi_enable && apr_irq) {
          int flg = 0;
          clr_interrupt(0);
-         flg |= clk_en & clk_flg;
+         clr_interrupt(4);
          flg |= ((FLAGS & OVR) != 0) & ov_irq;
          flg |= ((FLAGS & FLTOVR) != 0) & fov_irq;
          flg |= nxm_flag | mem_prot | push_ovf;
          if (flg)
              set_interrupt(0, apr_irq);
+         if (clk_en & clk_flg)
+             set_interrupt(4, clk_irq);
      }
 }
 
@@ -1108,7 +1110,7 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
         if (res & 0400000)
             push_ovf = 0;
         check_apr_irq();
-        sim_debug(DEBUG_CONI, &cpu_dev, "CONO APR %012llo\n", *data);
+        sim_debug(DEBUG_CONO, &cpu_dev, "CONO APR %012llo\n", *data);
         break;
 
     case DATAO:
@@ -1318,6 +1320,7 @@ int Mem_write_nopage() {
 
 #if KA
 #if ITS
+
 int its_load_tlb(uint32 reg, int page, uint32 *tlb) {
     uint64 data;
     int len = (reg >> 19) & 0177;
@@ -1333,11 +1336,11 @@ int its_load_tlb(uint32 reg, int page, uint32 *tlb) {
     }
     data = M[entry];
     if (page & 1) {
-        data &= ~017000LL;
-        data |= ((uint64)(age & 017)) << 9;
+        data &= ~036000LL;
+        data |= ((uint64)(age & 017)) << 10;
     } else {
-        data &= ~(017000LL << 18);
-        data |= ((uint64)(age & 017)) << (9+18);
+        data &= ~(036000LL << 18);
+        data |= ((uint64)(age & 017)) << (10+18);
     }
     M[entry] = data;
     if ((page & 1) == 0)
@@ -1427,17 +1430,17 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
         } else {
             data = u_tlb[page];
             if (data == 0) {
-               if (page & 0200) {
-                   if (its_load_tlb(dbr2, page - 0200, &u_tlb[page]))
-                      goto fault;
-               } else {
-                   if (its_load_tlb(dbr1, page, &u_tlb[page]))
-                      goto fault;
-               }
-               data = u_tlb[page];
+                if (page & 0200) {
+                    if (its_load_tlb(dbr2, page - 0200, &u_tlb[page]))
+                       goto fault;
+                } else {
+                    if (its_load_tlb(dbr1, page, &u_tlb[page]))
+                       goto fault;
+                }
+                data = u_tlb[page];
             }
         }
-        *loc = ((data & 0777) << 10) + (addr & 01777);
+        *loc = ((data & 01777) << 10) + (addr & 01777);
         acc = (data >> 16) & 03;
 
         /* Access check logic */
@@ -1471,7 +1474,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
 fault:
        /* Update fault data, fault address only if new fault */
        if ((ofd & 00770) == 0)
-           fault_addr = (page) | ((uf)? 0400 : 0) | ((data & 0777) << 9);
+           fault_addr = (page) | ((uf)? 0400 : 0) | ((data & 01777) << 9);
        if ((xct_flag & 04) == 0) {
            mem_prot = 1;
            fault_data |= 01000;
@@ -2626,7 +2629,7 @@ dpnorm:
                             (uint64)dbr1;
                       M[AB] = MB;
                       AB = (AB + 1) & RMASK;
-                      MB = ((uint64)fault_addr & 00017000) << 17 |
+                      MB = ((uint64)fault_addr & 00037000) << 17 |
                             (uint64)dbr2;
                       M[AB] = MB;
                       AB = (AB + 1) & RMASK;
@@ -2658,7 +2661,7 @@ dpnorm:
                       qua_time = MB & RMASK;
                       fault_data = (MB >> 18) & RMASK;
                       mem_prot = 0;
-                      if ((fault_data & 03772) != 0)
+                      if ((fault_data & 0777772) != 0)
                           mem_prot = 1;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 4 */
@@ -2666,7 +2669,7 @@ dpnorm:
                       fault_addr |= (MB >> 13) & 00760000;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 5 */
-                      fault_addr |= (MB >> 17) & 00017000;
+                      fault_addr |= (MB >> 17) & 00037000;
                       dbr2 = ((0377 << 18) | RMASK) & MB;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 6 */
@@ -2860,6 +2863,11 @@ ldb_ptr:
                   f_pc_inh = 1;
                   FLAGS |= BYTI;
                   BYF5 = 1;
+#if ITS
+                  if (QITS && pi_cycle == 0 && mem_prot == 0) {
+                     opc = PC | (FLAGS << 18);
+                  }
+#endif
               } else {
                   AB = AR & RMASK;
 #if KI | KL | ITS | BBN
@@ -3624,6 +3632,10 @@ fxnorm:
 
           /* Branch */
     case 0250:  /* EXCH */
+              MB = AR;
+              if (Mem_write(0, 0)) {
+                 goto last;
+              }
               set_reg(AC, BR);
               break;
 

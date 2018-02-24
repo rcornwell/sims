@@ -56,8 +56,8 @@ t_stat cty_devio(uint32 dev, uint64 *data);
 DIB cty_dib = { CTY_DEVNUM, 1, cty_devio, NULL};
 
 UNIT cty_unit[] = {
-    { UDATA (&ctyo_svc, TT_MODE_7P, 0), 10000 },
-    { UDATA (&ctyi_svc, TT_MODE_7P|UNIT_IDLE, 0), 0 },
+    { UDATA (&ctyo_svc, TT_MODE_7B, 0), 10000 },
+    { UDATA (&ctyi_svc, TT_MODE_7B|UNIT_IDLE, 0), 0 },
     };
 
 
