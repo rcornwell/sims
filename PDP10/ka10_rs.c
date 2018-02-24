@@ -315,6 +315,7 @@ t_stat rs_devio(uint32 dev, uint64 *data) {
             break;
      }
      df10 = &rs_df10[ctlr];
+     df10->devnum = dev;
      switch(dev & 3) {
      case CONI:
         *data = df10->status & ~(IADR_ATTN|IARD_RAE);
@@ -499,7 +500,7 @@ rs_write(int ctlr, int unit, int reg, uint32 data) {
                 uptr->u3 |= DS_DRY;
                 uptr->u3 &= ~(DS_ATA|CR_GO);
                 rs_attn[ctlr] = 0;
-                clr_interrupt(rs_dib[ctlr].dev_num);
+                clr_interrupt(df10->devnum);
                 for (i = 0; i < 8; i++) {
                     if (rs_unit[(ctlr * 8) + i].u3 & DS_ATA)
                        rs_attn[ctlr] = 1;
@@ -538,7 +539,7 @@ rs_write(int ctlr, int unit, int reg, uint32 data) {
             if (rs_unit[(ctlr * 8) + i].u3 & DS_ATA)
                rs_attn[ctlr] = 1;
         }
-        clr_interrupt(rs_dib[ctlr].dev_num);
+        clr_interrupt(df10->devnum);
         if (((df10->status & IADR_ATTN) != 0 && rs_attn[ctlr] != 0) ||
              (df10->status & PI_ENABLE))
             df10_setirq(df10);
