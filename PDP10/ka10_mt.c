@@ -138,6 +138,7 @@ uint8           next_unit;
 uint64          status;
 uint64          hold_reg;
 int             cc;
+int             hri_mode; /* Read in mode for TM10B */
 
 uint8                parity_table[64] = {
     /* 0    1    2    3    4    5    6    7 */
@@ -347,6 +348,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
      case CONO|04:
           if (*data & 1) {
               uptr->u3 |= MT_STOP;
+              hri_mode = 0;
               sim_debug(DEBUG_DETAIL, dptr, "MT stop %03o\n", dev);
           }
           if (*data & 2) {
@@ -409,7 +411,10 @@ void mt_df10_read(DEVICE *dptr, UNIT *uptr) {
 /* Wrapper to handle writing of hold register or via DF10 */
 void mt_df10_write(DEVICE *dptr, UNIT *uptr) {
      if (dptr->flags & MTDF_TYPEB) {
-        if (!df10_write(&mt_df10)) {
+        if (hri_mode) {
+            hold_reg = mt_df10.buf;
+            status |= DATA_REQUEST;
+        } else if (!df10_write(&mt_df10)) {
             uptr->u3 |= MT_STOP;
             return;
         }
@@ -551,8 +556,10 @@ t_stat mt_srv(UNIT * uptr)
                                  BUFFSIZE)) != MTSE_OK) {
                  sim_debug(DEBUG_DETAIL, dptr, "MT%o read error %d\n", unit, r);
                  uptr->u3 &= ~MT_MOTION;
-                 if (dptr->flags & MTDF_TYPEB && r == MTSE_TMK)
+                 if (dptr->flags & MTDF_TYPEB && r == MTSE_TMK) {
                      mt_df10_write(dptr, uptr);
+                     df10_writecw(&mt_df10);
+                 }
                  return mt_error(uptr, r, dptr);
             }
             sim_debug(DEBUG_DETAIL, dptr, "MT%o read %d\n", unit, reclen);
@@ -591,6 +598,8 @@ t_stat mt_srv(UNIT * uptr)
                 mt_df10_write(dptr, uptr);
           } else {
                 if ((cmd & 010) == 0) {
+                    if (dptr->flags & MTDF_TYPEB)
+                        df10_writecw(&mt_df10);
                     uptr->u3 &= ~(MT_MOTION|MT_BUSY);
                     return mt_error(uptr, MTSE_OK, dptr);
                 } else {
@@ -661,6 +670,8 @@ t_stat mt_srv(UNIT * uptr)
                      status &= ~CHAR_COUNT;
                      status |= (uint64)(uptr->u5) << 18;
                      uptr->u3 &= ~(MT_MOTION|MT_BUSY);
+                     if (dptr->flags & MTDF_TYPEB)
+                         df10_writecw(&mt_df10);
                      return mt_error(uptr, MTSE_OK, dptr);
                 }
             }
@@ -724,6 +735,8 @@ t_stat mt_srv(UNIT * uptr)
                 uptr->u6 = 0;
                 uptr->hwmark = 0;
                 uptr->u3 &= ~MT_MOTION;
+                if (dptr->flags & MTDF_TYPEB)
+                    df10_writecw(&mt_df10);
                 return mt_error(uptr, r, dptr); /* Record errors */
          }
          break;
@@ -772,6 +785,8 @@ t_stat mt_srv(UNIT * uptr)
             if ((uptr->u3 & MT_BRFUL) == 0) {
                 status &= ~DATA_LATE;
                 uptr->u3 &= ~MT_MOTION;
+                if (dptr->flags & MTDF_TYPEB)
+                    df10_writecw(&mt_df10);
                 return mt_error(uptr, MTSE_OK, dptr);
             }
             uptr->u3 &= ~MT_BRFUL;
@@ -845,13 +860,19 @@ mt_boot(int32 unit_num, DEVICE * dptr)
     else
         M[addr] = mt_df10.buf;
 
+    PC = mt_df10.buf & RMASK;
     /* If not at end of record and TMA continue record read */
-    if (((uint32)uptr->u6 < uptr->hwmark) && (dptr->flags & MTDF_TYPEB) == 0) {
+    if ((uint32)uptr->u6 < uptr->hwmark) {
         uptr->u3 |= MT_MOTION|MT_BUSY;
         uptr->u3 &= ~(MT_BRFUL|MT_BUFFUL);
+        hold_reg = mt_df10.buf = 0;
+        if ((dptr->flags & MTDF_TYPEB) != 0) {
+            mt_df10.cia = 020;
+            mt_df10.cda = addr;
+        }
+        hri_mode = 1;
         sim_activate(uptr, 300);
     }
-    PC = mt_df10.buf & RMASK;
     return SCPE_OK;
 }
 
