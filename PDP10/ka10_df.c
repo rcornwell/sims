@@ -33,6 +33,15 @@ void df10_writecw(struct df10 *df) {
       M[df->cia|1] = ((uint64)(df->ccw & WMASK) << CSHIFT) | ((uint64)df->cda & AMASK);
 }
 
+void df10_bump_addr(struct df10 *df) {
+#if KA & ITS
+        if (cpu_unit[0].flags & UNIT_ITSPAGE) 
+            df->cda = (uint32)((df->cda + 1) & RMASK) | (df->cda & 07000000);
+        else
+#endif
+        df->cda = (uint32)((df->cda + 1) & AMASK);
+}
+
 void df10_finish_op(struct df10 *df, int flags) {
       df->status &= ~BUSY;
       df->status |= flags;

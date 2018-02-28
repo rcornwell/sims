@@ -234,7 +234,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
           uptr->u3 = (int32)(*data & 077300);
           CLR_BUF(uptr);
           mt_df10.buf = 0;
-          sim_debug(DEBUG_CONO, dptr, 
+          sim_debug(DEBUG_CONO, dptr,
                   "MT CONO %03o start %o %o %o %012llo %012llo PC=%06o\n",
                       dev, uptr->u3, unit, pia, *data, status, PC);
           if ((uptr->flags & UNIT_ATT) != 0) {
@@ -357,7 +357,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
           if (dptr->flags & MTDF_TYPEB) {
               if (*data & 04)
                   df10_writecw(&mt_df10);
-              if (*data & 010) 
+              if (*data & 010)
                   status &= ~(WT_CW_DONE);
           }
           sim_debug(DEBUG_CONO, dptr, "MT CONO %03o control %o %o %012llo %012llo\n",
@@ -385,7 +385,6 @@ void mt_df10_read(DEVICE *dptr, UNIT *uptr) {
      if (dptr->flags & MTDF_TYPEB) {
          if (!df10_read(&mt_df10)) {
              uptr->u3 |= MT_STOP;
-             return;
          }
          sim_debug(DEBUG_DATA, dptr, "MT  <%012llo %o\n", mt_df10.buf, uptr->u5);
      } else {
@@ -545,7 +544,7 @@ t_stat mt_srv(UNIT * uptr)
         if (uptr->u3 & MT_STOP) {
             if ((uint32)uptr->u6 < uptr->hwmark)
                 status |= RLC_ERR;
-            if (dptr->flags & MTDF_TYPEB) 
+            if (dptr->flags & MTDF_TYPEB)
                 df10_writecw(&mt_df10);
             return mt_error(uptr, MTSE_OK, dptr);
         }
@@ -557,7 +556,7 @@ t_stat mt_srv(UNIT * uptr)
                  sim_debug(DEBUG_DETAIL, dptr, "MT%o read error %d\n", unit, r);
                  uptr->u3 &= ~MT_MOTION;
                  if (dptr->flags & MTDF_TYPEB && r == MTSE_TMK) {
-                     mt_df10_write(dptr, uptr);
+                     df10_write(&mt_df10);
                      df10_writecw(&mt_df10);
                  }
                  return mt_error(uptr, r, dptr);
@@ -598,8 +597,10 @@ t_stat mt_srv(UNIT * uptr)
                 mt_df10_write(dptr, uptr);
           } else {
                 if ((cmd & 010) == 0) {
-                    if (dptr->flags & MTDF_TYPEB)
+                    if (dptr->flags & MTDF_TYPEB) {
+                        df10_bump_addr(&mt_df10);
                         df10_writecw(&mt_df10);
+                    }
                     uptr->u3 &= ~(MT_MOTION|MT_BUSY);
                     return mt_error(uptr, MTSE_OK, dptr);
                 } else {
@@ -613,7 +614,7 @@ t_stat mt_srv(UNIT * uptr)
          if (uptr->u3 & MT_STOP) {
              if ((uint32)uptr->u6 < uptr->hwmark)
                  status |= RLC_ERR;
-             if (dptr->flags & MTDF_TYPEB) 
+             if (dptr->flags & MTDF_TYPEB)
                  df10_writecw(&mt_df10);
              return mt_error(uptr, MTSE_OK, dptr);
          }
@@ -901,9 +902,9 @@ t_stat show_mta (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
    if (dptr == NULL)
       return SCPE_IERR;
    if (dptr->flags & val) {
-      fprintf (st, "MT10B");
+      fprintf (st, "TM10B");
    } else {
-      fprintf (st, "MT10A");
+      fprintf (st, "TM10A");
    }
    return SCPE_OK;
 }
