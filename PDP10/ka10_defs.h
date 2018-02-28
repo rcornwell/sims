@@ -350,6 +350,7 @@ struct df10 {
 
 
 void df10_setirq(struct df10 *df) ;
+void df10_bump_addr(struct df10 *df);
 void df10_writecw(struct df10 *df) ;
 void df10_finish_op(struct df10 *df, int flags) ;
 void df10_setup(struct df10 *df, uint32 addr);
