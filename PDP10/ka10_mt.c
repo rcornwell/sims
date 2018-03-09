@@ -240,7 +240,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
           if ((uptr->flags & UNIT_ATT) != 0) {
               /* Check if Write */
               int  cmd = (uptr->u3 & FUNCTION) >> 9;
-              uptr->u3 &= ~(MT_BRFUL|MT_BUFFUL);
+              uptr->u3 &= ~(MT_BRFUL|MT_BUFFUL|MT_STOP);
               switch(cmd & 07) {
               case NOP_CLR:
                      uptr->u3 &= ~MT_BUSY;
@@ -692,7 +692,6 @@ t_stat mt_srv(UNIT * uptr)
          /* Writing and Type A, request first data word */
          if (BUF_EMPTY(uptr)) {
              uptr->u3 |= MT_MOTION;
-             uptr->u3 &= ~MT_STOP;
              status &= ~(IDLE_UNIT|BOT_FLAG|EOF_FLAG|EOT_FLAG|PARITY_ERR);
              sim_debug(DEBUG_EXP, dptr, "MT%o Init write\n", unit);
              uptr->hwmark = 0;
@@ -700,6 +699,9 @@ t_stat mt_srv(UNIT * uptr)
              uptr->u6 = 0;
              break;
          }
+         /* Force error if we exceed buffer size */
+         if (uptr->u6 >= BUFFSIZE)
+             return mt_error(uptr, MTSE_RECE, dptr);
          if ((uptr->u3 & MT_BRFUL) == 0)
               mt_df10_read(dptr, uptr);
          if ((uptr->u3 & MT_BRFUL) != 0) {
@@ -796,7 +798,7 @@ t_stat mt_srv(UNIT * uptr)
         sim_activate(uptr, 5000);
         return SCPE_OK;
     }
-    sim_activate(uptr, 500);
+    sim_activate(uptr, 420);
     return SCPE_OK;
 }
 
