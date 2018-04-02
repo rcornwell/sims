@@ -474,18 +474,13 @@ typedef enum {
     SW_NUMBER           /* Numeric Value */
     } SWITCH_PARSE;
 SWITCH_PARSE get_switches (const char *cptr, int32 *sw_val, int32 *sw_number);
-t_stat get_aval (t_addr addr, DEVICE *dptr, UNIT *uptr);
-t_value get_rval (REG *rptr, uint32 idx);
 void put_rval (REG *rptr, uint32 idx, t_value val);
 void fprint_help (FILE *st);
 void fprint_stopped (FILE *st, t_stat r);
 void fprint_capac (FILE *st, DEVICE *dptr, UNIT *uptr);
 void fprint_sep (FILE *st, int32 *tokens);
-char *read_line (char *ptr, int32 size, FILE *stream);
-char *read_line_p (const char *prompt, char *ptr, int32 size, FILE *stream);
 REG *find_reg_glob (CONST char *ptr, CONST char **optr, DEVICE **gdptr);
 REG *find_reg_glob_reason (CONST char *cptr, CONST char **optr, DEVICE **gdptr, t_stat *stat);
-char *sim_trim_endspc (char *cptr);
 
 /* Forward references */
 
@@ -1983,7 +1978,7 @@ static const char simh_help[] =
       " file.  Otherwise, the next command in the command file is processed.\n\n"
       "5String Comparison Expressions\n"
       " String Values can be compared with:\n"
-      "++{-i} {NOT} \"<string1>\" <compare-op> \"<string2>\"\n\n"
+      "++{-i} {NOT} \"<string1>\"|EnVarName1 <compare-op> \"<string2>|EnvVarName2\"\n\n"
       " The -i switch, if present, causes comparisons to be case insensitive.\n"
       " <string1> and <string2> are quoted string values which may have\n"
       " environment variables substituted as desired.\n"
@@ -2006,10 +2001,15 @@ static const char simh_help[] =
       " and a numeric comparison is performed. For example: \"+1\" EQU \"1\" will be\n"
       " true.\n"
       "5File Existence Expressions\n"
-      " File existence can be determined with:\n"
+      " File existence can be determined with:\n\n"
       "++{NOT} EXIST \"<filespec>\"\n\n"
       "++{NOT} EXIST <filespec>\n\n"
       " Specifies a true (false {NOT}) condition if the file exists.\n"
+      "5File Comparison Expressions\n"
+      " Files can have their contents compared with:\n\n"
+      "++-D {NOT} \"<filespec1>\" == \"<filespec2>\" \n\n"
+      " Specifies a true (false {NOT}) condition if the indicated files\n"
+      " have the same contents.\n\n"
        /***************** 80 character line width template *************************/
 #define HLP_EXIT        "*Commands Exiting_The_Simulator"
       "2Exiting The Simulator\n"
@@ -2421,7 +2421,7 @@ while (stat != SCPE_EXIT) {                             /* in case exit */
             cptr = (*sim_vm_read) (cbuf, sizeof(cbuf), stdin);
             }
         else
-            cptr = read_line_p (sim_prompt, cbuf, sizeof(cbuf), stdin);/* read with prmopt*/
+            cptr = read_line_p (sim_prompt, cbuf, sizeof(cbuf), stdin);/* read with prompt*/
         }
     if (cptr == NULL) {                                 /* EOF? or SIGINT? */
         if (sim_ttisatty()) {
@@ -3729,11 +3729,44 @@ int sim_cmp_string (const char *s1, const char *s2)
 long int v1, v2;
 char *ep1, *ep2;
 
+if (sim_switches & SWMASK ('F')) {      /* File Compare? */
+    FILE *f1, *f2;
+    int c1, c2;
+    char *filename1, *filename2;
+
+    filename1 = (char *)malloc (strlen (s1));
+    strcpy (filename1, s1 + 1);
+    filename1[strlen (filename1) - 1] = '\0';
+    filename2 = (char *)malloc (strlen (s2));
+    strcpy (filename2, s2 + 1);
+    filename2[strlen (filename2) - 1] = '\0';
+
+    f1 = fopen (filename1, "rb");
+    f2 = fopen (filename2, "rb");
+    free (filename1);
+    free (filename2);
+    if ((f1 == NULL) && (f2 == NULL))   /* Both can't open? */
+        return 0;                       /* Call that equal */
+    if (f1 == NULL) {
+        fclose (f2);
+        return -1;
+        }
+    if (f2 == NULL) {
+        fclose (f1);
+        return 1;
+        }
+    while (((c1 = fgetc (f1)) == (c2 = fgetc (f2))) &&
+           (c1 != EOF)) ;
+    fclose (f1);
+    fclose (f2);
+    return c1 - c2;
+    }
 v1 = strtol(s1+1, &ep1, 0);
 v2 = strtol(s2+1, &ep2, 0);
 if ((ep1 != s1 + strlen (s1) - 1) ||
     (ep2 != s2 + strlen (s2) - 1))
-    return strcmp (s1, s2);
+    return (strlen (s1) == strlen (s2)) ? strncmp (s1 + 1, s2 + 1, strlen (s1) - 2)
+                                        : strcmp (s1, s2);
 if (v1 == v2)
     return 0;
 if (v1 < v2)
@@ -3781,7 +3814,7 @@ CONST char *tptr, *gptr;
 REG *rptr;
 
 tptr = (CONST char *)get_glyph_gen (iptr, optr, mchar, (sim_switches & SWMASK ('I')), TRUE, '\\');
-if (*optr != '"') {
+if ((*optr != '"') && (*optr != '\'')) {
     ap = getenv (optr);
     if (!ap)
         return tptr;
@@ -3824,8 +3857,9 @@ if (!strcmp (gbuf, "EXIST")) {                          /* File Exist Test? */
     Exist = TRUE;                                       /* remember that, and */
     cptr = (CONST char *)tptr;
     }
-tptr = _get_string (cptr, gbuf, '=');                   /* get first string */
-if (Exist || (*gbuf == '"')) {                          /* quoted string comparison? */
+tptr = _get_string (cptr, gbuf, ' ');                   /* get first string */
+if (Exist || (*gbuf == '"') || (*gbuf == '\'')) {       /* quoted string comparison? */
+    char quote = *gbuf;
     char op[CBUFSIZE];
     static struct {
         const char *op;
@@ -3854,13 +3888,15 @@ if (Exist || (*gbuf == '"')) {                          /* quoted string compari
     while (sim_isspace (*cptr))                         /* skip spaces */
         ++cptr;
     if (!Exist) {
-        get_glyph (cptr, op, '"');
+        get_glyph (cptr, op, quote);
         for (optr = compare_ops; optr->op; optr++)
-            if (0 == strcmp (op, optr->op))
+            if (0 == strncmp (op, optr->op, strlen (optr->op)))
                 break;
         if (!optr->op)
             return sim_messagef (SCPE_ARG, "Invalid operator: %s\n", op);
-        cptr += strlen (op);
+        cptr += strlen (optr->op);
+        if ((!isspace (*cptr)) && isalpha (optr->op[strlen (optr->op) - 1]) && isalnum (*cptr))
+            return sim_messagef (SCPE_ARG, "Invalid operator: %s\n", op);
         while (sim_isspace (*cptr))                     /* skip spaces */
             ++cptr;
         cptr = _get_string (cptr, gbuf2, 0);            /* get second string */
@@ -5213,6 +5249,10 @@ if (flag) {
 #define S_xstr(a) S_str(a)
 #define S_str(a) #a
 fprintf (st, "%sgit commit id: %8.8s", flag ? "\n        " : "        ", S_xstr(SIM_GIT_COMMIT_ID));
+#if defined(SIM_GIT_COMMIT_TIME)
+if (flag)
+    fprintf (st, "%sgit commit time: %s", "\n        ", S_xstr(SIM_GIT_COMMIT_TIME));
+#endif
 #undef S_str
 #undef S_xstr
 #endif
@@ -5678,7 +5718,7 @@ if (dir) {
 #endif
     t_offset FileSize;
     char FileName[PATH_MAX + 1];
-    char *MatchName = 1 + strrchr (cptr, '/');;
+    const char *MatchName = 1 + strrchr (cptr, '/');;
     char *p_name;
     struct tm *local;
 #if defined (HAVE_GLOB)
@@ -6279,8 +6319,9 @@ if ((sim_switches & SWMASK ('R')) ||                    /* read only? */
     uptr->fileref = sim_fopen (cptr, "rb");             /* open rd only */
     if (uptr->fileref == NULL)                          /* open fail? */
         return attach_err (uptr, SCPE_OPENERR);         /* yes, error */
+    if (!(uptr->flags & UNIT_RO))
+        sim_messagef (SCPE_OK, "%s: unit is read only\n", sim_dname (dptr));
     uptr->flags = uptr->flags | UNIT_RO;                /* set rd only */
-    sim_messagef (SCPE_OK, "%s: unit is read only\n", sim_dname (dptr));
     }
 else {
     if (sim_switches & SWMASK ('N')) {                  /* new file only? */
@@ -6450,7 +6491,7 @@ if ((uptr->flags & UNIT_BUF) && (uptr->filebuf)) {
         }
     uptr->flags = uptr->flags & ~UNIT_BUF;
     }
-uptr->flags = uptr->flags & ~(UNIT_ATT | UNIT_RO);
+uptr->flags = uptr->flags & ~(UNIT_ATT | ((uptr->flags & UNIT_ROABLE) ? UNIT_RO : 0));
 free (uptr->filename);
 uptr->filename = NULL;
 if (fclose (uptr->fileref) == EOF)
@@ -8307,9 +8348,10 @@ static const char *get_glyph_gen (const char *iptr, char *optr, char mchar, t_bo
 {
 t_bool quoting = FALSE;
 t_bool escaping = FALSE;
+t_bool got_quoted = FALSE;
 char quote_char = 0;
 
-while ((*iptr != 0) && 
+while ((*iptr != 0) && (!got_quoted) &&
        ((quote && quoting) || ((sim_isspace (*iptr) == 0) && (*iptr != mchar)))) {
     if (quote) {
         if (quoting) {
@@ -8317,8 +8359,10 @@ while ((*iptr != 0) &&
                 if (*iptr == escape_char)
                     escaping = TRUE;
                 else
-                    if (*iptr == quote_char)
+                    if (*iptr == quote_char) {
                         quoting = FALSE;
+                        got_quoted = TRUE;
+                        }
                 }
             else
                 escaping = FALSE;
