@@ -227,8 +227,15 @@ t_stat dpy_devio(uint32 dev, uint64 *data) {
     switch (dev & 3) {
     case CONI:
         *data = (uint64)(uptr->STAT_REG & CONI_MASK);
-        sim_debug(DEBUG_CONI, &dpy_dev, "DPY  %03o CONI PC=%o %06o\n",
-                  dev, PC, (uint32)*data);
+        /*
+         * MIT AI only, See Hardware Memo 1
+         * https://github.com/larsbrinkhoff/its-archives/blob/master/ailab/ITS_Hardware_Memo_1.pdf
+         * Set sign bit if device assigned to this CPU (KA or PDP-6)
+         * (Thanks to Lars for figuring this out!)
+         */
+        *data |= SMASK;                 /* always assigned to us */
+        sim_debug(DEBUG_CONI, &dpy_dev, "DPY  %03o CONI PC=%06o %012llo\n",
+                  dev, PC, *data);
         break;
 
     case CONO:
