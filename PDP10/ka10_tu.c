@@ -444,7 +444,7 @@ tu_devirq(uint32 dev, int addr) {
        }
     }
     for (drive = 0; drive < NUM_DEVS_TU; drive++) {
-        if (dptr == tu_devs[drive])  
+        if (dptr == tu_devs[drive])
            return (tu_imode[drive] ? tu_ivect[drive] : addr);
     }
     return  addr;
@@ -1075,7 +1075,7 @@ tu_attach(UNIT * uptr, CONST char *file)
 
     uptr->u3 = 0;
     uptr->u5 = 0;
-    r = sim_tape_attach(uptr, file);
+    r = sim_tape_attach_ex(uptr, file, 0, 0);
     if (r == SCPE_OK) {
         uptr->u3 = CS_ATA|CS_CHANGE;
         tu_attn[ctlr] = 1;

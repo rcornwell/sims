@@ -264,9 +264,9 @@ DIB dp_dib[] = {
 MTAB                dp_mod[] = {
     {UNIT_WLK, 0, "write enabled", "WRITEENABLED", NULL},
     {UNIT_WLK, UNIT_WLK, "write locked", "LOCKED", NULL},
-    {MTAB_XTD|MTAB_VDV, 0, NULL, "NOHEADERS", 
+    {MTAB_XTD|MTAB_VDV, 0, NULL, "NOHEADERS",
             &dp_set_hdr, &dp_show_hdr, "No Headers", "Disable header writing"},
-    {MTAB_XTD|MTAB_VDV, DEV_WHDR, "write header", "HEADERS", 
+    {MTAB_XTD|MTAB_VDV, DEV_WHDR, "write header", "HEADERS",
             &dp_set_hdr, &dp_show_hdr, "Headers", "Enable header writing"},
     {UNIT_DTYPE, (RP03_DTYPE << UNIT_V_DTYPE), "RP03", "RP03", &dp_set_type },
     {UNIT_DTYPE, (RP02_DTYPE << UNIT_V_DTYPE), "RP02", "RP02", &dp_set_type },
@@ -440,8 +440,10 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
          unit = (*data >> 30) & 07;
          dp_cur_unit[ctlr] = unit;
          uptr = &dp_unit[(ctlr * NUM_UNITS_DP) + unit];
-         uptr->STATUS &= ~(SUF_ERR|SEC_ERR|SRC_ERR|NXM_ERR|ILL_WR|
+         if ((uptr->STATUS & NOT_RDY) == 0)  {
+              uptr->STATUS &= ~(SUF_ERR|SEC_ERR|SRC_ERR|NXM_ERR|ILL_WR|
                           NO_DRIVE|NOT_RDY|ILL_CMD|END_CYL|SRC_DONE);
+         }
          cyl = ((*data >> 22) & 0377);
          if (*data & CYL256)
             cyl += 0400;
@@ -490,14 +492,12 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
 
          case RC:
              cyl = 0;
-             uptr->STATUS |= NOT_RDY;
              /* Fall through */
 
          case SK:
-             if ((uptr->flags & UNIT_ATT) == 0) {
-                return SCPE_OK;
-             }
              uptr->STATUS |= NOT_RDY;
+             if ((uptr->flags & UNIT_ATT) == 0)
+                return SCPE_OK;
              uptr->UFLAGS = (cyl << 20) | (tmp<<3) | ctlr | SEEK_STATE;
              break;
 
@@ -677,7 +677,7 @@ t_stat dp_svc (UNIT *uptr)
    case WH:
            /* Cylinder, Surface, Sector all ok */
            if (BUF_EMPTY(uptr)) {
-                if (uptr->DATAPTR == 0) 
+                if (uptr->DATAPTR == 0)
                     sim_debug(DEBUG_DETAIL, dptr,
                        "DP %d cmd=%o cyl=%d (%o) sect=%d surf=%d %d\n",
                         ctlr, uptr->UFLAGS, cyl, cyl, sect, surf,uptr->CUR_CYL);
@@ -761,7 +761,8 @@ t_stat dp_svc (UNIT *uptr)
                    uptr->UFLAGS |= SEEK_DONE;
                    uptr->UFLAGS &= ~SEEK_STATE;
                    uptr->STATUS &= ~(NOT_RDY);
-                   df10_setirq(df10);
+                   if ((df10->status & BUSY) == 0)
+                        df10_setirq(df10);
                } else if (diff < 10 && diff > -10) {
                    uptr->CUR_CYL += diffs;
                    if (uptr->CUR_CYL < 0) {
@@ -769,13 +770,15 @@ t_stat dp_svc (UNIT *uptr)
                        uptr->UFLAGS &= ~SEEK_STATE;
                        uptr->STATUS &= ~(NOT_RDY);
                        uptr->CUR_CYL = 0;
-                       df10_setirq(df10);
+                       if ((df10->status & BUSY) == 0)
+                           df10_setirq(df10);
                    } else if (uptr->CUR_CYL > dp_drv_tab[dtype].cyl) {
                        uptr->UFLAGS |= SEEK_DONE;
                        uptr->UFLAGS &= ~SEEK_STATE;
                        uptr->STATUS &= ~(NOT_RDY);
                        uptr->CUR_CYL = dp_drv_tab[dtype].cyl;
-                       df10_setirq(df10);
+                       if ((df10->status & BUSY) == 0)
+                           df10_setirq(df10);
                    } else
                        sim_activate(uptr, 500);
                } else if (diff > 100 || diff < -100) {
@@ -829,7 +832,7 @@ t_stat dp_show_hdr (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
    dptr = find_dev_from_unit(uptr);
    if (dptr == NULL)
       return SCPE_IERR;
-   if ((dptr->flags & DEV_WHDR) == val) 
+   if ((dptr->flags & DEV_WHDR) == val)
       fprintf (st, "%s", (char *)desc);
    return SCPE_OK;
 }

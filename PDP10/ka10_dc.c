@@ -242,7 +242,7 @@ t_stat dc_devio(uint32 dev, uint64 *data) {
                 int32 ch = *data & DATA;
                 ch = sim_tt_outcvt(ch, TT_GET_MODE (dc_unit.flags) | TTUF_KSR);
                 tmxr_putc_ln (lp, ch);
-                if (lp->xmte) 
+                if (lp->xmte)
                     tx_enable |= (1 << ln);
                 else
                     tx_enable &= ~(1 << ln);

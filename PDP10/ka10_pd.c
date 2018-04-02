@@ -100,14 +100,14 @@ const char *pd_description (DEVICE *dptr)
 t_stat pd_set_on(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
     DEVICE *dptr = &pd_dev;
-    dptr->flags &= ~PD_OFF;    
+    dptr->flags &= ~PD_OFF;
     return SCPE_OK;
 }
 
 t_stat pd_set_off(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
     DEVICE *dptr = &pd_dev;
-    dptr->flags |= PD_OFF;    
+    dptr->flags |= PD_OFF;
     return SCPE_OK;
 }
 
