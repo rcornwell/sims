@@ -35,7 +35,7 @@ void df10_writecw(struct df10 *df) {
 
 void df10_bump_addr(struct df10 *df) {
 #if KA & ITS
-        if (cpu_unit[0].flags & UNIT_ITSPAGE) 
+        if (cpu_unit[0].flags & UNIT_ITSPAGE)
             df->cda = (uint32)((df->cda + 1) & RMASK) | (df->cda & 07000000);
         else
 #endif
@@ -104,7 +104,7 @@ int df10_read(struct df10 *df) {
             return 0;
         }
 #if KA & ITS
-        if (cpu_unit[0].flags & UNIT_ITSPAGE) 
+        if (cpu_unit[0].flags & UNIT_ITSPAGE)
             df->cda = (uint32)((df->cda + 1) & RMASK) | (df->cda & 07000000);
         else
 #endif
@@ -132,7 +132,7 @@ int df10_write(struct df10 *df) {
            return 0;
         }
 #if KA & ITS
-        if (cpu_unit[0].flags & UNIT_ITSPAGE) 
+        if (cpu_unit[0].flags & UNIT_ITSPAGE)
             df->cda = (uint32)((df->cda + 1) & RMASK) | (df->cda & 07000000);
         else
 #endif

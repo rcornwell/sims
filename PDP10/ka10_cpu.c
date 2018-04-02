@@ -174,7 +174,7 @@ char    page_fault;                           /* Page fail */
 uint32  ac_stack;                             /* Register stack pointer */
 uint32  pag_reload;                           /* Page reload pointer */
 uint64  fault_data;                           /* Fault data from last fault */
-int     trap_flag;                            /* Last instruction was trapped */
+int     trap_flag;                            /* In trap cycle */
 int     last_page;                            /* Last page mapped */
 int     modify;                               /* Modify cycle */
 char    xct_flag;                             /* XCT flags */
@@ -201,7 +201,7 @@ uint16  ofa;                                  /* Output fault address */
 uint32  qua_time;                             /* Quantum clock value */
 #endif
 
-char    dev_irq[128];                         /* Pending irq by device */
+uint8   dev_irq[128];                         /* Pending irq by device */
 t_stat  (*dev_tab[128])(uint32 dev, uint64 *data);
 int     (*dev_irqv[128])(uint32 dev, int addr);
 t_stat  rtc_srv(UNIT * uptr);
@@ -658,8 +658,16 @@ int opflags[] = {
 #define AOB(x)          (x + 01000001LL)
 #define SOB(x)          (x + 0777776777777LL)
 #endif
+#if ITS
 #define QITS            (cpu_unit[0].flags & UNIT_ITSPAGE)
+#else
+#define QITS            0
+#endif
+#if BBN
 #define QBBN            (cpu_unit[0].flags & UNIT_BBNPAGE)
+#else
+#define QBBN            0
+#endif
 
 /*
  * Set device to interrupt on a given level 1-7
@@ -670,7 +678,8 @@ void set_interrupt(int dev, int lvl) {
     if (lvl) {
        dev_irq[dev>>2] = 0200 >> lvl;
        pi_pending = 1;
-       sim_debug(DEBUG_IRQ, &cpu_dev, "set irq %o %o\n", dev & 0774, lvl);
+       sim_debug(DEBUG_IRQ, &cpu_dev, "set irq %o %o %03o %03o %03o\n",
+              dev & 0774, lvl, PIE, PIR, PIH);
     }
 }
 
@@ -693,11 +702,14 @@ int check_irq_level() {
      if (xct_flag != 0)
          return 0;
      check_apr_irq();
+
      /* If not enabled, check if any pending Processor IRQ */
      if (pi_enable == 0) {
         if (PIR != 0) {
             pi_enc = 1;
             for(lvl = 0100; lvl != 0; lvl >>= 1) {
+                if (lvl & PIH)
+                   break;
                 if (PIR & lvl)
                    return 1;
                 pi_enc++;
@@ -737,6 +749,7 @@ void restore_pi_hold() {
      for(lvl = 0100; lvl != 0; lvl >>= 1) {
         if (lvl & PIH) {
             PIR &= ~lvl;
+            sim_debug(DEBUG_IRQ, &cpu_dev, "restore irq %o %03o\n", lvl, PIH);
             PIH &= ~lvl;
             break;
          }
@@ -790,7 +803,7 @@ t_stat dev_pi(uint32 dev, uint64 *data) {
            parity_irq = 1;
         if (res & 0100000)
            parity_irq = 0;
-        sim_debug(DEBUG_CONI, &cpu_dev, "CONI PI %012llo\n", *data);
+        sim_debug(DEBUG_CONO, &cpu_dev, "CONO PI %012llo\n", *data);
         break;
 
      case CONI:
@@ -802,7 +815,7 @@ t_stat dev_pi(uint32 dev, uint64 *data) {
 #endif
         res |= (parity_irq << 15);
         *data = res;
-        sim_debug(DEBUG_CONO, &cpu_dev, "CONO PI %012llo\n", *data);
+        sim_debug(DEBUG_CONI, &cpu_dev, "CONI PI %012llo\n", *data);
         break;
 
     case DATAO:
@@ -943,10 +956,15 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
             clk_flg = 0;
             clr_interrupt(4);
         }
-        if (res & 0002000)
+        if (res & 0002000) {
             clk_en = 1;
-        if (res & 0004000)
+            if (clk_flg)
+               set_interrupt(4, clk_irq);
+        }
+        if (res & 0004000) {
             clk_en = 0;
+            clr_interrupt(4);
+        }
         if (res & 0040000)
             timer_irq = 1;
         if (res & 0100000)
@@ -956,7 +974,7 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
         if (res & 0400000)
             timer_flg = 0;
         check_apr_irq();
-        sim_debug(DEBUG_CONI, &cpu_dev, "CONO APR %012llo\n", *data);
+        sim_debug(DEBUG_CONO, &cpu_dev, "CONO APR %012llo\n", *data);
         break;
 
     case DATAO:
@@ -1048,14 +1066,11 @@ void check_apr_irq() {
      if (pi_enable && apr_irq) {
          int flg = 0;
          clr_interrupt(0);
-         clr_interrupt(4);
          flg |= ((FLAGS & OVR) != 0) & ov_irq;
          flg |= ((FLAGS & FLTOVR) != 0) & fov_irq;
          flg |= nxm_flag | mem_prot | push_ovf;
          if (flg)
              set_interrupt(0, apr_irq);
-         if (clk_en & clk_flg)
-             set_interrupt(4, clk_irq);
      }
 }
 
@@ -1082,7 +1097,6 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
         res = *data;
         clk_irq = apr_irq = res & 07;
         clr_interrupt(0);
-        clr_interrupt(4);
         if (res & 010)
             FLAGS &= ~OVR;
         if (res & 020)
@@ -1095,12 +1109,19 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
             fov_irq = 1;
         if (res & 0400)
             fov_irq = 0;
-        if (res & 01000)
+        if (res & 0001000) {
             clk_flg = 0;
-        if (res & 02000)
+            clr_interrupt(4);
+        }
+        if (res & 0002000) {
             clk_en = 1;
-        if (res & 04000)
+            if (clk_flg)
+               set_interrupt(4, clk_irq);
+        }
+        if (res & 0004000) {
             clk_en = 0;
+            clr_interrupt(4);
+        }
         if (res & 010000)
             nxm_flag = 0;
         if (res & 020000)
@@ -1203,7 +1224,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
                 fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 27)
                                       | 021LL;
                 page_fault = 1;
-fprintf(stderr, "suprt PC=%06o, %012llo %06o\n\r", PC, M[addr], FLAGS << 5);
+//fprintf(stderr, "suprt PC=%06o, %012llo %06o\n\r", PC, M[addr], FLAGS << 5);
                 return !wr;
             }
             return 1;
@@ -1237,7 +1258,7 @@ fprintf(stderr, "suprt PC=%06o, %012llo %06o\n\r", PC, M[addr], FLAGS << 5);
          (!fetch || (M[*loc] & 00777040000000LL) != 0254040000000LL)) {
         /* Handle public violation */
         fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 27) | 021LL;
-fprintf(stderr, "pub PC=%06o, %012llo\n\r", PC, fault_data);
+//fprintf(stderr, "pub PC=%06o, %012llo\n\r", PC, fault_data);
         page_fault = 1;
         return fetch;
     }
@@ -1896,7 +1917,7 @@ int     flag3;
 int     instr_count = 0;         /* Number of instructions to execute */
 uint32  IA;
 #if ITS
-char    one_p_arm;                            /* One proceed arm */
+char    one_p_arm = 0;           /* One proceed arm */
 #endif
 
 if (sim_step != 0) {
@@ -1922,10 +1943,8 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
    page_fault = 0;
 #endif
 #if ITS
-   one_p_arm = 0;
-#endif
-#if ITS
    if (QITS) {
+       one_p_arm = 0;
        sim_activate(&cpu_unit[1], 10000);
        qua_time = 0;
    }
@@ -2038,6 +2057,7 @@ no_fetch:
     /* If there is a interrupt handle it. */
     if (pi_rq) {
 st_pi:
+    sim_debug(DEBUG_IRQ, &cpu_dev, "trap irq %o %03o %03o \n", pi_enc, PIR, PIH);
         set_pi_hold(); /* Hold off all lower interrupts */
         pi_cycle = 1;
         pi_rq = 0;
@@ -2092,7 +2112,7 @@ st_pi:
     if (hst_lnt && /*(fm_sel || */PC > 020 && (PC & 0777774) != 0777040 &&
             (PC & 0777700) != 023700 && (PC != 0526772)) {
 #else
-    if (hst_lnt && /*(FLAGS & USER) &&*/ PC > 017/* && (PC & 0777774) != 0472174 && */
+    if (hst_lnt /*&& (FLAGS & USER) && PC > 017 && (PC & 0777774) != 0472174 && */
            /* (PC & 0777700) != 0113700 && (PC != 0527154)*/) {
 #endif
             hst_p = hst_p + 1;
@@ -2181,7 +2201,7 @@ unasign:
               AB = ub_ptr | 0424;
               Mem_write_nopage();
               AB |= 1;
-              MB = (FLAGS << 23) | ((PC + (trap_flag == 0)) & RMASK);
+              MB = ((uint64)(FLAGS) << 23) | ((PC + (trap_flag == 0)) & RMASK);
               Mem_write_nopage();
               FLAGS &= ~ (BYTI|ADRFLT|TRP1|TRP2);
               AB = ub_ptr | 0430;
@@ -2481,7 +2501,6 @@ dpnorm:
 
     case 0124: /* DMOVEM */
               AR = get_reg(AC);
-              MQ = get_reg(AC + 1);
               /* Handle each half as seperate instruction */
               if ((FLAGS & BYTI) == 0) {
                   MB = AR;
@@ -2489,6 +2508,7 @@ dpnorm:
                       goto last;
                   FLAGS |= BYTI;
               }
+              MQ = get_reg(AC + 1);
               if ((FLAGS & BYTI)) {
                   AB = (AB + 1) & RMASK;
                   MB = MQ;
@@ -2771,6 +2791,7 @@ dpnorm:
               goto unasign;
 
     case 0247: /* UUO  or ITS CIRC instruction */
+#if ITS
               if (QITS) {
                   BR = AR;
                   AR = get_reg(AC);
@@ -2795,7 +2816,7 @@ dpnorm:
                   set_reg(AC+1, MQ);
                   break;
               }
-
+#endif
                /* UUO */
     case 0105: case 0106: case 0107:
     case 0110: case 0111: case 0112: case 0113:
@@ -2809,7 +2830,7 @@ unasign:
               Mem_write(uuo_cycle, 0);
               AB += 1;
 #if ITS
-              if (one_p_arm) {
+              if (QITS && one_p_arm) {
                   FLAGS |= ONEP;
                   one_p_arm = 0;
               }
@@ -3006,19 +3027,22 @@ ldb_ptr:
               BR <<= 27;
               if (SCAD & 0400) {
                   SCAD = 01000 - SCAD;
-                  if (SCAD < 28) {
-                      AD = (BR & (SMASK<<27))? (FMASK<<27|MMASK) : 0;
+                  if (SCAD < 54) {
+                      AD = (BR & (SMASK<<27))? DCMASK : 0;
                       BR = (BR >> SCAD) | (AD << (54 - SCAD));
                   } else {
-                      BR = 0;
+                      if (SCAD < 64)
+                         BR = (BR & (SMASK<<27))? DCMASK: 0;
+                      else
+                         BR = 0;
                   }
               }
               /* Do the addition now */
               AR = (AR + BR);
 
               /* Set flag1 to sign and make positive */
-              if (AR & FPSMASK) {
-                  AR = (AR ^ FPFMASK) + 1;
+              if (AR & DNMASK) {
+                     AR = (AR ^ DFMASK) + 1;
                   flag1 = 1;
               } else {
                   flag1 = 0;
@@ -3037,21 +3061,21 @@ fxnorm:
                       if ((AR & 00740000000000000000LL) == 0) { SC -= 4;  AR <<= 4; }
                       if ((AR & 00600000000000000000LL) == 0) { SC -= 2;  AR <<= 2; }
                       if ((AR & 00400000000000000000LL) == 0) { SC -= 1;  AR <<= 1; }
-                      if (!nrf && !flag1 &&
-                               ((IR & 04) != 0) && ((AR & BIT9) != 0)) {
-                          AR += BIT8;
+                      if (!nrf && ((IR & 04) != 0)) {
+                          AR += BIT9;
+                          AR &= ~MMASK;
+                          if ((AR & FPNMASK) != 0) { SC += 1;  AR >>= 1; }
                           nrf = 1;
-                          goto fxnorm;
                       }
-                  }
-                  if (flag1) {
-                      AR = (AR ^ FPCMASK) + 1;
                   }
                   MQ = AR & MMASK;
                   AR >>= 27;
                   if (flag1) {
+                      MQ = (MQ ^ MMASK) + 1;
+                      AR = (AR ^ MMASK);
+                      if (MQ & BIT8)
+                         AR++;
                       AR |= SMASK;
-                      MQ |= SMASK;
                   }
               } else if (flag1) {
                  AR =  BIT9 | SMASK;
@@ -3065,6 +3089,7 @@ fxnorm:
                   FLAGS |= OVR|FLTOVR|TRP1;
                   if (!fxu_hold_set) {
                       FLAGS |= FLTUND;
+                      MQ = 0;
                   }
                   check_apr_irq();
               }
@@ -3074,12 +3099,17 @@ fxnorm:
               /* FADL FSBL FMPL */
               if ((IR & 07) == 1) {
                   SC = (SC + (0777 ^  26)) & 0777;
-                  if (MQ != 0) {
+                  if ((SC & 0400) != 0)
+                     MQ = 0;
+                  if ((MQ & MMASK) != 0 && MQ != MMASK) {
                       MQ &= MMASK;
                       SC ^= (SC & SMASK) ? 0377 : 0;
                       MQ |= ((uint64)(SC & 0377)) << 27;
-                  }
+                  } else
+                      MQ = 0;
               }
+              if ((AR & MMASK) == 0)
+                 AR = 0;
 
               /* Handle UFA */
               if (IR == 0130) {
@@ -3125,8 +3155,7 @@ fxnorm:
     case 0177:      /* FDVRB */
               flag1 = 0;
               SC = (int)((((BR & SMASK) ? 0777 : 0) ^ (BR >> 27)) & 0777);
-              SC += (int)((((AR & SMASK) ? 0 : 0777) ^ (AR >> 27)) & 0777);
-              SC = (SC + 0201) & 0777;
+              SCAD = (int)((((AR & SMASK) ? 0777 : 0) ^ (AR >> 27)) & 0777);
               if (BR & SMASK) {
                   BR = CM(BR) + 1;
                   flag1 = 1;
@@ -3135,6 +3164,7 @@ fxnorm:
                   AR = CM(AR) + 1;
                   flag1 = !flag1;
               }
+              SC = (SC + ((0777 ^ SCAD) + 1) + 0201) & 0777;
               /* Clear exponents */
               AR &= MMASK;
               BR &= MMASK;
@@ -3146,26 +3176,29 @@ fxnorm:
                   sac_inh = 1;
                   break;      /* Done */
               }
-              BR = (BR << 27) + MQ;
+              BR = (BR << 28);
               MB = AR;
               AR = BR / AR;
               if (AR != 0) {
-                  if (IR & 04) {
-                      AR ++;
-                  }
-                  if ((AR & BIT8) != 0) {
-                      SC += 1;
+                  if ((AR & BIT7) != 0) {
                       AR >>= 1;
+                  } else {
+                      SC--;
                   }
-                   if (SC >= 0600)
+                  if (IR & 04) {
+                      AR++;
+                  }
+                  AR >>= 1;
+                  while ((AR & BIT9) == 0) {
+                      AR <<= 1;
+                      SC--;
+                  }
+                  if (((SC & 0400) != 0) ^ ((SC & 0200) != 0) || SC == 0600)
                       fxu_hold_set = 1;
-                  if (flag1)  {
-                      AR = (AR ^ MMASK) + 1;
-                      AR |= SMASK;
-                  }
               } else if (flag1) {
                  AR =  SMASK | BIT9;
                  SC++;
+                 flag1 = 0;
               } else {
                  AR = 0;
                  SC = 0;
@@ -3177,13 +3210,16 @@ fxnorm:
                   }
                   check_apr_irq();
               }
+              if (flag1)  {
+                 AR = ((AR ^ MMASK) + 1) & MMASK;
+                 AR |= SMASK;
+              }
               SCAD = SC ^ ((AR & SMASK) ? 0377 : 0);
-              AR &= SMASK|MMASK;
               AR |= ((uint64)(SCAD & 0377)) << 27;
               break;
 
     case 0171:      /* FDVL */
-              flag1 = 0;
+              flag1 = flag3 = 0;
               SC = (int)((((BR & SMASK) ? 0777 : 0) ^ (BR >> 27)) & 0777);
               SC += (int)((((AR & SMASK) ? 0 : 0777) ^ (AR >> 27)) & 0777);
               SC = (SC + 0201) & 0777;
@@ -3194,6 +3230,7 @@ fxnorm:
                   if (MQ == 0)
                       BR = BR + 1;
                   flag1 = 1;
+                  flag3 = 1;
               }
               MQ &= MMASK;
               if (AR & SMASK) {
@@ -3218,6 +3255,7 @@ fxnorm:
               if (BR < AR) {
                  BR <<= 1;
                  SC--;
+                 FE--;
               }
               for (SCAD = 0; SCAD < 27; SCAD++) {
                   AD <<= 1;
@@ -3232,10 +3270,15 @@ fxnorm:
               SC++;
               if (AR != 0) {
                   if ((AR & BIT8) != 0) {
-                      SC += 1;
+                      SC++;
+                      FE++;
                       AR >>= 1;
                   }
-                   if (SC >= 0600)
+                  while ((AR & BIT9) == 0) {
+                      AR <<= 1;
+                      SC--;
+                  }
+                  if (((SC & 0400) != 0) ^ ((SC & 0200) != 0))
                       fxu_hold_set = 1;
                   if (flag1)  {
                       AR = (AR ^ MMASK) + 1;
@@ -3261,14 +3304,18 @@ fxnorm:
 
               if (MQ != 0) {
                   MQ &= MMASK;
-                  if (SC & 0400) {
-                     FE--;
+                  if (flag3) {
+                      MQ = (MQ ^ MMASK) + 1;
+                      MQ |= SMASK;
                   }
-                  FE ^= (AR & SMASK) ? 0377 : 0;
+                  if (FE & 0400) {
+                     MQ = 0;
+                     FE = 0;
+                  } else
+                     FE ^= (flag3) ? 0377 : 0;
                   MQ |= ((uint64)(FE & 0377)) << 27;
               }
               break;
-
                    /* FWT */
     case 0200:     /* MOVE */
     case 0201:     /* MOVEI */
@@ -3346,7 +3393,7 @@ fxnorm:
               MQ += (AR << 18) & LMASK;       /* low order bits */
               AR >>= 18;
               AR = (AR << 1) + (MQ >> 35);
-              MQ &= CMASK;
+              MQ &= CMASK;                   /* low order only has 35 bits */
               if ((IR & 4) == 0) {           /* IMUL */
                  if (AR > flag3 && !pi_cycle) {
                      FLAGS |= OVR|TRP1;
@@ -3500,12 +3547,9 @@ fxnorm:
               break;
 
     case 0241: /* ROT */
-#if KI | KL
               SC = (AB & RSIGN) ?
-                      ((AB & 0377) ? (((0377 ^ AB) + 1) & 0377) : 0400) : (AB & 0377);
-#else
-              SC = ((AB & RSIGN) ? (0377 ^ AB) + 1 : AB) & 0377;
-#endif
+                     ((AB & 0377) ? (((0377 ^ AB) + 1) & 0377) : 0400)
+                   : (AB & 0377);
               if (SC == 0)
                   break;
               SC = SC % 36;
@@ -3582,12 +3626,9 @@ fxnorm:
               break;
 
     case 0245: /* ROTC */
-#if KI | KL
               SC = (AB & RSIGN) ?
-                      ((AB & 0377) ? (((0377 ^ AB) + 1) & 0377) : 0400) : (AB & 0377);
-#else
-              SC = ((AB & RSIGN) ? (0777 ^ AB) + 1 : AB) & 0777;
-#endif
+                      ((AB & 0377) ? (((0377 ^ AB) + 1) & 0377) : 0400)
+                    : (AB & 0377);
               if (SC == 0)
                   break;
               SC = SC % 72;
@@ -3757,7 +3798,7 @@ fxnorm:
               PC = AR & RMASK;
               /* JRSTF */
               if (AC & 02) {
-                 FLAGS &= ~(OVR|NODIV|FLTUND|BYTI|FLTOVR|CRY1|CRY0);
+                 FLAGS &= ~(OVR|NODIV|FLTUND|BYTI|FLTOVR|CRY1|CRY0|TRP1|TRP2);
                  AR >>= 23; /* Move into position */
                  /* If executive mode, copy USER and UIO */
                  if ((FLAGS & (PUBLIC|USER)) == 0)
@@ -3956,8 +3997,7 @@ fxnorm:
               break;
 
     case 0264: /* JSR */       /* AR Frm PC */
-              MB = ((uint64)(FLAGS) << 23) |
-                      ((PC + !pi_cycle) & RMASK);
+              MB = ((uint64)(FLAGS) << 23) | ((PC + !pi_cycle) & RMASK);
               if (uuo_cycle | pi_cycle) {
                  FLAGS &= ~(USER|PUBLIC); /* Clear USER */
               }
