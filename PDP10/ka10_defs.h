@@ -68,6 +68,9 @@
 #define BBN KA
 #endif
 
+/* MPX interrupt multiplexer for ITS systems */
+#define MPX_DEV ITS
+
 /* Digital Equipment Corporation's 36b family had six implementations:
 
    name         mips    comments
@@ -224,7 +227,7 @@ extern DEBTAB crd_debug[];
 #if KI_22BIT|KI
 #define MAXMEMSIZE      4096 * 1024
 #else
-#define MAXMEMSIZE      512 * 1024
+#define MAXMEMSIZE      1024 * 1024
 #endif
 #define MEMSIZE         (cpu_unit[0].capac)
 
@@ -272,16 +275,19 @@ extern DEBTAB crd_debug[];
 #define UNIT_ITSPAGE    (2 << UNIT_V_PAGE)
 #define UNIT_BBNPAGE    (4 << UNIT_V_PAGE)
 #define UNIT_M_PAGE     (7 << UNIT_V_PAGE)
+#define UNIT_V_MPX      (UNIT_V_PAGE + 3)
+#define UNIT_MPX        (1 << UNIT_V_MPX)  /* MPX Device for ITS */
+#define UNIT_M_MPX      (1 << UNIT_V_MPX)
 
 typedef unsigned long long int uint64;
 typedef unsigned int uint18;
 
-extern uint64   M[];
-extern uint64   FM[];
-extern uint18   PC;
-extern uint32   FLAGS;
 
-
+#if MPX_DEV
+extern void set_interrupt_mpx(int dev, int lvl, int mpx);
+#else
+#define set_interrupt_mpx(d,l,m)   set_interrupt(d,l)
+#endif
 extern void set_interrupt(int dev, int lvl);
 extern void clr_interrupt(int dev);
 extern void check_apr_irq();
@@ -296,6 +302,7 @@ extern DEVICE   dpa_dev;
 extern DEVICE   dpb_dev;
 extern DEVICE   dpc_dev;
 extern DEVICE   dpd_dev;
+extern DEVICE   imp_dev;
 extern DEVICE   rpa_dev;
 extern DEVICE   rpb_dev;
 extern DEVICE   rpc_dev;
@@ -328,6 +335,7 @@ struct pdp_dib {
     int                 (*irq)(uint32 dev, int addr);
 };
 
+#define RH10_DEV        01000
 struct rh_dev {
     uint32              dev_num;
     DEVICE             *dev;
@@ -378,13 +386,16 @@ int  df10_write(struct df10 *df);
 #define NUM_DEVS_PD     ITS
 #define NUM_DEVS_DPY    USE_DISPLAY
 #define NUM_DEVS_WCNSLS USE_DISPLAY
+#define NUM_DEVS_IMP    0
 /* Global data */
 
-#define RH10_DEV        01000
 
 extern t_bool sim_idle_enab;
-
-struct rh_dev rh[4];
+extern struct rh_dev rh[];
+extern uint64   M[];
+extern uint64   FM[];
+extern uint18   PC;
+extern uint32   FLAGS;
 
 #endif
 

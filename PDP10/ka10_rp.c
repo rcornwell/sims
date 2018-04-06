@@ -53,57 +53,57 @@
 /* Parameters in the unit descriptor */
 
 /* CONI Flags */
-#define IADR_ATTN       0000000000040   /* Interrupt on attention */
-#define IARD_RAE        0000000000100   /* Interrupt on register access error */
-#define DIB_CBOV        0000000000200   /* Control bus overrun */
-#define CXR_PS_FAIL     0000000002000   /* Power supply fail (not implemented) */
-#define CXR_ILC         0000000004000   /* Illegal function code */
-#define CR_DRE          0000000010000   /* Or Data and Control Timeout */
-#define DTC_OVER        0000000020000   /* DF10 did not supply word on time (not implemented) */
-#define CCW_COMP_1      0000000040000   /* Control word written. */
-#define CXR_CHAN_ER     0000000100000   /* Channel Error */
-#define CXR_EXC         0000000200000   /* Error in drive transfer */
-#define CXR_DBPE        0000000400000   /* Device Parity error (not implemented) */
-#define CXR_NXM         0000001000000   /* Channel non-existent memory (not implemented) */
-#define CXR_CWPE        0000002000000   /* Channel Control word parity error (not implemented) */
-#define CXR_CDPE        0000004000000   /* Channel Data Parity Error (not implemented) */
-#define CXR_SD_RAE      0000200000000   /* Register access error */
-#define CXR_ILFC        0000400000000   /* Illegal CXR function code */
-#define B22_FLAG        0004000000000   /* 22 bit channel */
-#define CC_CHAN_PLS     0010000000000   /* Channel transfer pulse (not implemented) */
-#define CC_CHAN_ACT     0020000000000   /* Channel in use */
-#define CC_INH          0040000000000   /* Disconnect channel */
-#define CB_FULL         0200000000000   /* Set when channel buffer is full (not implemented) */
-#define AR_FULL         0400000000000   /* Set when AR is full (not implemented) */
+#define IADR_ATTN       0000000000040LL   /* Interrupt on attention */
+#define IARD_RAE        0000000000100LL   /* Interrupt on register access error */
+#define DIB_CBOV        0000000000200LL   /* Control bus overrun */
+#define CXR_PS_FAIL     0000000002000LL   /* Power supply fail (not implemented) */
+#define CXR_ILC         0000000004000LL   /* Illegal function code */
+#define CR_DRE          0000000010000LL   /* Or Data and Control Timeout */
+#define DTC_OVER        0000000020000LL   /* DF10 did not supply word on time (not implemented) */
+#define CCW_COMP_1      0000000040000LL   /* Control word written. */
+#define CXR_CHAN_ER     0000000100000LL   /* Channel Error */
+#define CXR_EXC         0000000200000LL   /* Error in drive transfer */
+#define CXR_DBPE        0000000400000LL   /* Device Parity error (not implemented) */
+#define CXR_NXM         0000001000000LL   /* Channel non-existent memory (not implemented) */
+#define CXR_CWPE        0000002000000LL   /* Channel Control word parity error (not implemented) */
+#define CXR_CDPE        0000004000000LL   /* Channel Data Parity Error (not implemented) */
+#define CXR_SD_RAE      0000200000000LL   /* Register access error */
+#define CXR_ILFC        0000400000000LL   /* Illegal CXR function code */
+#define B22_FLAG        0004000000000LL   /* 22 bit channel */
+#define CC_CHAN_PLS     0010000000000LL   /* Channel transfer pulse (not implemented) */
+#define CC_CHAN_ACT     0020000000000LL   /* Channel in use */
+#define CC_INH          0040000000000LL   /* Disconnect channel */
+#define CB_FULL         0200000000000LL   /* Set when channel buffer is full (not implemented) */
+#define AR_FULL         0400000000000LL   /* Set when AR is full (not implemented) */
 
 /* CONO Flags */
-#define ATTN_EN         0000000000040   /* enable attention interrupt. */
-#define REA_EN          0000000000100   /* enable register error interrupt */
-#define CBOV_CLR        0000000000200   /* Clear CBOV */
-#define CONT_RESET      0000000002000   /* Clear All error bits */
-#define ILC_CLR         0000000004000   /* Clear ILC and SD RAE */
-#define DRE_CLR         0000000010000   /* Clear CR_CBTO and CR_DBTO */
-#define OVER_CLR        0000000020000   /* Clear DTC overrun */
-#define WRT_CW          0000000040000   /* Write control word */
-#define CHN_CLR         0000000100000   /* Clear Channel Error */
-#define DR_EXC_CLR      0000000200000   /* Clear DR_EXC */
-#define DBPE_CLR        0000000400000   /* Clear CXR_DBPE */
+#define ATTN_EN         0000000000040LL   /* enable attention interrupt. */
+#define REA_EN          0000000000100LL   /* enable register error interrupt */
+#define CBOV_CLR        0000000000200LL   /* Clear CBOV */
+#define CONT_RESET      0000000002000LL   /* Clear All error bits */
+#define ILC_CLR         0000000004000LL   /* Clear ILC and SD RAE */
+#define DRE_CLR         0000000010000LL   /* Clear CR_CBTO and CR_DBTO */
+#define OVER_CLR        0000000020000LL   /* Clear DTC overrun */
+#define WRT_CW          0000000040000LL   /* Write control word */
+#define CHN_CLR         0000000100000LL   /* Clear Channel Error */
+#define DR_EXC_CLR      0000000200000LL   /* Clear DR_EXC */
+#define DBPE_CLR        0000000400000LL   /* Clear CXR_DBPE */
 
 /* DATAO/DATAI */
-#define CR_REG          0770000000000   /* Register number */
-#define LOAD_REG        0004000000000   /* Load register */
-#define CR_MAINT_MODE   0000100000000   /* Maint mode... not implemented */
-#define CR_DRIVE        0000007000000
-#define CR_GEN_EVD      0000000400000   /* Enable Parity */
-#define CR_DXES         0000000200000   /* Disable DXES errors  */
-#define CR_INAD         0000000077600
-#define CR_WTEVM        0000000000100   /* Verify Parity */
-#define CR_FUNC         0000000000076
-#define CR_GO           0000000000001
+#define CR_REG          0770000000000LL   /* Register number */
+#define LOAD_REG        0004000000000LL   /* Load register */
+#define CR_MAINT_MODE   0000100000000LL   /* Maint mode... not implemented */
+#define CR_DRIVE        0000007000000LL
+#define CR_GEN_EVD      0000000400000LL   /* Enable Parity */
+#define CR_DXES         0000000200000LL   /* Disable DXES errors  */
+#define CR_INAD         0000000077600LL
+#define CR_WTEVM        0000000000100LL   /* Verify Parity */
+#define CR_FUNC         0000000000076LL
+#define CR_GO           0000000000001LL
 
-#define IRQ_VECT        0000000000177   /* Interupt vector */
-#define IRQ_KI10        0000002000000
-#define IRQ_KA10        0000001000000
+#define IRQ_VECT        0000000000177LL   /* Interupt vector */
+#define IRQ_KI10        0000002000000LL
+#define IRQ_KA10        0000001000000LL
 
 /* u3  low */
 /* RPC - 00 - control */
@@ -457,7 +457,7 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
      struct df10   *df10;
      int            drive;
 
-     for (drive = 0; drive < 4; drive++) {
+     for (drive = 0; rh[drive].dev_num != 0; drive++) {
         if (rh[drive].dev_num == (dev & 0774)) {
             dptr = rh[drive].dev;
             break;
@@ -465,10 +465,7 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
      }
      if (dptr == NULL)
         return SCPE_OK;
-     for (ctlr = 0; ctlr < NUM_DEVS_RP; ctlr++) {
-         if (dptr == rp_devs[ctlr])
-            break;
-     }
+     ctlr = GET_CNTRL(dptr->units[0].flags);
      df10 = &rp_df10[ctlr];
      df10->devnum = dev;
      switch(dev & 3) {
@@ -567,7 +564,8 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
 
                 df10->status &= ~(1 << df10->ccw_comp);
                 df10->status &= ~PI_ENABLE;
-                if (((*data >> 1) & 077) < FNC_XFER) {
+                rp_drive[ctlr] = (int)(*data >> 18) & 07;
+                if (((*data >> 1) & 037) < FNC_XFER) {
                    df10->status |= CXR_ILC;
                    df10_setirq(df10);
                    sim_debug(DEBUG_DATAIO, dptr,
@@ -575,7 +573,6 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
                        dev, *data, ctlr, rp_drive[ctlr], PC, df10->status);
                    return SCPE_OK;
                 }
-                rp_drive[ctlr] = (int)(*data >> 18) & 07;
                 /* Start command */
                 df10_setup(df10, (uint32)(*data >> 6));
                 rp_write(ctlr, rp_drive[ctlr], 0, (uint32)(*data & 077));
@@ -619,15 +616,15 @@ rp_devirq(uint32 dev, int addr) {
     DEVICE        *dptr = NULL;
     int            drive;
 
-    for (drive = 0; drive < 4; drive++) {
+    for (drive = 0; rh[drive].dev_num != 0; drive++) {
        if (rh[drive].dev_num == (dev & 0774)) {
            dptr = rh[drive].dev;
            break;
        }
     }
-    for (drive = 0; drive < NUM_DEVS_RP; drive++) {
-        if (dptr == rp_devs[drive])
-           return (rp_imode[drive] ? rp_ivect[drive] : addr);
+    if (dptr != NULL) {
+        drive = GET_CNTRL(dptr->units[0].flags);
+        return (rp_imode[drive] ? rp_ivect[drive] : addr);
     }
     return  addr;
 }
@@ -674,31 +671,33 @@ rp_write(int ctlr, int unit, int reg, uint32 data) {
             uptr->u4 &= ~0177777;
              /* Fall through */
 
-        case FNC_SEARCH:                      /* search */
-        case FNC_SEEK:                        /* seek */
-            if (GET_CY(uptr->u4) >= rp_drv_tab[dtype].cyl ||
-                GET_SC(uptr->u4) >= rp_drv_tab[dtype].sect ||
-                GET_SF(uptr->u4) >= rp_drv_tab[dtype].surf) {
-                rp_attn[ctlr] &= ~(1<<unit);
-                uptr->u3 |= (ER1_IAE << 16)|DS_ERR|DS_DRY|DS_ATA;
-                if ((df10->status & IADR_ATTN) != 0 && rp_attn[ctlr] != 0)
-                    df10_setirq(df10);
-                break;
-            }
-            /* Fall through */
-
         case FNC_RETURN:                      /* return to center */
         case FNC_OFFSET:                      /* offset */
         case FNC_UNLOAD:                      /* unload */
             uptr->u3 &= ~DS_OFF;
              /* Fall through */
 
+        case FNC_SEARCH:                      /* search */
+        case FNC_SEEK:                        /* seek */
         case FNC_WCHK:                        /* write check */
         case FNC_WRITE:                       /* write */
         case FNC_WRITEH:                      /* write w/ headers */
         case FNC_READ:                        /* read */
         case FNC_READH:                       /* read w/ headers */
-            uptr->u3 |= DS_PIP|CR_GO;
+            uptr->u3 |= DS_PIP;
+
+            if (GET_CY(uptr->u4) >= rp_drv_tab[dtype].cyl ||
+                GET_SC(uptr->u4) >= rp_drv_tab[dtype].sect ||
+                GET_SF(uptr->u4) >= rp_drv_tab[dtype].surf) {
+                rp_attn[ctlr] &= ~(1<<unit);
+                uptr->u3 |= (ER1_IAE << 16)|DS_ERR|DS_DRY|DS_ATA;
+                uptr->u3 &= ~DS_PIP;
+                if ((df10->status & IADR_ATTN) != 0 && rp_attn[ctlr] != 0)
+                    df10_setirq(df10);
+                break;
+            }
+
+            uptr->u3 |= CR_GO;
             CLR_BUF(uptr);
             uptr->u6 = 0;
             break;
@@ -707,10 +706,12 @@ rp_write(int ctlr, int unit, int reg, uint32 data) {
         case FNC_DCLR:                        /* drive clear */
             uptr->u3 |= DS_DRY;
             uptr->u3 &= ~(DS_ATA|CR_GO);
+            uptr->u4 &= 003400177777;
+            uptr->u5 &= 0177777;
+            uptr->up7 = 0;
+            uptr->us9 = 0;
+            uptr->us10 = 0;
             rp_attn[ctlr] &= ~(1<<unit);
-            clr_interrupt(df10->devnum);
-            if ((df10->status & IADR_ATTN) != 0 && rp_attn[ctlr] != 0)
-                df10_setirq(df10);
             break;
 
         case FNC_PRESET:                      /* read-in preset */
@@ -724,7 +725,6 @@ rp_write(int ctlr, int unit, int reg, uint32 data) {
             if ((uptr->flags & UNIT_ATT) != 0)
                 uptr->u3 |= DS_VV;
             uptr->u3 |= DS_DRY;
-            df10_setirq(df10);
             break;
 
         default:
@@ -732,8 +732,11 @@ rp_write(int ctlr, int unit, int reg, uint32 data) {
             uptr->u3 |= (ER1_ILF << 16);
             rp_attn[ctlr] |= (1<<unit);
         }
-        if (uptr->u3 & DS_PIP)
+        if (uptr->u3 & CR_GO)
             sim_activate(uptr, 1000);
+        clr_interrupt(df10->devnum);
+        if ((df10->status & (IADR_ATTN|BUSY)) != 0 && rp_attn[ctlr] != 0)
+             df10_setirq(df10);
         sim_debug(DEBUG_DETAIL, dptr, "RPA%o AStatus=%06o\n", unit, uptr->u3);
         return;
     case  001:  /* status */
@@ -754,12 +757,10 @@ rp_write(int ctlr, int unit, int reg, uint32 data) {
                 rp_attn[ctlr] &= ~(1<<i);
             }
         }
-        if (df10->status & (IADR_ATTN|BUSY) == IADR_ATTN) {
-            if (rp_attn[ctlr] != 0)
-                df10_setirq(df10);
-            else
-                clr_interrupt(df10->devnum);
-        }
+        if (rp_attn[ctlr] != 0)
+            df10_setirq(df10);
+        else
+            clr_interrupt(df10->devnum);
         break;
     case  005:  /* sector/track */
         uptr->u4 &= 0177777;
@@ -971,9 +972,17 @@ t_stat rp_svc (UNIT *uptr)
     case FNC_READ:                       /* read */
     case FNC_READH:                      /* read w/ headers */
     case FNC_WCHK:                       /* write check */
+        if (uptr->u3 & DS_ERR) {
+            sim_debug(DEBUG_DETAIL, dptr, "RPA%o read error\n", unit);
+            uptr->u3 |= DS_DRY;
+            uptr->u3 &= ~CR_GO;
+            df10_finish_op(df, 0);
+            return SCPE_OK;
+        }
 
         if (BUF_EMPTY(uptr)) {
             int wc;
+
             if (GET_SC(uptr->u4) >= rp_drv_tab[dtype].sect ||
                 GET_SF(uptr->u4) >= rp_drv_tab[dtype].surf) {
                 uptr->u3 |= (ER1_IAE << 16)|DS_ERR|DS_DRY|DS_ATA;
@@ -1014,7 +1023,7 @@ t_stat rp_svc (UNIT *uptr)
                     }
                 }
             }
-            sim_activate(uptr, 20);
+            sim_activate(uptr, 50);
         } else {
             sim_debug(DEBUG_DETAIL, dptr, "RPA%o read done\n", unit);
             uptr->u3 |= DS_DRY;
@@ -1026,6 +1035,14 @@ t_stat rp_svc (UNIT *uptr)
 
     case FNC_WRITE:                      /* write */
     case FNC_WRITEH:                     /* write w/ headers */
+        if (uptr->u3 & DS_ERR) {
+            sim_debug(DEBUG_DETAIL, dptr, "RPA%o read error\n", unit);
+            uptr->u3 |= DS_DRY;
+            uptr->u3 &= ~CR_GO;
+            df10_finish_op(df, 0);
+            return SCPE_OK;
+        }
+
         if (BUF_EMPTY(uptr)) {
             if (GET_SC(uptr->u4) >= rp_drv_tab[dtype].sect ||
                 GET_SF(uptr->u4) >= rp_drv_tab[dtype].surf) {
@@ -1068,7 +1085,7 @@ t_stat rp_svc (UNIT *uptr)
              }
         }
         if (r) {
-            sim_activate(uptr, 20);
+            sim_activate(uptr, 50);
         } else {
             sim_debug(DEBUG_DETAIL, dptr, "RPA%o write done\n", unit);
             uptr->u3 |= DS_DRY;

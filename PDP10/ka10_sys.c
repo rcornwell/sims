@@ -135,6 +135,9 @@ DEVICE *sim_devices[] = {
     &wcnsls_dev,
 #endif
 #endif
+#if NUM_DEVS_IMP > 0
+    &imp_dev,
+#endif
     NULL
     };
 
