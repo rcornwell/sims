@@ -123,8 +123,12 @@
 t_stat         mt_devio(uint32 dev, uint64 *data);
 t_stat         mt_srv(UNIT *);
 t_stat         mt_boot(int32, DEVICE *);
-t_stat         set_mta (UNIT *uptr, int32 val, CONST char *cptr, void *desc) ;
-t_stat         show_mta (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+t_stat         mt_set_mta (UNIT *uptr, int32 val, CONST char *cptr, void *desc) ;
+t_stat         mt_show_mta (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+#if MPX_DEV
+t_stat         mt_set_mpx (UNIT *uptr, int32 val, CONST char *cptr, void *desc) ;
+t_stat         mt_show_mpx (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+#endif
 t_stat         mt_reset(DEVICE *);
 t_stat         mt_attach(UNIT *, CONST char *);
 t_stat         mt_detach(UNIT *);
@@ -140,6 +144,7 @@ uint8           wr_eor;
 uint64          status;
 uint64          hold_reg;
 int             cc;
+int             mt_mpx_lvl = 0;
 int             hri_mode; /* Read in mode for TM10B */
 
 uint8                parity_table[64] = {
@@ -175,7 +180,7 @@ DIB mt_dib = {MT_DEVNUM, 2, &mt_devio, NULL};
 MTAB                mt_mod[] = {
     {MTUF_WLK, 0, "write enabled", "WRITEENABLED", NULL},
     {MTUF_WLK, MTUF_WLK, "write locked", "LOCKED", NULL},
-    {MTAB_XTD|MTAB_VDV|MTAB_VALR, MTDF_TYPEB, "TYPE", "TYPE", &set_mta, &show_mta},
+    {MTAB_XTD|MTAB_VDV|MTAB_VALR, MTDF_TYPEB, "TYPE", "TYPE", &mt_set_mta, &mt_show_mta},
     {MTUF_7TRK, 0, "9T", "9T", NULL, NULL},
     {MTUF_7TRK, MTUF_7TRK, "7T", "7T", NULL, NULL},
     {MTAB_XTD|MTAB_VUN, 0, "FORMAT", "FORMAT",
@@ -184,6 +189,10 @@ MTAB                mt_mod[] = {
      &sim_tape_set_capac, &sim_tape_show_capac, NULL},
     {MTAB_XTD|MTAB_VUN|MTAB_VALR, 0, "DENSITY", "DENSITY",
      &sim_tape_set_dens, &sim_tape_show_dens, NULL},
+#if MPX_DEV
+    {MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "MPX", "MPX",
+     &mt_set_mpx, &mt_show_mpx, NULL},
+#endif
     {0}
 };
 
@@ -254,6 +263,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
                      } else {
                          clr_interrupt(MT_DEVNUM+4);
                      }
+                     clr_interrupt(MT_DEVNUM);
                      sim_debug(DEBUG_EXP, dptr, "Setting status %012llo\n", status);
                      return SCPE_OK;
 
@@ -286,7 +296,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
               case SPC_FWD:
                      if ((dptr->flags & MTDF_TYPEB) == 0 && (cmd & 010) == 0) {
                          status |= DATA_REQUEST;
-                         set_interrupt(MT_DEVNUM, pia);
+                         set_interrupt_mpx(MT_DEVNUM, pia, mt_mpx_lvl);
                      }
               }
               status |= IDLE_UNIT;
@@ -311,7 +321,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
              uptr->u3 |= MT_BUFFUL;
              if ((dptr->flags & MTDF_TYPEB) == 0) {
                  status |= DATA_REQUEST;
-                 set_interrupt(MT_DEVNUM, pia);
+                 set_interrupt_mpx(MT_DEVNUM, pia, mt_mpx_lvl);
              }
           }
           sim_debug(DEBUG_DATA, dptr, "MT %03o >%012llo\n", dev, *data);
@@ -401,7 +411,7 @@ void mt_df10_read(DEVICE *dptr, UNIT *uptr) {
             mt_df10.buf = hold_reg;
             if ((uptr->u3 & MT_STOP) == 0) {
                 status |= DATA_REQUEST;
-                set_interrupt(MT_DEVNUM, pia);
+                set_interrupt_mpx(MT_DEVNUM, pia, mt_mpx_lvl);
             }
         } else {
             if ((uptr->u3 & MT_STOP) == 0) {
@@ -434,7 +444,7 @@ void mt_df10_write(DEVICE *dptr, UNIT *uptr) {
             status |= DATA_REQUEST;
             uptr->u3 &= ~(MT_BRFUL);
             uptr->u3 |= MT_BUFFUL;
-            set_interrupt(MT_DEVNUM, pia);
+            set_interrupt_mpx(MT_DEVNUM, pia, mt_mpx_lvl);
         } else {
             uptr->u3 |= MT_BRFUL;
         }
@@ -642,7 +652,7 @@ t_stat mt_srv(UNIT * uptr)
              uptr->u6 = 0;
              if ((dptr->flags & MTDF_TYPEB) == 0) {
                  status |= DATA_REQUEST;
-                 set_interrupt(MT_DEVNUM, pia);
+                 set_interrupt_mpx(MT_DEVNUM, pia, mt_mpx_lvl);
              }
              break;
          }
@@ -720,7 +730,7 @@ t_stat mt_srv(UNIT * uptr)
              status |= (uint64)(1) << 18;
              if ((dptr->flags & MTDF_TYPEB) == 0) {
                  status |= DATA_REQUEST;
-                 set_interrupt(MT_DEVNUM, pia);
+                 set_interrupt_mpx(MT_DEVNUM, pia, mt_mpx_lvl);
              }
              break;
          }
@@ -918,7 +928,7 @@ mt_boot(int32 unit_num, DEVICE * dptr)
     return SCPE_OK;
 }
 
-t_stat set_mta (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+t_stat mt_set_mta (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
     DEVICE *dptr;
     dptr = find_dev_from_unit (uptr);
@@ -932,7 +942,7 @@ t_stat set_mta (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
     return SCPE_OK;
 }
 
-t_stat show_mta (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+t_stat mt_show_mta (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
    DEVICE *dptr;
 
@@ -950,6 +960,31 @@ t_stat show_mta (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
    return SCPE_OK;
 }
 
+#if MPX_DEV
+/* set MPX level number */
+t_stat mt_set_mpx (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+{
+    int32 mpx;
+    t_stat r;
+
+    if (cptr == NULL)
+        return SCPE_ARG;
+    mpx = (int32) get_uint (cptr, 8, 8, &r);
+    if (r != SCPE_OK)
+        return r;
+    mt_mpx_lvl = mpx;
+    return SCPE_OK;
+}
+
+t_stat mt_show_mpx (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+{
+   if (uptr == NULL)
+      return SCPE_IERR;
+
+   fprintf (st, "MPX=%o", mt_mpx_lvl);
+   return SCPE_OK;
+}
+#endif
 
 t_stat
 mt_reset(DEVICE * dptr)

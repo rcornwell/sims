@@ -141,9 +141,9 @@ char    fov_irq;                              /* Trap floating overflow */
 #if PDP6
 char    pcchg_irq;                            /* PC Change flag */
 #endif
-char    PIR;                                  /* Current priority level */
-char    PIH;                                  /* Highest priority */
-char    PIE;                                  /* Priority enable mask */
+uint8   PIR;                                  /* Current priority level */
+uint8   PIH;                                  /* Highest priority */
+uint8   PIE;                                  /* Priority enable mask */
 char    pi_enable;                            /* Interrupts enabled */
 char    parity_irq;                           /* Parity interupt */
 char    pi_pending;                           /* Interrupt pending. */
@@ -188,6 +188,9 @@ int     user_base_reg;                        /* User base register */
 int     user_limit;                           /* User limit register */
 uint64  pur;                                  /* Process use register */
 #endif
+#if MPX_DEV
+char    mpx_enable;                           /* Enable MPX device */
+#endif
 #if ITS
 uint32  dbr1;                                 /* User Low Page Table Address */
 uint32  dbr2;                                 /* User High Page Table Address */
@@ -201,7 +204,7 @@ uint16  ofa;                                  /* Output fault address */
 uint32  qua_time;                             /* Quantum clock value */
 #endif
 
-uint8   dev_irq[128];                         /* Pending irq by device */
+uint16  dev_irq[128];                         /* Pending irq by device */
 t_stat  (*dev_tab[128])(uint32 dev, uint64 *data);
 int     (*dev_irqv[128])(uint32 dev, int addr);
 t_stat  rtc_srv(UNIT * uptr);
@@ -234,11 +237,14 @@ DEVICE *rh_devs[] = {
     NULL,
 };
 
-struct rh_dev rh[4] = {
+struct rh_dev rh[] = {
     { 0270, NULL, },
     { 0274, NULL, },
     { 0360, NULL, },
     { 0364, NULL, },
+    { 0370, NULL, },
+    { 0374, NULL, },
+    { 0,    NULL, },
 };
 
 typedef struct {
@@ -307,6 +313,9 @@ REG cpu_reg[] = {
     { ORDATA (FM15, FM[015], 36) },
     { ORDATA (FM16, FM[016], 36) },
     { ORDATA (FM17, FM[017], 36) },
+    { ORDATA (PIR, PIR, 8) },
+    { ORDATA (PIH, PIH, 8) },
+    { ORDATA (PIE, PIE, 8) },
     { ORDATA (PIENB, pi_enable, 7) },
     { BRDATA (REG, FM, 8, 36, 017) },
     { ORDATAD(SW, SW, 36, "Console SW Register"), REG_FIT},
@@ -324,7 +333,10 @@ MTAB cpu_mod[] = {
     { UNIT_MSIZE, 16, "256K", "256K", &cpu_set_size },
 #if KI_22BIT|KI|ITS
     { UNIT_MSIZE, 32, "512K", "512K", &cpu_set_size },
+    { UNIT_MSIZE, 48, "768K", "768K", &cpu_set_size },
     { UNIT_MSIZE, 64, "1024K", "1024K", &cpu_set_size },
+#endif
+#if KI_22BIT|KI
     { UNIT_MSIZE, 128, "2048K", "2048K", &cpu_set_size },
     { UNIT_MSIZE, 256, "4096K", "4096K", &cpu_set_size },
 #endif
@@ -344,6 +356,12 @@ MTAB cpu_mod[] = {
 #if BBN
     { UNIT_M_PAGE, UNIT_BBNPAGE, "BBN", "BBN", NULL, NULL, NULL,
               "Paging hardware for TENEX"},
+#endif
+#if MPX_DEV
+    { UNIT_M_MPX, UNIT_MPX, "MPX", "MPX", NULL, NULL, NULL,
+              "MPX Device for ITS"},
+    { UNIT_M_MPX, 0, NULL, "NOMPX", NULL, NULL, NULL,
+              "Disables the MPX device"},
 #endif
 #endif
     { MTAB_XTD|MTAB_VDV|MTAB_NMO|MTAB_SHP, 0, "HISTORY", "HISTORY",
@@ -683,12 +701,27 @@ void set_interrupt(int dev, int lvl) {
     }
 }
 
+#if MPX_DEV
+void set_interrupt_mpx(int dev, int lvl, int mpx) {
+    lvl &= 07;
+    if (lvl) {
+       dev_irq[dev>>2] = 0200 >> lvl;
+       if (lvl == 1 && mpx != 0)
+          dev_irq[dev>>2] |= mpx << 8;
+       pi_pending = 1;
+       sim_debug(DEBUG_IRQ, &cpu_dev, "set mpx irq %o %o %o %03o %03o %03o\n",
+              dev & 0774, lvl, mpx, PIE, PIR, PIH);
+    }
+}
+#endif
+
 /*
  * Clear the interrupt flag for a device
  */
 void clr_interrupt(int dev) {
     dev_irq[dev>>2] = 0;
-    sim_debug(DEBUG_IRQ, &cpu_dev, "clear irq %o\n", dev & 0774);
+    if (dev > 4)
+        sim_debug(DEBUG_IRQ, &cpu_dev, "clear irq %o\n", dev & 0774);
 }
 
 /*
@@ -724,6 +757,22 @@ int check_irq_level() {
      if (lvl == 0)
         pi_pending = 0;
      pi_req = (lvl & PIE) | PIR;
+#if MPX_DEV
+     /* Check if interrupt on PI channel 1 */
+     if (mpx_enable && cpu_unit[0].flags & UNIT_MPX &&
+                 (pi_req & 0100) && (PIH & 0100) == 0) {
+         pi_enc = 010;
+         for(i = lvl = 0; i < 128; i++) {
+             int l = dev_irq[i] >> 8;
+             if (dev_irq[i] & 0100 && l != 0 && l < pi_enc)
+                 pi_enc = l;
+         }
+         if (pi_enc != 010) {
+            pi_enc += 010;
+            return 1;
+         }
+     }
+#endif
      /* Handle held interrupt requests */
      i = 1;
      for(lvl = 0100; lvl != 0; lvl >>= 1, i++) {
@@ -761,9 +810,14 @@ void restore_pi_hold() {
  * Hold interrupts at the current level.
  */
 void set_pi_hold() {
-     PIR &= ~(0200 >> pi_enc);
+     int pi = pi_enc;
+#if MPX_DEV
+     if (mpx_enable && cpu_unit[0].flags & UNIT_MPX && pi > 07)
+        pi = 1;
+#endif
+     PIR &= ~(0200 >> pi);
      if (pi_enable)
-        PIH |= (0200 >> pi_enc);
+        PIH |= (0200 >> pi);
 }
 
 /*
@@ -778,12 +832,13 @@ t_stat dev_pi(uint32 dev, uint64 *data) {
         if (res & 010000) {
            PIR = PIH = PIE = 0;
            pi_enable = 0;
+#if MPX_DEV
+           mpx_enable = 0;
+#endif
            parity_irq = 0;
         }
-        if (res & 0200) {
+        if (res & 0200) 
            pi_enable = 1;
-           check_apr_irq();
-        }
         if (res & 0400)
            pi_enable = 0;
         if (res & 01000)
@@ -794,6 +849,10 @@ t_stat dev_pi(uint32 dev, uint64 *data) {
            PIR |= (*data & 0177);
            pi_pending = 1;
         }
+#if MPX_DEV
+        if (res & 020000 && cpu_unit[0].flags & UNIT_MPX)
+           mpx_enable = 1;
+#endif
 #if KI
         if (res & 020000) {
            PIR &= ~(*data & 0177);
@@ -803,6 +862,7 @@ t_stat dev_pi(uint32 dev, uint64 *data) {
            parity_irq = 1;
         if (res & 0100000)
            parity_irq = 0;
+        check_apr_irq();
         sim_debug(DEBUG_CONO, &cpu_dev, "CONO PI %012llo\n", *data);
         break;
 
@@ -1126,8 +1186,12 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
             nxm_flag = 0;
         if (res & 020000)
             mem_prot = 0;
-        if (res & 0200000)
+        if (res & 0200000) {
+#if MPX_DEV
+            mpx_enable = 0;
+#endif
             reset_all(1);
+        }
         if (res & 0400000)
             push_ovf = 0;
         check_apr_irq();
@@ -2057,7 +2121,8 @@ no_fetch:
     /* If there is a interrupt handle it. */
     if (pi_rq) {
 st_pi:
-    sim_debug(DEBUG_IRQ, &cpu_dev, "trap irq %o %03o %03o \n", pi_enc, PIR, PIH);
+        sim_debug(DEBUG_IRQ, &cpu_dev, "trap irq %o %03o %03o \n",
+                       pi_enc, PIR, PIH);
         set_pi_hold(); /* Hold off all lower interrupts */
         pi_cycle = 1;
         pi_rq = 0;
@@ -4823,6 +4888,9 @@ if (QITS) {
     sim_rtcn_init_unit (&cpu_unit[1], cpu_unit[1].wait, TMR_RTC);
 }
 #endif
+#if MPX_DEV
+mpx_enable = 0;
+#endif
 return SCPE_OK;
 }
 
@@ -4907,13 +4975,13 @@ dev_tab[2] = &dev_pag;
 #endif
 #if BBN
 if (QBBN)
-   dev_tab[024] = &dev_pag;
+   dev_tab[024>>2] = &dev_pag;
 #endif
 /* Assign all RH10 devices */
 for (j = i = 0; (dptr = rh_devs[i]) != NULL; i++) {
     dibp = (DIB *) dptr->ctxt;
     if (dibp && !(dptr->flags & DEV_DIS)) {             /* enabled? */
-        if (j == 4)
+        if (rh[j].dev_num == 0)
            break;
         d = rh[j].dev_num;
         dev_tab[(d >> 2)] = dibp->io;
