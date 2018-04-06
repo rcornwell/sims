@@ -31,8 +31,7 @@
 #include "sim_defs.h"
 #include "sim_console.h"
 
-#define UNIT_CDR        UNIT_ATTABLE | UNIT_RO | UNIT_DISABLE | UNIT_ROABLE | \
-                                 MODE_029
+#define UNIT_CDR        UNIT_ATTABLE | UNIT_RO | UNIT_DISABLE | MODE_029
 #define UNIT_CDP        UNIT_ATTABLE | UNIT_DISABLE | MODE_029
 #define UNIT_LPR        UNIT_ATTABLE | UNIT_DISABLE
 
@@ -85,6 +84,7 @@ DEBTAB              cdr_debug[] = {
 
 #if NUM_DEVS_CDR > 0
 t_stat              cdr_boot(int32, DEVICE *);
+t_stat              cdr_ini(DEVICE *);
 t_stat              cdr_srv(UNIT *);
 t_stat              cdr_attach(UNIT *, CONST char *);
 t_stat              cdr_detach(UNIT *);
@@ -93,6 +93,7 @@ const char         *cdr_description(DEVICE *dptr);
 #endif
 
 #if NUM_DEVS_CDP > 0
+t_stat              cdp_ini(DEVICE *);
 t_stat              cdp_srv(UNIT *);
 t_stat              cdp_attach(UNIT *, CONST char *);
 t_stat              cdp_detach(UNIT *);
@@ -107,6 +108,7 @@ struct _lpr_data
 }
 lpr_data[NUM_DEVS_LPR];
 
+t_stat              lpr_ini(DEVICE *);
 t_stat              lpr_srv(UNIT *);
 t_stat              lpr_attach(UNIT *, CONST char *);
 t_stat              lpr_detach(UNIT *);
@@ -155,7 +157,7 @@ MTAB                cdr_mod[] = {
 DEVICE              cdr_dev = {
     "CR", cdr_unit, NULL, cdr_mod,
     NUM_DEVS_CDR, 8, 15, 1, 8, 8,
-    NULL, NULL, NULL, &cdr_boot, &cdr_attach, &cdr_detach,
+    NULL, NULL, &cdr_ini, &cdr_boot, &cdr_attach, &cdr_detach,
     NULL, DEV_DISABLE | DEV_DEBUG, 0, cdr_debug,
     NULL, NULL, &cdr_help, NULL, NULL,
     &cdr_description
@@ -177,7 +179,7 @@ MTAB                cdp_mod[] = {
 DEVICE              cdp_dev = {
     "CP", cdp_unit, NULL, cdp_mod,
     NUM_DEVS_CDP, 8, 15, 1, 8, 8,
-    NULL, NULL, NULL, NULL, &cdp_attach, &cdp_detach,
+    NULL, NULL, &cdp_ini, NULL, &cdp_attach, &cdp_detach,
     NULL, DEV_DISABLE | DEV_DEBUG, 0, cdr_debug,
     NULL, NULL, &cdp_help, NULL, NULL,
     &cdp_description
@@ -203,7 +205,7 @@ MTAB                lpr_mod[] = {
 DEVICE              lpr_dev = {
     "LP", lpr_unit, NULL, lpr_mod,
     NUM_DEVS_LPR, 8, 15, 1, 8, 8,
-    NULL, NULL, NULL, NULL, &lpr_attach, &lpr_detach,
+    NULL, NULL, &lpr_ini, NULL, &lpr_attach, &lpr_detach,
     NULL, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &lpr_help, NULL, NULL,
     &lpr_description
@@ -218,7 +220,7 @@ UNIT                con_unit[] = {
 DEVICE              con_dev = {
     "CON", con_unit, NULL, NULL,
     NUM_DEVS_CON, 8, 15, 1, 8, 8,
-    NULL, NULL, con_ini, NULL, NULL, NULL,
+    NULL, NULL, &con_ini, NULL, NULL, NULL,
     NULL, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &con_help, NULL, NULL,
     &con_description
@@ -228,6 +230,17 @@ DEVICE              con_dev = {
 
 
 #if ((NUM_DEVS_CDR > 0) | (NUM_DEVS_CDP > 0))
+t_stat
+cdr_ini(DEVICE *dptr) {
+     int                i;
+
+     for(i = 0; i < NUM_DEVS_CDR; i++) {
+        cdr_unit[i].u5 = 0;
+        sim_cancel(&cdr_unit[i]);
+     }
+     return SCPE_OK;
+}
+
 /*
  * Device entry points for card reader.
  * And Card punch.
@@ -486,6 +499,17 @@ cdr_description(DEVICE *dptr)
 
 /* Handle transfer of data for card punch */
 t_stat
+cdp_ini(DEVICE *dptr) {
+     int                i;
+
+     for(i = 0; i < NUM_DEVS_CDP; i++) {
+        cdp_unit[i].u5 = 0;
+        sim_cancel(&cdp_unit[i]);
+     }
+     return SCPE_OK;
+}
+
+t_stat
 cdp_srv(UNIT *uptr) {
     int                 chan = URCSTA_CHMASK & uptr->u5;
     int                 u = (uptr - cdp_unit);
@@ -584,6 +608,16 @@ cdp_description(DEVICE *dptr)
 
 /* Line printer routines
 */
+t_stat
+lpr_ini(DEVICE *dptr) {
+     int                i;
+
+     for(i = 0; i < NUM_DEVS_LPR; i++) {
+        lpr_unit[i].u5 = 0;
+        sim_cancel(&lpr_unit[i]);
+     }
+     return SCPE_OK;
+}
 
 #if NUM_DEVS_LPR > 0
 t_stat

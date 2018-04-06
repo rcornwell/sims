@@ -3852,6 +3852,8 @@ cpu_reset(DEVICE * dptr)
     GH = KV = Q = 0;
     hltf[0] = 0;
     P1_run = 0;
+    IAR = 0;
+    HALT = 0;
 
     idle_addr = 0;
     sim_brk_types = sim_brk_dflt = SWMASK('E') | SWMASK('A') | SWMASK('B');
