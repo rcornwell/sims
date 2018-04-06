@@ -456,8 +456,14 @@ dsk_boot(int32 unit_num, DEVICE * dptr)
     t_uint64    desc;
     int         i;
 
-    for(i = 0; i < 20; i++) 
+    for(i = 0; i < 20; i++) {
         esu_unit[i].u5 = 0;
+        sim_cancel(&esu_unit[i]);
+    }
+    dsk_unit[0].u5 = 0;
+    dsk_unit[1].u5 = 0;
+    sim_cancel(&dsk_unit[0]);
+    sim_cancel(&dsk_unit[1]);
 
     desc = (((t_uint64)dev)<<DEV_V)|DEV_IORD|DEV_OPT|020LL;
     return chan_boot(desc);
