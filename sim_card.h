@@ -85,19 +85,10 @@ extern "C" {
 #define MODE_CHAR       (0x30 << UNIT_V_CARD_MODE)
 
 
-struct _card_data
-{
-    int                 ptr;            /* Pointer in buffer */
-    int                 len;            /* Length of buffer */
-    char                cbuff[1024];    /* Read in buffer for cards */
-    uint16              image[80];      /* Image */
-    uint8               hol_to_ascii[4096]; /* Back conversion table */
-};
-
 /* Generic routines. */
-t_stat   sim_read_card(UNIT * uptr);
+t_stat   sim_read_card(UNIT * uptr, uint16 *image);
 int      sim_card_eof(UNIT * uptr);
-t_stat   sim_punch_card(UNIT * uptr, UNIT *stkptr);
+t_stat   sim_punch_card(UNIT * uptr, UNIT *stkptr, uint16 *image);
 t_stat   sim_card_attach(UNIT * uptr, CONST char *file);
 t_stat   sim_card_detach(UNIT *uptr);
 
