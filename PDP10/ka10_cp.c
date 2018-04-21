@@ -112,7 +112,7 @@ DEVICE              cp_dev = {
 
 t_stat cp_devio(uint32 dev, uint64 *data) {
      UNIT                *uptr = &cp_unit;
-     struct _card_data   *dp;
+     uint16              *image = (uint16 *)(uptr->up7);
 
      switch(dev & 3) {
      case CONI:
@@ -162,8 +162,7 @@ t_stat cp_devio(uint32 dev, uint64 *data) {
          *data = 0;
          break;
     case DATAO:
-         dp = (struct _card_data *)uptr->up7;
-         dp->image[uptr->u4++] = *data & 0xfff;
+         image[uptr->u4++] = *data & 0xfff;
          uptr->u3 &= ~DATA_REQ;
          clr_interrupt(dev);
          sim_debug(DEBUG_DATAIO, &cp_dev, "CP: DATAO %012llo %d\n", *data,
@@ -179,6 +178,8 @@ t_stat
 cp_srv(UNIT *uptr) {
 
     if (uptr->u3 & PUNCH_ON) {
+       uint16              *image = (uint16 *)(uptr->up7);
+
        uptr->u3 |= CARD_IN_PUNCH;
        if (uptr->u3 & DATA_REQ) {
            sim_activate(uptr, uptr->wait);
@@ -195,7 +196,7 @@ cp_srv(UNIT *uptr) {
         uptr->u4 = 0;
         uptr->u3 &= ~(PUNCH_ON|CARD_IN_PUNCH);
         uptr->u3 |= END_CARD;
-        switch(sim_punch_card(uptr, NULL)) {
+        switch(sim_punch_card(uptr, NULL, image)) {
         case SCPE_EOF:
         case SCPE_UNATT:
             uptr->u3 |= PICK_FAIL|TROUBLE;
@@ -224,16 +225,24 @@ cp_attach(UNIT * uptr, CONST char *file)
 
     if ((r = sim_card_attach(uptr, file)) != SCPE_OK)
         return r;
-    uptr->u3 = 0;
-    uptr->u4 = 0;
+    if (uptr->up7 == 0) {
+        uptr->up7 = calloc(80, sizeof(uint16));
+        uptr->u3 = 0;
+        uptr->u4 = 0;
+    }
     return SCPE_OK;
 }
 
 t_stat
 cp_detach(UNIT * uptr)
 {
+    uint16              *image = (uint16 *)(uptr->up7);
+
     if (uptr->u3 & CARD_IN_PUNCH)
-        sim_punch_card(uptr, NULL);
+        sim_punch_card(uptr, NULL, image);
+    if (uptr->up7 != 0)
+        free(uptr->up7);
+    uptr->up7 = 0;
     return sim_card_detach(uptr);
 }
 
