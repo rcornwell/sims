@@ -225,7 +225,7 @@ struct drvtyp rs_drv_tab[] = {
 
 
 struct df10   rs_df10[NUM_DEVS_RS];
-uint32        rs_cur_unit[NUM_DEVS_RS];
+uint32        rs_xfer_drive[NUM_DEVS_RS];
 uint64        rs_buf[NUM_DEVS_RS][RS_NUMWD];
 int           rs_reg[NUM_DEVS_RS];
 int           rs_ivect[NUM_DEVS_RS];
@@ -329,7 +329,7 @@ t_stat rs_devio(uint32 dev, uint64 *data) {
 
      case CONO:
          clr_interrupt(dev);
-         df10->status &= ~07LL;
+         df10->status &= ~(07LL|IADR_ATTN|IARD_RAE);
          df10->status |= *data & (07LL|IADR_ATTN|IARD_RAE);
          /* Clear flags */
          if (*data & CONT_RESET) {
@@ -362,10 +362,14 @@ t_stat rs_devio(uint32 dev, uint64 *data) {
 
      case DATAI:
         *data = 0;
+        if (df10->status & BUSY && rs_reg[ctlr] != 04) {
+            df10->status |= CC_CHAN_ACT;
+            return SCPE_OK;
+        }
         if (rs_reg[ctlr] == 040) {
               *data = (t_uint64)(rs_read(ctlr, rs_drive[ctlr], 0) & 077);
               *data |= ((t_uint64)(df10->cia)) << 6;
-              *data |= ((t_uint64)(rs_drive[ctlr])) << 18;
+              *data |= ((t_uint64)(rs_xfer_drive[ctlr])) << 18;
         } else if (rs_reg[ctlr] == 044) {
               *data = (t_uint64)rs_ivect[ctlr];
               if (rs_imode[ctlr])
@@ -394,6 +398,9 @@ t_stat rs_devio(uint32 dev, uint64 *data) {
          sim_debug(DEBUG_DATAIO, dptr, "RS %03o DATO %012llo, %d PC=%06o %06o\n",
                     dev, *data, ctlr, PC, df10->status);
          rs_reg[ctlr] = ((int)(*data >> 30)) & 077;
+         if (rs_reg[ctlr] < 040 && rs_reg[ctlr] != 04) {
+            rs_drive[ctlr] = (int)(*data >> 18) & 07;
+         }
          if (*data & LOAD_REG) {
              if (rs_reg[ctlr] == 040) {
                 if ((*data & 1) == 0) {
@@ -415,10 +422,10 @@ t_stat rs_devio(uint32 dev, uint64 *data) {
                        dev, *data, ctlr, rs_drive[ctlr], PC, df10->status);
                    return SCPE_OK;
                 }
-                rs_drive[ctlr] = (int)(*data >> 18) & 07;
 
                 /* Start command */
                 df10_setup(df10, (uint32)(*data >> 6));
+                rs_xfer_drive[ctlr] = (int)(*data >> 18) & 07;
                 rs_write(ctlr, rs_drive[ctlr], 0, (uint32)(*data & 077));
                 sim_debug(DEBUG_DATAIO, dptr,
                     "RS %03o command %012llo, %d[%d] PC=%06o %06o\n",
@@ -443,10 +450,6 @@ t_stat rs_devio(uint32 dev, uint64 *data) {
                 rs_drive[ctlr] = (int)(*data >> 18) & 07;
                 rs_write(ctlr, rs_drive[ctlr], rs_reg[ctlr] & 037,
                         (int)(*data & 0777777));
-             }
-         } else {
-             if (rs_reg[ctlr] < 040 && rs_reg[ctlr] != 04) {
-                rs_drive[ctlr] = (int)(*data >> 18) & 07;
              }
          }
          return SCPE_OK;
@@ -541,8 +544,10 @@ rs_write(int ctlr, int unit, int reg, uint32 data) {
         default:
             uptr->u3 |= DS_DRY|DS_ERR|DS_ATA;
             uptr->u3 |= (ER1_ILF << 16);
+            if ((df10->status & IADR_ATTN) != 0 && rs_attn[ctlr] != 0)
+                 df10_setirq(df10);
         }
-        if (uptr->u3 & DS_PIP)
+        if (uptr->u3 & CR_GO)
             sim_activate(uptr, 100);
         sim_debug(DEBUG_DETAIL, dptr, "RSA%o AStatus=%06o\n", unit, uptr->u3);
         return;
@@ -589,8 +594,7 @@ rs_read(int ctlr, int unit, int reg) {
     uint32        temp = 0;
     int           i;
 
-    if ((uptr->flags & UNIT_ATT) == 0) {                    /* not attached? */
-        df10->status |= 0002000000000;
+    if ((uptr->flags & UNIT_ATT) == 0 && reg != 04) {       /* not attached? */
         return 0;
     }
 

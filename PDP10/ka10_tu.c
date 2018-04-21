@@ -210,7 +210,7 @@
 
 
 struct df10   tu_df10[NUM_DEVS_TU];
-uint32        tu_cur_unit[NUM_DEVS_TU];
+int           tu_xfer_drive[NUM_DEVS_TU];
 uint8         tu_buf[NUM_DEVS_TU][TU_NUMFR];
 int           tu_reg[NUM_DEVS_TU];
 int           tu_ivect[NUM_DEVS_TU];
@@ -339,10 +339,14 @@ t_stat tu_devio(uint32 dev, uint64 *data) {
 
      case DATAI:
         *data = 0;
+        if (df10->status & BUSY && rp_reg[ctlr] != 04) {
+            df10->status |= CC_CHAN_ACT;
+            return SCPE_OK;
+        }
         if (tu_reg[ctlr] == 040) {
               *data = (t_uint64)(tu_read(ctlr, tu_drive[ctlr], 0) & 077);
               *data |= ((t_uint64)(df10->cia)) << 6;
-              *data |= ((t_uint64)(tu_drive[ctlr])) << 18;
+              *data |= ((t_uint64)(tu_xfer_drive[ctlr])) << 18;
         } else if (tu_reg[ctlr] == 044) {
               *data = (t_uint64)tu_ivect[ctlr];
               if (tu_imode[ctlr])
@@ -364,26 +368,30 @@ t_stat tu_devio(uint32 dev, uint64 *data) {
          sim_debug(DEBUG_DATAIO, dptr, "TU %03o DATO %012llo, %d PC=%06o %06o\n",
                     dev, *data, ctlr, PC, df10->status);
          tu_reg[ctlr] = ((int)(*data >> 30)) & 077;
+         if (rp_reg[ctlr] < 040 && rp_reg[ctlr] != 04) {
+            rp_drive[ctlr] = (int)(*data >> 18) & 07;
+         }
          if (*data & LOAD_REG) {
              if (tu_reg[ctlr] == 040) {
-                tu_drive[ctlr] = (int)(*data >> 18) & 07;
-                if (df10->status & BUSY) {
-                    df10->status |= CC_CHAN_ACT;
-                sim_debug(DEBUG_DATAIO, dptr,
-                    "TU %03o command busy %012llo, %d[%d] PC=%06o %06o\n",
-                    dev, *data, ctlr, tu_drive[ctlr], PC, df10->status);
-                    return SCPE_OK;
-                }
                 if ((*data & 1) == 0) {
                    return SCPE_OK;
                 }
+                if (df10->status & BUSY) {
+                    df10->status |= CC_CHAN_ACT;
+                    sim_debug(DEBUG_DATAIO, dptr,
+                         "TU %03o command busy %012llo, %d[%d] PC=%06o %06o\n",
+                         dev, *data, ctlr, tu_drive[ctlr], PC, df10->status);
+                    return SCPE_OK;
+                }
 
+                df10->status &= ~(1 << df10->ccw_comp);
+                df10->status &= ~PI_ENABLE;
                 if (((*data >> 1) & 077) < FNC_XFER) {
                    df10->status |= CXR_ILC;
                    df10_setirq(df10);
-                sim_debug(DEBUG_DATAIO, dptr,
-                    "TU %03o command abort %012llo, %d[%d] PC=%06o %06o\n",
-                    dev, *data, ctlr, tu_drive[ctlr], PC, df10->status);
+                   sim_debug(DEBUG_DATAIO, dptr,
+                       "TU %03o command abort %012llo, %d[%d] PC=%06o %06o\n",
+                       dev, *data, ctlr, tu_drive[ctlr], PC, df10->status);
                    return SCPE_OK;
                 }
                 /* Check if access error */
@@ -393,6 +401,7 @@ t_stat tu_devio(uint32 dev, uint64 *data) {
 
                 /* Start command */
                 df10_setup(df10, (uint32)(*data >> 6));
+                tu_xfer_drive[ctlr] = (int)(*data >> 18) & 07;
                 tu_write(ctlr, tu_drive[ctlr], 0, (uint32)(*data & 077));
                 sim_debug(DEBUG_DATAIO, dptr,
                     "TU %03o command %012llo, %d[%d] PC=%06o %06o\n",
@@ -417,10 +426,6 @@ t_stat tu_devio(uint32 dev, uint64 *data) {
                 tu_drive[ctlr] = (int)(*data >> 18) & 07;
                 tu_write(ctlr, tu_drive[ctlr], tu_reg[ctlr] & 037,
                         (int)(*data & 0777777));
-             }
-         } else {
-             if (tu_reg[ctlr] < 040 && tu_reg[ctlr] != 04) {
-                tu_drive[ctlr] = (int)(*data >> 18) & 07;
              }
          }
          return SCPE_OK;
@@ -461,7 +466,8 @@ tu_write(int ctlr, int unit, int reg, uint32 data) {
 
     switch(reg) {
     case  000:  /* control */
-        sim_debug(DEBUG_DETAIL, dptr, "TUA%o %d Status=%06o\n", unit, ctlr, uptr->u5);
+        sim_debug(DEBUG_DETAIL, dptr, "TUA%o %d Status=%06o\n",
+                             unit, ctlr, uptr->u5);
         df10->status &= ~(1 << df10->ccw_comp);
         if ((data & 01) != 0 && (uptr->flags & UNIT_ATT) != 0) {
             uptr->u3 = data & 076;
@@ -692,7 +698,6 @@ t_stat tu_srv(UNIT * uptr)
     uint8        ch;
     int          cc;
     int          cc_max;
-    int          stop_flag;
 
     /* Find dptr, and df10 */
     dptr = tu_devs[ctlr];
@@ -777,7 +782,8 @@ t_stat tu_srv(UNIT * uptr)
                      tu_error(uptr, MTSE_OK);
                      return SCPE_OK;
                   }
-                  sim_debug(DEBUG_DATA, dptr, "TU%o readrev %012llo\n", unit, df->buf);
+                  sim_debug(DEBUG_DATA, dptr, "TU%o readrev %012llo\n", 
+                            unit, df->buf);
                   df->buf = 0;
               }
           } else {
@@ -825,12 +831,14 @@ t_stat tu_srv(UNIT * uptr)
                       tu_error(uptr, MTSE_OK);
                       return SCPE_OK;
                   }
-                  sim_debug(DEBUG_DATA, dptr, "TU%o read %012llo\n", unit, df->buf);
+                  sim_debug(DEBUG_DATA, dptr, "TU%o read %012llo\n", 
+                            unit, df->buf);
                   df->buf = 0;
               }
           } else {
             if (uptr->u4 != 0) {
-                sim_debug(DEBUG_DATA, dptr, "TU%o read %012llo\n", unit, df->buf);
+                sim_debug(DEBUG_DATA, dptr, "TU%o read %012llo\n",
+                             unit, df->buf);
                 df10_write(df);
             }
             tu_error(uptr, MTSE_OK);
@@ -840,7 +848,6 @@ t_stat tu_srv(UNIT * uptr)
           break;
 
     case FNC_WRITE:
-         stop_flag = 0;
          if (BUF_EMPTY(uptr)) {
              uptr->u3 &= ~CS_PIP;
              if (tu_frame[ctlr] == 0) {
@@ -864,17 +871,15 @@ t_stat tu_srv(UNIT * uptr)
              uptr->u6 = 0;
              df->buf = 0;
          }
-         if (tu_frame[ctlr] == 0) {
-             stop_flag = 1;
-         } else if (uptr->u4 == 0 && df10_read(df) == 0) {
-             stop_flag = 1;
-         }
+         if (tu_frame[ctlr] != 0 && uptr->u4 == 0 && df10_read(df) == 0)
+             uptr->u4 != 010;
 
-         if (!stop_flag) {
+         if ((uptr->u3 & CS_MOTION) != 0) {
              if (uptr->u4 == 0)
-                  sim_debug(DEBUG_DATA, dptr, "TU%o write %012llo\n", unit, df->buf);
+                  sim_debug(DEBUG_DATA, dptr, "TU%o write %012llo\n",
+                             unit, df->buf);
              /* Write next char out */
-             cc = (8 * (3 - uptr->u4)) + 4;
+             cc = (8 * (3 - (uptr->u4 & 07))) + 4;
              if (cc < 0)
                   ch = df->buf & 0x0f;
              else
@@ -882,18 +887,23 @@ t_stat tu_srv(UNIT * uptr)
              tu_buf[ctlr][uptr->u6] = ch;
              uptr->u6++;
              uptr->hwmark = uptr->u6;
-             uptr->u4++;
-             if (uptr->u4 == cc_max) {
-                uptr->u4 = 0;
+             uptr->u4 = (uptr->u4 & 010) | ((uptr->u4 & 07) + 1);
+             if ((uptr->u4 & 7) == cc_max) {
+                uptr->u4 &= 010;
              }
              tu_frame[ctlr] = 0177777 & (tu_frame[ctlr] + 1);
-         } else {
+             if (tu_frame[ctlr] == 0)
+                uptr->u4 = 010;
+         }
+         if (uptr->u4 == 010) {
                 /* Write out the block */
                 reclen = uptr->hwmark;
                 r = sim_tape_wrrecf(uptr, &tu_buf[ctlr][0], reclen);
-                sim_debug(DEBUG_DETAIL, dptr, "TU%o Write %d\n", unit, reclen);
+                sim_debug(DEBUG_DETAIL, dptr, "TU%o Write %d %d\n",
+                             unit, reclen, uptr->u4);
                 uptr->u6 = 0;
                 uptr->hwmark = 0;
+                df10_finish_op(df,0 );
                 tu_error(uptr, r); /* Record errors */
                 return SCPE_OK;
          }

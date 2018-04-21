@@ -617,10 +617,8 @@ t_stat mt_srv(UNIT * uptr)
                 mt_df10_write(dptr, uptr);
           } else {
                 if ((cmd & 010) == 0) {
-                    if (dptr->flags & MTDF_TYPEB) {
-                        df10_bump_addr(&mt_df10);
+                    if (dptr->flags & MTDF_TYPEB)
                         df10_writecw(&mt_df10);
-                    }
                     uptr->u3 &= ~(MT_MOTION|MT_BUSY);
                     return mt_error(uptr, MTSE_OK, dptr);
                 } else {
@@ -661,10 +659,8 @@ t_stat mt_srv(UNIT * uptr)
                CLR_BUF(uptr);
                uptr->u3 &= ~MT_LASTWD;
             } else {
-                if (dptr->flags & MTDF_TYPEB) {
-                    df10_bump_addr(&mt_df10);
+                if (dptr->flags & MTDF_TYPEB)
                     df10_writecw(&mt_df10);
-                }
                 uptr->u3 &= ~(MT_MOTION|MT_BUSY);
                 return mt_error(uptr, MTSE_INVRL, dptr);
             }
