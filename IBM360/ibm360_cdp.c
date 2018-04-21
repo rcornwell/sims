@@ -163,6 +163,7 @@ uint8  cdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
 t_stat
 cdp_srv(UNIT *uptr) {
     int       u = uptr-cdp_unit;
+    uint16   *image = (uint16 *)(uptr->up7);
     uint16    addr = GET_UADDR(uptr->u3);
 
     /* Handle sense */
@@ -177,7 +178,7 @@ cdp_srv(UNIT *uptr) {
         /* Done waiting, punch card */
         uptr->u3 &= ~CDP_CARD;
         sim_debug(DEBUG_DETAIL, &cdp_dev, "unit=%d:punch\n", u);
-        switch(sim_punch_card(uptr, NULL)) {
+        switch(sim_punch_card(uptr, NULL, image)) {
         /* If we get here, something is wrong */
         case SCPE_IOERR:
              set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
@@ -191,16 +192,13 @@ cdp_srv(UNIT *uptr) {
 
     /* Copy next column over */
     if (uptr->u4 < 80) {
-        struct _card_data   *data;
         uint8               ch = 0;
-
-        data = (struct _card_data *)uptr->up7;
 
         if (chan_read_byte(addr, &ch)) {
             uptr->u3 |= CDP_CARD;
         } else {
             sim_debug(DEBUG_DATA, &cdp_dev, "%d: Char < %02o\n", u, ch);
-            data->image[uptr->u4++] = sim_ebcdic_to_hol(ch);
+            image[uptr->u4++] = sim_ebcdic_to_hol(ch);
             if (uptr->u4 == 80) {
                 uptr->u3 |= CDP_CARD;
             }
@@ -223,15 +221,23 @@ cdp_attach(UNIT * uptr, CONST char *file)
 
     if ((r = sim_card_attach(uptr, file)) != SCPE_OK)
        return r;
-    uptr->u5 = 0;
+    if (uptr->up7 == 0) {
+        uptr->up7 = calloc(80, sizeof(uint16));
+        uptr->u5 = 0;
+    }
     return SCPE_OK;
 }
 
 t_stat
 cdp_detach(UNIT * uptr)
 {
+    uint16   *image = (uint16 *)(uptr->up7);
+
     if (uptr->u5 & CDP_CARD)
-        sim_punch_card(uptr, NULL);
+        sim_punch_card(uptr, NULL, image);
+    if (uptr->up7 != 0)
+        free(uptr->up7);
+    uptr->up7 = 0;
     return sim_card_detach(uptr);
 }
 #endif

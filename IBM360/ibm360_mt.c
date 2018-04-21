@@ -891,7 +891,7 @@ mt_attach(UNIT * uptr, CONST char *file)
     uint16              addr = GET_UADDR(uptr->u3);
     t_stat              r;
 
-    if ((r = sim_tape_attach(uptr, file)) != SCPE_OK)
+    if ((r = sim_tape_attach_ex(uptr, file, 0, 0)) != SCPE_OK)
        return r;
     set_devattn(addr, SNS_DEVEND);
     return SCPE_OK;

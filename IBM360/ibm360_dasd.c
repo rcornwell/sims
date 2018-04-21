@@ -1384,7 +1384,7 @@ dasd_format(UNIT * uptr) {
     hdr.heads = disk_type[type].heads;
     hdr.tracksize = (disk_type[type].bpt | 0x1ff) + 1;
     hdr.devtype = disk_type[type].dev_type;
-    sim_fseek(uptr->fileref, 0, SEEK_SET);
+    (void)sim_fseek(uptr->fileref, 0, SEEK_SET);
     sim_fwrite(&hdr, 1, sizeof(struct dasd_header), uptr->fileref);
     if ((data = (struct dasd_t *)calloc(1, sizeof(struct dasd_t))) == 0)
         return 1;
