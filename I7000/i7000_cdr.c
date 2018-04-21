@@ -34,8 +34,7 @@
 #include "sim_defs.h"
 #ifdef NUM_DEVS_CDR
 
-#define UNIT_CDR        UNIT_ATTABLE | UNIT_RO | UNIT_DISABLE | \
-                         UNIT_ROABLE | MODE_026
+#define UNIT_CDR        UNIT_ATTABLE | UNIT_RO | UNIT_DISABLE | MODE_026
 
 /* Flags for punch and reader. */
 #define ATTENA          (1 << (UNIT_V_UF+7))
@@ -91,7 +90,7 @@ MTAB                cdr_mod[] = {
 DEVICE              cdr_dev = {
     "CDR", cdr_unit, NULL, cdr_mod,
     NUM_DEVS_CDR, 8, 15, 1, 8, 8,
-    NULL, NULL, NULL, &cdr_boot, &cdr_attach, &sim_card_detach,
+    NULL, NULL, NULL, &cdr_boot, &cdr_attach, &cdr_detach,
     &cdr_dib, DEV_DISABLE | DEV_DEBUG, 0, crd_debug,
     NULL, NULL, &cdr_help, NULL, NULL, &cdr_description
 };
@@ -169,9 +168,7 @@ t_stat
 cdr_srv(UNIT *uptr) {
     int                 chan = UNIT_G_CHAN(uptr->flags);
     int                 u = (uptr - cdr_unit);
-    struct _card_data   *data;
-
-    data = (struct _card_data *)uptr->up7;
+    uint16             *image = (uint16 *)(uptr->up7);
 
     /* Waiting for disconnect */
     if (uptr->u5 & URCSTA_WDISCO) {
@@ -201,7 +198,7 @@ cdr_srv(UNIT *uptr) {
     /* Check if new card requested. */
     if (uptr->u4 == 0 && uptr->u5 & URCSTA_READ &&
                 (uptr->u5 & URCSTA_CARD) == 0) {
-        switch(sim_read_card(uptr)) {
+        switch(sim_read_card(uptr, image)) {
         case SCPE_EOF:
              sim_debug(DEBUG_DETAIL, &cdr_dev, "%d: EOF\n", u);
              /* Fall through */
@@ -229,7 +226,7 @@ cdr_srv(UNIT *uptr) {
         }
 #ifdef I7070
         /* Check if load card. */
-        if (uptr->capac && (data->image[uptr->capac-1] & 0x800)) {
+        if (uptr->capac && (image[uptr->capac-1] & 0x800)) {
              uptr->u5 |= URCSTA_LOAD;
              chan_set_load_mode(chan);
         } else {
@@ -249,7 +246,7 @@ cdr_srv(UNIT *uptr) {
 
 #ifdef I7080
         /* Detect RSU */
-        if (data->image[uptr->u4] == 0x924) {
+        if (image[uptr->u4] == 0x924) {
              uptr->u5 &= ~URCSTA_READ;
              uptr->u5 |= URCSTA_WDISCO;
              chan_set(chan, DEV_REOR);
@@ -258,7 +255,7 @@ cdr_srv(UNIT *uptr) {
         }
 #endif
 
-        ch = sim_hol_to_bcd(data->image[uptr->u4]);
+        ch = sim_hol_to_bcd(image[uptr->u4]);
 
         /* Handle invalid punch */
         if (ch == 0x7f) {
@@ -321,14 +318,31 @@ cdr_attach(UNIT * uptr, CONST char *file)
 
     if ((r = sim_card_attach(uptr, file)) != SCPE_OK)
         return r;
-    uptr->u5 &= URCSTA_BUSY|URCSTA_WDISCO;
-    uptr->u4 = 0;
-    uptr->u6 = 0;
+    if (uptr->up7 == 0) {
+        uptr->up7 = malloc(sizeof(uint16)*80);
+        uptr->u5 &= URCSTA_BUSY|URCSTA_WDISCO;
+        uptr->u4 = 0;
+        uptr->u6 = 0;
+    }
 #ifdef I7010
     chan_set_attn_urec(UNIT_G_CHAN(uptr->flags), cdr_dib.addr);
 #endif
     return SCPE_OK;
 }
+
+t_stat
+cdr_detach(UNIT * uptr)
+{
+    t_stat              r;
+
+    if ((r = sim_card_detach(uptr)) != SCPE_OK)
+        return r;
+    if (uptr->up7 != 0)
+        free(uptr->up7);
+    uptr->up7 = 0;
+    return SCPE_OK;
+}
+
 #ifdef I7070
 t_stat
 cdr_setload(UNIT *uptr, int32 val, CONST char *cptr, void *desc)

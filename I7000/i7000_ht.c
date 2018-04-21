@@ -959,7 +959,7 @@ ht_attach(UNIT * uptr, CONST char *file)
 {
     t_stat              r;
 
-    if ((r = sim_tape_attach(uptr, file)) != SCPE_OK)
+    if ((r = sim_tape_attach_ex(uptr, file, 0, 0)) != SCPE_OK)
         return r;
     uptr->u5 = HT_BOT /*|HT_ATTN */ ;
     return SCPE_OK;
