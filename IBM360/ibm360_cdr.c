@@ -34,7 +34,7 @@
 #include "sim_card.h"
 
 #ifdef NUM_DEVS_CDR
-#define UNIT_CDR       UNIT_ATTABLE | UNIT_RO | UNIT_DISABLE | UNIT_ROABLE | MODE_029
+#define UNIT_CDR       UNIT_ATTABLE | UNIT_RO | UNIT_DISABLE | MODE_029
 
 
 #define CHN_SNS        0x04       /* Sense command */
@@ -102,7 +102,7 @@ struct dib cdr_dib = { 0xFF, 1, NULL, cdr_startcmd, NULL, cdr_unit};
 DEVICE              cdr_dev = {
     "CDR", cdr_unit, NULL, cdr_mod,
     NUM_DEVS_CDR, 8, 15, 1, 8, 8,
-    NULL, NULL, NULL, &cdr_boot, &cdr_attach, &sim_card_detach,
+    NULL, NULL, NULL, &cdr_boot, &cdr_attach, &cdr_detach,
     &cdr_dib, DEV_UADDR | DEV_DISABLE | DEV_DEBUG, 0, crd_debug
 };
 
@@ -166,7 +166,8 @@ uint8  cdr_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
 /* Handle transfer of data for card reader */
 t_stat
 cdr_srv(UNIT *uptr) {
-    int                 addr = GET_UADDR(uptr->u3);
+    int       addr = GET_UADDR(uptr->u3);
+    uint16   *image = (uint16 *)(uptr->up7);
 
     if ((uptr->u3 & CDR_CMDMSK) == CHN_SNS) {
          uint8 ch = uptr->u5;
@@ -178,7 +179,7 @@ cdr_srv(UNIT *uptr) {
 
     /* Check if new card requested. */
     if ((uptr->u3 & CDR_CARD) == 0) {
-       switch(sim_read_card(uptr)) {
+       switch(sim_read_card(uptr, image)) {
        case SCPE_EOF:
        case SCPE_UNATT:
             chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
@@ -203,13 +204,11 @@ cdr_srv(UNIT *uptr) {
 
     /* Copy next column over */
     if ((uptr->u3 & CDR_CMDMSK) == CDR_RD) {
-        struct _card_data   *data;
         int                  u = uptr-cdr_unit;
         uint16               xlat;
         uint8                ch = 0;
 
-        data = (struct _card_data *)uptr->up7;
-        xlat = sim_hol_to_ebcdic(data->image[uptr->u4]);
+        xlat = sim_hol_to_ebcdic(image[uptr->u4]);
 
         if (xlat == 0x100) {
             uptr->u5 |= SNS_DATCHK;
@@ -259,5 +258,15 @@ cdr_attach(UNIT * uptr, CONST char *file)
     uptr->u6 = 0;
     return SCPE_OK;
 }
+
+t_stat
+cdr_detach(UNIT * uptr)
+{
+    if (uptr->up7 != 0)
+        free(uptr->up7);
+    uptr->up7 = 0;
+    return sim_card_detach(uptr);
+}
+
 
 #endif

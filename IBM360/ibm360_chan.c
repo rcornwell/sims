@@ -716,6 +716,7 @@ t_stat chan_boot(uint16 addr, DEVICE *dptyr) {
 */
 uint16 scan_chan(uint8 mask) {
      int         i;
+     int         ch;
      int         pend = 0;         /* No device */
      int         imask = 0x80;
 
@@ -745,23 +746,23 @@ uint16 scan_chan(uint8 mask) {
      }
      if (pend) {
           irq_pend = 1;
-          i = find_subchan(pend);
-          if (i >= 0) {
-              sim_debug(DEBUG_EXP, &cpu_dev, "Scan end (%x %x)\n", chan_dev[i], pend);
-              store_csw(i);
+          ch = find_subchan(pend);
+          if (ch >= 0) {
+              sim_debug(DEBUG_EXP, &cpu_dev, "Scan end (%x %x)\n", chan_dev[ch], pend);
+              store_csw(ch);
           }
           dev_status[pend] = 0;
      } else {
           for (pend = 0; pend < MAX_DEV; pend++) {
              if (dev_status[pend] != 0) {
-                 i = find_subchan(pend);
-                 if (i >= 0 && ccw_cmd[i] == 0 && mask & (0x80 >> (pend >> 8))) {
+                 ch = find_subchan(pend);
+                 if (ch >= 0 && ccw_cmd[ch] == 0 && mask & (0x80 >> (pend >> 8))) {
                      irq_pend = 1;
                      M[0x44 >> 2] = (((uint32)dev_status[pend]) << 24);
                      M[0x40>>2] = 0;
                      sim_debug(DEBUG_EXP, &cpu_dev,
                             "Set atten %03x %02x [%08x] %08x\n",
-                            i, dev_status[pend], M[0x40 >> 2], M[0x44 >> 2]);
+                            ch, dev_status[pend], M[0x40 >> 2], M[0x44 >> 2]);
                      dev_status[pend] = 0;
                      return pend;
                  }
