@@ -99,7 +99,7 @@ MTAB                cr_mod[] = {
 DEVICE              cr_dev = {
     "CR", &cr_unit, NULL, cr_mod,
     NUM_DEVS_CR, 8, 15, 1, 8, 8,
-    NULL, NULL, NULL, NULL, &cr_attach, &sim_card_detach,
+    NULL, NULL, NULL, NULL, &cr_attach, &cr_detach,
     &cr_dib, DEV_DISABLE | DEV_DEBUG, 0, crd_debug,
     NULL, NULL, &cr_help, NULL, NULL, &cr_description
 };
@@ -170,13 +170,11 @@ t_stat cr_devio(uint32 dev, uint64 *data) {
 /* Handle transfer of data for card reader */
 t_stat
 cr_srv(UNIT *uptr) {
-    struct _card_data   *data;
-
-    data = (struct _card_data *)uptr->up7;
+    uint16              *image = (uint16 *)(uptr->up7);
 
     /* Check if new card requested. */
     if ((uptr->u3 & (READING|CARD_IN_READ)) == READING) {
-        switch(sim_read_card(uptr)) {
+        switch(sim_read_card(uptr, image)) {
         case SCPE_EOF:
              uptr->u3 |= END_FILE;
              if (uptr->u3 & TROUBLE_EN)
@@ -207,7 +205,7 @@ cr_srv(UNIT *uptr) {
              sim_activate(uptr, uptr->wait);
              return SCPE_OK;
         }
-        uptr->u5 = data->image[uptr->u4++];
+        uptr->u5 = image[uptr->u4++];
         if (uptr->u3 & DATA_RDY) {
             uptr->u3 |= DATA_MISS;
         }
@@ -226,8 +224,20 @@ cr_attach(UNIT * uptr, CONST char *file)
 
     if ((r = sim_card_attach(uptr, file)) != SCPE_OK)
         return r;
-    uptr->u3 |= RDY_READ;
+    if (uptr->up7 == 0) {
+        uptr->up7 = malloc(sizeof(uint16)*80);
+        uptr->u3 |= RDY_READ;
+    }
     return SCPE_OK;
+}
+
+t_stat
+cr_detach(UNIT * uptr)
+{
+    if (uptr->up7 != 0)
+        free(uptr->up7);
+    uptr->up7 = 0;
+    return sim_card_detach(uptr);
 }
 
 t_stat
