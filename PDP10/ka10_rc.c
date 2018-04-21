@@ -211,6 +211,7 @@ t_stat rc_devio(uint32 dev, uint64 *data) {
 #if KI_22BIT
         *data |= B22_FLAG;
 #endif
+        *data |= PRTLT;
         sim_debug(DEBUG_CONI, dptr, "HK %03o CONI %06o PC=%o\n", dev,
                           (uint32)*data, PC);
         break;

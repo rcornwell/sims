@@ -83,7 +83,7 @@
 #define CLRMSK          0000000177710LL
 #define CLRMSK2         0000176000000LL
 
-/* DATAI/DATAO */
+/* DATAO */
 #define DWPE_STOP       0000000001000LL
 #define SPARE           0000000002000LL
 #define DSPE_STOP       0000000004000LL
@@ -362,6 +362,7 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
          df10->status |= *data & 07LL;
          if (*data & BUSY) {
              /* Stop controller */
+             sim_cancel(uptr);
              uptr->STATUS &= ~BUSY;
              df10_finish_op(df10, 0);
          }
@@ -398,7 +399,7 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
          res = (uint64)(unit) << 33;
          if ((dptr->flags & DEV_WHDR) == 0)
              res |= WR_HD_LK;                  /* Can't write headers. */
-         if (GET_DTYPE(uptr->flags))
+         if (dp_drv_tab[GET_DTYPE(uptr->flags)].devtype == RP03_DTYPE)
              res |= SEL_RP03;
          if (uptr->flags & UNIT_DIS) {
              res |= NO_DRIVE;
@@ -557,35 +558,29 @@ t_stat dp_svc (UNIT *uptr)
                         ctlr, uptr->UFLAGS, cyl, cyl, sect, surf,uptr->CUR_CYL);
                 uptr->STATUS |= SRC_DONE;
                 if (uptr->STATUS & END_CYL) {
+                     if (cmd == WR) {
+                          if(df10_read(df10))
+                              df10_read(df10);
+                     }
                      uptr->UFLAGS |= DONE;
-                     uptr->STATUS &= ~END_CYL;
                      uptr->STATUS &= ~BUSY;
                      df10_finish_op(df10, 0);
                      return SCPE_OK;
                 }
                 if (sect >= dp_drv_tab[dtype].sect) {
-                     uptr->UFLAGS |= DONE;
                      uptr->STATUS &= ~BUSY;
                      uptr->STATUS |= SEC_ERR;
-                     df10_finish_op(df10, 0);
-                     return SCPE_OK;
                 }
                 if (surf >= dp_drv_tab[dtype].surf) {
-                     uptr->UFLAGS |= DONE;
                      uptr->STATUS &= ~BUSY;
                      uptr->STATUS |= SUF_ERR;
-                     df10_finish_op(df10, 0);
-                     return SCPE_OK;
                 }
                 if (cyl != uptr->CUR_CYL) {
-                     uptr->UFLAGS |= DONE;
                      uptr->STATUS &= ~BUSY;
                      uptr->STATUS |= SRC_ERR;
-                     df10_finish_op(df10, 0);
-                     return SCPE_OK;
                 }
                 if ((uptr->STATUS & BUSY) == 0) {
-                     uptr->STATUS &= ~BUSY;
+                     uptr->UFLAGS |= DONE;
                      df10_finish_op(df10, 0);
                      return SCPE_OK;
                 }
@@ -634,8 +629,8 @@ t_stat dp_svc (UNIT *uptr)
                r = df10_write(df10);
                break;
            }
-           sim_debug(DEBUG_DATA, dptr, "Xfer %d %08o %012llo\n",
-                          uptr->DATAPTR, df10->cda, df10->buf);
+           sim_debug(DEBUG_DATA, dptr, "Xfer %d %08o %012llo %08o\n",
+                          uptr->DATAPTR, df10->cda, df10->buf, df10->wcr);
            uptr->DATAPTR++;
            if (uptr->DATAPTR >= RP_NUMWD || r == 0 ) {
                if (cmd == WR) {
@@ -683,21 +678,29 @@ t_stat dp_svc (UNIT *uptr)
                         ctlr, uptr->UFLAGS, cyl, cyl, sect, surf,uptr->CUR_CYL);
                 uptr->STATUS |= SRC_DONE;
                 if (uptr->STATUS & END_CYL) {
+                     if (cmd == WR) {
+                          if(df10_read(df10))
+                              df10_read(df10);
+                     }
                      uptr->UFLAGS |= DONE;
-                     uptr->STATUS &= ~END_CYL;
                      uptr->STATUS &= ~BUSY;
                      df10_finish_op(df10, 0);
                      return SCPE_OK;
+                }
+                if (sect >= dp_drv_tab[dtype].sect) {
+                     uptr->STATUS &= ~BUSY;
+                     uptr->STATUS |= SEC_ERR;
+                }
+                if (surf >= dp_drv_tab[dtype].surf) {
+                     uptr->STATUS &= ~BUSY;
+                     uptr->STATUS |= SUF_ERR;
                 }
                 if (cyl != uptr->CUR_CYL) {
-                     uptr->UFLAGS |= DONE;
                      uptr->STATUS &= ~BUSY;
                      uptr->STATUS |= SRC_ERR;
-                     df10_finish_op(df10, 0);
-                     return SCPE_OK;
                 }
                 if ((uptr->STATUS & BUSY) == 0) {
-                     uptr->STATUS &= ~BUSY;
+                     uptr->UFLAGS |= DONE;
                      df10_finish_op(df10, 0);
                      return SCPE_OK;
                 }
