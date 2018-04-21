@@ -321,6 +321,7 @@ t_stat
 cdr_srv(UNIT *uptr) {
     int                 chan = URCSTA_CHMASK & uptr->u5;
     int                 u = (uptr - cdr_unit);
+    uint16              *image = (uint16 *)(uptr->up7);
 
     if (uptr->u5 & URCSTA_EOF) {
         sim_debug(DEBUG_DETAIL, &cdr_dev, "cdr %d %d unready\n", u, chan);
@@ -333,7 +334,7 @@ cdr_srv(UNIT *uptr) {
     /* Check if new card requested. */
     if (uptr->u4 == 0 && uptr->u5 & URCSTA_ACTIVE &&
                 (uptr->u5 & URCSTA_CARD) == 0) {
-        switch(sim_read_card(uptr)) {
+        switch(sim_read_card(uptr, image)) {
         case SCPE_UNATT:
              iostatus &= ~(CARD1_FLAG << u);
              uptr->u5 &= ~(URCSTA_ACTIVE);
@@ -370,22 +371,18 @@ cdr_srv(UNIT *uptr) {
     /* Copy next column over */
     if (uptr->u5 & URCSTA_CARD &&
         uptr->u4 < ((uptr->u5 & URCSTA_BIN) ? 160 : 80)) {
-        struct _card_data   *data;
         uint8                ch = 0;
         int                  u = (uptr - cdr_unit);
 
-        data = (struct _card_data *)uptr->up7;
-
         if (uptr->u5 & URCSTA_BIN) {
-            ch = (data->image[uptr->u4 >> 1] >>
-                    ((uptr->u4 & 1)? 0 : 6)) & 077;
+            ch = (image[uptr->u4 >> 1] >> ((uptr->u4 & 1)?  0 : 6)) & 077;
         } else {
-            ch = sim_hol_to_bcd(data->image[uptr->u4]);
+            ch = sim_hol_to_bcd(image[uptr->u4]);
             /* Remap some characters from 029 to BCL */
             switch(ch) {
             case 0:     ch = 020; break; /* Translate blanks */
             case 10:    /* Check if 0 punch of 82 punch */
-                        if (data->image[uptr->u4] != 0x200) {
+                        if (image[uptr->u4] != 0x200) {
                            ch = 0;
                            if (uptr->u4 == 0)
                                chan_set_parity(chan);
@@ -453,10 +450,13 @@ cdr_attach(UNIT * uptr, CONST char *file)
 
     if ((r = sim_card_attach(uptr, file)) != SCPE_OK)
         return r;
-    uptr->u5 &= URCSTA_BUSY;
-    uptr->u4 = 0;
-    uptr->u6 = 0;
-    iostatus |= (CARD1_FLAG << u);
+    if (uptr->up7 == 0) {
+        uptr->up7 = malloc(sizeof(uint16)*80);
+        uptr->u5 &= URCSTA_BUSY;
+        uptr->u4 = 0;
+        uptr->u6 = 0;
+        iostatus |= (CARD1_FLAG << u);
+    }
     return SCPE_OK;
 }
 
@@ -465,6 +465,9 @@ cdr_detach(UNIT * uptr)
 {
     int                 u = uptr-cdr_unit;
 
+    if (uptr->up7 != 0)
+        free(uptr->up7);
+    uptr->up7 = 0;
     iostatus &= ~(CARD1_FLAG << u);
     return sim_card_detach(uptr);
 }
@@ -513,12 +516,13 @@ t_stat
 cdp_srv(UNIT *uptr) {
     int                 chan = URCSTA_CHMASK & uptr->u5;
     int                 u = (uptr - cdp_unit);
+    uint16              *image = (uint16 *)(uptr->up7);
 
     if (uptr->u5 & URCSTA_BUSY) {
         /* Done waiting, punch card */
         if (uptr->u5 & URCSTA_FULL) {
               sim_debug(DEBUG_DETAIL, &cdp_dev, "cdp %d %d punch\n", u, chan);
-              switch(sim_punch_card(uptr, NULL)) {
+              switch(sim_punch_card(uptr, NULL, image)) {
               case SCPE_EOF:
               case SCPE_UNATT:
                   sim_debug(DEBUG_DETAIL, &cdp_dev, "cdp %d %d set eof\n", u,
@@ -540,10 +544,7 @@ cdp_srv(UNIT *uptr) {
 
     /* Copy next column over */
     if (uptr->u5 & URCSTA_ACTIVE && uptr->u4 < 80) {
-        struct _card_data   *data;
         uint8               ch = 0;
-
-        data = (struct _card_data *)uptr->up7;
 
         if(chan_read_char(chan, &ch, 0)) {
              uptr->u5 |= URCSTA_BUSY|URCSTA_FULL;
@@ -551,7 +552,7 @@ cdp_srv(UNIT *uptr) {
         } else {
             sim_debug(DEBUG_DATA, &cdp_dev, "cdp %d: Char %d < %02o\n", u,
                          uptr->u4, ch);
-            data->image[uptr->u4++] = sim_bcd_to_hol(ch & 077);
+            image[uptr->u4++] = sim_bcd_to_hol(ch & 077);
         }
         sim_activate(uptr, 10);
     }
@@ -572,16 +573,24 @@ cdp_attach(UNIT * uptr, CONST char *file)
 
     if ((r = sim_card_attach(uptr, file)) != SCPE_OK)
         return r;
-    uptr->u5 = 0;
-    iostatus |= PUNCH_FLAG;
+    if (uptr->up7 == 0) {
+        uptr->up7 = calloc(80, sizeof(uint16));
+        uptr->u5 = 0;
+        iostatus |= PUNCH_FLAG;
+    }
     return SCPE_OK;
 }
 
 t_stat
 cdp_detach(UNIT * uptr)
 {
+    uint16              *image = (uint16 *)(uptr->up7);
+
     if (uptr->u5 & URCSTA_FULL)
-        sim_punch_card(uptr, NULL);
+        sim_punch_card(uptr, NULL, image);
+    if (uptr->up7 != 0)
+        free(uptr->up7);
+    uptr->up7 = 0;
     iostatus &= ~PUNCH_FLAG;
     return sim_card_detach(uptr);
 }
