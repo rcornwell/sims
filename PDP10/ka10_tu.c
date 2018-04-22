@@ -339,7 +339,7 @@ t_stat tu_devio(uint32 dev, uint64 *data) {
 
      case DATAI:
         *data = 0;
-        if (df10->status & BUSY && rp_reg[ctlr] != 04) {
+        if (df10->status & BUSY && tu_reg[ctlr] != 04) {
             df10->status |= CC_CHAN_ACT;
             return SCPE_OK;
         }
@@ -368,8 +368,8 @@ t_stat tu_devio(uint32 dev, uint64 *data) {
          sim_debug(DEBUG_DATAIO, dptr, "TU %03o DATO %012llo, %d PC=%06o %06o\n",
                     dev, *data, ctlr, PC, df10->status);
          tu_reg[ctlr] = ((int)(*data >> 30)) & 077;
-         if (rp_reg[ctlr] < 040 && rp_reg[ctlr] != 04) {
-            rp_drive[ctlr] = (int)(*data >> 18) & 07;
+         if (tu_reg[ctlr] < 040 && tu_reg[ctlr] != 04) {
+            tu_drive[ctlr] = (int)(*data >> 18) & 07;
          }
          if (*data & LOAD_REG) {
              if (tu_reg[ctlr] == 040) {
