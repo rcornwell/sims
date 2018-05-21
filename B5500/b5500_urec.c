@@ -450,13 +450,12 @@ cdr_attach(UNIT * uptr, CONST char *file)
 
     if ((r = sim_card_attach(uptr, file)) != SCPE_OK)
         return r;
-    if (uptr->up7 == 0) {
+    if (uptr->up7 == 0) 
         uptr->up7 = malloc(sizeof(uint16)*80);
-        uptr->u5 &= URCSTA_BUSY;
-        uptr->u4 = 0;
-        uptr->u6 = 0;
-        iostatus |= (CARD1_FLAG << u);
-    }
+    uptr->u5 &= URCSTA_BUSY;
+    uptr->u4 = 0;
+    uptr->u6 = 0;
+    iostatus |= (CARD1_FLAG << u);
     return SCPE_OK;
 }
 
