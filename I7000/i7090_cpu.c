@@ -187,7 +187,7 @@
 #define HIST_INT        2       /* interrupt cycle */
 #define HIST_TRP        3       /* trap cycle */
 #define HIST_MIN        64
-#define HIST_MAX        10000
+#define HIST_MAX        1000000
 #define HIST_NOEA       0x40000000
 #define HIST_PC         0x10000
 
@@ -299,8 +299,13 @@ extern uint32       drum_addr;
 */
 
 UNIT                cpu_unit =
+#ifdef I7090
     { UDATA(rtc_srv, UNIT_BINK | MODEL(CPU_7090) | MEMAMOUNT(4),
             MAXMEMSIZE/2 ), 120 };
+#else
+    { UDATA(rtc_srv, UNIT_BINK | MODEL(CPU_704) | MEMAMOUNT(4),
+            MAXMEMSIZE/2 ), 120 };
+#endif
 
 REG                 cpu_reg[] = {
     {ORDATAD(IC, IC, 15, "Instruction Counter"), REG_FIT},
@@ -734,7 +739,7 @@ sim_instr(void)
 
     /* Set cycle time for delays */
     switch(CPU_MODEL) {
-    case CPU_704:
+    case CPU_704: cycle_time = 50; break;    /* Needed to allow SAP to work */
     case CPU_709: cycle_time = 120; break;   /* 83,333 cycles per second */
     default:
     case CPU_7090:  cycle_time = 22; break;  /* 454,545 cycles per second */
@@ -808,7 +813,7 @@ sim_instr(void)
 
 /* Check if we need to take any traps */
 #ifdef I7090    /* I704 did not have interrupts */
-        if (itrap && ihold == 0 && iowait == 0 && ioflags != 0) {
+        if (CPU_MODEL != CPU_704 && itrap && ihold == 0 && iowait == 0 && ioflags != 0) {
             t_uint64            mask = 00000001000001LL;
 
             MA = 012;
@@ -3246,10 +3251,9 @@ prottrap:
             case OP_LDA:
                 if (chan_select(0)) {
                     extern DEVICE drm_dev;
-                    drum_addr = (uint32)(MQ = SR);
+                    drum_addr = (uint32)(SR);
                     sim_debug(DEBUG_DETAIL, &drm_dev,
                                  "set address %06o\n", drum_addr);
-                    MQ <<= 1;
                     chan_clear(0, DEV_FULL);    /* In case we read something
                                                    before we got here */
                 } else
