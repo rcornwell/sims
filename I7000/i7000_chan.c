@@ -481,7 +481,7 @@ void
 chan_clear_status(int chan)
 {
     chan_flags[chan] &=
-        ~(CHS_ATTN | CHS_EOT | CHS_BOT | DEV_REOR | DEV_WEOR);
+        ~(CHS_ATTN | CHS_EOT | CHS_BOT | CHS_EOF | DEV_REOR | DEV_WEOR);
 }
 
 void

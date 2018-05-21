@@ -510,7 +510,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
             return SCPE_IOERR;
         }
         uptr->u5 |= MT_WEF;
-#if I7010 
+#if I7010
         chan_set_sel(chan, 1);
         chan_clear_status(chan);
         mt_chan[chan] = MTC_BSY | MTC_SEL | unit;
@@ -743,7 +743,7 @@ t_stat mt_srv(UNIT * uptr)
 
     /* Channel has disconnected, abort current read. */
     if ((mt_chan[chan] & 037) == (MTC_SEL | unit) &&
-            chan_stat(chan, DEV_DISCO)) {
+            chan_test(chan, DEV_DISCO)) {
         uptr->u5 &= ~MT_CMDMSK;
         reclen = uptr->hwmark;
         if (cmd == MT_WRS || cmd == MT_WRSB) {
@@ -811,7 +811,7 @@ t_stat mt_srv(UNIT * uptr)
 #else
         chan_clear(chan, DEV_SEL|STA_TWAIT);
 #endif
-        mt_chan[chan] = 0; 
+        mt_chan[chan] = 0;
         sim_debug(DEBUG_DETAIL, dptr, "Skip unit=%d\n", unit);
         /* Allow time for tape to be restarted, before stop */
         sim_activate(uptr,  us_to_ticks(500));
@@ -879,6 +879,7 @@ t_stat mt_srv(UNIT * uptr)
                         chan_set_error(chan);
                     }
 #else
+                    chan_set(chan, DEV_REOR);
                     chan_set_attn(chan);
 #endif
                 }
@@ -891,7 +892,7 @@ t_stat mt_srv(UNIT * uptr)
             sim_debug(DEBUG_DETAIL, dptr, "%s Block %d chars\n",
                       (cmd == MT_RDS) ? "BCD" : "Binary", reclen);
 #ifdef I7010
-            if (mode && mt_buffer[bufnum][0] == 017) 
+            if (mode && mt_buffer[bufnum][0] == 017)
                 chan_set_eof(chan);
 #endif
 
@@ -944,7 +945,7 @@ t_stat mt_srv(UNIT * uptr)
                 sim_activate(uptr, (uptr->hwmark-uptr->u6) * T1_us);
                 uptr->u3 += (uptr->hwmark - uptr->u6);
                 uptr->u6 = uptr->hwmark;    /* Force read next record */
-            } 
+            }
             sim_activate(uptr, T1_us);
             break;
 

@@ -344,10 +344,6 @@ chan_proc()
         cmask = 0x0100 << chan;
         switch (CHAN_G_TYPE(chan_unit[chan].flags)) {
         case CHAN_PIO:
-            if (chan_flags[chan] & CHS_ATTN) {
-                chan_flags[chan] &=
-                    ~(CHS_ATTN | STA_START | STA_ACTIVE | STA_WAIT);
-            }
             if ((chan_flags[chan] & (DEV_REOR|DEV_SEL|DEV_FULL)) ==
                         (DEV_SEL|DEV_REOR))  {
                 sim_debug(DEBUG_DETAIL, &chan_dev, "chan got EOR\n");
@@ -1266,8 +1262,10 @@ chan_cmd(uint16 dev, uint16 dcmd)
         if ((chan_flags[chan] & (DEV_FULL|DEV_WRITE)) == (DEV_FULL|DEV_WRITE))
             return SCPE_BUSY;
         /* Yes, disconnect device and tell it to write a EOR */
-        chan_flags[chan] |= DEV_DISCO | DEV_WEOR;
-        return SCPE_BUSY;
+        if ((chan_flags[chan] & (DEV_WRITE)) == (DEV_WRITE) ||
+            (chan_flags[chan] & (DEV_FULL)) == (DEV_FULL))
+            chan_flags[chan] |= DEV_DISCO | DEV_WEOR;
+	return SCPE_BUSY;
     }
     /* Unit is busy doing something, wait */
     if (chan_flags[chan] & (DEV_SEL | DEV_DISCO | STA_TWAIT | STA_WAIT))
