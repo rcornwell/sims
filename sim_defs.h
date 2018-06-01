@@ -140,6 +140,7 @@ extern int sim_vax_snprintf(char *buf, size_t buf_size, const char *fmt, ...);
 #endif
 #if defined(HAVE_PCREPOSIX_H)
 #include <pcreposix.h>
+#include <pcre.h>
 #define USE_REGEX 1
 #elif defined(HAVE_REGEX_H)
 #include <regex.h>
@@ -238,10 +239,12 @@ typedef unsigned long           t_uint64;
 typedef t_int64         t_svalue;                       /* signed value */
 typedef t_uint64        t_value;                        /* value */
 #define T_VALUE_MAX     0xffffffffffffffffuLL
+#define T_SVALUE_MAX    0x7fffffffffffffffLL
 #else                                                   /* 32b data */
 typedef int32           t_svalue;
 typedef uint32          t_value;
 #define T_VALUE_MAX     0xffffffffUL
+#define T_SVALUE_MAX    0x7fffffffL
 #endif                                                  /* end 64b data */
 
 #if defined (USE_INT64) && defined (USE_ADDR64)         /* 64b address */
@@ -404,8 +407,9 @@ typedef uint32          t_addr;
 #define SCPE_EXPECT     (SCPE_BASE + 45)                /* expect matched */
 #define SCPE_AMBREG     (SCPE_BASE + 46)                /* ambiguous register */
 #define SCPE_REMOTE     (SCPE_BASE + 47)                /* remote console command */
+#define SCPE_INVEXPR    (SCPE_BASE + 48)                /* invalid expression */
 
-#define SCPE_MAX_ERR    (SCPE_BASE + 47)                /* Maximum SCPE Error Value */
+#define SCPE_MAX_ERR    (SCPE_BASE + 48)                /* Maximum SCPE Error Value */
 #define SCPE_KFLAG      0x10000000                      /* tti data flag */
 #define SCPE_BREAK      0x20000000                      /* tti break flag */
 #define SCPE_NOMESSAGE  0x40000000                      /* message display supression flag */
@@ -417,6 +421,8 @@ typedef uint32          t_addr;
 #define PV_RSPC         1                               /* right, space fill */
 #define PV_RCOMMA       2                               /* right, space fill. Comma separate every 3 */
 #define PV_LEFT         3                               /* left justify */
+#define PV_RCOMMASIGN   6                               /* right, space fill. Comma separate every 3 treat as signed */
+#define PV_LEFTSIGN     7                               /* left justify treat as signed */
 
 /* Default timing parameters */
 
@@ -580,6 +586,8 @@ struct UNIT {
     t_bool              (*cancel)(UNIT *);
     double              usecs_remaining;                /* time balance for long delays */
     char                *uname;                         /* Unit name */
+    DEVICE              *dptr;                          /* DEVICE linkage (backpointer) */
+    uint32              dctrl;                          /* debug control */
 #ifdef SIM_ASYNCH_IO
     void                (*a_check_completion)(UNIT *);
     t_bool              (*a_is_active)(UNIT *);
@@ -634,7 +642,7 @@ struct UNIT {
 #define UNIT_NO_FIO     0000004         /* fileref is NOT a FILE * */
 #define UNIT_DISK_CHK   0000010         /* disk data debug checking (sim_disk) */
 #define UNIT_TMR_UNIT   0000020         /* Unit registered as a calibrated timer */
-#define UNIT_V_DF_TAPE  5               /* Bit offset for Tape Density reservation */
+#define UNIT_V_DF_TAPE  6               /* Bit offset for Tape Density reservation */
 #define UNIT_S_DF_TAPE  3               /* Bits Reserved for Tape Density */
 
 struct BITFIELD {
@@ -838,9 +846,11 @@ struct DEBTAB {
 #define DEBUG_PRI(d,m)  (sim_deb && (d.dctrl & (m)))
 #define DEBUG_PRJ(d,m)  (sim_deb && ((d)->dctrl & (m)))
 
-#define SIM_DBG_EVENT       0x10000
-#define SIM_DBG_ACTIVATE    0x20000
-#define SIM_DBG_AIO_QUEUE   0x40000
+#define SIM_DBG_EVENT       0x010000        /* event dispatch activities */
+#define SIM_DBG_ACTIVATE    0x020000        /* queue insertion activities */
+#define SIM_DBG_AIO_QUEUE   0x040000        /* asynch event queue activities */
+#define SIM_DBG_EXP_STACK   0x080000        /* expression stack activities */
+#define SIM_DBG_EXP_EVAL    0x100000        /* expression evaluation activities */
 
 /* Open File Reference */
 struct FILEREF {

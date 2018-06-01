@@ -2155,8 +2155,8 @@ t_stat sim_show_cons_speed (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONS
 {
 if (sim_con_ldsc.rxbps) {
     fprintf (st, "Speed = %d", sim_con_ldsc.rxbps);
-    if (sim_con_ldsc.rxbpsfactor != TMXR_RX_BPS_UNIT_SCALE)
-        fprintf (st, "*%.0f", sim_con_ldsc.rxbpsfactor/TMXR_RX_BPS_UNIT_SCALE);
+    if (sim_con_ldsc.bpsfactor != TMXR_BPS_UNIT_SCALE)
+        fprintf (st, "*%.0f", sim_con_ldsc.bpsfactor / TMXR_BPS_UNIT_SCALE);
     fprintf (st, " bps\n");
     }
 return SCPE_OK;
@@ -2239,7 +2239,15 @@ if (r != SCPE_OK)
 
 sim_deb_switches = sim_switches;                        /* save debug switches */
 if (sim_deb_switches & SWMASK ('R')) {
+    struct tm loc_tm, gmt_tm;
+    time_t time_t_now;
+
     clock_gettime(CLOCK_REALTIME, &sim_deb_basetime);
+    time_t_now = (time_t)sim_deb_basetime.tv_sec;
+    /* Adjust the relative timebase to reflect the localtime GMT offset */
+    loc_tm = *localtime (&time_t_now);
+    gmt_tm = *gmtime (&time_t_now);
+    sim_deb_basetime.tv_sec -= mktime (&gmt_tm) - mktime (&loc_tm);
     if (!(sim_deb_switches & (SWMASK ('A') | SWMASK ('T'))))
         sim_deb_switches |= SWMASK ('T');
     }
@@ -2323,17 +2331,33 @@ if (sim_deb) {
     if (sim_deb_switches & SWMASK ('A'))
         fprintf (st, "   Debug messages display time of day as seconds.msec%s\n", sim_deb_switches & SWMASK ('R') ? " relative to the start of debugging" : "");
     for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {
+        t_bool unit_debug = FALSE;
+        uint32 unit;
+
+        for (unit = 0; unit < dptr->numunits; unit++)
+            if (dptr->units[unit].dctrl) {
+                unit_debug = TRUE;
+                break;
+                }
         if (!(dptr->flags & DEV_DIS) &&
             ((dptr->flags & DEV_DEBUG) || (dptr->debflags)) &&
-            (dptr->dctrl)) {
+            ((dptr->dctrl) || unit_debug)) {
             fprintf (st, "Device: %-6s ", dptr->name);
             show_dev_debug (st, dptr, NULL, 0, NULL);
             }
         }
     for (i = 0; sim_internal_device_count && (dptr = sim_internal_devices[i]); ++i) {
+        t_bool unit_debug = FALSE;
+        uint32 unit;
+
+        for (unit = 0; unit < dptr->numunits; unit++)
+            if (dptr->units[unit].dctrl) {
+                unit_debug = TRUE;
+                break;
+                }
         if (!(dptr->flags & DEV_DIS) &&
             ((dptr->flags & DEV_DEBUG) || (dptr->debflags)) &&
-            (dptr->dctrl)) {
+            ((dptr->dctrl) || unit_debug)) {
             fprintf (st, "Device: %-6s ", dptr->name);
             show_dev_debug (st, dptr, NULL, 0, NULL);
             }
@@ -2775,7 +2799,7 @@ if (!sim_rem_master_mode) {
         (sim_con_ldsc.serport == 0)) {                      /* and not serial? */
         if (c && sim_con_ldsc.rxbps)                        /* got something && rate limiting? */
             sim_con_ldsc.rxnexttime =                       /* compute next input time */
-                floor (sim_gtime () + ((sim_con_ldsc.rxdelta * sim_timer_inst_per_sec ())/sim_con_ldsc.rxbpsfactor));
+                floor (sim_gtime () + ((sim_con_ldsc.rxdelta * sim_timer_inst_per_sec ()) / sim_con_ldsc.bpsfactor));
         if (c)
             sim_debug (DBG_RCV, &sim_con_telnet, "sim_poll_kbd() returning: '%c' (0x%02X)\n", sim_isprint (c & 0xFF) ? c & 0xFF : '.', c);
         return c;                                           /* in-window */
@@ -2836,9 +2860,7 @@ if (!sim_con_ldsc.conn) {                               /* no Telnet or serial c
     if (tmxr_poll_conn (&sim_con_tmxr) >= 0)            /* poll connect */
         sim_con_ldsc.rcve = 1;                          /* rcv enabled */
     }
-if (sim_con_ldsc.xmte == 0)                             /* xmt disabled? */
-    r = SCPE_STALL;
-else r = tmxr_putc_ln (&sim_con_ldsc, c);               /* no, Telnet output */
+r = tmxr_putc_ln (&sim_con_ldsc, c);                    /* Telnet output */
 tmxr_poll_tx (&sim_con_tmxr);                           /* poll xmt */
 return r;                                               /* return status */
 }
@@ -3906,6 +3928,12 @@ return SCPE_OK;
 
 #else
 
+#if !defined (__ANDROID_API__) || (__ANDROID_API__ < 26)
+#define TCSETATTR_ACTION TCSAFLUSH
+#else
+#define TCSETATTR_ACTION TCSANOW
+#endif
+
 #include <termios.h>
 #include <unistd.h>
 
@@ -3966,7 +3994,7 @@ runtty.c_cc[VINTR] = 0;                                 /* OS X doesn't deliver 
 #else
 runtty.c_cc[VINTR] = sim_int_char;                      /* in case changed */
 #endif
-if (tcsetattr (0, TCSAFLUSH, &runtty) < 0)
+if (tcsetattr (fileno(stdin), TCSETATTR_ACTION, &runtty) < 0)
     return SCPE_TTIERR;
 sim_os_set_thread_priority (PRIORITY_BELOW_NORMAL);     /* try to lower pri */
 return SCPE_OK;
@@ -3977,7 +4005,7 @@ static t_stat sim_os_ttcmd (void)
 if (!isatty (fileno (stdin)))                           /* skip if !tty */
     return SCPE_OK;
 sim_os_set_thread_priority (PRIORITY_NORMAL);           /* try to raise pri */
-if (tcsetattr (0, TCSAFLUSH, &cmdtty) < 0)
+if (tcsetattr (fileno(stdin), TCSETATTR_ACTION, &cmdtty) < 0)
     return SCPE_TTIERR;
 return SCPE_OK;
 }

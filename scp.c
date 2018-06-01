@@ -248,6 +248,9 @@
 #ifndef MAX
 #define MAX(a,b)  (((a) >= (b)) ? (a) : (b))
 #endif
+#ifndef MIN
+#define MIN(a,b)  (((a) <= (b)) ? (a) : (b))
+#endif
 
 /* search logical and boolean ops */
 
@@ -481,6 +484,7 @@ void fprint_capac (FILE *st, DEVICE *dptr, UNIT *uptr);
 void fprint_sep (FILE *st, int32 *tokens);
 REG *find_reg_glob (CONST char *ptr, CONST char **optr, DEVICE **gdptr);
 REG *find_reg_glob_reason (CONST char *cptr, CONST char **optr, DEVICE **gdptr, t_stat *stat);
+const char *sim_eval_expression (const char *cptr, t_svalue *value, t_bool parens_required, t_stat *stat);
 
 /* Forward references */
 
@@ -516,7 +520,7 @@ void int_handler (int signal);
 t_stat set_prompt (int32 flag, CONST char *cptr);
 t_stat sim_set_asynch (int32 flag, CONST char *cptr);
 t_stat sim_set_environment (int32 flag, CONST char *cptr);
-static const char *get_dbg_verb (uint32 dbits, DEVICE* dptr);
+static const char *get_dbg_verb (uint32 dbits, DEVICE* dptr, UNIT *uptr);
 
 /* Global data */
 
@@ -551,10 +555,10 @@ int32 sim_brk_lnt = 0;
 int32 sim_brk_ins = 0;
 int32 sim_quiet = 0;
 int32 sim_step = 0;
-char *sim_sub_instr = NULL;
-char *sim_sub_instr_buf = NULL;
-size_t sim_sub_instr_size = 0;
-size_t *sim_sub_instr_off = NULL;
+char *sim_sub_instr = NULL;         /* Copy of pre-substitution buffer contents */
+char *sim_sub_instr_buf = NULL;     /* Buffer address that substitutions were saved in */
+size_t sim_sub_instr_size = 0;      /* substitution buffer size */
+size_t *sim_sub_instr_off = NULL;   /* offsets in substitution buffer where original data started */
 static double sim_time;
 static uint32 sim_rtime;
 static int32 noqueue_time;
@@ -587,6 +591,7 @@ static const char *sim_do_ocptr[MAX_DO_NEST_LVL+1];
 static const char *sim_do_label[MAX_DO_NEST_LVL+1];
 
 t_stat sim_last_cmd_stat;                               /* Command Status */
+struct timespec cmd_time;                               /*  */
 
 static SCHTAB sim_stabr;                                /* Register search specifier */
 static SCHTAB sim_staba;                                /* Memory search specifier */
@@ -671,6 +676,7 @@ const struct scp_error {
          {"EXPECT",  "Expect matched"},
          {"AMBREG",  "Ambiguous register name"},
          {"REMOTE",  "remote console command"},
+         {"INVEXPR", "invalid expression"},
     };
 
 const size_t size_map[] = { sizeof (int8),
@@ -813,10 +819,27 @@ static const char simh_help[] =
 #define HLP_EVALUATE    "*Commands Evaluating_Instructions"
        /***************** 80 character line width template *************************/
       "2Evaluating Instructions\n"
-      " The EVAL command evaluates a symbolic expression and returns the equivalent\n"
+      " The EVAL command evaluates a symbolic instruction and returns the equivalent\n"
       " numeric value.  This is useful for obtaining numeric arguments for a search\n"
       " command:\n\n"
-      "++EVAL <expression>\n"
+      "++EVAL <expression>\n\n"
+      " Examples:\n\n"
+      "+On the VAX simulator:\n"
+      "++sim> eval addl2 r2,r3\n"
+      "++0:      005352C0\n"
+      "++sim> eval addl2 #ff,6(r0)\n"
+      "++0:      00FF8FC0\n"
+      "++4:      06A00000\n"
+      "++sim> eval 'AB\n"
+      "++0:      00004241\n\n"
+      "+On the PDP-8:\n"
+      "++sim> eval tad 60\n"
+      "++0:      1060\n"
+      "++sim> eval tad 300\n"
+      "++tad 300\n"
+      "++Can't be parsed as an instruction or data\n\n"
+      " 'tad 300' fails, because with an implicit PC of 0, location 300 can't be\n"
+      " reached with direct addressing.\n"
        /***************** 80 character line width template *************************/
       "2Loading and Saving Programs\n"
 #define HLP_LOAD        "*Commands Loading_and_Saving_Programs LOAD"
@@ -1214,9 +1237,42 @@ static const char simh_help[] =
       "+SET NOASYNCH                disable asynchronous I/O\n"
 #define HLP_SET_ENVIRON "*Commands SET Environment"
       "3Environment\n"
-      "4Explicitily Changing A Variable\n"
+      "4Explicitily Changing a Variable\n"
       "+SET ENVIRONMENT name=val    set environment variable\n"
       "+SET ENVIRONMENT name        clear environment variable\n"
+      "4Arithmetic Computations into a Variable\n\n"
+      "+SET ENVIRONMENT -A name=expression\n\n"
+      " Expression can contain any of these C language operators:\n\n"
+      "++ (                  Open Parenthesis\n"
+      "++ )                  Close Parenthesis\n"
+      "++ -                  Subtraction\n"
+      "++ +                  Addition\n"
+      "++ *                  Multiplication\n"
+      "++ /                  Division\n"
+      "++ %%                  Modulus\n"
+      "++ &&                 Logical AND\n"
+      "++ ||                 Logical OR\n"
+      "++ &                  Bitwise AND\n"
+      "++ |                  Bitwise Inclusive OR\n"
+      "++ ^                  Bitwise Exclusive OR\n"
+      "++ >>                 Bitwise Right Shift\n"
+      "++ <<                 Bitwise Left Shift\n"
+      "++ ==                 Equality\n"
+      "++ !=                 Inequality\n"
+      "++ <=                 Less than or Equal\n"
+      "++ <                  Less than\n"
+      "++ >=                 Greater than or Equal\n"
+      "++ >                  Greater than\n"
+      "++ !                  Logical Negation\n"
+      "++ ~                  Bitwise Compliment\n\n"
+      " Operator precedence is consistent with C language precedence.\n\n"
+      " Expression can contain arbitrary combinations of constant\n"
+      " values, simulator registers and environment variables \n"
+      "5Examples:\n"
+      "++SET ENV -A A=7+2\n"
+      "++SET ENV -A A=A-1\n"
+      "++ECHO A=%%A%%\n"
+      "++A=8\n"
       "4Gathering Input From A User\n"
       " Input from a user can be obtained by:\n\n"
       "+set environment -P \"Prompt String\" name=default\n\n"
@@ -1400,8 +1456,8 @@ static const char simh_help[] =
       " Built In variables %%DATE%%, %%TIME%%, %%DATETIME%%, %%LDATE%%, %%LTIME%%,\n"
       " %%CTIME%%, %%DATE_YYYY%%, %%DATE_YY%%, %%DATE_YC%%, %%DATE_MM%%, %%DATE_MMM%%,\n"
       " %%DATE_MONTH%%, %%DATE_DD%%, %%DATE_D%%, %%DATE_WYYYY%%, %%DATE_WW%%,\n"
-      " %%TIME_HH%%, %%TIME_MM%%, %%TIME_SS%%, %%STATUS%%, %%TSTATUS%%, %%SIM_VERIFY%%,\n"
-      " %%SIM_QUIET%%, %%SIM_MESSAGE%% %%SIM_MESSAGE%%\n"
+      " %%TIME_HH%%, %%TIME_MM%%, %%TIME_SS%%, %%TIME_MSEC%%, %%STATUS%%, %%TSTATUS%%,\n"
+      " %%SIM_VERIFY%%, %%SIM_QUIET%%, %%SIM_MESSAGE%% %%SIM_MESSAGE%%\n"
       " %%SIM_NAME%%, %%SIM_BIN_NAME%%, %%SIM_BIN_PATH%%m %%SIM_OSTYPE%%\n\n"
       "+Token %%0 expands to the command file name.\n"
       "+Token %%n (n being a single digit) expands to the n'th argument\n"
@@ -1436,6 +1492,7 @@ static const char simh_help[] =
       "++%%TIME_HH%%           hh          (00-23)\n"
       "++%%TIME_MM%%           mm          (00-59)\n"
       "++%%TIME_SS%%           ss          (00-59)\n"
+      "++%%TIME_MSEC%%         msec        (000-999)\n"
       "++%%STATUS%%            Status value from the last command executed\n"
       "++%%TSTATUS%%           The text form of the last status value\n"
       "++%%SIM_VERIFY%%        The Verify/Verbose mode of the current Do command file\n"
@@ -1958,8 +2015,42 @@ static const char simh_help[] =
       " failed\" message.  Otherwise, the command file will continue to bring up\n"
       " the operating system.\n"
       "4Conditional Expressions\n"
-      " The IF and ASSERT commands evaluate three different forms of conditional\n"
+      " The IF and ASSERT commands evaluate five different forms of conditional\n"
       " expressions.:\n\n"
+      "5C Style Simulator State Expressions\n"
+
+      " Comparisons can optionally be done with complete C style computational\n"
+      " expressions which leverage the C operations in the below table and can\n"
+      " optionally reference any combination of values that are constants or\n"
+      " contained in environment variables or simulator registers.  C style\n"
+      " expression evaluation is initiated by enclosing the expression in\n"
+      " parenthesis.\n\n"
+      " Expression can contain any of these C language operators:\n\n"
+      "++ (                  Open Parenthesis\n"
+      "++ )                  Close Parenthesis\n"
+      "++ -                  Subtraction\n"
+      "++ +                  Addition\n"
+      "++ *                  Multiplication\n"
+      "++ /                  Division\n"
+      "++ %%                  Modulus\n"
+      "++ &&                 Logical AND\n"
+      "++ ||                 Logical OR\n"
+      "++ &                  Bitwise AND\n"
+      "++ |                  Bitwise Inclusive OR\n"
+      "++ ^                  Bitwise Exclusive OR\n"
+      "++ >>                 Bitwise Right Shift\n"
+      "++ <<                 Bitwise Left Shift\n"
+      "++ ==                 Equality\n"
+      "++ !=                 Inequality\n"
+      "++ <=                 Less than or Equal\n"
+      "++ <                  Less than\n"
+      "++ >=                 Greater than or Equal\n"
+      "++ >                  Greater than\n"
+      "++ !                  Logical Negation\n"
+      "++ ~                  Bitwise Compliment\n\n"
+      " Operator precedence is consistent with C language precedence.\n\n"
+      " Expression can contain arbitrary combinations of constant\n"
+      " values, simulator registers and environment variables \n"
       "5Simulator State Expressions\n"
       " The values of simulator registers can be evaluated with:\n\n"
       "++{NOT} {<dev>} <reg>|<addr>{<logical-op><value>}<conditional-op><value>\n\n"
@@ -2152,6 +2243,8 @@ static C1TAB set_dev_tab[] = {
 static C1TAB set_unit_tab[] = {
     { "ENABLED",    &set_unit_enbdis,   1 },
     { "DISABLED",   &set_unit_enbdis,   0 },
+    { "DEBUG",      &set_dev_debug,     2+1 },
+    { "NODEBUG",    &set_dev_debug,     2+0 },
     { NULL,         NULL,               0 }
     };
 
@@ -2198,6 +2291,7 @@ static SHTAB show_dev_tab[] = {
     };
 
 static SHTAB show_unit_tab[] = {
+    { "DEBUG",      &show_dev_debug,            1 },
     { NULL, NULL, 0 }
     };
 
@@ -2305,6 +2399,8 @@ if ((sim_eval = (t_value *) calloc (sim_emax, sizeof (t_value))) == NULL) {
     fprintf (stderr, "Unable to allocate examine buffer\n");
     return 0;
     };
+if (sim_dflt_dev == NULL)                               /* if no default */
+    sim_dflt_dev = sim_devices[0];
 if ((stat = reset_all_p (0)) != SCPE_OK) {
     fprintf (stderr, "Fatal simulator initialization error\n%s\n",
         sim_error_text (stat));
@@ -2321,8 +2417,6 @@ if (!sim_quiet) {
     show_version (stdout, NULL, NULL, 0, NULL);
     }
 show_version (stdnul, NULL, NULL, 1, NULL);             /* Quietly set SIM_OSTYPE */
-if (sim_dflt_dev == NULL)                               /* if no default */
-    sim_dflt_dev = sim_devices[0];
 if (((sim_dflt_dev->flags & DEV_DEBUG) == 0) &&         /* default device without debug? */
     (sim_dflt_dev->debflags == NULL)) {
     sim_dflt_dev->flags |= DEV_DEBUG;                   /* connect default event debugging */
@@ -2674,6 +2768,7 @@ void fprint_set_help_ex (FILE *st, DEVICE *dptr, t_bool silent)
 MTAB *mptr;
 DEBTAB *dep;
 t_bool found = FALSE;
+t_bool deb_desc_available = FALSE;
 char buf[CBUFSIZE], header[CBUFSIZE];
 
 sprintf (header, "\n%s device SET commands:\n\n", dptr->name);
@@ -2707,13 +2802,11 @@ if ((dptr->flags & DEV_DEBUG) || (dptr->debflags)) {
     sprintf (buf, "set %s NODEBUG", sim_dname (dptr));
     fprintf (st,  "%-30s\tDisables debugging for device %s\n", buf, sim_dname (dptr));
     if (dptr->debflags) {
-        t_bool desc_available = FALSE;
-
         strcpy (buf, "");
         fprintf (st, "set %s DEBUG=", sim_dname (dptr));
         for (dep = dptr->debflags; dep->name != NULL; dep++) {
             fprintf (st, "%s%s", ((dep == dptr->debflags) ? "" : ";"), dep->name);
-            desc_available |= ((dep->desc != NULL) && (dep->desc[0] != '\0'));
+            deb_desc_available |= ((dep->desc != NULL) && (dep->desc[0] != '\0'));
             }
         fprintf (st, "\n");
         fprintf (st,  "%-30s\tEnables specific debugging for device %s\n", buf, sim_dname (dptr));
@@ -2722,11 +2815,6 @@ if ((dptr->flags & DEV_DEBUG) || (dptr->debflags)) {
             fprintf (st, "%s%s", ((dep == dptr->debflags) ? "" : ";"), dep->name);
         fprintf (st, "\n");
         fprintf (st,  "%-30s\tDisables specific debugging for device %s\n", buf, sim_dname (dptr));
-        if (desc_available) {
-            fprintf (st, "\n*%s device DEBUG settings:\n", sim_dname (dptr));
-            for (dep = dptr->debflags; dep->name != NULL; dep++)
-                fprintf (st, "%4s%-12s%s\n", "", dep->name, dep->desc ? dep->desc : "");
-            }
         }
     }
 if ((dptr->modifiers) && (dptr->units) && (dptr->numunits != 1)) {
@@ -2736,6 +2824,27 @@ if ((dptr->modifiers) && (dptr->units) && (dptr->numunits != 1)) {
         fprintf (st,  "%-30s\tEnables unit %sn\n", buf, sim_dname (dptr));
         sprintf (buf, "set %sn DISABLE", sim_dname (dptr));
         fprintf (st,  "%-30s\tDisables unit %sn\n", buf, sim_dname (dptr));
+        }
+    if (((dptr->flags & DEV_DEBUG) || (dptr->debflags)) &&
+        ((DEV_TYPE(dptr) == DEV_DISK) || (DEV_TYPE(dptr) == DEV_TAPE))) {
+        sprintf (buf, "set %sn DEBUG", sim_dname (dptr));
+        fprintf (st,  "%-30s\tEnables debugging for device unit %sn\n", buf, sim_dname (dptr));
+        sprintf (buf, "set %sn NODEBUG", sim_dname (dptr));
+        fprintf (st,  "%-30s\tDisables debugging for device unit %sn\n", buf, sim_dname (dptr));
+        if (dptr->debflags) {
+            strcpy (buf, "");
+            fprintf (st, "set %sn DEBUG=", sim_dname (dptr));
+            for (dep = dptr->debflags; dep->name != NULL; dep++)
+                fprintf (st, "%s%s", ((dep == dptr->debflags) ? "" : ";"), dep->name);
+            fprintf (st, "\n");
+            fprintf (st,  "%-30s\tEnables specific debugging for device unit %sn\n", buf, sim_dname (dptr));
+            fprintf (st, "set %sn NODEBUG=", sim_dname (dptr));
+            for (dep = dptr->debflags; dep->name != NULL; dep++)
+                fprintf (st, "%s%s", ((dep == dptr->debflags) ? "" : ";"), dep->name);
+            fprintf (st, "\n");
+            fprintf (st,  "%-30s\tDisables specific debugging for device unit %sn\n", buf, sim_dname (dptr));
+            }
+
         }
     for (mptr = dptr->modifiers; mptr->mask != 0; mptr++) {
         if ((!MODMASK(mptr,MTAB_VUN)) && MODMASK(mptr,MTAB_XTD))
@@ -2750,6 +2859,11 @@ if ((dptr->modifiers) && (dptr->units) && (dptr->numunits != 1)) {
                 fprintf (st,  "%-30s\t%s\n", "", mptr->help);
             }
         }
+    }
+if (deb_desc_available) {
+    fprintf (st, "\n*%s device DEBUG settings:\n", sim_dname (dptr));
+    for (dep = dptr->debflags; dep->name != NULL; dep++)
+        fprintf (st, "%4s%-12s%s\n", "", dep->name, dep->desc ? dep->desc : "");
     }
 if (!found && !silent)
     fprintf (st, "No SET help is available for the %s device\n", dptr->name);
@@ -3182,7 +3296,7 @@ strlcpy (abuf, fcptr, sizeof(abuf));
 c = abuf;
 do_arg[10] = NULL;                                      /* make sure the argument list always ends with a NULL */
 for (nargs = 0; nargs < 10; ) {                         /* extract arguments */
-    while (sim_isspace (*c))                                /* skip blanks */
+    while (sim_isspace (*c))                            /* skip blanks */
         c++;
     if (*c == 0)                                        /* all done? */
         do_arg [nargs++] = NULL;                        /* null argument */
@@ -3425,6 +3539,185 @@ return stat | SCPE_NOMESSAGE;                           /* suppress message sinc
    untouched.
 */
 
+static const char *
+_sim_get_env_special (const char *gbuf, char *rbuf, size_t rbuf_size)
+{
+const char *ap;
+char tbuf[CBUFSIZE];
+
+ap = getenv(gbuf);                      /* first try using the literal name */
+if (!ap) {
+    get_glyph (gbuf, tbuf, 0);          /* now try using the upcased name */
+    ap = getenv(tbuf);
+    }
+if (ap)                                 /* environment variable found? */
+    strlcpy (rbuf, ap, rbuf_size);      /* Return the environment value */
+else {                                  /* otherwise, check for Special Names */
+    time_t now = (time_t)cmd_time.tv_sec;
+    struct tm *tmnow = localtime(&now);
+
+    /* ISO 8601 format date/time info */
+    if (!strcmp ("DATE", gbuf)) {
+        sprintf (rbuf, "%4d-%02d-%02d", tmnow->tm_year+1900, tmnow->tm_mon+1, tmnow->tm_mday);
+        ap = rbuf;
+        }
+    else if (!strcmp ("TIME", gbuf)) {
+        sprintf (rbuf, "%02d:%02d:%02d", tmnow->tm_hour, tmnow->tm_min, tmnow->tm_sec);
+        ap = rbuf;
+        }
+    else if (!strcmp ("DATETIME", gbuf)) {
+        sprintf (rbuf, "%04d-%02d-%02dT%02d:%02d:%02d", tmnow->tm_year+1900, tmnow->tm_mon+1, tmnow->tm_mday, tmnow->tm_hour, tmnow->tm_min, tmnow->tm_sec);
+        ap = rbuf;
+        }
+    /* Locale oriented formatted date/time info */
+    else if (!strcmp ("LDATE", gbuf)) {
+        strftime (rbuf, rbuf_size, "%x", tmnow);
+        ap = rbuf;
+        }
+    else if (!strcmp ("LTIME", gbuf)) {
+#if defined(HAVE_C99_STRFTIME)
+        strftime (rbuf, rbuf_size, "%r", tmnow);
+#else
+        strftime (rbuf, rbuf_size, "%p", tmnow);
+        if (rbuf[0])
+            strftime (rbuf, rbuf_size, "%I:%M:%S %p", tmnow);
+        else
+            strftime (rbuf, rbuf_size, "%H:%M:%S", tmnow);
+#endif
+        ap = rbuf;
+        }
+    else if (!strcmp ("CTIME", gbuf)) {
+#if defined(HAVE_C99_STRFTIME)
+        strftime (rbuf, rbuf_size, "%c", tmnow);
+#else
+        strcpy (rbuf, ctime(&now));
+        rbuf[strlen (rbuf)-1] = '\0';    /* remove trailing \n */
+#endif
+        ap = rbuf;
+        }
+    else if (!strcmp ("UTIME", gbuf)) {
+        sprintf (rbuf, "%" LL_FMT "d", (LL_TYPE)now);
+        ap = rbuf;
+        }
+    /* Separate Date/Time info */
+    else if (!strcmp ("DATE_YYYY", gbuf)) {/* Year (0000-9999) */
+        strftime (rbuf, rbuf_size, "%Y", tmnow);
+        ap = rbuf;
+        }
+    else if (!strcmp ("DATE_YY", gbuf)) {/* Year (00-99) */
+        strftime (rbuf, rbuf_size, "%y", tmnow);
+        ap = rbuf;
+        }
+    else if (!strcmp ("DATE_YC", gbuf)) {/* Century (year/100) */
+        sprintf (rbuf, "%d", (tmnow->tm_year + 1900)/100);
+        ap = rbuf;
+        }
+    else if ((!strcmp ("DATE_19XX_YY", gbuf)) || /* Year with same calendar */
+             (!strcmp ("DATE_19XX_YYYY", gbuf))) {
+        int year = tmnow->tm_year + 1900;
+        int days = year - 2001;
+        int leaps = days/4 - days/100 + days/400;
+        int lyear = ((year % 4) == 0) && (((year % 100) != 0) || ((year % 400) == 0));
+        int selector = ((days + leaps + 7) % 7) + lyear * 7;
+        static int years[] = {90, 91, 97, 98, 99, 94, 89, 
+                              96, 80, 92, 76, 88, 72, 84};
+        int cal_year = years[selector];
+
+        if (!strcmp ("DATE_19XX_YY", gbuf))
+            sprintf (rbuf, "%d", cal_year);        /* 2 digit year */
+        else
+            sprintf (rbuf, "%d", cal_year + 1900); /* 4 digit year */
+        ap = rbuf;
+        }
+    else if (!strcmp ("DATE_MM", gbuf)) {/* Month number (01-12) */
+        strftime (rbuf, rbuf_size, "%m", tmnow);
+        ap = rbuf;
+        }
+    else if (!strcmp ("DATE_MMM", gbuf)) {/* abbreviated Month name */
+        strftime (rbuf, rbuf_size, "%b", tmnow);
+        ap = rbuf;
+        }
+    else if (!strcmp ("DATE_MONTH", gbuf)) {/* full Month name */
+        strftime (rbuf, rbuf_size, "%B", tmnow);
+        ap = rbuf;
+        }
+    else if (!strcmp ("DATE_DD", gbuf)) {/* Day of Month (01-31) */
+        strftime (rbuf, rbuf_size, "%d", tmnow);
+        ap = rbuf;
+        }
+    else if (!strcmp ("DATE_D", gbuf)) { /* ISO 8601 weekday number (1-7) */
+        sprintf (rbuf, "%d", (tmnow->tm_wday ? tmnow->tm_wday : 7));
+        ap = rbuf;
+        }
+    else if ((!strcmp ("DATE_WW", gbuf)) ||   /* ISO 8601 week number (01-53) */
+             (!strcmp ("DATE_WYYYY", gbuf))) {/* ISO 8601 week year number (0000-9999) */
+        int iso_yr = tmnow->tm_year + 1900;
+        int iso_wk = (tmnow->tm_yday + 11 - (tmnow->tm_wday ? tmnow->tm_wday : 7))/7;;
+
+        if (iso_wk == 0) {
+            iso_yr = iso_yr - 1;
+            tmnow->tm_yday += 365 + (((iso_yr % 4) == 0) ? 1 : 0);  /* Adjust for Leap Year (Correct thru 2099) */
+            iso_wk = (tmnow->tm_yday + 11 - (tmnow->tm_wday ? tmnow->tm_wday : 7))/7;
+            }
+        else
+            if ((iso_wk == 53) && (((31 - tmnow->tm_mday) + tmnow->tm_wday) < 4)) {
+                ++iso_yr;
+                iso_wk = 1;
+                }
+        if (!strcmp ("DATE_WW", gbuf))
+            sprintf (rbuf, "%02d", iso_wk);
+        else
+            sprintf (rbuf, "%04d", iso_yr);
+        ap = rbuf;
+        }
+    else if (!strcmp ("DATE_JJJ", gbuf)) {/* day of year (001-366) */
+        strftime (rbuf, rbuf_size, "%j", tmnow);
+        ap = rbuf;
+        }
+    else if (!strcmp ("TIME_HH", gbuf)) {/* Hour of day (00-23) */
+        strftime (rbuf, rbuf_size, "%H", tmnow);
+        ap = rbuf;
+        }
+    else if (!strcmp ("TIME_MM", gbuf)) {/* Minute of hour (00-59) */
+        strftime (rbuf, rbuf_size, "%M", tmnow);
+        ap = rbuf;
+        }
+    else if (!strcmp ("TIME_SS", gbuf)) {/* Second of minute (00-59) */
+        strftime (rbuf, rbuf_size, "%S", tmnow);
+        ap = rbuf;
+        }
+    else if (!strcmp ("TIME_MSEC", gbuf)) {/* Milliseconds of Second (000-999) */
+        sprintf (rbuf, "%03d", (int)(cmd_time.tv_nsec / 1000000));
+        ap = rbuf;
+        }
+    else if (!strcmp ("STATUS", gbuf)) {
+        sprintf (rbuf, "%08X", sim_last_cmd_stat);
+        ap = rbuf;
+        }
+    else if (!strcmp ("TSTATUS", gbuf)) {
+        sprintf (rbuf, "%s", sim_error_text (sim_last_cmd_stat));
+        ap = rbuf;
+        }
+    else if (!strcmp ("SIM_VERIFY", gbuf)) {
+        sprintf (rbuf, "%s", sim_do_echo ? "-V" : "");
+        ap = rbuf;
+        }
+    else if (!strcmp ("SIM_VERBOSE", gbuf)) {
+        sprintf (rbuf, "%s", sim_do_echo ? "-V" : "");
+        ap = rbuf;
+        }
+    else if (!strcmp ("SIM_QUIET", gbuf)) {
+        sprintf (rbuf, "%s", sim_quiet ? "-Q" : "");
+        ap = rbuf;
+        }
+    else if (!strcmp ("SIM_MESSAGE", gbuf)) {
+        sprintf (rbuf, "%s", sim_show_message ? "" : "-Q");
+        ap = rbuf;
+        }
+    }
+return ap;
+}
+
 void sim_sub_args (char *instr, size_t instr_size, char *do_arg[])
 {
 char gbuf[CBUFSIZE];
@@ -3434,11 +3727,8 @@ char rbuf[CBUFSIZE];
 int i;
 size_t instr_off = 0;
 size_t outstr_off = 0;
-time_t now;
-struct tm *tmnow;
 
-time(&now);
-tmnow = localtime(&now);
+clock_gettime(CLOCK_REALTIME, &cmd_time);
 tmpbuf = (char *)malloc(instr_size);
 op = tmpbuf;
 oend = tmpbuf + instr_size - 2;
@@ -3513,172 +3803,12 @@ for (; *ip && (op < oend); ) {
                             break;
                 ip = ip + 2;
                 }
-            else {                                      /* environment variable */
-                ap = NULL;
-                get_glyph_nc (ip+1, gbuf, '%');         /* first try using the literal name */
-                ap = getenv(gbuf);
-                if (!ap) {
-                    get_glyph (ip+1, gbuf, '%');        /* now try using the upcased name */
-                    ap = getenv(gbuf);
-                    }
+            else {                                      /* check environment variable or special variables */
+                get_glyph_nc (ip+1, gbuf, '%');         /* get the literal name */
+                ap = _sim_get_env_special (gbuf, rbuf, sizeof (rbuf));
                 ip += 1 + strlen (gbuf);
-                if (*ip == '%') ++ip;
-                if (!ap) {
-                    /* ISO 8601 format date/time info */
-                    if (!strcmp ("DATE", gbuf)) {
-                        sprintf (rbuf, "%4d-%02d-%02d", tmnow->tm_year+1900, tmnow->tm_mon+1, tmnow->tm_mday);
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("TIME", gbuf)) {
-                        sprintf (rbuf, "%02d:%02d:%02d", tmnow->tm_hour, tmnow->tm_min, tmnow->tm_sec);
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("DATETIME", gbuf)) {
-                        sprintf (rbuf, "%04d-%02d-%02dT%02d:%02d:%02d", tmnow->tm_year+1900, tmnow->tm_mon+1, tmnow->tm_mday, tmnow->tm_hour, tmnow->tm_min, tmnow->tm_sec);
-                        ap = rbuf;
-                        }
-                    /* Locale oriented formatted date/time info */
-                    else if (!strcmp ("LDATE", gbuf)) {
-                        strftime (rbuf, sizeof(rbuf), "%x", tmnow);
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("LTIME", gbuf)) {
-#if defined(HAVE_C99_STRFTIME)
-                        strftime (rbuf, sizeof(rbuf), "%r", tmnow);
-#else
-                        strftime (rbuf, sizeof(rbuf), "%p", tmnow);
-                        if (rbuf[0])
-                            strftime (rbuf, sizeof(rbuf), "%I:%M:%S %p", tmnow);
-                        else
-                            strftime (rbuf, sizeof(rbuf), "%H:%M:%S", tmnow);
-#endif
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("CTIME", gbuf)) {
-#if defined(HAVE_C99_STRFTIME)
-                        strftime (rbuf, sizeof(rbuf), "%c", tmnow);
-#else
-                        strcpy (rbuf, ctime(&now));
-                        rbuf[strlen (rbuf)-1] = '\0';    /* remove trailing \n */
-#endif
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("UTIME", gbuf)) {
-                        sprintf (rbuf, "%" LL_FMT "d", (LL_TYPE)now);
-                        ap = rbuf;
-                        }
-                    /* Separate Date/Time info */
-                    else if (!strcmp ("DATE_YYYY", gbuf)) {/* Year (0000-9999) */
-                        strftime (rbuf, sizeof(rbuf), "%Y", tmnow);
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("DATE_YY", gbuf)) {/* Year (00-99) */
-                        strftime (rbuf, sizeof(rbuf), "%y", tmnow);
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("DATE_YC", gbuf)) {/* Century (year/100) */
-                        sprintf (rbuf, "%d", (tmnow->tm_year + 1900)/100);
-                        ap = rbuf;
-                        }
-                    else if ((!strcmp ("DATE_19XX_YY", gbuf)) || /* Year with same calendar */
-                             (!strcmp ("DATE_19XX_YYYY", gbuf))) {
-                        int year = tmnow->tm_year + 1900;
-                        int days = year - 2001;
-                        int leaps = days/4 - days/100 + days/400;
-                        int lyear = ((year % 4) == 0) && (((year % 100) != 0) || ((year % 400) == 0));
-                        int selector = ((days + leaps + 7) % 7) + lyear * 7;
-                        static int years[] = {90, 91, 97, 98, 99, 94, 89, 
-                                              96, 80, 92, 76, 88, 72, 84};
-                        int cal_year = years[selector];
-
-                        if (!strcmp ("DATE_19XX_YY", gbuf))
-                            sprintf (rbuf, "%d", cal_year);        /* 2 digit year */
-                        else
-                            sprintf (rbuf, "%d", cal_year + 1900); /* 4 digit year */
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("DATE_MM", gbuf)) {/* Month number (01-12) */
-                        strftime (rbuf, sizeof(rbuf), "%m", tmnow);
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("DATE_MMM", gbuf)) {/* abbreviated Month name */
-                        strftime (rbuf, sizeof(rbuf), "%b", tmnow);
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("DATE_MONTH", gbuf)) {/* full Month name */
-                        strftime (rbuf, sizeof(rbuf), "%B", tmnow);
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("DATE_DD", gbuf)) {/* Day of Month (01-31) */
-                        strftime (rbuf, sizeof(rbuf), "%d", tmnow);
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("DATE_D", gbuf)) { /* ISO 8601 weekday number (1-7) */
-                        sprintf (rbuf, "%d", (tmnow->tm_wday ? tmnow->tm_wday : 7));
-                        ap = rbuf;
-                        }
-                    else if ((!strcmp ("DATE_WW", gbuf)) ||   /* ISO 8601 week number (01-53) */
-                             (!strcmp ("DATE_WYYYY", gbuf))) {/* ISO 8601 week year number (0000-9999) */
-                        int iso_yr = tmnow->tm_year + 1900;
-                        int iso_wk = (tmnow->tm_yday + 11 - (tmnow->tm_wday ? tmnow->tm_wday : 7))/7;;
-
-                        if (iso_wk == 0) {
-                            iso_yr = iso_yr - 1;
-                            tmnow->tm_yday += 365 + (((iso_yr % 4) == 0) ? 1 : 0);  /* Adjust for Leap Year (Correct thru 2099) */
-                            iso_wk = (tmnow->tm_yday + 11 - (tmnow->tm_wday ? tmnow->tm_wday : 7))/7;
-                            }
-                        else
-                            if ((iso_wk == 53) && (((31 - tmnow->tm_mday) + tmnow->tm_wday) < 4)) {
-                                ++iso_yr;
-                                iso_wk = 1;
-                                }
-                        if (!strcmp ("DATE_WW", gbuf))
-                            sprintf (rbuf, "%02d", iso_wk);
-                        else
-                            sprintf (rbuf, "%04d", iso_yr);
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("DATE_JJJ", gbuf)) {/* day of year (001-366) */
-                        strftime (rbuf, sizeof(rbuf), "%j", tmnow);
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("TIME_HH", gbuf)) {/* Hour of day (00-23) */
-                        strftime (rbuf, sizeof(rbuf), "%H", tmnow);
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("TIME_MM", gbuf)) {/* Minute of hour (00-59) */
-                        strftime (rbuf, sizeof(rbuf), "%M", tmnow);
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("TIME_SS", gbuf)) {/* Second of minute (00-59) */
-                        strftime (rbuf, sizeof(rbuf), "%S", tmnow);
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("STATUS", gbuf)) {
-                        sprintf (rbuf, "%08X", sim_last_cmd_stat);
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("TSTATUS", gbuf)) {
-                        sprintf (rbuf, "%s", sim_error_text (sim_last_cmd_stat));
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("SIM_VERIFY", gbuf)) {
-                        sprintf (rbuf, "%s", sim_do_echo ? "-V" : "");
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("SIM_VERBOSE", gbuf)) {
-                        sprintf (rbuf, "%s", sim_do_echo ? "-V" : "");
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("SIM_QUIET", gbuf)) {
-                        sprintf (rbuf, "%s", sim_quiet ? "-Q" : "");
-                        ap = rbuf;
-                        }
-                    else if (!strcmp ("SIM_MESSAGE", gbuf)) {
-                        sprintf (rbuf, "%s", sim_show_message ? "" : "-Q");
-                        ap = rbuf;
-                        }
-                    }
+                if (*ip == '%') 
+                    ++ip;
                 }
             if (ap) {                                   /* non-null arg? */
                 while (*ap && (op < oend)) {            /* copy the argument */
@@ -3921,61 +4051,75 @@ if (Exist || (*gbuf == '"') || (*gbuf == '\'')) {       /* quoted string compari
         }
     }
 else {
-    cptr = get_glyph (cptr, gbuf, 0);                   /* get register */
-    rptr = find_reg (gbuf, &gptr, sim_dfdev);           /* parse register */
-    if (rptr) {                                         /* got register? */
-        if (*gptr == '[') {                             /* subscript? */
-            if (rptr->depth <= 1)                       /* array register? */
-                return SCPE_ARG;
-            idx = (uint32) strtotv (++gptr, &tptr, 10); /* convert index */
-            if ((gptr == tptr) || (*tptr++ != ']'))
-                return SCPE_ARG;
-            gptr = tptr;                                /* update */
+    while (sim_isspace (*cptr))                         /* skip spaces */
+        ++cptr;
+    if (*cptr == '(') {
+        t_svalue value;
+
+        if ((cptr > sim_sub_instr_buf) && ((size_t)(cptr - sim_sub_instr_buf) < sim_sub_instr_size))
+            cptr = &sim_sub_instr[sim_sub_instr_off[cptr - sim_sub_instr_buf]]; /* get un-substituted string */
+        cptr = sim_eval_expression (cptr, &value, TRUE, &r);
+        result = (value != 0);
+        }
+    else {
+        cptr = get_glyph (cptr, gbuf, 0);                   /* get register */
+        rptr = find_reg (gbuf, &gptr, sim_dfdev);           /* parse register */
+        if (rptr) {                                         /* got register? */
+            if (*gptr == '[') {                             /* subscript? */
+                if (rptr->depth <= 1)                       /* array register? */
+                    return SCPE_ARG;
+                idx = (uint32) strtotv (++gptr, &tptr, 10); /* convert index */
+                if ((gptr == tptr) || (*tptr++ != ']'))
+                    return SCPE_ARG;
+                gptr = tptr;                                /* update */
+                }
+            else idx = 0;                                   /* not array */
+            if (idx >= rptr->depth)                         /* validate subscript */
+                return SCPE_SUB;
             }
-        else idx = 0;                                   /* not array */
-        if (idx >= rptr->depth)                         /* validate subscript */
-            return SCPE_SUB;
-        }
-    else {                                              /* not reg, check for memory */
-        if (sim_dfdev && sim_vm_parse_addr)             /* get addr */
-            addr = sim_vm_parse_addr (sim_dfdev, gbuf, &gptr);
-        else
-            addr = (t_addr) strtotv (gbuf, &gptr, sim_dfdev ? sim_dfdev->dradix : sim_dflt_dev->dradix);
-        if (gbuf == gptr)                               /* not register? */
-            return SCPE_NXREG;
-        }
-    if (*gptr != 0)                                     /* more? must be search */
-        get_glyph (gptr, gbuf, 0);
-    else {
-        if (*cptr == 0)                                 /* must be more */
-            return SCPE_2FARG;
-        cptr = get_glyph (cptr, gbuf, 0);               /* get search cond */
-        }
-    if (*cptr) {                                        /* more? */
-        if (flag)                                       /* ASSERT has no more args */
-            return SCPE_2MARG;
-        }
-    else {
-        if (!flag)                                      
-            return SCPE_2FARG;                          /* IF needs actions! */
-        }
-    if (rptr) {                                         /* Handle register case */
-        if (!get_rsearch (gbuf, rptr->radix, &sim_stabr) ||  /* parse condition */
-            (sim_stabr.boolop == -1))                   /* relational op reqd */
-            return SCPE_MISVAL;
-        sim_eval[0] = get_rval (rptr, idx);             /* get register value */
-        result = test_search (sim_eval, &sim_stabr);    /* test condition */
-        }
-    else {                                              /* Handle memory case */
-        if (!get_asearch (gbuf, sim_dfdev ? sim_dfdev->dradix : sim_dflt_dev->dradix, &sim_staba) ||  /* parse condition */
-            (sim_staba.boolop == -1))                    /* relational op reqd */
-            return SCPE_MISVAL;
-        reason = get_aval (addr, sim_dfdev, sim_dfunit);/* get data */
-        if (reason != SCPE_OK)                          /* return if error */
-            return reason;
-        result = test_search (sim_eval, &sim_staba);    /* test condition */
+        else {                                              /* not reg, check for memory */
+            if (sim_dfdev && sim_vm_parse_addr)             /* get addr */
+                addr = sim_vm_parse_addr (sim_dfdev, gbuf, &gptr);
+            else
+                addr = (t_addr) strtotv (gbuf, &gptr, sim_dfdev ? sim_dfdev->dradix : sim_dflt_dev->dradix);
+            if (gbuf == gptr)                               /* not register? */
+                return SCPE_NXREG;
+            }
+        if (*gptr != 0)                                     /* more? must be search */
+            get_glyph (gptr, gbuf, 0);
+        else {
+            if (*cptr == 0)                                 /* must be more */
+                return SCPE_2FARG;
+            cptr = get_glyph (cptr, gbuf, 0);               /* get search cond */
+            }
+        if (*cptr) {                                        /* more? */
+            if (flag)                                       /* ASSERT has no more args */
+                return SCPE_2MARG;
+            }
+        else {
+            if (!flag)                                      
+                return SCPE_2FARG;                          /* IF needs actions! */
+            }
+        if (rptr) {                                         /* Handle register case */
+            if (!get_rsearch (gbuf, rptr->radix, &sim_stabr) ||  /* parse condition */
+                (sim_stabr.boolop == -1))                   /* relational op reqd */
+                return SCPE_MISVAL;
+            sim_eval[0] = get_rval (rptr, idx);             /* get register value */
+            result = test_search (sim_eval, &sim_stabr);    /* test condition */
+            }
+        else {                                              /* Handle memory case */
+            if (!get_asearch (gbuf, sim_dfdev ? sim_dfdev->dradix : sim_dflt_dev->dradix, &sim_staba) ||  /* parse condition */
+                (sim_staba.boolop == -1))                    /* relational op reqd */
+                return SCPE_MISVAL;
+            reason = get_aval (addr, sim_dfdev, sim_dfunit);/* get data */
+            if (reason != SCPE_OK)                          /* return if error */
+                return reason;
+            result = test_search (sim_eval, &sim_staba);    /* test condition */
+            }
         }
     }
+if ((cptr > sim_sub_instr_buf) && ((size_t)(cptr - sim_sub_instr_buf) < sim_sub_instr_size))
+    cptr = &sim_sub_instr[sim_sub_instr_off[cptr - sim_sub_instr_buf]]; /* get un-substituted string */
 if (Not ^ result) {
     if (!flag)
         sim_brk_setact (cptr);                          /* set up IF actions */
@@ -4552,8 +4696,37 @@ if (sim_switches & SWMASK ('P')) {
     else
         cptr = deflt;
     }
-else
+else {
     cptr = get_glyph (cptr, varname, '=');              /* get environment variable name */
+    strlcpy (cbuf, cptr, sizeof(cbuf));
+    sim_trim_endspc (cbuf);
+    if (sim_switches & SWMASK ('S')) {                  /* Quote String argument? */
+        uint32 str_size;
+
+        cptr = cbuf;
+        get_glyph_quoted (cptr, cbuf, 0);
+        if (SCPE_OK != sim_decode_quoted_string (cbuf, (uint8 *)cbuf, &str_size)) 
+            return sim_messagef (SCPE_ARG, "Invalid quoted string: %s\n", cbuf);
+        cbuf[str_size] = '\0';
+        }
+    else {
+        if (sim_switches & SWMASK ('A')) {              /* Arithmentic Expression Evaluation argument? */
+            t_svalue val;
+            t_stat stat;
+            const char *eptr = cptr;
+
+            if ((cptr > sim_sub_instr_buf) && ((size_t)(cptr - sim_sub_instr_buf) < sim_sub_instr_size))
+                eptr = &sim_sub_instr[sim_sub_instr_off[cptr - sim_sub_instr_buf]]; /* get un-substituted string */
+            cptr = sim_eval_expression (eptr, &val, FALSE, &stat);
+            if (stat == SCPE_OK) {
+                sprintf (cbuf, "%ld", (long)val);
+                cptr = cbuf;
+                }
+            else
+                return stat;
+            }
+        }
+    }
 setenv(varname, cptr, 1);
 return SCPE_OK;
 }
@@ -4661,7 +4834,7 @@ while (*cptr != 0) {                                    /* do all mods */
                 if (cvptr)                              /* = value? */
                     return SCPE_ARG;
                 if (uptr->flags & UNIT_DIS)             /* disabled? */
-                     return SCPE_UDIS;
+                    return SCPE_UDIS;
                 if ((mptr->valid) &&                    /* invalid? */
                     ((r = mptr->valid (uptr, mptr->match, cvptr, mptr->desc)) != SCPE_OK))
                     return r;
@@ -4769,20 +4942,28 @@ else {
 return SCPE_OK;
 }
 
-/* Set device debug enabled/disabled routine */
+/* Set device/unit debug enabled/disabled routine */
 
-t_stat set_dev_debug (DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr)
+t_stat set_dev_debug (DEVICE *dptr, UNIT *uptr, int32 flags, CONST char *cptr)
 {
+int32 flag = flags & 1;
+t_bool uflag = ((flags & 2) != 0);
 char gbuf[CBUFSIZE];
 DEBTAB *dep;
 
 if ((dptr->flags & DEV_DEBUG) == 0)
     return SCPE_NOFNC;
 if (cptr == NULL) {                                     /* no arguments? */
-    dptr->dctrl = flag ? (dptr->debflags ? flag : 0xFFFFFFFF) : 0;/* disable/enable w/o table */
+    if (uflag)
+        uptr->dctrl = flag ? (dptr->debflags ? flag : 0xFFFFFFFF) : 0;/* disable/enable w/o table */
+    else
+        dptr->dctrl = flag ? (dptr->debflags ? flag : 0xFFFFFFFF) : 0;/* disable/enable w/o table */
     if (flag && dptr->debflags) {                       /* enable with table? */
         for (dep = dptr->debflags; dep->name != NULL; dep++)
-            dptr->dctrl = dptr->dctrl | dep->mask;      /* set all */
+            if (uflag)
+                uptr->dctrl = uptr->dctrl | dep->mask;      /* set all */
+            else
+                dptr->dctrl = dptr->dctrl | dep->mask;      /* set all */
         }
     return SCPE_OK;
     }
@@ -4793,8 +4974,15 @@ while (*cptr) {
     for (dep = dptr->debflags; dep->name != NULL; dep++) {
         if (strcmp (dep->name, gbuf) == 0) {            /* match? */
             if (flag)
-                dptr->dctrl = dptr->dctrl | dep->mask;
-            else dptr->dctrl = dptr->dctrl & ~dep->mask;
+                if (uflag)
+                    uptr->dctrl = uptr->dctrl | dep->mask;
+                else
+                    dptr->dctrl = dptr->dctrl | dep->mask;
+            else
+                if (uflag)
+                    uptr->dctrl = uptr->dctrl & ~dep->mask;
+                else
+                    dptr->dctrl = dptr->dctrl & ~dep->mask;
             break;
             }
         }                                               /* end for */
@@ -5161,14 +5349,22 @@ if (flag) {
 #else
     cpp = "C";
 #endif
+#if !defined (SIM_BUILD_OS)
     fprintf (st, "\n        Simulator Compiled as %s%s%s on %s at %s", cpp, arch, build, __DATE__, __TIME__);
+#else
+#define S_xstr(a) S_str(a)
+#define S_str(a) #a
+    fprintf (st, "\n        Simulator Compiled as %s%s%s on %s at %s %s", cpp, arch, build, __DATE__, __TIME__, S_xstr(SIM_BUILD_OS));
+#undef S_str
+#undef S_xstr
+#endif
 #endif
     fprintf (st, "\n        Memory Access: %s Endian", sim_end ? "Little" : "Big");
     fprintf (st, "\n        Memory Pointer Size: %d bits", (int)sizeof(dptr)*8);
     fprintf (st, "\n        %s", sim_toffset_64 ? "Large File (>2GB) support" : "No Large File support");
     fprintf (st, "\n        SDL Video support: %s", vid_version());
 #if defined (HAVE_PCREPOSIX_H)
-    fprintf (st, "\n        PCRE RegEx support for EXPECT commands");
+    fprintf (st, "\n        PCRE RegEx (Version %s) support for EXPECT commands", pcre_version());
 #elif defined (HAVE_REGEX_H)
     fprintf (st, "\n        RegEx support for EXPECT commands");
 #else
@@ -5407,11 +5603,38 @@ fprintf (st, "Radix=%d\n", dptr->dradix);
 return SCPE_OK;
 }
 
-t_stat show_dev_debug (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr)
+t_stat show_dev_debug (FILE *st, DEVICE *dptr, UNIT *uptr, int32 uflag, CONST char *cptr)
 {
-int32 any = 0;
 DEBTAB *dep;
+uint32 unit;
+int32 any = 0;
 
+if (uflag) {
+    if ((dptr->flags & DEV_DEBUG) || (dptr->debflags)) {
+        if (!uptr->dctrl)
+            return SCPE_OK;
+        if (dptr->debflags == NULL)
+            fprintf (st, "%s: Debugging enabled\n", sim_uname (uptr));
+        else {
+            uint32 dctrl = uptr->dctrl;
+
+            for (dep = dptr->debflags; (dctrl != 0) && (dep->name != NULL); dep++) {
+                if ((dctrl & dep->mask) == dep->mask) {
+                    dctrl &= ~dep->mask;
+                    if (any)
+                        fputc (';', st);
+                    else
+                        fprintf (st, "%s: Debug=", sim_uname (uptr));
+                    fputs (dep->name, st);
+                    any = 1;
+                    }
+                }
+            if (any)
+                fputc ('\n', st);
+            }
+        }
+    return SCPE_OK;
+    }
 if ((dptr->flags & DEV_DEBUG) || (dptr->debflags)) {
     if (dptr->dctrl == 0)
         fputs ("Debugging disabled", st);
@@ -5432,6 +5655,8 @@ if ((dptr->flags & DEV_DEBUG) || (dptr->debflags)) {
             }
         }
     fputc ('\n', st);
+    for (unit = 0; unit < dptr->numunits; unit++)
+        show_dev_debug (st, dptr, &dptr->units[unit], 1, NULL);
     return SCPE_OK;
     }
 else return SCPE_NOFNC;
@@ -5589,45 +5814,36 @@ t_stat pwd_cmd (int32 flg, CONST char *cptr)
 return show_cmd (0, "DEFAULT");
 }
 
-typedef void (*DIR_ENTRY_CALLBACK)(const char *directory, 
-                                   const char *filename,
-                                   t_offset FileSize,
-                                   const struct stat *filestat,
-                                   void *context);
-
 #if defined (_WIN32)
 
-static t_stat sim_dir_scan (const char *cptr, DIR_ENTRY_CALLBACK entry, void *context)
+t_stat sim_dir_scan (const char *cptr, DIR_ENTRY_CALLBACK entry, void *context)
 {
 HANDLE hFind;
 WIN32_FIND_DATAA File;
 struct stat filestat;
 char WildName[PATH_MAX + 1];
 
-if ((!stat (cptr, &filestat)) && (filestat.st_mode & S_IFDIR)) {
-    sprintf (WildName, "%s%c*", cptr, strchr (cptr, '/') ? '/' : '\\');
-    cptr = WildName;
-    }
+strlcpy (WildName, cptr, sizeof(WildName));
+cptr = WildName;
+sim_trim_endspc (WildName);
 if ((hFind =  FindFirstFileA (cptr, &File)) != INVALID_HANDLE_VALUE) {
     t_int64 FileSize;
     char DirName[PATH_MAX + 1], FileName[PATH_MAX + 1];
-    const char *c;
-    char pathsep = '/';
+    char *c;
+    const char *backslash = strchr (cptr, '\\');
+    const char *slash = strchr (cptr, '/');
+    const char *pathsep = (backslash && slash) ? MIN (backslash, slash) : (backslash ? backslash : slash);
 
     GetFullPathNameA(cptr, sizeof(DirName), DirName, (char **)&c);
-    c = strrchr(DirName, pathsep);
-    if (NULL == c) {
-        pathsep = '\\';
-        c = strrchr(cptr, pathsep);
+    c = strrchr (DirName, '\\');
+    *c = '\0';                                  /* Truncate to just directory path */
+    if (!pathsep || (!strcmp (slash, "/*")))    /* Separator wasn't mentioned? */
+        pathsep = "\\";                         /* Default to Windows backslash */
+    if (*pathsep == '/') {                      /* If slash separator? */
+        while ((c = strchr (DirName, '\\')))
+            *c = '/';                           /* Convert backslash to slash */
         }
-    if (c) {
-        memcpy(DirName, cptr, c - cptr);
-        DirName[c - cptr] = '\0';
-        }
-    else {
-        getcwd(DirName, PATH_MAX);
-        }
-    sprintf (&DirName[strlen (DirName)], "%c", pathsep);
+    sprintf (&DirName[strlen (DirName)], "%c", *pathsep);
     do {
         FileSize = (((t_int64)(File.nFileSizeHigh)) << 32) | File.nFileSizeLow;
         sprintf (FileName, "%s%s", DirName, File.cFileName);
@@ -5652,7 +5868,7 @@ return SCPE_OK;
 #endif
 #endif /* defined (HAVE_GLOB) */
 
-static t_stat sim_dir_scan (const char *cptr, DIR_ENTRY_CALLBACK entry, void *context)
+t_stat sim_dir_scan (const char *cptr, DIR_ENTRY_CALLBACK entry, void *context)
 {
 #if defined (HAVE_GLOB)
 glob_t  paths;
@@ -5668,8 +5884,6 @@ memset (WholeName, 0, sizeof(WholeName));
 strlcpy (WildName, cptr, sizeof(WildName));
 cptr = WildName;
 sim_trim_endspc (WildName);
-if ((!stat (WildName, &filestat)) && (filestat.st_mode & S_IFDIR))
-    strlcat (WildName, "/*", sizeof (WildName));
 if ((*cptr != '/') || (0 == memcmp (cptr, "./", 2)) || (0 == memcmp (cptr, "../", 3))) {
 #if defined (VMS)
     getcwd (WholeName, sizeof (WholeName)-1, 0);
@@ -5718,7 +5932,7 @@ if (dir) {
 #endif
     t_offset FileSize;
     char FileName[PATH_MAX + 1];
-    const char *MatchName = 1 + strrchr (cptr, '/');;
+    const char *MatchName = 1 + strrchr (cptr, '/');
     char *p_name;
     struct tm *local;
 #if defined (HAVE_GLOB)
@@ -5734,10 +5948,11 @@ if (dir) {
         if (fnmatch(MatchName, ent->d_name, 0))
             continue;
 #else
+        /* only match exact name without fnmatch support */
         if (strcmp(MatchName, ent->d_name) != 0)
             continue;
 #endif
-        sprintf (FileName, "%s/%s", DirName, ent->d_name);
+        sprintf (FileName, "%s%s", DirName, ent->d_name);
 #endif
         p_name = FileName + strlen (DirName);
         memset (&filestat, 0, sizeof (filestat));
@@ -5825,16 +6040,27 @@ sim_printf (" %s\n", filename);
 t_stat dir_cmd (int32 flg, CONST char *cptr)
 {
 DIR_CTX dir_state;
-t_stat stat;
+t_stat r;
+char WildName[PATH_MAX + 1];
+
 
 memset (&dir_state, 0, sizeof (dir_state));
+strlcpy (WildName, cptr, sizeof(WildName));
+cptr = WildName;
+sim_trim_endspc (WildName);
 if (*cptr == '\0')
     cptr = "./*";
-stat = sim_dir_scan (cptr, sim_dir_entry, &dir_state);
+else {
+    struct stat filestat;
+
+    if ((!stat (WildName, &filestat)) && (filestat.st_mode & S_IFDIR))
+        strlcat (WildName, "/*", sizeof (WildName));
+    }
+r = sim_dir_scan (cptr, sim_dir_entry, &dir_state);
 sim_dir_entry (NULL, NULL, 0, NULL, &dir_state);    /* output summary */
-if (stat != SCPE_OK)
+if (r != SCPE_OK)
     return sim_messagef (SCPE_ARG, "File Not Found\n");
-return stat;
+return r;
 }
 
 
@@ -6167,6 +6393,15 @@ for (i = 0; sim_internal_device_count && (dptr = sim_internal_devices[i]); ++i) 
 return SCPE_OK;
 }
 
+static DEBTAB scp_debug[] = {
+  {"EVENT",     SIM_DBG_EVENT,      "event dispatch activities"},
+  {"ACTIVATE",  SIM_DBG_ACTIVATE,   "queue insertion activities"},
+  {"QUEUE",     SIM_DBG_AIO_QUEUE,  "asynch event queue activities"},
+  {"EXPSTACK",  SIM_DBG_EXP_STACK,  "expression stack activities"},
+  {"EXPEVAL",   SIM_DBG_EXP_EVAL,   "expression evaluation activities"},
+  {0}
+};
+
 /* Reset to powerup state
 
    Inputs:
@@ -6183,6 +6418,42 @@ int32 old_sw = sim_switches;
 sim_switches = SWMASK ('P');
 r = reset_all (start);
 sim_switches = old_sw;
+if (sim_dflt_dev) { /* Make sure that SCP debug options are available */
+    sim_dflt_dev->flags |= DEV_DEBUG;
+    if (!sim_dflt_dev->debflags)
+        sim_dflt_dev->debflags = scp_debug;
+    else {
+        DEBTAB *cdptr, *sdptr, *ndptr;
+
+        for (sdptr = scp_debug; sdptr->name; sdptr++) {
+            for (cdptr = sim_dflt_dev->debflags; cdptr->name; cdptr++) {
+                if (sdptr->mask == cdptr->mask)
+                    break;
+                }
+            if (sdptr->mask != cdptr->mask) {
+                int i, dcount = 0;
+
+                for (cdptr = sim_dflt_dev->debflags; cdptr->name; cdptr++)
+                    dcount++;
+                for (cdptr = scp_debug; cdptr->name; cdptr++)
+                    dcount++;
+                ndptr = (DEBTAB *)calloc (1 + dcount, sizeof (*ndptr));
+                for (dcount = 0, cdptr =sim_dflt_dev->debflags; cdptr->name; cdptr++)
+                    ndptr[dcount++] = *cdptr;
+                for (cdptr = scp_debug; cdptr->name; cdptr++) {
+                    for (i = 0; i < dcount; i++) {
+                        if (cdptr->mask == ndptr[i].mask)
+                            break;
+                        }
+                    if (i == dcount)
+                        ndptr[dcount++] = *cdptr;
+                    }
+                sim_dflt_dev->debflags = ndptr;
+                break;
+                }
+            }
+        }
+    }
 return r;
 }
 
@@ -6494,8 +6765,13 @@ if ((uptr->flags & UNIT_BUF) && (uptr->filebuf)) {
 uptr->flags = uptr->flags & ~(UNIT_ATT | ((uptr->flags & UNIT_ROABLE) ? UNIT_RO : 0));
 free (uptr->filename);
 uptr->filename = NULL;
-if (fclose (uptr->fileref) == EOF)
-    return SCPE_IOERR;
+if (uptr->fileref) {                        /* Only close open file */
+    if (fclose (uptr->fileref) == EOF) {
+        uptr->fileref = NULL;
+        return SCPE_IOERR;
+        }
+    uptr->fileref = NULL;
+    }
 return SCPE_OK;
 }
 
@@ -6580,6 +6856,8 @@ const char *sim_uname (UNIT *uptr)
 DEVICE *d;
 char uname[CBUFSIZE];
 
+if (!uptr)
+    return "";
 if (uptr->uname)
     return uptr->uname;
 d = find_dev_from_unit(uptr);
@@ -7275,22 +7553,26 @@ for (i = 1; (dptr = sim_devices[i]) != NULL; i++) {     /* reposition all */
         }
     }
 if ((r = sim_ttrun ()) != SCPE_OK) {                    /* set console mode */
+    r = sim_messagef (SCPE_TTYERR, "sim_ttrun() returned: %s - errno: %d - %s\n", sim_error_text (r), errno, strerror (errno));
     sim_ttcmd ();
-    return sim_messagef (SCPE_TTYERR, "sim_ttrun() returned: %s\n", sim_error_text (r));
+    return r;
     }
 if ((r = sim_check_console (30)) != SCPE_OK) {          /* check console, error? */
+    r = sim_messagef (r, "sim_check_console () returned: %s - errno: %d - %s\n", sim_error_text (r), errno, strerror (errno));
     sim_ttcmd ();
-    sim_messagef (r, "sim_check_console () returned: %s\n", sim_error_text (r));
+    return r;
     }
 #ifdef SIGHUP
 if (signal (SIGHUP, int_handler) == SIG_ERR) {          /* set WRU */
+    r = sim_messagef (SCPE_SIGERR, "Can't establish SIGHUP: errno: %d - %s", errno, strerror (errno));
     sim_ttcmd ();
-    return sim_messagef (SCPE_SIGERR, "Can't establish SIGHUP");
+    return r;
     }
 #endif
 if (signal (SIGTERM, int_handler) == SIG_ERR) {         /* set WRU */
+    r = sim_messagef (SCPE_SIGERR, "Can't establish SIGTERM: errno: %d - %s", errno, strerror (errno));
     sim_ttcmd ();
-    return sim_messagef (SCPE_SIGERR, "Can't establish SIGTERM");
+    return r;
     }
 stop_cpu = FALSE;
 sim_is_running = TRUE;                                  /* flag running */
@@ -7581,10 +7863,10 @@ for (gptr = gbuf, reason = SCPE_OK;
         for (highr = lowr; highr->name != NULL; highr++) ;
         sim_switches = sim_switches | SIM_SW_HIDE;
         reason = exdep_reg_loop (ofile, sim_schrptr, flag, cptr,
-            lowr, --highr, 0, 0);
+            lowr, --highr, 0, 0xFFFFFFFF);
         if ((!sim_oline) && (sim_log && (ofile == stdout)))
             exdep_reg_loop (sim_log, sim_schrptr, EX_E, cptr,
-                lowr, --highr, 0, 0);
+                lowr, --highr, 0, 0xFFFFFFFF);
         continue;
         }
 
@@ -7646,7 +7928,7 @@ t_stat exdep_reg_loop (FILE *ofile, SCHTAB *schptr, int32 flag, CONST char *cptr
     REG *lowr, REG *highr, uint32 lows, uint32 highs)
 {
 t_stat reason;
-uint32 idx, val_start=lows;
+uint32 idx, val_start=lows, limits;
 t_value val, last_val;
 REG *rptr;
 int32 saved_switches = sim_switches;
@@ -7660,7 +7942,10 @@ for (rptr = lowr; rptr <= highr; rptr++) {
         (rptr->flags & REG_HIDDEN))
         continue;
     val = last_val = 0;
-    for (idx = lows; idx <= highs; idx++) {
+    limits = highs;
+    if (highs == 0xFFFFFFFF)
+        limits = (rptr->depth > 1) ? (rptr->depth - 1) : 0;
+    for (idx = lows; idx <= limits; idx++) {
         if (idx >= rptr->depth)
             return SCPE_SUB;
         sim_eval[0] = val = get_rval (rptr, idx);
@@ -7698,16 +7983,16 @@ for (rptr = lowr; rptr <= highr; rptr++) {
                 return reason;
             }
         }
-    if ((flag == EX_E) && (val_start != highs)) {
+    if ((flag == EX_E) && (val_start != limits)) {
         if (highs == val_start+1) {
-            reason = ex_reg (ofile, val, flag, rptr, highs);
+            reason = ex_reg (ofile, val, flag, rptr, limits);
             sim_switches = saved_switches;
             if (reason != SCPE_OK)
                 return reason;
             }
         else {
-            if (val_start+1 != highs)
-                fprintf (ofile, "%s[%d]-%s[%d]: same as above\n", rptr->name, val_start+1, rptr->name, highs);
+            if (val_start+1 != limits)
+                fprintf (ofile, "%s[%d]-%s[%d]: same as above\n", rptr->name, val_start+1, rptr->name, limits);
             else
                 fprintf (ofile, "%s[%d]: same as above\n", rptr->name, val_start+1);
             }
@@ -8189,13 +8474,13 @@ t_stat r;
 GET_SWITCHES (cptr);
 GET_RADIX (rdx, dptr->dradix);
 for (i = 0; i < sim_emax; i++)
-sim_eval[i] = 0;
+    sim_eval[i] = 0;
 if (*cptr == 0)
     return SCPE_2FARG;
 if ((r = parse_sym ((CONST char *)cptr, 0, dptr->units, sim_eval, sim_switches)) > 0) {
     sim_eval[0] = get_uint (cptr, rdx, width_mask[dptr->dwidth], &r);
     if (r != SCPE_OK)
-        return r;
+        return sim_messagef (r, "%s\nCan't be parsed as an instruction or data\n", cptr);
     }
 lim = 1 - r;
 for (i = a = 0; a < lim; ) {
@@ -8312,6 +8597,7 @@ if (0 == memcmp (cptr, "\xEF\xBB\xBF", 3))              /* Skip/ignore UTF8_BOM 
     memmove (cptr, cptr + 3, strlen (cptr + 3));
 while (sim_isspace (*cptr))                             /* trim leading spc */
     cptr++;
+sim_trim_endspc (cptr);                                 /* trim trailing spc */
 if ((*cptr == ';') || (*cptr == '#')) {                 /* ignore comment */
     if (sim_do_echo)                                    /* echo comments if -v */
         sim_printf("%s> %s\n", do_position(), cptr);
@@ -9068,17 +9354,23 @@ uint32 i, j;
 
 if (uptr == NULL)
     return NULL;
+if (uptr->dptr)
+    return uptr->dptr;
 for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {
     for (j = 0; j < dptr->numunits; j++) {
-        if (uptr == (dptr->units + j))
+        if (uptr == (dptr->units + j)) {
+            uptr->dptr = dptr;
             return dptr;
+            }
         }
     }
 for (i = 0; i<sim_internal_device_count; i++) {
     dptr = sim_internal_devices[i];
     for (j = 0; j < dptr->numunits; j++) {
-        if (uptr == (dptr->units + j))
+        if (uptr == (dptr->units + j)) {
+            uptr->dptr = dptr;
             return dptr;
+            }
         }
     }
 return NULL;
@@ -9106,32 +9398,34 @@ return (dptr->flags & DEV_DIS? TRUE: FALSE);
 
 REG *find_reg_glob_reason (CONST char *cptr, CONST char **optr, DEVICE **gdptr, t_stat *stat)
 {
-int32 i;
-DEVICE *dptr;
+int32 i, j;
+DEVICE *dptr, **devs, **dptrptr[] = {sim_devices, sim_internal_devices, NULL};
 REG *rptr, *srptr = NULL;
 
 if (stat)
     *stat = SCPE_OK;
 *gdptr = NULL;
-for (i = 0; (dptr = sim_devices[i]) != 0; i++) {        /* all dev */
-    if (dptr->flags & DEV_DIS)                          /* skip disabled */
-        continue;
-    if ((rptr = find_reg (cptr, optr, dptr))) {         /* found? */
-        if (srptr) {                                    /* ambig? err */
-            if (stat) {
-                if (sim_show_message) {
-                    if (*stat == SCPE_OK)
-                        sim_printf ("Ambiguous register.  %s appears in devices %s and %s", cptr, (*gdptr)->name, dptr->name);
-                    else
-                        sim_printf (" and %s", dptr->name);
+for (j = 0; (devs = dptrptr[j]) != NULL; j++) {
+    for (i = 0; (dptr = devs[i]) != NULL; i++) {        /* all dev */
+        if (dptr->flags & DEV_DIS)                          /* skip disabled */
+            continue;
+        if ((rptr = find_reg (cptr, optr, dptr))) {         /* found? */
+            if (srptr) {                                    /* ambig? err */
+                if (stat) {
+                    if (sim_show_message) {
+                        if (*stat == SCPE_OK)
+                            sim_printf ("Ambiguous register.  %s appears in devices %s and %s", cptr, (*gdptr)->name, dptr->name);
+                        else
+                            sim_printf (" and %s", dptr->name);
+                        }
+                    *stat = SCPE_AMBREG|SCPE_NOMESSAGE;
                     }
-                *stat = SCPE_AMBREG|SCPE_NOMESSAGE;
+                else
+                    return NULL;
                 }
-            else
-                return NULL;
+            srptr = rptr;                                   /* save reg */
+            *gdptr = dptr;                                  /* save unit */
             }
-        srptr = rptr;                                   /* save reg */
-        *gdptr = dptr;                                  /* save unit */
         }
     }
 if (stat && (*stat != SCPE_OK)) {
@@ -9631,46 +9925,144 @@ return ret;
 /* Radix independent input/output package
 
    strtotv - general radix input routine
+   strtotsv - general radix input routine
 
    Inputs:
         inptr   =       string to convert
         endptr  =       pointer to first unconverted character
         radix   =       radix for input
-   Outputs:
+   Output strtotv:
         value   =       converted value
+   Outputs strtotsv:
+        value   =       converted signed value
 
    On an error, the endptr will equal the inptr.
+
+   If the value of radix is zero, the syntax expected is similar 
+   to that of integer constants, which is formed by a succession of:
+
+      - An optional sign character (+ or -)
+      - An optional prefix indicating octal or hexadecimal radix 
+        ("0" or "0x"/"0X" respectively)
+      - A sequence of decimal digits (if no radix prefix was specified) 
+        or one of binary, octal or hexadecimal digits if a specific 
+        prefix is present
+
+   If the radix value is between 2 and 36, the format expected for 
+   the integral number is a succession of any of the valid digits 
+   and/or letters needed to represent integers of the specified 
+   radix (starting from '0' and up to 'z'/'Z' for radix 36). The 
+   sequence may optionally be preceded by a sign (either + or -) and, 
+   if base is 16, an optional "0x" or "0X" prefix.  If the base is 2,
+   an optional "0b" or "0B" prefix.
+
 */
 
 t_value strtotv (CONST char *inptr, CONST char **endptr, uint32 radix)
 {
-int32 nodigit;
+t_bool nodigits;
 t_value val;
 uint32 c, digit;
 
-*endptr = inptr;                                        /* assume fails */
-if ((radix < 2) || (radix > 36))
+if (endptr)
+    *endptr = inptr;                                    /* assume fails */
+if (((radix < 2) || (radix > 36)) && (radix != 0))
     return 0;
 while (sim_isspace (*inptr))                            /* bypass white space */
     inptr++;
+if (((radix == 0) || (radix == 16)) && 
+    ((!memcmp("0x", inptr, 2)) || (!memcmp("0X", inptr, 2)))) {
+    radix = 16;
+    inptr += 2;
+    }
+if (((radix == 0) || (radix == 2)) && 
+    ((!memcmp("0b", inptr, 2)) || (!memcmp("0B", inptr, 2)))) {
+    radix = 2;
+    inptr += 2;
+    }
+if ((radix == 0) && (*inptr == '0'))            /* Default radix and octal? */
+    radix = 8;
+if (radix == 0)                                 /* Default base 10 radix */
+    radix = 10;
 val = 0;
-nodigit = 1;
+nodigits = TRUE;
 for (c = *inptr; sim_isalnum(c); c = *++inptr) {        /* loop through char */
     c = sim_toupper (c);
     if (sim_isdigit (c))                                /* digit? */
         digit = c - (uint32) '0';
-    else if (radix <= 10)                               /* stop if not expected */
-        break;
-    else digit = c + 10 - (uint32) 'A';                 /* convert letter */
+    else {
+        if (radix <= 10)                                /* stop if not expected */
+            break;
+        else 
+            digit = c + 10 - (uint32) 'A';              /* convert letter */
+        }
     if (digit >= radix)                                 /* valid in radix? */
         return 0;
     val = (val * radix) + digit;                        /* add to value */
-    nodigit = 0;
+    nodigits = FALSE;
     }
-if (nodigit)                                            /* no digits? */
+if (nodigits)                                           /* no digits? */
     return 0;
-*endptr = inptr;                                        /* result pointer */
+if (endptr)
+    *endptr = inptr;                                    /* result pointer */
 return val;
+}
+
+t_svalue strtotsv (CONST char *inptr, CONST char **endptr, uint32 radix)
+{
+t_bool nodigits;
+t_svalue val;
+t_svalue negate = 1;
+uint32 c, digit;
+
+if (endptr)
+    *endptr = inptr;                                    /* assume fails */
+if (((radix < 2) || (radix > 36)) && (radix != 0))
+    return 0;
+while (sim_isspace (*inptr))                            /* bypass white space */
+    inptr++;
+if ((*inptr == '-') ||
+    (*inptr == '+')) {
+    if (*inptr == '-')
+        negate = -1;
+    ++inptr;
+    }
+if (((radix == 0) || (radix == 16)) && 
+    ((!memcmp("0x", inptr, 2)) || (!memcmp("0X", inptr, 2)))) {
+    radix = 16;
+    inptr += 2;
+    }
+if (((radix == 0) || (radix == 2)) && 
+    ((!memcmp("0b", inptr, 2)) || (!memcmp("0B", inptr, 2)))) {
+    radix = 2;
+    inptr += 2;
+    }
+if ((radix == 0) && (*inptr == '0'))            /* Default radix and octal? */
+    radix = 8;
+if (radix == 0)                                 /* Default base 10 radix */
+    radix = 10;
+val = 0;
+nodigits = TRUE;
+for (c = *inptr; sim_isalnum(c); c = *++inptr) {        /* loop through char */
+    c = sim_toupper (c);
+    if (sim_isdigit (c))                                /* digit? */
+        digit = c - (uint32) '0';
+    else {
+        if (radix <= 10)                                /* stop if not expected */
+            break;
+        else
+            digit = c + 10 - (uint32) 'A';              /* convert letter */
+        }
+    if (digit >= radix)                                 /* valid in radix? */
+        return 0;
+    val = (val * radix) + digit;                        /* add to value */
+    nodigits = FALSE;
+    }
+if (nodigits)                                           /* no digits? */
+    return 0;
+if (endptr)
+    *endptr = inptr;                                    /* result pointer */
+return val * negate;
 }
 
 /* fprint_val - general radix printing routine
@@ -9692,9 +10084,15 @@ t_stat sprint_val (char *buffer, t_value val, uint32 radix,
 {
 #define MAX_WIDTH ((int) ((CHAR_BIT * sizeof (t_value) * 4 + 3)/3))
 t_value owtest, wtest;
+t_bool negative = FALSE;
 int32 d, digit, ndigits, commas = 0;
 char dbuf[MAX_WIDTH + 1];
 
+if (((format == PV_LEFTSIGN) || (format == PV_RCOMMASIGN)) &&
+    (0 > (t_svalue)val)) {
+    val = (t_value)(-((t_svalue)val));
+    negative = TRUE;
+    }
 for (d = 0; d < MAX_WIDTH; d++)
     dbuf[d] = (format == PV_RZRO)? '0': ' ';
 dbuf[MAX_WIDTH] = 0;
@@ -9705,11 +10103,15 @@ do {
     val = val / radix;
     dbuf[d] = (char)((digit <= 9)? '0' + digit: 'A' + (digit - 10));
     } while ((d > 0) && (val != 0));
+if (negative && (format == PV_LEFTSIGN))
+    dbuf[--d] = '-';
 
 switch (format) {
     case PV_LEFT:
+    case PV_LEFTSIGN:
         break;
     case PV_RCOMMA:
+    case PV_RCOMMASIGN:
         for (digit = 0; digit < MAX_WIDTH; digit++)
             if (dbuf[digit] != ' ')
                 break;
@@ -9720,6 +10122,8 @@ switch (format) {
         for (digit=1; digit<=commas; digit++)
             dbuf[MAX_WIDTH - (digit * 4)] = ',';
         d = d - commas;
+        if (negative && (format == PV_RCOMMASIGN))
+            dbuf[--d] = '-';
         if (width > MAX_WIDTH) {
             if (!buffer)
                 return width;
@@ -10696,7 +11100,6 @@ if ((ep != NULL) && (*ep != ';')) {                     /* if a quoted string is
             ep = ep + 1;                                /*     skip the non-quote character */  
     ep = strchr (ep, ';');                              /* the next semicolon is outside the quotes if it exists */
     }
-
 if (ep != NULL) {                                       /* if a semicolon is present */
     lnt = ep - sim_brk_act[sim_do_depth];               /* cmd length */
     memcpy (buf, sim_brk_act[sim_do_depth], lnt + 1);   /* copy with ; */
@@ -10707,6 +11110,7 @@ else {
     strlcpy (buf, sim_brk_act[sim_do_depth], size);     /* copy action */
     sim_brk_clract ();                                  /* no more */
     }
+sim_trim_endspc (buf);
 return buf;
 }
 
@@ -11142,7 +11546,7 @@ if (exp->buf_size) {
     free (bstr);
     }
 if (exp->dptr && (exp->dbit & exp->dptr->dctrl))
-    fprintf (st, "  Expect Debugging via: SET %s DEBUG%s%s\n", sim_dname(exp->dptr), exp->dptr->debflags ? "=" : "", exp->dptr->debflags ? get_dbg_verb (exp->dbit, exp->dptr) : "");
+    fprintf (st, "  Expect Debugging via: SET %s DEBUG%s%s\n", sim_dname(exp->dptr), exp->dptr->debflags ? "=" : "", exp->dptr->debflags ? get_dbg_verb (exp->dbit, exp->dptr, NULL) : "");
 fprintf (st, "  Match Rules:\n");
 if (!*match)
     return sim_exp_showall (st, exp);
@@ -11404,7 +11808,7 @@ if (after)
 if (delay)
     fprintf (st, "  Default delay between character input is %u instructions\n", after);
 if (snd->dptr && (snd->dbit & snd->dptr->dctrl))
-    fprintf (st, "  Send Debugging via: SET %s DEBUG%s%s\n", sim_dname(snd->dptr), snd->dptr->debflags ? "=" : "", snd->dptr->debflags ? get_dbg_verb (snd->dbit, snd->dptr) : "");
+    fprintf (st, "  Send Debugging via: SET %s DEBUG%s%s\n", sim_dname(snd->dptr), snd->dptr->debflags ? "=" : "", snd->dptr->debflags ? get_dbg_verb (snd->dbit, snd->dptr, NULL) : "");
 return SCPE_OK;
 }
 
@@ -11481,7 +11885,7 @@ int32 debug_unterm  = 0;
 
 /* Finds debug phrase matching bitmask from from device DEBTAB table */
 
-static const char *get_dbg_verb (uint32 dbits, DEVICE* dptr)
+static const char *get_dbg_verb (uint32 dbits, DEVICE* dptr, UNIT *uptr)
 {
 static const char *debtab_none    = "DEBTAB_ISNULL";
 static const char *debtab_nomatch = "DEBTAB_NOMATCH";
@@ -11491,7 +11895,7 @@ int32 offset = 0;
 if (dptr->debflags == 0)
     return debtab_none;
 
-dbits &= dptr->dctrl;                           /* Look for just the bits that matched */
+dbits &= (dptr->dctrl | (uptr ? uptr->dctrl : 0));/* Look for just the bits that matched */
 
 /* Find matching words for bitmask */
 
@@ -11507,9 +11911,9 @@ return some_match ? some_match : debtab_nomatch;
 
 /* Prints standard debug prefix unless previous call unterminated */
 
-static const char *sim_debug_prefix (uint32 dbits, DEVICE* dptr)
+static const char *sim_debug_prefix (uint32 dbits, DEVICE* dptr, UNIT* uptr)
 {
-const char* debug_type = get_dbg_verb (dbits, dptr);
+const char* debug_type = get_dbg_verb (dbits, dptr, uptr);
 char tim_t[32] = "";
 char tim_a[32] = "";
 char pc_s[64] = "";
@@ -11602,7 +12006,7 @@ if (sim_deb && dptr && (dptr->dctrl & dbits)) {
 
     sim_oline = NULL;                                                   /* avoid potential debug to active socket */
     if (!debug_unterm)
-        fprintf(sim_deb, "%s", sim_debug_prefix(dbits, dptr));          /* print prefix if required */
+        fprintf(sim_deb, "%s", sim_debug_prefix(dbits, dptr, NULL));    /* print prefix if required */
     if (header)
         fprintf(sim_deb, "%s: ", header);
     fprint_fields (sim_deb, (t_value)before, (t_value)after, bitdefs);  /* print xlation, transition */
@@ -11777,29 +12181,25 @@ return stat | SCPE_NOMESSAGE;
    Callers should be calling sim_debug() which is a macro
    defined in scp.h which evaluates the action condition before 
    incurring call overhead. */
-void _sim_debug (uint32 dbits, DEVICE* vdptr, const char* fmt, ...)
+static void _sim_vdebug (uint32 dbits, DEVICE* dptr, UNIT *uptr, const char* fmt, va_list arglist)
 {
-DEVICE *dptr = (DEVICE *)vdptr;
-if (sim_deb && dptr && (dptr->dctrl & dbits)) {
+if (sim_deb && dptr && ((dptr->dctrl | (uptr ? uptr->dctrl : 0)) & dbits)) {
     TMLN *saved_oline = sim_oline;
     char stackbuf[STACKBUFSIZE];
     int32 bufsize = sizeof(stackbuf);
     char *buf = stackbuf;
-    va_list arglist;
     int32 i, j, len;
-    const char* debug_prefix = sim_debug_prefix(dbits, dptr);   /* prefix to print if required */
+    const char* debug_prefix = sim_debug_prefix(dbits, dptr, uptr);   /* prefix to print if required */
 
     sim_oline = NULL;                                   /* avoid potential debug to active socket */
     buf[bufsize-1] = '\0';
 
     while (1) {                                         /* format passed string, args */
-        va_start (arglist, fmt);
 #if defined(NO_vsnprintf)
         len = vsprintf (buf, fmt, arglist);
 #else                                                   /* !defined(NO_vsnprintf) */
         len = vsnprintf (buf, bufsize-1, fmt, arglist);
 #endif                                                  /* NO_vsnprintf */
-        va_end (arglist);
 
 /* If the formatted result didn't fit into the buffer, then grow the buffer and try again */
 
@@ -11847,14 +12247,35 @@ if (sim_deb && dptr && (dptr->dctrl & dbits)) {
         free (buf);
     sim_oline = saved_oline;                            /* restore original socket */
     }
-return;
+}
+
+void _sim_debug_unit (uint32 dbits, UNIT *uptr, const char* fmt, ...)
+{
+DEVICE *dptr = (uptr ? uptr->dptr : NULL);
+
+if (sim_deb && (((dptr ? dptr->dctrl : 0) | (uptr ? uptr->dctrl : 0)) & dbits)) {
+    va_list arglist;
+    va_start (arglist, fmt);
+    _sim_vdebug (dbits, dptr, uptr, fmt, arglist);
+    va_end (arglist);
+    }
+}
+
+void _sim_debug_device (uint32 dbits, DEVICE* dptr, const char* fmt, ...)
+{
+if (sim_deb && dptr && (dptr->dctrl & dbits)) {
+    va_list arglist;
+    va_start (arglist, fmt);
+    _sim_vdebug (dbits, dptr, NULL, fmt, arglist);
+    va_end (arglist);
+    }
 }
 
 void sim_data_trace(DEVICE *dptr, UNIT *uptr, const uint8 *data, const char *position, size_t len, const char *txt, uint32 reason)
 {
 
-if (sim_deb && (dptr->dctrl & reason)) {
-    sim_debug (reason, dptr, "%s %s %slen: %08X\n", sim_uname(uptr), txt, position, (unsigned int)len);
+if (sim_deb && ((dptr->dctrl | (uptr ? uptr->dctrl : 0)) & reason)) {
+    _sim_debug_unit (reason, uptr, "%s %s %slen: %08X\n", sim_uname(uptr), txt, position, (unsigned int)len);
     if (data && len) {
         unsigned int i, same, group, sidx, oidx, ridx, eidx, soff;
         char outbuf[80], strbuf[28], rad50buf[36], ebcdicbuf[32];
@@ -11901,7 +12322,7 @@ if (sim_deb && (dptr->dctrl & reason)) {
                 continue;
                 }
             if (same > 0) {
-                sim_debug (reason, dptr, "%04X thru %04X same as above\n", i-(16*same), i-1);
+                _sim_debug_unit (reason, uptr, "%04X thru %04X same as above\n", i-(16*same), i-1);
                 same = 0;
                 }
             group = (((len - i) > 16) ? 16 : (len - i));
@@ -11944,10 +12365,10 @@ if (sim_deb && (dptr->dctrl & reason)) {
             strbuf[soff+sidx] = '\0';
             ebcdicbuf[eidx] = '\0';
             rad50buf[ridx] = '\0';
-            sim_debug (reason, dptr, "%04X%-48s %s%s%s\n", i, outbuf, strbuf, ebcdicbuf, rad50buf);
+            _sim_debug_unit (reason, uptr, "%04X%-48s %s%s%s\n", i, outbuf, strbuf, ebcdicbuf, rad50buf);
             }
         if (same > 0) {
-            sim_debug (reason, dptr, "%04X thru %04X same as above\n", i-(16*same), (unsigned int)(len-1));
+            _sim_debug_unit (reason, uptr, "%04X thru %04X same as above\n", i-(16*same), (unsigned int)(len-1));
             }
         }
     }
@@ -12888,3 +13309,648 @@ va_end (ap);
 return r;
 }
 #endif
+
+/*
+ * Expression evaluation package
+ * 
+ * Derived from code provided by Gabriel Pizzolato
+ */
+
+
+typedef t_svalue (*Operator_Function)(t_svalue, t_svalue);
+
+typedef t_svalue (*Operator_String_Function)(const char *, const char *);
+
+typedef struct Operator {
+    const char *string;
+    int         precedence;
+    int         unary;
+    Operator_Function
+                function;
+    Operator_String_Function
+                string_function;
+    const char *description;
+    } Operator;
+
+typedef struct Stack_Element {
+    Operator *op;
+    char data[72];
+    } Stack_Element;
+
+typedef struct Stack {
+    int size;
+    int pointer;
+    int id;
+    Stack_Element *elements;
+    } Stack;
+
+#define STACK_GROW_AMOUNT 5             /* Number of elements to add to stack when needed */
+
+/* static variable allocation */
+static int stack_counter = 0; /* number of stacks current allocated */
+
+/* start of true stack code */
+/*-----------------------------------------------------------------------------
+ * Delete the given stack and free all memory associated with it.
+ -----------------------------------------------------------------------------*/
+void delete_Stack (Stack *sp)
+{
+if (sp == NULL)
+    return;
+
+sim_debug (SIM_DBG_EXP_STACK, sim_dflt_dev, "[Stack %d has been deallocated]\n", sp->id);
+
+/* Free the data that the stack was pointing at */
+free (sp->elements);
+free (sp);
+stack_counter--;
+}
+
+/*-----------------------------------------------------------------------------
+ * Check to see if a stack is empty
+ -----------------------------------------------------------------------------*/
+static t_bool isempty_Stack (Stack *this_Stack)
+{
+return (this_Stack->pointer == 0);
+}
+
+/*-----------------------------------------------------------------------------
+ * Create a new stack.
+ -----------------------------------------------------------------------------*/
+static Stack *new_Stack (void)
+{
+/* Stack variable to return */
+Stack *this_Stack = (Stack *)calloc(1, sizeof(*this_Stack));
+
+this_Stack->id = ++stack_counter;
+sim_debug (SIM_DBG_EXP_STACK, sim_dflt_dev, "[Stack %d has been allocated]\n", this_Stack->id);
+
+return this_Stack; /* Returns created stack */
+}
+
+/*-----------------------------------------------------------------------------
+ * Remove the top element from the specified stack
+ -----------------------------------------------------------------------------*/
+static t_bool pop_Stack (Stack * this_Stack, char *data, Operator **op)
+{
+*op = NULL;
+*data = '\0';
+
+if (isempty_Stack(this_Stack))
+    return FALSE;
+
+strcpy (data, this_Stack->elements[this_Stack->pointer-1].data);
+*op = this_Stack->elements[this_Stack->pointer-1].op;
+--this_Stack->pointer;
+
+if (*op)
+    sim_debug (SIM_DBG_EXP_STACK, sim_dflt_dev, "[Stack %d - Popping '%s'(precedence %d)]\n", 
+                                                this_Stack->id, (*op)->string, (*op)->precedence);
+else
+    sim_debug (SIM_DBG_EXP_STACK, sim_dflt_dev, "[Stack %d - Popping %s]\n", 
+                                                this_Stack->id, data);
+
+return TRUE;                      /* Success */
+}
+
+/*-----------------------------------------------------------------------------
+ * Add an element to the specified stack.
+ -----------------------------------------------------------------------------*/
+static t_bool push_Stack (Stack * this_Stack, char *data, Operator *op)
+{
+if (this_Stack == NULL)
+    return FALSE;
+
+if (this_Stack->pointer == this_Stack->size) {  /* If necessary, grow stack */
+    this_Stack->size += STACK_GROW_AMOUNT;
+    this_Stack->elements = (Stack_Element *)realloc (this_Stack->elements, this_Stack->size * sizeof(*this_Stack->elements));
+    memset (&this_Stack->elements[this_Stack->size - STACK_GROW_AMOUNT], 0, STACK_GROW_AMOUNT * sizeof(*this_Stack->elements));
+    }
+
+this_Stack->elements[this_Stack->pointer].op = op;
+strlcpy (this_Stack->elements[this_Stack->pointer].data, data, sizeof (this_Stack->elements[this_Stack->pointer].data));
+++this_Stack->pointer;
+
+if (op)
+    sim_debug (SIM_DBG_EXP_STACK, sim_dflt_dev, "[Stack %d - Pushing '%s'(precedence %d)]\n", 
+                                                this_Stack->id, op->string, op->precedence);
+else
+    sim_debug (SIM_DBG_EXP_STACK, sim_dflt_dev, "[Stack %d - Pushing %s]\n", 
+                                                this_Stack->id, data);
+
+return TRUE;                      /* Success */
+}
+
+/*-----------------------------------------------------------------------------
+ * Return the element at the top of the stack.
+ -----------------------------------------------------------------------------*/
+static t_bool top_Stack (Stack * this_Stack, char *data, Operator **op)
+{
+if (isempty_Stack(this_Stack))
+    return FALSE;
+
+strcpy (data, this_Stack->elements[this_Stack->pointer-1].data);
+*op = this_Stack->elements[this_Stack->pointer-1].op;
+
+if (*op)
+    sim_debug (SIM_DBG_EXP_STACK, sim_dflt_dev, "[Stack %d - Topping '%s'(precedence %d)]\n", 
+                                                this_Stack->id, (*op)->string, (*op)->precedence);
+else
+    sim_debug (SIM_DBG_EXP_STACK, sim_dflt_dev, "[Stack %d - Topping %s]\n", 
+                                                this_Stack->id, data);
+
+return TRUE;                      /* Success */
+}
+
+/* All Functions implementing operations */
+
+static t_svalue _op_add (t_svalue augend, t_svalue addend)
+{
+return augend + addend;
+}
+
+static t_svalue _op_sub (t_svalue subtrahend, t_svalue minuend)
+{
+return minuend - subtrahend;
+}
+
+static t_svalue _op_mult (t_svalue factorx, t_svalue factory)
+{
+return factorx * factory;
+}
+
+static t_svalue _op_div (t_svalue divisor, t_svalue dividend)
+{
+if (divisor != 0)
+    return dividend / divisor;
+return T_SVALUE_MAX;
+}
+
+static t_svalue _op_mod (t_svalue divisor, t_svalue dividend)
+{
+if (divisor != 0)
+    return dividend % divisor;
+return 0;
+}
+
+static t_svalue _op_comp (t_svalue data, t_svalue unused)
+{
+return ~data;
+}
+
+static t_svalue _op_log_not (t_svalue data, t_svalue unused)
+{
+return !data;
+}
+
+static t_svalue _op_log_and (t_svalue data1, t_svalue data2)
+{
+return data1 && data2;
+}
+
+static t_svalue _op_log_or (t_svalue data1, t_svalue data2)
+{
+return data1 || data2;
+}
+
+static t_svalue _op_bit_and (t_svalue data1, t_svalue data2)
+{
+return data1 & data2;
+}
+
+static t_svalue _op_bit_rsh (t_svalue shift, t_svalue data)
+{
+return data >> shift;
+}
+
+static t_svalue _op_bit_lsh (t_svalue shift, t_svalue data)
+{
+return data << shift;
+}
+
+static t_svalue _op_bit_or (t_svalue data1, t_svalue data2)
+{
+return data1 | data2;
+}
+
+static t_svalue _op_bit_xor (t_svalue data1, t_svalue data2)
+{
+return data1 ^ data2;
+}
+
+static t_svalue _op_eq (t_svalue data1, t_svalue data2)
+{
+return data1 == data2;
+}
+
+static t_svalue _op_ne (t_svalue data1, t_svalue data2)
+{
+return data1 != data2;
+}
+
+static t_svalue _op_le (t_svalue data1, t_svalue data2)
+{
+return data1 <= data2;
+}
+
+static t_svalue _op_lt (t_svalue data1, t_svalue data2)
+{
+return data1 < data2;
+}
+
+static t_svalue _op_ge (t_svalue data1, t_svalue data2)
+{
+return data1 >= data2;
+}
+
+static t_svalue _op_gt (t_svalue data1, t_svalue data2)
+{
+return data1 > data2;
+}
+
+static t_svalue _op_str_eq (const char *str1, const char *str2)
+{
+return (0 == strcmp (str1, str2));
+}
+
+static t_svalue _op_str_ne (const char *str1, const char *str2)
+{
+return (0 != strcmp (str1, str2));
+}
+
+static t_svalue _op_str_le (const char *str1, const char *str2)
+{
+return (0 > strcmp (str1, str2));
+}
+
+static t_svalue _op_str_lt (const char *str1, const char *str2)
+{
+return (0 >= strcmp (str1, str2));
+}
+
+static t_svalue _op_str_ge (const char *str1, const char *str2)
+{
+return (0 < strcmp (str1, str2));
+}
+
+static t_svalue _op_str_gt (const char *str1, const char *str2)
+{
+return (0 <= strcmp (str1, str2));
+}
+
+/* 
+ * The order of elements in this array is significant.  
+ * Care must be taken so that longer strings which have
+ * shorter strings contained in them must come first.
+ * For example "!=" must come before "!".
+ *
+ * These operators implement C language operator precedence
+ * as described in:
+ *   http://en.cppreference.com/w/c/language/operator_precedence
+ */
+static Operator operators[] = {
+    {"(",       99, 0, NULL,            NULL,           "Open Parenthesis"},
+    {")",       99, 0, NULL,            NULL,           "Close Parenthesis"},
+    {"+",        4, 0, _op_add,         NULL,           "Addition"},
+    {"-",        4, 0, _op_sub,         NULL,           "Subtraction"},
+    {"*",        3, 0, _op_mult,        NULL,           "Multiplication"},
+    {"/",        3, 0, _op_div,         NULL,           "Division"},
+    {"%",        3, 0, _op_mod,         NULL,           "Modulus"},
+    {"&&",      11, 0, _op_log_and,     NULL,           "Logical AND"},
+    {"||",      12, 0, _op_log_or,      NULL,           "Logical OR"},
+    {"&",        8, 0, _op_bit_and,     NULL,           "Bitwise AND"},
+    {">>",       5, 0, _op_bit_rsh,     NULL,           "Bitwise Right Shift"},
+    {"<<",       5, 0, _op_bit_lsh,     NULL,           "Bitwise Left Shift"},
+    {"|",       10, 0, _op_bit_or,      NULL,           "Bitwise Inclusive OR"},
+    {"^",        9, 0, _op_bit_xor,     NULL,           "Bitwise Exclusive OR"},
+    {"==",       7, 0, _op_eq,          _op_str_eq,     "Equality"},
+    {"!=",       7, 0, _op_ne,          _op_str_ne,     "Inequality"},
+    {"<=",       6, 0, _op_le,          _op_str_le,     "Less than or Equal"},
+    {"<",        6, 0, _op_lt,          _op_str_lt,     "Less than"},
+    {">=",       6, 0, _op_ge,          _op_str_ge,     "Greater than or Equal"},
+    {">",        6, 0, _op_gt,          _op_str_gt,     "Greater than"},
+    {"!",        2, 1, _op_log_not,     NULL,           "Logical Negation"},
+    {"~",        2, 1, _op_comp,        NULL,           "Bitwise Compliment"},
+    {NULL}};
+
+static const char *get_glyph_exp (const char *cptr, char *buf, Operator **oper, t_stat *stat)
+{
+static const char HexDigits[] = "0123456789abcdefABCDEF";
+static const char OctalDigits[] = "01234567";
+static const char BinaryDigits[] = "01";
+
+*stat = SCPE_OK;                            /* Assume Success */
+*buf = '\0';
+*oper = NULL;
+while (isspace (*cptr))
+    ++cptr;
+if (isalpha (*cptr)) {
+    while (isalnum (*cptr) || (*cptr == '.') || (*cptr == '_'))
+        *buf++ = *cptr++;
+    *buf = '\0';
+    }
+else {
+    if (isdigit (*cptr)) {
+        if ((!memcmp (cptr, "0x", 2)) ||    /* Hex Number */
+            (!memcmp (cptr, "0X", 2))) {
+            memcpy (buf, cptr, 2);
+            cptr += 2;
+            buf += 2;
+            while (strchr (HexDigits, *cptr))
+                *buf++ = *cptr++;
+            *buf = '\0';
+            }
+        else {
+            if ((!memcmp (cptr, "0b", 2)) ||/* Binary Number */
+                (!memcmp (cptr, "0B", 2))) {
+                memcpy (buf, cptr, 2);
+                cptr += 2;
+                buf += 2;
+                while (strchr (BinaryDigits, *cptr))
+                    *buf++ = *cptr++;
+                *buf = '\0';
+                }
+            else {
+                if (*cptr == '0') {         /* Octal Number */
+                    while (strchr (OctalDigits, *cptr))
+                        *buf++ = *cptr++;
+                    *buf = '\0';
+                    }
+                else {                      /* Decimal Number */
+                    while (isdigit (*cptr))
+                        *buf++ = *cptr++;
+                    *buf = '\0';
+                    }
+                }
+            }
+        if (isalpha (*cptr)) {              /* Numbers can't be followed by alpha character */
+            *stat = SCPE_INVEXPR;
+            return cptr;
+            }
+        }
+    else {
+        if (((cptr[0] == '-') || (cptr[0] == '+')) &&
+            (isdigit (cptr[1]))) {          /* Signed Decimal Number */
+            *buf++ = *cptr++;
+            while (isdigit (*cptr))
+                *buf++ = *cptr++;
+            *buf = '\0';
+            if (isalpha (*cptr)) {           /* Numbers can't be followed by alpha character */
+                *stat = SCPE_INVEXPR;
+                return cptr;
+                }
+            }
+        else {                               /* Special Characters (operators) */
+            if ((*cptr == '"') || (*cptr == '\'')) {
+                cptr = (CONST char *)get_glyph_gen (cptr, buf, 0, (sim_switches & SWMASK ('I')), TRUE, '\\');
+                }
+            else {
+                Operator *op;
+
+                for (op = operators; op->string; op++) {
+                    if (!memcmp (cptr, op->string, strlen (op->string))) {
+                        strcpy (buf, op->string);
+                        cptr += strlen (op->string);
+                        *oper = op;
+                        break;
+                        }
+                    }
+                if (!op->string) {
+                    *stat = SCPE_INVEXPR;
+                    return cptr;
+                    }
+                }
+            }
+        }
+    }
+while (isspace (*cptr))
+    ++cptr;
+return cptr;
+}
+
+/*
+ * Translate a string containing an infix ordered expression 
+ * into a stack containing that expression in postfix order 
+ */
+static const char *sim_into_postfix (Stack *stack1, const char *cptr, t_stat *stat, t_bool parens_required)
+{
+const char *start = cptr;
+const char *last_cptr;
+int parens = 0;
+Operator *op = NULL, *last_op;
+Stack *stack2 = new_Stack();        /* operator stack */
+char gbuf[CBUFSIZE];
+
+while (isspace(*cptr))              /* skip leading whitespace */
+    ++cptr;
+if (parens_required && (*cptr != '(')) {
+    delete_Stack (stack2);
+    *stat = SCPE_INVEXPR;
+    return cptr;
+    }
+while (*cptr) {
+    last_cptr = cptr;
+    last_op = op;
+    cptr = get_glyph_exp (cptr, gbuf, &op, stat);
+    if (*stat != SCPE_OK) {
+        delete_Stack (stack2);
+        return cptr;
+        }
+    if (!last_op && !op && ((gbuf[0] == '-') || (gbuf[0] == '+'))) {
+        for (op = operators; gbuf[0] != op->string[0]; op++);
+        gbuf[0] = '0';
+        cptr = last_cptr + 1;
+        }
+    sim_debug (SIM_DBG_EXP_EVAL, sim_dflt_dev, "[Glyph: %s]\n", op ? op->string : gbuf);
+    if (!op) {
+        push_Stack (stack1, gbuf, op);
+        continue;
+        }
+    if (0 == strcmp (op->string, "(")) {
+        ++parens;
+        push_Stack (stack2, gbuf, op);
+        continue;
+        }
+    if (0 == strcmp (op->string, ")")) {
+        char temp_buf[CBUFSIZE];
+        Operator *temp_op;
+
+        --parens;
+        if ((!pop_Stack (stack2, temp_buf, &temp_op)) ||
+            (parens < 0)){
+            *stat = sim_messagef (SCPE_INVEXPR, "Invalid Parenthesis nesting\n");
+            delete_Stack (stack2);
+            return cptr;
+            }
+        while (0 != strcmp (temp_op->string, "(")) {
+            push_Stack (stack1, temp_buf, temp_op);
+            if (!pop_Stack (stack2, temp_buf, &temp_op))
+                break;
+            }
+        if (parens_required && (parens == 0)) {
+            delete_Stack (stack2);
+            return cptr;
+            }
+        continue;
+        }
+    while (!isempty_Stack(stack2)) {
+        char top_buf[CBUFSIZE];
+        Operator *top_op;
+
+        top_Stack (stack2, top_buf, &top_op);
+        if (top_op->precedence > op->precedence)
+            break;
+        pop_Stack (stack2, top_buf, &top_op);
+        push_Stack (stack1, top_buf, top_op);
+        }
+    push_Stack (stack2, gbuf, op);
+    }
+if (parens != 0)
+    *stat = sim_messagef (SCPE_INVEXPR, "Invalid Parenthesis nesting\n");
+/* migrate the rest of stack2 onto stack1 */
+while (!isempty_Stack (stack2)) {
+    pop_Stack (stack2, gbuf, &op);
+    push_Stack (stack1, gbuf, op);
+    }
+
+delete_Stack (stack2);          /* delete the working operator stack */
+return cptr;                    /* return any unprocessed input */
+}
+
+static t_bool _value_of (const char *data, t_svalue *svalue, char *string, size_t string_size)
+{
+CONST char *gptr;
+
+if (isalpha (*data)) {
+    REG *rptr = NULL;
+    DEVICE *dptr = sim_dfdev;
+    const char *dot;
+    
+    dot = strchr (data, '.');
+    if (dot) {
+        char devnam[CBUFSIZE];
+
+        memcpy (devnam, data, dot - data);
+        devnam[dot - data] = '\0';
+        if (find_dev (devnam)) {
+            dptr = find_dev (devnam);
+            data = dot + 1;
+            rptr = find_reg (data, &gptr, dptr);
+            }
+        }
+    else
+        rptr = find_reg_glob (data, &gptr, &dptr);
+    if (rptr) {
+        *svalue = (t_svalue)get_rval (rptr, 0);
+        sprint_val (string + 1, *svalue, 10, string_size - 2, PV_LEFTSIGN);
+        *string = '"';
+        strlcpy (&string[strlen (string)], "\"", string_size - strlen (string));
+        return TRUE;
+        }
+    gptr = _sim_get_env_special (data, string + 1, string_size - 2);
+    if (gptr) {
+        *svalue = strtotsv(string + 1, &gptr, 0);
+        *string = '"';
+        strlcpy (&string[strlen (string)], "\"", string_size - strlen (string));
+        return (*gptr == '\0');
+        }
+    else
+        data = "";
+    }
+*svalue = strtotsv(data, &gptr, 0);
+snprintf (string, string_size - 1, "\"%s\"", data);
+return (*gptr == '\0');
+}
+
+/*
+ * Evaluate a given stack1 containing a postfix expression 
+ */
+static t_svalue sim_eval_postfix (Stack *stack1, t_stat *stat) {
+Stack *stack2 = new_Stack();    /* local working stack2 which is holds the numbers operators */
+char temp_data[CBUFSIZE];       /* Holds the items popped from the stack2 */
+Operator *temp_op;
+t_svalue temp_val;
+char temp_string[CBUFSIZE + 2];
+
+*stat = SCPE_OK;
+/* Reverse stack1 onto stack2 leaving stack1 empty */
+while (!isempty_Stack(stack1)) {
+    pop_Stack (stack1, temp_data, &temp_op);
+    if (temp_op)
+        sim_debug (SIM_DBG_EXP_EVAL, sim_dflt_dev, "[Expression element: %s (%d)\n", 
+                                                   temp_op->string, temp_op->precedence);
+    else
+        sim_debug (SIM_DBG_EXP_EVAL, sim_dflt_dev, "[Expression element: %s\n", 
+                                                   temp_data);
+    push_Stack (stack2, temp_data, temp_op);
+    }
+
+/* Loop through the postfix expression in stack2 evaluating until stack2 is empty */
+while (!isempty_Stack(stack2)) {
+    pop_Stack (stack2, temp_data, &temp_op);
+    if (temp_op) {              /* operator? */
+        t_bool num1;
+        t_svalue val1;
+        char item1[CBUFSIZE], string1[CBUFSIZE+2];
+        Operator *op1;
+        t_bool num2;
+        t_svalue val2;
+        char item2[CBUFSIZE], string2[CBUFSIZE+2];
+        Operator *op2;
+
+        if (!pop_Stack (stack1, item1, &op1)) {
+            *stat = SCPE_INVEXPR;
+            delete_Stack (stack2);
+            return 0;
+            }
+        if (temp_op->unary)
+            strlcpy (item2, "0", sizeof (item2));
+        else {
+            if ((!pop_Stack (stack1, item2, &op2)) && 
+                (temp_op->string[0] != '-') &&
+                (temp_op->string[0] != '+')) {
+                *stat = SCPE_INVEXPR;
+                delete_Stack (stack2);
+                return 0;
+                }
+            }
+        num1 = _value_of (item1, &val1, string1, sizeof (string1));
+        num2 = _value_of (item2, &val2, string2, sizeof (string2));
+        if ((!(num1 && num2)) && temp_op->string_function)
+            sprint_val (temp_data, (t_value)temp_op->string_function (string1, string2), 10, sizeof(temp_data) - 1, PV_LEFTSIGN);
+        else
+            sprint_val (temp_data, (t_value)temp_op->function (val1, val2), 10, sizeof(temp_data) - 1, PV_LEFTSIGN);
+        push_Stack (stack1, temp_data, NULL);
+        }
+    else
+        push_Stack (stack1, temp_data, temp_op);
+    }
+if (!pop_Stack (stack1, temp_data, &temp_op)) {
+    *stat = SCPE_INVEXPR;
+    delete_Stack (stack2);
+    return 0;
+    }
+delete_Stack (stack2);
+if (_value_of (temp_data, &temp_val, temp_string, sizeof (temp_string)))
+    return temp_val;
+else
+    return (t_svalue)(strlen (temp_string) > 2);
+}
+
+const char *sim_eval_expression (const char *cptr, t_svalue *value, t_bool parens_required, t_stat *stat)
+{
+const char *iptr = cptr;
+Stack *postfix = new_Stack (); /* for the postfix expression */
+
+*value = 0;
+cptr = sim_into_postfix (postfix, cptr, stat, parens_required);
+if (*stat != SCPE_OK) {
+    delete_Stack (postfix);
+    *stat = sim_messagef (SCPE_ARG, "Invalid Expression Element:\n%s\n%*s^\n", iptr, (int)(cptr-iptr), "");
+    return cptr;
+    }
+
+*value = sim_eval_postfix (postfix, stat);
+delete_Stack (postfix);
+return cptr;
+}

@@ -425,8 +425,9 @@ if (port == INVALID_HANDLE) {
     return port;
     }
 
-status = (lp) ? tmxr_set_config_line (lp, config)       /* set serial configuration */
-              : sim_config_serial (port, config);       /* set serial configuration */
+status = sim_config_serial (port, config);              /* set serial configuration */
+if ((lp) && (status == SCPE_OK))                        /* line specified? */
+    status = tmxr_set_config_line (lp, config);         /* set line speed parameters */
 
 if (status != SCPE_OK) {                                /* port configuration error? */
     sim_close_serial (port);                            /* close the port */
@@ -951,12 +952,12 @@ int ports = 0;
 memset(list, 0, max*sizeof(*list));
 #if defined(__linux) || defined(__linux__)
 if (1) {
-    struct dirent **namelist;
+    struct dirent **namelist = NULL;
     struct stat st;
 
     i = scandir("/sys/class/tty/", &namelist, NULL, NULL);
 
-    while (i--) {
+    while (0 < i--) {
         if (strcmp(namelist[i]->d_name, ".") &&
             strcmp(namelist[i]->d_name, "..")) {
             char path[1024], devicepath[1024], driverpath[1024];
