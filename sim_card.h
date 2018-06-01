@@ -82,13 +82,13 @@ extern "C" {
 #define MODE_LOWER      (8 << UNIT_V_CARD_MODE)
 #define MODE_026        (0x10 << UNIT_V_CARD_MODE)
 #define MODE_029        (0x20 << UNIT_V_CARD_MODE)
-#define MODE_CHAR       (0x30 << UNIT_V_CARD_MODE)
+#define MODE_CHAR       (0x70 << UNIT_V_CARD_MODE)
 
 
 /* Generic routines. */
-t_stat   sim_read_card(UNIT * uptr, uint16 *image);
+t_stat   sim_read_card(UNIT * uptr, uint16 image[80]);
 int      sim_card_eof(UNIT * uptr);
-t_stat   sim_punch_card(UNIT * uptr, UNIT *stkptr, uint16 *image);
+t_stat   sim_punch_card(UNIT * uptr, UNIT *stkptr, uint16 image[80]);
 t_stat   sim_card_attach(UNIT * uptr, CONST char *file);
 t_stat   sim_card_detach(UNIT *uptr);
 
