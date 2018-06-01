@@ -444,11 +444,11 @@ ifeq ($(WIN32),)  #*nix Environments (&& cygwin)
     endif
   endif
   # Find available RegEx library.  Prefer libpcreposix.
-  ifneq (,$(call find_include,pcreposix))
-    ifneq (,$(call find_lib,pcreposix))
-      OS_CCDEFS += -DHAVE_PCREPOSIX_H
-      OS_LDFLAGS += -lpcreposix
-      $(info using libpcreposix: $(call find_lib,pcreposix) $(call find_include,pcreposix))
+   ifneq (,$(and $(call find_include,pcreposix),$(call find_include,pcre)))
+     ifneq (,$(and $(call find_lib,pcreposix),$(call find_lib,pcre)))
+       OS_CCDEFS += -DHAVE_PCREPOSIX_H
+       OS_LDFLAGS += -lpcreposix -lpcre
+       $(info using libpcreposix: $(call find_lib,pcreposix) $(call find_lib,pcre) $(call find_include,pcreposix) $(call find_include,pcre))
       ifeq ($(LD_SEARCH_NEEDED),$(call need_search,pcreposix))
         OS_LDFLAGS += -L$(dir $(call find_lib,pcreposix))
       endif
@@ -1104,8 +1104,9 @@ KA10 = ${KA10D}/ka10_cpu.c ${KA10D}/ka10_sys.c ${KA10D}/ka10_df.c \
 	${KA10D}/ka10_lp.c ${KA10D}/ka10_pt.c ${KA10D}/ka10_dc.c \
 	${KA10D}/ka10_rp.c ${KA10D}/ka10_rc.c ${KA10D}/ka10_dt.c \
 	${KA10D}/ka10_dk.c ${KA10D}/ka10_cr.c ${KA10D}/ka10_cp.c \
-	${KA10D}/ka10_tu.c ${KA10D}/ka10_rs.c ${KA10D}/ka10_pd.c
-KA10_OPT = -DKA=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD 
+	${KA10D}/ka10_tu.c ${KA10D}/ka10_rs.c ${KA10D}/ka10_pd.c 
+KA10_OPT = -DKA=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD
+#	${KA10D}/ka10_imp.c sim_imp.c sim_ncp.c sim_tun.c
 
 ifneq ($(TYPE340),)
 # ONLY tested on Ubuntu 16.04, using X11 display support:
@@ -1122,7 +1123,7 @@ KI10 = ${KA10D}/ka10_cpu.c ${KA10D}/ka10_sys.c ${KA10D}/ka10_df.c \
 	${KA10D}/ka10_rp.c ${KA10D}/ka10_rc.c ${KA10D}/ka10_dt.c \
 	${KA10D}/ka10_dk.c ${KA10D}/ka10_cr.c ${KA10D}/ka10_cp.c \
 	${KA10D}/ka10_tu.c ${KA10D}/ka10_rs.c ${KA10D}/ka10_pd.c
-KI10_OPT = -DKI=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD
+KI10_OPT = -g -DKI=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD
 
 
 I7000D = I7000

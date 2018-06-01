@@ -174,6 +174,10 @@ static double sim_throt_peak_cps;
 static double sim_throt_inst_start;
 static uint32 sim_throt_sleep_time = 0;
 static int32 sim_throt_wait = 0;
+static uint32 sim_throt_delay = 3;
+#define CLK_TPS 10
+#define CLK_INIT (SIM_INITIAL_IPS/CLK_TPS)
+static int32 sim_int_clk_tps;
 static UNIT *sim_clock_unit[SIM_NTIMERS+1] = {NULL};
 UNIT * volatile sim_clock_cosched_queue[SIM_NTIMERS+1] = {NULL};
 static int32 sim_cosched_interval[SIM_NTIMERS+1];
@@ -1220,8 +1224,8 @@ for (tmr=0; tmr<=SIM_NTIMERS; ++tmr) {
     if (sim_clock_cosched_queue[tmr] != QUEUE_LIST_END) {
         int32 accum;
 
-        fprintf (st, "%s clock (%s) co-schedule event queue status\n",
-                 sim_name, sim_uname(sim_clock_unit[tmr]));
+        fprintf (st, "%s #%d clock (%s) co-schedule event queue status\n",
+                 sim_name, tmr, sim_uname(sim_clock_unit[tmr]));
         accum = 0;
         for (uptr = sim_clock_cosched_queue[tmr]; uptr != QUEUE_LIST_END; uptr = uptr->next) {
             if ((dptr = find_dev_from_unit (uptr)) != NULL) {
@@ -1251,18 +1255,36 @@ return SCPE_OK;
 REG sim_timer_reg[] = {
     { DRDATAD (IDLE_CYC_MS,      sim_idle_cyc_ms,        32, "Cycles Per Millisecond"), PV_RSPC|REG_RO},
     { DRDATAD (ROM_DELAY,        sim_rom_delay,          32, "ROM memory reference delay"), PV_RSPC|REG_RO},
+    { DRDATAD (TICK_RATE_0,      rtc_hz[0],              32, "Timer 0 Ticks Per Second") },
+    { DRDATAD (TICK_SIZE_0,      rtc_currd[0],           32, "Timer 0 Tick Size") },
+    { DRDATAD (TICK_RATE_1,      rtc_hz[1],              32, "Timer 1 Ticks Per Second") },
+    { DRDATAD (TICK_SIZE_1,      rtc_currd[1],           32, "Timer 1 Tick Size") },
+    { DRDATAD (TICK_RATE_2,      rtc_hz[2],              32, "Timer 2 Ticks Per Second") },
+    { DRDATAD (TICK_SIZE_2,      rtc_currd[2],           32, "Timer 2 Tick Size") },
+    { DRDATAD (TICK_RATE_3,      rtc_hz[3],              32, "Timer 3 Ticks Per Second") },
+    { DRDATAD (TICK_SIZE_3,      rtc_currd[3],           32, "Timer 3 Tick Size") },
+    { DRDATAD (TICK_RATE_4,      rtc_hz[4],              32, "Timer 4 Ticks Per Second") },
+    { DRDATAD (TICK_SIZE_4,      rtc_currd[4],           32, "Timer 4 Tick Size") },
+    { DRDATAD (TICK_RATE_5,      rtc_hz[5],              32, "Timer 5 Ticks Per Second") },
+    { DRDATAD (TICK_SIZE_5,      rtc_currd[5],           32, "Timer 5 Tick Size") },
+    { DRDATAD (TICK_RATE_6,      rtc_hz[6],              32, "Timer 6 Ticks Per Second") },
+    { DRDATAD (TICK_SIZE_6,      rtc_currd[6],           32, "Timer 6 Tick Size") },
+    { DRDATAD (TICK_RATE_7,      rtc_hz[7],              32, "Timer 7 Ticks Per Second") },
+    { DRDATAD (TICK_SIZE_7,      rtc_currd[7],           32, "Timer 7 Tick Size") },
+    { DRDATAD (INTERNAL_TICK_RATE,sim_int_clk_tps,       32, "Internal Timer Ticks Per Second") },
+    { DRDATAD (INTERNAL_TICK_SIZE,rtc_currd[SIM_NTIMERS],32, "Internal Timer Tick Size") },
     { NULL }
     };
 
 REG sim_throttle_reg[] = {
-    { DRDATAD (THROT_MS_START,   sim_throt_ms_start,     32, ""), PV_RSPC|REG_RO},
-    { DRDATAD (THROT_MS_STOP,    sim_throt_ms_stop,      32, ""), PV_RSPC|REG_RO},
-    { DRDATAD (THROT_TYPE,       sim_throt_type,         32, ""), PV_RSPC|REG_RO},
-    { DRDATAD (THROT_VAL,        sim_throt_val,          32, ""), PV_RSPC|REG_RO},
-    { DRDATAD (THROT_STATE,      sim_throt_state,        32, ""), PV_RSPC|REG_RO},
-    { DRDATAD (THROT_SLEEP_TIME, sim_throt_sleep_time,   32, ""), PV_RSPC|REG_RO},
-    { DRDATAD (THROT_WAIT,       sim_throt_wait,         32, ""), PV_RSPC|REG_RO},
-    { DRDATAD (THROT_DELAY,      sim_idle_stable,        32, "Seconds before throttling starts"), PV_RSPC},
+    { DRDATAD (THROT_MS_START,   sim_throt_ms_start,     32, "Throttle measurement start time"), PV_RSPC|REG_RO},
+    { DRDATAD (THROT_MS_STOP,    sim_throt_ms_stop,      32, "Throttle measurement stop time"), PV_RSPC|REG_RO},
+    { DRDATAD (THROT_TYPE,       sim_throt_type,         32, "Throttle type"), PV_RSPC|REG_RO},
+    { DRDATAD (THROT_VAL,        sim_throt_val,          32, "Throttle mode value"), PV_RSPC|REG_RO},
+    { DRDATAD (THROT_STATE,      sim_throt_state,        32, "Throttle state"), PV_RSPC|REG_RO},
+    { DRDATAD (THROT_SLEEP_TIME, sim_throt_sleep_time,   32, "Throttle sleep time"), PV_RSPC|REG_RO},
+    { DRDATAD (THROT_WAIT,       sim_throt_wait,         32, "Throttle execution interval before sleep"), PV_RSPC|REG_RO},
+    { DRDATAD (THROT_DELAY,      sim_throt_delay,        32, "Seconds before throttling starts"), PV_RSPC},
     { DRDATAD (THROT_DRIFT_PCT,  sim_throt_drift_pct,    32, "Percent of throttle drift before correction"), PV_RSPC},
     { NULL }
     };
@@ -1384,6 +1406,7 @@ static const char *sim_throttle_description (DEVICE *dptr)
 {
 return "Throttle facility";
 }
+
 
 DEVICE sim_timer_dev = {
     "INT-CLOCK", sim_timer_units, sim_timer_reg, sim_timer_mod, 
@@ -1742,10 +1765,10 @@ switch (sim_throt_state) {
 
     case SIM_THROT_STATE_INIT:                          /* take initial reading */
         if ((sim_calb_tmr != -1) && (rtc_hz[sim_calb_tmr] != 0)) {
-            if (rtc_calibrations[sim_calb_tmr] < sim_idle_stable) {
+            if (rtc_calibrations[sim_calb_tmr] < sim_throt_delay) {
                 sim_throt_ms_start = sim_os_msec ();
                 sim_throt_inst_start = sim_gtime ();
-                sim_debug (DBG_THR, &sim_timer_dev, "sim_throt_svc(INIT) Deferring until stable (%d more seconds)\n", (int)(sim_idle_stable - rtc_calibrations[sim_calb_tmr]));
+                sim_debug (DBG_THR, &sim_timer_dev, "sim_throt_svc(INIT) Deferring until stable (%d more seconds)\n", (int)(sim_throt_delay - rtc_calibrations[sim_calb_tmr]));
                 return sim_activate (uptr, rtc_hz[sim_calb_tmr]*rtc_currd[sim_calb_tmr]);
                 }
             sim_debug (DBG_THR, &sim_timer_dev, "sim_throt_svc(INIT) Computing Throttling values based on the last second's execution rate\n");
@@ -2215,10 +2238,6 @@ return NULL;
    To solve this we merely run an internal clock at 10Hz.
  */
 
-#define CLK_TPS 10
-#define CLK_INIT (SIM_INITIAL_IPS/CLK_TPS)
-static int32 sim_int_clk_tps;
-
 static t_stat sim_timer_clock_tick_svc (UNIT *uptr)
 {
 sim_debug(DBG_INT, &sim_timer_dev, "sim_timer_clock_tick_svc()\n");
@@ -2505,6 +2524,7 @@ if ((inst_delay == 0) && (usec_delay != 0))
 if ((sim_calb_tmr != -1) && (rtc_hz[sim_calb_tmr])) {       /* Calibrated Timer available? */
     int32 inst_til_tick = sim_activate_time (&sim_timer_units[sim_calb_tmr]) - 1;
     int32 ticks_til_calib = rtc_hz[sim_calb_tmr] - rtc_ticks[sim_calb_tmr];
+    double usecs_per_tick = floor (1000000.0 / rtc_hz[sim_calb_tmr]);
     int32 inst_til_calib = inst_til_tick + ((ticks_til_calib - 1) * rtc_currd[sim_calb_tmr]);
     uint32 usecs_til_calib = (uint32)ceil(inst_til_calib / inst_per_usec);
 
@@ -2514,6 +2534,18 @@ if ((sim_calb_tmr != -1) && (rtc_hz[sim_calb_tmr])) {       /* Calibrated Timer 
             uptr->usecs_remaining = (stat == SCPE_OK) ? usec_delay - usecs_til_calib : 0.0;
             sim_debug (DBG_TIM, &sim_timer_dev, "sim_timer_activate_after(%s, %.0f usecs) - coscheduling with with calibrated timer(%d), ticks=%d, usecs_remaining=%.0f usecs, inst_til_tick=%d\n", 
                        sim_uname(uptr), usec_delay, sim_calb_tmr, ticks_til_calib, uptr->usecs_remaining, inst_til_tick);
+            sim_debug (DBG_CHK, &sim_timer_dev, "sim_timer_activate_after(%s, %.0f usecs) - result = %.0f usecs, %.0f usecs\n", 
+                       sim_uname(uptr), usec_delay, sim_timer_activate_time_usecs (ouptr), sim_timer_activate_time_usecs (uptr));
+            return stat;
+            }
+        if ((usec_delay > usecs_per_tick) &&
+            (ticks_til_calib > 1)) {                  /* long wait? */
+            double usecs_til_tick = inst_til_tick / inst_per_usec;
+
+            stat = sim_clock_coschedule_tmr (uptr, sim_calb_tmr, 0);
+            uptr->usecs_remaining = (stat == SCPE_OK) ? usec_delay - usecs_til_tick : 0.0;
+            sim_debug (DBG_TIM, &sim_timer_dev, "sim_timer_activate_after(%s, %.0f usecs) - coscheduling with with calibrated timer(%d), ticks=%d, usecs_remaining=%.0f usecs, inst_til_tick=%d\n", 
+                       sim_uname(uptr), usec_delay, sim_calb_tmr, 0, uptr->usecs_remaining, inst_til_tick);
             sim_debug (DBG_CHK, &sim_timer_dev, "sim_timer_activate_after(%s, %.0f usecs) - result = %.0f usecs, %.0f usecs\n", 
                        sim_uname(uptr), usec_delay, sim_timer_activate_time_usecs (ouptr), sim_timer_activate_time_usecs (uptr));
             return stat;
