@@ -3966,9 +3966,7 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
     t_stat              r;
     t_value             sim_eval;
     struct InstHistory *h;
-    extern void         print_opcode(FILE * ofile, t_value val, t_opcode *);
-    extern t_opcode     word_ops[1], char_ops[1];
-    char                flags[] = "ABCNSMV";
+    CONST static char   flags[] = "ABCNSMV";
 
     if (hst_lnt == 0)
         return SCPE_NOFNC;      /* enabled? */
@@ -4018,8 +4016,7 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
             fputc(' ', st);
             fprint_val(st, h->op, 8, 12, PV_RZRO);
             fputc(' ', st);
-            print_opcode(st, h->op,
-                ((h->flags & F_CWMF) ? char_ops : word_ops));
+            print_opcode(st, h->op, ((h->flags & F_CWMF) != 0));
             fputc(' ', st);
             fprint_val(st, h->iar, 8, 16, PV_RZRO);
             fputc('\n', st);    /* end line */
