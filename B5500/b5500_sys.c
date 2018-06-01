@@ -341,9 +341,10 @@ t_opcode  char_ops[] = {
 
 /* Print out an instruction */
 void
-print_opcode(FILE * of, t_value val, t_opcode * tab)
+print_opcode(FILE * of, t_value val, int chr_mode)
 {
     uint16      op;
+    t_opcode   *tab = (chr_mode) ? char_ops: word_ops;
 
     op = val;
     while (tab->name != NULL) {
@@ -410,14 +411,14 @@ fprint_sym(FILE * of, t_addr addr, t_value * val, UNIT * uptr, int32 sw)
         fputs("   ", of);
         for (i = 36; i >= 0; i-=12) {
                 int     op = (int)(inst >> i) & 07777;
-                print_opcode(of, op, word_ops);
+                print_opcode(of, op, 0);
         }
     }
     if (sw & SWMASK('C')) {     /* Char mode opcodes */
         fputs("   ", of);
         for (i = 36; i >= 0; i-=12) {
                 int     op = (int)(inst >> i) & 07777;
-                print_opcode(of, op, char_ops);
+                print_opcode(of, op, 1);
         }
     }
     if (sw & SWMASK('B')) {     /* BCD mode */
