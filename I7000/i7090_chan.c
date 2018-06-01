@@ -55,7 +55,7 @@ extern UNIT         cpu_unit;
 extern uint16       IC;
 extern t_uint64     MQ;
 extern uint32       drum_addr;
-extern uint32       hsdrm_addr;
+extern t_uint64     hsdrm_addr;
 
 t_stat              chan_reset(DEVICE * dptr);
 void                chan_fetch(int chan);
@@ -356,10 +356,10 @@ chan_proc()
             /* On first command, copy it to drum address and load another */
             if ((chan_info[chan] & (CHAINF_RUN | CHAINF_START)) ==
                 CHAINF_START) {
-                hsdrm_addr = (int)M[location[chan] - 1];
+                hsdrm_addr = M[location[chan] - 1];
                 chan_info[chan] |= CHAINF_RUN;
                 if (chan_dev.dctrl & cmask)
-                    sim_debug(DEBUG_DETAIL, &chan_dev, "chan %d HDaddr %06o\n",
+                    sim_debug(DEBUG_DETAIL, &chan_dev, "chan %d HDaddr %012llo\n",
                               chan, hsdrm_addr);
                 chan_fetch(chan);
                 continue;
