@@ -74,7 +74,7 @@ DEVICE cty_dev = {
     "CTY", cty_unit, NULL, cty_mod,
     2, 10, 31, 1, 8, 8,
     NULL, NULL, &cty_reset,
-    NULL, NULL, NULL, &cty_dib, 0, 0, NULL,
+    NULL, NULL, NULL, &cty_dib, DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &cty_help, NULL, NULL, &cty_description
     };
 
@@ -86,6 +86,7 @@ t_stat cty_devio(uint32 dev, uint64 *data) {
         res |= cty_unit[1].u3 & (KEY_RDY | KEY_BSY);
         res |= cty_unit[0].u3 & KEY_TST;
         *data = res;
+        sim_debug(DEBUG_CONI, &cty_dev, "CTY %03o CONI %06o\n", dev, (uint32)*data);
         break;
      case CONO:
          res = *data;
@@ -100,6 +101,7 @@ t_stat cty_devio(uint32 dev, uint64 *data) {
              set_interrupt(dev, cty_unit[0].u5);
          else
              clr_interrupt(dev);
+         sim_debug(DEBUG_CONO, &cty_dev, "CTY %03o CONO %06o\n", dev, (uint32)*data);
          break;
      case DATAI:
          res = cty_unit[1].u4 & 0xff;
@@ -107,12 +109,16 @@ t_stat cty_devio(uint32 dev, uint64 *data) {
          if ((cty_unit[0].u3 & TEL_RDY) == 0)
              clr_interrupt(dev);
          *data = res;
+         sim_debug(DEBUG_DATAIO, &cty_dev, "CTY %03o DATAI %06o\n", dev, (uint32)*data);
          break;
     case DATAO:
          cty_unit[0].u4 = *data & 0x7f;
          cty_unit[0].u3 &= ~TEL_RDY;
          cty_unit[0].u3 |= TEL_BSY;
+         if ((cty_unit[0].u3 & KEY_RDY) == 0)
+             clr_interrupt(dev);
          sim_activate(&cty_unit[0], cty_unit[0].wait);
+         sim_debug(DEBUG_DATAIO, &cty_dev, "CTY %03o DATAO %06o\n", dev, (uint32)*data);
          break;
     }
     return SCPE_OK;
