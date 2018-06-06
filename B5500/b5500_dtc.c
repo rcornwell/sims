@@ -786,9 +786,8 @@ t_stat dtc_setnl (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
     newln = (int32) get_uint (cptr, 10, DTC_MLINES, &r);
     if ((r != SCPE_OK) || (newln == dtc_desc.lines))
         return r;
-    if ((newln == 0) || (newln >= DTC_MLINES))
+    if ((newln == 0) || (newln > DTC_MLINES))
         return SCPE_ARG;
-    newln--;
     if (newln < dtc_desc.lines) {
         for (i = newln, t = 0; i < dtc_desc.lines; i++)
             t = t | dtc_ldsc[i].conn;
@@ -802,7 +801,7 @@ t_stat dtc_setnl (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
             tmxr_detach_ln (&dtc_ldsc[i]);               /* completely reset line */
         }
     }
-    if (dtc_desc.lines < newln)
+    if (dtc_desc.lines <= newln)
         memset (dtc_ldsc + dtc_desc.lines, 0, sizeof(*dtc_ldsc)*(newln-dtc_desc.lines));
     dtc_desc.lines = newln;
     return dtc_reset (&dtc_dev);                         /* setup lines and auto config */
