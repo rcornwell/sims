@@ -3678,17 +3678,15 @@ control:
                         R = 0;
                         F = S;          /* Set F and X */
                         X = toF(S);
+                        S = CF(B);
                         if (B & FLAG) {
-                            if ((B & PRESENT) == 0) {
-                                if (NCSF)
-                                    Q |= PRES_BIT;
-                                break;
-                            }
-                            KV = 0;
+                            if ((B & PRESENT) == 0 && NCSF)
+                                Q |= PRES_BIT;
+                            else
+                                KV = 0;
                         } else {
                             KV = (uint8)((B >> (FFIELD_V - 3)) & 070);
                         }
-                        S = CF(B);
                         break;
 
                 case VARIANT(WMOP_MKS): /* Mark Stack */
