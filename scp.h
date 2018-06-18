@@ -246,6 +246,7 @@ CONST char *get_glyph_cmd (const char *iptr, char *optr);
 t_value get_uint (const char *cptr, uint32 radix, t_value max, t_stat *status);
 CONST char *get_range (DEVICE *dptr, CONST char *cptr, t_addr *lo, t_addr *hi,
     uint32 rdx, t_addr max, char term);
+t_stat sim_set_environment (int32 flag, CONST char *cptr);
 t_stat sim_decode_quoted_string (const char *iptr, uint8 *optr, uint32 *osize);
 char *sim_encode_quoted_string (const uint8 *iptr, uint32 size);
 void fprint_buffer_string (FILE *st, const uint8 *buf, uint32 size);
@@ -304,6 +305,7 @@ CONST char *match_ext (CONST char *fnam, const char *ext);
 t_stat show_version (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
 t_stat set_dev_debug (DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
 t_stat show_dev_debug (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
+t_stat sim_add_debug_flags (DEVICE *dptr, DEBTAB *debflags);
 const char *sim_error_text (t_stat stat);
 t_stat sim_string_to_stat (const char *cptr, t_stat *cond);
 t_stat sim_cancel_step (void);
