@@ -474,7 +474,7 @@ if (!lp->txbfd || lp->notelnet)                         /* if not buffered telne
     lp->txbpr = lp->txbpi = lp->txcnt = lp->txpcnt = 0; /*   init transmit indexes */
 lp->txdrp = lp->txstall = 0;
 tmxr_set_get_modem_bits (lp, 0, 0, NULL);
-if ((!lp->mp->buffered) && (!lp->txbfd)) {
+if (lp->mp && (!lp->mp->buffered) && (!lp->txbfd)) {
     lp->txbfd = 0;
     lp->txbsz = TMXR_MAXBUF;
     lp->txb = (char *)realloc (lp->txb, lp->txbsz);
@@ -735,7 +735,7 @@ else {
         }
     }
 if ((written > 0) && (lp->txbps) && (sim_is_running))
-    lp->txnexttime = floor (sim_gtime () + ((written * lp->txdelta * sim_timer_inst_per_sec ()) / lp->bpsfactor));
+    lp->txnexttime = floor (sim_gtime () + ((written * lp->txdeltausecs * sim_timer_inst_per_sec ()) / USECS_PER_SECOND));
 return written;
 }
 
@@ -1784,9 +1784,9 @@ if (lp->rxbpi == lp->rxbpr)                             /* empty? zero ptrs */
     lp->rxbpi = lp->rxbpr = 0;
 if (val) {                                              /* Got something? */
     if (lp->rxbps)
-        lp->rxnexttime = floor (sim_gtime () + ((lp->rxdelta * sim_timer_inst_per_sec ()) / lp->bpsfactor));
+        lp->rxnexttime = floor (sim_gtime () + ((lp->rxdeltausecs * sim_timer_inst_per_sec ()) / USECS_PER_SECOND));
     else
-        lp->rxnexttime = floor (sim_gtime () + ((lp->mp->uptr->wait * sim_timer_inst_per_sec ()) / TMXR_BPS_UNIT_SCALE));
+        lp->rxnexttime = floor (sim_gtime () + ((lp->mp->uptr->wait * sim_timer_inst_per_sec ()) / USECS_PER_SECOND));
     }
 tmxr_debug_return(lp, val);
 return val;
@@ -2173,8 +2173,8 @@ if ((lp->txbfd && !lp->notelnet) || (TXBUF_AVAIL(lp) > 1)) {/* room for char (+ 
     sim_exp_check (&lp->expect, chr);                   /* process expect rules as needed */
     if (!sim_is_running) {                              /* attach message or other non simulation time message? */
         tmxr_send_buffered_data (lp);                   /* put data on wire */
-        sim_os_ms_sleep(((lp->txbps) && (lp->txdelta > 1000)) ? /* rate limiting output slower than 1000 cps */
-                        (lp->txdelta - 1000) / 1000 : 
+        sim_os_ms_sleep(((lp->txbps) && (lp->txdeltausecs > 1000)) ? /* rate limiting output slower than 1000 cps */
+                        (lp->txdeltausecs - 1000) / 1000 : 
                         10);                           /* wait an approximate character delay */
         }
     return SCPE_OK;                                     /* char sent */
@@ -2267,10 +2267,8 @@ for (i = 0; i < mp->lines; i++) {                       /* loop thru lines */
 #endif
         if ((lp->xmte == 0) && 
             ((lp->txbps == 0) ||
-             (lp->txnexttime <= sim_gtime ()))) {
+             (lp->txnexttime <= sim_gtime ())))
             lp->xmte = 1;                               /* enable line transmit */
-            lp->txnexttime = 0.0;
-            }
         }
     }                                                   /* end for */
 }
@@ -2479,24 +2477,21 @@ if (*cptr == '*') {
 
     if (r != SCPE_OK)
         return r;
-    lp->bpsfactor = TMXR_BPS_UNIT_SCALE * bpsfactor;
+    lp->bpsfactor = bpsfactor;
     }
 if ((lp->serport) && (lp->bpsfactor != 0.0))
-    lp->bpsfactor = TMXR_BPS_UNIT_SCALE;
-lp->rxdelta = _tmln_speed_delta (speed);
+    lp->bpsfactor = 1.0;
+lp->rxdeltausecs = (uint32)(_tmln_speed_delta (speed) / lp->bpsfactor);
 lp->rxnexttime = 0.0;
 uptr = lp->uptr;
 if ((!uptr) && (lp->mp))
     uptr = lp->mp->uptr;
 if (uptr)
-    uptr->wait = lp->rxdelta;
-if (lp->bpsfactor == 0.0)
-    lp->bpsfactor = TMXR_BPS_UNIT_SCALE;
+    uptr->wait = lp->rxdeltausecs;
 lp->txbps = lp->rxbps;
-lp->txdelta = lp->rxdelta;
-lp->txnexttime = lp->rxnexttime;
+lp->txdeltausecs = lp->rxdeltausecs;
 if (lp->o_uptr)
-    lp->o_uptr->wait = lp->txdelta;
+    lp->o_uptr->wait = lp->txdeltausecs;
 return SCPE_OK;
 }
 
@@ -2534,7 +2529,7 @@ for (i = 0; i < mp->lines; i++) {               /* initialize lines */
     lp->mp = mp;                                /* set the back pointer */
     lp->modem_control = mp->modem_control;
     if (lp->bpsfactor == 0.0)
-        lp->bpsfactor = TMXR_BPS_UNIT_SCALE;
+        lp->bpsfactor = 1.0;
     }
 mp->ring_sock = INVALID_SOCKET;
 free (mp->ring_ipad);
@@ -2658,7 +2653,9 @@ while (*tptr) {
                 if ((NULL == cptr) || ('\0' == *cptr) || 
                     (_tmln_speed_delta (cptr) < 0))
                     return sim_messagef (SCPE_ARG, "Invalid Speed Specifier: %s\n", (cptr ? cptr : ""));
-                if (mp->port_speed_control && (_tmln_speed_delta (cptr) > 0) && (!(sim_switches & SIM_SW_REST)))
+                if (mp->port_speed_control && 
+                    ((_tmln_speed_delta (cptr) > 0) || (*cptr != '*')) && 
+                    (!(sim_switches & SIM_SW_REST)))
                     return sim_messagef (SCPE_ARG, "%s simulator programmatically sets %sport speed\n", sim_name, dev_name);
                 strlcpy (speed, cptr, sizeof(speed));
                 continue;
@@ -3802,6 +3799,27 @@ else
 return SCPE_OK;
 }
 
+static DEBTAB tmxr_debug[] = {
+  {"XMT",       TMXR_DBG_XMT,       "Transmit Data"},
+  {"RCV",       TMXR_DBG_RCV,       "Received Data"},
+  {"RET",       TMXR_DBG_RET,       "Returned Received Data"},
+  {"MODEM",     TMXR_DBG_MDM,       "Modem Signals"},
+  {"CONNECT",   TMXR_DBG_CON,       "Connection Activities"},
+  {"ASYNC",     TMXR_DBG_ASY,       "Asynchronous Activities"},
+  {"TRACE",     TMXR_DBG_TRC,       "trace routine calls"},
+  {"XMTPKT",    TMXR_DBG_PXMT,      "Transmit Packet Data"},
+  {"RCVPKT",    TMXR_DBG_PRCV,      "Received Packet Data"},
+  {"EXPECT",    TMXR_DBG_EXP,       "Expect Activities"},
+  {"SEND",      TMXR_DBG_SEND,      "Send Activities"},
+  {0}
+};
+
+t_stat tmxr_add_debug (DEVICE *dptr)
+{
+if (!(dptr->flags & DEV_MUX))
+    return SCPE_OK;
+return sim_add_debug_flags (dptr, tmxr_debug);
+}
 
 /* Attach unit to master socket */
 
@@ -3917,8 +3935,8 @@ else {
         if (mp->lines == 1) {
             if (mp->ldsc->rxbps) {
                 fprintf(st, ", Speed=%d", mp->ldsc->rxbps);
-                if (mp->ldsc->bpsfactor != TMXR_BPS_UNIT_SCALE)
-                    fprintf(st, "*%.0f", mp->ldsc->bpsfactor / TMXR_BPS_UNIT_SCALE);
+                if (mp->ldsc->bpsfactor != 1.0)
+                    fprintf(st, "*%.0f", mp->ldsc->bpsfactor);
                 fprintf(st, " bps");
                 }
             }
@@ -3946,13 +3964,13 @@ else {
                     fprintf(st, ", Loopback");
                 if (lp->rxbps) {
                     fprintf(st, ", Speed=%d", lp->rxbps);
-                    if (lp->bpsfactor != TMXR_BPS_UNIT_SCALE)
-                        fprintf(st, "*%.0f", lp->bpsfactor / TMXR_BPS_UNIT_SCALE);
+                    if (lp->bpsfactor != 1.0)
+                        fprintf(st, "*%.0f", lp->bpsfactor);
                     fprintf(st, " bps");
                     }
                 else {
-                    if (lp->bpsfactor != TMXR_BPS_UNIT_SCALE)
-                        fprintf(st, ", Speed=*%.0f bps", lp->bpsfactor / TMXR_BPS_UNIT_SCALE);
+                    if (lp->bpsfactor != 1.0)
+                        fprintf(st, ", Speed=*%.0f bps", lp->bpsfactor);
                     }
                 fprintf (st, "\n");
                 }
@@ -4084,20 +4102,20 @@ for (i=0; i<mp->lines; i++) {
         if (lp->rxnexttime > sim_gtime_now)
             due = (int32)(lp->rxnexttime - sim_gtime_now);
         else
-            due = sim_processing_event ? 1 : 0;     /* avoid potential infinite loop if called from service routine */
+            due = sim_processing_event ? 1 : 0; /* avoid potential infinite loop if called from service routine */
         sooner = MIN(sooner, due);
         }
-    if ((uptr == lp->o_uptr) &&         /* output completion unit? */
-        (lp->txbps)          &&         /* while rate limiting */
-        (lp->txnexttime)) {             /* with queued output data */
+    if ((lp->conn) &&                   /* Connected? */
+        (uptr == lp->o_uptr) &&         /* output completion unit? */
+        (lp->txbps)) {                  /* while rate limiting */
+        if ((tmxr_tqln(lp)) &&          /* pending output data? */
+            (lp->txnexttime < sim_gtime_now))
+            tmxr_send_buffered_data (lp);/* flush it */
         if (lp->txnexttime > sim_gtime_now)
             due = (int32)(lp->txnexttime - sim_gtime_now);
         else
-            due = sim_processing_event ? 1 : 0;     /* avoid potential infinite loop if called from service routine */
-        if (i == 0)
-            sooner = due;
-        else
-            sooner = MIN(sooner, due);
+            due = sim_processing_event ? 1 : 0; /* avoid potential infinite loop if called from service routine */
+        sooner = MIN(sooner, due);
         }
     }
 return sooner;
@@ -4113,18 +4131,18 @@ if (!(uptr->dynflags & UNIT_TM_POLL))
     return _sim_activate (uptr, interval);              /* Handle the non mux case */
 sooner = _tmxr_activate_delay (uptr, interval);
 if (sooner != interval) {
-    sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "scheduling %s after %d instructions rather than %d instructions\n", sim_uname (uptr), sooner, interval);
+    sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "tmxr_activate() - scheduling %s after %d instructions rather than %d instructions\n", sim_uname (uptr), sooner, interval);
     return _sim_activate (uptr, sooner);                /* Handle the busy case */
     }
 #if defined(SIM_ASYNCH_MUX)
 if (!sim_asynch_enabled) {
-    sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "scheduling %s after %d instructions\n", sim_uname (uptr), interval);
+    sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "tmxr_activate() - scheduling %s after %d instructions\n", sim_uname (uptr), interval);
     return _sim_activate (uptr, interval);
     }
-sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "scheduling %s asynchronously instead of %d instructions\n", sim_uname (uptr), interval);
+sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "tmxr_activate() - scheduling %s asynchronously instead of %d instructions\n", sim_uname (uptr), interval);
 return SCPE_OK;
 #else
-sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "scheduling %s after %d instructions\n", sim_uname (uptr), interval);
+sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "tmxr_activate() - scheduling %s after %d instructions\n", sim_uname (uptr), interval);
 return _sim_activate (uptr, interval);
 #endif
 }
@@ -4147,21 +4165,21 @@ if (!(uptr->dynflags & UNIT_TM_POLL))
 sooner = _tmxr_activate_delay (uptr, 0x7FFFFFFF);
 if (sooner != 0x7FFFFFFF) {
     if (sooner < 0) {
-        sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "scheduling %s for %u usecs produced overflow interval %d instructions, sceduling for %d instructions\n", sim_uname (uptr), usecs_walltime, sooner, 0x7FFFFFFF);
+        sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "tmxr_activate_after() - scheduling %s for %u usecs produced overflow interval %d instructions, sceduling for %d instructions\n", sim_uname (uptr), usecs_walltime, sooner, 0x7FFFFFFF);
         sooner = _tmxr_activate_delay (uptr, 0x7FFFFFFF);   /* Breakpoint here on unexpected value */
         }
-    sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "scheduling %s after %d instructions rather than %u usecs\n", sim_uname (uptr), sooner, usecs_walltime);
+    sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "tmxr_activate_after() - scheduling %s after %d instructions rather than %u usecs\n", sim_uname (uptr), sooner, usecs_walltime);
     return _sim_activate (uptr, sooner);                        /* Handle the busy case directly */
     }
 #if defined(SIM_ASYNCH_MUX)
 if (!sim_asynch_enabled) {
-    sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "scheduling %s after %u usecs\n", sim_uname (uptr), usecs_walltime);
+    sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "tmxr_activate_after() - scheduling %s after %u usecs\n", sim_uname (uptr), usecs_walltime);
     return _sim_activate_after (uptr, (double)usecs_walltime);
     }
-sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "scheduling %s asynchronously instead of %u usecs\n", sim_uname (uptr), usecs_walltime);
+sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "tmxr_activate_after() - scheduling %s asynchronously instead of %u usecs\n", sim_uname (uptr), usecs_walltime);
 return SCPE_OK;
 #else
-sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "scheduling %s after %u usecs\n", sim_uname (uptr), usecs_walltime);
+sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "tmxr_activate_after() - scheduling %s after %.0f usecs\n", sim_uname (uptr), (double)usecs_walltime);
 return _sim_activate_after (uptr, (double)usecs_walltime);
 #endif
 }
@@ -4197,17 +4215,17 @@ if (!(uptr->dynflags & UNIT_TM_POLL))
     return sim_clock_coschedule_tmr (uptr, tmr, ticks); /* Handle the non mux case */
 sooner = _tmxr_activate_delay (uptr, interval);
 if (sooner != interval) {
-    sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "scheduling %s after %d instructions rather than %d ticks (%d instructions)\n", sim_uname (uptr), sooner, ticks, interval);
+    sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "tmxr_clock_coschedule_tmr(tmr=%d) - scheduling %s after %d instructions rather than %d ticks (%d instructions)\n", tmr, sim_uname (uptr), sooner, ticks, interval);
     return _sim_activate (uptr, sooner);                /* Handle the busy case directly */
     }
 #if defined(SIM_ASYNCH_MUX)
 if (!sim_asynch_enabled) {
-    sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "coscheduling %s after interval %d ticks\n", sim_uname (uptr), ticks);
+    sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "tmxr_clock_coschedule_tmr(tmr=%d) - coscheduling %s after interval %d ticks\n", tmr, sim_uname (uptr), ticks);
     return sim_clock_coschedule (uptr, tmr, ticks);
     }
 return SCPE_OK;
 #else
-sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "coscheduling %s after interval %d ticks\n", sim_uname (uptr), ticks);
+sim_debug (TIMER_DBG_MUX, &sim_timer_dev, "tmxr_clock_coschedule_tmr(tmr=%d) - coscheduling %s after interval %d ticks\n", tmr, sim_uname (uptr), ticks);
 return sim_clock_coschedule_tmr (uptr, tmr, ticks);
 #endif
 }
@@ -4653,8 +4671,8 @@ else {
             fprintf (st, "  speed = %u", lp->rxbps);
         else
             fprintf (st, "  speed = %u/%u", lp->rxbps, lp->txbps);
-        if (lp->bpsfactor / TMXR_BPS_UNIT_SCALE > 1.0)
-            fprintf (st, "*%.0f", lp->bpsfactor / TMXR_BPS_UNIT_SCALE);
+        if (lp->bpsfactor > 1.0)
+            fprintf (st, "*%.0f", lp->bpsfactor);
         fprintf (st, " bps\n");
         }
     }

@@ -170,11 +170,11 @@ struct tmln {
     uint32              rxpboffset;                     /* rcv packet buffer offset */
     uint32              rxbps;                          /* rcv bps speed (0 - unlimited) */
     double              bpsfactor;                      /* receive speed factor (scaled to usecs) */
-#define TMXR_BPS_UNIT_SCALE 1000000.0
-    uint32              rxdelta;                        /* rcv inter character min time (usecs) */
+#define USECS_PER_SECOND 1000000.0
+    uint32              rxdeltausecs;                   /* rcv inter character min time (usecs) */
     double              rxnexttime;                     /* min time for next receive character */
     uint32              txbps;                          /* xmt bps speed (0 - unlimited) */
-    uint32              txdelta;                        /* xmt inter character min time (usecs) */
+    uint32              txdeltausecs;                   /* xmt inter character min time (usecs) */
     double              txnexttime;                     /* min time for next transmit character */
     uint8               *txpb;                          /* xmt packet buffer */
     uint32              txpbsize;                       /* xmt packet buffer size */
@@ -309,6 +309,7 @@ void _tmxr_debug (uint32 dbits, TMLN *lp, const char *msg, char *buf, int bufsiz
 #define tmxr_debug_trace_line(lp, msg) do {if (sim_deb && (lp)->mp && (lp)->mp->dptr && (TMXR_DBG_TRC & (lp)->mp->dptr->dctrl)) sim_debug (TMXR_DBG_TRC, (lp)->mp->dptr, "Ln%d:%s\n", (int)((lp)-(lp)->mp->ldsc), (msg)); } while (0)
 #define tmxr_debug_connect(mp, msg) do {if (sim_deb && (mp)->dptr && (TMXR_DBG_CON & (mp)->dptr->dctrl)) sim_debug (TMXR_DBG_CON, mp->dptr, "%s\n", (msg)); } while (0)
 #define tmxr_debug_connect_line(lp, msg) do {if (sim_deb && (lp)->mp && (lp)->mp->dptr && (TMXR_DBG_CON & (lp)->mp->dptr->dctrl)) sim_debug (TMXR_DBG_CON, (lp)->mp->dptr, "Ln%d:%s\n", (int)((lp)-(lp)->mp->ldsc), (msg)); } while (0)
+t_stat tmxr_add_debug (DEVICE *dptr);
 
 #if defined(SIM_ASYNCH_MUX) && !defined(SIM_ASYNCH_IO)
 #undef SIM_ASYNCH_MUX
