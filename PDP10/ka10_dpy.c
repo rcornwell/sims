@@ -151,6 +151,7 @@ extern uint64 SW;        /* switch register */
 
 t_stat dpy_devio(uint32 dev, uint64 *data);
 t_stat dpy_svc (UNIT *uptr);
+t_stat dpy_reset (DEVICE *dptr);
 const char *dpy_description (DEVICE *dptr);
 
 DIB dpy_dib[] = {
@@ -165,7 +166,7 @@ UNIT dpy_unit[] = {
 DEVICE dpy_dev = {
     "DPY", dpy_unit, NULL, NULL,
     NUM_DEVS_DPY, 0, 0, 0, 0, 0,
-    NULL, NULL, NULL,
+    NULL, NULL, dpy_reset,
     NULL, NULL, NULL,
     &dpy_dib, DEV_DISABLE | DEV_DIS | DEV_DEBUG, 0, NULL,      
     NULL, NULL, NULL, NULL, NULL, &dpy_description
@@ -288,6 +289,18 @@ t_stat dpy_svc (UNIT *uptr)
             }
         }
     }
+    return SCPE_OK;
+}
+
+/* Reset routine */
+
+t_stat dpy_reset (DEVICE *dptr)
+{
+    if (!(dptr->flags & DEV_DIS)) {
+        display_reset();
+        ty340_reset();
+    }
+    sim_cancel (&dpy_unit[0]);             /* deactivate unit */
     return SCPE_OK;
 }
 
