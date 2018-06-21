@@ -576,10 +576,15 @@ dtco_srv(UNIT * uptr)
                          ln);
              dtc_bufptr[ln] = 0;
              dtc_bsize[ln] = 0;
-        case BufInputBusy:
-             t = 1;
-             while (t && tmxr_rqln(&dtc_ldsc[ln]) != 0) {
-                 c = tmxr_getc_ln(&dtc_ldsc[ln]) & 0x7f;   /* get char */
+             /* Fall through */
+
+         case BufInputBusy:
+              t = 1;
+              while (t && tmxr_rqln(&dtc_ldsc[ln]) != 0) {
+                 c = tmxr_getc_ln(&dtc_ldsc[ln]);         /* get char */
+                 if ((c & TMXR_VALID) == 0) 
+                     break;
+                 c &= 0x7f;
                  c1 = ascii_to_con[c];
                  switch(c) {
                  case '\005':   /* ^E ENQ who-are-you */
