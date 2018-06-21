@@ -607,7 +607,7 @@ static const char *sim_int_step_description (DEVICE *dptr)
 return "Step/Next facility";
 }
 
-static UNIT sim_step_unit = { UDATA (&step_svc, 0, 0) };
+static UNIT sim_step_unit = { UDATA (&step_svc, UNIT_IDLE, 0) };
 DEVICE sim_step_dev = {
     "INT-STEP", &sim_step_unit, NULL, NULL, 
     1, 0, 0, 0, 0, 0, 
@@ -8419,7 +8419,8 @@ for (i = 0, j = addr; i < sim_emax; i++, j = j + dptr->aincr) {
     else {
         if (!(uptr->flags & UNIT_ATT))
             return SCPE_UNATT;
-        if (uptr->dynflags & UNIT_NO_FIO)
+        if ((uptr->dynflags & UNIT_NO_FIO) ||
+            (uptr->fileref == NULL))
             return SCPE_NOFNC;
         if ((uptr->flags & UNIT_FIX) && (j >= uptr->capac)) {
             reason = SCPE_NXM;
