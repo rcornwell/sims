@@ -76,6 +76,7 @@
 #define BufAbnormal     010     /* Abnornmal flag */
 #define BufGM           020     /* Buffer term with GM */
 #define BufIRQ          040     /* Buffer ready */
+#define BufDisco        0100    /* Buffer disconnecting */
 
 /* Not connected line:
         BufNotReady.
@@ -350,7 +351,7 @@ t_stat dtc_srv(UNIT * uptr)
     }
     /* Process for each unit */
     if (uptr->u5 & DTC_WR) {
-        if (line > dtc_desc.lines || line == -1) {
+        if (line > dtc_desc.lines || line == -1 || dtc_lstatus[line] & BufDisco) {
             sim_debug(DEBUG_DETAIL, &dtc_dev, "Datacomm write invalid %d\n",
                          line);
             chan_set_notrdy(chan);
@@ -434,7 +435,7 @@ t_stat dtc_srv(UNIT * uptr)
     }
 
     if (uptr->u5 & DTC_RD) {
-        if (line > dtc_desc.lines || line == -1) {
+        if (line > dtc_desc.lines || line == -1 || dtc_lstatus[line] & BufDisco) {
             sim_debug(DEBUG_DETAIL, &dtc_dev, "Datacomm read nothing %d\n",
                  line);
             chan_set_notrdy(chan);
@@ -489,7 +490,7 @@ t_stat dtc_srv(UNIT * uptr)
                 if (dtc_lstatus[line] & BufAbnormal)
                      chan_set_wcflg(chan);
                 if (dtc_ldsc[line].conn == 0)   /* connected? */
-                    dtc_lstatus[line] = BufIRQ|BufNotReady;
+                    dtc_lstatus[line] = BufIRQ|BufAbnormal|BufIRQ|BufIdle;
                 else
                     dtc_lstatus[line] = BufIRQ|BufIdle;
                 dtc_bsize[line] = 0;
@@ -524,6 +525,7 @@ dtco_srv(UNIT * uptr)
     sim_clock_coschedule(uptr, tmxr_poll);
     ln = tmxr_poll_conn(&dtc_desc);     /* look for connect */
     if (ln >= 0) {              /* got one? */
+        dtc_ldsc[ln].rcve = 1;
         dtc_blimit[ln] = dtc_bufsize-1;
         dtc_lstatus[ln] = BufIRQ|BufAbnormal|BufWriteRdy;
         IAR |= IRQ_12;
@@ -532,32 +534,43 @@ dtco_srv(UNIT * uptr)
 
     /* For each line that is in idle state enable recieve */
     for (ln = 0; ln < dtc_desc.lines; ln++) {
-        if (dtc_ldsc[ln].conn &&
-                (dtc_lstatus[ln] & BufSMASK) == BufIdle) {
+           dtc_ldsc[ln].rcve = 0;
+        if (dtc_ldsc[ln].conn && 
+            (dtc_lstatus[ln] & BufSMASK) < BufWrite) {
            dtc_ldsc[ln].rcve = 1;
         }
     }
     tmxr_poll_rx(&dtc_desc);    /* poll for input */
     for (ln = 0; ln < DTC_MLINES; ln++) {       /* loop thru mux */
         /* Check for disconnect */
-        if (dtc_ldsc[ln].conn == 0) {   /* connected? */
+        if (dtc_ldsc[ln].conn == 0 && (dtc_lstatus[ln] & BufDisco) == 0) {   /* connected? */
+             dtc_ldsc[ln].rcve = 0;
              switch(dtc_lstatus[ln] & BufSMASK) {
-             case BufIdle:              /* Idle, throw in EOT */
-                /* Fall through */
+             case BufIdle:              /* Idle Flag as disconnected */
+                  dtc_lstatus[ln] = BufIRQ|BufAbnormal|BufIdle|BufDisco;
+                  dtc_bsize[ln] = 0;
+                  IAR |= IRQ_12;
+                  sim_debug(DEBUG_DETAIL, &dtc_dev, "Datacomm disconnect %d idle\n", ln);
+                  break;
+
              case BufWriteRdy:          /* Awaiting output, terminate */
                   dtc_bufptr[ln] = 0;
                 /* Fall through */
              case BufInputBusy:         /* reading, terminate with EOT */
                   dtc_buf[ln][dtc_bufptr[ln]++] = 017;
-                  dtc_bsize[ln] = dtc_bufptr[ln];
+                  dtc_bsize[ln] = dtc_bufptr[ln]+1;
                   dtc_lstatus[ln] = BufIRQ|BufAbnormal|BufReadRdy;
                   IAR |= IRQ_12;
+                  sim_debug(DEBUG_DETAIL, &dtc_dev, "Datacomm disconnect %d write\n", ln);
                   break;
+
              case BufOutBusy:           /* Terminate Output */
-                  dtc_lstatus[ln] = BufIRQ|BufIdle;
+                  dtc_lstatus[ln] = BufIRQ|BufIdle|BufAbnormal;
                   dtc_bsize[ln] = 0;
                   IAR |= IRQ_12;
+                  sim_debug(DEBUG_DETAIL, &dtc_dev, "Datacomm disconnect %d out\n", ln);
                   break;
+
              default:                   /* Other cases, ignore until
                                            in better state */
                   break;
@@ -568,9 +581,10 @@ dtco_srv(UNIT * uptr)
         switch(dtc_lstatus[ln] & BufSMASK) {
         case BufIdle:
              /* If we have any data to receive */
-             if (tmxr_rqln(&dtc_ldsc[ln]) > 0)
-                dtc_lstatus[ln] = BufInputBusy;
-             else
+             if (tmxr_rqln(&dtc_ldsc[ln]) > 0) {
+                dtc_lstatus[ln] &= ~(BufSMASK);
+                dtc_lstatus[ln] |= BufInputBusy;
+             } else
                 break;          /* Nothing to do */
              sim_debug(DEBUG_DETAIL, &dtc_dev, "Datacomm recieve %d idle\n",
                          ln);
@@ -580,9 +594,9 @@ dtco_srv(UNIT * uptr)
 
          case BufInputBusy:
               t = 1;
-              while (t && tmxr_rqln(&dtc_ldsc[ln]) != 0) {
+              while (t) {
                  c = tmxr_getc_ln(&dtc_ldsc[ln]);         /* get char */
-                 if ((c & TMXR_VALID) == 0) 
+                 if (c == 0) 
                      break;
                  c &= 0x7f;
                  c1 = ascii_to_con[c];

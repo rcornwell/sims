@@ -213,7 +213,7 @@ uint16              l_reg[2];                   /* L current syllable pointer */
 uint8               ncsf_reg[2];                /* True if normal state */
 uint8               salf_reg[2];                /* True if subrogram mode */
 uint8               cwmf_reg[2];                /* True if character mode */
-uint8               hltf[2];                    /* True if processor halted */
+uint16              hltf[2];                    /* True if processor halted */
 uint8               msff_reg[2];                /* Mark stack flag Word mode */
 #define TFFF MSFF                               /* True state in Char mode */
 uint8               varf_reg[2];                /* Variant Flag */
@@ -960,10 +960,10 @@ void storeInterrupt(int forced, int test) {
     }
     AROF = 0;
     B = ICW;            /* Set ICW into B */
-    next_addr(S); /* Save B */
+    next_addr(S);       /* Save B */
     memory_cycle(11);
     B = RCW(f);         /* Save IRCW */
-    next_addr(S); /* Save B */
+    next_addr(S);       /* Save B */
     memory_cycle(11);
     if (CWMF) {
         /* Get the correct value of R */
@@ -1994,7 +1994,6 @@ sim_instr(void)
         if (P1_run == 0)
             return SCPE_STOP;
         while (loading) {
-            sim_interval = -1;
             reason = sim_process_event();
             if (reason != SCPE_OK) {
                  break; /* process */
@@ -2027,20 +2026,15 @@ sim_instr(void)
         }
 
         /* Toggle between two CPU's. */
+        if (TROF == 0 && NCSF) {
+            if (Q != 0 || ((cpu_index)? HLTF : IAR) != 0)
+                storeInterrupt(1,0);
+        }
+
         if (cpu_index == 0 && P2_run == 1) {
             cpu_index = 1;
-            /* Check if interrupt pending. */
-            if (TROF == 0 && NCSF && ((Q != 0) || HLTF))
-                /* Force a SFI */
-                storeInterrupt(1,0);
         } else {
             cpu_index = 0;
-
-            /* Check if interrupt pending. */
-            if (TROF == 0 && NCSF && ((Q != 0) ||
-                                 (IAR != 0)))
-                /* Force a SFI */
-                storeInterrupt(1,0);
         }
         if (TROF == 0)
             next_prog();
@@ -3678,15 +3672,17 @@ control:
                         R = 0;
                         F = S;          /* Set F and X */
                         X = toF(S);
-                        S = CF(B);
                         if (B & FLAG) {
-                            if ((B & PRESENT) == 0 && NCSF)
-                                Q |= PRES_BIT;
-                            else
-                                KV = 0;
+                            if ((B & PRESENT) == 0) {
+                                if (NCSF)
+                                    Q |= PRES_BIT;
+                                break;
+                            }
+                            KV = 0;
                         } else {
                             KV = (uint8)((B >> (FFIELD_V - 3)) & 070);
                         }
+                        S = CF(B);
                         break;
 
                 case VARIANT(WMOP_MKS): /* Mark Stack */
