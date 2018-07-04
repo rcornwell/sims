@@ -280,7 +280,7 @@ t_stat dsk_srv(UNIT * uptr)
                 chan_set_end(chan);
             } else 
                 uptr->u5 &= ~(DK_RDCK|DK_RD|DK_WR);
-            sim_activate(eptr, 500);
+            sim_activate(eptr, 8000);
             return SCPE_OK;
         }
         sim_activate(uptr, 100);
@@ -432,7 +432,7 @@ t_stat esu_srv(UNIT * uptr)
            uptr->u5 -= DK_SECT;
         } 
     }
-    sim_activate(uptr, (uptr->flags & MODIB) ? 200 :100);
+    sim_activate(uptr, (uptr->flags & MODIB) ? 500 :300);
     return SCPE_OK;
 }
                 
