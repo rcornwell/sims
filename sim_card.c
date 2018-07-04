@@ -561,7 +561,7 @@ sim_read_card(UNIT * uptr, uint16 image[80])
            uptr->pos = 0;
            uptr->flags &= ~UNIT_ATT;
            uptr->dynflags &= ~UNIT_ATTMULT;
-       } else if (card->flag & CARD_LAST) {
+       } else if (data->deck->flag & CARD_LAST) {
            char       *tptr = strtok(uptr->filename, ",");
            if (tptr == NULL) {
                free(uptr->filename);
@@ -894,7 +894,7 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf) {
             card->flag = CARD_ERR;
         /* Move data to buffer */
         for (i = 0; i < 80 && i < buf->len; i++) {
-            temp = buf->buffer[i];
+            temp = buf->buffer[i] & 0xFF;
             card->image[i] = ebcdic_to_hol[temp];
         }
         break;
@@ -927,6 +927,7 @@ _sim_read_deck(UNIT * uptr, int eof)
 
     buf.len = 0;
     buf.size = 0;
+    buf.buffer[0] = 0; /* Initialize bufer to empty */
 
     /* Slurp up current file */
     do {
@@ -960,7 +961,7 @@ _sim_read_deck(UNIT * uptr, int eof)
         for(i = 0; i < l; i++, j++)
             buf.buffer[i] = buf.buffer[j];
         buf.len -= buf.size;
-    } while (buf.len > 0);
+    } while (buf.len > 0 && r == SCPE_OK);
 
     /* If there is an error, free just read deck */
     if (r != SCPE_OK || deck == NULL) {
