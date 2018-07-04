@@ -1290,7 +1290,6 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
                 fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 27)
                                       | 021LL;
                 page_fault = 1;
-//fprintf(stderr, "suprt PC=%06o, %012llo %06o\n\r", PC, M[addr], FLAGS << 5);
                 return !wr;
             }
             return 1;
@@ -1306,6 +1305,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
            data = e_tlb[page];
            pag_reload = ((pag_reload + 1) & 037) | 040;
         }
+        last_page = ((page ^ 0777) << 1)|1;
     } else {
         data = u_tlb[page];
         if (data == 0) {
@@ -1315,6 +1315,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
            data = u_tlb[page];
            pag_reload = ((pag_reload + 1) & 037) | 040;
         }
+        last_page = ((page ^ 0777) << 1);
     }
     *loc = ((data & 017777) << 9) + (addr & 0777);
     /* Access check logic */
@@ -1324,7 +1325,6 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
          (!fetch || (M[*loc] & 00777040000000LL) != 0254040000000LL)) {
         /* Handle public violation */
         fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 27) | 021LL;
-//fprintf(stderr, "pub PC=%06o, %012llo\n\r", PC, fault_data);
         page_fault = 1;
         return fetch;
     }
@@ -1337,10 +1337,6 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
         fault_data |= (data & 0040000) ? 002LL : 0LL;   /* S */
         fault_data |= wr;
         page_fault = 1;
-        fprintf(stderr, "xlat %06o %03o ", addr, page >> 1);
-        fprintf(stderr, " %06o %04o %012llo %o", base, page, data, uf);
-        fprintf(stderr, " -> %06llo wr=%o PC=%06o ", fault_data, wr, PC);
-        fprintf(stderr, " fault\n\r");
         return 0;
     }
     return 1;
@@ -3920,50 +3916,67 @@ fxnorm:
     case 0257:  /* MAP */
 #if KI | KL
               f = AB >> 9;
-              last_page = ((f ^ 0777) << 1);
-              pag_reload &= 037;
               /* Check if Paging Enabled */
-              if (!page_enable) {
+              if (!page_enable || AB < 020) {
                   AR = 0020000LL + f; /* direct map */
                   set_reg(AC, AR);
                   break;
               }
-              AR = ub_ptr;
-              if ((FLAGS & USER) != 0) {
-                  /* Check if small user and outside range */
+              flag1 = (FLAGS & USER) != 0;
+
+              /* Figure out if this is a user space access */
+              if (xct_flag != 0 && !flag1) {
+                  if ((xct_flag & 2) != 0) {
+                      flag1 = (FLAGS & USERIO) != 0;
+                  }
+              }
+  
+              flag3 = 0;
+              /* If user, check if small user enabled */
+              if (flag1) {
                   if (small_user && (f & 0340) != 0) {
-                      AR = 0420000LL;   /* Page failure, no match */
+                      AR = 0420000LL;     /* Outside small user space registers */
                       set_reg(AC, AR);
                       break;
                   }
               } else {
-                  /* Map executive to use space */
+                  /* Handle system mapping */
+                  /* Pages 340-377 via UBR */
                   if ((f & 0740) == 0340) {
                       f += 01000 - 0340;
-                  /* Executive high segment */
+                  /* Pages 400-777 via EBR */
                   } else if (f & 0400) {
-                      AR = eb_ptr;
+                       flag3 = 1;
+                  /* Pages 000-037 direct map */
                   } else {
-                      AR = 0020000LL + f; /* direct map */
-                      set_reg(AC, AR);
-                      break;
+                       AR = 0020000LL + f; /* direct map */
+                       set_reg(AC, AR);
+                       break;
+                   }
+              }
+              /* Map the page */
+              if (flag3) {
+                  AR = e_tlb[f];
+                  if (AR == 0) {
+                     AR = M[eb_ptr + (f >> 1)];
+                     e_tlb[f & 0776] = RMASK & (AR >> 18);
+                     e_tlb[f | 1] = RMASK & AR;
+                     AR = e_tlb[f];
+                     pag_reload = ((pag_reload + 1) & 037) | 040;
                   }
-                  last_page |= 1;
-              }
-              AB = (AR + (f >> 1)) & RMASK;
-              pag_reload = ((pag_reload + 1) & 037) | 040;
-              if (Mem_read(0, 0, 0))
-                  goto last;
-              AR = MB;
-              if ((f & 1) == 0)
-                 AR >>= 18;
-              if ((AR & RSIGN) == 0) {
-                  AR = 0437777LL; /* Return invalid if not accessable */
               } else {
-                  AR &= 0357777LL;
-                  if ((AR & 0100000LL) == 0)
-                      AR |= RSIGN;
+                  AR = u_tlb[f];
+                  if (AR == 0) {
+                     AR = M[ub_ptr + (f >> 1)];
+                     u_tlb[f & 01776] = RMASK & (AR >> 18);
+                     u_tlb[f | 1] = RMASK & AR;
+                     AR = u_tlb[f];
+                     pag_reload = ((pag_reload + 1) & 037) | 040;
+                  }
               }
+              last_page = ((f ^ 0777) << 1) | flag3;
+              AR &= 0767777LL; /* Return valid entry for page */
+              AR ^= 0400000LL;  /* Flip access status. */
               set_reg(AC, AR);
 #endif
               break;
