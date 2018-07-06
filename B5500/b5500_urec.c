@@ -521,7 +521,7 @@ cdp_srv(UNIT *uptr) {
         /* Done waiting, punch card */
         if (uptr->u5 & URCSTA_FULL) {
               sim_debug(DEBUG_DETAIL, &cdp_dev, "cdp %d %d punch\n", u, chan);
-              switch(sim_punch_card(uptr, NULL, image)) {
+              switch(sim_punch_card(uptr, image)) {
               case SCPE_EOF:
               case SCPE_UNATT:
                   sim_debug(DEBUG_DETAIL, &cdp_dev, "cdp %d %d set eof\n", u,
@@ -586,7 +586,7 @@ cdp_detach(UNIT * uptr)
     uint16              *image = (uint16 *)(uptr->up7);
 
     if (uptr->u5 & URCSTA_FULL)
-        sim_punch_card(uptr, NULL, image);
+        sim_punch_card(uptr, image);
     if (uptr->up7 != 0)
         free(uptr->up7);
     uptr->up7 = 0;
