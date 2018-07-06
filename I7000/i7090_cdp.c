@@ -133,7 +133,7 @@ t_stat cdp_srv(UNIT * uptr)
     if (uptr->u5 & URCSTA_CMD && chan_stat(chan, DEV_DISCO)) {
         if ((uptr->u5 & CDPSTA_POSMASK) != 0) {
             sim_debug(DEBUG_DETAIL, &cdp_dev, "punch card\n");
-            sim_punch_card(uptr, NULL, image);
+            sim_punch_card(uptr, image);
             uptr->u5 &= ~CDPSTA_PUNCH;
         }
         uptr->u5 &= ~(URCSTA_WRITE | URCSTA_CMD | CDPSTA_POSMASK);
@@ -189,7 +189,7 @@ t_stat cdp_srv(UNIT * uptr)
             sim_debug(DEBUG_CHAN, &cdp_dev, "unit=%d disconnect\n", u);
         }
         sim_debug(DEBUG_DETAIL, &cdp_dev, "punch card full\n");
-        sim_punch_card(uptr, NULL, image);
+        sim_punch_card(uptr, image);
         uptr->u5 |= URCSTA_IDLE;
         uptr->u5 &= ~(URCSTA_WRITE | CDPSTA_POSMASK | CDPSTA_PUNCH);
         uptr->wait = 85;

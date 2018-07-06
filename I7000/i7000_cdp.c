@@ -210,10 +210,12 @@ cdp_srv(UNIT *uptr) {
         /* Done waiting, punch card */
         if (uptr->u5 & URCSTA_FULL) {
 #ifdef STACK_DEV
-              switch(sim_punch_card(uptr,
-                   &stack_unit[(u * 10) + ((uptr->u5 >> 16) & 0xf)], image)) {
+              UNIT   *sptr = &stack_unit[(u * 10) + ((uptr->u5 >> 16) & 0xf)];
+              if ((uptr->flags & UNIT_ATT) != 0 || (sptr->flags & UNIT_ATT) == 0)
+                  sptr = uptr;
+              switch(sim_punch_card(sptr, image)) {
 #else
-              switch(sim_punch_card(uptr, NULL, image)) {
+              switch(sim_punch_card(uptr, image)) {
 #endif
               case SCPE_EOF:
               case SCPE_UNATT:
@@ -293,13 +295,16 @@ cdp_detach(UNIT * uptr)
 {
     uint16        *image = (uint16 *)(uptr->up7);
 
-    if (uptr->u5 & URCSTA_FULL)
+    if (uptr->u5 & URCSTA_FULL) {
 #ifdef STACK_DEV
-        sim_punch_card(uptr, &stack_unit[
-                ((uptr - cdp_unit) * 10) + ((uptr->u5 >> 16) & 0xf)], image);
+        UNIT   *sptr = &stack_unit[((uptr - cdp_unit) * 10) + ((uptr->u5 >> 16) & 0xf)];
+        if ((uptr->flags & UNIT_ATT) != 0 || (sptr->flags & UNIT_ATT) == 0)
+            sptr = uptr;
+        sim_punch_card(sptr, image);
 #else
-        sim_punch_card(uptr, NULL, image);
+        sim_punch_card(uptr, image);
 #endif
+    }
     if (uptr->up7 == 0) 
         free(uptr->up7);
     uptr->up7 = 0;
