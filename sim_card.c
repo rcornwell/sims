@@ -950,9 +950,8 @@ _sim_read_deck(UNIT * uptr, int eof)
             next = card;
         }
         if (card->flag & CARD_ERR) {
-            r = SCPE_IOERR;
-            sim_messagef(r, "%s: %s Error (%s) in card %d\n", sim_uname(uptr),
-                        uptr->filename, sim_error_text(r), cards);
+            r = SCPE_BARE_STATUS(sim_messagef(SCPE_OPENERR, "%s: %s Error (%s) in card %d\n",
+                   sim_uname(uptr), uptr->filename, sim_error_text(r), cards));
         }
         /* Move data to start at begining of buffer */
         /* Data is moved down to simplify the decoding of one card */
@@ -964,7 +963,7 @@ _sim_read_deck(UNIT * uptr, int eof)
     } while (buf.len > 0 && r == SCPE_OK);
 
     /* If there is an error, free just read deck */
-    if (r != SCPE_OK || deck == NULL) {
+    if (r != SCPE_OK) {
        while (deck != NULL) {
           next = deck->next;
           free(deck);
@@ -1006,7 +1005,7 @@ _sim_read_deck(UNIT * uptr, int eof)
 */
 
 t_stat
-sim_punch_card(UNIT * uptr, UNIT *stkuptr, uint16 image[80])
+sim_punch_card(UNIT * uptr, uint16 image[80])
 {
 /* Convert word record into column image */
 /* Check output type, if auto or text, try and convert record to bcd first */
@@ -1017,20 +1016,10 @@ sim_punch_card(UNIT * uptr, UNIT *stkuptr, uint16 image[80])
     uint8                out[512];
     int                  i;
     int                  outp;
-    FILE                 *fo = uptr->fileref;
     int                  mode = uptr->flags & UNIT_CARD_MODE;
     int                  ok = 1;
     struct card_context *data;
     DEVICE              *dptr;
-
-    if ((uptr->flags & UNIT_ATT) == 0) {
-        if (stkuptr != NULL && stkuptr->flags & UNIT_ATT) {
-              fo = stkuptr->fileref;
-              if ((stkuptr->flags & UNIT_CARD_MODE) != MODE_AUTO)
-                  mode = stkuptr->flags & UNIT_CARD_MODE;
-        } else
-              return SCPE_UNATT;        /* attached? */
-    }
 
     data = (struct card_context *)uptr->card_ctx;
     dptr = find_dev_from_unit(uptr);
@@ -1162,7 +1151,8 @@ sim_punch_card(UNIT * uptr, UNIT *stkuptr, uint16 image[80])
         break;
     }
     data->punch_count++;
-    sim_fwrite(out, 1, outp, fo);
+    sim_fwrite(out, 1, outp, uptr->fileref);
+    uptr->pos = ftell (uptr->fileref);
     /* Clear image buffer */
     for (i = 0; i < 80; image[i++] = 0);
     return SCPE_OK;
@@ -1204,13 +1194,14 @@ t_stat sim_card_show_fmt (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 t_stat
 sim_card_attach(UNIT * uptr, CONST char *cptr)
 {
-    t_stat               r;
+    t_stat               r = SCPE_OK;;
     int                  eof = 0;
     struct card_context *data;
     char                 gbuf[30];
     int                  i;
-    char                *saved_filename = uptr->filename;
-    t_addr              saved_pos = uptr->pos;
+    char                *saved_filename;
+    t_bool              was_attached = (uptr->flags & UNIT_ATT);
+    t_addr              saved_pos;
     static int          ebcdic_init = 0;
 
     if (strchr (cptr, ',')) {       /* Restoring Attach list of files? */
@@ -1245,7 +1236,9 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
     if (sim_switches & SWMASK ('E'))
        eof = 1;
 
+    saved_filename = uptr->filename;
     uptr->filename = NULL;
+    saved_pos = uptr->pos;
     if ((r = attach_unit(uptr, cptr)) != SCPE_OK) {
         uptr->filename = saved_filename;
         uptr->pos = saved_pos;
@@ -1318,8 +1311,12 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
 
         /* Go read the deck */
         r = _sim_read_deck(uptr, eof);
-        detach_unit(uptr);
         uptr->pos = saved_pos;
+        detach_unit(uptr);
+        if (was_attached) {
+            uptr->flags |= UNIT_ATT;
+            uptr->filename = saved_filename;
+        }
         if (r == SCPE_OK) {
             const char    *fmt = "AUTO";
             int            mode = uptr->flags & UNIT_CARD_MODE;
@@ -1340,8 +1337,8 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
                 uptr->filename = (char *)malloc (32 + strlen (cptr));
                 sprintf (uptr->filename, "%s-F %s %s", (eof)?"-E ": "", fmt, cptr);
             }
-            (void)sim_messagef(SCPE_OK, "%s: %d card Deck Loaded from %s\n",
-                       sim_uname(uptr), data->hopper_cards - cards, cptr);
+            r = SCPE_BARE_STATUS(sim_messagef(SCPE_OK, "%s: %d card Deck Loaded from %s\n",
+                       sim_uname(uptr), data->hopper_cards - cards, cptr));
         } else {
             if (uptr->dynflags & UNIT_ATTMULT)
                 uptr->flags |= UNIT_ATT;
@@ -1350,7 +1347,7 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
         }
     }
 
-    return SCPE_OK;
+    return r;
 }
 
 t_stat
