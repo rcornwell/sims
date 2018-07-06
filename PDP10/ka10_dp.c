@@ -678,10 +678,8 @@ t_stat dp_svc (UNIT *uptr)
                         ctlr, uptr->UFLAGS, cyl, cyl, sect, surf,uptr->CUR_CYL);
                 uptr->STATUS |= SRC_DONE;
                 if (uptr->STATUS & END_CYL) {
-                     if (cmd == WR) {
-                          if(df10_read(df10))
-                              df10_read(df10);
-                     }
+                     if(df10_read(df10))
+                        df10_read(df10);
                      uptr->UFLAGS |= DONE;
                      uptr->STATUS &= ~BUSY;
                      df10_finish_op(df10, 0);
