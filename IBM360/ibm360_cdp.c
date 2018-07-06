@@ -178,7 +178,7 @@ cdp_srv(UNIT *uptr) {
         /* Done waiting, punch card */
         uptr->u3 &= ~CDP_CARD;
         sim_debug(DEBUG_DETAIL, &cdp_dev, "unit=%d:punch\n", u);
-        switch(sim_punch_card(uptr, NULL, image)) {
+        switch(sim_punch_card(uptr, image)) {
         /* If we get here, something is wrong */
         case SCPE_IOERR:
              set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
@@ -234,7 +234,7 @@ cdp_detach(UNIT * uptr)
     uint16   *image = (uint16 *)(uptr->up7);
 
     if (uptr->u5 & CDP_CARD)
-        sim_punch_card(uptr, NULL, image);
+        sim_punch_card(uptr, image);
     if (uptr->up7 != 0)
         free(uptr->up7);
     uptr->up7 = 0;
