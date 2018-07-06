@@ -252,6 +252,8 @@ cdr_attach(UNIT * uptr, CONST char *file)
 
     if ((r = sim_card_attach(uptr, file)) != SCPE_OK)
        return r;
+    if (uptr->up7 == 0)
+        uptr->up7 = malloc(sizeof(uint16)*80);
     set_devattn(addr, SNS_DEVEND);
     uptr->u3 &= ~(CDR_CARD);
     uptr->u4 = 0;
