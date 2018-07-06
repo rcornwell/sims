@@ -926,7 +926,7 @@ void initiate() {
 /* Save processor state in case of error or halt */
 void storeInterrupt(int forced, int test) {
     int         f;
-    t_uint64    temp;
+    uint16      temp;
 
     if (forced || test)
         NCSF = 0;
@@ -946,7 +946,7 @@ void storeInterrupt(int forced, int test) {
         }
         /* Make ILCW */
         B = X | ((i)? PRESENT : 0) | FLAG | DFLAG;
-        next_addr(S);     /* Save B */
+        next_addr(S);           /* Save B */
         memory_cycle(11);
     } else {
         if (BROF || test) {     /* Push B First */
@@ -959,11 +959,11 @@ void storeInterrupt(int forced, int test) {
         }
     }
     AROF = 0;
-    B = ICW;            /* Set ICW into B */
-    next_addr(S);       /* Save B */
+    B = ICW;                   /* Set ICW into B */
+    next_addr(S);              /* Save B */
     memory_cycle(11);
-    B = RCW(f);         /* Save IRCW */
-    next_addr(S);       /* Save B */
+    B = RCW(f);                /* Save IRCW */
+    next_addr(S);              /* Save B */
     memory_cycle(11);
     if (CWMF) {
         /* Get the correct value of R */
@@ -1985,7 +1985,7 @@ sim_instr(void)
     int                 i;
     int                 j;
 
-    reason = 0;
+    reason = SCPE_OK;
     hltf[0] = 0;
     hltf[1] = 0;
     P1_run = 1;
@@ -1993,17 +1993,17 @@ sim_instr(void)
     while (reason == 0) {       /* loop until halted */
         if (P1_run == 0)
             return SCPE_STOP;
+        /* System is booting, wait until finished loading */
         while (loading) {
             reason = sim_process_event();
-            if (reason != SCPE_OK) {
+            if (reason != SCPE_OK)
                  break; /* process */
-            }
         }
+        /* Passed time quantum */
         if (sim_interval <= 0) {        /* event queue? */
             reason = sim_process_event();
-            if (reason != SCPE_OK) {
+            if (reason != SCPE_OK)
                  break; /* process */
-            }
         }
 
         if (sim_brk_summ) {
@@ -2178,17 +2178,12 @@ crf_loop:
                 Ma = (F - field) & CORE;
                 memory_cycle(4);
                 AROF = 0;
-                if (A & FLAG) {
-                    if ((A & PRESENT) == 0) {
-                        if (NCSF)
-                            Q |= PRES_BIT;
-                        break;
-                    }
-                    GH = 0;
-                } else {
-                    GH = (A >> 12) & 070;
-                }
                 Ma = CF(A);
+                GH = 0;
+                if ((A & FLAG) == 0)
+                    GH = (A >> 12) & 070;
+                else if ((A & PRESENT) == 0 && NCSF)
+                    Q |= PRES_BIT;
                 break;
 
             case CMOP_RDA:      /* Recall Destination Address */
@@ -2197,34 +2192,29 @@ crf_loop:
                 S = (F - field) & CORE;
                 memory_cycle(3);
                 BROF = 0;
-                if (B & FLAG) {
-                    if ((B & PRESENT) == 0) {
-                        if (NCSF)
-                            Q |= PRES_BIT;
-                        break;
-                    }
-                    KV = 0;
-                } else {
-                    KV = (B >> 12) & 070;
-                }
                 S = CF(B);
+                KV = 0;
+                if ((B & FLAG) == 0)
+                    KV = (B >> 12) & 070;
+                else if ((B & PRESENT) == 0 && NCSF)
+                    Q |= PRES_BIT;
                 break;
 
             case CMOP_RCA:      /* Recall Control Address */
                 AROF = BROF;
-                A = B;  /* Save B temporarly */
+                A = B;          /* Save B temporarly */
                 atemp = S;      /* Save S */
                 S = (F - field) & CORE;
-                memory_cycle(3);        /* Load word in B */
+                memory_cycle(3);/* Load word in B */
                 S = atemp;      /* Restore S */
                 if (B & FLAG) {
                     if ((B & PRESENT) == 0) {
                         if (NCSF)
                             Q |= PRES_BIT;
-                        break;
+                    } else {
+                        C = CF(B);
+                        L = 0;
                     }
-                    C = CF(B);
-                    L = 0;
                 } else {
                     C = CF(B);
                     L = LF(B) + 1;
@@ -2312,9 +2302,10 @@ crf_loop:
                 A = B;
                 AROF = BROF;
                 B = ((t_uint64)(KV & 070) << (FFIELD_V - 3)) | toC(S);
+                atemp = S;
                 S = (F - field) & CORE;
                 memory_cycle(013);      /* Store B in S */
-                S = CF(B);
+                S = atemp;
                 B = A;
                 BROF = AROF;
                 AROF = 0;
@@ -2325,9 +2316,10 @@ crf_loop:
                 A = B;
                 AROF = BROF;
                 B = ((t_uint64)(GH & 070) << (FFIELD_V - 3)) | toC(Ma);
+                atemp = Ma;
                 Ma = (F - field) & CORE;
                 memory_cycle(015);      /* Store B in Ma */
-                Ma = CF(B);
+                Ma = atemp;
                 B = A;
                 BROF = AROF;
                 AROF = 0;
@@ -3672,17 +3664,12 @@ control:
                         R = 0;
                         F = S;          /* Set F and X */
                         X = toF(S);
-                        if (B & FLAG) {
-                            if ((B & PRESENT) == 0) {
-                                if (NCSF)
-                                    Q |= PRES_BIT;
-                                break;
-                            }
-                            KV = 0;
-                        } else {
-                            KV = (uint8)((B >> (FFIELD_V - 3)) & 070);
-                        }
                         S = CF(B);
+                        KV = 0;
+                        if ((B & FLAG) == 0)
+                            KV = (uint8)((B >> (FFIELD_V - 3)) & 070);
+                        else if ((B & PRESENT) == 0 && NCSF)
+                            Q |= PRES_BIT;
                         break;
 
                 case VARIANT(WMOP_MKS): /* Mark Stack */
