@@ -196,7 +196,7 @@ cp_srv(UNIT *uptr) {
         uptr->u4 = 0;
         uptr->u3 &= ~(PUNCH_ON|CARD_IN_PUNCH);
         uptr->u3 |= END_CARD;
-        switch(sim_punch_card(uptr, NULL, image)) {
+        switch(sim_punch_card(uptr, image)) {
         case SCPE_EOF:
         case SCPE_UNATT:
             uptr->u3 |= PICK_FAIL|TROUBLE;
@@ -239,7 +239,7 @@ cp_detach(UNIT * uptr)
     uint16              *image = (uint16 *)(uptr->up7);
 
     if (uptr->u3 & CARD_IN_PUNCH)
-        sim_punch_card(uptr, NULL, image);
+        sim_punch_card(uptr, image);
     if (uptr->up7 != 0)
         free(uptr->up7);
     uptr->up7 = 0;
