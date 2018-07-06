@@ -808,11 +808,11 @@ t_stat dtc_setnl (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
     if ((newln == 0) || (newln > DTC_MLINES))
         return SCPE_ARG;
     if (newln < dtc_desc.lines) {
-        for (i = newln, t = 0; i < dtc_desc.lines; i++)
+        for (i = newln-1, t = 0; i < dtc_desc.lines; i++)
             t = t | dtc_ldsc[i].conn;
         if (t && !get_yn ("This will disconnect users; proceed [N]?", FALSE))
             return SCPE_OK;
-        for (i = newln; i < dtc_desc.lines; i++) {
+        for (i = newln-1; i < dtc_desc.lines; i++) {
             if (dtc_ldsc[i].conn) {
                 tmxr_linemsg (&dtc_ldsc[i], "\r\nOperator disconnected line\r\n");
                 tmxr_send_buffered_data (&dtc_ldsc[i]);
