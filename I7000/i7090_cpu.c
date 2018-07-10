@@ -729,7 +729,6 @@ sim_instr(void)
     int                 xeccnt = 15;
     int                 shiftcnt;
     int                 stopnext = 0;
-    int                 first_rdwr = 0;
     int                 instr_count = 0; /* Number of instructions to execute */
 
     if (sim_step != 0) {
@@ -763,6 +762,7 @@ sim_instr(void)
         tbase |= CORE_B;
 
     iowait = 0;
+    ihold = 0;
     while (reason == 0) {       /* loop until halted */
 
         if (exe_KEYS) {
@@ -772,9 +772,7 @@ sim_instr(void)
            goto next_xec;
         }
 
-#ifdef I7090    /* I704 did not have interrupts */
    hltloop:
-#endif
 /* If doing fast I/O don't sit in idle loop */
         if (iowait && (cpu_unit.flags & UNIT_FASTIO))
             sim_interval = 0;
@@ -804,7 +802,6 @@ sim_instr(void)
         }
 #endif
 
-
         if (iowait == 0 && sim_brk_summ &&
                  sim_brk_test(((bcore & 2)? CORE_B:0)|IC, SWMASK('E'))) {
             reason = STOP_IBKPT;
@@ -813,7 +810,7 @@ sim_instr(void)
 
 /* Check if we need to take any traps */
 #ifdef I7090    /* I704 did not have interrupts */
-        if (CPU_MODEL != CPU_704 && itrap && ihold == 0 && iowait == 0 && ioflags != 0) {
+        if (CPU_MODEL != CPU_704 && itrap && ihold == 0 && iowait == 0 && ioflags != 0 && instr_count == 0) {
             t_uint64            mask = 00000001000001LL;
 
             MA = 012;
@@ -837,9 +834,13 @@ sim_instr(void)
                     /* check if we need to perform a trap */
                     if (f) {
                         /* HTR/HPR behave like wait if protected */
+                        if (hltinst)
+                            temp = (((t_uint64) bcore & 3) << 31) |
+                                  (((t_uint64) f) << 18) | (fptemp & memmask);
+                        else
+                            temp = (((t_uint64) bcore & 3) << 31) |
+                                  (((t_uint64) f) << 18) | (IC & memmask);
                         hltinst = 0;
-                        temp = (((t_uint64) bcore & 3) << 31) |
-                              (((t_uint64) f) << 18) | (IC & memmask);
                         sim_interval = sim_interval - 1;        /* count down */
                         WriteP(MA, temp);
                         if (nmode) {
@@ -854,8 +855,8 @@ sim_instr(void)
                         sim_interval = sim_interval - 1;        /* count down */
                         SR = ReadP(MA);
                         sim_debug(DEBUG_TRAP, &cpu_dev,
-                          "Doing trap chan %c %o >%012llo loc %o %012llo\n",
-                                  shiftcnt + 'A' - 1, f, temp, MA, SR);
+                          "Doing trap chan %c %o >%012llo loc %o %012llo IC=%06o\n",
+                                  shiftcnt + 'A' - 1, f, temp, MA, SR, IC);
                         if (hst_lnt) {  /* history enabled? */
                             hst_p = (hst_p + 1);        /* next entry */
                             if (hst_p >= hst_lnt)
@@ -880,9 +881,13 @@ sim_instr(void)
             /* Interval timer has lower priority then I/O traps */
             if (interval_irq && (ioflags & 0400000)) {
                 /* HTR/HPR behave like wait if protected */
+                if (hltinst)
+                    temp = (((t_uint64) bcore & 3) << 31) |
+                          (fptemp & memmask) | (relo_mode << 21);
+                else
+                    temp = (((t_uint64) bcore & 3) << 31) |
+                          (IC & memmask) | (relo_mode << 21);
                 hltinst = 0;
-                temp = (((t_uint64) bcore & 3) << 31) | (IC & memmask) |
-                        (relo_mode << 21);
                 sim_interval = sim_interval - 1;        /* count down */
                 MA = 6;
                 WriteP(MA, temp);
@@ -920,27 +925,20 @@ sim_instr(void)
 
         if (hltinst) {
              t_uint64            mask = 00000001000001LL;
-             if (CPU_MODEL == CPU_704) {
-                 reason = STOP_HALT;
-                 break;
-             }
              /* Hold out until all channels have idled out */
-             sim_interval = 0;
-             (void)sim_process_event();
+             sim_interval = sim_interval - 1;        /* count down */
              chan_proc();
              f = chan_active(0);
-             for (shiftcnt = 1; shiftcnt < NUM_CHAN; shiftcnt++)  {
-                f |= chan_active(shiftcnt);
+             for (shiftcnt = 1; f == 0 && shiftcnt < NUM_CHAN; shiftcnt++)  {
+                f = chan_active(shiftcnt);
                 /* CRC *//* Trap *//* EOF */
-                /* Wait until channel stops to trigger interupts */
-                if (ioflags & mask) {
-                    if (mask & AMASK & ioflags) {
-                        if (chan_stat(shiftcnt, CHS_EOF))
-                            f = 1;      /* We have a EOF */
-                        if (iotraps & (1 << shiftcnt))
-                            f = 1;      /* We have a IOCT/IORT/IOST */
-                    }
-                    if (mask & DMASK & ioflags && chan_stat(shiftcnt, CHS_ERR))
+                /* Wait until channel stops to trigger interrupts */
+                if (itrap) {
+                    /* Check for EOF or IOCT/IORT/IOST */
+                    if (mask & AMASK & ioflags &&
+                        (chan_test(shiftcnt, CHS_EOF) || iotraps & (1 << shiftcnt)))
+                         f = 1;
+                    if (mask & DMASK & ioflags && chan_test(shiftcnt, CHS_ERR))
                          f = 1; /* We have device error */
                  }
              }
@@ -954,6 +952,10 @@ sim_instr(void)
         }
 #else                     /* Handle halt on 704 */
         if (hltinst) {
+             sim_interval = sim_interval - 1;        /* count down */
+             chan_proc();
+             if (chan_active(0))
+                goto hltloop;
              reason = STOP_HALT;
              break;
         }
@@ -994,6 +996,8 @@ sim_instr(void)
             relo_pend = 0;
             prot_pend = 0;
         }
+
+
       next_xec:
         opcode = (uint16)(SR >> 24);
         IR = opcode;
@@ -1319,9 +1323,9 @@ prottrap:
                     break;
 #ifdef I7090    /* Not on 704 */
                 case OP_RCT:
-                    if (bcore & 4)
-                        goto prottrap;
                     if (CPU_MODEL != CPU_704) {
+                        if (bcore & 4)
+                            goto prottrap;
                         sim_debug(DEBUG_TRAP, &cpu_dev, "RCT %012llo\n", ioflags);
                         if ((bcore & 4) || STM)
                             goto seltrap;
@@ -1476,8 +1480,12 @@ prottrap:
             case OP_HPR:
               halt:
                 hltinst = 1;
-                if (opcode == OP_HTR)
+                ihold = 0;      /* Kill any hold on traps now */
+                if (opcode == OP_HTR) {
+                     fptemp = IC-1;
                      IC = MA;
+                } else
+                     fptemp = IC;
                 break;
             case OP_XEC:
                 opcode = (uint16)(SR >> 24);
@@ -3328,49 +3336,38 @@ prottrap:
 /* Input/Output Instuctions */
             case OP_ENB:
                 ioflags = SR;
-                itrap = 1;
+                if (SR)
+                   itrap = 1;
+                else
+                   itrap = 0;
+                sim_debug(DEBUG_TRAP, &cpu_dev, "ENB %012llo\n", ioflags);
                 ihold = 1;
-
                 /*
                  * IBSYS can't have an trap right after ENB or it will hang
                  * on a TTR * in IBNUC.
                  */
                 if (CPU_MODEL >= CPU_7090)
                     break;
-
-                /* Don't wait if EOF or Error is pending but hold if trap */
                 temp = 00000001000001LL;
+
                 for (shiftcnt = 1; shiftcnt < NUM_CHAN; shiftcnt++) {
-                    if (chan_active(shiftcnt) == 0) {
-                        if (temp & ioflags & AMASK &&
-                                iotraps & 1 << shiftcnt)
-                            break;
-                        if ((temp & ioflags & AMASK &&
-                                 chan_test(shiftcnt, CHS_EOF)) ||
-                            (temp & ioflags & DMASK &&
-                                 chan_test(shiftcnt, CHS_ERR))) {
-                            ihold = 0;
-                            break;
-                        }
-                    }
+                    if ((temp & ioflags & DMASK) == 0)
+                        chan_clear(shiftcnt, CHS_ERR);
+                    else if (chan_test(shiftcnt,CHS_ERR))
+                        ihold = 0;
+                    if ((temp & ioflags & AMASK) == 0)
+                        chan_clear(shiftcnt, CHS_EOF);
+                    else if (chan_test(shiftcnt,CHS_EOF))
+                        ihold = 0;
                     temp <<= 1;
                 }
                 break;
 #endif
 
             case OP_RDS:                /* Read select */
-                if (CPU_MODEL == CPU_704)
-                    MQ = 0;
-                else if (first_rdwr == 0) {
-                     iotraps &= ~(1 << ((MA >> 9) & 017));
-                     first_rdwr = 1;
-                }
                 opcode = IO_RDS;
                 goto docmd;
             case OP_WRS:                /* Write select */
-                if (CPU_MODEL != CPU_704 && first_rdwr == 0) {
-                     first_rdwr = 1;
-                }
                 opcode = IO_WRS;
                 goto docmd;
             case OP_WEF:                /* Write EOF */
@@ -3399,12 +3396,16 @@ prottrap:
                     iowait = 1; /* Channel is active, hold */
                     break;
                 case SCPE_OK:
+                    if (((MA >> 9) & 017) == 0) {
+                        if (opcode==IO_RDS)
+                            MQ = 0;
+                        chan_clear(0, CHS_EOF|CHS_EOT|DEV_REOR);
+                    }
                     ihold = 1;  /* Hold interupts for one cycle */
-                    first_rdwr = 0;
+                    iotraps &= ~(1 << ((MA >> 9) & 017));
                     break;
                 case SCPE_IOERR:
                     iocheck = 1;
-                    first_rdwr = 0;
                     break;
                 case SCPE_NODEV:
                     reason = STOP_IOCHECK;
@@ -3430,6 +3431,7 @@ prottrap:
 
 #ifdef I7090    /* Not on 704 */
             case OP_TRCA:               /* Transfer on Redundancy check */
+                ihold = 2;
                 if ((1LL << 18) & ioflags)
                     break;
                 f = chan_stat(1, CHS_ERR);
@@ -3472,6 +3474,7 @@ prottrap:
 #endif
 
             case OP_TEFA:               /* Transfer on channel EOF */
+                ihold = 2;
                 if ((1LL << 0) & ioflags)
                     break;
                 f = chan_stat(1, CHS_EOF);

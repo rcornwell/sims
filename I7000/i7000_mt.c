@@ -757,16 +757,16 @@ t_stat mt_srv(UNIT * uptr)
             }
         } else if (cmd == MT_RDS || cmd == MT_RDSB) {
             sim_debug(DEBUG_DETAIL, dptr,
-                        "Read flush unit=%d %s Block %d chars\n",
-                         unit, (cmd == MT_RDS) ? "BCD" : "Binary", reclen);
+                        "Read flush unit=%d %s at %d Block %d chars\n",
+                         unit, (cmd == MT_RDS) ? "BCD" : "Binary", uptr->u6, reclen);
             /* Keep moving until end of block */
-            if (uptr->u6 < (int32)uptr->hwmark ) {
+            if (uptr->u6 < reclen ) {
                 reclen -= uptr->u6;
                 uptr->u3 += reclen;
                 uptr->u5 |= MT_SKIP|MT_IDLE;
                 uptr->u6 = 0;
                 uptr->hwmark = 0;
-                chan_clear(chan, DEV_DISCO | DEV_WEOR);
+                chan_clear(chan, DEV_WEOR );
                 sim_activate(uptr, reclen * T1_us);
                 return SCPE_OK;
             } else {
@@ -1058,6 +1058,7 @@ t_stat mt_srv(UNIT * uptr)
                     r = MTSE_OK;
                 } else {
                     sim_debug(DEBUG_DETAIL, dptr, "error=%d\n", r);
+                    uptr->u6 = uptr->hwmark;
                     uptr->u5 &= ~MT_CMDMSK;
                     chan_set_attn(chan);
                     chan_clear(chan, DEV_SEL);
