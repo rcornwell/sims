@@ -395,7 +395,6 @@ chan_proc()
                         iotraps |= 1 << chan;
                         break;
                 }
-                iotraps |= 1LL << (chan + 18);
                 if (chan_dev.dctrl & cmask)
                      sim_debug(DEBUG_DETAIL, &chan_dev,
                         "chan %d attn< %o\n", chan, cmd[chan] & 070);
@@ -496,9 +495,8 @@ chan_proc()
                         chan_flags[chan] |= DEV_DISCO | DEV_WEOR;
                         chan_flags[chan] &=
                             ~(STA_START | STA_ACTIVE | STA_PEND);
-                        if (CHAN_G_TYPE(chan_unit[chan].flags) ==
-                            CHAN_7289)  {
-                                iotraps |= 1 << chan;
+                        if (CHAN_G_TYPE(chan_unit[chan].flags) == CHAN_7289)  {
+                            iotraps |= 1 << chan;
                             sim_debug(DEBUG_TRAP, &chan_dev, "chan %d Trap\n",
                                      chan);
                         }
@@ -841,8 +839,8 @@ chan_proc()
                         case SCPE_NODEV:
                             chan9_set_error(chan, SNS_IOCHECK);
                             iotraps |= 1 << chan;
-                            chan_flags[chan] &=
-                        ~(CTL_PREAD|CTL_PWRITE|CTL_SNS|CTL_CNTL|STA_ACTIVE);
+                            chan_flags[chan] &= ~(CTL_PREAD|CTL_PWRITE|CTL_SNS|
+                                 CTL_CNTL|STA_ACTIVE);
                             continue;
                         case SCPE_BUSY: /* Device not ready yet, wait */
                             continue;
