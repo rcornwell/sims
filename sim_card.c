@@ -70,25 +70,20 @@
 
 #define card_ctx up8
 
-#define CARD_EOF          01             /* This card is end of file card. */
-#define CARD_ERR          02             /* Return error for this card */
-#define CARD_LAST         04             /* Last card in current deck */
-
-struct _card_record
-{
-    struct _card_record  *next;          /* Next card in deck */
-    uint16                image[80];     /* Image */
-    uint8                 flag;          /* Card flags */
-};
+#define CARD_EOF          0x1000         /* This card is end of file card. */
+#define CARD_ERR          0x2000         /* Return error for this card */
+#define CARD_LAST         0x4000         /* Last card in current deck */
+#define DECK_SIZE         1000           /* Number of cards to allocate at a time */
 
 
 struct card_context
 {
-    int                 punch_count;    /* Number of cards punched */
-    int                 hopper_cards;    /* Cards in hopper */
-    char                cbuff[1024];    /* Read in buffer for cards */
+    int                 punch_count;     /* Number of cards punched */
+    char                cbuff[1024];     /* Read in buffer for cards */
     uint8               hol_to_ascii[4096]; /* Back conversion table */
-    struct _card_record *deck;          /* Current input deck */
+    int                 hopper_size;     /* Size of hopper */
+    int                 hopper_cards;    /* Number of cards in hopper */
+    uint16              (*images)[1][80];
 };
 
 /* Character conversion tables */
@@ -487,7 +482,7 @@ sim_hol_to_ebcdic(uint16 hol) {
 int
 sim_hopper_size(UNIT * uptr) {
     struct card_context  *data = (struct card_context *)uptr->card_ctx;
-    if (data == 0)
+    if (data == NULL)
         return 0;
     return data->hopper_cards;
 }
@@ -495,7 +490,7 @@ sim_hopper_size(UNIT * uptr) {
 int
 sim_punch_count(UNIT * uptr) {
     struct card_context  *data = (struct card_context *)uptr->card_ctx;
-    if (data == 0)
+    if (data == NULL)
         return 0;
     return data->punch_count;
 }
@@ -505,27 +500,27 @@ sim_read_card(UNIT * uptr, uint16 image[80])
 {
     int                   i;
     struct card_context  *data = (struct card_context *)uptr->card_ctx;
-    struct _card_record  *card;
-    struct _card_record  *ncard;
     DEVICE               *dptr;
+    uint16               (*img)[80];
     t_stat                r = SCPE_OK;
 
-    if (data == 0 || data->deck == 0 || (uptr->flags & UNIT_ATT) == 0)
+    if (data == NULL || data->hopper_size == 0 || (uptr->flags & UNIT_ATT) == 0)
         return SCPE_UNATT;      /* attached? */
+    if (uptr->pos >= data->hopper_cards)
+        return SCPE_UNATT;
 
     dptr = find_dev_from_unit( uptr);
-    card = data->deck;
-
+    img = &(*data->images)[uptr->pos];
     if (sim_deb && dptr && ((dptr)->dctrl & DEBUG_CARD)) {
-         if (card == NULL && card->flag & CARD_EOF) {
+         if (image[0] & CARD_EOF) {
              sim_debug(DEBUG_CARD, dptr, "Read hopper EOF\n");
-         } else if (card->flag & CARD_ERR) {
+         } else if (image[0] & CARD_ERR) {
              sim_debug(DEBUG_CARD, dptr, "Read hopper ERR\n");
          } else {
              uint8        out[81];
              int          ok = 1;
              for (i = 0; i < 80; i++) {
-                 out[i] = data->hol_to_ascii[card->image[i]];
+                 out[i] = data->hol_to_ascii[(int)(*img)[i]];
                  if (out[i] == 0xff) {
                     ok = 0;
                  }
@@ -541,43 +536,14 @@ sim_read_card(UNIT * uptr, uint16 image[80])
              }
          }
     }
-    if (card == NULL || card->flag & CARD_EOF)
+    if ((*img)[0] & CARD_EOF)
         r = SCPE_EOF;
-    else {
-        if (card->flag & CARD_ERR)
+    else if ((*img)[0] & CARD_ERR)
            r = SCPE_IOERR;
-        memcpy(image, card->image, sizeof(card->image));
-        uptr->pos++;
-        data->hopper_cards--;
-        data->punch_count++;
-    }
-    if (card != NULL) {
-       ncard = card->next;
-       free(card);
-       data->deck = ncard;
-       if (ncard == NULL) {
-           free(uptr->filename);
-           uptr->filename = NULL;
-           uptr->pos = 0;
-           uptr->flags &= ~UNIT_ATT;
-           uptr->dynflags &= ~UNIT_ATTMULT;
-       } else if (data->deck->flag & CARD_LAST) {
-           char       *tptr = strtok(uptr->filename, ",");
-           if (tptr == NULL) {
-               free(uptr->filename);
-               uptr->filename = NULL;
-               uptr->flags &= ~UNIT_ATT;
-               uptr->dynflags &= ~UNIT_ATTMULT;
-           } else {
-               int     len = strlen(tptr);
-               char    *str = (char *)malloc(len+1);
-               strcpy(str, tptr);
-               free(uptr->filename);
-               uptr->filename = str;
-           }
-           uptr->pos = 0;
-       }
-    }
+    uptr->pos++;
+    data->punch_count++;
+    memcpy(image, img, 80 * sizeof(uint16));
+    image[0] &= 0xfff;
     return r;
 }
 
@@ -588,14 +554,17 @@ int
 sim_card_eof(UNIT *uptr)
 {
     struct card_context  *data = (struct card_context *)uptr->card_ctx;
-    struct _card_record  *card;
+    uint16                col;
 
-    if (data == 0 || data->deck == 0)
+    if (data == NULL || data->images == NULL)
         return SCPE_UNATT;      /* attached? */
 
-    card = data->deck;
+    if (uptr->pos >= data->hopper_cards)
+        return SCPE_UNATT;
 
-    if (card == NULL || card->flag & CARD_EOF)
+    col = (*data->images)[uptr->pos][0];
+
+    if (col & CARD_EOF)
         return 1;
     return 0;
 }
@@ -619,17 +588,13 @@ static int _cmpcard(const char *p, const char *s) {
    return 1;
 }
 
-struct _card_record *
-_sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf) {
-    struct _card_record  *card;
+t_stat
+_sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf, uint16 (*image)[80]) {
     int                   mode;
     uint16                temp;
     int                   i;
     char                  c;
     int                   col;
-
-    /* Allocate structure to save this card in */
-    card = (struct _card_record *) calloc(1, sizeof(struct _card_record));
 
     sim_debug(DEBUG_CARD, dptr, "Read card ");
     if ((uptr->flags & UNIT_CARD_MODE) == MODE_AUTO) {
@@ -671,9 +636,9 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf) {
         /* Check if modes match */
         if ((uptr->flags & UNIT_CARD_MODE) != MODE_AUTO &&
             (uptr->flags & UNIT_CARD_MODE) != mode) {
-            card->flag = CARD_ERR;
+            (*image)[0] = CARD_ERR;
             sim_debug(DEBUG_CARD, dptr, "invalid mode\n");
-            return card;
+            return SCPE_OPENERR;
         }
     } else
         mode = uptr->flags & UNIT_CARD_MODE;
@@ -703,7 +668,7 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf) {
                 }
              }
              if (f) {
-                card->flag |= CARD_EOF;
+                (*image)[0] |= CARD_EOF;
                 goto end_card;
              }
         }
@@ -712,13 +677,12 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf) {
             sim_debug(DEBUG_CARD, dptr, "-octal-");
             for(col = 0, i = 4; col < 80 && i < buf->len; i++) {
                 if (buf->buffer[i] >= '0' && buf->buffer[i] <= '7') {
-                    card->image[col] = (card->image[col] << 3) |
-                                         (buf->buffer[i] - '0');
+                    (*image)[col] = ((*image)[col] << 3) | (buf->buffer[i] - '0');
                     j++;
                 } else if (buf->buffer[i] == '\n' || buf->buffer[i] == '\r') {
                     break;
                 } else {
-                    card->flag = CARD_ERR;
+                    (*image)[0] = CARD_ERR;
                     break;
                 }
                 if (j == 4) {
@@ -728,15 +692,15 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf) {
             }
         } else if (_cmpcard(&buf->buffer[0], "eor")) {
             sim_debug(DEBUG_CARD, dptr, "-eor-");
-            card->image[0] = 07;        /* 7/8/9 punch */
+            (*image)[0] = 07;        /* 7/8/9 punch */
             i = 4;
         } else if (_cmpcard(&buf->buffer[0], "eof")) {
             sim_debug(DEBUG_CARD, dptr, "-eof-");
-            card->image[0] = 015;       /* 6/7/9 punch */
+            (*image)[0] = 015;       /* 6/7/9 punch */
             i = 4;
         } else if (_cmpcard(&buf->buffer[0], "eoi")) {
             sim_debug(DEBUG_CARD, dptr, "-eoi-");
-            card->image[0] = 017;       /* 6/7/8/9 punch */
+            (*image)[0] = 017;       /* 6/7/8/9 punch */
             i = 4;
         } else {
             /* Convert text line into card image */
@@ -770,8 +734,8 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf) {
                            break;
                     }
                     if (temp & 0xf000)
-                        card->flag = CARD_ERR;
-                    card->image[col++] = temp & 0xfff;
+                        (*image)[0] |= CARD_ERR;
+                    (*image)[col++] = temp & 0xfff;
                 }
             }
         }
@@ -793,18 +757,18 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf) {
         temp = 0;
         sim_debug(DEBUG_CARD, dptr, "bin\n");
         if (buf->len < 160) {
-            card->flag = CARD_ERR;
-            return card;
+            (*image)[0] = CARD_ERR;
+            return SCPE_OPENERR;
         }
         /* Move data to buffer */
         for (col = i = 0; i < 160;) {
             temp |= buf->buffer[i];
-            card->image[col] = (buf->buffer[i++] >> 4) & 0xF;
-            card->image[col++] |= ((uint16)buf->buffer[i++]) << 4;
+            (*image)[col] = (buf->buffer[i++] >> 4) & 0xF;
+            (*image)[col++] |= ((uint16)buf->buffer[i++]) << 4;
         }
         /* Check if format error */
         if (temp & 0xF)
-            card->flag |= CARD_ERR;
+            (*image)[0]  |= CARD_ERR;
 
         break;
 
@@ -814,7 +778,7 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf) {
         if (((uint8)buf->buffer[0]) == 0217 &&
                    (buf->len == 1 || (((uint8)buf->buffer[1]) & 0200) != 0)) {
             i = 1;
-            card->flag = CARD_EOF;
+            (*image)[0] |= CARD_EOF;
             break;
         }
 
@@ -829,18 +793,18 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf) {
                 break;
             c = buf->buffer[i] & 077;
             if (sim_parity_table[(int)c] == (buf->buffer[i++] & 0100))
-                card->flag = CARD_ERR;
-            card->image[col] = ((uint16)c) << 6;
+                (*image)[0] |= CARD_ERR;
+            (*image)[col] = ((uint16)c) << 6;
             if (buf->buffer[i] & 0x80)
                 break;
             c = buf->buffer[i] & 077;
             if (sim_parity_table[(int)c] == (buf->buffer[i++] & 0100))
-                card->flag = CARD_ERR;
-            card->image[col++] |= c;
+                (*image)[0] |= CARD_ERR;
+            (*image)[col++] |= c;
         }
 
         if (i < buf->len && col >= 80 && (buf->buffer[i] & 0x80) == 0) {
-           card->flag = CARD_ERR;
+           (*image)[0] |= CARD_ERR;
         }
         /* Record over length of card, skip until next */
         while ((buf->buffer[i] & 0x80) == 0) {
@@ -855,7 +819,7 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf) {
         /* Check if first character is a tape mark */
         if (((uint8)buf->buffer[0]) == 0217 && (((uint8)buf->buffer[1]) & 0200) != 0) {
             i = 1;
-            card->flag = CARD_EOF;
+            (*image)[0] |= CARD_EOF;
             break;
         }
 
@@ -868,14 +832,14 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf) {
                 break;
             c = buf->buffer[i] & 077;
             if (sim_parity_table[(int)c] != (buf->buffer[i] & 0100))
-                card->flag = CARD_ERR;
+                (*image)[0] |= CARD_ERR;
             sim_debug(DEBUG_CARD, dptr, "%c", sim_six_to_ascii[(int)c]);
             /* Convert to top column */
-            card->image[col++] = sim_bcd_to_hol(c);
+            (*image)[col++] = sim_bcd_to_hol(c);
         }
 
         if (i < buf->len && col >= 80 && (buf->buffer[i] & 0x80) == 0) {
-           card->flag = CARD_ERR;
+           (*image)[0] |= CARD_ERR;
         }
 
         /* Record over length of card, skip until next */
@@ -891,17 +855,17 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf) {
     case MODE_EBCDIC:
         sim_debug(DEBUG_CARD, dptr, "ebcdic\n");
         if (buf->len < 80)
-            card->flag = CARD_ERR;
+            (*image)[0] |= CARD_ERR;
         /* Move data to buffer */
         for (i = 0; i < 80 && i < buf->len; i++) {
             temp = buf->buffer[i] & 0xFF;
-            card->image[i] = ebcdic_to_hol[temp];
+            (*image)[i] = ebcdic_to_hol[temp];
         }
         break;
 
     }
     buf->size = i;
-    return card;
+    return SCPE_OK;
 }
 
 t_stat
@@ -909,9 +873,6 @@ _sim_read_deck(UNIT * uptr, int eof)
 {
     struct _card_buffer   buf;
     struct card_context  *data;
-    struct _card_record  *deck = NULL;
-    struct _card_record  *next = NULL;
-    struct _card_record  *card = NULL;
     DEVICE               *dptr;
     int                   i;
     int                   j;
@@ -939,20 +900,32 @@ _sim_read_deck(UNIT * uptr, int eof)
                 buf.len += l;
         }
 
-        /* Process one card */
-        card = _sim_parse_card(uptr, dptr, &buf);
-        cards++;
-        if (deck == NULL) {
-            deck = card;
-            next = card;
-        } else {
-            next->next = card;
-            next = card;
+        /* Allocate space for some more cards if needed */
+        if (data->hopper_size == 0) {
+            data->hopper_size = DECK_SIZE;
+            data->hopper_cards = 0;
+            data->images = (uint16 (*)[1][80])malloc(data->hopper_size *
+                                      sizeof(*(data->images)));
+            memset(&data->images[data->hopper_cards], 0,
+                       (data->hopper_size - data->hopper_cards) *
+                             sizeof(*(data->images)));
+        } else if (data->hopper_cards >= data->hopper_size) {
+            data->hopper_size += DECK_SIZE;
+            data->images = (uint16 (*)[1][80])realloc(data->images,
+                       data->hopper_size * sizeof(*(data->images)));
+            memset(&data->images[data->hopper_cards], 0,
+                       (data->hopper_size - data->hopper_cards) *
+                             sizeof(*(data->images)));
         }
-        if (card->flag & CARD_ERR) {
+
+        /* Process one card */
+        cards++;
+        if (_sim_parse_card(uptr, dptr, &buf, &(*data->images)[data->hopper_cards])
+                != SCPE_OK) {
             r = SCPE_BARE_STATUS(sim_messagef(SCPE_OPENERR, "%s: %s Error (%s) in card %d\n",
                    sim_uname(uptr), uptr->filename, sim_error_text(r), cards));
         }
+        data->hopper_cards++;
         /* Move data to start at begining of buffer */
         /* Data is moved down to simplify the decoding of one card */
         l = buf.len - buf.size;
@@ -963,36 +936,31 @@ _sim_read_deck(UNIT * uptr, int eof)
     } while (buf.len > 0 && r == SCPE_OK);
 
     /* If there is an error, free just read deck */
-    if (r != SCPE_OK) {
-       while (deck != NULL) {
-          next = deck->next;
-          free(deck);
-          deck = next;
-       }
-    } else {
+    if (r == SCPE_OK) {
        if (eof) {
-          /* Create empty card */
-          card = (struct _card_record *) calloc(1, sizeof(struct _card_record));
-          card->flag = CARD_EOF;
-          if (deck == NULL) {
-              deck = card;
-              next = card;
-          } else {
-              next->next = card;
-              next = card;
+          /* Allocate space for some more cards if needed */
+          if (data->hopper_size == 0) {
+              data->hopper_size = DECK_SIZE;
+              data->hopper_cards = 0;
+              data->images = (uint16 (*)[1][80])malloc(data->hopper_size *
+                                        sizeof(*(data->images)));
+              memset(&data->images[data->hopper_cards], 0,
+                       (data->hopper_size - data->hopper_cards) *
+                             sizeof(*(data->images)));
+          } else if (data->hopper_cards >= data->hopper_size) {
+              data->hopper_size += DECK_SIZE;
+              data->images = (uint16 (*)[1][80])realloc(data->images,
+                         data->hopper_size * sizeof(*(data->images)));
+              memset(&data->images[data->hopper_cards], 0,
+                         (data->hopper_size - data->hopper_cards) *
+                               sizeof(*(data->images)));
           }
+
+          /* Create empty card */
+          (*data->images)[data->hopper_cards][0] = CARD_EOF;
+          data->hopper_cards++;
        }
-       next->flag |= CARD_LAST;
-    /* Append it onto end of deck and update length counts */
-       next = data->deck;
-       if ( next != NULL ) { /* Scan to end of current deck */
-            while (next->next != NULL)
-                next = next->next;
-            next->next = deck;
-       } else {
-            data->deck = deck;
-       }
-       data->hopper_cards += cards;
+       (*data->images)[data->hopper_cards][0] |= CARD_LAST;
     }
     return r;
 }
@@ -1295,15 +1263,12 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
 
         /* Check if we should append to end of existing */
         if ((sim_switches & SWMASK ('S')) == 0) {
-           /* No clear any existing decks on stack */
-           struct _card_record  *deck = data->deck;
-           struct _card_record  *next = NULL;
-           while (deck != NULL) {
-              next = deck->next;
-              free(deck);
-              deck = next;
-           }
-           data->deck = NULL;
+           data->hopper_cards = 0;
+           data->hopper_size = 0;
+           data->punch_count = 0;
+           if (data->images != NULL)
+              free(data->images);
+           data->images = NULL;
            free(saved_filename);
            saved_filename = NULL;
            saved_pos = 0;
@@ -1357,13 +1322,11 @@ sim_card_detach(UNIT * uptr)
     if (uptr->card_ctx != 0) {
         struct card_context * data = (struct card_context *)uptr->card_ctx;
         /* No clear any existing decks on stack */
-        struct _card_record  *deck = data->deck;
-        struct _card_record  *next = NULL;
-        while (deck != NULL) {
-            next = deck->next;
-            free(deck);
-            deck = next;
-        }
+        data->hopper_cards = 0;
+        data->hopper_size = 0;
+        if (data->images != NULL)
+           free(data->images);
+        data->images = NULL;
         free(uptr->card_ctx);
         uptr->card_ctx = 0;
     }
