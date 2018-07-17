@@ -1237,6 +1237,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
     int      base = 0;
     int      page = (RMASK & addr) >> 9;
     int      uf = (FLAGS & USER) != 0;
+    int      upmp = 0;
 
     if (page_fault)
         return 0;
@@ -1276,6 +1277,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
         /* Pages 340-377 via UBR */
         if ((page & 0740) == 0340) {
             page += 01000 - 0340;
+            upmp = 1;
         /* Pages 400-777 via EBR */
         } else if (page & 0400) {
             base = 1;
@@ -1315,7 +1317,10 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
            data = u_tlb[page];
            pag_reload = ((pag_reload + 1) & 037) | 040;
         }
-        last_page = ((page ^ 0777) << 1);
+        if (upmp) 
+           last_page = (((page-0440) ^ 0777) << 1) | 1;
+        else
+           last_page = ((page ^ 0777) << 1);
     }
     *loc = ((data & 017777) << 9) + (addr & 0777);
     /* Access check logic */
@@ -2121,7 +2126,6 @@ no_fetch:
 st_pi:
         sim_debug(DEBUG_IRQ, &cpu_dev, "trap irq %o %03o %03o \n",
                        pi_enc, PIR, PIH);
-        set_pi_hold(); /* Hold off all lower interrupts */
         pi_cycle = 1;
         pi_rq = 0;
         pi_hold = 0;
@@ -2202,10 +2206,9 @@ st_pi:
     sac_inh = 0;
 #if KI | KL | ITS | BBN
     modify = 0;
-    f_pc_inh = (trap_flag != 0);
-#else
-    f_pc_inh = 0;
 #endif
+    f_pc_inh = 0;
+
     /* Load pseudo registers based on flags */
     if (i_flags & (FCEPSE|FCE)) {
         if (Mem_read(0, 0, 0))
@@ -2283,7 +2286,6 @@ unasign:
                      FLAGS |= OVR;
               }
               PC = MB & RMASK;
-              trap_flag = 0;
               f_pc_inh = 1;
               break;
 #else
@@ -3943,7 +3945,8 @@ fxnorm:
                   /* Handle system mapping */
                   /* Pages 340-377 via UBR */
                   if ((f & 0740) == 0340) {
-                      f += 01000 - 0340;
+                       f += 01000 - 0340;
+                       flag3 = 2;
                   /* Pages 400-777 via EBR */
                   } else if (f & 0400) {
                        flag3 = 1;
@@ -3955,15 +3958,21 @@ fxnorm:
                    }
               }
               /* Map the page */
-              if (flag3) {
+              if (flag3&1) {
                   AR = e_tlb[f];
                   if (AR == 0) {
                      AR = M[eb_ptr + (f >> 1)];
                      e_tlb[f & 0776] = RMASK & (AR >> 18);
                      e_tlb[f | 1] = RMASK & AR;
                      AR = e_tlb[f];
+                     if (AR == 0) {
+                         AR = 0437777;
+                         set_reg(AC, AR);
+                         break;
+                     }
                      pag_reload = ((pag_reload + 1) & 037) | 040;
                   }
+                  last_page = ((f ^ 0777) << 1) | 1;
               } else {
                   AR = u_tlb[f];
                   if (AR == 0) {
@@ -3971,11 +3980,20 @@ fxnorm:
                      u_tlb[f & 01776] = RMASK & (AR >> 18);
                      u_tlb[f | 1] = RMASK & AR;
                      AR = u_tlb[f];
+                     if (AR == 0) {
+                         AR = 0437777;
+                         set_reg(AC, AR);
+                         break;
+                     }
                      pag_reload = ((pag_reload + 1) & 037) | 040;
                   }
+                  if (flag3 & 2) 
+                      last_page = (((f-0440) ^ 0777) << 1) | 1;
+                  else
+                      last_page = ((f ^ 0777) << 1);
               }
-              last_page = ((f ^ 0777) << 1) | flag3;
-              AR &= 0767777LL; /* Return valid entry for page */
+              if ((AR & 0400000LL) == 0)
+                  AR &= 0437777LL; /* Return valid entry for page */
               AR ^= 0400000LL;  /* Flip access status. */
               set_reg(AC, AR);
 #endif
@@ -4756,7 +4774,11 @@ last:
     }
 #endif
 
+#if KI | KL
+    if (!f_pc_inh && (trap_flag == 0)  && !pi_cycle) {
+#else
     if (!f_pc_inh && !pi_cycle) {
+#endif
         PC = (PC + 1) & RMASK;
     }
 
@@ -4780,12 +4802,9 @@ last:
        if ((IR & 0700) == 0700 && ((AC & 04) == 0)) {
            pi_hold = pi_ov;
            if (!pi_hold & f_inst_fetch) {
-                pi_restore = 1;
                 pi_cycle = 0;
            } else {
                 AB = 040 | (pi_enc << 1) | pi_ov;
-                pi_ov = 0;
-                pi_hold = 0;
 #if KI | KL
                 AB |= eb_ptr;
                 Mem_read_nopage();
@@ -4794,7 +4813,10 @@ last:
 #endif
                 goto no_fetch;
            }
-       } else if (pi_hold) {
+       } else if (pi_hold && !f_pc_inh) {
+            if ((IR & 0700) == 0700) {
+                (void)check_irq_level();
+            }
             AB = 040 | (pi_enc << 1) | pi_ov;
             pi_ov = 0;
             pi_hold = 0;
@@ -4806,6 +4828,13 @@ last:
 #endif
             goto no_fetch;
        } else {
+#if KI | KL
+            if (f_pc_inh && trap_flag == 0)
+                set_pi_hold(); /* Hold off all lower interrupts */
+#else
+            if (f_pc_inh)
+                set_pi_hold(); /* Hold off all lower interrupts */
+#endif
             f_inst_fetch = 1;
             f_load_pc = 1;
             pi_cycle = 0;
