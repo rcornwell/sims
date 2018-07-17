@@ -216,6 +216,9 @@ int32   qua_tps = 125000;
 #endif
 int32   tmxr_poll = 10000;
 
+/* Physical address range for Rubin 10-11 interface. */
+#define T11RANGE(addr)  ((addr) >= 03000000)
+
 DEVICE *rh_devs[] = {
 #if (NUM_DEVS_RS > 0)
     &rsa_dev,
@@ -356,6 +359,8 @@ MTAB cpu_mod[] = {
 #if ITS
     { UNIT_M_PAGE, UNIT_ITSPAGE, "ITS", "ITS", NULL, NULL, NULL,
               "Paging hardware for ITS"},
+    { UNIT_M_TEN11, UNIT_TEN11, "TEN11", "TEN11", NULL, NULL, NULL,
+              "Rubin 10-11 interface"},
 #endif
 #if BBN
     { UNIT_M_PAGE, UNIT_BBNPAGE, "BBN", "BBN", NULL, NULL, NULL,
@@ -379,6 +384,7 @@ DEBTAB              cpu_debug[] = {
     {"CONI", DEBUG_CONI, "Show coni instructions"},
     {"CONO", DEBUG_CONO, "Show coni instructions"},
     {"DATAIO", DEBUG_DATAIO, "Show datai and datao instructions"},
+    {"TEN11", DEBUG_TEN11, "Show Rubin 10-11 events"},
     {0, 0}
 };
 
@@ -682,6 +688,8 @@ int opflags[] = {
 #endif
 #if ITS
 #define QITS            (cpu_unit[0].flags & UNIT_ITSPAGE)
+#define QTEN11          ((cpu_unit[0].flags & (UNIT_TEN11|UNIT_M_PAGE)) \
+                         == (UNIT_TEN11|UNIT_ITSPAGE))
 #else
 #define QITS            0
 #endif
@@ -1890,6 +1898,15 @@ read:
         sim_interval--;
         if (!page_lookup(AB, flag, &addr, 0, cur_context, fetch))
             return 1;
+#if ITS
+        if (QTEN11 && T11RANGE(addr)) {
+            if (ten11_read (addr)) {
+                nxm_flag = 1;
+                return 1;
+            }
+            return 0;
+        }
+#endif
         if (addr >= (int)MEMSIZE) {
             nxm_flag = 1;
             return 1;
@@ -1948,6 +1965,15 @@ write:
         sim_interval--;
         if (!page_lookup(AB, flag, &addr, 1, cur_context, 0))
             return 1;
+#if ITS
+        if (QTEN11 && T11RANGE(addr)) {
+            if (ten11_write (addr)) {
+                nxm_flag = 1;
+                return 1;
+            }
+            return 0;
+        }
+#endif
         if (addr >= (int)MEMSIZE) {
             nxm_flag = 1;
             return 1;

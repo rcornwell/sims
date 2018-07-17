@@ -121,6 +121,7 @@
 #define DEBUG_CONO      0x0000040       /* Show CONO instructions */
 #define DEBUG_DATAIO    0x0000100       /* Show DATAI/O instructions */
 #define DEBUG_IRQ       0x0000200       /* Show IRQ requests */
+#define DEBUG_TEN11     0x0000400       /* Show Rubin 10-11 events */
 
 extern DEBTAB dev_debug[];
 extern DEBTAB crd_debug[];
@@ -278,6 +279,9 @@ extern DEBTAB crd_debug[];
 #define UNIT_V_MPX      (UNIT_V_PAGE + 3)
 #define UNIT_MPX        (1 << UNIT_V_MPX)  /* MPX Device for ITS */
 #define UNIT_M_MPX      (1 << UNIT_V_MPX)
+#define UNIT_V_TEN11    (UNIT_V_MPX + 1)
+#define UNIT_TEN11      (1 << UNIT_V_TEN11) /* Rubin 10-11 interface */
+#define UNIT_M_TEN11    (1 << UNIT_V_TEN11)
 
 typedef unsigned long long int uint64;
 typedef unsigned int uint18;
@@ -370,6 +374,9 @@ int  df10_fetch(struct df10 *df);
 int  df10_read(struct df10 *df);
 int  df10_write(struct df10 *df);
 
+extern uint64 MB;
+int ten11_read (int addr);
+int ten11_write (int addr);
 
 /* Console lights. */
 extern void ka10_lights_init (void);
