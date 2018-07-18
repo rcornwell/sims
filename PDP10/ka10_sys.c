@@ -138,6 +138,9 @@ DEVICE *sim_devices[] = {
 #if NUM_DEVS_IMP > 0
     &imp_dev,
 #endif
+#if NUM_DEVS_IMX > 0
+    &imx_dev,
+#endif
     NULL
     };
 
