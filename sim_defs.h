@@ -517,11 +517,11 @@ struct DEVICE {
 #define DEV_V_DYNM      2                               /* mem size dynamic */
 #define DEV_V_DEBUG     3                               /* debug capability */
 #define DEV_V_TYPE      4                               /* Attach type */
-#define DEV_S_TYPE      3                               /* Width of Type Field */
-#define DEV_V_SECTORS   7                               /* Unit Capacity is in 512byte sectors */
-#define DEV_V_DONTAUTO  8                               /* Do not auto detach already attached units */
-#define DEV_V_FLATHELP  9                               /* Use traditional (unstructured) help */
-#define DEV_V_NOSAVE    10                              /* Don't save device state */
+#define DEV_S_TYPE      4                               /* Width of Type Field */
+#define DEV_V_SECTORS   8                               /* Unit Capacity is in 512byte sectors */
+#define DEV_V_DONTAUTO  9                               /* Do not auto detach already attached units */
+#define DEV_V_FLATHELP  10                              /* Use traditional (unstructured) help */
+#define DEV_V_NOSAVE    11                              /* Don't save device state */
 #define DEV_V_UF_31     12                              /* user flags, V3.1 */
 #define DEV_V_UF        16                              /* user flags */
 #define DEV_V_RSV       31                              /* reserved */
@@ -541,8 +541,9 @@ struct DEVICE {
 #define DEV_DISK        (1 << DEV_V_TYPE)               /* sim_disk Attach */
 #define DEV_TAPE        (2 << DEV_V_TYPE)               /* sim_tape Attach */
 #define DEV_MUX         (3 << DEV_V_TYPE)               /* sim_tmxr Attach */
-#define DEV_ETHER       (4 << DEV_V_TYPE)               /* Ethernet Device */
-#define DEV_DISPLAY     (5 << DEV_V_TYPE)               /* Display Device */
+#define DEV_CARD        (4 << DEV_V_TYPE)               /* sim_card Attach */
+#define DEV_ETHER       (5 << DEV_V_TYPE)               /* Ethernet Device */
+#define DEV_DISPLAY     (6 << DEV_V_TYPE)               /* Display Device */
 #define DEV_TYPE(dptr)  ((dptr)->flags & DEV_TYPEMASK)
 
 #define DEV_UFMASK_31   (((1u << DEV_V_RSV) - 1) & ~((1u << DEV_V_UF_31) - 1))
