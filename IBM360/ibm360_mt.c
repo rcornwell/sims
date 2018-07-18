@@ -175,7 +175,7 @@ DEVICE              mta_dev = {
     "MTA", mta_unit, NULL, mt_mod,
     NUM_UNITS_MT, 8, 15, 1, 8, 8,
     NULL, NULL, &mt_reset, &mt_boot, &mt_attach, &mt_detach,
-    &mta_dib, DEV_BUF_NUM(0) | DEV_DISABLE | DEV_DEBUG, 0, dev_debug
+    &mta_dib, DEV_BUF_NUM(0) | DEV_DISABLE | DEV_DEBUG | DEV_TAPE, 0, dev_debug
 };
 
 #if NUM_DEVS_MT > 1
@@ -196,7 +196,7 @@ DEVICE              mtb_dev = {
     "MTB", mtb_unit, NULL, mt_mod,
     NUM_UNITS_MT, 8, 15, 1, 8, 8,
     NULL, NULL, &mt_reset, &mt_boot, &mt_attach, &mt_detach,
-    &mtb_dib, DEV_BUF_NUM(1) | DEV_DISABLE | DEV_DEBUG, 0, dev_debug
+    &mtb_dib, DEV_BUF_NUM(1) | DEV_DISABLE | DEV_DEBUG | DEV_TAPE, 0, dev_debug
 };
 #endif
 
@@ -356,9 +356,12 @@ t_stat mt_error(UNIT * uptr, uint16 addr, t_stat r, DEVICE * dptr)
        sim_debug(DEBUG_EXP, dptr, "BOT ");
        break;
     case MTSE_INVRL:              /* invalid rec lnt */
+       break;
     case MTSE_EOM:              /* end of medium */
        sim_debug(DEBUG_EXP, dptr, "EOT ");
-       break;
+       uptr->u5 = SNS_EQUCHK;
+       chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
+       return SCPE_OK;
     }
     chan_end(addr, SNS_CHNEND|SNS_DEVEND);
     return SCPE_OK;
@@ -423,7 +426,8 @@ t_stat mt_srv(UNIT * uptr)
              sim_debug(DEBUG_DETAIL, dptr, "Read unit=%d ", unit);
              if ((r = sim_tape_rdrecf(uptr, &mt_buffer[bufnum][0], &reclen,
                               BUFFSIZE)) != MTSE_OK) {
-            uptr->u3 &= ~(MT_CMDMSK|MT_READDONE);
+                 sim_debug(DEBUG_DETAIL, dptr, " error %d\n", r);
+                 uptr->u3 &= ~(MT_CMDMSK|MT_READDONE);
                  return mt_error(uptr, addr, r, dptr);
              }
              uptr->u4 = 0;
@@ -568,7 +572,7 @@ t_stat mt_srv(UNIT * uptr)
              sim_debug(DEBUG_DETAIL, dptr, "Read backward unit=%d ", unit);
              if ((r = sim_tape_rdrecr(uptr, &mt_buffer[bufnum][0], &reclen,
                                 BUFFSIZE)) != MTSE_OK) {
-            uptr->u3 &= ~(MT_CMDMSK|MT_READDONE);
+                  uptr->u3 &= ~(MT_CMDMSK|MT_READDONE);
                   return mt_error(uptr, addr, r, dptr);
              }
              uptr->u4 = reclen;

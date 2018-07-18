@@ -203,16 +203,18 @@ readbuff(int chan) {
     addr &= AMASK;
     addr >>= 2;
     chan_buf[chan] = M[addr];
-    sim_debug(DEBUG_DATA, &cpu_dev, "Channel write %02x %06x %08x %08x '",
-          chan, ccw_addr[chan] & 0xFFFFFC, chan_buf[chan], ccw_count[chan]);
-    for(k = 24; k >= 0; k -= 8) {
-        char ch = ebcdic_to_ascii[(chan_buf[chan] >> k) & 0xFF];
-        if (ch < 0x20 || ch == 0xff)
-           ch = '.';
-        sim_debug(DEBUG_DATA, &cpu_dev, "%c", ch);
-    }
+    if ((ccw_cmd[chan] & CMD_TYPE) == CMD_WRITE) {
+        sim_debug(DEBUG_CDATA, &cpu_dev, "Channel write %02x %06x %08x %08x '",
+              chan, ccw_addr[chan] & 0xFFFFFC, chan_buf[chan], ccw_count[chan]);
+        for(k = 24; k >= 0; k -= 8) {
+            char ch = ebcdic_to_ascii[(chan_buf[chan] >> k) & 0xFF];
+            if (ch < 0x20 || ch == 0xff)
+               ch = '.';
+            sim_debug(DEBUG_CDATA, &cpu_dev, "%c", ch);
+        }
 
-    sim_debug(DEBUG_DATA, & cpu_dev, "'\n");
+        sim_debug(DEBUG_CDATA, & cpu_dev, "'\n");
+    }
     return 0;
 }
 
@@ -249,15 +251,15 @@ writebuff(int chan) {
     addr &= AMASK;
     addr >>= 2;
     M[addr] = chan_buf[chan];
-    sim_debug(DEBUG_DATA, &cpu_dev, "Channel readf %02x %06x %08x %08x '",
+    sim_debug(DEBUG_CDATA, &cpu_dev, "Channel readf %02x %06x %08x %08x '",
           chan, ccw_addr[chan] & 0xFFFFFC, chan_buf[chan], ccw_count[chan]);
     for(k = 24; k >= 0; k -= 8) {
         char ch = ebcdic_to_ascii[(chan_buf[chan] >> k) & 0xFF];
         if (ch < 0x20 || ch == 0xff)
             ch = '.';
-        sim_debug(DEBUG_DATA, &cpu_dev, "%c", ch);
+        sim_debug(DEBUG_CDATA, &cpu_dev, "%c", ch);
     }
-    sim_debug(DEBUG_DATA, &cpu_dev, "'\n");
+    sim_debug(DEBUG_CDATA, &cpu_dev, "'\n");
     return 0;
 }
 
@@ -313,6 +315,9 @@ loop:
     caw[chan]+=4;
     caw[chan] &= PMASK|AMASK;         /* Mask overflow bits */
     ccw_count[chan] = word & 0xffff;
+    /* Copy SLI indicator on CD command */
+    if ((ccw_flags[chan] & (FLAG_CD|FLAG_SLI)) == (FLAG_CD|FLAG_SLI))
+         word |= (FLAG_SLI<<16);
     ccw_flags[chan] = (word >> 16) & 0xffff;
     chan_byte[chan] = BUFF_EMPTY;
     if (ccw_flags[chan] & FLAG_PCI) {
@@ -508,12 +513,16 @@ chan_end(uint16 addr, uint8 flags) {
     chan_status[chan] |= STATUS_CEND;
     chan_status[chan] |= ((uint16)flags) << 8;
     ccw_cmd[chan] = 0;
-    if (ccw_count[chan] != 0 &&  (ccw_flags[chan] & FLAG_SLI) == 0) {
+    if (ccw_count[chan] != 0 && (ccw_flags[chan] & FLAG_SLI) == 0) {
         sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end length\n");
         chan_status[chan] |= STATUS_LENGTH;
         ccw_flags[chan] = 0;
     }
     if (flags & (SNS_ATTN|SNS_UNITCHK|SNS_UNITEXP)) {
+        if (ccw_count[chan] != 0) {
+            sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end length\n");
+            chan_status[chan] |= STATUS_LENGTH;
+        }
         ccw_flags[chan] = 0;
     }
 
@@ -554,8 +563,6 @@ int  startio(uint16 addr) {
 
     if (chan < 0 || dibp == 0)
         return 3;
-    sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %x %x\n", addr, chan,
-              ccw_cmd[chan], ccw_flags[chan]);
     uptr = find_chan_dev(addr);
     if (uptr == 0)
         return 3;
@@ -563,6 +570,8 @@ int  startio(uint16 addr) {
         return 3;
     if (ccw_cmd[chan] != 0 || (ccw_flags[chan] & (FLAG_CD|FLAG_CC)) != 0)
         return 2;
+    sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %x %x\n", addr, chan,
+              ccw_cmd[chan], ccw_flags[chan]);
     chan_status[chan] = 0;
     dev_status[addr] = 0;
     caw[chan] = M[0x48>>2];
@@ -747,7 +756,7 @@ uint16 scan_chan(uint8 mask) {
      if (pend) {
           irq_pend = 1;
           ch = find_subchan(pend);
-          if (ch >= 0) {
+          if (ch >= 0 && loading == 0) {
               sim_debug(DEBUG_EXP, &cpu_dev, "Scan end (%x %x)\n", chan_dev[ch], pend);
               store_csw(ch);
           }
