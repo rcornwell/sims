@@ -31,7 +31,7 @@
         Binary Card format:
                 Each record 160 characters.
                 First character   21012345
-                                  111 
+                                  111
                 Second characters 6789----
                 Top 4 bits of second character are 0.
                 It is unlikely that ascii text or BCD format
@@ -86,9 +86,20 @@ extern "C" {
 
 
 /* Generic routines. */
+
+     /* Read next card into image row 12,11,10,1-9 */
+     /* Return SCPE_EOF if end file detected. */
 t_stat   sim_read_card(UNIT * uptr, uint16 image[80]);
-int      sim_card_eof(UNIT * uptr);
+     /* Punch card from image row 12,11,10,1-9 */
 t_stat   sim_punch_card(UNIT * uptr, uint16 image[80]);
+     /* Check if next card to be read is EOF */
+int      sim_card_eof(UNIT * uptr);
+     /* Return number of cards yet to read */
+int      sim_hopper_size(UNIT * uptr);
+     /* Return number of cards punched */
+int      sim_punch_count(UNIT * uptr);
+int      sim_card_input_hopper_count(UNIT *uptr);
+int      sim_card_output_hopper_count(UNIT *uptr);
 t_stat   sim_card_attach(UNIT * uptr, CONST char *file);
 t_stat   sim_card_detach(UNIT *uptr);
 
@@ -106,9 +117,9 @@ t_stat sim_card_show_fmt (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat sim_card_attach_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
 
 /* Translation tables */
-extern const char      sim_six_to_ascii[64];
-extern const char      sim_ascii_to_six[128];
-extern const uint8     sim_parity_table[64];
+extern const char      sim_six_to_ascii[64];        /* Map BCD to ASCII */
+extern const char      sim_ascii_to_six[128];       /* Map 7 bit ASCII to BCD */
+extern const uint8     sim_parity_table[64];        /* 64 entry odd parity table */
 
 #ifdef  __cplusplus
 }

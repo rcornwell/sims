@@ -72,7 +72,6 @@
 
 #define CARD_EOF          0x1000         /* This card is end of file card. */
 #define CARD_ERR          0x2000         /* Return error for this card */
-#define CARD_LAST         0x4000         /* Last card in current deck */
 #define DECK_SIZE         1000           /* Number of cards to allocate at a time */
 
 
@@ -495,6 +494,33 @@ sim_punch_count(UNIT * uptr) {
     return data->punch_count;
 }
 
+int
+sim_card_input_hopper_count(UNIT *uptr) {
+    struct card_context  *data = (struct card_context *)uptr->card_ctx;
+    uint16                col;
+
+    if (data == NULL || data->images == NULL)
+        return 0;           /* attached? */
+
+    if (uptr->pos >= data->hopper_cards)
+        return 0;
+
+    col = (*data->images)[data->hopper_cards-1][0];
+
+    return (int)((data->hopper_cards - uptr->pos) - ((col & CARD_EOF) ? 1 : 0));
+}
+
+int
+sim_card_output_hopper_count(UNIT *uptr) {
+    struct card_context  *data = (struct card_context *)uptr->card_ctx;
+
+    if (data == NULL)
+        return 0;           /* attached? */
+
+    return (int)data->punch_count;
+}
+
+
 t_stat
 sim_read_card(UNIT * uptr, uint16 image[80])
 {
@@ -543,7 +569,7 @@ sim_read_card(UNIT * uptr, uint16 image[80])
     uptr->pos++;
     data->punch_count++;
     memcpy(image, img, 80 * sizeof(uint16));
-    image[0] &= 0xfff;
+    image[0] &= 0xfff;          /* Remove any CARD_EOF and CARD_ERR Flags */
     return r;
 }
 
@@ -895,21 +921,13 @@ _sim_read_deck(UNIT * uptr, int eof)
         if (buf.len < 500 && !feof(uptr->fileref)) {
             l = sim_fread(&buf.buffer[buf.len], 1, 8192, uptr->fileref);
             if (l < 0)
-                r = SCPE_IOERR;
+                r = SCPE_OPENERR;
             else
                 buf.len += l;
         }
 
         /* Allocate space for some more cards if needed */
-        if (data->hopper_size == 0) {
-            data->hopper_size = DECK_SIZE;
-            data->hopper_cards = 0;
-            data->images = (uint16 (*)[1][80])malloc(data->hopper_size *
-                                      sizeof(*(data->images)));
-            memset(&data->images[data->hopper_cards], 0,
-                       (data->hopper_size - data->hopper_cards) *
-                             sizeof(*(data->images)));
-        } else if (data->hopper_cards >= data->hopper_size) {
+        if (data->hopper_cards >= data->hopper_size) {
             data->hopper_size += DECK_SIZE;
             data->images = (uint16 (*)[1][80])realloc(data->images,
                        data->hopper_size * sizeof(*(data->images)));
@@ -922,8 +940,8 @@ _sim_read_deck(UNIT * uptr, int eof)
         cards++;
         if (_sim_parse_card(uptr, dptr, &buf, &(*data->images)[data->hopper_cards])
                 != SCPE_OK) {
-            r = SCPE_BARE_STATUS(sim_messagef(SCPE_OPENERR, "%s: %s Error (%s) in card %d\n",
-                   sim_uname(uptr), uptr->filename, sim_error_text(r), cards));
+            r = sim_messagef(SCPE_OPENERR, "%s: %s Error (%s) in card %d\n",
+                   sim_uname(uptr), uptr->filename, sim_error_text(r), cards);
         }
         data->hopper_cards++;
         /* Move data to start at begining of buffer */
@@ -939,15 +957,7 @@ _sim_read_deck(UNIT * uptr, int eof)
     if (r == SCPE_OK) {
        if (eof) {
           /* Allocate space for some more cards if needed */
-          if (data->hopper_size == 0) {
-              data->hopper_size = DECK_SIZE;
-              data->hopper_cards = 0;
-              data->images = (uint16 (*)[1][80])malloc(data->hopper_size *
-                                        sizeof(*(data->images)));
-              memset(&data->images[data->hopper_cards], 0,
-                       (data->hopper_size - data->hopper_cards) *
-                             sizeof(*(data->images)));
-          } else if (data->hopper_cards >= data->hopper_size) {
+          if (data->hopper_cards >= data->hopper_size) {
               data->hopper_size += DECK_SIZE;
               data->images = (uint16 (*)[1][80])realloc(data->images,
                          data->hopper_size * sizeof(*(data->images)));
@@ -960,7 +970,6 @@ _sim_read_deck(UNIT * uptr, int eof)
           (*data->images)[data->hopper_cards][0] = CARD_EOF;
           data->hopper_cards++;
        }
-       (*data->images)[data->hopper_cards][0] |= CARD_LAST;
     }
     return r;
 }
@@ -1162,7 +1171,7 @@ t_stat sim_card_show_fmt (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 t_stat
 sim_card_attach(UNIT * uptr, CONST char *cptr)
 {
-    t_stat               r = SCPE_OK;;
+    t_stat               r = SCPE_OK;
     int                  eof = 0;
     struct card_context *data;
     char                 gbuf[30];
@@ -1172,28 +1181,30 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
     t_addr              saved_pos;
     static int          ebcdic_init = 0;
 
-    if (strchr (cptr, ',')) {       /* Restoring Attach list of files? */
+    if ((uptr->flags & UNIT_RO) &&      /* Attaching a Reader */
+            strchr (cptr, ',')) {       /* Restoring Attach list of files? */
         char tbuf[10*CBUFSIZE];
         char *tptr = tbuf;
         int32 saved_switches = sim_switches;
 
         strlcpy (tbuf, cptr, sizeof(tbuf));
         tptr = strtok (tptr, ",");
-        sim_switches |= SWMASK('S');
         while (tptr) {
             cptr = tptr;
             while (isspace(*cptr))
                 ++cptr;
             r = sim_card_attach (uptr, cptr);
-            if (SCPE_BARE_STATUS(r) != SCPE_OK)
+            if (r != SCPE_OK)
                 return r;
             tptr = strtok (NULL, ",");
             sim_switches = saved_switches & ~SWMASK('F');
+            sim_switches |= SWMASK('S');
         }
         sim_switches = saved_switches;
         return SCPE_OK;
     }
 
+    cptr = get_sim_sw (cptr);                               /* Pickup optional format specifier during RESTORE */
     if (sim_switches & SWMASK ('F')) {                      /* format spec? */
         cptr = get_glyph (cptr, gbuf, 0);                   /* get spec */
         if (*cptr == 0) return SCPE_2FARG;                  /* must be more */
@@ -1259,15 +1270,15 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
     }
 
     if (uptr->flags & UNIT_RO) {            /* Card Reader? */
-        int     cards = data->hopper_cards;
+        int     previous_cards = data->hopper_cards;
 
         /* Check if we should append to end of existing */
         if ((sim_switches & SWMASK ('S')) == 0) {
+           previous_cards = 0;
            data->hopper_cards = 0;
            data->hopper_size = 0;
            data->punch_count = 0;
-           if (data->images != NULL)
-              free(data->images);
+           free(data->images);
            data->images = NULL;
            free(saved_filename);
            saved_filename = NULL;
@@ -1302,8 +1313,8 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
                 uptr->filename = (char *)malloc (32 + strlen (cptr));
                 sprintf (uptr->filename, "%s-F %s %s", (eof)?"-E ": "", fmt, cptr);
             }
-            r = SCPE_BARE_STATUS(sim_messagef(SCPE_OK, "%s: %d card Deck Loaded from %s\n",
-                       sim_uname(uptr), data->hopper_cards - cards, cptr));
+            r = sim_messagef(SCPE_OK, "%s: %d card Deck Loaded from %s\n",
+                       sim_uname(uptr), data->hopper_cards - previous_cards, cptr);
         } else {
             if (uptr->dynflags & UNIT_ATTMULT)
                 uptr->flags |= UNIT_ATT;
@@ -1322,22 +1333,23 @@ sim_card_detach(UNIT * uptr)
     if (uptr->card_ctx != 0) {
         struct card_context * data = (struct card_context *)uptr->card_ctx;
         /* No clear any existing decks on stack */
-        data->hopper_cards = 0;
-        data->hopper_size = 0;
-        if (data->images != NULL)
-           free(data->images);
-        data->images = NULL;
+        free(data->images);
         free(uptr->card_ctx);
         uptr->card_ctx = 0;
     }
-    if (uptr->flags & UNIT_RO)             /* Card Reader? */
+    if (uptr->flags & UNIT_RO) {           /* Card Reader? */
+       free(uptr->filename);
+       uptr->filename = NULL;
+       uptr->flags &= ~UNIT_ATT;
+       uptr->dynflags &= ~UNIT_ATTMULT;
        return SCPE_OK;                     /* Already detached */
+    }
     return detach_unit(uptr);
 }
 
 t_stat sim_card_attach_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-    fprintf (st, "%s Card Attach Help\n\n", dptr->name);
+    fprintf (st, "%s Card %sAttach Help\n\n", dptr->name, (uptr->flags & UNIT_RO) ? "Reader " : "Punch ");
     if (0 == (uptr-dptr->units)) {
         if (dptr->numunits > 1) {
             uint32 i;
@@ -1361,6 +1373,13 @@ t_stat sim_card_attach_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, cons
         fprintf (st, "    -E          Return EOF after deck read\n");
         fprintf (st, "    -S          Append deck to cards currently waiting to be read\n");
     }
+    return SCPE_OK;
+}
+
+#else
+
+t_stat sim_card_attach_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
+{
     return SCPE_OK;
 }
 
