@@ -103,7 +103,7 @@ DEVICE              cdr_dev = {
     "CDR", cdr_unit, NULL, cdr_mod,
     NUM_DEVS_CDR, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, &cdr_boot, &cdr_attach, &cdr_detach,
-    &cdr_dib, DEV_UADDR | DEV_DISABLE | DEV_DEBUG, 0, crd_debug
+    &cdr_dib, DEV_UADDR | DEV_DISABLE | DEV_DEBUG | DEV_CARD, 0, crd_debug
 };
 
 

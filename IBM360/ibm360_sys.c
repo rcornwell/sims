@@ -86,6 +86,7 @@ DEBTAB              dev_debug[] = {
     {"EXP", DEBUG_EXP, "Show exception information"},
     {"POS", DEBUG_POS, "Dasd positioning information"},
     {"INST", DEBUG_INST, "Show instruction execution"},
+    {"CDATA", DEBUG_CDATA, "Show channel data"},
     {0, 0}
 };
 

@@ -99,6 +99,7 @@
 #define DK_WR_CKD          0x1d       /* Write count, key and data */
 #define DK_WR_SCKD         0x01       /* Write special count, key and data */
 #define DK_ERASE           0x11       /* Erase to end of track */
+#define DK_SETSECT         0x23       /* Set sector */
 #define DK_MT              0x80       /* Multi track flag */
 
 #define DK_INDEX           0x0100     /* Index seen in command */
@@ -427,16 +428,26 @@ t_stat dasd_srv(UNIT * uptr)
     switch(state) {
     case DK_POS_INDEX:             /* At Index Mark */
          /* Read and multi-track advance to next head */
-         if ((uptr->u3 & 0x83) == 0x82) {
-             sim_debug(DEBUG_DETAIL, dptr, "adv head unit=%d %02x %d %d\n", unit, state,
-                   data->tpos, uptr->u4 & 0xff);
+         if ((uptr->u3 & 0x83) == 0x82 || (uptr->u3 & 0x83) == 0x81) {
+             sim_debug(DEBUG_DETAIL, dptr, "adv head unit=%d %02x %d %d %02x\n", unit, state,
+                   data->tpos, uptr->u4 & 0xff, data->filemsk);
+             uptr->u4 ++;
+             if ((uptr->u4 & 0xff) >= disk_type[type].heads) {
+                 sim_debug(DEBUG_DETAIL, dptr, "end cyl unit=%d %02x %d\n", unit, state,
+                              data->tpos);
+                 uptr->u5 = (SNS_ENDCYL << 8);
+                 data->tstart = 0;
+                 uptr->u4 &= ~0xff;
+                 uptr->u3 &= ~0xff;
+                 chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                 goto index;
+             }
              if ((data->filemsk & DK_MSK_SK) == DK_MSK_SKNONE) {
                  uptr->u5 |= (SNS_WRP << 8);
                  uptr->u3 &= ~0xff;
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                  goto index;
              }
-             uptr->u4 ++;
              if ((uptr->u3 & 0x7) == 1 && (uptr->u3 & 0x60) != 0)
                  uptr->u3 &= ~DK_INDEX;
          }
@@ -491,20 +502,21 @@ index:
          break;
     case DK_POS_CNT:               /* In count (c) */
          data->tpos++;
-         if (data->count == 7) {
+         if (data->count == 0) {
              /* Check for end of track */
              if ((rec[0] & rec[1] & rec[2] & rec[3]) == 0xff) {
                 state = DK_POS_END;
                 data->state = DK_POS_END;
-             } else {
-                data->klen = rec[5];
-                data->dlen = (rec[6] << 8) | rec[7];
+             }
+             data->klen = rec[5];
+             data->dlen = (rec[6] << 8) | rec[7];
+             sim_debug(DEBUG_POS, dptr, "state count unit=%d r=%d k=%d d=%d %d\n",
+                 unit, data->rec, data->klen, data->dlen, data->tpos);
+         }
+         if (data->count == 7) {
                 data->state = DK_POS_KEY;
                 if (data->klen == 0)
                    data->state = DK_POS_DATA;
-             }
-             sim_debug(DEBUG_POS, dptr, "state count unit=%d r=%d k=%d d=%d %d\n",
-                 unit, data->rec, data->klen, data->dlen, data->tpos);
              sim_activate(uptr, 50);
          } else {
              sim_activate(uptr, 2);
@@ -633,6 +645,32 @@ index:
          uptr->u3 &= ~(0xff|DK_INDEX);
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          break;
+
+    case DK_SETSECT:
+         /* Not valid for drives before 3330 */
+         sim_debug(DEBUG_DETAIL, dptr, "setsector unit=%d\n", unit);
+         if (disk_type[type].sen_cnt > 6) {
+             if (chan_read_byte(addr, &ch)) {
+                 sim_debug(DEBUG_DETAIL, dptr, "setsector rdr\n");
+                 uptr->u6 = 0;
+                 uptr->u5 |= SNS_CMDREJ;
+                 chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                 break;
+             }
+             /* Check if valid argument */
+             if (ch < 0x80 || ch == 0xff) {
+                 /* Treat as NOP */
+                 uptr->u6 = cmd;
+                 uptr->u3 &= ~(0xff);
+                 chan_end(addr, SNS_DEVEND|SNS_CHNEND);
+                 break;
+             }
+          }
+          /* Otherwise report as invalid command */
+          uptr->u6 = 0;
+          uptr->u5 |= SNS_CMDREJ;
+          chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+          break;
 
     case DK_SEEK:            /* Seek */
     case DK_SEEKCYL:         /* Seek Cylinder */
@@ -777,6 +815,7 @@ index:
              uptr->u6 = 0;
              uptr->u5 |= SNS_CMDREJ;
              chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+             break;
          }
          /* Save */
          if (disk_type[type].dev_type >= 0x30) {
@@ -788,6 +827,7 @@ index:
              uptr->u6 = 0;
              uptr->u5 |= SNS_CMDREJ;
              chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+             break;
          }
          sim_debug(DEBUG_DETAIL, dptr, "setmsk unit=%d %x\n", unit, ch);
          data->filemsk = ch;
@@ -914,8 +954,9 @@ index:
                 sim_debug(DEBUG_DETAIL, dptr, "search Key cn unit=%d %x %d %x %d %x\n",
                           unit, state, count, uptr->u4, data->rec, uptr->u6);
              if (uptr->u6 == DK_RD_CNT || uptr->u6 == 0x100
+                 || ((uptr->u6 & 0x1F) == 0x11 && data->rec != 0)
                  || ((uptr->u6 & 0x1F) == 0x11 && /* Search ID */
-               (uptr->u3 & (DK_SRCOK|DK_SHORTSRC)) == DK_SRCOK ))  {
+               (uptr->u3 & (DK_SRCOK|DK_SHORTSRC)) == DK_SRCOK))  {
                 uptr->u3 &= ~(DK_SRCOK|DK_SHORTSRC|DK_NOEQ|DK_HIGH);
                 uptr->u3 |= DK_PARAM;
              }
@@ -1037,8 +1078,8 @@ index:
          if (count == 0 && state == DK_POS_CNT && data->rec != 0) {
              uptr->u3 |= DK_PARAM;
              uptr->u3 &= ~DK_INDEX;
-             sim_debug(DEBUG_DETAIL, dptr, "RD CKD unit=%d %d k=%d d=%d %02x %04x\n",
-                 unit, data->rec, data->klen, data->dlen, data->state,
+             sim_debug(DEBUG_DETAIL, dptr, "RD CKD unit=%d %d k=%d d=%d %02x %04x %04x\n",
+                 unit, data->rec, data->klen, data->dlen, data->state, data->dlen,
                  8 + data->klen + data->dlen);
          }
          goto rd;
@@ -1048,8 +1089,8 @@ index:
          if (count == 0 && state == DK_POS_KEY) {
              uptr->u3 |= DK_PARAM;
              uptr->u3 &= ~DK_INDEX;
-             sim_debug(DEBUG_DETAIL, dptr, "RD KD unit=%d %d k=%d d=%d %02x %04x\n",
-                 unit, data->rec, data->klen, data->dlen, data->state,
+             sim_debug(DEBUG_DETAIL, dptr, "RD KD unit=%d %d k=%d d=%d %02x %04x %04x\n",
+                 unit, data->rec, data->klen, data->dlen, data->state, data->dlen,
                  8 + data->klen + data->dlen);
          }
          goto rd;
@@ -1059,8 +1100,8 @@ index:
          if (count == 0 && state == DK_POS_DATA) {
              uptr->u3 |= DK_PARAM;
              uptr->u3 &= ~DK_INDEX;
-             sim_debug(DEBUG_DETAIL, dptr, "RD D unit=%d %d k=%d d=%d %02x %04x %d\n",
-                 unit, data->rec, data->klen, data->dlen, data->state,
+             sim_debug(DEBUG_DETAIL, dptr, "RD D unit=%d %d k=%d d=%d %02x %04x %04x %d\n",
+                 unit, data->rec, data->klen, data->dlen, data->state, data->dlen,
                  8 + data->klen + data->dlen, count);
          }
 
@@ -1421,8 +1462,8 @@ dasd_format(UNIT * uptr) {
         if ((cyl % 10) == 0)
            fputc('.', stderr);
     }
-    sim_fseek(uptr->fileref, sizeof(struct dasd_header), SEEK_SET);
-    sim_fread(data->cbuf, 1, tsize, uptr->fileref);
+    (void)sim_fseek(uptr->fileref, sizeof(struct dasd_header), SEEK_SET);
+    (void)sim_fread(data->cbuf, 1, tsize, uptr->fileref);
     data->cpos = sizeof(struct dasd_header);
     data->ccyl = 0;
     data->ccyl = 0;

@@ -66,7 +66,6 @@ uint8        interval_irq = 0;     /* Interval timer IRQ */
 #define MCHECK      0x04           /* Machine check flag */
 #define WAIT        0x02
 #define PROBLEM     0x01           /* Problem state */
-#define ILMASK      0xC0           /* Instruction length mask */
 
 #define FIXOVR      0x08           /* Fixed point overflow */
 #define DECOVR      0x04           /* Decimal overflow */
@@ -110,11 +109,18 @@ uint8        interval_irq = 0;     /* Interval timer IRQ */
 #define IRC_SIGNIF  0x000e         /* Significance error */
 #define IRC_FPDIV   0x000f         /* Floating pointer divide */
 
+#define AMASK       0x00ffffff     /* Mask address bits */
 #define MSIGN       0x80000000     /* Minus sign */
 #define MMASK       0x00ffffff     /* Mantissa mask */
 #define EMASK       0x7f000000     /* Exponent mask */
 #define XMASK       0x0fffffff     /* Working FP mask */
 #define CMASK       0xf0000000     /* Carry mask */
+
+#define R1(x)   (((x)>>4) & 0xf)
+#define R2(x)   ((x) & 0xf)
+#define B1(x)   (((x) >> 12) & 0xf)
+#define D1(x)   ((x) & 0xfff)
+#define X2(x)   R2(x)
 
 int hst_lnt;
 int hst_p;
@@ -285,7 +291,7 @@ int  ReadFull(uint32 addr, uint32 *data) {
      uint8   k;
 
      /* Ignore high order bits */
-     addr &= 0xffffff;
+     addr &= AMASK;
      if (addr >= MEMSIZE) {
         storepsw(OPPSW, IRC_ADDR);
         return 1;
@@ -315,6 +321,7 @@ int  ReadFull(uint32 addr, uint32 *data) {
         temp = M[addr];
      }
      *data = M[addr];
+    sim_debug(DEBUG_DATA, &cpu_dev, "rd fu %08x %08x ", addr<<2, *data);
      return 0;
 }
 
@@ -324,6 +331,7 @@ int ReadByte(uint32 addr, uint32 *data) {
         return 1;
      *data >>= 8 * (3 - (addr & 0x3));
      *data &= 0xff;
+    sim_debug(DEBUG_DATA, &cpu_dev, "rd by %08x %08x ", addr, *data);
      return 0;
 }
 
@@ -338,6 +346,7 @@ int ReadHalf(uint32 addr, uint32 *data) {
      *data &= 0xffff;
      if (*data & 0x8000)
         *data |= 0xffff0000;
+    sim_debug(DEBUG_DATA, &cpu_dev, "rd hf %08x %08x ", addr, *data);
      return 0;
 }
 
@@ -345,16 +354,13 @@ int WriteFull(uint32 addr, uint32 data) {
      int     offset;
      uint8   k;
      /* Ignore high order bits */
-     addr &= 0xffffff;
+     addr &= AMASK;
      if (addr >= MEMSIZE) {
         storepsw(OPPSW, IRC_ADDR);
         return 1;
      }
 
-    sim_debug(DEBUG_INST, &cpu_dev, "wr fu %08x %08x ", addr, data);
-     if ((addr & 0xfffffc) == 0x03c80) {
-        fprintf(stderr, "Error word\n\r");
-     }
+    sim_debug(DEBUG_DATA, &cpu_dev, "wr fu %08x %08x ", addr, data);
 
      offset = addr & 0x3;
      addr >>= 2;
@@ -416,15 +422,12 @@ int WriteByte(uint32 addr, uint32 data) {
      int     offset;
 
      /* Ignore high order bits */
-     addr &= 0xffffff;
+     addr &= AMASK;
      if (addr >= MEMSIZE) {
         storepsw(OPPSW, IRC_ADDR);
         return 1;
      }
-    sim_debug(DEBUG_INST, &cpu_dev, "wr by %08x %02x ", addr, data);
-     if ((addr & 0xfffffc) == 0x03c80) {
-        fprintf(stderr, "Error byte\n\r");
-     }
+    sim_debug(DEBUG_DATA, &cpu_dev, "wr by %08x %02x ", addr, data);
 
      offset = 8 * (3 - (addr & 0x3));
      addr >>= 2;
@@ -458,16 +461,13 @@ int WriteHalf(uint32 addr, uint32 data) {
      int        o;
 
      /* Ignore high order bits */
-     addr &= 0xffffff;
+     addr &= AMASK;
      if (addr >= MEMSIZE) {
         storepsw(OPPSW, IRC_ADDR);
         return 1;
      }
 
-    sim_debug(DEBUG_INST, &cpu_dev, "wr hf %08x %04x ", addr, data);
-     if ((addr & 0xfffffc) == 0x03c80) {
-        fprintf(stderr, "Error half\n\r");
-     }
+    sim_debug(DEBUG_DATA, &cpu_dev, "wr hf %08x %04x ", addr, data);
      offset = addr & 0x3;
      addr >>= 2;
 
@@ -534,12 +534,15 @@ sim_instr(void)
         uint8           fill;
         uint8           reg;
         uint8           reg1;
+        uint16          irq;
         int             e1, e2;
         int             temp, temp2;
         t_uint64        t64;
         t_uint64        t64a;
+        uint16          ops[3];
 
         reason = SCPE_OK;
+        ilc = 0;
         /* Enable timer if option set */
         if (cpu_unit.flags & FEAT_TIMER) {
             sim_activate(&cpu_unit, 100);
@@ -555,26 +558,30 @@ wait_loop:
                 return reason;
         }
 
-        irqcode = scan_chan(sysmsk);
-        if (irqcode != 0) {
+        irq= scan_chan(sysmsk);
+        if (irq!= 0) {
+            ilc = 0;
              if (loading) {
-                (void)WriteHalf(0x2, irqcode);
+                irqcode = irq;
+                (void)WriteHalf(0x2, irq);
                 loading = 0;
                 irqaddr = 0;
              } else
-                storepsw(OIOPSW, irqcode);
+                storepsw(OIOPSW, irq);
              goto supress;
         }
 
         if ((cpu_unit.flags & EXT_IRQ) && (sysmsk & 01)) {
+             ilc = 0;
              cpu_unit.flags &= ~EXT_IRQ;
              storepsw(OEPSW, 0x40);
              goto supress;
         }
 
         if (interval_irq && (sysmsk & 01)) {
+             ilc = 0;
              interval_irq = 0;
-             storepsw(OEPSW, 0x40);
+             storepsw(OEPSW, 0x80);
              goto supress;
         }
 
@@ -582,7 +589,7 @@ wait_loop:
             /* CPU IDLE */
             if (flags & WAIT && sysmsk == 0)
                return STOP_HALT;
-            sim_interval = -1;
+            sim_interval--;
             goto wait_loop;
         }
 
@@ -591,79 +598,87 @@ wait_loop:
         }
 
         if (PC & 1) {
+            ilc = 0;
             storepsw(OPPSW, IRC_SPEC);
             goto supress;
         }
 
- //       if ((PC & 0xFFFFF0) != 0xA10) {
         if (hst_lnt) {
              hst_p = hst_p + 1;
              if (hst_p >= hst_lnt)
                 hst_p = 0;
              hst[hst_p].pc = PC | HIST_PC;
         }
-//}
 
+        sim_debug(DEBUG_INST, &cpu_dev, "PSW=%08x %08x  ", (((uint32)sysmsk) << 24) |
+            (((uint32)st_key) << 16) | (((uint32)flags) << 16) | ((uint32)irqcode),
+             (((uint32)ilc) << 30) | (((uint32)cc) << 28) | (((uint32)pmsk) << 24) | PC);
         ilc = 0;
-        if (ReadHalf(PC, &src1))
+        if (ReadHalf(PC, &dest))
             goto supress;
+        ops[0] = dest;
         ilc = 1;
         if (hst_lnt)
-             hst[hst_p].inst[0] = src1;
-        if ((PC & 0xFFFFF0) != 0xBA0)
-        sim_debug(DEBUG_INST, &cpu_dev, "%08x %04x ", PC, src1 & 0xFFFF);
+             hst[hst_p].inst[0] = ops[0];
         PC += 2;
-        pmsk &= ~ILMASK;
-        reg = (uint8)(src1 & 0xff);
-        reg1 = (reg >> 4) & 0xf;
-        op = (uint8)(src1 >> 8);
-         pmsk += 0x40;
+        reg = (uint8)(ops[0] & 0xff);
+        reg1 = R1(reg);
+        op = (uint8)(ops[0] >> 8);
         /* Check if RX, RR, SI, RS, SS opcode */
         if (op & 0xc0) {
-            pmsk += 0x40;
-            if (ReadHalf(PC, &addr1))
+            if (ReadHalf(PC, &dest))
                 goto supress;
+            ops[1] = dest;
             ilc = 2;
             PC += 2;
             if (hst_lnt)
-                hst[hst_p].inst[1] = addr1;
-        if ((PC & 0xFFFFF0) != 0xBA0)
-                sim_debug(DEBUG_INST, &cpu_dev, "%04x ", addr1 & 0xFFFF);
+                hst[hst_p].inst[1] = ops[1];
             /* Check if SS */
             if ((op & 0xc0) == 0xc0) {
-                pmsk += 0x40;
-                if (ReadHalf(PC, &addr2))
+                if (ReadHalf(PC, &dest))
                     goto supress;;
+                ops[2] = dest;
                 PC += 2;
                 ilc = 3;
                 if (hst_lnt)
-                     hst[hst_p].inst[2] = addr2;
-        if ((PC & 0xFFFFF0) != 0xBA0)
-                sim_debug(DEBUG_INST, &cpu_dev, "%04x ", addr2 & 0xFFFF);
+                     hst[hst_p].inst[2] = ops[2];
             }
         }
 
-        if ((PC & 0xFFFFF0) != 0xBA0)
-        sim_debug(DEBUG_INST, &cpu_dev, " -> ");
+        if (sim_deb && (cpu_dev.dctrl & DEBUG_INST)) {
+           sim_debug(DEBUG_INST, &cpu_dev, "INST=%04x", ops[0]);
+           if (ops[0] & 0xc000) {
+               sim_debug(DEBUG_INST, &cpu_dev, "%04x",  ops[1]);
+               if ((ops[0] & 0xc000) == 0xc000)
+                   sim_debug(DEBUG_INST, &cpu_dev, "%04x", ops[2]);
+               else
+                   sim_debug(DEBUG_INST, &cpu_dev, "    ");
+           } else
+               sim_debug(DEBUG_INST, &cpu_dev, "        ");
+           sim_debug(DEBUG_INST, &cpu_dev, "    ");
+           fprint_inst(sim_deb, ops);
+        }
+
         /* Add in history here */
 opr:
+
+        /* If RX or RS or SS SI etc compute first address */
         if (op & 0xc0) {
             uint32        temp;
 
-            temp = addr1 & 0xf000;
-            addr1 &= 0xfff;
+            temp = B1(ops[1]);
+            addr1 = D1(ops[1]);
             if (temp)
-                addr1 += regs[(temp >> 12) & 0xf];
+                addr1 = (addr1 + regs[temp]) & AMASK;
             /* Handle RX type operands */
-            if ((op & 0x80) == 0 && (reg & 0xf) != 0)
-                addr1 += regs[reg & 0xf];
-            addr1 &= 0xffffff;
+            if ((op & 0x80) == 0 && X2(reg) != 0)
+                addr1 = (addr1 + regs[X2(reg)]) & AMASK;
+            /* Check if SS */
             if ((op & 0xc0) == 0xc0) {
-                temp = addr2 & 0xf000;
-                addr2 &= 0xfff;
+                temp = B1(ops[2]);
+                addr2 = D1(ops[2]);
                 if (temp)
-                    addr2 += regs[(temp >> 12) & 0xf];
-                addr2 &= 0xffffff;
+                    addr2 = (addr2 + regs[temp]) & AMASK;
             }
          }
 
@@ -674,10 +689,10 @@ opr:
                 goto supress;
             }
             if (reg1 & 0x9) {
-//                reason=1;
                 storepsw(OPPSW, IRC_SPEC);
                 goto supress;
             }
+            /* Load operands */
             src1 = fpregs[reg1];
             src1h = fpregs[reg1|1];
             if (op & 0x40) {
@@ -704,20 +719,21 @@ opr:
                 /* All RR opcodes */
         } else if ((op & 0xe0) == 0) {
                 src1 = regs[reg1];
-                dest = addr1 = src2 = regs[reg & 0xf];
+                dest = addr1 = src2 = regs[R2(reg)];
                 /* All RX integer ops */
         } else if ((op & 0xe0) == 0x40) {
                 dest = src1 = regs[reg1];
+                /* Read half word if 010010xx or 01001100 */
                 if ((op & 0x1c) == 0x08 || op == OP_MH)  {
                      if (ReadHalf(addr1, &src2))
                         goto supress;
+                /* Read full word if 0101xxx and not xxxx00xx (ST) */
                 } else if ((op & 0x10) && (op & 0x0c) != 0) {
                     if (ReadFull(addr1, &src2))
                         goto supress;
                 } else
                     src2 = addr1;
         }
-
         if (hst_lnt) {
              hst[hst_p].op = op;
              hst[hst_p].reg = reg;
@@ -726,15 +742,13 @@ opr:
              hst[hst_p].src1 = src1;
              hst[hst_p].src2 = src2;
         }
+        sim_debug(DEBUG_INST, &cpu_dev, "\n");
 
-        if ((PC & 0xFFFFF0) != 0xBA0)
-        sim_debug(DEBUG_INST, &cpu_dev, "%08x %08x - %08x %08x\n", addr1, addr2, src1, src2);
         /* Preform opcode */
         switch (op) {
         case OP_SPM:
                 dest = src1;
-                pmsk &= ~0xf;
-                pmsk |= (src1 >> 24) & 0xf;
+                pmsk = (src1 >> 24) & 0xf;
                 cc = (src1 >> 28) & 0x3;
                 break;
 
@@ -743,38 +757,40 @@ opr:
                 dest = (((uint32)ilc) << 30) |
                        ((uint32)(cc & 03) << 28) |
                        (((uint32)pmsk) << 24) | PC;
-                if (op != OP_BALR || (reg & 0xf))
-                    PC = addr1 & 0xffffff;
+                if (op != OP_BALR || R2(reg) != 0)
+                    PC = addr1;
                 regs[reg1] = dest;
                 break;
 
         case OP_BCTR:
         case OP_BCT:
                 dest = src1 - 1;
-                if (dest != 0 && (op != OP_BCTR || (reg & 0xf) != 0))
-                    PC = addr1 & 0xffffff;
+                if (dest != 0 && (op != OP_BCTR || R2(reg) != 0))
+                    PC = addr1;
                 regs[reg1] = dest;
                 break;
 
         case OP_BCR:
         case OP_BC:
                 dest = src1;
-                if (((0x8 >> cc) & reg1) != 0 && (op != OP_BCR || (reg & 0xf) != 0))
-                    PC = addr1 & 0xffffff;
+                if (((0x8 >> cc) & reg1) != 0 && (op != OP_BCR || R2(reg) != 0))
+                    PC = addr1;
                 break;
 
         case OP_BXH:
-                reg &= 0xf;
+                reg = R2(reg);
+                src1 = regs[reg|1];
                 dest = regs[reg1] = regs[reg1] + regs[reg];
-                if (regs[reg1] > regs[reg|1])
-                   PC = addr1 & 0xffffff;
+                if ((int32)dest > (int32)src1)
+                   PC = addr1;
                 break;
 
         case OP_BXLE:
-                reg &= 0xf;
+                reg = R2(reg);
+                src1 = regs[reg|1];
                 dest = regs[reg1] = regs[reg1] + regs[reg];
-                if (regs[reg1] <= regs[reg|1])
-                   PC = addr1 & 0xffffff;
+                if ((int32)dest <= (int32)src1)
+                   PC = addr1;
                 break;
 
         case OP_SSK:
@@ -833,14 +849,14 @@ opr:
                         goto supress;
                     if (ReadFull(addr1+4, &src2))
                         goto supress;
-        if (hst_lnt) {
-             hst_p = hst_p + 1;
-             if (hst_p >= hst_lnt)
-                hst_p = 0;
-             hst[hst_p].pc = irqaddr | HIST_LPW;
-             hst[hst_p].src1 = src1;
-             hst[hst_p].src2 = src2;
-        }
+                    if (hst_lnt) {
+                         hst_p = hst_p + 1;
+                         if (hst_p >= hst_lnt)
+                            hst_p = 0;
+                         hst[hst_p].pc = irqaddr | HIST_LPW;
+                         hst[hst_p].src1 = src1;
+                         hst[hst_p].src2 = src2;
+                    }
                     goto lpsw;
                 }
                 break;
@@ -857,8 +873,6 @@ opr:
                     storepsw(OPPSW, IRC_PRIV);
                 else
                     cc = testio(addr1);
-//                    if (cc != 0 && hst_lnt && hst_p > 2)
-//                       hst_p -= 2;
                 break;
 
         case OP_HIO:
@@ -942,6 +956,7 @@ set_cc3:
                     cc = 3;
                     if (pmsk & FIXOVR)
                        storepsw(OPPSW, IRC_FIXOVR);
+                    break;
                 }
                 goto set_cc;
 
@@ -980,7 +995,6 @@ set_cc3:
                 src1 = regs[reg1|1];
         case OP_MH:
                 fill = 0;
-                fprintf(stderr, "Mul %d x %d = ", src1, src2);
 
                 if (src1 & MSIGN) {
                     fill = 1;
@@ -1014,8 +1028,6 @@ set_cc3:
                 } else {
                     regs[reg1] = src1;
                 }
-fprintf(stderr, " %d  %08x %08x\n\r", src1, dest, src1);
-//                reason =1;
                 break;
 
         case OP_D:
@@ -1028,11 +1040,9 @@ fprintf(stderr, " %d  %08x %08x\n\r", src1, dest, src1);
                 dest = src2;
                 src2 = regs[reg1|1];
                 src1 = regs[reg1];
-//                fprintf(stderr, "Div %08x %08x / %08x  = ", src1, src2, dest);
 
                 if (dest == 0) {
                     storepsw(OPPSW, IRC_FIXDIV);
- //                   fprintf(stderr, "zero\n\r");
                     break;
                 }
                 t64 = (((t_uint64)src1) << 32) | ((t_uint64)src2);
@@ -1044,13 +1054,10 @@ fprintf(stderr, " %d  %08x %08x\n\r", src1, dest, src1);
                     fill ^= 1;
                     dest = -dest;
                 }
-  //              fprintf(stderr, "%lld / %d   ", t64, dest);
                 t64a = t64 % (t_uint64)dest;
                 t64 = t64 / (t_uint64)dest;
-   //             fprintf(stderr, "%lld , %lld   ", t64, t64a);
                 if ((t64 & 0xffffffff80000000) != 0) {
                     storepsw(OPPSW, IRC_FIXDIV);
-    //                fprintf(stderr, "zero\n\r");
                     break;
                 }
 
@@ -1092,7 +1099,6 @@ fprintf(stderr, " %d  %08x %08x\n\r", src1, dest, src1);
                     src2 = -src2;
                 regs[reg1] = src2;
                 regs[reg1|1] = src1;
-//fprintf(stderr, " %08x %08x\n\r", src1, src2);
                 break;
 
         case OP_NR:
@@ -1179,10 +1185,12 @@ char_save:
 
         case OP_TS:
                 dest = 0xff;
-                if (ReadByte(addr1, &src2))
+                if (ReadByte(addr1, &src1))
                   break;
-                cc = (src2 & 0x80) ? 1 : 0;
-                WriteByte(addr1, src1);
+                if (hst_lnt)
+                    hst[hst_p].src1 = src1;
+                cc = (src1 & 0x80) ? 1 : 0;
+                WriteByte(addr1, dest);
                 break;
 
         case OP_TM:
@@ -1192,9 +1200,10 @@ char_save:
                     hst[hst_p].src1 = dest;
                 dest &= reg;
                 if (dest != 0) {
-                    cc = 1;
                     if (reg == dest)
                         cc = 3;
+                    else
+                        cc = 1;
                  } else
                     cc = 0;
                  break;
@@ -1227,6 +1236,7 @@ char_save:
                 if (hst_lnt)
                     hst[hst_p].src1 = dest;
                 src2 = dest & MSIGN;
+                dest &= ~MSIGN;
                 addr1 &= 0x3f;
                 cc = 0;
                 while (addr1 > 0) {
@@ -1235,6 +1245,7 @@ char_save:
                         cc = 3;
                     addr1--;
                 }
+                dest |= src2;
                 if (cc == 3)
                     goto set_cc3;
                 else
@@ -1378,7 +1389,6 @@ save_dbl:
         case OP_MVN:
         case OP_MVZ:
         case OP_MVC:
-//fprintf(stderr, "Mov %x %x %x, ", op, addr1, addr2);
                 do {
                    if (ReadByte(addr2, &src1))
                        break;
@@ -1395,28 +1405,21 @@ save_dbl:
                    } else {
                        dest = src1;
                    }
-        if ((PC & 0xFFFFF0) != 0xBA0)
-                   sim_debug(DEBUG_INST, &cpu_dev, "%02x ", dest);
-//fprintf(stderr, " %x -> %x", src1, dest);
                    if (WriteByte(addr1, dest))
                        break;
                    addr1++;
                    addr2++;
                    reg--;
                 } while (reg != 0xff);
-//fprintf(stderr, "\n\r");
-                   sim_debug(DEBUG_INST, &cpu_dev, "\n");
                 break;
 
         case OP_CLC:
                 cc = 0;
-//fprintf(stderr, "CLC %d %06x %06x - ", reg+1, addr1, addr2);
                 do {
                     if (ReadByte(addr1, &src1))
                        break;
                     if (ReadByte(addr2, &src2))
                        break;
-//fprintf(stderr, "%02x %02x, ", src1 &0xff, src2 &0xff);
                     if (src1 != src2) {
                        dest = src1 - src2;
                        cc = (dest & MSIGN) ? 1 : (dest == 0) ? 0 : 2;
@@ -1426,7 +1429,6 @@ save_dbl:
                     addr2++;
                     reg--;
                 } while(reg != 0xff);
-//fprintf(stderr, "cc=%d\n\r",cc);
                 break;
 
         case OP_TR:
@@ -1451,7 +1453,7 @@ save_dbl:
                        break;
                    if (dest != 0) {
                        regs[1] &= 0xff000000;
-                       regs[1] |= addr1 & 0xffffff;
+                       regs[1] |= addr1 & AMASK;
                        regs[2] &= 0xffffff00;
                        regs[2] |= dest & 0xff;
                        cc = (reg == 0) ? 2 : 1;
@@ -1464,40 +1466,32 @@ save_dbl:
 
         case OP_PACK:
                 reg &= 0xf;
-//fprintf(stderr, "PACK %d, %d %06x %06x - ", reg, reg1, addr1, addr2);
                 addr2 += reg;
                 addr1 += reg1;
-//fprintf(stderr, " %06x %06x - ", addr1, addr2);
                 /* Flip first location */
                 if (ReadByte(addr2, &dest))
                     break;
-//fprintf(stderr, "%02x ", dest &0xff);
                 dest = ((dest >> 4) & 0xf) | ((dest << 4) & 0xf0);
                 if (WriteByte(addr1, dest))
                     break;
-//fprintf(stderr, "%02x, ", dest &0xff);
                 addr1--;
                 addr2--;
                 dest = 0;
                 while(reg != 0 && reg1 != 0) {
-//fprintf(stderr, "(%06x %06x) - ", addr1, addr2);
                      if (ReadByte(addr2, &dest))
                          goto supress;
-//fprintf(stderr, "%02x ", dest &0xff);
                      dest &= 0xf;
                      addr2--;
                      reg--;
                      if (reg != 0) {
                          if (ReadByte(addr2, &src1))
                              goto supress;
-//fprintf(stderr, "%02x ", src1 &0xff);
                          dest |= (src1 << 4) & 0xf0;
                          addr2--;
                          reg--;
                      }
                      if (WriteByte(addr1, dest))
                          goto supress;
-//fprintf(stderr, "->%02x, ", dest &0xff);
                      addr1--;
                      reg1--;
                 };
@@ -1505,22 +1499,18 @@ save_dbl:
                 while(reg1 != 0) {
                      if (WriteByte(addr1, dest))
                          break;
-//fprintf(stderr, "%02x, ", dest &0xff);
                      addr1--;
                      reg1--;
                 };
-//fprintf(stderr, "\n\r");
                 break;
 
         case OP_UNPK:
                 reg &= 0xf;
-//fprintf(stderr, "UNPK %d, %d %06x %06x - ", reg, reg1, addr1, addr2);
                 addr2 += reg;
                 addr1 += reg1;
                 if (ReadByte(addr2, &dest))
                     break;
                 dest = ((dest >> 4) & 0xf) | ((dest << 4) & 0xf0);
-//fprintf(stderr, "(%06x %06x) - %02x ", addr1, addr2, dest &0xff);
                 if (WriteByte(addr1, dest))
                     break;
                 addr1--;
@@ -1532,14 +1522,12 @@ save_dbl:
                     addr2--;
                     reg--;
                     src1 = (dest & 0xf) | src2;
-//fprintf(stderr, "(%06x %06x) - %02x ", addr1, addr2, src1);
                     if (WriteByte(addr1, src1))
                         goto supress;
                     addr1--;
                     reg1--;
                     if (reg1 != 0) {
                         src1 = ((dest >> 4) & 0xf) | src2;
-//fprintf(stderr, "(%06x %06x) - %02x ", addr1, addr2, src1);
                         if (WriteByte(addr1, src1))
                             goto supress;
                         addr1--;
@@ -1552,7 +1540,6 @@ save_dbl:
                     addr1--;
                     reg1--;
                 };
-//fprintf(stderr, "\n\r");
                 break;
 
         case OP_MVO:
@@ -1589,65 +1576,52 @@ save_dbl:
                     break;
                 if (ReadFull(addr1+4, &src1h))
                     break;
-//fprintf(stderr, "CVB: %08x %08x ", src1, src2);
                 fill = src1h & 0xf; /* Save away sign */
                 if (fill < 0xA) {
                     storepsw(OPPSW, IRC_DATA);
-//fprintf(stderr, "\n\r");
                     break;
                 }
                 if (fill == 0xB || fill == 0xD)
                     fill = 1;
                 else
                     fill = 0;
-//fprintf(stderr, "%d ", fill);
                 dest = 0;
                 /* Convert upper first */
                 for(temp = 28; temp >= 0; temp-=4) {
                     int d = (src1 >> temp) & 0xf;
-//fprintf(stderr, "%d %d ", temp, d);
                     if (d > 0xA) {
                         storepsw(OPPSW, IRC_DATA);
-//fprintf(stderr, "\n\r");
                         break;
                     }
                     dest = (dest * 10) + d;
                 }
-//fprintf(stderr, "- ");
                 /* Convert lower */
                 for(temp = 28; temp > 0; temp-=4) {
                     int d = (src1h >> temp) & 0xf;
-//fprintf(stderr, "%d %d ", temp, d);
                     if (d > 0xA) {
                         storepsw(OPPSW, IRC_DATA);
-//fprintf(stderr, "\n\r");
                         break;
                     }
                     dest = (dest * 10) + d;
                 }
                 if (dest & MSIGN) {
                     storepsw(OPPSW, IRC_FIXDIV);
-//                reason =1;
-//fprintf(stderr, "\n\r");
                     break;
                 }
                 if (fill)
                     dest = -dest;
                 regs[reg1] = dest;
-//fprintf(stderr, "%d \n\r", dest);
                 break;
 
         case OP_CVD:
                 dest = regs[reg1];
                 src1 = 0;
                 src1h = 0;
-//fprintf(stderr, "CVD: %08x ", dest);
                 if (dest & MSIGN) {
                     dest = -dest;
                     fill = 1;
                 } else
                     fill = 0;
-//fprintf(stderr, "%d ", fill);
                 temp = 4;
                 while (dest != 0) {
                     int d = dest % 10;
@@ -1657,14 +1631,12 @@ save_dbl:
                     else
                         src1h |= (d << temp);
                     temp += 4;
-//fprintf(stderr, "%d %d ", temp, d);
                 }
                 if (fill) {
                     src1h |= ((flags & ASCII)? 0xb : 0xd);
                 } else {
                     src1h |= ((flags & ASCII)? 0xa : 0xc);
                 }
-//fprintf(stderr, "-> %08x %08x\n\r", src1, src2);
 
                 if (WriteFull(addr1, src1))
                     break;
@@ -1735,19 +1707,20 @@ save_dbl:
                 }
                 if (ReadHalf(addr1, &dest))
                    break;
+                ops[0] = dest;
                 if (reg1) {
-                   dest |= src1 & 0xff;
+                   ops[0] |= src1 & 0xff;
                 }
-                reg = dest & 0xff;
-                reg1 = (reg >> 4) & 0xf;
-                op = dest >> 8;
+                reg = ops[0] & 0xff;
+                reg1 = R1(reg);
+                op = ops[0] >> 8;
                 if (hst_lnt) {
                     hst[hst_p].cc = cc;
                     hst_p = hst_p + 1;
                     if (hst_p >= hst_lnt)
                         hst_p = 0;
                     hst[hst_p].pc = addr1 | HIST_PC;
-                    hst[hst_p].inst[0] = dest;
+                    hst[hst_p].inst[0] = ops[0];
                 }
                 addr1 += 2;
                 if (op == OP_EX)
@@ -1755,19 +1728,19 @@ save_dbl:
                 /* Check if RX, RR, SI, RS, SS opcode */
                 else {
                     if (op & 0xc0) {
-                        if (ReadHalf(addr1, &src1))
+                        if (ReadHalf(addr1, &dest))
                             break;
+                        ops[1] = dest;
                         addr1+=2;
                         /* Check if SS */
                         if ((op & 0xc0) == 0xc0) {
-                            if(ReadHalf(addr1, &src2))
+                            if(ReadHalf(addr1, &dest))
                                break;
-                            addr2 = src2;
+                            ops[2] = dest;
                         }
-                        addr1 = src1;
                         if (hst_lnt) {
-                            hst[hst_p].inst[1] = addr1;
-                            hst[hst_p].inst[2] = addr2;
+                            hst[hst_p].inst[1] = ops[1];
+                            hst[hst_p].inst[2] = ops[2];
                         }
                     }
                     goto opr;
@@ -1996,7 +1969,6 @@ save_dbl:
         case OP_MXDR:
         case OP_MXD:
         default:
-        //        reason=1;
                 storepsw(OPPSW, IRC_OPR);
                 goto supress;
         }
@@ -2006,12 +1978,10 @@ save_dbl:
              hst[hst_p].cc = cc;
         }
 
-        if ((PC & 0xFFFFF0) != 0xBA0) {
-        sim_debug(DEBUG_INST, &cpu_dev, "R0=%08x R1=%08x R2=%08x R3=%08x ", regs[0], regs[1], regs[2], regs[3]);
-        sim_debug(DEBUG_INST, &cpu_dev, "R4=%08x R5=%08x R6=%08x R7=%08x\n", regs[4], regs[5], regs[6], regs[7]);
-        sim_debug(DEBUG_INST, &cpu_dev, "R8=%08x R9=%08x RA=%08x RB=%08x ", regs[8], regs[9], regs[10], regs[11]);
-        sim_debug(DEBUG_INST, &cpu_dev, "RC=%08x RD=%08x RE=%08x RF=%08x\n", regs[12], regs[13], regs[14], regs[15]);
-}
+        sim_debug(DEBUG_INST, &cpu_dev, "GR00=%08x GR01=%08x GR02=%08x GR03=%08x\n", regs[0], regs[1], regs[2], regs[3]);
+        sim_debug(DEBUG_INST, &cpu_dev, "GR04=%08x GR05=%08x GR06=%08x GR07=%08x\n", regs[4], regs[5], regs[6], regs[7]);
+        sim_debug(DEBUG_INST, &cpu_dev, "GR08=%08x GR09=%08x GR10=%08x GR11=%08x\n", regs[8], regs[9], regs[10], regs[11]);
+        sim_debug(DEBUG_INST, &cpu_dev, "GR12=%08x GR13=%08x GR14=%08x GR15=%08x\n", regs[12], regs[13], regs[14], regs[15]);
 
         if (irqaddr != 0) {
 supress:
@@ -2032,12 +2002,14 @@ lpsw:
              sysmsk = (src1 >> 24) & 0xff;
              st_key = (src1 >> 16) & 0xf0;
              flags = (src1 >> 16) & 0xf;
-             irqcode = 0;
              irqaddr = 0;
-             pmsk = (src2 >> 24) & 0xcf;
+             pmsk = (src2 >> 24) & 0xf;
              cc = (src2 >> 28) & 0x3;
-             PC = src2 & 0xffffff;
+             PC = src2 & AMASK;
              irq_pend = 1;
+             sim_debug(DEBUG_INST, &cpu_dev, "PSW=%08x %08x  ", (((uint32)sysmsk) << 24) |
+                 (((uint32)st_key) << 16) | (((uint32)flags) << 16) | ((uint32)irqcode),
+                  (((uint32)ilc) << 30) | (((uint32)cc) << 28) | (((uint32)pmsk) << 24) | PC);
         }
         sim_interval--;
     }
@@ -2067,11 +2039,12 @@ rtc_srv(UNIT * uptr)
         int32 t;
         t = sim_rtcn_calb (rtc_tps, TMR_RTC);
         sim_activate_after(uptr, 1000000/rtc_tps);
-        if (M[0x50>>2] == 0)  {
-     fprintf(stderr, "Timer %08x\n\r", M[0x50>>2]);
+        if ((M[0x50>>2] & 0xfffffc00) == 0)  {
+            sim_debug(DEBUG_INST, &cpu_dev, "TIMER IRQ %08x\n\r", M[0x50>>2]);
             interval_irq = 1;
         }
-        M[0x50>>2]--;
+        M[0x50>>2] -= 0x40;
+        sim_debug(DEBUG_INST, &cpu_dev, "TIMER = %08x\n", M[0x50>>2]);
     }
     return SCPE_OK;
 }
@@ -2088,7 +2061,7 @@ uint32 offset = 8 * (3 - (addr & 0x3));
 if (vptr == NULL)
     return SCPE_ARG;
 /* Ignore high order bits */
-addr &= 0xffffff;
+addr &= AMASK;
 if (addr >= MEMSIZE)
     return SCPE_NXM;
 addr >>= 2;
@@ -2108,7 +2081,7 @@ uint32 word;
 uint32 mask;
 
 /* Ignore high order bits */
-addr &= 0xffffff;
+addr &= AMASK;
 if (addr >= MEMSIZE)
     return SCPE_NXM;
 addr >>= 2;

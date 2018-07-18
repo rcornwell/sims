@@ -342,6 +342,7 @@ const char ebcdic_to_ascii[256];
 #define DEBUG_POS       0x0000010       /* Show dasd position data */
 #define DEBUG_INST      0x0000020       /* Show instruction execution */
 #define DEBUG_IRQ       0x0000100       /* Show IRQ requests */
+#define DEBUG_CDATA     0x0000200       /* Show channel data */
 
 extern DEBTAB dev_debug[];
 extern DEBTAB crd_debug[];
