@@ -273,7 +273,7 @@ DEVICE              mtz_dev = {
     "MT", &mta_unit[NUM_DEVS_MT * 10], NULL, mt_mod,
     NUM_UNITS_MT, 8, 15, 1, 8, 8,
     NULL, NULL, &mt_reset, &mt_boot, &mt_attach, &mt_detach,
-    &mt_dib, DEV_BUF_NUM(NUM_DEVS_MT) | DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &mt_dib, DEV_BUF_NUM(NUM_DEVS_MT) | DEV_DISABLE | DEV_DEBUG | DEV_TAPE, 0, dev_debug,
     NULL, NULL, &mt_help, NULL, NULL, &mt_description
 };
 #endif
@@ -283,7 +283,7 @@ DEVICE              mta_dev = {
     "MTA", mta_unit, NULL, mt_mod,
     NUM_UNITS_MT, 8, 15, 1, 8, 8,
     NULL, NULL, &mt_reset, &mt_boot, &mt_attach, &mt_detach,
-    &mt_dib, DEV_BUF_NUM(0) | DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &mt_dib, DEV_BUF_NUM(0) | DEV_DISABLE | DEV_DEBUG | DEV_TAPE, 0, dev_debug,
     NULL, NULL, &mt_help, NULL, NULL, &mt_description
 };
 
@@ -292,7 +292,7 @@ DEVICE              mtb_dev = {
     "MTB", &mta_unit[10], NULL, mt_mod,
     NUM_UNITS_MT, 8, 15, 1, 8, 8,
     NULL, NULL, &mt_reset, &mt_boot, &mt_attach, &mt_detach,
-    &mt_dib, DEV_BUF_NUM(1) | DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &mt_dib, DEV_BUF_NUM(1) | DEV_DISABLE | DEV_DEBUG | DEV_TAPE, 0, dev_debug,
     NULL, NULL, &mt_help, NULL, NULL, &mt_description
 };
 
@@ -301,7 +301,7 @@ DEVICE              mtc_dev = {
     "MTC", &mta_unit[20], NULL, mt_mod,
     NUM_UNITS_MT, 8, 15, 1, 8, 8,
     NULL, NULL, &mt_reset, &mt_boot, &mt_attach, &mt_detach,
-    &mt_dib, DEV_BUF_NUM(2) | DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &mt_dib, DEV_BUF_NUM(2) | DEV_DISABLE | DEV_DEBUG | DEV_TAPE, 0, dev_debug,
     NULL, NULL, &mt_help, NULL, NULL, &mt_description
 };
 
@@ -310,7 +310,7 @@ DEVICE              mtd_dev = {
     "MTD", &mta_unit[30], NULL, mt_mod,
     NUM_UNITS_MT, 8, 15, 1, 8, 36,
     NULL, NULL, &mt_reset, &mt_boot, &mt_attach, &mt_detach,
-    &mt_dib, DEV_BUF_NUM(3) | DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &mt_dib, DEV_BUF_NUM(3) | DEV_DISABLE | DEV_DEBUG | DEV_TAPE, 0, dev_debug,
     NULL, NULL, &mt_help, NULL, NULL, &mt_description
 };
 
@@ -319,7 +319,7 @@ DEVICE              mte_dev = {
     "MTE", &mta_unit[40], NULL, mt_mod,
     NUM_UNITS_MT, 8, 15, 1, 8, 8,
     NULL, NULL, &mt_reset, &mt_boot, &mt_attach, &mt_detach,
-    &mt_dib, DEV_BUF_NUM(4) | DEV_DIS | DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &mt_dib, DEV_BUF_NUM(4) | DEV_DIS | DEV_DISABLE | DEV_DEBUG | DEV_TAPE, 0, dev_debug,
     NULL, NULL, &mt_help, NULL, NULL, &mt_description
 };
 
@@ -328,7 +328,7 @@ DEVICE              mtf_dev = {
     "MTF", &mta_unit[50], NULL, mt_mod,
     NUM_UNITS_MT, 8, 15, 1, 8, 8,
     NULL, NULL, &mt_reset, &mt_boot, &mt_attach, &mt_detach,
-    &mt_dib, DEV_BUF_NUM(5) | DEV_DIS | DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &mt_dib, DEV_BUF_NUM(5) | DEV_DIS | DEV_DISABLE | DEV_DEBUG | DEV_TAPE, 0, dev_debug,
     NULL, NULL, &mt_help, NULL, NULL, &mt_description
 };
 #endif
