@@ -201,7 +201,7 @@ DEVICE              mt_dev = {
     "MTA", mt_unit, NULL, mt_mod,
     8, 8, 15, 1, 8, 8,
     NULL, NULL, &mt_reset, &mt_boot, &mt_attach, &mt_detach,
-    &mt_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &mt_dib, DEV_DISABLE | DEV_DEBUG | DEV_TAPE, 0, dev_debug,
     NULL, NULL, &mt_help, NULL, NULL, &mt_description
 };
 

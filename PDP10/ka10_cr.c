@@ -100,7 +100,7 @@ DEVICE              cr_dev = {
     "CR", &cr_unit, NULL, cr_mod,
     NUM_DEVS_CR, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, NULL, &cr_attach, &cr_detach,
-    &cr_dib, DEV_DISABLE | DEV_DEBUG, 0, crd_debug,
+    &cr_dib, DEV_DISABLE | DEV_DEBUG | DEV_CARD, 0, crd_debug,
     NULL, NULL, &cr_help, NULL, NULL, &cr_description
 };
 

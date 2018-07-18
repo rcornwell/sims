@@ -100,7 +100,7 @@ DEVICE              cp_dev = {
     "CP", &cp_unit, NULL, cp_mod,
     NUM_DEVS_CP, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, NULL, &cp_attach, &cp_detach,
-    &cp_dib, DEV_DISABLE | DEV_DEBUG, 0, crd_debug,
+    &cp_dib, DEV_DISABLE | DEV_DEBUG | DEV_CARD, 0, crd_debug,
     NULL, NULL, &cp_help, NULL, NULL, &cp_description
 };
 
