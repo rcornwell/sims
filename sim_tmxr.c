@@ -721,6 +721,7 @@ else {
         written = sim_write_sock (lp->sock, &(lp->txb[i]), length);
 
         if (written == SOCKET_ERROR) {                  /* did an error occur? */
+            lp->txdone = TRUE;
             if (lp->datagram)
                 return written;                         /* ignore errors on datagram sockets */
             else
@@ -736,8 +737,11 @@ else {
             }
         }
     }
-if ((written > 0) && (lp->txbps) && (sim_is_running))
-    lp->txnexttime = floor (sim_gtime () + ((written * lp->txdeltausecs * sim_timer_inst_per_sec ()) / USECS_PER_SECOND));
+if (written > 0) {
+    lp->txdone = FALSE;
+    if ((lp->txbps) && (sim_is_running))
+        lp->txnexttime = floor (sim_gtime () + ((written * lp->txdeltausecs * sim_timer_inst_per_sec ()) / USECS_PER_SECOND));
+    }
 return written;
 }
 
@@ -2372,6 +2376,22 @@ t_bool tmxr_tpbusyln (const TMLN *lp)
 return (0 != (lp->txppsize - lp->txppoffset));
 }
 
+/* Return transmitted data complete status */
+/* 0 - not done, 1 - just now done, -1 - previously done. */
+
+int32 tmxr_txdone_ln (TMLN *lp)
+{
+if (lp->txdone)
+    return -1;                      /* previously done */
+if ((lp->conn == 0) ||
+    (lp->txbps == 0) || 
+    (lp->txnexttime <= sim_gtime ())) {
+    lp->txdone = TRUE;              /* done now */
+    return 1;
+    }
+return 0;                           /* not done */
+}
+
 static void _mux_detach_line (TMLN *lp, t_bool close_listener, t_bool close_connecting)
 {
 if (close_listener && lp->master) {
@@ -3755,7 +3775,7 @@ pthread_mutex_unlock (&sim_tmxr_poll_lock);
 #endif
 }
 
-static t_stat _tmxr_locate_line_send_expect (const char *cptr, SEND **snd, EXPECT **exp)
+static t_stat _tmxr_locate_line_send_expect (const char *cptr, TMLN **lp, SEND **snd, EXPECT **exp)
 {
 char gbuf[CBUFSIZE];
 DEVICE *dptr;
@@ -3776,6 +3796,8 @@ for (i=0; i<tmxr_open_device_count; ++i)
         int line = (int)get_uint (cptr, 10, tmxr_open_devices[i]->lines, &r);
         if (r != SCPE_OK)
             return r;
+        if (lp)
+            *lp = &tmxr_open_devices[i]->ldsc[line];
         if (snd)
             *snd = &tmxr_open_devices[i]->ldsc[line].send;
         if (exp)
@@ -3787,12 +3809,17 @@ return SCPE_ARG;
 
 t_stat tmxr_locate_line_send (const char *cptr, SEND **snd)
 {
-return _tmxr_locate_line_send_expect (cptr, snd, NULL);
+return _tmxr_locate_line_send_expect (cptr, NULL, snd, NULL);
 }
 
 t_stat tmxr_locate_line_expect (const char *cptr, EXPECT **exp)
 {
-return _tmxr_locate_line_send_expect (cptr, NULL, exp);
+return _tmxr_locate_line_send_expect (cptr, NULL, NULL, exp);
+}
+
+t_stat tmxr_locate_line (const char *cptr, TMLN **lp)
+{
+return _tmxr_locate_line_send_expect (cptr, lp, NULL, NULL);
 }
 
 static const char *_tmxr_send_expect_line_name (const SEND *snd, const EXPECT *exp)
@@ -4191,11 +4218,11 @@ for (i=0; i<mp->lines; i++) {
         if ((tmxr_tqln(lp)) &&          /* pending output data */
             (lp->txnexttime < sim_gtime_now))/* that can be transmitted now? */
             tmxr_send_buffered_data (lp);/* flush it */
-        if (tmxr_tqln(lp) == 0)         /* no pending output data */
-            due = interval;             /* No rush */
+        if (lp->txnexttime > sim_gtime_now)
+            due = (int32)(lp->txnexttime - sim_gtime_now);
         else {
-            if (lp->txnexttime > sim_gtime_now)
-                due = (int32)(lp->txnexttime - sim_gtime_now);
+            if (tmxr_tqln(lp) == 0)         /* no pending output data */
+                due = interval;             /* No rush */
             else
                 due = sim_processing_event ? 1 : 0; /* avoid potential infinite loop if called from service routine */
             }
@@ -5363,9 +5390,9 @@ if ((dptr) && (dbits & dptr->dctrl)) {
         }
     if ((lp->rxnexttime != 0.0) || (lp->txnexttime != 0.0)) {
         if (lp->rxnexttime != 0.0)
-            sim_debug (dbits, dptr, " rxnexttime=%.0f", lp->rxnexttime);
+            sim_debug (dbits, dptr, " rxnexttime=%.0f (%.0f usecs)", lp->rxnexttime, ((lp->rxnexttime - sim_gtime ()) / sim_timer_inst_per_sec ()) * 1000000.0);
         if (lp->txnexttime != 0.0)
-            sim_debug (dbits, dptr, " txnexttime=%.0f", lp->txnexttime);
+            sim_debug (dbits, dptr, " txnexttime=%.0f (%.0f usecs)", lp->txnexttime, ((lp->txnexttime - sim_gtime ()) / sim_timer_inst_per_sec ()) * 1000000.0);
         sim_debug (dbits, dptr, "\n");
         }
     }

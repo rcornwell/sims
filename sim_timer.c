@@ -243,16 +243,16 @@ t_bool timedout = FALSE;
 clock_gettime(CLOCK_REALTIME, &done_time);
 done_time.tv_sec += (msec/1000);
 done_time.tv_nsec += 1000000*(msec%1000);
-if (done_time.tv_nsec > 1000000000) {
+if (done_time.tv_nsec >= 1000000000) {
   done_time.tv_sec += done_time.tv_nsec/1000000000;
   done_time.tv_nsec = done_time.tv_nsec%1000000000;
   }
 pthread_mutex_lock (&sim_asynch_lock);
 sim_idle_wait = TRUE;
-if (!pthread_cond_timedwait (&sim_asynch_wake, &sim_asynch_lock, &done_time))
-  sim_asynch_check = 0;                 /* force check of asynch queue now */
+if (pthread_cond_timedwait (&sim_asynch_wake, &sim_asynch_lock, &done_time))
+    timedout = TRUE;
 else
-  timedout = TRUE;
+    sim_asynch_check = 0;                 /* force check of asynch queue now */
 sim_idle_wait = FALSE;
 pthread_mutex_unlock (&sim_asynch_lock);
 if (!timedout) {
@@ -434,13 +434,22 @@ return;
 uint32 sim_os_ms_sleep_init (void)
 {
 TIMECAPS timers;
+MMRESULT mm_status;
 
-if (timeGetDevCaps (&timers, sizeof (timers)) != TIMERR_NOERROR)
+mm_status = timeGetDevCaps (&timers, sizeof (timers));
+if (mm_status != TIMERR_NOERROR) {
+    fprintf (stderr, "timeGetDevCaps() returned: 0x%X, Last Error: 0x%X\n", mm_status, GetLastError());
     return 0;
-if (timers.wPeriodMin == 0)
+    }
+if (timers.wPeriodMin == 0) {
+    fprintf (stderr, "Unreasonable MultiMedia timer minimum value of 0\n");
     return 0;
-if (timeBeginPeriod (timers.wPeriodMin) != TIMERR_NOERROR)
+    }
+mm_status = timeBeginPeriod (timers.wPeriodMin);
+if (mm_status != TIMERR_NOERROR) {
+    fprintf (stderr, "timeBeginPeriod() returned: 0x%X, Last Error: 0x%X\n", mm_status, GetLastError());
     return 0;
+    }
 atexit (sim_timer_exit);
 /* return measured actual minimum sleep time */
 return _compute_minimum_sleep ();
@@ -684,7 +693,7 @@ while (sub->tv_nsec > diff->tv_nsec) {
 diff->tv_nsec -= sub->tv_nsec;
 diff->tv_sec -= sub->tv_sec;
 /* Normalize the result */
-while (diff->tv_nsec > 1000000000) {
+while (diff->tv_nsec >= 1000000000) {
     ++diff->tv_sec;
     diff->tv_nsec -= 1000000000;
     }
@@ -705,11 +714,11 @@ t_stat sim_timer_show_idle_mode (FILE* st, UNIT* uptr, int32 val, CONST void *  
 #if defined(SIM_ASYNCH_CLOCKS)
 static int sim_timespec_compare (struct timespec *a, struct timespec *b)
 {
-while (a->tv_nsec > 1000000000) {
+while (a->tv_nsec >= 1000000000) {
     a->tv_nsec -= 1000000000;
     ++a->tv_sec;
     }
-while (b->tv_nsec > 1000000000) {
+while (b->tv_nsec >= 1000000000) {
     b->tv_nsec -= 1000000000;
     ++b->tv_sec;
     }
@@ -1055,8 +1064,15 @@ do {
         sim_os_clock_resoluton_ms = clock_diff;
     clock_last = clock_now;
     } while (clock_now < clock_start + 100);
-sim_os_tick_hz = 1000/(sim_os_clock_resoluton_ms * (sim_idle_rate_ms/sim_os_clock_resoluton_ms));
-return (sim_idle_rate_ms != 0);
+if ((sim_idle_rate_ms != 0) && (sim_os_clock_resoluton_ms != 0))
+    sim_os_tick_hz = 1000/(sim_os_clock_resoluton_ms * (sim_idle_rate_ms/sim_os_clock_resoluton_ms));
+else {
+    fprintf (stderr, "Can't properly determine host system clock capabilities.\n");
+    fprintf (stderr, "Minimum Host Sleep Time:       %u ms\n", sim_os_sleep_min_ms);
+    fprintf (stderr, "Minimum Host Sleep Incr Time:  %u ms\n", sim_os_sleep_inc_ms);
+    fprintf (stderr, "Host Clock Resolution:         %u ms\n", sim_os_clock_resoluton_ms);
+    }
+return ((sim_idle_rate_ms == 0) || (sim_os_clock_resoluton_ms == 0));
 }
 
 /* sim_timer_idle_capable - tell if the host is Idle capable and what the host OS tick size is */
@@ -1255,6 +1271,7 @@ return SCPE_OK;
 
 REG sim_timer_reg[] = {
     { DRDATAD (IDLE_CYC_MS,      sim_idle_cyc_ms,        32, "Cycles Per Millisecond"), PV_RSPC|REG_RO},
+    { DRDATAD (IDLE_STABLE,      sim_idle_stable,        32, "IDLE stability delay"), PV_RSPC},
     { DRDATAD (ROM_DELAY,        sim_rom_delay,          32, "ROM memory reference delay"), PV_RSPC|REG_RO},
     { DRDATAD (TICK_RATE_0,      rtc_hz[0],              32, "Timer 0 Ticks Per Second") },
     { DRDATAD (TICK_SIZE_0,      rtc_currd[0],           32, "Timer 0 Tick Size") },
@@ -2508,11 +2525,9 @@ for (tmr=0; tmr<=SIM_NTIMERS; tmr++)
         }
 if (sim_is_active (uptr))                               /* already active? */
     return SCPE_OK;
-if (usec_delay <= 0.0) {
-    sim_debug (DBG_QUE, &sim_timer_dev, "sim_timer_activate_after(%s, %.0f usecs) - invalid usec value\n", 
+if (usec_delay < 0.0) {
+    sim_debug (DBG_QUE, &sim_timer_dev, "sim_timer_activate_after(%s, %.0f usecs) - surprising usec value\n", 
                sim_uname(uptr), usec_delay);
-    uptr->usecs_remaining = 0.0;
-    return SCPE_ARG;
     }
 uptr->usecs_remaining = 0.0;
 /* 
