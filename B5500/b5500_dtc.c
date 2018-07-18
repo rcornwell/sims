@@ -820,7 +820,7 @@ t_stat dtc_setnl (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
             tmxr_detach_ln (&dtc_ldsc[i]);               /* completely reset line */
         }
     }
-    if (dtc_desc.lines <= newln)
+    if (dtc_desc.lines < newln)
         memset (dtc_ldsc + dtc_desc.lines, 0, sizeof(*dtc_ldsc)*(newln-dtc_desc.lines));
     dtc_desc.lines = newln;
     return dtc_reset (&dtc_dev);                         /* setup lines and auto config */
