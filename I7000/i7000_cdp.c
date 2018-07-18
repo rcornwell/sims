@@ -87,7 +87,7 @@ DEVICE              cdp_dev = {
     "CDP", cdp_unit, NULL, cdp_mod,
     NUM_DEVS_CDP, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, NULL, &cdp_attach, &cdp_detach,
-    &cdp_dib, DEV_DISABLE | DEV_DEBUG, 0, crd_debug,
+    &cdp_dib, DEV_DISABLE | DEV_DEBUG | DEV_CARD, 0, crd_debug,
     NULL, NULL, &cdp_help, NULL, NULL, &cdp_description
 };
 
