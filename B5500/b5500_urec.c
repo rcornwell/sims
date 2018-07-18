@@ -158,7 +158,7 @@ DEVICE              cdr_dev = {
     "CR", cdr_unit, NULL, cdr_mod,
     NUM_DEVS_CDR, 8, 15, 1, 8, 8,
     NULL, NULL, &cdr_ini, &cdr_boot, &cdr_attach, &cdr_detach,
-    NULL, DEV_DISABLE | DEV_DEBUG, 0, cdr_debug,
+    NULL, DEV_DISABLE | DEV_DEBUG | DEV_CARD, 0, cdr_debug,
     NULL, NULL, &cdr_help, NULL, NULL,
     &cdr_description
 };
@@ -180,7 +180,7 @@ DEVICE              cdp_dev = {
     "CP", cdp_unit, NULL, cdp_mod,
     NUM_DEVS_CDP, 8, 15, 1, 8, 8,
     NULL, NULL, &cdp_ini, NULL, &cdp_attach, &cdp_detach,
-    NULL, DEV_DISABLE | DEV_DEBUG, 0, cdr_debug,
+    NULL, DEV_DISABLE | DEV_DEBUG | DEV_CARD, 0, cdr_debug,
     NULL, NULL, &cdp_help, NULL, NULL,
     &cdp_description
 };
