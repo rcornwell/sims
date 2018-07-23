@@ -211,7 +211,7 @@ MTAB cpu_mod[] = {
     { FEAT_FLOAT, FEAT_FLOAT, "FLOAT", "FLOAT", NULL, NULL, NULL, "Floating point instruction"},
     { FEAT_UNIV, FEAT_UNIV, NULL, "UNIV", NULL, NULL, NULL, "Universal instruction"},
     { FEAT_STOR, 0, NULL, "NOSTORE", NULL, NULL, NULL},
-    { FEAT_STOR, FEAT_STOR, "STORE", "DECIMAL", NULL, NULL, NULL, "No storage alignment"},
+    { FEAT_STOR, FEAT_STOR, "STORE", "STORE", NULL, NULL, NULL, "No storage alignment"},
     { FEAT_TIMER, 0, NULL,  "NOTIMER", NULL, NULL},
     { FEAT_TIMER, FEAT_TIMER, "TIMER", "TIMER", NULL, NULL, NULL, "Interval timer"},
     { EXT_IRQ, 0, "NOEXT",  NULL, NULL, NULL},
@@ -255,6 +255,9 @@ void post_extirq() {
 
 void storepsw(uint32 addr, uint16 ircode) {
      uint32 word;
+        sim_debug(DEBUG_INST, &cpu_dev, "store %02x %d %x PSW=%08x %08x  ", addr, ilc, cc, (((uint32)sysmsk) << 24) |
+            (((uint32)st_key) << 16) | (((uint32)flags) << 16) | ((uint32)ircode),
+             (((uint32)ilc) << 30) | (((uint32)cc) << 28) | (((uint32)pmsk) << 24) | PC);
      irqaddr = addr + 0x40;
      word = (((uint32)sysmsk) << 24) |
             (((uint32)st_key) << 16) |
@@ -646,7 +649,7 @@ wait_loop:
         }
 
         if (sim_deb && (cpu_dev.dctrl & DEBUG_INST)) {
-           sim_debug(DEBUG_INST, &cpu_dev, "INST=%04x", ops[0]);
+           sim_debug(DEBUG_INST, &cpu_dev, "%d INST=%04x", ilc, ops[0]);
            if (ops[0] & 0xc000) {
                sim_debug(DEBUG_INST, &cpu_dev, "%04x",  ops[1]);
                if ((ops[0] & 0xc000) == 0xc000)
@@ -719,7 +722,8 @@ opr:
                 /* All RR opcodes */
         } else if ((op & 0xe0) == 0) {
                 src1 = regs[reg1];
-                dest = addr1 = src2 = regs[R2(reg)];
+                dest = src2 = regs[R2(reg)];
+                addr1 = dest & AMASK;
                 /* All RX integer ops */
         } else if ((op & 0xe0) == 0x40) {
                 dest = src1 = regs[reg1];
@@ -758,7 +762,7 @@ opr:
                        ((uint32)(cc & 03) << 28) |
                        (((uint32)pmsk) << 24) | PC;
                 if (op != OP_BALR || R2(reg) != 0)
-                    PC = addr1;
+                    PC = addr1 & AMASK;
                 regs[reg1] = dest;
                 break;
 
@@ -766,7 +770,7 @@ opr:
         case OP_BCT:
                 dest = src1 - 1;
                 if (dest != 0 && (op != OP_BCTR || R2(reg) != 0))
-                    PC = addr1;
+                    PC = addr1 & AMASK;
                 regs[reg1] = dest;
                 break;
 
@@ -774,7 +778,7 @@ opr:
         case OP_BC:
                 dest = src1;
                 if (((0x8 >> cc) & reg1) != 0 && (op != OP_BCR || R2(reg) != 0))
-                    PC = addr1;
+                    PC = addr1 & AMASK;
                 break;
 
         case OP_BXH:
@@ -782,7 +786,7 @@ opr:
                 src1 = regs[reg|1];
                 dest = regs[reg1] = regs[reg1] + regs[reg];
                 if ((int32)dest > (int32)src1)
-                   PC = addr1;
+                   PC = addr1 & AMASK;
                 break;
 
         case OP_BXLE:
@@ -790,7 +794,7 @@ opr:
                 src1 = regs[reg|1];
                 dest = regs[reg1] = regs[reg1] + regs[reg];
                 if ((int32)dest <= (int32)src1)
-                   PC = addr1;
+                   PC = addr1 & AMASK;
                 break;
 
         case OP_SSK:

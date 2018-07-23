@@ -9,8 +9,8 @@ DOS/360:   Will initialize disk.
            Assembly aborts with invalid instruction.
 
 OS/360:    Will initialize disk.
-           Will restore disk (with timer disabled)..
-           Will start to IPL OS/360
+           Will restore disk.
+           Can run some jobs.
 
 ibm360_cpu.c:
     Need to complete floating point and decimal instructions.
