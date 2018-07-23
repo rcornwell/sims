@@ -429,9 +429,9 @@ t_stat dasd_srv(UNIT * uptr)
     case DK_POS_INDEX:             /* At Index Mark */
          /* Read and multi-track advance to next head */
          if ((uptr->u3 & 0x83) == 0x82 || (uptr->u3 & 0x83) == 0x81) {
+             uptr->u4 ++;
              sim_debug(DEBUG_DETAIL, dptr, "adv head unit=%d %02x %d %d %02x\n", unit, state,
                    data->tpos, uptr->u4 & 0xff, data->filemsk);
-             uptr->u4 ++;
              if ((uptr->u4 & 0xff) >= disk_type[type].heads) {
                  sim_debug(DEBUG_DETAIL, dptr, "end cyl unit=%d %02x %d\n", unit, state,
                               data->tpos);
@@ -496,9 +496,9 @@ index:
              /* Check for end of track */
              if ((rec[0] & rec[1] & rec[2] & rec[3]) == 0xff)
                 data->state = DK_POS_END;
-             sim_activate(uptr, 50);
+             sim_activate(uptr, 10);
          } else
-             sim_activate(uptr, 2);
+             sim_activate(uptr, 1);
          break;
     case DK_POS_CNT:               /* In count (c) */
          data->tpos++;
@@ -517,9 +517,9 @@ index:
                 data->state = DK_POS_KEY;
                 if (data->klen == 0)
                    data->state = DK_POS_DATA;
-             sim_activate(uptr, 50);
+             sim_activate(uptr, 10);
          } else {
-             sim_activate(uptr, 2);
+             sim_activate(uptr, 1);
          }
          break;
     case DK_POS_KEY:               /* In Key area */
@@ -531,9 +531,9 @@ index:
              data->count = 0;
              count = 0;
              state = DK_POS_DATA;
-             sim_activate(uptr, 50);
+             sim_activate(uptr, 10);
          } else {
-             sim_activate(uptr, 2);
+             sim_activate(uptr, 1);
          }
          break;
     case DK_POS_DATA:              /* In Data area */
@@ -542,9 +542,9 @@ index:
              sim_debug(DEBUG_POS, dptr, "state data unit=%d %d %d\n", unit, data->rec,
                       data->count);
              data->state = DK_POS_AM;
-             sim_activate(uptr, 50);
+             sim_activate(uptr, 10);
          } else {
-             sim_activate(uptr, 2);
+             sim_activate(uptr, 1);
          }
          break;
     case DK_POS_AM:                /* Beginning of record */
@@ -559,7 +559,7 @@ index:
          /* Check for end of track */
          if ((rec[0] & rec[1] & rec[2] & rec[3]) == 0xff)
             data->state = DK_POS_END;
-         sim_activate(uptr, 75);
+         sim_activate(uptr, 20);
          break;
     case DK_POS_END:               /* Past end of data */
          data->tpos+=10;
@@ -653,21 +653,21 @@ index:
              if (chan_read_byte(addr, &ch)) {
                  sim_debug(DEBUG_DETAIL, dptr, "setsector rdr\n");
                  uptr->u6 = 0;
+                 uptr->u3 &= ~(0xff);
                  uptr->u5 |= SNS_CMDREJ;
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                  break;
              }
-             /* Check if valid argument */
-             if (ch < 0x80 || ch == 0xff) {
-                 /* Treat as NOP */
-                 uptr->u6 = cmd;
-                 uptr->u3 &= ~(0xff);
-                 chan_end(addr, SNS_DEVEND|SNS_CHNEND);
-                 break;
-             }
+             /* Treat as NOP */
+             uptr->u6 = cmd;
+             uptr->u3 &= ~(0xff);
+             chan_end(addr, SNS_DEVEND|SNS_CHNEND);
+             sim_debug(DEBUG_DETAIL, dptr, "setsector %02x\n", ch);
+             break;
           }
           /* Otherwise report as invalid command */
           uptr->u6 = 0;
+          uptr->u3 &= ~(0xff);
           uptr->u5 |= SNS_CMDREJ;
           chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
           break;
@@ -878,15 +878,7 @@ index:
     case DK_RD_CNT:          /* Read count */
          /* Wait for next address mark */
          if (state == DK_POS_AM)
-//             if (uptr->u3 & DK_PARAM) {
-//                 uptr->u5 |= (SNS_NOREC << 8);
-//                 uptr->u3 &= ~0xff;
-//                 chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
-//             }
              uptr->u3 |= DK_PARAM;
-         /* If at end of disk, index or home address, stop reading */
-//         if (state == DK_POS_END || state == DK_POS_INDEX || state == DK_POS_HA)
-//             uptr->u3 &= ~DK_PARAM;
 
          /* When we are at count segment and passed address mark */
          if (uptr->u3 & DK_PARAM && state == DK_POS_CNT && data->rec != 0) {
@@ -1086,7 +1078,8 @@ index:
 
     case DK_RD_KD:           /* Read key and data */
          /* Wait for next key */
-         if (count == 0 && state == DK_POS_KEY) {
+         if (count == 0 && ((data->klen != 0 && state == DK_POS_KEY) ||
+                            (data->klen == 0 && state == DK_POS_DATA))) {
              uptr->u3 |= DK_PARAM;
              uptr->u3 &= ~DK_INDEX;
              sim_debug(DEBUG_DETAIL, dptr, "RD KD unit=%d %d k=%d d=%d %02x %04x %04x\n",
@@ -1241,7 +1234,8 @@ rd:
 
     case DK_WR_KD:           /* Write key and data */
          /* Wait for beginning of next key */
-         if ((state == DK_POS_KEY) && count == 0) {
+         if (count == 0 && ((data->klen != 0 && state == DK_POS_KEY) ||
+                            (data->klen == 0 && state == DK_POS_DATA))) {
              /* Check if command ok based on mask */
              if ((data->filemsk & DK_MSK_WRT) == DK_MSK_INHWRT) {
                  uptr->u5 |= SNS_CMDREJ;

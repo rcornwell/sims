@@ -320,10 +320,6 @@ loop:
          word |= (FLAG_SLI<<16);
     ccw_flags[chan] = (word >> 16) & 0xffff;
     chan_byte[chan] = BUFF_EMPTY;
-    if (ccw_flags[chan] & FLAG_PCI) {
-        chan_status[chan] |= STATUS_PCI;
-        irq_pend = 1;
-    }
     /* Check invalid count */
     if (ccw_count[chan] == 0) {
         chan_status[chan] |= STATUS_PCHK;
@@ -356,6 +352,10 @@ loop:
              ccw_cmd[chan] = 0;
              irq_pend = 1;
         }
+    if (ccw_flags[chan] & FLAG_PCI) {
+        chan_status[chan] |= STATUS_PCI;
+        irq_pend = 1;
+    }
     }
     return 0;
 }
@@ -505,6 +505,11 @@ chan_end(uint16 addr, uint8 flags) {
         return;
 
     sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end(%x, %x) %x\n", addr, flags, ccw_count[chan]);
+    if (ccw_flags[chan] & FLAG_PCI) {
+        chan_status[chan] |= STATUS_PCI;
+        ccw_flags[chan] &= ~FLAG_PCI;
+        irq_pend = 1;
+    }
     if (chan_byte[chan] & BUFF_DIRTY) {
         if (writebuff(chan))
             return;
@@ -547,8 +552,11 @@ int
 store_csw(uint16 chan) {
     M[0x40 >> 2] = caw[chan];
     M[0x44 >> 2] = (((uint32)ccw_count[chan])) | ((uint32)chan_status[chan]<<16);
-    chan_status[chan] = 0;
-    chan_dev[chan] = 0;
+    if (chan_status[chan] & STATUS_PCI) {
+        chan_status[chan] &= ~STATUS_PCI;
+    } else {
+        chan_status[chan] = 0;
+    }
     sim_debug(DEBUG_EXP, &cpu_dev, "Channel store csw  %02x %06x %08x\n",
           chan, M[0x40>>2], M[0x44 >> 2]);
     return chan_dev[chan];
@@ -627,7 +635,7 @@ int testio(uint16 addr) {
         return 2;
     if (ccw_cmd[chan] == 0 && chan_status[chan] != 0) {
         store_csw(chan);
-        dev_status[addr] = 0;
+        chan_dev[chan] = 0;
         return 1;
     }
     if (dev_status[addr] != 0) {
@@ -736,6 +744,16 @@ uint16 scan_chan(uint8 mask) {
          if (i >= subchannels)
             imask = imask / 2;
 
+         /* Check if PCI pending */
+         if (chan_status[i] & STATUS_PCI) {
+                sim_debug(DEBUG_EXP, &cpu_dev, "Scan PCI(%x %x %x %x) end\n", i,
+                         chan_status[i], imask, mask);
+             if ((imask & mask) != 0) {
+                pend = chan_dev[i];
+                break;
+             }
+         }
+
          /* If channel end, check if we should continue */
          if (chan_status[i] & STATUS_CEND) {
              if (ccw_flags[i] & FLAG_CC) {
@@ -760,7 +778,6 @@ uint16 scan_chan(uint8 mask) {
               sim_debug(DEBUG_EXP, &cpu_dev, "Scan end (%x %x)\n", chan_dev[ch], pend);
               store_csw(ch);
           }
-          dev_status[pend] = 0;
      } else {
           for (pend = 0; pend < MAX_DEV; pend++) {
              if (dev_status[pend] != 0) {
