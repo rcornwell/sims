@@ -1401,7 +1401,7 @@ dasd_reset(DEVICE * dptr)
 }
 
 int
-dasd_format(UNIT * uptr) {
+dasd_format(UNIT * uptr, int flag) {
     struct dasd_header  hdr;
     struct dasd_t       *data;
     uint16              addr = GET_UADDR(uptr->u3);
@@ -1411,67 +1411,69 @@ dasd_format(UNIT * uptr) {
     int                 hd;
     int                 pos;
 
-    if (!get_yn("Initialize dasd? [Y] ", TRUE)) {
-        return 1;
-    }
-    memset(&hdr, 0, sizeof(struct dasd_header));
-    memcpy(&hdr.devid[0], "CKD_P370", 8);
-    hdr.heads = disk_type[type].heads;
-    hdr.tracksize = (disk_type[type].bpt | 0x1ff) + 1;
-    hdr.devtype = disk_type[type].dev_type;
-    (void)sim_fseek(uptr->fileref, 0, SEEK_SET);
-    sim_fwrite(&hdr, 1, sizeof(struct dasd_header), uptr->fileref);
-    if ((data = (struct dasd_t *)calloc(1, sizeof(struct dasd_t))) == 0)
-        return 1;
-    uptr->up7 = (void *)data;
-    tsize = hdr.tracksize * hdr.heads;
-    data->tsize = hdr.tracksize;
-    if ((data->cbuf = (uint8 *)calloc(tsize, sizeof(uint8))) == 0)
-        return 1;
-    for (cyl = 0; cyl <= disk_type[type].cyl; cyl++) {
-        pos = 0;
-        for (hd = 0; hd < disk_type[type].heads; hd++) {
-            int cpos = pos;
-            data->cbuf[pos++] = 0;            /* HA */
-            data->cbuf[pos++] = (cyl >> 8);
-            data->cbuf[pos++] = (cyl & 0xff);
-            data->cbuf[pos++] = (hd >> 8);
-            data->cbuf[pos++] = (hd & 0xff);
-            data->cbuf[pos++] = (cyl >> 8);   /* R0 */
-            data->cbuf[pos++] = (cyl & 0xff);
-            data->cbuf[pos++] = (hd >> 8);
-            data->cbuf[pos++] = (hd & 0xff);
-            data->cbuf[pos++] = 0;              /* Rec */
-            data->cbuf[pos++] = 0;              /* keylen */
-            data->cbuf[pos++] = 0;              /* dlen */
-            data->cbuf[pos++] = 8;              /*  */
-            pos += 8;
-            data->cbuf[pos++] = 0xff;           /* End record */
-            data->cbuf[pos++] = 0xff;
-            data->cbuf[pos++] = 0xff;
-            data->cbuf[pos++] = 0xff;
-            pos = cpos + data->tsize;
+    if (flag || get_yn("Initialize dasd? [Y] ", TRUE)) {
+        memset(&hdr, 0, sizeof(struct dasd_header));
+        memcpy(&hdr.devid[0], "CKD_P370", 8);
+        hdr.heads = disk_type[type].heads;
+        hdr.tracksize = (disk_type[type].bpt | 0x1ff) + 1;
+        hdr.devtype = disk_type[type].dev_type;
+        (void)sim_fseek(uptr->fileref, 0, SEEK_SET);
+        sim_fwrite(&hdr, 1, sizeof(struct dasd_header), uptr->fileref);
+        if ((data = (struct dasd_t *)calloc(1, sizeof(struct dasd_t))) == 0)
+            return 1;
+        uptr->up7 = (void *)data;
+        tsize = hdr.tracksize * hdr.heads;
+        data->tsize = hdr.tracksize;
+        if ((data->cbuf = (uint8 *)calloc(tsize, sizeof(uint8))) == 0)
+            return 1;
+        for (cyl = 0; cyl <= disk_type[type].cyl; cyl++) {
+            pos = 0;
+            for (hd = 0; hd < disk_type[type].heads; hd++) {
+                int cpos = pos;
+                data->cbuf[pos++] = 0;            /* HA */
+                data->cbuf[pos++] = (cyl >> 8);
+                data->cbuf[pos++] = (cyl & 0xff);
+                data->cbuf[pos++] = (hd >> 8);
+                data->cbuf[pos++] = (hd & 0xff);
+                data->cbuf[pos++] = (cyl >> 8);   /* R0 */
+                data->cbuf[pos++] = (cyl & 0xff);
+                data->cbuf[pos++] = (hd >> 8);
+                data->cbuf[pos++] = (hd & 0xff);
+                data->cbuf[pos++] = 0;              /* Rec */
+                data->cbuf[pos++] = 0;              /* keylen */
+                data->cbuf[pos++] = 0;              /* dlen */
+                data->cbuf[pos++] = 8;              /*  */
+                pos += 8;
+                data->cbuf[pos++] = 0xff;           /* End record */
+                data->cbuf[pos++] = 0xff;
+                data->cbuf[pos++] = 0xff;
+                data->cbuf[pos++] = 0xff;
+                pos = cpos + data->tsize;
+            }
+            sim_fwrite(data->cbuf, 1, tsize, uptr->fileref);
+            if ((cyl % 10) == 0)
+               fputc('.', stderr);
         }
-        sim_fwrite(data->cbuf, 1, tsize, uptr->fileref);
-        if ((cyl % 10) == 0)
-           fputc('.', stderr);
-    }
-    (void)sim_fseek(uptr->fileref, sizeof(struct dasd_header), SEEK_SET);
-    (void)sim_fread(data->cbuf, 1, tsize, uptr->fileref);
-    data->cpos = sizeof(struct dasd_header);
-    data->ccyl = 0;
-    data->ccyl = 0;
-    set_devattn(addr, SNS_DEVEND);
-    sim_activate(uptr, 100);
-    fputc('\n', stderr);
-    fputc('\r', stderr);
-    return 0;
+        (void)sim_fseek(uptr->fileref, sizeof(struct dasd_header), SEEK_SET);
+        (void)sim_fread(data->cbuf, 1, tsize, uptr->fileref);
+        data->cpos = sizeof(struct dasd_header);
+        data->ccyl = 0;
+        data->ccyl = 0;
+        set_devattn(addr, SNS_DEVEND);
+        sim_activate(uptr, 100);
+        fputc('\n', stderr);
+        fputc('\r', stderr);
+        return 0;
+    } else
+        return 1;
+  
 }
 
 t_stat
 dasd_attach(UNIT * uptr, CONST char *file)
 {
     uint16              addr = GET_UADDR(uptr->u3);
+    int                 flag = (sim_switches & SWMASK ('I')) != 0;
     t_stat              r;
     int                 i;
     struct dasd_header  hdr;
@@ -1482,16 +1484,16 @@ dasd_attach(UNIT * uptr, CONST char *file)
        return r;
 
     if (sim_fread(&hdr, 1, sizeof(struct dasd_header), uptr->fileref) !=
-          sizeof(struct dasd_header) || strncmp(&hdr.devid[0], "CKD_P370", 8) != 0) {
-        if (dasd_format(uptr)) {
+          sizeof(struct dasd_header) || strncmp(&hdr.devid[0], "CKD_P370", 8) != 0 || flag) {
+        if (dasd_format(uptr, flag)) {
             detach_unit(uptr);
             return SCPE_FMT;
         }
         return SCPE_OK;
     }
 
-    fprintf(stderr, "%8s %d %d %02x %d\n\r", hdr.devid, hdr.heads, hdr.tracksize,
-            hdr.devtype, hdr.highcyl);
+    sim_messagef(SCPE_OK, "Drive %03x=%d %d %02x %d\n\r",  addr,
+             hdr.heads, hdr.tracksize, hdr.devtype, hdr.highcyl);
     for (i = 0; disk_type[i].name != 0; i++) {
          tsize = (disk_type[i].bpt | 0x1ff) + 1;
          if (hdr.devtype == disk_type[i].dev_type && hdr.tracksize == tsize &&
@@ -1620,6 +1622,8 @@ t_stat dasd_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
         size = (10 * size) / 1024;
         fprintf(st, "      %-8s %4d.%1dMB\n", disk_type[i].name, size/10, size%10);
     }
+    fprintf (st, "Attach command switches\n");
+    fprintf (st, "    -I          Initialize the drive. No prompting.\n");
     fprint_set_help (st, dptr);
     fprint_show_help (st, dptr);
     return SCPE_OK;

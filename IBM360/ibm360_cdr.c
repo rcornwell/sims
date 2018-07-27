@@ -180,18 +180,18 @@ cdr_srv(UNIT *uptr) {
     /* Check if new card requested. */
     if ((uptr->u3 & CDR_CARD) == 0) {
        switch(sim_read_card(uptr, image)) {
-       case SCPE_EOF:
-       case SCPE_UNATT:
+       case CDSE_EOF:
+       case CDSE_EMPTY:
             chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
             uptr->u5 = SNS_INTVENT;
             uptr->u3 &= ~CDR_CMDMSK;
             return SCPE_OK;
-       case SCPE_IOERR:
+       case CDSE_ERROR:
             chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             uptr->u5 = SNS_INTVENT;
             uptr->u3 &= ~CDR_CMDMSK;
             return SCPE_OK;
-       case SCPE_OK:
+       case CDSE_OK:
             uptr->u3 |= CDR_CARD;
             if ((uptr->u3 & CDR_CMDMSK) == CDR_FEED) {
                 chan_end(addr, SNS_CHNEND|SNS_DEVEND);
