@@ -35,10 +35,6 @@
 #define UNIT_CDP        UNIT_ATTABLE | UNIT_DISABLE | MODE_029
 #define UNIT_LPR        UNIT_ATTABLE | UNIT_DISABLE
 
-/* For Card reader, when set returns end of file at end of deck. */
-/* Reset after sent to system */
-#define MODE_EOF        (0x40 << UNIT_V_CARD_MODE)
-
 #define TMR_RTC         0
 
 
@@ -149,8 +145,6 @@ MTAB                cdr_mod[] = {
     {MTAB_XTD | MTAB_VUN, 0, "FORMAT", "FORMAT",
           &sim_card_set_fmt, &sim_card_show_fmt, NULL,
           "Sets card format"},
-    {MODE_EOF, MODE_EOF, "EOF", "EOF", NULL, NULL, NULL,
-          "Causes EOF to be set when reader empty"},
     {0}
 };
 
@@ -269,15 +263,13 @@ t_stat card_cmd(uint16 cmd, uint16 dev, uint8 chan, uint16 *wc)
         /* Check if we ran out of cards */
         if (uptr->u5 & URCSTA_EOF) {
             /* If end of file, return to system */
-            if (uptr->flags & MODE_EOF) {
-                sim_debug(DEBUG_DETAIL, &cdr_dev, "cdr %d %d report eof\n", u,
-                         chan);
-                chan_set_eof(chan);
-                uptr->flags &= ~MODE_EOF;
+            if (sim_card_input_hopper_count(uptr) != 0) 
+                uptr->u5 &= ~URCSTA_EOF;
+            else {
+                /* Clear unit ready */
+                iostatus &= ~(CARD1_FLAG << u);
+                return SCPE_UNATT;
             }
-            /* Clear unit ready */
-            iostatus &= ~(CARD1_FLAG << u);
-            return SCPE_UNATT;
         }
 
         if (cmd & URCSTA_BINARY) {
@@ -335,31 +327,26 @@ cdr_srv(UNIT *uptr) {
     if (uptr->u4 == 0 && uptr->u5 & URCSTA_ACTIVE &&
                 (uptr->u5 & URCSTA_CARD) == 0) {
         switch(sim_read_card(uptr, image)) {
-        case SCPE_UNATT:
+        case CDSE_EMPTY:
              iostatus &= ~(CARD1_FLAG << u);
              uptr->u5 &= ~(URCSTA_ACTIVE);
              iostatus &= ~(CARD1_FLAG << u);
              chan_set_notrdy(chan);
              break;
-        case SCPE_EOF:
+        case CDSE_EOF:
              /* If end of file, return to system */
-             if (uptr->flags & MODE_EOF) {
-                sim_debug(DEBUG_DETAIL, &cdr_dev, "cdr %d %d set eof\n", u, chan);
-                chan_set_eof(chan);
-                uptr->flags &= ~MODE_EOF;
-             }
              uptr->u5 &= ~(URCSTA_ACTIVE);
              uptr->u5 |= URCSTA_EOF;
              chan_set_notrdy(chan);
              sim_activate(uptr, 500);
              break;
-        case SCPE_IOERR:
+        case CDSE_ERROR:
              chan_set_error(chan);
              uptr->u5 &= ~(URCSTA_ACTIVE);
              uptr->u5 |= URCSTA_EOF;
              chan_set_end(chan);
              break;
-        case SCPE_OK:
+        case CDSE_OK:
              uptr->u5 |= URCSTA_CARD;
              sim_activate(uptr, 500);
              break;
@@ -478,10 +465,6 @@ cdr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
    fprintf (st, "The system supports up to two card readers, the second one is disabled\n");
    fprintf (st, "by default. To have the card reader return the EOF flag when the deck\n");
    fprintf (st, "has finished reading do:\n");
-   fprintf (st, "    sim> SET CRn EOF\n");
-   fprintf (st, "This flag is cleared each time a deck has been read, so it must be set\n");
-   fprintf (st, "again after each deck. MCP does not require this to be set as long as\n");
-   fprintf (st, "the deck includes a ?END card\n");
    fprint_set_help(st, dptr);
    fprint_show_help(st, dptr);
    return SCPE_OK;
@@ -522,17 +505,17 @@ cdp_srv(UNIT *uptr) {
         if (uptr->u5 & URCSTA_FULL) {
               sim_debug(DEBUG_DETAIL, &cdp_dev, "cdp %d %d punch\n", u, chan);
               switch(sim_punch_card(uptr, image)) {
-              case SCPE_EOF:
-              case SCPE_UNATT:
+              case CDSE_EOF:
+              case CDSE_EMPTY:
                   sim_debug(DEBUG_DETAIL, &cdp_dev, "cdp %d %d set eof\n", u,
                                  chan);
                   chan_set_eof(chan);
                   break;
                  /* If we get here, something is wrong */
-              case SCPE_IOERR:
+              case CDSE_ERROR:
                   chan_set_error(chan);
                   break;
-              case SCPE_OK:
+              case CDSE_OK:
                   break;
               }
               uptr->u5 &= ~URCSTA_FULL;
