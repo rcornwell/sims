@@ -34,7 +34,7 @@
 #include "sim_card.h"
 
 #ifdef NUM_DEVS_CDP
-#define UNIT_CDP       UNIT_ATTABLE | UNIT_DISABLE
+#define UNIT_CDP       UNIT_ATTABLE | UNIT_DISABLE | MODE_029
 
 
 #define CHN_SNS        0x04       /* Sense command */
@@ -180,10 +180,11 @@ cdp_srv(UNIT *uptr) {
         sim_debug(DEBUG_DETAIL, &cdp_dev, "unit=%d:punch\n", u);
         switch(sim_punch_card(uptr, image)) {
         /* If we get here, something is wrong */
-        case SCPE_IOERR:
+        default:
+        sim_debug(DEBUG_DETAIL, &cdp_dev, "unit=%d:punch error\n", u);
              set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
              break;
-        default:
+        case CDSE_OK:
              set_devattn(addr, SNS_DEVEND);
              break;
         }
