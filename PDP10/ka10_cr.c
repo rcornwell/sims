@@ -175,19 +175,19 @@ cr_srv(UNIT *uptr) {
     /* Check if new card requested. */
     if ((uptr->u3 & (READING|CARD_IN_READ)) == READING) {
         switch(sim_read_card(uptr, image)) {
-        case SCPE_EOF:
+        case CDSE_EOF:
              uptr->u3 |= END_FILE;
              if (uptr->u3 & TROUBLE_EN)
                  set_interrupt(CR_DEVNUM, uptr->u3);
              return SCPE_OK;
-        case SCPE_UNATT:
+        case CDSE_EMPTY:
              return SCPE_OK;
-        case SCPE_IOERR:
+        case CDSE_ERROR:
              uptr->u3 |= TROUBLE;
              if (uptr->u3 & TROUBLE_EN)
                  set_interrupt(CR_DEVNUM, uptr->u3);
              return SCPE_OK;
-        case SCPE_OK:
+        case CDSE_OK:
              uptr->u3 |= CARD_IN_READ;
              break;
         }

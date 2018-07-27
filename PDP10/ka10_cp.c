@@ -197,15 +197,15 @@ cp_srv(UNIT *uptr) {
         uptr->u3 &= ~(PUNCH_ON|CARD_IN_PUNCH);
         uptr->u3 |= END_CARD;
         switch(sim_punch_card(uptr, image)) {
-        case SCPE_EOF:
-        case SCPE_UNATT:
+        case CDSE_EOF:
+        case CDSE_EMPTY:
             uptr->u3 |= PICK_FAIL|TROUBLE;
             break;
            /* If we get here, something is wrong */
-        case SCPE_IOERR:
+        case CDSE_ERROR:
             uptr->u3 |= EJECT_FAIL|TROUBLE;
             break;
-        case SCPE_OK:
+        case CDSE_OK:
             break;
         }
         if ((uptr->u3 & (TROUBLE|TROUBLE_EN)) == (TROUBLE|TROUBLE_EN))
