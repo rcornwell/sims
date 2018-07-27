@@ -77,11 +77,11 @@
 
 struct card_context
 {
-    int                 punch_count;     /* Number of cards punched */
+    t_addr              punch_count;     /* Number of cards punched */
     char                cbuff[1024];     /* Read in buffer for cards */
     uint8               hol_to_ascii[4096]; /* Back conversion table */
-    int                 hopper_size;     /* Size of hopper */
-    int                 hopper_cards;    /* Number of cards in hopper */
+    t_addr              hopper_size;     /* Size of hopper */
+    t_addr              hopper_cards;    /* Number of cards in hopper */
     uint16              (*images)[1][80];
 };
 
@@ -478,7 +478,7 @@ sim_hol_to_ebcdic(uint16 hol) {
 
 
 
-int
+t_addr
 sim_hopper_size(UNIT * uptr) {
     struct card_context  *data = (struct card_context *)uptr->card_ctx;
     if (data == NULL)
@@ -486,7 +486,7 @@ sim_hopper_size(UNIT * uptr) {
     return data->hopper_cards;
 }
 
-int
+t_addr
 sim_punch_count(UNIT * uptr) {
     struct card_context  *data = (struct card_context *)uptr->card_ctx;
     if (data == NULL)
@@ -494,7 +494,7 @@ sim_punch_count(UNIT * uptr) {
     return data->punch_count;
 }
 
-int
+t_addr
 sim_card_input_hopper_count(UNIT *uptr) {
     struct card_context  *data = (struct card_context *)uptr->card_ctx;
     uint16                col;
@@ -510,7 +510,7 @@ sim_card_input_hopper_count(UNIT *uptr) {
     return (int)((data->hopper_cards - uptr->pos) - ((col & CARD_EOF) ? 1 : 0));
 }
 
-int
+t_addr
 sim_card_output_hopper_count(UNIT *uptr) {
     struct card_context  *data = (struct card_context *)uptr->card_ctx;
 
@@ -521,19 +521,19 @@ sim_card_output_hopper_count(UNIT *uptr) {
 }
 
 
-t_stat
+t_cdstat
 sim_read_card(UNIT * uptr, uint16 image[80])
 {
     int                   i;
     struct card_context  *data = (struct card_context *)uptr->card_ctx;
     DEVICE               *dptr;
     uint16               (*img)[80];
-    t_stat                r = SCPE_OK;
+    t_stat                r = CDSE_OK;
 
-    if (data == NULL || data->hopper_size == 0 || (uptr->flags & UNIT_ATT) == 0)
-        return SCPE_UNATT;      /* attached? */
-    if (uptr->pos >= data->hopper_cards)
-        return SCPE_UNATT;
+    if (data == NULL || (uptr->flags & UNIT_ATT) == 0)
+        return CDSE_EMPTY;      /* attached? */
+    if (data->hopper_cards == 0 || uptr->pos >= data->hopper_cards)
+        return CDSE_EMPTY;
 
     dptr = find_dev_from_unit( uptr);
     img = &(*data->images)[uptr->pos];
@@ -563,9 +563,9 @@ sim_read_card(UNIT * uptr, uint16 image[80])
          }
     }
     if ((*img)[0] & CARD_EOF)
-        r = SCPE_EOF;
+        r = CDSE_EOF;
     else if ((*img)[0] & CARD_ERR)
-           r = SCPE_IOERR;
+           r = CDSE_ERROR;
     uptr->pos++;
     data->punch_count++;
     memcpy(image, img, 80 * sizeof(uint16));
@@ -981,6 +981,7 @@ _sim_read_deck(UNIT * uptr, int eof)
    C modifier is recognized (column binary is implemented)
 */
 
+
 t_stat
 sim_punch_card(UNIT * uptr, uint16 image[80])
 {
@@ -992,15 +993,17 @@ sim_punch_card(UNIT * uptr, uint16 image[80])
     /* Try to convert to text */
     uint8                out[512];
     int                  i;
-    int                  outp;
+    int                  outp = 0;
     int                  mode = uptr->flags & UNIT_CARD_MODE;
     int                  ok = 1;
     struct card_context *data;
     DEVICE              *dptr;
 
-    data = (struct card_context *)uptr->card_ctx;
     dptr = find_dev_from_unit(uptr);
-    outp = 0;
+    data = (struct card_context *)uptr->card_ctx;
+
+    if (data == NULL || (uptr->flags & UNIT_ATT) == 0)
+        return CDSE_EMPTY;      /* attached? */
 
     /* Fix mode if in auto mode */
     if (mode == MODE_AUTO) {
@@ -1132,7 +1135,7 @@ sim_punch_card(UNIT * uptr, uint16 image[80])
     uptr->pos = ftell (uptr->fileref);
     /* Clear image buffer */
     for (i = 0; i < 80; image[i++] = 0);
-    return SCPE_OK;
+    return CDSE_OK;
 }
 
 /* Set card format */
@@ -1270,7 +1273,7 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
     }
 
     if (uptr->flags & UNIT_RO) {            /* Card Reader? */
-        int     previous_cards = data->hopper_cards;
+        t_addr  previous_cards = data->hopper_cards;
 
         /* Check if we should append to end of existing */
         if ((sim_switches & SWMASK ('S')) == 0) {
