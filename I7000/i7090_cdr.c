@@ -164,22 +164,22 @@ t_stat cdr_srv(UNIT * uptr)
     pos = (uptr->u5 & CDRPOSMASK) >> CDRPOSSHIFT;
     if (pos == (CDRPOSMASK >> CDRPOSSHIFT)) {
         switch (sim_read_card(uptr, image)) {
-        case SCPE_UNATT:
-        case SCPE_IOERR:
+        case CDSE_EMPTY:
+        case CDSE_ERROR:
             sim_debug(DEBUG_EXP, &cdr_dev, "unit=%d Setting ATTN\n", u);
             chan_set_error(chan);
             chan_set_attn(chan);
             uptr->u5 &= ~URCSTA_READ;
             sim_activate(uptr, us_to_ticks(1000));
             return SCPE_OK;
-        case SCPE_EOF:
+        case CDSE_EOF:
             sim_debug(DEBUG_EXP, &cdr_dev, "unit=%d EOF\n", u);
             chan_set_eof(chan);
             chan_set_attn(chan);
             uptr->u5 &= ~URCSTA_READ;
             sim_activate(uptr, us_to_ticks(1000));
             return SCPE_OK;
-        case SCPE_OK:
+        case CDSE_OK:
             break;
         }
         pos = 0;
