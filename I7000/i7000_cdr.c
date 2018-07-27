@@ -199,25 +199,25 @@ cdr_srv(UNIT *uptr) {
     if (uptr->u4 == 0 && uptr->u5 & URCSTA_READ &&
                 (uptr->u5 & URCSTA_CARD) == 0) {
         switch(sim_read_card(uptr, image)) {
-        case SCPE_EOF:
+        case CDSE_EOF:
              sim_debug(DEBUG_DETAIL, &cdr_dev, "%d: EOF\n", u);
              /* Fall through */
 
-        case SCPE_UNATT:
+        case CDSE_EMPTY:
              chan_set_eof(chan);
              chan_set_attn(chan);
              chan_clear(chan, DEV_SEL);
              uptr->u5 |= URCSTA_EOF;
              uptr->u5 &= ~(URCSTA_BUSY|URCSTA_READ);
              return SCPE_OK;
-        case SCPE_IOERR:
+        case CDSE_ERROR:
              sim_debug(DEBUG_DETAIL, &cdr_dev, "%d: ERF\n", u);
              uptr->u5 |= URCSTA_ERR;
              uptr->u5 &= ~(URCSTA_BUSY|URCSTA_READ);
              chan_set_attn(chan);
              chan_clear(chan, DEV_SEL);
              return SCPE_OK;
-        case SCPE_OK:
+        case CDSE_OK:
              uptr->u5 |= URCSTA_CARD;
 #ifdef I7010
              chan_set_attn_urec(chan, cdr_dib.addr);

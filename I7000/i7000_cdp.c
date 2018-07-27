@@ -217,15 +217,15 @@ cdp_srv(UNIT *uptr) {
 #else
               switch(sim_punch_card(uptr, image)) {
 #endif
-              case SCPE_EOF:
-              case SCPE_UNATT:
+              case CDSE_EOF:
+              case CDSE_EMPTY:
                   chan_set_eof(chan);
                   break;
                  /* If we get here, something is wrong */
-              case SCPE_IOERR:
+              case CDSE_ERROR:
                   chan_set_error(chan);
                   break;
-              case SCPE_OK:
+              case CDSE_OK:
                   break;
               }
               uptr->u5 &= ~URCSTA_FULL;
