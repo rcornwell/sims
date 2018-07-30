@@ -62,11 +62,12 @@
     and the backward translation table. Which is generated from the table.
 */
 
-#if defined(USE_SIM_CARD)
 
 #include <ctype.h>
 #include "sim_defs.h"
 #include "sim_card.h"
+
+#if defined(USE_SIM_CARD)
 
 #define card_ctx up8
 
