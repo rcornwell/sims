@@ -3913,6 +3913,12 @@ fxnorm:
               if ((FLAGS & USER) == 0)
                   xct_flag = AC;
 #endif
+#if ITS
+              if (QITS && one_p_arm) {
+                  FLAGS |= ONEP;
+                  one_p_arm = 0;
+              }
+#endif
               break;
 
     case 0257:  /* MAP */

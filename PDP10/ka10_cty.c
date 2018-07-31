@@ -115,6 +115,8 @@ t_stat cty_devio(uint32 dev, uint64 *data) {
          cty_unit[0].u4 = *data & 0x7f;
          cty_unit[0].u3 &= ~TEL_RDY;
          cty_unit[0].u3 |= TEL_BSY;
+         if ((cty_unit[1].u3 & KEY_RDY) == 0)
+             clr_interrupt(dev);
          sim_activate(&cty_unit[0], cty_unit[0].wait);
          sim_debug(DEBUG_DATAIO, &cty_dev, "CTY %03o DATAO %06o\n", dev, (uint32)*data);
          break;
