@@ -760,7 +760,7 @@ t_stat mt_srv(UNIT * uptr)
                         "Read flush unit=%d %s at %d Block %d chars\n",
                          unit, (cmd == MT_RDS) ? "BCD" : "Binary", uptr->u6, reclen);
             /* Keep moving until end of block */
-            if (uptr->u6 < reclen ) {
+            if (uptr->u6 < (int32)reclen ) {
                 reclen -= uptr->u6;
                 uptr->u3 += reclen;
                 uptr->u5 |= MT_SKIP|MT_IDLE;
