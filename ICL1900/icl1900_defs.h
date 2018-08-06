@@ -175,8 +175,9 @@ t_opcode;
 #define B2             010000000
 #define B3             004000000
 #define B8             000100000
-#define B15            000040000
-#define B14            000020000
+#define B15            000001000
+#define B16            000000400
+#define B17            000000200
 #define M9             000000777
 #define M12            000007777
 #define M15            000077777
