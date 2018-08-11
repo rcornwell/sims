@@ -57,6 +57,8 @@ extern uint32           M[];                            /* Main Memory */
 
 extern DEBTAB dev_debug[];
 
+extern uint32   SR64;
+extern uint32   SR65;
 
 /* Returns from device commands */
 #define SCPE_BUSY       (1)     /* Device is active */
@@ -174,6 +176,8 @@ t_opcode;
 #define B1             020000000
 #define B2             010000000
 #define B3             004000000
+#define B4             002000000
+#define B5             001000000
 #define B8             000100000
 #define B15            000001000
 #define B16            000000400
@@ -190,6 +194,8 @@ t_opcode;
 
 #define CHAR_DEV       0            /* Device transfers via characters */
 #define WORD_DEV       1            /* Device transfers via words */
+#define SPEC_HES       2            /* Special transfer */
+#define LONG_BLK       4            /* Long block device */
 
 struct icl_dib {
        uint8       channel;         /* Channel number */
@@ -200,11 +206,13 @@ struct icl_dib {
 typedef struct icl_dib DIB;
 
 /* Hessitation operations */
-int chan_write_char(uint8 channel, uint8 data);
-int chan_read_char(uint8 channel, uint8 *data);
-int chan_write_word(uint8 channel, uint32 data);
-int chan_read_word(uint8 channel, uint32 *data);
-int chan_end(uint8 channel);
+extern void chan_send_cmd(int dev,  uint32 cmd, uint32 *resp);
+extern int chan_input_char(int dev, uint8 *data, int eor);
+extern int chan_output_char(int dev, uint8 *data, int eor);
+extern int chan_input_word(int dev, uint32 *data, int eor);
+extern int chan_output_word(int dev, uint32 *data, int eor);
+extern void chan_set_done(int dev);
+extern void chan_clr_done(int dev);
 
 /* Console tty device routines */
 extern t_stat      ctyi_cmd(uint32 cmd, uint32 *resp);

@@ -46,7 +46,7 @@ int32               sim_emax = 1;
 
 DEVICE             *sim_devices[] = {
     &cpu_dev,
-//    &cty_dev,
+    &cty_dev,
 #if NUM_DEVS_CDR > 0
     &cdr_dev,
 #endif
