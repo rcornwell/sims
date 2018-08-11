@@ -105,12 +105,9 @@ uint8               RF;                         /* Function code */
 uint32              RL;                         /* Limit register */
 uint8               RG;                         /* General register */
 uint32              RM;                         /* M field register */
-uint32              RN;                         /* Current address */
 uint32              RP;                         /* Temp register */
 uint32              RS;                         /* Temp register */
 uint32              RT;                         /* Temp register */
-uint32              MB;                         /* Memory buffer */
-uint32              MA;                         /* Memory address */
 uint8               RX;                         /* X field register */
 uint32              XR[8];                      /* Index registers */
 uint32              faccl;                      /* Floating point accumulator low */
@@ -175,6 +172,8 @@ t_stat              cpu_help(FILE *, DEVICE *, UNIT *, int32, const char *);
 t_stat              rtc_srv(UNIT * uptr);
 
 int32               rtc_tps = 60 ;
+int32               tmxr_poll = 10000;
+
 
 
 /* CPU data structures
@@ -323,13 +322,11 @@ t_stat
 sim_instr(void)
 {
     t_stat              reason;
-    uint32              temp;
-    uint32              temp2;
-    int                 x_reg;
-    int                 m;
-    int                 n;
+    uint32              temp;           /* Hol order code being obeyed */
+    int                 m;              /* Holds index register for address modification */
+    int                 n;              /* Generic short term temp register */
     int                 e1,e2;          /* Temp for exponents */
-    int                 f;
+    int                 f;              /* Used to hold flags */
 
     reason = 0;
     adrmask = (Mode & AM22) ? M22 : M15;
@@ -513,7 +510,7 @@ obey:
                          RB = RB ^ FMASK;
                          BCarry = !BCarry;
                      }
-                     temp2 = (RA & B0) != 0;
+                     n = (RA & B0) != 0;
                      RA = RA + RB + BCarry;
                      if (RF & 04) {
                         if (RF & 02)
@@ -524,7 +521,7 @@ obey:
                      } else {
                         int t2 = (RB & B0) != 0;
                         int tr = (RA & B0) != 0;
-                        if ((temp2 && t2 && !tr) || (!temp2 && !t2 && tr))
+                        if ((n && t2 && !tr) || (!n && !t2 && tr))
                            BV = 1;
                         BCarry = 0;
                      }
@@ -609,9 +606,13 @@ obey:
                      break;
 
        case OP_STOZ:         /* Store Zero */
-                     RA = 0;
+#if 0     /* Stevenage Machines */
+                      if (exe_mode)
+                         XR[RX] = RA;
+#endif
+                     RB = 0;
                      BCarry = 0;
-                     if (Mem_write(RS, &RA, 1)) {
+                     if (Mem_write(RS, &RB, 1)) {
                          goto intr;
                      }
                      break;
@@ -664,15 +665,15 @@ obey:
                      }
                      RP = RA;
                      RA = RB;
-                     temp2 = RP & 1;
+                     n = RP & 1;
                      RP >>= 1;
                      if (RF & 1)  /* Multiply and Round  */
                          RP |= B0;
                      RB = 0;
                      for(RK = 23; RK != 0; RK--) {
-                        if (temp2)
+                        if (n)
                            RB += RA;
-                        temp2 = RP & 1;
+                        n = RP & 1;
                         RP >>= 1;
                         if (RB & 1)
                            RP |= B0;
@@ -681,11 +682,11 @@ obey:
                         RB >>= 1;
                      }
 
-                     if (temp2) {
+                     if (n) {
                          RB += (RA ^ FMASK) + 1;
                      }
-                     temp2 = RP & 1;         /* Check for MPR */
-                     if (temp2 && RP & B0)
+                     n = RP & 1;         /* Check for MPR */
+                     if (n && RP & B0)
                         RB++;
                      RP >>= 1;
                      if (RF == OP_MPA) {
@@ -765,7 +766,7 @@ obey:
                      RB = XR[RX];  /* Dividend to RB/RP */
                      f =0;
 //fprintf(stderr, "DVD: %08o %08o %08o - %3o C=%08o\n\r", RA, RP, RB, RF, RC);
-                     if (RA == FMASK && RP == 1 && RB == 0)
+                     if (RA == FMASK && RP == 1 && RB == 0)  /* Flag special case */
                          f=1;
 
                      if (RA == 0) { /* Exit on zero divisor */  /* VI */
@@ -774,7 +775,7 @@ obey:
                          break;
                      }
                      BCarry = (RP & B0) != 0;
-                     temp = (RP | RB) == 0;   /* Save zero dividend */
+                     n = (RP | RB) == 0;   /* Save zero dividend */
 
                      /* Setup for specific divide order code */ /* V11 */
                      if (RF & 2) {     /* DVS */
@@ -791,20 +792,20 @@ obey:
 
                      /* First partial remainder */   /* V12 */
                      if (((RB ^ RA) & B0) == 0) {
-                         temp2 = RB + (RA ^ FMASK) + 1;
+                         RS = RB + (RA ^ FMASK) + 1;
                          RK=1;
                      } else {
-                         temp2 = RB + RA;
+                         RS = RB + RA;
                          RK=0;
                      }
-                     if (((temp2 ^ RA) & B0) != 0)
+                     if (((RS ^ RA) & B0) != 0)
                          BCarry = 1;
                      BCarry = RK != BCarry;
                      RP <<= 1;
-                     if (((temp2 ^ RA) & B0) == 0) {
+                     if (((RS ^ RA) & B0) == 0) {
                          RP |= 1;
                      }
-                     RB = temp2 << 1;
+                     RB = RS << 1;
                      if (RP & BM1)
                          RB |= 1;
                      RB &= FMASK;
@@ -813,16 +814,16 @@ obey:
 
                      /* Main divide loop */         /* V13 */
                      for (RK = 22; RK != 0; RK--) {
-                         if (((temp2 ^ RA) & B0) == 0) {
-                             temp2 = RB + (RA ^ FMASK) + 1;
+                         if (((RS ^ RA) & B0) == 0) {
+                             RS = RB + (RA ^ FMASK) + 1;
                          } else {
-                             temp2 = RB + RA;
+                             RS = RB + RA;
                          }
                          RP <<= 1;
-                         if (((temp2 ^ RA) & B0) == 0) {
+                         if (((RS ^ RA) & B0) == 0) {
                              RP |= 1;
                          }
-                         RB = temp2 << 1;
+                         RB = RS << 1;
                          if (RP & BM1)
                              RB |= 1;
                          RB &= FMASK;
@@ -831,13 +832,13 @@ obey:
                      }
 
                      /* Final product */
-                     if (((temp2 ^ RA) & B0) == 0) {   /* V14 */
-                         temp2 = RB + (RA ^ FMASK) + 1;
+                     if (((RS ^ RA) & B0) == 0) {   /* V14 */
+                         RS = RB + (RA ^ FMASK) + 1;
                      } else {
-                         temp2 = RB + RA;
+                         RS = RB + RA;
                      }
                      RP <<= 1;
-                     if (((temp2 ^ RA) & B0) == 0) {
+                     if (((RS ^ RA) & B0) == 0) {
                          RP |= 1;
                      }
                      RP &= FMASK;
@@ -856,9 +857,9 @@ obey:
 //fprintf(stderr, "DVD5: %08o %08o %08o \n\r", RA, RP, RB);
                      /* Form final partial product */
                      if (RA & B0) {
-                        temp2 = (RB + (RA ^ FMASK) + 1) & FMASK;
+                        RS = (RB + (RA ^ FMASK) + 1) & FMASK;
 //fprintf(stderr, "DVD5: %08o %08o %08o %08o\n\r", RA, RP, RB, RT);
-                        if (temp2 == 0) {
+                        if (RS == 0) {
                             RB = 0;
                             goto dvd1;
                         }
@@ -883,7 +884,7 @@ dvd1:
                          BCarry = 1;
 dvd2:
 //fprintf(stderr, "DVD7: %08o %08o %08o \n\r", RA, RP, RB);
-                     if (temp)
+                     if (n)
                          BCarry = 0;
                      if (BCarry)
                          BV = 1;
@@ -1130,15 +1131,15 @@ branch:
                     RK = RB & 01777;
                     BCarry = 0;
                     while (RK != 0) {
-                       temp2 = 0;
+                       n = 0;
                        switch (m) {
-                       case 0: temp2 = (RA & B0) != 0; break;
+                       case 0: n = (RA & B0) != 0; break;
                        case 1: break;
                        case 2:
                        case 3: temp = RA & B0;
                        }
                        RA <<= 1;
-                       RA |= temp2;
+                       RA |= n;
                        if ((m & 2) && temp != (RA & B0))
                           BV = 1;
                        RA &= FMASK;
@@ -1175,9 +1176,9 @@ branch:
                                if (RB & B0)
                                    RA |= 1;
                                RB &= M23;
-                               temp2 = (RA & B0) != 0;
+                               n = (RA & B0) != 0;
                                temp = (RA & BM1) != 0;
-                               if (temp2 != temp)
+                               if (n != temp)
                                    BV = 1;
                        }
                        RA &= FMASK;
@@ -1191,23 +1192,23 @@ branch:
        case OP_SRL:          /* Shift Right */
                     m = (RB >> 10) & 03;
                     RK = RB & 01777;
-                    temp2 = RA & B0;
+                    RT = RA & B0;
                     BCarry = 0;
                     switch(m) {
                     case 0: break;
-                    case 1: temp2 = 0; break;
+                    case 1: RT = 0; break;
                     case 2: break;
                     case 3: if (BV) {
-                                temp2 = B0 ^ temp2;
+                                RT = B0 ^ RT;
                                 BV = 0;
                             }
                     }
                     while (RK != 0) {
                        if (m == 0)
-                          temp2 = (RA & 1) ? B0 : 0;
+                          RT = (RA & 1) ? B0 : 0;
                        temp = RA & 1;
                        RA >>= 1;
-                       RA |= temp2;
+                       RA |= RT;
                        RK--;
                     }
                     if (m > 1 && temp == 1)
@@ -1220,9 +1221,9 @@ branch:
                     RK = RB & 01777;
                     RB = XR[(RX+1) & 07];
                     BCarry = 0;
-                    temp2 = RA & B0;
+                    RT = RA & B0;
                     if (m == 3 && RK != 0 && BV)  {
-                         temp2 = B0^temp2;
+                         RT = B0^RT;
                          BV = 0;
                     }
                     while (RK != 0) {
@@ -1247,7 +1248,7 @@ branch:
                                if (RA & 1)
                                   RB |= B1;
                                RA >>= 1;
-                               RA |= temp2;
+                               RA |= RT;
                        }
                        RK--;
                     }
@@ -1268,12 +1269,12 @@ branch:
                         RA = RB = 0;
                     } else if (BV) {
                         RT++;
-                        temp2 = (RA & B0) ^ B0;
+                        RP = (RA & B0) ^ B0;
                         if (RA & 1 && RF & 1)
                            RB |= B0;
                         RB >>= 1;
                         RA >>= 1;
-                        RA |= temp2;
+                        RA |= RP;
                     } else if (RA != 0 || RB != 0) {
                         /* Shift left until sign and B1 not same */
                         while ((((RA >> 1) ^ RA) & B1) == 0) {
@@ -1297,8 +1298,7 @@ branch:
                     RB += 0400;
                     if (RB & B0)  {
                         RB = RP;
-                        temp2 = (RA & M23) +1;
-                        if (temp2 & B0)
+                        if (((RA & M23) + 1) & B0)
                            RA = RB = 0;
                     }
                     RB = (RB & MMASK) | (RT & M9);
@@ -1363,6 +1363,17 @@ branch:
                      break;
 
        case OP_MODE:         /* Set Mode */
+#if 0     /* Stevenage Machines */
+                     if (exe_mode && RX == 1)
+                         temp = RB; /* Set interrupt enable mode */
+                     else
+/* On Stevenage Machines 002 -> 020 Add Datum */
+/* On Stevenage Machines 004 -> 000 unused */
+/* On Stevenage Machines 010 -> 000 unused */
+/* On Stevenage Machines 020 ->     Extended store mode */
+/* On Stevenage Machines 040 -> 000 unused */
+/* On Stevenage Machines 0100 -> Carry */
+#endif
                      if (exe_mode)
                         Mode = RB & 077;
                      else
@@ -1530,24 +1541,27 @@ branch:
                     }
 //fprintf(stderr, "FAD5: %08o %08o %08o %08o %08o\n\r", RA, RB, RC, faccl, facch);
                     /* Add the numbers */
-                    temp2 = (faccl & B0) != 0;  /* Save signs */
+                    n = (faccl & B0) != 0;  /* Save signs */
                     if (RA & B0)
-                       temp2 |= 2;
+                       n |= 2;
                     faccl += RA;
                     facch += RB;
                     if (facch & B0) {
                         facch &= M23;
                         faccl ++;
                     }
-                    temp = (faccl & B0) != 0;
+                    /* Sign of result */
+                    if ((faccl & B0) != 0)
+                       n |= 4;
 //fprintf(stderr, "FAD6: %08o %08o %08o %d %d\n\r", faccl, facch, RC, temp, temp2);
-                    if ((temp2 == 3 && temp == 0) || (temp2 == 0 && temp != 0)) {
+                    /* Result sign not equal same sign as addens */
+                    if (n == 3 || n == 4) {
                         if (faccl & 1)
                            facch |= B0;
                         faccl >>= 1;
                         facch >>= 1;
                         facch &= MMASK;
-                        if (!temp)
+                        if ((n & 4) == 0)
                            faccl |= B0;   /* Set sign */
                         e1++;
 //fprintf(stderr, "FAD6a: %08o %08o %08o %d %d\n\r", faccl, facch, RC, temp, temp2);
@@ -1579,7 +1593,7 @@ fn:
                            faccl ++;
                         facch &= M23;
                         faccl &= FMASK;
-                        temp2 = (faccl & B0) != 0;
+//                        temp2 = (faccl & B0) != 0;
                         /* renormalize if things changed */
                         if ((RX & 2) == 0 && (((faccl >> 1) ^ faccl) & B1) == 0) {
                             e1--;
@@ -1665,35 +1679,35 @@ fexp:
                         }
                     }
 //fprintf(stderr, "FMP2: %08o %08o %08o %08o %08o %03o %d %o\n\r", RA, RB, RC, faccl, facch, e1, e1, f);
-                    temp = faccl;
-                    temp2 = facch;
+                    RT = faccl;
+                    RP = facch;
                     faccl =  facch = 0; /* Clear product */
                     /* Do actual multiply */
 
                     for(RK = 37; RK != 0; RK--) {
                         /* If High order bit one, add in RB,RA */
-                        if (temp2 & B15) {
+                        if (RP & B15) {
                             facch += RB;
                             faccl += RA;
                             if (facch & B0)
                                 faccl++;
                             facch &= M23;
                         }
-                        /* Shift faccl,fach,temp,t right one */
-                        if (temp & 1)
-                            temp2 |= B0;
+                        /* Shift faccl,fach,RT,t right one */
+                        if (RT & 1)
+                            RP |= B0;
                         if (facch & 1)
-                            temp |= B0;
+                            RT |= B0;
                         if (faccl & 1)
                             facch |= B0;
-                        temp2 >>= 1;
-                        temp >>= 1;
+                        RP >>= 1;
+                        RT >>= 1;
                         facch >>= 1;
                         faccl >>= 1;
-//fprintf(stderr, "FMP3: %08o %08o %08o %08o %08o %08o %08o %02o\n\r", RA, RB, RC, faccl, facch, temp, temp2, RK);
+//fprintf(stderr, "FMP3: %08o %08o %08o %08o %08o %08o %08o %02o\n\r", RA, RB, RC, faccl, facch, RT, RP, RK);
                     }
                     /* Check if still negative multiplican */
-                    if (temp2 & B15) {
+                    if (RP & B15) {
                         facch += RB;
                         faccl += RA;
                         if (facch & B0)
@@ -1705,20 +1719,20 @@ fexp:
                     if ((RX & 2) == 0 && faccl == 0 && facch != 0) {
                         while ((faccl & B1) == 0) {
                             e1--;
-                            temp2 <<= 1;
-                            temp <<= 1;
+                            RP <<= 1;
+                            RT <<= 1;
                             facch <<= 1;
                             faccl <<= 1;
-                            if (temp2 & B0)
-                                temp |= 1;
-                            if (temp & B0)
+                            if (RP & B0)
+                                RT |= 1;
+                            if (RT & B0)
                                 facch |= 1;
                             if (facch & B0)
                                 faccl |= 1;
                             faccl &= FMASK;
                             facch &= M23;
-                            temp &= M23;
-                            temp2 &= M23;
+                            RT &= M23;
+                            RP &= M23;
                         }
                     }
                     /* Fix up if over flow */
@@ -1806,36 +1820,36 @@ fexp:
                     }
                     RA ^= M23;       /* precompliment */
                     RB ^= M23;
-                    temp2 = faccl;   /* Set dividend into upper half */
-                    temp = facch;
+                    RP = faccl;   /* Set dividend into upper half */
+                    RT = facch;
                     faccl = 0;
                     facch = 0;
                     n = 0;
                     /* DO actual divide */
                     for (RK=46; RK != 0; RK--) {
                          uint32    t0, t1;
-                         t0 = temp + RB + 1;
-                         t1 = temp2 + RA;
+                         t0 = RT + RB + 1;
+                         t1 = RP + RA;
                          if (t0 & B0)
                              t1++;
                          if (n || (t1 & B0)) {
-                             temp = t0;
-                             temp2 = t1;
+                             RT = t0;
+                             RP = t1;
                              facch |= 1;
                          }
                          facch <<= 1;
                          faccl <<= 1;
-                         temp <<= 1;
-                         temp2 <<= 1;
+                         RT <<= 1;
+                         RP <<= 1;
                          if (facch & B0)
                              faccl |= 1;
-                         if (temp & B0)
-                             temp2 |= 1;
-                         n = (temp2 & B0) != 0;
-                         temp &= M23;
-                         temp2 &= M23;
+                         if (RT & B0)
+                             RP |= 1;
+                         n = (RP & B0) != 0;
+                         RT &= M23;
+                         RP &= M23;
                          facch &= M23;
-//fprintf(stderr, "FDV3: %08o %08o %08o %08o %08o %08o %08o %02o %08o %08o %o\n\r", RA, RB, RC, faccl, facch, temp2, temp, RK,t1, t0, n);
+//fprintf(stderr, "FDV3: %08o %08o %08o %08o %08o %08o %08o %02o %08o %08o %o\n\r", RA, RB, RC, faccl, facch, RP, RT, RK,t1, t0, n);
                     }
                     /* If rounding and positive and negative result, adjust */
                     if (((RX & 2) == 0 || f == 0) && faccl & B0) {
@@ -1908,6 +1922,12 @@ fexp:
 
        case 0150:
        case 0151:
+       case 0160:   /* Stevenage machines */   /* Load accumulators */
+       case 0161:   /* Stevenage machines */   /* Store accumulators */
+       case 0162:   /* Stevenage machines */   
+       case 0163:   /* Stevenage machines */   /* Stope and Display */
+       case 0164:   /* Stevenage machines */   /* Search List N for Word X */
+       case 0165:   /* Stevenage machines */   /* Parity Search */
                     if (exe_mode) {
                         break;
                     }
@@ -1916,19 +1936,26 @@ fexp:
                          RA = 0;
                          switch(RB) {
                          case 1: RA = SR1; break;
-                         case 2: RA = SR2; break;
-                         case 3: RA = SR3; break;
-                         case 64: RA = SR64; SR64 = 0; break;
-                         case 65: RA = SR65; SR65 = 0; break;
+                         case 2: ctyi_cmd(0, &RA); break;
+                         case 3: ctyo_cmd(0, &RA); break;
+                         case 64: RA = SR64; SR64 &= 003777777; break;
+                         case 65: RA = SR65; break;
                          }
                          XR[RX] = RA;
-fprintf(stderr, "RD SR %o %08o\n\r", RB, RA);
+//fprintf(stderr, "RD SR %o %08o\n\r", RB, RA);
                          break;
                     }
                     /* Fall through */
        case 0171:            /* Write special register */
                     if (exe_mode) {
-fprintf(stderr, "WR SR %o %08o\n\r", RB, RA);
+//fprintf(stderr, "WR SR %o %08o\n\r", RB, RA);
+                         RT = 0;
+                         switch(RB) {
+                         case 2: ctyi_cmd(RA, &RT); break;
+                         case 3: ctyo_cmd(RA, &RT);  break;
+                         }
+                         XR[RX] = RT;
+
                          break;
                     }
                     /* Fall through */
@@ -1950,7 +1977,7 @@ fprintf(stderr, "WR SR %o %08o\n\r", RB, RA);
                          Mode &= ~(EJM|AM22|EXTRC);
                          Mode |= (EJM|AM22|EXTRC) & RA;
                          adrmask = (Mode & AM22) ? M22 : M15;
-//fprintf(stderr, "Load limit: %08o D:=%08o %02o\n\r", RL, RD, Mode);
+fprintf(stderr, "Load limit: %08o D:=%08o %02o\n\r", RL, RD, Mode);
 #endif
                          if (RF & 1)              /* Check if 172 or 173 order code */
                              break;
@@ -1962,7 +1989,7 @@ fprintf(stderr, "WR SR %o %08o\n\r", RB, RA);
                          if ((Mode & AM22) && (RA & B3))
                              Mode |= 1;
                          Mem_read(RD+8, &RC, 0);     /* Restore C register */
-//fprintf(stderr, "Load PC: %08o D:=%08o z=%08o\n\r", RC, RD, RA);
+fprintf(stderr, "Load PC: %08o D:=%08o z=%08o\n\r", RC, RD, RA);
                          if ((Mode & AM22) == 0 && (RA & B3))
                              Mode |= 1;
                          BV =  (RC & B0) != 0;
@@ -1976,6 +2003,15 @@ fprintf(stderr, "WR SR %o %08o\n\r", RB, RA);
                     /* Fall through */
        case 0174:            /* Send control character to peripheral */
                     if (exe_mode) {
+                         RT = RB;
+                         chan_send_cmd(RB, RA & 077, &RB);
+fprintf(stderr, "CMD  %04o %04o %08o\n\r", RT, RB, RA);
+                         m = (m == 0) ? 3 : (XR[m] >> 22) & 3;
+                         m = 6 * (3 - m);
+                         RB = (RB & 077) << m;
+                         RA &= ~(077 << m);
+                         RA |= RB;
+                         XR[RX] = RA;
                          break;
                     }
                     /* Fall through */
@@ -1987,7 +2023,7 @@ fprintf(stderr, "WR SR %o %08o\n\r", RB, RA);
                     /* Fall through */
        case 0177:            /* Test Datum and Limit */
                     if (exe_mode) {
-                        if (RA < RG || RA > RL)
+                        if (RA < RD || RA >= RL)
                             BCarry = 1;
                         break;
                     }

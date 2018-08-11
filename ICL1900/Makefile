@@ -1087,7 +1087,8 @@ DISPLAYD = display
 # Emulator source files and compile time options
 #
 ICL1900D = ./
-ICL1900 = ${ICL1900D}icl1900_cpu.c ${ICL1900D}icl1900_sys.c
+ICL1900 = ${ICL1900D}icl1900_cpu.c ${ICL1900D}icl1900_sys.c ${ICL1900D}icl1900_stdio.c \
+    ${ICL1900D}icl1900_cty.c
 ICL1900_OPT = -I.. -DUSE_SIM_CARD
 
 #
