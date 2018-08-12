@@ -116,6 +116,7 @@ uint8               fovr;                       /* Floating point overflow */
 uint8               BCarry;                     /* Carry bit */
 uint8               BV;                         /* Overflow flag */
 uint8               Mode;                       /* Mode */
+uint8               Zero;                       /* Zero suppression flag */
 uint8               exe_mode = 1;               /* Executive mode */
 #define     EJM     040                            /* Extended jump Mode */
 #define     DATUM   020                            /* Datum mode */
@@ -203,13 +204,13 @@ MTAB                cpu_mod[] = {
     {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(1), NULL, "8K", &cpu_set_size},
     {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(3), NULL, "16K", &cpu_set_size},
     {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(7), NULL, "32K", &cpu_set_size},
-    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(8), NULL, "48K", &cpu_set_size},
-    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(9), NULL, "64K", &cpu_set_size},
-    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(10), NULL, "96K", &cpu_set_size},
-    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(11), NULL, "128K", &cpu_set_size},
-    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(12), NULL, "256K", &cpu_set_size},
-    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(13), NULL, "512K", &cpu_set_size},
-    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(14), NULL, "1024K", &cpu_set_size},
+    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(11), NULL, "48K", &cpu_set_size},
+    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(15), NULL, "64K", &cpu_set_size},
+    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(23), NULL, "96K", &cpu_set_size},
+    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(31), NULL, "128K", &cpu_set_size},
+    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(63), NULL, "256K", &cpu_set_size},
+    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(127), NULL, "512K", &cpu_set_size},
+    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(254), NULL, "1024K", &cpu_set_size},
     /* Stevenage */
     {UNIT_MODEL, MODEL(MOD1),  "1901",  "1901",  NULL, NULL, NULL},
     {UNIT_MODEL, MODEL(MOD1A), "1901A", "1901A", NULL, NULL, NULL},
@@ -260,6 +261,29 @@ DEVICE              cpu_dev = {
 
 
 
+
+/* Test if we can access a word */
+uint8 Mem_test(uint32 addr) {
+    addr &= M22;
+
+    if (!exe_mode) {
+        if (addr < 8) 
+            return 0;
+        addr = addr + RD;
+    } else if (addr < 8) 
+        return 0;
+
+    if (!exe_mode && RL && (addr < RD || addr >= RL)) {
+        SR64 |= B1;
+        return 1;
+    }
+    addr &= adrmask;
+    if (addr > MEMSIZE) {
+        SR64 |= B1;
+        return 1;
+    }
+    return 0;
+}
 
 uint8 Mem_read(uint32 addr, uint32 *data, uint8 flag) {
     addr &= M22;
@@ -353,30 +377,33 @@ intr:
             Mem_write(RD+13, &facch, 0);  /* Save F.P.U. */
             Mem_write(RD+12, &faccl, 0);
             RA = 0;         /* Build ZSTAT */
-            if (Mode & 1)
+            if (Zero)
                 RA |= B3;
             if (OPIP | PIP)
                 RA |= B2;
             Mem_write(RD+9, &RA, 0);
-            RA = RC;
+            RA = RC & adrmask;
             if (BV)
               RA |= B0;
             if (BCarry)
               RA |= B1;
 #if 0
-            if ((Mode & AM22) == 0 && (Mode & 1))
+            if ((Mode & AM22) == 0 && Zero)
                 RA |= B8;
 #endif
             Mem_write(RD+8, &RA, 0);
             for (n = 0; n < 8; n++)
                Mem_write(RD+n, &XR[n], 0);
-            BV = BCarry = Mode = 0;
+            BV = BCarry = Mode = Zero = 0;
             adrmask = (Mode & AM22) ? M22 : M15;
             RC = 020;
             PIP = 0;
        }
 
 fetch:
+       if (!exe_mode && (Mode & 7) == 1)
+           SR64 |= B2;
+
        if (Mem_read(RC, &temp, 0)) {
            if (hst_lnt) {      /* history enabled? */
                hst_p = (hst_p + 1);    /* next entry */
@@ -397,7 +424,6 @@ fetch:
            RC = (RC + 1) & adrmask;
            goto intr;
        }
-
 obey:
        RM = temp & 037777;
        RF = 0177 & (temp >> 14);
@@ -407,7 +433,7 @@ obey:
            RA = XR[RX];
            RM = RB = temp & 077777;
            if ((Mode & EJM) && (RF & 1) == 0) {
-               RB |= (RB & 020000) ? 017740000 : 0; /* Sign extend RB */
+               RB = RB | ((RB & 020000) ? 017740000 : 0); /* Sign extend RB */
 //fprintf(stderr, "Rel B: %08o PC=%08o -> ", RB, RC);
                RB = (RB + RC) & adrmask;
 //fprintf(stderr, " %08o\n\r", RC);
@@ -521,8 +547,11 @@ obey:
                      } else {
                         int t2 = (RB & B0) != 0;
                         int tr = (RA & B0) != 0;
-                        if ((n && t2 && !tr) || (!n && !t2 && tr))
+                        if ((n && t2 && !tr) || (!n && !t2 && tr)) {
                            BV = 1;
+                           if (!exe_mode && (Mode & 7) == 4)
+                               SR64 |= B2;
+                        }
                         BCarry = 0;
                      }
                      RA &= FMASK;
@@ -660,8 +689,11 @@ obey:
        case OP_MPR:          /* Multiply and Round  */
        case OP_MPA:          /* Multiply and Accumulate */
                      if (RA == B0 && RB == B0) {
-                         if (RF != OP_MPA || (XR[(RX + 1) & 7] & B0) == 0)
+                         if (RF != OP_MPA || (XR[(RX + 1) & 7] & B0) == 0) {
                              BV = 1;
+                             if (!exe_mode && (Mode & 7) == 4)
+                                 SR64 |= B2;
+                         }
                      }
                      RP = RA;
                      RA = RB;
@@ -730,29 +762,32 @@ obey:
                         RA++;
                      RB &= M23;
                      if (RF == OP_CDB) {
-                        /* Add in RT */
-                        RB += RT;
-                        if (RB & B0)
-                           RA++;
-                        RB &= M23;
-                        if (RA & ~(M23))
-                           BV = 1;
-                        RA &= M23;
+                         /* Add in RT */
+                         RB += RT;
+                         if (RB & B0)
+                            RA++;
+                         RB &= M23;
+                         if (RA & ~(M23)) {
+                             BV = 1;
+                             if (!exe_mode && (Mode & 7) == 4)
+                                 SR64 |= B2;
+                         }
+                         RA &= M23;
                      } else {
-                        /* Save bits over 23 to char */
-                        m = (m == 0) ? 3 : (XR[m] >> 22) & 3;
-                        m = 6 * (3 - m);
-                        RP = (RA >> 23) & 017;
-                        if ((Mode & 1) != 0 && RP == 0)
-                            RP = 020;
-                        else
-                            Mode &= ~1;
-                        RA &= M23;
-                        RT &= ~(077 << m);
-                        RT |= (RP << m);
-                        if (Mem_write(RS, &RT, 1)) {
-                            goto intr;
-                        }
+                         /* Save bits over 23 to char */
+                         m = (m == 0) ? 3 : (XR[m] >> 22) & 3;
+                         m = 6 * (3 - m);
+                         RP = (RA >> 23) & 017;
+                         if (Zero && RP == 0)
+                             RP = 020;
+                         else
+                             Zero = 0;
+                         RA &= M23;
+                         RT &= ~(077 << m);
+                         RT |= (RP << m);
+                         if (Mem_write(RS, &RT, 1)) {
+                             goto intr;
+                         }
                      }
                      XR[(RX+1) & 7] = RB;
                      XR[RX] = RA;
@@ -771,6 +806,8 @@ obey:
 
                      if (RA == 0) { /* Exit on zero divisor */  /* VI */
                          BV = 1;
+                         if (!exe_mode && (Mode & 7) == 4)
+                             SR64 |= B2;
                          BCarry = 0;
                          break;
                      }
@@ -886,8 +923,11 @@ dvd2:
 //fprintf(stderr, "DVD7: %08o %08o %08o \n\r", RA, RP, RB);
                      if (n)
                          BCarry = 0;
-                     if (BCarry)
+                     if (BCarry) {
                          BV = 1;
+                         if (!exe_mode && (Mode & 7) == 4)
+                             SR64 |= B2;
+                     }
                      BCarry = 0;
                      if (f) {
                          RB = 0;
@@ -1001,16 +1041,21 @@ dvd2:
                      if (BV)
                        RA |= B0;
                      if ((Mode & (AM22|EJM)) == 0) {
-                        if (Mode & 1)
+                        if (Zero)
                            RA |= B8;
                      } else {
-                        if (Mode & 1)
+                        if (Zero)
                            RA |= B1;
                      }
                      BV = 0;
                      BCarry = 0;
                      XR[RX] = RA;
 branch:
+                     /* Monitor mode 3 -> int */
+                     if (!exe_mode && (Mode & 7) == 3) {
+                         SR64 |= B2;
+                         break;
+                     }
                      if ((Mode & EJM) != 0) {
                          if ((RF & 1) != 0) {
                              RB &= 037777;
@@ -1027,34 +1072,43 @@ branch:
                      if (hst_lnt) {      /* history enabled? */
                          hst[hst_p].ea = RB;
                      }
-                     if (Mem_read(RB, &temp, 0)) {
+                     if (Mem_test(RB))
                          goto intr;
+                     /* Monitor mode 2 -> Exec Mon */
+                     /* Read address to store from location 262. */
+                     /* Store address transfer address at location, increment 262 mod 128 */
+                     if (!exe_mode && (Mode & 7) == 2) {
+                         temp = M[262];
+                         M[temp & adrmask] = RB;
+                         M[262] =  (temp & ~ 0177) + ((temp + 1) & 0177);
                      }
-    /* Monitor mode 2 -> Exec Mon */
-    /* Read address to store from location 262. */
-    /* Store address transfer address at location, increment 262 mod 128 */
                      RC = RB;
-    /* Monitor mode 3 -> int */
-                     goto obey;
+               break;
 
        case OP_EXIT:         /* Exit Subroutine */
        case OP_EXIT1:
-                     if (RA & B0)
-                        BV = 1;
-                     Mode &= ~1;
+                     if (RA & B0) {
+                         BV = 1;
+                         if (!exe_mode && (Mode & 7) == 4)
+                             SR64 |= B2;
+                     }
+                     Zero = 0;
                      if ((Mode & (AM22|EJM)) == 0) {
                         if (RA & B8)
-                           Mode |= 1;
+                           Zero = 1;
                      } else {
                         if (RA & B1)
-                           Mode |= 1;
+                           Zero = 1;
                      }
                      BCarry = 0;
-                     RM |= (RM & 020000) ? 017740000 : 0; /* Sign extend RM */
+                     RM = RM | ((RM & 040000) ? 017740000 : 0); /* Sign extend RM */
                      RA = RA + RM;
-                     if (PIP)
-                         RA += RP;
-                     if (Mem_read(RA, &temp, 0)) {
+                     if (OPIP)
+                         RA = RA + RP;
+                     if (hst_lnt) {      /* history enabled? */
+                         hst[hst_p].ea = RA;
+                     }
+                     if (Mem_read(RA, &temp, 0)) {  /* Verify memory location accessable */
                          goto intr;
                      }
                      RC = RA & adrmask;
@@ -1107,6 +1161,8 @@ branch:
                     case 7:   /* BVC */
                           n = BV;
                           BV = !BV;
+                          if (!exe_mode && (Mode & 7) == 4 && BV)
+                              SR64 |= B2;
                           if (n == 0)
                               goto branch;
                           break;
@@ -1140,8 +1196,11 @@ branch:
                        }
                        RA <<= 1;
                        RA |= n;
-                       if ((m & 2) && temp != (RA & B0))
+                       if ((m & 2) && temp != (RA & B0)) {
                           BV = 1;
+                          if (!exe_mode && (Mode & 7) == 4)
+                              SR64 |= B2;
+                       }
                        RA &= FMASK;
                        RK--;
                     }
@@ -1178,8 +1237,11 @@ branch:
                                RB &= M23;
                                n = (RA & B0) != 0;
                                temp = (RA & BM1) != 0;
-                               if (n != temp)
+                               if (n != temp) {
                                    BV = 1;
+                                   if (!exe_mode && (Mode & 7) == 4)
+                                       SR64 |= B2;
+                               }
                        }
                        RA &= FMASK;
                        RB &= FMASK;
@@ -1260,6 +1322,7 @@ branch:
        case OP_NORMD:        /* Normalize Double -2 +FP */
                     RT = RB;
                     RB = (RF & 1) ? XR[(RX+1) & 07] & M23 : 0;
+//fprintf(stderr, "Norm0: %08o %08o %08o\n\r", RA, RB, RT);
                     if (RT & 04000) {
                          RT = 0;
                     } else {
@@ -1275,8 +1338,14 @@ branch:
                         RB >>= 1;
                         RA >>= 1;
                         RA |= RP;
-                    } else if (RA != 0 || RB != 0) {
+                        if ((RF & 1) == 0) {
+                            RB = RT;
+                            goto norm3;
+                        }
+//fprintf(stderr, "Norm1: %08o %08o %08o\n\r", RA, RB, RT);
+                    }  else if (RA != 0 || RB != 0) {
                         /* Shift left until sign and B1 not same */
+//fprintf(stderr, "Norm2: %08o %08o %08o\n\r", RA, RB, RT);
                         while ((((RA >> 1) ^ RA) & B1) == 0) {
                            RT--;
                            RA <<= 1;
@@ -1286,26 +1355,39 @@ branch:
                            RA &= FMASK;
                            RB &= M23;
                         }
+//fprintf(stderr, "Norm3: %08o %08o %08o\n\r", RA, RB, RT);
                         /* Check for overflow */
                         if (RT & B0) { /* < 0 */
                            RA = RB = 0;
                            goto norm1;
                         }
+                        if (RT > M9)   /* NO Round if overflow */
+                           goto norm2;
                     } else
                         RT = 0;
-                    /* Round RB if needed */
-                    RP = RB;
-                    RB += 0400;
-                    if (RB & B0)  {
-                        RB = RP;
-                        if (((RA & M23) + 1) & B0)
-                           RA = RB = 0;
+                    if (RF & 1) {   /* Round only on NORMD order codes */
+//fprintf(stderr, "Norm4: %08o %08o %08o\n\r", RA, RB, RT);
+                        /* Round RB if needed */
+                        RP = RB;
+                        RB += 0400;
+//fprintf(stderr, "Norm4a: %08o %08o %08o\n\r", RA, RB, RT);
+                        if (RB & B0 && RT <= M9)  {
+                            RB = RP;
+                            if (((RA & M23) + 1) & B0)
+                               RA = RB = 0;
+                        }
                     }
-                    RB = (RB & MMASK) | (RT & M9);
+norm2:
+                    RB = (RB & (MMASK|B0)) | (RT & M9);
+norm3:
                     BV = 0;
-                    if (RT > M9)    /* Exponent overlfow */
+                    if (RT > M9) {  /* Exponent overlfow */
                         BV = 1;
- norm1:
+                        if (!exe_mode && (Mode & 7) == 4)
+                            SR64 |= B2;
+                    }
+norm1:
+//fprintf(stderr, "Norm5: %08o %08o %08o\n\r", RA, RB, RT);
                     XR[(RX+1) & 07] = RB;
                     XR[RX] = RA;
                     break;
@@ -1355,6 +1437,8 @@ branch:
                      break;
 
        case OP_NULL:         /* No Operation */
+                     if (!exe_mode && RX == 7 && (Mode & 7) > 0 && (Mode & 7) < 5)
+                         SR64 |= B2;
                      break;
 
        case OP_LDCT:         /* Load Count */
@@ -1375,9 +1459,8 @@ branch:
 /* On Stevenage Machines 0100 -> Carry */
 #endif
                      if (exe_mode)
-                        Mode = RB & 077;
-                     else
-                        Mode = (Mode & 076) | (RB & 1);
+                        Mode = RB & 076;
+                        Zero = RB & 1;
                      adrmask = (Mode & AM22) ? M22 : M15;
                      break;
 
@@ -1457,8 +1540,11 @@ branch:
                         RB = RA = 0;
                         e1 = 0;
                     }
-                    if (e1 != 0 || fovr)
+                    if (e1 != 0 || fovr) {
                         BV = 1;
+                        if (!exe_mode && (Mode & 7) == 4)
+                            SR64 |= B2;
+                    }
 //fprintf(stderr, "FIX1: %08o %08o %08o %o %d\n\r", RA, RB, RC, RX, e1);
                     if (Mem_write(RS, &RA, 1)) {
                        goto intr;
@@ -1593,7 +1679,6 @@ fn:
                            faccl ++;
                         facch &= M23;
                         faccl &= FMASK;
-//                        temp2 = (faccl & B0) != 0;
                         /* renormalize if things changed */
                         if ((RX & 2) == 0 && (((faccl >> 1) ^ faccl) & B1) == 0) {
                             e1--;
@@ -1648,7 +1733,7 @@ fexp:
                         RA = RT;
 //fprintf(stderr, "FMP1: %08o %08o %08o %08o %08o\n\r", RA, RB, RC, faccl, facch);
                     }
-                     /* Extract exponents and mantissa's */
+                    /* Extract exponents and mantissa's */
                     e1 = ((facch & M9)) - 256;
                     facch &= MMASK;
                     e2 = ((RB & M9)) - 256;
@@ -1911,6 +1996,8 @@ fexp:
                     if (fovr) {
                        RA |= B0;
                        BV = 1;
+                        if (!exe_mode && (Mode & 7) == 4)
+                            SR64 |= B2;
                     }
                     RB++;
                     if (Mem_write(RB, &RA, 1)) {
@@ -1974,10 +2061,9 @@ fexp:
                          Mem_read(RB+1, &RA, 0); /* Read Limit */
                          RL = RA & (M22 & ~077);
                          RG |= (RA & 07);
-                         Mode &= ~(EJM|AM22|EXTRC);
-                         Mode |= (EJM|AM22|EXTRC) & RA;
+                         Mode = RA & 077;
                          adrmask = (Mode & AM22) ? M22 : M15;
-fprintf(stderr, "Load limit: %08o D:=%08o %02o\n\r", RL, RD, Mode);
+//fprintf(stderr, "Load C=%08o limit: %08o D:=%08o %02o\n\r", RC, RL, RD, Mode);
 #endif
                          if (RF & 1)              /* Check if 172 or 173 order code */
                              break;
@@ -1985,15 +2071,15 @@ fprintf(stderr, "Load limit: %08o D:=%08o %02o\n\r", RL, RD, Mode);
                          for (n = 0; n < 8; n++)  /* Restore user mode registers */
                              Mem_read(RD+n, &XR[n], 0);
                          Mem_read(RD+9, &RA, 0);    /* Read ZStatus and mode */
-                         Mode &= ~1;
+                         Zero = 0;
                          if ((Mode & AM22) && (RA & B3))
-                             Mode |= 1;
+                             Zero = 1;
                          Mem_read(RD+8, &RC, 0);     /* Restore C register */
-fprintf(stderr, "Load PC: %08o D:=%08o z=%08o\n\r", RC, RD, RA);
+//fprintf(stderr, "Load PC: %08o D:=%08o z=%08o\n\r", RC, RD, RA);
                          if ((Mode & AM22) == 0 && (RA & B3))
-                             Mode |= 1;
-                         BV =  (RC & B0) != 0;
-                         BCarry =  (RC & B1) != 0;
+                             Zero = 1;
+                         BV = (RC & B0) != 0;
+                         BCarry = (RC & B1) != 0;
                          RC &= adrmask;
                          Mem_read(RD+12, &faccl, 0);  /* Restore F.P.U. */
                          Mem_read(RD+13, &facch, 0);  /* Restore F.P.U. */
@@ -2039,7 +2125,7 @@ voluntary:
                     Mem_write(RD+13, &facch, 0);  /* Save F.P.U. */
                     Mem_write(RD+12, &faccl, 0);
                     RA = 0;         /* Build ZSTAT */
-                    if (Mode & 1)
+                    if (Zero)
                         RA |= B3;
                     if (OPIP)
                         RA |= B2;
@@ -2056,7 +2142,7 @@ voluntary:
                     Mem_write(RD+8, &RA, 0);
                     for (n = 0; n < 8; n++)
                         Mem_write(RD+n, &XR[n], 0);
-                    Mode = 0;
+                    Zero = Mode = 0;
                     BCarry = BV = 0;
                     adrmask = (Mode & AM22) ? M22 : M15;
                     XR[1] = RB;
@@ -2148,8 +2234,6 @@ cpu_set_size(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 
     cpu_unit[0].flags &= ~UNIT_MSIZE;
     cpu_unit[0].flags |= val;
-    cpu_unit[1].flags &= ~UNIT_MSIZE;
-    cpu_unit[1].flags |= val;
     val >>= UNIT_V_MSIZE;
     val = (val + 1) * 4096;
     if ((val < 0) || (val > MAXMEMSIZE))
@@ -2174,8 +2258,6 @@ cpu_set_hist(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     t_stat              r;
 
     if (cptr == NULL) {
-        for (i = 0; i < hst_lnt; i++)
-//            hst[i].c = 0;
         hst_p = 0;
         return SCPE_OK;
     }
