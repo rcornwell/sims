@@ -33,32 +33,27 @@
 #define GATHER           B5    /* Gather */
 
 
-DIB *devs[32];                 /* Pointer to device DIB entry */
+DIB *devs[64];                 /* Pointer to device DIB entry */
 
-/* Fake DIB entries for the CTY devices */
-DIB ctyi_dib = { 2, CHAR_DEV, ctyi_cmd};
-DIB ctyo_dib = { 3, CHAR_DEV, ctyo_cmd};
-DIB nul1_dib = { 22, 0, 0};
-DIB nul2_dib = { 23, 0, 0};
+DIB nul_dib = { 0, NULL, NULL, NULL};
 
-uint32   cw0;            /* Holding registers for current control word */
-uint32   cw1;
 
 t_stat
 chan_set_devs()
 {
-     int  i;
+     int   i;
+     int   chan;
 
      /* Clear device table */
      for (i = 0; i < sizeof(devs)/sizeof(DIB *); i++)
          devs[i] = NULL;
 
-     devs[22-4] = &nul1_dib;   /* Add in hidden channels */
-     devs[23-4] = &nul2_dib;
+     /* Add in hidden channels */
+     devs[22] = &nul_dib;  
+     devs[23] = &nul_dib;
      /* Scan all devices and assign to channel */
      for(i = 0; sim_devices[i] != NULL; i++) {
          DIB       *dibp = (DIB *) sim_devices[i]->ctxt;
-         int        chan;
 
          /* Check if device a channel device */
          if (dibp == NULL)
@@ -66,13 +61,33 @@ chan_set_devs()
          /* If device is disabled, don't add it */
          if (sim_devices[i]->flags & DEV_DIS)
             continue;
-         chan = dibp->channel - 4;
-         if (chan < 0)
-            continue;
-         if (devs[chan] != NULL) {
-            fprintf(stderr, "Conflict between devices %d %s\n", chan, sim_devices[i]->name);
+         if (dibp->type & MULT_DEV) {
+            chan = GET_UADDR(sim_devices[i]->flags);
+            /* Make sure it is in range */
+            if (chan < 2 || chan > 36)
+               continue;
+            if (devs[chan] != NULL) {
+               fprintf(stderr, "Conflict between devices %d %s\n", chan, sim_devices[i]->name);
+            } else {
+               devs[chan] = dibp;
+            }
          } else {
-            devs[chan] = dibp;
+            UNIT  *uptr = sim_devices[i]->units;
+            uint32 unit;
+            for (unit = 0; unit < sim_devices[i]->numunits; unit++, uptr++) {
+                /* If disabled, skip it */
+                if (uptr->flags & UNIT_DIS)
+                   continue;
+                chan = GET_UADDR(uptr->flags);
+                /* Make sure it is in range */
+                if (chan < 2 || chan > 36)
+                   continue;
+                if (devs[chan] != NULL) {
+                   fprintf(stderr, "Conflict between devices %d %s%d\n", chan, sim_devices[i]->name, unit);
+                } else {
+                   devs[chan] = dibp;
+                }
+            }
          }
      }
      return SCPE_OK;
@@ -85,7 +100,8 @@ set_chan(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
      DEVICE         *dptr;
      DIB            *dibp;
-     int             newchan;
+     int             new_chan;
+     int             cur_chan;
      t_stat          r;
 
      if (cptr == NULL)
@@ -99,27 +115,43 @@ set_chan(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
     
      if (dibp == NULL)
          return SCPE_IERR;
-     newchan = get_uint(cptr, 10, 37, &r);
+     new_chan = get_uint(cptr, 10, 37, &r);
      if (r != SCPE_OK)
          return r;
-     if (newchan < 4)     /* Lowest channel is 4 */
+     if (new_chan < 4)     /* Lowest channel is 4 */
          return SCPE_ARG;
-     newchan -= 4;
-     if (dibp == devs[dibp->channel-4])
-         devs[dibp->channel-4] = NULL;
+     /* Find channel device is current on and remove it */
+     if (dibp->type & MULT_DEV) {
+         cur_chan = GET_UADDR(dptr->flags);
+     } else {
+         cur_chan = GET_UADDR(uptr->flags);
+     }
+     if (dibp == devs[cur_chan])
+         devs[cur_chan] = NULL;
      /* If device is disabled, set to whatever the user wants */
      if (dptr->flags & DEV_DIS) {
-         dibp->channel = newchan;
+         if (dibp->type & MULT_DEV) {
+             dptr->flags &= ~UNIT_M_ADDR;
+             dptr->flags |= UNIT_ADDR(new_chan);
+         } else {
+             uptr->flags &= ~UNIT_M_ADDR;
+             uptr->flags |= UNIT_ADDR(new_chan);
+         }
          return SCPE_OK;
      }
  
-     if (devs[newchan] != NULL) {
-        devs[newchan] = dibp;
-        dibp->channel = newchan+4;
-        return SCPE_OK;
+     if (devs[new_chan] == NULL) {
+         if (dibp->type & MULT_DEV) {
+             dptr->flags &= ~UNIT_M_ADDR;
+             dptr->flags |= UNIT_ADDR(new_chan);
+         } else {
+             uptr->flags &= ~UNIT_M_ADDR;
+             uptr->flags |= UNIT_ADDR(new_chan);
+         }
+         devs[new_chan] = dibp;
+         return SCPE_OK;
      } else {
-        fprintf(stderr, "Device already on channel %d\n", newchan+4);
-        devs[dibp->channel] = dibp;
+        fprintf(stderr, "Device already on channel %d\n", new_chan);
      }
      return SCPE_ARG;
 }
@@ -140,103 +172,144 @@ get_chan(FILE *st, UNIT *uptr, int32 v, CONST void *desc)
      dibp = (DIB *) dptr->ctxt;
      if (dibp == NULL)
          return SCPE_IERR;
-     fprintf(st, "Chan=%d", dibp->channel);
+     if (dibp->type & MULT_DEV) {
+         chan = GET_UADDR(dptr->flags);
+     } else {
+         chan = GET_UADDR(uptr->flags);
+     }
+     fprintf(st, "DEV=%d", chan);
      return SCPE_OK;
 }
 
 int 
 get_ccw(int dev, uint32 *addr, uint8 type) {
-    int cw_addr = 256+4*dev;
-#if 0
-    cw0 = M[64+dev];
-#endif
-    cw0 = M[cw_addr];
-    cw1 = M[cw_addr+1];
-    *addr = cw1;
-    if (cw0 & WORDCCW) {
-        if (cw0 & BACKWARD) 
-            cw1 = ((cw1 + M22) & M22) | (cw1 & CMASK);
-        else
-            cw1 = ((cw1 + 1) & M22) | (cw1 & CMASK);
-    } else {
-        if (cw0 & BACKWARD) {
-            if (cw1 & CMASK) {
-                cw1 -= B1;
-            } else {
-                cw1 = ((cw1 - 1) & M22) | CMASK;
-            }
+    int      cw_addr;
+    uint32   cw0;            /* Holding registers for current control word */
+    uint32   cw1;
+
+    if (io_flags & EXT_IO) {
+        cw_addr = 256+4*dev;
+        cw0 = M[cw_addr];
+        cw1 = M[cw_addr+1];
+        *addr = cw1;
+        if (cw0 & WORDCCW) {
+            if (cw0 & BACKWARD) 
+                cw1 = ((cw1 + M22) & M22) | (cw1 & CMASK);
+            else
+                cw1 = ((cw1 + 1) & M22) | (cw1 & CMASK);
         } else {
-            if ((cw1 & CMASK) == CMASK) {
-                cw1 = (cw1 + 1) & M22;
+            if (cw0 & BACKWARD) {
+                if (cw1 & CMASK) {
+                    cw1 -= B1;
+                } else {
+                    cw1 = ((cw1 - 1) & M22) | CMASK;
+                }
             } else {
-                cw1 += B1;
+                if ((cw1 & CMASK) == CMASK) {
+                    cw1 = (cw1 + 1) & M22;
+                } else {
+                    cw1 += B1;
+                }
             }
         }
-    }
-    cw0 = ((cw0 - 1) & M15)  | (cw0 & CNTMSK);
-    if ((cw0 & M15) == 0) {
-        if ((cw0 & (CWRECHARGE|GATHER)) == (CWRECHARGE)) {
-            cw0 = M[cw_addr+2];
-            cw1 = M[cw_addr+3];
-        } else if ((cw0 & GATHER) != 0) {
-            int a;
-            if ((cw0 & CWRECHARGE) != 0) 
-                M[cw_addr+3] = M[cw_addr+2];
-            a = M[cw_addr+3];
-            cw0 = M[a & M22];
-            cw1 = M[(a + 1) & M22];
-            M[cw_addr+3] = ((a + 2) & M22) | (a & CMASK);
+        cw0 = ((cw0 - 1) & M15)  | (cw0 & CNTMSK);
+        if ((cw0 & M15) == 0) {
+            if ((cw0 & (CWRECHARGE|GATHER)) == (CWRECHARGE)) {
+                cw0 = M[cw_addr+2];
+                cw1 = M[cw_addr+3];
+            } else if ((cw0 & GATHER) != 0) {
+                int a;
+                if ((cw0 & CWRECHARGE) != 0) 
+                    M[cw_addr+3] = M[cw_addr+2];
+                a = M[cw_addr+3];
+                cw0 = M[a & M22];
+                cw1 = M[(a + 1) & M22];
+                M[cw_addr+3] = ((a + 2) & M22) | (a & CMASK);
+            }
+            M[cw_addr] = cw0;
+            M[cw_addr+1] = cw1;
+            return (cw0 & M15) == 0;
         }
         M[cw_addr] = cw0;
         M[cw_addr+1] = cw1;
-        return (cw0 & M15) == 0;
+    } else {
+        cw_addr = 64+dev;
+        cw0 = M[cw_addr];
+        if (type & WORD_DEV) {
+            *addr = cw0 & M15;
+            cw0 = ((cw0 + 1) & M15) | ((cw0 + CNTMSK) & CNTMSK);
+            cw1 = cw0 & CNTMSK;
+        } else {
+            *addr = cw0 & (CMASK|M15);
+            if ((cw0 & CMASK) == CMASK) {
+                cw0 = ((cw0 + 1) & M15) | (cw0 & CHCMSK);
+            } else {
+                cw0 += B1;
+            }
+            cw1 = (cw0 + CHCMSK) & CHCMSK;
+            cw0 = ((CMASK|M15) & cw0) | cw1;
+        }
+        M[cw_addr] = cw0;
+        if (cw1 == 0) {
+            if (type & LONG_BLK) {
+                cw1 = (M[cw_addr + 64] - 1)  & FMASK;
+                M[cw_addr + 64]  = cw1;
+            }
+            if (type & SPEC_HES) {
+                M[cw_addr] = M[cw_addr+1];
+                return 0;
+            }
+            return (cw1 == 0);
+        }
     }
-    M[cw_addr] = cw0;
-    M[cw_addr+1] = cw1;
     return 0;
 }
+
+
+/* Talk to non-standard interface devices */
+void
+chan_nsi_cmd(int dev, uint32 cmd) {
+    DIB            *dibp = devs[dev & 077];
+
+    if (dibp != NULL && dibp->nsi_cmd != NULL) {
+       (dibp->nsi_cmd)(dev, cmd);
+    } 
+}
+
+/* Talk to non-standard interface devices */
+void
+chan_nsi_status(int dev, uint32 *resp) {
+    DIB            *dibp = devs[dev & 077];
+
+    *resp = 0;
+    if (dibp != NULL && dibp->nsi_cmd != NULL) {
+       (dibp->nsi_status)(dev, resp);
+    } 
+}
+
 
 /* Hessitation operations */
 void
 chan_send_cmd(int dev, uint32 cmd, uint32 *resp) {
-    DIB            *dibp = NULL;
-    int             d = dev & 077;
-
-    if (dev >= 4 && dev <= 36)
-       dibp = devs[d - 4];
-    else if (dev == 3)
-       dibp = &ctyo_dib;
-    else if (dev == 2)
-       dibp = &ctyi_dib;
+    DIB            *dibp = devs[dev & 077];
 
     *resp = 0;
-    if (dibp != NULL && dibp->dev_cmd != NULL) {
-       t_stat   r;
-
-       r = (dibp->dev_cmd)((dev & 07700) | cmd, resp);
+    if (dibp != NULL && dibp->si_cmd != NULL) {
+       (dibp->si_cmd)(dev, cmd, resp);
     } 
 }
 
 /* Transfer date between device and memory */
 int
 chan_input_char(int dev, uint8 *data, int eor) {
+    DIB         *dibp = devs[dev & 077];
     int          r;
     int          c;
-    DIB         *dibp = NULL;
     uint32       addr;
     uint32       mb;
 
-
-    /* Figure out DIB to find out type of device */
-    if (dev >= 4 && dev <= 36)
-        dibp = devs[dev - 4];
-    else if (dev == 3)
-        dibp = &ctyo_dib;
-    else if (dev == 2)
-        dibp = &ctyi_dib;
-
-    /* Make sure device assigne here */
-    if (dibp == NULL || dibp->dev_cmd == NULL)
+    /* Make sure device assign here */
+    if (dibp == NULL)
         return -1;
 
     /* Check if right type */
@@ -247,32 +320,30 @@ chan_input_char(int dev, uint8 *data, int eor) {
     r = get_ccw(dev, &addr, dibp->type);
     c = (addr >> 22) & 3;
     c = 6 * (3 - c);
-    mb = M[addr & M22];
+    addr &= M22;
+    if (addr < 8)
+       mb = XR[addr];
+    else
+       mb = M[addr];
     mb &= ~(077 << c);
     mb |= ((uint32)(*data) & 077) << c;
-    M[addr & M22] = mb;
+    if (addr < 8)
+       XR[addr] = mb;
+    else
+       M[addr] = mb;
     return r;
 }
 
 int
 chan_output_char(int dev, uint8 *data, int eor) {
+    DIB         *dibp = devs[dev & 077];
     int          r;
     int          c;
-    DIB         *dibp = NULL;
     uint32       addr;
     uint32       mb;
 
-
-    /* Figure out DIB to find out type of device */
-    if (dev >= 4 && dev <= 36)
-        dibp = devs[dev - 4];
-    else if (dev == 3)
-        dibp = &ctyo_dib;
-    else if (dev == 2)
-        dibp = &ctyi_dib;
-
     /* Make sure device assigne here */
-    if (dibp == NULL || dibp->dev_cmd == NULL)
+    if (dibp == NULL)
         return -1;
 
     /* Check if right type */
@@ -283,28 +354,23 @@ chan_output_char(int dev, uint8 *data, int eor) {
     r = get_ccw(dev, &addr, dibp->type);
     c = (addr >> 22) & 3;
     c = 6 * (3 - c);
-    mb = M[addr & M22];
+    addr &= M22;
+    if (addr < 8)
+       mb = XR[addr];
+    else
+       mb = M[addr];
     *data = (uint8)(mb >> c) & 077;
     return r;
 }
 
 int
 chan_input_word(int dev, uint32 *data, int eor) {
+    DIB         *dibp = devs[dev & 077];
     int          r;
-    DIB         *dibp = NULL;
     uint32       addr;
 
-
-    /* Figure out DIB to find out type of device */
-    if (dev >= 4 && dev <= 36)
-        dibp = devs[dev - 4];
-    else if (dev == 3)
-        dibp = &ctyo_dib;
-    else if (dev == 2)
-        dibp = &ctyi_dib;
-
     /* Make sure device assigne here */
-    if (dibp == NULL || dibp->dev_cmd == NULL)
+    if (dibp == NULL)
         return -1;
 
     /* Check if right type */
@@ -313,27 +379,22 @@ chan_input_word(int dev, uint32 *data, int eor) {
 
     /* Get address of next word. */
     r = get_ccw(dev, &addr, dibp->type);
-    M[addr & M22] = *data;
+    addr &= M22;
+    if (addr < 8)
+       XR[addr] = *data;
+    else
+       M[addr] = *data;
     return r;
 }
 
 int
 chan_output_word(int dev, uint32 *data, int eor) {
+    DIB         *dibp = devs[dev & 077];
     int          r;
-    DIB         *dibp = NULL;
     uint32       addr;
 
-
-    /* Figure out DIB to find out type of device */
-    if (dev >= 4 && dev <= 36)
-        dibp = devs[dev - 4];
-    else if (dev == 3)
-        dibp = &ctyo_dib;
-    else if (dev == 2)
-        dibp = &ctyi_dib;
-
     /* Make sure device assigne here */
-    if (dibp == NULL || dibp->dev_cmd == NULL)
+    if (dibp == NULL)
         return -1;
 
     /* Check if right type */
@@ -342,7 +403,11 @@ chan_output_word(int dev, uint32 *data, int eor) {
 
     /* Get address of next word. */
     r = get_ccw(dev, &addr, dibp->type);
-    *data = M[addr & M22];
+    addr &= M22;
+    if (addr < 8)
+       *data = XR[addr];
+    else
+       *data = M[addr];
     return r;
 }
 

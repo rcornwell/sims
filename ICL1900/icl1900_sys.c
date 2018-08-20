@@ -46,7 +46,13 @@ int32               sim_emax = 1;
 
 DEVICE             *sim_devices[] = {
     &cpu_dev,
-    &cty_dev,
+    &cty_dev,        /* Must be first device after CPU */
+#if NUM_DEVS_PTR > 0
+    &ptr_dev,
+#endif
+#if NUM_DEVS_PTP > 0
+    &ptp_dev,
+#endif
 #if NUM_DEVS_CDR > 0
     &cdr_dev,
 #endif
@@ -99,7 +105,7 @@ uint8           mem_to_ascii[64] = {
    /* x0   x1   x2   x3   x4   x5   x6   x7 */ 
      '0', '1', '2', '3', '4', '5', '6', '7',    /* 0x */
      '8', '9', ':', ';', '<', '=', '>', '?',    /* 1x */
-     ' ', '!', '"', '#', '{', '%', '&', '\'',   /* 2x */
+     ' ', '!', '"', '#', '\\', '%', '&', '\'',   /* 2x */
      '(', ')', '*', '+', ',', '-', '.', '/',    /* 3x */
      '@', 'A', 'B', 'C', 'D', 'E', 'F', 'G',    /* 4x */
      'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',    /* 5x */
@@ -132,7 +138,7 @@ const char          ascii_to_mem[128] = {
    /* P    Q    R    S    T    U    V    W */
     060, 061, 062, 063, 064, 065, 066, 067,
    /* X    Y    Z    [    \    ]    ^    _ */
-    070, 071, 072, 073,  -1, 075, 076, 077,
+    070, 071, 072, 073, 024, 075, 076, 077,
    /* `    a    b    c    d    e    f    g */
      -1, 041, 042, 043, 044, 045, 046, 047,     /* 14 -1 177 */
    /* h    i    j    k    l    m    n    o */
@@ -155,7 +161,33 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
     uint8               image[80];
     int                 checksum;
 
-    if (match_ext(fnam, "txt")) {
+    if (match_ext(fnam, "card")) {
+
+        addr = 0;
+        while (fgets(buffer, 100, fileref)) {
+            /* Convert bits into image */
+            memset(image, 0, sizeof(image));
+            for (j = 0; j < 80; j++) {
+                if (buffer[j] == '\n')
+                   break;
+                image[j] = ascii_to_mem[buffer[j]];
+                if (image[j] < 0) { 
+                    fprintf(stderr, "Char %c: %s", buffer[j], buffer);
+                    return SCPE_FMT;
+                }
+            }
+            for (j = 0; j < 64; ) {
+                     data = 0;
+                     for (k = 0; k < 4; k++) 
+                         data = (data << 6) | image[j++];
+     fprintf(stderr, "Addr: %06o %08o\n\r", addr, data);
+   if (addr < 8)
+    XR[addr++] = data;
+else
+                     M[addr++] = data;
+            }
+        }
+    } else if (match_ext(fnam, "txt")) {
 
         while (fgets(buffer, 100, fileref)) {
             /* Convert bits into image */
@@ -201,9 +233,31 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
                  break;
             case 2:
             case 3:
+                 checksum = 0;
+                 for (j = 0; j < 4; j++) 
+                     checksum = (checksum << 6) | image[j];
+                 addr = 0;
+                 for (; j < 8; j++) 
+                     addr = (addr << 6) | image[j];
+                 checksum += addr;
+                 RC = addr;
+                 data = 0;
+                 for (i = 3; i < image[1]; i++) {
+                     data = 0;
+                     for (k = 0; k < 4; k++) 
+                         data = (data << 6) | image[j++];
+                     checksum += data;
+                 }
+                 for (k = 0; k < 4; k++) 
+                     data = (data << 6) | image[j++];
+                 data = FMASK & (checksum + data);
+                 if (data != 0) 
+                     fprintf(stderr, "Check %08o %08o: %s", addr, data, buffer);
+                 break;
             case 4:
             case 5:
             case 6:
+                 fprintf(stderr, "%o %c%c%c%c\n",  image[3],buffer[4], buffer[5], buffer[6], buffer[7]);
                  break;
             default:
                  fprintf(stderr, "B? :%s", buffer);

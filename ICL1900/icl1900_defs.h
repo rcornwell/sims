@@ -28,6 +28,8 @@
 
 /* Definitions for each supported CPU */
 
+#define NUM_DEVS_PTR    1
+#define NUM_DEVS_PTP    1
 #define NUM_DEVS_CDR    0
 #define NUM_DEVS_CDP    0
 #define NUM_DEVS_LPR    0
@@ -38,6 +40,7 @@
 #define MAXMEMSIZE      (4096 * 1024)
 
 extern uint32           M[];                            /* Main Memory */
+extern uint32           XR[8];
 
 /* Memory */
 #define MEMSIZE         (cpu_unit[0].capac)             /* actual memory size */
@@ -59,15 +62,50 @@ extern DEBTAB dev_debug[];
 
 extern uint32   SR64;
 extern uint32   SR65;
+extern uint32   RC;
+extern uint16   cpu_flags;
+extern uint8    io_flags;
+extern uint8    loading;
+
 
 /* Returns from device commands */
 #define SCPE_BUSY       (1)     /* Device is active */
 #define SCPE_NODEV      (2)     /* No device exists */
 
+typedef struct _cpumod
+{
+    CONST char        *name;
+    uint8              mod_num;     /* Model number */
+    uint16             cpu_flags;   /* Cpu option flags */
+    uint8              io_flags;    /* I/O type option. */
+    uint16             ticker;      /* Number of ticker events per second */
+} CPUMOD;
+
+/* Definitions for cpu flags */
+#define CPU_TYPE    (cpu_flags & 7)
+#define TYPE_A1     0000
+#define TYPE_A2     0001
+#define TYPE_B1     0002
+#define TYPE_B2     0003
+#define TYPE_C1     0004
+#define TYPE_C2     0005
+#define FLOAT_STD   0010          /* Floating point standard */
+#define FLOAT_OPT   0020          /* Floating point optional */
+#define FLOAT       0040          /* Floating point installed */
+#define STD_FLOAT   0100          /* Std Floating point only */
+#define NORM_OP     0001
+#define MULT_OPT    0200          /* Multiply/Divide optional */
+#define MULT        0400          /* Multiply/Divide installed */
+#define SV          01000         /* Stevenage Machine */
+#define WG          00000         /* West Gorton Machine */
+
+/* Definitions for io_flags */
+#define EXT_IO      0001          /* I/O channels at 256 and above */
+
 /* Symbol tables */
 typedef struct _opcode
 {
-    const char          *name;
+    CONST char          *name;
     uint8               type;
 }
 t_opcode;
@@ -192,21 +230,56 @@ t_opcode;
 #define NMASK          037777400
 #define MMASK          037777000
 
+#define UNIT_V_ADDR       24
+#define UNIT_M_ADDR       (077 << UNIT_V_ADDR)
+#define GET_UADDR(x)      ((UNIT_M_ADDR & (x)) >> UNIT_V_ADDR)
+#define UNIT_ADDR(x)      (UNIT_M_ADDR & ((x) << UNIT_V_ADDR))
+
+/* DIB type flags */
 #define CHAR_DEV       0            /* Device transfers via characters */
 #define WORD_DEV       1            /* Device transfers via words */
 #define SPEC_HES       2            /* Special transfer */
 #define LONG_BLK       4            /* Long block device */
+#define MULT_DEV       8            /* Channel in device flags */
 
 struct icl_dib {
-       uint8       channel;         /* Channel number */
-       uint8       type;            /* Type of device */
-       t_stat      (*dev_cmd)(uint32 cmd, uint32 *resp);   /* Start io on device */
+       uint8     type;            /* Type of device */
+       void      (*si_cmd)(int dev, uint32 cmd, uint32 *resp); /* Start io on device */
+       void      (*nsi_cmd)(int dev, uint32 cmd);              /* Start non-standard I/O on device */
+       void      (*nsi_status)(int dev, uint32 *resp);         /* Non-Standard I/O status */
 };
 
 typedef struct icl_dib DIB;
 
-/* Hessitation operations */
+/* Common commands */
+#define SEND_Q         020          /* Send status Q */
+#define SEND_P         024          /* Send status P */
+#define SEND_P2        025          /* Send status P2 */
+#define DISCO          036          /* Disconnect device */
+
+/* General response code */
+#define DEV_INOP       000          /* Device inoperable */
+#define DEV_REJT       003          /* Command rejected */
+#define DEV_ACCP       005          /* Command accepted */
+
+/* P Staus bits */
+#define DEV_OPT        001          /* Device operational */
+#define DEV_WARN       002          /* Device has warning */
+#define DEV_ERROR      004          /* Device has error pending */
+
+/* Q Status bits */
+#define DEV_TERM       001          /* Device terminated */
+#define DEV_P_STAT     040          /* No P status */
+
+/* Channel controls */
+extern t_stat chan_set_devs();
+extern t_stat set_chan(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+extern t_stat get_chan(FILE *st, UNIT *uptr, int32 v, CONST void *desc);
+
+/* Hesitation operations */
 extern void chan_send_cmd(int dev,  uint32 cmd, uint32 *resp);
+extern void chan_nsi_cmd(int dev,  uint32 cmd);
+extern void chan_nsi_status(int dev, uint32 *resp);
 extern int chan_input_char(int dev, uint8 *data, int eor);
 extern int chan_output_char(int dev, uint8 *data, int eor);
 extern int chan_input_word(int dev, uint32 *data, int eor);
@@ -214,17 +287,17 @@ extern int chan_output_word(int dev, uint32 *data, int eor);
 extern void chan_set_done(int dev);
 extern void chan_clr_done(int dev);
 
-/* Console tty device routines */
-extern t_stat      ctyi_cmd(uint32 cmd, uint32 *resp);
-extern t_stat      ctyo_cmd(uint32 cmd, uint32 *resp);
-
 /* Generic devices common to all */
 extern DEVICE      cpu_dev; 
 extern UNIT        cpu_unit[]; 
 extern REG         cpu_reg[];
 
 /* Global device definitions */
+extern DIB          ctyi_dib;
+extern DIB          ctyo_dib;
 extern DEVICE       cty_dev; 
+extern DEVICE       ptr_dev; 
+extern DEVICE       ptp_dev; 
 extern DEVICE       cdr_dev; 
 extern DEVICE       cdp_dev; 
 extern DEVICE       lpr_dev; 
