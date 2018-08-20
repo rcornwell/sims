@@ -28,12 +28,16 @@
 #include "icl1900_defs.h"
 
 extern int32 tmxr_poll;
+void cty_cmd(int dev, uint32 cmd);
+void cty_status(int dev, uint32 *resp);
 t_stat ctyi_svc (UNIT *uptr);
 t_stat ctyo_svc (UNIT *uptr);
 t_stat cty_reset (DEVICE *dptr);
 t_stat tty_set_mode (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat cty_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
 const char *cty_description (DEVICE *dptr);
+
+DIB cty_dib = { CHAR_DEV, NULL, cty_cmd, cty_status};
 
 #define CMD          u3
 #define STATUS       u4
@@ -53,8 +57,8 @@ const char *cty_description (DEVICE *dptr);
 #define F5           020000
 
 UNIT cty_unit[] = {
-    { UDATA (&ctyo_svc, TT_MODE_7P, 0), 10000 },
-    { UDATA (&ctyi_svc, TT_MODE_7P|UNIT_IDLE, 0), 0 },
+    { UDATA (&ctyo_svc, UNIT_ADDR(3)|TT_MODE_7P, 0), 10000 },
+    { UDATA (&ctyi_svc, UNIT_ADDR(2)|TT_MODE_7P|UNIT_IDLE, 0), 0 },
     };
 
 
@@ -70,7 +74,7 @@ DEVICE cty_dev = {
     "CTY", cty_unit, NULL, cty_mod,
     2, 8, 22, 1, 8, 22,
     NULL, NULL, &cty_reset,
-    NULL, NULL, NULL, NULL, DEV_DEBUG, 0, dev_debug,
+    NULL, NULL, NULL, &cty_dib, DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &cty_help, NULL, NULL, &cty_description
     };
 
@@ -97,20 +101,36 @@ DEVICE cty_dev = {
  *    11xxxx -> 101xxxx
  *
  */
-t_stat ctyo_cmd(uint32 cmd, uint32 *resp) {
-   if ((cmd & START) != 0 && (cty_unit[0].STATUS & BUSY) == 0) 
-       sim_activate(&cty_unit[0], cty_unit[0].wait);
-   cty_unit[0].CMD |= cmd;
-   *resp = cty_unit[0].STATUS;
-   cty_unit[0].STATUS &= BUSY;
-   chan_clr_done(3);
+void cty_cmd(int dev, uint32 cmd) {
+    int   u = 0;
+
+    if (dev > 3) 
+       return;
+    if (dev == 2)
+       u++;
+    if (cmd & START) {
+        cty_unit[u].STATUS &= ~END;
+        cty_unit[u].STATUS |= BUSY;
+        if (!u)
+           sim_activate(&cty_unit[u], cty_unit[u].wait);
+    } 
+    else if (cmd & STOP) { 
+        cty_unit[u].STATUS &= ~BUSY;
+    }
+    cty_unit[u].STATUS &= BUSY;
+    chan_clr_done(GET_UADDR(cty_unit[u].flags));
 }
 
-t_stat ctyi_cmd(uint32 cmd, uint32 *resp) {
-   cty_unit[1].CMD |= cmd;
-   *resp = cty_unit[1].STATUS;
-   cty_unit[1].STATUS &= BUSY;
-   chan_clr_done(2);
+void cty_status(int dev, uint32 *resp) {
+    int   u = 0;
+
+    if (dev > 3) 
+       return;
+    if (dev == 2)
+       u++;
+    *resp = cty_unit[u].STATUS;
+    cty_unit[u].STATUS &= BUSY;
+    chan_clr_done(GET_UADDR(cty_unit[u].flags));
 }
 
 t_stat ctyo_svc (UNIT *uptr)
@@ -119,17 +139,6 @@ t_stat ctyo_svc (UNIT *uptr)
     uint8   ch;
     int     eor;
 
-    if (uptr->CMD & START) {
-        uptr->STATUS &= ~END;
-        uptr->STATUS |= BUSY;
-        chan_clr_done(3);
-    } 
-    if (uptr->CMD & STOP) { 
-        uptr->STATUS |= END;
-        uptr->STATUS &= ~BUSY;
-        chan_set_done(3);
-    }
-    uptr->CMD = 0;
     /* Check if we had a held characteter */
     if (uptr->HOLD != 0) {
         if ((r = sim_putchar_s (uptr->HOLD)) == SCPE_STALL) {
@@ -145,7 +154,7 @@ t_stat ctyo_svc (UNIT *uptr)
     }
 
     if (uptr->STATUS & BUSY) { 
-       eor = chan_output_char(3, &ch, 0);
+       eor = chan_output_char(GET_UADDR(uptr->flags), &ch, 0);
        switch (ch & 060) {
        case 000:   ch = 0060 | (ch & 017); break;
        case 020:   ch = 0040 | (ch & 017); break;
@@ -164,7 +173,7 @@ t_stat ctyo_svc (UNIT *uptr)
        if (eor) {
           uptr->STATUS &= ~BUSY;
           uptr->STATUS |= END;
-          chan_set_done(3);
+          chan_set_done(GET_UADDR(uptr->flags));
        }
        sim_activate (uptr, uptr->wait);               /* try again */
     }
@@ -179,17 +188,6 @@ t_stat ctyi_svc (UNIT *uptr)
 
     sim_clock_coschedule (uptr, tmxr_poll);
 
-    if (uptr->CMD & START) {
-        uptr->STATUS &= ~END;
-        uptr->STATUS |= BUSY;
-        chan_clr_done(2);
-    } 
-    if (uptr->CMD & STOP) { 
-        uptr->STATUS |= END;
-        uptr->STATUS &= ~BUSY;
-        chan_set_done(2);
-    }
-    uptr->CMD = 0;
 /* Handle input */
 
     r = sim_poll_kbd();
@@ -197,7 +195,7 @@ t_stat ctyi_svc (UNIT *uptr)
        ch = 0177 & sim_tt_inpcvt(r & 0377, TT_GET_MODE (uptr->flags));
        if (uptr->HOLD) {
            if (ch >= '1' && ch <= '5') {
-               chan_set_done(2);
+               chan_set_done(GET_UADDR(uptr->flags));
                uptr->STATUS |= (F1 << (ch - '1'));
            }  else {
                sim_putchar('\007');
@@ -213,9 +211,9 @@ t_stat ctyi_svc (UNIT *uptr)
                 sim_debug(DEBUG_DATA, &cty_dev, ": ent\n");
                 sim_putchar('\r');
                 sim_putchar('\n');
-                uptr->STATUS |= ACCEPT|END;
+                uptr->STATUS |= ACCEPT;
                 uptr->STATUS &= ~BUSY;
-                chan_set_done(2);
+                chan_set_done(GET_UADDR(uptr->flags));
                 break;
 
           case 033: /* function key <escape>n key */
@@ -224,18 +222,18 @@ t_stat ctyi_svc (UNIT *uptr)
 
           case 030: /* ^X Post input interrupt */
                 sim_debug(DEBUG_CMD, &cty_dev, ": inp\n");
-                uptr->STATUS |= INPUT|END;
+                uptr->STATUS |= INPUT;
                 uptr->STATUS &= ~BUSY;
                 uptr->HOLD = 0;
-                chan_set_done(2);
+                chan_set_done(GET_UADDR(uptr->flags));
                 break;
 
           case 03:  /* ^C */
           case 025: /* ^U clear line */
-                uptr->STATUS |= CANCEL|END;
+                uptr->STATUS |= CANCEL;
                 uptr->STATUS &= ~BUSY;
                 uptr->HOLD = 0;
-                chan_set_done(2);
+                chan_set_done(GET_UADDR(uptr->flags));
                 break;
 
           default:
@@ -252,7 +250,7 @@ t_stat ctyi_svc (UNIT *uptr)
                     sim_putchar('\007');
                     break;
                 }
-                eor = chan_input_char(2, &ch, 0);
+                eor = chan_input_char(GET_UADDR(uptr->flags), &ch, 0);
                 switch (ch & 060) {
                 case 000:   ch = 0060 | (ch & 017); break;
                 case 020:   ch = 0040 | (ch & 017); break;
@@ -264,7 +262,7 @@ t_stat ctyi_svc (UNIT *uptr)
                 if (eor) {
                     uptr->STATUS &= ~BUSY;
                     uptr->STATUS |= END;
-                    chan_set_done(2);
+                    chan_set_done(GET_UADDR(uptr->flags));
                 }
                 break;
            }
@@ -279,14 +277,14 @@ t_stat ctyi_svc (UNIT *uptr)
                   sim_debug(DEBUG_CMD, &cty_dev, ": inp\n");
                   uptr->STATUS |= INPUT;
                   uptr->HOLD = 0;
-                  chan_set_done(2);
+                  chan_set_done(GET_UADDR(uptr->flags));
                   break;
 
             case 03:  /* ^C */
             case 025: /* ^U clear line */
                   uptr->STATUS |= CANCEL;
                   uptr->HOLD = 0;
-                  chan_set_done(2);
+                  chan_set_done(GET_UADDR(uptr->flags));
                   break;
   
             default:
@@ -307,8 +305,8 @@ t_stat cty_reset (DEVICE *dptr)
     cty_unit[1].CMD = 0;
     cty_unit[0].STATUS = 0;
     cty_unit[1].STATUS = 0;
-    chan_clr_done(2);
-    chan_clr_done(3);
+    chan_clr_done(GET_UADDR(cty_unit[0].flags));
+    chan_clr_done(GET_UADDR(cty_unit[1].flags));
     sim_clock_coschedule (&cty_unit[1], tmxr_poll);
 
     return SCPE_OK;

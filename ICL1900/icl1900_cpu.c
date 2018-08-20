@@ -37,8 +37,11 @@
 #define UNIT_MSIZE      (7 << UNIT_V_MSIZE)
 #define MEMAMOUNT(x)    (x << UNIT_V_MSIZE)
 #define UNIT_V_MODEL    (UNIT_V_MSIZE + 4)
-#define UNIT_MODEL      (0x1f << UNIT_V_MODEL)
+#define UNIT_MODEL      (0x3f << UNIT_V_MODEL)
 #define MODEL(x)        (UNIT_MODEL & (x << UNIT_V_MODEL))
+#define UNIT_FLOAT      (0x40 << UNIT_V_MODEL)
+#define UNIT_MULT       (0x100 << UNIT_V_MODEL)
+#define OPTION_MASK     (0x140 << UNIT_V_MODEL)
 
 
 #define TMR_RTC         1
@@ -133,6 +136,7 @@ uint32              SR3;                        /* Typewriter O/P */
 uint32              SR64;                       /* Interrupt status */
 uint32              SR65;                       /* Interrupt status */
 uint32              adrmask;                    /* Mask for addressing memory */
+uint8               loading;                    /* Loading bootstrap */
 
 
 struct InstHistory
@@ -164,6 +168,12 @@ t_stat              cpu_set_size(UNIT * uptr, int32 val, CONST char *cptr,
                                  void *desc);
 t_stat              cpu_show_size(FILE * st, UNIT * uptr, int32 val,
                                   CONST void *desc);
+t_stat              cpu_set_model(UNIT * uptr, int32 val, CONST char *cptr,
+                                 void *desc);
+t_stat              cpu_set_float(UNIT * uptr, int32 val, CONST char *cptr,
+                                 void *desc);
+t_stat              cpu_set_mult(UNIT * uptr, int32 val, CONST char *cptr,
+                                 void *desc);
 t_stat              cpu_show_hist(FILE * st, UNIT * uptr, int32 val,
                                   CONST void *desc);
 t_stat              cpu_set_hist(UNIT * uptr, int32 val, CONST char *cptr,
@@ -176,6 +186,49 @@ int32               rtc_tps = 60 ;
 int32               tmxr_poll = 10000;
 
 
+
+CPUMOD  cpu_modtab[] = {
+     { "1901",   MOD1,    TYPE_A1|FLOAT_STD|FLOAT_OPT|MULT_OPT|SV, 0, 10 },
+     { "1901A",  MOD1A,   TYPE_A1|FLOAT_STD|FLOAT_OPT|MULT_OPT|SV, 0, 10 },
+     { "1901S",  MOD1S,   TYPE_A1|FLOAT_STD|FLOAT_OPT|MULT_OPT|SV, 0, 10 },
+     { "1901T",  MOD1T,   TYPE_A1|FLOAT_STD|FLOAT_OPT|MULT_OPT|SV, 0, 10 },
+     { "1902",   MOD2,    TYPE_A1|FLOAT_STD|FLOAT_OPT|MULT|SV, 0, 10 },
+     { "1902A",  MOD2A,   TYPE_C2|FLOAT_STD|FLOAT_OPT|MULT|SV, 0, 10 },
+     { "1902S",  MOD2S,   TYPE_C1|FLOAT_STD|FLOAT_OPT|MULT|SV, EXT_IO, 10 },
+     { "1902T",  MOD2T,   TYPE_C1|FLOAT_STD|FLOAT_OPT|MULT|SV, EXT_IO, 10 },
+     { "1903",   MOD3,    TYPE_A2|FLOAT_STD|FLOAT_OPT|MULT_OPT|SV, 0, 10 },
+     { "1903A",  MOD3A,   TYPE_C2|FLOAT_STD|FLOAT_OPT|MULT|SV, 0, 10 },
+     { "1903S",  MOD3S,   TYPE_C2|FLOAT_STD|FLOAT_OPT|MULT_OPT|SV, EXT_IO, 10 },
+     { "1903T",  MOD3T,   TYPE_A2|FLOAT_STD|FLOAT_OPT|MULT_OPT|WG, 0, 10 },
+     { "1904",   MOD4,    TYPE_B2|FLOAT_OPT|MULT|WG, 0, 1 },
+     { "1904A",  MOD4A,   TYPE_C2|FLOAT_OPT|MULT|WG, EXT_IO, 10 },
+     { "1904E",  MOD4E,   TYPE_C2|FLOAT_OPT|MULT|WG, EXT_IO, 10 },
+     { "1904F",  MOD4F,   TYPE_C2|FLOAT_OPT|MULT|WG, EXT_IO, 10 },
+     { "1904S",  MOD4S,   TYPE_C2|FLOAT_OPT|MULT|WG, EXT_IO, 10 },
+     { "1905",   MOD5,    TYPE_A2|FLOAT|MULT|WG, 0, 1 },
+     { "1905A",  MOD5A,   TYPE_A2|FLOAT|MULT|WG, 0, 10 },
+     { "1905E",  MOD5E,   TYPE_C2|FLOAT|MULT|WG, EXT_IO, 10 },
+     { "1905F",  MOD5F,   TYPE_C2|FLOAT|MULT|WG, EXT_IO, 10 },
+     { "1905S",  MOD5S,   TYPE_C2|FLOAT|MULT|WG, EXT_IO, 10 },
+     { "1906",   MOD6,    TYPE_A2|FLOAT|MULT|WG, 0, 10 },
+     { "1906A",  MOD6A,   TYPE_A2|FLOAT|MULT|WG, 0, 100 },
+     { "1906E",  MOD6E,   TYPE_C2|FLOAT|MULT|WG, EXT_IO, 10 },
+     { "1906F",  MOD6F,   TYPE_C2|FLOAT|MULT|WG, EXT_IO, 10 },
+     { "1906S",  MOD6S,   TYPE_C2|FLOAT|MULT|WG, EXT_IO, 100 },
+     { "1907",   MOD7,    TYPE_A2|FLOAT|MULT|WG, 0, 10 },
+     { "1907A",  MOD7A,   TYPE_A2|FLOAT|MULT|WG, 0, 10 },
+     { "1907E",  MOD7E,   TYPE_C2|FLOAT|MULT|WG, EXT_IO, 10 },
+     { "1907F",  MOD7F,   TYPE_C2|FLOAT|MULT|WG, EXT_IO, 10 },
+     { "1907S",  MOD7S,   TYPE_C2|FLOAT|MULT|WG, EXT_IO, 10 },
+     { "1908",   MOD8,    TYPE_A2|FLOAT|MULT|WG, 0, 10 },
+     { "1908A",  MOD8A,   TYPE_A2|FLOAT|MULT|WG, 0, 10 },
+     { "1908S",  MOD8S,   TYPE_C2|FLOAT|MULT|WG, EXT_IO, 10 },
+     { "1909",   MOD9,    TYPE_C2|FLOAT|MULT|WG, EXT_IO, 1 },
+     { NULL, 0, 0, 0, 0},
+};
+
+uint16   cpu_flags = TYPE_C2|FLOAT_OPT|MULT;
+uint8    io_flags  = EXT_IO;
 
 /* CPU data structures
 
@@ -186,7 +239,7 @@ int32               tmxr_poll = 10000;
 */
 
 UNIT                cpu_unit[] =
-    {{ UDATA(rtc_srv, MEMAMOUNT(7)|UNIT_IDLE, MAXMEMSIZE ), 16667 }};
+    {{ UDATA(rtc_srv, MODEL(MOD4A)|UNIT_MULT|MEMAMOUNT(7)|UNIT_IDLE, MAXMEMSIZE ), 16667 }};
 
 REG                 cpu_reg[] = {
     {ORDATAD(C, RC,  22, "Instruction code"), REG_FIT},
@@ -212,37 +265,41 @@ MTAB                cpu_mod[] = {
     {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(127), NULL, "512K", &cpu_set_size},
     {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(254), NULL, "1024K", &cpu_set_size},
     /* Stevenage */
-    {UNIT_MODEL, MODEL(MOD1),  "1901",  "1901",  NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD1A), "1901A", "1901A", NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD1S), "1901S", "1901S", NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD1T), "1901T", "1901T", NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD2),  "1902",  "1902",  NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD2A), "1902A", "1902A", NULL, NULL, NULL},  /* C1 */
-    {UNIT_MODEL, MODEL(MOD2S), "1902S", "1902S", NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD2T), "1902T", "1902T", NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD3),  "1903",  "1903",  NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD3A), "1903A", "1903A", NULL, NULL, NULL},  /* C1 */
-    {UNIT_MODEL, MODEL(MOD3S), "1903S", "1903S", NULL, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD1),  "1901",  "1901",  &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD1A), "1901A", "1901A", &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD1S), "1901S", "1901S", &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD1T), "1901T", "1901T", &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD2),  "1902",  "1902",  &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD2A), "1902A", "1902A", &cpu_set_model, NULL, NULL},  /* C1 */
+    {UNIT_MODEL, MODEL(MOD2S), "1902S", "1902S", &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD2T), "1902T", "1902T", &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD3),  "1903",  "1903",  &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD3A), "1903A", "1903A", &cpu_set_model, NULL, NULL},  /* C1 */
+    {UNIT_MODEL, MODEL(MOD3S), "1903S", "1903S", &cpu_set_model, NULL, NULL},
     /* West Gorton */
-    {UNIT_MODEL, MODEL(MOD3T), "1903T", "1903T", NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD4),  "1904",  "1904",  NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD4A), "1904A", "1904A", NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD4E), "1904E", "1904E", NULL, NULL, NULL},  /* C */
-    {UNIT_MODEL, MODEL(MOD4F), "1904F", "1904F", NULL, NULL, NULL},  /* C */
-    {UNIT_MODEL, MODEL(MOD4S), "1904S", "1904S", NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD5),  "1905",  "1905",  NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD5E), "1905E", "1905E", NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD5F), "1905F", "1905F", NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD5S), "1905S", "1905S", NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD6),  "1906",  "1906",  NULL, NULL, NULL},    /* C */
-    {UNIT_MODEL, MODEL(MOD6A), "1906A", "1906A", NULL, NULL, NULL},  /* C */
-    {UNIT_MODEL, MODEL(MOD6E), "1906E", "1906E", NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD6F), "1906F", "1906F", NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD7),  "1907",  "1907",  NULL, NULL, NULL},    /* C */
-    {UNIT_MODEL, MODEL(MOD7E), "1907E", "1907E", NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD7F), "1907F", "1907F", NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD8A), "1908A", "1908A", NULL, NULL, NULL},
-    {UNIT_MODEL, MODEL(MOD9),  "1909",  "1909",  NULL, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD3T), "1903T", "1903T", &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD4),  "1904",  "1904",  &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD4A), "1904A", "1904A", &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD4E), "1904E", "1904E", &cpu_set_model, NULL, NULL},  /* C */
+    {UNIT_MODEL, MODEL(MOD4F), "1904F", "1904F", &cpu_set_model, NULL, NULL},  /* C */
+    {UNIT_MODEL, MODEL(MOD4S), "1904S", "1904S", &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD5),  "1905",  "1905",  &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD5E), "1905E", "1905E", &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD5F), "1905F", "1905F", &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD5S), "1905S", "1905S", &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD6),  "1906",  "1906",  &cpu_set_model, NULL, NULL},    /* C */
+    {UNIT_MODEL, MODEL(MOD6A), "1906A", "1906A", &cpu_set_model, NULL, NULL},  /* C */
+    {UNIT_MODEL, MODEL(MOD6E), "1906E", "1906E", &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD6F), "1906F", "1906F", &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD7),  "1907",  "1907",  &cpu_set_model, NULL, NULL},    /* C */
+    {UNIT_MODEL, MODEL(MOD7E), "1907E", "1907E", &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD7F), "1907F", "1907F", &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD8A), "1908A", "1908A", &cpu_set_model, NULL, NULL},
+    {UNIT_MODEL, MODEL(MOD9),  "1909",  "1909",  &cpu_set_model, NULL, NULL},
+    {UNIT_FLOAT, 0,            "NOFLOAT", "NOFLOAT", &cpu_set_float, NULL, NULL},
+    {UNIT_FLOAT, UNIT_FLOAT,   "FLOAT",  "FLOAT", &cpu_set_float, NULL, NULL},
+    {UNIT_MULT,  0,            "NOMULT", "NOMULT", &cpu_set_mult, NULL, NULL},
+    {UNIT_MULT,  UNIT_MULT,    "MULT",   "MULT", &cpu_set_mult, NULL, NULL},
     {MTAB_VDV, 0, "MEMORY", NULL, NULL, &cpu_show_size},
     {MTAB_XTD|MTAB_VDV, 0, "IDLE", "IDLE", &sim_set_idle, &sim_show_idle },
     {MTAB_XTD|MTAB_VDV, 0, NULL, "NOIDLE", &sim_clr_idle, NULL },
@@ -352,10 +409,10 @@ sim_instr(void)
     int                 e1,e2;          /* Temp for exponents */
     int                 f;              /* Used to hold flags */
 
-    reason = 0;
     adrmask = (Mode & AM22) ? M22 : M15;
+    reason = chan_set_devs();
 
-    while (reason == 0) {       /* loop until halted */
+    while (reason == SCPE_OK) {        /* loop until halted */
        if (sim_interval <= 0) {        /* event queue? */
            reason = sim_process_event();
            if (reason != SCPE_OK) {
@@ -370,27 +427,51 @@ sim_instr(void)
            }
        }
 
+       while (loading) {        /* event queue? */
+           reason = sim_process_event();
+           if (reason != SCPE_OK) {
+                break; /* process */
+           }
+           if ((SR64 | SR65) != 0) {
+              loading = 0;
+              exe_mode = 1;
+              RC = 020;
+           }
+       }
+
 intr:
        if (!exe_mode && (SR64 | SR65) != 0) {
             exe_mode = 1;
+            loading = 0;
             /* Store registers */
             Mem_write(RD+13, &facch, 0);  /* Save F.P.U. */
             Mem_write(RD+12, &faccl, 0);
             RA = 0;         /* Build ZSTAT */
-            if (Zero)
-                RA |= B3;
-            if (OPIP | PIP)
-                RA |= B2;
+            if (cpu_flags & SV) {
+                Mem_read(RD+9, &RA, 0);
+                RA &= 077777;
+                RA |= ((Mode|DATUM) << 16);
+                if (Mode & DATUM)
+                   RA |= 1 << 16;
+                if (BCarry)
+                   RA |= B1;
+            } else {
+                if (Zero)
+                    RA |= B3;
+                if (OPIP | PIP)
+                    RA |= B2;
+            }
             Mem_write(RD+9, &RA, 0);
             RA = RC & adrmask;
             if (BV)
               RA |= B0;
-            if (BCarry)
-              RA |= B1;
-#if 0
-            if ((Mode & AM22) == 0 && Zero)
-                RA |= B8;
-#endif
+            if (io_flags & EXT_IO) {
+                if (BCarry)
+                  RA |= B1;
+            } else {
+                if (Zero)
+                    RA |= B8;
+            }
             Mem_write(RD+8, &RA, 0);
             for (n = 0; n < 8; n++)
                Mem_write(RD+n, &XR[n], 0);
@@ -635,10 +716,9 @@ obey:
                      break;
 
        case OP_STOZ:         /* Store Zero */
-#if 0     /* Stevenage Machines */
-                      if (exe_mode)
+                     /* Stevenage Machines */
+                     if ((cpu_flags & SV) != 0 && exe_mode)
                          XR[RX] = RA;
-#endif
                      RB = 0;
                      BCarry = 0;
                      if (Mem_write(RS, &RB, 1)) {
@@ -688,6 +768,8 @@ obey:
        case OP_MPY:          /* Multiply */
        case OP_MPR:          /* Multiply and Round  */
        case OP_MPA:          /* Multiply and Accumulate */
+                     if ((cpu_flags & MULT) == 0)
+                         goto voluntary;
                      if (RA == B0 && RB == B0) {
                          if (RF != OP_MPA || (XR[(RX + 1) & 7] & B0) == 0) {
                              BV = 1;
@@ -796,6 +878,8 @@ obey:
        case OP_DVD:          /* Unrounded Double Length Divide */
        case OP_DVR:          /* Rounded Double Length Divide */
        case OP_DVS:          /* Single Length Divide */
+                     if ((cpu_flags & MULT) == 0)
+                         goto voluntary;
                      RP = XR[(RX+1) & 7];            /* VR */
                      RA = RB;  /* Divisor to RA */
                      RB = XR[RX];  /* Dividend to RB/RP */
@@ -1003,7 +1087,7 @@ dvd2:
        case OP_BCHX:         /* Branch on Character Indexing */
        case OP_BCHX1:
                      BCarry = 0;
-                     RA += 020000000;
+                     RA += B1;
                      n = (RA & BM1) != 0;
                      if (Mode & AM22) {
                         RA = ((RA + n) & M22) | (RA & CMASK);
@@ -1083,7 +1167,7 @@ branch:
                          M[262] =  (temp & ~ 0177) + ((temp + 1) & 0177);
                      }
                      RC = RB;
-               break;
+                     break;
 
        case OP_EXIT:         /* Exit Subroutine */
        case OP_EXIT1:
@@ -1172,6 +1256,8 @@ branch:
        /* B with Floating or C */
        case OP_BFP:          /* Branch state of floating point accumulator */
        case OP_BFP1:
+                    if ((cpu_flags & FLOAT) == 0)
+                        goto voluntary;
                     switch (RX & 06) {
                     case 0:  n = (faccl | facch) != 0; break;
                     case 2:  n = (faccl & B0) != 0; break;
@@ -1320,6 +1406,8 @@ branch:
 
        case OP_NORM:         /* Nomarlize Single -2 +FP */
        case OP_NORMD:        /* Normalize Double -2 +FP */
+                    if ((cpu_flags & NORM_OP) == 0)
+                        goto voluntary;
                     RT = RB;
                     RB = (RF & 1) ? XR[(RX+1) & 07] & M23 : 0;
 //fprintf(stderr, "Norm0: %08o %08o %08o\n\r", RA, RB, RT);
@@ -1394,110 +1482,125 @@ norm1:
 
         /* Not on A*/
        case OP_MVCH:         /* Move Characters - BC */
-                     RK = RB;
-                     RB = XR[(RX+1) & 07];
-                     do {
-                         if (Mem_read(RA, &RT, 1)) {
-                             goto intr;
-                         }
-                         m = (RA >> 22) & 3;
-                         RT = (RT >> (6 * (3 - m))) & 077;
-                         if (Mem_read(RB, &RS, 1)) {
-                             goto intr;
-                         }
-                         m = (RB >> 22) & 3;
-                         m = 6 * (3 - m);
-                         RS &= ~(077 << m);
-                         RS |= (RT & 077) << m;
-                         if (Mem_write(RB, &RS, 1)) {
-                             goto intr;
-                         }
-                         RA += 020000000;
-                         m = (RA & BM1) != 0;
-                         RA = ((RA + m) & M22) | (RA & CMASK);
-                         RB += 020000000;
-                         m = (RB & BM1) != 0;
-                         RB = ((RB + m) & M22) | (RB & CMASK);
-                         RK = (RK - 1) & 0777;
-                      } while (RK != 0);
-                      XR[RX] = RA;
-                      XR[(RX+1)&07] = RB;
-                      break;
+                    if (CPU_TYPE < TYPE_B1)
+                        goto voluntary;
+                    RK = RB;
+                    RB = XR[(RX+1) & 07];
+                    do {
+                        if (Mem_read(RA, &RT, 1)) {
+                            goto intr;
+                        }
+                        m = (RA >> 22) & 3;
+                        RT = (RT >> (6 * (3 - m))) & 077;
+                        if (Mem_read(RB, &RS, 1)) {
+                            goto intr;
+                        }
+                        m = (RB >> 22) & 3;
+                        m = 6 * (3 - m);
+                        RS &= ~(077 << m);
+                        RS |= (RT & 077) << m;
+                        if (Mem_write(RB, &RS, 1)) {
+                            goto intr;
+                        }
+                        RA += 020000000;
+                        m = (RA & BM1) != 0;
+                        RA = ((RA + m) & M22) | (RA & CMASK);
+                        RB += 020000000;
+                        m = (RB & BM1) != 0;
+                        RB = ((RB + m) & M22) | (RB & CMASK);
+                        RK = (RK - 1) & 0777;
+                     } while (RK != 0);
+                     XR[RX] = RA;
+                     XR[(RX+1)&07] = RB;
+                     break;
 
         /* Not on A*/
        case OP_SMO:          /* Supplementary Modifier - BC  */
-                     if (OPIP) {      /* Error */
-                         SR64 |= B1;
-                         goto intr;
-                     }
-                     if (Mem_read(RS, &RP, 1)) {
-                         goto intr;
-                     }
-                     PIP = 1;
-                     break;
+                    if (CPU_TYPE < TYPE_B1)
+                        goto voluntary;
+                    if (OPIP) {      /* Error */
+                        SR64 |= B1;
+                        goto intr;
+                    }
+                    if (Mem_read(RS, &RP, 1)) {
+                        goto intr;
+                    }
+                    PIP = 1;
+                    break;
 
-       case OP_NULL:         /* No Operation */
-                     if (!exe_mode && RX == 7 && (Mode & 7) > 0 && (Mode & 7) < 5)
-                         SR64 |= B2;
-                     break;
+       case OP_NULL:        /* No Operation */
+                    if (!exe_mode && RX == 7 && (Mode & 7) > 0 && (Mode & 7) < 5)
+                        SR64 |= B2;
+                    break;
 
-       case OP_LDCT:         /* Load Count */
-                     RA = CNTMSK & (RB << 15);
-                     XR[RX] = RA;
-                     break;
+       case OP_LDCT:        /* Load Count */
+                    RA = CNTMSK & (RB << 15);
+                    XR[RX] = RA;
+                    break;
 
        case OP_MODE:         /* Set Mode */
-#if 0     /* Stevenage Machines */
-                     if (exe_mode && RX == 1)
-                         temp = RB; /* Set interrupt enable mode */
-                     else
-/* On Stevenage Machines 002 -> 020 Add Datum */
-/* On Stevenage Machines 004 -> 000 unused */
-/* On Stevenage Machines 010 -> 000 unused */
-/* On Stevenage Machines 020 ->     Extended store mode */
-/* On Stevenage Machines 040 -> 000 unused */
-/* On Stevenage Machines 0100 -> Carry */
-#endif
-                     if (exe_mode)
-                        Mode = RB & 076;
-                        Zero = RB & 1;
-                     adrmask = (Mode & AM22) ? M22 : M15;
-                     break;
+                    /* Stevenage Machines */
+                    if ((cpu_flags & SV) != 0 && exe_mode) {
+                       if (RX == 0) {
+                           /* Remap modes settings */
+                           Mode = 0;
+                           if (RB & 02)
+                               Mode |= DATUM;
+                           if (RB & 020)
+                               Mode |= AM22;
+                           if (RB & 0100)
+                               Mode |= EJM;
+                           if (RB & 0200)
+                               BCarry = 1;
+                        } else if (RX == 1) {
+                           temp = RB; /* Set interrupt enable mode */
+                        }
+                    } else if (exe_mode)
+                       Mode = RB & 076;
+                    Zero = RB & 1;
+                    adrmask = (Mode & AM22) ? M22 : M15;
+                    break;
 
-       case OP_MOVE:         /* Copy N words */
-                     RK = RB;
-                     RA &= adrmask;
-                     RB = XR[(RX+1) & 07] & adrmask;
-                     do {
-                         if (Mem_read(RA, &RT, 1)) {
-                             goto intr;
-                         }
-                         if (Mem_write(RB, &RT, 1)) {
-                             goto intr;
-                         }
-                         RA++;
-                         RB++;
-                         RK = (RK - 1) & 0777;
-                     } while (RK != 0);
-                     break;
+       case OP_MOVE:        /* Copy N words */
+                    if (CPU_TYPE < TYPE_B1)
+                        goto voluntary;
+                    RK = RB;
+                    RA &= adrmask;
+                    RB = XR[(RX+1) & 07] & adrmask;
+                    do {
+                        if (Mem_read(RA, &RT, 1)) {
+                            goto intr;
+                        }
+                        if (Mem_write(RB, &RT, 1)) {
+                            goto intr;
+                        }
+                        RA++;
+                        RB++;
+                        RK = (RK - 1) & 0777;
+                    } while (RK != 0);
+                    break;
 
-       case OP_SUM:          /* Sum N words */
-                     RK = RB;
-                     RA = 0;
-                     RB = XR[(RX+1) & 07] & adrmask;
-                     do {
-                         if (Mem_read(RB, &RT, 1)) {
-                             goto intr;
-                         }
-                         RA = (RA + RT) & FMASK;
-                         RB++;
-                         RK = (RK - 1) & 0777;
-                     } while (RK != 0);
-                     XR[RX] = RA;
-                     break;
+       case OP_SUM:         /* Sum N words */
+                    if (CPU_TYPE < TYPE_B1)
+                        goto voluntary;
+                    RK = RB;
+                    RB = XR[(RX+1) & 07] & adrmask;
+                    RA = 0;
+                    do {
+                        if (Mem_read(RB, &RT, 1)) {
+                            goto intr;
+                        }
+                        RA = (RA + RT) & FMASK;
+                        RB++;
+                        RK = (RK - 1) & 0777;
+                    } while (RK != 0);
+                    XR[RX] = RA;
+                    break;
 
 /* B or C with Floating Point */
        case OP_FLOAT:        /* Convert Fixed to Float +FP */
+                    if ((cpu_flags & FLOAT) == 0)
+                        goto voluntary;
                      if (Mem_read(RS, &RA, 1)) {
                         goto intr;
                      }
@@ -1513,6 +1616,8 @@ norm1:
                      RX = 0;
                      goto fn;
        case OP_FIX:          /* Convert Float to Fixed +FP */
+                    if ((cpu_flags & FLOAT) == 0)
+                        goto voluntary;
                     RA = faccl;
                     RB = facch & MMASK;
                     e1 = 279 - (facch & M9);
@@ -1557,6 +1662,8 @@ norm1:
 
        case OP_FAD:          /* Floating Point Add +FP */
        case OP_FSB:          /* Floating Point Subtract +FP */
+                    if ((cpu_flags & FLOAT) == 0)
+                        goto voluntary;
                     if (Mem_read(RS, &RA, 1)) { /* Read lower */
                         goto intr;
                     }
@@ -1713,6 +1820,8 @@ fexp:
                     break;
 
        case OP_FMPY:         /* Floating Point Multiply +FP */
+                    if ((cpu_flags & FLOAT) == 0)
+                        goto voluntary;
                     if (Mem_read(RS, &RA, 1)) { /* Read lower */
                         goto intr;
                     }
@@ -1847,6 +1956,8 @@ fexp:
                     goto fn;
 
        case OP_FDVD:         /* Floating Point Divide +FP */
+                    if ((cpu_flags & FLOAT) == 0)
+                        goto voluntary;
                     if (Mem_read(RS, &RA, 1)) { /* Read lower */
                         goto intr;
                     }
@@ -1969,6 +2080,8 @@ fexp:
                     goto fn;
 
        case OP_LFP:          /* Load Floating Point +FP */
+                    if ((cpu_flags & FLOAT) == 0)
+                        goto voluntary;
                     if (RX & 1) {
                        faccl = facch = fovr = 0;
 //fprintf(stderr, "LFPZ: %08o %08o %o\n\r", faccl, facch, RX);
@@ -1989,6 +2102,8 @@ fexp:
 
        case OP_SFP:          /* Store Floating Point +FP */
 //fprintf(stderr, "SFP: %08o %08o %o\n\r", faccl, facch, fovr);
+                    if ((cpu_flags & FLOAT) == 0)
+                        goto voluntary;
                     if (Mem_write(RB, &faccl, 1)) {
                        goto intr;
                     }
@@ -2022,27 +2137,23 @@ fexp:
                     if (exe_mode) {
                          RA = 0;
                          switch(RB) {
+                         case 0: /* Time of day clock */ break;
                          case 1: RA = SR1; break;
-                         case 2: ctyi_cmd(0, &RA); break;
-                         case 3: ctyo_cmd(0, &RA); break;
                          case 64: RA = SR64; SR64 &= 003777777; break;
                          case 65: RA = SR65; break;
+                         default: if (RB < 64) 
+                                      chan_nsi_status(RB, &RA);
+                                  break;
                          }
                          XR[RX] = RA;
-//fprintf(stderr, "RD SR %o %08o\n\r", RB, RA);
                          break;
                     }
                     /* Fall through */
        case 0171:            /* Write special register */
                     if (exe_mode) {
 //fprintf(stderr, "WR SR %o %08o\n\r", RB, RA);
-                         RT = 0;
-                         switch(RB) {
-                         case 2: ctyi_cmd(RA, &RT); break;
-                         case 3: ctyo_cmd(RA, &RT);  break;
-                         }
-                         XR[RX] = RT;
-
+                         if (RB < 64) 
+                             chan_nsi_cmd(RB, RA);
                          break;
                     }
                     /* Fall through */
@@ -2089,14 +2200,13 @@ fexp:
                     /* Fall through */
        case 0174:            /* Send control character to peripheral */
                     if (exe_mode) {
-                         RT = RB;
-                         chan_send_cmd(RB, RA & 077, &RB);
+                         chan_send_cmd(RB, RA & 077, &RT);
 fprintf(stderr, "CMD  %04o %04o %08o\n\r", RT, RB, RA);
                          m = (m == 0) ? 3 : (XR[m] >> 22) & 3;
                          m = 6 * (3 - m);
-                         RB = (RB & 077) << m;
+                         RT = (RT & 077) << m;
                          RA &= ~(077 << m);
-                         RA |= RB;
+                         RA |= RT;
                          XR[RX] = RA;
                          break;
                     }
@@ -2170,6 +2280,7 @@ rtc_srv(UNIT * uptr)
 
     t = sim_rtcn_calb(rtc_tps, TMR_RTC);
     sim_activate_after(uptr, 1000000/rtc_tps);
+    SR64 |= B3;
 //    tmxr_poll = t;
     return SCPE_OK;
 }
@@ -2245,6 +2356,55 @@ cpu_set_size(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     MEMSIZE = val;
     for (i = MEMSIZE; i < MAXMEMSIZE; i++)
         M[i] = 0;
+    return SCPE_OK;
+}
+
+t_stat
+cpu_set_model(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
+{
+    CPUMOD    *ptr;
+
+    val >>= UNIT_V_MODEL;
+    for(ptr = &cpu_modtab[0]; ptr->name != NULL; ptr++) {
+        if (ptr->mod_num == val) {
+           cpu_flags = ptr->cpu_flags;
+           io_flags = ptr->io_flags;
+           rtc_tps = ptr->ticker;
+           cpu_unit[0].flags &= ~(UNIT_MODEL|UNIT_FLOAT|UNIT_MULT);
+           cpu_unit[0].flags |= MODEL(val);
+           if (cpu_flags & FLOAT)
+               cpu_unit[0].flags |= UNIT_FLOAT;
+           if (cpu_flags & MULT)
+               cpu_unit[0].flags |= UNIT_MULT;
+           return SCPE_OK;
+        }
+    }
+    return SCPE_ARG;
+}
+
+t_stat
+cpu_set_float(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
+{
+    int32 oval = val;
+    if (val == 0 && (cpu_flags & (FLOAT_OPT|FLOAT)) == FLOAT) 
+        val = UNIT_FLOAT;
+    cpu_unit[0].flags &= ~UNIT_FLOAT;
+    cpu_unit[0].flags |= val;
+    if (oval != val)
+       return SCPE_ARG;
+    return SCPE_OK;
+}
+
+t_stat
+cpu_set_mult(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
+{
+    int32 oval = val;
+    if (val == 0 && (cpu_flags & (MULT_OPT|MULT)) == MULT) 
+        val = UNIT_MULT;
+    cpu_unit[0].flags &= ~UNIT_MULT;
+    cpu_unit[0].flags |= val;
+    if (oval != val)
+       return SCPE_ARG;
     return SCPE_OK;
 }
 
