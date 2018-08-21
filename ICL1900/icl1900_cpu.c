@@ -2295,6 +2295,7 @@ cpu_reset(DEVICE * dptr)
     sim_register_clock_unit (&cpu_unit[0]);
     sim_rtcn_init (cpu_unit[0].wait, TMR_RTC);
     sim_activate(&cpu_unit[0], cpu_unit[0].wait) ;
+    SR64 = SR65 = 0;
 
     return SCPE_OK;
 }
@@ -2390,6 +2391,9 @@ cpu_set_float(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
         val = UNIT_FLOAT;
     cpu_unit[0].flags &= ~UNIT_FLOAT;
     cpu_unit[0].flags |= val;
+    cpu_flags &= ~FLOAT;
+    if (val)
+        cpu_flags |= FLOAT;
     if (oval != val)
        return SCPE_ARG;
     return SCPE_OK;
@@ -2403,6 +2407,9 @@ cpu_set_mult(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
         val = UNIT_MULT;
     cpu_unit[0].flags &= ~UNIT_MULT;
     cpu_unit[0].flags |= val;
+    cpu_flags &= ~MULT;
+    if (val)
+        cpu_flags |= MULT;
     if (oval != val)
        return SCPE_ARG;
     return SCPE_OK;
