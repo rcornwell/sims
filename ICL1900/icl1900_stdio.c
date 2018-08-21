@@ -42,6 +42,7 @@ t_stat
 chan_set_devs()
 {
      int   i;
+     int   j;
      int   chan;
 
      /* Clear device table */
@@ -61,7 +62,29 @@ chan_set_devs()
          /* If device is disabled, don't add it */
          if (sim_devices[i]->flags & DEV_DIS)
             continue;
-         if (dibp->type & MULT_DEV) {
+         if (dibp->type & BLK_DEV) {
+            int f = 1;
+    
+            chan = GET_UADDR(sim_devices[i]->flags);
+            /* Make sure it is in range */
+            if (chan < 2 || (chan + sim_devices[i]->numunits) > 36)
+               continue;
+            for (j = 0; j < sim_devices[i]->numunits; j++) {
+                if (sim_devices[i]->units[j].flags & UNIT_DIS)
+                    continue;
+                if (devs[chan+j] != NULL) {
+                    fprintf(stderr, "Conflict between devices %d %s\n", chan+j, sim_devices[i]->name);
+                    f = 0;
+                }
+            } 
+            if (f) {
+               for (j = 0; j < sim_devices[i]->numunits; j++) {
+                   if (sim_devices[i]->units[j].flags & UNIT_DIS)
+                       continue;
+                   devs[chan+j] = dibp;
+               } 
+            }
+         } else if (dibp->type & MULT_DEV) {
             chan = GET_UADDR(sim_devices[i]->flags);
             /* Make sure it is in range */
             if (chan < 2 || chan > 36)
@@ -103,6 +126,7 @@ set_chan(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
      int             new_chan;
      int             cur_chan;
      t_stat          r;
+     int             i;
 
      if (cptr == NULL)
          return SCPE_ARG;
@@ -121,7 +145,25 @@ set_chan(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
      if (new_chan < 4)     /* Lowest channel is 4 */
          return SCPE_ARG;
      /* Find channel device is current on and remove it */
-     if (dibp->type & MULT_DEV) {
+     if (dibp->type & BLK_DEV) {
+        if (new_chan < 2 || (new_chan + dptr->numunits) > 36)
+            return SCPE_ARG;
+        /* Validate that we can actually set this device. */
+        for (i = 0; i < dptr->numunits; i++) {
+            if (dptr->units[i].flags & UNIT_DIS)
+                continue;
+            if (devs[new_chan+i] != dibp && devs[new_chan+i] != NULL)
+                return SCPE_ARG;
+        }
+        /* Free up current device */
+        cur_chan = GET_UADDR(dptr->flags);
+        for (i = 0; i < dptr->numunits; i++) {
+            if (dptr->units[i].flags & UNIT_DIS)
+                continue;
+            if (devs[cur_chan+i] == dibp) 
+                devs[cur_chan] = NULL;
+        }
+     } else if (dibp->type & MULT_DEV) {
          cur_chan = GET_UADDR(dptr->flags);
      } else {
          cur_chan = GET_UADDR(uptr->flags);
@@ -130,7 +172,7 @@ set_chan(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
          devs[cur_chan] = NULL;
      /* If device is disabled, set to whatever the user wants */
      if (dptr->flags & DEV_DIS) {
-         if (dibp->type & MULT_DEV) {
+         if (dibp->type & (MULT_DEV|BLK_DEV)) {
              dptr->flags &= ~UNIT_M_ADDR;
              dptr->flags |= UNIT_ADDR(new_chan);
          } else {
@@ -140,6 +182,16 @@ set_chan(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
          return SCPE_OK;
      }
  
+     if (dibp->type & BLK_DEV) {
+         dptr->flags &= ~UNIT_M_ADDR;
+         dptr->flags |= UNIT_ADDR(new_chan);
+         for (i = 0; i < dptr->numunits; i++) {
+             if (dptr->units[i].flags & UNIT_DIS)
+                 continue;
+             devs[new_chan+i] = dibp;
+         }
+         return SCPE_OK;
+     }
      if (devs[new_chan] == NULL) {
          if (dibp->type & MULT_DEV) {
              dptr->flags &= ~UNIT_M_ADDR;
@@ -163,6 +215,7 @@ get_chan(FILE *st, UNIT *uptr, int32 v, CONST void *desc)
      DEVICE          *dptr;
      DIB             *dibp;
      int             chan;
+     int             i;
 
      if (uptr == NULL)
          return SCPE_IERR;
@@ -172,7 +225,9 @@ get_chan(FILE *st, UNIT *uptr, int32 v, CONST void *desc)
      dibp = (DIB *) dptr->ctxt;
      if (dibp == NULL)
          return SCPE_IERR;
-     if (dibp->type & MULT_DEV) {
+     if (dibp->type & BLK_DEV) {
+         chan = GET_UADDR(dptr->flags) + (uptr - dptr->units);
+     } else if (dibp->type & MULT_DEV) {
          chan = GET_UADDR(dptr->flags);
      } else {
          chan = GET_UADDR(uptr->flags);
@@ -416,7 +471,7 @@ chan_set_done(int dev) {
     if (dev < 22) 
        SR64 |= B2 >> dev;
     else
-       SR65 |= B1 >> (dev - 24);
+       SR65 |= B1 >> (dev - 23);
 }
 
 void
@@ -424,7 +479,7 @@ chan_clr_done(int dev) {
     if (dev < 22) 
        SR64 &= ~(B2 >> dev);
     else
-       SR65 &= ~(B1 >> (dev - 24));
+       SR65 &= ~(B1 >> (dev - 23));
 }
 
 

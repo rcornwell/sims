@@ -1,4 +1,4 @@
-/* icl1900_defs.h: ICL1900 simulator definitions 
+/* icl1900_defs.h: ICL1900 simulator definitions
 
    Copyright (c) 2017, Richard Cornwell
 
@@ -28,13 +28,14 @@
 
 /* Definitions for each supported CPU */
 
-#define NUM_DEVS_PTR    1
-#define NUM_DEVS_PTP    1
+#define NUM_DEVS_PTR    2
+#define NUM_DEVS_PTP    2
 #define NUM_DEVS_CDR    0
 #define NUM_DEVS_CDP    0
 #define NUM_DEVS_LPR    0
 #define NUM_DEVS_CON    0
-#define NUM_DEVS_MT     0
+#define NUM_DEVS_MT     0             /* 1971 SI tape drives */
+#define NUM_DEVS_MTA    8             /* 1974 NSI tape drives */
 #define NUM_DEVS_DSK    0
 #define NUM_DEVS_DTC    0
 #define MAXMEMSIZE      (4096 * 1024)
@@ -151,13 +152,13 @@ t_opcode;
 #define OP_DVS        0046          /* Single Length Divide */
 #define OP_CBD        0047          /* Convert Binary to Decimal */
 #define OP_BZE        0050          /* Branch if X is Zero */
-#define OP_BZE1       0051 
+#define OP_BZE1       0051
 #define OP_BNZ        0052          /* Branch if X is not Zero */
 #define OP_BNZ1       0053
 #define OP_BPZ        0054          /* Branch if X is Positive or zero */
 #define OP_BPZ1       0055
 #define OP_BNG        0056          /* Branch if X is Positive or zero */
-#define OP_BNG1       0057 
+#define OP_BNG1       0057
 #define OP_BUX        0060          /* Branch on Unit indexing */
 #define OP_BUX1       0061
 #define OP_BDX        0062          /* Branch on Double Indexing */
@@ -241,6 +242,7 @@ t_opcode;
 #define SPEC_HES       2            /* Special transfer */
 #define LONG_BLK       4            /* Long block device */
 #define MULT_DEV       8            /* Channel in device flags */
+#define BLK_DEV        16           /* First in group of devices. */
 
 struct icl_dib {
        uint8     type;            /* Type of device */
@@ -288,21 +290,23 @@ extern void chan_set_done(int dev);
 extern void chan_clr_done(int dev);
 
 /* Generic devices common to all */
-extern DEVICE      cpu_dev; 
-extern UNIT        cpu_unit[]; 
+extern DEVICE      cpu_dev;
+extern UNIT        cpu_unit[];
 extern REG         cpu_reg[];
 
 /* Global device definitions */
 extern DIB          ctyi_dib;
 extern DIB          ctyo_dib;
-extern DEVICE       cty_dev; 
-extern DEVICE       ptr_dev; 
-extern DEVICE       ptp_dev; 
-extern DEVICE       cdr_dev; 
-extern DEVICE       cdp_dev; 
-extern DEVICE       lpr_dev; 
-extern DEVICE       dtc_dev; 
-extern DEVICE       dsk_dev; 
-extern DEVICE       mt_dev; 
+extern DEVICE       cty_dev;
+extern DEVICE       ptr_dev;
+extern DEVICE       ptp_dev;
+extern DEVICE       cdr_dev;
+extern DEVICE       cdp_dev;
+extern DEVICE       lpr_dev;
+extern DEVICE       dtc_dev;
+extern DEVICE       dsk_dev;
+extern DEVICE       mt_dev;
+extern DEVICE       mta_dev;
 
+extern uint8        parity_table[64];
 #endif /* _ICL1900_H_ */

@@ -128,7 +128,7 @@ MTAB ptp_mod[] = {
     { UNIT_TYPE, SET_TYPE(T1925_2), "1925/2", "1925/2", NULL, NULL, "ICL 1922/2 SI 300CPM punch."},
     { UNIT_TYPE, SET_TYPE(T1926_1), "1926/1", "1926/1", NULL, NULL, "ICL 1926/1 NSI 1000CPM punch."},
     { UNIT_TYPE, SET_TYPE(T1926_2), "1926/2", "1926/2", NULL, NULL, "ICL 1926/2 SI 1000CPM punch."},
-    {MTAB_XTD | MTAB_VDV | MTAB_VALR, 0, "DEV", "DEV", &set_chan, &get_chan, NULL, "Device Number"},
+    {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "DEV", "DEV", &set_chan, &get_chan, NULL, "Device Number"},
     { 0 }
     };
 

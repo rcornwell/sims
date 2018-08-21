@@ -65,6 +65,9 @@ DEVICE             *sim_devices[] = {
 #if NUM_DEVS_MT > 0
     &mt_dev,
 #endif
+#if NUM_DEVS_MTA > 0
+    &mta_dev,
+#endif
 #if NUM_DEVS_DSK > 0
     &dsk_dev,
 #endif

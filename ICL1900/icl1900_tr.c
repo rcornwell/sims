@@ -131,7 +131,7 @@ MTAB ptr_mod[] = {
     { UNIT_TYPE, SET_TYPE(T1915_2), "1915/2", "1915/2", NULL, NULL, "ICL 1912/2 SI 300CPM reader."},
     { UNIT_TYPE, SET_TYPE(T1916_1), "1916/1", "1916/1", NULL, NULL, "ICL 1916/1 NSI 1000CPM reader."},
     { UNIT_TYPE, SET_TYPE(T1916_2), "1916/2", "1916/2", NULL, NULL, "ICL 1916/2 SI 1000CPM reader."},
-    {MTAB_XTD | MTAB_VDV | MTAB_VALR, 0, "DEV", "DEV", &set_chan, &get_chan, NULL, "Device Number"},
+    {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "DEV", "DEV", &set_chan, &get_chan, NULL, "Device Number"},
     { 0 }
     };
 
