@@ -88,15 +88,15 @@
 #define TERMINATE    000000001        /* Transfer complete */
 #define OPAT         000000002        /* Operator attention */
 #define PARITY       000000004        /* Parity error */
-#define SHORT_BLK    000000010        /* Short tape block */
+#define SHRTBLK      000000010        /* Short tape block */
 #define ACCEPT       000000020        /* Ready for command */
 #define BUSY         000000040        /* Device busy */
 #define CBUSY        000000100        /* Controller Busy */
 #define WPROT        000001000        /* Write protect */
-#define EOT          000004000        /* Hit end of tape */
+#define MARK         000004000        /* Tape Mark sensed */
 #define OFFLINE      000040000        /* Device offline */
 #define LONGBLK      000100000        /* Long block */
-#define MARK         000400000        /* Tape mark sensed */
+#define EOT          000400000        /* End of Tape sensed */
 #define DENS         014000000
 #define CHAR         060000000        /* Count of character read */
 
@@ -246,6 +246,7 @@ t_stat mta_svc (UNIT *uptr)
                  uptr->STATUS &= ~BUSY;
                  mta_busy = 0;
                  chan_set_done(dev);
+                 return SCPE_OK;
              }
              uptr->hwmark = reclen;
              sim_debug(DEBUG_DETAIL, dptr, "Block %d chars\n", reclen);
@@ -291,10 +292,11 @@ t_stat mta_svc (UNIT *uptr)
              uptr->CMD -= 1 << 16;
              if ((uptr->CMD & (M15 << 16)) == 0 || uptr->POS >= uptr->hwmark) {
                  /* Done with transfer */
+         sim_debug(DEBUG_DETAIL, dptr, "unit=%d %08o left %08o\n", unit, uptr->ADDR, uptr->CMD >> 16);
                  if ((uptr->CMD & (M15 << 16)) == 0 && uptr->POS < uptr->hwmark)
-                     uptr->STATUS |= LONGBLK;
+                     uptr->STATUS |= SHRTBLK;
                  if ((uptr->CMD & (M15 << 16)) != 0 && uptr->POS >= uptr->hwmark)
-                     uptr->STATUS |= SHORT_BLK;
+                     uptr->STATUS |= LONGBLK;
                  uptr->STATUS |= TERMINATE;
                  uptr->STATUS &= ~BUSY;
                  M[64 + dev] = uptr->ADDR;  /* Get transfer address */
@@ -386,6 +388,7 @@ t_stat mta_svc (UNIT *uptr)
                  uptr->STATUS &= ~BUSY;
                  mta_busy = 0;
                  chan_set_done(dev);
+                 return SCPE_OK;
              }
              uptr->POS = reclen;
              uptr->ADDR += uptr->CMD >> 16;
@@ -432,11 +435,12 @@ t_stat mta_svc (UNIT *uptr)
              uptr->ADDR &= M15;
              uptr->CMD -= 1 << 16;
              if ((uptr->CMD & (M15 << 16)) == 0 || uptr->POS == 0) {
+         sim_debug(DEBUG_DETAIL, dptr, "unit=%d %08o left %08o\n", unit, uptr->ADDR, uptr->CMD >> 16);
                  /* Done with transfer */
                  if ((uptr->CMD & (M15 << 16)) == 0 && uptr->POS != 0)
-                     uptr->STATUS |= LONGBLK;
+                     uptr->STATUS |= SHRTBLK;
                  if ((uptr->CMD & (M15 << 16)) != 0 && uptr->POS == 0)
-                     uptr->STATUS |= SHORT_BLK;
+                     uptr->STATUS |= LONGBLK;
                  uptr->STATUS |= TERMINATE;
                  uptr->STATUS &= ~BUSY;
                  M[64 + dev] = uptr->ADDR;  /* Get transfer address */
@@ -477,6 +481,7 @@ t_stat mta_svc (UNIT *uptr)
               break;
          case 2:
               uptr->STATUS &= ~BUSY;
+              uptr->STATUS |= TERMINATE;
               mta_busy = 0;
               chan_set_done(dev);
          }
@@ -506,6 +511,7 @@ t_stat mta_svc (UNIT *uptr)
               break;
          case 2:
               uptr->STATUS &= ~BUSY;
+//              uptr->STATUS |= TERMINATE|MARK;
               mta_busy = 0;
               chan_set_done(dev);
          }
@@ -513,22 +519,23 @@ t_stat mta_svc (UNIT *uptr)
 
     case MT_WTM:
          if (uptr->POS == 0) {
-            if (sim_tape_wrp(uptr)) {
-                uptr->STATUS |= WPROT;
-                uptr->STATUS &= ~BUSY;
-                mta_busy = 0;
-                uptr->STATUS &= FMASK;
-                chan_set_done(dev);
-                break;
-            }
-            uptr->POS ++;
-            sim_activate(uptr, 500);
+             if (sim_tape_wrp(uptr)) {
+                 uptr->STATUS |= WPROT;
+                 uptr->STATUS &= ~BUSY;
+                 mta_busy = 0;
+                 uptr->STATUS &= FMASK;
+                 chan_set_done(dev);
+                 break;
+             }
+             uptr->POS ++;
+             sim_activate(uptr, 500);
          } else {
-            sim_debug(DEBUG_DETAIL, dptr, "Write Mark unit=%d\n", unit);
-            r = sim_tape_wrtmk(uptr);
+             sim_debug(DEBUG_DETAIL, dptr, "Write Mark unit=%d\n", unit);
+             r = sim_tape_wrtmk(uptr);
              if (r != MTSE_OK)
-                uptr->STATUS |= OPAT;
+                 uptr->STATUS |= OPAT;
              uptr->STATUS &= ~BUSY;
+             uptr->STATUS |= TERMINATE;
              mta_busy = 0;
              chan_set_done(dev);
          }
@@ -560,6 +567,7 @@ t_stat mta_svc (UNIT *uptr)
               break;
          case 2:
               uptr->STATUS &= ~BUSY;
+              uptr->STATUS |= TERMINATE|MARK;
               mta_busy = 0;
               chan_set_done(dev);
          }

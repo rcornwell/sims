@@ -159,12 +159,12 @@ int read_tape(FILE *f, int *len) {
 	sz |= (xlen[3] & 0xff);
         sz &= 0xffffffff;
 
+printf("Rec = %d %o\n", sz, sz/3);
         /* Check for EOF */
         if (sz == 0xffffffff)  {
 	    *len = -1;
 	    return 1;
 	}
-fprintf(stderr, "Rec = %d\n", sz);
 //	/* Check for EOF */
 //        if (sz == 0) {
 //	   *len = -1;
@@ -201,8 +201,8 @@ void write_mark(FILE *f) {
    if (p7b) {
       fputc(BCD_TM|TAPE_IRG, f);
    } else {
-      static uint32 tape_mark = 0;
-      fwrite(&tape_mark, sizeof(uint32), 1, f);
+      static unsigned char xlen[4] = {0, 0, 0, 0};
+      fwrite(&xlen, sizeof(unsigned char), 4, f);
    }
 }
 
@@ -288,7 +288,10 @@ int main(int argc, char *argv[]) {
 //		    putchar(xlat[*p++ & 077]);
 //	       putchar('\n');
 //	    } else 
-		write_block(otape, sz, buffer);
+            for (i = 0; i < sz; i+=3) 
+               printf("%08o ", (buffer[i] << 16) | (buffer[i+1] << 8) | buffer[i+2]); 
+            printf("\n");
+	    write_block(otape, sz, buffer);
         }
     }
     fclose(tape);
