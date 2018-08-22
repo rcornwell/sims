@@ -441,6 +441,8 @@ sim_instr(void)
 
 intr:
        if (!exe_mode && (SR64 | SR65) != 0) {
+            if (CPU_TYPE < TYPE_C1 && !exe_mode) 
+                RC += RD;
             exe_mode = 1;
             loading = 0;
             /* Store registers */
@@ -2160,38 +2162,46 @@ fexp:
        case 0172:            /* Exit from executive */
        case 0173:            /* Load Datum limit and G */
                      if (exe_mode) {
-#if 0 /* Type A & B */   /* For non extended address processors. */
-                         Mem_read(RB, &RA, 0);
-                         RG = RA & 077;
-                         RD = RA & 077700;
-                         RL = (RA >> 9) & 077700;
-#else
-                         Mem_read(RB, &RA, 0); /* Read datum */
-                         RD = RA & (M22 & ~077);
-                         RG = (RA & 17) << 3;
-                         Mem_read(RB+1, &RA, 0); /* Read Limit */
-                         RL = RA & (M22 & ~077);
-                         RG |= (RA & 07);
-                         Mode = RA & 077;
+                         if (CPU_TYPE < TYPE_C1) {
+                             /* For non extended address processors. */
+                             Mem_read(RB, &RA, 0);
+                             RG = RA & 077;
+                             RD = RA & 077700;
+                             RL = (RA >> 9) & 077700;
+                         } else {
+                             Mem_read(RB, &RA, 0); /* Read datum */
+                             RD = RA & (M22 & ~077);
+                             RG = (RA & 17) << 3;
+                             Mem_read(RB+1, &RA, 0); /* Read Limit */
+                             RL = RA & (M22 & ~077);
+                             RG |= (RA & 07);
+                             Mode = RA & 077;
+                         }
                          adrmask = (Mode & AM22) ? M22 : M15;
 //fprintf(stderr, "Load C=%08o limit: %08o D:=%08o %02o\n\r", RC, RL, RD, Mode);
-#endif
-                         if (RF & 1)              /* Check if 172 or 173 order code */
+                         if (RF & 1)                 /* Check if 172 or 173 order code */
                              break;
-                         /* Restore floating point ACC from D12/D13 */
-                         for (n = 0; n < 8; n++)  /* Restore user mode registers */
+                         /* Restore registers */
+                         for (n = 0; n < 8; n++)     /* Restore user mode registers */
                              Mem_read(RD+n, &XR[n], 0);
-                         Mem_read(RD+9, &RA, 0);    /* Read ZStatus and mode */
-                         Zero = 0;
-                         if ((Mode & AM22) && (RA & B3))
-                             Zero = 1;
+                         Mem_read(RD+9, &RA, 0);     /* Read ZStatus and mode */
                          Mem_read(RD+8, &RC, 0);     /* Restore C register */
 //fprintf(stderr, "Load PC: %08o D:=%08o z=%08o\n\r", RC, RD, RA);
-                         if ((Mode & AM22) == 0 && (RA & B3))
-                             Zero = 1;
                          BV = (RC & B0) != 0;
                          BCarry = (RC & B1) != 0;
+                         Zero = 0;
+                         /* Type A & B */
+                         if (CPU_TYPE < TYPE_C1) {
+                             if (RC & B8)
+                                 Zero = 1;
+                             RC &= M15;
+                             RC -= RD;
+                         } else {
+                             if (RA & B3)
+                                 Zero = 1;
+                         }
                          RC &= adrmask;
+                         /* Restore floating point ACC from D12/D13 */
                          Mem_read(RD+12, &faccl, 0);  /* Restore F.P.U. */
                          Mem_read(RD+13, &facch, 0);  /* Restore F.P.U. */
                          exe_mode = 0;
@@ -2201,7 +2211,7 @@ fexp:
        case 0174:            /* Send control character to peripheral */
                     if (exe_mode) {
                          chan_send_cmd(RB, RA & 077, &RT);
-fprintf(stderr, "CMD  %04o %04o %08o\n\r", RT, RB, RA);
+//fprintf(stderr, "CMD  %04o %04o %08o\n\r", RT, RB, RA);
                          m = (m == 0) ? 3 : (XR[m] >> 22) & 3;
                          m = 6 * (3 - m);
                          RT = (RT & 077) << m;
@@ -2230,6 +2240,8 @@ voluntary:
                         reason = SCPE_STOP;
                         break;
                     }
+                    if (CPU_TYPE < TYPE_C1 && !exe_mode) 
+                        RC += RD;
                     exe_mode = 1;
                     /* Store registers */
                     Mem_write(RD+13, &facch, 0);  /* Save F.P.U. */
@@ -2245,10 +2257,9 @@ voluntary:
                         RA |= B0;
                     if (BCarry)
                         RA |= B1;
-#if 0 /* Type A & B */
-                    if (Mode & 1)
+                    /* Type A & B */
+                    if (CPU_TYPE < TYPE_C1 && Zero) 
                         RA |= B8;
-#endif
                     Mem_write(RD+8, &RA, 0);
                     for (n = 0; n < 8; n++)
                         Mem_write(RD+n, &XR[n], 0);
