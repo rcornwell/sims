@@ -64,7 +64,7 @@
  */
 
 #define MT_CMD      007
-#define BINARY      010
+#define BCD         010
 #define DISC        020
 
 #define BUF_EMPTY(u)  (u->hwmark == 0xFFFFFFFF)
@@ -73,7 +73,7 @@
 #define MT_READ      0
 #define MT_WRITE     1
 #define MT_REV_READ  2
-#define MT_BACKSPC   3
+#define MT_WRITEERG  3
 #define MT_SKIPF     4
 #define MT_WTM       5
 #define MT_SKIPB     6
@@ -82,21 +82,23 @@
 #define MT_TRCNT     M15
 #define MT_STOP      B3
 #define MT_START     B4
-#define MT_BINARY    B5
+#define MT_BCD       B5
 
 /* Error status word */
 #define TERMINATE    000000001        /* Transfer complete */
 #define OPAT         000000002        /* Operator attention */
 #define PARITY       000000004        /* Parity error */
-#define SHRTBLK      000000010        /* Short tape block */
+#define HESFAIL      000000010        /* Failed to transfer word in time */
 #define ACCEPT       000000020        /* Ready for command */
 #define BUSY         000000040        /* Device busy */
 #define CBUSY        000000100        /* Controller Busy */
 #define WPROT        000001000        /* Write protect */
-#define MARK         000004000        /* Tape Mark sensed */
+#define BOT          000002000        /* Beginning of Tape */
+#define EOT          000004000        /* End of Tape. */
 #define OFFLINE      000040000        /* Device offline */
 #define LONGBLK      000100000        /* Long block */
-#define EOT          000400000        /* End of Tape sensed */
+#define FILLWRD      000200000        /* Block short filled with stop */
+#define MARK         000400000        /* Tape mark sensed */
 #define DENS         014000000
 #define CHAR         060000000        /* Count of character read */
 
@@ -171,8 +173,8 @@ void mta_nsi_cmd(int dev, uint32 cmd) {
        }
        uptr->CMD = (cmd & MT_TRCNT) << 16;
        uptr->CMD |= (cmd >> 15) & 07;
-       if (cmd & MT_BINARY)
-          uptr->CMD |= BINARY;
+       if (cmd & MT_BCD)
+          uptr->CMD |= BCD;
        uptr->STATUS = BUSY;
        uptr->ADDR = M[64 + dev] & M15;  /* Get transfer address */
        uptr->POS = 0;
@@ -196,7 +198,15 @@ void mta_nsi_status(int dev, uint32 *resp) {
    *resp = uptr->STATUS;
    if (mta_busy)
        *resp |= CBUSY;
-//   uptr->STATUS &= BUSY|OFFLINE;
+   /* Set hard status bits. */
+   if ((uptr->flags & UNIT_ATT) == 0)
+       *resp |= OFFLINE;
+   if (sim_tape_wrp(uptr))
+       *resp |= WPROT;
+   if (sim_tape_bot(uptr))
+       *resp |= BOT;
+   if (sim_tape_eot(uptr))
+       *resp |= EOT;
    sim_debug(DEBUG_CMD, &mta_dev, "STAT: %d: %d c=%08o\n", dev, d, *resp);
    chan_clr_done(dev);
 }
@@ -211,6 +221,7 @@ t_stat mta_svc (UNIT *uptr)
     uint8        ch;
     uint32       word;
     int          i;
+    int          stop;
     uint8        mode;
 
     /* Handle a disconnect request */
@@ -251,16 +262,22 @@ t_stat mta_svc (UNIT *uptr)
              uptr->hwmark = reclen;
              sim_debug(DEBUG_DETAIL, dptr, "Block %d chars\n", reclen);
          }
+         stop = 0;
          if (uptr->flags & MTUF_9TR) {
              /* Grab three chars off buffer */
              word = 0;
              uptr->STATUS &= ~CMASK;
              for(i = 16; i >= 0; i-=8) {
                  if (uptr->POS >= uptr->hwmark) {
-                    if (i == 8)
+                    /* Add in fill characters */
+                    stop = 1;
+                    if (i == 8) {
                        uptr->STATUS += B2|B1;
-                    else if (i == 16)
+                       word |= 074;
+                    } else if (i == 16) {
                        uptr->STATUS += B1;
+                       word |= 07474;
+                    }
                     break;
                  }
                  word |= (uint32)mta_buffer[uptr->POS++] << i;
@@ -269,34 +286,42 @@ t_stat mta_svc (UNIT *uptr)
          } else {
              /* Grab four chars and check parity */
              word = 0;
-             mode = (uptr->CMD & BINARY) ? 0 : 0100;
+             mode = (uptr->CMD & BCD) ? 0 : 0100;
              uptr->STATUS &= ~CMASK;
              for(i = 18; i >= 0; i-=6) {
-                 if (uptr->POS >= uptr->hwmark)
-                    break;
-                 ch = mta_buffer[uptr->POS++];
-                 if ((parity_table[ch & 077] ^ (ch & 0100) ^ mode) == 0) {
-                     sim_debug(DEBUG_DETAIL, dptr, "Parity error unit=%d %d %03o\n",
-                           unit, uptr->POS-1, ch);
-                     uptr->STATUS |= PARITY;
-                     break;
+                 if (stop || uptr->POS >= uptr->hwmark) {
+                    stop = 1;
+                    ch = 074;
+                 } else {
+                    ch = mta_buffer[uptr->POS++];
+                    if ((parity_table[ch & 077] ^ (ch & 0100) ^ mode) == 0) {
+                        sim_debug(DEBUG_DETAIL, dptr, "Parity error unit=%d %d %03o\n",
+                              unit, uptr->POS-1, ch);
+                        uptr->STATUS |= PARITY;
+                        break;
+                    }
+                    uptr->STATUS += B1;
                  }
                  word |= (ch & 077) << i;
-                 uptr->STATUS += B1;
              }
          }
          sim_debug(DEBUG_DATA, dptr, "unit=%d %08o read %08o\n", unit, uptr->ADDR, word);
-         if ((uptr->STATUS & (CMASK|BM1)) != 0) {
+         if (stop || (uptr->STATUS & (CMASK|BM1)) != 0) {
              M[uptr->ADDR++] = word;
              uptr->ADDR &= M15;
              uptr->CMD -= 1 << 16;
-             if ((uptr->CMD & (M15 << 16)) == 0 || uptr->POS >= uptr->hwmark) {
+             if (stop || (uptr->CMD & (M15 << 16)) == 0 || uptr->POS >= uptr->hwmark) {
                  /* Done with transfer */
-         sim_debug(DEBUG_DETAIL, dptr, "unit=%d %08o left %08o\n", unit, uptr->ADDR, uptr->CMD >> 16);
+                 sim_debug(DEBUG_DETAIL, dptr, "unit=%d %08o left %08o\n", unit, uptr->ADDR,
+                                    uptr->CMD >> 16);
                  if ((uptr->CMD & (M15 << 16)) == 0 && uptr->POS < uptr->hwmark)
-                     uptr->STATUS |= SHRTBLK;
-                 if ((uptr->CMD & (M15 << 16)) != 0 && uptr->POS >= uptr->hwmark)
                      uptr->STATUS |= LONGBLK;
+                 if ((uptr->CMD & BCD) != 0 && (uptr->CMD & (M15 << 16)) != 0
+                                  && uptr->POS >= uptr->hwmark) {
+                     uptr->STATUS |= FILLWRD;
+                     M[uptr->ADDR++] = 074747474;
+                     uptr->ADDR &= M15;
+                 }
                  uptr->STATUS |= TERMINATE;
                  uptr->STATUS &= ~BUSY;
                  M[64 + dev] = uptr->ADDR;  /* Get transfer address */
@@ -310,6 +335,7 @@ t_stat mta_svc (UNIT *uptr)
          sim_activate(uptr, 100);
          break;
 
+    case MT_WRITEERG: /* Write and Erase */
     case MT_WRITE:
          /* Check if write protected */
          if (sim_tape_wrp(uptr)) {
@@ -326,6 +352,7 @@ t_stat mta_svc (UNIT *uptr)
          uptr->CMD -= 1 << 16;
          sim_debug(DEBUG_DATA, dptr, "unit=%d %08o write %08o\n", unit, uptr->ADDR, word);
 
+         stop = 0;
          if (uptr->flags & MTUF_9TR) {
              /* Put three chars in buffer */
              word = 0;
@@ -334,13 +361,27 @@ t_stat mta_svc (UNIT *uptr)
                  mta_buffer[uptr->POS++] = (uint8)((word >> i) & 0xff);
                  uptr->STATUS += B1;
              }
+             /* Check if end character detected */
+             if ((uptr->CMD & BCD) != 0) {
+                 for (i = 0; i <= 18; i+= 6) {
+                     if (((word >> i) & 077)  == 074) {
+                         uptr->POS--;
+                         uptr->STATUS -= B1;
+                         stop = 1;
+                     }
+                 }
+             }
          } else {
              /* Put four chars and generate parity */
              word = 0;
-             mode = (uptr->CMD & BINARY) ? 0100 : 0;
+             mode = (uptr->CMD & BCD) ? 0 : 0100;
              uptr->STATUS &= ~CMASK;
              for(i = 18; i >= 0; i-=6) {
                  ch = (uint8)((word >> i) & 077);
+                 if ((uptr->CMD & BCD) != 0 && ch == 074) {
+                     stop = 1;
+                     break;
+                 }
                  ch |= parity_table[ch] ^ mode;
                  mta_buffer[uptr->POS++] = ch;
                  uptr->STATUS += B1;
@@ -348,7 +389,7 @@ t_stat mta_svc (UNIT *uptr)
          }
          uptr->STATUS &= FMASK;
          uptr->hwmark = uptr->POS;
-         if ((uptr->CMD & (M15 << 16)) == 0) {
+         if (stop || (uptr->CMD & (M15 << 16)) == 0) {
              /* Done with transfer */
              reclen = uptr->hwmark;
              sim_debug(DEBUG_DETAIL, dptr, "Write unit=%d Block %d chars\n",
@@ -360,7 +401,7 @@ t_stat mta_svc (UNIT *uptr)
              uptr->STATUS &= ~BUSY;
              mta_busy = 0;
              uptr->STATUS &= FMASK;
-             M[64 + dev] = uptr->ADDR;  /* Get transfer address */
+             M[64 + dev] = uptr->ADDR;  /* Set transfer address */
              chan_set_done(dev);
              return SCPE_OK;
          }
@@ -370,6 +411,13 @@ t_stat mta_svc (UNIT *uptr)
     case MT_REV_READ:
          /* If empty buffer, fill */
          if (BUF_EMPTY(uptr)) {
+             if (sim_tape_bot(uptr)) {
+                 uptr->STATUS |= OPAT|TERMINATE;
+                 uptr->STATUS &= ~BUSY;
+                 mta_busy = 0;
+                 chan_set_done(dev);
+                 return SCPE_OK;
+             }
              sim_debug(DEBUG_DETAIL, dptr, "Read rev unit=%d ", unit);
              if ((r = sim_tape_rdrecr(uptr, &mta_buffer[0], &reclen,
                               BUFFSIZE)) != MTSE_OK) {
@@ -391,7 +439,7 @@ t_stat mta_svc (UNIT *uptr)
                  return SCPE_OK;
              }
              uptr->POS = reclen;
-             uptr->ADDR += uptr->CMD >> 16;
+             uptr->ADDR += (uptr->CMD >> 16) + 1;
              uptr->hwmark = reclen;
              sim_debug(DEBUG_DETAIL, dptr, "Block %d chars\n", reclen);
          }
@@ -402,10 +450,7 @@ t_stat mta_svc (UNIT *uptr)
              for(i = 0; i <= 16; i+=8) {
                  word |= (uint32)mta_buffer[--uptr->POS] << i;
                  if (uptr->POS == 0) {
-                    if (i == 8)
-                       uptr->STATUS += B2|B1;
-                    else if (i == 16)
-                       uptr->STATUS += B1;
+                    stop = 1;
                     break;
                  }
              }
@@ -413,37 +458,46 @@ t_stat mta_svc (UNIT *uptr)
          } else {
              /* Grab four chars and check parity */
              word = 0;
-             mode = (uptr->CMD & BINARY) ? 0 : 0100;
+             mode = (uptr->CMD & BCD) ? 0 : 0100;
              uptr->STATUS &= ~CMASK;
              for(i = 0; i <= 16; i+=6) {
-                 ch = mta_buffer[--uptr->POS];
-                 if ((parity_table[ch & 077] ^ (ch & 0100) ^ mode) == 0) {
-                     sim_debug(DEBUG_DETAIL, dptr, "Parity error unit=%d %d %03o\n",
-                           unit, uptr->POS, ch);
-                     uptr->STATUS |= PARITY;
-                     break;
+                 if (uptr->POS == 0) {
+                     ch = 074;
+                     stop = 1;
+                 } else {
+                     ch = mta_buffer[--uptr->POS];
+                     if ((parity_table[ch & 077] ^ (ch & 0100) ^ mode) == 0) {
+                         sim_debug(DEBUG_DETAIL, dptr, "Parity error unit=%d %d %03o\n",
+                               unit, uptr->POS, ch);
+                         uptr->STATUS |= PARITY;
+                         break;
+                     }
+                     uptr->STATUS += B1;
                  }
                  word |= (ch & 077) << i;
-                 uptr->STATUS += B1;
-                 if (uptr->POS == 0)
-                    break;
              }
          }
          sim_debug(DEBUG_DATA, dptr, "unit=%d %08o read %08o\n", unit, uptr->ADDR, word);
-         if ((uptr->STATUS & (CMASK|BM1)) != 0) {
-             M[uptr->ADDR--] = word;
-             uptr->ADDR &= M15;
+         if (stop || (uptr->STATUS & (CMASK|BM1)) != 0) {
+             uptr->ADDR = (uptr->ADDR - 1) & M15;
+             M[uptr->ADDR] = word;
              uptr->CMD -= 1 << 16;
-             if ((uptr->CMD & (M15 << 16)) == 0 || uptr->POS == 0) {
-         sim_debug(DEBUG_DETAIL, dptr, "unit=%d %08o left %08o\n", unit, uptr->ADDR, uptr->CMD >> 16);
+             if (stop || (uptr->CMD & (M15 << 16)) == 0 || uptr->POS == 0) {
+                 sim_debug(DEBUG_DETAIL, dptr, "unit=%d %08o left %08o\n", unit, uptr->ADDR,
+                                             uptr->CMD >> 16);
                  /* Done with transfer */
                  if ((uptr->CMD & (M15 << 16)) == 0 && uptr->POS != 0)
-                     uptr->STATUS |= SHRTBLK;
-                 if ((uptr->CMD & (M15 << 16)) != 0 && uptr->POS == 0)
                      uptr->STATUS |= LONGBLK;
+                 if ((uptr->CMD & BCD) != 0 && (uptr->CMD & (M15 << 16)) != 0
+                                  && uptr->POS != 0) {
+                     uptr->STATUS |= FILLWRD;
+                     uptr->ADDR = (uptr->ADDR - 1) & M15;
+                     M[uptr->ADDR] = 074747474;
+                     uptr->ADDR &= M15;
+                 }
                  uptr->STATUS |= TERMINATE;
                  uptr->STATUS &= ~BUSY;
-                 M[64 + dev] = uptr->ADDR;  /* Get transfer address */
+                 M[64 + dev] = uptr->ADDR;  /* Set transfer address */
                  mta_busy = 0;
                  uptr->STATUS &= FMASK;
                  chan_set_done(dev);
@@ -452,39 +506,6 @@ t_stat mta_svc (UNIT *uptr)
              uptr->STATUS &= FMASK;
          }
          sim_activate(uptr, 100);
-         break;
-
-    case MT_BACKSPC:
-         switch (uptr->POS ) {
-         case 0:
-              if (sim_tape_bot(uptr)) {
-                uptr->STATUS &= ~BUSY;
-                mta_busy = 0;
-                chan_set_done(dev);
-                break;
-              }
-              uptr->POS ++;
-              sim_activate(uptr, 500);
-              break;
-         case 1:
-              uptr->POS++;
-              sim_debug(DEBUG_DETAIL, dptr, "Backspace rec unit=%d ", unit);
-              r = sim_tape_sprecr(uptr, &reclen);
-              /* We don't set EOF on BSR */
-              if (r == MTSE_TMK) {
-                  uptr->STATUS |= MARK;
-                  sim_activate(uptr, 50);
-              } else {
-                  sim_debug(DEBUG_DETAIL, dptr, "%d \n", reclen);
-                  sim_activate(uptr, 10 + (10 * reclen));
-              }
-              break;
-         case 2:
-              uptr->STATUS &= ~BUSY;
-              uptr->STATUS |= TERMINATE;
-              mta_busy = 0;
-              chan_set_done(dev);
-         }
          break;
 
     case MT_SKIPF:
@@ -511,6 +532,7 @@ t_stat mta_svc (UNIT *uptr)
               break;
          case 2:
               uptr->STATUS &= ~BUSY;
+              uptr->STATUS |= TERMINATE;
 //              uptr->STATUS |= TERMINATE|MARK;
               mta_busy = 0;
               chan_set_done(dev);
@@ -520,7 +542,7 @@ t_stat mta_svc (UNIT *uptr)
     case MT_WTM:
          if (uptr->POS == 0) {
              if (sim_tape_wrp(uptr)) {
-                 uptr->STATUS |= WPROT;
+                 uptr->STATUS |= WPROT|OPAT|TERMINATE;
                  uptr->STATUS &= ~BUSY;
                  mta_busy = 0;
                  uptr->STATUS &= FMASK;
@@ -545,10 +567,11 @@ t_stat mta_svc (UNIT *uptr)
          switch (uptr->POS ) {
          case 0:
               if (sim_tape_bot(uptr)) {
-                uptr->STATUS &= ~BUSY;
-                mta_busy = 0;
-                chan_set_done(dev);
-                break;
+                  uptr->STATUS |= OPAT|TERMINATE;
+                  uptr->STATUS &= ~BUSY;
+                  mta_busy = 0;
+                  chan_set_done(dev);
+                  break;
               }
               uptr->POS ++;
               sim_activate(uptr, 500);
@@ -620,7 +643,7 @@ mta_boot(int32 unit_num, DEVICE * dptr)
         return SCPE_UNATT;      /* attached? */
 
     uptr->ADDR = 0;
-    uptr->CMD = MT_READ|MT_BINARY;
+    uptr->CMD = MT_READ;
     uptr->STATUS = BUSY;
     loading = 1;
     sim_activate (uptr, uptr->wait);
