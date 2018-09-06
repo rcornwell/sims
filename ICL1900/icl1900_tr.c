@@ -93,7 +93,7 @@
  * p101xxxx    Alpha + 11xxxx xxxx < 4
  * p110xxxx    Beta  + 10xxxx
  * p111xxxx    Beta  + 11xxxx xxxx < 4
- * 
+ *
  * Two modes Alpha and Beta. Delta is always output.
  *
  * Graphics mode translation.
@@ -165,7 +165,7 @@ void ptr_cmd(int dev, uint32 cmd, uint32 *resp) {
 
    *resp = 0;
    /* Find the unit from dev */
-   for (i = 0; i < NUM_DEVS_PTR; i++) {
+   for (i = 0; i < ptr_dev.numunits; i++) {
        if (GET_UADDR(ptr_unit[i].flags) == dev) {
            uptr = &ptr_unit[i];
            break;
@@ -180,12 +180,12 @@ void ptr_cmd(int dev, uint32 cmd, uint32 *resp) {
    if (NSI_TYPE(uptr->flags))
        return;
 
-   if ((uptr->flags & UNIT_ATT) == 0) 
+   if ((uptr->flags & UNIT_ATT) == 0)
         return;
    cmd &= 077;
    switch(cmd & 070) {
    case 010: /* Command */
-             if ((uptr->flags & UNIT_ATT) == 0) 
+             if ((uptr->flags & UNIT_ATT) == 0)
                  break;
              if (uptr->CMD & BUSY) {
                  *resp = 3;
@@ -201,13 +201,13 @@ void ptr_cmd(int dev, uint32 cmd, uint32 *resp) {
              break;
 
    case 020: if (cmd == 020) {    /* Send Q */
-                 if ((uptr->flags & UNIT_ATT) != 0) 
+                 if ((uptr->flags & UNIT_ATT) != 0)
                     *resp = 040;
                  if (uptr->STATUS & 06)
                     *resp = 040;
                  *resp |= uptr->STATUS & TERMINATE;
              } else if (cmd == 024) {  /* Send P */
-                 if ((uptr->flags & UNIT_ATT) != 0) 
+                 if ((uptr->flags & UNIT_ATT) != 0)
                     *resp = (uptr->STATUS & ERROR) | 1;
                  uptr->STATUS = 0;
                  chan_clr_done(GET_UADDR(uptr->flags));
@@ -220,7 +220,7 @@ void ptr_cmd(int dev, uint32 cmd, uint32 *resp) {
              }
              break;
 
-   default: 
+   default:
              break;
    }
 }
@@ -240,7 +240,7 @@ void ptr_nsi_cmd(int dev, uint32 cmd) {
    UNIT    *uptr = NULL;
 
    /* Find the unit from dev */
-   for (i = 0; i < NUM_DEVS_PTR; i++) {
+   for (i = 0; i < ptr_dev.numunits; i++) {
        if (GET_UADDR(ptr_unit[i].flags) == dev) {
            uptr = &ptr_unit[i];
            break;
@@ -276,7 +276,7 @@ void ptr_nsi_cmd(int dev, uint32 cmd) {
            uptr->CMD |= STOP_CHAR;
        if (cmd & 020)
            uptr->CMD |= BIN_MODE;
-       if ((cmd & 040) == 0) 
+       if ((cmd & 040) == 0)
            uptr->CMD |= IGN_BLNK;
        uptr->CMD |= BUSY;
        uptr->STATUS = 0;
@@ -300,7 +300,7 @@ void ptr_nsi_status(int dev, uint32 *resp) {
 
    *resp = 0;
    /* Find the unit from dev */
-   for (i = 0; i < NUM_DEVS_PTR; i++) {
+   for (i = 0; i < ptr_dev.numunits; i++) {
        if (GET_UADDR(ptr_unit[i].flags) == dev) {
            uptr = &ptr_unit[i];
            break;
@@ -352,7 +352,7 @@ t_stat ptr_svc (UNIT *uptr)
         if ((uptr->CMD & STOP_CHAR) != 0 && uptr->HOLD == 032)
             uptr->STATUS |= TERMINATE;
     }
-       
+
     /* Read next charater */
     if ((uptr->flags & UNIT_ATT) == 0 ||
          feof(uptr->fileref) ||
@@ -369,10 +369,10 @@ t_stat ptr_svc (UNIT *uptr)
        ch = data ^ (data >> 4);
        ch = ch ^ (ch >> 2);
        ch = ch ^ (ch >> 1);
-       if (ch != 0) 
+       if (ch != 0)
           uptr->STATUS = TERMINATE | ERROR;
        chan_set_done(GET_UADDR(uptr->flags));
-    } 
+    }
     data &= 0177;
     if ((data == 0 || data == 0177) && (uptr->CMD & IGN_BLNK) != 0) {
        sim_activate (uptr, uptr->wait);               /* try again */
@@ -423,7 +423,7 @@ t_stat ptr_svc (UNIT *uptr)
                   break;
                }
        case 0100:
-               if ((uptr->CMD & 1) == BETA_MODE) 
+               if ((uptr->CMD & 1) == BETA_MODE)
                   shift = ALPHA_SHIFT;
                uptr->CMD |= ALPHA_MODE;
                ch = 040 | (data & 037);
@@ -435,7 +435,7 @@ t_stat ptr_svc (UNIT *uptr)
                   break;
                }
        case 0120:
-               if ((uptr->CMD & 1) == ALPHA_MODE) 
+               if ((uptr->CMD & 1) == ALPHA_MODE)
                   shift = BETA_SHIFT;
                uptr->CMD &= ~ALPHA_MODE;
                ch = 040 | (data & 037);
@@ -498,7 +498,7 @@ ptr_boot(int32 unit_num, DEVICE * dptr)
 
     M[64 + chan] = 0;
     M[256 + 4 * chan] = 0;
-    M[257 + 4 * chan] = 020;
+    M[257 + 4 * chan] = 0;
     loading = 1;
     uptr->CMD = BUSY|ALPHA_MODE|BIN_MODE|IGN_BLNK;
     sim_activate (uptr, uptr->wait);

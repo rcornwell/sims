@@ -50,7 +50,7 @@ chan_set_devs()
          devs[i] = NULL;
 
      /* Add in hidden channels */
-     devs[22] = &nul_dib;  
+     devs[22] = &nul_dib;
      devs[23] = &nul_dib;
      /* Scan all devices and assign to channel */
      for(i = 0; sim_devices[i] != NULL; i++) {
@@ -64,7 +64,7 @@ chan_set_devs()
             continue;
          if (dibp->type & BLK_DEV) {
             int f = 1;
-    
+
             chan = GET_UADDR(sim_devices[i]->flags);
             /* Make sure it is in range */
             if (chan < 2 || (chan + sim_devices[i]->numunits) > 36)
@@ -76,13 +76,13 @@ chan_set_devs()
                     fprintf(stderr, "Conflict between devices %d %s\n", chan+j, sim_devices[i]->name);
                     f = 0;
                 }
-            } 
+            }
             if (f) {
                for (j = 0; j < sim_devices[i]->numunits; j++) {
                    if (sim_devices[i]->units[j].flags & UNIT_DIS)
                        continue;
                    devs[chan+j] = dibp;
-               } 
+               }
             }
          } else if (dibp->type & MULT_DEV) {
             chan = GET_UADDR(sim_devices[i]->flags);
@@ -136,7 +136,7 @@ set_chan(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
      if (dptr == NULL)
          return SCPE_IERR;
      dibp = (DIB *) dptr->ctxt;
-    
+
      if (dibp == NULL)
          return SCPE_IERR;
      new_chan = get_uint(cptr, 10, 37, &r);
@@ -160,7 +160,7 @@ set_chan(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
         for (i = 0; i < dptr->numunits; i++) {
             if (dptr->units[i].flags & UNIT_DIS)
                 continue;
-            if (devs[cur_chan+i] == dibp) 
+            if (devs[cur_chan+i] == dibp)
                 devs[cur_chan] = NULL;
         }
      } else if (dibp->type & MULT_DEV) {
@@ -181,7 +181,7 @@ set_chan(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
          }
          return SCPE_OK;
      }
- 
+
      if (dibp->type & BLK_DEV) {
          dptr->flags &= ~UNIT_M_ADDR;
          dptr->flags |= UNIT_ADDR(new_chan);
@@ -210,7 +210,7 @@ set_chan(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 
 /* Print the channel the device is on */
 t_stat
-get_chan(FILE *st, UNIT *uptr, int32 v, CONST void *desc) 
+get_chan(FILE *st, UNIT *uptr, int32 v, CONST void *desc)
 {
      DEVICE          *dptr;
      DIB             *dibp;
@@ -236,7 +236,7 @@ get_chan(FILE *st, UNIT *uptr, int32 v, CONST void *desc)
      return SCPE_OK;
 }
 
-int 
+int
 get_ccw(int dev, uint32 *addr, uint8 type) {
     int      cw_addr;
     uint32   cw0;            /* Holding registers for current control word */
@@ -248,7 +248,7 @@ get_ccw(int dev, uint32 *addr, uint8 type) {
         cw1 = M[cw_addr+1];
         *addr = cw1;
         if (cw0 & WORDCCW) {
-            if (cw0 & BACKWARD) 
+            if (cw0 & BACKWARD)
                 cw1 = ((cw1 + M22) & M22) | (cw1 & CMASK);
             else
                 cw1 = ((cw1 + 1) & M22) | (cw1 & CMASK);
@@ -274,7 +274,7 @@ get_ccw(int dev, uint32 *addr, uint8 type) {
                 cw1 = M[cw_addr+3];
             } else if ((cw0 & GATHER) != 0) {
                 int a;
-                if ((cw0 & CWRECHARGE) != 0) 
+                if ((cw0 & CWRECHARGE) != 0)
                     M[cw_addr+3] = M[cw_addr+2];
                 a = M[cw_addr+3];
                 cw0 = M[a & M22];
@@ -328,7 +328,7 @@ chan_nsi_cmd(int dev, uint32 cmd) {
 
     if (dibp != NULL && dibp->nsi_cmd != NULL) {
        (dibp->nsi_cmd)(dev, cmd);
-    } 
+    }
 }
 
 /* Talk to non-standard interface devices */
@@ -339,7 +339,7 @@ chan_nsi_status(int dev, uint32 *resp) {
     *resp = 0;
     if (dibp != NULL && dibp->nsi_cmd != NULL) {
        (dibp->nsi_status)(dev, resp);
-    } 
+    }
 }
 
 
@@ -351,7 +351,7 @@ chan_send_cmd(int dev, uint32 cmd, uint32 *resp) {
     *resp = 0;
     if (dibp != NULL && dibp->si_cmd != NULL) {
        (dibp->si_cmd)(dev, cmd, resp);
-    } 
+    }
 }
 
 /* Transfer date between device and memory */
@@ -384,8 +384,7 @@ chan_input_char(int dev, uint8 *data, int eor) {
     mb |= ((uint32)(*data) & 077) << c;
     if (addr < 8)
        XR[addr] = mb;
-    else
-       M[addr] = mb;
+    M[addr] = mb;
     return r;
 }
 
@@ -437,8 +436,7 @@ chan_input_word(int dev, uint32 *data, int eor) {
     addr &= M22;
     if (addr < 8)
        XR[addr] = *data;
-    else
-       M[addr] = *data;
+    M[addr] = *data;
     return r;
 }
 
@@ -468,7 +466,7 @@ chan_output_word(int dev, uint32 *data, int eor) {
 
 void
 chan_set_done(int dev) {
-    if (dev < 22) 
+    if (dev < 22)
        SR64 |= B2 >> dev;
     else
        SR65 |= B1 >> (dev - 23);
@@ -476,7 +474,7 @@ chan_set_done(int dev) {
 
 void
 chan_clr_done(int dev) {
-    if (dev < 22) 
+    if (dev < 22)
        SR64 &= ~(B2 >> dev);
     else
        SR65 &= ~(B1 >> (dev - 23));

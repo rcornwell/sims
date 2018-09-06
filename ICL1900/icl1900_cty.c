@@ -42,7 +42,7 @@ DIB cty_dib = { CHAR_DEV, NULL, cty_cmd, cty_status};
 #define CMD          u3
 #define STATUS       u4
 #define HOLD         u5
-                    
+
 #define START        01
 #define STOP         02
 #define END          000001
@@ -104,7 +104,7 @@ DEVICE cty_dev = {
 void cty_cmd(int dev, uint32 cmd) {
     int   u = 0;
 
-    if (dev > 3) 
+    if (dev > 3)
        return;
     if (dev == 2)
        u++;
@@ -113,8 +113,8 @@ void cty_cmd(int dev, uint32 cmd) {
         cty_unit[u].STATUS |= BUSY;
         if (!u)
            sim_activate(&cty_unit[u], cty_unit[u].wait);
-    } 
-    else if (cmd & STOP) { 
+    }
+    else if (cmd & STOP) {
         cty_unit[u].STATUS &= ~BUSY;
     }
     cty_unit[u].STATUS &= BUSY;
@@ -124,7 +124,7 @@ void cty_cmd(int dev, uint32 cmd) {
 void cty_status(int dev, uint32 *resp) {
     int   u = 0;
 
-    if (dev > 3) 
+    if (dev > 3)
        return;
     if (dev == 2)
        u++;
@@ -142,7 +142,7 @@ t_stat ctyo_svc (UNIT *uptr)
     /* Check if we had a held characteter */
     if (uptr->HOLD != 0) {
         if ((r = sim_putchar_s (uptr->HOLD)) == SCPE_STALL) {
-            r = SCPE_OK;    
+            r = SCPE_OK;
         } else {
             if (uptr->HOLD == '\r')
                 uptr->HOLD = '\n';
@@ -153,7 +153,7 @@ t_stat ctyo_svc (UNIT *uptr)
         return r;
     }
 
-    if (uptr->STATUS & BUSY) { 
+    if (uptr->STATUS & BUSY) {
        eor = chan_output_char(GET_UADDR(uptr->flags), &ch, 0);
        switch (ch & 060) {
        case 000:   ch = 0060 | (ch & 017); break;
@@ -238,7 +238,7 @@ t_stat ctyi_svc (UNIT *uptr)
 
           default:
                 sim_debug(DEBUG_DATA, &cty_dev, ": key '%c'\n", ch);
-                if (ch >= 0140) 
+                if (ch >= 0140)
                     ch -= 040;
                 if (ch >= 0100)
                     ch -= 040;
@@ -286,7 +286,7 @@ t_stat ctyi_svc (UNIT *uptr)
                   uptr->HOLD = 0;
                   chan_set_done(GET_UADDR(uptr->flags));
                   break;
-  
+
             default:
                   sim_debug(DEBUG_DATA, &cty_dev, ": key '%c'\n", ch);
                   sim_putchar('\007');
