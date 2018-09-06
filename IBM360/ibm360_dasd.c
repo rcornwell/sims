@@ -1349,6 +1349,14 @@ wrckd:
                 ((uptr->u6 & 0x3) == 1 && (uptr->u6 & 0x70) != 0 &&
                      (uptr->u3 & (DK_SHORTSRC|DK_SRCOK)) == DK_SRCOK)) {
                  state = data->state = DK_POS_END;
+                 /* Write end mark */
+                 for(i = 0; i < 8; i++)
+                    rec[i] = 0xff;
+                
+                 uptr->u6 = cmd;
+                 uptr->u3 &= ~(0xff|DK_PARAM|DK_INDEX);
+                 uptr->u3 |= DK_CYL_DIRTY;
+                 chan_end(addr, SNS_CHNEND|SNS_DEVEND);
              } else {
                  uptr->u5 |= SNS_CMDREJ | (SNS_INVSEQ << 8);
                  uptr->u6 = 0;
@@ -1358,14 +1366,6 @@ wrckd:
              }
          }
 
-         /* Write end mark */
-         for(i = 0; i < 8; i++)
-            rec[i] = 0xff;
-
-         uptr->u6 = cmd;
-         uptr->u3 &= ~(0xff|DK_PARAM|DK_INDEX);
-         uptr->u3 |= DK_CYL_DIRTY;
-         chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          break;
 
     case DK_WR_SCKD:         /* Write special count, key and data */
@@ -1444,6 +1444,14 @@ dasd_format(UNIT * uptr, int flag) {
                 data->cbuf[pos++] = 0;              /* dlen */
                 data->cbuf[pos++] = 8;              /*  */
                 pos += 8;
+                data->cbuf[pos++] = (cyl >> 8);   /* R1 */
+                data->cbuf[pos++] = (cyl & 0xff);
+                data->cbuf[pos++] = (hd >> 8);
+                data->cbuf[pos++] = (hd & 0xff);
+                data->cbuf[pos++] = 1;              /* Rec */
+                data->cbuf[pos++] = 0;              /* keylen */
+                data->cbuf[pos++] = 0;              /* dlen */
+                data->cbuf[pos++] = 0;              /*  */
                 data->cbuf[pos++] = 0xff;           /* End record */
                 data->cbuf[pos++] = 0xff;
                 data->cbuf[pos++] = 0xff;
