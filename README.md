@@ -49,8 +49,9 @@ To do:
 
 # ICL 1900 simulator.
 
-This is a new simulator. It will not quite pass instruction test. Divide does not work
-also Floating point instructions are not complete. 
+This is a new simulator. Will pass 1904E/1905E CPU diagnostics (FLIT). Will boot paper
+tape executive E4BM and tape executive E6RM. Still need to add more devices and test
+with Goerge 2 and 3.
 
 # IBM 360 simulator.
 
