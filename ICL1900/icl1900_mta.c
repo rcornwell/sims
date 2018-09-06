@@ -307,6 +307,8 @@ t_stat mta_svc (UNIT *uptr)
          }
          sim_debug(DEBUG_DATA, dptr, "unit=%d %08o read %08o\n", unit, uptr->ADDR, word);
          if (stop || (uptr->STATUS & (CMASK|BM1)) != 0) {
+             if (uptr->ADDR < 8)
+                 XR[uptr->ADDR] = word;
              M[uptr->ADDR++] = word;
              uptr->ADDR &= M15;
              uptr->CMD -= 1 << 16;
@@ -480,6 +482,8 @@ t_stat mta_svc (UNIT *uptr)
          sim_debug(DEBUG_DATA, dptr, "unit=%d %08o read %08o\n", unit, uptr->ADDR, word);
          if (stop || (uptr->STATUS & (CMASK|BM1)) != 0) {
              uptr->ADDR = (uptr->ADDR - 1) & M15;
+             if (uptr->ADDR < 8)
+                 XR[uptr->ADDR] = word;
              M[uptr->ADDR] = word;
              uptr->CMD -= 1 << 16;
              if (stop || (uptr->CMD & (M15 << 16)) == 0 || uptr->POS == 0) {
@@ -645,7 +649,10 @@ mta_boot(int32 unit_num, DEVICE * dptr)
     uptr->ADDR = 0;
     uptr->CMD = MT_READ;
     uptr->STATUS = BUSY;
+    uptr->POS = 0;
+    CLR_BUF(uptr);
     loading = 1;
+    mta_busy = 1;
     sim_activate (uptr, uptr->wait);
     return SCPE_OK;
 }

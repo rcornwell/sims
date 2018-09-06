@@ -10,7 +10,7 @@
 
 #define TAPE_IRG 0200
 #define BCD_TM 017
-                      
+
 unsigned char	buffer[TAPE_BUFFER_SIZE];
 char		*xlat;		/* Pointer to translate table */
 int		eor = 0;	/* Report eor */
@@ -125,7 +125,7 @@ int read_tape(FILE *f, int *len) {
 	    *len = -1;
 	    return 1;
 	}
-	if (lastchar != 0xff) 
+	if (lastchar != 0xff)
 	    buffer[sz++] = lastchar;
 	lastchar = 0xff;
 	while(fread(&ch, sizeof(unsigned char), 1, f) == 1) {
@@ -146,7 +146,7 @@ int read_tape(FILE *f, int *len) {
    } else {
 	unsigned char	xlen[4];
 	int		i;
-        if (fread(&xlen, sizeof(unsigned char), 4, f) != 4) 
+        if (fread(&xlen, sizeof(unsigned char), 4, f) != 4)
 	    return 0;
 	/* Convert to number */
 	sz = xlen[0];
@@ -269,27 +269,14 @@ int main(int argc, char *argv[]) {
    }
    /* Process records of the file */
    while(read_tape(tape, &sz)) {
-	if (sz == -2) 
+	if (sz == -2)
 	    break;
 	if (sz == -1) {
 	    puts("*EOF*");
 	    write_mark(otape);
 	} else {
-//            p = buffer;
- //           col = 0;
-//	    for(i = 0; i < sz; i++)  {
-//		char	ch = *p++;
-//		if (parity_table[ch & 077] == (ch & 0100)) 
-//		    col ++;
-//	    }
- //          if (col == sz) {
-//	       p = buffer;
-//	       for(i = 0; i < sz; i++) 
-//		    putchar(xlat[*p++ & 077]);
-//	       putchar('\n');
-//	    } else 
-            for (i = 0; i < sz; i+=3) 
-               printf("%08o ", (buffer[i] << 16) | (buffer[i+1] << 8) | buffer[i+2]); 
+            for (i = 0; i < sz; i+=3)
+               printf("%08o ", (buffer[i] << 16) | (buffer[i+1] << 8) | buffer[i+2]);
             printf("\n");
 	    write_block(otape, sz, buffer);
         }

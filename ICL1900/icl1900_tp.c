@@ -91,7 +91,7 @@
  * p101xxxx    Alpha + 11xxxx xxxx < 4
  * p110xxxx    Beta  + 10xxxx
  * p111xxxx    Beta  + 11xxxx xxxx < 4
- * 
+ *
  * Two modes Alpha and Beta. Delta is always output.
  *
  * Graphics mode translation.
@@ -162,7 +162,7 @@ void ptp_cmd(int dev, uint32 cmd, uint32 *resp) {
 
    *resp = 0;
    /* Find the unit from dev */
-   for (i = 0; i < NUM_DEVS_PTP; i++) {
+   for (i = 0; i < ptp_dev.numunits; i++) {
        if (GET_UADDR(ptp_unit[i].flags) == dev) {
            uptr = &ptp_unit[i];
            break;
@@ -183,7 +183,7 @@ void ptp_cmd(int dev, uint32 cmd, uint32 *resp) {
    cmd &= 077;
    switch(cmd & 070) {
    case 010: /* Command */
-             if ((uptr->flags & UNIT_ATT) == 0) 
+             if ((uptr->flags & UNIT_ATT) == 0)
                  break;
              if (uptr->CMD & BUSY) {
                  *resp = 3;
@@ -200,13 +200,13 @@ void ptp_cmd(int dev, uint32 cmd, uint32 *resp) {
              break;
 
    case 020: if (cmd == 020) {    /* Send Q */
-                 if ((uptr->flags & UNIT_ATT) == 0) 
+                 if ((uptr->flags & UNIT_ATT) == 0)
                     *resp = 040;
                  if (uptr->STATUS & 06)
                     *resp = 040;
                  *resp |= uptr->STATUS & TERMINATE;
              } else if (cmd == 024) {  /* Send P */
-                 if ((uptr->flags & UNIT_ATT) != 0) 
+                 if ((uptr->flags & UNIT_ATT) != 0)
                     *resp = (uptr->STATUS & ERROR) | 1;
                  uptr->STATUS = 0;
                  chan_clr_done(GET_UADDR(uptr->flags));
@@ -219,7 +219,7 @@ void ptp_cmd(int dev, uint32 cmd, uint32 *resp) {
              }
              break;
 
-   default: 
+   default:
              break;
    }
 }
@@ -238,7 +238,7 @@ void ptp_nsi_cmd(int dev, uint32 cmd) {
    UNIT    *uptr = NULL;
 
    /* Find the unit from dev */
-   for (i = 0; i < NUM_DEVS_PTP; i++) {
+   for (i = 0; i < ptp_dev.numunits; i++) {
        if (GET_UADDR(ptp_unit[i].flags) == dev) {
            uptr = &ptp_unit[i];
            break;
@@ -296,7 +296,7 @@ void ptp_nsi_status(int dev, uint32 *resp) {
 
    *resp = 0;
    /* Find the unit from dev */
-   for (i = 0; i < NUM_DEVS_PTP; i++) {
+   for (i = 0; i < ptp_dev.numunits; i++) {
        if (GET_UADDR(ptp_unit[i].flags) == dev) {
            uptr = &ptp_unit[i];
            break;
@@ -373,7 +373,7 @@ t_stat ptp_svc (UNIT *uptr)
             if (uptr->CMD & DELTA_MODE) {
                 uptr->CMD &= ~DELTA_MODE;
                 data = ch;
-                if (ch & 040) 
+                if (ch & 040)
                    data |= 0174 ^ ((ch & 020) << 1);
             } else if (uptr->CMD & ALPHA_MODE) {
                 data = ch & 017;
@@ -391,7 +391,7 @@ t_stat ptp_svc (UNIT *uptr)
                 case 0040: data |= 0140; break;
                 case 0060: data |= 0160; break;
                 }
-            }          
+            }
         }
     }
     if (data != 0) {
@@ -402,7 +402,7 @@ t_stat ptp_svc (UNIT *uptr)
            ch = ch ^ (ch << 2);
            ch = ch ^ (ch << 1);
            data |= ch;
-        } 
+        }
         fputc(data, uptr->fileref);
         uptr->pos = ftell(uptr->fileref);
         if (ferror (uptr->fileref)) {

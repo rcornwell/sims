@@ -1087,7 +1087,12 @@ DISPLAYD = display
 # Emulator source files and compile time options
 #
 ICL1900D = ICL1900
-ICL1900 = ${ICL1900D}/icl1900_cpu.c ${ICL1900D}/icl1900_sys.c 
+ICL1900 = ${ICL1900D}/icl1900_cpu.c ${ICL1900D}/icl1900_sys.c \
+          ${ICL1900D}/icl1900_stdio.c ${ICL1900D}/icl1900_cty.c \
+          ${ICL1900D}/icl1900_tr.c ${ICL1900D}/icl1900_tp.c \
+          ${ICL1900D}/icl1900_mta.c ${ICL1900D}/icl1900_lp.c \
+          ${ICL1900D}/icl1900_mt.c
+
 ICL1900_OPT = -I $(ICL1900D) -DICL1900 -DUSE_SIM_CARD
 
 IBM360D = IBM360
@@ -1105,7 +1110,7 @@ KA10 = ${KA10D}/ka10_cpu.c ${KA10D}/ka10_sys.c ${KA10D}/ka10_df.c \
 	${KA10D}/ka10_rp.c ${KA10D}/ka10_rc.c ${KA10D}/ka10_dt.c \
 	${KA10D}/ka10_dk.c ${KA10D}/ka10_cr.c ${KA10D}/ka10_cp.c \
 	${KA10D}/ka10_tu.c ${KA10D}/ka10_rs.c ${KA10D}/ka10_pd.c \
-	${KA10D}/ka10_imx.c
+	${KA10D}/ka10_imx.c ${KA10D}/ka10_tk10.c
 KA10_OPT = -DKA=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD
 #	${KA10D}/ka10_imp.c sim_imp.c sim_ncp.c sim_tun.c
 

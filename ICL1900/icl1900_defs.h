@@ -32,9 +32,9 @@
 #define NUM_DEVS_PTP    2
 #define NUM_DEVS_CDR    0
 #define NUM_DEVS_CDP    0
-#define NUM_DEVS_LPR    0
+#define NUM_DEVS_LPR    1
 #define NUM_DEVS_CON    0
-#define NUM_DEVS_MT     0             /* 1971 SI tape drives */
+#define NUM_DEVS_MT     4             /* 1971 SI tape drives */
 #define NUM_DEVS_MTA    8             /* 1974 NSI tape drives */
 #define NUM_DEVS_DSK    0
 #define NUM_DEVS_DTC    0

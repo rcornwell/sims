@@ -34,14 +34,11 @@
 #include "sim_timer.h"
 
 #define UNIT_V_MSIZE    (UNIT_V_UF + 0)
-#define UNIT_MSIZE      (7 << UNIT_V_MSIZE)
+#define UNIT_MSIZE      (0x1ff << UNIT_V_MSIZE)
 #define MEMAMOUNT(x)    (x << UNIT_V_MSIZE)
-#define UNIT_V_MODEL    (UNIT_V_MSIZE + 4)
+#define UNIT_V_MODEL    (UNIT_V_MSIZE + 9)
 #define UNIT_MODEL      (0x3f << UNIT_V_MODEL)
 #define MODEL(x)        (UNIT_MODEL & (x << UNIT_V_MODEL))
-#define UNIT_FLOAT      (0x40 << UNIT_V_MODEL)
-#define UNIT_MULT       (0x100 << UNIT_V_MODEL)
-#define OPTION_MASK     (0x140 << UNIT_V_MODEL)
 
 
 #define TMR_RTC         1
@@ -72,28 +69,28 @@
 #define MOD4            12      /* A2 OPT */
 #define MOD4A           13      /* C2 OPT */
 #define MOD4E           14      /* C2 OPT */
-#define MOD4F           12+32
-#define MOD4S           15      /* Ax OPT */
-#define MOD5            16      /* A2 FP */
-#define MOD5A           17      /* Ax FP */
-#define MOD5E           18      /* C2 FP */
-#define MOD5F           16+32
-#define MOD5S           19      /* Ax FP */
-#define MOD6            20      /* C2 OPT */
-#define MOD6A           21      /* Ax OPT 076 131 */
-#define MOD6E           22      /* Ax OPT 076 */
-#define MOD6F           20+32
-#define MOD6S           23      /* Ax OPT */
-#define MOD7            24      /* C2 FP */
-#define MOD7A           25      /* Ax FP */
-#define MOD7E           26      /* Ax FP */
-#define MOD7F           24+32
-#define MOD7S           27      /* Ax FP */
-#define MOD8            28      /* Ax FP */
-#define MOD8A           29      /* Ax FP */
-#define MOD8S           30      /* Ax FP */
-#define MOD9            31      /* A2 FP */
-#define MODXF           32      /* C2 FP */
+#define MOD4F           15
+#define MOD4S           16      /* Ax OPT */
+#define MOD5            17      /* A2 FP */
+#define MOD5A           18      /* Ax FP */
+#define MOD5E           19      /* C2 FP */
+#define MOD5F           20
+#define MOD5S           21      /* Ax FP */
+#define MOD6            22      /* C2 OPT */
+#define MOD6A           23      /* Ax OPT 076 131 */
+#define MOD6E           24      /* Ax OPT 076 */
+#define MOD6F           25
+#define MOD6S           26      /* Ax OPT */
+#define MOD7            27      /* C2 FP */
+#define MOD7A           28      /* Ax FP */
+#define MOD7E           29      /* Ax FP */
+#define MOD7F           30
+#define MOD7S           31      /* Ax FP */
+#define MOD8            32      /* Ax FP */
+#define MOD8A           33      /* Ax FP */
+#define MOD8S           34      /* Ax FP */
+#define MOD9            35      /* A2 FP */
+#define MODXF           36      /* C2 FP */
 
 
 
@@ -172,8 +169,12 @@ t_stat              cpu_set_model(UNIT * uptr, int32 val, CONST char *cptr,
                                  void *desc);
 t_stat              cpu_set_float(UNIT * uptr, int32 val, CONST char *cptr,
                                  void *desc);
+t_stat              cpu_show_float(FILE * st, UNIT * uptr, int32 val,
+                                  CONST void *desc);
 t_stat              cpu_set_mult(UNIT * uptr, int32 val, CONST char *cptr,
                                  void *desc);
+t_stat              cpu_show_mult(FILE * st, UNIT * uptr, int32 val,
+                                  CONST void *desc);
 t_stat              cpu_show_hist(FILE * st, UNIT * uptr, int32 val,
                                   CONST void *desc);
 t_stat              cpu_set_hist(UNIT * uptr, int32 val, CONST char *cptr,
@@ -239,7 +240,7 @@ uint8    io_flags  = EXT_IO;
 */
 
 UNIT                cpu_unit[] =
-    {{ UDATA(rtc_srv, MODEL(MOD4A)|UNIT_MULT|MEMAMOUNT(7)|UNIT_IDLE, MAXMEMSIZE ), 16667 }};
+    {{ UDATA(rtc_srv, MODEL(MOD4A)|MEMAMOUNT(7)|UNIT_IDLE, MAXMEMSIZE ), 16667 }};
 
 REG                 cpu_reg[] = {
     {ORDATAD(C, RC,  22, "Instruction code"), REG_FIT},
@@ -253,17 +254,6 @@ REG                 cpu_reg[] = {
 };
 
 MTAB                cpu_mod[] = {
-    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(0), NULL, "4K", &cpu_set_size},
-    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(1), NULL, "8K", &cpu_set_size},
-    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(3), NULL, "16K", &cpu_set_size},
-    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(7), NULL, "32K", &cpu_set_size},
-    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(11), NULL, "48K", &cpu_set_size},
-    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(15), NULL, "64K", &cpu_set_size},
-    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(23), NULL, "96K", &cpu_set_size},
-    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(31), NULL, "128K", &cpu_set_size},
-    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(63), NULL, "256K", &cpu_set_size},
-    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(127), NULL, "512K", &cpu_set_size},
-    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(254), NULL, "1024K", &cpu_set_size},
     /* Stevenage */
     {UNIT_MODEL, MODEL(MOD1),  "1901",  "1901",  &cpu_set_model, NULL, NULL},
     {UNIT_MODEL, MODEL(MOD1A), "1901A", "1901A", &cpu_set_model, NULL, NULL},
@@ -296,10 +286,21 @@ MTAB                cpu_mod[] = {
     {UNIT_MODEL, MODEL(MOD7F), "1907F", "1907F", &cpu_set_model, NULL, NULL},
     {UNIT_MODEL, MODEL(MOD8A), "1908A", "1908A", &cpu_set_model, NULL, NULL},
     {UNIT_MODEL, MODEL(MOD9),  "1909",  "1909",  &cpu_set_model, NULL, NULL},
-    {UNIT_FLOAT, 0,            "NOFLOAT", "NOFLOAT", &cpu_set_float, NULL, NULL},
-    {UNIT_FLOAT, UNIT_FLOAT,   "FLOAT",  "FLOAT", &cpu_set_float, NULL, NULL},
-    {UNIT_MULT,  0,            "NOMULT", "NOMULT", &cpu_set_mult, NULL, NULL},
-    {UNIT_MULT,  UNIT_MULT,    "MULT",   "MULT", &cpu_set_mult, NULL, NULL},
+    {MTAB_XTD|MTAB_VDV, 0,  NULL, "NOFLOAT", &cpu_set_float, NULL, NULL, "Disable floating point"},
+    {MTAB_XTD|MTAB_VDV, 1,  "FLOAT",  "FLOAT", &cpu_set_float, &cpu_show_float, NULL, "Enable floating point"},
+    {MTAB_XTD|MTAB_VDV,  0, NULL, "NOMULT", &cpu_set_mult, NULL, NULL, "Disable hardware multiply"},
+    {MTAB_XTD|MTAB_VDV,  1, "MULT",   "MULT", &cpu_set_mult, &cpu_show_mult, NULL, "Enable hardware multiply"},
+    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(0), NULL, "4K", &cpu_set_size},
+    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(1), NULL, "8K", &cpu_set_size},
+    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(3), NULL, "16K", &cpu_set_size},
+    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(7), NULL, "32K", &cpu_set_size},
+    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(11), NULL, "48K", &cpu_set_size},
+    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(15), NULL, "64K", &cpu_set_size},
+    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(23), NULL, "96K", &cpu_set_size},
+    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(31), NULL, "128K", &cpu_set_size},
+    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(63), NULL, "256K", &cpu_set_size},
+    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(127), NULL, "512K", &cpu_set_size},
+    {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(254), NULL, "1024K", &cpu_set_size},
     {MTAB_VDV, 0, "MEMORY", NULL, NULL, &cpu_show_size},
     {MTAB_XTD|MTAB_VDV, 0, "IDLE", "IDLE", &sim_set_idle, &sim_show_idle },
     {MTAB_XTD|MTAB_VDV, 0, NULL, "NOIDLE", &sim_clr_idle, NULL },
@@ -324,10 +325,10 @@ uint8 Mem_test(uint32 addr) {
     addr &= M22;
 
     if (!exe_mode) {
-        if (addr < 8) 
+        if (addr < 8)
             return 0;
         addr = addr + RD;
-    } else if (addr < 8) 
+    } else if (addr < 8)
         return 0;
 
     if (!exe_mode && RL && (addr < RD || addr >= RL)) {
@@ -441,13 +442,15 @@ sim_instr(void)
 
 intr:
        if (!exe_mode && (SR64 | SR65) != 0) {
-            if (CPU_TYPE < TYPE_C1 && !exe_mode) 
+            if (CPU_TYPE < TYPE_C1 && !exe_mode)
                 RC += RD;
             exe_mode = 1;
             loading = 0;
             /* Store registers */
-            Mem_write(RD+13, &facch, 0);  /* Save F.P.U. */
-            Mem_write(RD+12, &faccl, 0);
+            if (cpu_flags & FLOAT) {
+                Mem_write(RD+13, &facch, 0);  /* Save F.P.U. */
+                Mem_write(RD+12, &faccl, 0);
+            }
             RA = 0;         /* Build ZSTAT */
             if (cpu_flags & SV) {
                 Mem_read(RD+9, &RA, 0);
@@ -458,12 +461,14 @@ intr:
                 if (BCarry)
                    RA |= B1;
             } else {
-                if (Zero)
-                    RA |= B3;
-                if (OPIP | PIP)
-                    RA |= B2;
+                if (CPU_TYPE >= TYPE_C1)  {
+                    if (Zero)
+                        RA |= B3;
+                    if (OPIP | PIP)
+                        RA |= B2;
+                    Mem_write(RD+9, &RA, 0);
+                }
             }
-            Mem_write(RD+9, &RA, 0);
             RA = RC & adrmask;
             if (BV)
               RA |= B0;
@@ -885,10 +890,7 @@ obey:
                      RP = XR[(RX+1) & 7];            /* VR */
                      RA = RB;  /* Divisor to RA */
                      RB = XR[RX];  /* Dividend to RB/RP */
-                     f =0;
-//fprintf(stderr, "DVD: %08o %08o %08o - %3o C=%08o\n\r", RA, RP, RB, RF, RC);
-                     if (RA == FMASK && RP == 1 && RB == 0)  /* Flag special case */
-                         f=1;
+//fprintf(stderr, "DVD0: %08o %08o %08o - %3o C=%08o\n\r", RA, RB, RP, RF, RC);
 
                      if (RA == 0) { /* Exit on zero divisor */  /* VI */
                          BV = 1;
@@ -897,21 +899,41 @@ obey:
                          BCarry = 0;
                          break;
                      }
-                     BCarry = (RP & B0) != 0;
-                     n = (RP | RB) == 0;   /* Save zero dividend */
 
                      /* Setup for specific divide order code */ /* V11 */
                      if (RF & 2) {     /* DVS */
-                         if (BCarry) {
+                         if (RP & B0) { /* RC22 */ /* Sign extend RB */
                              RB = FMASK;
                          } else {
                              RB = 0;
                          }
                      }
+
+// {
+//   long int   divsor;
+//   long int   dividend;
+//   int sign;
+//
+//   dividend = (((long int)(RB)) << 23) | (long int)(RP);
+//   if (RB & B0)   {
+//      dividend |= 0xffff800000000000;
+//   }
+//   sign = 1;
+//   divsor = (long int)(RA);
+//   if (RA & B0) {
+//      divsor |= 0xffffffffff000000;
+//      sign = -1;
+//   }
+//fprintf(stderr, "DVD1: %08o %08o %08o %ld (%lo) / %ld (%lo) = %ld (%lo) m %ld (%lo) %o\n\r", RA, RB, RP,
+//  dividend, dividend, divsor, divsor, dividend/divsor, dividend/divsor,
+//   sign* (dividend%divsor), sign *(dividend % divsor), BV);
+//}
+                     BCarry = 0;
+                     if ((RB | RP) == 0)
+                         goto dvd_zero;
                      RP <<= 1;
                      RP &= FMASK;
                      BCarry = 0;
-//fprintf(stderr, "DVD1: %08o %08o %08o \n\r", RA, RP, RB);
 
                      /* First partial remainder */   /* V12 */
                      if (((RB ^ RA) & B0) == 0) {
@@ -921,12 +943,14 @@ obey:
                          RS = RB + RA;
                          RK=0;
                      }
+                     /* Check if potiential overflow */
                      if (((RS ^ RA) & B0) != 0)
                          BCarry = 1;
                      BCarry = RK != BCarry;
+                     /* Shift left quotent and remainder */
                      RP <<= 1;
                      if (((RS ^ RA) & B0) == 0) {
-                         RP |= 1;
+                         RP |= 1;    /* First quotient digit */
                      }
                      RB = RS << 1;
                      if (RP & BM1)
@@ -951,7 +975,7 @@ obey:
                              RB |= 1;
                          RB &= FMASK;
                          RP &= FMASK;
-//fprintf(stderr, "DVD3: %08o %08o %08o \n\r", RA, RP, RB);
+//fprintf(stderr, "DVD3: %08o %08o %08o %08o \n\r", RA, RP, RB, RS);
                      }
 
                      /* Final product */
@@ -965,61 +989,58 @@ obey:
                          RP |= 1;
                      }
                      RP &= FMASK;
-//fprintf(stderr, "DVD4: %08o %08o %08o \n\r", RA, RP, RB);
-
-                     /* Final Remainder */
-                     if (RP & 1) {
-                         RB = (RB + (RA ^ FMASK) + 1) & FMASK;
-                     } else {
-                         RB = (RB + RA) & FMASK;
-                     }
+                     RB = RS & FMASK;
+//fprintf(stderr, "DVD4: %08o %08o %08o %08o \n\r", RA, RP, RB, RS);
                      /* End correction */
                      if ((RP & 1) == 0) {
                          RB = (RB + RA) & FMASK;
                      }
 //fprintf(stderr, "DVD5: %08o %08o %08o \n\r", RA, RP, RB);
-                     /* Form final partial product */
-                     if (RA & B0) {
-                        RS = (RB + (RA ^ FMASK) + 1) & FMASK;
-//fprintf(stderr, "DVD5: %08o %08o %08o %08o\n\r", RA, RP, RB, RT);
-                        if (RS == 0) {
-                            RB = 0;
-                            goto dvd1;
-                        }
-                     }
-                     if ((RF & 1) == 0)    /* DVR */
-                         goto dvd2;
-                     if (RB == 0)
-                         goto dvd2;
-                     RT = RB + (RA ^ FMASK) + 1;
-//fprintf(stderr, "DVDA: %08o %08o %08o %08o \n\r", RA, RP, RB, RT);
-                     RA = RB;
-                     if ((((RT + RA) ^ RA) & B0) != 0)
-                         goto dvd2;
-                     RB = RT & FMASK;
-dvd1:
-//fprintf(stderr, "DVD6: %08o %08o %08o \n\r", RA, RP, RB);
-                     RT = RP;
-                     RP++;
-                     if ((RT ^ RP) & B0)
-                         BCarry = !BCarry;
-                     if (RP & BM1)
-                         BCarry = 1;
-dvd2:
+                     if ((RF & 1) == 0 || RB == 0) {
 //fprintf(stderr, "DVD7: %08o %08o %08o \n\r", RA, RP, RB);
-                     if (n)
-                         BCarry = 0;
+                         /* If remainder same as divisor, bump quotent zero remainder */
+                         if (RB == RA) {
+                             RT = RP;
+                             RP++;
+                             if ((RT & B0) != (RP & B0))
+                                 BCarry = !BCarry;
+                             RB = 0;
+                         }
+                     } else {   /* DVR */
+                         RT = RB + (RA ^ FMASK) + 1;
+//fprintf(stderr, "DVDA: %08o %08o %08o %08o \n\r", RA, RP, RB, RT);
+                         RA = RB;
+                         if ((((RT + RA) ^ RA) & B0) == 0) {
+                             RB = RT & FMASK;
+//fprintf(stderr, "DVD6: %08o %08o %08o \n\r", RA, RP, RB);
+                             RT = RP;
+                             RP++;
+                             if ((RT ^ RP) & B0)
+                                 BCarry = !BCarry;
+                             if (RP & BM1)
+                                 BCarry = 1;
+                         }
+                     }
+dvd_zero:
+                     /* Set overflow if BCarry still set */
                      if (BCarry) {
                          BV = 1;
                          if (!exe_mode && (Mode & 7) == 4)
                              SR64 |= B2;
                      }
                      BCarry = 0;
-                     if (f) {
-                         RB = 0;
-                         RP = FMASK;
-//fprintf(stderr, "DVD8: %08o %08o %08o \n\r", RA, RP, RB);
-                     }
+// {
+//   int32   a;
+//   int32   b;
+//
+//   a = RB;
+//   if (RB & B0)
+//      a |= 0xff000000;
+//   b = RP;
+//   if (RP & B0)
+//      b |= 0xff000000;
+//fprintf(stderr, "DVD8: q=%08o(%d) r=%08o(%d) %d %d %d\n\r", RP, b, RB, a, BV);
+//}
                      XR[RX] = RB & FMASK;
                      XR[(RX+1) & 7] = RP & FMASK;
                      break;
@@ -1518,7 +1539,7 @@ norm1:
 
         /* Not on A*/
        case OP_SMO:          /* Supplementary Modifier - BC  */
-                    if (CPU_TYPE < TYPE_B1)
+                    if (CPU_TYPE < TYPE_C1)
                         goto voluntary;
                     if (OPIP) {      /* Error */
                         SR64 |= B1;
@@ -1528,7 +1549,7 @@ norm1:
                         goto intr;
                     }
                     PIP = 1;
-                    break;
+                    goto fetch;
 
        case OP_NULL:        /* No Operation */
                     if (!exe_mode && RX == 7 && (Mode & 7) > 0 && (Mode & 7) < 5)
@@ -2128,7 +2149,7 @@ fexp:
        case 0151:
        case 0160:   /* Stevenage machines */   /* Load accumulators */
        case 0161:   /* Stevenage machines */   /* Store accumulators */
-       case 0162:   /* Stevenage machines */   
+       case 0162:   /* Stevenage machines */
        case 0163:   /* Stevenage machines */   /* Stope and Display */
        case 0164:   /* Stevenage machines */   /* Search List N for Word X */
        case 0165:   /* Stevenage machines */   /* Parity Search */
@@ -2143,7 +2164,7 @@ fexp:
                          case 1: RA = SR1; break;
                          case 64: RA = SR64; SR64 &= 003777777; break;
                          case 65: RA = SR65; break;
-                         default: if (RB < 64) 
+                         default: if (RB < 64)
                                       chan_nsi_status(RB, &RA);
                                   break;
                          }
@@ -2154,7 +2175,7 @@ fexp:
        case 0171:            /* Write special register */
                     if (exe_mode) {
 //fprintf(stderr, "WR SR %o %08o\n\r", RB, RA);
-                         if (RB < 64) 
+                         if (RB < 64)
                              chan_nsi_cmd(RB, RA);
                          break;
                     }
@@ -2240,25 +2261,27 @@ voluntary:
                         reason = SCPE_STOP;
                         break;
                     }
-                    if (CPU_TYPE < TYPE_C1 && !exe_mode) 
+                    if (CPU_TYPE < TYPE_C1 && !exe_mode)
                         RC += RD;
                     exe_mode = 1;
                     /* Store registers */
                     Mem_write(RD+13, &facch, 0);  /* Save F.P.U. */
                     Mem_write(RD+12, &faccl, 0);
-                    RA = 0;         /* Build ZSTAT */
-                    if (Zero)
-                        RA |= B3;
-                    if (OPIP)
-                        RA |= B2;
-                    Mem_write(RD+9, &RA, 0);
+                    if (CPU_TYPE >= TYPE_C1) {
+                        RA = 0;         /* Build ZSTAT */
+                        if (Zero)
+                            RA |= B3;
+                        if (OPIP)
+                            RA |= B2;
+                        Mem_write(RD+9, &RA, 0);
+                    }
                     RA = RC;
                     if (BV)
                         RA |= B0;
                     if (BCarry)
                         RA |= B1;
                     /* Type A & B */
-                    if (CPU_TYPE < TYPE_C1 && Zero) 
+                    if (CPU_TYPE < TYPE_C1 && Zero)
                         RA |= B8;
                     Mem_write(RD+8, &RA, 0);
                     for (n = 0; n < 8; n++)
@@ -2382,12 +2405,8 @@ cpu_set_model(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
            cpu_flags = ptr->cpu_flags;
            io_flags = ptr->io_flags;
            rtc_tps = ptr->ticker;
-           cpu_unit[0].flags &= ~(UNIT_MODEL|UNIT_FLOAT|UNIT_MULT);
+           cpu_unit[0].flags &= ~(UNIT_MODEL);
            cpu_unit[0].flags |= MODEL(val);
-           if (cpu_flags & FLOAT)
-               cpu_unit[0].flags |= UNIT_FLOAT;
-           if (cpu_flags & MULT)
-               cpu_unit[0].flags |= UNIT_MULT;
            return SCPE_OK;
         }
     }
@@ -2398,10 +2417,6 @@ t_stat
 cpu_set_float(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 {
     int32 oval = val;
-    if (val == 0 && (cpu_flags & (FLOAT_OPT|FLOAT)) == FLOAT) 
-        val = UNIT_FLOAT;
-    cpu_unit[0].flags &= ~UNIT_FLOAT;
-    cpu_unit[0].flags |= val;
     cpu_flags &= ~FLOAT;
     if (val)
         cpu_flags |= FLOAT;
@@ -2411,18 +2426,28 @@ cpu_set_float(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 }
 
 t_stat
+cpu_show_float(FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+{
+    fprintf(st, "%s", (cpu_flags & FLOAT) ? "FLOAT":"NOFLOAT");
+    return SCPE_OK;
+}
+
+t_stat
 cpu_set_mult(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 {
     int32 oval = val;
-    if (val == 0 && (cpu_flags & (MULT_OPT|MULT)) == MULT) 
-        val = UNIT_MULT;
-    cpu_unit[0].flags &= ~UNIT_MULT;
-    cpu_unit[0].flags |= val;
     cpu_flags &= ~MULT;
     if (val)
         cpu_flags |= MULT;
     if (oval != val)
        return SCPE_ARG;
+    return SCPE_OK;
+}
+
+t_stat
+cpu_show_mult(FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+{
+    fprintf(st, "%s", (cpu_flags & MULT) ? "MULT":"NOMULT");
     return SCPE_OK;
 }
 
