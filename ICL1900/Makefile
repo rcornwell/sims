@@ -1089,7 +1089,8 @@ DISPLAYD = display
 ICL1900D = .
 ICL1900 = ${ICL1900D}/icl1900_cpu.c ${ICL1900D}/icl1900_sys.c ${ICL1900D}/icl1900_stdio.c \
     ${ICL1900D}/icl1900_cty.c ${ICL1900D}/icl1900_tr.c ${ICL1900D}/icl1900_tp.c \
-    ${ICL1900D}/icl1900_mta.c ${ICL1900D}/icl1900_lp.c ${ICL1900D}/icl1900_mt.c
+    ${ICL1900D}/icl1900_cr.c ${ICL1900D}/icl1900_cp.c ${ICL1900D}/icl1900_lp.c \
+    ${ICL1900D}/icl1900_mta.c ${ICL1900D}/icl1900_mt.c ${ICL1900D}/icl1900_eds8.c
 
 ICL1900_OPT = -I.. -DUSE_SIM_CARD
 

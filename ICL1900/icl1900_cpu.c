@@ -2231,8 +2231,8 @@ fexp:
                     /* Fall through */
        case 0174:            /* Send control character to peripheral */
                     if (exe_mode) {
-                         chan_send_cmd(RB, RA & 077, &RT);
-//fprintf(stderr, "CMD  %04o %04o %08o\n\r", RT, RB, RA);
+                         chan_send_cmd(RB, RA & 07777, &RT);
+//fprintf(stderr, "CMD  C=%08o %04o %04o %08o\n\r", RC, RT, RB, RA);
                          m = (m == 0) ? 3 : (XR[m] >> 22) & 3;
                          m = 6 * (3 - m);
                          RT = (RT & 077) << m;
@@ -2243,8 +2243,13 @@ fexp:
                     }
                     /* Fall through */
        case 0175:                          /* Null operation in Executive mode */
+                    if (exe_mode) {
+fprintf(stderr, "CMD 175 C=%08o %04o %08o\n\r", RC, RB, RA);
+                         break;
+                    }
        case 0176:
                     if (exe_mode) {
+fprintf(stderr, "CMD 176 C=%08o %04o %08o\n\r", RC, RB, RA);
                          break;
                     }
                     /* Fall through */

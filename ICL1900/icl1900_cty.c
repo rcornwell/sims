@@ -109,15 +109,14 @@ void cty_cmd(int dev, uint32 cmd) {
     if (dev == 2)
        u++;
     if (cmd & START) {
-        cty_unit[u].STATUS &= ~END;
-        cty_unit[u].STATUS |= BUSY;
+        cty_unit[u].CMD = 1;
+        cty_unit[u].STATUS = BUSY;
         if (!u)
            sim_activate(&cty_unit[u], cty_unit[u].wait);
     }
-    else if (cmd & STOP) {
+    if (cmd & STOP) {
         cty_unit[u].STATUS &= ~BUSY;
     }
-    cty_unit[u].STATUS &= BUSY;
     chan_clr_done(GET_UADDR(cty_unit[u].flags));
 }
 
@@ -171,6 +170,7 @@ t_stat ctyo_svc (UNIT *uptr)
            r = SCPE_OK;
        }
        if (eor) {
+          uptr->CMD = 0;
           uptr->STATUS &= ~BUSY;
           uptr->STATUS |= END;
           chan_set_done(GET_UADDR(uptr->flags));
@@ -182,6 +182,7 @@ t_stat ctyo_svc (UNIT *uptr)
 
 t_stat ctyi_svc (UNIT *uptr)
 {
+    int     dev = GET_UADDR(uptr->flags);
     t_stat  r;
     uint8   ch;
     int     eor;
@@ -195,15 +196,16 @@ t_stat ctyi_svc (UNIT *uptr)
        ch = 0177 & sim_tt_inpcvt(r & 0377, TT_GET_MODE (uptr->flags));
        if (uptr->HOLD) {
            if (ch >= '1' && ch <= '5') {
-               chan_set_done(GET_UADDR(uptr->flags));
+               chan_set_done(dev);
                uptr->STATUS |= (F1 << (ch - '1'));
+               uptr->CMD = 0;
            }  else {
                sim_putchar('\007');
            }
            uptr->HOLD = 0;
            return SCPE_OK;
        }
-       if ((uptr->STATUS & BUSY) != 0) {
+       if (uptr->CMD && (uptr->STATUS & BUSY) != 0) {
           /* Handle end of buffer */
           switch (ch) {
           case '\r':
@@ -212,8 +214,8 @@ t_stat ctyi_svc (UNIT *uptr)
                 sim_putchar('\r');
                 sim_putchar('\n');
                 uptr->STATUS |= ACCEPT;
-                uptr->STATUS &= ~BUSY;
-                chan_set_done(GET_UADDR(uptr->flags));
+                uptr->CMD = 0;
+                chan_set_done(dev);
                 break;
 
           case 033: /* function key <escape>n key */
@@ -223,17 +225,17 @@ t_stat ctyi_svc (UNIT *uptr)
           case 030: /* ^X Post input interrupt */
                 sim_debug(DEBUG_CMD, &cty_dev, ": inp\n");
                 uptr->STATUS |= INPUT;
-                uptr->STATUS &= ~BUSY;
                 uptr->HOLD = 0;
-                chan_set_done(GET_UADDR(uptr->flags));
+                uptr->CMD = 0;
+                chan_set_done(dev);
                 break;
 
           case 03:  /* ^C */
           case 025: /* ^U clear line */
                 uptr->STATUS |= CANCEL;
-                uptr->STATUS &= ~BUSY;
                 uptr->HOLD = 0;
-                chan_set_done(GET_UADDR(uptr->flags));
+                uptr->CMD = 0;
+                chan_set_done(dev);
                 break;
 
           default:
@@ -250,7 +252,7 @@ t_stat ctyi_svc (UNIT *uptr)
                     sim_putchar('\007');
                     break;
                 }
-                eor = chan_input_char(GET_UADDR(uptr->flags), &ch, 0);
+                eor = chan_input_char(dev, &ch, 0);
                 switch (ch & 060) {
                 case 000:   ch = 0060 | (ch & 017); break;
                 case 020:   ch = 0040 | (ch & 017); break;
@@ -260,9 +262,9 @@ t_stat ctyi_svc (UNIT *uptr)
                 ch = sim_tt_outcvt ( ch, TT_GET_MODE (uptr->flags)) ;
                 sim_putchar (ch);
                 if (eor) {
-                    uptr->STATUS &= ~BUSY;
+                    uptr->CMD = 0;
                     uptr->STATUS |= END;
-                    chan_set_done(GET_UADDR(uptr->flags));
+                    chan_set_done(dev);
                 }
                 break;
            }
@@ -277,14 +279,14 @@ t_stat ctyi_svc (UNIT *uptr)
                   sim_debug(DEBUG_CMD, &cty_dev, ": inp\n");
                   uptr->STATUS |= INPUT;
                   uptr->HOLD = 0;
-                  chan_set_done(GET_UADDR(uptr->flags));
+                  chan_set_done(dev);
                   break;
 
             case 03:  /* ^C */
             case 025: /* ^U clear line */
                   uptr->STATUS |= CANCEL;
                   uptr->HOLD = 0;
-                  chan_set_done(GET_UADDR(uptr->flags));
+                  chan_set_done(dev);
                   break;
 
             default:

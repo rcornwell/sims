@@ -68,8 +68,11 @@ DEVICE             *sim_devices[] = {
 #if NUM_DEVS_MTA > 0
     &mta_dev,
 #endif
-#if NUM_DEVS_DSK > 0
-    &dsk_dev,
+#if NUM_DEVS_EDS8 > 0
+    &eds8_dev,
+#endif
+#if NUM_DEVS_EDS30 > 0
+    &eds30_dev,
 #endif
 #if NUM_DEVS_DTC > 0
     &dtc_dev,
@@ -88,6 +91,7 @@ DEBTAB              dev_debug[] = {
     {"DATA", DEBUG_DATA, "Show data transfers"},
     {"DETAIL", DEBUG_DETAIL, "Show details about device"},
     {"EXP", DEBUG_EXP, "Show exception information"},
+    {"STATUS", DEBUG_STATUS, "Show status conditions"},
     {0, 0}
 };
 
