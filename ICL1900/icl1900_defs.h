@@ -30,13 +30,14 @@
 
 #define NUM_DEVS_PTR    2
 #define NUM_DEVS_PTP    2
-#define NUM_DEVS_CDR    0
-#define NUM_DEVS_CDP    0
+#define NUM_DEVS_CDR    1
+#define NUM_DEVS_CDP    1
 #define NUM_DEVS_LPR    1
 #define NUM_DEVS_CON    0
 #define NUM_DEVS_MT     4             /* 1971 SI tape drives */
 #define NUM_DEVS_MTA    8             /* 1974 NSI tape drives */
-#define NUM_DEVS_DSK    0
+#define NUM_DEVS_EDS8   8
+#define NUM_DEVS_EDS30  0
 #define NUM_DEVS_DTC    0
 #define MAXMEMSIZE      (4096 * 1024)
 
@@ -54,10 +55,8 @@ extern uint32           XR[8];
 #define DEBUG_CMD       0x0000004       /* Show device commands */
 #define DEBUG_DATA      0x0000008       /* Show data transfers */
 #define DEBUG_DETAIL    0x0000010       /* Show details */
-#define DEBUG_EXP       0x0000020       /* Show error conditions */
-#define DEBUG_SNS       0x0000040       /* Shows sense data for 7909 devs */
-#define DEBUG_CTSS      0x0000080       /* Shows CTSS specail instructions */
-#define DEBUG_PROT      0x0000100       /* Protection traps */
+#define DEBUG_EXP       0x0000020       /* Show exeption conditions */
+#define DEBUG_STATUS    0x0000040       /* Show status conditions */
 
 extern DEBTAB dev_debug[];
 
@@ -304,7 +303,8 @@ extern DEVICE       cdr_dev;
 extern DEVICE       cdp_dev;
 extern DEVICE       lpr_dev;
 extern DEVICE       dtc_dev;
-extern DEVICE       dsk_dev;
+extern DEVICE       eds8_dev;
+extern DEVICE       eds30_dev;
 extern DEVICE       mt_dev;
 extern DEVICE       mta_dev;
 

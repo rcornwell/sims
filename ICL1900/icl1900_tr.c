@@ -74,7 +74,7 @@
 #define T1916_2               3
 
 #define UNIT_PTR(x)      UNIT_ADDR(x)|SET_TYPE(T1915_2)|UNIT_ATTABLE|\
-                              UNIT_DISABLE|UNIT_TEXT|UNIT_RO|TT_MODE_7B
+                              UNIT_DISABLE|UNIT_RO|TT_MODE_7B
 
 /*
  * Character translation.
@@ -196,21 +196,26 @@ void ptr_cmd(int dev, uint32 cmd, uint32 *resp) {
              uptr->CMD |= BUSY| (cmd & 07);
              uptr->STATUS = 0;
              sim_activate(uptr, uptr->wait);
-             chan_clr_done(GET_UADDR(uptr->flags));
+             chan_clr_done(dev);
              *resp = 5;
              break;
 
    case 020: if (cmd == 020) {    /* Send Q */
-                 if ((uptr->flags & UNIT_ATT) != 0)
+                 *resp = uptr->STATUS & TERMINATE;
+                 if ((uptr->flags & UNIT_ATT) != 0) {
                     *resp = 040;
-                 if (uptr->STATUS & 06)
-                    *resp = 040;
-                 *resp |= uptr->STATUS & TERMINATE;
+                    if ((uptr->CMD & BUSY) == 0)
+                       *resp |= 030;
+                 }
+                 if ((uptr->STATUS & ERROR) != 0)
+                    *resp |= 040;
              } else if (cmd == 024) {  /* Send P */
                  if ((uptr->flags & UNIT_ATT) != 0)
-                    *resp = (uptr->STATUS & ERROR) | 1;
+                    *resp = 1;
+                 if ((uptr->STATUS & ERROR) != 0)
+                    *resp |= 2;
                  uptr->STATUS = 0;
-                 chan_clr_done(GET_UADDR(uptr->flags));
+                 chan_clr_done(dev);
              }
              break;
 
@@ -265,7 +270,7 @@ void ptr_nsi_cmd(int dev, uint32 cmd) {
    if (cmd & 01) {
        if (uptr->CMD & BUSY || (uptr->flags & UNIT_ATT) == 0) {
            uptr->STATUS |= OPAT;
-           chan_set_done(GET_UADDR(uptr->flags));
+           chan_set_done(dev);
            return;
        }
        if (cmd & 010)
@@ -281,7 +286,7 @@ void ptr_nsi_cmd(int dev, uint32 cmd) {
        uptr->CMD |= BUSY;
        uptr->STATUS = 0;
        sim_activate(uptr, uptr->wait);
-       chan_clr_done(GET_UADDR(uptr->flags));
+       chan_clr_done(dev);
    }
 }
 
@@ -319,12 +324,12 @@ void ptr_nsi_status(int dev, uint32 *resp) {
    if (uptr->CMD & BUSY)
        *resp |= 040;
    uptr->STATUS = 0;
-   chan_clr_done(GET_UADDR(uptr->flags));
+   chan_clr_done(dev);
 }
 
 t_stat ptr_svc (UNIT *uptr)
 {
-    t_stat  r;
+    int     dev = GET_UADDR(uptr->flags);
     uint8   ch;
     uint8   shift = 0;
     int     data;
@@ -333,7 +338,7 @@ t_stat ptr_svc (UNIT *uptr)
     /* Handle a disconnect request */
     if (uptr->CMD & DISC) {
        uptr->CMD &= 1;
-       chan_set_done(GET_UADDR(uptr->flags));
+       chan_set_done(dev);
        return SCPE_OK;
     }
     /* If not busy, false schedule, just exit */
@@ -342,10 +347,10 @@ t_stat ptr_svc (UNIT *uptr)
     if (uptr->HOLD != 0) {
         ch = uptr->HOLD & 077;
         uptr->HOLD = 0;
-        eor = chan_input_char(GET_UADDR(uptr->flags), &ch, 0);
+        eor = chan_input_char(dev, &ch, 0);
         if (eor) {
             uptr->CMD &= 1;
-            chan_set_done(GET_UADDR(uptr->flags));
+            chan_set_done(dev);
             uptr->STATUS = TERMINATE;
             return SCPE_OK;
         }
@@ -358,7 +363,7 @@ t_stat ptr_svc (UNIT *uptr)
          feof(uptr->fileref) ||
          (data = getc (uptr->fileref)) == EOF) {
        uptr->CMD &= 1;
-       chan_set_done(GET_UADDR(uptr->flags));
+       chan_set_done(dev);
        uptr->STATUS = TERMINATE;
        return SCPE_OK;
     }
@@ -371,7 +376,7 @@ t_stat ptr_svc (UNIT *uptr)
        ch = ch ^ (ch >> 1);
        if (ch != 0)
           uptr->STATUS = TERMINATE | ERROR;
-       chan_set_done(GET_UADDR(uptr->flags));
+       chan_set_done(dev);
     }
     data &= 0177;
     if ((data == 0 || data == 0177) && (uptr->CMD & IGN_BLNK) != 0) {
@@ -384,7 +389,7 @@ t_stat ptr_svc (UNIT *uptr)
        case 0000:
        case 0020:   /* Terminate */
                uptr->STATUS |= TERMINATE;
-               chan_set_done(GET_UADDR(uptr->flags));
+               chan_set_done(dev);
                uptr->CMD &= 1;
                return SCPE_OK;
        case 0040:
@@ -444,24 +449,24 @@ t_stat ptr_svc (UNIT *uptr)
     }
     /* Check if error */
     if (shift != 0) {
-        eor = chan_input_char(GET_UADDR(uptr->flags), &shift, 0);
+        eor = chan_input_char(dev, &shift, 0);
         if (eor) {
            uptr->STATUS |= TERMINATE;
-           chan_set_done(GET_UADDR(uptr->flags));
+           chan_set_done(dev);
            uptr->CMD &= 1;
            uptr->HOLD = 0100 | ch;
            return SCPE_OK;
         }
     }
-    eor = chan_input_char(GET_UADDR(uptr->flags), &ch, 0);
+    eor = chan_input_char(dev, &ch, 0);
     if (eor) {
         uptr->STATUS |= TERMINATE;
-        chan_set_done(GET_UADDR(uptr->flags));
+        chan_set_done(dev);
         uptr->CMD &= 1;
         return SCPE_OK;
     }
     if (uptr->STATUS & TERMINATE) {
-        chan_set_done(GET_UADDR(uptr->flags));
+        chan_set_done(dev);
         uptr->CMD &= 1;
         return SCPE_OK;
     }
@@ -491,14 +496,14 @@ t_stat
 ptr_boot(int32 unit_num, DEVICE * dptr)
 {
     UNIT    *uptr = &dptr->units[unit_num];
-    int      chan = GET_UADDR(uptr->flags);
+    int      dev = GET_UADDR(uptr->flags);
 
     if ((uptr->flags & UNIT_ATT) == 0)
         return SCPE_UNATT;      /* attached? */
 
-    M[64 + chan] = 0;
-    M[256 + 4 * chan] = 0;
-    M[257 + 4 * chan] = 0;
+    M[64 + dev] = 0;
+    M[256 + 4 * dev] = 0;
+    M[257 + 4 * dev] = 0;
     loading = 1;
     uptr->CMD = BUSY|ALPHA_MODE|BIN_MODE|IGN_BLNK;
     sim_activate (uptr, uptr->wait);
@@ -508,12 +513,12 @@ ptr_boot(int32 unit_num, DEVICE * dptr)
 
 t_stat ptr_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-fprintf (st, "The Paper Tape Reader can be set to one of twp modes: 7P, or 7B.\n\n");
-fprintf (st, "  mode \n");
-fprintf (st, "  7P    Process even parity input tapes. \n");
-fprintf (st, "  7B    Ignore parity of input data.\n");
-fprintf (st, "The default mode is 7B.\n");
-return SCPE_OK;
+    fprintf (st, "The Paper Tape Reader can be set to one of two modes: 7P, or 7B\n\n");
+    fprintf (st, "  7P    Process even parity input tapes. \n");
+    fprintf (st, "  7B    Ignore parity of input data.\n");
+    fprintf (st, "The default mode is 7B.\n\n");
+    fprintf (st, "The device number can be set with DEV=# command.\n");
+    return SCPE_OK;
 }
 
 CONST char *ptr_description (DEVICE *dptr)

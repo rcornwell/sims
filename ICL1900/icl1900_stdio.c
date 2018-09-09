@@ -247,6 +247,8 @@ get_ccw(int dev, uint32 *addr, uint8 type) {
         cw0 = M[cw_addr];
         cw1 = M[cw_addr+1];
         *addr = cw1;
+        if (type & WORD_DEV)
+           cw0 |= WORDCCW;
         if (cw0 & WORDCCW) {
             if (cw0 & BACKWARD)
                 cw1 = ((cw1 + M22) & M22) | (cw1 & CMASK);
@@ -340,6 +342,8 @@ chan_nsi_status(int dev, uint32 *resp) {
     if (dibp != NULL && dibp->nsi_cmd != NULL) {
        (dibp->nsi_status)(dev, resp);
     }
+if (dev > 10)
+fprintf(stderr, "Status %d %08o\n\r", dev, *resp);
 }
 
 
@@ -469,7 +473,7 @@ chan_set_done(int dev) {
     if (dev < 22)
        SR64 |= B2 >> dev;
     else
-       SR65 |= B1 >> (dev - 23);
+       SR65 |= ((io_flags & EXT_IO) ? B1 : B2) >> (dev - 24);
 }
 
 void
@@ -477,7 +481,7 @@ chan_clr_done(int dev) {
     if (dev < 22)
        SR64 &= ~(B2 >> dev);
     else
-       SR65 &= ~(B1 >> (dev - 23));
+       SR65 &= ~(((io_flags & EXT_IO) ? B1 : B2) >> (dev - 24));
 }
 
 

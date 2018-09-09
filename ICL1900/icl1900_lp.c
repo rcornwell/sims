@@ -69,8 +69,7 @@
 #define T1933_2               3+12
 #define T1933_3               5+12
 
-#define UNIT_LPR(x)      UNIT_ADDR(x)|SET_TYPE(T1931_2)|UNIT_ATTABLE|\
-                             UNIT_DISABLE|UNIT_TEXT
+#define UNIT_LPR(x)      UNIT_ADDR(x)|SET_TYPE(T1931_2)|UNIT_ATTABLE|UNIT_DISABLE
 
 
 void lpr_cmd (int dev, uint32 cmd, uint32 *resp);

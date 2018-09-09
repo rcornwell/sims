@@ -144,7 +144,7 @@ DEVICE mta_dev = {
     "MTA", mta_unit, NULL, mta_mod,
     NUM_DEVS_MTA, 8, 22, 1, 8, 22,
     NULL, NULL, &mta_reset, &mta_boot, &mta_attach, &mta_detach,
-    &mta_dib, DEV_DISABLE | DEV_DEBUG | UNIT_ADDR(030), 0, dev_debug,
+    &mta_dib, DEV_DIS | DEV_DISABLE | DEV_DEBUG | UNIT_ADDR(24), 0, dev_debug,
     NULL, NULL, &mta_help, NULL, NULL, &mta_description
     };
 
@@ -606,7 +606,7 @@ t_stat mta_svc (UNIT *uptr)
              sim_activate(uptr, 30000);
              mta_busy = 0;
          } else {
-             sim_debug(DEBUG_DETAIL, dptr, "Rewind unit=%d\n", unit);
+             sim_debug(DEBUG_DETAIL, dptr, "Rewind unit=%d dev=%d\n", unit, dev);
              r = sim_tape_rewind(uptr);
              uptr->STATUS &= ~BUSY;
              uptr->STATUS |= TERMINATE;

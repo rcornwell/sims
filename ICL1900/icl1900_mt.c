@@ -81,21 +81,20 @@
 #define MT_QUAL      0100             /* Qualifier expected */
 #define MT_BUSY      0200             /* Device running command */
 
-#define ST1_OK         00100          /* Unit OK */
-#define ST1_WARN       00200          /* Warning, EOT, BOT, TM */
-#define ST1_ERR        00400          /* Parity error, blank, no unit */
-#define ST1_CORERR     01000          /* Corrected error */
-#define ST1_LONG       02000          /* Long Block */
+#define ST1_OK       001              /* Unit available */
+#define ST1_WARN     002              /* Warning, EOT, BOT, TM */
+#define ST1_ERR      004              /* Parity error, blank, no unit */
+#define ST1_CORERR   010              /* Corrected error */
+#define ST1_LONG     020              /* Long Block */
 #define ST1_P2       040              /* P2 Status */
 
-#define ST2_ROWS     0030000          /* Number of rows read */
-#define ST2_BLNK     0040000          /* Blank Tape */
+#define ST2_ROWS     00300            /* Number of rows read */
+#define ST2_BLNK     00400            /* Blank Tape */
 
 #define STQ_TERM     001              /* Operation terminated */
 #define STQ_WRP      002              /* Write ring present */
-#define STQ_ACCP     004              /* Handler accepted order */
-#define STQ_S1       010              /* Controller ready to accept */
-#define STQ_S2       020              /* Controller ready to accept */
+#define STQ_TPT_RDY  004              /* Tape can accept orders */
+#define STQ_CTL_RDY  030              /* Controller ready to accept new order */
 #define STQ_P1       040              /* P1 Status on */
 
 
@@ -139,75 +138,92 @@ DEVICE mt_dev = {
     "MT", mt_unit, NULL, mt_mod,
     NUM_DEVS_MT, 8, 22, 1, 8, 22,
     NULL, NULL, &mt_reset, &mt_boot, &mt_attach, &mt_detach,
-    &mt_dib, DEV_DISABLE | DEV_DEBUG | UNIT_ADDR(20), 0, dev_debug,
+    &mt_dib, DEV_DISABLE | DEV_DEBUG | UNIT_ADDR(24), 0, dev_debug,
     NULL, NULL, &mt_help, NULL, NULL, &mt_description
     };
 
 void mt_cmd(int dev, uint32 cmd, uint32 *resp) {
     UNIT  *uptr = &mt_unit[mt_drive];
     *resp = 0;
-    if (dev & 0400) {
+    if (cmd & 0400) {
+        sim_debug(DEBUG_CMD, &mt_dev, "Cmd: set unit=%d %04o\n", mt_drive, cmd);
         mt_drive = cmd & 07;
-        return;
-    }
-    if ((uptr->flags & UNIT_ATT) == 0) {
-        uptr->CMD = 0;
+        *resp = 5;
         return;
     }
     if (uptr->CMD & MT_QUAL) {
-        *resp = 5;
-        uptr->CMD &= ~MT_QUAL;
+        sim_debug(DEBUG_CMD, &mt_dev, "Cmd: qual unit=%d %04o\n", mt_drive, cmd);
+        cmd = uptr->CMD & ~MT_QUAL;
     } else {
         switch(cmd & 070) {
-        case 000: if (cmd == 0) {
-                     *resp = 5;
-                     return;
-                  }
-                  uptr->CMD = cmd;
-                  if (cmd != 1)
-                       uptr->CMD |= MT_QUAL;
+        case 000: if (cmd > 1)
+                       cmd |= MT_QUAL;
                   break;
-        case 010: uptr->CMD = cmd;
-                  if (cmd < 016)
-                      uptr->CMD |= MT_QUAL;
+        case 010: if (cmd < 016)
+                      cmd |= MT_QUAL;
                   break;
         case 020: if (cmd == SEND_Q) {
-                     if (!sim_tape_wrp(uptr))
-                         uptr->STATUS |= STQ_WRP;
-                     *resp = uptr->STATUS & 037;
-                     if (uptr->STATUS & 0777700)
-                         *resp |= STQ_P1;
+                     *resp = uptr->STATUS & 01;
+                     if (mt_busy == 0)
+                         *resp |= STQ_CTL_RDY;
+                     if ((uptr->flags & UNIT_ATT) != 0) {
+                         *resp |= STQ_TPT_RDY;
+                         if (!sim_tape_wrp(uptr))
+                             *resp |= STQ_WRP;
+//                         if ((uptr->CMD & MT_BUSY) == 0)
+                         if (uptr->STATUS & 07776 || (uptr->CMD & MT_BUSY) == 0)
+                             *resp |= STQ_P1;
+                     }
+                     uptr->STATUS &= ~1;
+                     chan_clr_done(dev);
                   } else if (cmd == SEND_P) {
-                     *resp = (uptr->STATUS >> 6) & 037;
-                     if (uptr->STATUS & 0770000)
-                         *resp |= ST1_P2;
+                     if ((uptr->flags & UNIT_ATT) != 0) {
+                         *resp = uptr->STATUS & 036;
+                         if ((uptr->CMD & MT_BUSY) == 0)
+                             *resp |= ST1_OK;
+                         if (uptr->STATUS & 07700)
+                             *resp |= ST1_P2;
+                     }
                   } else if (cmd == SEND_P2) {
-                     *resp = (uptr->STATUS >> 12) & 037;
+                     if ((uptr->flags & UNIT_ATT) != 0)
+                         *resp = (uptr->STATUS >> 6) & 037;
                   }
+                  sim_debug(DEBUG_STATUS, &mt_dev, "Status: unit:=%d %02o %02o\n", mt_drive, cmd, *resp);
                   return;
-        case 030: uptr->CMD = cmd;
-                  if (cmd < 036)
-                       uptr->CMD |= MT_QUAL;
+        case 030: if (cmd < 036)
+                       cmd |= MT_QUAL;
                   break;
         default:
+                  sim_debug(DEBUG_DETAIL, &mt_dev, "extra: unit:=%d %02o %02o\n", mt_drive, cmd, *resp);
                   return;
         }
     }
-        sim_debug(DEBUG_CMD, &mt_dev, "Cmd: unit=%d %02o\n", mt_drive, uptr->CMD);
-    if (uptr->flags & MT_BUSY) {
-        *resp = 3;
-        return;
+    sim_debug(DEBUG_CMD, &mt_dev, "Cmd: unit=%d %02o\n", mt_drive, cmd);
+    if ((uptr->flags & UNIT_ATT) == 0) {
+       *resp = 3;
+       return;
     }
+    if (mt_busy || (uptr->CMD & MT_BUSY)) {
+       *resp = 3;
+       return;
+    }
+    if (cmd == 0) {
+       *resp = 5;
+       return;
+    }
+    uptr->CMD = cmd;
     if ((uptr->CMD & MT_QUAL) == 0) {
         sim_debug(DEBUG_CMD, &mt_dev, "Cmd: unit=%d start %02o\n", mt_drive, uptr->CMD);
        mt_busy = 1;
        CLR_BUF(uptr);
        uptr->POS = 0;
        uptr->CMD |= MT_BUSY;
-       uptr->STATUS = ST1_OK|STQ_ACCP;
+       uptr->STATUS = 0;
+       chan_clr_done(dev);
        sim_activate(uptr, 100);
     }
     *resp = 5;
+    return;
 }
 
 t_stat mt_svc (UNIT *uptr)
@@ -235,7 +251,7 @@ t_stat mt_svc (UNIT *uptr)
              if ((r = sim_tape_rdrecf(uptr, &mt_buffer[0], &reclen,
                               BUFFSIZE)) != MTSE_OK) {
                  sim_debug(DEBUG_DETAIL, dptr, " error %d\n", r);
-                 uptr->STATUS = ST1_OK|STQ_TERM;
+                 uptr->STATUS = STQ_TERM;
                  if (r == MTSE_TMK)
                      uptr->STATUS |= ST1_WARN;
                  else if (r == MTSE_WRP)
@@ -270,9 +286,10 @@ t_stat mt_svc (UNIT *uptr)
          sim_debug(DEBUG_DATA, dptr, "unit=%d read %08o\n", unit, word);
          eor = chan_input_word(dev, &word, 0);
          if (eor || uptr->POS >= uptr->hwmark) {
-             uptr->STATUS = (stop << 12) | ST1_OK|STQ_TERM;
+             uptr->STATUS = (stop << 12) | STQ_TERM;
              if (uptr->POS < uptr->hwmark)
                   uptr->STATUS |= ST1_LONG;
+             sim_debug(DEBUG_DATA, dptr, "unit=%d read done %08o\n", unit, uptr->STATUS);
              uptr->CMD = 0;
              mt_busy = 0;
              chan_set_done(dev);
@@ -285,7 +302,7 @@ t_stat mt_svc (UNIT *uptr)
     case MT_WRITE:
          /* Check if write protected */
          if (sim_tape_wrp(uptr)) {
-             uptr->STATUS = ST1_OK|STQ_TERM|ST1_ERR;
+             uptr->STATUS = STQ_TERM|ST1_ERR;
              uptr->CMD &= ~MT_BUSY;
              mt_busy = 0;
              chan_set_done(dev);
@@ -307,7 +324,7 @@ t_stat mt_svc (UNIT *uptr)
              sim_debug(DEBUG_DETAIL, dptr, "Write unit=%d Block %d chars\n",
                       unit, reclen);
              r = sim_tape_wrrecf(uptr, &mt_buffer[0], reclen);
-             uptr->STATUS = ST1_OK|STQ_TERM;
+             uptr->STATUS = STQ_TERM;
              if (r != MTSE_OK)
                 uptr->STATUS |= ST1_ERR;
              uptr->CMD = 0;
@@ -322,7 +339,7 @@ t_stat mt_svc (UNIT *uptr)
          /* If empty buffer, fill */
          if (BUF_EMPTY(uptr)) {
              if (sim_tape_bot(uptr)) {
-                 uptr->STATUS = ST1_OK|ST1_WARN|STQ_TERM;
+                 uptr->STATUS = ST1_WARN|STQ_TERM;
                  uptr->CMD = 0;
                  mt_busy = 0;
                  chan_set_done(dev);
@@ -332,7 +349,7 @@ t_stat mt_svc (UNIT *uptr)
              if ((r = sim_tape_rdrecr(uptr, &mt_buffer[0], &reclen,
                               BUFFSIZE)) != MTSE_OK) {
                  sim_debug(DEBUG_DETAIL, dptr, " error %d\n", r);
-                 uptr->STATUS = ST1_OK|STQ_TERM;
+                 uptr->STATUS = STQ_TERM;
                  if (r == MTSE_TMK)
                      uptr->STATUS |= ST1_WARN;
                  else if (r == MTSE_WRP)
@@ -362,7 +379,7 @@ t_stat mt_svc (UNIT *uptr)
          sim_debug(DEBUG_DATA, dptr, "unit=%d read %08o\n", unit, word);
          eor = chan_input_word(dev, &word, 0);
          if (eor || uptr->POS == 0) {
-             uptr->STATUS = (stop << 12) | ST1_OK|STQ_TERM;
+             uptr->STATUS = (stop << 12) |STQ_TERM;
              if (uptr->POS != 0)
                   uptr->STATUS |= ST1_LONG;
              uptr->CMD = 0;
@@ -376,6 +393,7 @@ t_stat mt_svc (UNIT *uptr)
     case MT_FSF:
          switch(uptr->POS) {
          case 0:
+              sim_debug(DEBUG_DETAIL, dptr, "Skip rec unit=%d\n", unit);
               uptr->POS ++;
               sim_activate(uptr, 500);
               break;
@@ -396,7 +414,8 @@ t_stat mt_svc (UNIT *uptr)
               }
               break;
          case 2:
-              uptr->STATUS = ST1_OK|(ST1_WARN & uptr->STATUS) | STQ_TERM;
+              sim_debug(DEBUG_DETAIL, dptr, "Skip rec unit=%d done\n", unit);
+              uptr->STATUS = (ST1_WARN & uptr->STATUS) | STQ_TERM;
               uptr->CMD = 0;
               mt_busy = 0;
               chan_set_done(dev);
@@ -406,7 +425,7 @@ t_stat mt_svc (UNIT *uptr)
     case MT_WTM:
          if (uptr->POS == 0) {
              if (sim_tape_wrp(uptr)) {
-                 uptr->STATUS = ST1_OK|ST1_ERR|STQ_TERM;
+                 uptr->STATUS = ST1_ERR|STQ_TERM;
                  uptr->CMD = 0;
                  mt_busy = 0;
                  chan_set_done(dev);
@@ -417,7 +436,7 @@ t_stat mt_svc (UNIT *uptr)
          } else {
              sim_debug(DEBUG_DETAIL, dptr, "Write Mark unit=%d\n", unit);
              r = sim_tape_wrtmk(uptr);
-             uptr->STATUS = ST1_OK|STQ_TERM;
+             uptr->STATUS = STQ_TERM;
              if (r != MTSE_OK)
                  uptr->STATUS |= ST1_ERR;
               uptr->CMD = 0;
@@ -430,7 +449,7 @@ t_stat mt_svc (UNIT *uptr)
          switch (uptr->POS ) {
          case 0:
               if (sim_tape_bot(uptr)) {
-                  uptr->STATUS = ST1_OK|ST1_WARN|STQ_TERM;
+                  uptr->STATUS = ST1_WARN|STQ_TERM;
                   uptr->CMD = 0;
                   mt_busy = 0;
                   chan_set_done(dev);
@@ -443,7 +462,7 @@ t_stat mt_svc (UNIT *uptr)
               sim_debug(DEBUG_DETAIL, dptr, "Backspace rec unit=%d ", unit);
               r = sim_tape_sprecr(uptr, &reclen);
               /* We don't set EOF on BSR */
-              uptr->STATUS = ST1_OK|STQ_TERM;
+              uptr->STATUS = STQ_TERM;
               if (r == MTSE_TMK || r == MTSE_BOT) {
                   uptr->STATUS |= ST1_WARN;
               }
@@ -457,7 +476,7 @@ t_stat mt_svc (UNIT *uptr)
          switch (uptr->POS ) {
          case 0:
               if (sim_tape_bot(uptr)) {
-                  uptr->STATUS = ST1_OK|ST1_WARN|STQ_TERM;
+                  uptr->STATUS = ST1_WARN|STQ_TERM;
                   uptr->CMD = 0;
                   mt_busy = 0;
                   chan_set_done(dev);
@@ -479,7 +498,7 @@ t_stat mt_svc (UNIT *uptr)
               }
               break;
          case 2:
-              uptr->STATUS = ST1_OK|STQ_TERM;
+              uptr->STATUS = STQ_TERM;
               uptr->CMD = 0;
               mt_busy = 0;
               chan_set_done(dev);
@@ -495,11 +514,23 @@ t_stat mt_svc (UNIT *uptr)
              sim_debug(DEBUG_DETAIL, dptr, "Rewind unit=%d\n", unit);
              r = sim_tape_rewind(uptr);
               uptr->CMD = 0;
-             uptr->STATUS = ST1_OK|STQ_TERM;
+             uptr->STATUS = STQ_TERM;
              chan_set_done(dev);
          }
          break;
 
+    case MT_RUN:
+         if (uptr->POS == 0) {
+             uptr->POS ++;
+             sim_activate(uptr, 30000);
+             mt_busy = 0;
+         } else {
+             sim_debug(DEBUG_DETAIL, dptr, "Unload unit=%d\n", unit);
+             r = sim_tape_detach(uptr);
+             uptr->CMD = 0;
+             uptr->STATUS = 0;
+         }
+         break;
     }
     return SCPE_OK;
 }
@@ -516,7 +547,7 @@ t_stat mt_reset (DEVICE *dptr)
        uptr->CMD = 0;
        uptr->STATUS = 0;
        if ((uptr->flags & UNIT_ATT) != 0)
-           uptr->STATUS = ST1_OK;
+           uptr->STATUS = 0;
        mt_busy = 0;
     }
     chan_clr_done(GET_UADDR(dptr->flags));
@@ -540,7 +571,7 @@ mt_boot(int32 unit_num, DEVICE * dptr)
     mt_busy = 1;
     CLR_BUF(uptr);
     uptr->CMD = MT_BUSY|MT_BOOT;
-    uptr->STATUS = ST1_OK|STQ_ACCP;
+    uptr->STATUS = 0;
     sim_activate (uptr, 100);
     return SCPE_OK;
 }
@@ -548,14 +579,8 @@ mt_boot(int32 unit_num, DEVICE * dptr)
 t_stat
 mt_attach(UNIT * uptr, CONST char *file)
 {
-    t_stat              r;
-    DEVICE             *dptr = &mt_dev;
-    int                 unit = (uptr - dptr->units);
-
-    if ((r = sim_tape_attach_ex(uptr, file, 0, 0)) != SCPE_OK)
-       return r;
-    uptr->STATUS = ST1_OK;
-    return SCPE_OK;
+    uptr->STATUS = 0;
+    return sim_tape_attach_ex(uptr, file, 0, 0);
 }
 
 t_stat
