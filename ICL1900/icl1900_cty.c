@@ -113,9 +113,11 @@ void cty_cmd(int dev, uint32 cmd) {
         cty_unit[u].STATUS = BUSY;
         if (!u)
            sim_activate(&cty_unit[u], cty_unit[u].wait);
+        sim_debug(DEBUG_CMD, &cty_dev, "start %d\n", dev);
     }
     if (cmd & STOP) {
         cty_unit[u].STATUS &= ~BUSY;
+        sim_debug(DEBUG_CMD, &cty_dev, "stop %d\n", dev);
     }
     chan_clr_done(GET_UADDR(cty_unit[u].flags));
 }
@@ -205,7 +207,7 @@ t_stat ctyi_svc (UNIT *uptr)
            uptr->HOLD = 0;
            return SCPE_OK;
        }
-       if (uptr->CMD && (uptr->STATUS & BUSY) != 0) {
+       if (uptr->CMD) {
           /* Handle end of buffer */
           switch (ch) {
           case '\r':
@@ -263,7 +265,7 @@ t_stat ctyi_svc (UNIT *uptr)
                 sim_putchar (ch);
                 if (eor) {
                     uptr->CMD = 0;
-                    uptr->STATUS |= END;
+                    uptr->STATUS |= ACCEPT|END;
                     chan_set_done(dev);
                 }
                 break;
@@ -290,7 +292,7 @@ t_stat ctyi_svc (UNIT *uptr)
                   break;
 
             default:
-                  sim_debug(DEBUG_DATA, &cty_dev, ": key '%c'\n", ch);
+                  sim_debug(DEBUG_DATA, &cty_dev, ": ikey '%c'\n", ch);
                   sim_putchar('\007');
             }
         }

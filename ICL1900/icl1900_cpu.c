@@ -462,6 +462,8 @@ intr:
                    RA |= B1;
             } else {
                 if (CPU_TYPE >= TYPE_C1)  {
+                    Mem_read(RD+9, &RA, 0);
+                    RA &= 077777;
                     if (Zero)
                         RA |= B3;
                     if (OPIP | PIP)
@@ -471,7 +473,7 @@ intr:
             }
             RA = RC & adrmask;
             if (BV)
-              RA |= B0;
+                RA |= B0;
             if (io_flags & EXT_IO) {
                 if (BCarry)
                   RA |= B1;
@@ -570,7 +572,7 @@ obey:
        OPIP = PIP;
        PIP = 0;
 
-       if (hst_lnt) {      /* history enabled? */
+       if (hst_lnt && RC != 7) {      /* history enabled? */
            hst_p = (hst_p + 1);    /* next entry */
            if (hst_p >= hst_lnt)
                hst_p = 0;
@@ -2266,14 +2268,16 @@ voluntary:
                         reason = SCPE_STOP;
                         break;
                     }
-                    if (CPU_TYPE < TYPE_C1 && !exe_mode)
+                    if ((CPU_TYPE < TYPE_C1) && !exe_mode)
                         RC += RD;
                     exe_mode = 1;
                     /* Store registers */
                     Mem_write(RD+13, &facch, 0);  /* Save F.P.U. */
                     Mem_write(RD+12, &faccl, 0);
                     if (CPU_TYPE >= TYPE_C1) {
-                        RA = 0;         /* Build ZSTAT */
+                        Mem_read(RD+9, &RA, 0);
+                        RA &= 077777;
+                        /* Build ZSTAT and ASTAT */
                         if (Zero)
                             RA |= B3;
                         if (OPIP)

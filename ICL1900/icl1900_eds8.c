@@ -176,11 +176,13 @@ void eds8_cmd(int dev, uint32 cmd, uint32 *resp) {
                      *resp |= STQ_CTL_RDY;
                  if ((uptr->flags & UNIT_ATT) != 0)
                      *resp |= STQ_P1;
+                 uptr->CMD &= ~EDS8_TERM;
                  chan_clr_done(dev);
               } else if (cmd == SEND_P) {
                  *resp = (uptr->CMD >> 10) & 036;
                  if ((uptr->flags & UNIT_ATT) != 0)
                      *resp |= 1;
+                 uptr->CMD &= ~(036 << 10);
               }
               sim_debug(DEBUG_STATUS, &eds8_dev, "Status: unit:=%d %02o %02o\n", eds8_drive, cmd, *resp);
               return;
@@ -217,7 +219,7 @@ void eds8_cmd(int dev, uint32 cmd, uint32 *resp) {
     }
     uptr->CMD = cmd;
     if ((uptr->CMD & (EDS8_QUAL1|EDS8_QUAL2)) == 0) {
-        sim_debug(DEBUG_CMD, &eds8_dev, "Cmd: unit=%d start %02o\n", eds8_drive, uptr->CMD);
+       sim_debug(DEBUG_CMD, &eds8_dev, "Cmd: unit=%d start %02o\n", eds8_drive, uptr->CMD);
        eds8_busy = 1;
        uptr->CMD |= EDS8_BUSY;
        chan_clr_done(dev);
@@ -286,7 +288,7 @@ t_stat eds8_svc (UNIT *uptr)
     case EDS8_DISC:
          /* Retract heads and offline the drive */
          detach_unit(uptr);
-         uptr->CMD &= EDS8_RUN|EDS8_SK|EDS8_BUSY;
+         uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
          uptr->CMD |= EDS8_TERM;
          eds8_busy = 0;
          chan_set_done(dev);
@@ -298,11 +300,11 @@ t_stat eds8_svc (UNIT *uptr)
              int trk = (uptr->CMD >> 16) & 0377;
              if (uptr->CYL == trk) {
                 /* Terminate */
-                uptr->CMD &= EDS8_RUN|EDS8_SK|EDS8_BUSY;
+                uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
                 uptr->CMD |= EDS8_TERM|EDS8_IRQ;
              } else if (trk > CYLS) {
                 /* Terminate with error */
-                uptr->CMD &= EDS8_RUN|EDS8_SK|EDS8_BUSY;
+                uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
                 uptr->CMD |= EDS8_TERM|EDS8_PATH;
              } else {
                 uptr->CMD |= EDS8_RUN|EDS8_SK;
@@ -314,7 +316,7 @@ t_stat eds8_svc (UNIT *uptr)
          }
          if (uptr->CYL == ((uptr->CMD >> 16) & 0377)) {
              /* Terminate */
-             uptr->CMD &= EDS8_RUN|EDS8_SK|EDS8_BUSY;
+             uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
              uptr->CMD |= EDS8_TERM|EDS8_IRQ;
              chan_set_done(dev);
          }
@@ -328,7 +330,7 @@ t_stat eds8_svc (UNIT *uptr)
              uptr->HDSEC = (uptr->CMD >> 16) & 0377;
              if (((uptr->HDSEC >> 4) & 017) > HD_CYL || (uptr->HDSEC & 017) > SECT_TRK) {  
                  /* Terminate wrong track */
-                 uptr->CMD &= EDS8_RUN|EDS8_SK|EDS8_BUSY;
+                 uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
                  uptr->CMD |= EDS8_TERM|EDS8_PATH;
                  eds8_busy = 0;
                  chan_set_done(dev);
@@ -336,12 +338,12 @@ t_stat eds8_svc (UNIT *uptr)
              }
          }
          if (eor = chan_output_word(dev, &word, 0)) {
-                /* Terminate */
-                 uptr->CMD &= EDS8_RUN|EDS8_SK|EDS8_BUSY;
-                 uptr->CMD |= EDS8_TERM;
-                 eds8_busy = 0;
-                 chan_set_done(dev);
-                 break;
+             /* Terminate */
+             uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
+             uptr->CMD |= EDS8_TERM;
+             eds8_busy = 0;
+             chan_set_done(dev);
+             break;
          }
 
          uptr->HDSEC += 9;        /* Bump sector number, if more then 8, will bump head */
@@ -349,11 +351,11 @@ t_stat eds8_svc (UNIT *uptr)
          /* If empty buffer, fill */
          if (((uptr->HDSEC >> 4) & 017) > HD_CYL) {  
              /* Terminate long read */
-                 uptr->CMD &= EDS8_RUN|EDS8_SK|EDS8_BUSY;
-                 uptr->CMD |= EDS8_TERM|EDS8_LONG;
-                 eds8_busy = 0;
-                 chan_set_done(dev);
-                 break;
+             uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
+             uptr->CMD |= EDS8_TERM|EDS8_LONG;
+             eds8_busy = 0;
+             chan_set_done(dev);
+             break;
          }
          sim_activate(uptr, 100);
          break;
@@ -384,7 +386,7 @@ t_stat eds8_svc (UNIT *uptr)
              uptr->HDSEC = (uptr->CMD >> 16) & 0377;
              if (((uptr->HDSEC >> 4) & 017) > HD_CYL || (uptr->HDSEC & 017) > SECT_TRK) {  
                  /* Terminate wrong track */
-                 uptr->CMD &= EDS8_RUN|EDS8_SK|EDS8_BUSY;
+                 uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
                  uptr->CMD |= EDS8_TERM|EDS8_PATH;
                  eds8_busy = 0;
                  chan_set_done(dev);
@@ -405,8 +407,8 @@ t_stat eds8_svc (UNIT *uptr)
                      (((uptr->HDSEC >> 4) & 017) << 6) |
                      ((uptr->HDSEC << 1) & 016);
              if (eor = chan_input_word(dev, &word, 0)) {
-                /* Terminate */
-                 uptr->CMD &= EDS8_RUN|EDS8_SK|EDS8_BUSY;
+                 /* Terminate */
+                 uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
                  uptr->CMD |= EDS8_TERM;
                  eds8_busy = 0;
                  chan_set_done(dev);
@@ -416,8 +418,8 @@ t_stat eds8_svc (UNIT *uptr)
 
          for (i = 0; i < WD_SEC; i++) {
              if (eor = chan_input_word(dev, &eds8_buffer[i], 0)) {
-                /* Terminate */
-                 uptr->CMD &= EDS8_RUN|EDS8_SK|EDS8_BUSY;
+                 /* Terminate */
+                 uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
                  uptr->CMD |= EDS8_TERM;
                  eds8_busy = 0;
                  chan_set_done(dev);
@@ -438,8 +440,8 @@ t_stat eds8_svc (UNIT *uptr)
              }
              word = ((even & 017) << 12) | (((odd ^ 017) & 017) << 8) | 0100;
              if (eor = chan_input_word(dev, &word, 0)) {
-                /* Terminate */
-                 uptr->CMD &= EDS8_RUN|EDS8_SK|EDS8_BUSY;
+                 /* Terminate */
+                 uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
                  uptr->CMD |= EDS8_TERM;
                  eds8_busy = 0;
                  chan_set_done(dev);
@@ -452,11 +454,11 @@ t_stat eds8_svc (UNIT *uptr)
          /* If empty buffer, fill */
          if (((uptr->HDSEC >> 4) & 017) > HD_CYL) {  
              /* Terminate long read */
-                 uptr->CMD &= EDS8_RUN|EDS8_SK|EDS8_BUSY;
-                 uptr->CMD |= EDS8_TERM|EDS8_LONG;
-                 eds8_busy = 0;
-                 chan_set_done(dev);
-                 break;
+             uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
+             uptr->CMD |= EDS8_TERM|EDS8_LONG;
+             eds8_busy = 0;
+             chan_set_done(dev);
+             break;
          }
          sim_activate(uptr, 100);
          break;
@@ -466,19 +468,19 @@ t_stat eds8_svc (UNIT *uptr)
          if ((uptr->CMD & EDS8_RUN) == 0) {
          /* Write the starting at head/sector, if check, then check
             that data can be read back at end of each track */
-         /* Check if write protected */
-         if ((uptr->flags & (UNIT_RO|UNIT_WLK)) != 0) {
-                 uptr->CMD &= EDS8_RUN|EDS8_SK|EDS8_BUSY;
-                 uptr->CMD |= EDS8_TERM|EDS8_ERR;
-                 eds8_busy = 0;
-                 chan_set_done(dev);
-                 break;
-         }
+             /* Check if write protected */
+             if ((uptr->flags & (UNIT_RO|UNIT_WLK)) != 0) {
+                     uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
+                     uptr->CMD |= EDS8_TERM|EDS8_ERR;
+                     eds8_busy = 0;
+                     chan_set_done(dev);
+                     break;
+             }
              uptr->CMD |= EDS8_RUN;
              uptr->HDSEC = (uptr->CMD >> 16) & 0360;
              if (((uptr->HDSEC >> 4) & 017) > HD_CYL) {  
-             /* Terminate wrong track */
-                 uptr->CMD &= EDS8_RUN|EDS8_SK|EDS8_BUSY;
+                 /* Terminate wrong track */
+                 uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
                  uptr->CMD |= EDS8_TERM|EDS8_PATH;
                  eds8_busy = 0;
                  chan_set_done(dev);
@@ -497,11 +499,11 @@ t_stat eds8_svc (UNIT *uptr)
          /* If empty buffer, fill */
          if ((uptr->HDSEC & 010) != 0) {  
              /* Terminate */
-                 uptr->CMD &= EDS8_RUN|EDS8_SK|EDS8_BUSY;
-                 uptr->CMD |= EDS8_TERM;
-                 eds8_busy = 0;
-                 chan_set_done(dev);
-                 break;
+             uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
+             uptr->CMD |= EDS8_TERM;
+             eds8_busy = 0;
+             chan_set_done(dev);
+             break;
          }
          sim_activate(uptr, 100);
          break;
@@ -511,19 +513,19 @@ t_stat eds8_svc (UNIT *uptr)
          /* Write the starting at head/sector, if check, then check
             that data can be read back at end of each track */
          if ((uptr->CMD & EDS8_RUN) == 0) {
-         /* Check if write protected */
-         if ((uptr->flags & (UNIT_RO|UNIT_WLK)) != 0) {
-                 uptr->CMD &= EDS8_RUN|EDS8_SK|EDS8_BUSY;
+             /* Check if write protected */
+             if ((uptr->flags & (UNIT_RO|UNIT_WLK)) != 0) {
+                 uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
                  uptr->CMD |= EDS8_TERM|EDS8_ERR;
                  eds8_busy = 0;
                  chan_set_done(dev);
                  break;
-         }
+             }
              uptr->CMD |= EDS8_RUN;
              uptr->HDSEC = (uptr->CMD >> 16) & 0377;
              if (((uptr->HDSEC >> 4) & 017) > HD_CYL || (uptr->HDSEC & 017) > SECT_TRK) {  
              /* Terminate wrong track */
-                 uptr->CMD &= EDS8_RUN|EDS8_SK|EDS8_BUSY;
+                 uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
                  uptr->CMD |= EDS8_TERM|EDS8_PATH;
                  eds8_busy = 0;
                  chan_set_done(dev);
@@ -545,12 +547,12 @@ t_stat eds8_svc (UNIT *uptr)
 
          if (eor) {
              /* Terminate */
-                 uptr->CMD &= EDS8_RUN|EDS8_SK|EDS8_BUSY;
-                 uptr->CMD |= EDS8_TERM;
-                 eds8_busy = 0;
-                 chan_set_done(dev);
-                 break;
-             }
+             uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
+             uptr->CMD |= EDS8_TERM;
+             eds8_busy = 0;
+             chan_set_done(dev);
+             break;
+         }
 
     
          uptr->HDSEC += 9;        /* Bump sector number, if more then 8, will bump head */
@@ -558,11 +560,11 @@ t_stat eds8_svc (UNIT *uptr)
          /* If empty buffer, fill */
          if (((uptr->HDSEC >> 4) & 017) > HD_CYL) {  
              /* Terminate long read */
-                 uptr->CMD &= EDS8_RUN|EDS8_SK|EDS8_BUSY;
-                 uptr->CMD |= EDS8_TERM|EDS8_LONG;
-                 eds8_busy = 0;
-                 chan_set_done(dev);
-                 break;
+             uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
+             uptr->CMD |= EDS8_TERM|EDS8_LONG;
+             eds8_busy = 0;
+             chan_set_done(dev);
+             break;
          }
          sim_activate(uptr, 100);
          break;
