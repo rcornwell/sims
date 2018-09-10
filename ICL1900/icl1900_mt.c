@@ -200,7 +200,7 @@ void mt_cmd(int dev, uint32 cmd, uint32 *resp) {
     }
     sim_debug(DEBUG_CMD, &mt_dev, "Cmd: unit=%d %02o\n", mt_drive, cmd);
     if ((uptr->flags & UNIT_ATT) == 0) {
-       *resp = 3;
+       *resp = 0;
        return;
     }
     if (mt_busy || (uptr->CMD & MT_BUSY)) {
