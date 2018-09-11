@@ -32,7 +32,7 @@
 #define NUM_DEVS_CDR 0
 #endif
 
-#define UNIT_V_TYPE      (UNIT_V_UF + 0)
+#define UNIT_V_TYPE      (UNIT_V_UF + 8)
 #define UNIT_TYPE        (0xf << UNIT_V_TYPE)
 #define GET_TYPE(x)      ((UNIT_TYPE & (x)) >> UNIT_V_TYPE)
 #define SET_TYPE(x)      (UNIT_TYPE & ((x) << UNIT_V_TYPE))
@@ -45,12 +45,12 @@
 
 
 #define TERMINATE    0000001
-#define STOPPED      0000060
+#define STOPPED      0000030
 #define OPAT         0000002
 #define ERROR        0000004
 #define IMAGE        0000010
-#define DISC         0010
 #define BUSY         0020
+#define DISC         0040
 
 
 #if (NUM_DEVS_CDR > 0)
@@ -61,7 +61,7 @@
 #define T1912_2               3
 
 #define UNIT_CDR(x)      UNIT_ADDR(x)|SET_TYPE(T1912_2)|UNIT_ATTABLE|\
-                              UNIT_DISABLE|UNIT_RO
+                              UNIT_DISABLE|UNIT_RO|MODE_029
 
 
 void cdr_cmd (int dev, uint32 cmd, uint32 *resp);
@@ -69,6 +69,9 @@ void cdr_nsi_cmd (int dev, uint32 cmd);
 void cdr_nsi_status (int dev, uint32 *resp);
 t_stat cdr_svc (UNIT *uptr);
 t_stat cdr_boot (int32 unit_num, DEVICE * dptr);
+t_stat cdr_reset (DEVICE *dptr);
+t_stat cdr_attach(UNIT * uptr, CONST char *file);
+t_stat cdr_detach(UNIT * uptr);
 t_stat cdr_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
 CONST char *cdr_description (DEVICE *dptr);
 
@@ -94,8 +97,8 @@ MTAB cdr_mod[] = {
 DEVICE cdr_dev = {
     "CR", cdr_unit, NULL, cdr_mod,
     NUM_DEVS_CDR, 8, 22, 1, 8, 22,
-    NULL, NULL, NULL, &cdr_boot, &sim_card_attach, &sim_card_detach,
-    &cdr_dib, DEV_DISABLE | DEV_CARD | DEV_DEBUG, 0, dev_debug,
+    NULL, NULL, &cdr_reset, &cdr_boot, &cdr_attach, &cdr_detach,
+    &cdr_dib, DEV_DISABLE | DEV_CARD | DEV_DEBUG, 0, card_debug,
     NULL, NULL, &cdr_help, NULL, NULL, &cdr_description
     };
 
@@ -134,17 +137,20 @@ void cdr_cmd(int dev, uint32 cmd, uint32 *resp) {
    if ((uptr->flags & UNIT_ATT) == 0)
         return;
    if (cmd == 020) {    /* Send Q */
-        *resp = uptr->STATUS & 01;  /* Terminate */
-        if ((uptr->flags & UNIT_ATT) != 0 || uptr->STATUS & 07700)
+        *resp = uptr->STATUS & TERMINATE;  /* Terminate */
+        if ((uptr->flags & UNIT_ATT) != 0 || uptr->STATUS & 016)
             *resp |= 040;
         if ((uptr->STATUS & BUSY) == 0) 
             *resp |= STOPPED;
+        sim_debug(DEBUG_STATUS, &cdr_dev, "STATUS: %02o %02o\n", cmd, *resp);
+        uptr->STATUS &= ~TERMINATE;
+        chan_clr_done(dev);
    } else if (cmd == 024) {  /* Send P */
         *resp = uptr->STATUS & 016;  /* IMAGE, ERROR, OPAT */
         if ((uptr->flags & UNIT_ATT) != 0)
             *resp |= 1;
         uptr->STATUS &= (IMAGE|BUSY|DISC);
-        chan_clr_done(dev);
+        sim_debug(DEBUG_STATUS, &cdr_dev, "STATUS: %02o %02o\n", cmd, *resp);
    } else if (cmd == 031 || cmd == 033 || cmd == 037 ) {
         if ((uptr->flags & UNIT_ATT) == 0)
             return;
@@ -152,15 +158,16 @@ void cdr_cmd(int dev, uint32 cmd, uint32 *resp) {
             *resp = 3;
             return;
         }
-        sim_debug(DEBUG_CMD, &cdr_dev, "CMD: %02o %08o\n", cmd, uptr->STATUS);
-         uptr->STATUS = BUSY;
+        uptr->STATUS = BUSY;
         if (cmd & 02)
             uptr->STATUS |= IMAGE;
         sim_activate(uptr, uptr->wait);
         chan_clr_done(dev);
+        sim_debug(DEBUG_CMD, &cdr_dev, "CMD: %02o %08o\n", cmd, uptr->STATUS);
         *resp = 5;
    } else if (cmd == 036) {  /* Disconnect */
         uptr->STATUS |= DISC;
+        sim_debug(DEBUG_CMD, &cdr_dev, "CMD: %02o %08o\n", cmd, uptr->STATUS);
         *resp = 5;
    }
 }
@@ -195,6 +202,7 @@ void cdr_nsi_cmd(int dev, uint32 cmd) {
    if (cmd & 02) {
        if (uptr->STATUS & BUSY)
            uptr->STATUS |= DISC;
+       sim_debug(DEBUG_CMD, &cdr_dev, "STOP: %02o %08o\n", cmd, uptr->STATUS);
        return;
    }
 
@@ -207,6 +215,7 @@ void cdr_nsi_cmd(int dev, uint32 cmd) {
        uptr->STATUS = BUSY;
        sim_activate(uptr, uptr->wait);
        chan_clr_done(dev);
+       sim_debug(DEBUG_CMD, &cdr_dev, "START: %02o %08o\n", cmd, uptr->STATUS);
    }
 }
 
@@ -245,8 +254,10 @@ void cdr_nsi_status(int dev, uint32 *resp) {
        *resp |= 040;
    uptr->STATUS &= BUSY|DISC|IMAGE;
    chan_clr_done(dev);
+   sim_debug(DEBUG_STATUS, &cdr_dev, "STATUS: %02o\n", *resp);
 }
 
+
 t_stat cdr_svc (UNIT *uptr)
 {
     uint16  image[80];
@@ -266,13 +277,19 @@ t_stat cdr_svc (UNIT *uptr)
     if ((uptr->STATUS & BUSY) == 0)
         return SCPE_OK;
 
-    switch(sim_read_card(uptr, image)) {
+    switch(i = sim_read_card(uptr, image)) {
+    default:
     case CDSE_EMPTY:
     case CDSE_EOF:
+         sim_card_detach(uptr);
+         sim_debug(DEBUG_DATA, &cdr_dev, "EOF: %d\n", i);
+         break;
     case CDSE_ERROR:
          uptr->STATUS |= OPAT;
+         sim_debug(DEBUG_DATA, &cdr_dev, "Error: %d\n", i);
          break;
     case CDSE_OK:
+         sim_debug(DEBUG_DATA, &cdr_dev, "ok: %d\n", i);
          for (i = 0; i < 80; i++) {
              if (uptr->STATUS & IMAGE) {
                  ch = (image[i] >> 6) & 077;
@@ -281,12 +298,14 @@ t_stat cdr_svc (UNIT *uptr)
                     break;
                  ch = image[i] & 077;
              } else {
-                 ch = sim_hol_to_bcd(image[i]);
-                 if (ch == 0x7f) {
+                 ch = hol_to_mem[image[i]];
+             sim_debug(DEBUG_DATA, &cdr_dev, "col: %04x %02o '%c'\n", image[i], ch, mem_to_ascii[ch]);
+                 if (ch == 0xff) {
                     uptr->STATUS |= ERROR;
                     break;
                  }
              }
+             sim_debug(DEBUG_DATA, &cdr_dev, "DATA: %03o\n", ch);
              eor = chan_input_char(dev, &ch, 0);
              if (eor)
                 break;
@@ -299,6 +318,21 @@ t_stat cdr_svc (UNIT *uptr)
     chan_set_done(dev);
     return SCPE_OK;
 }
+
+t_stat
+cdr_reset(DEVICE *dptr) 
+{
+    int i;
+
+    memset(&hol_to_mem[0], 0xff, 4096);
+    for(i = 0; i < (sizeof(mem_to_hol)/sizeof(uint16)); i++) {
+         uint16          temp;
+         temp = mem_to_hol[i];
+         hol_to_mem[temp] = i;
+    }
+    return SCPE_OK;
+}
+
 
 /* Boot from given device */
 t_stat
@@ -318,6 +352,25 @@ cdr_boot(int32 unit_num, DEVICE * dptr)
     sim_activate (uptr, uptr->wait);
     return SCPE_OK;
 }
+
+t_stat
+cdr_attach(UNIT * uptr, CONST char *file)
+{
+    t_stat              r;
+
+    if ((r = sim_card_attach(uptr, file)) != SCPE_OK)
+       return r;
+    uptr->STATUS = 0;
+    chan_set_done(GET_UADDR(uptr->flags));
+    return SCPE_OK;
+}
+
+t_stat
+cdr_detach(UNIT * uptr)
+{
+    return sim_card_detach(uptr);
+}
+
 
 
 t_stat cdr_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)

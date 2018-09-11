@@ -454,7 +454,7 @@ intr:
             RA = 0;         /* Build ZSTAT */
             if (cpu_flags & SV) {
                 Mem_read(RD+9, &RA, 0);
-                RA &= 077777;
+                RA &= M15;
                 RA |= ((Mode|DATUM) << 16);
                 if (Mode & DATUM)
                    RA |= 1 << 16;
@@ -463,7 +463,7 @@ intr:
             } else {
                 if (CPU_TYPE >= TYPE_C1)  {
                     Mem_read(RD+9, &RA, 0);
-                    RA &= 077777;
+                    RA &= M15;
                     if (Zero)
                         RA |= B3;
                     if (OPIP | PIP)
@@ -2234,7 +2234,7 @@ fexp:
        case 0174:            /* Send control character to peripheral */
                     if (exe_mode) {
                          chan_send_cmd(RB, RA & 07777, &RT);
-//fprintf(stderr, "CMD  C=%08o %04o %04o %08o\n\r", RC, RT, RB, RA);
+fprintf(stderr, "CMD  C=%08o %04o %04o %08o\n\r", RC, RT, RB, RA);
                          m = (m == 0) ? 3 : (XR[m] >> 22) & 3;
                          m = 6 * (3 - m);
                          RT = (RT & 077) << m;
@@ -2276,7 +2276,7 @@ voluntary:
                     Mem_write(RD+12, &faccl, 0);
                     if (CPU_TYPE >= TYPE_C1) {
                         Mem_read(RD+9, &RA, 0);
-                        RA &= 077777;
+                        RA &= M15;
                         /* Build ZSTAT and ASTAT */
                         if (Zero)
                             RA |= B3;

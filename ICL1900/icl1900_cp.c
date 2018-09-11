@@ -32,7 +32,7 @@
 #define NUM_DEVS_CDP 0
 #endif
 
-#define UNIT_V_TYPE      (UNIT_V_UF + 0)
+#define UNIT_V_TYPE      (UNIT_V_UF + 8)
 #define UNIT_TYPE        (0xf << UNIT_V_TYPE)
 #define GET_TYPE(x)      ((UNIT_TYPE & (x)) >> UNIT_V_TYPE)
 #define SET_TYPE(x)      (UNIT_TYPE & ((x) << UNIT_V_TYPE))
@@ -56,7 +56,8 @@
 #define T1920_1               0
 #define T1920_2               1
 
-#define UNIT_CDP(x)      UNIT_ADDR(x)|SET_TYPE(T1920_2)|UNIT_ATTABLE|UNIT_DISABLE
+#define UNIT_CDP(x)      UNIT_ADDR(x)|SET_TYPE(T1920_2)|UNIT_ATTABLE|UNIT_DISABLE| \
+                          MODE_029
 
 
 void cdp_cmd (int dev, uint32 cmd, uint32 *resp);
@@ -264,7 +265,7 @@ t_stat cdp_svc (UNIT *uptr)
         if (eor) {
            break;
         }
-        image[i] = sim_bcd_to_hol(ch);
+        image[i] = mem_to_hol[ch];
     }
     switch(sim_punch_card(uptr, image)) {
     case CDSE_EMPTY:

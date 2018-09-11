@@ -113,6 +113,8 @@ void ptr_nsi_status (int dev, uint32 *resp);
 t_stat ptr_svc (UNIT *uptr);
 t_stat ptr_reset (DEVICE *dptr);
 t_stat ptr_boot (int32 unit_num, DEVICE * dptr);
+t_stat ptr_attach(UNIT *, CONST char *);
+t_stat ptr_detach(UNIT *);
 t_stat ptr_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
 CONST char *ptr_description (DEVICE *dptr);
 
@@ -138,7 +140,7 @@ MTAB ptr_mod[] = {
 DEVICE ptr_dev = {
     "TR", ptr_unit, NULL, ptr_mod,
     NUM_DEVS_PTR, 8, 22, 1, 8, 22,
-    NULL, NULL, &ptr_reset, &ptr_boot, &attach_unit, &detach_unit,
+    NULL, NULL, &ptr_reset, &ptr_boot, &ptr_attach, &ptr_detach,
     &ptr_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &ptr_help, NULL, NULL, &ptr_description
     };
@@ -209,11 +211,14 @@ void ptr_cmd(int dev, uint32 cmd, uint32 *resp) {
                  }
                  if ((uptr->STATUS & ERROR) != 0)
                     *resp |= 040;
+                 sim_debug(DEBUG_STATUS, &ptr_dev, "STATUS: %03o %03o\n", cmd, *resp);
+                 uptr->STATUS &= ~TERMINATE;
              } else if (cmd == 024) {  /* Send P */
                  if ((uptr->flags & UNIT_ATT) != 0)
                     *resp = 1;
                  if ((uptr->STATUS & ERROR) != 0)
                     *resp |= 2;
+                 sim_debug(DEBUG_STATUS, &ptr_dev, "STATUS: %03o %03o\n", cmd, *resp);
                  uptr->STATUS = 0;
                  chan_clr_done(dev);
              }
@@ -264,6 +269,7 @@ void ptr_nsi_cmd(int dev, uint32 cmd) {
    if (cmd & 02) {
        if (uptr->CMD & BUSY)
            uptr->CMD |= DISC;
+       sim_debug(DEBUG_CMD, &ptr_dev, "Stop: %03o\n", cmd);
        return;
    }
 
@@ -285,6 +291,7 @@ void ptr_nsi_cmd(int dev, uint32 cmd) {
            uptr->CMD |= IGN_BLNK;
        uptr->CMD |= BUSY;
        uptr->STATUS = 0;
+       sim_debug(DEBUG_CMD, &ptr_dev, "Start: %03o\n", cmd);
        sim_activate(uptr, uptr->wait);
        chan_clr_done(dev);
    }
@@ -323,6 +330,7 @@ void ptr_nsi_status(int dev, uint32 *resp) {
    *resp = uptr->STATUS;
    if (uptr->CMD & BUSY)
        *resp |= 040;
+   sim_debug(DEBUG_STATUS, &ptr_dev, "STATUS: %03o\n", *resp);
    uptr->STATUS = 0;
    chan_clr_done(dev);
 }
@@ -359,12 +367,12 @@ t_stat ptr_svc (UNIT *uptr)
     }
 
     /* Read next charater */
-    if ((uptr->flags & UNIT_ATT) == 0 ||
-         feof(uptr->fileref) ||
-         (data = getc (uptr->fileref)) == EOF) {
+    if (feof(uptr->fileref) || (data = getc (uptr->fileref)) == EOF) {
        uptr->CMD &= 1;
+       sim_debug(DEBUG_DETAIL, &ptr_dev, "Tape Empty\n");
+       detach_unit(uptr);
        chan_set_done(dev);
-       uptr->STATUS = TERMINATE;
+       uptr->STATUS = TERMINATE|OPAT;
        return SCPE_OK;
     }
 
@@ -509,6 +517,25 @@ ptr_boot(int32 unit_num, DEVICE * dptr)
     sim_activate (uptr, uptr->wait);
     return SCPE_OK;
 }
+
+t_stat
+ptr_attach(UNIT * uptr, CONST char *file)
+{
+    t_stat              r;
+
+    if ((r = attach_unit(uptr, file)) != SCPE_OK)
+       return r;
+    uptr->STATUS = 0;
+    chan_set_done(GET_UADDR(uptr->flags));
+    return SCPE_OK;
+}
+
+t_stat
+ptr_detach(UNIT * uptr)
+{
+    return detach_unit(uptr);
+}
+
 
 
 t_stat ptr_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
