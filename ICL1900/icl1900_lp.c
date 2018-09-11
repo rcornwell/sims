@@ -31,7 +31,7 @@
 #define NUM_DEVS_LPR 0
 #endif
 
-#define UNIT_V_TYPE      (UNIT_V_UF + 1)
+#define UNIT_V_TYPE      (UNIT_V_UF + 0)
 #define UNIT_TYPE        (0x1f << UNIT_V_TYPE)
 #define GET_TYPE(x)      ((UNIT_TYPE & (x)) >> UNIT_V_TYPE)
 #define SET_TYPE(x)      (UNIT_TYPE & ((x) << UNIT_V_TYPE))
@@ -48,6 +48,7 @@
 
 #define AUTO         00100
 #define PRINT        00040
+#define QUAL         00020
 #define SPACE        00010
 
 #define TERMINATE    0001
@@ -83,8 +84,8 @@ CONST char *lpr_description (DEVICE *dptr);
 DIB lpr_dib = {  CHAR_DEV, &lpr_cmd, &lpr_nsi_cmd, &lpr_nsi_status };
 
 UNIT lpr_unit[] = {
-    { UDATA (&lpr_svc, UNIT_LPR(11), 0), 10000 },
     { UDATA (&lpr_svc, UNIT_LPR(13), 0), 10000 },
+    { UDATA (&lpr_svc, UNIT_LPR(14), 0), 10000 },
     };
 
 
@@ -142,25 +143,32 @@ void lpr_cmd(int dev, uint32 cmd, uint32 *resp) {
    if (NSI_TYPE(uptr->flags))
        return;
 
-   if ((uptr->flags & UNIT_ATT) == 0)
-        return;
-
+   if (uptr->CMD & QUAL) {
+       uptr->CMD |= cmd << 8;
+       uptr->CMD &= ~QUAL;
+       sim_debug(DEBUG_CMD, &lpr_dev, "QUAL: %03o %03o %03o\n", cmd, uptr->CMD, uptr->STATUS);
+       *resp = 5;
+       return;
+   }
    if (cmd == 032 || cmd == 02) { /* Command */
        if (uptr->STATUS & BUSY) {
            *resp = 3;
            return;
        }
-       uptr->CMD = (cmd == 02) ? AUTO: 0;
+       uptr->CMD = (cmd == 02) ? AUTO: QUAL;
        uptr->STATUS = BUSY;
        sim_activate(uptr, uptr->wait);
        chan_clr_done(GET_UADDR(uptr->flags));
        *resp = 5;
    } else if (cmd == SEND_Q) {
-       if ((uptr->flags & UNIT_ATT) == 0)
+       if ((uptr->flags & UNIT_ATT) != 0)
           *resp = 040;
        if (uptr->STATUS & 06)
           *resp = 040;
        *resp |= uptr->STATUS & TERMINATE;
+       uptr->STATUS &= ~1;
+       if ((uptr->STATUS & BUSY) == 0)
+           *resp |= 030;
    } else if (cmd == SEND_P) {  /* Send P */
       if ((uptr->flags & UNIT_ATT) != 0)
          *resp = (uptr->STATUS & ERROR) | 1;
@@ -286,6 +294,11 @@ t_stat lpr_svc (UNIT *uptr)
        return SCPE_OK;
     }
 
+    if (uptr->CMD & QUAL) {
+       sim_activate(uptr, uptr->wait);
+       return SCPE_OK;
+    }
+
     len = 96;
     if (LW_120(uptr->flags))
         len = 120;
@@ -293,7 +306,7 @@ t_stat lpr_svc (UNIT *uptr)
         len = 160;
     for (i = 0; i < len && eor == 0; i++) {
         eor = chan_output_char(GET_UADDR(uptr->flags), &ch, 0);
-   sim_debug(DEBUG_DATA, &lpr_dev, "DATA: %03o\n", ch);
+        sim_debug(DEBUG_DATA, &lpr_dev, "DATA: %03o\n", ch);
         switch (ch & 060) {
         case 000:   ch = 0060 | (ch & 017); break;
         case 020:   ch = 0040 | (ch & 017); break;
@@ -304,8 +317,9 @@ t_stat lpr_svc (UNIT *uptr)
     }
     buffer[i++] = '\r';
     buffer[i++] = '\n';
-    buffer[i++] = '\0';
+    buffer[i] = '\0';
 
+fprintf(stderr, "Buffer: %s", buffer);
     sim_fwrite(&buffer, 1, i, uptr->fileref);
     /* Check if Done */
     if (eor) {

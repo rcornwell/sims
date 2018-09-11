@@ -94,6 +94,18 @@ DEBTAB              dev_debug[] = {
     {"STATUS", DEBUG_STATUS, "Show status conditions"},
     {0, 0}
 };
+
+/* Simulator card debug controls */
+DEBTAB              card_debug[] = {
+    {"CMD", DEBUG_CMD, "Show command execution to devices"},
+    {"DATA", DEBUG_DATA, "Show data transfers"},
+    {"DETAIL", DEBUG_DETAIL, "Show details about device"},
+    {"EXP", DEBUG_EXP, "Show console data"},
+    {"STATUS", DEBUG_STATUS, "Show status conditions"},
+    {"CARD", DEBUG_CARD, "Show Card read/punches"},
+    {0, 0}
+};
+
 
 
 uint8                parity_table[64] = {
@@ -155,6 +167,47 @@ const char          ascii_to_mem[128] = {
    /* x    y    z    {    |    }    ~   del*/
     070, 071, 072, 024,  -1,  -1,  -1,  -1,
 };
+
+
+uint16 mem_to_hol[64] = {
+   /*  0      1      2      3      4      5      6      7   */
+     0x200, 0x100, 0x080, 0x040, 0x020, 0x010, 0x008, 0x004,  /* 0x */
+   /*  8      9      :      ;      <      =      >      ?   */
+     0x002, 0x001, 0x812, 0x822, 0x40A, 0x20A, 0x412, 0x212,  /* 1x */
+   /*  bl     !      "      #      lb,    %      &      `   */
+     0x000, 0x206, 0x600, 0x042, 0x242, 0x222, 0x800, 0x80a,  /* 2x */
+   /*  (      )      *      +      ,      -      .      /   */
+     0x012, 0x00a, 0x422, 0xA00, 0x282, 0x400, 0x842, 0x300,  /* 3x */
+   /*  @      A      B      C      D      E      F      G   */
+     0x012, 0x900, 0x880, 0x840, 0x820, 0x810, 0x808, 0x804,  /* 4x */
+   /*  H      I      J      K      L      M      N      O   */
+     0x802, 0x801, 0x500, 0x480, 0x440, 0x420, 0x410, 0x408,  /* 5x */
+   /*  P      Q      R      S      T      U      V      W   */
+     0x404, 0x402, 0x401, 0x280, 0x240, 0x220, 0x210, 0x208,  /* 6x */
+   /*  X      Y      Z      [      $      ]      ^      _   */
+     0x204, 0x202, 0x201, 0x482, 0x442, 0x006, 0x406, 0x206,  /* 7x */
+};
+
+uint8 hol_to_mem[4096];
+   
+
+/* 2+8   22    12+2+8 33  11+2+8 73   0+2+8 24
+   3+8   23    12+3+8 36  11+3+8 74   0+3+8 34
+   4+8   40    12+4+8 13  11+4+8 32   0+4+8 25
+   5+8   30    12+5+8 12  11+5+8 16   0+5+8 17
+   6+8   31    12+6+8 27  11+6+8 14   0+6+8 15
+   7+8   75    12+7+8 21  11+7+8 76   0+7+8 77
+
+   0-9  00 -> 11
+   12+0    -> 26
+   12+n    -> 40+n
+   11      -> 35
+   11+0    -> 22
+   11+n    -> 51+n
+   10      -> 0
+   10+1    -> 37
+   10+n    -> 61
+*/
 
 
 /* Load a card image file into memory.  */

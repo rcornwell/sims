@@ -59,6 +59,10 @@ extern uint32           XR[8];
 #define DEBUG_STATUS    0x0000040       /* Show status conditions */
 
 extern DEBTAB dev_debug[];
+extern DEBTAB card_debug[];
+extern uint8 hol_to_mem[4096];
+extern uint8 mem_to_ascii[64];
+extern uint16 mem_to_hol[64];
 
 extern uint32   SR64;
 extern uint32   SR65;

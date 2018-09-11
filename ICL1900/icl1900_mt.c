@@ -167,10 +167,10 @@ void mt_cmd(int dev, uint32 cmd, uint32 *resp) {
                      if (mt_busy == 0)
                          *resp |= STQ_CTL_RDY;
                      if ((uptr->flags & UNIT_ATT) != 0) {
-                         *resp |= STQ_TPT_RDY;
+                         if (uptr->STATUS == 0)
+                             *resp |= STQ_TPT_RDY;
                          if (!sim_tape_wrp(uptr))
                              *resp |= STQ_WRP;
-//                         if ((uptr->CMD & MT_BUSY) == 0)
                          if (uptr->STATUS & 07776 || (uptr->CMD & MT_BUSY) == 0)
                              *resp |= STQ_P1;
                      }
@@ -184,9 +184,11 @@ void mt_cmd(int dev, uint32 cmd, uint32 *resp) {
                          if (uptr->STATUS & 07700)
                              *resp |= ST1_P2;
                      }
+                     uptr->STATUS &= 07700;
                   } else if (cmd == SEND_P2) {
                      if ((uptr->flags & UNIT_ATT) != 0)
                          *resp = (uptr->STATUS >> 6) & 037;
+                     uptr->STATUS = 0;
                   }
                   sim_debug(DEBUG_STATUS, &mt_dev, "Status: unit:=%d %02o %02o\n", mt_drive, cmd, *resp);
                   return;

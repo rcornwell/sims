@@ -84,7 +84,6 @@
 #define EDS8_ERR       004000           /* Hard error */
 #define EDS8_PATH      010000           /* Wrong track */
 #define EDS8_LONG      020000           /* Reached end of cylinder during read/write */
-#define EDS8_IRQ       040000           /* Drive changed status */
 
 #define ST1_OK         001            /* Unit available */
 #define ST1_ERR        002            /* Hard error */
@@ -151,6 +150,7 @@ void eds8_cmd(int dev, uint32 cmd, uint32 *resp) {
            *resp = 5;
         return;
     }
+    cmd &= ~02000;
     switch(cmd & 070) {
     case 000: if (cmd == 7)
                   cmd |= EDS8_QUAL1|EDS8_QUAL2;
@@ -186,7 +186,10 @@ void eds8_cmd(int dev, uint32 cmd, uint32 *resp) {
               }
               sim_debug(DEBUG_STATUS, &eds8_dev, "Status: unit:=%d %02o %02o\n", eds8_drive, cmd, *resp);
               return;
-    case 030: if (cmd < 036)
+    case 030: 
+              sim_debug(DEBUG_CMD, &eds8_dev, "Cmd: unit=%d %02o\n", eds8_drive, cmd);
+              cmd &= 077;
+              if (cmd < 036)
                    cmd |= EDS8_QUAL1|EDS8_QUAL2;
               break;
     case 040:
@@ -198,7 +201,9 @@ void eds8_cmd(int dev, uint32 cmd, uint32 *resp) {
                  uptr->CMD |= ((cmd & 017) << 16);
                  uptr->CMD &= ~EDS8_QUAL2;
               }
+              sim_debug(DEBUG_STATUS, &eds8_dev, "Qual: unit:=%d %02o %02o\n", eds8_drive, cmd, *resp);
               cmd = uptr->CMD;
+              *resp = 5;
               break;
     default:
               *resp = 3;
@@ -248,6 +253,7 @@ t_stat eds8_svc (UNIT *uptr)
     /* If we need to seek, move heads. */
     if (uptr->CMD & EDS8_SK) {
         int diff;
+        sim_debug(DEBUG_DETAIL, &eds8_dev, "Seek: unit:=%d %d %d\n", unit, uptr->CYL, (uptr->CMD >> 16) & 0377);
         diff = uptr->CYL - ((uptr->CMD >> 16) & 0377);
         i = 1;
         if (diff < 0) {
@@ -298,16 +304,18 @@ t_stat eds8_svc (UNIT *uptr)
          /* Set desired cylinder to value */
          if ((uptr->CMD & EDS8_RUN) == 0) {
              int trk = (uptr->CMD >> 16) & 0377;
+             sim_debug(DEBUG_DETAIL, &eds8_dev, "Seek: start unit:=%d %d %d\n", unit, uptr->CYL, trk);
              if (uptr->CYL == trk) {
                 /* Terminate */
                 uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
-                uptr->CMD |= EDS8_TERM|EDS8_IRQ;
+                uptr->CMD |= EDS8_TERM;
              } else if (trk > CYLS) {
                 /* Terminate with error */
                 uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
-                uptr->CMD |= EDS8_TERM|EDS8_PATH;
+                uptr->CMD |= EDS8_TERM;
              } else {
-                uptr->CMD |= EDS8_RUN|EDS8_SK;
+                uptr->CMD |= EDS8_RUN|EDS8_SK|EDS8_TERM;
+                sim_activate(uptr, 500);
              }
              eds8_busy = 0;
              /* trigger controller available */
@@ -317,7 +325,7 @@ t_stat eds8_svc (UNIT *uptr)
          if (uptr->CYL == ((uptr->CMD >> 16) & 0377)) {
              /* Terminate */
              uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
-             uptr->CMD |= EDS8_TERM|EDS8_IRQ;
+             uptr->CMD |= EDS8_TERM;
              chan_set_done(dev);
          }
          break;
@@ -617,7 +625,7 @@ eds8_attach(UNIT * uptr, CONST char *file)
     if ((r = attach_unit(uptr, file)) != SCPE_OK)
         return r;
     uptr->CYL = 0;
-    uptr->CMD = EDS8_TERM|EDS8_IRQ;
+    uptr->CMD = EDS8_TERM;
     chan_set_done(GET_UADDR(eds8_dev.flags));
 }
 
