@@ -32,7 +32,7 @@
 #define NUM_DEVS_CDP 0
 #endif
 
-#define UNIT_V_TYPE      (UNIT_V_UF + 8)
+#define UNIT_V_TYPE      (UNIT_V_UF + 7)
 #define UNIT_TYPE        (0xf << UNIT_V_TYPE)
 #define GET_TYPE(x)      ((UNIT_TYPE & (x)) >> UNIT_V_TYPE)
 #define SET_TYPE(x)      (UNIT_TYPE & ((x) << UNIT_V_TYPE))
@@ -70,8 +70,8 @@ CONST char *cdp_description (DEVICE *dptr);
 DIB cdp_dib = {  CHAR_DEV, &cdp_cmd, &cdp_nsi_cmd, &cdp_nsi_status };
 
 UNIT cdp_unit[] = {
-    { UDATA (&cdp_svc, UNIT_CDP(10), 0), 10000 },
     { UDATA (&cdp_svc, UNIT_CDP(12), 0), 10000 },
+    { UDATA (&cdp_svc, UNIT_CDP(13), 0), 10000 },
     };
 
 
@@ -88,7 +88,7 @@ DEVICE cdp_dev = {
     "CP", cdp_unit, NULL, cdp_mod,
     NUM_DEVS_CDP, 8, 22, 1, 8, 22,
     NULL, NULL, NULL, NULL, &sim_card_attach, &sim_card_detach,
-    &cdp_dib, DEV_DISABLE | DEV_CARD | DEV_DEBUG, 0, dev_debug,
+    &cdp_dib, DEV_DISABLE | DEV_CARD | DEV_DEBUG, 0, card_debug,
     NULL, NULL, &cdp_help, NULL, NULL, &cdp_description
     };
 
@@ -126,17 +126,20 @@ void cdp_cmd(int dev, uint32 cmd, uint32 *resp) {
    if ((uptr->flags & UNIT_ATT) == 0)
         return;
    if (cmd == 020) {    /* Send Q */
-        *resp = uptr->STATUS & 001; /* TERMINATE */
+        *resp = uptr->STATUS & TERMINATE; /* TERMINATE */
         if ((uptr->flags & UNIT_ATT) != 0 || uptr->STATUS & 07700)
             *resp |= 040;
 	if ((uptr->flags & BUSY) == 0)
             *resp |= STOPPED;
+        sim_debug(DEBUG_STATUS, &cdp_dev, "STATUS: %02o %02o\n", cmd, *resp);
+        uptr->STATUS &= ~TERMINATE;
+        chan_clr_done(dev);
    } else if (cmd == 024) {  /* Send P */
         *resp = uptr->STATUS & 016;  /* IMAGE, ERROR, OPAT */
         if ((uptr->flags & UNIT_ATT) != 0)
             *resp |= 1;
         uptr->STATUS &= (BUSY|DISC);
-        chan_clr_done(dev);
+        sim_debug(DEBUG_STATUS, &cdp_dev, "STATUS: %02o %02o\n", cmd, *resp);
    } else if (cmd == 032) {
         if ((uptr->flags & UNIT_ATT) == 0)
             return;
@@ -185,6 +188,7 @@ void cdp_nsi_cmd(int dev, uint32 cmd) {
    if (cmd & 02) {
        if (uptr->STATUS & BUSY)
            uptr->STATUS |= DISC;
+       sim_debug(DEBUG_CMD, &cdp_dev, "Stop: %02o %08o\n", cmd, uptr->STATUS);
        return;
    }
 
@@ -195,6 +199,7 @@ void cdp_nsi_cmd(int dev, uint32 cmd) {
            return;
        }
        uptr->STATUS = BUSY;
+       sim_debug(DEBUG_CMD, &cdp_dev, "Start: %02o %08o\n", cmd, uptr->STATUS);
        chan_clr_done(dev);
        sim_activate(uptr, uptr->wait);
    }
@@ -236,6 +241,7 @@ void cdp_nsi_status(int dev, uint32 *resp) {
    if ((uptr->flags & UNIT_ATT) == 0) 
        *resp |= 2;
    uptr->STATUS &= BUSY|DISC;
+   sim_debug(DEBUG_STATUS, &cdp_dev, "STATUS: %02o\n", *resp);
    chan_clr_done(dev);
 }
 
@@ -266,6 +272,7 @@ t_stat cdp_svc (UNIT *uptr)
            break;
         }
         image[i] = mem_to_hol[ch];
+        sim_debug(DEBUG_DATA, &cdp_dev, "Data: %02o %04x\n", ch, image[i]);
     }
     switch(sim_punch_card(uptr, image)) {
     case CDSE_EMPTY:

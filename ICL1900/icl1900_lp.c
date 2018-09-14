@@ -84,8 +84,8 @@ CONST char *lpr_description (DEVICE *dptr);
 DIB lpr_dib = {  CHAR_DEV, &lpr_cmd, &lpr_nsi_cmd, &lpr_nsi_status };
 
 UNIT lpr_unit[] = {
-    { UDATA (&lpr_svc, UNIT_LPR(13), 0), 10000 },
     { UDATA (&lpr_svc, UNIT_LPR(14), 0), 10000 },
+    { UDATA (&lpr_svc, UNIT_LPR(15), 0), 10000 },
     };
 
 
@@ -220,7 +220,7 @@ void lpr_nsi_cmd(int dev, uint32 cmd) {
            chan_set_done(GET_UADDR(uptr->flags));
            return;
        }
-       uptr->CMD |= 0;
+       uptr->CMD |= AUTO;
        uptr->STATUS = BUSY;
        sim_activate(uptr, uptr->wait);
        chan_clr_done(GET_UADDR(uptr->flags));
@@ -304,16 +304,16 @@ t_stat lpr_svc (UNIT *uptr)
         len = 120;
     else if (LW_160(uptr->flags))
         len = 160;
-    for (i = 0; i < len && eor == 0; i++) {
+    i = 0;
+    while (eor == 0 && i <sizeof(buffer)-4) {
         eor = chan_output_char(GET_UADDR(uptr->flags), &ch, 0);
-        sim_debug(DEBUG_DATA, &lpr_dev, "DATA: %03o\n", ch);
-        switch (ch & 060) {
-        case 000:   ch = 0060 | (ch & 017); break;
-        case 020:   ch = 0040 | (ch & 017); break;
-        case 040:   ch = 0100 | (ch & 017); break;
-        case 060:   ch = 0120 | (ch & 017); break;
+        if (uptr->CMD & AUTO) {
+            uptr->CMD |= (int32)ch << 8;
+            uptr->CMD &= ~AUTO;
+        } else {
+            sim_debug(DEBUG_DATA, &lpr_dev, "DATA: %03o\n", ch);
+            buffer[i++] = mem_to_ascii[ch];
         }
-        buffer[i] = ch;
     }
     buffer[i++] = '\r';
     buffer[i++] = '\n';

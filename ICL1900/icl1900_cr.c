@@ -32,7 +32,7 @@
 #define NUM_DEVS_CDR 0
 #endif
 
-#define UNIT_V_TYPE      (UNIT_V_UF + 8)
+#define UNIT_V_TYPE      (UNIT_V_UF + 7)
 #define UNIT_TYPE        (0xf << UNIT_V_TYPE)
 #define GET_TYPE(x)      ((UNIT_TYPE & (x)) >> UNIT_V_TYPE)
 #define SET_TYPE(x)      (UNIT_TYPE & ((x) << UNIT_V_TYPE))
@@ -78,8 +78,8 @@ CONST char *cdr_description (DEVICE *dptr);
 DIB cdr_dib = {  CHAR_DEV, &cdr_cmd, &cdr_nsi_cmd, &cdr_nsi_status };
 
 UNIT cdr_unit[] = {
-    { UDATA (&cdr_svc, UNIT_CDR(8), 0), 10000 },
-    { UDATA (&cdr_svc, UNIT_CDR(9), 0), 10000 },
+    { UDATA (&cdr_svc, UNIT_CDR(10), 0), 10000 },
+    { UDATA (&cdr_svc, UNIT_CDR(11), 0), 10000 },
     };
 
 
@@ -282,6 +282,7 @@ t_stat cdr_svc (UNIT *uptr)
     case CDSE_EMPTY:
     case CDSE_EOF:
          sim_card_detach(uptr);
+         uptr->STATUS |= OPAT;
          sim_debug(DEBUG_DATA, &cdr_dev, "EOF: %d\n", i);
          break;
     case CDSE_ERROR:
@@ -302,7 +303,7 @@ t_stat cdr_svc (UNIT *uptr)
              sim_debug(DEBUG_DATA, &cdr_dev, "col: %04x %02o '%c'\n", image[i], ch, mem_to_ascii[ch]);
                  if (ch == 0xff) {
                     uptr->STATUS |= ERROR;
-                    break;
+                    ch = 077;
                  }
              }
              sim_debug(DEBUG_DATA, &cdr_dev, "DATA: %03o\n", ch);

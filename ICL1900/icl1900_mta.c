@@ -668,8 +668,10 @@ mta_attach(UNIT * uptr, CONST char *file)
        return r;
     uptr->STATUS &= ~OFFLINE;
     uptr->STATUS = ACCEPT;
-//    chan_set_done(unit + GET_UADDR(dptr->flags));
-    return SCPE_OK;
+    if (uptr->flags & UNIT_RO)
+        uptr->flags |= MTUF_WLK;
+    chan_set_done(unit + GET_UADDR(dptr->flags));
+    return r;
 }
 
 t_stat

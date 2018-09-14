@@ -581,8 +581,13 @@ mt_boot(int32 unit_num, DEVICE * dptr)
 t_stat
 mt_attach(UNIT * uptr, CONST char *file)
 {
+    t_stat  r;
     uptr->STATUS = 0;
-    return sim_tape_attach_ex(uptr, file, 0, 0);
+    if ((r = sim_tape_attach_ex(uptr, file, 0, 0)) == SCPE_OK) {
+        if (uptr->flags & UNIT_RO)
+           uptr->flags |= MTUF_WLK;
+    }
+    return r;
 }
 
 t_stat

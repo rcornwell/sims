@@ -31,6 +31,8 @@
 #define NUM_DEVS_PTR 0
 #endif
 
+#if (NUM_DEVS_PTR > 0)
+
 #define PP_V_MODE        (UNIT_V_UF + 0)
 #define PP_M_MODE        (1 << PP_V_MODE)
 #define UNIT_V_TYPE      (UNIT_V_UF + 1)
@@ -42,7 +44,6 @@
 #define  SI_TYPE(x)      ((GET_TYPE(x) & 1) != 0)
 #define  PP_MODE_7B   0
 #define  PP_MODE_7P   1
-
 
 #define CMD          u3
 #define STATUS       u4
@@ -65,8 +66,6 @@
 #define ALPHA_SHIFT   074
 #define BETA_SHIFT    075
 #define DELTA_SHIFT   076
-
-#if (NUM_DEVS_PTR > 0)
 
 #define T1915_1               0
 #define T1915_2               1
