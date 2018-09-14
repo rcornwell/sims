@@ -116,8 +116,8 @@ CONST char *ptp_description (DEVICE *dptr);
 DIB ptp_dib = {  CHAR_DEV, &ptp_cmd, &ptp_nsi_cmd, &ptp_nsi_status };
 
 UNIT ptp_unit[] = {
-    { UDATA (&ptp_svc, UNIT_PTP(6), 0), 10000 },
-    { UDATA (&ptp_svc, UNIT_PTP(7), 0), 10000 },
+    { UDATA (&ptp_svc, UNIT_PTP(8), 0), 10000 },
+    { UDATA (&ptp_svc, UNIT_PTP(9), 0), 10000 },
     };
 
 

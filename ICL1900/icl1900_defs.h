@@ -234,7 +234,7 @@ t_opcode;
 #define NMASK          037777400
 #define MMASK          037777000
 
-#define UNIT_V_ADDR       24
+#define UNIT_V_ADDR       (UNIT_V_UF + 9)
 #define UNIT_M_ADDR       (077 << UNIT_V_ADDR)
 #define GET_UADDR(x)      ((UNIT_M_ADDR & (x)) >> UNIT_V_ADDR)
 #define UNIT_ADDR(x)      (UNIT_M_ADDR & ((x) << UNIT_V_ADDR))
