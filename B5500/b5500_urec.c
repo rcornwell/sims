@@ -366,23 +366,56 @@ cdr_srv(UNIT *uptr) {
         } else {
             ch = sim_hol_to_bcd(image[uptr->u4]);
             /* Remap some characters from 029 to BCL */
+            /* Sim_hol_to_bcd translates cards by looking at the zones 
+             *  12 - 11 and 10 and setting the two most significant
+             * digits of the BCD word to 11xxxx, 10xxxx, 01xxxx
+             * next if 8 is punched it add in 001000 then adds the one
+             * other digit if it is punched to make the lower four bits
+             * of the BCD number.
+             *
+             * A code of 10 only is returned as 1010 or 10.
+             * Some of these codes need to be changed because of overlap
+             * and minor variations in Burroughs code to IBM029 code.
+             */
+        sim_debug(DEBUG_DATA, &cdr_dev, "cdr %d: Char > %03o ", u, ch);
             switch(ch) {
             case 0:     ch = 020; break; /* Translate blanks */
-            case 10:    /* Check if 0 punch of 82 punch */
-                        if (image[uptr->u4] != 0x200) {
-                           ch = 0;
-                           if (uptr->u4 == 0)
-                               chan_set_parity(chan);
-                        }
+            case 012:   if (image[uptr->u4] == 0x082) /* 8-2 punch to 015 */
+                            ch = 015;
                         break;
-            case 0111:
-                        ch = 0;
-                        /* Handle invalid punch */
-                        chan_set_parity(chan);
+            case 016:   ch = 035; break; /* Translate = */
+            case 017:   if (image[uptr->u4] == 0x006) /* Translate " */
+                           ch = 037;
+                        break;
+            case 036:   ch = 016; break;
+            case 037:   ch = 0;          /* Handle ? */
+                        if (uptr->u4 == 0)
+                            chan_set_parity(chan);
+                        break;
+            case 052:   if (image[uptr->u4] == 0x482) /* Translate ! not equal */
+                            ch = 032; 
+                        break;
+            case 072:   if (image[uptr->u4] == 0xA00) /* Translate [ */
+                            ch = 074;
+                        else
+                            ch = 036;
+                        break; /* Translate */
+            case 074:   ch = 076; break; /* Translate < */
+            case 076:   ch = 072; break; /* Translate + */
+            case 0177:
+                        if (image[uptr->u4] == 0x405) /* Translate { */
+                            ch = 057;
+                        else if (image[uptr->u4] == 0x805) /* Translate } */
+                            ch = 017;
+                        else {
+                            ch = 0;
+                            /* Handle invalid punch */
+                            chan_set_parity(chan);
+                        }
                         break;  /* Translate ? to error*/
             }
         }
-        sim_debug(DEBUG_DATA, &cdr_dev, "cdr %d: Char > %03o '%c' %d\n", u, ch,
+        sim_debug(DEBUG_DATA, &cdr_dev, "-> %03o '%c' %d\n", ch,
                         sim_six_to_ascii[ch & 077], uptr->u4);
         if(chan_write_char(chan, &ch, 0)) {
             uptr->u5 &= ~(URCSTA_ACTIVE|URCSTA_CARD);
@@ -527,14 +560,31 @@ cdp_srv(UNIT *uptr) {
     /* Copy next column over */
     if (uptr->u5 & URCSTA_ACTIVE && uptr->u4 < 80) {
         uint8               ch = 0;
+        uint16              hol;
 
         if(chan_read_char(chan, &ch, 0)) {
              uptr->u5 |= URCSTA_BUSY|URCSTA_FULL;
              uptr->u5 &= ~URCSTA_ACTIVE;
         } else {
-            sim_debug(DEBUG_DATA, &cdp_dev, "cdp %d: Char %d < %02o\n", u,
-                         uptr->u4, ch);
-            image[uptr->u4++] = sim_bcd_to_hol(ch & 077);
+            hol = 0;
+            switch (ch & 077) {
+            case 015:  hol = 0x082; break;  /* : */
+            case 016:  hol = 0x20A; break;  /* > */
+            case 017:  hol = 0x805; break;  /* } */
+            case 032:  hol = 0x482; break;  /* ! */
+            case 035:  hol = 0X00A; break;  /* = */
+            case 036:  hol = 0x882; break;  /* ] */
+            case 037:  hol = 0x006; break;  /* " */
+            case 057:  hol = 0x405; break;  /* { */
+            case 072:  hol = 0x80A; break;  /* + */
+            case 074:  hol = 0xA00; break;  /* [ */
+            case 076:  hol = 0x822; break;  /* < */
+            default:
+                       hol = sim_bcd_to_hol(ch & 077);
+            }
+            sim_debug(DEBUG_DATA, &cdp_dev, "cdp %d: Char %d < %02o %03x\n", u,
+                         uptr->u4, ch, hol);
+            image[uptr->u4++] = hol;
         }
         sim_activate(uptr, 10);
     }
