@@ -354,6 +354,7 @@ t_stat eds8_svc (UNIT *uptr)
              break;
          }
 
+         sim_debug(DEBUG_DATA, &eds8_dev, "RSUP: %08o\n", word);
          uptr->HDSEC += 9;        /* Bump sector number, if more then 8, will bump head */
          uptr->HDSEC &= 0367;
          /* If empty buffer, fill */
@@ -425,6 +426,7 @@ t_stat eds8_svc (UNIT *uptr)
          }
 
          for (i = 0; i < WD_SEC; i++) {
+             sim_debug(DEBUG_DATA, &eds8_dev, "Data: %d <%08o\n", i, eds8_buffer[i]);
              if (eor = chan_input_word(dev, &eds8_buffer[i], 0)) {
                  /* Terminate */
                  uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
@@ -546,6 +548,7 @@ t_stat eds8_svc (UNIT *uptr)
          for (i = 0; i < WD_SEC; i++) {
              if (eor = chan_output_word(dev, &eds8_buffer[i], 0))
                 break;
+             sim_debug(DEBUG_DATA, &eds8_dev, "Data: %d >%08o\n", i, eds8_buffer[i]);
          }
 
          da = ((((uptr->CYL * HD_CYL) + ((uptr->HDSEC >> 4) & 017)) * SECT_TRK) +

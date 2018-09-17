@@ -133,6 +133,7 @@ uint32              SR3;                        /* Typewriter O/P */
 uint32              SR64;                       /* Interrupt status */
 uint32              SR65;                       /* Interrupt status */
 uint32              adrmask;                    /* Mask for addressing memory */
+uint32              memmask;                    /* Memory address range mask */
 uint8               loading;                    /* Loading bootstrap */
 
 
@@ -335,7 +336,7 @@ uint8 Mem_test(uint32 addr) {
         SR64 |= B1;
         return 1;
     }
-    addr &= adrmask;
+    addr &= memmask;
     if (addr > MEMSIZE) {
         SR64 |= B1;
         return 1;
@@ -363,7 +364,7 @@ uint8 Mem_read(uint32 addr, uint32 *data, uint8 flag) {
         SR64 |= B1;
         return 1;
     }
-    addr &= adrmask;
+    addr &= memmask;
     if (addr > MEMSIZE) {
         SR64 |= B1;
         return 1;
@@ -391,7 +392,7 @@ uint8 Mem_write(uint32 addr, uint32 *data, uint8 flag) {
         SR64 |= B1;
         return 1;
     }
-    addr &= adrmask;
+    addr &= memmask;
     if (addr > MEMSIZE) {
         SR64 |= B1;
         return 1;
@@ -410,6 +411,7 @@ sim_instr(void)
     int                 e1,e2;          /* Temp for exponents */
     int                 f;              /* Used to hold flags */
 
+    memmask = (CPU_TYPE < TYPE_C1) ? M15: M22;
     adrmask = (Mode & AM22) ? M22 : M15;
     reason = chan_set_devs();
 
@@ -471,21 +473,22 @@ intr:
                     Mem_write(RD+9, &RA, 0);
                 }
             }
-            RA = RC & adrmask;
-            if (BV)
-                RA |= B0;
+            RA = RC & memmask;
             if (io_flags & EXT_IO) {
                 if (BCarry)
                   RA |= B1;
             } else {
+                RC &= M15;
                 if (Zero)
                     RA |= B8;
             }
+            if (BV)
+                RA |= B0;
             Mem_write(RD+8, &RA, 0);
             for (n = 0; n < 8; n++)
                Mem_write(RD+n, &XR[n], 0);
             BV = BCarry = Mode = Zero = 0;
-            adrmask = (Mode & AM22) ? M22 : M15;
+            adrmask = M15;
             RC = 020;
             PIP = 0;
        }
@@ -511,7 +514,7 @@ fetch:
                hst[hst_p].e = exe_mode;
                hst[hst_p].mode = Mode;
            }
-           RC = (RC + 1) & adrmask;
+           RC = (RC + 1) & ((Mode & (EJM|AM22)) ? M22: M15);
            goto intr;
        }
 obey:
@@ -522,14 +525,10 @@ obey:
        if (RF >= 050 && RF < 0100) {
            RA = XR[RX];
            RM = RB = temp & 077777;
-           if ((Mode & EJM) && (RF & 1) == 0) {
+           /* Handle PC relative addressing */
+           if ((Mode & EJM) != 0 && (RF & 1) == 0) {
                RB = RB | ((RB & 020000) ? 017740000 : 0); /* Sign extend RB */
-//fprintf(stderr, "Rel B: %08o PC=%08o -> ", RB, RC);
-               RB = (RB + RC) & adrmask;
-//fprintf(stderr, " %08o\n\r", RC);
-           }
-           if (PIP && ((Mode & EJM) == 0 || (RF & 1) == 0)) {
-               RB = (RB + RP) & adrmask;
+               RB = (RB + RC) & M22;
            }
        } else {
            RA = XR[RX];
@@ -558,7 +557,7 @@ obey:
                       hst[hst_p].e = exe_mode;
                       hst[hst_p].mode = Mode;
                   }
-                  RC = (RC + 1) & adrmask;
+                  RC = (RC + 1) & ((Mode & (EJM|AM22)) ? M22: M15);
                   goto intr;
               }
               if (RF & 010) {
@@ -589,9 +588,9 @@ obey:
            hst[hst_p].mode = Mode;
        }
 
-       /* Advance to next location */
-       if (RF != 023)
-           RC = (RC + 1) & adrmask;
+       /* Advance to next location, except on OBEY order */
+       if (RF != OP_OBEY)
+           RC = (RC + 1) & ((Mode & (EJM|AM22)) ? M22: M15);
        OIP = 0;
 
        switch (RF) {
@@ -1147,15 +1146,16 @@ dvd_zero:
        case OP_CALL:         /* Call Subroutine */
        case OP_CALL1:
                      RA = RC;
-                     if (BV)
-                       RA |= B0;
                      if ((Mode & (AM22|EJM)) == 0) {
+                        RA &= adrmask;
                         if (Zero)
                            RA |= B8;
                      } else {
                         if (Zero)
                            RA |= B1;
                      }
+                     if (BV)
+                       RA |= B0;
                      BV = 0;
                      BCarry = 0;
                      XR[RX] = RA;
@@ -1165,22 +1165,20 @@ branch:
                          SR64 |= B2;
                          break;
                      }
-                     if ((Mode & EJM) != 0) {
-                         if ((RF & 1) != 0) {
-                             RB &= 037777;
-//fprintf(stderr, "Rep: %08o ->", RB);
-                             if (Mem_read(RB, &RB, 0)) {
-                                 goto intr;
-                             }
-//fprintf(stderr, " %08o \n\r", RB);
-                             RB &= adrmask;
-                             if (OPIP)
-                                 RB = (RB + RP) & adrmask;
+                     /* Handle replace jump */
+                     if ((Mode & EJM) != 0 && (RF & 1) != 0) {
+                         RB &= 037777;
+                         if (Mem_read(RB, &RB, 0)) {
+                             goto intr;
                          }
                      }
+                     /* Handle SMO */
+                     if (OPIP)
+                          RB = (RB + RP) & adrmask;
                      if (hst_lnt) {      /* history enabled? */
                          hst[hst_p].ea = RB;
                      }
+                     /* Don't transfer if address not valid */
                      if (Mem_test(RB))
                          goto intr;
                      /* Monitor mode 2 -> Exec Mon */
@@ -1191,6 +1189,10 @@ branch:
                          M[temp & adrmask] = RB;
                          M[262] =  (temp & ~ 0177) + ((temp + 1) & 0177);
                      }
+                     if ((Mode & (EJM|AM22)) == 0)
+                         RB &= M15;
+                     else
+                         RB &= M22;
                      RC = RB;
                      break;
 
@@ -1217,11 +1219,15 @@ branch:
                      if (hst_lnt) {      /* history enabled? */
                          hst[hst_p].ea = RA;
                      }
-                     if (Mem_read(RA, &temp, 0)) {  /* Verify memory location accessable */
+                     if ((Mode & (EJM|AM22)) == 0)
+                         RA &= M15;
+                     else
+                         RA &= M22;
+                     if (Mem_test(RA)) {  /* Verify memory location accessable */
                          goto intr;
                      }
-                     RC = RA & adrmask;
-                     goto obey;
+                     RC = RA;
+                     break;
 
        case OP_BRN:          /* Branch unconditional */
        case OP_BRN1:
@@ -1512,19 +1518,19 @@ norm1:
                     RK = RB;
                     RB = XR[(RX+1) & 07];
                     do {
-                        if (Mem_read(RA, &RT, 1)) {
+                        if (Mem_read(RA & adrmask, &RT, 1)) {
                             goto intr;
                         }
                         m = (RA >> 22) & 3;
                         RT = (RT >> (6 * (3 - m))) & 077;
-                        if (Mem_read(RB, &RS, 1)) {
+                        if (Mem_read(RB & adrmask, &RS, 1)) {
                             goto intr;
                         }
                         m = (RB >> 22) & 3;
                         m = 6 * (3 - m);
                         RS &= ~(077 << m);
                         RS |= (RT & 077) << m;
-                        if (Mem_write(RB, &RS, 1)) {
+                        if (Mem_write(RB & adrmask, &RS, 1)) {
                             goto intr;
                         }
                         RA += 020000000;
@@ -2200,7 +2206,7 @@ fexp:
                              RG |= (RA & 07);
                              Mode = RA & 077;
                          }
-                         adrmask = (Mode & AM22) ? M22 : M15;
+                         adrmask = (Mode & (AM22)) ? M22 : M15;
 //fprintf(stderr, "Load C=%08o limit: %08o D:=%08o %02o\n\r", RC, RL, RD, Mode);
                          if (RF & 1)                 /* Check if 172 or 173 order code */
                              break;
@@ -2223,7 +2229,7 @@ fexp:
                              if (RA & B3)
                                  Zero = 1;
                          }
-                         RC &= adrmask;
+                         RC &= (Mode & (EJM|AM22)) ? M22 : M15;
                          /* Restore floating point ACC from D12/D13 */
                          Mem_read(RD+12, &faccl, 0);  /* Restore F.P.U. */
                          Mem_read(RD+13, &facch, 0);  /* Restore F.P.U. */
@@ -2234,7 +2240,7 @@ fexp:
        case 0174:            /* Send control character to peripheral */
                     if (exe_mode) {
                          chan_send_cmd(RB, RA & 07777, &RT);
-fprintf(stderr, "CMD  C=%08o %04o %04o %08o\n\r", RC, RT, RB, RA);
+//fprintf(stderr, "CMD  C=%08o %04o %04o %08o\n\r", RC, RT, RB, RA);
                          m = (m == 0) ? 3 : (XR[m] >> 22) & 3;
                          m = 6 * (3 - m);
                          RT = (RT & 077) << m;
@@ -2246,12 +2252,12 @@ fprintf(stderr, "CMD  C=%08o %04o %04o %08o\n\r", RC, RT, RB, RA);
                     /* Fall through */
        case 0175:                          /* Null operation in Executive mode */
                     if (exe_mode) {
-fprintf(stderr, "CMD 175 C=%08o %04o %08o\n\r", RC, RB, RA);
+//fprintf(stderr, "CMD 175 C=%08o %04o %08o\n\r", RC, RB, RA);
                          break;
                     }
        case 0176:
                     if (exe_mode) {
-fprintf(stderr, "CMD 176 C=%08o %04o %08o\n\r", RC, RB, RA);
+//fprintf(stderr, "CMD 176 C=%08o %04o %08o\n\r", RC, RB, RA);
                          break;
                     }
                     /* Fall through */
@@ -2297,7 +2303,7 @@ voluntary:
                         Mem_write(RD+n, &XR[n], 0);
                     Zero = Mode = 0;
                     BCarry = BV = 0;
-                    adrmask = (Mode & AM22) ? M22 : M15;
+                    adrmask = M15;
                     XR[1] = RB;
                     XR[2] = temp;
                     RC = 040;
