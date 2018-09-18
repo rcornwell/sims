@@ -213,7 +213,10 @@ const char *sim_stop_messages[] = {
     "Unknown error",
     "HALT instruction",
     "Breakpoint",
-    "Invalid access"
+    "Invalid access",
+#if MAGIC_SWITCH
+    "No magic"
+#endif
      };
 
 /* Simulator debug controls */

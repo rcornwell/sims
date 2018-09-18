@@ -86,6 +86,10 @@
 #define PDP6_DEV PDP6|WAITS
 #endif
 
+#ifndef MAGIC_SWITCH   /* Infamous MIT magic switch. */
+#define MAGIC_SWITCH 0
+#endif
+
 
 /* MPX interrupt multiplexer for ITS systems */
 #define MPX_DEV ITS
@@ -132,6 +136,10 @@ typedef t_uint64     uint64;
 
 #define STOP_HALT       1                               /* halted */
 #define STOP_IBKPT      2                               /* breakpoint */
+#define STOP_ACCESS     3                               /* invalid access */
+#if MAGIC_SWITCH
+#define STOP_MAGIC      4                               /* low on magic */
+#endif
 
 /* Debuging controls */
 #define DEBUG_CMD       0x0000001       /* Show device commands */
@@ -628,6 +636,10 @@ int auxcpu_write (t_addr addr, t_uint64);
 #define NUM_DEVS_DPK    ITS
 #define NUM_DEVS_AI     ITS
 #endif
+#if MAGIC_SWITCH && !KA && !ITS
+#error "Magic switch only valid on KA10 with ITS mods"
+#endif
+
 /* Global data */
 
 

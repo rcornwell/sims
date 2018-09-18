@@ -230,7 +230,10 @@ uint32  fault_addr;                           /* Fault address */
 uint64  opc;                                  /* Saved PC and Flags */
 uint64  mar;                                  /* Memory address compare */
 uint32  qua_time;                             /* Quantum clock value */
-#endif
+#if MAGIC_SWITCH
+int     MAGIC = 1;                            /* Magic switch. */
+#endif /* MAGIC_SWITCH */
+#endif /* ITS */
 #if KL_ITS
 #define dbr1    FM[(6<<4)|1]
 #define dbr2    FM[(6<<4)|2]
@@ -464,7 +467,10 @@ REG cpu_reg[] = {
     { ORDATAD (OPC, opc, 36, "Saved PC and flags")},
     { ORDATAD (MAR, mar, 18, "Memory address register")},
     { ORDATAD (QUA_TIME, qua_time, 36, "Quantum timer"), REG_RO},
-#endif
+#if MAGIC_SWITCH
+    { ORDATAD (MAGIC, MAGIC, 1, "Magic switch"), REG_FIT},
+#endif /* MAGIC_SWITCH */
+#endif /* ITS */
 #if KL
     { ORDATAD (EXT_AC, ext_ac, 4, "Extended Instruction AC"), REG_HRO},
     { ORDATAD (PREV_CTX, prev_ctx, 5, "Previous context"), REG_HRO},
@@ -4036,6 +4042,13 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
          reason = STOP_IBKPT;
          break;
     }
+
+#if MAGIC_SWITCH
+    if (!MAGIC) {
+         reason = STOP_MAGIC;
+         break;
+    }
+#endif /* MAGIC_SWITCH */
 
     check_apr_irq();
     /* Normal instruction */
