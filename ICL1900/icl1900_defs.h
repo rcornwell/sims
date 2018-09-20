@@ -102,6 +102,7 @@ typedef struct _cpumod
 #define MULT        0400          /* Multiply/Divide installed */
 #define SV          01000         /* Stevenage Machine */
 #define WG          00000         /* West Gorton Machine */
+#define SL_FLOAT    02000         /* Store and load floating point registers */
 
 /* Definitions for io_flags */
 #define EXT_IO      0001          /* I/O channels at 256 and above */

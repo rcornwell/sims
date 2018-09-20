@@ -250,9 +250,10 @@ get_ccw(int dev, uint32 *addr, uint8 type) {
         if (type & WORD_DEV)
            cw0 |= WORDCCW;
         if (cw0 & WORDCCW) {
-            if (cw0 & BACKWARD)
+            if (cw0 & BACKWARD) {
                 cw1 = ((cw1 + M22) & M22) | (cw1 & CMASK);
-            else
+                *addr = cw1;
+            } else
                 cw1 = ((cw1 + 1) & M22) | (cw1 & CMASK);
         } else {
             if (cw0 & BACKWARD) {
@@ -261,6 +262,7 @@ get_ccw(int dev, uint32 *addr, uint8 type) {
                 } else {
                     cw1 = ((cw1 - 1) & M22) | CMASK;
                 }
+                *addr = cw1;
             } else {
                 if ((cw1 & CMASK) == CMASK) {
                     cw1 = (cw1 + 1) & M22;

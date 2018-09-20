@@ -161,9 +161,7 @@ void lpr_cmd(int dev, uint32 cmd, uint32 *resp) {
        chan_clr_done(GET_UADDR(uptr->flags));
        *resp = 5;
    } else if (cmd == SEND_Q) {
-       if ((uptr->flags & UNIT_ATT) != 0)
-          *resp = 040;
-       if (uptr->STATUS & 06)
+       if ((uptr->flags & UNIT_ATT) == 0 || (uptr->STATUS & 06) == 0)
           *resp = 040;
        *resp |= uptr->STATUS & TERMINATE;
        uptr->STATUS &= ~1;

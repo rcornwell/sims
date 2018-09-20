@@ -34,8 +34,8 @@
 #if (NUM_DEVS_PTR > 0)
 
 #define PP_V_MODE        (UNIT_V_UF + 0)
-#define PP_M_MODE        (1 << PP_V_MODE)
-#define UNIT_V_TYPE      (UNIT_V_UF + 1)
+#define PP_M_MODE        (3 << PP_V_MODE)
+#define UNIT_V_TYPE      (UNIT_V_UF + 2)
 #define UNIT_TYPE        (0xf << UNIT_V_TYPE)
 #define GET_TYPE(x)      ((UNIT_TYPE & (x)) >> UNIT_V_TYPE)
 #define SET_TYPE(x)      (UNIT_TYPE & ((x) << UNIT_V_TYPE))
@@ -44,6 +44,7 @@
 #define  SI_TYPE(x)      ((GET_TYPE(x) & 1) != 0)
 #define  PP_MODE_7B   0
 #define  PP_MODE_7P   1
+#define  PP_MODE_7X   2
 
 #define CMD          u3
 #define STATUS       u4
@@ -128,6 +129,7 @@ UNIT ptr_unit[] = {
 MTAB ptr_mod[] = {
     { PP_M_MODE, PP_MODE_7B, "7b", "7B", NULL },
     { PP_M_MODE, PP_MODE_7P, "7p", "7P", NULL },
+    { PP_M_MODE, PP_MODE_7X, "7x", "7X", NULL },
     { UNIT_TYPE, SET_TYPE(T1915_1), "1915/1", "1915/1", NULL, NULL, "ICL 1915/1 NSI 300CPM reader."},
     { UNIT_TYPE, SET_TYPE(T1915_2), "1915/2", "1915/2", NULL, NULL, "ICL 1912/2 SI 300CPM reader."},
     { UNIT_TYPE, SET_TYPE(T1916_1), "1916/1", "1916/1", NULL, NULL, "ICL 1916/1 NSI 1000CPM reader."},
@@ -203,12 +205,12 @@ void ptr_cmd(int dev, uint32 cmd, uint32 *resp) {
 
    case 020: if (cmd == 020) {    /* Send Q */
                  *resp = uptr->STATUS & TERMINATE;
-                 if ((uptr->flags & UNIT_ATT) != 0) {
+                 if ((uptr->flags & UNIT_ATT) == 0) {
                     *resp = 040;
                     if ((uptr->CMD & BUSY) == 0)
                        *resp |= 030;
                  }
-                 if ((uptr->STATUS & ERROR) != 0)
+                 if ((uptr->STATUS & ERROR) == 0)
                     *resp |= 040;
                  sim_debug(DEBUG_STATUS, &ptr_dev, "STATUS: %03o %03o\n", cmd, *resp);
                  uptr->STATUS &= ~TERMINATE;
@@ -384,6 +386,12 @@ t_stat ptr_svc (UNIT *uptr)
        if (ch != 0)
           uptr->STATUS = TERMINATE | ERROR;
        chan_set_done(dev);
+    } else if ((uptr->flags & PP_M_MODE) == PP_MODE_7X) {
+       if (data == 0243) {
+           data = 044;
+       } else if (data == 044) {
+           data = 0174;
+       }
     }
     data &= 0177;
     if ((data == 0 || data == 0177) && (uptr->CMD & IGN_BLNK) != 0) {
@@ -414,6 +422,7 @@ t_stat ptr_svc (UNIT *uptr)
                ch = 060 | (data & 017);
                break;
        }
+       sim_debug(DEBUG_DATA, &ptr_dev, "xlt: '%c' %03o\n", data, ch);
     } else {
        switch (data & 0160) {
        case 0000:
@@ -542,6 +551,7 @@ t_stat ptr_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cpt
     fprintf (st, "The Paper Tape Reader can be set to one of two modes: 7P, or 7B\n\n");
     fprintf (st, "  7P    Process even parity input tapes. \n");
     fprintf (st, "  7B    Ignore parity of input data.\n");
+    fprintf (st, "  7X    Ignore parity and translate British Pound to correct character\n");
     fprintf (st, "The default mode is 7B.\n\n");
     fprintf (st, "The device number can be set with DEV=# command.\n");
     return SCPE_OK;
