@@ -138,7 +138,7 @@ void cdr_cmd(int dev, uint32 cmd, uint32 *resp) {
         return;
    if (cmd == 020) {    /* Send Q */
         *resp = uptr->STATUS & TERMINATE;  /* Terminate */
-        if ((uptr->flags & UNIT_ATT) != 0 || uptr->STATUS & 016)
+        if ((uptr->flags & UNIT_ATT) == 0 || (uptr->STATUS & 016) == 0)
             *resp |= 040;
         if ((uptr->STATUS & BUSY) == 0) 
             *resp |= STOPPED;

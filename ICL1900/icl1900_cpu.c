@@ -31,6 +31,7 @@
 */
 
 #include "icl1900_defs.h"
+#include <time.h>
 #include "sim_timer.h"
 
 #define UNIT_V_MSIZE    (UNIT_V_UF + 0)
@@ -123,7 +124,6 @@ uint8               exe_mode = 1;               /* Executive mode */
 #define     AM22    010                            /* 22 bit addressing */
 #define     EXTRC   004                            /* Executive trace mode */
 /*                  002       */                   /* unused mode bit */
-#define     ZERSUP  001                            /* Zero suppression */
 uint8               OIP;                        /* Obey instruction */
 uint8               PIP;                        /* Pre Modify instruction */
 uint8               OPIP;                       /* Saved Pre Modify instruction */
@@ -183,7 +183,7 @@ t_stat              cpu_set_hist(UNIT * uptr, int32 val, CONST char *cptr,
 t_stat              cpu_help(FILE *, DEVICE *, UNIT *, int32, const char *);
 /* Interval timer */
 t_stat              rtc_srv(UNIT * uptr);
-
+void                time_read(uint32 *word);
 int32               rtc_tps = 60 ;
 int32               tmxr_poll = 10000;
 
@@ -203,29 +203,29 @@ CPUMOD  cpu_modtab[] = {
      { "1903S",  MOD3S,   TYPE_C2|FLOAT_STD|FLOAT_OPT|MULT_OPT|SV, EXT_IO, 10 },
      { "1903T",  MOD3T,   TYPE_A2|FLOAT_STD|FLOAT_OPT|MULT_OPT|WG, 0, 10 },
      { "1904",   MOD4,    TYPE_B2|FLOAT_OPT|MULT|WG, 0, 1 },
-     { "1904A",  MOD4A,   TYPE_C2|FLOAT_OPT|MULT|WG, EXT_IO, 10 },
-     { "1904E",  MOD4E,   TYPE_C2|FLOAT_OPT|MULT|WG, EXT_IO, 10 },
-     { "1904F",  MOD4F,   TYPE_C2|FLOAT_OPT|MULT|WG, EXT_IO, 10 },
-     { "1904S",  MOD4S,   TYPE_C2|FLOAT_OPT|MULT|WG, EXT_IO, 10 },
+     { "1904A",  MOD4A,   TYPE_C2|FLOAT_OPT|MULT|WG|SL_FLOAT, EXT_IO, 10 },
+     { "1904E",  MOD4E,   TYPE_C2|FLOAT_OPT|MULT|WG|SL_FLOAT, EXT_IO, 10 },
+     { "1904F",  MOD4F,   TYPE_C2|FLOAT_OPT|MULT|WG|SL_FLOAT, EXT_IO, 10 },
+     { "1904S",  MOD4S,   TYPE_C2|FLOAT_OPT|MULT|WG|SL_FLOAT, EXT_IO, 10 },
      { "1905",   MOD5,    TYPE_A2|FLOAT|MULT|WG, 0, 1 },
-     { "1905A",  MOD5A,   TYPE_A2|FLOAT|MULT|WG, 0, 10 },
-     { "1905E",  MOD5E,   TYPE_C2|FLOAT|MULT|WG, EXT_IO, 10 },
-     { "1905F",  MOD5F,   TYPE_C2|FLOAT|MULT|WG, EXT_IO, 10 },
-     { "1905S",  MOD5S,   TYPE_C2|FLOAT|MULT|WG, EXT_IO, 10 },
-     { "1906",   MOD6,    TYPE_A2|FLOAT|MULT|WG, 0, 10 },
-     { "1906A",  MOD6A,   TYPE_A2|FLOAT|MULT|WG, 0, 100 },
-     { "1906E",  MOD6E,   TYPE_C2|FLOAT|MULT|WG, EXT_IO, 10 },
-     { "1906F",  MOD6F,   TYPE_C2|FLOAT|MULT|WG, EXT_IO, 10 },
-     { "1906S",  MOD6S,   TYPE_C2|FLOAT|MULT|WG, EXT_IO, 100 },
-     { "1907",   MOD7,    TYPE_A2|FLOAT|MULT|WG, 0, 10 },
-     { "1907A",  MOD7A,   TYPE_A2|FLOAT|MULT|WG, 0, 10 },
-     { "1907E",  MOD7E,   TYPE_C2|FLOAT|MULT|WG, EXT_IO, 10 },
-     { "1907F",  MOD7F,   TYPE_C2|FLOAT|MULT|WG, EXT_IO, 10 },
-     { "1907S",  MOD7S,   TYPE_C2|FLOAT|MULT|WG, EXT_IO, 10 },
-     { "1908",   MOD8,    TYPE_A2|FLOAT|MULT|WG, 0, 10 },
-     { "1908A",  MOD8A,   TYPE_A2|FLOAT|MULT|WG, 0, 10 },
-     { "1908S",  MOD8S,   TYPE_C2|FLOAT|MULT|WG, EXT_IO, 10 },
-     { "1909",   MOD9,    TYPE_C2|FLOAT|MULT|WG, EXT_IO, 1 },
+     { "1905A",  MOD5A,   TYPE_A2|FLOAT|MULT|WG|SL_FLOAT, 0, 10 },
+     { "1905E",  MOD5E,   TYPE_C2|FLOAT|MULT|WG|SL_FLOAT, EXT_IO, 10 },
+     { "1905F",  MOD5F,   TYPE_C2|FLOAT|MULT|WG|SL_FLOAT, EXT_IO, 10 },
+     { "1905S",  MOD5S,   TYPE_C2|FLOAT|MULT|WG|SL_FLOAT, EXT_IO, 10 },
+     { "1906",   MOD6,    TYPE_A2|FLOAT|MULT|WG|SL_FLOAT, 0, 10 },
+     { "1906A",  MOD6A,   TYPE_A2|FLOAT|MULT|WG|SL_FLOAT, 0, 100 },
+     { "1906E",  MOD6E,   TYPE_C2|FLOAT|MULT|WG|SL_FLOAT, EXT_IO, 10 },
+     { "1906F",  MOD6F,   TYPE_C2|FLOAT|MULT|WG|SL_FLOAT, EXT_IO, 10 },
+     { "1906S",  MOD6S,   TYPE_C2|FLOAT|MULT|WG|SL_FLOAT, EXT_IO, 100 },
+     { "1907",   MOD7,    TYPE_A2|FLOAT|MULT|WG|SL_FLOAT, 0, 10 },
+     { "1907A",  MOD7A,   TYPE_A2|FLOAT|MULT|WG|SL_FLOAT, 0, 10 },
+     { "1907E",  MOD7E,   TYPE_C2|FLOAT|MULT|WG|SL_FLOAT, EXT_IO, 10 },
+     { "1907F",  MOD7F,   TYPE_C2|FLOAT|MULT|WG|SL_FLOAT, EXT_IO, 10 },
+     { "1907S",  MOD7S,   TYPE_C2|FLOAT|MULT|WG|SL_FLOAT, EXT_IO, 10 },
+     { "1908",   MOD8,    TYPE_A2|FLOAT|MULT|WG|SL_FLOAT, 0, 10 },
+     { "1908A",  MOD8A,   TYPE_A2|FLOAT|MULT|WG|SL_FLOAT, 0, 10 },
+     { "1908S",  MOD8S,   TYPE_C2|FLOAT|MULT|WG|SL_FLOAT, EXT_IO, 10 },
+     { "1909",   MOD9,    TYPE_C2|FLOAT|MULT|WG|SL_FLOAT, EXT_IO, 1 },
      { NULL, 0, 0, 0, 0},
 };
 
@@ -347,6 +347,7 @@ uint8 Mem_test(uint32 addr) {
 uint8 Mem_read(uint32 addr, uint32 *data, uint8 flag) {
     addr &= M22;
 
+    SR1++;
     if (!exe_mode) {
         if (addr < 8) {
             *data = XR[addr];
@@ -449,9 +450,12 @@ intr:
             exe_mode = 1;
             loading = 0;
             /* Store registers */
-            if (cpu_flags & FLOAT) {
-                Mem_write(RD+13, &facch, 0);  /* Save F.P.U. */
+            if (cpu_flags & FLOAT && cpu_flags & SL_FLOAT) {
                 Mem_write(RD+12, &faccl, 0);
+                RT = facch;
+                if (fovr)
+                    RT |= B0;
+                Mem_write(RD+13, &RT, 0);  /* Save F.P.U. */
             }
             RA = 0;         /* Build ZSTAT */
             if (cpu_flags & SV) {
@@ -725,7 +729,7 @@ obey:
 
        case OP_STOZ:         /* Store Zero */
                      /* Stevenage Machines */
-                     if ((cpu_flags & SV) != 0 && exe_mode)
+                     if ((cpu_flags & SV) != 0 && exe_mode && RX != 0)
                          XR[RX] = RA;
                      RB = 0;
                      BCarry = 0;
@@ -1289,6 +1293,8 @@ branch:
        case OP_BFP1:
                     if ((cpu_flags & FLOAT) == 0)
                         goto voluntary;
+                    if ((RX & 04) == 0 && fovr)
+                        BV = 1;
                     switch (RX & 06) {
                     case 0:  n = (faccl | facch) != 0; break;
                     case 2:  n = (faccl & B0) != 0; break;
@@ -1777,7 +1783,7 @@ norm1:
                     /* Sign of result */
                     if ((faccl & B0) != 0)
                        n |= 4;
-//fprintf(stderr, "FAD6: %08o %08o %08o %d %d\n\r", faccl, facch, RC, temp, temp2);
+//fprintf(stderr, "FAD6: %08o %08o %08o %o\n\r", faccl, facch, RC, n);
                     /* Result sign not equal same sign as addens */
                     if (n == 3 || n == 4) {
                         if (faccl & 1)
@@ -1788,8 +1794,10 @@ norm1:
                         if ((n & 4) == 0)
                            faccl |= B0;   /* Set sign */
                         e1++;
-//fprintf(stderr, "FAD6a: %08o %08o %08o %d %d\n\r", faccl, facch, RC, temp, temp2);
+//fprintf(stderr, "FAD6a: %08o %08o %08o\n\r", faccl, facch, RC);
                     }
+                    if (n == 7)   /* Handle minus with overflow */
+                       e1--;
 fn:
                     /* Common normalize routine */
                     faccl &= FMASK;
@@ -1828,7 +1836,7 @@ fn:
                             facch &= M23;
 //fprintf(stderr, "FADr: %08o %08o %08o %03o %d\n\r", faccl, facch, RC,  e1, e1);
                         }
-//fprintf(stderr, "FADR: %08o %08o %08o %03o %d\n\r",  faccl, facch, RC,  e1, temp2);
+//fprintf(stderr, "FADR: %08o %08o %08o %03o\n\r",  faccl, facch, RC,  e1);
                     }
                     faccl &= FMASK;
                     facch &= MMASK;
@@ -2140,8 +2148,8 @@ fexp:
                     }
                     RA = facch;
                     if (fovr) {
-                       RA |= B0;
-                       BV = 1;
+                        RA |= B0;
+                        BV = 1;
                         if (!exe_mode && (Mode & 7) == 4)
                             SR64 |= B2;
                     }
@@ -2153,23 +2161,93 @@ fexp:
                        faccl = facch = fovr = 0;
                     break;
 
-       case 0150:
-       case 0151:
        case 0160:   /* Stevenage machines */   /* Load accumulators */
+                    if ((cpu_flags & SV) != 0 && exe_mode) {
+                         /* Restore registers */
+                         for (n = 0; n < 8; n++)     /* Restore user mode registers */
+                             Mem_read(RB+n, &XR[n], 0);
+                         break;
+                    }
+                    /* Fall through */
+
        case 0161:   /* Stevenage machines */   /* Store accumulators */
+                    if ((cpu_flags & SV) != 0 && exe_mode) {
+                         /* Dump registers */
+                         for (n = 0; n < 8; n++)     /* Restore user mode registers */
+                             Mem_write(RB+n, &XR[n], 0);
+                         break;
+                    }
+                    /* Fall through */
+
        case 0162:   /* Stevenage machines */
-       case 0163:   /* Stevenage machines */   /* Stope and Display */
+       case 0163:   /* Stevenage machines */   /* Stop and Display */
        case 0164:   /* Stevenage machines */   /* Search List N for Word X */
-       case 0165:   /* Stevenage machines */   /* Parity Search */
-                    if (exe_mode) {
+                    if ((cpu_flags & SV) != 0 && exe_mode) {
+                        RK = RB;
+                        RB = XR[(RX+1) & 07] & adrmask;
+                        do {
+                            if (Mem_read(RA, &RT, 1)) {
+                                goto intr;
+                            }
+                            RB++;
+                            if (RA == RT)
+                               BCarry = 1;
+                            RK = (RK - 1) & 0777;
+                        } while (RA != RT && RK != 0);
+                        XR[(RX+1) & 07] = RB;
                         break;
                     }
+                    /* Fall through */
+                        
+       case 0165:   /* Stevenage machines */   /* Parity Search */
+                    if ((cpu_flags & SV) != 0 && exe_mode) {
+                        RK = RB;
+                        RB = XR[(RX+1) & 07] & adrmask;
+                        do {
+                            if (Mem_read(RA, &RT, 1)) {
+                                goto intr;
+                            }
+                            RA++;
+                            RB++;
+                            RK = (RK - 1) & 0777;
+                        } while (RK != 0);
+                        XR[RX] = RA;
+                        XR[(RX+1) & 07] = RB;
+                        break;
+                    }
+                    /* Fall through */
+
+       case 0166:   /* Stevenage machines */   /* Test X unequal */
+                    if ((cpu_flags & SV) != 0 && exe_mode) {
+                        if (RA != RB)
+                            BCarry = 1;
+                        break;
+                    }
+                    /* Fall through */
+
+       case 0167:   /* Stevenage machines */   /* Test X Less */
+                    if ((cpu_flags & SV) != 0 && exe_mode) {
+                        RB += BCarry;
+                        if (RB != RA)
+                            BCarry = (RB > RA);
+                        break;
+                    }
+
+                    /* If we get here and not in executive mode do volintary */
+                    if (exe_mode) {
+                        reason = SCPE_STOP;
+                        break;
+                    }
+                    /* Fall through */
+
        case 0170:            /* Read special register */
                     if (exe_mode) {
                          RA = 0;
                          switch(RB) {
-                         case 0: /* Time of day clock */ break;
-                         case 1: RA = SR1; break;
+                         case 0: /* Time of day clock */
+                                 time_read(&RA);
+                                 break;
+                         case 1: RA = SR1; SR1 = 0; break;
                          case 64: RA = SR64; SR64 &= 003777777; break;
                          case 65: RA = SR65; break;
                          default: if (RB < 64)
@@ -2230,9 +2308,13 @@ fexp:
                                  Zero = 1;
                          }
                          RC &= (Mode & (EJM|AM22)) ? M22 : M15;
-                         /* Restore floating point ACC from D12/D13 */
-                         Mem_read(RD+12, &faccl, 0);  /* Restore F.P.U. */
-                         Mem_read(RD+13, &facch, 0);  /* Restore F.P.U. */
+                         if (cpu_flags & FLOAT && cpu_flags & SL_FLOAT) {
+                             /* Restore floating point ACC from D12/D13 */
+                             Mem_read(RD+12, &faccl, 0);  /* Restore F.P.U. */
+                             Mem_read(RD+13, &facch, 0);  /* Restore F.P.U. */
+                             fovr = (facch & B0) != 0;
+                             facch &= M23;
+                         }
                          exe_mode = 0;
                          break;
                     }
@@ -2267,6 +2349,22 @@ fexp:
                             BCarry = 1;
                         break;
                     }
+       case 0140:
+       case 0141:
+       case 0142:
+       case 0143:
+       case 0144:
+       case 0145:
+       case 0146:
+       case 0147:
+       case 0150:
+       case 0151:
+       case 0152:
+       case 0153:
+       case 0154:
+       case 0155:
+       case 0156:
+       case 0157:
        default:
                     /* Voluntary entry to executive */
 voluntary:
@@ -2277,36 +2375,49 @@ voluntary:
                     if ((CPU_TYPE < TYPE_C1) && !exe_mode)
                         RC += RD;
                     exe_mode = 1;
-                    /* Store registers */
-                    Mem_write(RD+13, &facch, 0);  /* Save F.P.U. */
-                    Mem_write(RD+12, &faccl, 0);
+                    if (cpu_flags & FLOAT && cpu_flags & SL_FLOAT) {
+                       /* Store registers */
+                       Mem_write(RD+12, &faccl, 0);
+                       RT = facch;
+                       if (fovr)
+                           RT |= B0;
+                       Mem_write(RD+13, &RT, 0);  /* Save F.P.U. */
+                    }
                     if (CPU_TYPE >= TYPE_C1) {
-                        Mem_read(RD+9, &RA, 0);
-                        RA &= M15;
+                        Mem_read(RD+9, &RT, 0);
+                        RT &= M15;
                         /* Build ZSTAT and ASTAT */
                         if (Zero)
-                            RA |= B3;
+                            RT |= B3;
                         if (OPIP)
-                            RA |= B2;
-                        Mem_write(RD+9, &RA, 0);
+                            RT |= B2;
+                        Mem_write(RD+9, &RT, 0);
                     }
-                    RA = RC;
+                    RT = RC;
                     if (BV)
-                        RA |= B0;
+                        RT |= B0;
                     if (BCarry)
-                        RA |= B1;
+                        RT |= B1;
                     /* Type A & B */
                     if (CPU_TYPE < TYPE_C1 && Zero)
-                        RA |= B8;
-                    Mem_write(RD+8, &RA, 0);
+                        RT |= B8;
+                    Mem_write(RD+8, &RT, 0);
                     for (n = 0; n < 8; n++)
                         Mem_write(RD+n, &XR[n], 0);
                     Zero = Mode = 0;
                     BCarry = BV = 0;
                     adrmask = M15;
-                    XR[1] = RB;
-                    XR[2] = temp;
-                    RC = 040;
+                    if ((cpu_flags & SV) != 0) {
+                        if ((RF & 070) == 140 || (RF & 170) == 0110)
+                           XR[1] = RD+RX;
+                        XR[2] = RB;
+                        XR[3] = RF & 07;
+                        RC = 020 + ((RF >> 3) & 017);
+                    } else {
+                        XR[1] = RB;
+                        XR[2] = temp;
+                        RC = 040;
+                    }
                     break;
        }
 
@@ -2330,8 +2441,36 @@ rtc_srv(UNIT * uptr)
     t = sim_rtcn_calb(rtc_tps, TMR_RTC);
     sim_activate_after(uptr, 1000000/rtc_tps);
     SR64 |= B3;
-//    tmxr_poll = t;
     return SCPE_OK;
+}
+
+int
+bcd_2d(int n)
+{
+    uint8               d1, d2;
+
+    d1 = n / 10;
+    d2 = n % 10;
+    return (d1 << 4) | d2;
+}
+
+void
+time_read(uint32 *word)
+{
+    time_t              curtim;
+    struct tm          *tptr;
+    int                 ms;
+
+    curtim = time(NULL);        /* get time */
+    tptr = localtime(&curtim);  /* decompose */
+    if (tptr == NULL)
+        return;                 /* error? */
+
+    /* Convert and fill buffer */
+    *word = bcd_2d(tptr->tm_sec);
+    *word |= bcd_2d(tptr->tm_min) << 7;
+    *word |= bcd_2d(tptr->tm_hour) << 14;
+    return;
 }
 /* Reset routine */
 

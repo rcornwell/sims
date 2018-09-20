@@ -231,7 +231,48 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
     uint8               image[80];
     int                 checksum;
 
-    if (match_ext(fnam, "card")) {
+    if (match_ext(fnam, "wush")) {
+        while (fgets(buffer, 100, fileref)) {
+            char *p = &buffer[0];
+            /* Convert bits into image */
+            if (*p++ != '*') {
+                fprintf(stderr, "Buffer %s\n", buffer);
+                return SCPE_FMT;
+            }
+            addr = 0;
+            while (*p != '\0') {
+                if (*p == ':')
+                    break;
+                if (*p < '0' || *p > '7') {
+                    break;
+                }
+                addr = (addr << 3) | (*p++ - '0');
+            }
+            while (*p != '*') {
+                if (*p == '\0' || *p == '\n') {
+                    fprintf(stderr, "Buffer %s\n", buffer);
+                    return SCPE_FMT;
+                }
+                p++;
+            }
+            p++;
+            data = 0;
+            while (*p != '\0') {
+                if (*p < '0' || *p > '7') 
+                    break;
+                data = (data << 3) | (*p++ - '0');
+            }
+            if (addr == 077777777) {
+                RC = data;
+                break;
+            }
+            if (addr < 8)
+               XR[addr] = data;
+            M[addr] = data;
+        }
+        return SCPE_OK;
+
+    } else if (match_ext(fnam, "card")) {
         fgets(buffer, 100, fileref);
 
         addr = 020;
@@ -241,14 +282,15 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
             for (j = 0; j < 80; j++) {
                 if (buffer[j] == '\n')
                    break;
-                image[j] = ascii_to_mem[buffer[j]];
+                if ((buffer[j] & 0377) == 0243)
+                   image[j] = 024;
+                else
+                   image[j] = ascii_to_mem[buffer[j]];
                 if (image[j] < 0) {
-                    fprintf(stderr, "Char %c: %s", buffer[j], buffer);
+                    fprintf(stderr, "Char %c: %s\n", buffer[j], buffer);
                     return SCPE_FMT;
                 }
-                fprintf(stderr, "'%c' %02o ", buffer[j], image[j]);
             }
-   fprintf(stderr, "\n\r");
             for (j = 0; j < 64; ) {
                      data = 0;
                      for (k = 0; k < 4; k++)
@@ -267,7 +309,10 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
             for (j = 0; j < 80; j++) {
                 if (buffer[j] == '\n')
                    break;
-                image[j] = ascii_to_mem[buffer[j]];
+                if ((buffer[j] & 0377) == 0243)
+                   image[j] = 024;
+                else
+                   image[j] = ascii_to_mem[buffer[j]];
                 if (image[j] < 0) {
                     fprintf(stderr, "Char %c: %s", buffer[j], buffer);
                     return SCPE_FMT;
@@ -285,20 +330,19 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
                  addr = 0;
                  for (; j < 8; j++)
                      addr = (addr << 6) | image[j];
-                 checksum += addr;
+                 checksum = (checksum + addr) & FMASK;
                  for (i = 3; i < image[1]; i++) {
                      data = 0;
                      for (k = 0; k < 4; k++)
                          data = (data << 6) | image[j++];
-                     checksum += data;
+                     checksum = (checksum + data) & FMASK;
                      M[addr++] = data;
                  }
                  data = 0;
                  for (k = 0; k < 4; k++)
                      data = (data << 6) | image[j++];
-                 data = FMASK & (checksum + data);
-                 if (data != 0)
-                     fprintf(stderr, "Check %08o %08o: %s", addr, data, buffer);
+                 if ((FMASK & (checksum + data)) != 0)
+                     fprintf(stderr, "Check %08o %08o %08o: %s", addr, data, checksum, buffer);
                  break;
             case 1:
                  fprintf(stderr, "%c%c%c%c\n", buffer[4], buffer[5], buffer[6], buffer[7]);
@@ -311,14 +355,14 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
                  addr = 0;
                  for (; j < 8; j++)
                      addr = (addr << 6) | image[j];
-                 checksum += addr;
+                 checksum = (checksum + addr) & FMASK;
                  RC = addr;
                  data = 0;
                  for (i = 3; i < image[1]; i++) {
                      data = 0;
                      for (k = 0; k < 4; k++)
                          data = (data << 6) | image[j++];
-                     checksum += data;
+                     checksum = (checksum + data) & FMASK;
                  }
                  for (k = 0; k < 4; k++)
                      data = (data << 6) | image[j++];
@@ -335,8 +379,6 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
                  fprintf(stderr, "B? :%s", buffer);
                  return SCPE_FMT;
             }
-//            if (load_rec(image))
- //               return SCPE_OK;
         }
         return SCPE_OK;
     }

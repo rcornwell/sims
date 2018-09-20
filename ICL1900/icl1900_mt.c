@@ -173,8 +173,10 @@ void mt_cmd(int dev, uint32 cmd, uint32 *resp) {
                              *resp |= STQ_TPT_RDY;
                          if (!sim_tape_wrp(uptr))
                              *resp |= STQ_WRP;
-                         if (uptr->STATUS & 07776 || (uptr->CMD & MT_BUSY) == 0)
-                             *resp |= STQ_P1;
+//                         if ((uptr->STATUS & 07776) == 0)
+ //                            *resp |= STQ_P1;
+                     } else {
+                         *resp |= STQ_P1;
                      }
                      chan_clr_done(dev);
                   } else if (cmd == SEND_P) {
@@ -182,10 +184,10 @@ void mt_cmd(int dev, uint32 cmd, uint32 *resp) {
                          *resp = uptr->STATUS & 036;
                          if ((uptr->CMD & MT_BUSY) == 0)
                              *resp |= ST1_OK;
-                         if (uptr->STATUS & 07700)
+                         if (uptr->STATUS & 017700)
                              *resp |= ST1_P2;
                      }
-                     uptr->STATUS &= 07700;
+                     uptr->STATUS &= 017700;
                   } else if (cmd == SEND_P2) {
                      if ((uptr->flags & UNIT_ATT) != 0)
                          *resp = (uptr->STATUS >> 6) & 077;
@@ -256,11 +258,11 @@ t_stat mt_svc (UNIT *uptr)
                  sim_debug(DEBUG_DETAIL, dptr, " error %d\n", r);
                  uptr->STATUS = STQ_TERM;
                  if (r == MTSE_TMK)
-                     uptr->STATUS |= ST2_TM;
+                     uptr->STATUS |= ST1_WARN;
                  else if (r == MTSE_WRP)
                      uptr->STATUS |= ST1_ERR;
                  else if (r == MTSE_EOM)
-                     uptr->STATUS |= ST1_WARN;
+                     uptr->STATUS |= ST1_ERR|ST2_BLNK;
                  else
                      uptr->STATUS |= ST1_ERR;
                  uptr->CMD = 0;
@@ -293,7 +295,7 @@ t_stat mt_svc (UNIT *uptr)
              uptr->STATUS = (stop << 12) | STQ_TERM;
              if (uptr->POS < uptr->hwmark)
                   uptr->STATUS |= ST1_LONG;
-             sim_debug(DEBUG_DATA, dptr, "unit=%d read done %08o\n", unit, uptr->STATUS);
+             sim_debug(DEBUG_DATA, dptr, "unit=%d read done %08o %d\n", unit, uptr->STATUS, uptr->POS);
              uptr->CMD = 0;
              mt_busy = 0;
              chan_set_done(dev);
@@ -355,7 +357,7 @@ t_stat mt_svc (UNIT *uptr)
                  sim_debug(DEBUG_DETAIL, dptr, " error %d\n", r);
                  uptr->STATUS = STQ_TERM;
                  if (r == MTSE_TMK)
-                     uptr->STATUS |= ST2_TM;
+                     uptr->STATUS |= ST1_WARN;
                  else if (r == MTSE_EOM)
                      uptr->STATUS |= ST1_WARN;
                  else
@@ -385,6 +387,7 @@ t_stat mt_svc (UNIT *uptr)
              uptr->STATUS = (stop << 12) |STQ_TERM;
              if (uptr->POS != 0)
                   uptr->STATUS |= ST1_LONG;
+             sim_debug(DEBUG_DATA, dptr, "unit=%d read done %08o %d\n", unit, uptr->STATUS, uptr->POS);
              uptr->CMD = 0;
              mt_busy = 0;
              chan_set_done(dev);
@@ -398,7 +401,7 @@ t_stat mt_svc (UNIT *uptr)
          case 0:
               sim_debug(DEBUG_DETAIL, dptr, "Skip rec unit=%d\n", unit);
               uptr->POS ++;
-              sim_activate(uptr, 500);
+              sim_activate(uptr, 1000);
               break;
          case 1:
               sim_debug(DEBUG_DETAIL, dptr, "Skip rec unit=%d ", unit);
@@ -406,19 +409,21 @@ t_stat mt_svc (UNIT *uptr)
               if (r == MTSE_TMK) {
                   uptr->POS++;
                   sim_debug(DEBUG_DETAIL, dptr, "MARK\n");
-                  uptr->STATUS = ST2_TM;
+                  uptr->STATUS = 000003; //ST2_TM;
                   sim_activate(uptr, 50);
               } else if (r == MTSE_EOM) {
                   uptr->POS++;
-                  uptr->STATUS = ST1_WARN;
+                  uptr->STATUS = ST1_ERR|ST2_BLNK|STQ_TERM;
                   sim_activate(uptr, 50);
               } else {
                   sim_debug(DEBUG_DETAIL, dptr, "%d\n", reclen);
-                  sim_activate(uptr, 10 + (10 * reclen));
+                  sim_activate(uptr, 10 + (20 * reclen));
               }
               break;
          case 2:
               sim_debug(DEBUG_DETAIL, dptr, "Skip rec unit=%d done\n", unit);
+//              M[257+4*dev] = 0;
+//              M[259+4*dev] = 0;
               uptr->CMD = 0;
               mt_busy = 0;
               chan_set_done(dev);
@@ -464,11 +469,11 @@ t_stat mt_svc (UNIT *uptr)
               sim_debug(DEBUG_DETAIL, dptr, "Backspace rec unit=%d ", unit);
               r = sim_tape_sprecr(uptr, &reclen);
               if (r == MTSE_TMK) 
-                  uptr->STATUS = ST2_TM;
+                  uptr->STATUS = ST1_WARN|STQ_TERM;
               else if (r == MTSE_BOT) 
-                  uptr->STATUS = ST1_WARN|ST1_ERR;
+                  uptr->STATUS = ST1_WARN|STQ_TERM;
               else
-                  uptr->STATUS = ST1_WARN;
+                  uptr->STATUS = ST1_ERR|STQ_TERM;
               uptr->CMD = 0;
               mt_busy = 0;
               chan_set_done(dev);
@@ -494,7 +499,7 @@ t_stat mt_svc (UNIT *uptr)
               if (r == MTSE_TMK || r == MTSE_BOT) {
                   uptr->POS++;
                   if (r == MTSE_TMK) 
-                      uptr->STATUS = ST2_TM;
+                      uptr->STATUS = ST1_WARN|STQ_TERM;
                   if (r == MTSE_BOT) 
                       uptr->STATUS = ST1_WARN|ST1_ERR;
                   sim_activate(uptr, 50);
@@ -505,6 +510,8 @@ t_stat mt_svc (UNIT *uptr)
               break;
          case 2:
               uptr->CMD = 0;
+              M[257+4*dev] = 0;
+              M[259+4*dev] = 0;
               mt_busy = 0;
               chan_set_done(dev);
          }

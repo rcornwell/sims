@@ -32,8 +32,8 @@
 #endif
 
 #define PP_V_MODE        (UNIT_V_UF + 0)
-#define PP_M_MODE        (1 << PP_V_MODE)
-#define UNIT_V_TYPE      (UNIT_V_UF + 1)
+#define PP_M_MODE        (3 << PP_V_MODE)
+#define UNIT_V_TYPE      (UNIT_V_UF + 2)
 #define UNIT_TYPE        (0xf << UNIT_V_TYPE)
 #define GET_TYPE(x)      ((UNIT_TYPE & (x)) >> UNIT_V_TYPE)
 #define SET_TYPE(x)      (UNIT_TYPE & ((x) << UNIT_V_TYPE))
@@ -42,6 +42,7 @@
 #define  SI_TYPE(x)      ((GET_TYPE(x) & 1) != 0)
 #define  PP_MODE_7B   0
 #define  PP_MODE_7P   1
+#define  PP_MODE_7X   2
 
 #define CMD          u3
 #define STATUS       u4
@@ -124,6 +125,7 @@ UNIT ptp_unit[] = {
 MTAB ptp_mod[] = {
     { PP_M_MODE, PP_MODE_7B, "7b", "7B", NULL },
     { PP_M_MODE, PP_MODE_7P, "7p", "7P", NULL },
+    { PP_M_MODE, PP_MODE_7X, "7x", "7X", NULL },
     { UNIT_TYPE, SET_TYPE(T1925_1), "1925/1", "1925/1", NULL, NULL, "ICL 1925/1 NSI 300CPM punch."},
     { UNIT_TYPE, SET_TYPE(T1925_2), "1925/2", "1925/2", NULL, NULL, "ICL 1922/2 SI 300CPM punch."},
     { UNIT_TYPE, SET_TYPE(T1926_1), "1926/1", "1926/1", NULL, NULL, "ICL 1926/1 NSI 1000CPM punch."},
@@ -206,7 +208,7 @@ void ptp_cmd(int dev, uint32 cmd, uint32 *resp) {
                     if ((uptr->CMD & BUSY) != 0)
                         *resp |= 030;
                  }
-                 if ((uptr->STATUS & ERROR) != 0)
+                 if ((uptr->STATUS & ERROR) == 0)
                     *resp |= 040;
              } else if (cmd == 024) {  /* Send P */
                  if ((uptr->flags & UNIT_ATT) != 0)
@@ -407,7 +409,14 @@ t_stat ptp_svc (UNIT *uptr)
            ch = ch ^ (ch << 2);
            ch = ch ^ (ch << 1);
            data |= ch;
+        } else if ((uptr->flags & PP_M_MODE) == PP_MODE_7X) {
+           if (data == 044) {
+               data = 0243;
+           } else if (data == 0174) {
+               data = 044;
+           }
         }
+
         fputc(data, uptr->fileref);
         uptr->pos = ftell(uptr->fileref);
         if (ferror (uptr->fileref)) {
@@ -451,6 +460,7 @@ t_stat ptp_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cpt
     fprintf (st, "The Paper Tape Punch can be set to one of two modes: 7P, or 7B\n\n");
     fprintf (st, "  7P    Generate even parity tapes.\n");
     fprintf (st, "  7B    Generate 7 bit tapes.\n");
+    fprintf (st, "  7X    Generate translated 7 bit tapes\n");
     fprintf (st, "The default mode is 7B.\n\n");
     fprintf (st, "The device number can be set with DEV=# command.\n");
 

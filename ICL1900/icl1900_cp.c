@@ -127,7 +127,7 @@ void cdp_cmd(int dev, uint32 cmd, uint32 *resp) {
         return;
    if (cmd == 020) {    /* Send Q */
         *resp = uptr->STATUS & TERMINATE; /* TERMINATE */
-        if ((uptr->flags & UNIT_ATT) != 0 || uptr->STATUS & 07700)
+        if ((uptr->flags & UNIT_ATT) == 0 || (uptr->STATUS & 07700) == 0)
             *resp |= 040;
 	if ((uptr->flags & BUSY) == 0)
             *resp |= STOPPED;
