@@ -371,6 +371,13 @@ int  df10_read(struct df10 *df);
 int  df10_write(struct df10 *df);
 
 
+/* Console lights. */
+extern void ka10_lights_init (void);
+extern void ka10_lights_main (uint64);
+extern void ka10_lights_set_aux (int);
+extern void ka10_lights_clear_aux (int);
+
+
 /* I/O system parameters */
 #define NUM_DEVS_MT     1
 #define NUM_DEVS_DP     2
