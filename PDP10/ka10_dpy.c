@@ -116,7 +116,7 @@ extern uint64 SW;        /* switch register */
  * number of DPY_CYCLES to delay int
  * too small and host CPU doesn't run enough!
  */
-#define INT_COUNT       (500/DPY_CYCLE_US)
+#define INT_COUNT       (200/DPY_CYCLE_US)
 
 #define STAT_REG        u3
 #define INT_COUNTDOWN   u4
@@ -180,8 +180,22 @@ const char *dpy_description (DEVICE *dptr)
 /* until it's done just one place! */
 static void dpy_set_int_done(UNIT *uptr)
 {
-    uptr->STAT_REG |= CONI_INT_DONE;
+    uptr->DELAYED_DONE = 1;
     uptr->INT_COUNTDOWN = INT_COUNT;
+}
+
+/* update interrupt request */
+static void check_interrupt (UNIT *uptr)
+{
+    if (uptr->STAT_REG & CONI_INT_SPEC) {
+        uint32 sc = uptr->STAT_REG & CONX_SC;
+        set_interrupt(DPY_DEVNUM, sc >> CONX_SC_SHIFT);
+    } else if (uptr->STAT_REG & CONI_INT_DONE) {
+        uint32 dc = uptr->STAT_REG & CONX_DC;
+        set_interrupt(DPY_DEVNUM, dc>>CONX_DC_SHIFT);
+    } else {
+        clr_interrupt(DPY_DEVNUM);
+    }
 }
 
 /* return true if display not stopped */
@@ -198,12 +212,7 @@ int dpy_update_status (UNIT *uptr, ty340word status, int done)
         /* XXX also set in "rfd" callback: decide! */
         dpy_set_int_done(uptr);
     }
-    if (uptr->STAT_REG & CONI_INT_SPEC) {
-        uint32 sc = uptr->STAT_REG & CONX_SC;
-        if (sc) {                       /* PI channel set? */
-            set_interrupt(DPY_DEVNUM, sc >> CONX_SC_SHIFT);
-        }
-    }
+    check_interrupt(uptr);
     return running;
 }
 
@@ -282,12 +291,10 @@ t_stat dpy_svc (UNIT *uptr)
     display_age(DPY_CYCLE_US, 0);       /* age the display */
 
     if (uptr->INT_COUNTDOWN && --uptr->INT_COUNTDOWN == 0) {
-        if (uptr->STAT_REG & CONI_INT_DONE) { /* delayed int? */
-            uint32 dc = uptr->STAT_REG & CONX_DC;
-            if (dc) {   /* PI channel set? */
-                set_interrupt(DPY_DEVNUM, dc>>CONX_DC_SHIFT);
-            }
-        }
+        if (uptr->DELAYED_DONE)
+            uptr->STAT_REG |= CONI_INT_DONE;
+        uptr->DELAYED_DONE = 0;
+        check_interrupt (uptr);
     }
     return SCPE_OK;
 }
