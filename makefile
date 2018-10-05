@@ -1111,11 +1111,9 @@ KA10 = ${KA10D}/ka10_cpu.c ${KA10D}/ka10_sys.c ${KA10D}/ka10_df.c \
 	${KA10D}/ka10_rp.c ${KA10D}/ka10_rc.c ${KA10D}/ka10_dt.c \
 	${KA10D}/ka10_dk.c ${KA10D}/ka10_cr.c ${KA10D}/ka10_cp.c \
 	${KA10D}/ka10_tu.c ${KA10D}/ka10_rs.c ${KA10D}/ka10_pd.c \
-	${KA10D}/ka10_imx.c ${KA10D}/ka10_tk10.c ${KA10D}/ka10_mty.c \
-	${KA10D}/ka10_lights.c
+	${KA10D}/ka10_imx.c ${KA10D}/ka10_tk10.c ${KA10D}/ka10_mty.c
 KA10_OPT = -DKA=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD
 #	${KA10D}/ka10_imp.c sim_imp.c sim_ncp.c sim_tun.c
-KA10_LDFLAGS += -lusb-1.0
 
 ifneq ($(TYPE340),)
 # ONLY tested on Ubuntu 16.04, using X11 display support:
@@ -1123,6 +1121,12 @@ KA10_DPY=-DUSE_DISPLAY \
 	${KA10D}/ka10_dpy.c display/type340.c  display/display.c \
 	display/x11.c
 KA10_DPY_LDFLAGS =-lm -lX11 -lXt
+endif
+ifneq ($(PANDA_LIGHTS),)
+# ONLY for Panda display.
+KA10_OPT += -DPANDA_LIGHTS
+KA10 += ${KA10D}/ka10_lights.c
+KA10_LDFLAGS += -lusb-1.0
 endif
 
 KI10D = PDP10
@@ -1133,6 +1137,12 @@ KI10 = ${KA10D}/ka10_cpu.c ${KA10D}/ka10_sys.c ${KA10D}/ka10_df.c \
 	${KA10D}/ka10_dk.c ${KA10D}/ka10_cr.c ${KA10D}/ka10_cp.c \
 	${KA10D}/ka10_tu.c ${KA10D}/ka10_rs.c ${KA10D}/ka10_pd.c
 KI10_OPT = -g -DKI=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD
+ifneq ($(PANDA_LIGHTS),)
+# ONLY for Panda display.
+KI10_OPT += -DPANDA_LIGHTS
+KI10 += ${KA10D}/ka10_lights.c
+KI10_LDFLAGS = -lusb-1.0
+endif
 
 
 I7000D = I7000
@@ -1253,7 +1263,7 @@ pdp10-ki : ${BIN}pdp10-ki${EXE}
 
 ${BIN}pdp10-ki${EXE} : ${KI10} ${SIM}
 	${MKDIRBIN}
-	${CC} ${KA10} ${SIM} ${KI10_OPT} $(CC_OUTSPEC) ${LDFLAGS}
+	${CC} ${KA10} ${SIM} ${KI10_OPT} $(CC_OUTSPEC) ${LDFLAGS} ${KI10_LDFLAGS}
 ifeq ($(WIN32),)
 	cp ${BIN}pdp10-ki${EXE} ${BIN}ki10${EXE}
 else

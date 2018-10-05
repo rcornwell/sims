@@ -120,6 +120,7 @@ uint64  MB;                                   /* Memory Bufer Register */
 uint32  AB;                                   /* Memory address buffer */
 uint32  PC;                                   /* Program counter */
 uint32  IR;                                   /* Instruction register */
+uint64  MI;                                   /* Monitor lights */
 uint32  FLAGS;                                /* Flags */
 uint32  AC;                                   /* Operand accumulator */
 uint64  SW;                                   /* Switch register */
@@ -319,6 +320,7 @@ REG cpu_reg[] = {
     { ORDATA (PIENB, pi_enable, 7) },
     { BRDATA (REG, FM, 8, 36, 017) },
     { ORDATAD(SW, SW, 36, "Console SW Register"), REG_FIT},
+    { ORDATAD(MI, MI, 36, "Monitor Display"), REG_FIT},
     { NULL }
     };
 
@@ -881,8 +883,11 @@ t_stat dev_pi(uint32 dev, uint64 *data) {
         break;
 
     case DATAO:
+        MI = *data;
+#ifdef PANDA_LIGHTS
         /* Set lights */
         ka10_lights_main (*data);
+#endif
         break;
 
     case DATAI:
@@ -4944,7 +4949,9 @@ if (QITS) {
 #if MPX_DEV
 mpx_enable = 0;
 #endif
+#ifdef PANDA_LIGHTS
 ka10_lights_init ();
+#endif
 return SCPE_OK;
 }
 
