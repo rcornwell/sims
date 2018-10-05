@@ -1111,9 +1111,11 @@ KA10 = ${KA10D}/ka10_cpu.c ${KA10D}/ka10_sys.c ${KA10D}/ka10_df.c \
 	${KA10D}/ka10_rp.c ${KA10D}/ka10_rc.c ${KA10D}/ka10_dt.c \
 	${KA10D}/ka10_dk.c ${KA10D}/ka10_cr.c ${KA10D}/ka10_cp.c \
 	${KA10D}/ka10_tu.c ${KA10D}/ka10_rs.c ${KA10D}/ka10_pd.c \
-	${KA10D}/ka10_imx.c ${KA10D}/ka10_tk10.c ${KA10D}/ka10_mty.c
+	${KA10D}/ka10_imx.c ${KA10D}/ka10_tk10.c ${KA10D}/ka10_mty.c \
+	${KA10D}/ka10_lights.c
 KA10_OPT = -DKA=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD
 #	${KA10D}/ka10_imp.c sim_imp.c sim_ncp.c sim_tun.c
+KA10_LDFLAGS += -lusb-1.0
 
 ifneq ($(TYPE340),)
 # ONLY tested on Ubuntu 16.04, using X11 display support:

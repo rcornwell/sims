@@ -882,6 +882,9 @@ t_stat dev_pi(uint32 dev, uint64 *data) {
 
     case DATAO:
         /* Set lights */
+        ka10_lights_main (*data);
+        break;
+
     case DATAI:
         break;
     }
@@ -4941,6 +4944,7 @@ if (QITS) {
 #if MPX_DEV
 mpx_enable = 0;
 #endif
+ka10_lights_init ();
 return SCPE_OK;
 }
 
