@@ -422,8 +422,6 @@ t_stat mt_svc (UNIT *uptr)
               break;
          case 2:
               sim_debug(DEBUG_DETAIL, dptr, "Skip rec unit=%d done\n", unit);
-//              M[257+4*dev] = 0;
-//              M[259+4*dev] = 0;
               uptr->CMD = 0;
               mt_busy = 0;
               chan_set_done(dev);
@@ -510,8 +508,6 @@ t_stat mt_svc (UNIT *uptr)
               break;
          case 2:
               uptr->CMD = 0;
-              M[257+4*dev] = 0;
-              M[259+4*dev] = 0;
               mt_busy = 0;
               chan_set_done(dev);
          }
