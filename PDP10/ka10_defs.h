@@ -323,6 +323,7 @@ extern DEVICE   pd_dev;
 extern DEVICE   dpy_dev;
 extern DEVICE   imx_dev;
 extern DEVICE   tk10_dev;
+extern DEVICE   mty_dev;
 extern DEVICE   wcnsls_dev;             /* MIT Spacewar Consoles */
 
 extern t_stat (*dev_tab[128])(uint32 dev, uint64 *data);
@@ -387,6 +388,7 @@ int  df10_write(struct df10 *df);
 #define NUM_DEVS_PD     ITS
 #define NUM_DEVS_IMX    ITS
 #define NUM_DEVS_TK10   ITS
+#define NUM_DEVS_MTY    ITS
 #define NUM_DEVS_DPY    USE_DISPLAY
 #define NUM_DEVS_WCNSLS USE_DISPLAY
 #define NUM_DEVS_IMP    0
