@@ -117,7 +117,7 @@ extern uint64 SW;        /* switch register */
  * number of DPY_CYCLES to delay int
  * too small and host CPU doesn't run enough!
  */
-#define INT_COUNT       (500/DPY_CYCLE_US)
+#define INT_COUNT       (100/DPY_CYCLE_US)
 
 #define STAT_REG        u3
 #define INT_COUNTDOWN   u4
