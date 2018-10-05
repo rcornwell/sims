@@ -384,6 +384,82 @@ uint8  dasd_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     return SNS_CHNEND|SNS_DEVEND;
 }
 
+/* Compute position on new track. */
+void dasd_adjpos(UNIT * uptr)
+{
+    uint16              addr = GET_UADDR(uptr->u3);
+    struct dasd_t      *data = (struct dasd_t *)(uptr->up7);
+    uint8               *rec;
+    int                 pos;
+
+    /* Save current position */
+    pos = data->tpos;
+
+    /* Set ourselves to start of track */
+    data->state = DK_POS_HA;
+    data->rpos = data->rec = data->count = data->klen = data->dlen = 0;
+    data->tstart = (uptr->u4 & 0xff) * data->tsize;
+    rec = &data->cbuf[data->rpos + data->tstart];
+    /* Skip forward until we reach pos */
+    for (data->tpos = 0; data->tpos < pos; data->tpos++) {
+        switch(data->state) {
+         case DK_POS_HA:                /* In home address (c) */
+              if (data->count == 4) {
+                  data->tpos = data->rpos = 5;
+                  data->state = DK_POS_CNT;
+                  rec = &data->cbuf[data->rpos + data->tstart];
+                  /* Check for end of track */
+                  if ((rec[0] & rec[1] & rec[2] & rec[3]) == 0xff)
+                     data->state = DK_POS_END;
+              } 
+              break;
+         case DK_POS_CNT:               /* In count (c) */
+              if (data->count == 0) {
+                  /* Check for end of track */
+                  if ((rec[0] & rec[1] & rec[2] & rec[3]) == 0xff) {
+                     data->state = DK_POS_END;
+                  }
+                  data->klen = rec[5];
+                  data->dlen = (rec[6] << 8) | rec[7];
+              }
+              if (data->count == 7) {
+                     data->state = DK_POS_KEY;
+                     if (data->klen == 0)
+                        data->state = DK_POS_DATA;
+              }
+              break;
+         case DK_POS_KEY:               /* In Key area */
+              if (data->count == data->klen) {
+                  data->state = DK_POS_DATA;
+                  data->count = 0;
+              }
+              break;
+         case DK_POS_DATA:              /* In Data area */
+              if (data->count == data->dlen) {
+                  data->state = DK_POS_AM;
+              }
+              break;
+         case DK_POS_AM:                /* Beginning of record */
+              data->rpos += data->dlen + data->klen + 8;
+              data->tpos = data->rpos;
+              data->rec++;
+              data->state = DK_POS_CNT;
+              data->count = 0;
+              rec = &data->cbuf[data->rpos + data->tstart];
+              /* Check for end of track */
+              if ((rec[0] & rec[1] & rec[2] & rec[3]) == 0xff)
+                 data->state = DK_POS_END;
+              break;
+         case DK_POS_END:               /* Past end of data */
+              data->tpos+=10;
+              data->count = 0;
+              data->klen = 0;
+              data->dlen = 0;
+              return;
+         }
+     }
+}
+
 /* Handle processing of disk requests. */
 t_stat dasd_srv(UNIT * uptr)
 {
@@ -430,11 +506,11 @@ t_stat dasd_srv(UNIT * uptr)
          /* Read and multi-track advance to next head */
          if ((uptr->u3 & 0x83) == 0x82 || (uptr->u3 & 0x83) == 0x81) {
              uptr->u4 ++;
-             sim_debug(DEBUG_DETAIL, dptr, "adv head unit=%d %02x %d %d %02x\n", unit, state,
-                   data->tpos, uptr->u4 & 0xff, data->filemsk);
+             sim_debug(DEBUG_DETAIL, dptr, "adv head unit=%d %02x %d %d %02x\n",
+                   unit, state, data->tpos, uptr->u4 & 0xff, data->filemsk);
              if ((uptr->u4 & 0xff) >= disk_type[type].heads) {
-                 sim_debug(DEBUG_DETAIL, dptr, "end cyl unit=%d %02x %d\n", unit, state,
-                              data->tpos);
+                 sim_debug(DEBUG_DETAIL, dptr, "end cyl unit=%d %02x %d\n",
+                           unit, state, data->tpos);
                  uptr->u5 = (SNS_ENDCYL << 8);
                  data->tstart = 0;
                  uptr->u4 &= ~0xff;
@@ -452,8 +528,8 @@ t_stat dasd_srv(UNIT * uptr)
                  uptr->u3 &= ~DK_INDEX;
          }
          if ((uptr->u4 & 0xff) >= disk_type[type].heads) {
-             sim_debug(DEBUG_DETAIL, dptr, "end cyl unit=%d %02x %d\n", unit, state,
-                          data->tpos);
+             sim_debug(DEBUG_DETAIL, dptr, "end cyl unit=%d %02x %d\n",
+                         unit, state, data->tpos);
              uptr->u5 = (SNS_ENDCYL << 8);
              data->tstart = 0;
              uptr->u4 &= ~0xff;
@@ -462,8 +538,8 @@ t_stat dasd_srv(UNIT * uptr)
          }
          /* If INDEX set signal no record if read */
          if ((cmd & 0x03) == 0x01 && uptr->u3 & DK_INDEX) {
-             sim_debug(DEBUG_DETAIL, dptr, "index unit=%d %02x %d\n", unit, state,
-                        data->tpos);
+             sim_debug(DEBUG_DETAIL, dptr, "index unit=%d %02x %d\n", 
+                   unit, state, data->tpos);
              /* No seeks allowed, error out */
              if ((data->filemsk & DK_MSK_SK) == DK_MSK_SKNONE)
                  uptr->u5 |= (SNS_WRP << 8);
@@ -484,10 +560,6 @@ index:
     case DK_POS_HA:                /* In home address (c) */
          data->tpos++;
          if (data->count == 4) {
-//    sim_debug(DEBUG_DATA, dptr, "HA:unit=%d :", unit);
- //                 for(i = 0; i < 40; i++)
-  //  sim_debug(DEBUG_DATA, dptr, "%d:%02x ", i, rec[i]);
-   // sim_debug(DEBUG_DATA, dptr, "\n");
              data->tpos = data->rpos = 5;
              data->state = DK_POS_CNT;
              sim_debug(DEBUG_POS, dptr, "state HA unit=%d %d %d\n", unit, data->count,
@@ -751,10 +823,10 @@ index:
              /* Do seek */
              uptr->u3 |= DK_PARAM;
              data->state = DK_POS_SEEK;
-         sim_debug(DEBUG_DETAIL, dptr, "seek unit=%d doing\n", unit);
+             sim_debug(DEBUG_DETAIL, dptr, "seek unit=%d doing\n", unit);
              chan_end(addr, SNS_CHNEND);
          } else {
-             data->tstart = buf[5] * data->tsize;   /* Point to start of record */
+             dasd_adjpos(uptr);
              uptr->u6 = cmd;
              uptr->u3 &= ~(0xff);
              chan_end(addr, SNS_DEVEND|SNS_CHNEND);

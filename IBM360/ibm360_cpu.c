@@ -543,6 +543,7 @@ sim_instr(void)
         t_uint64        t64;
         t_uint64        t64a;
         uint16          ops[3];
+        uint16          dec_acc[8];
 
         reason = SCPE_OK;
         ilc = 0;
@@ -556,36 +557,37 @@ sim_instr(void)
 
 wait_loop:
         if (sim_interval <= 0) {
-             reason = sim_process_event();
-             if (reason != SCPE_OK)
-                return reason;
+            reason = sim_process_event();
+            if (reason != SCPE_OK)
+               return reason;
         }
 
         irq= scan_chan(sysmsk);
         if (irq!= 0) {
             ilc = 0;
-             if (loading) {
-                irqcode = irq;
-                (void)WriteHalf(0x2, irq);
-                loading = 0;
-                irqaddr = 0;
-             } else
-                storepsw(OIOPSW, irq);
-             goto supress;
+            sim_debug(DEBUG_DETAIL, &cpu_dev, "IRQ=%04x %08x ", irq, PC);
+            if (loading) {
+               irqcode = irq;
+               (void)WriteHalf(0x2, irq);
+               loading = 0;
+               irqaddr = 0;
+            } else
+               storepsw(OIOPSW, irq);
+            goto supress;
         }
 
         if ((cpu_unit.flags & EXT_IRQ) && (sysmsk & 01)) {
-             ilc = 0;
-             cpu_unit.flags &= ~EXT_IRQ;
-             storepsw(OEPSW, 0x40);
-             goto supress;
+            ilc = 0;
+            cpu_unit.flags &= ~EXT_IRQ;
+            storepsw(OEPSW, 0x40);
+            goto supress;
         }
 
         if (interval_irq && (sysmsk & 01)) {
-             ilc = 0;
-             interval_irq = 0;
-             storepsw(OEPSW, 0x80);
-             goto supress;
+            ilc = 0;
+            interval_irq = 0;
+            storepsw(OEPSW, 0x80);
+            goto supress;
         }
 
         if (loading || flags & WAIT) {
@@ -1954,10 +1956,11 @@ save_dbl:
         case OP_SP:
         case OP_ZAP:
         case OP_AP:
-                  /* Get sign of second operand */
-                  /* If op & 1 flip sign */
-                  /* Get sign of first operand */
-                  /* Compute sign of result */
+                if ((cpu_unit.flags & FEAT_DEC) == 0) {
+                    storepsw(OPPSW, IRC_OPR);
+                    goto supress;
+                }
+                 
         case OP_MP:
         case OP_DP:
                 storepsw(OPPSW, IRC_OPR);
@@ -2018,6 +2021,7 @@ lpsw:
         sim_interval--;
     }
 }
+
 
 /* Reset */
 
