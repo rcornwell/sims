@@ -801,6 +801,8 @@ uint16 scan_chan(uint8 mask) {
      if (pend) {
           irq_pend = 1;
           ch = find_subchan(pend);
+          if (ch < 0)
+              return 0;
           if (loading && loading == pend) {
               chan_status[ch] = 0;
               return pend;
