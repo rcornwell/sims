@@ -272,7 +272,7 @@ t_stat lpr_svc (UNIT *uptr)
     char    buffer[200];
     int     i;
     int     len;
-    int     eor;
+    int     eor = 0;
 
     /* Handle a disconnect request */
     if (uptr->STATUS & DISC) {

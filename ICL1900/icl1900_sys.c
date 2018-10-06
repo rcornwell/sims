@@ -285,7 +285,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
                 if ((buffer[j] & 0377) == 0243)
                    image[j] = 024;
                 else
-                   image[j] = ascii_to_mem[buffer[j]];
+                   image[j] = ascii_to_mem[buffer[j] & 0177];
                 if (image[j] < 0) {
                     fprintf(stderr, "Char %c: %s\n", buffer[j], buffer);
                     return SCPE_FMT;
@@ -312,7 +312,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
                 if ((buffer[j] & 0377) == 0243)
                    image[j] = 024;
                 else
-                   image[j] = ascii_to_mem[buffer[j]];
+                   image[j] = ascii_to_mem[buffer[j] & 0177];
                 if (image[j] < 0) {
                     fprintf(stderr, "Char %c: %s", buffer[j], buffer);
                     return SCPE_FMT;
@@ -623,9 +623,9 @@ find_opcode(char *op, int *val)
             if (v > 0177)
                return -1;
         }
+        if (op[i] == 0 && v <= 0177)
+            return v;
     }
-    if (op[i] == 0 && v <= 0177)
-        return v;
     for(i = 0;  i <= 0177; i++) {
         if (ops[i].name != '\0' && sim_strcasecmp(op, ops[i].name) == 0)
             return i;

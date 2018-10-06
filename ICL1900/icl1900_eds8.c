@@ -630,6 +630,7 @@ eds8_attach(UNIT * uptr, CONST char *file)
     uptr->CYL = 0;
     uptr->CMD = EDS8_TERM;
     chan_set_done(GET_UADDR(eds8_dev.flags));
+    return SCPE_OK;
 }
 
 

@@ -470,7 +470,7 @@ chan_output_word(int dev, uint32 *data, int eor) {
 
 void
 chan_set_done(int dev) {
-    if (dev < 22)
+    if (dev < 24)
        SR64 |= B2 >> dev;
     else
        SR65 |= ((io_flags & EXT_IO) ? B1 : B2) >> (dev - 24);
@@ -478,7 +478,7 @@ chan_set_done(int dev) {
 
 void
 chan_clr_done(int dev) {
-    if (dev < 22)
+    if (dev < 24)
        SR64 &= ~(B2 >> dev);
     else
        SR65 &= ~(((io_flags & EXT_IO) ? B1 : B2) >> (dev - 24));

@@ -33,6 +33,7 @@
 
 #define PP_V_MODE        (UNIT_V_UF + 0)
 #define PP_M_MODE        (3 << PP_V_MODE)
+#define PP_MODE(x)       ((PP_V_MODE & (x)) >> PP_V_MODE)
 #define UNIT_V_TYPE      (UNIT_V_UF + 2)
 #define UNIT_TYPE        (0xf << UNIT_V_TYPE)
 #define GET_TYPE(x)      ((UNIT_TYPE & (x)) >> UNIT_V_TYPE)
@@ -123,9 +124,9 @@ UNIT ptp_unit[] = {
 
 
 MTAB ptp_mod[] = {
-    { PP_M_MODE, PP_MODE_7B, "7b", "7B", NULL },
-    { PP_M_MODE, PP_MODE_7P, "7p", "7P", NULL },
-    { PP_M_MODE, PP_MODE_7X, "7x", "7X", NULL },
+    { PP_M_MODE, PP_MODE_7B << PP_V_MODE, "7b", "7B", NULL },
+    { PP_M_MODE, PP_MODE_7P << PP_V_MODE, "7p", "7P", NULL },
+    { PP_M_MODE, PP_MODE_7X << PP_V_MODE, "7x", "7X", NULL },
     { UNIT_TYPE, SET_TYPE(T1925_1), "1925/1", "1925/1", NULL, NULL, "ICL 1925/1 NSI 300CPM punch."},
     { UNIT_TYPE, SET_TYPE(T1925_2), "1925/2", "1925/2", NULL, NULL, "ICL 1922/2 SI 300CPM punch."},
     { UNIT_TYPE, SET_TYPE(T1926_1), "1926/1", "1926/1", NULL, NULL, "ICL 1926/1 NSI 1000CPM punch."},
@@ -403,13 +404,13 @@ t_stat ptp_svc (UNIT *uptr)
     }
     if (data != 0) {
     /* Check parity is even */
-        if ((uptr->flags & PP_M_MODE) == PP_MODE_7P) {
+        if (PP_MODE(uptr->flags) == PP_MODE_7P) {
            data &= 0177;
            ch = data ^ (data << 4);
            ch = ch ^ (ch << 2);
            ch = ch ^ (ch << 1);
            data |= ch;
-        } else if ((uptr->flags & PP_M_MODE) == PP_MODE_7X) {
+        } else if (PP_MODE(uptr->flags) == PP_MODE_7X) {
            if (data == 044) {
                data = 0243;
            } else if (data == 0174) {

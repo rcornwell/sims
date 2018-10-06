@@ -2408,7 +2408,7 @@ voluntary:
                     BCarry = BV = 0;
                     adrmask = M15;
                     if ((cpu_flags & SV) != 0) {
-                        if ((RF & 070) == 140 || (RF & 170) == 0110)
+                        if ((RF & 0170) == 0140 || (RF & 0170) == 0110)
                            XR[1] = RD+RX;
                         XR[2] = RB;
                         XR[3] = RF & 07;

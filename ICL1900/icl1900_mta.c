@@ -357,7 +357,6 @@ t_stat mta_svc (UNIT *uptr)
          stop = 0;
          if (uptr->flags & MTUF_9TR) {
              /* Put three chars in buffer */
-             word = 0;
              uptr->STATUS &= ~CMASK;
              for(i = 16; i >= 0; i-=8) {
                  mta_buffer[uptr->POS++] = (uint8)((word >> i) & 0xff);
@@ -375,7 +374,6 @@ t_stat mta_svc (UNIT *uptr)
              }
          } else {
              /* Put four chars and generate parity */
-             word = 0;
              mode = (uptr->CMD & BCD) ? 0 : 0100;
              uptr->STATUS &= ~CMASK;
              for(i = 18; i >= 0; i-=6) {
@@ -445,6 +443,8 @@ t_stat mta_svc (UNIT *uptr)
              uptr->hwmark = reclen;
              sim_debug(DEBUG_DETAIL, dptr, "Block %d chars\n", reclen);
          }
+
+         stop = 0;
          if (uptr->flags & MTUF_9TR) {
              /* Grab three chars off buffer */
              word = 0;
@@ -666,7 +666,6 @@ mta_attach(UNIT * uptr, CONST char *file)
 
     if ((r = sim_tape_attach_ex(uptr, file, 0, 0)) != SCPE_OK)
        return r;
-    uptr->STATUS &= ~OFFLINE;
     uptr->STATUS = ACCEPT;
     if (uptr->flags & UNIT_RO)
         uptr->flags |= MTUF_WLK;

@@ -319,7 +319,6 @@ t_stat mt_svc (UNIT *uptr)
          sim_debug(DEBUG_DATA, dptr, "unit=%d write %08o\n", unit, word);
 
          /* Put three chars in buffer */
-         word = 0;
          for(i = 16; i >= 0; i-=8) {
              mt_buffer[uptr->POS++] = (uint8)((word >> i) & 0xff);
          }
@@ -374,6 +373,7 @@ t_stat mt_svc (UNIT *uptr)
 
          /* Grab three chars off buffer */
          word = 0;
+         stop = 0;
          for(i = 0; i <= 16; i+=8) {
              word |= (uint32)mt_buffer[--uptr->POS] << i;
              if (uptr->POS == 0) {

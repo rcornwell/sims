@@ -35,6 +35,7 @@
 
 #define PP_V_MODE        (UNIT_V_UF + 0)
 #define PP_M_MODE        (3 << PP_V_MODE)
+#define PP_MODE(x)       ((PP_M_MODE & (x)) >> PP_V_MODE)
 #define UNIT_V_TYPE      (UNIT_V_UF + 2)
 #define UNIT_TYPE        (0xf << UNIT_V_TYPE)
 #define GET_TYPE(x)      ((UNIT_TYPE & (x)) >> UNIT_V_TYPE)
@@ -127,9 +128,9 @@ UNIT ptr_unit[] = {
 
 
 MTAB ptr_mod[] = {
-    { PP_M_MODE, PP_MODE_7B, "7b", "7B", NULL },
-    { PP_M_MODE, PP_MODE_7P, "7p", "7P", NULL },
-    { PP_M_MODE, PP_MODE_7X, "7x", "7X", NULL },
+    { PP_M_MODE, PP_MODE_7B << PP_V_MODE, "7b", "7B", NULL },
+    { PP_M_MODE, PP_MODE_7P << PP_V_MODE, "7p", "7P", NULL },
+    { PP_M_MODE, PP_MODE_7X << PP_V_MODE, "7x", "7X", NULL },
     { UNIT_TYPE, SET_TYPE(T1915_1), "1915/1", "1915/1", NULL, NULL, "ICL 1915/1 NSI 300CPM reader."},
     { UNIT_TYPE, SET_TYPE(T1915_2), "1915/2", "1915/2", NULL, NULL, "ICL 1912/2 SI 300CPM reader."},
     { UNIT_TYPE, SET_TYPE(T1916_1), "1916/1", "1916/1", NULL, NULL, "ICL 1916/1 NSI 1000CPM reader."},
@@ -379,14 +380,14 @@ t_stat ptr_svc (UNIT *uptr)
 
     sim_debug(DEBUG_DATA, &ptr_dev, "data: %03o\n", data);
     /* Check parity is even */
-    if ((uptr->flags & PP_M_MODE) == PP_MODE_7P) {
+    if (PP_MODE(uptr->flags) == PP_MODE_7P) {
        ch = data ^ (data >> 4);
        ch = ch ^ (ch >> 2);
        ch = ch ^ (ch >> 1);
        if (ch != 0)
           uptr->STATUS = TERMINATE | ERROR;
        chan_set_done(dev);
-    } else if ((uptr->flags & PP_M_MODE) == PP_MODE_7X) {
+    } else if (PP_MODE(uptr->flags) == PP_MODE_7X) {
        if (data == 0243) {
            data = 044;
        } else if (data == 044) {
@@ -399,6 +400,7 @@ t_stat ptr_svc (UNIT *uptr)
        return SCPE_OK;
     }
 
+    ch = 0;
     if (uptr->CMD & BIN_MODE) {
        switch (data & 0160) {
        case 0000:
@@ -430,31 +432,40 @@ t_stat ptr_svc (UNIT *uptr)
                if ((uptr->CMD & STOP_CHAR) != 0 && data == 012)
                    uptr->STATUS |= TERMINATE;
                shift = DELTA_SHIFT;
+               ch = (data & 017);
                break;
+
        case 0040:
                ch = 020 | (data & 017);
                break;
+
        case 0060:
                ch = 000 | (data & 017);
                break;
+
        case 0140:
                if ((data & 017) > 013) {
                   shift = DELTA_SHIFT;
                   ch = 070 | (data & 03);
                   break;
                }
+               /* Fall Through */
+
        case 0100:
                if ((uptr->CMD & 1) == BETA_MODE)
                   shift = ALPHA_SHIFT;
                uptr->CMD |= ALPHA_MODE;
                ch = 040 | (data & 037);
                break;
+
        case 0160:
                if ((data & 017) > 013) {
                   shift = DELTA_SHIFT;
                   ch = 064 | (data & 03);
                   break;
                }
+               /* Fall Through */
+
        case 0120:
                if ((uptr->CMD & 1) == ALPHA_MODE)
                   shift = BETA_SHIFT;
@@ -466,7 +477,7 @@ t_stat ptr_svc (UNIT *uptr)
     /* Check if error */
     if (shift != 0) {
         eor = chan_input_char(dev, &shift, 0);
-        if (eor) {
+        if (eor && ch != 0) {
            uptr->STATUS |= TERMINATE;
            chan_set_done(dev);
            uptr->CMD &= 1;
