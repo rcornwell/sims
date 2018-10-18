@@ -3141,19 +3141,12 @@ fxnorm:
                           nrf = 1;
                       }
                   }
+                  if (flag1)
+                      AR = (AR ^ 00777777777777777777LL) + 1;
                   MQ = AR & MMASK;
                   AR >>= 27;
-                  if (flag1) {
-                      MQ = (MQ ^ MMASK) + 1;
-                      AR = (AR ^ MMASK);
-                      if (MQ & BIT8)
-                         AR++;
+                  if (flag1)
                       AR |= SMASK;
-                  }
-              } else if (flag1) {
-                 AR =  BIT9 | SMASK;
-                 MQ = SMASK;
-                 SC++;
               } else {
                  AR = MQ = 0;
                  SC = 0;
@@ -4846,7 +4839,7 @@ last:
             if (f_pc_inh && trap_flag == 0)
                 set_pi_hold(); /* Hold off all lower interrupts */
 #else
-            if (f_pc_inh)
+            if (!QITS || f_pc_inh)
                 set_pi_hold(); /* Hold off all lower interrupts */
 #endif
             f_inst_fetch = 1;
