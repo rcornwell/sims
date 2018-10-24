@@ -505,21 +505,21 @@ t_stat dasd_srv(UNIT * uptr)
     case DK_POS_INDEX:             /* At Index Mark */
          /* Read and multi-track advance to next head */
          if ((uptr->u3 & 0x83) == 0x82 || (uptr->u3 & 0x83) == 0x81) {
-             uptr->u4 ++;
              sim_debug(DEBUG_DETAIL, dptr, "adv head unit=%d %02x %d %d %02x\n",
                    unit, state, data->tpos, uptr->u4 & 0xff, data->filemsk);
+             if ((data->filemsk & DK_MSK_SK) == DK_MSK_SKNONE) {
+                 uptr->u5 = (SNS_WRP << 8);
+                 uptr->u3 &= ~0xff;
+                 chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                 goto index;
+             }
+             uptr->u4 ++;
              if ((uptr->u4 & 0xff) >= disk_type[type].heads) {
                  sim_debug(DEBUG_DETAIL, dptr, "end cyl unit=%d %02x %d\n",
                            unit, state, data->tpos);
                  uptr->u5 = (SNS_ENDCYL << 8);
                  data->tstart = 0;
                  uptr->u4 &= ~0xff;
-                 uptr->u3 &= ~0xff;
-                 chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
-                 goto index;
-             }
-             if ((data->filemsk & DK_MSK_SK) == DK_MSK_SKNONE) {
-                 uptr->u5 |= (SNS_WRP << 8);
                  uptr->u3 &= ~0xff;
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                  goto index;
@@ -1187,6 +1187,8 @@ rd:
                  break;
              }
              if (state == DK_POS_DATA && count == data->dlen) {
+             sim_debug(DEBUG_DETAIL, dptr, "RD next unit=%d %02x %02x %02x %02x %02x %02x %02x %02x\n",
+                 unit, da[0], da[1], da[2], da[3], da[4], da[5], da[6], da[7]);
                  uptr->u3 &= ~(0xff|DK_PARAM);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                  break;
@@ -1195,6 +1197,8 @@ rd:
              sim_debug(DEBUG_DATA, dptr, "RD Char %02x %02x %d %d\n",
                     ch, state, count, data->tpos);
              if (chan_write_byte(addr, &ch)) {
+             sim_debug(DEBUG_DETAIL, dptr, "RD next unit=%d %02x %02x %02x %02x %02x %02x %02x %02x\n",
+                 unit, da[0], da[1], da[2], da[3], da[4], da[5], da[6], da[7]);
                  uptr->u3 &= ~(0xff|DK_PARAM);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                  break;
