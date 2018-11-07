@@ -232,7 +232,6 @@ uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     if (mt_busy[GET_DEV_BUF(dptr->flags)] != 0 || (uptr->u3 & MT_CMDMSK) != 0) {
         sim_debug(DEBUG_CMD, dptr, "CMD busy unit=%d %x\n", unit, cmd);
         uptr->flags |= MT_BUSY;   /* Flag we need to send CUE */
-//        mt_busy[GET_DEV_BUF(dptr->flags)] |= 2;
         return SNS_BSY;
     }
 
@@ -262,12 +261,8 @@ uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
          uptr->u4 = 0;
          uptr->u6 = 0;
          mt_busy[GET_DEV_BUF(dptr->flags)] = 1;
-         if ((cmd & 0x7) == 0x7) {         /* Quick end channel on control */
-//             if ((cmd & 0x30) == 0)  {
- //              mt_busy[GET_DEV_BUF(dptr->flags)] = 0;
-  //           }
+         if ((cmd & 0x7) == 0x7)           /* Quick end channel on control */
              return SNS_CHNEND;
-         }
          return 0;
 
     case 0x3:              /* Control */
@@ -305,9 +300,6 @@ uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
                   break;
              }
          } else {
-//             if ((cmd & 0xf0) != 0xc0) {
- //                uptr->u5 |= SNS_CMDREJ;
-  //           }
              uptr->u3 &= ~MT_MDEN_MSK;
              if (cmd & 0x8)
                  uptr->u3 |= MT_MDEN_800;
@@ -639,12 +631,10 @@ t_stat mt_srv(UNIT * uptr)
                 uptr->u3 &= ~MT_CMDMSK;
                 mt_busy[GET_DEV_BUF(dptr->flags)] &= ~1;
                 set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
-//                chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 return SCPE_OK;
             }
             uptr->u4 ++;
             sim_activate(uptr, 500);
-    //        chan_end(addr, SNS_CHNEND);
          } else {
             sim_debug(DEBUG_DETAIL, dptr, "Write Mark unit=%d\n", unit);
             uptr->u3 &= ~(MT_CMDMSK);
@@ -661,12 +651,10 @@ t_stat mt_srv(UNIT * uptr)
                   uptr->u3 &= ~MT_CMDMSK;
                   mt_busy[GET_DEV_BUF(dptr->flags)] &= ~1;
                   set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
-//                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                   return SCPE_OK;
               }
               uptr->u4 ++;
               sim_activate(uptr, 500);
-//              chan_end(addr, SNS_CHNEND);
               break;
          case 1:
               uptr->u4++;
@@ -702,10 +690,8 @@ t_stat mt_srv(UNIT * uptr)
                   uptr->u3 &= ~MT_CMDMSK;
                   mt_busy[bufnum] &= ~1;
                   set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
-//                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                   break;
                }
-//               chan_end(addr, SNS_CHNEND);
                uptr->u4 ++;
                sim_activate(uptr, 500);
                break;
@@ -741,7 +727,6 @@ t_stat mt_srv(UNIT * uptr)
          case 0:
               uptr->u4 ++;
               sim_activate(uptr, 500);
- //             chan_end(addr, SNS_CHNEND);
               break;
          case 1:
               uptr->u4++;
@@ -782,7 +767,6 @@ t_stat mt_srv(UNIT * uptr)
          case 0:
               uptr->u4 ++;
               sim_activate(uptr, 500);
-//              chan_end(addr, SNS_CHNEND);
               break;
          case 1:
               sim_debug(DEBUG_DETAIL, dptr, "Skip rec unit=%d ", unit);
@@ -821,12 +805,10 @@ t_stat mt_srv(UNIT * uptr)
                   uptr->u5 |= SNS_CMDREJ;
                   uptr->u3 &= ~MT_CMDMSK;
                   mt_busy[bufnum] &= ~1;
-//                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                   set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
               } else {
                   uptr->u4 ++;
                   sim_activate(uptr, 500);
-//               chan_end(addr, SNS_CHNEND);
               }
               break;
          case 1:
@@ -846,7 +828,6 @@ t_stat mt_srv(UNIT * uptr)
          if (uptr->u4 == 0) {
              uptr->u4 ++;
              sim_activate(uptr, 30000);
-//               chan_end(addr, SNS_CHNEND);
              mt_busy[bufnum] &= ~1;
          } else {
              sim_debug(DEBUG_DETAIL, dptr, "Rewind unit=%d\n", unit);
@@ -861,7 +842,6 @@ t_stat mt_srv(UNIT * uptr)
              uptr->u4 ++;
              mt_busy[bufnum] &= ~1;
              sim_activate(uptr, 30000);
-//               chan_end(addr, SNS_CHNEND);
          } else {
              sim_debug(DEBUG_DETAIL, dptr, "Unload unit=%d\n", unit);
              uptr->u3 &= ~(MT_CMDMSK);
@@ -898,6 +878,9 @@ mt_attach(UNIT * uptr, CONST char *file)
     if ((r = sim_tape_attach_ex(uptr, file, 0, 0)) != SCPE_OK)
        return r;
     set_devattn(addr, SNS_DEVEND);
+    uptr->u3 &= ~0xffff;
+    uptr->u4 = 0;
+    uptr->u5 = 0;
     return SCPE_OK;
 }
 

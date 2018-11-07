@@ -356,6 +356,8 @@ extern DEVICE mta_dev;
 extern DEVICE mtb_dev;
 extern DEVICE dda_dev;
 extern DEVICE ddb_dev;
+extern DEVICE ddc_dev;
+extern DEVICE ddd_dev;
 extern DEVICE com_dev;
 extern UNIT cpu_unit;
 
@@ -365,7 +367,7 @@ extern UNIT cpu_unit;
 #define NUM_DEVS_LPR        1
 #define NUM_DEVS_MT         1
 #define NUM_UNITS_MT        8
-#define NUM_DEVS_DASD       2
+#define NUM_DEVS_DASD       4
 #define NUM_UNITS_DASD      8
 #define NUM_DEVS_COM        1
 #define NUM_UNITS_COM       16

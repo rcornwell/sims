@@ -70,6 +70,12 @@ DEVICE *sim_devices[] = {
         &dda_dev,
 #if NUM_DEVS_DASD > 1
         &ddb_dev,
+#if NUM_DEVS_DASD > 2
+        &ddc_dev,
+#if NUM_DEVS_DASD > 3
+        &ddd_dev,
+#endif
+#endif
 #endif
 #endif
 #ifdef NUM_DEVS_COM

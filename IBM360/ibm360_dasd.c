@@ -301,6 +301,55 @@ DEVICE              ddb_dev = {
     &ddb_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &dasd_help, NULL, NULL, &dasd_description
 };
+
+#if NUM_DEVS_DASD > 2
+
+UNIT                ddc_unit[] = {
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x150)},       /* 0 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x151)},       /* 1 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x152)},       /* 2 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x153)},       /* 3 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x154)},       /* 4 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x155)},       /* 5 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x156)},       /* 6 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x157)},       /* 7 */
+};
+
+struct dib ddc_dib = { 0xF8, NUM_UNITS_MT, dasd_startio, dasd_startcmd, NULL,
+                        ddc_unit, dasd_ini};
+
+DEVICE              ddc_dev = {
+    "DC", ddc_unit, NULL, dasd_mod,
+    NUM_UNITS_DASD, 8, 15, 1, 8, 8,
+    NULL, NULL, &dasd_reset, &dasd_boot, &dasd_attach, &dasd_detach,
+    &ddc_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    NULL, NULL, &dasd_help, NULL, NULL, &dasd_description
+};
+
+#if NUM_DEVS_DASD > 3
+UNIT                ddd_unit[] = {
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x250)},       /* 0 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x251)},       /* 1 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x252)},       /* 2 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x253)},       /* 3 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x254)},       /* 4 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x255)},       /* 5 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x256)},       /* 6 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x257)},       /* 7 */
+};
+
+struct dib ddd_dib = { 0xF8, NUM_UNITS_MT, dasd_startio, dasd_startcmd, NULL,
+                        ddd_unit, dasd_ini};
+
+DEVICE              ddd_dev = {
+    "DD", ddd_unit, NULL, dasd_mod,
+    NUM_UNITS_DASD, 8, 15, 1, 8, 8,
+    NULL, NULL, &dasd_reset, &dasd_boot, &dasd_attach, &dasd_detach,
+    &ddd_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    NULL, NULL, &dasd_help, NULL, NULL, &dasd_description
+};
+#endif
+#endif
 #endif
 
 uint8  dasd_startio(UNIT *uptr, uint16 chan) {
@@ -753,7 +802,7 @@ index:
              if ((uptr->u4 >> 8) == data->cyl) {
                  uptr->u6 = cmd;
                  uptr->u3 &= ~(0xff);
-                 set_devattn(addr, SNS_DEVEND);
+                 set_devattn(addr, SNS_CHNEND | SNS_DEVEND);
                  sim_debug(DEBUG_DETAIL, dptr, "seek end unit=%d %d %d %x\n", unit,
                       uptr->u4 >> 8, data->cyl, data->state);
               }
@@ -1623,6 +1672,8 @@ dasd_detach(UNIT * uptr)
 {
     struct dasd_t       *data = (struct dasd_t *)uptr->up7;
     int                 type = GET_TYPE(uptr->flags);
+    uint16              addr = GET_UADDR(uptr->u3);
+    int                 cmd = uptr->u3 & 0x7f;
 
     if (uptr->u3 & DK_CYL_DIRTY) {
         (void)sim_fseek(uptr->fileref, data->cpos, SEEK_SET);
@@ -1630,10 +1681,11 @@ dasd_detach(UNIT * uptr)
                data->tsize * disk_type[type].heads, uptr->fileref);
         uptr->u3 &= ~DK_CYL_DIRTY;
     }
-    if (data != 0) {
-        free(data->cbuf);
-        free(data);
-    }
+    if (cmd != 0) 
+         chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+    sim_cancel(uptr);
+    free(data->cbuf);
+    free(data);
     uptr->up7 = 0;
     uptr->u3 &= ~0xffff;
     return detach_unit(uptr);
