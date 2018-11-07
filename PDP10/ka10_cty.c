@@ -51,6 +51,10 @@ const char *cty_description (DEVICE *dptr);
 #define KEY_TST          04000
 #define CTY_DEVNUM        0120
 
+#define STATUS            u3
+#define DATA              u4
+#define PIA               u5
+
 t_stat cty_devio(uint32 dev, uint64 *data);
 
 DIB cty_dib = { CTY_DEVNUM, 1, cty_devio, NULL};
@@ -82,40 +86,40 @@ t_stat cty_devio(uint32 dev, uint64 *data) {
      uint64     res;
      switch(dev & 3) {
      case CONI:
-        res = cty_unit[0].u5 | (cty_unit[0].u3 & (TEL_RDY | TEL_BSY));
-        res |= cty_unit[1].u3 & (KEY_RDY | KEY_BSY);
-        res |= cty_unit[0].u3 & KEY_TST;
+        res = cty_unit[0].PIA | (cty_unit[0].STATUS & (TEL_RDY | TEL_BSY));
+        res |= cty_unit[1].STATUS & (KEY_RDY | KEY_BSY);
+        res |= cty_unit[0].STATUS & KEY_TST;
         *data = res;
         sim_debug(DEBUG_CONI, &cty_dev, "CTY %03o CONI %06o\n", dev, (uint32)*data);
         break;
      case CONO:
          res = *data;
-         cty_unit[0].u5 = res & 07;
-         cty_unit[1].u5 = res & 07;
-         cty_unit[0].u5 &= ~(KEY_TST);
-         cty_unit[0].u3 &= ~((res >> 4) & (TEL_RDY | TEL_BSY));
-         cty_unit[0].u3 |= (res & (TEL_RDY | TEL_BSY | KEY_TST));
-         cty_unit[1].u3 &= ~((res >> 4) & (KEY_RDY | KEY_BSY));
-         cty_unit[1].u3 |= (res & (KEY_RDY | KEY_BSY));
-         if ((cty_unit[0].u3 & TEL_RDY) || (cty_unit[1].u3 & KEY_RDY))
-             set_interrupt(dev, cty_unit[0].u5);
+         cty_unit[0].PIA = res & 07;
+         cty_unit[1].PIA = res & 07;
+         cty_unit[0].PIA &= ~(KEY_TST);
+         cty_unit[0].STATUS &= ~((res >> 4) & (TEL_RDY | TEL_BSY));
+         cty_unit[0].STATUS |= (res & (TEL_RDY | TEL_BSY | KEY_TST));
+         cty_unit[1].STATUS &= ~((res >> 4) & (KEY_RDY | KEY_BSY));
+         cty_unit[1].STATUS |= (res & (KEY_RDY | KEY_BSY));
+         if ((cty_unit[0].STATUS & TEL_RDY) || (cty_unit[1].STATUS & KEY_RDY))
+             set_interrupt(dev, cty_unit[0].PIA);
          else
              clr_interrupt(dev);
          sim_debug(DEBUG_CONO, &cty_dev, "CTY %03o CONO %06o\n", dev, (uint32)*data);
          break;
      case DATAI:
-         res = cty_unit[1].u4 & 0xff;
-         cty_unit[1].u3 &= ~KEY_RDY;
-         if ((cty_unit[0].u3 & TEL_RDY) == 0)
+         res = cty_unit[1].DATA & 0xff;
+         cty_unit[1].STATUS &= ~KEY_RDY;
+         if ((cty_unit[0].STATUS & TEL_RDY) == 0)
              clr_interrupt(dev);
          *data = res;
          sim_debug(DEBUG_DATAIO, &cty_dev, "CTY %03o DATAI %06o\n", dev, (uint32)*data);
          break;
     case DATAO:
-         cty_unit[0].u4 = *data & 0x7f;
-         cty_unit[0].u3 &= ~TEL_RDY;
-         cty_unit[0].u3 |= TEL_BSY;
-         if ((cty_unit[1].u3 & KEY_RDY) == 0)
+         cty_unit[0].DATA = *data & 0x7f;
+         cty_unit[0].STATUS &= ~TEL_RDY;
+         cty_unit[0].STATUS |= TEL_BSY;
+         if ((cty_unit[1].STATUS & KEY_RDY) == 0)
              clr_interrupt(dev);
          sim_activate(&cty_unit[0], cty_unit[0].wait);
          sim_debug(DEBUG_DATAIO, &cty_dev, "CTY %03o DATAO %06o\n", dev, (uint32)*data);
@@ -131,16 +135,16 @@ t_stat ctyo_svc (UNIT *uptr)
     t_stat  r;
     int32   ch;
 
-    if (uptr->u4 != 0) {
-    ch = sim_tt_outcvt ( uptr->u4, TT_GET_MODE (uptr->flags)) ;
+    if (uptr->DATA != 0) {
+    ch = sim_tt_outcvt ( uptr->DATA, TT_GET_MODE (uptr->flags)) ;
     if ((r = sim_putchar_s (ch)) != SCPE_OK) {   /* output; error? */
         sim_activate (uptr, uptr->wait);               /* try again */
         return ((r == SCPE_STALL)? SCPE_OK: r);        /* !stall? report */
         }
     }
-    uptr->u3 &= ~TEL_BSY;
-    uptr->u3 |= TEL_RDY;
-    set_interrupt(CTY_DEVNUM, uptr->u5);
+    uptr->STATUS &= ~TEL_BSY;
+    uptr->STATUS |= TEL_RDY;
+    set_interrupt(CTY_DEVNUM, uptr->PIA);
     return SCPE_OK;
 }
 
@@ -154,10 +158,10 @@ t_stat ctyi_svc (UNIT *uptr)
         return ch;
     if (ch & SCPE_BREAK)                               /* ignore break */
         return SCPE_OK;
-    uptr->u4 = 0177 & sim_tt_inpcvt(ch, TT_GET_MODE (uptr->flags));
-    uptr->u4 = ch & 0177;
-    uptr->u3 |= KEY_RDY;
-    set_interrupt(CTY_DEVNUM, uptr->u5);
+    uptr->DATA = 0177 & sim_tt_inpcvt(ch, TT_GET_MODE (uptr->flags));
+    uptr->DATA = ch & 0177;
+    uptr->STATUS |= KEY_RDY;
+    set_interrupt(CTY_DEVNUM, uptr->PIA);
     return SCPE_OK;
 }
 
@@ -165,8 +169,8 @@ t_stat ctyi_svc (UNIT *uptr)
 
 t_stat cty_reset (DEVICE *dptr)
 {
-    cty_unit[0].u3 &= ~(TEL_RDY | TEL_BSY);
-    cty_unit[1].u3 &= ~(KEY_RDY | KEY_BSY);
+    cty_unit[0].STATUS &= ~(TEL_RDY | TEL_BSY);
+    cty_unit[1].STATUS &= ~(KEY_RDY | KEY_BSY);
     clr_interrupt(CTY_DEVNUM);
     sim_clock_coschedule (&cty_unit[1], tmxr_poll);
 

@@ -28,6 +28,12 @@
 #include "sim_tmxr.h"
 #include "ka10_defs.h"
 
+#ifndef NUM_DEVS_MTY
+#define NUM_DEVS_MTY 0
+#endif
+
+#if (NUM_DEVS_MTY > 0)
+
 #define MTY_NAME        "MTY"
 #define MTY_DEVNUM      0400
 #define MTY_LINES       32
@@ -298,3 +304,4 @@ static const char *mty_description (DEVICE *dptr)
 {
     return "Morton box: Terminal multiplexor";
 }
+#endif

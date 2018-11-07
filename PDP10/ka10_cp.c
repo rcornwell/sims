@@ -77,6 +77,10 @@
 #define HOPPER_LOW      0100000    /* less 200 cards 20 */
 #define TEST            0400000    /* In test mode 18 */
 
+#define STATUS      u3
+#define COL         u4
+#define BUFFER      up7
+
 t_stat              cp_devio(uint32 dev, uint64 *data);
 t_stat              cp_srv(UNIT *);
 t_stat              cp_reset(DEVICE *);
@@ -112,49 +116,49 @@ DEVICE              cp_dev = {
 
 t_stat cp_devio(uint32 dev, uint64 *data) {
      UNIT                *uptr = &cp_unit;
-     uint16              *image = (uint16 *)(uptr->up7);
+     uint16              *image = (uint16 *)(uptr->BUFFER);
 
      switch(dev & 3) {
      case CONI:
-        *data = uptr->u3;
+        *data = uptr->STATUS;
          sim_debug(DEBUG_CONI, &cp_dev, "CP: CONI %012llo\n", *data);
         break;
      case CONO:
          clr_interrupt(dev);
          sim_debug(DEBUG_CONO, &cp_dev, "CP: CONO %012llo\n", *data);
-         uptr->u3 &= ~PIA;
-         uptr->u3 |= *data & PIA;
+         uptr->STATUS &= ~PIA;
+         uptr->STATUS |= *data & PIA;
          if (*data & CLR_PUNCH) {
-             uptr->u3 &= ~(TROUBLE|ERROR|END_CARD|END_CARD_EN|TROUBLE_EN);
+             uptr->STATUS &= ~(TROUBLE|ERROR|END_CARD|END_CARD_EN|TROUBLE_EN);
              break;
          }
          if (*data & SET_DATA_REQ) {
-             uptr->u3 |= DATA_REQ;
-             set_interrupt(dev, uptr->u3);
+             uptr->STATUS |= DATA_REQ;
+             set_interrupt(dev, uptr->STATUS);
          }
          if (*data & CLR_DATA_REQ)
-             uptr->u3 &= ~DATA_REQ;
+             uptr->STATUS &= ~DATA_REQ;
          if (*data & CLR_END_CARD)
-             uptr->u3 &= ~END_CARD;
+             uptr->STATUS &= ~END_CARD;
          if (*data & EN_END_CARD)
-             uptr->u3 |= END_CARD_EN;
+             uptr->STATUS |= END_CARD_EN;
          if (*data & DIS_END_CARD)
-             uptr->u3 &= ~END_CARD_EN;
+             uptr->STATUS &= ~END_CARD_EN;
          if (*data & EN_TROUBLE)
-             uptr->u3 |= TROUBLE_EN;
+             uptr->STATUS |= TROUBLE_EN;
          if (*data & DIS_TROUBLE)
-             uptr->u3 &= ~TROUBLE_EN;
-         if (*data & EJECT && uptr->u3 & CARD_IN_PUNCH) {
-             uptr->u4 = 80;
-             uptr->u3 &= ~DATA_REQ;
+             uptr->STATUS &= ~TROUBLE_EN;
+         if (*data & EJECT && uptr->STATUS & CARD_IN_PUNCH) {
+             uptr->COL = 80;
+             uptr->STATUS &= ~DATA_REQ;
              sim_activate(uptr, uptr->wait);
          }
-         if ((uptr->u3 & (TROUBLE|TROUBLE_EN)) == (TROUBLE|TROUBLE_EN))
-             set_interrupt(CP_DEVNUM, uptr->u3);
-         if ((uptr->u3 & (END_CARD|END_CARD_EN)) == (END_CARD|END_CARD_EN))
-             set_interrupt(CP_DEVNUM, uptr->u3);
+         if ((uptr->STATUS & (TROUBLE|TROUBLE_EN)) == (TROUBLE|TROUBLE_EN))
+             set_interrupt(CP_DEVNUM, uptr->STATUS);
+         if ((uptr->STATUS & (END_CARD|END_CARD_EN)) == (END_CARD|END_CARD_EN))
+             set_interrupt(CP_DEVNUM, uptr->STATUS);
          if (*data & PUNCH_ON) {
-             uptr->u3 |= PUNCH_ON;
+             uptr->STATUS |= PUNCH_ON;
              sim_activate(uptr, uptr->wait);
          }
          break;
@@ -162,11 +166,11 @@ t_stat cp_devio(uint32 dev, uint64 *data) {
          *data = 0;
          break;
     case DATAO:
-         image[uptr->u4++] = *data & 0xfff;
-         uptr->u3 &= ~DATA_REQ;
+         image[uptr->COL++] = *data & 0xfff;
+         uptr->STATUS &= ~DATA_REQ;
          clr_interrupt(dev);
          sim_debug(DEBUG_DATAIO, &cp_dev, "CP: DATAO %012llo %d\n", *data,
-                 uptr->u4);
+                 uptr->COL);
          sim_activate(uptr, uptr->wait);
          break;
     }
@@ -177,41 +181,41 @@ t_stat cp_devio(uint32 dev, uint64 *data) {
 t_stat
 cp_srv(UNIT *uptr) {
 
-    if (uptr->u3 & PUNCH_ON) {
-       uint16              *image = (uint16 *)(uptr->up7);
+    if (uptr->STATUS & PUNCH_ON) {
+       uint16              *image = (uint16 *)(uptr->BUFFER);
 
-       uptr->u3 |= CARD_IN_PUNCH;
-       if (uptr->u3 & DATA_REQ) {
+       uptr->STATUS |= CARD_IN_PUNCH;
+       if (uptr->STATUS & DATA_REQ) {
            sim_activate(uptr, uptr->wait);
            return SCPE_OK;
        }
-       if (uptr->u4 < 80) {
-           if ((uptr->u3 & DATA_REQ) == 0) {
-               uptr->u3 |= DATA_REQ;
-               set_interrupt(CP_DEVNUM, uptr->u3);
+       if (uptr->COL < 80) {
+           if ((uptr->STATUS & DATA_REQ) == 0) {
+               uptr->STATUS |= DATA_REQ;
+               set_interrupt(CP_DEVNUM, uptr->STATUS);
            }
            sim_activate(uptr, uptr->wait);
            return SCPE_OK;
         }
-        uptr->u4 = 0;
-        uptr->u3 &= ~(PUNCH_ON|CARD_IN_PUNCH);
-        uptr->u3 |= END_CARD;
+        uptr->COL = 0;
+        uptr->STATUS &= ~(PUNCH_ON|CARD_IN_PUNCH);
+        uptr->STATUS |= END_CARD;
         switch(sim_punch_card(uptr, image)) {
         case CDSE_EOF:
         case CDSE_EMPTY:
-            uptr->u3 |= PICK_FAIL|TROUBLE;
+            uptr->STATUS |= PICK_FAIL|TROUBLE;
             break;
            /* If we get here, something is wrong */
         case CDSE_ERROR:
-            uptr->u3 |= EJECT_FAIL|TROUBLE;
+            uptr->STATUS |= EJECT_FAIL|TROUBLE;
             break;
         case CDSE_OK:
             break;
         }
-        if ((uptr->u3 & (TROUBLE|TROUBLE_EN)) == (TROUBLE|TROUBLE_EN))
-            set_interrupt(CP_DEVNUM, uptr->u3);
-        if (uptr->u3 & END_CARD_EN)
-            set_interrupt(CP_DEVNUM, uptr->u3);
+        if ((uptr->STATUS & (TROUBLE|TROUBLE_EN)) == (TROUBLE|TROUBLE_EN))
+            set_interrupt(CP_DEVNUM, uptr->STATUS);
+        if (uptr->STATUS & END_CARD_EN)
+            set_interrupt(CP_DEVNUM, uptr->STATUS);
     }
 
     return SCPE_OK;
@@ -225,10 +229,10 @@ cp_attach(UNIT * uptr, CONST char *file)
 
     if ((r = sim_card_attach(uptr, file)) != SCPE_OK)
         return r;
-    if (uptr->up7 == 0) {
-        uptr->up7 = calloc(80, sizeof(uint16));
-        uptr->u3 = 0;
-        uptr->u4 = 0;
+    if (uptr->BUFFER == 0) {
+        uptr->BUFFER = calloc(80, sizeof(uint16));
+        uptr->STATUS = 0;
+        uptr->COL = 0;
     }
     return SCPE_OK;
 }
@@ -236,13 +240,13 @@ cp_attach(UNIT * uptr, CONST char *file)
 t_stat
 cp_detach(UNIT * uptr)
 {
-    uint16              *image = (uint16 *)(uptr->up7);
+    uint16              *image = (uint16 *)(uptr->BUFFER);
 
-    if (uptr->u3 & CARD_IN_PUNCH)
+    if (uptr->STATUS & CARD_IN_PUNCH)
         sim_punch_card(uptr, image);
-    if (uptr->up7 != 0)
-        free(uptr->up7);
-    uptr->up7 = 0;
+    if (uptr->BUFFER != 0)
+        free(uptr->BUFFER);
+    uptr->BUFFER = 0;
     return sim_card_detach(uptr);
 }
 

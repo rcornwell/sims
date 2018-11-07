@@ -28,6 +28,12 @@
 #include "sim_tmxr.h"
 #include "ka10_defs.h"
 
+#ifndef NUM_DEVS_TK10
+#define NUM_DEVS_TK10 0
+#endif
+
+#if (NUM_DEVS_TK10 > 0)
+
 #define TK10_NAME        "TK"
 #define TK10_DEVNUM      0600  /* Also known as NTY. */
 #define TK10_LINES       16
@@ -321,3 +327,5 @@ static const char *tk10_description (DEVICE *dptr)
 {
     return "Knight kludge: TTY scanner";
 }
+
+#endif

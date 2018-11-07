@@ -3115,7 +3115,7 @@ ldb_ptr:
 
               /* Set flag1 to sign and make positive */
               if (AR & DNMASK) {
-                     AR = (AR ^ DFMASK) + 1;
+                  AR = (AR ^ DFMASK) + 1;
                   flag1 = 1;
               } else {
                   flag1 = 0;

@@ -322,6 +322,7 @@ extern DEVICE   dk_dev;
 extern DEVICE   pd_dev;
 extern DEVICE   dpy_dev;
 extern DEVICE   imx_dev;
+extern DEVICE   imp_dev;
 extern DEVICE   tk10_dev;
 extern DEVICE   mty_dev;
 extern DEVICE   wcnsls_dev;             /* MIT Spacewar Consoles */
@@ -410,5 +411,3 @@ extern uint18   PC;
 extern uint32   FLAGS;
 
 #endif
-
-

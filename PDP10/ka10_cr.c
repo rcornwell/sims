@@ -76,6 +76,11 @@
 #define RDY_READ_EN     00200000
 #define TROUBLE_EN      00400000
 
+#define STATUS      u3
+#define COL         u4
+#define DATA        u5
+#define BUFFER      up7
+
 t_stat              cr_devio(uint32 dev, uint64 *data);
 t_stat              cr_srv(UNIT *);
 t_stat              cr_reset(DEVICE *);
@@ -113,11 +118,11 @@ t_stat cr_devio(uint32 dev, uint64 *data) {
     switch(dev & 3) {
     case CONI:
          if (uptr->flags & UNIT_ATT &&
-                (uptr->u3 & (READING|CARD_IN_READ|END_CARD)) == 0)
-            uptr->u3 |= RDY_READ;
-         *data = uptr->u3;
-         if (uptr->u3 & RDY_READ_EN && uptr->u3 & RDY_READ)
-             set_interrupt(dev, uptr->u3);
+                (uptr->STATUS & (READING|CARD_IN_READ|END_CARD)) == 0)
+            uptr->STATUS |= RDY_READ;
+         *data = uptr->STATUS;
+         if (uptr->STATUS & RDY_READ_EN && uptr->STATUS & RDY_READ)
+             set_interrupt(dev, uptr->STATUS);
          sim_debug(DEBUG_CONI, &cr_dev, "CR: CONI %012llo\n", *data);
          break;
 
@@ -125,39 +130,39 @@ t_stat cr_devio(uint32 dev, uint64 *data) {
          clr_interrupt(dev);
          sim_debug(DEBUG_CONO, &cr_dev, "CR: CONO %012llo\n", *data);
          if (*data & CLR_READER) {
-            uptr->u3 = 0;
+            uptr->STATUS = 0;
             sim_cancel(uptr);
             break;
          }
-         uptr->u3 &= ~(PIA);
-         uptr->u3 |= *data & PIA;
-         uptr->u3 &= ~(*data & (CLR_DRDY|CLR_END_CARD|CLR_EOF|CLR_DATA_MISS));
+         uptr->STATUS &= ~(PIA);
+         uptr->STATUS |= *data & PIA;
+         uptr->STATUS &= ~(*data & (CLR_DRDY|CLR_END_CARD|CLR_EOF|CLR_DATA_MISS));
          if (*data & EN_TROUBLE)
-             uptr->u3 |= TROUBLE_EN;
+             uptr->STATUS |= TROUBLE_EN;
          if (*data & EN_READY)
-             uptr->u3 |= RDY_READ_EN;
+             uptr->STATUS |= RDY_READ_EN;
          if (*data & READ_CARD) {
-             uptr->u3 |= READING;
-             uptr->u3 &= ~(CARD_IN_READ|RDY_READ|DATA_RDY);
-             uptr->u4 = 0;
+             uptr->STATUS |= READING;
+             uptr->STATUS &= ~(CARD_IN_READ|RDY_READ|DATA_RDY);
+             uptr->COL = 0;
              sim_activate(uptr, uptr->wait);
          }
          if (uptr->flags & UNIT_ATT &&
-                (uptr->u3 & (READING|CARD_IN_READ|END_CARD)) == 0)
-            uptr->u3 |= RDY_READ;
-         if (uptr->u3 & RDY_READ_EN && uptr->u3 & RDY_READ)
-             set_interrupt(dev, uptr->u3);
-         if (uptr->u3 & TROUBLE_EN &&
-             (uptr->u3 & (END_CARD|END_FILE|DATA_MISS|TROUBLE)) != 0)
-             set_interrupt(dev, uptr->u3);
+                (uptr->STATUS & (READING|CARD_IN_READ|END_CARD)) == 0)
+            uptr->STATUS |= RDY_READ;
+         if (uptr->STATUS & RDY_READ_EN && uptr->STATUS & RDY_READ)
+             set_interrupt(dev, uptr->STATUS);
+         if (uptr->STATUS & TROUBLE_EN &&
+             (uptr->STATUS & (END_CARD|END_FILE|DATA_MISS|TROUBLE)) != 0)
+             set_interrupt(dev, uptr->STATUS);
          break;
 
     case DATAI:
          clr_interrupt(dev);
-         if (uptr->u3 & DATA_RDY) {
-             *data = uptr->u5;
+         if (uptr->STATUS & DATA_RDY) {
+             *data = uptr->DATA;
              sim_debug(DEBUG_DATAIO, &cr_dev, "CR: DATAI %012llo\n", *data);
-             uptr->u3 &= ~DATA_RDY;
+             uptr->STATUS &= ~DATA_RDY;
          } else
              *data = 0;
          break;
@@ -170,48 +175,48 @@ t_stat cr_devio(uint32 dev, uint64 *data) {
 /* Handle transfer of data for card reader */
 t_stat
 cr_srv(UNIT *uptr) {
-    uint16              *image = (uint16 *)(uptr->up7);
+    uint16              *image = (uint16 *)(uptr->BUFFER);
 
     /* Check if new card requested. */
-    if ((uptr->u3 & (READING|CARD_IN_READ)) == READING) {
+    if ((uptr->STATUS & (READING|CARD_IN_READ)) == READING) {
         switch(sim_read_card(uptr, image)) {
         case CDSE_EOF:
-             uptr->u3 |= END_FILE;
-             if (uptr->u3 & TROUBLE_EN)
-                 set_interrupt(CR_DEVNUM, uptr->u3);
+             uptr->STATUS |= END_FILE;
+             if (uptr->STATUS & TROUBLE_EN)
+                 set_interrupt(CR_DEVNUM, uptr->STATUS);
              return SCPE_OK;
         case CDSE_EMPTY:
              return SCPE_OK;
         case CDSE_ERROR:
-             uptr->u3 |= TROUBLE;
-             if (uptr->u3 & TROUBLE_EN)
-                 set_interrupt(CR_DEVNUM, uptr->u3);
+             uptr->STATUS |= TROUBLE;
+             if (uptr->STATUS & TROUBLE_EN)
+                 set_interrupt(CR_DEVNUM, uptr->STATUS);
              return SCPE_OK;
         case CDSE_OK:
-             uptr->u3 |= CARD_IN_READ;
+             uptr->STATUS |= CARD_IN_READ;
              break;
         }
-        uptr->u4 = 0;
+        uptr->COL = 0;
         sim_activate(uptr, uptr->wait);
         return SCPE_OK;
     }
 
     /* Copy next column over */
-    if (uptr->u3 & CARD_IN_READ) {
-        if (uptr->u4 >= 80) {
-             uptr->u3 &= ~(CARD_IN_READ|READING);
-             uptr->u3 |= END_CARD;
-             set_interrupt(CR_DEVNUM, uptr->u3);
+    if (uptr->STATUS & CARD_IN_READ) {
+        if (uptr->COL >= 80) {
+             uptr->STATUS &= ~(CARD_IN_READ|READING);
+             uptr->STATUS |= END_CARD;
+             set_interrupt(CR_DEVNUM, uptr->STATUS);
              sim_activate(uptr, uptr->wait);
              return SCPE_OK;
         }
-        uptr->u5 = image[uptr->u4++];
-        if (uptr->u3 & DATA_RDY) {
-            uptr->u3 |= DATA_MISS;
+        uptr->DATA = image[uptr->COL++];
+        if (uptr->STATUS & DATA_RDY) {
+            uptr->STATUS |= DATA_MISS;
         }
-        uptr->u3 |= DATA_RDY;
-        sim_debug(DEBUG_DATA, &cr_dev, "CR Char > %d %03x\n", uptr->u4, uptr->u5);
-        set_interrupt(CR_DEVNUM, uptr->u3);
+        uptr->STATUS |= DATA_RDY;
+        sim_debug(DEBUG_DATA, &cr_dev, "CR Char > %d %03x\n", uptr->COL, uptr->DATA);
+        set_interrupt(CR_DEVNUM, uptr->STATUS);
         sim_activate(uptr, uptr->wait);
     }
     return SCPE_OK;
@@ -224,9 +229,9 @@ cr_attach(UNIT * uptr, CONST char *file)
 
     if ((r = sim_card_attach(uptr, file)) != SCPE_OK)
         return r;
-    if (uptr->up7 == 0) {
-        uptr->up7 = malloc(sizeof(uint16)*80);
-        uptr->u3 |= RDY_READ;
+    if (uptr->BUFFER == 0) {
+        uptr->BUFFER = malloc(sizeof(uint16)*80);
+        uptr->STATUS |= RDY_READ;
     }
     return SCPE_OK;
 }
@@ -234,9 +239,9 @@ cr_attach(UNIT * uptr, CONST char *file)
 t_stat
 cr_detach(UNIT * uptr)
 {
-    if (uptr->up7 != 0)
-        free(uptr->up7);
-    uptr->up7 = 0;
+    if (uptr->BUFFER != 0)
+        free(uptr->BUFFER);
+    uptr->BUFFER = 0;
     return sim_card_detach(uptr);
 }
 

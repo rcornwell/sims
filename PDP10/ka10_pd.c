@@ -33,6 +33,12 @@
 #include <time.h>
 #include "ka10_defs.h"
 
+#ifndef NUM_DEVS_PD
+#define NUM_DEVS_PD 0
+#endif
+
+#if (NUM_DEVS_PD > 0)
+
 #define PD_DEVNUM       0500
 #define PD_OFF          (1 << DEV_V_UF)
 
@@ -118,3 +124,4 @@ t_stat pd_show_on(FILE *st, UNIT *uptr, int32 val, CONST void *desc)
     return SCPE_OK;
 }
 
+#endif
