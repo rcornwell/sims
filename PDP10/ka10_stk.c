@@ -24,6 +24,7 @@
 */
 
 #include <time.h>
+#include "sim_video.h"
 #include "display/display.h"
 #include "ka10_defs.h"
 
@@ -41,6 +42,7 @@
 
 static t_stat      stk_svc (UNIT *uptr);
 static t_stat      stk_devio(uint32 dev, uint64 *data);
+static t_stat      stk_reset (DEVICE *dptr);
 static const char  *stk_description (DEVICE *dptr);
 
 static uint64 status = 0;
@@ -58,7 +60,7 @@ MTAB stk_mod[] = {
 DEVICE              stk_dev = {
     "STK", stk_unit, NULL, stk_mod,
     1, 8, 0, 1, 8, 36,
-    NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, &stk_reset, NULL, NULL, NULL,
     &stk_dib, DEV_DISABLE | DEV_DIS | DEV_DEBUG, 0, NULL,
     NULL, NULL, NULL, NULL, NULL, &stk_description
 };
@@ -92,6 +94,239 @@ static int translate[] = {
   020,     021,     022,     023,     024,     025,     026,     027,
   030,     031,     032,     TOP|017, SHFT|'+',TOP|020, SHFT|'8',BS
 };
+
+static int bucky = 0;
+
+static int stk_modifiers (SIM_KEY_EVENT *kev)
+{
+  if (kev->state == SIM_KEYPRESS_DOWN) {
+    switch (kev->key) {
+    case SIM_KEY_SHIFT_L:
+    case SIM_KEY_SHIFT_R:
+      bucky |= SHFT;
+      return 1;
+    case SIM_KEY_CTRL_L:
+    case SIM_KEY_CTRL_R:
+    case SIM_KEY_CAPS_LOCK:
+      bucky |= CTRL;
+      return 1;
+    case SIM_KEY_WIN_L:
+    case SIM_KEY_WIN_R:
+      bucky |= TOP;
+      return 1;
+    case SIM_KEY_ALT_L:
+    case SIM_KEY_ALT_R:
+      bucky |= META;
+      return 1;
+    }
+  } else if (kev->state == SIM_KEYPRESS_UP) {
+    switch (kev->key) {
+    case SIM_KEY_SHIFT_L:
+    case SIM_KEY_SHIFT_R:
+      bucky &= ~SHFT;
+      return 1;
+    case SIM_KEY_CTRL_L:
+    case SIM_KEY_CTRL_R:
+    case SIM_KEY_CAPS_LOCK:
+      bucky &= ~CTRL;
+      return 1;
+    case SIM_KEY_WIN_L:
+    case SIM_KEY_WIN_R:
+      bucky &= ~TOP;
+      return 1;
+    case SIM_KEY_ALT_L:
+    case SIM_KEY_ALT_R:
+      bucky &= ~META;
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static int stk_keys (SIM_KEY_EVENT *kev)
+{
+  if (kev->state == SIM_KEYPRESS_UP)
+    return 0;
+
+  switch (kev->key) {
+  case SIM_KEY_0:
+    key_code = bucky | '+';
+    return 1;
+  case SIM_KEY_1:
+    key_code = bucky | '1';
+    return 1;
+  case SIM_KEY_2:
+    key_code = bucky | '2';
+    return 1;
+  case SIM_KEY_3:
+    key_code = bucky | '3';
+    return 1;
+  case SIM_KEY_4:
+    key_code = bucky | '4';
+    return 1;
+  case SIM_KEY_5:
+    key_code = bucky | '5';
+    return 1;
+  case SIM_KEY_6:
+    key_code = bucky | '6';
+    return 1;
+  case SIM_KEY_7:
+    key_code = bucky | '7';
+    return 1;
+  case SIM_KEY_8:
+    key_code = bucky | '8';
+    return 1;
+  case SIM_KEY_9:
+    key_code = bucky | '9';
+    return 1;
+  case SIM_KEY_A:
+    key_code = bucky | 001;
+    return 1;
+  case SIM_KEY_B:
+    key_code = bucky | 002;
+    return 1;
+  case SIM_KEY_C:
+    key_code = bucky | 003;
+    return 1;
+  case SIM_KEY_D:
+    key_code = bucky | 004;
+    return 1;
+  case SIM_KEY_E:
+    key_code = bucky | 005;
+    return 1;
+  case SIM_KEY_F:
+    key_code = bucky | 006;
+    return 1;
+  case SIM_KEY_G:
+    key_code = bucky | 007;
+    return 1;
+  case SIM_KEY_H:
+    key_code = bucky | 010;
+    return 1;
+  case SIM_KEY_I:
+    key_code = bucky | 011;
+    return 1;
+  case SIM_KEY_J:
+    key_code = bucky | 012;
+    return 1;
+  case SIM_KEY_K:
+    key_code = bucky | 013;
+    return 1;
+  case SIM_KEY_L:
+    key_code = bucky | 014;
+    return 1;
+  case SIM_KEY_M:
+    key_code = bucky | 015;
+    return 1;
+  case SIM_KEY_N:
+    key_code = bucky | 016;
+    return 1;
+  case SIM_KEY_O:
+    key_code = bucky | 017;
+    return 1;
+  case SIM_KEY_P:
+    key_code = bucky | 020;
+    return 1;
+  case SIM_KEY_Q:
+    key_code = bucky | 021;
+    return 1;
+  case SIM_KEY_R:
+    key_code = bucky | 022;
+    return 1;
+  case SIM_KEY_S:
+    key_code = bucky | 023;
+    return 1;
+  case SIM_KEY_T:
+    key_code = bucky | 024;
+    return 1;
+  case SIM_KEY_U:
+    key_code = bucky | 025;
+    return 1;
+  case SIM_KEY_V:
+    key_code = bucky | 026;
+    return 1;
+  case SIM_KEY_W:
+    key_code = bucky | 027;
+    return 1;
+  case SIM_KEY_X:
+    key_code = bucky | 030;
+    return 1;
+  case SIM_KEY_Y:
+    key_code = bucky | 031;
+    return 1;
+  case SIM_KEY_Z:
+    key_code = bucky | 032;
+    return 1;
+  case SIM_KEY_BACKQUOTE:
+    key_code = bucky | '0';
+    return 1;
+  case SIM_KEY_MINUS:
+    key_code = bucky | '-';
+    return 1;
+  case SIM_KEY_EQUALS:
+    key_code = bucky | '*';
+    return 1;
+  case SIM_KEY_LEFT_BRACKET:
+    key_code = bucky | '(';
+    return 1;
+  case SIM_KEY_RIGHT_BRACKET:
+    key_code = bucky | ')';
+    return 1;
+  case SIM_KEY_SEMICOLON:
+    key_code = bucky | ';';
+    return 1;
+  case SIM_KEY_SINGLE_QUOTE:
+    key_code = bucky | ':';
+    return 1;
+  case SIM_KEY_BACKSLASH:
+    key_code = bucky | BKSL;
+    return 1;
+  case SIM_KEY_LEFT_BACKSLASH:
+    key_code = bucky | BKSL;
+    return 1;
+  case SIM_KEY_COMMA:
+    key_code = bucky | ',';
+    return 1;
+  case SIM_KEY_PERIOD:
+    key_code = bucky | '.';
+    return 1;
+  case SIM_KEY_SLASH:
+    key_code = bucky | '/';
+    return 1;
+  case SIM_KEY_ESC:
+    key_code = bucky | ALT;
+    return 1;
+  case SIM_KEY_BACKSPACE:
+  case SIM_KEY_DELETE:
+    key_code = bucky | BS;
+    return 1;
+  case SIM_KEY_TAB:
+    key_code = bucky | TAB;
+    return 1;
+  case SIM_KEY_ENTER:
+    key_code = bucky | CR;
+    return 1;
+  case SIM_KEY_SPACE:
+    key_code = bucky | ' ';
+    return 1;
+  default:
+    return 0;
+  }
+}
+
+static int stk_keyboard (SIM_KEY_EVENT *kev)
+{
+    if (stk_modifiers (kev))
+      return 0;
+    
+    if (stk_keys (kev)) {
+      status |= STK_DONE;
+      set_interrupt(STK_DEVNUM, status & STK_PIA);
+      return 0;
+    }
+
+    return 1;
+}
 
 static t_stat stk_svc (UNIT *uptr)
 {
@@ -143,6 +378,12 @@ t_stat stk_devio(uint32 dev, uint64 *data)
         break;
     }
 
+    return SCPE_OK;
+}
+
+static t_stat stk_reset (DEVICE *dptr)
+{
+    vid_display_kb_event_process = stk_keyboard;
     return SCPE_OK;
 }
 
