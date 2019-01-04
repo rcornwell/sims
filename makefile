@@ -95,6 +95,10 @@ ifneq (,$(findstring besm6,$(MAKECMDGOALS)))
   VIDEO_USEFUL = true
   BESM6_BUILD = true
 endif
+# building the KA10 needs video support
+ifneq (,$(findstring ka10,$(MAKECMDGOALS)))
+  VIDEO_USEFUL = true
+endif
 # building the pdp11, pdp10, or any vax simulator could use networking support
 ifneq (,$(or $(findstring pdp11,$(MAKECMDGOALS)),$(findstring pdp10,$(MAKECMDGOALS)),$(findstring vax,$(MAKECMDGOALS)),$(findstring pdp10-ka,$(MAKECMDGOALS)),$(findstring pdp10-ki,$(MAKECMDGOALS)),$(findstring all,$(MAKECMDGOALS))))
   NETWORK_USEFUL = true
@@ -1118,10 +1122,10 @@ KA10_OPT = -DKA=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD ${NETWORK_OPT}
 
 ifneq ($(TYPE340),)
 # ONLY tested on Ubuntu 16.04, using X11 display support:
-KA10_DPY=-DUSE_DISPLAY \
+KA10_DPY=-DUSE_DISPLAY -DHAVE_LIBSDL -DUSE_SIM_VIDEO `$(SDLX_CONFIG) --cflags` \
 	${KA10D}/ka10_dpy.c display/type340.c  display/display.c \
-	display/x11.c
-KA10_DPY_LDFLAGS =-lm -lX11 -lXt
+	display/sim_ws.c
+KA10_DPY_LDFLAGS =-lm -lX11 -lXt `$(SDLX_CONFIG) --libs`
 endif
 ifneq ($(PANDA_LIGHTS),)
 # ONLY for Panda display.
