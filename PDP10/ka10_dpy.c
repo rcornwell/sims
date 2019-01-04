@@ -244,7 +244,7 @@ t_stat dpy_devio(uint32 dev, uint64 *data) {
         uptr->STAT_REG &= ~CONO_MASK;
         uptr->STAT_REG |= *data & CONO_MASK;
         if (*data & CONO_INIT)
-            dpy_update_status( uptr, ty340_reset(), 1);
+            dpy_update_status( uptr, ty340_reset(&dpy_dev), 1);
         sim_debug(DEBUG_CONO, &dpy_dev, "DPY %03o CONO %06o PC=%06o %06o\n",
                   dev, (uint32)*data, PC, uptr->STAT_REG & ~STAT_VALID);
         break;
@@ -298,7 +298,7 @@ t_stat dpy_reset (DEVICE *dptr)
 {
     if (!(dptr->flags & DEV_DIS)) {
         display_reset();
-        ty340_reset();
+        ty340_reset(dptr);
     }
     sim_cancel (&dpy_unit[0]);             /* deactivate unit */
     return SCPE_OK;
