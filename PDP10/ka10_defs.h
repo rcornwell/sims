@@ -399,7 +399,7 @@ extern void ka10_lights_clear_aux (int);
 #define NUM_DEVS_MTY    ITS
 #define NUM_DEVS_DPY    USE_DISPLAY
 #define NUM_DEVS_WCNSLS USE_DISPLAY
-#define NUM_DEVS_IMP    0
+#define NUM_DEVS_IMP    1
 /* Global data */
 
 
