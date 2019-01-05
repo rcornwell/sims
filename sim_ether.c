@@ -576,7 +576,7 @@ int eth_get_packet_crc32_data(const uint8 *msg, int len, uint8 *crcdata)
     uint32 crc = eth_crc32(0, msg, len);                  /* calculate CRC */
     uint32 ncrc = htonl(crc);                             /* CRC in network order */
     int size = sizeof(ncrc);                              /* size of crc field */
-    memcpy(crcdata, &ncrc, size);                         /* append crc to packet */
+    memcpy(crcdata, &crc, size);                         /* append crc to packet */
     crc_len = len + size;                                 /* set packet crc length */
   } else {
     crc_len = 0;                                          /* appending crc would destroy packet */
