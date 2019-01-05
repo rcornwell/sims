@@ -34,7 +34,7 @@
 
 #if (NUM_DEVS_LP > 0)
 
-#define LP_DEVNUM 0126
+#define LP_DEVNUM 0124
 #define STATUS   u3
 #define CHL      u4
 #define CHR      u5
