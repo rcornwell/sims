@@ -76,7 +76,6 @@ con_data[NUM_DEVS_CON];
 uint8  con_startcmd(UNIT *, uint16,  uint8);
 void                con_ini(UNIT *, t_bool);
 t_stat              con_srv(UNIT *);
-t_stat              con_reset(DEVICE *);
 t_stat              con_attach(UNIT *, char *);
 t_stat              con_detach(UNIT *);
 
@@ -110,6 +109,7 @@ void
 con_ini(UNIT *uptr, t_bool f) {
      int                 u = (uptr - con_unit);
      con_data[u].inptr = 0;
+     uptr->u3 &= ~CON_MSK;
      uptr->u5 = 0;
      sim_activate(uptr, 1000);
 }
@@ -262,7 +262,6 @@ con_srv(UNIT *uptr) {
           case '\r':
           case '\n':
                 sim_debug(DEBUG_DATA, &con_dev, "%d: ent\n", u);
-//                if (con_data[u].inptr != 0)
                    uptr->u3 |= CON_INPUT;
                 uptr->u3 |= CON_CR;
                 sim_putchar('\r');

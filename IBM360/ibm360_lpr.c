@@ -102,7 +102,7 @@ MTAB                lpr_mod[] = {
     {0}
 };
 
-struct dib lpr_dib = { 0xFF, 1, NULL, lpr_startcmd, NULL, lpr_unit};
+struct dib lpr_dib = { 0xFF, 1, NULL, lpr_startcmd, NULL, lpr_unit, lpr_ini};
 
 DEVICE              lpr_dev = {
     "LPR", lpr_unit, NULL, lpr_mod,
@@ -273,6 +273,9 @@ lpr_srv(UNIT *uptr) {
 
 void
 lpr_ini(UNIT *uptr, t_bool f) {
+    uptr->u3 &= ~(LPR_FULL|LPR_CMDMSK);
+    uptr->u4 = 0;
+    uptr->u5 = 0;
 }
 
 t_stat

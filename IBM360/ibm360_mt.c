@@ -40,9 +40,10 @@
 #ifdef NUM_DEVS_MT
 #define BUFFSIZE       (64 * 1024)
 #define MTUF_9TR       (1 << MTUF_V_UF)
-#define UNIT_MT              UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE | MTUF_9TR
 #define DEV_BUF_NUM(x)  (((x) & 07) << DEV_V_UF)
 #define GET_DEV_BUF(x)  (((x) >> DEV_V_UF) & 07)
+#define UNIT_MT(x)     UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE | MTUF_9TR | \
+                          DEV_BUF_NUM(x)
 
 
 
@@ -159,14 +160,14 @@ MTAB                mt_mod[] = {
 };
 
 UNIT                mta_unit[] = {
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x180)},       /* 0 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x181)},       /* 1 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x182)},       /* 2 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x183)},       /* 3 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x184)},       /* 4 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x185)},       /* 5 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x186)},       /* 6 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x187)},       /* 7 */
+    {UDATA(&mt_srv, UNIT_MT(0), 0), 0, UNIT_ADDR(0x180)},       /* 0 */
+    {UDATA(&mt_srv, UNIT_MT(0), 0), 0, UNIT_ADDR(0x181)},       /* 1 */
+    {UDATA(&mt_srv, UNIT_MT(0), 0), 0, UNIT_ADDR(0x182)},       /* 2 */
+    {UDATA(&mt_srv, UNIT_MT(0), 0), 0, UNIT_ADDR(0x183)},       /* 3 */
+    {UDATA(&mt_srv, UNIT_MT(0), 0), 0, UNIT_ADDR(0x184)},       /* 4 */
+    {UDATA(&mt_srv, UNIT_MT(0), 0), 0, UNIT_ADDR(0x185)},       /* 5 */
+    {UDATA(&mt_srv, UNIT_MT(0), 0), 0, UNIT_ADDR(0x186)},       /* 6 */
+    {UDATA(&mt_srv, UNIT_MT(0), 0), 0, UNIT_ADDR(0x187)},       /* 7 */
 };
 
 struct dib mta_dib = { 0xF8, NUM_UNITS_MT, NULL, mt_startcmd, NULL, mta_unit, mt_ini};
@@ -180,14 +181,14 @@ DEVICE              mta_dev = {
 
 #if NUM_DEVS_MT > 1
 UNIT                mtb_unit[] = {
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x280)},       /* 0 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x281)},       /* 1 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x282)},       /* 2 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x283)},       /* 3 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x284)},       /* 4 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x285)},       /* 5 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x286)},       /* 6 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x287)},       /* 7 */
+    {UDATA(&mt_srv, UNIT_MT(1), 0), 0, UNIT_ADDR(0x280)},       /* 0 */
+    {UDATA(&mt_srv, UNIT_MT(1), 0), 0, UNIT_ADDR(0x281)},       /* 1 */
+    {UDATA(&mt_srv, UNIT_MT(1), 0), 0, UNIT_ADDR(0x282)},       /* 2 */
+    {UDATA(&mt_srv, UNIT_MT(1), 0), 0, UNIT_ADDR(0x283)},       /* 3 */
+    {UDATA(&mt_srv, UNIT_MT(1), 0), 0, UNIT_ADDR(0x284)},       /* 4 */
+    {UDATA(&mt_srv, UNIT_MT(1), 0), 0, UNIT_ADDR(0x285)},       /* 5 */
+    {UDATA(&mt_srv, UNIT_MT(1), 0), 0, UNIT_ADDR(0x286)},       /* 6 */
+    {UDATA(&mt_srv, UNIT_MT(1), 0), 0, UNIT_ADDR(0x287)},       /* 7 */
 };
 
 struct dib mtb_dib = { 0xF8, NUM_UNITS_MT, NULL, mt_startcmd, NULL, mtb_unit, mt_ini};
@@ -857,7 +858,7 @@ mt_ini(UNIT * uptr, t_bool f)
 {
     DEVICE             *dptr = find_dev_from_unit(uptr);
 
-    uptr->u3 &= ~0xffff;
+    uptr->u3 &= UNIT_ADDR_MASK;
     if ((uptr->flags & MTUF_9TR) == 0)
         uptr->u3 |= MT_ODD|MT_CONV|MT_MDEN_800;
     mt_busy[GET_DEV_BUF(dptr->flags)] = 0;
@@ -878,7 +879,7 @@ mt_attach(UNIT * uptr, CONST char *file)
     if ((r = sim_tape_attach_ex(uptr, file, 0, 0)) != SCPE_OK)
        return r;
     set_devattn(addr, SNS_DEVEND);
-    uptr->u3 &= ~0xffff;
+    uptr->u3 &= UNIT_ADDR_MASK;
     uptr->u4 = 0;
     uptr->u5 = 0;
     return SCPE_OK;
@@ -887,7 +888,7 @@ mt_attach(UNIT * uptr, CONST char *file)
 t_stat
 mt_detach(UNIT * uptr)
 {
-    uptr->u3 = 0;
+    uptr->u3 &= UNIT_ADDR_MASK;
     return sim_tape_detach(uptr);
 }
 
@@ -900,7 +901,7 @@ mt_boot(int32 unit_num, DEVICE * dptr)
     if ((uptr->flags & UNIT_ATT) == 0)
         return SCPE_UNATT;      /* attached? */
     if ((uptr->flags & MTUF_9TR) == 0)  {
-        uptr->u3 &= ~0xffff;
+        uptr->u3 &= UNIT_ADDR_MASK;
         uptr->u3 |= MT_ODD|MT_CONV|MT_MDEN_800;
     }
     return chan_boot(GET_UADDR(uptr->u3), dptr);

@@ -405,7 +405,7 @@ uint8  dasd_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
        if (cmd == 0x0)
            return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
 
-       uptr->u5 = 0x48; //SNS_INTVENT|SNS_CMDREJ;
+       uptr->u5 = 0x48; /*SNS_INTVENT|SNS_CMDREJ; */
        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     }
 
@@ -419,6 +419,7 @@ uint8  dasd_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     case 0x2:              /* Read command */
          uptr->u3 &= ~(DK_PARAM);
          uptr->u3 |= cmd;
+         uptr->u5 = 0;
          return 0;
 
     case 0x0:               /* Status */
@@ -460,7 +461,7 @@ void dasd_adjpos(UNIT * uptr)
                   /* Check for end of track */
                   if ((rec[0] & rec[1] & rec[2] & rec[3]) == 0xff)
                      data->state = DK_POS_END;
-              } 
+              }
               break;
          case DK_POS_CNT:               /* In count (c) */
               if (data->count == 0) {
@@ -557,6 +558,8 @@ t_stat dasd_srv(UNIT * uptr)
              sim_debug(DEBUG_DETAIL, dptr, "adv head unit=%d %02x %d %d %02x\n",
                    unit, state, data->tpos, uptr->u4 & 0xff, data->filemsk);
              if ((data->filemsk & DK_MSK_SK) == DK_MSK_SKNONE) {
+                 sim_debug(DEBUG_DETAIL, dptr, "end cyl skmsk unit=%d %02x %d %02x\n",
+                           unit, state, data->tpos, data->filemsk);
                  uptr->u5 = (SNS_WRP << 8);
                  uptr->u3 &= ~0xff;
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -576,23 +579,12 @@ t_stat dasd_srv(UNIT * uptr)
              if ((uptr->u3 & 0x7) == 1 && (uptr->u3 & 0x60) != 0)
                  uptr->u3 &= ~DK_INDEX;
          }
-         if ((uptr->u4 & 0xff) >= disk_type[type].heads) {
-             sim_debug(DEBUG_DETAIL, dptr, "end cyl unit=%d %02x %d\n",
-                         unit, state, data->tpos);
-             uptr->u5 = (SNS_ENDCYL << 8);
-             data->tstart = 0;
-             uptr->u4 &= ~0xff;
-             uptr->u3 &= ~0xff;
-             chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
-         }
          /* If INDEX set signal no record if read */
          if ((cmd & 0x03) == 0x01 && uptr->u3 & DK_INDEX) {
-             sim_debug(DEBUG_DETAIL, dptr, "index unit=%d %02x %d\n", 
-                   unit, state, data->tpos);
-             /* No seeks allowed, error out */
-             if ((data->filemsk & DK_MSK_SK) == DK_MSK_SKNONE)
-                 uptr->u5 |= (SNS_WRP << 8);
-             else
+             sim_debug(DEBUG_DETAIL, dptr, "index unit=%d %02x %d %04x\n",
+                   unit, state, data->tpos, uptr->u5);
+             /* Unless command is Read Header, return No record found */
+             if (cmd != DK_RD_HA)
                  uptr->u5 |= (SNS_NOREC << 8);
              uptr->u3 &= ~0xff;
              chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -728,41 +720,52 @@ index:
     case 0x4:                 /* Sense */
          ch = uptr->u5 & 0xff;
          sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 1 %x\n", unit, ch);
-         chan_write_byte(addr, &ch) ;
+         if (chan_write_byte(addr, &ch))
+             goto sense_end;
          ch = (uptr->u5 >> 8) & 0xff;
          sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 2 %x\n", unit, ch);
-         chan_write_byte(addr, &ch) ;
+         if (chan_write_byte(addr, &ch))
+             goto sense_end;
          ch = 0;
          sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 3 %x\n", unit, ch);
-         chan_write_byte(addr, &ch) ;
+         if (chan_write_byte(addr, &ch))
+             goto sense_end;
          if (disk_type[type].sen_cnt > 6) {
              ch = 0;
              sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 4 %x\n", unit, ch);
-             chan_write_byte(addr, &ch) ;
+             if (chan_write_byte(addr, &ch))
+                 goto sense_end;
              ch = unit;
              sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 5 %x\n", unit, ch);
-             chan_write_byte(addr, &ch) ;
+             if (chan_write_byte(addr, &ch))
+                 goto sense_end;
              ch = (uptr->u4 >> 8) & 0xff;
              sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 6 %x\n", unit, ch);
-             chan_write_byte(addr, &ch) ;
+             if (chan_write_byte(addr, &ch))
+                 goto sense_end;
              ch = (uptr->u4 & 0x1f) | ((uptr->u4 & 0x10000) ? 0x40 : 0);
              sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 7 %x\n", unit, ch);
-             chan_write_byte(addr, &ch) ;
+             if (chan_write_byte(addr, &ch))
+                 goto sense_end;
              ch = 0;              /* Compute message code */
              sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 8 %x\n", unit, ch);
-             chan_write_byte(addr, &ch) ;
+             if (chan_write_byte(addr, &ch))
+                 goto sense_end;
              i = 8;
          } else {
              ch = unit;
              sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 4 %x\n", unit, ch);
-             chan_write_byte(addr, &ch) ;
+             if (chan_write_byte(addr, &ch))
+                 goto sense_end;
              i = 4;
          }
          ch = 0;
          for (; i < disk_type[type].sen_cnt; i++) {
              sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d %d %x\n", unit, i, ch);
-             chan_write_byte(addr, &ch) ;
+             if (chan_write_byte(addr, &ch))
+                 goto sense_end;
          }
+sense_end:
          uptr->u3 &= ~(0xff|DK_INDEX);
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          break;
@@ -1284,7 +1287,7 @@ rd:
                   uptr->u6 = cmd;
                   uptr->u3 &= ~(0xff|DK_PARAM);
                   chan_end(addr, SNS_CHNEND|SNS_DEVEND);
-                  for(i = 0; i < 8; i++)
+                  for(i = 1; i < 9; i++)
                      da[i] = 0xff;
              }
          }
@@ -1477,7 +1480,7 @@ wrckd:
                  /* Write end mark */
                  for(i = 0; i < 8; i++)
                     rec[i] = 0xff;
-                
+
                  uptr->u6 = cmd;
                  uptr->u3 &= ~(0xff|DK_PARAM|DK_INDEX);
                  uptr->u3 |= DK_CYL_DIRTY;
@@ -1599,7 +1602,6 @@ dasd_format(UNIT * uptr, int flag) {
         return 0;
     } else
         return 1;
-  
 }
 
 t_stat
@@ -1681,7 +1683,7 @@ dasd_detach(UNIT * uptr)
                data->tsize * disk_type[type].heads, uptr->fileref);
         uptr->u3 &= ~DK_CYL_DIRTY;
     }
-    if (cmd != 0) 
+    if (cmd != 0)
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
     sim_cancel(uptr);
     free(data->cbuf);

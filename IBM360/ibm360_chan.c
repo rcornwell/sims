@@ -604,7 +604,7 @@ int  startio(uint16 addr) {
     }
     if (chan_status[chan] & STATUS_BUSY) {
         M[0x40 >> 2] = 0;
-        M[0x44 >> 2] = ((uint32)chan_status[chan]<<16);// | M[0x44 >> 2] & 0xffff;
+        M[0x44 >> 2] = ((uint32)chan_status[chan]<<16);
         sim_debug(DEBUG_EXP, &cpu_dev, "Channel store csw  %02x %08x\n",
                    chan, M[0x44 >> 2]);
         chan_status[chan] = 0;
@@ -634,7 +634,6 @@ int testio(uint16 addr) {
     sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=1\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
         store_csw(chan);
- //       chan_dev[chan] = 0;
         return 1;
     }
     if (ccw_cmd[chan] != 0 || (ccw_flags[chan] & (FLAG_CD|FLAG_CC)) != 0) {
