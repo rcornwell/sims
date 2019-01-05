@@ -26,6 +26,12 @@
 #include <time.h>
 #include "ka10_defs.h"
 
+#ifndef NUM_DEVS_IMX
+#define NUM_DEVS_IMX 0
+#endif
+
+#if (NUM_DEVS_IMX > 0)
+
 #define IMX_DEVNUM      0574
 
 #define IMX_PIA         0000007
@@ -109,3 +115,4 @@ const char *imx_description (DEVICE *dptr)
 {
     return "A/D input multiplexor";
 }
+#endif
