@@ -16,7 +16,7 @@ correctly as far as I am able to tell. It will currently run MCP XIII and XV.
 These are still in the testing stages. Please report any issues that you find in them.
 
 The KA10 sim has successfully run Tops 10 5.03 and Tops 10 6.03.  
-The KI10 sim has successfully run Tops 10 6.03   
+The KI10 sim has successfully run Tops 10 6.03 with VMSER  
 The KA10 sim has successfully run ITS.  
 Support for BBN pager (untested).  
 
@@ -36,6 +36,10 @@ Support for BBN pager (untested).
    * Reader  
  
    DC10E terminal mux.  
+   Morton tty Mux for ITS.  
+   Knight Kludge mux for ITS.  
+
+   340 Display Station support.  
 
    The RP10 supports boot (actual hardware did not), by reading in Blocks 4-7
 and transfering to the loaded value. RC10, RH10, TM10 support readin mode. 
@@ -55,10 +59,9 @@ with Goerge 2 and 3.
 
 # IBM 360 simulator.
 
-This is a new simulator. There is still much work and testing that needs to be done.
-The goal is to have it run TOS, DOS and OS/360. If there is interest I might try early 
-versions of MTS, and possibly add in 370 paging support.
-
+Current version will IPL TOS/360, DOS/360, OS/360. Still work do to with system generation.
+Mising is floating point and decimal instruction support. IBM 360/67 support will also be
+added to support CP/67 and MTS early versions. 
 It supports the following units:
 
     DASD (Disk)
