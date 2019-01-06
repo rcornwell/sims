@@ -99,6 +99,7 @@
 #define DK_WR_CKD          0x1d       /* Write count, key and data */
 #define DK_WR_SCKD         0x01       /* Write special count, key and data */
 #define DK_ERASE           0x11       /* Erase to end of track */
+#define DK_RD_SECT         0x22       /* Read sector counter */
 #define DK_SETSECT         0x23       /* Set sector */
 #define DK_MT              0x80       /* Multi track flag */
 
@@ -1258,6 +1259,33 @@ rd:
          }
          break;
 
+    case DK_RD_SECT:         /* Read sector */
+         /* Not valid for drives before 3330 */
+         sim_debug(DEBUG_DETAIL, dptr, "readsector unit=%d\n", unit);
+         if (disk_type[type].sen_cnt > 6) {
+             ch = data->tpos / 110;
+             if (chan_write_byte(addr, &ch)) {
+                 sim_debug(DEBUG_DETAIL, dptr, "readsector rdr\n");
+                 uptr->u6 = 0;
+                 uptr->u3 &= ~(0xff);
+                 uptr->u5 |= SNS_CMDREJ;
+                 chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                 break;
+             }
+             /* Nothing more to do */
+             uptr->u6 = cmd;
+             uptr->u3 &= ~(0xff);
+             chan_end(addr, SNS_DEVEND|SNS_CHNEND);
+             sim_debug(DEBUG_DETAIL, dptr, "readsector %02x\n", ch);
+             break;
+          }
+          /* Otherwise report as invalid command */
+          uptr->u6 = 0;
+          uptr->u3 &= ~(0xff);
+          uptr->u5 |= SNS_CMDREJ;
+          chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+          break;
+
     case DK_WR_HA:           /* Write home address */
          /* Wait for index */
          if (state == DK_POS_INDEX) {
@@ -1697,10 +1725,12 @@ t_stat
 dasd_boot(int32 unit_num, DEVICE * dptr)
 {
     UNIT               *uptr = &dptr->units[unit_num];
+    struct dasd_t      *data = (struct dasd_t *)(uptr->up7);
     t_stat              r;
 
     if ((uptr->flags & UNIT_ATT) == 0)
         return SCPE_UNATT;      /* attached? */
+    data->filemsk = 0;
     return chan_boot(GET_UADDR(uptr->u3), dptr);
 }
 
