@@ -1000,6 +1000,7 @@ SOCKET newsock;
 TMLN *lp;
 int32 *op;
 int32 i, j;
+int32 ringing = -1;
 char *address;
 char msg[512];
 uint32 poll_time = sim_os_msec ();
@@ -1094,11 +1095,12 @@ if (mp->master) {
                     (lp->ser_connect_pending == FALSE) &&
                     ((lp->modembits & TMXR_MDM_DTR) == 0)) {
                     ++ringable_count;
-                    tmxr_set_get_modem_bits (lp, TMXR_MDM_RNG, 0, NULL);
+                    lp->modembits |= TMXR_MDM_RNG;
                     tmxr_debug_connect_line (lp, "tmxr_poll_conn() - Ringing line");
                     }
                 }
             if (ringable_count > 0) {
+                ringing = -2;
                 if (mp->ring_start_time == 0) {
                     mp->ring_start_time = poll_time;
                     mp->ring_sock = newsock;
@@ -1201,6 +1203,12 @@ for (i = 0; i < mp->lines; i++) {                       /* check each line in se
                             tmxr_debug_connect_line (lp, msg);
                             free (sockname);
                             free (peername);
+                            if (!lp->notelnet) {
+                                sim_write_sock (lp->sock, (char *)mantra, sizeof(mantra));
+                                tmxr_debug (TMXR_DBG_XMT, lp, "Sending", (char *)mantra, sizeof(mantra));
+                                lp->telnet_sent_opts = (uint8 *)realloc (lp->telnet_sent_opts, 256);
+                                memset (lp->telnet_sent_opts, 0, 256);
+                                }
                             return i;
                         case -1:                                /* failed connection */
                             sprintf (msg, "tmxr_poll_conn() - Outgoing Line Connection to %s failed", lp->destination);
@@ -1247,7 +1255,7 @@ for (i = 0; i < mp->lines; i++) {                       /* check each line in se
                                 lp->ipad = address;                 /* ip address */
                                 tmxr_init_line (lp);                /* init line */
                                 if (!lp->notelnet) {
-                                    sim_write_sock (newsock, (char *)mantra, sizeof(mantra));
+                                    sim_write_sock (lp->sock, (char *)mantra, sizeof(mantra));
                                     tmxr_debug (TMXR_DBG_XMT, lp, "Sending", (char *)mantra, sizeof(mantra));
                                     lp->telnet_sent_opts = (uint8 *)realloc (lp->telnet_sent_opts, 256);
                                     memset (lp->telnet_sent_opts, 0, 256);
@@ -1285,7 +1293,7 @@ for (i = 0; i < mp->lines; i++) {                       /* check each line in se
 
     }
 
-return -1;                                              /* no new connections made */
+return ringing;                                         /* no new connections made */
 }
 
 /* Reset a line.
@@ -1350,7 +1358,7 @@ if ((lp->destination) && (!lp->serport)) {
     if ((!lp->modem_control) || (lp->modembits & TMXR_MDM_DTR)) {
         sprintf (msg, "tmxr_reset_ln_ex() - connecting to %s", lp->destination);
         tmxr_debug_connect_line (lp, msg);
-        lp->connecting = sim_connect_sock_ex (lp->datagram ? lp->port : NULL, lp->destination, "localhost", NULL, (lp->datagram ? SIM_SOCK_OPT_DATAGRAM : 0) | (lp->mp->packet ? SIM_SOCK_OPT_NODELAY : 0));
+        lp->connecting = sim_connect_sock_ex (lp->datagram ? lp->port : NULL, lp->destination, "localhost", NULL, (lp->datagram ? SIM_SOCK_OPT_DATAGRAM : 0) | (lp->packet ? SIM_SOCK_OPT_NODELAY : 0));
         }
     }
 tmxr_init_line (lp);                                /* initialize line state */
@@ -1546,7 +1554,7 @@ if ((bits_to_set & ~(TMXR_MDM_OUTGOING)) ||         /* Assure only settable bits
     return SCPE_ARG;
 before_modem_bits = lp->modembits;
 lp->modembits |= bits_to_set;
-lp->modembits &= ~(bits_to_clear | TMXR_MDM_INCOMING);
+lp->modembits &= ~bits_to_clear;
 if ((lp->sock) || (lp->serport) || (lp->loopback)) {
     if (lp->modembits & TMXR_MDM_DTR) {
         incoming_state = TMXR_MDM_DSR;
@@ -1598,6 +1606,8 @@ else {
                 }
             }
         }
+    if (!lp->conn)
+        lp->modembits &= ~(TMXR_MDM_DCD | TMXR_MDM_CTS);
     if ((lp->master) || (lp->mp && lp->mp->master) ||
         (lp->port && lp->destination))
         incoming_state = TMXR_MDM_DSR;
@@ -1638,7 +1648,7 @@ if (lp->mp && lp->modem_control) {                  /* This API ONLY works on mo
 
                 sprintf (msg, "tmxr_set_get_modem_bits() - establishing outgoing connection to: %s", lp->destination);
                 tmxr_debug_connect_line (lp, msg);
-                lp->connecting = sim_connect_sock_ex (lp->datagram ? lp->port : NULL, lp->destination, "localhost", NULL, (lp->datagram ? SIM_SOCK_OPT_DATAGRAM : 0) | (lp->mp->packet ? SIM_SOCK_OPT_NODELAY : 0));
+                lp->connecting = sim_connect_sock_ex (lp->datagram ? lp->port : NULL, lp->destination, "localhost", NULL, (lp->datagram ? SIM_SOCK_OPT_DATAGRAM : 0) | (lp->packet ? SIM_SOCK_OPT_NODELAY : 0));
                 }
             }
         }
@@ -2470,9 +2480,13 @@ static struct {
     {"7200",    TMLN_SPD_7200_BPS},
     {"9600",    TMLN_SPD_9600_BPS},
     {"19200",   TMLN_SPD_19200_BPS},
+    {"25000",   TMLN_SPD_25000_BPS},
     {"38400",   TMLN_SPD_38400_BPS},
+    {"40000",   TMLN_SPD_40000_BPS},
+    {"50000",   TMLN_SPD_50000_BPS},
     {"57600",   TMLN_SPD_57600_BPS},
     {"76800",   TMLN_SPD_76800_BPS},
+    {"80000",   TMLN_SPD_80000_BPS},
     {"115200",  TMLN_SPD_115200_BPS},
     {"0",       0}};                    /* End of List, last valid value */
 int nspeed;
@@ -2500,6 +2514,12 @@ while (1) {
 return -1;
 }
 
+t_stat tmxr_set_line_modem_control (TMLN *lp, t_bool enab_disab)
+{
+lp->modem_control = enab_disab;
+return SCPE_OK;
+}
+
 t_stat tmxr_set_line_speed (TMLN *lp, CONST char *speed)
 {
 UNIT *uptr;
@@ -2518,7 +2538,8 @@ if (*cptr == '*') {
     if (r != SCPE_OK)
         return r;
     lp->bpsfactor = bpsfactor;
-    if (speed == cptr) {                /* just changing bps factor? */
+    if (!(lp->serport) &&               /* Not a serial port */
+        (speed == cptr)) {              /* AND just changing bps factor? */
         char speedbps[16];
 
         sprintf (speedbps, "%d", lp->rxbps);
@@ -2528,8 +2549,9 @@ if (*cptr == '*') {
         }
     }
 lp->rxbps = rxbps;                      /* use supplied speed */
-if ((lp->serport) && (lp->bpsfactor != 0.0))
-    lp->bpsfactor = 1.0;                /* Ignore bps factor for serial ports */
+if ((lp->bpsfactor == 0.0) ||           /* factor unspecified */
+    (lp->serport))                      /* OR serial port */
+    lp->bpsfactor = 1.0;                /* No bps factor */
 lp->rxdeltausecs = (uint32)(_tmln_speed_delta (speed) / lp->bpsfactor);
 lp->rxnexttime = 0.0;
 uptr = lp->uptr;
@@ -3108,6 +3130,8 @@ if ((line < 0) || (line >= mp->lines))
 if (mp->ldsc[line].uptr)
     mp->ldsc[line].uptr->dynflags &= ~UNIT_TM_POLL;
 mp->ldsc[line].uptr = uptr_poll;
+if (uptr_poll->tmxr)                /* associated with a TMXR? */
+    mp->ldsc[line].uptr->dynflags |= UNIT_TM_POLL;
 return SCPE_OK;
 }
 
@@ -3141,6 +3165,8 @@ if ((line < 0) || (line >= mp->lines))
 if (mp->ldsc[line].o_uptr)
     mp->ldsc[line].o_uptr->dynflags &= ~UNIT_TM_POLL;
 mp->ldsc[line].o_uptr = uptr_poll;
+if (uptr_poll->tmxr)                /* associated with a TMXR? */
+    mp->ldsc[line].o_uptr->dynflags |= UNIT_TM_POLL;
 return SCPE_OK;
 }
 
@@ -4260,7 +4286,7 @@ return _sim_activate (uptr, interval);
 
 t_stat tmxr_activate_abs (UNIT *uptr, int32 interval)
 {
-AIO_VALIDATE;                   /* Can't call asynchronously */
+AIO_VALIDATE(uptr);             /* Can't call asynchronously */
 sim_cancel (uptr);
 return tmxr_activate (uptr, interval);
 }

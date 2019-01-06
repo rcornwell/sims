@@ -88,6 +88,8 @@
    sim_tape_show_dens   show tape density
    sim_tape_set_async   enable asynchronous operation
    sim_tape_clr_async   disable asynchronous operation
+   aim_tape_test        unit test routine
+
 */
 
 #include "sim_defs.h"
@@ -2439,7 +2441,7 @@ if (ctx == NULL)                                        /* if not properly attac
 sim_debug_unit (ctx->dbit, uptr, "sim_tape_reset(unit=%d)\n", (int)(uptr-ctx->dptr->units));
 
 _sim_tape_io_flush(uptr);
-AIO_VALIDATE;
+AIO_VALIDATE(uptr);
 AIO_UPDATE_QUEUE;
 return SCPE_OK;
 }
@@ -2745,5 +2747,10 @@ else {                                                  /* otherwise get the den
         fprintf (st, "density not set");                /*   it was never set by the caller */
     }
 
+return SCPE_OK;
+}
+
+t_stat sim_tape_test (DEVICE *dptr)
+{
 return SCPE_OK;
 }

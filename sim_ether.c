@@ -576,7 +576,7 @@ int eth_get_packet_crc32_data(const uint8 *msg, int len, uint8 *crcdata)
     uint32 crc = eth_crc32(0, msg, len);                  /* calculate CRC */
     uint32 ncrc = htonl(crc);                             /* CRC in network order */
     int size = sizeof(ncrc);                              /* size of crc field */
-    memcpy(crcdata, &crc, size);                         /* append crc to packet */
+    memcpy(crcdata, &crc, size);                          /* append crc to packet */
     crc_len = len + size;                                 /* set packet crc length */
   } else {
     crc_len = 0;                                          /* appending crc would destroy packet */
@@ -968,6 +968,8 @@ void eth_show_dev (FILE* st, ETH_DEV* dev)
   {}
 static int _eth_get_system_id (char *buf, size_t buf_size)
   {memset (buf, 0, buf_size); return 0;}
+t_stat sim_ether_test (DEVICE *dptr)
+  {return SCPE_OK;}
 #else    /* endif unimplemented */
 
 const char *eth_capabilities(void)
@@ -1118,14 +1120,6 @@ static void load_function(const char* function, _func* func_ptr) {
     sim_printf ("Eth: Failed to find function '%s' in %s\n", function, lib_name);
     lib_loaded = 3;
   }
-}
-
-static void try_load_function(const char* function, _func* func_ptr) {
-#ifdef _WIN32
-    *func_ptr = (_func)((size_t)GetProcAddress(hLib, function));
-#else
-    *func_ptr = (_func)((size_t)dlsym(hLib, function));
-#endif
 }
 
 /* load wpcap.dll as required */
@@ -2279,7 +2273,12 @@ else {
   }
 
 namebuf[sizeof(namebuf)-1] = '\0';
-strncpy (namebuf, savname, sizeof(namebuf)-1);
+strlcpy (namebuf, savname, sizeof(namebuf));
+if (strchr (namebuf, ':')) {
+    for (num = 0; (namebuf[num] != ':') && (namebuf[num] != '\0'); num++)
+        if (isupper (namebuf[num]))
+            namebuf[num] = tolower (namebuf[num]);
+    }
 savname = namebuf;
 r = _eth_open_port(namebuf, &dev->eth_api, &dev->handle, &dev->fd_handle, errbuf, NULL, (void *)dev, dptr, dbit);
 
@@ -4017,5 +4016,10 @@ if (dev->bpf_filter)
 if (dev->eth_api == ETH_API_NAT)
   sim_slirp_show ((SLIRP *)dev->handle, st);
 #endif
+}
+
+t_stat sim_ether_test (DEVICE *dptr)
+{
+return SCPE_OK;
 }
 #endif /* USE_NETWORK */
