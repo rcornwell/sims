@@ -103,14 +103,15 @@
 #define DK_SETSECT         0x23       /* Set sector */
 #define DK_MT              0x80       /* Multi track flag */
 
-#define DK_INDEX           0x0100     /* Index seen in command */
-#define DK_NOEQ            0x0200     /* Not equal compare */
-#define DK_HIGH            0x0400     /* High compare */
-#define DK_PARAM           0x0800     /* Parameter in u4 */
-#define DK_MSET            0x1000     /* Mode set command already */
-#define DK_SHORTSRC        0x2000     /* Last search was short */
-#define DK_SRCOK           0x4000     /* Last search good */
-#define DK_CYL_DIRTY       0x8000     /* Current cylinder dirty */
+#define DK_INDEX           0x00100    /* Index seen in command */
+#define DK_NOEQ            0x00200    /* Not equal compare */
+#define DK_HIGH            0x00400    /* High compare */
+#define DK_PARAM           0x00800    /* Parameter in u4 */
+#define DK_MSET            0x01000    /* Mode set command already */
+#define DK_SHORTSRC        0x02000    /* Last search was short */
+#define DK_SRCOK           0x04000    /* Last search good */
+#define DK_CYL_DIRTY       0x08000    /* Current cylinder dirty */
+#define DK_DONE            0x10000    /* Write command done, zero fill */
 
 #define DK_MSK_INHWR0      0x00       /* Inhbit writing of HA/R0 */
 #define DK_MSK_INHWRT      0x40       /* Inhbit all writes */
@@ -1025,6 +1026,8 @@ sense_end:
          if (state == DK_POS_CNT && count == 0) {
              sim_debug(DEBUG_DETAIL, dptr, "search ID unit=%d %x %d %x %d\n",
                            unit, state, count, uptr->u4, data->rec);
+             sim_debug(DEBUG_DETAIL, dptr, "ID unit=%d %02x %02x %02x %02x %02x %02x %02x %02x\n",
+                 unit, da[0], da[1], da[2], da[3], da[4], da[5], da[6], da[7]);
              uptr->u3 &= ~(DK_SRCOK|DK_SHORTSRC|DK_NOEQ|DK_HIGH);
              uptr->u3 |= DK_PARAM;
          }
@@ -1378,6 +1381,7 @@ rd:
                  data->tpos++;
                  state = data->state = DK_POS_CNT;
                  uptr->u3 |= DK_PARAM;
+                 uptr->u3 &= ~DK_DONE;
              } else {
                  sim_debug(DEBUG_DETAIL, dptr, "Wr CKD unit=%d seq\n", unit);
                  uptr->u5 |= SNS_CMDREJ | (SNS_INVSEQ << 8);
@@ -1403,6 +1407,7 @@ rd:
              if (((uptr->u6 & 0x13) == 0x11 &&
                      (uptr->u3 & (DK_SHORTSRC|DK_SRCOK)) == DK_SRCOK)) {
                  uptr->u3 |= DK_PARAM;
+                 uptr->u3 &= ~DK_DONE;
              sim_debug(DEBUG_DETAIL, dptr, "WR KD unit=%d %d k=%d d=%d %02x %04x %d\n",
                  unit, data->rec, data->klen, data->dlen, data->state,
                  8 + data->klen + data->dlen, count);
@@ -1429,6 +1434,7 @@ rd:
              if (((uptr->u6 & 0x3) == 1 && (uptr->u6 & 0xE0) != 0 &&
                      (uptr->u3 & (DK_SHORTSRC|DK_SRCOK)) == DK_SRCOK)) {
                  uptr->u3 |= DK_PARAM;
+                 uptr->u3 &= ~DK_DONE;
              sim_debug(DEBUG_DETAIL, dptr, "WR D unit=%d %d k=%d d=%d %02x %04x %d\n",
                  unit, data->rec, data->klen, data->dlen, data->state,
                  8 + data->klen + data->dlen, count);
@@ -1444,32 +1450,33 @@ wrckd:
          if (uptr->u3 & DK_PARAM) {
              uptr->u3 &= ~DK_INDEX;
              if (state == DK_INDEX) {
-                  uptr->u5 = SNS_TRKOVR << 8;
-                  uptr->u3 &= ~(0xff|DK_PARAM);
-                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
-                  break;
+                 uptr->u5 = SNS_TRKOVR << 8;
+                 uptr->u3 &= ~(0xff|DK_PARAM|DK_DONE);
+                 chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                 break;
              } else if ((cmd == DK_WR_KD || cmd == DK_WR_D) && state == DK_POS_DATA
                    && data->dlen == 0) {
-                  sim_debug(DEBUG_DETAIL, dptr, "WR EOF unit=%d %x %d %d d=%d\n",
+                 sim_debug(DEBUG_DETAIL, dptr, "WR EOF unit=%d %x %d %d d=%d\n",
                             unit, state, count, data->rec, data->dlen);
-                  uptr->u3 &= ~(0xff|DK_PARAM);
-                  uptr->u6 = cmd;
-                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
-                  break;
+                 uptr->u3 &= ~(0xff|DK_PARAM|DK_DONE);
+                 uptr->u6 = cmd;
+                 chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
+                 break;
              } else if (state == DK_POS_DATA && data->count == data->dlen) {
-                  uptr->u6 = cmd;
-                  uptr->u3 &= ~(0xff|DK_PARAM);
-                  chan_end(addr, SNS_CHNEND|SNS_DEVEND);
-                  if ((cmd & 0x10) != 0) {
+                 uptr->u6 = cmd;
+                 uptr->u3 &= ~(0xff|DK_PARAM|DK_DONE);
+                 chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+                 if ((cmd & 0x10) != 0) {
                       for(i = 0; i < 8; i++)
                          da[i] = 0xff;
-                  }
-                  sim_debug(DEBUG_DETAIL, dptr, "WCKD end unit=%d %d %d %04x\n",
+                 }
+                 sim_debug(DEBUG_DETAIL, dptr, "WCKD end unit=%d %d %d %04x\n",
                           unit, data->tpos+8, count, data->tpos - data->rpos);
-                  break;
+                 break;
              }
-             if (chan_read_byte(addr, &ch)) {
+             if (uptr->u3 & DK_DONE || chan_read_byte(addr, &ch)) {
                  ch = 0;
+                 uptr->u3 |= DK_DONE;
              }
              sim_debug(DEBUG_DATA, dptr, "Char %02x, %02x %d %d\n", ch, state,
                    count, data->tpos);
@@ -1482,16 +1489,17 @@ wrckd:
                      "WCKD count unit=%d %d k=%d d=%d %02x %04x\n",
                      unit, data->rec, data->klen, data->dlen, data->state,
                      8 + data->klen + data->dlen);
-                 data->state = DK_POS_KEY;
                  if (data->klen == 0)
                      data->state = DK_POS_DATA;
+                 else
+                     data->state = DK_POS_KEY;
                  data->count = 0;
              }
          }
          break;
 
     case DK_ERASE:           /* Erase to end of track */
-         if (state == DK_POS_AM || state == DK_POS_END) {
+         if ((state == DK_POS_AM || state == DK_POS_END) && data->count == 0) {
              /* Check if command ok based on mask */
              i = data->filemsk & DK_MSK_WRT;
              if (i == DK_MSK_INHWRT || i == DK_MSK_ALLWRU) {

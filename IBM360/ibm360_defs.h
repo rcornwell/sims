@@ -115,6 +115,7 @@ typedef struct dib {
 #define OP_SSK            0x08
 #define OP_ISK            0x09
 #define OP_SVC            0x0A
+#define OP_BASR           0x0D
 #define OP_LPR            0x10
 #define OP_LNR            0x11
 #define OP_LTR            0x12
@@ -176,6 +177,7 @@ typedef struct dib {
 #define OP_AH             0x4A
 #define OP_SH             0x4B
 #define OP_MH             0x4C
+#define OP_BAS            0x4D
 #define OP_CVD            0x4E
 #define OP_CVB            0x4F
 #define OP_ST             0x50
@@ -236,6 +238,9 @@ typedef struct dib {
 #define OP_TIO            0x9D
 #define OP_HIO            0x9E
 #define OP_TCH            0x9F
+#define OP_STMC           0xB0
+#define OP_LRA            0xB1
+#define OP_LMC            0xB8
 #define OP_MVN            0xD1
 #define OP_MVC            0xD2
 #define OP_MVZ            0xD3
