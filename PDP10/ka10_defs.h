@@ -213,6 +213,9 @@ extern DEBTAB crd_debug[];
 #define EXJSYS  000040        /* 002000 */
 #endif
 #ifdef ITS
+#ifdef PURE
+#undef PURE
+#endif
 #define PURE    000040        /* 002000 */
 #define ONEP    000010        /* 000400 */
 #endif

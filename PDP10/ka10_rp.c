@@ -539,7 +539,7 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
         } else if ((rp_reg[ctlr] & 040) == 0) {
               int parity;
               *data = (t_uint64)(rp_read(ctlr, rp_drive[ctlr], rp_reg[ctlr]) & 0177777);
-              parity = (*data >> 8) ^ *data;
+              parity = (int)((*data >> 8) ^ *data);
               parity = (parity >> 4) ^ parity;
               parity = (parity >> 2) ^ parity;
               parity = ((parity >> 1) ^ parity) & 1;

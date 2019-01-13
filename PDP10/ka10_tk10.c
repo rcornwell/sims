@@ -183,7 +183,6 @@ static t_stat tk10_svc (UNIT *uptr)
 {
     static int scan = 0;
     int i;
-    int32 done;
 
     sim_activate_after (uptr, 1000);
 
@@ -244,8 +243,6 @@ static t_stat tk10_svc (UNIT *uptr)
 
 static t_stat tk10_reset (DEVICE *dptr)
 {
-    int i;
-
     sim_debug(DEBUG_CMD, &tk10_dev, "Reset\n");
     if (tk10_unit->flags & UNIT_ATT)
         sim_activate (tk10_unit, tmxr_poll);

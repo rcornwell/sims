@@ -26,7 +26,62 @@
 
 #include "ka10_defs.h"
 #include "sim_ether.h"
-#include <arpa/inet.h>
+
+static char *
+ipv4_inet_ntoa(struct in_addr ip)
+{
+static char str[20];
+
+sprintf (str, "%d.%d.%d.%d", ip.s_addr & 0xFF, (ip.s_addr >> 8) & 0xFF, (ip.s_addr >> 16) & 0xFF, (ip.s_addr >> 24) & 0xFF);
+return str;
+}
+
+typedef uint32 in_addr_t;
+
+static
+int ipv4_inet_aton(const char *str, struct in_addr *inp)
+{
+unsigned long bytes[4];
+int i = 0;
+char *end;
+in_addr_t val;
+
+for (i=0; (i < 4) && isdigit (*str); i++) {
+    bytes[i] = strtoul (str, &end, 0);
+    if (str == end)
+        return 0;
+    str = end;
+    if (*str == '.')
+        ++str;
+    }
+if (*str && (*str != '/'))
+    return 0;
+switch (i) {
+    case 1:
+        val = bytes[0];
+        break;
+    case 2:
+        if ((bytes[0] > 0xFF) || (bytes[1] > 0xFFFFFF))
+            return 0;
+        val = (bytes[0] << 24) | bytes[1];
+        break;
+    case 3:
+        if ((bytes[0] > 0xFF) || (bytes[1] > 0xFF) || (bytes[2] > 0xFFFF))
+            return 0;
+        val = (bytes[0] << 24) | (bytes[1] << 16) | bytes[2];
+        break;
+    case 4:
+        if ((bytes[0] > 0xFF) || (bytes[1] > 0xFF) || (bytes[2] > 0xFF) || (bytes[3] > 0xFF))
+            return 0;
+        val = (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
+        break;
+    default:
+        return 0;
+    }
+if (inp)
+    *(in_addr_t *)inp = htonl (val);
+return 1;
+}
 
 #if NUM_DEVS_IMP > 0
 #define IMP_DEVNUM  0460
@@ -540,7 +595,6 @@ imp_packet_in(struct imp_device *imp, ETH_PACK *read_buffer)
     int                     type = ntohs(hdr->type);
     int                     n;
     int                     pad; 
-int i;
     if (type == ETHTYPE_ARP) {
         imp_arp_arpin(imp, read_buffer);
     } else if (type == ETHTYPE_IP) {
@@ -679,7 +733,7 @@ imp_send_packet (struct imp_device *imp, int len)
            break;
     case 8:      /* Error with Message */
            break;
-    defult:
+    default:
            break;
     }
     return;
@@ -897,7 +951,6 @@ imp_arp_arpin(struct imp_device *imp, ETH_PACK *packet)
 {
     struct arp_hdr *arp;
     int             op;
-    t_stat          r;
 
     /* Ignore packet if too short */
     if (packet->len < sizeof(struct arp_hdr)) 
@@ -1010,12 +1063,13 @@ t_stat imp_show_ip (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
    struct in_addr ip;
    ip.s_addr = imp_data.ip;
-   fprintf (st, "IP=%s/%d", inet_ntoa(ip), imp_data.maskbits);
+   fprintf (st, "IP=%s/%d", ipv4_inet_ntoa(ip), imp_data.maskbits);
+   return SCPE_OK;
 }
 
 t_stat imp_set_ip (UNIT* uptr, int32 val, CONST char* cptr, void* desc)
 {
-    char tbuf[CBUFSIZE], gbuf[CBUFSIZE], abuf[CBUFSIZE];
+    char abuf[CBUFSIZE];
     struct in_addr  ip;
 
     if (!cptr) return SCPE_IERR;
@@ -1026,7 +1080,7 @@ t_stat imp_set_ip (UNIT* uptr, int32 val, CONST char* cptr, void* desc)
           imp_data.maskbits = atoi (cptr);
     else
           imp_data.maskbits = 32;
-    if (inet_aton (abuf, &ip)) {
+    if (ipv4_inet_aton (abuf, &ip)) {
         imp_data.ip = ip.s_addr;
         imp_data.ip_mask =  htonl((0xffffffff) << (32 - imp_data.maskbits));
         return SCPE_OK;
@@ -1037,8 +1091,10 @@ t_stat imp_set_ip (UNIT* uptr, int32 val, CONST char* cptr, void* desc)
 t_stat imp_show_gwip (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
    struct in_addr ip;
+
    ip.s_addr = imp_data.gwip;
-   fprintf (st, "GW=%s", inet_ntoa(ip));
+   fprintf (st, "GW=%s", ipv4_inet_ntoa(ip));
+   return SCPE_OK;
 }
 
 t_stat imp_set_gwip (UNIT* uptr, int32 val, CONST char* cptr, void* desc)
@@ -1047,7 +1103,7 @@ t_stat imp_set_gwip (UNIT* uptr, int32 val, CONST char* cptr, void* desc)
     if (!cptr) return SCPE_IERR;
     if (uptr->flags & UNIT_ATT) return SCPE_ALATT;
 
-    if (inet_aton (cptr, &ip)) {
+    if (ipv4_inet_aton (cptr, &ip)) {
        imp_data.gwip = ip.s_addr;
        return SCPE_OK;
     }
@@ -1057,8 +1113,10 @@ t_stat imp_set_gwip (UNIT* uptr, int32 val, CONST char* cptr, void* desc)
 t_stat imp_show_hostip (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
    struct in_addr ip;
+
    ip.s_addr = imp_data.hostip;
-   fprintf (st, "HOST=%s", inet_ntoa(ip));
+   fprintf (st, "HOST=%s", ipv4_inet_ntoa(ip));
+   return SCPE_OK;
 }
 
 t_stat imp_set_hostip (UNIT* uptr, int32 val, CONST char* cptr, void* desc)
@@ -1067,7 +1125,7 @@ t_stat imp_set_hostip (UNIT* uptr, int32 val, CONST char* cptr, void* desc)
     if (!cptr) return SCPE_IERR;
     if (uptr->flags & UNIT_ATT) return SCPE_ALATT;
 
-    if (inet_aton (cptr, &ip)) {
+    if (ipv4_inet_aton (cptr, &ip)) {
        imp_data.hostip = ip.s_addr;
        return SCPE_OK;
     }
