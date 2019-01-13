@@ -28,6 +28,8 @@
 #include "display/display.h"
 #include "ka10_defs.h"
 
+#ifdef USE_DISPLAY
+#if NUM_DEVS_STK > 0
 #define STK_DEVNUM      070
 
 /* CONI/O bits. */
@@ -391,3 +393,5 @@ const char *stk_description (DEVICE *dptr)
 {
     return "Stanford keyboard";
 }
+#endif
+#endif

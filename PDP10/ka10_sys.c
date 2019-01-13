@@ -142,7 +142,9 @@ DEVICE *sim_devices[] = {
     &imx_dev,
 #endif
 #if NUM_DEVS_STK > 0
+#ifdef USE_DISPLAY
     &stk_dev,
+#endif
 #endif
 #if NUM_DEVS_TK10 > 0
     &tk10_dev,
