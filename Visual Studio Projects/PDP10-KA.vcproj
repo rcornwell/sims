@@ -21,13 +21,12 @@
 			OutputDirectory="..\BIN\NT\$(PlatformName)-$(ConfigurationName)"
 			IntermediateDirectory="..\BIN\NT\Project\simh\$(ProjectName)\$(PlatformName)-$(ConfigurationName)"
 			ConfigurationType="1"
-			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC71.vsprops"
 			CharacterSet="0"
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
 				Description="Check for required build dependencies &amp; git commit id"
-				CommandLine="Pre-Build-Event.cmd LIBPCRE"
+				CommandLine="Pre-Build-Event.cmd &quot;$(TargetDir)$(TargetName).exe&quot; LIBPCRE"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
@@ -36,13 +35,16 @@
 				Name="VCXMLDataGeneratorTool"
 			/>
 			<Tool
+				Name="VCWebServiceProxyGeneratorTool"
+			/>
+			<Tool
 				Name="VCMIDLTool"
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="./;../;../GRI/;&quot;../../windows-build/PCRE/include/&quot;"
-				PreprocessorDefinitions="USE_INT64;USE_SIM_CARD;KA=1;_CRT_NONSTDC_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;SIM_NEED_GIT_COMMIT_ID;HAVE_PCREPOSIX_H;PCRE_STATIC"
+				AdditionalIncludeDirectories="../PDP10/;../PDP11/;../VAX/;../../windows-build/libSDL/SDL2-2.0.5/include;./;../;../slirp;../slirp_glue;../slirp_glue/qemu;../slirp_glue/qemu/win32/include;../../windows-build/winpcap/Wpdpack/Include;../../windows-build/PCRE/include/;../../windows-build/pthreads;../../windows-build/libSDL/SDL2-2.0.8/include;../../windows-build/libpng-1.6.18"
+				PreprocessorDefinitions="USE_INT64;USE_SIM_CARD;KA=1;_CRT_NONSTDC_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;SIM_NEED_GIT_COMMIT_ID;HAVE_PCREPOSIX_H;PCRE_STATIC;USE_SHARED;PTW32_STATIC_LIB;USE_READER_THREAD;SIM_ASYNCH_IO"
 				KeepComments="false"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="0"
@@ -95,6 +97,8 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
+				Description="Running Available Tests"
+				CommandLine="Post-Build-Event.cmd PDP10-KA &quot;$(TargetDir)$(TargetName).exe&quot;"
 			/>
 		</Configuration>
 		<Configuration
@@ -102,19 +106,21 @@
 			OutputDirectory="..\BIN\NT\$(PlatformName)-$(ConfigurationName)"
 			IntermediateDirectory="..\BIN\NT\Project\simh\$(ProjectName)\$(PlatformName)-$(ConfigurationName)"
 			ConfigurationType="1"
-			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC71.vsprops"
 			CharacterSet="0"
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
 				Description="Check for required build dependencies &amp; git commit id"
-				CommandLine="Pre-Build-Event.cmd LIBPCRE"
+				CommandLine="Pre-Build-Event.cmd &quot;$(TargetDir)$(TargetName).exe&quot; LIBPCRE"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
 			/>
 			<Tool
 				Name="VCXMLDataGeneratorTool"
+			/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"
 			/>
 			<Tool
 				Name="VCMIDLTool"
@@ -124,8 +130,9 @@
 				Optimization="2"
 				InlineFunctionExpansion="1"
 				OmitFramePointers="true"
-				AdditionalIncludeDirectories="./;../;../GRI/;&quot;../../windows-build/PCRE/include/&quot;"
-				PreprocessorDefinitions="USE_INT64;USE_SIM_CARD;KA=1;_CRT_NONSTDC_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;SIM_NEED_GIT_COMMIT_ID;HAVE_PCREPOSIX_H;PCRE_STATIC"
+				WholeProgramOptimization="true"
+				AdditionalIncludeDirectories="../PDP10/;../PDP11/;../VAX/;../../windows-build/libSDL/SDL2-2.0.5/include;./;../;../slirp;../slirp_glue;../slirp_glue/qemu;../slirp_glue/qemu/win32/include;../../windows-build/winpcap/Wpdpack/Include;../../windows-build/PCRE/include/;../../windows-build/pthreads;../../windows-build/libSDL/SDL2-2.0.8/include;../../windows-build/libpng-1.6.18"
+				PreprocessorDefinitions="USE_INT64;USE_SIM_CARD;KA=1;_CRT_NONSTDC_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;SIM_NEED_GIT_COMMIT_ID;HAVE_PCREPOSIX_H;PCRE_STATIC;USE_SHARED;PTW32_STATIC_LIB;USE_READER_THREAD;SIM_ASYNCH_IO"
 				StringPooling="true"
 				RuntimeLibrary="0"
 				EnableFunctionLevelLinking="true"
@@ -178,6 +185,8 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
+				Description="Running Available Tests"
+				CommandLine="Post-Build-Event.cmd PDP10-KA &quot;$(TargetDir)$(TargetName).exe&quot;"
 			/>
 		</Configuration>
 	</Configurations>
@@ -221,7 +230,19 @@
 				>
 			</File>
 			<File
+				RelativePath="..\PDP10\ka10_dpy.c"
+				>
+			</File>
+			<File
 				RelativePath="..\PDP10\ka10_dt.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ka10_imp.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ka10_imx.c"
 				>
 			</File>
 			<File
@@ -230,6 +251,14 @@
 			</File>
 			<File
 				RelativePath="..\PDP10\ka10_mt.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ka10_mty.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ka10_pd.c"
 				>
 			</File>
 			<File
@@ -253,8 +282,35 @@
 				>
 			</File>
 			<File
+				RelativePath="..\PDP10\ka10_tk10.c"
+				>
+			</File>
+			<File
 				RelativePath="..\PDP10\ka10_tu.c"
 				>
+			</File>
+			<File
+				RelativePath="..\..\windows-build\pthreads\pthread.c"
+				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						PreprocessorDefinitions="HAVE_CONFIG_H;PTW32_BUILD_INLINED;PTW32_STATIC_LIB;__CLEANUP_C;$(NOINHERIT)"
+						CompileAs="1"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						WholeProgramOptimization="false"
+						PreprocessorDefinitions="HAVE_CONFIG_H;PTW32_BUILD_INLINED;PTW32_STATIC_LIB;__CLEANUP_C;$(NOINHERIT)"
+						CompileAs="1"
+					/>
+				</FileConfiguration>
 			</File>
 			<File
 				RelativePath="..\scp.c"
@@ -375,6 +431,10 @@
 			Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe"
 			>
 		</Filter>
+		<File
+			RelativePath="..\PDP10\Makefile"
+			>
+		</File>
 	</Files>
 	<Globals>
 	</Globals>

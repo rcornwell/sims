@@ -244,10 +244,19 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "isys8024", "isys8024.vcproj
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "imds-225", "imds-225.vcproj", "{A66F0D85-174F-4AFE-A44E-7FAE3D3727BC}"
+	ProjectSection(ProjectDependencies) = postProject
+		{D40F3AF1-EEE7-4432-9807-2AD287B490F8} = {D40F3AF1-EEE7-4432-9807-2AD287B490F8}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ibmpc", "ibmpc.vcproj", "{76EF8599-7AB0-4C8D-997B-AAEEE724A5D0}"
+	ProjectSection(ProjectDependencies) = postProject
+		{D40F3AF1-EEE7-4432-9807-2AD287B490F8} = {D40F3AF1-EEE7-4432-9807-2AD287B490F8}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ibmpcxt", "ibmpcxt.vcproj", "{0026A4C2-655A-4C03-B6CA-B1EAF79FA4D1}"
+	ProjectSection(ProjectDependencies) = postProject
+		{D40F3AF1-EEE7-4432-9807-2AD287B490F8} = {D40F3AF1-EEE7-4432-9807-2AD287B490F8}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "scelbi", "scelbi.vcproj", "{1E92CC4B-9ED5-4CD4-BD35-061F25126523}"
 	ProjectSection(ProjectDependencies) = postProject
@@ -260,6 +269,9 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "3B2", "3B2.vcproj", "{56178
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "I701", "I701.vcproj", "{F1F44607-FB9E-428C-AD8F-56F98699D121}"
+	ProjectSection(ProjectDependencies) = postProject
+		{D40F3AF1-EEE7-4432-9807-2AD287B490F8} = {D40F3AF1-EEE7-4432-9807-2AD287B490F8}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "I7090", "I7090.vcproj", "{33EE34FC-A12F-47FE-9FD6-8B74D08718C7}"
 	ProjectSection(ProjectDependencies) = postProject
@@ -282,6 +294,21 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "I7070", "I7070.vcproj", "{F
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "I7010", "I7010.vcproj", "{55A727F0-B5C8-48E8-9EF2-D5DAF679C520}"
+	ProjectSection(ProjectDependencies) = postProject
+		{D40F3AF1-EEE7-4432-9807-2AD287B490F8} = {D40F3AF1-EEE7-4432-9807-2AD287B490F8}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "UC15", "UC15.vcproj", "{B5E9D32E-53F9-4C9B-B037-5A2D34E370CF}"
+	ProjectSection(ProjectDependencies) = postProject
+		{D40F3AF1-EEE7-4432-9807-2AD287B490F8} = {D40F3AF1-EEE7-4432-9807-2AD287B490F8}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PDP10-KA", "PDP10-KA.vcproj", "{01F75DE5-8049-4C73-A325-B1F9964CE709}"
+	ProjectSection(ProjectDependencies) = postProject
+		{D40F3AF1-EEE7-4432-9807-2AD287B490F8} = {D40F3AF1-EEE7-4432-9807-2AD287B490F8}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PDP10-KI", "PDP10-KI.vcproj", "{0BA63EC5-BD4F-44FB-AE89-7DD2C84CB1D9}"
 	ProjectSection(ProjectDependencies) = postProject
 		{D40F3AF1-EEE7-4432-9807-2AD287B490F8} = {D40F3AF1-EEE7-4432-9807-2AD287B490F8}
 	EndProjectSection
@@ -532,6 +559,18 @@ Global
 		{55A727F0-B5C8-48E8-9EF2-D5DAF679C520}.Debug|Win32.Build.0 = Debug|Win32
 		{55A727F0-B5C8-48E8-9EF2-D5DAF679C520}.Release|Win32.ActiveCfg = Release|Win32
 		{55A727F0-B5C8-48E8-9EF2-D5DAF679C520}.Release|Win32.Build.0 = Release|Win32
+		{B5E9D32E-53F9-4C9B-B037-5A2D34E370CF}.Debug|Win32.ActiveCfg = Debug|Win32
+		{B5E9D32E-53F9-4C9B-B037-5A2D34E370CF}.Debug|Win32.Build.0 = Debug|Win32
+		{B5E9D32E-53F9-4C9B-B037-5A2D34E370CF}.Release|Win32.ActiveCfg = Release|Win32
+		{B5E9D32E-53F9-4C9B-B037-5A2D34E370CF}.Release|Win32.Build.0 = Release|Win32
+		{01F75DE5-8049-4C73-A325-B1F9964CE709}.Debug|Win32.ActiveCfg = Debug|Win32
+		{01F75DE5-8049-4C73-A325-B1F9964CE709}.Debug|Win32.Build.0 = Debug|Win32
+		{01F75DE5-8049-4C73-A325-B1F9964CE709}.Release|Win32.ActiveCfg = Release|Win32
+		{01F75DE5-8049-4C73-A325-B1F9964CE709}.Release|Win32.Build.0 = Release|Win32
+		{0BA63EC5-BD4F-44FB-AE89-7DD2C84CB1D9}.Debug|Win32.ActiveCfg = Debug|Win32
+		{0BA63EC5-BD4F-44FB-AE89-7DD2C84CB1D9}.Debug|Win32.Build.0 = Debug|Win32
+		{0BA63EC5-BD4F-44FB-AE89-7DD2C84CB1D9}.Release|Win32.ActiveCfg = Release|Win32
+		{0BA63EC5-BD4F-44FB-AE89-7DD2C84CB1D9}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
