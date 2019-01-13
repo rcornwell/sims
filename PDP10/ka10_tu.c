@@ -872,7 +872,7 @@ t_stat tu_srv(UNIT * uptr)
              df->buf = 0;
          }
          if (tu_frame[ctlr] != 0 && uptr->u4 == 0 && df10_read(df) == 0)
-             uptr->u4 != 010;
+             uptr->u4 |= 010;
 
          if ((uptr->u3 & CS_MOTION) != 0) {
              if (uptr->u4 == 0)

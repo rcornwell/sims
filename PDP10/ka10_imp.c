@@ -851,8 +851,8 @@ imp_packet_out(struct imp_device *imp, ETH_PACK *packet) {
             memcpy(&pkt->ethhdr.dest, &tabptr->ethaddr, 6);
             memcpy(&pkt->ethhdr.src, &imp->mac, 6);
             pkt->ethhdr.type = htons(ETHTYPE_IP);
-            packet->crc_len = eth_add_packet_crc32(&packet->msg[0], packet->len);
-            packet->len = packet->crc_len;
+//            packet->crc_len = eth_add_packet_crc32(&packet->msg[0], packet->len);
+//            packet->len = packet->crc_len;
             eth_write(&imp->etherface, packet, NULL);
             return;
          }
@@ -884,8 +884,8 @@ imp_packet_out(struct imp_device *imp, ETH_PACK *packet) {
     arp->protolen = 4;
 
     arp_pkt.len = sizeof(struct arp_hdr);
-    packet->crc_len = eth_add_packet_crc32(&packet->msg[0], packet->len);
-    packet->len = packet->crc_len;
+//    packet->crc_len = eth_add_packet_crc32(&packet->msg[0], packet->len);
+//    packet->len = packet->crc_len;
     eth_write(&imp->etherface, &arp_pkt, NULL);
 }
    
@@ -973,8 +973,8 @@ imp_arp_arpin(struct imp_device *imp, ETH_PACK *packet)
            arp->sipaddr = imp->ip;
            arp->ethhdr.type = htons(ETHTYPE_ARP);
            packet->len = sizeof(struct arp_hdr);
-           packet->crc_len = eth_add_packet_crc32(&packet->msg[0], packet->len);
-           packet->len = packet->crc_len;
+//           packet->crc_len = eth_add_packet_crc32(&packet->msg[0], packet->len);
+//           packet->len = packet->crc_len;
            eth_write(&imp->etherface, packet, NULL);
          }
          break;
@@ -995,9 +995,9 @@ imp_arp_arpin(struct imp_device *imp, ETH_PACK *packet)
                     memcpy(&pkt->ethhdr.dest, &arp->shwaddr, 6);
                     memcpy(&pkt->ethhdr.src, &imp->mac, 6);
                     pkt->ethhdr.type = htons(ETHTYPE_IP);
-                    temp->packet.crc_len = eth_add_packet_crc32(
-                                      &temp->packet.msg[0], temp->packet.len);
-                    temp->packet.len = temp->packet.crc_len;
+//                    temp->packet.crc_len = eth_add_packet_crc32(
+//                                      &temp->packet.msg[0], temp->packet.len);
+//                    temp->packet.len = temp->packet.crc_len;
                     eth_write(&imp->etherface, &temp->packet, NULL);
                     imp_free_packet(imp, temp);
                 } else {
