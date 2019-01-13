@@ -382,7 +382,7 @@ t_stat rs_devio(uint32 dev, uint64 *data) {
                int parity;
 
                *data = (t_uint64)(rs_read(ctlr, rs_drive[ctlr], rs_reg[ctlr]) & 0177777);
-               parity = (*data >> 8) ^ *data;
+               parity = (int)((*data >> 8) ^ *data);
                parity = (parity >> 4) ^ parity;
                parity = (parity >> 2) ^ parity;
                parity = ((parity >> 1) ^ parity) & 1;

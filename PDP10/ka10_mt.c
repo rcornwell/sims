@@ -610,7 +610,7 @@ t_stat mt_srv(UNIT * uptr)
             }
             uptr->BPOS++;
             uptr->CPOS++;
-            if ((uptr->BPOS + cc_max) >= uptr->hwmark)
+            if ((uint32)(uptr->BPOS + cc_max) >= uptr->hwmark)
                 uptr->CNTRL |= MT_LASTWD;
             status &= ~CHAR_COUNT;
             status |= (uint64)(uptr->CPOS) << 18;

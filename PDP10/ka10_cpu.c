@@ -798,7 +798,7 @@ int check_irq_level() {
  * Recover from held interrupt.
  */
 void restore_pi_hold() {
-     int i, lvl;
+     int lvl;
 
      if (!pi_enable)
         return;
@@ -1446,7 +1446,7 @@ int its_load_tlb(uint32 reg, int page, uint32 *tlb) {
     if ((page & 1) == 0)
         data >>= 18;
     data &= RMASK;
-    *tlb = data;
+    *tlb = (uint32)data;
     pag_reload = ((pag_reload + 1) & 017);
     return 0;
 }
@@ -1464,7 +1464,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
         int      page = (RMASK & addr) >> 10;
         int      acc;
         int      uf = (FLAGS & USER) != 0;
-        int      ofd = fault_data;
+        int      ofd = (int)fault_data;
 
         /* If paging is not enabled, address is direct */
         if (!page_enable) {
@@ -2793,7 +2793,7 @@ dpnorm:
                       dbr3 = ((0377 << 18) | RMASK) & MB;
                       AB = (AB + 1) & RMASK;
                       MB = M[AB];                /* WD 7 */
-                      ac_stack = MB;
+                      ac_stack = (uint32)MB;
                       page_enable = 1;
                   }
                   /* AC & 2 = Clear TLB */
@@ -3144,7 +3144,6 @@ ldb_ptr:
               }
 fnorm:
               if (AR != 0) {
-fxnorm:
                   if ((AR & FPNMASK) != 0) { SC += 1;  AR >>= 1; }
                   if (((SC & 0400) != 0) ^ ((SC & 0200) != 0))
                       fxu_hold_set = 1;

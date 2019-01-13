@@ -169,7 +169,6 @@ static t_stat mty_svc (UNIT *uptr)
 {
     static int scan = 0;
     int i;
-    int32 done;
 
     /* High speed device, poll every 0.1 ms. */
     sim_activate_after (uptr, 100);
@@ -221,8 +220,6 @@ static t_stat mty_svc (UNIT *uptr)
 
 static t_stat mty_reset (DEVICE *dptr)
 {
-    int i;
-
     sim_debug(DEBUG_CMD, &mty_dev, "Reset\n");
     if (mty_unit->flags & UNIT_ATT)
         sim_activate (mty_unit, tmxr_poll);
