@@ -112,6 +112,7 @@
 #define DK_SRCOK           0x04000    /* Last search good */
 #define DK_CYL_DIRTY       0x08000    /* Current cylinder dirty */
 #define DK_DONE            0x10000    /* Write command done, zero fill */
+#define DK_INDEX2          0x20000    /* Second index seen */
 
 #define DK_MSK_INHWR0      0x00       /* Inhbit writing of HA/R0 */
 #define DK_MSK_INHWRT      0x40       /* Inhbit all writes */
@@ -362,7 +363,7 @@ uint8  dasd_startio(UNIT *uptr, uint16 chan) {
     if ((uptr->u3 & 0xff) != 0) {
        return SNS_BSY;
     }
-    uptr->u3 &= ~(DK_INDEX|DK_NOEQ|DK_HIGH|DK_PARAM|DK_MSET);
+    uptr->u3 &= ~(DK_INDEX|DK_NOEQ|DK_HIGH|DK_PARAM|DK_MSET|DK_DONE|DK_INDEX2);
     if ((uptr->flags & UNIT_ATT) != 0) {
         struct dasd_t  *data = (struct dasd_t *)(uptr->up7);
         data->filemsk = 0;
@@ -550,7 +551,7 @@ t_stat dasd_srv(UNIT * uptr)
     rec = &data->cbuf[data->rpos + data->tstart];
     da = &data->cbuf[data->tpos + data->tstart];
     if (state != DK_POS_SEEK && data->tpos >= data->tsize) {
-    sim_debug(DEBUG_POS, dptr, "state end unit=%d %d\n", unit, data->tpos);
+        sim_debug(DEBUG_POS, dptr, "state end unit=%d %d\n", unit, data->tpos);
         state = DK_POS_INDEX;
     }
     switch(state) {
@@ -579,10 +580,10 @@ t_stat dasd_srv(UNIT * uptr)
                  goto index;
              }
              if ((uptr->u3 & 0x7) == 1 && (uptr->u3 & 0x60) != 0)
-                 uptr->u3 &= ~DK_INDEX;
+                 uptr->u3 &= ~(DK_INDEX|DK_INDEX2);
          }
          /* If INDEX set signal no record if read */
-         if ((cmd & 0x03) == 0x01 && uptr->u3 & DK_INDEX) {
+         if ((cmd & 0x03) == 0x01 && uptr->u3 & DK_INDEX2) {
              sim_debug(DEBUG_DETAIL, dptr, "index unit=%d %02x %d %04x\n",
                    unit, state, data->tpos, uptr->u5);
              /* Unless command is Read Header, return No record found */
@@ -592,7 +593,7 @@ t_stat dasd_srv(UNIT * uptr)
              chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
          }
 index:
-         uptr->u3 |= DK_INDEX;
+         uptr->u3 |= (uptr->u3 & DK_INDEX) ? DK_INDEX2 : DK_INDEX;
          data->tstart = data->tsize * (uptr->u4 & 0xff);
          data->tpos = data->rpos = 0;
          data->state = DK_POS_HA;
@@ -690,7 +691,7 @@ index:
          sim_debug(DEBUG_DETAIL, dptr, "seek unit=%d %d %d s=%x\n", unit, uptr->u4 >> 8, i,
                  data->state);
          if (i == 0) {
-             uptr->u3 &= ~DK_INDEX;
+             uptr->u3 &= ~(DK_INDEX|DK_INDEX2);
              data->state = DK_POS_INDEX;
              sim_activate(uptr, 20);
          } else if (i > 0 ) {
@@ -768,7 +769,7 @@ index:
                  goto sense_end;
          }
 sense_end:
-         uptr->u3 &= ~(0xff|DK_INDEX);
+         uptr->u3 &= ~(0xff|DK_INDEX|DK_INDEX2);
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          break;
 
@@ -1175,7 +1176,7 @@ sense_end:
          /* Read in the first record on track zero */
          if (count == 0 && state == DK_POS_DATA && data->rec == 1) {
              uptr->u3 |= DK_PARAM;
-             uptr->u3 &= ~DK_INDEX;
+             uptr->u3 &= ~(DK_INDEX|DK_INDEX2);
              sim_debug(DEBUG_DETAIL, dptr, "RD IPL unit=%d %d k=%d d=%d %02x %04x\n",
                  unit, data->rec, data->klen, data->dlen, data->state,
                  8 + data->klen + data->dlen);
@@ -1186,7 +1187,7 @@ sense_end:
          /* Wait for record zero count */
          if (count == 0 && state == DK_POS_CNT && data->rec == 0) {
              uptr->u3 |= DK_PARAM;
-             uptr->u3 &= ~DK_INDEX;
+             uptr->u3 &= ~(DK_INDEX|DK_INDEX2);
              sim_debug(DEBUG_DETAIL, dptr, "RD R0 unit=%d %d k=%d d=%d %02x %04x\n",
                  unit, data->rec, data->klen, data->dlen, data->state,
                  8 + data->klen + data->dlen);
@@ -1197,7 +1198,7 @@ sense_end:
          /* Wait for any count */
          if (count == 0 && state == DK_POS_CNT && data->rec != 0) {
              uptr->u3 |= DK_PARAM;
-             uptr->u3 &= ~DK_INDEX;
+             uptr->u3 &= ~(DK_INDEX|DK_INDEX2);
              sim_debug(DEBUG_DETAIL, dptr, "RD CKD unit=%d %d k=%d d=%d %02x %04x %04x\n",
                  unit, data->rec, data->klen, data->dlen, data->state, data->dlen,
                  8 + data->klen + data->dlen);
@@ -1209,7 +1210,7 @@ sense_end:
          if (count == 0 && ((data->klen != 0 && state == DK_POS_KEY) ||
                             (data->klen == 0 && state == DK_POS_DATA))) {
              uptr->u3 |= DK_PARAM;
-             uptr->u3 &= ~DK_INDEX;
+             uptr->u3 &= ~(DK_INDEX|DK_INDEX2);
              sim_debug(DEBUG_DETAIL, dptr, "RD KD unit=%d %d k=%d d=%d %02x %04x %04x\n",
                  unit, data->rec, data->klen, data->dlen, data->state, data->dlen,
                  8 + data->klen + data->dlen);
@@ -1220,8 +1221,9 @@ sense_end:
          /* Wait for next data */
          if (count == 0 && state == DK_POS_DATA) {
              uptr->u3 |= DK_PARAM;
-             uptr->u3 &= ~DK_INDEX;
-             sim_debug(DEBUG_DETAIL, dptr, "RD D unit=%d %d k=%d d=%d %02x %04x %04x %d\n",
+             uptr->u3 &= ~(DK_INDEX|DK_INDEX2);
+             sim_debug(DEBUG_DETAIL, dptr, 
+                 "RD D unit=%d %d k=%d d=%d %02x %04x %04x %d\n",
                  unit, data->rec, data->klen, data->dlen, data->state, data->dlen,
                  8 + data->klen + data->dlen, count);
          }
@@ -1243,8 +1245,9 @@ rd:
                  break;
              }
              if (state == DK_POS_DATA && count == data->dlen) {
-             sim_debug(DEBUG_DETAIL, dptr, "RD next unit=%d %02x %02x %02x %02x %02x %02x %02x %02x\n",
-                 unit, da[0], da[1], da[2], da[3], da[4], da[5], da[6], da[7]);
+                 sim_debug(DEBUG_DETAIL, dptr, 
+                     "RD next unit=%d %02x %02x %02x %02x %02x %02x %02x %02x\n",
+                     unit, da[0], da[1], da[2], da[3], da[4], da[5], da[6], da[7]);
                  uptr->u3 &= ~(0xff|DK_PARAM);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                  break;
@@ -1253,8 +1256,9 @@ rd:
              sim_debug(DEBUG_DATA, dptr, "RD Char %02x %02x %d %d\n",
                     ch, state, count, data->tpos);
              if (chan_write_byte(addr, &ch)) {
-             sim_debug(DEBUG_DETAIL, dptr, "RD next unit=%d %02x %02x %02x %02x %02x %02x %02x %02x\n",
-                 unit, da[0], da[1], da[2], da[3], da[4], da[5], da[6], da[7]);
+                 sim_debug(DEBUG_DETAIL, dptr,
+                     "RD next unit=%d %02x %02x %02x %02x %02x %02x %02x %02x\n",
+                     unit, da[0], da[1], da[2], da[3], da[4], da[5], da[6], da[7]);
                  uptr->u3 &= ~(0xff|DK_PARAM);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                  break;
@@ -1306,8 +1310,8 @@ rd:
          }
 
          if (uptr->u3 & DK_PARAM) {
-             uptr->u3 &= ~DK_INDEX;
-             sim_debug(DEBUG_DETAIL, dptr, "Wr HA unit=%d %x %d %d\n", unit,
+             uptr->u3 &= ~(DK_INDEX|DK_INDEX2);
+             sim_debug(DEBUG_DETAIL, dptr, "WR HA unit=%d %x %d %d\n", unit,
                          state, count, data->rec);
              if (chan_read_byte(addr, &ch)) {
                  ch = 0;
@@ -1329,7 +1333,7 @@ rd:
          /* Wait for first record or end of disk */
          if ((state == DK_POS_CNT || state == DK_POS_END)
                   && data->rec == 0 && count == 0) {
-             sim_debug(DEBUG_DETAIL, dptr, "Wr R0 unit=%d %x %d\n", unit,
+             sim_debug(DEBUG_DETAIL, dptr, "WR R0 unit=%d %x %d\n", unit,
                    state, count);
              /* Check if command ok based on mask */
              if ((data->filemsk & DK_MSK_WRT) != DK_MSK_ALLWRT) {
@@ -1360,12 +1364,12 @@ rd:
          /* Wait for next non-zero record, or end of disk */
          if ((state == DK_POS_CNT || state == DK_POS_END)
                   && data->rec != 0 && count == 0) {
-             sim_debug(DEBUG_DETAIL, dptr, "Wr CKD unit=%d %x %d\n", unit,
+             sim_debug(DEBUG_DETAIL, dptr, "WR CKD unit=%d %x %d\n", unit,
                       state, count);
              /* Check if command ok based on mask */
              i = data->filemsk & DK_MSK_WRT;
              if (i == DK_MSK_INHWRT || i == DK_MSK_ALLWRU) {
-                 sim_debug(DEBUG_DETAIL, dptr, "Wr CKD unit=%d mask\n", unit);
+                 sim_debug(DEBUG_DETAIL, dptr, "WR CKD unit=%d mask\n", unit);
                  uptr->u5 |= SNS_CMDREJ;
                  uptr->u6 = 0;
                  uptr->u3 &= ~(0xff);
@@ -1375,7 +1379,7 @@ rd:
              if (uptr->u6 == DK_WR_R0 || uptr->u6 == DK_WR_CKD ||
                 ((uptr->u6 & 0x7) == 1 && (uptr->u6 & 0x60) != 0 &&
                      (uptr->u3 & (DK_SHORTSRC|DK_SRCOK)) == DK_SRCOK)) {
-                 sim_debug(DEBUG_DETAIL, dptr, "Wr CKD unit=%d ok\n", unit);
+                 sim_debug(DEBUG_DETAIL, dptr, "WR CKD unit=%d ok\n", unit);
                  data->tpos = data->rpos;
                  da = &data->cbuf[data->tpos + data->tstart];
                  data->tpos++;
@@ -1383,7 +1387,7 @@ rd:
                  uptr->u3 |= DK_PARAM;
                  uptr->u3 &= ~DK_DONE;
              } else {
-                 sim_debug(DEBUG_DETAIL, dptr, "Wr CKD unit=%d seq\n", unit);
+                 sim_debug(DEBUG_DETAIL, dptr, "WR CKD unit=%d seq\n", unit);
                  uptr->u5 |= SNS_CMDREJ | (SNS_INVSEQ << 8);
                  uptr->u6 = 0;
                  uptr->u3 &= ~(0xff);
@@ -1448,8 +1452,8 @@ rd:
 
 wrckd:
          if (uptr->u3 & DK_PARAM) {
-             uptr->u3 &= ~DK_INDEX;
-             if (state == DK_INDEX) {
+             uptr->u3 &= ~(DK_INDEX|DK_INDEX2);
+             if (state == DK_POS_INDEX) {
                  uptr->u5 = SNS_TRKOVR << 8;
                  uptr->u3 &= ~(0xff|DK_PARAM|DK_DONE);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -1465,13 +1469,13 @@ wrckd:
              } else if (state == DK_POS_DATA && data->count == data->dlen) {
                  uptr->u6 = cmd;
                  uptr->u3 &= ~(0xff|DK_PARAM|DK_DONE);
-                 chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                  if ((cmd & 0x10) != 0) {
                       for(i = 0; i < 8; i++)
                          da[i] = 0xff;
                  }
                  sim_debug(DEBUG_DETAIL, dptr, "WCKD end unit=%d %d %d %04x\n",
                           unit, data->tpos+8, count, data->tpos - data->rpos);
+                 chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                  break;
              }
              if (uptr->u3 & DK_DONE || chan_read_byte(addr, &ch)) {
@@ -1500,6 +1504,8 @@ wrckd:
 
     case DK_ERASE:           /* Erase to end of track */
          if ((state == DK_POS_AM || state == DK_POS_END) && data->count == 0) {
+             sim_debug(DEBUG_DETAIL, dptr, "Erase unit=%d %d %d\n",
+                     unit, data->rec, data->rpos);
              /* Check if command ok based on mask */
              i = data->filemsk & DK_MSK_WRT;
              if (i == DK_MSK_INHWRT || i == DK_MSK_ALLWRU) {
@@ -1518,7 +1524,7 @@ wrckd:
                     rec[i] = 0xff;
 
                  uptr->u6 = cmd;
-                 uptr->u3 &= ~(0xff|DK_PARAM|DK_INDEX);
+                 uptr->u3 &= ~(0xff|DK_PARAM|DK_INDEX|DK_INDEX2);
                  uptr->u3 |= DK_CYL_DIRTY;
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND);
              } else {

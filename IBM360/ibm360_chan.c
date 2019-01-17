@@ -554,6 +554,7 @@ store_csw(uint16 chan) {
     M[0x44 >> 2] = (((uint32)ccw_count[chan])) | ((uint32)chan_status[chan]<<16);
     if (chan_status[chan] & STATUS_PCI) {
         chan_status[chan] &= ~STATUS_PCI;
+        ccw_flags[chan] &= ~FLAG_PCI;
     } else {
         chan_status[chan] = 0;
     }
