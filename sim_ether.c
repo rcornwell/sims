@@ -1572,6 +1572,9 @@ static void eth_get_nic_hw_addr(ETH_DEV* dev, const char *devname)
         NULL};
 
     memset(command, 0, sizeof(command));
+    /* try to force an otherwise unused interface to be turned on */
+    snprintf(command, sizeof(command)-1, "ifconfig %s up", devname);
+    (void)system(command);
     for (i=0; patterns[i] && (0 == dev->have_host_nic_phy_addr); ++i) {
       snprintf(command, sizeof(command)-1, "ifconfig %s | %s  >NIC.hwaddr", devname, patterns[i]);
       (void)system(command);
@@ -2154,7 +2157,21 @@ else { /* !tap: */
       else { /* not udp:, so attempt to open the parameter as if it were an explicit device name */
 #if defined(HAVE_PCAP_NETWORK)
         *handle = (void*) pcap_open_live(savname, bufsz, ETH_PROMISC, PCAP_READ_TIMEOUT, errbuf);
-        if (!*handle)   /* can't open device */
+#if !defined(__CYGWIN__) && !defined(__VMS) && !defined(_WIN32)
+        if (!*handle) { /* can't open device */
+          if (strstr (errbuf, "That device is not up")) {
+            char command[1024];
+
+            /* try to force an otherwise unused interface to be turned on */
+            memset(command, 0, sizeof(command));
+            snprintf(command, sizeof(command)-1, "ifconfig %s up", savname);
+            (void)system(command);
+            errbuf[0] = '\0';
+            *handle = (void*) pcap_open_live(savname, bufsz, ETH_PROMISC, PCAP_READ_TIMEOUT, errbuf);
+            }
+          }
+#endif
+        if (!*handle)  /* can't open device */
           return sim_messagef (SCPE_OPENERR, "Eth: pcap_open_live error - %s\n", errbuf);
         *eth_api = ETH_API_PCAP;
 #if !defined(HAS_PCAP_SENDPACKET) && defined (xBSD) && !defined (__APPLE__)
@@ -2445,8 +2462,10 @@ if (!rand_initialized)
 return (rand() & 0xFF);
 }
 
-t_stat eth_check_address_conflict (ETH_DEV* dev, 
-                                   ETH_MAC* const mac)
+t_stat eth_check_address_conflict_ex (ETH_DEV* dev, 
+                                      ETH_MAC* const mac,
+                                      int *reflections,
+                                      t_bool silent)
 {
 ETH_PACK send, recv;
 t_stat status;
@@ -2455,6 +2474,8 @@ int responses = 0;
 uint32 offset, function;
 char mac_string[32];
 
+if (reflections)
+    *reflections = 0;
 eth_mac_fmt(mac, mac_string);
 sim_debug(dev->dbit, dev->dptr, "Determining Address Conflict for MAC address: %s\n", mac_string);
 
@@ -2578,13 +2599,23 @@ do {
   } while (recv.len > 0);
 
 sim_debug(dev->dbit, dev->dptr, "Address Conflict = %d\n", responses);
-if (responses)
+if (responses && !silent)
   return sim_messagef (SCPE_ARG, "%s: MAC Address Conflict on LAN for address %s, change the MAC address to a unique value\n", sim_dname (dev->dptr), mac_string);
-return responses;
+if (reflections)
+  *reflections = responses;
+return SCPE_OK;
+}
+
+t_stat eth_check_address_conflict (ETH_DEV* dev, 
+                                   ETH_MAC* const mac)
+{
+return eth_check_address_conflict_ex (dev, mac, NULL, FALSE);
 }
 
 t_stat eth_reflect(ETH_DEV* dev)
 {
+t_stat r;
+
 /* Test with an address no NIC should have. */
 /* We do this to avoid reflections from the wire, */
 /* in the event that a simulated NIC has a MAC address conflict. */
@@ -2592,11 +2623,12 @@ static ETH_MAC mac = {0xfe,0xff,0xff,0xff,0xff,0xfe};
 
 sim_debug(dev->dbit, dev->dptr, "Determining Reflections...\n");
 
-dev->reflections = 0;
-dev->reflections = eth_check_address_conflict (dev, &mac);
+r = eth_check_address_conflict_ex (dev, &mac, &dev->reflections, TRUE);
+if (r != SCPE_OK)
+  return sim_messagef (r, "eth: Error determining reflection count\n");
 
 sim_debug(dev->dbit, dev->dptr, "Reflections = %d\n", dev->reflections);
-return dev->reflections;
+return SCPE_OK;
 }
 
 static void
@@ -3643,7 +3675,7 @@ else
 /* test reflections.  This is done early in this routine since eth_reflect */
 /* calls eth_filter recursively and thus changes the state of the device. */
 if (dev->reflections == -1)
-  status = eth_reflect(dev);
+  eth_reflect(dev);
 
 /* set new filter addresses */
 for (i = 0; i < addr_count; i++)
