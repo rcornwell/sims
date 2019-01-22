@@ -119,6 +119,16 @@ uint8  cdr_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     }
 
     sim_debug(DEBUG_CMD, dptr, "CMD unit=%d %x\n", unit, cmd);
+    if (cmd != 4 && sim_card_eof(uptr) == 1) {
+        uint16   *image = (uint16 *)(uptr->up7);
+        uptr->u5 = SNS_INTVENT;
+        sim_read_card(uptr, image);   /* Read in the EOF */
+        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
+    }
+    if (cmd != 4 && (uptr->flags & UNIT_ATT) == 0) {
+        uptr->u5 = SNS_INTVENT;
+        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
+    }
     switch (cmd & 0x7) {
     case 2:              /* Read command */
          if ((cmd & 0xc0) != 0xc0)
@@ -171,6 +181,8 @@ cdr_srv(UNIT *uptr) {
 
     if ((uptr->u3 & CDR_CMDMSK) == CHN_SNS) {
          uint8 ch = uptr->u5;
+         if (ch == 0 && (uptr->flags & UNIT_ATT) == 0)
+             ch = SNS_INTVENT;
          chan_write_byte(addr, &ch);
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          uptr->u3 &= ~(CDR_CMDMSK);
@@ -180,16 +192,16 @@ cdr_srv(UNIT *uptr) {
     /* Check if new card requested. */
     if ((uptr->u3 & CDR_CARD) == 0) {
        switch(sim_read_card(uptr, image)) {
-       case CDSE_EOF:
        case CDSE_EMPTY:
-            chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
             uptr->u5 = SNS_INTVENT;
+       case CDSE_EOF:
             uptr->u3 &= ~CDR_CMDMSK;
+            chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
             return SCPE_OK;
        case CDSE_ERROR:
-            chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             uptr->u5 = SNS_INTVENT;
             uptr->u3 &= ~CDR_CMDMSK;
+            chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             return SCPE_OK;
        case CDSE_OK:
             uptr->u3 |= CDR_CARD;

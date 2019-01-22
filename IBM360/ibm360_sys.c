@@ -918,7 +918,7 @@ if (sw & SWMASK ('M')) {
 }
 num = get_uint(cptr, rdx, max[l], &r);
 for (i = 0; i < l && i < 4; i++)
-    val[i] = (num >> (i * 8)) & 0xff;
+    val[i] = (num >> (((l - 1) - i) * 8)) & 0xff;
 return -(l-1);
 }
 

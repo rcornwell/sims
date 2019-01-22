@@ -268,6 +268,10 @@ uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
 
     case 0x3:              /* Control */
     case 0xb:              /* Control */
+         if ((uptr->flags & UNIT_ATT) == 0) {
+             uptr->u5 |= SNS_INTVENT;
+             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
+         }
          if ((uptr->flags & MTUF_9TR) == 0)  {
              uptr->u5 |= (SNS_7TRACK << 8);
              if ((cmd & 0xc0) == 0xc0) {
@@ -375,8 +379,12 @@ t_stat mt_srv(UNIT * uptr)
 
     if ((uptr->flags & UNIT_ATT) == 0) {
         uptr->u5 |= SNS_INTVENT;
-        if (cmd != MT_SENSE)
-            return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
+        if (cmd != MT_SENSE) {
+            uptr->u3 &= ~(MT_CMDMSK);
+            mt_busy[bufnum] &= ~1;
+            chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+            return SCPE_OK;
+        }
     }
 
     switch (cmd) {

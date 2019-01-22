@@ -3,24 +3,20 @@ Current status:
 Operating Systems:
 TOS/360:   Will IPL, and read IPL deck. Will run some jobs.
 
-DOS/360:   Will initialize disk.
-           Will restore disk.
-           Will run basic commands. 
-           Assembly aborts with invalid instruction.
+DOS/360:   Will restore and run supervisor gen job on 2314.
 
-OS/360:    Will initialize disk.
-           Will restore disk.
-           Can run some jobs.
+OS/360:    MVT can be generated. Fortran, Algol working.
 
 ibm360_cpu.c:
-    Need to complete floating point and decimal instructions.
+    Floating point starting to work.
+    Decimal instructions need test.
+    Complete /67 support.
 
 ibm360_chan.c
-    More debugging required.
+    Mostly working.
 
 ibm360_cdp.c:
     Add support for binary mode.
-    Fix translation table.
 
 ibm360_cdr.c:
     Add support for binary mode.
@@ -32,15 +28,15 @@ ibm360_con.c:
     Appears to be working.
 
 ibm360_dasd.c:
-    Possibly working.
+    Mostly working.
 
 ibm360_lpr.c:
     Need to add in support for line skip and skip control.
 
 ibm360_mt.c:
-    Possibly working.
+    Mostly working.
 
 ibm360_sys.c:
-    Need to add in deposit function.
+    Working.
 
 

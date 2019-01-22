@@ -386,7 +386,7 @@ uint8  dasd_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     sim_debug(DEBUG_CMD, dptr, "CMD unit=%d %02x\n", unit, cmd);
     if ((uptr->flags & UNIT_ATT) == 0) {
        if (cmd == 0x4) {  /* Sense */
-    sim_debug(DEBUG_CMD, dptr, "CMD sense\n");
+           sim_debug(DEBUG_CMD, dptr, "CMD sense\n");
            ch = uptr->u5 & 0xff;
            sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 1 %x\n", unit, ch);
            chan_write_byte(addr, &ch) ;
@@ -406,9 +406,9 @@ uint8  dasd_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
            return SNS_CHNEND|SNS_DEVEND;
        }
        if (cmd == 0x0)
-           return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
+           return 0;
 
-       uptr->u5 = 0x48; /*SNS_INTVENT|SNS_CMDREJ; */
+       uptr->u5 = SNS_INTVENT|SNS_CMDREJ;
        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     }
 
@@ -734,7 +734,7 @@ index:
          if (chan_write_byte(addr, &ch))
              goto sense_end;
          if (disk_type[type].sen_cnt > 6) {
-             ch = 0;
+             ch = (unit & 07) | ((~unit & 07) << 3);
              sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 4 %x\n", unit, ch);
              if (chan_write_byte(addr, &ch))
                  goto sense_end;
@@ -756,11 +756,20 @@ index:
                  goto sense_end;
              i = 8;
          } else {
-             ch = unit;
+             if (disk_type[type].dev_type == 0x11)
+                 ch = 0xc8;
+             else
+                 ch = 0x40;
+             if ((uptr->u4 >> 8) & SNS_ENDCYL)
+                ch |= 4;
              sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 4 %x\n", unit, ch);
              if (chan_write_byte(addr, &ch))
                  goto sense_end;
-             i = 4;
+             ch = unit;
+             sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 5 %x\n", unit, ch);
+             if (chan_write_byte(addr, &ch))
+                 goto sense_end;
+             i = 5;
          }
          ch = 0;
          for (; i < disk_type[type].sen_cnt; i++) {

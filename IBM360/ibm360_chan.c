@@ -150,22 +150,26 @@ readfull(int chan, uint32 addr, uint32 *word) {
     int sk, k;
     if ((addr & AMASK) > MEMSIZE) {
         chan_status[chan] |= STATUS_PCHK;
+        irq_pend = 1;
         return 1;
     }
-    sk = (addr >> 24) & 0xff;
+    sk = (addr >> 24) & 0xf0;
+    addr &= AMASK;
+    addr >>= 2;
     if (sk != 0) {
-        if ((cpu_dev.flags & PROTECT) == 0) {
+        if ((cpu_unit.flags & FEAT_PROT) == 0) {
             chan_status[chan] |= STATUS_PROT;
+            irq_pend = 1;
             return 1;
         }
-        k = key[(addr & 0xfffc00) >> 10];
+        k = key[addr >> 9];
         if ((k & 0x8) != 0 && (k & 0xf0) != sk) {
+//fprintf(stderr, "Prot %08x %x %x\n\r", addr << 2, k, sk);
             chan_status[chan] |= STATUS_PROT;
+            irq_pend = 1;
             return 1;
         }
     }
-    addr &= AMASK;
-    addr >>= 2;
     *word = M[addr];
     return 0;
 }
@@ -184,24 +188,25 @@ readbuff(int chan) {
         irq_pend = 1;
         return 1;
     }
-    sk = (addr >> 24) & 0xff;
+    sk = (addr >> 24) & 0xf0;
+    addr &= AMASK;
+    addr >>= 2;
     if (sk != 0) {
-        if ((cpu_dev.flags & PROTECT) == 0) {
+        if ((cpu_unit.flags & FEAT_PROT) == 0) {
             chan_status[chan] |= STATUS_PROT;
             chan_byte[chan] = BUFF_CHNEND;
             irq_pend = 1;
             return 1;
         }
-        k = key[(addr & 0xfffc00) >> 10];
+        k = key[addr >> 9];
         if ((k & 0x8) != 0 && (k & 0xf0) != sk) {
+//fprintf(stderr, "Prot %08x %x %x\n\r", addr << 2, k, sk);
             chan_status[chan] |= STATUS_PROT;
             chan_byte[chan] = BUFF_CHNEND;
             irq_pend = 1;
             return 1;
         }
     }
-    addr &= AMASK;
-    addr >>= 2;
     chan_buf[chan] = M[addr];
     if ((ccw_cmd[chan] & CMD_TYPE) == CMD_WRITE) {
         sim_debug(DEBUG_CDATA, &cpu_dev, "Channel write %02x %06x %08x %08x '",
@@ -233,23 +238,24 @@ writebuff(int chan) {
         return 1;
     }
     sk = (addr >> 24) & 0xff;
+    addr &= AMASK;
+    addr >>= 2;
     if (sk != 0) {
-        if ((cpu_dev.flags & PROTECT) == 0) {
+        if ((cpu_unit.flags & FEAT_PROT) == 0) {
             chan_status[chan] |= STATUS_PROT;
             chan_byte[chan] = BUFF_CHNEND;
             irq_pend = 1;
             return 1;
         }
-        k = key[(addr & 0xfffc00) >> 10];
-        if ((k & 0x8) != 0 && (k & 0xf0) != sk) {
+        k = key[addr >> 9];
+        if ((k & 0xf0) != sk) {
+//fprintf(stderr, "Prot %08x %x %x\n\r", addr << 2, k, sk);
             chan_status[chan] |= STATUS_PROT;
             chan_byte[chan] = BUFF_CHNEND;
             irq_pend = 1;
             return 1;
         }
     }
-    addr &= AMASK;
-    addr >>= 2;
     M[addr] = chan_buf[chan];
     sim_debug(DEBUG_CDATA, &cpu_dev, "Channel readf %02x %06x %08x %08x '",
           chan, ccw_addr[chan] & 0xFFFFFC, chan_buf[chan], ccw_count[chan]);
@@ -575,8 +581,6 @@ int  startio(uint16 addr) {
     uptr = find_chan_dev(addr);
     if (uptr == 0)
         return 3;
-    if ((uptr->flags & UNIT_ATT)  == 0)
-        return 3;
     if (ccw_cmd[chan] != 0 || (ccw_flags[chan] & (FLAG_CD|FLAG_CC)) != 0 || chan_status[chan] != 0)
         return 2;
     sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %x %x\n", addr, chan,
@@ -595,13 +599,24 @@ int  startio(uint16 addr) {
             return 1;
         }
     }
-    if (load_ccw(chan, 0) || (chan_status[chan] & (STATUS_PCI))) {
-        M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | M[0x44 >> 2] & 0xffff;
-        sim_debug(DEBUG_EXP, &cpu_dev, "Channel store csw  %02x %08x\n",
-                   chan, M[0x44 >> 2]);
-        chan_status[chan] &= ~STATUS_PCI;
-        dev_status[addr] = 0;
-        return 1;
+    if (load_ccw(chan, 0)) {
+        if (chan_status[chan] & (STATUS_ATTN|STATUS_CHECK|STATUS_PROT|STATUS_PCHK|STATUS_EXPT)) {
+            M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | M[0x44 >> 2] & 0xffff;
+            sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %x %x cc=2\n", addr, chan,
+                  ccw_cmd[chan], ccw_flags[chan]);
+            chan_status[chan] = 0;
+            dev_status[addr] = 0;
+            ccw_cmd[chan] = 0;
+            return 1;
+        }
+        if (chan_status[chan] & (STATUS_PCI)) {
+            M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | M[0x44 >> 2] & 0xffff;
+            sim_debug(DEBUG_EXP, &cpu_dev, "Channel store csw  %02x %08x\n",
+                       chan, M[0x44 >> 2]);
+            chan_status[chan] &= ~STATUS_PCI;
+            dev_status[addr] = 0;
+            return 1;
+        }
     }
     if (chan_status[chan] & STATUS_BUSY) {
         M[0x40 >> 2] = 0;
@@ -628,34 +643,32 @@ int testio(uint16 addr) {
     uptr = find_chan_dev(addr);
     if (uptr == 0)
         return 3;
-    if ((uptr->flags & UNIT_ATT)  == 0)
-        return 3;
     if (chan_status[chan] & (STATUS_PCI|STATUS_ATTN|STATUS_CHECK|\
             STATUS_PROT|STATUS_PCHK|STATUS_EXPT)) {
-    sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=1\n", addr, chan,
+        sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=1\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
         store_csw(chan);
         return 1;
     }
     if (ccw_cmd[chan] != 0 || (ccw_flags[chan] & (FLAG_CD|FLAG_CC)) != 0) {
-    sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=2\n", addr, chan,
+        sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=2\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
         return 2;
-}
+    }
     if (chan_dev[chan] != 0 && chan_dev[chan] != addr) {
-    sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=2a\n", addr, chan,
+        sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=2a\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
         return 2;
-}
+    }
     if (ccw_cmd[chan] == 0 && chan_status[chan] != 0) {
-    sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=1a\n", addr, chan,
+        sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=1a\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
         store_csw(chan);
         chan_dev[chan] = 0;
         return 1;
     }
     if (dev_status[addr] != 0) {
-    sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=1b\n", addr, chan,
+        sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=1b\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
         M[0x40 >> 2] = 0;
         M[0x44 >> 2] = ((uint32)dev_status[addr]) << 24;
@@ -663,18 +676,21 @@ int testio(uint16 addr) {
         return 1;
     }
 
-    chan_status[chan] = dibp->start_cmd(uptr, chan, 0) << 8;
-    if (chan_status[chan] & (STATUS_ATTN|STATUS_CHECK|STATUS_EXPT)) {
-    sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=1c\n", addr, chan,
+    status = dibp->start_cmd(uptr, chan, 0) << 8;
+    if (status == 0 && (uptr->flags & UNIT_ATT) == 0) {
+        sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=1c\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
-        M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | M[0x44 >> 2] & 0xffff;
-        chan_status[chan] = 0;
-        dev_status[addr] = 0;
+        return 3;
+    }
+
+    if (status & (STATUS_ATTN|STATUS_CHECK|STATUS_EXPT)) {
+        M[0x44 >> 2] = ((uint32)status<<24) | M[0x44 >> 2] & 0xffff;
+        sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=1d\n", addr, chan,
+              ccw_cmd[chan], ccw_flags[chan]);
         return 1;
     }
     sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=0\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
-    chan_status[chan] = 0;
     return 0;
 }
 

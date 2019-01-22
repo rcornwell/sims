@@ -76,17 +76,15 @@ typedef struct dib {
 #define GET_UADDR(x)      ((UNIT_ADDR_MASK & x) >> UNIT_V_ADDR)
 #define UNIT_ADDR(x)      ((x) << UNIT_V_ADDR)
 
-#define PROTECT_V         UNIT_V_UF+12
-#define PROTECT           (1 << PROTECT_V)
-
-/* Arithmetic */
-
-/* Instruction format */
-
-/* Globally visible flags */
-
-/* I/O routine functions */
-
+/* CPU options, needed by channel */
+#define FEAT_PROT    (1 << (UNIT_V_UF + 8))      /* Storage protection feature */
+#define FEAT_DEC     (1 << (UNIT_V_UF + 9))      /* Decimal instruction set */
+#define FEAT_FLOAT   (1 << (UNIT_V_UF + 10))     /* Floating point instruction set */
+#define FEAT_UNIV    (3 << (UNIT_V_UF + 9))      /* All instructions */
+#define FEAT_STOR    (1 << (UNIT_V_UF + 11))     /* No alignment restrictions */
+#define FEAT_TIMER   (1 << (UNIT_V_UF + 12))     /* Interval timer */
+#define FEAT_DAT     (1 << (UNIT_V_UF + 13))     /* Dynamic address translation */
+#define EXT_IRQ      (1 << (UNIT_V_UF_31))       /* External interrupt */
 
 /* low addresses */
 #define IPSW              0x00        /* IPSW */
