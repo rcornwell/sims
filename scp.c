@@ -3285,6 +3285,8 @@ if (*cptr) {
         UNIT *uptr;
         t_stat r;
 
+        if (0 == strcmp (gbuf, "DEVICE"))
+            cptr = get_glyph (cptr, gbuf, 0);
         dptr = find_unit (gbuf, &uptr);
         if (dptr == NULL) {
             dptr = find_dev (gbuf);
@@ -12270,6 +12272,7 @@ while ((eol = strchr (debug_line_buf, '\n')) || flush) {
         debug_line_count = 0;
         }
     else {
+        linesize = debug_line_offset;
         if (debug_line_count == 0) {
             debug_line_buf_last_endprefix_offset = endprefix - debug_line_buf;
             memcpy (debug_line_buf_last, debug_line_buf, linesize);
