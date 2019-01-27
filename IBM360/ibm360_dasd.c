@@ -594,6 +594,7 @@ t_stat dasd_srv(UNIT * uptr)
          }
 index:
          uptr->u3 |= (uptr->u3 & DK_INDEX) ? DK_INDEX2 : DK_INDEX;
+         uptr->u3 &= ~DK_SRCOK;
          data->tstart = data->tsize * (uptr->u4 & 0xff);
          data->tpos = data->rpos = 0;
          data->state = DK_POS_HA;
@@ -630,9 +631,9 @@ index:
                  unit, data->rec, data->klen, data->dlen, data->tpos);
          }
          if (data->count == 7) {
-                data->state = DK_POS_KEY;
-                if (data->klen == 0)
-                   data->state = DK_POS_DATA;
+             data->state = DK_POS_KEY;
+             if (data->klen == 0)
+                 data->state = DK_POS_DATA;
              sim_activate(uptr, 10);
          } else {
              sim_activate(uptr, 1);
@@ -1218,6 +1219,9 @@ sense_end:
          /* Wait for next key */
          if (count == 0 && ((data->klen != 0 && state == DK_POS_KEY) ||
                             (data->klen == 0 && state == DK_POS_DATA))) {
+             if ((uptr->u3 & DK_INDEX) && data->rec == 0 &&
+                 (uptr->u3 & DK_SRCOK) == 0)
+                 break;
              uptr->u3 |= DK_PARAM;
              uptr->u3 &= ~(DK_INDEX|DK_INDEX2);
              sim_debug(DEBUG_DETAIL, dptr, "RD KD unit=%d %d k=%d d=%d %02x %04x %04x\n",
@@ -1229,9 +1233,12 @@ sense_end:
     case DK_RD_D:            /* Read Data */
          /* Wait for next data */
          if (count == 0 && state == DK_POS_DATA) {
+             if ((uptr->u3 & DK_INDEX) && data->rec == 0 &&
+                 (uptr->u3 & DK_SRCOK) == 0)
+                 break;
              uptr->u3 |= DK_PARAM;
              uptr->u3 &= ~(DK_INDEX|DK_INDEX2);
-             sim_debug(DEBUG_DETAIL, dptr, 
+             sim_debug(DEBUG_DETAIL, dptr,
                  "RD D unit=%d %d k=%d d=%d %02x %04x %04x %d\n",
                  unit, data->rec, data->klen, data->dlen, data->state, data->dlen,
                  8 + data->klen + data->dlen, count);
@@ -1254,7 +1261,7 @@ rd:
                  break;
              }
              if (state == DK_POS_DATA && count == data->dlen) {
-                 sim_debug(DEBUG_DETAIL, dptr, 
+                 sim_debug(DEBUG_DETAIL, dptr,
                      "RD next unit=%d %02x %02x %02x %02x %02x %02x %02x %02x\n",
                      unit, da[0], da[1], da[2], da[3], da[4], da[5], da[6], da[7]);
                  uptr->u3 &= ~(0xff|DK_PARAM);
