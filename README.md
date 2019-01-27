@@ -39,6 +39,8 @@ Support for BBN pager (untested).
    Morton tty Mux for ITS.  
    Knight Kludge mux for ITS.  
 
+   IMP networking support for ITS and TENEX.  
+
    340 Display Station support.  
 
    The RP10 supports boot (actual hardware did not), by reading in Blocks 4-7
@@ -48,8 +50,7 @@ and transfering to the loaded value. RC10, RH10, TM10 support readin mode.
 
 To do:  
    * Add support for PMP IBM 3330 drive to run Waits.  
-   * Add support for DC76 for ITS.  
-   * Add support for SA10 for Tymcom-X under KI.
+   * Add support for CHAOS net driver.  
 
 # ICL 1900 simulator.
 
@@ -59,12 +60,12 @@ with Goerge 2 and 3.
 
 # IBM 360 simulator.
 
-Current version will IPL TOS/360, DOS/360, OS/360. Still work do to with system generation.
-Mising is floating point and decimal instruction support. IBM 360/67 support will also be
-added to support CP/67 and MTS early versions. 
-It supports the following units:
+Currently will run IPL TOS/360, DOS/360, OS/360. TSO support still in progress.
+Floating point code is broken, decimal instructions are untested.
+IBM 360/67 support will also be added to support MTS early versions. 
+Support for the following units:
 
-    DASD (Disk)
+    DASD (Disk) Up to 4 devices of 8.
     * 2301, 2302, 2303, 2305, 2311, 2314, 3330.
     
     Tape
@@ -77,7 +78,7 @@ It supports the following units:
     * 1050 Console
 
     Communications
-    * 2703 with 16 lines of 2741 or 1050. (Todo).
+    * 2703 with 16 lines of 2741 or 1050.
 
 # IBM 7000 simulators.
 Latest status for I7000 Cpus: 
