@@ -79,6 +79,7 @@ DEVICE *sim_devices[] = {
 #endif
 #endif
 #ifdef NUM_DEVS_COM
+        &coml_dev,
         &com_dev,
 #endif
        NULL };

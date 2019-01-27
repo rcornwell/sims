@@ -705,6 +705,8 @@ int haltio(uint16 addr) {
     uptr = find_chan_dev(chan_dev[chan]);
     if (uptr == 0)
         return 3;
+    sim_debug(DEBUG_CMD, &cpu_dev, "HIO %x %x %x %x\n", addr, chan,
+              ccw_cmd[chan], ccw_flags[chan]);
     if (ccw_cmd[chan]) {
         chan_byte[chan] = BUFF_CHNEND;
         return 2;

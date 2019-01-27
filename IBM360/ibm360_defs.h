@@ -361,6 +361,7 @@ extern DEVICE dda_dev;
 extern DEVICE ddb_dev;
 extern DEVICE ddc_dev;
 extern DEVICE ddd_dev;
+extern DEVICE coml_dev;
 extern DEVICE com_dev;
 extern UNIT cpu_unit;
 
