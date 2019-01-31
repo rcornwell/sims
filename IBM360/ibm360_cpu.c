@@ -23,7 +23,6 @@
 
 #include "ibm360_defs.h"                            /* simulator defns */
 
-
 #define FEAT_PROT    (1 << (UNIT_V_UF + 8))      /* Storage protection feature */
 #define FEAT_DEC     (1 << (UNIT_V_UF + 9))      /* Decimal instruction set */
 #define FEAT_FLOAT   (1 << (UNIT_V_UF + 10))     /* Floating point instruction set */
@@ -125,6 +124,8 @@ uint32       execp_error;          /* Translation error */
 #define MMASK       0x00ffffff     /* Mantissa mask */
 #define EMASK       0x7f000000     /* Exponent mask */
 #define XMASK       0x0fffffff     /* Working FP mask */
+#define HMASK       0x7fffffff     /* Working FP mask */
+#define FMASK       0xffffffff     /* Working FP mask */
 #define CMASK       0x10000000     /* Carry mask */
 #define NMASK       0x00f00000     /* Normalize mask */
 
@@ -164,6 +165,23 @@ struct InstHistory
    uint8        cc;
 };
 
+#if 0
+#include <math.h>
+
+double cnvt_float(uint32 l, uint32 h) {
+    t_uint64        t64;
+    double          d;
+    int             e;
+    e = ((l >> 24) & 0x7f) - 64;
+    t64 = ((t_uint64)l & MMASK) << 32LL | h;
+    d = (double)t64;
+    d *= exp2(-56 + 4*e);
+    if (l & MSIGN)
+    d *= -1.0;
+    return d;
+}
+#endif
+
 struct InstHistory *hst = NULL;
 
 /* Forward and external declarations */
@@ -202,6 +220,10 @@ UNIT cpu_unit = { UDATA (&rtc_srv, UNIT_BINK, MAXMEMSIZE) };
 
 REG cpu_reg[] = {
     { HRDATA (PC, PC, 24) },
+    { HRDATA (CC, cc, 2) },
+    { HRDATA (PMASK, pmsk, 4) },
+    { HRDATA (FLAGS, flags, 4) },
+    { HRDATA (KEY, st_key, 4) },
     { HRDATA (R0, regs[00], 32) },
     { HRDATA (R1, regs[01], 32) },
     { HRDATA (R2, regs[02], 32) },
@@ -724,6 +746,7 @@ sim_instr(void)
     t_uint64        t64;
     t_uint64        t64a;
     uint16          ops[3];
+//double    a, b, c;
 
     reason = SCPE_OK;
     ilc = 0;
@@ -880,7 +903,10 @@ opr:
             }
             /* Load operands */
             src1 = fpregs[reg1];
-            src1h = fpregs[reg1|1];
+            if ((op & 0x10)  == 0)
+                 src1h = fpregs[reg1|1];
+            else
+                 src1h = 0;
             if (op & 0x40) {
                 if ((op & 0x10) != 0 && (addr1 & 0x3) != 0) {
 //fprintf(stderr, "Spec FP Op=%0x  Op=%x\n\r", op, addr1);
@@ -2219,7 +2245,9 @@ save_dbl:
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
-//fprintf(stderr, "FP + Op=%0x src1=%08x %08x, src2=%08x %08x\n\r", op, src1, src1h, src2, src2h);
+//                a = cnvt_float(src1, src1h);
+//                b = cnvt_float(src2, src2h);
+//fprintf(stderr, "FP + Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
                 /* Extract numbers and adjust */
                 e1 = (src1 & EMASK) >> 24;
                 e2 = (src2 & EMASK) >> 24;
@@ -2228,26 +2256,37 @@ save_dbl:
                    fill |= 2;
                 if (src2 & MSIGN)
                    fill |= 1;
+                src2 &= MMASK;
+                src1 &= MMASK;
+                temp = e1 - e2;
+                if (temp > 0) {
+                    /* Shift src2 right if src1 larger expo - expo */
+                    while (temp-- != 0) {
+                       src2h >>= 4;
+                       src2h |= (src2 & 0xf) << 28;
+                       src2 >>= 4;
+                       e2 ++;
+//fprintf(stderr, "FP +2 Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
+                    }
+                } else if (temp < 0) {
+                    /* Shift src1 right if src2 larger expo - expo */
+                    while (temp++ != 0) {
+                       src1h >>= 4;
+                       src1h |= (src1 & 0xf) << 28;
+                       src1 >>= 4;
+                       e1 ++;
+//fprintf(stderr, "FP +1 Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
+                    }
+                }
+
+                /* Exponents should be equal now. */
+
                 /* Create guard digit by shifting left 4 bits */
                 src1 = ((src1 & MMASK) << 4) | ((src1h >> 28) & 0xf);
                 src2 = ((src2 & MMASK) << 4) | ((src2h >> 28) & 0xf);
                 src1h &= XMASK;
                 src2h &= XMASK;
-                /* Shift src2 right if src1 larger expo - expo */
-                while (e1 > e2) {
-                   src2h |= (src2 & 0xf) << 28;
-                   src2h >>= 4;
-                   src2 >>= 4;
-                   e2 ++;
-                }
-                /* Shift src1 right if src2 larger expo - expo */
-                while (e2 > e1) {
-                   src1h |= (src1 & 0xf) << 28;
-                   src1h >>= 4;
-                   src1 >>= 4;
-                   e1 ++;
-                }
-                /* Exponents should be equal now. */
+
                 /* Add results */
                 if (fill == 2 || fill == 1) {
                      /* Different signs do subtract */
@@ -2265,13 +2304,13 @@ save_dbl:
                          desth &= XMASK;
                      }
                      if (dest & CMASK)
-                         dest ^= CMASK;
+                         dest &= XMASK;
                      else {
                          fill ^= 2;
                          dest ^= XMASK;
                          desth ^= XMASK;
                          desth++;
-                         if (dest & CMASK) {
+                         if (desth & CMASK) {
                             dest++;
                             desth &= XMASK;
                          }
@@ -2285,43 +2324,48 @@ save_dbl:
                      }
                 }
                 /* If src1 not normal shift left + expo */
+//fprintf(stderr, "FP +n res=%08x %08x %d\n\r", dest, desth, cc);
                 if (dest & CMASK) {
-                   desth >>= 4;
-                   desth |= (dest & 0xf) << 28;
-                   dest >>= 4;
-                   e1 ++;
-                   if (e1 >= 128) {
-                       storepsw(OPPSW, IRC_EXPOVR);
-// fprintf(stderr, "FP ov\n\r");
-                   }
+                    desth >>= 4;
+                    desth |= (dest & 0xf) << 28;
+                    dest >>= 4;
+                    e1 ++;
+                    if (e1 >= 128) {
+                        storepsw(OPPSW, IRC_EXPOVR);
+// fprintf(stderr, "FP ov %d\n\r", e1);
+                    }
                 }
 
-                /* Compute sign of result */
+                /* Set condition codes */
                 cc = 0;
                 if ((desth | dest) != 0)
                      cc = (fill & 2) ? 1 : 2;
 
 //fprintf(stderr, "FP +p res=%08x %08x %d\n\r", dest, desth, cc);
-                /* Set condition codes */
-                /* If (op & 0xF) == 0x9, compare */
-                if ((op & 0xF) == 0x9)  /* Compare operator */
+                /* If compare operator, we are done */
+                if ((op & 0xF) == 0x9) {
+//fprintf(stderr, "FP = %d\n\r", cc);
                    break;               /* All done */
+                }
+
+                /* Remove DP Guard bit */
+                desth |= (dest & 0xf) << 28;
+                dest >>= 4;
 
                 /* Check signifigance exception */
                 if (cc == 0 && pmsk & SIGMSK) {
                     storepsw(OPPSW, IRC_EXPOVR);
-// fprintf(stderr, "FP under\n\r");
+// fprintf(stderr, "FP Signifigance\n\r");
                     goto fpstore;
                 }
 
-                /* If (op & 0xE) != 0xE, normalize */
-                if ((op & 0xE) != 0xE) { /* Normalize operator */
-                   if (cc != 0) {
-                       while ((dest & EMASK) == 0 && e1 > 0) {
+                /* Check if we are normalized addition */
+                if ((op & 0xE) != 0xE) {
+                   if (cc != 0) {   /* Only if non-zero result */
+                       while ((dest & NMASK) == 0 && e1 > 0) {
 //fprintf(stderr, "FP +n res=%08x %08x %x\n\r", dest, desth, e1);
-                          dest = (dest << 4) | ((desth >> 24) & 0xf);
+                          dest = (dest << 4) | ((desth >> 28) & 0xf);
                           desth <<= 4;
-                          desth &= XMASK;
                           e1 --;
                        }
                        /* Check if underflow */
@@ -2335,20 +2379,19 @@ save_dbl:
                            }
                        }
                    } else {
-                       e1 = 0;   /* Return true zero */
+                       fill = e1 = 0;   /* Return true zero */
                    }
                 }
+
 fpstore:
                 /* Store result */
-                desth = (desth >> 4) | ((dest & 0xf) << 28);
-                dest >>= 4;
                 dest |= (e1 << 24) & EMASK;
                 if (cc != 0 && fill & 2)
                    dest |= MSIGN;
                 if ((op & 0x10) == 0)
                     fpregs[reg1|1] = desth;
                 fpregs[reg1] = dest;
-//fprintf(stderr, "FP + res=%08x %08x %d\n\r", dest, desth, cc);
+//fprintf(stderr, "FP + res=%08x %08x %d %e\n\r", dest, desth, cc, cnvt_float(dest,desth));
                 break;
 
                   /* Multiply */
@@ -2361,53 +2404,67 @@ fpstore:
                     goto supress;
                 }
 
-//fprintf(stderr, "FP * Op=%0x src1=%08x %08x, src2=%08x %08x\n\r", op, src1, src1h, src2, src2h);
+//                a = cnvt_float(src1, src1h);
+//                b = cnvt_float(src2, src2h);
+//fprintf(stderr, "FP * Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a*b);
                 /* Extract numbers and adjust */
                 e1 = (src1 & EMASK) >> 24;
                 e2 = (src2 & EMASK) >> 24;
-                e1 = e1 + e2 - 64;
                 fill = 0;
                 if ((src1 & MSIGN) != (src2 & MSIGN))
-                   fill = 2;
-                /* If Prenomalize src2 and src1 */
-                while ((src2 | src2h) != 0 && (src2 & NMASK) == 0) {
-                   src2 = ((src2 & MMASK) << 4) | ((src2h >> 24) & 0xf);
-                   src2h <<= 4;
-                   e1 --;
-                }
-                /* Create guard digit */
-                src2 = ((src2 & MMASK) << 4) | ((src2h >> 28) & 0xf);
-                src2h &= XMASK;
+                   fill = 1;
                 src1 &= MMASK;
+                src2 &= MMASK;
+
+                /* Pre-nomalize src2 and src1 */
+                while ((src2 | src2h) != 0 && (src2 & NMASK) == 0) {
+                   src2 = ((src2 & MMASK) << 4) | ((src2h >> 28) & 0xf);
+                   src2h <<= 4;
+                   e2 --;
+                }
                 while ((src1 | src1h) != 0 && (src1 & NMASK) == 0) {
                    src1 = ((src1 & MMASK) << 4) | ((src1h >> 28) & 0xf);
                    src1h <<= 4;
                    e1 --;
                 }
+                e1 = e1 + e2 - 64;
+
+                /* Create guard bit */
+                src2 <<= 1;
+                if (src2h & MSIGN) {
+                    src2 |= 1;
+                    src2h & HMASK;
+                }
                 dest = desth = 0;
                 /* Do multiply */
                 for (temp = 0; temp < 56; temp++) {
 //fprintf(stderr, "FP *s  src1=%08x %08x, src2=%08x %08x dest=%08x %08x %d\n\r", src1, src1h, src2, src2h, dest, desth, temp);
-                   /* Add if we need too */
-                   if (src1h & 1) {
-                     desth += src2h;
-                     dest += src2;
-                     if (desth & CMASK) {
-                         dest ++;
-                         desth &= XMASK;
+                     /* Add if we need too */
+                     if (src1h & 1) {
+                         desth += src2h;
+                         dest += src2;
+                         if (desth & MSIGN) {
+                             dest ++;
+                             desth &= HMASK;
+                         }
                      }
-                   }
-                   /* Shift right by one */
-                   src1h >>= 1;
-                   if (src1 & 1)
-                      src1h |= MSIGN;
-                   src1 >>= 1;
-                   if (dest & 1)
-                      desth |= CMASK;
-                   desth >>= 1;
-                   dest >>= 1;
+                     /* Shift right by one */
+                     src1h >>= 1;
+                     if (src1 & 1)
+                        src1h |= MSIGN;
+                     src1 >>= 1;
+                     if (dest & 1)
+                        desth |= MSIGN;
+                     desth >>= 1;
+                     dest >>= 1;
                 }
 fpnorm:
+                /* Remove guard but */
+                if (dest & 1) {
+                    desth |= MSIGN;
+                }
+                dest >>= 1;
+
                 /* If src1 not normal shift left + expo */
                 if (dest & CMASK) {
                    desth >>= 4;
@@ -2421,38 +2478,32 @@ fpnorm:
                 }
                 /* Align the results */
                 if ((dest | desth) != 0) {
-                   while ((dest & EMASK) == 0 && e1 > 0) {
+                    while ((dest & NMASK) == 0 && e1 > 0) {
 //fprintf(stderr, "FP *n res=%08x %08x %x\n\r", dest, desth, e1);
-                       dest = (dest << 4) | ((desth >> 24) & 0xf);
-                       desth <<= 4;
-                       desth &= XMASK;
-                       e1 --;
+                        dest = (dest << 4) | ((desth >> 28) & 0xf);
+                        desth <<= 4;
+                        e1 --;
                     }
                     /* Check if underflow */
                     if (e1 < 0) {
                         if (pmsk & EXPUND) {
-                           storepsw(OPPSW, IRC_EXPUND);
+                            storepsw(OPPSW, IRC_EXPUND);
 // fprintf(stderr, "FP un\n\r");
                         } else {
-                           desth = dest = 0;
-                           fill = e1 = 0;
+                            desth = dest = 0;
+                            fill = e1 = 0;
                         }
                     }
-                }
-                goto fpstore;
-#if 0
-                /* Store result */
-                desth = (desth >> 4) | ((dest & 0xf) << 28);
-                dest >>= 4;
+                } else
+                    fill = 0;
                 dest |= (e1 << 24) & EMASK;
-fprintf(stderr, "FP * res=%08x %08x\n\r", dest, desth);
                 if (fill)
                    dest |= MSIGN;
                 if ((op & 0x10) == 0)
                     fpregs[reg1|1] = desth;
                 fpregs[reg1] = dest;
+//fprintf(stderr, "FP * res=%08x %08x %d %e\n\r", dest, desth, cc, cnvt_float(dest,desth));
                 break;
-#endif
 
                   /* Divide */
         case OP_DER:
@@ -2463,120 +2514,109 @@ fprintf(stderr, "FP * res=%08x %08x\n\r", dest, desth);
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
-//fprintf(stderr, "FP / Op=%0x src1=%08x %08x, src2=%08x %08x\n\r", op, src1, src1h, src2, src2h);
+//                a = cnvt_float(src1, src1h);
+//                b = cnvt_float(src2, src2h);
+//fprintf(stderr, "FP / Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a/b);
 
                 /* Extract numbers and adjust */
                 e1 = (src1 & EMASK) >> 24;
                 e2 = (src2 & EMASK) >> 24;
-                e1 = e1 - e2 + 64;
                 fill = 0;
-                if (src1 & MSIGN)
+                fill = 0;
+                if ((src1 & MSIGN) != (src2 & MSIGN))
                    fill = 1;
-                if (src2 & MSIGN)
-                   fill = !fill;
-                /* If Prenomalize src2 and src1 */
-                while ((src2 | src2h) != 0 && (src2 & NMASK) == 0) {
-                   src2 = ((src2 & MMASK) << 4) | ((src2h >> 24) & 0xf);
-                   src2h <<= 4;
-                   e1 --;
-                }
-                while ((src1 | src1h) != 0 && (src1 & NMASK) == 0) {
-                   src1 = ((src1 & MMASK) << 4) | ((src1h >> 24) & 0xf);
-                   src1h <<= 4;
-                   e1 --;
-                }
-                /* Create guard digit */
-                src2 = ((src2 & MMASK) << 4) | ((src2h >> 28) & 0xf);
-                src2h &= XMASK;
+                src1 &= MMASK;
+                src2 &= MMASK;
                 if ((src2 | src2h) == 0) {
                     storepsw(OPPSW, IRC_FPDIV);
                     break;
                 }
+
+                /* Pre-nomalize src2 and src1 */
+                while ((src2 | src2h) != 0 && (src2 & NMASK) == 0) {
+                    src2 = ((src2 & MMASK) << 4) | ((src2h >> 28) & 0xf);
+                    src2h <<= 4;
+                    e2 --;
+                }
+                while ((src1 | src1h) != 0 && (src1 & NMASK) == 0) {
+                    src1 = ((src1 & MMASK) << 4) | ((src1h >> 28) & 0xf);
+                    src1h <<= 4;
+                    e1 --;
+                }
+                e1 = e1 - e2 + 64;
+
+                /* Shift numbers up 4 bits so as not to lose precision below */
+                src2 = ((src2 & MMASK) << 4) | ((src2h >> 28) & 0xf);
+                src2h <<= 4;
                 src1 = ((src1 & MMASK) << 4) | ((src1h >> 28) & 0xf);
-                src1h &= XMASK;
-                dest = desth = 0;
-                if ((src1 | src1h) == 0) {
-                    e1 = fill = 0;
-                    goto fpstore;
+                src1h <<= 4;
+
+                /* Expand for DP math */
+                src2 <<= 1;
+                if (src2h & MSIGN) {
+                    src2 |= 1;
+                    src2h & HMASK;
                 }
+                src1 <<= 1;
+                if (src1h & MSIGN) {
+                    src1 |= 1;
+                    src1h & HMASK;
+                }
+
+                /* Check if we need to adjust divsor it larger then dividend */
+                if (src1 > src2) {
+//fprintf(stderr, "FP /o  src1=%08x %08x, src2=%08x %08x dest=%08x %08x\n\r", src1, src1h, src2, src2h, dest, desth);
+                    src1h >>= 4;
+                    src1h |= (src1 & 0xf) <<27;
+                    src1 >>= 4;
+                    e1++;
+                }
+
                 /* Change sign of src2 so we can add */
-                src2 ^= XMASK;
-                src2h ^= XMASK;
+                src2 ^= HMASK /*0x3fffffff*/;
+                src2h ^= HMASK;
                 src2h++;
-                if (src2h & CMASK) {
-                   src2++;
-                   src2h &= XMASK;
+                if (src2h & MSIGN) {
+                    src2++;
+                    src2h &= HMASK;
                 }
+                dest = desth = 0;
                 /* Do divide */
-                for (temp = 0; temp < 56; temp++) {
-                   uint32    tlow, thigh;
+                for (temp = 56; temp > 0; temp--) {
+                     uint32    tlow, thigh;
 
 //fprintf(stderr, "FP /s  src1=%08x %08x, src2=%08x %08x dest=%08x %08x %d\n\r", src1, src1h, src2, src2h, dest, desth, temp);
-                   /* Shift left by one */
-                   src1 <<= 1;
-                   src1h <<= 1;
-                   if (src1h & CMASK) {
-                      src1 |= 1;
-                      src1h &= XMASK;
-                   }
-                   thigh = src1h + src2h;
-                   tlow = src1 + src2;
-                   if (thigh & CMASK) {
-                      tlow ++;
-                      thigh &= XMASK;
-                   }
-                   dest <<= 1;
-                   desth <<= 1;
-                   if (desth & CMASK) {
-                      dest |= 1;
-                      desth &= XMASK;
-                   }
-                   if ((tlow & CMASK) != 0) {
-                      src1 = tlow;
-                      src1h = thigh;
-                      desth |= 1;
-                   }
+                     /* Shift left by one */
+                     src1 <<= 1;
+                     src1h <<= 1;
+                     if (src1h & MSIGN) {
+                         src1 |= 1;
+                         src1h & HMASK;
+                     }
+                     /* Subtract remainder to dividend */
+                     thigh = src1h + src2h;
+                     tlow = src1 + src2;
+                     if (thigh & MSIGN) {
+                         tlow ++;
+                         thigh &= HMASK;
+                     }
+
+                     /* Shift quotent left one bit */
+                     dest <<= 1;
+                     desth <<= 1;
+                     if (desth & MSIGN) {
+                         dest |= 1;
+                         desth &= HMASK;
+                     }
+
+                     /* If remainder larger then divisor replace */
+                     if ((tlow & MSIGN/*0x40000000*/) != 0) {
+                         src1 = tlow;
+                         src1h = thigh;
+                         desth |= 1;
+                     }
                 }
                 goto fpnorm;
-#if 0
-                /* If src1 not normal shift left + expo */
-                if (dest & CMASK) {
-                   desth >>= 4;
-                   desth |= (dest & 0xf) << 28;
-                   dest >>= 4;
-                   e1 ++;
-                   if (e1 >= 128)
-                       storepsw(OPPSW, IRC_EXPOVR);
-                }
-                goto fpnorm;
-                /* Normalize result */
-                if ((dest | desth) != 0) {
-                   while ((dest & EMASK) == 0 && e1 > 0) {
-fprintf(stderr, "FP /n res=%08x %08x %x\n\r", dest, desth, e1);
-                       dest = (dest << 4) | ((desth >> 28) & 0xf);
-                       desth <<= 4;
-                       e1 --;
-                    }
-                    /* Check if underflow */
-                    if (e1 < 0) {
-                        if (pmsk & EXPUND)
-                           storepsw(OPPSW, IRC_EXPUND);
-                        else {
-                           desth = dest = 0;
-                           fill = e1 = 0;
-                        }
-                    }
-                }
-                /* Store result */
-                dest |= (e1 << 24) & EMASK;
-fprintf(stderr, "FP / res=%08x %08x\n\r", dest, desth);
-                if (fill)
-                   dest |= MSIGN;
-                if ((op & 0x10) == 0)
-                    fpregs[reg1|1] = desth;
-                fpregs[reg1] = dest;
-                break;
-#endif
 
                   /* Decimal operations */
         case OP_CP:    /* 1001 */
@@ -2624,6 +2664,7 @@ fprintf(stderr, "FP / res=%08x %08x\n\r", dest, desth);
              hst[hst_p].cc = cc;
         }
 
+        if ((op & 0xA0) == 0x20) {
         sim_debug(DEBUG_INST, &cpu_dev,
                   "GR00=%08x GR01=%08x GR02=%08x GR03=%08x\n",
                    regs[0], regs[1], regs[2], regs[3]);
@@ -2644,6 +2685,7 @@ fprintf(stderr, "FP / res=%08x %08x\n\r", dest, desth);
                   "FP04=%08x FP05=%08x FP06=%08x FP07=%08x\n",
                    fpregs[4], fpregs[5], fpregs[6], fpregs[7]);
         }
+       }
 
         if (irqaddr != 0) {
 supress:
@@ -2798,9 +2840,9 @@ dec_add(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
     cy = addsub;
     zero = 1;
     /* Add numbers together */
-    for (i = 1; i <= len; i++) {
-        acc = a[i] + ((op)? (0x9 - b[i]):b[i]) + cy;
-        if ((acc & 0xf) > 0x9)
+    for (i = 1; i < len; i++) {
+        acc = a[i] + ((addsub)? (0x9 - b[i]):b[i]) + cy;
+        if (acc > 0x9)
            acc += 0x6;
         a[i] = acc & 0xf;
         cy = (acc >> 4) & 0xf;
@@ -2815,11 +2857,12 @@ dec_add(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
     } else {
         if (addsub) {
            /* We need to recomplent the result */
+           sa = !sa;
            cy = 1;
            zero = 1;
-           for (i = 1; i <= len; i++) {
+           for (i = 1; i < len; i++) {
                 acc = (0x9 - a[i]) + cy;
-                if ((acc & 0xf) > 0x9)
+                if (acc > 0x9)
                    acc += 0x6;
                 a[i] = acc & 0xf;
                 cy = (acc >> 4) & 0xf;
@@ -2828,6 +2871,8 @@ dec_add(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
            }
         }
     }
+    if (zero && !ov)
+       sa = 0;
     cc = 0;
     if (zero)  /* Really not zero */
        cc = (sa)? 2: 1;
@@ -2842,10 +2887,10 @@ dec_add(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
            }
         }
         dec_store(a, addr1, (int)len1, sa);
-        if (ov && pmsk & DECOVR)
-            storepsw(OPPSW, IRC_DECOVR);
         if (ov)
             cc = 3;
+        if (ov && pmsk & DECOVR)
+            storepsw(OPPSW, IRC_DECOVR);
     }
 }
 
@@ -2892,7 +2937,7 @@ fprintf(stderr, "Spec DecMP  len=%x len=%x\n\r", len1, len2);
             cy = 0;
             for (i = j, k = 1; i <= len1; i++, k--) {
                 acc = a[i] + b[k] + cy;
-                if ((acc & 0xf) > 0x9)
+                if (acc > 0x9)
                    acc += 0x6;
                 a[i] = acc & 0xf;
                 cy = (acc >> 4) & 0xf;
@@ -2930,7 +2975,7 @@ fprintf(stderr, "Spec DecDP  len=%x len=%x\n\r", len1, len2);
     /* Add numbers together */
     for (i = 1; i <= len; i++) {
         acc = a[i] + ((op)? (0x9 - b[i]):b[i]) + cy;
-        if ((acc & 0xf) > 0x9)
+        if (acc > 0x9)
            acc += 0x6;
         a[i] = acc & 0xf;
         cy = (acc >> 4) & 0xf;
@@ -2944,7 +2989,7 @@ fprintf(stderr, "Spec DecDP  len=%x len=%x\n\r", len1, len2);
             for (i = j, k = 1; i <= len1; i++, k--) {
                  c[i] = a[i];   /* Save if we divide too far */
                  acc = a[i] + (0x9 - b[k]) + cy;
-                 if ((acc & 0xf) > 0x9)
+                 if (acc > 0x9)
                      acc += 0x6;
                  a[i] = acc & 0xf;
                  cy = (acc >> 4) & 0xf;
