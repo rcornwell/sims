@@ -117,7 +117,7 @@ uint32       execp_error;          /* Translation error */
 #define IRC_SIGNIF  0x000e         /* Significance error */
 #define IRC_FPDIV   0x000f         /* Floating pointer divide */
 #define IRC_SEG     0x0010         /* Segment translation */
-#define IRC_PAGE    0x0011         /* Pagre translation */
+#define IRC_PAGE    0x0011         /* Page translation */
 
 #define AMASK       0x00ffffff     /* Mask address bits */
 #define MSIGN       0x80000000     /* Minus sign */
@@ -346,10 +346,10 @@ void storepsw(uint32 addr, uint16 ircode) {
  * Translate an address from virtual to physical.
  */
 int  TransAddr(uint32 va, uint32 *pa) {
-     uint32  seg;
-     uint32  page;
-     uint32  entry;
-     uint32  addr;
+     uint32      seg;
+     uint32      page;
+     uint32      entry;
+     uint32      addr;
 
      /* Check address in range */
      va &= AMASK;
@@ -432,9 +432,9 @@ int  TransAddr(uint32 va, uint32 *pa) {
  * success.
  */
 int  ReadFull(uint32 addr, uint32 *data) {
-     uint32  temp;
-     int     offset;
-     uint8   k;
+     uint32     temp;
+     int        offset;
+     uint8      k;
 
      /* Ignore high order bits */
      addr &= AMASK;
@@ -525,8 +525,8 @@ int ReadHalf(uint32 addr, uint32 *data) {
 }
 
 int WriteFull(uint32 addr, uint32 data) {
-     int     offset;
-     uint8   k;
+     int        offset;
+     uint8      k;
      /* Ignore high order bits */
      addr &= AMASK;
      if (addr >= MEMSIZE) {
@@ -614,9 +614,9 @@ int WriteFull(uint32 addr, uint32 data) {
 }
 
 int WriteByte(uint32 addr, uint32 data) {
-     uint32        mask;
-     uint8   k;
-     int     offset;
+     uint32     mask;
+     uint8      k;
+     int        offset;
 
      /* Ignore high order bits */
      addr &= AMASK;
@@ -652,7 +652,7 @@ int WriteByte(uint32 addr, uint32 data) {
 }
 
 int WriteHalf(uint32 addr, uint32 data) {
-     uint32        mask;
+     uint32     mask;
      uint8      k;
      int        offset;
      int        o;
@@ -738,8 +738,10 @@ sim_instr(void)
     uint32          addr2;
     uint8           op;
     uint8           fill;
+    uint8           digit;
     uint8           reg;
     uint8           reg1;
+    uint8           zone;
     uint16          irq;
     int             e1, e2;
     int             temp, temp2;
@@ -1904,19 +1906,19 @@ save_dbl:
                     break;
                 addr1--;
                 addr2--;
-                src2 = (flags & ASCII)? 0x50 : 0xf0;
+                zone = (flags & ASCII)? 0x50 : 0xf0;
                 while(reg != 0 && reg1 != 0) {
                     if (ReadByte(addr2, &dest))
                         goto supress;
                     addr2--;
                     reg--;
-                    src1 = (dest & 0xf) | src2;
+                    src1 = (dest & 0xf) | zone;
                     if (WriteByte(addr1, src1))
                         goto supress;
                     addr1--;
                     reg1--;
                     if (reg1 != 0) {
-                        src1 = ((dest >> 4) & 0xf) | src2;
+                        src1 = ((dest >> 4) & 0xf) | zone;
                         if (WriteByte(addr1, src1))
                             goto supress;
                         addr1--;
@@ -1924,7 +1926,7 @@ save_dbl:
                     }
                 };
                 while(reg1 != 0) {
-                    if (WriteByte(addr1, src2))
+                    if (WriteByte(addr1, zone))
                         break;
                     addr1--;
                     reg1--;
@@ -2036,56 +2038,83 @@ save_dbl:
         case OP_EDMK:
                 if (ReadByte(addr1, &src1))
                     break;
-                fill = src1;
-                addr1++;
-                src2 = 0;
-                src1 = 1;
+                zone = (flags & ASCII) ? 0x50: 0xf0;
+                fill = digit = (uint8)src1;
+                temp = 0;    /* Hold zero flag */
+                e2 = 0;      /* Significance indicator */
+                e1 = 1;      /* Need another source char */
                 cc = 0;
-                while(reg != 0) {
-                    uint8        t;
-                    uint32  temp;
-                    if (ReadByte(addr1, &temp))
-                        break;
-                    t = temp;
-                    if (src1) {
-                        if (ReadByte(addr2, &dest))
-                            break;
-                        addr2--;
-                        reg --;
-                    }
-                    if (t == 0x21) {
-                        src2 = 1;
-                        t = 0x20;
-                        if (op == OP_EDMK)
-                             regs[1] = addr1;
-                    }
-                    if (t == 0x20) {
-                        if (src2 || (dest >> (4*src1)) & 0xf) {
-                             t = (dest >> (4*src1)) & 0xf;
-                             t |= (flags & ASCII)?0x5:0xf;
-                             if (!src2) {
-                                 src2 = 1;
-                                 if (op == OP_EDMK)
-                                     regs[1] = addr1;
+                for (;;) {
+                    uint8       t;
+                    switch(digit) {
+                    case 0x21:  /* Signficance starter */
+                    case 0x20:  /* Digit selector */
+                         /* If we have not run out of source, grab next pair */
+                         if (e1) {
+                             if (ReadByte(addr2, &src2))
+                                 break;
+                             addr2++;
+                             /* Check if valid */
+                             if (src2 > 0xa0) {
+                                 storepsw(OPPSW, IRC_DATA);
+                                 goto supress;
                              }
-                             if (t & 0xf)
-                                 cc = 2;
-                        } else
-                             t = fill;
-                        if (WriteByte(addr1, t))
-                            break;
-                    } else if (t == 0x22) {
-                        src2 = 0;
-                        t = fill;
-                        if (WriteByte(addr1, t))
-                            break;
+                         }
+                         /* Split apart. */
+                         t = (src2 >> 4) & 0xf;
+                         e1 = !e1;
+                         src2 = (src2 & 0xf) << 4; /* Prepare for next trip */
+                         /* Doing Edit and have seperator */
+                         if (op == OP_EDMK && !e2 && t) {
+                             regs[1] &= 0xff000000;
+                             regs[1] |= addr1 & AMASK;
+                         }
+                         /* Found none zero */
+                         if (t)
+                             temp = 2;   /* Set positive */
+                         /* Select digit or fill */
+                         if (t || e2)
+                             digit = zone | t;
+                         else
+                             digit = fill;
+                         if (src1 == 0x21 || t)
+                             e2 = 1;
+                         /* If sign, update status */
+                         if (!e1) { /* Check if found sign */
+                             switch(src2) {
+                             case 0xa0:   /* Minus */
+                             case 0xc0:
+                             case 0xe0:
+                             case 0xf0:
+                                        e2 = 0;
+                                        /* Fall through */
+                             case 0xb0:
+                             case 0xd0:
+                                        e1 = 1;
+                             }
+                          }
+                          break;
+                    case 0x22:  /* Field separator */
+                         e2 = 0;
+                         digit = fill;
+                         temp = 0;    /* Set zero */
+                         break;
+                    default:    /* Anything else */
+                         if (!e2)
+                            digit = fill;
                     }
-                    addr1--;
+                    if (WriteByte(addr1, digit))
+                        break;
+                    addr1++;
+                    if (reg == 0)
+                        break;
                     reg --;
-                    src1 = !src1;
-                };
-                dest &= 0xf;
-                if (cc != 0 && (dest == 0xd || dest == 0xb))
+                    if (ReadByte(addr1, &src1))
+                        break;
+                    digit = src1;
+                } 
+                cc = temp;
+                if (e2 && cc == 2)
                     cc = 1;
                 break;
 
@@ -2750,6 +2779,10 @@ int dec_load(uint8 *data, uint32 addr, uint len, int *sign)
         data[j++] = t;
         addr--;
     }
+ //   fprintf(stderr, "Load : ");
+ //   for (i = 31; i >= 0; i--) {
+ //       fprintf(stderr, "%x", data[i]);
+ //   }
     /* Check if sign valid and return it */
     if (data[0] == 0xB || data[0] == 0xD)
         *sign = 1;
@@ -2757,6 +2790,7 @@ int dec_load(uint8 *data, uint32 addr, uint len, int *sign)
         err = 1;
     else
         *sign = 0;
+ //   fprintf(stderr, " s=%d l=%d\n\r", *sign, len);
     if (err) {
         storepsw(OPPSW, IRC_DATA);
         return 1;
@@ -2788,6 +2822,11 @@ int dec_store(uint8 *data, uint32 addr, uint len, int sign)
             return 1;
         addr--;
     }
+//    fprintf(stderr, "Store: ");
+//    for (i = 31; i >= 0; i--) {
+//        fprintf(stderr, "%x", data[i]);
+//    }
+//    fprintf(stderr, "\n\r");
     return 0;
 }
 
@@ -2820,7 +2859,9 @@ dec_add(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
     if (dec_load(b, addr2, (int)len2, &sb))
         return;
 
-    len = 2*(len+1);
+    if (op & 1)
+        sb = !sb;
+    len = 2*(len+1)+1;
     /* On all but ZAP load first operand */
     if ((op & 3) != 0) {
         if (dec_load(a, addr1, (int)len1, &sa))
@@ -2830,18 +2871,13 @@ dec_add(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
         memset(a, 0, 32);
         sa = 0;
     }
-    if (op & 1) {
-        if (sa == sb)
-            addsub = 1;
-    } else {
-        if (sa != sb)
-            addsub = 1;
-    }
+    if (sa != sb)
+        addsub = 1;
     cy = addsub;
     zero = 1;
     /* Add numbers together */
     for (i = 1; i < len; i++) {
-        acc = a[i] + ((addsub)? (0x9 - b[i]):b[i]) + cy;
+        acc = b[i] + ((addsub)? (0x9 - a[i]):a[i]) + cy;
         if (acc > 0x9)
            acc += 0x6;
         a[i] = acc & 0xf;
@@ -2849,6 +2885,11 @@ dec_add(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
         if ((acc & 0xf) != 0)
             zero = 0;
     }
+//    fprintf(stderr, "add: ");
+//    for (i = 31; i >= 0; i--) {
+//        fprintf(stderr, "%x", a[i]);
+//    }
+//    fprintf(stderr, " as=%d cy=%d z=%d\n\r", addsub, cy, zero);
     if (cy) {
         if (addsub)
            sa = !sa;
@@ -2857,7 +2898,7 @@ dec_add(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
     } else {
         if (addsub) {
            /* We need to recomplent the result */
-           sa = !sa;
+    //       sa = !sa;
            cy = 1;
            zero = 1;
            for (i = 1; i < len; i++) {
@@ -2871,12 +2912,17 @@ dec_add(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
            }
         }
     }
+//    fprintf(stderr, "sum: ");
+//    for (i = 31; i >= 0; i--) {
+//        fprintf(stderr, "%x", a[i]);
+//    }
+//    fprintf(stderr, " as=%d cy=%d z=%d ov=%d\n\r", addsub, cy, zero,ov);
     if (zero && !ov)
        sa = 0;
     cc = 0;
-    if (zero)  /* Really not zero */
-       cc = (sa)? 2: 1;
-    if ((op & 3) == 1) {
+    if (!zero)  /* Really not zero */
+       cc = (sa)? 1: 2;
+    if ((op & 3) != 1) {
         if (!zero && !ov) {
            /* Start at len1 and go to len2 and see if any non-zero digits */
            for (i = (len1+1)*2; i < len; i++) {
@@ -2909,7 +2955,7 @@ dec_mul(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
     int      len;
 
     if (len2 > 7 || len2 >= len1) {
-fprintf(stderr, "Spec DecMP  len=%x len=%x\n\r", len1, len2);
+//fprintf(stderr, "Spec DecMP  len=%x len=%x\n\r", len1, len2);
         storepsw(OPPSW, IRC_SPEC);
         return;
     }
@@ -2921,7 +2967,7 @@ fprintf(stderr, "Spec DecMP  len=%x len=%x\n\r", len1, len2);
     len1 = (len1 + 1) * 2;
     len2 = (len2 + 1) * 2;
     /* Verify that we have len2 zeros at start of a */
-    for (i = len1; i > len2; i--) {
+    for (i = len1 - len2; i < len1; i++) {
         if (a[i] != 0) {
             storepsw(OPPSW, IRC_DATA);
             return;
@@ -2929,13 +2975,14 @@ fprintf(stderr, "Spec DecMP  len=%x len=%x\n\r", len1, len2);
     }
     sa ^= sb;     /* Compute sign */
     /* Start at end and work backwards */
-    for (j = len2; j > 1; j--) {
+    for (j = len1-len2; j > 0; j--) {
         mul = a[j];
         a[j] = 0;
+ //   fprintf(stderr, "add m=%d %d: ", mul, j);
         while(mul != 0) {
-            /* Add numbers together */
+            /* Add multiplier to multiplican */
             cy = 0;
-            for (i = j, k = 1; i <= len1; i++, k--) {
+            for (i = j, k = 1; i < len1; i++, k++) {
                 acc = a[i] + b[k] + cy;
                 if (acc > 0x9)
                    acc += 0x6;
@@ -2944,6 +2991,10 @@ fprintf(stderr, "Spec DecMP  len=%x len=%x\n\r", len1, len2);
             }
             mul--;
         }
+//   for (i = 31; i >= 0; i--) {
+//       fprintf(stderr, "%x", a[i]);
+//   }
+//   fprintf(stderr, "cy=%d\n\r", cy);
     }
     dec_store(a, addr1, len, sa);
 }
@@ -2956,7 +3007,8 @@ dec_div(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
     uint8    c[32];
     int      i;
     int      j;
-    int      k;
+    int      k, x;
+    int      o;
     uint8    acc;
     uint8    cy;
     int      sa, sb;
@@ -2964,7 +3016,7 @@ dec_div(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
     int      len;
 
     if (len2 > 7 || len2 >= len1) {
-fprintf(stderr, "Spec DecDP  len=%x len=%x\n\r", len1, len2);
+//fprintf(stderr, "Spec DecDP  len=%x len=%x\n\r", len1, len2);
         storepsw(OPPSW, IRC_SPEC);
         return;
     }
@@ -2972,21 +3024,18 @@ fprintf(stderr, "Spec DecDP  len=%x len=%x\n\r", len1, len2);
        return;
     if (dec_load(a, addr1, (int)len1, &sa))
        return;
-    /* Add numbers together */
-    for (i = 1; i <= len; i++) {
-        acc = a[i] + ((op)? (0x9 - b[i]):b[i]) + cy;
-        if (acc > 0x9)
-           acc += 0x6;
-        a[i] = acc & 0xf;
-        cy = (acc >> 4) & 0xf;
-    }
+    memset(c, 0, 32);
+    len = (int)len1;
+    len1 = (len1 + 1) * 2;
+    len2 = (len2 + 1) * 2;
     sb ^= sa;     /* Compute sign */
-    for (j = len2; j > 1; j--) {
+//    fprintf(stderr, "div 1=%d 2=%d\n\r", len1, len2);
+    for (j = len1 - len2; j > 0; j--) {
         q = 0;
         do {
             /* Subtract divisor */
             cy = 1;
-            for (i = j, k = 1; i <= len1; i++, k--) {
+            for (i = j, k = 1; k < len2; i++, k++) {
                  c[i] = a[i];   /* Save if we divide too far */
                  acc = a[i] + (0x9 - b[k]) + cy;
                  if (acc > 0x9)
@@ -2994,23 +3043,48 @@ fprintf(stderr, "Spec DecDP  len=%x len=%x\n\r", len1, len2);
                  a[i] = acc & 0xf;
                  cy = (acc >> 4) & 0xf;
             }
-            if (cy) {
-                a[i] = q;
-                memcpy(a, c, 32);  /* Restore the result */
-                if (q > 9) {
+            /* Plus one more digit */
+            if (i < 32) {
+               acc = a[i] + 9 + cy;
+               if (acc > 0x9)
+                   acc += 0x6;
+               a[i] = acc & 0xf;
+               cy = (acc >> 4) & 0xf;
+            }
+//    fprintf(stderr, "div q=%d %d: ", q, j);
+//    for (x = 31; x >= 0; x--) {
+//        fprintf(stderr, "%x", a[x]);
+//    }
+//    fprintf(stderr, " cy=%d\n\r", cy);
+            /* If no borrow, so we are done with this digit */
+            if (!cy) {
+                /* It is a no-no to have non-zero digit above size */
+                if (q > 0 && (i+1) >= len1) {
                     storepsw(OPPSW, IRC_DECDIV);
                     return;
                 }
+                a[i+1] = q;  /* Save quotient digit */
+                for (i = j; k > 1; i++, k--)
+                     a[i] = c[i];   /* Restore previous */
+//    fprintf(stderr, "div r=%d %d: ", q, j);
+//    for (x = 31; x >= 0; x--) {
+//        fprintf(stderr, "%x", a[x]);
+//    }
+//    fprintf(stderr, "\n\r");
             } else {
                 q++;
             }
-        } while(cy == 0);
+            if (q > 9) {
+                storepsw(OPPSW, IRC_DECDIV);
+                return;
+            }
+        } while(cy != 0);
     }
     /* Set sign of quotient */
     if (sb) {
-        a[len2+1] = ((flags & ASCII)? 0xb : 0xd);
+        a[len2] = ((flags & ASCII)? 0xb : 0xd);
     } else {
-        a[len2+1] = ((flags & ASCII)? 0xa : 0xc);
+        a[len2] = ((flags & ASCII)? 0xa : 0xc);
     }
     dec_store(a, addr1, len, sa);
 }
