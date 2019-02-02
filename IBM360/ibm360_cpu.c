@@ -2251,8 +2251,8 @@ save_dbl:
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
-                a = cnvt_float(src1, 0);
-                b = cnvt_float(src2, 0);
+//                a = cnvt_float(src1, 0);
+//                b = cnvt_float(src2, 0);
 //fprintf(stderr, "FP = Op=%0x src1=%08x, src2=%08x %e %e %e\n\r", op, src1, src2, a, b, a-b);
                 /* Extract numbers and adjust */
                 e1 = (src1 & EMASK) >> 24;
@@ -2340,8 +2340,8 @@ save_dbl:
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
-                a = cnvt_float(src1, 0);
-                b = cnvt_float(src2, 0);
+//                a = cnvt_float(src1, 0);
+//                b = cnvt_float(src2, 0);
 //fprintf(stderr, "FP + Op=%0x src1=%08x, src2=%08x %e %e %e\n\r", op, src1, src2, a, b, a+b);
                 /* Extract numbers and adjust */
                 e1 = (src1 & EMASK) >> 24;
@@ -2473,8 +2473,8 @@ save_dbl:
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
-                a = cnvt_float(src1, src1h);
-                b = cnvt_float(src2, src2h);
+//                a = cnvt_float(src1, src1h);
+//                b = cnvt_float(src2, src2h);
 //fprintf(stderr, "FP = Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a-b);
                 /* Extract numbers and adjust */
                 e1 = (src1 & EMASK) >> 24;
@@ -2594,8 +2594,8 @@ save_dbl:
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
-                a = cnvt_float(src1, src1h);
-                b = cnvt_float(src2, src2h);
+//                a = cnvt_float(src1, src1h);
+//                b = cnvt_float(src2, src2h);
 //fprintf(stderr, "FP + Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
                 /* Extract numbers and adjust */
                 e1 = (src1 & EMASK) >> 24;
@@ -2784,8 +2784,8 @@ fpstore:
                     goto supress;
                 }
 
-                a = cnvt_float(src1, src1h);
-                b = cnvt_float(src2, src2h);
+//                a = cnvt_float(src1, src1h);
+ //               b = cnvt_float(src2, src2h);
 //fprintf(stderr, "FP * Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a*b);
                 /* Extract numbers and adjust */
                 e1 = (src1 & EMASK) >> 24;
@@ -2894,8 +2894,8 @@ fpnorm:
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
-                a = cnvt_float(src1, src1h);
-                b = cnvt_float(src2, src2h);
+//                a = cnvt_float(src1, src1h);
+//                b = cnvt_float(src2, src2h);
 //fprintf(stderr, "FP / Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a/b);
 
                 /* Extract numbers and adjust */
