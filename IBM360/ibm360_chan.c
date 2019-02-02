@@ -576,19 +576,41 @@ int  startio(uint16 addr) {
     UNIT        *uptr;
     uint8        status;
 
+    /* Find channel this device is on, if no none return cc=3 */
     if (chan < 0 || dibp == 0)
         return 3;
     uptr = find_chan_dev(addr);
     if (uptr == 0)
         return 3;
-    if (ccw_cmd[chan] != 0 || (ccw_flags[chan] & (FLAG_CD|FLAG_CC)) != 0 || chan_status[chan] != 0)
+
+    /* If channel is active return cc=2 */
+    if (ccw_cmd[chan] != 0 || (ccw_flags[chan] & (FLAG_CD|FLAG_CC)) != 0)
         return 2;
+
     sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %x %x\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
+
+    /* Check if any status pending */
+    if (chan_status[chan] != 0) {
+        /* If not for this device, return cc=2 */
+        if (chan_dev[chan] != addr)
+            return 2;
+        if ((chan_status[chan] & ~(STATUS_CEND|STATUS_DEND)) != 0) {
+            M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | M[0x44 >> 2] & 0xffff;
+            sim_debug(DEBUG_EXP, &cpu_dev, "Channel store csw  %02x %08x\n",
+                   chan, M[0x44 >> 2]);
+            chan_status[chan] = 0;
+            return 1;
+        }
+    }
+
+    /* All ok, get caw address */
     chan_status[chan] = 0;
     dev_status[addr] = 0;
     caw[chan] = M[0x48>>2];
     chan_dev[chan] = addr;
+
+    /* If device has start_io function run it */
     if (dibp->start_io != NULL) {
         chan_status[chan] = dibp->start_io(uptr, chan) << 8;
         if (chan_status[chan] != 0) {
@@ -599,8 +621,11 @@ int  startio(uint16 addr) {
             return 1;
         }
     }
+
+    /* Try to load first command */
     if (load_ccw(chan, 0)) {
-        if (chan_status[chan] & (STATUS_ATTN|STATUS_CHECK|STATUS_PROT|STATUS_PCHK|STATUS_EXPT)) {
+        if (chan_status[chan] & 
+                  (STATUS_ATTN|STATUS_CHECK|STATUS_PROT|STATUS_PCHK|STATUS_EXPT)) {
             M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | M[0x44 >> 2] & 0xffff;
             sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %x %x cc=2\n", addr, chan,
                   ccw_cmd[chan], ccw_flags[chan]);
@@ -618,6 +643,8 @@ int  startio(uint16 addr) {
             return 1;
         }
     }
+
+    /* If channel returned busy save CSW and return cc=1 */
     if (chan_status[chan] & STATUS_BUSY) {
         M[0x40 >> 2] = 0;
         M[0x44 >> 2] = ((uint32)chan_status[chan]<<16);
@@ -638,11 +665,14 @@ int testio(uint16 addr) {
     UNIT        *uptr;
     uint8        status;
 
+    /* Find channel this device is on, if no none return cc=3 */
     if (chan < 0 || dibp == 0)
         return 3;
     uptr = find_chan_dev(addr);
     if (uptr == 0)
         return 3;
+
+    /* If any error pending save csw and return cc=1 */
     if (chan_status[chan] & (STATUS_PCI|STATUS_ATTN|STATUS_CHECK|\
             STATUS_PROT|STATUS_PCHK|STATUS_EXPT)) {
         sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=1\n", addr, chan,
@@ -650,16 +680,22 @@ int testio(uint16 addr) {
         store_csw(chan);
         return 1;
     }
+
+    /* If channel active, return cc=2 */
     if (ccw_cmd[chan] != 0 || (ccw_flags[chan] & (FLAG_CD|FLAG_CC)) != 0) {
         sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=2\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
         return 2;
     }
+
+    /* If error pending for another device, return cc=2 */
     if (chan_dev[chan] != 0 && chan_dev[chan] != addr) {
         sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=2a\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
         return 2;
     }
+
+    /* Device finished and channel status pending return it and cc=1 */
     if (ccw_cmd[chan] == 0 && chan_status[chan] != 0) {
         sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=1a\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
@@ -667,6 +703,8 @@ int testio(uint16 addr) {
         chan_dev[chan] = 0;
         return 1;
     }
+
+    /* Device has returned a status, store the csw and return cc=1 */
     if (dev_status[addr] != 0) {
         sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=1b\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
@@ -676,19 +714,25 @@ int testio(uint16 addr) {
         return 1;
     }
 
+    /* Nothing pending, send a 0 command to device to get status */
     status = dibp->start_cmd(uptr, chan, 0) << 8;
+
+    /* If no status and unattached device return cc=3 */
     if (status == 0 && (uptr->flags & UNIT_ATT) == 0) {
         sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=1c\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
         return 3;
     }
 
+    /* If we get a error, save csw and return cc=1 */
     if (status & (STATUS_ATTN|STATUS_CHECK|STATUS_EXPT)) {
         M[0x44 >> 2] = ((uint32)status<<24) | M[0x44 >> 2] & 0xffff;
         sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=1d\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
         return 1;
     }
+
+    /* Everything ok, return cc=0 */
     sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=0\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
     return 0;
@@ -700,6 +744,7 @@ int haltio(uint16 addr) {
     UNIT         *uptr;
     uint8         status;
 
+    /* Find channel this device is on, if no none return cc=3 */
     if (chan < 0 || dibp == 0)
         return 3;
     uptr = find_chan_dev(chan_dev[chan]);
@@ -707,10 +752,14 @@ int haltio(uint16 addr) {
         return 3;
     sim_debug(DEBUG_CMD, &cpu_dev, "HIO %x %x %x %x\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
+
+    /* If channel busy, set end of buffer, return cc=2 */
     if (ccw_cmd[chan]) {
         chan_byte[chan] = BUFF_CHNEND;
         return 2;
     }
+
+    /* Not executing a command, issue halt if available */
     if (dibp->halt_io != NULL)
         chan_status[chan] = dibp->halt_io(uptr) << 8;
     return 0;
