@@ -831,7 +831,7 @@ sense_end:
              sim_debug(DEBUG_DETAIL, dptr, "seek unit=%d not allow\n", unit);
              uptr->u6 = cmd;
              uptr->u3 &= ~(0xff);
-             uptr->u5 |= SNS_CMDREJ;
+             uptr->u5 |= SNS_WRP << 8;
              chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
              break;
          }
@@ -841,7 +841,7 @@ sense_end:
                  sim_debug(DEBUG_DETAIL, dptr, "seek unit=%d not allow\n", unit);
                  uptr->u6 = cmd;
                  uptr->u3 &= ~(0xff);
-                 uptr->u5 |= SNS_CMDREJ;
+                 uptr->u5 |= SNS_WRP << 8;
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                  break;
              }
@@ -1353,7 +1353,7 @@ rd:
                    state, count);
              /* Check if command ok based on mask */
              if ((data->filemsk & DK_MSK_WRT) != DK_MSK_ALLWRT) {
-                 uptr->u5 |= SNS_CMDREJ;
+                 uptr->u5 |= SNS_CMDREJ | (SNS_WRP << 8);
                  uptr->u6 = 0;
                  uptr->u3 &= ~(0xff);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -1386,7 +1386,7 @@ rd:
              i = data->filemsk & DK_MSK_WRT;
              if (i == DK_MSK_INHWRT || i == DK_MSK_ALLWRU) {
                  sim_debug(DEBUG_DETAIL, dptr, "WR CKD unit=%d mask\n", unit);
-                 uptr->u5 |= SNS_CMDREJ;
+                 uptr->u5 |= SNS_CMDREJ | (SNS_WRP << 8);
                  uptr->u6 = 0;
                  uptr->u3 &= ~(0xff);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -1418,7 +1418,7 @@ rd:
                             (data->klen == 0 && state == DK_POS_DATA))) {
              /* Check if command ok based on mask */
              if ((data->filemsk & DK_MSK_WRT) == DK_MSK_INHWRT) {
-                 uptr->u5 |= SNS_CMDREJ;
+                 uptr->u5 |= SNS_CMDREJ | (SNS_WRP << 8);
                  uptr->u6 = 0;
                  uptr->u3 &= ~(0xff);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -1445,7 +1445,7 @@ rd:
          if ((state == DK_POS_DATA) && count == 0) {
              /* Check if command ok based on mask */
              if ((data->filemsk & DK_MSK_WRT) == DK_MSK_INHWRT) {
-                 uptr->u5 |= SNS_CMDREJ;
+                 uptr->u5 |= SNS_CMDREJ | (SNS_WRP << 8);
                  uptr->u6 = 0;
                  uptr->u3 &= ~(0xff);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);

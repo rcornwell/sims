@@ -563,6 +563,7 @@ store_csw(uint16 chan) {
         ccw_flags[chan] &= ~FLAG_PCI;
     } else {
         chan_status[chan] = 0;
+        ccw_flags[chan] &= ~FLAG_PCI;
     }
     sim_debug(DEBUG_EXP, &cpu_dev, "Channel store csw  %02x %06x %08x\n",
           chan, M[0x40>>2], M[0x44 >> 2]);
@@ -584,12 +585,13 @@ int  startio(uint16 addr) {
         return 3;
 
     /* If channel is active return cc=2 */
-    if (ccw_cmd[chan] != 0 || (ccw_flags[chan] & (FLAG_CD|FLAG_CC)) != 0)
+    if (ccw_cmd[chan] != 0 || (ccw_flags[chan] & (FLAG_CD|FLAG_CC)) != 0 || chan_status[chan] != 0)
         return 2;
 
     sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %x %x\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
 
+#if 0
     /* Check if any status pending */
     if (chan_status[chan] != 0) {
         /* If not for this device, return cc=2 */
@@ -603,6 +605,7 @@ int  startio(uint16 addr) {
             return 1;
         }
     }
+#endif
 
     /* All ok, get caw address */
     chan_status[chan] = 0;
