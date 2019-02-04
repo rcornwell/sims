@@ -129,6 +129,109 @@ DEVICE              coml_dev = {
 };
 
 
+static const uint8 com_2741_in[128] = {
+   /*     SOH   STX   ETX   EOT   ENQ   ACK   BEL */
+    0000, 0000, 0000, 0000, 0x1F, 0000, 0000, 0000,     /*0-37*/
+   /* 8    9     A     B     C     D     E     F */
+   /*BS   HT    LF    VT    FF    CR    SO    SI */
+    0x5D, 0x7a, 0x5B, 0000, 0000, 0x1f, 0000, 0000,
+   /*DLE  DC1   DC2   DC3   DC4   NAK   SYN   ETB */
+    0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000,
+   /*CAN  EM    SUB   ESC   FS    GS    RS    US */
+    0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000,
+   /*  sp    !    "     #     $     %     &     ' */
+    0x81, 0xd7, 0x96, 0x16, 0x57, 0x8b, 0x61, 0x8d,     /* 40 - 77 */
+   /*  (     )    *     +     ,     -     .     / */
+    0x93, 0x95, 0x90, 0xe1, 0166, 0x40, 0067, 0x23,    /* / = cS x37 */
+   /*  0    1     2     3     4     5     6     7 */
+    0x15, 0x02, 0x04, 0x07, 0x08, 0x0b, 0x0d, 0x0e,
+   /*  8    9     :     ;     <     =     >     ? */
+    0x10, 0x13, 0x88, 0x87, 0x84, 0x82, 0x8e, 0xa3,
+   /*  @    A     B     C     D     E     F     G */
+    0x20, 0xe2, 0xe4, 0xe7, 0xe8, 0xeb, 0xed, 0xee,     /* 100 - 137 */
+   /*  H    I     J     K     L     M     N     O */
+    0xf0, 0xf3, 0xc3, 0xc5, 0xc6, 0xc9, 0xca, 0xcc,
+   /*  P    Q     R     S     T     U     V     W */
+    0xcf, 0xd1, 0xd2, 0xa5, 0xa6, 0xa9, 0xaa, 0xac,
+   /*  X    Y     Z     [     \     ]     ^     _ */
+    0xaf, 0xb1, 0xb2, 0000, 0000, 0000, 0000, 0000,
+   /*  `    a     b     c     d     e     f     g */
+    0000, 0x62, 0x64, 0x67, 0x68, 0x6b, 0x6d, 0x6e,     /* 140 - 177 */
+   /*  h    i     j     k     l     m     n     o */
+    0x70, 0x73, 0x43, 0x45, 0x46, 0x49, 0x4a, 0x4c,
+   /*  p    q     r     s     t     u     v     w */
+    0x4f, 0x51, 0x52, 0x25, 0x26, 0x29, 0x2a, 0x2c,
+   /*  x    y     z     {     |     }     ~   del*/
+    0x2f, 0x31, 0x32, 0000, 0xb7, 0000, 0xf9, 0x7f
+};
+
+static const uint8 com_2741_out[256] = {
+   /*  0,    1,    2,    3,    4,    5,    6,    7,  */
+    0xff,  ' ',  '1', 0xff,  '2', 0xff, 0xff,  '3',       /* 0x0x */
+   /*  8,    9,    A,    B,    C,    D,    E,    F,  */
+     '4', 0xff, 0xff,  '5', 0xff,  '6',  '7', 0xff, 
+   /*  0,    1,    2,    3,    4,    5,    6,    7,  */
+     '8', 0xff, 0xff,  '9', 0xff,  '0',  '#', 0xff,       /* 0x1x */
+   /*  8,    9,    A,    B,    C,    D,    E,    F,  */
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x04, 
+   /*  0,    1,    2,    3,    4,    5,    6,    7,  */
+     '@', 0xff, 0xff,  '/', 0xff,  's',  't', 0xff,       /* 0x2x */
+   /*  8,    9,    A,    B,    C,    D,    E,    F,  */
+    0xff,  'u',  'v', 0xff,  'w', 0xff,  'x', 0xff, 
+   /*  0,    1,    2,    3,    4,    5,    6,    7,  */
+    0xff,  'y',  'z', 0xff, 0xff, 0xff, 0xff,  '/',       /* 0x3x */
+   /*  8,    9,    A,    B,    C,    D,    E,    F,  */
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 
+   /*  0,    1,    2,    3,    4,    5,    6,    7,  */
+     '-', 0xff, 0xff,  'i', 0xff,  'k',  'l', 0xff,       /* 0x4x */
+   /*  8,    9,    A,    B,    C,    D,    E,    F,  */
+    0xff,  'm',  'n', 0xff,  'o', 0xff, 0xff,  'p', 
+   /*  0,    1,    2,    3,    4,    5,    6,    7,  */
+    0xff,  'q',  'r', 0xff, 0xff, 0xff, 0xff,  '$',       /* 0x5x */
+   /*  8,    9,    A,    B,    C,    D,    E,    F,  */
+    0xff, 0xff, 0xff, 0x0a, 0xff, 0x08, 0xff, 0xff, 
+   /*  0,    1,    2,    3,    4,    5,    6,    7,  */
+    0xff,  '&',  'a', 0xff,  'b', 0xff, 0xff,  'c',       /* 0x6x */
+   /*  8,    9,    A,    B,    C,    D,    E,    F,  */
+     'd', 0xff, 0xff,  'e', 0xff,  'f',  'g', 0xff, 
+   /*  0,    1,    2,    3,    4,    5,    6,    7,  */
+     'h', 0xff, 0xff,  'i', 0xff, 0xff, 0xff, 0xff,       /* 0x7x */
+   /*  8,    9,    A,    B,    C,    D,    E,    F,  */
+    0xff, 0xff, 0x09, 0xff, 0xff, 0xff, 0xff, 0x7f, 
+   /*  0,    1,    2,    3,    4,    5,    6,    7,  */
+    0xff,  ' ',  '=', 0xff,  '<', 0xff, 0xff,  ';',       /* 0x8x */
+   /*  8,    9,    A,    B,    C,    D,    E,    F,  */
+     ':', 0xff, 0xff,  '%', 0xff, '\'',  '>', 0xff, 
+   /*  0,    1,    2,    3,    4,    5,    6,    7,  */
+     '*', 0xff, 0xff,  '(', 0xff,  ')',  '"', 0xff,       /* 0x9x */
+   /*  8,    9,    A,    B,    C,    D,    E,    F,  */
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 
+   /*  0,    1,    2,    3,    4,    5,    6,    7,  */
+    0xff, 0xff, 0xff,  '?', 0xff,  'S',  'T', 0xff,       /* 0xAx */
+   /*  8,    9,    A,    B,    C,    D,    E,    F,  */
+    0xff,  'U',  'V', 0xff,  'W', 0xff, 0xff,  'X', 
+   /*  0,    1,    2,    3,    4,    5,    6,    7,  */
+    0xff,  'Y',  'Z', 0xff, 0xff, 0xff, 0xff,  '|',       /* 0xBx */
+   /*  8,    9,    A,    B,    C,    D,    E,    F,  */
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 
+   /*  0,    1,    2,    3,    4,    5,    6,    7,  */
+    0xff,  '-', 0xff,  'J', 0xff,  'K',  'L', 0xff,       /* 0xCx */
+   /*  8,    9,    A,    B,    C,    D,    E,    F,  */
+    0xff,  'M',  'N', 0xff,  'O', 0xff, 0xff,  'P', 
+   /*  0,    1,    2,    3,    4,    5,    6,    7,  */
+    0xff,  'Q',  'R', 0xff, 0xff, 0xff, 0xff,  '!',       /* 0xDx */
+   /*  8,    9,    A,    B,    C,    D,    E,    F,  */
+    0xff, 0xff, 0xff, 0x0a, 0xff, 0x08, 0xff, 0xff, 
+   /*  0,    1,    2,    3,    4,    5,    6,    7,  */
+    0xff,  '+',  'A', 0xff,  'B', 0xff, 0xff,  'C',       /* 0xEx */
+   /*  8,    9,    A,    B,    C,    D,    E,    F,  */
+     'D', 0xff, 0xff,  'E', 0xff,  'F',  'G', 0xff,
+   /*  0,    1,    2,    3,    4,    5,    6,    7,  */
+     'H', 0xff, 0xff,  'I', 0xff, 0xff,  '~', 0xff,       /* 0xFx */
+   /*  8,    9,    A,    B,    C,    D,    E,    F,  */
+    0xff, 0xff, 0x09, 0xff, 0xff, 0xff, 0xff, 0x7f
+};
+
 uint8  coml_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     uint16         addr = GET_UADDR(uptr->u3);
     DEVICE         *dptr = find_dev_from_unit(uptr);
@@ -234,12 +337,18 @@ t_stat coml_srv(UNIT * uptr)
                     uptr->u3 &= ~0xff;
                     chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                     return SCPE_OK;
-                } else {
+                 } else {
                     ch = sim_tt_inpcvt (data, TT_GET_MODE(uptr->flags) |
                                                      TTUF_KSR);
+                    ch = com_2741_in[ch & 0x7f];
                     if (chan_write_byte( addr, &ch)) {
-                        uptr->u3 &= 0xff;
+                        uptr->u3 &= ~0xff;
                         chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+                        return SCPE_OK;
+                    }
+                    if (ch == 0x1f) {
+                        uptr->u3 &= ~0xff;
+                        chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
                         return SCPE_OK;
                     }
                 }
@@ -250,31 +359,34 @@ t_stat coml_srv(UNIT * uptr)
 
     case CMD_WR:         /* Write data to com line */
          if (uptr->u3 & ENAB) {
+             sim_debug(DEBUG_CMD, dptr, "COM: unit=%d write\n", unit);
              if (chan_read_byte (addr, &ch)) {
-                 uptr->u3 &= 0xff;
+                 uptr->u3 &= ~0xff;
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND);
              } else {
-                 int32 data = ch;
+                 int32 data;
+                 data = com_2741_out[ch];
                  data = sim_tt_outcvt(data, TT_GET_MODE(uptr->flags) |
                                                                   TTUF_KSR);
                  tmxr_putc_ln( &com_ldsc[unit], data);
                  sim_activate(uptr, 200);
              }
          } else {
+             sim_debug(DEBUG_CMD, dptr, "COM: unit=%d write error\n", unit);
              uptr->u3 &= ~0xff;
              chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
          }
          break;
 
     case CMD_BRK:        /* Send break signal  */
-         uptr->u3 &= 0xff;
+         uptr->u3 &= ~0xff;
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          break;
 
     case CMD_PREP:       /* Wait for incoming data  */
          if (uptr->u3 & ENAB) {
              if (tmxr_rqln(&com_ldsc[unit]) > 0) {
-                 uptr->u3 &= 0xff;
+                 uptr->u3 &= ~0xff;
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND);
              } else
                  sim_activate(uptr, 200);
@@ -285,19 +397,20 @@ t_stat coml_srv(UNIT * uptr)
          break;
 
     case CMD_SRCH:       /* Wait for EOT character  */
-         uptr->u3 &= 0xff;
+         uptr->u3 &= ~0xff;
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          break;
 
     case CMD_ENB:        /* Enable line */
-         sim_debug(DEBUG_CMD, dptr, "COM: unit=%d enable\n", unit);
          if ((uptr->u3 & (POLL|ENAB)) == ENAB) {
+             uptr->u3 &= ~0xff;
+             sim_debug(DEBUG_CMD, dptr, "COM: unit=%d enable connect\n", unit);
              chan_end(addr, SNS_CHNEND|SNS_DEVEND);
-         } else {
+         } else if ((uptr->u3 & POLL) == 0) {
+             sim_debug(DEBUG_CMD, dptr, "COM: unit=%d enable\n", unit);
              (void)tmxr_set_get_modem_bits(&com_ldsc[unit], TMXR_MDM_DTR, 
                    0, NULL);
              uptr->u3 |= POLL;
-             sim_activate(uptr, 200);
          }
          break;
 
@@ -337,6 +450,7 @@ t_stat com_scan(UNIT * uptr)
              line->u3 &= ~POLL;
              line->u3 |= ENAB;
              sim_debug(DEBUG_DETAIL, &com_dev, "COM line connect %d\n", ln);
+             sim_activate(line, 200);
         }
     }
     tmxr_poll_tx(&com_desc);
