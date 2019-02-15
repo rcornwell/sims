@@ -33,7 +33,7 @@
 
 #define PP_V_MODE        (UNIT_V_UF + 0)
 #define PP_M_MODE        (3 << PP_V_MODE)
-#define PP_MODE(x)       ((PP_V_MODE & (x)) >> PP_V_MODE)
+#define PP_MODE(x)       ((PP_M_MODE & (x)) >> PP_V_MODE)
 #define UNIT_V_TYPE      (UNIT_V_UF + 2)
 #define UNIT_TYPE        (0xf << UNIT_V_TYPE)
 #define GET_TYPE(x)      ((UNIT_TYPE & (x)) >> UNIT_V_TYPE)

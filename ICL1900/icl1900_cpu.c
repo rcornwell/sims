@@ -2529,8 +2529,8 @@ cpu_show_size(FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 t_stat
 cpu_set_size(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 {
-    t_uint64            mc = 0;
-    uint32              i;
+    uint32     mc = 0;
+    uint32     i;
 
     cpu_unit[0].flags &= ~UNIT_MSIZE;
     cpu_unit[0].flags |= val;
