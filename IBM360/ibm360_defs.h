@@ -326,7 +326,7 @@ int  startio(uint16 addr) ;
 int testio(uint16 addr);
 int haltio(uint16 addr);
 int testchan(uint16 channel);
-uint16 scan_chan(uint8 mask);
+uint16 scan_chan(uint16 mask);
 t_stat chan_boot(uint16 addr, DEVICE *dptr);
 t_stat chan_set_devs();
 t_stat set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc);

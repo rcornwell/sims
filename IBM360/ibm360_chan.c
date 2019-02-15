@@ -269,6 +269,9 @@ writebuff(int chan) {
     return 0;
 }
 
+/*
+ * Load in the next CCW, return 1 if failure, 0 if success.
+ */
 int
 load_ccw(uint16 chan, int tic_ok) {
     uint32         word;
@@ -358,10 +361,12 @@ loop:
              ccw_cmd[chan] = 0;
              irq_pend = 1;
         }
+    }
     if (ccw_flags[chan] & FLAG_PCI) {
         chan_status[chan] |= STATUS_PCI;
+        ccw_flags[chan] &= ~FLAG_PCI;
         irq_pend = 1;
-    }
+        sim_debug(DEBUG_CMD, &cpu_dev, "Set PCI %02x\n", chan);
     }
     return 0;
 }
@@ -382,25 +387,33 @@ chan_read_byte(uint16 addr, uint8 *data) {
     if ((ccw_cmd[chan] & 0x1)  == 0) {
         return 1;
     }
+    /* Check if finished transfer */
     if (chan_byte[chan] == BUFF_CHNEND)
         return 1;
+    /* Check if count is zero */
     if (ccw_count[chan] == 0) {
+         /* If not data channing, let device know there will be no
+          * more data to come
+          */
          if ((ccw_flags[chan] & FLAG_CD) == 0) {
             chan_status[chan] |= STATUS_CEND;
             chan_byte[chan] = BUFF_CHNEND;
             sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_read_end\n");
             return 1;
          } else {
+            /* If chaining try and start next CCW */
             if (load_ccw(chan, 1))
                 return 1;
          }
     }
+    /* Read in next work if buffer is in empty status */
     if (chan_byte[chan] == BUFF_EMPTY) {
          if (readbuff(chan))
             return 1;
          chan_byte[chan] = ccw_addr[chan] & 0x3;
          ccw_addr[chan] += 4 - chan_byte[chan];
     }
+    /* Return current byte */
     ccw_count[chan]--;
     byte = (chan_buf[chan] >>  (8 * (3 - (chan_byte[chan] & 0x3)))) & 0xff;
     chan_byte[chan]++;
@@ -425,17 +438,23 @@ chan_write_byte(uint16 addr, uint8 *data) {
     if ((ccw_cmd[chan] & 0x1)  != 0) {
         return 1;
     }
+    /* Check if at end of transfer */
     if (chan_byte[chan] == BUFF_CHNEND) {
         if ((ccw_flags[chan] & FLAG_SLI) == 0) {
             chan_status[chan] |= STATUS_LENGTH;
         }
         return 1;
     }
+    /* Check if count is zero */
     if (ccw_count[chan] == 0) {
+        /* Flush the buffer if we got anything back. */
         if (chan_byte[chan] & BUFF_DIRTY) {
             if (writebuff(chan))
                 return 1;
         }
+        /* If not data channing, let device know there will be no
+         * more data to come
+         */
         if ((ccw_flags[chan] & FLAG_CD) == 0) {
             chan_byte[chan] = BUFF_CHNEND;
             if ((ccw_flags[chan] & FLAG_SLI) == 0) {
@@ -445,9 +464,11 @@ chan_write_byte(uint16 addr, uint8 *data) {
             sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_write_end\n");
             return 1;
         }
+        /* Otherwise try and grab next CCW */
         if (load_ccw(chan, 1))
             return 1;
     }
+    /* If we are skipping, just adjust count */
     if (ccw_flags[chan] & FLAG_SKIP) {
         ccw_count[chan]--;
         chan_byte[chan] = BUFF_EMPTY;
@@ -457,6 +478,7 @@ chan_write_byte(uint16 addr, uint8 *data) {
             ccw_addr[chan]++;
         return 0;
     }
+    /* Check if we need to save what we have */
     if (chan_byte[chan] == (BUFF_EMPTY|BUFF_DIRTY)) {
          if (writebuff(chan))
             return 1;
@@ -471,6 +493,7 @@ chan_write_byte(uint16 addr, uint8 *data) {
             return 1;
         chan_byte[chan] = ccw_addr[chan] & 0x3;
     }
+    /* Store it in buffer and adjust pointer */
     ccw_count[chan]--;
     offset = 8 * (chan_byte[chan] & 0x3);
     mask = 0xff000000 >> offset;
@@ -487,6 +510,9 @@ chan_write_byte(uint16 addr, uint8 *data) {
     return 0;
 }
 
+/*
+ * A device wishes to inform the CPU it needs some service.
+ */
 void
 set_devattn(uint16 addr, uint8 flags) {
     int          chan = find_subchan(addr);
@@ -503,6 +529,9 @@ set_devattn(uint16 addr, uint8 flags) {
     irq_pend = 1;
 }
 
+/*
+ * Signal end of transfer by device.
+ */
 void
 chan_end(uint16 addr, uint8 flags) {
     int         chan = find_subchan(addr);
@@ -511,11 +540,13 @@ chan_end(uint16 addr, uint8 flags) {
         return;
 
     sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end(%x, %x) %x\n", addr, flags, ccw_count[chan]);
+    /* If PCI flag set, trigger interrupt */
     if (ccw_flags[chan] & FLAG_PCI) {
         chan_status[chan] |= STATUS_PCI;
         ccw_flags[chan] &= ~FLAG_PCI;
         irq_pend = 1;
     }
+    /* Flush buffer if there was any change */
     if (chan_byte[chan] & BUFF_DIRTY) {
         if (writebuff(chan))
             return;
@@ -524,6 +555,8 @@ chan_end(uint16 addr, uint8 flags) {
     chan_status[chan] |= STATUS_CEND;
     chan_status[chan] |= ((uint16)flags) << 8;
     ccw_cmd[chan] = 0;
+
+    /* If count not zero and not suppressing length, report error */
     if (ccw_count[chan] != 0 && (ccw_flags[chan] & FLAG_SLI) == 0) {
         sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end length\n");
         chan_status[chan] |= STATUS_LENGTH;
@@ -537,9 +570,11 @@ chan_end(uint16 addr, uint8 flags) {
         ccw_flags[chan] = 0;
     }
 
+    /* If channel is also finished, then skip any more data commands. */
     if (chan_status[chan] & (STATUS_DEND|STATUS_CEND)) {
         chan_byte[chan] = BUFF_NEWCMD;
 
+        /* While command has chain data set, continue to skip */
         while ((ccw_flags[chan] & FLAG_CD)) {
             if (load_ccw(chan, 1))
                 break;
@@ -554,6 +589,9 @@ chan_end(uint16 addr, uint8 flags) {
     irq_pend = 1;
 }
 
+/*
+ * Save full csw.
+ */
 int
 store_csw(uint16 chan) {
     M[0x40 >> 2] = caw[chan];
@@ -570,8 +608,11 @@ store_csw(uint16 chan) {
     return chan_dev[chan];
 }
 
-
-int  startio(uint16 addr) {
+/*
+ * Handle SIO instruction.
+ */
+int
+startio(uint16 addr) {
     int          chan = find_subchan(addr);
     DIB         *dibp = dev_unit[addr];
     UNIT        *uptr;
@@ -662,11 +703,14 @@ int  startio(uint16 addr) {
     return 0;
 }
 
+/*
+ * Handle TIO instruction.
+ */
 int testio(uint16 addr) {
     int          chan = find_subchan(addr);
     DIB         *dibp = dev_unit[addr];
     UNIT        *uptr;
-    uint8        status;
+    uint16       status;
 
     /* Find channel this device is on, if no none return cc=3 */
     if (chan < 0 || dibp == 0)
@@ -741,6 +785,9 @@ int testio(uint16 addr) {
     return 0;
 }
 
+/*
+ * Handle HIO instruction.
+ */
 int haltio(uint16 addr) {
     int           chan = find_subchan(addr);
     DIB          *dibp = dev_unit[addr];
@@ -768,6 +815,9 @@ int haltio(uint16 addr) {
     return 0;
 }
 
+/*
+ * Handle TCH instruction.
+ */
 int testchan(uint16 channel) {
     uint16         st = 0;
     channel >>= 8;
@@ -785,6 +835,10 @@ int testchan(uint16 channel) {
     return 0;
 }
 
+/*
+ * Bootstrap a device. Set command to READ IPL, length 24 bytes, suppress
+ * length warning, and chain command.
+ */
 t_stat chan_boot(uint16 addr, DEVICE *dptyr) {
     int          chan = find_subchan(addr);
     DIB         *dibp = dev_unit[addr];
@@ -821,19 +875,24 @@ t_stat chan_boot(uint16 addr, DEVICE *dptyr) {
     return SCPE_OK;
 }
 
-/* Scan all channels and see if one is ready to start or has
-   interrupt pending.
-*/
-uint16 scan_chan(uint8 mask) {
+/*
+ * Scan all channels and see if one is ready to start or has
+ * interrupt pending.
+ */
+uint16
+scan_chan(uint16 mask) {
      int         i;
      int         ch;
      int         pend = 0;         /* No device */
-     int         imask = 0x80;
+     int         imask = 0x8000;
 
+     /* Quick exit if no pending IRQ's */
      if (irq_pend == 0)
          return 0;
      irq_pend = 0;
+     /* Start with channel 0 and work through all channels */
      for (i = 0; i < subchannels + channels; i++) {
+         /* If onto channel 1 or above shift mask */
          if (i >= subchannels)
             imask = imask / 2;
 
@@ -886,7 +945,8 @@ uint16 scan_chan(uint8 mask) {
           for (pend = 0; pend < MAX_DEV; pend++) {
              if (dev_status[pend] != 0) {
                  ch = find_subchan(pend);
-                 if (ch >= 0 && ccw_cmd[ch] == 0 && mask & (0x80 >> (pend >> 8))) {
+                 if (ch >= 0 && ccw_cmd[ch] == 0 &&
+                        (mask & (0x8000 >> (pend >> 8))) != 0) {
                      irq_pend = 1;
                      M[0x44 >> 2] = (((uint32)dev_status[pend]) << 24);
                      M[0x40>>2] = 0;

@@ -30,6 +30,7 @@
 #define FEAT_STOR    (1 << (UNIT_V_UF + 11))     /* No alignment restrictions */
 #define FEAT_TIMER   (1 << (UNIT_V_UF + 12))     /* Interval timer */
 #define FEAT_DAT     (1 << (UNIT_V_UF + 13))     /* Dynamic address translation */
+#define FEAT_EFP     (1 << (UNIT_V_UF + 14))     /* Extended floating point */
 #define EXT_IRQ      (1 << (UNIT_V_UF_31))       /* External interrupt */
 
 #define UNIT_V_MSIZE (UNIT_V_UF + 0)             /* dummy mask */
@@ -50,9 +51,11 @@ uint32       regs[16];             /* CPU Registers */
 uint32       PC;                   /* Program counter */
 uint32       fpregs[8];            /* Floating point registers */
 uint32       cregs[16];            /* Control registers /67 or 370 only */
-uint8        sysmsk;               /* Interupt mask */
-uint8        sysmskh;              /* High order system mask */
+uint16       sysmsk;               /* Interupt mask */
+uint8        ext_en;               /* Enable external and timer IRQ's */
+uint8        irq_en;               /* Enable channel IRQ's */
 uint8        st_key;               /* Storage key */
+uint8        ec_mode;              /* EC mode PSW */
 uint8        cc;                   /* CC */
 uint8        ilc;                  /* Instruction length code */
 uint8        pmsk;                 /* Program mask */
@@ -62,10 +65,7 @@ uint16       irqaddr;              /* Address of IRQ vector */
 uint16       loading;              /* Doing IPL */
 uint8        interval_irq = 0;     /* Interval timer IRQ */
 uint8        dat_en = 0;           /* Translate addresses */
-uint32       segtable;             /* Address of segment table */
-uint8        seglen;               /* Length of segment table */
 uint32       tlb[256];             /* Translation look aside buffer */
-uint32       execp_error;          /* Translation error */
 
 #define DAT_ENABLE  0x01           /* DAT enabled */
 
@@ -206,7 +206,7 @@ t_bool build_dev_tab (void);
 /* Interval timer option */
 t_stat              rtc_srv(UNIT * uptr);
 t_stat              rtc_reset(DEVICE * dptr);
-int32               rtc_tps = 60;
+int32               rtc_tps = 300;
 
 
 /* CPU data structures
@@ -263,17 +263,22 @@ MTAB cpu_mod[] = {
     { UNIT_MSIZE, MEMAMOUNT(128), "2M", "2M", &cpu_set_size },
     { FEAT_PROT, 0, NULL, "NOPROT", NULL, NULL, NULL, "No Storage protection"},
     { FEAT_PROT, FEAT_PROT, "PROT", "PROT", NULL, NULL, NULL, "Storage protection"},
-    { FEAT_DEC, 0, NULL, "NODECIMAL", NULL, NULL, NULL},
-    { FEAT_DEC, FEAT_DEC, "DECIMAL", "DECIMAL", NULL, NULL, NULL, "Decimal instruction set"},
-    { FEAT_FLOAT, 0, NULL, "NOFLOAT", NULL, NULL, NULL},
-    { FEAT_FLOAT, FEAT_FLOAT, "FLOAT", "FLOAT", NULL, NULL, NULL, "Floating point instruction"},
-    { FEAT_UNIV, FEAT_UNIV, NULL, "UNIV", NULL, NULL, NULL, "Universal instruction"},
-    { FEAT_STOR, 0, NULL, "NOSTORE", NULL, NULL, NULL},
+    { FEAT_UNIV, FEAT_UNIV, "UNIV", "UNIV", NULL, NULL, NULL, "Universal instruction"},
+    { FEAT_UNIV, 0, NULL, "NOUNIV", NULL, NULL, NULL, "Basic instructions"},
+    { FEAT_UNIV, FEAT_FLOAT, "FLOAT", "FLOAT", NULL, NULL, NULL, 
+                                "Floating point instructions"},
+    { FEAT_FLOAT, 0, NULL, "NOFLOAT", NULL, NULL, NULL, "No floating point instructions"},
+    { FEAT_UNIV, FEAT_DEC, "DECIMAL", "DECIMAL", NULL, NULL, NULL, "Decimal instruction set"},
+    { FEAT_DEC, 0, NULL, "NODECIMAL", NULL, NULL, "No decimal instructions"},
+    { FEAT_EFP|FEAT_FLOAT, FEAT_EFP|FEAT_FLOAT, "EFLOAT", "EFLOAT", NULL, NULL, NULL, 
+                                "Extended Floating point instruction"},
+    { FEAT_EFP, 0, NULL, "NOEFLOAT", NULL, NULL, NULL, "No extended floating point"},
     { FEAT_STOR, FEAT_STOR, "STORE", "STORE", NULL, NULL, NULL, "No storage alignment"},
-    { FEAT_TIMER, 0, NULL,  "NOTIMER", NULL, NULL},
+    { FEAT_STOR, 0, NULL, "NOSTORE", NULL, NULL, NULL},
     { FEAT_TIMER, FEAT_TIMER, "TIMER", "TIMER", NULL, NULL, NULL, "Interval timer"},
+    { FEAT_TIMER, 0, NULL,  "NOTIMER", NULL, NULL},
+    { FEAT_DAT, FEAT_DAT, "DAT", "DAT", NULL, NULL, NULL, "DAT /67"},
     { FEAT_DAT, 0, NULL,  "NODAT", NULL, NULL},
-    { FEAT_DAT, FEAT_DAT, "DAT", "DAT", NULL, NULL, NULL, "Dat /67"},
     { EXT_IRQ, 0, "NOEXT",  NULL, NULL, NULL},
     { EXT_IRQ, EXT_IRQ, "EXT", "EXT", NULL, NULL, NULL, "External Irq"},
     { MTAB_XTD|MTAB_VDV|MTAB_NMO|MTAB_SHP, 0, "HISTORY", "HISTORY",
@@ -314,32 +319,49 @@ void post_extirq() {
 
 
 void storepsw(uint32 addr, uint16 ircode) {
-     uint32 word;
-        sim_debug(DEBUG_INST, &cpu_dev, "store %02x %d %x PSW=%08x %08x  ", addr, ilc, cc, (((uint32)sysmsk) << 24) |
-            (((uint32)st_key) << 16) | (((uint32)flags) << 16) | ((uint32)ircode),
-             (((uint32)ilc) << 30) | (((uint32)cc) << 28) | (((uint32)pmsk) << 24) | PC);
+     uint32   word;
+     uint32   word2;
      irqaddr = addr + 0x40;
-     word = (((uint32)sysmsk) << 24) |
-            (((uint32)st_key) << 16) |
-            (((uint32)flags) << 16) |
-            ((uint32)ircode);
+
+     if (ec_mode) {
+         /* Generate first word */
+         word = (((uint32)dat_en) << 26) |
+                ((irq_en) ? 1<<25:0) |
+                ((ext_en) ? 1<<24:0) |
+                (((uint32)st_key) << 16) |
+                (((uint32)flags) << 16) |
+                (((uint32)ilc) << 14) |
+                (((uint32)cc) << 12) |
+                (((uint32)pmsk) << 8);
+         /* Generate second word. */
+         word2 = PC;
+     } else {
+         /* Generate first word */
+         word = ((uint32)(ext_en) << 24) |
+                ((uint32)(sysmsk & 0xfe00) << 16) |
+                (((uint32)st_key) << 16) |
+                (((uint32)flags) << 16) |
+                ((uint32)ircode);
+         /* Generate second word. */
+         word2 = (((uint32)ilc) << 30) |
+                (((uint32)cc) << 28) |
+                (((uint32)pmsk) << 24) |
+                (PC & AMASK);
+     }
      M[addr >> 2] = word;
-        if (hst_lnt) {
-             hst_p = hst_p + 1;
-             if (hst_p >= hst_lnt)
-                hst_p = 0;
-             hst[hst_p].pc = addr | HIST_SPW;
-             hst[hst_p].src1 = word;
-        }
      addr += 4;
-     word = (((uint32)ilc) << 30) |
-            (((uint32)cc) << 28) |
-            (((uint32)pmsk) << 24) |
-            PC;
-     M[addr >> 2] = word;
-        if (hst_lnt) {
-             hst[hst_p].src2 = word;
-        }
+     M[addr >> 2] = word2;
+     /* Update history */
+     if (hst_lnt) {
+         hst_p = hst_p + 1;
+         if (hst_p >= hst_lnt)
+             hst_p = 0;
+         hst[hst_p].pc = addr | HIST_SPW;
+         hst[hst_p].src1 = word;
+         hst[hst_p].src2 = word2;
+     }
+     sim_debug(DEBUG_INST, &cpu_dev, "store %02x %d %x PSW=%08x %08x\n\r", addr, ilc,
+             cc, word, word2);
      irqcode = ircode;
 }
 
@@ -354,69 +376,73 @@ int  TransAddr(uint32 va, uint32 *pa) {
 
      /* Check address in range */
      va &= AMASK;
-     if (va >= MEMSIZE) {
-        storepsw(OPPSW, IRC_ADDR);
-        return 1;
-     }
 
      if (!dat_en) {
-        *pa = va;
-        return 0;
+         if (va >= MEMSIZE) {
+            storepsw(OPPSW, IRC_ADDR);
+            return 1;
+         }
+         *pa = va;
+         return 0;
      }
 
-     seg = (va & SEG_MASK) >> 12;
-     page = seg & 0xff;
+     seg = va & SEG_MASK;
+     page = (seg >> 12) & 0xff;
      /* Quick check if TLB correct */
      entry = tlb[page];
      if ((entry & TLB_VALID) != 0 && ((entry ^ seg) & TLB_SEG) == 0) {
          *pa = (va & 0xfff) | ((entry & TLB_PHY) << 12);
+         if (va >= MEMSIZE) {
+            storepsw(OPPSW, IRC_ADDR);
+            return 1;
+         }
          return 0;
      }
      /* TLB not correct, try loading correct entry */
      seg >>= 8;         /* Segment number to word address */
      if ((seg >> 4) != 0) {
-         execp_error = va;
-        storepsw(OPPSW, IRC_SEG);
+         cregs[2] = va;
+         storepsw(OPPSW, IRC_SEG);
          /* Not valid address */
          return 1;
      }
-     addr = ((seg & 0xFFF) << 2) + segtable;
+     addr = ((seg & 0xFFF) << 2) + (cregs[0] & AMASK);
      /* Ignore high order bits */
      addr &= AMASK;
      if (addr >= MEMSIZE) {
-        storepsw(OPPSW, IRC_ADDR);
-        return 1;
+         storepsw(OPPSW, IRC_ADDR);
+         return 1;
      }
      entry = M[addr >> 2];
      /* Check if entry valid and in correct length */
      if (entry & PTE_VALID || page > (entry >> 24)) {
-        storepsw(OPPSW, IRC_PAGE);
-        execp_error = va;
-        return 1;
+         cregs[2] = va;
+         storepsw(OPPSW, IRC_PAGE);
+         return 1;
      }
 
      /* Now we need to fetch the actual entry */
      addr = (((entry & PTE_ADR) >> 1) + page) << 2;
      addr &= AMASK;
      if (addr >= MEMSIZE) {
-        storepsw(OPPSW, IRC_ADDR);
-        return 1;
+         storepsw(OPPSW, IRC_ADDR);
+         return 1;
      }
      entry = M[addr >> 2];
      entry >>= (addr & 2) ? 0 : 16;
      entry &= 0xffff;
 
      if ((entry & (PTE_MBZ)) != 0) {
+         cregs[2] = va;
          storepsw(OPPSW, IRC_SPEC);
-         execp_error = va;
          return 1;
      }
 
      /* Check if entry valid and in correct length */
      if (entry & PTE_AVAL) {
-        storepsw(OPPSW, IRC_PAGE);
-         execp_error = va;
-        return 1;
+         cregs[2] = va;
+         storepsw(OPPSW, IRC_PAGE);
+         return 1;
      }
 
      /* Compute correct entry */
@@ -424,6 +450,10 @@ int  TransAddr(uint32 va, uint32 *pa) {
      entry |= (va & TLB_SEG) | TLB_VALID;
      tlb[page] = entry;
      *pa = (va & 0xfff) | ((entry & TLB_PHY) << 12);
+     if (va >= MEMSIZE) {
+        storepsw(OPPSW, IRC_ADDR);
+        return 1;
+     }
      return 0;
 }
 
@@ -437,12 +467,9 @@ int  ReadFull(uint32 addr, uint32 *data) {
      int        offset;
      uint8      k;
 
-     /* Ignore high order bits */
-     addr &= AMASK;
-     if (addr >= MEMSIZE) {
-        storepsw(OPPSW, IRC_ADDR);
-        return 1;
-     }
+     /* Validate address */
+     if (TransAddr(addr, &addr))
+         return 1;
 
      offset = addr & 0x3;
      addr >>= 2;
@@ -455,7 +482,6 @@ int  ReadFull(uint32 addr, uint32 *data) {
          }
          k = key[addr >> 9];
          if ((k & 0x8) != 0 && (k & 0xf0) != st_key) {
-//fprintf(stderr, "Protstore %08x %x %x\n\r", addr <<2, k ,st_key);
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
@@ -468,10 +494,15 @@ int  ReadFull(uint32 addr, uint32 *data) {
               return 1;
          }
          temp = addr + 1;
+         /* Check if possible next page */
+         if ((temp & 0x3ff) == 0) {
+             if (TransAddr(temp << 2, &temp))
+                 return 1;
+             temp >>= 2;
+         }
          if ((temp & 0x1ff) == 0 && st_key != 0) {
              k = key[temp >> 9];
              if ((k & 0x8) != 0 && (k & 0xf0) != st_key) {
-//fprintf(stderr, "Protstore %08x %x %x\n\r", addr <<2, k ,st_key);
                  storepsw(OPPSW, IRC_PROT);
                  return 1;
              }
@@ -527,16 +558,16 @@ int ReadHalf(uint32 addr, uint32 *data) {
 
 int WriteFull(uint32 addr, uint32 data) {
      int        offset;
+     uint32     pa;
+     uint32     pa2;
      uint8      k;
-     /* Ignore high order bits */
-     addr &= AMASK;
-     if (addr >= MEMSIZE) {
-         storepsw(OPPSW, IRC_ADDR);
-         return 1;
-     }
 
-     offset = addr & 0x3;
-     addr >>= 2;
+     /* Validate address */
+     if (TransAddr(addr, &pa))
+         return 1;
+
+     offset = pa & 0x3;
+     pa >>= 2;
 
      /* Check storage key */
      if (st_key != 0) {
@@ -544,90 +575,75 @@ int WriteFull(uint32 addr, uint32 data) {
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
-         k = key[addr >> 9];
+         k = key[pa >> 9];
          if ((k & 0xf0) != st_key) {
-//fprintf(stderr, "Protstore %08x %x %x\n\r", addr <<2, k ,st_key);
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
      }
 
+     /* Check if we handle unaligned access */
+     if (offset != 0) {
+         if ((cpu_unit.flags & FEAT_STOR) == 0) {
+             storepsw(OPPSW, IRC_SPEC);
+             return 1;
+         }
+
+         /* Check if new page or new protection zone */
+         if ((pa & 0x1ff) == 0x1ff) {
+             /* Validate address */
+             if (TransAddr(addr + 4, &pa2))
+                 return 1;
+             pa2 >>= 2;
+             if (st_key != 0) {
+                k = key[(pa2) >> 9];
+                if ((k & 0xf0) != st_key) {
+                    storepsw(OPPSW, IRC_PROT);
+                    return 1;
+                }
+             }
+        } else 
+             pa2 = pa + 1;
+     }
+
      switch (offset) {
      case 0:
-         M[addr] = data;
+          M[pa] = data;
           break;
      case 1:
-        if ((cpu_unit.flags & FEAT_STOR) == 0) {
-             storepsw(OPPSW, IRC_SPEC);
-             return 1;
-        }
-        if (((addr & 0x1ff) == 0x1ff) &&  st_key != 0) {
-            k = key[(addr + 1) >> 9];
-            if ((k & 0xf0) != st_key) {
-//fprintf(stderr, "Protstore %08x %x %x\n\r", addr <<2, k ,st_key);
-                storepsw(OPPSW, IRC_PROT);
-                return 1;
-            }
-        }
-        M[addr] &= 0xff000000;
-        M[addr] |= 0xffffff & (data >> 8);
-        M[addr+1] &= 0xffffff;
-        M[addr+1] |= 0xff000000 & (data << 24);
-        break;
+          M[pa] &= 0xff000000;
+          M[pa] |= 0xffffff & (data >> 8);
+          M[pa2] &= 0xffffff;
+          M[pa2] |= 0xff000000 & (data << 24);
+          break;
      case 2:
-        if ((cpu_unit.flags & FEAT_STOR) == 0) {
-             storepsw(OPPSW, IRC_SPEC);
-             return 1;
-        }
-        if (((addr & 0x1ff) == 0x1ff) &&  st_key != 0) {
-            k = key[(addr + 1) >> 9];
-            if ((k & 0xf0) != st_key) {
-//fprintf(stderr, "Protstore %08x %x %x\n\r", addr <<2, k ,st_key);
-                storepsw(OPPSW, IRC_PROT);
-                return 1;
-            }
-        }
-        M[addr] &= 0xffff0000;
-        M[addr] |= 0xffff & (data >> 16);
-        M[addr+1] &= 0xffff;
-        M[addr+1] |= 0xffff0000 & (data << 16);
-        break;
+          M[pa] &= 0xffff0000;
+          M[pa] |= 0xffff & (data >> 16);
+          M[pa2] &= 0xffff;
+          M[pa2] |= 0xffff0000 & (data << 16);
+          break;
      case 3:
-        if ((cpu_unit.flags & FEAT_STOR) == 0) {
-             storepsw(OPPSW, IRC_SPEC);
-             return 1;
-        }
-        if (((addr & 0x1ff) == 0x1ff) &&  st_key != 0) {
-            k = key[(addr + 1) >> 9];
-            if ((k & 0xf0) != st_key) {
-//fprintf(stderr, "Protstore %08x %x %x\n\r", addr <<2, k ,st_key);
-                storepsw(OPPSW, IRC_PROT);
-                return 1;
-            }
-        }
-        M[addr] &= 0xffffff00;
-        M[addr] |= 0xff & (data >> 24);
-        M[addr+1] &= 0xff;
-        M[addr+1] |= 0xffffff00 & (data << 8);
-        break;
+          M[pa] &= 0xffffff00;
+          M[pa] |= 0xff & (data >> 24);
+          M[pa2] &= 0xff;
+          M[pa2] |= 0xffffff00 & (data << 8);
+          break;
      }
      return 0;
 }
 
 int WriteByte(uint32 addr, uint32 data) {
      uint32     mask;
+     uint32     pa;
      uint8      k;
      int        offset;
 
-     /* Ignore high order bits */
-     addr &= AMASK;
-     if (addr >= MEMSIZE) {
-         storepsw(OPPSW, IRC_ADDR);
+     /* Validate address */
+     if (TransAddr(addr, &pa))
          return 1;
-     }
 
-     offset = 8 * (3 - (addr & 0x3));
-     addr >>= 2;
+     offset = 8 * (3 - (pa & 0x3));
+     pa >>= 2;
 
      /* Check storage key */
      if (st_key != 0) {
@@ -635,9 +651,8 @@ int WriteByte(uint32 addr, uint32 data) {
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
-         k = key[addr >> 9];
+         k = key[pa >> 9];
          if ((k & 0xf0) != st_key) {
-//fprintf(stderr, "Protstore %08x %x %x\n\r", addr <<2, k ,st_key);
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
@@ -647,26 +662,31 @@ int WriteByte(uint32 addr, uint32 data) {
      data &= mask;
      data <<= offset;
      mask <<= offset;
-     M[addr] &= ~mask;
-     M[addr] |= data;
+     M[pa] &= ~mask;
+     M[pa] |= data;
      return 0;
 }
 
 int WriteHalf(uint32 addr, uint32 data) {
      uint32     mask;
      uint8      k;
+     uint32     pa;
+     uint32     pa2;
      int        offset;
      int        o;
 
-     /* Ignore high order bits */
-     addr &= AMASK;
-     if (addr >= MEMSIZE) {
-         storepsw(OPPSW, IRC_ADDR);
+     /* Validate address */
+     if (TransAddr(addr, &pa))
+         return 1;
+
+     offset = pa & 0x3;
+     pa >>= 2;
+
+     /* Check if we handle unaligned access */
+     if ((offset & 1) != 0 && (cpu_unit.flags & FEAT_STOR) == 0) {
+         storepsw(OPPSW, IRC_SPEC);
          return 1;
      }
-
-     offset = addr & 0x3;
-     addr >>= 2;
 
      /* Check storage key */
      if (st_key != 0) {
@@ -674,50 +694,51 @@ int WriteHalf(uint32 addr, uint32 data) {
             storepsw(OPPSW, IRC_PROT);
             return 1;
         }
-        k = key[addr >> 9];
+        k = key[pa >> 9];
         if ((k & 0xf0) != st_key) {
-//fprintf(stderr, "Protstore %08x %x %x\n\r", addr <<2, k ,st_key);
             storepsw(OPPSW, IRC_PROT);
             return 1;
         }
+     }
+
+     if (offset == 3) {
+         /* Check if new page or new protection zone */
+         if ((pa & 0x1ff) == 0x1ff) {
+             /* Validate address */
+             if (TransAddr(addr + 4, &pa2))
+                 return 1;
+             pa2 >>= 2;
+             if (st_key != 0) {
+                k = key[(pa2) >> 9];
+                if ((k & 0xf0) != st_key) {
+                    storepsw(OPPSW, IRC_PROT);
+                    return 1;
+                }
+             }
+        } else 
+             pa2 = pa + 1;
      }
 
      mask = 0xffff;
      data &= mask;
      switch (offset) {
      case 0:
-          M[addr] &= ~(mask << 16);
-          M[addr] |= data << 16;
+          M[pa] &= ~(mask << 16);
+          M[pa] |= data << 16;
           break;
      case 1:
-          if ((cpu_unit.flags & FEAT_STOR) == 0) {
-              storepsw(OPPSW, IRC_SPEC);
-              return 1;
-          }
-          M[addr] &= ~(mask << 8);
-          M[addr] |= data << 8;
+          M[pa] &= ~(mask << 8);
+          M[pa] |= data << 8;
           break;
      case 2:
-          M[addr] &= ~mask;
-          M[addr] |= data;
+          M[pa] &= ~mask;
+          M[pa] |= data;
           break;
      case 3:
-          if ((cpu_unit.flags & FEAT_STOR) == 0) {
-               storepsw(OPPSW, IRC_SPEC);
-               return 1;
-          }
-          if (((addr & 0x1ff) == 0x1ff) &&  st_key != 0) {
-              k = key[(addr + 1) >> 9];
-              if ((k & 0xf0) != st_key) {
-//fprintf(stderr, "Protstore %08x %x %x\n\r", addr <<2, k ,st_key);
-                  storepsw(OPPSW, IRC_PROT);
-                  return 1;
-              }
-          }
-          M[addr] &= 0xffffff00;
-          M[addr] |= 0xff & (data >> 8);
-          M[addr+1] &= 0x00ffffff;
-          M[addr+1] |= 0xff000000 & (data << 24);
+          M[pa] &= 0xffffff00;
+          M[pa] |= 0xff & (data >> 8);
+          M[pa2] &= 0x00ffffff;
+          M[pa2] |= 0xff000000 & (data << 24);
           break;
      }
      return 0;
@@ -758,6 +779,7 @@ sim_instr(void)
         sim_activate(&cpu_unit, 100);
     }
     interval_irq = 0;
+    irq_en |= (loading != 0);
 
     while (reason == SCPE_OK) {
 
@@ -768,6 +790,7 @@ wait_loop:
                return reason;
         }
 
+        /* Check if we should see if an IRQ is pending */
         irq= scan_chan(sysmsk);
         if (irq!= 0) {
             ilc = 0;
@@ -782,23 +805,27 @@ wait_loop:
             goto supress;
         }
 
-        if ((cpu_unit.flags & EXT_IRQ) && (sysmsk & 01)) {
-            ilc = 0;
-            cpu_unit.flags &= ~EXT_IRQ;
-            storepsw(OEPSW, 0x40);
-            goto supress;
+        /* Check for external interrupts */
+        if (ext_en) {
+            if ((cpu_unit.flags & EXT_IRQ) && (cregs[4] & 0x40) != 0) {
+                ilc = 0;
+                cpu_unit.flags &= ~EXT_IRQ;
+                storepsw(OEPSW, 0x40);
+                goto supress;
+            }
+
+            if (interval_irq && (cregs[4] & 0x80) != 0) {
+                ilc = 0;
+                interval_irq = 0;
+                storepsw(OEPSW, 0x80);
+                goto supress;
+            }
         }
 
-        if (interval_irq && (sysmsk & 01)) {
-            ilc = 0;
-            interval_irq = 0;
-            storepsw(OEPSW, 0x80);
-            goto supress;
-        }
-
+        /* If we have wait flag or loading, nothing more to do */
         if (loading || flags & WAIT) {
             /* CPU IDLE */
-            if (flags & WAIT && sysmsk == 0)
+            if (flags & WAIT && irq_en == 0 && ext_en == 0)
                return STOP_HALT;
             sim_interval--;
             goto wait_loop;
@@ -821,7 +848,8 @@ wait_loop:
              hst[hst_p].pc = PC | HIST_PC;
         }
 
-        sim_debug(DEBUG_INST, &cpu_dev, "PSW=%08x %08x  ", (((uint32)sysmsk) << 24) |
+        sim_debug(DEBUG_INST, &cpu_dev, "PSW=%08x %08x  ",
+            ((uint32)(ext_en) << 24) | (((uint32)sysmsk & 0xfe00) << 16) |
             (((uint32)st_key) << 16) | (((uint32)flags) << 16) | ((uint32)irqcode),
              (((uint32)ilc) << 30) | (((uint32)cc) << 28) | (((uint32)pmsk) << 24) | PC);
         ilc = 0;
@@ -900,7 +928,6 @@ opr:
                 goto supress;
             }
             if (reg1 & 0x9) {
-//fprintf(stderr, "Spec FP Reg=%x\n\r", reg1);
                 storepsw(OPPSW, IRC_SPEC);
                 goto supress;
             }
@@ -912,7 +939,6 @@ opr:
                  src1h = 0;
             if (op & 0x40) {
                 if ((op & 0x10) != 0 && (addr1 & 0x3) != 0) {
-//fprintf(stderr, "Spec FP Op=%0x  Op=%x\n\r", op, addr1);
                    storepsw(OPPSW, IRC_SPEC);
                    goto supress;
                 }
@@ -924,11 +950,8 @@ opr:
                        goto supress;
                 } else
                    src2h = 0;
-//if ((op & 0xf) > 8)
-//fprintf(stderr, "RD FP Op=%0x %08x %08x\n\r", op, src2, src2h);
             } else {
                 if (reg & 0x9) {
-//fprintf(stderr, "Spec FP Reg2=%x\n\r", reg);
                    storepsw(OPPSW, IRC_SPEC);
                    goto supress;
                 }
@@ -937,8 +960,6 @@ opr:
                     src2h = fpregs[R2(reg)|1];
                 else
                     src2h = 0;
-//if ((op & 0xf) > 8)
-//fprintf(stderr, "RD FP Op=%0x %08x %08x\n\r", op, src2, src2h);
             }
                 /* All RR opcodes */
         } else if ((op & 0xe0) == 0) {
@@ -1041,9 +1062,9 @@ opr:
                 } else if (addr1 >= MEMSIZE) {
                     storepsw(OPPSW, IRC_ADDR);
                 } else if (cpu_unit.flags & FEAT_PROT) {
-                    key[addr1 >> 11] = src1 & 0xf8;
-//if ((src1 & 0xff) != 0)
-//fprintf(stderr, "Protset %08x %02x\n\r", addr1, src1);
+                    if (TransAddr(addr1, &addr2))
+                        break;
+                    key[addr2 >> 11] = src1 & 0xf8;
                 }
                 break;
 
@@ -1058,8 +1079,10 @@ opr:
                 } else if (addr1 >= MEMSIZE) {
                     storepsw(OPPSW, IRC_ADDR);
                 } else {
+                    if (TransAddr(addr1, &addr2))
+                        break;
                     dest &= 0xffffff00;
-                    dest |= key[addr1 >> 11];
+                    dest |= key[addr2 >> 11];
                     regs[reg1] = dest;
                 }
                 break;
@@ -1073,8 +1096,20 @@ opr:
                     storepsw(OPPSW, IRC_PRIV);
                 } else {
                     ReadByte(addr1, &src1);
-                    sysmsk = src1 & 0xff;
-                    irq_pend = 1;
+                    if (ec_mode) {
+                        if (src1 & 0xf0)
+                           storepsw(OPPSW, IRC_SPEC);
+                        dat_en = (src1 > 2) & 3;
+                        irq_en = (src1 & 02) != 0;
+                        ext_en = (src1 & 01) != 0;
+                    } else {
+                        sysmsk = (src1 & 0xfe) << 8;
+                        irq_en = (sysmsk != 0);
+                        ext_en = (src1 & 0x1) != 0;
+                        cregs[6] &= 0x0000ffff;
+                        cregs[6] |= (uint32)(sysmsk) << 16;
+                        irq_pend = 1;
+                    }
                 }
                 break;
 
@@ -1630,13 +1665,10 @@ save_dbl:
                         dest = 0;
                         switch (reg) {
                         case 0x0:     /* Segment table address */
-                                  dest = segtable;
-                                  break;
-                        case 0x2:     /* Translation execption */
-                                  dest = execp_error;
-                                  break;
-                        case 0x4:     /* Extended mask */
                         case 0x6:     /* Maskes */
+                        case 0x4:     /* Extended mask */
+                        case 0x2:     /* Translation execption */
+                                  dest = cregs[reg];
                                   break;
                         case 0x8:     /* Partitioning register */
                         case 0x9:     /* Partitioning register */
@@ -1677,21 +1709,29 @@ save_dbl:
                     for (;;) {
                         if (ReadFull(addr1, &dest))
                             goto supress;
+                        cregs[reg] = dest;
                         switch (reg) {
                         case 0x0:     /* Segment table address */
-                                  if ((dest & 0x3f) != 0)
-                                     storepsw(OPPSW, IRC_PRIV);
-                                  segtable = dest & AMASK;
                                   for (temp = 0;
                                        temp < sizeof(tlb)/sizeof(uint32);
                                        temp++)
                                       tlb[temp] = 0;
+                                  if ((dest & 0x3f) != 0)
+                                     storepsw(OPPSW, IRC_DATA);
                                   break;
-                        case 0x2:     /* Translation execption */
-                                  execp_error = dest;
+                        case 0x6:     /* Maskes */
+                                  sysmsk = (dest >> 16) & 0xfefe;
+                                  cregs[reg] &= 0xfefe0000;
+                                  if (sysmsk & 0xfe00) 
+                                      cregs[reg] |= 0x1000000;
+                                  if (sysmsk & 0x00fe)
+                                      cregs[reg] |= 0x0010000;
                                   break;
                         case 0x4:     /* Extended mask */
-                        case 0x6:     /* Maskes */
+                                  ec_mode = (dest & 0x00800000) != 0;
+                                  cregs[reg] &= 0xf08000ff;
+                                  break;
+                        case 0x2:     /* Translation execption */
                                   break;
                         case 0x1:     /* Unassigned */
                         case 0x3:     /* Unassigned */
@@ -1705,7 +1745,7 @@ save_dbl:
                         case 0xD:     /* Partitioning register */
                         case 0xE:     /* Partitioning register */
                         case 0xF:     /* Unassigned */
-                                   break;
+                                  break;
                         }
                         if (reg1 == reg)
                             break;
@@ -1736,7 +1776,7 @@ save_dbl:
                         cc = 1;
                         break;
                     }
-                    addr2 = ((addr2 & 0xFFF) << 2) + segtable;
+                    addr2 = ((addr2 & 0xFFF) << 2) + (cregs[0] & AMASK);
                     /* Ignore high order bits */
                     addr2 &= AMASK;
                     if (addr2 >= MEMSIZE) {
@@ -3066,6 +3106,7 @@ fpnorm:
         case OP_MXR:
         case OP_MXDR:
         case OP_MXD:
+fprintf(stderr, "Extended op\n\r");
         default:
                 storepsw(OPPSW, IRC_OPR);
                 goto supress;
@@ -3076,7 +3117,6 @@ fpnorm:
              hst[hst_p].cc = cc;
         }
 
-//        if ((op & 0xA0) == 0x20) {
         sim_debug(DEBUG_INST, &cpu_dev,
                   "GR00=%08x GR01=%08x GR02=%08x GR03=%08x\n",
                    regs[0], regs[1], regs[2], regs[3]);
@@ -3097,37 +3137,48 @@ fpnorm:
                   "FP04=%08x FP05=%08x FP06=%08x FP07=%08x\n",
                    fpregs[4], fpregs[5], fpregs[6], fpregs[7]);
         }
- //      }
 
         if (irqaddr != 0) {
 supress:
              src1 = M[irqaddr>>2];
-        if (hst_lnt) {
-             hst_p = hst_p + 1;
-             if (hst_p >= hst_lnt)
-                hst_p = 0;
-             hst[hst_p].pc = irqaddr | HIST_LPW;
-             hst[hst_p].src1 = src1;
-        }
+             if (hst_lnt) {
+                 hst_p = hst_p + 1;
+                 if (hst_p >= hst_lnt)
+                     hst_p = 0;
+                 hst[hst_p].pc = irqaddr | HIST_LPW;
+                 hst[hst_p].src1 = src1;
+             }
              irqaddr += 4;
              src2 = M[irqaddr>>2];
-        if (hst_lnt) {
-             hst[hst_p].src2 = src2;
-        }
+             if (hst_lnt) {
+                  hst[hst_p].src2 = src2;
+             }
 lpsw:
-             sysmsk = (src1 >> 24) & 0xff;
-             st_key = (src1 >> 16) & 0xf0;
-             flags = (src1 >> 16) & 0xf;
+             if (ec_mode) {
+                 dat_en = (src1 >> 26) & 3;
+                 irq_en = (src1 & 0x2000000) != 0;
+                 cc = (src1 >> 12) & 3;
+                 pmsk = (src1 >> 8) & 0xf;
+             } else {
+                 cregs[6] = src1 & 0xfe000000;
+                 sysmsk = (cregs[6] >> 16) & 0xfe00;
+                 if (sysmsk) {
+                     cregs[reg] |= 0x1000000;
+                     irq_en = 1;
+                 } else
+                     irq_en = 0;
+                 pmsk = (src2 >> 24) & 0xf;
+                 cc = (src2 >> 28) & 0x3;
+             }
              irqaddr = 0;
-             pmsk = (src2 >> 24) & 0xf;
-             cc = (src2 >> 28) & 0x3;
+             ext_en = (src1 & 0x1000000) != 0;
+             st_key = (src1 >> 16)  & 0xf0;
+             flags = (src1 >> 16) & 0xf;
              PC = src2 & AMASK;
              irq_pend = 1;
-             sim_debug(DEBUG_INST, &cpu_dev, "PSW=%08x %08x  ",
-                   (((uint32)sysmsk) << 24) | (((uint32)st_key) << 16) |
-                   (((uint32)flags) << 16) | ((uint32)irqcode),
-                   (((uint32)ilc) << 30) | (((uint32)cc) << 28) |
-                   (((uint32)pmsk) << 24) | PC);
+             sim_debug(DEBUG_INST, &cpu_dev, "PSW=%08x %08x  ", src1, src2);
+             if (dat_en & 0x2)
+                 storepsw(OPPSW, IRC_SPEC);
         }
         sim_interval--;
     }
@@ -3445,6 +3496,7 @@ t_stat cpu_reset (DEVICE *dptr)
         if (M == NULL)
             return SCPE_MEM;
     }
+    cregs[4] = 0xff;
     return SCPE_OK;
 }
 
@@ -3461,7 +3513,7 @@ rtc_srv(UNIT * uptr)
             sim_debug(DEBUG_INST, &cpu_dev, "TIMER IRQ %08x\n\r", M[0x50>>2]);
             interval_irq = 1;
         }
-        M[0x50>>2] -= 0x40;
+        M[0x50>>2] -= 0x100;
         sim_debug(DEBUG_INST, &cpu_dev, "TIMER = %08x\n", M[0x50>>2]);
     }
     return SCPE_OK;

@@ -33,6 +33,7 @@
 /* u3 */
 #define CMD_RD             0x02       /* Read in data from com line */
 #define CMD_WR             0x01       /* Write data to com line */
+#define CMD_NOP            0x03       /* Nop command */
 #define CMD_DIAL           0x29       /* Dial call */
 #define CMD_BRK            0x0D       /* Send break signal  */
 #define CMD_PREP           0x06       /* Wait for incoming data  */
@@ -246,6 +247,8 @@ uint8  coml_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
 
     switch (cmd & 0x3) {
     case 0x3:              /* Control */
+         if (cmd == CMD_NOP)
+             break;
     case 0x1:              /* Write command */
     case 0x2:              /* Read command */
          uptr->u3 |= cmd;
@@ -333,14 +336,14 @@ t_stat coml_srv(UNIT * uptr)
          if (uptr->u3 & ENAB) {
              if (tmxr_rqln(&com_ldsc[unit]) > 0) {
                  int32   data = tmxr_getc_ln (&com_ldsc[unit]);
-                 if (ch & SCPE_BREAK) {
+                 if (data & SCPE_BREAK) {
                     uptr->u3 &= ~0xff;
                     chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                     return SCPE_OK;
                  } else {
                     ch = sim_tt_inpcvt (data, TT_GET_MODE(uptr->flags) |
                                                      TTUF_KSR);
-                    ch = com_2741_in[ch & 0x7f];
+                    ch = com_2741_in[data & 0x7f];
                     if (chan_write_byte( addr, &ch)) {
                         uptr->u3 &= ~0xff;
                         chan_end(addr, SNS_CHNEND|SNS_DEVEND);
