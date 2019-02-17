@@ -1,10 +1,5 @@
 /*
- * external interface for type340.c
- * Simulator Independent DEC Type 340 Graphic Display Processor Simulation
- */
-
-/*
- * Copyright (c) 2018, Philip L. Budne
+ * Copyright (c) 2018 Lars Brinkhoff
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -23,39 +18,47 @@
  * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- * Except as contained in this notice, the name of the author shall
+ * Except as contained in this notice, the names of the authors shall
  * not be used in advertising or otherwise to promote the sale, use or
  * other dealings in this Software without prior written authorization
  * from the authors.
  */
 
-typedef unsigned int ty340word;
+#if defined(__cplusplus)
+extern "C" {
+#endif
+#ifndef SIM_DEFS_H_
+typedef unsigned short uint16;
+typedef int int32;
+typedef unsigned int uint32;
+#endif /* SIM_DEFS_H_ */
+
+/* Hardware type. */
+#define TYPE_DAZZLE  1
+#define TYPE_LOGO    2
 
 /*
- * Type340 status bits
- * MUST BE EXACT SAME VALUES AS USED IN PDP-10 CONI!!!
+ * The PIX_SCALE #define establishes the initial default display scale
+ * factor; to change from the default scale factor, set ng_scale
+ * before calling ng_init().
  */
-#define ST340_VEDGE     04000
-#define ST340_LPHIT     02000
-#define ST340_HEDGE     01000
-#define ST340_STOP_INT  00400
+#ifndef PIX_SCALE
+#define PIX_SCALE RES_FULL
+#endif
+extern int ng_type;
+extern int ng_scale;
 
-/* NOT same as PDP-10 CONI */
-#define ST340_STOPPED   0400000
+extern int32 ng_get_csr(void);
+extern int32 ng_get_reloc(void);
+extern void ng_set_csr(uint16);
+extern void ng_set_reloc(uint16);
 
-/*
- * calls from host into type340.c
- */
-ty340word ty340_reset(void *);
-ty340word ty340_status(void);
-ty340word ty340_instruction(ty340word inst);
-void ty340_set_dac(ty340word addr);
-void ty342_set_grid(int, int);
+extern int  ng_init(void *, int);
+extern int  ng_cycle(int, int);
 
-/*
- * calls from type340.c into host simulator
- */
-extern ty340word ty340_fetch(ty340word);
-extern void ty340_store(ty340word, ty340word);
-extern void ty340_lp_int(ty340word x, ty340word y);
-extern void ty340_rfd(void);
+extern int  ng_fetch(uint32, uint16 *);       /* get a display-file word */
+extern int  ng_store(uint32, uint16);
+
+#if defined(__cplusplus)
+}
+#endif

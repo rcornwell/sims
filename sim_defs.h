@@ -411,13 +411,12 @@ typedef uint32          t_addr;
 #define SCPE_STALL      (SCPE_BASE + 41)                /* Telnet conn stall */
 #define SCPE_AFAIL      (SCPE_BASE + 42)                /* assert failed */
 #define SCPE_INVREM     (SCPE_BASE + 43)                /* invalid remote console command */
-#define SCPE_NOTATT     (SCPE_BASE + 44)                /* not attached */
-#define SCPE_EXPECT     (SCPE_BASE + 45)                /* expect matched */
-#define SCPE_AMBREG     (SCPE_BASE + 46)                /* ambiguous register */
-#define SCPE_REMOTE     (SCPE_BASE + 47)                /* remote console command */
-#define SCPE_INVEXPR    (SCPE_BASE + 48)                /* invalid expression */
+#define SCPE_EXPECT     (SCPE_BASE + 44)                /* expect matched */
+#define SCPE_AMBREG     (SCPE_BASE + 45)                /* ambiguous register */
+#define SCPE_REMOTE     (SCPE_BASE + 46)                /* remote console command */
+#define SCPE_INVEXPR    (SCPE_BASE + 47)                /* invalid expression */
 
-#define SCPE_MAX_ERR    (SCPE_BASE + 48)                /* Maximum SCPE Error Value */
+#define SCPE_MAX_ERR    (SCPE_BASE + 47)                /* Maximum SCPE Error Value */
 #define SCPE_KFLAG      0x10000000                      /* tti data flag */
 #define SCPE_BREAK      0x20000000                      /* tti break flag */
 #define SCPE_NOMESSAGE  0x40000000                      /* message display supression flag */
@@ -854,14 +853,6 @@ struct DEBTAB {
 #define DEBUG_PRD(d)    (sim_deb && d->dctrl)
 #define DEBUG_PRI(d,m)  (sim_deb && (d.dctrl & (m)))
 #define DEBUG_PRJ(d,m)  (sim_deb && ((d)->dctrl & (m)))
-
-#define SIM_DBG_EVENT       0x01000000      /* event dispatch activities */
-#define SIM_DBG_ACTIVATE    0x02000000      /* queue insertion activities */
-#define SIM_DBG_AIO_QUEUE   0x04000000      /* asynch event queue activities */
-#define SIM_DBG_EXP_STACK   0x08000000      /* expression stack activities */
-#define SIM_DBG_EXP_EVAL    0x10000000      /* expression evaluation activities */
-#define SIM_DBG_BRK_ACTION  0x20000000      /* action activities */
-#define SIM_DBG_DO          0x40000000      /* do activities */
 
 /* Open File Reference */
 struct FILEREF {

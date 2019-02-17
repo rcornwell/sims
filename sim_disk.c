@@ -1809,8 +1809,10 @@ int (*close_function)(FILE *f);
 FILE *fileref;
 t_bool auto_format;
 
-if ((uptr == NULL) || !(uptr->flags & UNIT_ATT))
-    return SCPE_NOTATT;
+if (uptr == NULL)
+    return SCPE_IERR;
+if (!(uptr->flags & UNIT_ATT))
+    return SCPE_UNATT;
 
 ctx = (struct disk_context *)uptr->disk_ctx;
 fileref = uptr->fileref;
@@ -3464,15 +3466,16 @@ if ((sDynamic) &&
                     else
                         ParentName[i/2] = Pdata[i] ? Pdata[i] : Pdata[i+1];
                 free (Pdata);
+                memset (CheckPath, 0, sizeof (CheckPath));
                 if (0 == memcmp (sDynamic->ParentLocatorEntries[j].PlatformCode, "W2ku", 4))
-                    strncpy (CheckPath, ParentName, sizeof (CheckPath)-1);
+                    strlcpy (CheckPath, ParentName, sizeof (CheckPath));
                 else
                     if (0 == memcmp (sDynamic->ParentLocatorEntries[j].PlatformCode, "W2ru", 4)) {
                         const char *c;
 
                         if ((c = strrchr (szVHDPath, '\\'))) {
                             memcpy (CheckPath, szVHDPath, c-szVHDPath+1);
-                            strncpy (CheckPath+strlen(CheckPath), ParentName, sizeof (CheckPath)-(strlen (CheckPath)+1));
+                            strlcat (CheckPath, ParentName, sizeof (CheckPath));
                             }
                         }
                 VhdPathToHostPath (CheckPath, CheckPath, sizeof (CheckPath));
