@@ -23,24 +23,8 @@
 
 #include "sim_defs.h"                     /* simulator defns */
 
-/* Simulator stop codes */
-
-#define STOP_IONRDY       1               /* I/O dev not ready */
-#define STOP_HALT         2               /* HALT */
-#define STOP_IBKPT        3               /* breakpoint */
-#define STOP_UUO          4               /* invalid opcode */
-#define STOP_INVINS       5               /* invalid instr */
-#define STOP_INVIOP       6               /* invalid I/O op */
-#define STOP_INDLIM       7               /* indirect limit */
-#define STOP_XECLIM       8               /* XEC limit */
-#define STOP_IOCHECK      9               /* IOCHECK */
-#define STOP_MMTRP       10               /* mm in trap */
-#define STOP_TRPINS      11               /* trap inst not BRM */
-#define STOP_RTCINS      12               /* rtc inst not MIN/SKR */
-#define STOP_ILLVEC      13               /* zero vector */
-#define STOP_CCT         14               /* runaway CCT */
-
-/* Conditional error returns */
+#define STOP_HALT       1                               /* halted */
+#define STOP_IBKPT      2                               /* breakpoint */
 
 /* Memory */
 

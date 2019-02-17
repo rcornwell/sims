@@ -109,21 +109,10 @@ DEBTAB              crd_debug[] = {
 
 
 const char *sim_stop_messages[] = {
-       "Unknown error",
-       "IO device not ready",
-       "HALT instruction",
-       "Breakpoint",
-       "Unknown Opcode",
-       "Invalid instruction",
-       "Invalid I/O operation",
-       "Nested indirects exceed limit",
-       "Nested XEC's exceed limit",
-       "I/O Check opcode",
-       "Memory management trap during trap",
-       "Trap instruction not BRM",
-       "RTC instruction not MIN or SKR",
-       "Interrupt vector zero",
-       "Runaway carriage control tape"  };
+    "Unknown error",
+    "HALT instruction",
+    "Breakpoint"
+     };
 
 const char ascii_to_ebcdic[128] = {
    /* Control                              */
@@ -381,27 +370,6 @@ t_opcode  optab[] = {
 };
 
 
-/* Register change decode
-
-   Inputs:
-    *of       =       output stream
-    inst      =       mask bits
-*/
-
-//void fprint_reg (FILE *of, int32 inst)
-//{
-//int32 i, j, sp;
-#if 0
-inst = inst & ~(I_M_OP << I_V_OP);                     /* clear opcode */
-for (i = sp = 0; opc_val[i] >= 0; i++) {              /* loop thru ops */
-    j = (opc_val[i] >> I_V_FL) & I_M_FL;              /* get class */
-    if ((j == I_V_REG) && (opc_val[i] & inst)) {       /* reg class? */
-       inst = inst & ~opc_val[i];                     /* mask bit set? */
-       fprintf (of, (sp? " %s": "%s"), opcode[i]);
-       sp = 1;  }  }
-#endif
-//return;
-//}
 
 void fprint_inst(FILE *of, uint16 *val) {
 uint8           inst = (val[0] >> 8) &  0xff;
@@ -483,6 +451,7 @@ t_stat fprint_sym (FILE *of, t_addr addr, t_value *val,
        UNIT *uptr, int32 sw)
 {
 uint8           inst = *val;
+uint16          sval[4];
 int             i;
 int             l = 1;
 int             rdx = 16;
@@ -532,92 +501,30 @@ if (sw & SWMASK ('C')) {
    }
    fputc('\'', of);
 } else if (sw & SWMASK ('M')) {
-    for (tab = optab; tab->name != NULL; tab++) {
-       if (tab->opbase == inst) {
-          i = 0;
-          switch (tab->type & LNMSK) {
-          case SS:
-                    num = (uint32)(val[i++] << 8);
-                    num |= (uint32)val[i++];
-                    fprint_val(of, num, 16, 16, PV_RZRO);
-                    fputc(' ', of);
-                    /* Fall through */
-          case RX:
-          case RS:
-          case SI:
-                    num = (uint32)(val[i++] << 8);
-                    num |= (uint32)val[i++];
-                    fprint_val(of, num, 16, 16, PV_RZRO);
-                    fputc(' ', of);
-                    /* Fall through */
-          case RR:
-                    num = (uint32)(val[i++] << 8);
-                    num |= (uint32)val[i++];
-                    fprint_val(of, num, 16, 16, PV_RZRO);
-                    fputc(' ', of);
-                    break;
-          }
-          for(; i < 6; i+=2)
-              fputs("     ", of);
-          fputc(' ', of);
-          fputs(tab->name, of);
-          fputc(' ', of);
-          switch (tab->type & LNMSK) {
-          case RR:
-                    if (tab->type & IMDOP) {
-                        fprint_val(of, val[1], rdx, 8, PV_RZRO);
-                    } else {
-                        if (tab->type & ONEOP)
-                            fprintf(of, "%d", (val[1] >> 4) & 0xf);
-                        else
-                            fprintf(of, "%d,%d", (val[1] >> 4) & 0xf, val[1] & 0xf);
-                    }
-                    break;
-          case RX:
-                    fprintf(of, "%d, ", (val[1] >> 4) & 0xf);
-                    num = ((val[2] << 8) & 0xf00) | val[3];
-                    fprint_val(of, num, rdx, 12, PV_LEFT);
-                    fprintf(of, "(%d,%d)", val[1] & 0xf, (val[2] >> 4) & 0xf);
-                    break;
-          case RS:
-                    fprintf(of, "%d,", (val[1] >> 4) & 0xf);
-                    if ((tab->type & ZEROOP) == 0)
-                        fprintf(of, "%d,", val[1] & 0xf);
-                    num = ((val[2] << 8) & 0xf00) | val[3];
-                    fprint_val(of, num, rdx, 12, PV_LEFT); if (val[2] & 0xf0)
-                        fprintf(of, "(%d)", (val[2] >> 4) & 0xf);
-                    break;
-          case SI:
-                    num = ((val[2] << 8) & 0xf00) | val[3];
-                    fprint_val(of, num, rdx, 12, PV_LEFT);
-                    if (val[2] & 0xf0)
-                        fprintf(of, "(%d)", (val[2] >> 4) & 0xf);
-                    if ((tab->type & ZEROOP) == 0)
-                       fprintf(of, ",%2x", val[1]);
-                    break;
-          case SS:
-                    num = ((val[2] << 8) & 0xf00) | val[3];
-                    fprint_val(of, num, rdx, 12, PV_LEFT);
-                    if (tab->type & TWOOP) {
-                       fprintf(of, "(%d", (val[1] >> 4) & 0xf);
-                    } else {
-                       fprintf(of, "(%d", val[1] & 0xff);
-                    }
-                    if (val[2] & 0xf0)
-                        fprintf(of, ",%d", (val[2] >> 4) & 0xf);
-                    fprintf(of, "),");
-                    num = ((val[4] << 8) & 0xf00) | val[5];
-                    fprint_val(of, num, rdx, 12, PV_LEFT);
-                    if (tab->type & TWOOP) {
-                       fprintf(of, "(%d,", val[1] & 0xf);
-                    } else {
-                       fprintf(of, "(");
-                    }
-                    fprintf(of, "%d)", (val[4] >> 4) & 0xf);
-                    break;
-          }
-      }
+   i = 0;
+   if ((inst & 0xC0) == 0xC0) {
+       num = (uint32)(val[i++] << 8);
+       num |= (uint32)val[i++];
+       sval[l++] = num;
+       fprint_val(of, num, 16, 16, PV_RZRO);
+       fputc(' ', of);
    }
+   if ((inst & 0xC0) != 0) {
+       num = (uint32)(val[i++] << 8);
+       num |= (uint32)val[i++];
+       sval[l++] = num;
+       fprint_val(of, num, 16, 16, PV_RZRO);
+       fputc(' ', of);
+   }
+   num = (uint32)(val[i++] << 8);
+   num |= (uint32)val[i++];
+   sval[l++] = num;
+   fprint_val(of, num, 16, 16, PV_RZRO);
+   fputc(' ', of);
+   for(; i < 6; i+=2)
+       fputs("     ", of);
+   fputc(' ', of);
+   fprint_inst(of, sval);
 } else {
     num = 0;
     for (i = 0; i < l && i < 4; i++)

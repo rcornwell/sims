@@ -3409,7 +3409,7 @@ dec_mul(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
 void
 dec_div(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
 {
-    uint8    a[32];
+    uint8    a[33];
     uint8    b[32];
     uint8    c[32];
     int      i;
@@ -3448,7 +3448,7 @@ dec_div(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
                  cy = (acc >> 4) & 0xf;
             }
             /* Plus one more digit */
-            if (i < 32) {
+            if (i < 31) {
                acc = a[i] + 9 + cy;
                if (acc > 0x9)
                    acc += 0x6;
