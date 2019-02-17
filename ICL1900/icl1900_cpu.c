@@ -2538,7 +2538,7 @@ cpu_set_size(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     val = (val + 1) * 4096;
     if ((val < 0) || (val > MAXMEMSIZE))
         return SCPE_ARG;
-    for (i = val; i < MEMSIZE; i++)
+    for (i = val - 1; i < MEMSIZE; i++)
         mc |= M[i];
     if ((mc != 0) && (!get_yn("Really truncate memory [N]?", FALSE)))
         return SCPE_OK;

@@ -247,7 +247,8 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
                 if (*p < '0' || *p > '7') {
                     break;
                 }
-                addr = (addr << 3) | (*p++ - '0');
+                ch = ascii_to_mem[*p++ & 0177];
+                addr = (addr << 3) | ch;
             }
             while (*p != '*') {
                 if (*p == '\0' || *p == '\n') {
