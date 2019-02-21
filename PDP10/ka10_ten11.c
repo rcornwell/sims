@@ -170,6 +170,11 @@ static void build (unsigned char *request, unsigned char octet)
 
 static t_stat ten11_svc (UNIT *uptr)
 {
+  tmxr_poll_rx (&ten11_desc);
+  if (ten11_ldsc.rcve && !ten11_ldsc.conn) {
+    ten11_ldsc.rcve = 0;
+    tmxr_reset_ln (&ten11_ldsc);
+  }
   if (tmxr_poll_conn(&ten11_desc) >= 0) {
     sim_debug(DBG_CMD, &ten11_dev, "got connection\n");
     ten11_ldsc.rcve = 1;
@@ -208,6 +213,8 @@ static int error (const char *message)
 {
   sim_debug (DBG_TRC, &ten11_dev, "%s\r\n", message);
   sim_debug (DBG_TRC, &ten11_dev, "CLOSE\r\n");
+  ten11_ldsc.rcve = 0;
+  tmxr_reset_ln (&ten11_ldsc);
   return -1;
 }
 
