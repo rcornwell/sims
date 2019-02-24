@@ -312,6 +312,7 @@ t_stat dpy_reset (DEVICE *dptr)
 ty340word
 ty340_fetch(ty340word addr)
 {
+    return 0;
 }
 
 /* not used with Type 344 interface */
