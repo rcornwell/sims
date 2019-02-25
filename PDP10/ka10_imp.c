@@ -27,64 +27,19 @@
 #include "ka10_defs.h"
 #include "sim_ether.h"
 
-static char *
-ipv4_inet_ntoa(struct in_addr ip)
-{
-static char str[20];
-
-sprintf (str, "%d.%d.%d.%d", ip.s_addr & 0xFF, (ip.s_addr >> 8) & 0xFF, (ip.s_addr >> 16) & 0xFF, (ip.s_addr >> 24) & 0xFF);
-return str;
-}
-
-typedef uint32 in_addr_t;
-
-static
-int ipv4_inet_aton(const char *str, struct in_addr *inp)
-{
-unsigned long bytes[4];
-int i = 0;
-char *end;
-in_addr_t val;
-
-for (i=0; (i < 4) && isdigit (*str); i++) {
-    bytes[i] = strtoul (str, &end, 0);
-    if (str == end)
-        return 0;
-    str = end;
-    if (*str == '.')
-        ++str;
-    }
-if (*str && (*str != '/'))
-    return 0;
-switch (i) {
-    case 1:
-        val = bytes[0];
-        break;
-    case 2:
-        if ((bytes[0] > 0xFF) || (bytes[1] > 0xFFFFFF))
-            return 0;
-        val = (bytes[0] << 24) | bytes[1];
-        break;
-    case 3:
-        if ((bytes[0] > 0xFF) || (bytes[1] > 0xFF) || (bytes[2] > 0xFFFF))
-            return 0;
-        val = (bytes[0] << 24) | (bytes[1] << 16) | bytes[2];
-        break;
-    case 4:
-        if ((bytes[0] > 0xFF) || (bytes[1] > 0xFF) || (bytes[2] > 0xFF) || (bytes[3] > 0xFF))
-            return 0;
-        val = (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
-        break;
-    default:
-        return 0;
-    }
-if (inp)
-    *(in_addr_t *)inp = htonl (val);
-return 1;
-}
-
 #if NUM_DEVS_IMP > 0
 #define IMP_DEVNUM  0460
+
+#define UNIT_V_DHCP     (UNIT_V_UF + 0)                 /* DHCP enable flag */
+#define UNIT_DHCP       (1 << UNIT_V_DHCP)
+#define UNIT_V_DTYPE    (UNIT_V_UF + 1)                 /* Type of IMP interface */
+#define UNIT_M_DTYPE    3
+#define UNIT_DTYPE      (UNIT_M_DTYPE << UNIT_V_DTYPE)
+#define GET_DTYPE(x)    (((x) >> UNIT_V_DTYPE) & UNIT_M_DTYPE)
+
+#define TYPE_MIT        0              /* MIT Style KAIMP ITS */
+#define TYPE_BBN        1              /* BBN style interface TENEX */
+
 
 /* CONI */
 #define IMPID       010 /* Input done. */
@@ -141,11 +96,24 @@ return 1;
 
 #define IMP_ARPTAB_SIZE        8
 
+uint32 mask[] = {
+     0xFFFFFFFF, 0xFFFFFFFE, 0xFFFFFFFC, 0xFFFFFFF8,
+     0xFFFFFFF0, 0xFFFFFFE0, 0xFFFFFFC0, 0xFFFFFF80,
+     0xFFFFFF00, 0xFFFFFE00, 0xFFFFFC00, 0xFFFFF800,
+     0xFFFFF000, 0xFFFFE000, 0xFFFFC000, 0xFFFF8000,
+     0xFFFF0000, 0xFFFE0000, 0xFFFC0000, 0xFFF80000,
+     0xFFF00000, 0xFFE00000, 0xFFC00000, 0xFF800000,
+     0xFF000000, 0xFE000000, 0xFC000000, 0xF8000000,
+     0xF0000000, 0xE0000000, 0xC0000000, 0x80000000,
+     0x00000000};
+
+typedef uint32 in_addr_t;
+
 PACKED_BEGIN
 struct imp_eth_hdr {
-   ETH_MAC    dest;
-   ETH_MAC    src;
-   uint16     type;
+    ETH_MAC    dest;
+    ETH_MAC    src;
+    uint16     type;
 } PACKED_END;
 
 #define ETHTYPE_ARP 0x0806
@@ -156,56 +124,64 @@ struct imp_eth_hdr {
  */
 PACKED_BEGIN
 struct ip {
-        uint8           ip_v_hl;        /* version,header length */
-        uint8           ip_tos;         /* type of service */
-        uint16          ip_len;         /* total length */
-        uint16          ip_id;          /* identification */
-        uint16          ip_off;         /* fragment offset field */
+    uint8           ip_v_hl;            /* version,header length */
+    uint8           ip_tos;             /* type of service */
+    uint16          ip_len;             /* total length */
+    uint16          ip_id;              /* identification */
+    uint16          ip_off;             /* fragment offset field */
 #define IP_DF 0x4000                    /* don't fragment flag */
 #define IP_MF 0x2000                    /* more fragments flag */
 #define IP_OFFMASK 0x1fff               /* mask for fragmenting bits */
-        uint8           ip_ttl;         /* time to live */
-        uint8           ip_p;           /* protocol */
-        uint16          ip_sum;         /* checksum */
-        in_addr_t       ip_src;
-        in_addr_t       ip_dst;         /* source and dest address */
+    uint8           ip_ttl;             /* time to live */
+    uint8           ip_p;               /* protocol */
+    uint16          ip_sum;             /* checksum */
+    in_addr_t       ip_src;
+    in_addr_t       ip_dst;             /* source and dest address */
 } PACKED_END;
 
 #define TCP_PROTO  6
 PACKED_BEGIN
 struct tcp {
-        uint16          tcp_sport;      /* Source port */
-        uint16          tcp_dport;      /* Destination port */
-        uint32          seq;            /* Sequence number */
-        uint32          ack;            /* Ack number */
-        uint16          flags;          /* Flags */
-        uint16          window;         /* Window size */
-        uint16          chksum;         /* packet checksum */
-        uint16          urgent;         /* Urgent pointer */
-        uint8           payload[];      /* Payload data */
+    uint16          tcp_sport;          /* Source port */
+    uint16          tcp_dport;          /* Destination port */
+    uint32          seq;                /* Sequence number */
+    uint32          ack;                /* Ack number */
+    uint16          flags;              /* Flags */
+    uint16          window;             /* Window size */
+    uint16          chksum;             /* packet checksum */
+    uint16          urgent;             /* Urgent pointer */
 } PACKED_END;
 
 #define UDP_PROTO 17
 PACKED_BEGIN
 struct udp {
-        uint16          udp_sport;      /* Source port */
-        uint16          udp_dport;      /* Destination port */
-        uint16          len;            /* Length */
-        uint16          chksum;         /* packet checksum */
+    uint16          udp_sport;          /* Source port */
+    uint16          udp_dport;          /* Destination port */
+    uint16          len;                /* Length */
+    uint16          chksum;             /* packet checksum */
+} PACKED_END;
+
+PACKED_BEGIN
+struct udp_hdr {
+    in_addr_t       ip_src;
+    in_addr_t       ip_dst;             /* source and dest address */
+    uint8           zero;
+    uint8           proto;              /* Protocol */
+    uint16          hlen;               /* Length of header and data */
 } PACKED_END;
 
 #define ICMP_PROTO 1
 PACKED_BEGIN
 struct icmp {
-        uint8           type;           /* Type of packet */
-        uint8           code;           /* Code */
-        uint16          chksum;         /* packet checksum */
+    uint8           type;               /* Type of packet */
+    uint8           code;               /* Code */
+    uint16          chksum;             /* packet checksum */
 } PACKED_END;
 
 PACKED_BEGIN
 struct ip_hdr {
-   struct imp_eth_hdr  ethhdr;
-   struct ip           iphdr;
+    struct imp_eth_hdr  ethhdr;
+    struct ip           iphdr;
 } PACKED_END;
 
 #define ARP_REQUEST     1
@@ -214,82 +190,190 @@ struct ip_hdr {
 
 PACKED_BEGIN
 struct arp_hdr {
-   struct imp_eth_hdr  ethhdr;
-   uint16              hwtype;
-   uint16              protocol;
-   uint8               hwlen;
-   uint8               protolen;
-   uint16              opcode;
-   ETH_MAC             shwaddr;
-   in_addr_t           sipaddr;
-   ETH_MAC             dhwaddr;
-   in_addr_t           dipaddr;
-   uint8               padding[18];
+    struct imp_eth_hdr  ethhdr;
+    uint16              hwtype;
+    uint16              protocol;
+    uint8               hwlen;
+    uint8               protolen;
+    uint16              opcode;
+    ETH_MAC             shwaddr;
+    in_addr_t           sipaddr;
+    ETH_MAC             dhwaddr;
+    in_addr_t           dipaddr;
+    uint8               padding[18];
 } PACKED_END;
 
 struct arp_entry {
-   in_addr_t  ipaddr;
-   ETH_MAC    ethaddr;
-   uint16     time;
+    in_addr_t  ipaddr;
+    ETH_MAC    ethaddr;
+    uint16     time;
+};
+
+/* DHCP client states */
+#define DHCP_STATE_OFF              0
+#define DHCP_STATE_REQUESTING       1
+#define DHCP_STATE_INIT             2
+#define DHCP_STATE_REBOOTING        3
+#define DHCP_STATE_REBINDING        4
+#define DHCP_STATE_RENEWING         5
+#define DHCP_STATE_SELECTING        6
+#define DHCP_STATE_INFORMING        7
+#define DHCP_STATE_CHECKING         8
+#define DHCP_STATE_PERMANENT        9   /* not yet implemented */
+#define DHCP_STATE_BOUND            10
+#define DHCP_STATE_RELEASING        11  /* not yet implemented */
+#define DHCP_STATE_BACKING_OFF      12
+
+/* DHCP op codes */
+#define DHCP_BOOTREQUEST            1
+#define DHCP_BOOTREPLY              2
+
+/* DHCP message types */
+#define DHCP_DISCOVER               1
+#define DHCP_OFFER                  2
+#define DHCP_REQUEST                3
+#define DHCP_DECLINE                4
+#define DHCP_ACK                    5
+#define DHCP_NAK                    6
+#define DHCP_RELEASE                7
+#define DHCP_INFORM                 8
+
+/** DHCP hardware type, currently only ethernet is supported */
+#define DHCP_HTYPE_ETH              1
+
+#define DHCP_MAGIC_COOKIE           0x63825363UL
+
+/* This is a list of options for BOOTP and DHCP, see RFC 2132 for descriptions */
+
+/* BootP options */
+#define DHCP_OPTION_PAD             0
+#define DHCP_OPTION_SUBNET_MASK     1 /* RFC 2132 3.3 */
+#define DHCP_OPTION_ROUTER          3
+#define DHCP_OPTION_DNS_SERVER      6
+#define DHCP_OPTION_HOSTNAME        12
+#define DHCP_OPTION_IP_TTL          23
+#define DHCP_OPTION_MTU             26
+#define DHCP_OPTION_BROADCAST       28
+#define DHCP_OPTION_TCP_TTL         37
+#define DHCP_OPTION_NTP             42
+#define DHCP_OPTION_END             255
+
+/* DHCP options */
+#define DHCP_OPTION_REQUESTED_IP    50 /* RFC 2132 9.1, requested IP address */
+#define DHCP_OPTION_LEASE_TIME      51 /* RFC 2132 9.2, time in seconds, in 4 bytes */
+#define DHCP_OPTION_OVERLOAD        52 /* RFC2132 9.3, use file and/or sname field for options */
+
+#define DHCP_OPTION_MESSAGE_TYPE    53 /* RFC 2132 9.6, important for DHCP */
+#define DHCP_OPTION_MESSAGE_TYPE_LEN 1
+
+#define DHCP_OPTION_SERVER_ID       54 /* RFC 2132 9.7, server IP address */
+#define DHCP_OPTION_PARAMETER_REQUEST_LIST  55 /* RFC 2132 9.8, requested option types */
+
+#define DHCP_OPTION_MAX_MSG_SIZE    57 /* RFC 2132 9.10, message size accepted >= 576 */
+#define DHCP_OPTION_MAX_MSG_SIZE_LEN 2
+
+#define DHCP_OPTION_T1              58 /* T1 renewal time */
+#define DHCP_OPTION_T2              59 /* T2 rebinding time */
+#define DHCP_OPTION_US              60
+#define DHCP_OPTION_CLIENT_ID       61
+#define DHCP_OPTION_TFTP_SERVERNAME 66
+#define DHCP_OPTION_BOOTFILE        67
+
+/* possible combinations of overloading the file and sname fields with options */
+#define DHCP_OVERLOAD_NONE          0
+#define DHCP_OVERLOAD_FILE          1
+#define DHCP_OVERLOAD_SNAME         2
+#define DHCP_OVERLOAD_SNAME_FILE    3
+
+#define DHCP_CHADDR_LEN             16
+#define DHCP_SNAME_LEN              64
+#define DHCP_FILE_LEN               128
+
+#define XID                         0x3903F326
+
+PACKED_BEGIN
+struct dhcp {
+    uint8             op;                      /* Operation */
+    uint8             htype;                   /* Header type */
+    uint8             hlen;                    /* Ether Header len */
+    uint8             hops;                    /*  ops? */
+    uint32            xid;                     /* id number */
+    uint16            secs;
+    uint16            flags;
+    in_addr_t         ciaddr;                  /* Client IP address */
+    in_addr_t         yiaddr;                  /* Your IP address */
+    in_addr_t         siaddr;                  /* Server IP address */
+    in_addr_t         giaddr;                  /* Gateway IP address */
+    uint8             chaddr[DHCP_CHADDR_LEN];
+    uint8             sname[DHCP_SNAME_LEN];
+    uint8             file[DHCP_FILE_LEN];
+    uint32            cookie;                  /* magic cookie */
+    uint8             options[100];            /* Space for options */
+} PACKED_END;
+
+struct imp_packet {
+    struct imp_packet *next;                   /* Link to packets */
+    ETH_PACK          packet;
+    in_addr_t         dest;                    /* Destination IP address */
+    uint16            msg_id;                  /* Message ID */
+    int               life;                    /* How many ticks to wait */
+} imp_buffer[8];
+
+struct imp_map {
+    uint16            port;                    /* Port to fix */
+    uint16            cls_tim;                 /* Close timer */
+    uint32            adj;                     /* Amount to adjust */
+    uint32            lseq;                    /* Sequence number last adjusted */
 };
 
 
-struct imp_packet {
-  struct imp_packet *next;                        /* Link to packets */
-  ETH_PACK          packet;
-  in_addr_t         dest;                         /* Destination IP address */
-  uint16            msg_id;                       /* Message ID */
-  int               life;                         /* How many ticks to wait */
-} imp_buffer[8];
-  
-
 struct imp_stats {
-  int               recv;                         /* received packets */
-  int               dropped;                      /* received packets dropped */
-  int               xmit;                         /* transmitted packets */
-  int               fail;                         /* transmit failed */
-  int               runt;                         /* runts */
-  int               reset;                        /* reset count */
-  int               giant;                        /* oversize packets */
-  int               setup;                        /* setup packets */
-  int               loop;                         /* loopback packets */
-  int               recv_overrun;                 /* receiver overruns */
+    int               recv;                    /* received packets */
+    int               dropped;                 /* received packets dropped */
+    int               xmit;                    /* transmitted packets */
+    int               fail;                    /* transmit failed */
+    int               runt;                    /* runts */
+    int               reset;                   /* reset count */
+    int               giant;                   /* oversize packets */
+    int               setup;                   /* setup packets */
+    int               loop;                    /* loopback packets */
+    int               recv_overrun;            /* receiver overruns */
 };
 
 
 struct imp_device {
-                                                  /*+ initialized values - DO NOT MOVE */
-  ETH_PCALLBACK     rcallback;                    /* read callback routine */
-  ETH_PCALLBACK     wcallback;                    /* write callback routine */
-  ETH_MAC           mac;                          /* Hardware MAC address */
-  struct imp_packet  *sendq;                      /* Send queue */
-  struct imp_packet  *freeq;                      /* Free queue */
-  in_addr_t         ip;                           /* Local IP address */
-  in_addr_t         ip_mask;                      /* Local IP mask */
-  in_addr_t         hostip;                       /* IP address of local host */
-  in_addr_t         gwip;                         /* Gateway IP address */
-  int               maskbits;                     /* Mask length */
-  in_addr_t         dhcpip;                       /* DHCP server address */
-  int               dhcp;                         /* Use dhcp */
-  int               init_state;                   /* Initialization state */
-  int               padding;                      /* Type zero padding */
-  uint64            obuf;                         /* Output buffer */
-  uint64            ibuf;                         /* Input buffer */
-  int               obits;                        /* Output bits */
-  int               ibits;                        /* Input bits */
-  struct imp_stats   stats;
-  uint8             sbuffer[ETH_FRAME_SIZE];      /* Temp send buffer */
-  uint8             rbuffer[ETH_FRAME_SIZE];      /* Temp receive buffer */
-  ETH_DEV           etherface;
-  ETH_QUE           ReadQ;
-  int32             idtmr;                        /* countdown for ID Timer */
-  uint32            must_poll;                    /* receiver must poll instead of counting on asynch polls */
-  t_bool            initialized;                  /* flag for one time initializations */
-  int imp_error;
-  int host_error;
- 
-  size_t bits_to_imp;
-  size_t bits_to_host;
+    ETH_PCALLBACK     rcallback;               /* read callback routine */
+    ETH_PCALLBACK     wcallback;               /* write callback routine */
+    ETH_MAC           mac;                     /* Hardware MAC address */
+    struct imp_packet *sendq;                  /* Send queue */
+    struct imp_packet *freeq;                  /* Free queue */
+    in_addr_t         ip;                      /* Local IP address */
+    in_addr_t         ip_mask;                 /* Local IP mask */
+    in_addr_t         hostip;                  /* IP address of local host */
+    in_addr_t         gwip;                    /* Gateway IP address */
+    int               maskbits;                /* Mask length */
+    struct imp_map    port_map[64];            /* Ports to adjust */
+    in_addr_t         dhcpip;                  /* DHCP server address */
+    int               dhcp;                    /* Use dhcp */
+    uint8             dhcp_state;              /* State of DHCP */
+    int               dhcp_lease;              /* DHCP lease time */
+    int               dhcp_renew;              /* DHCP renew time */
+    int               dhcp_rebind;             /* DHCP rebind time */
+    int               sec_tim;                 /* 1 second timer */
+    int               init_state;              /* Initialization state */
+    uint32            dhcp_xid;                /* Transaction ID */
+    int               padding;                 /* Type zero padding */
+    uint64            obuf;                    /* Output buffer */
+    uint64            ibuf;                    /* Input buffer */
+    int               obits;                   /* Output bits */
+    int               ibits;                   /* Input bits */
+    struct imp_stats  stats;
+    uint8             sbuffer[ETH_FRAME_SIZE]; /* Temp send buffer */
+    uint8             rbuffer[ETH_FRAME_SIZE]; /* Temp receive buffer */
+    ETH_DEV           etherface;
+    ETH_QUE           ReadQ;
+    int               imp_error;
+    int               host_error;
 } imp_data;
 
 extern int32 tmxr_poll;
@@ -304,7 +388,6 @@ t_stat         imp_devio(uint32 dev, uint64 *data);
 t_stat         imp_srv(UNIT *);
 t_stat         imp_eth_srv(UNIT *);
 t_stat         imp_reset (DEVICE *dptr);
-const char     *imp_description (DEVICE *dptr);
 t_stat         imp_set_mpx (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat         imp_show_mpx (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat         imp_show_mac (FILE* st, UNIT* uptr, int32 val, CONST void* desc);
@@ -315,16 +398,23 @@ t_stat         imp_show_gwip (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 t_stat         imp_set_gwip (UNIT* uptr, int32 val, CONST char* cptr, void* desc);
 t_stat         imp_show_hostip (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat         imp_set_hostip (UNIT* uptr, int32 val, CONST char* cptr, void* desc);
+t_stat         imp_show_dhcpip (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 void           imp_timer_task(struct imp_device *imp);
-void           imp_packet_in(struct imp_device *imp, ETH_PACK *read_buffer);
+void           imp_packet_in(struct imp_device *imp);
 void           imp_send_packet (struct imp_device *imp_data, int len);
 void           imp_free_packet(struct imp_device *imp, struct imp_packet *p);
 struct imp_packet * imp_get_packet();
 void           imp_arp_update(in_addr_t *ipaddr, ETH_MAC *ethaddr);
 void           imp_arp_arpin(struct imp_device *imp, ETH_PACK *packet);
 void           imp_packet_out(struct imp_device *imp, ETH_PACK *packet);
+void           imp_do_dhcp_client(struct imp_device *imp, ETH_PACK *packet);
+void           imp_dhcp_timer(struct imp_device *imp);
+void           imp_dhcp_discover(struct imp_device *imp);
+void           imp_dhcp_release(struct imp_device *imp);
 t_stat         imp_attach (UNIT * uptr, CONST char * cptr);
 t_stat         imp_detach (UNIT * uptr);
+t_stat         imp_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
+const char     *imp_description (DEVICE *dptr);
 
 
 int       imp_mpx_lvl = 0;
@@ -341,7 +431,7 @@ MTAB imp_mod[] = {
       &imp_set_mac, &imp_show_mac, NULL, "MAC address" },
     { MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "MPX", "MPX",
       &imp_set_mpx, &imp_show_mpx, NULL},
-    { MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "IP", "IP=ddd.ddd.ddd.ddd/ddd",
+    { MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "IP", "IP=ddd.ddd.ddd.ddd/dd",
       &imp_set_ip, &imp_show_ip, NULL, "IP address" },
     { MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "GW", "GW=ddd.ddd.ddd.ddd",
       &imp_set_gwip, &imp_show_gwip, NULL, "GW address" },
@@ -349,7 +439,16 @@ MTAB imp_mod[] = {
       &imp_set_hostip, &imp_show_hostip, NULL, "HOST IP address" },
     { MTAB_XTD|MTAB_VDV|MTAB_NMO, 0, "ETH", NULL, NULL,
       &eth_show, NULL, "Display attachedable devices" },
-
+    { UNIT_DHCP, 0, "DHCP disabled", "NODHCP", NULL, NULL, NULL,
+           "Don't aquire address from DHCP"},
+    { UNIT_DHCP, UNIT_DHCP, "DHCP", "DHCP", NULL, NULL, NULL,
+           "Use DHCP to set IP address"},
+    { MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "DHCPIP", "DHCPIP=ddd.ddd.ddd.ddd",
+      NULL, &imp_show_dhcpip, NULL, "DHCP server address" },
+    { UNIT_DTYPE, (TYPE_MIT << UNIT_V_DTYPE), "MIT", "MIT", NULL, NULL,  NULL,
+           "ITS/MIT style interface"},
+    { UNIT_DTYPE, (TYPE_BBN << UNIT_V_DTYPE), "BBN", "BBN", NULL, NULL,  NULL,
+           "Tenex/BBN style interface"},
     { 0 }
     };
 
@@ -358,7 +457,7 @@ DEVICE imp_dev = {
     1, 8, 0, 1, 8, 36,
     NULL, NULL, &imp_reset, NULL, &imp_attach, &imp_detach,
     &imp_dib, DEV_DISABLE | DEV_DIS | DEV_DEBUG, 0, dev_debug,
-    NULL, NULL, NULL, NULL, NULL, &imp_description
+    NULL, NULL, &imp_help, NULL, NULL, &imp_description
 };
 
 static void check_interrupts (UNIT *uptr)
@@ -419,6 +518,8 @@ t_stat imp_devio(uint32 dev, uint64 *data)
             uptr->STATUS |= IMPIHE;
         if (*data & IMPLHW) //Last host word.
             uptr->STATUS |= IMPLHW;
+        if ((uptr->STATUS & IMPIB) == 0)
+            imp_packet_in(&imp_data);
         break;
     case CONI:
         last_coni = sim_interval;
@@ -459,7 +560,7 @@ t_stat imp_srv(UNIT * uptr)
         if (imp_data.obits == 32)
            imp_data.obuf >>= 4;
         for (i = imp_data.obits - 1; i >= 0; i--) {
-            imp_data.sbuffer[uptr->OPOS>>3] |= 
+            imp_data.sbuffer[uptr->OPOS>>3] |=
                   ((imp_data.obuf >> i) & 1) << (7-(uptr->OPOS & 7));
             uptr->OPOS++;
         }
@@ -495,11 +596,40 @@ t_stat imp_srv(UNIT * uptr)
     return SCPE_OK;
 }
 
+void
+ip_checksum(uint8 *chksum, uint8 *ptr, int len)
+{
+   /*
+    * Compute Internet Checksum for "count" bytes
+    *         beginning at location "addr".
+    */
+   int32  sum = 0;
+
+   while( len > 1 )  {
+      /*  This is the inner loop */
+      sum += (ptr[0]<<8)+ptr[1];
+      ptr+=2;
+      len -= 2;
+   }
+
+   /*  Add left-over byte, if any */
+   if( len > 0 )
+      sum += ptr[0]<<8;
+
+    /*  Fold 32-bit sum to 16 bits */
+    while (sum>>16)
+       sum = (sum & 0xffff) + (sum >> 16);
+    sum=(~sum & 0xffff);
+    chksum[0]=(sum>>8) & 0xff;
+    chksum[1]=sum & 0xff;
+}
+
 
 /*
  * Update the checksum based on code from RFC1631
  */
-void checksumadjust(uint8 *chksum, uint8 *optr,
+void
+checksumadjust(uint8 *chksum, uint8 *optr,
    int olen, uint8 *nptr, int nlen)
    /* assuming: unsigned char is 8 bits, long is 32 bits.
      - chksum points to the chksum in the packet
@@ -507,69 +637,78 @@ void checksumadjust(uint8 *chksum, uint8 *optr,
      - nptr points to the new data in the packet
      - even number of octets updated.
    */
-   {
-     int32 x, old, new;
-     x=chksum[0]*256+chksum[1];
-     x=(~x & 0xffff);
-     while (olen > 1) {
-         old=optr[0]*256+optr[1];
-         optr+=2;
-         x-=old & 0xffff;
-         if (x<=0) { x--; x&=0xffff; }
-         olen-=2;
-     }
-     if (olen > 0) {
-         old=optr[0]*256;
-         x-=old & 0xffff;
-         if (x<=0) { x--; x&=0xffff; }
-     }
-     while (nlen > 1) {
-         new=nptr[0]*256+nptr[1];
-         nptr+=2;
-         x+=new & 0xffff;
-         if (x & 0x10000) { x++; x&=0xffff; }
-         nlen-=2;
-     }
-     if (nlen > 0) {
-         new=nptr[0]*256;
-         x+=new & 0xffff;
-         if (x & 0x10000) { x++; x&=0xffff; }
-     }
-     x=(~x & 0xffff);
-     chksum[0]=x/256; chksum[1]=x & 0xff;
-   }
+{
+    int32 sum, old, new;
+    sum=(chksum[0]<<8)+chksum[1];
+    sum=(~sum & 0xffff);
+    while (olen > 1) {
+        old=(optr[0]<<8)+optr[1];
+        optr+=2;
+        sum-=old & 0xffff;
+        if (sum<=0) { sum--; sum&=0xffff; }
+        olen-=2;
+    }
+    if (olen > 0) {
+        old=optr[0]<<8;
+        sum-=old & 0xffff;
+        if (sum<=0) { sum--; sum&=0xffff; }
+    }
+    while (nlen > 1) {
+        new=(nptr[0]<<8)+nptr[1];
+        nptr+=2;
+        sum+=new & 0xffff;
+        if (sum & 0x10000) { sum++; sum&=0xffff; }
+        nlen-=2;
+    }
+    if (nlen > 0) {
+        new=(nptr[0]<<8);
+        sum+=new & 0xffff;
+        if (sum & 0x10000) { sum++; sum&=0xffff; }
+    }
+    sum=(~sum & 0xffff);
+    chksum[0]=sum>>8;
+    chksum[1]=sum & 0xff;
+}
 
 t_stat imp_eth_srv(UNIT * uptr)
 {
     ETH_PACK          read_buffer;
 
-    sim_clock_coschedule(uptr, tmxr_poll);              /* continue poll */
+    sim_clock_coschedule(uptr, 250);              /* continue poll */
 
+    if (uptr->ILEN == 0)
+        imp_packet_in(&imp_data);
+
+    imp_timer_task(&imp_data);
     if (imp_data.init_state >= 3 && imp_data.init_state < 6) {
+       if (imp_unit[0].flags & UNIT_DHCP && imp_data.dhcp_state != DHCP_STATE_BOUND)
+           return SCPE_OK;
        if (imp_unit[0].ILEN == 0) {
               /* Queue up a nop packet */
-              imp_data.rbuffer[0] = 0xf; 
+              imp_data.rbuffer[0] = 0xf;
               imp_data.rbuffer[3] = 4;
               imp_unit[0].STATUS |= IMPIB;
               imp_unit[0].IPOS = 0;
               imp_unit[0].ILEN = 12*8;
               imp_data.init_state++;
-              sim_debug(DEBUG_DETAIL, &imp_dev, "IMP Send Nop %d\n", 
+              sim_debug(DEBUG_DETAIL, &imp_dev, "IMP Send Nop %d\n",
                        imp_data.init_state);
         }
-    } else if (uptr->ILEN == 0 && 
-        eth_read (&imp_data.etherface, &read_buffer, NULL) > 0) {
-        imp_packet_in(&imp_data, &read_buffer);
     }
-    imp_timer_task(&imp_data);
     return SCPE_OK;
 }
 
 void
-imp_timer_task(struct imp_device *imp) 
+imp_timer_task(struct imp_device *imp)
 {
     struct imp_packet  *nq = NULL;                /* New send queue */
-   
+
+    /* If DHCP enabled, send a discover packet */
+    if (imp_data.init_state >= 1 &&
+      imp_unit[0].flags & UNIT_DHCP && imp->dhcp_state == DHCP_STATE_OFF) {
+      imp_dhcp_discover(&imp_data);
+    }
+
     /* Scan the send queue and see if any packets have timed out */
     while (imp->sendq != NULL) {
          struct imp_packet *temp = imp->sendq;
@@ -586,86 +725,148 @@ imp_timer_task(struct imp_device *imp)
          }
      }
      imp->sendq = nq;
+
+     if (imp->sec_tim-- == 0) {
+         imp_dhcp_timer(&imp_data);
+         imp->sec_tim = 1000;
+     }
 }
 
 void
-imp_packet_in(struct imp_device *imp, ETH_PACK *read_buffer)
+imp_packet_in(struct imp_device *imp)
 {
-    struct imp_eth_hdr     *hdr = (struct imp_eth_hdr *)(&read_buffer->msg[0]);
-    int                     type = ntohs(hdr->type);
-    int                     n;
-    int                     pad; 
-    if (type == ETHTYPE_ARP) {
-        imp_arp_arpin(imp, read_buffer);
-    } else if (type == ETHTYPE_IP) {
-        struct ip           *ip_hdr = 
-               (struct ip *)(&read_buffer->msg[sizeof(struct imp_eth_hdr)]);
-        /* Process as IP if it is for us */
-        if (ip_hdr->ip_dst == imp_data.ip || ip_hdr->ip_dst == 0) {
-            /* Add mac address since we will probably need it later */
-            imp_arp_update(&ip_hdr->ip_src, &hdr->src);
-            /* Clear beginning of message */
-            memset(&imp->rbuffer[0], 0, 256);
-            imp->rbuffer[0] = 0xf;
-            imp->rbuffer[3] = 0;
-            imp->rbuffer[5] = (ntohl(ip_hdr->ip_src) >> 16) & 0xff;
-            imp->rbuffer[7] = 14;
-            imp->rbuffer[8] = 0233;
-            imp->rbuffer[18] = 0;
-            imp->rbuffer[19] = 0x80;
-            imp->rbuffer[21] = 0x30;
+   ETH_PACK                read_buffer;
+   struct imp_eth_hdr     *hdr;
+   int                     type;
+   int                     n;
+   int                     pad;
+int i;
+   if (eth_read (&imp_data.etherface, &read_buffer, NULL) <= 0)
+       return;
+   hdr = (struct imp_eth_hdr *)(&read_buffer.msg[0]);
+   type = ntohs(hdr->type);
+   if (type == ETHTYPE_ARP) {
+       imp_arp_arpin(imp, &read_buffer);
+   } else if (type == ETHTYPE_IP) {
+       struct ip           *ip_hdr =
+              (struct ip *)(&read_buffer.msg[sizeof(struct imp_eth_hdr)]);
+//    char buffer[20];
+//    eth_mac_fmt(&hdr->dest, buffer);
+       /* Process DHCP is this is IP broadcast */
+       if (ip_hdr->ip_dst == broadcast_ipaddr ||
+                memcmp(&hdr->dest, &imp->mac, 6) == 0) {
+           uint8   *payload = (uint8 *)(&read_buffer.msg[sizeof(struct imp_eth_hdr) +
+                                       (ip_hdr->ip_v_hl & 0xf) * 4]);
+           struct udp *udp_hdr = (struct udp *)payload;
+           /* Check for DHCP traffic */
+           if (ip_hdr->ip_p == UDP_PROTO && ntohs(udp_hdr->udp_dport) == 68 &&
+              ntohs(udp_hdr->udp_sport) == 67) {
+              imp_do_dhcp_client(imp, &read_buffer);
+              return;
+           }
+       }
+       /* Process as IP if it is for us */
+       if (ip_hdr->ip_dst == imp_data.ip || ip_hdr->ip_dst == 0) {
+           /* Add mac address since we will probably need it later */
+           imp_arp_update(&ip_hdr->ip_src, &hdr->src);
+           /* Clear beginning of message */
+           memset(&imp->rbuffer[0], 0, 256);
+           imp->rbuffer[0] = 0xf;
+           imp->rbuffer[3] = 0;
+           imp->rbuffer[5] = (ntohl(ip_hdr->ip_src) >> 16) & 0xff;
+           imp->rbuffer[7] = 14;
+           imp->rbuffer[8] = 0233;
+           imp->rbuffer[18] = 0;
+           imp->rbuffer[19] = 0x80;
+           imp->rbuffer[21] = 0x30;
 
-            /* Copy message over */
-            pad = 12 + (imp->padding / 8);
-            n = read_buffer->len - (sizeof(struct imp_eth_hdr));
-            memcpy(&imp->rbuffer[pad], ip_hdr ,n);
-//    fprintf(stderr, "rec  Len=%d: ", n);
-//    for (i = pad; i < n; i++) 
+           /* Copy message over */
+           pad = 12 + (imp->padding / 8);
+           n = read_buffer.len;// - (sizeof(struct imp_eth_hdr));
+           memcpy(&imp->rbuffer[pad], ip_hdr ,n);
+           ip_hdr = (struct ip *)(&imp->rbuffer[pad]);
+//    fprintf(stderr, "rec  Len=%d: %08x %08x %08x ", n, ip_hdr->ip_dst, imp_data.ip, imp_data.hostip);
+//    for (i = pad; i < n; i++)
 //        fprintf(stderr, "%02x ", imp->rbuffer[i]);
 //    fprintf(stderr, "\r\n");
             /* Repoint IP header to copy packet */
-            ip_hdr = (struct ip *)(&imp->rbuffer[pad]);
             /*
              * If local IP defined, change destination to ip,
              * and update checksum
              */
-             if (ip_hdr->ip_dst == imp_data.ip && imp_data.hostip != 0) {
-                 uint8   *payload = (uint8 *)(&imp->rbuffer[pad +
-                                             (ip_hdr->ip_v_hl & 0xf) * 4]);
-                 uint16   chk = ip_hdr->ip_sum;
-                 checksumadjust((uint8 *)&ip_hdr->ip_sum,
-                              (uint8 *)(&ip_hdr->ip_dst), sizeof(in_addr_t), 
+           if (ip_hdr->ip_dst == imp_data.ip && imp_data.hostip != 0) {
+               uint8   *payload = (uint8 *)(&imp->rbuffer[pad +
+                                           (ip_hdr->ip_v_hl & 0xf) * 4]);
+               uint16   chk = ip_hdr->ip_sum;
+               /* If TCP packet update the TCP checksum */
+               if (ip_hdr->ip_p == TCP_PROTO) {
+                   struct tcp *tcp_hdr = (struct tcp *)payload;
+                   uint16       port = ntohs(tcp_hdr->tcp_dport);
+                   checksumadjust((uint8 *)&tcp_hdr->chksum,
+                              (uint8 *)(&ip_hdr->ip_dst), sizeof(in_addr_t),
                               (uint8 *)(&imp_data.hostip), sizeof(in_addr_t));
-                 /* If TCP packet update the TCP checksum */
-                 if (ip_hdr->ip_p == TCP_PROTO) {
-                     struct tcp *tcp_hdr = (struct tcp *)payload;
-                     checksumadjust((uint8 *)&tcp_hdr->chksum,
-                                (uint8 *)(&ip_hdr->ip_dst), sizeof(in_addr_t),
-                                (uint8 *)(&imp_data.hostip), sizeof(in_addr_t));
-                 /* Check if UDP */
-                 } else if (ip_hdr->ip_p == UDP_PROTO) {
-                      struct udp *udp_hdr = (struct udp *)payload;
-                      checksumadjust((uint8 *)&udp_hdr->chksum,
-                                (uint8 *)(&ip_hdr->ip_src), sizeof(in_addr_t),
-                                (uint8 *)(&imp_data.hostip), sizeof(in_addr_t));
-                 /* Lastly check if ICMP */
-                 } else if (ip_hdr->ip_p == ICMP_PROTO) {
-                      struct icmp *icmp_hdr = (struct icmp *)payload;
-                      checksumadjust((uint8 *)&icmp_hdr->chksum, 
-                                (uint8 *)(&ip_hdr->ip_src), sizeof(in_addr_t),
-                                (uint8 *)(&imp_data.hostip), sizeof(in_addr_t));
-                 }
-                 ip_hdr->ip_dst = imp_data.hostip;
-             }
-             n += pad;
-             imp_unit[0].STATUS |= IMPIB;
-             imp_unit[0].IPOS = 0;
-             imp_unit[0].ILEN = n*8;
-//    fprintf(stderr, "recv Len=%d: ", n);
-//    for (i = pad; i < n; i++) 
+                   if ((ntohs(tcp_hdr->flags) & 0x10) != 0) {
+//fprintf(stderr, "ACK %x\r\n", port);
+                       for (i = 0; i < 64; i++) {
+                           if (imp->port_map[i].port == port) {
+                               /* Check if SYN */
+                               if (ntohs(tcp_hdr->flags) & 02) {
+                                   imp->port_map[i].port = 0;
+                                   imp->port_map[i].adj = 0;
+                               } else {
+                                   uint32   new_seq = ntohl(tcp_hdr->ack);
+//fprintf(stderr, "Adjusting sequence %x %d %x\r\n", port, imp->port_map[i].adj, new_seq);
+                                   if (new_seq > imp->port_map[i].lseq) {
+                                       new_seq = htonl(new_seq - imp->port_map[i].adj);
+                                       checksumadjust((uint8 *)&tcp_hdr->chksum,
+                                               (uint8 *)(&tcp_hdr->ack), 4,
+                                               (uint8 *)(&new_seq), 4);
+                                       tcp_hdr->ack = new_seq;
+                                   }
+//fprintf(stderr, "Adjusting sequence %x %d %x\r\n", port, imp->port_map[i].adj, new_seq);
+                               }
+                               if (ntohs(tcp_hdr->flags) & 01)
+                                   imp->port_map[i].cls_tim = 100;
+                               break;
+                           }
+                       }
+                   }
+               /* Check if UDP */
+               } else if (ip_hdr->ip_p == UDP_PROTO) {
+                    struct udp *udp_hdr = (struct udp *)payload;
+                    if (ip_hdr->ip_p == UDP_PROTO &&
+                        htons(udp_hdr->udp_dport) == 68 &&
+                        htons(udp_hdr->udp_sport) == 67) {
+                        imp_do_dhcp_client(imp, &read_buffer);
+                        return;
+                    }
+                    checksumadjust((uint8 *)&udp_hdr->chksum,
+                              (uint8 *)(&ip_hdr->ip_src), sizeof(in_addr_t),
+                              (uint8 *)(&imp_data.hostip), sizeof(in_addr_t));
+               /* Lastly check if ICMP */
+               } else if (ip_hdr->ip_p == ICMP_PROTO) {
+                    struct icmp *icmp_hdr = (struct icmp *)payload;
+                    checksumadjust((uint8 *)&icmp_hdr->chksum,
+                              (uint8 *)(&ip_hdr->ip_src), sizeof(in_addr_t),
+                              (uint8 *)(&imp_data.hostip), sizeof(in_addr_t));
+               }
+               checksumadjust((uint8 *)&ip_hdr->ip_sum,
+                            (uint8 *)(&ip_hdr->ip_dst), sizeof(in_addr_t),
+                            (uint8 *)(&imp_data.hostip), sizeof(in_addr_t));
+               ip_hdr->ip_dst = imp_data.hostip;
+           }
+           /* If we are not initializing queue it up for host */
+           if (imp_data.init_state >= 6) {
+               n = pad + ntohs(ip_hdr->ip_len);
+               imp_unit[0].STATUS |= IMPIB;
+               imp_unit[0].IPOS = 0;
+               imp_unit[0].ILEN = n*8;
+//    fprintf(stderr, "recv Len=%d: ", n - pad);
+//    for (i = pad; i < n; i++)
 //        fprintf(stderr, "%02x ", imp->rbuffer[i]);
 //    fprintf(stderr, "\r\n");
-         } 
+           }
+       }
          /* Otherwise just ignore it */
    }
 }
@@ -681,7 +882,7 @@ imp_send_packet (struct imp_device *imp, int len)
     int        lk;
 
 //    fprintf(stderr, "Out Len=%d: %d %d %d; ", len, imp->sbuffer[3], imp->sbuffer[8], imp->sbuffer[9]);
- //   for (i = 0; i < len; i++) 
+ //   for (i = 0; i < len; i++)
  //       fprintf(stderr, "%02x ", imp->sbuffer[i]);
  //   fprintf(stderr, "\r\n");
     if (imp->sbuffer[0] != 0xF) {
@@ -696,7 +897,7 @@ imp_send_packet (struct imp_device *imp, int len)
     sim_debug(DEBUG_DETAIL, &imp_dev,
         "IMP packet Type=%d ht=%d dh=%d imp=%d lk=%d %d st=%d Len=%d\n",
          imp->sbuffer[3], imp->sbuffer[4], imp->sbuffer[5],
-         (imp->sbuffer[6] * 256) + imp->sbuffer[7], 
+         (imp->sbuffer[6] * 256) + imp->sbuffer[7],
          lk, imp->sbuffer[9] >> 4, st, n);
     switch(imp->sbuffer[3]) {
     case 0:      /* Regular packet */
@@ -753,65 +954,121 @@ imp_packet_out(struct imp_device *imp, ETH_PACK *packet) {
     ETH_PACK           arp_pkt;
     in_addr_t          ipaddr;
     int                i;
- 
+
 //    fprintf(stderr, "pkt  Len=%d: ", packet->len);
-//    for (i = sizeof(struct imp_eth_hdr); i < packet->len; i++) 
+//    for (i = sizeof(struct imp_eth_hdr); i < packet->len; i++)
 //        fprintf(stderr, "%02x ", packet->msg[i]);
 //    fprintf(stderr, "\r\n");
     /* If local IP defined, change source to ip, and update checksum */
     if (imp->hostip != 0) {
        int          hl = (pkt->iphdr.ip_v_hl & 0xf) * 4;
        uint8        *payload = (uint8 *)(&packet->msg[
-                    sizeof(struct imp_eth_hdr) + hl]);
+                            sizeof(struct imp_eth_hdr) + hl]);
        /* If TCP packet update the TCP checksum */
        if (pkt->iphdr.ip_p == TCP_PROTO) {
-           struct tcp *tcp_hdr = (struct tcp *)payload;
-           int  thl = ((ntohs(tcp_hdr->flags) >> 12) & 0xf) * 4;
-           uint8  *tcp_payload = &packet->msg[
+           struct tcp  *tcp_hdr = (struct tcp *)payload;
+           int          thl = ((ntohs(tcp_hdr->flags) >> 12) & 0xf) * 4;
+           uint16       port = ntohs(tcp_hdr->tcp_sport);
+           uint8       *tcp_payload = &packet->msg[
                     sizeof(struct imp_eth_hdr) + hl + thl];
-           checksumadjust((uint8 *)&tcp_hdr->chksum, 
+           /* Update pseudo header checksum */
+           checksumadjust((uint8 *)&tcp_hdr->chksum,
                        (uint8 *)(&pkt->iphdr.ip_src), sizeof(in_addr_t),
                        (uint8 *)(&imp->ip), sizeof(in_addr_t));
+           /* See if we need to change the sequence number */
+           for (i = 0; i < 64; i++) {
+               if (imp->port_map[i].port == port) {
+                   /* Check if SYN */
+                   if (ntohs(tcp_hdr->flags) & 02) {
+                       imp->port_map[i].port = 0;
+                       imp->port_map[i].adj = 0;
+                   } else {
+                       uint32   new_seq = ntohl(tcp_hdr->seq);
+//fprintf(stderr, "Adjusting sequence %x %d %x\r\n", port, imp->port_map[i].adj, new_seq);
+                       if (new_seq > imp->port_map[i].lseq) {
+                           new_seq = htonl(new_seq + imp->port_map[i].adj);
+                           checksumadjust((uint8 *)&tcp_hdr->chksum,
+                                   (uint8 *)(&tcp_hdr->seq), 4,
+                                   (uint8 *)(&new_seq), 4);
+                           tcp_hdr->seq = new_seq;
+                       }
+                   }
+                   if (ntohs(tcp_hdr->flags) & 01)
+                       imp->port_map[i].cls_tim = 100;
+                   break;
+               }
+           }
            /* Check if sending to FTP */
-           if (ntohs(tcp_hdr->tcp_dport) == 21 && 
-               strncmp(&tcp_payload[0], "PORT ", 5) == 0) {
+           if (ntohs(tcp_hdr->tcp_dport) == 21 &&
+                   strncmp(&tcp_payload[0], "PORT ", 5) == 0) {
                /* We need to translate the IP address to new port number. */
-               int  thl = ((tcp_hdr->flags >> 12) & 0xf) * 4;
-               char port_buffer[100]; 
-               int  l = ntohs(pkt->iphdr.ip_len) - thl - hl;
-               int  c;
+               int     l = ntohs(pkt->iphdr.ip_len) - thl - hl;
                uint32  nip = ntohl(imp->ip);
                uint16  len;
+               int     nlen;
+               uint8   port_buffer[100];
+               struct udp_hdr     udp_hdr;
+//    fprintf(stderr, "pktx Len=%d %d %d %d: ", packet->len, hl, thl, l);
+//    for (i = sizeof(struct imp_eth_hdr); i < packet->len; i++)
+//        fprintf(stderr, "%02x ", packet->msg[i]);
+//    fprintf(stderr, "\r\n");
+//fprintf(stderr, "Port: %d %s\r\n", l, tcp_payload);
                /* Count out 4 commas */
-               for (i = c = 0; i < l && c < 4; i++) {
-                  if (tcp_hdr->payload[i] == ',')
-                     c++;
+               for (i = nlen = 0; i < l && nlen < 4; i++) {
+                  if (tcp_payload[i] == ',')
+                     nlen++;
                }
-               c = sprintf(port_buffer, "PORT %d,%d,%d,%d,", 
-                    (nip >> 24) & 0xFF, (nip >> 16) & 0xFF, 
+               nlen = sprintf(port_buffer, "PORT %d,%d,%d,%d,",
+                    (nip >> 24) & 0xFF, (nip >> 16) & 0xFF,
                     (nip >> 8) & 0xFF, nip&0xff);
                /* Copy over rest of string */
                while(i < l) {
-                   port_buffer[c++] = tcp_hdr->payload[i++];
+                   port_buffer[nlen++] = tcp_payload[i++];
+               }
+               port_buffer[nlen] = '\0';
+               memcpy(tcp_payload, port_buffer, nlen);
+               /* Check if we need to update the sequence numbers */
+               if (nlen != l && (ntohs(tcp_hdr->flags) & 02) == 0) {
+                   int n = -1;
+                   /* See if we need to change the sequence number */
+                   for (i = 0; i < 64; i++) {
+                       if (imp->port_map[i].port == port) {
+                           n = i;
+                           break;
+                       }
+                       if (n < 0 && imp->port_map[i].port == 0)
+                           n = 0;
+                   }
+                   if (n >= 0) {
+//fprintf(stderr, "old sequence %x %d\r\n", port, imp->port_map[n].adj);
+                       imp->port_map[n].port = port;
+                       imp->port_map[n].adj += nlen - l;
+                       imp->port_map[n].cls_tim = 0;
+                       imp->port_map[n].lseq = ntohl(tcp_hdr->seq);
+//fprintf(stderr, "Adjusting sequence %x %d\r\n", port, imp->port_map[n].adj);
+                   }
                }
                /* Now we need to update the checksums */
-               /* First new PORT command */
-               checksumadjust((uint8 *)&tcp_hdr->chksum, 
-                       (uint8 *)(&tcp_hdr->payload), l,
-                       (uint8 *)(&port_buffer), c);
-               /* Now update the payload */
-               memcpy(&tcp_hdr->payload[0], port_buffer, c);
-               /* Now update the length */
-               len = htons(c + thl + hl);
-               checksumadjust((uint8 *)&pkt->iphdr.ip_sum,
-                        (uint8 *)(&pkt->iphdr.ip_len),  2,
-                        (uint8 *)(&len), 2);
-               checksumadjust((uint8 *)&tcp_hdr->chksum,
-                        (uint8 *)(&pkt->iphdr.ip_len),  2,
-                        (uint8 *)(&len), 2);
-               pkt->iphdr.ip_len = len;
-               packet->len = ntohs(len) + sizeof(struct imp_eth_hdr);
-               packet->len += (packet->len&1);  /* Round to even size */
+               tcp_hdr->chksum = 0;
+               pkt->iphdr.ip_len = htons(nlen + thl + hl);
+               ip_checksum((uint8 *)&tcp_hdr->chksum, (uint8 *)tcp_hdr,
+                       nlen + thl);
+               udp_hdr.ip_src = imp->ip;
+               udp_hdr.ip_dst = pkt->iphdr.ip_dst;
+               udp_hdr.zero = 0;
+               udp_hdr.proto = TCP_PROTO;
+               udp_hdr.hlen = htons(nlen + thl);
+               checksumadjust((uint8 *)&tcp_hdr->chksum, (uint8 *)(&udp_hdr), 0,
+                    (uint8 *)(&udp_hdr), sizeof(udp_hdr));
+//fprintf(stderr, "Port: %d %s\r\n", nlen, tcp_payload);
+               pkt->iphdr.ip_sum = 0;
+               ip_checksum((uint8 *)(&pkt->iphdr.ip_sum), (uint8 *)&pkt->iphdr, 20);
+               packet->len = nlen + thl + hl +  sizeof(struct imp_eth_hdr);
+//    fprintf(stderr, "pkty Len=%d %d %d %d: ", packet->len, hl, thl, l);
+//    for (i = sizeof(struct imp_eth_hdr); i < packet->len; i++)
+//        fprintf(stderr, "%02x ", packet->msg[i]);
+//    fprintf(stderr, "\r\n");
+//               packet->len += (packet->len&1);  /* Round to even size */
            }
        /* Check if UDP */
        } else if (pkt->iphdr.ip_p == UDP_PROTO) {
@@ -834,39 +1091,41 @@ imp_packet_out(struct imp_device *imp, ETH_PACK *packet) {
     }
 
 //    fprintf(stderr, "pkt2 Len=%d: ", packet->len);
-//    for (i = sizeof(struct imp_eth_hdr); i < packet->len; i++) 
+//    for (i = sizeof(struct imp_eth_hdr); i < packet->len; i++)
 //        fprintf(stderr, "%02x ", packet->msg[i]);
 //    fprintf(stderr, "\r\n");
 
     /* Try to send the packed */
-    ipaddr = pkt->iphdr.ip_dst; 
+    ipaddr = pkt->iphdr.ip_dst;
+    packet->len = sizeof(struct imp_eth_hdr) + ntohs(pkt->iphdr.ip_len);
+    /* Enforce minimum packet size */
+    while (packet->len < 60)
+       packet->msg[packet->len++] = 0;
 
-    /* Check if on our subnet */ 
-    if ((imp->ip & imp->ip_mask) != (ipaddr & imp->ip_mask)) 
+    /* Check if on our subnet */
+    if ((imp->ip & imp->ip_mask) != (ipaddr & imp->ip_mask))
         ipaddr = imp->gwip;
-   
+
     for (i = 0; i < IMP_ARPTAB_SIZE; i++) {
         tabptr = &arp_table[i];
         if (ipaddr == tabptr->ipaddr) {
             memcpy(&pkt->ethhdr.dest, &tabptr->ethaddr, 6);
             memcpy(&pkt->ethhdr.src, &imp->mac, 6);
             pkt->ethhdr.type = htons(ETHTYPE_IP);
-//            packet->crc_len = eth_add_packet_crc32(&packet->msg[0], packet->len);
-//            packet->len = packet->crc_len;
             eth_write(&imp->etherface, packet, NULL);
             return;
          }
     }
-   
+
     /* Queue packet for later send */
     send = imp_get_packet(imp);
     send->next = imp->sendq;
     imp->sendq = send;
     send->packet.len = packet->len;
     send->life = 1000;
-    send->dest = pkt->iphdr.ip_dst; 
+    send->dest = pkt->iphdr.ip_dst;
     memcpy(&send->packet.msg[0], pkt, send->packet.len);
- 
+
     /* We did not find it, so construct and send a ARP packet */
     memset(&arp_pkt, 0, sizeof(ETH_PACK));
     arp = (struct arp_hdr *)(&arp_pkt.msg[0]);
@@ -884,11 +1143,9 @@ imp_packet_out(struct imp_device *imp, ETH_PACK *packet) {
     arp->protolen = 4;
 
     arp_pkt.len = sizeof(struct arp_hdr);
-//    packet->crc_len = eth_add_packet_crc32(&packet->msg[0], packet->len);
-//    packet->len = packet->crc_len;
     eth_write(&imp->etherface, &arp_pkt, NULL);
 }
-   
+
 
 /*
  * Update the ARP table, first use free entry, else use oldest.
@@ -917,7 +1174,7 @@ imp_arp_update(in_addr_t *ipaddr, ETH_MAC *ethaddr)
     for (i = 0; i < IMP_ARPTAB_SIZE; i++) {
         tabptr = &arp_table[i];
 
-        if (tabptr->ipaddr == 0) 
+        if (tabptr->ipaddr == 0)
             break;
     }
 
@@ -953,7 +1210,7 @@ imp_arp_arpin(struct imp_device *imp, ETH_PACK *packet)
     int             op;
 
     /* Ignore packet if too short */
-    if (packet->len < sizeof(struct arp_hdr)) 
+    if (packet->len < sizeof(struct arp_hdr))
        return;
     arp = (struct arp_hdr *)(&packet->msg[0]);
     op = ntohs(arp->opcode);
@@ -973,8 +1230,6 @@ imp_arp_arpin(struct imp_device *imp, ETH_PACK *packet)
            arp->sipaddr = imp->ip;
            arp->ethhdr.type = htons(ETHTYPE_ARP);
            packet->len = sizeof(struct arp_hdr);
-//           packet->crc_len = eth_add_packet_crc32(&packet->msg[0], packet->len);
-//           packet->len = packet->crc_len;
            eth_write(&imp->etherface, packet, NULL);
          }
          break;
@@ -995,9 +1250,6 @@ imp_arp_arpin(struct imp_device *imp, ETH_PACK *packet)
                     memcpy(&pkt->ethhdr.dest, &arp->shwaddr, 6);
                     memcpy(&pkt->ethhdr.src, &imp->mac, 6);
                     pkt->ethhdr.type = htons(ETHTYPE_IP);
-//                    temp->packet.crc_len = eth_add_packet_crc32(
-//                                      &temp->packet.msg[0], temp->packet.len);
-//                    temp->packet.len = temp->packet.crc_len;
                     eth_write(&imp->etherface, &temp->packet, NULL);
                     imp_free_packet(imp, temp);
                 } else {
@@ -1011,9 +1263,448 @@ imp_arp_arpin(struct imp_device *imp, ETH_PACK *packet)
     }
     return;
 }
+
+
+static int sent_flag = 0;
+void sent(int status) {
+    sent_flag = 1;
+}
+
+/* Send out a DHCP packet, fill in IP and Ethernet data. */
+void
+imp_do_send_dhcp(struct imp_device *imp, ETH_PACK *packet, uint8 *last)
+{
+    struct ip_hdr     *pkt;
+    struct udp        *udp;
+    struct udp_hdr     udp_hdr;
+    int                len;
+
+    pkt = (struct ip_hdr *)(&packet->msg[0]);
+    udp = (struct udp *)(&packet->msg[sizeof(struct imp_eth_hdr) +
+                          sizeof(struct ip)]);
+    len = last - (uint8 *)udp;
+    /* Fill in ethernet and IP packet */
+    memcpy(&pkt->ethhdr.dest, &broadcast_ethaddr, 6);
+    memcpy(&pkt->ethhdr.src, &imp->mac, 6);
+    pkt->ethhdr.type = htons(ETHTYPE_IP);
+    pkt->iphdr.ip_v_hl = 0x45;
+    pkt->iphdr.ip_id = 1;
+    pkt->iphdr.ip_ttl = 128;
+    pkt->iphdr.ip_p = UDP_PROTO;
+    pkt->iphdr.ip_dst = broadcast_ipaddr;
+    udp->udp_sport = htons(68);
+    udp->udp_dport = htons(67);
+    udp->len = htons(len);
+    pkt->iphdr.ip_len = htons(len + sizeof(struct ip));
+    ip_checksum((uint8 *)(&pkt->iphdr.ip_sum), (uint8 *)&pkt->iphdr, 20);
+    ip_checksum((uint8 *)(&udp->chksum), (uint8 *)(udp), len);
+    /* Compute checksum of psuedo header and data */
+    udp_hdr.ip_src = pkt->iphdr.ip_src;
+    udp_hdr.ip_dst = pkt->iphdr.ip_dst;
+    udp_hdr.zero = 0;
+    udp_hdr.proto = UDP_PROTO;
+    udp_hdr.hlen = udp->len;
+    checksumadjust((uint8 *)&udp->chksum, (uint8 *)(&udp_hdr), 0,
+               (uint8 *)(&udp_hdr), sizeof(udp_hdr));
+    packet->len = len + sizeof(struct ip_hdr);
+    sent_flag = 0;
+    eth_write(&imp->etherface, packet, &sent);
+}
+
+/* Handle incoming DCHP offer and other requests */
+void
+imp_do_dhcp_client(struct imp_device *imp, ETH_PACK *read_buffer)
+{
+    struct ip           *ip_hdr = (struct ip *)
+                           (&read_buffer->msg[sizeof(struct imp_eth_hdr)]);
+    ETH_PACK            dhcp_pkt;
+    int                 hl = (ip_hdr->ip_v_hl & 0xf) * 4;
+    struct dhcp         *dhcp;
+    struct udp          *upkt;
+    struct udp_hdr      udp_hdr;
+    uint8               *opt;
+    uint16              sum;
+    int                 len;
+    in_addr_t           my_ip;                   /* Local IP address */
+    in_addr_t           my_mask;                 /* Local IP mask */
+    in_addr_t           my_gw;                   /* Gateway IP address */
+    int                 lease_time;              /* Lease time */
+    in_addr_t           dhcpip;                  /* DHCP server address */
+    int                 opr;                     /* Dhcp operation */
+
+
+    upkt = (struct udp *)(&((uint8 *)(ip_hdr))[hl]);
+    dhcp = (struct dhcp *)(&((uint8 *)(upkt))[sizeof(struct udp)]);
+
+    ip_checksum((uint8 *)&sum, (uint8 *)ip_hdr, hl);
+    if (sum != 0) {
+       fprintf(stderr, "IP checksum error %x\n\r", sum);
+       return;
+    }
+    ip_checksum((uint8 *)(&sum), (uint8 *)(upkt), ntohs(upkt->len));
+    udp_hdr.ip_src = ip_hdr->ip_src;
+    udp_hdr.ip_dst = ip_hdr->ip_dst;
+    udp_hdr.zero = 0;
+    udp_hdr.proto = UDP_PROTO;
+    udp_hdr.hlen = upkt->len;
+    checksumadjust((uint8 *)&sum, 0, 0, (uint8 *)(&udp_hdr), sizeof(udp_hdr));
+    if (sum != 0) {
+       fprintf(stderr, "UDP checksum error %x\n\r", sum);
+       return;
+    }
+
+    if (memcmp(&dhcp->chaddr, &imp->mac, 6) != 0 || dhcp->xid != imp->dhcp_xid)
+       return;
+
+    if (dhcp->op != DHCP_BOOTREPLY)
+       return;
+
+    opt = &dhcp->options[0];
+
+    /* Scan and collect the options we care about */
+    while (*opt != DHCP_OPTION_END) {
+        switch(*opt++) {
+        case DHCP_OPTION_PAD:
+                              break;
+        default:
+                              len = *opt++;
+                              opt += len;
+                              break;
+        case DHCP_OPTION_SUBNET_MASK:
+                              len = *opt++;
+                              memcpy(&my_mask, opt, 4);
+                              opt += len;
+                              break;
+        case DHCP_OPTION_ROUTER:
+                              len = *opt++;
+                              memcpy(&my_gw, opt, 4);
+                              opt += len;
+                              break;
+        case DHCP_OPTION_REQUESTED_IP:
+                              len = *opt++;
+                              memcpy(&my_ip, opt, 4);
+                              opt += len;
+                              break;
+        case DHCP_OPTION_LEASE_TIME:
+                              len = *opt++;
+                              memcpy(&lease_time, opt, 4);
+                              opt += len;
+                              break;
+        case DHCP_OPTION_SERVER_ID:
+                              len = *opt++;
+                              memcpy(&dhcpip, opt, 4);
+                              opt += len;
+                              break;
+        case DHCP_OPTION_MESSAGE_TYPE:
+                              len = *opt++;
+                              opr = *opt;
+                              opt += len;
+                              break;
+        }
+    }
+
+    /* Process an offer message */
+    if (opr == DHCP_OFFER && imp->dhcp_state == DHCP_STATE_SELECTING) {
+        /* Create a REQUEST Packet with IP address given */
+        struct dhcp       *dhcp_rply;
+        in_addr_t          ip_t;
+
+        memset(&dhcp_pkt.msg[0], 0, ETH_FRAME_SIZE);
+        dhcp_rply = (struct dhcp *)(&dhcp_pkt.msg[sizeof(struct imp_eth_hdr) +
+                              sizeof(struct ip) + sizeof(struct udp)]);
+
+        dhcp_rply->op = DHCP_BOOTREQUEST;
+        dhcp_rply->htype = DHCP_HTYPE_ETH;
+        dhcp_rply->hlen = 6;
+        dhcp_rply->xid = ++imp->dhcp_xid;
+        dhcp_rply->cookie = htonl(DHCP_MAGIC_COOKIE);
+        memcpy(&dhcp_rply->chaddr, &imp->mac, 6);
+        opt = &dhcp_rply->options[0];
+        *opt++ = DHCP_OPTION_MESSAGE_TYPE;
+        *opt++ = 1;
+        *opt++ = DHCP_REQUEST;
+        *opt++ = DHCP_OPTION_REQUESTED_IP;
+        *opt++ = 4;
+        ip_t = htonl(dhcp->yiaddr);
+        *opt++ = (ip_t >> 24) & 0xff;
+        *opt++ = (ip_t >> 16) & 0xff;
+        *opt++ = (ip_t >> 8) & 0xff;
+        *opt++ = ip_t & 0xff;
+        *opt++ = DHCP_OPTION_SERVER_ID;
+        *opt++ = 4;
+        ip_t = imp->dhcpip;
+        *opt++ = (ip_t >> 24) & 0xff;
+        *opt++ = (ip_t >> 16) & 0xff;
+        *opt++ = (ip_t >> 8) & 0xff;
+        *opt++ = ip_t & 0xff;
+        *opt++ = DHCP_OPTION_CLIENT_ID;
+        *opt++ = 6;
+        for (len = 0; len < 6; len++)
+            *opt++ = imp->mac[len];
+        *opt++ = DHCP_OPTION_PARAMETER_REQUEST_LIST;
+        *opt++ = 2;     /* Number */
+        *opt++ = DHCP_OPTION_SUBNET_MASK;     /* Subnet mask */
+        *opt++ = DHCP_OPTION_ROUTER;         /* Routers */
+        *opt++ = DHCP_OPTION_END;  /* Last option */
+//        len = opt - (uint8 *)dhcp_rply;
+        imp_do_send_dhcp(imp, &dhcp_pkt, opt);
+        imp->dhcp_state = DHCP_STATE_REQUESTING;
+    }
+    if (opr == DHCP_ACK && (imp->dhcp_state == DHCP_STATE_REQUESTING ||
+              imp->dhcp_state == DHCP_STATE_REBINDING ||
+              imp->dhcp_state == DHCP_STATE_RENEWING)) {
+        /* Set my IP address to one offered */
+        imp->ip = dhcp->yiaddr;
+        imp->ip_mask = my_mask;
+        imp->gwip = my_gw;
+        imp->dhcpip = dhcpip;
+        imp->dhcp_state = DHCP_STATE_BOUND;
+        imp->dhcp_lease = ntohl(lease_time);
+        imp->dhcp_renew = imp->dhcp_lease / 2;
+        imp->dhcp_rebind = (7 * imp->dhcp_lease) / 8;
+        for (len = 0; len < 33; len++) {
+            if (mask[len] == my_mask) {
+                imp->maskbits = 32 - len;
+                break;
+            }
+        }
+    }
+    if (opr == DHCP_NAK && (imp->dhcp_state == DHCP_STATE_REQUESTING ||
+              imp->dhcp_state == DHCP_STATE_REBINDING ||
+              imp->dhcp_state == DHCP_STATE_RENEWING))
+        imp->dhcp_state = DHCP_STATE_OFF;
+}
+
+void
+imp_dhcp_timer(struct imp_device *imp)
+{
+    struct ip           *ip_hdr;
+    ETH_PACK            dhcp_pkt;
+    int                 hl = (ip_hdr->ip_v_hl & 0xf) * 4;
+    uint8               *opt;
+    int                 len;
+    in_addr_t           ip_t;
+    struct dhcp        *dhcp_rply;
+
+    if (imp->dhcp_lease-- == 0)
+        imp->dhcp_state = DHCP_STATE_OFF;
+    else if (imp->dhcp_rebind-- == 0) {
+        imp->dhcp_state = DHCP_STATE_REBINDING;
+        imp->dhcpip = 0;
+    } else if (imp->dhcp_renew-- == 0) {
+        imp->dhcp_state = DHCP_STATE_RENEWING;
+    }
+
+    switch (imp->dhcp_state) {
+    case DHCP_STATE_REBINDING:
+    case DHCP_STATE_RENEWING:
+         /* Create a REQUEST Packet with IP address given */
+
+         memset(&dhcp_pkt.msg[0], 0, ETH_FRAME_SIZE);
+         dhcp_rply = (struct dhcp *)(&dhcp_pkt.msg[sizeof(struct imp_eth_hdr) +
+                               sizeof(struct ip) + sizeof(struct udp)]);
+
+         dhcp_rply->op = DHCP_BOOTREQUEST;
+         dhcp_rply->htype = DHCP_HTYPE_ETH;
+         dhcp_rply->hlen = 6;
+         dhcp_rply->xid = ++imp->dhcp_xid;
+         dhcp_rply->cookie = htonl(DHCP_MAGIC_COOKIE);
+         memcpy(&dhcp_rply->chaddr, &imp->mac, 6);
+         opt = &dhcp_rply->options[0];
+         *opt++ = DHCP_OPTION_MESSAGE_TYPE;
+         *opt++ = 1;
+         *opt++ = DHCP_REQUEST;
+         *opt++ = DHCP_OPTION_REQUESTED_IP;
+         *opt++ = 4;
+         ip_t = htonl(imp->ip);
+         *opt++ = (ip_t >> 24) & 0xff;
+         *opt++ = (ip_t >> 16) & 0xff;
+         *opt++ = (ip_t >> 8) & 0xff;
+         *opt++ = ip_t & 0xff;
+         *opt++ = DHCP_OPTION_SERVER_ID;
+         *opt++ = 4;
+         ip_t = imp->dhcpip;
+         *opt++ = (ip_t >> 24) & 0xff;
+         *opt++ = (ip_t >> 16) & 0xff;
+         *opt++ = (ip_t >> 8) & 0xff;
+         *opt++ = ip_t & 0xff;
+         *opt++ = DHCP_OPTION_CLIENT_ID;
+         *opt++ = 6;
+         for (len = 0; len < 6; len++)
+             *opt++ = imp->mac[len];
+         *opt++ = DHCP_OPTION_PARAMETER_REQUEST_LIST;
+         *opt++ = 2;     /* Number */
+         *opt++ = DHCP_OPTION_SUBNET_MASK;     /* Subnet mask */
+         *opt++ = DHCP_OPTION_ROUTER;         /* Routers */
+         *opt++ = DHCP_OPTION_END;  /* Last option */
+//         len = opt - (uint8 *)dhcp_rply;
+         imp_do_send_dhcp(imp, &dhcp_pkt, opt);
+         break;
+
+    case DHCP_STATE_OFF:
+         imp_dhcp_discover(imp);
+         break;
+
+    default:
+         break;
+    }
+}
+
+void
+imp_dhcp_discover(struct imp_device *imp)
+{
+    ETH_PACK          dhcp_pkt;
+    struct dhcp       *dhcp;
+    uint8             *opt;
+//    int               len;
+
+    /* Fill in Discover packet */
+    memset(&dhcp_pkt.msg[0], 0, ETH_FRAME_SIZE);
+    dhcp = (struct dhcp *)(&dhcp_pkt.msg[sizeof(struct imp_eth_hdr) +
+                          sizeof(struct ip) + sizeof(struct udp)]);
+
+    dhcp->op = DHCP_BOOTREQUEST;
+    dhcp->htype = DHCP_HTYPE_ETH;
+    dhcp->hlen = 6;
+    dhcp->xid = ++imp->dhcp_xid;
+    dhcp->cookie = htonl(DHCP_MAGIC_COOKIE);
+    memcpy(&dhcp->chaddr, &imp->mac, 6);
+    opt = &dhcp->options[0];
+    *opt++ = DHCP_OPTION_MESSAGE_TYPE;
+    *opt++ = 1;
+    *opt++ = DHCP_DISCOVER;
+    if (imp->ip != 0) {
+        in_addr_t     ip_t = htonl(imp->ip);
+        *opt++ = DHCP_OPTION_REQUESTED_IP;
+        *opt++ = 0x04;
+        *opt++ = (ip_t >> 24) & 0xff;
+        *opt++ = (ip_t >> 16) & 0xff;
+        *opt++ = (ip_t >> 8) & 0xff;
+        *opt++ = ip_t & 0xff;
+    }
+    *opt++= DHCP_OPTION_PARAMETER_REQUEST_LIST;
+    *opt++= 2;     /* Number */
+    *opt++= DHCP_OPTION_SUBNET_MASK;     /* Subnet mask */
+    *opt++= DHCP_OPTION_ROUTER;         /* Routers */
+    *opt++= DHCP_OPTION_END;  /* Last option */
+    /* Fill in ethernet and IP packet */
+//    len = opt - (uint8 *)dhcp;
+    imp_do_send_dhcp(imp, &dhcp_pkt, opt);
+    imp->dhcp_state = DHCP_STATE_SELECTING;
+}
+
+void
+imp_dhcp_release(struct imp_device *imp)
+{
+    ETH_PACK          dhcp_pkt;
+    struct dhcp       *dhcp;
+    uint8             *opt;
+    int               len;
+
+
+    /* Nothing to send if we are not bound */
+    if (imp_data.dhcp_state != DHCP_STATE_OFF)
+        return;
+    /* Fill in DHCP RELEASE PACKET */
+    memset(&dhcp_pkt.msg[0], 0, ETH_FRAME_SIZE);
+    dhcp = (struct dhcp *)(&dhcp_pkt.msg[sizeof(struct imp_eth_hdr) +
+                          sizeof(struct ip) + sizeof(struct udp)]);
+
+    dhcp->op = DHCP_BOOTREQUEST;
+    dhcp->htype = DHCP_HTYPE_ETH;
+    dhcp->hlen = 6;
+    dhcp->xid = ++imp->dhcp_xid;
+    dhcp->ciaddr = htonl(imp->ip);
+    dhcp->cookie = htonl(DHCP_MAGIC_COOKIE);
+    memcpy(&dhcp->chaddr, &imp->mac, 6);
+    opt = &dhcp->options[0];
+    *opt++ = DHCP_OPTION_SERVER_ID;
+    *opt++ = 4;
+    *opt++ = (imp->dhcpip >> 24) & 0xff;
+    *opt++ = (imp->dhcpip >> 16) & 0xff;
+    *opt++ = (imp->dhcpip >> 8) & 0xff;
+    *opt++ = imp->dhcpip & 0xff;
+    *opt++ = DHCP_OPTION_MESSAGE_TYPE;
+    *opt++ = 1;
+    *opt++ = DHCP_RELEASE;
+    if (imp->ip != 0) {
+        in_addr_t   ip_t = htonl(imp->ip);
+        *opt++ = DHCP_OPTION_REQUESTED_IP;
+        *opt++ = 0x04;
+        *opt++ = (ip_t >> 24) & 0xff;
+        *opt++ = (ip_t >> 16) & 0xff;
+        *opt++ = (ip_t >> 8) & 0xff;
+        *opt++ = ip_t & 0xff;
+    }
+    *opt++ = DHCP_OPTION_CLIENT_ID;
+    *opt++ = 6;
+    for (len = 0; len < 6; len++)
+        *opt++ = imp->mac[len];
+    *opt++= DHCP_OPTION_END;  /* Last option */
+//    len = opt - (uint8 *)dhcp;
+    imp_do_send_dhcp(imp, &dhcp_pkt, opt);
+    while(sent_flag == 0);
+    imp->dhcp_state = DHCP_STATE_OFF;
+}
 
 
 
+static char *
+ipv4_inet_ntoa(struct in_addr ip)
+{
+   static char str[20];
+
+   sprintf (str, "%d.%d.%d.%d", ip.s_addr & 0xFF, (ip.s_addr >> 8) & 0xFF,
+                          (ip.s_addr >> 16) & 0xFF, (ip.s_addr >> 24) & 0xFF);
+   return str;
+}
+
+static
+int ipv4_inet_aton(const char *str, struct in_addr *inp)
+{
+    unsigned long bytes[4];
+    int i = 0;
+    char *end;
+    in_addr_t val;
+
+    for (i=0; (i < 4) && isdigit (*str); i++) {
+        bytes[i] = strtoul (str, &end, 0);
+        if (str == end)
+            return 0;
+        str = end;
+        if (*str == '.')
+            ++str;
+        }
+    if (*str && (*str != '/'))
+        return 0;
+    switch (i) {
+    case 1:
+            val = bytes[0];
+            break;
+    case 2:
+            if ((bytes[0] > 0xFF) || (bytes[1] > 0xFFFFFF))
+                return 0;
+            val = (bytes[0] << 24) | bytes[1];
+            break;
+    case 3:
+            if ((bytes[0] > 0xFF) || (bytes[1] > 0xFF) || (bytes[2] > 0xFFFF))
+                return 0;
+            val = (bytes[0] << 24) | (bytes[1] << 16) | bytes[2];
+            break;
+    case 4:
+            if ((bytes[0] > 0xFF) || (bytes[1] > 0xFF) || (bytes[2] > 0xFF)
+                  || (bytes[3] > 0xFF))
+                return 0;
+            val = (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
+            break;
+    default:
+            return 0;
+    }
+    if (inp)
+        *(in_addr_t *)inp = htonl (val);
+    return 1;
+}
+
 t_stat imp_set_mpx (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
     int32 mpx;
@@ -1076,13 +1767,17 @@ t_stat imp_set_ip (UNIT* uptr, int32 val, CONST char* cptr, void* desc)
     if (uptr->flags & UNIT_ATT) return SCPE_ALATT;
 
     cptr = get_glyph (cptr, abuf, '/');
-    if (cptr && *cptr)
+    if (cptr && *cptr) {
           imp_data.maskbits = atoi (cptr);
-    else
+          if (imp_data.maskbits < 0)
+              imp_data.maskbits = 0;
+          if (imp_data.maskbits > 32)
+              imp_data.maskbits = 32;
+    } else
           imp_data.maskbits = 32;
     if (ipv4_inet_aton (abuf, &ip)) {
         imp_data.ip = ip.s_addr;
-        imp_data.ip_mask =  htonl((0xffffffff) << (32 - imp_data.maskbits));
+        imp_data.ip_mask =  htonl(mask[imp_data.maskbits]);
         return SCPE_OK;
     }
     return SCPE_ARG;
@@ -1108,6 +1803,14 @@ t_stat imp_set_gwip (UNIT* uptr, int32 val, CONST char* cptr, void* desc)
        return SCPE_OK;
     }
     return SCPE_ARG;
+}
+
+t_stat imp_show_dhcpip (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+{
+   struct in_addr ip;
+   ip.s_addr = imp_data.dhcpip;
+   fprintf (st, "DHCPIP=%s", ipv4_inet_ntoa(ip));
+   return SCPE_OK;
 }
 
 t_stat imp_show_hostip (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
@@ -1153,8 +1856,8 @@ t_stat imp_reset (DEVICE *dptr)
 {
     int  i;
     struct imp_packet *p;
-  
-    /* Clear ARP table. */ 
+
+    /* Clear ARP table. */
     for (i = 0; i < IMP_ARPTAB_SIZE; i++) {
         arp_table[i].ipaddr = 0;
     }
@@ -1170,6 +1873,7 @@ t_stat imp_reset (DEVICE *dptr)
     imp_data.freeq = p;
     imp_data.init_state = 0;
     last_coni = sim_interval;
+    imp_data.dhcp_state = DHCP_STATE_OFF;
     sim_activate(&imp_unit[0], 200);
     return SCPE_OK;
 }
@@ -1177,47 +1881,50 @@ t_stat imp_reset (DEVICE *dptr)
 /* attach device: */
 t_stat imp_attach(UNIT* uptr, CONST char* cptr)
 {
-  t_stat status;
-  char* tptr;
+    t_stat status;
+    char* tptr;
 
-  tptr = (char *) malloc(strlen(cptr) + 1);
-  if (tptr == NULL) return SCPE_MEM;
-  strcpy(tptr, cptr);
+    tptr = (char *) malloc(strlen(cptr) + 1);
+    if (tptr == NULL) return SCPE_MEM;
+    strcpy(tptr, cptr);
 
-  status = eth_open(&imp_data.etherface, cptr, &imp_dev, 0xFFFF);
-  if (status != SCPE_OK) {
-    free(tptr);
-    return status;
-  }
-//  eth_set_throttle (&imp_data.etherface, imp_data.throttle_time, xu->var->throttle_burst, xu->var->throttle_delay);
-  if (SCPE_OK != eth_check_address_conflict (&imp_data.etherface, &imp_data.mac)) {
-    char buf[32];
+    status = eth_open(&imp_data.etherface, cptr, &imp_dev, 0xFFFF);
+    if (status != SCPE_OK) {
+      free(tptr);
+      return status;
+    }
+    if (SCPE_OK != eth_check_address_conflict (&imp_data.etherface, &imp_data.mac)) {
+      char buf[32];
 
-    eth_mac_fmt(&imp_data.mac, buf);     /* format ethernet mac address */
-    sim_printf("%s: MAC Address Conflict on LAN for address %s\n", imp_dev.name, buf);
-    eth_close(&imp_data.etherface);
-    free(tptr);
-    return SCPE_NOATT;
-  }
-  if (SCPE_OK != eth_filter(&imp_data.etherface, 1, &imp_data.mac, 1, 0)) {
-    eth_close(&imp_data.etherface);
-    free(tptr);
-    return SCPE_NOATT;
-  }
-     
-  uptr->filename = tptr;
-  uptr->flags |= UNIT_ATT;
-  eth_setcrc(&imp_data.etherface, 1); /* enable CRC */
-
-  /* init read queue (first time only) */
-  status = ethq_init(&imp_data.ReadQ, 8);
-  if (status != SCPE_OK) {
-    eth_close(&imp_data.etherface);
-    free(tptr);
-    return status;
+      eth_mac_fmt(&imp_data.mac, buf);     /* format ethernet mac address */
+      sim_printf("%s: MAC Address Conflict on LAN for address %s\n", imp_dev.name, buf);
+      eth_close(&imp_data.etherface);
+      free(tptr);
+      return SCPE_NOATT;
+    }
+    if (SCPE_OK != eth_filter(&imp_data.etherface, 1, &imp_data.mac, 1, 0)) {
+      eth_close(&imp_data.etherface);
+      free(tptr);
+      return SCPE_NOATT;
     }
 
-  return SCPE_OK;
+    uptr->filename = tptr;
+    uptr->flags |= UNIT_ATT;
+    eth_setcrc(&imp_data.etherface, 0); /* Don't need CRC */
+
+    /* init read queue (first time only) */
+    status = ethq_init(&imp_data.ReadQ, 8);
+    if (status != SCPE_OK) {
+      eth_close(&imp_data.etherface);
+      free(tptr);
+      return status;
+    }
+
+    imp_data.sec_tim = 1000;
+    imp_data.dhcp_xid = XID;
+    imp_data.dhcp_state = DHCP_STATE_OFF;
+
+    return SCPE_OK;
 }
 
 /* detach device: */
@@ -1225,17 +1932,45 @@ t_stat imp_attach(UNIT* uptr, CONST char* cptr)
 t_stat imp_detach(UNIT* uptr)
 {
 
-  if (uptr->flags & UNIT_ATT) {
-    eth_close (&imp_data.etherface);
-    free(uptr->filename);
-    uptr->filename = NULL;
-    uptr->flags &= ~UNIT_ATT;
-    /* cancel service timers */
-    sim_cancel (uptr);                  /* stop the receiver */
-    sim_cancel (uptr+1);                /* stop the timer services */
-  }
-  return SCPE_OK;
+    if (uptr->flags & UNIT_ATT) {
+        /* If DHCP, release our IP address */
+        if (uptr->flags & UNIT_DHCP) {
+          imp_dhcp_release(&imp_data);
+        }
+        eth_close (&imp_data.etherface);
+        free(uptr->filename);
+        uptr->filename = NULL;
+        uptr->flags &= ~UNIT_ATT;
+        /* cancel service timers */
+        sim_cancel (uptr);                  /* stop the receiver */
+        sim_cancel (uptr+1);                /* stop the timer services */
+    }
+    return SCPE_OK;
 }
+
+t_stat imp_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
+{
+fprintf (st, "IMP interface\n\n");
+fprintf (st, "The IMP acted as an interface to the early internet. ");
+fprintf (st, "This interface operated\nat the TCP/IP level rather than the ");
+fprintf (st, "Ethernet level. This interface allows for\nITS or Tenex to be ");
+fprintf (st, "placed on the internet. The interface connects up to a TAP\n");
+fprintf (st, "or direct ethernet connection. If the host is to be run at an ");
+fprintf (st, "arbitrary IP\naddress, then the HOST should be set to the IP ");
+fprintf (st, "of ITS. The network interface\nwill translate this IP address ");
+fprintf (st, "to the one set in IP. If HOST is set to 0.0.0.0,\nno ");
+fprintf (st, "translation will take place. IP should be set to the external ");
+fprintf (st, "address of\nthe IMP, along the number of bits in the net mask. ");
+fprintf (st, "GW points to the default\nrouter. If DHCP is enabled these ");
+fprintf (st, "will be set from DHCP when the IMP is attached.\nIf IP is set ");
+fprintf (st, "and DHCP is enabled, when the IMP is attached it will inform\n");
+fprintf (st, "the local DHCP server of it's address.\n\n");
+fprint_set_help (st, dptr);
+fprint_show_help (st, dptr);
+eth_attach_help(st, dptr, uptr, flag, cptr);
+return SCPE_OK;
+}
+
 
 const char *imp_description (DEVICE *dptr)
 {
