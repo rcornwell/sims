@@ -61,14 +61,13 @@ with Goerge 2 and 3.
 # IBM 360 simulator.
 
 Currently will run IPL TOS/360, DOS/360, OS/360. TSO support still in progress.
-Floating point code is broken, decimal instructions are untested.
-IBM 360/67 support will also be added to support MTS early versions. 
+IBM 360/67 support added for MTS early versions. 
 Support for the following units:
 
     DASD (Disk) Up to 4 devices of 8.
     * 2301, 2302, 2303, 2305, 2311, 2314, 3330.
     
-    Tape
+    Tape, 8 devices.
     * 2400 (7 track and 9 track).
 
     Unit record
@@ -89,7 +88,7 @@ Latest status for I7000 Cpus:
 
 ## i704
    * SAP works.  
-   * Fort2 unfinished.  
+   * Fortran II works in some cases.
 
 ## i7010
    * PR155 works.
@@ -99,8 +98,7 @@ Latest status for I7000 Cpus:
    * Protection mode does not handle setting H or L to 0.  
 
 ## i7070
-   * Will load Diags, need to remember how to run them to run
-   * tests on machine.   
+   * Will load Diags.
 
 ## i7080
    * Sort of working.   
@@ -133,5 +131,5 @@ Latest status for I7000 Cpus:
 
    * Lisp 1.5 works.  
 
-   * Signifigence mode Not tested, Test Code Needed.  
+   * Signifigance mode Not tested, Test Code Needed.  
 
