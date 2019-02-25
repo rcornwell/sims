@@ -155,6 +155,8 @@ char    clk_en;                               /* Enable clock interrupts */
 int     clk_irq;                              /* Clock interrupt */
 char    pi_restore;                           /* Restore previous level */
 char    pi_hold;                              /* Hold onto interrupt */
+int     modify;                               /* Modify cycle */
+char    xct_flag;                             /* XCT flags */
 #if KI
 uint64  ARX;                                  /* Extension to AR */
 uint64  BRX;                                  /* Extension to BR */
@@ -177,8 +179,6 @@ uint32  pag_reload;                           /* Page reload pointer */
 uint64  fault_data;                           /* Fault data from last fault */
 int     trap_flag;                            /* In trap cycle */
 int     last_page;                            /* Last page mapped */
-int     modify;                               /* Modify cycle */
-char    xct_flag;                             /* XCT flags */
 #endif
 #if BBN
 int     exec_map;                             /* Enable executive mapping */
@@ -1415,12 +1415,88 @@ int Mem_write_nopage() {
     return 0;
 }
 
+int Mem_read(int flag, int cur_context, int fetch) {
+    int addr;
 
+    if (AB < 020) {
+        if (FLAGS & USER) {
+           MB =  get_reg(AB);
+           return 0;
+        } else {
+            if (!cur_context && ((xct_flag & 1) != 0)) {
+               if (FLAGS & USERIO) {
+                  if (fm_sel == 0)
+                     goto read;
+                  MB = FM[fm_sel|AB];
+                  return 0;
+               }
+               MB = M[ub_ptr + ac_stack + AB];
+               return 0;
+            }
+        }
+        MB = get_reg(AB);
+    } else {
+read:
+        sim_interval--;
+        if (!page_lookup(AB, flag, &addr, 0, cur_context, fetch))
+            return 1;
+        if (addr >= (int)MEMSIZE) {
+            nxm_flag = 1;
+            return 1;
+        }
+        MB = M[addr];
+    }
+    return 0;
+}
+
+int Mem_write(int flag, int cur_context) {
+    int addr;
+
+    if (AB < 020) {
+        if (FLAGS & USER) {
+            set_reg(AB, MB);
+            return 0;
+        } else {
+            if (!cur_context &&
+                (((xct_flag & 1) != 0 && modify) ||
+                      (xct_flag & 2) != 0)) {
+                if (FLAGS & USERIO) {
+                   if (fm_sel == 0)
+                      goto write;
+                   else
+                      FM[fm_sel|AB] = MB;
+                } else {
+                   M[ub_ptr + ac_stack + AB] = MB;
+                }
+                return 0;
+            }
+        }
+        set_reg(AB, MB);
+    } else {
+write:
+        sim_interval--;
+        if (!page_lookup(AB, flag, &addr, 1, cur_context, 0))
+            return 1;
+        if (addr >= (int)MEMSIZE) {
+            nxm_flag = 1;
+            return 1;
+        }
+        M[addr] = MB;
+    }
+    return 0;
+}
 #endif
 
 #if KA
+
+#define get_reg(reg)                 FM[(reg) & 017]
+#define set_reg(reg, value)          FM[(reg) & 017] = value
+
 #if ITS
 
+/*
+ * Load TBL entry for ITS.
+ */
 int its_load_tlb(uint32 reg, int page, uint32 *tlb) {
     uint64 data;
     int len = (reg >> 19) & 0177;
@@ -1450,15 +1526,12 @@ int its_load_tlb(uint32 reg, int page, uint32 *tlb) {
     pag_reload = ((pag_reload + 1) & 017);
     return 0;
 }
-#endif
 
 /*
  * Translation logic for KA10
  */
-int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch) {
 
-#if ITS
-    if (QITS) {
+int page_lookup_its(int addr, int flag, int *loc, int wr, int cur_context, int fetch) {
         uint64   data;
         int      base = 0;
         int      page = (RMASK & addr) >> 10;
@@ -1582,9 +1655,79 @@ fault:
            PC = (PC + 1) & RMASK;
        }
        return 0;
-      }
+}
+
+/*
+ * Read a location in memory.
+ *
+ * Return of 0 if successful, 1 if there was an error.
+ */
+int Mem_read_its(int flag, int cur_context, int fetch) {
+    int addr;
+
+    if (AB < 020) {
+        if ((xct_flag & 1) != 0 && !cur_context && (FLAGS & USER) == 0) {
+           MB = M[(ac_stack & 01777777) + AB];
+           return 0;
+        }
+        MB = get_reg(AB);
+    } else {
+        sim_interval--;
+        if (!page_lookup_its(AB, flag, &addr, 0, cur_context, fetch))
+            return 1;
+        if (QTEN11 && T11RANGE(addr)) {
+            if (ten11_read (addr, &MB)) {
+                nxm_flag = 1;
+                return 1;
+            }
+            return 0;
+        }
+        if (addr >= (int)MEMSIZE) {
+            nxm_flag = 1;
+            return 1;
+        }
+        MB = M[addr];
+    }
+    return 0;
+}
+
+/*
+ * Write a location in memory.
+ *
+ * Return of 0 if successful, 1 if there was an error.
+ */
+int Mem_write_its(int flag, int cur_context) {
+    int addr;
+
+    if (AB < 020) {
+        if ((xct_flag & 2) != 0 && !cur_context && (FLAGS & USER) == 0) {
+            M[(ac_stack & 01777777) + AB] = MB;
+            return 0;
+        }
+        set_reg(AB, MB);
+    } else {
+        sim_interval--;
+        if (!page_lookup_its(AB, flag, &addr, 1, cur_context, 0))
+            return 1;
+        if (QTEN11 && T11RANGE(addr)) {
+            if (ten11_write (addr, MB)) {
+                nxm_flag = 1;
+                return 1;
+            }
+            return 0;
+        }
+        if (addr >= (int)MEMSIZE) {
+            nxm_flag = 1;
+            return 1;
+        }
+        M[addr] = MB;
+    }
+    return 0;
+}
 #endif
+
 #if BBN
+int page_lookup_bbn(int addr, int flag, int *loc, int wr, int cur_context, int fetch) {
       /* Group 0, 01 = 00
                   bit 2 = Age 00x                                        0100000
                   bit 3 = Age 02x                                        0040000
@@ -1616,7 +1759,7 @@ fault:
                   bit 7 = illegal write
                   bit 8 = address limit register violation or p.t. bits
                           0,1 = 3 (illegal format */
-    if (QBBN) {
+//    if (QBBN) {
         uint64   data;
         uint32   tlb_data;
         uint64   traps;
@@ -1821,9 +1964,64 @@ fault_bbn1:
       if (wr)
           M[((tlb_data & 03777) << 9) | 0572] = MB;
       return 0;
-      }
+}
+
+/*
+ * Read a location in memory.
+ *
+ * Return of 0 if successful, 1 if there was an error.
+ */
+int Mem_read_bbn(int flag, int cur_context, int fetch) {
+    int addr;
+
+    if (AB < 020) {
+        if ((xct_flag & 2) != 0 && !cur_context && (FLAGS & USER) == 0) {
+           MB = M[ac_stack + AB];
+           return 0;
+        }
+        MB = get_reg(AB);
+    } else {
+        sim_interval--;
+        if (!page_lookup_bbn(AB, flag, &addr, 0, cur_context, fetch))
+            return 1;
+        if (addr >= (int)MEMSIZE) {
+            nxm_flag = 1;
+            return 1;
+        }
+        MB = M[addr];
+    }
+    return 0;
+}
+
+/*
+ * Write a location in memory.
+ *
+ * Return of 0 if successful, 1 if there was an error.
+ */
+int Mem_write_bbn(int flag, int cur_context) {
+    int addr;
+
+    if (AB < 020) {
+        if ((xct_flag & 4) != 0 && !cur_context && (FLAGS & USER) == 0) {
+            M[ac_stack + AB] = MB;
+            return 0;
+        }
+        set_reg(AB, MB);
+    } else {
+        sim_interval--;
+        if (!page_lookup_bbn(AB, flag, &addr, 1, cur_context, 0))
+            return 1;
+        if (addr >= (int)MEMSIZE) {
+            nxm_flag = 1;
+            return 1;
+        }
+        M[addr] = MB;
+    }
+    return 0;
+}
 #endif
 
+int page_lookup_ka(int addr, int flag, int *loc, int wr, int cur_context, int fetch) {
       if (!flag && (FLAGS & USER) != 0) {
           if (addr <= ((Pl << 10) + 01777)) {
              *loc = (addr + (Rl << 10)) & RMASK;
@@ -1844,65 +2042,15 @@ fault_bbn1:
       return 1;
 }
 
-#define get_reg(reg)                 FM[(reg) & 017]
-#define set_reg(reg, value)          FM[(reg) & 017] = value
-#endif
-
-/*
- * Read a location in memory.
- *
- * Return of 0 if successful, 1 if there was an error.
- */
-int Mem_read(int flag, int cur_context, int fetch) {
+int Mem_read_ka(int flag, int cur_context, int fetch) {
     int addr;
 
     if (AB < 020) {
-#if ITS
-        if (QITS && (xct_flag & 1) != 0 && !cur_context && (FLAGS & USER) == 0) {
-           MB = M[(ac_stack & 01777777) + AB];
-           return 0;
-        }
-#endif
-#if BBN
-        if (QBBN && (xct_flag & 2) != 0 && !cur_context && (FLAGS & USER) == 0) {
-           MB = M[ac_stack + AB];
-           return 0;
-        }
-#endif
-#if KI | KL
-        if (FLAGS & USER) {
-           MB =  get_reg(AB);
-           return 0;
-        } else {
-            if (!cur_context && ((xct_flag & 1) != 0)) {
-               if (FLAGS & USERIO) {
-                  if (fm_sel == 0)
-                     goto read;
-                  MB = FM[fm_sel|AB];
-                  return 0;
-               }
-               MB = M[ub_ptr + ac_stack + AB];
-               return 0;
-            }
-        }
-#endif
         MB = get_reg(AB);
     } else {
-#if KI | KL
-read:
-#endif
         sim_interval--;
-        if (!page_lookup(AB, flag, &addr, 0, cur_context, fetch))
+        if (!page_lookup_ka(AB, flag, &addr, 0, cur_context, fetch))
             return 1;
-#if ITS
-        if (QTEN11 && T11RANGE(addr)) {
-            if (ten11_read (addr, &MB)) {
-                nxm_flag = 1;
-                return 1;
-            }
-            return 0;
-        }
-#endif
         if (addr >= (int)MEMSIZE) {
             nxm_flag = 1;
             return 1;
@@ -1917,59 +2065,16 @@ read:
  *
  * Return of 0 if successful, 1 if there was an error.
  */
-int Mem_write(int flag, int cur_context) {
+
+int Mem_write_ka(int flag, int cur_context) {
     int addr;
 
     if (AB < 020) {
-#if ITS
-        if (QITS && (xct_flag & 2) != 0 && !cur_context && (FLAGS & USER) == 0) {
-            M[(ac_stack & 01777777) + AB] = MB;
-            return 0;
-        }
-#endif
-#if BBN
-        if (QBBN && (xct_flag & 4) != 0 && !cur_context && (FLAGS & USER) == 0) {
-            M[ac_stack + AB] = MB;
-            return 0;
-        }
-#endif
-#if KI | KL
-        if (FLAGS & USER) {
-            set_reg(AB, MB);
-            return 0;
-        } else {
-            if (!cur_context &&
-                (((xct_flag & 1) != 0 && modify) ||
-                      (xct_flag & 2) != 0)) {
-                if (FLAGS & USERIO) {
-                   if (fm_sel == 0)
-                      goto write;
-                   else
-                      FM[fm_sel|AB] = MB;
-                } else {
-                   M[ub_ptr + ac_stack + AB] = MB;
-                }
-                return 0;
-            }
-        }
-#endif
         set_reg(AB, MB);
     } else {
-#if KI | KL
-write:
-#endif
         sim_interval--;
-        if (!page_lookup(AB, flag, &addr, 1, cur_context, 0))
+        if (!page_lookup_ka(AB, flag, &addr, 1, cur_context, 0))
             return 1;
-#if ITS
-        if (QTEN11 && T11RANGE(addr)) {
-            if (ten11_write (addr, MB)) {
-                nxm_flag = 1;
-                return 1;
-            }
-            return 0;
-        }
-#endif
         if (addr >= (int)MEMSIZE) {
             nxm_flag = 1;
             return 1;
@@ -1978,6 +2083,10 @@ write:
     }
     return 0;
 }
+
+int (*Mem_read)(int flag, int cur_context, int fetch);
+int (*Mem_write)(int flag, int cur_context);
+#endif
 
 /*
  * Function to determine number of leading zero bits in a work
@@ -2067,9 +2176,9 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
     check_apr_irq();
     /* Normal instruction */
     if (f_load_pc) {
-#if KI | KL | ITS | BBN
         modify = 0;
         xct_flag = 0;
+#if KI | KL 
         trap_flag = 0;
 #endif
         AB = PC;
@@ -2234,18 +2343,14 @@ st_pi:
     nrf = 0;
     fxu_hold_set = 0;
     sac_inh = 0;
-#if KI | KL | ITS | BBN
     modify = 0;
-#endif
     f_pc_inh = 0;
 
     /* Load pseudo registers based on flags */
     if (i_flags & (FCEPSE|FCE)) {
         if (Mem_read(0, 0, 0))
             goto last;
-#if KI | KL | ITS | BBN
         modify = 1;
-#endif
         AR = MB;
     }
 
@@ -2938,9 +3043,7 @@ unasign:
     case 0134: /* ILDB */
     case 0136: /* IDPB */
               if ((FLAGS & BYTI) == 0) {      /* BYF6 */
-#if KI | KL | ITS | BBN
                   modify = 1;
-#endif
                   if (Mem_read(0, !QITS, 0))
                       goto last;
                   AR = MB;
@@ -2988,10 +3091,8 @@ ldb_ptr:
 #endif
               } else {
                   AB = AR & RMASK;
-#if KI | KL | ITS | BBN
                   if ((IR & 06) == 6)
                       modify = 1;
-#endif
                   if (Mem_read(0, 0, 0))
                       goto last;
                   AR = MB;
@@ -3927,6 +4028,7 @@ fnorm:
     case 0256: /* XCT */
               f_load_pc = 0;
               f_pc_inh = 1;
+              xct_flag = 0;
 #if BBN
               if (QBBN && (FLAGS & USER) == 0)
                    xct_flag = AC;
@@ -5036,6 +5138,26 @@ t_bool build_dev_tab (void)
 DEVICE *dptr;
 DIB    *dibp;
 uint32 i, j, d;
+
+#if KA
+/* Set up memory access routines based on current CPU type. */
+
+/* Default to KA */
+Mem_read = &Mem_read_ka;
+Mem_write = &Mem_write_ka;
+#if ITS
+if (QITS) {
+    Mem_read = &Mem_read_its;
+    Mem_write = &Mem_write_its;
+}
+#endif
+#if BBN
+if (QBBN) {
+    Mem_read = &Mem_read_bbn;
+    Mem_write = &Mem_write_bbn;
+}
+#endif
+#endif
 
 /* Clear device and interrupt table */
 for (i = 0; i < 128; i++) {
