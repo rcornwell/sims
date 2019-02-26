@@ -518,8 +518,6 @@ t_stat imp_devio(uint32 dev, uint64 *data)
             uptr->STATUS |= IMPIHE;
         if (*data & IMPLHW) //Last host word.
             uptr->STATUS |= IMPLHW;
-        if ((uptr->STATUS & IMPIB) == 0)
-            imp_packet_in(&imp_data);
         break;
     case CONI:
         last_coni = sim_interval;
@@ -556,7 +554,6 @@ t_stat imp_srv(UNIT * uptr)
     int     l;
 
     if (uptr->STATUS & IMPOB && imp_data.sendq == NULL) {
-    int x = uptr->OPOS>>3;
         if (imp_data.obits == 32)
            imp_data.obuf >>= 4;
         for (i = imp_data.obits - 1; i >= 0; i--) {
@@ -592,7 +589,9 @@ t_stat imp_srv(UNIT * uptr)
         uptr->STATUS |= IMPID;
         check_interrupts (uptr);
     }
-    sim_activate(uptr, 200);
+    if (uptr->ILEN == 0 && (uptr->STATUS & (IMPIB|IMPID)) == 0)
+        imp_packet_in(&imp_data);
+    sim_activate(uptr, 100);
     return SCPE_OK;
 }
 
@@ -674,12 +673,12 @@ t_stat imp_eth_srv(UNIT * uptr)
 {
     ETH_PACK          read_buffer;
 
-    sim_clock_coschedule(uptr, 250);              /* continue poll */
-
-    if (uptr->ILEN == 0)
-        imp_packet_in(&imp_data);
+    sim_clock_coschedule(uptr, 1000);              /* continue poll */
 
     imp_timer_task(&imp_data);
+    if (uptr->ILEN == 0 && (uptr->STATUS & (IMPIB|IMPID)) == 0)
+        imp_packet_in(&imp_data);
+
     if (imp_data.init_state >= 3 && imp_data.init_state < 6) {
        if (imp_unit[0].flags & UNIT_DHCP && imp_data.dhcp_state != DHCP_STATE_BOUND)
            return SCPE_OK;
@@ -702,11 +701,22 @@ void
 imp_timer_task(struct imp_device *imp)
 {
     struct imp_packet  *nq = NULL;                /* New send queue */
+    int                 n;
 
     /* If DHCP enabled, send a discover packet */
     if (imp_data.init_state >= 1 &&
       imp_unit[0].flags & UNIT_DHCP && imp->dhcp_state == DHCP_STATE_OFF) {
       imp_dhcp_discover(&imp_data);
+    }
+
+    /* Scan through adjusted ports and remove old ones */
+    for (n = 0; n < 64; n++) {
+        if (imp->port_map[n].cls_tim > 0) {
+            if (--imp->port_map[n].cls_tim == 0) {
+                imp->port_map[n].port = 0;
+                imp->port_map[n].adj = 0;
+            }
+        }
     }
 
     /* Scan the send queue and see if any packets have timed out */
@@ -740,7 +750,7 @@ imp_packet_in(struct imp_device *imp)
    int                     type;
    int                     n;
    int                     pad;
-int i;
+//int i;
    if (eth_read (&imp_data.etherface, &read_buffer, NULL) <= 0)
        return;
    hdr = (struct imp_eth_hdr *)(&read_buffer.msg[0]);
@@ -807,17 +817,17 @@ int i;
                               (uint8 *)(&imp_data.hostip), sizeof(in_addr_t));
                    if ((ntohs(tcp_hdr->flags) & 0x10) != 0) {
 //fprintf(stderr, "ACK %x\r\n", port);
-                       for (i = 0; i < 64; i++) {
-                           if (imp->port_map[i].port == port) {
+                       for (n = 0; n < 64; n++) {
+                           if (imp->port_map[n].port == port) {
                                /* Check if SYN */
                                if (ntohs(tcp_hdr->flags) & 02) {
-                                   imp->port_map[i].port = 0;
-                                   imp->port_map[i].adj = 0;
+                                   imp->port_map[n].port = 0;
+                                   imp->port_map[n].adj = 0;
                                } else {
                                    uint32   new_seq = ntohl(tcp_hdr->ack);
 //fprintf(stderr, "Adjusting sequence %x %d %x\r\n", port, imp->port_map[i].adj, new_seq);
-                                   if (new_seq > imp->port_map[i].lseq) {
-                                       new_seq = htonl(new_seq - imp->port_map[i].adj);
+                                   if (new_seq > imp->port_map[n].lseq) {
+                                       new_seq = htonl(new_seq - imp->port_map[n].adj);
                                        checksumadjust((uint8 *)&tcp_hdr->chksum,
                                                (uint8 *)(&tcp_hdr->ack), 4,
                                                (uint8 *)(&new_seq), 4);
@@ -826,7 +836,7 @@ int i;
 //fprintf(stderr, "Adjusting sequence %x %d %x\r\n", port, imp->port_map[i].adj, new_seq);
                                }
                                if (ntohs(tcp_hdr->flags) & 01)
-                                   imp->port_map[i].cls_tim = 100;
+                                   imp->port_map[n].cls_tim = 100;
                                break;
                            }
                        }
@@ -1325,12 +1335,12 @@ imp_do_dhcp_client(struct imp_device *imp, ETH_PACK *read_buffer)
     uint8               *opt;
     uint16              sum;
     int                 len;
-    in_addr_t           my_ip;                   /* Local IP address */
-    in_addr_t           my_mask;                 /* Local IP mask */
-    in_addr_t           my_gw;                   /* Gateway IP address */
-    int                 lease_time;              /* Lease time */
-    in_addr_t           dhcpip;                  /* DHCP server address */
-    int                 opr;                     /* Dhcp operation */
+    in_addr_t           my_ip = 0;               /* Local IP address */
+    in_addr_t           my_mask = 0;             /* Local IP mask */
+    in_addr_t           my_gw = 0;               /* Gateway IP address */
+    int                 lease_time = 0;          /* Lease time */
+    in_addr_t           dhcpip = 0;              /* DHCP server address */
+    int                 opr = -1;                /* Dhcp operation */
 
 
     upkt = (struct udp *)(&((uint8 *)(ip_hdr))[hl]);
@@ -1478,9 +1488,7 @@ imp_do_dhcp_client(struct imp_device *imp, ETH_PACK *read_buffer)
 void
 imp_dhcp_timer(struct imp_device *imp)
 {
-    struct ip           *ip_hdr;
     ETH_PACK            dhcp_pkt;
-    int                 hl = (ip_hdr->ip_v_hl & 0xf) * 4;
     uint8               *opt;
     int                 len;
     in_addr_t           ip_t;
