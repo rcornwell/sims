@@ -1214,11 +1214,11 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
 
     case DATAO:
         /* Set protection registers */
-        Rh = 0377 & (*data >> 1);
-        Rl = 0377 & (*data >> 10);
+        Rh = (0377 & (*data >> 1)) << 10;
+        Rl = (0377 & (*data >> 10)) << 10;
         Pflag = 01 & (*data >> 18);
-        Ph = 0377 & (*data >> 19);
-        Pl = 0377 & (*data >> 28);
+        Ph = ((0377 & (*data >> 19)) << 10) + 01777;
+        Pl = ((0377 & (*data >> 28)) << 10) + 01777;
         sim_debug(DEBUG_DATAIO, &cpu_dev, "DATAO APR %012llo\n", *data);
         break;
 
@@ -2023,14 +2023,14 @@ int Mem_write_bbn(int flag, int cur_context) {
 
 int page_lookup_ka(int addr, int flag, int *loc, int wr, int cur_context, int fetch) {
       if (!flag && (FLAGS & USER) != 0) {
-          if (addr <= ((Pl << 10) + 01777)) {
-             *loc = (addr + (Rl << 10)) & RMASK;
+          if (addr <= Pl) {
+             *loc = (addr + Rl) & RMASK;
              return 1;
           }
           if (cpu_unit[0].flags & UNIT_TWOSEG &&
-             (addr & 0400000) != 0 && (addr <= ((Ph << 10) + 01777))) {
+             (addr & 0400000) != 0 && (addr <= Ph)) {
              if ((Pflag == 0) || (Pflag == 1 && wr == 0)) {
-                *loc = (addr + (Rh << 10)) & RMASK;
+                *loc = (addr + Rh) & RMASK;
                 return 1;
              }
           }
