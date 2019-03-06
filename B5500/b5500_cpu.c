@@ -266,6 +266,7 @@ t_stat              cpu_ex(t_value * vptr, t_addr addr, UNIT * uptr,
 t_stat              cpu_dep(t_value val, t_addr addr, UNIT * uptr,
                             int32 sw);
 t_stat              cpu_reset(DEVICE * dptr);
+t_stat              cpu_msize(UNIT *up, int32 v, CONST char *cp, void *dp);
 t_stat              cpu_set_size(UNIT * uptr, int32 val, CONST char *cptr,
                                  void *desc);
 t_stat              cpu_show_size(FILE * st, UNIT * uptr, int32 val,
@@ -299,6 +300,7 @@ REG                 cpu_reg[] = {
     {BRDATA(A, a_reg, 8,48,2), REG_FIT},
     {BRDATA(B, b_reg, 8,48,2), REG_FIT},
     {BRDATA(X, x_reg, 8,39,2), REG_FIT},
+    {BRDATA(Y, x_reg, 8,39,2), REG_FIT},
     {BRDATA(GH, gh_reg, 8,6,2)},
     {BRDATA(KV, kv_reg, 8,6,2)},
     {BRDATAD(MA, ma_reg, 8,15,2, "Memory address")},
@@ -319,8 +321,12 @@ REG                 cpu_reg[] = {
     {BRDATA(VARF, varf_reg, 2,1,2)},
     {BRDATA(HLTF, hltf, 2,1,2)},
     {ORDATAD(IAR, IAR, 15,      "Interrupt pending")},
-    {ORDATAD(TUS, iostatus, 32, "Perpherial ready status")},
+    {ORDATAD(TUS, iostatus, 32, "Perpherial ready status"), REG_RO},
     {FLDATA(HALT, HALT, 0)},
+    {FLDATA(P1RUN, P1_run, 0), REG_HRO},
+    {FLDATA(P2RUN, P2_run, 0), REG_HRO},
+    {DRDATA(IDLE_ENAB, sim_idle_enab, 4), REG_HRO},
+    {ORDATAD(RTC, RTC, 8, "Real Time Counter"), REG_HRO},
     {NULL}
 };
 
@@ -345,8 +351,8 @@ DEVICE              cpu_dev = {
     "CPU", cpu_unit, cpu_reg, cpu_mod,
     2, 8, 15, 1, 8, 48,
     &cpu_ex, &cpu_dep, &cpu_reset, NULL, NULL, NULL,
-    NULL, DEV_DEBUG, 0, dev_debug,
-    NULL, NULL, &cpu_help
+    NULL, DEV_DEBUG|DEV_DYNM, 0, dev_debug,
+    cpu_msize, NULL, &cpu_help
 };
 
 
@@ -3856,7 +3862,6 @@ cpu_ex(t_value * vptr, t_addr addr, UNIT * uptr, int32 sw)
         return SCPE_NXM;
     if (vptr != NULL)
         *vptr = (t_value)(M[addr] & (FLAG|FWORD));
-
     return SCPE_OK;
 }
 
@@ -3875,6 +3880,21 @@ t_stat
 cpu_show_size(FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
     fprintf(st, "%dK", MEMSIZE/1024);
+    return SCPE_OK;
+}
+
+t_stat
+cpu_msize(UNIT *uptr, int32 v, CONST char *cptr, void *dptr)
+{
+    int32 val;
+    if ((v < 0) || (v > MAXMEMSIZE))
+        return SCPE_ARG;
+    val = ((v / 4096) - 1) << UNIT_V_MSIZE;
+    cpu_unit[0].flags &= ~UNIT_MSIZE;
+    cpu_unit[0].flags |= val;
+    cpu_unit[1].flags &= ~UNIT_MSIZE;
+    cpu_unit[1].flags |= val;
+    MEMSIZE = v;
     return SCPE_OK;
 }
 
