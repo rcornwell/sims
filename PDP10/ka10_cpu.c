@@ -217,7 +217,9 @@ int32   qua_tps = 125000;
 int32   tmxr_poll = 10000;
 
 /* Physical address range for Rubin 10-11 interface. */
-#define T11RANGE(addr)  ((addr) >= 03000000)
+#define T11RANGE(addr)  ((addr) >= 03040000)
+/* Physical address range for auxiliary PDP-6. */
+#define AUXCPURANGE(addr)  ((addr) >= 03000000 && (addr) < 03040000)
 
 DEVICE *rh_devs[] = {
 #if (NUM_DEVS_RS > 0)
@@ -686,6 +688,7 @@ int opflags[] = {
 #if ITS
 #define QITS            (cpu_unit[0].flags & UNIT_ITSPAGE)
 #define QTEN11          (ten11_unit[0].flags & UNIT_ATT)
+#define QAUXCPU         (auxcpu_unit[0].flags & UNIT_ATT)
 #else
 #define QITS            0
 #endif
@@ -1682,6 +1685,13 @@ int Mem_read_its(int flag, int cur_context, int fetch) {
             }
             return 0;
         }
+        if (AUXCPURANGE(addr) && QAUXCPU) {
+            if (auxcpu_read (addr, &MB)) {
+                nxm_flag = 1;
+                return 1;
+            }
+            return 0;
+        }
         if (addr >= (int)MEMSIZE) {
             nxm_flag = 1;
             return 1;
@@ -1711,6 +1721,13 @@ int Mem_write_its(int flag, int cur_context) {
             return 1;
         if (T11RANGE(addr) && QTEN11) {
             if (ten11_write (addr, MB)) {
+                nxm_flag = 1;
+                return 1;
+            }
+            return 0;
+        }
+        if (AUXCPURANGE(addr) && QAUXCPU) {
+            if (auxcpu_write (addr, MB)) {
                 nxm_flag = 1;
                 return 1;
             }
