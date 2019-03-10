@@ -502,6 +502,7 @@ if (sw & SWMASK ('C')) {
    fputc('\'', of);
 } else if (sw & SWMASK ('M')) {
    i = 0;
+   l = 0;
    if ((inst & 0xC0) == 0xC0) {
        num = (uint32)(val[i++] << 8);
        num |= (uint32)val[i++];
