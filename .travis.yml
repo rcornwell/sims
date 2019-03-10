@@ -1,0 +1,14 @@
+os:
+  - linux
+#  - osx
+language: c
+dist: trusty
+sudo: required
+env:
+  - CPU=ka10 TYPE340=0
+  - CPU=ka10 TYPE340=1
+  - CPU=ki10 TYPE340=0
+install: sh -ex dependencies.sh install_linux
+script: make $CPU TYPE340=$TYPE340
+notifications:
+  email: lars@nocrew.org

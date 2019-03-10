@@ -155,6 +155,9 @@ DEVICE *sim_devices[] = {
 #if NUM_DEVS_TEN11 > 0
     &ten11_dev,
 #endif
+#if NUM_DEVS_AUXCPU > 0
+    &auxcpu_dev,
+#endif
     NULL
     };
 

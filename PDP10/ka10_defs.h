@@ -299,6 +299,7 @@ extern void restore_pi_hold();
 extern void set_pi_hold();
 extern UNIT     cpu_unit[];
 extern UNIT     ten11_unit[];
+extern UNIT     auxcpu_unit[];
 extern DEVICE   cpu_dev;
 extern DEVICE   cty_dev;
 extern DEVICE   mt_dev;
@@ -331,6 +332,7 @@ extern DEVICE   stk_dev;
 extern DEVICE   tk10_dev;
 extern DEVICE   mty_dev;
 extern DEVICE   ten11_dev;
+extern DEVICE   auxcpu_dev;
 extern DEVICE   wcnsls_dev;             /* MIT Spacewar Consoles */
 
 extern t_stat (*dev_tab[128])(uint32 dev, uint64 *data);
@@ -386,6 +388,8 @@ extern void ka10_lights_main (uint64);
 extern void ka10_lights_set_aux (int);
 extern void ka10_lights_clear_aux (int);
 
+int auxcpu_read (int addr, uint64 *);
+int auxcpu_write (int addr, uint64);
 
 /* I/O system parameters */
 #define NUM_DEVS_MT     1
@@ -407,6 +411,7 @@ extern void ka10_lights_clear_aux (int);
 #define NUM_DEVS_TK10   ITS
 #define NUM_DEVS_MTY    ITS
 #define NUM_DEVS_TEN11  ITS
+#define NUM_DEVS_AUXCPU ITS
 #define NUM_DEVS_DPY    USE_DISPLAY
 #define NUM_DEVS_WCNSLS USE_DISPLAY
 #define NUM_DEVS_IMP    1
