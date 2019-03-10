@@ -1675,7 +1675,7 @@ int Mem_read_its(int flag, int cur_context, int fetch) {
         sim_interval--;
         if (!page_lookup_its(AB, flag, &addr, 0, cur_context, fetch))
             return 1;
-        if (QTEN11 && T11RANGE(addr)) {
+        if (T11RANGE(addr) && QTEN11) {
             if (ten11_read (addr, &MB)) {
                 nxm_flag = 1;
                 return 1;
@@ -1709,7 +1709,7 @@ int Mem_write_its(int flag, int cur_context) {
         sim_interval--;
         if (!page_lookup_its(AB, flag, &addr, 1, cur_context, 0))
             return 1;
-        if (QTEN11 && T11RANGE(addr)) {
+        if (T11RANGE(addr) && QTEN11) {
             if (ten11_write (addr, MB)) {
                 nxm_flag = 1;
                 return 1;
