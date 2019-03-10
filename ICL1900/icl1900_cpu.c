@@ -2645,7 +2645,7 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
     int32               k, di, lnt;
     const char          *cptr = (const char *) desc;
     t_stat              r;
-    t_value             sim_eval;
+    t_value             v;
     struct InstHistory *h;
 
     if (hst_lnt == 0)
@@ -2668,8 +2668,8 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
             fprintf(st, " %07o %08o %08o %08o %08o %08o %o %o %o %02o ",
                     h->rc & M22 , h->ea, h->xr, h->ra, h->rb, h->rr,
                     h->c, h->v, h->e, h->mode);
-            sim_eval = h->op;
-            fprint_sym(st, h->rc & M22, &sim_eval, &cpu_unit[0], SWMASK('M'));
+            v = h->op;
+            fprint_sym(st, h->rc & M22, &v, &cpu_unit[0], SWMASK('M'));
             fputc('\n', st);    /* end line */
         }                       /* end else instruction */
     }                           /* end for */
