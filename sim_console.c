@@ -667,7 +667,7 @@ if (c >= 0) {                                           /* poll connect */
     TMLN *lp = rem->lp;
     char wru_name[8];
 
-    sim_activate_after(uptr+1, 1000000);                /* start data poll after 1 second */
+    sim_activate_after(rem_con_data_unit, 1000000);     /* start data poll after 1 second */
     lp->rcve = 1;                                       /* rcv enabled */
     rem->buf_ptr = 0;                                   /* start with empty command buffer */
     rem->single_mode = TRUE;                            /* start in single command mode */
@@ -1412,6 +1412,7 @@ for (i=(was_active_command ? sim_rem_cmd_active_line : 0);
             sim_is_running = FALSE;
             sim_rem_collect_all_registers ();
             sim_stop_timer_services ();
+            sim_flush_buffered_files ();
             if (rem->act == NULL) {
                 for (j=0; j < sim_rem_con_tmxr.lines; j++) {
                     TMLN *lpj = &sim_rem_con_tmxr.ldsc[j];
@@ -1437,6 +1438,7 @@ for (i=(was_active_command ? sim_rem_cmd_active_line : 0);
                     sim_is_running = FALSE;
                     sim_rem_collect_all_registers ();
                     sim_stop_timer_services ();
+                    sim_flush_buffered_files ();
                     stat = SCPE_STOP;
                     _sim_rem_message ("RUN", stat);
                     _sim_rem_log_out (lp);

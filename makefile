@@ -1192,7 +1192,8 @@ IBM360 = ${IBM360D}/ibm360_cpu.c ${IBM360D}/ibm360_sys.c \
 	${IBM360D}/ibm360_cdr.c ${IBM360D}/ibm360_cdp.c \
 	${IBM360D}/ibm360_mt.c ${IBM360D}/ibm360_lpr.c \
 	${IBM360D}/ibm360_dasd.c ${IBM360D}/ibm360_com.c
-IBM360_OPT = -I $(IBM360D) -DIBM360 -DUSE_SIM_CARD
+IBM360_OPT = -I $(IBM360D) -DIBM360 -DUSE_64BIT -DUSE_SIM_CARD
+IBM360_OPT32 = -I $(IBM360D) -DIBM360 -DUSE_SIM_CARD
 
 KA10D = PDP10
 KA10 = ${KA10D}/ka10_cpu.c ${KA10D}/ka10_sys.c ${KA10D}/ka10_df.c \
@@ -1225,9 +1226,8 @@ KI10 = ${KA10D}/ka10_cpu.c ${KA10D}/ka10_sys.c ${KA10D}/ka10_df.c \
 	${KA10D}/ka10_lp.c ${KA10D}/ka10_pt.c ${KA10D}/ka10_dc.c  \
 	${KA10D}/ka10_rp.c ${KA10D}/ka10_rc.c ${KA10D}/ka10_dt.c \
 	${KA10D}/ka10_dk.c ${KA10D}/ka10_cr.c ${KA10D}/ka10_cp.c \
-	${KA10D}/ka10_tu.c ${KA10D}/ka10_rs.c ${KA10D}/ka10_pd.c \
-	${KA10D}/ka10_imp.c
-KI10_OPT = -g -DKI=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD ${NETWORK_OPT}
+	${KA10D}/ka10_tu.c ${KA10D}/ka10_rs.c ${KA10D}/ka10_imp.c
+KI10_OPT = -DKI=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD ${NETWORK_OPT}
 ifneq ($(PANDA_LIGHTS),)
 # ONLY for Panda display.
 KI10_OPT += -DPANDA_LIGHTS
@@ -1856,7 +1856,7 @@ ATT3B2_OPT = -I ${ATT3B2D} -DUSE_INT64 -DUSE_ADDR64
 #
 # Build everything (not the unsupported/incomplete or experimental simulators)
 #
-ALL = b5500 ka10 ki10 i701 i704 i7010 i7070 i7080 i7090 ibm360 icl1900
+ALL = b5500 i701 i704 i7010 i7070 i7080 i7090 ka10 ki10 ibm360 ibm360_32 icl1900
 
 all : ${ALL}
 
@@ -1978,7 +1978,7 @@ pdp10-ki : ${BIN}pdp10-ki${EXE}
 
 ${BIN}pdp10-ki${EXE} : ${KI10} ${SIM}
 	${MKDIRBIN}
-	${CC} ${KA10} ${SIM} ${KI10_OPT} $(CC_OUTSPEC) ${LDFLAGS} ${KI10_LDFLAGS}
+	${CC} ${KI10} ${SIM} ${KI10_OPT} $(CC_OUTSPEC) ${LDFLAGS} ${KI10_LDFLAGS}
 ifeq ($(WIN32),)
 	cp ${BIN}pdp10-ki${EXE} ${BIN}ki10${EXE}
 else
@@ -2192,6 +2192,16 @@ ${BIN}ibm360${EXE}: ${IBM360} ${SIM}
 ifneq (,$(call find_test,${IBM360D},ibm360))
 	$@ $(call find_test,${IBM360D},ibm360) $(TEST_ARG)
 endif
+
+ibm360_32: $(BIN)ibm360_32$(EXE)
+
+${BIN}ibm360_32${EXE}: ${IBM360} ${SIM}
+	${MKDIRBIN}
+	${CC} ${IBM360} ${SIM} ${IBM360_OPT32} $(CC_OUTSPEC) ${LDFLAGS}
+ifneq (,$(call find_test,${IBM360D},ibm360))
+	$@ $(call find_test,${IBM360D},ibm360) $(TEST_ARG)
+endif
+
 
 icl1900: $(BIN)icl1900$(EXE)
 
