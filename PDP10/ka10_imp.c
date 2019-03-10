@@ -320,7 +320,8 @@ struct imp_packet {
 } imp_buffer[8];
 
 struct imp_map {
-    uint16            port;                    /* Port to fix */
+    uint16            sport;                   /* Port to fix */
+    uint16            dport;                   /* Port to fix */
     uint16            cls_tim;                 /* Close timer */
     uint32            adj;                     /* Amount to adjust */
     uint32            lseq;                    /* Sequence number last adjusted */
@@ -713,7 +714,8 @@ imp_timer_task(struct imp_device *imp)
     for (n = 0; n < 64; n++) {
         if (imp->port_map[n].cls_tim > 0) {
             if (--imp->port_map[n].cls_tim == 0) {
-                imp->port_map[n].port = 0;
+                imp->port_map[n].dport = 0;
+                imp->port_map[n].sport = 0;
                 imp->port_map[n].adj = 0;
             }
         }
@@ -750,7 +752,7 @@ imp_packet_in(struct imp_device *imp)
    int                     type;
    int                     n;
    int                     pad;
-//int i;
+int i;
    if (eth_read (&imp_data.etherface, &read_buffer, NULL) <= 0)
        return;
    hdr = (struct imp_eth_hdr *)(&read_buffer.msg[0]);
@@ -811,21 +813,28 @@ imp_packet_in(struct imp_device *imp)
                /* If TCP packet update the TCP checksum */
                if (ip_hdr->ip_p == TCP_PROTO) {
                    struct tcp *tcp_hdr = (struct tcp *)payload;
-                   uint16       port = ntohs(tcp_hdr->tcp_dport);
+                   uint16       dport = ntohs(tcp_hdr->tcp_dport);
+                   uint16       sport = ntohs(tcp_hdr->tcp_sport);
+                   int          thl = ((ntohs(tcp_hdr->flags) >> 12) & 0xf) * 4;
+                   int          hl = (ip_hdr->ip_v_hl & 0xf) * 4;
+                   uint8       *tcp_payload = &imp->rbuffer[
+                            sizeof(struct imp_eth_hdr) + hl + thl];
                    checksumadjust((uint8 *)&tcp_hdr->chksum,
                               (uint8 *)(&ip_hdr->ip_dst), sizeof(in_addr_t),
                               (uint8 *)(&imp_data.hostip), sizeof(in_addr_t));
                    if ((ntohs(tcp_hdr->flags) & 0x10) != 0) {
-//fprintf(stderr, "ACK %x\r\n", port);
+//fprintf(stderr, "ACK %d %d\r\n", sport, dport);
                        for (n = 0; n < 64; n++) {
-                           if (imp->port_map[n].port == port) {
+                           if (imp->port_map[n].sport == sport &&
+                               imp->port_map[n].dport == dport) {
                                /* Check if SYN */
                                if (ntohs(tcp_hdr->flags) & 02) {
-                                   imp->port_map[n].port = 0;
+                                   imp->port_map[n].sport = 0;
+                                   imp->port_map[n].dport = 0;
                                    imp->port_map[n].adj = 0;
                                } else {
                                    uint32   new_seq = ntohl(tcp_hdr->ack);
-//fprintf(stderr, "Adjusting sequence %x %d %x\r\n", port, imp->port_map[i].adj, new_seq);
+//fprintf(stderr, "Adjusting sequence %x %d %x\r\n", sport, imp->port_map[n].adj, new_seq);
                                    if (new_seq > imp->port_map[n].lseq) {
                                        new_seq = htonl(new_seq - imp->port_map[n].adj);
                                        checksumadjust((uint8 *)&tcp_hdr->chksum,
@@ -833,13 +842,85 @@ imp_packet_in(struct imp_device *imp)
                                                (uint8 *)(&new_seq), 4);
                                        tcp_hdr->ack = new_seq;
                                    }
-//fprintf(stderr, "Adjusting sequence %x %d %x\r\n", port, imp->port_map[i].adj, new_seq);
+//fprintf(stderr, "Adjusting sequence %x %d %x\r\n", sport, imp->port_map[n].adj, new_seq);
                                }
                                if (ntohs(tcp_hdr->flags) & 01)
                                    imp->port_map[n].cls_tim = 100;
                                break;
                            }
                        }
+                    }
+                    /* Check if recieving to FTP */
+                    if (sport == 21 && strncmp(&tcp_payload[0], "PORT ", 5) == 0) {
+                        /* We need to translate the IP address to new port number. */
+                        int     l = ntohs(ip_hdr->ip_len) - thl - hl;
+                        uint32  nip = ntohl(imp->hostip);
+                        uint16  len;
+                        int     nlen;
+                        int     i;
+                        uint8   port_buffer[100];
+                        struct udp_hdr     udp_hdr;
+//    fprintf(stderr, "pktx Len=%d %d %d %d: ", read_buffer.len, hl, thl, l);
+//    for (i = sizeof(struct imp_eth_hdr); i < read_buffer.len; i++)
+//        fprintf(stderr, "%02x ", imp->rbuffer[i]);
+//    fprintf(stderr, "\r\n");
+//fprintf(stderr, "Port: %d %s\r\n", l, tcp_payload);
+                       /* Count out 4 commas */
+                       for (i = nlen = 0; i < l && nlen < 4; i++) {
+                          if (tcp_payload[i] == ',')
+                             nlen++;
+                       }
+                       nlen = sprintf(port_buffer, "PORT %d,%d,%d,%d,",
+                            (nip >> 24) & 0xFF, (nip >> 16) & 0xFF,
+                            (nip >> 8) & 0xFF, nip&0xff);
+                       /* Copy over rest of string */
+                       while(i < l) {
+                           port_buffer[nlen++] = tcp_payload[i++];
+                       }
+                       port_buffer[nlen] = '\0';
+                       memcpy(tcp_payload, port_buffer, nlen);
+                       /* Check if we need to update the sequence numbers */
+                       if (nlen != l && (ntohs(tcp_hdr->flags) & 02) == 0) {
+                           int n = -1;
+                           /* See if we need to change the sequence number */
+                           for (i = 0; i < 64; i++) {
+                               if (imp->port_map[i].sport == sport &&
+                                   imp->port_map[i].dport == dport) {
+                                   n = i;
+                                   break;
+                               }
+                               if (n < 0 && imp->port_map[i].dport == 0)
+                                   n = 0;
+                           }
+                           if (n >= 0) {
+//fprintf(stderr, "old sequence %x %d\r\n", dport, imp->port_map[n].adj);
+                               imp->port_map[n].dport = dport;
+                               imp->port_map[n].sport = sport;
+                               imp->port_map[n].adj += nlen - l;
+                               imp->port_map[n].cls_tim = 0;
+                               imp->port_map[n].lseq = ntohl(tcp_hdr->seq);
+//fprintf(stderr, "Adjusting sequence %x %d\r\n", dport, imp->port_map[n].adj);
+                           }
+                       }
+                       /* Now we need to update the checksums */
+                       tcp_hdr->chksum = 0;
+                       ip_hdr->ip_len = htons(nlen + thl + hl);
+                       ip_checksum((uint8 *)&tcp_hdr->chksum, (uint8 *)tcp_hdr,
+                               nlen + thl);
+                       udp_hdr.ip_src = ip_hdr->ip_src;
+                       udp_hdr.ip_dst = imp->hostip;
+                       udp_hdr.zero = 0;
+                       udp_hdr.proto = TCP_PROTO;
+                       udp_hdr.hlen = htons(nlen + thl);
+                       checksumadjust((uint8 *)&tcp_hdr->chksum, (uint8 *)(&udp_hdr), 0,
+                            (uint8 *)(&udp_hdr), sizeof(udp_hdr));
+//fprintf(stderr, "Port: %d %s\r\n", nlen, tcp_payload);
+                       ip_hdr->ip_sum = 0;
+                       ip_checksum((uint8 *)(&ip_hdr->ip_sum), (uint8 *)ip_hdr, 20);
+//    fprintf(stderr, "pkty Len=%d %d %d %d: ", read_buffer.len, hl, thl, l);
+//    for (i = sizeof(struct imp_eth_hdr); i < read_buffer.len; i++)
+//        fprintf(stderr, "%02x ", imp->rbuffer[i]);
+//    fprintf(stderr, "\r\n");
                    }
                /* Check if UDP */
                } else if (ip_hdr->ip_p == UDP_PROTO) {
@@ -978,7 +1059,8 @@ imp_packet_out(struct imp_device *imp, ETH_PACK *packet) {
        if (pkt->iphdr.ip_p == TCP_PROTO) {
            struct tcp  *tcp_hdr = (struct tcp *)payload;
            int          thl = ((ntohs(tcp_hdr->flags) >> 12) & 0xf) * 4;
-           uint16       port = ntohs(tcp_hdr->tcp_sport);
+           uint16       sport = ntohs(tcp_hdr->tcp_sport);
+           uint16       dport = ntohs(tcp_hdr->tcp_dport);
            uint8       *tcp_payload = &packet->msg[
                     sizeof(struct imp_eth_hdr) + hl + thl];
            /* Update pseudo header checksum */
@@ -987,10 +1069,12 @@ imp_packet_out(struct imp_device *imp, ETH_PACK *packet) {
                        (uint8 *)(&imp->ip), sizeof(in_addr_t));
            /* See if we need to change the sequence number */
            for (i = 0; i < 64; i++) {
-               if (imp->port_map[i].port == port) {
+               if (imp->port_map[i].sport == sport && 
+                   imp->port_map[i].dport == dport) {
                    /* Check if SYN */
                    if (ntohs(tcp_hdr->flags) & 02) {
-                       imp->port_map[i].port = 0;
+                       imp->port_map[i].sport = 0;
+                       imp->port_map[i].dport = 0;
                        imp->port_map[i].adj = 0;
                    } else {
                        uint32   new_seq = ntohl(tcp_hdr->seq);
@@ -1009,8 +1093,7 @@ imp_packet_out(struct imp_device *imp, ETH_PACK *packet) {
                }
            }
            /* Check if sending to FTP */
-           if (ntohs(tcp_hdr->tcp_dport) == 21 &&
-                   strncmp(&tcp_payload[0], "PORT ", 5) == 0) {
+           if (dport == 21 && strncmp(&tcp_payload[0], "PORT ", 5) == 0) {
                /* We need to translate the IP address to new port number. */
                int     l = ntohs(pkt->iphdr.ip_len) - thl - hl;
                uint32  nip = ntohl(imp->ip);
@@ -1042,20 +1125,22 @@ imp_packet_out(struct imp_device *imp, ETH_PACK *packet) {
                    int n = -1;
                    /* See if we need to change the sequence number */
                    for (i = 0; i < 64; i++) {
-                       if (imp->port_map[i].port == port) {
+                       if (imp->port_map[i].sport == sport &&
+                           imp->port_map[i].dport == dport) {
                            n = i;
                            break;
                        }
-                       if (n < 0 && imp->port_map[i].port == 0)
+                       if (n < 0 && imp->port_map[i].dport == 0)
                            n = 0;
                    }
                    if (n >= 0) {
-//fprintf(stderr, "old sequence %x %d\r\n", port, imp->port_map[n].adj);
-                       imp->port_map[n].port = port;
+//fprintf(stderr, "old sequence %x %d\r\n", sport, imp->port_map[n].adj);
+                       imp->port_map[n].dport = dport;
+                       imp->port_map[n].sport = sport;
                        imp->port_map[n].adj += nlen - l;
                        imp->port_map[n].cls_tim = 0;
                        imp->port_map[n].lseq = ntohl(tcp_hdr->seq);
-//fprintf(stderr, "Adjusting sequence %x %d\r\n", port, imp->port_map[n].adj);
+//fprintf(stderr, "Adjusting sequence %x %d\r\n", sport, imp->port_map[n].adj);
                    }
                }
                /* Now we need to update the checksums */
