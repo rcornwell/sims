@@ -130,6 +130,25 @@ uint32       tlb[256];             /* Translation look aside buffer */
 #define NMASK       0x00f00000     /* Normalize mask */
 #define SNMASK      0x0f000000     /* Short normal mask */
 
+#ifdef USE_64BIT
+#define MSIGNL      0x8000000000000000LL
+#define MMASKL      0x00ffffff00000000LL
+#define CMASKL      0x1000000000000000LL
+#define EMASKL      0x7f00000000000000LL
+#define XMASKL      0x0fffffffffffffffLL
+#define NMASKL      0x00f0000000000000LL
+#define UMASKL      0x0ffffffffffffff0LL
+#define SNMASKL     0x0f00000000000000LL
+#define LDDBL(r,x)  x = (((t_uint64)regs[r]) << 32) | ((t_uint64)regs[r|1]); \
+                    if (hst_lnt) { hst[hst_p].src1 = ((x) >> 32);  \
+                    hst[hst_p].src2 = (x) & FMASK; }
+#define STDBL(r,x)   regs[r|1] = (uint32)((x) & FMASK); regs[r] = (uint32)(((x) >> 32) & FMASK)
+#else
+#define LDDBLx(r,x)  x = regs[r]; x##h = regs[r|1]; \
+                    if (hst_lnt) { hst[hst_p].src1 = x; hst[hst_p].src2 = x##h ; }
+#define STDBLx(r,x)   regs[r|1] = x##h; regs[r] = x;
+#endif
+
 #define R1(x)   (((x)>>4) & 0xf)
 #define R2(x)   ((x) & 0xf)
 #define B1(x)   (((x) >> 12) & 0xf)
@@ -767,8 +786,11 @@ sim_instr(void)
     uint16          irq;
     int             e1, e2;
     int             temp, temp2;
-    t_uint64        t64;
-    t_uint64        t64a;
+#ifdef USE_64BIT
+    t_uint64        src1L;
+    t_uint64        src2L;
+    t_uint64        destL;
+#endif
     uint16          ops[3];
 //double    a, b, c;
 
@@ -848,10 +870,12 @@ wait_loop:
              hst[hst_p].pc = PC | HIST_PC;
         }
 
-        sim_debug(DEBUG_INST, &cpu_dev, "PSW=%08x %08x  ",
-            ((uint32)(ext_en) << 24) | (((uint32)sysmsk & 0xfe00) << 16) |
-            (((uint32)st_key) << 16) | (((uint32)flags) << 16) | ((uint32)irqcode),
-             (((uint32)ilc) << 30) | (((uint32)cc) << 28) | (((uint32)pmsk) << 24) | PC);
+        if (sim_deb && (cpu_dev.dctrl & DEBUG_INST)) {
+            sim_debug(DEBUG_INST, &cpu_dev, "PSW=%08x %08x  ",
+                ((uint32)(ext_en) << 24) | (((uint32)sysmsk & 0xfe00) << 16) |
+                (((uint32)st_key) << 16) | (((uint32)flags) << 16) | ((uint32)irqcode),
+                 (((uint32)ilc) << 30) | (((uint32)cc) << 28) | (((uint32)pmsk) << 24) | PC);
+        }
         ilc = 0;
         if (ReadHalf(PC, &dest))
             goto supress;
@@ -896,6 +920,7 @@ wait_loop:
                sim_debug(DEBUG_INST, &cpu_dev, "        ");
            sim_debug(DEBUG_INST, &cpu_dev, "    ");
            fprint_inst(sim_deb, ops);
+           sim_debug(DEBUG_INST, &cpu_dev, "\n");
         }
 
         /* Add in history here */
@@ -988,7 +1013,6 @@ opr:
              hst[hst_p].src1 = src1;
              hst[hst_p].src2 = src2;
         }
-        sim_debug(DEBUG_INST, &cpu_dev, "\n");
 
         /* Preform opcode */
         switch (op) {
@@ -1221,10 +1245,8 @@ set_cc:
         case OP_AR:
         case OP_AH:
                 dest = src1 + src2;
-                src1 = (src1 & MSIGN) != 0;
-                src2 = (src2 & MSIGN) != 0;
-                if ((src1 && src2 && (dest & MSIGN) == 0) ||
-                    (!src1 && !src2 && (dest & MSIGN) != 0)) {
+                if ((((src1 & src2 & ~dest) |
+                       (~src1 & ~src2 & dest)) & MSIGN) != 0) {
 set_cc3:
                     regs[reg1] = dest;
                     cc = 3;
@@ -1278,30 +1300,41 @@ set_cc3:
                     fill ^= 1;
                     src2 = -src2;
                 }
-                dest = 0;
+#ifdef USE_64BIT
+                src1L = ((t_uint64)src1) * ((t_uint64)src2);
+                if (fill) 
+                    src1L = -src1L;
+                if (op != OP_MH) {
+                    STDBL(reg1, src1L);
+                } else {
+                    regs[reg1] = (uint32)(src1L & FMASK);
+                }
+#else
+                src1h = 0;
                 if (src1 != 0 || src2 != 0) {
                     for (reg = 32; reg > 0; reg--) {
                          if (src1 & 1)
-                            dest += src2;
+                            src1h += src2;
                          src1 >>= 1;
-                         if (dest & 1)
+                         if (src1h & 1)
                              src1 |= MSIGN;
-                         dest >>= 1;
+                         src1h >>= 1;
                     }
                 }
                 if (fill) {
-                    dest ^= 0xffffffff;
-                    src1 ^= 0xffffffff;
-                    if (src1 == 0xfffffff)
-                        dest ++;
+                    src1h ^= FMASK;
+                    src1 ^= FMASK;
+                    if (src1 == FMASK)
+                        src1h ++;
                     src1++;
                 }
                 if (op != OP_MH) {
                     regs[reg1|1] = src1;
-                    regs[reg1] = dest;
+                    regs[reg1] = src1h;
                 } else {
                     regs[reg1] = src1;
                 }
+#endif
                 break;
 
         case OP_D:
@@ -1310,69 +1343,78 @@ set_cc3:
                    storepsw(OPPSW, IRC_SPEC);
                    break;
                 }
-                fill = 0;
-                dest = src2;
-                src2 = regs[reg1|1];
-                src1 = regs[reg1];
-
-                if (dest == 0) {
+                if (src2 == 0) {
                     storepsw(OPPSW, IRC_FIXDIV);
                     break;
                 }
-                t64 = (((t_uint64)src1) << 32) | ((t_uint64)src2);
+                fill = 0;
+#ifdef USE_64BIT
+                LDDBL(reg1, src1L);
+
+                if (src1L & MSIGNL) {
+                    fill = 3;
+                    src1L = -src1L;
+                }
+                if (src2 & MSIGN) {
+                    fill ^= 1;
+                    src2 = -src2;
+                }
+                src2L = src1L % (t_uint64)src2;
+                src1L = src1L / (t_uint64)src2;
+
+                /* Check for overflow */
+                if ((src1L & 0xFFFFFFFF80000000LL) != 0) {
+                    storepsw(OPPSW, IRC_FIXDIV);
+                    break;
+                }
+
+                src1 = (uint32)(src2L & FMASK);
+                dest = (uint32)(src1L & FMASK);
+#else
+                LDDBLx(reg1, src1);
                 if (src1 & MSIGN) {
                     fill = 3;
-                    t64 = -t64;
+                    src1h ^= FMASK;
+                    src1 ^= FMASK;
+                    if (src1h == FMASK)
+                       src1 ++;
+                    src1h++;
                 }
-                if (dest & MSIGN) {
+                if (src2 & MSIGN) {
                     fill ^= 1;
-                    dest = -dest;
+                    src2 = -src2;
                 }
-                t64a = t64 % (t_uint64)dest;
-                t64 = t64 / (t_uint64)dest;
-                if ((t64 & 0xffffffff80000000) != 0) {
+                dest = 0;
+                for (reg = 0; reg < 32; reg++) {
+                    /* Shift left by one */
+                    src1 <<= 1;
+                    if (src1h & MSIGN)
+                        src1 |= 1;
+                    src1h <<= 1;
+                    /* Subtract remainder from divisor */
+                    desth = src1 - src2;
+
+                    /* Shift quotent left one bit */
+                    dest <<= 1;
+
+                    /* If remainder larger then divisor replace */
+                    if ((desth & MSIGN) == 0) {
+                        src1 = desth;
+                        dest |= 1;
+                    }
+                }
+                /* Check for overflow */
+                if ((dest & MSIGN) != 0) {
                     storepsw(OPPSW, IRC_FIXDIV);
                     break;
-                }
-
-                src1 = (uint32)t64;
-                src2 = (uint32)t64a;
-#if 0
-                if (src2 & MSIGN) {
-                    fill = 3;
-                    src2 ^= 0xffffffff;
-                    src1 ^= 0xffffffff;
-                    if (src1 == 0xfffffff)
-                       src2 ++;
-                    src1++;
-                }
-                if (dest & MSIGN) {
-                    fill ^= 1;
-                    dest = -dest;
-                }
-                src2 <<= 1;
-                if (src1 & MSIGN)
-                   src2 |= 1;
-                src1 <<= 1;
-                for (reg = 0; reg < 32; reg++) {
-                    int f = 0;
-                    if (src1 < dest) {
-                       src1 = src1 - dest;
-                       f = 1;
-                    }
-                    src2 <<= 1;
-                    src2 |= f;
-                    if (src1 & MSIGN)
-                       src2 |= 1;
-                    src1 <<= 1;
                 }
 #endif
                 if (fill & 1)
-                    src1 = -src1;
+                    dest = -dest;
                 if (fill & 2)
-                    src2 = -src2;
-                regs[reg1] = src2;
-                regs[reg1|1] = src1;
+                    src1 = -src1;
+                regs[reg1] = src1;
+                regs[reg1|1] = dest;
                 break;
 
         case OP_NR:
@@ -1530,13 +1572,13 @@ char_save:
                 if (reg & 1) {
                    storepsw(OPPSW, IRC_SPEC);
                 } else {
-                   src1 = regs[reg1];
-                   src1h = regs[reg1|1];
-                   if (hst_lnt) {
-                        hst[hst_p].src1 = src1;
-                        hst[hst_p].src2 = src1h;
-                   }
                    addr1 &= 0x3f;
+#ifdef USE_64BIT
+                   LDDBL(reg1, src1L);
+                   src1L >>= addr1;
+                   STDBL(reg1, src1L);
+#else
+                   LDDBLx(reg1, src1);
                    while(addr1 > 0) {
                        src1h >>= 1;
                        if (src1 & 1)
@@ -1544,9 +1586,9 @@ char_save:
                        src1 >>= 1;
                        addr1--;
                    }
-                   regs[reg1|1] = src1h;
-                   regs[reg1] = src1;
-                   dest = src1;
+                   STDBLx(reg1, src1);
+#endif
+                   dest = regs[reg1];
                 }
                 break;
 
@@ -1554,13 +1596,13 @@ char_save:
                 if (reg & 1)
                    storepsw(OPPSW, IRC_SPEC);
                 else {
-                   src1 = regs[reg1];
-                   src1h = regs[reg1|1];
-                   if (hst_lnt) {
-                        hst[hst_p].src1 = src1;
-                        hst[hst_p].src2 = src1h;
-                   }
                    addr1 &= 0x3f;
+#ifdef USE_64BIT
+                   LDDBL(reg1, src1L);
+                   src1L <<= addr1;
+                   STDBL(reg1, src1L);
+#else
+                   LDDBLx(reg1, src1);
                    while(addr1 > 0) {
                        src1 <<= 1;
                        if (src1h & MSIGN)
@@ -1568,9 +1610,9 @@ char_save:
                        src1h <<= 1;
                        addr1--;
                    }
-                   regs[reg1|1] = src1h;
-                   regs[reg1] = src1;
-                   dest = src1;
+                   STDBLx(reg1, src1);
+#endif
+                   dest = regs[reg1];
                 }
                 break;
 
@@ -1578,15 +1620,24 @@ char_save:
                 if (reg & 1)
                    storepsw(OPPSW, IRC_SPEC);
                 else {
-                   src1 = regs[reg1];
-                   src1h = regs[reg1|1];
-                   if (hst_lnt) {
-                        hst[hst_p].src1 = src1;
-                        hst[hst_p].src2 = src1h;
-                   }
-                   dest = src1 & MSIGN;
                    addr1 &= 0x3f;
                    cc = 0;
+#ifdef USE_64BIT
+                   LDDBL(reg1, src1L);
+                   src2L = src1L & MSIGNL;
+                   while (addr1 > 0) {
+                       src1L <<= 1;
+                       if (src2L != (src1L & MSIGNL))
+                           cc = 3;
+                       addr1--;
+                   }
+save_dbl:
+                   STDBL(reg1, src1L);
+                   if (cc != 3 && src1L != 0)
+                      cc = (src1L & MSIGNL) ? 1 : 2;
+#else
+                   LDDBLx(reg1, src1);
+                   dest = src1 & MSIGN;
                    while(addr1 > 0) {
                        src1 <<= 1;
                        if ((src1 & MSIGN) != dest)
@@ -1597,13 +1648,13 @@ char_save:
                        addr1--;
                    }
 save_dbl:
-                   regs[reg1|1] = src1h;
-                   regs[reg1] = src1;
-                   dest = src1;
+                   STDBLx(reg1, src1);
                    if (cc != 3 && (src1 | src1h) != 0)
                       cc = (src1 & MSIGN) ? 1 : 2;
+#endif
                    if (cc == 3 && (pmsk & FIXOVR))
                       storepsw(OPPSW, IRC_FIXOVR);
+                   dest = regs[reg1];
                 }
                 break;
 
@@ -1611,11 +1662,19 @@ save_dbl:
                 if (reg & 1)
                    storepsw(OPPSW, IRC_SPEC);
                 else {
-                   src1 = regs[reg1];
-                   src1h = regs[reg1|1];
-                   dest = src1 & MSIGN;
                    addr1 &= 0x3f;
                    cc = 0;
+#ifdef USE_64BIT
+                   LDDBL(reg1, src1L);
+                   src2L = src1L & MSIGNL;
+                   while (addr1 > 0) {
+                       src1L >>= 1;
+                       src1L |= src2L;
+                       addr1--;
+                   }
+#else
+                   LDDBLx(reg1, src1);
+                   dest = src1 & MSIGN;
                    while(addr1 > 0) {
                        src1h >>= 1;
                        if (src1 & 1)
@@ -1624,6 +1683,7 @@ save_dbl:
                        src1 |= dest;
                        addr1--;
                    }
+#endif
                    goto save_dbl;
                 }
                 break;
@@ -1974,6 +2034,7 @@ save_dbl:
                 };
                 break;
 
+                /* Move with offset, packed odd shift */
         case OP_MVO:
                 reg &= 0xf;
                 addr2 += reg;
@@ -2003,6 +2064,7 @@ save_dbl:
                 };
                 break;
 
+                /* Convert packed decimal to binary */
         case OP_CVB:
                 if (ReadFull(addr1, &src1))
                     break;
@@ -2013,15 +2075,11 @@ save_dbl:
                     storepsw(OPPSW, IRC_DATA);
                     break;
                 }
-                if (fill == 0xB || fill == 0xD)
-                    fill = 1;
-                else
-                    fill = 0;
                 dest = 0;
                 /* Convert upper first */
                 for(temp = 28; temp >= 0; temp-=4) {
                     int d = (src1 >> temp) & 0xf;
-                    if (d > 0xA) {
+                    if (d >= 0xA) {
                         storepsw(OPPSW, IRC_DATA);
                         break;
                     }
@@ -2030,32 +2088,35 @@ save_dbl:
                 /* Convert lower */
                 for(temp = 28; temp > 0; temp-=4) {
                     int d = (src1h >> temp) & 0xf;
-                    if (d > 0xA) {
+                    if (d >= 0xA) {
                         storepsw(OPPSW, IRC_DATA);
                         break;
                     }
                     dest = (dest * 10) + d;
                 }
+                /* Check if too big */
                 if (dest & MSIGN) {
                     storepsw(OPPSW, IRC_FIXDIV);
                     break;
                 }
-                if (fill)
+                /* Twos compliment if needed */
+                if (fill == 0xB || fill == 0xD)
                     dest = -dest;
                 regs[reg1] = dest;
                 break;
 
+                /* Convert binary to packed decimal */
         case OP_CVD:
                 dest = regs[reg1];
                 src1 = 0;
                 src1h = 0;
-                if (dest & MSIGN) {
+                if (dest & MSIGN) {  /* Save sign */
                     dest = -dest;
                     fill = 1;
                 } else
                     fill = 0;
                 temp = 4;
-                while (dest != 0) {
+                while (dest != 0) {  /* Convert digits until zero */
                     int d = dest % 10;
                     dest /= 10;
                     if (temp > 32)
@@ -2064,7 +2125,7 @@ save_dbl:
                         src1h |= (d << temp);
                     temp += 4;
                 }
-                if (fill) {
+                if (fill) {   /* Set sign */
                     src1h |= ((flags & ASCII)? 0xb : 0xd);
                 } else {
                     src1h |= ((flags & ASCII)? 0xa : 0xc);
@@ -2075,6 +2136,7 @@ save_dbl:
                 WriteFull(addr1+4, src1h);
                 break;
 
+                /* Edit string, mark saves address of significant digit */
         case OP_ED:
         case OP_EDMK:
                 if (ReadByte(addr1, &src1))
@@ -2159,6 +2221,7 @@ save_dbl:
                     cc = 1;
                 break;
 
+                /* Execute instruction at address with R1 modify */
         case OP_EX:
                 if (addr1 & 1) {
                    storepsw(OPPSW, IRC_SPEC);
@@ -2207,10 +2270,14 @@ save_dbl:
                 break;
 
 
-                     /* Floating Half register */
+                /* Floating Half register */
         case OP_HDR:
         case OP_HER:
 //fprintf(stderr, "FP HD Op=%0x src2=%08x %08x %.12e\n\r", op, src2, src2h, cnvt_float(src2, src2h));
+                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
+                    storepsw(OPPSW, IRC_OPR);
+                    goto supress;
+                }
                 /* Split number apart */
                 e1 = (src2 & EMASK) >> 24;
                 dest = src2 & MSIGN;  /* Save sign */
@@ -2242,12 +2309,18 @@ save_dbl:
                 src2 |= ((e1 << 24) & EMASK) | dest;
 //fprintf(stderr, "FP HD= Op=%0x src2=%08x %08x %.12e\n\r", op, src2, src2h, cnvt_float(src2, src2h));
 
+                /* Fall through */
+
                 /* Floating Load register */
         case OP_LER:
         case OP_LDR:
         case OP_LE:
         case OP_LD:
 //fprintf(stderr, "FP LD Op=%0x src1=%08x %08x\n\r", op, src1, src1h);
+                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
+                    storepsw(OPPSW, IRC_OPR);
+                    goto supress;
+                }
                 if ((op & 0x10) == 0)
                     fpregs[reg1|1] = src2h;
                 fpregs[reg1] = src2;
@@ -2263,7 +2336,11 @@ save_dbl:
         case OP_LTER:
         case OP_LCER:
 //fprintf(stderr, "FP LD Op=%0x src1=%08x %08x\n\r", op, src1, src1h);
-                if ((op & 0x2) == 0)  /* LP, LT */
+                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
+                    storepsw(OPPSW, IRC_OPR);
+                    goto supress;
+                }
+                if ((op & 0x2) == 0)  /* LP, LN */
                     src2 &= ~MSIGN;
                 if ((op & 0x1))       /* LN, LC */
                     src2 ^= MSIGN;
@@ -2280,12 +2357,20 @@ save_dbl:
 
                   /* Floating Store register */
         case OP_STD:
+                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
+                    storepsw(OPPSW, IRC_OPR);
+                    goto supress;
+                }
                 if (WriteFull(addr1 + 4, src1h))
                     break;
                 /* Fall through */
 
         case OP_STE:
 //fprintf(stderr, "FP STD Op=%0x src1=%08x %08x\n\r", op, src1, src1h);
+                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
+                    storepsw(OPPSW, IRC_OPR);
+                    goto supress;
+                }
                 WriteFull(addr1, src1);
                 break;
 
@@ -2529,9 +2614,65 @@ save_dbl:
                    fill |= 2;
                 if (src2 & MSIGN)
                    fill |= 1;
-                src2 &= MMASK;
                 src1 &= MMASK;
+                src2 &= MMASK;
                 temp = e1 - e2;
+#ifdef USE_64BIT
+                src1L = (((t_uint64)(src1)) << 36) | (((t_uint64)src1h) << 4);
+                src2L = (((t_uint64)(src2)) << 36) | (((t_uint64)src2h) << 4);
+                if (temp > 0) {
+                    if (temp > 15) {
+                        src2L  = 0;
+                    } else {
+                        /* Shift src2 right if src1 larger expo - expo */
+                        src2L >>= 4 * temp;
+//                        e2 += temp;
+//fprintf(stderr, "FP =2 Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
+                    }
+                } else if (temp < 0) {
+                    if (temp < -15) {
+                        src1L = 0;
+                    } else {
+                    /* Shift src1 right if src2 larger expo - expo */
+                        src1L >>= 4 * -temp;
+//fprintf(stderr, "FP =1 Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
+                    }
+                    e1 = e2;
+                }
+
+                /* Exponents should be equal now. */
+
+                /* Add results */
+                if (fill == 3 || fill == 0) {
+                     /* Different signs do subtract */
+                     src2L ^= XMASKL;
+                     src2L++;
+                     destL = src1L + src2L;
+                     if (destL & CMASKL)
+                         destL &= XMASKL;
+                     else {
+                         fill ^= 2;
+                         destL ^= XMASKL;
+                         destL ++;
+                     }
+                } else {
+                     destL = src1L + src2L;
+                }
+                /* If overflow, shift right 4 bits */
+//fprintf(stderr, "FP +n res=%08x %08x\n\r", dest, desth);
+                if (destL & CMASKL) {
+                    destL >>= 4;
+                }
+                cc = 0;
+                if (destL != 0)
+                     cc = (fill & 2) ? 1 : 2;
+#else
+                /* Create guard digit by shifting left 4 bits */
+                src1 = (src1 << 4) | ((src1h >> 28) & 0xf);
+                src2 = (src2 << 4) | ((src2h >> 28) & 0xf);
+                src1h <<= 4;
+                src2h <<= 4;
+
                 if (temp > 0) {
                     if (temp > 15) {
                         src2 = src2h = 0;
@@ -2541,71 +2682,57 @@ save_dbl:
                             src2h >>= 4;
                             src2h |= (src2 & 0xf) << 28;
                             src2 >>= 4;
-                            e2 ++;
+//                            e2 ++;
 //fprintf(stderr, "FP =2 Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
                         }
                     }
                 } else if (temp < 0) {
                     if (temp < -15) {
                         src1 = src1h = 0;
-                        e1 = e2;
                     } else {
                     /* Shift src1 right if src2 larger expo - expo */
                         while (temp++ != 0) {
                             src1h >>= 4;
                             src1h |= (src1 & 0xf) << 28;
                             src1 >>= 4;
-                            e1 ++;
 //fprintf(stderr, "FP =1 Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
                         }
                     }
+                    e1 = e2;
                 }
 
                 /* Exponents should be equal now. */
-
-                /* Create guard digit by shifting left 4 bits */
-                src1 = ((src1 & MMASK) << 4) | ((src1h >> 28) & 0xf);
-                src2 = ((src2 & MMASK) << 4) | ((src2h >> 28) & 0xf);
-                src1h &= XMASK;
-                src2h &= XMASK;
-
 
                 /* Add results */
                 if (fill == 3 || fill == 0) {
                      /* Different signs do subtract */
                      src2 ^= XMASK;
-                     src2h ^= XMASK;
-                     src2h++;
-                     if (src2h & CMASK) {
+                     src2h ^= FMASK;
+                     if (src2h == FMASK) {
                         src2++;
-                        src2h &= XMASK;
                      }
+                     src2h++;
                      desth = src1h + src2h;
                      dest = src1 + src2;
-                     if (desth & CMASK) {
+                     if (desth < src2h)
                          dest ++;
-                         desth &= XMASK;
-                     }
                      if (dest & CMASK)
                          dest &= XMASK;
                      else {
                          fill ^= 2;
                          dest ^= XMASK;
-                         desth ^= XMASK;
-                         desth++;
-                         if (desth & CMASK) {
+                         desth ^= FMASK;
+                         if (desth == FMASK)
                             dest++;
-                            desth &= XMASK;
-                         }
+                         desth++;
                      }
                 } else {
                      desth = src1h + src2h;
                      dest = src1 + src2;
-                     if (desth & CMASK) {
+                     if (desth < src2h)
                          dest ++;
-                         desth &= XMASK;
-                     }
                 }
+
                 /* If overflow, shift right 4 bits */
 //fprintf(stderr, "FP +n res=%08x %08x\n\r", dest, desth);
                 if (dest & CMASK) {
@@ -2613,13 +2740,12 @@ save_dbl:
                     desth |= (dest & 0xf) << 28;
                     dest >>= 4;
                 }
-
                 /* Set condition codes */
                 cc = 0;
                 if ((desth | dest) != 0)
                      cc = (fill & 2) ? 1 : 2;
-
 //fprintf(stderr, "FP = res=%08x %08x %d\n\r", dest, desth, cc);
+#endif
                 break;
 
                   /* Floating Subtract */
@@ -2650,11 +2776,117 @@ save_dbl:
                    fill |= 2;
                 if (src2 & MSIGN)
                    fill |= 1;
-                src2 &= MMASK;
                 src1 &= MMASK;
+                src2 &= MMASK;
                 temp = e1 - e2;
+#ifdef USE_64BIT
+                src1L = (((t_uint64)(src1)) << 36) | (((t_uint64)src1h) << 4);
+                src2L = (((t_uint64)(src2)) << 36) | (((t_uint64)src2h) << 4);
+                if (temp > 0) {
+                    if (temp > 15) {
+                        src2L  = 0;
+                    } else {
+                        /* Shift src2 right if src1 larger expo - expo */
+                        src2L >>= 4 * temp;
+//                        e2 += temp;
+//fprintf(stderr, "FP =2 Op=%0x src1=%016llx, src2=%016llxx %e %e %e\n\r", op, src1L, src2L, a, b, a+b);
+                    }
+                } else if (temp < 0) {
+                    if (temp < -15) {
+                        src1L = 0;
+                    } else {
+                    /* Shift src1 right if src2 larger expo - expo */
+                        src1L >>= 4 * (-temp);
+//fprintf(stderr, "FP =1 Op=%0x src1=%016llx, src2=%016llxx %e %e %e\n\r", op, src1L, src2L, a, b, a+b);
+                    }
+                    e1 = e2;
+                }
 
-                /* Create guard digit by shifting left 5 bits */
+                /* Exponents should be equal now. */
+
+                /* Add results */
+                if (fill == 2 || fill == 1) {
+                     /* Different signs do subtract */
+                     src2L ^= XMASKL;
+                     src2L++;
+                     destL = src1L + src2L;
+                     if (destL & CMASKL)
+                         destL &= XMASKL;
+                     else {
+                         fill ^= 2;
+                         destL ^= XMASKL;
+                         destL ++;
+                     }
+                } else {
+                     destL = src1L + src2L;
+                }
+                /* If overflow, shift right 4 bits */
+//fprintf(stderr, "FP +n res=%016llx\n\r", destL);
+                if (destL & CMASKL) {
+                    destL >>= 4;
+                    e1 ++;
+                    if (e1 >= 128) {
+                        storepsw(OPPSW, IRC_EXPOVR);
+// fprintf(stderr, "FP ov %d\n\r", e1);
+                    }
+                }
+
+                /* Set condition codes */
+                cc = 0;
+                if ((op & 0xE) != 0xE) {
+                    if (destL != 0)
+                        cc = (fill & 2) ? 1 : 2;
+                    else
+                        e1 = fill = 0;
+                } else {
+                    if ((destL & UMASKL) != 0)
+                        cc = (fill & 2) ? 1 : 2;
+                    else
+                        destL = e1 = fill = 0;
+                }
+
+                /* Check signifigance exception */
+                if (cc == 0 && pmsk & SIGMSK) {
+                    storepsw(OPPSW, IRC_EXPOVR);
+// fprintf(stderr, "FP Signifigance\n\r");
+                    e1 = fill = 0;
+                    dest = desth = 0;
+                    goto fpstore;
+                }
+
+                /* Check if we are normalized addition */
+                if ((op & 0xE) != 0xE) {
+                   if (cc != 0) {   /* Only if non-zero result */
+                       while ((destL & SNMASKL) == 0) {
+//fprintf(stderr, "FP +n res=%016llx  %x\n\r", destL, e1);
+                          destL <<= 4;
+                          e1 --;
+                       }
+                       /* Check if underflow */
+                       if (e1 < 0) {
+                           if (pmsk & EXPUND) {
+                              storepsw(OPPSW, IRC_EXPUND);
+// fprintf(stderr, "FP under\n\r");
+                           } else {
+                              destL = 0;
+                              fill = e1 = 0;
+                           }
+                       }
+                   } else {
+                       fill = e1 = 0;   /* Return true zero */
+                   }
+                } else {
+                   if (cc == 0)
+                      fill = e1 = 0;    /* Return true zero */
+                }
+
+                /* Remmove the guard digit */
+                destL >>= 4;
+                dest = ((uint32)(destL >> 32)) & MMASK;
+                desth = (uint32)(destL & FMASK);
+#else
+
+                /* Create guard digit by shifting left 4 bits */
                 src1 = ((src1 & MMASK) << 4) | ((src1h >> 28) & 0xf);
                 src2 = ((src2 & MMASK) << 4) | ((src2h >> 28) & 0xf);
                 src1h <<= 4;
@@ -2670,80 +2902,56 @@ save_dbl:
                             src2h >>= 4;
                             src2h |= (src2 & 0xf) << 28;
                             src2 >>= 4;
-                            e2 ++;
+ //                           e2 ++;
 //fprintf(stderr, "FP +2 Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
                         }
                     }
                 } else if (temp < 0) {
                     if (temp < -15) {
                         src1 = src1h = 0;
-                        e1 = e2;
                     } else {
                     /* Shift src1 right if src2 larger expo - expo */
                         while (temp++ != 0) {
                             src1h >>= 4;
                             src1h |= (src1 & 0xf) << 28;
                             src1 >>= 4;
-                            e1 ++;
 //fprintf(stderr, "FP +1 Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
                         }
                     }
+                    e1 = e2;
                 }
 
                 /* Exponents should be equal now. */
 
-                /* Create carry bit */
-                src1 <<= 1;
-                if (src1h & MSIGN) {
-                    src1 |= 1;
-                    src1h &= HMASK;
-                }
-                src2 <<= 1;
-                if (src2h & MSIGN) {
-                    src2 |= 1;
-                    src2h &= HMASK;
-                }
-
                 /* Add results */
                 if (fill == 2 || fill == 1) {
                      /* Different signs do subtract */
-                     src2 ^= HMASK;
-                     src2h ^= HMASK;
-                     src2h++;
-                     if (src2h & MSIGN) {
+                     src2 ^= XMASK;
+                     src2h ^= FMASK;
+                     if (src2h == FMASK)
                         src2++;
-                        src2h &= HMASK;
-                     }
+                     src2h++;
                      desth = src1h + src2h;
                      dest = src1 + src2;
-                     if (desth & MSIGN) {
-                         dest ++;
-                         desth &= HMASK;
-                     }
-                     if (dest & MSIGN)
-                         dest &= HMASK;
+                     if (desth < src2h || desth < src1h)
+                         dest++;
+                     if (dest & CMASK)
+                         dest &= XMASK;
                      else {
                          fill ^= 2;
-                         dest ^= HMASK;
-                         desth ^= HMASK;
-                         desth++;
-                         if (desth & MSIGN) {
+                         dest ^= XMASK;
+                         desth ^= FMASK;
+                         if (desth == FMASK)
                             dest++;
-                            desth &= HMASK;
-                         }
+                         desth++;
                      }
                 } else {
                      desth = src1h + src2h;
                      dest = src1 + src2;
-                     if (desth & MSIGN) {
+                     if (desth < src2h || desth < src1h)
                          dest ++;
-                         desth &= HMASK;
-                     }
                 }
-                /* Remove carry bit */
-                if (dest & 1)
-                    desth |= MSIGN;
-                dest >>= 1;
+
                 /* If overflow, shift right 4 bits */
 //fprintf(stderr, "FP +n res=%08x %08x\n\r", dest, desth);
                 if (dest & CMASK) {
@@ -2775,6 +2983,7 @@ save_dbl:
                 if (cc == 0 && pmsk & SIGMSK) {
                     storepsw(OPPSW, IRC_EXPOVR);
 // fprintf(stderr, "FP Signifigance\n\r");
+                    e1 = fill = 0;
                     goto fpstore;
                 }
 
@@ -2808,15 +3017,17 @@ save_dbl:
                 /* Remmove the guard digit */
                 desth = (desth >> 4) | ((dest & 0xf) << 28);
                 dest >>= 4;
+#endif
 fpstore:
                 /* Store result */
                 dest |= (e1 << 24) & EMASK;
                 if (cc != 0 && fill & 2)
                    dest |= MSIGN;
-                if ((op & 0x10) == 0)
-                    fpregs[reg1|1] = desth;
+                fpregs[reg1|1] = desth;
                 fpregs[reg1] = dest;
 //fprintf(stderr, "FP + res=%08x %08x %d %.12e\n\r", dest, desth, cc, cnvt_float(dest,desth));
+//fprintf(stderr, "FP o=%02x src1=%08x%08x, src2=%08x%08x dest=%08x%08x\n\r", op, src1, src1h, src2, src2h, dest, desth);
+//fprintf(stderr, "FP o=%02x src1=%016llx, src2=%016llx dest=%08x%08x %d %.12e\n\r", op, src1L, src2L, dest, desth, cc, cnvt_float(dest,desth));
                 break;
 
                   /* Multiply */
@@ -2840,25 +3051,91 @@ fpstore:
                    fill = 1;
                 src1 &= MMASK;
                 src2 &= MMASK;
+#ifdef USE_64BIT
+                src1L = (((t_uint64)(src1)) << 32) | ((t_uint64)src1h);
+                src2L = (((t_uint64)(src2)) << 32) | ((t_uint64)src2h);
 
                 /* Pre-nomalize src2 and src1 */
-                while ((src2 | src2h) != 0 && (src2 & NMASK) == 0) {
-                   src2 = ((src2 & MMASK) << 4) | ((src2h >> 28) & 0xf);
-                   src2h <<= 4;
-                   e2 --;
+                if (src2L != 0) {
+                    while ((src2L & NMASKL) == 0) {
+                       src2L <<= 4;
+                       e2 --;
+                    }
                 }
-                while ((src1 | src1h) != 0 && (src1 & NMASK) == 0) {
-                   src1 = ((src1 & MMASK) << 4) | ((src1h >> 28) & 0xf);
-                   src1h <<= 4;
-                   e1 --;
+                if (src1L != 0) {
+                    while ((src1L & NMASKL) == 0) {
+                       src1L <<= 4;
+                       e1 --;
+                    }
                 }
+
+                /* Compute exponent */
                 e1 = e1 + e2 - 64;
 
-                /* Create guard bit */
-                src2 <<= 4;
-                src2 |= (src2h >> 28) & 0xf;
-                src2h <<= 3;
-                src2h &= HMASK;
+                destL = 0;
+                /* Do multiply */
+                for (temp = 0; temp < 56; temp++) {
+//fprintf(stderr, "FP *s  src1=%016llx, src2=%016llx dest=%016llx %d\n\r", src1L, src2L, destL, temp);
+                     /* Add if we need too */
+                     if (src1L & 1)
+                         destL += src2L;
+                     /* Shift right by one */
+                     src1L >>= 1;
+                     destL >>= 1;
+                }
+fpnorm:
+//fprintf(stderr, "FP *r res=%016llx %x\n\r", destL, e1);
+                /* If overflow, shift right 4 bits */
+                if (destL & EMASKL) {
+                   destL >>= 4;
+                   e1 ++;
+                   if (e1 >= 128) {
+                       storepsw(OPPSW, IRC_EXPOVR);
+//fprintf(stderr, "FP ov\n\r");
+                   }
+                }
+                /* Align the results */
+                if ((destL) != 0) {
+                    while ((destL & NMASKL) == 0) {
+//fprintf(stderr, "FP *n res=%016llx %x\n\r", destL, e1);
+                        destL <<= 4;
+                        e1 --;
+                    }
+                    /* Check if underflow */
+                    if (e1 < 0) {
+                        if (pmsk & EXPUND) {
+                            storepsw(OPPSW, IRC_EXPUND);
+// fprintf(stderr, "FP un\n\r");
+                        } else {
+                            destL = 0;
+                            fill = e1 = 0;
+                        }
+                    }
+                } else
+                    e1 = fill = 0;
+//fprintf(stderr, "FP *f res=%016llx %x\n\r", destL, e1);
+                dest = ((uint32)(destL >> 32)) & MMASK;
+                desth = (uint32)(destL & FMASK);
+#else
+                /* Pre-nomalize src2 and src1 */
+                if ((src2 | src2h) != 0) {
+                    while ((src2 & NMASK) == 0) {
+                       src2 = ((src2 & MMASK) << 4) | ((src2h >> 28) & 0xf);
+                       src2h <<= 4;
+                       e2 --;
+                    }
+                }
+                if ((src1 | src1h) != 0) {
+                    while ((src1 | src1h) != 0 && (src1 & NMASK) == 0) {
+                       src1 = ((src1 & MMASK) << 4) | ((src1h >> 28) & 0xf);
+                       src1h <<= 4;
+                       e1 --;
+                    }
+                }
+
+                /* Compute exponent */
+                e1 = e1 + e2 - 64;
+
                 dest = desth = 0;
                 /* Do multiply */
                 for (temp = 0; temp < 56; temp++) {
@@ -2867,25 +3144,19 @@ fpstore:
                      if (src1h & 1) {
                          desth += src2h;
                          dest += src2;
-                         if (desth & MSIGN) {
+                         if (desth < src2h)
                              dest ++;
-                             desth &= HMASK;
-                         }
                      }
                      /* Shift right by one */
                      src1h >>= 1;
                      if (src1 & 1)
                         src1h |= MSIGN;
                      src1 >>= 1;
+                     desth >>= 1;
                      if (dest & 1)
                         desth |= MSIGN;
-                     desth >>= 1;
                      dest >>= 1;
                 }
-                e2 = desth & 0xf;
-                desth >>= 3;
-                desth |= (dest & 0xf) << 28;
-                dest >>= 4;
 fpnorm:
                 /* If overflow, shift right 4 bits */
                 if (dest & EMASK) {
@@ -2918,6 +3189,7 @@ fpnorm:
                     }
                 } else
                     e1 = fill = 0;
+#endif
                 dest |= (e1 << 24) & EMASK;
                 if (fill)
                    dest |= MSIGN;
@@ -2925,6 +3197,8 @@ fpnorm:
                     fpregs[reg1|1] = desth;
                 fpregs[reg1] = dest;
 //fprintf(stderr, "FP * res=%08x %08x %d %.12e\n\r", dest, desth, cc, cnvt_float(dest,desth));
+//fprintf(stderr, "FP o=%02x src1=%08x%08x, src2=%08x%08x dest=%08x%08x\n\r", op, src1, src1h, src2, src2h, dest, desth);
+//fprintf(stderr, "FP o=%02x src1=%016llx, src2=%016llx dest=%08x%08x %d %.12e\n\r", op, src1L, src2L, dest, desth, cc, cnvt_float(dest,desth));
                 break;
 
                   /* Divide */
@@ -2953,7 +3227,75 @@ fpnorm:
                     storepsw(OPPSW, IRC_FPDIV);
                     break;
                 }
+#ifdef USE_64BIT
+                src1L = (((t_uint64)(src1)) << 32) | ((t_uint64)src1h);
+                src2L = (((t_uint64)(src2)) << 32) | ((t_uint64)src2h);
 
+                /* Pre-nomalize src2 and src1 */
+                if (src2L != 0) {
+                    while ((src2L & NMASKL) == 0) {
+                       src2L <<= 4;
+                       e2 --;
+                    }
+                }
+                if (src1L != 0) {
+                    while ((src1L & NMASKL) == 0) {
+                       src1L <<= 4;
+                       e1 --;
+                    }
+                }
+
+                /* Compute exponent */
+                e1 = e1 - e2 + 64;
+
+                /* Shift numbers up 4 bits so as not to lose precision below */
+                src2L <<= 4;
+                src1L <<= 4;
+
+
+                /* Check if we need to adjust divsor it larger then dividend */
+                if (src1L > src2L) {
+//fprintf(stderr, "FP /o  src1=%016llx, src2=%016llx dest=%016llx\n\r", src1L, src2L, destL);
+                    src1L >>= 4;
+                    e1++;
+                }
+
+                /* Change sign of src2 so we can add */
+                src2L ^= XMASKL;
+                src2L++;
+                destL = 0;
+                /* Do divide */
+                for (temp = 56; temp > 0; temp--) {
+                     t_uint64    t;
+
+//fprintf(stderr, "FP /s  src1=%016llx, src2=%016llx dest=%016llx %d\n\r", src1L, src2L, destL, temp);
+                     /* Shift left by one */
+                     src1L <<= 1;
+                     /* Subtract remainder to dividend */
+                     t= src1L + src2L;
+
+                     /* Shift quotent left one bit */
+                     destL <<= 1;
+
+                     /* If remainder larger then divisor replace */
+                     if ((t & CMASKL) != 0) {
+                         src1L = t;
+                         destL |= 1;
+                     }
+                }
+
+                /* Compute one final set to see if rounding needed */
+                /* Shift left by one */
+                src1L <<= 1;
+                /* Subtract remainder to dividend */
+                src1L += src2L;
+
+                /* If .5 off, round */
+                if ((src1L & MSIGNL) != 0) {
+//fprintf(stderr, "FP /rn src1=%016llx, src2=%016llx dest=%016llx %d\n\r", src1L, src2L, destL, temp);
+                    destL++;
+                }
+#else
                 /* Pre-nomalize src2 and src1 */
                 while ((src2 | src2h) != 0 && (src2 & NMASK) == 0) {
                     src2 = ((src2 & MMASK) << 4) | ((src2h >> 28) & 0xf);
@@ -2973,35 +3315,21 @@ fpnorm:
                 src1 = ((src1 & MMASK) << 4) | ((src1h >> 28) & 0xf);
                 src1h <<= 4;
 
-                /* Expand for DP math */
-                src2 <<= 1;
-                if (src2h & MSIGN) {
-                    src2 |= 1;
-                    src2h &= HMASK;
-                }
-                src1 <<= 1;
-                if (src1h & MSIGN) {
-                    src1 |= 1;
-                    src1h &= HMASK;
-                }
-
                 /* Check if we need to adjust divsor it larger then dividend */
-                if (src1 > src2) {
+                if (src1 > src2 || (src1 == src2 && src1h > src2h)) {
 //fprintf(stderr, "FP /o  src1=%08x %08x, src2=%08x %08x dest=%08x %08x\n\r", src1, src1h, src2, src2h, dest, desth);
                     src1h >>= 4;
-                    src1h |= (src1 & 0xf) <<27;
+                    src1h |= (src1 & 0xf) <<28;
                     src1 >>= 4;
                     e1++;
                 }
 
                 /* Change sign of src2 so we can add */
-                src2 ^= HMASK;
-                src2h ^= HMASK;
-                src2h++;
-                if (src2h & MSIGN) {
-                    src2++;
-                    src2h &= HMASK;
-                }
+                src2h ^= FMASK;
+                src2 ^= XMASK;
+                if (src2h == FMASK)
+                   src2 ++;
+                src2h ++;
                 dest = desth = 0;
                 /* Do divide */
                 for (temp = 56; temp > 0; temp--) {
@@ -3010,29 +3338,23 @@ fpnorm:
 //fprintf(stderr, "FP /s  src1=%08x %08x, src2=%08x %08x dest=%08x %08x %d\n\r", src1, src1h, src2, src2h, dest, desth, temp);
                      /* Shift left by one */
                      src1 <<= 1;
-                     src1h <<= 1;
-                     if (src1h & MSIGN) {
+                     if (src1h & MSIGN)
                          src1 |= 1;
-                         src1h &= HMASK;
-                     }
-                     /* Subtract remainder to dividend */
+                     src1h <<= 1;
+                     /* Subtract dividend from remainder */
                      thigh = src1h + src2h;
                      tlow = src1 + src2;
-                     if (thigh & MSIGN) {
+                     if (thigh < src2h)
                          tlow ++;
-                         thigh &= HMASK;
-                     }
 
                      /* Shift quotent left one bit */
                      dest <<= 1;
-                     desth <<= 1;
-                     if (desth & MSIGN) {
+                     if (desth & MSIGN)
                          dest |= 1;
-                         desth &= HMASK;
-                     }
+                     desth <<= 1;
 
                      /* If remainder larger then divisor replace */
-                     if ((tlow & MSIGN) != 0) {
+                     if ((tlow & CMASK) != 0) {
                          src1 = tlow;
                          src1h = thigh;
                          desth |= 1;
@@ -3042,32 +3364,23 @@ fpnorm:
                 /* Compute one final set to see if rounding needed */
                 /* Shift left by one */
                 src1 <<= 1;
-                src1h <<= 1;
-                if (src1h & MSIGN) {
+                if (src1h & MSIGN)
                     src1 |= 1;
-                    src1h &= HMASK;
-                }
+                src1h <<= 1;
                 /* Subtract remainder to dividend */
                 src1h += src2h;
                 src1 += src2;
-                if (src1h &  MSIGN) {
-                    src1 ++;
-                    src1h &= HMASK;
-                }
+                if (src1h <  src2h)
+                    src1++;
 
-                /* If remainder larger then divisor replace */
-                if ((src1 & MSIGN) != 0) {
-                    desth++;
-                    if (desth & MSIGN) {
+                /* If .5 off, round */
+                if (src1 & MSIGN) {
+//fprintf(stderr, "FP /rn src1=%08x%08x, src2=%08x%08x dest=%08x%08x %d\n\r", src1, src1h, src2, src2h, dest, desth, temp);
+                    if (desth == FMASK)
                         dest++;
-                        desth &= XMASK;
-                    }
+                    desth++;
                 }
-                /* Remove guard but */
-                if (dest & 1) {
-                    desth |= MSIGN;
-                }
-                dest >>= 1;
+#endif
                 goto fpnorm;
 
                   /* Decimal operations */
@@ -3100,14 +3413,690 @@ fpnorm:
 
                   /* Extended precision load round */
         case OP_LRER:
+                if ((cpu_unit.flags & FEAT_EFP) == 0) {
+                    storepsw(OPPSW, IRC_OPR);
+                    goto supress;
+                }
+                if (fpregs[(reg & 0xf)|1] & MSIGN) {
+                    e1 = (src2 & EMASK) >> 24;
+                    fill = 0;
+                    if (src2 & MSIGN)
+                       fill = 1;
+                    src2 &= MMASK;
+                    dest = src2 + 1;
+                    /* If overflow, shift right 4 bits */
+//fprintf(stderr, "FP LRER res=%08x %d\n\r", dest, cc);
+                    if (dest & CMASK) {
+                        dest >>= 4;
+                        e1 ++;
+                        if (e1 >= 128) {
+                            storepsw(OPPSW, IRC_EXPOVR);
+// fprintf(stderr, "FP ov %d\n\r", e1);
+                        }
+                    }
+
+                    /* Store result */
+                    dest |= (e1 << 24) & EMASK;
+                    if (fill)
+                       dest |= MSIGN;
+                 } else
+                    dest = src2;
+                 fpregs[reg1] = dest;
+//fprintf(stderr, "FP LRER res=%08x %d %.12e\n\r", dest, cc, cnvt_float(dest,0));
+                break;
+
         case OP_LRDR:
-        case OP_SXR:
-        case OP_AXR:
-        case OP_MXR:
+                if ((cpu_unit.flags & FEAT_EFP) == 0) {
+                    storepsw(OPPSW, IRC_OPR);
+                    goto supress;
+                }
+                if (reg & 0xB) {
+                    storepsw(OPPSW, IRC_SPEC);
+                    goto supress;
+                }
+                if (fpregs[(reg & 0xf)|2] & 0x00800000) {
+//                b = cnvt_float(src2, src2h);
+//fprintf(stderr, "FP LRDR Op=%0x src2=%08x %08x %.12e\n\r", op, src2, src2h, b);
+                    /* Extract numbers and adjust */
+                    e1 = (src2 & EMASK) >> 24;
+                    fill = 0;
+                    if (src2 & MSIGN)
+                       fill = 2;
+                    src2 &= MMASK;
+
+                    /* Add round */
+                    desth = src2h + 1;
+                    dest = src2;
+		    if (desth == 0) 
+                        dest ++;
+
+                    /* If overflow, shift right 4 bits */
+//fprintf(stderr, "FP +n res=%08x %08x\n\r", dest, desth);
+                    if (dest & CMASK) {
+                        desth >>= 4;
+                        desth |= (dest & 0xf) << 28;
+                        dest >>= 4;
+                        e1 ++;
+                        if (e1 >= 128) {
+                            storepsw(OPPSW, IRC_EXPOVR);
+// fprintf(stderr, "FP ov %d\n\r", e1);
+                        }
+                    }
+                    goto fpstore;
+                } else {
+                    fpregs[reg1|1] = src2h;
+                    fpregs[reg1] = src2;
+                }
+                break;
+
         case OP_MXDR:
         case OP_MXD:
-fprintf(stderr, "Extended op\n\r");
-        default:
+                if ((cpu_unit.flags & FEAT_EFP) == 0) {
+                    storepsw(OPPSW, IRC_OPR);
+                    goto supress;
+                }
+                if (reg1 & 0xB) {
+                    storepsw(OPPSW, IRC_SPEC);
+                    goto supress;
+                }
+//                a = cnvt_float(src1, src1h);
+//                b = cnvt_float(src2, src2h);
+//fprintf(stderr, "FP * Op=%0x src1=%08x %08x, src2=%08x %08x %.12e %.12e %.12e\n\r", op, src1, src1h, src2, src2h, a, b, a*b);
+                /* Extract numbers and adjust */
+                e1 = (src1 & EMASK) >> 24;
+                e2 = (src2 & EMASK) >> 24;
+                fill = 0;
+                if ((src1 & MSIGN) != (src2 & MSIGN))
+                   fill = 1;
+                src1 &= MMASK;
+                src2 &= MMASK;
+#ifdef USE_64BIT
+                src1L = (((t_uint64)(src1)) << 32) | ((t_uint64)src1h);
+                src2L = (((t_uint64)(src2)) << 32) | ((t_uint64)src2h);
+
+                /* Pre-nomalize src2 and src1 */
+                if (src2L != 0) {
+                    while ((src2L & NMASKL) == 0) {
+                       src2L <<= 4;
+                       e2 --;
+                    }
+                }
+                if (src1L != 0) {
+                    while ((src1L & NMASKL) == 0) {
+                       src1L <<= 4;
+                       e1 --;
+                    }
+                }
+
+                /* Compute exponent */
+                e1 = e1 + e2 - 64;
+
+                destL = 0;
+                /* Do multiply */
+                for (temp = 0; temp < 56; temp++) {
+//fprintf(stderr, "FP *s  src1=%016llx, src2=%016llx dest=%016llx %d\n\r", src1L, src2L, destL, temp);
+                     /* Add if we need too */
+                     if (src1L & 1)
+                         destL += src2L;
+                     /* Shift right by one */
+                     src1L >>= 1;
+                     if (destL & 1)
+                        src1L |= MSIGNL;
+                     destL >>= 1;
+                }
+//fprintf(stderr, "FP *r res=%016llx %x\n\r", destL, e1);
+                /* If overflow, shift right 4 bits */
+                if (destL & EMASKL) {
+                   src1L >>= 4;
+                   src1L |= (destL & 0xF) << 60;
+                   destL >>= 4;
+                   e1 ++;
+                   if (e1 >= 128) {
+                       storepsw(OPPSW, IRC_EXPOVR);
+//fprintf(stderr, "FP ov\n\r");
+                   }
+                }
+
+                /* Align the results */
+                if ((destL | src1L) != 0) {
+                    while ((destL & NMASKL) == 0) {
+//fprintf(stderr, "FP *n res=%016llx %x\n\r", destL, e1);
+                        destL <<= 4;
+                        destL |= (src1L >> 60) & 0xf;
+                        src1L <<= 4;
+                        e1 --;
+                    }
+                    /* Check if underflow */
+                    if (e1 < 0) {
+                        if (pmsk & EXPUND) {
+                            storepsw(OPPSW, IRC_EXPUND);
+// fprintf(stderr, "FP un\n\r");
+                        } else {
+                            destL = src1L = 0;
+                            fill = e1 = 0;
+                        }
+                    }
+                } else
+                    e1 = fill = 0;
+//fprintf(stderr, "FP *f res=%016llx %x\n\r", destL, e1);
+                dest = ((uint32)(destL >> 32)) & MMASK;
+                desth = (uint32)(destL & FMASK);
+                src1 = ((uint32)(src1L >> 40)) & MMASK;
+                src1h = ((uint32)(src1L >> 8)) & MMASK;
+#else
+                /* Pre-nomalize src2 and src1 */
+                if ((src2 | src2h) != 0) {
+                    while ((src2 & NMASK) == 0) {
+                       src2 = ((src2 & MMASK) << 4) | ((src2h >> 28) & 0xf);
+                       src2h <<= 4;
+                       e2 --;
+                    }
+                }
+                if ((src1 | src1h) != 0) {
+                    while ((src1 | src1h) != 0 && (src1 & NMASK) == 0) {
+                       src1 = ((src1 & MMASK) << 4) | ((src1h >> 28) & 0xf);
+                       src1h <<= 4;
+                       e1 --;
+                    }
+                }
+
+                /* Compute exponent */
+                e1 = e1 + e2 - 64;
+
+                dest = desth = 0;
+                /* Do multiply */
+                for (temp = 0; temp < 56; temp++) {
+//fprintf(stderr, "FP *s  src1=%08x %08x, src2=%08x %08x dest=%08x %08x %d\n\r", src1, src1h, src2, src2h, dest, desth, temp);
+                     /* Add if we need too */
+                     if (src1h & 1) {
+                         desth += src2h;
+                         dest += src2;
+                         if (desth < src2h)
+                             dest ++;
+                     }
+                     /* Shift right by one */
+                     src1h >>= 1;
+                     if (src1 & 1)
+                        src1h |= MSIGN;
+                     src1 >>= 1;
+                     if (desth & 1)
+                        src1 |= MSIGN;
+                     desth >>= 1;
+                     if (dest & 1)
+                        desth |= MSIGN;
+                     dest >>= 1;
+                }
+
+                /* If overflow, shift right 4 bits */
+                if (dest & EMASK) {
+                   src1h >>= 4;     /* Fix lower product bits */
+                   src1h |= (src1 & 0xf) << 28;
+                   src1 >>= 4;
+                   src1 |= (desth & 0xf) << 20;
+                   desth >>= 4;
+                   desth |= (dest & 0xf) << 28;
+                   dest >>= 4;
+                   e1 ++;
+                   if (e1 >= 128) {
+                       storepsw(OPPSW, IRC_EXPOVR);
+//fprintf(stderr, "FP ov\n\r");
+                   }
+                }
+
+                /* Align the results */
+                if ((dest | desth | src1 | src1h) != 0) {
+                    while ((dest & NMASK) == 0) {
+//fprintf(stderr, "FP *n res=%08x %08x %x\n\r", dest, desth, e1);
+                        dest = (dest << 4) | ((desth >> 28) & 0xf);
+                        desth = (desth << 4) | ((src1 >> 20) & 0xf);
+                        src1 = ((src1 << 4) | ((src1h >> 28) & 0xf)) & MMASK;
+                        src1h <<= 4;;
+                        e1 --;
+                    }
+                    /* Check if underflow */
+                    if (e1 < 0) {
+                        if (pmsk & EXPUND) {
+                            storepsw(OPPSW, IRC_EXPUND);
+// fprintf(stderr, "FP un\n\r");
+                        } else {
+                            desth = dest = src1 = src1h = 0;
+                            fill = e1 = 0;
+                        }
+                    }
+                } else
+                    e1 = fill = 0;
+#endif
+                if (e1) {
+                    dest |= (e1 << 24) & EMASK;
+                    src1 |= ((e1 - 14) << 24) & EMASK;
+                    if (fill) {
+                       dest |= MSIGN;
+                       src1 |= MSIGN;
+                    }
+                }
+                fpregs[reg1|3] = src1h;
+                fpregs[reg1|2] = src1;
+                fpregs[reg1|1] = desth;
+                fpregs[reg1] = dest;
+//fprintf(stderr, "FP * res=%08x %08x %d %.12e\n\r", dest, desth, cc, cnvt_float(dest,desth));
+                break;
+
+        case OP_SXR:
+                src1 ^= MSIGN;
+                /* Fall through */
+        case OP_AXR:
+                if ((cpu_unit.flags & FEAT_EFP) == 0) {
+                    storepsw(OPPSW, IRC_OPR);
+                    goto supress;
+                }
+                if ((reg & 0xBB) != 0) {
+                    storepsw(OPPSW, IRC_SPEC);
+                    goto supress;
+                }
+//                a = cnvt_float(src1, src1h);
+//                b = cnvt_float(src2, src2h);
+//fprintf(stderr, "FP + Op=%0x src1=%08x %08x, src2=%08x %08x %.12e %.12e %.12e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
+                /* Extract numbers and adjust */
+                e1 = (src1 & EMASK) >> 24;
+                e2 = (src2 & EMASK) >> 24;
+                fill = 0;
+                if (src1 & MSIGN)
+                   fill |= 2;
+                if (src2 & MSIGN)
+                   fill |= 1;
+                src1 &= MMASK;
+                src2 &= MMASK;
+                temp = e1 - e2;
+#ifdef USE_64BIT
+                if (temp > 0) {
+                    if (temp > 15) {
+                        src1L = src2L = 0;
+                    } else {
+                        src1L = (((t_uint64)(src2)) << 36) | (((t_uint64)src2h) << 4);
+                        src2L = (((t_uint64)(fpregs[R2(reg)|2] & MMASK) << 36)) |
+                                      (((t_uint64)fpregs[R2(reg)|3]) << 4);
+                        /* Shift src2 right if src1 larger expo - expo */
+                        while (temp-- != 0) {
+                            src2L >>= 4;
+                            src2L |= ((src1L >> 8) & 0xf) << 60;
+                            src1L >>= 4;
+                            src1L &= UMASKL;
+//fprintf(stderr, "FP +2 Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
+                        }
+//fprintf(stderr, "FP =2 Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
+                    }
+                } else if (temp < 0) {
+                    /* Flip operands around */
+                    src1L = (((t_uint64)(src1)) << 36) | (((t_uint64)src1h) << 4);
+                    src2L = (((t_uint64)(fpregs[reg1|2] & MMASK) << 36)) |
+                          (((t_uint64)fpregs[reg1|3]) << 4);
+                    fill = ((fill & 2) >> 1) | ((fill & 1) << 1);
+                    if (temp < -15) {
+                        fpregs[reg1] = 0;
+                        fpregs[reg1|1] = 0;
+                        fpregs[reg1|2] = 0;
+                        fpregs[reg1|3] = 0;
+                        e1 = e2;
+                    } else {
+                    /* Shift src1 right if src2 larger expo - expo */
+                        fpregs[reg1] = fpregs[R2(reg)];
+                        fpregs[reg1|1] = fpregs[R2(reg)|1];
+                        fpregs[reg1|2] = fpregs[R2(reg)|2];
+                        fpregs[reg1|3] = fpregs[R2(reg)|3];
+                        while (temp++ != 0) {
+                            src2L >>= 4;
+                            src2L |= ((src1L >> 8) & 0xf) << 60;
+                            src1L >>= 4;
+                            src1L &= UMASKL;
+//fprintf(stderr, "FP =1 Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
+                        }
+                    }
+                    e1 = e2;
+                }
+
+                /* Exponents should be equal now. */
+
+                /* Add results */
+                if (fill == 2 || fill == 1) {
+                     t_uint64    th, tl;
+                     /* Different signs do subtract */
+                     src2L ^= XMASKL;
+                     src1L ^= XMASKL;
+                     if (src2L == XMASKL)
+                         src1L += 0x10LL;
+                     src2L++;
+                     tl = (((t_uint64)(fpregs[reg1] & MMASK) << 36)) |
+                                      (((t_uint64)fpregs[reg1|1]) << 4);
+                     th = (((t_uint64)(fpregs[reg1|2] & MMASK) << 36)) |
+                                      (((t_uint64)fpregs[reg1|3]) << 4);
+                     destL = tl + src2L;
+                     src1L = th + src1L;
+                     if (destL & CMASKL) {
+                         destL &= XMASKL;
+                         src1L += 0x10LL;
+                     }
+                     if (src1L & CMASKL)
+                         src1L &= XMASKL;
+                     else {
+                         fill ^= 2;
+                         destL ^= XMASKL;
+                         src1L ^= XMASKL;
+                         if (destL == XMASKL)
+                            src1L += 0x10LL;
+                         destL ++;
+                     }
+                } else {
+                     t_uint64    th, tl;
+                     tl = (((t_uint64)(fpregs[reg1] & MMASK) << 36)) |
+                                      (((t_uint64)fpregs[reg1|1]) << 4);
+                     th = (((t_uint64)(fpregs[reg1|2] & MMASK) << 36)) |
+                                      (((t_uint64)fpregs[reg1|3]) << 4);
+                     destL = tl + src2L;
+                     src1L = th + src1L;
+                     if (destL & CMASKL) {
+                         destL &= XMASKL;
+                         src1L += 0x10LL;
+                     }
+                }
+                /* If overflow, shift right 4 bits */
+//fprintf(stderr, "FP +n res=%08x %08x\n\r", dest, desth);
+                if (src1L & CMASKL) {
+                    destL >>= 4;
+                    destL |= ((src1L >> 8) & 0xf) << 60;
+                    src1L >>= 4;
+                    src1L &= UMASKL;
+                    e1 ++;
+                    if (e1 >= 128) {
+                        storepsw(OPPSW, IRC_EXPOVR);
+// fprintf(stderr, "FP ov %d\n\r", e1);
+                    }
+                }
+
+                /* Set condition codes */
+                cc = 0;
+                if ((destL | src1L) != 0)
+                    cc = (fill & 2) ? 1 : 2;
+                else
+                    e1 = fill = 0;
+
+                /* Check signifigance exception */
+                if (cc == 0 && pmsk & SIGMSK) {
+                    storepsw(OPPSW, IRC_EXPOVR);
+// fprintf(stderr, "FP Signifigance\n\r");
+                    fpregs[reg1] = 0;
+                    fpregs[reg1|1] = 0;
+                    fpregs[reg1|2] = 0;
+                    fpregs[reg1|3] = 0;
+                    break;
+                }
+
+                /* Check if we are normalized addition */
+                if (cc != 0) {   /* Only if non-zero result */
+                    while ((src1L & SNMASKL) == 0) {
+//fprintf(stderr, "FP +n res=%08x %08x %x\n\r", dest, desth, e1);
+                          src1L <<= 4;
+                          src1L |= ((destL >> 60) & 0xf) << 8;
+                          destL <<= 4;
+                          e1 --;
+                       }
+                       /* Check if underflow */
+                       if (e1 < 0) {
+                           if (pmsk & EXPUND) {
+                              storepsw(OPPSW, IRC_EXPUND);
+// fprintf(stderr, "FP under\n\r");
+                           } else {
+                              src2L = destL = 0;
+                              fill = e1 = 0;
+                           }
+                       }
+                   } else {
+                       fill = e1 = 0;   /* Return true zero */
+                   }
+
+                /* Remmove the guard digit */
+                destL >>= 4;
+                src1L >>= 4;
+                dest = ((uint32)(destL >> 32)) & MMASK;
+                desth = (uint32)(destL & FMASK);
+                src1 = ((uint32)(src1L >> 40)) & MMASK;
+                src1h = ((uint32)(src1L >> 8)) & MMASK;
+#else
+                /* Create guard digit by shifting left 4 bits */
+                if (temp > 0) {
+                    if (temp > 15) {
+                        src1 = src1h = src2 = src2h = 0;
+                    } else {
+                        src1 = (src2 << 4) | ((src2h >> 28) & 0xf);
+                        src1h = (src2h << 4) & XMASK;;
+                        src2 = ((fpregs[R2(reg)|2] & MMASK) << 4) | ((fpregs[R2(reg)|3] >> 28) & 0xf);
+                        src2h = (fpregs[R2(reg)|3] << 4) & XMASK;
+                        /* Shift src2 right if src1 larger expo - expo */
+                        while (temp-- != 0) {
+                            src2h >>= 4;
+                            src2h |= (src2 & 0xf) << 24;
+                            src2  >>= 4;
+                            src2  |= (src1h & 0xf) << 24;
+                            src1h >>= 4;
+                            src1h |= (src1 & 0xf) << 24;
+                            src1h &= 0xfffffff0;
+                            src1  >>= 4;
+//fprintf(stderr, "FP +2 Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
+                        }
+//fprintf(stderr, "FP =2 Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
+                    }
+                } else if (temp < 0) {
+                    /* Flip operands around */
+                    src1 = (src1 << 4) | ((src1h >> 28) & 0xf);
+                    src1h = (src1h << 4) & XMASK;;
+                    src2 = ((fpregs[reg1|2] & MMASK) << 4) | ((fpregs[reg1|3] >> 28) & 0xf);
+                    src2h = (fpregs[reg1|3] << 4) & XMASK;
+                    fill = ((fill & 2) >> 1) | ((fill & 1) << 1);
+                    if (temp < -15) {
+                        fpregs[reg1] = 0;
+                        fpregs[reg1|1] = 0;
+                        fpregs[reg1|2] = 0;
+                        fpregs[reg1|3] = 0;
+                        e1 = e2;
+                    } else {
+                    /* Shift src1 right if src2 larger expo - expo */
+                        fpregs[reg1] = fpregs[R2(reg)];
+                        fpregs[reg1|1] = fpregs[R2(reg)|1];
+                        fpregs[reg1|2] = fpregs[R2(reg)|2];
+                        fpregs[reg1|3] = fpregs[R2(reg)|3];
+                        while (temp++ != 0) {
+                            src2h >>= 4;
+                            src2h |= (src2 & 0xf) << 24;
+                            src2  >>= 4;
+                            src2  |= (src1h & 0xf) << 24;
+                            src1h >>= 4;
+                            src1h |= (src1 & 0xf) << 24;
+                            src1h &= 0xfffffff0;
+                            src1  >>= 4;
+//fprintf(stderr, "FP =1 Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
+                        }
+                    }
+                    e1 = e2;
+                }
+
+                /* Exponents should be equal now. */
+
+                /* Add results */
+                if (fill == 2 || fill == 1) {
+                     uint32     th, tl;
+                     /* Different signs do subtract */
+                     src2 ^= XMASK;
+                     src2h ^= FMASK;
+                     src1 ^= XMASK;
+                     src1h ^= FMASK;
+                     if (src2h == FMASK) {
+                        if (src2 == CMASK) {
+                           src2h &= XMASK;
+                           if (src1h == FMASK)
+                              src1++;
+                           src1h++;
+                        }
+                        src2++;
+                     }
+                     src2h++;
+                     th = (fpregs[reg1|3] << 4) & FMASK;
+                     tl = ((fpregs[reg1|2] & MMASK) << 4) |
+                            ((fpregs[reg1|3] >> 28) & 0xf);
+                     th = th + src2h;
+                     tl = tl + src2;
+                     if (th < src2h)
+                         tl++;
+                     src2h = (fpregs[reg1|1] << 4) & FMASK;
+                     src2 = ((fpregs[reg1] & MMASK) << 4) |
+                            ((fpregs[reg1|1] >> 28) & 0xf);
+                     desth = src2h + src1h;
+                     dest = src2 + src1;
+                     if (desth < src2h || desth < src1h)
+                         dest ++;
+                     if (src2 & CMASK) {
+                         if (desth & 0xfffffff0)
+                            dest++;
+                         desth += 0x10;
+                         src2 &= XMASK;
+                     }
+                     if (dest & CMASK)
+                         dest &= XMASK;
+                     else {
+                         fill ^= 2;
+                         src1 ^= XMASK;
+                         src1h ^= FMASK;
+                         dest ^= XMASK;
+                         desth ^= FMASK;
+                         if (src1h == FMASK) {
+                            if (src1 == CMASK) {
+                               desth &= XMASK;
+                               if (desth == FMASK)
+                                  dest++;
+                               desth++;
+                            }
+                            src1++;
+                         }
+                         src1h++;
+                     }
+                } else {
+                     uint32     th, tl;
+                     th = (fpregs[reg1|3] << 4) & FMASK;
+                     tl = ((fpregs[reg1|2] & MMASK) << 4) |
+                            ((fpregs[reg1|3] >> 28) & 0xf);
+                     th = th + src2h;
+                     tl = tl + src2;
+                     if (th < src2h)
+                         tl++;
+                     src2h = (fpregs[reg1|1] << 4) & FMASK;
+                     src2 = ((fpregs[reg1] & MMASK) << 4) |
+                            ((fpregs[reg1|1] >> 28) & 0xf);
+                     desth = src2h + src1h;
+                     dest = src2 + src1;
+                     if (desth < src2h || desth < src1h)
+                         dest ++;
+                     if (src2 & CMASK) {
+                         if (desth & 0xfffffff0)
+                            dest++;
+                         desth += 0x10;
+                         src2 &= XMASK;
+                     }
+                }
+
+                /* If overflow, shift right 4 bits */
+//fprintf(stderr, "FP +n res=%08x %08x\n\r", dest, desth);
+                if (dest & CMASK) {
+                    src1h >>= 4;
+                    src1h |= (src1 & 0xf) << 24;
+                    src1  >>= 4;
+                    src1  |= (desth & 0xf) << 24;
+                    desth >>= 4;
+                    desth |= (dest & 0xf) << 24;
+                    desth &= 0xfffffff0;
+                    e1 ++;
+                    if (e1 >= 128) {
+                        storepsw(OPPSW, IRC_EXPOVR);
+// fprintf(stderr, "FP ov %d\n\r", e1);
+                    }
+                }
+
+                /* Set condition codes */
+                cc = 0;
+                if ((dest | desth | src1 | src1h) != 0)
+                    cc = (fill & 2) ? 1 : 2;
+                else
+                    e1 = fill = 0;
+
+                /* Check signifigance exception */
+                if (cc == 0 && pmsk & SIGMSK) {
+                    storepsw(OPPSW, IRC_EXPOVR);
+// fprintf(stderr, "FP Signifigance\n\r");
+                    fpregs[reg1] = 0;
+                    fpregs[reg1|1] = 0;
+                    fpregs[reg1|2] = 0;
+                    fpregs[reg1|3] = 0;
+                    break;
+                }
+
+                /* Check if we are normalized addition */
+                if (cc != 0) {   /* Only if non-zero result */
+                    while ((dest & SNMASK) == 0) {
+//fprintf(stderr, "FP +n res=%08x %08x %x\n\r", dest, desth, e1);
+                          dest = (dest << 4) | ((desth >> 28) & 0xf);
+                          desth = (desth << 4) | ((src1 >> 24) & 0xf);
+                          src1 = (src1 << 4) | ((src1h >> 28) & 0xf);
+                          src1h <<= 4;
+                          e1 --;
+                    }
+                       /* Check if underflow */
+                    if (e1 < 0) {
+                        if (pmsk & EXPUND) {
+                            storepsw(OPPSW, IRC_EXPUND);
+// fprintf(stderr, "FP under\n\r");
+                        } else {
+                           desth = dest = 0;
+                           fill = e1 = 0;
+                        }
+                    }
+                } else {
+                    fill = e1 = 0;   /* Return true zero */
+                }
+
+                /* Remmove the guard digit */
+                src1h = (src1h >> 4) | ((src1 & 0xf) << 28);
+                src1  = (src1  >> 4) | ((desth & 0xf0) << 24);
+                desth = (desth >> 4) | ((dest & 0xf) << 28);
+                dest >>= 4;
+#endif
+                /* Store result */
+                if (e1) {
+                    dest |= (e1 << 24) & EMASK;
+                    src1 |= ((e1 - 14) << 24) & EMASK;
+                    if (fill) {
+                       dest |= MSIGN;
+                       src1 |= MSIGN;
+                    }
+                }
+                fpregs[reg1|3] = src1h;
+                fpregs[reg1|2] = src1;
+                fpregs[reg1|1] = desth;
+                fpregs[reg1] = dest;
+//fprintf(stderr, "FP + res=%08x %08x %d %.12e\n\r", dest, desth, cc, cnvt_float(dest,desth));
+                break;
+//fprintf(stderr, "FP + DP \n\r");
+                break;
+
+        case OP_MXR:
+                if ((cpu_unit.flags & FEAT_EFP) == 0) {
+                    storepsw(OPPSW, IRC_OPR);
+                    goto supress;
+                }
+                if ((reg & 0xBB) != 0) {
+                    storepsw(OPPSW, IRC_SPEC);
+                    goto supress;
+                }
+//fprintf(stderr, "FP * DP \n\r");
+                break;
+
+        default:   /* Unknown op code */
                 storepsw(OPPSW, IRC_OPR);
                 goto supress;
         }
@@ -3117,25 +4106,27 @@ fprintf(stderr, "Extended op\n\r");
              hst[hst_p].cc = cc;
         }
 
-        sim_debug(DEBUG_INST, &cpu_dev,
-                  "GR00=%08x GR01=%08x GR02=%08x GR03=%08x\n",
-                   regs[0], regs[1], regs[2], regs[3]);
-        sim_debug(DEBUG_INST, &cpu_dev,
-                  "GR04=%08x GR05=%08x GR06=%08x GR07=%08x\n",
-                   regs[4], regs[5], regs[6], regs[7]);
-        sim_debug(DEBUG_INST, &cpu_dev,
-                  "GR08=%08x GR09=%08x GR10=%08x GR11=%08x\n",
-                   regs[8], regs[9], regs[10], regs[11]);
-        sim_debug(DEBUG_INST, &cpu_dev,
-                  "GR12=%08x GR13=%08x GR14=%08x GR15=%08x\n",
-                   regs[12], regs[13], regs[14], regs[15]);
-        if ((op & 0xA0) == 0x20) {
+        if (sim_deb && (cpu_dev.dctrl & DEBUG_INST)) {
             sim_debug(DEBUG_INST, &cpu_dev,
-                  "FP00=%08x FP01=%08x FP02=%08x FP03=%08x\n",
-                   fpregs[0], fpregs[1], fpregs[2], fpregs[3]);
+                      "GR00=%08x GR01=%08x GR02=%08x GR03=%08x\n",
+                       regs[0], regs[1], regs[2], regs[3]);
             sim_debug(DEBUG_INST, &cpu_dev,
-                  "FP04=%08x FP05=%08x FP06=%08x FP07=%08x\n",
-                   fpregs[4], fpregs[5], fpregs[6], fpregs[7]);
+                      "GR04=%08x GR05=%08x GR06=%08x GR07=%08x\n",
+                       regs[4], regs[5], regs[6], regs[7]);
+            sim_debug(DEBUG_INST, &cpu_dev,
+                      "GR08=%08x GR09=%08x GR10=%08x GR11=%08x\n",
+                       regs[8], regs[9], regs[10], regs[11]);
+            sim_debug(DEBUG_INST, &cpu_dev,
+                      "GR12=%08x GR13=%08x GR14=%08x GR15=%08x\n",
+                       regs[12], regs[13], regs[14], regs[15]);
+            if ((op & 0xA0) == 0x20) {
+                sim_debug(DEBUG_INST, &cpu_dev,
+                      "FP00=%08x FP01=%08x FP02=%08x FP03=%08x\n",
+                       fpregs[0], fpregs[1], fpregs[2], fpregs[3]);
+                sim_debug(DEBUG_INST, &cpu_dev,
+                      "FP04=%08x FP05=%08x FP06=%08x FP07=%08x\n",
+                       fpregs[4], fpregs[5], fpregs[6], fpregs[7]);
+            }
         }
 
         if (irqaddr != 0) {
@@ -3638,7 +4629,6 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
     int32               k, di, lnt;
     const char          *cptr = (const char *) desc;
     t_stat              r;
-    t_value             sim_eval;
     struct InstHistory *h;
 
     if (hst_lnt == 0)
