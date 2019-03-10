@@ -26,6 +26,11 @@
 #include "ka10_defs.h"
 #include "sim_tmxr.h"
 
+#ifndef NUM_DEVS_AUXCPU
+#define NUM_DEVS_AUXCPU 0
+#endif
+
+#if NUM_DEVS_AUXCPU > 0
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -389,3 +394,4 @@ t_stat auxcpu_devio(uint32 dev, uint64 *data)
 
     return SCPE_OK;
 }
+#endif
