@@ -562,13 +562,8 @@ chan_end(uint16 addr, uint8 flags) {
         chan_status[chan] |= STATUS_LENGTH;
         ccw_flags[chan] = 0;
     }
-    if (flags & (SNS_ATTN|SNS_UNITCHK|SNS_UNITEXP)) {
-        if (ccw_count[chan] != 0) {
-            sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end length\n");
-            chan_status[chan] |= STATUS_LENGTH;
-        }
+    if (flags & (SNS_ATTN|SNS_UNITCHK|SNS_UNITEXP))
         ccw_flags[chan] = 0;
-    }
 
     /* If channel is also finished, then skip any more data commands. */
     if (chan_status[chan] & (STATUS_DEND|STATUS_CEND)) {
@@ -631,22 +626,6 @@ startio(uint16 addr) {
 
     sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %x %x\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
-
-#if 0
-    /* Check if any status pending */
-    if (chan_status[chan] != 0) {
-        /* If not for this device, return cc=2 */
-        if (chan_dev[chan] != addr)
-            return 2;
-        if ((chan_status[chan] & ~(STATUS_CEND|STATUS_DEND)) != 0) {
-            M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | M[0x44 >> 2] & 0xffff;
-            sim_debug(DEBUG_EXP, &cpu_dev, "Channel store csw  %02x %08x\n",
-                   chan, M[0x44 >> 2]);
-            chan_status[chan] = 0;
-            return 1;
-        }
-    }
-#endif
 
     /* All ok, get caw address */
     chan_status[chan] = 0;

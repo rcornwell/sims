@@ -336,6 +336,7 @@ t_stat coml_srv(UNIT * uptr)
          if (uptr->u3 & ENAB) {
              if (tmxr_rqln(&com_ldsc[unit]) > 0) {
                  int32   data = tmxr_getc_ln (&com_ldsc[unit]);
+             sim_debug(DEBUG_DATA, dptr, "COML: unit=%d read '%c'\n", unit, data);
                  if (data & SCPE_BREAK) {
                     uptr->u3 &= ~0xff;
                     chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
