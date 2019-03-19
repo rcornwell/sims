@@ -110,6 +110,11 @@ endif
 # building the KA10 needs video support
 ifneq (,$(findstring ka10,$(MAKECMDGOALS)))
   VIDEO_USEFUL = true
+  NETWORK_USEFUL = true
+endif
+# building the KI10 needs video support
+ifneq (,$(findstring ki10,$(MAKECMDGOALS)))
+  NETWORK_USEFUL = true
 endif
 # building the pdp11, pdp10, or any vax simulator could use networking support
 ifneq (,$(or $(findstring pdp11,$(MAKECMDGOALS)),$(findstring pdp10,$(MAKECMDGOALS)),$(findstring vax,$(MAKECMDGOALS)),$(findstring all,$(MAKECMDGOALS))))
