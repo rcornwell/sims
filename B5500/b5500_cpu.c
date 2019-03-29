@@ -269,8 +269,6 @@ t_stat              cpu_reset(DEVICE * dptr);
 t_stat              cpu_msize(UNIT *up, int32 v, CONST char *cp, void *dp);
 t_stat              cpu_set_size(UNIT * uptr, int32 val, CONST char *cptr,
                                  void *desc);
-t_stat              cpu_show_size(FILE * st, UNIT * uptr, int32 val,
-                                  CONST void *desc);
 t_stat              cpu_show_hist(FILE * st, UNIT * uptr, int32 val,
                                   CONST void *desc);
 t_stat              cpu_set_hist(UNIT * uptr, int32 val, CONST char *cptr,
@@ -291,7 +289,7 @@ int32               rtc_tps = 60 ;
 */
 
 UNIT                cpu_unit[] =
-    {{ UDATA(rtc_srv, MEMAMOUNT(7)|UNIT_IDLE, MAXMEMSIZE ), 16667 },
+    {{ UDATA(rtc_srv, MEMAMOUNT(7)|UNIT_IDLE|UNIT_FIX, MAXMEMSIZE ), 16667 },
     { UDATA(0, UNIT_DISABLE|UNIT_DIS, 0 ), 0 }};
 
 REG                 cpu_reg[] = {
@@ -339,7 +337,6 @@ MTAB                cpu_mod[] = {
     {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(5), NULL, "24K", &cpu_set_size},
     {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(6), NULL, "28K", &cpu_set_size},
     {UNIT_MSIZE|MTAB_VDV, MEMAMOUNT(7), NULL, "32K", &cpu_set_size},
-    {MTAB_VDV, 0, "MEMORY", NULL, NULL, &cpu_show_size},
     {MTAB_XTD|MTAB_VDV, 0, "IDLE", "IDLE", &sim_set_idle, &sim_show_idle },
     {MTAB_XTD|MTAB_VDV, 0, NULL, "NOIDLE", &sim_clr_idle, NULL },
     {MTAB_XTD | MTAB_VDV | MTAB_NMO | MTAB_SHP, 0, "HISTORY", "HISTORY",
@@ -3877,13 +3874,6 @@ cpu_dep(t_value val, t_addr addr, UNIT * uptr, int32 sw)
 }
 
 t_stat
-cpu_show_size(FILE *st, UNIT *uptr, int32 val, CONST void *desc)
-{
-    fprintf(st, "%dK", MEMSIZE/1024);
-    return SCPE_OK;
-}
-
-t_stat
 cpu_msize(UNIT *uptr, int32 v, CONST char *cptr, void *dptr)
 {
     int32 val;
@@ -4035,6 +4025,7 @@ t_stat              cpu_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, con
     fprintf(st, "       sim> SET CPU1 ENABLE                enable second CPU\n");
     fprintf(st, "The primary CPU can't be disabled. Memory is shared between the two\n");
     fprintf(st, "CPU's. Memory can be configured in 4K increments up to 32K total.\n");
+    fprint_reg_help (st, dptr);
     fprint_set_help(st, dptr);
     fprint_show_help(st, dptr);
     return SCPE_OK;
