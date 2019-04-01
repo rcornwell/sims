@@ -1208,8 +1208,8 @@ KA10 = ${KA10D}/ka10_cpu.c ${KA10D}/ka10_sys.c ${KA10D}/ka10_df.c \
 	${KA10D}/ka10_dk.c ${KA10D}/ka10_cr.c ${KA10D}/ka10_cp.c \
 	${KA10D}/ka10_tu.c ${KA10D}/ka10_rs.c ${KA10D}/ka10_pd.c \
 	${KA10D}/ka10_imx.c ${KA10D}/ka10_tk10.c ${KA10D}/ka10_mty.c \
-	${KA10D}/ka10_imp.c ${KA10D}/ka10_stk.c ${KA10D}/ka10_ten11.c \
-        ${KA10D}/ka10_auxcpu.c
+	${KA10D}/ka10_imp.c ${KA10D}/ka10_ch10.c ${KA10D}/ka10_stk.c \
+	${KA10D}/ka10_ten11.c ${KA10D}/ka10_auxcpu.c
 KA10_OPT = -DKA=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD ${NETWORK_OPT}
 
 ifneq ($(TYPE340),)
