@@ -79,7 +79,6 @@
 
 #define STATUS      u3
 #define COL         u4
-#define BUFFER      up7
 
 t_stat              cp_devio(uint32 dev, uint64 *data);
 t_stat              cp_srv(UNIT *);
@@ -88,6 +87,7 @@ t_stat              cp_attach(UNIT *, CONST char *);
 t_stat              cp_detach(UNIT *);
 t_stat              cp_help(FILE *, DEVICE *, UNIT *, int32, const char *);
 const char         *cp_description(DEVICE *dptr);
+uint16              cp_buffer[80];
 
 
 DIB cp_dib = { CP_DEVNUM, 1, cp_devio, NULL};
@@ -100,8 +100,13 @@ MTAB                cp_mod[] = {
     {0}
 };
 
+REG                 cp_reg[] = {
+    {BRDATA(BUFF, cp_buffer, 16, 16, sizeof(cp_buffer)), REG_HRO},
+    {0}
+};
+
 DEVICE              cp_dev = {
-    "CP", &cp_unit, NULL, cp_mod,
+    "CP", &cp_unit, cp_reg, cp_mod,
     NUM_DEVS_CP, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, NULL, &cp_attach, &cp_detach,
     &cp_dib, DEV_DISABLE | DEV_DEBUG | DEV_CARD, 0, crd_debug,
@@ -116,7 +121,6 @@ DEVICE              cp_dev = {
 
 t_stat cp_devio(uint32 dev, uint64 *data) {
      UNIT                *uptr = &cp_unit;
-     uint16              *image = (uint16 *)(uptr->BUFFER);
 
      switch(dev & 3) {
      case CONI:
@@ -166,7 +170,7 @@ t_stat cp_devio(uint32 dev, uint64 *data) {
          *data = 0;
          break;
     case DATAO:
-         image[uptr->COL++] = *data & 0xfff;
+         cp_buffer[uptr->COL++] = *data & 0xfff;
          uptr->STATUS &= ~DATA_REQ;
          clr_interrupt(dev);
          sim_debug(DEBUG_DATAIO, &cp_dev, "CP: DATAO %012llo %d\n", *data,
@@ -182,7 +186,6 @@ t_stat
 cp_srv(UNIT *uptr) {
 
     if (uptr->STATUS & PUNCH_ON) {
-       uint16              *image = (uint16 *)(uptr->BUFFER);
 
        uptr->STATUS |= CARD_IN_PUNCH;
        if (uptr->STATUS & DATA_REQ) {
@@ -200,7 +203,7 @@ cp_srv(UNIT *uptr) {
         uptr->COL = 0;
         uptr->STATUS &= ~(PUNCH_ON|CARD_IN_PUNCH);
         uptr->STATUS |= END_CARD;
-        switch(sim_punch_card(uptr, image)) {
+        switch(sim_punch_card(uptr, cp_buffer)) {
         case CDSE_EOF:
         case CDSE_EMPTY:
             uptr->STATUS |= PICK_FAIL|TROUBLE;
@@ -227,26 +230,15 @@ cp_attach(UNIT * uptr, CONST char *file)
 {
     t_stat              r;
 
-    if ((r = sim_card_attach(uptr, file)) != SCPE_OK)
-        return r;
-    if (uptr->BUFFER == 0) {
-        uptr->BUFFER = calloc(80, sizeof(uint16));
-        uptr->STATUS = 0;
-        uptr->COL = 0;
-    }
-    return SCPE_OK;
+    return sim_card_attach(uptr, file);
 }
 
 t_stat
 cp_detach(UNIT * uptr)
 {
-    uint16              *image = (uint16 *)(uptr->BUFFER);
 
     if (uptr->STATUS & CARD_IN_PUNCH)
-        sim_punch_card(uptr, image);
-    if (uptr->BUFFER != 0)
-        free(uptr->BUFFER);
-    uptr->BUFFER = 0;
+        sim_punch_card(uptr, cp_buffer);
     return sim_card_detach(uptr);
 }
 

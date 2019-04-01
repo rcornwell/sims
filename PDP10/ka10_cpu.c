@@ -132,31 +132,31 @@ int     SCAD;                                 /* Shift count extension */
 int     FE;                                   /* Exponent */
 #if KA | PDP6
 int     Pl, Ph, Rl, Rh, Pflag;                /* Protection registers */
-char    push_ovf;                             /* Push stack overflow */
-char    mem_prot;                             /* Memory protection flag */
+int     push_ovf;                             /* Push stack overflow */
+int     mem_prot;                             /* Memory protection flag */
 #endif
-char    nxm_flag;                             /* Non-existant memory flag */
-char    clk_flg;                              /* Clock flag */
-char    ov_irq;                               /* Trap overflow */
-char    fov_irq;                              /* Trap floating overflow */
+int     nxm_flag;                             /* Non-existant memory flag */
+int     clk_flg;                              /* Clock flag */
+int     ov_irq;                               /* Trap overflow */
+int     fov_irq;                              /* Trap floating overflow */
 #if PDP6
-char    pcchg_irq;                            /* PC Change flag */
+int     pcchg_irq;                            /* PC Change flag */
 #endif
 uint8   PIR;                                  /* Current priority level */
 uint8   PIH;                                  /* Highest priority */
 uint8   PIE;                                  /* Priority enable mask */
-char    pi_enable;                            /* Interrupts enabled */
-char    parity_irq;                           /* Parity interupt */
-char    pi_pending;                           /* Interrupt pending. */
-int     pi_req;                               /* Current interrupt request */
+int     pi_enable;                            /* Interrupts enabled */
+int     parity_irq;                           /* Parity interupt */
+int     pi_pending;                           /* Interrupt pending. */
+//int     pi_req;                               /* Current interrupt request */
 int     pi_enc;                               /* Flag for pi */
 int     apr_irq;                              /* Apr Irq level */
-char    clk_en;                               /* Enable clock interrupts */
+int     clk_en;                               /* Enable clock interrupts */
 int     clk_irq;                              /* Clock interrupt */
-char    pi_restore;                           /* Restore previous level */
-char    pi_hold;                              /* Hold onto interrupt */
+int     pi_restore;                           /* Restore previous level */
+int     pi_hold;                              /* Hold onto interrupt */
 int     modify;                               /* Modify cycle */
-char    xct_flag;                             /* XCT flags */
+int     xct_flag;                             /* XCT flags */
 #if KI
 uint64  ARX;                                  /* Extension to AR */
 uint64  BRX;                                  /* Extension to BR */
@@ -165,15 +165,15 @@ uint32  ub_ptr;                               /* User base pointer */
 uint32  eb_ptr;                               /* Executive base pointer */
 uint8   fm_sel;                               /* User fast memory block */
 int32   apr_serial = -1;                      /* CPU Serial number */
-char    inout_fail;                           /* In out fail flag */
-char    small_user;                           /* Small user flag */
-char    user_addr_cmp;                        /* User address compare flag */
+int     inout_fail;                           /* In out fail flag */
+int     small_user;                           /* Small user flag */
+int     user_addr_cmp;                        /* User address compare flag */
 #endif
 #if KI | ITS | BBN
 uint32  e_tlb[512];                           /* Executive TLB */
 uint32  u_tlb[546];                           /* User TLB */
-char    page_enable;                          /* Enable paging */
-char    page_fault;                           /* Page fail */
+int     page_enable;                          /* Enable paging */
+int     page_fault;                           /* Page fail */
 uint32  ac_stack;                             /* Register stack pointer */
 uint32  pag_reload;                           /* Page reload pointer */
 uint64  fault_data;                           /* Fault data from last fault */
@@ -190,7 +190,7 @@ int     user_limit;                           /* User limit register */
 uint64  pur;                                  /* Process use register */
 #endif
 #if MPX_DEV
-char    mpx_enable;                           /* Enable MPX device */
+int     mpx_enable;                           /* Enable MPX device */
 #endif
 #if ITS
 uint32  dbr1;                                 /* User Low Page Table Address */
@@ -201,7 +201,6 @@ uint8   age;                                  /* Age word */
 uint32  fault_addr;                           /* Fault address */
 uint64  opc;                                  /* Saved PC and Flags */
 uint64  mar;                                  /* Memory address compare */
-uint16  ofa;                                  /* Output fault address */
 uint32  qua_time;                             /* Quantum clock value */
 #endif
 
@@ -323,9 +322,81 @@ REG cpu_reg[] = {
     { ORDATA (PIH, PIH, 8) },
     { ORDATA (PIE, PIE, 8) },
     { ORDATA (PIENB, pi_enable, 7) },
+#if KI
+    { BRDATA (REG, FM, 8, 36, 077) },
+#else
     { BRDATA (REG, FM, 8, 36, 017) },
+#endif
     { ORDATAD(SW, SW, 36, "Console SW Register"), REG_FIT},
     { ORDATAD(MI, MI, 36, "Monitor Display"), REG_FIT},
+    { FLDATA (BYF5, BYF5, 0) },
+    { FLDATA (UUO, uuo_cycle, 0) },
+#if KA | PDP6
+    { ORDATA (PL, Pl, 18) },
+    { ORDATA (PH, Ph, 18) },
+    { ORDATA (RL, Rl, 18) },
+    { ORDATA (RH, Rh, 18) },
+    { FLDATA (PFLAG, Pflag, 0) },
+    { FLDATA (PUSHOVER, push_ovf, 0) },
+    { FLDATA (MEMPROT, mem_prot, 0) },
+#endif
+    { FLDATA (NXM, nxm_flag, 0) },
+    { FLDATA (CLK, clk_flg, 0) },
+    { FLDATA (OV, ov_irq, 0) },
+    { FLDATA (FOV, fov_irq, 0) },
+#if PDP6
+    { FLDATA (PCCHG, pcchg_irq, 0) },
+#endif
+    { FLDATA (PI_PEND, pi_pending, 0), REG_HRO},
+    { FLDATA (PARITY, parity_irq, 0) },
+    { ORDATA (APRIRQ, apr_irq, 0) },
+    { ORDATA (CLKIRQ, clk_irq, 0) },
+    { FLDATA (CLKEN, clk_en, 0), REG_HRO},
+    { FLDATA (CLKEN, clk_en, 0), REG_HRO},
+    { FLDATA (XCT, xct_flag, 0), REG_HRO},
+#if MPX_DEV
+    { FLDATA (MPX, mpx_enable, 0), REG_HRO},
+#endif
+    { FLDATA (PIHOLD, pi_hold, 0), REG_HRO},
+    { FLDATA (PIREST, pi_restore, 0), REG_HRO},
+#if KI
+    { ORDATA (UB, ub_ptr, 18) },
+    { ORDATA (EB, eb_ptr, 18) },
+    { ORDATA (FMSEL, fm_sel, 8) },
+    { ORDATA (SERIAL, apr_serial, 10) },
+    { FLDATA (INOUT, inout_fail, 0), REG_RO},
+    { FLDATA (SMALL, small_user, 0), REG_RO},
+    { FLDATA (ADRCMP, user_addr_cmp, 0), REG_HRO},
+#endif
+#if KI | ITS | BBN
+    { FLDATA (PAGE_ENABLE, page_enable, 0)},
+    { FLDATA (PAGE_FAULT, page_fault, 0), REG_RO},
+    { ORDATA (AC_STACK, ac_stack, 18), REG_RO},
+    { ORDATA (PAG_RELOAD, pag_reload, 18), REG_HRO},
+    { ORDATA (FAULT_DATA, fault_data, 36), REG_RO},
+    { FLDATA (TRP_FLG, trap_flag, 0), REG_HRO},
+    { ORDATA (LST_PG, last_page, 9), REG_HRO},
+#endif
+#if BBN
+    { FLDATA (EXEC_MAP, exec_map, 0), REG_RO},
+    { FLDATA (NXT_WR, next_write, 0), REG_RO},
+    { ORDATA (MON_BASE, mon_base_reg, 8), REG_RO},
+    { ORDATA (AC_BASE, ac_base, 5), REG_RO},
+    { ORDATA (USER_BASE, user_base_reg, 8), REG_RO},
+    { ORDATA (USER_LIMIT, user_limit, 3), REG_RO},
+    { ORDATA (PER_USER, pur, 36), REG_RO},
+#endif
+#if ITS
+    { ORDATA (DBR1, dbr1, 18)},
+    { ORDATA (DBR2, dbr2, 18)},
+    { ORDATA (DBR3, dbr3, 18)},
+    { ORDATA (JPC, jpc, 18)},
+    { ORDATA (AGE, age, 4)},
+    { ORDATA (FAULT_ADDR, fault_addr, 18)},
+    { ORDATA (OPC, opc, 36)},
+    { ORDATA (MAR, mar, 18)},
+    { ORDATA (QUA_TIME, qua_time, 36), REG_RO},
+#endif
     { NULL }
     };
 
@@ -741,6 +812,7 @@ void clr_interrupt(int dev) {
  */
 int check_irq_level() {
      int i, lvl;
+     int pi_req;
 
      /* If PXCT don't check for interrupts */
      if (xct_flag != 0)
@@ -848,7 +920,7 @@ t_stat dev_pi(uint32 dev, uint64 *data) {
 #endif
            parity_irq = 0;
         }
-        if (res & 0200) 
+        if (res & 0200)
            pi_enable = 1;
         if (res & 0400)
            pi_enable = 0;
@@ -1332,7 +1404,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
            data = u_tlb[page];
            pag_reload = ((pag_reload + 1) & 037) | 040;
         }
-        if (upmp) 
+        if (upmp)
            last_page = (((page-0440) ^ 0777) << 1) | 1;
         else
            last_page = ((page ^ 0777) << 1);
@@ -1535,129 +1607,129 @@ int its_load_tlb(uint32 reg, int page, uint32 *tlb) {
  */
 
 int page_lookup_its(int addr, int flag, int *loc, int wr, int cur_context, int fetch) {
-        uint64   data;
-        int      base = 0;
-        int      page = (RMASK & addr) >> 10;
-        int      acc;
-        int      uf = (FLAGS & USER) != 0;
-        int      ofd = (int)fault_data;
+    uint64   data;
+    int      base = 0;
+    int      page = (RMASK & addr) >> 10;
+    int      acc;
+    int      uf = (FLAGS & USER) != 0;
+    int      ofd = (int)fault_data;
 
-        /* If paging is not enabled, address is direct */
-        if (!page_enable) {
+    /* If paging is not enabled, address is direct */
+    if (!page_enable) {
+        *loc = addr;
+        return 1;
+    }
+
+    /* If fetching byte data, use write access */
+    if (BYF5 && (IR & 06) == 6)
+        wr = 1;
+
+    /* If this is modify instruction use write access */
+    wr |= modify;
+
+    /* Figure out if this is a user space access */
+    if (flag)
+        uf = 0;
+    else if (xct_flag != 0 && !cur_context && !uf) {
+             if (((xct_flag & 2) != 0 && wr != 0) ||
+                 ((xct_flag & 1) != 0 && (wr == 0 || modify))) {
+                 uf = 1;
+             }
+    }
+
+    /* AC & 1 = ??? */
+    /* AC & 2 = Read User */
+    /* AC & 4 = Write User */
+    /* AC & 8 = Inhibit mem protect, skip */
+
+    /* Add in MAR checking */
+    if (addr == (mar & RMASK)) {
+       switch((mar >> 18) & 03) {
+       case 0: break;
+       case 1: if (fetch) {
+                  mem_prot = 1;
+                  fault_data |= 2;
+               }
+               break;
+       case 2: if (!wr)
+                  break;
+               /* Fall through */
+       case 3: mem_prot = 1;
+               fault_data |= 2;
+               break;
+       }
+    }
+
+
+    /* Map the page */
+    if (!uf) {
+        /* Handle system mapping */
+        if ((page & 0200) == 0 || (fault_data & 04) == 0) {
+        /* Direct map 0-377 or all if bit 2 off */
             *loc = addr;
             return 1;
         }
-
-        /* If fetching byte data, use write access */
-        if (BYF5 && (IR & 06) == 6)
-            wr = 1;
-
-        /* If this is modify instruction use write access */
-        wr |= modify;
-
-        /* Figure out if this is a user space access */
-        if (flag)
-            uf = 0;
-        else if (xct_flag != 0 && !cur_context && !uf) {
-                 if (((xct_flag & 2) != 0 && wr != 0) ||
-                     ((xct_flag & 1) != 0 && (wr == 0 || modify))) {
-                     uf = 1;
-                 }
-        }
-
-        /* AC & 1 = ??? */
-        /* AC & 2 = Read User */
-        /* AC & 4 = Write User */
-        /* AC & 8 = Inhibit mem protect, skip */
-
-        /* Add in MAR checking */
-        if (addr == (mar & RMASK)) {
-           switch((mar >> 18) & 03) {
-           case 0: break;
-           case 1: if (fetch) {
-                      mem_prot = 1;
-                      fault_data |= 2;
-                   }
-                   break;
-           case 2: if (!wr)
-                      break;
-                   /* Fall through */
-           case 3: mem_prot = 1;
-                   fault_data |= 2;
-                   break;
-           }
-        }
-
-
-        /* Map the page */
-        if (!uf) {
-            /* Handle system mapping */
-            if ((page & 0200) == 0 || (fault_data & 04) == 0) {
-            /* Direct map 0-377 or all if bit 2 off */
-                *loc = addr;
-                return 1;
-            }
+        data = e_tlb[page - 0200];
+        if (data == 0) {
+            if (its_load_tlb(dbr3, page - 0200, &e_tlb[page - 0200]))
+                goto fault;
             data = e_tlb[page - 0200];
-            if (data == 0) {
-                if (its_load_tlb(dbr3, page - 0200, &e_tlb[page - 0200]))
-                    goto fault;
-                data = e_tlb[page - 0200];
-            }
-        } else {
-            data = u_tlb[page];
-            if (data == 0) {
-                if (page & 0200) {
-                    if (its_load_tlb(dbr2, page - 0200, &u_tlb[page]))
-                       goto fault;
-                } else {
-                    if (its_load_tlb(dbr1, page, &u_tlb[page]))
-                       goto fault;
-                }
-                data = u_tlb[page];
-            }
         }
-        *loc = ((data & 01777) << 10) + (addr & 01777);
-        acc = (data >> 16) & 03;
+    } else {
+        data = u_tlb[page];
+        if (data == 0) {
+            if (page & 0200) {
+                if (its_load_tlb(dbr2, page - 0200, &u_tlb[page]))
+                   goto fault;
+            } else {
+                if (its_load_tlb(dbr1, page, &u_tlb[page]))
+                   goto fault;
+            }
+            data = u_tlb[page];
+        }
+    }
+    *loc = ((data & 01777) << 10) + (addr & 01777);
+    acc = (data >> 16) & 03;
 
-        /* Access check logic */
-        switch(acc) {
-        case 0:                     /* No access */
-               fault_data |= 0010;
-               break;
-        case 1:                     /* Read Only Access */
-               if (!wr)
-                   return 1;
-               if ((fault_data & 00770) == 0)
-                   fault_data |= 0100;
-               break;
-        case 2:                     /* Read write first */
-               if (fetch && (FLAGS & PURE)) {
-                   fault_data |= 0020;
-                   break;
-               }
-               if (!wr)            /* Read is OK */
-                   return 1;
-               if ((fault_data & 00770) == 0)
-                   fault_data |= 040;
-               break;
-        case 3:                    /* All access */
-               if (fetch && (FLAGS & PURE)) {
-                   fault_data |= 0020;
-                   break;
-               }
+    /* Access check logic */
+    switch(acc) {
+    case 0:                     /* No access */
+           fault_data |= 0010;
+           break;
+    case 1:                     /* Read Only Access */
+           if (!wr)
                return 1;
-       }
+           if ((fault_data & 00770) == 0)
+               fault_data |= 0100;
+           break;
+    case 2:                     /* Read write first */
+           if (fetch && (FLAGS & PURE)) {
+               fault_data |= 0020;
+               break;
+           }
+           if (!wr)            /* Read is OK */
+               return 1;
+           if ((fault_data & 00770) == 0)
+               fault_data |= 040;
+           break;
+    case 3:                    /* All access */
+           if (fetch && (FLAGS & PURE)) {
+               fault_data |= 0020;
+               break;
+           }
+           return 1;
+    }
 fault:
-       /* Update fault data, fault address only if new fault */
-       if ((ofd & 00770) == 0)
-           fault_addr = (page) | ((uf)? 0400 : 0) | ((data & 01777) << 9);
-       if ((xct_flag & 04) == 0) {
-           mem_prot = 1;
-           fault_data |= 01000;
-       } else {
-           PC = (PC + 1) & RMASK;
-       }
-       return 0;
+    /* Update fault data, fault address only if new fault */
+    if ((ofd & 00770) == 0)
+        fault_addr = (page) | ((uf)? 0400 : 0) | ((data & 01777) << 9);
+    if ((xct_flag & 04) == 0) {
+        mem_prot = 1;
+        fault_data |= 01000;
+    } else {
+        PC = (PC + 1) & RMASK;
+    }
+    return 0;
 }
 
 /*
@@ -1776,211 +1848,210 @@ int page_lookup_bbn(int addr, int flag, int *loc, int wr, int cur_context, int f
                   bit 7 = illegal write
                   bit 8 = address limit register violation or p.t. bits
                           0,1 = 3 (illegal format */
-//    if (QBBN) {
-        uint64   data;
-        uint32   tlb_data;
-        uint64   traps;
-        int      base = 0;
-        int      trap = 0;
-        int      lvl = 0;
-        int      page = (RMASK & addr) >> 9;
-        int      uf = (FLAGS & USER) != 0;
+    uint64   data;
+    uint32   tlb_data;
+    uint64   traps;
+    int      base = 0;
+    int      trap = 0;
+    int      lvl = 0;
+    int      page = (RMASK & addr) >> 9;
+    int      uf = (FLAGS & USER) != 0;
 
-        if (page_fault)
-            return 0;
+    if (page_fault)
+        return 0;
 
-        /* If paging is not enabled, address is direct */
-        if (!page_enable) {
-            *loc = addr;
-            return 1;
+    /* If paging is not enabled, address is direct */
+    if (!page_enable) {
+        *loc = addr;
+        return 1;
+    }
+
+    /* If this is modify instruction use write access */
+    wr |= modify;
+
+    /* Umove instructions handled here */
+    if ((IR & 0774) == 0100 && (FLAGS & EXJSYS) == 0)
+        uf = 1;
+    /* Figure out if this is a user space access */
+    if (flag)
+        uf = 0;
+    else if ((FLAGS & EXJSYS) == 0 && xct_flag != 0) {
+         if (xct_flag & 010 && cur_context)
+             uf = 1;
+         if (xct_flag & 004 && wr == 0)
+             uf = 1;
+         if (xct_flag & 002 && BYF5)
+             uf = 1;
+         if (xct_flag & 001 && wr == 1)
+             uf = 1;
+    }
+
+    /* If not really user mode and register access */
+    if (uf && (FLAGS & USER) == 0 && addr < 020) {
+        addr |= 0775000 | (ac_base << 4);
+        uf = 0;
+    }
+
+    if (uf) {
+        if (page > user_limit) {
+            /* over limit violation */
+            fault_data = 0401000;
+            goto fault_bbn;
         }
-
-        /* If this is modify instruction use write access */
-        wr |= modify;
-
-        /* Umove instructions handled here */
-        if ((IR & 0774) == 0100 && (FLAGS & EXJSYS) == 0)
-            uf = 1;
-        /* Figure out if this is a user space access */
-        if (flag)
-            uf = 0;
-        else if ((FLAGS & EXJSYS) == 0 && xct_flag != 0) {
-             if (xct_flag & 010 && cur_context)
-                 uf = 1;
-             if (xct_flag & 004 && wr == 0)
-                 uf = 1;
-             if (xct_flag & 002 && BYF5)
-                 uf = 1;
-             if (xct_flag & 001 && wr == 1)
-                 uf = 1;
+        base = user_base_reg;
+        tlb_data = u_tlb[page];
+    } else {
+        /* 000 - 077 resident map */
+        /* 100 - 177 per processor map */
+        /* 200 - 577 monitor map */
+        /* 600 - 777 per process map */
+        if ((page & 0700) == 0 && exec_map == 0) {
+             *loc = addr;
+             return 1;
         }
-
-        /* If not really user mode and register access */
-        if (uf && (FLAGS & USER) == 0 && addr < 020) {
-            addr |= 0775000 | (ac_base << 4);
-            uf = 0;
-        }
-
-        if (uf) {
-            if (page > user_limit) {
-                /* over limit violation */
-                fault_data = 0401000;
-                goto fault_bbn;
-            }
-            base = user_base_reg;
-            tlb_data = u_tlb[page];
-        } else {
-            /* 000 - 077 resident map */
-            /* 100 - 177 per processor map */
-            /* 200 - 577 monitor map */
-            /* 600 - 777 per process map */
-            if ((page & 0700) == 0 && exec_map == 0) {
-                 *loc = addr;
-                 return 1;
-            }
-            if ((page & 0600) == 0600)
-                 base = mon_base_reg;
-            else
-                 base = 03000;
-            tlb_data = e_tlb[page];
-        }
-        if (tlb_data != 0) {
+        if ((page & 0600) == 0600)
+             base = mon_base_reg;
+        else
+             base = 03000;
+        tlb_data = e_tlb[page];
+    }
+    if (tlb_data != 0) {
 access:
-            *loc = ((tlb_data & 03777) << 9) + (addr & 0777);
-            /* Check access */
-            if (wr && (tlb_data & 0200000) == 0) {
-                fault_data = 0402000;
-                goto fault_bbn;
-            } else if (fetch && (tlb_data & 0100000) == 0) {
-                fault_data = 0404000;
-                goto fault_bbn;
-            } else if ((tlb_data & 0400000) == 0) {
-                fault_data = 0404000;
-                goto fault_bbn;
-            }
-            return 1;
+        *loc = ((tlb_data & 03777) << 9) + (addr & 0777);
+        /* Check access */
+        if (wr && (tlb_data & 0200000) == 0) {
+            fault_data = 0402000;
+            goto fault_bbn;
+        } else if (fetch && (tlb_data & 0100000) == 0) {
+            fault_data = 0404000;
+            goto fault_bbn;
+        } else if ((tlb_data & 0400000) == 0) {
+            fault_data = 0404000;
+            goto fault_bbn;
         }
-        traps = FMASK;
-        /* Map the page */
+        return 1;
+    }
+    traps = FMASK;
+    /* Map the page */
 map_page:
-        while (tlb_data == 0) {
-            data = M[base + page];
+    while (tlb_data == 0) {
+        data = M[base + page];
 
-            switch ((data >> 33) & 03) {
-            case 0:      /* Direct page */
-                 /* Bit 4 = execute */
-                 /* Bit 3 = Write */
-                 /* Bit 2 = Read */
-                 page = data & BBN_PAGE;
-                 traps &= data & (BBN_MERGE|BBN_TRPPG);
-                 tlb_data = (data & (BBN_EXEC|BBN_WRITE|BBN_READ) >> 16) |
-                             (data & 03777);
-                 break;
+        switch ((data >> 33) & 03) {
+        case 0:      /* Direct page */
+             /* Bit 4 = execute */
+             /* Bit 3 = Write */
+             /* Bit 2 = Read */
+             page = data & BBN_PAGE;
+             traps &= data & (BBN_MERGE|BBN_TRPPG);
+             tlb_data = (data & (BBN_EXEC|BBN_WRITE|BBN_READ) >> 16) |
+                         (data & 03777);
+             break;
 
-            case 1:      /* Shared page */
-                 /* Check trap */
-                 base = 020000;
-                 page = (data & BBN_SPT) >> 9;
-                 traps &= data & (BBN_MERGE|BBN_PAGE);
-                 data = 0;
-                 lvl ++;
-                 break;
+        case 1:      /* Shared page */
+             /* Check trap */
+             base = 020000;
+             page = (data & BBN_SPT) >> 9;
+             traps &= data & (BBN_MERGE|BBN_PAGE);
+             data = 0;
+             lvl ++;
+             break;
 
-            case 2:      /* Indirect page */
-                 if (lvl == 2) {
-                     /* Trap */
-                     fault_data =  0201000;
-                     goto fault_bbn;
-                 }
-                 page = data & BBN_PN;
-                 base = 020000 + ((data & BBN_SPT) >> 9);
-                 traps &= data & (BBN_MERGE|BBN_PAGE);
-                 data = 0;
-                 lvl ++;
-                 break;
-
-            case 3:      /* Invalid page */
-                 /* Trap all  */
-                 fault_data = ((lvl != 0)? 0200000: 0)  | 0401000;
+        case 2:      /* Indirect page */
+             if (lvl == 2) {
+                 /* Trap */
+                 fault_data =  0201000;
                  goto fault_bbn;
-            }
-            if ((traps & (BBN_TRP|BBN_TRP1)) == (BBN_TRP|BBN_TRP1)) {
-               fault_data = 04000;
-               goto fault_bbn;
-            }
+             }
+             page = data & BBN_PN;
+             base = 020000 + ((data & BBN_SPT) >> 9);
+             traps &= data & (BBN_MERGE|BBN_PAGE);
+             data = 0;
+             lvl ++;
+             break;
+
+        case 3:      /* Invalid page */
+             /* Trap all  */
+             fault_data = ((lvl != 0)? 0200000: 0)  | 0401000;
+             goto fault_bbn;
         }
-        if (uf) {
-            u_tlb[page] = tlb_data;
-        } else {
-            e_tlb[page] = tlb_data;
+        if ((traps & (BBN_TRP|BBN_TRP1)) == (BBN_TRP|BBN_TRP1)) {
+           fault_data = 04000;
+           goto fault_bbn;
         }
-        /* Handle traps */
-        if (page_fault)
-           goto fault_bbn1;
-        if (wr && (traps & BBN_TRPMOD)) {
-            fault_data = ((lvl != 0)? 0200000: 0)  | 0440000;
-            goto fault_bbn;
-        }
-        if ((traps & BBN_TRPUSR)) {
-            fault_data = ((lvl != 0)? 0200000: 0)  | 0420000;
-            goto fault_bbn;
-        }
-        if ((traps & BBN_ACC) == 0 || (traps & BBN_TRP)) {
-            fault_data = ((lvl != 0)? 0200000: 0)  | 0410000;
-            goto fault_bbn;
-        }
-        /* Update CST */
-        data = M[04000 + (tlb_data & 03777)];
-        if ((data & 00700000000000LL) == 0) {
-            fault_data = 0100000 >> ((data >> 31) & 03);
-            goto fault_bbn;
-        }
-        data &= ~00777000000000LL; /* Clear age */
-        if (wr)
-           data |= 00000400000000LL; /* Set modify */
-        data |= pur;
-        M[04000 + (tlb_data & 03777)] = data;
-        goto access;
+    }
+    if (uf) {
+        u_tlb[page] = tlb_data;
+    } else {
+        e_tlb[page] = tlb_data;
+    }
+    /* Handle traps */
+    if (page_fault)
+       goto fault_bbn1;
+    if (wr && (traps & BBN_TRPMOD)) {
+        fault_data = ((lvl != 0)? 0200000: 0)  | 0440000;
+        goto fault_bbn;
+    }
+    if ((traps & BBN_TRPUSR)) {
+        fault_data = ((lvl != 0)? 0200000: 0)  | 0420000;
+        goto fault_bbn;
+    }
+    if ((traps & BBN_ACC) == 0 || (traps & BBN_TRP)) {
+        fault_data = ((lvl != 0)? 0200000: 0)  | 0410000;
+        goto fault_bbn;
+    }
+    /* Update CST */
+    data = M[04000 + (tlb_data & 03777)];
+    if ((data & 00700000000000LL) == 0) {
+        fault_data = 0100000 >> ((data >> 31) & 03);
+        goto fault_bbn;
+    }
+    data &= ~00777000000000LL; /* Clear age */
+    if (wr)
+       data |= 00000400000000LL; /* Set modify */
+    data |= pur;
+    M[04000 + (tlb_data & 03777)] = data;
+    goto access;
       /* Handle fault */
 fault_bbn:
-      /* Write location of trap to PSB 571 */
-      /* If write write MB to PSB 752 */
-      /* Force APR to execute at location 70 */
+    /* Write location of trap to PSB 571 */
+    /* If write write MB to PSB 752 */
+    /* Force APR to execute at location 70 */
 
-      /* Status word */
-      /* RH = Effective address */
-      /* Bit 17 = Exec Mode        0000001 */
-      /* Bit 16 = Execute request  0000002 */
-      /* Bit 15 = Write            0000004 */
-      /* Bit 14 = Read             0000010 */
-      /* Bit 13 = Ind              0000020 */
-      /* Bit 12 = PI in progress   0000040 */
-      /* Bit 11 = Key in progress  0000100 */
-      /* Bit 10 = non-ex-mem       0000200 */
-      /* Bit  9 = Parity           0000400 */
-      /* Bit 0-8 = status */
-      if ((FLAGS & USER) == 0)
-         fault_data |= 01;
-      if (fetch)
-         fault_data |= 02;
-      if (wr)
-         fault_data |= 04;
-      else
-         fault_data |= 010;
-      if (cur_context)
-         fault_data |= 020;
-      if (uuo_cycle)
-         fault_data |= 040;
-      page_fault = 1;
-      base = mon_base_reg;
-      tlb_data = e_tlb[0777];
-      page = 0777;
-      goto map_page;
+    /* Status word */
+    /* RH = Effective address */
+    /* Bit 17 = Exec Mode        0000001 */
+    /* Bit 16 = Execute request  0000002 */
+    /* Bit 15 = Write            0000004 */
+    /* Bit 14 = Read             0000010 */
+    /* Bit 13 = Ind              0000020 */
+    /* Bit 12 = PI in progress   0000040 */
+    /* Bit 11 = Key in progress  0000100 */
+    /* Bit 10 = non-ex-mem       0000200 */
+    /* Bit  9 = Parity           0000400 */
+    /* Bit 0-8 = status */
+    if ((FLAGS & USER) == 0)
+       fault_data |= 01;
+    if (fetch)
+       fault_data |= 02;
+    if (wr)
+       fault_data |= 04;
+    else
+       fault_data |= 010;
+    if (cur_context)
+       fault_data |= 020;
+    if (uuo_cycle)
+       fault_data |= 040;
+    page_fault = 1;
+    base = mon_base_reg;
+    tlb_data = e_tlb[0777];
+    page = 0777;
+    goto map_page;
 fault_bbn1:
-      M[((tlb_data & 03777) << 9) | 0571] = ((uint64)fault_data) << 18 | addr;
-      if (wr)
-          M[((tlb_data & 03777) << 9) | 0572] = MB;
-      return 0;
+    M[((tlb_data & 03777) << 9) | 0571] = ((uint64)fault_data) << 18 | addr;
+    if (wr)
+        M[((tlb_data & 03777) << 9) | 0572] = MB;
+    return 0;
 }
 
 /*
@@ -2195,7 +2266,7 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
     if (f_load_pc) {
         modify = 0;
         xct_flag = 0;
-#if KI | KL 
+#if KI | KL
         trap_flag = 0;
 #endif
         AB = PC;
@@ -3600,7 +3671,7 @@ fnorm:
               AR = (AR << 1) + (MQ >> 35);
               MQ &= CMASK;                   /* low order only has 35 bits */
               if ((IR & 4) == 0) {           /* IMUL */
-                 if (AR > flag3 && !pi_cycle) {
+                  if (AR > flag3 && !pi_cycle) {
                      FLAGS |= OVR|TRP1;
                      check_apr_irq();
                   }
@@ -4079,7 +4150,7 @@ fnorm:
                       flag1 = (FLAGS & USERIO) != 0;
                   }
               }
-  
+
               flag3 = 0;
               /* If user, check if small user enabled */
               if (flag1) {
@@ -4134,7 +4205,7 @@ fnorm:
                      }
                      pag_reload = ((pag_reload + 1) & 037) | 040;
                   }
-                  if (flag3 & 2) 
+                  if (flag3 & 2)
                       last_page = (((f-0440) ^ 0777) << 1) | 1;
                   else
                       last_page = ((f ^ 0777) << 1);
@@ -5058,7 +5129,7 @@ page_enable = 0;
 #endif
 nxm_flag = clk_flg = 0;
 PIR = PIH = PIE = pi_enable = parity_irq = 0;
-pi_pending = pi_req = pi_enc = apr_irq = 0;
+pi_pending = pi_enc = apr_irq = 0;
 ov_irq =fov_irq =clk_en =clk_irq = 0;
 pi_restore = pi_hold = 0;
 #if KI | KL

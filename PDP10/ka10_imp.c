@@ -506,7 +506,7 @@ t_stat imp_devio(uint32 dev, uint64 *data)
             uptr->STATUS |= IMPO32;
         if (*data & IMPODS) //Set output done.
             uptr->STATUS |= IMPOD;
-        if (*data & IMPIR) { //Enable interrup on IMP ready.
+        if (*data & IMPIR) { //Enable interrupt on IMP ready.
             uptr->STATUS |= IMPIC;
             uptr->STATUS &= ~IMPERR;
         }
@@ -1069,7 +1069,7 @@ imp_packet_out(struct imp_device *imp, ETH_PACK *packet) {
                        (uint8 *)(&imp->ip), sizeof(in_addr_t));
            /* See if we need to change the sequence number */
            for (i = 0; i < 64; i++) {
-               if (imp->port_map[i].sport == sport && 
+               if (imp->port_map[i].sport == sport &&
                    imp->port_map[i].dport == dport) {
                    /* Check if SYN */
                    if (ntohs(tcp_hdr->flags) & 02) {

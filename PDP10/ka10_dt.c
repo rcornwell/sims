@@ -299,8 +299,9 @@ REG dt_reg[] = {
     { ORDATA (DTSA, dtsa, 18) },
     { ORDATA (DTSB, dtsb, 18) },
     { ORDATA (DTDB, dtdb, 18) },
+    { ORDATA (MPX, dt_mpx_lvl, 3) },
     { URDATA (POS, dt_unit[0].pos, 10, T_ADDR_W, 0,
-              DT_NUMDR, PV_LEFT | REG_RO) },
+              DT_NUMDR, PV_LEFT | REG_RO | REG_UNIT) },
     { NULL }
     };
 

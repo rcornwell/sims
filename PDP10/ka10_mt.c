@@ -197,9 +197,31 @@ MTAB                mt_mod[] = {
     {0}
 };
 
+REG                 mt_reg[] = {
+    {BRDATA(BUFF, &mt_buffer[0], 16, 64, BUFFSIZE), REG_HRO},
+    {ORDATA(PIA, pia, 3)},
+    {ORDATA(UNIT, unit, 3)},
+    {ORDATA(NUNIT, next_unit, 3)},
+    {FLDATA(READIN, hri_mode, 0), REG_HRO},
+    {FLDATA(WREOR, wr_eor, 0), REG_HRO},
+    {ORDATA(STATUS, status, 18), REG_HRO},
+    {ORDATA(HOLD, hold_reg, 36), REG_HRO},
+    {ORDATA(MPX, mt_mpx_lvl, 3)},
+    {ORDATA(CC, cc, 3), REG_RO},
+    {ORDATA(DSTATUS, mt_df10.status, 18), REG_RO},
+    {ORDATA(CIA, mt_df10.cia, 18)},
+    {ORDATA(CCW, mt_df10.ccw, 18)},
+    {ORDATA(WCR, mt_df10.wcr, 18)},
+    {ORDATA(CDA, mt_df10.cda, 18)},
+    {ORDATA(DEVNUM, mt_df10.devnum, 9), REG_HRO},
+    {ORDATA(BUF, mt_df10.buf, 36), REG_HRO},
+    {ORDATA(NXM, mt_df10.nxmerr, 8), REG_HRO},
+    {ORDATA(COMP, mt_df10.ccw_comp, 8), REG_HRO},
+    {0}
+};
 
 DEVICE              mt_dev = {
-    "MTA", mt_unit, NULL, mt_mod,
+    "MTA", mt_unit, mt_reg, mt_mod,
     8, 8, 15, 1, 8, 8,
     NULL, NULL, &mt_reset, &mt_boot, &mt_attach, &mt_detach,
     &mt_dib, DEV_DISABLE | DEV_DEBUG | DEV_TAPE, 0, dev_debug,

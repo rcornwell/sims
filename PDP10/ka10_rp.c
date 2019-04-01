@@ -398,8 +398,30 @@ MTAB                rp_mod[] = {
     {0}
 };
 
+REG                 rpa_reg[] = {
+    {ORDATA(IVECT, rp_ivect[0], 18)},
+    {FLDATA(IMODE, rp_imode[0], 0)},
+    {ORDATA(XFER, rp_xfer_drive[0], 3), REG_HRO},
+    {ORDATA(DRIVE, rp_drive[0], 3), REG_HRO},
+    {ORDATA(REG, rp_reg[0], 6), REG_RO},
+    {ORDATA(RAE, rp_rae[0], 8), REG_RO},
+    {ORDATA(ATTN, rp_attn[0], 8), REG_RO},
+    {FLDATA(READIN, readin_flag, 0), REG_HRO},
+    {ORDATA(STATUS, rp_df10[0].status, 18), REG_RO},
+    {ORDATA(CIA, rp_df10[0].cia, 18)},
+    {ORDATA(CCW, rp_df10[0].ccw, 18)},
+    {ORDATA(WCR, rp_df10[0].wcr, 18)},
+    {ORDATA(CDA, rp_df10[0].cda, 18)},
+    {ORDATA(DEVNUM, rp_df10[0].devnum, 9), REG_HRO},
+    {ORDATA(BUF, rp_df10[0].buf, 36), REG_HRO},
+    {ORDATA(NXM, rp_df10[0].nxmerr, 8), REG_HRO},
+    {ORDATA(COMP, rp_df10[0].ccw_comp, 8), REG_HRO},
+    {BRDATA(BUFF, &rp_buf[0][0], 16, 64, RP_NUMWD), REG_HRO},
+    {0}
+};  
+
 DEVICE              rpa_dev = {
-    "RPA", rp_unit, NULL, rp_mod,
+    "RPA", rp_unit, rpa_reg, rp_mod,
     NUM_UNITS_RP, 8, 18, 1, 8, 36,
     NULL, NULL, &rp_reset, &rp_boot, &rp_attach, &rp_detach,
     &rp_dib[0], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
@@ -407,8 +429,29 @@ DEVICE              rpa_dev = {
 };
 
 #if (NUM_DEVS_RP > 1)
+REG                 rpb_reg[] = {
+    {ORDATA(IVECT, rp_ivect[1], 18)},
+    {FLDATA(IMODE, rp_imode[1], 0)},
+    {ORDATA(XFER, rp_xfer_drive[1], 3), REG_HRO},
+    {ORDATA(DRIVE, rp_drive[1], 3), REG_HRO},
+    {ORDATA(REG, rp_reg[1], 6), REG_RO},
+    {ORDATA(RAE, rp_rae[1], 8), REG_RO},
+    {ORDATA(ATTN, rp_attn[1], 8), REG_RO},
+    {ORDATA(STATUS, rp_df10[1].status, 18), REG_RO},
+    {ORDATA(CIA, rp_df10[1].cia, 18)},
+    {ORDATA(CCW, rp_df10[1].ccw, 18)},
+    {ORDATA(WCR, rp_df10[1].wcr, 18)},
+    {ORDATA(CDA, rp_df10[1].cda, 18)},
+    {ORDATA(DEVNUM, rp_df10[1].devnum, 9), REG_HRO},
+    {ORDATA(BUF, rp_df10[1].buf, 36), REG_HRO},
+    {ORDATA(NXM, rp_df10[1].nxmerr, 8), REG_HRO},
+    {ORDATA(COMP, rp_df10[1].ccw_comp, 8), REG_HRO},
+    {BRDATA(BUFF, &rp_buf[1][0], 16, 64, RP_NUMWD), REG_HRO},
+    {0}
+};  
+
 DEVICE              rpb_dev = {
-    "RPB", &rp_unit[010], NULL, rp_mod,
+    "RPB", &rp_unit[010], rpb_reg, rp_mod,
     NUM_UNITS_RP, 8, 18, 1, 8, 36,
     NULL, NULL, &rp_reset, &rp_boot, &rp_attach, &rp_detach,
     &rp_dib[1], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
@@ -416,8 +459,29 @@ DEVICE              rpb_dev = {
 };
 
 #if (NUM_DEVS_RP > 2)
+REG                 rpc_reg[] = {
+    {ORDATA(IVECT, rp_ivect[2], 18)},
+    {FLDATA(IMODE, rp_imode[2], 0)},
+    {ORDATA(XFER, rp_xfer_drive[2], 3), REG_HRO},
+    {ORDATA(DRIVE, rp_drive[2], 3), REG_HRO},
+    {ORDATA(REG, rp_reg[2], 6), REG_RO},
+    {ORDATA(RAE, rp_rae[2], 8), REG_RO},
+    {ORDATA(ATTN, rp_attn[2], 8), REG_RO},
+    {ORDATA(STATUS, rp_df10[2].status, 18), REG_RO},
+    {ORDATA(CIA, rp_df10[2].cia, 18)},
+    {ORDATA(CCW, rp_df10[2].ccw, 18)},
+    {ORDATA(WCR, rp_df10[2].wcr, 18)},
+    {ORDATA(CDA, rp_df10[2].cda, 18)},
+    {ORDATA(DEVNUM, rp_df10[2].devnum, 9), REG_HRO},
+    {ORDATA(BUF, rp_df10[2].buf, 36), REG_HRO},
+    {ORDATA(NXM, rp_df10[2].nxmerr, 8), REG_HRO},
+    {ORDATA(COMP, rp_df10[2].ccw_comp, 8), REG_HRO},
+    {BRDATA(BUFF, &rp_buf[2][0], 16, 64, RP_NUMWD), REG_HRO},
+    {0}
+};  
+
 DEVICE              rpc_dev = {
-    "RPC", &rp_unit[020], NULL, rp_mod,
+    "RPC", &rp_unit[020], rpc_reg, rp_mod,
     NUM_UNITS_RP, 8, 18, 1, 8, 36,
     NULL, NULL, &rp_reset, &rp_boot, &rp_attach, &rp_detach,
     &rp_dib[2], DEV_DISABLE | DEV_DIS | DEV_DEBUG, 0, dev_debug,
@@ -425,8 +489,29 @@ DEVICE              rpc_dev = {
 };
 
 #if (NUM_DEVS_RP > 3)
+REG                 rpd_reg[] = {
+    {ORDATA(IVECT, rp_ivect[3], 18)},
+    {FLDATA(IMODE, rp_imode[3], 0)},
+    {ORDATA(XFER, rp_xfer_drive[3], 3), REG_HRO},
+    {ORDATA(DRIVE, rp_drive[3], 3), REG_HRO},
+    {ORDATA(REG, rp_reg[3], 6), REG_RO},
+    {ORDATA(RAE, rp_rae[3], 8), REG_RO},
+    {ORDATA(ATTN, rp_attn[3], 8), REG_RO},
+    {ORDATA(STATUS, rp_df10[3].status, 18), REG_RO},
+    {ORDATA(CIA, rp_df10[3].cia, 18)},
+    {ORDATA(CCW, rp_df10[3].ccw, 18)},
+    {ORDATA(WCR, rp_df10[3].wcr, 18)},
+    {ORDATA(CDA, rp_df10[3].cda, 18)},
+    {ORDATA(DEVNUM, rp_df10[3].devnum, 9), REG_HRO},
+    {ORDATA(BUF, rp_df10[3].buf, 36), REG_HRO},
+    {ORDATA(NXM, rp_df10[3].nxmerr, 8), REG_HRO},
+    {ORDATA(COMP, rp_df10[3].ccw_comp, 8), REG_HRO},
+    {BRDATA(BUFF, &rp_buf[3][0], 16, 64, RP_NUMWD), REG_HRO},
+    {0}
+};  
+
 DEVICE              rpd_dev = {
-    "RPD", &rp_unit[030], NULL, rp_mod,
+    "RPD", &rp_unit[030], rpd_reg, rp_mod,
     NUM_UNITS_RP, 8, 18, 1, 8, 36,
     NULL, NULL, &rp_reset, &rp_boot, &rp_attach, &rp_detach,
     &rp_dib[3], DEV_DISABLE | DEV_DIS | DEV_DEBUG, 0, dev_debug,

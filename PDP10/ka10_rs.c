@@ -283,8 +283,30 @@ MTAB                rs_mod[] = {
     {0}
 };
 
+REG                 rsa_reg[] = {
+    {ORDATA(IVECT, rs_ivect[0], 18)},
+    {FLDATA(IMODE, rs_imode[0], 0)},
+    {ORDATA(XFER, rs_xfer_drive[0], 3), REG_HRO},
+    {ORDATA(DRIVE, rs_drive[0], 3), REG_HRO},
+    {ORDATA(REG, rs_reg[0], 6), REG_RO},
+    {ORDATA(RAE, rs_rae[0], 8), REG_RO},
+    {ORDATA(ATTN, rs_attn[0], 8), REG_RO},
+    {FLDATA(READIN, readin_flag, 0), REG_HRO},
+    {ORDATA(STATUS, rs_df10[0].status, 18), REG_RO},
+    {ORDATA(CIA, rs_df10[0].cia, 18)},
+    {ORDATA(CCW, rs_df10[0].ccw, 18)},
+    {ORDATA(WCR, rs_df10[0].wcr, 18)},
+    {ORDATA(CDA, rs_df10[0].cda, 18)},
+    {ORDATA(DEVNUM, rs_df10[0].devnum, 9), REG_HRO},
+    {ORDATA(BUF, rs_df10[0].buf, 36), REG_HRO},
+    {ORDATA(NXM, rs_df10[0].nxmerr, 8), REG_HRO},
+    {ORDATA(COMP, rs_df10[0].ccw_comp, 8), REG_HRO},
+    {BRDATA(BUFF, &rs_buf[0][0], 16, 64, RS_NUMWD), REG_HRO},
+    {0}
+};  
+
 DEVICE              rsa_dev = {
-    "FSA", rs_unit, NULL, rs_mod,
+    "FSA", rs_unit, rsa_reg, rs_mod,
     NUM_UNITS_RS, 8, 18, 1, 8, 36,
     NULL, NULL, &rs_reset, &rs_boot, &rs_attach, &rs_detach,
     &rs_dib[0], DEV_DISABLE | DEV_DIS | DEV_DEBUG, 0, dev_debug,

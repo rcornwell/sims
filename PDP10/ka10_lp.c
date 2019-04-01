@@ -65,7 +65,6 @@ t_stat          lpt_detach (UNIT *uptr);
 t_stat          lpt_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
                          const char *cptr);
 const char     *lpt_description (DEVICE *dptr);
-int32           lpt_stopioe;
 
 char            lpt_buffer[134 * 3];
 uint8           lpt_chbuf[5];             /* Read in Character buffers */
@@ -84,9 +83,8 @@ UNIT lpt_unit = {
     };
 
 REG lpt_reg[] = {
-    { DRDATA (STATUS, lpt_unit.STATUS, 18), PV_LEFT },
-    { DRDATA (TIME, lpt_unit.wait, 24), PV_LEFT },
-    { FLDATA (STOP_IOE, lpt_stopioe, 0) },
+    { DRDATA (STATUS, lpt_unit.STATUS, 18), PV_LEFT | REG_UNIT },
+    { DRDATA (TIME, lpt_unit.wait, 24), PV_LEFT | REG_UNIT },
     { BRDATA(BUFF, lpt_buffer, 16, 8, sizeof(lpt_buffer)), REG_HRO},
     { BRDATA(CBUFF, lpt_chbuf, 16, 8, sizeof(lpt_chbuf)), REG_HRO},
     { NULL }
@@ -207,7 +205,7 @@ uint16 utf_code[32] = {
       0x222b,           /* Integral */
       0x00b1,           /* Plus minus */
       0x2295,           /* Circle plus */
-      0x221e,           /* Infinity */  
+      0x221e,           /* Infinity */
       0x2202,           /* Partial derivitive */
       0x2282,           /* Subset of */
       0x2283,           /* Superset of */
@@ -252,7 +250,7 @@ lpt_output(UNIT *uptr, char c) {
         lpt_buffer[uptr->POS++] = c;
         uptr->COL++;
     }
-    if (uptr->COL == 132) 
+    if (uptr->COL == 132)
         lpt_printline(uptr, 1);
     return;
 }

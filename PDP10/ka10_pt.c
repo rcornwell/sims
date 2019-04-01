@@ -73,8 +73,8 @@ UNIT ptp_unit = {
     };
 
 REG ptp_reg[] = {
-    { DRDATA (STATUS, ptp_unit.STATUS, 18), PV_LEFT },
-    { DRDATA (TIME, ptp_unit.wait, 24), PV_LEFT },
+    { DRDATA (STATUS, ptp_unit.STATUS, 18), PV_LEFT | REG_UNIT},
+    { DRDATA (TIME, ptp_unit.wait, 24), PV_LEFT | REG_UNIT},
     { NULL }
     };
 
@@ -97,8 +97,8 @@ UNIT ptr_unit = {
     };
 
 REG ptr_reg[] = {
-    { DRDATA (STATUS, ptr_unit.STATUS, 18), PV_LEFT },
-    { DRDATA (TIME, ptr_unit.wait, 24), PV_LEFT },
+    { DRDATA (STATUS, ptr_unit.STATUS, 18), PV_LEFT | REG_UNIT},
+    { DRDATA (TIME, ptr_unit.wait, 24), PV_LEFT | REG_UNIT},
     { NULL }
     };
 
@@ -169,7 +169,7 @@ t_stat ptp_svc (UNIT *uptr)
 
     if ((uptr->flags & UNIT_ATT) == 0) {
         uptr->STATUS |= NO_TAPE_PP;
-        return SCPE_UNATT;
+        return SCPE_OK;
     }
     fputc (uptr->CHR, uptr->fileref);                       /* print char */
     uptr->pos = ftell (uptr->fileref);
@@ -267,7 +267,7 @@ t_stat ptr_svc (UNIT *uptr)
     set_interrupt(PR_DEVNUM, uptr->STATUS);
 
     if ((uptr->flags & UNIT_ATT) == 0)                   /* attached? */
-        return SCPE_UNATT;
+        return SCPE_OK;
     word = 0;
     while (count > 0) {
         if ((temp = getc (uptr->fileref)) == EOF) {

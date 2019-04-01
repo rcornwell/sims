@@ -266,6 +266,30 @@ MTAB                tu_mod[] = {
     {0}
 };
 
+REG                 tua_reg[] = {
+    {ORDATA(IVECT, tu_ivect[0], 18)},
+    {FLDATA(IMODE, tu_imode[0], 0)},
+    {ORDATA(FRAME, tu_frame[0], 16)},
+    {ORDATA(TCR, tu_tcr[0], 16)},
+    {ORDATA(XFER, tu_xfer_drive[0], 3), REG_HRO},
+    {ORDATA(DRIVE, tu_drive[0], 3), REG_HRO},
+    {ORDATA(REG, tu_reg[0], 6), REG_RO},
+    {ORDATA(RAE, tu_rae[0], 8), REG_RO},
+    {ORDATA(ATTN, tu_attn[0], 8), REG_RO},
+    {FLDATA(READIN, readin_flag, 0), REG_HRO},
+    {ORDATA(STATUS, tu_df10[0].status, 18), REG_RO},
+    {ORDATA(CIA, tu_df10[0].cia, 18)},
+    {ORDATA(CCW, tu_df10[0].ccw, 18)},
+    {ORDATA(WCR, tu_df10[0].wcr, 18)},
+    {ORDATA(CDA, tu_df10[0].cda, 18)},
+    {ORDATA(DEVNUM, tu_df10[0].devnum, 9), REG_HRO},
+    {ORDATA(BUF, tu_df10[0].buf, 36), REG_HRO},
+    {ORDATA(NXM, tu_df10[0].nxmerr, 8), REG_HRO},
+    {ORDATA(COMP, tu_df10[0].ccw_comp, 8), REG_HRO},
+    {BRDATA(BUFF, &tu_buf[0][0], 16, 64, TU_NUMFR), REG_HRO},
+    {0}
+};  
+
 DEVICE              tua_dev = {
     "TUA", tu_unit, NULL, tu_mod,
     NUM_UNITS_TU, 8, 18, 1, 8, 36,

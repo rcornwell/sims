@@ -162,8 +162,23 @@ MTAB                rc_mod[] = {
     {0}
 };
 
+REG                 rca_reg[] = {
+    {BRDATA(BUFF, &rc_buf[0][0], 16, 64, RM10_WDS), REG_HRO},
+    {ORDATA(IPR, rc_ipr[0], 2), REG_HRO},
+    {ORDATA(STATUS, rc_df10[0].status, 18), REG_RO},
+    {ORDATA(CIA, rc_df10[0].cia, 18)},
+    {ORDATA(CCW, rc_df10[0].ccw, 18)},
+    {ORDATA(WCR, rc_df10[0].wcr, 18)},
+    {ORDATA(CDA, rc_df10[0].cda, 18)},
+    {ORDATA(DEVNUM, rc_df10[0].devnum, 9), REG_HRO},
+    {ORDATA(BUF, rc_df10[0].buf, 36), REG_HRO},
+    {ORDATA(NXM, rc_df10[0].nxmerr, 8), REG_HRO},
+    {ORDATA(COMP, rc_df10[0].ccw_comp, 8), REG_HRO},
+    {0}
+};
+
 DEVICE              rca_dev = {
-    "FHA", rc_unit, NULL, rc_mod,
+    "FHA", rc_unit, rca_reg, rc_mod,
     NUM_UNITS_RC, 8, 18, 1, 8, 36,
     NULL, NULL, &rc_reset, &rc_boot, &rc_attach, &rc_detach,
     &rc_dib[0], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
@@ -171,8 +186,23 @@ DEVICE              rca_dev = {
 };
 
 #if (NUM_DEVS_RC > 1)
+REG                 rcb_reg[] = {
+    {BRDATA(BUFF, &rc_buf[1][0], 16, 64, RM10_WDS), REG_HRO},
+    {ORDATA(IPR, rc_ipr[1], 2), REG_HRO},
+    {ORDATA(STATUS, rc_df10[1].status, 18), REG_RO},
+    {ORDATA(CIA, rc_df10[1].cia, 18)},
+    {ORDATA(CCW, rc_df10[1].ccw, 18)},
+    {ORDATA(WCR, rc_df10[1].wcr, 18)},
+    {ORDATA(CDA, rc_df10[1].cda, 18)},
+    {ORDATA(DEVNUM, rc_df10[1].devnum, 9), REG_HRO},
+    {ORDATA(BUF, rc_df10[1].buf, 36), REG_HRO},
+    {ORDATA(NXM, rc_df10[1].nxmerr, 8), REG_HRO},
+    {ORDATA(COMP, rc_df10[1].ccw_comp, 8), REG_HRO},
+    {0}
+};
+
 DEVICE              rcb_dev = {
-    "FHB", &rc_unit[010], NULL, rc_mod,
+    "FHB", &rc_unit[010], rcb_reg, rc_mod,
     NUM_UNITS_RC, 8, 18, 1, 8, 36,
     NULL, NULL, &rc_reset, &rc_boot, &rc_attach, &rc_detach,
     &rc_dib[1], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,

@@ -275,8 +275,24 @@ MTAB                dp_mod[] = {
     {0}
 };
 
+REG                 dpa_reg[] = {
+    {BRDATA(BUFF, &dp_buf[0][0], 16, 64, RP_NUMWD), REG_HRO},
+    {BRDATA(UNIT, &dp_cur_unit[0], 16, 8, 1), REG_HRO},
+    {FLDATA(READIN, readin_flag, 0), REG_HRO},
+    {ORDATA(STATUS, dp_df10[0].status, 18), REG_RO},
+    {ORDATA(CIA, dp_df10[0].cia, 18)},
+    {ORDATA(CCW, dp_df10[0].ccw, 18)},
+    {ORDATA(WCR, dp_df10[0].wcr, 18)},
+    {ORDATA(CDA, dp_df10[0].cda, 18)},
+    {ORDATA(DEVNUM, dp_df10[0].devnum, 9), REG_HRO},
+    {ORDATA(BUF, dp_df10[0].buf, 36), REG_HRO},
+    {ORDATA(NXM, dp_df10[0].nxmerr, 8), REG_HRO},
+    {ORDATA(COMP, dp_df10[0].ccw_comp, 8), REG_HRO},
+    {0}
+};
+
 DEVICE              dpa_dev = {
-    "DPA", dp_unit, NULL, dp_mod,
+    "DPA", dp_unit, dpa_reg, dp_mod,
     NUM_UNITS_DP, 8, 18, 1, 8, 36,
     NULL, NULL, &dp_reset, &dp_boot, &dp_attach, &dp_detach,
     &dp_dib[0], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
@@ -284,8 +300,23 @@ DEVICE              dpa_dev = {
 };
 
 #if (NUM_DEVS_DP > 1)
+REG                 dpb_reg[] = {
+    {BRDATA(BUFF, &dp_buf[1][0], 16, 64, RP_NUMWD), REG_HRO},
+    {BRDATA(DF10, &dp_cur_unit[1], 16, 8, 1), REG_HRO},
+    {ORDATA(STATUS, dp_df10[1].status, 18), REG_RO},
+    {ORDATA(CIA, dp_df10[1].cia, 18)},
+    {ORDATA(CCW, dp_df10[1].ccw, 18)},
+    {ORDATA(WCR, dp_df10[1].wcr, 18)},
+    {ORDATA(CDA, dp_df10[1].cda, 18)},
+    {ORDATA(DEVNUM, dp_df10[1].devnum, 9), REG_HRO},
+    {ORDATA(BUF, dp_df10[1].buf, 36), REG_HRO},
+    {ORDATA(NXM, dp_df10[1].nxmerr, 8), REG_HRO},
+    {ORDATA(COMP, dp_df10[1].ccw_comp, 8), REG_HRO},
+    {0}
+};
+
 DEVICE              dpb_dev = {
-    "DPB", &dp_unit[010], NULL, dp_mod,
+    "DPB", &dp_unit[010], dpb_reg, dp_mod,
     NUM_UNITS_DP, 8, 18, 1, 8, 36,
     NULL, NULL, &dp_reset, &dp_boot, &dp_attach, &dp_detach,
     &dp_dib[1], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
@@ -293,8 +324,23 @@ DEVICE              dpb_dev = {
 };
 
 #if (NUM_DEVS_DP > 2)
+REG                 dpc_reg[] = {
+    {BRDATA(BUFF, &dp_buf[2][0], 16, 64, RP_NUMWD), REG_HRO},
+    {BRDATA(DF10, &dp_cur_unit[2], 16, 8, 1), REG_HRO},
+    {ORDATA(STATUS, dp_df10[2].status, 18), REG_RO},
+    {ORDATA(CIA, dp_df10[2].cia, 18)},
+    {ORDATA(CCW, dp_df10[2].ccw, 18)},
+    {ORDATA(WCR, dp_df10[2].wcr, 18)},
+    {ORDATA(CDA, dp_df10[2].cda, 18)},
+    {ORDATA(DEVNUM, dp_df10[2].devnum, 9), REG_HRO},
+    {ORDATA(BUF, dp_df10[2].buf, 36), REG_HRO},
+    {ORDATA(NXM, dp_df10[2].nxmerr, 8), REG_HRO},
+    {ORDATA(COMP, dp_df10[2].ccw_comp, 8), REG_HRO},
+    {0}
+};
+
 DEVICE              dpc_dev = {
-    "DPC", &dp_unit[020], NULL, dp_mod,
+    "DPC", &dp_unit[020], dpc_reg, dp_mod,
     NUM_UNITS_DP, 8, 18, 1, 8, 36,
     NULL, NULL, &dp_reset, &dp_boot, &dp_attach, &dp_detach,
     &dp_dib[2], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
@@ -302,8 +348,23 @@ DEVICE              dpc_dev = {
 };
 
 #if (NUM_DEVS_DP > 3)
+REG                 dpd_reg[] = {
+    {BRDATA(BUFF, &dp_buf[3][0], 16, 64, RP_NUMWD), REG_HRO},
+    {BRDATA(DF10, &dp_cur_unit[3], 16, 8, 1), REG_HRO},
+    {ORDATA(STATUS, dp_df10[3].status, 18), REG_RO},
+    {ORDATA(CIA, dp_df10[3].cia, 18)},
+    {ORDATA(CCW, dp_df10[3].ccw, 18)},
+    {ORDATA(WCR, dp_df10[3].wcr, 18)},
+    {ORDATA(CDA, dp_df10[3].cda, 18)},
+    {ORDATA(DEVNUM, dp_df10[3].devnum, 9), REG_HRO},
+    {ORDATA(BUF, dp_df10[3].buf, 36), REG_HRO},
+    {ORDATA(NXM, dp_df10[3].nxmerr, 8), REG_HRO},
+    {ORDATA(COMP, dp_df10[3].ccw_comp, 8), REG_HRO},
+    {0}
+};
+
 DEVICE              dpd_dev = {
-    "DPD", &dp_unit[030], NULL, dp_mod,
+    "DPD", &dp_unit[030], dpd_reg, dp_mod,
     NUM_UNITS_DP, 8, 18, 1, 8, 36,
     NULL, NULL, &dp_reset, &dp_boot, &dp_attach, &dp_detach,
     &dp_dib[3], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,

@@ -78,7 +78,6 @@
 #define STATUS      u3
 #define COL         u4
 #define DATA        u5
-#define BUFFER      up7
 
 #define CARD_RDY(u)       (sim_card_input_hopper_count(u) > 0 || \
                            sim_card_eof(u) == 1)
@@ -90,6 +89,7 @@ t_stat              cr_attach(UNIT *, CONST char *);
 t_stat              cr_detach(UNIT *);
 t_stat              cr_help(FILE *, DEVICE *, UNIT *, int32, const char *);
 const char         *cr_description(DEVICE *dptr);
+uint16              cr_buffer[80];
 
 DIB cr_dib = { CR_DEVNUM, 1, cr_devio, NULL};
 
@@ -103,8 +103,14 @@ MTAB                cr_mod[] = {
     {0}
 };
 
+REG                 cr_reg[] = {
+    {BRDATA(BUFF, cr_buffer, 16, 16, sizeof(cr_buffer)), REG_HRO},
+    {0}
+};
+
+
 DEVICE              cr_dev = {
-    "CR", &cr_unit, NULL, cr_mod,
+    "CR", &cr_unit, cr_reg, cr_mod,
     NUM_DEVS_CR, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, NULL, &cr_attach, &cr_detach,
     &cr_dib, DEV_DISABLE | DEV_DEBUG | DEV_CARD, 0, crd_debug,
@@ -180,7 +186,6 @@ t_stat cr_devio(uint32 dev, uint64 *data) {
 /* Handle transfer of data for card reader */
 t_stat
 cr_srv(UNIT *uptr) {
-    uint16              *image = (uint16 *)(uptr->BUFFER);
 
     /* Read in card, ready to read next one set IRQ */
     if (uptr->flags & UNIT_ATT /*&& uptr->STATUS & END_CARD*/) {
@@ -198,7 +203,7 @@ cr_srv(UNIT *uptr) {
     /* Check if new card requested. */
     if ((uptr->STATUS & (READING|CARD_IN_READ)) == READING) {
         uptr->STATUS &= ~(END_CARD|RDY_READ);
-        switch(sim_read_card(uptr, image)) {
+        switch(sim_read_card(uptr, cr_buffer)) {
         case CDSE_EOF:
              sim_debug(DEBUG_EXP, &cr_dev, "CR: card eof\n");
              uptr->STATUS &= ~(CARD_IN_READ|READING);
@@ -240,7 +245,7 @@ cr_srv(UNIT *uptr) {
              sim_activate(uptr, uptr->wait);
              return SCPE_OK;
         }
-        uptr->DATA = image[uptr->COL++];
+        uptr->DATA = cr_buffer[uptr->COL++];
         if (uptr->STATUS & DATA_RDY) {
             uptr->STATUS |= DATA_MISS;
         }
@@ -259,8 +264,6 @@ cr_attach(UNIT * uptr, CONST char *file)
 
     if ((r = sim_card_attach(uptr, file)) != SCPE_OK)
         return r;
-    if (uptr->BUFFER == 0)
-        uptr->BUFFER = malloc(sizeof(uint16)*80);
     if ((uptr->STATUS & (READING|CARD_IN_READ)) == 0) {
         uptr->STATUS |= RDY_READ;
         uptr->STATUS &= ~(HOPPER_EMPTY|STOP|TROUBLE|CELL_ERROR|PICK_ERROR);
@@ -273,9 +276,6 @@ cr_attach(UNIT * uptr, CONST char *file)
 t_stat
 cr_detach(UNIT * uptr)
 {
-    if (uptr->BUFFER != 0)
-        free(uptr->BUFFER);
-    uptr->BUFFER = 0;
     if (uptr->flags & UNIT_ATT) {
         uptr->STATUS |= TROUBLE|HOPPER_EMPTY;
         if (uptr->STATUS & TROUBLE_EN)
