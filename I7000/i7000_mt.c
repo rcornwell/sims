@@ -1361,8 +1361,7 @@ mt_attach(UNIT * uptr, CONST char *file)
     uptr->u3 = 0;
     uptr->u5 |= MT_RDY;
     uptr->flags |= MTUF_ONLINE;
-    uptr->dynflags = MT_200_VALID | MT_556_VALID |
-           (((uptr->flags & MTUF_LDN) ? MT_556_VALID : MT_200_VALID) < UNIT_V_DF_TAPE);
+/*    uptr->dynflags = (((uptr->flags & MTUF_LDN) ? MT_556_VALID : MT_200_VALID) < UNIT_V_DF_TAPE); */
     return SCPE_OK;
 }
 
