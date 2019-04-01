@@ -328,6 +328,7 @@ extern DEVICE   pd_dev;
 extern DEVICE   dpy_dev;
 extern DEVICE   imx_dev;
 extern DEVICE   imp_dev;
+extern DEVICE   ch10_dev;
 extern DEVICE   stk_dev;
 extern DEVICE   tk10_dev;
 extern DEVICE   mty_dev;
@@ -393,7 +394,6 @@ int auxcpu_write (int addr, uint64);
 
 /* I/O system parameters */
 #define NUM_DEVS_MT     1
-#define NUM_DEVS_DP     2
 #define NUM_DEVS_LP     1
 #define NUM_DEVS_PT     1
 #define NUM_DEVS_CR     1
@@ -402,6 +402,8 @@ int auxcpu_write (int addr, uint64);
 #define NUM_DEVS_RC     1
 #define NUM_DEVS_DT     1
 #define NUM_DEVS_DK     1
+#if !PDP6
+#define NUM_DEVS_DP     2
 #define NUM_DEVS_RP     4
 #define NUM_DEVS_RS     1
 #define NUM_DEVS_TU     1
@@ -415,6 +417,8 @@ int auxcpu_write (int addr, uint64);
 #define NUM_DEVS_DPY    USE_DISPLAY
 #define NUM_DEVS_WCNSLS USE_DISPLAY
 #define NUM_DEVS_IMP    1
+#define NUM_DEVS_CH10   ITS
+#endif
 /* Global data */
 
 
