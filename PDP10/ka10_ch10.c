@@ -408,7 +408,7 @@ t_stat ch10_devio(uint32 dev, uint64 *data)
 
 t_stat ch10_svc(UNIT *uptr)
 {
-  sim_clock_coschedule (uptr, 100);
+  sim_clock_coschedule (uptr, 1000);
   (void)tmxr_poll_conn (&ch10_tmxr);
   if (ch10_lines[0].conn) {
     ch10_receive ();
