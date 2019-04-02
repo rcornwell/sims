@@ -40,6 +40,7 @@ Support for BBN pager (untested).
    Knight Kludge mux for ITS.  
 
    IMP networking support for ITS and TENEX.  
+   CH10 networking support for ITS.
 
    340 Display Station support.  
 
@@ -50,7 +51,7 @@ and transfering to the loaded value. RC10, RH10, TM10 support readin mode.
 
 To do:  
    * Add support for PMP IBM 3330 drive to run Waits.  
-   * Add support for CHAOS net driver.  
+   * Add support for PDP6 processor.
 
 # ICL 1900 simulator.
 
