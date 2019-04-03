@@ -950,7 +950,7 @@ imp_send_packet (struct imp_device *imp, int len)
     if (imp->sbuffer[0] != 0xF) {
        // Send type 1 message.
        /* Send back invalid leader message */
-       sim_fprintf("Invalid header\n");
+       sim_printf("Invalid header\n");
        return;
     }
     n = (imp->sbuffer[10] << 8) + (imp->sbuffer[11]);
@@ -1381,7 +1381,7 @@ imp_do_dhcp_client(struct imp_device *imp, ETH_PACK *read_buffer)
 
     ip_checksum((uint8 *)&sum, (uint8 *)ip_hdr, hl);
     if (sum != 0) {
-       sim_fprintf(stderr, "IP checksum error %x\n\r", sum);
+       sim_printf("IP checksum error %x\n\r", sum);
        return;
     }
     ip_checksum((uint8 *)(&sum), (uint8 *)(upkt), ntohs(upkt->len));
@@ -1392,7 +1392,7 @@ imp_do_dhcp_client(struct imp_device *imp, ETH_PACK *read_buffer)
     udp_hdr.hlen = upkt->len;
     checksumadjust((uint8 *)&sum, 0, 0, (uint8 *)(&udp_hdr), sizeof(udp_hdr));
     if (sum != 0) {
-       sim_fprintf(stderr, "UDP checksum error %x\n\r", sum);
+       sim_printf("UDP checksum error %x\n\r", sum);
        return;
     }
 
