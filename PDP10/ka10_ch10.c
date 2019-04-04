@@ -454,7 +454,8 @@ t_stat ch10_detach (UNIT *uptr)
 t_stat ch10_reset (DEVICE *dptr)
 {
   ch10_clear ();
-  sim_activate (&ch10_unit[0], 100);
+  if (ch10_unit[0].flags & UNIT_ATT)
+      sim_activate (&ch10_unit[0], 100);
   return SCPE_OK;
 }
 
