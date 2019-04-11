@@ -440,7 +440,7 @@ t_stat ch10_attach (UNIT *uptr, CONST char *cptr)
 
   uptr->filename = (char *)realloc (uptr->filename, 1 + strlen (cptr));
   strcpy (uptr->filename, cptr);
-  sim_activate (uptr, 100);
+  sim_activate (uptr, 1000);
   return SCPE_OK;
 }
 

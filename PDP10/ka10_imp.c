@@ -478,7 +478,7 @@ static void check_interrupts (UNIT *uptr)
             set_interrupt_mpx(IMP_DEVNUM, uptr->STATUS, imp_mpx_lvl);
     }
     if (uptr->STATUS & IMPOD)
-        set_interrupt_mpx(IMP_DEVNUM, uptr->STATUS, imp_mpx_lvl + 1);
+       set_interrupt_mpx(IMP_DEVNUM, uptr->STATUS, imp_mpx_lvl + 1);
 }
 
 t_stat imp_devio(uint32 dev, uint64 *data)
@@ -492,32 +492,32 @@ t_stat imp_devio(uint32 dev, uint64 *data)
                  (uint32)*data, PC);
         uptr->STATUS &= ~7;
         uptr->STATUS |= *data & 7;
-        if (*data & IMPIDC) //Clear input done.
+        if (*data & IMPIDC) /* Clear input done. */
             uptr->STATUS &= ~IMPID;
-        if (*data & IMI32S) //Set 32-bit input.
+        if (*data & IMI32S) /* Set 32-bit input. */
             uptr->STATUS |= IMPI32;
-        if (*data & IMI32C) //Clear 32-bit input
+        if (*data & IMI32C) /* Clear 32-bit input */
             uptr->STATUS &= ~IMPI32;
-        if (*data & IMPODC) //Clear output done.
+        if (*data & IMPODC) /* Clear output done. */
             uptr->STATUS &= ~IMPOD;
-        if (*data & IMO32C) //Clear 32-bit output.
+        if (*data & IMO32C) /* Clear 32-bit output. */
             uptr->STATUS &= ~IMPO32;
-        if (*data & IMO32S) //Set 32-bit output.
+        if (*data & IMO32S) /* Set 32-bit output. */
             uptr->STATUS |= IMPO32;
-        if (*data & IMPODS) //Set output done.
+        if (*data & IMPODS) /* Set output done. */
             uptr->STATUS |= IMPOD;
-        if (*data & IMPIR) { //Enable interrupt on IMP ready.
+        if (*data & IMPIR) { /* Enable interrupt on IMP ready. */
             uptr->STATUS |= IMPIC;
             uptr->STATUS &= ~IMPERR;
         }
-        if (*data & IMPHEC) { //Clear host error.
+        if (*data & IMPHEC) { /* Clear host error. */
             /* Only if there has been a CONI lately. */
             if (last_coni - sim_interval < CONI_TIMEOUT)
                 uptr->STATUS &= ~IMPHER;
         }
-        if (*data & IMIIHE) //Inhibit interrupt on host error.
+        if (*data & IMIIHE) /* Inhibit interrupt on host error. */
             uptr->STATUS |= IMPIHE;
-        if (*data & IMPLHW) //Last host word.
+        if (*data & IMPLHW) /* Last host word. */
             uptr->STATUS |= IMPLHW;
         break;
     case CONI:
@@ -531,8 +531,9 @@ t_stat imp_devio(uint32 dev, uint64 *data)
         uptr->STATUS &= ~IMPOD;
         imp_data.obuf = *data;
         imp_data.obits = (uptr->STATUS & IMPO32) ? 32 : 36;
-         sim_debug(DEBUG_DATAIO, dptr, "IMP %03o DATO %012llo %d %08x PC=%o\n",
+        sim_debug(DEBUG_DATAIO, dptr, "IMP %03o DATO %012llo %d %08x PC=%o\n",
                  dev, *data, imp_data.obits, (uint32)(*data >> 4), PC);
+        sim_activate(uptr, 100);
         break;
     case DATAI:
         *data = imp_data.ibuf;
@@ -541,6 +542,7 @@ t_stat imp_devio(uint32 dev, uint64 *data)
                  dev, *data, (uint32)(*data >> 4), PC);
         if (uptr->ILEN != 0)
             uptr->STATUS |= IMPIB;
+        sim_activate(uptr, 100);
         break;
     }
 
@@ -592,7 +594,6 @@ t_stat imp_srv(UNIT * uptr)
     }
     if (uptr->ILEN == 0 && (uptr->STATUS & (IMPIB|IMPID)) == 0)
         imp_packet_in(&imp_data);
-    sim_activate(uptr, 100);
     return SCPE_OK;
 }
 
@@ -752,7 +753,7 @@ imp_packet_in(struct imp_device *imp)
    int                     type;
    int                     n;
    int                     pad;
-int i;
+
    if (eth_read (&imp_data.etherface, &read_buffer, NULL) <= 0)
        return;
    hdr = (struct imp_eth_hdr *)(&read_buffer.msg[0]);
@@ -792,7 +793,7 @@ int i;
 
            /* Copy message over */
            pad = 12 + (imp->padding / 8);
-           n = read_buffer.len;// - (sizeof(struct imp_eth_hdr));
+           n = read_buffer.len;
            memcpy(&imp->rbuffer[pad], ip_hdr ,n);
            ip_hdr = (struct ip *)(&imp->rbuffer[pad]);
             /* Re-point IP header to copy packet */
@@ -932,6 +933,8 @@ int i;
                imp_unit[0].IPOS = 0;
                imp_unit[0].ILEN = n*8;
            }
+           if (!sim_is_active(&imp_unit[0]))
+               sim_activate(&imp_unit[0], 100);
        }
          /* Otherwise just ignore it */
    }
@@ -948,7 +951,6 @@ imp_send_packet (struct imp_device *imp, int len)
     int        lk;
 
     if (imp->sbuffer[0] != 0xF) {
-       // Send type 1 message.
        /* Send back invalid leader message */
        sim_printf("Invalid header\n");
        return;
@@ -984,6 +986,7 @@ imp_send_packet (struct imp_device *imp, int len)
     case 1:      /* Error */
            break;
     case 2:      /* Host going down */
+fprintf(stderr, "IMP: Host shutdown\n\r");
            break;
     case 4:      /* Nop */
            if (imp->init_state < 3)
@@ -1577,7 +1580,6 @@ imp_dhcp_timer(struct imp_device *imp)
          *opt++ = DHCP_OPTION_SUBNET_MASK;     /* Subnet mask */
          *opt++ = DHCP_OPTION_ROUTER;         /* Routers */
          *opt++ = DHCP_OPTION_END;  /* Last option */
-//         len = opt - (uint8 *)dhcp_rply;
          imp_do_send_dhcp(imp, &dhcp_pkt, opt);
          break;
 
@@ -1911,7 +1913,6 @@ t_stat imp_reset (DEVICE *dptr)
     imp_data.init_state = 0;
     last_coni = sim_interval;
     imp_data.dhcp_state = DHCP_STATE_OFF;
-    sim_activate(&imp_unit[0], 200);
     return SCPE_OK;
 }
 
@@ -1978,8 +1979,6 @@ t_stat imp_detach(UNIT* uptr)
         free(uptr->filename);
         uptr->filename = NULL;
         uptr->flags &= ~UNIT_ATT;
-        /* cancel service timers */
-        sim_cancel (uptr);                  /* stop the receiver */
         sim_cancel (uptr+1);                /* stop the timer services */
     }
     return SCPE_OK;
