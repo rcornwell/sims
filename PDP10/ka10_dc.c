@@ -303,7 +303,6 @@ int32 ln;
 
     if ((uptr->flags & UNIT_ATT) == 0)                  /* attached? */
         return SCPE_OK;
-    sim_clock_coschedule(uptr, tmxr_poll);              /* continue poll */
     ln = tmxr_poll_conn (&dc_desc);                     /* look for connect */
     if (ln >= 0) {                                      /* got one? rcv enb*/
         dc_ldsc[ln].rcve = 1;
@@ -336,6 +335,7 @@ int32 ln;
     /* If any pending status request, raise the PI signal */
     if (dc_l_status)
         set_interrupt(DC_DEVNUM, uptr->STATUS);
+    sim_clock_coschedule(uptr, tmxr_poll);              /* continue poll */
     return SCPE_OK;
 }
 
