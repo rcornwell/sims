@@ -57,7 +57,7 @@ typedef uint32          t_mtrlnt;                       /* magtape rec lnt */
 #define MTR_MAXLEN      0x00FFFFFF                      /* max len is 24b */
 #define MTR_ERF         0x80000000                      /* error flag */
 #define MTR_F(x)        ((x) & MTR_ERF)                 /* record error flg */
-#define MTR_L(x)        ((x) & ~MTR_ERF)                /* record length */
+#define MTR_L(x)        ((t_mtrlnt)((x) & ~MTR_ERF))    /* record length */
 
 /* TPC tape format */
 
@@ -85,6 +85,9 @@ typedef struct {
 #define AWS_REC         0x00A0
     } t_awshdr;
 
+/* TAR tape format */
+#define TAR_DFLT_RECSIZE     10240                      /* Default Fixed record size */
+
 /* Unit flags */
 
 #define MTUF_V_PNU      (UNIT_V_UF + 0)                 /* position not upd */
@@ -98,6 +101,7 @@ typedef struct {
 #define MTUF_F_TPC       2                              /* TPC format */
 #define MTUF_F_P7B       3                              /* P7B format */
 #define MTUF_F_AWS       4                              /* AWS format */
+#define MTUF_F_TAR       5                              /* TAR format */
 #define MTUF_V_UF       (MTUF_V_FMT + MTUF_W_FMT)
 #define MTUF_PNU        (1u << MTUF_V_PNU)
 #define MTUF_WLK        (1u << MTUF_V_WLK)
@@ -109,6 +113,7 @@ typedef struct {
 #define MT_F_TPC        (MTUF_F_TPC << MTUF_V_FMT)
 #define MT_F_P7B        (MTUF_F_P7B << MTUF_V_FMT)
 #define MT_F_AWS        (MTUF_F_AWS << MTUF_V_FMT)
+#define MT_F_TAR        (MTUF_F_TAR << MTUF_V_FMT)
 
 #define MT_SET_PNU(u)   (u)->flags = (u)->flags | MTUF_PNU
 #define MT_CLR_PNU(u)   (u)->flags = (u)->flags & ~MTUF_PNU
@@ -224,6 +229,7 @@ t_stat sim_tape_set_capac (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat sim_tape_show_capac (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat sim_tape_set_dens (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat sim_tape_show_dens (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+t_stat sim_tape_density_supported (char *string, size_t string_size, int32 valid_bits);
 t_stat sim_tape_set_asynch (UNIT *uptr, int latency);
 t_stat sim_tape_clr_asynch (UNIT *uptr);
 t_stat sim_tape_test (DEVICE *dptr);

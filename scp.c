@@ -4095,7 +4095,7 @@ return ap;
 
    Token "%0" represents the command file name.
 
-   The input sequence "\%" represents a literal "%", and "\\" represents a
+   The input sequence "%%" represents a literal "%", and "\\" represents a
    literal "\".  All other character combinations are rendered literally.
 
    Omitted parameters result in null-string substitutions.
@@ -4202,11 +4202,16 @@ for (; *ip && (op < oend); ) {
                     ++ip;
                     }
                 else {
-                    get_glyph_nc (ip, gbuf, '%');           /* get the literal name */
-                    ap = _sim_get_env_special (gbuf, rbuf, sizeof (rbuf));
-                    ip += strlen (gbuf);
-                    if (*ip == '%') 
-                        ++ip;
+                    if (*ip == '\0') {                  /* is this a bare % at end of line? */
+                        *op++ = '%';                    /* leave it there as a literal percent sign */
+                        }
+                    else {
+                        get_glyph_nc (ip, gbuf, '%');   /* get the literal name */
+                        ap = _sim_get_env_special (gbuf, rbuf, sizeof (rbuf));
+                        ip += strlen (gbuf);
+                        if (*ip == '%') 
+                            ++ip;
+                        }
                     }
                 }
             if (ap) {                                   /* non-null arg? */
@@ -7281,6 +7286,7 @@ for (i = 0; i < (device_count + sim_internal_device_count); i++) {/* loop thru d
         WRITE_I (uptr->wait);
         WRITE_I (uptr->buf);
         WRITE_I (uptr->recsize);
+        WRITE_I (uptr->tape_eom);
         WRITE_I (uptr->capac);                          /* [V3.5] capacity */
         fprintf (sfile, "%.0f\n", uptr->usecs_remaining);/* [V4.0] remaining wait */
         WRITE_I (uptr->pos);
@@ -7532,6 +7538,7 @@ for ( ;; ) {                                            /* device loop */
             READ_I (uptr->wait);
             READ_I (uptr->buf);
             READ_I (uptr->recsize);
+            READ_I (uptr->tape_eom);
             }
         old_capac = uptr->capac;                        /* save current capacity */
         if (v35) {                                      /* [V3.5+] capacity */
