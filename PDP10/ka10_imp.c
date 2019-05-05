@@ -673,8 +673,6 @@ checksumadjust(uint8 *chksum, uint8 *optr,
 
 t_stat imp_eth_srv(UNIT * uptr)
 {
-    ETH_PACK          read_buffer;
-
     sim_clock_coschedule(uptr, 1000);              /* continue poll */
 
     imp_timer_task(&imp_data);
@@ -847,7 +845,6 @@ imp_packet_in(struct imp_device *imp)
                         /* We need to translate the IP address to new port number. */
                         int     l = ntohs(ip_hdr->ip_len) - thl - hl;
                         uint32  nip = ntohl(imp->hostip);
-                        uint16  len;
                         int     nlen;
                         int     i;
                         uint8   port_buffer[100];
@@ -1066,7 +1063,6 @@ imp_packet_out(struct imp_device *imp, ETH_PACK *packet) {
                /* We need to translate the IP address to new port number. */
                int     l = ntohs(pkt->iphdr.ip_len) - thl - hl;
                uint32  nip = ntohl(imp->ip);
-               uint16  len;
                int     nlen;
                uint8   port_buffer[100];
                struct udp_hdr     udp_hdr;

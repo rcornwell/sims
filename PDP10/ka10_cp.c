@@ -228,8 +228,6 @@ cp_srv(UNIT *uptr) {
 t_stat
 cp_attach(UNIT * uptr, CONST char *file)
 {
-    t_stat              r;
-
     return sim_card_attach(uptr, file);
 }
 

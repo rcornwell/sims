@@ -26,6 +26,11 @@
 #include "ka10_defs.h"
 #include "sim_tmxr.h"
 
+#ifndef NUM_DEVS_TEN11
+#define NUM_DEVS_TEN11 0
+#endif
+
+#if (NUM_DEVS_TEN11 > 0)
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -34,11 +39,6 @@
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 
-#ifndef NUM_DEVS_TEN11
-#define NUM_DEVS_TEN11 0
-#endif
-
-#if (NUM_DEVS_TEN11 > 0)
 /* Rubin 10-11 pager. */
 static uint64 ten11_pager[256];
 

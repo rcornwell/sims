@@ -257,7 +257,6 @@ lpt_output(UNIT *uptr, char c) {
 
 t_stat lpt_svc (UNIT *uptr)
 {
-    t_stat r;
     char    c;
     int     pos;
     int     cpos;

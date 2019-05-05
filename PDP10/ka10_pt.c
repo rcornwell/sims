@@ -43,7 +43,11 @@
 #define BUSY_FLG    000020
 #define BIN_FLG     000040
 #define NO_TAPE_PP  000100
+#if PDP6
+#define TAPE_PR     000000
+#else
 #define TAPE_PR     000400
+#endif
 
 
 t_stat         ptp_devio(uint32 dev, uint64 *data);
@@ -69,7 +73,7 @@ const char    *ptr_description (DEVICE *dptr);
 DIB ptp_dib = { PP_DEVNUM, 1, &ptp_devio, NULL };
 
 UNIT ptp_unit = {
-    UDATA (&ptp_svc, UNIT_ATTABLE+UNIT_TEXT, 0), SERIAL_OUT_WAIT
+    UDATA (&ptp_svc, UNIT_ATTABLE+UNIT_TEXT, 0), 10000
     };
 
 REG ptp_reg[] = {
@@ -93,7 +97,7 @@ DEVICE ptp_dev = {
 DIB ptr_dib = { PR_DEVNUM, 1, &ptr_devio, NULL };
 
 UNIT ptr_unit = {
-    UDATA (&ptr_svc, UNIT_ATTABLE+UNIT_TEXT, 0), SERIAL_OUT_WAIT
+    UDATA (&ptr_svc, UNIT_ATTABLE+UNIT_TEXT, 0), 10000
     };
 
 REG ptr_reg[] = {
@@ -242,11 +246,11 @@ t_stat ptr_devio(uint32 dev, uint64 *data) {
          if ((uptr->STATUS & DONE_FLG)) {
              *data = ((uint64)uptr->CHL) << 18;
              *data |= ((uint64)uptr->CHR);
-             uptr->STATUS |= BUSY_FLG;
              uptr->STATUS &= ~DONE_FLG;
              clr_interrupt(dev);
              sim_activate (&ptr_unit, ptr_unit.wait);
          }
+             uptr->STATUS |= BUSY_FLG;
          sim_debug(DEBUG_DATAIO, &ptr_dev, "PT: DATAI %012llo\n\r", *data);
          break;
     case DATAO:
