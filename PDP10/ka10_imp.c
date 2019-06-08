@@ -375,6 +375,7 @@ struct imp_device {
     ETH_QUE           ReadQ;
     int               imp_error;
     int               host_error;
+    int               rfnm_count;              /* Number of pending RFNM packets */
 } imp_data;
 
 extern int32 tmxr_poll;
@@ -401,6 +402,7 @@ t_stat         imp_show_hostip (FILE *st, UNIT *uptr, int32 val, CONST void *des
 t_stat         imp_set_hostip (UNIT* uptr, int32 val, CONST char* cptr, void* desc);
 t_stat         imp_show_dhcpip (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 void           imp_timer_task(struct imp_device *imp);
+void           imp_send_rfmn(struct imp_device *imp);
 void           imp_packet_in(struct imp_device *imp);
 void           imp_send_packet (struct imp_device *imp_data, int len);
 void           imp_free_packet(struct imp_device *imp, struct imp_packet *p);
@@ -752,8 +754,22 @@ imp_packet_in(struct imp_device *imp)
    int                     n;
    int                     pad;
 
-   if (eth_read (&imp_data.etherface, &read_buffer, NULL) <= 0)
+   if (eth_read (&imp_data.etherface, &read_buffer, NULL) <= 0) {
+       /* Any pending packet notifications? */
+       if (imp->rfnm_count != 0) {
+           /* Create RFNM packet */
+           memset(&imp->rbuffer[0], 0, 256);
+           imp->rbuffer[0] = 0xf;
+           imp->rbuffer[3] = 4;
+           imp_unit[0].STATUS |= IMPIB;
+           imp_unit[0].IPOS = 0;
+           imp_unit[0].ILEN = 12*8;
+           if (!sim_is_active(&imp_unit[0]))
+               sim_activate(&imp_unit[0], 100);
+           imp->rfnm_count--;
+       }
        return;
+   }
    hdr = (struct imp_eth_hdr *)(&read_buffer.msg[0]);
    type = ntohs(hdr->type);
    if (type == ETHTYPE_ARP) {
@@ -1155,6 +1171,7 @@ imp_packet_out(struct imp_device *imp, ETH_PACK *packet) {
             memcpy(&pkt->ethhdr.src, &imp->mac, 6);
             pkt->ethhdr.type = htons(ETHTYPE_IP);
             eth_write(&imp->etherface, packet, NULL);
+            imp->rfnm_count++;
             return;
          }
     }
@@ -1293,6 +1310,7 @@ imp_arp_arpin(struct imp_device *imp, ETH_PACK *packet)
                     memcpy(&pkt->ethhdr.src, &imp->mac, 6);
                     pkt->ethhdr.type = htons(ETHTYPE_IP);
                     eth_write(&imp->etherface, &temp->packet, NULL);
+                    imp->rfnm_count++;
                     imp_free_packet(imp, temp);
                 } else {
                     temp->next = nq;
