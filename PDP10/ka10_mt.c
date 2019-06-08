@@ -147,7 +147,7 @@ uint64          mt_hold_reg;
 int             mt_mpx_lvl = 0;
 int             hri_mode; /* Read in mode for TM10B */
 
-uint8                parity_table[64] = {
+static uint8          parity_table[64] = {
     /* 0    1    2    3    4    5    6    7 */
     0000, 0100, 0100, 0000, 0100, 0000, 0000, 0100,
     0100, 0000, 0000, 0100, 0000, 0100, 0100, 0000,

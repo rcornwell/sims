@@ -42,7 +42,10 @@
    sim_load             binary loader
 */
 
-#if KL
+#if KLB
+char sim_name[] = "KL-10B";
+#endif
+#if KLA
 char sim_name[] = "KL-10A";
 #endif
 #if KI
@@ -78,8 +81,14 @@ DEVICE *sim_devices[] = {
 #if (NUM_DEVS_CP > 0)
     &cp_dev,
 #endif
+#if (NUM_DEVS_DCT > 0)
+    &dct_dev,
+#endif
 #if (NUM_DEVS_MT > 0)
     &mt_dev,
+#endif
+#if (NUM_DEVS_MTC > 0)
+    &mtc_dev,
 #endif
 #if (NUM_DEVS_DP > 0)
     &dpa_dev,
@@ -111,14 +120,23 @@ DEVICE *sim_devices[] = {
 #if (NUM_DEVS_TU > 0)
     &tua_dev,
 #endif
+#if (NUM_DEVS_DSK > 0)
+    &dsk_dev,
+#endif
 #if (NUM_DEVS_RC > 0)
     &rca_dev,
 #if (NUM_DEVS_RC > 1)
     &rcb_dev,
 #endif
 #endif
+#if (NUM_DEVS_PMP > 0)
+    &pmp_dev,
+#endif
 #if (NUM_DEVS_DT > 0)
     &dt_dev,
+#endif
+#if (NUM_DEVS_DTC > 0)
+    &dtc_dev,
 #endif
 #if (NUM_DEVS_DC > 0)
     &dc_dev,

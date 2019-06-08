@@ -46,12 +46,24 @@
 #define KI 0
 #endif
 
-#ifndef KL              /* KL10A Only no extended addressing */
-#define KL 0
+#ifndef KLA
+#define KLA 0
+#endif
+
+#ifndef KLB
+#define KLB 0
+#endif
+
+#ifndef KL               /* Either KL10A or KL10B */
+#define KL (KLA+KLB)
 #endif
 
 #if (PDP6 + KA + KI + KL) != 1
 #error "Please define only one type of CPU"
+#endif
+
+#ifndef PDP6_DEV       /* Include PDP6 devices */
+#define PDP6_DEV PDP6
 #endif
 
 #ifndef KI_22BIT
@@ -154,10 +166,15 @@ extern DEBTAB crd_debug[];
 #define DCMASK   00777777777777777777777LL
 #define DNMASK   00400000000000000000000LL
 #define DXMASK   00200000000000000000000LL
-#define FPSMASK  00040000000000000000000LL
-#define FPNMASK  00001000000000000000000LL
-#define FPFMASK  00077777777777777777777LL
-#define FPCMASK  00000777777777777777777LL
+#define FPHBIT   01000000000000000000000LL
+#define FPSBIT   00400000000000000000000LL
+#define FPNBIT   00200000000000000000000LL
+#define FP1BIT   00100000000000000000000LL
+#define FPFMASK  01777777777777777777777LL
+#define FPRMASK  00000000000177777777777LL
+#define FPMMASK  00000000000077777777777LL
+#define FPRBIT2  00000000000100000000000LL
+#define FPRBIT1  00000000000200000000000LL
 
 #define CM(x)   (FMASK ^ (x))
 
@@ -183,8 +200,13 @@ extern DEBTAB crd_debug[];
 #define LRZ(x)          (((x) >> 18) & RMASK)
 
 
+#if PDP6
+#define NODIV   000000
+#define FLTUND  000000
+#else
 #define NODIV   000001        /* 000040 */
 #define FLTUND  000002        /* 000100 */
+#endif
 #if KI|KL
 #define TRP1    000004        /* 000200 */
 #define TRP2    000010        /* 000400 */
@@ -196,11 +218,14 @@ extern DEBTAB crd_debug[];
 #define ADRFLT  000000
 #define PUBLIC  000000
 #endif
+#ifdef BBN
+#define EXJSYS  000040        /* 002000 */
+#endif
 #define USERIO  000100        /* 004000 */
 #define USER    000200        /* 010000 */
 #define BYTI    000400        /* 020000 */
 #if PDP6
-#define FLTOVR  000000
+#define FLTOVR  010000
 #define PCHNG   001000        /* 040000 */
 #else
 #define FLTOVR  001000        /* 040000 */
@@ -209,15 +234,12 @@ extern DEBTAB crd_debug[];
 #define CRY1    002000        /* 100000 */
 #define CRY0    004000        /* 200000 */
 #define OVR     010000        /* 400000 */
-#ifdef BBN
-#define EXJSYS  000040        /* 002000 */
-#endif
 #ifdef ITS
 #ifdef PURE
 #undef PURE
 #endif
-#define PURE    000040        /* 002000 */
 #define ONEP    000010        /* 000400 */
+#define PURE    000040        /* 002000 */
 #endif
 
 #define DATAI   00
@@ -230,19 +252,23 @@ extern DEBTAB crd_debug[];
 #if KI_22BIT|KI
 #define MAXMEMSIZE      4096 * 1024
 #else
+#if PDP6
+#define MAXMEMSIZE      256 * 1024
+#else
 #define MAXMEMSIZE      1024 * 1024
+#endif
 #endif
 #define MEMSIZE         (cpu_unit[0].capac)
 
 #define ICWA            0000000000776
 #if KI_22BIT
-#define AMASK    00000017777777LL
-#define WMASK    0037777LL
-#define CSHIFT   22
+#define AMASK           00000017777777LL
+#define WMASK           0037777LL
+#define CSHIFT          22
 #else
-#define AMASK    RMASK
-#define WMASK    RMASK
-#define CSHIFT   18
+#define AMASK           RMASK
+#define WMASK           RMASK
+#define CSHIFT          18
 #endif
 
 #define API_MASK        0000000007
@@ -251,23 +277,23 @@ extern DEBTAB crd_debug[];
 #define CCW_COMP        0000000040      /* Write Final CCW */
 
 #if KI
-#define DEF_SERIAL      514             /* Default dec test machine */
+#define DEF_SERIAL      514             /* Default DEC test machine */
 #endif
 
 #if BBN
-#define BBN_PAGE    0000017777777LL
-#define BBN_TRPPG   0000017000000LL
-#define BBN_SPT     0000017777000LL
-#define BBN_PN      0000000000777LL
-#define BBN_ACC     0000040000000LL
-#define BBN_TRP1    0000100000000LL
-#define BBN_TRP     0000200000000LL
-#define BBN_TRPMOD  0000400000000LL
-#define BBN_TRPUSR  0001000000000LL
-#define BBN_EXEC    0020000000000LL
-#define BBN_WRITE   0040000000000LL
-#define BBN_READ    0100000000000LL
-#define BBN_MERGE   0161740000000LL
+#define BBN_PAGE        0000017777777LL
+#define BBN_TRPPG       0000017000000LL
+#define BBN_SPT         0000017777000LL
+#define BBN_PN          0000000000777LL
+#define BBN_ACC         0000040000000LL
+#define BBN_TRP1        0000100000000LL
+#define BBN_TRP         0000200000000LL
+#define BBN_TRPMOD      0000400000000LL
+#define BBN_TRPUSR      0001000000000LL
+#define BBN_EXEC        0020000000000LL
+#define BBN_WRITE       0040000000000LL
+#define BBN_READ        0100000000000LL
+#define BBN_MERGE       0161740000000LL
 #endif
 
 /* Flags for CPU unit */
@@ -283,7 +309,6 @@ extern DEBTAB crd_debug[];
 #define UNIT_M_MPX      (1 << UNIT_V_MPX)
 
 typedef unsigned long long int uint64;
-typedef unsigned int uint18;
 
 
 #if MPX_DEV
@@ -291,12 +316,12 @@ extern void set_interrupt_mpx(int dev, int lvl, int mpx);
 #else
 #define set_interrupt_mpx(d,l,m)   set_interrupt(d,l)
 #endif
-extern void set_interrupt(int dev, int lvl);
-extern void clr_interrupt(int dev);
-extern void check_apr_irq();
-extern int check_irq_level();
-extern void restore_pi_hold();
-extern void set_pi_hold();
+extern void     set_interrupt(int dev, int lvl);
+extern void     clr_interrupt(int dev);
+extern void     check_apr_irq();
+extern int      check_irq_level();
+extern void     restore_pi_hold();
+extern void     set_pi_hold();
 extern UNIT     cpu_unit[];
 extern UNIT     ten11_unit[];
 extern UNIT     auxcpu_unit[];
@@ -323,6 +348,7 @@ extern DEVICE   rca_dev;
 extern DEVICE   rcb_dev;
 extern DEVICE   dc_dev;
 extern DEVICE   dt_dev;
+extern DEVICE   pmp_dev;
 extern DEVICE   dk_dev;
 extern DEVICE   pd_dev;
 extern DEVICE   dpy_dev;
@@ -335,6 +361,10 @@ extern DEVICE   mty_dev;
 extern DEVICE   ten11_dev;
 extern DEVICE   auxcpu_dev;
 extern DEVICE   wcnsls_dev;             /* MIT Spacewar Consoles */
+extern DEVICE   dct_dev;                /* PDP6 devices. */
+extern DEVICE   dtc_dev;
+extern DEVICE   mtc_dev;
+extern DEVICE   dsk_dev;
 
 extern t_stat (*dev_tab[128])(uint32 dev, uint64 *data);
 
@@ -379,6 +409,11 @@ void df10_setup(struct df10 *df, uint32 addr);
 int  df10_fetch(struct df10 *df);
 int  df10_read(struct df10 *df);
 int  df10_write(struct df10 *df);
+#if PDP6_DEV
+int  dct_read(int u, t_uint64 *data, int c);
+int  dct_write(int u, t_uint64 *data, int c);
+int  dct_is_connect(int u);
+#endif
 
 int ten11_read (int addr, uint64 *data);
 int ten11_write (int addr, uint64 data);
@@ -393,20 +428,29 @@ int auxcpu_read (int addr, uint64 *);
 int auxcpu_write (int addr, uint64);
 
 /* I/O system parameters */
-#define NUM_DEVS_MT     1
 #define NUM_DEVS_LP     1
 #define NUM_DEVS_PT     1
 #define NUM_DEVS_CR     1
 #define NUM_DEVS_CP     1
 #define NUM_DEVS_DC     1
+#define NUM_DEVS_DPY    USE_DISPLAY
+#define NUM_DEVS_WCNSLS USE_DISPLAY
+#if PDP6_DEV
+#define NUM_DEVS_DTC    1
+#define NUM_DEVS_DCT    2
+#define NUM_DEVS_MTC    1
+#define NUM_DEVS_DSK    1
+#endif
+#if !PDP6
+#define NUM_DEVS_MT     1
 #define NUM_DEVS_RC     1
 #define NUM_DEVS_DT     1
 #define NUM_DEVS_DK     1
-#if !PDP6
 #define NUM_DEVS_DP     2
 #define NUM_DEVS_RP     4
 #define NUM_DEVS_RS     1
 #define NUM_DEVS_TU     1
+#define NUM_DEVS_PMP    0
 #define NUM_DEVS_PD     ITS
 #define NUM_DEVS_IMX    ITS
 #define NUM_DEVS_STK    ITS
@@ -414,8 +458,6 @@ int auxcpu_write (int addr, uint64);
 #define NUM_DEVS_MTY    ITS
 #define NUM_DEVS_TEN11  ITS
 #define NUM_DEVS_AUXCPU ITS
-#define NUM_DEVS_DPY    USE_DISPLAY
-#define NUM_DEVS_WCNSLS USE_DISPLAY
 #define NUM_DEVS_IMP    1
 #define NUM_DEVS_CH10   ITS
 #endif
@@ -426,7 +468,7 @@ extern t_bool sim_idle_enab;
 extern struct rh_dev rh[];
 extern uint64   M[];
 extern uint64   FM[];
-extern uint18   PC;
+extern uint32   PC;
 extern uint32   FLAGS;
 
 #endif
