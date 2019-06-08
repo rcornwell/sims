@@ -3,7 +3,7 @@
 
 # Development Simulators.
 
-This is a working copy of my Burroughs B5500, Dec KA10, KI10, IBM 360 and IBM7000 series
+This is a working copy of my Burroughs B5500, Dec PDP6, KA10, KI10, IBM 360 and IBM7000 series
 simulators for SimH.
 
 # Burroughs B5500
@@ -11,11 +11,33 @@ simulators for SimH.
 This is the same version as in the current simH source tree. It is working
 correctly as far as I am able to tell. It will currently run MCP XIII and XV.
 
-# Dec KA10 & KI10
+# Dec PDP6
 
-These are still in the testing stages. Please report any issues that you find in them.
+The PDP6 simulator is part of the KA/KI simulator. The PDP6 devices can be built into the KA10
+simulator if desired.
 
-The KA10 sim has successfully run Tops 10 5.03 and Tops 10 6.03.  
+The PDP6 runs TOPS 10 4.5 off Dectape.
+
+  Disk
+  * 270 Disk
+
+  Tape
+  * 551 Tape
+  * 555 Dectape.
+
+  Paper Tape
+  * Punch
+  * Reader
+
+  DC10E Terminal mux.
+
+  Type 340 graphics display.
+
+# Dec KA10 & KI10 
+
+These are nearing release. Please report any issues that you find in them.
+
+The KA10 sim has successfully run Tops 10 4.5, 5.03 and Tops 10 6.03.  
 The KI10 sim has successfully run Tops 10 6.03 with VMSER  
 The KA10 sim has successfully run ITS.  
 Support for BBN pager (untested).  
@@ -51,7 +73,6 @@ and transfering to the loaded value. RC10, RH10, TM10 support readin mode.
 
 To do:  
    * Add support for PMP IBM 3330 drive to run Waits.  
-   * Add support for PDP6 processor.
 
 # ICL 1900 simulator.
 

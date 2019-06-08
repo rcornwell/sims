@@ -108,12 +108,10 @@ ifneq (,$(findstring besm6,$(MAKECMDGOALS)))
   BESM6_BUILD = true
 endif
 # building the KA10 needs video support
-ifneq (,$(findstring ka10,$(MAKECMDGOALS)))
+ifneq (,$(or $(findstring pdp6,$(MAKECMDGOALS)),$(findstring pdp10-ka,$(MAKECMDGOALS)),$(findstring pdp10-ki,$(MAKECMDGOALS))))
   VIDEO_USEFUL = true
-  NETWORK_USEFUL = true
 endif
-# building the KI10 needs video support
-ifneq (,$(findstring ki10,$(MAKECMDGOALS)))
+ifneq (,$(or $(findstring pdp10-ka,$(MAKECMDGOALS)),$(findstring pdp10-ki,$(MAKECMDGOALS))))
   NETWORK_USEFUL = true
 endif
 # building the pdp11, pdp10, or any vax simulator could use networking support
@@ -1200,6 +1198,20 @@ IBM360 = ${IBM360D}/ibm360_cpu.c ${IBM360D}/ibm360_sys.c \
 IBM360_OPT = -I $(IBM360D) -DIBM360 -DUSE_64BIT -DUSE_SIM_CARD
 IBM360_OPT32 = -I $(IBM360D) -DIBM360 -DUSE_SIM_CARD
 
+PDP6D = PDP10
+PDP6 = ${PDP6D}/ka10_cpu.c ${PDP6D}/ka10_sys.c ${PDP6D}/ka10_cty.c \
+	${PDP6D}/ka10_lp.c ${PDP6D}/ka10_pt.c ${PDP6D}/ka10_dc.c \
+	${PDP6D}/ka10_cr.c ${PDP6D}/ka10_cp.c ${PDP6D}/pdp6_dct.c \
+	${PDP6D}/pdp6_dtc.c ${PDP6D}/pdp6_mtc.c ${PDP6D}/pdp6_dsk.c
+PDP6_OPT = -DPDP6=1 -DUSE_INT64 -I $(PDP6D) -DUSE_SIM_CARD 
+ifneq ($(TYPE340),)
+# ONLY tested on Ubuntu 16.04, using X11 display support:
+PDP6_DPY=-DUSE_DISPLAY -DHAVE_LIBSDL -DUSE_SIM_VIDEO `$(SDLX_CONFIG) --cflags` \
+	${PDP6D}/ka10_dpy.c display/type340.c  display/display.c \
+	display/sim_ws.c
+PDP6_DPY_LDFLAGS =-lm -lX11 -lXt `$(SDLX_CONFIG) --libs`
+endif
+
 KA10D = PDP10
 KA10 = ${KA10D}/ka10_cpu.c ${KA10D}/ka10_sys.c ${KA10D}/ka10_df.c \
 	${KA10D}/ka10_dp.c ${KA10D}/ka10_mt.c ${KA10D}/ka10_cty.c \
@@ -1209,8 +1221,9 @@ KA10 = ${KA10D}/ka10_cpu.c ${KA10D}/ka10_sys.c ${KA10D}/ka10_df.c \
 	${KA10D}/ka10_tu.c ${KA10D}/ka10_rs.c ${KA10D}/ka10_pd.c \
 	${KA10D}/ka10_imx.c ${KA10D}/ka10_tk10.c ${KA10D}/ka10_mty.c \
 	${KA10D}/ka10_imp.c ${KA10D}/ka10_ch10.c ${KA10D}/ka10_stk.c \
-	${KA10D}/ka10_ten11.c ${KA10D}/ka10_auxcpu.c
-KA10_OPT = -DKA=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD ${NETWORK_OPT}
+	${KA10D}/ka10_ten11.c ${KA10D}/ka10_auxcpu.c ${PDP6D}/pdp6_dct.c \
+	${PDP6D}/pdp6_dtc.c ${PDP6D}/pdp6_mtc.c ${PDP6D}/pdp6_dsk.c
+KA10_OPT = -DKA=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD ${NETWORK_OPT} -DPDP6_DEV=1
 
 ifneq ($(TYPE340),)
 # ONLY tested on Ubuntu 16.04, using X11 display support:
@@ -1227,18 +1240,25 @@ KA10_LDFLAGS += -lusb-1.0
 endif
 
 KI10D = PDP10
-KI10 = ${KA10D}/ka10_cpu.c ${KA10D}/ka10_sys.c ${KA10D}/ka10_df.c \
-	${KA10D}/ka10_dp.c ${KA10D}/ka10_mt.c ${KA10D}/ka10_cty.c \
-	${KA10D}/ka10_lp.c ${KA10D}/ka10_pt.c ${KA10D}/ka10_dc.c  \
-	${KA10D}/ka10_rp.c ${KA10D}/ka10_rc.c ${KA10D}/ka10_dt.c \
-	${KA10D}/ka10_dk.c ${KA10D}/ka10_cr.c ${KA10D}/ka10_cp.c \
-	${KA10D}/ka10_tu.c ${KA10D}/ka10_rs.c ${KA10D}/ka10_imp.c
+KI10 = ${KI10D}/ka10_cpu.c ${KI10D}/ka10_sys.c ${KI10D}/ka10_df.c \
+	${KI10D}/ka10_dp.c ${KI10D}/ka10_mt.c ${KI10D}/ka10_cty.c \
+	${KI10D}/ka10_lp.c ${KI10D}/ka10_pt.c ${KI10D}/ka10_dc.c  \
+	${KI10D}/ka10_rp.c ${KI10D}/ka10_rc.c ${KI10D}/ka10_dt.c \
+	${KI10D}/ka10_dk.c ${KI10D}/ka10_cr.c ${KI10D}/ka10_cp.c \
+	${KI10D}/ka10_tu.c ${KI10D}/ka10_rs.c ${KI10D}/ka10_imp.c
 KI10_OPT = -DKI=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD ${NETWORK_OPT}
 ifneq ($(PANDA_LIGHTS),)
 # ONLY for Panda display.
 KI10_OPT += -DPANDA_LIGHTS
 KI10 += ${KA10D}/ka10_lights.c
 KI10_LDFLAGS = -lusb-1.0
+endif
+ifneq ($(TYPE340),)
+# ONLY tested on Ubuntu 16.04, using X11 display support:
+KI10_DPY=-DUSE_DISPLAY -DHAVE_LIBSDL -DUSE_SIM_VIDEO `$(SDLX_CONFIG) --cflags` \
+	${KI10D}/ka10_dpy.c display/type340.c  display/display.c \
+	display/sim_ws.c
+KI10_DPY_LDFLAGS =-lm -lX11 -lXt `$(SDLX_CONFIG) --libs`
 endif
 
 
@@ -1862,7 +1882,7 @@ ATT3B2_OPT = -I ${ATT3B2D} -DUSE_INT64 -DUSE_ADDR64
 #
 # Build everything (not the unsupported/incomplete or experimental simulators)
 #
-ALL = b5500 i701 i704 i7010 i7070 i7080 i7090 ka10 ki10 ibm360 ibm360_32 icl1900
+ALL = b5500 i701 i704 i7010 i7070 i7080 i7090 pdp10-ka pdp10-ki ibm360 ibm360_32 icl1900 pdp6
 
 all : ${ALL}
 
@@ -1962,34 +1982,29 @@ ifneq (,$(call find_test,${PDP10D},pdp10))
 	$@ $(call find_test,${PDP10D},pdp10) $(TEST_ARG)
 endif
 
-ka10 : pdp10-ka
+pdp6 : ${BIN}pdp6${EXE}
+
+${BIN}pdp6${EXE} : ${PDP6} ${SIM}
+	${MKDIRBIN}
+	${CC} ${PDP6} ${PDP6_DPY} ${SIM} ${PDP6_OPT} $(CC_OUTSPEC) ${LDFLAGS} ${PDP6_LDFLAGS} ${PDP6_DPY_LDFLAGS}
+ifneq (,$(call find_test,${PDP10D},pdp6))
+	$@ $(call find_test,${PDP10D},pdp6) $(TEST_ARG)
+endif
 
 pdp10-ka : ${BIN}pdp10-ka${EXE}
 
 ${BIN}pdp10-ka${EXE} : ${KA10} ${SIM}
 	${MKDIRBIN}
 	${CC} ${KA10} ${KA10_DPY} ${SIM} ${KA10_OPT} $(CC_OUTSPEC) ${LDFLAGS} ${KA10_LDFLAGS} ${KA10_DPY_LDFLAGS}
-ifeq ($(WIN32),)
-	cp ${BIN}pdp10-ka${EXE} ${BIN}ka10${EXE}
-else
-	copy $(@D)\pdp10-ka${EXE} $(@D)\ka10${EXE}
-endif
 ifneq (,$(call find_test,${PDP10D},ka10))
 	$@ $(call find_test,${PDP10D},ka10) $(TEST_ARG)
 endif
-
-ki10 : pdp10-ki
 
 pdp10-ki : ${BIN}pdp10-ki${EXE}
 
 ${BIN}pdp10-ki${EXE} : ${KI10} ${SIM}
 	${MKDIRBIN}
-	${CC} ${KI10} ${SIM} ${KI10_OPT} $(CC_OUTSPEC) ${LDFLAGS} ${KI10_LDFLAGS}
-ifeq ($(WIN32),)
-	cp ${BIN}pdp10-ki${EXE} ${BIN}ki10${EXE}
-else
-	copy $(@D)\pdp10-ki${EXE} $(@D)\ki10${EXE}
-endif
+	${CC} ${KI10} ${KI10_DPY} ${SIM} ${KI10_OPT} $(CC_OUTSPEC) ${LDFLAGS} ${KI10_LDFLAGS} ${KI10_DPY_LDFLAGS}
 ifneq (,$(call find_test,${PDP10D},ki10))
 	$@ $(call find_test,${PDP10D},ki10) $(TEST_ARG)
 endif
