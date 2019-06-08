@@ -1350,6 +1350,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
     int      page = (RMASK & addr) >> 9;
     int      uf = (FLAGS & USER) != 0;
     int      upmp = 0;
+    int      wf = wr;
 
     if (page_fault)
         return 0;
@@ -1362,17 +1363,17 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
 
     /* If fetching byte data, use write access */
     if (BYF5 && (IR & 06) == 6)
-        wr = 1;
+        wf = 1;
 
     /* If this is modify instruction use write access */
-    wr |= modify;
+    wf |= modify;
 
     /* Figure out if this is a user space access */
     if (flag)
         uf = 0;
     else if (xct_flag != 0 && !cur_context && !uf) {
-             if (((xct_flag & 2) != 0 && wr != 0) ||
-                 ((xct_flag & 1) != 0 && (wr == 0 || modify))) {
+             if (((xct_flag & 2) != 0 && wf != 0) ||
+                 ((xct_flag & 1) != 0 && (wf == 0 || modify))) {
                  uf = (FLAGS & USERIO) != 0;
              }
     }
@@ -1447,7 +1448,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
     }
     if (cur_context && ((data & 0200000) != 0))
         FLAGS |= PUBLIC;
-    if ((data & RSIGN) == 0 || (wr & ((data & 0100000) == 0))) {
+    if ((data & RSIGN) == 0 || (wf & ((data & 0100000) == 0))) {
         fault_data = ((((uint64)(addr))<<9) | ((uint64)(uf) << 27)) & LMASK;
         fault_data |= (data & 0400000) ? 010LL : 0LL;   /* A */
         fault_data |= (data & 0100000) ? 004LL : 0LL;   /* W */
@@ -2640,9 +2641,10 @@ st_pi:
 
     /* Load pseudo registers based on flags */
     if (i_flags & (FCEPSE|FCE)) {
+        if (i_flags & FCEPSE)
+            modify = 1;
         if (Mem_read(0, 0, 0))
             goto last;
-        modify = 1;
         AR = MB;
     }
 
@@ -2764,7 +2766,6 @@ unasign:
                     /* AR High */
               if (Mem_read(0, 0, 0))
                   goto last;
-              modify = 1;
               AR = MB;
               BR = AR;
               AR = get_reg(AC);
@@ -2860,7 +2861,6 @@ dpnorm:
                     /* AR High */
               if (Mem_read(0, 0, 0))
                   goto last;
-              modify = 1;
               AR = MB;
               BR = AR;
               AR = get_reg(AC);
@@ -2904,7 +2904,6 @@ dpnorm:
                     /* AR High */
               if (Mem_read(0, 0, 0))
                   goto last;
-              modify = 1;
               AR = MB;
               BR = AR;
               AR = get_reg(AC);
@@ -2971,7 +2970,6 @@ dpnorm:
                   goto last;
               AR = MB;
               AB = (AB + 1) & RMASK;
-              modify = 0;
               if (Mem_read(0, 0, 0))
                    goto last;
               MQ = MB;
@@ -2984,7 +2982,6 @@ dpnorm:
                   goto last;
               AR = MB;
               AB = (AB + 1) & RMASK;
-              modify = 0;
               if (Mem_read(0, 0, 0))
                    goto last;
               MQ = ((MB & CMASK) ^ CMASK) + 1;   /* Low */
