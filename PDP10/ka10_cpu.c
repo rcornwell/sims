@@ -4148,6 +4148,21 @@ left:
                   break;              /* Done */
               }
 
+#if !PDP6
+              if (AR == SMASK && BR == 1) {
+                  FLAGS |= OVR|NODIV; /* Overflow and No Divide */
+                  sac_inh=1;          /* Don't touch AC */
+                  check_apr_irq();
+                  break;              /* Done */
+              }
+#else
+              if (AR == SMASK && BR == 1) {
+                  MQ = 0;
+                  AR = 0;
+                  break;              /* Done */
+              }
+#endif
+
               if (AR & SMASK) {
                  AR = (CM(AR) + 1) & FMASK;
                  flag1 = !flag1;
