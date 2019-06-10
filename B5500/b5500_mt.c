@@ -600,7 +600,6 @@ mt_reset(DEVICE *dptr)
        at later. Also disconnect all devices no
        longer connected. */
     for ( i = 0; i < NUM_DEVS_MT; i++) {
-        mt_unit[i].dynflags = MT_DENS_556 << UNIT_V_DF_TAPE;
         if ((mt_unit[i].flags & UNIT_ATT) == 0)
             iostatus &= ~(1 << i);
         else if (mt_unit[i].CMD & (MT_LOADED|MT_RDY)) {
