@@ -76,7 +76,7 @@ int clock_gettime(int clock_id, struct timespec *tp);
 #define SIM_NTIMERS     8                           /* # timers */
 #define SIM_TMAX        500                         /* max timer makeup */
 
-#define SIM_INITIAL_IPS 500000                      /* uncalibrated assumption */
+#define SIM_INITIAL_IPS 5000000                     /* uncalibrated assumption */
                                                     /* about instructions per second */
 
 #define SIM_IDLE_CAL    10                          /* ms to calibrate */
@@ -108,10 +108,12 @@ void sim_timespec_diff (struct timespec *diff, struct timespec *min, struct time
 double sim_timenow_double (void);
 int32 sim_rtcn_init (int32 time, int32 tmr);
 int32 sim_rtcn_init_unit (UNIT *uptr, int32 time, int32 tmr);
+int32 sim_rtcn_init_unit_ticks (UNIT *uptr, int32 time, int32 tmr, int32 ticksper);
 void sim_rtcn_get_time (struct timespec *now, int tmr);
 t_stat sim_rtcn_tick_ack (uint32 time, int32 tmr);
 void sim_rtcn_init_all (void);
 int32 sim_rtcn_calb (int32 ticksper, int32 tmr);
+int32 sim_rtcn_calb_tick (int32 tmr);
 int32 sim_rtc_init (int32 time);
 int32 sim_rtc_calb (int32 ticksper);
 t_stat sim_set_timers (int32 arg, CONST char *cptr);
@@ -145,6 +147,7 @@ t_stat sim_clock_coschedule_abs (UNIT *uptr, int32 interval);
 t_stat sim_clock_coschedule_tmr (UNIT *uptr, int32 tmr, int32 ticks);
 t_stat sim_clock_coschedule_tmr_abs (UNIT *uptr, int32 tmr, int32 ticks);
 double sim_timer_inst_per_sec (void);
+void sim_timer_precalibrate_execution_rate (void);
 int32 sim_rtcn_tick_size (int32 tmr);
 int32 sim_rtcn_calibrated_tmr (void);
 t_bool sim_timer_idle_capable (uint32 *host_ms_sleep_1, uint32 *host_tick_ms);
