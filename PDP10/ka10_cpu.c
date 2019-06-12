@@ -4128,6 +4128,10 @@ left:
               }
               AR &= FMASK;
               MQ = (MQ & ~SMASK) | (AR & SMASK);
+#if KA
+              if (BR == SMASK && (AR & SMASK))  /* Handle special case */
+                  FLAGS |= OVR;
+#endif
               break;
 
     case 0230:       /* IDIV */
