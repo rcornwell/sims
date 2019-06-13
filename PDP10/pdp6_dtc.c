@@ -406,7 +406,7 @@ t_stat
 dtc_svc (UNIT *uptr)
 {
    int        word;
-   t_uint64   data = 0;
+   uint64     data = 0;
    uint32     *fbuf = (uint32 *) uptr->filebuf;         /* file buffer */
    int        u = uptr-dtc_unit;
    int        blk;
@@ -604,8 +604,8 @@ dtc_svc (UNIT *uptr)
                        break;
                   case FNC_RALL:
                   case FNC_READ:
-                       data = ((t_uint64)fbuf[off]) << 18;
-                       data |= ((t_uint64)fbuf[off+1]);
+                       data = ((uint64)fbuf[off]) << 18;
+                       data |= ((uint64)fbuf[off+1]);
                        if (dct_write(dtc_dct, &data, 6) == 0) {
                            dtc_dtsb &= ~DTB_ACT;
                            dtc_dtsb |= DTB_INCBLK|DTB_DONE;
@@ -670,7 +670,7 @@ dtc_svc (UNIT *uptr)
                   sim_activate(uptr,DT_WRDTIM*2);
                   uptr->DELAY -= 2;
                   word = (uptr->DSTATE >> DTC_V_BLK) & DTC_M_BLK;
-                  data = (t_uint64)word;
+                  data = (uint64)word;
                   uptr->DSTATE = DTC_RCHK|(word << DTC_V_BLK)|(DTC_M_WORD << DTC_V_WORD) |
                            (uptr->DSTATE & DTC_MOTMASK);
                   sim_debug(DEBUG_DETAIL, &dtc_dev, "DTC %o rev reverse block %04o\n", u, word);
@@ -744,7 +744,7 @@ dtc_svc (UNIT *uptr)
                   uptr->DSTATE = DTC_FCHK|(word << DTC_V_BLK) | (uptr->DSTATE & DTC_MOTMASK);
                   sim_debug(DEBUG_DETAIL, &dtc_dev, "DTC %o forward block %04o %06o\n",
                              u, word, dtc_dtsb);
-                  data = (t_uint64)word;
+                  data = (uint64)word;
                   if ((dtc_dtsb & DTB_DLY) != 0) {
                       if (uptr->DELAY < 0) {
                           if (uptr->CMD & DTC_TIME)
@@ -861,8 +861,8 @@ dtc_svc (UNIT *uptr)
                        break;
                   case FNC_RALL:
                   case FNC_READ:
-                       data = ((t_uint64)fbuf[off]) << 18;
-                       data |= (t_uint64)fbuf[off+1];
+                       data = ((uint64)fbuf[off]) << 18;
+                       data |= (uint64)fbuf[off+1];
                        if (dct_write(dtc_dct, &data, 6) == 0)
                           dtc_dtsb |= DTB_DONE;
                        break;
@@ -1053,8 +1053,8 @@ dtc_boot(int32 unit_num, DEVICE * dptr)
     while (wc != 0777777) {
         wc = (wc + 1) & RMASK;
         addr = (addr + 1) & RMASK;
-        word = ((t_uint64)fbuf[off++]) << 18;
-        word |= (t_uint64)fbuf[off++];
+        word = ((uint64)fbuf[off++]) << 18;
+        word |= (uint64)fbuf[off++];
         if (addr < 020)
            FM[addr] = word;
         else

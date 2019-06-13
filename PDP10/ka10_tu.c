@@ -368,22 +368,22 @@ t_stat tu_devio(uint32 dev, uint64 *data) {
             return SCPE_OK;
         }
         if (tu_reg[ctlr] == 040) {
-              *data = (t_uint64)(tu_read(ctlr, tu_drive[ctlr], 0) & 077);
-              *data |= ((t_uint64)(df10->cia)) << 6;
-              *data |= ((t_uint64)(tu_xfer_drive[ctlr])) << 18;
+              *data = (uint64)(tu_read(ctlr, tu_drive[ctlr], 0) & 077);
+              *data |= ((uint64)(df10->cia)) << 6;
+              *data |= ((uint64)(tu_xfer_drive[ctlr])) << 18;
         } else if (tu_reg[ctlr] == 044) {
-              *data = (t_uint64)tu_ivect[ctlr];
+              *data = (uint64)tu_ivect[ctlr];
               if (tu_imode[ctlr])
                 *data |= IRQ_KI10;
               else
                 *data |= IRQ_KA10;
         } else if (tu_reg[ctlr] == 054) {
-                *data = (t_uint64)(tu_rae[ctlr]);
+                *data = (uint64)(tu_rae[ctlr]);
         } else if ((tu_reg[ctlr] & 040) == 0) {
-              *data = (t_uint64)(tu_read(ctlr, tu_drive[ctlr], tu_reg[ctlr]) & 0177777);
-              *data |= ((t_uint64)(tu_drive[ctlr])) << 18;
+              *data = (uint64)(tu_read(ctlr, tu_drive[ctlr], tu_reg[ctlr]) & 0177777);
+              *data |= ((uint64)(tu_drive[ctlr])) << 18;
         }
-        *data |= ((t_uint64)(tu_reg[ctlr])) << 30;
+        *data |= ((uint64)(tu_reg[ctlr])) << 30;
         sim_debug(DEBUG_DATAIO, dptr, "TU %03o DATI %012llo, %d %d PC=%06o\n",
                     dev, *data, ctlr, tu_drive[ctlr], PC);
         return SCPE_OK;

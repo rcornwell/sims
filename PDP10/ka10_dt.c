@@ -253,8 +253,8 @@
 #define DT_WRDTIM       15000
 
 int32 dtsa = 0;                                         /* status A */
-t_uint64 dtsb = 0;                                      /* status B */
-t_uint64 dtdb = 0;                                      /* data buffer */
+uint64 dtsb = 0;                                        /* status B */
+uint64 dtdb = 0;                                        /* data buffer */
 int dt_mpx_lvl;
 
 t_stat         dt_devio(uint32 dev, uint64 *data);
@@ -525,7 +525,7 @@ t_stat dt_devio(uint32 dev, uint64 *data) {
      return SCPE_OK;
 }
 
-void dt_getword(t_uint64 *data, int req) {
+void dt_getword(uint64 *data, int req) {
     int dev = dt_dib.dev_num;
     clr_interrupt(dev|4);
     if (dtsb & DTB_DATREQ) {
@@ -539,7 +539,7 @@ void dt_getword(t_uint64 *data, int req) {
     }
 }
 
-void dt_putword(t_uint64 *data) {
+void dt_putword(uint64 *data) {
     int dev = dt_dib.dev_num;
     clr_interrupt(dev|4);
     if (dtsb & DTB_DATREQ) {
@@ -559,7 +559,7 @@ void dt_putword(t_uint64 *data) {
 t_stat dt_svc (UNIT *uptr)
 {
    int        word;
-   t_uint64   data = 0;
+   uint64     data = 0;
    uint32     *fbuf = (uint32 *) uptr->filebuf;         /* file buffer */
    int        u = uptr-dt_unit;
    int        blk;
@@ -710,8 +710,8 @@ if (uptr->DSTATE & DTC_MOT) {
                 break;
            case FNC_RALL:
            case FNC_READ:
-                data = ((t_uint64)fbuf[off]) << 18;
-                data |= ((t_uint64)fbuf[off+1]);
+                data = ((uint64)fbuf[off]) << 18;
+                data |= ((uint64)fbuf[off+1]);
                 if ((dtsb & DTB_STOP) == 0)
                     dt_putword(&data);
                 break;
@@ -779,7 +779,7 @@ if (uptr->DSTATE & DTC_MOT) {
       case DTC_RBLK:                           /* In reverse block number */
            sim_activate(uptr,DT_WRDTIM*2);
            word = (uptr->DSTATE >> DTC_V_BLK) & DTC_M_BLK;
-           data = (t_uint64)word;
+           data = (uint64)word;
            uptr->DSTATE = DTC_RCHK|(word << DTC_V_BLK)|(DTC_M_WORD << DTC_V_WORD) | (DTC_MOTMASK & uptr->DSTATE);
            sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o rev reverse block %04o\n", u, word);
            dtsb &= ~DTB_END;
@@ -837,7 +837,7 @@ if (uptr->DSTATE & DTC_MOT) {
            word = (uptr->DSTATE >> DTC_V_BLK) & DTC_M_BLK;
            uptr->DSTATE = DTC_FCHK|(word << DTC_V_BLK) | (DTC_MOTMASK & uptr->DSTATE);
            sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o forward block %04o\n", u, word);
-           data = (t_uint64)word;
+           data = (uint64)word;
            if (DTC_GETUNI(dtsa) == u)  {
                uptr->u3 &= 077077;
                uptr->u3 |= dtsa & 0700;        /* Copy command */
@@ -926,8 +926,8 @@ if (uptr->DSTATE & DTC_MOT) {
                 break;
            case FNC_RALL:
            case FNC_READ:
-                data = ((t_uint64)fbuf[off]) << 18;
-                data |= (t_uint64)fbuf[off+1];
+                data = ((uint64)fbuf[off]) << 18;
+                data |= (uint64)fbuf[off+1];
                 if ((dtsb & DTB_STOP) == 0)
                     dt_putword(&data);
                 else
@@ -1059,8 +1059,8 @@ dt_boot(int32 unit_num, DEVICE * dptr)
     while (wc != 0) {
         wc = (wc + 1) & RMASK;
         addr = (addr + 1) & RMASK;
-        word = ((t_uint64)fbuf[off++]) << 18;
-        word |= (t_uint64)fbuf[off++];
+        word = ((uint64)fbuf[off++]) << 18;
+        word |= (uint64)fbuf[off++];
         if (addr < 020)
            FM[addr] = word;
         else

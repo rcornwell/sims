@@ -60,7 +60,7 @@
 static int pia = 0;
 static int status = 0;
 
-static t_stat auxcpu_devio(uint32 dev, uint64 *data);
+static t_stat auxcpu_devio(uint32 dev, t_uint64 *data);
 static t_stat auxcpu_svc (UNIT *uptr);
 static t_stat auxcpu_reset (DEVICE *dptr);
 static t_stat auxcpu_attach (UNIT *uptr, CONST char *ptr);
@@ -246,7 +246,7 @@ static int transaction (unsigned char *request, unsigned char *response)
   return 0;
 }
 
-int auxcpu_read (int addr, uint64 *data)
+int auxcpu_read (int addr, t_uint64 *data)
 {
   unsigned char request[12];
   unsigned char response[12];
@@ -271,11 +271,11 @@ int auxcpu_read (int addr, uint64 *data)
   switch (response[0])
     {
     case ACK:
-      *data = (uint64)response[1];
-      *data |= (uint64)response[2] << 8;
-      *data |= (uint64)response[3] << 16;
-      *data |= (uint64)response[4] << 24;
-      *data |= (uint64)response[5] << 32;
+      *data = (t_uint64)response[1];
+      *data |= (t_uint64)response[2] << 8;
+      *data |= (t_uint64)response[3] << 16;
+      *data |= (t_uint64)response[4] << 24;
+      *data |= (t_uint64)response[5] << 32;
       break;
     case ERR:
       fprintf (stderr, "AUXCPU: Read error %06o\r\n", addr);
@@ -292,7 +292,7 @@ int auxcpu_read (int addr, uint64 *data)
   return 0;
 }
 
-int auxcpu_write (int addr, uint64 data)
+int auxcpu_write (int addr, t_uint64 data)
 {
   unsigned char request[12];
   unsigned char response[12];
@@ -362,7 +362,7 @@ static int auxcpu_interrupt (void)
   return 0;
 }
 
-t_stat auxcpu_devio(uint32 dev, uint64 *data)
+t_stat auxcpu_devio(uint32 dev, t_uint64 *data)
 {
     DEVICE *dptr = &auxcpu_dev;
 

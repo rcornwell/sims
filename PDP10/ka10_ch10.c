@@ -387,15 +387,15 @@ t_stat ch10_devio(uint32 dev, uint64 *data)
           int i = 512-rx_count;
           ch10_status &= ~RXD;
           if (ch10_status & SWAP) {
-              *data = ((t_uint64)(rx_buffer[i]) & 0xff) << 20;
-              *data |= ((t_uint64)(rx_buffer[i+1]) & 0xff) << 28;
-              *data |= ((t_uint64)(rx_buffer[i+2]) & 0xff) << 4;
-              *data |= ((t_uint64)(rx_buffer[i+3]) & 0xff) << 12;
+              *data = ((uint64)(rx_buffer[i]) & 0xff) << 20;
+              *data |= ((uint64)(rx_buffer[i+1]) & 0xff) << 28;
+              *data |= ((uint64)(rx_buffer[i+2]) & 0xff) << 4;
+              *data |= ((uint64)(rx_buffer[i+3]) & 0xff) << 12;
           } else {
-              *data = ((t_uint64)(rx_buffer[i]) & 0xff) << 28;
-              *data |= ((t_uint64)(rx_buffer[i+1]) & 0xff) << 20;
-              *data |= ((t_uint64)(rx_buffer[i+2]) & 0xff) << 12;
-              *data |= ((t_uint64)(rx_buffer[i+3]) & 0xff) << 4;
+              *data = ((uint64)(rx_buffer[i]) & 0xff) << 28;
+              *data |= ((uint64)(rx_buffer[i+1]) & 0xff) << 20;
+              *data |= ((uint64)(rx_buffer[i+2]) & 0xff) << 12;
+              *data |= ((uint64)(rx_buffer[i+3]) & 0xff) << 4;
           }
           rx_count-=4;
           sim_debug (DBG_DAT, &ch10_dev, "Read buffer word %d:%02x %02x %02x %02x %012llo %012llo\n",

@@ -218,11 +218,41 @@ DEBTAB              crd_debug[] = {
 #define FMT_R   1                                       /* RIM10 */
 #define FMT_S   2                                       /* SAV */
 #define FMT_E   3                                       /* EXE */
+#define FMT_D   4                                       /* WAITS DMP */
 
 #define EXE_DIR 01776                                   /* EXE directory */
 #define EXE_VEC 01775                                   /* EXE entry vec */
 #define EXE_PDV 01774                                   /* EXE ignored */
 #define EXE_END 01777                                   /* EXE end */
+
+/* WAITS Octal dump loader.
+
+   Simple octal ASCII file, one word per line. All lines which don't
+   start with 0-7 are ignored. Everything after the octal constant is
+   also ignored.
+
+*/
+t_stat load_dmp (FILE *fileref)
+{
+   char    buffer[100];
+   char    *p;
+   uint32  addr = 075;
+   uint64  data;
+
+   while (fgets((char *)buffer, 80, fileref) != 0) {
+        p = (char *)buffer;
+        if (*p >= '0' && *p <= '7') {
+           data = 0;
+           while (*p >= '0' && *p <= '7') {
+               data = (data << 3) + *p - '0';
+               p++;
+           }
+           M[addr++] = data;
+        }
+   }
+   return SCPE_OK;
+}
+
 
 /* RIM10 loader
 
@@ -493,12 +523,16 @@ else if (sim_switches & SWMASK ('S'))                   /* -s? */
     fmt = FMT_S;
 else if (sim_switches & SWMASK ('E'))                   /* -e? */
     fmt = FMT_E;
+else if (sim_switches & SWMASK ('D'))                   /* -d? */
+    fmt = FMT_D;
 else if (match_ext (fnam, "RIM"))                       /* .RIM? */
     fmt = FMT_R;
 else if (match_ext (fnam, "SAV"))                       /* .SAV? */
     fmt = FMT_S;
 else if (match_ext (fnam, "EXE"))                       /* .EXE? */
     fmt = FMT_E;
+else if (match_ext (fnam, "DMP"))                       /* .DMP? */
+    fmt = FMT_D;
 else {
     wc = sim_fread (&data, sizeof (uint64), 1, fileref);/* read hdr */
     if (wc == 0)                                        /* error? */
@@ -520,6 +554,9 @@ switch (fmt) {                                          /* case fmt */
 
     case FMT_E:                                         /* EXE */
         return load_exe (fileref);
+
+    case FMT_D:                                         /* DMP */
+        return load_dmp (fileref);
         }
 
 printf ("Can't determine load file format\n");

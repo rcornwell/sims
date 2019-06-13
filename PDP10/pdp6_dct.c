@@ -44,8 +44,8 @@
 #define MISS            0000000010000LL
 #define NUM_CHARS       0000000160000LL
 
-t_uint64      dct_buf[NUM_DEVS_DCT];
-t_uint64      dct_acc[NUM_DEVS_DCT];
+uint64        dct_buf[NUM_DEVS_DCT];
+uint64        dct_acc[NUM_DEVS_DCT];
 
 t_stat        dct_devio(uint32 dev, uint64 *data);
 t_stat        dct_svc(UNIT *);
@@ -189,7 +189,7 @@ dct_is_connect (int dev)
 
 /* Read data from memory */
 int
-dct_read (int dev, t_uint64 *data, int cnt)
+dct_read (int dev, uint64 *data, int cnt)
 {
     int      d = dev & 07;
     int      u = (dev >> 3) & 07;
@@ -224,7 +224,7 @@ dct_read (int dev, t_uint64 *data, int cnt)
 
 /* Write data to memory */
 int
-dct_write (int dev, t_uint64 *data, int cnt)
+dct_write (int dev, uint64 *data, int cnt)
 {
     int      d = dev & 07;
     int      u = (dev >> 3) & 07;

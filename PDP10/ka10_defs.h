@@ -121,6 +121,8 @@
    Code  = 0 stops execution for an interrupt check
 */
 
+typedef t_uint64     uint64;
+
 #define STOP_HALT       1                               /* halted */
 #define STOP_IBKPT      2                               /* breakpoint */
 
@@ -161,11 +163,6 @@ extern DEBTAB crd_debug[];
 #define BIT10_35 00000377777777LL
 #define MANT     00000777777777LL
 #define EXPO     00377000000000LL
-#define DFMASK   01777777777777777777777LL
-#define DSMASK   01000000000000000000000LL
-#define DCMASK   00777777777777777777777LL
-#define DNMASK   00400000000000000000000LL
-#define DXMASK   00200000000000000000000LL
 #define FPHBIT   01000000000000000000000LL
 #define FPSBIT   00400000000000000000000LL
 #define FPNBIT   00200000000000000000000LL
@@ -234,6 +231,11 @@ extern DEBTAB crd_debug[];
 #define CRY1    002000        /* 100000 */
 #define CRY0    004000        /* 200000 */
 #define OVR     010000        /* 400000 */
+#if KI|KL
+#define PRV_PUB 020000        /* Overflow in excutive mode */
+#else
+#define PRV_PUB 000000        /* Not on KA or PDP6 */
+#endif
 #ifdef ITS
 #ifdef PURE
 #undef PURE
@@ -308,8 +310,6 @@ extern DEBTAB crd_debug[];
 #define UNIT_MPX        (1 << UNIT_V_MPX)  /* MPX Device for ITS */
 #define UNIT_M_MPX      (1 << UNIT_V_MPX)
 
-typedef unsigned long long int uint64;
-
 
 #if MPX_DEV
 extern void set_interrupt_mpx(int dev, int lvl, int mpx);
@@ -366,7 +366,7 @@ extern DEVICE   dtc_dev;
 extern DEVICE   mtc_dev;
 extern DEVICE   dsk_dev;
 
-extern t_stat (*dev_tab[128])(uint32 dev, uint64 *data);
+extern t_stat (*dev_tab[128])(uint32 dev, t_uint64 *data);
 
 #define VEC_DEVMAX      8                               /* max device vec */
 
@@ -374,7 +374,7 @@ extern t_stat (*dev_tab[128])(uint32 dev, uint64 *data);
 struct pdp_dib {
     uint32              dev_num;                        /* device address */
     uint32              num_devs;                       /* length */
-    t_stat              (*io)(uint32 dev, uint64 *data);
+    t_stat              (*io)(uint32 dev, t_uint64 *data);
     int                 (*irq)(uint32 dev, int addr);
 };
 
@@ -396,7 +396,7 @@ struct df10 {
         uint32  wcr;
         uint32  cda;
         uint32  devnum;
-        uint64  buf;
+        t_uint64  buf;
         uint8   nxmerr;
         uint8   ccw_comp;
 } ;
@@ -415,17 +415,17 @@ int  dct_write(int u, t_uint64 *data, int c);
 int  dct_is_connect(int u);
 #endif
 
-int ten11_read (int addr, uint64 *data);
-int ten11_write (int addr, uint64 data);
+int ten11_read (int addr, t_uint64 *data);
+int ten11_write (int addr, t_uint64 data);
 
 /* Console lights. */
 extern void ka10_lights_init (void);
-extern void ka10_lights_main (uint64);
+extern void ka10_lights_main (t_uint64);
 extern void ka10_lights_set_aux (int);
 extern void ka10_lights_clear_aux (int);
 
-int auxcpu_read (int addr, uint64 *);
-int auxcpu_write (int addr, uint64);
+int auxcpu_read (int addr, t_uint64 *);
+int auxcpu_write (int addr, t_uint64);
 
 /* I/O system parameters */
 #define NUM_DEVS_LP     1
@@ -466,8 +466,8 @@ int auxcpu_write (int addr, uint64);
 
 extern t_bool sim_idle_enab;
 extern struct rh_dev rh[];
-extern uint64   M[];
-extern uint64   FM[];
+extern t_uint64   M[];
+extern t_uint64   FM[];
 extern uint32   PC;
 extern uint32   FLAGS;
 

@@ -610,28 +610,28 @@ t_stat rp_devio(uint32 dev, uint64 *data) {
             return SCPE_OK;
         }
         if (rp_reg[ctlr] == 040) {
-              *data = (t_uint64)(rp_read(ctlr, rp_drive[ctlr], 0) & 077);
-              *data |= ((t_uint64)(df10->cia)) << 6;
-              *data |= ((t_uint64)(rp_xfer_drive[ctlr])) << 18;
+              *data = (uint64)(rp_read(ctlr, rp_drive[ctlr], 0) & 077);
+              *data |= ((uint64)(df10->cia)) << 6;
+              *data |= ((uint64)(rp_xfer_drive[ctlr])) << 18;
         } else if (rp_reg[ctlr] == 044) {
-              *data = (t_uint64)rp_ivect[ctlr];
+              *data = (uint64)rp_ivect[ctlr];
               if (rp_imode[ctlr])
                 *data |= IRQ_KI10;
               else
                 *data |= IRQ_KA10;
         } else if (rp_reg[ctlr] == 054) {
-                *data = (t_uint64)(rp_rae[ctlr]);
+                *data = (uint64)(rp_rae[ctlr]);
         } else if ((rp_reg[ctlr] & 040) == 0) {
               int parity;
-              *data = (t_uint64)(rp_read(ctlr, rp_drive[ctlr], rp_reg[ctlr]) & 0177777);
+              *data = (uint64)(rp_read(ctlr, rp_drive[ctlr], rp_reg[ctlr]) & 0177777);
               parity = (int)((*data >> 8) ^ *data);
               parity = (parity >> 4) ^ parity;
               parity = (parity >> 2) ^ parity;
               parity = ((parity >> 1) ^ parity) & 1;
-              *data |= ((t_uint64)(parity ^ 1)) << 17;
-              *data |= ((t_uint64)(rp_drive[ctlr])) << 18;
+              *data |= ((uint64)(parity ^ 1)) << 17;
+              *data |= ((uint64)(rp_drive[ctlr])) << 18;
         }
-        *data |= ((t_uint64)(rp_reg[ctlr])) << 30;
+        *data |= ((uint64)(rp_reg[ctlr])) << 30;
         sim_debug(DEBUG_DATAIO, dptr, "RP %03o DATI %012llo, %d %d PC=%06o\n",
                     dev, *data, ctlr, rp_drive[ctlr], PC);
         return SCPE_OK;

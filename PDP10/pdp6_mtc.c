@@ -279,7 +279,7 @@ mtc_devio(uint32 dev, uint64 *data) {
           switch(dev & 03) {
           case CONI:
               uptr = &mtc_unit[mtc_sel_unit];
-              res = mtc_status | (t_uint64)(uptr->STATUS);
+              res = mtc_status | (uint64)(uptr->STATUS);
               if ((uptr->flags & MTUF_WLK) != 0)
                   res |= WRITE_LOCK;
               if (sim_tape_bot(uptr))
@@ -384,7 +384,7 @@ mtc_srv(UNIT * uptr)
     t_stat              r = SCPE_ARG;   /* Force error if not set */
     uint8               ch;
     int                 cc;
-    t_uint64            hold_reg;
+    uint64              hold_reg;
     int                 cc_max;
     int                 i;
 
@@ -782,10 +782,10 @@ mtc_srv(UNIT * uptr)
     return SCPE_OK;
 }
 
-t_uint64
+uint64
 mtc_read_word(UNIT *uptr) {
-     int i, cc, ch;
-     t_uint64  hold_reg = 0;
+     int i,  cc, ch;
+     uint64  hold_reg = 0;
 
      for(i = 0; i <= 4; i++) {
         cc = (8 * (3 - i)) + 4;
@@ -806,7 +806,7 @@ mtc_boot(int32 unit_num, DEVICE * dptr)
     UNIT               *uptr = &dptr->units[unit_num];
     t_mtrlnt            reclen;
     t_stat              r;
-    t_uint64            hold_reg;
+    uint64              hold_reg;
     int                 wc, addr;
 
     if ((uptr->flags & UNIT_ATT) == 0)

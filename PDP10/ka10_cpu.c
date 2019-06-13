@@ -541,7 +541,7 @@ int opflags[] = {
         0,                0,                0,              0,
 
         /* UFA */         /* DFN */         /* FSC */       /* IBP */
-        P10(FCE|FBR),     P10(FCE|FAC|SAC), FAC|SAC,        0,
+        P10(FCE|FBR),     P10(FCE|FAC),     FAC|SAC,        0,
         /* ILDB */        /* LDB */         /* IDPB */      /* DPB */
         0,                0,                0,              0,
         /* Floating point */
@@ -1320,6 +1320,7 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
         Ph = ((0377 & (*data >> 19)) << 10) + 01777;
         Pl = ((0377 & (*data >> 28)) << 10) + 01777;
         sim_debug(DEBUG_DATAIO, &cpu_dev, "DATAO APR %012llo\n", *data);
+sim_debug(DEBUG_DATAIO, &cpu_dev, "Rl=%06o Pl=%06o, Rh=%06o, Ph=%06o\n", Rl, Pl, Rh, Ph);
         break;
 
     case DATAI:
@@ -1545,6 +1546,8 @@ read:
             nxm_flag = 1;
             return 1;
         }
+        if (sim_brk_summ && sim_brk_test(AB, SWMASK('R')))
+            watch_stop = 1;
         MB = M[addr];
     }
     return 0;
@@ -1582,6 +1585,8 @@ write:
             nxm_flag = 1;
             return 1;
         }
+        if (sim_brk_summ && sim_brk_test(AB, SWMASK('W')))
+            watch_stop = 1;
         M[addr] = MB;
     }
     return 0;
@@ -1798,6 +1803,8 @@ int Mem_read_its(int flag, int cur_context, int fetch) {
             nxm_flag = 1;
             return 1;
         }
+        if (sim_brk_summ && sim_brk_test(AB, SWMASK('R')))
+            watch_stop = 1;
         MB = M[addr];
     }
     return 0;
@@ -1843,6 +1850,8 @@ int Mem_write_its(int flag, int cur_context) {
             nxm_flag = 1;
             return 1;
         }
+        if (sim_brk_summ && sim_brk_test(AB, SWMASK('W')))
+            watch_stop = 1;
         M[addr] = MB;
     }
     return 0;
@@ -2110,6 +2119,8 @@ int Mem_read_bbn(int flag, int cur_context, int fetch) {
             nxm_flag = 1;
             return 1;
         }
+        if (sim_brk_summ && sim_brk_test(AB, SWMASK('R')))
+            watch_stop = 1;
         MB = M[addr];
     }
     return 0;
@@ -2137,6 +2148,8 @@ int Mem_write_bbn(int flag, int cur_context) {
             nxm_flag = 1;
             return 1;
         }
+        if (sim_brk_summ && sim_brk_test(AB, SWMASK('W')))
+            watch_stop = 1;
         M[addr] = MB;
     }
     return 0;
@@ -2159,7 +2172,7 @@ int page_lookup_ka(int addr, int flag, int *loc, int wr, int cur_context, int fe
           mem_prot = 1;
           return 0;
       } else {
-         *loc = addr;
+          *loc = addr;
       }
       return 1;
 }
@@ -2177,6 +2190,8 @@ int Mem_read_ka(int flag, int cur_context, int fetch) {
             nxm_flag = 1;
             return 1;
         }
+        if (sim_brk_summ && sim_brk_test(AB, SWMASK('R')))
+            watch_stop = 1;
         MB = M[addr];
     }
     return 0;
@@ -2201,6 +2216,8 @@ int Mem_write_ka(int flag, int cur_context) {
             nxm_flag = 1;
             return 1;
         }
+        if (sim_brk_summ && sim_brk_test(AB, SWMASK('W')))
+            watch_stop = 1;
         M[addr] = MB;
     }
     return 0;
@@ -2508,7 +2525,7 @@ no_fetch:
 
 #if KI | KL
     /* Handle page fault and traps */
-    if (page_enable && trap_flag == 0 && (FLAGS & (TRP1|TRP2))) {
+    if (pi_enable && page_enable && trap_flag == 0 && (FLAGS & (TRP1|TRP2))) {
         AB = 0420 + ((FLAGS & (TRP1|TRP2)) >> 2);
         trap_flag = FLAGS & (TRP1|TRP2);
         FLAGS &= ~(TRP1|TRP2);
@@ -2712,7 +2729,7 @@ unasign:
               if ((FLAGS & USER) != 0 && (AB & 4) != 0) {
                   FLAGS |= USERIO;
                   if (AB & 2)
-                     FLAGS |= OVR;
+                     FLAGS |= PRV_PUB;
               }
               PC = MB & RMASK;
               f_pc_inh = 1;
@@ -2774,83 +2791,107 @@ unasign:
               AB = (AB + 1) & RMASK;
               if (Mem_read(0, 0, 0))
                   goto last;
+              /* Make into 64 bit numbers */
               SC = GET_EXPO(BR);
               SMEAR_SIGN(BR);
               BR <<= 35;
-              BR |= MB & CMASK;
+              BR |= (MB & CMASK);
               FE = GET_EXPO(AR);
               SMEAR_SIGN(AR);
               AR <<= 35;
               AR |= (MQ & CMASK);
               if (IR & 01) {
-                  BR = (DFMASK ^ BR) + 1;
+                  BR = (FPFMASK ^ BR) + 1;
               }
-              SCAD = SC - FE;
-              if (SCAD < 0) {
+              SCAD = (SC - 200) + (FE - 200);
+              if (FE > SC) {  /* Swap if BR larger */
                   AD = AR;
                   AR = BR;
                   BR = AD;
                   SCAD = FE;
                   FE = SC;
                   SC = SCAD;
-                  SCAD = SC - FE;
               }
-              if (SCAD > 0) {
-                  while (SCAD > 0) {
-                     AR = (AR & (DSMASK|DNMASK)) | (AR >> 1);
-                     SCAD--;
+              SCAD = SC - FE;
+              flag3 = 0;
+              MQ = 0;
+              if (SCAD > 0) {  /* Align numbers */
+                  if (SCAD > 64) /* Outside range */
+                      AR = 0;
+                  else {
+                      while (SCAD > 0) {
+                          MQ >>= 1;
+                          if (AR & 1)
+                             MQ |= SMASK;
+                          AR = (AR & (FPHBIT|FPSBIT)) | (AR >> 1);
+                          SCAD--;
+                       }
                   }
               }
-              AD = (AR + BR);
-              flag1 = 0;
-              if ((AR & DSMASK) ^ (BR & DSMASK)) {
-                  if (AD & DSMASK) {
-                     AD = (DCMASK ^ AD) + 1;
-                     flag1 = 1;
+              AR = AR + BR + flag3;
+              /* Set flag1 to sign */
+              flag1 = (AR & FPHBIT) != 0;
+dpnorm:
+              /* Make sure High bit and sign bit same */
+              while (((AR & FPHBIT) != 0) != ((AR & FPSBIT) != 0)) {
+                  SC += 1;
+                  MQ >>= 1;
+                  if (AR & 1)
+                      MQ |= SMASK;
+                  AR = (AR & FPHBIT) | (AR >> 1);
+              }
+
+              /* Check for potiential underflow */
+              if (((SC & 0400) != 0) ^ ((SC & 0200) != 0))
+                 fxu_hold_set = 1;
+              if (AR != 0) {
+                  while (AR != 0 &&
+                         (((AR & (FPSBIT|FPNBIT)) == (FPSBIT|FPNBIT)) ||
+                          ((AR & (FPSBIT|FPNBIT)) == 0))) {
+                      SC --;
+                      AR <<= 1;
+                      if (MQ & SMASK)
+                          AR |= 1;
+                      MQ <<= 1;
+                  }
+                  /* Handle special minus case */
+                  if (AR == (FPHBIT|FPSBIT)) {
+                      SC += 1;
+                      AR = (AR & FPHBIT) | (AR >> 1);
                   }
               } else {
-                  if (AR & DSMASK) {
-                     AD = (DCMASK ^ AD) + 1;
-                     flag1 = 1;
-                  }
-                  if (AD & DNMASK) {
-                     AD ++;
-                     AD = (AD & DSMASK) | (AD >> 1);
-                     SC++;
-                  }
+                 AR = MQ = 0;
+                 SC = 0;
               }
-              AR = AD;
 
-              while (AR != 0 && ((AR & DXMASK) == 0)) {
-                 AR <<= 1;
-                 SC--;
-                 fxu_hold_set = 1;
+              /* Check if we need to round */
+              if (!nrf && ((MQ & SMASK) != 0) && (((AR & FPSBIT) == 0) ||
+                          ((AR & FPSBIT) != 0) && (MQ & 0377700000000LL) != 0)) {
+                 AR++;
+                 nrf = 1;
+                /* Clean things up if we overflowed */
+                if ((AR & FPHBIT) == 0)
+                    goto dpnorm;
               }
-dpnorm:
-              if (AR == 0)
-                  flag1 = 0;
-              ARX = AR & CMASK;
+              /* Extract result */
+              MQ = (AR & CMASK);
               AR >>= 35;
               AR &= MMASK;
-              if (flag1) {
-                  ARX = (ARX ^ CMASK) + 1;
-                  AR = (AR ^ MMASK) + ((ARX & SMASK) != 0);
-                  ARX &= CMASK;
-                  AR &= MMASK;
-                  AR |= SMASK;
-              }
+              if (flag1)   /* Append sign */
+                 AR |= SMASK;
+              /* Check for over/under flow */
               if (((SC & 0400) != 0) && !pi_cycle) {
                  FLAGS |= OVR|FLTOVR|TRP1;
-                 if (fxu_hold_set) {
+                 if (!fxu_hold_set) {
                      FLAGS |= FLTUND;
                  }
               }
+              /* Add exponent */
               SCAD = SC ^ ((AR & SMASK) ? 0377 : 0);
               AR &= SMASK|MMASK;
-              if (AR != 0)
+              if (AR != 0 || MQ != 0)
                   AR |= ((uint64)(SCAD & 0377)) << 27;
 
-              MQ = ARX;
               set_reg(AC, AR);
               set_reg(AC+1, MQ);
               break;
@@ -2868,6 +2909,7 @@ dpnorm:
               AB = (AB + 1) & RMASK;
               if (Mem_read(0, 0, 0))
                   goto last;
+              /* Make into 64 bit numbers */
               SC = GET_EXPO(AR);
               SMEAR_SIGN(AR);
               AR <<= 35;
@@ -2877,26 +2919,97 @@ dpnorm:
               BR <<= 35;
               BR |= MB & CMASK;
               flag1 = 0;
-              if (AR & DSMASK) {
-                  AR = (DFMASK ^ AR) + 1;
+              /* Make both numbers positive */
+              if (AR & FPSBIT) {
+                  AR = (FPFMASK ^ AR) + 1;
                   flag1 = 1;
               }
-              if (BR & DSMASK) {
-                  BR = (DFMASK ^ BR) + 1;
+              if (BR & FPSBIT) {
+                  BR = (FPFMASK ^ BR) + 1;
                   flag1 = !flag1;
               }
-              SC = SC + FE - 0201;
-              if (SC < 0)
-                  fxu_hold_set = 1;
-              AD = (AR >> 30) * (BR >> 30);
-              AD += ((AR >> 30) * (BR & PMASK)) >> 30;
-              AD += ((AR & PMASK) * (BR >> 30)) >> 30;
-              AR = AD >> 1;
-              if (AR & DNMASK) {
-                 AR >>= 1;
-                 SC++;
+              /* Compute exponent */
+              SC = SC + FE - 0200;
+              ARX = 0;
+              /* Do multiply */
+              for (FE = 0; FE < 62; FE++) {
+                  if (FE == 35)  /* Clear MQ so it has correct lower product digits */
+                     MQ = 0;
+                  if (BR & 1)
+                     ARX += AR;
+                  MQ >>= 1;
+                  if (ARX & 1)
+                     MQ |= BIT1;
+                  ARX >>= 1;
+                  BR >>= 1;
               }
-              goto dpnorm;
+              AR = ARX;
+              /* Make result negative if needed */
+              if (flag1) {
+                  MQ = (MQ ^ CMASK) + 0400;
+                  AR = (AR ^ FPFMASK);
+                  if (MQ & SMASK) {
+                     AR ++;
+                     MQ &= FMASK;
+                  }
+                  /* Check for overflow */
+                  if ((AR & (FPHBIT|FPSBIT)) == (FPHBIT)) {
+                      SC += 1;
+                      MQ >>= 1;
+                      if (AR & 1)
+                          MQ |= BIT1;
+                      AR = (AR >> 1) | (FPHBIT & AR);
+                  }
+              }
+              /* Check if we need to normalize */
+              if (AR != 0) {
+                  /* Check for fast shift */
+                  if ((AR & ~MMASK) == 0 || ((AR & ~MMASK) + BIT8) == 0) {
+                      SC -= 35;
+                      AR <<= 35;
+                      AR |= MQ & CMASK;
+                      MQ = 0;
+                      if ((AR & 0777) == 0777)
+                          AR &= (FPFMASK << 8);
+                  }
+                  if (((AR & (FPSBIT|FPNBIT)) == (FPSBIT|FPNBIT)) ||
+                      ((AR & (FPSBIT|FPNBIT)) == 0)) {
+                      SC --;
+                      AR <<= 1;
+                      if (MQ & BIT1)
+                         AR |= 1;
+                      MQ <<= 1;
+                      MQ &= FMASK;
+                      nrf = 1;
+                  }
+              } else {
+                 AR = MQ = 0;
+                 SC = 0;
+                 flag1 = 0;
+              }
+              /* Round if needed */
+              if (MQ & BIT1)
+                   AR++;
+              /* Build results */
+              MQ = (AR & CMASK);
+              AR >>= 35;
+              AR &= MMASK;
+              if (flag1)
+                  AR |= SMASK;
+              if (((SC & 0400) != 0) && !pi_cycle) {
+                 FLAGS |= OVR|FLTOVR|TRP1;
+                 if (SC < 0) {
+                     FLAGS |= FLTUND;
+                 }
+              }
+              SCAD = SC ^ ((AR & SMASK) ? 0377 : 0);
+              AR &= SMASK|MMASK;
+              if (AR != 0 || MQ != 0)
+                  AR |= ((uint64)(SCAD & 0377)) << 27;
+
+              set_reg(AC, AR);
+              set_reg(AC+1, MQ);
+              break;
 
     case 0113: /* DFDV */
               /* On Load AR,MQ has memory operand */
@@ -2911,6 +3024,7 @@ dpnorm:
               AB = (AB + 1) & RMASK;
               if (Mem_read(0, 0, 0))
                   goto last;
+              /* Make into 64 bit numbers */
               SC = GET_EXPO(AR);
               SMEAR_SIGN(AR);
               AR <<= 35;
@@ -2919,15 +3033,17 @@ dpnorm:
               SMEAR_SIGN(BR);
               BR <<= 35;
               BR |= MB & CMASK;
+              /* Make both positive */
               flag1 = 0;
-              if (AR & DSMASK) {
-                  AR = (DFMASK ^ AR) + 1;
+              if (AR & FPSBIT) {
+                  AR = (FPFMASK ^ AR) + 1;
                   flag1 = 1;
               }
-              if (BR & DSMASK) {
-                  BR = (DFMASK ^ BR) + 1;
+              if (BR & FPSBIT) {
+                  BR = (FPFMASK ^ BR) + 1;
                   flag1 = !flag1;
               }
+              /* Precheck if divide ok */
               if (AR >= (BR << 1)) {
                   if (!pi_cycle)
                       FLAGS |= OVR|FLTOVR|NODIV|TRP1;
@@ -2935,18 +3051,21 @@ dpnorm:
                   sac_inh = 1;
                   break;
               }
-
+              /* Divide by zero */
               if (AR == 0)  {
                   sac_inh = 1;
                   break;
               }
+              /* Compute exponents */
               SC = SC - FE + 0201;
+              /* Precheck divider */
               if (AR < BR) {
                   AR <<= 1;
                   SC--;
               }
-              if (SC < 0)
-                  fxu_hold_set = 1;
+              if (SC < 0 && !pi_cycle)
+                  FLAGS |= FLTUND|OVR|FLTOVR|TRP1;
+              /* Do divide */
               AD = 0;
               for (FE = 0; FE < 62; FE++) {
                   AD <<= 1;
@@ -2957,7 +3076,34 @@ dpnorm:
                   AR <<= 1;
               }
               AR = AD;
-              goto dpnorm;
+              if (flag1) {
+                  AR = (AR ^ FPFMASK) + 1;
+              }
+              if (((SC & 0400) != 0) ^ ((SC & 0200) != 0) || SC == 0600)
+                  fxu_hold_set = 1;
+              while (((AR & FPHBIT) != 0) != ((AR & FPSBIT) != 0)) {
+                  SC += 1;
+                  AR = (AR & FPHBIT) | (AR >> 1);
+              }
+              MQ = (AR & CMASK);
+              AR >>= 35;
+              AR &= MMASK;
+              if (flag1)
+                  AR |= SMASK;
+              if (((SC & 0400) != 0) && !pi_cycle) {
+                  FLAGS |= OVR|FLTOVR|TRP1;
+                  if (!fxu_hold_set) {
+                      FLAGS |= FLTUND;
+                  }
+              }
+              SCAD = SC ^ ((AR & SMASK) ? 0377 : 0);
+              AR &= SMASK|MMASK;
+              if (AR != 0 | MQ != 0)
+                  AR |= ((uint64)(SCAD & 0377)) << 27;
+
+              set_reg(AC, AR);
+              set_reg(AC+1, MQ);
+              break;
 
     case 0114: /* DADD */
     case 0115: /* DSUB */
@@ -3046,15 +3192,7 @@ dpnorm:
               MQ = 0;
               SC = ((((AR & SMASK) ? 0377 : 0 )
                       ^ ((AR >> 27) & 0377)) + 0600) & 0777;
-              flag1 = 0;
-              if ((AR & SMASK) != 0) {
-                 AR ^= MMASK;
-                 AR++;
-                 AR &= MMASK;
-                 flag1 = 1;
-              } else {
-                 AR &= MMASK;
-              }
+              SMEAR_SIGN(AR);
               SC -= 27;
               SC &= 0777;
               if (SC < 9) {
@@ -3063,17 +3201,21 @@ dpnorm:
               }  else if ((SC & 0400) != 0) {
               /* -27 < N < 0 */
                   SC = 01000 - SC;
-                  MQ = (AR << (36 - SC)) - flag1 ;
-                  AR = (AR >> SC);
-                  if ((IR & 04) && (MQ & SMASK) != 0)
+                  if (SC > 27) {
+                      AR = MQ = 0;
+                  } else {
+                      MQ = (AR << (36 - SC)) & FMASK /*- flag1*/ ;
+                      AR = (AR >> SC) | FMASK & (((AR & SMASK)? FMASK << (27 - SC): 0));
+                  }
+                  if (((IR & 04) != 0 && (MQ & SMASK) != 0) ||
+                      ((IR & 04) == 0 && (AR & SMASK) != 0 &&
+                             ((MQ & CMASK) != 0 || (MQ & SMASK) != 0)))
                        AR ++;
               } else {
                   if (!pi_cycle)
                       FLAGS |= OVR|TRP1;        /* OV & T1 */
                   sac_inh = 1;
               }
-              if (flag1)
-                 AR = (CM(AR) + 1) & FMASK;
               if (!sac_inh)
                  set_reg(AC, AR);
               break;
@@ -3429,6 +3571,7 @@ ldb_ptr:
               BR = AR;
               AR = AD;
               MB = BR;
+              set_reg(AC, AR);
               if (Mem_write(0, 0))
                  goto last;
 #endif
@@ -3667,7 +3810,7 @@ fnormx:
               flag1 = 0;
               flag3 = 0;
               if (AR & SMASK) {
-                 if ((AR & EXPO) != 0 && (AR & MMASK) == 0) {
+                  if ((AR & MMASK) == 0) {
                      AR = BIT9;
                      SC++;
                  } else
@@ -3676,6 +3819,10 @@ fnormx:
                  flag3 = 1;
               }
               if (BR & SMASK) {
+                  if ((BR & MMASK) == 0) {
+                     BR = BIT9;
+                     SC++;
+                 } else
                  BR = CM(BR) + 1;
                  flag1 = !flag1;
               }
@@ -3710,12 +3857,12 @@ fnormx:
                   flag1 = 1;
                   flag3 = 1;
               }
-              if ((BR & MMASK) == 0) {
-                  AR = 0;
+              if ((BR & (MMASK)) == 0) {
+                  AR = BR;
                   break;
               }
               if (AR & SMASK) {
-                  if ((AR & EXPO) != 0 && (AR & MMASK) == 0) {
+                  if ((AR & MMASK) == 0) {
                       AR = BIT9;
                       SC--;
                   } else
@@ -3744,6 +3891,8 @@ fnormx:
                   } else {
                       SC--;
                   }
+                  if (((SC & 0400) != 0) ^ ((SC & 0200) != 0) || SC == 0600)
+                      fxu_hold_set = 1;
                   if (IR & 04) {
                       AR++;
                   }
@@ -3776,10 +3925,6 @@ fnormx:
                       SC--;
                   }
                   AR &= MMASK;
-#endif
-                  if (((SC & 0400) != 0) ^ ((SC & 0200) != 0) || SC == 0600)
-                      fxu_hold_set = 1;
-#if PDP6
                   if (flag1)  {
                       AR |= SMASK;
                   }
@@ -3868,7 +4013,7 @@ fnormx:
               MQ = BR;
               if (flag1)
                   AR = ((AR ^ FMASK) + 1) & FMASK;
- 
+
               /* FDT1 */
               if (AR != 0) {
                   MQ = (MQ >> 1) & (CMASK >> 1);
@@ -3985,11 +4130,10 @@ left:
                       AR |= SMASK;
                   }
               } else if (flag1) {
-                 AR =  SMASK | BIT9;
-                 SC++;
+                  FE = SC = 0;
               } else {
-                 AR = 0;
-                 SC = 0;
+                  AR = 0;
+                  SC = 0;
               }
               if (((SC & 0400) != 0) && !pi_cycle) {
                   FLAGS |= OVR|FLTOVR|TRP1;
@@ -4008,7 +4152,7 @@ left:
                       MQ = (MQ ^ MMASK) + 1;
                       MQ |= SMASK;
                   }
-                  if (FE & 0400) {
+                  if (FE < 0 /*FE & 0400*/) {
                      MQ = 0;
                      FE = 0;
                   } else
@@ -4128,6 +4272,10 @@ left:
               }
               AR &= FMASK;
               MQ = (MQ & ~SMASK) | (AR & SMASK);
+#if KA
+              if (BR == SMASK && (AR & SMASK))  /* Handle special case */
+                  FLAGS |= OVR;
+#endif
               break;
 
     case 0230:       /* IDIV */
@@ -4147,6 +4295,21 @@ left:
                   check_apr_irq();
                   break;              /* Done */
               }
+
+#if !PDP6
+              if (AR == SMASK && BR == 1) {
+                  FLAGS |= OVR|NODIV; /* Overflow and No Divide */
+                  sac_inh=1;          /* Don't touch AC */
+                  check_apr_irq();
+                  break;              /* Done */
+              }
+#else
+              if (AR == SMASK && BR == 1) {
+                  MQ = 0;
+                  AR = 0;
+                  break;              /* Done */
+              }
+#endif
 
               if (AR & SMASK) {
                  AR = (CM(AR) + 1) & FMASK;
@@ -4187,7 +4350,8 @@ left:
               MQ |= (AD & SMASK) != 0;
               SC = 35;
               if ((AD & SMASK) == 0) {
-                  FLAGS |= OVR|NODIV; /* Overflow and No Divide */
+                  FLAGS |= OVR|NODIV|TRP1; /* Overflow and No Divide */
+                  i_flags = 0;
                   sac_inh=1;
                   check_apr_irq();
                   break;      /* Done */
@@ -4420,7 +4584,12 @@ left:
                        AR = AOB(AR) & FMASK;
 #endif
                        f_pc_inh = 1;
+#if KA & ITS
+                       if (QITS)
+                           set_reg(AC, AR);
+#else
                        set_reg(AC, AR);
+#endif
                        goto last;
                   }
                   AB = (AR & RMASK);
@@ -4435,7 +4604,12 @@ left:
                        AR = AOB(AR) & FMASK;
 #endif
                        f_pc_inh = 1;
+#if KA & ITS
+                       if (QITS)
+                           set_reg(AC, AR);
+#else
                        set_reg(AC, AR);
+#endif
                        goto last;
                   }
                   AD = (AR & RMASK) + CM(BR) + 1;
@@ -4530,6 +4704,9 @@ left:
 #endif
                  FLAGS |= AR & (OVR|NODIV|FLTUND|BYTI|FLTOVR|CRY1|CRY0|\
                                  TRP1|TRP2|PUBLIC|PCHNG);
+#if KI
+                 FLAGS |= (FLAGS & OVR) ? PRV_PUB : 0;
+#endif
 #if ITS
                  if (QITS)
                      FLAGS |= AR & (PURE|ONEP);
@@ -4539,7 +4716,7 @@ left:
 
               if (AC & 01) {  /* Enter User Mode */
 #if KI | KL
-                 FLAGS &= ~PUBLIC;
+                 FLAGS &= ~(PUBLIC|PRV_PUB);
 #else
                  FLAGS |= USER;
 #endif
@@ -4667,6 +4844,12 @@ left:
               /* Stack, JUMP */
     case 0260:  /* PUSHJ */     /* AR Frm PC */
               MB = ((uint64)(FLAGS) << 23) | ((PC + !pi_cycle) & RMASK);
+#if KI
+              if ((FLAGS & USER) == 0) {
+                  MB &= ~SMASK;
+                  MB |= (FLAGS & PRV_PUB) ? SMASK : 0;
+              }
+#endif
               BR = AB;
               AR = AOB(AR);
               AB = AR & RMASK;
@@ -4765,6 +4948,12 @@ left:
 
     case 0264: /* JSR */       /* AR Frm PC */
               MB = ((uint64)(FLAGS) << 23) | ((PC + !pi_cycle) & RMASK);
+#if KI
+              if ((FLAGS & USER) == 0) {
+                  MB &= ~SMASK;
+                  MB |= (FLAGS & PRV_PUB) ? SMASK : 0;
+              }
+#endif
 #if PDP6
               if (ill_op | uuo_cycle | pi_cycle | ex_uuo_sync) {
                  ill_op = 0;
@@ -4791,6 +4980,12 @@ left:
               AD = ((uint64)(FLAGS) << 23) |
                       ((PC + !pi_cycle) & RMASK);
               FLAGS &= ~ (BYTI|ADRFLT|TRP1|TRP2);
+#if KI
+              if ((FLAGS & USER) == 0) {
+                  AD &= ~SMASK;
+                  AD |= (FLAGS & PRV_PUB) ? SMASK : 0;
+              }
+#endif
 #if !PDP6
               if (uuo_cycle | pi_cycle) {
                  FLAGS &= ~(USER|PUBLIC); /* Clear USER */
@@ -5385,7 +5580,7 @@ fetch_opr:
                           AR = AOB(AR);
                           if (AR & C1) {
                               pi_ov = 1;
-			}
+                          }
                           else if (!pi_cycle)
                               PC = (PC + 1) & RMASK;
                           AR &= FMASK;

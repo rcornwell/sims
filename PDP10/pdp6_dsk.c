@@ -188,7 +188,7 @@ DEVICE              dsk_dev = {
 t_stat
 dsk_devio(uint32 dev, uint64 *data) {
      UNIT        *uptr = &dsk_unit[(dsk_addr >> 16) & 03];
-     t_uint64     res;
+     uint64       res;
      int          unit;
      int          tmp;
      int          drv;
@@ -197,9 +197,9 @@ dsk_devio(uint32 dev, uint64 *data) {
 
      switch(dev & 3) {
      case CONI:
-          res = ((t_uint64)(dsk_cmd) << 18);
-          res |= ((t_uint64)(dsk_octflp)) << 10;
-          res |= ((t_uint64)(dsk_status & RMASK));
+          res = ((uint64)(dsk_cmd) << 18);
+          res |= ((uint64)(dsk_octflp)) << 10;
+          res |= ((uint64)(dsk_status & RMASK));
           if ((uptr->flags & UNIT_ATT) == 0)
               res |= OPR;
           if (uptr->flags & UNIT_WLK)
@@ -267,7 +267,7 @@ dsk_svc (UNIT *uptr)
    int           cyl;
    int           sec;
    int           tmp, wc;
-   t_uint64      data;
+   uint64        data;
    DEVICE       *dptr;
    t_stat        err, r;
 

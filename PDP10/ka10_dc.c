@@ -68,7 +68,7 @@
 #define OFF_HOOK 0000100        /* Off Hook (CD) */
 #define CAUSE_PI 0000200        /* Cause PI */
 
-t_uint64 dc_l_status;                             /* Line status */
+uint64   dc_l_status;                             /* Line status */
 int      dc_l_count = 0;                          /* Scan counter */
 int      dc_modem = DC10_MLINES;                  /* Modem base address */
 uint8    dcix_buf[DC10_MLINES] = { 0 };           /* Input buffers */
