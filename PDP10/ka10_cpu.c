@@ -442,6 +442,10 @@ MTAB cpu_mod[] = {
     { UNIT_M_PAGE, UNIT_BBNPAGE, "BBN", "BBN", NULL, NULL, NULL,
               "Paging hardware for TENEX"},
 #endif
+#if WAITS
+    { UNIT_M_PAGE, UNIT_WAITSPG, "WAITS", "WAITS", NULL, NULL, NULL,
+              "Support for WAITS XCTR"},
+#endif
 #if MPX_DEV
     { UNIT_M_MPX, UNIT_MPX, "MPX", "MPX", NULL, NULL, NULL,
               "MPX Device for ITS"},
@@ -789,6 +793,11 @@ int opflags[] = {
 #define QBBN            (cpu_unit[0].flags & UNIT_BBNPAGE)
 #else
 #define QBBN            0
+#endif
+#if WAITS
+#define QWAITS          (cpu_unit[0].flags & UNIT_WAITSPG)
+#else
+#define QWAITS          0
 #endif
 
 /*
@@ -1351,7 +1360,6 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
     int      page = (RMASK & addr) >> 9;
     int      uf = (FLAGS & USER) != 0;
     int      upmp = 0;
-    int      wf = wr;
 
     if (page_fault)
         return 0;
@@ -1364,17 +1372,17 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
 
     /* If fetching byte data, use write access */
     if (BYF5 && (IR & 06) == 6)
-        wf = 1;
+        wr = 1;
 
     /* If this is modify instruction use write access */
-    wf |= modify;
+    wr |= modify;
 
     /* Figure out if this is a user space access */
     if (flag)
         uf = 0;
     else if (xct_flag != 0 && !cur_context && !uf) {
-             if (((xct_flag & 2) != 0 && wf != 0) ||
-                 ((xct_flag & 1) != 0 && (wf == 0 || modify))) {
+             if (((xct_flag & 2) != 0 && wr != 0) ||
+                 ((xct_flag & 1) != 0 && (wr == 0 || modify))) {
                  uf = (FLAGS & USERIO) != 0;
              }
     }
@@ -1449,7 +1457,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
     }
     if (cur_context && ((data & 0200000) != 0))
         FLAGS |= PUBLIC;
-    if ((data & RSIGN) == 0 || (wf & ((data & 0100000) == 0))) {
+    if ((data & RSIGN) == 0 || (wr & ((data & 0100000) == 0))) {
         fault_data = ((((uint64)(addr))<<9) | ((uint64)(uf) << 27)) & LMASK;
         fault_data |= (data & 0400000) ? 010LL : 0LL;   /* A */
         fault_data |= (data & 0100000) ? 004LL : 0LL;   /* W */
@@ -2156,6 +2164,100 @@ int Mem_write_bbn(int flag, int cur_context) {
 }
 #endif
 
+#if WAITS
+int page_lookup_waits(int addr, int flag, int *loc, int wr, int cur_context, int fetch) {
+    int      uf = (FLAGS & USER) != 0;
+
+    if (page_fault)
+        return 0;
+
+    /* If paging is not enabled, address is direct */
+    if (!page_enable) {
+        *loc = addr;
+        return 1;
+    }
+
+    /* If this is modify instruction use write access */
+    wr |= modify;
+
+    /* Figure out if this is a user space access */
+    if (flag)
+        uf = 0;
+    else if (xct_flag != 0) {
+         if (xct_flag & 010 && cur_context)   /* Indirect */
+             uf = 1;
+         if (xct_flag & 004 && wr == 0)       /* XR */
+             uf = 1;
+         if (xct_flag & 001 && (wr == 1 || BYF5))  /* XW or XLB or XDB */
+             uf = 1;
+    }
+
+    if (uf) {
+        if (addr <= Pl) {
+           *loc = (addr + Rl) & RMASK;
+           return 1;
+        }
+        if ((addr & 0400000) != 0 && (addr <= Ph)) {
+           if ((Pflag == 0) || (Pflag == 1 && wr == 0)) {
+              *loc = (addr + Rh) & RMASK;
+              return 1;
+           }
+        }
+        mem_prot = 1;
+        return 0;
+    } else {
+        *loc = addr;
+    }
+    return 1;
+}
+
+int Mem_read_waits(int flag, int cur_context, int fetch) {
+    int addr;
+
+    if (AB < 020) {
+        MB = get_reg(AB);
+    } else {
+        sim_interval--;
+        if (!page_lookup_waits(AB, flag, &addr, 0, cur_context, fetch))
+            return 1;
+        if (addr >= (int)MEMSIZE) {
+            nxm_flag = 1;
+            return 1;
+        }
+        if (sim_brk_summ && sim_brk_test(AB, SWMASK('R')))
+            watch_stop = 1;
+        MB = M[addr];
+    }
+    return 0;
+}
+
+/*
+ * Write a location in memory.
+ *
+ * Return of 0 if successful, 1 if there was an error.
+ */
+
+int Mem_write_waits(int flag, int cur_context) {
+    int addr;
+
+    if (AB < 020) {
+        set_reg(AB, MB);
+    } else {
+        sim_interval--;
+        if (!page_lookup_waits(AB, flag, &addr, 1, cur_context, 0))
+            return 1;
+        if (addr >= (int)MEMSIZE) {
+            nxm_flag = 1;
+            return 1;
+        }
+        if (sim_brk_summ && sim_brk_test(AB, SWMASK('W')))
+            watch_stop = 1;
+        M[addr] = MB;
+    }
+    return 0;
+}
+#endif
+
 int page_lookup_ka(int addr, int flag, int *loc, int wr, int cur_context, int fetch) {
       if (!flag && (FLAGS & USER) != 0) {
           if (addr <= Pl) {
@@ -2525,7 +2627,7 @@ no_fetch:
 
 #if KI | KL
     /* Handle page fault and traps */
-    if (pi_enable && page_enable && trap_flag == 0 && (FLAGS & (TRP1|TRP2))) {
+    if (page_enable && trap_flag == 0 && (FLAGS & (TRP1|TRP2))) {
         AB = 0420 + ((FLAGS & (TRP1|TRP2)) >> 2);
         trap_flag = FLAGS & (TRP1|TRP2);
         FLAGS &= ~(TRP1|TRP2);
@@ -3453,7 +3555,7 @@ dpnorm:
               }
 #endif
                /* UUO */
-    case 0105: case 0106: case 0107:
+    case 0105: case 0106: case 0107: 
     case 0110: case 0111: case 0112: case 0113:
     case 0114: case 0115: case 0116: case 0117:
     case 0120: case 0121: case 0122: case 0123:
@@ -4749,6 +4851,10 @@ left:
               if ((FLAGS & USER) == 0)
                   xct_flag = AC;
 #endif
+#if WAITS
+              if (QWAITS && (FLAGS & USER) == 0)
+                   xct_flag = AC;
+#endif
 #if ITS
               if (QITS && one_p_arm) {
                   FLAGS |= ONEP;
@@ -5937,6 +6043,12 @@ if (QITS) {
 if (QBBN) {
     Mem_read = &Mem_read_bbn;
     Mem_write = &Mem_write_bbn;
+}
+#endif
+#if WAITS
+if (QWAITS) {
+    Mem_read = &Mem_read_waits;
+    Mem_write = &Mem_write_waits;
 }
 #endif
 #endif

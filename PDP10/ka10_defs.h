@@ -80,6 +80,11 @@
 #define BBN KA
 #endif
 
+/* Support for WAITS mods */
+#ifndef WAITS
+#define WAITS KA
+#endif
+
 /* MPX interrupt multiplexer for ITS systems */
 #define MPX_DEV ITS
 
@@ -305,8 +310,9 @@ extern DEBTAB crd_debug[];
 #define UNIT_TWOSEG     (1 << UNIT_V_PAGE)
 #define UNIT_ITSPAGE    (2 << UNIT_V_PAGE)
 #define UNIT_BBNPAGE    (4 << UNIT_V_PAGE)
-#define UNIT_M_PAGE     (7 << UNIT_V_PAGE)
-#define UNIT_V_MPX      (UNIT_V_PAGE + 3)
+#define UNIT_WAITSPG    (8 << UNIT_V_PAGE)
+#define UNIT_M_PAGE     (017 << UNIT_V_PAGE)
+#define UNIT_V_MPX      (UNIT_V_PAGE + 4)
 #define UNIT_MPX        (1 << UNIT_V_MPX)  /* MPX Device for ITS */
 #define UNIT_M_MPX      (1 << UNIT_V_MPX)
 
@@ -450,7 +456,7 @@ int auxcpu_write (int addr, t_uint64);
 #define NUM_DEVS_RP     4
 #define NUM_DEVS_RS     1
 #define NUM_DEVS_TU     1
-#define NUM_DEVS_PMP    0
+#define NUM_DEVS_PMP    WAITS
 #define NUM_DEVS_PD     ITS
 #define NUM_DEVS_IMX    ITS
 #define NUM_DEVS_STK    ITS
