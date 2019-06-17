@@ -206,6 +206,7 @@ uint64  mar;                                  /* Memory address compare */
 uint32  qua_time;                             /* Quantum clock value */
 #endif
 int     watch_stop;                           /* Stop at memory watch point */
+int     maoff = 0;                            /* Offset for traps */
 
 uint16  dev_irq[128];                         /* Pending irq by device */
 t_stat  (*dev_tab[128])(uint32 dev, uint64 *data);
@@ -429,6 +430,10 @@ MTAB cpu_mod[] = {
     { MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "SERIAL", "SERIAL",
           &cpu_set_serial, &cpu_show_serial, NULL, "CPU Serial Number" },
 #endif
+    { UNIT_MAOFF, 0, NULL, "NOMAOFF", NULL, NULL, NULL,
+             "No interrupt relocation"},
+    { UNIT_MAOFF, UNIT_MAOFF, "MAOFF", "MAOFF", NULL, NULL,
+              NULL, "Interrupts relocated to 140"},
 #if KA
     { UNIT_M_PAGE, 0, "ONESEG", "ONESEG", NULL, NULL, NULL,
              "One Relocation Register"},
@@ -1270,7 +1275,7 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
         res |= (((FLAGS & FLTOVR) != 0) << 6) | (fov_irq << 7) ;
         res |= (clk_flg << 9) | (((uint64)clk_en) << 10) | (nxm_flag << 12);
         res |= (mem_prot << 13) | (((FLAGS & USERIO) != 0) << 15);
-        res |= (push_ovf << 16);
+        res |= (push_ovf << 16) | (maoff >> 1);
         *data = res;
         sim_debug(DEBUG_CONI, &cpu_dev, "CONI APR %012llo\n", *data);
         break;
@@ -2168,22 +2173,13 @@ int Mem_write_bbn(int flag, int cur_context) {
 int page_lookup_waits(int addr, int flag, int *loc, int wr, int cur_context, int fetch) {
     int      uf = (FLAGS & USER) != 0;
 
-    if (page_fault)
-        return 0;
-
-    /* If paging is not enabled, address is direct */
-    if (!page_enable) {
-        *loc = addr;
-        return 1;
-    }
-
     /* If this is modify instruction use write access */
     wr |= modify;
 
     /* Figure out if this is a user space access */
     if (flag)
         uf = 0;
-    else if (xct_flag != 0) {
+    else if (xct_flag != 0 && !fetch) {
          if (xct_flag & 010 && cur_context)   /* Indirect */
              uf = 1;
          if (xct_flag & 004 && wr == 0)       /* XR */
@@ -2678,7 +2674,7 @@ st_pi:
         pi_rq = 0;
         pi_hold = 0;
         pi_ov = 0;
-        AB = 040 | (pi_enc << 1);
+        AB = 040 | (pi_enc << 1) | maoff;
 #if KI | KL
         xct_flag = 0;
         /*
@@ -2828,11 +2824,10 @@ unasign:
               Mem_read_nopage();
               FLAGS = (MB >> 23) & 017777;
               /* If transistioning from user to executive adjust flags */
-              if ((FLAGS & USER) != 0 && (AB & 4) != 0) {
+              if ((FLAGS & USER) != 0 && (AB & 4) != 0) 
                   FLAGS |= USERIO;
-                  if (AB & 2)
-                     FLAGS |= PRV_PUB;
-              }
+              if ((FLAGS & USER) == 0 && (AB & 2 || (FLAGS & OVR) != 0))
+                  FLAGS |= PRV_PUB|OVR;
               PC = MB & RMASK;
               f_pc_inh = 1;
               break;
@@ -2865,6 +2860,8 @@ unasign:
               }
 #endif
               AB = 040;
+              if (maoff && (IR & 0140) == 040)
+                  AB |= maoff;
               Mem_write(uuo_cycle, 1);
               AB += 1;
               f_load_pc = 0;
@@ -3554,6 +3551,21 @@ dpnorm:
                   break;
               }
 #endif
+#if WAITS
+              if (QWAITS) {   /* WAITS FIX instruction */
+                  if (Mem_read(0, 0, 0))
+                      goto last;
+                  AR = MB;
+                  BR = get_reg(AC);
+                  if (hst_lnt) {
+                      hst[hst_p].mb = AR;
+                  }
+                  MQ = 0;
+                  AR = SWAP_AR;
+                  goto ufa;
+              }
+#endif
+ 
                /* UUO */
     case 0105: case 0106: case 0107: 
     case 0110: case 0111: case 0112: case 0113:
@@ -3567,7 +3579,7 @@ dpnorm:
 unasign:
 #if !PDP6
               MB = ((uint64)(IR) << 27) | ((uint64)(AC) << 23) | (uint64)(AB);
-              AB = 060;
+              AB = 060 | maoff;
               uuo_cycle = 1;
               Mem_write(uuo_cycle, 0);
               AB += 1;
@@ -3725,6 +3737,9 @@ ldb_ptr:
 
 #if !PDP6
     case 0130:  /* UFA */
+#endif
+#if WAITS
+ufa:
 #endif
     case 0140:  /* FAD */
     case 0141:  /* FADL */
@@ -4398,7 +4413,7 @@ left:
                   break;              /* Done */
               }
 
-#if !PDP6
+#if !PDP6 
               if (AR == SMASK && BR == 1) {
                   FLAGS |= OVR|NODIV; /* Overflow and No Divide */
                   sac_inh=1;          /* Don't touch AC */
@@ -4806,12 +4821,15 @@ left:
 #endif
                  FLAGS |= AR & (OVR|NODIV|FLTUND|BYTI|FLTOVR|CRY1|CRY0|\
                                  TRP1|TRP2|PUBLIC|PCHNG);
-#if KI
-                 FLAGS |= (FLAGS & OVR) ? PRV_PUB : 0;
-#endif
 #if ITS
                  if (QITS)
                      FLAGS |= AR & (PURE|ONEP);
+#endif
+#if KI
+                 if ((FLAGS & USER) == 0) {
+                    FLAGS &= ~PRV_PUB;
+                    FLAGS |= (AR & OVR) ? PRV_PUB : 0;
+                 }
 #endif
                  check_apr_irq();
               }
@@ -5811,7 +5829,7 @@ last:
            if (!pi_hold & f_inst_fetch) {
                 pi_cycle = 0;
            } else {
-                AB = 040 | (pi_enc << 1) | pi_ov;
+                AB = 040 | (pi_enc << 1) | pi_ov | maoff;
 #if KI | KL
                 AB |= eb_ptr;
                 Mem_read_nopage();
@@ -5824,7 +5842,7 @@ last:
             if ((IR & 0700) == 0700) {
                 (void)check_irq_level();
             }
-            AB = 040 | (pi_enc << 1) | pi_ov;
+            AB = 040 | (pi_enc << 1) | pi_ov | maoff;
             pi_ov = 0;
             pi_hold = 0;
 #if KI | KL
@@ -6026,6 +6044,9 @@ t_bool build_dev_tab (void)
 DEVICE *dptr;
 DIB    *dibp;
 uint32 i, j, d;
+
+/* Set trap offset based on MAOFF flag */
+maoff = (cpu_unit[0].flags & UNIT_MAOFF)? 0100 : 0;
 
 #if KA
 /* Set up memory access routines based on current CPU type. */

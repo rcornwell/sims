@@ -179,6 +179,9 @@ DEVICE *sim_devices[] = {
 #if NUM_DEVS_AUXCPU > 0
     &auxcpu_dev,
 #endif
+#if NUM_DEVS_DKB > 0
+    &dkb_dev,
+#endif
     NULL
     };
 
@@ -236,7 +239,7 @@ t_stat load_dmp (FILE *fileref)
 {
    char    buffer[100];
    char    *p;
-   uint32  addr = 075;
+   uint32  addr = 074;
    uint64  data;
 
    while (fgets((char *)buffer, 80, fileref) != 0) {

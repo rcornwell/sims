@@ -306,7 +306,9 @@ extern DEBTAB crd_debug[];
 /* Flags for CPU unit */
 #define UNIT_V_MSIZE    (UNIT_V_UF + 0)
 #define UNIT_MSIZE      (0177 << UNIT_V_MSIZE)
-#define UNIT_V_PAGE     (UNIT_V_MSIZE + 8)
+#define UNIT_V_MAOFF    (UNIT_V_MSIZE + 8)
+#define UNIT_V_PAGE     (UNIT_V_MAOFF + 1)
+#define UNIT_MAOFF      (1 << UNIT_V_MAOFF)
 #define UNIT_TWOSEG     (1 << UNIT_V_PAGE)
 #define UNIT_ITSPAGE    (2 << UNIT_V_PAGE)
 #define UNIT_BBNPAGE    (4 << UNIT_V_PAGE)
@@ -365,6 +367,7 @@ extern DEVICE   stk_dev;
 extern DEVICE   tk10_dev;
 extern DEVICE   mty_dev;
 extern DEVICE   ten11_dev;
+extern DEVICE   dkb_dev;
 extern DEVICE   auxcpu_dev;
 extern DEVICE   wcnsls_dev;             /* MIT Spacewar Consoles */
 extern DEVICE   dct_dev;                /* PDP6 devices. */
@@ -457,6 +460,7 @@ int auxcpu_write (int addr, t_uint64);
 #define NUM_DEVS_RS     1
 #define NUM_DEVS_TU     1
 #define NUM_DEVS_PMP    WAITS
+#define NUM_DEVS_DKB    WAITS
 #define NUM_DEVS_PD     ITS
 #define NUM_DEVS_IMX    ITS
 #define NUM_DEVS_STK    ITS

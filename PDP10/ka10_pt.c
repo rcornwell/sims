@@ -125,6 +125,11 @@ t_stat ptp_devio(uint32 dev, uint64 *data) {
     switch(dev & 3) {
     case CONI:
          *data = uptr->STATUS;
+#if WAITS
+         /* The NXM stop switch is always off */
+         if (cpu_unit[0].flags & UNIT_WAITSPG)
+             *data |= 0200;
+#endif
          sim_debug(DEBUG_CONI, &ptp_dev, "PP: CONI %012llo\n\r", *data);
          break;
 
