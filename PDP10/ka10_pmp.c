@@ -505,8 +505,11 @@ pmp_devio(uint32 dev, uint64 *data) {
                           break;
                       }
                   }
-                  if (pmp_cur_unit == NULL)
+                  if (pmp_cur_unit == NULL) {
                       pmp_statusb &= ~REQ_CH;
+                      if (pmp_statusb & CMD_LD)
+                          pmp_startcmd();
+                  }
               }
           }
           if (*data & CLR_DATCH)    /* Data chaining */
@@ -531,10 +534,7 @@ pmp_devio(uint32 dev, uint64 *data) {
                     dev, *data, PC);
           pmp_cmd_hold = (*data) & HOLD_MASK;
           pmp_statusb |= CMD_LD;
-          if ((pmp_statusb & CMD_LD) != 0) {
-               if ((pmp_statusb & (IDLE_CH)) != 0)
-                   pmp_startcmd();
-          }
+          pmp_startcmd();
           (void)pmp_checkirq();
           break;
      }
@@ -616,8 +616,8 @@ load:
         if ((pmp_cnt & 03) == 0)
             pmp_cnt |= BUFF_EMPTY;
     } else {
-        if (pmp_cnt & 0x4) {
-           if ((pmp_cnt & 07) == 0x4) {   /* Split byte */
+        if ((pmp_cnt & 0xf) > 0x3) {
+           if ((pmp_cnt & 0xf) == 0x4) {   /* Split byte */
               byte = (pmp_data << 4) & 0xf0;
               if (pmp_cnt & BUFF_CHNEND) {
                   *data = byte;
@@ -631,13 +631,13 @@ load:
               xfer = 1;  /* Read in a word */
               byte |= pmp_data & 0xf;
            } else {
-              byte = (pmp_data >>  4 + (8 * (8 - (pmp_cnt & 0x3)))) & 0xff;
+              byte = (pmp_data >>  4 + (8 * (8 - (pmp_cnt & 0xf)))) & 0xff;
            }
         } else {
-           byte = (pmp_data >>  4 + (8 * (3 - (pmp_cnt & 0x3)))) & 0xff;
+           byte = (pmp_data >>  4 + (8 * (3 - (pmp_cnt & 0xf)))) & 0xff;
         }
         pmp_cnt =(pmp_cnt + 1);
-        if ((pmp_cnt & 017) == 9) {
+        if ((pmp_cnt & 0xf) == 9) {
             pmp_cnt = BUFF_EMPTY;
             if (pmp_cnt & BUFF_CHNEND)
                 goto next;
@@ -709,40 +709,40 @@ chan_write_byte(uint8 *data) {
             if (pmp_addr >= (int)MEMSIZE)
                 return pmp_posterror(NXM_ERR);
             M[pmp_addr] = pmp_data;
-              sim_debug(DEBUG_DATA, &pmp_dev, "chan_write %06o %012llo\n", pmp_addr, pmp_data);
+              sim_debug(DEBUG_DETAIL, &pmp_dev, "chan_write %06o %012llo\n", pmp_addr, pmp_data);
               pmp_addr++;
             xfer = 1;
         }
     } else {
-        if (pmp_cnt & 0x4) {
-           if ((pmp_cnt & 07) == 0x4) {   /* Split byte */
+        if ((pmp_cnt & 0xf) > 0x3) {
+           if ((pmp_cnt & 0xf) == 0x4) {   /* Split byte */
               pmp_data &= ~0xf;
               pmp_data |= (uint64)((*data >> 4) & 0xf);
               if (pmp_addr >= (int)MEMSIZE)
                   return pmp_posterror(NXM_ERR);
               M[pmp_addr] = pmp_data;
-              sim_debug(DEBUG_DATA, &pmp_dev, "chan_write %06o %012llo %2x\n", pmp_addr, pmp_data, pmp_cnt);
+              sim_debug(DEBUG_DETAIL, &pmp_dev, "chan_write %06o %012llo %2x\n", pmp_addr, pmp_data, pmp_cnt);
               pmp_addr++;
               xfer = 1;  /* Read in a word */
               pmp_data = *data & 0xf;
               pmp_cnt |= BUFF_DIRTY;
            } else {
-              pmp_data &= ~(0xff <<(4 + (8 * (8 - (pmp_cnt & 0x3)))));
-              pmp_data |= (uint64)(*data & 0xff) << (4 + (8 * (8 - (pmp_cnt & 0x3))));
+              pmp_data &= ~(0xff <<(4 + (8 * (8 - (pmp_cnt & 0xf)))));
+              pmp_data |= (uint64)(*data & 0xff) << (4 + (8 * (8 - (pmp_cnt & 0xf))));
               pmp_cnt |= BUFF_DIRTY;
            }
         } else {
-           pmp_data &= ~(0xff <<(4 + (8 * (3 - (pmp_cnt & 0x3)))));
-           pmp_data |= (uint64)(*data & 0xff) << (4 + (8 * (3 - (pmp_cnt & 0x3))));
+           pmp_data &= ~(0xff <<(4 + (8 * (3 - (pmp_cnt & 0xf)))));
+           pmp_data |= (uint64)(*data & 0xff) << (4 + (8 * (3 - (pmp_cnt & 0xf))));
            pmp_cnt |= BUFF_DIRTY;
         }
         pmp_cnt++;
-        if ((pmp_cnt & 017) == 9) {
+        if ((pmp_cnt & 0xf) == 9) {
             pmp_cnt = BUFF_EMPTY;
             if (pmp_addr >= (int)MEMSIZE)
                 return pmp_posterror(NXM_ERR);
             M[pmp_addr] = pmp_data;
-            sim_debug(DEBUG_DATA, &pmp_dev, "chan_write %06o %012llo %2x\n", pmp_addr, pmp_data, pmp_cnt);
+            sim_debug(DEBUG_DETAIL, &pmp_dev, "chan_write %06o %012llo %2x\n", pmp_addr, pmp_data, pmp_cnt);
             pmp_addr++;
             xfer = 1;  /* Read in a word */
         }
@@ -813,19 +813,7 @@ chan_end(uint8 flags) {
             return;
         } 
 
-        /* Otherwise if there is command chaining, try new command */
         if (pmp_cmd & CMDCH_ON) {
-            /* Channel in operation, must be command chaining */
-            if (((pmp_cmd & SKP_MOD_OFF) != 0) && ((pmp_status & ST_MOD) == 0)) {
-                pmp_statusb &= ~(CMD_LD);
-                (void)pmp_checkirq();
-                return;
-            }
-            if (((pmp_cmd & SKP_MOD_ON) != 0) && ((pmp_status & ST_MOD) != 0)) {
-                pmp_statusb &= ~(CMD_LD);
-                (void)pmp_checkirq();
-                return;
-            }
            pmp_startcmd();
            (void)pmp_checkirq();
            return;
@@ -845,6 +833,7 @@ pmp_startcmd() {
     int            i;
     int            unit;
     int            cmd;
+    int            old_cmd = pmp_cmd;
     uint8          ch;
 
     sim_debug(DEBUG_CMD, &pmp_dev, "start command %o\n", pmp_statusb);
@@ -892,7 +881,7 @@ pmp_startcmd() {
 
     /* Check if device busy */
     if ((pmp_cur_unit->CMD & 0xff) != 0) {
-    sim_debug(DEBUG_CMD, &pmp_dev, "busy %o\n", pmp_statusb);
+       sim_debug(DEBUG_CMD, &pmp_dev, "busy %o\n", pmp_statusb);
        if (pmp_statusb & IS_CH)
           (void)pmp_posterror(SEL_ERR);
        pmp_status |= UNU_END|BSY;
@@ -903,13 +892,28 @@ pmp_startcmd() {
     /* Copy over command */
     if ((pmp_statusb & CMD_LD) != 0) {
         pmp_cmd = pmp_cmd_hold;
-    sim_debug(DEBUG_CMD, &pmp_dev, "load %o\n", pmp_cmd);
+        sim_debug(DEBUG_CMD, &pmp_dev, "load %o\n", pmp_cmd);
         pmp_statusb &= ~(CMD_LD);
         if (pmp_statusb & WCMA_LD) {
             pmp_statusb &= ~(WCMA_LD);
             pmp_addr = pmp_addr_hold;
             pmp_wc = pmp_wc_hold;
             pmp_cnt = BUFF_EMPTY;
+        }
+    }
+
+    /* Otherwise if there is command chaining, try new command */
+    if (old_cmd & CMDCH_ON) {
+        /* Channel in operation, must be command chaining */
+        if (((old_cmd & SKP_MOD_OFF) != 0) && ((pmp_status & ST_MOD) == 0)) {
+            pmp_statusb &= ~(CMD_LD);
+            (void)pmp_checkirq();
+            return;
+        }
+        if (((old_cmd & SKP_MOD_ON) != 0) && ((pmp_status & ST_MOD) != 0)) {
+            pmp_statusb &= ~(CMD_LD);
+            (void)pmp_checkirq();
+            return;
         }
     }
     sim_debug(DEBUG_CMD, &pmp_dev, "CMD unit=%d %02x %06o\n", unit, pmp_cmd, pmp_addr);
@@ -949,19 +953,21 @@ pmp_startcmd() {
        return;
     }
 
-    pmp_statusb &= ~IDLE_CH;
     /* Issue the actual command */
     switch (cmd & 0x3) {
     case 0x3:              /* Control */
-         if (cmd == DK_RELEASE) {
+         if (cmd == 0x3 || cmd == DK_RELEASE) {
+            pmp_status &= ~(STS_MASK);
             pmp_status |= NEW_STS|CHN_END|DEV_END;
             (void)pmp_checkirq();
             return;
          }
+
          /* Fall Through */
 
     case 0x1:              /* Write command */
     case 0x2:              /* Read command */
+         pmp_statusb &= ~IDLE_CH;
          pmp_cur_unit->CMD &= ~(DK_PARAM);
          pmp_cur_unit->CMD |= cmd;
          sim_debug(DEBUG_CMD, &pmp_dev, "CMD unit=%d CMD=%02x\n", unit, pmp_cur_unit->CMD);
@@ -969,17 +975,19 @@ pmp_startcmd() {
 
     case 0x0:               /* Status */
          if (cmd == 0x4) {  /* Sense */
+            pmp_statusb &= ~IDLE_CH;
             pmp_cur_unit->CMD |= cmd;
             return;
          }
          break;
     }
+    pmp_status &= ~(STS_MASK);
     if (pmp_cur_unit->SENSE & 0xff)
         pmp_status |= UNU_END|UNIT_CHK;
     pmp_status |= NEW_STS|CHN_END|DEV_END;
     pmp_statusb |= IDLE_CH;
     pmp_statusb &= ~OP1;
-         sim_debug(DEBUG_CMD, &pmp_dev, "CMD unit=%d finish\n", unit);
+    sim_debug(DEBUG_CMD, &pmp_dev, "CMD unit=%d finish\n", unit);
     (void)pmp_checkirq();
 }
 
@@ -1159,9 +1167,9 @@ index:
              /* Check for end of track */
              if ((rec[0] & rec[1] & rec[2] & rec[3]) == 0xff)
                 data->state = DK_POS_END;
-             sim_activate(uptr, 10);
+             sim_activate(uptr, 40);
          } else
-             sim_activate(uptr, 1);
+             sim_activate(uptr, 10);
          break;
     case DK_POS_CNT:               /* In count (c) */
          data->tpos++;
@@ -1180,9 +1188,9 @@ index:
              data->state = DK_POS_KEY;
              if (data->klen == 0)
                  data->state = DK_POS_DATA;
-             sim_activate(uptr, 20);
+             sim_activate(uptr, 50);
          } else {
-             sim_activate(uptr, 1);
+             sim_activate(uptr, 10);
          }
          break;
     case DK_POS_KEY:               /* In Key area */
@@ -1194,9 +1202,9 @@ index:
              data->count = 0;
              count = 0;
              state = DK_POS_DATA;
-             sim_activate(uptr, 10);
+             sim_activate(uptr, 50);
          } else {
-             sim_activate(uptr, 1);
+             sim_activate(uptr, 10);
          }
          break;
     case DK_POS_DATA:              /* In Data area */
@@ -1205,9 +1213,9 @@ index:
              sim_debug(DEBUG_EXP, dptr, "state data unit=%d %d %d\n", unit, data->rec,
                       data->count);
              data->state = DK_POS_AM;
-             sim_activate(uptr, 10);
+             sim_activate(uptr, 50);
          } else {
-             sim_activate(uptr, 1);
+             sim_activate(uptr, 10);
          }
          break;
     case DK_POS_AM:                /* Beginning of record */
@@ -1222,7 +1230,7 @@ index:
          /* Check for end of track */
          if ((rec[0] & rec[1] & rec[2] & rec[3]) == 0xff)
             data->state = DK_POS_END;
-         sim_activate(uptr, 20);
+         sim_activate(uptr, 60);
          break;
     case DK_POS_END:               /* Past end of data */
          data->tpos+=10;
@@ -1378,8 +1386,9 @@ sense_end:
              if ((uptr->POS >> 8) == data->cyl) {
                  uptr->LASTCMD = cmd;
                  uptr->CMD &= ~(0xff);
-                 uptr->CMD |= DK_ATTN;
-                 pmp_statusb |= REQ_CH;
+             //    uptr->CMD |= DK_ATTN;
+              //   pmp_statusb |= REQ_CH;
+             chan_end(SNS_DEVEND|SNS_CHNEND);
                  sim_debug(DEBUG_DETAIL, dptr, "seek end unit=%d %d %d %x\n", unit,
                       uptr->POS >> 8, data->cyl, data->state);
               }
@@ -1450,7 +1459,7 @@ sense_end:
              uptr->CMD |= DK_PARAM;
              data->state = DK_POS_SEEK;
              sim_debug(DEBUG_DETAIL, dptr, "seek unit=%d doing\n", unit);
-             chan_end(SNS_CHNEND);
+//             chan_end(SNS_CHNEND);
          } else {
              pmp_adjpos(uptr);
              uptr->LASTCMD = cmd;

@@ -62,10 +62,6 @@
 #error "Please define only one type of CPU"
 #endif
 
-#ifndef PDP6_DEV       /* Include PDP6 devices */
-#define PDP6_DEV PDP6
-#endif
-
 #ifndef KI_22BIT
 #define KI_22BIT KI|KL
 #endif
@@ -84,6 +80,11 @@
 #ifndef WAITS
 #define WAITS KA
 #endif
+
+#ifndef PDP6_DEV       /* Include PDP6 devices */
+#define PDP6_DEV PDP6|WAITS
+#endif
+
 
 /* MPX interrupt multiplexer for ITS systems */
 #define MPX_DEV ITS
@@ -374,6 +375,7 @@ extern DEVICE   dct_dev;                /* PDP6 devices. */
 extern DEVICE   dtc_dev;
 extern DEVICE   mtc_dev;
 extern DEVICE   dsk_dev;
+extern DEVICE   t630_dev;
 
 extern t_stat (*dev_tab[128])(uint32 dev, t_uint64 *data);
 
@@ -449,6 +451,7 @@ int auxcpu_write (int addr, t_uint64);
 #define NUM_DEVS_DCT    2
 #define NUM_DEVS_MTC    1
 #define NUM_DEVS_DSK    1
+#define NUM_DEVS_T630   1
 #endif
 #if !PDP6
 #define NUM_DEVS_MT     1

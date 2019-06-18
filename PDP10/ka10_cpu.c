@@ -2179,7 +2179,7 @@ int page_lookup_waits(int addr, int flag, int *loc, int wr, int cur_context, int
     /* Figure out if this is a user space access */
     if (flag)
         uf = 0;
-    else if (xct_flag != 0 && !fetch) {
+    else if (xct_flag != 0 && !fetch && !uf) {
          if (xct_flag & 010 && cur_context)   /* Indirect */
              uf = 1;
          if (xct_flag & 004 && wr == 0)       /* XR */
@@ -2211,7 +2211,21 @@ int Mem_read_waits(int flag, int cur_context, int fetch) {
     int addr;
 
     if (AB < 020) {
-        MB = get_reg(AB);
+        int      uf = (FLAGS & USER) != 0;
+        if (uf || flag || xct_flag == 0 || fetch) {
+            MB = get_reg(AB);
+            return 0;
+        }
+        if (xct_flag & 010 && cur_context)   /* Indirect */
+            uf = 1;
+        if (xct_flag & 004)                  /* XR */
+            uf = 1;
+        if (xct_flag & 001 && BYF5)  /* XW or XLB or XDB */
+            uf = 1;
+        if (uf)
+            MB = M[AB + Rl];
+        else 
+            MB = get_reg(AB);
     } else {
         sim_interval--;
         if (!page_lookup_waits(AB, flag, &addr, 0, cur_context, fetch))
@@ -2237,7 +2251,19 @@ int Mem_write_waits(int flag, int cur_context) {
     int addr;
 
     if (AB < 020) {
-        set_reg(AB, MB);
+        int      uf = (FLAGS & USER) != 0;
+        if (uf || xct_flag == 0) {
+            set_reg(AB, MB);
+            return 0;
+        }
+        if (xct_flag & 010 && cur_context)   /* Indirect */
+            uf = 1;
+        if (xct_flag & 001 && BYF5)     /* XW or XLB or XDB */
+            uf = 1;
+        if (uf)
+           M[AB + Rl] = MB;
+        else 
+           set_reg(AB, MB);
     } else {
         sim_interval--;
         if (!page_lookup_waits(AB, flag, &addr, 1, cur_context, 0))
