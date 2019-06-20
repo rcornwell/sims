@@ -1450,18 +1450,8 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
            last_page = ((page ^ 0777) << 1);
     }
     *loc = ((data & 017777) << 9) + (addr & 0777);
-    /* Access check logic */
 
-    /* If PUBLIC and private page, make sure we are fetching a Portal */
-    if (!flag && ((FLAGS & PUBLIC) != 0) && ((data & 0200000) == 0) &&
-         (!fetch || (M[*loc] & 00777040000000LL) != 0254040000000LL)) {
-        /* Handle public violation */
-        fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 27) | 021LL;
-        page_fault = 1;
-        return fetch;
-    }
-    if (cur_context && ((data & 0200000) != 0))
-        FLAGS |= PUBLIC;
+    /* Check for access error */
     if ((data & RSIGN) == 0 || (wr & ((data & 0100000) == 0))) {
         fault_data = ((((uint64)(addr))<<9) | ((uint64)(uf) << 27)) & LMASK;
         fault_data |= (data & 0400000) ? 010LL : 0LL;   /* A */
@@ -1471,6 +1461,19 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
         page_fault = 1;
         return 0;
     }
+
+    /* If PUBLIC and private page, make sure we are fetching a Portal */
+    if (!flag && ((FLAGS & PUBLIC) != 0) && ((data & 0200000) == 0) &&
+         (!fetch || (M[*loc] & 00777040000000LL) != 0254040000000LL)) {
+        /* Handle public violation */
+        fault_data = (((uint64)(page))<<18) | ((uint64)(uf) << 27) | 021LL;
+        page_fault = 1;
+        return 0;
+    }
+
+    /* If fetching from public page, set public flag */
+    if (fetch && ((data & 0200000) != 0))
+        FLAGS |= PUBLIC;
     return 1;
 }
 
@@ -4852,10 +4855,9 @@ left:
                      FLAGS |= AR & (PURE|ONEP);
 #endif
 #if KI
-                 if ((FLAGS & USER) == 0) {
-                    FLAGS &= ~PRV_PUB;
+                 FLAGS &= ~PRV_PUB;
+                 if ((FLAGS & USER) == 0)
                     FLAGS |= (AR & OVR) ? PRV_PUB : 0;
-                 }
 #endif
                  check_apr_irq();
               }
@@ -4880,7 +4882,7 @@ left:
                   PC = AR & RMASK;
                   f_pc_inh = 1;
               }
-              FLAGS &=  017777 ^ (AC << 9);
+              FLAGS &=  037777 ^ (AC << 9);
               break;
 
     case 0256: /* XCT */
@@ -4993,7 +4995,7 @@ left:
 
               /* Stack, JUMP */
     case 0260:  /* PUSHJ */     /* AR Frm PC */
-              MB = ((uint64)(FLAGS) << 23) | ((PC + !pi_cycle) & RMASK);
+              MB = (((uint64)(FLAGS) << 23) & LMASK) | ((PC + !pi_cycle) & RMASK);
 #if KI
               if ((FLAGS & USER) == 0) {
                   MB &= ~SMASK;
@@ -5097,7 +5099,7 @@ left:
               break;
 
     case 0264: /* JSR */       /* AR Frm PC */
-              MB = ((uint64)(FLAGS) << 23) | ((PC + !pi_cycle) & RMASK);
+              MB = (((uint64)(FLAGS) << 23) & LMASK) | ((PC + !pi_cycle) & RMASK);
 #if KI
               if ((FLAGS & USER) == 0) {
                   MB &= ~SMASK;
@@ -5127,7 +5129,7 @@ left:
               break;
 
     case 0265: /* JSP */       /* AR Frm PC */
-              AD = ((uint64)(FLAGS) << 23) |
+              AD = (((uint64)(FLAGS) << 23) & LMASK) |
                       ((PC + !pi_cycle) & RMASK);
               FLAGS &= ~ (BYTI|ADRFLT|TRP1|TRP2);
 #if KI
@@ -6045,8 +6047,8 @@ return SCPE_OK;
 
 t_stat cpu_set_size (UNIT *uptr, int32 sval, CONST char *cptr, void *desc)
 {
-uint32 i;
-uint32 val = (uint32)sval;
+int32 i;
+int32 val = (int32)sval;
 
 if ((val <= 0) || ((val * 16 * 1024) > MAXMEMSIZE))
     return SCPE_ARG;
@@ -6060,7 +6062,7 @@ if (val < MEMSIZE) {
 }
 for (i = MEMSIZE; i < val; i++)
     M[i] = 0;
-cpu_unit[0].capac = val;
+cpu_unit[0].capac = (uint32)val;
 return SCPE_OK;
 }
 
@@ -6247,7 +6249,7 @@ fprintf (st, "PC      AC            EA        AR            RES           FLAGS 
 for (k = 0; k < lnt; k++) {                             /* print specified */
     h = &hst[(++di) % hst_lnt];                         /* entry pointer */
     if (h->pc & HIST_PC) {                              /* instruction? */
-        fprintf (st, "%06o  ", (uint32)(h->pc & RMASK));
+        fprintf (st, "%06o  ", h->pc & 0777777);
         fprint_val (st, h->ac, 8, 36, PV_RZRO);
         fputs ("  ", st);
         fprintf (st, "%06o  ", h->ea);
@@ -6256,7 +6258,11 @@ for (k = 0; k < lnt; k++) {                             /* print specified */
         fputs ("  ", st);
         fprint_val (st, h->fmb, 8, 36, PV_RZRO);
         fputs ("  ", st);
+#if KI | KL
+        fprintf (st, "%c%06o  ", ((h->flags & (PRV_PUB << 5))? 'p':' '), h->flags & 0777777);
+#else
         fprintf (st, "%06o  ", h->flags);
+#endif
         if ((h->pc & HIST_PC2) == 0) {
             sim_eval = h->ir;
             fprint_val (st, sim_eval, 8, 36, PV_RZRO);
