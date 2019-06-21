@@ -2261,7 +2261,7 @@ int Mem_write_waits(int flag, int cur_context) {
         }
         if (xct_flag & 010 && cur_context)   /* Indirect */
             uf = 1;
-        if (xct_flag & 001 && BYF5)     /* XW or XLB or XDB */
+        if (xct_flag & 001)     /* XW or XLB or XDB */
             uf = 1;
         if (uf)
            M[AB + Rl] = MB;
@@ -2889,7 +2889,7 @@ unasign:
               }
 #endif
               AB = 040;
-              if (maoff && (IR & 0140) == 040)
+              if (maoff && uuo_cycle)
                   AB |= maoff;
               Mem_write(uuo_cycle, 1);
               AB += 1;

@@ -375,7 +375,7 @@ extern DEVICE   dct_dev;                /* PDP6 devices. */
 extern DEVICE   dtc_dev;
 extern DEVICE   mtc_dev;
 extern DEVICE   dsk_dev;
-extern DEVICE   t630_dev;
+extern DEVICE   dcs_dev;
 
 extern t_stat (*dev_tab[128])(uint32 dev, t_uint64 *data);
 
@@ -443,7 +443,6 @@ int auxcpu_write (int addr, t_uint64);
 #define NUM_DEVS_PT     1
 #define NUM_DEVS_CR     1
 #define NUM_DEVS_CP     1
-#define NUM_DEVS_DC     1
 #define NUM_DEVS_DPY    USE_DISPLAY
 #define NUM_DEVS_WCNSLS USE_DISPLAY
 #if PDP6_DEV
@@ -451,9 +450,10 @@ int auxcpu_write (int addr, t_uint64);
 #define NUM_DEVS_DCT    2
 #define NUM_DEVS_MTC    1
 #define NUM_DEVS_DSK    1
-#define NUM_DEVS_T630   1
+#define NUM_DEVS_DCS    1
 #endif
 #if !PDP6
+#define NUM_DEVS_DC     1
 #define NUM_DEVS_MT     1
 #define NUM_DEVS_RC     1
 #define NUM_DEVS_DT     1

@@ -141,8 +141,8 @@ DEVICE *sim_devices[] = {
 #if (NUM_DEVS_DC > 0)
     &dc_dev,
 #endif
-#if (NUM_DEVS_T630 > 0)
-    &t630_dev,
+#if (NUM_DEVS_DCS > 0)
+    &dcs_dev,
 #endif
 #if (NUM_DEVS_DK > 0)
     &dk_dev,
@@ -247,13 +247,15 @@ t_stat load_dmp (FILE *fileref)
 
    while (fgets((char *)buffer, 80, fileref) != 0) {
         p = (char *)buffer;
-        if (*p >= '0' && *p <= '7') {
+        while (*p >= '0' && *p <= '7') {
            data = 0;
            while (*p >= '0' && *p <= '7') {
                data = (data << 3) + *p - '0';
                p++;
            }
            M[addr++] = data;
+           if (*p == ' ' || *p == '\t')
+               p++;
         }
    }
    return SCPE_OK;

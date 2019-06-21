@@ -493,25 +493,6 @@ pmp_devio(uint32 dev, uint64 *data) {
           }
           if (*data & STS_CLR)      /* Clear status bits */
               pmp_status &= ~STS_MASK;
-          if (*data & NSTS_CLR) {    /* Clear new status */
-              pmp_status &= ~NEW_STS;
-              if ((pmp_statusb & OP1) == 0) { /* Check if any device requesting attn */
-                  pmp_cur_unit = NULL;
-                  for (i = 0; i < NUM_UNITS_PMP; i++) {
-                      if ((pmp_dev.units[i].CMD & DK_ATTN) != 0) {
-                          pmp_cur_unit = &pmp_dev.units[i];
-                          pmp_status |= NEW_STS|DEV_END;
-                          pmp_dev.units[i].CMD &= ~DK_ATTN;
-                          break;
-                      }
-                  }
-                  if (pmp_cur_unit == NULL) {
-                      pmp_statusb &= ~REQ_CH;
-                      if (pmp_statusb & CMD_LD)
-                          pmp_startcmd();
-                  }
-              }
-          }
           if (*data & CLR_DATCH)    /* Data chaining */
               pmp_cmd &= ~DATCH_ON;
           if (*data & CMD_CLR)      /* Clear pending command */
@@ -521,6 +502,24 @@ pmp_devio(uint32 dev, uint64 *data) {
           }
           if (*data & (CLR_UEND|CLR_IRQ))     /* Clear unusual end condtions */
               pmp_status &= ~(UNU_END|NEW_STS|STS_MASK);
+          if (*data & NSTS_CLR) {    /* Clear new status */
+              pmp_status &= ~NEW_STS;
+              if ((pmp_statusb & OP1) == 0) { /* Check if any device requesting attn */
+                  for (i = 0; i < NUM_UNITS_PMP; i++) {
+                      if ((pmp_dev.units[i].CMD & DK_ATTN) != 0) {
+                          pmp_cur_unit = &pmp_dev.units[i];
+                          pmp_status |= NEW_STS|DEV_END;
+                          pmp_dev.units[i].CMD &= ~DK_ATTN;
+                          break;
+                      }
+                  }
+                  if ((pmp_statusb & NEW_STS) == 0) {
+                      pmp_statusb &= ~REQ_CH;
+                      if (pmp_statusb & CMD_LD)
+                          pmp_startcmd();
+                  }
+              }
+          }
           (void)pmp_checkirq();
           break;
 
@@ -592,7 +591,7 @@ chan_read_byte(uint8 *data) {
         return 1;
     }
     /* Check if finished transfer */
-    if (pmp_cnt == BUFF_CHNEND)
+    if (pmp_cnt & BUFF_CHNEND)
         return 1;
 
 load:
@@ -604,25 +603,20 @@ load:
         pmp_data = M[pmp_addr];
          sim_debug(DEBUG_DETAIL, &pmp_dev, "chan_read %06o %012llo\n", pmp_addr, pmp_data);
         pmp_addr++;
+        pmp_cnt = 0;
         xfer = 1;  /* Read in a word */
     }
     /* Handle word vs byte mode */
     if (pmp_cmd & BYTE_MODE) {
-        if (pmp_cnt & BUFF_CHNEND)
-            goto next;
         byte = (pmp_data >>  4 + (8 * (3 - (pmp_cnt & 0x3)))) & 0xff;
-        pmp_cnt = 07 & (pmp_cnt + 1);
+        pmp_cnt++;
         *data = byte;
         if ((pmp_cnt & 03) == 0)
-            pmp_cnt |= BUFF_EMPTY;
+            pmp_cnt = BUFF_EMPTY;
     } else {
         if ((pmp_cnt & 0xf) > 0x3) {
            if ((pmp_cnt & 0xf) == 0x4) {   /* Split byte */
               byte = (pmp_data << 4) & 0xf0;
-              if (pmp_cnt & BUFF_CHNEND) {
-                  *data = byte;
-                  goto next;
-              }
               if (pmp_addr >= (int)MEMSIZE)
                   return pmp_posterror(NXM_ERR);
               pmp_data = M[pmp_addr];
@@ -636,12 +630,9 @@ load:
         } else {
            byte = (pmp_data >>  4 + (8 * (3 - (pmp_cnt & 0xf)))) & 0xff;
         }
-        pmp_cnt =(pmp_cnt + 1);
-        if ((pmp_cnt & 0xf) == 9) {
+        pmp_cnt++;
+        if ((pmp_cnt & 0xf) == 9)
             pmp_cnt = BUFF_EMPTY;
-            if (pmp_cnt & BUFF_CHNEND)
-                goto next;
-        }
      }
      *data = byte;
      if (pmp_cmd & CNT_BYT) {
@@ -959,6 +950,9 @@ pmp_startcmd() {
          if (cmd == 0x3 || cmd == DK_RELEASE) {
             pmp_status &= ~(STS_MASK);
             pmp_status |= NEW_STS|CHN_END|DEV_END;
+            if ((pmp_cmd & CMDCH_ON) == 0)
+                /* Indicate that device is done */
+                pmp_statusb &= ~OP1;
             (void)pmp_checkirq();
             return;
          }
@@ -1385,12 +1379,12 @@ sense_end:
          if (uptr->CMD & DK_PARAM) {
              if ((uptr->POS >> 8) == data->cyl) {
                  uptr->LASTCMD = cmd;
-                 uptr->CMD &= ~(0xff);
+                 uptr->CMD &= ~(0xff|DK_PARAM);
              //    uptr->CMD |= DK_ATTN;
               //   pmp_statusb |= REQ_CH;
-             chan_end(SNS_DEVEND|SNS_CHNEND);
                  sim_debug(DEBUG_DETAIL, dptr, "seek end unit=%d %d %d %x\n", unit,
                       uptr->POS >> 8, data->cyl, data->state);
+             chan_end(SNS_DEVEND|SNS_CHNEND);
               }
               break;
          }
