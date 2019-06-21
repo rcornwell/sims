@@ -1200,10 +1200,9 @@ IBM360_OPT32 = -I $(IBM360D) -DIBM360 -DUSE_SIM_CARD
 
 PDP6D = PDP10
 PDP6 = ${PDP6D}/ka10_cpu.c ${PDP6D}/ka10_sys.c ${PDP6D}/ka10_cty.c \
-	${PDP6D}/ka10_lp.c ${PDP6D}/ka10_pt.c ${PDP6D}/ka10_dc.c \
-	${PDP6D}/ka10_cr.c ${PDP6D}/ka10_cp.c ${PDP6D}/pdp6_dct.c \
-	${PDP6D}/pdp6_dtc.c ${PDP6D}/pdp6_mtc.c ${PDP6D}/pdp6_dsk.c \
-	${PDP6D}/pdp6_dcs.c
+	${PDP6D}/ka10_lp.c ${PDP6D}/ka10_pt.c ${PDP6D}/ka10_cr.c \
+	${PDP6D}/ka10_cp.c ${PDP6D}/pdp6_dct.c ${PDP6D}/pdp6_dtc.c \
+	${PDP6D}/pdp6_mtc.c ${PDP6D}/pdp6_dsk.c ${PDP6D}/pdp6_dcs.c
 PDP6_OPT = -DPDP6=1 -DUSE_INT64 -I $(PDP6D) -DUSE_SIM_CARD 
 ifneq ($(TYPE340),)
 # ONLY tested on Ubuntu 16.04, using X11 display support:
@@ -1223,8 +1222,8 @@ KA10 = ${KA10D}/ka10_cpu.c ${KA10D}/ka10_sys.c ${KA10D}/ka10_df.c \
 	${KA10D}/ka10_imx.c ${KA10D}/ka10_tk10.c ${KA10D}/ka10_mty.c \
 	${KA10D}/ka10_imp.c ${KA10D}/ka10_ch10.c ${KA10D}/ka10_stk.c \
 	${KA10D}/ka10_ten11.c ${KA10D}/ka10_auxcpu.c $(KA10D)/ka10_pmp.c \
-	${PDP6D}/pdp6_dct.c ${PDP6D}/pdp6_dtc.c ${PDP6D}/pdp6_mtc.c \
-	${PDP6D}/pdp6_dsk.c ${PDP6D}/pdp6_dcs.c ${PDP10D}/ka10_dkb.c
+	${PDP10D}/ka10_dkb.c ${PDP6D}/pdp6_dct.c ${PDP6D}/pdp6_dtc.c \
+	${PDP6D}/pdp6_mtc.c ${PDP6D}/pdp6_dsk.c ${PDP6D}/pdp6_dcs.c 
 KA10_OPT = -DKA=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD ${NETWORK_OPT}
 
 ifneq ($(TYPE340),)

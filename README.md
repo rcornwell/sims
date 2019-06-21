@@ -18,20 +18,20 @@ simulator if desired.
 
 The PDP6 runs TOPS 10 4.5 off Dectape.
 
-  Disk
-  * 270 Disk
+  Disk  
+  * 270 Disk  
 
-  Tape
-  * 551 Tape
-  * 555 Dectape.
+  Tape  
+  * 551 Tape  
+  * 555 Dectape.  
 
-  Paper Tape
-  * Punch
-  * Reader
+  Paper Tape  
+  * Punch  
+  * Reader  
 
-  DC10E Terminal mux.
+  Type 630 Terminal mux.  
 
-  Type 340 graphics display.
+  Type 340 graphics display.  
 
 # Dec KA10 & KI10 
 
@@ -41,12 +41,14 @@ The KA10 sim has successfully run Tops 10 4.5, 5.03 and Tops 10 6.03.
 The KI10 sim has successfully run Tops 10 6.03 with VMSER  
 The KA10 sim has successfully run ITS.  
 Support for BBN pager (untested).  
+Support for WAITS (in progress).
 
    Disk   
    * RC10 RD10/RM10  
    * RP10 RP01/RP02/RP03  
    * RH10 RP04/RP06/RP07 (RP07 not supported under 6.03).   
    * RH10 RS04  
+   * PMP (P. PETIT'S IBM CHANNEL)  
 
    Tape  
    * TM10A or B  
@@ -65,6 +67,8 @@ Support for BBN pager (untested).
    CH10 networking support for ITS.
 
    340 Display Station support.  
+
+   Optional support for PDP6 devices (standard if WAITS enabled).  
 
    The RP10 supports boot (actual hardware did not), by reading in Blocks 4-7
 and transfering to the loaded value. RC10, RH10, TM10 support readin mode. 
