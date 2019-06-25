@@ -186,7 +186,6 @@ int     last_page;                            /* Last page mapped */
 int     exec_map;                             /* Enable executive mapping */
 int     next_write;                           /* Clear next write mapping */
 int     mon_base_reg;                         /* Monitor base register */
-int     ac_base;                              /* Ac base register */
 int     user_base_reg;                        /* User base register */
 int     user_limit;                           /* User limit register */
 uint64  pur;                                  /* Process use register */
@@ -378,16 +377,15 @@ REG cpu_reg[] = {
     { FLDATAD (PAGE_ENABLE, page_enable, 0, "Paging enabled")},
     { FLDATAD (PAGE_FAULT, page_fault, 0, "Page fault"), REG_RO},
     { ORDATAD (AC_STACK, ac_stack, 18, "AC Stack"), REG_RO},
-    { ORDATAD (PAG_RELOAD, pag_reload, 18, "Page reload"), REG_HRO},
+    { ORDATAD (PAGE_RELOAD, pag_reload, 18, "Page reload"), REG_HRO},
     { ORDATAD (FAULT_DATA, fault_data, 36, "Page fault data"), REG_RO},
     { FLDATAD (TRP_FLG, trap_flag, 0, "Trap flag"), REG_HRO},
-    { ORDATAD (LST_PG, last_page, 9, "Last page"), REG_HRO},
+    { ORDATAD (LST_PAGE, last_page, 9, "Last page"), REG_HRO},
 #endif
 #if BBN
     { FLDATAD (EXEC_MAP, exec_map, 0, "Executive mapping"), REG_RO},
     { FLDATAD (NXT_WR, next_write, 0, "Map next write"), REG_RO},
     { ORDATAD (MON_BASE, mon_base_reg, 8, "Monitor base"), REG_RO},
-    { ORDATAD (AC_BASE, ac_base, 5, "AC Base"), REG_RO},
     { ORDATAD (USER_BASE, user_base_reg, 8, "User base"), REG_RO},
     { ORDATAD (USER_LIMIT, user_limit, 3, "User limit"), REG_RO},
     { ORDATAD (PER_USER, pur, 36, "Per user data"), REG_RO},
@@ -448,7 +446,9 @@ MTAB cpu_mod[] = {
               "Paging hardware for TENEX"},
 #endif
 #if WAITS
-    { UNIT_M_PAGE, UNIT_WAITSPG, "WAITS", "WAITS", NULL, NULL, NULL,
+    { UNIT_M_WAITS, 0, "NOWAITS", "NOWAITS", NULL, NULL, NULL,
+              "No support for WAITS XCTR"},
+    { UNIT_M_WAITS, UNIT_WAITS, "WAITS", "WAITS", NULL, NULL, NULL,
               "Support for WAITS XCTR"},
 #endif
 #if MPX_DEV
@@ -800,7 +800,7 @@ int opflags[] = {
 #define QBBN            0
 #endif
 #if WAITS
-#define QWAITS          (cpu_unit[0].flags & UNIT_WAITSPG)
+#define QWAITS          (cpu_unit[0].flags & UNIT_WAITS)
 #else
 #define QWAITS          0
 #endif
@@ -1198,10 +1198,10 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
                  for (i = 0; i < 512; i++)
                     e_tlb[i] = u_tlb[i] = 0;
                  res = M[071];
-                 mon_base_reg = (res & 0377);
-                 ac_base = (res >> 13) & 037;
-                 user_base_reg = (res >> 18) & 0377;
-                 user_limit = page_limit[(res >> 19) & 07];
+                 mon_base_reg = (res & 03777) << 9;
+                 ac_stack = (res >> 9) & 0760;
+                 user_base_reg = (res >> 9) & 03777000;
+                 user_limit = page_limit[(res >> 30) & 07];
                  pur = M[072];
                  break;
 
@@ -1317,6 +1317,10 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
         if (res & 0200000) {
 #if MPX_DEV
             mpx_enable = 0;
+#endif
+#if BBN
+            if (QBBN)
+               exec_map = 0;
 #endif
             reset_all(1);
         }
@@ -1915,6 +1919,8 @@ int page_lookup_bbn(int addr, int flag, int *loc, int wr, int cur_context, int f
     int      lvl = 0;
     int      page = (RMASK & addr) >> 9;
     int      uf = (FLAGS & USER) != 0;
+    int      map = page;
+    int      match;
 
     if (page_fault)
         return 0;
@@ -1934,23 +1940,42 @@ int page_lookup_bbn(int addr, int flag, int *loc, int wr, int cur_context, int f
     /* Figure out if this is a user space access */
     if (flag)
         uf = 0;
-    else if ((FLAGS & EXJSYS) == 0 && xct_flag != 0) {
-         if (xct_flag & 010 && cur_context)
-             uf = 1;
-         if (xct_flag & 004 && wr == 0)
-             uf = 1;
-         if (xct_flag & 002 && BYF5)
-             uf = 1;
-         if (xct_flag & 001 && wr == 1)
-             uf = 1;
+    else {
+         if (QWAITS && xct_flag != 0 && !fetch && !uf) {
+             if (xct_flag & 010 && cur_context)   /* Indirect */
+                 uf = 1;
+             if (xct_flag & 004 && wr == 0)       /* XR */
+                 uf = 1;
+             if (xct_flag & 001 && (wr == 1 || BYF5))  /* XW or XLB or XDB */
+                 uf = 1;
+         }
+         if (!QWAITS && (FLAGS & EXJSYS) == 0 && uf == 0 && !fetch && xct_flag != 0) {
+             if (xct_flag & 010 && cur_context)
+                 uf = 1;
+             if (xct_flag & 004 && wr == 0)
+                 uf = 1;
+             if (xct_flag & 002 && BYF5)
+                 uf = 1;
+             if (xct_flag & 001 && wr == 1)
+                 uf = 1;
+         }
     }
 
     /* If not really user mode and register access */
-    if (uf && (FLAGS & USER) == 0 && addr < 020) {
-        addr |= 0775000 | (ac_base << 4);
+    if (addr < 020 && uf && (FLAGS & USER) == 0) {
+        if (QWAITS)
+           goto lookup;
+        addr |= 0775000 | ac_stack;
         uf = 0;
     }
 
+    /* If still access register, just return */
+    if (addr < 020) {
+       *loc = addr;
+       return 1;
+    }
+
+lookup:
     if (uf) {
         if (page > user_limit) {
             /* over limit violation */
@@ -1993,24 +2018,25 @@ access:
     traps = FMASK;
     /* Map the page */
 map_page:
-    while (tlb_data == 0) {
-        data = M[base + page];
+    match = 0;
+    while (!match) {
+        data = M[base + map];
 
-        switch ((data >> 33) & 03) {
+        switch ((data >> 34) & 03) {
         case 0:      /* Direct page */
              /* Bit 4 = execute */
              /* Bit 3 = Write */
              /* Bit 2 = Read */
-             page = data & BBN_PAGE;
              traps &= data & (BBN_MERGE|BBN_TRPPG);
-             tlb_data = (data & (BBN_EXEC|BBN_WRITE|BBN_READ) >> 16) |
+             tlb_data = ((data & (BBN_EXEC|BBN_WRITE|BBN_READ)) >> 16) |
                          (data & 03777);
+             match = 1;
              break;
 
         case 1:      /* Shared page */
              /* Check trap */
              base = 020000;
-             page = (data & BBN_SPT) >> 9;
+             map = (data & BBN_SPT) >> 9;
              traps &= data & (BBN_MERGE|BBN_PAGE);
              data = 0;
              lvl ++;
@@ -2022,7 +2048,7 @@ map_page:
                  fault_data =  0201000;
                  goto fault_bbn;
              }
-             page = data & BBN_PN;
+             map = data & BBN_PN;
              base = 020000 + ((data & BBN_SPT) >> 9);
              traps &= data & (BBN_MERGE|BBN_PAGE);
              data = 0;
@@ -2045,8 +2071,8 @@ map_page:
         e_tlb[page] = tlb_data;
     }
     /* Handle traps */
-    if (page_fault)
-       goto fault_bbn1;
+//    if (page_fault)
+ //      goto fault_bbn1;
     if (wr && (traps & BBN_TRPMOD)) {
         fault_data = ((lvl != 0)? 0200000: 0)  | 0440000;
         goto fault_bbn;
@@ -2102,14 +2128,10 @@ fault_bbn:
     if (uuo_cycle)
        fault_data |= 040;
     page_fault = 1;
-    base = mon_base_reg;
-    tlb_data = e_tlb[0777];
-    page = 0777;
-    goto map_page;
 fault_bbn1:
-    M[((tlb_data & 03777) << 9) | 0571] = ((uint64)fault_data) << 18 | addr;
+    M[mon_base_reg | 0571] = ((uint64)fault_data) << 18 | addr;
     if (wr)
-        M[((tlb_data & 03777) << 9) | 0572] = MB;
+        M[mon_base_reg | 0572] = MB;
     return 0;
 }
 
@@ -2121,24 +2143,25 @@ fault_bbn1:
 int Mem_read_bbn(int flag, int cur_context, int fetch) {
     int addr;
 
-    if (AB < 020) {
-        if ((xct_flag & 2) != 0 && !cur_context && (FLAGS & USER) == 0) {
-           MB = M[ac_stack + AB];
-           return 0;
-        }
+    /* If not doing any special access, just access register */
+    if (AB < 020 && ((xct_flag == 0 || fetch || cur_context || (FLAGS & USER) != 0))) {
         MB = get_reg(AB);
-    } else {
-        sim_interval--;
-        if (!page_lookup_bbn(AB, flag, &addr, 0, cur_context, fetch))
-            return 1;
-        if (addr >= (int)MEMSIZE) {
-            nxm_flag = 1;
-            return 1;
-        }
-        if (sim_brk_summ && sim_brk_test(AB, SWMASK('R')))
-            watch_stop = 1;
-        MB = M[addr];
+        return 0;
     }
+    sim_interval--;
+    if (!page_lookup_bbn(AB, flag, &addr, 0, cur_context, fetch))
+        return 1;
+    if (addr < 020) {
+        MB = get_reg(AB);
+        return 0;
+    }
+    if (addr >= (int)MEMSIZE) {
+        nxm_flag = 1;
+        return 1;
+    }
+    if (sim_brk_summ && sim_brk_test(AB, SWMASK('R')))
+        watch_stop = 1;
+    MB = M[addr];
     return 0;
 }
 
@@ -2150,24 +2173,25 @@ int Mem_read_bbn(int flag, int cur_context, int fetch) {
 int Mem_write_bbn(int flag, int cur_context) {
     int addr;
 
-    if (AB < 020) {
-        if ((xct_flag & 4) != 0 && !cur_context && (FLAGS & USER) == 0) {
-            M[ac_stack + AB] = MB;
-            return 0;
-        }
+    /* If not doing any special access, just access register */
+    if (AB < 020 && ((xct_flag == 0 || cur_context || (FLAGS & USER) != 0))) {
         set_reg(AB, MB);
-    } else {
-        sim_interval--;
-        if (!page_lookup_bbn(AB, flag, &addr, 1, cur_context, 0))
-            return 1;
-        if (addr >= (int)MEMSIZE) {
-            nxm_flag = 1;
-            return 1;
-        }
-        if (sim_brk_summ && sim_brk_test(AB, SWMASK('W')))
-            watch_stop = 1;
-        M[addr] = MB;
+        return 0;
     }
+    sim_interval--;
+    if (!page_lookup_bbn(AB, flag, &addr, 1, cur_context, 0))
+        return 1;
+    if (addr < 020) {
+        set_reg(AB, MB);
+        return 0;
+    }
+    if (addr >= (int)MEMSIZE) {
+        nxm_flag = 1;
+        return 1;
+    }
+    if (sim_brk_summ && sim_brk_test(AB, SWMASK('W')))
+        watch_stop = 1;
+    M[addr] = MB;
     return 0;
 }
 #endif
@@ -2225,7 +2249,7 @@ int Mem_read_waits(int flag, int cur_context, int fetch) {
             uf = 1;
         if (xct_flag & 001 && BYF5)  /* XW or XLB or XDB */
             uf = 1;
-        if (uf)
+        if (uf && (FLAGS & USER) == 0)
             MB = M[AB + Rl];
         else 
             MB = get_reg(AB);
@@ -2253,9 +2277,10 @@ int Mem_read_waits(int flag, int cur_context, int fetch) {
 int Mem_write_waits(int flag, int cur_context) {
     int addr;
 
+
     if (AB < 020) {
         int      uf = (FLAGS & USER) != 0;
-        if (uf || xct_flag == 0) {
+        if (uf || flag || xct_flag == 0) {
             set_reg(AB, MB);
             return 0;
         }
@@ -2263,7 +2288,7 @@ int Mem_write_waits(int flag, int cur_context) {
             uf = 1;
         if (xct_flag & 001)     /* XW or XLB or XDB */
             uf = 1;
-        if (uf)
+        if (uf && (FLAGS & USER) == 0)
            M[AB + Rl] = MB;
         else 
            set_reg(AB, MB);
@@ -5803,7 +5828,7 @@ last:
 #if BBN
     if (QBBN && page_fault) {
         page_fault = 0;
-        AB = 070;
+        AB = 070 + maoff;
         f_pc_inh = 1;
         pi_cycle = 1;
         goto fetch;
@@ -6094,8 +6119,8 @@ if (QBBN) {
     Mem_write = &Mem_write_bbn;
 }
 #endif
-#if WAITS
-if (QWAITS) {
+#if WAITS  /* Waits without BBN pager */
+if (QWAITS && !QBBN) {
     Mem_read = &Mem_read_waits;
     Mem_write = &Mem_write_waits;
 }

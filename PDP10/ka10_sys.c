@@ -244,6 +244,7 @@ t_stat load_dmp (FILE *fileref)
    char    *p;
    uint32  addr = 074;
    uint64  data;
+   int     high = 0;
 
    while (fgets((char *)buffer, 80, fileref) != 0) {
         p = (char *)buffer;
@@ -252,6 +253,12 @@ t_stat load_dmp (FILE *fileref)
            while (*p >= '0' && *p <= '7') {
                data = (data << 3) + *p - '0';
                p++;
+           }
+           if (addr == 0135 && data != 0)
+               high = (uint32)(data & RMASK);
+           if (high != 0 && high == addr) {
+               addr = 0400000;
+               high = 0;
            }
            M[addr++] = data;
            if (*p == ' ' || *p == '\t')

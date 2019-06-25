@@ -313,11 +313,13 @@ extern DEBTAB crd_debug[];
 #define UNIT_TWOSEG     (1 << UNIT_V_PAGE)
 #define UNIT_ITSPAGE    (2 << UNIT_V_PAGE)
 #define UNIT_BBNPAGE    (4 << UNIT_V_PAGE)
-#define UNIT_WAITSPG    (8 << UNIT_V_PAGE)
-#define UNIT_M_PAGE     (017 << UNIT_V_PAGE)
-#define UNIT_V_MPX      (UNIT_V_PAGE + 4)
-#define UNIT_MPX        (1 << UNIT_V_MPX)  /* MPX Device for ITS */
+#define UNIT_M_PAGE     (007 << UNIT_V_PAGE)
+#define UNIT_V_WAITS    (UNIT_V_PAGE + 3)
+#define UNIT_M_WAITS    (1 << UNIT_V_WAITS)
+#define UNIT_WAITS      (UNIT_M_WAITS)        /* Support for WAITS xct and fix */
+#define UNIT_V_MPX      (UNIT_V_WAITS + 1)
 #define UNIT_M_MPX      (1 << UNIT_V_MPX)
+#define UNIT_MPX        (UNIT_M_MPX)          /* MPX Device for ITS */
 
 
 #if MPX_DEV
