@@ -1071,10 +1071,7 @@ t_stat rp_svc (UNIT *uptr)
     case FNC_WCHK:                       /* write check */
         if (uptr->u3 & DS_ERR) {
             sim_debug(DEBUG_DETAIL, dptr, "RP%o read error\n", unit);
-            uptr->u3 |= DS_DRY;
-            uptr->u3 &= ~CR_GO;
-            df10_finish_op(df, 0);
-            return SCPE_OK;
+            goto rd_end;
         }
 
         if (BUF_EMPTY(uptr)) {
@@ -1098,6 +1095,20 @@ t_stat rp_svc (UNIT *uptr)
                 rp_buf[ctlr][wc++] = 0;
             uptr->hwmark = RP_NUMWD;
             uptr->u6 = 0;
+            /* On read headers, transfer 2 words to start */
+            if (GET_FNC(uptr->u3) == FNC_READH) {
+                df->buf == ((uint64)(cyl) << 18) | 
+                         (uint64)((GET_SF(uptr->u4) << 8) | GET_SF(uptr->u4));
+                sim_debug(DEBUG_DATA, dptr, "RP%o read word h1 %012llo %09o %06o\n",
+                   unit, df->buf, df->cda, df->wcr);
+                if (df10_write(df) == 0)
+                    goto rd_end;
+                df->buf == ((uint64)((020 * ctlr) + (unit + 1)) << 18) | unit;
+                sim_debug(DEBUG_DATA, dptr, "RP%o read word h2 %012llo %09o %06o\n",
+                   unit, df->buf, df->cda, df->wcr);
+                if (df10_write(df) == 0)
+                    goto rd_end;
+            }
         }
 
         df->buf = rp_buf[ctlr][uptr->u6++];
@@ -1121,6 +1132,7 @@ t_stat rp_svc (UNIT *uptr)
             }
             sim_activate(uptr, 50);
         } else {
+rd_end:
             sim_debug(DEBUG_DETAIL, dptr, "RP%o read done\n", unit);
             uptr->u3 |= DS_DRY;
             uptr->u3 &= ~CR_GO;
@@ -1133,10 +1145,7 @@ t_stat rp_svc (UNIT *uptr)
     case FNC_WRITEH:                     /* write w/ headers */
         if (uptr->u3 & DS_ERR) {
             sim_debug(DEBUG_DETAIL, dptr, "RP%o read error\n", unit);
-            uptr->u3 |= DS_DRY;
-            uptr->u3 &= ~CR_GO;
-            df10_finish_op(df, 0);
-            return SCPE_OK;
+            goto wr_end;
         }
 
         if (BUF_EMPTY(uptr)) {
@@ -1148,13 +1157,24 @@ t_stat rp_svc (UNIT *uptr)
                 sim_debug(DEBUG_DETAIL, dptr, "RP%o writex done\n", unit);
                 return SCPE_OK;
             }
+            /* On Write headers, transfer 2 words to start */
+            if (GET_FNC(uptr->u3) == FNC_WRITEH) {
+                if (df10_read(df) == 0)
+                    goto wr_end;
+                sim_debug(DEBUG_DATA, dptr, "RP%o write word h1 %012llo %06o\n",
+                      unit, df->buf, df->wcr);
+                if (df10_read(df) == 0)
+                    goto wr_end;
+                sim_debug(DEBUG_DATA, dptr, "RP%o write word h2 %012llo %06o\n",
+                      unit, df->buf, df->wcr);
+            }
             uptr->u6 = 0;
             uptr->hwmark = 0;
         }
         r = df10_read(df);
-        rp_buf[ctlr][uptr->u6++] = df->buf;
         sim_debug(DEBUG_DATA, dptr, "RP%o write word %d %012llo %06o\n",
                       unit, uptr->u6, df->buf, df->wcr);
+        rp_buf[ctlr][uptr->u6++] = df->buf;
         if (r == 0 || uptr->u6 == RP_NUMWD) {
             while (uptr->u6 < RP_NUMWD)
                 rp_buf[ctlr][uptr->u6++] = 0;
@@ -1182,6 +1202,7 @@ t_stat rp_svc (UNIT *uptr)
         if (r) {
             sim_activate(uptr, 50);
         } else {
+wr_end:
             sim_debug(DEBUG_DETAIL, dptr, "RP%o write done\n", unit);
             uptr->u3 |= DS_DRY;
             uptr->u3 &= ~CR_GO;
