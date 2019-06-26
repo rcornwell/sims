@@ -40,8 +40,7 @@ These are nearing release. Please report any issues that you find in them.
 The KA10 sim has successfully run Tops 10 4.5, 5.03 and Tops 10 6.03.  
 The KI10 sim has successfully run Tops 10 6.03 with VMSER  
 The KA10 sim has successfully run ITS.  
-Support for BBN pager (untested).  
-Support for WAITS (in progress).
+The KA10 sim has successfully run WAITS (with and without BBN pager).  
 
    Disk   
    * RC10 RD10/RM10  
@@ -68,15 +67,12 @@ Support for WAITS (in progress).
 
    340 Display Station support.  
 
-   Optional support for PDP6 devices (standard if WAITS enabled).  
+   Optional support for PDP6 devices (standard if WAITS included).  
 
    The RP10 supports boot (actual hardware did not), by reading in Blocks 4-7
 and transfering to the loaded value. RC10, RH10, TM10 support readin mode. 
 
-   Possibly add in support for KL10A. (No extended addressing). 
-
-To do:  
-   * Add support for PMP IBM 3330 drive to run Waits.  
+   Support for KL10A will be started in the summer.  
 
 # ICL 1900 simulator.
 
