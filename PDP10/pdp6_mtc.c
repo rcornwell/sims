@@ -283,7 +283,7 @@ mtc_devio(uint32 dev, uint64 *data) {
               if ((uptr->flags & MTUF_WLK) != 0)
                   res |= WRITE_LOCK;
               if (sim_tape_bot(uptr))
-                  res |= BOT_FLAG|LD_PT;
+                  res |= BOT_FLAG;
               if (sim_tape_eot(uptr))
                   res |= EOT_FLAG;
               if ((uptr->flags & UNIT_ATT) != 0 && (uptr->CNTRL & (MTC_START|MTC_BUSY)) == 0)
@@ -303,7 +303,7 @@ mtc_devio(uint32 dev, uint64 *data) {
                  /* Switch to drive to check status */
                  mtc_sel_unit = (mtc_hold_cmd >> 4) & 07;
               } 
-              sim_debug(DEBUG_CONI, dptr, "MTC CONO %03o status %012llo %o %08o PC=%06o\n",
+              sim_debug(DEBUG_CONO, dptr, "MTC CONO %03o status %012llo %o %08o PC=%06o\n",
                           dev, *data, mtc_sel_unit, mtc_status, PC);
               uptr = &mtc_unit[mtc_sel_unit];
               mtc_checkirq(uptr);
@@ -365,12 +365,16 @@ mtc_checkirq(UNIT * uptr)
         set_interrupt(MTC_DEVCTL, mtc_pia);
         return;
     }
+#if 0
+    /* Need to verify if this is real interrupt or not */
     if ((mtc_status & IRQ_JNU) != 0 &&
         (mtc_hold_cmd & CMD_FULL) == 0 &&
         (uptr->CNTRL & (MTC_START|MTC_BUSY)) == 0) {
+           sim_debug(DEBUG_DETAIL, &mtc_dev, "MTC%o jnu %o %08o\n", mtc_sel_unit, mtc_pia, mtc_status);
        set_interrupt(MTC_DEVCTL, mtc_pia);
        return;
     }
+#endif
 } 
 
 /* Handle processing of tape requests. */
@@ -702,8 +706,9 @@ mtc_srv(UNIT * uptr)
              sim_debug(DEBUG_DETAIL, dptr, "MTC%o Write %d %d\n", unit, reclen, r);
              if (r == MTSE_EOM)
                  uptr->STATUS |= ILL_OPR;
-             else
+             else if (r != MTSE_OK)
                  uptr->STATUS |= PARITY_ERRL;
+             mtc_status |= EOR_FLAG;
              uptr->CNTRL &= ~(MTC_BUSY);
              uptr->BPOS = 0;
              uptr->hwmark = 0;

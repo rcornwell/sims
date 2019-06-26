@@ -366,6 +366,15 @@ dtc_devio(uint32 dev, uint64 *data) {
               }
               dtc_dtsb |= DTB_REQ;
           } else {
+              /* If not selecting, but delaying, give it to a unit to handle */
+              if (dtc_dtsb & DTB_DLY) {
+                   dtc_unit[i].CMD = (dtc_dtsa & 0007007);
+                   if ((dtc_unit[i].DSTATE & DTC_MOT) == 0) {
+                       if (!sim_is_active(&dtc_unit[i])) {
+                          sim_activate(&dtc_unit[i], 10000);
+                       }
+                   }
+              }
               /* Not selecting any, stop all */
               for (i = 0; i < DTC_NUMDR; i++)
                   dtc_unit[i].CMD = DTC_FNC_STOP;
@@ -488,10 +497,10 @@ dtc_svc (UNIT *uptr)
                   sim_activate(uptr, DT_WRDTIM*10);
                   if ((dtc_dtsb & DTB_DLY) != 0) {
                       uptr->DELAY = 0;
-                      if (uptr->CMD & DTC_TIME)
-                          set_interrupt(DTC_DEVNUM, dtc_dtsa);
                       dtc_dtsb &= ~DTB_DLY;
                       dtc_dtsb |= DTB_TIME;
+                      if (uptr->CMD & DTC_TIME)
+                          set_interrupt(DTC_DEVNUM, dtc_dtsa);
                   }
                   break;
 
@@ -543,10 +552,10 @@ dtc_svc (UNIT *uptr)
                   uptr->DSTATE = DTC_FBLK|(word << DTC_V_BLK) | (uptr->DSTATE & DTC_MOTMASK);
                   if ((dtc_dtsb & DTB_DLY) != 0) {
                       if (uptr->DELAY < 0) {
-                          if (uptr->CMD & DTC_TIME)
-                              set_interrupt(DTC_DEVNUM, dtc_dtsa);
                           dtc_dtsb &= ~DTB_DLY;
                           dtc_dtsb |= DTB_TIME;
+                          if (uptr->CMD & DTC_TIME)
+                              set_interrupt(DTC_DEVNUM, dtc_dtsa);
                       }
                       break;
                   }
@@ -640,10 +649,10 @@ dtc_svc (UNIT *uptr)
                       dtc_dtsb |= DTB_DONE;
                   if ((dtc_dtsb & DTB_DLY) != 0) {
                       if (uptr->DELAY < 0) {
-                          if (uptr->CMD & DTC_TIME)
-                              set_interrupt(DTC_DEVNUM, dtc_dtsa);
                           dtc_dtsb &= ~DTB_DLY;
                           dtc_dtsb |= DTB_TIME;
+                          if (uptr->CMD & DTC_TIME)
+                              set_interrupt(DTC_DEVNUM, dtc_dtsa);
                       }
                       break;
                   }
@@ -677,10 +686,10 @@ dtc_svc (UNIT *uptr)
                   dtc_dtsb &= ~DTB_EOT;
                   if ((dtc_dtsb & DTB_DLY) != 0) {
                       if (uptr->DELAY < 0) {
-                          if (uptr->CMD & DTC_TIME)
-                              set_interrupt(DTC_DEVNUM, dtc_dtsa);
                           dtc_dtsb &= ~DTB_DLY;
                           dtc_dtsb |= DTB_TIME;
+                          if (uptr->CMD & DTC_TIME)
+                              set_interrupt(DTC_DEVNUM, dtc_dtsa);
                       }
                       break;
                   }
@@ -747,10 +756,10 @@ dtc_svc (UNIT *uptr)
                   data = (uint64)word;
                   if ((dtc_dtsb & DTB_DLY) != 0) {
                       if (uptr->DELAY < 0) {
-                          if (uptr->CMD & DTC_TIME)
-                              set_interrupt(DTC_DEVNUM, dtc_dtsa);
                           dtc_dtsb &= ~DTB_DLY;
                           dtc_dtsb |= DTB_TIME;
+                          if (uptr->CMD & DTC_TIME)
+                              set_interrupt(DTC_DEVNUM, dtc_dtsa);
                       }
                       break;
                   }
@@ -796,10 +805,10 @@ dtc_svc (UNIT *uptr)
                       dtc_dtsb |= DTB_DONE;
                   if ((dtc_dtsb & DTB_DLY) != 0) {
                       if (uptr->DELAY < 0) {
-                          if (uptr->CMD & DTC_TIME)
-                              set_interrupt(DTC_DEVNUM, dtc_dtsa);
                           dtc_dtsb &= ~DTB_DLY;
                           dtc_dtsb |= DTB_TIME;
+                          if (uptr->CMD & DTC_TIME)
+                              set_interrupt(DTC_DEVNUM, dtc_dtsa);
                       }
                       break;
                   }
@@ -892,10 +901,10 @@ dtc_svc (UNIT *uptr)
                       dtc_dtsb |= DTB_DONE;
                   if ((dtc_dtsb & DTB_DLY) != 0) {
                       if (uptr->DELAY < 0) {
-                          if (uptr->CMD & DTC_TIME)
-                              set_interrupt(DTC_DEVNUM, dtc_dtsa);
                           dtc_dtsb &= ~DTB_DLY;
                           dtc_dtsb |= DTB_TIME;
+                          if (uptr->CMD & DTC_TIME)
+                              set_interrupt(DTC_DEVNUM, dtc_dtsa);
                       }
                       break;
                   }
@@ -938,10 +947,10 @@ dtc_svc (UNIT *uptr)
                   sim_debug(DEBUG_DETAIL, &dtc_dev, "DTC %o reverse block %o\n", u, word);
                   if ((dtc_dtsb & DTB_DLY) != 0) {
                       if (uptr->DELAY < 0) {
-                          if (uptr->CMD & DTC_TIME)
-                              set_interrupt(DTC_DEVNUM, dtc_dtsa);
                           dtc_dtsb &= ~DTB_DLY;
                           dtc_dtsb |= DTB_TIME;
+                          if (uptr->CMD & DTC_TIME)
+                              set_interrupt(DTC_DEVNUM, dtc_dtsa);
                       }
                       break;
                   }
@@ -984,10 +993,10 @@ dtc_svc (UNIT *uptr)
                   if (dtc_dtsa & DTC_ETF)
                       set_interrupt(DTC_DEVNUM, dtc_dtsa);
                   if ((dtc_dtsb & DTB_DLY) != 0) {
-                      if (uptr->CMD & DTC_TIME)
-                          set_interrupt(DTC_DEVNUM, dtc_dtsa);
                       dtc_dtsb &= ~DTB_DLY;
                       dtc_dtsb |= DTB_TIME;
+                      if (uptr->CMD & DTC_TIME)
+                          set_interrupt(DTC_DEVNUM, dtc_dtsa);
                   }
                   sim_activate(uptr, DT_WRDTIM*10);
                   break;
@@ -1030,6 +1039,13 @@ dtc_svc (UNIT *uptr)
         }
         sim_debug(DEBUG_DETAIL, &dtc_dev, "DTC %o start %06o\n", u, uptr->CMD);
         return SCPE_OK;
+    } else if ((dtc_dtsb & DTB_DLY) != 0) {
+        uptr->DELAY = 0;
+        dtc_dtsb |= DTB_TIME;
+        dtc_dtsb &= ~DTB_DLY;
+        if(dtc_dtsa & DTC_TIME)
+           set_interrupt(DTC_DEVNUM, dtc_dtsa);
+        sim_debug(DEBUG_DETAIL, &dtc_dev, "DTC %o delay over %06o\n", u, dtc_dtsa);
     }
     return SCPE_OK;
 }

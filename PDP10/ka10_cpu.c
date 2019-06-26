@@ -2237,34 +2237,20 @@ int page_lookup_waits(int addr, int flag, int *loc, int wr, int cur_context, int
 int Mem_read_waits(int flag, int cur_context, int fetch) {
     int addr;
 
-    if (AB < 020) {
-        int      uf = (FLAGS & USER) != 0;
-        if (uf || flag || xct_flag == 0 || fetch) {
-            MB = get_reg(AB);
-            return 0;
-        }
-        if (xct_flag & 010 && cur_context)   /* Indirect */
-            uf = 1;
-        if (xct_flag & 004)                  /* XR */
-            uf = 1;
-        if (xct_flag & 001 && BYF5)  /* XW or XLB or XDB */
-            uf = 1;
-        if (uf && (FLAGS & USER) == 0)
-            MB = M[AB + Rl];
-        else 
-            MB = get_reg(AB);
-    } else {
-        sim_interval--;
-        if (!page_lookup_waits(AB, flag, &addr, 0, cur_context, fetch))
-            return 1;
-        if (addr >= (int)MEMSIZE) {
-            nxm_flag = 1;
-            return 1;
-        }
-        if (sim_brk_summ && sim_brk_test(AB, SWMASK('R')))
-            watch_stop = 1;
-        MB = M[addr];
+    if (AB < 020 && ((xct_flag == 0 || fetch || cur_context || (FLAGS & USER) != 0))) {
+        MB = get_reg(AB);
+        return 0;
     }
+    sim_interval--;
+    if (!page_lookup_waits(AB, flag, &addr, 0, cur_context, fetch))
+        return 1;
+    if (addr >= (int)MEMSIZE) {
+        nxm_flag = 1;
+        return 1;
+    }
+    if (sim_brk_summ && sim_brk_test(AB, SWMASK('R')))
+        watch_stop = 1;
+    MB = M[addr];
     return 0;
 }
 
@@ -2278,32 +2264,21 @@ int Mem_write_waits(int flag, int cur_context) {
     int addr;
 
 
-    if (AB < 020) {
-        int      uf = (FLAGS & USER) != 0;
-        if (uf || flag || xct_flag == 0) {
-            set_reg(AB, MB);
-            return 0;
-        }
-        if (xct_flag & 010 && cur_context)   /* Indirect */
-            uf = 1;
-        if (xct_flag & 001)     /* XW or XLB or XDB */
-            uf = 1;
-        if (uf && (FLAGS & USER) == 0)
-           M[AB + Rl] = MB;
-        else 
-           set_reg(AB, MB);
-    } else {
-        sim_interval--;
-        if (!page_lookup_waits(AB, flag, &addr, 1, cur_context, 0))
-            return 1;
-        if (addr >= (int)MEMSIZE) {
-            nxm_flag = 1;
-            return 1;
-        }
-        if (sim_brk_summ && sim_brk_test(AB, SWMASK('W')))
-            watch_stop = 1;
-        M[addr] = MB;
+    /* If not doing any special access, just access register */
+    if (AB < 020 && ((xct_flag == 0 || cur_context || (FLAGS & USER) != 0))) {
+        set_reg(AB, MB);
+        return 0;
     }
+    sim_interval--;
+    if (!page_lookup_waits(AB, flag, &addr, 1, cur_context, 0))
+        return 1;
+    if (addr >= (int)MEMSIZE) {
+        nxm_flag = 1;
+        return 1;
+    }
+    if (sim_brk_summ && sim_brk_test(AB, SWMASK('W')))
+        watch_stop = 1;
+    M[addr] = MB;
     return 0;
 }
 #endif

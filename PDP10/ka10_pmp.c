@@ -2192,16 +2192,7 @@ pmp_format(UNIT * uptr, int flag) {
                 data->cbuf[pos++] = (cyl & 0xff);
                 data->cbuf[pos++] = (hd >> 8);
                 data->cbuf[pos++] = (hd & 0xff);
-                data->cbuf[pos++] = (cyl >> 8);   /* R0 */
-                data->cbuf[pos++] = (cyl & 0xff);
-                data->cbuf[pos++] = (hd >> 8);
-                data->cbuf[pos++] = (hd & 0xff);
-                data->cbuf[pos++] = rec++;        /* Rec */
-                data->cbuf[pos++] = 0;            /* keylen */
-                data->cbuf[pos++] = 0;            /* dlen */
-                data->cbuf[pos++] = 8;            /*  */
-                pos += 8;
-                data->cbuf[pos++] = (cyl >> 8);   /* R1 Rib block */
+                data->cbuf[pos++] = (cyl >> 8);   /* R0 Rib block */
                 data->cbuf[pos++] = (cyl & 0xff);
                 data->cbuf[pos++] = (hd >> 8);
                 data->cbuf[pos++] = (hd & 0xff);
