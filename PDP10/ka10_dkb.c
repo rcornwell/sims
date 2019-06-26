@@ -58,13 +58,13 @@ DEVICE dkb_dev = {
     "DKB", dkb_unit, NULL, dkb_mod,
     2, 10, 31, 1, 8, 8,
     NULL, NULL, NULL,
-    NULL, NULL, NULL, &dkb_dib, DEV_DEBUG, 0, dev_debug,
+    NULL, NULL, NULL, &dkb_dib, DEV_DEBUG | DEV_DISABLE | DEV_DIS, 0, dev_debug,
     NULL, NULL, &dkb_help, NULL, NULL, &dkb_description
     };
 
 int status;
 t_stat dkb_devio(uint32 dev, uint64 *data) {
-     uint64     res;
+/*   uint64     res; */
      switch(dev & 3) {
      case CONI:
         *data = status;

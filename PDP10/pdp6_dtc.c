@@ -249,6 +249,13 @@ t_stat         dtc_detach (UNIT *uptr);
    dtc_mod       DTC modifier list
 */
 
+
+#if !PDP6
+#define D DEV_DIS
+#else
+#define D 0
+#endif
+
 DIB dtc_dib = { DTC_DEVNUM, 2, &dtc_devio, NULL};
 
 UNIT dtc_unit[] = {
@@ -307,7 +314,7 @@ DEVICE dtc_dev = {
     "DTC", dtc_unit, dtc_reg, dtc_mod,
     DTC_NUMDR, 8, 24, 1, 8, 18,
     NULL, NULL, &dtc_reset, &dtc_boot, &dtc_attach, &dtc_detach,
-    &dtc_dib, DEV_DISABLE | DEV_DEBUG, 0,
+    &dtc_dib, DEV_DISABLE | DEV_DEBUG | D, 0,
     dtc_deb, NULL, NULL
     };
 

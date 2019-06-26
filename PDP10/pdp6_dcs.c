@@ -85,6 +85,13 @@ const char *dcs_description (DEVICE *dptr);
    dcs_reg      Type 630 register list
 */
 
+
+#if !PDP6
+#define D DEV_DIS
+#else
+#define D 0
+#endif
+
 DIB dcs_dib = { DCS_DEVNUM, 2, &dcs_devio, NULL };
 
 UNIT dcs_unit = {
@@ -126,7 +133,7 @@ DEVICE dcs_dev = {
     1, 10, 31, 1, 8, 8,
     &tmxr_ex, &tmxr_dep, &dcs_reset,
     NULL, &dcs_attach, &dcs_detach,
-    &dcs_dib, DEV_NET | DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &dcs_dib, DEV_MUX | DEV_DISABLE | DEV_DEBUG | D, 0, dev_debug,
     NULL, NULL, &dcs_help, NULL, NULL, &dcs_description
     };
 
@@ -272,10 +279,7 @@ int32 ln;
 
 /* Scan to see if something to do */
 t_stat dcs_doscan (UNIT *uptr) {
-   uint32 lmask;
 
-//   if ((uptr->STATUS & (RSCN_ACT|XSCN_ACT)) == 0)
- //      return SCPE_OK;
    clr_interrupt(DCS_DEVNUM);
    if ((uptr->STATUS & (RSCN_ACT)) != 0) {
        for (;dcs_rx_rdy != 0; dcs_rx_scan++) {

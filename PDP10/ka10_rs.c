@@ -103,6 +103,7 @@
 #define IRQ_KI10        0000002000000LL
 #define IRQ_KA10        0000001000000LL
 
+#define CMD             u3
 /* u3  low */
 /* RSC - 00 - control */
 
@@ -162,6 +163,7 @@
 
 #define AS_U0           0000001         /* unit 0 flag */
 
+#define DA              u4
 /* u4 high */
 /* RSDC - 05 - desired sector */
 
@@ -180,6 +182,8 @@
 #define LA_V_SC         6                               /* sector pos */
 
 #define GET_DA(c,d)     (((GET_SF (c)) * rs_drv_tab[d].sect) + GET_SC (c))
+
+#define DATAPTR         u6
 
 /* This controller supports many different disk drive types.  These drives
    are operated in 576 bytes/sector (128 36b words/sector) mode, which gives
@@ -357,9 +361,8 @@ t_stat rs_devio(uint32 dev, uint64 *data) {
          if (*data & CONT_RESET) {
             UNIT *uptr=dptr->units;
             for(drive = 0; drive < NUM_UNITS_RS; drive++, uptr++) {
-               uptr->u3 &= DS_MOL|DS_WRL|DS_DPR|DS_DRY|DS_VV|076;
-               uptr->u4 &= 003400177777;
-               uptr->u5 &= 0177777;
+               uptr->CMD &= DS_MOL|DS_WRL|DS_DPR|DS_DRY|DS_VV|076;
+               uptr->DA &= 003400177777;
             }
          }
          if (*data & (DBPE_CLR|DR_EXC_CLR|CHN_CLR))
@@ -505,81 +508,81 @@ rs_write(int ctlr, int unit, int reg, uint32 data) {
     struct df10   *df10 = &rs_df10[ctlr];
     UNIT          *uptr = &dptr->units[unit];
  
-    if ((uptr->u3 & CR_GO) && reg != 04) {
-        uptr->u3 |= (ER1_RMR << 16)|DS_ERR;
+    if ((uptr->CMD & CR_GO) && reg != 04) {
+        uptr->CMD |= (ER1_RMR << 16)|DS_ERR;
         return;
     }
     switch(reg) {
     case  000:  /* control */
-        sim_debug(DEBUG_DETAIL, dptr, "RSA%o %d Status=%06o\n", unit, ctlr, uptr->u3);
+        sim_debug(DEBUG_DETAIL, dptr, "RSA%o %d Status=%06o\n", unit, ctlr, uptr->CMD);
         /* Set if drive not writable */
         if (uptr->flags & UNIT_WLK)
-           uptr->u3 |= DS_WRL;
+           uptr->CMD |= DS_WRL;
         /* If drive not ready don't do anything */
-        if ((uptr->u3 & DS_DRY) == 0) {
-           uptr->u3 |= (ER1_RMR << 16)|DS_ERR;
+        if ((uptr->CMD & DS_DRY) == 0) {
+           uptr->CMD |= (ER1_RMR << 16)|DS_ERR;
            sim_debug(DEBUG_DETAIL, dptr, "RSA%o %d busy\n", unit, ctlr);
            return;
         }
         /* Check if GO bit set */
         if ((data & 1) == 0) {
-           uptr->u3 &= ~076;
-           uptr->u3 |= data & 076;
+           uptr->CMD &= ~076;
+           uptr->CMD |= data & 076;
            sim_debug(DEBUG_DETAIL, dptr, "RSA%o %d no go\n", unit, ctlr);
            return;                           /* No, nop */
         }
-        uptr->u3 &= DS_ATA|DS_VV|DS_DPR|DS_MOL|DS_WRL;
-        uptr->u3 |= data & 076;
+        uptr->CMD &= DS_ATA|DS_VV|DS_DPR|DS_MOL|DS_WRL;
+        uptr->CMD |= data & 076;
         switch (GET_FNC(data)) {
         case FNC_NOP:
-            uptr->u3 |= DS_DRY;
+            uptr->CMD |= DS_DRY;
             break;
 
         case FNC_SEARCH:                      /* search */
         case FNC_WCHK:                        /* write check */
         case FNC_WRITE:                       /* write */
         case FNC_READ:                        /* read */
-            uptr->u3 |= DS_PIP|CR_GO;
-            uptr->u6 = 0;
+            uptr->CMD |= DS_PIP|CR_GO;
+            uptr->DATAPTR = 0;
             break;
 
         case FNC_PRESET:                      /* read-in preset */
-            uptr->u4 = 0;
+            uptr->DA = 0;
             if ((uptr->flags & UNIT_ATT) != 0)
-                uptr->u3 |= DS_VV;
-            uptr->u3 |= DS_DRY;
+                uptr->CMD |= DS_VV;
+            uptr->CMD |= DS_DRY;
             df10_setirq(df10);
             break;
 
         case FNC_DCLR:                        /* drive clear */
-            uptr->u3 |= DS_DRY;
-            uptr->u3 &= ~(DS_ATA|CR_GO);
+            uptr->CMD |= DS_DRY;
+            uptr->CMD &= ~(DS_ATA|CR_GO);
             rs_attn[ctlr] = 0;
             clr_interrupt(df10->devnum);
             for (i = 0; i < 8; i++) {
-                if (rs_unit[(ctlr * 8) + i].u3 & DS_ATA)
+                if (rs_unit[(ctlr * 8) + i].CMD & DS_ATA)
                    rs_attn[ctlr] = 1;
             }
             if ((df10->status & IADR_ATTN) != 0 && rs_attn[ctlr] != 0)
                 df10_setirq(df10);
             break;
         default:
-            uptr->u3 |= DS_DRY|DS_ERR|DS_ATA;
-            uptr->u3 |= (ER1_ILF << 16);
+            uptr->CMD |= DS_DRY|DS_ERR|DS_ATA;
+            uptr->CMD |= (ER1_ILF << 16);
             if ((df10->status & IADR_ATTN) != 0 && rs_attn[ctlr] != 0)
                  df10_setirq(df10);
         }
-        if (uptr->u3 & CR_GO)
+        if (uptr->CMD & CR_GO)
             sim_activate(uptr, 100);
-        sim_debug(DEBUG_DETAIL, dptr, "RSA%o AStatus=%06o\n", unit, uptr->u3);
+        sim_debug(DEBUG_DETAIL, dptr, "RSA%o AStatus=%06o\n", unit, uptr->CMD);
         return;
     case  001:  /* status */
         break;
     case  002:  /* error register 1 */
-        uptr->u3 &= 0177777;
-        uptr->u3 |= data << 16;
+        uptr->CMD &= 0177777;
+        uptr->CMD |= data << 16;
         if (data != 0)
-           uptr->u3 |= DS_ERR;
+           uptr->CMD |= DS_ERR;
         break;
     case  003:  /* maintenance */
         break;
@@ -587,8 +590,8 @@ rs_write(int ctlr, int unit, int reg, uint32 data) {
         rs_attn[ctlr] = 0;
         for (i = 0; i < 8; i++) {
             if (data & (1<<i))
-                rs_unit[(ctlr * 8) + i].u3 &= ~DS_ATA;
-            if (rs_unit[(ctlr * 8) + i].u3 & DS_ATA)
+                rs_unit[(ctlr * 8) + i].CMD &= ~DS_ATA;
+            if (rs_unit[(ctlr * 8) + i].CMD & DS_ATA)
                rs_attn[ctlr] = 1;
         }
         clr_interrupt(df10->devnum);
@@ -597,13 +600,13 @@ rs_write(int ctlr, int unit, int reg, uint32 data) {
             df10_setirq(df10);
         break;
     case  005:  /* sector/track */
-        uptr->u4 = data & 0177777;
+        uptr->DA = data & 0177777;
         break;
     case  006:  /* drive type */
     case  007:  /* look ahead */
         break;
     default:
-        uptr->u3 |= (ER1_ILR<<16)|DS_ERR;
+        uptr->CMD |= (ER1_ILR<<16)|DS_ERR;
         rs_rae[ctlr] &= ~(1<<unit);
     }
 }
@@ -622,27 +625,27 @@ rs_read(int ctlr, int unit, int reg) {
 
     switch(reg) {
     case  000:  /* control */
-        temp = uptr->u3 & 077;
+        temp = uptr->CMD & 077;
         if (uptr->flags & UNIT_ATT)
            temp |= CS1_DVA;
-        if ((df10->status & BUSY) == 0 && (uptr->u3 & CR_GO) == 0)
+        if ((df10->status & BUSY) == 0 && (uptr->CMD & CR_GO) == 0)
            temp |= CS1_GO;
         break;
     case  001:  /* status */
-        temp = uptr->u3 & 0177700;
+        temp = uptr->CMD & 0177700;
         break;
     case  002:  /* error register 1 */
-        temp = (uptr->u3 >> 16) & 0177777;
+        temp = (uptr->CMD >> 16) & 0177777;
         break;
     case  004:  /* atten summary */
         for (i = 0; i < 8; i++) {
-            if (rs_unit[(ctlr * 8) + i].u3 & DS_ATA) {
+            if (rs_unit[(ctlr * 8) + i].CMD & DS_ATA) {
                 temp |= 1 << i;
             }
         }
         break;
     case  005:  /* sector/track */
-        temp = uptr->u4 & 0177777;
+        temp = uptr->DA & 0177777;
         break;
     case  006:  /* drive type */
         temp = rs_drv_tab[GET_DTYPE(uptr->flags)].devtype;
@@ -651,7 +654,7 @@ rs_read(int ctlr, int unit, int reg) {
     case  007:  /* look ahead */
         break;
     default:
-        uptr->u3 |= (ER1_ILR<<16);
+        uptr->CMD |= (ER1_ILR<<16);
         rs_rae[ctlr] &= ~(1<<unit);
     }
     return temp;
@@ -673,26 +676,26 @@ t_stat rs_svc (UNIT *uptr)
     unit = uptr - dptr->units;
     df = &rs_df10[ctlr];
     if ((uptr->flags & UNIT_ATT) == 0) {                    /* not attached? */
-        uptr->u3 |= (ER1_UNS << 16) | DS_ATA|DS_ERR;       /* set drive error */
+        uptr->CMD |= (ER1_UNS << 16) | DS_ATA|DS_ERR;       /* set drive error */
         df->status &= ~BUSY;
         df10_setirq(df);
         return (SCPE_OK);
     }
 
     /* Check if seeking */
-    if (uptr->u3 & DS_PIP) {
-       uptr->u3 &= ~DS_PIP;
-       uptr->u6 = 0;
+    if (uptr->CMD & DS_PIP) {
+       uptr->CMD &= ~DS_PIP;
+       uptr->DATAPTR = 0;
     }
 
-    switch (GET_FNC(uptr->u3)) {
+    switch (GET_FNC(uptr->CMD)) {
     case FNC_NOP:
     case FNC_DCLR:                       /* drive clear */
         break;
     case FNC_PRESET:                     /* read-in preset */
         rs_attn[ctlr] = 1;
-        uptr->u3 |= DS_DRY|DS_ATA;
-        uptr->u3 &= ~CR_GO;
+        uptr->CMD |= DS_DRY|DS_ATA;
+        uptr->CMD &= ~CR_GO;
         df->status &= ~BUSY;
         if (df->status & IADR_ATTN)
             df10_setirq(df);
@@ -700,12 +703,12 @@ t_stat rs_svc (UNIT *uptr)
         break;
 
     case FNC_SEARCH:                     /* search */
-        if (GET_SC(uptr->u4) >= rs_drv_tab[dtype].sect ||
-            GET_SF(uptr->u4) >= rs_drv_tab[dtype].surf)
-            uptr->u3 |= (ER1_IAE << 16)|DS_ERR;
+        if (GET_SC(uptr->DA) >= rs_drv_tab[dtype].sect ||
+            GET_SF(uptr->DA) >= rs_drv_tab[dtype].surf)
+            uptr->CMD |= (ER1_IAE << 16)|DS_ERR;
         rs_attn[ctlr] = 1;
-        uptr->u3 |= DS_DRY|DS_ATA;
-        uptr->u3 &= ~CR_GO;
+        uptr->CMD |= DS_DRY|DS_ATA;
+        uptr->CMD &= ~CR_GO;
         df->status &= ~BUSY;
         if ((df->status & (IADR_ATTN|BUSY)) == IADR_ATTN)
             df10_setirq(df);
@@ -714,20 +717,20 @@ t_stat rs_svc (UNIT *uptr)
 
     case FNC_READ:                       /* read */
     case FNC_WCHK:                       /* write check */
-        if (uptr->u6 == 0) {
+        if (uptr->DATAPTR == 0) {
             int wc;
-            if (GET_SC(uptr->u4) >= rs_drv_tab[dtype].sect ||
-                GET_SF(uptr->u4) >= rs_drv_tab[dtype].surf) {
-                uptr->u3 |= (ER1_IAE << 16)|DS_ERR|DS_DRY|DS_ATA;
+            if (GET_SC(uptr->DA) >= rs_drv_tab[dtype].sect ||
+                GET_SF(uptr->DA) >= rs_drv_tab[dtype].surf) {
+                uptr->CMD |= (ER1_IAE << 16)|DS_ERR|DS_DRY|DS_ATA;
                 df->status &= ~BUSY;
-                uptr->u3 &= ~CR_GO;
+                uptr->CMD &= ~CR_GO;
                 sim_debug(DEBUG_DETAIL, dptr, "RSA%o readx done\n", unit);
                 df10_finish_op(df, 0);
                 return SCPE_OK;
             }
             sim_debug(DEBUG_DETAIL, dptr, "RSA%o read (%d,%d)\n", unit,
-                   GET_SC(uptr->u4), GET_SF(uptr->u4));
-            da = GET_DA(uptr->u4, dtype) * RS_NUMWD;
+                   GET_SC(uptr->DA), GET_SF(uptr->DA));
+            da = GET_DA(uptr->DA, dtype) * RS_NUMWD;
             (void)sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
             wc = sim_fread (&rs_buf[ctlr][0], sizeof(uint64), RS_NUMWD,
                                 uptr->fileref);
@@ -736,63 +739,63 @@ t_stat rs_svc (UNIT *uptr)
             uptr->hwmark = RS_NUMWD;
         }
 
-        df->buf = rs_buf[ctlr][uptr->u6++];
+        df->buf = rs_buf[ctlr][uptr->DATAPTR++];
         sim_debug(DEBUG_DATA, dptr, "RSA%o read word %d %012llo %09o %06o\n",
-                unit, uptr->u6, df->buf, df->cda, df->wcr);
+                unit, uptr->DATAPTR, df->buf, df->cda, df->wcr);
         if (df10_write(df)) {
-            if (uptr->u6 == uptr->hwmark) {
+            if (uptr->DATAPTR == uptr->hwmark) {
                 /* Increment to next sector. Set Last Sector */
-                uptr->u6 = 0;
-                uptr->u4 += 1 << DA_V_SC;
-                if (GET_SC(uptr->u4) >= rs_drv_tab[dtype].sect) {
-                    uptr->u4 &= (DA_M_SF << DA_V_SF);
-                    uptr->u4 += 1 << DA_V_SF;
-                    if (GET_SF(uptr->u4) >= rs_drv_tab[dtype].surf)
-                        uptr->u3 |= DS_LST;
+                uptr->DATAPTR = 0;
+                uptr->DA += 1 << DA_V_SC;
+                if (GET_SC(uptr->DA) >= rs_drv_tab[dtype].sect) {
+                    uptr->DA &= (DA_M_SF << DA_V_SF);
+                    uptr->DA += 1 << DA_V_SF;
+                    if (GET_SF(uptr->DA) >= rs_drv_tab[dtype].surf)
+                        uptr->CMD |= DS_LST;
                 }
             }
             sim_activate(uptr, 20);
         } else {
             sim_debug(DEBUG_DETAIL, dptr, "RSA%o read done\n", unit);
-            uptr->u3 |= DS_DRY;
-            uptr->u3 &= ~CR_GO;
+            uptr->CMD |= DS_DRY;
+            uptr->CMD &= ~CR_GO;
             df10_finish_op(df, 0);
             return SCPE_OK;
         }
         break;
 
     case FNC_WRITE:                      /* write */
-        if (uptr->u6 == 0) {
-            if (GET_SC(uptr->u4) >= rs_drv_tab[dtype].sect ||
-                GET_SF(uptr->u4) >= rs_drv_tab[dtype].surf) {
-                uptr->u3 |= (ER1_IAE << 16)|DS_ERR|DS_DRY|DS_ATA;
-                uptr->u3 &= ~CR_GO;
+        if (uptr->DATAPTR == 0) {
+            if (GET_SC(uptr->DA) >= rs_drv_tab[dtype].sect ||
+                GET_SF(uptr->DA) >= rs_drv_tab[dtype].surf) {
+                uptr->CMD |= (ER1_IAE << 16)|DS_ERR|DS_DRY|DS_ATA;
+                uptr->CMD &= ~CR_GO;
                 sim_debug(DEBUG_DETAIL, dptr, "RSA%o writex done\n", unit);
                 df10_finish_op(df, 0);
                 return SCPE_OK;
             }
         }
         r = df10_read(df);
-        rs_buf[ctlr][uptr->u6++] = df->buf;
+        rs_buf[ctlr][uptr->DATAPTR++] = df->buf;
         sim_debug(DEBUG_DATA, dptr, "RSA%o write word %d %012llo %09o %06o\n",
-                 unit, uptr->u6, df->buf, df->cda, df->wcr);
-        if (r == 0 || uptr->u6 == RS_NUMWD) {
-            while (uptr->u6 < RS_NUMWD)
-                rs_buf[ctlr][uptr->u6++] = 0;
+                 unit, uptr->DATAPTR, df->buf, df->cda, df->wcr);
+        if (r == 0 || uptr->DATAPTR == RS_NUMWD) {
+            while (uptr->DATAPTR < RS_NUMWD)
+                rs_buf[ctlr][uptr->DATAPTR++] = 0;
             sim_debug(DEBUG_DETAIL, dptr, "RSA%o write (%d,%d)\n", unit,
-                   GET_SC(uptr->u4), GET_SF(uptr->u4));
-            da = GET_DA(uptr->u4, dtype) * RS_NUMWD;
+                   GET_SC(uptr->DA), GET_SF(uptr->DA));
+            da = GET_DA(uptr->DA, dtype) * RS_NUMWD;
             (void)sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
             (void)sim_fwrite (&rs_buf[ctlr][0], sizeof(uint64), RS_NUMWD,
                                 uptr->fileref);
-            uptr->u6 = 0;
+            uptr->DATAPTR = 0;
             if (r) {
-                uptr->u4 += 1 << DA_V_SC;
-                if (GET_SC(uptr->u4) >= rs_drv_tab[dtype].sect) {
-                    uptr->u4 &= (DA_M_SF << DA_V_SF);
-                    uptr->u4 += 1 << DA_V_SF;
-                    if (GET_SF(uptr->u4) >= rs_drv_tab[dtype].surf)
-                        uptr->u3 |= DS_LST;
+                uptr->DA += 1 << DA_V_SC;
+                if (GET_SC(uptr->DA) >= rs_drv_tab[dtype].sect) {
+                    uptr->DA &= (DA_M_SF << DA_V_SF);
+                    uptr->DA += 1 << DA_V_SF;
+                    if (GET_SF(uptr->DA) >= rs_drv_tab[dtype].surf)
+                        uptr->CMD |= DS_LST;
                 }
              }
         }
@@ -800,8 +803,8 @@ t_stat rs_svc (UNIT *uptr)
             sim_activate(uptr, 20);
         } else {
             sim_debug(DEBUG_DETAIL, dptr, "RSA%o write done\n", unit);
-            uptr->u3 |= DS_DRY;
-            uptr->u3 &= ~CR_GO;
+            uptr->CMD |= DS_DRY;
+            uptr->CMD &= ~CR_GO;
             df10_finish_op(df, 0);
             return SCPE_OK;
         }
@@ -857,7 +860,7 @@ rs_boot(int32 unit_num, DEVICE * rptr)
     dptr = rs_devs[ctlr];
     (void)sim_fseek(uptr->fileref, 0, SEEK_SET);
     (void)sim_fread (&rs_buf[0][0], sizeof(uint64), RS_NUMWD, uptr->fileref);
-    uptr->u3 |= DS_VV;
+    uptr->CMD |= DS_VV;
     addr = rs_buf[0][ptr] & RMASK;
     wc = (rs_buf[0][ptr++] >> 18) & RMASK;
     while (wc != 0) {
@@ -899,11 +902,11 @@ t_stat rs_attach (UNIT *uptr, CONST char *cptr)
         return SCPE_OK;
     dib = (DIB *) rstr->ctxt;
     ctlr = dib->dev_num & 014;
-    uptr->u4 = 0;
-    uptr->u3 &= ~DS_VV;
-    uptr->u3 |= DS_DPR|DS_MOL|DS_DRY;
+    uptr->DA = 0;
+    uptr->CMD &= ~DS_VV;
+    uptr->CMD |= DS_DPR|DS_MOL|DS_DRY;
     if (uptr->flags & UNIT_WLK)
-         uptr->u3 |= DS_WRL;
+         uptr->CMD |= DS_WRL;
     rs_df10[ctlr].status |= PI_ENABLE;
     set_interrupt(dib->dev_num, rs_df10[ctlr].status);
     return SCPE_OK;
@@ -917,7 +920,7 @@ t_stat rs_detach (UNIT *uptr)
         return SCPE_OK;
     if (sim_is_active (uptr))                              /* unit active? */
         sim_cancel (uptr);                                  /* cancel operation */
-    uptr->u3 &= ~(DS_VV|DS_WRL|DS_DPR|DS_DRY);
+    uptr->CMD &= ~(DS_VV|DS_WRL|DS_DPR|DS_DRY);
     return detach_unit (uptr);
 }
 

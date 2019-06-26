@@ -32,12 +32,12 @@
 
 #if (NUM_DEVS_TEN11 > 0)
 #include <fcntl.h>
-#include <unistd.h>
+//#include <unistd.h>
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
+//#include <sys/socket.h>
+//#include <netinet/in.h>
+//#include <netinet/tcp.h>
+//#include <arpa/inet.h>
 
 /* Rubin 10-11 pager. */
 static uint64 ten11_pager[256];

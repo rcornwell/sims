@@ -420,18 +420,14 @@ MTAB cpu_mod[] = {
     { UNIT_MSIZE, 48, "768K", "768K", &cpu_set_size },
     { UNIT_MSIZE, 64, "1024K", "1024K", &cpu_set_size },
 #endif
-#if KI_22BIT|KI
+#if KI_22BIT|KI|KL
     { UNIT_MSIZE, 128, "2048K", "2048K", &cpu_set_size },
     { UNIT_MSIZE, 256, "4096K", "4096K", &cpu_set_size },
 #endif
-#if KI
+#if KI|KL
     { MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "SERIAL", "SERIAL",
           &cpu_set_serial, &cpu_show_serial, NULL, "CPU Serial Number" },
 #endif
-    { UNIT_MAOFF, 0, NULL, "NOMAOFF", NULL, NULL, NULL,
-             "No interrupt relocation"},
-    { UNIT_MAOFF, UNIT_MAOFF, "MAOFF", "MAOFF", NULL, NULL,
-              NULL, "Interrupts relocated to 140"},
 #if KA
     { UNIT_M_PAGE, 0, "ONESEG", "ONESEG", NULL, NULL, NULL,
              "One Relocation Register"},
@@ -446,10 +442,10 @@ MTAB cpu_mod[] = {
               "Paging hardware for TENEX"},
 #endif
 #if WAITS
-    { UNIT_M_WAITS, 0, "NOWAITS", "NOWAITS", NULL, NULL, NULL,
-              "No support for WAITS XCTR"},
     { UNIT_M_WAITS, UNIT_WAITS, "WAITS", "WAITS", NULL, NULL, NULL,
               "Support for WAITS XCTR"},
+    { UNIT_M_WAITS, 0, NULL, "NOWAITS", NULL, NULL, NULL,
+              "No support for WAITS XCTR"},
 #endif
 #if MPX_DEV
     { UNIT_M_MPX, UNIT_MPX, "MPX", "MPX", NULL, NULL, NULL,
@@ -457,6 +453,10 @@ MTAB cpu_mod[] = {
     { UNIT_M_MPX, 0, NULL, "NOMPX", NULL, NULL, NULL,
               "Disables the MPX device"},
 #endif
+    { UNIT_MAOFF, UNIT_MAOFF, "MAOFF", "MAOFF", NULL, NULL,
+              NULL, "Interrupts relocated to 140"},
+    { UNIT_MAOFF, 0, NULL, "NOMAOFF", NULL, NULL, NULL,
+             "No interrupt relocation"},
 #endif
     { MTAB_XTD|MTAB_VDV|MTAB_NMO|MTAB_SHP, 0, "HISTORY", "HISTORY",
       &cpu_set_hist, &cpu_show_hist },
@@ -2017,7 +2017,6 @@ access:
     }
     traps = FMASK;
     /* Map the page */
-map_page:
     match = 0;
     while (!match) {
         data = M[base + map];
@@ -2028,8 +2027,8 @@ map_page:
              /* Bit 3 = Write */
              /* Bit 2 = Read */
              traps &= data & (BBN_MERGE|BBN_TRPPG);
-             tlb_data = ((data & (BBN_EXEC|BBN_WRITE|BBN_READ)) >> 16) |
-                         (data & 03777);
+             tlb_data = (uint32)(((data & (BBN_EXEC|BBN_WRITE|BBN_READ)) >> 16) |
+                         (data & 03777));
              match = 1;
              break;
 
@@ -2071,8 +2070,6 @@ map_page:
         e_tlb[page] = tlb_data;
     }
     /* Handle traps */
-//    if (page_fault)
- //      goto fault_bbn1;
     if (wr && (traps & BBN_TRPMOD)) {
         fault_data = ((lvl != 0)? 0200000: 0)  | 0440000;
         goto fault_bbn;
@@ -2128,7 +2125,6 @@ fault_bbn:
     if (uuo_cycle)
        fault_data |= 040;
     page_fault = 1;
-fault_bbn1:
     M[mon_base_reg | 0571] = ((uint64)fault_data) << 18 | addr;
     if (wr)
         M[mon_base_reg | 0572] = MB;
@@ -3226,7 +3222,7 @@ dpnorm:
               }
               SCAD = SC ^ ((AR & SMASK) ? 0377 : 0);
               AR &= SMASK|MMASK;
-              if (AR != 0 | MQ != 0)
+              if (AR != 0 || MQ != 0)
                   AR |= ((uint64)(SCAD & 0377)) << 27;
 
               set_reg(AC, AR);
@@ -6053,14 +6049,14 @@ int32 val = (int32)sval;
 if ((val <= 0) || ((val * 16 * 1024) > MAXMEMSIZE))
     return SCPE_ARG;
 val = val * 16 * 1024;
-if (val < MEMSIZE) {
+if (val < (int32)MEMSIZE) {
     uint64 mc = 0;
-    for (i = val-1; i < MEMSIZE; i++)
+    for (i = val-1; i < (int32)MEMSIZE; i++)
         mc = mc | M[i];
     if ((mc != 0) && (!get_yn ("Really truncate memory [N]?", FALSE)))
         return SCPE_OK;
 }
-for (i = MEMSIZE; i < val; i++)
+for (i = (int32)MEMSIZE; i < val; i++)
     M[i] = 0;
 cpu_unit[0].capac = (uint32)val;
 return SCPE_OK;

@@ -32,13 +32,8 @@
 
 #if NUM_DEVS_AUXCPU > 0
 #include <fcntl.h>
-#include <unistd.h>
+//#include <unistd.h>
 #include <sys/types.h>
-//#include <sys/socket.h>
-//#include <netinet/in.h>
-//#include <netinet/tcp.h>
-//#include <arpa/inet.h>
-
 
 /* External bus interface. */
 #define DATO            1

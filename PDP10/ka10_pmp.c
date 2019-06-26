@@ -310,9 +310,9 @@ struct pmp_t
 struct disk_t
 {
     char               *name;         /* Type Name */
-    unsigned int        cyl;          /* Number of cylinders */
-    unsigned int        heads;        /* Number of heads/cylinder */
-    unsigned int        bpt;          /* Max bytes per track */
+    int                 cyl;          /* Number of cylinders */
+    int                 heads;        /* Number of heads/cylinder */
+    int                 bpt;          /* Max bytes per track */
     uint8               sen_cnt;      /* Number of sense bytes */
     uint8               dev_type;     /* Device type code */
 }
@@ -335,7 +335,7 @@ disk_type[] =
 struct pmp_header
 {
        uint8    devid[8];      /* device header. */
-       uint32   heads;         /* number of heads per cylinder */
+       int      heads;         /* number of heads per cylinder */
        uint32   tracksize;     /* size of track */
        uint8    devtype;       /* Hex code of last two digits of device type. */
        uint8    fileseq;       /* always 0. */
@@ -594,7 +594,6 @@ chan_read_byte(uint8 *data) {
     if (pmp_cnt & BUFF_CHNEND)
         return 1;
 
-load:
     pmp_statusb |= TRANS_CH;                 /* Tranfer in progress */
     /* Read in next work if buffer is in empty status */
     if (pmp_cnt & BUFF_EMPTY) {
@@ -608,7 +607,7 @@ load:
     }
     /* Handle word vs byte mode */
     if (pmp_cmd & BYTE_MODE) {
-        byte = (pmp_data >>  4 + (8 * (3 - (pmp_cnt & 0x3)))) & 0xff;
+        byte = (pmp_data >> (4 + (8 * (3 - (pmp_cnt & 0x3))))) & 0xff;
         pmp_cnt++;
         *data = byte;
         if ((pmp_cnt & 03) == 0)
@@ -625,10 +624,10 @@ load:
               xfer = 1;  /* Read in a word */
               byte |= pmp_data & 0xf;
            } else {
-              byte = (pmp_data >>  4 + (8 * (8 - (pmp_cnt & 0xf)))) & 0xff;
+              byte = (pmp_data >> (4 + (8 * (8 - (pmp_cnt & 0xf))))) & 0xff;
            }
         } else {
-           byte = (pmp_data >>  4 + (8 * (3 - (pmp_cnt & 0xf)))) & 0xff;
+           byte = (pmp_data >> (4 + (8 * (3 - (pmp_cnt & 0xf))))) & 0xff;
         }
         pmp_cnt++;
         if ((pmp_cnt & 0xf) == 9)
@@ -643,7 +642,7 @@ load:
      if (pmp_wc & 07000000) 
          pmp_cnt |= BUFF_CHNEND;
      return 0;
-
+#if 0
 next:
      /* If not data channing, let device know there will be no
       * more data to come
@@ -663,16 +662,13 @@ next:
          }
      }
      goto load;
+#endif
 }
 
 /* write byte to memory */
 int
 chan_write_byte(uint8 *data) {
-    int          byte;
-    int          offset;
-    int          k;
     int          xfer = 0;
-    uint32       mask;
 
     if ((pmp_cmd & 0x1)  != 0) {
         return 1;
@@ -820,7 +816,6 @@ chan_end(uint8 flags) {
 void
 pmp_startcmd() {
     uint16         addr;
-    struct pmp_t   *data;
     int            i;
     int            unit;
     int            cmd;
@@ -848,7 +843,7 @@ pmp_startcmd() {
             pmp_wc = pmp_wc_hold;
             pmp_cnt = BUFF_EMPTY;
         }
-        addr = (pmp_cmd & DEV_ADDR) >> 14;
+        addr = (uint16)((pmp_cmd & DEV_ADDR) >> 14);
         sim_debug(DEBUG_CMD, &pmp_dev, "initiate on %02x\n", addr);
         /* scan units looking for matching device. */
         for (i = 0; i < NUM_UNITS_PMP; i++) {
@@ -999,7 +994,8 @@ pmp_adjpos(UNIT * uptr)
 
     /* Set ourselves to start of track */
     data->state = DK_POS_HA;
-    data->rpos = data->rec = data->count = data->klen = data->dlen = 0;
+    data->rec = data->klen = 0;
+    data->rpos = data->count = data->dlen = 0;
     data->tstart = (uptr->POS & 0xff) * data->tsize;
     rec = &data->cbuf[data->rpos + data->tstart];
     /* Skip forward until we reach pos */
@@ -2336,7 +2332,7 @@ pmp_detach(UNIT * uptr)
 t_stat
 pmp_set_type(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 {
-    int                 i, u;
+    int                 i;
 
     if (cptr == NULL)
         return SCPE_ARG;
@@ -2369,14 +2365,8 @@ pmp_get_type(FILE * st, UNIT * uptr, int32 v, CONST void *desc)
 t_stat
 pmp_set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 {
-    DEVICE             *dptr;
-    DIB                *dibp;
     t_value             newdev;
     t_stat              r;
-    int                 num;
-    int                 type;
-    int                 i;
-    int                 devaddr;
 
     if (cptr == NULL)
         return SCPE_ARG;
@@ -2399,10 +2389,7 @@ pmp_set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 t_stat
 pmp_get_dev_addr(FILE * st, UNIT * uptr, int32 v, CONST void *desc)
 {
-    DEVICE             *dptr;
-    DIB                *dibp;
     int                 addr;
-
 
     if (uptr == NULL)
         return SCPE_IERR;

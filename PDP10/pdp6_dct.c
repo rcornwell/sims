@@ -37,7 +37,7 @@
 #define PIA             0000000000007LL
 #define DEV             0000000000070LL
 #define PACK            0000000000300LL
-#define OUT             0000000000400LL
+#define IN_OUT          0000000000400LL
 #define DB_RQ           0000000001000LL     /* DCT has data for 10 or needs data */
 #define DB_AC           0000000002000LL     /* DCT has completed a word. */
 #define DB_MV           0000000004000LL     /* Data needs to be moved between buffers */
@@ -52,6 +52,13 @@ t_stat        dct_svc(UNIT *);
 t_stat        dct_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
                  const char *cptr);
 const char    *dct_description (DEVICE *dptr);
+
+
+#if !PDP6
+#define D DEV_DIS
+#else
+#define D 0
+#endif
 
 UNIT                dct_unit[] = {
 /* Controller 1 */
@@ -73,7 +80,7 @@ DEVICE              dct_dev = {
     "DCT", dct_unit, dct_reg, NULL,
     NUM_DEVS_DCT, 8, 18, 1, 8, 36,
     NULL, NULL, NULL, NULL, NULL, NULL,
-    &dct_dib[0], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &dct_dib[0], DEV_DISABLE | DEV_DEBUG | D, 0, dev_debug,
     NULL, NULL, &dct_help, NULL, NULL, &dct_description
 };
 
@@ -145,14 +152,14 @@ dct_svc (UNIT *uptr)
     int   dev = dct_dib[0].dev_num + (u << 2);
 
     /* Transfer from 10 to device */
-    if ((uptr->STATUS & (DB_MV|OUT|DB_AC|DB_RQ)) == (DB_AC|DB_MV|OUT)) {
+    if ((uptr->STATUS & (DB_MV|IN_OUT|DB_AC|DB_RQ)) == (DB_AC|DB_MV|IN_OUT)) {
         dct_acc[u] = dct_buf[u];
         uptr->STATUS &= ~(DB_MV|DB_AC);
         uptr->STATUS |= DB_RQ;
     }
 
     /* Tranfer from device to 10 */
-    if ((uptr->STATUS & (DB_MV|OUT|DB_AC|DB_RQ)) == (DB_AC|DB_MV)) {
+    if ((uptr->STATUS & (DB_MV|IN_OUT|DB_AC|DB_RQ)) == (DB_AC|DB_MV)) {
         dct_buf[u] = dct_acc[u];
         uptr->STATUS &= ~(DB_MV|DB_AC);
         uptr->STATUS |= DB_RQ;
@@ -181,7 +188,7 @@ dct_is_connect (int dev)
     if (((uptr->STATUS & DEV) >> 3) != d)
         return 0;
     /* If sending processor to device, and no data, terminate */
-    if ((uptr->STATUS & OUT) != 0 && (uptr->STATUS & DB_AC) != 0)
+    if ((uptr->STATUS & IN_OUT) != 0 && (uptr->STATUS & DB_AC) != 0)
         return 0;
     /* Everything ok, still connected */
     return 1;
@@ -206,7 +213,7 @@ dct_read (int dev, uint64 *data, int cnt)
         return 0;
 
     /* Check if correct direction */
-    if ((uptr->STATUS & OUT) == 0)
+    if ((uptr->STATUS & IN_OUT) == 0)
         return 0;
 
     /* If we have data return it */
@@ -241,7 +248,7 @@ dct_write (int dev, uint64 *data, int cnt)
         return 0;
 
     /* Check if correct direction */
-    if ((uptr->STATUS & OUT) != 0)
+    if ((uptr->STATUS & IN_OUT) != 0)
         return 0;
 
     /* If buffer is empty put data in it. */

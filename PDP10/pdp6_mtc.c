@@ -184,6 +184,12 @@ static uint8    parity_table[64] = {
 /* One buffer per channel */
 uint8               mtc_buffer[BUFFSIZE];
 
+#if !PDP6
+#define D DEV_DIS
+#else
+#define D 0
+#endif
+
 UNIT                mtc_unit[] = {
 /* Controller 1 */
     {UDATA(&mtc_srv,  UNIT_MT, 0)},  /* 0 */
@@ -219,7 +225,7 @@ DEVICE              mtc_dev = {
     "MTC", mtc_unit, NULL, mtc_mod,
     8, 8, 15, 1, 8, 8,
     NULL, NULL, &mtc_reset, &mtc_boot, &mtc_attach, &mtc_detach,
-    &mtc_dib, DEV_DISABLE | DEV_DEBUG | DEV_TAPE, 0, dev_debug,
+    &mtc_dib, DEV_DISABLE | DEV_DEBUG | DEV_TAPE | D, 0, dev_debug,
     NULL, NULL, &mtc_help, NULL, NULL, &mtc_description
 };
 

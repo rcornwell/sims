@@ -189,11 +189,6 @@ t_stat
 dsk_devio(uint32 dev, uint64 *data) {
      UNIT        *uptr = &dsk_unit[(dsk_addr >> 16) & 03];
      uint64       res;
-     int          unit;
-     int          tmp;
-     int          drv;
-     int          cyl;
-     int          dtype;
 
      switch(dev & 3) {
      case CONI:
@@ -266,10 +261,10 @@ dsk_svc (UNIT *uptr)
    int           ctlr  = (dsk_addr >> 16) & 03;
    int           cyl;
    int           sec;
-   int           tmp, wc;
+   int           wc;
    uint64        data;
    DEVICE       *dptr;
-   t_stat        err, r;
+   t_stat        err;
 
    dptr = &dsk_dev;
 
@@ -454,7 +449,6 @@ t_stat
 dsk_reset(DEVICE * dptr)
 {
     int unit;
-    int ctlr;
     UNIT *uptr = dptr->units;
     for(unit = 0; unit < NUM_UNITS_DSK; unit++) {
          uptr->UFLAGS  = 0;
@@ -469,15 +463,6 @@ dsk_reset(DEVICE * dptr)
 t_stat
 dsk_boot(int32 unit_num, DEVICE * dptr)
 {
-    UNIT               *uptr = &dptr->units[unit_num];
-    int                 dtype = GET_DTYPE(uptr->flags);
-    uint32              addr;
-    int                 wc;
-    int                 wps;
-    int                 seg;
-    int                 sect;
-    uint32              ptr;
-
     return SCPE_OK;
 }
 
