@@ -21,7 +21,7 @@
 
 */
 
-#include "ka10_defs.h"
+#include "kx10_defs.h"
 
 #ifndef NUM_DEVS_RP
 #define NUM_DEVS_RP 0

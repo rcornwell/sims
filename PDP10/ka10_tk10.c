@@ -26,7 +26,7 @@
 #include <time.h>
 #include "sim_defs.h"
 #include "sim_tmxr.h"
-#include "ka10_defs.h"
+#include "kx10_defs.h"
 
 #ifndef NUM_DEVS_TK10
 #define NUM_DEVS_TK10 0

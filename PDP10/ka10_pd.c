@@ -31,7 +31,7 @@
 */
 
 #include <time.h>
-#include "ka10_defs.h"
+#include "kx10_defs.h"
 
 #ifndef NUM_DEVS_PD
 #define NUM_DEVS_PD 0

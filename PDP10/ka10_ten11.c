@@ -23,7 +23,7 @@
    specific to the MIT AI lab PDP-10.
 */
 
-#include "ka10_defs.h"
+#include "kx10_defs.h"
 #include "sim_tmxr.h"
 
 #ifndef NUM_DEVS_TEN11

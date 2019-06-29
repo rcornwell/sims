@@ -25,7 +25,7 @@
 
 */
 
-#include "ka10_defs.h"
+#include "kx10_defs.h"
 #include <time.h>
 
 #ifndef NUM_DEVS_DK

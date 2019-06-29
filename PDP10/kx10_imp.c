@@ -24,7 +24,7 @@
 */
 
 
-#include "ka10_defs.h"
+#include "kx10_defs.h"
 #include "sim_ether.h"
 
 #if NUM_DEVS_IMP > 0

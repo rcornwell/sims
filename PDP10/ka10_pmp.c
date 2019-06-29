@@ -57,7 +57,7 @@
 
 */
 
-#include "ka10_defs.h"
+#include "kx10_defs.h"
 
 #ifndef NUM_DEVS_PMP
 #define NUM_DEVS_PMP 0

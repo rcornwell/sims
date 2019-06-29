@@ -94,7 +94,7 @@
 
 */
 
-#include "ka10_defs.h"
+#include "kx10_defs.h"
 #include "sim_timer.h"
 #include <time.h>
 

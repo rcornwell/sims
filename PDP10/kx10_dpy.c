@@ -84,7 +84,7 @@
  * The largest positive number (011) results in the greatest intensity.
  */
 
-#include "ka10_defs.h"
+#include "kx10_defs.h"
 #include <time.h>
 
 #ifndef NUM_DEVS_DPY

@@ -26,7 +26,7 @@
 #include <time.h>
 #include "sim_video.h"
 #include "display/display.h"
-#include "ka10_defs.h"
+#include "kx10_defs.h"
 
 #ifdef USE_DISPLAY
 #if NUM_DEVS_STK > 0

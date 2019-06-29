@@ -21,7 +21,7 @@
 
 */
 
-#include "ka10_defs.h"
+#include "kx10_defs.h"
 
 #ifndef NUM_DEVS_DCT
 #define NUM_DEVS_DCT 0

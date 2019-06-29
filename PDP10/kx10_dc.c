@@ -25,7 +25,7 @@
 
 */
 
-#include "ka10_defs.h"
+#include "kx10_defs.h"
 #include "sim_sock.h"
 #include "sim_tmxr.h"
 

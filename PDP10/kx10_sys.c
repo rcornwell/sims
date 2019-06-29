@@ -27,7 +27,7 @@
    in this Software without prior written authorization from Richard Cornwell.
 */
 
-#include "ka10_defs.h"
+#include "kx10_defs.h"
 #include "sim_card.h"
 #include <ctype.h>
 

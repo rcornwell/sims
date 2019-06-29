@@ -22,7 +22,7 @@
 
 #include <libusb-1.0/libusb.h>
 
-#include "ka10_defs.h"
+#include "kx10_defs.h"
 
 static libusb_device_handle *lights_handle = NULL;
 static uint64 lights_main = 0;

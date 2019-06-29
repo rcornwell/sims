@@ -29,7 +29,7 @@
 
 */
 
-#include "ka10_defs.h"
+#include "kx10_defs.h"
 #include "sim_card.h"
 #include "sim_defs.h"
 #if (NUM_DEVS_CP > 0)

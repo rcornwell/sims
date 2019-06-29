@@ -76,7 +76,7 @@
 
 */
 
-#include "ka10_defs.h"
+#include "kx10_defs.h"
 #ifndef NUM_DEVS_DT
 #define NUM_DEVS_DT 0
 #endif

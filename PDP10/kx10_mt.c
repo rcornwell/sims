@@ -34,7 +34,7 @@
    of junk.  File marks are represented by a byte count of 0.
 */
 
-#include "ka10_defs.h"
+#include "kx10_defs.h"
 #include "sim_tape.h"
 
 #ifndef NUM_DEVS_MT

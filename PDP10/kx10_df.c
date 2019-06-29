@@ -21,7 +21,7 @@
 
 */
 
-#include "ka10_defs.h"
+#include "kx10_defs.h"
 
 void df10_setirq(struct df10 *df) {
       df->status |= PI_ENABLE;

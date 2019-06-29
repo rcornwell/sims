@@ -24,7 +24,7 @@
    in this Software without prior written authorization from Richard Cornwell.
 */
 
-#include "ka10_defs.h"
+#include "kx10_defs.h"
 
 #ifndef NUM_DEVS_PT
 #define NUM_DEVS_PT 0
