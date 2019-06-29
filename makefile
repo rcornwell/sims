@@ -1199,28 +1199,28 @@ IBM360_OPT = -I $(IBM360D) -DIBM360 -DUSE_64BIT -DUSE_SIM_CARD
 IBM360_OPT32 = -I $(IBM360D) -DIBM360 -DUSE_SIM_CARD
 
 PDP6D = PDP10
-PDP6 = ${PDP6D}/ka10_cpu.c ${PDP6D}/ka10_sys.c ${PDP6D}/ka10_cty.c \
-	${PDP6D}/ka10_lp.c ${PDP6D}/ka10_pt.c ${PDP6D}/ka10_cr.c \
-	${PDP6D}/ka10_cp.c ${PDP6D}/pdp6_dct.c ${PDP6D}/pdp6_dtc.c \
+PDP6 = ${PDP6D}/kx10_cpu.c ${PDP6D}/kx10_sys.c ${PDP6D}/kx10_cty.c \
+	${PDP6D}/kx10_lp.c ${PDP6D}/kx10_pt.c ${PDP6D}/kx10_cr.c \
+	${PDP6D}/kx10_cp.c ${PDP6D}/pdp6_dct.c ${PDP6D}/pdp6_dtc.c \
 	${PDP6D}/pdp6_mtc.c ${PDP6D}/pdp6_dsk.c ${PDP6D}/pdp6_dcs.c
 PDP6_OPT = -DPDP6=1 -DUSE_INT64 -I $(PDP6D) -DUSE_SIM_CARD 
 ifneq ($(TYPE340),)
 # ONLY tested on Ubuntu 16.04, using X11 display support:
 PDP6_DPY=-DUSE_DISPLAY -DHAVE_LIBSDL -DUSE_SIM_VIDEO `$(SDLX_CONFIG) --cflags` \
-	${PDP6D}/ka10_dpy.c display/type340.c  display/display.c \
+	${PDP6D}/kx10_dpy.c display/type340.c  display/display.c \
 	display/sim_ws.c
 PDP6_DPY_LDFLAGS =-lm -lX11 -lXt `$(SDLX_CONFIG) --libs`
 endif
 
 KA10D = PDP10
-KA10 = ${KA10D}/ka10_cpu.c ${KA10D}/ka10_sys.c ${KA10D}/ka10_df.c \
-	${KA10D}/ka10_dp.c ${KA10D}/ka10_mt.c ${KA10D}/ka10_cty.c \
-	${KA10D}/ka10_lp.c ${KA10D}/ka10_pt.c ${KA10D}/ka10_dc.c \
-	${KA10D}/ka10_rp.c ${KA10D}/ka10_rc.c ${KA10D}/ka10_dt.c \
-	${KA10D}/ka10_dk.c ${KA10D}/ka10_cr.c ${KA10D}/ka10_cp.c \
-	${KA10D}/ka10_tu.c ${KA10D}/ka10_rs.c ${KA10D}/ka10_pd.c \
-	${KA10D}/ka10_imx.c ${KA10D}/ka10_tk10.c ${KA10D}/ka10_mty.c \
-	${KA10D}/ka10_imp.c ${KA10D}/ka10_ch10.c ${KA10D}/ka10_stk.c \
+KA10 = ${KA10D}/kx10_cpu.c ${KA10D}/kx10_sys.c ${KA10D}/kx10_df.c \
+	${KA10D}/kx10_dp.c ${KA10D}/kx10_mt.c ${KA10D}/kx10_cty.c \
+	${KA10D}/kx10_lp.c ${KA10D}/kx10_pt.c ${KA10D}/kx10_dc.c \
+	${KA10D}/kx10_rp.c ${KA10D}/kx10_rc.c ${KA10D}/kx10_dt.c \
+	${KA10D}/kx10_dk.c ${KA10D}/kx10_cr.c ${KA10D}/kx10_cp.c \
+	${KA10D}/kx10_tu.c ${KA10D}/kx10_rs.c ${KA10D}/ka10_pd.c \
+	${KA10D}/kx10_imp.c ${KA10D}/ka10_tk10.c ${KA10D}/ka10_mty.c \
+	${KA10D}/ka10_imx.c ${KA10D}/ka10_ch10.c ${KA10D}/ka10_stk.c \
 	${KA10D}/ka10_ten11.c ${KA10D}/ka10_auxcpu.c $(KA10D)/ka10_pmp.c \
 	${PDP10D}/ka10_dkb.c ${PDP6D}/pdp6_dct.c ${PDP6D}/pdp6_dtc.c \
 	${PDP6D}/pdp6_mtc.c ${PDP6D}/pdp6_dsk.c ${PDP6D}/pdp6_dcs.c 
@@ -1229,7 +1229,7 @@ KA10_OPT = -DKA=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD ${NETWORK_OPT}
 ifneq ($(TYPE340),)
 # ONLY tested on Ubuntu 16.04, using X11 display support:
 KA10_DPY=-DUSE_DISPLAY -DHAVE_LIBSDL -DUSE_SIM_VIDEO `$(SDLX_CONFIG) --cflags` \
-	${KA10D}/ka10_dpy.c display/type340.c  display/display.c \
+	${KA10D}/kx10_dpy.c display/type340.c  display/display.c \
 	display/sim_ws.c
 KA10_DPY_LDFLAGS =-lm -lX11 -lXt `$(SDLX_CONFIG) --libs`
 endif
@@ -1241,12 +1241,12 @@ KA10_LDFLAGS += -lusb-1.0
 endif
 
 KI10D = PDP10
-KI10 = ${KI10D}/ka10_cpu.c ${KI10D}/ka10_sys.c ${KI10D}/ka10_df.c \
-	${KI10D}/ka10_dp.c ${KI10D}/ka10_mt.c ${KI10D}/ka10_cty.c \
-	${KI10D}/ka10_lp.c ${KI10D}/ka10_pt.c ${KI10D}/ka10_dc.c  \
-	${KI10D}/ka10_rp.c ${KI10D}/ka10_rc.c ${KI10D}/ka10_dt.c \
-	${KI10D}/ka10_dk.c ${KI10D}/ka10_cr.c ${KI10D}/ka10_cp.c \
-	${KI10D}/ka10_tu.c ${KI10D}/ka10_rs.c ${KI10D}/ka10_imp.c
+KI10 = ${KI10D}/kx10_cpu.c ${KI10D}/kx10_sys.c ${KI10D}/kx10_df.c \
+	${KI10D}/kx10_dp.c ${KI10D}/kx10_mt.c ${KI10D}/kx10_cty.c \
+	${KI10D}/kx10_lp.c ${KI10D}/kx10_pt.c ${KI10D}/kx10_dc.c  \
+	${KI10D}/kx10_rp.c ${KI10D}/kx10_rc.c ${KI10D}/kx10_dt.c \
+	${KI10D}/kx10_dk.c ${KI10D}/kx10_cr.c ${KI10D}/kx10_cp.c \
+	${KI10D}/kx10_tu.c ${KI10D}/kx10_rs.c ${KI10D}/kx10_imp.c
 KI10_OPT = -DKI=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD ${NETWORK_OPT}
 ifneq ($(PANDA_LIGHTS),)
 # ONLY for Panda display.
@@ -1257,7 +1257,7 @@ endif
 ifneq ($(TYPE340),)
 # ONLY tested on Ubuntu 16.04, using X11 display support:
 KI10_DPY=-DUSE_DISPLAY -DHAVE_LIBSDL -DUSE_SIM_VIDEO `$(SDLX_CONFIG) --cflags` \
-	${KI10D}/ka10_dpy.c display/type340.c  display/display.c \
+	${KI10D}/kx10_dpy.c display/type340.c  display/display.c \
 	display/sim_ws.c
 KI10_DPY_LDFLAGS =-lm -lX11 -lXt `$(SDLX_CONFIG) --libs`
 endif
