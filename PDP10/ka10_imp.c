@@ -29,6 +29,9 @@
 
 #if NUM_DEVS_IMP > 0
 #define IMP_DEVNUM  0460
+#define WA_IMP_DEVNUM  0400
+
+#define DEVNUM imp_dib.dev_num
 
 #define UNIT_V_DHCP     (UNIT_V_UF + 0)                 /* DHCP enable flag */
 #define UNIT_DHCP       (1 << UNIT_V_DHCP)
@@ -39,7 +42,9 @@
 
 #define TYPE_MIT        0              /* MIT Style KAIMP ITS */
 #define TYPE_BBN        1              /* BBN style interface TENEX */
+#define TYPE_WAITS      2              /* IMP connected to waits system. */
 
+/* ITS IMP Bits */
 
 /* CONI */
 #define IMPID       010 /* Input done. */
@@ -68,6 +73,52 @@
 #define IMPHEC   010000 /* Clear host error */
 #define IMIIHE   040000 /* Inhibit interrupt on host error */
 #define IMPLHW  0200000 /* Set last host word. */
+
+/* BBN IMP BITS */
+
+/* CONO bits */
+#define IMP_EN_IN   00000010  /* Enable input PIA channel */
+#define IMP_EN_OUT  00000200  /* Enable output PIA channel */
+#define IMP_EN_END  00004000  /* Enable end PIA channel */
+#define IMP_END_IN  00010000  /* End of input */
+#define IMP_END_OUT 00020000  /* End of output */
+#define IMP_STOP    00040000  /* Stop the imp */
+#define IMP_PDP_DN  00100000  /* PDP-10 is down */
+#define IMP_CLR     00200000  /* Clear imp down flag */
+#define IMP_RST     00400000  /* Reset IMP */
+
+/* CONI bits */
+#define IMP_IFULL   00000010  /* Input full */
+#define IMP_OEMPY   00000200  /* Output empty */
+#define IMP_ENDIN   00014000  /* End of input */
+#define IMP_DN      00020000  /* IMP down */
+#define IMP_WAS_DN  00040000  /* IMP was down */
+#define IMP_PWR     00200000  /* IMP Rdy */
+
+/* WAITS IMP BITS */
+
+/* CONO bits  */
+#define IMP_ODPIEN   0000010  /* Enable change of output done PIA, also set byte size */
+#define IMP_IDPIEN   0000020  /* Enable change of input done PIA, also set byte size */
+#define IMP_IEPIEN   0000040  /* Change end of input PIA */
+#define IMP_FINO     0000100  /* Last bit of output */
+#define IMP_STROUT   0000200  /* Start output */
+#define IMP_CLRWT    0002000  /* Clear waiting to input bit */
+#define IMP_CLRST    0004000  /* Clear stop after input bit */
+#define IMP_O32      0010000  /* Set output to 32bit */
+#define IMP_I32      0020000  /* Set input to 32bit */
+#define IMP_STRIN    0040000  /* Start input */
+#define IMP_TEST     0100000  /* Test mode */
+
+/* CONI bits */
+#define IMP_ODONE    0004000  /* Output done */
+#define IMP_IEND     0010000  /* Input end. */
+#define IMP_IDONE    0020000  /* Input done */
+#define IMP_ERR      0040000  /* Imp error */
+#define IMP_RDY      0200000  /* Imp ready */
+#define IMP_OCHN     0000007
+#define IMP_ICHN     0000070
+#define IMP_ECHN     0000700
 
 /* CONI timeout.  If no CONI instruction is executed for 3-5 seconds,
    the interface will raise the host error signal. */
@@ -376,6 +427,7 @@ struct imp_device {
     int               imp_error;
     int               host_error;
     int               rfnm_count;              /* Number of pending RFNM packets */
+    int               pia;                     /* PIA channels */
 } imp_data;
 
 extern int32 tmxr_poll;
@@ -452,6 +504,8 @@ MTAB imp_mod[] = {
            "ITS/MIT style interface"},
     { UNIT_DTYPE, (TYPE_BBN << UNIT_V_DTYPE), "BBN", "BBN", NULL, NULL,  NULL,
            "Tenex/BBN style interface"},
+    { UNIT_DTYPE, (TYPE_WAITS << UNIT_V_DTYPE), "WAITS", "WAITS", NULL, NULL,  NULL,
+           "WAITS style interface"},
     { 0 }
     };
 
@@ -462,25 +516,28 @@ DEVICE imp_dev = {
     &imp_dib, DEV_DISABLE | DEV_DIS | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &imp_help, NULL, NULL, &imp_description
 };
+#define IMP_OCHN     0000007
+#define IMP_ICHN     0000070
+#define IMP_ECHN     0000700
 
 static void check_interrupts (UNIT *uptr)
 {
-    clr_interrupt (IMP_DEVNUM);
+    clr_interrupt (DEVNUM);
 
     if ((uptr->STATUS & (IMPERR | IMPIC)) == IMPERR)
-        set_interrupt(IMP_DEVNUM, uptr->STATUS);
+        set_interrupt(DEVNUM, imp_data.pia >> 6);
     if ((uptr->STATUS & (IMPR | IMPIC)) == (IMPR | IMPIC))
-        set_interrupt(IMP_DEVNUM, uptr->STATUS);
+        set_interrupt(DEVNUM, imp_data.pia >> 6);
     if ((uptr->STATUS & (IMPHER | IMPIHE)) == IMPHER)
-        set_interrupt(IMP_DEVNUM, uptr->STATUS);
+        set_interrupt(DEVNUM, imp_data.pia >> 6);
     if (uptr->STATUS & IMPID) {
         if (uptr->STATUS & IMPLW)
-            set_interrupt(IMP_DEVNUM, uptr->STATUS);
+            set_interrupt(DEVNUM, imp_data.pia);
         else
-            set_interrupt_mpx(IMP_DEVNUM, uptr->STATUS, imp_mpx_lvl);
+            set_interrupt_mpx(DEVNUM, imp_data.pia, imp_mpx_lvl);
     }
     if (uptr->STATUS & IMPOD)
-       set_interrupt_mpx(IMP_DEVNUM, uptr->STATUS, imp_mpx_lvl + 1);
+       set_interrupt_mpx(DEVNUM, imp_data.pia >> 3, imp_mpx_lvl + 1);
 }
 
 t_stat imp_devio(uint32 dev, uint64 *data)
@@ -492,39 +549,106 @@ t_stat imp_devio(uint32 dev, uint64 *data)
     case CONO:
         sim_debug(DEBUG_CONO, dptr, "IMP %03o CONO %06o PC=%o\n", dev,
                  (uint32)*data, PC);
-        uptr->STATUS &= ~7;
-        uptr->STATUS |= *data & 7;
-        if (*data & IMPIDC) /* Clear input done. */
-            uptr->STATUS &= ~IMPID;
-        if (*data & IMI32S) /* Set 32-bit input. */
-            uptr->STATUS |= IMPI32;
-        if (*data & IMI32C) /* Clear 32-bit input */
-            uptr->STATUS &= ~IMPI32;
-        if (*data & IMPODC) /* Clear output done. */
-            uptr->STATUS &= ~IMPOD;
-        if (*data & IMO32C) /* Clear 32-bit output. */
-            uptr->STATUS &= ~IMPO32;
-        if (*data & IMO32S) /* Set 32-bit output. */
-            uptr->STATUS |= IMPO32;
-        if (*data & IMPODS) /* Set output done. */
-            uptr->STATUS |= IMPOD;
-        if (*data & IMPIR) { /* Enable interrupt on IMP ready. */
-            uptr->STATUS |= IMPIC;
-            uptr->STATUS &= ~IMPERR;
+        switch (GET_DTYPE(uptr->flags)) {
+        case TYPE_MIT:
+             imp_data.pia = *data & 7;
+             imp_data.pia = (imp_data.pia << 6) | (imp_data.pia << 3) | imp_data.pia;
+             if (*data & IMPIDC) /* Clear input done. */
+                 uptr->STATUS &= ~IMPID;
+             if (*data & IMI32S) /* Set 32-bit input. */
+                 uptr->STATUS |= IMPI32;
+             if (*data & IMI32C) /* Clear 32-bit input */
+                 uptr->STATUS &= ~IMPI32;
+             if (*data & IMPODC) /* Clear output done. */
+                 uptr->STATUS &= ~IMPOD;
+             if (*data & IMO32C) /* Clear 32-bit output. */
+                 uptr->STATUS &= ~IMPO32;
+             if (*data & IMO32S) /* Set 32-bit output. */
+                 uptr->STATUS |= IMPO32;
+             if (*data & IMPODS) /* Set output done. */
+                 uptr->STATUS |= IMPOD;
+             if (*data & IMPIR) { /* Enable interrupt on IMP ready. */
+                 uptr->STATUS |= IMPIC;
+                 uptr->STATUS &= ~IMPERR;
+             }
+             if (*data & IMPHEC) { /* Clear host error. */
+                 /* Only if there has been a CONI lately. */
+                 if (last_coni - sim_interval < CONI_TIMEOUT)
+                     uptr->STATUS &= ~IMPHER;
+             }
+             if (*data & IMIIHE) /* Inhibit interrupt on host error. */
+                 uptr->STATUS |= IMPIHE;
+             if (*data & IMPLHW) /* Last host word. */
+                 uptr->STATUS |= IMPLHW;
+             break;
+        case TYPE_BBN:
+             break;
+        case TYPE_WAITS:
+             if (*data & IMP_ODPIEN) {
+                 imp_data.pia &= ~07;
+                 imp_data.pia |= *data & 07;
+                 uptr->STATUS &= ~(IMPO32|IMPLHW|IMPOD);
+                 if (*data & IMP_O32)
+                     uptr->STATUS |= IMPO32;
+             }
+             if (*data & IMP_IDPIEN) {
+                 imp_data.pia &= ~070;
+                 imp_data.pia |= (*data & 07) << 3;
+                 uptr->STATUS &= ~(IMPI32|IMPID);
+                 if (*data & IMP_I32)
+                     uptr->STATUS |= IMPI32;
+             }
+             if (*data & IMP_IEPIEN) {
+                 imp_data.pia &= ~0700;
+                 imp_data.pia |= (*data & 07) << 6;
+             }
+             if (*data & IMP_FINO) {
+                 if (uptr->STATUS & IMPOD) {
+                     imp_send_packet (&imp_data, uptr->OPOS >> 3);
+                     /* Allow room for ethernet header for later */
+                     memset(imp_data.sbuffer, 0, ETH_FRAME_SIZE);
+                     uptr->OPOS = 0;
+                     uptr->STATUS &= ~(IMPLHW);
+                 } else 
+                     uptr->STATUS |= IMPLHW;
+             }
+             if (*data & IMP_STROUT)
+                 uptr->STATUS &= ~(IMPOD|IMPLHW);
+             if (*data & IMP_CLRWT) { /* Not sure about this yet. */
+                 uptr->STATUS &= ~IMPID;
+             }
+             if (*data & IMP_CLRST)   /* Not sure about this yet. */
+                 uptr->STATUS &= ~IMPID;
+             if (*data & IMP_STRIN) {
+                 uptr->STATUS &= ~IMPID;
+                 uptr->ILEN = 0;
+             }
+             check_interrupts(uptr);
+             break;
         }
-        if (*data & IMPHEC) { /* Clear host error. */
-            /* Only if there has been a CONI lately. */
-            if (last_coni - sim_interval < CONI_TIMEOUT)
-                uptr->STATUS &= ~IMPHER;
-        }
-        if (*data & IMIIHE) /* Inhibit interrupt on host error. */
-            uptr->STATUS |= IMPIHE;
-        if (*data & IMPLHW) /* Last host word. */
-            uptr->STATUS |= IMPLHW;
         break;
     case CONI:
-        last_coni = sim_interval;
-        *data = uptr->STATUS;
+        switch (GET_DTYPE(uptr->flags)) {
+        case TYPE_MIT:
+             last_coni = sim_interval;
+             *data = (uint64)(uptr->STATUS | (imp_data.pia & 07));
+             break;
+        case TYPE_BBN:
+             break;
+        case TYPE_WAITS:
+             *data = (uint64)(imp_data.pia & 0777);
+             if (uptr->STATUS & IMPOD)
+                 *data |= IMP_ODONE;
+             if (uptr->STATUS & IMPID)
+                 *data |= IMP_IDONE;
+             if (uptr->STATUS & IMPR)
+                 *data |= IMP_RDY;
+             if (uptr->STATUS & IMPLW)
+                 *data |= IMP_IEND;
+             if (uptr->STATUS & (IMPERR|IMPHER))
+                 *data |= IMP_ERR;
+             break;
+        }
         sim_debug(DEBUG_CONI, dptr, "IMP %03o CONI %012llo PC=%o\n", dev,
                            *data, PC);
         break;
@@ -684,16 +808,23 @@ t_stat imp_eth_srv(UNIT * uptr)
     if (imp_data.init_state >= 3 && imp_data.init_state < 6) {
        if (imp_unit[0].flags & UNIT_DHCP && imp_data.dhcp_state != DHCP_STATE_BOUND)
            return SCPE_OK;
+              sim_debug(DEBUG_DETAIL, &imp_dev, "IMP init Nop %d\n",
+                       imp_data.init_state);
        if (imp_unit[0].ILEN == 0) {
               /* Queue up a nop packet */
+              imp_data.rbuffer[0] = 0x4;
+#if 0
               imp_data.rbuffer[0] = 0xf;
               imp_data.rbuffer[3] = 4;
+#endif
               imp_unit[0].STATUS |= IMPIB;
               imp_unit[0].IPOS = 0;
               imp_unit[0].ILEN = 12*8;
               imp_data.init_state++;
               sim_debug(DEBUG_DETAIL, &imp_dev, "IMP Send Nop %d\n",
                        imp_data.init_state);
+              check_interrupts (&imp_unit[0]);
+              sim_activate(&imp_unit[0], 100);
         }
     }
     return SCPE_OK;
@@ -962,21 +1093,35 @@ imp_send_packet (struct imp_device *imp, int len)
     int        n;
     int        st;
     int        lk;
+    int        mt;
 
-    if (imp->sbuffer[0] != 0xF) {
+    switch (imp->sbuffer[0] & 0xF) {
+    default:
        /* Send back invalid leader message */
        sim_printf("Invalid header\n");
        return;
+    case 0x0:
+       mt = 0;
+       st = imp->sbuffer[3] & 0xf;
+       lk = 0233;
+       break;
+    case 0x4:
+       mt = 4;
+       st = imp->sbuffer[3] & 0xf;
+       break;
+    case 0xf:
+       st = imp->sbuffer[9] & 0xf;
+       lk = imp->sbuffer[8];
+       mt = imp->sbuffer[3];
+       break;
     }
     n = (imp->sbuffer[10] << 8) + (imp->sbuffer[11]);
-    st = imp->sbuffer[9] & 0xf;
-    lk = imp->sbuffer[8];
     sim_debug(DEBUG_DETAIL, &imp_dev,
         "IMP packet Type=%d ht=%d dh=%d imp=%d lk=%d %d st=%d Len=%d\n",
          imp->sbuffer[3], imp->sbuffer[4], imp->sbuffer[5],
          (imp->sbuffer[6] * 256) + imp->sbuffer[7],
          lk, imp->sbuffer[9] >> 4, st, n);
-    switch(imp->sbuffer[3]) {
+    switch(mt) {
     case 0:      /* Regular packet */
            switch(st) {
            case 0: /* Regular */
@@ -1936,6 +2081,16 @@ t_stat imp_attach(UNIT* uptr, CONST char* cptr)
     t_stat status;
     char* tptr;
 
+    /* Set to correct device number */
+    switch(GET_DTYPE(imp_unit[0].flags)) {
+    case TYPE_MIT:
+    case TYPE_BBN:
+                   imp_dib.dev_num = IMP_DEVNUM;
+                   break;
+    case TYPE_WAITS:
+                   imp_dib.dev_num = WA_IMP_DEVNUM;
+                   break;
+    }
     tptr = (char *) malloc(strlen(cptr) + 1);
     if (tptr == NULL) return SCPE_MEM;
     strcpy(tptr, cptr);
