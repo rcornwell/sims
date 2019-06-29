@@ -204,7 +204,7 @@ struct pmp_t
      uint16             tpos;    /* Track position */
      uint16             rpos;    /* Start of current record */
      uint16             dlen;    /* remaining in data */
-     uint16             tsize;   /* Size of one track include rounding */
+     uint32             tsize;   /* Size of one track include rounding */
      uint8              state;   /* Current state */
      uint8              klen;    /* remaining in key */
      uint8              filemsk; /* Current file mask */

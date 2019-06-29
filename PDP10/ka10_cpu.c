@@ -1457,7 +1457,8 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
 
     /* Check for access error */
     if ((data & RSIGN) == 0 || (wr & ((data & 0100000) == 0))) {
-        fault_data = ((((uint64)(addr))<<9) | ((uint64)(uf) << 27)) & LMASK;
+        page = (RMASK & addr) >> 9;
+        fault_data = ((((uint64)(page))<<18) | ((uint64)(uf) << 27)) & LMASK;
         fault_data |= (data & 0400000) ? 010LL : 0LL;   /* A */
         fault_data |= (data & 0100000) ? 004LL : 0LL;   /* W */
         fault_data |= (data & 0040000) ? 002LL : 0LL;   /* S */
@@ -2744,13 +2745,7 @@ st_pi:
     }
 
     /* Update history */
-#if KI
-    if (hst_lnt && /*(fm_sel || */PC > 020 && (PC & 0777774) != 0777040 &&
-            (PC & 0777700) != 023700 && (PC != 0526772)) {
-#else
-    if (hst_lnt /*&& (FLAGS & USER) && PC > 017 && (PC & 0777774) != 0472174 && */
-           /* (PC & 0777700) != 0113700 && (PC != 0527154)*/) {
-#endif
+    if (hst_lnt) {
             hst_p = hst_p + 1;
             if (hst_p >= hst_lnt) {
                     hst_p = 0;
@@ -2836,9 +2831,13 @@ unasign:
               AB = ub_ptr | 0424;
               Mem_write_nopage();
               AB |= 1;
-              MB = ((uint64)(FLAGS) << 23) | ((PC + (trap_flag == 0)) & RMASK);
+              MB = (((uint64)(FLAGS) << 23) & LMASK) | ((PC + (trap_flag == 0)) & RMASK);
+              if ((FLAGS & USER) == 0) {
+                  MB &= ~SMASK;
+                  MB |= (FLAGS & PRV_PUB) ? SMASK : 0;
+              }
               Mem_write_nopage();
-              FLAGS &= ~ (BYTI|ADRFLT|TRP1|TRP2);
+              FLAGS &= ~ (PRV_PUB|BYTI|ADRFLT|TRP1|TRP2);
               AB = ub_ptr | 0430;
               if (trap_flag != 0)
                   AB |= 1;
@@ -5814,10 +5813,9 @@ last:
         Mem_write_nopage();
         FLAGS |= trap_flag & (TRP1|TRP2);
         trap_flag = 1;
-        AB = 0420;
+        AB = ((FLAGS & USER) ? ub_ptr : eb_ptr) | 0420;
         f_pc_inh = 1;
         pi_cycle = 1;
-        AB += (FLAGS & USER) ? ub_ptr : eb_ptr;
         Mem_read_nopage();
         goto no_fetch;
     }
