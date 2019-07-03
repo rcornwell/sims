@@ -1140,11 +1140,9 @@ tu_detach(UNIT * uptr)
 
 t_stat tu_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-fprintf (st, "TU04/05/06/07 Disk Pack Drives (TU)\n\n");
-fprintf (st, "The TU controller implements the Massbus family of large disk drives.  TU\n");
-fprintf (st, "options include the ability to set units write enabled or write locked, to\n");
-fprintf (st, "set the drive type to one of six disk types or autosize, and to write a DEC\n");
-fprintf (st, "standard 044 compliant bad block table on the last track.\n\n");
+fprintf (st, "TU Tape Drives with TM03 formatter. (TU)\n\n");
+fprintf (st, "The TU controller implements the Massbus tape formatter the TM03. TU\n");
+fprintf (st, "options include the ability to set units write enabled or write locked\n\n");
 fprint_set_help (st, dptr);
 fprint_show_help (st, dptr);
 fprintf (st, "\nThe type options can be used only when a unit is not attached to a file.\n");

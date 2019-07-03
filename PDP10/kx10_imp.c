@@ -458,7 +458,7 @@ void           imp_send_rfmn(struct imp_device *imp);
 void           imp_packet_in(struct imp_device *imp);
 void           imp_send_packet (struct imp_device *imp_data, int len);
 void           imp_free_packet(struct imp_device *imp, struct imp_packet *p);
-struct imp_packet * imp_get_packet();
+struct imp_packet * imp_get_packet(struct imp_device *imp);
 void           imp_arp_update(in_addr_t *ipaddr, ETH_MAC *ethaddr);
 void           imp_arp_arpin(struct imp_device *imp, ETH_PACK *packet);
 void           imp_packet_out(struct imp_device *imp, ETH_PACK *packet);
@@ -765,7 +765,7 @@ checksumadjust(uint8 *chksum, uint8 *optr,
      - even number of octets updated.
    */
 {
-    int32 sum, old, new;
+    int32 sum, old, new_sum;
     sum=(chksum[0]<<8)+chksum[1];
     sum=(~sum & 0xffff);
     while (olen > 1) {
@@ -781,15 +781,15 @@ checksumadjust(uint8 *chksum, uint8 *optr,
         if (sum<=0) { sum--; sum&=0xffff; }
     }
     while (nlen > 1) {
-        new=(nptr[0]<<8)+nptr[1];
+        new_sum=(nptr[0]<<8)+nptr[1];
         nptr+=2;
-        sum+=new & 0xffff;
+        sum+=new_sum & 0xffff;
         if (sum & 0x10000) { sum++; sum&=0xffff; }
         nlen-=2;
     }
     if (nlen > 0) {
-        new=(nptr[0]<<8);
-        sum+=new & 0xffff;
+        new_sum=(nptr[0]<<8);
+        sum+=new_sum & 0xffff;
         if (sum & 0x10000) { sum++; sum&=0xffff; }
     }
     sum=(~sum & 0xffff);
@@ -988,13 +988,13 @@ imp_packet_in(struct imp_device *imp)
                        }
                     }
                     /* Check if recieving to FTP */
-                    if (sport == 21 && strncmp(&tcp_payload[0], "PORT ", 5) == 0) {
+                    if (sport == 21 && strncmp((CONST char *)&tcp_payload[0], "PORT ", 5) == 0) {
                         /* We need to translate the IP address to new port number. */
                         int     l = ntohs(ip_hdr->ip_len) - thl - hl;
                         uint32  nip = ntohl(imp->hostip);
                         int     nlen;
                         int     i;
-                        uint8   port_buffer[100];
+                        char    port_buffer[100];
                         struct udp_hdr     udp_hdr;
                        /* Count out 4 commas */
                        for (i = nlen = 0; i < l && nlen < 4; i++) {
@@ -1003,7 +1003,7 @@ imp_packet_in(struct imp_device *imp)
                        }
                        nlen = sprintf(port_buffer, "PORT %d,%d,%d,%d,",
                             (nip >> 24) & 0xFF, (nip >> 16) & 0xFF,
-                            (nip >> 8) & 0xFF, nip&0xff);
+                            (nip >> 8) & 0xFF, nip & 0xff);
                        /* Copy over rest of string */
                        while(i < l) {
                            port_buffer[nlen++] = tcp_payload[i++];
@@ -1095,6 +1095,8 @@ imp_send_packet (struct imp_device *imp, int len)
     int        lk;
     int        mt;
 
+    lk = 0;
+    n = len;
     switch (imp->sbuffer[0] & 0xF) {
     default:
        /* Send back invalid leader message */
@@ -1113,9 +1115,9 @@ imp_send_packet (struct imp_device *imp, int len)
        st = imp->sbuffer[9] & 0xf;
        lk = imp->sbuffer[8];
        mt = imp->sbuffer[3];
+       n = (imp->sbuffer[10] << 8) + (imp->sbuffer[11]);
        break;
     }
-    n = (imp->sbuffer[10] << 8) + (imp->sbuffer[11]);
     sim_debug(DEBUG_DETAIL, &imp_dev,
         "IMP packet Type=%d ht=%d dh=%d imp=%d lk=%d %d st=%d Len=%d\n",
          imp->sbuffer[3], imp->sbuffer[4], imp->sbuffer[5],
@@ -1220,12 +1222,12 @@ imp_packet_out(struct imp_device *imp, ETH_PACK *packet) {
                }
            }
            /* Check if sending to FTP */
-           if (dport == 21 && strncmp(&tcp_payload[0], "PORT ", 5) == 0) {
+           if (dport == 21 && strncmp((CONST char *)&tcp_payload[0], "PORT ", 5) == 0) {
                /* We need to translate the IP address to new port number. */
                int     l = ntohs(pkt->iphdr.ip_len) - thl - hl;
                uint32  nip = ntohl(imp->ip);
                int     nlen;
-               uint8   port_buffer[100];
+               char    port_buffer[100];
                struct udp_hdr     udp_hdr;
                /* Count out 4 commas */
                for (i = nlen = 0; i < l && nlen < 4; i++) {

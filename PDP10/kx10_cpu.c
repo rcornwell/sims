@@ -805,6 +805,52 @@ int opflags[] = {
 #define QWAITS          0
 #endif
 
+#if ITS
+/*
+ * Set quantum clock to qua_time.
+ */
+
+void
+set_quantum()
+{
+    sim_cancel(&cpu_unit[1]);
+    if ((qua_time & RSIGN) == 0) {
+        double us;
+        us = (double)(RSIGN - qua_time);
+        (void)sim_activate_after(&cpu_unit[1], us);
+    }
+}
+
+/*
+ * Update the qua_time variable.
+ */
+void
+load_quantum()
+{
+    if (sim_is_active(&cpu_unit[1])) {
+       double us;
+       us = sim_activate_time_usecs (&cpu_unit[1]);
+       qua_time = RSIGN - (uint32)us;
+       sim_cancel(&cpu_unit[1]);
+    }
+}
+
+/*
+ * Get the current quantum time.
+ */
+uint32
+get_quantum()
+{
+    uint32  t = 0;
+    if (sim_is_active(&cpu_unit[1])) {
+       double us;
+       us = sim_activate_time_usecs (&cpu_unit[1]);
+       t = RSIGN - (uint32)us;
+    }
+    return t;
+}
+#endif
+
 /*
  * Set device to interrupt on a given level 1-7
  * Level 0 means that device interrupt is not enabled
@@ -2577,8 +2623,7 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
 #if ITS
    if (QITS) {
        one_p_arm = 0;
-       sim_activate(&cpu_unit[1], 10000);
-       qua_time = 0;
+       set_quantum();
    }
 #endif
   watch_stop = 0;
@@ -2588,7 +2633,7 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
          if ((reason = sim_process_event()) != SCPE_OK) {/* error?  stop sim */
 #if ITS
              if (QITS)
-                 sim_cancel(&cpu_unit[1]);
+                 load_quantum();
 #endif
              return reason;
          }
@@ -2733,15 +2778,7 @@ st_pi:
     /* Check if possible idle loop */
     if (sim_idle_enab && (FLAGS & USER) != 0 && PC < 020 && AB < 020 &&
            (IR & 0760) == 0340) {
-#if ITS
-       if (QITS)
-           sim_cancel(&cpu_unit[1]);
-#endif
        sim_idle (TMR_RTC, FALSE);
-#if ITS
-       if (QITS)
-           sim_activate(&cpu_unit[1], 10000);
-#endif
     }
 
     /* Update history */
@@ -2989,7 +3026,7 @@ dpnorm:
 
               /* Check if we need to round */
               if (!nrf && ((MQ & SMASK) != 0) && (((AR & FPSBIT) == 0) ||
-                          ((AR & FPSBIT) != 0) && (MQ & 0377700000000LL) != 0)) {
+                          (((AR & FPSBIT) != 0) && ((MQ & 0377700000000LL) != 0)))) {
                  AR++;
                  nrf = 1;
                 /* Clean things up if we overflowed */
@@ -3328,7 +3365,7 @@ dpnorm:
                       AR = MQ = 0;
                   } else {
                       MQ = (AR << (36 - SC)) & FMASK /*- flag1*/ ;
-                      AR = (AR >> SC) | FMASK & (((AR & SMASK)? FMASK << (27 - SC): 0));
+                      AR = (AR >> SC) | (FMASK & (((AR & SMASK)? FMASK << (27 - SC): 0)));
                   }
                   if (((IR & 04) != 0 && (MQ & SMASK) != 0) ||
                       ((IR & 04) == 0 && (AR & SMASK) != 0 &&
@@ -3402,7 +3439,7 @@ dpnorm:
                       MB = (mar & 00777607777777LL) | ((uint64)pag_reload) << 21;
                       M[AB] = MB;
                       AB = (AB + 1) & RMASK;
-                      MB = ((uint64)qua_time) | ((uint64)fault_data) << 18;
+                      MB = ((uint64)get_quantum()) | ((uint64)fault_data) << 18;
                       M[AB] = MB;
                       AB = (AB + 1) & RMASK;
                       MB = ((uint64)fault_addr & 00760000) << 13 |
@@ -3439,6 +3476,7 @@ dpnorm:
                       MB = M[AB];                /* WD 3 */
                       /* Store Quantum */
                       qua_time = MB & RMASK;
+                      set_quantum();
                       fault_data = (MB >> 18) & RMASK;
                       mem_prot = 0;
                       if ((fault_data & 0777772) != 0)
@@ -5901,7 +5939,7 @@ last:
     if (!pi_cycle && instr_count != 0 && --instr_count == 0) {
 #if ITS
         if (QITS)
-            sim_cancel(&cpu_unit[1]);
+            load_quantum();
 #endif
         return SCPE_STEP;
     }
@@ -5909,7 +5947,7 @@ last:
 /* Should never get here */
 #if ITS
 if (QITS)
-    sim_cancel(&cpu_unit[1]);
+    load_quantum();
 #endif
 
 return reason;
@@ -5935,15 +5973,11 @@ t_stat
 qua_srv(UNIT * uptr)
 {
     int32 t;
-    t = sim_rtcn_calb (qua_tps, TMR_QUA);
-    sim_activate_after(uptr, 1000000/qua_tps);
     if ((fault_data & 1) == 0 && pi_enable && !pi_pending && (FLAGS & USER) != 0) {
-        qua_time += 8;
-        if ((qua_time & 01000000LL) != 0) {
-            mem_prot = 1;
-            fault_data |= 1;
-        }
+       mem_prot = 1;
+       fault_data |= 1;
     }
+    qua_time = RSIGN;
     return SCPE_OK;
 }
 #endif
@@ -5985,11 +6019,6 @@ sim_brk_types = SWMASK('E') | SWMASK('W') | SWMASK('R');
 sim_brk_dflt = SWMASK ('E');
 sim_rtcn_init_unit (&cpu_unit[0], cpu_unit[0].wait, TMR_RTC);
 sim_activate(&cpu_unit[0], 10000);
-#if ITS
-if (QITS) {
-    sim_rtcn_init_unit (&cpu_unit[1], cpu_unit[1].wait, TMR_RTC);
-}
-#endif
 #if MPX_DEV
 mpx_enable = 0;
 #endif

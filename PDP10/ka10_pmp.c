@@ -309,7 +309,7 @@ struct pmp_t
 
 struct disk_t
 {
-    char               *name;         /* Type Name */
+    const char         *name;         /* Type Name */
     int                 cyl;          /* Number of cylinders */
     int                 heads;        /* Number of heads/cylinder */
     int                 bpt;          /* Max bytes per track */
@@ -327,7 +327,7 @@ disk_type[] =
        {"2314",  203, 20,  7294,  6,  0x14},   /*  29.17 M */
        {"3330",  411, 19, 13165, 24,  0x30},   /* 100.00 M */
        {"3330-2",815, 19, 13165, 24,  0x30},
-       {NULL, 0}
+       {0},
 };
 
 
@@ -2251,7 +2251,7 @@ pmp_attach(UNIT * uptr, CONST char *file)
        return r;
 
     if (sim_fread(&hdr, 1, sizeof(struct pmp_header), uptr->fileref) !=
-          sizeof(struct pmp_header) || strncmp(&hdr.devid[0], "CKD_P370", 8) != 0 || flag) {
+          sizeof(struct pmp_header) || strncmp((CONST char *)&hdr.devid[0], "CKD_P370", 8) != 0 || flag) {
         if (pmp_format(uptr, flag)) {
             detach_unit(uptr);
             return SCPE_FMT;

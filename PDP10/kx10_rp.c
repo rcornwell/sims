@@ -1099,13 +1099,13 @@ t_stat rp_svc (UNIT *uptr)
             uptr->DATAPTR = 0;
             /* On read headers, transfer 2 words to start */
             if (GET_FNC(uptr->CMD) == FNC_READH) {
-                df->buf == (((uint64)cyl) << 18) | 
+                df->buf = (((uint64)cyl) << 18) | 
                          ((uint64)((GET_SF(uptr->DA) << 8) | GET_SF(uptr->DA)));
                 sim_debug(DEBUG_DATA, dptr, "RP%o read word h1 %012llo %09o %06o\n",
                    unit, df->buf, df->cda, df->wcr);
                 if (df10_write(df) == 0)
                     goto rd_end;
-                df->buf == ((uint64)((020 * ctlr) + (unit + 1)) << 18) | (uint64)(unit);
+                df->buf = ((uint64)((020 * ctlr) + (unit + 1)) << 18) | (uint64)(unit);
                 sim_debug(DEBUG_DATA, dptr, "RP%o read word h2 %012llo %09o %06o\n",
                    unit, df->buf, df->cda, df->wcr);
                 if (df10_write(df) == 0)

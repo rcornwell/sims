@@ -265,14 +265,13 @@ MTAB                dp_mod[] = {
     {UNIT_WLK, 0, "write enabled", "WRITEENABLED", NULL},
     {UNIT_WLK, UNIT_WLK, "write locked", "LOCKED", NULL},
     {MTAB_XTD|MTAB_VDV, 0, NULL, "NOHEADERS",
-            &dp_set_hdr, &dp_show_hdr, "No Headers", "Disable header writing"},
+            &dp_set_hdr, &dp_show_hdr, NULL, "Disable header writing"},
     {MTAB_XTD|MTAB_VDV, DEV_WHDR, "write header", "HEADERS",
-            &dp_set_hdr, &dp_show_hdr, "Headers", "Enable header writing"},
+            &dp_set_hdr, &dp_show_hdr, NULL, "Enable header writing"},
     {UNIT_DTYPE, (RP03_DTYPE << UNIT_V_DTYPE), "RP03", "RP03", &dp_set_type },
     {UNIT_DTYPE, (RP02_DTYPE << UNIT_V_DTYPE), "RP02", "RP02", &dp_set_type },
     {UNIT_DTYPE, (RP01_DTYPE << UNIT_V_DTYPE), "RP01", "RP01", &dp_set_type },
-
-    {0}
+    {0},
 };
 
 REG                 dpa_reg[] = {

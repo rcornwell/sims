@@ -1,0 +1,17 @@
+List of known errors in diagnostics:
+
+  DDTMB:
+     31456 - Unsure why this is failing. Bits 11-14 of MTS not clearing.
+     32506 - Not setting parity error on WTM.
+     32602 - need to fix density settings.
+     33766 - timing does not match.
+     33770 - " " "
+     34151 - Not setting bad tape flag.
+     36204 -
+     36216 -
+     36235 - 
+     36312 -
+     36373 -
+     36400 - 
+     36726 - not clearing data
+     37311 - Long EOR Not supported.
