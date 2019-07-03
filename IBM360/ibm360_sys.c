@@ -195,9 +195,9 @@ return SCPE_NOFNC;
 
 /* Symbol tables */
 typedef struct _opcode {
-       uint8    opbase;
-       char     *name;
-       uint8    type;
+       uint8       opbase;
+       const char *name;
+       uint8       type;
 } t_opcode;
 
 #define RR       01

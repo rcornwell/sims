@@ -195,7 +195,7 @@ struct dasd_t
 
 struct disk_t
 {
-    char               *name;         /* Type Name */
+    const char         *name;         /* Type Name */
     unsigned int        cyl;          /* Number of cylinders */
     unsigned int        heads;        /* Number of heads/cylinder */
     unsigned int        bpt;          /* Max bytes per track */
@@ -225,7 +225,7 @@ disk_type[] =
 /* Header block */
 struct dasd_header
 {
-       uint8    devid[8];      /* device header. */
+       char     devid[8];      /* device header. */
        uint32   heads;         /* number of heads per cylinder */
        uint32   tracksize;     /* size of track */
        uint8    devtype;       /* Hex code of last two digits of device type. */

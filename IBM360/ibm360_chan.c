@@ -212,7 +212,7 @@ readbuff(int chan) {
         sim_debug(DEBUG_CDATA, &cpu_dev, "Channel write %02x %06x %08x %08x '",
               chan, ccw_addr[chan] & 0xFFFFFC, chan_buf[chan], ccw_count[chan]);
         for(k = 24; k >= 0; k -= 8) {
-            char ch = ebcdic_to_ascii[(chan_buf[chan] >> k) & 0xFF];
+            unsigned char ch = ebcdic_to_ascii[(chan_buf[chan] >> k) & 0xFF];
             if (ch < 0x20 || ch == 0xff)
                ch = '.';
             sim_debug(DEBUG_CDATA, &cpu_dev, "%c", ch);
@@ -260,7 +260,7 @@ writebuff(int chan) {
     sim_debug(DEBUG_CDATA, &cpu_dev, "Channel readf %02x %06x %08x %08x '",
           chan, ccw_addr[chan] & 0xFFFFFC, chan_buf[chan], ccw_count[chan]);
     for(k = 24; k >= 0; k -= 8) {
-        char ch = ebcdic_to_ascii[(chan_buf[chan] >> k) & 0xFF];
+        unsigned char ch = ebcdic_to_ascii[(chan_buf[chan] >> k) & 0xFF];
         if (ch < 0x20 || ch == 0xff)
             ch = '.';
         sim_debug(DEBUG_CDATA, &cpu_dev, "%c", ch);
@@ -637,7 +637,7 @@ startio(uint16 addr) {
     if (dibp->start_io != NULL) {
         chan_status[chan] = dibp->start_io(uptr, chan) << 8;
         if (chan_status[chan] != 0) {
-            M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | M[0x44 >> 2] & 0xffff;
+            M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | (M[0x44 >> 2] & 0xffff);
             sim_debug(DEBUG_EXP, &cpu_dev, "Channel store csw  %02x %08x\n",
                    chan, M[0x44 >> 2]);
             chan_status[chan] = 0;
@@ -649,7 +649,7 @@ startio(uint16 addr) {
     if (load_ccw(chan, 0)) {
         if (chan_status[chan] & 
                   (STATUS_ATTN|STATUS_CHECK|STATUS_PROT|STATUS_PCHK|STATUS_EXPT)) {
-            M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | M[0x44 >> 2] & 0xffff;
+            M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | (M[0x44 >> 2] & 0xffff);
             sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %x %x cc=2\n", addr, chan,
                   ccw_cmd[chan], ccw_flags[chan]);
             chan_status[chan] = 0;
@@ -658,7 +658,7 @@ startio(uint16 addr) {
             return 1;
         }
         if (chan_status[chan] & (STATUS_PCI)) {
-            M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | M[0x44 >> 2] & 0xffff;
+            M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | (M[0x44 >> 2] & 0xffff);
             sim_debug(DEBUG_EXP, &cpu_dev, "Channel store csw  %02x %08x\n",
                        chan, M[0x44 >> 2]);
             chan_status[chan] &= ~STATUS_PCI;
@@ -752,7 +752,7 @@ int testio(uint16 addr) {
 
     /* If we get a error, save csw and return cc=1 */
     if (status & (STATUS_ATTN|STATUS_CHECK|STATUS_EXPT)) {
-        M[0x44 >> 2] = ((uint32)status<<24) | M[0x44 >> 2] & 0xffff;
+        M[0x44 >> 2] = ((uint32)status<<24) | (M[0x44 >> 2] & 0xffff);
         sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=1d\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
         return 1;

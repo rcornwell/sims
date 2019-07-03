@@ -288,7 +288,7 @@ MTAB cpu_mod[] = {
                                 "Floating point instructions"},
     { FEAT_FLOAT, 0, NULL, "NOFLOAT", NULL, NULL, NULL, "No floating point instructions"},
     { FEAT_UNIV, FEAT_DEC, "DECIMAL", "DECIMAL", NULL, NULL, NULL, "Decimal instruction set"},
-    { FEAT_DEC, 0, NULL, "NODECIMAL", NULL, NULL, "No decimal instructions"},
+    { FEAT_DEC, 0, NULL, "NODECIMAL", NULL, NULL, NULL, "No decimal instructions"},
     { FEAT_EFP|FEAT_FLOAT, FEAT_EFP|FEAT_FLOAT, "EFLOAT", "EFLOAT", NULL, NULL, NULL, 
                                 "Extended Floating point instruction"},
     { FEAT_EFP, 0, NULL, "NOEFLOAT", NULL, NULL, NULL, "No extended floating point"},
@@ -4173,6 +4173,7 @@ lpsw:
         }
         sim_interval--;
     }
+    return SCPE_OK;
 }
 
 /*

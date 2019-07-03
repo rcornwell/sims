@@ -315,11 +315,11 @@ t_stat chan_boot(uint16 addr, DEVICE *dptr);
 t_stat chan_set_devs();
 t_stat set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc);
 t_stat show_dev_addr(FILE * st, UNIT * uptr, int32 v, CONST void *desc);
-uint16 loading;
-int    irq_pend;
+extern uint16 loading;
+extern int    irq_pend;
 
-const char ascii_to_ebcdic[128];
-const char ebcdic_to_ascii[256];
+extern const char ascii_to_ebcdic[128];
+extern const char ebcdic_to_ascii[256];
 
 /* Debuging controls */
 #define DEBUG_CMD       0x0000001       /* Show device commands */
