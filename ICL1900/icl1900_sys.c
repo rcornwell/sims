@@ -527,7 +527,7 @@ t_opcode  ops[] = {
         "177",          TYPE_A,
 };
 
-char  *type_d[] = {   "BRN", "BVS", "BVSR", "BVC", "BVCR", "BCS", "BCC", "BVCI" };
+const char  *type_d[] = {   "BRN", "BVS", "BVSR", "BVC", "BVCR", "BCS", "BCC", "BVCI" };
 
 char   type_c[] = {  'C', 'L', 'A', 'V' };
 
@@ -589,7 +589,7 @@ print_opcode(FILE * of, t_value val)
 t_stat
 fprint_sym(FILE * of, t_addr addr, t_value * val, UNIT * uptr, int32 sw)
 {
-    t_value             inst = *val;
+    t_value             inst = val[0];
     int                 i;
 
     fputc(' ', of);

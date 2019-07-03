@@ -76,8 +76,8 @@ UNIT cdp_unit[] = {
 
 
 MTAB cdp_mod[] = {
-    { UNIT_TYPE, SET_TYPE(T1920_1), "1920/1", "1920/1", NULL, NULL, "ICL 1920/1 NSI card punch."},
-    { UNIT_TYPE, SET_TYPE(T1920_2), "1920/2", "1920/2", NULL, NULL, "ICL 1920/2 SI card punch."},
+    { UNIT_TYPE, SET_TYPE(T1920_1), "1920/1", "1920/1", NULL, NULL, NULL, "ICL 1920/1 NSI card punch."},
+    { UNIT_TYPE, SET_TYPE(T1920_2), "1920/2", "1920/2", NULL, NULL, NULL, "ICL 1920/2 SI card punch."},
     {MTAB_XTD | MTAB_VUN, 0, "FORMAT", "FORMAT",
                &sim_card_set_fmt, &sim_card_show_fmt, NULL},
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "DEV", "DEV", &set_chan, &get_chan, NULL, "Device Number"},

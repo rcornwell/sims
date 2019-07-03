@@ -84,10 +84,10 @@ UNIT cdr_unit[] = {
 
 
 MTAB cdr_mod[] = {
-    { UNIT_TYPE, SET_TYPE(T1911_1), "1911/1", "1911/1", NULL, NULL, "ICL 1911/1 NSI 900CPM reader."},
-    { UNIT_TYPE, SET_TYPE(T1911_2), "1911/2", "1911/2", NULL, NULL, "ICL 1911/2 SI 900CPM reader."},
-    { UNIT_TYPE, SET_TYPE(T1912_1), "1912/1", "1912/1", NULL, NULL, "ICL 1912/1 NSI 300CPM reader."},
-    { UNIT_TYPE, SET_TYPE(T1912_2), "1912/2", "1912/2", NULL, NULL, "ICL 1912/2 SI 900CPM reader."},
+    { UNIT_TYPE, SET_TYPE(T1911_1), "1911/1", "1911/1", NULL, NULL, NULL, "ICL 1911/1 NSI 900CPM reader."},
+    { UNIT_TYPE, SET_TYPE(T1911_2), "1911/2", "1911/2", NULL, NULL, NULL, "ICL 1911/2 SI 900CPM reader."},
+    { UNIT_TYPE, SET_TYPE(T1912_1), "1912/1", "1912/1", NULL, NULL, NULL, "ICL 1912/1 NSI 300CPM reader."},
+    { UNIT_TYPE, SET_TYPE(T1912_2), "1912/2", "1912/2", NULL, NULL, NULL, "ICL 1912/2 SI 900CPM reader."},
     {MTAB_XTD | MTAB_VUN, 0, "FORMAT", "FORMAT",
                &sim_card_set_fmt, &sim_card_show_fmt, NULL},
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "DEV", "DEV", &set_chan, &get_chan, NULL, "Device Number"},

@@ -345,7 +345,8 @@ t_stat eds8_svc (UNIT *uptr)
                  break;
              }
          }
-         if (eor = chan_output_word(dev, &word, 0)) {
+         eor = chan_output_word(dev, &word, 0);
+         if (eor) {
              /* Terminate */
              uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
              uptr->CMD |= EDS8_TERM;
@@ -415,7 +416,8 @@ t_stat eds8_svc (UNIT *uptr)
                      ((uptr->CYL & 017) << 12) |
                      (((uptr->HDSEC >> 4) & 017) << 6) |
                      ((uptr->HDSEC << 1) & 016);
-             if (eor = chan_input_word(dev, &word, 0)) {
+             eor = chan_input_word(dev, &word, 0);
+             if (eor) {
                  /* Terminate */
                  uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
                  uptr->CMD |= EDS8_TERM;
@@ -427,7 +429,8 @@ t_stat eds8_svc (UNIT *uptr)
 
          for (i = 0; i < WD_SEC; i++) {
              sim_debug(DEBUG_DATA, &eds8_dev, "Data: %d <%08o\n", i, eds8_buffer[i]);
-             if (eor = chan_input_word(dev, &eds8_buffer[i], 0)) {
+             eor = chan_input_word(dev, &eds8_buffer[i], 0);
+             if (eor) {
                  /* Terminate */
                  uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
                  uptr->CMD |= EDS8_TERM;
@@ -449,7 +452,8 @@ t_stat eds8_svc (UNIT *uptr)
                  odd ^= (word >> 18) ^ (word >> 12) ^ (word >> 6) ^ word;
              }
              word = ((even & 017) << 12) | (((odd ^ 017) & 017) << 8) | 0100;
-             if (eor = chan_input_word(dev, &word, 0)) {
+             eor = chan_input_word(dev, &word, 0);
+             if (eor) {
                  /* Terminate */
                  uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
                  uptr->CMD |= EDS8_TERM;
@@ -546,7 +550,8 @@ t_stat eds8_svc (UNIT *uptr)
             eds8_buffer[wc] = 0;
 
          for (i = 0; i < WD_SEC; i++) {
-             if (eor = chan_output_word(dev, &eds8_buffer[i], 0))
+             eor = chan_output_word(dev, &eds8_buffer[i], 0);
+             if (eor)
                 break;
              sim_debug(DEBUG_DATA, &eds8_dev, "Data: %d >%08o\n", i, eds8_buffer[i]);
          }
