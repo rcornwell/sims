@@ -376,6 +376,7 @@ extern DEVICE   dkb_dev;
 extern DEVICE   auxcpu_dev;
 extern DEVICE   dpk_dev;
 extern DEVICE   wcnsls_dev;             /* MIT Spacewar Consoles */
+extern DEVICE   ai_dev;
 extern DEVICE   dct_dev;                /* PDP6 devices. */
 extern DEVICE   dtc_dev;
 extern DEVICE   mtc_dev;
@@ -479,6 +480,7 @@ int auxcpu_write (int addr, t_uint64);
 #define NUM_DEVS_IMP    1
 #define NUM_DEVS_CH10   ITS
 #define NUM_DEVS_DPK    ITS
+#define NUM_DEVS_AI     ITS
 #endif
 /* Global data */
 
