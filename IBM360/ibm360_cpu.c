@@ -4181,7 +4181,7 @@ lpsw:
  * return 1 if error.
  * return 0 if ok.
  */
-int dec_load(uint8 *data, uint32 addr, uint len, int *sign)
+int dec_load(uint8 *data, uint32 addr, int len, int *sign)
 {
     uint32   temp;
     int      i, j;
@@ -4224,7 +4224,7 @@ int dec_load(uint8 *data, uint32 addr, uint len, int *sign)
  * return 1 if error.
  * return 0 if ok.
  */
-int dec_store(uint8 *data, uint32 addr, uint len, int sign)
+int dec_store(uint8 *data, uint32 addr, int len, int sign)
 {
     uint32   temp;
     int      i, j;
