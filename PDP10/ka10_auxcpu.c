@@ -157,10 +157,10 @@ static t_stat auxcpu_detach (UNIT *uptr)
   return r;
 }
 
-static void build (unsigned char *request, unsigned char octet)
+static void build (unsigned char *request, t_uint64 octet)
 {
   request[0]++;
-  request[request[0]] = octet;
+  request[request[0]] = octet & 0377;
 }
 
 static t_stat auxcpu_svc (UNIT *uptr)
