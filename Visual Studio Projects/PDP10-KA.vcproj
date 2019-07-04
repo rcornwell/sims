@@ -26,7 +26,7 @@
 			<Tool
 				Name="VCPreBuildEventTool"
 				Description="Check for required build dependencies &amp; git commit id"
-				CommandLine="Pre-Build-Event.cmd &quot;$(TargetDir)$(TargetName).exe&quot; LIBPCRE"
+				CommandLine="Pre-Build-Event.cmd &quot;$(TargetDir)$(TargetName).exe&quot; LIBPCRE BUILD LIBSDL"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
@@ -35,16 +35,13 @@
 				Name="VCXMLDataGeneratorTool"
 			/>
 			<Tool
-				Name="VCWebServiceProxyGeneratorTool"
-			/>
-			<Tool
 				Name="VCMIDLTool"
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories="../PDP10/;../PDP11/;../VAX/;../../windows-build/libSDL/SDL2-2.0.5/include;./;../;../slirp;../slirp_glue;../slirp_glue/qemu;../slirp_glue/qemu/win32/include;../../windows-build/winpcap/Wpdpack/Include;../../windows-build/PCRE/include/;../../windows-build/pthreads;../../windows-build/libSDL/SDL2-2.0.8/include;../../windows-build/libpng-1.6.18"
-				PreprocessorDefinitions="USE_INT64;USE_SIM_CARD;KA=1;_CRT_NONSTDC_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;SIM_NEED_GIT_COMMIT_ID;HAVE_PCREPOSIX_H;PCRE_STATIC;USE_SHARED;PTW32_STATIC_LIB;USE_READER_THREAD;SIM_ASYNCH_IO"
+				PreprocessorDefinitions="USE_INT64;USE_SIM_CARD;KA=1;USE_DISPLAY;USE_SIM_VIDEO;HAVE_LIBSDL;USE_SHARED;_CRT_NONSTDC_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;SIM_NEED_GIT_COMMIT_ID;HAVE_PCREPOSIX_H;PCRE_STATIC;PTW32_STATIC_LIB;USE_READER_THREAD;SIM_ASYNCH_IO"
 				KeepComments="false"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="0"
@@ -66,9 +63,10 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="wsock32.lib winmm.lib pcrestaticd.lib pcreposixstaticd.lib"
-				LinkIncremental="2"
-				AdditionalLibraryDirectories="../../windows-build/PCRE/lib/"
+				AdditionalOptions="/fixed:no"
+				AdditionalDependencies="libcmtd.lib wsock32.lib winmm.lib Iphlpapi.lib pcrestaticd.lib pcreposixstaticd.lib SDL2-StaticD.lib SDL2_ttf-StaticD.lib freetype2412MT_D.lib libpng16.lib zlib.lib dxguid.lib Imm32.lib Version.lib"
+				LinkIncremental="1"
+				AdditionalLibraryDirectories="../../windows-build/lib/Debug/"
 				GenerateDebugInformation="true"
 				SubSystem="1"
 				StackReserveSize="10485760"
@@ -111,16 +109,13 @@
 			<Tool
 				Name="VCPreBuildEventTool"
 				Description="Check for required build dependencies &amp; git commit id"
-				CommandLine="Pre-Build-Event.cmd &quot;$(TargetDir)$(TargetName).exe&quot; LIBPCRE"
+				CommandLine="Pre-Build-Event.cmd &quot;$(TargetDir)$(TargetName).exe&quot; LIBPCRE BUILD LIBSDL"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
 			/>
 			<Tool
 				Name="VCXMLDataGeneratorTool"
-			/>
-			<Tool
-				Name="VCWebServiceProxyGeneratorTool"
 			/>
 			<Tool
 				Name="VCMIDLTool"
@@ -132,7 +127,7 @@
 				OmitFramePointers="true"
 				WholeProgramOptimization="true"
 				AdditionalIncludeDirectories="../PDP10/;../PDP11/;../VAX/;../../windows-build/libSDL/SDL2-2.0.5/include;./;../;../slirp;../slirp_glue;../slirp_glue/qemu;../slirp_glue/qemu/win32/include;../../windows-build/winpcap/Wpdpack/Include;../../windows-build/PCRE/include/;../../windows-build/pthreads;../../windows-build/libSDL/SDL2-2.0.8/include;../../windows-build/libpng-1.6.18"
-				PreprocessorDefinitions="USE_INT64;USE_SIM_CARD;KA=1;_CRT_NONSTDC_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;SIM_NEED_GIT_COMMIT_ID;HAVE_PCREPOSIX_H;PCRE_STATIC;USE_SHARED;PTW32_STATIC_LIB;USE_READER_THREAD;SIM_ASYNCH_IO"
+				PreprocessorDefinitions="USE_INT64;USE_SIM_CARD;KA=1;USE_DISPLAY;USE_SIM_VIDEO;HAVE_LIBSDL;USE_SHARED;_CRT_NONSTDC_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;SIM_NEED_GIT_COMMIT_ID;HAVE_PCREPOSIX_H;PCRE_STATIC;PTW32_STATIC_LIB;USE_READER_THREAD;SIM_ASYNCH_IO"
 				StringPooling="true"
 				RuntimeLibrary="0"
 				EnableFunctionLevelLinking="true"
@@ -152,15 +147,17 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="wsock32.lib winmm.lib pcrestatic.lib pcreposixstatic.lib"
+				AdditionalOptions="/fixed:no"
+				AdditionalDependencies="libcmt.lib wsock32.lib winmm.lib Iphlpapi.lib pcrestatic.lib pcreposixstatic.lib SDL2-Static.lib SDL2_ttf-Static.lib freetype2412MT.lib libpng16.lib zlib.lib dxguid.lib Imm32.lib Version.lib"
 				LinkIncremental="1"
-				AdditionalLibraryDirectories="../../windows-build/PCRE/lib/"
+				AdditionalLibraryDirectories="../../windows-build/lib/Release/"
 				GenerateDebugInformation="false"
 				SubSystem="1"
 				StackReserveSize="10485760"
 				StackCommitSize="10485760"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
+				LinkTimeCodeGeneration="1"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
 				TargetMachine="1"
@@ -198,59 +195,19 @@
 			Filter="cpp;c;cxx;def;odl;idl;hpj;bat;asm"
 			>
 			<File
-				RelativePath="..\PDP10\ka10_cp.c"
+				RelativePath="..\PDP10\ka10_auxcpu.c"
 				>
 			</File>
 			<File
-				RelativePath="..\PDP10\ka10_cpu.c"
+				RelativePath="..\PDP10\ka10_ch10.c"
 				>
 			</File>
 			<File
-				RelativePath="..\PDP10\ka10_cr.c"
-				>
-			</File>
-			<File
-				RelativePath="..\PDP10\ka10_cty.c"
-				>
-			</File>
-			<File
-				RelativePath="..\PDP10\ka10_dc.c"
-				>
-			</File>
-			<File
-				RelativePath="..\PDP10\ka10_df.c"
-				>
-			</File>
-			<File
-				RelativePath="..\PDP10\ka10_dk.c"
-				>
-			</File>
-			<File
-				RelativePath="..\PDP10\ka10_dp.c"
-				>
-			</File>
-			<File
-				RelativePath="..\PDP10\ka10_dpy.c"
-				>
-			</File>
-			<File
-				RelativePath="..\PDP10\ka10_dt.c"
-				>
-			</File>
-			<File
-				RelativePath="..\PDP10\ka10_imp.c"
+				RelativePath="..\PDP10\ka10_dkb.c"
 				>
 			</File>
 			<File
 				RelativePath="..\PDP10\ka10_imx.c"
-				>
-			</File>
-			<File
-				RelativePath="..\PDP10\ka10_lp.c"
-				>
-			</File>
-			<File
-				RelativePath="..\PDP10\ka10_mt.c"
 				>
 			</File>
 			<File
@@ -262,23 +219,15 @@
 				>
 			</File>
 			<File
-				RelativePath="..\PDP10\ka10_pt.c"
+				RelativePath="..\PDP10\ka10_pmp.c"
 				>
 			</File>
 			<File
-				RelativePath="..\PDP10\ka10_rc.c"
+				RelativePath="..\PDP10\ka10_stk.c"
 				>
 			</File>
 			<File
-				RelativePath="..\PDP10\ka10_rp.c"
-				>
-			</File>
-			<File
-				RelativePath="..\PDP10\ka10_rs.c"
-				>
-			</File>
-			<File
-				RelativePath="..\PDP10\ka10_sys.c"
+				RelativePath="..\PDP10\ka10_ten11.c"
 				>
 			</File>
 			<File
@@ -286,7 +235,99 @@
 				>
 			</File>
 			<File
-				RelativePath="..\PDP10\ka10_tu.c"
+				RelativePath="..\PDP10\kx10_cp.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_cpu.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_cr.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_cty.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_dc.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_df.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_dk.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_dp.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_dpy.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_dt.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_imp.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_lp.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_mt.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_pt.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_rc.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_rp.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_rs.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_sys.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_tu.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\pdp6_dcs.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\pdp6_dct.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\pdp6_dsk.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\pdp6_dtc.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\pdp6_mtc.c"
 				>
 			</File>
 			<File
@@ -360,13 +401,37 @@
 				RelativePath="..\sim_video.c"
 				>
 			</File>
+			<Filter
+				Name="display"
+				>
+				<File
+					RelativePath="..\display\display.c"
+					>
+				</File>
+				<File
+					RelativePath="..\display\display.h"
+					>
+				</File>
+				<File
+					RelativePath="..\display\sim_ws.c"
+					>
+				</File>
+				<File
+					RelativePath="..\display\type340.c"
+					>
+				</File>
+				<File
+					RelativePath="..\display\type340.h"
+					>
+				</File>
+			</Filter>
 		</Filter>
 		<Filter
 			Name="Header Files"
 			Filter="h;hpp;hxx;hm;inl;inc"
 			>
 			<File
-				RelativePath="..\PDP10\ka10_defs.h"
+				RelativePath="..\PDP10\kx10_defs.h"
 				>
 			</File>
 			<File
@@ -431,10 +496,6 @@
 			Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe"
 			>
 		</Filter>
-		<File
-			RelativePath="..\PDP10\Makefile"
-			>
-		</File>
 	</Files>
 	<Globals>
 	</Globals>
