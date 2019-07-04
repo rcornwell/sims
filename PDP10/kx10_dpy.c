@@ -211,7 +211,6 @@ int dpy_update_status (UNIT *uptr, ty340word status, int done)
 t_stat dpy_devio(uint32 dev, uint64 *data) {
     int         unit = (dev - DPY_DEVNUM) >> 2;
     UNIT        *uptr;
-    int32       t;
     int32       inst;
 
     if (unit < 0 || unit >= NUM_DEVS_DPY)

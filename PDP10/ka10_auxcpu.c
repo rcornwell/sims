@@ -257,9 +257,9 @@ int auxcpu_read (int addr, t_uint64 *data)
 
   memset (request, 0, sizeof request);
   build (request, DATI);
-  build (request, addr);
-  build (request, addr >> 8);
-  build (request, addr >> 16);
+  build (request, addr & 0377);
+  build (request, (addr >> 8) & 0377);
+  build (request, (addr >> 16) & 0377);
 
   transaction (request, response);
 
@@ -302,14 +302,14 @@ int auxcpu_write (int addr, t_uint64 data)
 
   memset (request, 0, sizeof request);
   build (request, DATO);
-  build (request, addr);
-  build (request, addr >> 8);
-  build (request, addr >> 16);
-  build (request, data);
-  build (request, data >> 8);
-  build (request, data >> 16);
-  build (request, data >> 24);
-  build (request, data >> 32);
+  build (request, (addr) & 0377);
+  build (request, (addr >> 8) & 0377);
+  build (request, (addr >> 16) & 0377);
+  build (request, (data) & 0377);
+  build (request, (data >> 8) & 0377);
+  build (request, (data >> 16) & 0377);
+  build (request, (data >> 24) & 0377);
+  build (request, (data >> 32) & 0377);
 
   transaction (request, response);
 

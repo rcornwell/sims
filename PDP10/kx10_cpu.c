@@ -817,7 +817,7 @@ set_quantum()
     if ((qua_time & RSIGN) == 0) {
         double us;
         us = (double)(RSIGN - qua_time);
-        (void)sim_activate_after(&cpu_unit[1], us);
+        (void)sim_activate_after_d(&cpu_unit[1], us);
     }
 }
 
@@ -1317,6 +1317,22 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
     switch(dev & 03) {
     case CONI:
         /* Read trap conditions */
+        /* 000007 33-35 PIA */
+        /* 000010 32 Overflow * */
+        /* 000020 31 Overflow enable */
+        /* 000040 30 Trap offset */
+        /* 000100 29 Floating overflow * */
+        /* 000200 28 Floating overflow enable */
+        /* 000400 27 */
+        /* 001000 26 Clock * */
+        /* 002000 25 Clock enable */
+        /* 004000 24 */
+        /* 010000 23 NXM * */
+        /* 020000 22 Memory protection * */
+        /* 040000 21 Address break * */
+        /* 100000 20 User In-Out */
+        /* 200000 19 Push overflow * */
+        /* 400000 18 */
         res = apr_irq | (((FLAGS & OVR) != 0) << 3) | (ov_irq << 4) ;
         res |= (((FLAGS & FLTOVR) != 0) << 6) | (fov_irq << 7) ;
         res |= (clk_flg << 9) | (((uint64)clk_en) << 10) | (nxm_flag << 12);
@@ -2708,9 +2724,9 @@ no_fetch:
 
     /* Handle indirection repeat until no longer indirect */
     do {
-         if (!pi_cycle & pi_pending
+         if ((!pi_cycle) & pi_pending
 #if KI | KL
-                             & !trap_flag
+                             & (!trap_flag)
 #endif
                              ) {
             pi_rq = check_irq_level();
@@ -5886,7 +5902,7 @@ last:
 
        if ((IR & 0700) == 0700 && ((AC & 04) == 0)) {
            pi_hold = pi_ov;
-           if (!pi_hold & f_inst_fetch) {
+           if ((!pi_hold) & f_inst_fetch) {
                 pi_cycle = 0;
            } else {
                 AB = 040 | (pi_enc << 1) | pi_ov | maoff;
@@ -5972,7 +5988,6 @@ rtc_srv(UNIT * uptr)
 t_stat
 qua_srv(UNIT * uptr)
 {
-    int32 t;
     if ((fault_data & 1) == 0 && pi_enable && !pi_pending && (FLAGS & USER) != 0) {
        mem_prot = 1;
        fault_data |= 1;
