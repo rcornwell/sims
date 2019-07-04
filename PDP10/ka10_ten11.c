@@ -329,7 +329,7 @@ int ten11_read (int addr, uint64 *data)
   return 0;
 }
 
-static int write_word (int addr, int data)
+static int write_word (int addr, uint16 data)
 {
   unsigned char request[8];
   unsigned char response[8];
@@ -342,11 +342,11 @@ static int write_word (int addr, int data)
 
   memset (request, 0, sizeof request);
   build (request, DATO);
-  build (request, addr >> 16);
-  build (request, addr >> 8);
-  build (request, addr);
-  build (request, data >> 8);
-  build (request, data);
+  build (request, (addr >> 16) & 0377);
+  build (request, (addr >> 8) & 0377);
+  build (request, addr & 0377);
+  build (request, (data >> 8) & 0377);
+  build (request, data & 0377);
 
   transaction (request, response);
 
@@ -408,9 +408,9 @@ int ten11_write (int addr, uint64 data)
                unibus, uaddr, data);
 
     if ((data & 010) == 0)
-      write_word (uaddr, data >> 20);
+      write_word (uaddr, (data >> 20) & 0177777);
     if ((data & 004) == 0)
-      write_word (uaddr + 2, data >> 4);
+      write_word (uaddr + 2, (data >> 4) & 0177777);
   }
   return 0;
 }

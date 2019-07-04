@@ -817,7 +817,7 @@ set_quantum()
     if ((qua_time & RSIGN) == 0) {
         double us;
         us = (double)(RSIGN - qua_time);
-        (void)sim_activate_after(&cpu_unit[1], us);
+        (void)sim_activate_after_d(&cpu_unit[1], us);
     }
 }
 
@@ -5972,7 +5972,6 @@ rtc_srv(UNIT * uptr)
 t_stat
 qua_srv(UNIT * uptr)
 {
-    int32 t;
     if ((fault_data & 1) == 0 && pi_enable && !pi_pending && (FLAGS & USER) != 0) {
        mem_prot = 1;
        fault_data |= 1;
