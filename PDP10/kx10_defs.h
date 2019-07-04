@@ -192,6 +192,7 @@ extern DEBTAB crd_debug[];
 #define INST_V_XR       18                              /* index */
 #define INST_M_XR       017
 #define OP_JRST         0254                            /* JRST */
+#define OP_JUMPA        0324                            /* JUMPA */
 #define AC_XPCW         07                              /* XPCW */
 #define OP_JSR          0264                            /* JSR */
 #define GET_OP(x)       ((int32) (((x) >> INST_V_OP) & INST_M_OP))
@@ -201,7 +202,7 @@ extern DEBTAB crd_debug[];
 #define GET_XR(x)       ((int32) (((x) >> INST_V_XR) & INST_M_XR))
 #define GET_ADDR(x)     ((uint32) ((x) & RMASK))
 #define LRZ(x)          (((x) >> 18) & RMASK)
-
+#define JRST1           (((uint64)OP_JRST << 27) + 1)
 
 #if PDP6
 #define NODIV   000000

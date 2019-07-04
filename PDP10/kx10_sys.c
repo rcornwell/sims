@@ -225,6 +225,7 @@ DEBTAB              crd_debug[] = {
 #define FMT_S   2                                       /* SAV */
 #define FMT_E   3                                       /* EXE */
 #define FMT_D   4                                       /* WAITS DMP */
+#define FMT_I   5                                       /* ITS SBLK */
 
 #define EXE_DIR 01776                                   /* EXE directory */
 #define EXE_VEC 01775                                   /* EXE entry vec */
@@ -266,6 +267,144 @@ t_stat load_dmp (FILE *fileref)
         }
    }
    return SCPE_OK;
+}
+
+
+int get_evac(FILE *fileref, uint64 *word)
+{
+    static uint64 data = 0;
+    static int bits = 0;
+    unsigned char buf[4];
+    unsigned char octet;
+
+    while (bits < 36) {
+        if (sim_fread(&octet, 1, 1, fileref) != 1)
+            return 1;
+
+        if (octet <= 011 ||
+            (octet >= 013 && octet <= 014) ||
+            (octet >= 016 && octet <= 0176)) {
+            data <<= 7;
+            data |= octet;
+            bits += 7;
+        } else if (octet == 012) {
+            data <<= 14;
+            data |= 015 << 7 | 012;
+            bits += 14;
+        } else if (octet == 015) {
+            data <<= 7;
+            data |= 012;
+            bits += 7;
+        } else if (octet == 0177) {
+            data <<= 14;
+            data |= 0177 << 7 | 7;
+            bits += 14;
+        } else if ((octet >= 0200 && octet <= 0206) ||
+                   (octet >= 0210 && octet <= 0211) ||
+                   (octet >= 0213 && octet <= 0214) ||
+                   (octet >= 0216 && octet <= 0355)) {
+            data <<= 14;
+            data |= 0177 << 7 | (octet - 0200);
+            bits += 14;
+        } else if (octet == 0207) {
+            data <<= 14;
+            data |= 0177 << 7 | 0177;
+            bits += 14;
+        } else if (octet == 0212) {
+            data <<= 14;
+            data |= 0177 << 7 | 015;
+            bits += 14;
+        } else if (octet == 0215) {
+            data <<= 14;
+            data |= 0177 << 7 | 012;
+            bits += 14;
+        } else if (octet == 0356) {
+            data <<= 7;
+            data |= 015;
+            bits += 7;
+        } else if (octet == 0357) {
+            data <<= 7;
+            data |= 0177;
+            bits += 7;
+        } else if (octet >= 0360) {
+            if (bits != 0)
+                return 1;
+
+            if (sim_fread(&buf, 1, 4, fileref) != 4)
+                return 1;
+
+            data = (uint64)(octet & 017) << 32;
+            data |= (uint64)(buf[0]) << 24;
+            data |= (uint64)(buf[1]) << 16;
+            data |= (uint64)(buf[2]) << 8;
+            data |= (uint64)(buf[3]);
+            bits = 36;
+        }
+
+        if (bits == 35) {
+            data <<= 1;
+            bits++;
+        }
+    }
+
+    if (bits == 42) {
+        *word = (data >> 6) & -2LL;
+        data &= 0177;
+        bits = 7;
+    } else {
+        *word = data;
+        data = 0;
+        bits = 0;
+    }
+
+    return 0;
+}
+
+/* ITS SBLK loader.
+
+   The SBLK format is similar to SAV.  However, ITS files stored as
+   octet streams are usually in the "evacuate" format.
+*/
+t_stat load_sblk (FILE *fileref)
+{
+    uint64 word;
+    uint64 check;
+    int count, addr;
+
+    /* First, skip over the paper tape bootstrap.  It ends with a
+       JRST 1. */
+    do {
+        if (get_evac (fileref, &word))
+            return SCPE_FMT;
+    } while (word != JRST1);
+
+    /* Load all "simple blocks".  They start with an AOBJN pointer,
+       and then comes the data.  Last is a checksum word.  */
+    while (get_evac (fileref, &word) == 0 && (word & SMASK)) {
+        check = word;
+        count = -((word >> 18) | (-1 << 18));
+        addr = word & RMASK;
+        while (count-- > 0) {
+            if (get_evac (fileref, &word))
+                return SCPE_FMT;
+            M[addr++] = word;
+            check = (check << 1) + (check >> 35) + word;
+            check &= FMASK;
+        }
+        if (get_evac (fileref, &word))
+            return SCPE_FMT;
+        if (check != word)
+            return SCPE_FMT;
+    }
+
+    /* After the simple blocks comes a start instruction.  It should
+       be a JRST or JUMPA. */
+    if ((word >> 27) != OP_JRST && (word >> 27) != OP_JUMPA)
+        return SCPE_FMT;
+
+    PC = word & FMASK;
+
+    return SCPE_OK;
 }
 
 
@@ -540,6 +679,8 @@ else if (sim_switches & SWMASK ('E'))                   /* -e? */
     fmt = FMT_E;
 else if (sim_switches & SWMASK ('D'))                   /* -d? */
     fmt = FMT_D;
+else if (sim_switches & SWMASK ('I'))                   /* -i? */
+    fmt = FMT_I;
 else if (match_ext (fnam, "RIM"))                       /* .RIM? */
     fmt = FMT_R;
 else if (match_ext (fnam, "SAV"))                       /* .SAV? */
@@ -548,6 +689,8 @@ else if (match_ext (fnam, "EXE"))                       /* .EXE? */
     fmt = FMT_E;
 else if (match_ext (fnam, "DMP"))                       /* .DMP? */
     fmt = FMT_D;
+else if (match_ext (fnam, "BIN"))                       /* .BIN? */
+    fmt = FMT_I;
 else {
     wc = sim_fread (&data, sizeof (uint64), 1, fileref);/* read hdr */
     if (wc == 0)                                        /* error? */
@@ -572,6 +715,9 @@ switch (fmt) {                                          /* case fmt */
 
     case FMT_D:                                         /* DMP */
         return load_dmp (fileref);
+
+    case FMT_I:                                         /* SBLK */
+        return load_sblk (fileref);
         }
 
 printf ("Can't determine load file format\n");
