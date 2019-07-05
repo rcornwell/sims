@@ -207,6 +207,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\PDP10\ka10_dpk.c"
+				>
+			</File>
+			<File
 				RelativePath="..\PDP10\ka10_imx.c"
 				>
 			</File>
