@@ -459,7 +459,7 @@ void           imp_packet_in(struct imp_device *imp);
 void           imp_send_packet (struct imp_device *imp_data, int len);
 void           imp_free_packet(struct imp_device *imp, struct imp_packet *p);
 struct imp_packet * imp_get_packet(struct imp_device *imp);
-void           imp_arp_update(in_addr_t *ipaddr, ETH_MAC *ethaddr);
+void           imp_arp_update(in_addr_t ipaddr, ETH_MAC *ethaddr);
 void           imp_arp_arpin(struct imp_device *imp, ETH_PACK *packet);
 void           imp_packet_out(struct imp_device *imp, ETH_PACK *packet);
 void           imp_do_dhcp_client(struct imp_device *imp, ETH_PACK *packet);
@@ -924,7 +924,7 @@ imp_packet_in(struct imp_device *imp)
        /* Process as IP if it is for us */
        if (ip_hdr->ip_dst == imp_data.ip || ip_hdr->ip_dst == 0) {
            /* Add mac address since we will probably need it later */
-           imp_arp_update(&ip_hdr->ip_src, &hdr->src);
+           imp_arp_update(ip_hdr->ip_src, &hdr->src);
            /* Clear beginning of message */
            memset(&imp->rbuffer[0], 0, 256);
            imp->rbuffer[0] = 0xf;
@@ -1357,7 +1357,7 @@ imp_packet_out(struct imp_device *imp, ETH_PACK *packet) {
  * Update the ARP table, first use free entry, else use oldest.
  */
 void
-imp_arp_update(in_addr_t *ipaddr, ETH_MAC *ethaddr)
+imp_arp_update(in_addr_t ipaddr, ETH_MAC *ethaddr)
 {
     struct arp_entry  *tabptr;
     int                i;
@@ -1368,7 +1368,7 @@ imp_arp_update(in_addr_t *ipaddr, ETH_MAC *ethaddr)
         tabptr = &arp_table[i];
 
         if (tabptr->ipaddr != 0) {
-            if (tabptr->ipaddr == *ipaddr) {
+            if (tabptr->ipaddr == ipaddr) {
                 memcpy(&tabptr->ethaddr, ethaddr, sizeof(ETH_MAC));
                 tabptr->time = ++arptime;
                 return;
@@ -1400,7 +1400,7 @@ imp_arp_update(in_addr_t *ipaddr, ETH_MAC *ethaddr)
 
     /* Now update the entry */
     memcpy(&tabptr->ethaddr, ethaddr, sizeof(ETH_MAC));
-    tabptr->ipaddr = *ipaddr;
+    tabptr->ipaddr = ipaddr;
     tabptr->time = ++arptime;
 }
 
@@ -1424,7 +1424,7 @@ imp_arp_arpin(struct imp_device *imp, ETH_PACK *packet)
     switch (op) {
     case ARP_REQUEST:
         if (arp->dipaddr == imp->ip) {
-           imp_arp_update(&arp->sipaddr, &arp->shwaddr);
+           imp_arp_update(arp->sipaddr, &arp->shwaddr);
 
            arp->opcode = htons(ARP_REPLY);
            memcpy(&arp->dhwaddr, &arp->shwaddr, 6);
@@ -1444,7 +1444,7 @@ imp_arp_arpin(struct imp_device *imp, ETH_PACK *packet)
         /* Check if this is our address */
         if (arp->dipaddr == imp->ip) {
             struct imp_packet  *nq = NULL;                /* New send queue */
-            imp_arp_update(&arp->sipaddr, &arp->shwaddr);
+            imp_arp_update(arp->sipaddr, &arp->shwaddr);
             /* Scan send queue, and send all packets for this host */
             while (imp->sendq != NULL) {
                 struct imp_packet *temp = imp->sendq;
