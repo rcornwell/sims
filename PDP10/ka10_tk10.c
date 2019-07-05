@@ -184,7 +184,8 @@ static t_stat tk10_svc (UNIT *uptr)
     static int scan = 0;
     int i;
 
-    sim_activate_after (uptr, 1000);
+    /* Slow hardware only supported 300 baud teletypes. */
+    sim_activate_after (uptr, 2083);
 
     i = tmxr_poll_conn (&tk10_desc);
     if (i >= 0) {
