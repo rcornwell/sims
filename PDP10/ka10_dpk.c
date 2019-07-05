@@ -116,9 +116,7 @@ DEVICE dpk_dev = {
 static t_stat dpk_devio(uint32 dev, uint64 *data)
 {
     DEVICE *dptr = &dpk_dev;
-    TMLN *lp;
     int port;
-    int ch;
 
     switch(dev & 07) {
     case CONO|4:
@@ -215,11 +213,11 @@ static int ildb (uint64 *pointer)
  again:
     pos = (bp >> 12) & 077;
     pos -= 7;
-    addr = bp >> 18;
+    addr = (bp >> 18) & 0777777;
     if (pos < 0) {
         pos = 36 - 7;
         addr++;
-        addr &= 0777777;;
+        addr &= 0777777;
     }
 
     if (M[addr] & 1) {
@@ -228,13 +226,13 @@ static int ildb (uint64 *pointer)
     } else
         *pointer = ((uint64)addr << 18) | (pos << 12) | 7 << 6;
 
-    ch = M[addr] >> pos;
-    return ch & 0177;
+    ch = (M[addr] >> pos) & 0177;
+    return ch;
 }
 
 static int dpk_output (int port, TMLN *lp)
 {
-    uint64 pointer, count;
+    uint64 count;
     int ch;
 
     if ((dpk_port[port] & PORT_OUTPUT) == 0)
@@ -264,7 +262,6 @@ static t_stat dpk_svc (UNIT *uptr)
 {
     static int scan = 0;
     int i;
-    int32 done;
 
     /* 16 ports at 4800 baud, rounded up. */
     sim_activate_after (uptr, 200);
