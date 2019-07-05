@@ -385,7 +385,7 @@ t_stat load_sblk (FILE *fileref)
        and then comes the data.  Last is a checksum word.  */
     while (get_evac (fileref, &word) == 0 && (word & SMASK)) {
         check = word;
-        count = -((word >> 18) | (-1 << 18));
+        count = (int)((((word >> 18) ^ RMASK) + 1) & RMASK);
         addr = word & RMASK;
         while (count-- > 0) {
             if (get_evac (fileref, &word))

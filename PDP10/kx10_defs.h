@@ -484,7 +484,7 @@ int auxcpu_write (int addr, t_uint64);
 
 extern t_bool sim_idle_enab;
 extern struct rh_dev rh[];
-extern t_uint64   M[];
+extern t_uint64   M[MAXMEMSIZE];
 extern t_uint64   FM[];
 extern uint32   PC;
 extern uint32   FLAGS;

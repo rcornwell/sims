@@ -2160,7 +2160,7 @@ pmp_format(UNIT * uptr, int flag) {
     int                 sector;
     int                 rec;
     int                 hd;
-    int                 pos;
+    uint32              pos;
 
     if (flag || get_yn("Initialize dasd? [Y] ", TRUE)) {
         memset(&hdr, 0, sizeof(struct pmp_header));
@@ -2181,7 +2181,7 @@ pmp_format(UNIT * uptr, int flag) {
         for (cyl = 0; cyl <= disk_type[type].cyl; cyl++) {
             pos = 0;
             for (hd = 0; hd < disk_type[type].heads; hd++) {
-                int cpos = pos;
+                uint32 cpos = pos;
                 rec = 0;
                 data->cbuf[pos++] = 0;            /* HA */
                 data->cbuf[pos++] = (cyl >> 8);

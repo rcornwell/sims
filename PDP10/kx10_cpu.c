@@ -4635,9 +4635,7 @@ left:
               break;
 
     case 0243:  /* JFFO */
-#if PDP6
-              break;
-#endif
+#if !PDP6
               SC = 0;
               if (AR != 0) {
 #if ITS
@@ -4650,6 +4648,7 @@ left:
                   SC = nlzero(AR);
               }
               set_reg(AC + 1, SC);
+#endif
               break;
 
     case 0244: /* ASHC */
