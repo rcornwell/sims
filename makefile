@@ -1208,7 +1208,7 @@ PDP6 = ${PDP6D}/kx10_cpu.c ${PDP6D}/kx10_sys.c ${PDP6D}/kx10_cty.c \
 	${PDP6D}/kx10_lp.c ${PDP6D}/kx10_pt.c ${PDP6D}/kx10_cr.c \
 	${PDP6D}/kx10_cp.c ${PDP6D}/pdp6_dct.c ${PDP6D}/pdp6_dtc.c \
 	${PDP6D}/pdp6_mtc.c ${PDP6D}/pdp6_dsk.c ${PDP6D}/pdp6_dcs.c \
-	${KI10D}/kx10_dpy.c ${DISPLAYL} $(DISPLAY340)
+	${PDP6D}/kx10_dpy.c ${DISPLAYL} $(DISPLAY340)
 PDP6_OPT = -DPDP6=1 -DUSE_INT64 -I $(PDP6D) -DUSE_SIM_CARD $(DISPLAY_OPT) $(PDP6_DISPLAY_OPT)
 
 KA10D = PDP10
@@ -1224,9 +1224,9 @@ KA10 = ${KA10D}/kx10_cpu.c ${KA10D}/kx10_sys.c ${KA10D}/kx10_df.c \
 	${KA10D}/kx10_imp.c ${KA10D}/ka10_tk10.c ${KA10D}/ka10_mty.c \
 	${KA10D}/ka10_imx.c ${KA10D}/ka10_ch10.c ${KA10D}/ka10_stk.c \
 	${KA10D}/ka10_ten11.c ${KA10D}/ka10_auxcpu.c $(KA10D)/ka10_pmp.c \
-	${PDP10D}/ka10_dkb.c ${PDP6D}/pdp6_dct.c ${PDP6D}/pdp6_dtc.c \
-	${PDP6D}/pdp6_mtc.c ${PDP6D}/pdp6_dsk.c ${PDP6D}/pdp6_dcs.c \
-	${KA10D}/ka10_dpk.c ${KI10D}/kx10_dpy.c ${DISPLAYL} $(DISPLAY340)
+	${KA10D}/ka10_dkb.c ${KA10D}/pdp6_dct.c ${KA10D}/pdp6_dtc.c \
+	${KA10D}/pdp6_mtc.c ${KA10D}/pdp6_dsk.c ${KA10D}/pdp6_dcs.c \
+	${KA10D}/ka10_dpk.c ${KA10D}/kx10_dpy.c ${DISPLAYL} $(DISPLAY340)
 KA10_OPT = -DKA=1 -DUSE_INT64 -I $(KA10D) -DUSE_SIM_CARD ${NETWORK_OPT} $(DISPLAY_OPT) $(KA10_DISPLAY_OPT)
 ifneq ($(PANDA_LIGHTS),)
 # ONLY for Panda display.
