@@ -38,6 +38,7 @@
 #define STAT_REG        u3
 #define CLK_REG         u4
 #define INT_REG         u5
+#define CLK_TIM         u6
 
 /* CONO */
 #define PIA             000007
@@ -59,12 +60,8 @@
 #define CLK_PI          000200
 #define CLK_EXT         001000
 
-/* Invariants */
-#define TMR_DK          2
-#define TIM_TPS         100000
-
 t_stat dk_devio(uint32 dev, uint64 *data);
-void   dk_count (UNIT *uptr);
+void   dk_test (UNIT *uptr);
 t_stat dk_svc (UNIT *uptr);
 
 DIB dk_dib[] = {
@@ -72,9 +69,9 @@ DIB dk_dib[] = {
         { DK_DEVNUM + 4, 1, &dk_devio, NULL}};
 
 UNIT dk_unit[] = {
-        {UDATA (&dk_svc, UNIT_IDLE, TIM_TPS) },
+        {UDATA (&dk_svc, UNIT_IDLE, 0) },
 #if (NUM_DEVS_DK > 1)
-        {UDATA (&dk_svc, UNIT_IDLE, TIM_TPS) },
+        {UDATA (&dk_svc, UNIT_IDLE, 0) },
 #endif
         };
 
@@ -90,6 +87,7 @@ DEVICE dk_dev = {
 t_stat dk_devio(uint32 dev, uint64 *data) {
     int         unit = (dev - DK_DEVNUM) >> 2;
     UNIT        *uptr;
+    double      us;
     int32       t;
 
     if (unit < 0 || unit >= NUM_DEVS_DK)
@@ -110,12 +108,14 @@ t_stat dk_devio(uint32 dev, uint64 *data) {
         if (*data & CLK_GEN_CLR) {
            uptr->CLK_REG = 0;
            uptr->STAT_REG = 0;
+           sim_cancel(uptr);
         }
         uptr->STAT_REG |= (uint32)(*data & 07);
 
         if (*data & CLK_ADD_ONE)  {
            if ((uptr->STAT_REG & CLK_EN) == 0) {
-              dk_count(uptr);
+              uptr->CLK_REG++;
+              dk_test(uptr);
            }
         }
 
@@ -138,18 +138,29 @@ t_stat dk_devio(uint32 dev, uint64 *data) {
 
         if ((uptr->STAT_REG & CLK_EN) != 0 &&
                 (uptr->STAT_REG & (CLK_FLG|CLK_OVF))) {
-           set_interrupt(dev, uptr->STAT_REG & 7);
+           set_interrupt(dev, uptr->STAT_REG);
         }
 
+set_clock:
+        if (sim_is_active(uptr)) {  /* Save current clock time */
+           us = sim_activate_time_usecs(uptr);
+           uptr->CLK_REG += uptr->CLK_TIM - (uint32)(us / 10.0);
+           sim_cancel(uptr);
+        }
+        if (uptr->INT_REG == uptr->CLK_REG) {
+           uptr->STAT_REG |= CLK_FLG; 
+           set_interrupt(dev, uptr->STAT_REG);
+        }
         if (uptr->STAT_REG & CLK_EN) {
-           if (!sim_is_active(uptr)) {
-                t = sim_rtcn_calb (uptr->capac, TMR_DK + unit);  /* calibrate */
-                sim_activate(uptr, t);
-           }
+           if (uptr->INT_REG < uptr->CLK_REG)  /* Count until overflow */
+               uptr->CLK_TIM = 01000000;
+           else
+               uptr->CLK_TIM = uptr->INT_REG;
+           t = uptr->CLK_TIM - uptr->CLK_REG;
+           us = (double)(t) * 10.0;
+           sim_activate_after_d(uptr, us);
         } else {
-           if (sim_is_active(uptr)) {
-              sim_cancel(uptr);
-           }
+           sim_cancel(uptr);
         }
         sim_debug(DEBUG_CONO, &dk_dev, "DK %03o CONO %06o PC=%06o %06o\n",
                dev, (uint32)*data, PC, uptr->STAT_REG);
@@ -157,31 +168,29 @@ t_stat dk_devio(uint32 dev, uint64 *data) {
 
     case DATAO:
         uptr->INT_REG = (uint32)(*data & RMASK);
-
-        if (uptr->STAT_REG & CLK_EN) {
-           if (uptr->INT_REG == uptr->CLK_REG)
-               uptr->STAT_REG |= CLK_FLG;
-           set_interrupt(dev, uptr->STAT_REG & 7);
-        }
         sim_debug(DEBUG_DATAIO, &dk_dev, "DK %03o DATO %012llo PC=%06o\n",
                     dev, *data, PC);
-        break;
+        goto set_clock;
 
     case DATAI:
+        if (sim_is_active(uptr)) {  /* Save current clock time */
+           double us = sim_activate_time_usecs(uptr);
+           uptr->CLK_REG += uptr->CLK_TIM - (uint32)(us / 10.0);
+           sim_cancel(uptr);
+        }
         *data = (uint64)(uptr->CLK_REG);
         sim_debug(DEBUG_DATAIO, &dk_dev, "DK %03o DATI %012llo PC=%06o\n",
                     dev, *data, PC);
-        break;
+        goto set_clock;
     }
 
     return SCPE_OK;
 }
 
 /* Bump counter by 1 */
-void dk_count (UNIT *uptr)
+void dk_test (UNIT *uptr)
 {
     int   dev;
-    uptr->CLK_REG++;
     if (uptr->CLK_REG & (~RMASK))
        uptr->STAT_REG |= CLK_OVF;
     uptr->CLK_REG &= RMASK;
@@ -196,18 +205,8 @@ void dk_count (UNIT *uptr)
 /* Timer service - */
 t_stat dk_svc (UNIT *uptr)
 {
-    int32    t;
-    if (uptr->STAT_REG & CLK_EN) {
-        t = sim_rtcn_calb (uptr->capac,
-                                  TMR_DK + (uptr - dk_unit));   /* calibrate */
-        if (uptr->STAT_REG & CLK_PI) {
-            if (FLAGS & USER)
-                dk_count(uptr);                                 /* count */
-        } else {
-            dk_count(uptr);                                     /* count */
-        }
-        sim_activate (uptr, t);                                 /* reactivate unit */
-    }
+    uptr->CLK_REG = uptr->CLK_TIM;
+    dk_test (uptr);
     return SCPE_OK;
 }
 
