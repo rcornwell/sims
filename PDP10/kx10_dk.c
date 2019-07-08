@@ -63,6 +63,7 @@
 t_stat dk_devio(uint32 dev, uint64 *data);
 void   dk_test (UNIT *uptr);
 t_stat dk_svc (UNIT *uptr);
+const char *dk_description (DEVICE *dptr);
 
 DIB dk_dib[] = {
         { DK_DEVNUM, 1, &dk_devio, NULL },
@@ -81,7 +82,7 @@ DEVICE dk_dev = {
     NULL, NULL, NULL,
     NULL, NULL, NULL,
     &dk_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
-    NULL, NULL, NULL, NULL, NULL, NULL
+    NULL, NULL, NULL, NULL, NULL, &dk_description
     };
 
 t_stat dk_devio(uint32 dev, uint64 *data) {
@@ -209,5 +210,11 @@ t_stat dk_svc (UNIT *uptr)
     dk_test (uptr);
     return SCPE_OK;
 }
+
+const char *dk_description (DEVICE *dptr)
+{
+return "DK10 Timer module";
+}
+
 
 #endif

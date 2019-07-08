@@ -405,7 +405,7 @@ t_stat load_sblk (FILE *fileref)
     if ((word >> 27) != OP_JRST && (word >> 27) != OP_JUMPA)
         return SCPE_FMT;
 
-    PC = word & FMASK;
+    PC = word & RMASK;
 
     return SCPE_OK;
 }

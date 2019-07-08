@@ -893,8 +893,7 @@ t_stat dp_show_hdr (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
    dptr = find_dev_from_unit(uptr);
    if (dptr == NULL)
       return SCPE_IERR;
-   if ((dptr->flags & DEV_WHDR) == val)
-      fprintf (st, "%s", (char *)desc);
+   fprintf (st, "%s", (dptr->flags & DEV_WHDR) ? "HEADERS" : "NOHEADERS");
    return SCPE_OK;
 }
 
