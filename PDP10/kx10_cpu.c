@@ -4624,7 +4624,7 @@ left:
               break;
 
     case 0242: /* LSH */
-              SC = ((AB & RSIGN) ? (0377 ^ AB) + 1 : AB) & 0777;
+              SC = ((AB & RSIGN) ? (0377 ^ AB) + 1 : AB) & 0377;
               if (SC == 0)
                   break;
               if (AB & RSIGN) {
