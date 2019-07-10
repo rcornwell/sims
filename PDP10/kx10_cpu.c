@@ -4047,14 +4047,19 @@ fnormx:
               flag3 = 0;
               SC = (int)((((BR & SMASK) ? 0777 : 0) ^ (BR >> 27)) & 0777);
               SCAD = (int)((((AR & SMASK) ? 0777 : 0) ^ (AR >> 27)) & 0777);
+              if ((BR & (MMASK)) == 0) {
+                  if (BR == SMASK) {
+                      BR = BIT9;
+                      SC--;
+                  } else {
+                      AR = BR;
+                      break;
+                  }
+              }
               if (BR & SMASK) {
                   BR = CM(BR) + 1;
                   flag1 = 1;
                   flag3 = 1;
-              }
-              if ((BR & (MMASK)) == 0) {
-                  AR = BR;
-                  break;
               }
               if (AR & SMASK) {
                   if ((AR & MMASK) == 0) {
@@ -4329,6 +4334,7 @@ left:
               } else {
                   AR = 0;
                   SC = 0;
+                  FE = 0;
               }
               if (((SC & 0400) != 0) && !pi_cycle) {
                   FLAGS |= OVR|FLTOVR|TRP1;
@@ -4625,12 +4631,14 @@ left:
 
     case 0242: /* LSH */
               SC = ((AB & RSIGN) ? (0377 ^ AB) + 1 : AB) & 0377;
-              if (SC == 0)
-                  break;
-              if (AB & RSIGN) {
-                  AR = AR >> SC;
-              } else {
-                  AR = (AR << SC) & FMASK;
+              if (SC != 0) {
+                 if (SC > 36){
+                     AR = 0;
+                 } else if (AB & RSIGN) {
+                     AR = AR >> SC;
+                 } else {
+                     AR = (AR << SC) & FMASK;
+                 }
               }
               break;
 
