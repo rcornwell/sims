@@ -1667,6 +1667,4 @@ HALT instruction, IC: 00000 (  000000000000   HTR 00000)
 HALT instruction, IC: 00000 (  000000000000   HTR 00000)
 
 HALT instruction, IC: 00000 (  000000000000   HTR 00000)
-/home/rich/github/sims/I7000/tests/i7090_test.ini-164> detach all
-DR: writing buffer to file
 Log file closed
