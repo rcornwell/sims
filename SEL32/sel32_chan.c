@@ -1199,7 +1199,7 @@ t_stat chan_boot(uint16 chsa, DEVICE *dptr) {
         chp->ccw_flags = 0;                         /* clear the command flags */
         return SCPE_IOERR;                          /* return error */
     }
-    sim_debug(DEBUG_CMD, &dev_cpu, "Channel Boot OK return from load_ccw chsa %02x status %08x\n",
+    sim_debug(DEBUG_CMD, &cpu_dev, "Channel Boot OK return from load_ccw chsa %02x status %08x\n",
         chsa, chp->chan_status);
     loading = chsa;                                 /* show we are loading from the boot device */
     return SCPE_OK;                                 /* all OK */
