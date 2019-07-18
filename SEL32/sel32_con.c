@@ -28,6 +28,9 @@
    they will transfer their block during chan_cmd. All data is
    transmitted as ASCII characters.
 
+   Change History:
+   12/10/2018 - force input chars to upper case if lower case
+
 */
 
 #include "sel32_defs.h"
@@ -297,6 +300,8 @@ t_stat con_srvi(UNIT *uptr) {
     r = sim_poll_kbd();         /* poll for ready */
     if (r & SCPE_KFLAG) {       /* got a char */
         ch = r & 0377;          /* drop any extra bits */
+        if ((ch >= 'a') && (ch <= 'z'))
+            ch &= 0xdf;         /* make upper case */
         if ((cmd == CON_RD) || (cmd == CON_ECHO)) {     /* looking for input */
             atbuf = 0;          /* reset attention buffer */
             if (ch == '\n')     /* convert newline */
