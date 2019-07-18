@@ -51,6 +51,7 @@ extern uint32 SPAD[];           /* cpu SPAD */
 #define BUFFSIZE        (64 * 1024)
 #define MTUF_9TR        (1 << MTUF_V_UF)
 #define UNIT_MT         UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE | MTUF_9TR
+//#define UNIT_MT         UNIT_ATTABLE | UNIT_ROABLE | MTUF_9TR
 #define DEV_BUF_NUM(x)  (((x) & 07) << DEV_V_UF)
 #define GET_DEV_BUF(x)  (((x) >> DEV_V_UF) & 07)
 
@@ -335,7 +336,7 @@ MTAB                mt_mod[] = {
 
 UNIT                mta_unit[] = {
     /* Unit data layout for MT devices */
-//  {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1000)},       /* 0 */
+//  {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1000)},       /* 0 */
     {
     NULL,               /* UNIT *next */             /* next active */
     mt_srv,             /* t_stat (*action) */       /* action routine */
@@ -519,15 +520,20 @@ uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     case 0x4:              /* Sense */
         uptr->u3 &= ~(MT_CMDMSK);                   /* clear out last cmd */
         uptr->u3 |= cmd & MT_CMDMSK;                /* insert new cmd */
-        sim_activate(uptr, 100);                    /* Start unit off */
         CLR_BUF(uptr);                              /* buffer is empty */
         uptr->u4 = 0;                               /* reset buffer position pointer */
+//      sim_activate(uptr, 100);                    /* Start unit off */
+        sim_activate(uptr, 10);                     /* Start unit off */
         mt_busy[GET_DEV_BUF(dptr->flags)] = 1;      /* show we are busy */
         if ((cmd & 0x3) == 0x3) {                   /* Quick end channel on control */
             if (cmd != MT_SETM) {                   /* mode set command */
                 sim_debug(DEBUG_EXP, &mta_dev, "mt_startcmd ret CHNEND chan %x unit %x cmd %x\n", chan, unit, cmd);
-                return SNS_CHNEND;
+//fprintf(stderr, "mt_startcmd ret CHNEND chan %x unit %x cmd %x\n", chan, unit, cmd);
+                return 0;
+//                return SNS_CHNEND;
             }
+            return SNS_CHNEND;
+//          return SNS_CHNEND|SNS_DEVEND;           /* done */
         }
         sim_debug(DEBUG_EXP, &mta_dev, "mt_startcmd sense return 0 chan %x cmd %x\n", chan, cmd);
         return 0;
@@ -948,11 +954,14 @@ t_stat mt_srv(UNIT * uptr)
     case MT_FSF:    /* 0x63 */          /* advance filemark */
         switch(uptr->u4) {
         case 0:
-            uptr->u4 ++;
-            sim_activate(uptr, 500);
+            uptr->u4++;
+//            sim_activate(uptr, 500);
+            sim_activate(uptr, 50);
+//fprintf(stderr, "Start adv file unit %d cnt %d\n", unit, uptr->u4);
             break;
         case 1:
             sim_debug(DEBUG_DETAIL, &mta_dev, "Skip rec unit=%d\n", unit);
+//fprintf(stderr, "Skip 1 rec unit=%d cnt %d reclen %d\n", unit, uptr->u4, reclen);
             r = sim_tape_sprecf(uptr, &reclen);
             if (r == MTSE_TMK) {
                 uptr->u4++;
@@ -964,12 +973,15 @@ t_stat mt_srv(UNIT * uptr)
                 sim_activate(uptr, 50);
             } else {
                 sim_debug(DEBUG_DETAIL, &mta_dev, "%d\n", reclen);
-                sim_activate(uptr, 10 + (10 * reclen));
+//              sim_activate(uptr, 10 + (10 * reclen));
+                sim_activate(uptr, 50);
             }
             break;
         case 2:
+//fprintf(stderr, "Skip 2 rec unit=%d cnt %d reclen %d\n", unit, uptr->u4, reclen);
             uptr->u3 &= ~(MT_CMDMSK);
-            chan_end(addr, SNS_DEVEND);
+//            chan_end(addr, SNS_DEVEND);
+            chan_end(addr, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
             mt_busy[bufnum] &= ~1;
             sim_debug(DEBUG_DETAIL, &mta_dev, "Skip done unit=%d\n", unit);
             break;
@@ -1011,21 +1023,24 @@ t_stat mt_srv(UNIT * uptr)
 
     case MT_REW:    /* 0x23 */                      /* rewind tape */
         if (uptr->u4 == 0) {
-            uptr->u4 ++;
-            sim_activate(uptr, 30000);
-            mt_busy[bufnum] &= ~1;
+            uptr->u4++;
+//          sim_activate(uptr, 30000);
+//fprintf(stderr, "Start rewind unit %d\n", unit);
+            sim_activate(uptr, 500);
         } else {
             sim_debug(DEBUG_DETAIL, &mta_dev, "Rewind unit=%d\n", unit);
+//fprintf(stderr, "Rewind complete unit %d\n", unit);
             uptr->u3 &= ~(MT_CMDMSK);
             r = sim_tape_rewind(uptr);
-            chan_end(addr, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
             uptr->u5 |= SNS_LOAD;                   /* set BOT */
+            chan_end(addr, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
+            mt_busy[bufnum] &= ~1;
          }
          break;
 
     case MT_RUN:    /* 0x33 */                      /* Rewind and unload tape */
          if (uptr->u4 == 0) {
-             uptr->u4 ++;
+             uptr->u4++;
              mt_busy[bufnum] &= ~1;
              sim_activate(uptr, 30000);
          } else {
