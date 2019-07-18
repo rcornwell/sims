@@ -74,7 +74,8 @@ P00070  20                            DATAB     C' '    0x20    FORMS CONTROL FO
 */
   
 #ifdef NUM_DEVS_LPR
-#define UNIT_LPR        UNIT_ATTABLE | UNIT_DISABLE
+//#define UNIT_LPR        UNIT_ATTABLE | UNIT_DISABLE
+#define UNIT_LPR        UNIT_ATTABLE | UNIT_IDLE
 
 extern  t_stat  set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 extern  t_stat  show_dev_addr(FILE *st, UNIT * uptr, int32 v, CONST void *desc);
@@ -160,9 +161,9 @@ MTAB            lpr_mod[] = {
 };
 
 UNIT            lpr_unit[] = {
-    {UDATA(lpr_srv, UNIT_LPR|UNIT_IDLE, 66), 300, UNIT_ADDR(0x7EF8)},     /* A */
+    {UDATA(lpr_srv, UNIT_LPR, 66), 300, UNIT_ADDR(0x7EF8)},     /* A */
 #if NUM_DEVS_LPR > 1
-    {UDATA(lpr_srv, UNIT_LPR|UNIT_IDLE, 66), 300, UNIT_ADDR(0x7EF9)},     /* B */
+    {UDATA(lpr_srv, UNIT_LPR, 66), 300, UNIT_ADDR(0x7EF9)},     /* B */
 #endif
 };
 
