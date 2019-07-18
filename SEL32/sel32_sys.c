@@ -675,11 +675,11 @@ t_opcode  optab[] = {
     {  0x3C08,      0xFC0F,   H|TYPE_F,   "SURM", },     /* Subtract Register to Register Masked # */
     {  0x4000,      0xFC0F, N|H|TYPE_F,   "MPR", },      /* Multiply Register to Register # NBR */
     {  0x4400,      0xFC0F, N|H|TYPE_F,   "DVR", },      /* Divide Register to Register # NBR */
-    {  0x5000,      0xFC0F, B|H|TYPE_A,   "LABRM", },    /* Load Address BR Mode */
-    {  0x5400,      0xFC0F, B|H|TYPE_A,   "STWBR", },    /* Store Base Register BR Only */
-    {  0x5800,      0xFC0F, B|H|TYPE_A,   "SUABR", },    /* Subtract Base Register BR Only */
-    {  0x5808,      0xFC0F, B|H|TYPE_A,   "LABR", },     /* Load Address Base Register BR Only */
-    {  0x5C00,      0xFC0F, B|H|TYPE_A,   "LWBR", },     /* Load Base Register BR Only */
+    {  0x5000,      0xFC0F,   B|TYPE_D,   "LABRM", },    /* Load Address BR Mode */
+    {  0x5400,      0xFC0F,   B|TYPE_A,   "STWBR", },    /* Store Base Register BR Only */
+    {  0x5800,      0xFC0F,   B|TYPE_A,   "SUABR", },    /* Subtract Base Register BR Only */
+    {  0x5808,      0xFC0F,   B|TYPE_D,   "LABR", },     /* Load Address Base Register BR Only */
+    {  0x5C00,      0xFC0F,   B|TYPE_A,   "LWBR", },     /* Load Base Register BR Only */
     {  0x5C08,      0xFC0F, B|H|TYPE_A,   "BSUBM", },    /* Branch Subroutine Memory BR Only */
     {  0x5C08,      0xFC0F, B|H|TYPE_A,   "CALLM", },    /* Call Memory BR Only */
     {  0x6000,      0xFC0F, N|H|TYPE_F,   "NOR", },      /* Normalize # NBR Only */
