@@ -39,7 +39,7 @@
 #include "sim_tape.h"
 
 extern t_stat set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
-extern t_stat show_dev_addr(FILE *st, UNIT * uptr, int32 v, CONST void *desc);
+extern t_stat show_dev_addr(FILE *st, UNIT *uptr, int32 v, CONST void *desc);
 extern void chan_end(uint16 chan, uint8 flags);
 extern int  chan_read_byte(uint16 chan, uint8 *data);
 extern int  chan_write_byte(uint16 chan, uint8 *data);
@@ -333,83 +333,6 @@ MTAB                mt_mod[] = {
     {0}
 };
 
-#ifdef DEFINED_IN_SIM_DEFS_H
-/* Unit data structure from sim_defs.h
-
-   Parts of the unit structure are device specific, that is, they are
-   not referenced by the simulator control package and can be freely
-   used by device simulators.  Fields starting with 'buf', and flags
-   starting with 'UF', are device specific.  The definitions given here
-   are for a typical sequential device.
-*/
-
-struct UNIT {
-    UNIT                *next;                          /* next active */
-    t_stat              (*action)(UNIT *up);            /* action routine */
-    char                *filename;                      /* open file name */
-    FILE                *fileref;                       /* file reference */
-    void                *filebuf;                       /* memory buffer */
-    uint32              hwmark;                         /* high water mark */
-    int32               time;                           /* time out */
-    uint32              flags;                          /* flags */
-    uint32              dynflags;                       /* dynamic flags */
-    t_addr              capac;                          /* capacity */
-    t_addr              pos;                            /* file position */
-    void                (*io_flush)(UNIT *up);          /* io flush routine */
-    uint32              iostarttime;                    /* I/O start time */
-    int32               buf;                            /* buffer */
-    int32               wait;                           /* wait */
-    int32               u3;                             /* device specific */
-    int32               u4;                             /* device specific */
-    int32               u5;                             /* device specific */
-    int32               u6;                             /* device specific */
-    void                *up7;                           /* device specific */
-    void                *up8;                           /* device specific */
-    uint16              us9;                            /* device specific */
-    uint16              us10;                           /* device specific */
-    void                *tmxr;                          /* TMXR linkage */
-    t_bool              (*cancel)(UNIT *);
-    double              usecs_remaining;                /* time balance for long delays */
-    char                *uname;                         /* Unit name */
-#ifdef SIM_ASYNCH_IO
-    void                (*a_check_completion)(UNIT *);
-    t_bool              (*a_is_active)(UNIT *);
-    UNIT                *a_next;                        /* next asynch active */
-    int32               a_event_time;
-    ACTIVATE_API        a_activate_call;
-    /* Asynchronous Polling control */
-    /* These fields should only be referenced when holding the sim_tmxr_poll_lock */
-    t_bool              a_polling_now;                  /* polling active flag */
-    int32               a_poll_waiter_count;            /* count of polling threads */
-                                                        /* waiting for this unit */
-    /* Asynchronous Timer control */
-    double              a_due_time;                     /* due time for timer event */
-    double              a_due_gtime;                    /* due time (in instructions) for timer event */
-    double              a_usec_delay;                   /* time delay for timer event */
-#endif /* SIM_ASYNCH_IO */
-    };
-
-/* Unit flags */
-
-#define UNIT_V_UF_31    12              /* dev spec, V3.1 */
-#define UNIT_V_UF       16              /* device specific */
-#define UNIT_V_RSV      31              /* reserved!! */
-
-#define UNIT_ATTABLE    0000001         /* attachable */
-#define UNIT_RO         0000002         /* read only */
-#define UNIT_FIX        0000004         /* fixed capacity */
-#define UNIT_SEQ        0000010         /* sequential */
-#define UNIT_ATT        0000020         /* attached */
-#define UNIT_BINK       0000040         /* K = power of 2 */
-#define UNIT_BUFABLE    0000100         /* bufferable */
-#define UNIT_MUSTBUF    0000200         /* must buffer */
-#define UNIT_BUF        0000400         /* buffered */
-#define UNIT_ROABLE     0001000         /* read only ok */
-#define UNIT_DISABLE    0002000         /* disable-able */
-#define UNIT_DIS        0004000         /* disabled */
-#define UNIT_IDLE       0040000         /* idle eligible */
-#endif /* DEFINED_IN_SIM_DEFS_H */
-
 UNIT                mta_unit[] = {
     /* Unit data layout for MT devices */
 //  {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1000)},       /* 0 */
@@ -421,7 +344,7 @@ UNIT                mta_unit[] = {
     NULL,               /* void *filebuf */          /* memory buffer */
     0,                  /* uint32 hwmark */          /* high water mark */
     0,                  /* int32 time */             /* time out */
-    UNIT_MT,            /* uint32 flags */           /* flags */
+    UNIT_MT|UNIT_IDLE,  /* uint32 flags */           /* flags */
     0,                  /* uint32 dynflags */        /* dynamic flags */
     0,                  /* t_addr capac */           /* capacity */
     0,                  /* t_addr pos */             /* file position */
@@ -442,54 +365,14 @@ UNIT                mta_unit[] = {
     0,                  /* double usecs_remaining */ /* time balance for long delays */
     NULL,               /* char *uname */            /* Unit name */
     },
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1001)},       /* 1 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1002)},       /* 2 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1003)},       /* 3 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1004)},       /* 4 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1005)},       /* 5 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1006)},       /* 6 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1007)},       /* 7 */
+    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1001)},       /* 1 */
+    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1002)},       /* 2 */
+    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1003)},       /* 3 */
+    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1004)},       /* 4 */
+    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1005)},       /* 5 */
+    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1006)},       /* 6 */
+    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1007)},       /* 7 */
 };
-
-#if DEFINED_IN_SEL32_DEFS_H
-/* Device information block */
-typedef struct dib {
-        /* Pre Start I/O */
-        uint8       (*pre_io)(UNIT *uptr, uint16 chan);
-        /* Start a command */
-        uint8       (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd);
-        /* Halt I/O */
-        uint8       (*halt_io)(UNIT *uptr);
-        /* Test I/O */
-        uint8       (*test_io)(UNIT *uptr);
-        /* Post I/O */
-        uint8       (*post_io)(UNIT *uptr);
-        /* Controller init */
-        void        (*dev_ini)(UNIT *, t_bool); /* init function */
-        UNIT        *units;             /* Pointer to units structure */
-        CHANP       *chan_prg;          /* Pointer to channel program */
-        uint8       numunits;           /* number of units */
-        uint8       mask;               /* device mask */
-        uint16      chan_addr;          /* parent channel address */
-        uint32      chan_fifo_in;       /* fifo input index */
-        uint32      chan_fifo_out;      /* fifo output index */
-        uint32      chan_fifo[FIFO_SIZE];   /* interrupt status fifo for each channel */
-} DIB;
-
-/* CHAN 0x7F000000 UNIT 0x00ff0000 */
-#define DEV_V_ADDR        DEV_V_UF                  /* Pointer to device address (16) */
-#define DEV_V_DADDR       (DEV_V_UF + 8)            /* Device address */
-#define DEV_ADDR_MASK     (0x7f << DEV_V_DADDR)     /* 24 bits shift */
-#define DEV_V_UADDR       (DEV_V_UF)                /* Device address in Unit */
-#define DEV_UADDR         (1 << DEV_V_UADDR)
-#define GET_DADDR(x)      (0x7f & ((x) >> DEV_V_ADDR))
-#define DEV_ADDR(x)       ((x) << DEV_V_ADDR)
-
-#define UNIT_V_ADDR       16
-#define UNIT_ADDR_MASK    (0x7fff << UNIT_V_ADDR)
-#define GET_UADDR(x)      ((UNIT_ADDR_MASK & x) >> UNIT_V_ADDR)
-#define UNIT_ADDR(x)      ((x) << UNIT_V_ADDR)
-#endif
 
 /* channel program information */
 CHANP           mta_chp[NUM_UNITS_MT] = {0};
@@ -553,14 +436,14 @@ DEVICE          mta_dev = {
 CHANP           mtb_chp[NUM_UNITS_MT] = {0};
 
 UNIT            mtb_unit[] = {
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1800)},       /* 0 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1801)},       /* 1 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1802)},       /* 2 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1803)},       /* 3 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1804)},       /* 4 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1805)},       /* 5 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1806)},       /* 6 */
-    {UDATA(&mt_srv, UNIT_MT, 0), 0, UNIT_ADDR(0x1807)},       /* 7 */
+    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1800)},       /* 0 */
+    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1801)},       /* 1 */
+    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1802)},       /* 2 */
+    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1803)},       /* 3 */
+    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1804)},       /* 4 */
+    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1805)},       /* 5 */
+    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1806)},       /* 6 */
+    {UDATA(&mt_srv, UNIT_MT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x1807)},       /* 7 */
 };
 
 /* device information block */
@@ -788,7 +671,7 @@ t_stat mt_srv(UNIT * uptr)
         if (chan_write_byte(addr, &ch)) {
             sim_debug(DEBUG_CMD, &mta_dev, "Read unit %d EOR\n", unit);
             /* If not read whole record, skip till end */
-            if (uptr->u4 < uptr->hwmark) {
+            if ((uint32)uptr->u4 < uptr->hwmark) {
                 /* Send dummy character to force SLI */
                 chan_write_byte(addr, &ch);         /* write the byte */
                 sim_debug(DEBUG_CMD, &mta_dev, "Read unit %d send dump SLI\n", unit);
@@ -804,7 +687,7 @@ t_stat mt_srv(UNIT * uptr)
         } else {
             sim_debug(DEBUG_DATA, &mta_dev,
                 "Read data @2 unit %d  cnt %x ch %02x hwm %x\n", unit, uptr->u4, ch, uptr->hwmark);
-            if (uptr->u4 >= uptr->hwmark) {         /* In IRG */
+            if ((uint32)uptr->u4 >= uptr->hwmark) {         /* In IRG */
                 /* Handle end of record */
                 uptr->u3 &= ~MT_CMDMSK;             /* clear the cmd */
                 mt_busy[bufnum] &= ~1;              /* set not busy */

@@ -250,6 +250,7 @@ extern DEBTAB dev_debug[];
 #define DSEXT16(x)      (x&0x8000?(l_uint64)(((l_uint64)x&RMASK)|D48LMASK):(t_uint64)x)
 /* sign extend 32 bit value to uint64 */
 #define DSEXT32(x)      (x&0x8000?(l_uint64)(((l_uint64)x&D32RMASK)|D32LMASK):(t_uint64)x)
+#define NEGATE32(val)   ((~val) + 1)    /* negate a value 16/32/64 bits */
 
 #define UNIT_V_MODEL    (UNIT_V_UF + 0)
 #define UNIT_MODEL      (7 << UNIT_V_MODEL)
@@ -347,4 +348,8 @@ extern DEBTAB dev_debug[];
 #define INTS_ENAB   0x10000000          /* Interrupt enabled when set (copy is of SPAD */
 #define INTS_EXTL   0x08000000          /* IOP/RTOM ext interrupt if set, I/O if not set (copy of SPAD) */
 #define INTS_REQ    0x04000000          /* Interrupt is requesting */
+
+/* Rename of global PC variable to avoid namespace conflicts on some platforms */
+
+#define PC PC_Global
 

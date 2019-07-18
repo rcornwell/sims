@@ -245,7 +245,7 @@ MTAB            com_mod[] = {
 };
 
 UNIT            com_unit[] = {
-    {UDATA(&comi_srv, UNIT_ATTABLE, 0), COM_WAIT, UNIT_ADDR(0x0000)},       /* 0 */
+    {UDATA(&comi_srv, UNIT_ATTABLE|UNIT_IDLE, 0), COM_WAIT, UNIT_ADDR(0x0000)},       /* 0 */
 };
 
 //DIB com_dib = {NULL, com_startcmd, NULL, NULL, com_ini, com_unit, com_chp, COM_UNITS, 0x0f, 0x7e00, 0, 0, 0};
@@ -293,7 +293,7 @@ DEVICE          com_dev = {
     coml_mod    COM modifieers list
 */
 
-#define UNIT_COML UNIT_ATTABLE|UNIT_DISABLE|UNIT_ATT
+#define UNIT_COML UNIT_ATTABLE|UNIT_DISABLE|UNIT_ATT|UNIT_IDLE
 
 /* channel program information */
 CHANP           coml_chp[COM_LINES*2] = {0};
@@ -637,7 +637,6 @@ t_stat comi_srv(UNIT *uptr)
     uint16  chsa = GET_UADDR(uptr->u3);                 /* get channel/sub-addr */
     int     cmd = uptr->u3 & 0xff;
     uint32  cln = (uptr - coml_unit) & 0x7;             /* use line # 0-7 for 8-15 */
-    UNIT    *comlp;
 
     ln = uptr - com_unit;                               /* line # */
     if ((com_unit[COMC].flags & UNIT_ATT) == 0){        /* attached? */

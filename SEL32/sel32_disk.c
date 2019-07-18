@@ -41,7 +41,7 @@ extern uint32   SPAD[];         /* cpu SPAD memory */
 
 #define GET_TYPE(x)        ((UNIT_TYPE & (x)) >> UNIT_V_TYPE)
 #define SET_TYPE(x)         (UNIT_TYPE & ((x) << UNIT_V_TYPE))
-#define UNIT_DISK          UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE | UNIT_FIX
+#define UNIT_DISK          UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE | UNIT_FIX | UNIT_IDLE
 
 /* INCH command information */
 /*
@@ -204,7 +204,7 @@ struct ddata_t
 /* disk definition structure */
 struct disk_t
 {
-    char        *name;      /* Device ID Name */
+    const char  *name;      /* Device ID Name */
     uint32      taus;       /* total allocation units */
     uint16      bms;        /* bit map size */
     uint16      nhds;       /* Number of heads */
@@ -499,7 +499,7 @@ dosns:
     case DSK_INCH:              /* INCH 0x00 */
     {
         uint32  mema;           /* memory address */    
-        int     i;
+        uint32  i;
         UNIT    *up = dptr->units;  /* first unit for this device */
         sim_debug(DEBUG_CMD, dptr, "disk_startcmd starting inch cmd addr %x u4 %x\n", addr, uptr->u4);
         /* u4 has IOCD word 1 contents.  For the disk processor it contains */
@@ -561,7 +561,7 @@ t_stat disk_srv(UNIT * uptr)
     int             cmd = uptr->u3 & DSK_CMDMSK;
     int             type = GET_TYPE(uptr->flags);
     int             count = data->count;
-    int             trk, cyl;
+    uint32          trk, cyl;
     int             unit = (uptr - dptr->units);
     int             i;
     uint8           ch;

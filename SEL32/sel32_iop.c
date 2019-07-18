@@ -97,7 +97,7 @@ MTAB            iop_mod[] = {
 };
 
 UNIT            iop_unit[] = {
-    {UDATA(iop_srv, UNIT_ATT, 0), 0, UNIT_ADDR(0x7E00)},    /* Channel controlller */
+    {UDATA(iop_srv, UNIT_ATT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x7E00)},    /* Channel controlller */
 };
 
 //DIB iop_dib = {NULL, iop_startcmd, NULL, NULL, NULL, iop_ini, iop_unit, iop_chp, NUM_UNITS_IOP, 0xff, 0x7e00,0,0,0};

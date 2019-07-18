@@ -158,7 +158,7 @@ uint32 s_adfw(uint32 reg, uint32 mem, uint32 *cc) {
     exp = expr - expm;                  /* subtract memory exponent from reg exponent */
     if (exp & MSIGN) {                  /* test for negative */
         /* difference is negative, so memory exponent is larger */
-        exp = -exp;                     /* make difference positive */
+        exp = NEGATE32(exp);            /* make difference positive */
         if (exp > 0x06000000) {         /* test for difference > 6 */
             ret = mem;                  /* assume 0 and return original mem operand value */
             goto goout;                 /* go set cc's and return */
@@ -237,7 +237,6 @@ uint32 s_adfw(uint32 reg, uint32 mem, uint32 *cc) {
     if ((sign == 3 && (exp & MSIGN) == 0) ||
         (sign == 0 && (exp & MSIGN) != 0)) {
         /* we have exponent overflow from addition */
-AROVFLO:
         CC |= CC4BIT;               /* set CC4 for exponent overflow */
 ARUNFLO:
         /* we have exponent underflow from addition */
@@ -295,7 +294,7 @@ goout2:
 
 /* subtract memory floating point number from register floating point number */
 uint32 s_sufw(uint32 reg, uint32 mem, uint32 *cc) {
-    return s_adfw(reg, -mem, cc);
+    return s_adfw(reg, NEGATE32(mem), cc);
 }
 
 /* add memory floating point number to register floating point number */
@@ -340,7 +339,7 @@ t_uint64 s_adfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
     sign = expr;                        /* save register exponent */
     if (exp & MSIGN) {
         /* exponent difference is negative */
-        exp = -exp;                     /* make exponent difference positive */
+        exp = NEGATE32(exp);            /* make exponent difference positive */
         if (exp > 0x0d000000) {
             /* shift count is > 13, so return operand and set cc's */
             ret = mem;                  /* return the original mem operand */
@@ -435,7 +434,7 @@ DUNFLO:
 
 /* subtract memory floating point number from register floating point number */
 t_uint64 s_sufd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
-    return s_adfd(reg, -mem, cc);
+    return s_adfd(reg, NEGATE32(mem), cc);
 }
 
 /* convert from 32 bit float to 32 bit integer */
@@ -445,7 +444,7 @@ uint32 s_fixw(uint32 fltv, uint32 *cc) {
     uint32 neg = 0;                     /* clear neg flag */
 
     if (fltv & MSIGN) {                 /* check for negative */
-        fltv = -fltv;                   /* make src positive */
+        fltv = NEGATE32(fltv);          /* make src positive */
         neg = 1;                        /* set neg val flag */
     } else {
         if (fltv == 0) {
@@ -468,7 +467,7 @@ uint32 s_fixw(uint32 fltv, uint32 *cc) {
         temp = 0x7fffffff;              /* too big, set to max value */
         goto OVFLO;                     /* go set CC's */
     }
-    sc = (-temp2 * 4);                  /* pos shift cnt * 4 */
+    sc = (NEGATE32(temp2) * 4);         /* pos shift cnt * 4 */
     fltv >>= sc;                        /* do 4 bit shifts */
     /* see if overflow to neg */
     /* set CC1 for overflow */
@@ -479,7 +478,7 @@ uint32 s_fixw(uint32 fltv, uint32 *cc) {
     }
     /* see if original value was negative */
     if (neg)
-        fltv = -fltv;                   /* put back to negative */
+        fltv = NEGATE32(fltv);          /* put back to negative */
     temp = fltv;                        /* return integer value */
     /* come here to set cc's and return */
     /* temp has return value */
@@ -510,12 +509,12 @@ UNFLO:
 /* convert from 32 bit integer to 32 bit float */
 /* No overflow (CC1) can be generated */
 uint32 s_fltw(uint32 intv, uint32 *cc) {
-    uint32 CC = 0, temp, temp2;
+    uint32 CC = 0, temp;
     uint32 neg = 0;                     /* zero sign flag */
     uint32 sc = 0;                      /* zero shift count */
 
     if (intv & MSIGN) {
-        intv = -intv;                   /* make src positive */
+        intv = NEGATE32(intv);          /* make src positive */
         neg = 1;                        /* set neg flag */
     } else {
         if (intv == 0) {                /* see if zero */
@@ -535,10 +534,10 @@ uint32 s_fltw(uint32 intv, uint32 *cc) {
         temp >>= 1;                     /* one more zeros */
     sc >>= 2;                           /* normalize radix */
     sc -= 72;                           /* make excess 64 notation */
-    sc = -sc;                           /* make positive */
+    sc = NEGATE32(sc);                  /* make positive */
     temp = (temp >> 8) | (sc << 24);    /* merge exp with fraction */
     if (neg)                            /* was input negative */
-        temp = -temp;                   /* make neg again */
+        temp = NEGATE32(temp);          /* make neg again */
     /* come here to set cc's and return */
     /* temp has return value */
 setcc:
@@ -556,12 +555,12 @@ setcc:
 /* convert from 64 bit double to 64 bit integer */
 /* set CC1 if overflow/underflow exception */
 t_uint64 s_fixd(t_uint64 dblv, uint32 *cc) {
-    uint32 temp, temp2, CC = 0, neg = 0, sc = 0;
+    uint32 temp2, CC = 0, neg = 0, sc = 0;
     t_uint64 dest;
 
     /* neg and CC flags already set to zero */
     if ((t_int64)dblv < 0) {
-        dblv = -dblv;                   /* make src positive */
+        dblv = NEGATE32(dblv);          /* make src positive */
         neg = 1;                        /* set neg val flag */
     } else {
         if (dblv == 0) {
@@ -584,7 +583,7 @@ t_uint64 s_fixd(t_uint64 dblv, uint32 *cc) {
         dest = 0x7fffffffffffffffll;    /* too big, set max */
         goto DOVFLO;                    /* go set CC's */
     }
-    sc = (-temp2 * 4);                  /* pos shift cnt * 4 */
+    sc = (NEGATE32(temp2) * 4);         /* pos shift cnt * 4 */
     dblv >>= sc;                        /* do 4 bit shifts */
     /* see if overflow to neg */
     /* FIXME set CC1 for overflow? */
@@ -595,7 +594,7 @@ t_uint64 s_fixd(t_uint64 dblv, uint32 *cc) {
     }
     /* see if original values was negative */
     if (neg)
-        dblv = -dblv;                   /* put back to negative */
+        dblv = NEGATE32(dblv);          /* put back to negative */
     dest = dblv;                        /* return integer value */
 dodblcc:
     /* dest has return value */
@@ -629,7 +628,7 @@ t_uint64 s_fltd(t_uint64 intv, uint32 *cc) {
     uint32 CC = 0;                      /* n0 CC's yet */
 
     if (intv & DMSIGN) {
-        intv = -intv;                   /* make src positive */
+        intv = NEGATE32(intv);          /* make src positive */
         neg = 1;                        /* set neg flag */
     } else {
         if (intv == 0) {                /* see if zero */
@@ -647,10 +646,10 @@ t_uint64 s_fltd(t_uint64 intv, uint32 *cc) {
         temp <<= 4;                     /* zero, shift in next nibble */
         sc++;                           /* incr shift count */
     }
-    sc = (-sc + 78);                    /* normalized, make into excess 64 */
+    sc = (NEGATE32(sc) + 78);           /* normalized, make into excess 64 */
     temp = (sc << 56) | temp;           /* merge exponent into fraction */
     if (neg)                            /* was input negative */
-        temp = -temp;                   /* make neg again */
+        temp = NEGATE32(temp);          /* make neg again */
     /* come here to set cc's and return */
     /* temp has return dbl value */
 setcc:
@@ -674,7 +673,7 @@ uint32 s_mpfw(uint32 reg, uint32 mem, uint32 *cc) {
     /* process operator */
     sign = mem;                         /* save original value for sign */
     if (mem & MSIGN) {                  /* check for negative */
-        mem = -mem;                     /* make mem positive */
+        mem = NEGATE32(mem);            /* make mem positive */
     } else {
         if (mem == 0) {
             temp = 0;                   /* return zero */
@@ -689,7 +688,7 @@ uint32 s_mpfw(uint32 reg, uint32 mem, uint32 *cc) {
     /* process operand */
     if (reg & MSIGN) {                  /* check for negative */
         sign ^= reg;                    /* adjust sign */
-        reg = -reg;                     /* make reg positive */
+        reg = NEGATE32(reg);            /* make reg positive */
     } else {
         if (reg == 0) {
             temp = 0;                   /* return zero */
@@ -705,11 +704,10 @@ uint32 s_mpfw(uint32 reg, uint32 mem, uint32 *cc) {
     dtemp = (t_uint64)mem * (t_uint64)reg;  /* multiply fractions */
     dtemp <<= 1;                        /* adjust fraction */
     if (sign & MSIGN)
-        dtemp = -dtemp;                 /* if negative, negate fraction */
+        dtemp = NEGATE32(dtemp);        /* if negative, negate fraction */
     /* normalize the value in dtemp and put exponent into expr */
     dtemp = s_nord(dtemp, &expr);       /* normalize fraction */
     temp -= 0x80;                       /* resize exponent */
-RROUND:
     temp2 = (uint32)(dtemp >> 32);      /* get upper 32 bits */
     if ((int32)temp2 >= 0x7fffffc0)     /* check for special rounding */
         goto RRND2;                     /* no special handling */
@@ -795,7 +793,7 @@ uint32 s_dvfw(uint32 reg, uint32 mem, uint32 *cc) {
     /* process operator */
     sign = mem;                         /* save original value for sign */
     if (mem & MSIGN) {                  /* check for negative */
-        mem = -mem;                     /* make mem positive */
+        mem = NEGATE32(mem);            /* make mem positive */
     } else {
         if (mem == 0) {                 /* check for divide by zero */
             goto DOVFLO;                /* go process overflow */
@@ -809,7 +807,7 @@ uint32 s_dvfw(uint32 reg, uint32 mem, uint32 *cc) {
     /* process operand */
     if (reg & MSIGN) {                  /* check for negative */
         sign ^= reg;                    /* adjust sign */
-        reg = -reg;                     /* make reg positive */
+        reg = NEGATE32(reg);            /* make reg positive */
     } else {
         if (reg == 0) {
             temp = 0;                   /* return zero */
@@ -827,7 +825,7 @@ uint32 s_dvfw(uint32 reg, uint32 mem, uint32 *cc) {
     temp2 >>= 3;                        /* shift out excess bits */
     temp2 <<= 3;                        /* replace with zero bits */
     if (sign & MSIGN)
-        temp2 = -temp2;                 /* if negative, negate fraction */
+        temp2 = NEGATE32(temp2);        /* if negative, negate fraction */
     /* normalize the result in temp and put exponent into expr */
     temp2 = s_nor(temp2, &expr);        /* normalize fraction */
     temp += 1;                          /* adjust exponent */
@@ -909,14 +907,14 @@ setcc:
 
 /* multiply register double by memory double */
 t_uint64 s_mpfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
-    t_uint64 tr1, tr2, tl1, tl2, dblreg, ret;
+    t_uint64 tr1, tr2, tl1, tl2, dblreg;
     uint32 CC = 0, temp, temp2, sign = 0;
     uint32 expm, expr;
     t_uint64 dtemp1, dtemp2;
 
     /* process operator */
     if (mem & DMSIGN) {                 /* check for negative */
-        mem = -mem;                     /* make mem positive */
+        mem = NEGATE32(mem);            /* make mem positive */
         sign = 1;                       /* save original value for sign */
     } else {
         if (mem == 0) {                 /* check for zero */
@@ -935,7 +933,7 @@ t_uint64 s_mpfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
     /* process operand */
     if (reg & DMSIGN) {                 /* check for negative */
         sign ^= 1;                      /* adjust sign */
-        reg = -reg;                     /* make reg positive */
+        reg = NEGATE32(reg);            /* make reg positive */
     } else {
         if (reg == 0) {
             dblreg = 0;                 /* return zero */
@@ -968,12 +966,11 @@ t_uint64 s_mpfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
     dtemp2 += dblreg;                   /* add other partial product */
     dblreg = (t_int64)dtemp2 << 1;      /* position for normalize */
     if (sign)                           /* see if negative */
-        dblreg = -dblreg;               /* make negative */
+        dblreg = NEGATE32(dblreg);      /* make negative */
     /* normalize the value in dblreg and put exponent into expr */
     dblreg = s_nord(dblreg, &expr);     /* normalize fraction */
     if (expr != 0x40)                   /* is result normalized */
         dblreg &= 0xfffffffffffff87fll; /* no, adjust value */
-DRND1:
     if (dblreg == DMSIGN) {             /* check for neg zero */
         dblreg = DNORMASK;              /* correct the value */
         expr++;                         /* adjust exponent too */
@@ -1041,14 +1038,14 @@ setcc:
 
 /* divide register double by memory double */
 t_uint64 s_dvfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
-    t_uint64 tr1, tr2, tl1, tl2, dblreg, ret;
+    t_uint64 tr1, tr2, tl1, tl2, dblreg;
     uint32 CC = 0, temp, temp2, sign = 0;
     uint32 expm, expr;
     t_uint64 dtemp1, dtemp2;
 
     /* process operator */
     if (mem & DMSIGN) {                 /* check for negative */
-        mem = -mem;                     /* make mem positive */
+        mem = NEGATE32(mem);            /* make mem positive */
         sign = 1;                       /* save original value for sign */
     } else {
         if (mem == 0) {                 /* check for divide by zero */
@@ -1068,7 +1065,7 @@ t_uint64 s_dvfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
     /* process operand */
     if (reg & DMSIGN) {                 /* check for negative */
         sign ^= 1;                      /* adjust sign */
-        reg = -reg;                     /* make reg positive */
+        reg = NEGATE32(reg);            /* make reg positive */
     } else {
         if (reg == 0) {
             dblreg = 0;                 /* return zero */
@@ -1120,10 +1117,9 @@ t_uint64 s_dvfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
     dblreg &= 0xffffffffffffffe0;       /* fixup quotient */
     /* exp in temp */
     if (sign)                           /* neg input */
-        dblreg = -dblreg;               /* yes, negate result */
+        dblreg = NEGATE32(dblreg);      /* yes, negate result */
     /* normalize the value in dblreg and put exponent into expr */
     dblreg = s_nord(dblreg, &expr);     /* normalize fraction */
-DRND1:
     if (dblreg == DMSIGN) {             /* check for neg zero */
         dblreg  = DNORMASK;             /* correct the value */
         expr++;                         /* adjust exponent too */

@@ -41,7 +41,7 @@ extern uint32   SPAD[];         /* cpu SPAD memory */
 
 #define GET_TYPE(x)        ((UNIT_TYPE & (x)) >> UNIT_V_TYPE)
 #define SET_TYPE(x)         (UNIT_TYPE & ((x) << UNIT_V_TYPE))
-#define UNIT_SCFI          UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE | UNIT_FIX
+#define UNIT_SCFI          UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE | UNIT_FIX | UNIT_IDLE
 
 /* INCH command information */
 /*
@@ -206,7 +206,7 @@ struct ddata_t
 /* disk definition structure */
 struct scfi_t
 {
-    char        *name;      /* Device ID Name */
+    const char  *name;      /* Device ID Name */
     uint32      taus;       /* total allocation units */
     uint16      bms;        /* bit map size */
     uint16      nhds;       /* Number of heads */
@@ -507,7 +507,7 @@ dosns:
     case DSK_INCH:              /* INCH 0x00 */
     {
         uint32  mema;           /* memory address */    
-        int     i;
+        uint32  i;
         UNIT    *up = dptr->units;  /* first unit for this device */
         sim_debug(DEBUG_CMD, dptr, "scfi_startcmd starting inch cmd addr %x u4 %x\r\n", addr, uptr->u4);
         /* u4 has IOCD word 1 contents.  For the disk processor it contains */
