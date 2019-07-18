@@ -1181,6 +1181,16 @@ DISPLAYD = display
 #
 # Emulator source files and compile time options
 #
+SEL32D = SEL32
+#
+SEL32 = ${SEL32D}/sel32_cpu.c ${SEL32D}/sel32_sys.c ${SEL32D}/sel32_defs.h \
+	${SEL32D}/sel32_chan.c ${SEL32D}/sel32_iop.c ${SEL32D}/sel32_com.c \
+	${SEL32D}/sel32_con.c ${SEL32D}/sel32_clk.c ${SEL32D}/sel32_mt.c \
+	${SEL32D}/sel32_lpr.c ${SEL32D}/sel32_scfi.c ${SEL32D}/sel32_fltpt.c \
+	${SEL32D}/sel32_disk.c
+SEL32_OPT = -I $(SEL32D) -DSEL32 
+#SEL32_OPT = -I $(SEL32D) -DUSE_INT64 -DSEL32 
+
 ICL1900D = ICL1900
 ICL1900 = ${ICL1900D}/icl1900_cpu.c ${ICL1900D}/icl1900_sys.c \
 	${ICL1900D}/icl1900_stdio.c ${ICL1900D}/icl1900_cty.c \
@@ -1874,7 +1884,7 @@ ATT3B2_OPT = -I ${ATT3B2D} -DUSE_INT64 -DUSE_ADDR64
 #
 # Build everything (not the unsupported/incomplete or experimental simulators)
 #
-ALL = b5500 i701 i704 i7010 i7070 i7080 i7090 pdp10-ka pdp10-ki ibm360 ibm360_32 icl1900 pdp6
+ALL = b5500 i701 i704 i7010 i7070 i7080 i7090 pdp10-ka pdp10-ki ibm360 ibm360_32 icl1900 pdp6 sel32
 
 all : ${ALL}
 
@@ -2224,6 +2234,16 @@ ${BIN}icl1900${EXE}: ${ICL1900} ${SIM}
 ifneq (,$(call find_test,${ICL1900D},icl1900))
 	$@ $(call find_test,${ICL1900D},icl1900) $(TEST_ARG)
 endif
+
+sel32: $(BIN)sel32$(EXE)
+
+${BIN}sel32${EXE}: ${SEL32} ${SIM}
+	${MKDIRBIN}
+	${CC} ${SEL32} ${SIM} ${SEL32_OPT} $(CC_OUTSPEC) ${LDFLAGS}
+ifneq (,$(call find_test,${SEL32D},sel32))
+	$@ $(call find_test,${SEL32D},sel32) $(TEST_ARG)
+endif
+
 
 s3 : ${BIN}s3${EXE}
 

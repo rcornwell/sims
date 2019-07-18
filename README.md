@@ -1,15 +1,70 @@
 
 [![Coverity Scan Build Status](https://scan.coverity.com/projects/12020/badge.svg)](https://scan.coverity.com/projects/rcornwell-sims)  
 
-# Development Simulators.
+This is a working copy of my Burroughs B5500, Dec PDP6, KA10, KI10, SEL32, IBM 360 and IBM7000
+series simulators for SimH.
 
-This is a working copy of my Burroughs B5500, Dec PDP6, KA10, KI10, IBM 360 and IBM7000 series
-simulators for SimH.
+# Stable released simulators.
+
+# IBM 7000 simulators.
+Latest status for I7000 Cpus: 
+
+## i701
+
+   * Largely untested.  
+
+## i704
+   * SAP works.  
+   * Fortran II works in some cases.
+
+## i7010
+   * PR155 works.
+   * PR108 works.
+   * Most Diags appear to pass without serious error.
+   * Protection mode has some errors left.  
+   * Protection mode does not handle setting H or L to 0.  
+
+## i7070
+   * Will load Diags.
+
+## i7080
+   * Sort of working.   
+   * RWW, ECB untested.  
+   * TLx instructions implimented, untested, see 8SE  
+   * Will boot from card.  
+   * Tape system appear to be working.  
+
+   * 8CU10B errors:  
+	410, 412, 413, 414, 418, 419, 420-427 error becuase
+		storage is not parity checked.   
+	440 divide not producing correct sign on error.  
+
+## i7090
+   * Working with exceptions.  
+
+   * Known bugs:  
+
+      * DFDP/DFMP     Sometimes off by +/-1 or 2 in least signifigant part of result.  
+      * EAD           +n + -n should be -0 is +0
+      * Not all channel skips working for 9P01C.
+      * HTx	Not sure what problems are, does not quite work.  
+      * DKx	Sometimes fails diagnostics with missing inhibit of interrupt.   
+
+   * CTSS    works.  
+  
+   * IBSYS   works.  
+  
+   * Stand alone assembler works.  
+
+   * Lisp 1.5 works.  
+
+   * Signifigance mode Not tested, Test Code Needed.  
 
 # Burroughs B5500
 
-This is the same version as in the current simH source tree. It is working
-correctly as far as I am able to tell. It will currently run MCP XIII and XV.
+ Emulates a dual CPU B5500 with up to 32K of memory. I can support either DFX disks or
+ dual disks up to 20 units. Up to 16 magnetic tapes drives is support. 2 Card readers
+ a card punch and a pair of line printers.
 
 # Dec PDP6
 
@@ -74,6 +129,24 @@ and transfering to the loaded value. RC10, RH10, TM10 support readin mode.
 
    Support for KL10A will be started in the summer.  
 
+# Development Simulators.
+ 
+# Dec KL10
+
+Still in initial coding stages.
+
+   Disk   
+   * RH10 RP04/RP06/RP07 (RP07 not supported under 6.03).   
+   * RH10 RS04  
+
+   Tape  
+   * TM10A or B  
+   * RH10 TM03/TU16  
+
+   DC10E terminal mux.  
+
+   IMP networking support for ITS and TENEX.  
+
 # ICL 1900 simulator.
 
 This is a new simulator. Will pass 1904E/1905E CPU diagnostics (FLIT). Will boot paper
@@ -101,57 +174,25 @@ Support for the following units:
     Communications
     * 2703 with 16 lines of 2741 or 1050.
 
-# IBM 7000 simulators.
-Latest status for I7000 Cpus: 
+# SEL32 Development Simulator
 
-## i701
+This is a working copy of a simulator for the SEL Concept/32 computer.
+The current test version is for the SEL 32/27, 32/67, 32/87, 32/97 computers.
+Support for 32/55, 32/75, V6, and V9 computers may be added in the future.
+This simulator is co-authors with James C. Bevier. I did the initial parts
+of the simulator, James took it to a working simulator, I m assisting him
+in maintaining and enhancing the simulator.
 
-   * Largely untested.  
+# SEL Concept/32
 
-## i704
-   * SAP works.  
-   * Fortran II works in some cases.
+This simulator is running a test version of MPX-32 1.5F.  It is capable of
+creating a disk image of the O/S from a SDT tape.  The disk image can be
+booted, initialized, and run many of the MPX utilities; including OPCOM & TSM.
+Eight terminals can be used to access TSM via Telnet port 4747.  Initial
+support has been added for excess 64 floating point arithmetic.  More testing
+is still required.  The sim32disk.gz can be uncompressed and booted with the
+sel32.27.sim32.disk.ini initialization file.  The sim32sdt.tap.gz file can
+also be uncompressed and started with the sel32.27.sim32.tape.ini initialization
+file to install from tape.
 
-## i7010
-   * PR155 works.
-   * PR108 works.
-   * Most Diags appear to pass without serious error.
-   * Protection mode has some errors left.  
-   * Protection mode does not handle setting H or L to 0.  
-
-## i7070
-   * Will load Diags.
-
-## i7080
-   * Sort of working.   
-   * RWW, ECB untested.  
-   * TLx instructions implimented, untested, see 8SE  
-   * Will boot from card.  
-   * Tape system appear to be working.  
-
-   * 8CU10B errors:  
-	410, 412, 413, 414, 418, 419, 420-427 error becuase
-		storage is not parity checked.   
-	440 divide not producing correct sign on error.  
-
-## i7090
-   * Working with exceptions.  
-
-   * Known bugs:  
-
-      * DFDP/DFMP     Sometimes off by +/-1 or 2 in least signifigant part of result.  
-      * EAD           +n + -n should be -0 is +0
-      * Not all channel skips working for 9P01C.
-      * HTx	Not sure what problems are, does not quite work.  
-      * DKx	Sometimes fails diagnostics with missing inhibit of interrupt.   
-
-   * CTSS    works.  
-  
-   * IBSYS   works.  
-  
-   * Stand alone assembler works.  
-
-   * Lisp 1.5 works.  
-
-   * Signifigance mode Not tested, Test Code Needed.  
 
