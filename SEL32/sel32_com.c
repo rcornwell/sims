@@ -438,6 +438,7 @@ uint8  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
             uptr->u3 |= COM_EKO;        /* save echo status */
         uptr->u3 |= COM_READ;           /* show read mode */
         uptr->u5 = SNS_RDY|SNS_ONLN;    /* status is online & ready */
+//  fprintf(stderr, "COM_RD input count = %x\r\n", coml_chp[unit].ccw_count);
         return 0;
         break;
 
