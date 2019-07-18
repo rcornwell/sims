@@ -41,7 +41,8 @@ extern uint32   SPAD[];         /* cpu SPAD memory */
 
 #define GET_TYPE(x)        ((UNIT_TYPE & (x)) >> UNIT_V_TYPE)
 #define SET_TYPE(x)         (UNIT_TYPE & ((x) << UNIT_V_TYPE))
-#define UNIT_SCFI          UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE | UNIT_FIX | UNIT_IDLE
+//#define UNIT_SCFI          UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE | UNIT_FIX | UNIT_IDLE
+#define UNIT_SCFI          UNIT_ATTABLE | UNIT_IDLE
 
 /* INCH command information */
 /*
@@ -197,8 +198,6 @@ struct ddata_t
     uint16      tpos;       /* Track position */
     uint16      spos;       /* Sector position */
     uint16      dlen;       /* remaining in data */
-//  uint16      tsize;      /* Size of one track in byte */
-//  uint16      ssize;      /* Size of one sector in bytes */
     uint16      rec;        /* Current record number */
     uint16      count;      /* Remaining in current operation */
 };
@@ -321,7 +320,7 @@ MTAB            scfi_mod[] = {
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "TYPE", "TYPE",
      &scfi_set_type, &scfi_get_type, NULL, "Type of disk"},
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "DEV", "DEV", &set_dev_addr,
-        &show_dev_addr, NULL},
+        &show_dev_addr, NULL, "Device channel address"},
     {0}
 };
 
@@ -393,7 +392,7 @@ DIB             sdb_dib = {
     sdb_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
     NUM_UNITS_SCFI, /* uint8 numunits */                        /* number of units defined */
     0xF0,           /* uint8 mask */                            /* 16 devices - device mask */
-    0x0c00,         /* uint16 chan_addr */                      /* parent channel address */
+    0x0C00,         /* uint16 chan_addr */                      /* parent channel address */
     0,              /* uint32 chan_fifo_in */                   /* fifo input index */
     0,              /* uint32 chan_fifo_out */                  /* fifo output index */
     0,              /* uint32 chan_fifo[FIFO_SIZE] */           /* interrupt status fifo for channel */
@@ -569,7 +568,7 @@ t_stat scfi_srv(UNIT *uptr)
     int             cmd = uptr->u3 & DSK_CMDMSK;
     int             type = GET_TYPE(uptr->flags);
     int             count = data->count;
-    int             trk, cyl;
+    int32           trk, cyl;
     int             unit = (uptr - dptr->units);
     int             i;
     uint8           ch;
@@ -579,9 +578,9 @@ t_stat scfi_srv(UNIT *uptr)
     sim_debug(DEBUG_DETAIL, &sda_dev, "scfi_srv entry unit %d cmd %x chsa %x chan %x count %x\n",
         unit, cmd, chsa, chsa>>8, chp->ccw_count);
 
-    if ((uptr->flags & UNIT_ATT) == 0) {        /* unit attached status */
-        return SCPE_OK;
-    }
+//    if ((uptr->flags & UNIT_ATT) == 0) {        /* unit attached status */
+//        return SCPE_OK;
+//    }
     if ((uptr->flags & UNIT_ATT) == 0) {        /* unit attached status */
         uptr->u5 |= SNS_INTVENT;                /* unit intervention required */
         if (cmd != DSK_SNS)                     /* we are completed with unit check status */
@@ -888,7 +887,8 @@ void scfi_ini(UNIT *uptr, t_bool f)
     int     i = GET_TYPE(uptr->flags);
 
     uptr->u3 &= ~0xffff;                /* clear out the flags but leave ch/sa */
-    /* capacity is tracks per allocation unit times sectors per allocation unit */
+    /* capacity is total allocation units times sectors per allocation unit */
+    /* total sectors on disk */
     uptr->capac  = scfi_type[i].taus * scfi_type[i].spau;
 
     sim_debug(DEBUG_EXP, &sda_dev, "SDA init device %s on unit SDA%.1x cap %x\n",
@@ -897,6 +897,7 @@ void scfi_ini(UNIT *uptr, t_bool f)
 
 t_stat scfi_reset(DEVICE * dptr)
 {
+    /* add reset code here */
     return SCPE_OK;
 }
 
@@ -961,8 +962,7 @@ int scfi_format(UNIT *uptr) {
 }
 
 /* attach the selected file to the disk */
-t_stat scfi_attach(UNIT *uptr, CONST char *file)
-{
+t_stat scfi_attach(UNIT *uptr, CONST char *file) {
     uint16          addr = GET_UADDR(uptr->u3);
     int             type = GET_TYPE(uptr->flags);
     DEVICE          *dptr = find_dev_from_unit(uptr);
@@ -1047,8 +1047,7 @@ fmt:
 }
 
 /* detach a disk device */
-t_stat scfi_detach(UNIT *uptr)
-{
+t_stat scfi_detach(UNIT *uptr) {
     struct ddata_t       *data = (struct ddata_t *)uptr->up7;
 
     if (data != 0) {
@@ -1060,8 +1059,7 @@ t_stat scfi_detach(UNIT *uptr)
 }
 
 /* boot from the specified disk unit */
-t_stat scfi_boot(int32 unit_num, DEVICE *dptr)
-{
+t_stat scfi_boot(int32 unit_num, DEVICE *dptr) {
     UNIT    *uptr = &dptr->units[unit_num];         /* find disk unit number */
 
     sim_debug(DEBUG_CMD, &sda_dev, "SCFI Disk Boot dev/unit %x\n", GET_UADDR(uptr->u3));
@@ -1119,13 +1117,16 @@ t_stat scfi_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
     }
     fprintf (st, ".\nEach drive has the following storage capacity:\r\n");
     for (i = 0; scfi_type[i].name != 0; i++) {
-        int32 size = scfi_type[i].taus * scfi_type[i].spau;
-        size /= 1024;
-        size = (10 * size) / 1024;
-        fprintf(st, "      %-8s %4d.%1dMB\r\n", scfi_type[i].name, size/10, size%10);
+        /* disk capacity in sectors */
+        int32 capac = scfi_type[i].taus * scfi_type[i].spau;
+        int32 ssize = scfi_type[i].ssiz * 4;    /* disk sector size in bytes */
+        int32 size = capac * ssize;             /* disk capacity in bytes */
+        size /= 1024;                           /* make KB */
+        size = (10 * size) / 1024;              /* size in MB * 10 */
+        fprintf(st, "      %-8s %4d.%1d MB\r\n", scfi_type[i].name, size/10, size%10);
     }
-    fprint_set_help (st, dptr);
-    fprint_show_help (st, dptr);
+    fprint_set_help(st, dptr);
+    fprint_show_help(st, dptr);
     return SCPE_OK;
 }
 
