@@ -1,6 +1,7 @@
 /* sel32_defs.h: Gould Concept/32 (orignal SEL32) simulator definitions 
 
-   Copyright (c) 2017, Richard Cornwell
+   Copyright (c) 2018, Richard Cornwell
+   Copyright (c) 2018, James C. Bevier
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -15,9 +16,10 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-   IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+   RICHARD CORNWELL OR JAMES BEVIER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
 
 */
 
@@ -255,5 +257,106 @@ typedef struct dib {
 
 extern DEBTAB dev_debug[];
 
+/* defines for all programs */
+#define RMASK           0x0000FFFF      /* right hw 16 bit mask */
+#define LMASK           0xFFFF0000      /* left hw 16 bit mask */
+#define FMASK           0xFFFFFFFF      /* 32 bit mask */
+#define DMASK           0xFFFFFFFFFFFFFFFFLL    /* 64 bit all bits mask */
+#define D48LMASK        0xFFFFFFFFFFFF0000LL    /* 64 bit left 48 bits mask */
+#define D32LMASK        0xFFFFFFFF00000000LL    /* 64 bit left 32 bits mask */
+#define D32RMASK        0x00000000FFFFFFFFLL    /* 64 bit right 32 bits mask */
+#define MSIGN           0x80000000      /* 32 bit minus sign */
+#define DMSIGN          0x8000000000000000LL    /* 64 bit minus sign */
+#define FSIGN           0x80000000      /* 32 bit minus sign */
+/* sign extend 16 bit value to uint32 */
+#define SEXT16(x)       (x&MSIGN?(uint32)(((uint32)x&RMASK)|LMASK):(uint32)x)
+/* sign extend 16 bit value to uint64 */
+#define DSEXT16(x)      (x&MSIGN?(l_uint64)(((l_uint64)x&RMASK)|D48LMASK):(t_uint64)x)
+/* sign extend 32 bit value to uint64 */
+#define DSEXT32(x)      (x&MSIGN?(l_uint64)(((l_uint64)x&D32RMASK)|D32LMASK):(t_uint64)x)
 
-extern DEVICE cpu_dev;
+#define UNIT_V_MODEL    (UNIT_V_UF + 0)
+#define UNIT_MODEL      (7 << UNIT_V_MODEL)
+#define MODEL(x)        (x << UNIT_V_MODEL)
+#define UNIT_V_MSIZE    (UNIT_V_MODEL + 3)
+#define UNIT_MSIZE      (0x1F << UNIT_V_MSIZE)
+#define MEMAMOUNT(x)    (x << UNIT_V_MSIZE)
+#define CPU_MODEL       ((cpu_unit.flags >> UNIT_V_MODEL) & 0x7)    /* cpu model 0-7 */
+
+#define MODEL_55        0                     /* 512K Mode Only */
+#define MODEL_75        1                     /* Extended */
+#define MODEL_27        2                     /* */
+#define MODEL_67        3                     /* */
+#define MODEL_87        4                     /* */
+#define MODEL_97        5                     /* */
+#define MODEL_V6        6                     /* V6 CPU */
+#define MODEL_V9        7                     /* V9 CPU */
+
+ DEVICEC1      0x40                       /* CC1 in CC */
+#define CC2      0x20                       /* CC2 in CC */
+#define CC3      0x10                       /* CC3 in CC */
+#define CC4      0x08                       /* CC4 in CC */
+
+#define CC1BIT   0x40000000                 /* CC1 in PSD1 */
+#define CC2BIT   0x20000000                 /* CC2 in PSD1 */
+#define CC3BIT   0x10000000                 /* CC3 in PSD1 */
+#define CC4BIT   0x08000000                 /* CC4 in PSD1 */
+
+/* PSD mode bits in 'modes' variable */
+#define PRIV     0x80                       /* Privileged mode  PSD 1 bit 0 */
+#define EXTD     0x04                       /* Extended Addressing PSD 1 bit 5 */
+#define BASE     0x02                       /* Base Mode PSD 1 bit 6 */
+#define AEXP     0x01                       /* Arithmetic exception PSD 1 bit 7 */
+
+#define MAP      0x40                       /* Map mode, PSD 2 bit 0 */
+#define RET      0x20                       /* Retain current maps, PSD 2 bit 15 */
+#define BLKED    0x10                       /* Set blocked mode, PSD 2 bit 17 */
+#define BLKRET   0x08                       /* Set retain blocked mode, PSD 2 bit 16 */
+
+/* PSD mode bits in PSD words 1&2 variable */
+#define PRIVBIT  0x80000000                 /* Privileged mode  PSD 1 bit 0 */
+#define EXTDBIT  0x04000000                 /* Extended Addressing PSD 1 bit 5 */
+#define BASEBIT  0x02000000                 /* Base Mode PSD 1 bit 6 */
+#define AEXPBIT  0x01000000                 /* Arithmetic exception PSD 1 bit 7 */
+
+#define BLKEDBIT 0x00004000                 /* Set blocked mode, PSD 2 bit 17 */
+#define RETBIT   0x00010000                 /* Retain current maps, PSD 2 bit 15 */
+#define MAPBIT   0x80000000                 /* Map mode, PSD 2 bit 0 */
+
+/* Trap Table Address in memory is pointed to by SPAD 0xF0 */
+#define POWERFAIL_TRAP  0x80                /* Power fail trap */
+#define POWERON_TRAP    0x84                /* Power-On trap */
+#define MEMPARITY_TRAP  0x88                /* Memory Parity Error trap */
+#define NONPRESMEM_TRAP 0x8C                /* Non Present Memory trap */
+#define UNDEFINSTR_TRAP 0x90                /* Undefined Instruction Trap */
+#define PRIVVIOL_TRAP   0x94                /* Privlege Violation Trap */
+#define SVCCALL_TRAP    0x98                /* Supervisor Call Trap */
+#define MACHINECHK_TRAP 0x9C                /* Machine Check Trap */
+#define SYSTEMCHK_TRAP  0xA0                /* System Check Trap */
+#define MAPFAULT_TRAP   0xA4                /* Map Fault Trap */
+#define IPUUNDEFI_TRAP  0xA8                /* IPU Undefined Instruction Trap */
+#define SIGNALIPU_TRAP  0xAC                /* Signal IPU/CPU Trap */
+#define ADDRSPEC_TRAP   0xB0                /* Address Specification Trap */
+#define CONSOLEATN_TRAP 0xB4                /* Console Attention Trap */
+#define PRIVHALT_TRAP   0xB8                /* Privlege Mode Halt Trap */
+#define AEXPCEPT_TRAP   0xBC                /* Arithmetic Exception Trap */
+
+
+/* Errors returned from various functions */
+#define ALLOK   0x0000                      /* no error, all is OK */
+#define MAPFLT  MAPFAULT_TRAP               /* map fault error */
+#define NPMEM   NONPRESMEM_TRAP             /* non present memory */
+#define MPVIOL  PRIVVIOL_TRAP               /* memory protection violation */
+
+/* general instruction decode equates */
+#define IND     0x00100000                  /* indirect bit in instruction, bit 11 */
+#define F_BIT   0x00080000                  /* byte flag addressing bit 11 in instruction */
+#define C_BITS  0x00000003                  /* byte number or hw, dw, dw flags bits 20 & 31 */
+#define BIT0    0x80000000                  /* general use for bit 0 testing */
+#define BIT1    0x40000000                  /* general use for bit 1 testing */
+#define MASK16  0x0000FFFF                  /* 16 bit address mask */
+#define MASK19  0x0007FFFF                  /* 19 bit address mask */
+#define MASK20  0x000FFFFF                  /* 20 bit address mask */
+#define MASK24  0x00FFFFFF                  /* 24 bit address mask */
+#define MASK32  0xFFFFFFFF                  /* 32 bit address mask */
+

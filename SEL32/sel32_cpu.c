@@ -1,6 +1,7 @@
 /* sel32_cpu.c: Sel 32 CPU simulator
 
-   Copyright (c) 2017, Richard Cornwell
+   Copyright (c) 2018, Richard Cornwell
+   Copyright (c) 2018, James C. Bevier
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -15,9 +16,10 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-   IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+   RICHARD CORNWELL OR JAMES BEVIER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
 
 */
 
@@ -29,15 +31,6 @@
 #define UNIT_V_MSIZE    (UNIT_V_MODEL + 3)
 #define UNIT_MSIZE      (0x1F << UNIT_V_MSIZE)
 #define MEMAMOUNT(x)    (x << UNIT_V_MSIZE)
-
-#define MODEL_55        0                     /* 512K Mode Only */
-#define MODEL_75        1                     /* Extended */
-#define MODEL_27        2                     /* */
-#define MODEL_67        3                     /* */
-#define MODEL_87        4                     /* */
-#define MODEL_97        5                     /* */
-#define MODEL_V6        6                     /* V6 CPU */
-#define MODEL_V9        7                     /* V9 CPU */
 
 #define TMR_RTC         1
 
@@ -52,33 +45,20 @@ uint32           BR[8];                       /* Base registers */
 uint32           PC;                          /* Program counter */
 uint8            CC:                          /* Condition code register */
 uint32           SPAD[256];                   /* Scratch pad memory */
-#define CC1      0x40
-#define CC2      0x20
-#define CC3      0x10
-#define CC4      0x08
-#define AEXP     0x01                         /* Arithmetic exception PSD 1 bit 7 */
-                                              /* Held in CC */
-
 uint8            modes;                       /* Operating modes */
-#define PRIV     0x80                         /* Privileged mode  PSD 1 bit 0 */
-#define EXTD     0x04                         /* Extended Addressing PSD 1 bit 5 */
-#define BASE     0x02                         /* Base Mode PSD 1 bit 6 */
-#define MAP      0x40                         /* Map mode, PSD 2 bit 0 */
-#define RET      0x20                         /* Retain current map, PSD 2 bit 15 */
-
 uint8            irq_flags;                   /* Interrupt control flags PSD 2 bits 16&17 */
 uint16           cpix;                        /* Current Process index */
 uint16           bpix;                        /* Base process index */
 
 struct InstHistory
 {
-    uint32   pc;
-    uint32   inst;
-    uint32   ea;
-    uint64   dest;
-    uint64   source;
-    uint64   res;
-    uint8    cc;
+    uint32   pc;               /* Program counter */
+    uint32   inst;             /* Instruction register */
+    uint32   ea;               /* Effective address */
+    uint64   dest;             /* Destination value */
+    uint64   source;           /* Source value */
+    uint64   res;              /* Result value */
+    uint8    cc;               /* Condition codes */
 };
 
 t_stat              cpu_ex(t_value * vptr, t_addr addr, UNIT * uptr,
@@ -113,41 +93,25 @@ struct InstHistory *hst = NULL;                 /* History stack */
 UNIT                cpu_unit =
     { UDATA(rtc_srv, UNIT_BINK | MODEL(MODEL_27) | MEMAMOUNT(0),
             MAXMEMSIZE ), 120 };
+uint32           GPR[8];                      /* General Purpose Registers */
+uint32           BR[8];                       /* Base registers */
+uint32           PC;                          /* Program counter */
+uint8            CC:                          /* Condition code register */
+uint32           SPAD[256];                   /* Scratch pad memory */
+uint8            modes;                       /* Operating modes */
+uint8            irq_flags;                   /* Interrupt control flags PSD 2 bits 16&17 */
+uint16           cpix;                        /* Current Process index */
+uint16           bpix;                        /* Base process index */
+uint32           tlb[2048];                   /* Translation look asside buffer */
 
 REG                 cpu_reg[] = {
-    {ORDATAD(IC, IC, 15, "Instruction Counter"), REG_FIT},
-    {ORDATAD(AC, AC, 38, "Accumulator"), REG_FIT, 0},
-    {ORDATAD(MQ, MQ, 36, "Multiplier Quotent"), REG_FIT, 0},
-    {BRDATAD(XR, XR, 8, 15, 8, "Index registers"), REG_FIT},
-    {ORDATAD(ID, ID, 36, "Indicator Register")},
-#ifdef EXTRA_SL
-    {ORDATAD(SL, SL, 8, "Sense Lights"), REG_FIT},
-#else
-    {ORDATAD(SL, SL, 4, "Sense Lights"), REG_FIT},
-#endif
-#ifdef EXTRA_SW
-    {ORDATAD(SW, SW, 12, "Sense Switches"), REG_FIT},
-#else
-    {ORDATAD(SW, SW, 6, "Sense Switches"), REG_FIT},
-#endif
-#endif
-    {ORDATAD(KEYS, KEYS, 36, "Console Key Register"), REG_FIT},
-    {ORDATAD(MTM, MTM, 1, "Multi Index registers"), REG_FIT},
-    {ORDATAD(TM, TM, 1, "Trap mode"), REG_FIT},
-    {ORDATAD(STM, STM, 1, "Select trap mode"), REG_FIT},
-    {ORDATAD(CTM, CTM, 1, "Copy Trap Mode"), REG_FIT},
-    {ORDATAD(FTM, FTM, 1, "Floating trap mode"), REG_FIT},
-    {ORDATAD(NMODE, nmode, 1, "Storage null mode"), REG_FIT},
-    {ORDATAD(ACOVF, acoflag, 1, "AC Overflow Flag"), REG_FIT},
-    {ORDATAD(MQOVF, mqoflag, 1, "MQ Overflow Flag"), REG_FIT},
-    {ORDATAD(IOC, iocheck, 1, "I/O Check flag"), REG_FIT},
-    {ORDATAD(DVC, dcheck, 1, "Divide Check flag"), REG_FIT},
-    {ORDATAD(RELOC, relocaddr, 14, "Relocation offset"), REG_FIT},
-    {ORDATAD(BASE, baseaddr, 14, "Relocation base"), REG_FIT},
-    {ORDATAD(LIMIT, limitaddr, 14, "Relocation limit"), REG_FIT},
-    {ORDATAD(ENB, ioflags, 36, "I/O Trap Flags"), REG_FIT},
-    {FLDATA(INST_BASE, bcore, 0), REG_FIT},
-    {FLDATA(DATA_BASE, bcore, 1), REG_FIT},
+    {HRDATAD(PC, PC, 24, "Program Counter Counter"), REG_FIT},
+    {BRDATAD(GPR, GPR, 8, 32, 16, "General Purpose Registers"), REG_FIT, 0},
+    {BRDATAD(BR, BR, 8, 32, 16, "Base Registers"), REG_FIT, 0},
+    {HRDATAD(CC, CC, 4, "Condition codes"), REG_FIT},
+    {BRDATAD(SPAD, SPAD, 256, 32, 16, "Scratch Pad Registers"), REG_FIT},
+    {HRDATAD(CPIX, cpix, 16, "Current process index"), REG_FIT},
+    {HRDATAD(BPIX, bpix, 16, "Base process index"), REG_FIT},
     {NULL}
 };
 
@@ -304,7 +268,35 @@ int base_mode[] = {
       ADR,   RR|SR|WRD,         ADR,     IMM,  
 };
 
+/* System 70 PTE:
+ *
+ *     Bit 0 - NU
+ *     Bit 1 - Valid Entry
+ *     Bit 2 - Write Protect
+ *     Bit 3 - 15 Address.
+ *
+ * System 67 PTR:
+ *     Bit 0 - Valid Entry
+ *     Bit 1 - 0000-7ff Write Protected
+ *     Bit 2 - 0800-fff Write Protected
+ *     Bit 3 - 1000-7ff Write Protected
+ *     Bit 4 - 1800-fff Write Protected
+ *     Bit 5 - 15 Address.
+ * 
+ * System V6&V9 
+ *     Bit 0 - Valid Entry
+ *     Bit 1 - No Access
+ *     Bit 2 - Write protect
+ *     Bit 3 - Modified Block
+ *     Bit 4 - Access Block
+ *     Bit 5-15 Address.
+ */
+
 int page_lookup(uint32 addr, uint32 *loc, int wr) {
+    int page = addr >> 12;
+    if (tlb[page] != 0) {
+    } else {
+    }
 }
 
 int Mem_read(uint32 addr, uint32 *data) {
@@ -336,8 +328,10 @@ t_stat
 sim_instr(void)
 {
     t_stat              reason;
-    uint64              dest;             /* Holds destination/source register */
-    uint64              source;           /* Holds source or memory data */
+    uint64              d_dest;           /* Holds double length destination/source register */
+    uint32              dest;             /* Holds destination/source register */
+    uint64              d_source;         /* Holds double length source or memory data */
+    uint32              source;           /* Holds source or memory data */
     uint32              addr;             /* Holds address of last access */
     uint32              temp;             /* General holding place for stuff */
     uint32              IR;               /* Instruction register */
@@ -385,7 +379,7 @@ exec:
         op = (opr >> 26) & 03F;
         FC =  (IR & F_BIT) ? 0x4 : 0;
         reg = (opr >> 23) & 0x7;
-        dest = (uint64)IR;
+        dest = IR;
         dbl = 0;
         ovr = 0;
         if (mode & BASE) {
@@ -464,7 +458,7 @@ exec:
                         /* Fault */
                    }
                    addr = temp & 0xFF07FFFF;
-                   dest = (uint64)temp;
+                   dest = temp;
                    ix = (temp >> 21) & 3;
                    if (ix != 0) 
                        addr += GPR[ix];
@@ -499,7 +493,7 @@ exec:
                       }
                       if (Mem_read(addr + 4, &temp)) {
                       }
-                      source |= ((uint64)temp) << 32;
+                      d_source = ((uint64)temp) << 32 | source;
                       dbl = 1;
                       break;
            case 4:
@@ -513,33 +507,33 @@ exec:
 
        /* Read in if from register */
        if (i_flags & RR) {
-           dest = (uint64)GPR[reg];
+           dest = GPR[reg];
            if (dbl) {
               if (reg & 1) {
                   /* Spec fault */
               }
-              dest |= ((uint64)GPR[reg|1]) << 32;
+              d_dest = ((uint64)GPR[reg|1]) << 32 | dest;
            } else {
-              dest |= (dest & FSIGN) ? 0xFFFFFFFF << 32: 0;
+              d_dest |= ((dest & FSIGN) ? 0xFFFFFFFFLL << 32: 0) | dest;
            }
        }
 
        /* For Base mode */
        if (i_flags & RB) {
-           dest = (uint64)BR[reg];
+           dest = BR[reg];
        }
 
        /* For register instructions */
        if (i_flags & R1) {
            int r = (IR >> 20) & 07;
-           source = (uint64)GPR[r];
+           source = GPR[r];
            if (dbl) {
               if (r & 1) {
                   /* Spec fault */
               }
-              source |= ((uint64)GPR[r|1]) << 32;
+              d_source = ((uint64)GPR[reg|1]) << 32 | source;
            } else {
-              source |= (source & FSIGN) ? 0xFFFFFFFF << 32: 0;
+              d_source |= ((source & FSIGN) ? 0xFFFFFFFFLL << 32: 0) | source;
            }
        }
 
@@ -638,17 +632,6 @@ exec:
                   break;
        case 0x04:             /* 0x10 */ /* CAR or (basemode SACZ ) */
                   if (modes & BASE) {
-                      temp = GPR[reg];
-                      t = (IR >> 20) & 7;
-                      temp = temp - GPR[t];
-                      CC &= AEXP;
-                      else if (temp & FSIGN)
-                         CC |= CC3;
-                      else if (temp == 0)
-                         CC |= CC4;
-                      else 
-                         CC |= CC2;
-                  } else {
 scaz:
                       temp = GPR[reg];
                       t = 0;
@@ -662,7 +645,18 @@ scaz:
                       } else {
                          CC |= CC4;
                       }
+                  } else {
                       GPR[(IR >> 20) & 7] = t; 
+                      temp = GPR[reg];
+                      t = (IR >> 20) & 7;
+                      temp = temp - GPR[t];
+                      CC &= AEXP;
+                      else if (temp & FSIGN)
+                         CC |= CC3;
+                      else if (temp == 0)
+                         CC |= CC4;
+                      else 
+                         CC |= CC2;
                   }
                   break;
 
@@ -1307,8 +1301,8 @@ scaz:
                             if (reg & 1) {
                                  /* Spec fault */
                             }
-                            dest = (uint64)temp | (temp & FSIGN) ? FMASK << 32: 0;
-                            source = (uint64)addr | (addr & FSIGN) ? FMASK << 32: 0;
+                            d_dest = (uint64)temp | (temp & FSIGN) ? FMASK << 32: 0;
+                            d_source = (uint64)addr | (addr & FSIGN) ? FMASK << 32: 0;
                             GPR[reg] = (uint32)(dest &  FMASK);
                             GPR[reg|1] = (uint32)((dest >> 32) & FMASK);
                             CC &= AEXP;
@@ -1324,24 +1318,24 @@ scaz:
                             if (reg & 1) {
                                 /* Spec fault */
                             }
-                            source = (uint64)addr | (addr & FSIGN) ? FMASK << 32: 0;
-                            if (source == 0) {
+                            d_source = (uint64)addr | (addr & FSIGN) ? FMASK << 32: 0;
+                            if (d_source == 0) {
                                 ovr = 1;
                                 break;
                             }
-                            dest = (uint64)GPR[reg];
-                            dest |= ((uint64)GPR[reg|1]) << 32;
-                            t = (int64)dest % (int64)source;
+                            d_dest = (uint64)GPR[reg];
+                            d_dest |= ((uint64)GPR[reg|1]) << 32;
+                            t = (int64)d_dest % (int64)d_source;
                             dbl = (t < 0);
-                            if ((t ^ (dest & MSIGN)) != 0)  /* Fix sign if needed */
+                            if ((t ^ (d_dest & MSIGN)) != 0)  /* Fix sign if needed */
                                 t = -t;
-                            dest = (int64)dest / (int64)source;
-                            if ((dest & LMASK) != 0 && (dest & LMASK) != LMASK)
+                            d_dest = (int64)d_dest / (int64)d_source;
+                            if ((d_dest & LMASK) != 0 && (d_dest & LMASK) != LMASK)
                                 ovr = 1;
                             GPR[reg] = (uint32)t;
-                            GPR[reg|1] = (uint32)(dest &  FMASK);
+                            GPR[reg|1] = (uint32)(d_dest &  FMASK);
                             CC &= AEXP;
-                            if (dest & MSIGN)
+                            if (d_dest & MSIGN)
                                CC |= CC3;
                             else if (dest == 0)
                                CC |= CC4;
@@ -1503,9 +1497,12 @@ scaz:
 
        /* Store result to register */
        if (i_flags & SD) {
-          if (dbl) 
-             GPR[reg|1] = (uint32)(dest>>32);
-          GPR[reg] = (uint32)(dest & FMASK);
+          if (dbl) {
+             GPR[reg|1] = (uint32)(d_dest>>32);
+             GPR[reg] = (uint32)(d_dest & FMASK);
+          } else {
+             GPR[reg] = dest;
+          }
        }
 
        /* Store result to base register */
@@ -1513,7 +1510,7 @@ scaz:
           if (dbl)  {
               /* Fault */
           }
-          BR[reg] = (uint32)(dest & FMASK);
+          BR[reg] = dest;
        }
 
        /* Store result to memory */
