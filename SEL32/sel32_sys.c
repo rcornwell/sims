@@ -53,9 +53,10 @@ extern uint32 PSD[];
 */
 
 char sim_name[] = "SEL 32";                 /* our simulator name */
-
 REG *sim_PC = &cpu_reg[0];
-int32 sim_emax = 1;                         /* maximum number of instructions/words to examine */
+
+//old int32 sim_emax = 1;                         /* maximum number of instructions/words to examine */
+int32 sim_emax = 4;                         /* maximum number of instructions/words to examine */
 
 DEVICE *sim_devices[] = {
         &cpu_dev,
@@ -366,7 +367,7 @@ t_stat load_icl(FILE *fileref)
     uint32  data;       /* entry data */
     uint32  cls;        /* device class */
     uint32  ivl;        /* Interrupt Vector Location */
-    int     i;          /* just a tmp */
+    uint32  i;          /* just a tmp */
     char    buf[120];   /* input buffer */
 
     /* read file input records until the end */
@@ -577,10 +578,10 @@ t_stat sim_load (FILE *fileref, CONST char *cptr, CONST char *fnam, int flag)
 #define X               0x80    /* 32/55 or 32/75 only */
 
 typedef struct _opcode {
-       uint16   opbase;
-       uint16   mask;
-       uint8    type;
-       char     *name;
+       uint16       opbase;
+       uint16       mask;
+       uint8        type;
+       const char   *name;
 } t_opcode;
 
 
@@ -794,7 +795,7 @@ t_opcode  optab[] = {
     val       =       16/32 bit instruction to print left justified
     sw        =       mode switches, 'M'=base mode, 'N'=nonbase mode
 */
-char *fc_type = "WHDHBBBB";     /* F & C bit values */
+const char *fc_type = "WHDHBBBB";   /* F & C bit values */
 
 int fprint_inst(FILE *of, uint32 val, int32 sw)
 {
@@ -803,6 +804,7 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
     int      mode = 0;                              /* assume non base mode instructions */
     t_opcode *tab;
 
+///    printf("inst %x sw %x\r\n", val, sw);
 #ifdef DO_THIS_UNTIL_FIGURE_IT_OUT
     if (sw & SWMASK('M'))                           /* Base mode printing */
         mode = 1;
@@ -976,10 +978,13 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
 t_stat fprint_sym (FILE *of, t_addr addr, t_value *val, UNIT *uptr, int32 sw)
 {
     int         i;
-    int         l = 1;
-    int         rdx = 16;
+//old    int         l = 1;                          /* default to bytes */
+    int         l = 4;                          /* default to full words */
+    int         rdx = 16;                       /* default radex is hex */
     uint32      num, tmp=*val;
 
+    if (addr & 0x02)
+        l = 2;
     /* determine base for number output */
     if (sw & SWMASK ('D')) 
         rdx = 10;                               /* decimal */
@@ -991,7 +996,14 @@ t_stat fprint_sym (FILE *of, t_addr addr, t_value *val, UNIT *uptr, int32 sw)
         rdx = 16;                               /* hex */
 
     if (sw & SWMASK ('M')) {                    /* machine base mode? */
-        sw &= ~ SWMASK('F');                     /* Can't do F and M at same time */
+//        sw &= ~ SWMASK('F');                    /* Can't do F and M at same time */
+//        sw &= ~ SWMASK('W');                    /* Can't do W and M at same time */
+        sw &= ~ SWMASK('B');                    /* Can't do B and M at same time */
+        sw &= ~ SWMASK('C');                    /* Can't do C and M at same time */
+        if (addr & 0x02)
+            l = 2;
+        else
+            l = 4;
     } else
     if (sw & SWMASK('F')) {
         l = 4;                                  /* words are 4 bytes */
@@ -1018,18 +1030,26 @@ t_stat fprint_sym (FILE *of, t_addr addr, t_value *val, UNIT *uptr, int32 sw)
     if (sw & (SWMASK('M') | SWMASK('N'))) { 
         unsigned char ch;
         num = 0;
-        for (i = 0; i < 4; i++)  {
-            ch = tmp & 0xff;                    /* get the char */
-            num |= (uint32)ch << ((3-i) * 8);   /* get byte swapped 16/32 bit instruction */
+        for (i = 0; i < l && i < 4; i++) {
+            num |= (uint32)val[i] << ((l-i-1) * 8); /* collect 8-32 bit data value to print */
         }
         if (addr & 0x02)
-            tmp <<= 16;                         /* use rt hw */
-        l = fprint_inst(of, tmp, sw);           /* go print the instruction */
+            num <<= 16;                         /* use rt hw */
+//printf("call pr_sym addr %x inst %x sw %x num %x\r\n", addr, tmp, sw, num);
+        l = fprint_inst(of, num, sw);           /* go print the instruction */
+        if (((addr & 2) == 0) && (l == 2)) {    /* did we execute a left halfword instruction */
+            fprintf(of, "; ");
+            l = fprint_inst(of, num<<16, sw);   /* go print right halfword instruction */
+            l = 4;                              /* next word address */
+        }
     } else {
         /* print the numeric value of the memory data */
         num = 0;
+        if (addr & 0x02)
+            l = 2;
         for (i = 0; i < l && i < 4; i++) 
             num |= (uint32)val[i] << ((l-i-1) * 8); /* collect 8-32 bit data value to print */
+//printf("call pr_val addr %x inst %x sw %x num %x\r\n", addr, tmp, sw, num);
         fprint_val(of, num, rdx, l*8, PV_RZRO); /* print it in requested radix */
     }
     return -(l-1);                              /* will be negative if we did anything */
@@ -1095,8 +1115,9 @@ t_stat parse_sym (CONST char *cptr, t_addr addr, UNIT *uptr, t_value *val, int32
 {
     int        i;
     int        x;
-    int        l = 1;
-    int        rdx = 16;
+//old  int        l = 1;                           /* default to bytes */
+    int        l = 4;                           /* default to full words */
+    int        rdx = 16;                        /* default radex is hex */
     char       mod = 0;
     t_opcode   *tab;
     t_stat     r;
@@ -1578,7 +1599,7 @@ t_stat parse_sym (CONST char *cptr, t_addr addr, UNIT *uptr, t_value *val, int32
     /* this code will get a value based on length specified in switches */
     num = get_uint(cptr, rdx, max[l], &r);          /* get the unsigned value */
     for (i = 0; i < l && i < 4; i++) 
-        val[i] = (num >> (i * 8)) & 0xff;           /* get 1-4 bytes of data */
+        val[i] = (num >> ((l - (1 + i)) * 8)) & 0xff; /* get 1-4 bytes of data */
     return -(l-1);
 }
 
