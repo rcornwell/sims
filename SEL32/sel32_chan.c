@@ -290,8 +290,9 @@ CHANP *find_chanp_ptr(uint16 chsa)
 int readfull(CHANP *chp, uint32 maddr, uint32 *word)
 {
     maddr &= MASK24;                            /* mask addr to 24 bits */
-    if (maddr > MEMSIZE) {                      /* see if mem addr > MEMSIZE */
+    if (maddr > (MEMSIZE*4)) {                  /* see if mem addr > MEMSIZE */
         chp->chan_status |= STATUS_PCHK;        /* program check error */
+        sim_debug(DEBUG_EXP, &cpu_dev, "readfull read %x from addr %x ERROR\n", *word, maddr<<2);
         return 1;                               /* show we have error */
     }
     maddr >>= 2;                                /* get 32 bit word index */
@@ -310,7 +311,7 @@ int readbuff(CHANP *chp)
     uint32 addr = chp->ccw_addr;                /* channel buffer address */
     uint16 chan = get_chan(chp->chan_dev);      /* our channel */
 
-    if ((addr & MASK24) > MEMSIZE) {            /* see if memory address invalid */
+    if ((addr & MASK24) > (MEMSIZE*4)) {        /* see if memory address invalid */
         chp->chan_status |= STATUS_PCHK;        /* bad, program check */
         chp->chan_byte = BUFF_CHNEND;           /* force channel end */
         irq_pend = 1;                           /* and we have an interrupt */
@@ -340,13 +341,15 @@ int writebuff(CHANP *chp)
 {
     uint32 addr = chp->ccw_addr;
 
-    if ((addr & MASK24) > MEMSIZE) {
+    if ((addr & MASK24) > (MEMSIZE*4)) {
         chp->chan_status |= STATUS_PCHK;
+    sim_debug(DEBUG_EXP, &cpu_dev, "writebuff PCHK addr %x to big mem %x status %x\n", addr, MEMSIZE, chp->chan_status);
         chp->chan_byte = BUFF_CHNEND;
         irq_pend = 1;
         return 1;
     }
     addr &= MASK24;
+    sim_debug(DEBUG_EXP, &cpu_dev, "writebuff WRITE addr %x status %x\n", addr, MEMSIZE, chp->chan_status);
     M[addr>>2] = chp->chan_buf;
     return 0;
 }
@@ -362,6 +365,7 @@ int load_ccw(CHANP *chp, int tic_ok)
     uint16      chan = get_chan(chp->chan_dev);     /* our channel */
 
 loop:
+    sim_debug(DEBUG_EXP, &cpu_dev, "load_ccw entry chan_status[%x] %x\n", chan, chp->chan_status);
     /* Abort if we have any errors */
     if (chp->chan_status & 0x3f03) {                    /* check channel status */
         sim_debug(DEBUG_EXP, &cpu_dev, "load_ccw ERROR chan_status[%x] %x\n", chan, chp->chan_status);
@@ -405,7 +409,12 @@ loop:
         docmd = 1;                                  /* show we have a command */
     }
     /* Set up for this command */
+#ifndef HASK_HACK
     chp->ccw_addr = word & MASK24;                  /* set the data address */
+#else
+    /* make a 20 bit address */
+    chp->ccw_addr = word & 0xfffff;                 /* set the data address */
+#endif
     readfull(chp, chp->chan_caw, &word);            /* get IOCD WD 2 */
 
     sim_debug(DEBUG_CMD, &cpu_dev, "load_ccw read ccw chan %02x caw %06x IOCD wd 2 %08x\n",
@@ -419,8 +428,8 @@ loop:
         irq_pend = 1;                               /* interrupt pending */
     }
 
-    sim_debug(DEBUG_EXP, &cpu_dev, "load_ccw read docmd %x irq_flag %x count %x chan %x\n",
-        docmd, irq_pend, chp->ccw_count, chan);
+    sim_debug(DEBUG_EXP, &cpu_dev, "load_ccw read docmd %x irq_flag %x count %x chan %x ccw_flags %x\n",
+        docmd, irq_pend, chp->ccw_count, chan, chp->ccw_flags);
     /* Check invalid count */
     /* HACK HACK - LPR sends CC cmd only without data addr/count */
 #ifdef NONO
@@ -568,24 +577,24 @@ int chan_write_byte(uint16 chsa, uint8 *data)
 
     /* see if at end of buffer */
     if (chp->chan_byte == BUFF_CHNEND) {
-        sim_debug(DEBUG_CMD, &cpu_dev, "chan_write_byte BUFF_CHNEND\n");
+        sim_debug(DEBUG_DATA, &cpu_dev, "chan_write_byte BUFF_CHNEND\n");
         /* if SLI not set, we have incorrect length */
         if ((chp->ccw_flags & FLAG_SLI) == 0) {
-            sim_debug(DEBUG_CMD, &cpu_dev, "chan_write_byte 4 setting SLI ret\n");
+            sim_debug(DEBUG_DATA, &cpu_dev, "chan_write_byte 4 setting SLI ret\n");
             chp->chan_status |= STATUS_LENGTH;      /* set SLI */
         }
         return 1;                                   /* return error */
     }
     if (chp->ccw_count == 0) {
-        sim_debug(DEBUG_CMD, &cpu_dev, "chan_write_byte cccw_count is zero ccw_count[%x] %x\n",
+        sim_debug(DEBUG_DATA, &cpu_dev, "chan_write_byte ccw_count is zero ccw_count[%x] %x\n",
                 chan, chp->ccw_count);
         if (chp->chan_byte & BUFF_DIRTY) {
-            sim_debug(DEBUG_CMD, &cpu_dev, "chan_write_byte 2 BUF DIRTY ret\n");
+            sim_debug(DEBUG_DATA, &cpu_dev, "chan_write_byte 2 BUF DIRTY ret\n");
             if (writebuff(chp))                     /* write it */
                 return 1;                           /* return error */
         }
         if ((chp->ccw_flags & FLAG_DC) == 0) {      /* see if we have data chaining */
-            sim_debug(DEBUG_CMD, &cpu_dev, "chan_write_byte no DC\n");
+            sim_debug(DEBUG_DATA, &cpu_dev, "chan_write_byte no DC\n");
             chp->chan_status |= STATUS_CEND;        /* no, end of data */
             chp->chan_byte = BUFF_CHNEND;           /* thats all the data we want */
             return 1;                               /* return error */
@@ -596,7 +605,7 @@ int chan_write_byte(uint16 chsa, uint8 *data)
                 return 1;                           /* return error */
          }
     }
-    sim_debug(DEBUG_DATA, &cpu_dev, "chan_write_byte non zero ccw_count[%x] %x\n", chan, chp->ccw_count);
+    sim_debug(DEBUG_DATA, &cpu_dev, "chan_write_byte non zero ccw_count[%x]=%x\n", chan, chp->ccw_count);
     if (chp->ccw_flags & FLAG_SKIP) {
         chp->ccw_count--;
         chp->chan_byte = BUFF_EMPTY;
@@ -604,7 +613,7 @@ int chan_write_byte(uint16 chsa, uint8 *data)
             chp->ccw_addr--;
         else
             chp->ccw_addr++;
-        sim_debug(DEBUG_CMD, &cpu_dev, "chan_write_byte SKIP ret\n");
+        sim_debug(DEBUG_CMD, &cpu_dev, "chan_write_byte SKIP ret addr %x cnt %x\n", chp->ccw_addr, chp->ccw_count);
         return 0;
     }
     if (chp->chan_byte == (BUFF_EMPTY|BUFF_DIRTY)) {
@@ -672,7 +681,7 @@ void chan_end(uint16 chsa, uint16 flags) {
     uint32  chan_icb = find_int_icb(chsa);          /* get icb address */
     CHANP   *chp = find_chanp_ptr(chsa);            /* get channel prog pointer */
 
-    sim_debug(DEBUG_EXP, &cpu_dev, "chan_end chsa %x, flags %x\n", chsa, flags);
+    sim_debug(DEBUG_EXP, &cpu_dev, "chan_end entry chsa %x flags %x ccw_flags %x status %x\n", chsa, flags, chp->ccw_flags, chp->chan_status);
     if (chp->chan_byte & BUFF_DIRTY) {
         if (writebuff(chp))                         /* write remaining data */
             return;                                 /* error */
@@ -680,13 +689,29 @@ void chan_end(uint16 chsa, uint16 flags) {
     }
     chp->chan_status |= STATUS_CEND;                /* set channel end */
     chp->chan_status |= ((uint16)flags);            /* add in the callers flags */
-    chp->ccw_cmd = 0;                               /* reset the completed channel command */
+//    chp->ccw_cmd = 0;                               /* reset the completed channel command */
 
+    sim_debug(DEBUG_EXP, &cpu_dev, "chan_end SLI test chsa %x ccw_flags %x count %x status %x\n", chsa, chp->ccw_flags, chp->ccw_count, chp->chan_status);
+#ifdef HACK_HACK
+    /* hack - rewind had byte count of 1, so triggered this error when it is not */
+    /* remove until I firgure out what is required */
+    /* FIXME */
     /* test for incorrect transfer length */
     if (chp->ccw_count != 0 && ((chp->ccw_flags & FLAG_SLI) == 0)) {
         chp->chan_status |= STATUS_LENGTH;          /* show incorrect length status */
         chp->ccw_flags = 0;                         /* no flags */
     }
+#else
+    if (((chp->ccw_cmd & 0xF) == 0x02) || ((chp->ccw_cmd & 0xf) == 0x01)) { /* see if this is a read/write cmd */
+        /* test for incorrect transfer length */
+        if (chp->ccw_count != 0 && ((chp->ccw_flags & FLAG_SLI) == 0)) {
+            chp->chan_status |= STATUS_LENGTH;      /* show incorrect length status */
+            chp->ccw_flags = 0;                     /* no flags */
+        }
+    }
+#endif
+    sim_debug(DEBUG_EXP, &cpu_dev, "chan_end SLI test chsa %x ccw_flags %x status %x\n", chsa, chp->ccw_flags, chp->chan_status);
+    chp->ccw_cmd = 0;                               /* reset the completed channel command */
     /* no flags for attention status */
     if (flags & (SNS_ATTN|SNS_UNITCHK|SNS_UNITEXP)) {
         chp->ccw_flags = 0;                         /* no flags */
@@ -1344,17 +1369,19 @@ uint32 scan_chan(void) {
 
             /* If channel end, check if we should continue */
             if (chp->chan_status & STATUS_CEND) {   /* do we have channel end */
-//fprintf(stderr, "got channel end chsa %x j %d units %d status %x\n", chsa, j, dibp->numunits, chp->chan_status);
-//fflush(stderr);
+    sim_debug(DEBUG_EXP, &cpu_dev, "scan_chan loading %x chan end chsa %x flags %x status %x\n", loading, chsa, chp->ccw_flags, chp->chan_status);
                 if (chp->ccw_flags & FLAG_CC) {     /* command chain flag */
                     /* we have channel end and CC flag, continue channel prog */
+    sim_debug(DEBUG_EXP, &cpu_dev, "scan_chan loading %x chan end & CC chsa %x status %x\n", loading, chsa, chp->chan_status);
                     if (chp->chan_status & STATUS_DEND) {   /* device end? */
+    sim_debug(DEBUG_EXP, &cpu_dev, "scan_chan loading %x dev end & CC chsa %x status %x\n", loading, chsa, chp->chan_status);
                         (void)load_ccw(chp, 1);     /* go load the next IOCB */
                     } else
                         irq_pend = 1;               /* still pending int */
                 } else {
                     /* we have channel end and no CC flag, end command */
                     chsa = chp->chan_dev;           /* get the chan/sa */
+    sim_debug(DEBUG_EXP, &cpu_dev, "scan_chan loading %x chan end & no CC chsa %x status %x\n", loading, chsa, chp->chan_status);
                     dev_status[chsa] = 0;           /* no device status anymore */
                     /* handle case where we are loading the O/S on boot */
                     if (loading) {
@@ -1363,6 +1390,8 @@ uint32 scan_chan(void) {
                         }
                         irq_pend = 0;               /* no pending int */
                         chp->chan_status = 0;       /* no channel status */
+//fprintf(stderr, "chp = %x loading complete\n", chp);
+//fflush(stderr);
                         return chsa;                /* if loading, just channel number */
                     }
                     /* we are not loading, but have completed channel program */
