@@ -39,7 +39,6 @@ extern  int     traceme, trstart;
 
 /* Constants */
 #define COM_LINES       8                               /* max lines */
-//#define COM_LINES     16                              /* max lines */
 #define COM_LINES_DFLT  8                               /* default lines */
 #define COM_INIT_POLL   8000
 #define COML_WAIT       500
@@ -295,7 +294,6 @@ DEVICE          com_dev = {
 */
 
 #define UNIT_COML UNIT_ATTABLE|UNIT_DISABLE|UNIT_ATT
-//#define UNIT_COML UNIT_ATTABLE|UNIT_DISABLE
 
 /* channel program information */
 CHANP           coml_chp[COM_LINES*2] = {0};
@@ -438,7 +436,7 @@ uint8  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
             uptr->u3 |= COM_EKO;        /* save echo status */
         uptr->u3 |= COM_READ;           /* show read mode */
         uptr->u5 = SNS_RDY|SNS_ONLN;    /* status is online & ready */
-//  fprintf(stderr, "COM_RD input count = %x\r\n", coml_chp[unit].ccw_count);
+        sim_debug(DEBUG_CMD, &com_dev, "com_startcmd %x: input cnt = %x\n", chan, coml_chp[unit].ccw_count);
         return 0;
         break;
 
@@ -517,8 +515,8 @@ uint8  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         ch = (com_lstat[unit][1] >> 0) & 0xff;
         chan_write_byte(GET_UADDR(uptr->u3), &ch);  /* write status */
         sim_debug(DEBUG_CMD, &com_dev,
-                "com_startcmd Cmd SENSE return chan %x u5-status %x ls0 %x ls1 %x\n",
-                chan, uptr->u5, com_lstat[unit][0], com_lstat[unit][1]);
+            "com_startcmd Cmd SENSE return chan %x u5-status %x ls0 %x ls1 %x\n",
+            chan, uptr->u5, com_lstat[unit][0], com_lstat[unit][1]);
         return SNS_CHNEND|SNS_DEVEND;   /* good return */
         break;
 
@@ -603,6 +601,7 @@ uint8  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 /* ACE byte 2  Wake-up character */
 #define ACE_WAKE    0x0000FF00  /* 8 bit wake-up character */
 #endif
+
     case COM_SACE:      /* 0xff */      /* Set ACE parameters (3 chars) */
         sim_debug(DEBUG_CMD, &com_dev, "com_startcmd %x: Cmd %x SACE\n", chan, cmd);
         chan_read_byte(GET_UADDR(uptr->u3), &ch);   /* read char 0 */
@@ -725,31 +724,24 @@ t_stat como_srv(UNIT *uptr)
     uint8   ch;
 
 
-//fprintf(stderr, "como_srv entry 1 chsa %x line %x cmd %x\r\n", chsa, ln, cmd);
+    sim_debug(DEBUG_CMD, &com_dev, "como_srv entry 1 chsa %x line %x cmd %x\n", chsa, ln, cmd);
     if (cmd) {
         /* get a user byte from memory */
         done = chan_read_byte(chsa, &ch);               /* get byte from memory */
-#if 0
-        if (!done)
-            fprintf(stderr, "como_srv mem_read chsa %x line %x char %c %x\r\n", chsa, ln, ch, ch);
-        else
-            uptr->u3 &= LMASK;                          /* leave only chsa */
-#else
         if (done)
             uptr->u3 &= LMASK;                          /* leave only chsa */
-#endif
     } else
         return SCPE_OK;
 
     if (com_dev.flags & DEV_DIS) {                      /* disabled */
-//fprintf(stderr, "como_srv chsa %x line %x DEV_DIS set\r\n", chsa, ln);
+        sim_debug(DEBUG_CMD, &com_dev, "como_srv chsa %x line %x DEV_DIS set\n", chsa, ln);
             if (done) {
-//fprintf(stderr, "como_srv Write DONE %d status %x\r\n", ln, SNS_CHNEND|SNS_DEVEND);
+                sim_debug(DEBUG_CMD, &com_dev, "como_srv Write DONE %d status %x\n", ln, SNS_CHNEND|SNS_DEVEND);
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
             }
             return SCPE_OK;                             /* return */
     }
-//fprintf(stderr, "como_srv poll chsa %x line %x\r\n", chsa, ln);
+    sim_debug(DEBUG_CMD, &com_dev, "como_srv poll chsa %x line %x DEV_DIS set\n", chsa, ln);
 
     if (com_ldsc[ln].conn) {                            /* connected? */
         if (com_ldsc[ln].xmte) {                        /* xmt enabled? */
@@ -757,13 +749,12 @@ t_stat como_srv(UNIT *uptr)
 endit:
                 uptr->u3 &= LMASK;                      /* nothing left, command complete */
                 sim_debug(DEBUG_CMD, &com_dev, "com_srvo write %d: chnend|devend\n", ln);
-//fprintf(stderr, "como_srv Write DONE %d status %x\r\n", ln, SNS_CHNEND|SNS_DEVEND);
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
                 return SCPE_OK;
             }
             /* send the next char out */
             tmxr_putc_ln(&com_ldsc[ln], ch);            /* output char */
-//fprintf(stderr, "como_srv writing char %c to ln %d\r\n", ch, ln);
+            sim_debug(DEBUG_CMD, &com_dev, "com_srvo writing char %c to ln %d\n", ch, ln);
             tmxr_poll_tx(&com_desc);                    /* poll xmt */
             sim_activate(uptr, uptr->wait);             /* wait */
             return SCPE_OK;
@@ -772,7 +763,7 @@ endit:
                 goto endit;                             /* done */
             /* just dump the char */
 //          /* xmt disabled, just wait around */
-//fprintf(stderr, "como_srv Write dumping %x on line %d\r\n", ch, ln);
+            sim_debug(DEBUG_CMD, &com_dev, "com_srvo write dumping char %c on line %d\n", ch, ln);
             tmxr_poll_tx(&com_desc);                    /* poll xmt */
 //??            sim_activate(uptr, coml_unit[ln].wait);     /* wait */
             sim_activate(uptr, uptr->wait);             /* wait */
@@ -781,7 +772,7 @@ endit:
     } else {
         /* not connected, so dump char on ground */
         if (done) {
-//fprintf(stderr, "como_srv Write dump DONE %d status %x\r\n", ln, SNS_CHNEND|SNS_DEVEND);
+            sim_debug(DEBUG_CMD, &com_dev, "com_srvo write dump DONE line %d status %x\n", ln, SNS_CHNEND|SNS_DEVEND);
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* done */
             uptr->u3 &= LMASK;                          /* nothing left, command complete */
         }
@@ -814,12 +805,10 @@ t_stat com_attach(UNIT *uptr, CONST char *cptr)
     t_stat      r;
 
     chsa = GET_UADDR(com_unit[COMC].u3);        /* get channel/subaddress */
-//fprintf(stderr, "com_attach chsa %x\r\n", chsa);
     r = tmxr_attach(&com_desc, uptr, cptr);     /* attach */
     if (r != SCPE_OK)                           /* error? */
         return r;                               /* return error */
     sim_activate(uptr, 0);                      /* start poll at once */
-//fprintf(stderr, "com_attach chsa %x\r\n", chsa);
     return SCPE_OK;
 }
 
@@ -850,12 +839,8 @@ void com_reset_ln (int32 ln)
 t_stat com_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
 fprintf (st, "SEL32 8-Line Async Controller Terminal Interfaces\n\n");
-fprintf (st, "For very early system programs, the PDP-11 simulator supports up to sixteen\n");
-fprintf (st, "additional DC11 terminal interfaces.  The additional terminals consist of two\n");
-fprintf (st, "independent devices, DCI and COML.  The entire set is modeled as a terminal\n");
-fprintf (st, "multiplexer, with DCI as the master controller.  The additional terminals\n");
-fprintf (st, "perform input and output through Telnet sessions connected to a user-specified\n");
-fprintf (st, "port.\n\n");
+fprintf (st, "Terminals perform input and output through Telnet sessions connected to a \n");
+fprintf (st, "user-specified port.\n\n");
 fprintf (st, "The ATTACH command specifies the port to be used:\n\n");
 tmxr_attach_help (st, dptr, uptr, flag, cptr);
 fprintf (st, "The additional terminals can be set to one of four modes: UC, 7P, 7B, or 8B.\n\n");
