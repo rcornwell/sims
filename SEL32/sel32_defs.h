@@ -326,6 +326,7 @@ extern DEBTAB dev_debug[];
 #define C_BITS  0x00000003                  /* byte number or hw, dw, dw flags bits 20 & 31 */
 #define BIT0    0x80000000                  /* general use for bit 0 testing */
 #define BIT1    0x40000000                  /* general use for bit 1 testing */
+#define BIT2    0x20000000                  /* general use for bit 2 testing */
 #define MASK16  0x0000FFFF                  /* 16 bit address mask */
 #define MASK19  0x0007FFFF                  /* 19 bit address mask */
 #define MASK20  0x000FFFFF                  /* 20 bit address mask */
