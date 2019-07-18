@@ -41,7 +41,8 @@ extern uint32   SPAD[];         /* cpu SPAD memory */
 
 #define GET_TYPE(x)        ((UNIT_TYPE & (x)) >> UNIT_V_TYPE)
 #define SET_TYPE(x)         (UNIT_TYPE & ((x) << UNIT_V_TYPE))
-#define UNIT_DISK          UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE | UNIT_FIX | UNIT_IDLE
+//#define UNIT_DISK          UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE | UNIT_FIX | UNIT_IDLE
+#define UNIT_DISK          UNIT_ATTABLE | UNIT_IDLE
 
 /* INCH command information */
 /*
@@ -310,7 +311,7 @@ MTAB            disk_mod[] = {
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "TYPE", "TYPE",
     &disk_set_type, &disk_get_type, NULL, "Type of disk"},
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "DEV", "DEV", &set_dev_addr,
-        &show_dev_addr, NULL},
+        &show_dev_addr, NULL, "Device channel address"},
     {0}
 };
 
@@ -571,9 +572,9 @@ t_stat disk_srv(UNIT * uptr)
     sim_debug(DEBUG_DETAIL, &dda_dev, "disk_srv entry unit %d cmd %x chsa %x chan %x count %x\n",
         unit, cmd, chsa, chsa>>8, chp->ccw_count);
 
-    if ((uptr->flags & UNIT_ATT) == 0) {        /* unit attached status */
-        return SCPE_OK;
-    }
+//    if ((uptr->flags & UNIT_ATT) == 0) {        /* unit attached status */
+//        return SCPE_OK;
+//    }
     if ((uptr->flags & UNIT_ATT) == 0) {        /* unit attached status */
         uptr->u5 |= SNS_INTVENT;                /* unit intervention required */
         if (cmd != DSK_SNS)                     /* we are completed with unit check status */
@@ -922,7 +923,8 @@ void disk_ini(UNIT *uptr, t_bool f)
     int     i = GET_TYPE(uptr->flags);
 
     uptr->u3 &= ~0xffff;                /* clear out the flags but leave ch/sa */
-    /* capacity is tracks per allocation unit time sectors per allocation unit */
+    /* capacity is total allocation units time sectors per allocation unit */
+    /* total sectors on disk */
     uptr->capac  = disk_type[i].taus * disk_type[i].spau;
 
     sim_debug(DEBUG_EXP, &dda_dev, "DMA init device %s on unit DMA%.1x cap %x\n",
@@ -931,6 +933,7 @@ void disk_ini(UNIT *uptr, t_bool f)
 
 t_stat disk_reset(DEVICE * dptr)
 {
+    /* add reset code here */
     return SCPE_OK;
 }
 
@@ -1076,9 +1079,6 @@ t_stat disk_detach(UNIT * uptr) {
     struct ddata_t       *data = (struct ddata_t *)uptr->up7;
 
     if (data != 0) {
-#ifdef CALLOC_BUFF
-        free(data->cbuf);       /* free cylinder buffer */
-#endif
         free(data);             /* free disk data structure */
     }
     uptr->up7 = 0;              /* no pointer to disk data */
@@ -1113,7 +1113,6 @@ t_stat disk_set_type(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
         if (strcmp(disk_type[i].name, cptr) == 0) {
             uptr->flags &= ~UNIT_TYPE;
             uptr->flags |= SET_TYPE(i);
-//          uptr->capac = disk_type[i].bpt * disk_type[i].heads * disk_type[i].cyl;
             uptr->capac  = disk_type[i].taus * disk_type[i].spau;
             return SCPE_OK;
         }
@@ -1121,8 +1120,7 @@ t_stat disk_set_type(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     return SCPE_ARG;
 }
 
-t_stat
-disk_get_type(FILE * st, UNIT * uptr, int32 v, CONST void *desc)
+t_stat disk_get_type(FILE * st, UNIT * uptr, int32 v, CONST void *desc)
 {
     if (uptr == NULL)
         return SCPE_IERR;
@@ -1147,13 +1145,16 @@ t_stat disk_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
     }
     fprintf (st, ".\nEach drive has the following storage capacity:\r\n");
     for (i = 0; disk_type[i].name != 0; i++) {
-        int32 size = disk_type[i].taus * disk_type[i].spau;
-        size /= 1024;
-        size = (10 * size) / 1024;
-        fprintf(st, "      %-8s %4d.%1dMB\r\n", disk_type[i].name, size/10, size%10);
+        /* disk capacity in sectors */
+        int32 capac = disk_type[i].taus * disk_type[i].spau;
+        int32 ssize = disk_type[i].ssiz * 4;    /* disk sector size in bytes */
+        int32 size = capac * ssize;             /* disk capacity in bytes */
+        size /= 1024;                           /* make KB */
+        size = (10 * size) / 1024;              /* size in MB * 10 */
+        fprintf(st, "      %-8s %4d.%1d MB\r\n", disk_type[i].name, size/10, size%10);
     }
-    fprint_set_help (st, dptr);
-    fprint_show_help (st, dptr);
+    fprint_set_help(st, dptr);
+    fprint_show_help(st, dptr);
     return SCPE_OK;
 }
 
