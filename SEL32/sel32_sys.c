@@ -695,7 +695,7 @@ t_opcode  optab[] = {
     {  0x7840,      0xFC40, N|H|TYPE_I,   "SLAD", },     /* Shift Left Arithmetic Double # NBR */
     {  0x7C00,      0xFC40, N|H|TYPE_I,   "SRLD", },     /* Shift Right Logical Double # NBR */
     {  0x7C40,      0xFC40, N|H|TYPE_I,   "SLLD", },     /* Shift Left Logical Double # NBR */
-    {  0x8000,      0xFC00,   TYPE_A,     "LEAR", },     /* Load Effective Address Real * */
+    {  0x8000,      0xFC08,   TYPE_A,     "LEAR", },     /* Load Effective Address Real * */
     {  0x8400,      0xFC00,   TYPE_A,     "ANM", },      /* And Memory B,H,W,D */
     {  0x8800,      0xFC00,   TYPE_A,     "ORM", },      /* Or Memory B,H,W,D */
     {  0x8C00,      0xFC00,   TYPE_A,     "EOM", },      /* Exclusive Or Memory */
@@ -1028,7 +1028,6 @@ t_stat fprint_sym (FILE *of, t_addr addr, t_value *val, UNIT *uptr, int32 sw)
     } else
     /* go print the symbolic instruction for base or nonbase mode */
     if (sw & (SWMASK('M') | SWMASK('N'))) { 
-        unsigned char ch;
         num = 0;
         for (i = 0; i < l && i < 4; i++) {
             num |= (uint32)val[i] << ((l-i-1) * 8); /* collect 8-32 bit data value to print */
@@ -1045,8 +1044,6 @@ t_stat fprint_sym (FILE *of, t_addr addr, t_value *val, UNIT *uptr, int32 sw)
     } else {
         /* print the numeric value of the memory data */
         num = 0;
-        if (addr & 0x02)
-            l = 2;
         for (i = 0; i < l && i < 4; i++) 
             num |= (uint32)val[i] << ((l-i-1) * 8); /* collect 8-32 bit data value to print */
 //printf("call pr_val addr %x inst %x sw %x num %x\r\n", addr, tmp, sw, num);
