@@ -10,5 +10,7 @@
 *.tap binary
 *.dsk binary
 *.vhd binary
+*,c text eol=crlf
+*,h text eol=crlf
 sim_rev.h export-subst
 
