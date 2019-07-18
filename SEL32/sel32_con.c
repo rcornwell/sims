@@ -34,6 +34,7 @@
 */
 
 #include "sel32_defs.h"
+#include "sim_tmxr.h"
 
 #ifdef NUM_DEVS_CON
 
@@ -103,9 +104,8 @@ uint8 con_startcmd(UNIT *, uint16,  uint8);
 void    con_ini(UNIT *, t_bool);
 t_stat  con_srvi(UNIT *);
 t_stat  con_srvo(UNIT *);
+t_stat  con_poll(UNIT *);
 t_stat  con_reset(DEVICE *);
-t_stat  con_attach(UNIT *, char *);
-t_stat  con_detach(UNIT *);
 
 /* channel program information */
 CHANP           con_chp[NUM_UNITS_CON] = {0};
@@ -116,8 +116,8 @@ MTAB    con_mod[] = {
 };
 
 UNIT            con_unit[] = {
-    {UDATA(con_srvi, UNIT_ATT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x7EFC)},   /* Input */
-    {UDATA(con_srvo, UNIT_ATT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x7EFD)},   /* Output */
+    {UDATA(con_srvi, UNIT_IDLE, 0), 0, UNIT_ADDR(0x7EFC)},   /* Input */
+    {UDATA(con_srvo, UNIT_IDLE, 0), 0, UNIT_ADDR(0x7EFD)},   /* Output */
 };
 
 //DIB               con_dib = {NULL, con_startcmd, NULL, NULL, NULL, con_ini, con_unit, con_chp, NUM_UNITS_CON, 0xf, 0x7e00, 0, 0, 0};
@@ -141,7 +141,7 @@ DIB             con_dib = {
 DEVICE  con_dev = {
     "CON", con_unit, NULL, con_mod,
     NUM_UNITS_CON, 8, 15, 1, 8, 8,
-    NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, &con_reset, NULL, NULL, NULL,
     &con_dib, DEV_UADDR|DEV_DISABLE|DEV_DEBUG, 0, dev_debug
 };
 
@@ -166,6 +166,7 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
     if ((uptr->u3 & CON_MSK) != 0)  /* is unit busy */
         return SNS_BSY;             /* yes, return busy */
 
+//fprintf(stderr, "COM process command %x\n", cmd);
     /* process the commands */
     switch (cmd & 0xFF) {
     case CON_INCH:      /* 0x00 */      /* INCH command */
@@ -187,8 +188,8 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         return 0;                       /* no status change */
         break;
 
-    case CON_RD:                        /* Read command */
-    case CON_ECHO:                      /* Read command w/ECHO */
+    case CON_RD:        /* 0x02 */      /* Read command */
+    case CON_ECHO:      /* 0x0a */      /* Read command w/ECHO */
         /* if output requested for input device, give error */
         if (unit == 1) {
             uptr->u5 |= SNS_CMDREJ;     /* command rejected */
@@ -205,24 +206,24 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         return 0;
         break;
 
-    case CON_NOP:                       /* NOP has do nothing */
+    case CON_NOP:       /* 0x03 */      /* NOP has do nothing */
         uptr->u5 = SNS_RDY|SNS_ONLN;    /* status is online & ready */
         return SNS_CHNEND|SNS_DEVEND;   /* good return */
         break;
 
-    case CON_CON:                       /* Connect, return Data Set ready */
+    case CON_CON:       /* 0x1f */      /* Connect, return Data Set ready */
         sim_debug(DEBUG_CMD, &con_dev, "con_startcmd %x: Cmd %x NOP\n", chan, cmd);
         uptr->u5 |= (SNS_DSR|SNS_DCD);  /* Data set ready, Data Carrier detected */
         return SNS_CHNEND|SNS_DEVEND;   /* good return */
         break;
 
-    case CON_DIS:                       /* NOP has do nothing */
+    case CON_DIS:       /* 0x23 */      /* NOP has do nothing */
         sim_debug(DEBUG_CMD, &con_dev, "con_startcmd %x: Cmd %x NOP\n", chan, cmd);
         uptr->u5 &= ~(SNS_DSR|SNS_DCD); /* Data set not ready */
         return SNS_CHNEND|SNS_DEVEND;   /* good return */
         break;
 
-    case CON_SNS:                       /* Sense */
+    case CON_SNS:       /* 0x04 */      /* Sense */
         sim_debug(DEBUG_CMD, &con_dev, "con_startcmd %x: Cmd Sense %02x\n", chan, uptr->u5);
         /* value 4 is Data Set Ready */
         /* value 5 is Data carrier detected n/u */
@@ -232,6 +233,7 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         break;
 
     default:                            /* invalid command */
+//fprintf(stderr, "Invalid command %x\n", cmd);
         uptr->u5 |= SNS_CMDREJ;         /* command rejected */
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* unit check */
         break;
@@ -268,14 +270,13 @@ t_stat con_srvi(UNIT *uptr) {
     uint16      chsa = GET_UADDR(uptr->u3);
     int         unit = (uptr - con_unit);       /* unit 0 is read, unit 1 is write */
     int         cmd = uptr->u3 & CON_MSK;
-    t_stat      r = SCPE_ARG;                   /* Force error if not set */
     uint8       ch;
-    int         i;
+    t_stat      r;
 
     switch (cmd) {
 
-    case CON_RD:                                /* read from device */
-    case CON_ECHO:                              /* read from device w/ECHO */
+    case CON_RD:        /* 0x02 */              /* read from device */
+    case CON_ECHO:      /* 0x0a */              /* read from device w/ECHO */
         if (uptr->u3 & CON_INPUT) {             /* input waiting? */
             ch = con_data[unit].ibuff[uptr->u4++];  /* get char from read buffer */
             sim_debug(DEBUG_CMD, &con_dev, "con_srvi %d: read %02x\n", unit, ch);
@@ -296,8 +297,8 @@ t_stat con_srvi(UNIT *uptr) {
         break;
     }
 
-    /* poll for next input if reading or @@A sequence */
-    r = sim_poll_kbd();                         /* poll for ready */
+    /* check for next input if reading or @@A sequence */
+    r = sim_poll_kbd();                         /* poll for a char */
     if (r & SCPE_KFLAG) {                       /* got a char */
         ch = r & 0377;                          /* drop any extra bits */
         if ((ch >= 'a') && (ch <= 'z'))
@@ -363,10 +364,14 @@ t_stat con_srvi(UNIT *uptr) {
             }
         }
     }
-    if ((cmd == CON_RD) || (cmd == CON_ECHO))   /* looking for input */
-        sim_activate(uptr, 200);                /* keep going */
-    else
-        sim_activate(uptr, 400);                /* keep going */
+    if ((r & SCPE_KFLAG) &&                     /* got something and */
+        ((cmd == CON_RD) || (cmd == CON_ECHO))) /* looking for input */
+        return sim_activate (uptr, 20);
+    return tmxr_clock_coschedule_tmr (uptr, TMR_RTC, 1);      /* come back soon */
+}
+
+t_stat  con_reset(DEVICE *dptr) {
+    tmxr_set_console_units (&con_unit[0], &con_unit[1]);
     return SCPE_OK;
 }
 
