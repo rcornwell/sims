@@ -31,7 +31,6 @@
 */
 
 #include "sel32_defs.h"
-#include "sim_defs.h"
 
 #ifdef NUM_DEVS_CON
 

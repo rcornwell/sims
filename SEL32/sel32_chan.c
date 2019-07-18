@@ -24,7 +24,6 @@
 
 /* Handle Class E and F channel I/O operations */
 #include "sel32_defs.h"
-#include "sim_defs.h"
 
 /* Class E I/O device instruction format */
 /* |-----------+-----------+-----------+-----------+-----------+-----------+-----------+-----------| */

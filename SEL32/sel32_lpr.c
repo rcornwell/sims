@@ -30,7 +30,6 @@
 */
 
 #include "sel32_defs.h"
-#include "sim_defs.h"
 #include <ctype.h>
 
 /****  COMMANDS TO PRINT BUFFER THEN DO FORMS CONTROL */
