@@ -160,9 +160,9 @@ MTAB            lpr_mod[] = {
 };
 
 UNIT            lpr_unit[] = {
-    {UDATA(lpr_srv, UNIT_LPR, 66), 300, UNIT_ADDR(0x7EF8)},     /* A */
+    {UDATA(lpr_srv, UNIT_LPR|UNIT_IDLE, 66), 300, UNIT_ADDR(0x7EF8)},     /* A */
 #if NUM_DEVS_LPR > 1
-    {UDATA(lpr_srv, UNIT_LPR, 66), 300, UNIT_ADDR(0x7EF9)},     /* B */
+    {UDATA(lpr_srv, UNIT_LPR|UNIT_IDLE, 66), 300, UNIT_ADDR(0x7EF9)},     /* B */
 #endif
 };
 
@@ -200,8 +200,6 @@ void lpr_ini(UNIT *uptr, t_bool f) {
 /* start an I/O operation */
 uint8 lpr_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 {
-    uint8       ch;
-
     if ((uptr->u3 & LPR_CMDMSK) != 0) {         /* unit busy */
         return SNS_BSY;                         /* yes, busy (already tested) */
     }
@@ -277,7 +275,8 @@ t_stat lpr_srv(UNIT *uptr) {
     int         u = (uptr - lpr_unit);
     int         cmd = (uptr->u3 & 0xff);
 
-    sim_debug(DEBUG_CMD, &lpr_dev, "lpr_srv called chsa %x cmd %x u3 %x cnt %x\r\n", chsa, cmd, uptr->u3, uptr->u6);
+    sim_debug(DEBUG_CMD, &lpr_dev, "lpr_srv called chsa %x cmd %x u3 %x cnt %x\r\n",
+            chsa, cmd, uptr->u3, uptr->u6);
 
     /* FIXME, need IOP lp status bit assignments */
     if (cmd == 0x04) {                          /* sense? */
@@ -324,8 +323,26 @@ t_stat lpr_srv(UNIT *uptr) {
             uptr->u3 |= LPR_FULL;               /* end of buffer or error */
             break;                              /* done reading */
         } else {
+            /* remove nulls */
+            if (lpr_data[u].lbuff[uptr->u6] == '\0') {
+                lpr_data[u].lbuff[uptr->u6] = ' ';
+            }
+            /* remove backspace */
+            if (lpr_data[u].lbuff[uptr->u6] == 0x8) {
+                lpr_data[u].lbuff[uptr->u6] = ' ';
+            }
             uptr->u6++;                         /* next buffer loc */
         }
+    }
+
+    /* remove trailing blanks before we apply trailing carriage control */
+    while (uptr->u6 > 0) {
+        if ((lpr_data[u].lbuff[uptr->u6-1] == ' ') ||
+            (lpr_data[u].lbuff[uptr->u6-1] == '\0')) {
+            uptr->u6--;
+            continue;
+        }
+        break;
     }
 
     /* process any CC after printing buffer */
@@ -368,11 +385,11 @@ t_stat lpr_srv(UNIT *uptr) {
     if (uptr->u3 & LPR_FULL || uptr->u6 >= 156) {
         lpr_data[u].lbuff[uptr->u6] = 0x00;     /* NULL terminate */
         sim_fwrite(&lpr_data[u].lbuff, 1, uptr->u6, uptr->fileref); /* Print our buffer */
-        sim_debug(DEBUG_DETAIL, &lpr_dev, "LPR %s", &lpr_data[u].lbuff);
+        sim_debug(DEBUG_DETAIL, &lpr_dev, "LPR %s", (char*)&lpr_data[u].lbuff);
         uptr->u3 &= ~(LPR_FULL|LPR_CMDMSK);     /* clear old status */
         uptr->u6 = 0;                           /* start at beginning of buffer */
         uptr->u4++;                             /* increment the line count */
-        if (uptr->u4 > uptr->capac) {           /* see if at max lines/page */
+        if ((uint32)uptr->u4 > uptr->capac) {   /* see if at max lines/page */
             uptr->u4 = 0;                       /* yes, restart count */
             chan_end(chsa, SNS_DEVEND|SNS_CHNEND|SNS_UNITEXP);  /* we are done */
         } else
