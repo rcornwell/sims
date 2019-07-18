@@ -642,6 +642,7 @@ t_stat mt_srv(UNIT * uptr)
         uptr->u3 &= ~MT_CMDMSK;                     /* clear the cmd */
         mt_busy[bufnum] &= ~1;                      /* make our buffer not busy */
         chan_end(addr, SNS_CHNEND|SNS_DEVEND);      /* we are done dev|chan end */
+        sim_debug(DEBUG_CMD, &mta_dev, "mt_srv SENSE %x char complete unit=%d\n", uptr->u4, unit);
         break;
 
     case MT_READ:   /* 0x02 */                      /* read a record from the device */
@@ -653,8 +654,8 @@ t_stat mt_srv(UNIT * uptr)
             }
             uptr->u3 &= ~(MT_CMDMSK|MT_READDONE);   /* clear all but readdone & cmd */
             mt_busy[bufnum] &= ~1;                  /* not busy anymore */
-            sim_debug(DEBUG_CMD, &mta_dev, "mt_srv READ %x char complete unit=%d\n", uptr->u4, unit);
             chan_end(addr, SNS_CHNEND|SNS_DEVEND);  /* set chan end, dev end status */
+            sim_debug(DEBUG_CMD, &mta_dev, "mt_srv READ %x char complete unit=%d\n", uptr->u4, unit);
             break;
         }
         /* read is not completed, get an input char */
@@ -675,7 +676,7 @@ t_stat mt_srv(UNIT * uptr)
 
         /* Send character over to channel */
         if (chan_write_byte(addr, &ch)) {
-            sim_debug(DEBUG_CMD, &mta_dev, "Read unit %d EOR\n", unit);
+            sim_debug(DEBUG_CMD, &mta_dev, "Read unit %d EOR cnt %x\n", unit, uptr->u4);
             /* If not read whole record, skip till end */
             if ((uint32)uptr->u4 < uptr->hwmark) {
                 /* Send dummy character to force SLI */
@@ -785,7 +786,7 @@ t_stat mt_srv(UNIT * uptr)
          ch = mt_buffer[bufnum][--uptr->u4];
 
          if (chan_write_byte(addr, &ch)) {
-                sim_debug(DEBUG_DATA, &mta_dev, "Read unit=%d EOR\n", unit);
+                sim_debug(DEBUG_DATA, &mta_dev, "Read unit=%d EOR cnt %x\n", unit, uptr->u4);
               /* If not read whole record, skip till end */
               if (uptr->u4 >= 0) {
                   sim_activate(uptr, (uptr->u4) * 20);
@@ -837,7 +838,7 @@ t_stat mt_srv(UNIT * uptr)
                   chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                   return SCPE_OK;
               }
-              uptr->u4 ++;
+              uptr->u4++;
               sim_activate(uptr, 50);
               break;
          case 1:
@@ -870,7 +871,7 @@ t_stat mt_srv(UNIT * uptr)
          break;
 
     case MT_BSF:    /* 0x73 */          /* Backspace file */
-        sim_debug(DEBUG_DETAIL, &mta_dev, "mt_srv cmd 0x73 BSF unit %d\n", unit);
+         sim_debug(DEBUG_DETAIL, &mta_dev, "mt_srv cmd 0x73 BSF unit %d\n", unit);
          switch(uptr->u4) {
          case 0:
               if (sim_tape_bot(uptr)) {
@@ -887,7 +888,7 @@ t_stat mt_srv(UNIT * uptr)
               r = sim_tape_sprecr(uptr, &reclen);
               if (r == MTSE_TMK) {
                   uptr->u4++;
-                sim_debug(DEBUG_DETAIL, &mta_dev, "MARK\n");
+                  sim_debug(DEBUG_DETAIL, &mta_dev, "MARK\n");
                   sim_activate(uptr, 50);
                } else if (r == MTSE_BOT) {
                   uptr->u4+= 2;
@@ -899,13 +900,13 @@ t_stat mt_srv(UNIT * uptr)
                break;
          case 2:        /* File Mark */
               uptr->u3 &= ~(MT_CMDMSK);
-              chan_end(addr, SNS_DEVEND);
               mt_busy[bufnum] &= ~1;
+              chan_end(addr, SNS_DEVEND);
               break;
          case 3:        /* BOT */
               uptr->u3 &= ~(MT_CMDMSK);
-              chan_end(addr, SNS_DEVEND);
               mt_busy[bufnum] &= ~1;
+              chan_end(addr, SNS_DEVEND);
               break;
          }
          break;
@@ -935,18 +936,18 @@ t_stat mt_srv(UNIT * uptr)
          case 2:
               uptr->u3 &= ~(MT_CMDMSK);
 //              set_devattn(addr, SNS_DEVEND);
-            chan_end(addr, SNS_DEVEND);
               mt_busy[bufnum] &= ~1;
+              chan_end(addr, SNS_DEVEND);
               break;
          case 3:
               uptr->u3 &= ~(MT_CMDMSK);
-            chan_end(addr, SNS_DEVEND|SNS_UNITEXP);
               mt_busy[bufnum] &= ~1;
+              chan_end(addr, SNS_DEVEND|SNS_UNITEXP);
               break;
          case 4:
               uptr->u3 &= ~(MT_CMDMSK);
-            chan_end(addr, SNS_DEVEND|SNS_UNITCHK);
               mt_busy[bufnum] &= ~1;
+              chan_end(addr, SNS_DEVEND|SNS_UNITCHK);
               break;
          }
          break;
@@ -981,14 +982,14 @@ t_stat mt_srv(UNIT * uptr)
 //fprintf(stderr, "Skip 2 rec unit=%d cnt %d reclen %d\n", unit, uptr->u4, reclen);
             uptr->u3 &= ~(MT_CMDMSK);
 //            chan_end(addr, SNS_DEVEND);
-            chan_end(addr, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
             mt_busy[bufnum] &= ~1;
+            chan_end(addr, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
             sim_debug(DEBUG_DETAIL, &mta_dev, "Skip done unit=%d\n", unit);
             break;
         case 3:
             uptr->u3 &= ~(MT_CMDMSK);
-            chan_end(addr, SNS_DEVEND|SNS_UNITCHK);
             mt_busy[bufnum] &= ~1;
+            chan_end(addr, SNS_DEVEND|SNS_UNITCHK);
             break;
         }
         break;
@@ -1016,8 +1017,8 @@ t_stat mt_srv(UNIT * uptr)
          case 2:
               uptr->u3 &= ~(MT_CMDMSK);
 //              set_devattn(addr, SNS_DEVEND);
-              chan_end(addr, SNS_DEVEND);
               mt_busy[bufnum] &= ~1;
+              chan_end(addr, SNS_DEVEND);
          }
          break;
 
@@ -1026,15 +1027,16 @@ t_stat mt_srv(UNIT * uptr)
             uptr->u4++;
 //          sim_activate(uptr, 30000);
 //fprintf(stderr, "Start rewind unit %d\n", unit);
+            sim_debug(DEBUG_DETAIL, &mta_dev, "Start rewind unit %d\n", unit);
             sim_activate(uptr, 500);
         } else {
-            sim_debug(DEBUG_DETAIL, &mta_dev, "Rewind unit=%d\n", unit);
+            sim_debug(DEBUG_DETAIL, &mta_dev, "Rewind complete unit %d\n", unit);
 //fprintf(stderr, "Rewind complete unit %d\n", unit);
             uptr->u3 &= ~(MT_CMDMSK);
             r = sim_tape_rewind(uptr);
             uptr->u5 |= SNS_LOAD;                   /* set BOT */
-            chan_end(addr, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
             mt_busy[bufnum] &= ~1;
+            chan_end(addr, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
          }
          break;
 
