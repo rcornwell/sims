@@ -293,7 +293,8 @@ DEVICE          com_dev = {
     coml_mod    COM modifieers list
 */
 
-#define UNIT_COML UNIT_ATTABLE|UNIT_DISABLE|UNIT_ATT|UNIT_IDLE
+/*#define UNIT_COML UNIT_ATTABLE|UNIT_DISABLE|UNIT_IDLE */
+#define UNIT_COML UNIT_IDLE|UNIT_DISABLE
 
 /* channel program information */
 CHANP           coml_chp[COM_LINES*2] = {0};
