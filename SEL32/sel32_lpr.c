@@ -319,20 +319,8 @@ t_stat lpr_srv(UNIT *uptr) {
         }
     }
 
-#ifdef OLDWAY
     /* Copy next byte from users buffer */
-    if ((uptr->u3 & LPR_FULL) == 0) {           /* copy in a char if not full */
-        if(chan_read_byte(chsa, &lpr_data[u].lbuff[uptr->u6])) {
-            uptr->u3 |= LPR_FULL;               /* end of buffer or error */
-        } else {
-            sim_activate(uptr, 20);             /* got a char, wait for a while */
-            uptr->u6++;                         /* next buffer loc */
-            return SCPE_OK;                     /* done til next char */
-        }
-    }
-#else
-    /* Copy next byte from users buffer */
-    while ((uptr->u3 & LPR_FULL) == 0) {           /* copy in a char if not full */
+    while ((uptr->u3 & LPR_FULL) == 0) {        /* copy in a char if not full */
         if(chan_read_byte(chsa, &lpr_data[u].lbuff[uptr->u6])) {
             uptr->u3 |= LPR_FULL;               /* end of buffer or error */
             break;                              /* done reading */
@@ -340,7 +328,6 @@ t_stat lpr_srv(UNIT *uptr) {
             uptr->u6++;                         /* next buffer loc */
         }
     }
-#endif
 
     /* process any CC after printing buffer */
     if ((uptr->u3 & LPR_FULL) && (uptr->u3 & LPR_POST) && ((cmd & 0x0f) == 0x0d)) {
@@ -391,51 +378,12 @@ t_stat lpr_srv(UNIT *uptr) {
             chan_end(chsa, SNS_DEVEND|SNS_CHNEND|SNS_UNITEXP);  /* we are done */
         } else
             chan_end(chsa, SNS_DEVEND|SNS_CHNEND);  /* we are done */
-#if 0   /* done, so no time out */
-#ifdef OLDWAY
-        sim_activate(uptr, 3000);               /* wait a long time for next look */
-#else
-        /* 600 lpm lp does 10 lines / sec, so 100ms wait*/
-        sim_activate(uptr, 100);               /* wait a time for next look */
-#endif
-#endif
+        /* done, so no time out */
         return SCPE_OK;
     }
 
     /* should not get here */
-    sim_activate(uptr, 20);                     /* got a char, wait for a while */
     return SCPE_OK;
-}
-
-/* print a line to the "printer" */
-void print_line(UNIT *uptr)
-{
-    char        out[150];               /* Temp conversion buffer */
-    int         i;
-    int         u = (uptr - lpr_unit);
-
-    /* Try to convert to text */
-    memset(out, ' ', sizeof(out));
-
-    /* Scan each column */
-    for (i = 0; i < uptr->u6; i++) {
-        int     ch = lpr_data[u].lbuff[i];
-
-        if (!isprint(ch))               /* make sure char is printable */
-            ch = '.';                   /* not printable, make it a '.' */
-        out[i] = ch;                    /* save to buffer */
-    }
-
-    for (--i; i > 0 && out[i] == ' '; i--)  /* Trim trailing spaces */
-        ;
-    out[++i] = '\r';                    /* output CR, LF. NULL */
-    out[++i] = '\n';
-    out[++i] = '\0';
-
-    sim_fwrite(&out, 1, i, uptr->fileref);  /* Print our buffer */
-    sim_debug(DEBUG_DETAIL, &lpr_dev, "%s", out);
-
-    memset(&lpr_data[u].lbuff[0], 0, 144);  /* clear the output buffer */
 }
 
 /* Set the number of lines per page on printer */
@@ -484,8 +432,6 @@ t_stat lpr_attach(UNIT * uptr, CONST char *file)
 /* detach a file from the line printer */
 t_stat lpr_detach(UNIT * uptr)
 {
-    if (uptr->u3 & LPR_FULL)
-        print_line(uptr);
     return detach_unit(uptr);
 }
 
