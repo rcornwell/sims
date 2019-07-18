@@ -670,6 +670,7 @@ void chan_end(uint16 chsa, uint16 flags) {
     uint32  chan_icb = find_int_icb(chsa);          /* get icb address */
     CHANP   *chp = find_chanp_ptr(chsa);            /* get channel prog pointer */
 
+    sim_debug(DEBUG_EXP, &cpu_dev, "chan_end chsa %x, flags %x\n", chsa, flags);
     if (chp->chan_byte & BUFF_DIRTY) {
         if (writebuff(chp))                         /* write remaining data */
             return;                                 /* error */
@@ -689,6 +690,7 @@ void chan_end(uint16 chsa, uint16 flags) {
         chp->ccw_flags = 0;                         /* no flags */
     }
 
+    sim_debug(DEBUG_EXP, &cpu_dev, "chan_end test end chsa %x, flags %x\n", chsa, flags);
     /* test for device or controller end */
     if (chp->chan_status & (STATUS_DEND|STATUS_CEND)) {
         chp->chan_byte = BUFF_NEWCMD;               /* clear byte flag */
