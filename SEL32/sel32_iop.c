@@ -45,6 +45,14 @@ extern  void    post_extirq(void);
 extern  uint32  attention_trap;             /* set when trap is requested */
 extern  void    set_devwake(uint16 addr, uint8 flags);
 
+/* forward definitions */
+uint8   iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
+void    iop_ini(UNIT *uptr, t_bool f);
+t_stat  iop_srv(UNIT *uptr);
+t_stat  iop_reset(DEVICE *dptr);
+t_stat  iop_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
+const char  *iop_desc(DEVICE *dptr);
+
 /* Held in u3 is the device command and status */
 #define IOP_INCH    0x00    /* Initialize channel command */
 #define IOP_MSK     0xff    /* Command mask */
@@ -83,11 +91,6 @@ struct _iop_data
 }
 iop_data[NUM_UNITS_CON];
 
-/* forward definitions */
-uint8 iop_startcmd(UNIT *, uint16,  uint8);
-void    iop_ini(UNIT *, t_bool);
-t_stat  iop_srv(UNIT *);
-
 /* channel program information */
 CHANP           iop_chp[NUM_UNITS_MT] = {0};
 
@@ -97,7 +100,7 @@ MTAB            iop_mod[] = {
 };
 
 UNIT            iop_unit[] = {
-    {UDATA(iop_srv, UNIT_ATT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x7E00)},    /* Channel controlller */
+    {UDATA(iop_srv, UNIT_IDLE, 0), 0, UNIT_ADDR(0x7E00)},    /* Channel controlller */
 };
 
 //DIB iop_dib = {NULL, iop_startcmd, NULL, NULL, NULL, iop_ini, iop_unit, iop_chp, NUM_UNITS_IOP, 0xff, 0x7e00,0,0,0};
@@ -121,8 +124,11 @@ DIB             iop_dib = {
 DEVICE          iop_dev = {
     "IOP", iop_unit, NULL, iop_mod,
     NUM_UNITS_IOP, 8, 15, 1, 8, 8,
-    NULL, NULL, NULL, NULL, NULL, NULL,
-    &iop_dib, DEV_UADDR|DEV_DISABLE|DEV_DEBUG, 0, dev_debug
+    NULL, NULL, &iop_reset,         /* examine, deposit, reset */
+    NULL, NULL, NULL,               /* boot, attach, detach */
+    &iop_dib, DEV_UADDR|DEV_DISABLE|DEV_DEBUG, 0, dev_debug,  /* dib, dev flags, debug flags, debug */
+    NULL, NULL, &iop_help,          /* ?, ?, help */
+    NULL, NULL, &iop_desc           /* ?, ?, description */
 };
 
 /* IOP controller routines */
@@ -192,6 +198,29 @@ t_stat iop_srvi(UNIT *uptr)
 
     sim_debug(DEBUG_CMD, &iop_dev, "iop_srv start %x: cmd %x \n", chsa, cmd);
     return SCPE_OK;
+}
+
+t_stat iop_reset(DEVICE *dptr)
+{
+    /* add reset code here */
+    return SCPE_OK;
+}
+
+/* sho help iop */
+t_stat iop_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr)
+{
+    fprintf(st, "SEL 32 IOP Channel Controller at 0x7E00\r\n");
+    fprintf(st, "The IOP fields all interrupts and status posting\r\n");
+    fprintf(st, "for each of the controllers on the system.\r\n");
+    fprintf(st, "Nothing can be configured for this Channel.\r\n");
+//    fprint_set_help(st, dptr);
+//    fprint_show_help(st, dptr);
+    return SCPE_OK;
+}
+
+const char *iop_desc(DEVICE *dptr)
+{
+    return("SEL IOP Channel Controller @ 0x7E00");
 }
 
 #endif
