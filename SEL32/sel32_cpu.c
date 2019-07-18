@@ -173,9 +173,9 @@ int traceme = 0;                              /* dynamic trace function */
 //int trstart = 4;                            /* count of when to start tracing */
 /* start on J.INIT */
 //int trstart = 12;                            /* count of when to start tracing */
-int trstart = 0x8000000;                      /* count of when to start tracing */
+//int trstart = 0x8000000;                      /* count of when to start tracing */
 //int trstart = 37;                           /* count of when to start tracing */
-//int trstart = 0;                           /* count of when to start tracing */
+int trstart = 0;                           /* count of when to start tracing */
 
 /* CPU registers, map cache, spad, and other variables */
 int             cpu_index;                  /* Current CPU running */
@@ -499,11 +499,10 @@ int base_mode[] = {
     INV,        INV,       SD|HLF,      SD|HLF,
    /* 40        44            48         4C     */
    /*                                        */
-      INV,      INV,        INV,       INV,  
-
+      INV,      INV,        INV,       INV, 
     /* 50       54          58            5C */
    /*  LA       BASE        BASE          CALLM */ 
-    SD|ADR,     SM,ADR,     SB|RM|ADR,    ADR,
+    SD|ADR,     SM|ADR,     SB|RM|ADR,    ADR,
 
    /* 60        64            68         6C     */
    /*                                         */
@@ -527,7 +526,7 @@ int base_mode[] = {
 
    /* B0        B4            B8         BC   */
    /* LM        LN            ADM        SUM  */ 
-      SD|RM|ADR,SD|RM|ADR,  SD|RM|ADR, SD|RM|ADR,
+   SD|RM|ADR,   SD|RM|ADR,  SD|RM|ADR, SD|RM|ADR,
 
    /* C0        C4            C8         CC   */
    /* MPM       DVM           IMM        LF   */
@@ -535,7 +534,7 @@ int base_mode[] = {
 
    /*  D0       D4            D8         DC */
    /*  LEA      ST            STM        STFBR */ 
-     INV,       SM|ADR,       SM|ADR,    ADR,  
+     INV,       RR|SM|ADR,       SM|ADR,    ADR,  
 
    /* E0        E4            E8         EC     */
    /* ADF       MPF           ARM        BCT      */
@@ -543,7 +542,8 @@ int base_mode[] = {
 
    /* F0        F4            F8         FC */
   /*  BCF       BI            MISC       IO */ 
-      ADR,      RR|SB|WRD,    ADR,       IMM,  
+////      ADR,      RR|SB|WRD,    ADR,       IMM,  
+    ADR,           RR|SD|WRD,     ADR,       IMM,  
 };
 
 /* set up the map registers for the current task in the cpu */
@@ -837,7 +837,7 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot)
             word = addr & 0x7ffff;  /* get 19 bit logical word address */
         if ((modes & MAPMODE) == 0) {
             /* check if valid real address */
-            if (word >= MEMSIZE)    /* see if address is within our memory */
+            if (word >= (MEMSIZE*4))    /* see if address is within our memory */
                 return NPMEM;       /* no, none present memory error */
             *realaddr = word;       /* return the real address */
             return ALLOK;           /* all OK, return instruction */
@@ -857,7 +857,7 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot)
             /* required map is valid, get 9 bit address and merge with 15 bit page offset */
             word = ((map & 0x1ff) << 15) | (word & 0x7fff);
             /* check if valid real address */
-            if (word >= MEMSIZE)        /* see if address is within our memory */
+            if (word >= (MEMSIZE*4))    /* see if address is within our memory */
                 return NPMEM;           /* no, none present memory error */
             if ((modes & PRIVBIT) == 0) {   /* see if we are in unprivileged mode */
                 if (map & 0x2000)       /* check if protect bit is set in map entry */
@@ -878,7 +878,7 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot)
             word = addr & 0x7ffff;  /* get 19 bit address */
         if ((modes & MAPMODE) == 0) {
             /* check if valid real address */
-            if (word >= MEMSIZE)    /* see if address is within our memory */
+            if (word >= (MEMSIZE*4))    /* see if address is within our memory */
                 return NPMEM;       /* no, none present memory error */
             *realaddr = word;       /* return the real address */
             return ALLOK;           /* all OK, return instruction */
@@ -897,7 +897,7 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot)
             /* required map is valid, get 11 bit address and merge with 13 bit page offset */
             word = ((map & 0x7ff) << 13) | (word & 0x1fff);
             /* check if valid real address */
-            if (word >= MEMSIZE)    /* see if address is within our memory */
+            if (word >= (MEMSIZE*4))    /* see if address is within our memory */
                 return NPMEM;       /* no, none present memory error */
             if ((modes & PRIVBIT) == 0) {   /* see if we are in unprivileged mode */
                 mask = (word & 0x1800) >> 11;   /* get offset of 2kb block for map being addressed */
@@ -1137,8 +1137,15 @@ wait_loop:
                 uint32 chsa  = scan_chan();     /* go scan for load complete pending */
                 if (chsa != 0) {                /* see if a boot channel/subaddress were returned */
                     /* take interrupt, store the PSD, fetch new PSD */
+//                    fprintf(stderr, "Booting from loading %x chsa %x PSD1 %x PSD2 %x\n", loading, chsa, M[0], M[1]);
+//                    fflush(stderr);
+#ifdef TRYING_NEW_WAY
                     PSD1 = 0x80000000;          /* get new PSD 1, priv and addr is 0 */
                     PSD2 = 0x00004000;          /* get new PSD 2, blocked */
+#else
+                    PSD1 = M[0>>2];             /* PSD1 from location 0 */
+                    PSD2 = M[4>>2];             /* PSD2 from location 4 */
+#endif
                     modes = PSD1 & 0x87000000;  /* extract bits 0, 5, 6, 7 from PSD 1 */
                     sim_debug(DEBUG_INST, &cpu_dev, "Boot Loading PSD1 %.8x PSD2 %.8x\n", PSD1, PSD2);
                     /* set interrupt blocking state in CPUSTATUS */
@@ -1218,7 +1225,7 @@ exec:
         if (modes & BASEBIT) {
             i_flags = base_mode[OP>>2];         /* set the instruction processing flags */
             addr = IR & RMASK;                  /* get address offset from instruction */
-            sim_debug(DEBUG_INST, &cpu_dev, "Base i_flags %x addr %.8x\n", i_flags, addr);
+            sim_debug(DEBUG_INST, &cpu_dev, "Base OP %x i_flags %x addr %.8x\n", OP, i_flags, addr);
             switch(i_flags & 0xf) {
             case HLF:
                 source = GPR[sreg];             /* get the src reg from instruction */
@@ -2525,13 +2532,16 @@ doovr3:
                 break;
 
         case 0x50>>2:               /* 0x50 INV - SD|ADR */ /* LA basemode */
+//fprintf(stderr, "place @ LABR op = %.8x modes %x addr %lx\r\n", IR, modes, addr);
                 if ((modes & BASEBIT) == 0)             /* see if nonbased */
                     goto inv;                           /* invalid instruction in nonbased mode */
+//fprintf(stderr, "place @ LABR op = %.8x modes %x addr %lx\r\n", IR, modes, addr);
                 if (modes & (BASEBIT|EXTDBIT)) {
                     dest = (t_uint64)addr;              /* just pure 24 bit address */
                 } else {
                     dest = (t_uint64)(addr | ((FC & 4) << 17));     /* F bit to bit 12 */
                 }
+//fprintf(stderr, "place @ LABR op = %.8x modes %x addr %lx\r\n", IR, modes, addr);
                 break;
 
         case 0x54>>2:               /* 0x54 SM|ADR - INV */ /* (basemode STWBR) */
@@ -4259,8 +4269,8 @@ mcheck:
                         if ((TRAPME = startxio(chsa, &status)))
                             goto newpsd;            /* error returned, trap cpu */
                         PSD1 = ((PSD1 & 0x87fffffe) | (status & 0x78000000));   /* insert status */
-   fprintf(stderr, "XIO SIO ret chan %x chsa %x status %x\r\n",  chan, (chan<<8)|suba, status);
-   fflush(stderr);
+//   fprintf(stderr, "XIO SIO ret chan %x chsa %x status %x\r\n",  chan, (chan<<8)|suba, status);
+//   fflush(stderr);
                         sim_debug(DEBUG_EXP, &cpu_dev, "XIO SIO ret chan %x chsa %x status %x\n",
                             chan, (chan<<8)|suba, status);
                         break;
@@ -4530,6 +4540,11 @@ mcheck:
         fprintf(stderr, " R0=%x R1=%x R2=%x R3=%x", GPR[0], GPR[1], GPR[2], GPR[3]);
         fprintf(stderr, " R4=%x R5=%x R6=%x R7=%x", GPR[4], GPR[5], GPR[6], GPR[7]);
         fprintf(stderr, "\r\n");
+        if (modes & BASEBIT) {
+        fprintf(stderr, "                  B0=%x B1=%x B2=%x B3=%x", BR[0], BR[1], BR[2], BR[3]);
+        fprintf(stderr, " B4=%x B5=%x B6=%x B7=%x", BR[4], BR[5], BR[6], BR[7]);
+        fprintf(stderr, "\r\n");
+        }
     }
 #endif
 sim_debug(DEBUG_DATA, &cpu_dev, "R0=%08x R1=%08x R2=%08x R3=%08x\n", GPR[0], GPR[1], GPR[2], GPR[3]);
@@ -4614,6 +4629,11 @@ newpsd:
                     fprintf(stderr, "PSD1 %.8x PSD2 %.8x TRAPME %.4x\r\n", PSD1, PSD2, TRAPME);
                     for (ix=0; ix<8; ix+=2) {
                         fprintf(stderr, "GPR[%d] %.8x GPR[%d] %.8x\r\n", ix, GPR[ix], ix+1, GPR[ix+1]);
+                    }
+                    if (modes & BASEBIT) {
+                    for (ix=0; ix<8; ix+=2) {
+                        fprintf(stderr, "BR[%d] %.8x BR[%d] %.8x\r\n", ix, BR[ix], ix+1, BR[ix+1]);
+                    }
                     }
                     fprintf(stderr, "[][][][][][][][][][] HALT TRAP [][][][][][][][][][]\r\n");
                     return STOP_HALT;               /* exit to simh for halt */
@@ -4700,6 +4720,11 @@ dumpi:
         fprintf(stderr, " R0=%x R1=%x R2=%x R3=%x", GPR[0], GPR[1], GPR[2], GPR[3]);
         fprintf(stderr, " R4=%x R5=%x R6=%x R7=%x", GPR[4], GPR[5], GPR[6], GPR[7]);
         fprintf(stderr, "\r\n");
+        if (modes & BASEBIT) {
+        fprintf(stderr, "                  B0=%x B1=%x B2=%x B3=%x", BR[0], BR[1], BR[2], BR[3]);
+        fprintf(stderr, " B4=%x B5=%x B6=%x B7=%x", BR[4], BR[5], BR[6], BR[7]);
+        fprintf(stderr, "\r\n");
+        }
 #if 1
         fprintf(stderr, "Current MAPC PSD2 %x modes %x\r\n", PSD2, modes);
         for (ix=0; ix<16; ix++) {
