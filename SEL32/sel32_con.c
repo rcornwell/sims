@@ -116,8 +116,8 @@ MTAB    con_mod[] = {
 };
 
 UNIT            con_unit[] = {
-    {UDATA(con_srvi, UNIT_ATT, 0), 0, UNIT_ADDR(0x7EFC)},   /* Input */
-    {UDATA(con_srvo, UNIT_ATT, 0), 0, UNIT_ADDR(0x7EFD)},   /* Output */
+    {UDATA(con_srvi, UNIT_ATT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x7EFC)},   /* Input */
+    {UDATA(con_srvo, UNIT_ATT|UNIT_IDLE, 0), 0, UNIT_ADDR(0x7EFD)},   /* Output */
 };
 
 //DIB               con_dib = {NULL, con_startcmd, NULL, NULL, NULL, con_ini, con_unit, con_chp, NUM_UNITS_CON, 0xf, 0x7e00, 0, 0, 0};
@@ -255,7 +255,7 @@ t_stat con_srvo(UNIT *uptr) {
             uptr->u3 &= LMASK;              /* nothing left, command complete */
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
         } else {
-            sim_debug(DEBUG_CMD, &con_dev, "con_srvo write %d: putch %0.2x %c\n", unit, ch, ch);
+            sim_debug(DEBUG_CMD, &con_dev, "con_srvo write %d: putch %02x %c\n", unit, ch, ch);
             sim_putchar(ch);            /* output next char to device */
             sim_activate(uptr, 20);     /* TRY 07-18-18 */
         }
@@ -268,14 +268,14 @@ t_stat con_srvi(UNIT *uptr) {
     uint16      chsa = GET_UADDR(uptr->u3);
     int         unit = (uptr - con_unit);       /* unit 0 is read, unit 1 is write */
     int         cmd = uptr->u3 & CON_MSK;
-    t_stat      r = SCPE_ARG;       /* Force error if not set */
+    t_stat      r = SCPE_ARG;                   /* Force error if not set */
     uint8       ch;
     int         i;
 
     switch (cmd) {
 
-    case CON_RD:            /* read from device */
-    case CON_ECHO:          /* read from device w/ECHO */
+    case CON_RD:                                /* read from device */
+    case CON_ECHO:                              /* read from device w/ECHO */
         if (uptr->u3 & CON_INPUT) {             /* input waiting? */
             ch = con_data[unit].ibuff[uptr->u4++];  /* get char from read buffer */
             sim_debug(DEBUG_CMD, &con_dev, "con_srvi %d: read %02x\n", unit, ch);
@@ -297,20 +297,20 @@ t_stat con_srvi(UNIT *uptr) {
     }
 
     /* poll for next input if reading or @@A sequence */
-    r = sim_poll_kbd();         /* poll for ready */
-    if (r & SCPE_KFLAG) {       /* got a char */
-        ch = r & 0377;          /* drop any extra bits */
+    r = sim_poll_kbd();                         /* poll for ready */
+    if (r & SCPE_KFLAG) {                       /* got a char */
+        ch = r & 0377;                          /* drop any extra bits */
         if ((ch >= 'a') && (ch <= 'z'))
-            ch &= 0xdf;         /* make upper case */
-        if ((cmd == CON_RD) || (cmd == CON_ECHO)) {     /* looking for input */
-            atbuf = 0;          /* reset attention buffer */
-            if (ch == '\n')     /* convert newline */
-                ch = '\r';      /* make newline into carriage return */ 
+            ch &= 0xdf;                         /* make upper case */
+        if ((cmd == CON_RD) || (cmd == CON_ECHO)) { /* looking for input? */
+            atbuf = 0;                          /* reset attention buffer */
+            if (ch == '\n')                     /* convert newline */
+                ch = '\r';                      /* make newline into carriage return */ 
             /* Handle end of buffer */
             switch (ch) {
-
-            case 0x7f:      /* Delete */
-            case '\b':      /* backspace */
+#ifdef ONE_AT_A_TIME
+            case 0x7f:                          /* Delete */
+            case '\b':                          /* backspace 0x08 */
                 if (con_data[unit].incnt != 0) {
                     con_data[unit].incnt--;
                     sim_putchar('\b');
@@ -318,19 +318,19 @@ t_stat con_srvi(UNIT *uptr) {
                     sim_putchar('\b');
                 }
                 break;
-            case 03:  /* ^C */
-            case 025: /* ^U clear line */
-                for (i = con_data[unit].incnt; i> 0; i--) {
+            case 03:                            /* ^C */
+            case 025:                           /* ^U clear line */
+                for (i = con_data[unit].incnt; i > 0; i--) {
                     sim_putchar('\b');
                     sim_putchar(' ');
                     sim_putchar('\b');
                 }
                 con_data[unit].incnt = 0;
                 break;
-
-            case '\r':      /* return */
-            case '\n':      /* newline */
-                uptr->u3 |= CON_CR;         /* C/R received */
+#endif
+            case '\r':                          /* return */
+            case '\n':                          /* newline */
+                uptr->u3 |= CON_CR;             /* C/R received */
                 /* fall through */
             default:
                 if (con_data[unit].incnt < sizeof(con_data[unit].ibuff)) {
@@ -347,26 +347,26 @@ t_stat con_srvi(UNIT *uptr) {
                 if (ch == 'a')
                     ch = 'A';
                 atbuf = (atbuf|ch)<<8;
-                sim_putchar(ch);        /* ECHO the char */
+                sim_putchar(ch);                /* ECHO the char */
                 if (atbuf == 0x40404100) {
                     attention_trap = CONSOLEATN_TRAP;   /* console attn (0xb4) */
-                    atbuf = 0;          /* reset attention buffer */
-                    sim_putchar('\r');  /* return char */
-                    sim_putchar('\n');  /* line feed char */
+                    atbuf = 0;                  /* reset attention buffer */
+                    sim_putchar('\r');          /* return char */
+                    sim_putchar('\n');          /* line feed char */
                 }
             } else {
                 if (ch == '?') {
-                    int chan = ((chsa >> 8) & 0x7f);        /* get the channel number */
+                    int chan = ((chsa >> 8) & 0x7f);    /* get the channel number */
                     /* set ring bit? */
                     set_devwake(chsa, SNS_ATTN|SNS_DEVEND|SNS_CHNEND);  /* tell user */
                 }
             }
         }
     }
-    if ((cmd == CON_RD) || (cmd == CON_ECHO))       /* looking for input */
-        sim_activate(uptr, 200);        /* keep going */
+    if ((cmd == CON_RD) || (cmd == CON_ECHO))   /* looking for input */
+        sim_activate(uptr, 200);                /* keep going */
     else
-        sim_activate(uptr, 400);        /* keep going */
+        sim_activate(uptr, 400);                /* keep going */
     return SCPE_OK;
 }
 
