@@ -165,12 +165,17 @@
 /*                   Wd 5 - 24 bit real address of the channel status word */
 
 /* instruction trace controls */
-//#define TRME                              /* set defined to enable instruction trace */
-#undef TRME
-int traceme = 0;                            /* dynamic trace function */
-//int trstart = 0;                          /* count of when to start tracing */
-int trstart = 8000000;                      /* count of when to start tracing */
-//int trstart = 37;                         /* count of when to start tracing */
+//#define TRME                                /* set defined to enable instruction trace */
+//#define TRMEMPX                             /* set defined to enable instruction trace in MPX */
+//#undef TRME
+int traceme = 0;                              /* dynamic trace function */
+/* start on second diag starting */
+//int trstart = 4;                            /* count of when to start tracing */
+/* start on J.INIT */
+//int trstart = 12;                            /* count of when to start tracing */
+int trstart = 0x8000000;                      /* count of when to start tracing */
+//int trstart = 37;                           /* count of when to start tracing */
+//int trstart = 0;                           /* count of when to start tracing */
 
 /* CPU registers, map cache, spad, and other variables */
 int             cpu_index;                  /* Current CPU running */
@@ -285,7 +290,7 @@ UNIT  cpu_unit =
     0,                  /* uint32 hwmark */          /* high water mark */
     0,                  /* int32 time */             /* time out */
 //was    UNIT_BINK|MODEL(MODEL_27)|MEMAMOUNT(1), /* uint32 flags */ /* flags */
-    UNIT_IDLE|UNIT_BINK|MODEL(MODEL_27)|MEMAMOUNT(1), /* uint32 flags */ /* flags */
+    UNIT_IDLE|UNIT_BINK|MODEL(MODEL_27)|MEMAMOUNT(4), /* uint32 flags */ /* flags */
     0,                  /* uint32 dynflags */        /* dynamic flags */
     MAXMEMSIZE,         /* t_addr capac */           /* capacity */
     0,                  /* t_addr pos */             /* file position */
@@ -353,6 +358,8 @@ MTAB cpu_mod[] = {
     {UNIT_MSIZE, MEMAMOUNT(6),   "4M",   "4M", &cpu_set_size},
     {UNIT_MSIZE, MEMAMOUNT(7),   "8M",   "8M", &cpu_set_size},
     {UNIT_MSIZE, MEMAMOUNT(8),  "16M",  "16M", &cpu_set_size},
+    { MTAB_XTD|MTAB_VDV, 0, "IDLE", "IDLE", &sim_set_idle, &sim_show_idle },
+    { MTAB_XTD|MTAB_VDV, 0, NULL, "NOIDLE", &sim_clr_idle, NULL },
     {MTAB_XTD | MTAB_VDV | MTAB_NMO | MTAB_SHP, 0, "HISTORY", "HISTORY",
      &cpu_set_hist, &cpu_show_hist},
     {0}
@@ -446,7 +453,7 @@ int nobase_mode[] = {
 
    /*    80            84             88             8C   */
    /*    LEAR          ANM            ORM            EOM  */
-       SD|ADR,  SCC|SD|RR|RNX|ADR,  SCC|SD|RR|RNX|ADR,  SCC|SD|RR|RNX|ADR,  
+       SD|ADR,  SD|RR|RNX|ADR,  SD|RR|RNX|ADR,  SD|RR|RNX|ADR,  
 
    /*    90            94             98             9C */
    /*    CAM           CMM            SBM            ZBM  */ 
@@ -470,7 +477,7 @@ int nobase_mode[] = {
 
    /*    E0            E4             E8             EC   */
    /*    ADF           MPF            ARM            BCT  */
-     ADR,           ADR,      SCC|SM|RR|RM|ADR,  ADR, 
+     ADR,           ADR,      SM|RR|RNX|ADR,  ADR, 
 
    /*    F0            F4             F8             FC */
    /*    BCF           BI             MISC           IO */ 
@@ -643,7 +650,7 @@ t_stat load_maps(uint32 thepsd[2])
     }
     else
     {
-#ifdef TRME  /* set to 1 for traceme to work */
+#ifdef TRMEMPX    /* set to 1 for traceme to work */
         char n[9];
         uint32 dqe;
 #endif
@@ -660,7 +667,7 @@ t_stat load_maps(uint32 thepsd[2])
         midl = M[mpl+cpix];             /* get mpl entry wd 0 for given cpix */
         msdl = M[mpl+cpix+1];           /* get mpl entry wd 1 for given cpix */
 
-#ifdef TRME   /* set to 1 for traceme to work */
+#ifdef TRMEMPX    /* set to 1 for traceme to work */
         //traceme = trstart;
         if (traceme >= trstart) {
             dqe = M[0x8e8>>2];
@@ -687,7 +694,9 @@ t_stat load_maps(uint32 thepsd[2])
             /* load msd 0 maps first (O/S) */
             spc = osmidl & MASK16;      /* get 16 bit segment description count */
 #ifdef TRME  /* set to 1 for traceme to work */
+    if (traceme >= trstart) {
             fprintf(stderr, "mapping osmidl %x spc %x osmsdl %x usermidl %x\r\n", osmidl, spc, M[mpl+1], midl);
+    }
 #endif
             if (osmidl & BIT0) {        /* see if O/S already loaded */
                 num = spc;              /* set the number of o/s maps loaded */
@@ -744,7 +753,9 @@ skipos:
         msdl = M[mpl+cpix+1];           /* get 24 bit real word address of midl */
         spc = midl & RMASK;             /* get segment page count from msdl */
 #ifdef TRME /* set to 1 for traceme to work */
+    if (traceme >= trstart) {
             fprintf(stderr, "mapping usmidl %x spc %x msdl %x\r\n", midl, spc, msdl);
+    }
 #endif
         midl = M[mpl+cpix+1] & MASK24;  /* get 24 bit real word address of midl */
         midl = midl>>2;                 /* get word address of midl */
@@ -766,7 +777,7 @@ skipos:
             if (traceme >= trstart) {
                 fprintf(stderr, "mapping 0x%x USER num 0x%x midl %x MAPC[%d] %x\r\n",
                     spc, num-1, (midl+(j/2))<<2, num/2, map);
-}
+            }
 #endif
             }
             else {
@@ -995,6 +1006,9 @@ t_stat sim_instr(void) {
     t_uint64            dest;             /* Holds destination/source register */
     t_uint64            source;           /* Holds source or memory data */
     t_uint64            td;               /* Temporary */
+    t_int64             int64a;           /* temp int */
+    t_int64             int64b;           /* temp int */
+    t_int64             int64c;           /* temp int */
     uint32              addr;             /* Holds address of last access */
     uint32              temp;             /* General holding place for stuff */
     uint32              IR;               /* Instruction register */
@@ -1019,6 +1033,9 @@ t_stat sim_instr(void) {
     uint32              int_icb;          /* interrupt context block address */
     uint32              OIR;              /* Original Instruction register */
     uint32              OPSD1;            /* Original PSD1 */
+    int32               int32a;           /* temp int */
+    int32               int32b;           /* temp int */
+    int32               int32c;           /* temp int */
 
 wait_loop:
     while (reason == 0) {                       /* loop until halted */
@@ -1049,7 +1066,11 @@ wait_loop:
 
         /* process pending I/O interrupts */
         if (!loading && (wait4int || irq_pend)) {   /* see if ints are pending */
+//    fprintf(stderr, "scan_chan call\n");
+//    fflush(stderr);
             int_icb = scan_chan();              /* no, go scan for I/O int pending */
+//    fprintf(stderr, "scan_chan return, int_icb = 0x%x\n", int_icb);
+//    fflush(stderr);
             if (int_icb != 0) {                 /* was ICB returned for an I/O or interrupt */
                 int il;
                 /* find interrupt level for icb address */
@@ -1189,6 +1210,10 @@ exec:
         ovr = 0;                                /* no overflow or arithmetic exception either */
         dest = (t_uint64)IR;                    /* assume memory address specified */
         CC = PSD1 & 0x78000000;                 /* save CC's if any */
+/* changed for diags 052719*/
+        modes = PSD1 & 0x87000000;              /* extract bits 0, 5, 6, 7 from PSD 1 */
+        if (PSD2 & MAPBIT)
+            modes |= MAPMODE;                   /* set mapped mode */
 
         if (modes & BASEBIT) {
             i_flags = base_mode[OP>>2];         /* set the instruction processing flags */
@@ -1367,7 +1392,7 @@ exec:
            }
         }
 
-        /* Read memory operand without doing sign extend for EOMX/ANMX/ORMX */
+        /* Read memory operand without doing sign extend for EOMX/ANMX/ORMX/ARMX */
         if (i_flags & RNX) { 
             if ((TRAPME = Mem_read(addr, &temp))) { /* get the word from memory */
                 goto newpsd;                    /* memory read error or map fault */
@@ -1410,7 +1435,6 @@ exec:
             dest = (t_uint64)GPR[reg];          /* get the register content */
             if (dbl) {                          /* is it double regs */
                 if (reg & 1) {                  /* check for odd reg load */
-//fprintf(stderr, "RR AD02 DBL WD opr %x FC %x addr = %x dest %lx\r\n", IR, FC, addr, dest);
                     TRAPME = ADDRSPEC_TRAP;     /* bad address, error */
                     goto newpsd;                /* go execute the trap now */
                 }
@@ -1466,6 +1490,14 @@ exec:
                         }
                         /*FIXME*/
                         reason = STOP_HALT;         /* do halt for now */
+                        /*
+                    fprintf(stdout, "[][][][][][][][][][] HALT [][][][][][][][][][]\r\n");
+                    fprintf(stdout, "PSD1 %.8x PSD2 %.8x TRAPME %.4x\r\n", PSD1, PSD2, TRAPME);
+                    for (ix=0; ix<8; ix+=2) {
+                        fprintf(stdout, "GPR[%d] %.8x GPR[%d] %.8x\r\n", ix, GPR[ix], ix+1, GPR[ix+1]);
+                    }
+                    fprintf(stdout, "[][][][][][][][][][] HALT [][][][][][][][][][]\r\n");
+                        */
                         return STOP_HALT;           /* exit to simh for halt */
                         break;
                 case 0x1:   /* WAIT */
@@ -1477,9 +1509,9 @@ exec:
                             time_t result = time(NULL);
                             sim_debug(DEBUG_CMD, &cpu_dev, "Starting WAIT mode %u\n", (uint32)result);
                         }
-                        /* tell simh we will be waiting */
-                        sim_idle(TMR_RTC, 1);       /* wait for clock tick */
                         wait4int = 1;               /* show we are waiting for interrupt */
+                        /* tell simh we will be waiting */
+                        sim_idle(TMR_RTC, 0);       /* wait for next pending device event */
                         i_flags |= BT;              /* keep PC from being incremented while waiting */
                         break;
                 case 0x2:   /* NOP */
@@ -1503,18 +1535,48 @@ exec:
                             goto newpsd;            /* go execute the trap now */
                         }
                         temp = GPR[reg];            /* save the current contents of specified reg */
+#ifdef NOT_WORKING_NOW
+                        ovr = ((temp & FSIGN) != 0);    /* set ovr to status of sign bit 0 */
                         if (GPR[reg+1] & FSIGN) {   /* if sign of R+1 is set, incr R by 1 */
                             temp++;                 /* incr temp R value */
-                            if (temp < GPR[reg])    /* if temp R less than R, we have overflow */
-                                ovr = 1;            /* show we have overflow */
+                            ovr ^= ((temp & FSIGN) != 0);   /* set ovr if sign bit changed */
+                            if (ovr && ((temp != 0) && (temp != 0x80000000)))
+                                ovr = 0;            /* no overflow if -1 to 0 */
+                            if ((temp == 0x80000000) && (ovr == 0))
+                                ovr = 1;
+                            if ((temp == 0x00000000) && (bc != 0x80000000) && (ovr == 1)) /* new */
+                                ovr = 0; /* new */
+                            if ((temp == 0xffffffff) && (ovr == 1))
+                                ovr = 0;
+//                              if (temp < GPR[reg])    /* if temp R less than R, we have overflow */
+//                                  ovr = 1;            /* show we have overflow */
                             GPR[reg] = temp;        /* update the R value */
                         }
+                        else
+                            ovr = 0;
+#else
+                        t = (temp & FSIGN) != 0;    /* set flag for sign bit not set in temp value */
+                        bc = 1;
+                        t |= ((bc & FSIGN) != 0) ? 2 : 0; /* ditto for the bit value */
+                        if (GPR[reg+1] & FSIGN) {   /* if sign of R+1 is set, incr R by 1 */
+                            temp += bc;             /* add the bit value to the reg */
+                            /* if both signs are neg and result sign is positive, overflow */
+                            /* if both signs are pos and result sign is negative, overflow */
+                            if ((t == 3 && (temp & FSIGN) == 0) ||
+                                (t == 0 && (temp & FSIGN) != 0)) {
+                                ovr = 1;            /* we have an overflow */
+                            }
+                            GPR[reg] = temp;        /* update the R value */
+                        } else
+                            ovr = 0;
+#endif
                         set_CCs(temp, ovr);         /* set the CC's, CC1 = ovr */
                         /* the arithmetic exception will be handled */
                         /* after instruction is completed */
                         /* check for arithmetic exception trap enabled */
                         if (ovr && (modes & AEXPBIT)) {
                             TRAPME = AEXPCEPT_TRAP; /* set the trap type */
+/* DIAG */                  goto newpsd;            /* handle trap */
                         }
                         break;
                 case 0x6:   /* BEI */
@@ -1532,10 +1594,12 @@ exec:
                             TRAPME = PRIVVIOL_TRAP; /* set the trap to take */
                             goto newpsd;            /* Privlege violation trap */
                         }
+                        if (CPUSTATUS & 0x80)       /* see if old mode is blocked */
+                            irq_pend = 1;           /* start scanning interrupts again */
                         CPUSTATUS &= ~0x80;         /* into status word bit 24 too */
                         PSD2 &= ~0x0000c000;        /* clear bit 48 & 49 to be unblocked */
                         SPAD[0xf5] = PSD2;          /* save the current PSD2 */
-                        irq_pend = 1;               /* start scanning interrupts again */
+/*052619                irq_pend = 1;                  start scanning interrupts again */
                         break;
                 case 0x8:   /* EAE */
                         PSD1 |= AEXPBIT;            /* set the enable AEXP flag in PSD */
@@ -1555,7 +1619,7 @@ exec:
                         CPUSTATUS |= EXTDBIT;       /* into status word too */
                         break;
                 case 0xE:   /* DAE */
-                        modes &= AEXPBIT;           /* set new extended flag in modes & PSD */
+                        modes &= ~AEXPBIT;          /* disable arithmetic exception in modes & PSD */
                         PSD1 &= ~AEXPBIT;           /* disable AEXP flag in PSD */
                         CPUSTATUS &= ~AEXPBIT;      /* into status word too */
                         break;
@@ -1570,105 +1634,120 @@ exec:
         case 0x04>>2:               /* 0x04 SCC|RR|R1|SD|HLF - SD|HLF */ /* ANR, SMC, CMC, RPSWT */
                 switch(opr & 0xF) {
                 case 0x0:   /* ANR */
-                    dest &= source;     /* just an and reg to reg */
-                    i_flags |=  SCC;    /* make sure we set CC's for dest value */
+                    dest &= source;                 /* just an and reg to reg */
+                    if (dest & MSIGN)
+                        dest |= D32LMASK;           /* force upper word to all ones */
+                    i_flags |=  SCC;                /* make sure we set CC's for dest value */
                     break;
-                case 0xA:   /* CMC */   /* Cache Memory Control - Diag use only */
-                                        /* write reg to cache memory controller */
+                case 0xA:   /* CMC */               /* Cache Memory Control - Diag use only */
+                                                    /* write reg to cache memory controller */
                     break;
-                case 0x7:   /* SMC */   /* Shared Memory Control Not Used */
-                                        /* write reg to shared memory controller */
+                case 0x7:   /* SMC */               /* Shared Memory Control Not Used */
+                                                    /* write reg to shared memory controller */
                     break;
-                case 0xB:   /* RPSWT */ /* Read Processor Status Word 2 (PSD2) */
-                    dest = PSD2;        /* get PSD2 for user */
+                case 0xB:   /* RPSWT */             /* Read Processor Status Word 2 (PSD2) */
+                    dest = PSD2;                    /* get PSD2 for user */
                     break;
-                default:    /* INV */   /* everything else is invalid instruction */
-                    TRAPME = UNDEFINSTR_TRAP;   /* Undefined Instruction Trap */
-                    goto newpsd;        /* handle trap */
+                default:    /* INV */               /* everything else is invalid instruction */
+                    TRAPME = UNDEFINSTR_TRAP;       /* Undefined Instruction Trap */
+                    goto newpsd;                    /* handle trap */
                     break;
                 }
                 break;
 
         case 0x08>>2:               /* 0x08 SCC|RR|R1|SD|HLF - */ /* ORR or ORRM */
-                dest |= source;                 /* or the regs into dest reg */
-                if (opr & 0x8)                  /* is this ORRM op? */
-                     dest &= GPR[4];            /* mask with reg 4 contents */
+                dest |= source;                     /* or the regs into dest reg */
+                if (opr & 0x8)                      /* is this ORRM op? */
+                     dest &= GPR[4];                /* mask with reg 4 contents */
+                if (dest & MSIGN)                   /* see if we need to sign extend */
+                    dest |= D32LMASK;               /* force upper word to all ones */
                 break;
 
         case 0x0C>>2:               /* 0x0c SCC|RR|R1|SD|HLF - SCC|SD|HLF */ /* EOR or EORM */
-                dest ^= source;                 /* exclusive or the regs into dest reg */
-                if (opr & 0x8)                  /* is this EORM op? */
-                     dest &= GPR[4];            /* mask with reg 4 contents */
+                dest ^= source;                     /* exclusive or the regs into dest reg */
+                if (opr & 0x8)                      /* is this EORM op? */
+                     dest &= GPR[4];                /* mask with reg 4 contents */
+                if (dest & MSIGN)                   /* see if we need to sign extend */
+                    dest |= D32LMASK;               /* force upper word to all ones */
                 break;
 
         case 0x10>>2:               /* 0x10 HLF - HLF */ /* CAR or (basemode SACZ ) */
-                if (modes & BASEBIT) {          /* handle basemode SACZ instruction */
-sacz:                                           /* non basemode SCZ enters here */
-                    temp = GPR[reg];            /* get destination reg contents to shift */
-                    CC = 0;                     /* zero the CC's */
-                    t = 0;                      /* start with zero shift count */
+                if (modes & BASEBIT) {              /* handle basemode SACZ instruction */
+sacz:                                               /* non basemode SCZ enters here */
+                    temp = GPR[reg];                /* get destination reg contents to shift */
+                    CC = 0;                         /* zero the CC's */
+                    t = 0;                          /* start with zero shift count */
                     if (temp == 0) {
-                        CC = CC4BIT;            /* set CC4 showing dest is zero & cnt is zero too */
+                        CC = CC4BIT;                /* set CC4 showing dest is zero & cnt is zero too */
                     }
+#ifdef NONO_FOR_DIAG
                     else
                     if (temp & BIT0) {
-                        CC = 0;                 /* clear CC4 & set count to zero */
+                        CC = 0;                     /* clear CC4 & set count to zero */
                     }
+#endif
                     else
-                    if (temp != 0) {            /* shift non zero values */
+                    if (temp != 0) {                /* shift non zero values */
                         while ((temp & FSIGN) == 0) {   /* shift the reg until bit 0 is set */
-                            temp <<= 1;         /* shift left 1 bit */
-                            t++;                /* increment shift count */
+                            temp <<= 1;             /* shift left 1 bit */
+                            t++;                    /* increment shift count */
                         }
-                        temp <<= 1;             /* shift the sign bit out */
+                        temp <<= 1;                 /* shift the sign bit out */
                     }
-                    GPR[reg] = temp;            /* save the shifted values */
-                    GPR[sreg] = t;              /* set the shift cnt into the src reg */
-                    PSD1 &= 0x87FFFFFE;         /* clear the old CC's */
-                    PSD1 |= (CC & 0x78000000);  /* update the CC's in the PSD */
+                    GPR[reg] = temp;                /* save the shifted values */
+                    GPR[sreg] = t;                  /* set the shift cnt into the src reg */
+                    PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
+                    PSD1 |= (CC & 0x78000000);      /* update the CC's in the PSD */
                 } else {
                     /* handle non basemode CAR instr */
-                    temp = GPR[reg] - GPR[sreg];    /* subtract src from destination value */
-                    set_CCs(temp, ovr);         /* set the CC's, CC1 = ovr */
+                    if ((int32)GPR[reg] < (int32)GPR[sreg])
+                        CC = CC3BIT;                /* negative */
+                    else
+                    if (GPR[reg] == GPR[sreg])
+                        CC = CC4BIT;                /* zero */
+                    else
+                        CC = CC2BIT;                /* positive */
+                    PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
+                    PSD1 |= (CC & 0x78000000);      /* update the CC's in the PSD */
                 }
                 break;
 
         case 0x14>>2:               /* 0x14 HLF - HLF */ /* CMR compare masked with reg */
-                temp = GPR[reg] ^ GPR[sreg];    /* exclusive or src and destination values */
-                temp &= GPR[4];                 /* and with mask reg (GPR 4) */
-                CC = 0;                         /* set all CCs zero */
-                if (temp == 0)                  /* if result is zero, set CC4 */
-                    CC = CC4BIT;                /* set CC4 to show result 0 */
-                PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
-                PSD1 |= (CC & 0x78000000);      /* update the CC's in the PSD */
+                temp = GPR[reg] ^ GPR[sreg];        /* exclusive or src and destination values */
+                temp &= GPR[4];                     /* and with mask reg (GPR 4) */
+                CC = 0;                             /* set all CCs zero */
+                if (temp == 0)                      /* if result is zero, set CC4 */
+                    CC = CC4BIT;                    /* set CC4 to show result 0 */
+                PSD1 &= 0x87FFFFFE;                 /* clear the old CC's */
+                PSD1 |= (CC & 0x78000000);          /* update the CC's in the PSD */
                 break;
 
-        case 0x18>>2:               /* 0x18 SD|HLF - SD|HLF */ /* SBR, (basemode ZBR, ABR, TBR */
-                if (modes & BASEBIT) {          /* handle basemode ZBR, ABR, TBR */
-                    if ((opr & 0xC) == 0x0)     /* SBR instruction */
-                        goto sbr;               /* use nonbase SBR code */
-                    if ((opr & 0xC) == 0x4)     /* ZBR instruction */
-                        goto zbr;               /* use nonbase ZBR code */
-                    if ((opr & 0xC) == 0x8)     /* ABR instruction */
-                        goto abr;               /* use nonbase ABR code */
-                    if ((opr & 0xC) == 0xC)     /* TBR instruction */
-                        goto tbr;               /* use nonbase TBR code */
+        case 0x18>>2:               /* 0x18 HLF - HLF */ /* SBR, (basemode ZBR, ABR, TBR */
+                if (modes & BASEBIT) {              /* handle basemode ZBR, ABR, TBR */
+                    if ((opr & 0xC) == 0x0)         /* SBR instruction */
+                        goto sbr;                   /* use nonbase SBR code */
+                    if ((opr & 0xC) == 0x4)         /* ZBR instruction */
+                        goto zbr;                   /* use nonbase ZBR code */
+                    if ((opr & 0xC) == 0x8)         /* ABR instruction */
+                        goto abr;                   /* use nonbase ABR code */
+                    if ((opr & 0xC) == 0xC)         /* TBR instruction */
+                        goto tbr;                   /* use nonbase TBR code */
 inv:
-                    TRAPME = UNDEFINSTR_TRAP;   /* Undefined Instruction Trap */
-                    goto newpsd;                /* handle trap */
+                    TRAPME = UNDEFINSTR_TRAP;       /* Undefined Instruction Trap */
+                    goto newpsd;                    /* handle trap */
 
-                } else {                        /* handle non basemode SBR */
-sbr:                                            /* handle basemode too */
+                } else {                            /* handle non basemode SBR */
+sbr:                                                /* handle basemode too */
                     /* move the byte field bits 14-15 to bits 27-28 */
                     /* or in the bit# from dest reg field bits 6-8 into bit 29-31 */
                     bc = (((opr << 3) & 0x18) | reg);   /* get # bits to shift right */
-                    bc = BIT0 >> bc;            /* make a bit mask of bit number */
+                    bc = BIT0 >> bc;                /* make a bit mask of bit number */
                     t = (PSD1 & 0x70000000) >> 1;   /* get old CC bits 1-3 into CCs 2-4*/
-                    PSD1 &= 0x87FFFFFE;         /* clear the old CC's */
-                    if (GPR[sreg] & bc)         /* test the bit in src reg */
-                        t |= CC1BIT;            /* set CC1 to the bit value */
-                    GPR[sreg] |=  bc;           /* set the bit in src reg */
-                    PSD1 |= t;                  /* update the CC's in the PSD */
+                    PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
+                    if (GPR[sreg] & bc)             /* test the bit in src reg */
+                        t |= CC1BIT;                /* set CC1 to the bit value */
+                    GPR[sreg] |=  bc;               /* set the bit in src reg */
+                    PSD1 |= t;                      /* update the CC's in the PSD */
                 }
                 break;
 
@@ -1714,9 +1793,15 @@ abr:                                                /* basemode ABR too */
                     bc = (((opr << 3) & 0x18) | reg);   /* get # bits to shift right */
                     bc = BIT0 >> bc;                /* make a bit mask of bit number */
                     temp = GPR[sreg];               /* get reg value to add bit to */
-                    ovr = ((temp & FSIGN) != 0);    /* set ovr to status of sign bit 0 */
+                    t = (temp & FSIGN) != 0;        /* set flag for sign bit not set in temp value */
+                    t |= ((bc & FSIGN) != 0) ? 2 : 0; /* ditto for the bit value */
                     temp += bc;                     /* add the bit value to the reg */
-                    ovr ^= ((temp & FSIGN) != 0);   /* set ovr if sign bit changed */
+                    /* if both signs are neg and result sign is positive, overflow */
+                    /* if both signs are pos and result sign is negative, overflow */
+                    if ((t == 3 && (temp & FSIGN) == 0) ||
+                        (t == 0 && (temp & FSIGN) != 0)) {
+                        ovr = 1;                    /* we have an overflow */
+                    }
                     GPR[sreg] = temp;               /* save the new value */
                     set_CCs(temp, ovr);             /* set the CC's, CC1 = ovr */
                     /* the arithmetic exception will be handled */
@@ -1724,44 +1809,50 @@ abr:                                                /* basemode ABR too */
                     /* check for arithmetic exception trap enabled */
                     if (ovr && (modes & AEXPBIT)) {
                         TRAPME = AEXPCEPT_TRAP;     /* set the trap type */
+/* DIAG */              goto newpsd;                /* handle trap */
                     }
                 }
                 break;
 
                 case 0x24>>2:               /* 0x24 HLF - HLF */ /* TBR (basemode SRC)  */
                 if (modes & BASEBIT) {              /* handle SRC basemode */
-                    if ((opr & 0x60) == 0x00)   /* SRC instruction */
-                        goto src;               /* use nonbase code */
-                    if ((opr & 0x60) == 0x40)   /* SLC instruction */
-                        goto slc;               /* use nonbase code */
-                    goto inv;                   /* else invalid */
-                } else {                        /* handle TBR non basemode */
-tbr:                                            /* handle basemode TBR too */
+                    if ((opr & 0x60) == 0x00)       /* SRC instruction */
+                        goto src;                   /* use nonbase code */
+                    if ((opr & 0x60) == 0x40)       /* SLC instruction */
+                        goto slc;                   /* use nonbase code */
+                    goto inv;                       /* else invalid */
+                } else {                            /* handle TBR non basemode */
+tbr:                                                /* handle basemode TBR too */
                     /* move the byte field bits 14-15 to bits 27-28 */
                     /* or in the bit# from dest reg field bits 6-8 into bit 29-31 */
                     bc = (((opr << 3) & 0x18) | reg);   /* get # bits to shift right */
-                    bc = BIT0 >> bc;            /* make a bit mask of bit number */
+                    bc = BIT0 >> bc;                /* make a bit mask of bit number */
                     t = (PSD1 & 0x70000000) >> 1;   /* get old CC bits 1-3 into CCs 2-4*/
-                    PSD1 &= 0x87FFFFFE;         /* clear the old CC's */
-                    if (GPR[sreg] & bc)         /* test the bit in src reg */
-                        t |= CC1BIT;            /* set CC1 to the bit value */
-                    PSD1 |= t;                  /* update the CC's in the PSD */
+                    PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
+                    if (GPR[sreg] & bc)             /* test the bit in src reg */
+                        t |= CC1BIT;                /* set CC1 to the bit value */
+                    PSD1 |= t;                      /* update the CC's in the PSD */
+#ifdef TRME     /* set to 1 for traceme to work */
+    if (traceme >= trstart) {
+                    fprintf(stderr, "TBR GPR[%x] %x bc %x t %x PSD1 %x\n", sreg, GPR[sreg], bc, t, PSD1);
+    }
+#endif
                 }
                 break;
 
         case 0x28>>2:               /* 0x28 HLF - HLF */ /* Misc OP REG instructions */
-                temp = GPR[reg];            /* get reg value */
+                addr = GPR[reg];                    /* get reg value */
                 switch(opr & 0xF) {
 
                 case 0x0:       /* TRSW */
                     if (modes & BASEBIT)
-                        addr = temp & MASK24;       /* 24 bits for based mode */
+                        temp = 0x78FFFFFE;          /* bits 1-4 and 24 bit addr for based mode */
                     else
-                        addr = temp & 0x7FFFE;      /* 19 bits for non based mode */
+                        temp = 0x7807FFFE;          /* bits 1-4 and 19 bit addr for non based mode */
                     /* we are returning to the addr in reg, set CC's from reg */
-                    /* update the PSD with new address */
-                    PSD1 = (PSD1 & 0xff000000) | (addr & 0xfffffe); /* set new PC */
-                    PSD1 = ((PSD1 & 0x87ffffff) | (temp & 0x78000000)); /* insert CCs from reg */
+                    /* update the PSD with new address from reg */
+                    PSD1 &= ~temp;                  /* clean the bits to be changed */
+                    PSD1 |= (addr & temp);          /* insert the CC's and address */
                     i_flags |= BT;                  /* we branched, so no PC update */
                     break;
 
@@ -1875,6 +1966,9 @@ tbr:                                            /* handle basemode TBR too */
                     temp = NEGATE32(addr);          /* negate Rs value */
                     if (temp == addr)               /* overflow if nothing changed */
                         ovr = 1;                    /* set overflow flag */
+                    /* reset ovr if val == 0, not set for DIAGS */
+                    if ((temp == 0) & ovr)
+                        ovr = 0;
                     bc = 1;                         /* set the CC's */
                     break;
 
@@ -1929,6 +2023,9 @@ tbr:                                            /* handle basemode TBR too */
                     temp = NEGATE32(addr);          /* complement GPR[reg] */
                     if (temp == addr)               /* check for overflow */
                         ovr = 1;                    /* overflow */
+                    /* reset ovr if val == 0, not set for DIAGS */
+                    if ((temp == 0) & ovr)
+                        ovr = 0;
                     temp &= GPR[4];                 /* and with negative reg */
                     bc = 1;                         /* set the CC's */
                     break;
@@ -1960,12 +2057,13 @@ tbr:                                            /* handle basemode TBR too */
                 /* check for arithmetic exception trap enabled */
                 if (ovr && (modes & AEXPBIT)) {
                     TRAPME = AEXPCEPT_TRAP;         /* set the trap type */
+/* DIAG */          goto newpsd;                    /* handle trap */
                 }
                 break;
 
 /*TODO*/    case 0x30>>2:               /* 0x30 */ /* CALM */
                 fprintf(stderr, "ERROR - CALM called\r\n");
-                fflush(stderr);
+//              fflush(stderr);
                 goto inv;           /* TODO */
                 break;
 
@@ -1990,8 +2088,9 @@ tbr:                                            /* handle basemode TBR too */
                         /* if both signs are neg and result sign is positive, overflow */
                         /* if both signs are pos and result sign is negative, overflow */
                         if ((t == 3 && (temp & FSIGN) == 0) ||
-                            (t == 0 && (temp & FSIGN) != 0))
+                            (t == 0 && (temp & FSIGN) != 0)) {
                             ovr = 1;                    /* we have an overflow */
+                        }
                         i_flags |= SF;                  /* special processing */
                         break;
 
@@ -2304,6 +2403,8 @@ doovr4:
                         TRAPME = AEXPCEPT_TRAP;         /* set the trap type */
                         goto newpsd;                    /* go execute the trap now */
                     }
+///                    GPR[reg] = temp;                    /* temp has destination reg value */
+///                    set_CCs(temp, ovr);                 /* set the CC's */
                 }
                 break;
 
@@ -2373,17 +2474,23 @@ doovr4:
                 source = (t_uint64)(GPR[sreg]) | ((GPR[sreg] & FSIGN) ? D32LMASK : 0);
                 /* merge the dividend regs into the 64bit value */
                 dest = (((t_uint64)GPR[reg]) << 32) | ((t_uint64)GPR[reg+1]);
-                if (source == 0) {
+                if (source == 0)
                     goto doovr3;
-                    break;
-                }
                 td = (t_int64)dest % (t_int64)source;   /* remainder */
-                dbl = (td < 0);                         /* double reg is neg remainder */
+//                dbl = (td < 0);                         /* double reg is neg remainder */
                 if (((td & DMSIGN) ^ (dest & DMSIGN)) != 0) /* Fix sign if needed */
                     td = NEGATE32(td);                  /* dividend and remainder must be same sign */
                 dest = (t_int64)dest / (t_int64)source; /* now do the divide */
-                if ((dest & D32LMASK) != 0 && (dest & D32LMASK) != D32LMASK) {  /* test for overflow */
+                int64a = dest;
+                if (int64a < 0)
+                    int64a = -int64a;
+                if (int64a > 0x7fffffff)                /* if more than 31 bits, we have an error */
+                    goto doovr3;
+                if (((dest & D32LMASK) != 0 && (dest & D32LMASK) != D32LMASK) ||
+                    ((dest & D32LMASK) == D32LMASK) && ((dest & D32RMASK) == 0)) {  /* test for overflow */
 doovr3:
+                    dest = (((t_uint64)GPR[reg]) << 32);/* insert upper reg value */
+                    dest |= (t_uint64)GPR[reg+1];       /* get low order reg value */
                     ovr = 1;                            /* the quotient exceeds 31 bit, overflow */
                     /* the arithmetic exception will be handled */
                     /* after instruction is completed */
@@ -2392,7 +2499,16 @@ doovr3:
                         TRAPME = AEXPCEPT_TRAP;         /* set the trap type */
                     }
                     /* the original regs must be returned unchanged if aexp */
-                    set_CCs(temp, ovr);                 /* set the CC's */
+                    CC = CC1BIT;                        /* set ovr CC bit */
+                    if (dest == 0)
+                        CC |= CC4BIT;                   /* dw is zero, so CC4 */
+                    else
+                    if (dest & DMSIGN)
+                        CC |= CC3BIT;                   /* it is neg dw, so CC3  */
+                    else
+                        CC |= CC2BIT;                   /* then dest > 0, so CC2 */
+                    PSD1 &= 0x87FFFFFE;                 /* clear the old CC's from PSD1 */
+                    PSD1 |= CC;                         /* update the CC's in the PSD */
                 } else {
                     GPR[reg] = (uint32)(td & FMASK);    /* reg gets remainder, reg+1 quotient */
                     GPR[reg+1] = (uint32)(dest & FMASK);    /* store quotient in reg+1 */
@@ -2541,6 +2657,7 @@ sla:
                     /* check for arithmetic exception trap enabled */
                     if (ovr && (modes & AEXPBIT)) {
                         TRAPME = AEXPCEPT_TRAP; /* set the trap type */
+/*DIAG*/                goto newpsd;                /* go execute the trap now */
                     }
                 } else {                    /* this is a SRA */
                     for (ix=0; ix<bc; ix++) {
@@ -2620,6 +2737,7 @@ src:
                     /* check for arithmetic exception trap enabled */
                     if (ovr && (modes & AEXPBIT)) {
                         TRAPME = AEXPCEPT_TRAP; /* set the trap type */
+/*DIAG*/                goto newpsd;                /* go execute the trap now */
                     }
                 } else {                    /* this is a SRAD */
                     for (ix=0; ix<bc; ix++) {
@@ -2653,56 +2771,162 @@ src:
                 /* convert address to real physical address */
                 TRAPME = RealAddr(addr, &temp, &t);
                 if (TRAPME != ALLOK)
-                    goto newpsd;        /* memory read error or map fault */
+                    goto newpsd;                /* memory read error or map fault */
                 /* OS code says F bit is not transferred, so just ignore it */
-//              if (FC & 4)             /* see if F bit was set */
-//                  temp |= 0x01000000; /* set bit 7 of address */
-                dest = temp;            /* put in dest to go out */
+                /* DIAGS need it, so put it back */
+                if (FC & 4)                     /* see if F bit was set */
+                    temp |= 0x01000000;         /* set bit 7 of address */
+                dest = temp;                    /* put in dest to go out */
                 break;
 
-        case 0x84>>2:               /* 0x84 SCC|SD|RR|RNX|ADR - SD|RNX|ADR */ /* ANMx */
+        case 0x84>>2:               /* 0x84 SD|RR|RNX|ADR - SD|RNX|ADR */ /* ANMx */
 //                dest &= source;
                 td = dest & source;                 /* DO ANMX */
-                goto meoa;
-                break;
-
-        case 0x88>>2:               /* 0x88 SCC|SD|RR|RNX|ADR - SD|RNX|ADR */ /* ORMx */
-//                dest |= source;
-                td = dest | source;                 /* DO ORMX */
-                goto meoa;
-                break;
-
-        case 0x8C>>2:               /* 0x8C  SCC|SD|RR|RNX|ADR - SD|RNX|ADR */ /* EOMx */
-                /* must special handle because we are getting bit difference */
-                /* for word, halfword, & byte zero the upper 32 bits of dest */
-                td = dest ^ source;                 /* DO EOMX */
-meoa:
+                CC = 0;
                 switch(FC) {                        /* adjust for hw or bytes */
                 case 4: case 5: case 6: case 7:     /* byte address */
-                    /* EOMB */
+                    /* ANMB */
                     td &= 0xff;                     /* mask out right most byte */
                     dest &= 0xffffff00;             /* make place for byte */
+                    if (td == 0)
+                        CC |= CC4BIT;               /* byte is zero, so CC4 */
+                    else
+                        CC |= CC2BIT;               /* then td > 0, so CC2 */
                     break;
                 case 1:                             /* left halfword addr */
                 case 3:                             /* right halfword addr */
-                    /* EOMH */
+                    /* ANMH */
                     td &= RMASK;                    /* mask out right most 16 bits */
                     dest &= LMASK;                  /* make place for halfword */
+                    if (td == 0)
+                        CC |= CC4BIT;               /* hw is zero, so CC4 */
+                    else
+                        CC |= CC2BIT;               /* then td > 0, so CC2 */
                     break;
                 case 0:                             /* 32 bit word */
-                    /* EOMW */
+                    /* ANMW */
                     td &= D32RMASK;                 /* mask out right most 32 bits */
-                    /* drop through */
-                case 2:                             /* 64 bit double */
-                    /* EOMD */
                     dest = 0;                       /* make place for 64 bits */
+                    if (td == 0)
+                        CC |= CC4BIT;               /* word is zero, so CC4 */
+                    else
+                    if (td & 0x80000000)
+                        CC |= CC3BIT;               /* it is neg wd, so CC3  */
+                    else
+                        CC |= CC2BIT;               /* then td > 0, so CC2 */
+                    break;
+                case 2:                             /* 64 bit double */
+                    /* ANMD */
+                    dest = 0;                       /* make place for 64 bits */
+                    if (td == 0)
+                        CC |= CC4BIT;               /* dw is zero, so CC4 */
+                    else
+                    if (td & DMSIGN)
+                        CC |= CC3BIT;               /* it is neg dw, so CC3  */
+                    else
+                        CC |= CC2BIT;               /* then td > 0, so CC2 */
                     break;
                 }
                 dest |= td;                         /* insert result into dest */
+                if (dest & 0x80000000)              /* see if we need to sign extend */
+                    dest |= D32LMASK;               /* force upper word to all ones */
+                PSD1 &= 0x87FFFFFE;                 /* clear the old CC's from PSD1 */
+                PSD1 |= CC;                         /* update the CC's in the PSD */
+                break;
+
+        case 0x88>>2:               /* 0x88 SD|RR|RNX|ADR - SD|RNX|ADR */ /* ORMx */
+//                dest |= source;
+                td = dest | source;                 /* DO ORMX */
+//                goto meoa;
+meoa:
+                CC = 0;
+                switch(FC) {                        /* adjust for hw or bytes */
+                case 4: case 5: case 6: case 7:     /* byte address */
+                    /* ORMB */
+                    td &= 0xff;                     /* mask out right most byte */
+                    dest &= 0xffffff00;             /* make place for byte */
+                    dest |= td;                     /* insert result into dest */
+                    if (dest == 0)
+                        CC |= CC4BIT;               /* byte is zero, so CC4 */
+                    else
+                    if (dest & MSIGN) {
+                        CC |= CC3BIT;               /* assume negative */
+                        dest |= D32LMASK;           /* force upper word to all ones */
+                    }
+                    else
+                        CC |= CC2BIT;               /* then td > 0, so CC2 */
+                    break;
+                case 1:                             /* left halfword addr */
+                case 3:                             /* right halfword addr */
+                    /* ORMH */
+                    td &= RMASK;                    /* mask out right most 16 bits */
+                    dest &= LMASK;                  /* make place for halfword */
+                    dest |= td;                     /* insert result into dest */
+                    if (dest == 0)
+                        CC |= CC4BIT;               /* byte is zero, so CC4 */
+                    else
+                    if (dest & MSIGN) {
+                        CC |= CC3BIT;                /* assume negative */
+                        dest |= D32LMASK;           /* force upper word to all ones */
+                    }
+                    else
+                        CC |= CC2BIT;               /* then td > 0, so CC2 */
+                    break;
+                case 0:                             /* 32 bit word */
+                    /* ORMW */
+                    td &= D32RMASK;                 /* mask out right most 32 bits */
+                    dest = 0;                       /* make place for 64 bits */
+                    dest |= td;                     /* insert result into dest */
+                    if (dest == 0)
+                        CC |= CC4BIT;               /* byte is zero, so CC4 */
+                    else
+                    if (dest & MSIGN) {
+                        CC |= CC3BIT;                /* assume negative */
+                        dest |= D32LMASK;           /* force upper word to all ones */
+                    }
+                    else
+                        CC |= CC2BIT;               /* then td > 0, so CC2 */
+                    break;
+                case 2:                             /* 64 bit double */
+                    /* ORMD */
+                    dest = 0;                       /* make place for 64 bits */
+                    dest |= td;                     /* insert result into dest */
+                    if (dest == 0)
+                        CC |= CC4BIT;               /* byte is zero, so CC4 */
+                    else
+                    if (dest & DMSIGN)
+                        CC |= CC3BIT;                /* assume negative */
+                    else
+                        CC |= CC2BIT;               /* then td > 0, so CC2 */
+                    break;
+                }
+                PSD1 &= 0x87FFFFFE;                 /* clear the old CC's from PSD1 */
+                PSD1 |= CC;                         /* update the CC's in the PSD */
+                break;
+
+        case 0x8C>>2:               /* 0x8C  SD|RR|RNX|ADR - SD|RNX|ADR */ /* EOMx */
+                /* must special handle because we are getting bit difference */
+                /* for word, halfword, & byte zero the upper 32 bits of dest */
+                /* Diags require CC's to be set on result value of byte, hw, wd, or dw */
+                td = dest ^ source;                 /* DO EOMX */
+                goto meoa;
                 break;
 
         case 0x90>>2:               /* 0x90 SCC|RR|RM|ADR - RM|ADR */ /* CAMx */
-                dest -= source;
+//              dest -= source;                     /* old */
+                td = dest;
+                dest = dest + NEGATE32(source);     /* sub mem from reg */
+#ifndef HACK
+                if (dbl && (dest == DMSIGN)) {
+                    /* HACK HACK HACK for diags */
+                    if ((t_int64)td > (t_int64)source)
+                        dest = 1;                   /* +1 CC2 */
+                    else
+                        dest = 0;                   /* force to 0 to set cc4 */
+                    if ((t_int64)dest < (t_int64)source)
+                        dest = 0;                   /* force to 0 to set cc4 */
+                }
+#endif
                 break;
 
         case 0x94>>2:               /* 0x94 RR|RM|ADR - RM|ADR */ /* CMMx */
@@ -2734,7 +2958,8 @@ meoa:
                 if ((TRAPME = Mem_read(addr, &temp)))   /* get the word from memory */
                     goto newpsd;                /* memory read error or map fault */
 
-                t = (CC & 0x70000000) >> 1;     /* get old CC bits 1-3 into CCs 2-4*/
+                t = (PSD1 & 0x70000000) >> 1;   /* get old CC bits 1-3 into CCs 2-4*/
+//DIAG                t = (CC & 0x70000000) >> 1;     /* get old CC bits 1-3 into CCs 2-4*/
                 /* use C bits and bits 6-8 (reg) to generate shift bit count */
                 bc = ((FC & 3) << 3) | reg;     /* get # bits to shift right */
                 bc = BIT0 >> bc;                /* make a bit mask of bit number */
@@ -2756,7 +2981,8 @@ meoa:
                 if ((TRAPME = Mem_read(addr, &temp)))   /* get the word from memory */
                     goto newpsd;                /* memory read error or map fault */
 
-                t = (CC & 0x70000000) >> 1;     /* get old CC bits 1-3 into CCs 2-4*/
+                t = (PSD1 & 0x70000000) >> 1;   /* get old CC bits 1-3 into CCs 2-4*/
+//DIAG                t = (CC & 0x70000000) >> 1;     /* get old CC bits 1-3 into CCs 2-4*/
                 /* use C bits and bits 6-8 (reg) to generate shift bit count */
                 bc = ((FC & 3) << 3) | reg;     /* get # bits to shift right */
                 bc = BIT0 >> bc;                /* make a bit mask of bit number */
@@ -2781,17 +3007,25 @@ meoa:
                 /* use C bits and bits 6-8 (reg) to generate shift bit count */
                 bc = ((FC & 3) << 3) | reg;     /* get # bits to shift right */
                 bc = BIT0 >> bc;                /* make a bit mask of bit number */
-                ovr = (temp & FSIGN) != 0;      /* set ovr to status of sign bit 0 */
+                t = (temp & FSIGN) != 0;        /* set flag for sign bit not set in temp value */
+                t |= ((bc & FSIGN) != 0) ? 2 : 0; /* ditto for the bit value */
                 temp += bc;                     /* add the bit value to the reg */
-                ovr ^= (temp & FSIGN) != 0;     /* set ovr if sign bit changed */
+                /* if both signs are neg and result sign is positive, overflow */
+                /* if both signs are pos and result sign is negative, overflow */
+                if ((t == 3 && (temp & FSIGN) == 0) ||
+                    (t == 0 && (temp & FSIGN) != 0)) {
+                    ovr = 1;                    /* we have an overflow */
+                }
                 set_CCs(temp, ovr);             /* set the CC's, CC1 = ovr */
                 if ((TRAPME = Mem_write(addr, &temp)))  /* put word into memory */
                     goto newpsd;                /* memory write error or map fault */
                 /* the arithmetic exception will be handled */
                 /* after instruction is completed */
                 /* check for arithmetic exception trap enabled */
-                if (ovr && (modes & AEXPBIT))
+                if (ovr && (modes & AEXPBIT)) {
                     TRAPME = AEXPCEPT_TRAP;     /* set the trap type */
+/* DIAG */          goto newpsd;                /* handle trap */
+                }
                 break;
 
         case 0xA4>>2:               /* 0xA4 ADR - ADR */ /* TBM */
@@ -2803,7 +3037,8 @@ meoa:
                 if ((TRAPME = Mem_read(addr, &temp)))   /* get the word from memory */
                     goto newpsd;                /* memory read error or map fault */
 
-                t = (CC & 0x70000000) >> 1;     /* get old CC bits 1-3 into CCs 2-4*/
+                t = (PSD1 & 0x70000000) >> 1;   /* get old CC bits 1-3 into CCs 2-4*/
+//DIAG                t = (CC & 0x70000000) >> 1;     /* get old CC bits 1-3 into CCs 2-4*/
                 /* use C bits and bits 6-8 (reg) to generate shift bit count */
                 bc = ((FC & 3) << 3) | reg;     /* get # bits to shift right */
                 bc = BIT0 >> bc;                /* make a bit mask of bit number */
@@ -2829,11 +3064,11 @@ meoa:
                     (IR & 0xFF800000) == 0xA8000000 ||
                     (IR & 0xFC000000) == 0x80000000) {
                     /* Fault, attempt to execute another EXR, EXRR, EXM, or LEAR  */
-                    goto inv;           /* invalid instruction */
+                    goto inv;                   /* invalid instruction */
                 }
-                EXM_EXR = 4;            /* set PC increment for EXM */
-                OPSD1 &= 0x87FFFFFE;            /* clear the old CC's */
-                OPSD1 |= PSD1 & 0x78000000;     /* update the CC's in the PSD */
+                EXM_EXR = 4;                    /* set PC increment for EXM */
+                OPSD1 &= 0x87FFFFFE;            /* clear the old PSD CC's */
+                OPSD1 |= PSD1 & 0x78000000;     /* update the CC's in the old PSD */
                 /* TODO Update other history information for this instruction */
                 if (hst_lnt) {
                     hst[hst_p].opsd1 = OPSD1;   /* update the CC in opsd1 */
@@ -2865,10 +3100,11 @@ meoa:
         fprintf(stderr, "\r\n");
     }
 #endif
-                goto exec;              /* go execute the instruction */
+                goto exec;                      /* go execute the instruction */
+                break;
  
-        case 0xAC>>2:               /* 0xAC SCC|SD|RM|ADR - SD|RM|ADR */ /* Lx */
-                dest = source;      /* set value to load into reg */
+       case 0xAC>>2:               /* 0xAC SCC|SD|RM|ADR - SD|RM|ADR */ /* Lx */
+                dest = source;                  /* set value to load into reg */
                 break;
 
         case 0xB0>>2:               /* 0xB0 SCC|SD|RM|ADR - SD|RM|ADR */ /* LMx */
@@ -2876,22 +3112,27 @@ meoa:
                 if (dbl) {
                     /* we need to and both regs with R4 */
                     t_uint64 nm = (((t_uint64)GPR[4]) << 32) | (((t_uint64)GPR[4]) & D32RMASK);
-                    dest = source & nm;     /* mask both regs with reg 4 contents */
+                    dest = source & nm;         /* mask both regs with reg 4 contents */
                 } else {
-                    dest = source;          /* <= 32 bits, so just do lower 32 bits */
+                    dest = source;              /* <= 32 bits, so just do lower 32 bits */
                     dest &= (((t_uint64)GPR[4]) & D32RMASK);        /* mask with reg 4 contents */
+                    if (dest & 0x80000000)      /* see if we need to sign extend */
+                        dest |= D32LMASK;       /* force upper word to all ones */
                 }           
                 break;
  
         case 0xB4>>2:               /* 0xB4 SCC|SD|RM|ADR - SD|RM|ADR */ /* LNx */
-                dest = NEGATE32(source);/* set the value to load into reg */
-                if (dest == source)
-                    ovr = 1;    /* set arithmetic exception status */
+                dest = NEGATE32(source);        /* set the value to load into reg */
+                td = dest;
+                if (dest != 0 && (dest == source || dest == 0x80000000))
+                    ovr = 1;                    /* set arithmetic exception status */
+                if (dest & 0x80000000)          /* see if we need to sign extend */
+                    dest |= D32LMASK;           /* force upper word to all ones */
                 /* the arithmetic exception will be handled */
                 /* after instruction is completed */
                 /* check for arithmetic exception trap enabled */
-                if (ovr && (modes & AEXPBIT)) {
-                    TRAPME = AEXPCEPT_TRAP; /* set the trap type */
+                if (dest != 0 && ovr && (modes & AEXPBIT)) {
+                    TRAPME = AEXPCEPT_TRAP;     /* set the trap type */
                 }
                 break;
 
@@ -2899,102 +3140,140 @@ meoa:
                 source = NEGATE32(source);
                 /* Fall through */
 
-        case 0xE8>>2:           /* 0xE8 SCC|SM|RR|RM|ADR - SM|RM|ADR */ /* ARMx */
         case 0xB8>>2:           /* 0xB8 SCC|SD|RR|RM|ADR - SD|RM|ADR */ /* ADMx */
-                t = (source & DMSIGN) != 0;
-                t |= ((dest & DMSIGN) != 0) ? 2 : 0;
+                ovr = 0;
+                /* DIAG fixs */
+                if (dbl == 0) {
+                    source &= D32RMASK;         /* just 32 bits */
+                    dest &= D32RMASK;           /* just 32 bits */
+                    t = (source & MSIGN) != 0;
+                    t |= ((dest & MSIGN) != 0) ? 2 : 0;
+                }
+                else {
+                    t = (source & DMSIGN) != 0;
+                    t |= ((dest & DMSIGN) != 0) ? 2 : 0;
+                }
+                td = dest;
                 dest = dest + source;
-                if ((t == 3) && ((dest & DMSIGN) == 0)) {
-                    ovr = 1;
+                if (dbl == 0) {
+                    /* if both signs are neg and result sign is positive, overflow */
+                    /* if both signs are pos and result sign is negative, overflow */
+                    if (((t == 3) && ((dest & MSIGN) == 0)) || 
+                        ((t == 0) && ((dest & MSIGN) != 0)))
+                        ovr = 1;
+                    if (dest & MSIGN)
+                        dest = (D32LMASK | dest);       /* sign extend */
+                    else
+                        dest = (D32RMASK & dest);       /* zero fill */
                 }
-                if ((t == 0) && ((dest & DMSIGN) != 0)) {
-                    ovr = 1;
-                }
-                if ((dbl == 0) && ((dest & D32LMASK) != 0) && ((dest & D32LMASK) != D32LMASK)) {
-                    ovr = 1;
+                else
+                {
+                    /* if both signs are neg and result sign is positive, overflow */
+                    /* if both signs are pos and result sign is negative, overflow */
+                    if (((t == 3) && ((dest & DMSIGN) == 0)) || 
+                        ((t == 0) && ((dest & DMSIGN) != 0)))
+                        ovr = 1;
                 }
 
                 /* the arithmetic exception will be handled */
                 /* after instruction is completed */
                 /* check for arithmetic exception trap enabled */
                 if (ovr && (modes & AEXPBIT)) {
-                    TRAPME = AEXPCEPT_TRAP; /* set the trap type */
+                    TRAPME = AEXPCEPT_TRAP;             /* set the trap type */
                 }
                 break;
 
         case 0xC0>>2:               /* 0xC0 SCC|SD|RM|ADR - SD|RM|ADR */ /* MPMx */
-                if (reg & 1) {                  /* see if odd reg specified */
-                    TRAPME = ADDRSPEC_TRAP;     /* bad reg address, error */
-                    goto newpsd;                /* go execute the trap now */
+                if (reg & 1) {                          /* see if odd reg specified */
+                    TRAPME = ADDRSPEC_TRAP;             /* bad reg address, error */
+                    goto newpsd;                        /* go execute the trap now */
                 }
-                dest = (t_uint64)GPR[reg+1];    /* get low order reg value */
+                dest = GPR[reg+1];                      /* get low order reg value */
+                if (dest & MSIGN)
+                    dest = (D32LMASK | dest);           /* sign extend */
                 dest = (t_uint64)((t_int64)dest * (t_int64)source);
                 dbl = 1;
                 break;
 
         case 0xC4>>2:               /* 0xC4 RM|ADR - RM|ADR */ /* DVMx */
-                if (reg & 1) {                  /* see if odd reg specified */
-                    TRAPME = ADDRSPEC_TRAP;     /* bad reg address, error */
-                    goto newpsd;                /* go execute the trap now */
+                if (reg & 1) {                          /* see if odd reg specified */
+                    TRAPME = ADDRSPEC_TRAP;             /* bad reg address, error */
+                    goto newpsd;                        /* go execute the trap now */
                 }
+                if (source == 0)
+                    goto doovr;                         /* we have div by zero */
                 dest = (((t_uint64)GPR[reg]) << 32);    /* insert upper reg value */
-                dest |= (t_uint64)GPR[reg+1];       /* get low order reg value */
-                if (source == 0) {
-                    goto doovr;                 /* we have div by zero */
-                }
+                dest |= (t_uint64)GPR[reg+1];           /* get low order reg value */
                 td = ((t_int64)dest % (t_int64)source); /* remainder */
-                dbl = (td < 0);                 /* double reg if neg remainder */
                 if (((td & DMSIGN) ^ (dest & DMSIGN)) != 0) /* Fix sign if needed */
-                    td = NEGATE32(td);          /* dividend and remainder must be same sign */
+                    td = NEGATE32(td);                  /* dividend and remainder must be same sign */
                 dest = (t_int64)dest / (t_int64)source; /* now do the divide */
-                if ((dest & D32LMASK) != 0 && (dest & D32LMASK) != D32LMASK) {  /* test for overflow */
+                int64a = dest;
+                if (int64a < 0)
+                    int64a = -int64a;
+                if (int64a > 0x7fffffff)                /* if more than 31 bits, we have an error */
+                    goto doovr;
+                if (((dest & D32LMASK) != 0 && (dest & D32LMASK) != D32LMASK) ||
+                    ((dest & D32LMASK) == D32LMASK) && ((dest & D32RMASK) == 0)) {  /* test for overflow */
 doovr:
-                    ovr = 1;                    /* the quotient exceeds 31 bit, overflow */
+                    dest = (((t_uint64)GPR[reg]) << 32);/* insert upper reg value */
+                    dest |= (t_uint64)GPR[reg+1];           /* get low order reg value */
+                    ovr = 1;                            /* the quotient exceeds 31 bit, overflow */
+                    /* the original regs must be returned unchanged if aexp */
+                    CC = CC1BIT;                        /* set ovr CC bit */
+                    if (dest == 0)
+                        CC |= CC4BIT;                   /* dw is zero, so CC4 */
+                    else
+                    if (dest & DMSIGN)
+                        CC |= CC3BIT;                   /* it is neg dw, so CC3  */
+                    else
+                        CC |= CC2BIT;                   /* then dest > 0, so CC2 */
+                    PSD1 &= 0x87FFFFFE;                 /* clear the old CC's from PSD1 */
+                    PSD1 |= CC;                         /* update the CC's in the PSD */
                     /* the arithmetic exception will be handled */
                     /* after instruction is completed */
                     /* check for arithmetic exception trap enabled */
                     if (modes & AEXPBIT)
-                        TRAPME = AEXPCEPT_TRAP; /* set the trap type */
-                    /* the original regs must be returned unchanged if aexp */
-                    set_CCs(GPR[reg+1], ovr);       /* set the CC's, CC1 = ovr */
+                        TRAPME = AEXPCEPT_TRAP;         /* set the trap type */
                 } else {
                     GPR[reg] = (uint32)(td & FMASK);    /* reg gets remainder, reg+1 quotient */
                     GPR[reg+1] = (uint32)(dest & FMASK);    /* store quotient in reg+1 */
-                    set_CCs(GPR[reg+1], ovr);       /* set the CC's, CC1 = ovr */
+                    set_CCs(GPR[reg+1], ovr);           /* set the CC's, CC1 = ovr */
                 }
                 break;
 
         case 0xC8>>2:               /* 0xC8 IMM - IMM */ /* Immedate */
-                temp = GPR[reg];                /* get reg contents */
-                addr = IR & RMASK;              /* sign extend 16 bit imm value from IR */
-                if (addr & 0x8000)              /* negative */
-                    addr |= LMASK;              /* extend sign */
+                temp = GPR[reg];                        /* get reg contents */
+                addr = IR & RMASK;                      /* sign extend 16 bit imm value from IR */
+                if (addr & 0x8000)                      /* negative */
+                    addr |= LMASK;                      /* extend sign */
 
-                switch(opr & 0xF) {             /* switch on aug code */
+                switch(opr & 0xF) {                     /* switch on aug code */
                 case 0x0:       /* LI */  /* SCC | SD */
-                    GPR[reg] = addr;            /* put immediate value into reg */
-                    set_CCs(addr, ovr);         /* set the CC's, CC1 = ovr */
+                    GPR[reg] = addr;                    /* put immediate value into reg */
+                    set_CCs(addr, ovr);                 /* set the CC's, CC1 = ovr */
                     break;
 
                 case 0x2:       /* SUI */
-                    addr = NEGATE32(addr);      /* just make value a negative add */
+                    addr = NEGATE32(addr);              /* just make value a negative add */
                     /* drop through */
                 case 0x1:       /* ADI */
-                    t = (temp & FSIGN) != 0;    /* set flag for sign bit not set in reg value */
+                    t = (temp & FSIGN) != 0;            /* set flag for sign bit not set in reg value */
                     t |= ((addr & FSIGN) != 0) ? 2 : 0; /* ditto for the extended immediate value */
-                    temp = temp + addr;         /* now add the numbers */
+                    temp = temp + addr;                 /* now add the numbers */
                     /* if both signs are neg and result sign is positive, overflow */
                     /* if both signs are pos and result sign is negative, overflow */
                     if ((t == 3 && (temp & FSIGN) == 0) ||
                         (t == 0 && (temp & FSIGN) != 0))
-                        ovr = 1;                /* we have an overflow */
-                    GPR[reg] = temp;            /* save the result */
-                    set_CCs(temp, ovr);         /* set the CC's, CC1 = ovr */
+                        ovr = 1;                        /* we have an overflow */
+                    GPR[reg] = temp;                    /* save the result */
+                    set_CCs(temp, ovr);                 /* set the CC's, CC1 = ovr */
                     /* the arithmetic exception will be handled */
                     /* after instruction is completed */
                     /* check for arithmetic exception trap enabled */
                     if (ovr && (modes & AEXPBIT)) {
-                        TRAPME = AEXPCEPT_TRAP; /* set the trap type */
+                        TRAPME = AEXPCEPT_TRAP;         /* set the trap type */
+/* DIAG */              goto newpsd;                    /* go execute the trap now */
                     }
                     break;
 
@@ -3013,9 +3292,9 @@ doovr:
                     break;
 
                 case 0x4:       /* DVI */
-                    if (reg & 1) {              /* see if odd reg specified */
-                        TRAPME = ADDRSPEC_TRAP; /* bad reg address, error */
-                        goto newpsd;            /* go execute the trap now */
+                    if (reg & 1) {                      /* see if odd reg specified */
+                        TRAPME = ADDRSPEC_TRAP;         /* bad reg address, error */
+                        goto newpsd;                    /* go execute the trap now */
                     }
                     /* change immediate value into a 64 bit value */
                     source = ((t_uint64)(addr & FMASK)) | ((addr & FSIGN) ? D32LMASK : 0);
@@ -3025,25 +3304,42 @@ doovr:
                     dest = (((t_uint64)GPR[reg]) << 32);    /* get upper reg value */
                     dest |= (t_uint64)GPR[reg+1];       /* insert low order reg value */
                     td = ((t_int64)dest % (t_int64)source); /* remainder */
-                    dbl = (td < 0);                 /* double reg if neg remainder */
+//                    dbl = (td < 0);                   /* double reg if neg remainder */
                     if (((td & DMSIGN) ^ (dest & DMSIGN)) != 0) /* Fix sign if needed */
-                        td = NEGATE32(td);          /* dividend and remainder must be same sign */
+                        td = NEGATE32(td);              /* dividend and remainder must be same sign */
                     dest = (t_int64)dest / (t_int64)source; /* now do the divide */
+                    int64a = dest;
+                    if (int64a < 0)
+                        int64a = -int64a;
+                    if (int64a > 0x7fffffff)            /* if more than 31 bits, we have an error */
+                        goto doovr2;
                     if ((dest & D32LMASK) != 0 && (dest & D32LMASK) != D32LMASK) {  /* test for overflow */
 doovr2:
-                        ovr = 1;                    /* the quotient exceeds 31 bit, overflow */
+                        dest = (((t_uint64)GPR[reg]) << 32);    /* get upper reg value */
+                        dest |= (t_uint64)GPR[reg+1];   /* insert low order reg value */
+                        ovr = 1;                        /* the quotient exceeds 31 bit, overflow */
                         /* the arithmetic exception will be handled */
                         /* after instruction is completed */
                         /* check for arithmetic exception trap enabled */
                         if (modes & AEXPBIT)
-                            TRAPME = AEXPCEPT_TRAP;         /* set the trap type */
+                            TRAPME = AEXPCEPT_TRAP;     /* set the trap type */
                         /* the original regs must be returned unchanged if aexp */
                         /* put reg values back in dest for CC test */
-                        set_CCs(GPR[reg+1], ovr);           /* set the CC's, CC1 = ovr */
+                        CC = CC1BIT;                    /* set ovr CC bit */
+                        if (dest == 0)
+                            CC |= CC4BIT;               /* dw is zero, so CC4 */
+                        else
+                        if (dest & DMSIGN)
+                            CC |= CC3BIT;               /* it is neg dw, so CC3  */
+                        else
+                            CC |= CC2BIT;               /* then dest > 0, so CC2 */
+                        PSD1 &= 0x87FFFFFE;             /* clear the old CC's from PSD1 */
+                        PSD1 |= CC;                     /* update the CC's in the PSD */
+//                        set_CCs(GPR[reg+1], ovr);       /* set the CC's, CC1 = ovr */
                     } else {
                         GPR[reg] = (uint32)(td & FMASK);    /* reg gets remainder, reg+1 quotient */
                         GPR[reg+1] = (uint32)(dest & FMASK);    /* store quotient in reg+1 */
-                        set_CCs(GPR[reg+1], ovr);           /* set the CC's, CC1 = ovr */
+                        set_CCs(GPR[reg+1], ovr);       /* set the CC's, CC1 = ovr */
                     }
                     break;
 
@@ -3060,7 +3356,7 @@ doovr2:
 /* |-----------+-----------+-----------+-----------+-----------+-----------+-----------+-----------| */
 /* */
                 case 0x6: {           /* SVC  none - none */  /* Supervisor Call Trap */
-#ifdef TRME     /* set to 1 for traceme to work */
+#ifdef TRMEMPX    /* set to 1 for traceme to work */
                     int j;
                     char n[9];
                     uint32 dqe = M[0x8e8>>2];       /* get DQE of current task */
@@ -3094,7 +3390,7 @@ doovr2:
                     PSD1 = M[(t>>2)+2];             /* get new PSD 1 */
                     PSD2 = (M[(t>>2)+3] & ~0x3ffc) | bc;    /* get new PSD 2 w/old cpix */
                     M[(t>>2)+4] = IR&0xFFF;         /* store call number */
-#ifdef TRME     /* set to 1 for traceme to work */
+#ifdef TRMEMPX    /* set to 1 for traceme to work */
     fprintf(stderr, "SVC @ %.8x SVC %x,%x PSD1 %.8x PSD2 %.8x SPAD PSD@ %x C.CURR %x LMN %s\r\n",
         OPSD1, temp2>>2, IR&0xFFF, PSD1, PSD2, SPAD[0xf5], dqe, n);
     fprintf(stderr, " R0=%x R1=%x R2=%x R3=%x", GPR[0], GPR[1], GPR[2], GPR[3]);
@@ -3196,17 +3492,13 @@ doovr2:
                     TRAPME = ADDRSPEC_TRAP;     /* bad reg address, error */
                     goto newpsd;                /* go execute the trap now */
                 }
-//temp = addr;
-//temp2 = reg;
                 bc = addr & 0x20;               /* bit 26 initial value */
                 while (reg < 8) {
                     if (bc != (addr & 0x20)) {  /* test for crossing file boundry */
                         if (CPU_MODEL < MODEL_27) {
                             TRAPME = ADDRSPEC_TRAP; /* bad reg address, error */
-//fprintf(stderr, "LF reg %x %x addr %x %x\r\n", temp2, reg, temp, addr);
                             goto newpsd;        /* go execute the trap now */
                         }
-//fprintf(stderr, "LF reg %x %x addr %x %x\r\n", temp2, reg, temp, addr);
                     }
                     if (FC & 0x4)               /* LFBR? */
                         TRAPME = Mem_read(addr, &BR[reg]);  /* read the base reg */
@@ -3221,13 +3513,9 @@ doovr2:
 
        case 0xD0>>2:             /* 0xD0 SD|ADR - INV */ /* LEA  none basemode only */
                 dest = (t_uint64)(addr);
-//fprintf(stderr, "LEA AD02 opr %x FC %x addr = %x dest %lx\r\n", IR, FC, addr, dest);
                 break;
 
         case 0xD4>>2:               /* 0xD4 SM|ADR - SM|ADR */ /* STx */
-//if (IR & IND) {
-//fprintf(stderr, "STX AD02 opr %x FC %x addr = %x dest %lx\r\n", IR, FC, addr, dest);
-//}
                 break;
 
         case 0xD8>>2:               /* 0xD8 SM|ADR - SM|ADR */ /* STMx */
@@ -3253,17 +3541,13 @@ doovr2:
                     TRAPME = ADDRSPEC_TRAP;             /* bad reg address, error */
                     goto newpsd;                        /* go execute the trap now */
                 }
-//temp = addr;
-//temp2 = reg;
                 bc = addr & 0x20;                       /* bit 26 initial value */
                 while (reg < 8) {
                     if (bc != (addr & 0x20)) {          /* test for crossing file boundry */
                         if (CPU_MODEL < MODEL_27) {
                             TRAPME = ADDRSPEC_TRAP;     /* bad reg address, error */
-//fprintf(stderr, "STF reg %x %x addr %x %x\r\n", temp2, reg, temp, addr);
                             goto newpsd;                /* go execute the trap now */
                         }
-//fprintf(stderr, "STF reg %x %x addr %x %x\r\n", temp2, reg, temp, addr);
                     }
                     if (FC & 0x4)                       /* STFBR? */
                         TRAPME = Mem_write(addr, &BR[reg]);     /* store the base reg */
@@ -3422,6 +3706,87 @@ doovr2:
                 }
                 break;
 
+        case 0xE8>>2:               /* 0xE8 SM|RR|RNX|ADR - SM|RM|ADR */ /* ARMx */
+                ovr = 0;
+                CC = 0;
+                switch(FC) {                        /* adjust for hw or bytes */
+                case 4: case 5: case 6: case 7:     /* byte address */
+                    /* ARMB */
+                    td = dest + source;             /* DO ARMB */
+                    td &= 0xff;                     /* mask out right most byte */
+                    dest &= 0xffffff00;             /* make place for byte */
+                    dest |= td;                     /* insert result into dest */
+                    if (td == 0)
+                        CC |= CC4BIT;               /* byte is zero, so CC4 */
+                    break;
+                case 1:                             /* left halfword addr */
+                case 3:                             /* right halfword addr */
+                    /* ARMH */
+                    td = dest + source;             /* DO ARMH */
+                    td &= RMASK;                    /* mask out right most 16 bits */
+                    dest &= LMASK;                  /* make place for halfword */
+                    dest |= td;                     /* insert result into dest */
+                    if (td == 0)
+                        CC |= CC4BIT;               /* hw is zero, so CC4 */
+                    break;
+                case 0:                             /* 32 bit word */
+                    /* ARMW */
+                    /* dest and source are really 32 bit values */
+                    t = (source & MSIGN) != 0;
+                    t |= ((dest & MSIGN) != 0) ? 2 : 0;
+                    td = dest + source;             /* DO ARMW */
+                    td &= D32RMASK;                 /* mask out right most 32 bits */
+                    dest = 0;                       /* make place for 64 bits */
+                    dest |= td;                     /* insert result into dest */
+                    /* if both signs are neg and result sign is positive, overflow */
+                    /* if both signs are pos and result sign is negative, overflow */
+                    if (((t == 3) && ((dest & MSIGN) == 0)) || 
+                        ((t == 0) && ((dest & MSIGN) != 0)))
+                        ovr = 1;
+                    if (dest & MSIGN)
+                        dest = (D32LMASK | dest);   /* sign extend */
+                    else
+                        dest = (D32RMASK & dest);   /* zero fill */
+                    if (td == 0)
+                        CC |= CC4BIT;               /* word is zero, so CC4 */
+                    else
+                    if (td & 0x80000000)
+                        CC |= CC3BIT;               /* it is neg wd, so CC3  */
+                    else
+                        CC |= CC2BIT;               /* then td > 0, so CC2 */
+                    break;
+                case 2:                             /* 64 bit double */
+                    /* ARMD */
+                    t = (source & DMSIGN) != 0;
+                    t |= ((dest & DMSIGN) != 0) ? 2 : 0;
+                    td = dest + source;             /* DO ARMD */
+                    dest = td;                      /* insert result into dest */
+                    /* if both signs are neg and result sign is positive, overflow */
+                    /* if both signs are pos and result sign is negative, overflow */
+                    if (((t == 3) && ((dest & DMSIGN) == 0)) || 
+                        ((t == 0) && ((dest & DMSIGN) != 0)))
+                        ovr = 1;
+                    if (td == 0)
+                        CC |= CC4BIT;               /* dw is zero, so CC4 */
+                    else
+                    if (td & DMSIGN)
+                        CC |= CC3BIT;               /* it is neg dw, so CC3  */
+                    else
+                        CC |= CC2BIT;               /* then td > 0, so CC2 */
+                    break;
+                }
+                if (ovr)
+                    CC |= CC1BIT;                   /* set overflow CC */
+                PSD1 &= 0x87FFFFFE;                 /* clear the old CC's from PSD1 */
+                PSD1 |= CC;                         /* update the CC's in the PSD */
+                /* the arithmetic exception will be handled */
+                /* after instruction is completed */
+                /* check for arithmetic exception trap enabled */
+                if (ovr && (modes & AEXPBIT)) {
+                    TRAPME = AEXPCEPT_TRAP;         /* set the trap type */
+                }
+                break;
+
         case 0xEC>>2:               /* 0xEC ADR - ADR */ /* Branch unconditional or Branch True */
                 /* GOOF alert, the assembler sets bit 31 to 1 so this test will fail*/
                 /* so just test for F bit and go on */
@@ -3453,7 +3818,7 @@ doovr2:
                 /* branch not taken, go do next instruction */
                 break;
 
-        case 0xF0>>2:               /* 0xF0 ADR - ADR */ /* Branch False or Branch Function True */
+        case 0xF0>>2:               /* 0xF0 ADR - ADR */ /* Branch False or Branch Function True BFT */
                 /* GOOF alert, the assembler sets bit 31 to 1 so this test will fail*/
                 /* so just test for F bit and go on */
                 /* if ((FC & 5) != 0) { */
@@ -3481,7 +3846,6 @@ doovr2:
                     if (IR & IND)                       /* see if CCs from last indirect are wanted */
                         PSD1 = (PSD1 & 0x87fffffe) | temp2;    /* insert last indirect CCs */
                 }
-                /* branch not taken, go do next instruction */
                 break;
 
         case 0xF4>>2:               /* 0xF4 RR|SD|ADR - RR|SB|WRD */ /* Branch increment */
@@ -3493,6 +3857,7 @@ doovr2:
 /* FIXME */         if (PC == (addr & 0x7FFFC)) {       /* BIB to current PC, bump branch addr */
                         addr += 4;
 //                      fprintf(stderr, "BI? stopping BIB $ addr %x PC %x\r\n", addr, PC);
+                        dest = 0;                       /* force reg to zero */
                     }
 #endif
                     PSD1 = (PSD1 & 0xff000000) | (addr & 0xfffffe); /* set new PC */
@@ -3510,11 +3875,15 @@ doovr2:
                     break;
                 case 0x1:       /* BL F880 */
                     /* copy CC's from instruction and PC incremented by 4 */
-                    GPR[0] = ((PSD1 & 0x78000000) | (PSD1 & 0x7fffe)) + 4;
-                    if (IR & IND)                       /* see if CC from last indirect are wanted */
-                        GPR[0] = (GPR[0] & 0x87fffffe) | CC;    /* insert last CCs */
+                    GPR[0] = ((PSD1 & 0xff000000) | ((PSD1 + 4) & 0xfffffe));
+                    if (IR & IND) {                     /* see if CC from last indirect are wanted */
+                        PSD1 = (PSD1 & 0x87fffffe) | CC;    /* insert last CCs */
+                    }
                     /* update the PSD with new address */
-                    PSD1 = (PSD1 & 0xff000000) | (addr & 0xfffffe);
+                    if (modes & BASEBIT) 
+                        PSD1 = (PSD1 & 0xff000000) | (addr & 0xfffffe); /* bit 8-30 */
+                    else
+                        PSD1 = (PSD1 & 0xff000000) | (addr & 0x07fffe); /* bit 13-30 */
                     i_flags |= BT;                      /* we branched, so no PC update */
                     break;
 
@@ -3522,7 +3891,7 @@ doovr2:
                     /* fall through */;
                 case 0x5:       /* LPSDCM FA80 */
                 {
-#ifdef TRME     /* set to 1 for traceme to work */
+#ifdef TRMEMPX    /* set to 1 for traceme to work */
                     int j;
                     char n[9];
                     uint32 dqe = M[0x8e8>>2];
@@ -3566,9 +3935,12 @@ doovr2:
                         PSD2 |= 0x00004000;             /* set to blocked state */
 
                     if (opr & 0x0200) {                 /* Was it LPSDCM? */
+#ifdef TRME     /* set to 1 for traceme to work */
+    traceme++;  /* start trace (maybe) if traceme >= trstart */
+#endif
                         /* map bit must be on to load maps */
                         if (PSD2 & MAPBIT) {
-#ifdef TRME  /* set to 1 for traceme to work */
+#ifdef TRMEMPX    /* set to 1 for traceme to work */
     // FIXME DEBUG MACLIBR
 //    if (n[0] == 'M' && n[1] == 'A' && n[2] == 'C' && n[3] == 'L')
 //      traceme = trstart;          /* start tracing */
@@ -3593,12 +3965,13 @@ doovr2:
     // FIXME DEBUG COMPRESS
 //if (n[0] == 'C' && n[1] == 'O' && n[2] == 'M' && n[3] == 'P')
 //      traceme = trstart;          /* start tracing */
-    // FIXME DEBUG J.TSM
-if (n[0] == 'J' && n[1] == '.' && n[2] == 'T' && n[3] == 'S')
+    // FIXME DEBUG NBCC
+if (n[0] == 'N' && n[1] == 'B' && n[2] == 'C' && n[3] == 'C')
       traceme = trstart;          /* start tracing */
 traceme++; /* start trace */
 //if (traceme >= trstart) {
-fprintf(stderr, "LPSDCM #%d LOAD MAPS PSD1 %x PSD2 %x SPAD PSD2 %x CPUSTATUS %x C.CURR %x LMN %s\r\n", traceme, PSD1, PSD2, SPAD[0xf5], CPUSTATUS, dqe, n);
+fprintf(stderr, "LPSDCM #%d LOAD MAPS PSD1 %x PSD2 %x SPAD PSD2 %x CPUSTATUS %x modes %x, C.CURR %x LMN %s\r\n",
+        traceme, PSD1, PSD2, SPAD[0xf5], CPUSTATUS, modes, dqe, n);
 fprintf(stderr, " R0=%x R1=%x R2=%x R3=%x", GPR[0], GPR[1], GPR[2], GPR[3]);
 fprintf(stderr, " R4=%x R5=%x R6=%x R7=%x", GPR[4], GPR[5], GPR[6], GPR[7]);
 fprintf(stderr, "\r\n");
@@ -3622,7 +3995,7 @@ fprintf(stderr, "\r\n");
                         if ((PSD2 & 0x3fff) == 0) {
                             PSD2 |= (SPAD[0xf5] & 0x3fff);  /* use new cpix */
                         }
-#ifdef TRME  /* set to 1 for traceme to work */
+#ifdef TRMEMPX    /* set to 1 for traceme to work */
 sim_debug(DEBUG_EXP, &cpu_dev, "LPSD PSD1 %x PSD2 %x CPUSTATUS %x\n", PSD1, PSD2, CPUSTATUS);
 //if (traceme >= trstart) {
 fprintf(stderr, "LPSD PSD1 %x PSD2 %x SPAD PSD2 %x CPUSTATUS %x C.CURR %x LMN %s\r\n",
@@ -3728,10 +4101,12 @@ fprintf(stderr, "\r\n");
 
                     case 0x4:       /* DAI FC04 */
                         prior = (opr >> 3) & 0x7f;      /* get priority level */
+#ifdef DO_NOT_TRAP_IF_MISSING
                         /* SPAD entries for interrupts begin at 0x80 */
                         t = SPAD[prior+0x80];           /* get spad entry for interrupt */
                         if (t == 0 || t == 0xffffffff)  /* if not set up, die */
                             goto syscheck;              /* system check */
+#endif
                         INTS[prior] &= ~INTS_ACT;       /* deactivate specified int level */
                         SPAD[prior+0x80] &= ~SINT_ACT;  /* deactivate in SPAD too */
                         irq_pend = 1;                   /* start scanning interrupts again */
@@ -3870,9 +4245,22 @@ mcheck:
 
                     case 0x02:      /* Start I/O SIO */
                         chsa = temp2 & 0x7FFF;      /* get logical device address */
+                        /* make sure level is deactivated, makes diags work???? */
+/*052619*/              INTS[ix] &= ~INTS_ACT;      /* deactivate specified int level */
+/*052619*/              SPAD[ix+0x80] &= ~SINT_ACT; /* deactivate in SPAD too */
+                        {
+                            /* to make diags work, clear any active int above current one */
+                            unsigned int nx;
+                            for (nx=0; nx<ix; nx++) {
+/*052619*/                      INTS[nx] &= ~INTS_ACT;      /* deactivate specified int level */
+/*052619*/                      SPAD[nx+0x80] &= ~SINT_ACT; /* deactivate in SPAD too */
+                            }
+                        }
                         if ((TRAPME = startxio(chsa, &status)))
                             goto newpsd;            /* error returned, trap cpu */
                         PSD1 = ((PSD1 & 0x87fffffe) | (status & 0x78000000));   /* insert status */
+   fprintf(stderr, "XIO SIO ret chan %x chsa %x status %x\r\n",  chan, (chan<<8)|suba, status);
+   fflush(stderr);
                         sim_debug(DEBUG_EXP, &cpu_dev, "XIO SIO ret chan %x chsa %x status %x\n",
                             chan, (chan<<8)|suba, status);
                         break;
@@ -3949,6 +4337,7 @@ mcheck:
                         SPAD[ix+0x80] |= SINT_ENAB; /* enable in SPAD too */
                         INTS[ix] &= ~INTS_REQ;      /* clears any requests also TRY 06-09-18 */
 //TRY 06-09-18                      irq_pend = 1;               /* start scanning interrupts again */
+                        PSD1 = ((PSD1 & 0x87fffffe) | (0x40000000 & 0x78000000));   /* insert cc1 status */
                         break;
 
                     case 0x0D:      /* Disable channel interrupt DCI */
@@ -4075,16 +4464,25 @@ mcheck:
         if (i_flags & SCC) {
             PSD1 &= 0x87FFFFFe;     /* clear the old CC's */
             if (ovr)                /* if overflow, set CC1 */
-                CC |= CC1BIT;       /* show we had AEXP */
+                CC = CC1BIT;        /* show we had AEXP */
             else
                 CC = 0;             /* no CC's yet */   
-            if ((t_int64)dest < 0)  /* is it neg */
+            if (dest & DMSIGN)      /* if neg, set CC3 */
                 CC |= CC3BIT;       /* if neg, set CC3 */
             else if (dest == 0)
                 CC |= CC4BIT;       /* if zero, set CC4 */
             else
                 CC |= CC2BIT;       /* if gtr than zero, set CC2 */
             PSD1 |= CC & 0x78000000;    /* update the CC's in the PSD */
+        }
+
+        /* check if we had an arithmetic exception on the last instruction*/
+        if (ovr && (modes & AEXPBIT)) {
+#ifdef TRME
+    fprintf(stderr, "Calling newpsd for ovr = %x at end\n", ovr);
+#endif
+            TRAPME = AEXPCEPT_TRAP;     /* trap the system now */
+            goto newpsd;                /* process the trap */
         }
 
         /* Update instruction pointer to next instruction */
@@ -4102,11 +4500,6 @@ mcheck:
         } else
             EXM_EXR = 0;                /* reset PC increment for EXR */
 
-        /* check if we had an arithmetic exception on the last instruction*/
-        if (ovr && (modes & AEXPBIT)) {
-            TRAPME = AEXPCEPT_TRAP;     /* trap the system now */
-            goto newpsd;                /* process the trap */
-        }
         OPSD1 &= 0x87FFFFFE;            /* clear the old CC's */
         OPSD1 |= PSD1 & 0x78000000;     /* update the CC's in the PSD */
         /* TODO Update other history information for this instruction */
@@ -4155,10 +4548,34 @@ newpsd:
             /* Trap Table Address in memory is pointed to by SPAD 0xF0 */
             /* TODO update cpu status and trap status words with reason too */
             switch(TRAPME) {
+            case NONPRESMEM_TRAP:       /* 0x8C Non Present Memory trap */
+            case MEMPARITY_TRAP:        /* 0x88 Memory Parity Error trap */
+            case AEXPCEPT_TRAP:         /* 0xBC Arithmetic Exception Trap */
+                /* adjust PSD1 to next instruction */
+                /* Update instruction pointer to next instruction */
+                if ((i_flags & BT) == 0) {      /* see if PSD was replaced on a branch instruction */
+                    /* branch not taken, so update the PC */
+                    if (EXM_EXR != 0) { /* special handling for EXM, EXR, EXRR */
+                        PSD1 = (PSD1 + 4) | (((PSD1 & 2) >> 1) & 1);
+                        EXM_EXR = 0;    /* reset PC increment for EXR */
+                    } else
+                    if (i_flags & HLF) {
+                        PSD1 = (PSD1 + 2) | (((PSD1 & 2) >> 1) & 1);
+                    } else {
+                        PSD1 = (PSD1 + 4) | (((PSD1 & 2) >> 1) & 1);
+                    }
+                } else
+                    EXM_EXR = 0;        /* reset PC increment for EXR */
+#ifdef TRME    /* set to 1 for traceme to work */
+    if (traceme >= trstart) {
+    fprintf(stderr, "MPA TRAPS %x @ PSD1 %x PSD2 %x CPUSTATUS %x\r\n",
+            TRAPME, PSD1, PSD2, CPUSTATUS);
+    fprintf(stderr, "tvl %.8x, tta %.8x status %.8x\r\n", tvl, tta, CPUSTATUS);
+    }
+#endif
+
             case POWERFAIL_TRAP:        /* 0x80 power fail trap */
             case POWERON_TRAP:          /* 0x84 Power-On trap */
-            case MEMPARITY_TRAP:        /* 0x88 Memory Parity Error trap */
-            case NONPRESMEM_TRAP:       /* 0x8C Non Present Memory trap */
             case UNDEFINSTR_TRAP:       /* 0x90 Undefined Instruction Trap */
             case PRIVVIOL_TRAP:         /* 0x94 Privlege Violation Trap */
 //TODO      case SVCCALL_TRAP:          /* 0x98 Supervisor Call Trap */
@@ -4170,17 +4587,19 @@ newpsd:
             case ADDRSPEC_TRAP:         /* 0xB0 Address Specification Trap */
             case CONSOLEATN_TRAP:       /* 0xB4 Console Attention Trap */
             case PRIVHALT_TRAP:         /* 0xB8 Privlege Mode Halt Trap */
-            case AEXPCEPT_TRAP:         /* 0xBC Arithmetic Exception Trap */
+//DIAG            case AEXPCEPT_TRAP:         /* 0xBC Arithmetic Exception Trap */
             default:
+                sim_debug(DEBUG_EXP, &cpu_dev, "TRAP PSD1 %x PSD2 %x CPUSTATUS %x TRAPME %x\n",
+                        PSD1, PSD2, CPUSTATUS, TRAPME);
+#ifdef TRME     /* set to 1 for traceme to work */
+    if (traceme >= trstart) {
+    fprintf(stderr, "At TRAP %x IR %x PSD1 %x PSD2 %x CPUSTATUS %x ovr %d\r\n",
+            TRAPME, IR, PSD1, PSD2, CPUSTATUS, ovr);
+    fprintf(stderr, "tvl %.8x, tta %.8x status %.8x\r\n", tvl, tta, CPUSTATUS);
+    }
+#endif
                 tta = tta + (TRAPME - 0x80);        /* tta has mem addr of trap vector */
                 tvl = M[tta>>2] & 0x7FFFC;          /* get trap vector address from trap vector loc */
-                sim_debug(DEBUG_EXP, &cpu_dev, "TRAP PSD1 %x PSD2 %x CPUSTATUS %x\n",
-                        PSD1, PSD2, CPUSTATUS);
-#ifdef TRME     /* set to 1 for traceme to work */
-    fprintf(stderr, "Before TRAPS %x LOAD MAPS PSD1 %x PSD2 %x CPUSTATUS %x\r\n",
-            TRAPME, PSD1, PSD2, CPUSTATUS);
-    fprintf(stderr, "tvl %.8x, tta %.8x status %.8x\r\n", tvl, tta, CPUSTATUS);
-#endif
                 if (tvl == 0 || tvl == 0x7FFFC || (CPUSTATUS & 0x40) == 0) {
                     /* vector is zero or software has not enabled traps yet */
                     /* execute a trap halt */
@@ -4232,7 +4651,10 @@ newpsd:
 #ifdef TRME     /* set to 1 for traceme to work */
 //  if (TRAPME == UNDEFINSTR_TRAP || TRAPME == MAPFAULT_TRAP) {
 //  if (TRAPME == MAPFAULT_TRAP) {
-    if (TRAPME == ADDRSPEC_TRAP) {
+//  if (TRAPME == ADDRSPEC_TRAP) {
+/// if (TRAPME == AEXPCEPT_TRAP) {
+    if (TRAPME == PRIVVIOL_TRAP) {
+traceme = trstart;
         sim_debug(DEBUG_EXP, &cpu_dev, "TRAP PSD1 %x PSD2 %x CPUSTATUS %x\r\n", PSD1, PSD2, CPUSTATUS);
         fprintf(stderr, "TRAPS %x LOAD MAPS PSD1 %x PSD2 %x CPUSTATUS %x\r\n", TRAPME, PSD1, PSD2, CPUSTATUS);
         goto dumpi;
@@ -4278,12 +4700,12 @@ dumpi:
         fprintf(stderr, " R0=%x R1=%x R2=%x R3=%x", GPR[0], GPR[1], GPR[2], GPR[3]);
         fprintf(stderr, " R4=%x R5=%x R6=%x R7=%x", GPR[4], GPR[5], GPR[6], GPR[7]);
         fprintf(stderr, "\r\n");
-#if 0
-        fprintf(stderr, "Current MAPC\r\n");
+#if 1
+        fprintf(stderr, "Current MAPC PSD2 %x modes %x\r\n", PSD2, modes);
         for (ix=0; ix<16; ix++) {
             fprintf(stderr, "MAP %x MPC %x\r\n", ix/2, MAPC[ix]);
         }
-        fflush(stderr);
+//      fflush(stderr);
 #endif
 //  if (TRAPME == UNDEFINSTR_TRAP || TRAPME == MAPFAULT_TRAP)
     if (TRAPME == MAPFAULT_TRAP)
