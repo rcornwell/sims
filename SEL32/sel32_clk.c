@@ -48,6 +48,8 @@ t_stat rtc_srv (UNIT *uptr);
 t_stat rtc_reset (DEVICE *dptr);
 t_stat rtc_set_freq (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat rtc_show_freq (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+t_stat rtc_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
+const char *rtc_desc(DEVICE *dptr);
 
 extern int irq_pend;                /* go scan for pending int or I/O */
 extern uint32 INTS[];               /* interrupt control flags */
@@ -67,7 +69,7 @@ int32 rtc_lvl = 0x18;               /* rtc interrupt level */
 
 /* clock is attached all the time */
 /* default to 60 HZ RTC */
-UNIT rtc_unit = { UDATA (&rtc_srv, UNIT_ATT, 0), 16666, UNIT_ADDR(0x7F06)};
+UNIT rtc_unit = { UDATA (&rtc_srv, UNIT_IDLE, 0), 16666, UNIT_ADDR(0x7F06)};
 
 REG rtc_reg[] = {
     { FLDATA (PIE, rtc_pie, 0) },
@@ -93,8 +95,11 @@ MTAB rtc_mod[] = {
 DEVICE rtc_dev = {
     "RTC", &rtc_unit, rtc_reg, rtc_mod,
     1, 8, 8, 1, 8, 8,
-    NULL, NULL, &rtc_reset,
-    NULL, NULL, NULL
+    NULL, NULL, &rtc_reset,         /* examine, deposit, reset */
+    NULL, NULL, NULL,               /* boot, attach, detach */
+    NULL, 0, 0, NULL,               /* dib, dev flags, debug flags, debug */
+    NULL, NULL, &rtc_help,          /* ?, ?, help */
+    NULL, NULL, &rtc_desc,          /* ?, ?, description */
     };
 
 /* The real time clock runs continuously; therefore, it only has
@@ -161,12 +166,30 @@ t_stat rtc_set_freq(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 /* Show frequency */
 t_stat rtc_show_freq (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
-    /* print the cirrent frequency setting */
+    /* print the current frequency setting */
     if (rtc_tps < 100)
         fprintf (st, (rtc_tps == 50)? "50Hz": "60Hz");
     else
         fprintf (st, (rtc_tps == 100)? "100Hz": "120Hz");
     return SCPE_OK;
+}
+
+/* sho help rtc */
+t_stat rtc_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr)
+{
+    fprintf(st, "SEL 32 IOP realtime clock at 0x7F06\r\n");
+    fprintf(st, "Use:\r\n");
+    fprintf(st, "    sim> SET RTC [50][60][100][120]\r\n");
+    fprintf(st, "to set clock interrupt rate in HZ\r\n");
+    fprint_set_help(st, dptr);
+    fprint_show_help(st, dptr);
+    return SCPE_OK;
+}
+
+/* device description */
+const char *rtc_desc(DEVICE *dptr)
+{
+    return "SEL IOP realtime clock @ address 0x7F06";
 }
 
 /************************************************************************/
@@ -179,6 +202,8 @@ t_stat itm_srv (UNIT *uptr);
 t_stat itm_set_freq (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat itm_reset (DEVICE *dptr);
 t_stat itm_show_freq (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+t_stat itm_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
+const char *itm_desc(DEVICE *dptr);
 
 /* Clock data structures
 
@@ -196,11 +221,11 @@ REG itm_reg[] = {
     };
 
 MTAB itm_mod[] = {
-    { MTAB_XTD|MTAB_VDV, 3840, NULL, "38.40us",
+    { MTAB_XTD|MTAB_VDV, 3840, NULL, "3840us",
       &itm_set_freq, NULL, NULL },
-    { MTAB_XTD|MTAB_VDV, 7680, NULL, "76.80us",
+    { MTAB_XTD|MTAB_VDV, 7680, NULL, "7680us",
       &itm_set_freq, NULL, NULL },
-    { MTAB_XTD|MTAB_VDV, 0, "FREQUENCY", NULL,
+    { MTAB_XTD|MTAB_VDV, 0, "RESOLUTION", NULL,
       NULL, &itm_show_freq, NULL },
     { 0 }
     };
@@ -208,8 +233,11 @@ MTAB itm_mod[] = {
 DEVICE itm_dev = {
     "ITM", &itm_unit, itm_reg, itm_mod,
     1, 8, 8, 1, 8, 8,
-    NULL, NULL, &itm_reset,
-    NULL, NULL, NULL
+    NULL, NULL, &itm_reset,         /* examine, deposit, reset */
+    NULL, NULL, NULL,               /* boot, attach, detach */
+    NULL, 0, 0, NULL,               /* dib, ?, ?, debug */
+    NULL, NULL, &itm_help,          /* ?, ?, help */
+    NULL, NULL, &itm_desc,          /* ?, ?, description */
     };
 
 /* The interval timer downcounts the value it is loaded with and
@@ -319,9 +347,28 @@ t_stat itm_set_freq (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 /* Show frequency */
 t_stat itm_show_freq (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
-    /* print the cirrent frequency setting */
+    /* print the current interval count setting */
     fprintf (st, "%0.2fus", (itm_tick_size_x_100 / 100.0));
     return SCPE_OK;
 }
+
+/* sho help rtc */
+t_stat itm_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr)
+{
+    fprintf(st, "SEL 32 IOP interval timer at 0x7F04\r\n");
+    fprintf(st, "Use:\r\n");
+    fprintf(st, "    sim> SET ITM [3840][7680]\r\n");
+    fprintf(st, "to set interval timer clock rate in us x 100\r\n");
+    fprint_set_help(st, dptr);
+    fprint_show_help(st, dptr);
+    return SCPE_OK;
+}
+
+/* device description */
+const char *itm_desc(DEVICE *dptr)
+{
+    return "SEL IOP interval timer @ address 0x7F04";
+}
+
 #endif
 
