@@ -395,13 +395,17 @@ uint8  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         return SNS_BSY;                 /* yes, return busy */
     }
 
-    sim_debug(DEBUG_CMD, dptr, "CMD unit %x chan %x cmd %x", unit, chan, cmd);
+    sim_debug(DEBUG_CMD, &com_dev, "CMD unit %x chan %x cmd %x", unit, chan, cmd);
 
     /* process the commands */
     switch (cmd & 0xFF) {
     case COM_INCH:      /* 00 */        /* INCH command */
         sim_debug(DEBUG_CMD, &com_dev, "com_startcmd %x: CMD INCH\n", chan);
-        return SNS_CHNEND|SNS_DEVEND;   /* all is well */
+        uptr->u3 &= LMASK;              /* leave only chsa */
+        uptr->u3 |= (0x7f & COM_MSK);   /* save 0x7f as INCH cmd command */
+        uptr->u5 = SNS_RDY|SNS_ONLN;    /* status is online & ready */
+        sim_activate(uptr, 20);         /* start us up */
+//        return SNS_CHNEND|SNS_DEVEND;   /* all is well */
         break;
 
     /* write commands must use address 8-f */
@@ -444,7 +448,10 @@ uint8  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
     case COM_NOP:       /* 0x03 */      /* NOP has do nothing */
         sim_debug(DEBUG_CMD, &com_dev, "com_startcmd %x: Cmd %x NOP\n", chan, cmd);
         uptr->u5 = SNS_RDY|SNS_ONLN;    /* status is online & ready */
-        return SNS_CHNEND|SNS_DEVEND;   /* good return */
+        uptr->u3 &= LMASK;              /* leave only chsa */
+        uptr->u3 |= (cmd & COM_MSK);    /* save command */
+        sim_activate(uptr, 20);         /* start us up */
+//        return SNS_CHNEND|SNS_DEVEND;   /* good return */
         break;
 
     case COM_SNS:       /* 0x04 */      /* Sense (8 bytes) */
@@ -640,6 +647,17 @@ t_stat comi_srv(UNIT *uptr)
     uint32  cln = (uptr - coml_unit) & 0x7;             /* use line # 0-7 for 8-15 */
 
     ln = uptr - com_unit;                               /* line # */
+    sim_debug(DEBUG_CMD, &com_dev, "comi_srv entry chsa %x line %x cmd %x\n", chsa, ln, cmd);
+    /* handle NOP and INCH cmds */
+    sim_debug(DEBUG_CMD, &com_dev, "comi_srv entry chsa %x line %x cmd %x\n", chsa, ln, cmd);
+    if (cmd == COM_NOP || cmd == 0x7f) {                /* check for NOP or INCH */
+        uptr->u3 &= LMASK;                              /* leave only chsa */
+        sim_debug(DEBUG_CMD, &com_dev, "comi_srv NOP or INCH done chsa %x line %x cmd %x\n", chsa, ln, cmd);
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);          /* done */
+        return SCPE_OK;                                 /* return */
+    }
+
+    ln = uptr - com_unit;                               /* line # */
     if ((com_unit[COMC].flags & UNIT_ATT) == 0){        /* attached? */
         return SCPE_OK;
     }
@@ -723,6 +741,14 @@ t_stat como_srv(UNIT *uptr)
     int     cmd = uptr->u3 & 0xff;                      /* get active cmd */
     uint8   ch;
 
+    /* handle NOP and INCH cmds */
+    sim_debug(DEBUG_CMD, &com_dev, "como_srv entry chsa %x line %x cmd %x\n", chsa, ln, cmd);
+    if (cmd == COM_NOP || cmd == 0x7f) {                /* check for NOP or INCH */
+        uptr->u3 &= LMASK;                              /* leave only chsa */
+        sim_debug(DEBUG_CMD, &com_dev, "como_srv NOP or INCH done chsa %x line %x cmd %x\n", chsa, ln, cmd);
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);          /* done */
+        return SCPE_OK;                                 /* return */
+    }
 
     sim_debug(DEBUG_CMD, &com_dev, "como_srv entry 1 chsa %x line %x cmd %x\n", chsa, ln, cmd);
     if (cmd) {
@@ -786,13 +812,15 @@ t_stat com_reset (DEVICE *dptr)
 {
     int32 i;
 
-    if (com_dev.flags & DEV_DIS)                            /* master disabled? */
-        com_dev.flags |= DEV_DIS;                           /* disable lines */
+#ifndef JUNK
+    if (com_dev.flags & DEV_DIS)                        /* master disabled? */
+        com_dev.flags |= DEV_DIS;                       /* disable lines */
     else
         com_dev.flags &= ~DEV_DIS;
-    if (com_unit[COMC].flags & UNIT_ATT)                    /* master att? */
-        sim_clock_coschedule(&com_unit[0], 200);            /* activate */
-    for (i = 0; i < COM_LINES; i++)                         /* reset lines */
+#endif
+    if (com_unit[COMC].flags & UNIT_ATT)                /* master att? */
+        sim_clock_coschedule(&com_unit[0], 200);        /* activate */
+    for (i = 0; i < COM_LINES; i++)                     /* reset lines */
         com_reset_ln(i);
     return SCPE_OK;
 }
@@ -808,6 +836,7 @@ t_stat com_attach(UNIT *uptr, CONST char *cptr)
     r = tmxr_attach(&com_desc, uptr, cptr);     /* attach */
     if (r != SCPE_OK)                           /* error? */
         return r;                               /* return error */
+    sim_debug(DEBUG_CMD, &com_dev, "com_srv com is now attached chsa %x\n", chsa);
     sim_activate(uptr, 0);                      /* start poll at once */
     return SCPE_OK;
 }
