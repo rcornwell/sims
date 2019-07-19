@@ -36,12 +36,12 @@
 //#undef TRME
 int traceme = 0;                              /* dynamic trace function */
 /* start on second diag starting */
-//int trstart = 4;                            /* count of when to start tracing */
+int trstart = 900;                            /* count of when to start tracing */
 /* start on J.INIT */
 //int trstart = 12;                            /* count of when to start tracing */
 //int trstart = 0x8000000;                      /* count of when to start tracing */
 //int trstart = 37;                           /* count of when to start tracing */
-int trstart = 0;                           /* count of when to start tracing */
+//int trstart = 0;                           /* count of when to start tracing */
 
 /* 32/7x PSW/PSD Mode Trap/Interrupt Priorities */
 /* Relative Logical  Int Vect TCW  IOCD Description */
@@ -3918,7 +3918,7 @@ doovr2:
                     /* update the PSD with new address */
                     PSD1 = (PSD1 & 0xff000000) | (addr & 0xfffffe); /* set new PC */
                     i_flags |= BT;                      /* we branched, so no PC update */
-                    if (((modes & BASEBIT) == 0) & (IR & IND)) /* see if CCs from last indirect are wanted */
+                    if (((modes & BASEBIT) == 0) && (IR & IND)) /* see if CCs from last indirect are wanted */
                         PSD1 = (PSD1 & 0x87fffffe) | temp2;    /* insert last indirect CCs */
                 }
                 /* branch not taken, go do next instruction */
@@ -3949,7 +3949,7 @@ doovr2:
                     /* update the PSD with new address */
                     PSD1 = (PSD1 & 0xff000000) | (addr & 0xfffffe); /* set new PC */
                     i_flags |= BT;                      /* we branched, so no PC update */
-                    if (((modes & BASEBIT) == 0) & (IR & IND)) /* see if CCs from last indirect are wanted */
+                    if (((modes & BASEBIT) == 0) && (IR & IND)) /* see if CCs from last indirect are wanted */
                         PSD1 = (PSD1 & 0x87fffffe) | temp2;    /* insert last indirect CCs */
                 }
                 break;
@@ -3968,7 +3968,7 @@ doovr2:
                     }
 #endif
                     PSD1 = (PSD1 & 0xff000000) | (addr & 0xfffffe); /* set new PC */
-                    if (((modes & BASEBIT) == 0) & (IR & IND)) /* see if CCs from last indirect are wanted */
+                    if (((modes & BASEBIT) == 0) && (IR & IND)) /* see if CCs from last indirect are wanted */
                         PSD1 = (PSD1 & 0x87fffffe) | CC;    /* insert last CCs */
                     i_flags |= BT;                      /* we branched, so no PC update */
                 }
@@ -3983,7 +3983,7 @@ doovr2:
                 case 0x1:       /* BL F880 */
                     /* copy CC's from instruction and PC incremented by 4 */
                     GPR[0] = ((PSD1 & 0xff000000) | ((PSD1 + 4) & 0xfffffe));
-                    if (((modes & BASEBIT) == 0) & (IR & IND)) /* see if CCs from last indirect are wanted */
+                    if (((modes & BASEBIT) == 0) && (IR & IND)) /* see if CCs from last indirect are wanted */
                         PSD1 = (PSD1 & 0x87fffffe) | CC;    /* insert last CCs */
                     /* update the PSD with new address */
                     if (modes & BASEBIT) 
@@ -4040,10 +4040,10 @@ doovr2:
                     if (CPUSTATUS & 0x80)               /* see if old mode is blocked */
                         PSD2 |= 0x00004000;             /* set to blocked state */
 
-                    if (opr & 0x0200) {                 /* Was it LPSDCM? */
 #ifdef TRME     /* set to 1 for traceme to work */
     traceme++;  /* start trace (maybe) if traceme >= trstart */
 #endif
+                    if (opr & 0x0200) {                 /* Was it LPSDCM? */
                         /* map bit must be on to load maps */
                         if (PSD2 & MAPBIT) {
 #ifdef TRMEMPX    /* set to 1 for traceme to work */
@@ -4640,6 +4640,7 @@ mcheck:
         fprintf(stderr, "                  B0=%x B1=%x B2=%x B3=%x", BR[0], BR[1], BR[2], BR[3]);
         fprintf(stderr, " B4=%x B5=%x B6=%x B7=%x", BR[4], BR[5], BR[6], BR[7]);
         fprintf(stderr, "\r\n");
+        fflush(stderr);
         }
     }
 #endif
