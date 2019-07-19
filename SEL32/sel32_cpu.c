@@ -29,6 +29,20 @@
 
 #include "sel32_defs.h"
 
+/* instruction trace controls */
+//#define UTXBUG                              /* debugging for UTX */
+//#define TRME                                /* set defined to enable instruction trace */
+//#define TRMEMPX                             /* set defined to enable instruction trace for MPX */
+//#undef TRME
+int traceme = 0;                              /* dynamic trace function */
+/* start on second diag starting */
+//int trstart = 4;                            /* count of when to start tracing */
+/* start on J.INIT */
+//int trstart = 12;                            /* count of when to start tracing */
+//int trstart = 0x8000000;                      /* count of when to start tracing */
+//int trstart = 37;                           /* count of when to start tracing */
+int trstart = 0;                           /* count of when to start tracing */
+
 /* 32/7x PSW/PSD Mode Trap/Interrupt Priorities */
 /* Relative Logical  Int Vect TCW  IOCD Description */
 /* Priority Priority Location Addr Addr             */
@@ -163,19 +177,6 @@
 /*                   Wd 3 - New PSD Word 2 */
 /*                   Wd 4 - Input/Output Command List Address (IOCL) for the Class F I/O CHannel */
 /*                   Wd 5 - 24 bit real address of the channel status word */
-
-/* instruction trace controls */
-//#define TRME                                /* set defined to enable instruction trace */
-//#define TRMEMPX                             /* set defined to enable instruction trace in MPX */
-//#undef TRME
-int traceme = 0;                              /* dynamic trace function */
-/* start on second diag starting */
-//int trstart = 4;                            /* count of when to start tracing */
-/* start on J.INIT */
-//int trstart = 12;                            /* count of when to start tracing */
-//int trstart = 0x8000000;                      /* count of when to start tracing */
-//int trstart = 37;                           /* count of when to start tracing */
-int trstart = 0;                           /* count of when to start tracing */
 
 /* CPU registers, map cache, spad, and other variables */
 int             cpu_index;                  /* Current CPU running */
@@ -449,7 +450,7 @@ int nobase_mode[] = {
 
    /*    70            74             78             7C */
    /*    SRL           SRC            SRAD           SRLD */ 
-      SD|HLF,          SD|HLF,        HLF,           HLF,
+         HLF,          HLF,           HLF,           HLF,
 
    /*    80            84             88             8C   */
    /*    LEAR          ANM            ORM            EOM  */
@@ -487,7 +488,7 @@ int nobase_mode[] = {
 int base_mode[] = {
    /* 00        04            08         0C      */
    /* 00        AND,          OR,        EOR  */
-     HLF,      SCC|RR|SD|HLF,     SCC|RR|SD|HLF,     SCC|RR|SD|HLF,  
+     HLF,      SCC|R1|RR|SD|HLF,     SCC|R1|RR|SD|HLF,     SCC|R1|RR|SD|HLF,  
    /* 10        14           18        1C  */
    /* SACZ      CMR         xBR         SRx */
      HLF,       HLF,        HLF,        HLF,
@@ -496,13 +497,13 @@ int base_mode[] = {
      HLF,       HLF,         HLF,       HLF,    
    /* 30        34          38           3C */
    /*           LA          FLRop        SUR */
-    INV,        INV,       SD|HLF,      SD|HLF,
+    INV,        INV,       HLF,      HLF,
    /* 40        44            48         4C     */
    /*                                        */
       INV,      INV,        INV,       INV, 
     /* 50       54          58            5C */
    /*  LA       BASE        BASE          CALLM */ 
-    SD|ADR,     SM|ADR,     SB|RM|ADR,    ADR,
+    SD|ADR,     SM|ADR,     SB|ADR,    RM|ADR,
 
    /* 60        64            68         6C     */
    /*                                         */
@@ -514,36 +515,35 @@ int base_mode[] = {
 
    /* LEAR      ANM          ORM        EOM   */
    /* 80        84            88         8C   */
-    SD|ADR,    SD|RNX|ADR, SD|RNX|ADR, SD|RNX|ADR, 
+    SD|ADR,    SD|RR|RNX|ADR, SD|RR|RNX|ADR, SD|RR|RNX|ADR, 
 
    /* CAM       CMM           SBM        ZBM  */ 
    /* 90        94            98         9C   */
-        RM|ADR, RM|ADR,       ADR,       ADR,
+    SCC|RR|RM|ADR, RR|RM|ADR,   ADR,     ADR,
 
    /* A0        A4            A8         AC   */
    /* ABM       TBM           EXM        L    */
-      ADR,      ADR,          ADR,    SD|RM|ADR,
+      ADR,      ADR,          ADR,    SCC|SD|RM|ADR,
 
    /* B0        B4            B8         BC   */
    /* LM        LN            ADM        SUM  */ 
-   SD|RM|ADR,   SD|RM|ADR,  SD|RM|ADR, SD|RM|ADR,
+   SCC|SD|RM|ADR,   SCC|SD|RM|ADR,  SCC|SD|RR|RM|ADR, SCC|SD|RR|RM|ADR,
 
    /* C0        C4            C8         CC   */
    /* MPM       DVM           IMM        LF   */
-    SD|RM|ADR,  RM|ADR,       IMM,       ADR, 
+    SCC|SD|RM|ADR,  RM|ADR,       IMM,       ADR, 
 
    /*  D0       D4            D8         DC */
    /*  LEA      ST            STM        STFBR */ 
-     INV,       RR|SM|ADR,       SM|ADR,    ADR,  
+     INV,       RR|SM|ADR,    RR|SM|ADR,    ADR,  
 
    /* E0        E4            E8         EC     */
    /* ADF       MPF           ARM        BCT      */
-    ADR,     ADR,     SM|RM|ADR,    ADR, 
+    ADR,     ADR,     SM|RR|RNX|ADR,    ADR, 
 
    /* F0        F4            F8         FC */
   /*  BCF       BI            MISC       IO */ 
-////      ADR,      RR|SB|WRD,    ADR,       IMM,  
-    ADR,           RR|SD|WRD,     ADR,       IMM,  
+    ADR,        RR|SD|WRD,    ADR,       IMM,  
 };
 
 /* set up the map registers for the current task in the cpu */
@@ -1056,6 +1056,11 @@ wait_loop:
             reason = STOP_IBKPT;
             break;
         }
+///*UTX*/        if (M[0] == 0xfd023f0c) {
+///*UTX*/        if ((M[0] != 0xec0000ad) && (traceme > 0)) {
+//            reason = STOP_IBKPT;
+//            break;
+//        }
 
         sim_interval--;                         /* count down */
 
@@ -1514,7 +1519,7 @@ exec:
                         }
                         if (wait4int == 0) {
                             time_t result = time(NULL);
-                            sim_debug(DEBUG_CMD, &cpu_dev, "Starting WAIT mode %u\n", (uint32)result);
+                            sim_debug(DEBUG_CMD, &cpu_dev, "Starting WAIT mode %x\n", (uint32)result);
                         }
                         wait4int = 1;               /* show we are waiting for interrupt */
                         /* tell simh we will be waiting */
@@ -1679,7 +1684,7 @@ exec:
                 break;
 
         case 0x10>>2:               /* 0x10 HLF - HLF */ /* CAR or (basemode SACZ ) */
-                if (modes & BASEBIT) {              /* handle basemode SACZ instruction */
+                if ((modes & BASEBIT) && (IR & 0x8000)) { /* handle basemode SACZ instruction */
 sacz:                                               /* non basemode SCZ enters here */
                     temp = GPR[reg];                /* get destination reg contents to shift */
                     CC = 0;                         /* zero the CC's */
@@ -1706,7 +1711,7 @@ sacz:                                               /* non basemode SCZ enters h
                     PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
                     PSD1 |= (CC & 0x78000000);      /* update the CC's in the PSD */
                 } else {
-                    /* handle non basemode CAR instr */
+                    /* handle non basemode/basemode CAR instr */
                     if ((int32)GPR[reg] < (int32)GPR[sreg])
                         CC = CC3BIT;                /* negative */
                     else
@@ -1760,14 +1765,50 @@ sbr:                                                /* handle basemode too */
 
         case 0x1C>>2:               /* 0x1C HLF - HLF */ /* ZBR (basemode SRA, SRL, SLA, SLL) */
                 if (modes & BASEBIT) {          /* handle basemode SRA, SRL, SLA, SLL */
-                    if ((opr & 0x60) == 0x00)   /* SRA instruction */
-                        goto sra;               /* use nonbase SRA code */
-                    if ((opr & 0x60) == 0x20)   /* SRL instruction */
-                        goto srl;               /* use nonbase SRL code */
-                    if ((opr & 0x60) == 0x40)   /* SLA instruction */
-                        goto sla;               /* use nonbase SLA code */
-                    if ((opr & 0x60) == 0x60)   /* SLL instruction */
-                        goto sll;               /* use nonbase SLL code */
+                    bc = opr & 0x1f;            /* get bit shift count */
+                    if ((opr & 0x60) == 0x00) { /* SRA instruction */
+                        temp = GPR[reg];        /* get reg value to shift */
+                        t = temp & FSIGN;       /* sign value */
+                        for (ix=0; ix<bc; ix++) {
+                            temp >>= 1;         /* shift bit 0 right one bit */
+                            temp |= t;          /* restore original sign bit */
+                        }
+                        GPR[reg] = temp;        /* save the new value */
+                        break;
+                    }
+                    if ((opr & 0x60) == 0x20) { /* SRL instruction */
+                        GPR[reg] >>= bc;        /* value to be output */
+                        break;
+                    }
+                    if ((opr & 0x60) == 0x40) { /* SLA instruction */
+                        temp = GPR[reg];        /* get reg value to shift */
+                        t = temp & FSIGN;       /* sign value */
+                        ovr = 0;                /* set ovr off */
+                        for (ix=0; ix<bc; ix++) {
+                            temp <<= 1;         /* shift bit into sign position */
+                            if ((temp & FSIGN) ^ t) /* see if sign bit changed */
+                                ovr = 1;        /* set arithmetic exception flag */
+                        }
+                        temp &= ~BIT0;          /* clear sign bit */
+                        temp |= t;              /* restore original sign bit */
+                        GPR[reg] = temp;        /* save the new value */
+                        PSD1 &= 0x87FFFFFE;     /* clear the old CC's */
+                        if (ovr)
+                            PSD1 |= BIT1;       /* CC1 in PSD */
+                        /* the arithmetic exception will be handled */
+                        /* after instruction is completed */
+                        /* check for arithmetic exception trap enabled */
+                        if (ovr && (modes & AEXPBIT)) {
+                            TRAPME = AEXPCEPT_TRAP; /* set the trap type */
+/*DIAG*/                    goto newpsd;        /* go execute the trap now */
+                        }
+                        break;
+                    }
+                    if ((opr & 0x60) == 0x60) { /* SLL instruction */
+                        GPR[reg] <<= bc;        /* value to be output */
+                        break;
+                    }
+                    break;
                 } else {                        /* handle nonbase ZBR */
 zbr:                                            /* handle basemode too */
                     /* move the byte field bits 14-15 to bits 27-28 */
@@ -1784,15 +1825,58 @@ zbr:                                            /* handle basemode too */
                 break;
 
         case 0x20>>2:               /* 0x20 HLF - HLF */    /* ABR (basemode SRAD, SRLD, SLAD, SLLD) */
-                if (modes & BASEBIT) {              /* handle basemode SRA, SRL, SLA, SLL */
-                    if ((opr & 0x60) == 0x00)       /* SRAD instruction */
-                        goto sra;                   /* use nonbase SRAD code */
-                    if ((opr & 0x60) == 0x20)       /* SRLD instruction */
-                        goto srl;                   /* use nonbase SRLD code */
-                    if ((opr & 0x60) == 0x40)       /* SLAD instruction */
-                        goto sla;                   /* use nonbase SLAD code */
-                    if ((opr & 0x60) == 0x60)       /* SLLD instruction */
-                        goto sll;                   /* use nonbase SLLD code */
+                if (modes & BASEBIT) {              /* handle basemode SRAD, SRLD, SLAD, SLLD */
+                    if (reg & 1) {                  /* see if odd reg specified */
+                        TRAPME = ADDRSPEC_TRAP;     /* bad reg address, error */
+                        goto newpsd;                /* go execute the trap now */
+                    }
+                    dest = (t_uint64)GPR[reg+1];    /* get low order reg value */
+                    dest |= (((t_uint64)GPR[reg]) << 32);   /* insert upper reg value */
+                    bc = opr & 0x1f;                /* get bit shift count */
+                    source = dest & DMSIGN;         /* 64 bit sign value */
+                    switch (opr & 0x60) {
+                    case 0x00:                      /* SRAD instruction */
+                        for (ix=0; ix<bc; ix++) {
+                            dest >>= 1;             /* shift bit 0 right one bit */
+                            dest |= source;         /* restore original sign bit */
+                        }
+                        break;
+
+                    case 0x20:                      /* SRLD */
+                        dest >>= bc;                /* shift right #bits */
+                        break;
+
+                    case 0x40:                      /* SLAD instruction */
+                        ovr = 0;                    /* set ovr off */
+                        for (ix=0; ix<bc; ix++) {
+                            dest <<= 1;             /* shift bit into sign position */
+                            if ((dest & DMSIGN) ^ source)   /* see if sign bit changed */
+                                ovr = 1;            /* set arithmetic exception flag */
+                        }
+                        dest &= ~DMSIGN;            /* clear sign bit */
+                        dest |= source;             /* restore original sign bit */
+                        GPR[reg+1] = (uint32)(dest & FMASK);    /* save the low order reg */
+                        GPR[reg] = (uint32)((dest>>32) & FMASK);/* save the hi order reg */
+                        PSD1 &= 0x87FFFFFE;         /* clear the old CC's */
+                        if (ovr)
+                            PSD1 |= BIT1;           /* CC1 in PSD */
+                        /* the arithmetic exception will be handled */
+                        /* after instruction is completed */
+                        /* check for arithmetic exception trap enabled */
+                        if (ovr && (modes & AEXPBIT)) {
+                            TRAPME = AEXPCEPT_TRAP; /* set the trap type */
+/*DIAG*/                    goto newpsd;            /* go execute the trap now */
+                        }
+                        break;
+
+                    case 0x60:                      /* SLLD */
+                        dest <<= bc;                /* shift left #bits */
+                        break;
+                    }
+                    GPR[reg+1] = (uint32)(dest & FMASK);    /* save the low order reg */
+                    GPR[reg] = (uint32)((dest>>32) & FMASK);/* save the hi order reg */
+                    break;
+
                 } else {                            /* handle nonbase mode ABR */
 abr:                                                /* basemode ABR too */
                     /* move the byte field bits 14-15 to bits 27-28 */
@@ -1823,11 +1907,24 @@ abr:                                                /* basemode ABR too */
 
                 case 0x24>>2:               /* 0x24 HLF - HLF */ /* TBR (basemode SRC)  */
                 if (modes & BASEBIT) {              /* handle SRC basemode */
-                    if ((opr & 0x60) == 0x00)       /* SRC instruction */
-                        goto src;                   /* use nonbase code */
-                    if ((opr & 0x60) == 0x40)       /* SLC instruction */
-                        goto slc;                   /* use nonbase code */
-                    goto inv;                       /* else invalid */
+                    bc = opr & 0x1f;                /* get bit shift count */
+                    temp = GPR[reg];                /* get reg value to shift */
+                    if ((opr & 0x60) == 0x40) {     /* SLC instruction */
+                        for (ix=0; ix<bc; ix++) {
+                            t = temp & BIT0;        /* get sign bit status */
+                            temp <<= 1;             /* shift the bit out */
+                            if (t)
+                                temp |= 1;          /* the sign bit status */
+                        }
+                    } else {                        /* this is SRC */
+                        for (ix=0; ix<bc; ix++) {
+                            t = temp & 1;           /* get bit 31 status */
+                            temp >>= 1;             /* shift the bit out */
+                            if (t)
+                                temp |= BIT0;       /* put in new sign bit */
+                        }
+                    }
+                    GPR[reg] = temp;                /* shift result */
                 } else {                            /* handle TBR non basemode */
 tbr:                                                /* handle basemode TBR too */
                     /* move the byte field bits 14-15 to bits 27-28 */
@@ -2084,11 +2181,12 @@ tbr:                                                /* handle basemode TBR too *
                 }
                 break;
 
-        case 0x38>>2:                   /* 0x38 HLF - SD|HLF */   /* REG - REG floating point */
+        case 0x38>>2:                   /* 0x38 HLF - HLF */   /* REG - REG floating point */
                 switch(opr & 0xF) {
                     case 0x0:   /* ADR */
                         temp = GPR[reg];                /* reg contents specified by Rd */
                         addr = GPR[sreg];               /* reg contents specified by Rs */
+//fprintf(stderr, "ADR addr %x reg %x sreg %x temp %x\n", addr, reg, sreg, temp);
                         t = (temp & FSIGN) != 0;        /* set flag for sign bit not set in temp value */
                         t |= ((addr & FSIGN) != 0) ? 2 : 0; /* ditto for the reg value */
                         temp = temp + addr;             /* add the values */
@@ -2410,14 +2508,13 @@ doovr4:
                         TRAPME = AEXPCEPT_TRAP;         /* set the trap type */
                         goto newpsd;                    /* go execute the trap now */
                     }
-///                    GPR[reg] = temp;                    /* temp has destination reg value */
-///                    set_CCs(temp, ovr);                 /* set the CC's */
                 }
                 break;
 
             case 0x3C>>2:               /* 0x3C HLF - HLF */    /* SUR and SURM */
                 temp = GPR[reg];                        /* get negative value to add */
                 addr = NEGATE32(GPR[sreg]);             /* reg contents specified by Rs */
+//fprintf(stderr, "SUR addr %x reg %x sreg %x temp %x tot %x\n", addr, reg, sreg, temp, temp+addr);
                 switch(opr & 0xF) {
                     case 0x0:       /* SUR */
                         t = (temp & FSIGN) != 0;        /* set flag for sign bit not set in temp value */
@@ -2532,16 +2629,10 @@ doovr3:
                 break;
 
         case 0x50>>2:               /* 0x50 INV - SD|ADR */ /* LA basemode */
-//fprintf(stderr, "place @ LABR op = %.8x modes %x addr %lx\r\n", IR, modes, addr);
+//fprintf(stderr, "place @ LABM op = %.8x modes %x addr %lx\r\n", IR, modes, addr);
                 if ((modes & BASEBIT) == 0)             /* see if nonbased */
                     goto inv;                           /* invalid instruction in nonbased mode */
-//fprintf(stderr, "place @ LABR op = %.8x modes %x addr %lx\r\n", IR, modes, addr);
-                if (modes & (BASEBIT|EXTDBIT)) {
-                    dest = (t_uint64)addr;              /* just pure 24 bit address */
-                } else {
-                    dest = (t_uint64)(addr | ((FC & 4) << 17));     /* F bit to bit 12 */
-                }
-//fprintf(stderr, "place @ LABR op = %.8x modes %x addr %lx\r\n", IR, modes, addr);
+                dest = (t_uint64)addr;                  /* just pure 24 bit address */
                 break;
 
         case 0x54>>2:               /* 0x54 SM|ADR - INV */ /* (basemode STWBR) */
@@ -2557,20 +2648,21 @@ doovr3:
         case 0x58>>2:               /* 0x58 SB|ADR - INV */ /* (basemode SUABR and LABR) */
                 if ((modes & BASEBIT) == 0)             /* see if nonbased */
                     goto inv;                           /* invalid instruction in nonbased mode */
-                if ((FC & 4) != 0) {                    /* see if SUABR F=0 */
+                if ((FC & 4) == 0) {                    /* see if SUABR F=0 */
                      dest = BR[reg] - addr;             /* subtract addr from the BR and store back to BR */
                   } else {                              /* LABR if F=1 */
                      dest = addr;                       /* addr goes to specified BR */
                   }
                   break;
-        case 0x5C>>2:               /* 0x5C RM|SB|ADR - INV */  /* (basemode LWBR and BSUBM) */
+        case 0x5C>>2:               /* 0x5C ADR - INV */  /* (basemode LWBR and BSUBM) */
                 if ((modes & BASEBIT) == 0)             /* see if nonbased */
                     goto inv;                           /* invalid instruction in nonbased mode */
                 if (FC != 0) {                          /* word address only */
                     TRAPME = ADDRSPEC_TRAP;             /* bad reg address, error */
                     goto newpsd;                        /* go execute the trap now */
                 }
-                if ((FC & 0x4) != 0x4) {                /* this is a LWBR instruction */
+                if ((FC & 0x4) == 0) {                  /* this is a LWBR instruction */
+//fprintf(stderr, "LWBR addr %x reg %x sreg %x source %lx dest %lx\n", addr, reg, sreg, source, dest);
                     BR[reg] = (uint32)source;           /* load memory location in BR */
                 } else {                                /* this is a CALLM/BSUBM instruction */
                     /* if Rd field is 0 (reg is b6-8), this is a BSUBM instruction */
@@ -2619,13 +2711,13 @@ doovr3:
                 break;
 
         case 0x64>>2:               /* 0x64 SD|HLF - INV */ /* NORD */
-                if ((modes & BASEBIT)) {        /* only for nonbased mode */
-                    TRAPME = UNDEFINSTR_TRAP;   /* Undefined Instruction Trap */
-                    goto newpsd;                /* handle trap */
+                if ((modes & BASEBIT)) {            /* only for nonbased mode */
+                    TRAPME = UNDEFINSTR_TRAP;       /* Undefined Instruction Trap */
+                    goto newpsd;                    /* handle trap */
                 }
-                if (reg & 1) {                  /* see if odd reg specified */
-                    TRAPME = ADDRSPEC_TRAP;     /* bad reg address, error */
-                    goto newpsd;                /* go execute the trap now */
+                if (reg & 1) {                      /* see if odd reg specified */
+                    TRAPME = ADDRSPEC_TRAP;         /* bad reg address, error */
+                    goto newpsd;                    /* go execute the trap now */
                 }
                 /* shift until upper 5 bits are neither 0 or all 1's */
                 /* merge the GPR[reg] & GPR[reg+1] into a 64bit value */
@@ -2638,121 +2730,113 @@ doovr3:
 
         case 0x68>>2:           /* 0x68 HLF - INV */ /* non basemode SCZ */
                 if (modes & BASEBIT) 
-                    goto inv;               /* invalid instruction */
-                goto sacz;                  /* use basemode sacz instruction */
+                    goto inv;                       /* invalid instruction */
+                goto sacz;                          /* use basemode sacz instruction */
 
         case 0x6C>>2:           /* 0x6C HLF - INV */ /* non basemode SRA & SLA */
                 if (modes & BASEBIT) 
-                    goto inv;           /* invalid instruction */
-sra:
-sla:
-                bc = opr & 0x1f;        /* get bit shift count */
-                temp = GPR[reg];        /* get reg value to shift */
-                t = temp & FSIGN;       /* sign value */
-                if (opr & 0x0040) {     /* is this SLA */
-                    ovr = 0;            /* set ovr off */
+                    goto inv;                       /* invalid instruction */
+                bc = opr & 0x1f;                    /* get bit shift count */
+                temp = GPR[reg];                    /* get reg value to shift */
+                t = temp & FSIGN;                   /* sign value */
+                if (opr & 0x0040) {                 /* is this SLA */
+                    ovr = 0;                        /* set ovr off */
                     for (ix=0; ix<bc; ix++) {
-                        temp <<= 1;             /* shift bit into sign position */
-                        if ((temp & FSIGN) ^ t) /* see if sign bit changed */
-                            ovr = 1;            /* set arithmetic exception flag */
+                        temp <<= 1;                 /* shift bit into sign position */
+                        if ((temp & FSIGN) ^ t)     /* see if sign bit changed */
+                            ovr = 1;                /* set arithmetic exception flag */
                     }
-                    temp &= ~BIT0;          /* clear sign bit */
-                    temp |= t;              /* restore original sign bit */
-                    GPR[reg] = temp;        /* save the new value */
-                    PSD1 &= 0x87FFFFFE;     /* clear the old CC's */
+                    temp &= ~BIT0;                  /* clear sign bit */
+                    temp |= t;                      /* restore original sign bit */
+                    GPR[reg] = temp;                /* save the new value */
+                    PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
                     if (ovr)
-                        PSD1 |= BIT1;       /* CC1 in PSD */
+                        PSD1 |= BIT1;               /* CC1 in PSD */
                     /* the arithmetic exception will be handled */
                     /* after instruction is completed */
                     /* check for arithmetic exception trap enabled */
                     if (ovr && (modes & AEXPBIT)) {
-                        TRAPME = AEXPCEPT_TRAP; /* set the trap type */
+                        TRAPME = AEXPCEPT_TRAP;     /* set the trap type */
 /*DIAG*/                goto newpsd;                /* go execute the trap now */
                     }
-                } else {                    /* this is a SRA */
+                } else {                            /* this is a SRA */
                     for (ix=0; ix<bc; ix++) {
-                        temp >>= 1;         /* shift bit 0 right one bit */
-                        temp |= t;          /* restore original sign bit */
+                        temp >>= 1;                 /* shift bit 0 right one bit */
+                        temp |= t;                  /* restore original sign bit */
                     }
-                    GPR[reg] = temp;        /* save the new value */
+                    GPR[reg] = temp;                /* save the new value */
                 }
                 break;
 
        case 0x70>>2:             /* 0x70 SD|HLF - INV */ /* non-basemode SRL & SLL */
                 if (modes & BASEBIT) 
-                    goto inv;           /* invalid instruction in basemode */
-sll:
-srl:
-                bc = opr & 0x1f;        /* get bit shift count */
-                temp = GPR[reg];        /* get reg value to shift */
-                if (opr & 0x0040)       /* is this SLL, bit 9 set */
-                    temp <<= bc;        /* shift left #bits */
+                    goto inv;                       /* invalid instruction in basemode */
+                bc = opr & 0x1f;                    /* get bit shift count */
+                if (opr & 0x0040)                   /* is this SLL, bit 9 set */
+                    GPR[reg] <<= bc;                /* shift left #bits */
                 else
-                    temp >>= bc;        /* shift right #bits */
-                dest = temp;            /* value to be output */
+                    GPR[reg] >>= bc;                /* shift right #bits */
                 break;
 
        case 0x74>>2:             /* 0x74 SD|HLF - INV */ /* non-basemode SRC & SLC */
                 if (modes & BASEBIT) 
-                    goto inv;               /* invalid instruction in basemode */
-slc:
-src:
-                bc = opr & 0x1f;            /* get bit shift count */
-                temp = GPR[reg];            /* get reg value to shift */
-                if (opr & 0x0040) {         /* is this SLC, bit 9 set */
+                    goto inv;                       /* invalid instruction in basemode */
+                bc = opr & 0x1f;                    /* get bit shift count */
+                temp = GPR[reg];                    /* get reg value to shift */
+                if (opr & 0x0040) {                 /* is this SLC, bit 9 set */
                     for (ix=0; ix<bc; ix++) {
-                        t = temp & BIT0;    /* get sign bit status */
-                        temp <<= 1;         /* shift the bit out */
+                        t = temp & BIT0;            /* get sign bit status */
+                        temp <<= 1;                 /* shift the bit out */
                         if (t)
-                            temp |= 1;      /* the sign bit status */
+                            temp |= 1;              /* the sign bit status */
                     }
-                } else {                     /* this is SRC, bit 9 not set */
+                } else {                            /* this is SRC, bit 9 not set */
                     for (ix=0; ix<bc; ix++) {
-                        t = temp & 1;       /* get bit 31 status */
-                        temp >>= 1;         /* shift the bit out */
+                        t = temp & 1;               /* get bit 31 status */
+                        temp >>= 1;                 /* shift the bit out */
                         if (t)
-                            temp |= BIT0;   /* put in new sign bit */
+                            temp |= BIT0;           /* put in new sign bit */
                     }
                 }
-                dest = temp;                /* shift result */
+                GPR[reg] = temp;                    /* shift result */
                 break;
 
         case 0x78>>2:               /* 0x78 HLF - INV */ /* non-basemode SRAD & SLAD */
-                if (modes & BASEBIT)            /* Base mode? */
-                    goto inv;                   /* invalid instruction in basemode */
-                if (reg & 1) {                  /* see if odd reg specified */
-                    TRAPME = ADDRSPEC_TRAP;     /* bad reg address, error */
-                    goto newpsd;                /* go execute the trap now */
+                if (modes & BASEBIT)                /* Base mode? */
+                    goto inv;                       /* invalid instruction in basemode */
+                if (reg & 1) {                      /* see if odd reg specified */
+                    TRAPME = ADDRSPEC_TRAP;         /* bad reg address, error */
+                    goto newpsd;                    /* go execute the trap now */
                 }
-                bc = opr & 0x1f;                /* get bit shift count */
-                dest = (t_uint64)GPR[reg+1];            /* get low order reg value */
+                bc = opr & 0x1f;                    /* get bit shift count */
+                dest = (t_uint64)GPR[reg+1];        /* get low order reg value */
                 dest |= (((t_uint64)GPR[reg]) << 32);   /* insert upper reg value */
-                source = dest & DMSIGN;         /* 64 bit sign value */
-                if (opr & 0x0040) {             /* is this SLAD */
-                    ovr = 0;                    /* set ovr off */
+                source = dest & DMSIGN;             /* 64 bit sign value */
+                if (opr & 0x0040) {                 /* is this SLAD */
+                    ovr = 0;                        /* set ovr off */
                     for (ix=0; ix<bc; ix++) {
-                        dest <<= 1;             /* shift bit into sign position */
+                        dest <<= 1;                 /* shift bit into sign position */
                         if ((dest & DMSIGN) ^ source)   /* see if sign bit changed */
-                            ovr = 1;            /* set arithmetic exception flag */
+                            ovr = 1;                /* set arithmetic exception flag */
                     }
-                    dest &= ~DMSIGN;        /* clear sign bit */
-                    dest |= source;         /* restore original sign bit */
+                    dest &= ~DMSIGN;                /* clear sign bit */
+                    dest |= source;                 /* restore original sign bit */
                     GPR[reg+1] = (uint32)(dest & FMASK);    /* save the low order reg */
                     GPR[reg] = (uint32)((dest>>32) & FMASK);/* save the hi order reg */
-                    PSD1 &= 0x87FFFFFE;     /* clear the old CC's */
+                    PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
                     if (ovr)
-                        PSD1 |= BIT1;       /* CC1 in PSD */
+                        PSD1 |= BIT1;               /* CC1 in PSD */
                     /* the arithmetic exception will be handled */
                     /* after instruction is completed */
                     /* check for arithmetic exception trap enabled */
                     if (ovr && (modes & AEXPBIT)) {
-                        TRAPME = AEXPCEPT_TRAP; /* set the trap type */
+                        TRAPME = AEXPCEPT_TRAP;     /* set the trap type */
 /*DIAG*/                goto newpsd;                /* go execute the trap now */
                     }
-                } else {                    /* this is a SRAD */
+                } else {                            /* this is a SRAD */
                     for (ix=0; ix<bc; ix++) {
-                        dest >>= 1;         /* shift bit 0 right one bit */
-                        dest |= source;     /* restore original sign bit */
+                        dest >>= 1;                 /* shift bit 0 right one bit */
+                        dest |= source;             /* restore original sign bit */
                     }
                     GPR[reg+1] = (uint32)(dest & FMASK);    /* save the low order reg */
                     GPR[reg] = (uint32)((dest>>32) & FMASK);/* save the hi order reg */
@@ -2761,18 +2845,18 @@ src:
 
         case 0x7C>>2:               /* 0x7C HLF - INV */ /* non-basemode SRLD & SLLD */
                 if (modes & BASEBIT) 
-                    goto inv;               /* invalid instruction in basemode */
-                if (reg & 1) {              /* see if odd reg specified */
-                    TRAPME = ADDRSPEC_TRAP; /* bad reg address, error */
-                    goto newpsd;            /* go execute the trap now */
+                    goto inv;                       /* invalid instruction in basemode */
+                if (reg & 1) {                      /* see if odd reg specified */
+                    TRAPME = ADDRSPEC_TRAP;         /* bad reg address, error */
+                    goto newpsd;                    /* go execute the trap now */
                 }
-                dest = (t_uint64)GPR[reg+1];            /* get low order reg value */
+                dest = (t_uint64)GPR[reg+1];        /* get low order reg value */
                 dest |= (((t_uint64)GPR[reg]) << 32);   /* insert upper reg value */
-                bc = opr & 0x1f;        /* get bit shift count */
-                if (opr & 0x0040)       /* is this SLL, bit 9 set */
-                    dest <<= bc;        /* shift left #bits */
+                bc = opr & 0x1f;                    /* get bit shift count */
+                if (opr & 0x0040)                   /* is this SLL, bit 9 set */
+                    dest <<= bc;                    /* shift left #bits */
                 else
-                    dest >>= bc;        /* shift right #bits */
+                    dest >>= bc;                    /* shift right #bits */
                 GPR[reg+1] = (uint32)(dest & FMASK);    /* save the low order reg */
                 GPR[reg] = (uint32)((dest>>32) & FMASK);/* save the hi order reg */
                 break;
@@ -2781,12 +2865,12 @@ src:
                 /* convert address to real physical address */
                 TRAPME = RealAddr(addr, &temp, &t);
                 if (TRAPME != ALLOK)
-                    goto newpsd;                /* memory read error or map fault */
+                    goto newpsd;                    /* memory read error or map fault */
                 /* OS code says F bit is not transferred, so just ignore it */
                 /* DIAGS need it, so put it back */
-                if (FC & 4)                     /* see if F bit was set */
-                    temp |= 0x01000000;         /* set bit 7 of address */
-                dest = temp;                    /* put in dest to go out */
+                if (FC & 4)                         /* see if F bit was set */
+                    temp |= 0x01000000;             /* set bit 7 of address */
+                dest = temp;                        /* put in dest to go out */
                 break;
 
         case 0x84>>2:               /* 0x84 SD|RR|RNX|ADR - SD|RNX|ADR */ /* ANMx */
@@ -2876,7 +2960,7 @@ meoa:
                         CC |= CC4BIT;               /* byte is zero, so CC4 */
                     else
                     if (dest & MSIGN) {
-                        CC |= CC3BIT;                /* assume negative */
+                        CC |= CC3BIT;               /* assume negative */
                         dest |= D32LMASK;           /* force upper word to all ones */
                     }
                     else
@@ -2891,7 +2975,7 @@ meoa:
                         CC |= CC4BIT;               /* byte is zero, so CC4 */
                     else
                     if (dest & MSIGN) {
-                        CC |= CC3BIT;                /* assume negative */
+                        CC |= CC3BIT;               /* assume negative */
                         dest |= D32LMASK;           /* force upper word to all ones */
                     }
                     else
@@ -2905,7 +2989,7 @@ meoa:
                         CC |= CC4BIT;               /* byte is zero, so CC4 */
                     else
                     if (dest & DMSIGN)
-                        CC |= CC3BIT;                /* assume negative */
+                        CC |= CC3BIT;               /* assume negative */
                     else
                         CC |= CC2BIT;               /* then td > 0, so CC2 */
                     break;
@@ -2926,6 +3010,9 @@ meoa:
 //              dest -= source;                     /* old */
                 td = dest;
                 dest = dest + NEGATE32(source);     /* sub mem from reg */
+#ifdef UTXBUG
+//    fprintf(stderr, "CAMX dest %lx source %lx result %lx\n", td, source, dest);
+#endif
 #ifndef HACK
                 if (dbl && (dest == DMSIGN)) {
                     /* HACK HACK HACK for diags */
@@ -3013,6 +3100,9 @@ meoa:
                 }
                 if ((TRAPME = Mem_read(addr, &temp)))   /* get the word from memory */
                     goto newpsd;                /* memory read error or map fault */
+#ifdef UTXBUG
+    fprintf(stderr, "ABM before @ addr %x val %x\n", addr, temp);
+#endif
 
                 /* use C bits and bits 6-8 (reg) to generate shift bit count */
                 bc = ((FC & 3) << 3) | reg;     /* get # bits to shift right */
@@ -3027,6 +3117,9 @@ meoa:
                     ovr = 1;                    /* we have an overflow */
                 }
                 set_CCs(temp, ovr);             /* set the CC's, CC1 = ovr */
+#ifdef UTXBUG
+    fprintf(stderr, "ABM after @ addr %x val %x\n", addr, temp);
+#endif
                 if ((TRAPME = Mem_write(addr, &temp)))  /* put word into memory */
                     goto newpsd;                /* memory write error or map fault */
                 /* the arithmetic exception will be handled */
@@ -3113,8 +3206,9 @@ meoa:
                 goto exec;                      /* go execute the instruction */
                 break;
  
-       case 0xAC>>2:               /* 0xAC SCC|SD|RM|ADR - SD|RM|ADR */ /* Lx */
+        case 0xAC>>2:               /* 0xAC SCC|SD|RM|ADR - SD|RM|ADR */ /* Lx */
                 dest = source;                  /* set value to load into reg */
+//fprintf(stderr, "LW addr %x reg %x sreg %x source %lx dest %lx\n", addr, reg, sreg, source, dest);
                 break;
 
         case 0xB0>>2:               /* 0xB0 SCC|SD|RM|ADR - SD|RM|ADR */ /* LMx */
@@ -3148,6 +3242,7 @@ meoa:
 
         case 0xBC>>2:           /* 0xBC SCC|SD|RR|RM|ADR - SD|RM|ADR */ /* SUMx */
                 source = NEGATE32(source);
+//fprintf(stderr, "SUMW addr %x reg %x sreg %x source %lx dest %lx\n", addr, reg, sreg, source, dest);
                 /* Fall through */
 
         case 0xB8>>2:           /* 0xB8 SCC|SD|RR|RM|ADR - SD|RM|ADR */ /* ADMx */
@@ -3367,6 +3462,7 @@ doovr2:
 /* */
                 case 0x6: {           /* SVC  none - none */  /* Supervisor Call Trap */
 #ifdef TRMEMPX    /* set to 1 for traceme to work */
+                    /* get current MPX task name */
                     int j;
                     char n[9];
                     uint32 dqe = M[0x8e8>>2];       /* get DQE of current task */
@@ -3822,7 +3918,7 @@ doovr2:
                     /* update the PSD with new address */
                     PSD1 = (PSD1 & 0xff000000) | (addr & 0xfffffe); /* set new PC */
                     i_flags |= BT;                      /* we branched, so no PC update */
-                    if (IR & IND)                       /* see if CCs from last indirect are wanted */
+                    if (((modes & BASEBIT) == 0) & (IR & IND)) /* see if CCs from last indirect are wanted */
                         PSD1 = (PSD1 & 0x87fffffe) | temp2;    /* insert last indirect CCs */
                 }
                 /* branch not taken, go do next instruction */
@@ -3853,7 +3949,7 @@ doovr2:
                     /* update the PSD with new address */
                     PSD1 = (PSD1 & 0xff000000) | (addr & 0xfffffe); /* set new PC */
                     i_flags |= BT;                      /* we branched, so no PC update */
-                    if (IR & IND)                       /* see if CCs from last indirect are wanted */
+                    if (((modes & BASEBIT) == 0) & (IR & IND)) /* see if CCs from last indirect are wanted */
                         PSD1 = (PSD1 & 0x87fffffe) | temp2;    /* insert last indirect CCs */
                 }
                 break;
@@ -3864,14 +3960,15 @@ doovr2:
                     /* we are taking the branch, set CC's if indirect, else leave'm */
                     /* update the PSD with new address */
 #if 1  /* set to 1 to stop branch to self, for now */
-/* FIXME */         if (PC == (addr & 0x7FFFC)) {       /* BIB to current PC, bump branch addr */
+///* FIXME */         if (PC == (addr & 0x7FFFC)) {       /* BIB to current PC, bump branch addr */
+/* FIXME */         if (PC == (addr & 0xFFFFFC)) {       /* BIB to current PC, bump branch addr */
                         addr += 4;
 //                      fprintf(stderr, "BI? stopping BIB $ addr %x PC %x\r\n", addr, PC);
                         dest = 0;                       /* force reg to zero */
                     }
 #endif
                     PSD1 = (PSD1 & 0xff000000) | (addr & 0xfffffe); /* set new PC */
-                    if (IR & IND)                       /* see if CCs from last indirect are wanted */
+                    if (((modes & BASEBIT) == 0) & (IR & IND)) /* see if CCs from last indirect are wanted */
                         PSD1 = (PSD1 & 0x87fffffe) | CC;    /* insert last CCs */
                     i_flags |= BT;                      /* we branched, so no PC update */
                 }
@@ -3886,9 +3983,8 @@ doovr2:
                 case 0x1:       /* BL F880 */
                     /* copy CC's from instruction and PC incremented by 4 */
                     GPR[0] = ((PSD1 & 0xff000000) | ((PSD1 + 4) & 0xfffffe));
-                    if (IR & IND) {                     /* see if CC from last indirect are wanted */
+                    if (((modes & BASEBIT) == 0) & (IR & IND)) /* see if CCs from last indirect are wanted */
                         PSD1 = (PSD1 & 0x87fffffe) | CC;    /* insert last CCs */
-                    }
                     /* update the PSD with new address */
                     if (modes & BASEBIT) 
                         PSD1 = (PSD1 & 0xff000000) | (addr & 0xfffffe); /* bit 8-30 */
@@ -4189,6 +4285,9 @@ syscheck:
                 /* the channel must be defined as a class F I/O channel in SPAD */
                 /* if not class F, the system will generate a system check trap */
                 t = SPAD[lchan];                    /* get spad entry for channel */
+#ifdef UTXBUG
+    fprintf(stderr, "XIO step 1 lchan = %x, spad[%x] %x mem[0] %x\n", lchan, lchan, t, M[0]);
+#endif
                 if (t == 0 || t == 0xffffffff)      /* if not set up, die */
                     goto syscheck;                  /* machine check */
                 /* sim_debug(DEBUG_EXP, &cpu_dev, "$$ XIO lchan %x sa %x spad %.8x\n", lchan, suba, t); */
@@ -4219,10 +4318,8 @@ mcheck:
                 if (((temp & MASK24) == 0) && (((opr >> 2) & 0xf) == 2)) 
                     goto mcheck;                /* bad iocl address */
 
-//fprintf(stderr, "XIO ready chan %x intr %x icb %x iocla %x iocd1 %.8x iocd2 %0.x8\r\n",
-//      chan, ix, addr, addr+16, M[temp>>2], M[(temp+4)>>2]);
-//sim_debug(DEBUG_EXP, &cpu_dev, "XIO ready chan %x intr %x icb %x iocla %x iocd1 %.8x iocd2 %.8x\n",
-//      chan, ix, addr, addr+16, M[temp>>2], M[(temp+4)>>2]);
+        sim_debug(DEBUG_EXP, &cpu_dev, "XIO ready chan %x intr %x icb %x iocla %x iocd1 %.8x iocd2 %.8x\n",
+            chan, ix, addr, addr+16, M[temp>>2], M[(temp+4)>>2]);
                 /* at this point, the channel has a valid SPAD channel entry */
                 /* t is SPAD entry contents for chan device */
                 /* temp2 has IR + reg contents if reg != 0 */
@@ -4232,8 +4329,8 @@ mcheck:
                 /* ix - positive interrupt level */
                 /* addr - ICB for specified interrupt level, points to 6 wd block */
                 /* temp - First IOCD address */
-//fprintf(stderr, "XIO switch %x lchan %x chan %x intr %x chsa %x IOCDa %x\r\n", ((opr>>3)&0xf), lchan, chan, ix, (chan<<8)|suba, temp);
-//sim_debug(DEBUG_EXP, &cpu_dev, "XIO switch chan %x intr %x chsa %x IOCDa %.8x\n", chan, ix, (chan<<8)|suba, temp);
+        sim_debug(DEBUG_EXP, &cpu_dev, "XIO switch %x lchan %x, chan %x intr %x chsa %x IOCDa %.8x\n",
+            ((opr>>3)&0x0f), lchan, chan, ix, (chan<<8)|suba, temp);
                 switch((opr >> 3) & 0xf) {          /* use bits 9-12 to determine I/O instruction */
                     uint32 status;                  /* status returned by various functions */
                     uint16 chsa;                    /* logical device address */
@@ -4269,10 +4366,8 @@ mcheck:
                         if ((TRAPME = startxio(chsa, &status)))
                             goto newpsd;            /* error returned, trap cpu */
                         PSD1 = ((PSD1 & 0x87fffffe) | (status & 0x78000000));   /* insert status */
-//   fprintf(stderr, "XIO SIO ret chan %x chsa %x status %x\r\n",  chan, (chan<<8)|suba, status);
-//   fflush(stderr);
-                        sim_debug(DEBUG_EXP, &cpu_dev, "XIO SIO ret chan %x chsa %x status %x\n",
-                            chan, (chan<<8)|suba, status);
+                        sim_debug(DEBUG_EXP, &cpu_dev, "XIO SIO ret chan %x chsa %x status %x M[0] %x\n",
+                            chan, (chan<<8)|suba, status, M[0]);
                         break;
                             
                     case 0x03:      /* Test I/O TIO */
@@ -4346,7 +4441,7 @@ mcheck:
                         INTS[ix] |= INTS_ENAB;      /* enable specified int level */
                         SPAD[ix+0x80] |= SINT_ENAB; /* enable in SPAD too */
                         INTS[ix] &= ~INTS_REQ;      /* clears any requests also TRY 06-09-18 */
-//TRY 06-09-18                      irq_pend = 1;               /* start scanning interrupts again */
+//TRY 06-09-18          irq_pend = 1;               /* start scanning interrupts again */
                         PSD1 = ((PSD1 & 0x87fffffe) | (0x40000000 & 0x78000000));   /* insert cc1 status */
                         break;
 
@@ -4507,8 +4602,9 @@ mcheck:
             } else {
                 PSD1 = (PSD1 + 4) | (((PSD1 & 2) >> 1) & 1);
             }
-        } else
+        } else {
             EXM_EXR = 0;                /* reset PC increment for EXR */
+        }
 
         OPSD1 &= 0x87FFFFFE;            /* clear the old CC's */
         OPSD1 |= PSD1 & 0x78000000;     /* update the CC's in the PSD */
@@ -4602,7 +4698,7 @@ newpsd:
             case ADDRSPEC_TRAP:         /* 0xB0 Address Specification Trap */
             case CONSOLEATN_TRAP:       /* 0xB4 Console Attention Trap */
             case PRIVHALT_TRAP:         /* 0xB8 Privlege Mode Halt Trap */
-//DIAG            case AEXPCEPT_TRAP:         /* 0xBC Arithmetic Exception Trap */
+//DIAG      case AEXPCEPT_TRAP:         /* 0xBC Arithmetic Exception Trap */
             default:
                 sim_debug(DEBUG_EXP, &cpu_dev, "TRAP PSD1 %x PSD2 %x CPUSTATUS %x TRAPME %x\n",
                         PSD1, PSD2, CPUSTATUS, TRAPME);
@@ -4725,7 +4821,7 @@ dumpi:
         fprintf(stderr, " B4=%x B5=%x B6=%x B7=%x", BR[4], BR[5], BR[6], BR[7]);
         fprintf(stderr, "\r\n");
         }
-#if 1
+#if 0
         fprintf(stderr, "Current MAPC PSD2 %x modes %x\r\n", PSD2, modes);
         for (ix=0; ix<16; ix++) {
             fprintf(stderr, "MAP %x MPC %x\r\n", ix/2, MAPC[ix]);
@@ -4835,7 +4931,6 @@ t_stat cpu_ex(t_value *vptr, t_addr baddr, UNIT *uptr, int32 sw)
     if (vptr == NULL)                   /* any address specified by user */
         return SCPE_OK;                 /* no, just ignore the request */
     *vptr = (M[addr] >> (8 * (3 - (baddr & 0x3))));  /* return memory contents */
-//printf("exam addr %x sw %x mem %x retv %x\r\n", baddr, sw, M[addr], *vptr);
     return SCPE_OK;                     /* we are all ok */
 }
 
@@ -4851,7 +4946,6 @@ t_stat cpu_dep(t_value val, t_addr baddr, UNIT *uptr, int32 sw)
     if (addr >= MEMSIZE)                /* see if address is within our memory */
         return SCPE_NXM;                /* no, none existant memory error */
     val = (M[addr] & bmasks[baddr & 0x3]) | (val << (8 * (3 - (baddr & 0x3))));
-//printf("dep addr %x sw %x mem %x retv %x\r\n", baddr, sw, M[addr], val);
     M[addr] = val;                      /* set new value */
     return SCPE_OK;                     /* all OK */
 }
