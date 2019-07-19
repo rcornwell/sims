@@ -618,18 +618,18 @@ t_opcode  optab[] = {
     {  0x1808,      0xFC0C, B|H|TYPE_K,   "ABR", },      /* Add Bit In Register # BR */
     {  0x180C,      0xFC0C, B|H|TYPE_K,   "TBR", },      /* Test Bit in Register # BR */
     {  0x1C00,      0xFC0C, N|H|TYPE_K,   "ZBR", },      /* Zero Bit in Register # NBR */ /* CON SRABR */
-    {  0x1C00,      0xFC0F, B|H|TYPE_I,   "SRABR", },    /* Shift Right Arithmetic # BR */ /* CON ZBM */
-    {  0x1C20,      0xFC0F, B|H|TYPE_I,   "SRLBR", },    /* Shift Right Logical # BR */
-    {  0x1C40,      0xFC0F, B|H|TYPE_I,   "SLABR", },    /* Shift Left Arithmetic # BR */
-    {  0x1C60,      0xFC0F, B|H|TYPE_I,   "SLLBR", },    /* Shift Left Logical # BR */
+    {  0x1C00,      0xFC60, B|H|TYPE_I,   "SRABR", },    /* Shift Right Arithmetic # BR */ /* CON ZBM */
+    {  0x1C20,      0xFC60, B|H|TYPE_I,   "SRLBR", },    /* Shift Right Logical # BR */
+    {  0x1C40,      0xFC60, B|H|TYPE_I,   "SLABR", },    /* Shift Left Arithmetic # BR */
+    {  0x1C60,      0xFC60, B|H|TYPE_I,   "SLLBR", },    /* Shift Left Logical # BR */
     {  0x2000,      0xFC0C, N|H|TYPE_K,   "ABR", },      /* Add Bit in Register # NBR */ /* CON SRADBR */
-    {  0x2000,      0xFC0F, B|H|TYPE_I,   "SRADBR", },   /* Shift Right Arithmetic Double # BR */ /* CON ABR */
-    {  0x2020,      0xFC0F, B|H|TYPE_I,   "SRLDBR", },   /* Shift Left Logical Double # BR */
-    {  0x2040,      0xFC0F, B|H|TYPE_I,   "SLADBR", },   /* Shift Right Arithmetic Double # BR */
-    {  0x2060,      0xFC0F, B|H|TYPE_I,   "SLLDBR", },   /* Shift Left Logical Double # BR */
+    {  0x2000,      0xFC60, B|H|TYPE_I,   "SRADBR", },   /* Shift Right Arithmetic Double # BR */ /* CON ABR */
+    {  0x2020,      0xFC60, B|H|TYPE_I,   "SRLDBR", },   /* Shift Left Logical Double # BR */
+    {  0x2040,      0xFC60, B|H|TYPE_I,   "SLADBR", },   /* Shift Right Arithmetic Double # BR */
+    {  0x2060,      0xFC60, B|H|TYPE_I,   "SLLDBR", },   /* Shift Left Logical Double # BR */
     {  0x2400,      0xFC0C, N|H|TYPE_K,   "TBR", },      /* Test Bit in Register # NBR */ /* CON SRCBR */
-    {  0x2400,      0xFC0F, B|H|TYPE_I,   "SRCBR", },    /* Shift Right Circular # BR */ /* CON TBR */
-    {  0x2440,      0xFC0F, B|H|TYPE_F,   "SLCBR", },    /* Shift Left Circular # BR */
+    {  0x2400,      0xFC60, B|H|TYPE_I,   "SRCBR", },    /* Shift Right Circular # BR */ /* CON TBR */
+    {  0x2440,      0xFC60, B|H|TYPE_F,   "SLCBR", },    /* Shift Left Circular # BR */
     {  0x2800,      0xFC0F,   H|TYPE_G,   "TRSW", },     /* Transfer GPR to PSD */
     {  0x2802,      0xFC0F, B|H|TYPE_F,   "XCBR", },     /* Exchange Base Registers # BR Only */
     {  0x2804,      0xFC0F, B|H|TYPE_G,   "TCCR", },     /* Transfer CC to GPR # BR Only */
@@ -675,13 +675,13 @@ t_opcode  optab[] = {
     {  0x3C08,      0xFC0F,   H|TYPE_F,   "SURM", },     /* Subtract Register to Register Masked # */
     {  0x4000,      0xFC0F, N|H|TYPE_F,   "MPR", },      /* Multiply Register to Register # NBR */
     {  0x4400,      0xFC0F, N|H|TYPE_F,   "DVR", },      /* Divide Register to Register # NBR */
-    {  0x5000,      0xFC0F,   B|TYPE_D,   "LABRM", },    /* Load Address BR Mode */
-    {  0x5400,      0xFC0F,   B|TYPE_A,   "STWBR", },    /* Store Base Register BR Only */
-    {  0x5800,      0xFC0F,   B|TYPE_A,   "SUABR", },    /* Subtract Base Register BR Only */
-    {  0x5808,      0xFC0F,   B|TYPE_D,   "LABR", },     /* Load Address Base Register BR Only */
-    {  0x5C00,      0xFC0F,   B|TYPE_A,   "LWBR", },     /* Load Base Register BR Only */
-    {  0x5C08,      0xFC0F, B|H|TYPE_A,   "BSUBM", },    /* Branch Subroutine Memory BR Only */
-    {  0x5C08,      0xFC0F, B|H|TYPE_A,   "CALLM", },    /* Call Memory BR Only */
+    {  0x5000,      0xFC08,   B|TYPE_D,   "LABRM", },    /* Load Address BR Mode */
+    {  0x5400,      0xFC08,   B|TYPE_A,   "STWBR", },    /* Store Base Register BR Only */
+    {  0x5800,      0xFC08,   B|TYPE_A,   "SUABR", },    /* Subtract Base Register BR Only */
+    {  0x5808,      0xFC08,   B|TYPE_D,   "LABR", },     /* Load Address Base Register BR Only */
+    {  0x5C00,      0xFC08,   B|TYPE_A,   "LWBR", },     /* Load Base Register BR Only */
+    {  0x5C08,      0xFC08, B|H|TYPE_A,   "BSUBM", },    /* Branch Subroutine Memory BR Only */
+    {  0x5C08,      0xFC08, B|H|TYPE_A,   "CALLM", },    /* Call Memory BR Only */
     {  0x6000,      0xFC0F, N|H|TYPE_F,   "NOR", },      /* Normalize # NBR Only */
     {  0x6400,      0xFC0F, N|H|TYPE_F,   "NORD", },     /* Normalize Double #  NBR Only */
     {  0x6800,      0xFC0F, N|H|TYPE_F,   "SCZ", },      /* Shift and Count Zeros # */
@@ -818,7 +818,7 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
             if (mode && (tab->type & (X | N)))
                 continue;                           /* non basemode instruction in base mode, skip */
             if (!mode && (tab->type & B))
-                continue;                           /* basemode instruction in nonbase mde, skip */
+                continue;                           /* basemode instruction in nonbase mode, skip */
 
             /* TODO?  Maybe want to make sure MODEL is 32/7X for X type instructions */
 
@@ -833,7 +833,12 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
             case TYPE_E:                    /* [*]o[,x] or o[(b)][,x] */
                 /* append B, H, W, D to base instruction using F & C bits */
                 i = (val & 3) | ((inst >> 1) & 04);
-                if (((inst&0xfc00) != 0xdc00) && ((inst&0xfc00) != 0xcc00) &&
+                if (((inst&0xfc00) != 0xdc00) &&
+                    ((inst&0xfc00) != 0x5400) &&
+                    ((inst&0xfc00) != 0x5800) &&
+                    ((inst&0xfc00) != 0x5c00) &&
+                    ((inst&0xfc00) != 0xcc00) &&
+                    ((inst&0xfc00) != 0xcc08) &&
                     ((inst&0xfc00) != 0x8000))
                     fputc(fc_type[i], of);
                 /* Fall through */
@@ -854,7 +859,8 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
                     fputc(' ', of);
                 if (mode) {
                     /* base reg mode */
-                    fprint_val(of, val&0xffff, 16, 16, PV_RZRO);    /* output 16 bit offset */
+//UTX               fprint_val(of, val&0xffff, 16, 16, PV_RZRO);    /* output 16 bit offset */
+                    fprint_val(of, val&0xffff, 16, 16, PV_LEFT);    /* output 16 bit offset */
                     if (inst & 07) {
                         fputc('(', of);
                         fputc(('0'+(inst & 07)), of);           /* output the base reg number */
@@ -958,10 +964,12 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
     }
     /* FIXME - should we just return error here? or dump as hex data? */
     /* we get here if opcode not found, print data value */
-    fputs(" invld ", of);                       /* output error message */
+    if (mode)
+        fputs(" Binvld ", of);                  /* output basemode error message */
+    else
+        fputs(" Ninvld ", of);                  /* output non-basmode error message */
     fprint_val(of, val, 16, 32, PV_RZRO);       /* output unknown 32 bit instruction code */
     return 4;                                   /* show as full word size */
-//  return SCPE_UNK;                            /* unknown opcode */
 }
 
 /* Symbolic decode
@@ -978,7 +986,6 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
 t_stat fprint_sym (FILE *of, t_addr addr, t_value *val, UNIT *uptr, int32 sw)
 {
     int         i;
-//old    int         l = 1;                          /* default to bytes */
     int         l = 4;                          /* default to full words */
     int         rdx = 16;                       /* default radex is hex */
     uint32      num, tmp=*val;
@@ -1112,7 +1119,6 @@ t_stat parse_sym (CONST char *cptr, t_addr addr, UNIT *uptr, t_value *val, int32
 {
     int        i;
     int        x;
-//old  int        l = 1;                           /* default to bytes */
     int        l = 4;                           /* default to full words */
     int        rdx = 16;                        /* default radex is hex */
     char       mod = 0;
