@@ -55,6 +55,7 @@ const char  *iop_desc(DEVICE *dptr);
 
 /* Held in u3 is the device command and status */
 #define IOP_INCH    0x00    /* Initialize channel command */
+#define IOP_NOP     0x03    /* NOP command */
 #define IOP_MSK     0xff    /* Command mask */
 
 /* Status held in u3 */
@@ -152,14 +153,30 @@ uint8  iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
     /* process the commands */
     switch (cmd & 0xFF) {
     case IOP_INCH:                                  /* INCH command */
+        uptr->u5 = SNS_RDY|SNS_ONLN;                /* status is online & ready */
+        uptr->u3 &= LMASK;                          /* leave only chsa */
         sim_debug(DEBUG_CMD, &iop_dev, "iop_startcmd %x: Cmd INCH\n", chan);
-        return SNS_CHNEND|SNS_DEVEND;               /* all is well */
+        uptr->u3 |= IOP_MSK;                        /* save INCH command as 0xff */
+        sim_activate(uptr, 20);                     /* TRY 07-13-19 */
+        return 0;                                   /* no status change */
+        break;
+
+    case IOP_NOP:                                   /* NOP command */
+        sim_debug(DEBUG_CMD, &iop_dev, "iop_startcmd %x: Cmd NOP\n", chan);
+        uptr->u5 = SNS_RDY|SNS_ONLN;                /* status is online & ready */
+        uptr->u3 &= LMASK;                          /* leave only chsa */
+        uptr->u3 |= (cmd & IOP_MSK);                /* save NOP command */
+        sim_activate(uptr, 20);                     /* TRY 07-13-19 */
+        return 0;                                   /* no status change */
         break;
 
     default:                                        /* invalid command */
         uptr->u5 |= SNS_CMDREJ;                     /* command rejected */
         sim_debug(DEBUG_CMD, &iop_dev, "iop_startcmd %x: Cmd Invald %x status %02x\n", chan, cmd, uptr->u5);
-        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* unit check */
+        uptr->u3 &= LMASK;                          /* leave only chsa */
+        uptr->u3 |= (cmd & IOP_MSK);                /* save command */
+        sim_activate(uptr, 20);                     /* force interrupt */
+        return 0;                                   /* no status change */
         break;
     }
 
@@ -172,11 +189,17 @@ uint8  iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 t_stat iop_srv(UNIT *uptr)
 {
     uint16      chsa = GET_UADDR(uptr->u3);
-    int         unit = (uptr - iop_unit);           /* unit 0 is channel */
+    int         cmd = uptr->u3 & IOP_MSK;
 
-    uptr->u3 &= LMASK;                              /* nothing left, command complete */
-    sim_debug(DEBUG_CMD, &iop_dev, "iop_srv chan %d: devend|devend\n", unit);
-//  chan_end(chsa, SNS_CHNEND|SNS_DEVEND);          /* TRY 6/12/18 done */
+    /* test for NOP or INCH cmds */
+    if ((cmd == IOP_NOP) || (cmd == IOP_MSK)) {     /* NOP has do nothing */
+        uptr->u3 &= LMASK;                              /* nothing left, command complete */
+        sim_debug(DEBUG_CMD, &iop_dev, "iop_srv INCH/NOP chan %d: chnend|devend\n", chsa);
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);          /* done */
+    } else
+    if (cmd) {
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);  /* done */
+    }
     return SCPE_OK;
 }
 
