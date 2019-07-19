@@ -218,6 +218,7 @@ uint8 lpr_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
     switch (cmd & LPR_CMDMSK) {
     case 0x00:                                  /* INCH command */
         sim_debug(DEBUG_CMD, &lpr_dev, "lpr_startcmd %x: Cmd INCH\n", chan);
+//fprintf(stderr, "lpr_startcmd %x: Cmd INCH\n", chan);
         return SNS_CHNEND|SNS_DEVEND;           /* all is well */
         break;
 
