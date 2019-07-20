@@ -180,7 +180,7 @@ This is a working copy of a simulator for the SEL Concept/32 computer.
 The current test version is for the SEL 32/27, 32/67, 32/87, 32/97 computers.
 Support for 32/55, 32/75, V6, and V9 computers may be added in the future.
 This simulator is co-authors with James C. Bevier. I did the initial parts
-of the simulator, James took it to a working simulator, I m assisting him
+of the simulator, James took it to a working simulator, I am assisting him
 in maintaining and enhancing the simulator.
 
 # SEL Concept/32

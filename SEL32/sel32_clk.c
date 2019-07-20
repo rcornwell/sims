@@ -130,7 +130,6 @@ void rtc_setup(uint32 ss, uint32 level)
 
     rtc_lvl = level;                                /* save the interrupt level */
     addr = M[addr>>2];                              /* get the interrupt context block addr */
-//fprintf(stderr, "rtc_setup called ss %x level %x SPAD %x icba %x\r\n", ss, level, val, addr);
     if (ss == 1) {                                  /* starting? */
         INTS[level] |= INTS_ENAB;                   /* make sure enabled */
         SPAD[level+0x80] |= SINT_ENAB;              /* in spad too */
@@ -147,7 +146,8 @@ void rtc_setup(uint32 ss, uint32 level)
 t_stat rtc_reset(DEVICE *dptr)
 {
     rtc_pie = 0;                                    /* disable pulse */
-    rtc_unit.wait = sim_rtcn_init (rtc_unit.wait, TMR_RTC); /* initialize clock calibration */
+//MARKFIX rtc_unit.wait = sim_rtcn_init(rtc_unit.wait, TMR_RTC); /* initialize clock calibration */
+    rtc_unit.wait = sim_rtcn_init_unit(&rtc_unit, rtc_unit.wait, TMR_RTC); /* initialize clock calibration */
     sim_activate (&rtc_unit, rtc_unit.wait);        /* activate unit */
     return SCPE_OK;
 }
@@ -250,12 +250,6 @@ DEVICE itm_dev = {
 /* cause interrupt */
 t_stat itm_srv (UNIT *uptr)
 {
-//  uint32  val = SPAD[itm_lvl+0x80];               /* get SPAD value for interrupt vector */
-//  uint32 addr = SPAD[0xf1] + (itm_lvl<<2);        /* vector address in SPAD */
-//  addr = M[addr>>2];                              /* get the interrupt context block addr */
-//fprintf(stderr, "itm_srv level %x itm_pie %x wait %x spad %x icba %x\r\n",
-//  itm_lvl, itm_pie, itm_unit.wait, val, addr);
-
     if (itm_pie) {                              /* interrupt enabled? */
         INTS[itm_lvl] |= INTS_REQ;              /* request the interrupt on zero value */
         irq_pend = 1;                           /* make sure we scan for int */
@@ -274,30 +268,27 @@ t_stat itm_srv (UNIT *uptr)
 int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
 {
     uint32  temp;
-//  uint32  val = SPAD[level+0x80];                 /* get SPAD value for interrupt vector */
-
-//  itm_lvl = level;                                /* save the interrupt level */
-//  uint32 addr = SPAD[0xf1] + (level<<2);          /* vector address in SPAD */
-//  addr = M[addr>>2];                              /* get the interrupt context block addr */
-//fprintf(stderr, "itm_rdwr called ss %x level %x SPAD %x icba %x\r\n", ss, level, val, addr);
-//fprintf(stderr, "itm_rdwr called cmd %x count %x (%d) level %x return cnt %x (%d)\r\n",
-//  cmd, cnt, cnt, level);
     switch (cmd) {
     case 0x39:                                      /* load timer with new value and start*/
         if (cnt < 0)
             cnt = 26042;                            /* TRY ??*/
-        sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);/* start timer with value from user */
+        /* start timer with value from user */
+        sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);
         return 0;                                   /* does not matter, no value returned  */
     case 0x60:                                      /* read and stop timer */
-        temp = (uint32)(100.0 * sim_activate_time_usecs (&itm_unit) / itm_tick_size_x_100);/* get timer value and stop timer */
+        /* get timer value and stop timer */
+        temp = (uint32)(100.0 * sim_activate_time_usecs (&itm_unit) / itm_tick_size_x_100);
         sim_cancel (&itm_unit);
         return temp;                                /* return current count value */
     case 0x79:                                      /* read the current timer value */
-        temp = (uint32)(100.0 * sim_activate_time_usecs (&itm_unit) / itm_tick_size_x_100); /* get timer value, load new value and start timer */
-        sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);/* start timer to fire after cnt ticks */
+        /* get timer value, load new value and start timer */
+        temp = (uint32)(100.0 * sim_activate_time_usecs (&itm_unit) / itm_tick_size_x_100);
+        /* start timer to fire after cnt ticks */
+        sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);
         return temp;                                /* return current count value */
     case 0x40:                                      /* read the current timer value */
-        return (uint32)(100.0 * sim_activate_time_usecs (&itm_unit) / itm_tick_size_x_100);/* return current count value */
+        /* return current count value */
+        return (uint32)(100.0 * sim_activate_time_usecs (&itm_unit) / itm_tick_size_x_100);
         break;
     }
     return 0;                                       /* does not matter, no value returned  */
@@ -310,7 +301,6 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
 void itm_setup(uint32 ss, uint32 level)
 {
     itm_lvl = level;                                /* save the interrupt level */
-// fprintf(stderr, "itm_setup called ss %x level %x\r\n", ss, level);
     if (ss == 1) {                                  /* starting? */
         INTS[level] |= INTS_ENAB;                   /* make sure enabled */
         SPAD[level+0x80] |= SINT_ENAB;              /* in spad too */
@@ -326,8 +316,6 @@ void itm_setup(uint32 ss, uint32 level)
 /* Clock reset */
 t_stat itm_reset (DEVICE *dptr)
 {
-//  int intlev = 0x5f;                              /* interrupt level for itm */
-//fprintf(stderr, "itm_reset called\r\n");
     itm_pie = 0;                                    /* disable pulse */
     sim_cancel (&itm_unit);                         /* not running yet */
     return SCPE_OK;

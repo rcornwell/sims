@@ -30,6 +30,7 @@
 
    Change History:
    12/10/2018 - force input chars to upper case if lower case
+   07/18/2019 - generate interrupt for INCH/NOP commands for UTX
 
 */
 
@@ -166,12 +167,16 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
     if ((uptr->u3 & CON_MSK) != 0)  /* is unit busy */
         return SNS_BSY;             /* yes, return busy */
 
-//fprintf(stderr, "COM process command %x\n", cmd);
+    sim_debug(DEBUG_CMD, &con_dev, "con_startcmd chan %x cmd %x enter\n", chan, cmd);
     /* process the commands */
     switch (cmd & 0xFF) {
     case CON_INCH:      /* 0x00 */      /* INCH command */
         sim_debug(DEBUG_CMD, &con_dev, "con_startcmd %x: Cmd INCH\n", chan);
-        return SNS_CHNEND|SNS_DEVEND;   /* all is well */
+        uptr->u3 &= LMASK;              /* leave only chsa */
+        uptr->u3 |= CON_MSK;            /* save INCH command as 0xff */
+        uptr->u5 = SNS_RDY|SNS_ONLN;    /* status is online & ready */
+        sim_activate(uptr, 20);         /* start us off */
+        return 0;                       /* no status change */
         break;
 
     case CON_RWD:       /* 0x37 */      /* TOF and write line */
@@ -184,7 +189,7 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         uptr->u3 &= LMASK;              /* leave only chsa */
         uptr->u3 |= (cmd & CON_MSK);    /* save command */
         uptr->u5 = SNS_RDY|SNS_ONLN;    /* status is online & ready */
-        sim_activate(uptr, 20);         /* TRY 06-09-18 */
+        sim_activate(uptr, 20);         /* start us off */
         return 0;                       /* no status change */
         break;
 
@@ -203,12 +208,16 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         atbuf = 0;                      /* reset attention buffer */
         uptr->u4 = 0;                   /* no I/O yet */
         uptr->u5 = SNS_RDY|SNS_ONLN;    /* status is online & ready */
+        sim_activate(uptr, 20);         /* start us off */
         return 0;
         break;
 
     case CON_NOP:       /* 0x03 */      /* NOP has do nothing */
         uptr->u5 = SNS_RDY|SNS_ONLN;    /* status is online & ready */
-        return SNS_CHNEND|SNS_DEVEND;   /* good return */
+        uptr->u3 &= LMASK;              /* leave only chsa */
+        uptr->u3 |= (cmd & CON_MSK);    /* save command */
+        sim_activate(uptr, 20);         /* start us off */
+        return 0;                       /* no status change */
         break;
 
     case CON_CON:       /* 0x1f */      /* Connect, return Data Set ready */
@@ -217,7 +226,7 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         return SNS_CHNEND|SNS_DEVEND;   /* good return */
         break;
 
-    case CON_DIS:       /* 0x23 */      /* NOP has do nothing */
+    case CON_DIS:       /* 0x23 */      /* Disconnect has do nothing */
         sim_debug(DEBUG_CMD, &con_dev, "con_startcmd %x: Cmd %x NOP\n", chan, cmd);
         uptr->u5 &= ~(SNS_DSR|SNS_DCD); /* Data set not ready */
         return SNS_CHNEND|SNS_DEVEND;   /* good return */
@@ -233,8 +242,8 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         break;
 
     default:                            /* invalid command */
-//fprintf(stderr, "Invalid command %x\n", cmd);
         uptr->u5 |= SNS_CMDREJ;         /* command rejected */
+        sim_debug(DEBUG_CMD, &con_dev, "con_startcmd %x: Invalid command Sense %02x\n", chan, uptr->u5);
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* unit check */
         break;
     }
@@ -247,9 +256,17 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
 /* Handle output transfers for console */
 t_stat con_srvo(UNIT *uptr) {
     uint16      chsa = GET_UADDR(uptr->u3);
-    int         unit = (uptr - con_unit);       /* unit 0 is read, unit 1 is write */
+    int         unit = (uptr - con_unit);           /* unit 0 is read, unit 1 is write */
     int         cmd = uptr->u3 & CON_MSK;
     uint8       ch;
+
+    sim_debug(DEBUG_CMD, &con_dev, "con_srvo enter chsa %x cmd = %x\n", chsa, cmd);
+    if ((cmd == CON_NOP) || (cmd == CON_MSK)) {     /* NOP has to do nothing */
+        uptr->u3 &= LMASK;                          /* nothing left, command complete */
+        sim_debug(DEBUG_CMD, &con_dev, "con_srvo NOP or INCH chsa %x cmd = %x\n", chsa, cmd);
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* done */
+        return SCPE_OK;
+    }
 
     if ((cmd == CON_WR) || (cmd == CON_RWD)) {
         /* Write to device */
@@ -258,8 +275,8 @@ t_stat con_srvo(UNIT *uptr) {
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
         } else {
             sim_debug(DEBUG_CMD, &con_dev, "con_srvo write %d: putch %02x %c\n", unit, ch, ch);
-            sim_putchar(ch);            /* output next char to device */
-            sim_activate(uptr, 20);     /* TRY 07-18-18 */
+            sim_putchar(ch);                /* output next char to device */
+            sim_activate(uptr, 20);         /* start us off */
         }
     }
     return SCPE_OK;
@@ -272,6 +289,15 @@ t_stat con_srvi(UNIT *uptr) {
     int         cmd = uptr->u3 & CON_MSK;
     uint8       ch;
     t_stat      r;
+
+    sim_debug(DEBUG_CMD, &con_dev, "con_srvi enter chsa %x cmd = %x\n", chsa, cmd);
+
+    if ((cmd == CON_NOP) || (cmd == CON_MSK)) { /* NOP has do nothing */
+        uptr->u3 &= LMASK;                      /* nothing left, command complete */
+        sim_debug(DEBUG_CMD, &con_dev, "con_srvi NOP or INCH chsa %x cmd = %x\n", chsa, cmd);
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
+        /* drop through to poll input */
+    }
 
     switch (cmd) {
 

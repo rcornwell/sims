@@ -119,9 +119,9 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 
 /* u4 - sector target address register (STAR) */
 /* Holds the current cylinder, head(track), sector */
-#define DISK_CYL            0xFFFF0000  /* cylinder mask */
-#define DISK_TRACK          0x0000FF00  /* track mask */
-#define DISK_SECTOR         0x000000ff  /* sector mask */
+#define DISK_CYL           0xFFFF0000 /* cylinder mask */
+#define DISK_TRACK         0x0000FF00 /* track mask */
+#define DISK_SECTOR        0x000000ff /* sector mask */
 
 /* u5 */
 /* Sense byte 0  - mode register */
@@ -410,7 +410,7 @@ uint8  disk_preio(UNIT *uptr, uint16 chan)
         return SNS_BSY;
     }
 
-    sim_debug(DEBUG_CMD, dptr, "dsk_preio unit=%d\n", unit);
+    sim_debug(DEBUG_CMD, dptr, "dsk_preio unit=%d OK\n", unit);
     return 0;       /* good to go */
 }
 
@@ -435,7 +435,7 @@ uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     if ((uptr->u3 & 0xff00) != 0) {         /* if any status info, we are busy */
         return SNS_BSY;
     }
-    sim_debug(DEBUG_CMD, dptr, "disk_startcmd CMD 2 unit=%d %02x\n", unit, cmd);
+    sim_debug(DEBUG_CMD, dptr, "disk_startcmd CMD continue unit=%d %02x\n", unit, cmd);
 
     if ((uptr->flags & UNIT_ATT) == 0) {    /* see if unit is attached */
         if (cmd == DSK_SNS) {               /* not attached, is cmd Sense 0x04 */
@@ -487,7 +487,7 @@ dosns:
             uptr->u5 &= 0xff000000;     /* clear status bytes, but leave mode data */
             return SNS_CHNEND|SNS_DEVEND;
         }
-        if (cmd == 0x0)                     /* INCH cmd gives unit check */
+        if (cmd == 0x0)                     /* INCH cmd gives unit check here */
            return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
             
         uptr->u5 |= (SNS_INTVENT|SNS_CMDREJ);       /* set new error status */
@@ -521,33 +521,38 @@ dosns:
             up++;                           /* next unit for this device */
         }
         sim_debug(DEBUG_CMD, dptr, "disk_startcmd done inch cmd addr %x\n", addr);
-        return SNS_CHNEND|SNS_DEVEND;
-        break;
+        uptr->u3 |= DSK_CMDMSK;             /* use 0xff for inch, just need int */
+        sim_activate(uptr, 20);             /* start things off */
+        return 0;
     }
 
     case DSK_SCK:                   /* Seek command 0x07 */
     case DSK_XEZ:                   /* Rezero & Read IPL record 0x1f */
-        uptr->u3 &= ~(DSK_STAR);    /* show we do not have seek STAR in u4 */
+        uptr->u3 &= ~(DSK_STAR);            /* show we do not have seek STAR in u4 */
     case DSK_WD:                    /* Write command 0x01 */
     case DSK_RD:                    /* Read command 0x02 */
     case DSK_LMR:                   /* read mode register */
 
-        uptr->u3 |= cmd;            /* save cmd */
-        sim_debug(DEBUG_CMD, dptr, "disk_startcmd done with disk seek r/w cmd %x addr %x\n", cmd, addr);
-        sim_activate(uptr, 20);     /* start things off */
+        uptr->u3 |= cmd;                    /* save cmd */
+        sim_debug(DEBUG_CMD, dptr, "disk_startcmd starting disk seek r/w cmd %x addr %x\n", cmd, addr);
+        sim_activate(uptr, 20);             /* start things off */
         return 0;
 
-    case DSK_NOP:           /* NOP 0x03 */
-        return SNS_CHNEND|SNS_DEVEND;   /* return OK */
+    case DSK_NOP:                   /* NOP 0x03 */
+        uptr->u3 |= cmd;                    /* save cmd */
+        sim_activate(uptr, 20);             /* start things off */
+        return 0;
 
-    case DSK_SNS:           /* Sense 0x04 */
-        goto dosns;         /* use code above */
+    case DSK_SNS:                   /* Sense 0x04 */
+        uptr->u3 |= cmd;                    /* save cmd */
+        sim_activate(uptr, 20);             /* start things off */
+//      goto dosns;                         /* use code above */
         break;
     }
     sim_debug(DEBUG_CMD, dptr, "disk_startcmd done with disk_startcmd %x addr %x u5 %x\n", cmd, addr, uptr->u5);
-    if (uptr->u5 & 0xff)
+    if (uptr->u5 & 0xff)                    /* any other cmd is error */
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
-    sim_activate(uptr, 20);             /* start things off */
+    sim_activate(uptr, 20);                 /* start things off */
     return SNS_CHNEND|SNS_DEVEND;
 }
 
@@ -583,26 +588,33 @@ t_stat disk_srv(UNIT * uptr)
 
     sim_debug(DEBUG_CMD, dptr, "disk_srv cmd=%x chsa %04x count %x\n", cmd, chsa, chp->ccw_count);
     switch (cmd) {
-    case 0:                               /* No command, stop disk */
-         break;
+    case 0:                                 /* No command, stop disk */
+        break;
+
+    case DSK_CMDMSK:        /* use 0xff for inch, just need int */
+    case DSK_NOP:           /* NOP 0x03 */
+        uptr->u3 &= ~(0xffff);              /* remove old cmd */
+        sim_debug(DEBUG_CMD, dptr, "disk_srv cmd=%x chsa %04x count %x completed\n", cmd, chsa, chp->ccw_count);
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
+        break;
 
     case DSK_SNS: /* 0x4 */
-         ch = uptr->u5 & 0xff;
-         sim_debug(DEBUG_DETAIL, dptr, "dsk_srv sense unit=%d 1 %x\n", unit, ch);
-         chan_write_byte(chsa, &ch) ;
-         ch = (uptr->u5 >> 8) & 0xff;
-         sim_debug(DEBUG_DETAIL, dptr, "dsk_srv sense unit=%d 2 %x\n", unit, ch);
-         chan_write_byte(chsa, &ch) ;
-         ch = 0;
-         sim_debug(DEBUG_DETAIL, dptr, "dsk_srv sense unit=%d 3 %x\n", unit, ch);
-         chan_write_byte(chsa, &ch) ;
-         ch = unit;
-         sim_debug(DEBUG_DETAIL, dptr, "dsk_srv sense unit=%d 4 %x\n", unit, ch);
-         chan_write_byte(chsa, &ch) ;
-         ch = 4;
-         uptr->u3 &= ~(0xff00);
-         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
-         break;
+        ch = uptr->u5 & 0xff;
+        sim_debug(DEBUG_DETAIL, dptr, "dsk_srv sense unit=%d 1 %x\n", unit, ch);
+        chan_write_byte(chsa, &ch) ;
+        ch = (uptr->u5 >> 8) & 0xff;
+        sim_debug(DEBUG_DETAIL, dptr, "dsk_srv sense unit=%d 2 %x\n", unit, ch);
+        chan_write_byte(chsa, &ch) ;
+        ch = 0;
+        sim_debug(DEBUG_DETAIL, dptr, "dsk_srv sense unit=%d 3 %x\n", unit, ch);
+        chan_write_byte(chsa, &ch) ;
+        ch = unit;
+        sim_debug(DEBUG_DETAIL, dptr, "dsk_srv sense unit=%d 4 %x\n", unit, ch);
+        chan_write_byte(chsa, &ch) ;
+        ch = 4;
+        uptr->u3 &= ~(0xff00);
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
+        break;
 
     case DSK_SCK:            /* Seek cylinder, track, sector 0x07 */
 
