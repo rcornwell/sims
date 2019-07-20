@@ -6581,7 +6581,7 @@ while ((c = strchr (c, '/'))) {
         return sim_messagef (SCPE_ARG, "%s is not a directory\n", path);
         }
     if (
-#if defined(_MSC_VER)
+#if defined(_WIN32)
         mkdir (path)
 #else
         mkdir (path, 0777)
@@ -6592,7 +6592,7 @@ while ((c = strchr (c, '/'))) {
     ++c;
     }
 if (
-#if defined(_MSC_VER)
+#if defined(_WIN32)
     mkdir (path)
 #else
     mkdir (path, 0777)
@@ -13568,7 +13568,7 @@ return SCPE_OK;
 #define HLP_MATCH_AMBIGUOUS (~0u)
 #define HLP_MATCH_WILDCARD  (~1U)
 #define HLP_MATCH_NONE      0
-static int matchHelpTopicName (TOPIC *topic, const char *token)
+static size_t matchHelpTopicName (TOPIC *topic, const char *token)
 {
 size_t i, match;
 char cbuf[CBUFSIZE], *cptr;
