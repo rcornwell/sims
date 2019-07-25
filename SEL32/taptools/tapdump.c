@@ -48,18 +48,18 @@ int getloi(char *s, int lim)
             if (ln > 0)
             {
                 if (count - lcount > 1)
-                    fprintf(stderr, "file %d: records %d to %d: size %d\n", filen, lcount, count - 1, ln);
+                    fprintf(stderr, "file %d: records %d to %d: size %d (%x)\n", filen, lcount, count-1, ln, ln);
                 else
-                    fprintf(stderr, "file %d: record %d: size %d\n", filen, lcount, ln);
+                    fprintf(stderr, "file %d: record %d: size %d (%x)\n", filen, lcount, ln, ln);
             }
-            fprintf(stderr, "file %d: eof after %d records: %d bytes\n", filen, count, size);
+            fprintf(stderr, "file %d: eof after %d records: %d bytes (%x)\n", filen, count, size, size);
 #endif
             filen++;    /* set next file number */
         }
         else
         {
 #ifndef NOTDUMP
-            fprintf(stderr, "second eof after %d files: %d bytes\n", filen, size);
+            fprintf(stderr, "second eof after %d files: %d bytes (%x)\n", filen, size, size);
 #endif
         }
         count = 0;      /* file record count back to zero */
@@ -77,7 +77,7 @@ int getloi(char *s, int lim)
         /* we have EOM */
         fprintf(stderr, "mpx eot\n");
         /* print out total tape size in bytes */
-        fprintf(stderr, "total length: %ld bytes\n", tsize);
+        fprintf(stderr, "total length: %ld bytes (%x)\n", tsize, tsize);
 #endif
         return -1;      /* at EOM on disk file */
     }
@@ -94,9 +94,9 @@ int getloi(char *s, int lim)
         if (ln > 0)
         {
             if (count - lcount > 1)
-                fprintf(stderr, "file %d: records %d to %d: size %d\n", filen, lcount, count - 1, ln);
+                fprintf(stderr, "file %d: records %d to %d: size %d (%x)\n", filen, lcount, count-1, ln, ln);
             else
-                fprintf(stderr, "file %d: record %d: size %d\n", filen, lcount, ln);
+                fprintf(stderr, "file %d: record %d: size %d (%x)\n", filen, lcount, ln, ln);
         }
 #endif
         ln = n;

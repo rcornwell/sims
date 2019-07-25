@@ -613,7 +613,7 @@ t_opcode  optab[] = {
     {  0x1000,      0xFC0F,   H|TYPE_F,   "CAR", },      /* Compare Arithmetic Register # */
     {  0x1008,      0xFC0F, B|H|TYPE_F,   "SACZ", },     /* Shift and Count Zeros # BR */
     {  0x1400,      0xFC0F,   H|TYPE_F,   "CMR", },      /* Compare masked with register */
-    {  0x1800,      0xFC0C, N|H|TYPE_K,   "SBR", },      /* Set Bit in Register # */
+    {  0x1800,      0xFC0C,   H|TYPE_K,   "SBR", },      /* Set Bit in Register # */
     {  0x1804,      0xFC0C, B|H|TYPE_K,   "ZBR", },      /* Zero Bit In register # BR */
     {  0x1808,      0xFC0C, B|H|TYPE_K,   "ABR", },      /* Add Bit In Register # BR */
     {  0x180C,      0xFC0C, B|H|TYPE_K,   "TBR", },      /* Test Bit in Register # BR */
@@ -634,7 +634,7 @@ t_opcode  optab[] = {
     {  0x2802,      0xFC0F, B|H|TYPE_F,   "XCBR", },     /* Exchange Base Registers # BR Only */
     {  0x2804,      0xFC0F, B|H|TYPE_G,   "TCCR", },     /* Transfer CC to GPR # BR Only */
     {  0x2805,      0xFC0F, B|H|TYPE_G,   "TRCC", },     /* Transfer GPR to CC # BR */
-    {  0x2808,      0xFC0F, B|H|TYPE_F,   "BSUB", },     /* Branch Subroutine # BR Only */
+    {  0x2808,      0xFF8F, B|H|TYPE_F,   "BSUB", },     /* Branch Subroutine # BR Only */
     {  0x2808,      0xFC0F, B|H|TYPE_F,   "CALL", },     /* Procedure Call # BR Only */
     {  0x280C,      0xFC0F, B|H|TYPE_G,   "TPCBR", },    /* Transfer Program Counter to Base # BR Only */
     {  0x280E,      0xFC7F, B|H|TYPE_G,   "RETURN", },   /* Procedure Return # BR Only */
@@ -680,8 +680,8 @@ t_opcode  optab[] = {
     {  0x5800,      0xFC08,   B|TYPE_A,   "SUABR", },    /* Subtract Base Register BR Only */
     {  0x5808,      0xFC08,   B|TYPE_D,   "LABR", },     /* Load Address Base Register BR Only */
     {  0x5C00,      0xFC08,   B|TYPE_A,   "LWBR", },     /* Load Base Register BR Only */
-    {  0x5C08,      0xFC08, B|H|TYPE_A,   "BSUBM", },    /* Branch Subroutine Memory BR Only */
-    {  0x5C08,      0xFC08, B|H|TYPE_A,   "CALLM", },    /* Call Memory BR Only */
+    {  0x5C08,      0xFF88,   B|TYPE_B,   "BSUBM", },    /* Branch Subroutine Memory BR Only */
+    {  0x5C08,      0xFC08,   B|TYPE_B,   "CALLM", },    /* Call Memory BR Only */
     {  0x6000,      0xFC0F, N|H|TYPE_F,   "NOR", },      /* Normalize # NBR Only */
     {  0x6400,      0xFC0F, N|H|TYPE_F,   "NORD", },     /* Normalize Double #  NBR Only */
     {  0x6800,      0xFC0F, N|H|TYPE_F,   "SCZ", },      /* Shift and Count Zeros # */
@@ -805,13 +805,8 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
     t_opcode *tab;
 
 ///    printf("inst %x sw %x\r\n", val, sw);
-#ifdef DO_THIS_UNTIL_FIGURE_IT_OUT
-    if (sw & SWMASK('M'))                           /* Base mode printing */
+    if ((PSD[0] & 0x02000000) || (sw & SWMASK('M'))) /* bit 6 is base mode */
         mode = 1;
-#else
-    if (PSD[0] & 0x02000000)                        /* bit 6 is base mode */
-        mode = 1;
-#endif
     /* loop through the instruction table for an opcode match and get the type */ 
     for (tab = optab; tab->name != NULL; tab++) {
         if (tab->opbase == (inst & tab->mask)) {
@@ -834,6 +829,7 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
                 /* append B, H, W, D to base instruction using F & C bits */
                 i = (val & 3) | ((inst >> 1) & 04);
                 if (((inst&0xfc00) != 0xdc00) &&
+                    ((inst&0xfc00) != 0xd000) &&
                     ((inst&0xfc00) != 0x5400) &&
                     ((inst&0xfc00) != 0x5800) &&
                     ((inst&0xfc00) != 0x5c00) &&

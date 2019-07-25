@@ -104,6 +104,11 @@ char *argv[];
                     case 'U':
                     case 'u':
                         option |= DOUSER;   /* save username for files */
+                        if (*p == '\0')
+                        {
+                            p = *++argv;    /* next parameter */
+                            --argc;         /* one less arg */
+                        };
                         userp = p;
                         while (*p != '\0')
                             p++;
@@ -247,7 +252,7 @@ getout:
         blks = (word/4608);                     /* blocks */
         if ((word%4608) != 0)
             blks++; 
-        printf("handle file %s user %s size %d bytes %d sect %d blocks\n",
+        printf("write SMD %s user %s size %d bytes %d sect %d blocks\n",
             fnp, userp, word, size, blks);
         fclose(fp);
         /* create smd entry for this file */
@@ -305,6 +310,7 @@ getout:
             }
             memset((char *)dir, 0, 4608);       /* zero smd storage */
             filen = 0;                          /* restart count */
+            dirp = (u_int32_t *)dir;            /* get word pointer for smd data */
         }
     }
     /* write out the directory entries for the files to save */
@@ -371,7 +377,7 @@ getout:
             }
             memset((char *)data, 0, 4608);      /* zero data storage */
         }
-        printf("handle file %s user %s (size %d bytes) (%d sect) (%d blocks)\n",
+        printf("write file %s user %s (size %d bytes) (%d sect) (%d blocks)\n",
             fnp, userp, word, size, blks);
         fclose(fp);
     }

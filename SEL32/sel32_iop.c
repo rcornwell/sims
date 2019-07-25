@@ -180,9 +180,7 @@ uint8  iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         break;
     }
 
-    if (uptr->u5 & (~(SNS_RDY|SNS_ONLN)))
-        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
-    return SNS_CHNEND|SNS_DEVEND;
+    return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;       /* not reachable for now */
 }
 
 /* Handle transfers for other sub-channels on IOP */

@@ -657,7 +657,7 @@ t_stat scfi_srv(UNIT *uptr)
                         data->cyl--;            /* seek 1 cyl */
                         sim_activate(uptr, 200);
                     }
-                    if (data->cyl < 0)          /* test for less than zero */
+                    if ((int32)data->cyl < 0)   /* test for less than zero */
                         data->cyl = 0;          /* make zero */
                 }
                 sim_debug(DEBUG_DETAIL, dptr, "scfi_srv seek next unit=%d %d %d\n", unit, uptr->u4 >> 16,

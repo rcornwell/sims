@@ -122,7 +122,7 @@ t_uint64 s_nord(t_uint64 reg, uint32 *exp) {
 /* add memory floating point number to register floating point number */
 /* set CC1 if overflow/underflow */
 uint32 s_adfw(uint32 reg, uint32 mem, uint32 *cc) {
-    uint32 mfrac, rfrac, frac, ret, oexp;
+    uint32 mfrac, rfrac, frac, ret=0, oexp;
     uint32 CC, sc, sign, expr, expm, exp;
 
     *cc = 0;                            /* clear the CC'ss */
@@ -402,7 +402,7 @@ t_uint64 s_adfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
         if (ret & DMSIGN)               /* see if negative */
             /* fraction is negative */
             exp ^= EXMASK;              /* neg fraction, so complement exponent */
-            ret = ret | ((t_uint64)exp << 32);  /* position and insert exponent */
+        ret = ret | ((t_uint64)exp << 32);  /* position and insert exponent */
     }
 
     /* come here to set cc's and return */
@@ -832,6 +832,7 @@ uint32 s_dvfw(uint32 reg, uint32 mem, uint32 *cc) {
 
     if (temp2 >= 0x7fffffc0)            /* check for special rounding */
         goto RRND2;                     /* no special handling */
+    /* FIXME dead code */
     if (temp2 == MSIGN) {               /* check for minux zero */
         temp2 = 0xF8000000;             /* yes, fixup value */
         expr++;                         /* bump exponent */
@@ -854,7 +855,7 @@ RRND1:
     temp2 += 0x40;                      /* round at bit 25 */
 RRND2:
     expr += temp;                       /* add exponent */
-    if (expr < 0) {                     /* test for underflow */
+    if ((int32)expr < 0) {              /* test for underflow */
         goto DUNFLO;                    /* go process underflow */
     }
     if (expr > 0x7f) {                  /* test for overflow */
@@ -981,8 +982,8 @@ t_uint64 s_mpfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
     temp += expr;                       /* compute final exponent */
     /* if both signs are neg and result sign is positive, overflow */
     /* if both signs are pos and result sign is negative, overflow */
-    if ((temp2 == 3 && (temp & MSIGN) == 0) ||
-        (temp2 == 0 && (temp & MSIGN) != 0)) {
+    if (((temp2 == 3) && ((temp & MSIGN) == 0)) ||
+        ((temp2 == 0) && ((temp & MSIGN) != 0))) {
         /* we have exponent overflow from addition */
         goto DOVFLO;                    /* process overflow */
     }
@@ -1084,8 +1085,8 @@ t_uint64 s_dvfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
     temp += 0x02000000;                 /* adjust exponent (abr bit 6)*/
     /* if both signs are neg and result sign is positive, overflow */
     /* if both signs are pos and result sign is negative, overflow */
-    if ((temp2 == 3 && (temp & MSIGN) == 0) ||
-        (temp2 == 0 && (temp & MSIGN) != 0)) {
+    if (((temp2 == 3) && ((temp & MSIGN) == 0)) ||
+        ((temp2 == 0) && ((temp & MSIGN) != 0))) {
         /* we have exponent overflow from addition */
         goto DOVFLO;                    /* process overflow */
     }

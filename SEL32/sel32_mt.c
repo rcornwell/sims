@@ -177,7 +177,7 @@ OTAB     EQU       $
 /* Sense byte 1 */
 #define SNS_PEMODER      0x800000       /* PE tape mode error */
 #define SNS_TPECHK       0x400000       /* Tape PE mode check */
-#define SNS_FMRKDT       0x200000       /* File mark detected EOR */
+#define SNS_FMRKDT       0x200000       /* File mark detected EOF */
 #define SNS_CORERR       0x100000       /* Corrected Error */
 #define SNS_HARDER       0x080000       /* Hard Error */
 #define SNS_MRLDER       0x040000       /* Mode register load error */
@@ -455,7 +455,8 @@ uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     case 0x1:                                       /* Write command */
     case 0x2:                                       /* Read command */
     case 0xc:                                       /* Read backward */
-        uptr->u5 = (uptr->u5 & 0x0000ff00);         /* clear all but byte 2 */
+        if (cmd != 0x03)                            /* if this is a nop do not zero status */
+            uptr->u5 = (uptr->u5 & 0x0000ff00);     /* clear all but byte 2 */
         uptr->u5 |= (SNS_RDY|SNS_ONLN);             /* set ready status */
         if (sim_tape_wrp(uptr))
             uptr->u5 |= (SNS_WRP);                  /* write protected */
@@ -500,8 +501,9 @@ t_stat mt_error(UNIT *uptr, uint16 addr, t_stat r, DEVICE *dptr)
         break;
 
     case MTSE_TMK:                                  /* tape mark */
-        sim_debug(DEBUG_CMD, &mta_dev, "mt_error FILE MARK\n");
+        sim_debug(DEBUG_CMD, &mta_dev, "FILE MARK\n");
         uptr->u5 |= SNS_FMRKDT;                     /* file mark detected */
+        chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
         break;
 
     case MTSE_WRP:                                  /* write protected */
@@ -530,6 +532,7 @@ t_stat mt_error(UNIT *uptr, uint16 addr, t_stat r, DEVICE *dptr)
     case MTSE_EOM:                                  /* end of medium */
         uptr->u5 |= SNS_EOT;                        /* tape at EOT */
         sim_debug(DEBUG_CMD, &mta_dev, "EOT ");
+        chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
         break;
     }
     chan_end(addr, SNS_CHNEND|SNS_DEVEND);          /* we are done with command */
@@ -551,8 +554,11 @@ t_stat mt_srv(UNIT *uptr)
     sim_debug(DEBUG_DATA, &mta_dev, "mt_srv unit %d cmd %x\n", unit, cmd);
     if ((uptr->flags & UNIT_ATT) == 0) {            /* unit attached status */
         uptr->u5 |= SNS_INTVENT;                    /* unit intervention required */
-        if (cmd != MT_SENSE)                        /* we are completed with unit check status */
-            return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
+        mt_busy[bufnum] &= ~1;                      /* make our buffer not busy */
+        if (cmd != MT_SENSE) {                      /* we are completed with unit check status */
+            chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+            return SCPE_OK;
+        }
     }
 
     switch (cmd) {
@@ -600,6 +606,7 @@ t_stat mt_srv(UNIT *uptr)
                 uptr->u5 |= SNS_EOT;                /* set EOT status */
             }
             uptr->u3 &= ~(MT_CMDMSK|MT_READDONE);   /* clear all but readdone & cmd */
+            uptr->u3 &= ~MT_CMDMSK;                 /* clear the cmd */
             mt_busy[bufnum] &= ~1;                  /* not busy anymore */
             chan_end(addr, SNS_CHNEND|SNS_DEVEND);  /* set chan end, dev end status */
             sim_debug(DEBUG_CMD, &mta_dev, "mt_srv READ %x char complete unit=%d sense %x\n",
@@ -631,7 +638,7 @@ t_stat mt_srv(UNIT *uptr)
                 /* Send dummy character to force SLI */
                 chan_write_byte(addr, &ch);         /* write the byte */
                 sim_debug(DEBUG_CMD, &mta_dev, "Read unit %d send dump SLI\n", unit);
-                sim_activate(uptr, (uptr->hwmark-uptr->u4) * 20); /* wait again */
+                sim_activate(uptr, (uptr->hwmark-uptr->u4) * 10); /* wait again */
                 uptr->u3 |= MT_READDONE;            /* read is done */
                 break;
             }
@@ -639,15 +646,22 @@ t_stat mt_srv(UNIT *uptr)
                 "Read data @1 unit %d  cnt %x ch %02x hwm %x\n", unit, uptr->u4, ch, uptr->hwmark);
             uptr->u3 &= ~MT_CMDMSK;                 /* clear the cmd */
             mt_busy[bufnum] &= ~1;                  /* set not busy */
-            chan_end(addr, SNS_DEVEND);             /* return end status */
+            chan_end(addr, SNS_CHNEND|SNS_DEVEND);  /* return end status */
         } else {
             sim_debug(DEBUG_DATA, &mta_dev,
                 "Read data @2 unit %d  cnt %x ch %02x hwm %x\n", unit, uptr->u4, ch, uptr->hwmark);
             if ((uint32)uptr->u4 >= uptr->hwmark) { /* In IRG */
-                /* Handle end of record */
+                /* Handle end of data record */
+                sim_debug(DEBUG_CMD, &mta_dev, "Read data out of data unit %d cnt %x ch %02x hwm %x\n",
+                        unit, uptr->u4, ch, uptr->hwmark);
+#ifdef UTX_EOF_CHANGE
                 uptr->u3 &= ~MT_CMDMSK;             /* clear the cmd */
                 mt_busy[bufnum] &= ~1;              /* set not busy */
                 chan_end(addr, SNS_CHNEND|SNS_DEVEND);  /* return end status */
+#else
+                uptr->u3 |= MT_READDONE;            /* read is done */
+                sim_activate(uptr, 20);             /* wait again */
+#endif
             } else
                 sim_activate(uptr, 20);             /* wait again */
         }
@@ -858,8 +872,9 @@ t_stat mt_srv(UNIT *uptr)
     case MT_FSR:    /* 0x43 */          /* Advance record */
          switch(uptr->u4) {
          case 0:
+              sim_debug(DEBUG_DETAIL, &mta_dev, "Skip rec entry unit=%d ", unit);
               uptr->u4++;
-              sim_activate(uptr, 500);
+              sim_activate(uptr, 50);
               break;
          case 1:
               uptr->u4++;
@@ -867,13 +882,13 @@ t_stat mt_srv(UNIT *uptr)
               r = sim_tape_sprecf(uptr, &reclen);
               if (r == MTSE_TMK) {
                   uptr->u4 = 3;
-                  sim_debug(DEBUG_DETAIL, &mta_dev, "MARK\n");
+                  sim_debug(DEBUG_DETAIL, &mta_dev, "FSR MARK\n");
                   sim_activate(uptr, 50);
               } else if (r == MTSE_EOM) {
                   uptr->u4 = 4;
                   sim_activate(uptr, 50);
               } else {
-                  sim_debug(DEBUG_DETAIL, &mta_dev, "%d\n", reclen);
+                  sim_debug(DEBUG_DETAIL, &mta_dev, "FSR skipped %d byte record\n", reclen);
                   sim_activate(uptr, 10 + (10 * reclen));
               }
               break;
@@ -886,6 +901,7 @@ t_stat mt_srv(UNIT *uptr)
               uptr->u3 &= ~(MT_CMDMSK);
               mt_busy[bufnum] &= ~1;
               chan_end(addr, SNS_DEVEND|SNS_UNITEXP);
+              sim_debug(DEBUG_DETAIL, &mta_dev, "Skip record Completed\n");
               break;
          case 4:
               uptr->u3 &= ~(MT_CMDMSK);
@@ -898,22 +914,24 @@ t_stat mt_srv(UNIT *uptr)
     case MT_FSF:    /* 0x63 */          /* advance filemark */
         switch(uptr->u4) {
         case 0:
+            sim_debug(DEBUG_DETAIL, &mta_dev, "Skip file entry unit=%d\n", unit);
             uptr->u4++;
             sim_activate(uptr, 50);
             break;
         case 1:
-            sim_debug(DEBUG_DETAIL, &mta_dev, "Skip rec unit=%d\n", unit);
+            sim_debug(DEBUG_DETAIL, &mta_dev, "Skip file unit=%d\n", unit);
             r = sim_tape_sprecf(uptr, &reclen);
             if (r == MTSE_TMK) {
                 uptr->u4++;
-                sim_debug(DEBUG_DETAIL, &mta_dev, "MARK\n");
+                uptr->u5 |= SNS_FMRKDT;             /* file mark detected */
+                sim_debug(DEBUG_DETAIL, &mta_dev, "FSF MARK\n");
                 sim_activate(uptr, 50);
             } else if (r == MTSE_EOM) {
                 uptr->u5 |= SNS_EOT;                /* set EOT status */
                 uptr->u4+= 2;
                 sim_activate(uptr, 50);
             } else {
-                sim_debug(DEBUG_DETAIL, &mta_dev, "%d\n", reclen);
+                sim_debug(DEBUG_DETAIL, &mta_dev, "FSF skipped %d byte record\n", reclen);
                 sim_activate(uptr, 50);
             }
             break;
@@ -921,12 +939,12 @@ t_stat mt_srv(UNIT *uptr)
             uptr->u3 &= ~(MT_CMDMSK);
             mt_busy[bufnum] &= ~1;
             chan_end(addr, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
-            sim_debug(DEBUG_DETAIL, &mta_dev, "Skip done unit=%d\n", unit);
+            sim_debug(DEBUG_DETAIL, &mta_dev, "Skip file done unit=%d\n", unit);
             break;
         case 3:
             uptr->u3 &= ~(MT_CMDMSK);
             mt_busy[bufnum] &= ~1;
-            chan_end(addr, SNS_DEVEND|SNS_UNITCHK);
+            chan_end(addr, SNS_DEVEND|SNS_UNITCHK|SNS_UNITCHK);
             break;
         }
         break;
