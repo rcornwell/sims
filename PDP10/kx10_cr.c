@@ -136,7 +136,7 @@ t_stat cr_devio(uint32 dev, uint64 *data) {
 
     case CONO:
          clr_interrupt(dev);
-         sim_debug(DEBUG_CONO, &cr_dev, "CR: CONO %012llo\n", *data);
+         sim_debug(DEBUG_CONO, &cr_dev, "CR: CONO %012llo PC=%06o\n", *data, PC);
          if (*data & CLR_READER) {
              uptr->STATUS = 0;
              if (!CARD_RDY(uptr))
@@ -156,7 +156,6 @@ t_stat cr_devio(uint32 dev, uint64 *data) {
              uptr->STATUS &= ~(CARD_IN_READ|RDY_READ|DATA_RDY);
              uptr->COL = 0;
              sim_activate(uptr, uptr->wait);
-             break;
          }
          if (CARD_RDY(uptr))
              uptr->STATUS |= RDY_READ;

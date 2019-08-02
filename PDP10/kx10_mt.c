@@ -240,6 +240,8 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
           res |= ((uint64)wr_eor) << 21;
           if (dptr->flags & MTDF_TYPEB)
              res |= 7LL;  /* Force DATA PIA to 7 on type B */
+          if (cpu_unit[0].flags & UNIT_ITSPAGE)
+             res |= SMASK;
           *data = res;
           sim_debug(DEBUG_CONI, dptr, "MT CONI %03o status %06o %o %o PC=%06o\n",
                       dev, (uint32)res, mt_sel_unit, mt_pia, PC);
