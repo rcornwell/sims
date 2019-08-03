@@ -92,7 +92,7 @@ uint16              cp_buffer[80];
 
 DIB cp_dib = { CP_DEVNUM, 1, cp_devio, NULL};
 
-UNIT                cp_unit = {UDATA(cp_srv, UNIT_CDP, 0), 600 };
+UNIT                cp_unit = {UDATA(cp_srv, UNIT_CDP, 0), 2000 };
 
 MTAB                cp_mod[] = {
     {MTAB_XTD | MTAB_VUN, 0, "FORMAT", "FORMAT",

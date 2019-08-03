@@ -94,7 +94,7 @@ uint16              cr_buffer[80];
 DIB cr_dib = { CR_DEVNUM, 1, cr_devio, NULL};
 
 UNIT                cr_unit = {
-   UDATA(cr_srv, UNIT_CDR, 0), 300,
+   UDATA(cr_srv, UNIT_CDR, 0), 1000,
 };
 
 MTAB                cr_mod[] = {
@@ -214,7 +214,7 @@ cr_srv(UNIT *uptr) {
         case CDSE_EMPTY:
          sim_debug(DEBUG_EXP, &cr_dev, "CR: card empty\n");
              uptr->STATUS &= ~(CARD_IN_READ|READING);
-             uptr->STATUS |= HOPPER_EMPTY|TROUBLE|STOP;
+             uptr->STATUS |= HOPPER_EMPTY|TROUBLE;
              if (uptr->STATUS & TROUBLE_EN)
                  set_interrupt(CR_DEVNUM, uptr->STATUS);
              return SCPE_OK;
@@ -239,6 +239,8 @@ cr_srv(UNIT *uptr) {
     if (uptr->STATUS & CARD_IN_READ) {
         if (uptr->COL >= 80) {
              uptr->STATUS &= ~(CARD_IN_READ|READING);
+             if (sim_card_input_hopper_count(uptr) == 0)
+                uptr->STATUS |= HOPPER_EMPTY;
              uptr->STATUS |= END_CARD;
              set_interrupt(CR_DEVNUM, uptr->STATUS);
              sim_activate(uptr, uptr->wait);
