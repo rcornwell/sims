@@ -843,6 +843,7 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
             case TYPE_D:                 /* r,[*]o[,x] or r,o[(b)],[,x] */
                 if ((tab->type & 0xF) != TYPE_E) {
                     fputc(' ', of);
+//                    fputc('R', of);
                     /* output the reg or bit number */
                     fputc('0'+((inst>>7) & 07), of);
                     fputc(',', of);
@@ -859,11 +860,14 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
                     fprint_val(of, val&0xffff, 16, 16, PV_LEFT);    /* output 16 bit offset */
                     if (inst & 07) {
                         fputc('(', of);
+//                        fputc('B', of);
                         fputc(('0'+(inst & 07)), of);           /* output the base reg number */
                         fputc(')', of);
                     }
-                    if (inst & 0x70) {
+//                    if (inst & 0x70) {
+                    if ((inst & 0x70) && (tab->type != TYPE_D)) {
                         fputc(',', of);
+//                        fputc('R', of);
                         fputc(('0'+((inst >> 4) & 07)), of);    /* output the index reg number */
                     }
                 } else {
@@ -873,6 +877,7 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
                     fprint_val(of, val&0x7ffff, 16, 19, PV_LEFT);   /* 19 bit offset */
                     if (inst & 0x60) {
                         fputc(',', of);                         /* register coming */
+//                        fputc('R', of);
                         if (tab->type != TYPE_D)
                             fputc('0'+((inst & 0x60) >> 5), of);    /* output the index reg number */
                         else { 
@@ -886,6 +891,7 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
             /* immediate or XIO instructions */
             case TYPE_C:                    /* r,v */
                 fputc(' ', of);
+//                fputc('R', of);
                 fputc('0'+((inst>>7) & 07), of);                /* index reg number */
                 fputc(',', of);
                 fprint_val(of, val&0xffff, 16, 16, PV_LEFT);    /* 16 bit imm val or chan/suba */
@@ -894,14 +900,17 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
             /* reg - reg instructions */
             case TYPE_F:                    /* rs,rd */
                 fputc(' ', of);
+//                fputc('R', of);
                 fputc('0'+((inst>>4) & 07), of);                /* src reg */
                 fputc(',', of);
+//                fputc('R', of);
                 fputc('0'+((inst>>7) & 07), of);                /* dest reg */
                 break;
 
             /* single reg instructions */
             case TYPE_G:                    /* op r */
                 fputc(' ', of);
+//                fputc('R', of);
                 fputc('0'+((inst>>7) & 07), of);                /* output src/dest reg  num */
                 break;
 
@@ -912,6 +921,7 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
             /* reg and bit shift cnt */
             case TYPE_I:                    /* r,b */
                 fputc(' ', of);
+//                fputc('R', of);
                 fputc('0'+((inst>>7) & 07), of);                /* reg number */
                 fputc(',', of);
                 fprint_val(of, inst&0x1f, 10, 5, PV_LEFT);      /* 5 bit shift count */
@@ -920,6 +930,7 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
             /* register bit operations */
             case TYPE_K:                 /* r,rb */
                 fputc(' ', of);
+//                fputc('R', of);
                 fputc('0'+((inst>>4) & 07), of);                /* register number */
                 fputc(',', of);
                 i = ((inst & 3) << 3) | ((inst >> 7) & 07);

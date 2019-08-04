@@ -119,48 +119,48 @@ OTAB     EQU       $
 
 #define CMD      u3
 /* BTP tape commands */
-#define MT_INCH             0x00       /* Initialize channel command */
-#define MT_WRITE            0x01       /* Write command */
-#define MT_READ             0x02       /* Read command */
-#define MT_NOP              0x03       /* Control command */
-#define MT_SENSE            0x04       /* Sense command */
-#define MT_RDBK             0x0c       /* Read Backward */
-#define MT_RDCMP            0x13       /* Read and compare command */
-#define MT_REW              0x23       /* Rewind command */
-#define MT_RUN              0x33       /* Rewind and unload */
-#define MT_FSR              0x43       /* Advance record */
-#define MT_BSR              0x53       /* Backspace record */
-#define MT_FSF              0x63       /* Advance filemark  */
-#define MT_BSF              0x73       /* Backspace filemark */
-#define MT_SETM             0x83       /* Set Mode command */
-#define MT_WTM              0x93       /* Write Tape filemark */
-#define MT_ERG              0xA3       /* Erase 3.5 of tape */
-#define MT_MODEMSK          0xFF       /* Mode Mask */
+#define MT_INCH             0x00        /* Initialize channel command */
+#define MT_WRITE            0x01        /* Write command */
+#define MT_READ             0x02        /* Read command */
+#define MT_NOP              0x03        /* Control command */
+#define MT_SENSE            0x04        /* Sense command */
+#define MT_RDBK             0x0c        /* Read Backward */
+#define MT_RDCMP            0x13        /* Read and compare command */
+#define MT_REW              0x23        /* Rewind command */
+#define MT_RUN              0x33        /* Rewind and unload */
+#define MT_FSR              0x43        /* Advance record */
+#define MT_BSR              0x53        /* Backspace record */
+#define MT_FSF              0x63        /* Advance filemark  */
+#define MT_BSF              0x73        /* Backspace filemark */
+#define MT_SETM             0x83        /* Set Mode command */
+#define MT_WTM              0x93        /* Write Tape filemark */
+#define MT_ERG              0xA3        /* Erase 3.5 of tape */
+#define MT_MODEMSK          0xFF        /* Mode Mask */
 
 /* set mode bits for BTP (MT_SETM) */
-#define MT_MODE_AUTO        0x80       /* =0 Perform auto error recodery on read */
-#define MT_MODE_FORCE       0x80       /* =1 Read regardless if error recovery fails */
-#define MT_MDEN_800         0x40       /* =0 select 800 BPI NRZI mode 9 track only */
-#define MT_MDEN_1600        0x40       /* =1 select 1600 BPI PE mode 9 track only */
-#define MT_MDEN_6250        0x20       /* =0 Use mode from bit one for NRZI/PE */
-#define MT_MDEN_6250        0x20       /* =1 6250 BPI GCR mode 9 track only */
-#define MT_MDEN_SCATGR      0x01       /* =1 HSTP scatter/gather mode */
-#define MT_MDEN_MSK         0xc0       /* Density mask */
+#define MT_MODE_AUTO        0x80        /* =0 Perform auto error recodery on read */
+#define MT_MODE_FORCE       0x80        /* =1 Read regardless if error recovery fails */
+#define MT_MDEN_800         0x40        /* =0 select 800 BPI NRZI mode 9 track only */
+#define MT_MDEN_1600        0x40        /* =1 select 1600 BPI PE mode 9 track only */
+#define MT_MDEN_6250        0x20        /* =0 Use mode from bit one for NRZI/PE */
+#define MT_MDEN_6250        0x20        /* =1 6250 BPI GCR mode 9 track only */
+#define MT_MDEN_SCATGR      0x01        /* =1 HSTP scatter/gather mode */
+#define MT_MDEN_MSK         0xc0        /* Density mask */
 
-#define MT_CTL_MSK          0x38       /* Mask for control flags */
-#define MT_CTL_NOP          0x00       /* Nop control mode */
-#define MT_CTL_NRZI         0x08       /* 9 track 800 bpi mode */
-#define MT_CTL_RST          0x10       /* Set density, odd, convert on, trans off */
-#define MT_CTL_NOP2         0x18       /* 9 track 1600 NRZI mode */
+#define MT_CTL_MSK          0x38        /* Mask for control flags */
+#define MT_CTL_NOP          0x00        /* Nop control mode */
+#define MT_CTL_NRZI         0x08        /* 9 track 800 bpi mode */
+#define MT_CTL_RST          0x10        /* Set density, odd, convert on, trans off */
+#define MT_CTL_NOP2         0x18        /* 9 track 1600 NRZI mode */
 
 /* in u3 is device command code and status */
-#define MT_CMDMSK            0x00ff       /* Command being run */
-#define MT_READDONE          0x0400       /* Read finished, end channel */
-#define MT_MARK              0x0800       /* Sensed tape mark in move command */
-#define MT_ODD               0x1000       /* Odd parity */
-#define MT_TRANS             0x2000       /* Translation turned on ignored 9 track  */
-#define MT_CONV              0x4000       /* Data converter on ignored 9 track  */
-#define MT_BUSY              0x8000       /* Flag to send a CUE */
+#define MT_CMDMSK           0x00ff      /* Command being run */
+#define MT_READDONE         0x0400      /* Read finished, end channel */
+#define MT_MARK             0x0800      /* Sensed tape mark in move command */
+#define MT_ODD              0x1000      /* Odd parity */
+#define MT_TRANS            0x2000      /* Translation turned on ignored 9 track  */
+#define MT_CONV             0x4000      /* Data converter on ignored 9 track  */
+#define MT_BUSY             0x8000      /* Flag to send a CUE */
 
 #define POS      u4
 /* in u4 is current buffer position */
@@ -168,14 +168,14 @@ OTAB     EQU       $
 #define SNS      u5
 /* in u5 packs sense byte 0, 1, 2 and 3 */
 /* Sense byte 0 */
-#define SNS_CMDREJ       0x80000000       /* Command reject */
-#define SNS_INTVENT      0x40000000       /* Unit intervention required */
-#define SNS_SPARE1       0x20000000       /* Spare */
-#define SNS_EQUCHK       0x10000000       /* Equipment check */
-#define SNS_DATCHK       0x08000000       /* Data Check */
-#define SNS_OVRRUN       0x04000000       /* Data overrun */
-#define SNS_SPARE2       0x02000000       /* Spare */
-#define SNS_LOOKER       0x01000000       /* lookahead error */
+#define SNS_CMDREJ       0x80000000     /* Command reject */
+#define SNS_INTVENT      0x40000000     /* Unit intervention required */
+#define SNS_SPARE1       0x20000000     /* Spare */
+#define SNS_EQUCHK       0x10000000     /* Equipment check */
+#define SNS_DATCHK       0x08000000     /* Data Check */
+#define SNS_OVRRUN       0x04000000     /* Data overrun */
+#define SNS_SPARE2       0x02000000     /* Spare */
+#define SNS_LOOKER       0x01000000     /* lookahead error */
 
 /* Sense byte 1 */
 #define SNS_PEMODER      0x800000       /* PE tape mode error */
@@ -188,27 +188,27 @@ OTAB     EQU       $
 #define SNS_SPARE3       0x010000       /* Spare */
 
 /* Sense byte 2 mode bits */
-#define SNS_MREG0        0x8000       /* Mode register bit 0 */
-#define SNS_MREG1        0x4000       /* Mode register bit 1 */
-#define SNS_MREG2        0x2000       /* Mode register bit 2 */
-#define SNS_MREG3        0x1000       /* Mode register bit 3 */
-#define SNS_MREG4        0x0800       /* Mode register bit 4 */
-#define SNS_MREG5        0x0400       /* Mode register bit 5 */
-#define SNS_MREG6        0x0200       /* Mode register bit 6 */
-#define SNS_MREG7        0x0100       /* Mode register bit 7 */
+#define SNS_MREG0        0x8000         /* Mode register bit 0 */
+#define SNS_MREG1        0x4000         /* Mode register bit 1 */
+#define SNS_MREG2        0x2000         /* Mode register bit 2 */
+#define SNS_MREG3        0x1000         /* Mode register bit 3 */
+#define SNS_MREG4        0x0800         /* Mode register bit 4 */
+#define SNS_MREG5        0x0400         /* Mode register bit 5 */
+#define SNS_MREG6        0x0200         /* Mode register bit 6 */
+#define SNS_MREG7        0x0100         /* Mode register bit 7 */
 
 /* Sense byte 3 */
-#define SNS_RDY          0x80       /* Drive Ready */
-#define SNS_ONLN         0x40       /* Drive Online */
-#define SNS_WRP          0x20       /* Drive is file protected (write ring missing) */
-#define SNS_NRZI         0x10       /* Drive is NRZI */
-#define SNS_SPARE4       0x08       /* Spare */
-#define SNS_LOAD         0x04       /* Drive is at load point */
-#define SNS_EOT          0x02       /* Drive is at EOT */
-#define SNS_SPARE5       0x01       /* Spare */
+#define SNS_RDY          0x80           /* Drive Ready */
+#define SNS_ONLN         0x40           /* Drive Online */
+#define SNS_WRP          0x20           /* Drive is file protected (write ring missing) */
+#define SNS_NRZI         0x10           /* Drive is NRZI */
+#define SNS_SPARE4       0x08           /* Spare */
+#define SNS_LOAD         0x04           /* Drive is at load point */
+#define SNS_EOT          0x02           /* Drive is at EOT */
+#define SNS_SPARE5       0x01           /* Spare */
 
-#define SNS_BYTE4        0x00       /* Hardware errors not supported */
-#define SNS_BYTE5        0x00       /* Hardware errors not supported */
+#define SNS_BYTE4        0x00           /* Hardware errors not supported */
+#define SNS_BYTE5        0x00           /* Hardware errors not supported */
 
 #define MT_CONV1         0x40
 #define MT_CONV2         0x80
@@ -445,40 +445,40 @@ uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     sim_debug(DEBUG_EXP, &mta_dev, "mt_startcmd processing unit %x cmd %x\n", unit, cmd);
 
     switch (cmd & 0xF) {
-    case 0x0:                                   /* INCH command */
+    case 0x0:                                       /* INCH command */
         /* POS has INCH buffer address and us9 the count */
         /* just return OK and channel software will use POS as status buffer */
         sim_debug(DEBUG_DETAIL, &mta_dev, "mt_startcmd INCH done unit %x cmd %x\n",
                  unit, cmd);
         /* UTX_needs_interrupt */
-        cmd = MT_CMDMSK;                        /* insert INCH cmd as 0xff */
+        cmd = MT_CMDMSK;                            /* insert INCH cmd as 0xff */
         /* fall through */
-    case 0x3:                                   /* Tape motion commands */
+    case 0x3:                                       /* Tape motion commands */
         /* UTX_needs_interrupt */
         /* fall through */
-    case 0x1:                                   /* Write command */
-    case 0x2:                                   /* Read command */
-    case 0xc:                                   /* Read backward */
-        if (cmd != 0x03)                        /* if this is a nop do not zero status */
-            uptr->SNS = (uptr->SNS & 0x0000ff00); /* clear all but byte 2 */
-        uptr->SNS |= (SNS_RDY|SNS_ONLN);        /* set ready status */
+    case 0x1:                                       /* Write command */
+    case 0x2:                                       /* Read command */
+    case 0xc:                                       /* Read backward */
+        if (cmd != 0x03)                            /* if this is a nop do not zero status */
+            uptr->SNS = (uptr->SNS & 0x0000ff00);   /* clear all but byte 2 */
+        uptr->SNS |= (SNS_RDY|SNS_ONLN);            /* set ready status */
         if (sim_tape_wrp(uptr))
-            uptr->SNS |= (SNS_WRP);             /* write protected */
+            uptr->SNS |= (SNS_WRP);                 /* write protected */
         if (sim_tape_bot(uptr))
-            uptr->SNS |= (SNS_LOAD);            /* tape at load point */
+            uptr->SNS |= (SNS_LOAD);                /* tape at load point */
         if (sim_tape_eot(uptr))
-            uptr->SNS |= (SNS_EOT);             /* tape at EOM */
+            uptr->SNS |= (SNS_EOT);                 /* tape at EOM */
         /* Fall through */
 
     case 0x4:              /* Sense */
-        uptr->CMD &= ~(MT_CMDMSK);               /* clear out last cmd */
-        uptr->CMD |= cmd & MT_CMDMSK;            /* insert new cmd */
-        CLR_BUF(uptr);                          /* buffer is empty */
+        uptr->CMD &= ~(MT_CMDMSK);                  /* clear out last cmd */
+        uptr->CMD |= cmd & MT_CMDMSK;               /* insert new cmd */
+        CLR_BUF(uptr);                              /* buffer is empty */
         /* INCH cmd has iNCH buffer address in POS, so leave it */
         if (cmd != MT_CMDMSK)
-            uptr->POS = 0;                       /* reset buffer position pointer */
-        sim_activate(uptr, 100);                /* Start unit off */
-        mt_busy[GET_DEV_BUF(dptr->flags)] = 1;  /* show we are busy */
+            uptr->POS = 0;                          /* reset buffer position pointer */
+        sim_activate(uptr, 100);                    /* Start unit off */
+        mt_busy[GET_DEV_BUF(dptr->flags)] = 1;      /* show we are busy */
         sim_debug(DEBUG_EXP, &mta_dev, "mt_startcmd sense return 0 chan %x cmd %x\n",
               chan, cmd);
         return 0;
@@ -488,7 +488,7 @@ uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         uptr->SNS |= SNS_CMDREJ;
         break;
     }
-    if (uptr->SNS & 0xff000000)                      /* errors? */
+    if (uptr->SNS & 0xff000000)                     /* errors? */
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     sim_debug(DEBUG_EXP, &mta_dev,
               "mt_startcmd ret CHNEND|DEVEND chan %d unit %x cmd %x\n", chan, unit, cmd);
@@ -507,7 +507,7 @@ t_stat mt_error(UNIT *uptr, uint16 addr, t_stat r, DEVICE *dptr)
 
     case MTSE_TMK:                                  /* tape mark */
         sim_debug(DEBUG_CMD, &mta_dev, "FILE MARK\n");
-        uptr->SNS |= SNS_FMRKDT;                     /* file mark detected */
+        uptr->SNS |= SNS_FMRKDT;                    /* file mark detected */
         chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
         break;
 
@@ -567,38 +567,38 @@ t_stat mt_srv(UNIT *uptr)
     }
 
     switch (cmd) {
-    case MT_CMDMSK:   /* 0x0ff for inch 0x00 */    /* INCH is for channel, nothing for us */
+    case MT_CMDMSK:   /* 0x0ff for inch 0x00 */     /* INCH is for channel, nothing for us */
         /* uptr->POS has INCH buffer address, just leave it */
         sim_debug(DEBUG_CMD, &mta_dev, "mt_srv cmd 0 INCH unit=%d\n", unit);
-        uptr->CMD &= ~MT_CMDMSK;                   /* clear the cmd */
-        mt_busy[bufnum] &= ~1;                     /* make our buffer not busy */
-        chan_end(addr, SNS_CHNEND|SNS_DEVEND);     /* we are done dev|chan end */
+        uptr->CMD &= ~MT_CMDMSK;                    /* clear the cmd */
+        mt_busy[bufnum] &= ~1;                      /* make our buffer not busy */
+        chan_end(addr, SNS_CHNEND|SNS_DEVEND);      /* we are done dev|chan end */
         break;
 
-    case MT_NOP:    /* 0x03 */                     /* NOP motion command */
-        uptr->CMD &= ~MT_CMDMSK;                   /* clear the cmd */
-        mt_busy[bufnum] &= ~1;                     /* make our buffer not busy */
-        chan_end(addr, SNS_CHNEND|SNS_DEVEND);     /* we are done dev|chan end */
+    case MT_NOP:    /* 0x03 */                      /* NOP motion command */
+        uptr->CMD &= ~MT_CMDMSK;                    /* clear the cmd */
+        mt_busy[bufnum] &= ~1;                      /* make our buffer not busy */
+        chan_end(addr, SNS_CHNEND|SNS_DEVEND);      /* we are done dev|chan end */
         break;
 
-    case MT_SENSE:  /* 0x04 */                     /* get sense data */
+    case MT_SENSE:  /* 0x04 */                      /* get sense data */
         sim_debug(DEBUG_CMD, &mta_dev, "mt_srv cmd 4 SENSE unit=%d\n", unit);
-        ch = (uptr->SNS >> 24) & 0xff;             /* get sense byte 0 status */
+        ch = (uptr->SNS >> 24) & 0xff;              /* get sense byte 0 status */
         sim_debug(DEBUG_DETAIL, &mta_dev, "sense unit %d byte 0 %x\n", unit, ch);
-        chan_write_byte(addr, &ch);                /* write byte 0 */
-        ch = (uptr->SNS >> 16) & 0xff;             /* get sense byte 1 status */
+        chan_write_byte(addr, &ch);                 /* write byte 0 */
+        ch = (uptr->SNS >> 16) & 0xff;              /* get sense byte 1 status */
         sim_debug(DEBUG_DETAIL, &mta_dev, "sense unit %d byte 1 %x\n", unit, ch);
-        chan_write_byte(addr, &ch);                /* write byte 1 */
-        ch = (uptr->SNS >> 8) & 0xff;              /* get sense byte 2 status */
+        chan_write_byte(addr, &ch);                 /* write byte 1 */
+        ch = (uptr->SNS >> 8) & 0xff;               /* get sense byte 2 status */
         sim_debug(DEBUG_DETAIL, &mta_dev, "sense unit %d byte 2 %x\n", unit, ch);
-        chan_write_byte(addr, &ch);                /* write byte 2 */
-        ch = (uptr->SNS >> 0) & 0xff;              /* get sense byte 3 status */
+        chan_write_byte(addr, &ch);                 /* write byte 2 */
+        ch = (uptr->SNS >> 0) & 0xff;               /* get sense byte 3 status */
         sim_debug(DEBUG_DETAIL, &mta_dev, "sense unit %d byte 3 %x\n", unit, ch);
-        chan_write_byte(addr, &ch);                /* write byte 3 */
+        chan_write_byte(addr, &ch);                 /* write byte 3 */
         ch = 4;
-        uptr->CMD &= ~MT_CMDMSK;                   /* clear the cmd */
-        mt_busy[bufnum] &= ~1;                     /* make our buffer not busy */
-        chan_end(addr, SNS_CHNEND|SNS_DEVEND);     /* we are done dev|chan end */
+        uptr->CMD &= ~MT_CMDMSK;                    /* clear the cmd */
+        mt_busy[bufnum] &= ~1;                      /* make our buffer not busy */
+        chan_end(addr, SNS_CHNEND|SNS_DEVEND);      /* we are done dev|chan end */
         sim_debug(DEBUG_CMD, &mta_dev, "mt_srv SENSE %x char complete unit=%d\n",
                      uptr->POS, unit);
         break;
@@ -628,8 +628,8 @@ t_stat mt_srv(UNIT *uptr)
                 uptr->CMD &= ~(MT_CMDMSK|MT_READDONE);   /* clear all but readdone & cmd */
                 return mt_error(uptr, addr, r, dptr);   /* process any error & return status */
             }
-            uptr->SNS &= ~(SNS_LOAD|SNS_EOT);        /* reset BOT & EOT */
-            uptr->POS = 0;                           /* reset buffer position */
+            uptr->SNS &= ~(SNS_LOAD|SNS_EOT);       /* reset BOT & EOT */
+            uptr->POS = 0;                          /* reset buffer position */
             uptr->hwmark = reclen;                  /* set buffer chars read in */
             sim_debug(DEBUG_DETAIL, &mta_dev, "mt_srv READ fill buffer complete count %x\n", reclen);
         }
@@ -645,13 +645,13 @@ t_stat mt_srv(UNIT *uptr)
                 chan_write_byte(addr, &ch);         /* write the byte */
                 sim_debug(DEBUG_CMD, &mta_dev, "Read unit %d send dump SLI\n", unit);
                 sim_activate(uptr, (uptr->hwmark-uptr->POS) * 10); /* wait again */
-                uptr->CMD |= MT_READDONE;            /* read is done */
+                uptr->CMD |= MT_READDONE;           /* read is done */
                 break;
             }
             sim_debug(DEBUG_CMD, &mta_dev,
                 "Read data @1 unit %d  cnt %x ch %02x hwm %x\n", unit, uptr->POS,
                          ch, uptr->hwmark);
-            uptr->CMD &= ~MT_CMDMSK;                 /* clear the cmd */
+            uptr->CMD &= ~MT_CMDMSK;                /* clear the cmd */
             mt_busy[bufnum] &= ~1;                  /* set not busy */
             chan_end(addr, SNS_CHNEND|SNS_DEVEND);  /* return end status */
         } else {
@@ -664,11 +664,11 @@ t_stat mt_srv(UNIT *uptr)
                         "Read data out of data unit %d cnt %x ch %02x hwm %x\n",
                         unit, uptr->POS, ch, uptr->hwmark);
 #ifdef UTX_EOF_CHANGE
-                uptr->CMD &= ~MT_CMDMSK;             /* clear the cmd */
+                uptr->CMD &= ~MT_CMDMSK;            /* clear the cmd */
                 mt_busy[bufnum] &= ~1;              /* set not busy */
                 chan_end(addr, SNS_CHNEND|SNS_DEVEND);  /* return end status */
 #else
-                uptr->CMD |= MT_READDONE;            /* read is done */
+                uptr->CMD |= MT_READDONE;           /* read is done */
                 sim_activate(uptr, 20);             /* wait again */
 #endif
             } else
@@ -680,23 +680,23 @@ t_stat mt_srv(UNIT *uptr)
         sim_debug(DEBUG_CMD, &mta_dev, "mt_srv cmd 0x83 SETM unit=%d\n", unit);
         /* Grab data until channel has no more */
         if (chan_read_byte(addr, &ch)) {
-            if (uptr->POS > 0) {                     /* Only if data in record */
+            if (uptr->POS > 0) {                    /* Only if data in record */
                 reclen = uptr->hwmark;              /* set record length */
                 ch = mt_buffer[bufnum][0];          /* get the first byte read */
                 sim_debug(DEBUG_CMD, &mta_dev,
                     "Write mode data done unit %d chars %d char %x\n", unit, reclen, ch);
                 /* put mode bits into byte 2 of SNS */
                 uptr->SNS = (uptr->SNS & 0xffff00ff) | (ch << 8);
-                uptr->POS = 0;                       /* no bytes anymore */
-                uptr->CMD &= ~MT_CMDMSK;             /* no cmd to do */
+                uptr->POS = 0;                      /* no bytes anymore */
+                uptr->CMD &= ~MT_CMDMSK;            /* no cmd to do */
                 mt_busy[bufnum] &= ~1;              /* set not busy */
                 chan_end(addr, SNS_CHNEND|SNS_DEVEND);  /* return end status */
             }
         } else {
-            mt_buffer[bufnum][uptr->POS++] = ch;     /* save the character read in */
+            mt_buffer[bufnum][uptr->POS++] = ch;    /* save the character read in */
             sim_debug(DEBUG_CMD, &mta_dev, "Write mode data in unit %d POS %d ch %0x\n",
                   unit, uptr->POS, ch);
-            uptr->hwmark = uptr->POS;                /* set high water mark */
+            uptr->hwmark = uptr->POS;               /* set high water mark */
             sim_activate(uptr, 20);                 /* wait time */
         }
         break;
@@ -714,7 +714,7 @@ t_stat mt_srv(UNIT *uptr)
 
          /* Grab data until channel has no more */
          if (chan_read_byte(addr, &ch)) {
-             if (uptr->POS > 0) {                    /* Only if data in record */
+             if (uptr->POS > 0) {                   /* Only if data in record */
                  reclen = uptr->hwmark;
                  sim_debug(DEBUG_DETAIL, &mta_dev, "Write unit=%d Block %d chars\n",
                         unit, reclen);
@@ -941,11 +941,11 @@ t_stat mt_srv(UNIT *uptr)
             r = sim_tape_sprecf(uptr, &reclen);
             if (r == MTSE_TMK) {
                 uptr->POS++;
-                uptr->SNS |= SNS_FMRKDT;             /* file mark detected */
+                uptr->SNS |= SNS_FMRKDT;            /* file mark detected */
                 sim_debug(DEBUG_DETAIL, &mta_dev, "FSF MARK\n");
                 sim_activate(uptr, 50);
             } else if (r == MTSE_EOM) {
-                uptr->SNS |= SNS_EOT;                /* set EOT status */
+                uptr->SNS |= SNS_EOT;               /* set EOT status */
                 uptr->POS+= 2;
                 sim_activate(uptr, 50);
             } else {
@@ -1030,10 +1030,10 @@ void mt_ini(UNIT *uptr, t_bool f)
     if (MT_DENS(uptr->dynflags) == 0)
         uptr->dynflags |= MT_DENS_6250 << UNIT_S_DF_TAPE;
 
-    uptr->CMD &= ~0xffff;                     /* clear out the flags but leave ch/sa */
-    uptr->SNS = 0;                            /* clear sense data */
-    uptr->SNS |= (SNS_RDY|SNS_ONLN|SNS_LOAD); /* set initial status */
-    mt_busy[GET_DEV_BUF(dptr->flags)] = 0;    /* set not busy */
+    uptr->CMD &= ~0xffff;                           /* clear out the flags but leave ch/sa */
+    uptr->SNS = 0;                                  /* clear sense data */
+    uptr->SNS |= (SNS_RDY|SNS_ONLN|SNS_LOAD);       /* set initial status */
+    mt_busy[GET_DEV_BUF(dptr->flags)] = 0;          /* set not busy */
     sim_debug(DEBUG_EXP, dptr, "MT init device %s unit %x\n", dptr->name,
                  GET_UADDR(uptr->CMD));
 }
@@ -1055,11 +1055,11 @@ t_stat mt_attach(UNIT *uptr, CONST char *file)
     /* mount the specified file to the MT */
     if ((r = sim_tape_attach(uptr, file)) != SCPE_OK) {
        sim_debug(DEBUG_EXP, &mta_dev, "mt_attach ERROR filename %s status %x\n", file, r);
-       return r;                                        /* report any error */
+       return r;                                    /* report any error */
     }
     sim_debug(DEBUG_EXP, &mta_dev, "mt_attach complete filename %s\n", file);
-    set_devattn(addr, SNS_DEVEND);                      /* ready int???? */
-    return SCPE_OK;                                     /* return good status */
+    set_devattn(addr, SNS_DEVEND);                  /* ready int???? */
+    return SCPE_OK;                                 /* return good status */
 }
 
 /* detach the MT device and unload any tape */
@@ -1073,19 +1073,19 @@ t_stat mt_detach(UNIT *uptr)
 /* boot from the specified tape unit */
 t_stat mt_boot(int32 unit_num, DEVICE *dptr)
 {
-    UNIT    *uptr = &dptr->units[unit_num];       /* find tape unit pointer */
+    UNIT    *uptr = &dptr->units[unit_num];         /* find tape unit pointer */
 
     sim_debug(DEBUG_EXP, &mta_dev, "MT Boot dev/unit %x\n", GET_UADDR(uptr->CMD));
-    if ((uptr->flags & UNIT_ATT) == 0) {          /* Is MT device already attached? */
+    if ((uptr->flags & UNIT_ATT) == 0) {            /* Is MT device already attached? */
         sim_debug(DEBUG_EXP, &mta_dev, "MT Boot attach error dev/unit %x\n",
                GET_UADDR(uptr->CMD));
-        return SCPE_UNATT;                        /* not attached, return error */
+        return SCPE_UNATT;                          /* not attached, return error */
     }
-    SPAD[0xf4] = GET_UADDR(uptr->CMD);            /* put boot device chan/sa into spad */
-    SPAD[0xf8] = 0xF000;                          /* show as F class device */
+    SPAD[0xf4] = GET_UADDR(uptr->CMD);              /* put boot device chan/sa into spad */
+    SPAD[0xf8] = 0xF000;                            /* show as F class device */
 
-    uptr->CMD &= ~0xffff;                         /* clear out old status */
-    return chan_boot(GET_UADDR(uptr->CMD), dptr); /* boot the ch/sa */
+    uptr->CMD &= ~0xffff;                           /* clear out old status */
+    return chan_boot(GET_UADDR(uptr->CMD), dptr);   /* boot the ch/sa */
 }
 
 t_stat mt_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)

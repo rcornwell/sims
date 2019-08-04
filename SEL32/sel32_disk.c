@@ -70,7 +70,7 @@ bits 0-7 - Flags
 bits 8-15 - sector count (sectors per track)(F16=16, F20=20)
 bits 16-23 - MHD Head count (number of heads on MHD)
 bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option of
-    mini-module)
+  mini-module)
 */
 
 
@@ -83,89 +83,89 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 #define CMD        u3
 /* u3 */
 /* in u3 is device command code and status */
-#define DSK_CMDMSK       0x00ff   /* Command being run */
-#define DSK_STAR         0x0100   /* STAR value in u4 */
-#define DSK_NU2          0x0200   /*                    */
-#define DSK_READDONE     0x0400   /* Read finished, end channel */
-#define DSK_ENDDSK       0x0800   /* Sensed end of disk */
-#define DSK_SEEKING      0x1000   /* Disk is currently seeking */
-#define DSK_READING      0x2000   /* Disk is reading data */
-#define DSK_WRITING      0x4000   /* Disk is writing data */
-#define DSK_BUSY         0x8000   /* Flag to send a CUE */
+#define DSK_CMDMSK       0x00ff     /* Command being run */
+#define DSK_STAR         0x0100     /* STAR value in u4 */
+#define DSK_NU2          0x0200     /*                    */
+#define DSK_READDONE     0x0400     /* Read finished, end channel */
+#define DSK_ENDDSK       0x0800     /* Sensed end of disk */
+#define DSK_SEEKING      0x1000     /* Disk is currently seeking */
+#define DSK_READING      0x2000     /* Disk is reading data */
+#define DSK_WRITING      0x4000     /* Disk is writing data */
+#define DSK_BUSY         0x8000     /* Flag to send a CUE */
 /* commands */
-#define DSK_INCH           0x00   /* Initialize channel */
-#define DSK_WD             0x01   /* Write data */
-#define DSK_RD             0x02   /* Read data */
-#define DSK_NOP            0x03   /* No operation */
-#define DSK_SNS            0x04   /* Sense */
-#define DSK_SCK            0x07   /* Seek cylinder, track, sector */
-#define DSK_TIC            0x08   /* Transfer in channel */
-#define DSK_FNSK           0x0B   /* Format for no skip */
-#define DSK_LPL            0x13   /* Lock protected label */
-#define DSK_LMR            0x1F   /* Load mode register */
-#define DSK_RES            0x23   /* Reserve */
-#define DSK_WSL            0x31   /* Write sector label */
-#define DSK_RSL            0x32   /* Read sector label */
-#define DSK_REL            0x33   /* Release */
-#define DSK_XEZ            0x37   /* Rezero */
-#define DSK_POR            0x43   /* Priority Override */
-#define DSK_IHA            0x47   /* Increment head address */
-#define DSK_SRM            0x4F   /* Set reserve track mode */
-#define DSK_WTL            0x51   /* Write track label */
-#define DSK_RTL            0x52   /* Read track label */
-#define DSK_XRM            0x5F   /* Reset reserve track mode */
-#define DSK_RAP            0xA2   /* Read angular positions */
-#define DSK_TESS           0xAB   /* Test STAR (subchannel target address register) */
-#define DSK_ICH            0xFF   /* Initialize Controller */
+#define DSK_INCH           0x00     /* Initialize channel */
+#define DSK_WD             0x01     /* Write data */
+#define DSK_RD             0x02     /* Read data */
+#define DSK_NOP            0x03     /* No operation */
+#define DSK_SNS            0x04     /* Sense */
+#define DSK_SCK            0x07     /* Seek cylinder, track, sector */
+#define DSK_TIC            0x08     /* Transfer in channel */
+#define DSK_FNSK           0x0B     /* Format for no skip */
+#define DSK_LPL            0x13     /* Lock protected label */
+#define DSK_LMR            0x1F     /* Load mode register */
+#define DSK_RES            0x23     /* Reserve */
+#define DSK_WSL            0x31     /* Write sector label */
+#define DSK_RSL            0x32     /* Read sector label */
+#define DSK_REL            0x33     /* Release */
+#define DSK_XEZ            0x37     /* Rezero */
+#define DSK_POR            0x43     /* Priority Override */
+#define DSK_IHA            0x47     /* Increment head address */
+#define DSK_SRM            0x4F     /* Set reserve track mode */
+#define DSK_WTL            0x51     /* Write track label */
+#define DSK_RTL            0x52     /* Read track label */
+#define DSK_XRM            0x5F     /* Reset reserve track mode */
+#define DSK_RAP            0xA2     /* Read angular positions */
+#define DSK_TESS           0xAB     /* Test STAR (subchannel target address register) */
+#define DSK_ICH            0xFF     /* Initialize Controller */
 
 #define STAR      u4
 /* u4 - sector target address register (STAR) */
 /* Holds the current cylinder, head(track), sector */
-#define DISK_CYL     0xFFFF0000   /* cylinder mask */
-#define DISK_TRACK   0x0000FF00   /* track mask */
-#define DISK_SECTOR  0x000000ff   /* sector mask */
+#define DISK_CYL     0xFFFF0000     /* cylinder mask */
+#define DISK_TRACK   0x0000FF00     /* track mask */
+#define DISK_SECTOR  0x000000ff     /* sector mask */
 
 #define SNS       u5
 /* u5 */
 /* Sense byte 0  - mode register */
-#define SNS_DROFF    0x80000000   /* Drive Carriage will be offset */
-#define SNS_TRKOFF   0x40000000   /* Track offset: 0=positive, 1=negative */
-#define SNS_RDTMOFF  0x20000000   /* Read timing offset = 1 */
-#define SNS_RDSTRBT  0x10000000   /* Read strobe timing: 1=positive, 0=negative */
-#define SNS_DIAGMOD  0x08000000   /* Diagnostic Mode ECC Code generation and checking */
-#define SNS_RSVTRK   0x04000000   /* Reserve Track mode: 1=OK to write, 0=read only */
-#define SNS_FHDOPT   0x02000000   /* FHD or FHD option = 1 */
-#define SNS_RESERV   0x01000000   /* Reserved */
+#define SNS_DROFF      0x80000000   /* Drive Carriage will be offset */
+#define SNS_TRKOFF     0x40000000   /* Track offset: 0=positive, 1=negative */
+#define SNS_RDTMOFF    0x20000000   /* Read timing offset = 1 */
+#define SNS_RDSTRBT    0x10000000   /* Read strobe timing: 1=positive, 0=negative */
+#define SNS_DIAGMOD    0x08000000   /* Diagnostic Mode ECC Code generation and checking */
+#define SNS_RSVTRK     0x04000000   /* Reserve Track mode: 1=OK to write, 0=read only */
+#define SNS_FHDOPT     0x02000000   /* FHD or FHD option = 1 */
+#define SNS_RESERV     0x01000000   /* Reserved */
 
 /* Sense byte 1 */
-#define SNS_CMDREJ     0x800000   /* Command reject */
-#define SNS_INTVENT    0x400000   /* Unit intervention required */
-#define SNS_SPARE1     0x200000   /* Spare */
-#define SNS_EQUCHK     0x100000   /* Equipment check */
-#define SNS_DATCHK     0x080000   /* Data Check */
-#define SNS_OVRRUN     0x040000   /* Data overrun/underrun */
-#define SNS_DSKFERR    0x020000   /* Disk format error */
-#define SNS_DEFTRK     0x010000   /* Defective track encountered */
+#define SNS_CMDREJ     0x800000     /* Command reject */
+#define SNS_INTVENT    0x400000     /* Unit intervention required */
+#define SNS_SPARE1     0x200000     /* Spare */
+#define SNS_EQUCHK     0x100000     /* Equipment check */
+#define SNS_DATCHK     0x080000     /* Data Check */
+#define SNS_OVRRUN     0x040000     /* Data overrun/underrun */
+#define SNS_DSKFERR    0x020000     /* Disk format error */
+#define SNS_DEFTRK     0x010000     /* Defective track encountered */
 
 /* Sense byte 2 */
-#define SNS_LAST         0x8000   /* Last track flag encountered */
-#define SNS_AATT         0x4000   /* At Alternate track */
-#define SNS_WPER         0x2000   /* Write protection error */
-#define SNS_WRL          0x1000   /* Write lock error */
-#define SNS_MOCK         0x0800   /* Mode check */
-#define SNS_INAD         0x0400   /* Invalid memory address */
-#define SNS_RELF         0x0200   /* Release fault */
-#define SNS_CHER         0x0100   /* Chaining error */
+#define SNS_LAST       0x8000       /* Last track flag encountered */
+#define SNS_AATT       0x4000       /* At Alternate track */
+#define SNS_WPER       0x2000       /* Write protection error */
+#define SNS_WRL        0x1000       /* Write lock error */
+#define SNS_MOCK       0x0800       /* Mode check */
+#define SNS_INAD       0x0400       /* Invalid memory address */
+#define SNS_RELF       0x0200       /* Release fault */
+#define SNS_CHER       0x0100       /* Chaining error */
 
 /* Sense byte 3 */
-#define SNS_REVL           0x80   /* Revolution lost */
-#define SNS_DADE           0x40   /* Disc addressing or seek error */
-#define SNS_BUCK           0x20   /* Buffer check */
-#define SNS_ECCS           0x10   /* ECC error in sector label */
-#define SNS_ECCD           0x08   /* ECC error iin data */
-#define SNS_ECCT           0x04   /* ECC error in track label */
-#define SNS_RTAE           0x02   /* Reserve track access error */
-#define SNS_UESS           0x01   /* Uncorrectable ECC error */
+#define SNS_REVL       0x80         /* Revolution lost */
+#define SNS_DADE       0x40         /* Disc addressing or seek error */
+#define SNS_BUCK       0x20         /* Buffer check */
+#define SNS_ECCS       0x10         /* ECC error in sector label */
+#define SNS_ECCD       0x08         /* ECC error iin data */
+#define SNS_ECCT       0x04         /* ECC error in track label */
+#define SNS_RTAE       0x02         /* Reserve track access error */
+#define SNS_UESS       0x01         /* Uncorrectable ECC error */
 
 #define ATTR      u6
 /* u6 */
@@ -405,20 +405,20 @@ uint8  disk_preio(UNIT *uptr, uint16 chan)
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
 
-    if ((uptr->CMD & 0xff00) != 0) {         /* just return if busy */
+    if ((uptr->CMD & 0xff00) != 0) {        /* just return if busy */
         return SNS_BSY;
     }
 
     sim_debug(DEBUG_CMD, dptr, "dsk_preio unit=%d OK\n", unit);
-    return 0;       /* good to go */
+    return 0;                               /* good to go */
 }
 
 uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 {
-    uint16         addr = GET_UADDR(uptr->CMD);
-    DEVICE         *dptr = find_dev_from_unit(uptr);
-    int            unit = (uptr - dptr->units);
-    uint8          ch;
+    uint16      addr = GET_UADDR(uptr->CMD);
+    DEVICE      *dptr = find_dev_from_unit(uptr);
+    int         unit = (uptr - dptr->units);
+    uint8       ch;
 
     sim_debug(DEBUG_CMD, dptr, "disk_startcmd unit %d cmd %x CMD %x\n", unit, cmd, uptr->CMD);
     if ((uptr->flags & UNIT_ATT) == 0) {    /* unit attached status */
@@ -592,7 +592,7 @@ t_stat disk_srv(UNIT * uptr)
              unit, cmd, chsa, chsa>>8, chp->ccw_count);
 
     if ((uptr->flags & UNIT_ATT) == 0) {   /* unit attached status */
-        uptr->SNS |= SNS_INTVENT;           /* unit intervention required */
+        uptr->SNS |= SNS_INTVENT;          /* unit intervention required */
         if (cmd != DSK_SNS)                /* we are completed with unit check status */
             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     }

@@ -1268,12 +1268,13 @@ uint32 scan_chan(void) {
     if ((CPUSTATUS & 0x80) == 0) {                  /* are interrupts blocked */
         /* ints not blocked, so look for highest requesting interrupt */
         for (i=0; i<112; i++) {
-            if (INTS[i]&INTS_ACT)                   /* look for level active */
-                break;                              /* this level active, so stop looking */
             if (SPAD[i+0x80] == 0)                  /* not initialize? */
                 continue;                           /* skip this one */
             if (SPAD[i+0x80] == 0xffffffff)         /* not initialize? */
                 continue;                           /* skip this one */
+//          if (INTS[i]&INTS_ACT)                   /* look for level active */
+            if (SPAD[i+0x80] & SINT_ACT)            /* look for level active */
+                break;                              /* this level active, so stop looking */
             /* see if there is pending status for this channel */
             /* if there is and the level is not requesting, do it */
             if ((INTS[i] & INTS_ENAB) && !(INTS[i] & INTS_REQ)) {
@@ -1305,14 +1306,15 @@ uint32 scan_chan(void) {
             /* look for the highest requesting interrupt */
             /* that is enabled */
             if (((INTS[i] & INTS_ENAB) && (INTS[i] & INTS_REQ)) ||
-                ((SPAD[i+0x80] & INTS_ENAB) && (INTS[i] & INTS_REQ))) {
+                ((SPAD[i+0x80] & SINT_ENAB) && (INTS[i] & INTS_REQ))) {
                 /* requesting, make active and turn off request flag */
                 INTS[i] &= ~INTS_REQ;               /* turn off request */
                 INTS[i] |= INTS_ACT;                /* turn on active */
                 SPAD[i+0x80] |= SINT_ACT;           /* show active in SPAD too */
                 /* make sure both enabled too */
-                INTS[i] |= INTS_ENAB;               /* turn on enable */
-                SPAD[i+0x80] |= SINT_ENAB;          /* show enabled in SPAD too */
+   /* should already be enabled */
+//                INTS[i] |= INTS_ENAB;               /* turn on enable */
+//                SPAD[i+0x80] |= SINT_ENAB;          /* show enabled in SPAD too */
                 /* get the address of the interrupt IVL table in main memory */
                 chan_ivl = SPAD[0xf1] + (i<<2);     /* contents of spad f1 points to chan ivl in mem */
                 chan_icba = M[chan_ivl >> 2];       /* get the interrupt context block addr in memory */

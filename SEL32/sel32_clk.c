@@ -112,7 +112,18 @@ t_stat rtc_srv (UNIT *uptr)
 {
     if (rtc_pie) {                                  /* set pulse intr */
         INTS[rtc_lvl] |= INTS_REQ;                  /* request the interrupt */
+//fprintf(stderr, "Clock on tic il %x act %x req %x\n", rtc_lvl, INTS[rtc_lvl] & INTS_ACT, INTS[rtc_lvl] & INTS_REQ);
         irq_pend = 1;                               /* make sure we scan for int */
+    }
+    else {
+#ifdef FIX_CLOCK_ACTIVE
+        if (INTS[rtc_lvl] & INTS_ACT) {             /* is level active? */
+            INTS[rtc_lvl] &= ~INTS_ACT;             /* deactivate specified int level */
+            SPAD[rtc_lvl+0x80] &= ~SINT_ACT;        /* deactivate in SPAD too */
+        }
+#endif
+//        if ((INTS[rtc_lvl] & INTS_ACT) && (INTS[rtc_lvl] & INTS_REQ)) /* is level active & requesting ? */
+//fprintf(stderr, "Clock off tic il %x act %x req %x\n", rtc_lvl, INTS[rtc_lvl] & INTS_ACT, INTS[rtc_lvl] & INTS_REQ);
     }
     rtc_unit.wait = sim_rtcn_calb (rtc_tps, TMR_RTC);   /* calibrate */
     sim_activate_after (&rtc_unit, 1000000/rtc_tps);/* reactivate 16666 tics / sec */
@@ -125,17 +136,26 @@ t_stat rtc_srv (UNIT *uptr)
 /* level = interrupt level */
 void rtc_setup(uint32 ss, uint32 level)
 {
-    uint32  val = SPAD[level+0x80];                 /* get SPAD value for interrupt vector */
+    uint32 val = SPAD[level+0x80];                  /* get SPAD value for interrupt vector */
     uint32 addr = SPAD[0xf1] + (level<<2);          /* vector address in SPAD */
 
     rtc_lvl = level;                                /* save the interrupt level */
     addr = M[addr>>2];                              /* get the interrupt context block addr */
     if (ss == 1) {                                  /* starting? */
+// fprintf(stderr, "Clock start pie %x act = %x req %x\n", rtc_pie, INTS[rtc_lvl] & INTS_ACT, INTS[rtc_lvl] & INTS_REQ);
         INTS[level] |= INTS_ENAB;                   /* make sure enabled */
         SPAD[level+0x80] |= SINT_ENAB;              /* in spad too */
-        INTS[level] |= INTS_REQ;                    /* request the interrupt */
         sim_activate(&rtc_unit, 20);                /* start us off */
     } else {
+// fprintf(stderr, "Clock stop pie %x act = %x req %x\n", rtc_pie, INTS[rtc_lvl] & INTS_ACT, INTS[rtc_lvl] & INTS_REQ);
+#ifdef FIX_CLOCK_ACTIVE
+        if ((rtc_pie == 0) && (INTS[rtc_lvl] & INTS_ACT)) { /* is level active & requesting ? */
+            /* should still not be busy, so maybe diags running */
+//fprintf(stderr, "Clock already stopped, do DAI act = %x req %x\n", INTS[rtc_lvl] & INTS_ACT, INTS[rtc_lvl] & INTS_REQ);
+            INTS[rtc_lvl] &= ~INTS_ACT;             /* deactivate specified int level */
+            SPAD[rtc_lvl+0x80] &= ~SINT_ACT;        /* deactivate in SPAD too */
+        }
+#endif
         INTS[level] &= ~INTS_ENAB;                  /* make sure disabled */
         SPAD[level+0x80] &= ~SINT_ENAB;             /* in spad too */
     }
@@ -304,7 +324,7 @@ void itm_setup(uint32 ss, uint32 level)
     if (ss == 1) {                                  /* starting? */
         INTS[level] |= INTS_ENAB;                   /* make sure enabled */
         SPAD[level+0x80] |= SINT_ENAB;              /* in spad too */
-        INTS[level] |= INTS_REQ;                    /* request the interrupt */
+//DIAG  INTS[level] |= INTS_REQ;                    /* request the interrupt */
         sim_cancel (&itm_unit);                     /* not running yet */
     } else {
         INTS[level] &= ~INTS_ENAB;                  /* make sure disabled */
