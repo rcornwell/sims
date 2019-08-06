@@ -312,7 +312,7 @@ static void channel_error (int errors)
 static void channel_seek (const char *cmd, uint64 data, int offset)
 {
     int cyl, sur, sec, x;
-    uint64 da;
+    int da;
 
     if (data & DUNENB)
         channel_unit = &ai_unit[(data >> 033) & 017];
@@ -332,7 +332,7 @@ static void channel_seek (const char *cmd, uint64 data, int offset)
     da += CYLINDER_REAL_SIZE * cyl;
     da += offset;
     if (channel_unit->flags & UNIT_ATT) {
-        (void)sim_fseeko(channel_unit->fileref, (t_addr)(da * sizeof(uint64)), SEEK_SET);
+        (void)sim_fseek(channel_unit->fileref, da * sizeof(uint64), SEEK_SET);
         x = channel_cylinder - cyl;
         if (x < 0)
             x = -x;
@@ -444,7 +444,7 @@ static t_stat sim_fcompare (void *x, size_t m, size_t n, FILE *f)
 static t_stat sim_freadh (uint64 *x, size_t n, FILE *f)
 {
     uint64 buf[2];
-    unsigned i;
+    size_t i;
 
     if ((channel_unit->flags & UNIT_ATT) == 0) {
         sim_debug(DEBUG_EXP, &ai_dev, "Drive offline\n");
@@ -455,7 +455,7 @@ static t_stat sim_freadh (uint64 *x, size_t n, FILE *f)
     for (i = 0; i < n; i++) {
         if ((i & 1) == 0) {
             (void)sim_fread (buf, sizeof (uint64), 2, f);
-            (void)sim_fseeko(f, (SECTOR_REAL_SIZE-2) * sizeof(uint64), SEEK_CUR);
+            (void)sim_fseek(f, (SECTOR_REAL_SIZE-2) * sizeof(uint64), SEEK_CUR);
             x[i] = buf[0] >> 8;
         } else {
             x[i] = (buf[0] & 0377) << 20;
@@ -632,7 +632,7 @@ static void decode_image (uint64 *data, int n, FILE *f)
 
 static int check_nxm (uint64 data, int *n, uint64 *data2, int *n2)
 {
-    unsigned addr = data & ADDR;
+    unsigned int addr = data & ADDR;
     *data2 = 0;
     *n2 = 0;
     if (addr + *n > MEMSIZE) {
@@ -758,7 +758,7 @@ static void channel_command (uint64 data)
             /* If at the end of the sector, skip to next sector. */
             if ((sim_ftell (channel_unit->fileref) / sizeof(uint64))
                 % SECTOR_REAL_SIZE == 1030)
-              (void)sim_fseeko(channel_unit->fileref, 4 * sizeof(uint64), SEEK_CUR);
+              (void)sim_fseek(channel_unit->fileref, 4 * sizeof(uint64), SEEK_CUR);
             break;
         case MODE_IMAGE:
             decode_image (&M[data & ADDR], n, channel_unit->fileref);
@@ -789,7 +789,7 @@ static void channel_command (uint64 data)
     case DCSKIP:
         n = 010000 - ((data & WC) >> 20);
         sim_debug(DEBUG_CMD, &ai_dev, "SKIP %o words\n", n);
-        (void)sim_fseeko(channel_unit->fileref, n * sizeof(uint64), SEEK_CUR);
+        (void)sim_fseek(channel_unit->fileref, n * sizeof(uint64), SEEK_CUR);
         break;
     case DOPR:
         if (data & DOHXFR)
