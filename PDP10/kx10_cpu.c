@@ -221,7 +221,8 @@ int32   tmxr_poll = 10000;
 /* Physical address range for Rubin 10-11 interface. */
 #define T11RANGE(addr)  ((addr) >= 03040000)
 /* Physical address range for auxiliary PDP-6. */
-#define AUXCPURANGE(addr)  ((addr) >= 03000000 && (addr) < 03040000)
+extern int auxcpu_base;
+#define AUXCPURANGE(addr)  ((addr) >= auxcpu_base && (addr) < (auxcpu_base + 040000))
 
 DEVICE *rh_devs[] = {
 #if (NUM_DEVS_RS > 0)
