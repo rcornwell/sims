@@ -178,11 +178,11 @@ lpt_printline(UNIT *uptr, int nl) {
     /* Stick a carraige return and linefeed as needed */
     if (uptr->COL != 0 || trim)
         lpt_buffer[uptr->POS++] = '\r';
-    if (nl) {
+    if (nl != 0) {
         lpt_buffer[uptr->POS++] = '\n';
         uptr->LINE++;
     }
-    if (uptr->LINE > (int32)uptr->capac) {
+    if (nl < 0 && uptr->LINE > (int32)uptr->capac) {
         lpt_buffer[uptr->POS++] = '\f';
         uptr->LINE = 0;
     }
@@ -310,7 +310,6 @@ t_stat lpt_svc (UNIT *uptr)
                       break;
             case 012:     /* Line feed, print line, space one line */
                       lpt_printline(uptr, 1);
-                      uptr->LINE++;
                       break;
             case 014:     /* Form feed, skip to top of page */
                       lpt_printline(uptr, 0);
@@ -351,11 +350,7 @@ t_stat lpt_svc (UNIT *uptr)
                       }
                       break;
             case 023:     /* Skip one line */
-                      if (uptr->COL != 0)
-                          lpt_printline(uptr, 1);
-                      sim_fwrite("\r\n", 1, 2, uptr->fileref);
-                      uptr->pos+=2;
-                      uptr->LINE++;
+                      lpt_printline(uptr, -1);
                       break;
             default:      /* Ignore */
                       break;
