@@ -54,7 +54,7 @@
 
 static int pia = 0;
 static int status = 0;
-int auxcpu_base = 03000000;
+t_value auxcpu_base = 03000000;
 
 static t_stat auxcpu_devio(uint32 dev, t_uint64 *data);
 static t_stat auxcpu_svc (UNIT *uptr);
@@ -398,7 +398,7 @@ t_stat auxcpu_devio(uint32 dev, t_uint64 *data)
 static t_stat auxcpu_set_base (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
     t_stat r;
-    int x;
+    t_value x;
 
     if (cptr == NULL || *cptr == 0)
         return SCPE_ARG;
@@ -413,7 +413,7 @@ static t_stat auxcpu_set_base (UNIT *uptr, int32 val, CONST char *cptr, void *de
 
 static t_stat auxcpu_show_base (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
-    fprintf (st, "Base: %o", auxcpu_base);
+    fprintf (st, "Base: %llo", auxcpu_base);
     return SCPE_OK;
 }
 #endif
