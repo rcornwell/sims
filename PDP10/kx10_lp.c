@@ -182,7 +182,7 @@ lpt_printline(UNIT *uptr, int nl) {
         lpt_buffer[uptr->POS++] = '\n';
         uptr->LINE++;
     }
-    if (nl < 0 && uptr->LINE > (int32)uptr->capac) {
+    if (nl > 0 && uptr->LINE > (int32)uptr->capac) {
         lpt_buffer[uptr->POS++] = '\f';
         uptr->LINE = 0;
     }
