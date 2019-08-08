@@ -253,7 +253,7 @@ static UNIT *channel_unit = ai_unit;
 static int latency_unit = 0;
 static int channel_pc = 0;
 static int channel_status = 0;
-static int channel_errors = 0;
+static uint64 channel_errors = 0;
 static int channel_cc = 0;
 static int channel_wc = 0;
 static int channel_mode = MODE_ERROR;
@@ -361,7 +361,7 @@ static void channel_special (uint64 data)
     case DSRCAL:
         sim_debug(DEBUG_CMD, &ai_dev, "Command: (RECALIBRATE)\n");
         channel_status |= DSSATT;
-        channel_errors &= ~(017 << 036);
+        channel_errors &= ~(017LL << 036);
         channel_errors |= (channel_unit - ai_unit) << 036;
         if (channel_status & DSSAEB) {
             channel_status |= DPIRQC;
