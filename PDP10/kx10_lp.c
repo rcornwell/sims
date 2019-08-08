@@ -241,6 +241,8 @@ lpt_output(UNIT *uptr, char c) {
 
     if (c == 0)
        return;
+    if (uptr->COL == 132)
+        lpt_printline(uptr, 1);
     if ((uptr->flags & UNIT_UC) && (c & 0140) == 0140)
         c &= 0137;
     if ((uptr->flags & UNIT_UTF8) && c < 040) {
@@ -260,8 +262,6 @@ lpt_output(UNIT *uptr, char c) {
         lpt_buffer[uptr->POS++] = c;
         uptr->COL++;
     }
-    if (uptr->COL == 132)
-        lpt_printline(uptr, 1);
     return;
 }
 
