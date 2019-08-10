@@ -40,6 +40,8 @@
 #define POS      u5
 #define LINE     u6
 
+#define MARGIN   6
+
 #define UNIT_V_CT    (UNIT_V_UF + 0)
 #define UNIT_UC      (1 << UNIT_V_CT)
 #define UNIT_UTF8    (2 << UNIT_V_CT)
@@ -182,8 +184,10 @@ lpt_printline(UNIT *uptr, int nl) {
         lpt_buffer[uptr->POS++] = '\n';
         uptr->LINE++;
     }
-    if (nl > 0 && uptr->LINE > (int32)uptr->capac) {
+    if (nl > 0 && uptr->LINE >= ((int32)uptr->capac - MARGIN)) {
         lpt_buffer[uptr->POS++] = '\f';
+        uptr->LINE = 0;
+    } else if (nl < 0 && uptr->LINE >= (int32)uptr->capac) {
         uptr->LINE = 0;
     }
        
