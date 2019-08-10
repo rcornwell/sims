@@ -946,6 +946,15 @@ opr:
             }
          }
 
+         if (hst_lnt) {
+              hst[hst_p].op = op;
+              hst[hst_p].reg = reg;
+              hst[hst_p].addr1 = addr1;
+              hst[hst_p].addr2 = addr2;
+              hst[hst_p].src1 = 0;
+              hst[hst_p].src2 = 0;
+         }
+
         /* Check if floating point */
         if ((op & 0xA0) == 0x20) {
             if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
@@ -1006,10 +1015,6 @@ opr:
                     src2 = addr1;
         }
         if (hst_lnt) {
-             hst[hst_p].op = op;
-             hst[hst_p].reg = reg;
-             hst[hst_p].addr1 = addr1;
-             hst[hst_p].addr2 = addr2;
              hst[hst_p].src1 = src1;
              hst[hst_p].src2 = src2;
         }

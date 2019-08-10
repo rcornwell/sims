@@ -174,6 +174,7 @@ print_line(UNIT * uptr)
 
     /* Print out buffer */
     sim_fwrite(&out, 1, i, uptr->fileref);
+    uptr->pos += i;
     sim_debug(DEBUG_DETAIL, &lpr_dev, "%s", out);
     uptr->u4++;
     if (uptr->u4 > uptr->capac) {

@@ -319,6 +319,7 @@ t_stat lpr_svc (UNIT *uptr)
 
 fprintf(stderr, "Buffer: %s", buffer);
     sim_fwrite(&buffer, 1, i, uptr->fileref);
+    uptr->pos += i;
     /* Check if Done */
     if (eor) {
         uptr->STATUS |= TERMINATE;
