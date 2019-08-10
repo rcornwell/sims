@@ -141,7 +141,7 @@ static const uint16          ascii_to_hol_026[128] = {
     0xC04, 0xC02, 0xC01, 0x680, 0x640, 0x620, 0x610, 0x608,
    /*   x      y      z      {      |      }      ~    del */
    /*                     T79     Y78   Y79     79         */
-    0x604, 0x602, 0x601, 0x406, 0x806, 0x006, 0x005, 0xf000
+    0x604, 0x602, 0x601, 0x406, 0x806, 0x805, 0x005, 0xf000
 };
 
 /* Set for Burrough codes */
@@ -1270,6 +1270,7 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
          }
          if ((temp & 0xf000) == 0) {
             data->hol_to_ascii[temp] = i;
+     fprintf(stderr, "%03x %04o '%c'\n\r", temp, temp, i);
          }
     }
 
