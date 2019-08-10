@@ -1270,7 +1270,6 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
          }
          if ((temp & 0xf000) == 0) {
             data->hol_to_ascii[temp] = i;
-     fprintf(stderr, "%03x %04o '%c'\n\r", temp, temp, i);
          }
     }
 
