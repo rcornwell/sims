@@ -348,13 +348,13 @@ int writebuff(CHANP *chp)
 
     if ((addr & MASK24) > (MEMSIZE*4)) {
         chp->chan_status |= STATUS_PCHK;
-    sim_debug(DEBUG_EXP, &cpu_dev, "writebuff PCHK addr %x to big mem %x status %x\n", addr, MEMSIZE, chp->chan_status);
+    sim_debug(DEBUG_DETAIL, &cpu_dev, "writebuff PCHK addr %x to big mem %x status %x\n", addr, MEMSIZE, chp->chan_status);
         chp->chan_byte = BUFF_CHNEND;
         irq_pend = 1;
         return 1;
     }
     addr &= MASK24;
-    sim_debug(DEBUG_EXP, &cpu_dev, "writebuff WRITE addr %x MEMSIZE %x status %x\n", addr, MEMSIZE, chp->chan_status);
+    sim_debug(DEBUG_DETAIL, &cpu_dev, "writebuff WRITE addr %x MEMSIZE %x status %x\n", addr, MEMSIZE, chp->chan_status);
     M[addr>>2] = chp->chan_buf;
     return 0;
 }
@@ -454,6 +454,8 @@ loop:
             /* the INCH buffer will be returned in uptr->u4 and uptr->us9 will be non-zero */
             /* it should just return SNS_CHNEND and SNS_DEVEND status */
 /*052619*/  chp->chan_inch_addr = uptr->u4;         /* save INCH buffer address */
+            sim_debug(DEBUG_EXP, &cpu_dev, "load_ccw INCH buffer save %x chan %0x status %.8x count %x\n",
+                uptr->u4, chan, chp->chan_status, chp->ccw_count);
         }
 
         sim_debug(DEBUG_EXP, &cpu_dev, "load_ccw before start_cmd chan %0x status %.8x count %x\n",
@@ -705,7 +707,8 @@ void chan_end(uint16 chsa, uint16 flags) {
     chp->chan_status |= ((uint16)flags);            /* add in the callers flags */
 //    chp->ccw_cmd = 0;                               /* reset the completed channel command */
 
-    sim_debug(DEBUG_EXP, &cpu_dev, "chan_end SLI test chsa %x ccw_flags %x count %x status %x\n", chsa, chp->ccw_flags, chp->ccw_count, chp->chan_status);
+    sim_debug(DEBUG_EXP, &cpu_dev, "chan_end SLI test chsa %x ccw_flags %x count %x status %x\n",
+            chsa, chp->ccw_flags, chp->ccw_count, chp->chan_status);
 #ifdef HACK_HACK
     /* hack - rewind had byte count of 1, so triggered this error when it is not */
     /* remove until I figure out what is required */
@@ -969,6 +972,8 @@ t_stat testxio(uint16 lchsa, uint32 *status) {        /* test XIO */
     /* nothing going on, so say all OK */
     *status = CC1BIT;                               /* request accepted, no status, so CC1 */
 tioret:
+//    fprintf(stderr, "$$$ TIO END chsa %x chan %x cmd %x flags %x chan_stat %x CCs %x\n",
+//        chsa, chan, chp->ccw_cmd, chp->ccw_flags, chp->chan_status, *status);
     sim_debug(DEBUG_CMD, &cpu_dev, "$$$ TIO END chsa %x chan %x cmd %x flags %x chan_stat %x CCs %x\n",
         chsa, chan, chp->ccw_cmd, chp->ccw_flags, chp->chan_status, *status);
     return SCPE_OK;                                 /* No CC's all OK  */
@@ -1259,7 +1264,7 @@ uint32 scan_chan(void) {
     uint32      chan;                               /* channel num 0-7f */
     uint32      tempa;                              /* icb address */
     uint32      chan_ivl;                           /* int level table address */
-    int         lev;                                /* interrupt level */
+//  int         lev;                                /* interrupt level */
     uint32      chan_icba;                          /* int level context block address */
     CHANP       *chp;                               /* channel prog pointer */
     DIB         *dibp;                              /* DIB pointer */

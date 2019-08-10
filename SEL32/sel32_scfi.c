@@ -80,6 +80,7 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 /*  26 words of scratchpad */
 /*   4 words of label buffer registers */
 
+#define CMD     u3
 /* u3 */
 /* in u3 is device command code and status */
 #define DSK_CMDMSK       0x00ff       /* Command being run */
@@ -117,12 +118,14 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 #define DSK_TESS           0xAB       /* Test STAR (subchannel target address register) */
 #define DSK_ICH            0xFF       /* Initialize Controller */
 
+#define STAR    u4
 /* u4 - sector target address register (STAR) */
 /* Holds the current cylinder, head(track), sector */
 #define DISK_CYL           0xFFFF0000   /* cylinder mask */
 #define DISK_TRACK         0x0000FF00   /* track mask */
 #define DISK_SECTOR        0x000000ff   /* sector mask */
 
+#define SNS     u5
 /* u5 */
 /* Sense byte 0  - mode register */
 #define SNS_DROFF          0x80000000       /* Drive Carriage will be offset */
@@ -164,6 +167,7 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 #define SNS_RTAE           0x02       /* Reserve track access error */
 #define SNS_UESS           0x01       /* Uncorrectable ECC error */
 
+#define ATTR    u6
 /* u6 */
 /* u6 holds drive attribute entry */
 /* provided by inch command for controller */
@@ -181,6 +185,7 @@ bits 16-23 - MHD Head count (number of heads on MHD)
 bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option of mini-module)
 */
 
+#define DDATA   up7
 /* Pointer held in up7 */
 /* sects/cylinder = sects/track * numhds */
 /* allocated during attach command for each unit defined */
@@ -441,11 +446,10 @@ uint8  scfi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     if ((uptr->u3 & 0xff00) != 0) {         /* if any status info, we are busy */
         return SNS_BSY;
     }
-    sim_debug(DEBUG_CMD, dptr, "scfi_startcmd CMD 2 unit=%d %02x\n", unit, cmd);
+    sim_debug(DEBUG_CMD, dptr, "scfi_startcmd CMD 2 unit=%d cmd %02x\n", unit, cmd);
 
     if ((uptr->flags & UNIT_ATT) == 0) {    /* see if unit is attached */
         if (cmd == DSK_SNS) {               /* not attached, is cmd Sense 0x04 */
-dosns:
             sim_debug(DEBUG_CMD, dptr, "scfi_startcmd CMD sense\n");
             /* bytes 0,1 - Cyl entry from STAR reg in u4 */
             ch = (uptr->u4 >> 24) & 0xff;
@@ -524,6 +528,8 @@ dosns:
         /* so we will not have a map fault */
         for (i=0; i<dptr->numunits && i<8; i++) {       /* process all drives */
             up->u6 = M[(mema>>2)+i+1];      /* save each unit's drive data */
+            sim_debug(DEBUG_CMD, dptr, "scfi_startcmd ATTR data %x flags %x sec %x MHD %x FHD %x\n",
+                up->ATTR, i, (up->ATTR >> 24)&0xff, (up->ATTR >> 16)&0xff, (up->ATTR >> 8)&0xff, (up->ATTR&0xff));
             up++;                           /* next unit for this device */
         }
         sim_debug(DEBUG_CMD, dptr, "scfi_startcmd done inch cmd addr %x\n", addr);
