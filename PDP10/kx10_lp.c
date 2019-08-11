@@ -66,6 +66,8 @@ t_stat          lpt_attach (UNIT *uptr, CONST char *cptr);
 t_stat          lpt_detach (UNIT *uptr);
 t_stat          lpt_setlpp(UNIT *, int32, CONST char *, void *);
 t_stat          lpt_getlpp(FILE *, UNIT *, int32, CONST void *);
+t_stat          lpt_setdev(UNIT *, int32, CONST char *, void *);
+t_stat          lpt_getdev(FILE *, UNIT *, int32, CONST void *);
 t_stat          lpt_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
                          const char *cptr);
 const char     *lpt_description (DEVICE *dptr);
@@ -100,6 +102,8 @@ MTAB lpt_mod[] = {
     {UNIT_CT, UNIT_UTF8, "UTF8 ouput", "UTF8", NULL},
     {MTAB_XTD|MTAB_VUN|MTAB_VALR, 0, "LINESPERPAGE", "LINESPERPAGE",
         &lpt_setlpp, &lpt_getlpp, NULL, "Number of lines per page"},
+    {MTAB_XTD|MTAB_VUN|MTAB_VALR, 0, "DEV", "DEV",
+        &lpt_setdev, &lpt_getdev, NULL, "Device address of printer defualt 124"},
     { 0 }
 };
 
@@ -434,6 +438,32 @@ lpt_getlpp(FILE *st, UNIT *uptr, int32 v, CONST void *desc)
     return SCPE_OK;
 }
 
+t_stat
+lpt_setdev(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+{
+    t_value   i;
+    t_stat    r;
+    if (cptr == NULL)
+        return SCPE_ARG;
+    if (uptr == NULL)
+        return SCPE_IERR;
+    i = get_uint (cptr, 8, 01000, &r);
+    if (r != SCPE_OK)
+        return SCPE_ARG;
+    if ((i & 03) != 0)
+        return SCPE_ARG;
+    lpt_dib.dev_num = (int)i;
+    return SCPE_OK;
+}
+
+t_stat
+lpt_getdev(FILE *st, UNIT *uptr, int32 v, CONST void *desc)
+{
+    if (uptr == NULL)
+        return SCPE_IERR;
+    fprintf(st, "dev=%03o", lpt_dib.dev_num);
+    return SCPE_OK;
+}
 
 t_stat lpt_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
@@ -442,8 +472,10 @@ fprintf (st, "The line printer (LPT) writes data to a disk file.  The POS regist
 fprintf (st, "the number of the next data item to be written.  Thus, by changing POS, the\n");
 fprintf (st, "user can backspace or advance the printer.\n");
 fprintf (st, "The Line printer can be configured to any number of lines per page with the:\n");
-fprintf (st, "        sim> SET %s LINESPERPAGE=n\n\n", dptr->name);
+fprintf (st, "        sim> SET %s0 LINESPERPAGE=n\n\n", dptr->name);
 fprintf (st, "The default is 66 lines per page.\n\n");
+fprintf (st, "The device address of the Line printer can be changed\n");
+fprintf (st, "        sim> SET %s0 DEV=n\n\n", dptr->name);
 fprint_set_help (st, dptr);
 fprint_show_help (st, dptr);
 fprint_reg_help (st, dptr);
