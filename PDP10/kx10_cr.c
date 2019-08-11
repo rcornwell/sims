@@ -156,6 +156,7 @@ t_stat cr_devio(uint32 dev, uint64 *data) {
              uptr->STATUS &= ~(CARD_IN_READ|RDY_READ|DATA_RDY);
              uptr->COL = 0;
              sim_activate(uptr, uptr->wait);
+             break;
          }
          if (CARD_RDY(uptr))
              uptr->STATUS |= RDY_READ;
