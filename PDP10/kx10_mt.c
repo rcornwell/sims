@@ -889,7 +889,6 @@ void mt_read_word(UNIT *uptr) {
         }
         uptr->BPOS++;
      }
-fprintf(stderr, "Boot: %012llo\n\r", mt_df10.buf);
 }
 
 /* Boot from given device */
