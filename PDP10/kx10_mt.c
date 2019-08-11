@@ -871,18 +871,25 @@ t_stat mt_srv(UNIT * uptr)
 }
 
 void mt_read_word(UNIT *uptr) {
-     int i, cc, ch;
+     int i, cc, ch, cc_max;
 
      mt_df10.buf = 0;
-     for(i = 0; i <= 4; i++) {
-        cc = (8 * (3 - i)) + 4;
+     cc_max = (uptr->flags & MTUF_7TRK) ? 5: 4;
+     for(i = 0; i <= cc_max; i++) {
         ch = mt_buffer[uptr->BPOS];
-        if (cc < 0)
-            mt_df10.buf |=  (uint64)(ch & 0x3f);
-        else
-            mt_df10.buf |= (uint64)(ch & 0xff) << cc;
+        if (uptr->flags & MTUF_7TRK) {
+           cc = 6 * (5 - i);
+           mt_df10.buf |= (uint64)(ch & 0x3f) << cc;
+        } else {
+           cc = (8 * (3 - i)) + 4;
+           if (cc < 0)
+               mt_df10.buf |=  (uint64)(ch & 0x3f);
+           else
+               mt_df10.buf |= (uint64)(ch & 0xff) << cc;
+        }
         uptr->BPOS++;
      }
+fprintf(stderr, "Boot: %012llo\n\r", mt_df10.buf);
 }
 
 /* Boot from given device */
