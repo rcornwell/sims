@@ -616,7 +616,7 @@ t_stat mt_srv(UNIT * uptr)
                 cc = 6 * (5 - uptr->CPOS);
                 ch = mt_buffer[uptr->BPOS];
                 if ((((uptr->CNTRL & ODD_PARITY) ? 0x40 : 0) ^ (ch & 0x40) ^
-                      parity_table[ch & 0x3f]) == 0) {
+                      parity_table[ch & 0x3f]) != 0) {
                       mt_status |= PARITY_ERR;
                 }
                 mt_df10.buf |= (uint64)(ch & 0x3f) << cc;
@@ -695,7 +695,7 @@ t_stat mt_srv(UNIT * uptr)
             if (uptr->flags & MTUF_7TRK) {
                 ch = mt_buffer[uptr->BPOS];
                 if ((((uptr->CNTRL & ODD_PARITY) ? 0x40 : 0) ^ (ch & 0x40) ^
-                      parity_table[ch & 0x3f]) == 0) {
+                      parity_table[ch & 0x3f]) != 0) {
                       mt_status |= PARITY_ERR;
                 }
                 mt_buffer[uptr->BPOS] &= 0x3f;
