@@ -434,11 +434,10 @@ uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     if ((uptr->CMD & 0xff00) != 0) {         /* if any status info, we are busy */
         return SNS_BSY;
     }
-    sim_debug(DEBUG_CMD, dptr, "disk_startcmd CMD continue unit=%d %02x\n", unit, cmd);
+    sim_debug(DEBUG_CMD, dptr, "disk_startcmd CMD continue unit=%d cmd %02x\n", unit, cmd);
 
     if ((uptr->flags & UNIT_ATT) == 0) {    /* see if unit is attached */
         if (cmd == DSK_SNS) {               /* not attached, is cmd Sense 0x04 */
-dosns:
             sim_debug(DEBUG_CMD, dptr, "disk_startcmd CMD sense\n");
             /* bytes 0,1 - Cyl entry from STAR reg in STAR */
             ch = (uptr->STAR >> 24) & 0xff;
@@ -512,7 +511,7 @@ dosns:
         UNIT    *up = dptr->units;  /* first unit for this device */
         sim_debug(DEBUG_CMD, dptr, "disk_startcmd starting inch cmd addr %x STAR %x\n",
                    addr, uptr->STAR);
-        /* STAR has IOCD word 1 contents.  For the disk processor it contains */
+        /* STAR (u4) has IOCD word 1 contents.  For the disk processor it contains */
         /* a pointer to the INCH buffer followed by 8 drive attribute words that */
         /* contains the flags, sector count, MHD head count, and FHD count */
         /* us9 has the byte count from IOCD wd2 and should be 0x24 (36) */
@@ -528,6 +527,8 @@ dosns:
         /* so we will not have a map fault */
         for (i=0; i<dptr->numunits && i<8; i++) {       /* process all drives */
             up->ATTR = M[(mema>>2)+i+1];    /* save each unit's drive data */
+            sim_debug(DEBUG_CMD, dptr, "disk_startcmd ATTR data %x flags %x sec %x MHD %x FHD %x\n",
+                up->ATTR, i, (up->ATTR >> 24)&0xff, (up->ATTR >> 16)&0xff, (up->ATTR >> 8)&0xff, (up->ATTR&0xff));
             up++;                           /* next unit for this device */
         }
         sim_debug(DEBUG_CMD, dptr, "disk_startcmd done inch cmd addr %x\n", addr);
@@ -662,7 +663,7 @@ t_stat disk_srv(UNIT * uptr)
                         data->cyl++;            /* Seek 1 cyl */
                         sim_activate(uptr, 200);
                     }
-                    if (data->cyl >= disk_type[type].cyl)   /* test for over max */
+                    if (data->cyl >= (int)disk_type[type].cyl)   /* test for over max */
                         data->cyl = disk_type[type].cyl-1;  /* make max */
                 } else {
                     if (i < -50) {
@@ -845,7 +846,7 @@ rezero:
                 if (data->tpos >= (disk_type[type].nhds)) {
                     data->tpos = 0;         /* number of tracks per cylinder */
                     data->cyl++;            /* cylinder position */
-                    if (data->cyl >= (disk_type[type].cyl)) {
+                    if (data->cyl >= (int)(disk_type[type].cyl)) {
                         /* EOM reached, abort */
                         uptr->CMD &= ~(0xffff);  /* remove old status bits & cmd */
                         chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -924,7 +925,7 @@ rddone:
                 if (data->tpos >= (disk_type[type].nhds)) {
                     data->tpos = 0;         /* number of tracks per cylinder */
                     data->cyl++;            /* cylinder position */
-                    if (data->cyl >= (disk_type[type].cyl)) {
+                    if (data->cyl >= (int)(disk_type[type].cyl)) {
                         /* EOM reached, abort */
                         sim_debug(DEBUG_DETAIL, dptr,
                             "Error %d on write %d to diskfile cyl %d hds %d sec %d\n",
@@ -984,7 +985,7 @@ t_stat disk_attach(UNIT *uptr, CONST char *file)
     uint16          tsize;  /* track size in bytes */
     uint16          ssize;  /* sector size in bytes */
     struct ddata_t  *data;
-    uint8           buff[1024];
+//  uint8           buff[1024];
 
     /* have simulator attach the file to the unit */
     if ((r = attach_unit(uptr, file)) != SCPE_OK)

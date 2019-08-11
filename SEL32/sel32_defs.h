@@ -322,6 +322,7 @@ extern DEBTAB dev_debug[];
 #define MAPFLT  MAPFAULT_TRAP               /* map fault error */
 #define NPMEM   NONPRESMEM_TRAP             /* non present memory */
 #define MPVIOL  PRIVVIOL_TRAP               /* memory protection violation */
+#define DMDPG   DEMANDPG_TRAP               /* Demand Page Fault Trap (V6&V9 Only) */
 
 /* general instruction decode equates */
 #define IND     0x00100000                  /* indirect bit in instruction, bit 11 */

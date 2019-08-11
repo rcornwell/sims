@@ -865,7 +865,8 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
                         fputc(')', of);
                     }
 //                    if (inst & 0x70) {
-                    if ((inst & 0x70) && (tab->type != TYPE_D)) {
+//                    if ((inst & 0x70) && (tab->type != TYPE_D)) {
+                    if (inst & 0x70) {
                         fputc(',', of);
 //                        fputc('R', of);
                         fputc(('0'+((inst >> 4) & 07)), of);    /* output the index reg number */

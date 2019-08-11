@@ -112,18 +112,7 @@ t_stat rtc_srv (UNIT *uptr)
 {
     if (rtc_pie) {                                  /* set pulse intr */
         INTS[rtc_lvl] |= INTS_REQ;                  /* request the interrupt */
-//fprintf(stderr, "Clock on tic il %x act %x req %x\n", rtc_lvl, INTS[rtc_lvl] & INTS_ACT, INTS[rtc_lvl] & INTS_REQ);
         irq_pend = 1;                               /* make sure we scan for int */
-    }
-    else {
-#ifdef FIX_CLOCK_ACTIVE
-        if (INTS[rtc_lvl] & INTS_ACT) {             /* is level active? */
-            INTS[rtc_lvl] &= ~INTS_ACT;             /* deactivate specified int level */
-            SPAD[rtc_lvl+0x80] &= ~SINT_ACT;        /* deactivate in SPAD too */
-        }
-#endif
-//        if ((INTS[rtc_lvl] & INTS_ACT) && (INTS[rtc_lvl] & INTS_REQ)) /* is level active & requesting ? */
-//fprintf(stderr, "Clock off tic il %x act %x req %x\n", rtc_lvl, INTS[rtc_lvl] & INTS_ACT, INTS[rtc_lvl] & INTS_REQ);
     }
     rtc_unit.wait = sim_rtcn_calb (rtc_tps, TMR_RTC);   /* calibrate */
     sim_activate_after (&rtc_unit, 1000000/rtc_tps);/* reactivate 16666 tics / sec */
@@ -142,20 +131,10 @@ void rtc_setup(uint32 ss, uint32 level)
     rtc_lvl = level;                                /* save the interrupt level */
     addr = M[addr>>2];                              /* get the interrupt context block addr */
     if (ss == 1) {                                  /* starting? */
-// fprintf(stderr, "Clock start pie %x act = %x req %x\n", rtc_pie, INTS[rtc_lvl] & INTS_ACT, INTS[rtc_lvl] & INTS_REQ);
         INTS[level] |= INTS_ENAB;                   /* make sure enabled */
         SPAD[level+0x80] |= SINT_ENAB;              /* in spad too */
         sim_activate(&rtc_unit, 20);                /* start us off */
     } else {
-// fprintf(stderr, "Clock stop pie %x act = %x req %x\n", rtc_pie, INTS[rtc_lvl] & INTS_ACT, INTS[rtc_lvl] & INTS_REQ);
-#ifdef FIX_CLOCK_ACTIVE
-        if ((rtc_pie == 0) && (INTS[rtc_lvl] & INTS_ACT)) { /* is level active & requesting ? */
-            /* should still not be busy, so maybe diags running */
-//fprintf(stderr, "Clock already stopped, do DAI act = %x req %x\n", INTS[rtc_lvl] & INTS_ACT, INTS[rtc_lvl] & INTS_REQ);
-            INTS[rtc_lvl] &= ~INTS_ACT;             /* deactivate specified int level */
-            SPAD[rtc_lvl+0x80] &= ~SINT_ACT;        /* deactivate in SPAD too */
-        }
-#endif
         INTS[level] &= ~INTS_ENAB;                  /* make sure disabled */
         SPAD[level+0x80] &= ~SINT_ENAB;             /* in spad too */
     }
@@ -166,7 +145,6 @@ void rtc_setup(uint32 ss, uint32 level)
 t_stat rtc_reset(DEVICE *dptr)
 {
     rtc_pie = 0;                                    /* disable pulse */
-//MARKFIX rtc_unit.wait = sim_rtcn_init(rtc_unit.wait, TMR_RTC); /* initialize clock calibration */
     rtc_unit.wait = sim_rtcn_init_unit(&rtc_unit, rtc_unit.wait, TMR_RTC); /* initialize clock calibration */
     sim_activate (&rtc_unit, rtc_unit.wait);        /* activate unit */
     return SCPE_OK;
@@ -216,6 +194,8 @@ const char *rtc_desc(DEVICE *dptr)
 
 /* Interval Timer support */
 int32 itm_pie = 0;                                  /* itm pulse enable */
+int32 itm_cmd = 0;                                  /* itm last user cmd */
+int32 itm_cnt = 0;                                  /* itm pulse count enable */
 int32 itm_tick_size_x_100 = 3840;                   /* itm 26041 ticks/sec = 38.4 us per tic */
 int32 itm_lvl = 0x5f;                               /* itm interrupt level */
 t_stat itm_srv (UNIT *uptr);
@@ -236,6 +216,8 @@ UNIT itm_unit = { UDATA (&itm_srv, UNIT_IDLE, 0), 26042, UNIT_ADDR(0x7F04)};
 
 REG itm_reg[] = {
     { FLDATA (PIE, itm_pie, 0) },
+    { FLDATA (CNT, itm_cnt, 0) },
+    { FLDATA (CMD, itm_cmd, 0) },
     { DRDATA (TICK_SIZE, itm_tick_size_x_100, 32), PV_LEFT + REG_HRO },
     { NULL }
     };
@@ -273,13 +255,19 @@ t_stat itm_srv (UNIT *uptr)
     if (itm_pie) {                              /* interrupt enabled? */
         INTS[itm_lvl] |= INTS_REQ;              /* request the interrupt on zero value */
         irq_pend = 1;                           /* make sure we scan for int */
+        if (itm_cmd == 0x3d) {
+            /* restart timer with value from user */
+            sim_activate_after_abs_d (&itm_unit, ((double)itm_cnt * itm_tick_size_x_100) / 100.0);
+        }
     }   
     return SCPE_OK;
 }
 
 /* ITM read/load function called from CD command processing */
 /* level = interrupt level */
-/* cmd = 0x39 load and enable interval timer, no return value */
+/* cmd = 0x20 stop timer, do not transfer any value */
+/*     = 0x39 load and enable interval timer, no return value */
+/*     = 0x3d load and enable interval timer, countdown to zero, interrupt and reload */
 /*     = 0x40 read timer value */
 /*     = 0x60 read timer value and stop timer */
 /*     = 0x79 read/reload and start timer */
@@ -288,12 +276,25 @@ t_stat itm_srv (UNIT *uptr)
 int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
 {
     uint32  temp;
+
+    itm_cmd = cmd;                                  /* save last cmd */
     switch (cmd) {
+    case 0x20:                                      /* stop timer */
+        sim_cancel (&itm_unit);                     /* cancel itc */
+        itm_cnt = 0;                                /* no count reset value */
+        return 0;                                   /* does not matter, no value returned  */
     case 0x39:                                      /* load timer with new value and start*/
         if (cnt < 0)
             cnt = 26042;                            /* TRY ??*/
         /* start timer with value from user */
         sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);
+        sim_cancel (&itm_unit);
+        itm_cnt = 0;                                /* no count reset value */
+        return 0;                                   /* does not matter, no value returned  */
+    case 0x3d:                                      /* load timer with new value and start*/
+        /* start timer with value from user, reload on zero time */
+        sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);
+        itm_cnt = cnt;                              /* count reset value */
         return 0;                                   /* does not matter, no value returned  */
     case 0x60:                                      /* read and stop timer */
         /* get timer value and stop timer */
@@ -305,6 +306,7 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
         temp = (uint32)(100.0 * sim_activate_time_usecs (&itm_unit) / itm_tick_size_x_100);
         /* start timer to fire after cnt ticks */
         sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);
+        itm_cnt = 0;                                /* no count reset value */
         return temp;                                /* return current count value */
     case 0x40:                                      /* read the current timer value */
         /* return current count value */
