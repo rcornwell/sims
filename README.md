@@ -103,6 +103,7 @@ The KA10 sim has successfully run WAITS (with and without BBN pager).
    * RH10 RP04/RP06/RP07 (RP07 not supported under 6.03).   
    * RH10 RS04  
    * PMP (P. PETIT'S IBM CHANNEL)  
+   * System Concepts DC-10 IBM 2314  
 
    Tape  
    * TM10A or B  
@@ -136,14 +137,18 @@ and transfering to the loaded value. RC10, RH10, TM10 support readin mode.
 Still in initial coding stages.
 
    Disk   
-   * RH10 RP04/RP06/RP07 (RP07 not supported under 6.03).   
+   * RH10 RP04/RP06/RP07  
    * RH10 RS04  
+   * RH20 RP04/RP06/RP07  
+   * RH20 RS04  
 
    Tape  
    * TM10A or B  
    * RH10 TM03/TU16  
+   * RH20 TM03/TU16  
 
    DC10E terminal mux.  
+   Terminals attached to front end processor  
 
    IMP networking support for ITS and TENEX.  
 
