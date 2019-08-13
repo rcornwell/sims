@@ -184,7 +184,7 @@ static t_stat ten11_svc (UNIT *uptr)
     ten11_ldsc.rcve = 1;
     uptr->wait = TEN11_POLL;
   }
-  sim_activate (uptr, uptr->wait);
+  sim_clock_coschedule (uptr, uptr->wait);
   return SCPE_OK;
 }
 

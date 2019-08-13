@@ -187,7 +187,7 @@ static t_stat auxcpu_svc (UNIT *uptr)
     auxcpu_ldsc.rcve = 1;
     uptr->wait = AUXCPU_POLL;
   }
-  sim_activate (uptr, uptr->wait);
+  sim_clock_coschedule (uptr, uptr->wait);
   return SCPE_OK;
 }
 

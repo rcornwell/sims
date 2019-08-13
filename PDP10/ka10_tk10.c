@@ -69,7 +69,7 @@ TMXR tk10_desc = { TK10_LINES, 0, 0, tk10_ldsc };
 static uint64 status = 0;
 
 UNIT                tk10_unit[] = {
-    {UDATA(tk10_svc, TT_MODE_7B|UNIT_ATTABLE|UNIT_DISABLE, 0)},  /* 0 */
+    {UDATA(tk10_svc, TT_MODE_7B|UNIT_IDLE|UNIT_ATTABLE|UNIT_DISABLE, 0)},  /* 0 */
 };
 DIB tk10_dib = {TK10_DEVNUM, 1, &tk10_devio, NULL};
 
@@ -185,7 +185,7 @@ static t_stat tk10_svc (UNIT *uptr)
     int i;
 
     /* Slow hardware only supported 300 baud teletypes. */
-    sim_activate_after (uptr, 2083);
+    sim_clock_coschedule (uptr, 2083);
 
     i = tmxr_poll_conn (&tk10_desc);
     if (i >= 0) {
