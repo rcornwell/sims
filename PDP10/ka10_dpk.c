@@ -86,7 +86,7 @@ static int dpk_ird = 0;
 static int dpk_iwr = 0;
 
 UNIT                dpk_unit[] = {
-    {UDATA(dpk_svc, TT_MODE_8B|UNIT_ATTABLE|UNIT_DISABLE, 0)},  /* 0 */
+    {UDATA(dpk_svc, TT_MODE_8B|UNIT_IDLE|UNIT_ATTABLE|UNIT_DISABLE, 0)},  /* 0 */
 };
 DIB dpk_dib = {DPK_DEVNUM, 1, &dpk_devio, NULL};
 
@@ -264,7 +264,7 @@ static t_stat dpk_svc (UNIT *uptr)
     int i;
 
     /* 16 ports at 4800 baud, rounded up. */
-    sim_activate_after (uptr, 200);
+    sim_clock_coschedule (uptr, 200);
 
     i = tmxr_poll_conn (&dpk_desc);
     if (i >= 0) {

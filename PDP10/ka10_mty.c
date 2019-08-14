@@ -65,7 +65,7 @@ TMXR mty_desc = { MTY_LINES, 0, 0, mty_ldsc };
 static uint64 status = 0;
 
 UNIT                mty_unit[] = {
-    {UDATA(mty_svc, TT_MODE_7B|UNIT_ATTABLE|UNIT_DISABLE, 0)},  /* 0 */
+    {UDATA(mty_svc, TT_MODE_7B|UNIT_IDLE|UNIT_ATTABLE|UNIT_DISABLE, 0)},  /* 0 */
 };
 DIB mty_dib = {MTY_DEVNUM, 1, &mty_devio, NULL};
 
@@ -171,7 +171,7 @@ static t_stat mty_svc (UNIT *uptr)
     int i;
 
     /* High speed device, poll every 0.1 ms. */
-    sim_activate_after (uptr, 100);
+    sim_clock_coschedule (uptr, 100);
 
     i = tmxr_poll_conn (&mty_desc);
     if (i >= 0) {
