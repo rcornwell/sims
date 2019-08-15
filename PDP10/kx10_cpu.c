@@ -2796,9 +2796,17 @@ st_pi:
 #endif
 
     /* Check if possible idle loop */
-    if (sim_idle_enab && (FLAGS & USER) != 0 && PC < 020 && AB < 020 &&
-           (IR & 0760) == 0340) {
-       sim_idle (TMR_RTC, FALSE);
+    if (sim_idle_enab) {
+        /* Operating system idle loop: AOJA or SOJA in register. */
+        if ((FLAGS & USER) != 0 && PC < 020 && AB < 020 &&
+               (IR & 0760) == 0340)
+            sim_idle (TMR_RTC, FALSE);
+        /* MUUO handler loop.  This typically happens when ITS wants
+           to reset the auxiliary PDP-6.  ITS clear PDP-6 core which
+           makes it execute a 0, which calls the MUUO handler at 41,
+           which is 0, and then we loop. */
+        if ((FLAGS & USER) == 0 && uuo_cycle && IA == 041 && IR == 0)
+            sim_idle (TMR_RTC, FALSE);
     }
 
     /* Update history */
