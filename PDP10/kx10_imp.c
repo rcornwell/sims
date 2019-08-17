@@ -1803,6 +1803,7 @@ imp_dhcp_discover(struct imp_device *imp)
     ETH_PACK          dhcp_pkt;
     struct dhcp       *dhcp;
     uint8             *opt;
+    int               len;
 
     /* Fill in Discover packet */
     memset(&dhcp_pkt.msg[0], 0, ETH_FRAME_SIZE);
@@ -1819,6 +1820,11 @@ imp_dhcp_discover(struct imp_device *imp)
     *opt++ = DHCP_OPTION_MESSAGE_TYPE;
     *opt++ = 1;
     *opt++ = DHCP_DISCOVER;
+    *opt++ = DHCP_OPTION_CLIENT_ID;
+    *opt++ = 7;
+    *opt++ = DHCP_HTYPE_ETH;
+    for (len = 0; len < 6; len++)
+    *opt++ = imp->mac[len];
     if (imp->ip != 0) {
         in_addr_T     ip_t = htonl(imp->ip);
         *opt++ = DHCP_OPTION_REQUESTED_IP;
