@@ -146,6 +146,7 @@
 #endif
 
 #define IMP_ARPTAB_SIZE        8
+#define IMP_ARP_MAX_AGE        100
 
 uint32 mask[] = {
      0xFFFFFFFF, 0xFFFFFFFE, 0xFFFFFFFC, 0xFFFFFFF8,
@@ -257,7 +258,7 @@ struct arp_hdr {
 struct arp_entry {
     in_addr_T  ipaddr;
     ETH_MAC    ethaddr;
-    uint16     time;
+    uint16     age;
 };
 
 /* DHCP client states */
@@ -453,6 +454,7 @@ t_stat         imp_set_gwip (UNIT* uptr, int32 val, CONST char* cptr, void* desc
 t_stat         imp_show_hostip (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat         imp_set_hostip (UNIT* uptr, int32 val, CONST char* cptr, void* desc);
 t_stat         imp_show_dhcpip (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+t_stat         imp_show_arp (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 void           imp_timer_task(struct imp_device *imp);
 void           imp_send_rfmn(struct imp_device *imp);
 void           imp_packet_in(struct imp_device *imp);
@@ -466,10 +468,12 @@ void           imp_do_dhcp_client(struct imp_device *imp, ETH_PACK *packet);
 void           imp_dhcp_timer(struct imp_device *imp);
 void           imp_dhcp_discover(struct imp_device *imp);
 void           imp_dhcp_release(struct imp_device *imp);
+void           imp_arp_age(struct imp_device *imp);
 t_stat         imp_attach (UNIT * uptr, CONST char * cptr);
 t_stat         imp_detach (UNIT * uptr);
 t_stat         imp_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
 const char     *imp_description (DEVICE *dptr);
+static char    *ipv4_inet_ntoa(struct in_addr ip);
 
 
 int       imp_mpx_lvl = 0;
@@ -506,6 +510,8 @@ MTAB imp_mod[] = {
            "Tenex/BBN style interface"},
     { UNIT_DTYPE, (TYPE_WAITS << UNIT_V_DTYPE), "WAITS", "WAITS", NULL, NULL,  NULL,
            "WAITS style interface"},
+    { MTAB_XTD|MTAB_VDV|MTAB_NMO, 0, "ARP", NULL,
+      NULL, &imp_show_arp, NULL, "ARP IP address->MAC address table" },
     { 0 }
     };
 
@@ -872,6 +878,7 @@ imp_timer_task(struct imp_device *imp)
 
      if (imp->sec_tim-- == 0) {
          imp_dhcp_timer(&imp_data);
+         imp_arp_age(&imp_data);
          imp->sec_tim = 1000;
      }
 }
@@ -1361,7 +1368,6 @@ imp_arp_update(in_addr_T ipaddr, ETH_MAC *ethaddr)
 {
     struct arp_entry  *tabptr;
     int                i;
-    static int         arptime = 0;
 
     /* Check if entry already in the table. */
     for (i = 0; i < IMP_ARPTAB_SIZE; i++) {
@@ -1370,7 +1376,7 @@ imp_arp_update(in_addr_T ipaddr, ETH_MAC *ethaddr)
         if (tabptr->ipaddr != 0) {
             if (tabptr->ipaddr == ipaddr) {
                 memcpy(&tabptr->ethaddr, ethaddr, sizeof(ETH_MAC));
-                tabptr->time = ++arptime;
+                tabptr->age = 0;
                 return;
             }
         }
@@ -1390,8 +1396,8 @@ imp_arp_update(in_addr_T ipaddr, ETH_MAC *ethaddr)
         uint16    tmpage = 0;
         for (i = 0; i < IMP_ARPTAB_SIZE; i++) {
             tabptr = &arp_table[i];
-            if (arptime - tabptr->time > tmpage) {
-                tmpage = arptime - tabptr->time;
+            if (tabptr->age > tmpage) {
+                tmpage = tabptr->age;
                 fnd = i;
             }
         }
@@ -1401,7 +1407,24 @@ imp_arp_update(in_addr_T ipaddr, ETH_MAC *ethaddr)
     /* Now update the entry */
     memcpy(&tabptr->ethaddr, ethaddr, sizeof(ETH_MAC));
     tabptr->ipaddr = ipaddr;
-    tabptr->time = ++arptime;
+    tabptr->age = 0;
+}
+
+void imp_arp_age(struct imp_device *imp)
+{
+    struct arp_entry  *tabptr;
+    int                i;
+
+    for (i = 0; i < IMP_ARPTAB_SIZE; i++) {
+        tabptr = &arp_table[i];
+        if (tabptr->ipaddr != 0) {      /* active entry? */
+            tabptr->age++;              /* Age it */
+            /* expire too old entries */
+            if (tabptr->age > IMP_ARP_MAX_AGE) {
+                memset(tabptr, 0, sizeof(*tabptr));
+            }
+        }
+    }
 }
 
 
@@ -1469,6 +1492,27 @@ imp_arp_arpin(struct imp_device *imp, ETH_PACK *packet)
         break;
     }
     return;
+}
+
+t_stat imp_show_arp (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+{
+    struct arp_entry  *tabptr;
+    int                i;
+
+    fprintf (st, "%-14s%-19s%s\n", "IP Address:", "MAC:", "Age:");
+
+    for (i = 0; i < IMP_ARPTAB_SIZE; i++) {
+        char buf[32];
+
+        tabptr = &arp_table[i];
+
+        if (tabptr->ipaddr == 0)
+            continue;
+
+        eth_mac_fmt(&tabptr->ethaddr, buf);     /* format ethernet mac address */
+        fprintf (st, "%-14s%-19s%d\n", ipv4_inet_ntoa(*((struct in_addr *)&tabptr->ipaddr)), buf, tabptr->age);
+        }
+    return SCPE_OK;
 }
 
 
@@ -2132,6 +2176,7 @@ t_stat imp_attach(UNIT* uptr, CONST char* cptr)
     imp_data.sec_tim = 1000;
     imp_data.dhcp_xid = XID;
     imp_data.dhcp_state = DHCP_STATE_OFF;
+    memset(arp_table, 0, sizeof(arp_table));
 
     return SCPE_OK;
 }
