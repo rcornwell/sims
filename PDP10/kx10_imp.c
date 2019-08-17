@@ -476,8 +476,8 @@ int       imp_mpx_lvl = 0;
 int       last_coni;
 
 UNIT imp_unit[] = {
-    {UDATA(imp_srv, UNIT_IDLE+UNIT_ATTABLE+UNIT_DISABLE, 0)},  /* 0 */
-    {UDATA(imp_eth_srv, UNIT_IDLE+UNIT_DISABLE, 0)},  /* 0 */
+    {UDATA(imp_srv,     UNIT_IDLE+UNIT_ATTABLE, 0)},  /* 0 */
+    {UDATA(imp_eth_srv, UNIT_IDLE+UNIT_DIS,     0)},  /* 0 */
 };
 DIB imp_dib = {IMP_DEVNUM, 1, &imp_devio, NULL};
 
@@ -511,7 +511,7 @@ MTAB imp_mod[] = {
 
 DEVICE imp_dev = {
     "IMP", imp_unit, NULL, imp_mod,
-    1, 8, 0, 1, 8, 36,
+    2, 8, 0, 1, 8, 36,
     NULL, NULL, &imp_reset, NULL, &imp_attach, &imp_detach,
     &imp_dib, DEV_DISABLE | DEV_DIS | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &imp_help, NULL, NULL, &imp_description
