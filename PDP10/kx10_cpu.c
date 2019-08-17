@@ -6010,6 +6010,19 @@ qua_srv(UNIT * uptr)
 #endif
 
 
+/*
+ * This sequence of instructions is a mix that hopefully
+ * represents a resonable instruction set that is a close 
+ * estimate to the normal calibrated result.
+ */
+
+static const char *pdp10_clock_precalibrate_commands[] = {
+    "-m 100 ADDM 0,110",
+    "-m 101 ADDI 0,1",
+    "-m 102 JRST 100",
+    "PC 100",
+    NULL};
+
 /* Reset routine */
 
 t_stat cpu_reset (DEVICE *dptr)
@@ -6044,6 +6057,7 @@ exec_map = 0;
 for(i=0; i < 128; dev_irq[i++] = 0);
 sim_brk_types = SWMASK('E') | SWMASK('W') | SWMASK('R');
 sim_brk_dflt = SWMASK ('E');
+sim_clock_precalibrate_commands = pdp10_clock_precalibrate_commands;
 sim_rtcn_init_unit (&cpu_unit[0], cpu_unit[0].wait, TMR_RTC);
 sim_activate(&cpu_unit[0], 10000);
 #if MPX_DEV
