@@ -2118,9 +2118,7 @@ else { /* !tap: */
 
       while (isspace(*devname))
         ++devname;
-      if (!(*handle = (void*) sim_slirp_open(devname, opaque, &_slirp_callback, dptr, dbit)))
-        strlcpy(errbuf, strerror(errno), PCAP_ERRBUF_SIZE);
-      else {
+      if ((*handle = (void*) sim_slirp_open(devname, opaque, &_slirp_callback, dptr, dbit, errbuf, PCAP_ERRBUF_SIZE))) {
         *eth_api = ETH_API_NAT;
         *fd_handle = 0;
         }
