@@ -1584,9 +1584,13 @@ t_stat imp_show_arp (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 
         eth_mac_fmt(&tabptr->ethaddr, buf);     /* format ethernet mac address */
         if (tabptr->age == ARP_DONT_AGE)
-            fprintf (st, "%-17s%-19s%s\n", ipv4_inet_ntoa(*((struct in_addr *)&tabptr->ipaddr)), buf, "static");
+            fprintf (st, "%-17s%-19s%s\n",
+                          ipv4_inet_ntoa(*((struct in_addr *)&tabptr->ipaddr)),
+                          buf, "static");
         else
-            fprintf (st, "%-17s%-19s%d\n", ipv4_inet_ntoa(*((struct in_addr *)&tabptr->ipaddr)), buf, tabptr->age);
+            fprintf (st, "%-17s%-19s%d\n",
+                          ipv4_inet_ntoa(*((struct in_addr *)&tabptr->ipaddr)),
+                          buf, tabptr->age);
         }
     return SCPE_OK;
 }
@@ -1612,7 +1616,11 @@ static const char  *dhcp_opr_names[16] = {
 
 /* Send out a DHCP packet, fill in IP and Ethernet data. */
 void
-imp_do_send_dhcp(struct imp_device *imp, const char *op, ETH_PACK *packet, uint8 *last, const struct arp_entry *destarp)
+imp_do_send_dhcp(struct imp_device *imp,
+                 const char *op,
+                 ETH_PACK *packet,
+                 uint8 *last,
+                  const struct arp_entry *destarp)
 {
     struct ip_hdr     *pkt;
     struct udp        *udp;
@@ -1764,7 +1772,9 @@ imp_do_dhcp_client(struct imp_device *imp, ETH_PACK *read_buffer)
     }
 
     sim_debug(DEBUG_DETAIL, &imp_dev,
-        "DHCP client incoming %s packet: dhcp_state=%s - wait_time=%d\n", (opr == -1) ? "" : dhcp_opr_names[opr], dhcp_state_names[imp->dhcp_state], imp->dhcp_wait_time);
+        "DHCP client incoming %s packet: dhcp_state=%s - wait_time=%d\n", 
+                   (opr == -1) ? "" : dhcp_opr_names[opr], 
+                    dhcp_state_names[imp->dhcp_state], imp->dhcp_wait_time);
 
     /* Process an offer message */
     if (opr == DHCP_OFFER && imp->dhcp_state == DHCP_STATE_SELECTING) {
@@ -1842,7 +1852,8 @@ imp_dhcp_timer(struct imp_device *imp)
             "DHCP timer: dhcp_state=BOUND, Lease remaining time=%d\n", imp->dhcp_lease);
     else
         sim_debug(DEBUG_DETAIL, &imp_dev,
-            "DHCP timer: dhcp_state=%s, wait_time=%d\n", dhcp_state_names[imp->dhcp_state], imp->dhcp_wait_time);
+            "DHCP timer: dhcp_state=%s, wait_time=%d\n", dhcp_state_names[imp->dhcp_state],
+                      imp->dhcp_wait_time);
 
     if ((imp->dhcp_state == DHCP_STATE_BOUND) ||
         (imp->dhcp_state == DHCP_STATE_REBINDING) ||
@@ -2223,7 +2234,8 @@ t_stat imp_show_dhcpip (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
         if (imp_data.dhcp_state == DHCP_STATE_BOUND) {
             fprintf (st, ", Lease Expires in %d seconds", imp_data.dhcp_lease);
         } else {
-            fprintf (st, ", State:%s, Waited %d seconds", dhcp_state_names[imp_data.dhcp_state], imp_data.dhcp_wait_time);            
+            fprintf (st, ", State:%s, Waited %d seconds", dhcp_state_names[imp_data.dhcp_state],
+                  imp_data.dhcp_wait_time);            
         }
     }
    return SCPE_OK;
@@ -2296,6 +2308,8 @@ t_stat imp_reset (DEVICE *dptr)
     imp_data.freeq = p;
     imp_data.init_state = 0;
     last_coni = sim_gtime();
+    if (imp_unit[0].flags & UNIT_ATT)
+        sim_activate_after(&imp_unit[2], 1000000);    /* Start Timer service */
     return SCPE_OK;
 }
 
@@ -2317,7 +2331,8 @@ t_stat imp_attach(UNIT* uptr, CONST char* cptr)
                    break;
     }
     if (!(uptr->flags & UNIT_DHCP) && imp_data.ip == 0)
-      return sim_messagef (SCPE_NOATT, "%s: An IP Address must be specified when DHCP is disabled\n", imp_dev.name);
+      return sim_messagef (SCPE_NOATT, "%s: An IP Address must be specified when DHCP is disabled\n", 
+               imp_dev.name);
 
     tptr = (char *) malloc(strlen(cptr) + 1);
     if (tptr == NULL) return SCPE_MEM;
@@ -2332,12 +2347,14 @@ t_stat imp_attach(UNIT* uptr, CONST char* cptr)
     if (SCPE_OK != eth_check_address_conflict (&imp_data.etherface, &imp_data.mac)) {
       eth_close(&imp_data.etherface);
       free(tptr);
-      return sim_messagef (SCPE_NOATT, "%s: MAC Address Conflict on LAN for address %s\n", imp_dev.name, buf);
+      return sim_messagef (SCPE_NOATT, "%s: MAC Address Conflict on LAN for address %s\n",
+                      imp_dev.name, buf);
     }
     if (SCPE_OK != eth_filter(&imp_data.etherface, 2, &imp_data.mac, 0, 0)) {
       eth_close(&imp_data.etherface);
       free(tptr);
-      return sim_messagef (SCPE_NOATT, "%s: Can't set packet filter for MAC Address %s\n", imp_dev.name, buf);
+      return sim_messagef (SCPE_NOATT, "%s: Can't set packet filter for MAC Address %s\n",
+                       imp_dev.name, buf);
     }
 
     uptr->filename = tptr;
@@ -2355,7 +2372,8 @@ t_stat imp_attach(UNIT* uptr, CONST char* cptr)
 
     /* Pick a relatively unique starting xid, presuming that the 
        MAC address has been verified unique on the LAN by eth_open */
-    imp_data.dhcp_xid = (imp_data.mac[0] | (imp_data.mac[1] << 8) | (imp_data.mac[2] << 16) | (imp_data.mac[3] << 24)) + (uint32)time(NULL);
+    imp_data.dhcp_xid = (imp_data.mac[0] | (imp_data.mac[1] << 8) |
+                        (imp_data.mac[2] << 16) | (imp_data.mac[3] << 24)) + (uint32)time(NULL);
     imp_data.dhcp_state = DHCP_STATE_OFF;
     memset(imp_data.arp_table, 0, sizeof(imp_data.arp_table));
 
@@ -2384,8 +2402,7 @@ t_stat imp_attach(UNIT* uptr, CONST char* cptr)
     }
 
     eth_set_async (&imp_data.etherface, 0); /* Allow Asynchronous inbound packets */
-    sim_activate_after(uptr+2, 1000000);    /* Start Timer service */
-
+    sim_activate_after(&imp_unit[2], 1000000);    /* Start Timer service */
     return SCPE_OK;
 }
 
