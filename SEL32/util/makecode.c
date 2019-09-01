@@ -1,16 +1,23 @@
 /*
  * makecode.c
  *
- * This program uncompresses MPX compressed files and
- * dumps the object records into a file as absolute data.
+ * This program uncompresses an MPX compressed object file and
+ * dumps the object records into a file named "testcode.mem" 
+ * as absolute data.  This code can then be loaded into the
+ * sel32 simulator using the "load testcode.mem" command.  The
+ * assembler code must be assembled as asbolute code with
+ * origin at 0.
+ *
  * input - stdin or specified file name
- * output - stdout
+ * output - file testcode.mem in local directory.
+ *
  */
 
 #include <stdio.h>
 #include <fcntl.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 //#undef DOTRACE
 #define DOTRACE
@@ -25,13 +32,19 @@
 #define uint32 unsigned int
 #define int32 int
 void codedump(int sect);
+int rbl(unsigned char *buf, int n);
+void putloi(unsigned char *s, int cnt);
+int getloi(unsigned char *s, int lim);
+int rmopen(int cfcb);
+int rmclose(int cfcb);
+int rmread(int cfcb, unsigned char *buffer);
 
 int binary = 1;
 int dounix;                     /* set if doing unix object */
 int first;                      /* set after 1st time */
 int ifd;                        /* input file number */
 
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
     unsigned char s[BUFSIZ];
     int i;
@@ -155,7 +168,7 @@ unsigned int endaddr;           /* end transfer address, if given */
 /*
  **  output line of text from the source
  */
-int putloi(unsigned char *s, int cnt)
+void putloi(unsigned char *s, int cnt)
 {
     int i, j, k, l;
     int seq;
@@ -1785,9 +1798,7 @@ int bcnt = 0;
 unsigned char *bptr = 0;
 int recl = 0;
 
-int rbl(buf, n)
-unsigned char *buf;
-int n;
+int rbl(unsigned char *buf, int n)
 {
     int count = 0;
     unsigned char *cp;
@@ -1874,13 +1885,10 @@ int n;
         }
 /* fprintf(stderr, "ret cnt = %ld\n", count); */
         return (count);
-
     }
     else
     {
-
         /* non compressed read here */
-
         /* read the next record */
         if ((recl = getloi(line, BUFSIZ)) == 0)
             return (0);         /* this means eof */
@@ -1914,7 +1922,6 @@ int n;
 
 /* fprintf(stderr, "ret1 cnt = %ld\n", count); */
     return (count);
-
 }
 
 /*~!bbio.c*/
@@ -1989,11 +1996,14 @@ struct ioc iocx[IOCMAX];
 #define BLKSIZE 768
 #define BLKS (10*BLKSIZE)
 
+/* forword definition */
+int bfredf(struct ioc *wioc);
+int plredf(struct ioc *wioc);
+
 /* ircont - establish ioc address for this fcb */
 /* input - file number */
 /* output - ioc address */
-struct ioc *ircont(cfcb)
-int cfcb;
+struct ioc *ircont(int cfcb)
 {
     int i;
     struct ioc *wioc;           /* current ioc */
@@ -2041,8 +2051,7 @@ int cfcb;
 }
 
 /* rmopen - open up a file stream */
-rmopen(cfcb)
-int cfcb;
+int rmopen(int cfcb)
 {
     struct ioc *wioc;
 
@@ -2055,8 +2064,7 @@ int cfcb;
 }
 
 /* rmclose - close a file stream */
-rmclose(cfcb)
-int cfcb;
+int rmclose(int cfcb)
 {
     struct ioc *wioc;
 
@@ -2071,9 +2079,7 @@ int cfcb;
 }
 
 /* rmread - read from file stream */
-rmread(cfcb, buffer)
-int cfcb;
-unsigned char *buffer;
+int rmread(int cfcb, unsigned char *buffer)
 {
     struct ioc *wioc;
     int fillcnt, i, bytecnt;
@@ -2189,8 +2195,7 @@ unsigned char *buffer;
 }
 
 /* bfredf - read next buffer from file stream */
-bfredf(wioc)
-struct ioc *wioc;
+int bfredf(struct ioc *wioc)
 {
     unsigned char *cbaddr;
 
@@ -2215,8 +2220,7 @@ struct ioc *wioc;
 }
 
 /* plredf - read next buffer pool from file stream */
-plredf(wioc)
-struct ioc *wioc;
+int plredf(struct ioc *wioc)
 {
     int retc;
 
@@ -2230,6 +2234,7 @@ struct ioc *wioc;
     wioc->nab = (retc + BLKSIZE - 1) / BLKSIZE;
     wioc->cpp = wioc->cfp;      /* update curr pool position */
     wioc->cfp += wioc->nab;     /* update current file position */
+    return 0;
 }
 
 /*
@@ -2254,10 +2259,10 @@ void codedump(int sect)
         fprintf(stderr, "program does not start at zero, aborting.\n");
         return;
     }
-    memory = (uint32 *) sect_addr[sect];    /* real memory pointer */
+    memory = (uint32 *)sect_addr[sect];    /* real memory pointer */
     tr_stop = sect_base[sect] + sect_size[sect];
 #ifndef QUIET
-    fprintf(stderr, "tr_start %x tr_stop %x memory %x\n", tr_start, tr_stop, (int)memory);
+    fprintf(stderr, "tr_start %x tr_stop %x memory %x\n", tr_start, tr_stop, (uint32 *)memory);
 #endif
     /* write out the memory to disk */
     fwrite(memory, sizeof(char), sect_size[sect], fp);
@@ -2267,7 +2272,7 @@ void codedump(int sect)
         uint32 byte;
 
 #ifdef QUIET
-        fprintf(stderr, "addr %0x - data %0x\n", (int32) tr_start, *memory);
+        fprintf(stderr, "addr %0x - data %0x\n", (int32)tr_start, *memory);
 #else
         fprintf(stderr, "addr %0x - data %0.2x%0.2x%0.2x%0.2x\n", (int32)tr_start,
         	(data >> 0) & 0xff,
