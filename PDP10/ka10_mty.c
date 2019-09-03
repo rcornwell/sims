@@ -65,7 +65,7 @@ TMXR mty_desc = { MTY_LINES, 0, 0, mty_ldsc };
 static uint64 status = 0;
 
 UNIT                mty_unit[] = {
-    {UDATA(mty_svc, TT_MODE_7B|UNIT_IDLE|UNIT_ATTABLE|UNIT_DISABLE, 0)},  /* 0 */
+    {UDATA(mty_svc, TT_MODE_7B|UNIT_IDLE|UNIT_ATTABLE, 0)},  /* 0 */
 };
 DIB mty_dib = {MTY_DEVNUM, 1, &mty_devio, NULL};
 
@@ -107,9 +107,6 @@ static t_stat mty_devio(uint32 dev, uint64 *data)
         line = (status & MTY_LINE) >> 12;
         if (*data & MTY_STOP) {
             status &= ~MTY_ODONE;
-            /* Set txdone so future calls to tmxr_txdone_ln will
-               return -1 rather than 1. */
-            mty_ldsc[line].txdone = 1;
             sim_debug(DEBUG_CMD, &mty_dev, "Clear output done line %d\n",
                       line);
         }
@@ -132,18 +129,15 @@ static t_stat mty_devio(uint32 dev, uint64 *data)
         sim_debug(DEBUG_DATAIO, &mty_dev, "DATAO line %d -> %012llo\n",
                   line, *data);
         lp = &mty_ldsc[line];
-        if (!mty_ldsc[line].conn)
-            /* If the line isn't connected, clear txdone to force
-               tmxr_txdone_ln to return 1 rather than -1. */
-            mty_ldsc[line].txdone = 0;
-        /* Write up to five characters extracted from a word.  NUL can
-           only be in the first character. */
-        ch = (word >> 29) & 0177;
-        tmxr_putc_ln (lp, sim_tt_outcvt(ch, TT_GET_MODE (mty_unit[0].flags)));
-        while ((ch = (word >> 22) & 0177) != 0) {
+        if (mty_ldsc[line].conn) {
+            /* Write up to five characters extracted from a word.  NUL can
+               only be in the first character. */
+            ch = (word >> 29) & 0177;
             tmxr_putc_ln (lp, sim_tt_outcvt(ch, TT_GET_MODE (mty_unit[0].flags)));
-
-            word <<= 7;
+            while ((ch = (word >> 22) & 0177) != 0) {
+                tmxr_putc_ln (lp, sim_tt_outcvt(ch, TT_GET_MODE (mty_unit[0].flags)));
+                word <<= 7;
+            }
         }
         status &= ~MTY_ODONE;
         break;
@@ -178,9 +172,6 @@ static t_stat mty_svc (UNIT *uptr)
         mty_ldsc[i].conn = 1;
         mty_ldsc[i].rcve = 1;
         mty_ldsc[i].xmte = 1;
-        /* Set txdone so tmxr_txdone_ln will not return return 1 on
-           the first call after a new connection. */
-        mty_ldsc[i].txdone = 1;
         sim_debug(DEBUG_CMD, &mty_dev, "Connect %d\n", i);
     }
 
@@ -220,6 +211,8 @@ static t_stat mty_svc (UNIT *uptr)
 
 static t_stat mty_reset (DEVICE *dptr)
 {
+    int i;
+
     sim_debug(DEBUG_CMD, &mty_dev, "Reset\n");
     if (mty_unit->flags & UNIT_ATT)
         sim_activate (mty_unit, tmxr_poll);
@@ -228,6 +221,11 @@ static t_stat mty_reset (DEVICE *dptr)
 
     status = 0;
     clr_interrupt(MTY_DEVNUM);
+
+    for (i = 0; i < MTY_LINES; i++) {
+        tmxr_set_line_unit (&mty_desc, i, mty_unit);
+        tmxr_set_line_output_unit (&mty_desc, i, mty_unit);
+    }
 
     return SCPE_OK;
 }
@@ -241,9 +239,6 @@ static t_stat mty_attach (UNIT *uptr, CONST char *cptr)
     for (i = 0; i < MTY_LINES; i++) {
         mty_ldsc[i].rcve = 0;
         mty_ldsc[i].xmte = 0;
-        /* Set txdone so tmxr_txdone_ln will not return return 1 on
-           the first call. */
-        mty_ldsc[i].txdone = 1;
     }
     if (stat == SCPE_OK) {
         status = 0;
