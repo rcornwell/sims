@@ -2649,7 +2649,8 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
   watch_stop = 0;
 
   while ( reason == 0) {                                /* loop until ABORT */
-    if (sim_interval <= 0) {                           /* check clock queue */
+    AIO_CHECK_EVENT;                                    /* queue async events */
+    if (sim_interval <= 0) {                            /* check clock queue */
          if ((reason = sim_process_event()) != SCPE_OK) {/* error?  stop sim */
 #if ITS
              if (QITS)
@@ -2748,6 +2749,7 @@ no_fetch:
               if (Mem_read(pi_cycle | uuo_cycle, 1, 0))
                  goto last;
          /* Handle events during a indirect loop */
+         AIO_CHECK_EVENT;           /* queue async events */
          if (sim_interval-- <= 0) {
               if ((reason = sim_process_event()) != SCPE_OK) {
                   return reason;
@@ -4766,6 +4768,7 @@ left:
     case 0251: /* BLT */
               BR = AB;
               do {
+                  AIO_CHECK_EVENT;          /* queue async events */
                   if (sim_interval <= 0) {
                        sim_process_event();
                   }
