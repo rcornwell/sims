@@ -145,7 +145,7 @@
 #endif
 #endif
 
-#define IMP_ARPTAB_SIZE        8
+#define IMP_ARPTAB_SIZE        64
 #define IMP_ARP_MAX_AGE        100
 
 uint32 mask[] = {
@@ -199,6 +199,12 @@ struct tcp {
     uint32          seq;                /* Sequence number */
     uint32          ack;                /* Ack number */
     uint16          flags;              /* Flags */
+#define TCP_FL_FIN  0x01
+#define TCP_FL_SYN  0x02
+#define TCP_FL_RST  0x04
+#define TCP_FL_PSH  0x08
+#define TCP_FL_ACK  0x10
+#define TCP_FL_URG  0x20
     uint16          window;             /* Window size */
     uint16          chksum;             /* packet checksum */
     uint16          urgent;             /* Urgent pointer */
@@ -473,6 +479,8 @@ void           imp_arp_arpin(struct imp_device *imp, ETH_PACK *packet);
 void           imp_arp_arpout(struct imp_device *imp, in_addr_T ipaddr);
 struct arp_entry * imp_arp_lookup(struct imp_device *imp, in_addr_T ipaddr);
 void           imp_packet_out(struct imp_device *imp, ETH_PACK *packet);
+void           imp_packet_debug(struct imp_device *imp, const char *action, ETH_PACK *packet);
+void           imp_write(struct imp_device *imp, ETH_PACK *packet);
 void           imp_do_dhcp_client(struct imp_device *imp, ETH_PACK *packet);
 void           imp_dhcp_timer(struct imp_device *imp);
 void           imp_dhcp_discover(struct imp_device *imp);
@@ -529,11 +537,38 @@ MTAB imp_mod[] = {
     { 0 }
     };
 
+/* Simulator debug controls */
+DEBTAB              imp_debug[] = {
+    {"CMD", DEBUG_CMD, "Show command execution to devices"},
+    {"DATA", DEBUG_DATA, "Show data transfers"},
+    {"DETAIL", DEBUG_DETAIL, "Show details about device"},
+    {"EXP", DEBUG_EXP, "Show exception information"},
+    {"CONI", DEBUG_CONI, "Show coni instructions"},
+    {"CONO", DEBUG_CONO, "Show coni instructions"},
+    {"DATAIO", DEBUG_DATAIO, "Show datai and datao instructions"},
+    {"IRQ", DEBUG_IRQ, "Show IRQ requests"},
+#define DEBUG_DHCP (DEBUG_IRQ<<1)
+    {"DHCP", DEBUG_DHCP, "Show DHCP activities"},
+#define DEBUG_ARP (DEBUG_DHCP<<1)
+    {"ARP", DEBUG_ARP, "Show ARP activities"},
+#define DEBUG_TCP (DEBUG_ARP<<1)
+    {"TCP", DEBUG_TCP, "Show TCP packet activities"},
+#define DEBUG_UDP (DEBUG_TCP<<1)
+    {"UDP", DEBUG_UDP, "Show UDP packet activities"},
+#define DEBUG_ICMP (DEBUG_UDP<<1)
+    {"ICMP", DEBUG_ICMP, "Show ICMP packet activities"},
+#define DEBUG_ETHER (DEBUG_ICMP<<1)
+    {"ETHER", DEBUG_ETHER, "Show ETHER activities"},
+    {0, 0}
+};
+
+
+
 DEVICE imp_dev = {
     "IMP", imp_unit, NULL, imp_mod,
     3, 8, 0, 1, 8, 36,
     NULL, NULL, &imp_reset, NULL, &imp_attach, &imp_detach,
-    &imp_dib, DEV_DISABLE | DEV_DIS | DEV_DEBUG, 0, dev_debug,
+    &imp_dib, DEV_DISABLE | DEV_DIS | DEV_DEBUG, 0, imp_debug,
     NULL, NULL, &imp_help, NULL, NULL, &imp_description
 };
 #define IMP_OCHN     0000007
@@ -831,8 +866,8 @@ t_stat imp_eth_srv(UNIT * uptr)
            imp_data.dhcp_state != DHCP_STATE_REBINDING &&
            imp_data.dhcp_state != DHCP_STATE_RENEWING)
            return SCPE_OK;
-      sim_debug(DEBUG_DETAIL, &imp_dev, "IMP init Nop %d\n",
-               imp_data.init_state);
+       sim_debug(DEBUG_DETAIL, &imp_dev, "IMP init Nop %d\n",
+                 imp_data.init_state);
        if (imp_unit[0].ILEN == 0) {
               /* Queue up a nop packet */
               imp_data.rbuffer[0] = 0x4;
@@ -922,6 +957,7 @@ imp_packet_in(struct imp_device *imp)
        }
        return;
    }
+   imp_packet_debug(imp, "Received", &read_buffer);
    hdr = (struct imp_eth_hdr *)(&read_buffer.msg[0]);
    type = ntohs(hdr->type);
    if (type == ETHTYPE_ARP) {
@@ -1083,9 +1119,11 @@ imp_packet_in(struct imp_device *imp)
                /* Lastly check if ICMP */
                } else if (ip_hdr->ip_p == ICMP_PROTO) {
                     struct icmp *icmp_hdr = (struct icmp *)payload;
-                    checksumadjust((uint8 *)&icmp_hdr->chksum,
-                              (uint8 *)(&ip_hdr->ip_src), sizeof(in_addr_T),
-                              (uint8 *)(&imp_data.hostip), sizeof(in_addr_T));
+                    if ((icmp_hdr->type != 0) &&   /*     Not Echo Reply */
+                        (icmp_hdr->type != 8))     /* and Not Echo */
+                        checksumadjust((uint8 *)&icmp_hdr->chksum,
+                                  (uint8 *)(&ip_hdr->ip_src), sizeof(in_addr_T),
+                                  (uint8 *)(&imp_data.hostip), sizeof(in_addr_T));
                }
                checksumadjust((uint8 *)&ip_hdr->ip_sum,
                             (uint8 *)(&ip_hdr->ip_dst), sizeof(in_addr_T),
@@ -1309,9 +1347,11 @@ imp_packet_out(struct imp_device *imp, ETH_PACK *packet) {
         /* Lastly check if ICMP */
        } else if (pkt->iphdr.ip_p == ICMP_PROTO) {
              struct icmp *icmp_hdr = (struct icmp *)payload;
-             checksumadjust((uint8 *)&icmp_hdr->chksum,
-                  (uint8 *)(&pkt->iphdr.ip_src), sizeof(in_addr_T),
-                  (uint8 *)(&imp->ip), sizeof(in_addr_T));
+             if ((icmp_hdr->type != 0) &&   /*     Not Echo Reply */
+                 (icmp_hdr->type != 8))     /* and Not Echo */
+                 checksumadjust((uint8 *)&icmp_hdr->chksum,
+                      (uint8 *)(&pkt->iphdr.ip_src), sizeof(in_addr_T),
+                      (uint8 *)(&imp->ip), sizeof(in_addr_T));
        }
        /* Lastly update the header and IP address */
        checksumadjust((uint8 *)&pkt->iphdr.ip_sum,
@@ -1337,7 +1377,7 @@ imp_packet_out(struct imp_device *imp, ETH_PACK *packet) {
             memcpy(&pkt->ethhdr.dest, &tabptr->ethaddr, 6);
             memcpy(&pkt->ethhdr.src, &imp->mac, 6);
             pkt->ethhdr.type = htons(ETHTYPE_IP);
-            eth_write(&imp->etherface, packet, NULL);
+            imp_write(imp, packet);
             imp->rfnm_count++;
             return;
          }
@@ -1357,6 +1397,259 @@ imp_packet_out(struct imp_device *imp, ETH_PACK *packet) {
 }
 
 
+void imp_packet_debug(struct imp_device *imp, const char *action, ETH_PACK *packet) {
+    struct imp_eth_hdr *eth = (struct imp_eth_hdr *)&packet->msg[0];
+    struct arp_hdr     *arp = (struct arp_hdr *)eth;
+    struct ip          *ip = (struct ip *)&packet->msg[sizeof(struct imp_eth_hdr)];
+    struct udp         *udp;
+    struct tcp         *tcp;
+    struct icmp        *icmp;
+    uint8              *payload;
+    struct in_addr     ipaddr;
+    size_t             len;
+    int                flag;
+    char               src_ip[20];
+    char               dst_ip[20];
+    char               src_port[8];
+    char               dst_port[8];
+    char               mac_buf[20];
+    char               flags[64];
+    static struct tcp_flag_bits {
+        const char *name;
+        uint16      bitmask;
+        } bits[] = {
+            {"FIN", TCP_FL_FIN},
+            {"SYN", TCP_FL_SYN},
+            {"RST", TCP_FL_RST},
+            {"PSH", TCP_FL_PSH},
+            {"ACK", TCP_FL_ACK},
+            {"URG", TCP_FL_URG},
+            {NULL, 0}
+        };
+    static const char *icmp_types[] = {
+        "Echo Reply",                                   // Type 0
+        "Type 1 - Unassigned",
+        "Type 2 - Unassigned",
+        "Destination Unreachable",                      // Type 3
+        "Source Quench (Deprecated)",                   // Type 4
+        "Redirect",                                     // Type 5
+        "Type 6 - Alternate Host Address (Deprecated)",
+        "Type 7 - Unassigned",
+        "Echo Request",                                 // Type 8
+        "Router Advertisement",                         // Type 9
+        "Router Selection",                             // Type 10
+        "Time Exceeded",                                // Type 11
+        "Type 12 - Parameter Problem",
+        "Type 13 - Timestamp",
+        "Type 14 - Timestamp Reply",
+        "Type 15 - Information Request (Deprecated)",
+        "Type 16 - Information Reply (Deprecated)",
+        "Type 17 - Address Mask Request (Deprecated)",
+        "Type 18 - Address Mask Reply (Deprecated)",
+        "Type 19 - Reserved (for Security)",
+        "Type 20 - Reserved (for Robustness Experiment)",
+        "Type 21 - Reserved (for Robustness Experiment)",
+        "Type 22 - Reserved (for Robustness Experiment)",
+        "Type 23 - Reserved (for Robustness Experiment)",
+        "Type 24 - Reserved (for Robustness Experiment)",
+        "Type 25 - Reserved (for Robustness Experiment)",
+        "Type 26 - Reserved (for Robustness Experiment)",
+        "Type 27 - Reserved (for Robustness Experiment)",
+        "Type 28 - Reserved (for Robustness Experiment)",
+        "Type 29 - Reserved (for Robustness Experiment)",
+        "Type 30 - Traceroute (Deprecated)",
+        "Type 31 - Datagram Conversion Error (Deprecated)",
+        "Type 32 - Mobile Host Redirect (Deprecated)",
+        "Type 33 - IPv6 Where-Are-You (Deprecated)",
+        "Type 34 - IPv6 I-Am-Here (Deprecated)",
+        "Type 35 - Mobile Registration Request (Deprecated)",
+        "Type 36 - Mobile Registration Reply (Deprecated)",
+        "Type 37 - Domain Name Request (Deprecated)",
+        "Type 38 - Domain Name Reply (Deprecated)",
+        "Type 39 - SKIP (Deprecated)",
+        "Type 40 - Photuris",
+        "Type 41 - ICMP messages utilized by experimental mobility protocols such as Seamoby",
+        "Type 42 - Extended Echo Request",
+        "Type 43 - Extended Echo Reply"
+    };
+
+    if (ntohs(eth->type) == ETHTYPE_ARP) {
+        struct in_addr in_addr;
+        const char *arp_op = (ARP_REQUEST == ntohs(arp->opcode)) ? "REQUEST" : ((ARP_REPLY == ntohs(arp->opcode)) ? "REPLY" : "Unknown");
+        char eth_src[20], eth_dst[20];
+        char arp_shwaddr[20], arp_dhwaddr[20];
+        char arp_sipaddr[20], arp_dipaddr[20];
+
+        if (!(imp_dev.dctrl & DEBUG_ARP))
+            return;
+        eth_mac_fmt(&arp->ethhdr.src, eth_src);
+        eth_mac_fmt(&arp->ethhdr.dest, eth_dst);
+        eth_mac_fmt(&arp->shwaddr, arp_shwaddr);
+        memcpy(&in_addr, &arp->sipaddr, sizeof(in_addr));
+        strlcpy(arp_sipaddr, ipv4_inet_ntoa(in_addr), sizeof(arp_sipaddr));
+        eth_mac_fmt(&arp->dhwaddr, arp_dhwaddr);
+        memcpy(&in_addr, &arp->dipaddr, sizeof(in_addr));
+        strlcpy(arp_dipaddr, ipv4_inet_ntoa(in_addr), sizeof(arp_dipaddr));
+        sim_debug(DEBUG_ARP, &imp_dev,
+            "%s %s EthDst=%s EthSrc=%s shwaddr=%s sipaddr=%s dhwaddr=%s dipaddr=%s\n", 
+            action, arp_op, eth_dst, eth_src, arp_shwaddr, arp_sipaddr, arp_dhwaddr, arp_dipaddr);
+        return;
+    }
+    if (ntohs(eth->type) != ETHTYPE_IP)
+        return;
+    if (!(imp_dev.dctrl & (DEBUG_TCP|DEBUG_UDP|DEBUG_ICMP)))
+        return;
+    memcpy(&ipaddr, &ip->ip_src, sizeof(ipaddr));
+    strlcpy(src_ip, ipv4_inet_ntoa(ipaddr), sizeof(src_ip));
+    memcpy(&ipaddr, &ip->ip_dst, sizeof(ipaddr));
+    strlcpy(dst_ip, ipv4_inet_ntoa(ipaddr), sizeof(dst_ip));
+    payload = (uint8 *)&packet->msg[sizeof(struct imp_eth_hdr) + (ip->ip_v_hl & 0xf) * 4];
+    switch (ip->ip_p) {
+        case UDP_PROTO:
+            udp = (struct udp *)payload;
+            snprintf(src_port, sizeof(src_port), "%d", ntohs(udp->udp_sport));
+            snprintf(dst_port, sizeof(dst_port), "%d", ntohs(udp->udp_dport));
+            sim_debug(DEBUG_UDP, &imp_dev, "%s %d byte packet from %s:%s to %s:%s\n", action,
+                ntohs(udp->len), src_ip, src_port, dst_ip, dst_port);
+            if ((imp_dev.dctrl & DEBUG_DHCP) && 
+                (((ntohs(udp->udp_sport) == DHCP_UDP_PORT_CLIENT) &&
+                  (ntohs(udp->udp_dport) == DHCP_UDP_PORT_SERVER)) || 
+                 ((ntohs(udp->udp_dport) == DHCP_UDP_PORT_CLIENT) &&
+                  (ntohs(udp->udp_sport) == DHCP_UDP_PORT_SERVER)))) {
+                struct dhcp         *dhcp = (struct dhcp *)(payload + sizeof(struct udp));
+                uint8               *opt = &dhcp->options[0];
+
+                sim_debug(DEBUG_DHCP, &imp_dev, "%s XID=%08X", 
+                    (dhcp->op == DHCP_BOOTREQUEST) ? "REQUEST" : 
+                                                     (dhcp->op == DHCP_BOOTREPLY) ? "REPLY" : 
+                                                                                    "??????",
+                    dhcp->xid);
+                if (dhcp->ciaddr) {
+                    memcpy(&ipaddr, &dhcp->ciaddr, sizeof(ipaddr));
+                    sim_debug(DEBUG_DHCP, &imp_dev, ", ciaddr=%s", ipv4_inet_ntoa(ipaddr));
+                    }
+                if (dhcp->yiaddr) {
+                    memcpy(&ipaddr, &dhcp->yiaddr, sizeof(ipaddr));
+                    sim_debug(DEBUG_DHCP, &imp_dev, ", yiaddr=%s", ipv4_inet_ntoa(ipaddr));
+                    }
+                if (dhcp->siaddr) {
+                    memcpy(&ipaddr, &dhcp->siaddr, sizeof(ipaddr));
+                    sim_debug(DEBUG_DHCP, &imp_dev, ", siaddr=%s", ipv4_inet_ntoa(ipaddr));
+                    }
+                if (dhcp->giaddr) {
+                    memcpy(&ipaddr, &dhcp->giaddr, sizeof(ipaddr));
+                    sim_debug(DEBUG_DHCP, &imp_dev, ", giaddr=%s", ipv4_inet_ntoa(ipaddr));
+                    }
+                eth_mac_fmt((ETH_MAC*)&dhcp->chaddr, mac_buf);
+                sim_debug(DEBUG_DHCP, &imp_dev, ", chaddr=%s Options: ", mac_buf);
+                while (*opt != DHCP_OPTION_END) {
+                    int opt_len;
+                    u_long numeric;
+                    static const char  *opr_names[] = {
+                                        "",             "DISCOVER",     "OFFER",        "REQUEST",
+                                        "DECLINE",      "ACK",          "NAK",          "RELEASE",
+                                        "INFORM"
+                                        };
+
+
+                    switch(*opt++) {
+                    case DHCP_OPTION_PAD:
+                          break;
+                    default:
+                          opt_len = *opt++;
+                          opt += opt_len;
+                          break;
+                    case DHCP_OPTION_SUBNET_MASK:
+                          opt_len = *opt++;
+                          memcpy(&ipaddr, opt, 4);
+                          sim_debug(DEBUG_DHCP, &imp_dev, ", mask=%s", ipv4_inet_ntoa(ipaddr));
+                          opt += opt_len;
+                          break;
+                    case DHCP_OPTION_ROUTER:
+                          opt_len = *opt++;
+                          memcpy(&ipaddr, opt, 4);
+                          sim_debug(DEBUG_DHCP, &imp_dev, ", router=%s", ipv4_inet_ntoa(ipaddr));
+                          opt += opt_len;
+                          break;
+                    case DHCP_OPTION_REQUESTED_IP:
+                          opt_len = *opt++;
+                          memcpy(&ipaddr, opt, 4);
+                          sim_debug(DEBUG_DHCP, &imp_dev, ", requested-ip=%s", ipv4_inet_ntoa(ipaddr));
+                          opt += opt_len;
+                          break;
+                    case DHCP_OPTION_LEASE_TIME:
+                          opt_len = *opt++;
+                          memcpy(&numeric, opt, 4);
+                          sim_debug(DEBUG_DHCP, &imp_dev, ", lease-time=%d", ntohl(numeric));
+                          opt += opt_len;
+                          break;
+                    case DHCP_OPTION_T1:
+                          opt_len = *opt++;
+                          memcpy(&numeric, opt, 4);
+                          sim_debug(DEBUG_DHCP, &imp_dev, ", renew-time=%d", ntohl(numeric));
+                          opt += opt_len;
+                          break;
+                    case DHCP_OPTION_T2:
+                          opt_len = *opt++;
+                          memcpy(&numeric, opt, 4);
+                          sim_debug(DEBUG_DHCP, &imp_dev, ", rebind-time=%d", ntohl(numeric));
+                          opt += opt_len;
+                          break;
+                    case DHCP_OPTION_SERVER_ID:
+                          opt_len = *opt++;
+                          memcpy(&ipaddr, opt, 4);
+                          sim_debug(DEBUG_DHCP, &imp_dev, ", server-ip=%s", ipv4_inet_ntoa(ipaddr));
+                          opt += opt_len;
+                          break;
+                    case DHCP_OPTION_MESSAGE_TYPE:
+                          opt_len = *opt++;
+                          sim_debug(DEBUG_DHCP, &imp_dev, "MessageType=%s", opr_names[*opt]);
+                          opt += opt_len;
+                          break;
+                        }
+                    }
+                sim_debug(DEBUG_DHCP, &imp_dev, "\n");
+            } else {
+                if (udp->len && (imp_dev.dctrl & DEBUG_UDP))
+                    sim_data_trace(&imp_dev, imp_unit, payload + sizeof(struct udp), "", 
+                                                       ntohs(udp->len), "", DEBUG_DATA);
+                }
+            break;
+        case TCP_PROTO:
+            tcp = (struct tcp *)payload;
+            snprintf(src_port, sizeof(src_port), "%d", ntohs(tcp->tcp_sport));
+            snprintf(dst_port, sizeof(dst_port), "%d", ntohs(tcp->tcp_dport));
+            strlcpy(flags, "", sizeof(flags));
+            for (flag=0; bits[flag].name; flag++) {
+                if (ntohs(tcp->flags) & bits[flag].bitmask) {
+                    if (*flags)
+                        strlcat(flags, ",", sizeof(flags));
+                    strlcat(flags, bits[flag].name, sizeof(flags));
+                }
+
+            }
+            len = ntohs(ip->ip_len) - ((ip->ip_v_hl & 0xf) * 4 + (ntohs(tcp->flags) >> 12) * 4);
+            sim_debug(DEBUG_TCP, &imp_dev, "%s %s%s %d byte packet from %s:%s to %s:%s\n", action,
+                        flags, *flags ? ":" : "", (int)len, src_ip, src_port, dst_ip, dst_port);
+            if (len && (imp_dev.dctrl & DEBUG_TCP))
+                sim_data_trace(&imp_dev, imp_unit, payload + 4 * (ntohs(tcp->flags) >> 12), "", len, "", DEBUG_DATA);
+            break;
+        case ICMP_PROTO:
+            icmp = (struct icmp *)payload;
+            len = ntohs(ip->ip_len) - (ip->ip_v_hl & 0xf) * 4;
+            sim_debug(DEBUG_ICMP, &imp_dev, "%s %s %d byte packet from %s to %s\n", action,
+                (icmp->type < sizeof(icmp_types)/sizeof(icmp_types[0])) ? icmp_types[icmp->type] : "", (int)len, src_ip, dst_ip);
+            if (len && (imp_dev.dctrl & DEBUG_ICMP))
+                sim_data_trace(&imp_dev, imp_unit, payload + sizeof(struct icmp), "", len, "", DEBUG_DATA);
+            break;
+    }
+}
+
+void imp_write(struct imp_device *imp, ETH_PACK *packet) {
+    imp_packet_debug(imp, "Sending", packet);
+    eth_write(&imp->etherface, packet, NULL);
+}
+
 /*
  * Update the ARP table, first use free entry, else use oldest.
  */
@@ -1365,6 +1658,7 @@ imp_arp_update(struct imp_device *imp, in_addr_T ipaddr, ETH_MAC *ethaddr, int a
 {
     struct arp_entry  *tabptr;
     int                i;
+    char               mac_buf[20];
 
     /* Check if entry already in the table. */
     for (i = 0; i < IMP_ARPTAB_SIZE; i++) {
@@ -1372,7 +1666,13 @@ imp_arp_update(struct imp_device *imp, in_addr_T ipaddr, ETH_MAC *ethaddr, int a
 
         if (tabptr->ipaddr != 0) {
             if (tabptr->ipaddr == ipaddr) {
-                memcpy(&tabptr->ethaddr, ethaddr, sizeof(ETH_MAC));
+                if (0 != memcmp(&tabptr->ethaddr, ethaddr, sizeof(ETH_MAC))) {
+                    memcpy(&tabptr->ethaddr, ethaddr, sizeof(ETH_MAC));
+                    eth_mac_fmt(ethaddr, mac_buf);
+                    sim_debug(DEBUG_ARP, &imp_dev,
+                              "updating entry for IP %s to %s\n", 
+                              ipv4_inet_ntoa(*((struct in_addr *)&ipaddr)), mac_buf);
+                    }
                 if (tabptr->age != ARP_DONT_AGE)
                     tabptr->age = age;
                 return;
@@ -1402,10 +1702,14 @@ imp_arp_update(struct imp_device *imp, in_addr_T ipaddr, ETH_MAC *ethaddr, int a
         tabptr = &imp->arp_table[fnd];
     }
 
-    /* Now update the entry */
+    /* Now save the entry */
     memcpy(&tabptr->ethaddr, ethaddr, sizeof(ETH_MAC));
     tabptr->ipaddr = ipaddr;
     tabptr->age = age;
+    eth_mac_fmt(ethaddr, mac_buf);
+    sim_debug(DEBUG_ARP, &imp_dev,
+              "creating entry for IP %s to %s, initial age=%d\n", 
+              ipv4_inet_ntoa(*((struct in_addr *)&ipaddr)), mac_buf, age);
 }
 
 /*
@@ -1423,6 +1727,12 @@ void imp_arp_age(struct imp_device *imp)
                 tabptr->age++;          /* Age it */
             /* expire too old entries */
             if (tabptr->age > IMP_ARP_MAX_AGE) {
+                char mac_buf[20];
+
+                eth_mac_fmt(&tabptr->ethaddr, mac_buf);
+                sim_debug(DEBUG_ARP, &imp_dev, 
+                          "discarding ARP entry for IP %s %s after %d seconds\n", 
+                          ipv4_inet_ntoa(*((struct in_addr *)&tabptr->ipaddr)), mac_buf, IMP_ARP_MAX_AGE);
                 memset(tabptr, 0, sizeof(*tabptr));
             }
         }
@@ -1438,18 +1748,20 @@ void
 imp_arp_arpin(struct imp_device *imp, ETH_PACK *packet)
 {
     struct arp_hdr *arp;
+    struct in_addr in_addr;
     int             op;
+    char            mac_buf[20];
 
     /* Ignore packet if too short */
     if (packet->len < sizeof(struct arp_hdr))
        return;
     arp = (struct arp_hdr *)(&packet->msg[0]);
     op = ntohs(arp->opcode);
+    imp_arp_update(imp, arp->sipaddr, &arp->shwaddr, 0);
 
     switch (op) {
     case ARP_REQUEST:
         if (arp->dipaddr == imp->ip) {
-           imp_arp_update(imp, arp->sipaddr, &arp->shwaddr, 0);
 
            arp->opcode = htons(ARP_REPLY);
            memcpy(&arp->dhwaddr, &arp->shwaddr, 6);
@@ -1461,7 +1773,10 @@ imp_arp_arpin(struct imp_device *imp, ETH_PACK *packet)
            arp->sipaddr = imp->ip;
            arp->ethhdr.type = htons(ETHTYPE_ARP);
            packet->len = sizeof(struct arp_hdr);
-           eth_write(&imp->etherface, packet, NULL);
+           imp_write(imp, packet);
+           eth_mac_fmt(&arp->dhwaddr, mac_buf);
+           sim_debug(DEBUG_ARP, &imp_dev, "replied to received request for IP %s from %s\n",
+               ipv4_inet_ntoa(*((struct in_addr *)&imp->ip)), mac_buf);
          }
          break;
 
@@ -1469,7 +1784,11 @@ imp_arp_arpin(struct imp_device *imp, ETH_PACK *packet)
         /* Check if this is our address */
         if (arp->dipaddr == imp->ip) {
             struct imp_packet  *nq = NULL;                /* New send queue */
-            imp_arp_update(imp, arp->sipaddr, &arp->shwaddr, 0);
+
+            eth_mac_fmt(&arp->shwaddr, mac_buf);
+            memcpy(&in_addr, &arp->sipaddr, sizeof(in_addr));
+            sim_debug(DEBUG_ARP, &imp_dev, "received reply for IP %s as %s\n",
+               ipv4_inet_ntoa(in_addr), mac_buf);
             /* Scan send queue, and send all packets for this host */
             while (imp->sendq != NULL) {
                 struct imp_packet *temp = imp->sendq;
@@ -1481,7 +1800,7 @@ imp_arp_arpin(struct imp_device *imp, ETH_PACK *packet)
                     memcpy(&pkt->ethhdr.dest, &arp->shwaddr, 6);
                     memcpy(&pkt->ethhdr.src, &imp->mac, 6);
                     pkt->ethhdr.type = htons(ETHTYPE_IP);
-                    eth_write(&imp->etherface, &temp->packet, NULL);
+                    imp_write(imp, &temp->packet);
                     imp->rfnm_count++;
                     imp_free_packet(imp, temp);
                 } else {
@@ -1522,7 +1841,8 @@ imp_arp_arpout(struct imp_device *imp, in_addr_T ipaddr)
     arp->protolen = 4;
 
     arp_pkt.len = sizeof(struct arp_hdr);
-    eth_write(&imp->etherface, &arp_pkt, NULL);
+    imp_write(imp, &arp_pkt);
+    sim_debug(DEBUG_ARP, &imp_dev, "sending request for IP %s\n", ipv4_inet_ntoa(*((struct in_addr *)&ipaddr)));
 }
 
 /*
@@ -1625,7 +1945,9 @@ imp_do_send_dhcp(struct imp_device *imp,
     struct ip_hdr     *pkt;
     struct udp        *udp;
     struct udp_hdr     udp_hdr;
+    struct in_addr     in_addr;
     int                len;
+    char               mac_buf[20];
 
     pkt = (struct ip_hdr *)(&packet->msg[0]);
     udp = (struct udp *)(&packet->msg[sizeof(struct imp_eth_hdr) +
@@ -1658,9 +1980,13 @@ imp_do_send_dhcp(struct imp_device *imp,
     checksumadjust((uint8 *)&udp->chksum, (uint8 *)(&udp_hdr), 0,
                (uint8 *)(&udp_hdr), sizeof(udp_hdr));
     packet->len = len + sizeof(struct ip_hdr);
-    eth_write(&imp->etherface, packet, NULL);
-    sim_debug(DEBUG_DETAIL, &imp_dev,
-        "DHCP client sent %s packet\n", op);
+    imp_write(imp, packet);
+
+    eth_mac_fmt (&pkt->ethhdr.dest, mac_buf);
+    memcpy(&in_addr, &udp_hdr.ip_dst, sizeof(in_addr));
+    sim_debug(DEBUG_DHCP, &imp_dev,
+        "client sent %s packet to: %s:%d(%s)\n", 
+        op, ipv4_inet_ntoa(in_addr), ntohs(udp->udp_dport), mac_buf);
 }
 
 /* Handle incoming DCHP offer and other requests */
@@ -1674,6 +2000,7 @@ imp_do_dhcp_client(struct imp_device *imp, ETH_PACK *read_buffer)
     struct dhcp         *dhcp;
     struct udp          *upkt;
     struct udp_hdr      udp_hdr;
+    struct in_addr      in_addr;
     uint8               *opt;
     uint16              sum;
     int                 len;
@@ -1685,6 +2012,7 @@ imp_do_dhcp_client(struct imp_device *imp, ETH_PACK *read_buffer)
     int                 rebind_time = 0;         /* Rebind time */
     in_addr_T           dhcpip = 0;              /* DHCP server address */
     int                 opr = -1;                /* DHCP operation */
+    char                mac_buf[20];             /* Source MAC address */
 
     upkt = (struct udp *)(&((uint8 *)(ip_hdr))[hl]);
     dhcp = (struct dhcp *)(&((uint8 *)(upkt))[sizeof(struct udp)]);
@@ -1771,10 +2099,13 @@ imp_do_dhcp_client(struct imp_device *imp, ETH_PACK *read_buffer)
         }
     }
 
-    sim_debug(DEBUG_DETAIL, &imp_dev,
-        "DHCP client incoming %s packet: dhcp_state=%s - wait_time=%d\n", 
+    eth_mac_fmt(&eth->src, mac_buf);
+    memcpy(&in_addr, &udp_hdr.ip_src, sizeof(in_addr));
+    sim_debug(DEBUG_DHCP, &imp_dev,
+        "client incoming %s packet: dhcp_state=%s - wait_time=%d from: %s:%d(%s)\n", 
                    (opr == -1) ? "" : dhcp_opr_names[opr], 
-                    dhcp_state_names[imp->dhcp_state], imp->dhcp_wait_time);
+                    dhcp_state_names[imp->dhcp_state], imp->dhcp_wait_time,
+                    ipv4_inet_ntoa(in_addr), ntohs(upkt->udp_sport), mac_buf);
 
     /* Process an offer message */
     if (opr == DHCP_OFFER && imp->dhcp_state == DHCP_STATE_SELECTING) {
@@ -1829,7 +2160,7 @@ imp_do_dhcp_client(struct imp_device *imp, ETH_PACK *read_buffer)
         arp->hwlen = 6;
         arp->protolen = 4;
         arp_pkt.len = sizeof(struct arp_hdr);
-        eth_write(&imp->etherface, &arp_pkt, NULL);
+        imp_write(imp, &arp_pkt);
         }
     }
     if (opr == DHCP_NAK && (imp->dhcp_state == DHCP_STATE_REQUESTING ||
@@ -2338,7 +2669,7 @@ t_stat imp_attach(UNIT* uptr, CONST char* cptr)
     if (tptr == NULL) return SCPE_MEM;
     strcpy(tptr, cptr);
 
-    status = eth_open(&imp_data.etherface, cptr, &imp_dev, 0xFFFF);
+    status = eth_open(&imp_data.etherface, cptr, &imp_dev, DEBUG_ETHER);
     if (status != SCPE_OK) {
       free(tptr);
       return status;
