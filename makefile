@@ -111,7 +111,7 @@ endif
 ifneq (,$(or $(findstring pdp6,$(MAKECMDGOALS)),$(findstring pdp10-ka,$(MAKECMDGOALS)),$(findstring pdp10-ki,$(MAKECMDGOALS))))
   VIDEO_USEFUL = true
 endif
-ifneq (,$(or $(findstring pdp10-ka,$(MAKECMDGOALS)),$(findstring pdp10-ki,$(MAKECMDGOALS))))
+ifneq (,$(or $(findstring pdp10-ka,$(MAKECMDGOALS)),$(findstring pdp10-ki,$(MAKECMDGOALS),$(findstring pdp10-kl,$MAKECMDGOALS))))
   NETWORK_USEFUL = true
 endif
 # building the pdp11, pdp10, or any vax simulator could use networking support
@@ -1265,6 +1265,13 @@ KI10 += ${KA10D}/ka10_lights.c
 KI10_LDFLAGS = -lusb-1.0
 endif
 
+KL10D = PDP10
+KL10 = ${KL10D}/kx10_cpu.c ${KL10D}/kx10_sys.c ${KL10D}/kx10_df.c \
+	${KL10D}/kx10_mt.c ${KL10D}/kx10_dc.c ${KL10D}/kx10_rp.c \
+	${KL10D}/kx10_tu.c ${KL10D}/kx10_rs.c ${KL10D}/kx10_imp.c \
+        ${KL10D}/kl10_fe.c
+KL10_OPT = -DKL=1 -DUSE_INT64 -I $(KL10D) -DUSE_SIM_CARD ${NETWORK_OPT} 
+
 PDP1D = PDP1
 ifneq (,$(DISPLAY_OPT))
   PDP1_DISPLAY_OPT = -DDISPLAY_TYPE=DIS_TYPE30 -DPIX_SCALE=RES_HALF
@@ -1885,7 +1892,7 @@ ATT3B2_OPT = -I ${ATT3B2D} -DUSE_INT64 -DUSE_ADDR64
 #
 # Build everything (not the unsupported/incomplete or experimental simulators)
 #
-ALL = b5500 i701 i704 i7010 i7070 i7080 i7090 pdp10-ka pdp10-ki ibm360 ibm360_32 icl1900 pdp6 sel32
+ALL = b5500 i701 i704 i7010 i7070 i7080 i7090 pdp10-ka pdp10-ki pdp10-kl ibm360 ibm360_32 icl1900 pdp6 sel32
 
 all : ${ALL}
 
@@ -2010,6 +2017,15 @@ ${BIN}pdp10-ki${EXE} : ${KI10} ${SIM}
 	${CC} ${KI10} ${KI10_DPY} ${SIM} ${KI10_OPT} $(CC_OUTSPEC) ${LDFLAGS} ${KI10_LDFLAGS}
 ifneq (,$(call find_test,${PDP10D},ki10))
 	$@ $(call find_test,${PDP10D},ki10) $(TEST_ARG)
+endif
+
+pdp10-kl : ${BIN}pdp10-kl${EXE}
+
+${BIN}pdp10-kl${EXE} : ${KL10} ${SIM}
+	${MKDIRBIN}
+	${CC} ${KL10} ${SIM} ${KL10_OPT} $(CC_OUTSPEC) ${LDFLAGS} ${KL10_LDFLAGS}
+ifneq (,$(call find_test,${PDP10D},kl10))
+	$@ $(call find_test,${PDP10D},kl10) $(TEST_ARG)
 endif
 
 pdp11 : ${BIN}BuildROMs${EXE} ${BIN}pdp11${EXE}

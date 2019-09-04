@@ -224,7 +224,6 @@ int           tu_rae[NUM_DEVS_TU];
 int           tu_attn[NUM_DEVS_TU];
 uint16        tu_frame[NUM_DEVS_TU];
 uint16        tu_tcr[NUM_DEVS_TU];
-extern int    readin_flag;
 static uint64 tu_boot_buffer;
 
 t_stat        tu_devio(uint32 dev, uint64 *data);
@@ -280,7 +279,6 @@ REG                 tua_reg[] = {
     {ORDATA(REG, tu_reg[0], 6), REG_RO},
     {ORDATA(RAE, tu_rae[0], 8), REG_RO},
     {ORDATA(ATTN, tu_attn[0], 8), REG_RO},
-    {FLDATA(READIN, readin_flag, 0), REG_HRO},
     {ORDATA(STATUS, tu_df10[0].status, 18), REG_RO},
     {ORDATA(CIA, tu_df10[0].cia, 18)},
     {ORDATA(CCW, tu_df10[0].ccw, 18)},

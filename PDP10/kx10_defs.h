@@ -46,16 +46,20 @@
 #define KI 0
 #endif
 
+#ifndef KL
+#define KL 0
+#endif
+
+#if KL
+#define KLA 1
+#endif
+
 #ifndef KLA
 #define KLA 0
 #endif
 
 #ifndef KLB
 #define KLB 0
-#endif
-
-#ifndef KL               /* Either KL10A or KL10B */
-#define KL (KLA+KLB)
 #endif
 
 #if (PDP6 + KA + KI + KL) != 1
@@ -79,6 +83,11 @@
 /* Support for WAITS mods */
 #ifndef WAITS
 #define WAITS KA
+#endif
+
+/* Support for ITS on KL */
+#ifndef KL_ITS
+#define KL_ITS KL
 #endif
 
 #ifndef PDP6_DEV       /* Include PDP6 devices */
@@ -162,6 +171,8 @@ extern DEBTAB crd_debug[];
 #define EMASK    00777000000000LL
 #define MMASK    00000777777777LL
 #define BIT1     00200000000000LL
+#define BIT2     00100000000000LL
+#define BIT3     00040000000000LL
 #define BIT7     00002000000000LL
 #define BIT8     00001000000000LL
 #define BIT9     00000400000000LL
@@ -181,6 +192,7 @@ extern DEBTAB crd_debug[];
 #define FPRBIT1  00000000000200000000000LL
 
 #define CM(x)   (FMASK ^ (x))
+#define CCM(x)  ((CMASK ^ (x)) & CMASK)
 
 #define INST_V_OP       27                              /* opcode */
 #define INST_M_OP       0777
@@ -204,6 +216,7 @@ extern DEBTAB crd_debug[];
 #define GET_ADDR(x)     ((uint32) ((x) & RMASK))
 #define LRZ(x)          (((x) >> 18) & RMASK)
 #define JRST1           (((uint64)OP_JRST << 27) + 1)
+
 
 #if PDP6
 #define NODIV   000000
@@ -290,6 +303,10 @@ extern DEBTAB crd_debug[];
 #define DEF_SERIAL      514             /* Default DEC test machine */
 #endif
 
+#if KL
+#define DEF_SERIAL      1025            /* Default DEC test machine */
+#endif
+
 #if BBN
 #define BBN_PAGE        0000017777777LL
 #define BBN_TRPPG       0000017000000LL
@@ -322,6 +339,9 @@ extern DEBTAB crd_debug[];
 #define UNIT_V_MPX      (UNIT_V_WAITS + 1)
 #define UNIT_M_MPX      (1 << UNIT_V_MPX)
 #define UNIT_MPX        (UNIT_M_MPX)          /* MPX Device for ITS */
+#define DEV_V_RH        (DEV_V_UF + 8)                 /* Type RH20 */
+#define TYPE_RH10       (0 << DEV_V_RH)
+#define TYPE_RH20       (1 << DEV_V_RH)
 
 
 #if MPX_DEV
@@ -338,8 +358,18 @@ extern void     set_pi_hold();
 extern UNIT     cpu_unit[];
 extern UNIT     ten11_unit[];
 extern UNIT     auxcpu_unit[];
-extern DEVICE   cpu_dev;
+#if KL
+/* DTE memory access functions, n = DTE# */
+extern int      Mem_examine_word(int n, int wrd, uint64 *data);
+extern int      Mem_deposit_word(int n, int wrd, uint64 *data);
+extern int      Mem_read_byte(int n, uint16 *data);
+extern int      Mem_write_byte(int n, uint16 *data);
+extern DEVICE   dte_dev;
+extern DEVICE   tty_dev;
+#else
 extern DEVICE   cty_dev;
+#endif
+extern DEVICE   cpu_dev;
 extern DEVICE   mt_dev;
 extern DEVICE   dpa_dev;
 extern DEVICE   dpb_dev;
@@ -396,6 +426,7 @@ struct pdp_dib {
 };
 
 #define RH10_DEV        01000
+#define RH20_DEV        02000
 struct rh_dev {
     uint32              dev_num;
     DEVICE             *dev;
@@ -446,9 +477,15 @@ int auxcpu_write (int addr, t_uint64);
 
 /* I/O system parameters */
 #define NUM_DEVS_LP     1
+#if KL
+#define NUM_DEVS_PT     0
+#define NUM_DEVS_CR     0
+#define NUM_DEVS_CP     0
+#else
 #define NUM_DEVS_PT     1
 #define NUM_DEVS_CR     1
 #define NUM_DEVS_CP     1
+#endif
 #define NUM_DEVS_DPY    USE_DISPLAY
 #define NUM_DEVS_WCNSLS USE_DISPLAY
 #if PDP6_DEV
@@ -461,10 +498,20 @@ int auxcpu_write (int addr, t_uint64);
 #if !PDP6
 #define NUM_DEVS_DC     1
 #define NUM_DEVS_MT     1
+#if KL
+#define NUM_DEVS_RC     0
+#define NUM_DEVS_DT     0
+#define NUM_DEVS_DK     0
+#define NUM_DEVS_DP     0
+#define NUM_DEVS_TTY    1
+#define NUM_LINES_TTY   16
+#else
 #define NUM_DEVS_RC     1
 #define NUM_DEVS_DT     1
 #define NUM_DEVS_DK     1
 #define NUM_DEVS_DP     2
+#define NUM_DEVS_TTY    0
+#endif
 #define NUM_DEVS_RP     4
 #define NUM_DEVS_RS     1
 #define NUM_DEVS_TU     1

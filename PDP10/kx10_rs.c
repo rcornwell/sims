@@ -237,7 +237,6 @@ int           rs_imode[NUM_DEVS_RS];
 int           rs_drive[NUM_DEVS_RS];
 int           rs_rae[NUM_DEVS_RS];
 int           rs_attn[NUM_DEVS_RS];
-extern int    readin_flag;
 
 t_stat        rs_devio(uint32 dev, uint64 *data);
 int           rs_devirq(uint32 dev, int addr);
@@ -295,7 +294,6 @@ REG                 rsa_reg[] = {
     {ORDATA(REG, rs_reg[0], 6), REG_RO},
     {ORDATA(RAE, rs_rae[0], 8), REG_RO},
     {ORDATA(ATTN, rs_attn[0], 8), REG_RO},
-    {FLDATA(READIN, readin_flag, 0), REG_HRO},
     {ORDATA(STATUS, rs_df10[0].status, 18), REG_RO},
     {ORDATA(CIA, rs_df10[0].cia, 18)},
     {ORDATA(CCW, rs_df10[0].ccw, 18)},

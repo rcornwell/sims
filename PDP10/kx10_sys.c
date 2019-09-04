@@ -68,6 +68,9 @@ DEVICE *sim_devices[] = {
 #if PDP6 | KA | KI
     &cty_dev,
 #endif
+#if KL
+    &dte_dev,
+#endif
 #if (NUM_DEVS_PT > 0)
     &ptp_dev,
     &ptr_dev,
@@ -140,6 +143,9 @@ DEVICE *sim_devices[] = {
 #endif
 #if (NUM_DEVS_DC > 0)
     &dc_dev,
+#endif
+#if (NUM_DEVS_TTY > 0)
+    &tty_dev,
 #endif
 #if (NUM_DEVS_DCS > 0)
     &dcs_dev,
@@ -550,7 +556,6 @@ t_stat load_sav (FILE *fileref)
         wc = (int32)(data >> 18);
         pa = (uint32) (data & RMASK);
         if (wc == (OP_JRST << 9)) {
-            printf("Start addr=%06o\n", pa);
             PC = pa;
             return SCPE_OK;
         }
@@ -604,8 +609,10 @@ uint32 ma;
 ndir = entvec = 0;                                      /* no dir, entvec */
 cont = 1;
 do {
-    wc = sim_fread (&data, sizeof (uint64), 1, fileref);/* read blk hdr */
-    if (wc == 0)                                        /* error? */
+    
+    wc = get_word(fileref, &data);
+//    wc = sim_fread (&data, sizeof (uint64), 1, fileref);/* read blk hdr */
+    if (wc != 0)                                        /* error? */
         return SCPE_FMT;
     bsz = (int32) ((data & RMASK) - 1);                 /* get count */
     if (bsz < 0)                                        /* zero? */
@@ -616,9 +623,14 @@ do {
     case EXE_DIR:                                       /* directory */
         if (ndir != 0)                                  /* got one */
             return SCPE_FMT;
-        ndir = sim_fread (dirbuf, sizeof (uint64), bsz, fileref);
-        if (ndir < bsz)                                 /* error */
-            return SCPE_FMT;
+        for (i = 0; i < bsz; i++) {
+             if (get_word(fileref, &dirbuf[i]))
+                 return SCPE_FMT;
+        }
+        ndir = bsz;
+//        ndir = sim_fread (dirbuf, sizeof (uint64), bsz, fileref);
+  //      if (ndir < bsz)                                 /* error */
+   //         return SCPE_FMT;
         break;
 
     case EXE_PDV:                                       /* optional */
@@ -628,9 +640,14 @@ do {
     case EXE_VEC:                                       /* entry vec */
         if (bsz != 2)                                   /* must be 2 wds */
             return SCPE_FMT;
-        entvec = sim_fread (entbuf, sizeof (uint64), bsz, fileref);
-        if (entvec < 2)                                 /* error? */
-            return SCPE_FMT;
+        for (i = 0; i < bsz; i++) {
+             if (get_word(fileref, &entbuf[i]))
+                 return SCPE_FMT;
+        }
+//        entvec = sim_fread (entbuf, sizeof (uint64), bsz, fileref);
+ //       if (entvec < 2)                                 /* error? */
+  //          return SCPE_FMT;
+        entvec = bsz;
         cont = 0;                                       /* stop */
         break;
 
@@ -651,10 +668,11 @@ for (i = 0; i < ndir; i = i + 2) {                      /* loop thru dir */
     rpt = ((int32) ((dirbuf[i + 1] >> 27) + 1)) & 0777; /* repeat count */
     for (j = 0; j < rpt; j++, mpage++) {                /* loop thru rpts */
         if (fpage) {                                    /* file pages? */
-            (void)sim_fseek (fileref, (fpage << PAG_V_PN) * sizeof (uint64), SEEK_SET);
-            wc = sim_fread (pagbuf, sizeof (uint64), PAG_SIZE, fileref);
-            if (wc < PAG_SIZE)
-                return SCPE_FMT;
+            (void)sim_fseek (fileref, (fpage << PAG_V_PN) * 5, SEEK_SET);
+            for (k = 0; k < PAG_SIZE; k++) {
+                 if (get_word(fileref, &pagbuf[k]))
+                     return SCPE_FMT;
+            }
             fpage++;
             }
         ma = mpage << PAG_V_PN;                         /* mem addr */
@@ -764,8 +782,13 @@ static const char *opcode[] = {
 "MUUO60", "MUUO61", "MUUO62", "MUUO63", "MUUO64", "MUUO65", "MUUO66", "MUUO67",
 "MUUO70", "MUUO71", "MUUO72", "MUUO73", "MUUO74", "MUUO75", "MUUO76", "MUUO77",
 
-"UJEN",   "MUUO101", "MUUO102", "JSYS", "MUUO104", "MUUO105", "MUUO106",
+#if KL
+"UJEN",         "GFAD", "GFSB", "JSYS", "ADJSP", "GFMP", "GFDV ",
 "DFAD", "DFSB", "DFMP", "DFDV", "DADD", "DSUB", "DMUL", "DDIV",
+#else
+"UJEN", "MUUO101", "MUUO102", "JSYS", "MUUO104", "MUUO105", "MUUO106",
+"DFAD", "DFSB", "DFMP", "DFDV", "MUUO114", "MUUO115", "MUUO116", "MUUO117",
+#endif
 "DMOVE", "DMOVN", "FIX", "EXTEND", "DMOVEM", "DMOVNM", "FIXR", "FLTR",
 "UFA", "DFN", "FSC", "ADJBP", "ILDB", "LDB", "IDPB", "DPB",
 "FAD", "FADL", "FADM", "FADB", "FADR", "FADRL", "FADRM", "FADRB",

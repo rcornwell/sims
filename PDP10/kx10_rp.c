@@ -89,6 +89,14 @@
 #define DR_EXC_CLR      0000000200000LL   /* Clear DR_EXC */
 #define DBPE_CLR        0000000400000LL   /* Clear CXR_DBPE */
 
+/* RH20 CONO Flags */
+#define RH20_DELETE_SCR 0000000000100LL   /* Clear SCR */
+#define RH20_RCLP       0000000000200LL   /* Reset command list */
+#define RH20_MASS_EN    0000000000400LL   /* Mass bus enable */
+#define RH20_XFER_CLR   0000000001000LL   /* Clear XFER error */
+#define RH20_CLR_MBC    0000000002000LL   /* Clear MBC */
+#define RH20_CLR_RAE    0000000004000LL   /* Clear RAE error */
+
 /* DATAO/DATAI */
 #define CR_REG          0770000000000LL   /* Register number */
 #define LOAD_REG        0004000000000LL   /* Load register */
@@ -292,7 +300,6 @@ int           rp_imode[NUM_DEVS_RP];
 int           rp_drive[NUM_DEVS_RP];
 int           rp_rae[NUM_DEVS_RP];
 int           rp_attn[NUM_DEVS_RP];
-extern int    readin_flag;
 
 t_stat        rp_devio(uint32 dev, uint64 *data);
 int           rp_devirq(uint32 dev, int addr);
@@ -410,7 +417,6 @@ REG                 rpa_reg[] = {
     {ORDATA(REG, rp_reg[0], 6), REG_RO},
     {ORDATA(RAE, rp_rae[0], 8), REG_RO},
     {ORDATA(ATTN, rp_attn[0], 8), REG_RO},
-    {FLDATA(READIN, readin_flag, 0), REG_HRO},
     {ORDATA(STATUS, rp_df10[0].status, 18), REG_RO},
     {ORDATA(CIA, rp_df10[0].cia, 18)},
     {ORDATA(CCW, rp_df10[0].ccw, 18)},
@@ -1259,6 +1265,21 @@ rp_boot(int32 unit_num, DEVICE * rptr)
     uint64        word;
     int           wc;
 
+#if KL
+    int           sect;
+    /* KL does not support readin, so fake it by reading in sectors 4 to 7 */
+    /* Possible in future fine boot loader in FE file system */
+    addr = (MEMSIZE - 512) & RMASK;
+    for (sect = 4; sect <= 7; sect++) {
+        (void)sim_fseek(uptr->fileref, (sect * RP_NUMWD) * sizeof(uint64), SEEK_SET);
+        (void)sim_fread (&rp_buf[0][0], sizeof(uint64), RP_NUMWD, uptr->fileref);
+        ptr = 0;
+        for(wc = RP_NUMWD; wc > 0; wc--) {
+            M[addr++] = rp_buf[0][ptr++];
+        }
+    }
+    PC = (MEMSIZE - 512) & RMASK;
+#else
     df = &rp_df10[ctlr];
     dptr = rp_devs[ctlr];
     (void)sim_fseek(uptr->fileref, 0, SEEK_SET);
@@ -1283,6 +1304,7 @@ rp_boot(int32 unit_num, DEVICE * rptr)
     rp_drive[ctlr] = uptr - dptr->units;
     df->status |= CCW_COMP_1|PI_ENABLE;
     PC = word & RMASK;
+#endif
     return SCPE_OK;
 }
 
