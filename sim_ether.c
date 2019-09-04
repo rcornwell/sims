@@ -2118,7 +2118,9 @@ else { /* !tap: */
 
       while (isspace(*devname))
         ++devname;
-      if ((*handle = (void*) sim_slirp_open(devname, opaque, &_slirp_callback, dptr, dbit, errbuf, PCAP_ERRBUF_SIZE))) {
+      if (!(*handle = (void*) sim_slirp_open(devname, opaque, &_slirp_callback, dptr, dbit)))
+        strlcpy(errbuf, strerror(errno), PCAP_ERRBUF_SIZE);
+      else {
         *eth_api = ETH_API_NAT;
         *fd_handle = 0;
         }
@@ -2438,7 +2440,11 @@ return SCPE_OK;
 
 const char *eth_version (void)
 {
+#if defined(HAVE_PCAP_NETWORK)
 return pcap_lib_version();
+#else
+return NULL;
+#endif
 }
 
 t_stat eth_attach_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
