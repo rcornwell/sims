@@ -52,6 +52,7 @@
 
 #if KL
 #define KLA 1
+#define KLB 0
 #endif
 
 #ifndef KLA
@@ -329,7 +330,16 @@ extern DEBTAB crd_debug[];
 #define UNIT_V_MAOFF    (UNIT_V_MSIZE + 8)
 #define UNIT_V_PAGE     (UNIT_V_MAOFF + 1)
 #define UNIT_MAOFF      (1 << UNIT_V_MAOFF)
+#if KL
+#if KLB
+#define UNIT_KL10B      (1 << UNIT_V_PAGE)
+#else
+#define UNIT_KL10B      (0)
+#endif
+#define UNIT_TWOSEG     (0)
+#else
 #define UNIT_TWOSEG     (1 << UNIT_V_PAGE)
+#endif
 #define UNIT_ITSPAGE    (2 << UNIT_V_PAGE)
 #define UNIT_BBNPAGE    (4 << UNIT_V_PAGE)
 #define UNIT_M_PAGE     (007 << UNIT_V_PAGE)
