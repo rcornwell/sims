@@ -472,7 +472,7 @@ void dte_second(UNIT *uptr) {
     t_stat  r;
 
 #if KI_22BIT
-#if ITS_KL
+#if KL_ITS
     if ((cpu_unit[0].flags & UNIT_ITSPAGE) == 0)
 #endif
     base = eb_ptr;
