@@ -189,7 +189,7 @@ int     t20_page;                             /* Tops 20 paging selected */
 int     ptr_flg;                              /* Access to pointer value */
 #if KLB
 int     cur_sect;                             /* Current section */
-int     prv_sect;                             /* Previous section */
+int     prev_sect;                            /* Previous section */
 int     pc_sect;                              /* Program counter section */
 #endif
 #else
@@ -1228,6 +1228,7 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
         }
         if (res & BIT1) {
             /* Load previous section */
+            prev_sect = (res >> 18) & 077;
         }
         if (res & BIT2) {
             ub_ptr = (res & 017777) << 9;
@@ -1266,6 +1267,7 @@ t_stat dev_cca(uint32 dev, uint64 *data) {
     check_apr_irq();
     return SCPE_OK;
 }
+
 
 /*
  * Check if the last operation caused a APR IRQ to be generated.
@@ -1331,19 +1333,24 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
     case DATAI:
         if (dev & 040) {
            /* APRID */
-           AR = SMASK| (500LL << 18);
+           AR = SMASK| (500LL << 18);   /* MC level 500 */
            /* Bit 0 for TOPS-20 paging */
            /* Bit 1 for extended addressing */
            /* Bit 2 Exotic microcode */
            /* Bit 4 for ITS Style Paging */
 #if KL_ITS
-           AR |= 00020000000000LL;
+           if (QITS)
+               AR |= 00020000000000LL;
 #endif
-           /* Bit 18 50hz  4 */
-           /* Bit 19 Cache 2 */
-           /* Bit 20 Channel?  1*/
+           /* Bit 18 50hz      */
+           /* Bit 19 Cache     */
+           /* Bit 20 Channel?  */
            /* Bit 21 Extended KL10 */
            /* Bit 22 Master Osc */
+#if KLB
+           if (QKLB)
+               AR |= BIT1|040000;
+#endif
            AR |= (uint64)((apr_serial == -1) ? DEF_SERIAL : apr_serial);
            MB = AR;
            (void)Mem_write(0, 0);
@@ -1844,12 +1851,11 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
         int        dbr;
         int        pg;
 
-        dbr = (uf)?
-                     ((page & 0400)?FM[(06<<4)|4]:FM[(06<<4)|3]) :
-                     ((page & 0400)?FM[(06<<4)|2]:FM[(06<<4)|1]);
+        dbr = (uf)? ((page & 0400) ? dbr1 : dbr2) :
+                    ((page & 0400) ? dbr3 : dbr4) ;
         pg = (page & 0377) >> 2;   /* 2 1024 word page entries */
         data = M[dbr + pg];
-        if ((page & 02) == 0)
+        if ((page & 01) != 0)
             data >>= 18;
         data &= RMASK;
         switch(data >> 16) {
@@ -1858,14 +1864,16 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
         case 2:  pg = RSIGN;  break; /* R/W First */
         case 3:  pg = RSIGN|0100000;  break; /* R/W */
         }
-        pg |= data & 01777;
+        pg |= (data & 00377) << 1;
         /* Create 2 page table entries. */
         if (uf) {
             u_tlb[page & 0776] = pg;
-            u_tlb[(page & 0776)|1] = pg+1;
+            u_tlb[(page & 0776)|1] = pg|1;
+            data = u_tlb[page];
         } else {
             e_tlb[page & 0776] = pg;
-            e_tlb[(page & 0776)|1] = pg+1;
+            e_tlb[(page & 0776)|1] = pg|1;
+            data = e_tlb[page];
         }
     } else
 #endif
@@ -2072,6 +2080,7 @@ fprintf(stderr, "YMap %012llo\n\r", data);
         else
            e_tlb[page] = data;
     } else {
+
        /* Map the page */
        if (uf | upmp) {
            data = M[ub_ptr + (page >> 1)];
@@ -3869,15 +3878,12 @@ no_fetch:
          AR = MB;
          AB = MB & RMASK;
          if (MB &  017000000) {
-#if 0
-            if (xct_flag != 0 && (FLAGS & USER) == 0 && (xct_flag & 8) != 0)
-               AR = FM[prev_ctx|((MB >> 18) & 017)];
+#if KL
+            if ((xct_flag & 8) != 0 && (FLAGS & USER) == 0)
+               AR = MB = (AB + FM[prev_ctx|((MB >> 18) & 017)]) & FMASK;
             else
-               AR = get_reg((MB >> 18) & 017);
-             AR = MB = (AR + AB) & FMASK;
-#else
-             AR = MB = (AB + get_reg((MB >> 18) & 017)) & FMASK;
 #endif
+             AR = MB = (AB + get_reg((MB >> 18) & 017)) & FMASK;
              AB = MB & RMASK;
          }
          if (IR != 0254)
@@ -4073,7 +4079,7 @@ unasign:
               MB = (ub_ptr >> 9) | ((uint64)(prev_ctx & 0160)) << 20 |
                    ((uint64)(fm_sel & 0160)) << 23 | SMASK|BIT1|BIT2;
               Mem_write_nopage();
-              prev_ctx = fm_sel;
+//              prev_ctx = fm_sel;
 #endif
               /* Read in new PC and flags */
               FLAGS &= ~ (PRV_PUB|BYTI|ADRFLT|TRP1|TRP2);
@@ -4167,18 +4173,13 @@ unasign:
                   fault_data = (MB >> 18) & RMASK;
                   AB = (AB + 1) & RMASK;
                   MB = M[AB];                /* WD 4 */
-                  FM[(06<<4)|1] = ((0377 << 18) | RMASK) & MB;
+                  dbr1 = ((0377 << 18) | RMASK) & MB;
                   AB = (AB + 1) & RMASK;
                   MB = M[AB];                /* WD 5 */
-                  FM[(06<<4)|2] = ((0377 << 18) | RMASK) & MB;
+                  dbr2 = ((0377 << 18) | RMASK) & MB;
                   AB = (AB + 1) & RMASK;
-                  MB = M[AB];                /* WD 6 */
-                  FM[(06<<4)|3] = ((0377 << 18) | RMASK) & MB;
-                  AB = (AB + 1) & RMASK;
-                  MB = M[AB];                /* WD 7 */
-                  page_enable = 1;
                   for (f = 0; f < 512; f++)
-                     e_tlb[f] = u_tlb[f] = 0;
+                      u_tlb[f] = 0;
                   break;
               }
               goto unasign;
@@ -4200,15 +4201,10 @@ unasign:
                   MB = ((uint64)fault_data) << 18;
                   M[AB] = MB;
                   AB = (AB + 1) & RMASK;
-                  MB = (uint64)FM[(06<<4)|1];
+                  MB = dbr1;
                   M[AB] = MB;
                   AB = (AB + 1) & RMASK;
-                  MB = (uint64)FM[(06<<4)|2];
-                  M[AB] = MB;
-                  AB = (AB + 1) & RMASK;
-                  MB = (uint64)FM[(06<<4)|3];
-                  M[AB] = MB;
-                  AB = (AB + 1) & RMASK;
+                  MB = dbr2;
                   M[AB] = MB;
               }
               goto unasign;
@@ -6814,14 +6810,10 @@ jrstf:
               /* Check if Paging Enabled */
               if (!page_enable || AB < 020) {
                   AR = 0020000LL + f; /* direct map */
-#else
-              /* Check if Paging Enabled */
-              if (!page_enable || AB < 020) {
-                  AR = AB; /* direct map */
-#endif
                   set_reg(AC, AR);
                   break;
               }
+#endif
 #if KL
               /* Invalid in user unless USERIO set, or not in supervisor mode */
               if ((FLAGS & (USER|USERIO)) == USER || (FLAGS & (USER|PUBLIC)) == PUBLIC)
@@ -6830,6 +6822,16 @@ jrstf:
               /* Figure out if this is a user space access */
               if (xct_flag & 4)
                   flag1 = (FLAGS & USERIO) != 0;
+
+              /* Check if Paging Enabled */
+              if (!page_enable || AB < 020) {
+                  AR = AB; /* direct map */
+                  if (flag1)                 /* U */
+                     AR |= SMASK;            /* BIT8 */
+                  AR |= BIT8|BIT2|00040000000000LL;    /* BIT3 */
+                  set_reg(AC, AR);
+                  break;
+              }
 
               /* Handle KI paging odditiy */
               if (!flag1 && !t20_page && (f & 0740) == 0340) {
