@@ -191,6 +191,7 @@ int     ptr_flg;                              /* Access to pointer value */
 int     cur_sect;                             /* Current section */
 int     prev_sect;                            /* Previous section */
 int     pc_sect;                              /* Program counter section */
+int     glb_sect;                             /* Global section access */
 #endif
 #else
 int     small_user;                           /* Small user flag */
@@ -1226,10 +1227,12 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
             fm_sel = (uint8)(res >> 23) & 0160;
             prev_ctx = (res >> 20) & 0160;
         }
-        if (res & BIT1) {
+#if KLB
+        if (QKLB && res & BIT1) {
             /* Load previous section */
             prev_sect = (res >> 18) & 077;
         }
+#endif
         if (res & BIT2) {
             ub_ptr = (res & 017777) << 9;
             for (i = 0; i < 512; i++)
@@ -1851,7 +1854,7 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
         int        dbr;
         int        pg;
 
-        dbr = (uf)? ((page & 0400) ? dbr1 : dbr2) :
+        dbr = (uf)? ((page & 0400) ? dbr2 : dbr1) :
                     ((page & 0400) ? dbr3 : dbr4) ;
         pg = (page & 0377) >> 2;   /* 2 1024 word page entries */
         data = M[dbr + pg];
@@ -2220,6 +2223,11 @@ fprintf(stderr, "Page fault %06o a=%o wr=%o w=%o %06o\n\r", addr, (data & RSIGN)
            fault_data |= 00010000000000LL; /* BIT5 */
         if (data & 0020000LL)        /* C */
            fault_data |= 00002000000000LL; /* BIT7 */
+#if KL_ITS
+        if (QITS && (xct_flag & 020) != 0)
+           PC = (PC + 1) & AMASK;
+        else
+#endif
         page_fault = 1;
         return 0;
     }
@@ -3812,6 +3820,7 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
             cur_sect = pc_sect;
         else
             cur_sect = 0;
+        glb_sect = 0;
 #endif
         uuo_cycle = 0;
         f_pc_inh = 0;
@@ -6619,6 +6628,10 @@ fprintf(stderr, "Xjrst %012llo - ", MB);
                            goto last;
                        AR = MB;       /* Get PC. */
 fprintf(stderr, " %012llo\n\r", MB);
+#if KLB
+                       if (QKLB)
+                          pc_sect = (MB >> 18) & 017;
+#endif
                        goto jrstf;
 
               case 006:  /* XJEN */
@@ -6657,11 +6670,32 @@ jrstf:
                        check_apr_irq();
                        break;
 
-              case 003:  /* Invalid */
               case 007:  /* XPCW */
+#if KLB
+                       if (QKLB) {
+                          MB = ((uint64)FLAGS) << 23;
+                          if (Mem_write(0, 0))
+                             goto last;
+                          AB = (AB + 1) & RMASK;
+                          MB = (((uint64)pc_sect) << 18) | PC;
+                          if (Mem_write(0, 0))
+                             goto last;
+                          AB = (AB + 1) & RMASK;
+                          goto xjrstf;
+                       }
+#endif
+              case 014:  /* SFM */
+#if KLB
+                       if (QKLB) {
+                          MB = ((uint64)FLAGS) << 23;
+                          MB |= prev_sect;
+                          (void)Mem_write(0, 0);
+                          goto last;
+                       }
+#endif
+              case 003:  /* Invalid */
               case 011:  /* Invalid */
               case 013:  /* Invalid */
-              case 014:  /* SFM */
               case 015:  /* Invalid */
               case 016:  /* Invalid */
               case 017:  /* Invalid */
@@ -8820,14 +8854,34 @@ if (vptr == NULL)
 if (ea < 020)
     *vptr = FM[ea] & FMASK;
 else {
+#if KL | KI
     if (sw & SWMASK ('V')) {
-        if (ea >= MAXMEMSIZE)
-            return SCPE_REL;
+        int uf = ((sw & SWMASK('U')) != 0);
+        int page = ea >> 9;
+        uint32  tlb;
+#if KL
+        if (!uf && !t20_page && (page & 0740) == 0340) {
+#else
+        if (!uf && (page & 0740) == 0340) {
+#endif
+             /* Pages 340-377 via UBT */
+             page += 01000 - 0340;
+             uf = 1;
         }
+        if (uf)
+           tlb = u_tlb[page];
+        else
+           tlb = e_tlb[page];
+        if ((tlb & RSIGN) == 0)
+           return 4;
+        ea = ((tlb & 017777) << 9) + (ea & 0777);
+    }
+#endif
+
     if (ea >= MEMSIZE)
         return SCPE_NXM;
     *vptr = M[ea] & FMASK;
-    }
+}
 return SCPE_OK;
 }
 
@@ -8838,10 +8892,29 @@ t_stat cpu_dep (t_value val, t_addr ea, UNIT *uptr, int32 sw)
 if (ea < 020)
     FM[ea] = val & FMASK;
 else {
+#if KL | KI
     if (sw & SWMASK ('V')) {
-        if (ea >= MAXMEMSIZE)
-            return SCPE_REL;
+        int uf = ((sw & SWMASK('U')) != 0);
+        int page = ea >> 9;
+        uint32  tlb;
+#if KL
+        if (!uf && !t20_page && (page & 0740) == 0340) {
+#else
+        if (!uf && (page & 0740) == 0340) {
+#endif
+             /* Pages 340-377 via UBT */
+             page += 01000 - 0340;
+             uf = 1;
         }
+        if (uf)
+           tlb = u_tlb[page];
+        else
+           tlb = e_tlb[page];
+        if ((tlb & RSIGN) == 0)
+           return 4;
+        ea = ((tlb & 017777) << 9) + (ea & 0777);
+    }
+#endif
     if (ea >= MEMSIZE)
         return SCPE_NXM;
     M[ea] = val & FMASK;
