@@ -1,6 +1,6 @@
 /* ka10_ten11.c: Rubin 10-11 interface.
 
-   Copyright (c) 2018, Lars Brinkhoff
+   Copyright (c) 2018-2019, Lars Brinkhoff
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
