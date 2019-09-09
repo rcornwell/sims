@@ -236,8 +236,7 @@ uint32  qua_time;                             /* Quantum clock value */
 #define dbr2    FM[(6<<4)|2]
 #define dbr3    FM[(6<<4)|3]
 #define dbr4    FM[(6<<4)|4]
-#define jpc     FM[(6<<4)|7]
-#define opc     FM[(6<<4)|6]
+#define jpc     FM[(6<<4)|15]
 #define mar     brk_addr;
 #endif
 
@@ -1227,12 +1226,10 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
             fm_sel = (uint8)(res >> 23) & 0160;
             prev_ctx = (res >> 20) & 0160;
         }
-#if KLB
-        if (QKLB && res & BIT1) {
+        if (res & BIT1) {
             /* Load previous section */
             prev_sect = (res >> 18) & 077;
         }
-#endif
         if (res & BIT2) {
             ub_ptr = (res & 017777) << 9;
             for (i = 0; i < 512; i++)
@@ -1851,23 +1848,25 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
 
 #if KL_ITS
     if (QITS && t20_page) {
-        int        dbr;
+        uint64     dbr;
         int        pg;
 
         dbr = (uf)? ((page & 0400) ? dbr2 : dbr1) :
                     ((page & 0400) ? dbr3 : dbr4) ;
         pg = (page & 0377) >> 2;   /* 2 1024 word page entries */
         data = M[dbr + pg];
-        if ((page & 01) != 0)
+fprintf(stderr, "Load page %06o dbr%012llo pg%06o data=%012llo -> ", page, dbr, pg, data);
+        if ((page & 02) == 0)
             data >>= 18;
         data &= RMASK;
+        pg = 0;
         switch(data >> 16) {
-        case 0:  pg =     0;  break; /* No access */
+        case 0:  break;              /* No access */
         case 1:                      /* Read Only */
         case 2:  pg = RSIGN;  break; /* R/W First */
         case 3:  pg = RSIGN|0100000;  break; /* R/W */
         }
-        pg |= (data & 00377) << 1;
+        pg |= (data & 017777) << 1;
         /* Create 2 page table entries. */
         if (uf) {
             u_tlb[page & 0776] = pg;
@@ -1878,6 +1877,7 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
             e_tlb[(page & 0776)|1] = pg|1;
             data = e_tlb[page];
         }
+fprintf(stderr, " %06o %06o\n\r", pg, pg | 1);
     } else
 #endif
 #define PG_PUB   0040000
@@ -3832,7 +3832,9 @@ fetch:
 #endif
 #if ITS
         if (QITS && pi_cycle == 0 && mem_prot == 0) {
+#if !KL_ITS
            opc = PC | (FLAGS << 18);
+#endif
            if ((FLAGS & ONEP) != 0) {
               one_p_arm = 1;
               FLAGS &= ~ONEP;
@@ -4163,7 +4165,7 @@ unasign:
               }
               goto unasign;
 
-    case 0076:
+    case 0076:     /* LMR */
               if (QITS && (FLAGS & USER) == 0) {
                   /* Load store ITS pager info */
                   if ((AB + 8) > MEMSIZE) {
@@ -4172,49 +4174,44 @@ unasign:
                   MB = M[AB];                /* WD 0 */
                   jpc = (MB & RMASK);
                   AB = (AB + 1) & RMASK;
-                  MB = M[AB];
-                  opc = MB;
+                  MB = M[AB];                /* WD 1 */
+                  brk_addr = MB & RMASK;
+                  brk_flags = 017 & (MB >> 23);
                   AB = (AB + 1) & RMASK;
                   MB = M[AB];                /* WD 2 */
-                  brk_addr = /*03777777 &*/ MB;
+                  fault_data = MB;
                   AB = (AB + 1) & RMASK;
                   MB = M[AB];                /* WD 3 */
-                  fault_data = (MB >> 18) & RMASK;
+                  dbr1 = MB;
                   AB = (AB + 1) & RMASK;
                   MB = M[AB];                /* WD 4 */
-                  dbr1 = ((0377 << 18) | RMASK) & MB;
-                  AB = (AB + 1) & RMASK;
-                  MB = M[AB];                /* WD 5 */
-                  dbr2 = ((0377 << 18) | RMASK) & MB;
-                  AB = (AB + 1) & RMASK;
+                  dbr2 = MB;
                   for (f = 0; f < 512; f++)
                       u_tlb[f] = 0;
                   break;
               }
               goto unasign;
-    case 0077:
+    case 0077:     /* SPM */
               if (QITS && (FLAGS & USER) == 0) {
                   if ((AB + 8) > MEMSIZE) {
                      break;
                   }
-                  MB = ((uint64)fault_data) << 18 |
-                        (uint64)jpc;
-                  M[AB] = MB;
+                  MB = (uint64)jpc;
+                  M[AB] = MB;                 /* WD 0 */
                   AB = (AB + 1) & RMASK;
-                  MB = opc;
-                  M[AB] = MB;
+                  MB = (uint64)brk_addr;
+                  MB |= ((uint64)brk_flags) << 23;
+                  M[AB] = MB;                 /* WD 1 */
                   AB = (AB + 1) & RMASK;
-                  MB = (brk_addr);
-                  M[AB] = MB;
-                  AB = (AB + 1) & RMASK;
-                  MB = ((uint64)fault_data) << 18;
-                  M[AB] = MB;
+                  MB = fault_data;
+                  M[AB] = MB;                 /* WD 2 */
                   AB = (AB + 1) & RMASK;
                   MB = dbr1;
-                  M[AB] = MB;
+                  M[AB] = MB;                 /* WD 3 */
                   AB = (AB + 1) & RMASK;
                   MB = dbr2;
-                  M[AB] = MB;
+                  M[AB] = MB;                 /* WD 4 */
+                  break;
               }
               goto unasign;
 #endif
