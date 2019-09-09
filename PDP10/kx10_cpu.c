@@ -1228,7 +1228,9 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
         }
         if (res & BIT1) {
             /* Load previous section */
+#if KLB
             prev_sect = (res >> 18) & 077;
+#endif
         }
         if (res & BIT2) {
             ub_ptr = (res & 017777) << 9;
