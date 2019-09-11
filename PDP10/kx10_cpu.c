@@ -183,6 +183,8 @@ int     mtr_enable;                           /* Enable Timer */
 int     mtr_flags;                            /* Flags for accounting */
 int     tim_per;                              /* Timer period */
 int     tim_val;                              /* Current timer value */
+int     mem_cnt;                              /* Number of memory cycles */
+int     rtc_tim;                              /* Time till next 60hz clock */
 uint32  brk_addr;                             /* Address break */
 int     brk_flags;                            /* Break flags */
 int     t20_page;                             /* Tops 20 paging selected */
@@ -1167,6 +1169,24 @@ t_stat null_dev(uint32 dev, uint64 *data) {
 #if KL
 static int      timer_irq, timer_flg;
 
+void
+update_times(int tim)
+{
+    uint64    temp;
+    if (page_enable)  {
+        temp = (M[eb_ptr + 0511] & CMASK) + (tim << 12);
+        if (temp & SMASK)
+           M[eb_ptr + 0510] = (M[eb_ptr+0510] + 1) & FMASK;
+        M[eb_ptr + 0511] = temp & CMASK;
+        if (FLAGS & USER) {
+            temp = (M[ub_ptr + 0506] & CMASK) + (tim << 12);
+            if (temp & SMASK)
+               M[ub_ptr + 0505] = (M[ub_ptr+0505] + 1) & FMASK;
+            M[ub_ptr + 0506] = temp & CMASK;
+        }
+    }
+}
+
 /*
  * Page device for KL10.
  */
@@ -1204,13 +1224,10 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
 
            page &= ~7;
            /* Map the page */
-//           if (uf || upmp) {
-               for(i = 0; i < 8; i++)
-                  u_tlb[page+i] = 0;
- //          } else {
-               for(i = 0; i < 8; i++)
-                  e_tlb[page+i] = 0;
-  //         }
+           for(i = 0; i < 8; i++)
+              u_tlb[page+i] = 0;
+           for(i = 0; i < 8; i++)
+              e_tlb[page+i] = 0;
            /* If not user do exec mappping */
            if (/*!uf && !t20_page &&*/ (page & 0740) == 0340) {
               /* Pages 340-377 via UBT */
@@ -1219,29 +1236,36 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
                for(i = 0; i < 8; i++)
                   u_tlb[page+i] = 0;
            }
-           break;
-        }
-        res = *data;
-        if (res & SMASK) {
-            fm_sel = (uint8)(res >> 23) & 0160;
-            prev_ctx = (res >> 20) & 0160;
-        }
-        if (res & BIT1) {
-            /* Load previous section */
+        } else {
+            res = *data;
+            if (res & SMASK) {
+                fm_sel = (uint8)(res >> 23) & 0160;
+                prev_ctx = (res >> 20) & 0160;
+            }
+            if (res & BIT1) {
+                /* Load previous section */
 #if KLB
-            prev_sect = (res >> 18) & 077;
+                prev_sect = (res >> 18) & 077;
 #endif
-        }
-        if (res & BIT2) {
-            ub_ptr = (res & 017777) << 9;
-            for (i = 0; i < 512; i++)
-               u_tlb[i] = 0;
-            for (;i < 546; i++)
-               u_tlb[i] = 0;
-       }
-       sim_debug(DEBUG_DATAIO, &cpu_dev,
+            }
+            if ((res & RSIGN) == 0) {
+                int   t;
+                double us = sim_activate_time_usecs (&cpu_unit[0]);
+                t = rtc_tim - ((int)us);
+                update_times(t);
+                rtc_tim = ((int)us);
+            }
+            if (res & BIT2) {
+                ub_ptr = (res & 017777) << 9;
+                for (i = 0; i < 512; i++)
+                   u_tlb[i] = 0;
+                for (;i < 546; i++)
+                   u_tlb[i] = 0;
+           }
+           sim_debug(DEBUG_DATAIO, &cpu_dev,
                     "DATAO PAG %012llo ebr=%06o ubr=%06o\n",
                     *data, eb_ptr, ub_ptr);
+       }
        break;
 
     case DATAI:
@@ -1334,34 +1358,32 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
 
     case DATAI:
         if (dev & 040) {
-           /* APRID */
-           AR = SMASK| (500LL << 18);   /* MC level 500 */
-           /* Bit 0 for TOPS-20 paging */
-           /* Bit 1 for extended addressing */
-           /* Bit 2 Exotic microcode */
-           /* Bit 4 for ITS Style Paging */
+            /* APRID */
+            AR = SMASK| (500LL << 18);   /* MC level 500 */
+            /* Bit 0 for TOPS-20 paging */
+            /* Bit 1 for extended addressing */
+            /* Bit 2 Exotic microcode */
+            /* Bit 4 for ITS Style Paging */
 #if KL_ITS
-           if (QITS)
-               AR |= 00020000000000LL;
-#endif
-           /* Bit 18 50hz      */
-           /* Bit 19 Cache     */
-           /* Bit 20 Channel?  */
-           /* Bit 21 Extended KL10 */
-           /* Bit 22 Master Osc */
-#if KLB
-           if (QKLB)
-               AR |= BIT1|040000;
-#endif
-           AR |= (uint64)((apr_serial == -1) ? DEF_SERIAL : apr_serial);
-           MB = AR;
-           (void)Mem_write(0, 0);
-           sim_debug(DEBUG_DATAIO, &cpu_dev, "APRID %012llo\n", MB);
-           break;
+            if (QITS)
+                AR |= 00020000000000LL;
+#endif     
+            /* Bit 18 50hz      */
+            /* Bit 19 Cache     */
+            /* Bit 20 Channel?  */
+            /* Bit 21 Extended KL10 */
+            /* Bit 22 Master Osc */
+#if KLB    
+            if (QKLB)
+                AR |= BIT1|040000;
+#endif     
+            AR |= (uint64)((apr_serial == -1) ? DEF_SERIAL : apr_serial);
+            sim_debug(DEBUG_DATAIO, &cpu_dev, "APRID BLKI %012llo\n", MB);
+        } else {
+            *data = ((uint64)brk_flags) << 23;
+            *data |= (uint64)brk_addr;
+            sim_debug(DEBUG_DATAIO, &cpu_dev, "DATAI APR %012llo\n", *data);
         }
-        *data = ((uint64)brk_flags) << 23;
-        *data |= (uint64)brk_addr;
-        sim_debug(DEBUG_DATAIO, &cpu_dev, "DATAI APR %012llo\n", *data);
         break;
     }
     return SCPE_OK;
@@ -1399,6 +1421,7 @@ t_stat dev_mtr(uint32 dev, uint64 *data) {
         break;
 
     case DATAO:
+        /* MUUO */
         if (dev & 040) {
             sim_debug(DEBUG_DATAIO, &cpu_dev, "BLKO MTR %012llo\n", *data);
         } else {
@@ -1408,12 +1431,34 @@ t_stat dev_mtr(uint32 dev, uint64 *data) {
 
     case DATAI:
         if (dev & 040) {
+            /* RDMACT */
             /* Read memory accounting */
+            if (page_enable)  {
+                res = (M[ub_ptr + 0507] & CMASK);
+                BR = M[ub_ptr + 0506];
+            } else {
+                res = 0 << 12;
+                BR = 0;
+            }
             sim_debug(DEBUG_DATAIO, &cpu_dev, "BLKI MTR %012llo\n", *data);
         } else {
+            /* RDEACT */
             /* Read executive accounting */
+            int   t;
+            double us = sim_activate_time_usecs (&cpu_unit[0]);
+            t = rtc_tim - ((int)us);
+            update_times(t);
+            rtc_tim = ((int)us);
+            if (page_enable)  {
+                res = (M[ub_ptr + 0505] & CMASK);
+                BR = M[ub_ptr + 0504];
+            } else {
+                res = t << 12;
+                BR = 0;
+            }
             sim_debug(DEBUG_DATAIO, &cpu_dev, "DATAI MTR %012llo\n", *data);
         }
+        *data = res;
         break;
     }
     return SCPE_OK;
@@ -1463,7 +1508,8 @@ t_stat dev_tim(uint32 dev, uint64 *data) {
 
     case DATAO:
         if (dev & 040) {
-            /* Write performance */
+            /* WRPAE */
+            /* Write performance enables */
             sim_debug(DEBUG_DATAIO, &cpu_dev, "BLKO TIM %012llo\n", *data);
         } else {
             sim_debug(DEBUG_DATAIO, &cpu_dev, "DATAO TIM %012llo\n", *data);
@@ -1472,14 +1518,38 @@ t_stat dev_tim(uint32 dev, uint64 *data) {
 
     case DATAI:
         if (dev & 040) {
-            /* Read perfomance */
+            /* RDPERF */
+            /* Read process execution time */
+            int   t;
+            us = sim_activate_time_usecs (&cpu_unit[0]);
+            t = rtc_tim - ((int)us);
+            update_times(t);
+            rtc_tim = ((int)us);
+            if (page_enable)  {
+                res = (M[ub_ptr + 0505]);
+                BR = M[ub_ptr + 0504];
+            } else {
+                res = 0 << 12;
+                BR = t;
+            }
             sim_debug(DEBUG_DATAIO, &cpu_dev, "BLKI TIM %012llo\n", *data);
         } else {
             /* RDTIME */
-            *data = M[eb_ptr + 0510];
-            BR = M[eb_ptr + 0511];
+            int   t;
+            us = sim_activate_time_usecs (&cpu_unit[0]);
+            t = rtc_tim - ((int)us);
+            update_times(t);
+            rtc_tim = ((int)us);
+            if (page_enable)  {
+                res = (M[eb_ptr + 0511]);
+                BR = M[eb_ptr + 0510];
+            } else {
+                res = t << 12;
+                BR = 0;
+            }
             sim_debug(DEBUG_DATAIO, &cpu_dev, "DATAI TIM %012llo\n", *data);
         }
+        *data = res;
         return SCPE_OK;
     }
     /* If timer is on, figure out when it will go off */
@@ -1857,7 +1927,7 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
                     ((page & 0400) ? dbr3 : dbr4) ;
         pg = (page & 0377) >> 2;   /* 2 1024 word page entries */
         data = M[dbr + pg];
-fprintf(stderr, "Load page %06o dbr%012llo pg%06o data=%012llo -> ", page, dbr, pg, data);
+//fprintf(stderr, "Load page %06o dbr%012llo pg%06o data=%012llo -> ", page, dbr, pg, data);
         if ((page & 02) == 0)
             data >>= 18;
         data &= RMASK;
@@ -1879,7 +1949,7 @@ fprintf(stderr, "Load page %06o dbr%012llo pg%06o data=%012llo -> ", page, dbr, 
             e_tlb[(page & 0776)|1] = pg|1;
             data = e_tlb[page];
         }
-fprintf(stderr, " %06o %06o\n\r", pg, pg | 1);
+//fprintf(stderr, " %06o %06o\n\r", pg, pg | 1);
     } else
 #endif
 #define PG_PUB   0040000
@@ -2156,7 +2226,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
     if (flag)
         uf = 0;
     else if (xct_flag != 0 && !uf && !fetch) {
-fprintf(stderr, "PXCT ir=%03o pc=%06o ad=%06o x=%02o c=%o b=%o p=%o w=%o", IR, PC, addr, xct_flag, cur_context, BYF5, ptr_flg, wr);
+//fprintf(stderr, "PXCT ir=%03o pc=%06o ad=%06o x=%02o c=%o b=%o p=%o w=%o", IR, PC, addr, xct_flag, cur_context, BYF5, ptr_flg, wr);
         if (((xct_flag & 8) != 0 && cur_context) ||
             ((xct_flag & 4) != 0 && !cur_context && !BYF5 && !ptr_flg) ||
             ((xct_flag & 2) != 0 && !cur_context && ptr_flg) ||
@@ -2164,7 +2234,7 @@ fprintf(stderr, "PXCT ir=%03o pc=%06o ad=%06o x=%02o c=%o b=%o p=%o w=%o", IR, P
             uf = (FLAGS & USERIO) != 0;
             pub = (FLAGS & PRV_PUB) != 0;
         }
-fprintf(stderr, "%o %o\n\r", uf, pub);
+//fprintf(stderr, "%o %o\n\r", uf, pub);
     }
 
     /* Handle KI paging odditiy */
@@ -2197,7 +2267,7 @@ fprintf(stderr, "%o %o\n\r", uf, pub);
          (!fetch || (M[*loc] & 00777740000000LL) != 0254040000000LL)) {
         /* Handle public violation */
         fault_data = ((uint64)addr) | 021LL << 30 | BIT8 |((uf)?SMASK:0);
-fprintf(stderr, "Public fault %012llo %06o\n\r", fault_data, FLAGS << 5);
+//fprintf(stderr, "Public fault %012llo %06o\n\r", fault_data, FLAGS << 5);
         page_fault = 1;
         return 0;
     }
@@ -2296,16 +2366,16 @@ int Mem_read(int flag, int cur_context, int fetch) {
     sim_interval--;
     if (AB < 020) {
         if (xct_flag != 0 && !fetch && (FLAGS & USER) == 0) {
-fprintf(stderr, "PXCT ir=%03o pc=%06o ad=%06o x=%02o c=%o b=%o p=%o rgr ", IR, PC, addr, xct_flag, cur_context, BYF5, ptr_flg);
+//fprintf(stderr, "PXCT ir=%03o pc=%06o ad=%06o x=%02o c=%o b=%o p=%o rgr ", IR, PC, addr, xct_flag, cur_context, BYF5, ptr_flg);
             if (((xct_flag & 8) != 0 && cur_context) ||
                 ((xct_flag & 4) != 0 && !cur_context && !BYF5 && !ptr_flg) ||
                 ((xct_flag & 2) != 0 && !cur_context && ptr_flg) ||
                 ((xct_flag & 1) != 0 && !cur_context && BYF5)) {
                MB = FM[prev_ctx|AB];
-fprintf(stderr, "prev \n\r");
+//fprintf(stderr, "prev \n\r");
                return 0;
             }
-fprintf(stderr, "\n\r");
+//fprintf(stderr, "\n\r");
         }
         MB = get_reg(AB);
     } else {
@@ -2328,16 +2398,16 @@ int Mem_write(int flag, int cur_context) {
     sim_interval--;
     if (AB < 020) {
         if (xct_flag != 0 && (FLAGS & USER) == 0) {
-fprintf(stderr, "PXCT ir=%03o pc=%06o ad=%06o x=%02o c=%o b=%o p=%o rgw ", IR, PC, addr, xct_flag, cur_context, BYF5, ptr_flg);
+//fprintf(stderr, "PXCT ir=%03o pc=%06o ad=%06o x=%02o c=%o b=%o p=%o rgw ", IR, PC, addr, xct_flag, cur_context, BYF5, ptr_flg);
             if (((xct_flag & 8) != 0 && cur_context) ||
                 ((xct_flag & 4) != 0 && !cur_context && !BYF5 && !ptr_flg) ||
                 ((xct_flag & 2) != 0 && !cur_context && ptr_flg) ||
                 ((xct_flag & 1) != 0 && !cur_context && BYF5)) {
-fprintf(stderr, "prev \n\r");
+//fprintf(stderr, "prev \n\r");
                FM[prev_ctx|AB] = MB;
                return 0;
             }
-fprintf(stderr, "\n\r");
+//fprintf(stderr, "\n\r");
         }
         set_reg(AB, MB);
     } else {
@@ -3880,6 +3950,7 @@ no_fetch:
 
     /* Handle indirection repeat until no longer indirect */
     do {
+         int   ix;
          if ((!pi_cycle) & pi_pending
 #if KI | KL
                              & (!trap_flag)
@@ -3887,16 +3958,19 @@ no_fetch:
                              ) {
             pi_rq = check_irq_level();
          }
-         ind = (MB & 020000000) != 0;
+         ind = TST_IND(MB) != 0;
          AR = MB;
          AB = MB & RMASK;
-         if (MB &  017000000) {
+         ix = GET_XR(MB);
+         if (ix) {
 #if KL
+//            if (xct_flag != 0)
+//fprintf(stderr, "PXCT ir=%03o pc=%06o ad=%06o x=%02o m=%012llo\n\r", IR, PC, AB, xct_flag, MB);
             if ((xct_flag & 8) != 0 && (FLAGS & USER) == 0)
-               AR = MB = (AB + FM[prev_ctx|((MB >> 18) & 017)]) & FMASK;
+               AR = MB = (AB + FM[prev_ctx|ix]) & FMASK;
             else
 #endif
-             AR = MB = (AB + get_reg((MB >> 18) & 017)) & FMASK;
+             AR = MB = (AB + get_reg(ix)) & FMASK;
              AB = MB & RMASK;
          }
          if (IR != 0254)
@@ -6621,12 +6695,10 @@ xjrstf:
                        if (Mem_read(0, 0, 0))
                            goto last;
                        BR = MB >> 32; /* Move flags into position */
-fprintf(stderr, "Xjrst %012llo - ", MB);
                        AB = (AB + 1) & RMASK;
                        if (Mem_read(0, 0, 0))
                            goto last;
                        AR = MB;       /* Get PC. */
-fprintf(stderr, " %012llo\n\r", MB);
 #if KLB
                        if (QKLB)
                           pc_sect = (MB >> 18) & 017;
@@ -7330,7 +7402,7 @@ skip_op:
                   PC_CHANGE
                   PC = (PC + 1) & RMASK;
 #if KI | KL
-              } else if (pi_cycle) {
+              } else if (trap_flag == 0 && pi_cycle) {
                    pi_ov = pi_hold = 1;
 #endif
               }
@@ -7663,17 +7735,26 @@ fetch_opr:
                   case 0:     /* 00 BLKI */
                   case 2:     /* 10 BLKO */
 #if KL
+                          /* For KL10 special devices treat like DATAI/DATAO */
                           if (d <= 05) {
                               if (AC & 02) {
-//                                  if (Mem_read(pi_cycle, 0, 0))
- //                                    goto last;
-  //                                AR = MB;
+                                  if (d == 1 || d == 4) {
+                                      if (Mem_read(pi_cycle, 0, 0))
+                                         goto last;
+                                      AR = MB;
+                                  }
                                   dev_tab[d](040|DATAO|(d<<2), &AR);
                               } else {
                                   dev_tab[d](040|DATAI|(d<<2), &AR);
-   //                               MB = AR;
-    //                              if (Mem_write(pi_cycle, 0))
-     //                                 goto last;
+                                  MB = AR;
+                                  if (Mem_write(pi_cycle, 0))
+                                      goto last;
+                                  if (d == 4 || d == 5) {
+                                      AB = (AB + 1) & RMASK;
+                                      MB = BR;
+                                      if (Mem_write(pi_cycle, 0))
+                                          goto last;
+                                  }
                               }
                               break;
                           }
@@ -7704,7 +7785,7 @@ fetch_opr:
                           if (Mem_write(pi_cycle, 0))
                               goto last;
 #if KL
-                          if (d == 5) { /* DATAI TIM is two words */
+                          if (d == 4 || d == 5) { /* DATAI TIM, MTR is two words */
                               AB = (AB + 1) & RMASK;
                               MB = BR;
                               if (Mem_write(pi_cycle, 0))
@@ -8746,14 +8827,23 @@ t_stat
 rtc_srv(UNIT * uptr)
 {
     int32 t;
+#if KL
+    uint64 temp;
+#endif
     t = sim_rtcn_calb (rtc_tps, TMR_RTC);
     sim_activate_after(uptr, 1000000/rtc_tps);
     tmxr_poll = t/2;
+#if PDP6 | KA | KI
     clk_flg = 1;
     if (clk_en) {
         sim_debug(DEBUG_CONO, &cpu_dev, "CONO timmer\n");
         set_interrupt(4, clk_irq);
     }
+#endif
+#if KL
+    update_times(rtc_tim);
+    rtc_tim = (1000000/rtc_tps);
+#endif
     return SCPE_OK;
 }
 
