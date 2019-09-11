@@ -527,7 +527,7 @@ int auxcpu_write (int addr, t_uint64);
 #define NUM_DEVS_TU     1
 #define NUM_DEVS_PMP    WAITS
 #define NUM_DEVS_DKB    WAITS
-#define NUM_DEVS_PD     ITS
+#define NUM_DEVS_PD     ITS | KL_ITS
 #define NUM_DEVS_IMX    ITS
 #define NUM_DEVS_STK    ITS
 #define NUM_DEVS_TK10   ITS
