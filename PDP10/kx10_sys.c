@@ -42,11 +42,8 @@
    sim_load             binary loader
 */
 
-#if KLB
-char sim_name[] = "KL-10B";
-#endif
-#if KLA
-char sim_name[] = "KL-10A";
+#if KL
+char sim_name[] = "KL-10";
 #endif
 #if KI
 char sim_name[] = "KI-10";
@@ -162,6 +159,9 @@ DEVICE *sim_devices[] = {
     &wcnsls_dev,
 #endif
 #endif
+#if (NUM_DEVS_III > 0)
+    &iii_dev,
+#endif
 #if NUM_DEVS_IMP > 0
     &imp_dev,
 #endif
@@ -203,7 +203,8 @@ DEVICE *sim_devices[] = {
 const char *sim_stop_messages[] = {
     "Unknown error",
     "HALT instruction",
-    "Breakpoint"
+    "Breakpoint",
+    "Invalid access"
      };
 
 /* Simulator debug controls */
@@ -556,6 +557,7 @@ t_stat load_sav (FILE *fileref)
         wc = (int32)(data >> 18);
         pa = (uint32) (data & RMASK);
         if (wc == (OP_JRST << 9)) {
+            printf("Start addr=%06o\n", pa);
             PC = pa;
             return SCPE_OK;
         }
@@ -673,12 +675,16 @@ for (i = 0; i < ndir; i = i + 2) {                      /* loop thru dir */
                  if (get_word(fileref, &pagbuf[k]))
                      return SCPE_FMT;
             }
+//            wc = sim_fread (pagbuf, sizeof (uint64), PAG_SIZE, fileref);
+ //           if (wc < PAG_SIZE)
+  //              return SCPE_FMT;
             fpage++;
             }
         ma = mpage << PAG_V_PN;                         /* mem addr */
         for (k = 0; k < PAG_SIZE; k++, ma++) {          /* copy buf to mem */
             if (ma > MEMSIZE)
                 return SCPE_NXM;
+fprintf(stderr, "M %06o %012llo\n", ma, pagbuf[k]);
             M[ma] = fpage? (pagbuf[k] & FMASK): 0;
             }                                           /* end copy */
         }                                               /* end rpt */

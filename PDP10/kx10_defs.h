@@ -174,6 +174,9 @@ extern DEBTAB crd_debug[];
 #define BIT1     00200000000000LL
 #define BIT2     00100000000000LL
 #define BIT3     00040000000000LL
+#define BIT4     00020000000000LL
+#define BIT5     00010000000000LL
+#define BIT6     00004000000000LL
 #define BIT7     00002000000000LL
 #define BIT8     00001000000000LL
 #define BIT9     00000400000000LL
@@ -405,6 +408,7 @@ extern DEVICE   pmp_dev;
 extern DEVICE   dk_dev;
 extern DEVICE   pd_dev;
 extern DEVICE   dpy_dev;
+extern DEVICE   iii_dev;
 extern DEVICE   imx_dev;
 extern DEVICE   imp_dev;
 extern DEVICE   ch10_dev;
@@ -514,7 +518,7 @@ int auxcpu_write (int addr, t_uint64);
 #define NUM_DEVS_DK     0
 #define NUM_DEVS_DP     0
 #define NUM_DEVS_TTY    1
-#define NUM_LINES_TTY   16
+#define NUM_LINES_TTY   40
 #else
 #define NUM_DEVS_RC     1
 #define NUM_DEVS_DT     1
@@ -527,6 +531,7 @@ int auxcpu_write (int addr, t_uint64);
 #define NUM_DEVS_TU     1
 #define NUM_DEVS_PMP    WAITS
 #define NUM_DEVS_DKB    WAITS
+#define NUM_DEVS_III    0
 #define NUM_DEVS_PD     ITS | KL_ITS
 #define NUM_DEVS_IMX    ITS
 #define NUM_DEVS_STK    ITS

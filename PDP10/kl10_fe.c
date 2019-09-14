@@ -104,8 +104,8 @@
 #define SEC_RTM        05400
 #define SEC_CMDMSK     07400
 #define DTE_MON        00000001     /* Save in unit1 STATUS */
-#define SEC_CLK        00000001     /* Clock enabled */
-#define DTE_ACK_CTY    00000002     /* Send CTY Ack */
+#define SEC_CLK        00000002     /* Clock enabled */
+#define ITS_ON         00000004     /* ITS Is alive */
 
 /* Primary or Queued protocol addresses */
 #define PRI_CMTW_0     0
@@ -157,6 +157,20 @@
 #define PRI_EMCLK      007          /* Clock */
 #define PRI_EMFED      010          /* Front end device */
 
+#if KL_ITS
+/* ITS Timesharing protocol locations */
+#define ITS_DTEVER     0400         /* Protocol version and number of devices */
+#define ITS_DTECHK     0401         /* Increment at 60Hz. Ten setom 2 times per second */
+#define ITS_DTEINP     0402         /* Input from 10 to 11. Line #, Count */
+#define ITS_DTEOUT     0403         /* Output from 10 to 11 Line #, Count */
+#define ITS_DTELSP     0404         /* Line # to set speed of */
+#define ITS_DTELPR     0405         /* Parameter */
+#define ITS_DTEOST     0406         /* Line # to start output on */
+#define ITS_DTETYI     0410         /* Received char (Line #, char) */
+#define ITS_DTEODN     0411         /* Output done (Line #, buffer size) */
+#define ITS_DTEHNG     0412         /* Hangup/dialup */
+#endif
+
 #define TMR_RTC        2
 
 extern int32 tmxr_poll;
@@ -164,6 +178,9 @@ t_stat dte_devio(uint32 dev, uint64 *data);
 int    dte_devirq(uint32 dev, int addr);
 void   dte_second(UNIT *uptr);
 void   dte_primary(UNIT *uptr);
+#if KL_ITS
+void   dte_its(UNIT *uptr);
+#endif
 void   dte_transfer(UNIT *uptr);
 void   dte_function(UNIT *uptr);
 int    dte_start(UNIT *uptr);
@@ -178,6 +195,11 @@ t_stat dte_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cpt
 const char *dte_description (DEVICE *dptr);
 extern uint64  SW;                                   /* Switch register */
 
+#if KL_ITS
+#define QITS         (cpu_unit[0].flags & UNIT_ITSPAGE)
+#else
+#define QITS         0
+#endif
 
 #define STATUS            u3
 #define CNT               u4
@@ -319,6 +341,7 @@ DEVICE lpt_dev = {
 #if (NUM_DEVS_TTY > 0)
 
 struct _buffer tty_out[NUM_LINES_TTY], tty_in[NUM_LINES_TTY];
+struct _buffer tty_done, tty_hang;
 TMLN     tty_ldsc[NUM_LINES_TTY] = { 0 };            /* Line descriptors */
 TMXR     tty_desc = { NUM_LINES_TTY, 0, 0, tty_ldsc };
 int      tty_connect[NUM_LINES_TTY];;
@@ -479,6 +502,14 @@ void dte_second(UNIT *uptr) {
 #endif
     /* read command */ 
     word = M[SEC_DTCMD + base];
+#if KL_ITS
+    if (word == 0 && QITS && (uptr->STATUS & ITS_ON) != 0) {
+        dte_its(uptr);
+        uptr->STATUS |= DTE_10DB;
+        uptr->STATUS &= ~DTE_11DB;
+        return;
+    }
+#endif
     /* Do it */
     sim_debug(DEBUG_DETAIL, &dte_dev, "CTY secondary %012llo\n", word);
     switch(word & SEC_CMDMSK) {
@@ -564,10 +595,141 @@ enter_pri:
          break;
      }
      /* Acknowledge command */
+     M[SEC_DTCMD + base] = 0;
      M[SEC_DTFLG + base] = FMASK;
      uptr->STATUS |= DTE_10DB;
      uptr->STATUS &= ~DTE_11DB;
 }
+
+#if KL_ITS
+void dte_its(UNIT *uptr) {
+     uint64     word;
+     char       ch;
+     uint16     data;
+     int        cnt;
+     int        ln;
+     t_stat     r;
+
+     /* Check for output Start */
+     word = M[ITS_DTEOST];
+     if ((word & SMASK) == 0) {
+         if (((tty_done.in_ptr + 1) & 0xff) != tty_done.out_ptr) {
+              tty_done.buff[tty_done.in_ptr] = (char)(word & 0xff);
+              tty_done.in_ptr = (tty_done.in_ptr + 1) & 0xff;
+              M[ITS_DTEOST] = FMASK;
+              sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS DTEOST = %012llo\n", word);
+         }
+     }
+     /* Check for input Start */
+     word = M[ITS_DTEINP];
+     if ((word & SMASK) == 0) {
+         M[ITS_DTEINP] = FMASK;
+         sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS DTEINP = %012llo\n", word);
+     }
+     /* Check for output Start */
+     word = M[ITS_DTEOUT];
+     if ((word & SMASK) == 0) {
+         cnt = word & 017777;
+         ln = ((word >> 18) & 077) - 1;
+         sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS DTEOUT = %012llo\n", word);
+         while (cnt > 0) {
+             if (ln < 0) {
+                 if (!Mem_read_byte(0, &data)) 
+                    return;
+                 ch = (data >> 8) & 0177;
+                 sim_debug(DEBUG_DETAIL, &dte_dev, "CTY type %x\n", ch);
+                 ch = sim_tt_outcvt( ch, TT_GET_MODE(uptr->flags));
+                 if ((r = sim_putchar_s (ch)) != SCPE_OK) /* Output errors */
+                      return;
+                 cnt--;
+                 if (cnt) {
+                     ch = data & 0177;
+                     sim_debug(DEBUG_DETAIL, &dte_dev, "CTY type %x\n", ch);
+                     ch = sim_tt_outcvt( ch, TT_GET_MODE(uptr->flags));
+                     if ((r = sim_putchar_s (ch)) != SCPE_OK) /* Output errors */
+                          return;
+                     cnt--;
+                 }
+             } else {
+                 if (!Mem_read_byte(0, &data)) 
+                    return;
+                 ch = (data >> 8) & 0177;
+                 if (((tty_out[ln].in_ptr + 1) & 0xff) == tty_out[ln].out_ptr)
+                    return;
+                 sim_debug(DEBUG_DETAIL, &dte_dev, "TTY queue %x %d\n", ch, ln);
+                 tty_out[ln].buff[tty_out[ln].in_ptr] = ch;
+                 tty_out[ln].in_ptr = (tty_out[ln].in_ptr + 1) & 0xff;
+                 cnt--;
+                 if (cnt) {
+                     ch = data & 0177;
+                     if (((tty_out[ln].in_ptr + 1) & 0xff) == tty_out[ln].out_ptr)
+                        return;
+                     sim_debug(DEBUG_DETAIL, &dte_dev, "TTY queue %x %d\n", ch, ln);
+                     tty_out[ln].buff[tty_out[ln].in_ptr] = ch;
+                     tty_out[ln].in_ptr = (tty_out[ln].in_ptr + 1) & 0xff;
+                     cnt--;
+                 }
+             }
+         }
+         /* If on CTY Queue output done response */
+         if (ln < 0) {
+             if (((tty_done.in_ptr + 1) & 0xff) != tty_done.out_ptr) {
+                  tty_done.buff[tty_done.in_ptr] = (char)(0 & 0xff);
+                  tty_done.in_ptr = (tty_done.in_ptr + 1) & 0xff;
+             }
+         }
+         M[ITS_DTEOUT] = FMASK;
+         uptr->STATUS |= DTE_11DN;
+         if (uptr->STATUS & DTE_PIE)
+             set_interrupt(DTE_DEVNUM, uptr->STATUS);
+         sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS DTEOUT = %012llo\n", word);
+     }
+     /* Check for line speed */
+     word = M[ITS_DTELSP];
+     if ((word & SMASK) == 0) {
+         M[ITS_DTELSP] = FMASK;
+         sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS DTELSP = %012llo %012llo\n", word, M[ITS_DTELPR]);
+     }
+#if 0
+     /* Check for input */
+     word = M[ITS_DTETYI];
+     if ((word & SMASK) != 0) {
+        int   l = uptr->CNT;
+        do {
+           if (tty_connect[l]) {
+//         if ((ch = dte_unit[1].CHHOLD) != 0) {
+//             word = ch;
+//             dte_unit[1].CHHOLD = 0;
+//             M[ITS_DTETYI] = word;
+//             /* Tell 10 something is ready */
+//             uptr->STATUS |= DTE_10DB;
+//             if (uptr->STATUS & DTE_PIE)
+//                 set_interrupt(DTE_DEVNUM, uptr->STATUS);
+//         }
+         sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS DTETYI = %012llo\n", word);
+     }
+#endif
+     /* Check for output done */
+     word = M[ITS_DTEODN];
+     if ((word & SMASK) != 0) {
+         if (tty_done.in_ptr != tty_done.out_ptr) {
+              ln = tty_done.buff[tty_done.out_ptr];
+              tty_done.out_ptr = (tty_done.out_ptr + 1) & 0xff;
+              word = M[ITS_DTEODN] = (((uint64)ln) << 18)|1;
+              sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS DTEODN = %012llo\n", word);
+              /* Tell 10 something is ready */
+              uptr->STATUS |= DTE_10DB;
+              if (uptr->STATUS & DTE_PIE)
+                  set_interrupt(DTE_DEVNUM, uptr->STATUS);
+         }
+     }
+     /* Check for hangup */
+     word = M[ITS_DTEHNG];
+     if ((word & SMASK) == 0) {
+         sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS DTEHNG = %012llo\n", word);
+     }
+}
+#endif
 
 /* Handle primary protocol */
 void dte_primary(UNIT *uptr) {
@@ -1049,10 +1211,12 @@ t_stat dtei_svc (UNIT *uptr)
     uint16   data1;
 
 #if KI_22BIT
+#if KL_ITS
+    if ((cpu_unit[0].flags & UNIT_ITSPAGE) == 0)
+#endif
     base = eb_ptr;
 #endif
-
-    sim_clock_coschedule (uptr, 1000);
+    sim_activate (uptr, 1000);
     if ((uptr->STATUS & DTE_SEC) == 0) {
         dte_function(uptr);  /* Process queue */
         dte_start(optr);
@@ -1067,6 +1231,24 @@ t_stat dtei_svc (UNIT *uptr)
         uptr->CHHOLD = ch;
     }
     sim_debug(DEBUG_DETAIL, &dte_dev, "CTY char %x\n", ch);
+#if KL_ITS
+    if (QITS && (optr->STATUS & ITS_ON) != 0) {
+        uint64  word = M[ITS_DTETYI];
+        if ((word & SMASK) != 0) {
+            if (ch != 0) {
+                word = ch;
+                uptr->CHHOLD = 0;
+                M[ITS_DTETYI] = word;
+                /* Tell 10 something is ready */
+                optr->STATUS |= DTE_10DB;
+                if (optr->STATUS & DTE_PIE)
+                    set_interrupt(DTE_DEVNUM, optr->STATUS);
+                sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS DTETYI = %012llo\n", word);
+             }
+       }
+       return SCPE_OK;
+    }
+#endif
     if (optr->STATUS & DTE_SEC) {
          if (optr->STATUS & DTE_MON && M[SEC_DTMTI + base] == 0) {
              sim_debug(DEBUG_DETAIL, &dte_dev, "CTY char %x\n", ch & 0177);
@@ -1078,6 +1260,10 @@ t_stat dtei_svc (UNIT *uptr)
              uptr->CHHOLD = 0;
          }
     } else {
+#if KL_ITS
+         if (QITS)
+            return SCPE_OK;
+#endif
          data1 = (PRI_EMCTY << 8) | ch;
          if (dte_queue(uptr, PRI_EMLNC, PRI_EMCTY, 1, &data1) != 0)
              uptr->CHHOLD = 0;
@@ -1091,7 +1277,6 @@ dtertc_srv(UNIT * uptr)
     int32 t;
     UNIT     *optr = &dte_unit[0];
 
-    t = sim_rtcn_calb (rtc_tps, TMR_RTC);
     sim_activate_after(uptr, 1000000/rtc_tps);
     if (uptr->STATUS & SEC_CLK) {
         rtc_tick++;
@@ -1111,6 +1296,22 @@ dtertc_srv(UNIT * uptr)
                           rtc_tick, rtc_wait, optr->STATUS);
         }
     }
+#if KL_ITS
+        if (QITS) {
+            uint64     word;
+
+            word = (M[ITS_DTECHK] + 1) & FMASK;
+            if (word == 0) {
+                optr->STATUS |= ITS_ON;
+                sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS ON\n");
+            } else if (word >= (15 * 60)) {
+                optr->STATUS &= ~ITS_ON;
+                word = 15 * 60;
+                sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS OFF\n");
+            }
+            M[ITS_DTECHK] = word;
+        }
+#endif
     if ((optr->STATUS & DTE_SEC) == 0) {
         int      addr = 0144 + eb_ptr;
         uint64   word;
@@ -1409,9 +1610,7 @@ const char *lpt_description (DEVICE *dptr)
 t_stat ttyi_svc (UNIT *uptr)
 {
     int32    ln;
-    int      n = 0;
     TMLN     *lp;
-    uint16   data1[32];
     int      flg;
 
     if ((uptr->flags & UNIT_ATT) == 0)                  /* attached? */
@@ -1419,68 +1618,45 @@ t_stat ttyi_svc (UNIT *uptr)
 
     sim_clock_coschedule(uptr, tmxr_poll);              /* continue poll */
 
-    /* Check if room in queue for at least one packet */
-    if (((dte_out_res + 1) & 0x1f) == dte_out_ptr) {
-        sim_debug(DEBUG_DATA, &dte_dev, "DTE: func out full %d %d\n",
-                          dte_out_res, dte_out_ptr);
-        return SCPE_OK;
+    /* If we have room see if any new lines */
+    if (((tty_hang.in_ptr + 1) & 0xff) != tty_hang.out_ptr) {
+        ln = tmxr_poll_conn (&tty_desc);                    /* look for connect */
+        if (ln >= 0) {                                      /* got one? rcv enb*/
+            tty_hang.buff[tty_hang.in_ptr] = ln + 1;
+            tty_hang.in_ptr = (tty_hang.in_ptr + 1) & 0xff;
+            tty_connect[ln] = 1;
+            sim_debug(DEBUG_DETAIL, &tty_dev, "TTY line connect %d\n", ln);
+        }
     }
     
-    ln = tmxr_poll_conn (&tty_desc);                    /* look for connect */
-    if (ln >= 0) {                                      /* got one? rcv enb*/
-        tty_ldsc[ln].rcve = 1;
-        tty_ldsc[ln].xmte = 1;
-        data1[0] = ((ln + 1) << 8) | (ln + 1);
-        tty_connect[ln] = 1;
-        (void)dte_queue(&dte_unit[0], PRI_EMDSC, PRI_EMDLS, 1, data1);
-//        data1[0] = (ln + 1) << 8;
- //       /* Send out any data we got */
-  //      (void)dte_queue(&dte_unit[0], PRI_EMACK, PRI_EMDLS, 1, data1);
-        sim_debug(DEBUG_DETAIL, &tty_dev, "TTY line connect %d\n", ln);
-    }
     tmxr_poll_tx(&tty_desc);
     tmxr_poll_rx(&tty_desc);
 
-    /* Check if room in queue for at least one packet */
-    if (((dte_out_res + 1) & 0x1f) == dte_out_ptr) {
-        sim_debug(DEBUG_DATA, &dte_dev, "DTE: func out full %d %d\n", 
-                         dte_out_res, dte_out_ptr);
-        return SCPE_OK;
-    }
-    ln = uptr->CNT;
-    do {
-        flg = 0;
-        lp = &tty_ldsc[ln];
-        /* Check to see if any pending data for this line */
-        if (lp->rcve && tmxr_input_pending_ln(lp) > 0) {
-            int32 ch = tmxr_getc_ln (lp);
-            sim_debug(DEBUG_DETAIL, &tty_dev, "TTY recieve %d: %02x\n", ln, ch);
-            if ((ch & SCPE_BREAK) == 0) {                /* break? */
-                ch = sim_tt_inpcvt (ch, TT_GET_MODE(tty_unit[0].flags) | TTUF_KSR);
-                data1[n++] = ((ln + 1) << 8) | ch;
-            }
-            flg = 1;
-        }
-        if (++ln >= tty_desc.lines)
-            ln = 0;
-    } while (flg && n < 32);
-    uptr->CNT = ln;
-   
-    /* Send out any data we got */
-    if (n > 0)
-       (void)dte_queue(&dte_unit[0], PRI_EMLNC, PRI_EMDLS, n, data1);
-   
-    /* Look for lines that have been disconnected */
+    /* Scan each line for input */
     for (ln = 0; ln < tty_desc.lines; ln++) {
-        if (tty_connect[ln] == 1 && tty_ldsc[ln].conn == 0) {
-            data1[0] = (ln + 1) << 8;
-            if (dte_queue(&dte_unit[0], PRI_EMHUD, PRI_EMDLS, 1, data1) != 0) {
-                /* Check if disconnect */
+        lp = &tty_ldsc[ln];
+        flg = 1;
+        /* Spool up as much as we have room for */
+        while (flg && ((tty_out[ln].in_ptr + 1) & 0xff) != tty_out[ln].out_ptr) {
+            int32 ch = tmxr_getc_ln(lp);
+            if ((ch & TMXR_VALID) != 0) {
+                ch = sim_tt_inpcvt (ch, TT_GET_MODE(tty_unit[0].flags) | TTUF_KSR);
+                tty_in[ln].buff[tty_in[ln].in_ptr] = ch & 0377;
+                tty_in[ln].in_ptr = (tty_in[ln].in_ptr + 1) & 0xff;
+                sim_debug(DEBUG_DETAIL, &tty_dev, "TTY recieve %d: %02x\n", ln, ch);
+            } else
+                flg = 0;
+        }
+        /* Look for lines that have been disconnected */
+        if (tty_connect[ln] == 1 && lp->conn == 0) {
+            if (((tty_hang.in_ptr + 1) & 0xff) != tty_hang.out_ptr) {
+                tty_hang.buff[tty_hang.in_ptr] = ln + 1;
+                tty_hang.in_ptr = (tty_hang.in_ptr + 1) & 0xff;
                 tty_connect[ln] = 0;
                 sim_debug(DEBUG_DETAIL, &tty_dev, "TTY line disconnect %d\n", ln);
             }
         }
-    }
+    } 
 
     return SCPE_OK;
 }
@@ -1503,14 +1679,10 @@ t_stat ttyo_svc (UNIT *uptr)
        lp = &tty_ldsc[ln];
        if (lp->conn == 0)
            continue;
+       if (((tty_done.in_ptr + 1) & 0xff) == tty_done.out_ptr)
+           return SCPE_OK;
        if (tty_out[ln].out_ptr == tty_out[ln].in_ptr) 
            continue;
-       /* Check if room in queue for at least one packet */
-       if (((dte_out_res + 1) & 0x1f) == dte_out_ptr) {
-           sim_debug(DEBUG_DATA, &dte_dev, "DTE: func out full %d %d\n", 
-                         dte_out_res, dte_out_ptr);
-           return SCPE_OK;
-       }
        while (tty_out[ln].out_ptr != tty_out[ln].in_ptr) {
            int32 ch = tty_out[ln].buff[tty_out[ln].out_ptr];
            ch = sim_tt_outcvt(ch, TT_GET_MODE (tty_unit[0].flags) | TTUF_KSR);
@@ -1521,20 +1693,20 @@ t_stat ttyo_svc (UNIT *uptr)
            else if (r == SCPE_LOST) {
                tty_out[ln].out_ptr = tty_out[ln].in_ptr = 0;
                continue;
-           }
+           } else
+               continue;
        }
-       data1[n++] = (ln + 1) << 8;
-       /* Send out any data we got */
-       if (n > 32) {
-          (void)dte_queue(&dte_unit[0], PRI_EMACK, PRI_EMDLS, n, data1);
-          n = 0;
-       }
-    } 
-   
-    /* Send out any data we got */
-    if (n > 0) 
-       (void)dte_queue(&dte_unit[0], PRI_EMACK, PRI_EMDLS, n, data1);
-
+       tty_done.buff[tty_done.in_ptr] = ln + 1;
+       tty_done.in_ptr = (tty_done.in_ptr + 1) & 0xff;
+#if KL_ITS
+       /* Tell 10 we have something for it */
+       if (QITS) {
+           dte_unit[0].STATUS |= DTE_10DB;
+           if (dte_unit[0].STATUS & DTE_PIE)
+               set_interrupt(DTE_DEVNUM, dte_unit[0].STATUS);
+       } 
+#endif
+    }
     return SCPE_OK;
 }
 

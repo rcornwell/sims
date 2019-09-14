@@ -1206,8 +1206,10 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
 
      case CONO:
         eb_ptr = (*data & 017777) << 9;
-        for (i = 0; i < 512; i++)
+        for (i = 0; i < 512; i++) {
             e_tlb[i] = 0;
+            u_tlb[i] = 0;
+        }
         for (;i < 546; i++)
             u_tlb[i] = 0;
         page_enable = (*data & 020000) != 0;
@@ -1224,17 +1226,17 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
 
            page &= ~7;
            /* Map the page */
-           for(i = 0; i < 8; i++)
+           for(i = 0; i < 8; i++) {
               u_tlb[page+i] = 0;
-           for(i = 0; i < 8; i++)
               e_tlb[page+i] = 0;
+           }
            /* If not user do exec mappping */
            if (/*!uf && !t20_page &&*/ (page & 0740) == 0340) {
               /* Pages 340-377 via UBT */
               page += 01000 - 0340;
               upmp = 1;
-               for(i = 0; i < 8; i++)
-                  u_tlb[page+i] = 0;
+              for(i = 0; i < 8; i++)
+                 u_tlb[page+i] = 0;
            }
         } else {
             res = *data;
@@ -1257,8 +1259,10 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
             }
             if (res & BIT2) {
                 ub_ptr = (res & 017777) << 9;
-                for (i = 0; i < 512; i++)
+                for (i = 0; i < 512; i++) {
                    u_tlb[i] = 0;
+                   e_tlb[i] = 0;
+                }
                 for (;i < 546; i++)
                    u_tlb[i] = 0;
            }
@@ -1290,6 +1294,7 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
  */
 t_stat dev_cca(uint32 dev, uint64 *data) {
     irq_flags |= 020;
+    *data = 0;
     check_apr_irq();
     return SCPE_OK;
 }
@@ -1618,8 +1623,8 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
                e_tlb[i] = u_tlb[i] = 0;
             for (;i < 546; i++)
                u_tlb[i] = 0;
-            user_addr_cmp = (res & 00020000000000LL) != 0;
-            small_user =    (res & 00040000000000LL) != 0;
+            user_addr_cmp = (res & BIT4) != 0;
+            small_user =    (res & BIT3) != 0;
             fm_sel = (uint8)(res >> 29) & 060;
        }
        pag_reload = 0;
@@ -1634,9 +1639,9 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
            res |= 020000;
        res |= ((uint64)(ub_ptr)) << 9;
        if (user_addr_cmp)
-           res |= 00020000000000LL;
+           res |= BIT4;
        if (small_user)
-           res |= 00040000000000LL;
+           res |= BIT3;
        res |= ((uint64)(fm_sel)) << 29;
        *data = res;
        sim_debug(DEBUG_DATAIO, &cpu_dev, "DATAI PAG %012llo\n", *data);
@@ -1933,9 +1938,19 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
         data &= RMASK;
         pg = 0;
         switch(data >> 16) {
-        case 0:  break;              /* No access */
+        case 0: 
+                 fault_data = 033LL << 30 |((uf)?SMASK:0);
+                 page_fault = 1;
+                 return 0;           /* No access */
         case 1:                      /* Read Only */
-        case 2:  pg = RSIGN;  break; /* R/W First */
+        case 2:                      /* R/W First */
+                 if (wr) {
+                     fault_data = 024LL << 30 |((uf)?SMASK:0);
+                     page_fault = 1;
+                     return 0;
+                 }
+                 pg = RSIGN;
+                 break;
         case 3:  pg = RSIGN|0100000;  break; /* R/W */
         }
         pg |= (data & 017777) << 1;
@@ -2257,8 +2272,16 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
     /* If not valid, go refill it */
     if (data == 0) {
         data = load_tlb(uf, page, upmp, wr, 1, flag);
-        if (data == 0 && page_fault)
+        if (data == 0 && page_fault) {
+            fault_data |= ((uint64)addr);
+#if KL_ITS
+            if (QITS && (xct_flag & 020) != 0) {
+                PC = (PC + 1) & AMASK;
+                page_fault = 0;
+            }
+#endif
             return 0;
+        }
     }
     *loc = ((data & 017777) << 9) + (addr & 0777);
 
@@ -2283,23 +2306,33 @@ fprintf(stderr, "Page fault %06o a=%o wr=%o w=%o %06o\n\r", addr, (data & RSIGN)
         } else {
            e_tlb[page] = 0;
         }
-        if (data & 0400000LL)        /* A */
-           fault_data |= 00100000000000LL; /* BIT2 */
-        if (data & 0200000LL)        /* P */
-           fault_data |= 00004000000000LL; /* BIT6 */
-        if (data & 0100000LL)        /* W */
-           fault_data |= 00040000000000LL; /* BIT3 */
-        if (data & 0040000LL)        /* S */
-           fault_data |= 00020000000000LL; /* BIT4 */
-        if (wr)                      /* T */
-           fault_data |= 00010000000000LL; /* BIT5 */
         if (data & 0020000LL)        /* C */
-           fault_data |= 00002000000000LL; /* BIT7 */
+           fault_data |= BIT7;       /* BIT7 */
+        if (data & 0200000LL)        /* P */
+           fault_data |= BIT6;       /* BIT6 */
 #if KL_ITS
-        if (QITS && (xct_flag & 020) != 0)
-           PC = (PC + 1) & AMASK;
-        else
+        if (QITS) {
+            if ((xct_flag & 020) != 0) {
+                PC = (PC + 1) & AMASK;
+                page_fault = 0;
+            } else if ((data & RSIGN) == 0) {
+                fault_data = ((uint64)addr) | 033LL << 30 |((uf)?SMASK:0);
+                page_fault = 1;
+            } else {// if (wr & ((data & 0100000) == 0)) {
+                fault_data = ((uint64)addr) | 024LL << 30 |((uf)?SMASK:0);
+                page_fault = 1;
+            }
+            return 0;
+        }
 #endif
+        if (wr)                      /* T */
+           fault_data |= BIT5;       /* BIT5 */
+        if (data & 0040000LL)        /* S */
+           fault_data |= BIT4;       /* BIT4 */
+        if (data & 0100000LL)        /* W */
+           fault_data |= BIT3;       /* BIT3 */
+        if (data & 0400000LL)        /* A */
+           fault_data |= BIT2;       /* BIT2 */
         page_fault = 1;
         return 0;
     }
@@ -4255,7 +4288,7 @@ unasign:
                   brk_flags = 017 & (MB >> 23);
                   AB = (AB + 1) & RMASK;
                   MB = M[AB];                /* WD 2 */
-                  fault_data = MB;
+                  FM[(6<<4)|0] = MB;
                   AB = (AB + 1) & RMASK;
                   MB = M[AB];                /* WD 3 */
                   dbr1 = MB;
@@ -4279,7 +4312,7 @@ unasign:
                   MB |= ((uint64)brk_flags) << 23;
                   M[AB] = MB;                 /* WD 1 */
                   AB = (AB + 1) & RMASK;
-                  MB = fault_data;
+                  MB = FM[(6<<4)|0];
                   M[AB] = MB;                 /* WD 2 */
                   AB = (AB + 1) & RMASK;
                   MB = dbr1;
@@ -6718,7 +6751,6 @@ xjrstf:
                            goto xjrstf;
                        /* Fall through */
 
-
               case 002: /* JRSTF */
                        BR = AR >> 23; /* Move into position */
 jrstf:
@@ -6932,8 +6964,8 @@ jrstf:
               if (!page_enable || AB < 020) {
                   AR = AB; /* direct map */
                   if (flag1)                 /* U */
-                     AR |= SMASK;            /* BIT8 */
-                  AR |= BIT8|BIT2|00040000000000LL;    /* BIT3 */
+                     AR |= SMASK;            /* BIT0 */
+                  AR |= BIT2|BIT3|BIT4|BIT8;
                   set_reg(AC, AR);
                   break;
               }
@@ -6952,16 +6984,16 @@ jrstf:
               if (BR & 0400000LL) {      /* A */
                  AR = ((AR & 017777LL) << 9) + (AB & 0777);
                  if (flag1)                 /* U */
-                    AR |= SMASK;            /* BIT8 */
-                 AR |= 00100000000000LL;    /* BIT2 */
+                    AR |= SMASK;            /* BIT0 */
+                 AR |= BIT2;                /* BIT2 */
                  if (BR & 0200000LL)        /* P */
-                    AR |= 00004000000000LL; /* BIT6 */
+                    AR |= BIT6;             /* BIT6 */
                  if (BR & 0100000LL)        /* W */
-                    AR |= 00040000000000LL; /* BIT3 */
+                    AR |= BIT3;             /* BIT3 */
                  if (BR & 0040000LL)        /* S */
-                    AR |= 00020000000000LL; /* BIT4 */
+                    AR |= BIT4;             /* BIT4 */
                  if (BR & 0020000LL)        /* C */
-                    AR |= 00002000000000LL; /* BIT7 */
+                    AR |= BIT7;             /* BIT7 */
               } else
                  AR = (f & 01740) ? 0 : 0377777LL;
               AR |= BIT8;
@@ -7730,6 +7762,12 @@ test_op:
                   goto muuo;
               } else {
                   int d = ((IR & 077) << 1) | ((AC & 010) != 0);
+#if KL
+                  if (d == 3) {
+                      irq_flags |= 020;
+                      goto last;
+                  }
+#endif
 fetch_opr:
                   switch(AC & 07) {
                   case 0:     /* 00 BLKI */
@@ -7864,6 +7902,12 @@ last:
         }
 fprintf(stderr, "Page fault %06o %012llo %06o\n\r", PC, fault_data, FLAGS << 5);
         BYF5 = 0;
+#if KL_ITS
+        if (QITS) {
+            AB = eb_ptr + 0500;
+            FM[(6<<4)|0] = fault_data;
+        } else
+#endif
         AB = ub_ptr + 0500;
         MB = fault_data;
         Mem_write_nopage();
