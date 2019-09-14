@@ -1216,7 +1216,7 @@ t_stat dtei_svc (UNIT *uptr)
 #endif
     base = eb_ptr;
 #endif
-    sim_activate (uptr, 1000);
+    sim_clock_coschedule (uptr, tmxr_poll);
     if ((uptr->STATUS & DTE_SEC) == 0) {
         dte_function(uptr);  /* Process queue */
         dte_start(optr);
