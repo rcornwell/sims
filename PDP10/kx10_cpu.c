@@ -1934,6 +1934,11 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
         data = M[dbr + pg];
 //fprintf(stderr, "Load page %06o dbr%012llo pg%06o data=%012llo -> ", page, dbr, pg, data);
         if ((page & 02) == 0)
+            data &= ~0160000000000LL;
+        else
+            data &= ~0160000LL;
+        M[dbr + pg] = data;
+        if ((page & 02) == 0)
             data >>= 18;
         data &= RMASK;
         pg = 0;
@@ -2242,9 +2247,9 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
         uf = 0;
     else if (xct_flag != 0 && !uf && !fetch) {
 //fprintf(stderr, "PXCT ir=%03o pc=%06o ad=%06o x=%02o c=%o b=%o p=%o w=%o", IR, PC, addr, xct_flag, cur_context, BYF5, ptr_flg, wr);
-        if (((xct_flag & 8) != 0 && cur_context) ||
+        if (((xct_flag & 8) != 0 && cur_context && !ptr_flg) ||
             ((xct_flag & 4) != 0 && !cur_context && !BYF5 && !ptr_flg) ||
-            ((xct_flag & 2) != 0 && !cur_context && ptr_flg) ||
+            ((xct_flag & 2) != 0 && cur_context && ptr_flg) ||
             ((xct_flag & 1) != 0 && !cur_context && BYF5 )) {
             uf = (FLAGS & USERIO) != 0;
             pub = (FLAGS & PRV_PUB) != 0;
@@ -3999,11 +4004,15 @@ no_fetch:
 #if KL
 //            if (xct_flag != 0)
 //fprintf(stderr, "PXCT ir=%03o pc=%06o ad=%06o x=%02o m=%012llo\n\r", IR, PC, AB, xct_flag, MB);
-            if ((xct_flag & 8) != 0 && (FLAGS & USER) == 0)
-               AR = MB = (AB + FM[prev_ctx|ix]) & FMASK;
+            if (((xct_flag & 8) != 0 && (FLAGS & USER) == 0) ||
+                ((xct_flag & 2) != 0 && (FLAGS & USER) == 0 && ptr_flg))
+               AR = FM[prev_ctx|ix];
             else
-#endif
+               AR = get_reg(ix);
+             AR = MB = (AB + AR) & FMASK;
+#else
              AR = MB = (AB + get_reg(ix)) & FMASK;
+#endif
              AB = MB & RMASK;
          }
          if (IR != 0254)
@@ -5422,7 +5431,7 @@ unasign:
 #if KL
               if (AC != 0) { /* ADJBP */
                   modify = 1;
-                  if (Mem_read(0, !QITS, 0)) {
+                  if (Mem_read(0, 0, 0)) {
                       goto last;
                   }
                   AR = MB;
@@ -5466,8 +5475,10 @@ unasign:
                   modify = 1;
 #if KL
                   ptr_flg = 1;
-#endif
+                  if (Mem_read(0, 1, 0)) {
+#else
                   if (Mem_read(0, !QITS, 0)) {
+#endif
 #if PDP6
                       FLAGS |= BYTI;
 #endif
@@ -5488,7 +5499,11 @@ unasign:
                   AR &= PMASK;
                   AR |= (uint64)(SC & 077) << 30;
                   MB = AR;
+#if KL
+                  if (Mem_write(0, 1))
+#else
                   if (Mem_write(0, !QITS))
+#endif
                       goto last;
                   if ((IR & 04) == 0)
                       break;
@@ -5501,8 +5516,10 @@ unasign:
               if ((FLAGS & BYTI) == 0 || !BYF5) {
 #if KL
                   ptr_flg = 1;
-#endif
+                  if (Mem_read(0, 1, 0))
+#else
                   if (Mem_read(0, !QITS, 0))
+#endif
                       goto last;
                   AR = MB;
 ldb_ptr:
@@ -6773,6 +6790,16 @@ jrstf:
                        check_apr_irq();
                        break;
 
+              case 017:  /* Invalid */
+#if KL_ITS
+                       if (QITS) {
+                           BR = AR >> 23; /* Move into position */
+                           pi_enable = 1;
+                           goto jrstf;
+                       }
+#endif
+                       goto muuo;
+
               case 007:  /* XPCW */
 #if KLB
                        if (QKLB) {
@@ -6787,6 +6814,8 @@ jrstf:
                           goto xjrstf;
                        }
 #endif
+                       goto muuo;
+
               case 014:  /* SFM */
 #if KLB
                        if (QKLB) {
@@ -6796,12 +6825,13 @@ jrstf:
                           goto last;
                        }
 #endif
+                       goto muuo;
+
               case 003:  /* Invalid */
               case 011:  /* Invalid */
               case 013:  /* Invalid */
               case 015:  /* Invalid */
               case 016:  /* Invalid */
-              case 017:  /* Invalid */
                        goto muuo;
 
               case 004:  /* HALT */
