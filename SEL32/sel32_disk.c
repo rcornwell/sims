@@ -168,7 +168,6 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 #define SNS_UESS       0x01         /* Uncorrectable ECC error */
 
 #define ATTR      u6
-/* u6 */
 /* u6 holds drive attribute entry */
 /* provided by inch command for controller */
 /*
@@ -192,18 +191,9 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 /* allocated during attach command for each unit defined */
 struct ddata_t
 {
-    uint8       rbuf[1024]; /* read buffer, Sector buffer 768 or 1024 */
-    uint8       wbuf[1024]; /* write buffer, Sector buffer 768 or 1024 */
-    uint32      tstart;     /* Location of start of cyl/track/sect in data */
-    uint16      tsize;      /* Size of one track in byte */
-    uint16      ssize;      /* Size of one sector in bytes */
-    int16       ccyl;       /* Current Cylinder number */
     int16       cyl;        /* Cylinder head at */
     uint16      tpos;       /* Track position */
     uint16      spos;       /* Sector position */
-    uint16      dlen;       /* remaining in data */
-    uint16      rec;        /* Current record number */
-    uint16      count;      /* Remaining in current operation */
 };
 
 /* disk definition structure */
@@ -527,8 +517,8 @@ uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         /* so we will not have a map fault */
         for (i=0; i<dptr->numunits && i<8; i++) {       /* process all drives */
             up->ATTR = M[(mema>>2)+i+1];    /* save each unit's drive data */
-            sim_debug(DEBUG_CMD, dptr, "disk_startcmd ATTR data %x flags %x sec %x MHD %x FHD %x\n",
-                up->ATTR, i, (up->ATTR >> 24)&0xff, (up->ATTR >> 16)&0xff, (up->ATTR >> 8)&0xff, (up->ATTR&0xff));
+            sim_debug(DEBUG_CMD, dptr, "disk_startcmd %d ATTR data %x flags %x sec %x MHD %x FHD %x\n",
+                i, up->ATTR, (up->ATTR >> 24)&0xff, (up->ATTR >> 16)&0xff, (up->ATTR >> 8)&0xff, (up->ATTR&0xff));
             up++;                           /* next unit for this device */
         }
         sim_debug(DEBUG_CMD, dptr, "disk_startcmd done inch cmd addr %x\n", addr);
@@ -580,11 +570,14 @@ t_stat disk_srv(UNIT * uptr)
     struct ddata_t  *data = (struct ddata_t *)(uptr->DDATA);
     int             cmd = uptr->CMD & DSK_CMDMSK;
     int             type = GET_TYPE(uptr->flags);
-    int             count = data->count;
     uint32          trk, cyl;
     int             unit = (uptr - dptr->units);
+    int             len;
     int             i;
     uint8           ch;
+    int             tsize = disk_type[type].spt * disk_type[type].ssiz * 4; /* get track size in bytes */
+    int             ssize = disk_type[type].ssiz * 4;       /* disk sector size in bytes */
+    int             tstart;
     uint8           buf2[768];
     uint8           buf[768];
 
@@ -728,16 +721,13 @@ rezero:
         uptr->CMD |= DSK_STAR;           /* show we have seek STAR in STAR */
         /* calc the sector address of data */
         /* calculate file position in bytes of requested sector */
-        data->tstart = (cyl * disk_type[type].nhds * data->tsize) +
-            (trk * data->tsize) + (buf[3] * 0x300);
+        tstart = (cyl * disk_type[type].nhds * tsize) + (trk * tsize) + (buf[3] * 0x300);
         data->tpos = trk;               /* save the track/head number */
         data->spos = buf[3];            /* save the sector number */
-        data->count = 0;                /* no data seen yet */
-        data->rec = 0;                  /* number of bytes in this sector */
         sim_debug(DEBUG_DETAIL, dptr, "dsk_srv seek start %x trk %x sec %x\n",
-                       data->tstart, trk, buf[3]);
-        if ((sim_fseek(uptr->fileref, data->tstart, SEEK_SET)) != 0) {  /* seek home */
-            sim_debug(DEBUG_DETAIL, dptr, "dsk_srv Error on seek to %x\n", data->tstart);
+                       tstart, trk, buf[3]);
+        if ((sim_fseek(uptr->fileref, tstart, SEEK_SET)) != 0) {  /* seek home */
+            sim_debug(DEBUG_DETAIL, dptr, "dsk_srv Error on seek to %x\n", tstart);
         }
 
         /* Check if already on correct cylinder */
@@ -751,7 +741,7 @@ rezero:
         } else {
             sim_debug(DEBUG_DETAIL, dptr,
                 "dsk_srv calc sect addr seek start %x trk %x sec %x\n",
-                      data->tstart, trk, buf[3]);
+                      tstart, trk, buf[3]);
             uptr->CMD &= ~(0xffff);  /* remove old status bits & cmd */
             sim_activate(uptr, 20);
             chan_end(chsa, SNS_DEVEND|SNS_CHNEND);
@@ -765,8 +755,7 @@ rezero:
         uptr->STAR = 0;             /* set STAR to 0, 0, 0 */
         uptr->CMD &= ~(0xffff);     /* remove old cmd */
         uptr->CMD |= DSK_SCK;       /* show as seek command */
-        data->tstart = 0;           /* byte offset is 0 */
-        data->dlen = 0;             /* no data written yet */
+        tstart = 0;                 /* byte offset is 0 */
         /* Read in 1 dummy character for length to inhibit SLI posting */
         if (chan_read_byte(chsa, &buf[0])) {
             /* we have error, bail out */
@@ -797,21 +786,18 @@ rezero:
         break;
 
     case DSK_RD:            /* Read Data */
-        /* data->tstart has start of sector address in bytes */
         if ((uptr->CMD & DSK_READING) == 0) {    /* see if we are reading data */
             uptr->CMD |= DSK_READING;            /* read from disk starting */
-            data->dlen = 0;                      /* no data read yet */
             sim_debug(DEBUG_CMD, dptr,
-                "DISK READ starting unit=%d CMD %x count %d rec %d\n",
-                        unit, uptr->CMD, count, data->rec);
+                "DISK READ starting unit=%d CMD %x\n", unit, uptr->CMD);
         }
 
         if (uptr->CMD & DSK_READING) {       /* see if we are reading data */
             /* read in a sector of data from disk */
-            if ((count=sim_fread(buf, 1, data->ssize, uptr->fileref)) != data->ssize) {
+            if ((len=sim_fread(buf, 1, ssize, uptr->fileref)) != ssize) {
                 sim_debug(DEBUG_CMD, dptr,
                         "Error %d on read %d of diskfile cyl %d hds %d sec %d\n",
-                         count, data->ssize, data->cyl, data->tpos, data->spos);
+                         len, ssize, data->cyl, data->tpos, data->spos);
                 uptr->CMD &= ~(0xffff);  /* remove old status bits & cmd */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
@@ -820,24 +806,21 @@ rezero:
             sim_debug(DEBUG_CMD, dptr,
                   "disk_srv  after READ chsa %04x count %x\n", chsa, chp->ccw_count);
             /* process the next sector of data */
-            data->rec = count;              /* no bytes in sector yet */
-            count = 0;                      /* used here as a flag for short write */
-            for (i=0; i<(data->rec); i++) {
+            for (i=0; i<len; i++) {
                 ch = buf[i];                /* get a char from buffer */
                 if (chan_write_byte(chsa, &ch)) {   /* put a byte to memory */
                     sim_debug(DEBUG_DATAIO, dptr,
-                      "DISK Read %d bytes from dskfile cyl %d hds %d sec %d tstart %x\n",
-                       data->dlen+i, data->cyl, data->tpos, data->spos, data->tstart);
+                      "DISK Read %d bytes from dskfile cyl %d hds %d sec %d\n",
+                       i, data->cyl, data->tpos, data->spos);
                     uptr->CMD &= ~(0xffff);  /* remove old status bits & cmd */
                     chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
                     goto rddone;
                 }
             }
-            data->dlen += data->rec;        /* add byte read to total count */
 
             sim_debug(DEBUG_CMD, dptr,
-"DISK READ from sec end %d bytes end %d from diskfile cyl %d hds %d sec %d tstart %x\n",
-               data->dlen, data->ssize, data->cyl, data->tpos, data->spos, data->tstart);
+"DISK READ from sec end bytes end %d from diskfile cyl %d hds %d sec %d\n",
+               ssize, data->cyl, data->tpos, data->spos);
             data->spos++;
             /* set sector to read next one */
             if (data->spos >= (disk_type[type].spt)) {
@@ -857,8 +840,8 @@ rezero:
             /* see if we are done reading data */
             if (test_write_byte_end(chsa)) {
                 sim_debug(DEBUG_DATAIO, dptr,
-       "DISK Read complete Read %d bytes from diskfile cyl %d hds %d sec %d tstart %x\n",
-                    data->dlen, data->cyl, data->tpos, data->spos, data->tstart);
+       "DISK Read complete Read bytes from diskfile cyl %d hds %d sec %d\n",
+                     data->cyl, data->tpos, data->spos);
                 uptr->CMD &= ~(0xffff);  /* remove old status bits & cmd */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
             }
@@ -869,55 +852,50 @@ rddone:
         break;
 
     case DSK_WD:            /* Write Data */
-        /* data->tstart has start of sector address in bytes */
         if ((uptr->CMD & DSK_WRITING) == 0) {        /* see if we are writing data */
             uptr->CMD |= DSK_WRITING;        /* write to disk starting */
-            data->dlen = 0;                 /* no data written yet */
             sim_debug(DEBUG_CMD, dptr,
-                "DISK WRITE starting unit=%d CMD %x bytes %d rec %d\n",
-                unit, uptr->CMD, data->dlen, data->rec);
+                "DISK WRITE starting unit=%d CMD %x\n", unit, uptr->CMD);
         }
         if (uptr->CMD & DSK_WRITING) {       /* see if we are writing data */
             /* process the next sector of data */
-            data->rec = 0;                  /* no bytes in sector yet */
-            count = 0;                      /* used here as a flag for short read */
-            for (i=0; i<(data->ssize); i++) {
+            len = 0;                      /* used here as a flag for short read */
+            for (i=0; i<ssize; i++) {
                 if (chan_read_byte(chsa, &ch)) {    /* get a byte from memory */
                     /* if error on reading 1st byte, we are done writing */
                     if (i == 0) {
                         uptr->CMD &= ~(0xffff);  /* remove old status bits & cmd */
                         sim_debug(DEBUG_CMD, dptr,
-                      "DISK Wrote %d bytes to diskfile cyl %d hds %d sec %d tstart %x\n",
-                            data->dlen, data->cyl, data->tpos, data->spos, data->tstart);
+                      "DISK Wrote bytes to diskfile cyl %d hds %d sec %d\n",
+                            data->cyl, data->tpos, data->spos);
                         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
                         goto wrdone;
                     }
                     ch = 0;                 /* finish out the sector with zero */
-                    count++;                /* show we have no more data to write */
+                    len++;                /* show we have no more data to write */
                 }
                 buf2[i] = ch;               /* save the char */
             }
-            data->dlen += data->ssize;      /* add 1 sector of bytes */
             /* write the sector to disk */
-            if ((i=sim_fwrite(buf2, 1, data->ssize, uptr->fileref)) != data->ssize) {
+            if ((i=sim_fwrite(buf2, 1, ssize, uptr->fileref)) != ssize) {
                 sim_debug(DEBUG_CMD, dptr,
                     "Error %d on write %d to diskfile cyl %d hds %d sec %d\n",
-                    i, data->ssize, data->cyl, data->tpos, data->spos);
+                    i, ssize, data->cyl, data->tpos, data->spos);
                 uptr->CMD &= ~(0xffff);  /* remove old status bits & cmd */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
             }
-            if (count != 0) {           /* see if done with write command */
+            if (len != 0) {           /* see if done with write command */
                 sim_debug(DEBUG_DATAIO, dptr,
-                    "DISK WroteB %d bytes to diskfile cyl %d hds %d sec %d tstart %x\n",
-                    data->dlen, data->cyl, data->tpos, data->spos, data->tstart);
+                    "DISK WroteB  bytes to diskfile cyl %d hds %d sec %d\n",
+                     data->cyl, data->tpos, data->spos);
                 uptr->CMD &= ~(0xffff);  /* remove old status bits & cmd */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we done */
                 break;
             }
             sim_debug(DEBUG_CMD, dptr,
-       "DISK WR to sec end %d bytes end %d to diskfile cyl %d hds %d sec %d tstart %x\n",
-               data->dlen, data->ssize, data->cyl, data->tpos, data->spos, data->tstart);
+       "DISK WR to sec end bytes end %d to diskfile cyl %d hds %d sec %d\n",
+                ssize, data->cyl, data->tpos, data->spos);
             data->spos++;
             if (data->spos >= (disk_type[type].spt)) {
                 data->spos = 0;             /* number of sectors per track */
@@ -929,7 +907,7 @@ rddone:
                         /* EOM reached, abort */
                         sim_debug(DEBUG_DETAIL, dptr,
                             "Error %d on write %d to diskfile cyl %d hds %d sec %d\n",
-                            i, data->ssize, data->cyl, data->tpos, data->spos);
+                            i, ssize, data->cyl, data->tpos, data->spos);
                         uptr->CMD &= ~(0xffff);  /* remove old status bits & cmd */
                         chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                         break;
@@ -1006,12 +984,10 @@ t_stat disk_attach(UNIT *uptr, CONST char *file)
     uptr->DDATA = (void *)data;               /* save pointer to structure in DDATA */
     /* track size in bytes is sectors/track times words/sector time 4 bytse/word */
     tsize = disk_type[type].spt * disk_type[type].ssiz * 4; /* get track size in bytes */
-    data->tsize = tsize;                    /* save size of track in bytes */
     uptr->capac = disk_type[type].taus * disk_type[type].spau;
                                             /* disk capacity in sectors */
     ssize = disk_type[type].ssiz * 4;       /* disk sector size in bytes */
     uptr->capac *= ssize;                   /* disk capacity in bytes */
-    data->ssize = ssize;                    /* save sector size bytes */
 
     sim_debug(DEBUG_CMD, dptr, "Disk taus %d spau %d ssiz %d cap %d\n",
         disk_type[type].taus, disk_type[type].spau, disk_type[type].ssiz * 4,
@@ -1022,13 +998,8 @@ t_stat disk_attach(UNIT *uptr, CONST char *file)
         return SCPE_FMT;        /* error */
     }
 
-    data->ssize = ssize;    /* save sector size in bytes */
-    data->tsize = tsize;    /* save track size in bytes */
-    data->ccyl = 0;         /* current cylinder number */
     data->tpos = 0;         /* current track position */
     data->spos = 0;         /* current sector position */
-    data->rec = 0;          /* record length */
-    data->count = 0;        /* clear count value */
 
     set_devattn(addr, SNS_DEVEND);
     return SCPE_OK;
