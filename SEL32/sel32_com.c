@@ -35,7 +35,6 @@ extern  void    chan_end(uint16 chan, uint8 flags);
 extern  int     chan_read_byte(uint16 chan, uint8 *data);
 extern  int     chan_write_byte(uint16 chan, uint8 *data);
 extern  void    set_devwake(uint16 addr, uint8 flags);
-extern  int     traceme, trstart;
 
 /* Constants */
 #define COM_LINES       8                               /* max lines */

@@ -91,7 +91,6 @@ extern uint32   M[];                        /* our memory */
 extern uint32   SPAD[];                     /* CPU scratchpad memory */
 extern uint32   CPUSTATUS;                  /* CPU status word */
 extern uint32   INTS[];                     /* Interrupt status flags */
-extern int traceme, trstart;
 
 /* device status */
 DIB         *dev_unit[MAX_DEV];             /* Pointer to Device info block */
@@ -187,7 +186,7 @@ uint32 find_int_lev(uint16 chsa)
                 level = ((val >> 16) & 0x7f);       /* 1's comp of int level */
                 level = 127 - level;                /* get positive number level */
                 sim_debug(DEBUG_EXP, &cpu_dev,
-                    "find_int_lev F SPAD %x chan %x chsa %x level %x\n", val, chan, chsa, level);
+                    "find_int_lev class F SPAD %x chan %x chsa %x level %x\n", val, chan, chsa, level);
                 return(level);                      /* return the level*/
             }
         }
@@ -368,6 +367,7 @@ int load_ccw(CHANP *chp, int tic_ok)
     int         docmd = 0;
     UNIT        *uptr;
     uint16      chan = get_chan(chp->chan_dev);     /* our channel */
+    CHANP       *pchp;
 
 loop:
     sim_debug(DEBUG_EXP, &cpu_dev, "load_ccw entry chan_status[%x] %x\n", chan, chp->chan_status);
@@ -449,11 +449,16 @@ loop:
         /* Check if this is INCH command */
         if ((chp->ccw_cmd & 0xFF) == 0) {           /* see if this is an initialize channel cmd */
             uptr->u4 = (uint32)chp->ccw_addr;       /* save the memory address in wd 1 of iocd */
-            uptr->us9 = chp->ccw_count & 0xffff;    /* get count from IOCD wd 2 */
+            if ((chp->ccw_count&0xffff) == 0)       /* see if user said 0 count for INCH */
+                uptr->us9 = 1;                      /* make non zero for later test */
+            else
+                uptr->us9 = chp->ccw_count & 0xffff;    /* get count from IOCD wd 2 */
             /* just drop through and call the device startcmd function */
             /* the INCH buffer will be returned in uptr->u4 and uptr->us9 will be non-zero */
             /* it should just return SNS_CHNEND and SNS_DEVEND status */
 /*052619*/  chp->chan_inch_addr = uptr->u4;         /* save INCH buffer address */
+            pchp = find_chanp_ptr(chp->chan_dev&0x7f00);    /* get parent channel prog pointer */
+/*091119*/  pchp->chan_inch_addr = uptr->u4;        /* save INCH buffer address */
             sim_debug(DEBUG_EXP, &cpu_dev, "load_ccw INCH buffer save %x chan %0x status %.8x count %x\n",
                 uptr->u4, chan, chp->chan_status, chp->ccw_count);
         }
@@ -484,6 +489,9 @@ loop:
         if ((chp->ccw_cmd & 0xFF) == 0 && (uptr->us9 != 0)) {
 ///     if ((chp->ccw_cmd & 0xFF) == 0 && (uptr->us9 >= 0)) {
             chp->chan_inch_addr = uptr->u4;         /* save INCH buffer address */
+            pchp = find_chanp_ptr(chp->chan_dev&0x7f00);    /* get parent channel prog pointer */
+            pchp->chan_inch_addr = uptr->u4;        /* save INCH buffer address */
+            chp->chan_status &= STATUS_DEND;        /* inch has only channel end status */
             sim_debug(DEBUG_EXP, &cpu_dev, "load_ccw INCH %x saved chan %0x\n",
                     chp->chan_inch_addr, chan);
         }
@@ -491,16 +499,6 @@ loop:
 
         /* see if command completed */
         if (chp->chan_status & (STATUS_DEND|STATUS_CEND)) {
-#ifdef TRY_THIS
-            /* INCH cmd will return here too, get INCH buffer addr from uptr->u4 */
-            /* see if this is an initialize channel cmd */
-            if ((chp->ccw_cmd & 0xFF) == 0 && (uptr->us9 != 0)) {
-///         if ((chp->ccw_cmd & 0xFF) == 0 && (uptr->us9 >= 0)) {
-                chp->chan_inch_addr = uptr->u4;     /* save INCH buffer address */
-                sim_debug(DEBUG_EXP, &cpu_dev, "load_ccw INCH %x saved chan %0x\n",
-                        chp->chan_inch_addr, chan);
-            }
-#endif
             chp->chan_status |= STATUS_CEND;        /* set channel end status */
             chp->chan_byte = BUFF_NEWCMD;           /* ready for new cmd */
             chp->ccw_cmd = 0;                       /* stop IOCD processing */
@@ -759,7 +757,7 @@ void store_csw(CHANP *chp)
     uint32  chsa = chp->chan_dev;                   /* get ch/sa information */
 
     /* put sub address in byte 0 */
-    stwd1 = ((chsa & 0xff) << 24) | chp->chan_caw;      /* subaddress and IOCD address to SW 1 */
+    stwd1 = ((chsa & 0xff) << 24) | chp->chan_caw;  /* subaddress and IOCD address to SW 1 */
     /* save 16 bit channel status and residual byte count in SW 2 */
     stwd2 = ((uint32)chp->chan_status << 16) | ((uint32)chp->ccw_count);
     if ((FIFO_Put(chsa, stwd1) == -1) || (FIFO_Put(chsa, stwd2) == -1)) {
@@ -946,7 +944,7 @@ t_stat testxio(uint16 lchsa, uint32 *status) {        /* test XIO */
     sim_debug(DEBUG_CMD, &cpu_dev, "testxio busy test chsa %0x chan %x cmd %x flags %x IOCD1 %x IOCD2 %x IOCLA %x\n",
         chsa, chan, chp->ccw_cmd, chp->ccw_flags, M[iocla>>2], M[(iocla+4)>>2], iocla);
 
-    sim_debug(DEBUG_CMD, &cpu_dev, "$$$ TIO %x %x %x %x\n", chsa, chan, chp->ccw_cmd, chp->ccw_flags);
+    sim_debug(DEBUG_CMD, &cpu_dev, "$$ TIO chsa %x chan %x cmd %x flags %x\n", chsa, chan, chp->ccw_cmd, chp->ccw_flags);
 
     /* check for a Command or data chain operation in progresss */
     if (chp->ccw_cmd != 0 || (chp->ccw_flags & (FLAG_DC|FLAG_CC)) != 0) {
@@ -1305,6 +1303,8 @@ uint32 scan_chan(void) {
                         /* now store the status dw address into word 5 of the ICB for the channel */
                         M[(chan_icba + 20) >> 2] = tempa | BIT1;    /* post sw addr in ICB+5w & set CC2 in SW */
                         INTS[i] |= INTS_REQ;            /* turn on channel interrupt request */
+     sim_debug(DEBUG_EXP, &cpu_dev, "scan_chan %x FIFO read, set INTS REQ irq %x inch %x chan_icba %x sw1 %x sw2 %x\n",
+                    chan, i, tempa, chan_icba, sw1, sw2);
                     }
                 }
             }

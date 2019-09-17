@@ -175,7 +175,7 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         uptr->u3 &= LMASK;              /* leave only chsa */
         uptr->u3 |= CON_MSK;            /* save INCH command as 0xff */
         uptr->u5 = SNS_RDY|SNS_ONLN;    /* status is online & ready */
-        sim_activate(uptr, 20);         /* start us off */
+        sim_activate(uptr, 10);         /* start us off */
         return 0;                       /* no status change */
         break;
 
@@ -216,18 +216,18 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         uptr->u5 = SNS_RDY|SNS_ONLN;    /* status is online & ready */
         uptr->u3 &= LMASK;              /* leave only chsa */
         uptr->u3 |= (cmd & CON_MSK);    /* save command */
-        sim_activate(uptr, 20);         /* start us off */
+        sim_activate(uptr, 10);         /* start us off */
         return 0;                       /* no status change */
         break;
 
     case CON_CON:       /* 0x1f */      /* Connect, return Data Set ready */
-        sim_debug(DEBUG_CMD, &con_dev, "con_startcmd %x: Cmd %x NOP\n", chan, cmd);
+        sim_debug(DEBUG_CMD, &con_dev, "con_startcmd %x: Cmd %x CON\n", chan, cmd);
         uptr->u5 |= (SNS_DSR|SNS_DCD);  /* Data set ready, Data Carrier detected */
         return SNS_CHNEND|SNS_DEVEND;   /* good return */
         break;
 
     case CON_DIS:       /* 0x23 */      /* Disconnect has do nothing */
-        sim_debug(DEBUG_CMD, &con_dev, "con_startcmd %x: Cmd %x NOP\n", chan, cmd);
+        sim_debug(DEBUG_CMD, &con_dev, "con_startcmd %x: Cmd %x DIS\n", chan, cmd);
         uptr->u5 &= ~(SNS_DSR|SNS_DCD); /* Data set not ready */
         return SNS_CHNEND|SNS_DEVEND;   /* good return */
         break;
@@ -263,8 +263,13 @@ t_stat con_srvo(UNIT *uptr) {
     sim_debug(DEBUG_CMD, &con_dev, "con_srvo enter chsa %x cmd = %x\n", chsa, cmd);
     if ((cmd == CON_NOP) || (cmd == CON_MSK)) {     /* NOP has to do nothing */
         uptr->u3 &= LMASK;                          /* nothing left, command complete */
-        sim_debug(DEBUG_CMD, &con_dev, "con_srvo NOP or INCH chsa %x cmd = %x\n", chsa, cmd);
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* done */
+        if (cmd == CON_MSK) {                       /* Channel end only for INCH */
+            sim_debug(DEBUG_CMD, &con_dev, "con_srvo INCH chsa %x cmd = %x\n", chsa, cmd);
+            chan_end(chsa, SNS_CHNEND);             /* done */
+        } else {
+            sim_debug(DEBUG_CMD, &con_dev, "con_srvo NOP chsa %x cmd = %x\n", chsa, cmd);
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
+        }
         return SCPE_OK;
     }
 
@@ -290,12 +295,18 @@ t_stat con_srvi(UNIT *uptr) {
     uint8       ch;
     t_stat      r;
 
-    sim_debug(DEBUG_CMD, &con_dev, "con_srvi enter chsa %x cmd = %x\n", chsa, cmd);
+    sim_debug(DEBUG_DATA, &con_dev, "con_srvi enter chsa %x cmd = %x\n", chsa, cmd);
 
     if ((cmd == CON_NOP) || (cmd == CON_MSK)) { /* NOP has do nothing */
         uptr->u3 &= LMASK;                      /* nothing left, command complete */
-        sim_debug(DEBUG_CMD, &con_dev, "con_srvi NOP or INCH chsa %x cmd = %x\n", chsa, cmd);
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
+        if (cmd == CON_MSK) {                   /* Channel end only for INCH */
+            sim_debug(DEBUG_CMD, &con_dev, "con_srvi INCH chsa %x cmd = %x\n", chsa, cmd);
+            chan_end(chsa, SNS_CHNEND);         /* done */
+        } else {
+            sim_debug(DEBUG_CMD, &con_dev, "con_srvi NOP chsa %x cmd = %x\n", chsa, cmd);
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
+//            chan_end(chsa, SNS_CHNEND);         /* done */
+        }
         /* drop through to poll input */
     }
 

@@ -528,8 +528,8 @@ uint8  scfi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
         /* so we will not have a map fault */
         for (i=0; i<dptr->numunits && i<8; i++) {       /* process all drives */
             up->u6 = M[(mema>>2)+i+1];      /* save each unit's drive data */
-            sim_debug(DEBUG_CMD, dptr, "scfi_startcmd %d ATTR data %x flags %x sec %x MHD %x FHD %x\n",
-                i, up->ATTR, (up->ATTR >> 24)&0xff, (up->ATTR >> 16)&0xff, (up->ATTR >> 8)&0xff, (up->ATTR&0xff));
+            sim_debug(DEBUG_CMD, dptr, "scfi_startcmd ATTR data %x unit %x flags %x sec %x MHD %x FHD %x\n",
+                up->ATTR, i, (up->ATTR >> 24)&0xff, (up->ATTR >> 16)&0xff, (up->ATTR >> 8)&0xff, (up->ATTR&0xff));
             up++;                           /* next unit for this device */
         }
         sim_debug(DEBUG_CMD, dptr, "scfi_startcmd done inch cmd addr %x\n", addr);
