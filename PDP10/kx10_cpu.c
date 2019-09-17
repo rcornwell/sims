@@ -221,7 +221,7 @@ int32   tmxr_poll = 10000;
 /* Physical address range for Rubin 10-11 interface. */
 #define T11RANGE(addr)  ((addr) >= 03040000)
 /* Physical address range for auxiliary PDP-6. */
-extern int auxcpu_base;
+extern t_addr auxcpu_base;
 #define AUXCPURANGE(addr)  ((addr) >= auxcpu_base && (addr) < (auxcpu_base + 040000))
 
 DEVICE *rh_devs[] = {
@@ -1856,7 +1856,7 @@ fault:
  * Return of 0 if successful, 1 if there was an error.
  */
 int Mem_read_its(int flag, int cur_context, int fetch) {
-    int addr;
+    t_addr addr;
 
     if (AB < 020) {
         if ((xct_flag & 1) != 0 && !cur_context && (FLAGS & USER) == 0) {
@@ -1903,7 +1903,7 @@ int Mem_read_its(int flag, int cur_context, int fetch) {
  * Return of 0 if successful, 1 if there was an error.
  */
 int Mem_write_its(int flag, int cur_context) {
-    int addr;
+    t_addr addr;
 
     if (AB < 020) {
         if ((xct_flag & 2) != 0 && !cur_context && (FLAGS & USER) == 0) {

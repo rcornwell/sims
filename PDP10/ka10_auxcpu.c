@@ -54,7 +54,7 @@
 
 static int pia = 0;
 static int status = 0;
-t_value auxcpu_base = 03000000;
+t_addr auxcpu_base = 03000000;
 
 static t_stat auxcpu_devio(uint32 dev, t_uint64 *data);
 static t_stat auxcpu_svc (UNIT *uptr);
@@ -407,13 +407,13 @@ static t_stat auxcpu_set_base (UNIT *uptr, int32 val, CONST char *cptr, void *de
     if (r != SCPE_OK)
         return SCPE_ARG;
 
-    auxcpu_base = x;
+    auxcpu_base = (t_addr)x;
     return SCPE_OK;
 }
 
 static t_stat auxcpu_show_base (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
-    fprintf (st, "Base: %llo", auxcpu_base);
+    fprintf (st, "Base: %" T_ADDR_FMT "o", auxcpu_base);
     return SCPE_OK;
 }
 #endif
