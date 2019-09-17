@@ -2534,7 +2534,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
 }
 
 int Mem_read(int flag, int cur_context, int fetch) {
-    int addr;
+    t_addr addr;
 
     if (AB < 020) {
         MB = get_reg(AB);
@@ -2542,7 +2542,7 @@ int Mem_read(int flag, int cur_context, int fetch) {
         sim_interval--;
         if (!page_lookup(AB, flag, &addr, 0, cur_context, fetch))
             return 1;
-        if (addr >= (int)MEMSIZE) {
+        if (addr >= MEMSIZE) {
             nxm_flag = 1;
             return 1;
         }
@@ -2560,7 +2560,7 @@ int Mem_read(int flag, int cur_context, int fetch) {
  */
 
 int Mem_write(int flag, int cur_context) {
-    int addr;
+    t_addr addr;
 
     if (AB < 020) {
         set_reg(AB, MB);
@@ -2568,7 +2568,7 @@ int Mem_write(int flag, int cur_context) {
         sim_interval--;
         if (!page_lookup(AB, flag, &addr, 1, cur_context, 0))
             return 1;
-        if (addr >= (int)MEMSIZE) {
+        if (addr >= MEMSIZE) {
             nxm_flag = 1;
             return 1;
         }
