@@ -171,6 +171,7 @@ extern DEBTAB crd_debug[];
 #define XMASK    03777777777777LL
 #define EMASK    00777000000000LL
 #define MMASK    00000777777777LL
+#define SECTM    00007777000000LL
 #define BIT1     00200000000000LL
 #define BIT2     00100000000000LL
 #define BIT3     00040000000000LL
@@ -531,7 +532,7 @@ int auxcpu_write (int addr, t_uint64);
 #define NUM_DEVS_TU     1
 #define NUM_DEVS_PMP    WAITS
 #define NUM_DEVS_DKB    WAITS
-#define NUM_DEVS_III    (WAITS & USE_DISPLAY)
+#define NUM_DEVS_III    (WAITS * USE_DISPLAY)
 #define NUM_DEVS_PD     ITS | KL_ITS
 #define NUM_DEVS_IMX    ITS
 #define NUM_DEVS_STK    ITS

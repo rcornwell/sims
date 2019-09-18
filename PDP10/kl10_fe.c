@@ -238,6 +238,8 @@ struct _buffer {
     char     buff[256];  /* Buffer */
 } cty_in, cty_out;
 
+int cty_data;
+
 DIB dte_dib[] = {
     { DTE_DEVNUM|000, 1, dte_devio, dte_devirq},
 };
@@ -505,7 +507,7 @@ void dte_second(UNIT *uptr) {
 #if KL_ITS
     if (word == 0 && QITS && (uptr->STATUS & ITS_ON) != 0) {
         dte_its(uptr);
-        uptr->STATUS |= DTE_10DB;
+//        uptr->STATUS |= DTE_10DB;
         uptr->STATUS &= ~DTE_11DB;
         return;
     }
@@ -515,14 +517,16 @@ void dte_second(UNIT *uptr) {
     switch(word & SEC_CMDMSK) {
     default:
     case SEC_MONO:  /* Ouput character in monitor mode */
-         ch = (int32)(word & 0177);
-         M[SEC_DTCHR + base] = ch;
-         ch = sim_tt_outcvt( ch, TT_GET_MODE(uptr->flags));
-         if ((r = sim_putchar_s (ch)) != SCPE_OK) { /* Output errors */
+         if (((cty_out.in_ptr + 1) & 0xff) == cty_out.out_ptr) {
             sim_activate(uptr, 1000);
             return;
          }
-         M[SEC_DTMTD + base] = FMASK ^ 1;
+         ch = (int32)(word & 0177);
+         ch = sim_tt_outcvt( ch, TT_GET_MODE(uptr->flags));
+         cty_out.buff[cty_out.in_ptr] = (char)(word & 0x7f);
+         cty_out.in_ptr = (cty_out.in_ptr + 1) & 0xff;
+         M[SEC_DTCHR + base] = ch;
+         M[SEC_DTMTD + base] = FMASK;
          M[SEC_DTF11 + base] = 0;
          break;
      case SEC_SETPRI:
@@ -542,21 +546,22 @@ enter_pri:
          /* Start input process */
          break;
      case SEC_SETDDT: /* Read character from console */
-         if ((ch = dte_unit[1].CHHOLD) == 0) {
-            sim_activate(uptr, 100);
-            return;
+         if (cty_in.in_ptr == cty_in.out_ptr) {
+             sim_activate(uptr, 100);
+             return;
          }
+         ch = cty_in.buff[cty_in.out_ptr];
+         cty_in.out_ptr = (cty_in.out_ptr + 1) & 0xff;
          M[SEC_DTF11 + base] = 0177 & ch;
          M[SEC_DTMTI + base] = FMASK;
-         dte_unit[1].CHHOLD = 0;
          break;
      case SEC_CLRDDT: /* Clear DDT input mode */
          uptr->STATUS &= ~DTE_MON;
-         sim_cancel(&dte_unit[1]);
+//         sim_cancel(&dte_unit[1]);
          break;
      case SEC_MONON:
          uptr->STATUS |= DTE_MON;
-         sim_activate(&dte_unit[1], 100);
+//         sim_activate(&dte_unit[1], 100);
          break;
      case SEC_RDSW:  /* Read switch register */
          M[SEC_DTSWR + base] = SW;
@@ -686,10 +691,27 @@ void dte_its(UNIT *uptr) {
      }
      /* Check for line speed */
      word = M[ITS_DTELSP];
-     if ((word & SMASK) == 0) {
+     if ((word & SMASK) == 0) {  /* Ready? */
          M[ITS_DTELSP] = FMASK;
          sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS DTELSP = %012llo %012llo\n", word, M[ITS_DTELPR]);
      }
+     /* Check if any input for it */
+     if ((uptr->STATUS & ITS_ON) != 0) {
+        word = M[ITS_DTETYI];
+        if ((word & SMASK) != 0) {  /* Ready? */
+            if (cty_in.in_ptr != cty_in.out_ptr) {
+                ch = cty_in.buff[cty_in.out_ptr];
+                cty_in.out_ptr = (cty_in.out_ptr + 1) & 0xff;
+                word = (uint64)ch;
+                M[ITS_DTETYI] = word;
+                /* Tell 10 something is ready */
+                uptr->STATUS |= DTE_10DB;
+                if (uptr->STATUS & DTE_PIE)
+                    set_interrupt(DTE_DEVNUM, uptr->STATUS);
+            }
+       }
+       sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS DTETYI = %012llo\n", word);
+    }
 #if 0
      /* Check for input */
      word = M[ITS_DTETYI];
@@ -865,16 +887,16 @@ dte_function(UNIT *uptr)
                data1[0] = 0;
                if (dte_queue(uptr, PRI_EM2TI, PRI_EMCTY, 1, data1) == 0)
                    return;
-#if (NUM_DEVS_LP > 0)
-               data1[0] = 140;
-               if (dte_queue(uptr, PRI_EMHLA, PRI_EMLPT, 1, data1) == 0)
-                   return;
-#endif
+//#if (NUM_DEVS_LP > 0)
+//               data1[0] = 140;
+//               if (dte_queue(uptr, PRI_EMHLA, PRI_EMLPT, 1, data1) == 0)
+//                   return;
+//#endif
 
 //        data1[0] = ((ln + 1) << 8) | 32;
  //       (void)dte_queue(uptr, PRI_EMHLA, PRI_EMDL1, 1, data1);
-               if (dte_queue(uptr, PRI_EMAKA, PRI_EMDH1, 0, data1) == 0)
-                   return;
+//               if (dte_queue(uptr, PRI_EMAKA, PRI_EMDH1, 0, data1) == 0)
+//                   return;
                break;
        
         case PRI_EM2TI:            /* Replay to initial message. */
@@ -934,19 +956,20 @@ dte_function(UNIT *uptr)
 cty:
                data1[0] = 0;
                while (cmd->dptr < cmd->dcnt) {
+                    if (((cty_out.in_ptr + 1) & 0xff) == cty_out.out_ptr)
+                        return;
                     ch = (int32)(cmd->data[cmd->dptr >> 1]);
                     if ((cmd->dptr & 1) == 0)
                         ch >>= 8;
                     ch &= 0177;
                     sim_debug(DEBUG_DETAIL, &dte_dev, "CTY type %x\n", ch);
                     ch = sim_tt_outcvt( ch, TT_GET_MODE(uptr->flags));
-                    if ((r = sim_putchar_s (ch)) != SCPE_OK) /* Output errors */
-                       return;
+                    cty_out.buff[cty_out.in_ptr] = (char)(ch & 0xff);
+                    cty_out.in_ptr = (cty_out.in_ptr + 1) & 0xff;
+                    cty_data = 1;   /* Let output know it needs to ack this */
                     cmd->dptr++;
                }
                if (cmd->dptr != cmd->dcnt)
-                  return;
-               if (dte_queue(uptr, PRI_EMACK, PRI_EMCTY, 1, data1) == 0)
                    return;
                break;
        
@@ -1126,6 +1149,37 @@ error:
     return;
 }
 
+void
+dte_input()
+{
+    uint16  data1;
+    uint16  dataq[32];
+    int     n;
+    int     save_ptr;
+    char    ch;
+
+    /* Check if CTY done with input */
+    if (cty_data && cty_out.in_ptr == cty_out.out_ptr) {
+        data1 = 0;
+        if (dte_queue(&dte_unit[0], PRI_EMACK, PRI_EMCTY, 1, &data1) == 0)
+            return;
+        cty_data = 0;
+    }
+    n = 0;
+    save_ptr = cty_in.out_ptr;
+    while (cty_in.in_ptr != cty_in.out_ptr && n < 32) {
+        ch = cty_in.buff[cty_in.out_ptr];
+        cty_in.out_ptr = (cty_in.out_ptr + 1) & 0xff;
+        sim_debug(DEBUG_DETAIL, &tty_dev, "CTY recieve %02x\n", ch);
+        dataq[n++] = ch;
+    } 
+    if (n > 0 && dte_queue(&dte_unit[0], PRI_EMLNC, PRI_EMCTY, n, dataq) == 0) {
+        /* Restore the input pointer */
+        cty_in.out_ptr = save_ptr;
+        return;
+    }
+}
+
 /*
  * Queue up a packet to send to 10.
  */
@@ -1217,57 +1271,71 @@ t_stat dtei_svc (UNIT *uptr)
     base = eb_ptr;
 #endif
     sim_clock_coschedule (uptr, tmxr_poll);
-    if ((uptr->STATUS & DTE_SEC) == 0) {
+#if KL_ITS
+    if ((uptr->STATUS & (DTE_SEC|ITS_ON)) == 0) {
+#else
+    if ((uptr->STATUS & (DTE_SEC)) == 0) {
+#endif
         dte_function(uptr);  /* Process queue */
+        dte_input(uptr);
         dte_start(optr);
     }
-                                                       /* continue poll */
-    if ((ch = uptr->CHHOLD) == 0) {
-        if ((ch = sim_poll_kbd ()) < SCPE_KFLAG)           /* no char or error? */
-            return ch;
-        if (ch & SCPE_BREAK)                               /* ignore break */
-            return SCPE_OK;
-        ch = 0177 & sim_tt_inpcvt(ch, TT_GET_MODE (uptr->flags));
-        uptr->CHHOLD = ch;
+
+    /* Flush out any pending CTY output */
+    while(cty_out.in_ptr != cty_out.out_ptr) {
+        ch = cty_out.buff[cty_out.out_ptr];
+        if (sim_putchar(ch) != SCPE_OK)
+            break;
+        cty_out.out_ptr = (cty_out.out_ptr + 1) & 0xff;
+            sim_debug(DEBUG_DETAIL, &dte_dev, "CTY outch %x '%c'\n", ch,
+                            ((ch > 040 && ch < 0177)? ch: '.'));
     }
-    sim_debug(DEBUG_DETAIL, &dte_dev, "CTY char %x\n", ch);
+
+    /* If we have room see if any new lines */
+    if (((cty_in.in_ptr + 1) & 0xff) != cty_in.out_ptr) {
+        ch = sim_poll_kbd ();
+        if (ch & SCPE_KFLAG) {
+            ch = 0177 & sim_tt_inpcvt(ch, TT_GET_MODE (uptr->flags));
+            cty_in.buff[cty_in.in_ptr] =ch & 0377;
+            cty_in.in_ptr = (cty_in.in_ptr + 1) & 0xff;
+            sim_debug(DEBUG_DETAIL, &dte_dev, "CTY char %x '%c'\n", ch,
+                            ((ch > 040 && ch < 0177)? ch: '.'));
+        }
+    }
+#if KL_ITS
+    if ((optr->STATUS & (DTE_SEC|ITS_ON)) == (DTE_SEC) &&
+#else
+    if ((optr->STATUS & DTE_SEC) != 0 &&
+#endif
+         cty_in.in_ptr != cty_in.out_ptr &&
+        (optr->STATUS & DTE_MON) != 0 &&
+         M[SEC_DTMTI + base] == 0) {
+        ch = cty_in.buff[cty_in.out_ptr];
+        cty_in.out_ptr = (cty_in.out_ptr + 1) & 0xff;
+        M[SEC_DTF11 + base] = ch;
+        M[SEC_DTMTI + base] = FMASK;
+        optr->STATUS |= DTE_10DB;
+        if (optr->STATUS & DTE_PIE)
+           set_interrupt(DTE_DEVNUM, optr->STATUS);
+    }
 #if KL_ITS
     if (QITS && (optr->STATUS & ITS_ON) != 0) {
         uint64  word = M[ITS_DTETYI];
         if ((word & SMASK) != 0) {
-            if (ch != 0) {
-                word = ch;
-                uptr->CHHOLD = 0;
+            if (cty_in.in_ptr != cty_in.out_ptr) {
+                ch = cty_in.buff[cty_in.out_ptr];
+                cty_in.out_ptr = (cty_in.out_ptr + 1) & 0xff;
+                word = (uint64)ch;
                 M[ITS_DTETYI] = word;
                 /* Tell 10 something is ready */
                 optr->STATUS |= DTE_10DB;
                 if (optr->STATUS & DTE_PIE)
                     set_interrupt(DTE_DEVNUM, optr->STATUS);
                 sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS DTETYI = %012llo\n", word);
-             }
+            }
        }
-       return SCPE_OK;
     }
 #endif
-    if (optr->STATUS & DTE_SEC) {
-         if (optr->STATUS & DTE_MON && M[SEC_DTMTI + base] == 0) {
-             sim_debug(DEBUG_DETAIL, &dte_dev, "CTY char %x\n", ch & 0177);
-             M[SEC_DTF11 + base] = ch;
-             M[SEC_DTMTI + base] = FMASK;
-             optr->STATUS |= DTE_10DB;
-             if (optr->STATUS & DTE_PIE)
-                set_interrupt(DTE_DEVNUM, optr->STATUS);
-             uptr->CHHOLD = 0;
-         }
-    } else {
-#if KL_ITS
-         if (QITS)
-            return SCPE_OK;
-#endif
-         data1 = (PRI_EMCTY << 8) | ch;
-         if (dte_queue(uptr, PRI_EMLNC, PRI_EMCTY, 1, &data1) != 0)
-             uptr->CHHOLD = 0;
-    }
     return SCPE_OK;
 }
 
@@ -1278,6 +1346,7 @@ dtertc_srv(UNIT * uptr)
     UNIT     *optr = &dte_unit[0];
 
     sim_activate_after(uptr, 1000000/rtc_tps);
+    /* Check if clock requested */
     if (uptr->STATUS & SEC_CLK) {
         rtc_tick++;
         if (rtc_wait != 0) {
@@ -1297,21 +1366,24 @@ dtertc_srv(UNIT * uptr)
         }
     }
 #if KL_ITS
-        if (QITS) {
-            uint64     word;
+    /* Check if Timesharing is running */
+    if (QITS) {
+        uint64     word;
 
-            word = (M[ITS_DTECHK] + 1) & FMASK;
-            if (word == 0) {
-                optr->STATUS |= ITS_ON;
-                sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS ON\n");
-            } else if (word >= (15 * 60)) {
-                optr->STATUS &= ~ITS_ON;
-                word = 15 * 60;
-                sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS OFF\n");
-            }
-            M[ITS_DTECHK] = word;
+        word = (M[ITS_DTECHK] + 1) & FMASK;
+        if (word == 0) {
+            optr->STATUS |= ITS_ON;
+            sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS ON\n");
+        } else if (word >= (15 * 60)) {
+            optr->STATUS &= ~ITS_ON;
+            word = 15 * 60;
+            sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS OFF\n");
         }
+        M[ITS_DTECHK] = word;
+    } else
 #endif
+
+    /* Update out keep alive timer if in secondary protocol */
     if ((optr->STATUS & DTE_SEC) == 0) {
         int      addr = 0144 + eb_ptr;
         uint64   word;
