@@ -1408,11 +1408,11 @@ t_stat dte_reset (DEVICE *dptr)
     dte_unit[1].STATUS = DTE_SEC;
     dte_unit[1].CHHOLD = 0;
     dte_unit[2].STATUS = 0;
-    dte_in_ptr = dte_in_cmd = dte_out_ptr = dte_out_res = 0;
-    cty_in.in_ptr = 0;
-    cty_in.out_ptr = 0;
-    cty_out.in_ptr = 0;
-    cty_out.out_ptr = 0;
+//    dte_in_ptr = dte_in_cmd = dte_out_ptr = dte_out_res = 0;
+//    cty_in.in_ptr = 0;
+//    cty_in.out_ptr = 0;
+//    cty_out.in_ptr = 0;
+//    cty_out.out_ptr = 0;
     sim_rtcn_init_unit (&dte_unit[2], dte_unit[2].wait, TMR_RTC);
     sim_activate(&dte_unit[1], 100);
     sim_activate(&dte_unit[2], 100);

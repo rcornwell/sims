@@ -2007,7 +2007,7 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
            data = M[ub_ptr + base];
         else
            data = M[eb_ptr + base];
-//fprintf(stderr, "Map %06o %03o %012llo %012llo %012llo\n\r", base, sect, data, spt, cst);
+fprintf(stderr, "Map %06o %03o %012llo %012llo %012llo\n\r", base, sect, data, spt, cst);
         /* Find correct page table */
         do {
             switch ((data >> 33) & 07) {
@@ -2045,13 +2045,13 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
 
             }
         } while (!match);
-//fprintf(stderr, "XMap %012llo\n\r", data);
+fprintf(stderr, "XMap %012llo\n\r", data);
 
         match = 0;
         /* Now look up address of final table entry */
         do {
             if ((data >> 18) & PG_STG) {
-//fprintf(stderr, "ZMap %012llo not in stg\n\r", data);
+fprintf(stderr, "ZMap %012llo not in stg\n\r", data);
                if (trap) {
                    fault_data = 0;
                    page_fault = 1;
@@ -2064,7 +2064,7 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
             if (cst) {
                uint64 c = M[cst + pg];
                if ((c & PG_AGE) == 0) {
-//fprintf(stderr, "ZMap %012llo %012llo age\n\r", data, c);
+fprintf(stderr, "ZMap %012llo %012llo age\n\r", data, c);
                    if (trap) {
                        fault_data = 0;
                        page_fault = 1;
@@ -2076,7 +2076,7 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
 
             /* Get address of page */
             data = M[(pg << 9) + page];
-//fprintf(stderr, "YMap %012llo\n\r", data);
+fprintf(stderr, "YMap %012llo\n\r", data);
 
             /* Decode map pointer */
             switch ((data >> 33) & 07) {
@@ -2261,16 +2261,6 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
         }
 //fprintf(stderr, "%o %o\n\r", uf, pub);
     }
-#if KLB
-    if (QKLB && t20_page && !flag && (sect & 07740) != 0) {
-//fprintf(stderr, "Page fault %06o a=%o wr=%o w=%o %06o\n\r", addr, (data & RSIGN) == 0, wr, (data & 0100000) == 0, data);
-        fault_data = (027LL << 30) | (uint64)addr  | (((uint64)sect) << 18);
-        if (uf)                      /* U */
-           fault_data |= SMASK;      /*  BIT0 */
-        page_fault = 1;
-        return 0;
-    }
-#endif
 
     /* Handle KI paging odditiy */
     if (!uf && !t20_page && (page & 0740) == 0340) {
@@ -2323,7 +2313,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
 
     /* Check for access error */
     if ((data & RSIGN) == 0 || (wr & ((data & 0100000) == 0))) {
-//fprintf(stderr, "Page fault %06o a=%o wr=%o w=%o %06o\n\r", addr, (data & RSIGN) == 0, wr, (data & 0100000) == 0, data);
+fprintf(stderr, "Page fault %06o a=%o wr=%o w=%o %06o\n\r", addr, (data & RSIGN) == 0, wr, (data & 0100000) == 0, data);
         fault_data = BIT8 | (uint64)addr;
 #if KLB
         if (QKLB)
@@ -2428,6 +2418,16 @@ int Mem_read(int flag, int cur_context, int fetch) {
 
     sim_interval--;
 #if KLB
+    /* Check if invalid section */
+    if (QKLB && t20_page && !flag && (sect & 07740) != 0) {
+        fault_data = (027LL << 30) | (uint64)addr  | (((uint64)sect) << 18);
+        if (USER==0)                 /* U */
+           fault_data |= SMASK;      /*  BIT0 */
+fprintf(stderr, "Invalid section %012llo\n\r", fault_data);
+        page_fault = 1;
+        return 0;
+    }
+
     if ((glb_sect == 0 || sect == 0 || (glb_sect && sect == 1)) && AB < 020) {
 #else
     if (AB < 020) {
@@ -2464,6 +2464,16 @@ int Mem_write(int flag, int cur_context) {
 
     sim_interval--;
 #if KLB
+    /* Check if invalid section */
+    if (QKLB && t20_page && !flag && (sect & 07740) != 0) {
+        fault_data = (027LL << 30) | (uint64)addr  | (((uint64)sect) << 18);
+        if (USER==0)                 /* U */
+           fault_data |= SMASK;      /*  BIT0 */
+fprintf(stderr, "Invalid section %012llo\n\r", fault_data);
+        page_fault = 1;
+        return 0;
+    }
+
     if ((glb_sect == 0 || sect == 0 || (glb_sect && sect == 1)) && AB < 020) {
 #else
     if (AB < 020) {
@@ -3985,10 +3995,6 @@ fetch:
         }
 #endif
 
-#if KL & KLB
-       glb_sect = (cur_sect != 0);
-#endif
-
        if (Mem_read(pi_cycle | uuo_cycle, 1, 1)) {
            pi_rq = check_irq_level();
            if (pi_rq)
@@ -4005,6 +4011,10 @@ no_fetch:
        AC = (MB >> 23) & 017;
        AD = MB;  /* Save for historical sake */
        IA = AB;
+#if KL & KLB
+       glb_sect = (cur_sect != 0);
+#endif
+
        i_flags = opflags[IR];
        BYF5 = 0;
     }
@@ -4124,7 +4134,7 @@ fprintf(stderr, "EFIW %012llo %o %02o %06o %06o\n\r", MB, ind, ix, cur_sect, AB)
     } while (ind & !pi_rq);
     if (IR != 0254) {
 #if KL & KLB
-//       if (QKLB && IR != 0415)
+       if (QKLB && (pc_sect == 0 || IR != 0415))
 #endif
        AR &= RMASK;
     }
@@ -4183,7 +4193,7 @@ st_pi:
     }
 
     /* Update history */
-    if (hst_lnt && PC >= 020) {
+    if (hst_lnt && PC > 020) {
             hst_p = hst_p + 1;
             if (hst_p >= hst_lnt) {
                     hst_p = 0;
@@ -7195,6 +7205,11 @@ jrstf:
 
               /* Stack, JUMP */
     case 0260:  /* PUSHJ */     /* AR Frm PC */
+#if KL & KLB
+              if (QKLB && pc_sect != 0)
+                  MB = ((uint64)pc_sect << 18) + (PC + !pi_cycle);
+              else
+#endif
               MB = (((uint64)(FLAGS) << 23) & LMASK) | ((PC + !pi_cycle) & RMASK);
 #if KI | KL
               if ((FLAGS & USER) == 0) {
@@ -7203,11 +7218,18 @@ jrstf:
               }
 #endif
               BR = AB;
+#if KL 
+              BYF5 = 1;
+#if KLB
+              if (QKLB && pc_sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
+                  AR++;
+                  glb_sect = 1;
+                  sect = (AR >> 18) & 07777;
+              } else
+#endif        
+#endif        
               AR = AOB(AR);
               AB = AR & RMASK;
-#if KL
-              BYF5 = 1;
-#endif
               if (Mem_write(uuo_cycle | pi_cycle, 0))
                  goto last;
               FLAGS &= ~ (BYTI|ADRFLT|TRP1|TRP2);
@@ -7236,12 +7258,26 @@ jrstf:
                   jpc = PC;
               }
 #endif
+#if KL & KLB
+              if (QKLB && pc_sect != 0)
+                  pc_sect = (BR >> 18) & 07777;
+#endif
               PC = BR & RMASK;
               PC_CHANGE
               f_pc_inh = 1;
               break;
 
     case 0261: /* PUSH */
+#if KL 
+              BYF5 = 1;
+#if KLB
+              if (QKLB && pc_sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
+                  AR++;
+                  sect = (AR >> 18) & 07777;
+                  glb_sect = 1;
+              } else
+#endif        
+#endif        
               AR = AOB(AR);
               AB = AR & RMASK;
               if (AR & C1) {
@@ -7254,24 +7290,45 @@ jrstf:
 #endif
               }
               MB = BR;
-#if KL
-              BYF5 = 1;
-#endif
               if (Mem_write(0, 0))
                  goto last;
               break;
 
     case 0262: /* POP */
+#if KL 
+              BYF5 = 1;   /* Tell PXCT that this is stack */
+#if KLB
+              if (QKLB && pc_sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
+                  sect = (AR >> 18) & 07777;
+                  f = glb_sect;
+                  glb_sect = 1;
+                  AD = AR - 1;
+              } else
+#endif        
+#endif        
+              AD = SOB(AR);
               AB = AR & RMASK;
               if (Mem_read(0, 0, 0))
                   goto last;
-              AR = SOB(AR);
               AB = BR & RMASK;
 #if KL
-              BYF5 = 1;   /* Tell PXCT that this is stack */
+              BYF5 = 0;   /* Tell PXCT that this is stack */
+#if KLB
+              sect = cur_sect;
+              glb_sect = f;
+#endif
 #endif
               if (Mem_write(0, 0))
                   goto last;
+#if KL
+#if KLB
+              if (QKLB && pc_sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
+                  AR = AD;
+                  break;
+              } 
+#endif
+#endif
+              AR = AD;
               if ((AR & C1) == 0) {
 #if KI | KL
                   if (!pi_cycle)
@@ -7285,6 +7342,17 @@ jrstf:
 
     case 0263: /* POPJ */
               AB = AR & RMASK;
+#if KL 
+              BYF5 = 1;   /* Tell PXCT that this is stack */
+#if KLB
+              if (QKLB && pc_sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
+                  sect = (AR >> 18) & 07777;
+                  glb_sect = 1;
+                  AD = AR - 1;
+              } else
+#endif        
+#endif        
+              AD = SOB(AR);
               if (Mem_read(0, 0, 0))
                   goto last;
 #if ITS | KL_ITS
@@ -7294,7 +7362,20 @@ jrstf:
 #endif
               PC_CHANGE
               PC = MB & RMASK;
-              AR = SOB(AR);
+#if KL
+              BYF5 = 0;   /* Tell PXCT that this is stack */
+#if KLB
+if (pc_sect != 0)
+fprintf(stderr, "Popj %012llo\n\r", MB); 
+              if (QKLB && pc_sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
+                  pc_sect = (MB >> 18) & 07777;
+                  AR = AD;
+                  f_pc_inh = 1;
+                  break;
+              } 
+#endif
+#endif
+              AR = AD;
               if ((AR & C1) == 0) {
 #if KI | KL
                   if (!pi_cycle)
@@ -8141,6 +8222,8 @@ last:
         if (QKLB)
             pc_sect = (MB >> 18) & 07777;
 #endif
+        xct_flag = 0;
+        f_load_pc = 1;
         f_pc_inh = 1;
     }
 #endif
@@ -8166,14 +8249,6 @@ last:
         FLAGS &= ~ADRFLT;
 #else
     if (!f_pc_inh && !pi_cycle) {
-#endif
-#if KLB
-        if (QKLB) {
-            PC++;
-            if (PC & BIT17)
-               pc_sect = (pc_sect + 1) & 07777;
-            PC &= RMASK;
-        } else
 #endif
         PC = (PC + 1) & RMASK;
     }
