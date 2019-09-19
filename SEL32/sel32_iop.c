@@ -1,6 +1,6 @@
 /* sel32_iop.c: SEL 32 Class F IOP processor channel.
 
-   Copyright (c) 2018, James C. Bevier
+   Copyright (c) 2018-2019, James C. Bevier
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -139,7 +139,7 @@ void iop_ini(UNIT *uptr, t_bool f)
     int     unit = (uptr - iop_unit);               /* unit 0 */
     DEVICE *dptr = &iop_dev;                        /* one and only dummy device */
 
-    sim_debug(DEBUG_CMD, &iop_dev, "IOP init device %s controller/device %x\n", dptr->name, GET_UADDR(uptr->u3));
+    sim_debug(DEBUG_CMD, &iop_dev, "IOP init device %s controller/device %04x\n", dptr->name, GET_UADDR(uptr->u3));
     iop_data[unit].incnt = 0;                       /* no input data */
     uptr->u5 = SNS_RDY|SNS_ONLN;                    /* status is online & ready */
 }
@@ -155,14 +155,14 @@ uint8  iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
     case IOP_INCH:                                  /* INCH command */
         uptr->u5 = SNS_RDY|SNS_ONLN;                /* status is online & ready */
         uptr->u3 &= LMASK;                          /* leave only chsa */
-        sim_debug(DEBUG_CMD, &iop_dev, "iop_startcmd %x: Cmd INCH\n", chan);
+        sim_debug(DEBUG_CMD, &iop_dev, "iop_startcmd %04x: Cmd INCH\n", chan);
         uptr->u3 |= IOP_MSK;                        /* save INCH command as 0xff */
         sim_activate(uptr, 20);                     /* TRY 07-13-19 */
         return 0;                                   /* no status change */
         break;
 
     case IOP_NOP:                                   /* NOP command */
-        sim_debug(DEBUG_CMD, &iop_dev, "iop_startcmd %x: Cmd NOP\n", chan);
+        sim_debug(DEBUG_CMD, &iop_dev, "iop_startcmd %04x: Cmd NOP\n", chan);
         uptr->u5 = SNS_RDY|SNS_ONLN;                /* status is online & ready */
         uptr->u3 &= LMASK;                          /* leave only chsa */
         uptr->u3 |= (cmd & IOP_MSK);                /* save NOP command */
@@ -172,7 +172,8 @@ uint8  iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 
     default:                                        /* invalid command */
         uptr->u5 |= SNS_CMDREJ;                     /* command rejected */
-        sim_debug(DEBUG_CMD, &iop_dev, "iop_startcmd %x: Cmd Invald %x status %02x\n", chan, cmd, uptr->u5);
+        sim_debug(DEBUG_CMD, &iop_dev, "iop_startcmd %04x: Cmd Invald %02x status %02x\n",
+            chan, cmd, uptr->u5);
         uptr->u3 &= LMASK;                          /* leave only chsa */
         uptr->u3 |= (cmd & IOP_MSK);                /* save command */
         sim_activate(uptr, 20);                     /* force interrupt */
@@ -207,7 +208,7 @@ t_stat iop_srvo(UNIT *uptr)
     uint16      chsa = GET_UADDR(uptr->u3);
     int         cmd = uptr->u3 & IOP_MSK;
 
-    sim_debug(DEBUG_CMD, &iop_dev, "iop_srvo start %x: cmd %x \n", chsa, cmd);
+    sim_debug(DEBUG_CMD, &iop_dev, "iop_srvo start %04x: cmd %02x \n", chsa, cmd);
     return SCPE_OK;
 }
 
@@ -217,7 +218,7 @@ t_stat iop_srvi(UNIT *uptr)
     uint16      chsa = GET_UADDR(uptr->u3);
     int         cmd = uptr->u3 & IOP_MSK;
 
-    sim_debug(DEBUG_CMD, &iop_dev, "iop_srv start %x: cmd %x \n", chsa, cmd);
+    sim_debug(DEBUG_CMD, &iop_dev, "iop_srv start %04x: cmd %02x \n", chsa, cmd);
     return SCPE_OK;
 }
 
