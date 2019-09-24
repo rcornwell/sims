@@ -2329,12 +2329,6 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
             if (QKLB)
                 fault_data = (((uint64)sect) << 18);
 #endif
-#if KL_ITS
-            if (QITS && (xct_flag & 020) != 0) {
-                PC = (PC + 1) & AMASK;
-                page_fault = 0;
-            }
-#endif
             /* Ignore faults if flag set */
             if (FLAGS & ADRFLT) {
                 page_fault = 0;
@@ -2380,10 +2374,7 @@ fprintf(stderr, "Page fault %06o a=%o wr=%o w=%o %06o\n\r", addr, (data & RSIGN)
            fault_data |= BIT6;       /* BIT6 */
 #if KL_ITS
         if (QITS) {
-            if ((xct_flag & 020) != 0) {
-                PC = (PC + 1) & AMASK;
-                page_fault = 0;
-            } else if ((data & RSIGN) == 0) {
+            if ((data & RSIGN) == 0) {
                 fault_data = ((uint64)addr) | 033LL << 30 |((uf)?SMASK:0);
                 page_fault = 1;
             } else {// if (wr & ((data & 0100000) == 0)) {
@@ -4488,7 +4479,7 @@ unasign:
               if (QITS && (FLAGS & USER) == 0) {
                    f_load_pc = 0;
                    f_pc_inh = 1;
-                   xct_flag = AC | ((IR & 1) << 4);
+                   xct_flag = AC;
                    break;
               }
               goto unasign;
