@@ -107,10 +107,11 @@ ifneq (,$(findstring besm6,$(MAKECMDGOALS)))
   VIDEO_USEFUL = true
   BESM6_BUILD = true
 endif
-# building the KA10 needs video support
+# building the PDP6, KA10 or KI10 needs video support
 ifneq (,$(or $(findstring pdp6,$(MAKECMDGOALS)),$(findstring pdp10-ka,$(MAKECMDGOALS)),$(findstring pdp10-ki,$(MAKECMDGOALS))))
   VIDEO_USEFUL = true
 endif
+# building the KA10, KI10 or KL10 networking can be used.
 ifneq (,$(or $(findstring pdp10-ka,$(MAKECMDGOALS)),$(findstring pdp10-ki,$(MAKECMDGOALS),$(findstring pdp10-kl,$MAKECMDGOALS))))
   NETWORK_USEFUL = true
 endif
@@ -1269,7 +1270,7 @@ KL10D = PDP10
 KL10 = ${KL10D}/kx10_cpu.c ${KL10D}/kx10_sys.c ${KL10D}/kx10_df.c \
 	${KL10D}/kx10_mt.c ${KL10D}/kx10_dc.c ${KL10D}/kx10_rp.c \
 	${KL10D}/kx10_tu.c ${KL10D}/kx10_rs.c ${KL10D}/kx10_imp.c \
-        ${KL10D}/kl10_fe.c ${KL10D}/ka10_pd.c
+        ${KL10D}/kl10_fe.c ${KL10D}/ka10_pd.c ${KL10D}/ka10_ch10.c
 KL10_OPT = -DKL=1 -DUSE_INT64 -I $(KL10D) -DUSE_SIM_CARD ${NETWORK_OPT} 
 
 PDP1D = PDP1

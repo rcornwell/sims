@@ -376,7 +376,7 @@ extern UNIT     auxcpu_unit[];
 /* DTE memory access functions, n = DTE# */
 extern int      Mem_examine_word(int n, int wrd, uint64 *data);
 extern int      Mem_deposit_word(int n, int wrd, uint64 *data);
-extern int      Mem_read_byte(int n, uint16 *data);
+extern int      Mem_read_byte(int n, uint16 *data, int byte);
 extern int      Mem_write_byte(int n, uint16 *data);
 extern DEVICE   dte_dev;
 extern DEVICE   tty_dev;
@@ -541,7 +541,7 @@ int auxcpu_write (int addr, t_uint64);
 #define NUM_DEVS_TEN11  ITS
 #define NUM_DEVS_AUXCPU ITS
 #define NUM_DEVS_IMP    1
-#define NUM_DEVS_CH10   ITS
+#define NUM_DEVS_CH10   ITS | KL_ITS
 #define NUM_DEVS_DPK    ITS
 #define NUM_DEVS_AI     ITS
 #endif

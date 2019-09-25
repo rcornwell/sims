@@ -157,6 +157,7 @@ int     pi_enable;                            /* Interrupts enabled */
 int     parity_irq;                           /* Parity interupt */
 int     pi_pending;                           /* Interrupt pending. */
 int     pi_enc;                               /* Flag for pi */
+int     pi_vect;                              /* Last pi location used for IRQ */
 int     apr_irq;                              /* Apr Irq level */
 int     clk_en;                               /* Enable clock interrupts */
 int     clk_irq;                              /* Clock interrupt */
@@ -266,6 +267,8 @@ int32   tmxr_poll = 10000;
 /* Physical address range for auxiliary PDP-6. */
 #define AUXCPURANGE(addr)  ((addr) >= 03000000 && (addr) < 03040000)
 
+
+/* List of RH10 & RH20 devices */
 DEVICE *rh_devs[] = {
 #if (NUM_DEVS_RS > 0)
     &rsa_dev,
@@ -287,16 +290,10 @@ DEVICE *rh_devs[] = {
 #endif
     NULL,
 };
-
-struct rh_dev rh[] = {
-    { 0270, NULL, },
-    { 0274, NULL, },
-    { 0360, NULL, },
-    { 0364, NULL, },
-    { 0370, NULL, },
-    { 0374, NULL, },
-    { 0,    NULL, },
-};
+/* RH10 device numbers */
+int rh_nums[] = { 0270, 0274, 0360, 0364, 0370, 0374, 0};
+/* Maps RH10 & RH20 device number to DEVICE structure */
+struct rh_dev rh[8];
 
 typedef struct {
     uint32      pc;
@@ -2355,7 +2352,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
 
     /* Check for access error */
     if ((data & RSIGN) == 0 || (wr & ((data & 0100000) == 0))) {
-fprintf(stderr, "Page fault %06o a=%o wr=%o w=%o %06o\n\r", addr, (data & RSIGN) == 0, wr, (data & 0100000) == 0, data);
+//fprintf(stderr, "Page fault %06o a=%o wr=%o w=%o %06o\n\r", addr, (data & RSIGN) == 0, wr, (data & 0100000) == 0, data);
         fault_data = BIT8 | (uint64)addr;
 #if KLB
         if (QKLB)
@@ -2462,7 +2459,7 @@ int Mem_read(int flag, int cur_context, int fetch) {
         fault_data = (027LL << 30) | (uint64)addr  | (((uint64)sect) << 18);
         if (USER==0)                 /* U */
            fault_data |= SMASK;      /*  BIT0 */
-fprintf(stderr, "Invalid section %012llo\n\r", fault_data);
+//fprintf(stderr, "Invalid section %012llo\n\r", fault_data);
         page_fault = 1;
         return 0;
     }
@@ -2508,7 +2505,7 @@ int Mem_write(int flag, int cur_context) {
         fault_data = (027LL << 30) | (uint64)addr  | (((uint64)sect) << 18);
         if (USER==0)                 /* U */
            fault_data |= SMASK;      /*  BIT0 */
-fprintf(stderr, "Invalid section %012llo\n\r", fault_data);
+//fprintf(stderr, "Invalid section %012llo\n\r", fault_data);
         page_fault = 1;
         return 0;
     }
@@ -2615,12 +2612,12 @@ int Mem_deposit_word(int n, int wrd, uint64 *data) {
 /*
  * Read in 16 bits of data from a byte pointer.
  */
-int Mem_read_byte(int n, uint16 *data) {
+int Mem_read_byte(int n, uint16 *data, int byte) {
     int      addr;
     uint64   val;
     uint64   msk;
     int      p, s, np;
-    int      need = 16;
+    int      need = byte? 8: 16;
 
     *data = 0;
     while (need > 0) {
@@ -4222,18 +4219,23 @@ st_pi:
          * hit at a given level.
          */
         for (f = 0; f < 128; f++) {
-            if (dev_irqv[f] != 0)
-                sim_debug(DEBUG_IRQ, &cpu_dev, "vect irq %o %03o \n",
-                     pi_enc, dev_irq[f]);
             if (dev_irqv[f] != 0 && dev_irq[f] & (0200 >> pi_enc)) {
                 AB = dev_irqv[f](f << 2, AB);
+            if (dev_irqv[f] != 0)
+                sim_debug(DEBUG_IRQ, &cpu_dev, "vect irq %o %03o %06o\n",
+                         pi_enc, dev_irq[f], AB);
                 break;
             }
         }
-        AB |= eb_ptr;
+        if (AB & RSIGN)
+            AB &= 0777;
+        else
+            AB |= eb_ptr;
+        pi_vect = AB;
         Mem_read_nopage();
         goto no_fetch;
 #else
+        pi_vect = AB;
         goto fetch;
 #endif
     }
@@ -7022,7 +7024,6 @@ xjrstf:
                        if (QKLB) {
                           pc_sect = (AR >> 18) & 07777;
                           prev_sect = BR & 037;
-                          fprintf(stderr, "xjrstf %012llo  %012llo\n\r", BR, AR);
                        }
 #endif
                        BR = BR >> 23; /* Move flags into position */
@@ -8409,7 +8410,7 @@ last:
 #if KI | KL
         if (page_enable && page_fault) {
             page_fault = 0;
-fprintf(stderr, "Page fault trap %06o\n\r", PC);
+//fprintf(stderr, "Page fault trap %06o\n\r", PC);
             pi_cycle = 0;
 #if KI
             inout_fail = 1;
@@ -8428,9 +8429,8 @@ fprintf(stderr, "Page fault trap %06o\n\r", PC);
            if ((!pi_hold) & f_inst_fetch) {
                 pi_cycle = 0;
            } else {
-                AB = 040 | (pi_enc << 1) | pi_ov | maoff;
+                AB = pi_vect | pi_ov;
 #if KI | KL
-                AB |= eb_ptr;
                 Mem_read_nopage();
 #else
                 Mem_read(1, 0, 1);
@@ -8441,11 +8441,10 @@ fprintf(stderr, "Page fault trap %06o\n\r", PC);
             if ((IR & 0700) == 0700) {
                 (void)check_irq_level();
             }
-            AB = 040 | (pi_enc << 1) | pi_ov | maoff;
+            AB = pi_vect | pi_ov;
             pi_ov = 0;
             pi_hold = 0;
 #if KI | KL
-            AB |= eb_ptr;
             Mem_read_nopage();
 #else
             Mem_read(1, 0, 1);
@@ -9572,7 +9571,7 @@ t_bool build_dev_tab (void)
 DEVICE *dptr;
 DIB    *dibp;
 uint32 i, j, d;
-int     rh20 = 0540;
+int     rh20;
 
 /* Set trap offset based on MAOFF flag */
 maoff = (cpu_unit[0].flags & UNIT_MAOFF)? 0100 : 0;
@@ -9626,15 +9625,23 @@ if (QBBN)
    dev_tab[024>>2] = &dev_pag;
 #endif
 
-/* Assign all RH10 devices */
+/* Assign all RH10 & RH20  devices */
+rh20 = 0540;
 for (j = i = 0; (dptr = rh_devs[i]) != NULL; i++) {
     dibp = (DIB *) dptr->ctxt;
     if (dibp && !(dptr->flags & DEV_DIS)) {             /* enabled? */
-        if (rh[j].dev_num == 0)
-           break;
-        d = rh[j].dev_num;
+        d = dibp->dev_num;                              /* Check type */
+        if (d & RH10_DEV) {                             /* Skip RH10 devices */
+            d = rh_nums[j];
+            if (d == 0)
+                break;
+        } else if (d & RH20_DEV) {                      /* RH20, grab next device */
+            d = rh20;
+            rh20 += 4;
+        }
         dev_tab[(d >> 2)] = dibp->io;
         dev_irqv[(d >> 2)] = dibp->irq;
+        rh[j].dev_num = d;
         rh[j].dev = dptr;
         j++;
     }
@@ -9653,12 +9660,8 @@ for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {
          for (j = 0; j < dibp->num_devs; j++) {         /* loop thru disp */
               if (dibp->io) {                           /* any dispatch? */
                    d = dibp->dev_num;
-                   if (d & RH10_DEV)                    /* Skip RH10 devices */
+                   if (d & (RH10_DEV|RH20_DEV))         /* Skip RH10 & RH20 devices */
                        continue;
-                   if (d & RH20_DEV) {                  /* RH20, grab next device */
-                       d = rh20;
-                       rh20 += 4;
-                   }
                    if (dev_tab[(d >> 2) + j] != &null_dev) {
                                                         /* already filled? */
                        sim_printf ("%s device number conflict at %02o\n",
