@@ -644,7 +644,8 @@ void dte_its(UNIT *uptr) {
                  cty_out.buff[cty_out.in_ptr] = ch;
                  cty_out.in_ptr = (cty_out.in_ptr + 1) & 0xff;
                  cnt--;
-                 sim_activate(&dte_unit[1], 100);
+                 if (! sim_is_active(&dte_unit[1]))
+                     sim_activate(&dte_unit[1], 100);
 #if (NUM_DEVS_TTY > 0)
              } else {
                  struct _buffer *otty = &tty_out[ln];
@@ -677,7 +678,7 @@ void dte_its(UNIT *uptr) {
      word = M[ITS_DTEOST];
      if ((word & SMASK) == 0) {
          if (word == 0)
-             cty_done = 1;
+             cty_done++;
 #if (NUM_DEVS_TTY > 0)
          else if (word > 0 && word < tty_desc.lines) {
             tty_done[word-1] = 1;
@@ -1091,10 +1092,11 @@ dte_input()
        uint64   word;
        word = M[ITS_DTEODN];
        /* Check if ready for output done */
+               sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS DTEODN = %012llo %d\n", word, cty_done);
        if ((word & SMASK) != 0) {
            if (cty_done) {
                word = 64LL;
-               cty_done = 0;
+               cty_done--;
 #if (NUM_DEVS_TTY > 0)
            } else {
                for (ln = 0; ln < tty_desc.lines; ln++) {
@@ -1184,7 +1186,7 @@ dte_input()
            data1 = PRI_CTYDV;
            if (dte_queue(PRI_EMACK, PRI_EMDLS, 1, &data1) == 0)
                return;
-           cty_done = 0;
+           cty_done--;
        }
        /* Grab a chunck of input from CTY if any */
        n = 0;
@@ -1341,7 +1343,7 @@ t_stat dtei_svc (UNIT *uptr)
 
 
     /* If we have room see if any new lines */
-    if (((cty_in.in_ptr + 1) & 0xff) != cty_in.out_ptr) {
+    while (((cty_in.in_ptr + 1) & 0xff) != cty_in.out_ptr) {
         ch = sim_poll_kbd ();
         if (ch & SCPE_KFLAG) {
             ch = 0177 & sim_tt_inpcvt(ch, TT_GET_MODE (uptr->flags));
@@ -1349,7 +1351,8 @@ t_stat dtei_svc (UNIT *uptr)
             cty_in.in_ptr = (cty_in.in_ptr + 1) & 0xff;
             sim_debug(DEBUG_DETAIL, &dte_dev, "CTY char %o '%c'\n", ch,
                             ((ch > 040 && ch < 0177)? ch: '.'));
-        }
+        } else
+            break;
     }
 
     /* If Monitor input, place in buffer */
@@ -1382,7 +1385,7 @@ t_stat dteo_svc (UNIT *uptr)
         sim_debug(DEBUG_DETAIL, &dte_dev, "CTY outch %o '%c'\n", ch,
                             ((ch > 040 && ch < 0177)? ch: '.'));
     }
-    cty_done = 1;
+    cty_done++;
     dte_input();
     return SCPE_OK;
 }
@@ -1423,7 +1426,6 @@ dtertc_srv(UNIT * uptr)
         word = (M[ITS_DTECHK] + 1) & FMASK;
         if (word == 0) {
             optr->STATUS |= ITS_ON;
-            cty_done = 0;
             sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS ON\n");
             sim_activate(&tty_unit[0], 1000);
             sim_activate(&tty_unit[1], 1000);
@@ -1462,6 +1464,7 @@ t_stat dte_reset (DEVICE *dptr)
     dte_unit[1].STATUS = 0;
     dte_unit[2].STATUS = 0;
     dte_unit[3].STATUS = 0;
+    cty_done = 0;
     sim_rtcn_init_unit (&dte_unit[3], 1000, TMR_RTC);
     sim_activate(&dte_unit[3], 1000);
     sim_activate(&dte_unit[2], 1000);
