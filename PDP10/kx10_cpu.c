@@ -5677,7 +5677,7 @@ unasign:
                       }
                       FE = 36 - (adjb * SC) - ((36 - FE) % SC);   /* New P */
                       AR = (((uint64)(FE & 077)) << 30) |    /* Make new BP */
-                           (AR & 00777777000000LL) |  /* S,IX,I */
+                           (AR & PMASK & LMASK) |  /* S,IX,I */
                            ((AR + adjw) & RMASK);
                   }
                   set_reg(AC, AR);
