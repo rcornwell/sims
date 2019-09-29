@@ -4052,7 +4052,7 @@ no_fetch:
     /* Handle page fault and traps */
     if (page_enable && trap_flag == 0 && (FLAGS & (TRP1|TRP2))) {
 #if KL_ITS
-        if (QITS && (FLAGS & ADRFLT) != 0) {
+        if (QITS && (FLAGS & (ADRFLT|BYTI)) == ADRFLT) {
            FLAGS &= ~ADRFLT;
         } else {
 #endif
