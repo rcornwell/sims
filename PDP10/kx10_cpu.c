@@ -7045,6 +7045,10 @@ xjrstf:
               case 002: /* JRSTF */
                        BR = AR >> 23; /* Move into position */
 jrstf:
+#if KL_ITS
+                       if (QITS)
+                           f = FLAGS & (TRP1|TRP2);
+#endif
                        FLAGS &= ~(OVR|NODIV|FLTUND|BYTI|FLTOVR|CRY1|CRY0|TRP1|TRP2|PCHNG|ADRFLT);
                        /* If executive mode, copy USER and UIO */
                        if ((FLAGS & (PUBLIC|USER)) == 0)
@@ -7057,6 +7061,10 @@ jrstf:
                        FLAGS &= ~PRV_PUB;
                        if ((FLAGS & USER) == 0)
                           FLAGS |= (BR & OVR) ? PRV_PUB : 0;
+#if KL_ITS
+                       if (QITS)
+                           FLAGS |= f;
+#endif
                        check_apr_irq();
                        break;
 
