@@ -867,7 +867,7 @@ rddone:
                     if (i == 0) {
                         uptr->u3 &= ~(0xffff);  /* remove old status bits & cmd */
                         sim_debug(DEBUG_DATAIO, dptr,
-                            "DISK Wrote %04x bytes to diskfile cyl %04x hds %02x sec %02x tstart %08\n",
+                            "DISK Wrote %04x bytes to diskfile cyl %04x hds %02x sec %02x tstart %08x\n",
                             data->dlen, data->cyl, data->tpos, data->spos, data->tstart);
                         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
                         goto wrdone;
