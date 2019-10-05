@@ -117,7 +117,7 @@ t_stat grabxio(uint16 chsa, uint32 *status);    /* grab XIO n/u */
 t_stat rsctlxio(uint16 chsa, uint32 *status);   /* reset controller XIO */
 uint32 find_int_icb(uint16 chsa);
 uint32 find_int_lev(uint16 chsa);
-uint32 scan_chan(void);
+uint32 scan_chan(int *ilev);
 t_stat chan_boot(uint16 chsa, DEVICE *dptr);
 t_stat chan_set_devs();
 t_stat set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
@@ -326,15 +326,15 @@ int readbuff(CHANP *chp)
     addr >>= 2;                                 /* byte to word address */
     chp->chan_buf = M[addr];                    /* get 4 bytes */
 
-    sim_debug(DEBUG_DATA, &cpu_dev, "readbuff read memory bytes into buffer %02x %06x %08x %08x [",
+    sim_debug(DEBUG_EXP, &cpu_dev, "readbuff read memory bytes into buffer %02x %06x %08x %08x [",
           chan, chp->ccw_addr & 0xFFFFFC, chp->chan_buf, chp->ccw_count);
     for(k = 24; k >= 0; k -= 8) {
         char ch = (chp->chan_buf >> k) & 0xFF;
         if (ch < 0x20 || ch == 0xff)
            ch = '.';
-        sim_debug(DEBUG_DATA, &cpu_dev, "%c", ch);
+        sim_debug(DEBUG_EXP, &cpu_dev, "%c", ch);
     }
-    sim_debug(DEBUG_DATA, &cpu_dev, "]\n");
+    sim_debug(DEBUG_EXP, &cpu_dev, "]\n");
     return 0;
 }
 
@@ -448,6 +448,13 @@ loop:
         if (uptr == 0)
             return 1;                               /* if none, error */
 
+#ifndef CON_BUG
+#ifdef DO_DYNAMIC_DEBUG
+        if ((chp->chan_dev == 0x7efc) && ((chp->ccw_cmd & 0xff) == 0x03) && (chp->ccw_count == 0))
+            /* start debugging */
+            cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP);
+#endif
+#endif
         /* Check if this is INCH command */
         if ((chp->ccw_cmd & 0xFF) == 0) {           /* see if this is an initialize channel cmd */
             uptr->u4 = (uint32)chp->ccw_addr;       /* save the memory address in wd 1 of iocd */
@@ -699,8 +706,8 @@ void chan_end(uint16 chsa, uint16 flags) {
     uint32  chan_icb = find_int_icb(chsa);          /* get icb address */
     CHANP   *chp = find_chanp_ptr(chsa);            /* get channel prog pointer */
 
-    sim_debug(DEBUG_EXP, &cpu_dev, "chan_end entry chsa %04x flags %04x ccw_flags %04x status %04x\n",
-            chsa, flags, chp->ccw_flags, chp->chan_status);
+    sim_debug(DEBUG_EXP, &cpu_dev, "chan_end entry chsa %04x flags %04x chan_icb %06x status %04x\n",
+            chsa, flags, chan_icb, chp->chan_status);
     if (chp->chan_byte & BUFF_DIRTY) {
         if (writebuff(chp))                         /* write remaining data */
             return;                                 /* error */
@@ -769,7 +776,8 @@ void store_csw(CHANP *chp)
     if ((FIFO_Put(chsa, stwd1) == -1) || (FIFO_Put(chsa, stwd2) == -1)) {
         fprintf(stderr, "FIFO Overflow ERROR on chsa %04x\r\n", chsa);
     }
-    sim_debug(DEBUG_CMD, &cpu_dev, "store_csw on chsa %04x sw1 %08x sw2 %08x\r\n", chsa, stwd1, stwd2);
+    sim_debug(DEBUG_CMD, &cpu_dev, "store_csw chsa %04x sw1 %08x sw2 %08x CPU stat %08x\n",
+        chsa, stwd1, stwd2, SPAD[0xf9]);
     chp->chan_status = 0;                           /* no status anymore */
     irq_pend = 1;                                   /* wakeup controller */
 }
@@ -1270,9 +1278,9 @@ t_stat chan_boot(uint16 chsa, DEVICE *dptr) {
 }
 
 /* Scan all channels and see if one is ready to start or has
-   interrupt pending.
+   interrupt pending. Return icb address and interrupt level
 */
-uint32 scan_chan(void) {
+uint32 scan_chan(int *ilev) {
     int         i,j;
     uint32      chsa = 0;                           /* No device */
     uint32      chan;                               /* channel num 0-7f */
@@ -1340,8 +1348,9 @@ uint32 scan_chan(void) {
                 /* get the address of the interrupt IVL table in main memory */
                 chan_ivl = SPAD[0xf1] + (i<<2);     /* contents of spad f1 points to chan ivl in mem */
                 chan_icba = M[chan_ivl >> 2];       /* get the interrupt context block addr in memory */
-                sim_debug(DEBUG_EXP, &cpu_dev, "scan_chan INTS REQ irq %04x found chan_icba %8x INTS %0x\n",
+                sim_debug(DEBUG_EXP, &cpu_dev, "scan_chan INTS REQ irq %04x found chan_icba %08x INTS %08x\n",
                     i, chan_icba, INTS[i]);
+                *ilev = i;                          /* return interrupt level */
                 return(chan_icba);                  /* return ICB address */
             }
         }

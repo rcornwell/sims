@@ -279,7 +279,11 @@ t_stat con_srvo(UNIT *uptr) {
             uptr->u3 &= LMASK;              /* nothing left, command complete */
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
         } else {
-            sim_debug(DEBUG_CMD, &con_dev, "con_srvo write %d: putch %02x %c\n", unit, ch, ch);
+            /* HACK HACK HACK */
+            /* simh stops outputing chars to debug file if it is passed a null????? */
+            if (ch == 0)                    /* do not pass a null char */
+                ch = '@';                   /* stop simh abort .... */
+            sim_debug(DEBUG_CMD, &con_dev, "con_srvo write %01x: putch %02x %c\n", unit, ch, ch);
             sim_putchar(ch);                /* output next char to device */
             sim_activate(uptr, 20);         /* start us off */
         }
@@ -302,6 +306,7 @@ t_stat con_srvi(UNIT *uptr) {
         if (cmd == CON_MSK) {                   /* Channel end only for INCH */
             sim_debug(DEBUG_CMD, &con_dev, "con_srvi INCH chsa %04x cmd = %02x\n", chsa, cmd);
             chan_end(chsa, SNS_CHNEND);         /* done */
+//          chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
         } else {
             sim_debug(DEBUG_CMD, &con_dev, "con_srvi NOP chsa %04x cmd = %02x\n", chsa, cmd);
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */

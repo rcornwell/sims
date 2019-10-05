@@ -217,8 +217,8 @@ uint8 lpr_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
     /* process the command */
     switch (cmd & LPR_CMDMSK) {
     case 0x00:                                  /* INCH command */
-        sim_debug(DEBUG_CMD, &lpr_dev, "lpr_startcmd %x: Cmd INCH\n", chan);
-//fprintf(stderr, "lpr_startcmd %x: Cmd INCH\n", chan);
+        sim_debug(DEBUG_CMD, &lpr_dev, "lpr_startcmd %04x: Cmd INCH\n", chan);
+//fprintf(stderr, "lpr_startcmd %04x: Cmd INCH\n", chan);
         return SNS_CHNEND|SNS_DEVEND;           /* all is well */
         break;
 
@@ -244,7 +244,7 @@ uint8 lpr_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
     case 0x37:                          /* <LF> <LF> <LF> */
     case 0x47:                          /* <FF> */
         /* process the command */
-        sim_debug(DEBUG_CMD, &lpr_dev, "lpr_startcmd %x: Cmd %x print\n", chan, cmd&LPR_CMDMSK);
+        sim_debug(DEBUG_CMD, &lpr_dev, "lpr_startcmd %04x: Cmd %02x print\n", chan, cmd&LPR_CMDMSK);
         uptr->u3 &= ~(LPR_CMDMSK);      /* zero cmd */
         uptr->u3 |= (cmd & LPR_CMDMSK); /* save new command in u3 */
         sim_activate(uptr, 100);        /* Start unit off */
@@ -253,7 +253,7 @@ uint8 lpr_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         return 0;                       /* we are good to go */
 
     case 0x4:                           /* Sense Status */
-        sim_debug(DEBUG_CMD, &lpr_dev, "lpr_startcmd %x: Cmd %x sense\n", chan, cmd&LPR_CMDMSK);
+        sim_debug(DEBUG_CMD, &lpr_dev, "lpr_startcmd %04x: Cmd %02x sense\n", chan, cmd&LPR_CMDMSK);
         uptr->u3 &= ~(LPR_CMDMSK);      /* zero cmd */
         uptr->u3 |= (cmd & LPR_CMDMSK); /* save new command in u3 */
         sim_activate(uptr, 100);        /* Start unit off */
@@ -262,7 +262,7 @@ uint8 lpr_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         return 0;                       /* we are good to go */
 
     default:                            /* invalid command */
-        sim_debug(DEBUG_CMD, &lpr_dev, "lpr_startcmd %x: Cmd %x INVALID \r\n", chan, cmd&LPR_CMDMSK);
+        sim_debug(DEBUG_CMD, &lpr_dev, "lpr_startcmd %04x: Cmd %02x INVALID\n", chan, cmd&LPR_CMDMSK);
         uptr->u5 |= SNS_CMDREJ;
         break;
     }
@@ -277,7 +277,7 @@ t_stat lpr_srv(UNIT *uptr) {
     int         u = (uptr - lpr_unit);
     int         cmd = (uptr->u3 & 0xff);
 
-    sim_debug(DEBUG_CMD, &lpr_dev, "lpr_srv called chsa %x cmd %x u3 %x cnt %x\r\n",
+    sim_debug(DEBUG_CMD, &lpr_dev, "lpr_srv called chsa %04x cmd %02x u3 %08x cnt %04x\r\n",
             chsa, cmd, uptr->u3, uptr->u6);
 
     /* FIXME, need IOP lp status bit assignments */
@@ -430,7 +430,7 @@ t_stat lpr_getlpp(FILE *st, UNIT *uptr, int32 v, CONST void *desc)
 {
     if (uptr == NULL)
         return SCPE_IERR;
-    fprintf(st, "linesperpage=%d", uptr->capac);
+    fprintf(st, "linesperpage=%02d", uptr->capac);
     return SCPE_OK;
 }
 

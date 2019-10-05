@@ -1,4 +1,4 @@
-/* sel32_iop.c: SEL 32 Class F IOP processor channel.
+/* sel32_iop.c: SEL-32 Class F IOP processor channel.
 
    Copyright (c) 2018-2019, James C. Bevier
 
@@ -242,7 +242,7 @@ t_stat iop_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr
 
 const char *iop_desc(DEVICE *dptr)
 {
-    return("SEL IOP Channel Controller @ 0x7E00");
+    return("SEL-32 IOP Channel Controller @ 0x7E00");
 }
 
 #endif

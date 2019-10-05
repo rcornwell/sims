@@ -1,4 +1,4 @@
-/* sel32_disk.c: SEL 32 2311/2314 Disk controller
+/* sel32_disk.c: SEL-32 2311/2314 Disk controller
 
    Copyright (c) 2018, James C. Bevier
    Portions provided by Richard Cornwell and other SIMH contributers

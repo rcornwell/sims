@@ -111,8 +111,8 @@ DEVICE rtc_dev = {
 t_stat rtc_srv (UNIT *uptr)
 {
     if (rtc_pie) {                                  /* set pulse intr */
-//                            time_t result = time(NULL);
-//                            fprintf(stderr, "Clock int time %x\r\n", (uint32)result);
+//      time_t result = time(NULL);
+//      fprintf(stderr, "Clock int time %08x\r\n", (uint32)result);
         INTS[rtc_lvl] |= INTS_REQ;                  /* request the interrupt */
         irq_pend = 1;                               /* make sure we scan for int */
     }
@@ -255,8 +255,8 @@ DEVICE itm_dev = {
 t_stat itm_srv (UNIT *uptr)
 {
     if (itm_pie) {                              /* interrupt enabled? */
-                            time_t result = time(NULL);
-                            fprintf(stderr, "Clock int time %x\r\n", (uint32)result);
+        time_t result = time(NULL);
+        fprintf(stderr, "Clock int time %08x\r\n", (uint32)result);
         INTS[itm_lvl] |= INTS_REQ;              /* request the interrupt on zero value */
         irq_pend = 1;                           /* make sure we scan for int */
         if (itm_cmd == 0x3d) {
@@ -284,20 +284,20 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
     itm_cmd = cmd;                                  /* save last cmd */
     switch (cmd) {
     case 0x20:                                      /* stop timer */
-//        fprintf(stderr, "clk kill value %x (%d)\r\n", cnt, cnt);
+//        fprintf(stderr, "clk kill value %08x (%08d)\r\n", cnt, cnt);
         sim_cancel (&itm_unit);                     /* cancel itc */
         itm_cnt = 0;                                /* no count reset value */
         return 0;                                   /* does not matter, no value returned  */
     case 0x39:                                      /* load timer with new value and start*/
         if (cnt <= 0)
             cnt = 26042;                            /* 0x65ba TRY 1,000,000/38.4 */
-//        fprintf(stderr, "clk 0x39 init value %x (%d)\r\n", cnt, cnt);
+//        fprintf(stderr, "clk 0x39 init value %08x (%08d)\r\n", cnt, cnt);
         /* start timer with value from user */
         sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);
         itm_cnt = 0;                                /* no count reset value */
         return 0;                                   /* does not matter, no value returned  */
     case 0x3d:                                      /* load timer with new value and start*/
-//        fprintf(stderr, "clk 0x3d init value %x (%d)\r\n", cnt, cnt);
+//        fprintf(stderr, "clk 0x3d init value %08x (%08d)\r\n", cnt, cnt);
         /* start timer with value from user, reload on zero time */
         sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);
         itm_cnt = cnt;                              /* count reset value */
@@ -305,14 +305,14 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
     case 0x60:                                      /* read and stop timer */
         /* get timer value and stop timer */
         temp = (uint32)(100.0 * sim_activate_time_usecs (&itm_unit) / itm_tick_size_x_100);
-//        fprintf(stderr, "clk 0x60 temp value %x (%d)\r\n", temp, temp);
+//        fprintf(stderr, "clk 0x60 temp value %08x (%08d)\r\n", temp, temp);
         sim_cancel (&itm_unit);
         return temp;                                /* return current count value */
     case 0x79:                                      /* read the current timer value */
         /* get timer value, load new value and start timer */
         temp = (uint32)(100.0 * sim_activate_time_usecs (&itm_unit) / itm_tick_size_x_100);
-//        fprintf(stderr, "clk 0x79 temp value %x (%d)\r\n", temp, temp);
-//        fprintf(stderr, "clk 0x79 init value %x (%d)\r\n", cnt, cnt);
+//        fprintf(stderr, "clk 0x79 temp value %08x (%08d)\r\n", temp, temp);
+//        fprintf(stderr, "clk 0x79 init value %08x (%08d)\r\n", cnt, cnt);
         /* start timer to fire after cnt ticks */
         sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);
         itm_cnt = 0;                                /* no count reset value */
@@ -320,7 +320,7 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
     case 0x40:                                      /* read the current timer value */
         /* return current count value */
         temp = (uint32)(100.0 * sim_activate_time_usecs (&itm_unit) / itm_tick_size_x_100);
-//        fprintf(stderr, "clk 0x40 temp value %x (%d)\r\n", temp, temp);
+//        fprintf(stderr, "clk 0x40 temp value %08x (%08d)\r\n", temp, temp);
         return temp;
         break;
     }
@@ -388,7 +388,7 @@ t_stat itm_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr
 /* device description */
 const char *itm_desc(DEVICE *dptr)
 {
-    return "SEL IOP interval timer @ address 0x7F04";
+    return "SEL IOP Interval Timer @ address 0x7F04";
 }
 
 #endif
