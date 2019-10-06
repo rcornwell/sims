@@ -1,8 +1,8 @@
 
 [![Coverity Scan Build Status](https://scan.coverity.com/projects/12020/badge.svg)](https://scan.coverity.com/projects/rcornwell-sims)  
 
-This is a working copy of my Burroughs B5500, Dec PDP6, KA10, KI10, SEL32, IBM 360 and IBM7000
-series simulators for SimH.
+This is a working copy of my Burroughs B5500, Dec PDP6, KA10, KI10, KL10, SEL32, IBM 360
+and IBM7000 series simulators for SimH.
 
 # Stable released simulators.
 
@@ -64,7 +64,14 @@ Latest status for I7000 Cpus:
 
  Emulates a dual CPU B5500 with up to 32K of memory. I can support either DFX disks or
  dual disks up to 20 units. Up to 16 magnetic tapes drives is support. 2 Card readers
- a card punch and a pair of line printers.
+ a card punch and a pair of line printers. Will run MCP XIII and XV.
+
+  * Up to either 10 disks with DFX support or 20 disks without.  
+  * Up to 16 magnetic tape drives.  
+  * Dual card reader.  
+  * Dual Line printer.  
+  * Single card punch.
+  * Up to 32 terminal lines.  
 
 # Dec PDP6
 
@@ -88,75 +95,56 @@ The PDP6 runs TOPS 10 4.5 off Dectape.
 
   Type 340 graphics display.  
 
-# Dec KA10 & KI10 
+# Dec KA10 & KI10 & KL10
 
-These are nearing release. Please report any issues that you find in them.
-
-The KA10 sim has successfully run Tops 10 4.5, 5.03 and Tops 10 6.03.  
-The KI10 sim has successfully run Tops 10 6.03 with VMSER  
-The KA10 sim has successfully run ITS.  
-The KA10 sim has successfully run WAITS (with and without BBN pager).  
+The KA10 sim has successfully run Tops 10 4.5, 5.03 and Tops 10 6.03, ITS and WAITS.  
+The KI10 sim has successfully run Tops 10 6.03 with VMSER.  
+The KL10 sim has successfully run Tops 10 6.03 with VMSER and ITS.  
+KL10 extended addressing support is still in development.  
 
    Disk   
    * RC10 RD10/RM10  
    * RP10 RP01/RP02/RP03  
-   * RH10 RP04/RP06/RP07 (RP07 not supported under 6.03).   
-   * RH10 RS04  
+   * RH10/RH20 RP04/RP06/RP07 (RP07 not supported under 6.03).   
+   * RH10/RH20 RS04  
    * PMP (P. PETIT'S IBM CHANNEL)  
    * System Concepts DC-10 IBM 2314  
 
    Tape  
    * TM10A or B  
-   * RH10 TM03/TU16  
+   * RH10/RH20 TM03/TU16  
    * TD10 Dectape  
 
    Paper Tape  
    * Punch  
    * Reader  
  
-   DC10E terminal mux.  
-   Morton tty Mux for ITS.  
-   Knight Kludge mux for ITS.  
+   * DC10E terminal mux.  
+   * Morton tty Mux for ITS.  
+   * Knight Kludge mux for ITS.  
+   * Terminals on KL10 Front End.  
 
-   IMP networking support for ITS and TENEX.  
-   CH10 networking support for ITS.
+   * IMP networking support for ITS and TENEX.  
+   * CH10 networking support for ITS.  
 
-   340 Display Station support.  
+   * 340 Display Station support.  
+   * III Display support for WAITS (in progress).  
 
-   Optional support for PDP6 devices (standard if WAITS included).  
+   * Optional support for PDP6 devices (standard if WAITS included).  
 
    The RP10 supports boot (actual hardware did not), by reading in Blocks 4-7
 and transfering to the loaded value. RC10, RH10, TM10 support readin mode. 
-
-   Support for KL10A will be started in the summer.  
-
-# Development Simulators.
- 
-# Dec KL10
-
-Still in initial coding stages.
-
-   Disk   
-   * RH10 RP04/RP06/RP07  
-   * RH10 RS04  
-   * RH20 RP04/RP06/RP07  
-   * RH20 RS04  
-
-   Tape  
-   * TM10A or B  
-   * RH10 TM03/TU16  
-   * RH20 TM03/TU16  
-
-   DC10E terminal mux.  
-   Terminals attached to front end processor  
-
-   IMP networking support for ITS and TENEX.  
 
 # ICL 1900 simulator.
 
 This is a new simulator. Will pass 1904E/1905E CPU diagnostics (FLIT). Will boot paper
 tape executive E4BM and tape executive E6RM. Still need to add more devices and test
 with Goerge 2 and 3.
+
+  The CPU can be configured for model A, B or C type system. Or models 1901 throgh 1909. 
+Paging is currently not supported. Both standard interface and older non-standard interface
+are supported on most device.
+
 
 # IBM 360 simulator.
 
@@ -186,18 +174,14 @@ The current test version is for the SEL 32/27, 32/67, 32/87, 32/97 computers.
 Support for 32/55, 32/75, V6, and V9 computers may be added in the future.
 This simulator is co-authors with James C. Bevier. I did the initial parts
 of the simulator, James took it to a working simulator, I am assisting him
-in maintaining and enhancing the simulator.
-
-# SEL Concept/32
-
-This simulator is running a test version of MPX-32 1.5F.  It is capable of
-creating a disk image of the O/S from a SDT tape.  The disk image can be
-booted, initialized, and run many of the MPX utilities; including OPCOM & TSM.
-Eight terminals can be used to access TSM via Telnet port 4747.  Initial
-support has been added for excess 64 floating point arithmetic.  More testing
-is still required.  The sim32disk.gz can be uncompressed and booted with the
-sel32.27.sim32.disk.ini initialization file.  The sim32sdt.tap.gz file can
-also be uncompressed and started with the sel32.27.sim32.tape.ini initialization
-file to install from tape.
+in maintaining and enhancing the simulator. This simulator is running a test
+version of MPX-32 1.5F.  It is capable of creating a disk image of the O/S
+from a SDT tape.  The disk image can be booted, initialized, and run many of
+the MPX utilities; including OPCOM & TSM.  Eight terminals can be used to
+access TSM via Telnet port 4747.  Initial support has been added for excess
+64 floating point arithmetic.  More testing is still required.  The sim32disk.gz
+can be uncompressed and booted with the sel32.27.sim32.disk.ini initialization file.
+The sim32sdt.tap.gz file can also be uncompressed and started with the
+sel32.27.sim32.tape.ini initialization file to install from tape.
 
 
