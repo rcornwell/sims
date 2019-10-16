@@ -100,7 +100,6 @@ The PDP6 runs TOPS 10 4.5 off Dectape.
 The KA10 sim has successfully run Tops 10 4.5, 5.03 and Tops 10 6.03, ITS and WAITS.  
 The KI10 sim has successfully run Tops 10 6.03 with VMSER.  
 The KL10 sim has successfully run Tops 10 6.03 with VMSER and ITS.  
-KL10 extended addressing support is still in development.  
 
    Disk   
    * RC10 RD10/RM10  

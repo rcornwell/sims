@@ -1,6 +1,6 @@
-/* ka10_df.c: DF10 common routines.
+/* kx10_df.c: DF10 common routines.
 
-   Copyright (c) 2015-2017, Richard Cornwell
+   Copyright (c) 2015-2019, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -23,11 +23,14 @@
 
 #include "kx10_defs.h"
 
+
+/* Set an IRQ for a DF10 device */
 void df10_setirq(struct df10 *df) {
       df->status |= PI_ENABLE;
       set_interrupt(df->devnum, df->status);
 }
 
+/* Generate the DF10 complete word */
 void df10_writecw(struct df10 *df) {
       df->status |= 1 << df->ccw_comp;
       if (df->wcr != 0)
@@ -35,6 +38,7 @@ void df10_writecw(struct df10 *df) {
       M[df->cia|1] = ((uint64)(df->ccw & WMASK) << CSHIFT) | ((uint64)(df->cda) & AMASK);
 }
 
+/* Finish off a DF10 transfer */
 void df10_finish_op(struct df10 *df, int flags) {
       df->status &= ~BUSY;
       df->status |= flags;
@@ -42,6 +46,7 @@ void df10_finish_op(struct df10 *df, int flags) {
       df10_setirq(df);
 }
 
+/* Setup for a DF10 transfer */
 void df10_setup(struct df10 *df, uint32 addr) {
       df->cia = addr & ICWA;
       df->ccw = df->cia;
@@ -50,6 +55,7 @@ void df10_setup(struct df10 *df, uint32 addr) {
       df->status &= ~(1 << df->ccw_comp);
 }
 
+/* Fetch the next IO control word */
 int df10_fetch(struct df10 *df) {
       uint64 data;
       if (df->ccw > MEMSIZE) {
@@ -84,6 +90,7 @@ int df10_fetch(struct df10 *df) {
       return 1;
 }
 
+/* Read next word */
 int df10_read(struct df10 *df) {
      uint64 data;
      if (df->wcr == 0) {
@@ -113,6 +120,7 @@ int df10_read(struct df10 *df) {
      return 1;
 }
 
+/* Write next word */
 int df10_write(struct df10 *df) {
      if (df->wcr == 0) {
          if (!df10_fetch(df))

@@ -52,7 +52,8 @@
 
 #if KL
 #define KLA 1
-#define KLB 0
+#define KLB 1
+#define EPT440 0              /* Force KL10A to 440 section address */
 #endif
 
 #ifndef KLA
@@ -183,6 +184,7 @@ extern DEBTAB crd_debug[];
 #define BIT9     00000400000000LL
 #define BIT10    00000200000000LL
 #define BIT10_35 00000377777777LL
+#define BIT12    00000040000000LL
 #define BIT17    00000001000000LL
 #define MANT     00000777777777LL
 #define EXPO     00377000000000LL
@@ -293,6 +295,12 @@ extern DEBTAB crd_debug[];
 #define AMASK           00000017777777LL
 #define WMASK           0037777LL
 #define CSHIFT          22
+#if KL
+#define RH20_WMASK      003777LL
+#define RH20_XFER       SMASK
+#define RH20_HALT       BIT1
+#define RH20_REV        BIT2
+#endif
 #else
 #define AMASK           RMASK
 #define WMASK           RMASK
@@ -303,6 +311,10 @@ extern DEBTAB crd_debug[];
 #define PI_ENABLE       0000000010      /* Clear DONE */
 #define BUSY            0000000020      /* STOP */
 #define CCW_COMP        0000000040      /* Write Final CCW */
+/* RH10 / RH20 interrupt */
+#define IADR_ATTN       0000000000040LL   /* Interrupt on attention */
+#define IARD_RAE        0000000000100LL   /* Interrupt on register access error */
+#define CCW_COMP_1      0000000040000LL   /* Control word written. */
 
 #if KI
 #define DEF_SERIAL      514             /* Default DEC test machine */
@@ -353,7 +365,12 @@ extern DEBTAB crd_debug[];
 #define UNIT_V_MPX      (UNIT_V_WAITS + 1)
 #define UNIT_M_MPX      (1 << UNIT_V_MPX)
 #define UNIT_MPX        (UNIT_M_MPX)          /* MPX Device for ITS */
-#define DEV_V_RH        (DEV_V_UF + 8)                 /* Type RH20 */
+#define CNTRL_V_RH      (UNIT_V_UF + 4)
+#define CNTRL_M_RH      7
+#define GET_CNTRL_RH(x) (((x) >> CNTRL_V_RH) & CNTRL_M_RH)
+#define CNTRL_RH(x)     (((x) & CNTRL_M_RH) << CNTRL_V_RH)
+#define DEV_V_RH        (DEV_V_UF + 1)                 /* Type RH20 */
+#define DEV_M_RH        (1 << DEV_V_RH)
 #define TYPE_RH10       (0 << DEV_V_RH)
 #define TYPE_RH20       (1 << DEV_V_RH)
 
@@ -432,38 +449,63 @@ extern t_stat (*dev_tab[128])(uint32 dev, t_uint64 *data);
 
 #define VEC_DEVMAX      8                               /* max device vec */
 
+/* DF10 Interface */
+struct df10 {
+      uint32         status;     /* DF10 status word */
+      uint32         cia;        /* Initial transfer address */
+      uint32         ccw;        /* Next control word address */
+      uint32         wcr;        /* CUrrent word count */
+      uint32         cda;        /* Current transfer address */
+      uint32         devnum;     /* Device number */
+      t_uint64       buf;        /* Data buffer */
+      uint8          nxmerr;     /* Bit to set for NXM */
+      uint8          ccw_comp;   /* Have we written out CCW */
+} ;
+
+/* RH10/RH20 Interface */
+struct rh_if {
+      void           (*rh_write)(DEVICE *dptr, struct rh_if *rh, int reg, uint32 data);
+      uint32         (*rh_read)(DEVICE *dptr, struct rh_if *rh, int reg);
+      void           (*rh_reset)(DEVICE *dptr);
+      t_uint64       buf;        /* Data buffer */
+      uint32         status;     /* DF10 status word */
+      uint32         cia;        /* Initial transfer address */
+      uint32         ccw;        /* Current word count */
+      uint32         wcr;
+      uint32         cda;        /* Current transfer address */
+      uint32         devnum;     /* Device number */
+      int            ivect;      /* Interrupt vector */
+      uint8          imode;      /* Mode of vector */
+      int            cop;        /* RH20 Channel operator */
+      uint32         sbar;       /* RH20 Starting address */
+      uint32         stcr;       /* RH20 Count */
+      uint32         pbar;
+      uint32         ptcr;
+      int            reg;        /* Last register selected */
+      int            drive;      /* Last drive selected */
+      int            rae;        /* Access register error */
+      int            attn;       /* Attention bits */
+      int            xfer_drive; /* Current transfering drive */
+};
+
 /* Device context block */
 struct pdp_dib {
     uint32              dev_num;                        /* device address */
     uint32              num_devs;                       /* length */
     t_stat              (*io)(uint32 dev, t_uint64 *data);
     int                 (*irq)(uint32 dev, int addr);
+    struct rh_if        *rh;
 };
-
+ 
 #define RH10_DEV        01000
 #define RH20_DEV        02000
 struct rh_dev {
     uint32              dev_num;
     DEVICE             *dev;
+    struct rh_if       *rh;
 };
 
-
 typedef struct pdp_dib DIB;
-
-
-/* DF10 Interface */
-struct df10 {
-        uint32  status;
-        uint32  cia;
-        uint32  ccw;
-        uint32  wcr;
-        uint32  cda;
-        uint32  devnum;
-        t_uint64  buf;
-        uint8   nxmerr;
-        uint8   ccw_comp;
-} ;
-
 
 void df10_setirq(struct df10 *df) ;
 void df10_writecw(struct df10 *df) ;
@@ -477,6 +519,18 @@ int  dct_read(int u, t_uint64 *data, int c);
 int  dct_write(int u, t_uint64 *data, int c);
 int  dct_is_connect(int u);
 #endif
+
+/* Define RH10/RH20 functions */
+t_stat  rh_set_type(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+t_stat  rh_show_type (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+t_stat  rh_devio(uint32 dev, t_uint64 *data);
+int     rh_devirq(uint32 dev, int addr);
+void    rh_setattn(struct rh_if *rh, int unit);
+int     rh_blkend(struct rh_if *rh);
+void    rh_setirq(struct rh_if *rh) ;
+void    rh_finish_op(struct rh_if *rh, int flags);
+int     rh_read(struct rh_if *rh);
+int     rh_write(struct rh_if *rh);
 
 int ten11_read (int addr, t_uint64 *data);
 int ten11_write (int addr, t_uint64 data);

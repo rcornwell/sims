@@ -523,12 +523,22 @@ int get_word(FILE *fileref, uint64 *word)
 
    if (sim_fread(cbuf, 1, 5, fileref) != 5)
        return 1;
-   *word = ((uint64)(cbuf[0]) << 29) |
-           ((uint64)(cbuf[1]) << 22) |
-           ((uint64)(cbuf[2]) << 15) |
-           ((uint64)(cbuf[3]) << 8) |
-           ((uint64)(cbuf[4] & 0177) << 1) |
-           ((uint64)(cbuf[4] & 0200) >> 7);
+#if 1
+   *word = ((uint64)(cbuf[0] & 0177) << 29) |
+           ((uint64)(cbuf[1] & 0177) << 22) |
+           ((uint64)(cbuf[2] & 0177) << 15) |
+           ((uint64)(cbuf[3] & 0177) << 8) |
+           ((uint64)(cbuf[4] & 0177) << 1);
+   if (cbuf[4] & 0200)
+       *word |= 1;
+#endif
+#if 0
+   *word = ((uint64)(cbuf[0] & 0377) << 28) |
+           ((uint64)(cbuf[1] & 0377) << 20) |
+           ((uint64)(cbuf[2] & 0377) << 12) |
+           ((uint64)(cbuf[3] & 0377) << 4) |
+           (uint64)(cbuf[4] & 017);
+#endif
     return 0;
 }
 
@@ -613,7 +623,6 @@ cont = 1;
 do {
     
     wc = get_word(fileref, &data);
-//    wc = sim_fread (&data, sizeof (uint64), 1, fileref);/* read blk hdr */
     if (wc != 0)                                        /* error? */
         return SCPE_FMT;
     bsz = (int32) ((data & RMASK) - 1);                 /* get count */
@@ -630,9 +639,6 @@ do {
                  return SCPE_FMT;
         }
         ndir = bsz;
-//        ndir = sim_fread (dirbuf, sizeof (uint64), bsz, fileref);
-  //      if (ndir < bsz)                                 /* error */
-   //         return SCPE_FMT;
         break;
 
     case EXE_PDV:                                       /* optional */
@@ -646,9 +652,6 @@ do {
              if (get_word(fileref, &entbuf[i]))
                  return SCPE_FMT;
         }
-//        entvec = sim_fread (entbuf, sizeof (uint64), bsz, fileref);
- //       if (entvec < 2)                                 /* error? */
-  //          return SCPE_FMT;
         entvec = bsz;
         cont = 0;                                       /* stop */
         break;
@@ -673,24 +676,22 @@ for (i = 0; i < ndir; i = i + 2) {                      /* loop thru dir */
             (void)sim_fseek (fileref, (fpage << PAG_V_PN) * 5, SEEK_SET);
             for (k = 0; k < PAG_SIZE; k++) {
                  if (get_word(fileref, &pagbuf[k]))
-                     return SCPE_FMT;
+                     break;
             }
-//            wc = sim_fread (pagbuf, sizeof (uint64), PAG_SIZE, fileref);
- //           if (wc < PAG_SIZE)
-  //              return SCPE_FMT;
             fpage++;
             }
         ma = mpage << PAG_V_PN;                         /* mem addr */
         for (k = 0; k < PAG_SIZE; k++, ma++) {          /* copy buf to mem */
             if (ma > MEMSIZE)
                 return SCPE_NXM;
-fprintf(stderr, "M %06o %012llo\n", ma, pagbuf[k]);
             M[ma] = fpage? (pagbuf[k] & FMASK): 0;
             }                                           /* end copy */
         }                                               /* end rpt */
     }                                                   /* end directory */
 if (entvec && entbuf[1])
     PC = (int32) (entbuf[1] & RMASK);               /* start addr */
+else if (entvec == 0)
+    PC = (int32) (M[0120] & RMASK);
 return SCPE_OK;
 }
 

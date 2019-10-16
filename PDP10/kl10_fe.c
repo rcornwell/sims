@@ -533,7 +533,6 @@ void dte_second(UNIT *uptr) {
          cty_out.in_ptr = (cty_out.in_ptr + 1) & 0xff;
          M[SEC_DTCHR + base] = ch;
          M[SEC_DTMTD + base] = FMASK;
-         M[SEC_DTF11 + base] = 0;
          sim_activate(&dte_unit[1], 100);
          break;
      case SEC_SETPRI:
@@ -554,8 +553,9 @@ enter_pri:
          break;
      case SEC_SETDDT: /* Read character from console */
          if (cty_in.in_ptr == cty_in.out_ptr) {
-             sim_activate(uptr, 100);
-             return;
+             M[SEC_DTF11 + base] = 0;
+             M[SEC_DTMTI + base] = FMASK;
+             break;
          }
          ch = cty_in.buff[cty_in.out_ptr];
          cty_in.out_ptr = (cty_in.out_ptr + 1) & 0xff;
@@ -1543,8 +1543,6 @@ lpt_printline(UNIT *uptr, int nl) {
     uptr->pos += uptr->POS;
     uptr->COL = 0;
     uptr->POS = 0;
-//    if (uptr->LINE == 0)
- //      (void)dte_queue(PRI_EMHDS, PRI_EMLPT, 1, &data1);
     return;
 }
 
