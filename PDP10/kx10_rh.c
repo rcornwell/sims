@@ -495,7 +495,9 @@ rh_devirq(uint32 dev, int addr) {
 void rh_setattn(struct rh_if *rhc, int unit)
 {
     rhc->attn |= 1<<unit;
-    if ((rhc->status & IADR_ATTN) != 0)
+    if (rhc->imode != 2 && rhc->status & BUSY)
+        return;
+    if ((rhc->status & IADR_ATTN) != 0) 
         rh_setirq(rhc);
 }
 
