@@ -1174,7 +1174,6 @@ t_stat dev_pi(uint32 dev, uint64 *data) {
         if (dev & 040) {   /* SBDIAG */
             AB = (AB + 1) & RMASK;
             res = 0;
-//            fprintf(stderr, "SBDIAG %012llo\n\r", *data);
             if (((*data >> 31) & 037) == 010) {
                 switch(*data & 037) {
                 case 0:  res = 06000000000LL; break;
@@ -1182,7 +1181,6 @@ t_stat dev_pi(uint32 dev, uint64 *data) {
                 case 2:  res = 0; break;
                 default: res = 0; break;
                 }
- //           fprintf(stderr, "SBDIAG return %012llo\n\r", res);
             }
             MB = res;
             (void)Mem_write(0, 0);
@@ -3950,7 +3948,7 @@ int     flag1;
 int     flag3;
 int     instr_count = 0;         /* Number of instructions to execute */
 uint32  IA;
-#if ITS
+#if ITS | KL_ITS
 char    one_p_arm = 0;           /* One proceed arm */
 #endif
 
@@ -3985,10 +3983,14 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
        set_quantum();
    }
 #endif
-  watch_stop = 0;
+#if KL_ITS
+   if (QITS)
+       one_p_arm = 0;
+#endif
+   watch_stop = 0;
 
-  while ( reason == 0) {                                /* loop until ABORT */
-    if (sim_interval <= 0) {                           /* check clock queue */
+   while ( reason == 0) {                                /* loop until ABORT */
+      if (sim_interval <= 0) {                           /* check clock queue */
          if ((reason = sim_process_event()) != SCPE_OK) {/* error?  stop sim */
 #if ITS
              if (QITS)
@@ -4045,7 +4047,6 @@ fetch:
            }
         }
 #endif
-
        if (Mem_read(pi_cycle | uuo_cycle, 1, 1)) {
            pi_rq = check_irq_level();
            if (pi_rq)
@@ -4073,21 +4074,21 @@ no_fetch:
 #if KI | KL
     /* Handle page fault and traps */
     if (page_enable && trap_flag == 0 && (FLAGS & (TRP1|TRP2))) {
+        if (FLAGS & ADRFLT) {
 #if KL_ITS
-        if (QITS && (FLAGS & (ADRFLT|BYTI)) == ADRFLT) {
-           FLAGS &= ~ADRFLT;
+            if (QITS && (FLAGS & (TRP1|TRP2|ADRFLT)) == (TRP1|TRP2|ADRFLT))
+               one_p_arm = 1;
+#endif
+            FLAGS &= ~ADRFLT;
         } else {
-#endif
-        AB = 0420 + ((FLAGS & (TRP1|TRP2)) >> 2);
-        trap_flag = FLAGS & (TRP1|TRP2);
-        FLAGS &= ~(TRP1|TRP2);
-        pi_cycle = 1;
-        AB += (FLAGS & USER) ? ub_ptr : eb_ptr;
-        Mem_read_nopage();
-        goto no_fetch;
-#if KL_ITS
+            AB = 0420 + ((FLAGS & (TRP1|TRP2)) >> 2);
+            trap_flag = FLAGS & (TRP1|TRP2);
+            FLAGS &= ~(TRP1|TRP2);
+            pi_cycle = 1;
+            AB += (FLAGS & USER) ? ub_ptr : eb_ptr;
+            Mem_read_nopage();
+            goto no_fetch;
         }
-#endif
     }
 #endif
 
@@ -5766,7 +5767,7 @@ unasign:
                       }
                       FE = 36 - (adjb * SC) - ((36 - FE) % SC);   /* New P */
 #if KLB
-                      if (f) {
+                      if (QKLB && f) {
                           /* Short pointer */
                           f = (AR >> 30) & 077;  /* P */
                           AR = (((uint64)((f + adjb) & 077)) << 30) |    /* Make new BP */
@@ -5856,8 +5857,8 @@ unasign:
                               goto last;
                           AB = (AB - 1) & RMASK;
                       } else
-                          AR = (AR & LMASK) | ((AR + 1) & RMASK);
 #endif
+                          AR = (AR & LMASK) | ((AR + 1) & RMASK);
 #elif KI
                       AR = (AR & LMASK) | ((AR + 1) & RMASK);
 #else
@@ -5912,6 +5913,12 @@ ldb_ptr:
                   f_load_pc = 0;
                   f_inst_fetch = 0;
                   f_pc_inh = 1;
+#if KL_ITS
+                  if (QITS && one_p_arm) {
+                      FLAGS |= ADRFLT;
+                      one_p_arm = 0;
+                  }
+#endif
                   FLAGS |= BYTI;
                   BYF5 = 1;
 #if KL
@@ -7132,6 +7139,12 @@ left:
                      one_p_arm = 0;
                  }
 #endif
+#if KL_ITS
+                 if (QITS && one_p_arm) {
+                     FLAGS |= ADRFLT;
+                     one_p_arm = 0;
+                 }
+#endif
               }
 #if KL
               switch (AC) {
@@ -7376,6 +7389,12 @@ jrstf:
 #if ITS
               if (QITS && one_p_arm) {
                   FLAGS |= ONEP;
+                  one_p_arm = 0;
+              }
+#endif
+#if ITS
+              if (QITS && one_p_arm) {
+                  FLAGS |= ADRFLT;
                   one_p_arm = 0;
               }
 #endif
@@ -8360,7 +8379,6 @@ fetch_opr:
                                       AR = MB;
                                   }
                                   dev_tab[d](040|DATAO|(d<<2), &AR);
-if (d == 1)            fprintf(stderr, "SBDIAG return %012llo\n\r", AR);
                               } else {
                                   dev_tab[d](040|DATAI|(d<<2), &AR);
                                   MB = AR;
