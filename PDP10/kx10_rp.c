@@ -133,7 +133,7 @@
 /* RPDT - 06 - drive type */
 
 /* RPLA - 07 - look ahead register */
-
+#define LA_REG         us9
 #define LA_V_SC         6                               /* sector pos */
 
 /* RPER2 - 10 - error status 2 - drive unsafe conditions - unimplemented */
@@ -713,6 +713,10 @@ rp_read(DEVICE *dptr, struct rh_if *rhc, int reg) {
         temp = uptr->ERR3;
         break;
     case  007:  /* look ahead */
+        uptr->LA_REG += 0100;
+        uptr->LA_REG &= 07700;
+        temp = uptr->LA_REG;
+        break;
     case  016:  /* ecc position */
     case  017:  /* ecc pattern */
         break;
