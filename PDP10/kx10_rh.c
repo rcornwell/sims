@@ -139,7 +139,7 @@
    77   Status (tra,cb test, bar test, ev par, r/w, exc,ebl, 0, attn, sclk
 */
 
-/* 
+/*
  * CCW 000..... New channel comand list pointer  HALT.
        010..... Next CCW Address JUMP
        1xycount-address.  x=halt last xfer, y=reverse
@@ -155,7 +155,7 @@ t_stat
 rh_set_type(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
     DEVICE *dptr;
-    DIB    *dibp;  
+    DIB    *dibp;
     dptr = find_dev_from_unit (uptr);
     if (dptr == NULL)
        return SCPE_IERR;
@@ -211,7 +211,7 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
               sim_debug(DEBUG_CONI, dptr, "%s %03o CONI %06o PC=%o %o\n",
                      dptr->name, dev, (uint32)*data, PC, rhc->attn);
               return SCPE_OK;
-        
+
          case CONO:
               clr_interrupt(dev);
               rhc->status &= ~(07LL|IADR_ATTN|RH20_MASS_EN);
@@ -230,13 +230,13 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
                  rhc->rae = 0;
               if (*data & PI_ENABLE)
                  rhc->status &= ~PI_ENABLE;
-              if (((rhc->status & IADR_ATTN) != 0 && rhc->attn != 0) 
+              if (((rhc->status & IADR_ATTN) != 0 && rhc->attn != 0)
                     || (rhc->status & PI_ENABLE))
                  set_interrupt(rhc->devnum, rhc->status);
               sim_debug(DEBUG_CONO, dptr, "%s %03o CONO %06o PC=%06o %06o\n",
                     dptr->name, dev, (uint32)*data, PC, rhc->status);
               return SCPE_OK;
-        
+
          case DATAI:
               *data = 0;
               if (rhc->status & BUSY && rhc->reg != 04) {
@@ -272,7 +272,7 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
               sim_debug(DEBUG_DATAIO, dptr, "%s %03o DATI %012llo %d PC=%06o\n",
                           dptr->name, dev, *data, rhc->drive, PC);
               return SCPE_OK;
-        
+
          case DATAO:
               sim_debug(DEBUG_DATAIO, dptr, "%s %03o DATO %012llo  PC=%06o %06o\n",
                          dptr->name, dev, *data, PC, rhc->status);
@@ -290,19 +290,19 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
                          return SCPE_OK;
                      }
                      rhc->rh_write(dptr, rhc, rhc->reg & 037, (int)(*data & 0777777));
-                     if (((rhc->status & IADR_ATTN) != 0 && rhc->attn != 0) 
+                     if (((rhc->status & IADR_ATTN) != 0 && rhc->attn != 0)
                              || (rhc->status & PI_ENABLE))
                          set_interrupt(rhc->devnum, rhc->status);
                      /* Check if access error */
                      if (rhc->rae & (1 << rhc->drive) && (*data & BIT9) == 0)
                          set_interrupt(rhc->devnum, rhc->status);
-                     else 
+                     else
                          rhc->rae &= ~(1 << rhc->drive);
                   } else if ((rhc->reg & 070) != 070) {
                       if ((*data & BIT9) == 0) {
                           rhc->rae = (1 << rhc->drive);
                           set_interrupt(rhc->devnum, rhc->status);
-                      } 
+                      }
                   } else {
                       switch(rhc->reg & 07) {
                       case 0:
@@ -329,7 +329,7 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
          if ((rhc->status & (RH20_SCR_FULL|RH20_PCR_FULL)) == (RH20_SCR_FULL))
              rh20_setup(rhc);
          return SCPE_OK;
-     } 
+     }
 #endif
      switch(dev & 3) {
      case CONI:
@@ -464,7 +464,7 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
              }
          }
          clr_interrupt(dev);
-         if (((rhc->status & (IADR_ATTN|BUSY)) == IADR_ATTN && rhc->attn != 0) 
+         if (((rhc->status & (IADR_ATTN|BUSY)) == IADR_ATTN && rhc->attn != 0)
                || (rhc->status & PI_ENABLE))
              set_interrupt(rhc->devnum, rhc->status);
          return SCPE_OK;
@@ -497,7 +497,7 @@ void rh_setattn(struct rh_if *rhc, int unit)
     rhc->attn |= 1<<unit;
     if (rhc->imode != 2 && rhc->status & BUSY)
         return;
-    if ((rhc->status & IADR_ATTN) != 0) 
+    if ((rhc->status & IADR_ATTN) != 0)
         rh_setirq(rhc);
 }
 
@@ -551,7 +551,7 @@ void rh_writecw(struct rh_if *rhc, int nxm) {
          return;
      }
 #endif
-     if (nxm) 
+     if (nxm)
         rhc->status |= CXR_NXM;
      rhc->status |= CCW_COMP_1;
      if (rhc->wcr != 0)
@@ -568,7 +568,7 @@ void rh_finish_op(struct rh_if *rhc, int nxm) {
      rh_writecw(rhc, nxm);
      rh_setirq(rhc);
 #if KL
-     if (rhc->imode == 2 && 
+     if (rhc->imode == 2 &&
           (rhc->status & (RH20_SCR_FULL|RH20_PCR_FULL)) == (RH20_SCR_FULL))
         rh20_setup(rhc);
 #endif
