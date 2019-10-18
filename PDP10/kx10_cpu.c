@@ -4412,16 +4412,18 @@ muuo:
 #endif
 unasign:
               /* Save Opcode */
-              AB = ub_ptr | 0424;
 #if KL & KLB
-              if (!QKLB && t20_page)
-                  AB = AB + 1;
               if (QKLB && t20_page) {
                   AR = (((uint64)cur_sect) << 18) | (uint64)AB; /* Save address */
                   MB = (((uint64)((IR << 9) | (AC << 5))) | ((uint64)(FLAGS) << 23)) & FMASK;
               } else
 #endif
               MB = ((uint64)(IR) << 27) | ((uint64)(AC) << 23) | (uint64)(AB);
+              AB = ub_ptr | 0424;
+#if KL & KLB
+              if (!QKLB && !QITS && t20_page)
+                 AB = AB + 1;
+#endif
               Mem_write_nopage();
               /* Save flags */
               AB++;
