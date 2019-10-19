@@ -785,7 +785,7 @@ endit:
             }
             /* send the next char out */
             tmxr_putc_ln(&com_ldsc[ln], ch);            /* output char */
-            sim_debug(DEBUG_CMD, &com_dev, "com_srvo writing char %c to ln %04x\n", ch, ln);
+            sim_debug(DEBUG_CMD, &com_dev, "com_srvo writing char 0x%02x to ln %04x\n", ch, ln);
             tmxr_poll_tx(&com_desc);                    /* poll xmt */
             sim_activate(uptr, uptr->wait);             /* wait */
             return SCPE_OK;
@@ -794,7 +794,7 @@ endit:
                 goto endit;                             /* done */
             /* just dump the char */
 //          /* xmt disabled, just wait around */
-            sim_debug(DEBUG_CMD, &com_dev, "com_srvo write dumping char %c on line %04x\n", ch, ln);
+            sim_debug(DEBUG_CMD, &com_dev, "com_srvo write dumping char 0x%02x on line %04x\n", ch, ln);
             tmxr_poll_tx(&com_desc);                    /* poll xmt */
 //??            sim_activate(uptr, coml_unit[ln].wait);     /* wait */
             sim_activate(uptr, uptr->wait);             /* wait */

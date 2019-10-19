@@ -598,8 +598,18 @@ t_stat disk_srv(UNIT * uptr)
         break;
 
     case DSK_CMDMSK:        /* use 0xff for inch, just need int */
+        uptr->CMD &= ~(0xffff);             /* remove old cmd */
+        sim_debug(DEBUG_CMD, dptr, "disk_srv cmd=%x chsa %04x count %x completed\n",
+                 cmd, chsa, chp->ccw_count);
+#ifdef FIX4MPX
+        chan_end(chsa, SNS_CHNEND);         /* return just channel end OK */
+#else
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
+#endif
+        break;
+
     case DSK_NOP:           /* NOP 0x03 */
-        uptr->CMD &= ~(0xffff);              /* remove old cmd */
+        uptr->CMD &= ~(0xffff);             /* remove old cmd */
         sim_debug(DEBUG_CMD, dptr, "disk_srv cmd=%x chsa %04x count %x completed\n",
                  cmd, chsa, chp->ccw_count);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */

@@ -618,13 +618,18 @@ t_stat scfi_srv(UNIT *uptr)
          break;
 
     case DSK_CMDMSK:                            /* use 0xff for inch, just need int */
+        uptr->u3 &= ~(0xffff);                  /* remove old cmd */
+        sim_debug(DEBUG_CMD, dptr,
+                "disk_srv cmd INCH chsa %04x count %04x completed\n", chsa, chp->ccw_count);
+        chan_end(chsa, SNS_CHNEND);             /* return just channel end */
+        break;
+
     case DSK_NOP:                               /* NOP 0x03 */
         uptr->u3 &= ~(0xffff);                  /* remove old cmd */
         sim_debug(DEBUG_CMD, dptr,
-                "disk_srv cmd=%02x chsa %04x count %04x completed\n", cmd, chsa, chp->ccw_count);
+                "disk_srv cmd NOP chsa %04x count %04x completed\n", chsa, chp->ccw_count);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
         break;
-
 
     case DSK_SNS: /* 0x4 */
         ch = uptr->u5 & 0xff;
@@ -913,7 +918,7 @@ wrdone:
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
         break;
     }
-    sim_debug(DEBUG_DATAIO, dptr, "scfi_srv done cmd %02x chsa %04x count %04x\n", cmd, chsa, chp->ccw_count);
+    sim_debug(DEBUG_CMD, dptr, "scfi_srv done cmd %02x chsa %04x count %04x\n", cmd, chsa, chp->ccw_count);
     return SCPE_OK;
 }
 

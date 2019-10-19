@@ -1,6 +1,6 @@
-/* sel32_defs.h: SEL 32 Concept/32 simulator definitions 
+/* sel32_defs.h: SEL-32 Concept/32 simulator definitions 
 
-   Copyright (c) 2018, James C. Bevier
+   Copyright (c) 2018-2019, James C. Bevier
    Portions provided by Richard Cornwell and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
@@ -111,6 +111,8 @@
 #define NUM_UNITS_MT    4       /* 4 of 8 devices */
 #define NUM_DEVS_DISK   1       /* 1 DP02 disk drive controller */
 #define NUM_UNITS_DISK  4       /* 4 disk drive devices */
+//#define NUM_DEVS_SCFI   1       /* 1 scfi (SCSI) disk drive units */
+//#define NUM_UNITS_SCFI  1       /* 1 of 4 disk drive devices */
 #define NUM_DEVS_SCFI   2       /* 2 scfi (SCSI) disk drive units */
 #define NUM_UNITS_SCFI  2       /* 2 of 4 disk drive devices */
 #define NUM_DEVS_RTOM   1       /* 1 IOP RTOM channel */

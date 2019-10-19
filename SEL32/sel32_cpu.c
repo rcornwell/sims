@@ -172,7 +172,7 @@ uint32          BR[8];                      /* Base registers */
 uint32          PC;                         /* Program counter */
 uint32          CC;                         /* Condition codes, bits 1-4 of PSD1 */
 uint32          SPAD[256];                  /* Scratch pad memory */
-uint32          INTS[112];                  /* Interrupt status flags */
+uint32          INTS[128];                  /* Interrupt status flags */
 uint32          CPUSTATUS;                  /* cpu status word */
 uint32          TRAPSTATUS;                 /* trap status word */
 uint32          CMCR;                       /* Cache Memory Control Register */
@@ -188,7 +188,10 @@ uint32          BOOTR[8] = {0};             /* Boot registers settings */
 uint32          MAPC[1024];                 /* maps are 16bit entries on word bountries */
 uint32          dummy=0;
 uint32          pfault;                     /* page # of fault from read/write */
-uint32          HIWM = 0;                   /* max maps loaded so far */
+uint32          BPIX=0;                     /* # pages loaded for O/S */
+uint32          CPIXPL=0;                   /* highest page loaded for User */
+uint32          CPIXBA=0;                   /* 24 bit logical address of the User */
+uint32          HIWM=0;                     /* max maps loaded so far */
 uint32          TLB[2048];                  /* Translated addresses for each map entry */
 /* bits 0-4 are bits 0-4 from map entry */
 /* bit 0 valid */
@@ -231,12 +234,13 @@ uint32 cpu_cmd(UNIT * uptr, uint16 cmd, uint16 dev);
 t_stat cpu_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
 const char *cpu_description (DEVICE *dptr);
 t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot);
-t_stat load_maps(uint32 thepsd[2]);
+t_stat load_maps(uint32 thepsd[2], uint32 diag);
 t_stat read_instruction(uint32 thepsd[2], uint32 *instr);
 t_stat Mem_read(uint32 addr, uint32 *data);
 t_stat Mem_write(uint32 addr, uint32 *data);
 
 /* external definitions */
+extern t_stat checkxio(uint16 addr, uint32 *status);    /* XIO check in chan.c */
 extern t_stat startxio(uint16 addr, uint32 *status);    /* XIO start in chan.c */
 extern t_stat testxio(uint16 addr, uint32 *status);     /* XIO test in chan.c */
 extern t_stat stopxio(uint16 addr, uint32 *status);     /* XIO stop in chan.c */
@@ -316,6 +320,9 @@ REG                 cpu_reg[] = {
     {BRDATAD(MAPC, MAPC, 16, 32, 1024, "CPU map cache"), REG_FIT},
     {BRDATAD(TLB, TLB, 16, 32, 2048, "CPU Translation Lookaside Buffer"), REG_FIT},
     {HRDATAD(HIWM, HIWM, 32, "Max Maps Loaded"), REG_FIT},
+    {HRDATAD(BPIX, BPIX, 32, "# Maps Loaded for O/S"), REG_FIT},
+    {HRDATAD(CPIXPL, CPIXPL, 32, "Maximum Map # Loaded for User"), REG_FIT},
+    {HRDATAD(CPIXBA, CPIXBA, 32, "24 bit starting address for User"), REG_FIT},
     {HRDATAD(CPUSTATUS, CPUSTATUS, 32, "CPU Status Word"), REG_FIT},
     {HRDATAD(TRAPSTATUS, TRAPSTATUS, 32, "TRAP Status Word"), REG_FIT},
     {HRDATAD(CC, CC, 32, "Condition Codes"), REG_FIT},
@@ -639,8 +646,8 @@ int base_mode[] = {
 /* A privilege violation trap occurres if access it denied */
 /* Bits 5-15 contain the 11 most-significant bits of the physical address */
 /* MSD 0 page limit is used to verify access to O/S pages */
-/* CPIX page limit is used to verify access to user pages and page faults */
-/* CPIX base address ss used for user address translation */
+/* CPIXPL page limit is used to verify access to user pages and page faults */
+/* CPIXBA base address is used for user address translation */
 /* Access to pages outside the limit registers results in a map fault */
 
 #define MAX32       32      /* 32/77 map limit */
@@ -652,19 +659,24 @@ int base_mode[] = {
 #define WMW(x,y) (M[x>>2]=y)                        /* write memory addressed word */
 /* write halfword to memory address */
 #define WMH(x,y) (x&2?(M[x>>2]=(M[x>>]&LMASK)|(y&RMASK)):(M[>>2]=(M[x>>2]&RMASK)|(y<<16)))
-/* write halfword map register MAP cache address */
+/* write halfword map register to MAP cache address */
 #define WMR(x,y) (x&2?(MAPC[x>>2]=(MAPC[x>>2]&LMASK)|(y&RMASK)):(MAPC[x>>2]=(MAPC[x>>2]&RMASK)|(y<<16)))
+#define RMR(x) (x&2?(MAPC[x>>2]&RMASK):(MAPC[x>>2]>>16)&RMASK)    /* read map register halfword */
 
 /* set up the map registers for the current task in the cpu */
 /* the PSD bpix and cpix are used to setup the maps */
 /* return non-zero if mapping error */
-t_stat load_maps(uint32 thepsd[2])
+/* if diag set, always load maps on 67, V6, and V7 */
+t_stat load_maps(uint32 thepsd[2], uint32 diag)
 {
     uint32 num, sdc, spc;
     uint32 mpl, cpixmsdl, bpixmsdl, msdl, midl;
     uint32 cpix, bpix, i, j, map, osmsdl, osmidl;
     uint32 MAXMAP = MAX2048;                        /* default to 2048 maps */
 
+    sim_debug(DEBUG_EXP, &cpu_dev, "Load Maps Entry PSD %08x %08x STATUS %08x diags %01x\n",
+        thepsd[0], thepsd[1], CPUSTATUS, diag);
+    /* check if valid real address */
     if (CPU_MODEL < MODEL_27) {
         MAXMAP = MAX32;                             /* 32 maps for 32/77 */
         /* 32/7x machine, 8KW maps 32 maps total */
@@ -679,7 +691,7 @@ t_stat load_maps(uint32 thepsd[2])
         /* master process list is in 0x83 of spad for 7x */
         mpl = SPAD[0x83] >> 2;                      /* get mpl from spad address */
         /* check if valid real address */
-        if (mpl >= (MEMSIZE))                       /* see if address is within our memory */
+        if ((mpl & 0x003fffff) >= MEMSIZE)          /* see if address is within our memory */
             return NPMEM;                           /* no, none present memory error */
         cpixmsdl = M[mpl + cpix];                   /* get msdl from mpl for given cpix */
 
@@ -726,7 +738,7 @@ t_stat load_maps(uint32 thepsd[2])
             spc = (M[msdl + i] >> 24) & 0xff;       /* get segment page count from msdl */
             midl = (M[msdl + i] >> 2) & 0x3fffff;   /* get 24 bit real word address of midl */
 
-            for (j = 0; j < spc; j++, num++) {      /* loop throught the midl's */
+            for (j = 0; j < spc; j++, num++) {      /* loop through the midl's */
                 if (num >= MAXMAP)
                     return MAPFLT;                  /* map loading overflow, map fault error */
                 /* load 16 bit map descriptors */
@@ -778,14 +790,16 @@ t_stat load_maps(uint32 thepsd[2])
     /* we are mapped, so calculate real address from map information */
     cpix = thepsd[1] & 0x3ff8;                      /* get cpix 11 bit offset from psd wd 2 */
     num = 0;                                        /* no maps loaded yet */
+    BPIX = 0;                                       /* assume no os maps loaded */
     /* master process list is in 0xf3 of spad for concept */
     mpl = SPAD[0xf3];                               /* get mpl from spad address */
     sim_debug(DEBUG_EXP, &cpu_dev,
-        "MEMORY %08x MPL %08x MPL[0] %08x MPL[1] %08x MPL[%04x] %08x\n",
-        MEMSIZE*4, mpl, M[(mpl)>>2], M[(mpl+4)>>2], cpix, M[(cpix+mpl+4)>>2]);
+        "MEMORY %08x MPL %08x MPL[0] %08x MPL[1] %08x MPL[%04x] %08x %08x\n",
+        MEMSIZE*4, mpl, M[(mpl)>>2], M[(mpl+4)>>2], cpix, M[(cpix+mpl)>>2], M[(cpix+mpl+4)>>2]);
     /* check if valid real address */
-    if ((mpl & MASK24) >= MEMSIZE*4)                /* see if address is within our memory */
+    if ((mpl & MASK24) >= MEMSIZE*4) {              /* see if address is within our memory */
         return NPMEM;                               /* no, non present memory error */
+    }
     osmsdl = RMW(mpl+4);                            /* get msdl pointer from wd 1 of OS MPL entry */
     if ((osmsdl & MASK24)>= (MEMSIZE*4))            /* see if address is within our memory */
         return NPMEM;                               /* no, non present memory error */
@@ -793,93 +807,161 @@ t_stat load_maps(uint32 thepsd[2])
     if ((msdl & MASK24) >= (MEMSIZE*4))             /* see if address is within our memory */
         return NPMEM;                               /* no, non present memory error */
     midl = RMW(mpl+cpix);                           /* get midl entry for given cpix */
-    /* load msd 0 maps first (O/S) */
     osmidl = RMW(mpl);                              /* get midl 0 word address */
+#ifdef DO_DYNAMIC_DEBUG
+    if ((cpix != 0) && (osmidl & BIT0))
+        /* start debugging */
+        cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
+#endif
 
     sim_debug(DEBUG_EXP, &cpu_dev,
         "loading maps MAXMAP %04x psd2 %08x mpl %08x osmidl %04x osmsdl %08x midl %04x msdl %08x\n",
          MAXMAP, thepsd[1], mpl, osmidl, osmsdl, midl, msdl);
+    if (cpix != 0)
     sim_debug(DEBUG_EXP, &cpu_dev,
-        "MSD 0000 for OS SegCnt %04x OSmsdl %08x\nMSD %04x for User SegCnt %04x Usermsdl %08x\n",
-         RMW(mpl), RMW(mpl+4), cpix, midl, msdl);
+        "MSD 0000 for OS SegCnt %04x OSmsdl %08x diag %01x\nMSD %04x for User SegCnt %04x Usermsdl %08x\n",
+         RMW(mpl), RMW(mpl+4), diag, cpix, midl, msdl);
 
+    /* load msd 0 maps first (O/S) */
     /* if bit zero of cpix mpl entry is set, use msd entry 0 first to load maps */
     /* This test must be made (cpix == bpix) to allow sysgen to run without using */
     /* a valid cpix */
     /* the cpix is zero indicating only load MSD 0 for the target system */
     /* bit 0 of msd 0 will be zero saying load the maps */
+    /* Do not load O/S if already loaded. Bit zero of O/S midl will be set by */
+    /* swapper on startup */
+#ifdef FIXMPX
     if ((cpix == 0) || (midl & BIT0)) {
-        /* Do not load O/S if already loaded. Bit zero of O/S midl will be set by */
-        /* swapper on startup */
+#else
+    if ((cpix == 0) || ((cpix != 0) && (midl & BIT0))) {
+#endif
         /* load msd 0 maps first (O/S) */
         spc = osmidl & MASK16;                      /* get 16 bit segment description count */
         if (osmidl & BIT0) {                        /* see if O/S already loaded */
             num = spc;                              /* set the number of o/s maps already loaded */
+            BPIX = spc;                             /* save the # maps in O/S */
             goto skipos;                            /* skip OS map loading */
         }
         /* O/S is not loaded, so let's load it */
-        osmidl = RMW(mpl+4) & MASK24;               /* get 24 bit real address from mpl 0 wd2 */
+        osmsdl &= MASK24;                           /* get 24 bit real address from mpl 0 wd2 */
         for (j = 0; j < spc; j++, num++) {          /* copy maps from msdl to map cache */
-            if (num >= MAXMAP)
+            if (num >= MAXMAP) {
+                sim_debug(DEBUG_EXP, &cpu_dev, "loadmap 4 map fault\n");
                 return MAPFLT;                      /* map loading overflow, map fault error */
+            }
             /* load 16 bit map descriptors */
-            map = RMH(osmidl+(j<<1));
+            map = RMH(osmsdl+(j<<1));               /* get provided map value */
             /* translate the map number to a real address */
             /* put this address in the LTB for later translation */
             /* copy the map status bits too and set hit bit */
-            TLB[num] = ((map & 0x7ff) << 13) | ((map & 0xf800) << 16) | 0x04000000;
+            /* set the hit bit in the TLB */
+            TLB[num] = ((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000) | 0x04000000;
             WMR((num*2),map);                       /* store the map reg contents into cache */
+            sim_debug(DEBUG_EXP, &cpu_dev, "OS map #%4x, %04x, map2 %08x, TLB %08x MAPC %08x\n",
+                num, map, ((map << 16) & 0xf8000000), TLB[num], MAPC[num/2]);
         }
+        BPIX = num;                                 /* save the # maps loaded in O/S */
     }
 skipos:
+    CPIXPL = 0;                                     /* no user pages yet */
+    CPIXBA = 0;                                     /* no user pages yet */
     /* sysgen in mpx does not have a valid cpix MPL entry, only a bpix entry */
     /* that entry uses 64 map entries to map between target/host systems */
     /* When cpix in instruction is zero, just load the O/S specified by MSD 0 */
-    if (cpix == 0)                                  /* see if all maps loaded */
+#ifdef FIXMPX
+    if ((cpix == 0) && (num == 0))                  /* see if any maps loaded */
+///        return MAPFLT;                              /* map fault error */
         goto skipcpix;                              /* only load maps specified by msd 0 */
-
-    /* now load user maps specified by the cpix value */
-    msdl &= MASK24;                                 /* get 24 bit real word address of msdl */
-    spc = midl & RMASK;                             /* get segment page count from msdl */
-    sim_debug(DEBUG_EXP, &cpu_dev,
-        "loading maps MAXMAP %04x cpix %04x spc %04x midl %08x msdl %08x osmidl %08x osmsdl %08x num %04x\n",
-        MAXMAP, cpix, spc, midl, msdl, osmidl, osmsdl, num);
-    sim_debug(DEBUG_EXP, &cpu_dev,
-        "user maps @%08x map[0] %08x map[2] %08x map[4] %08x map[6] %08x map[8] %08x\n",
-        msdl, M[msdl>>2], M[(msdl+4)>>2], M[(msdl+8)>>2], M[(msdl+12)>>2], RMH(msdl+16));
-    for (j = 0; j < spc; j++, num++) {              /* copy maps from midl to map cache */
-        if (num >= MAXMAP)
-            return MAPFLT;                          /* map loading overflow, map fault error */
-        /* load 16 bit map descriptors */
-        map = RMH(msdl+(j<<1));                     /* get 16 bit map entry */
-        /* translate the map number to a real address */
-        /* put this address in the LTB for later translation */
-        /* copy the map status bits too */
-        TLB[num] = ((map & 0x7ff) << 13) | ((map & 0xf800) << 16) | 0x04000000;
-        WMR((num*2),map);                           /* store the map reg contents into cache */
-    }
-    /* if none loaded, map fault */
-    /* if we got here without a map block found, return map fault error */
-skipcpix:
-    if (num == 0)
+#else
+    if ((cpix == 0) && (num == 0)) {                /* see if any maps loaded */
+        sim_debug(DEBUG_EXP, &cpu_dev, "loadmap 3 map fault\n");
         return MAPFLT;                              /* map fault error */
-    if (num & 1) {
-        /* last map was in left hw, zero right halfword */
-        WMR((num*2),0);                             /* zero the map reg contents in cache */
-        TLB[num++] = 0;                             /* zero the TLB entry too */
     }
-    sim_debug(DEBUG_EXP, &cpu_dev,
-      "loading maps done MAXMAP %04x cpix %04x spc %04x midl %08x msdl %08x osmidl %08x num %04x HIWM %04x\n",
-        MAXMAP, cpix, spc, midl, msdl, osmidl, num, HIWM);
-    sim_debug(DEBUG_EXP, &cpu_dev,
-        "MAPC[0-6] %08x %08x %08x %08x %08x %08x\n",
-        MAPC[0], MAPC[1], MAPC[2], MAPC[3], MAPC[4], MAPC[5]);
+    if ((cpix == 0) && (num != 0))                  /* see if any maps loaded */
+        goto skipcpix;                              /* only load maps specified by msd 0 */
+#endif
+
+    msdl &= MASK24;                                 /* get 24 bit real word address of msdl */
+//    CPIXBA = msdl;                                  /* save user msdl pointer */
+    CPIXBA = cpix;                                  /* save user MPL offset */
+    spc = midl & MASK16;                            /* get segment page count from msdl */
+    CPIXPL = spc;                                   /* save user map load count */
+//    if (((CPU_MODEL < MODEL_V6) && (CPU_MODEL != MODEL_67)) || diag || (BPIX == 0)) {
+    if (((CPU_MODEL < MODEL_V6) && (CPU_MODEL != MODEL_97) && (CPU_MODEL != MODEL_67)) || diag) {
+//    if ((CPU_MODEL < MODEL_V6) || diag) {
+        /* handle non virtual page loading or diag LMAP instruction */
+        /* now load user maps specified by the cpix value */
+        for (j = 0; j < spc; j++, num++) {          /* copy maps from midl to map cache */
+            if (num >= MAXMAP) {
+                sim_debug(DEBUG_EXP, &cpu_dev, "loadmap 0 map fault\n");
+                return MAPFLT;                      /* map loading overflow, map fault error */
+            }
+            /* load 16 bit map descriptors */
+            map = RMH(msdl+(j<<1));                 /* get provided map value */
+            /* translate the map number to a real address */
+            /* put this address in the LTB for later translation */
+            /* copy the map status bits too */
+//            TLB[num] = ((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000) | 0x04000000;
+            if (CPU_MODEL < MODEL_V6)
+                if (diag)
+                    TLB[num] = (((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000)) | 0x04000000;
+//                    TLB[num] = ((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000);
+                else
+                    TLB[num] = (((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000));
+//                    TLB[num] = (((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000)) | 0x04000000;
+            else
+                TLB[num] = ((map & 0x7ff) << 13) | ((map << 16) & 0xe0000000) | 0x04000000;
+            WMR((num*2),map);                       /* store the map reg contents into cache */
+            if ((num < 0x20) || (num > (MAXMAP - 0x10)))
+            sim_debug(DEBUG_EXP, &cpu_dev, "UserN map #%4x, %04x, map2 %08x, TLB %08x, MAPC %08x\n",
+                num, map, ((map << 16) & 0xf8000000), TLB[num], MAPC[num/2]);
+        }
+        if (num & 1) {
+            /* last map was in left hw, zero right halfword */
+            WMR((num*2),0);                         /* zero the map reg contents in cache */
+            TLB[num++] = 0;                         /* zero the TLB entry too */
+        }
+//WAS skipcpix:
+        if (num == 0) {                              /* see if any maps loaded */
+            sim_debug(DEBUG_EXP, &cpu_dev, "loadmap 1 map fault\n");
+            return MAPFLT;                          /* map fault error */
+        }
+    } else {
+        /* handle virtual memory case for 67, V6 & V9 */
+        /* now clear TLB & maps specified by the cpix value */
+        for (j = 0; j < spc; j++, num++) {          /* clear maps in map cache */
+            if (num >= MAXMAP) {
+                sim_debug(DEBUG_EXP, &cpu_dev, "loadmap 2 map fault\n");
+                return MAPFLT;                      /* map loading overflow, map fault error */
+            }
+            /* load 16 bit map descriptors for debugging */
+            map = RMH(msdl+(j<<1));                 /* get provided map value */
+            TLB[num] = 0;                           /* clear the TLB entry */
+//WAS       WMR((num*2),0);                         /* zero the map reg contents in cache */
+            if ((num < 0x20) || (num > (MAXMAP - 0x10)))
+            sim_debug(DEBUG_EXP, &cpu_dev, "UserV map #%4x, %04x, map2 %08x, TLB %08x, MAPC %08x\n",
+                num, map, ((map << 16) & 0xf8000000), TLB[num], MAPC[num/2]);
+        }
+//      if (num & 1) {
+//          /* last map was in left hw, zero right halfword */
+///         WMR((num*2),0);                         /* zero the map reg contents in cache */
+//          TLB[num++] = 0;                         /* zero the TLB entry too */
+//      }
+    }
+skipcpix:
+    if (num == 0)                                   /* see if any maps loaded */
+        return MAPFLT;                              /* map fault error */
     /* now clear any map entries left over from previous map */
+      if ((num & 1) && (num < MAXMAP)) {
+          /* last map was in left hw, zero right halfword */
+//WAS       WMR((num*2),0);                         /* zero the map reg contents in cache */
+          TLB[num++] = 0;                         /* zero the TLB entry too */
+      }
     if ((num/2) < HIWM) {                           /* largest number of maps loaded so far */
         /* we need to zero the left over entries from previous map */
         /* num should be even at this point, so zero 32 bit words for remaining maps */
         for (i = num/2; i < HIWM; i++) {            /* zero any remaining entries */
-            MAPC[i] = 0;                            /* clear the map entry to make not valid */
+//WAS       MAPC[i] = 0;                            /* clear the map entry to make not valid */
             TLB[i*2] = 0;                           /* zero the TLB entry */
             TLB[(i*2)+1] = 0;                       /* zero the TLB entry */
         }
@@ -895,7 +977,7 @@ skipcpix:
  */
 t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot)
 {
-    uint32 word, index, map, mask, raddr, t;
+    uint32 word, index, map, mask, raddr, mpl, offset;
 
     *prot = 0;      /* show unprotected memory as default */
                     /* unmapped mode is unprotected */
@@ -929,9 +1011,11 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot)
         if (map & 0x4000) {
             /* required map is valid, get 9 bit address and merge with 15 bit page offset */
             word = ((map & 0x1ff) << 15) | (word & 0x7fff);
+#ifndef DIAGS_SAYS_ANY_ADDRESS_OK_IF_MAPPED
             /* check if valid real address */
             if (word >= (MEMSIZE*4))            /* see if address is within our memory */
                 return NPMEM;                   /* no, none present memory error */
+#endif
             if ((modes & PRIVBIT) == 0) {       /* see if we are in unprivileged mode */
                 if (map & 0x2000)               /* check if protect bit is set in map entry */
                     *prot = 1;                  /* return memory write protection status */
@@ -943,8 +1027,10 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot)
         return MAPFLT;                          /* map fault error */
     }
     else
-    if ((CPU_MODEL < MODEL_V6) && (CPU_MODEL != MODEL_67)) {
-        /* 32/27, 32/67, 32/87, 32/97 2KW maps */
+    if ((CPU_MODEL < MODEL_V6) && (CPU_MODEL != MODEL_67) && (CPU_MODEL != MODEL_97)) {
+//    if (CPU_MODEL < MODEL_V6) {
+        /* 32/27, 32/87, 32/97 2KW maps */
+//        /* 32/27, 32/67, 32/87, 32/97 2KW maps */
         /* Concept 32 machine, 2KW maps */
         if (modes & (BASEBIT | EXTDBIT))
             word = addr & 0xffffff;             /* get 24 bit address */
@@ -958,15 +1044,17 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot)
             return ALLOK;                       /* all OK, return instruction */
         }
         /* diag wants the mpl entry checked to make sure valid */
-        t = SPAD[0xf3];                         /* get mpl from spad address */
-        if ((M[(t+4)>>2] & MASK24) >= (MEMSIZE*4)) {    /* check OS midl */
-//    fprintf(stderr, "RealAddr MPL %x MPL[1] %x\r\n", t, M[(t+4)>>2]);
+        mpl = SPAD[0xf3];                       /* get mpl from spad address */
+        if ((M[(mpl+4)>>2] & MASK24) >= (MEMSIZE*4)) {    /* check OS midl */
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "RealAddr MachCheck MPL %x MPL[1] %x\r\n", mpl, M[(mpl+4)>>2]);
             return MACHINECHK_TRAP;             /* no, diags want machine check error */
-//            return NPMEM;                       /* no, none present memory error */
+//            return NPMEM;                     /* no, none present memory error */
         }
         /* we are mapped, so calculate real address from map information */
         /* get 11 bit page number from address bits 8-18 */
         index = (word >> 13) & 0x7ff;           /* get 11 bit value */
+        offset = word & 0x1fff;                 /* get 13 bit page offset */
         map = MAPC[index/2];                    /* get two hw map entries */
         if (index & 1)
             /* entry is in rt hw, clear left hw */
@@ -975,20 +1063,26 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot)
             /* entry is in left hw, move to rt hw */
             map >>= 16;                         /* map is in left hw */
         /* see if map is valid */
-        if ((map & 0x8000) == 0)                /* see if valid map */
+        if ((map & 0x8000) == 0) {                /* see if valid map */
+            sim_debug(DEBUG_EXP, &cpu_dev, "RealAddr loadmap 0a map fault index %04x B+C %04x map %04x\n",
+                index, BPIX+CPIXPL, map);
             return MAPFLT;                      /* no, map fault error */
+        }
         raddr = TLB[index];                     /* get the base address & bits */
-        if (raddr == 0)                         /* see if valid address */
+        if (raddr == 0) {                       /* see if valid address */
+            sim_debug(DEBUG_EXP, &cpu_dev, "RealAddr loadmap 0b map fault index %04x B+C %04x TLB %08x\n",
+                index, BPIX+CPIXPL, raddr);
             return MAPFLT;                      /* no, map fault error */
+        }
+#ifndef DIAGS_SAYS_ANY_ADDRESS_OK_IF_MAPPED
         /* check if valid real address */
         if ((raddr & 0xffffff) >= (MEMSIZE*4))  /* see if address is within our memory */
             return NPMEM;                       /* no, none present memory error */
+#endif
         word = (raddr & 0xffe000) | (word & 0x1fff);   /* combine map and offset */
         *realaddr = word;                       /* return the real address */
 //    if (PSD2 & 0x80000000)
 //    fprintf(stderr, "RealAddr page %x realaddr = %x raddr %x\n", index, word, raddr);
-#ifndef LATER
-//        if (PSD1 & BIT0)                        /* all OK if privledged */
         if (modes & BIT0)                       /* all OK if privledged */
             return ALLOK;                       /* all OK, return instruction */
         /* get protection status of map */
@@ -996,7 +1090,6 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot)
         if ((BIT1 >> index) & raddr) {          /* is 1/4 page write protected */
             *prot = 1;                          /* return memory write protection status */
         }
-#endif
         return ALLOK;                           /* all OK, return instruction */
     }
     else
@@ -1014,47 +1107,116 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot)
             *realaddr = word;                   /* return the real address */
             return ALLOK;                       /* all OK, return instruction */
         }
+
         /* diag wants the mpl entries checked to make sure valid */
-        t = SPAD[0xf3];                         /* get mpl from spad address */
-        if ((M[(t+4)>>2] & MASK24) >= (MEMSIZE*4)) {    /* check OS midl */
-//    fprintf(stderr, "RealAddr MPL %x MPL[1] %x\r\n", t, M[(t+4)>>2]);
-            return MACHINECHK_TRAP;             /* diags want machine check error */
-//            return NPMEM;                       /* no, none present memory error */
+        /* master process list is in 0xf3 of spad for concept */
+        mpl = SPAD[0xf3] & MASK24;              /* get mpl from spad address */
+        /* check if valid real address */
+        if ((mpl & MASK24) >= MEMSIZE*4) {      /* see if address is within our memory */
+            return NPMEM;                       /* no, non present memory error */
         }
+        if ((M[(mpl+4)>>2] & MASK24) >= (MEMSIZE*4)) {    /* check OS midl */
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "RealAddr MachCheck MPL %x MPL[1] %x\r\n", mpl, M[(mpl+4)>>2]);
+            return MACHINECHK_TRAP;             /* diags want machine check error */
+        }
+
         /* we are mapped, so calculate real address from map information */
         /* get 11 bit page number from address bits 8-18 */
-        index = (word >> 13) & 0x7ff;           /* get 11 bit value */
-#ifdef NOTHERE
-        map = MAPC[index/2];                    /* get two hw map entries */
-        if (index & 1)
-            /* entry is in rt hw, clear left hw */
-            map &= RMASK;                       /* map is in rt hw */
-        else
-            /* entry is in left hw, move to rt hw */
-            map >>= 16;                         /* map is in left hw */
-        /* see if map is valid */
-        if ((map & 0x8000) == 0)                /* see if valid map */
+        index = (addr >> 13) & 0x7ff;           /* get 11 bit page value */
+        offset = addr & 0x1fff;                 /* get 13 bit page offset */
+
+        if (index >= (BPIX + CPIXPL)) {
+            sim_debug(DEBUG_EXP, &cpu_dev, "RealAddr loadmap 1 map fault index %04x B+C %04x\n", index, BPIX+CPIXPL);
             return MAPFLT;                      /* no, map fault error */
+        }
+
+        if ((TLB[index] & 0x04000000) == 0) {   /* is HIT bit on */
+            uint32  nix, msdl, midl;
+
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "MEMORY %08x MPL %08x MPL[0] %08x MPL[1] %08x MPL[%04x] %08x %08x\n",
+                MEMSIZE*4, mpl, M[(mpl)>>2], M[(mpl+4)>>2], CPIXBA, M[(CPIXBA+mpl)>>2], M[(CPIXBA+mpl+4)>>2]);
+            msdl = RMW(mpl+CPIXBA+4);           /* get mpl entry wd 1 for given cpix */
+            if ((msdl & MASK24) >= (MEMSIZE*4)) /* see if address is within our memory */
+                return NPMEM;                   /* no, non present memory error */
+            midl = RMW(mpl+CPIXBA);             /* get midl entry for given cpix */
+#ifdef DO_DYNAMIC_DEBUG
+            /* start debugging */
+            cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
 #endif
+            /* HIT bit is off, we must load the map entries from memory */
+            /* turn on the map hit flag and set maps real base addr */
+            nix = index & 0x7ff;                /* map # */
+            word = (TLB[nix] & 0xffe000) | offset;  /* combine map and offset */
+            map = RMH(msdl+((nix-BPIX)<<1));    /* map content */      
+            sim_debug(DEBUG_EXP, &cpu_dev, "Addr %08x RealAddr %08x Map0 HIT %08x, TLB[%3x] %08x MAPC[%03x] %08x\n",
+                addr, word, map, nix, TLB[nix], nix/2, MAPC[nix/2]);
+
+            TLB[nix] = ((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000) | 0x04000000;
+            word = (TLB[nix] & 0xffe000) | offset;  /* combine map and offset */
+            WMR((nix*2),map);                   /* store the map reg contents into cache */
+            sim_debug(DEBUG_EXP, &cpu_dev, "Addr %08x RealAddr %08x Map1 HIT %08x, TLB[%3x] %08x MAPC[%03x] %08x\n",
+                addr, word, map, nix, TLB[nix], nix/2, MAPC[nix/2]);
+
+            /* now do the other map reg in the same word */
+            if ((nix-BPIX) & 1)                 /* is bpix odd count */
+                nix -= 1;                       /* we are at rt hw, so backup hw */
+            else
+                nix += 1;                       /* we are at lf hw, so do next hw */
+            /* nix has correct index */
+            if ((TLB[nix] & 0x04000000) == 0) { /* is HIT bit already on */
+                /* hit not on, so load the map */
+                if (nix < (BPIX+CPIXPL)) {      /* need to be a mapped reg */
+                    map = RMH(msdl+((nix-BPIX)<<1)); /* do other map content */      
+                    WMR((nix*2),map);           /* store the map reg contents into cache */
+                    TLB[nix] = ((map&0x7ff) << 13) | ((map<<16) & 0xf8000000) | 0x04000000;
+                    word = (TLB[nix] & 0xffe000);  /* combine map and offset */
+                    sim_debug(DEBUG_EXP, &cpu_dev,
+                        "RealAddr %08x Map2 HIT %08x, TLB[%03x] %08x MAPC[%03x] %08x\n",
+                        word, map, nix, TLB[nix], nix/2, MAPC[nix/2]);
+                }
+            }
+        }
         raddr = TLB[index];                     /* get the base address & bits */
-        if (raddr == 0)                         /* see if valid address */
+#ifndef IGNOR
+        if ((raddr & BIT0) == 0) {              /* see if valid address */
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "RealAddr loadmap 2 map fault addr %08x raddr %08x index %04x\n", addr, raddr, index);
             return MAPFLT;                      /* no, map fault error */
-        /* check if valid real address */
-        if ((raddr & 0xffffff) >= (MEMSIZE*4))  /* see if address is within our memory */
-            return NPMEM;                       /* no, none present memory error */
-        word = (raddr & 0xffe000) | (word & 0x1fff);   /* combine map and offset */
-        *realaddr = word;                       /* return the real address */
-//    if (PSD2 & 0x80000000)
-//    fprintf(stderr, "RealAddr page %x realaddr = %x raddr %x\r\n", index, word, raddr);
-#ifdef LATER
-//        if (PSD1 & BIT0)                        /* all OK if privledged */
-        if (modes & BIT0)                       /* all OK if privledged */
-            return ALLOK;                       /* all OK, return instruction */
+        }
 #endif
-        /* get protection status bits in map, combine with priv bit in psd 1 */
-        /* access bits in bits 24-26 and bit 31 set indicating status returned */
-//        *prot = (((PSD1 & BIT0) | (raddr & 0x60000000)) >> 24) | 1;
-        *prot = (((modes & BIT0) | (raddr & 0x60000000)) >> 24) | 1;
+#ifdef DIAGS_SAYS_ANY_ADDRESS_OK_IF_MAPPED
+        /* check if valid real address */
+        if ((raddr & 0xffffff) >= (MEMSIZE*4)) { /* see if address is within our memory */
+            return NPMEM;                       /* no, none present memory error */
+//            fprintf(stderr, "\r\nRealAddr Bad address %08x, TLB %08x MAPC[%03x] %08x\n",
+//                raddr, TLB[index], index/2, MAPC[index/2]);
+//            fflush(stderr);
+//            sim_debug(DEBUG_EXP, &cpu_dev, "RealAddr Bad address %08x, TLB %08x MAPC[%03x] %08x\n",
+//                raddr, TLB[index], index/2, MAPC[index/2]);
+        }
+#endif
+        word = (raddr & 0xffe000) | offset;     /* combine map and offset */
+        *realaddr = word;                       /* return the real address */
+//        sim_debug(DEBUG_EXP, &cpu_dev, "RealAddr address %08x, TLB %08x MAPC[%03x] %08x qp %02x\n",
+//            word, TLB[index], index/2, MAPC[index/2], (word>>11)&3);
+
+        /* handle V6 & V9 different than 32/67 */
+        if (CPU_MODEL >= MODEL_V6) {
+            /* get protection status bits in map, combine with priv bit in psd 1 */
+            /* access bits in bits 24-26 and bit 31 set indicating status returned */
+            *prot = (((modes & BIT0) | (raddr & 0x60000000)) >> 24) | 1;
+        } else {
+            /* handle 32/67 */
+            if (modes & BIT0)                   /* all OK if privledged */
+                return ALLOK;                   /* all OK, return instruction */
+            /* get protection status of map */
+            index = (word >> 11) & 0x3;         /* see which 1/4 page we are in */
+            if ((BIT1 >> index) & raddr) {      /* is 1/4 page write protected */
+                *prot = 1;                      /* return memory write protection status */
+            }
+        }
         return ALLOK;                           /* all OK, return instruction */
     }
 }
@@ -1102,22 +1264,29 @@ t_stat Mem_read(uint32 addr, uint32 *data)
     sim_debug(DEBUG_DETAIL, &cpu_dev, "Mem_read status = %02x\n", status);
     if (status == ALLOK) {
         *data = M[realaddr >> 2];               /* valid address, get physical address contents */
-//        if ((CPU_MODEL >= MODEL_V6) && (modes & MAPMODE)) {
-        if (((CPU_MODEL >= MODEL_V6) || (CPU_MODEL == MODEL_67)) && (modes & MAPMODE)) {
-            /* for v6 & v9, check if we have read access */
-            if ((prot & 0xe0) == 0 || (prot & 0xe0) == 0x20) {
-                /* user has no access, do protection violation */
-                return MPVIOL;                  /* return memory protection violation */
+//        if (((CPU_MODEL >= MODEL_V6) || (CPU_MODEL == MODEL_67)) && (modes & MAPMODE)) {
+        if (((CPU_MODEL >= MODEL_V6) || (CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_67)) && (modes & MAPMODE)) {
+            page = (addr >> 13) & 0x7ff;        /* get 11 bit value */
+            if (CPU_MODEL >= MODEL_V6) {
+                /* for v6 & v9, check if we have read access */
+                if ((prot & 0xe0) == 0 || (prot & 0xe0) == 0x20) {
+                    /* user has no access, do protection violation */
+    sim_debug(DEBUG_EXP, &cpu_dev, "Mem_read protect error @ %08x prot %02x\n", addr, prot);
+                    return MPVIOL;              /* return memory protection violation */
+                }
+                raddr = TLB[page];              /* get the base address & bits */
+                if ((raddr & BIT0) == 0) {      /* see if page is valid */
+                    /* not valid, but mapped, so do a demand page request */
+                    *data = page;               /* return the page # */
+                    pfault = page;              /* save page number */
+                    return DMDPG;               /* demand page request */
+                }
+                if ((raddr & 0x04000000) == 0)  /* HIT on */
+//HUH                TLB[page] |= 0x08000000;        /* set accessed bit */
+                    TLB[page] |= 0x08000000;    /* no, set accessed bit */
+    sim_debug(DEBUG_EXP, &cpu_dev, "Mem_read addr %08x page %04x access bit set TLB %08x\n", addr, page, TLB[page]);
             }
             /* everybody else has read access */
-            page = (addr >> 13) & 0x7ff;        /* get 11 bit value */
-            raddr = TLB[page];                  /* get the base address & bits */
-            if ((raddr & BIT0) == 0) {          /* see if page is valid */
-                /* not valid, but mapped, so do a demand page request */
-                *data = page;                   /* return the page # */
-                pfault = page;                  /* save page number */
-                return DMDPG;                   /* demand page request */
-            }
         }
         sim_debug(DEBUG_DETAIL, &cpu_dev, "Mem_read addr %.8x realaddr %.8x data %.8x prot %d\n",
             addr, realaddr, *data, prot);
@@ -1142,24 +1311,37 @@ t_stat Mem_write(uint32 addr, uint32 *data)
         addr, realaddr, *data, prot);
     }
     if (status == ALLOK) {
-        if (((CPU_MODEL >= MODEL_V6) || (CPU_MODEL == MODEL_67)) && (modes & MAPMODE)) {
-//        if ((CPU_MODEL >= MODEL_V6) && (modes & MAPMODE)) {
-            /* for v6 & v9, check if we have write access */
-            if (((prot & 0xe0) != 0x40) && ((prot & 0xe0) != 0x80) && ((prot & 0xe0) != 0xc0)){
-                /* user has no write access, do protection violation */
-                return MPVIOL;                  /* return memory protection violation */
-            }
-            /* everything else has read access */
+//        if (((CPU_MODEL >= MODEL_V6) || (CPU_MODEL == MODEL_67)) && (modes & MAPMODE)) {
+        if (((CPU_MODEL >= MODEL_V6) || (CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_67)) && (modes & MAPMODE)) {
             page = (addr >> 13) & 0x7ff;        /* get 11 bit value */
-            raddr = TLB[page];                  /* get the base address & bits */
-            if ((raddr & BIT0) == 0) {          /* see if page is valid */
-                /* not valid, but mapped, so do a demand page request */
-                *data = page;                   /* return the page # */
-                pfault = page;                  /* save page number */
-                return DMDPG;                   /* demand page request */
+            if (CPU_MODEL >= MODEL_V6) {
+                /* for v6 & v9, check if we have write access */
+                if (((prot & 0xe0) != 0x40) && ((prot & 0xe0) != 0x80) && ((prot & 0xe0) != 0xc0)){
+                    /* user has no write access, do protection violation */
+    sim_debug(DEBUG_EXP, &cpu_dev, "Mem_write V6 & V7 protect error @ %08x prot %02x\n", addr, prot);
+                    return MPVIOL;              /* return memory protection violation */
+                }
+                raddr = TLB[page];              /* get the base address & bits */
+                if ((raddr & BIT0) == 0) {      /* see if page is valid */
+                    /* not valid, but mapped, so do a demand page request */
+                    *data = page;               /* return the page # */
+                    pfault = page;              /* save page number */
+                    return DMDPG;               /* demand page request */
+                }
+                if ((raddr & 0x04000000) == 0)  /* HIT on */
+//HUH                TLB[page] |= 0x18000000;        /* set modify/accessed bit */
+                TLB[page] |= 0x18000000;        /* no, set modify/accessed bit */
+    sim_debug(DEBUG_EXP, &cpu_dev, "Mem_write addr %08x page %04x modify/access bits set TLB %08x\n", addr, page, TLB[page]);
+            } else {
+                if (prot) {                     /* check for write protected memory */
+    sim_debug(DEBUG_EXP, &cpu_dev, "Mem_write 32/67 protect error @ %08x prot %02x\n", addr, prot);
+                    return MPVIOL;              /* return memory protection violation */
+                }
             }
+            /* everything else has write access */
         } else {
             if (prot) {                         /* check for write protected memory */
+    sim_debug(DEBUG_EXP, &cpu_dev, "Mem_write protect error @ %08x prot %02x\n", addr, prot);
                 return MPVIOL;                  /* return memory protection violation */
             }
         }
@@ -1252,6 +1434,7 @@ wait_loop:
 
         if (drop_nop) {                         /* need to drop a nop? */
             PSD1 = (PSD1 + 2) | (((PSD1 & 2) >> 1) & 1);    /* skip this instruction */
+            PSD1 &= ~1;                         /* clear bit 31, no lr */
             drop_nop = 0;                       /* we dropped the nop */
         }
 redo:
@@ -1359,14 +1542,25 @@ redo:
         /* Check for external interrupt here */
         /* see if we have an attention request from console */
         if (!skipinstr && attention_trap) {
+#ifdef DO_DYNAMIC_DEBUG
+            /* start debugging */
+            cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
+            attention_trap = 0;                 /* clear flag */
+            sim_debug(DEBUG_EXP, &cpu_dev, "Attention TRAP %04x skip %01x wait4int %01x irq_pend %01x\n",
+                TRAPME, skipinstr, wait4int, irq_pend);
+            sim_debug(DEBUG_EXP, &cpu_dev, "Attention TRAPME %04x PSD %08x %08x\n",
+                TRAPME, PSD1, PSD2);
+#else
             TRAPME = attention_trap;            /* get trap number */
-            attention_trap = 0;                 /* do only once */
+            attention_trap = 0;                 /* clear flag */
             sim_debug(DEBUG_DETAIL, &cpu_dev, "Attention TRAP %04x\n", TRAPME);
             skipinstr = 1;                      /* skip next interrupt test only once */
             goto newpsd;                        /* got process trap */
+#endif
         }
 
 skipi:
+        i_flags = 0;                            /* do not update pc if MF or NPM */
         skipinstr = 0;                          /* skip only once */
         if (sim_brk_summ && sim_brk_test(PC, SWMASK('E'))) {
             reason = STOP_IBKPT;
@@ -1375,8 +1569,18 @@ skipi:
 
         /* fill IR from logical memory address */
         if ((TRAPME = read_instruction(PSD, &IR))) {
-            sim_debug(DEBUG_DATA, &cpu_dev, "read_instr TRAPME %04x PSD %08x %08x\n",
+#ifdef DO_DYNAMIC_DEBUG
+            /* start debugging */
+            cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
+#endif
+            sim_debug(DEBUG_EXP, &cpu_dev, "read_instr TRAPME %04x PSD %08x %08x\n",
                 TRAPME, PSD1, PSD2);
+            i_flags = HLF;                      /* assume a hw instruction */
+//            if ((CPU_MODEL <= MODEL_27) || (CPU_MODEL == MODEL_87) ||
+//                (CPU_MODEL == MODEL_97))
+//                goto newpsd;                    /* got process trap */
+//            else
+            if ((CPU_MODEL == MODEL_27))
             if ((TRAPME == MAPFLT) || (TRAPME == NPMEM))
                 i_flags |= BT;                  /* do not update pc if MF or NPM */
             goto newpsd;                        /* got process trap */
@@ -1496,8 +1700,19 @@ exec:
             addr = IR & 0x7ffff;                /* get 19 bit address from instruction */
             if (PC >= 0x80000) {
                 TRAPME = MAPFAULT_TRAP;         /* Map Fault Trap */
-                i_flags |= BT;                  /* do not update pc if MAPFAULT */
-                PSD1 &= 0xff07ffff;             /* remove overflow bits */
+                if ((CPU_MODEL <= MODEL_27)) {
+                    i_flags &= ~(BT|HLF);       /* update pc if MAPFAULT */
+                    i_flags |= BT;              /* do not update pc if MAPFAULT */
+                } else
+                    i_flags |= HLF;             /* assume half word instr */
+                if ((CPU_MODEL <= MODEL_27))
+                    /* 77, 27 rolls to zero, not 80000 */
+                    PSD1 &= 0xff07ffff;         /* remove overflow bits */
+                else
+                    PSD1 &= 0xff0fffff;         /* leave overflow bit for trap addr */
+                sim_debug(DEBUG_EXP, &cpu_dev,
+                    "PC over 80000 Base OP %04x i_flags %04x addr %08x PSD %08x %08x\n",
+                    OP, i_flags, addr, PSD1, PSD2);
                 goto newpsd;                    /* handle trap */
             }
 
@@ -1954,7 +2169,7 @@ exec:
 #ifdef DO_DYNAMIC_DEBUG
                     /* start debugging */
                     if (reg == 2)
-                        cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP);
+                        cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
 #endif
 //                    if ((CPU_MODEL == MODEL_V6) || (CPU_MODEL == MODEL_67)) {
                     if (CPU_MODEL <= MODEL_V6) {
@@ -1993,7 +2208,7 @@ exec:
                     }
 #ifdef DO_DYNAMIC_DEBUG
                     /* start debugging */
-                    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP);
+                    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
 #endif
                     /* Shared memory control bit assignments for reg */
                     /*    0 - Reserved */
@@ -2002,10 +2217,11 @@ exec:
                     /*    7 - Read & Lock Enabled (=1)/Disabled (=0) */
                     /* 8-12 - Lower Bound of Shared Memory */
                     /* 3-31 - Reserved and must be zero */
-//                    fprintf(stderr, "\r\nSMC V6/67 GPR[%02x] = %08x SMCR = %08x CPU STATUS SPAD[f9] = %08x\r\n",
+                    sim_debug(DEBUG_EXP, &cpu_dev,
+                        "SMC V6/67 GPR[%02x] = %08x SMCR = %08x CPU STATUS SPAD[f9] = %08x\n",
+                        reg, GPR[reg], SMCR, SPAD[0xf9]);
+//                    fprintf(sim_deb, "SMC V6/67 GPR[%02x] = %08x SMCR = %08x CPU STATUS SPAD[f9] = %08x\r\n",
 //                            reg, GPR[reg], SMCR, SPAD[0xf9]);
-                    fprintf(sim_deb, "SMC V6/67 GPR[%02x] = %08x SMCR = %08x CPU STATUS SPAD[f9] = %08x\r\n",
-                            reg, GPR[reg], SMCR, SPAD[0xf9]);
                     SMCR = GPR[reg];                /* write reg bits 0-12 to shared memory controller */
                     i_flags &= ~SD;                 /* turn off store dest for this instruction */
                     break;
@@ -2043,7 +2259,11 @@ exec:
                     } else {
                         /* if bit 0 of reg not set, return PSD2 */
 //        fprintf(stderr, "RPSWT READ PSD2 GPR[%x] = %x CCW %x SPAD %x PSD2 %x\n", reg, GPR[reg], CCW, SPAD[0xf5], PSD2);
+                        /* make sure bit 49 (block state is current stat */
                         dest = SPAD[0xf5];          /* get PSD2 for user from SPAD 0xf5 */
+                        dest &= ~0x0000c000;        /* clear bits 48 & 49 */
+                        if (modes & BLKMODE)        /* set to current mode */
+                            dest |= 0x00004000;     /* set bit 49 for blocked */
                     }
                     break;
 
@@ -2584,18 +2804,25 @@ tbr:                                                /* handle basemode TBR too *
                         TRAPME = PRIVVIOL_TRAP;     /* set the trap to take */
                         goto newpsd;                /* handle trap */
                     }
+                    /* cpu must be unmapped */
+                    if (modes & MAPMODE) {          /* must be unmapped cpu */
+                        TRAPME = MAPFAULT_TRAP;     /* Map Fault Trap */
+                        goto newpsd;                /* handle trap */
+                    }
 #ifdef DO_DYNAMIC_DEBUG
                     /* start debugging */
-                    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP);
+//                    if ((reg == 7) && (temp == 0x5c8c))
+                    if ((temp & 0xffffff) == 0x75ec)
+                    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
 #endif
                     {   /* load the cpu maps using diag psd */
                         uint32  DPSD[2];            /* the PC for the instruction */
                         /* get PSD pointed to by real addr in Rd (temp) */
-                        DPSD[0] = M[temp>>2];       /* get word one on psd */
-                        DPSD[1] = M[(temp>>2)+1];   /* get word one on psd */
+                        DPSD[0] = M[temp>>2];       /* get word one of psd */
+                        DPSD[1] = M[(temp>>2)+1];   /* get word one of psd */
                         sim_debug(DEBUG_EXP, &cpu_dev,
-                            "LMAP PSD %08x %08x DPSD %08x %08x modes %08x\n",
-                            PSD1, PSD2, DPSD[0], DPSD[1], modes);
+                            "LMAP PSD %08x %08x DPSD %08x %08x modes %08x temp %06x\n",
+                            PSD1, PSD2, DPSD[0], DPSD[1], modes, temp);
                         if ((DPSD[1] & MAPBIT) == 0)  /* if PSD2 is unmapped, treat as NOP */
                             goto skipit;
                         if (PSD2 & RETMBIT)         /* don't load maps if retain bit set */
@@ -2607,10 +2834,12 @@ tbr:                                                /* handle basemode TBR too *
                             "LMAP PSD %08x %08x DPSD %08x %08x modes %08x temp2 %08x\n",
                             PSD1, PSD2, DPSD[0], DPSD[1], modes, temp2);
                         /* we need to load the new maps */
-                        TRAPME = load_maps(DPSD);   /* load maps for new PSD */
+                        TRAPME = load_maps(DPSD, 1);    /* load maps for new PSD */
                         sim_debug(DEBUG_EXP, &cpu_dev,
-                            "LMAP TRAPME %x MAPC[0-6] %08x %08x %08x %08x %08x %08x\n",
-                            TRAPME, MAPC[0], MAPC[1], MAPC[2], MAPC[3], MAPC[4], MAPC[5]);
+//                            "LMAP TRAPME %08x MAPC[0-6] %08x %08x %08x %08x %08x %08x\n",
+//                            TRAPME, MAPC[0], MAPC[1], MAPC[2], MAPC[3], MAPC[4], MAPC[5]);
+                            "LMAP TRAPME %08x MAPC[8-d] %08x %08x %08x %08x %08x %08x\n",
+                            TRAPME, MAPC[8], MAPC[9], MAPC[10], MAPC[11], MAPC[12], MAPC[13]);
                         modes = temp2;              /* restore modes flags */
                         if (TRAPME) {
                             /* DIAGS wants the cpix for the psd to be the requested one */
@@ -2655,13 +2884,17 @@ tbr:                                                /* handle basemode TBR too *
                         TRAPME = PRIVVIOL_TRAP;     /* set the trap to take */
                         goto newpsd;                /* handle trap */
                     }
-                   if (modes & MAPMODE) {          /* must be unmapped cpu */
-                        TRAPME = MAPFAULT_TRAP;     /* Map Fault Trap */
-                        goto newpsd;                /* handle trap */
+#ifndef DIAG_CAN_BE_MAPPED_OR_UNMAPPED
+                    if (CPU_MODEL <= MODEL_27) {    /* 77 & 27 must be unmapped */
+                        if (modes & MAPMODE) {      /* must be unmapped cpu */
+                            TRAPME = MAPFAULT_TRAP; /* Map Fault Trap */
+                            goto newpsd;            /* handle trap */
+                        }
                     }
+#endif
 #ifdef DO_DYNAMIC_DEBUG
                     /* start debugging */
-                    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP);
+                    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
 #endif
                     /* Rs has map number for even/odd pair loading */
                     if (CPU_MODEL < MODEL_27) {
@@ -2673,14 +2906,20 @@ tbr:                                                /* handle basemode TBR too *
                         /* 32/27 & 32/87 have 256 maps */
                         addr &= 0xfe;               /* make 0-255 */
                         temp = MAPC[addr>>1];       /* get even/odd maps */
-//            fprintf(stderr, "TMAPR #%x val %x\r\n", addr, temp);
                     } else
-//                    if ((CPU_MODEL == MODEL_67) || (CPU_MODEL == MODEL_97)) {
                     if (CPU_MODEL == MODEL_97) {
-                        /* 32/67, 32/97, V7, & V9 have 2048 maps */
-                        addr &= 0x7fe;              /* make 0-2047 */
+                        /* 32/97 with 2048 maps */
+                        addr &= 0x7ff;              /* make 0-2047 */
                         temp = MAPC[addr>>1];       /* get even/odd maps */
-//            fprintf(stderr, "TMAPR #%x val %x\r\n", addr, temp);
+                        if ((addr & 1) == 0)        /* if even reg, use left hw */
+                            temp >>= 16;            /* move over reg value */
+                        temp &= 0xffff;             /* just 16 bits */
+                        if (TLB[addr] & 0x04000000) /* see if HIT bit set */
+                            temp |= 0x80000000;     /* show hit BIT is set */
+                        if ((addr < 0x20) || (addr > 0x7f8))
+                            sim_debug(DEBUG_EXP, &cpu_dev,
+                                "TMAPR #%4x val %08x TLB %08x MAPC %04x\n",
+                                addr, temp, TLB[addr], RMR(addr<<1));
                     } else {
                         /* 32/67, V6 & V9 have 2048 maps demand paging */
                         addr &= 0x7ff;              /* make 0-2047 */
@@ -2688,8 +2927,13 @@ tbr:                                                /* handle basemode TBR too *
                         if ((addr & 1) == 0)        /* if even reg, use left hw */
                             temp >>= 16;            /* move over reg value */
                         temp &= 0xffff;             /* just 16 bits */
-                        if (temp & 0x1800)          /* r/w access yet */
-                            temp |= 0x80000000;     /* set hit bit */
+                        if (TLB[addr] & 0x04000000) /* see if HIT bit set */
+                            temp |= 0x80000000;     /* show hit BIT is set */
+                        temp |= ((TLB[addr] & 0xf8000000) >> 16);  /* add in protect bits */
+                        if ((addr < 0x20) || (addr > 0x7f8))
+                            sim_debug(DEBUG_EXP, &cpu_dev,
+                                "TMAPR #%4x val %08x TLB %08x MAPC %04x\n",
+                                addr, temp, TLB[addr], RMR(addr<<1));
                     }
                     GPR[reg] = temp;                /* save the temp value to Rd reg */
                     goto skipit;
@@ -2826,7 +3070,7 @@ skipit:
                 }
                 break;
 
-        case 0x38>>2:                   /* 0x38 HLF - HLF */   /* REG - REG floating point */
+            case 0x38>>2:               /* 0x38 HLF - HLF */   /* REG - REG floating point */
                 switch(opr & 0xF) {
                     case 0x0:   /* ADR */
                         temp = GPR[reg];                /* reg contents specified by Rd */
@@ -3082,7 +3326,7 @@ doovr4:
 #ifdef DO_DYNAMIC_DEBUG
                 /* start debugging */
                 if ((reg == 0) && (sreg == 0))
-                    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP);
+                    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
 #endif
                         /* merge the sregs into the 64bit value */
                         source = (((t_uint64)GPR[sreg]) << 32) | ((t_uint64)GPR[sreg+1]);
@@ -3618,8 +3862,11 @@ doovr3:
         case 0x80>>2:           /* 0x80 SD|ADR - SD|ADR */ /* LEAR */
                 /* convert address to real physical address */
                 TRAPME = RealAddr(addr, &temp, &t);
-                if (TRAPME != ALLOK)
+                if (TRAPME != ALLOK) {
+                    sim_debug(DEBUG_EXP, &cpu_dev,
+                        "At LEAR with TRAPME %04x addr %08x\n", TRAPME, addr);
                     goto newpsd;                    /* memory read error or map fault */
+                }
                 /* OS code says F bit is not transferred, so just ignore it */
                 /* DIAGS needs it, so put it back */
                 if (FC & 4)                         /* see if F bit was set */
@@ -4770,6 +5017,11 @@ doovr2:
                     if ((TRAPME = Mem_read(addr, &temp))) { /* get PSD1 from memory */
                         goto newpsd;                    /* memory read error or map fault */
                     }
+#ifdef DO_DYNAMIC_DEBUG
+                /* start debugging */
+                if ((temp&0xffffff) == 0xe040)
+                    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
+#endif
                     bc = CPUSTATUS;                     /* save the CPU STATUS */
                     TPSD[0] = PSD1;                     /* save the PSD for the instruction */
                     TPSD[1] = PSD2;
@@ -4782,8 +5034,7 @@ doovr2:
                             goto newpsd;                /* memory read error or map fault */
                         }
                         PSD2 = temp2;                   /* PSD2 access good, so save it */
-                    }
-                    else {
+                    } else {
                         if ((TRAPME = Mem_read(addr+4, &temp2))) {   /* get PSD2 from memory */
                             goto newpsd;                /* memory read error or map fault */
                         }
@@ -4830,20 +5081,42 @@ doovr2:
                         if (PSD2 & MAPBIT) {
                             /* set mapped mode in cpu status */
                             CPUSTATUS |= 0x00800000;    /* set bit 8 of cpu status */
-///                            if ((PSD2 & RETMBIT) == 0) {    /* don't load maps if retain bit set */
+                            sim_debug(DEBUG_EXP, &cpu_dev,
+                                "B4 LPSDCM temp %06x TPSD %08x %08x PSD %08x %08x\n",
+                                temp, TPSD[0], TPSD[1], PSD1, PSD2);
+                            sim_debug(DEBUG_EXP, &cpu_dev,
+                                "B4 LPSDCM MAPC[14-19] %08x %08x %08x %08x %08x %08x\n",
+                                MAPC[14], MAPC[15], MAPC[16], MAPC[17], MAPC[18], MAPC[19]);
+//                              "B4 LPSDCM MAPC[0-6] %08x %08x %08x %08x %08x %08x\n",
+//                              MAPC[0], MAPC[1], MAPC[2], MAPC[3], MAPC[4], MAPC[5]);
+                            /* this mod fixes MPX 1.X 1st swapr load */
+//                            if ((BPIX == 0) && (CPIXPL == 0))   /* any O/S or user maps yet? */
+                            if (CPIXPL == 0)            /* any user maps yet? */
+                                PSD2 &= ~RETMBIT;       /* no, turn off retain bit in PSD2 */
+                            if ((PSD2 & RETMBIT) == 0) { /* don't load maps if retain bit set */
                                 /* we need to load the new maps */
-//    fprintf(stderr, "LPSDCM TPSD %x %x PSD %x %x MAPC[0-6] %x %x %x %x %x %x\r\n",
-//    TPSD[0], TPSD[1], PSD1, PSD2, MAPC[0], MAPC[1], MAPC[2], MAPC[3], MAPC[4], MAPC[5]);
-                                TRAPME = load_maps(PSD);    /* load maps for new PSD */
-///                            }
+                                TRAPME = load_maps(PSD, 0); /* load maps for new PSD */
+                                sim_debug(DEBUG_EXP, &cpu_dev,
+                                    "AF LPSDCM TPSD %08x %08x PSD %08x %08x\n",
+                                    TPSD[0], TPSD[1], PSD1, PSD2);
+                                sim_debug(DEBUG_EXP, &cpu_dev,
+//                                    "AF LPSDCM MAPC[0-6] %08x %08x %08x %08x %08x %08x\n",
+//                                    MAPC[0], MAPC[1], MAPC[2], MAPC[3], MAPC[4], MAPC[5]);
+                                    "AF LPSDCM MAPC[14-19] %08x %08x %08x %08x %08x %08x\n",
+                                    MAPC[14], MAPC[15], MAPC[16], MAPC[17], MAPC[18], MAPC[19]);
+                            }
                             PSD2 &= ~RETMBIT;           /* turn off retain bit in PSD2 */
                             SPAD[0xf5] = PSD2;          /* save the current PSD2 */
                             SPAD[0xf9] = CPUSTATUS;     /* save the cpu status in SPAD */
-//    fprintf(stderr, "LPSDCM MAPS LOADED TRAPME = %x PSD1 %x PSD2 %x CPUSTATUS %x\r\n",
-//    TRAPME, PSD1, PSD2, CPUSTATUS);
                             sim_debug(DEBUG_EXP, &cpu_dev,
                                 "LPSDCM MAPS LOADED TRAPME = %02x PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
                                 TRAPME, PSD1, PSD2, CPUSTATUS);
+#ifdef DO_DYNAMIC_DEBUG
+                /* start debugging */
+//                if ((PSD1&0xffffff) == 0x6d44)
+                if ((PSD1&0xffffff) == 0x5c34)
+                    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
+#endif
                         }
                         PSD2 &= ~RETMBIT;               /* turn off retain bit in PSD2 */
                     } else {
@@ -4856,7 +5129,7 @@ doovr2:
                     /* TRAPME can be error from LPSDCM or OK here */
                     if (TRAPME) {                       /* if we have an error, restore old PSD */
                         sim_debug(DEBUG_EXP, &cpu_dev,
-                            "LPSDCM MAPS LOADED TRAPME = %02x PSD1 %08x PSD2 %08x CPUSTATUS %08x SPAD[f9] %08x\n",
+                            "LPSDCM MAPS2 LOADED TRAPME = %02x PSD1 %08x PSD2 %08x CPUSTATUS %08x SPAD[f9] %08x\n",
                             TRAPME, PSD1, PSD2, CPUSTATUS, SPAD[0xf9]);
                         PSD1 = TPSD[0];                 /* restore PSD1 */
                         /* HACK HACK HACK */
@@ -4869,7 +5142,7 @@ doovr2:
                         irq_pend = reg;                 /* restore intr status */
                         goto newpsd;                    /* go process error */
                     }
-                    skipinstr = 1;                      /* do not intr next instruction */
+                    skipinstr = 1;                      /* do not allow intr on next instruction */
                     drop_nop = 0;                       /* nothing to drop */
                     goto newpsd;                        /* load the new psd, or process error */
                     break;
@@ -4902,30 +5175,6 @@ doovr2:
                 if ((modes & PRIVBIT) == 0) {           /* must be privileged to do I/O */
                     TRAPME = PRIVVIOL_TRAP;             /* set the trap to take */
                     TRAPSTATUS |= 0x1000;               /* set Bit 19 of Trap Status word */
-
-#ifdef FIXBUG
-                cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP);
-                sim_debug(DEBUG_CMD, &cpu_dev, "----XIO Privileged Violation\n");
-                sim_debug(DEBUG_CMD, &cpu_dev, "Starting XIO HALT instruction\n");
-                        
-//                        if (cpu_dev.dctrl & DEBUG_EXP) {
-                sim_debug(DEBUG_EXP, &cpu_dev, "\n[][][][][][][][][][] XIO PV TRAP [][][][][][][][][][]\n");
-                sim_debug(DEBUG_EXP, &cpu_dev, "PSD1 %.8x PSD2 %.8x TRAPME %.4x CPUSTATUS %08x\n",
-                    PSD1, PSD2, TRAPME, CPUSTATUS);
-                for (ix=0; ix<8; ix+=2) {
-                    sim_debug(DEBUG_EXP, &cpu_dev, "GPR[%d] %.8x GPR[%d] %.8x\n", ix, GPR[ix], ix+1, GPR[ix+1]);
-                }
-                sim_debug(DEBUG_EXP, &cpu_dev, "[][][][][][][][][][] XIO PV TRAP [][][][][][][][][][]\n");
-//                        }
-                fprintf(stdout, "\r\n[][][][][][][][][][] XIO HALT [][][][][][][][][][]\r\n");
-                fprintf(stdout, "PSD1 %.8x PSD2 %.8x TRAPME %.4x\r\n", PSD1, PSD2, TRAPME);
-                for (ix=0; ix<8; ix+=2) {
-                    fprintf(stdout, "GPR[%d] %.8x GPR[%d] %.8x\r\n", ix, GPR[ix], ix+1, GPR[ix+1]);
-                }
-                fprintf(stdout, "[][][][][][][][][][] XIO HALT [][][][][][][][][][]\r\n");
-///*TEST DIAG*/           reason = STOP_HALT;         /* do halt for now */
-///*TEST DIAG*/           return STOP_HALT;           /* exit to simh for halt */
-#endif
                     goto newpsd;                        /* Privlege violation trap */
                 }
                 if ((opr & 0x7) != 0x07) {              /* aug is 111 for XIO instruction */
@@ -4936,148 +5185,98 @@ doovr2:
                     t = SPAD[prior+0x80];               /* get spad entry for interrupt */
                     addr = SPAD[0xf1] + (prior<<2);     /* vector address in SPAD */
                     addr = M[addr>>2];                  /* get the interrupt context block addr */
+                    prior = (opr >> 3) & 0x7f;          /* get priority level */
+                    uint32 maxlev = 0x5f;               /* max lev for all but 32/27 in diags */
+                    if (CPU_MODEL <= MODEL_27) {
+                        maxlev = 0x6f;                  /* 27 uses 112 */
+                    }
+//                    if (CPU_MODEL == MODEL_V9) {
+//                        maxlev = 0x5f;                  /* 27 uses 112 */
+//                    }
 
                     switch(opr & 0x7) {                 /* use bits 13-15 to determine instruction */
                     case 0x0:       /* EI  FC00  Enable Interrupt */
-                        prior = (opr >> 3) & 0x7f;      /* get priority level */
+                        if (prior > maxlev)             /* ignore for invalid levels */
+                            break;                      /* ignore */
                         /* SPAD entries for interrupts begin at 0x80 */
                         t = SPAD[prior+0x80];           /* get spad entry for interrupt */
-                        if (t == 0 || t == 0xffffffff)  /* if not set up, die */
+                        if (t == 0 || t == 0xffffffff)  /* if not set up, not class F */
                             goto syscheck;              /* system check */
+//                            break;                      /* ignore */
+                        if ((t & 0x0f000000) == 0x0f000000) /* if class F ignore instruction */
+                            break;                      /* ignore for F class */
                         INTS[prior] |= INTS_ENAB;       /* enable specified int level */
                         SPAD[prior+0x80] |= SINT_ENAB;  /* enable in SPAD too */
                         irq_pend = 1;                   /* start scanning interrupts again */
+
                         /* test for clock at address 0x7f06 and interrupt level 0x18 */
                         if ((SPAD[prior+0x80] & 0x0f00ffff) == 0x7f06)
-//                        if (prior == 0x18)              /* is this the clock starting */
                             rtc_setup(1, prior);        /* tell clock to start */
                         if ((SPAD[prior+0x80] & 0x0f00ffff) == 0x7f04)
-//                        if (prior == 0x5f)              /* is this the interval timer starting */
                             itm_setup(1, prior);        /* tell timer to start */
-#ifdef NOT_NOW
-                        {
-                            /* output current status of ints */
-                            unsigned int nx;
-                            for (nx=0; nx<112; nx++) {
-                                if (INTS[nx] & INTS_ACT)
-                                    fprintf(stderr, "EI %04x Interrupt level %04x active\n", prior, nx);
-                                if (INTS[nx] & INTS_REQ)
-                                    fprintf(stderr, "EI %04x Interrupt level %04x requesting\n", prior, nx);
-                                if (INTS[nx] & INTS_ENAB)
-                                    fprintf(stderr, "EI %04x Interrupt level %04x enabled\n", prior, nx);
-                            }
-                        }
-#endif
                         break;
 
                     case 0x1:       /* DI FC01 */
-                        prior = (opr >> 3) & 0x7f;      /* get priority level */
-///                        if (prior > 0x6f)               /* ignore for invalid levels */
-                        if (prior > 0x5f)               /* ignore for invalid levels */
-//                            goto syscheck;              /* system check */
-                            break;
+                        if (prior > maxlev)             /* ignore for invalid levels */
+                            break;                      /* ignore */
                         /* SPAD entries for interrupts begin at 0x80 */
                         t = SPAD[prior+0x80];           /* get spad entry for interrupt */
-                        if (t != 0 && t != 0xffffffff)  /* if not set up, not class F */
+                        if (t == 0 || t == 0xffffffff)  /* if not set up, not class F */
+                            goto syscheck;              /* system check */
+//                            break;                      /* ignore */
                         if ((t & 0x0f000000) == 0x0f000000) /* if class F ignore instruction */
-                            break;
+                            break;                      /* ignore for F class */
                         /* active state is left alone */
                         INTS[prior] &= ~INTS_ENAB;      /* disable specified int level */
                         INTS[prior] &= ~INTS_REQ;       /* clears any requests also */
                         SPAD[prior+0x80] &= ~SINT_ENAB; /* disable in SPAD too */
+
                         /* test for clock at address 0x7f06 and interrupt level 0x18 */
                         if ((SPAD[prior+0x80] & 0x0f00ffff) == 0x7f06)
-//                        if (prior == 0x18)              /* is this the clock stopping */
                             rtc_setup(0, prior);        /* tell clock to stop */
                         if ((SPAD[prior+0x80] & 0x0f00ffff) == 0x7f04)
-//                        if (prior == 0x5f)              /* is this the interval timer stopping */
                             itm_setup(0, prior);        /* tell timer to stop */
-#ifdef NOT_NOW
-                        {
-                            /* output current status of ints */
-                            unsigned int nx;
-                            for (nx=0; nx<112; nx++) {
-                                if (INTS[nx] & INTS_ACT)
-                                    fprintf(stderr, "DI %04x Interrupt level %04x active\n", prior, nx);
-                                if (INTS[nx] & INTS_REQ)
-                                    fprintf(stderr, "DI %04x Interrupt level %04x requesting\n", prior, nx);
-                                if (INTS[nx] & INTS_ENAB)
-                                    fprintf(stderr, "DI %04x Interrupt level %04x enabled\n", prior, nx);
-                            }
-                        }
-#endif
                         break;
 
                     case 0x2:       /* RI FC02 */
-                        prior = (opr >> 3) & 0x7f;      /* get priority level */
-///                        if (prior > 0x6f)               /* ignore for invalid levels */
-                        if (prior > 0x5f)               /* ignore for invalid levels */
-//                            goto syscheck;              /* system check */
-                            break;
+                        if (prior > maxlev)             /* ignore for invalid levels */
+                            break;                      /* ignore */
                         /* SPAD entries for interrupts begin at 0x80 */
                         t = SPAD[prior+0x80];           /* get spad entry for interrupt */
-                        if (t != 0 && t != 0xffffffff)  /* if not set up, not class F */
+                        if (t == 0 || t == 0xffffffff)  /* if not set up, not class F */
+                            goto syscheck;              /* system check */
+//                            break;                      /* ignore */
                         if ((t & 0x0f000000) == 0x0f000000) /* if class F ignore instruction */
-                            break;
+                            break;                      /* ignore for F class */
                         INTS[prior] |= INTS_REQ;        /* set the request flag for this level */
                         irq_pend = 1;                   /* start scanning interrupts again */
-#ifdef NOT_NOW
-                        {
-                            /* output current status of ints */
-                            unsigned int nx;
-                            for (nx=0; nx<112; nx++) {
-                                if (INTS[nx] & INTS_ACT)
-                                    fprintf(stderr, "RI %04x Interrupt level %04x active\n", prior, nx);
-                                if (INTS[nx] & INTS_REQ)
-                                    fprintf(stderr, "RI %04x Interrupt level %04x requesting\n", prior, nx);
-                                if (INTS[nx] & INTS_ENAB)
-                                    fprintf(stderr, "RI %04x Interrupt level %04x enabled\n", prior, nx);
-                            }
-                        }
-#endif
                         break;
 
                     case 0x3:       /* AI FC03 */
-                        prior = (opr >> 3) & 0x7f;      /* get priority level */
-///                        if (prior > 0x6f)               /* ignore for invalid levels */
-                        if (prior > 0x5f)               /* ignore for invalid levels */
-//                            goto syscheck;              /* system check */
-                            break;
+                        if (prior > maxlev)             /* ignore for invalid levels */
+                            break;                      /* ignore */
                         /* SPAD entries for interrupts begin at 0x80 */
                         t = SPAD[prior+0x80];           /* get spad entry for interrupt */
-                        if (t != 0 && t != 0xffffffff)  /* if not set up, not class F */
+                        if (t == 0 || t == 0xffffffff)  /* if not set up, not class F */
+                            goto syscheck;              /* system check */
+//                            break;                      /* ignore */
                         if ((t & 0x0f000000) == 0x0f000000) /* if class F ignore instruction */
-                            break;
+                            break;                      /* ignore for F class */
                         INTS[prior] |= INTS_ACT;        /* activate specified int level */
                         SPAD[prior+0x80] |= SINT_ACT;   /* activate in SPAD too */
                         irq_pend = 1;                   /* start scanning interrupts again */
-#ifdef NOT_NOW
-                        {
-                            /* output current status od ints */
-                            unsigned int nx;
-                            for (nx=0; nx<112; nx++) {
-                                if (INTS[nx] & INTS_ACT)
-                                    fprintf(stderr, "AI %04x Interrupt level %04x active\n", prior, nx);
-                                if (INTS[nx] & INTS_REQ)
-                                    fprintf(stderr, "AI %04x Interrupt level %04x requesting\n", prior, nx);
-                                if (INTS[nx] & INTS_ENAB)
-                                    fprintf(stderr, "AI %04x Interrupt level %04x enabled\n", prior, nx);
-                            }
-                        }
-#endif
                         break;
 
                     case 0x4:       /* DAI FC04 */
-                        prior = (opr >> 3) & 0x7f;      /* get priority level */
-///                        if (prior > 0x6f)               /* ignore for invalid levels */
-                        if (prior > 0x5f)               /* ignore for invalid levels */
-//                            goto syscheck;              /* system check */
-                            break;
+                        if (prior > maxlev)             /* ignore for invalid levels */
+                            break;                      /* ignore */
                         /* SPAD entries for interrupts begin at 0x80 */
                         t = SPAD[prior+0x80];           /* get spad entry for interrupt */
-                        if (t != 0 && t != 0xffffffff)  /* if not set up, not class F */
+                        if (t == 0 || t == 0xffffffff)  /* if not set up, not class F */
+                            goto syscheck;              /* system check */
+//                            break;                      /* ignore */
                         if ((t & 0x0f000000) == 0x0f000000) /* if class F ignore instruction */
-                            break;
+                            break;                      /* ignore for F class */
                         INTS[prior] &= ~INTS_ACT;       /* deactivate specified int level */
                         SPAD[prior+0x80] &= ~SINT_ACT;  /* deactivate in SPAD too */
                         irq_pend = 1;                   /* start scanning interrupts again */
@@ -5085,20 +5284,6 @@ doovr2:
                         /* skip tests for interrupts if this is the case */
                         skipinstr = 1;                  /* skip interrupt test */
                         drop_nop = 0;                   /* nothing to drop */
-#ifdef NOT_NOW
-                        {
-                            /* output current status of ints */
-                            unsigned int nx;
-                            for (nx=0; nx<112; nx++) {
-                                if (INTS[nx] & INTS_ACT)
-                                    fprintf(stderr, "DAI %04x Interrupt level %04x active\n", prior, nx);
-                                if (INTS[nx] & INTS_REQ)
-                                    fprintf(stderr, "DAI %04x Interrupt level %04x requesting\n", prior, nx);
-                                if (INTS[nx] & INTS_ENAB)
-                                    fprintf(stderr, "DAI %04x Interrupt level %04x enabled\n", prior, nx);
-                            }
-                        }
-#endif
                         break;
 
                     case 0x5:       /* TD FC05 */       /* bits 13-15 is test code type */
@@ -5165,6 +5350,7 @@ syscheck:
                 if ((t == 0 || t == 0xffffffff) ||      /* if not set up, system check */
                     ((t & 0x0f000000) != 0x0f000000)) {   /* class in bits 4-7 */
 syscheckf:
+//fprintf(stderr, "SYSCHK XIO lchan %.4x spad %.8x\r\n", lchan, t);
                     TRAPME = SYSTEMCHK_TRAP;            /* trap condition if F class */
                     TRAPSTATUS |= BIT0;                 /* class F error bit */
                     TRAPSTATUS &= ~BIT1;                /* I/O processing error */
@@ -5315,7 +5501,6 @@ mcheck:
                             chan, (chan<<8)|suba, status);
                         break;
 
-                    /* TODO Finish XIO interrupts */
                     case 0x0C:      /* Enable channel interrupt ECI */
                         chsa = temp2 & 0x7FFF;          /* get logical device address */
                         sim_debug(DEBUG_EXP, &cpu_dev, "XIO ECI chan %04x sa %04x spad %08x\n",
@@ -5324,7 +5509,9 @@ mcheck:
                         INTS[ix] |= INTS_ENAB;          /* enable specified int level */
                         SPAD[ix+0x80] |= SINT_ENAB;     /* enable in SPAD too */
                         irq_pend = 1;                   /* start scanning interrupts again */
-                        PSD1 = ((PSD1 & 0x87fffffe) | (0x40000000 & 0x78000000));   /* insert cc1 status */
+                        if ((TRAPME = checkxio(chsa, &status)))
+                            goto newpsd;                /* error returned, trap cpu */
+                        PSD1 = ((PSD1 & 0x87fffffe) | (status & 0x78000000));   /* insert status */
                         break;
 
                     case 0x0D:      /* Disable channel interrupt DCI */
@@ -5333,7 +5520,7 @@ mcheck:
 if (chan == 0x7e)
     if (event++ > 10)
     //if (event++ > 100)
-        cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP);
+        cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
 #endif
                         chsa = temp2 & 0x7FFF;          /* get logical device address */
                         sim_debug(DEBUG_EXP, &cpu_dev, "XIO DCI chan %04x sa %04x spad %08x\n",
@@ -5341,6 +5528,9 @@ if (chan == 0x7e)
                         /* SPAD entries for interrupts begin at 0x80 */
                         INTS[ix] &= ~INTS_ENAB;         /* disable specified int level */
                         SPAD[ix+0x80] &= ~SINT_ENAB;    /* disable in SPAD too */
+                        if ((TRAPME = checkxio(chsa, &status)))
+                            goto newpsd;                /* error returned, trap cpu */
+                        PSD1 = ((PSD1 & 0x87fffffe) | (status & 0x78000000));   /* insert status */
                         break;
 
                     case 0x0E:      /* Activate channel interrupt ACI */
@@ -5351,6 +5541,9 @@ if (chan == 0x7e)
                         INTS[ix] |= INTS_ACT;           /* activate specified int level */
                         SPAD[ix+0x80] |= SINT_ACT;      /* enable in SPAD too */
                         INTS[ix] &= ~INTS_REQ;          /* clears any requests also */
+                        if ((TRAPME = checkxio(chsa, &status)))
+                            goto newpsd;                /* error returned, trap cpu */
+                        PSD1 = ((PSD1 & 0x87fffffe) | (status & 0x78000000));   /* insert status */
                         break;
 
                     case 0x0F:      /* Deactivate channel interrupt DACI */
@@ -5363,7 +5556,9 @@ if (chan == 0x7e)
                         SPAD[ix+0x80] &= ~SINT_ACT;     /* deactivate in SPAD too */
                         irq_pend = 1;                   /* start scanning interrupts again */
                         skipinstr = 1;                  /* skip interrupt test */
-                        /* NOTE CC must be returned */
+                        if ((TRAPME = checkxio(chsa, &status)))
+                            goto newpsd;                /* error returned, trap cpu */
+                        PSD1 = ((PSD1 & 0x87fffffe) | (status & 0x78000000));   /* insert status */
                         break;
                 }                   /* end of XIO switch */
                 break;
@@ -5559,6 +5754,7 @@ newpsd:
 
         /* we get here from a LPSD, LPSDCM, INTR, or TRAP */
         if (TRAPME) {
+            static int pvcnt = 0;
             /* SPAD location 0xf0 has trap vector base address */
             uint32 tta = SPAD[0xf0];                /* get trap table address in memory */
             uint32 tvl;                             /* trap vector location */
@@ -5567,35 +5763,38 @@ newpsd:
             /* Trap Table Address in memory is pointed to by SPAD 0xF0 */
             /* TODO update cpu status and trap status words with reason too */
             switch(TRAPME) {
-            case POWERFAIL_TRAP:                    /* 0x80 power fail trap */
-            case POWERON_TRAP:                      /* 0x84 Power-On trap */
-            case MEMPARITY_TRAP:                    /* 0x88 Memory Parity Error trap */
-            case NONPRESMEM_TRAP:                   /* 0x8C Non Present Memory trap */
-            case UNDEFINSTR_TRAP:                   /* 0x90 Undefined Instruction Trap */
-            case PRIVVIOL_TRAP:                     /* 0x94 Privlege Violation Trap */
-//MOVED     case SVCCALL_TRAP:                      /* 0x98 Supervisor Call Trap */
-            case MACHINECHK_TRAP:                   /* 0x9C Machine Check Trap */
-            case SYSTEMCHK_TRAP:                    /* 0xA0 System Check Trap */
-            case MAPFAULT_TRAP:                     /* 0xA4 Map Fault Trap */
-            case IPUUNDEFI_TRAP:                    /* 0xA8 IPU Undefined Instruction Trap */
-//MOVED     case CALM_TRAP:                         /* 0xA8 Call Monitor Instruction Trap */
-            case SIGNALIPU_TRAP:                    /* 0xAC Signal IPU/CPU Trap */
-            case ADDRSPEC_TRAP:                     /* 0xB0 Address Specification Trap */
-            case CONSOLEATN_TRAP:                   /* 0xB4 Console Attention Trap */
-            case PRIVHALT_TRAP:                     /* 0xB8 Privlege Mode Halt Trap */
-            case AEXPCEPT_TRAP:                     /* 0xBC Arithmetic Exception Trap */
-            case CACHEERR_TRAP:                     /* 0xC0 Cache Error Trap (V9 Only) */
+            case POWERFAIL_TRAP:                    /* 0x80 PL00/PL01 power fail trap */
+            case POWERON_TRAP:                      /* 0x84 PL00/PL01 Power-On trap */
+            case MEMPARITY_TRAP:                    /* 0x88 PL02 Memory Parity Error trap */
+            case NONPRESMEM_TRAP:                   /* 0x8C PL03 Non Present Memory trap */
+            case UNDEFINSTR_TRAP:                   /* 0x90 PL04 Undefined Instruction Trap */
+            case PRIVVIOL_TRAP:                     /* 0x94 PL05 Privlege Violation Trap */
+//MOVED     case SVCCALL_TRAP:                      /* 0x98 PL06 Supervisor Call Trap */
+            case MACHINECHK_TRAP:                   /* 0x9C PL07 Machine Check Trap */
+            case SYSTEMCHK_TRAP:                    /* 0xA0 PL08 System Check Trap */
+            case MAPFAULT_TRAP:                     /* 0xA4 PL09 Map Fault Trap */
+            case IPUUNDEFI_TRAP:                    /* 0xA8 PL0A IPU Undefined Instruction Trap */
+//MOVED     case CALM_TRAP:                         /* 0xA8 PL0A Call Monitor Instruction Trap */
+            case SIGNALIPU_TRAP:                    /* 0xAC PL0B Signal IPU/CPU Trap */
+            case ADDRSPEC_TRAP:                     /* 0xB0 PL0C Address Specification Trap */
+            case CONSOLEATN_TRAP:                   /* 0xB4 PL0D Console Attention Trap */
+            case PRIVHALT_TRAP:                     /* 0xB8 PL0E Privlege Mode Halt Trap */
+            case AEXPCEPT_TRAP:                     /* 0xBC PL0F Arithmetic Exception Trap */
+            case CACHEERR_TRAP:                     /* 0xC0 PL10 Cache Error Trap (V9 Only) */
                 /* drop through */
             default:
 #ifdef DO_DYNAMIC_DEBUG
                 /* start debugging */
+//                if (TRAPME == PRIVHALT_TRAP)
 //                if (TRAPME == UNDEFINSTR_TRAP)
-                if (TRAPME == PRIVVIOL_TRAP)
-                    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP);
+                if ((TRAPME == PRIVHALT_TRAP) && (pvcnt++ > 5)) {
+                    pvcnt = 0;
+                    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
+                }
 #endif
                 sim_debug(DEBUG_EXP, &cpu_dev,
-                    "##TRAPME %04x LOAD MAPS PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
-                    TRAPME, PSD1, PSD2, CPUSTATUS);
+                    "##TRAPME %04x LOAD MAPS PSD1 %08x PSD2 %08x CPUSTATUS %08x drop_nop %01x i_flags %04x\n",
+                    TRAPME, PSD1, PSD2, CPUSTATUS, drop_nop, i_flags);
                 /* adjust PSD1 to next instruction */
                 /* Update instruction pointer to next instruction */
                 if ((i_flags & BT) == 0) {          /* see if PSD was replaced on a branch instruction */
@@ -5605,7 +5804,7 @@ newpsd:
                         EXM_EXR = 0;                /* reset PC increment for EXR */
                     } else
                     if (i_flags & HLF) {            /* if nop in rt hw, bump pc a word */
-                        if ((drop_nop) && ((CPU_MODEL == MODEL_67) || (CPU_MODEL == MODEL_V6)))
+                        if ((drop_nop) && ((CPU_MODEL == MODEL_67) || (CPU_MODEL >= MODEL_V6)))
                         {    
                             PSD1 = (PSD1 + 4) | (((PSD1 & 2) >> 1) & 1);
                             drop_nop = 0;
@@ -5616,14 +5815,19 @@ newpsd:
                     }
                 } else {
                     EXM_EXR = 0;                    /* reset PC increment for EXR */
+/*DIAG*/            if ((drop_nop) && ((CPU_MODEL == MODEL_67) || (CPU_MODEL >= MODEL_V6)))
+/*DIAG*/                PSD1 &= ~1;                 /* force off last right */
                     drop_nop = 0;
+                    sim_debug(DEBUG_EXP, &cpu_dev,
+                        "##GOT BT TRAPME %04x LOAD MAPS PSD1 %08x PSD2 %08x addr %08x\n",
+                        TRAPME, PSD1, PSD2, addr);
                 }
                 /* do not update pc for page fault */
             case DEMANDPG_TRAP:                     /* 0xC4 Demand Page Fault Trap (V6&V9 Only) */
 #ifndef DO_DYNAMIC_DEBUG
                 /* start debugging */
                 if (TRAPME == DEMANDPG_TRAP)
-                    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP);
+                    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
 #endif
                 if (TRAPME == DEMANDPG_TRAP) {      /* 0xC4 Demand Page Fault Trap (V6&V9 Only) */
                     /* Set map number */
@@ -5633,7 +5837,7 @@ newpsd:
                         TRAPME, pfault, PSD1, PSD2, CPUSTATUS);
                 }
                 sim_debug(DEBUG_EXP, &cpu_dev,
-                    "TRAPME %04x PSD1 %08x PSD2 %08x CPUSTATUS %08x drop_nop %02x\n",
+                    "At TRAPME %04x PSD1 %08x PSD2 %08x CPUSTATUS %08x drop_nop %02x\n",
                     TRAPME, PSD1, PSD2, CPUSTATUS, drop_nop);
                 sim_debug(DEBUG_EXP, &cpu_dev,
                     "At TRAP %04x IR %08x PSD1 %08x PSD2 %08x CPUSTATUS %08x ovr %02x drop_nop %02x\n",
@@ -5671,7 +5875,8 @@ newpsd:
                 } else {
                     /* valid vector, so store the PSD, fetch new PSD */
                     bc = PSD2 & 0x3ffc;             /* get copy of cpix */
-                    if ((TRAPME) && (CPU_MODEL <= MODEL_27))
+//                    if ((TRAPME) && ((CPU_MODEL <= MODEL_27) || (CPU_MODEL == MODEL_87)))
+                    if ((TRAPME) && ((CPU_MODEL <= MODEL_27) ))
                         /* Privlege Mode Halt Trap on 27 has bit 31 reset */
                         M[tvl>>2] = PSD1 & 0xfffffffe;  /* store PSD 1 */
                     else
@@ -5706,6 +5911,11 @@ newpsd:
                     PSD2 &= ~RETMBIT;               /* turn off retain bit in PSD2 */
                     SPAD[0xf5] = PSD2;              /* save the current PSD2 */
                     SPAD[0xf9] = CPUSTATUS;         /* save the cpu status in SPAD */
+#ifdef DO_DYNAMIC_DEBUG
+                /* start debugging */
+                if ((PSD1 & 0xffffff) == 0x3468)
+                    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
+#endif
                     sim_debug(DEBUG_EXP, &cpu_dev, "Process TRAPME %04x PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
                         TRAPME, PSD1, PSD2, CPUSTATUS);
                     /* TODO provide page fault data to word 6 */

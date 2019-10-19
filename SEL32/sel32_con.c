@@ -281,9 +281,9 @@ t_stat con_srvo(UNIT *uptr) {
         } else {
             /* HACK HACK HACK */
             /* simh stops outputing chars to debug file if it is passed a null????? */
-            if (ch == 0)                    /* do not pass a null char */
-                ch = '@';                   /* stop simh abort .... */
-            sim_debug(DEBUG_CMD, &con_dev, "con_srvo write %01x: putch %02x %c\n", unit, ch, ch);
+//            if (ch == 0)                    /* do not pass a null char */
+//                ch = '@';                   /* stop simh abort .... */
+            sim_debug(DEBUG_CMD, &con_dev, "con_srvo write %01x: putch 0x%02x\n", unit, ch);
             sim_putchar(ch);                /* output next char to device */
             sim_activate(uptr, 20);         /* start us off */
         }

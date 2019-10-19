@@ -108,6 +108,7 @@ void set_devattn(uint16 chsa, uint16 flags);
 void set_devwake(uint16 chsa, uint16 flags);    /* wakeup O/S for async line */
 void chan_end(uint16 chan, uint16 flags);
 int test_write_byte_end(uint16 chsa);
+t_stat checkxio(uint16 chsa, uint32 *status);   /* check XIO */
 t_stat startxio(uint16 chsa, uint32 *status);   /* start XIO */
 t_stat testxio(uint16 chsa, uint32 *status);    /* test XIO */
 t_stat stoptxio(uint16 chsa, uint32 *status);   /* stop XIO */
@@ -326,15 +327,15 @@ int readbuff(CHANP *chp)
     addr >>= 2;                                 /* byte to word address */
     chp->chan_buf = M[addr];                    /* get 4 bytes */
 
-    sim_debug(DEBUG_EXP, &cpu_dev, "readbuff read memory bytes into buffer %02x %06x %08x %08x [",
+    sim_debug(DEBUG_DETAIL, &cpu_dev, "readbuff read memory bytes into buffer %02x %06x %08x %08x [",
           chan, chp->ccw_addr & 0xFFFFFC, chp->chan_buf, chp->ccw_count);
     for(k = 24; k >= 0; k -= 8) {
         char ch = (chp->chan_buf >> k) & 0xFF;
         if (ch < 0x20 || ch == 0xff)
            ch = '.';
-        sim_debug(DEBUG_EXP, &cpu_dev, "%c", ch);
+        sim_debug(DEBUG_DETAIL, &cpu_dev, "%c", ch);
     }
-    sim_debug(DEBUG_EXP, &cpu_dev, "]\n");
+    sim_debug(DEBUG_DETAIL, &cpu_dev, "]\n");
     return 0;
 }
 
@@ -801,6 +802,79 @@ void store_csw(CHANP *chp)
 /* e   unassigned */
 /* f   unassigned */
 
+/* check an XIO operation */
+/* chan channel number 0-7f */
+/* suba unit address within channel 0-ff */
+/* Condition codes to return 0-f as specified above */
+t_stat checkxio(uint16 lchsa, uint32 *status) {
+    int     lchan = get_chan(lchsa);                /* get the logical channel number */
+    DIB     *dibp;                                  /* device information pointer */
+    UNIT    *uptr;                                  /* pointer to unit in channel */
+    uint32  chan_ivl;                               /* Interrupt Level ICB address for channel */
+    uint32  iocla;                                  /* I/O channel IOCL address int ICB */
+    uint32  tempa, inta, spadent, chan;
+    uint16  chsa;
+    CHANP   *chp;
+
+    /* get the device entry for the logical channel in SPAD */
+    spadent = SPAD[lchan];                          /* get spad device entry for logical channel */
+    chan = (spadent & 0x7f00) >> 8;                 /* get real channel */
+    chsa = (chan << 8) | (lchsa & 0xff);            /* merge sa to real channel */
+    dibp = dev_unit[chsa & 0x7f00];                 /* get the device information pointer */
+    chp = find_chanp_ptr(chsa);                     /* find the chanp pointer */
+    uptr = find_unit_ptr(chsa);                     /* find pointer to unit on channel */
+
+    sim_debug(DEBUG_CMD, &cpu_dev, "checkxio 1 chsa %04x chan %04x\n", chsa, chan);
+    if (dibp == 0 || uptr == 0) {                   /* if no dib or unit ptr, CC3 on return */
+        *status = CC3BIT;                           /* not found, so CC3 */
+        sim_debug(DEBUG_CMD, &cpu_dev, "checkxio chsa %04x is not found, CC3 return\n", chsa);
+        return SCPE_OK;                             /* not found, CC3 */
+    }
+    if ((uptr->flags & UNIT_ATTABLE) && ((uptr->flags & UNIT_ATT) == 0)) {    /* is unit attached? */
+        sim_debug(DEBUG_CMD, &cpu_dev, "checkxio chsa %04x is not attached, CC3 return\n", chsa);
+        *status = CC3BIT;                           /* not attached, so error CC3 */
+        return SCPE_OK;                             /* not found, CC3 */
+    }
+    /* see if interrupt is setup in SPAD and determine IVL for channel */
+    sim_debug(DEBUG_CMD, &cpu_dev, "checkxio dev spad %08x chsa %04x\n", spadent, chsa);
+
+    inta = ((spadent & 0x007f0000) >> 16);          /* 1's complement of chan int level */
+    inta = 127 - inta;                              /* get positive int level */
+    spadent = SPAD[inta + 0x80];                    /* get interrupt spad entry */
+    sim_debug(DEBUG_CMD, &cpu_dev, "checkxio int spad %08x inta %04x chan %04x\n", spadent, inta, chan);
+
+    /* get the address of the interrupt IVL in main memory */
+    chan_ivl = SPAD[0xf1] + (inta<<2);              /* contents of spad f1 points to chan ivl in mem */
+    chan_ivl = M[chan_ivl >> 2];                    /* get the interrupt context block addr in memory */
+    iocla = M[(chan_ivl+16)>>2];                    /* iocla is in wd 4 of ICB */
+    sim_debug(DEBUG_CMD, &cpu_dev,
+        "checkxio busy test chsa %04x cmd %02x iocla %08x flags %04x IOCD1 %08x IOCD2 %08x\n",
+        chsa, chp->ccw_cmd, iocla, chp->ccw_flags, M[iocla>>2], M[(iocla+4)>>2]);
+
+    /* check for a Command or data chain operation in progresss */
+    if (chp->ccw_cmd != 0 || (chp->ccw_flags & (FLAG_DC|FLAG_CC)) != 0) {
+        sim_debug(DEBUG_CMD, &cpu_dev, "checkxio busy return CC4 chsa %04x chan %04x\n", chsa, chan);
+        *status = CC4BIT;                           /* busy, so CC4 */
+        return SCPE_OK;                             /* just busy CC4 */
+    }
+
+    /* determine if channel DIB has a pre startio command processor */
+    if (dibp->pre_io != NULL) {                     /* NULL if no startio function */
+        /* call the device controller to get prestart_io status */
+        tempa = dibp->pre_io(uptr, chan);           /* get status from device */
+        if (tempa != 0) {                           /* see if sub channel status is ready */
+            /* The device must be busy or something, but it is not ready.  Return busy */
+            sim_debug(DEBUG_CMD, &cpu_dev, "checkxio CC3 & CC4 return busy chan %04x cstat %08x\n",
+                chan, tempa);
+            *status = CC3BIT|CC4BIT;                /* sub channel busy, so CC3|CC4 */
+            return SCPE_OK;                         /* just busy or something, CC3|CC4 */
+        }
+    }
+    *status = CC1BIT;                               /* CCs = 1, CMD accepted & queued, will not echo status */
+    sim_debug(DEBUG_CMD, &cpu_dev, "checkxio done CC1 status %08x\n", *status);
+    return SCPE_OK;                                 /* No CC's all OK  */
+}
+
 /* start an XIO operation */
 /* chan channel number 0-7f */
 /* suba unit address within channel 0-ff */
@@ -972,7 +1046,7 @@ t_stat testxio(uint16 lchsa, uint32 *status) {        /* test XIO */
     }
     /* the channel is not busy, see if any status to post */
     if ((FIFO_Get(chsa, &sw1) == 0) && (FIFO_Get(chsa, &sw2) == 0)) {
-        uint32  chan_icb = find_int_icb(chsa);          /* get icb address */
+        uint32  chan_icb = find_int_icb(chsa);      /* get icb address */
 
     sim_debug(DEBUG_CMD, &cpu_dev, "testxio status stored OK, sw1 %08x sw2 %08x\n", sw1, sw2);
         /* we have status to return, do it now */
@@ -1378,16 +1452,16 @@ uint32 scan_chan(int *ilev) {
 
             /* If channel end, check if we should continue */
             if (chp->chan_status & STATUS_CEND) {   /* do we have channel end */
-                sim_debug(DEBUG_EXP, &cpu_dev,
+                sim_debug(DEBUG_DETAIL, &cpu_dev,
                     "scan_chan loading %02x chan end chsa %04x flags %04x status %04x\n",
                     loading, chsa, chp->ccw_flags, chp->chan_status);
                 if (chp->ccw_flags & FLAG_CC) {     /* command chain flag */
                     /* we have channel end and CC flag, continue channel prog */
-                    sim_debug(DEBUG_EXP, &cpu_dev,
+                    sim_debug(DEBUG_DETAIL, &cpu_dev,
                         "scan_chan loading %02x chan end & CC chsa %04x status %04x\n",
                         loading, chsa, chp->chan_status);
                     if (chp->chan_status & STATUS_DEND) {   /* device end? */
-                        sim_debug(DEBUG_EXP, &cpu_dev,
+                        sim_debug(DEBUG_DETAIL, &cpu_dev,
                             "scan_chan loading %02x dev end & CC chsa %04x status %04x\n",
                             loading, chsa, chp->chan_status);
                         (void)load_ccw(chp, 1);     /* go load the next IOCB */
@@ -1396,7 +1470,7 @@ uint32 scan_chan(int *ilev) {
                 } else {
                     /* we have channel end and no CC flag, end command */
                     chsa = chp->chan_dev;           /* get the chan/sa */
-                    sim_debug(DEBUG_EXP, &cpu_dev,
+                    sim_debug(DEBUG_DETAIL, &cpu_dev,
                         "scan_chan loading %02x chan end & no CC chsa %04x status %04x\n",
                         loading, chsa, chp->chan_status);
                     dev_status[chsa] = 0;           /* no device status anymore */
