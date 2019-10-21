@@ -738,6 +738,7 @@ t_stat rp_svc (UNIT *uptr)
     struct rh_if *rhc;
     int           diff, da;
     t_stat        r;
+    int           sts;
 
     dptr = rp_devs[ctlr];
     rhc = &rp_rh[ctlr];
@@ -887,7 +888,7 @@ t_stat rp_svc (UNIT *uptr)
                     }
                 }
                 if (rh_blkend(rhc))
-                   goto rd_end;
+                    goto rd_end;
             }
             sim_activate(uptr, 10);
         } else {
@@ -930,13 +931,15 @@ rd_end:
             uptr->DATAPTR = 0;
             uptr->hwmark = 0;
         }
-        r = rh_read(rhc);
+        sts = rh_read(rhc);
         sim_debug(DEBUG_DATA, dptr, "%s%o write word %d %012llo %06o\n",
                       dptr->name, unit, uptr->DATAPTR, rhc->buf, rhc->wcr);
         rp_buf[ctlr][uptr->DATAPTR++] = rhc->buf;
-        if (r == 0 || uptr->DATAPTR == RP_NUMWD) {
+        if (sts == 0) {
             while (uptr->DATAPTR < RP_NUMWD)
                 rp_buf[ctlr][uptr->DATAPTR++] = 0;
+        }
+        if (uptr->DATAPTR == RP_NUMWD) {
             sim_debug(DEBUG_DETAIL, dptr, "%s%o write (%d,%d,%d)\n", dptr->name,
                    unit, cyl, GET_SF(uptr->DA), GET_SC(uptr->DA));
             da = GET_DA(uptr->DA, dtype) * RP_NUMWD;
@@ -945,7 +948,7 @@ rd_end:
                                 uptr->fileref);
             uptr->DATAPTR = 0;
             CLR_BUF(uptr);
-            if (r) {
+            if (sts) {
                 uptr->DA += 1 << DA_V_SC;
                 if (GET_SC(uptr->DA) >= rp_drv_tab[dtype].sect) {
                     uptr->DA &= (DA_M_SF << DA_V_SF) | (DC_M_CY << DC_V_CY);
@@ -956,11 +959,11 @@ rd_end:
                          uptr->CMD |= DS_PIP;
                     }
                 }
-                if (rh_blkend(rhc))
-                   goto wr_end;
-             }
+            }
+            if (rh_blkend(rhc))
+               goto wr_end;
         }
-        if (r) {
+        if (sts) {
             sim_activate(uptr, 10);
         } else {
 wr_end:

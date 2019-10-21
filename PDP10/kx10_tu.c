@@ -233,7 +233,7 @@ REG                 tua_reg[] = {
     {ORDATA(BUF, tu_rh[0].buf, 36), REG_HRO},
     {BRDATA(BUFF, &tu_buf[0][0], 16, 64, TU_NUMFR), REG_HRO},
     {0}
-};  
+};
 
 DEVICE              tua_dev = {
     "TUA", tu_unit, NULL, tu_mod,
@@ -496,135 +496,139 @@ t_stat tu_srv(UNIT * uptr)
     switch (GET_FNC(uptr->CMD)) {
     case FNC_NOP:
     case FNC_DCLR:
-          sim_debug(DEBUG_DETAIL, dptr, "%s%o nop\n", dptr->name, unit);
-          tu_error(uptr, MTSE_OK);      /* Nop */
-          rh_setirq(rhc);
-          return SCPE_OK;
+         sim_debug(DEBUG_DETAIL, dptr, "%s%o nop\n", dptr->name, unit);
+         tu_error(uptr, MTSE_OK);      /* Nop */
+         rh_setirq(rhc);
+         return SCPE_OK;
 
     case FNC_REWIND:
-          sim_debug(DEBUG_DETAIL, dptr, "%s%o rewind\n", dptr->name, unit);
-          if (uptr->CMD & CS1_GO) {
-              sim_activate(uptr,40000);
-              uptr->CMD |= CS_MOTION;
-              uptr->CMD &= ~(CS1_GO);
-          } else {
+         sim_debug(DEBUG_DETAIL, dptr, "%s%o rewind\n", dptr->name, unit);
+         if (uptr->CMD & CS1_GO) {
+             sim_activate(uptr,40000);
+             uptr->CMD |= CS_MOTION;
+             uptr->CMD &= ~(CS1_GO);
+         } else {
              uptr->CMD &= ~(CS_MOTION|CS_PIP);
              uptr->CMD |= CS_CHANGE|CS_ATA;
              tu_error(uptr, sim_tape_rewind(uptr));
-          }
-          return SCPE_OK;
+         }
+         return SCPE_OK;
 
     case FNC_UNLOAD:
-          sim_debug(DEBUG_DETAIL, dptr, "%s%o unload\n", dptr->name, unit);
-          uptr->CMD &= ~(CS1_GO);
-          uptr->CMD |= CS_CHANGE|CS_ATA;
-          tu_error(uptr, sim_tape_detach(uptr));
-          return SCPE_OK;
+         sim_debug(DEBUG_DETAIL, dptr, "%s%o unload\n", dptr->name, unit);
+         uptr->CMD &= ~(CS1_GO);
+         uptr->CMD |= CS_CHANGE|CS_ATA;
+         tu_error(uptr, sim_tape_detach(uptr));
+         return SCPE_OK;
 
     case FNC_WCHKREV:
     case FNC_READREV:
-          if (BUF_EMPTY(uptr)) {
-              uptr->CMD &= ~CS_PIP;
-              if ((r = sim_tape_rdrecr(uptr, &tu_buf[ctlr][0], &reclen,
-                                  TU_NUMFR)) != MTSE_OK) {
-                  sim_debug(DEBUG_DETAIL, dptr, "%s%o read error %d\n", dptr->name, unit, r);
-                  if (r == MTSE_BOT)
-                      uptr->STATUS |= ER1_NEF;
-                  tu_error(uptr, r);
-                  rh_finish_op(rhc, 0);
-              } else {
-                  sim_debug(DEBUG_DETAIL, dptr, "%s%o read %d\n", dptr->name, unit, reclen);
-                  uptr->CMD |= CS_MOTION;
-                  uptr->hwmark = reclen;
-                  uptr->DATAPTR = uptr->hwmark-1;
-                  uptr->CPOS = cc_max;
-                  rhc->buf = 0;
-                  sim_activate(uptr, 100);
-              }
-              return SCPE_OK;
-          }
-          if (uptr->DATAPTR >= 0) {
-              tu_frame[ctlr]++;
-              cc = (8 * (3 - uptr->CPOS)) + 4;
-              ch = tu_buf[ctlr][uptr->DATAPTR];
-              if (cc < 0)
-                  rhc->buf |= (uint64)(ch & 0x0f);
-              else
-                  rhc->buf |= (uint64)(ch & 0xff) << cc;
-              uptr->DATAPTR--;
-              uptr->CPOS--;
-              if (uptr->CPOS == 0) {
-                  uptr->CPOS = cc_max;
-                  if (GET_FNC(uptr->CMD) == FNC_READREV && rh_write(rhc) == 0) {
-                     tu_error(uptr, MTSE_OK);
-                     return SCPE_OK;
-                  }
-                  sim_debug(DEBUG_DATA, dptr, "%s%o readrev %012llo\n", 
-                            dptr->name, unit, rhc->buf);
-                  rhc->buf = 0;
-              }
-          } else {
-              if (uptr->CPOS != cc_max)
+         if (BUF_EMPTY(uptr)) {
+             uptr->CMD &= ~CS_PIP;
+             if ((r = sim_tape_rdrecr(uptr, &tu_buf[ctlr][0], &reclen,
+                                 TU_NUMFR)) != MTSE_OK) {
+                 sim_debug(DEBUG_DETAIL, dptr, "%s%o read error %d\n", dptr->name, unit, r);
+                 if (r == MTSE_BOT)
+                     uptr->STATUS |= ER1_NEF;
+                 tu_error(uptr, r);
+                 rh_finish_op(rhc, 0);
+             } else {
+                 sim_debug(DEBUG_DETAIL, dptr, "%s%o read %d\n", dptr->name, unit, reclen);
+                 uptr->CMD |= CS_MOTION;
+                 uptr->hwmark = reclen;
+                 uptr->DATAPTR = uptr->hwmark-1;
+                 uptr->CPOS = cc_max;
+                 rhc->buf = 0;
+                 sim_activate(uptr, 100);
+             }
+             return SCPE_OK;
+         }
+         if (uptr->DATAPTR >= 0) {
+             tu_frame[ctlr]++;
+             cc = (8 * (3 - uptr->CPOS)) + 4;
+             ch = tu_buf[ctlr][uptr->DATAPTR];
+             if (cc < 0)
+                 rhc->buf |= (uint64)(ch & 0x0f);
+             else
+                 rhc->buf |= (uint64)(ch & 0xff) << cc;
+             uptr->DATAPTR--;
+             uptr->CPOS--;
+             if (uptr->CPOS == 0) {
+                 uptr->CPOS = cc_max;
+                 if (GET_FNC(uptr->CMD) == FNC_READREV && rh_write(rhc) == 0) {
+                    tu_error(uptr, MTSE_OK);
+                    rh_finish_op(rhc, 0);
+                    return SCPE_OK;
+                 }
+                 sim_debug(DEBUG_DATA, dptr, "%s%o readrev %012llo\n",
+                           dptr->name, unit, rhc->buf);
+                 rhc->buf = 0;
+             }
+         } else {
+             if (uptr->CPOS != cc_max)
                  rh_write(rhc);
-              (void)rh_blkend(rhc);
-              tu_error(uptr, MTSE_OK);
+             (void)rh_blkend(rhc);
+             tu_error(uptr, MTSE_OK);
              rh_finish_op(rhc, 0);
-              return SCPE_OK;
-          }
-          break;
+             return SCPE_OK;
+         }
+         break;
 
     case FNC_WCHK:
     case FNC_READ:
-          if (BUF_EMPTY(uptr)) {
-              uptr->CMD &= ~CS_PIP;
-              uptr->CMD |= CS_MOTION;
-              if ((r = sim_tape_rdrecf(uptr, &tu_buf[ctlr][0], &reclen,
-                                  TU_NUMFR)) != MTSE_OK) {
-                  sim_debug(DEBUG_DETAIL, dptr, "%s%o read error %d\n", dptr->name, unit, r);
-                  tu_error(uptr, r);
-                  rh_finish_op(rhc, 0);
-              } else {
-                  sim_debug(DEBUG_DETAIL, dptr, "%s%o read %d %d\n", dptr->name,  unit, reclen, uptr->pos);
-                  uptr->hwmark = reclen;
-                  uptr->DATAPTR = 0;
-                  uptr->CPOS = 0;
-                  rhc->buf = 0;
-                  sim_activate(uptr, 100);
-              }
-              return SCPE_OK;
-          }
-          if ((uint32)uptr->DATAPTR < uptr->hwmark) {
-              tu_frame[ctlr]++;
-              cc = (8 * (3 - uptr->CPOS)) + 4;
-              ch = tu_buf[ctlr][uptr->DATAPTR];
-              if (cc < 0)
-                  rhc->buf |= (uint64)(ch & 0x0f);
-              else
-                  rhc->buf |= (uint64)(ch & 0xff) << cc;
-              uptr->DATAPTR++;
-              uptr->CPOS++;
-              if (uptr->CPOS == cc_max) {
-                  uptr->CPOS = 0;
-                  if (GET_FNC(uptr->CMD) == FNC_READ && rh_write(rhc) == 0) {
-                      tu_error(uptr, MTSE_OK);
-                      return SCPE_OK;
-                  }
-                  sim_debug(DEBUG_DATA, dptr, "%s%o read %012llo\n", 
-                            dptr->name, unit, rhc->buf);
-                  rhc->buf = 0;
-              }
-          } else {
-            if (uptr->CPOS != 0) {
-                sim_debug(DEBUG_DATA, dptr, "%s%o read %012llo\n",
-                             dptr->name, unit, rhc->buf);
-                rh_write(rhc);
-            }
-            tu_error(uptr, MTSE_OK);
-            (void)rh_blkend(rhc);
-            rh_finish_op(rhc, 0);
-            return SCPE_OK;
-          }
-          break;
+         if (BUF_EMPTY(uptr)) {
+             uptr->CMD &= ~CS_PIP;
+             uptr->CMD |= CS_MOTION;
+             if ((r = sim_tape_rdrecf(uptr, &tu_buf[ctlr][0], &reclen,
+                                 TU_NUMFR)) != MTSE_OK) {
+                 sim_debug(DEBUG_DETAIL, dptr, "%s%o read error %d\n", dptr->name, unit, r);
+                 tu_error(uptr, r);
+                 rh_finish_op(rhc, 0);
+             } else {
+                 sim_debug(DEBUG_DETAIL, dptr, "%s%o read %d %d\n", dptr->name,  unit, reclen, uptr->pos);
+                 uptr->hwmark = reclen;
+                 uptr->DATAPTR = 0;
+                 uptr->CPOS = 0;
+                 rhc->buf = 0;
+                 sim_activate(uptr, 100);
+             }
+             return SCPE_OK;
+         }
+         if ((uint32)uptr->DATAPTR < uptr->hwmark) {
+             tu_frame[ctlr]++;
+             cc = (8 * (3 - uptr->CPOS)) + 4;
+             ch = tu_buf[ctlr][uptr->DATAPTR];
+             if (cc < 0)
+                 rhc->buf |= (uint64)(ch & 0x0f);
+             else
+                 rhc->buf |= (uint64)(ch & 0xff) << cc;
+             uptr->DATAPTR++;
+             uptr->CPOS++;
+             if (uptr->CPOS == cc_max) {
+                 uptr->CPOS = 0;
+                 if (GET_FNC(uptr->CMD) == FNC_READ && rh_write(rhc) == 0) {
+                     tu_error(uptr, MTSE_OK);
+                     if (uptr->DATAPTR == uptr->hwmark)
+                         (void)rh_blkend(rhc);
+                     rh_finish_op(rhc, 0);
+                     return SCPE_OK;
+                 }
+                 sim_debug(DEBUG_DATA, dptr, "%s%o read %012llo\n",
+                           dptr->name, unit, rhc->buf);
+                 rhc->buf = 0;
+             }
+         } else {
+             if (uptr->CPOS != 0) {
+                 sim_debug(DEBUG_DATA, dptr, "%s%o read %012llo\n",
+                              dptr->name, unit, rhc->buf);
+                 rh_write(rhc);
+             }
+             tu_error(uptr, MTSE_OK);
+             (void)rh_blkend(rhc);
+             rh_finish_op(rhc, 0);
+             return SCPE_OK;
+         }
+         break;
 
     case FNC_WRITE:
          if (BUF_EMPTY(uptr)) {
@@ -675,81 +679,81 @@ t_stat tu_srv(UNIT * uptr)
                 uptr->CPOS = 010;
          }
          if (uptr->CPOS == 010) {
-                /* Write out the block */
-                reclen = uptr->hwmark;
-                r = sim_tape_wrrecf(uptr, &tu_buf[ctlr][0], reclen);
-                sim_debug(DEBUG_DETAIL, dptr, "%s%o Write %d %d\n",
-                             dptr->name, unit, reclen, uptr->CPOS);
-                uptr->DATAPTR = 0;
-                uptr->hwmark = 0;
-                (void)rh_blkend(rhc);
-                tu_error(uptr, r); /* Record errors */
-                rh_finish_op(rhc,0 );
-                return SCPE_OK;
+             /* Write out the block */
+             reclen = uptr->hwmark;
+             r = sim_tape_wrrecf(uptr, &tu_buf[ctlr][0], reclen);
+             sim_debug(DEBUG_DETAIL, dptr, "%s%o Write %d %d\n",
+                          dptr->name, unit, reclen, uptr->CPOS);
+             uptr->DATAPTR = 0;
+             uptr->hwmark = 0;
+             (void)rh_blkend(rhc);
+             tu_error(uptr, r); /* Record errors */
+             rh_finish_op(rhc,0 );
+             return SCPE_OK;
          }
          break;
 
     case FNC_WTM:
-        uptr->CMD |= CS_ATA;
-        if ((uptr->flags & MTUF_WLK) != 0) {
-            tu_error(uptr, MTSE_WRP);
-        } else {
-            tu_error(uptr, sim_tape_wrtmk(uptr));
-        }
-        sim_debug(DEBUG_DETAIL, dptr, "%s%o WTM\n", dptr->name, unit);
-        return SCPE_OK;
+         uptr->CMD |= CS_ATA;
+         if ((uptr->flags & MTUF_WLK) != 0) {
+             tu_error(uptr, MTSE_WRP);
+         } else {
+             tu_error(uptr, sim_tape_wrtmk(uptr));
+         }
+         sim_debug(DEBUG_DETAIL, dptr, "%s%o WTM\n", dptr->name, unit);
+         return SCPE_OK;
 
     case FNC_ERASE:
-        uptr->CMD |= CS_ATA;
-        if ((uptr->flags & MTUF_WLK) != 0) {
-            tu_error(uptr, MTSE_WRP);
-        } else {
-            tu_error(uptr, sim_tape_wrgap(uptr, 35));
-        }
-        sim_debug(DEBUG_DETAIL, dptr, "%s%o ERG\n", dptr->name, unit);
-        return SCPE_OK;
+         uptr->CMD |= CS_ATA;
+         if ((uptr->flags & MTUF_WLK) != 0) {
+             tu_error(uptr, MTSE_WRP);
+         } else {
+             tu_error(uptr, sim_tape_wrgap(uptr, 35));
+         }
+         sim_debug(DEBUG_DETAIL, dptr, "%s%o ERG\n", dptr->name, unit);
+         return SCPE_OK;
 
     case FNC_SPACEF:
     case FNC_SPACEB:
-        sim_debug(DEBUG_DETAIL, dptr, "%s%o space %o\n", dptr->name, unit, GET_FNC(uptr->CMD));
-        if (tu_frame[ctlr] == 0) {
-             uptr->STATUS |= ER1_NEF;
-             uptr->CMD |= CS_ATA;
-             tu_error(uptr, MTSE_OK);
-             return SCPE_OK;
-        }
-        uptr->CMD |= CS_MOTION;
-        /* Always skip at least one record */
-        if (GET_FNC(uptr->CMD) == FNC_SPACEF)
-            r = sim_tape_sprecf(uptr, &reclen);
-        else
-            r = sim_tape_sprecr(uptr, &reclen);
-        switch (r) {
-        case MTSE_OK:            /* no error */
-             break;
+         sim_debug(DEBUG_DETAIL, dptr, "%s%o space %o\n", dptr->name, unit, GET_FNC(uptr->CMD));
+         if (tu_frame[ctlr] == 0) {
+              uptr->STATUS |= ER1_NEF;
+              uptr->CMD |= CS_ATA;
+              tu_error(uptr, MTSE_OK);
+              return SCPE_OK;
+         }
+         uptr->CMD |= CS_MOTION;
+         /* Always skip at least one record */
+         if (GET_FNC(uptr->CMD) == FNC_SPACEF)
+             r = sim_tape_sprecf(uptr, &reclen);
+         else
+             r = sim_tape_sprecr(uptr, &reclen);
+         switch (r) {
+         case MTSE_OK:            /* no error */
+              break;
 
-        case MTSE_BOT:           /* beginning of tape */
-             uptr->STATUS |= ER1_NEF;
-             /* Fall Through */
+         case MTSE_BOT:           /* beginning of tape */
+              uptr->STATUS |= ER1_NEF;
+              /* Fall Through */
 
-        case MTSE_TMK:           /* tape mark */
-        case MTSE_EOM:           /* end of medium */
-             if (tu_frame[ctlr] != 0)
-                uptr->STATUS |= ER1_FCE;
-             uptr->CMD &= ~(CS1_GO);
-             uptr->CMD |= CS_ATA;
-             /* Stop motion if we recieve any of these */
-             tu_error(uptr, r);
-             return SCPE_OK;
-        }
-        tu_frame[ctlr] = 0177777 & (tu_frame[ctlr] + 1);
-        if (tu_frame[ctlr] == 0) {
-           uptr->CMD |= CS_ATA;
-           tu_error(uptr, MTSE_OK);
-           return SCPE_OK;
-        } else
-           sim_activate(uptr, 5000);
-        return SCPE_OK;
+         case MTSE_TMK:           /* tape mark */
+         case MTSE_EOM:           /* end of medium */
+              if (tu_frame[ctlr] != 0)
+                 uptr->STATUS |= ER1_FCE;
+              uptr->CMD &= ~(CS1_GO);
+              uptr->CMD |= CS_ATA;
+              /* Stop motion if we recieve any of these */
+              tu_error(uptr, r);
+              return SCPE_OK;
+         }
+         tu_frame[ctlr] = 0177777 & (tu_frame[ctlr] + 1);
+         if (tu_frame[ctlr] == 0) {
+            uptr->CMD |= CS_ATA;
+            tu_error(uptr, MTSE_OK);
+            return SCPE_OK;
+         } else
+            sim_activate(uptr, 5000);
+         return SCPE_OK;
     }
     sim_activate(uptr, 100);
     return SCPE_OK;

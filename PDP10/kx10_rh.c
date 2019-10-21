@@ -119,7 +119,7 @@
 
 /* RH20 channel status flags */
 #define RH20_MEM_PAR    00200000000000LL  /* Memory parity error */
-#define RH20_ADR_PAR    00100000000000LL  /* Address parity error */
+#define RH20_NADR_PAR   00100000000000LL  /* Address parity error */
 #define RH20_NOT_WC0    00040000000000LL  /* Word count not zero */
 #define RH20_NXM_ERR    00020000000000LL  /* Non existent memory */
 #define RH20_LAST_ERR   00000400000000LL  /* Last transfer error */
@@ -206,8 +206,6 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
                  *data |= RH20_ATTN;
               if (rhc->rae != 0)
                  *data |= RH20_RAE;
-              if ((rhc->status & PI_ENABLE) == 0)
-                  *data |= RH20_CHAN_RDY;
               sim_debug(DEBUG_CONI, dptr, "%s %03o CONI %06o PC=%o %o\n",
                      dptr->name, dev, (uint32)*data, PC, rhc->attn);
               return SCPE_OK;
@@ -218,8 +216,8 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
               rhc->status |= *data & (07LL|IADR_ATTN|RH20_MASS_EN);
               /* Clear flags */
               if (*data & RH20_CLR_MBC) {
-                 if (rhc->rh_reset != NULL)
-                     rhc->rh_reset(dptr);
+                 if (rhc->dev_reset != NULL)
+                     rhc->dev_reset(dptr);
                  rhc->imode = 2;
               }
               if (*data & RH20_DELETE_SCR)
@@ -245,12 +243,12 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
               }
               if (rhc->reg < 040) {
                   int parity;
-                  *data = (uint64)(rhc->rh_read(dptr, rhc, rhc->reg) & 0177777);
+                  *data = (uint64)(rhc->dev_read(dptr, rhc, rhc->reg) & 0177777);
                   parity = (int)((*data >> 8) ^ *data);
                   parity = (parity >> 4) ^ parity;
                   parity = (parity >> 2) ^ parity;
                   parity = ((parity >> 1) ^ parity) & 1;
-                  *data |= ((uint64)(parity ^ 1)) << 17;
+                  *data |= ((uint64)(!parity)) << 16;
                   *data |= ((uint64)(rhc->drive)) << 18;
                   *data |= BIT10;
               } else if ((rhc->reg & 070) != 070) {
@@ -278,9 +276,8 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
                          dptr->name, dev, *data, PC, rhc->status);
               rhc->reg = ((int)(*data >> 30)) & 077;
               rhc->imode |= 2;
-              if (rhc->reg < 040 && rhc->reg != 04) {
-                 rhc->drive = (int)(*data >> 18) & 07;
-              }
+              if (rhc->reg < 040)
+                  rhc->drive = (int)(*data >> 18) & 07;
               if (*data & LOAD_REG) {
                   if (rhc->reg < 040) {
                      clr_interrupt(dev);
@@ -289,7 +286,7 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
                          set_interrupt(rhc->devnum, rhc->status);
                          return SCPE_OK;
                      }
-                     rhc->rh_write(dptr, rhc, rhc->reg & 037, (int)(*data & 0777777));
+                     rhc->dev_write(dptr, rhc, rhc->reg & 037, (int)(*data & 0777777));
                      if (((rhc->status & IADR_ATTN) != 0 && rhc->attn != 0)
                              || (rhc->status & PI_ENABLE))
                          set_interrupt(rhc->devnum, rhc->status);
@@ -350,8 +347,8 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
          rhc->status &= ~(07LL|IADR_ATTN|IARD_RAE);
          rhc->status |= *data & (07LL|IADR_ATTN|IARD_RAE);
          /* Clear flags */
-         if (*data & CONT_RESET && rhc->rh_reset != NULL)
-            rhc->rh_reset(dptr);
+         if (*data & CONT_RESET && rhc->dev_reset != NULL)
+            rhc->dev_reset(dptr);
          if (*data & (DBPE_CLR|DR_EXC_CLR|CHN_CLR))
             rhc->status &= ~(*data & (DBPE_CLR|DR_EXC_CLR|CHN_CLR));
          if (*data & OVER_CLR)
@@ -379,7 +376,7 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
             return SCPE_OK;
         }
         if (rhc->reg == 040) {
-              *data = (uint64)(rhc->rh_read(dptr, rhc, 0) & 077);
+              *data = (uint64)(rhc->dev_read(dptr, rhc, 0) & 077);
               *data |= ((uint64)(rhc->cia)) << 6;
               *data |= ((uint64)(rhc->xfer_drive)) << 18;
         } else if (rhc->reg == 044) {
@@ -392,7 +389,7 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
                 *data = (uint64)(rhc->rae);
         } else if ((rhc->reg & 040) == 0) {
               int parity;
-              *data = (uint64)(rhc->rh_read(dptr, rhc, rhc->reg) & 0177777);
+              *data = (uint64)(rhc->dev_read(dptr, rhc, rhc->reg) & 0177777);
               parity = (int)((*data >> 8) ^ *data);
               parity = (parity >> 4) ^ parity;
               parity = (parity >> 2) ^ parity;
@@ -439,7 +436,7 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
                 /* Start command */
                 rh_setup(rhc, (uint32)(*data >> 6));
                 rhc->xfer_drive = (int)(*data >> 18) & 07;
-                rhc->rh_write(dptr, rhc, 0, (uint32)(*data & 077));
+                rhc->dev_write(dptr, rhc, 0, (uint32)(*data & 077));
                 sim_debug(DEBUG_DATAIO, dptr,
                     "%s %03o command %012llo, %d PC=%06o %06o\n",
                     dptr->name, dev, *data, rhc->drive, PC, rhc->status);
@@ -460,7 +457,7 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
                 if (rhc->rae & (1 << rhc->drive)) {
                     return SCPE_OK;
                 }
-                rhc->rh_write(dptr, rhc, rhc->reg & 037, (int)(*data & 0777777));
+                rhc->dev_write(dptr, rhc, rhc->reg & 037, (int)(*data & 0777777));
              }
          }
          clr_interrupt(dev);
@@ -506,7 +503,8 @@ int rh_blkend(struct rh_if *rhc)
 {
 #if KL
      if (rhc->imode == 2) {
-         rhc->cia = (rhc->cia + 1) & RH20_WMASK;
+//fprintf(stderr, "RH blkend %o\n\r", rhc->cia);
+         rhc->cia = (rhc->cia + 1) & 01777;
          if (rhc->cia == 0) {
             rhc->status |= RH20_XEND;
             return 1;
@@ -527,25 +525,31 @@ void rh_writecw(struct rh_if *rhc, int nxm) {
 #if KL
      if (rhc->imode == 2) {
          uint32   chan = (rhc->devnum - 0540);
-         if (rhc->ptcr & BIT10) {
-             int wc = (rhc->wcr ^ RH20_WMASK) + 1;
+         int      wc = ((rhc->wcr ^ RH20_WMASK) + 1) & RH20_WMASK;
+         rhc->status |= RH20_CHAN_RDY;
+         if (wc != 0 || (rhc->status & RH20_XEND) == 0 ||
+             (rhc->ptcr & BIT10) != 0) {
              uint64 wrd1 = SMASK|(uint64)(rhc->ccw);
-             if (nxm)
+             if (nxm) {
                 wrd1 |= RH20_NXM_ERR;
+                rhc->status |= RH20_CHAN_ERR;
+             }  
              if (wc != 0) {
                 wrd1 |= RH20_NOT_WC0;
                 if (rhc->status & RH20_XEND) {
                    wrd1 |= RH20_LONG_STS;
-                   rhc->status |= RH20_LONG_WC;
+                   rhc->status |= RH20_LONG_WC|RH20_CHAN_ERR;
                 }
              } else if ((rhc->status & RH20_XEND) == 0) {
                 wrd1 |= RH20_SHRT_STS;
-                rhc->status |= RH20_SHRT_WC;
+                rhc->status |= RH20_SHRT_WC|RH20_CHAN_ERR;
              }
+             wrd1 |= RH20_NADR_PAR;
              M[eb_ptr|chan|1] = wrd1;
-             M[eb_ptr|chan|2] = ((uint64)rhc->cop << 30) |
-                            (((uint64)wc & RH20_WMASK) << CSHIFT) |
-                                  ((uint64)(rhc->cda) & AMASK);
+             M[eb_ptr|chan|2] = ((uint64)rhc->cop << 33) |
+                                (((uint64)wc) << CSHIFT) |
+                                ((uint64)(rhc->cda) & AMASK);
+//fprintf(stderr, "RH20 final %012llo %012llo %06o\n\r", M[eb_ptr|chan|1], M[eb_ptr|chan|2], wc);
          }
          rhc->status &= ~(RH20_PCR_FULL);
          return;
@@ -575,7 +579,6 @@ void rh_finish_op(struct rh_if *rhc, int nxm) {
 }
 
 #if KL
-
 /* Set up for a RH20 transfer */
 void rh20_setup(struct rh_if *rhc)
 {
@@ -596,12 +599,12 @@ void rh20_setup(struct rh_if *rhc)
      rhc->drive = (rhc->ptcr >> 18) & 07;
      rhc->status &= ~(RH20_SCR_FULL|PI_ENABLE|RH20_XEND);
      rhc->status |= RH20_PCR_FULL;
-     reg = rhc->rh_read(dptr, rhc, 1);
+     reg = rhc->dev_read(dptr, rhc, 1);
      if ((reg & (DS_DRY|DS_DPR|DS_ERR)) != (DS_DRY|DS_DPR))
          return;
      if (rhc->status & RH20_SBAR) {
          rhc->drive = (rhc->pbar >> 18) & 07;
-         rhc->rh_write(dptr, rhc, 5, (rhc->pbar & 0177777));
+         rhc->dev_write(dptr, rhc, 5, (rhc->pbar & 0177777));
          rhc->status &= ~RH20_SBAR;
      }
      if (rhc->ptcr & BIT7) {  /* If RCPL reset I/O pointers */
@@ -609,9 +612,13 @@ void rh20_setup(struct rh_if *rhc)
          rhc->wcr = 0;
      }
      /* Hold block count in cia */
-     rhc->cia = (rhc->ptcr >> 6);
-     rhc->rh_write(dptr, rhc, 0, (rhc->ptcr & 077));
+     rhc->drive = (rhc->ptcr >> 18) & 07;
+     rhc->cia = (rhc->ptcr >> 6) & 01777;
+     rhc->dev_write(dptr, rhc, 0, (rhc->ptcr & 077));
      rhc->cop = 0;
+     rhc->wcr = 0;
+     rhc->status &= ~RH20_CHAN_RDY;
+//fprintf(stderr, "RH setup %06o %06o %o\n\r", rhc->ptcr, rhc->ccw, rhc->cia);
 }
 #endif
 
@@ -630,7 +637,7 @@ int rh_fetch(struct rh_if *rhc) {
      uint64 data;
 #if KL
      if (rhc->imode == 2 && (rhc->cop & 2) != 0) {
-         rh_finish_op(rhc, 0);
+//         rh_finish_op(rhc, 0);
          return 0;
      }
 #endif
@@ -641,17 +648,19 @@ int rh_fetch(struct rh_if *rhc) {
      data = M[rhc->ccw];
 #if KL
      if (rhc->imode == 2) {
+//fprintf(stderr, "RH20 fetch %06o %012llo\n\r", rhc->ccw, data);
          while((data & RH20_XFER) == 0) {
              rhc->ccw = (uint32)(data & AMASK);
              if ((data & (BIT1|BIT2)) == 0) {
-                 rh_finish_op(rhc, 0);
-                 break;
+//                 rh_finish_op(rhc, 0);
+                 return 0;
              }
              if (rhc->ccw > MEMSIZE) {
                  rh_finish_op(rhc, 1);
                  return 0;
              }
              data = M[rhc->ccw];
+//fprintf(stderr, "RH20 fetch2 %06o %012llo\n\r", rhc->ccw, data);
          }
          rhc->wcr = (((data >> CSHIFT) & RH20_WMASK) ^ WMASK) + 1;
          rhc->cda = (data & AMASK);
@@ -662,7 +671,7 @@ int rh_fetch(struct rh_if *rhc) {
 #endif
      while((data & (WMASK << CSHIFT)) == 0) {
          if ((data & AMASK) == 0 || (uint32)(data & AMASK) == rhc->ccw) {
-             rh_finish_op(rhc,0);
+             rh_finish_op(rhc, 0);
              return 0;
          }
          rhc->ccw = (uint32)(data & AMASK);
