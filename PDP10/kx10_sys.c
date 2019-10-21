@@ -517,29 +517,28 @@ return SCPE_OK;
 }
 
 
-int get_word(FILE *fileref, uint64 *word)
+int get_word(FILE *fileref, uint64 *word, int ftype)
 {
-   char cbuf[5];
+    char cbuf[5];
 
-   if (sim_fread(cbuf, 1, 5, fileref) != 5)
+    if (sim_fread(cbuf, 1, 5, fileref) != 5)
        return 1;
-#if 1
-   *word = ((uint64)(cbuf[0] & 0177) << 29) |
-           ((uint64)(cbuf[1] & 0177) << 22) |
-           ((uint64)(cbuf[2] & 0177) << 15) |
-           ((uint64)(cbuf[3] & 0177) << 8) |
-           ((uint64)(cbuf[4] & 0177) << 1);
-   if (cbuf[4] & 0200)
-       *word |= 1;
-#endif
-#if 0
-   *word = ((uint64)(cbuf[0] & 0377) << 28) |
-           ((uint64)(cbuf[1] & 0377) << 20) |
-           ((uint64)(cbuf[2] & 0377) << 12) |
-           ((uint64)(cbuf[3] & 0377) << 4) |
-           (uint64)(cbuf[4] & 017);
-#endif
-    return 0;
+    if (ftype) {
+       *word = ((uint64)(cbuf[0] & 0177) << 29) |
+               ((uint64)(cbuf[1] & 0177) << 22) |
+               ((uint64)(cbuf[2] & 0177) << 15) |
+               ((uint64)(cbuf[3] & 0177) << 8) |
+               ((uint64)(cbuf[4] & 0177) << 1);
+       if (cbuf[4] & 0200)
+           *word |= 1;
+   } else {
+       *word = ((uint64)(cbuf[0] & 0377) << 28) |
+               ((uint64)(cbuf[1] & 0377) << 20) |
+               ((uint64)(cbuf[2] & 0377) << 12) |
+               ((uint64)(cbuf[3] & 0377) << 4) |
+               (uint64)(cbuf[4] & 017);
+   }
+   return 0;
 }
 
 /* SAV file loader
@@ -555,14 +554,14 @@ int get_word(FILE *fileref, uint64 *word)
         JRST start
 */
 
-t_stat load_sav (FILE *fileref)
+t_stat load_sav (FILE *fileref, int ftype)
 {
     uint64 data;
     uint32 pa;
     int32 wc;
 
     for ( ;; ) {                                        /* loop */
-        if (get_word(fileref, &data))
+        if (get_word(fileref, &data, ftype))
             return SCPE_OK;
         wc = (int32)(data >> 18);
         pa = (uint32) (data & RMASK);
@@ -576,7 +575,7 @@ t_stat load_sav (FILE *fileref)
             pa &= RMASK;
             wc++;
             wc &= RMASK;
-            if (get_word(fileref, &data))
+            if (get_word(fileref, &data, ftype))
                return SCPE_FMT;
             M[pa] = data;
         }                                              /* end if  count*/
@@ -611,7 +610,7 @@ t_stat load_sav (FILE *fileref)
 #define PAG_V_PN 9
 #define DIRSIZ  (2 * PAG_SIZE)
 
-t_stat load_exe (FILE *fileref)
+t_stat load_exe (FILE *fileref, int ftype)
 {
 uint64 data, dirbuf[DIRSIZ], pagbuf[PAG_SIZE], entbuf[2];
 int32 ndir, entvec, i, j, k, cont, bsz, bty, rpt, wc;
@@ -622,7 +621,7 @@ ndir = entvec = 0;                                      /* no dir, entvec */
 cont = 1;
 do {
     
-    wc = get_word(fileref, &data);
+    wc = get_word(fileref, &data, ftype);
     if (wc != 0)                                        /* error? */
         return SCPE_FMT;
     bsz = (int32) ((data & RMASK) - 1);                 /* get count */
@@ -635,7 +634,7 @@ do {
         if (ndir != 0)                                  /* got one */
             return SCPE_FMT;
         for (i = 0; i < bsz; i++) {
-             if (get_word(fileref, &dirbuf[i]))
+             if (get_word(fileref, &dirbuf[i], ftype))
                  return SCPE_FMT;
         }
         ndir = bsz;
@@ -649,7 +648,7 @@ do {
         if (bsz != 2)                                   /* must be 2 wds */
             return SCPE_FMT;
         for (i = 0; i < bsz; i++) {
-             if (get_word(fileref, &entbuf[i]))
+             if (get_word(fileref, &entbuf[i], ftype))
                  return SCPE_FMT;
         }
         entvec = bsz;
@@ -675,7 +674,7 @@ for (i = 0; i < ndir; i = i + 2) {                      /* loop thru dir */
         if (fpage) {                                    /* file pages? */
             (void)sim_fseek (fileref, (fpage << PAG_V_PN) * 5, SEEK_SET);
             for (k = 0; k < PAG_SIZE; k++) {
-                 if (get_word(fileref, &pagbuf[k]))
+                 if (get_word(fileref, &pagbuf[k], ftype))
                      break;
             }
             fpage++;
@@ -701,9 +700,13 @@ t_stat sim_load (FILE *fileref, CONST char *cptr, CONST char *fnam, int flag)
 {
 uint64 data;
 int32 wc, fmt;
+int ftype;
 extern int32 sim_switches;
 
 fmt = 0;                                                /* no fmt */
+ftype = 0;
+if (sim_switches & SWMASK ('C'))                        /* -c? core dump */
+    ftype = 1;
 if (sim_switches & SWMASK ('R'))                        /* -r? */
     fmt = FMT_R;
 else if (sim_switches & SWMASK ('S'))                   /* -s? */
@@ -741,10 +744,10 @@ switch (fmt) {                                          /* case fmt */
         return load_rim (fileref);
 
     case FMT_S:                                         /* SAV */
-        return load_sav (fileref);
+        return load_sav (fileref, ftype);
 
     case FMT_E:                                         /* EXE */
-        return load_exe (fileref);
+        return load_exe (fileref, ftype);
 
     case FMT_D:                                         /* DMP */
         return load_dmp (fileref);
