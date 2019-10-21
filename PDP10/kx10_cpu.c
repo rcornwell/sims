@@ -2362,14 +2362,14 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
          (!fetch || (M[*loc] & 00777740000000LL) != 0254040000000LL)) {
         /* Handle public violation */
         fault_data = ((uint64)addr) | 021LL << 30 | BIT8 |((uf)?SMASK:0);
-//fprintf(stderr, "Public fault %012llo %06o\n\r", fault_data, FLAGS << 5);
+//fprintf(stderr, "Public fault %012llo %06o %06o\n\r", fault_data, FLAGS << 5, PC);
         page_fault = 1;
         return 0;
     }
 
     /* Check for access error */
     if ((data & RSIGN) == 0 || (wr & ((data & 0100000) == 0))) {
-//fprintf(stderr, "Page fault %06o a=%o wr=%o w=%o %06o\n\r", addr, (data & RSIGN) == 0, wr, (data & 0100000) == 0, data);
+//fprintf(stderr, "Page fault %06o a=%o wr=%o w=%o %06o %06o\n\r", addr, (data & RSIGN) == 0, wr, (data & 0100000) == 0, data, PC);
         fault_data = BIT8 | (uint64)addr;
 #if KLB
         if (QKLB)
@@ -4189,6 +4189,7 @@ in_loop:
                      AB = AR & RMASK;
                      if (!glb_sect && AB < 020)  /* Map to global AC */
                          sect = cur_sect = 1;
+//fprintf(stderr, "LFIW %012llo %o %02o %06o %06o\n\r", MB, ind, ix, cur_sect, AB);
                  } else {             /* Extended index EFIW */
                      ind = (MB & BIT1) != 0;
                      ix = (MB >> 30) & 017;
@@ -7240,6 +7241,19 @@ jrstf:
  //                      }
 #endif
 //                       goto muuo;
+              case 015:  /* XJRST */
+                       if (Mem_read(0, 0, 0))
+                           goto last;
+                       AR = MB;       /* Get PC. */
+#if KLB
+                       if (QKLB) {
+                          pc_sect = (AR >> 18) & 07777;
+                          if ((FLAGS & USER) == 0 && ((BR >> 23) & USER) == 0)
+                              prev_sect = BR & 037;
+//fprintf(stderr, "XJRST %06o %06o %06o %012llo\r\n", pc_sect, prev_sect, FLAGS, BR);
+                       }
+#endif
+                        break;
 
               case 014:  /* SFM */
 #if KLB
@@ -7255,7 +7269,6 @@ jrstf:
               case 003:  /* Invalid */
               case 011:  /* Invalid */
               case 013:  /* Invalid */
-              case 015:  /* Invalid */
               case 016:  /* Invalid */
                        goto muuo;
 
@@ -7510,7 +7523,7 @@ jrstf:
               }
 #endif
 #endif
-              BR = AB;
+//              BR = AB;
 #if KL
               BYF5 = 1;
 #if KLB
@@ -7551,8 +7564,8 @@ jrstf:
               }
 #endif
 #if KL & KLB
-              if (QKLB && pc_sect != 0)
-                  pc_sect = (BR >> 18) & 07777;
+              if (QKLB && pc_sect != 0 && glb_sect)
+                  pc_sect = cur_sect;
 #endif
               PC = BR & RMASK;
               PC_CHANGE
@@ -7687,10 +7700,12 @@ jrstf:
 #if KL
               BYF5 = 0;   /* Tell PXCT that this is stack */
 #if KLB
-              if (QKLB && f && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
+              if (QKLB && f) {
                   pc_sect = (MB >> 18) & 07777;
-                  AR = (AR - 1) & FMASK;
-                  break;
+                  if ((AR & SMASK) == 0 && (AR & SECTM) != 0) {
+                      AR = (AR - 1) & FMASK;
+                      break;
+                  }
               }
 #endif
 #endif
