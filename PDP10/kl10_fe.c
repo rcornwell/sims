@@ -176,7 +176,7 @@
 
 extern int32 tmxr_poll;
 t_stat dte_devio(uint32 dev, uint64 *data);
-int    dte_devirq(uint32 dev, int addr);
+t_addr dte_devirq(uint32 dev, t_addr addr);
 void   dte_second(UNIT *uptr);
 void   dte_primary(UNIT *uptr);
 #if KL_ITS
@@ -472,8 +472,8 @@ sim_debug(DEBUG_CONO, &dte_dev, "CTY Ring 11 DB\n");
 }
 
 /* Handle KL style interrupt vectors */
-int
-dte_devirq(uint32 dev, int addr) {
+t_addr
+dte_devirq(uint32 dev, t_addr addr) {
     return 0142; 
 }
 

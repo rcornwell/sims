@@ -122,8 +122,8 @@ uint64  MQ;                                   /* Extension to AR */
 uint64  BR;                                   /* Secondary operand */
 uint64  AD;                                   /* Address Data */
 uint64  MB;                                   /* Memory Bufer Register */
-uint32  AB;                                   /* Memory address buffer */
-uint32  PC;                                   /* Program counter */
+t_addr  AB;                                   /* Memory address buffer */
+t_addr  PC;                                   /* Program counter */
 uint32  IR;                                   /* Instruction register */
 uint64  MI;                                   /* Monitor lights */
 uint32  FLAGS;                                /* Flags */
@@ -169,8 +169,8 @@ int     xct_flag;                             /* XCT flags */
 uint64  ARX;                                  /* Extension to AR */
 uint64  BRX;                                  /* Extension to BR */
 uint64  ADX;                                  /* Extension to AD */
-uint32  ub_ptr;                               /* User base pointer */
-uint32  eb_ptr;                               /* Executive base pointer */
+t_addr  ub_ptr;                               /* User base pointer */
+t_addr  eb_ptr;                               /* Executive base pointer */
 uint8   fm_sel;                               /* User fast memory block */
 int32   apr_serial = -1;                      /* CPU Serial number */
 int     inout_fail;                           /* In out fail flag */
@@ -250,7 +250,7 @@ int     maoff = 0;                            /* Offset for traps */
 
 uint16  dev_irq[128];                         /* Pending irq by device */
 t_stat  (*dev_tab[128])(uint32 dev, uint64 *data);
-int     (*dev_irqv[128])(uint32 dev, int addr);
+t_addr  (*dev_irqv[128])(uint32 dev, t_addr addr);
 t_stat  rtc_srv(UNIT * uptr);
 int32   rtc_tps = 60;
 #if ITS
@@ -1423,7 +1423,9 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
             /* Bit 0 for TOPS-20 paging */
             /* Bit 1 for extended addressing */
             /* Bit 2 Exotic microcode */
-            /* Bit 4 for ITS Style Paging */
+            /* Bit 3 KL10B */
+            /* Bit 4 PMOVE/PMOVEM or ITS Style Paging */
+            /* Bit 5 Tops-20 R5 microcode */
 #if KL_ITS
             if (QITS)
                 AR |= 00020000000000LL;
@@ -1435,7 +1437,7 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
             /* Bit 22 Master Osc */
 #if KLB
             if (QKLB)
-                AR |= BIT1|040000;
+                AR |= BIT1|BIT4|040000;
 #endif
             AR |= (uint64)((apr_serial == -1) ? DEF_SERIAL : apr_serial);
             sim_debug(DEBUG_DATAIO, &cpu_dev, "APRID BLKI %012llo\n", MB);
@@ -1629,8 +1631,8 @@ t_stat dev_tim(uint32 dev, uint64 *data) {
     return SCPE_OK;
 }
 
-int
-tim_irq(uint32 dev, int addr)
+t_addr
+tim_irq(uint32 dev, t_addr addr)
 {
     return 0514;
 }
@@ -2029,19 +2031,21 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
 #endif
 #define PG_PUB   0040000
 #define PG_WRT   0020000
+#define PG_KEP   0010000
 #define PG_CAC   0004000
-#define PG_STG   0000037
+#define PG_STG   0000077
 #define PG_IDX   0000777
 
 #define PG_MASK  0000003777777LL
 #define PG_AGE   0770000000000LL
-#define PG_PAG   0007777
+#define PG_PAG   0017777
     if (t20_page) { /* Start with full access */
-         int acc_bits = PG_PUB|PG_WRT|PG_CAC;
+         int acc_bits = PG_PUB|PG_WRT|PG_KEP|PG_CAC;
          uint64 spt = FM[(06<<4)|3] & PG_MASK;
          uint64 cst = FM[(06<<4)|2] & PG_MASK;
          uint64 cst_msk = FM[(06<<4)|0];
          uint64 cst_dat = FM[(06<<4)|1];
+         uint64 cst_val;
          int   index;
          int   match = 0;
          int   pg;
@@ -2067,106 +2071,121 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
            data = M[eb_ptr + base];
 //fprintf(stderr, "Map %06o %03o %012llo %012llo %012llo\n\r", base, sect, data, spt, cst);
         /* Find correct page table */
-        do {
-            switch ((data >> 33) & 07) {
-            default:     /* Invalid page */
-                 fault_data = 024LL << 30;
-                 page_fault = 1;
-                 return 0;
-            case 1:      /* Direct page */
-                 /* Bit 4 = execute */
-                 /* Bit 3 = Write */
-                 /* Bit 2 = Read */
-                 acc_bits &= (data >> 18) & RMASK;
-                 match = 1;
-                 break;
+sect_loop:
+       switch ((data >> 33) & 07) {
+       default:     /* Invalid page */
+            fault_data = (wr)? BIT5:0;
+            page_fault = 1;
+            return 0;
+       case 1:      /* Direct page */
+            /* Bit 4 = execute */
+            /* Bit 3 = Write */
+            /* Bit 2 = Read */
+            acc_bits &= (data >> 18) & RMASK;
+            break;
 
-            case 2:      /* Shared page */
-                 acc_bits &= (data >> 18) & RMASK;
-                 data = M[(data & RMASK) + spt];
-                 match = 1;
-                 break;
+       case 2:      /* Shared page */
+            acc_bits &= (data >> 18) & RMASK;
+            data = M[(data & RMASK) + spt];
+            break;
 
-            case 3:      /* Indirect page */
-                 acc_bits &= (data >> 18) & RMASK;
-                 index = (data >> 18) & PG_IDX;
-                 data = M[(data & RMASK) + spt];
-                 if ((data >> 18) & PG_STG) {
+       case 3:      /* Indirect page */
+            acc_bits &= (data >> 18) & RMASK;
+            index = (data >> 18) & PG_IDX;
+            data = M[(data & RMASK) + spt];
+            if (((data >> 18) & PG_STG) != 0) {
+                fault_data = 0;
+                page_fault = 1;
+                return 0;
+            }
+            pg = data & PG_PAG;
+            if (cst) {
+                cst_val = M[cst + pg];
+                if ((cst_val & PG_AGE) == 0) {
+//fprintf(stderr, "ZMap %012llo %012llo age\n\r", data, c);
                     if (trap) {
                         fault_data = 0;
                         page_fault = 1;
                     }
                     return 0;
-                 }
-                 data = M[(data & RMASK) + index];
-                 break;
-
+                }
+                M[cst + pg] = (cst_val & cst_msk) | cst_dat;
             }
-        } while (!match);
+            data = M[(pg << 9) | index];
+            goto sect_loop;
+        }
+        if (((data >> 18) & PG_STG) != 0) {
+            fault_data = 0;
+            page_fault = 1;
+            return 0;
+        }
 //fprintf(stderr, "XMap %012llo\n\r", data);
+        pg = data & PG_PAG;
 
-        match = 0;
-        /* Now look up address of final table entry */
-        do {
-            if ((data >> 18) & PG_STG) {
-//fprintf(stderr, "ZMap %012llo not in stg\n\r", data);
-               if (trap) {
-                   fault_data = 0;
-                   page_fault = 1;
-               }
-               return 0;
+        /* Update CST entry if needed */
+        if (cst) {
+            cst_val = M[cst + pg];
+//fprintf(stderr, "ZMap %08o %012llo %012llo age\n\r", cst+pg, data, cst_val);
+            if ((cst_val & PG_AGE) == 0) {
+                if (trap) {
+                    fault_data = 0;
+                    page_fault = 1;
+                }
+                return 0;
             }
-            pg = data & PG_PAG;
-            /* Check outside of memory */
-            /* Update CST entry if needed */
-            if (cst) {
-               uint64 c = M[cst + pg];
-               if ((c & PG_AGE) == 0) {
-//fprintf(stderr, "ZMap %012llo %012llo age\n\r", data, c);
-                   if (trap) {
-                       fault_data = 0;
-                       page_fault = 1;
-                   }
-                   return 0;
-               }
-               M[cst + pg] = (c & cst_msk) | cst_dat;
-            }
+            M[cst + pg] = (cst_val & cst_msk) | cst_dat;
+        }
 
-            /* Get address of page */
-            data = M[(pg << 9) + page];
+        /* Get address of page */
+        data = M[(pg << 9) | page];
 //fprintf(stderr, "YMap %012llo %o %o\n\r", data, pg << 9, page);
+pg_loop:
 
-            /* Decode map pointer */
-            switch ((data >> 33) & 07) {
-            default:     /* Invalid page */
-                 if (trap) {
-                     fault_data = 024LL << 30;
-                     page_fault = 1;
-                 }
+        /* Decode map pointer */
+        switch ((data >> 33) & 07) {
+        default:     /* Invalid page */
+             fault_data = (wr)? BIT5:0;
+             page_fault = 1;
+             return 0;
+        case 1:      /* Direct page */
+             /* Bit 4 = execute */
+             /* Bit 3 = Write */
+             /* Bit 2 = Read */
+             acc_bits &= (data >> 18) & RMASK;
+             break;
+
+        case 2:      /* Shared page */
+             acc_bits &= (data >> 18) & RMASK;
+             data = M[(data & RMASK) + spt];
+             break;
+
+        case 3:      /* Indirect page */
+             acc_bits &= (data >> 18) & RMASK;
+             index = (data >> 18) & PG_IDX;
+             data = M[(data & RMASK) + spt];
+//fprintf(stderr, "IMap %012llo %o %o %o\n\r", data, pg << 9, index, page);
+             if (((data >> 18) & PG_STG) != 0) {
+                 fault_data = 0;
+                 page_fault = 1;
                  return 0;
-            case 1:      /* Direct page */
-                 /* Bit 4 = execute */
-                 /* Bit 3 = Write */
-                 /* Bit 2 = Read */
-                 acc_bits &= (data >> 18) & RMASK;
-                 match = 1;
-                 break;
-
-            case 2:      /* Shared page */
-                 acc_bits &= (data >> 18) & RMASK;
-                 data = M[(data & RMASK) + spt];
-                 match = 1;
-                 break;
-
-            case 3:      /* Indirect page */
-                 acc_bits &= (data >> 18) & RMASK;
-                 page = (data >> 18) & PG_IDX;
-                 data = M[(data & RMASK) + spt];
-//fprintf(stderr, "IMap %012llo %o %o\n\r", data, pg << 9, page);
-                 break;
-
-            }
-        } while (!match);
+             }
+             pg = data & RMASK;
+             if (cst) {
+                 cst_val = M[cst + pg];
+//fprintf(stderr, "ZMap %08o %012llo %012llo age\n\r", cst + pg, data, cst_val);
+                 if ((cst_val & PG_AGE) == 0) {
+                     if (trap) {
+                         fault_data = 0;
+                         page_fault = 1;
+                     }
+                     return 0;
+                 }
+                 M[cst + pg] = (cst_val & cst_msk) | cst_dat;
+             }
+             data = M[(pg << 9) | index];
+//fprintf(stderr, "JMap %012llo %o %o %o\n\r", data, pg << 9, index, page);
+             goto pg_loop;
+        }
 
         /* Now have final page */
         if ((data >> 18) & PG_STG) {
@@ -2178,8 +2197,9 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
         /* Check outside of memory */
         /* Update CST entry if needed */
         if (cst) {
-           uint64 c = M[cst + pg];
-           if ((c & PG_AGE) == 0) {
+           cst_val = M[cst + pg];
+//fprintf(stderr, "ZMap %08o %012llo %012llo age\n\r", cst + pg, data, cst_val);
+           if ((cst_val  & PG_AGE) == 0) {
                if (trap) {
                    fault_data = 0;
                    page_fault = 1;
@@ -2188,16 +2208,17 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
            }
            if (acc_bits & PG_WRT) {
                if (wr)
-                  c |= 1;
+                  cst_val  |= 1;
                acc_bits |= 1;
            } else if (wr) { /* Trying to write and not writable */
+//fprintf(stderr, "ZMap %012llo %012llo age\n\r", data, cst_val);
                if (trap) {
                    fault_data = 0 /* Write fault */;
                    page_fault = 1;
                }
                return 0;
            }
-           M[cst + pg] = (c & cst_msk) | cst_dat;
+           M[cst + pg] = (cst_val  & cst_msk) | cst_dat;
         } else {
            if (acc_bits & PG_WRT)
                acc_bits |= 1;
@@ -2213,7 +2234,7 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
            data |= 0200000;
         if (acc_bits & PG_WRT)
            data |= 0100000;
-        if (acc_bits & 1)
+        if (acc_bits & PG_KEP)
            data |= 0040000;   /* Set M bit (S) */
         if (acc_bits & PG_CAC)
            data |= 0020000;
@@ -2226,6 +2247,7 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
            u_tlb[page] = data;
         else
            e_tlb[page] = data;
+//fprintf(stderr, "Page %03o %08o %o\r\n", page, data, uf);
     } else {
 
        /* Map the page */
@@ -2244,7 +2266,6 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
            data = e_tlb[page];
        }
     }
-//fprintf(stderr, "Page %03o %08o %o\r\n", page, data, uf);
     return (int)(data);
 }
 
@@ -2258,7 +2279,7 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
  * cur_context is set when access should ignore xct_flag
  * fetch is set for instruction fetches.
  */
-int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch) {
+int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int fetch) {
     int      data;
     int      base = 0;
     int      page = (RMASK & addr) >> 9;
@@ -2467,7 +2488,7 @@ int Mem_write_nopage() {
 }
 
 int Mem_read(int flag, int cur_context, int fetch) {
-    int addr;
+    t_addr addr;
 
     sim_interval--;
 #if KLB
@@ -2513,7 +2534,7 @@ int Mem_read(int flag, int cur_context, int fetch) {
 }
 
 int Mem_write(int flag, int cur_context) {
-    int addr;
+    t_addr addr;
 
     sim_interval--;
 #if KLB
@@ -2559,7 +2580,7 @@ int Mem_write(int flag, int cur_context) {
 }
 
 /* executive page table lookup */
-int exec_page_lookup(int addr, int wr, int *loc)
+int exec_page_lookup(t_addr addr, int wr, int *loc)
 {
     int      data;
     int      page = (RMASK & addr) >> 9;
@@ -2595,7 +2616,7 @@ int exec_page_lookup(int addr, int wr, int *loc)
 }
 
 int Mem_examine_word(int n, int wrd, uint64 *data) {
-    int      addr = 0144 + (8 * n) + eb_ptr;
+    t_addr   addr = 0144 + (8 * n) + eb_ptr;
     int      base = 0;
 
     if (addr >= MEMSIZE)
@@ -2611,7 +2632,7 @@ int Mem_examine_word(int n, int wrd, uint64 *data) {
 }
 
 int Mem_deposit_word(int n, int wrd, uint64 *data) {
-    int      addr = 0146 + (8 * n) + eb_ptr;
+    t_addr   addr = 0146 + (8 * n) + eb_ptr;
     int      base = 0;
 
     if (addr >= MEMSIZE)
@@ -2630,7 +2651,7 @@ int Mem_deposit_word(int n, int wrd, uint64 *data) {
  * Read in 16 bits of data from a byte pointer.
  */
 int Mem_read_byte(int n, uint16 *data, int byte) {
-    int      addr;
+    t_addr   addr;
     uint64   val;
     uint64   msk;
     int      p, s, np;
@@ -2675,7 +2696,7 @@ int Mem_read_byte(int n, uint16 *data, int byte) {
 }
 
 int Mem_write_byte(int n, uint16 *data) {
-    int      addr;
+    t_addr   addr;
     uint64   val;
     uint64   msk;
     int      p, s, np;
@@ -2787,7 +2808,7 @@ load_tlb(int uf, int page)
  * cur_context is set when access should ignore xct_flag
  * fetch is set for instruction fetches.
  */
-int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch) {
+int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int fetch) {
     int      data;
     int      base = 0;
     int      page = (RMASK & addr) >> 9;
@@ -2932,7 +2953,7 @@ int Mem_write_nopage() {
 }
 
 int Mem_read(int flag, int cur_context, int fetch) {
-    int addr;
+    t_addr addr;
 
     sim_interval--;
     if (AB < 020) {
@@ -2968,7 +2989,7 @@ read:
 }
 
 int Mem_write(int flag, int cur_context) {
-    int addr;
+    t_addr addr;
 
     sim_interval--;
     if (AB < 020) {
@@ -3052,7 +3073,7 @@ int its_load_tlb(uint32 reg, int page, uint32 *tlb) {
  * Translation logic for KA10
  */
 
-int page_lookup_its(int addr, int flag, int *loc, int wr, int cur_context, int fetch) {
+int page_lookup_its(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int fetch) {
     uint64   data;
     int      base = 0;
     int      page = (RMASK & addr) >> 10;
@@ -3184,7 +3205,7 @@ fault:
  * Return of 0 if successful, 1 if there was an error.
  */
 int Mem_read_its(int flag, int cur_context, int fetch) {
-    int addr;
+    t_addr addr;
 
     sim_interval--;
     if (AB < 020) {
@@ -3231,7 +3252,7 @@ int Mem_read_its(int flag, int cur_context, int fetch) {
  * Return of 0 if successful, 1 if there was an error.
  */
 int Mem_write_its(int flag, int cur_context) {
-    int addr;
+    t_addr addr;
 
     sim_interval--;
     if (AB < 020) {
@@ -3274,7 +3295,7 @@ int Mem_write_its(int flag, int cur_context) {
 #endif
 
 #if BBN
-int page_lookup_bbn(int addr, int flag, int *loc, int wr, int cur_context, int fetch) {
+int page_lookup_bbn(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int fetch) {
       /* Group 0, 01 = 00
                   bit 2 = Age 00x                                        0100000
                   bit 3 = Age 02x                                        0040000
@@ -3536,7 +3557,7 @@ fault_bbn:
  * Return of 0 if successful, 1 if there was an error.
  */
 int Mem_read_bbn(int flag, int cur_context, int fetch) {
-    int addr;
+    t_addr addr;
 
     sim_interval--;
     /* If not doing any special access, just access register */
@@ -3566,7 +3587,7 @@ int Mem_read_bbn(int flag, int cur_context, int fetch) {
  * Return of 0 if successful, 1 if there was an error.
  */
 int Mem_write_bbn(int flag, int cur_context) {
-    int addr;
+    t_addr addr;
 
     sim_interval--;
     /* If not doing any special access, just access register */
@@ -3592,7 +3613,7 @@ int Mem_write_bbn(int flag, int cur_context) {
 #endif
 
 #if WAITS
-int page_lookup_waits(int addr, int flag, int *loc, int wr, int cur_context, int fetch) {
+int page_lookup_waits(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int fetch) {
     int      uf = (FLAGS & USER) != 0;
 
     /* If this is modify instruction use write access */
@@ -3630,7 +3651,7 @@ int page_lookup_waits(int addr, int flag, int *loc, int wr, int cur_context, int
 }
 
 int Mem_read_waits(int flag, int cur_context, int fetch) {
-    int addr;
+    t_addr addr;
 
     sim_interval--;
     if (AB < 020 && ((xct_flag == 0 || fetch || cur_context || (FLAGS & USER) != 0))) {
@@ -3656,7 +3677,7 @@ int Mem_read_waits(int flag, int cur_context, int fetch) {
  */
 
 int Mem_write_waits(int flag, int cur_context) {
-    int addr;
+    t_addr addr;
 
     sim_interval--;
     /* If not doing any special access, just access register */
@@ -3677,7 +3698,7 @@ int Mem_write_waits(int flag, int cur_context) {
 }
 #endif
 
-int page_lookup_ka(int addr, int flag, int *loc, int wr, int cur_context, int fetch) {
+int page_lookup_ka(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int fetch) {
       if (!flag && (FLAGS & USER) != 0) {
           if (addr <= Pl) {
              *loc = (addr + Rl) & RMASK;
@@ -3699,7 +3720,7 @@ int page_lookup_ka(int addr, int flag, int *loc, int wr, int cur_context, int fe
 }
 
 int Mem_read_ka(int flag, int cur_context, int fetch) {
-    int addr;
+    t_addr addr;
 
     sim_interval--;
     if (AB < 020) {
@@ -3725,7 +3746,7 @@ int Mem_read_ka(int flag, int cur_context, int fetch) {
  */
 
 int Mem_write_ka(int flag, int cur_context) {
-    int addr;
+    t_addr addr;
 
     sim_interval--;
     if (AB < 020) {
@@ -3850,7 +3871,7 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
 #define get_reg(reg)                 FM[(reg) & 017]
 #define set_reg(reg, value)          FM[(reg) & 017] = value
 
-int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch) {
+int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int fetch) {
       if (!flag && (FLAGS & USER) != 0) {
           if (addr <= Pl) {
              *loc = (addr + Rl) & RMASK;
@@ -3865,7 +3886,7 @@ int page_lookup(int addr, int flag, int *loc, int wr, int cur_context, int fetch
 }
 
 int Mem_read(int flag, int cur_context, int fetch) {
-    int addr;
+    t_addr addr;
 
     sim_interval--;
     if (AB < 020) {
@@ -3891,7 +3912,7 @@ int Mem_read(int flag, int cur_context, int fetch) {
  */
 
 int Mem_write(int flag, int cur_context) {
-    int addr;
+    t_addr addr;
 
     sim_interval--;
     if (AB < 020) {
@@ -4300,7 +4321,7 @@ st_pi:
     }
 
     /* Update history */
-    if (hst_lnt && PC > 017) {
+    if (hst_lnt /*&& PC > 017*/) {
             hst_p = hst_p + 1;
             if (hst_p >= hst_lnt) {
                     hst_p = 0;
@@ -4387,11 +4408,32 @@ st_pi:
 
     /* Process the instruction */
     switch (IR) {
+#if KL & KLB
+    case 0052: 
+    case 0053:
+         if (QKLB & t20_page) {
+             if (Mem_read(0, 0, 0))
+                goto last;
+             AB = MB & (SECTM|RMASK);
+             if (IR & 1) {
+                 AR = get_reg(AC);
+                 if (Mem_write_nopage())
+                     goto last;
+             } else {
+                 if (Mem_read_nopage())
+                     goto last;
+                 set_reg(AC, MB);
+             }
+             break;
+          }
+#else
+    case 0052: case 0053:
+#endif
 muuo:
     case 0000: /* UUO */
     case 0040: case 0041: case 0042: case 0043:
     case 0044: case 0045: case 0046: case 0047:
-    case 0050: case 0051: case 0052: case 0053:
+    case 0050: case 0051: 
     case 0054: case 0055: case 0056: case 0057:
     case 0060: case 0061: case 0062: case 0063:
     case 0064: case 0065: case 0066: case 0067:
@@ -7135,22 +7177,15 @@ left:
               break;
 
     case 0254: /* JRST */      /* AR Frm PC */
-              if (uuo_cycle | pi_cycle) {
-                 FLAGS &= ~USER; /* Clear USER */
-#if ITS
-                 if (QITS && one_p_arm) {
-                     FLAGS |= ONEP;
-                     one_p_arm = 0;
-                 }
-#endif
+#if KL
 #if KL_ITS
+              if (uuo_cycle | pi_cycle) {
                  if (QITS && one_p_arm) {
                      FLAGS |= ADRFLT;
                      one_p_arm = 0;
                  }
-#endif
               }
-#if KL
+#endif
               switch (AC) {
               case 000: /* JRST */
                        break;
@@ -7171,7 +7206,6 @@ xjrstf:
                           pc_sect = (AR >> 18) & 07777;
                           if ((FLAGS & USER) == 0 && ((BR >> 23) & USER) == 0)
                               prev_sect = BR & 037;
-//fprintf(stderr, "XJRST %06o %06o %06o %012llo\r\n", pc_sect, prev_sect, FLAGS, BR);
                        }
 #endif
                        BR = BR >> 23; /* Move flags into position */
@@ -7214,6 +7248,7 @@ jrstf:
                            FLAGS |= f;
 #endif
                        check_apr_irq();
+//fprintf(stderr, "XJRST %06o %06o %06o %06o %012llo\r\n", pc_sect, PC, prev_sect, FLAGS << 5, BR);
                        break;
 
               case 017:  /* Invalid */
@@ -7227,9 +7262,12 @@ jrstf:
                        goto muuo;
 
               case 007:  /* XPCW */
-#if KLB
-//                       if (QKLB) {
+//fprintf(stderr, "XPCW %06o %06o %06o %06o\r\n", pc_sect, AB, PC, FLAGS << 5);
                           MB = (((uint64)FLAGS) << 23) | (prev_sect & 037);
+                          if (uuo_cycle | pi_cycle) {
+                             FLAGS &= ~(USER|PUBLIC); /* Clear USER */
+                          }
+                          sect = 0;
                           if (Mem_write(0, 0))
                              goto last;
                           AB = (AB + 1) & RMASK;
@@ -7238,9 +7276,7 @@ jrstf:
                              goto last;
                           AB = (AB + 1) & RMASK;
                           goto xjrstf;
- //                      }
-#endif
-//                       goto muuo;
+
               case 015:  /* XJRST */
                        if (Mem_read(0, 0, 0))
                            goto last;
@@ -7301,6 +7337,15 @@ jrstf:
                  pc_sect = (AR >> 18) & 07777;
 #endif
 #else
+              if (uuo_cycle | pi_cycle) {
+                 FLAGS &= ~USER; /* Clear USER */
+#if ITS
+                 if (QITS && one_p_arm) {
+                     FLAGS |= ONEP;
+                     one_p_arm = 0;
+                 }
+#endif
+              }
               /* JEN */
               if (AC & 010) { /* Restore interrupt level. */
 #if KI
@@ -7523,13 +7568,17 @@ jrstf:
               }
 #endif
 #endif
-//              BR = AB;
 #if KL
               BYF5 = 1;
 #if KLB
-              if (QKLB && pc_sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
-                  AR = (AR + 1) & FMASK;
-                  sect = (AR >> 18) & 07777;
+              if (QKLB) {
+                  if (pc_sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
+                      AR = (AR + 1) & FMASK;
+                      sect = (AR >> 18) & 07777;
+                  } else {
+                      sect = pc_sect;
+                      AR = AOB(AR);
+                  }
               } else
 #endif
 #endif
@@ -7576,9 +7625,14 @@ jrstf:
 #if KL
               BYF5 = 1;
 #if KLB
-              if (QKLB && pc_sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
-                  AR = (AR + 1) & FMASK;
-                  sect = (AR >> 18) & 07777;
+              if (QKLB) {
+                  if (pc_sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
+                      AR = (AR + 1) & FMASK;
+                      sect = (AR >> 18) & 07777;
+                  } else {
+                      sect = pc_sect;
+                      AR = AOB(AR);
+                  }
               } else
 #endif
 #endif
@@ -7622,6 +7676,7 @@ jrstf:
               flag1 = glb_sect;
               if (QKLB) {
                   f = (pc_sect != 0);
+                  sect = pc_sect;
                   if ((FLAGS & USER) == 0 && (xct_flag & 1) != 0) {
                       sect = prev_sect;
                       f = (prev_sect != 0);
@@ -7675,6 +7730,7 @@ jrstf:
 #if KLB
               if (QKLB) {
                   f = (pc_sect != 0);
+                  sect = pc_sect;
                   if ((FLAGS & USER) == 0 && (xct_flag & 1) != 0) {
                       f = (prev_sect != 0);
                       sect = prev_sect;
@@ -7758,8 +7814,10 @@ jrstf:
 #if KL & KLB
               if (QKLB) {
                   AR = AR + 1;
+                  if (AR & BIT17)
+                      cur_sect++;
                   if (glb_sect)
-                      pc_sect = (AR >> 18) & 07777;
+                      pc_sect = cur_sect;
                   PC = AR & RMASK;
               } else
 #endif
@@ -7798,7 +7856,7 @@ jrstf:
               PC_CHANGE
 #if KL & KLB
               if (QKLB && glb_sect)
-                  pc_sect = (AR >> 18) & 07777;
+                  pc_sect = cur_sect;
 #endif
               PC = AR & RMASK;
               AR = AD;
@@ -7820,7 +7878,7 @@ jrstf:
               PC_CHANGE
 #if KL & KLB
               if (QKLB && glb_sect)
-                  pc_sect = (AR >> 18) & 07777;
+                  pc_sect = cur_sect;
 #endif
               PC = AR & RMASK;
               AR = BR;
@@ -8490,7 +8548,7 @@ fetch_opr:
     }
 
     if (hst_lnt && PC >= 020) {
-        hst[hst_p].fmb = AR;
+        hst[hst_p].fmb = MB;
     }
 
 last:
@@ -8515,35 +8573,35 @@ last:
         BYF5 = 0;
 #if KL_ITS
         if (QITS) {
-            AB = eb_ptr + 0500;
+            AB = eb_ptr | 0500;
             FM[(6<<4)|0] = fault_data;
         } else
 #endif
-        AB = ub_ptr + 0500;
+        AB = ub_ptr | 0500;
+#if KLB
+        if (!QKLB && !QITS && t20_page)
+            AB++;
+#endif
         MB = fault_data;
         Mem_write_nopage();
         AB++;
         FLAGS |= trap_flag & (TRP1|TRP2);
         trap_flag = (TRP1|TRP2);
-#if KLB
-        if (QKLB)
+        if (QKLB /*|| (!QITS && t20_page)*/)
             MB = (((uint64)(FLAGS) << 23) & LMASK);
         else
-#endif
-        MB = (((uint64)(FLAGS) << 23) & LMASK) | (PC & RMASK);
+            MB = (((uint64)(FLAGS) << 23) & LMASK) | (PC & RMASK);
         if ((FLAGS & USER) == 0) {
             MB &= ~SMASK;
             MB |= (FLAGS & PRV_PUB) ? SMASK : 0;
         }
         Mem_write_nopage();
         AB++;
-#if KLB
-        if (QKLB) {
+        if (QKLB /*|| (!QITS && t20_page)*/) {
             MB = (((uint64)pc_sect) << 18) | (PC & RMASK);
             Mem_write_nopage();
             AB++;
         }
-#endif
         flag1 = flag3 = 0;
         if (FLAGS & PUBLIC)
             flag3 = 1;

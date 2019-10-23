@@ -896,6 +896,8 @@ rd_end:
             sim_debug(DEBUG_DETAIL, dptr, "%s%o read done\n", dptr->name, unit);
             uptr->CMD |= DS_DRY;
             uptr->CMD &= ~CS1_GO;
+            if (uptr->DATAPTR == RP_NUMWD) 
+               (void)rh_blkend(rhc);
             rh_finish_op(rhc, 0);
             return SCPE_OK;
         }

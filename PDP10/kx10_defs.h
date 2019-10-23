@@ -493,7 +493,7 @@ struct pdp_dib {
     uint32              dev_num;                        /* device address */
     uint32              num_devs;                       /* length */
     t_stat              (*io)(uint32 dev, t_uint64 *data);
-    int                 (*irq)(uint32 dev, int addr);
+    t_addr              (*irq)(uint32 dev, t_addr addr);
     struct rh_if        *rh;
 };
  
@@ -524,7 +524,7 @@ int  dct_is_connect(int u);
 t_stat  rh_set_type(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat  rh_show_type (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat  rh_devio(uint32 dev, t_uint64 *data);
-int     rh_devirq(uint32 dev, int addr);
+t_addr  rh_devirq(uint32 dev, t_addr addr);
 void    rh_setattn(struct rh_if *rh, int unit);
 int     rh_blkend(struct rh_if *rh);
 void    rh_setirq(struct rh_if *rh) ;
@@ -532,8 +532,8 @@ void    rh_finish_op(struct rh_if *rh, int flags);
 int     rh_read(struct rh_if *rh);
 int     rh_write(struct rh_if *rh);
 
-int ten11_read (int addr, t_uint64 *data);
-int ten11_write (int addr, t_uint64 data);
+int ten11_read (t_addr addr, t_uint64 *data);
+int ten11_write (t_addr addr, t_uint64 data);
 
 /* Console lights. */
 extern void ka10_lights_init (void);
@@ -541,8 +541,8 @@ extern void ka10_lights_main (t_uint64);
 extern void ka10_lights_set_aux (int);
 extern void ka10_lights_clear_aux (int);
 
-int auxcpu_read (int addr, t_uint64 *);
-int auxcpu_write (int addr, t_uint64);
+int auxcpu_read (t_addr addr, t_uint64 *);
+int auxcpu_write (t_addr addr, t_uint64);
 
 /* I/O system parameters */
 #define NUM_DEVS_LP     1

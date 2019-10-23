@@ -255,6 +255,9 @@ tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
     UNIT          *uptr = &dptr->units[unit];
     int            i;
 
+    if (rhc->drive != 0)   /* Only one unit at 0 */
+       return;
+
     if (uptr->CMD & CS1_GO) {
        uptr->STATUS |= (ER1_RMR);
        return;
@@ -295,6 +298,7 @@ tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
             case FNC_DCLR:                        /* drive clear */
                 uptr->CMD &= ~(CS_ATA|CS1_GO|CS_TM);
                 uptr->STATUS = 0;
+                rhc->status &= ~PI_ENABLE;
                 rhc->attn = 0;
                 for (i = 0; i < 8; i++) {
                     if (dptr->units[i].CMD & CS_ATA)
@@ -351,6 +355,9 @@ tu_read(DEVICE *dptr, struct rh_if *rhc, int reg) {
     uint32         temp = 0;
     int            i;
 
+    if (rhc->drive != 0)   /* Only one unit at 0 */
+       return 0;
+
     switch(reg) {
     case  000:  /* control */
         temp = uptr->CMD & 076;
@@ -399,7 +406,7 @@ tu_read(DEVICE *dptr, struct rh_if *rhc, int reg) {
         temp = tu_frame[ctlr];
         break;
     case  006:  /* drive type */
-        temp = 040054;
+        temp = 042054;
         break;
     case  011: /* tape control register */
         temp = tu_tcr[ctlr];

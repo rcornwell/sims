@@ -212,14 +212,15 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
 
          case CONO:
               clr_interrupt(dev);
-              rhc->status &= ~(07LL|IADR_ATTN|RH20_MASS_EN);
-              rhc->status |= *data & (07LL|IADR_ATTN|RH20_MASS_EN);
               /* Clear flags */
               if (*data & RH20_CLR_MBC) {
                  if (rhc->dev_reset != NULL)
                      rhc->dev_reset(dptr);
                  rhc->imode = 2;
+                 rhc->status = 0;
               }
+              rhc->status &= ~(07LL|IADR_ATTN|RH20_MASS_EN);
+              rhc->status |= *data & (07LL|IADR_ATTN|RH20_MASS_EN);
               if (*data & RH20_DELETE_SCR)
                  rhc->status &= ~(RH20_SBAR|RH20_SCR_FULL);
               if (*data & (RH20_RCLP|RH20_CLR_MBC))
@@ -470,8 +471,8 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
 }
 
 /* Handle KI and KL style interrupt vectors */
-int
-rh_devirq(uint32 dev, int addr) {
+t_addr
+rh_devirq(uint32 dev, t_addr addr) {
     DEVICE        *dptr = NULL;
     struct rh_if  *rhc = NULL;
     int            drive;

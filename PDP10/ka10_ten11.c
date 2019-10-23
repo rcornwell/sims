@@ -244,7 +244,7 @@ static int transaction (unsigned char *request, unsigned char *response)
   return 0;
 }
 
-static int read_word (int addr, int *data)
+static int read_word (t_addr addr, int *data)
 {
   unsigned char request[8];
   unsigned char response[8];
@@ -290,7 +290,7 @@ static int read_word (int addr, int *data)
   return 0;
 }
 
-int ten11_read (int addr, uint64 *data)
+int ten11_read (t_addr addr, uint64 *data)
 {
   int offset = addr & 01777;
   int word1, word2;
@@ -333,7 +333,7 @@ int ten11_read (int addr, uint64 *data)
   return 0;
 }
 
-static int write_word (int addr, uint16 data)
+static int write_word (t_addr addr, uint16 data)
 {
   unsigned char request[8];
   unsigned char response[8];
@@ -371,7 +371,7 @@ static int write_word (int addr, uint16 data)
   return 0;
 }
 
-int ten11_write (int addr, uint64 data)
+int ten11_write (t_addr addr, uint64 data)
 {
   int offset = addr & 01777;
 

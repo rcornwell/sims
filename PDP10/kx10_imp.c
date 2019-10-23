@@ -451,7 +451,7 @@ static CONST ETH_MAC broadcast_ethaddr = {0xff,0xff,0xff,0xff,0xff,0xff};
 static CONST in_addr_T broadcast_ipaddr = {0xffffffff};
 
 t_stat         imp_devio(uint32 dev, uint64 *data);
-t_stat         imp_devirq(uint32 dev, int addr);
+t_addr         imp_devirq(uint32 dev, t_addr addr);
 t_stat         imp_srv(UNIT *);
 t_stat         imp_eth_srv(UNIT *);
 t_stat         imp_tim_srv(UNIT *);
@@ -741,8 +741,8 @@ t_stat imp_devio(uint32 dev, uint64 *data)
 
 #if KL
 /* Handle KL style interrupt vectors for ITS */
-int
-imp_devirq(uint32 dev, int addr) {
+t_addr
+imp_devirq(uint32 dev, t_addr addr) {
     if ((cpu_unit[0].flags & UNIT_ITSPAGE) != 0 && (imp_data.pia & 7) == 1) {
         if (imp_unit[0].STATUS & IMPID && (imp_unit[0].STATUS & IMPLW) == 0)
             return 070|RSIGN;
