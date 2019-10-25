@@ -524,6 +524,7 @@ iii_svc (UNIT *uptr)
          uptr->MAR &= RMASK;
          sim_activate(uptr, 10);
      }
+     return SCPE_OK;
 }
 
 

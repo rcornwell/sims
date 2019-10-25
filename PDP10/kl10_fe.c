@@ -34,6 +34,12 @@
 #define UNIT_DUMMY      (1 << UNIT_V_UF)
 
 #define DTE_DEVNUM       0200
+#define DEV_V_OS        (DEV_V_UF + 1)                 /* Type RSX10/RSX20 */
+#define DEV_M_OS        (1 << DEV_V_OS)
+#define TYPE_RSX10      (0 << DEV_V_OS)
+#define TYPE_RSX20      (1 << DEV_V_OS)
+
+
 
 /* DTE10 CONI bits */
 
@@ -45,7 +51,7 @@
 #define DTE_11DN       00000100    /* TO 11 transfer done */
 #define DTE_10DN       00000040    /* TO 10 transfer done */
 #define DTE_10ER       00000020    /* Error during TO10 transfer */
-#define DTE_PIE        00000010    /* DTE PI enabled */
+#define DTE_PIE        00000010    /* PIO enabled */
 #define DTE_PIA        00000007    /* PI channel assigment */
 
 /* internal flags */
@@ -191,6 +197,8 @@ t_stat dtei_svc (UNIT *uptr);
 t_stat dte_svc (UNIT *uptr);
 t_stat dteo_svc (UNIT *uptr);
 t_stat dtertc_srv(UNIT * uptr);
+t_stat dte_set_type(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+t_stat dte_show_type (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat dte_reset (DEVICE *dptr);
 t_stat dte_stop_os (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat tty_set_mode (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
@@ -256,6 +264,10 @@ MTAB dte_mod[] = {
     { TT_MODE, TT_MODE_7B, "7b", "7B", &tty_set_mode },
     { TT_MODE, TT_MODE_8B, "8b", "8B", &tty_set_mode },
     { TT_MODE, TT_MODE_7P, "7p", "7P", &tty_set_mode },
+    {MTAB_XTD|MTAB_VDV, TYPE_RSX10, NULL, "RSX10",  &dte_set_type, NULL,
+              NULL, "Sets DTE to RSX10 mode"},
+    {MTAB_XTD|MTAB_VDV, TYPE_RSX20, "RSX20", "RSX20", &dte_set_type, &dte_show_type,
+              NULL, "Sets DTE to RSX20 mode"},
     { 0 }
     };
 
@@ -453,8 +465,7 @@ sim_debug(DEBUG_CONO, &dte_dev, "CTY Ring 11 DB\n");
              dte_unit[0].STATUS |= DTE_11DB;
              sim_activate(&dte_unit[0], 200);
          }
-         if (dte_unit[0].STATUS & DTE_PIE && 
-             dte_unit[0].STATUS & (DTE_10DB|DTE_11DN|DTE_10DN|DTE_11ER|DTE_10ER))
+         if (dte_unit[0].STATUS & (DTE_10DB|DTE_11DN|DTE_10DN|DTE_11ER|DTE_10ER))
              set_interrupt(dev, dte_unit[0].STATUS);
          sim_debug(DEBUG_CONO, &dte_dev, "CTY %03o CONO %06o %06o\n", dev, (uint32)*data, PC);
          break;
@@ -523,17 +534,19 @@ void dte_second(UNIT *uptr) {
     switch(word & SEC_CMDMSK) {
     default:
     case SEC_MONO:  /* Ouput character in monitor mode */
+         ch = (int32)(word & 0177);
          if (((cty_out.in_ptr + 1) & 0xff) == cty_out.out_ptr) {
-            sim_activate(uptr, 1000);
+            sim_activate(uptr, 200);
             return;
          }
-         ch = (int32)(word & 0177);
-         ch = sim_tt_outcvt( ch, TT_GET_MODE(uptr->flags));
-         cty_out.buff[cty_out.in_ptr] = (char)(word & 0x7f);
-         cty_out.in_ptr = (cty_out.in_ptr + 1) & 0xff;
+         if (ch != 0) {
+             ch = sim_tt_outcvt( ch, TT_GET_MODE(uptr->flags));
+             cty_out.buff[cty_out.in_ptr] = (char)(word & 0x7f);
+             cty_out.in_ptr = (cty_out.in_ptr + 1) & 0xff;
+             sim_activate(&dte_unit[1], 200);
+         }
          M[SEC_DTCHR + base] = ch;
          M[SEC_DTMTD + base] = FMASK;
-         sim_activate(&dte_unit[1], 100);
          break;
      case SEC_SETPRI:
 enter_pri:
@@ -550,6 +563,11 @@ enter_pri:
          dte_in_cmd = dte_out_res = 0;
          cty_done = 0;
          /* Start input process */
+     M[SEC_DTCMD + base] = 0;
+     M[SEC_DTFLG + base] = FMASK;
+//     uptr->STATUS |= DTE_10DB;
+     uptr->STATUS &= ~DTE_11DB;
+return;
          break;
      case SEC_SETDDT: /* Read character from console */
          if (cty_in.in_ptr == cty_in.out_ptr) {
@@ -594,6 +612,8 @@ enter_pri:
               break;
          case SEC_CLKWT:
               rtc_wait = (uint16)(M[SEC_DTT11 + base] & 0177777);
+              /* Fall Through */
+
          case SEC_CLKON:
               dte_unit[3].STATUS |= SEC_CLK;
               rtc_tick = 0;
@@ -607,8 +627,11 @@ enter_pri:
      /* Acknowledge command */
      M[SEC_DTCMD + base] = 0;
      M[SEC_DTFLG + base] = FMASK;
-     uptr->STATUS |= DTE_10DB;
      uptr->STATUS &= ~DTE_11DB;
+     if (dte_dev.flags & TYPE_RSX20) {
+         uptr->STATUS |= DTE_10DB;
+         set_interrupt(DTE_DEVNUM, dte_unit[0].STATUS);
+     }
 }
 
 #if KL_ITS
@@ -663,8 +686,7 @@ void dte_its(UNIT *uptr) {
          }
          M[ITS_DTEOUT] = FMASK;
          uptr->STATUS |= DTE_11DN;
-         if (uptr->STATUS & DTE_PIE)
-             set_interrupt(DTE_DEVNUM, uptr->STATUS);
+         set_interrupt(DTE_DEVNUM, uptr->STATUS);
          sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS DTEOUT = %012llo\n", word);
      }
      /* Check for line speed */
@@ -792,8 +814,7 @@ done:
     if (Mem_deposit_word(0, dte_dt10_off + PRI_CMTW_STS, &word)) 
         goto error;
     uptr->STATUS |= DTE_11DN;
-    if (uptr->STATUS & DTE_PIE)
-        set_interrupt(DTE_DEVNUM, uptr->STATUS);
+    set_interrupt(DTE_DEVNUM, uptr->STATUS);
     dte_function(uptr);
 }
 
@@ -1068,8 +1089,7 @@ void dte_transfer(UNIT *uptr) {
     dte_out_ptr = (dte_out_ptr + 1) & 0x1f;
 done:
     uptr->STATUS |= DTE_10DN;
-    if (uptr->STATUS & DTE_PIE)
-        set_interrupt(DTE_DEVNUM, uptr->STATUS);
+    set_interrupt(DTE_DEVNUM, uptr->STATUS);
 error:
     return;
 }
@@ -1113,8 +1133,7 @@ dte_input()
                M[ITS_DTEODN] = word;
                /* Tell 10 something is ready */
                uptr->STATUS |= DTE_10DB;
-               if (uptr->STATUS & DTE_PIE)
-                   set_interrupt(DTE_DEVNUM, uptr->STATUS);
+               set_interrupt(DTE_DEVNUM, uptr->STATUS);
                sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS DTEODN = %012llo\n", word);
            }
        }
@@ -1148,8 +1167,7 @@ dte_input()
                M[ITS_DTETYI] = word;
                /* Tell 10 something is ready */
                uptr->STATUS |= DTE_10DB;
-               if (uptr->STATUS & DTE_PIE)
-                   set_interrupt(DTE_DEVNUM, uptr->STATUS);
+               set_interrupt(DTE_DEVNUM, uptr->STATUS);
                sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS DTETYI = %012llo\n", word);
            }
        }
@@ -1172,8 +1190,7 @@ dte_input()
            if ((word & SMASK) == 0) {
                M[ITS_DTEHNG] = word;
                uptr->STATUS |= DTE_10DB;
-               if (uptr->STATUS & DTE_PIE)
-                   set_interrupt(DTE_DEVNUM, uptr->STATUS);
+               set_interrupt(DTE_DEVNUM, uptr->STATUS);
                sim_debug(DEBUG_DETAIL, &dte_dev, "CTY ITS DTEHNG = %012llo\n", word);
            }
        }
@@ -1297,8 +1314,7 @@ dte_start(UNIT *uptr)
 error:
          /* If we can't read it, go back to secondary */
          uptr->STATUS |= DTE_SEC|DTE_10ER;
-         if (uptr->STATUS & DTE_PIE)
-             set_interrupt(DTE_DEVNUM, uptr->STATUS);
+         set_interrupt(DTE_DEVNUM, uptr->STATUS);
          return 0;
     }
     /* If in middle of transfer hold off */
@@ -1313,8 +1329,7 @@ error:
         goto error;
     /* Tell 10 something is ready */
     uptr->STATUS |= DTE_10DB;
-    if (uptr->STATUS & DTE_PIE)
-        set_interrupt(DTE_DEVNUM, uptr->STATUS);
+    set_interrupt(DTE_DEVNUM, uptr->STATUS);
     return 1;
 }
 
@@ -1362,9 +1377,10 @@ t_stat dtei_svc (UNIT *uptr)
         cty_in.out_ptr = (cty_in.out_ptr + 1) & 0xff;
         M[SEC_DTF11 + base] = ch;
         M[SEC_DTMTI + base] = FMASK;
-        optr->STATUS |= DTE_10DB;
-        if (optr->STATUS & DTE_PIE)
-           set_interrupt(DTE_DEVNUM, optr->STATUS);
+        if (dte_dev.flags & TYPE_RSX20) {
+            uptr->STATUS |= DTE_10DB;
+            set_interrupt(DTE_DEVNUM, dte_unit[0].STATUS);
+        }
     }
     return SCPE_OK;
 }
@@ -1372,6 +1388,15 @@ t_stat dtei_svc (UNIT *uptr)
 /* Handle output of characters to CTY. Started whenever there is output pending */
 t_stat dteo_svc (UNIT *uptr)
 {
+    uint32   base = 0;
+    UNIT     *optr = &dte_unit[0];
+
+#if KI_22BIT
+#if KL_ITS
+    if (!QITS)
+#endif
+    base = eb_ptr;
+#endif
     /* Flush out any pending CTY output */
     while(cty_out.in_ptr != cty_out.out_ptr) {
         char ch = cty_out.buff[cty_out.out_ptr];
@@ -1470,6 +1495,35 @@ t_stat dte_reset (DEVICE *dptr)
     sim_activate(&dte_unit[2], 1000);
     return SCPE_OK;
 }
+
+
+t_stat
+dte_set_type(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+{
+    DEVICE *dptr;
+    dptr = find_dev_from_unit (uptr);
+    if (dptr == NULL)
+       return SCPE_IERR;
+    dptr->flags &= ~DEV_M_OS;
+    dptr->flags |= val;
+    return SCPE_OK;
+}
+
+t_stat
+dte_show_type (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+{
+   DEVICE *dptr;
+
+   if (uptr == NULL)
+      return SCPE_IERR;
+
+   dptr = find_dev_from_unit(uptr);
+   if (dptr == NULL)
+      return SCPE_IERR;
+   fprintf (st, "%s", (dptr->flags & TYPE_RSX20) ? "RSX20" : "RSX10");
+   return SCPE_OK;
+}
+
 
 /* Stop operating system */
 

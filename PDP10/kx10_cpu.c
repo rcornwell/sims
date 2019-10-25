@@ -7263,7 +7263,7 @@ jrstf:
 
               case 007:  /* XPCW */
 //fprintf(stderr, "XPCW %06o %06o %06o %06o\r\n", pc_sect, AB, PC, FLAGS << 5);
-                          MB = (((uint64)FLAGS) << 23) | (prev_sect & 037);
+                          MB = ((((uint64)FLAGS) << 23) | (prev_sect & 037)) & FMASK;
                           if (uuo_cycle | pi_cycle) {
                              FLAGS &= ~(USER|PUBLIC); /* Clear USER */
                           }
@@ -7480,8 +7480,12 @@ jrstf:
                   goto muuo;
 
               /* Figure out if this is a user space access */
-              if (xct_flag & 4)
+              if (xct_flag & 4) {
                   flag1 = (FLAGS & USERIO) != 0;
+#if KLB
+                  sect = prev_sect;
+#endif
+              }
 
               /* Check if Paging Enabled */
               if (!page_enable || AB < 020) {
@@ -10214,6 +10218,7 @@ DEVICE *dptr;
 DIB    *dibp;
 uint32 i, j, d;
 int     rh20;
+int     rh_idx;
 
 /* Set trap offset based on MAOFF flag */
 maoff = (cpu_unit[0].flags & UNIT_MAOFF)? 0100 : 0;
@@ -10269,31 +10274,29 @@ if (QBBN)
 
 /* Assign all RH10 & RH20  devices */
 rh20 = 0540;
-for (j = i = 0; (dptr = rh_devs[i]) != NULL; i++) {
+rh_idx = 0;
+for (i = 0; (dptr = rh_devs[i]) != NULL; i++) {
     dibp = (DIB *) dptr->ctxt;
     if (dibp && !(dptr->flags & DEV_DIS)) {             /* enabled? */
         d = dibp->dev_num;                              /* Check type */
         if (d & RH10_DEV) {                             /* Skip RH10 devices */
-            d = rh_nums[j];
-            if (d == 0)
-                break;
+            d = rh_nums[rh_idx];
+            if (d == 0) {
+                sim_printf ("To many RH10 devices %s\n", sim_dname (dptr));
+                return TRUE;
+            }
         } else if (d & RH20_DEV) {                      /* RH20, grab next device */
-            d = rh20;
-            rh20 += 4;
+ continue;
+//            d = rh20;
+ //           rh20 += 4;
         }
         dev_tab[(d >> 2)] = dibp->io;
         dev_irqv[(d >> 2)] = dibp->irq;
-        rh[j].dev_num = d;
-        rh[j].dev = dptr;
-        rh[j].rh = dibp->rh;
-        j++;
+        rh[rh_idx].dev_num = d;
+        rh[rh_idx].dev = dptr;
+        rh[rh_idx].rh = dibp->rh;
+        rh_idx++;
     }
-}
-
-/* Make sure all are assigned */
-if (j == 4 && rh_devs[i] != NULL) {
-    sim_printf ("To many RH10 devices %s\n", sim_dname (dptr));
-    return TRUE;
 }
 
 /* Assign all remaining devices */
@@ -10303,8 +10306,16 @@ for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {
          for (j = 0; j < dibp->num_devs; j++) {         /* loop thru disp */
               if (dibp->io) {                           /* any dispatch? */
                    d = dibp->dev_num;
-                   if (d & (RH10_DEV|RH20_DEV))         /* Skip RH10 & RH20 devices */
+                   if (d & (RH10_DEV))         /* Skip RH10 & RH20 devices */
                        continue;
+                   if (d & (RH20_DEV)) {
+                       d = rh20;
+                       rh20 += 4;
+                       rh[rh_idx].dev_num = d;
+                       rh[rh_idx].dev = dptr;
+                       rh[rh_idx].rh = dibp->rh;
+                       rh_idx++;
+                   }
                    if (dev_tab[(d >> 2) + j] != &null_dev) {
                                                         /* already filled? */
                        sim_printf ("%s device number conflict at %02o\n",
