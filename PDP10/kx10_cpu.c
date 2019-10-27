@@ -2232,10 +2232,11 @@ pg_loop:
         data = pg | RSIGN;
         if (acc_bits & PG_PUB)
            data |= 0200000;
-        if (acc_bits & PG_WRT)
-           data |= 0100000;
-        if (acc_bits & PG_KEP)
-           data |= 0040000;   /* Set M bit (S) */
+        if (acc_bits & PG_WRT) {
+           if (wr)
+              data |= 0040000;   /* Set M bit (S) */
+           data |= 0100000;      /* Set W bit */
+        }
         if (acc_bits & PG_CAC)
            data |= 0020000;
 #if KLB
@@ -2709,6 +2710,8 @@ int Mem_write_byte(int n, uint16 *data) {
         if (addr >= MEMSIZE)
             return 0;
         val = M[addr];
+        if (val == 0)
+            return 1;
 //    fprintf(stderr, "Write: %06o %012llo -> ", addr, val);
         s = (val >> 24) & 077;
         p = (((val >> 30) & 077) + (0777 ^ s) + 1) & 0777;
@@ -4523,10 +4526,12 @@ unasign:
 #endif
               FLAGS = (MB >> 23) & 017777;
               /* If transistioning from user to executive adjust flags */
-              if ((FLAGS & USER) == 0 && (AB & 4) != 0)
-                  FLAGS |= USERIO;
-              if ((FLAGS & USER) == 0 && (AB & 2 || (FLAGS & OVR) != 0))
-                  FLAGS |= PRV_PUB|OVR;
+              if ((FLAGS & USER) == 0) {
+                  if ((AB & 4) != 0)
+                      FLAGS |= USERIO;
+                  if ((AB & 2 || (FLAGS & OVR) != 0))
+                      FLAGS |= PRV_PUB|OVR;
+              }
               PC = MB & RMASK;
               f_pc_inh = 1;
               break;
@@ -10286,9 +10291,8 @@ for (i = 0; (dptr = rh_devs[i]) != NULL; i++) {
                 return TRUE;
             }
         } else if (d & RH20_DEV) {                      /* RH20, grab next device */
- continue;
-//            d = rh20;
- //           rh20 += 4;
+            d = rh20;
+            rh20 += 4;
         }
         dev_tab[(d >> 2)] = dibp->io;
         dev_irqv[(d >> 2)] = dibp->irq;
@@ -10306,16 +10310,8 @@ for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {
          for (j = 0; j < dibp->num_devs; j++) {         /* loop thru disp */
               if (dibp->io) {                           /* any dispatch? */
                    d = dibp->dev_num;
-                   if (d & (RH10_DEV))         /* Skip RH10 & RH20 devices */
+                   if (d & (RH10_DEV|RH20_DEV))         /* Skip RH10 & RH20 devices */
                        continue;
-                   if (d & (RH20_DEV)) {
-                       d = rh20;
-                       rh20 += 4;
-                       rh[rh_idx].dev_num = d;
-                       rh[rh_idx].dev = dptr;
-                       rh[rh_idx].rh = dibp->rh;
-                       rh_idx++;
-                   }
                    if (dev_tab[(d >> 2) + j] != &null_dev) {
                                                         /* already filled? */
                        sim_printf ("%s device number conflict at %02o\n",
