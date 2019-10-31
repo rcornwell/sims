@@ -28,6 +28,8 @@
 #endif
 
 #if (NUM_DEVS_RS > 0)
+#define BUF_EMPTY(u)  (u->hwmark == 0xFFFFFFFF)
+#define CLR_BUF(u)     u->hwmark = 0xFFFFFFFF
 
 #define RS_NUMWD        128     /* 36bit words/sec */
 #define NUM_UNITS_RS    8
@@ -170,18 +172,7 @@ struct drvtyp rs_drv_tab[] = {
     };
 
 
-//struct df10   rs_df10[NUM_DEVS_RS];
-//uint32        rs_xfer_drive[NUM_DEVS_RS];
 uint64        rs_buf[NUM_DEVS_RS][RS_NUMWD];
-//int           rs_reg[NUM_DEVS_RS];
-//int           rs_ivect[NUM_DEVS_RS];
-//int           rs_imode[NUM_DEVS_RS];
-//int           rs_drive[NUM_DEVS_RS];
-//int           rs_rae[NUM_DEVS_RS];
-//int           rs_attn[NUM_DEVS_RS];
-
-//t_stat        rs_devio(uint32 dev, uint64 *data);
-//int           rs_devirq(uint32 dev, int addr);
 void          rs_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data);
 uint32        rs_read(DEVICE *dptr, struct rh_if *rhc, int reg);
 void          rs_rst(DEVICE *dptr);
@@ -323,6 +314,7 @@ rs_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
         case FNC_WRITE:                       /* write */
         case FNC_READ:                        /* read */
             uptr->CMD |= DS_PIP|CS1_GO;
+            CLR_BUF(uptr);
             uptr->DATAPTR = 0;
             break;
 
@@ -441,6 +433,7 @@ t_stat rs_svc (UNIT *uptr)
     struct rh_if *rhc;
     int           da;
     t_stat        r;
+    int           sts;
 
     /* Find dptr, and df10 */
     dptr = rs_devs[ctlr];
@@ -481,7 +474,7 @@ t_stat rs_svc (UNIT *uptr)
 
     case FNC_READ:                       /* read */
     case FNC_WCHK:                       /* write check */
-        if (uptr->DATAPTR == 0) {
+        if (BUF_EMPTY(uptr)) {
             int wc;
             if (GET_SC(uptr->DA) >= rs_drv_tab[dtype].sect ||
                 GET_SF(uptr->DA) >= rs_drv_tab[dtype].surf) {
@@ -500,15 +493,17 @@ t_stat rs_svc (UNIT *uptr)
             while (wc < RS_NUMWD)
                 rs_buf[ctlr][wc++] = 0;
             uptr->hwmark = RS_NUMWD;
+            uptr->DATAPTR = 0;
         }
 
         rhc->buf = rs_buf[ctlr][uptr->DATAPTR++];
         sim_debug(DEBUG_DATA, dptr, "%s%o read word %d %012llo %09o %06o\n",
                 dptr->name, unit, uptr->DATAPTR, rhc->buf, rhc->cda, rhc->wcr);
         if (rh_write(rhc)) {
-            if (uptr->DATAPTR == uptr->hwmark) {
+            if (uptr->DATAPTR == RS_NUMWD) {
                 /* Increment to next sector. Set Last Sector */
                 uptr->DATAPTR = 0;
+                CLR_BUF(uptr);
                 uptr->DA += 1 << DA_V_SC;
                 if (GET_SC(uptr->DA) >= rs_drv_tab[dtype].sect) {
                     uptr->DA &= (DA_M_SF << DA_V_SF);
@@ -525,13 +520,15 @@ rd_end:
             sim_debug(DEBUG_DETAIL, dptr, "%s%o read done\n", dptr->name, unit);
             uptr->CMD |= DS_DRY;
             uptr->CMD &= ~CS1_GO;
+            if (uptr->DATAPTR == RS_NUMWD)
+               (void)rh_blkend(rhc);
             rh_finish_op(rhc, 0);
             return SCPE_OK;
         }
         break;
 
     case FNC_WRITE:                      /* write */
-        if (uptr->DATAPTR == 0) {
+        if (BUF_EMPTY(uptr)) {
             if (GET_SC(uptr->DA) >= rs_drv_tab[dtype].sect ||
                 GET_SF(uptr->DA) >= rs_drv_tab[dtype].surf) {
                 uptr->CMD |= (ER1_IAE << 16)|DS_ERR|DS_DRY|DS_ATA;
@@ -540,14 +537,18 @@ rd_end:
                 rh_finish_op(rhc, 0);
                 return SCPE_OK;
             }
+            uptr->DATAPTR = 0;
+            uptr->hwmark = 0;
         }
-        r = rh_read(rhc);
+        sts = rh_read(rhc);
         rs_buf[ctlr][uptr->DATAPTR++] = rhc->buf;
         sim_debug(DEBUG_DATA, dptr, "%s%o write word %d %012llo %09o %06o\n",
                  dptr->name, unit, uptr->DATAPTR, rhc->buf, rhc->cda, rhc->wcr);
-        if (r == 0 || uptr->DATAPTR == RS_NUMWD) {
+        if (sts == 0) {
             while (uptr->DATAPTR < RS_NUMWD)
                 rs_buf[ctlr][uptr->DATAPTR++] = 0;
+        }
+        if (uptr->DATAPTR == RS_NUMWD) {
             sim_debug(DEBUG_DETAIL, dptr, "%s%o write (%d,%d)\n", dptr->name, unit,
                    GET_SC(uptr->DA), GET_SF(uptr->DA));
             da = GET_DA(uptr->DA, dtype) * RS_NUMWD;
@@ -555,7 +556,8 @@ rd_end:
             (void)sim_fwrite (&rs_buf[ctlr][0], sizeof(uint64), RS_NUMWD,
                                 uptr->fileref);
             uptr->DATAPTR = 0;
-            if (r) {
+            CLR_BUF(uptr);
+            if (sts) {
                 uptr->DA += 1 << DA_V_SC;
                 if (GET_SC(uptr->DA) >= rs_drv_tab[dtype].sect) {
                     uptr->DA &= (DA_M_SF << DA_V_SF);
@@ -563,11 +565,11 @@ rd_end:
                     if (GET_SF(uptr->DA) >= rs_drv_tab[dtype].surf)
                         uptr->CMD |= DS_LST;
                 }
-                if (rh_blkend(rhc))
-                   goto wr_end;
              }
+             if (rh_blkend(rhc))
+                  goto wr_end;
         }
-        if (r) {
+        if (sts) {
             sim_activate(uptr, 20);
         } else {
 wr_end:
@@ -668,7 +670,6 @@ t_stat rs_attach (UNIT *uptr, CONST char *cptr)
     if (rstr == 0)
         return SCPE_OK;
     dib = (DIB *) rstr->ctxt;
-    ctlr = dib->dev_num & 014;
     uptr->DA = 0;
     uptr->CMD &= ~DS_VV;
     uptr->CMD |= DS_DPR|DS_MOL|DS_DRY;

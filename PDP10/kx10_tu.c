@@ -236,7 +236,7 @@ REG                 tua_reg[] = {
 };
 
 DEVICE              tua_dev = {
-    "TUA", tu_unit, NULL, tu_mod,
+    "TUA", tu_unit, tua_reg, tu_mod,
     NUM_UNITS_TU, 8, 18, 1, 8, 36,
     NULL, NULL, &tu_reset, &tu_boot, &tu_attach, &tu_detach,
     &tu_dib[0], DEV_DISABLE | DEV_DEBUG | DEV_TAPE, 0, dev_debug,

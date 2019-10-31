@@ -32,7 +32,6 @@
 #define CLR_BUF(u)     u->hwmark = 0xFFFFFFFF
 
 #define RP_NUMWD        128     /* 36bit words/sec */
-#define RP_DEVNUM       0270    /* First device number */
 #define NUM_UNITS_RP    8
 
 /* Flags in the unit flags word */
@@ -1084,7 +1083,6 @@ t_stat rp_attach (UNIT *uptr, CONST char *cptr)
         if (rh[ctlr].dev == rptr)
             break;
     }
-    ctlr = dib->dev_num & 014;
     uptr->DA = 0;
     uptr->CMD &= ~DS_VV;
     uptr->CMD |= DS_DPR|DS_MOL|DS_DRY;

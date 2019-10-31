@@ -99,7 +99,7 @@
 #define CR_FUNC         0000000000076LL
 #define CR_GO           0000000000001LL
 
-#define IRQ_VECT        0000000000177LL   /* Interupt vector */
+#define IRQ_VECT        0000000000777LL   /* Interupt vector */
 #define IRQ_KI10        0000002000000LL
 #define IRQ_KA10        0000001000000LL
 #define FNC_XFER        024             /* >=? data xfr */
@@ -484,7 +484,10 @@ rh_devirq(uint32 dev, t_addr addr) {
        }
     }
     if (rhc != NULL) {
-        return (rhc->imode ? rhc->ivect : addr);
+        if (rhc->imode == 1) /* KI10 Style */
+           addr = RSIGN | rhc->ivect;
+        else if (rhc->imode == 2) /* RH20 style */
+           addr = rhc->ivect;
     }
     return  addr;
 }
