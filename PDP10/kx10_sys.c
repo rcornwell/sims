@@ -239,6 +239,7 @@ DEBTAB              crd_debug[] = {
 #define FMT_E   3                                       /* EXE */
 #define FMT_D   4                                       /* WAITS DMP */
 #define FMT_I   5                                       /* ITS SBLK */
+#define FMT_B   6                                       /* EXB format */
 
 #define EXE_DIR 01776                                   /* EXE directory */
 #define EXE_VEC 01775                                   /* EXE entry vec */
@@ -694,6 +695,86 @@ else if (entvec == 0)
 return SCPE_OK;
 }
 
+static int     exb_pos = -1;
+int get_exb_byte (FILE *fileref, int *byt, int ftype)
+{
+    static uint64  word;
+
+    exb_pos++;
+    switch(exb_pos & 3) {
+    case 0:   if (get_word(fileref, &word, ftype))
+                  return 1;
+              *byt = ((word >> 18) & 0377);
+              break;
+    case 1:   *byt = ((word >> 26) & 0377);
+              break;
+    case 2:   *byt = ((word >> 0) & 0377);
+              break;
+    case 3:   *byt = ((word >> 8) & 0377);
+              break;
+    }
+    return 0;
+}
+
+t_stat load_exb (FILE *fileref, int ftype)
+{
+    int     odd = 0;
+    int     pos = 0;
+    int     wc;
+    int     byt;
+    uint64  word;
+    t_addr  addr;
+
+    exb_pos = -1;
+    for ( ;; ) {
+        int byt;
+        /* All records start on even byte */
+        if (odd && get_exb_byte (fileref, &byt, ftype))
+            return SCPE_FMT;
+        if (get_exb_byte(fileref, &byt, ftype))
+            return SCPE_FMT;
+        wc = byt;
+        if (get_exb_byte(fileref, &byt, ftype))
+            return SCPE_FMT;
+        wc |= byt << 8;
+        wc -= 4;
+        odd = wc & 1;
+        if (get_exb_byte(fileref, &byt, ftype))
+            return SCPE_FMT;
+        addr = byt;
+        if (get_exb_byte(fileref, &byt, ftype))
+            return SCPE_FMT;
+        addr |= byt << 8;
+        if (get_exb_byte(fileref, &byt, ftype))
+            return SCPE_FMT;
+        addr |= byt << 16; 
+        if (get_exb_byte(fileref, &byt, ftype))
+            return SCPE_FMT;
+        addr |= byt << 24; 
+        /* Empty record gives start address */
+        if (wc == 0) {
+            PC = addr;
+            return SCPE_OK;
+        }
+        pos = 0;
+        for (; wc > 0; wc--, pos++) {
+            if (get_exb_byte(fileref, &byt, ftype))
+                return SCPE_FMT;
+            switch(pos) {
+            case 0: word = ((uint64)byt); break;
+            case 1: word |= ((uint64)byt) << 8; break;
+            case 2: word |= ((uint64)byt) << 16; break;
+            case 3: word |= ((uint64)byt) << 24; break;
+            case 4: word |= ((uint64)(byt & 017)) << 32;
+                    M[addr++] = word;
+                    pos = -1;
+                    break;
+            }
+        }
+    }
+    return SCPE_FMT;
+}
+
 /* Master loader */
 
 t_stat sim_load (FILE *fileref, CONST char *cptr, CONST char *fnam, int flag)
@@ -717,12 +798,16 @@ else if (sim_switches & SWMASK ('D'))                   /* -d? */
     fmt = FMT_D;
 else if (sim_switches & SWMASK ('I'))                   /* -i? */
     fmt = FMT_I;
+else if (sim_switches & SWMASK ('B'))                   /* -b? */
+    fmt = FMT_B;
 else if (match_ext (fnam, "RIM"))                       /* .RIM? */
     fmt = FMT_R;
 else if (match_ext (fnam, "SAV"))                       /* .SAV? */
     fmt = FMT_S;
 else if (match_ext (fnam, "EXE"))                       /* .EXE? */
     fmt = FMT_E;
+else if (match_ext (fnam, "EXB"))                       /* .EXB? */
+    fmt = FMT_B;
 else if (match_ext (fnam, "DMP"))                       /* .DMP? */
     fmt = FMT_D;
 else if (match_ext (fnam, "BIN"))                       /* .BIN? */
@@ -754,6 +839,9 @@ switch (fmt) {                                          /* case fmt */
 
     case FMT_I:                                         /* SBLK */
         return load_sblk (fileref);
+
+    case FMT_B:                                         /* EXB */
+        return load_exb  (fileref, ftype);
         }
 
 printf ("Can't determine load file format\n");
