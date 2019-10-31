@@ -4086,9 +4086,8 @@ no_fetch:
        IA = AB;
 #if KL & KLB
        if (QKLB)
-           glb_sect = (cur_sect != 0);
+           glb_sect = 0;
 #endif
-
        i_flags = opflags[IR];
        BYF5 = 0;
     }
@@ -4114,12 +4113,20 @@ no_fetch:
     }
 #endif
 
-#if KLB
-    if (QKLB)
-        glb_sect = 0;
-#endif
-
     /* Handle indirection repeat until no longer indirect */
+#if KL && KLB
+        /* If we are doing a PXCT with E1 or E2 set, change section */
+         if (QKLB) {
+             if (((xct_flag & 8) != 0 && (FLAGS & USER) == 0 && !ptr_flg) ||
+                 ((xct_flag & 2) != 0 && (FLAGS & USER) == 0 && ptr_flg))
+             sect = cur_sect = prev_sect;
+             /* Short cut for extended pointer address */
+             if (ptr_flg && (glb_sect || cur_sect != 0) && (AR & BIT12) != 0) { /* Full pointer */
+                 ind = 1;  /* Allow us to read word, xDB has already bumped AB */
+                 goto in_loop;
+             }
+         }
+#endif
     do {
          if ((!pi_cycle) & pi_pending
 #if KI | KL
@@ -4128,23 +4135,10 @@ no_fetch:
                              ) {
             pi_rq = check_irq_level();
          }
-#if KLB
-         if (QKLB && ptr_flg && pc_sect != 0 && (AR & BIT12) != 0) { /* Full pointer */
-             ind = 1;
-             goto in_loop;
-         }
-#endif
          ind = TST_IND(MB) != 0;
          AR = MB;
          AB = MB & RMASK;
          ix = GET_XR(MB);
-#if KLB
-         if (QKLB) {
-             if (((xct_flag & 8) != 0 && (FLAGS & USER) == 0 && !ptr_flg) ||
-                 ((xct_flag & 2) != 0 && (FLAGS & USER) == 0 && ptr_flg))
-             sect = cur_sect = prev_sect;
-         }
-#endif
          if (ix) {
 #if KL
              if (((xct_flag & 8) != 0 && (FLAGS & USER) == 0) ||
@@ -4171,9 +4165,6 @@ no_fetch:
              AB = MB & RMASK;
          }
 #if KL & KLB
-           else  /* No index so become local */
-             glb_sect = 0;
-
 in_loop:
 #endif
          if (ind & !pi_rq) {
@@ -4181,15 +4172,15 @@ in_loop:
                  goto last;
 #if KL & KLB
              /* Check if extended indexing */
-             if (QKLB && cur_sect != 0) {
-                 if (MB & SMASK) {    /* Instruction format IFIW */
-                     if (MB & BIT1) { /* Illegal index word */
+             if (QKLB && (cur_sect != 0 || glb_sect)) {
+                 if (MB & SMASK || cur_sect == 0) {    /* Instruction format IFIW */
+                     if (MB & BIT1 && cur_sect != 0) { /* Illegal index word */
+//fprintf(stderr, "Illegal fault %06o %012llo\n\r", PC, MB);
                          fault_data = 024LL << 30 | (((FLAGS & USER) != 0)?SMASK:0) |
                                       (AR & RMASK) | ((uint64)cur_sect << 18);
                          page_fault = 1;
                          goto last;
                      }
-                     glb_sect = 0;
                      ind = TST_IND(MB) != 0;
                      ix = GET_XR(MB);
                      AB = MB & RMASK;
@@ -4200,20 +4191,25 @@ in_loop:
                          else
                              AR = get_reg(ix);
                          /* Check if extended indexing */
-                         if ((AR & SMASK) != 0 || (AR & SECTM) == 0) { /* Local index word */
+                         if (cur_sect == 0 || (AR & SMASK) != 0 || (AR & SECTM) == 0) {
+                              /* Local index word */
                               AR = (AR + AB) & RMASK;
+                              glb_sect = 0;
                          } else {
                               AR = (AR + AB) & FMASK;
                               glb_sect = 1;
                               sect = cur_sect = (AR >> 18) & 07777;
                          }
                          MB = AR;
-                     } else
+                     } else {
+                         if (((xct_flag & 014) != 014 || (FLAGS & USER) != 0))
+                             glb_sect = 0;
+                         if ((MB & RMASK) < 020)
+                            sect = cur_sect = 1;
                          AR = MB;
+                     }
                      AB = AR & RMASK;
-                     if (!glb_sect && AB < 020)  /* Map to global AC */
-                         sect = cur_sect = 1;
-//fprintf(stderr, "LFIW %012llo %o %02o %06o %06o\n\r", MB, ind, ix, cur_sect, AB);
+//fprintf(stderr, "LFIW %012llo %o %02o %06o %06o %o\n\r", MB, ind, ix, cur_sect, AB, glb_sect);
                  } else {             /* Extended index EFIW */
                      ind = (MB & BIT1) != 0;
                      ix = (MB >> 30) & 017;
@@ -4235,7 +4231,7 @@ in_loop:
                      sect = cur_sect = (AR >> 18) & 07777;
                      AB = AR & RMASK;
                      glb_sect = 1;
-//fprintf(stderr, "EFIW %012llo %o %02o %06o %06o\n\r", MB, ind, ix, cur_sect, AB);
+//fprintf(stderr, "EFIW %012llo %o %02o %06o %06o\n\r", AR, ind, ix, cur_sect, AB);
                  }
                  if (ind)
                      goto in_loop;
@@ -4324,7 +4320,7 @@ st_pi:
     }
 
     /* Update history */
-    if (hst_lnt /*&& PC > 017*/) {
+    if (hst_lnt && PC > 017) {
             hst_p = hst_p + 1;
             if (hst_p >= hst_lnt) {
                     hst_p = 0;
@@ -5975,7 +5971,7 @@ ldb_ptr:
 #if KL
                   ptr_flg = 1;
 #if KLB
-                  if (QKLB && pc_sect != 0 && (AR & BIT12) != 0) {
+                  if (QKLB && (glb_sect || cur_sect != 0) && (AR & BIT12) != 0) {
                       /* Full pointer */
                       AB = (AB + 1) & RMASK;
 //fprintf(stderr, "LBP %o %o %06o %012llo\n\r", SC, SCAD, AB, MB);
@@ -7207,7 +7203,7 @@ xjrstf:
                            goto last;
                        AR = MB;       /* Get PC. */
 #if KLB
-                       if (QKLB) {
+                       if (QKLB && t20_page) {
                           pc_sect = (AR >> 18) & 07777;
                           if ((FLAGS & USER) == 0 && ((BR >> 23) & USER) == 0)
                               prev_sect = BR & 037;
@@ -7272,7 +7268,6 @@ jrstf:
                           if (uuo_cycle | pi_cycle) {
                              FLAGS &= ~(USER|PUBLIC); /* Clear USER */
                           }
-                          sect = 0;
                           if (Mem_write(0, 0))
                              goto last;
                           AB = (AB + 1) & RMASK;
@@ -7587,6 +7582,8 @@ jrstf:
                   } else {
                       sect = pc_sect;
                       AR = AOB(AR);
+                      if (pc_sect != 0 && (AR & RMASK) < 020)
+                          sect = 1;
                   }
               } else
 #endif
@@ -7622,7 +7619,7 @@ jrstf:
               }
 #endif
 #if KL & KLB
-              if (QKLB && pc_sect != 0 && glb_sect)
+              if (QKLB && glb_sect)
                   pc_sect = cur_sect;
 #endif
               PC = BR & RMASK;
@@ -7634,7 +7631,7 @@ jrstf:
 #if KL
               BYF5 = 1;
 #if KLB
-              if (QKLB) {
+              if (QKLB && t20_page) {
                   if (pc_sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
                       AR = (AR + 1) & FMASK;
                       sect = (AR >> 18) & 07777;
@@ -7648,23 +7645,6 @@ jrstf:
               AR = AOB(AR);
               AB = AR & RMASK;
               MB = BR;
-#if KLB
-              flag1 = glb_sect;
-              if (QKLB) {
-                  f = (pc_sect != 0);
-                  if ((FLAGS & USER) == 0 && (xct_flag & 1) != 0) {
-                      sect = prev_sect;
-                      f = (prev_sect != 0);
-                  }
-                  if (f && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
-                      sect = (AR >> 18) & 07777;
-                      glb_sect = 1;
-                  }
-                  if (Mem_write(0, 0))
-                     goto last;
-                  break;
-              }
-#endif
               if (AR & C1) {
 #if KI | KL
                  if (!pi_cycle)
@@ -7674,6 +7654,16 @@ jrstf:
                  check_apr_irq();
 #endif
               }
+#if KLB
+              if (QKLB && t20_page) {
+                  if ((FLAGS & USER) == 0 && (xct_flag & 1) != 0)
+                      sect = prev_sect;
+                  if (sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
+                      sect = (AR >> 18) & 07777;
+                      glb_sect = 1;
+                  }
+              }
+#endif
               if (Mem_write(0, 0))
                  goto last;
               break;
@@ -7683,7 +7673,7 @@ jrstf:
               BYF5 = 1;   /* Tell PXCT that this is stack */
 #if KLB
               flag1 = glb_sect;
-              if (QKLB) {
+              if (QKLB && t20_page) {
                   f = (pc_sect != 0);
                   sect = pc_sect;
                   if ((FLAGS & USER) == 0 && (xct_flag & 1) != 0) {
@@ -7706,7 +7696,7 @@ jrstf:
 #if KL
               BYF5 = 0;   /* Now back to data */
 #if KLB
-              if (QKLB) {
+              if (QKLB && t20_page) {
                   sect = cur_sect;
                   glb_sect = flag1;
               }
@@ -7737,7 +7727,7 @@ jrstf:
 #if KL
               BYF5 = 1;   /* Tell PXCT that this is stack */
 #if KLB
-              if (QKLB) {
+              if (QKLB && t20_page) {
                   f = (pc_sect != 0);
                   sect = pc_sect;
                   if ((FLAGS & USER) == 0 && (xct_flag & 1) != 0) {
@@ -8557,7 +8547,7 @@ fetch_opr:
     }
 
     if (hst_lnt && PC >= 020) {
-        hst[hst_p].fmb = MB;
+        hst[hst_p].fmb = (i_flags & SAC) ? AR: MB;
     }
 
 last:
@@ -8596,7 +8586,7 @@ last:
         AB++;
         FLAGS |= trap_flag & (TRP1|TRP2);
         trap_flag = (TRP1|TRP2);
-        if (QKLB /*|| (!QITS && t20_page)*/)
+        if (QKLB & t20_page)
             MB = (((uint64)(FLAGS) << 23) & LMASK);
         else
             MB = (((uint64)(FLAGS) << 23) & LMASK) | (PC & RMASK);
@@ -8606,7 +8596,7 @@ last:
         }
         Mem_write_nopage();
         AB++;
-        if (QKLB /*|| (!QITS && t20_page)*/) {
+        if (QKLB && t20_page) {
             MB = (((uint64)pc_sect) << 18) | (PC & RMASK);
             Mem_write_nopage();
             AB++;
@@ -9941,7 +9931,7 @@ do_extend(uint32 ia)
                   while (reg != 0) {
                       if (reg & SMASK) {
                           val1 = (val1 - 1) & (SECTM|RMASK);
-                          sect = (val1 >> 18) & 07777;
+                          sect = (val1 >> 18) & 00037;
                           AB = val1 & RMASK;
                           ptr_flg = 1;
                           if (Mem_read(0, 0, 0)) {
@@ -9950,7 +9940,7 @@ do_extend(uint32 ia)
                           }
 //fprintf(stderr, " XBLT: D=%012llo 1-%012llo 2-%012llo\n\r", MB, val1, val2);
                           val2 = (val2 - 1) & (SECTM|RMASK);
-                          sect = (val2 >> 18) & 07777;
+                          sect = (val2 >> 18) & 00037;
                           AB = val2 & RMASK;
                           ptr_flg = 0;
                           BYF5 = 1;
@@ -9962,13 +9952,13 @@ do_extend(uint32 ia)
                           BYF5 = 0;
                           reg = (reg + 1) & FMASK;
                       } else {
-                          sect = (val1 >> 18) & 07777;
+                          sect = (val1 >> 18) & 00037;
                           AB = val1 & RMASK;
                           ptr_flg = 1;
                           if (Mem_read(0, 0, 0))
                              goto xblt_done;
 //fprintf(stderr, " XBLT: D=%012llo 1-%012llo 2-%012llo\n\r", MB, val1, val2);
-                          sect = (val2 >> 18) & 07777;
+                          sect = (val2 >> 18) & 00037;
                           AB = val2 & RMASK;
                           ptr_flg = 0;
                           BYF5 = 1;
@@ -10416,7 +10406,7 @@ for (k = 0; k < lnt; k++) {                             /* print specified */
 #if KL
 #if KLB
         if (QKLB)
-            fprintf(st, "%09o ", h->pc & 0777777777);
+            fprintf(st, "%08o ", h->pc & 0777777777);
         else
 #endif
 #endif
@@ -10426,7 +10416,7 @@ for (k = 0; k < lnt; k++) {                             /* print specified */
 #if KL
 #if KLB
         if (QKLB)
-            fprintf(st, "%09o ", h->ea & 0777777777);
+            fprintf(st, "%08o ", h->ea & 0777777777);
         else
 #endif
 #endif
