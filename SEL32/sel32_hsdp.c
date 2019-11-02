@@ -1,4 +1,4 @@
-/* sel32_disk.c: SEL-32 2311/2314 Disk Processor II
+/* sel32_hsdp.c: SEL-32 8064 High Speed Disk Processor
 
    Copyright (c) 2018-2019, James C. Bevier
    Portions provided by Richard Cornwell and other SIMH contributers
@@ -35,13 +35,13 @@ extern int test_write_byte_end(uint16 chsa);
 extern uint32   M[];                            /* our memory */
 extern uint32   SPAD[];                         /* cpu SPAD memory */
 
-#ifdef NUM_DEVS_DISK
+#ifdef NUM_DEVS_HSDP
 #define UNIT_V_TYPE        (UNIT_V_UF + 0)
 #define UNIT_TYPE          (0xf << UNIT_V_TYPE)
 
 #define GET_TYPE(x)        ((UNIT_TYPE & (x)) >> UNIT_V_TYPE)
 #define SET_TYPE(x)        (UNIT_TYPE & ((x) << UNIT_V_TYPE))
-#define UNIT_DISK          UNIT_ATTABLE | UNIT_IDLE
+#define UNIT_HSDP          UNIT_ATTABLE | UNIT_IDLE
 
 /* INCH command information */
 /*
@@ -197,7 +197,7 @@ struct ddata_t
 };
 
 /* disk definition structure */
-struct disk_t
+struct hsdp_t
 {
     const char  *name;                          /* Device ID Name */
     uint32      taus;                           /* total allocation units */
@@ -206,35 +206,28 @@ struct disk_t
     uint16      ssiz;                           /* sector size in words */
     uint16      spt;                            /* # sectors per track(cylinder) */
     uint8       spau;                           /* # sectors per allocation unit */
-    uint8       spb;                            /* # sectors per block (192 WDS)*/
+    uint8       spb;                            /* # sectors per block (256 WDS)*/
     uint32      cyl;                            /* Number of cylinders */
     uint8       type;                           /* Device type code */
 }
-disk_type[] =
+hsdp_type[] =
 {
-    /* Class E Disc Devices */
-    {"FE004",   5888,  184, 256, 192, 23, 1, 1,    1, 0x80},   /*    4 M */
-    {"CE010",  12800,  200,   2,  96, 16, 1, 2,  400, 0x60},   /*   10 M */
-    {"ME040",  23000,  719,   5, 192, 23, 2, 1,  400, 0x40},   /*   40 M */
-    {"ME080",  46000, 1438,   5, 192, 23, 2, 1,  800, 0x40},   /*   80 M */
-    {"ME300",  87400, 2732,  19, 192, 23, 4, 1,  800, 0x40},   /*  300 M */
-    {"FE005",   5888,  184,   4, 192, 23, 1, 1,   64, 0x80},   /*    5 M */
-
-    /* Class F Disc Devices */
-    {"FL001",   1334,    0,   2,  64, 26, 3, 3,   26, 0x40},   /*    1 M */
-    {"MH040",  20000,  625,   5, 192, 20, 2, 1,  400, 0x40},   /*   40 M */
-    {"MH080",  40000, 1250,   5, 192, 20, 2, 1,  800, 0x40},   /*   80 M */
-    {"MH300",  76000, 2375,  19, 192, 20, 4, 1,  800, 0x40},   /*  300 M */
-    {"FH005",   5120,  184,   4, 192, 20, 1, 1,   64, 0x80},   /*    5 M */
-    {"CD032",   8000,  250,   1, 192, 20, 2, 1,  800, 0x60},   /*   32 M */
-    {"CD032",   8000,  250,   1, 192, 20, 2, 1,  800, 0x60},   /*   32 M */
-    {"CD064",   8000,  250,   1, 192, 20, 2, 1,  800, 0x60},   /*   64 M */
-    {"CD064",  24000,  750,   3, 192, 20, 2, 1,  800, 0x60},   /*   64 M */
-    {"CD096",   8000,  250,   1, 192, 20, 2, 1,  800, 0x60},   /*   96 M */
-    {"CD096",  40000, 1250,   5, 192, 20, 2, 1,  800, 0x60},   /*   96 M */
-    {"MH600",  80000, 2500,  40, 192, 20, 8, 1,  800, 0x40},   /*  600 M */
-    {"FM600",  80000, 2500,  40, 192, 20, 8, 1,  800, 0x40},   /*  600 M */
-    {"FM600",   1600,   50,  40, 192, 20, 1, 1,    2, 0x80},   /*  600 M */
+    /* Class F Disc Devices */                                 /*XX CYL SIZE  */
+    {"MH040",  20000,  625,   5, 256, 16, 2, 1,  400, 0x40},   /*0  411  40 M */
+    {"MH080",  40000, 1250,   5, 256, 16, 2, 1,  800, 0x40},   /*1  823  80 M */
+    {"MH160",  80000, 1250,  10, 256, 16, 4, 1, 1600, 0x40},   /*2  823 160 M */
+    {"MH300",  76000, 2375,  19, 256, 16, 4, 1,  800, 0x40},   /*3  823 300 M */
+    {"MH340",  76000, 2375,  24, 256, 16, 4, 1,  800, 0x40},   /*4  711 340 M */
+    {"FH005",   5120,  184,   4, 256, 16, 1, 1,   64, 0x80},   /*5   64   5 M */
+    {"CD032",   8000,  250,   1, 256, 16, 2, 1,  800, 0x60},   /*6  823  32 M */
+    {"CD032",   8000,  250,   1, 256, 16, 2, 1,  800, 0x60},   /*7  823  32 M */
+    {"CD064",   8000,  250,   1, 256, 16, 2, 1,  800, 0x60},   /*8  823  64 M */
+    {"CD064",  24000,  750,   3, 256, 16, 2, 1,  800, 0x60},   /*9  823  64 M */
+    {"CD096",   8000,  250,   1, 256, 16, 2, 1,  800, 0x60},   /*10 823  96 M */
+    {"CD096",  40000, 1250,   5, 256, 16, 2, 1,  800, 0x60},   /*11 823  96 M */
+    {"MH600",  80000, 2500,  40, 256, 16, 8, 1,  800, 0x40},   /*12 843 600 M */
+    {"FM600",  80000, 2500,  40, 256, 16, 8, 1,  800, 0x40},   /*13 843 600 M */
+    {"FM600",   1600,   50,  40, 256, 16, 1, 1,    2, 0x80},   /*14  10 600 M */
     {NULL, 0}
 };
 
@@ -244,7 +237,7 @@ disk_type[] =
 *****************************************************************
          SPACE
          BOUND     1W
-DID.TBL  EQU       $
+DID.TBL  EQU       $    MPX1.X
 *
 *DEVICE ID NAME..................................................
 *TOTAL ALLOC. UNITS.....................................        :
@@ -259,14 +252,7 @@ DID.TBL  EQU       $
 *               ......:..:..:...:....:....:.....:......:........:
 DID      FORM        32, 8, 8,  8,   8,  16,   16,    32,      64
          SPACE
-*        CLASS 'E' DISC DEVICES
-         DID    C'DE01', 1, 1, 23, 192, 256,  184,  5888, C'FE004'
-         DID    C'DE02', 2, 1, 16,  96,   2,  200, 12800, C'CE010'
-         DID    C'DE04', 1, 2, 23, 192,   5,  719, 23000, C'ME040'
-         DID    C'DE05', 1, 2, 23, 192,   5, 1438, 46000, C'ME080'
-         DID    C'DE06', 1, 4, 23, 192,  19, 2732, 87400, C'ME300'
-         DID    C'DE07', 1, 1, 23, 192,   4,  184,  5888, C'FE005'
-*        CLASS 'F' EXTENDED I/O DISC DEVICES
+*        CLASS 'F' EXTENDED I/O DISC DEVICES (MPX 1.X)
          DID    C'DF01', 3, 3, 26,  64,   2,     ,  1334, C'FL001'
          DID    C'DF02', 1, 2, 20, 192,   5,  625, 20000, C'MH040'
          DID    C'DF03', 1, 2, 20, 192,   5, 1250, 40000, C'MH080'
@@ -282,115 +268,150 @@ DID      FORM        32, 8, 8,  8,   8,  16,   16,    32,      64
          DID    C'DF0A', 1, 8, 20, 192,  40, 2500, 80000, C'FM600'
          DID    C'DF0A', 1, 1, 20, 192,  40,   50,  1600, C'FM600'
 *
+         BOUND     1W
+DID.TBL  EQU       $    MPX3.X
+*
+*DEVICE ID NAME..................................................
+*TOTAL SECTORS .........................................        :
+*BIT MAP SIZE      ..............................      :        :
+*NO. OF HEADS      ........................     :      :        :
+*SECTOR SIZE       ...................    :     :      :        :
+*SECTORS/TRACK     ..............    :    :     :      :        :
+*SECTORS/ALOC. UNIT..........   :    :    :     :      :        :
+*SECTORS/BLOCK     .......  :   :    :    :     :      :        :
+*OLD DEVICE ID NAME....  :  :   :    :    :     :      :        :
+*                     :  :  :   :    :    :     :      :        :
+*               ......:..:..:...:....:....:.....:......:........:
+DID      FORM        32, 8, 8,  8,   8,  16,   16,    32,      64
+         SPACE
+*        CLASS 'F' EXTENDED I/O DISC DEVICES MPX3.X
+         DID    C'DF01', 3, 1, 26,  64,   2,     ,  4004, C'FL001   '
+         DID    C'DF02', 1, 2, 20, 192,   5,  642, 41100, C'MH040   '
+         DID    C'DF03', 1, 2, 20, 192,   5, 1286, 82300, C'MH080   '
+         DID    C'DF04', 1, 4, 20, 192,  19, 2444,312740, C'MH300   '
+         DID    C'DF05', 1, 1, 20, 192,   4,  160,  5120, C'FH005   '
+         DID    C'DF06', 1, 2, 20, 192,   1,  258, 16460, C'CD032   '
+         DID    C'DF06', 1, 2, 20, 192,   1,  258, 16460, C'CD032   '
+         DID    C'DF07', 1, 2, 20, 192,   1,  258, 16460, C'CD064   '
+         DID    C'DF07', 1, 2, 20, 192,   3,  772, 49380, C'CD064   '
+         DID    C'DF08', 1, 2, 20, 192,   1,  258, 16460, C'CD096   '
+         DID    C'DF08', 1, 2, 20, 192,   5, 1286, 82300, C'CD096   '
+         DID    C'DF09', 1,10, 20, 192,  40, 2635,674400, C'MH600   '
+         DID    C'DF0A', 1,10, 20, 192,  40, 2635,674400, C'FM600   '
+         DID    C'DF0A', 1, 1, 20, 192,  96,   60,  1920, C'FM600   '
+         DID    C'DF0B', 1, 4, 20, 192,  10, 1286,164600, C'MH160   '
+         DID    C'DF0C', 1, 2, 20, 192,   5, 1286,    00, C'ANY     '
+         DID    C'DF0D', 1, 4, 20, 192,  24, 2670,341280, C'MH340   '
+*
 #endif
 
-uint8   disk_preio(UNIT *uptr, uint16 chan) ;
-uint8   disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) ;
-uint8   disk_haltio(uint16 addr);
-t_stat  disk_srv(UNIT *);
-t_stat  disk_boot(int32, DEVICE *);
-void    disk_ini(UNIT *, t_bool);
-t_stat  disk_reset(DEVICE *);
-t_stat  disk_attach(UNIT *, CONST char *);
-t_stat  disk_detach(UNIT *);
-t_stat  disk_set_type(UNIT * uptr, int32 val, CONST char *cptr, void *desc);
-t_stat  disk_get_type(FILE * st, UNIT * uptr, int32 v, CONST void *desc);
-t_stat  disk_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
-const char  *disk_description (DEVICE *dptr);
+uint8   hsdp_preio(UNIT *uptr, uint16 chan) ;
+uint8   hsdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) ;
+uint8   hsdp_haltio(uint16 addr);
+t_stat  hsdp_srv(UNIT *);
+t_stat  hsdp_boot(int32, DEVICE *);
+void    hsdp_ini(UNIT *, t_bool);
+t_stat  hsdp_reset(DEVICE *);
+t_stat  hsdp_attach(UNIT *, CONST char *);
+t_stat  hsdp_detach(UNIT *);
+t_stat  hsdp_set_type(UNIT * uptr, int32 val, CONST char *cptr, void *desc);
+t_stat  hsdp_get_type(FILE * st, UNIT * uptr, int32 v, CONST void *desc);
+t_stat  hsdp_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
+const char  *hsdp_description (DEVICE *dptr);
 
 /* channel program information */
-CHANP           dda_chp[NUM_UNITS_DISK] = {0};
+CHANP           dpa_chp[NUM_UNITS_HSDP] = {0};
 
-MTAB            disk_mod[] = {
+MTAB            hsdp_mod[] = {
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "TYPE", "TYPE",
-    &disk_set_type, &disk_get_type, NULL, "Type of disk"},
+    &hsdp_set_type, &hsdp_get_type, NULL, "Type of disk"},
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "DEV", "DEV", &set_dev_addr,
         &show_dev_addr, NULL, "Device channel address"},
     {0}
 };
 
-UNIT            dda_unit[] = {
-/* SET_TYPE(9) DM300 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0x800)},       /* 0 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0x801)},       /* 1 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0x802)},       /* 2 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0x803)},       /* 3 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0x804)},       /* 4 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0x805)},       /* 5 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0x806)},       /* 6 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0x807)},       /* 7 */
+UNIT            dpa_unit[] = {
+/* SET_TYPE(3) DM300 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC00)},       /* 0 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC02)},       /* 1 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC04)},       /* 2 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC06)},       /* 3 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC08)},       /* 4 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC0A)},       /* 5 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC0C)},       /* 6 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC0E)},       /* 7 */
 };
 
-DIB             dda_dib = {
-    disk_preio,                                 /* Pre start I/O */
-    disk_startcmd,                              /* Start a command */
+DIB             dpa_dib = {
+    hsdp_preio,                                 /* Pre start I/O */
+    hsdp_startcmd,                              /* Start a command */
     NULL,                                       /* Stop I/O */
     NULL,                                       /* Test I/O */
     NULL,                                       /* Post I/O */
-    disk_ini,                                   /* init function */
-    dda_unit,                                   /* Pointer to units structure */
-    dda_chp,                                    /* Pointer to chan_prg structure */
-    NUM_UNITS_DISK,                             /* number of units defined */
-    0x0f,                                       /* 16 devices - device mask */
-    0x0800,                                     /* parent channel address */
-    0,                                          /* fifo input index */
-    0,                                          /* fifo output index */
-    0,                                          /* interrupt status fifo for channel */
-};
-
-DEVICE          dda_dev = {
-    "DMA", dda_unit, NULL, disk_mod,
-    NUM_UNITS_DISK, 16, 24, 4, 16, 32,
-    NULL, NULL, &disk_reset, &disk_boot, &disk_attach, &disk_detach,
-    &dda_dib, DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
-    NULL, NULL, &disk_help, NULL, NULL, &disk_description
-};
-
-#if NUM_DEVS_DISK > 1
-/* channel program information */
-CHANP           ddb_chp[NUM_UNITS_DISK] = {0};
-
-UNIT            ddb_unit[] = {
-/* SET_TYPE(9) DM300 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0xC00)},       /* 0 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0xC01)},       /* 1 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0xC02)},       /* 2 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0xC03)},       /* 3 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0xC04)},       /* 4 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0xC05)},       /* 5 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0xC06)},       /* 6 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0xC07)},       /* 7 */
-};
-
-
-DIB             ddb_dib = {
-    disk_preio,                                 /* Pre Start I/O */
-    disk_startcmd,                              /* Start a command SIO */
-    NULL,                                       /* Stop I/O HIO */
-    NULL,                                       /* Test I/O TIO */
-    NULL,                                       /* Post I/O */
-    disk_ini,                                   /* init function */
-    ddb_unit,                                   /* Pointer to units structure */
-    ddb_chp,                                    /* Pointer to chan_prg structure */
-    NUM_UNITS_DISK,                             /* number of units defined */
-    0x0f,                                       /* 16 devices - device mask */
+    hsdp_ini,                                   /* init function */
+    dpa_unit,                                   /* Pointer to units structure */
+    dpa_chp,                                    /* Pointer to chan_prg structure */
+    NUM_UNITS_HSDP,                             /* number of units defined */
+    0x0F,                                       /* 16 devices - device mask */
     0x0C00,                                     /* parent channel address */
     0,                                          /* fifo input index */
     0,                                          /* fifo output index */
     0,                                          /* interrupt status fifo for channel */
 };
 
-DEVICE          ddb_dev = {
-    "DMB", ddb_unit, NULL, disk_mod,
-    NUM_UNITS_DISK, 16, 24, 4, 16, 32,
-    NULL, NULL, &disk_reset, &disk_boot, &disk_attach, &disk_detach,
-    &ddb_dib, DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
-    NULL, NULL, &disk_help, NULL, NULL, &disk_description
+DEVICE          dpa_dev = {
+    "DPA", dpa_unit, NULL, hsdp_mod,
+    NUM_UNITS_HSDP, 16, 24, 4, 16, 32,
+    NULL, NULL, &hsdp_reset, &hsdp_boot, &hsdp_attach, &hsdp_detach,
+    &dpa_dib, DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
+    NULL, NULL, &hsdp_help, NULL, NULL, &hsdp_description
+};
+
+#if NUM_DEVS_HSDP > 1
+/* channel program information */
+CHANP           dpb_chp[NUM_UNITS_HSDP] = {0};
+
+UNIT            dpb_unit[] = {
+/* SET_TYPE(3) DM300 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(3), 0), 0, UNIT_ADDR(0x800)},       /* 0 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(3), 0), 0, UNIT_ADDR(0x802)},       /* 1 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(3), 0), 0, UNIT_ADDR(0x804)},       /* 2 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(3), 0), 0, UNIT_ADDR(0x806)},       /* 3 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(3), 0), 0, UNIT_ADDR(0x808)},       /* 4 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(3), 0), 0, UNIT_ADDR(0x80A)},       /* 5 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(3), 0), 0, UNIT_ADDR(0x80C)},       /* 6 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(3), 0), 0, UNIT_ADDR(0x80E)},       /* 7 */
+};
+
+
+DIB             dpb_dib = {
+    hsdp_preio,                                 /* Pre Start I/O */
+    hsdp_startcmd,                              /* Start a command SIO */
+    NULL,                                       /* Stop I/O HIO */
+    NULL,                                       /* Test I/O TIO */
+    NULL,                                       /* Post I/O */
+    hsdp_ini,                                   /* init function */
+    dpb_unit,                                   /* Pointer to units structure */
+    dpb_chp,                                    /* Pointer to chan_prg structure */
+    NUM_UNITS_HSDP,                             /* number of units defined */
+    0x0F,                                       /* 8 devices - device mask */
+    0x0800,                                     /* parent channel address */
+    0,                                          /* fifo input index */
+    0,                                          /* fifo output index */
+    0,                                          /* interrupt status fifo for channel */
+};
+
+DEVICE          dpb_dev = {
+    "DPB", dpb_unit, NULL, hsdp_mod,
+    NUM_UNITS_HSDP, 16, 24, 4, 16, 32,
+    NULL, NULL, &hsdp_reset, &hsdp_boot, &hsdp_attach, &hsdp_detach,
+    &dpb_dib, DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
+    NULL, NULL, &hsdp_help, NULL, NULL, &hsdp_description
 };
 #endif
 
 /* start a disk operation */
-uint8  disk_preio(UNIT *uptr, uint16 chan)
+uint8  hsdp_preio(UNIT *uptr, uint16 chan)
 {
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
@@ -399,18 +420,18 @@ uint8  disk_preio(UNIT *uptr, uint16 chan)
         return SNS_BSY;
     }
 
-    sim_debug(DEBUG_CMD, dptr, "dsk_preio unit=%02x OK\n", unit);
+    sim_debug(DEBUG_CMD, dptr, "hsdp_preio unit=%02x OK\n", unit);
     return 0;                                   /* good to go */
 }
 
-uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
+uint8  hsdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 {
     uint16      addr = GET_UADDR(uptr->CMD);
     DEVICE      *dptr = find_dev_from_unit(uptr);
     int         unit = (uptr - dptr->units);
     uint8       ch;
 
-    sim_debug(DEBUG_CMD, dptr, "disk_startcmd unit %02x cmd %02x CMD %08x\n", unit, cmd, uptr->CMD);
+    sim_debug(DEBUG_CMD, dptr, "hsdp_startcmd unit %02x cmd %02x CMD %08x\n", unit, cmd, uptr->CMD);
     if ((uptr->flags & UNIT_ATT) == 0) {        /* unit attached status */
         uptr->SNS |= SNS_INTVENT;               /* unit intervention required */
         if (cmd != DSK_SNS)                     /* we are completed with unit check status */
@@ -424,46 +445,46 @@ uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     if ((uptr->CMD & 0xff00) != 0) {            /* if any status info, we are busy */
         return SNS_BSY;
     }
-    sim_debug(DEBUG_CMD, dptr, "disk_startcmd CMD continue unit=%02x cmd %02x\n", unit, cmd);
+    sim_debug(DEBUG_CMD, dptr, "hsdp_startcmd CMD continue unit=%02x cmd %02x\n", unit, cmd);
 
     if ((uptr->flags & UNIT_ATT) == 0) {        /* see if unit is attached */
         if (cmd == DSK_SNS) {                   /* not attached, is cmd Sense 0x04 */
-            sim_debug(DEBUG_CMD, dptr, "disk_startcmd CMD sense\n");
+            sim_debug(DEBUG_CMD, dptr, "hsdp_startcmd CMD sense\n");
             /* bytes 0,1 - Cyl entry from STAR reg in STAR */
             ch = (uptr->STAR >> 24) & 0xff;
-            sim_debug(DEBUG_DETAIL, dptr, "disk_startcmd sense STAR b0 unit=%02x 1 %02x\n",
+            sim_debug(DEBUG_DETAIL, dptr, "hsdp_startcmd sense STAR b0 unit=%02x 1 %02x\n",
                 unit, ch);
             chan_write_byte(addr, &ch) ;
             ch = (uptr->STAR >> 16) & 0xff;
-            sim_debug(DEBUG_DETAIL, dptr, "disk_startcmd sense STAR b1 unit=%02x 1 %02x\n",
+            sim_debug(DEBUG_DETAIL, dptr, "hsdp_startcmd sense STAR b1 unit=%02x 1 %02x\n",
                 unit, ch);
             chan_write_byte(addr, &ch) ;
             /* byte 2 - Track entry from STAR reg in STAR */
             ch = (uptr->STAR >> 8) & 0xff;
-            sim_debug(DEBUG_DETAIL, dptr, "disk_startcmd sense STAR b2 unit=%02x 1 %02x\n",
+            sim_debug(DEBUG_DETAIL, dptr, "hsdp_startcmd sense STAR b2 unit=%02x 1 %02x\n",
                 unit, ch);
             chan_write_byte(addr, &ch) ;
             /* byte 3 - Sector entry from STAR reg in STAR */
             ch = (uptr->STAR) & 0xff;
-            sim_debug(DEBUG_DETAIL, dptr, "disk_startcmd sense STAR b3 unit=%02x 1 %02x\n",
+            sim_debug(DEBUG_DETAIL, dptr, "hsdp_startcmd sense STAR b3 unit=%02x 1 %02x\n",
                 unit, ch);
             chan_write_byte(addr, &ch) ;
             /* bytes 4 - mode reg, byte 0 of SNS */
             ch = (uptr->SNS >> 24) & 0xff;      /* return the sense data for device */
-            sim_debug(DEBUG_DETAIL, dptr, "disk_startcmd sense unit=%02x 1 %02x\n",
+            sim_debug(DEBUG_DETAIL, dptr, "hsdp_startcmd sense unit=%02x 1 %02x\n",
                 unit, ch);
             chan_write_byte(addr, &ch) ;
             /* bytes 5-7 - status bytes, bytes 1-3 of SNS */
             ch = (uptr->SNS >> 16) & 0xff;
-            sim_debug(DEBUG_DETAIL, dptr, "disk_startcmd sense unit=%02x %02x\n",
+            sim_debug(DEBUG_DETAIL, dptr, "hsdp_startcmd sense unit=%02x %02x\n",
                 unit, ch);
             chan_write_byte(addr, &ch) ;
             ch = (uptr->SNS >> 8) & 0xff;
-            sim_debug(DEBUG_DETAIL, dptr, "disk_startcmd sense unit=%02x 3 %02x\n",
+            sim_debug(DEBUG_DETAIL, dptr, "hsdp_startcmd sense unit=%02x 3 %02x\n",
                 unit, ch);
             chan_write_byte(addr, &ch) ;
             ch = (uptr->SNS) & 0xff;
-            sim_debug(DEBUG_DETAIL, dptr, "disk_startcmd sense unit=%02x 4 %02x\n",
+            sim_debug(DEBUG_DETAIL, dptr, "hsdp_startcmd sense unit=%02x 4 %02x\n",
                 unit, ch);
             chan_write_byte(addr, &ch) ;
             /* bytes 8-11 - drive attribute register (DATR) entries from uptr->ATTR via
@@ -499,7 +520,7 @@ uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         uint32  mema;                           /* memory address */
         uint32  i;
         UNIT    *up = dptr->units;              /* first unit for this device */
-        sim_debug(DEBUG_CMD, dptr, "disk_startcmd starting inch cmd addr %04x STAR %08x\n",
+        sim_debug(DEBUG_CMD, dptr, "hsdp_startcmd starting inch cmd addr %04x STAR %08x\n",
                    addr, uptr->STAR);
         /* STAR (u4) has IOCD word 1 contents.  For the disk processor it contains */
         /* a pointer to the INCH buffer followed by 8 drive attribute words that */
@@ -510,7 +531,7 @@ uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         mema = (uint32)uptr->STAR;              /* get memory address of buffer */
         uptr->STAR = M[mema>>2];                /* get status buffer address for XIO return status */
         sim_debug(DEBUG_CMD, dptr,
-             "disk_startcmd starting inch cmd addr %04x STAR %08x mema %08x units %02x\n",
+             "hsdp_startcmd starting inch cmd addr %04x STAR %08x mema %08x units %02x\n",
             addr, uptr->STAR, mema, dptr->numunits);
         /* the next 8 words have drive data for each unit */
         /* WARNING 8 drives must be defined for this controller */
@@ -518,11 +539,11 @@ uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         for (i=0; i<dptr->numunits && i<8; i++) {   /* process all drives */
             up->ATTR = M[(mema>>2)+i+1];        /* save each unit's drive data */
             sim_debug(DEBUG_CMD, dptr,
-                "disk_startcmd ATTR data %08x unit %02x flags %02x sec %02x MHD %02x FHD %02x\n",
+                "hsdp_startcmd ATTR data %08x unit %02x flags %02x sec %02x MHD %02x FHD %02x\n",
                 up->ATTR, i, (up->ATTR >> 24)&0xff, (up->ATTR >> 16)&0xff, (up->ATTR >> 8)&0xff, (up->ATTR&0xff));
             up++;                               /* next unit for this device */
         }
-        sim_debug(DEBUG_CMD, dptr, "disk_startcmd done inch cmd addr %04x\n", addr);
+        sim_debug(DEBUG_CMD, dptr, "hsdp_startcmd done inch cmd addr %04x\n", addr);
         uptr->CMD |= DSK_CMDMSK;                /* use 0xff for inch, just need int */
         sim_activate(uptr, 20);                 /* start things off */
         return 0;
@@ -537,7 +558,7 @@ uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 
         uptr->CMD |= cmd;                       /* save cmd */
         sim_debug(DEBUG_CMD, dptr,
-             "disk_startcmd starting disk seek r/w cmd %02x addr %04x\n", cmd, addr);
+             "hsdp_startcmd starting disk seek r/w cmd %02x addr %04x\n", cmd, addr);
         sim_activate(uptr, 20);                 /* start things off */
         return 0;
 
@@ -552,7 +573,7 @@ uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         break;
     }
     sim_debug(DEBUG_CMD, dptr,
-        "disk_startcmd done with disk_startcmd %02x addr %04x SNS %08x\n",
+        "hsdp_startcmd done with hsdp_startcmd %02x addr %04x SNS %08x\n",
               cmd, addr, uptr->SNS);
     if (uptr->SNS & 0xff)                       /* any other cmd is error */
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
@@ -561,7 +582,7 @@ uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 }
 
 /* Handle processing of disk requests. */
-t_stat disk_srv(UNIT * uptr)
+t_stat hsdp_srv(UNIT * uptr)
 {
     uint16          chsa = GET_UADDR(uptr->CMD);
     DEVICE          *dptr = find_dev_from_unit(uptr);
@@ -576,14 +597,14 @@ t_stat disk_srv(UNIT * uptr)
     int             len;
     int             i;
     uint8           ch;
-    int             tsize = disk_type[type].spt * disk_type[type].ssiz * 4; /* get track size in bytes */
-    int             ssize = disk_type[type].ssiz * 4;   /* disk sector size in bytes */
+    int             tsize = hsdp_type[type].spt * hsdp_type[type].ssiz * 4; /* get track size in bytes */
+    int             ssize = hsdp_type[type].ssiz * 4;   /* disk sector size in bytes */
     int             tstart;
-    uint8           buf2[768];
-    uint8           buf[768];
+    uint8           buf2[1024];
+    uint8           buf[1024];
 
     sim_debug(DEBUG_DETAIL, &dda_dev,
-              "disk_srv entry unit %02x cmd %02x chsa %04x chan %04x count %04x\n",
+              "hsdp_srv entry unit %02x cmd %02x chsa %04x chan %04x count %04x\n",
              unit, cmd, chsa, chsa>>8, chp->ccw_count);
 
     if ((uptr->flags & UNIT_ATT) == 0) {        /* unit attached status */
@@ -592,7 +613,7 @@ t_stat disk_srv(UNIT * uptr)
             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     }
 
-    sim_debug(DEBUG_CMD, dptr, "disk_srv cmd=%02x chsa %04x count %04x\n",
+    sim_debug(DEBUG_CMD, dptr, "hsdp_srv cmd=%02x chsa %04x count %04x\n",
               cmd, chsa, chp->ccw_count);
     switch (cmd) {
     case 0:                                     /* No command, stop disk */
@@ -600,7 +621,7 @@ t_stat disk_srv(UNIT * uptr)
 
     case DSK_CMDMSK:        /* use 0xff for inch, just need int */
         uptr->CMD &= ~(0xffff);                 /* remove old cmd */
-        sim_debug(DEBUG_CMD, dptr, "disk_srv cmd=%02x chsa %04x count %04x completed\n",
+        sim_debug(DEBUG_CMD, dptr, "hsdp_srv cmd=%02x chsa %04x count %04x completed\n",
                  cmd, chsa, chp->ccw_count);
 #ifdef FIX4MPX
         chan_end(chsa, SNS_CHNEND);             /* return just channel end OK */
@@ -611,7 +632,7 @@ t_stat disk_srv(UNIT * uptr)
 
     case DSK_NOP:           /* NOP 0x03 */
         uptr->CMD &= ~(0xffff);                 /* remove old cmd */
-        sim_debug(DEBUG_CMD, dptr, "disk_srv cmd NOP chsa %04x count %04x completed\n",
+        sim_debug(DEBUG_CMD, dptr, "hsdp_srv cmd NOP chsa %04x count %04x completed\n",
             chsa, chp->ccw_count);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
         break;
@@ -667,8 +688,8 @@ t_stat disk_srv(UNIT * uptr)
                         data->cyl++;            /* Seek 1 cyl */
                         sim_activate(uptr, 200);
                     }
-                    if (data->cyl >= (int)disk_type[type].cyl)   /* test for over max */
-                        data->cyl = disk_type[type].cyl-1;  /* make max */
+                    if (data->cyl >= (int)hsdp_type[type].cyl)   /* test for over max */
+                        data->cyl = hsdp_type[type].cyl-1;  /* make max */
                 } else {
                     if (i < -50) {
                         data->cyl -= 50;        /* seek 50 cyl */
@@ -714,9 +735,9 @@ rezero:
 
         /* FIXME do something with FHD here */
         /* Check if seek valid */
-        if (cyl > disk_type[type].cyl ||
-            trk >= disk_type[type].nhds ||
-            buf[3] > disk_type[type].spt)  {
+        if (cyl > hsdp_type[type].cyl ||
+            trk >= hsdp_type[type].nhds ||
+            buf[3] > hsdp_type[type].spt)  {
             sim_debug(DEBUG_CMD, dptr,
                    "dsk_srv seek ERROR cyl %04x trk %02x sec %02x unit=%02x\n",
                             cyl, trk, buf[3], unit);
@@ -731,7 +752,7 @@ rezero:
         uptr->CMD |= DSK_STAR;                  /* show we have seek STAR in STAR */
         /* calc the sector address of data */
         /* calculate file position in bytes of requested sector */
-        tstart = (cyl * disk_type[type].nhds * tsize) + (trk * tsize) + (buf[3] * 0x300);
+        tstart = (cyl * hsdp_type[type].nhds * tsize) + (trk * tsize) + (buf[3] * 1024);
         data->tpos = trk;                       /* save the track/head number */
         data->spos = buf[3];                    /* save the sector number */
         sim_debug(DEBUG_DETAIL, dptr, "dsk_srv seek start %04x trk %02x sec %02x\n",
@@ -814,7 +835,7 @@ rezero:
             }
 
             sim_debug(DEBUG_CMD, dptr,
-                  "disk_srv after READ chsa %04x count %04x\n", chsa, chp->ccw_count);
+                  "hsdp_srv after READ chsa %04x count %04x\n", chsa, chp->ccw_count);
             /* process the next sector of data */
             for (i=0; i<len; i++) {
                 ch = buf[i];                    /* get a char from buffer */
@@ -833,13 +854,13 @@ rezero:
                 ssize, data->cyl, data->tpos, data->spos);
             data->spos++;
             /* set sector to read next one */
-            if (data->spos >= (disk_type[type].spt)) {
+            if (data->spos >= (hsdp_type[type].spt)) {
                 data->spos = 0;                 /* number of sectors per track */
                 data->tpos++;                   /* track position */
-                if (data->tpos >= (disk_type[type].nhds)) {
+                if (data->tpos >= (hsdp_type[type].nhds)) {
                     data->tpos = 0;             /* number of tracks per cylinder */
                     data->cyl++;                /* cylinder position */
-                    if (data->cyl >= (int)(disk_type[type].cyl)) {
+                    if (data->cyl >= (int)(hsdp_type[type].cyl)) {
                         /* EOM reached, abort */
                         uptr->CMD &= ~(0xffff); /* remove old status bits & cmd */
                         chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -907,13 +928,13 @@ rddone:
                 "DISK WR to sec end %0x4x bytes end %04x to diskfile cyl %04x hds %02x sec %02x\n",
                 len, ssize, data->cyl, data->tpos, data->spos);
             data->spos++;
-            if (data->spos >= (disk_type[type].spt)) {
+            if (data->spos >= (hsdp_type[type].spt)) {
                 data->spos = 0;                 /* number of sectors per track */
                 data->tpos++;                   /* track position */
-                if (data->tpos >= (disk_type[type].nhds)) {
+                if (data->tpos >= (hsdp_type[type].nhds)) {
                     data->tpos = 0;             /* number of tracks per cylinder */
                     data->cyl++;                /* cylinder position */
-                    if (data->cyl >= (int)(disk_type[type].cyl)) {
+                    if (data->cyl >= (int)(hsdp_type[type].cyl)) {
                         /* EOM reached, abort */
                         sim_debug(DEBUG_DETAIL, dptr,
                             "Error %08x on write %04x to diskfile cyl %04x hds %02x sec %02x\n",
@@ -937,13 +958,13 @@ wrdone:
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
         break;
     }
-    sim_debug(DEBUG_DETAIL, dptr, "disk_srv done cmd=%02x chsa %04x count %04x\n",
+    sim_debug(DEBUG_DETAIL, dptr, "hsdp_srv done cmd=%02x chsa %04x count %04x\n",
         cmd, chsa, chp->ccw_count);
     return SCPE_OK;
 }
 
 /* initialize the disk */
-void disk_ini(UNIT *uptr, t_bool f)
+void hsdp_ini(UNIT *uptr, t_bool f)
 {
     DEVICE  *dptr = find_dev_from_unit(uptr);
     int     i = GET_TYPE(uptr->flags);
@@ -951,20 +972,20 @@ void disk_ini(UNIT *uptr, t_bool f)
     uptr->CMD &= ~0xffff;                       /* clear out the flags but leave ch/sa */
     /* capacity is total allocation units time sectors per allocation unit */
     /* total sectors on disk */
-    uptr->capac  = disk_type[i].taus * disk_type[i].spau;
+    uptr->capac  = hsdp_type[i].taus * hsdp_type[i].spau;
 
-    sim_debug(DEBUG_EXP, &dda_dev, "DMA init device %s on unit DMA%.1x cap %x\n",
+    sim_debug(DEBUG_EXP, &dda_dev, "DPA init device %s on unit DPA%.1x cap %x\n",
         dptr->name, GET_UADDR(uptr->CMD), uptr->capac);
 }
 
-t_stat disk_reset(DEVICE * dptr)
+t_stat hsdp_reset(DEVICE * dptr)
 {
     /* add reset code here */
     return SCPE_OK;
 }
 
 /* attach the selected file to the disk */
-t_stat disk_attach(UNIT *uptr, CONST char *file)
+t_stat hsdp_attach(UNIT *uptr, CONST char *file)
 {
     uint16          addr = GET_UADDR(uptr->CMD);
     int             type = GET_TYPE(uptr->flags);
@@ -979,12 +1000,12 @@ t_stat disk_attach(UNIT *uptr, CONST char *file)
     if ((r = attach_unit(uptr, file)) != SCPE_OK)
         return r;
 
-    if (disk_type[type].name == 0) {            /* does the assigned disk have a name */
+    if (hsdp_type[type].name == 0) {            /* does the assigned disk have a name */
         detach_unit(uptr);                      /* no, reject */
         return SCPE_FMT;                        /* error */
     }
 
-    /* get a buffer to hold disk_t structure */
+    /* get a buffer to hold hsdp_t structure */
     /* extended data structure per unit */
     if ((data = (struct ddata_t *)calloc(1, sizeof(struct ddata_t))) == 0) {
         detach_unit(uptr);
@@ -993,14 +1014,14 @@ t_stat disk_attach(UNIT *uptr, CONST char *file)
 
     uptr->DDATA = (void *)data;                 /* save pointer to structure in DDATA */
     /* track size in bytes is sectors/track times words/sector time 4 bytse/word */
-    tsize = disk_type[type].spt * disk_type[type].ssiz * 4; /* get track size in bytes */
-    uptr->capac = disk_type[type].taus * disk_type[type].spau;
+    tsize = hsdp_type[type].spt * hsdp_type[type].ssiz * 4; /* get track size in bytes */
+    uptr->capac = hsdp_type[type].taus * hsdp_type[type].spau;
                                                 /* disk capacity in sectors */
-    ssize = disk_type[type].ssiz * 4;           /* disk sector size in bytes */
+    ssize = hsdp_type[type].ssiz * 4;           /* disk sector size in bytes */
     uptr->capac *= ssize;                       /* disk capacity in bytes */
 
     sim_debug(DEBUG_CMD, dptr, "Disk taus %d spau %d ssiz %d cap %d\n",
-        disk_type[type].taus, disk_type[type].spau, disk_type[type].ssiz * 4,
+        hsdp_type[type].taus, hsdp_type[type].spau, hsdp_type[type].ssiz * 4,
         uptr->capac);                           /* disk capacity */
 
     if ((sim_fseek(uptr->fileref, 0, SEEK_SET)) != 0) { /* seek home */
@@ -1016,7 +1037,7 @@ t_stat disk_attach(UNIT *uptr, CONST char *file)
 }
 
 /* detach a disk device */
-t_stat disk_detach(UNIT * uptr) {
+t_stat hsdp_detach(UNIT * uptr) {
     struct ddata_t       *data = (struct ddata_t *)uptr->DDATA;
 
     if (data != 0) {
@@ -1028,7 +1049,7 @@ t_stat disk_detach(UNIT * uptr) {
 }
 
 /* boot from the specified disk unit */
-t_stat disk_boot(int32 unit_num, DEVICE * dptr) {
+t_stat hsdp_boot(int32 unit_num, DEVICE * dptr) {
     UNIT    *uptr = &dptr->units[unit_num];     /* find disk unit number */
 
     sim_debug(DEBUG_CMD, &dda_dev, "Disk Boot dev/unit %x\n", GET_UADDR(uptr->CMD));
@@ -1040,7 +1061,7 @@ t_stat disk_boot(int32 unit_num, DEVICE * dptr) {
 }
 
 /* Disk option setting commands */
-t_stat disk_set_type(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
+t_stat hsdp_set_type(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 {
     int     i;
 
@@ -1050,58 +1071,58 @@ t_stat disk_set_type(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
         return SCPE_IERR;
     if (uptr->flags & UNIT_ATT)
         return SCPE_ALATT;
-    for (i = 0; disk_type[i].name != 0; i++) {
-        if (strcmp(disk_type[i].name, cptr) == 0) {
+    for (i = 0; hsdp_type[i].name != 0; i++) {
+        if (strcmp(hsdp_type[i].name, cptr) == 0) {
             uptr->flags &= ~UNIT_TYPE;
             uptr->flags |= SET_TYPE(i);
-            uptr->capac  = disk_type[i].taus * disk_type[i].spau;
+            uptr->capac  = hsdp_type[i].taus * hsdp_type[i].spau;
             return SCPE_OK;
         }
     }
     return SCPE_ARG;
 }
 
-t_stat disk_get_type(FILE * st, UNIT * uptr, int32 v, CONST void *desc)
+t_stat hsdp_get_type(FILE * st, UNIT * uptr, int32 v, CONST void *desc)
 {
     if (uptr == NULL)
         return SCPE_IERR;
     fputs("TYPE=", st);
-    fputs(disk_type[GET_TYPE(uptr->flags)].name, st);
+    fputs(hsdp_type[GET_TYPE(uptr->flags)].name, st);
     return SCPE_OK;
 }
 
 /* help information for disk */
-t_stat disk_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
+t_stat hsdp_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
     const char *cptr)
 {
     int i;
-    fprintf (st, "SEL 2314 Disk Processor II\r\n");
+    fprintf (st, "SEL 8064 High Speed Disk Processor\r\n");
     fprintf (st, "Use:\r\n");
     fprintf (st, "    sim> SET %sn TYPE=type\r\n", dptr->name);
     fprintf (st, "Type can be: ");
-    for (i = 0; disk_type[i].name != 0; i++) {
-        fprintf(st, "%s", disk_type[i].name);
-        if (disk_type[i+1].name != 0)
+    for (i = 0; hsdp_type[i].name != 0; i++) {
+        fprintf(st, "%s", hsdp_type[i].name);
+        if (hsdp_type[i+1].name != 0)
         fprintf(st, ", ");
     }
     fprintf (st, ".\nEach drive has the following storage capacity:\r\n");
-    for (i = 0; disk_type[i].name != 0; i++) {
+    for (i = 0; hsdp_type[i].name != 0; i++) {
         /* disk capacity in sectors */
-        int32 capac = disk_type[i].taus * disk_type[i].spau;
-        int32 ssize = disk_type[i].ssiz * 4;    /* disk sector size in bytes */
+        int32 capac = hsdp_type[i].taus * hsdp_type[i].spau;
+        int32 ssize = hsdp_type[i].ssiz * 4;    /* disk sector size in bytes */
         int32 size = capac * ssize;             /* disk capacity in bytes */
         size /= 1024;                           /* make KB */
         size = (10 * size) / 1024;              /* size in MB * 10 */
-        fprintf(st, "      %-8s %4d.%1d MB\r\n", disk_type[i].name, size/10, size%10);
+        fprintf(st, "      %-8s %4d.%1d MB\r\n", hsdp_type[i].name, size/10, size%10);
     }
     fprint_set_help(st, dptr);
     fprint_show_help(st, dptr);
     return SCPE_OK;
 }
 
-const char *disk_description (DEVICE *dptr)
+const char *hsdp_description (DEVICE *dptr)
 {
-    return "SEL 2314 Disk Processor II";
+    return "SEL 8064 High Speed Disk Processor";
 }
 
 #endif

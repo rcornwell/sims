@@ -32,30 +32,29 @@ extern uint32 PSD[];
 
 /* SCP data structures and interface routines
 
-   The interface between the simulator control package (SCP) and the
-   simulator consists of the following routines and data structures
+The interface between the simulator control package (SCP) and the
+simulator consists of the following routines and data structures
 
-   sim_name              simulator name string
-   sim_devices[]         array of pointers to simulated devices
-   sim_PC                pointer to saved PC register descriptor
-   sim_interval          simulator interval to next event (in sel32_cpu.c)
-   sim_stop_messages[]   array of pointers to stop messages
-   sim_instr()           instruction execution routine (in sel32_cpu.c)
-   sim_load()            binary loader routine
-   sim_emax              maximum number of words for examine
+sim_name            simulator name string
+sim_devices[]       array of pointers to simulated devices
+sim_PC              pointer to saved PC register descriptor
+sim_interval        simulator interval to next event (in sel32_cpu.c)
+sim_stop_messages[] array of pointers to stop messages
+sim_instr()         instruction execution routine (in sel32_cpu.c)
+sim_load()          binary loader routine
+sim_emax            maximum number of words for examine
 
-   In addition, the simulator must supply routines to print and parse
-   architecture specific formats
+In addition, the simulator must supply routines to print and parse
+architecture specific formats
 
-   fprint_sym              print symbolic output
-   fparse_sym              parse symbolic input
+fprint_sym          print symbolic output
+fparse_sym          parse symbolic input
 
 */
 
-char sim_name[] = "SEL 32";                 /* our simulator name */
+char sim_name[] = "SEL-32";                 /* our simulator name */
 REG *sim_PC = &cpu_reg[0];
 
-//old int32 sim_emax = 1;                         /* maximum number of instructions/words to examine */
 int32 sim_emax = 4;                         /* maximum number of instructions/words to examine */
 
 DEVICE *sim_devices[] = {
@@ -95,6 +94,12 @@ DEVICE *sim_devices[] = {
         &sda_dev,
 #if NUM_DEVS_SCFI > 1
         &sdb_dev,
+#endif
+#endif
+#ifdef NUM_DEVS_HSDP
+        &dpa_dev,
+#if NUM_DEVS_HSDP > 1
+        &dpb_dev,
 #endif
 #endif
 #ifdef NUM_DEVS_COM
@@ -142,10 +147,8 @@ int get_word(FILE *fileref, uint32 *word)
     if (sim_fread(cbuf, 1, 4, fileref) != 4)
         return 1;                           /* read error or eof */
     /* byte swap while reading data */
-    *word = ((cbuf[0]) << 24) |
-           ((cbuf[1]) << 16) |
-           ((cbuf[2]) << 8) |
-           ((cbuf[3]));
+    *word = ((cbuf[0]) << 24) | ((cbuf[1]) << 16) |
+            ((cbuf[2]) << 8) | ((cbuf[3]));
     return 0;                               /* all OK */
 }
 

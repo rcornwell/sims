@@ -412,7 +412,8 @@ loop:
     /* Check if not chaining data */
     if ((chp->ccw_flags & FLAG_DC) == 0) {
         chp->ccw_cmd = (word >> 24) & 0xff;         /* not DC, so set command from IOCD wd 1 */
-        sim_debug(DEBUG_EXP, &cpu_dev, "load_ccw No DC, flags %04x cmd %02x\n", chp->ccw_flags, chp->ccw_cmd);
+        sim_debug(DEBUG_EXP, &cpu_dev,
+            "load_ccw No DC, flags %04x cmd %02x\n", chp->ccw_flags, chp->ccw_cmd);
         docmd = 1;                                  /* show we have a command */
     }
     /* Set up for this command */
@@ -449,6 +450,15 @@ loop:
         if (uptr == 0)
             return 1;                               /* if none, error */
 
+#ifdef DO_DYNAMIC_DEBUG
+        if ((chp->chan_dev == 0x1000) && ((chp->ccw_cmd & 0xff) == 0x80)) {
+            uint32 addr = chp->ccw_addr;            /* set the data address */
+            /* start debugging */
+            cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP);
+            sim_debug(DEBUG_CMD, &cpu_dev, "cmd 80 MT wds @ addr %08x %08x %08x %08x %08x\n",
+                addr, M[addr>>2], M[(addr+4)>>2], M[(addr+8)>>2], M[(addr+12)>>2]);
+        }
+#endif
 #ifndef CON_BUG
 #ifdef DO_DYNAMIC_DEBUG
         if ((chp->chan_dev == 0x7efc) && ((chp->ccw_cmd & 0xff) == 0x03) && (chp->ccw_count == 0))
@@ -969,13 +979,13 @@ t_stat startxio(uint16 lchsa, uint32 *status) {
     /* start processing the IOCL */
     if (load_ccw(chp, 0) || (chp->chan_status & STATUS_PCI)) {
         /* we have an error or user requested interrupt, return status */
-        store_csw(chp);                             /* store the status in the inch status dw */
-        sim_debug(DEBUG_CMD, &cpu_dev, "startxio store csw CC1 chan %04x status %08x\n",
+        sim_debug(DEBUG_CMD, &cpu_dev, "startxio store csw CC2 chan %04x status %08x\n",
                 chan, chp->chan_status);
+        store_csw(chp);                             /* store the status in the inch status dw */
         chp->chan_status &= ~STATUS_PCI;            /* remove PCI status bit */
         dev_status[chsa] = 0;                       /* no device status */
-        *status = CC1BIT;                           /* status stored, so CC1 */
-        return SCPE_OK;                             /* CC1 (0x40) status stored */
+        *status = CC2BIT;                           /* status stored, so CC2 */
+        return SCPE_OK;                             /* CC2 (0x20) status stored */
     }
 
     *status = CC1BIT;                               /* CCs = 1, SIO accepted & queued, will not echo status  */
