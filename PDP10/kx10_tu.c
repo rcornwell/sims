@@ -122,7 +122,7 @@
 
 /* TUDT - 06 - drive type */
 
-/* TULA - 07 - look ahead register */
+/* TULA - 07 - Check Character */
 
 /* TUSN  - 10 - serial number */
 
@@ -338,6 +338,10 @@ tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
     case  007:  /* look ahead */
     case  011:  /* tape control register */
         tu_tcr[ctlr]  = data & 0177777 ;
+        if ((tu_tcr[ctlr] & TC_DENS) == TC_1600)
+            uptr->STATUS |= DS_PES;
+        else
+            uptr->STATUS &= ~DS_PES;
         break;
     default:
         uptr->STATUS |= ER1_ILR;
@@ -469,10 +473,8 @@ void tu_error(UNIT * uptr, t_stat r)
          break;
 
     }
-    if (uptr->CMD & CS_ATA) {
+    if (uptr->CMD & CS_ATA)
         rh_setattn(rhc, 0);
-//        rhc->attn = 1;
-    }
     uptr->CMD &= ~(CS_MOTION|CS_PIP|CS1_GO);
     sim_debug(DEBUG_EXP, dptr, "Setting status %d\n", r);
 }
@@ -517,13 +519,13 @@ t_stat tu_srv(UNIT * uptr)
          } else {
              uptr->CMD &= ~(CS_MOTION|CS_PIP);
              uptr->CMD |= CS_CHANGE|CS_ATA;
-             tu_error(uptr, sim_tape_rewind(uptr));
+             rh_setattn(rhc, 0);
+             (void)sim_tape_rewind(uptr);
          }
          return SCPE_OK;
 
     case FNC_UNLOAD:
          sim_debug(DEBUG_DETAIL, dptr, "%s%o unload\n", dptr->name, unit);
-         uptr->CMD &= ~(CS1_GO);
          uptr->CMD |= CS_CHANGE|CS_ATA;
          tu_error(uptr, sim_tape_detach(uptr));
          return SCPE_OK;
@@ -642,7 +644,6 @@ t_stat tu_srv(UNIT * uptr)
              uptr->CMD &= ~CS_PIP;
              if (tu_frame[ctlr] == 0) {
                   uptr->STATUS |= ER1_NEF;
-                  uptr->CMD &= ~(CS1_GO);
                   uptr->CMD |= CS_ATA;
                   rhc->attn = 1;
                   tu_error(uptr, MTSE_OK);
@@ -701,6 +702,7 @@ t_stat tu_srv(UNIT * uptr)
          break;
 
     case FNC_WTM:
+         uptr->CMD &= ~CS_PIP;
          uptr->CMD |= CS_ATA;
          if ((uptr->flags & MTUF_WLK) != 0) {
              tu_error(uptr, MTSE_WRP);
@@ -711,6 +713,7 @@ t_stat tu_srv(UNIT * uptr)
          return SCPE_OK;
 
     case FNC_ERASE:
+         uptr->CMD &= ~CS_PIP;
          uptr->CMD |= CS_ATA;
          if ((uptr->flags & MTUF_WLK) != 0) {
              tu_error(uptr, MTSE_WRP);
@@ -723,6 +726,7 @@ t_stat tu_srv(UNIT * uptr)
     case FNC_SPACEF:
     case FNC_SPACEB:
          sim_debug(DEBUG_DETAIL, dptr, "%s%o space %o\n", dptr->name, unit, GET_FNC(uptr->CMD));
+         uptr->CMD &= ~CS_PIP;
          if (tu_frame[ctlr] == 0) {
               uptr->STATUS |= ER1_NEF;
               uptr->CMD |= CS_ATA;
@@ -735,6 +739,7 @@ t_stat tu_srv(UNIT * uptr)
              r = sim_tape_sprecf(uptr, &reclen);
          else
              r = sim_tape_sprecr(uptr, &reclen);
+         tu_frame[ctlr] = 0177777 & (tu_frame[ctlr] + 1);
          switch (r) {
          case MTSE_OK:            /* no error */
               break;
@@ -744,22 +749,23 @@ t_stat tu_srv(UNIT * uptr)
               /* Fall Through */
 
          case MTSE_TMK:           /* tape mark */
+              /* Position just after mark */
+              if (GET_FNC(uptr->CMD) == FNC_SPACEB && r == MTSE_TMK)
+                  sim_tape_sprecf(uptr, &reclen);
          case MTSE_EOM:           /* end of medium */
               if (tu_frame[ctlr] != 0)
                  uptr->STATUS |= ER1_FCE;
-              uptr->CMD &= ~(CS1_GO);
               uptr->CMD |= CS_ATA;
               /* Stop motion if we recieve any of these */
               tu_error(uptr, r);
               return SCPE_OK;
          }
-         tu_frame[ctlr] = 0177777 & (tu_frame[ctlr] + 1);
          if (tu_frame[ctlr] == 0) {
             uptr->CMD |= CS_ATA;
             tu_error(uptr, MTSE_OK);
             return SCPE_OK;
          } else
-            sim_activate(uptr, 5000);
+            sim_activate(uptr, reclen * 100);
          return SCPE_OK;
     }
     sim_activate(uptr, 100);
@@ -858,9 +864,7 @@ tu_attach(UNIT * uptr, CONST char *file)
     r = sim_tape_attach_ex(uptr, file, 0, 0);
     if (r == SCPE_OK) {
         uptr->CMD = CS_ATA|CS_CHANGE;
-        rhc->attn = 1;
-        if ((rhc->status & IADR_ATTN) != 0)
-           rh_setirq(rhc);
+        rh_setattn(rhc, 0);
     }
     return r;
 }
@@ -874,9 +878,7 @@ tu_detach(UNIT * uptr)
     /* Find df10 */
     uptr->STATUS = 0;
     uptr->CMD = CS_ATA|CS_CHANGE;
-    rhc->attn = 1;
-    if ((rhc->status & IADR_ATTN) != 0)
-       rh_setirq(rhc);
+    rh_setattn(rhc, 0);
     return sim_tape_detach(uptr);
 }
 

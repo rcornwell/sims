@@ -496,10 +496,8 @@ rh_devirq(uint32 dev, t_addr addr) {
 void rh_setattn(struct rh_if *rhc, int unit)
 {
     rhc->attn |= 1<<unit;
-    if (rhc->imode != 2 && rhc->status & BUSY)
-        return;
-    if ((rhc->status & IADR_ATTN) != 0)
-        rh_setirq(rhc);
+    if ((rhc->status & BUSY) == 0 && (rhc->status & IADR_ATTN) != 0) 
+        set_interrupt(rhc->devnum, rhc->status);
 }
 
 /* Decrement block count for RH20, nop for RH10 */
@@ -601,11 +599,12 @@ void rh20_setup(struct rh_if *rhc)
      rhc->ptcr = rhc->stcr;
      /* Read drive status */
      rhc->drive = (rhc->ptcr >> 18) & 07;
-     rhc->status &= ~(RH20_SCR_FULL|PI_ENABLE|RH20_XEND);
+     rhc->status &= ~(RH20_DATA_OVR|RH20_CHAN_RDY|RH20_DR_RESP|RH20_CHAN_ERR|RH20_SHRT_WC|\
+                      RH20_LONG_WC|RH20_DR_EXC|RH20_SCR_FULL|PI_ENABLE|RH20_XEND);
      rhc->status |= RH20_PCR_FULL;
-     reg = rhc->dev_read(dptr, rhc, 1);
-     if ((reg & (DS_DRY|DS_DPR|DS_ERR)) != (DS_DRY|DS_DPR))
-         return;
+//     reg = rhc->dev_read(dptr, rhc, 1);
+ //    if ((reg & (DS_DRY|DS_DPR|DS_ERR)) != (DS_DRY|DS_DPR))
+  //       return;
      if (rhc->status & RH20_SBAR) {
          rhc->drive = (rhc->pbar >> 18) & 07;
          rhc->dev_write(dptr, rhc, 5, (rhc->pbar & 0177777));
