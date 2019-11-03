@@ -225,6 +225,10 @@
 				>  
 			</File>
 			<File
+				RelativePath="..\SEL32\sel32_hsdp.c"
+				>  
+			</File>
+			<File
 				RelativePath="..\SEL32\sel32_iop.c"
 				>  
 			</File>
