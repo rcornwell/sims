@@ -829,7 +829,7 @@ rezero:
             }
 
             sim_debug(DEBUG_CMD, dptr,
-                "DISK READ from sec end bytes end %04x from diskfile cyl %04x hds %02x sec %02\n",
+                "DISK READ from sec end bytes end %04x from diskfile cyl %04x hds %02x sec %02x\n",
                 ssize, data->cyl, data->tpos, data->spos);
             data->spos++;
             /* set sector to read next one */
