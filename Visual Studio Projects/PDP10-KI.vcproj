@@ -254,6 +254,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\PDP10\kx10_rh.c"
+				>
+			</File>
+			<File
 				RelativePath="..\PDP10\kx10_rp.c"
 				>
 			</File>
