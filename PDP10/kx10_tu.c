@@ -752,6 +752,8 @@ t_stat tu_srv(UNIT * uptr)
               /* Position just after mark */
               if (GET_FNC(uptr->CMD) == FNC_SPACEB && r == MTSE_TMK)
                   sim_tape_sprecf(uptr, &reclen);
+              /* Fall Through */
+
          case MTSE_EOM:           /* end of medium */
               if (tu_frame[ctlr] != 0)
                  uptr->STATUS |= ER1_FCE;

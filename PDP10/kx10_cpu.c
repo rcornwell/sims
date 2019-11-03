@@ -4437,6 +4437,7 @@ st_pi:
              }
              break;
           }
+          /* Fall through */
 #else
     case 0052: case 0053:
 #endif
