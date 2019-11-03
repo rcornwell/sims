@@ -5824,7 +5824,7 @@ newpsd:
                 }
                 /* do not update pc for page fault */
             case DEMANDPG_TRAP:                     /* 0xC4 Demand Page Fault Trap (V6&V9 Only) */
-#ifndef DO_DYNAMIC_DEBUG
+#ifdef DO_DYNAMIC_DEBUG
                 /* start debugging */
                 if (TRAPME == DEMANDPG_TRAP)
                     cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);

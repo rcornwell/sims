@@ -111,10 +111,12 @@
 #define NUM_UNITS_MT    4       /* 4 of 8 devices */
 #define NUM_DEVS_DISK   1       /* 1 DP02 disk drive controller */
 #define NUM_UNITS_DISK  4       /* 4 disk drive devices */
-//#define NUM_DEVS_SCFI   1       /* 1 scfi (SCSI) disk drive units */
-//#define NUM_UNITS_SCFI  1       /* 1 of 4 disk drive devices */
-#define NUM_DEVS_SCFI   2       /* 2 scfi (SCSI) disk drive units */
-#define NUM_UNITS_SCFI  2       /* 2 of 4 disk drive devices */
+#define NUM_DEVS_HSDP   1       /* 1 HSPD disk drive controller */
+#define NUM_UNITS_HSDP  2       /* 2 disk drive devices */
+#define NUM_DEVS_SCFI   1       /* 1 scfi (SCSI) disk drive units */
+#define NUM_UNITS_SCFI  1       /* 1 of 4 disk drive devices */
+//#define NUM_DEVS_SCFI   2       /* 2 scfi (SCSI) disk drive units */
+//#define NUM_UNITS_SCFI  2       /* 2 of 4 disk drive devices */
 #define NUM_DEVS_RTOM   1       /* 1 IOP RTOM channel */
 #define NUM_UNITS_RTOM  1       /* 1 IOP RTOM device (clock & interval timer) */
 #define NUM_DEVS_LPR    1       /* 1 IOP Line printer */
@@ -143,6 +145,12 @@ extern DEVICE dda_dev;
 #endif
 #if NUM_DEVS_DISK > 1
 extern DEVICE ddb_dev;
+#endif
+#ifdef NUM_DEVS_HSDP
+extern DEVICE dpa_dev;
+#endif
+#if NUM_DEVS_HSDP > 1
+extern DEVICE dpb_dev;
 #endif
 #ifdef NUM_DEVS_SCFI
 extern DEVICE sda_dev;
