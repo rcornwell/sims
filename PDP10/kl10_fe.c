@@ -500,8 +500,6 @@ dte_devirq(uint32 dev, t_addr addr) {
 /* Handle TO11 interrupts */
 t_stat dte_svc (UNIT *uptr)
 {
-    t_stat  r;
-
     /* Did the 10 knock? */
     if (uptr->STATUS & DTE_11DB) {
         /* If in secondary mode, do that protocol */
@@ -521,7 +519,6 @@ void dte_second(UNIT *uptr) {
     uint64   word;
     int32    ch;
     uint32   base = 0;
-    t_stat  r;
 
 #if KI_22BIT
 #if KL_ITS
@@ -574,7 +571,6 @@ enter_pri:
          /* Start input process */
      M[SEC_DTCMD + base] = 0;
      M[SEC_DTFLG + base] = FMASK;
-//     uptr->STATUS |= DTE_10DB;
      uptr->STATUS &= ~DTE_11DB;
 return;
          break;
@@ -651,7 +647,6 @@ void dte_its(UNIT *uptr) {
      uint16     data;
      int        cnt;
      int        ln;
-     t_stat     r;
 
      /* Check for input Start */
      word = M[ITS_DTEINP];
@@ -727,7 +722,7 @@ void dte_primary(UNIT *uptr) {
     int      s;
     int      cnt;
     struct   _dte_queue *in;
-    uint16   data1, data2, *dp;
+    uint16   data1, *dp;
 
     if ((uptr->STATUS & DTE_11DB) == 0)
         return;
@@ -838,7 +833,6 @@ error:
             dte_in_ptr = (dte_in_ptr + 1) & 0x1f;
         }
     }
-done:
     word &= ~PRI_CMT_TOT;
     if (Mem_deposit_word(0, dte_dt10_off + PRI_CMTW_STS, &word))
         goto error;
@@ -854,7 +848,6 @@ dte_function(UNIT *uptr)
     uint16    data1[32];
     int32     ch;
     struct _dte_queue *cmd;
-    t_stat    r;
     int       func;
 
     /* Check if queue is empty */
@@ -1111,12 +1104,10 @@ cty:
  * Send to 10 when requested.
  */
 void dte_transfer(UNIT *uptr) {
-    uint64   word;
-    int      s;
     uint16   cnt;
     uint16   scnt;
     struct   _dte_queue *out;
-    uint16   data1, data2, *dp;
+    uint16   *dp;
 
     /* Check if Queue empty */
     if (dte_out_res == dte_out_ptr)
@@ -1203,7 +1194,6 @@ dte_input()
     int     ln;
     int     save_ptr;
     char    ch;
-    int     flg;
     UNIT    *uptr = &dte_unit[0];
 
 #if KL_ITS
@@ -1365,7 +1355,6 @@ dte_input()
 int
 dte_queue(int func, int dev, int dcnt, uint16 *data)
 {
-    uint64   word;
     uint16   *dp;
     struct   _dte_queue *out;
 
@@ -1444,8 +1433,6 @@ t_stat dtei_svc (UNIT *uptr)
     int32    ch;
     uint32   base = 0;
     UNIT     *optr = &dte_unit[0];
-    uint16   data1;
-    int      f;
 
 #if KI_22BIT
 #if KL_ITS
@@ -1524,7 +1511,6 @@ t_stat dteo_svc (UNIT *uptr)
 t_stat
 dtertc_srv(UNIT * uptr)
 {
-    int32 t;
     UNIT     *optr = &dte_unit[0];
 
     sim_activate_after(uptr, 1000000/rtc_tps);
@@ -1725,8 +1711,6 @@ lpt_output(UNIT *uptr, char c) {
 t_stat lpt_svc (UNIT *uptr)
 {
     char    c;
-    int     pos;
-    int     cpos;
     uint16  data1 = 0;
 
     if ((uptr->flags & UNIT_ATT) == 0)
@@ -1818,8 +1802,6 @@ t_stat lpt_reset (DEVICE *dptr)
 
 t_stat lpt_attach (UNIT *uptr, CONST char *cptr)
 {
-    t_stat reason;
-
     return attach_unit (uptr, cptr);
 }
 
@@ -1938,7 +1920,6 @@ t_stat ttyo_svc (UNIT *uptr)
     int32    ln;
     int      n = 0;
     TMLN     *lp;
-    uint16   data1[32];
 
     if ((tty_unit[0].flags & UNIT_ATT) == 0)                  /* attached? */
         return SCPE_OK;

@@ -134,7 +134,7 @@ int     SC;                                   /* Shift count */
 int     SCAD;                                 /* Shift count extension */
 int     FE;                                   /* Exponent */
 #if KA | PDP6
-int     Pl, Ph, Rl, Rh, Pflag;                /* Protection registers */
+t_addr  Pl, Ph, Rl, Rh, Pflag;                /* Protection registers */
 int     push_ovf;                             /* Push stack overflow */
 int     mem_prot;                             /* Memory protection flag */
 #endif
@@ -2268,9 +2268,9 @@ pg_loop:
 #endif
         /* And save it */
         if (uf)
-           u_tlb[page] = data;
+           u_tlb[page] = data & (SECTM|RMASK);
         else
-           e_tlb[page] = data;
+           e_tlb[page] = data & (SECTM|RMASK);
 //fprintf(stderr, "Page %03o %08o %o\r\n", page, data, uf);
     } else {
 
@@ -2893,7 +2893,6 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
         return 0;
     }
 
-pub:
     /* If PUBLIC and private page, make sure we are fetching a Portal */
     if (!flag && pub && ((data & KI_PAG_P) == 0) && (!fetch || !OP_PORTAL(M[*loc]))) {
         /* Handle public violation */
@@ -8906,7 +8905,6 @@ do_byte_setup(int n, int wr, int *pos, int *sz)
 #if KLB
          /* Check if extended indexing */
          if (QKLB && sect != 0) {
-inx:
              if (MB & SMASK) {    /* Instruction format IFIW */
                  if (MB & BIT1) { /* Illegal index word */
                      fault_data = 024LL << 30 | (((FLAGS & USER) != 0)?SMASK:0) |
@@ -9010,8 +9008,8 @@ inx:
 int
 load_byte(int n, uint64 *data, uint64 fill, int cnt)
 {
-    uint64    val1, val2, msk;
-    int       s, p, addr, ind, np, ix;
+    uint64    val1, msk;
+    int       s, p;
 
     /* Check if should return fill */
     val1 = get_reg(n);
@@ -9052,8 +9050,8 @@ back:
 int
 store_byte(int n, uint64 data, int cnt)
 {
-    uint64    val1, val2, msk;
-    int       s, p, addr, ind, np, ix;
+    uint64    val1, msk;
+    int       s, p;
 
     /* Fetch Pointer word */
     if (do_byte_setup(n, 1, &p, &s))
@@ -9222,8 +9220,8 @@ adv_byte(int n)
 void
 bak_byte(int n, int cnt)
 {
-    uint64    val, msk;
-    int       s, p, addr, ind, np;
+    uint64    val;
+    int       s, p;
 
     /* Increment count */
     if (cnt) {
@@ -9675,7 +9673,7 @@ do_extend(uint32 ia)
     case 011:  /* CVTDBT */
 #if KLB
               if (QKLB && pc_sect != 0 && glb_sect)
-                 xlat_sect = (val2 >> 18) & 07777;
+                 xlat_sect = (AR >> 18) & 07777;
               else
                  xlat_sect = cur_sect;
 #endif
@@ -10016,9 +10014,6 @@ t_stat
 rtc_srv(UNIT * uptr)
 {
     int32 t;
-#if KL
-    uint64 temp;
-#endif
     t = sim_rtcn_calb (rtc_tps, TMR_RTC);
     sim_activate_after(uptr, 1000000/rtc_tps);
     tmxr_poll = t/2;

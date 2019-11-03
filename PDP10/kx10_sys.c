@@ -727,7 +727,6 @@ t_stat load_exb (FILE *fileref, int ftype)
 
     exb_pos = -1;
     for ( ;; ) {
-        int byt;
         /* All records start on even byte */
         if (odd && get_exb_byte (fileref, &byt, ftype))
             return SCPE_FMT;

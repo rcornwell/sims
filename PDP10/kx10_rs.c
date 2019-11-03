@@ -432,7 +432,6 @@ t_stat rs_svc (UNIT *uptr)
     DEVICE       *dptr;
     struct rh_if *rhc;
     int           da;
-    t_stat        r;
     int           sts;
 
     /* Find dptr, and df10 */
@@ -670,6 +669,10 @@ t_stat rs_attach (UNIT *uptr, CONST char *cptr)
     if (rstr == 0)
         return SCPE_OK;
     dib = (DIB *) rstr->ctxt;
+    for (ctlr = 0; rh[ctlr].dev_num != 0; ctlr++) {
+        if (rh[ctlr].dev == rstr)
+            break;
+    }
     uptr->DA = 0;
     uptr->CMD &= ~DS_VV;
     uptr->CMD |= DS_DPR|DS_MOL|DS_DRY;

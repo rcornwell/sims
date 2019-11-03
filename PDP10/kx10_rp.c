@@ -736,7 +736,6 @@ t_stat rp_svc (UNIT *uptr)
     DEVICE       *dptr;
     struct rh_if *rhc;
     int           diff, da;
-    t_stat        r;
     int           sts;
 
     dptr = rp_devs[ctlr];
@@ -1013,15 +1012,12 @@ rp_boot(int32 unit_num, DEVICE * rptr)
 {
     UNIT         *uptr = &rptr->units[unit_num];
     int           ctlr = GET_CNTRL_RH(uptr->flags);
-    DEVICE       *dptr;
-    struct rh_if *rhc;
+    struct rh_if *rhc = &rp_rh[ctlr];
+    DEVICE       *dptr = rp_devs[ctlr];
     uint32        addr;
     uint32        ptr = 0;
-    uint64        word;
     int           wc;
-
-    rhc = &rp_rh[ctlr];
-    dptr = rp_devs[ctlr];
+    uint64        word;
 #if KL
     int           sect;
     /* KL does not support readin, so fake it by reading in sectors 4 to 7 */
@@ -1032,10 +1028,11 @@ rp_boot(int32 unit_num, DEVICE * rptr)
         (void)sim_fread (&rp_buf[0][0], sizeof(uint64), RP_NUMWD, uptr->fileref);
         ptr = 0;
         for(wc = RP_NUMWD; wc > 0; wc--) {
-            M[addr++] = rp_buf[0][ptr++];
+            word = rp_buf[0][ptr++];
+            M[addr++] = word;
         }
     }
-    PC = (MEMSIZE - 512) & RMASK;
+    word = (MEMSIZE - 512) & RMASK;
 #else
     (void)sim_fseek(uptr->fileref, 0, SEEK_SET);
     (void)sim_fread (&rp_buf[0][0], sizeof(uint64), RP_NUMWD, uptr->fileref);
@@ -1053,8 +1050,8 @@ rp_boot(int32 unit_num, DEVICE * rptr)
     addr = rp_buf[0][ptr] & RMASK;
     wc = (rp_buf[0][ptr++] >> 18) & RMASK;
     word = rp_buf[0][ptr++];
-    PC = word & RMASK;
 #endif
+    PC = word & RMASK;
     uptr->CMD |= DS_VV;
     rhc->reg = 040;
     rhc->drive = uptr - dptr->units;
