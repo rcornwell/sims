@@ -224,6 +224,7 @@ extern DEBTAB crd_debug[];
 #define LRZ(x)          (((x) >> 18) & RMASK)
 #define JRST1           (((uint64)OP_JRST << 27) + 1)
 
+#define OP_PORTAL(x)    (((x) & 00777740000000LL) == 0254040000000LL)
 
 #if PDP6
 #define NODIV   000000
@@ -338,6 +339,24 @@ extern DEBTAB crd_debug[];
 #define BBN_WRITE       0040000000000LL
 #define BBN_READ        0100000000000LL
 #define BBN_MERGE       0161740000000LL
+#endif
+
+#if KL
+/* KL10 TLB paging bits */
+#define KL_PAG_A        0400000    /* Access */
+#define KL_PAG_P        0200000    /* Public */
+#define KL_PAG_W        0100000    /* Writable (M Tops 20) */
+#define KL_PAG_S        0040000    /* Software (W Writable Tops 20) */
+#define KL_PAG_C        0020000    /* Cacheable */
+#endif
+
+#if KI
+/* KI10 TLB paging bits */
+#define KI_PAG_A        0400000    /* Access */
+#define KI_PAG_P        0200000    /* Public */
+#define KI_PAG_W        0100000    /* Writable */
+#define KI_PAG_S        0040000    /* Software */
+#define KI_PAG_X        0020000    /* Reserved */
 #endif
 
 /* Flags for CPU unit */
