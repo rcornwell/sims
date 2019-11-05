@@ -526,9 +526,9 @@ struct rh_dev {
 
 typedef struct pdp_dib DIB;
 
-void df10_setirq(struct df10 *df) ;
-void df10_writecw(struct df10 *df) ;
-void df10_finish_op(struct df10 *df, int flags) ;
+void df10_setirq(struct df10 *df);
+void df10_writecw(struct df10 *df);
+void df10_finish_op(struct df10 *df, int flags);
 void df10_setup(struct df10 *df, uint32 addr);
 int  df10_fetch(struct df10 *df);
 int  df10_read(struct df10 *df);
@@ -545,8 +545,9 @@ t_stat  rh_show_type (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat  rh_devio(uint32 dev, t_uint64 *data);
 t_addr  rh_devirq(uint32 dev, t_addr addr);
 void    rh_setattn(struct rh_if *rh, int unit);
+void    rh_error(struct rh_if *rh);
 int     rh_blkend(struct rh_if *rh);
-void    rh_setirq(struct rh_if *rh) ;
+void    rh_setirq(struct rh_if *rh);
 void    rh_finish_op(struct rh_if *rh, int flags);
 int     rh_read(struct rh_if *rh);
 int     rh_write(struct rh_if *rh);

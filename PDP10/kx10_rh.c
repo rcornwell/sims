@@ -500,6 +500,12 @@ void rh_setattn(struct rh_if *rhc, int unit)
         set_interrupt(rhc->devnum, rhc->status);
 }
 
+void rh_error(struct rh_if *rhc)
+{
+    if (rhc->imode == 2)
+       rhc->status |= RH20_DR_EXC;
+}
+
 /* Decrement block count for RH20, nop for RH10 */
 int rh_blkend(struct rh_if *rhc)
 {
@@ -529,12 +535,15 @@ void rh_writecw(struct rh_if *rhc, int nxm) {
          uint32   chan = (rhc->devnum - 0540);
          int      wc = ((rhc->wcr ^ RH20_WMASK) + 1) & RH20_WMASK;
          rhc->status |= RH20_CHAN_RDY;
+         rhc->status &= ~(RH20_PCR_FULL);
          if (wc != 0 || (rhc->status & RH20_XEND) == 0 ||
-             (rhc->ptcr & BIT10) != 0) {
+             (rhc->ptcr & BIT10) != 0 || nxm) {
              uint64 wrd1 = SMASK|(uint64)(rhc->ccw);
+             if ((rhc->ptcr & BIT10) == 0 && (rhc->status & RH20_DR_EXC) != 0)
+                  return;
              if (nxm) {
-                wrd1 |= RH20_NXM_ERR;
-                rhc->status |= RH20_CHAN_ERR;
+                 wrd1 |= RH20_NXM_ERR;
+                 rhc->status |= RH20_CHAN_ERR;
              }  
              if (wc != 0) {
                 wrd1 |= RH20_NOT_WC0;
@@ -553,7 +562,6 @@ void rh_writecw(struct rh_if *rhc, int nxm) {
                                 ((uint64)(rhc->cda) & AMASK);
 //fprintf(stderr, "RH20 final %012llo %012llo %06o\n\r", M[eb_ptr|chan|1], M[eb_ptr|chan|2], wc);
          }
-         rhc->status &= ~(RH20_PCR_FULL);
          return;
      }
 #endif

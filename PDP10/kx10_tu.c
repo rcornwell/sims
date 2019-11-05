@@ -338,10 +338,6 @@ tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
     case  007:  /* look ahead */
     case  011:  /* tape control register */
         tu_tcr[ctlr]  = data & 0177777 ;
-        if ((tu_tcr[ctlr] & TC_DENS) == TC_1600)
-            uptr->STATUS |= DS_PES;
-        else
-            uptr->STATUS &= ~DS_PES;
         break;
     default:
         uptr->STATUS |= ER1_ILR;
@@ -475,6 +471,8 @@ void tu_error(UNIT * uptr, t_stat r)
     }
     if (uptr->CMD & CS_ATA)
         rh_setattn(rhc, 0);
+    if (uptr->CMD & (CS_ATA | CS_TM))
+        rh_error(rhc);
     uptr->CMD &= ~(CS_MOTION|CS_PIP|CS1_GO);
     sim_debug(DEBUG_EXP, dptr, "Setting status %d\n", r);
 }
@@ -749,11 +747,6 @@ t_stat tu_srv(UNIT * uptr)
               /* Fall Through */
 
          case MTSE_TMK:           /* tape mark */
-              /* Position just after mark */
-              if (GET_FNC(uptr->CMD) == FNC_SPACEB && r == MTSE_TMK)
-                  sim_tape_sprecf(uptr, &reclen);
-              /* Fall Through */
-
          case MTSE_EOM:           /* end of medium */
               if (tu_frame[ctlr] != 0)
                  uptr->STATUS |= ER1_FCE;
