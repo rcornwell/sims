@@ -364,14 +364,14 @@ DEVICE          coml_dev = {
 /* 8-line serial routines */
 void coml_ini(UNIT *uptr, t_bool f)
 {
-    int unit;
-    uint16 chsa;
+//  int unit;
+//  uint16 chsa;
 
-    unit = uptr - coml_unit;                /* unit # */
-    chsa = GET_UADDR(uptr->u3);             /* get channel/sub-addr */
+//  unit = uptr - coml_unit;                /* unit # */
+//  chsa = GET_UADDR(uptr->u3);             /* get channel/sub-addr */
 
     /* maybe do someting here on master channel init */
-    uptr->u5 = SNS_RDY|SNS_ONLN;    /* status is online & ready */
+    uptr->u5 = SNS_RDY|SNS_ONLN;            /* status is online & ready */
 }
 
 /* 8-line serial routines */
@@ -380,7 +380,7 @@ void com_ini(UNIT *uptr, t_bool f)
     DEVICE *dptr = find_dev_from_unit(uptr);
 
     sim_debug(DEBUG_CMD, &com_dev, "COM init device %s controller 0x7e00\n", dptr->name);
-    sim_activate(uptr, 1000);   /* time increment */
+    sim_activate(uptr, 1000);               /* time increment */
 }
 
 /* called from sel32_chan to start an I/O operation */
@@ -645,7 +645,7 @@ t_stat comi_srv(UNIT *uptr)
     int32   newln, ln, c;
     uint16  chsa = GET_UADDR(uptr->u3);                 /* get channel/sub-addr */
     int     cmd = uptr->u3 & 0xff;
-    uint32  cln = (uptr - coml_unit) & 0x7;             /* use line # 0-7 for 8-15 */
+//  uint32  cln = (uptr - coml_unit) & 0x7;             /* use line # 0-7 for 8-15 */
 
     ln = uptr - com_unit;                               /* line # */
     sim_debug(DEBUG_CMD, &com_dev, "comi_srv entry chsa %04x line %04x cmd %02x\n", chsa, ln, cmd);
@@ -666,12 +666,13 @@ t_stat comi_srv(UNIT *uptr)
     newln = tmxr_poll_conn(&com_desc);                  /* look for connect */
     if (newln >= 0) {                                   /* rcv enb pending? */
         uint16  chsa = GET_UADDR(coml_unit[newln].u3);  /* get channel/sub-addr */
-        int     chan = ((chsa >> 8) & 0x7f);            /* get the channel number */
-        UNIT    *comlp = coml_unit+ln;                  /* get uptr for coml line */
-        int     cmd = comlp->u3 & 0xff;                 /* get the active cmd */
+//      int     chan = ((chsa >> 8) & 0x7f);            /* get the channel number */
+//      UNIT    *comlp = coml_unit+ln;                  /* get uptr for coml line */
+//      int     cmd = comlp->u3 & 0xff;                 /* get the active cmd */
 //fprintf(stderr, "comi_srv poll chsa %04x new line %04x\r\n", chsa, newln);
         com_ldsc[newln].rcve = 1;                       /* enable rcv */
-        com_ldsc[newln+8].xmte = 1;                     /* enable xmt for output line */
+//BAD   com_ldsc[newln+8].xmte = 1;                     /* enable xmt for output line */
+        com_ldsc[newln].xmte = 1;                       /* enable xmt for output line */
         com_sta[newln] &= ~COML_REP;                    /* clr pending */
         /* send attention to OS here for this channel */
         /* need to get chsa here for the channel */

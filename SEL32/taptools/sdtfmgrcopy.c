@@ -1,7 +1,7 @@
 /*
  * sdtfmgrcopy.c
  *
- * This program scans a metatape file and prints file count * and sizes.
+ * This program scans a metatape file and prints file count and sizes.
  * input - stdin or specified filename  
  * output - stdout
  */

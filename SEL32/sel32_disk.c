@@ -681,7 +681,7 @@ t_stat disk_srv(UNIT * uptr)
                         data->cyl--;            /* seek 1 cyl */
                         sim_activate(uptr, 200);
                     }
-                    if (data->cyl < 0)          /* test for less than zero */
+                    if ((int32)data->cyl < 0)   /* test for less than zero */
                         data->cyl = 0;          /* make zero */
                 }
                 sim_debug(DEBUG_DETAIL, dptr, "dsk_srv seek next unit=%02x %02x %04x\n",
@@ -970,7 +970,7 @@ t_stat disk_attach(UNIT *uptr, CONST char *file)
     int             type = GET_TYPE(uptr->flags);
     DEVICE          *dptr = find_dev_from_unit(uptr);
     t_stat          r;
-    uint16          tsize;                      /* track size in bytes */
+//  uint16          tsize;                      /* track size in bytes */
     uint16          ssize;                      /* sector size in bytes */
     struct ddata_t  *data;
 //  uint8           buff[1024];
@@ -993,7 +993,7 @@ t_stat disk_attach(UNIT *uptr, CONST char *file)
 
     uptr->DDATA = (void *)data;                 /* save pointer to structure in DDATA */
     /* track size in bytes is sectors/track times words/sector time 4 bytse/word */
-    tsize = disk_type[type].spt * disk_type[type].ssiz * 4; /* get track size in bytes */
+//  tsize = disk_type[type].spt * disk_type[type].ssiz * 4; /* get track size in bytes */
     uptr->capac = disk_type[type].taus * disk_type[type].spau;
                                                 /* disk capacity in sectors */
     ssize = disk_type[type].ssiz * 4;           /* disk sector size in bytes */

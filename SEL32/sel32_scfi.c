@@ -570,9 +570,9 @@ t_stat scfi_srv(UNIT *uptr)
     int             dlen = 0;                   /* total bytes processed */
     int             i;
     uint8           ch;
-    int             tsize = scfi_type[type].spt * scfi_type[type].ssiz*4; /* get track size in bytes */
+//  int             tsize = scfi_type[type].spt * scfi_type[type].ssiz*4; /* get track size in bytes */
     uint16          ssize = scfi_type[type].ssiz*4;    /* Size of one sector in bytes */
-    int32           tstart;                     /* Location of start of cyl/track/sect in data */
+    int32           tstart = 0;                 /* Location of start of cyl/track/sect in data */
     uint8           buf2[768];
     uint8           buf[768];
 
@@ -915,7 +915,7 @@ t_stat scfi_reset(DEVICE * dptr)
 
 /* create the disk file for the specified device */
 int scfi_format(UNIT *uptr) {
-    struct ddata_t  *data = (struct ddata_t *)uptr->up7;
+//  struct ddata_t  *data = (struct ddata_t *)uptr->up7;
     uint16          addr = GET_UADDR(uptr->u3);
     int             type = GET_TYPE(uptr->flags);
     DEVICE          *dptr = find_dev_from_unit(uptr);
@@ -977,7 +977,7 @@ t_stat scfi_attach(UNIT *uptr, CONST char *file) {
     int             type = GET_TYPE(uptr->flags);
     DEVICE          *dptr = find_dev_from_unit(uptr);
     t_stat          r;
-    uint16          tsize;                      /* track size in bytes */
+//  uint16          tsize;                      /* track size in bytes */
     uint16          ssize;                      /* sector size in bytes */
     struct ddata_t  *data;
     uint8           buff[1024];
@@ -1000,7 +1000,7 @@ t_stat scfi_attach(UNIT *uptr, CONST char *file) {
 
     uptr->up7 = (void *)data;                   /* save pointer to structure in up7 */
     /* track size in bytes is sectors/track times words/sector time 4 bytse/word */
-    tsize = scfi_type[type].spt * scfi_type[type].ssiz * 4; /* get track size in bytes */
+//  tsize = scfi_type[type].spt * scfi_type[type].ssiz * 4; /* get track size in bytes */
     uptr->capac = scfi_type[type].taus * scfi_type[type].spau;  /* disk capacity in sectors */
     ssize = scfi_type[type].ssiz * 4;           /* disk sector size in bytes */
     uptr->capac *= ssize;                       /* disk capacity in bytes */

@@ -909,7 +909,7 @@ setcc:
 /* multiply register double by memory double */
 t_uint64 s_mpfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
     t_uint64 tr1, tr2, tl1, tl2, dblreg;
-    uint32 CC = 0, temp, temp2, sign = 0;
+    uint32 CC = 0, temp = 0, temp2, sign = 0;
     uint32 expm, expr;
     t_uint64 dtemp1, dtemp2;
 
@@ -1039,7 +1039,7 @@ setcc:
 
 /* divide register double by memory double */
 t_uint64 s_dvfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
-    t_uint64 tr1, tr2, tl1, tl2, dblreg;
+    t_uint64 tr1, /*tr2,*/ tl1, /*tl2,*/ dblreg;
     uint32 CC = 0, temp, temp2, sign = 0;
     uint32 expm, expr;
     t_uint64 dtemp1, dtemp2;
@@ -1094,8 +1094,8 @@ t_uint64 s_dvfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
 
     tl1 = (mem >> 32) & D32RMASK;       /* get left half of operator */
     tr1 = mem & D32RMASK;               /* get right half of operator */
-    tl2 = (reg >> 32) & D32RMASK;       /* get left half of operand */
-    tr2 = reg & D32RMASK;               /* get right half of operand */
+//  tl2 = (reg >> 32) & D32RMASK;       /* get left half of operand */
+//  tr2 = reg & D32RMASK;               /* get right half of operand */
 
     dtemp2 = reg / tl1;                 /* operand / left half of operator */
     dtemp2 = (dtemp2 & D32RMASK) << 32; /* move quotient to upper 32 bits */

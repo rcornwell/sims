@@ -653,15 +653,15 @@ int base_mode[] = {
 #define MAX32       32      /* 32/77 map limit */
 #define MAX256      256     /* 32/27 and 32/87 map limit */
 #define MAX2048     2048    /* 32/67, V6, and V9 map limit */
-#define RMB(x) ((M[x>>2]>>(8*(7-(x&3))))&0xff)      /* read memory addressed byte */
-#define RMH(x) (x&2?(M[x>>2]&RMASK):(M[x>>2]>>16)&RMASK)    /* read memory addressed halfword */
-#define RMW(x) (M[x>>2])                            /* read memory addressed word */
-#define WMW(x,y) (M[x>>2]=y)                        /* write memory addressed word */
+#define RMB(x) ((M[(x)>>2]>>(8*(7-(x&3))))&0xff)      /* read memory addressed byte */
+#define RMH(x) ((x)&2?(M[(x)>>2]&RMASK):(M[(x)>>2]>>16)&RMASK)    /* read memory addressed halfword */
+#define RMW(x) (M[(x)>>2])                            /* read memory addressed word */
+#define WMW(x,y) (M[(x)>>2]=y)                        /* write memory addressed word */
 /* write halfword to memory address */
-#define WMH(x,y) (x&2?(M[x>>2]=(M[x>>]&LMASK)|(y&RMASK)):(M[>>2]=(M[x>>2]&RMASK)|(y<<16)))
+#define WMH(x,y) ((x)&2?(M[(x)>>2]=(M[(x)>>]&LMASK)|((y)&RMASK)):(M[(x)>>2]=(M[(x)>>2]&RMASK)|((y)<<16)))
 /* write halfword map register to MAP cache address */
-#define WMR(x,y) (x&2?(MAPC[x>>2]=(MAPC[x>>2]&LMASK)|(y&RMASK)):(MAPC[x>>2]=(MAPC[x>>2]&RMASK)|(y<<16)))
-#define RMR(x) (x&2?(MAPC[x>>2]&RMASK):(MAPC[x>>2]>>16)&RMASK)    /* read map register halfword */
+#define WMR(x,y) ((x)&2?(MAPC[(x)>>2]=(MAPC[(x)>>2]&LMASK)|((y)&RMASK)):(MAPC[(x)>>2]=(MAPC[(x)>>2]&RMASK)|((y)<<16)))
+#define RMR(x) ((x)&2?(MAPC[(x)>>2]&RMASK):(MAPC[(x)>>2]>>16)&RMASK)    /* read map register halfword */
 
 /* set up the map registers for the current task in the cpu */
 /* the PSD bpix and cpix are used to setup the maps */
@@ -977,7 +977,7 @@ skipcpix:
  */
 t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot)
 {
-    uint32 word, index, map, mask, raddr, mpl, offset;
+    uint32 word, index, map, raddr, mpl, offset;
 
     *prot = 0;      /* show unprotected memory as default */
                     /* unmapped mode is unprotected */
@@ -1132,7 +1132,8 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot)
         }
 
         if ((TLB[index] & 0x04000000) == 0) {   /* is HIT bit on */
-            uint32  nix, msdl, midl;
+            uint32  nix, msdl;
+//NU        uint32  midl;
 
             sim_debug(DEBUG_EXP, &cpu_dev,
                 "MEMORY %08x MPL %08x MPL[0] %08x MPL[1] %08x MPL[%04x] %08x %08x\n",
@@ -1140,7 +1141,7 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot)
             msdl = RMW(mpl+CPIXBA+4);           /* get mpl entry wd 1 for given cpix */
             if ((msdl & MASK24) >= (MEMSIZE*4)) /* see if address is within our memory */
                 return NPMEM;                   /* no, non present memory error */
-            midl = RMW(mpl+CPIXBA);             /* get midl entry for given cpix */
+//NU        midl = RMW(mpl+CPIXBA);             /* get midl entry for given cpix */
 #ifdef DO_DYNAMIC_DEBUG
             /* start debugging */
             cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
@@ -1396,8 +1397,8 @@ t_stat sim_instr(void) {
     uint32              sreg;             /* Source reg in from bits 9-11 reg-reg instructions */
     uint32              ix;               /* index register */
     uint32              dbl;              /* Double word */
-    uint32              ovr;              /* Overflow flag */
-    uint32              stopnext = 0;     /* Stop on next instruction */
+    uint32              ovr=0;            /* Overflow flag */
+//FORSTEP    uint32              stopnext = 0;     /* Stop on next instruction */
     uint32              skipinstr = 0;    /* Skip test for interrupt on this instruction */
     uint32              drop_nop = 0;     /* Set if right hw instruction is a nop */
     uint32              int_icb;          /* interrupt context block address */
@@ -1408,7 +1409,9 @@ t_stat sim_instr(void) {
     int32               int32a;           /* temp int */
     int32               int32b;           /* temp int */
     int32               int32c;           /* temp int */
+#ifdef DO_DYNAMIC_DEBUG
     int32               event = 0;
+#endif
 
 wait_loop:
     while (reason == 0) {                       /* loop until halted */
@@ -1417,7 +1420,7 @@ wait_loop:
             reason = sim_process_event();       /* process */
             if (reason != SCPE_OK) {
                 if (reason == SCPE_STEP) {
-//*FORSTEP*/           stopnext = 1;
+//FORSTEP           stopnext = 1;
                     break;
                 } else
                     break;                      /* process */
@@ -2673,25 +2676,25 @@ tbr:                                                /* handle basemode TBR too *
                         }
 
                         temp = (PSD1+2) & 0x01fffffe;   /* save AEXP bit and PC from PSD1 in to frame */
-                        if (TRAPME = Mem_write(cfp, &temp)) { /* Save the PSD into memory */
+                        if ((TRAPME = Mem_write(cfp, &temp))) { /* Save the PSD into memory */
                             goto newpsd;                /* memory write error or map fault */
                         }
 
                         temp = 0x00000000;              /* show frame created by CALL instr */
-                        if (TRAPME = Mem_write(cfp+4, &temp)) { /* Save zero into memory */
+                        if ((TRAPME = Mem_write(cfp+4, &temp))) { /* Save zero into memory */
                             goto newpsd;                /* memory write error or map fault */
                         }
 
                         /* Save BR 0-7 to stack */
                         for (ix=0; ix<8; ix++) {
-                            if (TRAPME = Mem_write(cfp+(4*ix)+8, &BR[ix])) { /* Save into memory */
+                            if ((TRAPME = Mem_write(cfp+(4*ix)+8, &BR[ix]))) { /* Save into memory */
                                 goto newpsd;            /* memory write error or map fault */
                             }
                         }
 
                         /* save GPR 2-8 to stack */
                         for (ix=2; ix<8; ix++) {
-                            if (TRAPME = Mem_write(cfp+(4*ix)+32, &GPR[ix])) { /* Save into memory */
+                            if ((TRAPME = Mem_write(cfp+(4*ix)+32, &GPR[ix]))) { /* Save into memory */
                                 goto newpsd;            /* memory write error or map fault */
                             }
                         }
@@ -3518,7 +3521,7 @@ doovr4:
                 if (int64a > 0x7fffffff)                /* if more than 31 bits, we have an error */
                     goto doovr3;
                 if (((dest & D32LMASK) != 0 && (dest & D32LMASK) != D32LMASK) ||
-                    ((dest & D32LMASK) == D32LMASK) && ((dest & D32RMASK) == 0)) {  /* test for overflow */
+                    (((dest & D32LMASK) == D32LMASK) && ((dest & D32RMASK) == 0))) {  /* test for overflow */
 doovr3:
                     dest = (((t_uint64)GPR[reg]) << 32);/* insert upper reg value */
                     dest |= (t_uint64)GPR[reg+1];       /* get low order reg value */
@@ -3604,12 +3607,12 @@ doovr3:
                         }
 
                         temp = (PSD1+4) & 0x01fffffe;   /* save AEXP bit and PC from PSD1 into frame */
-                        if (TRAPME = Mem_write(cfp, &temp)) { /* Save the PSD into memory */
+                        if ((TRAPME = Mem_write(cfp, &temp))) { /* Save the PSD into memory */
                             goto newpsd;                /* memory write error or map fault */
                         }
 
                         temp = 0x80000000;              /* show frame created by BSUBM instr */
-                        if (TRAPME = Mem_write(cfp+4, &temp)) { /* Save zero into memory */
+                        if ((TRAPME = Mem_write(cfp+4, &temp))) { /* Save zero into memory */
                             goto newpsd;                /* memory write error or map fault */
                         }
 
@@ -3620,7 +3623,7 @@ doovr3:
                             goto newpsd;                /* go execute the trap now */
                         }
 
-                        if (TRAPME = Mem_read(temp, &addr))   /* get the word from memory */
+                        if ((TRAPME = Mem_read(temp, &addr)))   /* get the word from memory */
                             goto newpsd;                /* memory read error or map fault */
 
                         BR[1] = addr;                   /* effective address contents to BR 1 */
@@ -3642,25 +3645,25 @@ doovr3:
                         }
 
                         temp = (PSD1+4) & 0x01fffffe;   /* save AEXP bit and PC from PSD1 in to frame */
-                        if (TRAPME = Mem_write(cfp, &temp)) { /* Save the PSD into memory */
+                        if ((TRAPME = Mem_write(cfp, &temp))) { /* Save the PSD into memory */
                             goto newpsd;                /* memory write error or map fault */
                         }
 
                         temp = 0x00000000;              /* show frame created by CALL instr */
-                        if (TRAPME = Mem_write(cfp+4, &temp)) { /* Save zero into memory */
+                        if ((TRAPME = Mem_write(cfp+4, &temp))) { /* Save zero into memory */
                             goto newpsd;                /* memory write error or map fault */
                         }
 
                         /* save the BRs 0-7 on stack */
                         for (ix=0; ix<8; ix++) {
-                            if (TRAPME = Mem_write(cfp+(4*ix)+8, &BR[ix])) { /* Save into memory */
+                            if ((TRAPME = Mem_write(cfp+(4*ix)+8, &BR[ix]))) { /* Save into memory */
                                 goto newpsd;            /* memory write error or map fault */
                             }
                         }
 
                         /* save GPRs 2-7 on stack */
                         for (ix=2; ix<8; ix++) {
-                            if (TRAPME = Mem_write(cfp+(4*ix)+32, &GPR[ix])) { /* Save into memory */
+                            if ((TRAPME = Mem_write(cfp+(4*ix)+32, &GPR[ix]))) { /* Save into memory */
                                 goto newpsd;            /* memory write error or map fault */
                             }
                         }
@@ -3672,7 +3675,7 @@ doovr3:
                             goto newpsd;                /* go execute the trap now */
                         }
 
-                        if (TRAPME = Mem_read(temp, &addr))   /* get the word from memory */
+                        if ((TRAPME = Mem_read(temp, &addr)))   /* get the word from memory */
                             goto newpsd;                /* memory read error or map fault */
 
                         BR[1] = addr;                   /* effective address contents to BR 1 */
@@ -4335,7 +4338,7 @@ meoa:           /* merge point for eor, and, or */
                 if (int64a > 0x7fffffff)                /* if more than 31 bits, we have an error */
                     goto doovr;
                 if (((dest & D32LMASK) != 0 && (dest & D32LMASK) != D32LMASK) ||
-                    ((dest & D32LMASK) == D32LMASK) && ((dest & D32RMASK) == 0)) {  /* test for overflow */
+                    (((dest & D32LMASK) == D32LMASK) && ((dest & D32RMASK) == 0))) {  /* test for overflow */
 doovr:
                     dest = (((t_uint64)GPR[reg]) << 32);/* insert upper reg value */
                     dest |= (t_uint64)GPR[reg+1];       /* get low order reg value */
@@ -5182,11 +5185,12 @@ doovr2:
                     uint32 status = 0;                  /* status returned from device */
                     uint32 device = (opr >> 3) & 0x7f;  /* get device code */
                     uint32 prior = device;              /* interrupt priority */
+                    uint32 maxlev = 0x5f;               /* max lev for all but 32/27 in diags */
+
                     t = SPAD[prior+0x80];               /* get spad entry for interrupt */
                     addr = SPAD[0xf1] + (prior<<2);     /* vector address in SPAD */
                     addr = M[addr>>2];                  /* get the interrupt context block addr */
                     prior = (opr >> 3) & 0x7f;          /* get priority level */
-                    uint32 maxlev = 0x5f;               /* max lev for all but 32/27 in diags */
                     if (CPU_MODEL <= MODEL_27) {
                         maxlev = 0x6f;                  /* 27 uses 112 */
                     }
@@ -5349,7 +5353,6 @@ syscheck:
                 t = SPAD[lchan];                        /* get spad entry for channel */
                 if ((t == 0 || t == 0xffffffff) ||      /* if not set up, system check */
                     ((t & 0x0f000000) != 0x0f000000)) {   /* class in bits 4-7 */
-syscheckf:
 //fprintf(stderr, "SYSCHK XIO lchan %.4x spad %.8x\r\n", lchan, t);
                     TRAPME = SYSTEMCHK_TRAP;            /* trap condition if F class */
                     TRAPSTATUS |= BIT0;                 /* class F error bit */
@@ -5754,7 +5757,9 @@ newpsd:
 
         /* we get here from a LPSD, LPSDCM, INTR, or TRAP */
         if (TRAPME) {
+#ifdef DO_DYNAMIC_DEBUG
             static int pvcnt = 0;
+#endif
             /* SPAD location 0xf0 has trap vector base address */
             uint32 tta = SPAD[0xf0];                /* get trap table address in memory */
             uint32 tvl;                             /* trap vector location */
@@ -5842,14 +5847,14 @@ newpsd:
                 sim_debug(DEBUG_EXP, &cpu_dev,
                     "At TRAP %04x IR %08x PSD1 %08x PSD2 %08x CPUSTATUS %08x ovr %02x drop_nop %02x\n",
                     TRAPME, IR, PSD1, PSD2, CPUSTATUS, ovr, drop_nop);
-                sim_debug(DEBUG_EXP, &cpu_dev,
-                    "tvl %08x, tta %08x status %08x\n", tvl, tta, CPUSTATUS);
 
                 tta = tta + (TRAPME - 0x80);        /* tta has mem addr of trap vector */
                 if (modes & BASEBIT)
                     tvl = M[tta>>2] & 0xFFFFFC;     /* get 24 bit trap vector address from trap vector loc */
                 else
                     tvl = M[tta>>2] & 0x7FFFC;      /* get 19 bit trap vector address from trap vector loc */
+                sim_debug(DEBUG_EXP, &cpu_dev,
+                    "tvl %08x, tta %08x status %08x\n", tvl, tta, CPUSTATUS);
                 if (tvl == 0 || (CPUSTATUS & 0x40) == 0) {
                     /* vector is zero or software has not enabled traps yet */
                     /* execute a trap halt */

@@ -80,6 +80,26 @@ sdtfmgrcopy - This program reads a MPX 1.x filemgr save tape or a
                     to the file bootfil1
            output - directory/files extracted to current directory
 
+diagcopy - This program reads a SEL diagnostic boot tape and splits
+           the contents into multiple files.  The first tape record
+           is 204 bytes of boot code and is put into the file bootcode.
+           The following records in the file contains the diagnostic
+           overlay program (DOL) and are in 7680 byte block.  The last
+           record can be <= 7680 bytes.  The data is put into the file
+           dolfile.  The 2nd file on the tape contains the diagnostic
+           auto execute file.  It is a MPX blocked file where the first
+           word of each 768 char block contains 0x0003f3b8.  It can be
+           read using the deblk utility in the taptools directory.
+           The following diagnostic files on the tape are written to
+           files named diagfileNN where NN is relative file number on
+           the tape.  These records are all multiple of 768 bytes each
+           and contain binary programs.
+           input - diag.tap file to dump
+           output - stdout filelist and sizes
+           output - if tape contains a valid diag image, it will be
+                    output to files bootfile, cmdfile, dolfile and
+                    to diagfileNN, where NN is 3 or larger.
+
 tapdump -  This program reads a metadata .tap file and prints a side
            by side hexdump of the file contents.  The records are 
            displayed as 256 byte chuncks.  After each record if 256

@@ -2,9 +2,9 @@
  * fmgrcopy.c
  *
  * This program scans a metatape file and prints file count and sizes.
- * In addition, it creats a director for each username specified in
+ * In addition, it creats a directory for each username specified in
  * the filemanager tape and then creates a file containing the file
- * contents.  The file must be an filemgr save tape and not an SDT
+ * contents.  The file must be a filemgr save tape and not an SDT
  * tape.
  * input - stdin or specified filename  
  * output - stdout

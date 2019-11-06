@@ -578,7 +578,6 @@ int chan_read_byte(uint16 chsa, uint8 *data)
 /* test end of write byte I/O (device read) */
 int test_write_byte_end(uint16 chsa)
 {
-    int     chan = get_chan(chsa);                  /* get the channel number */
     CHANP   *chp = find_chanp_ptr(chsa);            /* get channel prog pointer */
 
     /* see if at end of buffer */
@@ -698,7 +697,6 @@ void set_devwake(uint16 chsa, uint16 flags)
 /* post interrupt for specified channel */
 void set_devattn(uint16 chsa, uint16 flags)
 {
-    int     chan = get_chan(chsa);                  /* get the channel number */
     CHANP   *chp = find_chanp_ptr(chsa);            /* get channel prog pointer */
 
     sim_debug(DEBUG_EXP, &cpu_dev, "set_devattn chsa %04x, flags %04x\n", chsa, flags);
@@ -713,7 +711,6 @@ void set_devattn(uint16 chsa, uint16 flags)
 
 /* channel operation completed */
 void chan_end(uint16 chsa, uint16 flags) {
-    int     chan = get_chan(chsa);                  /* get the channel number */
     uint32  chan_icb = find_int_icb(chsa);          /* get icb address */
     CHANP   *chp = find_chanp_ptr(chsa);            /* get channel prog pointer */
 
@@ -726,7 +723,7 @@ void chan_end(uint16 chsa, uint16 flags) {
     }
     chp->chan_status |= STATUS_CEND;                /* set channel end */
     chp->chan_status |= ((uint16)flags);            /* add in the callers flags */
-//    chp->ccw_cmd = 0;                               /* reset the completed channel command */
+//  chp->ccw_cmd = 0;                               /* reset the completed channel command */
 
     sim_debug(DEBUG_EXP, &cpu_dev, "chan_end SLI test chsa %04x ccw_flags %04x count %04x status %04x\n",
             chsa, chp->ccw_flags, chp->ccw_count, chp->chan_status);
@@ -1306,13 +1303,13 @@ t_stat rsctlxio(uint16 lchsa, uint32 *status) {       /* reset controller XIO */
     int     chan = get_chan(lchsa);
     uint32  spadent;
     uint16  chsa;
-    CHANP   *chp;
+//  CHANP   *chp;
 
     /* get the device entry for the logical channel in SPAD */
     spadent = SPAD[chan];                           /* get spad device entry for logical channel */
     chan = (spadent & 0x7f00) >> 8;                 /* get real channel */
     chsa = (chan << 8) | (lchsa & 0xff);            /* merge sa to real channel */
-    chp = find_chanp_ptr(chsa);                     /* find the chanp pointer */
+//  chp = find_chanp_ptr(chsa);                     /* find the chanp pointer */
 
     *status = 0;                                    /* not busy, no CC */
     sim_debug(DEBUG_CMD, &cpu_dev, "rsctlxio chsa %04x chan %04x\n", chsa, chan);

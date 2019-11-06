@@ -837,7 +837,6 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
                     ((inst&0xfc00) != 0x5800) &&
                     ((inst&0xfc00) != 0x5c00) &&
                     ((inst&0xfc00) != 0xcc00) &&
-                    ((inst&0xfc00) != 0xcc08) &&
                     ((inst&0xfc00) != 0x8000))
                     fputc(fc_type[i], of);
                 /* Fall through */
@@ -999,7 +998,8 @@ t_stat fprint_sym (FILE *of, t_addr addr, t_value *val, UNIT *uptr, int32 sw)
     int         i;
     int         l = 4;                          /* default to full words */
     int         rdx = 16;                       /* default radex is hex */
-    uint32      num, tmp=*val;
+    uint32      num;
+//  uint32      tmp=*val;                       /* for debug */
 
     if (addr & 0x02)
         l = 2;

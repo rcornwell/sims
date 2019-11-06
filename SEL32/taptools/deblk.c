@@ -477,6 +477,25 @@ int n;
             }
         }
         else
+        /* test for a diag blocked ascii file */
+        /* test 1st 2 byte of file for zero */
+        if ((si[0] == 0) && (si[1] == 3) && (i == 0xf3b8)) {
+            filetype |= blocked;        /* we have blocked file */
+            bin = 6;                    /* where we start for data block */
+
+            /* see if we have compressed data */
+            if ((si[bin + 2] == 0xbf) || (si[bin + 2] == 0x9f))
+            {
+                filetype |= compress;   /* data is compressed */
+                bcnt = 0;               /* no data in buffer */
+            }
+            else
+            {
+                /* data is not compressed, just ascii without newlines */
+                filetype |= ascii;      /* blocked ascii data */
+            }
+        }
+        else
         {
             /* data is unblocked, see if compressed or not */
             if ((si[ubin] == 0xbf) || (si[ubin] == 0x9f))

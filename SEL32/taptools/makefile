@@ -33,6 +33,7 @@ PROGS =			\
 	$(ROOT)/tapscan \
 	$(ROOT)/eomtap \
 	$(ROOT)/volmcopy \
+	$(ROOT)/diagcopy \
 	$(ROOT)/ddump \
 	$(ROOT)/deblk \
 	$(ROOT)/mpxblk \
@@ -111,6 +112,12 @@ $B/eomtap:	$D eomtap.c
 	@echo $(@F) installed in $B
 
 $B/volmcopy:	$D volmcopy.c
+	@-$(CC) $(CFLAGS) $(@F).c $(LFLAGS) -o $@
+	@chmod 755 $@
+	@cp $(@F) $B
+	@echo $(@F) installed in $B
+
+$B/diagcopy:	$D diagcopy.c
 	@-$(CC) $(CFLAGS) $(@F).c $(LFLAGS) -o $@
 	@chmod 755 $@
 	@cp $(@F) $B

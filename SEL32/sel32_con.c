@@ -152,7 +152,7 @@ DEVICE  con_dev = {
 /* initialize the console chan/unit */
 void con_ini(UNIT *uptr, t_bool f) {
     int     unit = (uptr - con_unit);   /* unit 0 */
-    DEVICE *dptr = find_dev_from_unit(uptr);
+//  DEVICE *dptr = find_dev_from_unit(uptr);
 
     con_data[unit].incnt = 0;   /* no input data */
     uptr->u5 = SNS_RDY|SNS_ONLN;    /* status is online & ready */
@@ -399,7 +399,7 @@ t_stat con_srvi(UNIT *uptr) {
                 }
             } else {
                 if (ch == '?') {
-                    int chan = ((chsa >> 8) & 0x7f);    /* get the channel number */
+//                  int chan = ((chsa >> 8) & 0x7f);    /* get the channel number */
                     /* set ring bit? */
                     set_devwake(chsa, SNS_ATTN|SNS_DEVEND|SNS_CHNEND);  /* tell user */
                 }

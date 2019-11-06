@@ -127,7 +127,7 @@ t_stat rtc_srv (UNIT *uptr)
 /* level = interrupt level */
 void rtc_setup(uint32 ss, uint32 level)
 {
-    uint32 val = SPAD[level+0x80];                  /* get SPAD value for interrupt vector */
+//  uint32 val = SPAD[level+0x80];                  /* get SPAD value for interrupt vector */
     uint32 addr = SPAD[0xf1] + (level<<2);          /* vector address in SPAD */
 
     rtc_lvl = level;                                /* save the interrupt level */
