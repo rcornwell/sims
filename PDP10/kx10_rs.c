@@ -513,7 +513,7 @@ t_stat rs_svc (UNIT *uptr)
                 if (rh_blkend(rhc))
                    goto rd_end;
             }
-            sim_activate(uptr, 20);
+            sim_activate(uptr, 10);
         } else {
 rd_end:
             sim_debug(DEBUG_DETAIL, dptr, "%s%o read done\n", dptr->name, unit);
@@ -569,7 +569,7 @@ rd_end:
                   goto wr_end;
         }
         if (sts) {
-            sim_activate(uptr, 20);
+            sim_activate(uptr, 10);
         } else {
 wr_end:
             sim_debug(DEBUG_DETAIL, dptr, "%s%o write done\n", dptr->name, unit);

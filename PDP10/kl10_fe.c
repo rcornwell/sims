@@ -480,7 +480,7 @@ sim_debug(DEBUG_CONO, &dte_dev, "CTY Ring 11 DB\n");
          sim_debug(DEBUG_DATAIO, &dte_dev, "CTY %03o DATAO %06o\n", dev, (uint32)*data);
          if (*data == 01365) {
              dte_unit[0].STATUS |= DTE_SEC|DTE_10ER;
-             dte_unit[0].STATUS &= ~(DTE_10DB);
+             dte_unit[0].STATUS &= ~(DTE_10DB|DTE_IND|DTE_11DB);
              break;
          }
          dte_unit[0].CNT = (*data & (DTE_TO10IB|DTE_TO10BC));

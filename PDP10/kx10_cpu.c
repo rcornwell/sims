@@ -892,32 +892,36 @@ struct {
     int n;
     int l;
 } _byte_adj[] = {
-    { /* 37 */  36, 6, 38, 0 },
-    { /* 38 */  30, 6, 39, 0 },
-    { /* 39 */  24, 6, 40, 0 },
-    { /* 40 */  18, 6, 41, 0 },
-    { /* 41 */  12, 6, 42, 0 },
-    { /* 42 */   6, 6, 43, 0 },
-    { /* 43 */   0, 6, 37, 1 },
-    { /* 44 */  36, 8, 45, 0 },
-    { /* 45 */  28, 8, 46, 0 },
-    { /* 46 */  20, 8, 47, 0 },
-    { /* 47 */  12, 8, 48, 0 },
-    { /* 48 */   4, 8, 44, 1 },
-    { /* 49 */  36, 7, 50, 0 },
-    { /* 50 */  29, 7, 51, 0 },
-    { /* 51 */  22, 7, 52, 0 },
-    { /* 52 */  15, 7, 53, 0 },
-    { /* 53 */   8, 7, 54, 0 },
-    { /* 54 */   1, 7, 49, 1 },
-    { /* 55 */  36, 9, 56, 0 },
-    { /* 56 */  27, 9, 57, 0 },
-    { /* 57 */  18, 9, 58, 0 },
-    { /* 58 */   9, 9, 59, 0 },
-    { /* 59 */   0, 9, 55, 1 },
-    { /* 60 */  36,18, 61, 0 },
-    { /* 61 */  18,18, 62, 0 },
-    { /* 62 */   0,18, 60, 1 }
+    { /* 37 */  36, 6, 38, 0 }, /* 45 */
+    { /* 38 */  30, 6, 39, 0 }, /* 46 */
+    { /* 39 */  24, 6, 40, 0 }, /* 47 */
+    { /* 40 */  18, 6, 41, 0 }, /* 50 */
+    { /* 41 */  12, 6, 42, 0 }, /* 51 */
+    { /* 42 */   6, 6, 43, 0 }, /* 52 */
+    { /* 43 */   0, 6, 37, 1 }, /* 53 */
+
+    { /* 44 */  36, 8, 45, 0 }, /* 54 */
+    { /* 45 */  28, 8, 46, 0 }, /* 55 */
+    { /* 46 */  20, 8, 47, 0 }, /* 56 */
+    { /* 47 */  12, 8, 48, 0 }, /* 57 */
+    { /* 48 */   4, 8, 44, 1 }, /* 60 */
+
+    { /* 49 */  36, 7, 50, 0 }, /* 61 */
+    { /* 50 */  29, 7, 51, 0 }, /* 62 */
+    { /* 51 */  22, 7, 52, 0 }, /* 63 */
+    { /* 52 */  15, 7, 53, 0 }, /* 64 */
+    { /* 53 */   8, 7, 54, 0 }, /* 65 */
+    { /* 54 */   1, 7, 49, 1 }, /* 66 */
+
+    { /* 55 */  36, 9, 56, 0 }, /* 67 */
+    { /* 56 */  27, 9, 57, 0 }, /* 70 */
+    { /* 57 */  18, 9, 58, 0 }, /* 71 */
+    { /* 58 */   9, 9, 59, 0 }, /* 72 */
+    { /* 59 */   0, 9, 55, 1 }, /* 73 */
+
+    { /* 60 */  36,18, 61, 0 }, /* 74 */
+    { /* 61 */  18,18, 62, 0 }, /* 75 */
+    { /* 62 */   0,18, 60, 1 }  /* 76 */
 };
 #endif
 
@@ -1284,7 +1288,7 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
               e_tlb[page+i] = 0;
            }
            /* If not user do exec mappping */
-           if (/*!uf && !t20_page &&*/ (page & 0740) == 0340) {
+           if (!t20_page && (page & 0740) == 0340) {
               /* Pages 340-377 via UBT */
               page += 01000 - 0340;
               upmp = 1;
@@ -2066,7 +2070,7 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
          int   base = 0540;
 #endif
 
-//fprintf(stderr, "Lookup Page %o %03o %0o %o %o\r\n", sect, page, t20_page, upmp, uf);
+//fprintf(stderr, "Lookup Page %o %03o %0o upmp=%o u=%o w=%o %06o\r\n", sect, page, t20_page, upmp, uf, AB);
         /* Get segment pointer */
         /* And save it */
 #if KLB
@@ -2117,7 +2121,7 @@ sect_loop:
                 sim_interval--;
                 cst_val = M[cst + pg];
                 if ((cst_val & PG_AGE) == 0) {
-//fprintf(stderr, "ZMap %012llo %012llo age\n\r", data, c);
+//fprintf(stderr, "ZMap %012llo %012llo age\n\r", data, cst_val);
                     if (trap) {
                         fault_data = 0;
                         page_fault = 1;
@@ -2221,7 +2225,7 @@ pg_loop:
         if (cst) {
            sim_interval--;
            cst_val = M[cst + pg];
-//fprintf(stderr, "ZMap %08o %012llo %012llo age\n\r", cst + pg, data, cst_val);
+//fprintf(stderr, "CMap %08o %012llo %012llo age\n\r", cst + pg, data, cst_val);
            if ((cst_val  & PG_AGE) == 0) {
                if (trap) {
                    fault_data = 0;
@@ -2233,7 +2237,7 @@ pg_loop:
                if (wr)
                   cst_val  |= 1;
            } else if (wr) { /* Trying to write and not writable */
-//fprintf(stderr, "ZMap %012llo %012llo age\n\r", data, cst_val);
+//fprintf(stderr, "WMap %012llo %012llo age\n\r", data, cst_val);
                if (trap) {
                    fault_data = 0 /* Write fault */;
                    page_fault = 1;
@@ -2360,6 +2364,18 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
 //fprintf(stderr, " %o %o\n\r", uf, pub);
     }
 
+#if KLB
+    /* Check if invalid section */
+    if (QKLB && t20_page && !flag && (sect & 07740) != 0) {
+        fault_data = (027LL << 30) | (((uint64)sect) << 18) | (uint64)addr;
+        if (uf)                      /* U */
+           fault_data |= SMASK;      /*  BIT0 */
+//fprintf(stderr, "Invalid section %012llo\n\r", fault_data);
+        page_fault = 1;
+        return 0;
+    }
+#endif
+
     /* Handle KI paging odditiy */
     if (!uf && !t20_page && (page & 0740) == 0340) {
         /* Pages 340-377 via UBT */
@@ -2373,8 +2389,9 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
     else
        data = e_tlb[page];
 
+//fprintf(stderr, "Map page %06o -> %06o %06o %o\n\r", page, data, sect, flag);
 #if KLB
-    if (QKLB && t20_page && ((data >> 18) & 077) != ((flag) ? 0 : sect))
+    if (QKLB && t20_page && ((data >> 18) & 037) != ((flag) ? 0 : sect))
         data = 0;
 #endif
     /* If not valid, go refill it */
@@ -2409,8 +2426,21 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
 
     /* Check if we need to modify TLB entry for TOPS 20 */
     if (t20_page && (data & KL_PAG_A) && (wr & ((data & KL_PAG_W) == 0)) && (data & KL_PAG_S)) {
-        /* Try and reload TLB and modify the CST */
-        data = load_tlb(uf, page, upmp, wr, 0, flag);
+        uint64 cst = FM[(06<<4)|2] & PG_MASK;
+        /* Update CST entry if needed */
+        if (cst) {
+           uint64 cst_val;
+           int  pg = data & 017777;
+           sim_interval--;
+           cst_val = M[cst + pg];
+           M[cst + pg] = cst_val | 1;
+        }
+        data |= KL_PAG_W;
+        /* Map the page */
+        if (uf || upmp)
+           u_tlb[page] = data;
+        else
+           e_tlb[page] = data;
     }
 
     /* create location. */
@@ -2501,16 +2531,6 @@ int Mem_read(int flag, int cur_context, int fetch) {
     t_addr addr;
 
 #if KLB
-    /* Check if invalid section */
-    if (QKLB && t20_page && !flag && (sect & 07740) != 0) {
-        fault_data = (027LL << 30) | (uint64)AB  | (((uint64)sect) << 18);
-        if (USER==0)                 /* U */
-           fault_data |= SMASK;      /*  BIT0 */
-//fprintf(stderr, "Invalid section %012llo\n\r", fault_data);
-        page_fault = 1;
-        return 0;
-    }
-
     if (AB < 020 && ((QKLB && (glb_sect == 0 || sect == 0 || (glb_sect && sect == 1))) || !QKLB)) {
 #else
     if (AB < 020) {
@@ -2547,16 +2567,6 @@ int Mem_write(int flag, int cur_context) {
     t_addr addr;
 
 #if KLB
-    /* Check if invalid section */
-    if (QKLB && t20_page && !flag && (sect & 07740) != 0) {
-        fault_data = (027LL << 30) | (uint64)AB  | (((uint64)sect) << 18);
-        if (USER==0)                 /* U */
-           fault_data |= SMASK;      /*  BIT0 */
-//fprintf(stderr, "Invalid section %012llo\n\r", fault_data);
-        page_fault = 1;
-        return 0;
-    }
-
     if (AB < 020 && ((QKLB && (glb_sect == 0 || sect == 0 || (glb_sect && sect == 1))) || !QKLB)) {
 #else
     if (AB < 020) {
@@ -5802,6 +5812,8 @@ unasign:
                       FE = (AR >> 30) & 077;  /* P */
 #if KLB
                       if (QKLB && FE > 36) {
+                          if (FE == 077)
+                              goto muuo;
                           f = 1;
                           SC = _byte_adj[(FE - 37)].s;
                           FE = _byte_adj[(FE - 37)].p;
@@ -5886,6 +5898,8 @@ fprintf(stderr, "ADJBP > 36 %d %d\n\r", SC, FE);
                   if (QKLB && SCAD > 36) {  /* Extended pointer */
                       int i = SCAD - 37;
 //fprintf(stderr, "ILDB %012llo %d %d -> %d %d %d\n\r", AR, SCAD, i, _byte_adj[i].p, _byte_adj[i].s,_byte_adj[i].n);
+                      if (SCAD == 077)
+                          goto muuo;
                       SC = _byte_adj[i].s;
                       SCAD = (_byte_adj[i].p + (0777 ^ SC) + 1) & 0777;
                       i++;
@@ -5968,6 +5982,8 @@ fprintf(stderr, "ADJBP > 36 %d %d\n\r", SC, FE);
 #if KL & KLB
                   if (QKLB && SCAD > 36) {   /* Extended pointer */
                       int i = SCAD - 37;
+                      if (SCAD == 077)
+                          goto muuo;
                       SC = _byte_adj[i].s;
                       SCAD = _byte_adj[i].p;
 ld_ptr:
@@ -8252,8 +8268,14 @@ skip_op:
               BR = SWAP_AR;
               /* Fall Through */
 
-    case 0500:    /* HLL  */
     case 0501:    /* HLLI */
+#if KL && KLB
+              if (IR == 0501 && QKLB && t20_page && pc_sect != 0)
+                  AR = ((AB > 020) ? ((uint64)pc_sect) : 1) << 18;
+              /* Fall Through */
+#endif
+ 
+    case 0500:    /* HLL  */
     case 0502:    /* HLLM */
     case 0504:    /* HRL  */
     case 0505:    /* HRLI */

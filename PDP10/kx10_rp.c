@@ -745,6 +745,8 @@ t_stat rp_svc (UNIT *uptr)
         uptr->CMD |= (ER1_UNS << 16) | DS_ATA|DS_ERR;     /* set drive error */
         if (GET_FNC(uptr->CMD) >= FNC_XFER) {             /* xfr? set done */
            rh_setirq(rhc);
+        } else {
+           rh_setattn(rhc, unit);
         }
         return (SCPE_OK);
     }
@@ -755,6 +757,7 @@ t_stat rp_svc (UNIT *uptr)
         if (cyl >= rp_drv_tab[dtype].cyl) {
             uptr->CMD &= ~DS_PIP;
             uptr->CMD |= (ER1_IAE << 16)|DS_ERR|DS_DRY|DS_ATA;
+            rh_setattn(rhc, unit);
         }
         diff = cyl - (uptr->CCYL & 01777);
         if (diff < 0) {

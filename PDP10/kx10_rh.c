@@ -216,6 +216,7 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
               if (*data & RH20_CLR_MBC) {
                  if (rhc->dev_reset != NULL)
                      rhc->dev_reset(dptr);
+                 rhc->attn = 0;
                  rhc->imode = 2;
                  rhc->status = 0;
               }

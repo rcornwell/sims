@@ -760,10 +760,10 @@ t_stat tu_srv(UNIT * uptr)
             tu_error(uptr, MTSE_OK);
             return SCPE_OK;
          } else
-            sim_activate(uptr, reclen * 100);
+            sim_activate(uptr, reclen * 50);
          return SCPE_OK;
     }
-    sim_activate(uptr, 100);
+    sim_activate(uptr, 50);
     return SCPE_OK;
 }
 
