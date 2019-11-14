@@ -320,6 +320,7 @@ t_stat          lpt_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
 const char     *lpt_description (DEVICE *dptr);
 
 char            lpt_buffer[134 * 3];
+uint16          lpt_vfu[256];
 
 struct _buffer lpt_queue;
 
@@ -992,16 +993,26 @@ cty:
                    sim_activate(&dte_unit[1], 100);
                    while (cmd->dptr < cmd->dcnt) {
                         int ln;
-                        if (((cty_out.in_ptr + 1) & 0xff) == cty_out.out_ptr)
-                            return;
                         ch = (int32)(cmd->data[cmd->dptr >> 1]);
                         ln = (ch >> 8);
                         ch &= 0177;
                         if (ch != 0 && ln == 0) {
+                            if (((cty_out.in_ptr + 1) & 0xff) == cty_out.out_ptr)
+                                return;
                             sim_debug(DEBUG_DETAIL, &dte_dev, "CTY queue %o\n", ch);
                             ch = sim_tt_outcvt( ch, TT_GET_MODE(uptr->flags));
                             cty_out.buff[cty_out.in_ptr] = (char)(ch & 0xff);
                             cty_out.in_ptr = (cty_out.in_ptr + 1) & 0xff;
+                        } else
+                        if (ch != 0 && ln >= 2 && ln <= tty_desc.lines) {
+                            struct _buffer *otty;
+                            ln -= 2;
+                            otty = &tty_out[ln];
+                            if (((otty->in_ptr + 1) & 0xff) == otty->out_ptr)
+                                return;
+                            sim_debug(DEBUG_DETAIL, &dte_dev, "TTY queue %o %d\n", ch, ln);
+                            otty->buff[otty->in_ptr] = ch;
+                            otty->in_ptr = (otty->in_ptr + 1) & 0xff;
                         }
                         cmd->dptr+=2;
                    }
@@ -1014,23 +1025,38 @@ cty:
 #if (NUM_DEVS_LP > 0)
                if (cmd->dev == PRI_EMLPT) {
                    data1[0] = 0;
-                   if (dte_queue(PRI_EMHDS, PRI_EMLPT, 1, data1) == 0)
+//                   if (cmd->data[0] != 0)
+ //                     data1[0] = 2;
+                   data1[1] = (lpt_unit.LINE == 0) ? 0x1: 0;
+                   data1[2] = 0100220;
+    if (dte_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMLPT, 5, data1) == 0)
                        return;
                }
 #endif
                if (cmd->dev == PRI_EMCTY) {
                    data1[0] = 0;
-                   if (dte_queue(PRI_EMHDS, PRI_EMCTY, 1, data1) == 0)
+                   data1[1] = 0;
+                   if (dte_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMCTY, 2, data1) == 0)
                        return;
                }
                if (cmd->dev == PRI_EMDH1) {
                    data1[0] = 0;
-                   if (dte_queue(PRI_EMHDS, PRI_EMDH1, 1, data1) == 0)
+                   data1[1] = 0;
+                   if (dte_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMDH1, 2, data1) == 0)
                        return;
                }
                break;
 
         case PRI_EMHDS:            /* Here is device status */
+               break;
+
+        case PRI_EMLDV:            /* Load LP VFU */
+               if (cmd->dev == PRI_EMLPT) {
+                   int ln = 0;
+                   while (cmd->dptr < cmd->dcnt) {
+                        lpt_vfu[ln++] = cmd->data[cmd->dptr++];
+                   }
+               }
                break;
 
 #if (NUM_DEVS_TTY > 0)
@@ -1089,7 +1115,6 @@ cty:
                break;
 #endif
         case PRI_EMLDR:            /* Load LP RAM */
-        case PRI_EMLDV:            /* Load LP VFU */
         default:
                break;
         }
@@ -1135,8 +1160,8 @@ void dte_transfer(UNIT *uptr) {
        }
        uptr->STATUS &= ~DTE_SIND;
     } else {
-        sim_debug(DEBUG_DATA, &dte_dev, "DTE: %d %d send CMD: %o %o %o\n",
-                         dte_out_ptr, dte_out_res, out->cnt, out->func, out->dev);
+        sim_debug(DEBUG_DATA, &dte_dev, "DTE: %d %d send CMD: [%o] %o %o %o\n",
+                         dte_out_ptr, dte_out_res, scnt, out->cnt, out->func, out->dev);
        /* Get size of packet */
        cnt = out->cnt;
        if ((out->func & PRI_IND_FLG) == 0)
@@ -1368,9 +1393,10 @@ dte_queue(int func, int dev, int dcnt, uint16 *data)
     out->func = func;
     out->dev = dev;
     out->dcnt = (dcnt-1)*2;
+//    out->dcnt = dcnt*2;
     out->spare = 0;
-    sim_debug(DEBUG_DATA, &dte_dev, "DTE: %d %d queue resp: %o %o %s %o\n",
-                    dte_out_ptr, dte_out_res, out->cnt, out->func,
+    sim_debug(DEBUG_DATA, &dte_dev, "DTE: %d %d queue resp: %o (%o) f=%o %s d=%o\n",
+                    dte_out_ptr, dte_out_res, out->cnt, out->dcnt, out->func,
                     (out->func > PRI_EMLDV)? "***":pri_name[out->func], out->dev);
     for (dp = &out->data[0]; dcnt > 0; dcnt--) {
          *dp++ = *data++;
@@ -1407,6 +1433,7 @@ error:
     }
     /* Bump count of messages sent */
     word = (word & ~(PRI_CMT_10IC|PRI_CMT_IP)) | ((word + 0400) & PRI_CMT_10IC);
+    word &= ~PRI_CMT_FWD;
     if ((uptr->STATUS & DTE_SIND) != 0)
         word |= PRI_CMT_IP;
     if (Mem_deposit_word(0, dte_dt10_off + PRI_CMTW_STS, &word))
@@ -1415,10 +1442,11 @@ error:
     if ((dte_out[dte_out_ptr].func & PRI_IND_FLG) == 0)
         dcnt += dte_out[dte_out_ptr].dcnt;
     /* Tell 10 something is ready */
-    word = (uint64)dcnt;
     if ((uptr->STATUS & DTE_SIND) != 0) {
-        word = (uint64)(dte_out[dte_out_ptr].dcnt);
+        dcnt = dte_out[dte_out_ptr].dcnt;
     }
+    sim_debug(DEBUG_DATA, &dte_dev, "DTE: start: %012llo %o\n", word, dcnt);
+    word = (uint64)dcnt;
     if (Mem_deposit_word(0, dte_dt10_off + PRI_CMTW_CNT, &word))
         goto error;
     uptr->STATUS |= DTE_10DB;
@@ -1711,7 +1739,7 @@ lpt_output(UNIT *uptr, char c) {
 t_stat lpt_svc (UNIT *uptr)
 {
     char    c;
-    uint16  data1 = 0;
+    uint16  data1[5];
 
     if ((uptr->flags & UNIT_ATT) == 0)
         return SCPE_OK;
@@ -1781,7 +1809,15 @@ t_stat lpt_svc (UNIT *uptr)
             lpt_output(uptr, c);
         }
     }
-    if (dte_queue(PRI_EMACK, PRI_EMLPT, 1, &data1) == 0)
+//    data1[0] = 0;
+    if (uptr->LINE == 0) {
+        data1[0] = 0;
+        data1[1] = (lpt_unit.LINE == 0) ? 0x1: 0;
+        data1[2] = 0100220;
+        if (dte_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMLPT, 5, data1) == 0)
+            sim_activate(uptr, 1000);
+    }
+    if (dte_queue(PRI_EMACK, PRI_EMLPT, 1, data1) == 0)
         sim_activate(uptr, 1000);
     return SCPE_OK;
 }

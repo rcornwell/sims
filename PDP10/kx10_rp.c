@@ -935,8 +935,8 @@ rd_end:
             uptr->hwmark = 0;
         }
         sts = rh_read(rhc);
-        sim_debug(DEBUG_DATA, dptr, "%s%o write word %d %012llo %06o\n",
-                      dptr->name, unit, uptr->DATAPTR, rhc->buf, rhc->wcr);
+        sim_debug(DEBUG_DATA, dptr, "%s%o write word %d %012llo %06o %06o\n",
+                      dptr->name, unit, uptr->DATAPTR, rhc->buf, rhc->cda, rhc->wcr);
         rp_buf[ctlr][uptr->DATAPTR++] = rhc->buf;
         if (sts == 0) {
             while (uptr->DATAPTR < RP_NUMWD)

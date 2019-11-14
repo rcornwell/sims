@@ -218,7 +218,6 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
                      rhc->dev_reset(dptr);
                  rhc->attn = 0;
                  rhc->imode = 2;
-                 rhc->status = 0;
               }
               rhc->status &= ~(07LL|IADR_ATTN|RH20_MASS_EN);
               rhc->status |= *data & (07LL|IADR_ATTN|RH20_MASS_EN);
@@ -651,6 +650,15 @@ void rh_setup(struct rh_if *rhc, uint32 addr)
 /* Fetch the next IO control word */
 int rh_fetch(struct rh_if *rhc) {
      uint64 data;
+     int    reg;
+     DEVICE *dptr;
+
+     for (reg = 0; rh[reg].dev_num != 0; reg++) {
+        if (rh[reg].rh == rhc) {
+            dptr = rh[reg].dev;
+            break;
+        }
+     }
 #if KL
      if (rhc->imode == 2 && (rhc->cop & 2) != 0) {
 //         rh_finish_op(rhc, 0);
@@ -662,9 +670,9 @@ int rh_fetch(struct rh_if *rhc) {
          return 0;
      }
      data = M[rhc->ccw];
+     sim_debug(DEBUG_EXP, dptr, "%s fetch %06o %012llo\n\r", dptr->name, rhc->ccw, data);
 #if KL
      if (rhc->imode == 2) {
-//fprintf(stderr, "RH20 fetch %06o %012llo\n\r", rhc->ccw, data);
          while((data & RH20_XFER) == 0) {
              rhc->ccw = (uint32)(data & AMASK);
              if ((data & (BIT1|BIT2)) == 0) {
@@ -676,6 +684,7 @@ int rh_fetch(struct rh_if *rhc) {
                  return 0;
              }
              data = M[rhc->ccw];
+             sim_debug(DEBUG_EXP, dptr, "%s fetch2 %06o %012llo\n\r", dptr->name, rhc->ccw, data);
 //fprintf(stderr, "RH20 fetch2 %06o %012llo\n\r", rhc->ccw, data);
          }
          rhc->wcr = (((data >> CSHIFT) & RH20_WMASK) ^ WMASK) + 1;
@@ -696,6 +705,7 @@ int rh_fetch(struct rh_if *rhc) {
              return 0;
          }
          data = M[rhc->ccw];
+         sim_debug(DEBUG_EXP, dptr, "%s fetch2 %06o %012llo\n\r", dptr->name, rhc->ccw, data);
      }
      rhc->wcr = (uint32)((data >> CSHIFT) & WMASK);
      rhc->cda = (uint32)(data & AMASK);

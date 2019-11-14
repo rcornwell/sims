@@ -1276,9 +1276,7 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
 
     case DATAO:
         if (dev & 040) { /* CLRPT */
-           int      upmp = 0;
            int      page = (RMASK & AB) >> 9;
-           int      uf = (FLAGS & USER) != 0;
            int      i;
 
            page &= ~7;
@@ -1291,7 +1289,6 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
            if (!t20_page && (page & 0740) == 0340) {
               /* Pages 340-377 via UBT */
               page += 01000 - 0340;
-              upmp = 1;
               for(i = 0; i < 8; i++)
                  u_tlb[page+i] = 0;
            }
@@ -2070,7 +2067,7 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
          int   base = 0540;
 #endif
 
-//fprintf(stderr, "Lookup Page %o %03o %0o upmp=%o u=%o w=%o %06o\r\n", sect, page, t20_page, upmp, uf, AB);
+//fprintf(stderr, "Lookup Page %o %03o upmp=%o u=%o w=%o %06o\r\n", sect, page, upmp, uf, wr, AB);
         /* Get segment pointer */
         /* And save it */
 #if KLB
@@ -2111,6 +2108,7 @@ sect_loop:
             index = (data >> 18) & PG_IDX;
             sim_interval--;
             data = M[(data & RMASK) + spt];
+//fprintf(stderr, "IMap1 %012llo %o %o %o\n\r", data, pg << 9, index, page);
             if (((data >> 18) & PG_STG) != 0) {
                 fault_data = 0;
                 page_fault = 1;
@@ -2121,7 +2119,7 @@ sect_loop:
                 sim_interval--;
                 cst_val = M[cst + pg];
                 if ((cst_val & PG_AGE) == 0) {
-//fprintf(stderr, "ZMap %012llo %012llo age\n\r", data, cst_val);
+//fprintf(stderr, "ZMap1 %012llo %012llo age\n\r", data, cst_val);
                     if (trap) {
                         fault_data = 0;
                         page_fault = 1;
@@ -2132,6 +2130,7 @@ sect_loop:
             }
             sim_interval--;
             data = M[(pg << 9) | index];
+//fprintf(stderr, "JMap1 %012llo %o %o %o\n\r", data, pg << 9, index, page);
             goto sect_loop;
         }
         if (((data >> 18) & PG_STG) != 0) {
@@ -2187,7 +2186,7 @@ pg_loop:
              index = (data >> 18) & PG_IDX;
              sim_interval--;
              data = M[(data & RMASK) + spt];
-//fprintf(stderr, "IMap %012llo %o %o %o\n\r", data, pg << 9, index, page);
+//fprintf(stderr, "IMap2 %012llo %o %o %o\n\r", data, pg << 9, index, page);
              if (((data >> 18) & PG_STG) != 0) {
                  fault_data = 0;
                  page_fault = 1;
@@ -2197,7 +2196,7 @@ pg_loop:
              if (cst) {
                  sim_interval--;
                  cst_val = M[cst + pg];
-//fprintf(stderr, "ZMap %08o %012llo %012llo age\n\r", cst + pg, data, cst_val);
+//fprintf(stderr, "ZMap2 %08o %012llo %012llo age\n\r", cst + pg, data, cst_val);
                  if ((cst_val & PG_AGE) == 0) {
                      if (trap) {
                          fault_data = 0;
@@ -2215,7 +2214,13 @@ pg_loop:
 
         /* Now have final page */
         if ((data >> 18) & PG_STG) {
-           fault_data = 0;
+            fault_data = BIT2;           /* BIT2 */
+            if (acc_bits & PG_CAC)
+               fault_data |= BIT7;       /* BIT7 */
+            if (acc_bits & PG_PUB)
+               fault_data |= BIT6;       /* BIT6 */
+            if (acc_bits & PG_WRT) 
+               fault_data |= BIT4;       /* BIT4 */
            page_fault = 1;
            return 0;
         }
@@ -2236,7 +2241,7 @@ pg_loop:
            if (acc_bits & PG_WRT) {
                if (wr)
                   cst_val  |= 1;
-           } else if (wr) { /* Trying to write and not writable */
+          } else if (wr) { /* Trying to write and not writable */
 //fprintf(stderr, "WMap %012llo %012llo age\n\r", data, cst_val);
                if (trap) {
                    fault_data = 0 /* Write fault */;
@@ -2455,7 +2460,11 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
          (!fetch || !OP_PORTAL(M[*loc]))) {
         /* Handle public violation */
         fault_data = ((uint64)addr) | 021LL << 30 | BIT8 |((uf)?SMASK:0);
-//fprintf(stderr, "Public fault %012llo %06o %06o\n\r", fault_data, FLAGS << 5, PC);
+#if KLB
+        if (QKLB && t20_page)
+            fault_data |= (((uint64)sect) << 18);
+#endif
+//fprintf(stderr, "Public fault %012llo %06o %06o %012llo\n\r", fault_data, FLAGS << 5, PC, data);
         page_fault = 1;
         return 0;
     }
@@ -7305,6 +7314,10 @@ jrstf:
                                 | (prev_sect & 037)
 #endif
                                  ) & FMASK;
+                          if ((FLAGS & USER) == 0) {
+                              MB &= ~SMASK;
+                              MB |= (FLAGS & PRV_PUB) ? SMASK : 0;
+                          }
                           if (uuo_cycle | pi_cycle) {
                              FLAGS &= ~(USER|PUBLIC); /* Clear USER */
                           }
@@ -7335,38 +7348,38 @@ jrstf:
 
               case 014:  /* SFM */
 #if KLB
-//                       if (QKLB) {
-                          MB = ((((uint64)FLAGS) << 23) | (uint64)(prev_sect & 037)) & FMASK;
-//fprintf(stderr, "SFM %012llo\n\r", MB);
-                          (void)Mem_write(0, 0);
-                          goto last;
- //                      }
+                        MB = ((((uint64)FLAGS) << 23) | (uint64)(prev_sect & 037)) & FMASK;
+                        if ((FLAGS & USER) == 0) {
+                            MB &= ~SMASK;
+                            MB |= (FLAGS & PRV_PUB) ? SMASK : 0;
+                        }
+                        (void)Mem_write(0, 0);
+                        goto last;
 #endif
-  //                     goto muuo;
 
               case 003:  /* Invalid */
               case 011:  /* Invalid */
               case 013:  /* Invalid */
               case 016:  /* Invalid */
-                       goto muuo;
+                        goto muuo;
 
               case 004:  /* HALT */
-                       if ((FLAGS & (USER|USERIO)) == USER ||
-                           (FLAGS & (USER|PUBLIC)) == PUBLIC) {
-                            goto muuo;
-                       } else {
-                            reason = STOP_HALT;
-                       }
-                       break;
+                        if ((FLAGS & (USER|USERIO)) == USER ||
+                            (FLAGS & (USER|PUBLIC)) == PUBLIC) {
+                             goto muuo;
+                        } else {
+                             reason = STOP_HALT;
+                        }
+                        break;
               case 010:  /* JEN */
-                       /* Restore interrupt level. */
-                       if ((FLAGS & (USER|USERIO)) == USER ||
-                           (FLAGS & (USER|PUBLIC)) == PUBLIC) {
-                            goto muuo;
-                       } else {
-                            pi_restore = 1;
-                       }
-                       break;
+                        /* Restore interrupt level. */
+                        if ((FLAGS & (USER|USERIO)) == USER ||
+                            (FLAGS & (USER|PUBLIC)) == PUBLIC) {
+                             goto muuo;
+                        } else {
+                             pi_restore = 1;
+                        }
+                        break;
               }
 #if KL_ITS
               if (QITS && (FLAGS & USER)) {
@@ -7530,7 +7543,17 @@ jrstf:
               }
 
               /* Check if Paging Enabled */
-              if (!page_enable || AB < 020) {
+              if (!page_enable) {
+                  AR = AB; /* direct map */
+                  if (flag1)                 /* U */
+                     AR |= SMASK;            /* BIT0 */
+                  AR |= BIT2|BIT3|BIT4|BIT8;
+                  set_reg(AC, AR);
+                  break;
+              }
+
+              /* Check if access to register */
+              if (AB < 020 && ((QKLB && (glb_sect == 0 || sect == 0 || (glb_sect && sect == 1))) || !QKLB)) {
                   AR = AB; /* direct map */
                   if (flag1)                 /* U */
                      AR |= SMASK;            /* BIT0 */
@@ -8790,9 +8813,6 @@ last:
 #endif
         return SCPE_STEP;
     }
-//#if KL
-//    FLAGS &= ~ADRFLT;
-//#endif
 }
 /* Should never get here */
 #if ITS
