@@ -1988,7 +1988,7 @@ sim_debug(DEBUG_DATAIO, &cpu_dev, "Rl=%06o Pl=%06o, Rh=%06o, Ph=%06o\n", Rl, Pl,
 
 #if KL
 int
-load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
+load_tlb(int uf, int page, int upmp, int wr)
 {
     uint64  data;
 
@@ -2071,11 +2071,8 @@ load_tlb(int uf, int page, int upmp, int wr, int trap, int flag)
         /* Get segment pointer */
         /* And save it */
 #if KLB
-        if (QKLB) {
-            base = 0540;
-            if (!flag)
-                base += (sect & 037);
-        }
+        if (QKLB)
+            base = 0540 + (sect & 037);
 #endif
         sim_interval--;
         if (uf)
@@ -2120,10 +2117,8 @@ sect_loop:
                 cst_val = M[cst + pg];
                 if ((cst_val & PG_AGE) == 0) {
 //fprintf(stderr, "ZMap1 %012llo %012llo age\n\r", data, cst_val);
-                    if (trap) {
-                        fault_data = 0;
-                        page_fault = 1;
-                    }
+                    fault_data = 0;
+                    page_fault = 1;
                     return 0;
                 }
                 M[cst + pg] = (cst_val & cst_msk) | cst_dat;
@@ -2147,10 +2142,8 @@ sect_loop:
             cst_val = M[cst + pg];
 //fprintf(stderr, "ZMap %08o %012llo %012llo age\n\r", cst+pg, data, cst_val);
             if ((cst_val & PG_AGE) == 0) {
-                if (trap) {
-                    fault_data = 0;
-                    page_fault = 1;
-                }
+                fault_data = 0;
+                page_fault = 1;
                 return 0;
             }
             M[cst + pg] = (cst_val & cst_msk) | cst_dat;
@@ -2198,10 +2191,8 @@ pg_loop:
                  cst_val = M[cst + pg];
 //fprintf(stderr, "ZMap2 %08o %012llo %012llo age\n\r", cst + pg, data, cst_val);
                  if ((cst_val & PG_AGE) == 0) {
-                     if (trap) {
-                         fault_data = 0;
-                         page_fault = 1;
-                     }
+                     fault_data = 0;
+                     page_fault = 1;
                      return 0;
                  }
                  M[cst + pg] = (cst_val & cst_msk) | cst_dat;
@@ -2232,10 +2223,8 @@ pg_loop:
            cst_val = M[cst + pg];
 //fprintf(stderr, "CMap %08o %012llo %012llo age\n\r", cst + pg, data, cst_val);
            if ((cst_val  & PG_AGE) == 0) {
-               if (trap) {
-                   fault_data = 0;
-                   page_fault = 1;
-               }
+               fault_data = 0;
+               page_fault = 1;
                return 0;
            }
            if (acc_bits & PG_WRT) {
@@ -2243,10 +2232,8 @@ pg_loop:
                   cst_val  |= 1;
           } else if (wr) { /* Trying to write and not writable */
 //fprintf(stderr, "WMap %012llo %012llo age\n\r", data, cst_val);
-               if (trap) {
-                   fault_data = 0 /* Write fault */;
-                   page_fault = 1;
-               }
+               fault_data = 0 /* Write fault */;
+               page_fault = 1;
                return 0;
            }
            M[cst + pg] = (cst_val  & cst_msk) | cst_dat;
@@ -2273,7 +2260,7 @@ pg_loop:
            data |= KL_PAG_C;
 #if KLB
         if (QKLB)
-           data |= (((flag) ? 0: sect) & 037) << 18;
+           data |=  (sect & 037) << 18;
 #endif
         /* And save it */
         if (uf)
@@ -2348,7 +2335,7 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
     /*  AC = 4 all general access */
     /*  AC = 8 only in cur_context EA calculations */
     if (flag)
-        uf = 0;
+        sect = uf = 0;
     else if (xct_flag != 0 && !uf && !fetch) {
 //fprintf(stderr, "PXCT ir=%03o pc=%06o ad=%06o x=%02o c=%o b=%o p=%o w=%o", IR, PC, addr, xct_flag, cur_context, BYF5, ptr_flg, wr);
 #if KLB
@@ -2371,7 +2358,7 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
 
 #if KLB
     /* Check if invalid section */
-    if (QKLB && t20_page && !flag && (sect & 07740) != 0) {
+    if (QKLB && t20_page && (sect & 07740) != 0) {
         fault_data = (027LL << 30) | (((uint64)sect) << 18) | (uint64)addr;
         if (uf)                      /* U */
            fault_data |= SMASK;      /*  BIT0 */
@@ -2396,12 +2383,12 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
 
 //fprintf(stderr, "Map page %06o -> %06o %06o %o\n\r", page, data, sect, flag);
 #if KLB
-    if (QKLB && t20_page && ((data >> 18) & 037) != ((flag) ? 0 : sect))
+    if (QKLB && t20_page && ((data >> 18) & 037) != sect)
         data = 0;
 #endif
     /* If not valid, go refill it */
     if (data == 0) {
-        data = load_tlb(uf, page, upmp, wr, 1, flag);
+        data = load_tlb(uf, page, upmp, wr);
         if (data == 0 && page_fault) {
             fault_data |= ((uint64)addr);
             /* Ignore faults if flag set */
@@ -2491,7 +2478,7 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
 #endif
         fault_data = BIT8 | (uint64)addr;
 #if KLB
-        if (QKLB)
+        if (QKLB && t20_page)
             fault_data |= (((uint64)sect) << 18);
 #endif
         /* Remap the flag bits */
@@ -2614,6 +2601,7 @@ int exec_page_lookup(t_addr addr, int wr, int *loc)
     int      data;
     int      page = (RMASK & addr) >> 9;
     int      upmp = 0;
+    int      sav_sect = sect;
 
     /* If paging is not enabled, address is direct */
     if (!page_enable) {
@@ -2636,9 +2624,13 @@ int exec_page_lookup(t_addr addr, int wr, int *loc)
 
     /* If not valid, go refill it */
     if (data == 0 || (data & LMASK) != 0) {
-        data = load_tlb(0, page, upmp, wr, 0, 1);
-        if (data == 0)
+        sect = 0;
+        data = load_tlb(0, page, upmp, wr);
+        if (data == 0) {
+           page_fault = 0;
            return 1;
+        }
+        sect = sav_sect;
     }
     *loc = ((data & 017777) << 9) + (addr & 0777);
     return 0;
@@ -4147,7 +4139,7 @@ no_fetch:
     /* Handle indirection repeat until no longer indirect */
 #if KL && KLB
         /* If we are doing a PXCT with E1 or E2 set, change section */
-         if (QKLB) {
+         if (QKLB && t20_page) {
              if (((xct_flag & 8) != 0 && (FLAGS & USER) == 0 && !ptr_flg) ||
                  ((xct_flag & 2) != 0 && (FLAGS & USER) == 0 && ptr_flg))
              sect = cur_sect = prev_sect;
@@ -4179,7 +4171,7 @@ no_fetch:
                 AR = get_reg(ix);
 #if KLB
              /* Check if extended indexing */
-             if (QKLB && cur_sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
+             if (QKLB && t20_page && cur_sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
                  AR = (AR + ((AB & RSIGN) ? SECTM|((uint64)AB): (uint64)AB)) & (SECTM|RMASK);
                  sect = cur_sect = (AR >> 18) & 07777;
                  glb_sect = 1;
@@ -4203,7 +4195,7 @@ in_loop:
                  goto last;
 #if KL & KLB
              /* Check if extended indexing */
-             if (QKLB && (cur_sect != 0 || glb_sect)) {
+             if (QKLB && t20_page && (cur_sect != 0 || glb_sect)) {
                  if (MB & SMASK || cur_sect == 0) {    /* Instruction format IFIW */
                      if (MB & BIT1 && cur_sect != 0) { /* Illegal index word */
 //fprintf(stderr, "Illegal fault %06o %012llo\n\r", PC, MB);
@@ -4279,14 +4271,6 @@ in_loop:
     } while (ind & !pi_rq);
     if (IR != 0254) {
        AR &= RMASK;
-#if KL & KLB
-       if (QKLB && IR == 0415 && pc_sect != 0) {
-           if (glb_sect == 0 && AR < 020)
-               AR |= BIT17;
-           else
-               AR |= ((uint64)cur_sect) << 18;
-       }
-#endif
     }
 
 
@@ -4439,9 +4423,9 @@ st_pi:
     /* Process the instruction */
     switch (IR) {
 #if KL & KLB
-    case 0052:
-    case 0053:
-         if (QKLB && t20_page) {
+    case 0052:  /* PMOVE */
+    case 0053:  /* PMOVEM */
+         if (QKLB && t20_page && (FLAGS & USER) == 0) {
              if (Mem_read(0, 0, 0))
                 goto last;
              AB = MB & (SECTM|RMASK);
@@ -4495,6 +4479,7 @@ unasign:
               MB = ((uint64)(IR) << 27) | ((uint64)(AC) << 23) | (uint64)(AB);
               AB = ub_ptr | 0424;
 #if KL & KLB
+              /* If single sections KL10 UUO starts at 425 */
               if (!QKLB && !QITS && t20_page)
                  AB = AB + 1;
 #endif
@@ -4504,18 +4489,29 @@ unasign:
 #if KL & KLB
               if (QKLB && t20_page)
                   MB = ((uint64)(pc_sect) << 18) | ((PC + (trap_flag == 0)) & RMASK);
-              else
-#endif
+              else {
+                  MB = (((uint64)(FLAGS) << 23) & LMASK) | ((PC + (trap_flag == 0)) & RMASK);
+                  if ((FLAGS & USER) == 0) {
+                      MB &= ~SMASK;
+                      MB |= (FLAGS & PRV_PUB) ? SMASK : 0;
+                  }
+              }
+#else
               MB = (((uint64)(FLAGS) << 23) & LMASK) | ((PC + (trap_flag == 0)) & RMASK);
               if ((FLAGS & USER) == 0) {
                   MB &= ~SMASK;
                   MB |= (FLAGS & PRV_PUB) ? SMASK : 0;
               }
+#endif
               Mem_write_nopage();
 #if KL
               extend = 0;
 #if KLB
               if (QKLB && t20_page) { /* Save address */
+                  if (pc_sect != 0 && glb_sect == 0 && AR < 020)
+                      AR |= BIT17;
+                  else
+                      AR |= ((uint64)cur_sect) << 18;
                   MB = AR;
                   AB ++;
                   Mem_write_nopage();
@@ -4579,13 +4575,17 @@ unasign:
 #if KL & KLB
               /* LUUO's in non-zero section are different */
               if (QKLB && t20_page && pc_sect != 0) {
-                  AR = (((uint64)cur_sect) << 18) | AB; /* Save address */
+                  /* Save Effective address */
+                  if (pc_sect != 0 && glb_sect == 0 && AR < 020)
+                      AR = BIT17;
+                  else
+                      AR = ((uint64)cur_sect) << 18;
+                  AR |= AB; /* Save address */
                   /* Grab address of LUUO block from user base 420 */
                   AB = ((FLAGS & USER) ? ub_ptr : eb_ptr) + 0420;
                   Mem_read_nopage();
                   /* Now save like MUUO */
-                  AB = MB & RMASK;
-                  sect = (MB >> 18) & 07777;
+                  AB = MB & (SECTM|RMASK);
                   MB = (((uint64)((IR << 9) | (AC << 5))) | ((uint64)(FLAGS) << 23)) & FMASK;
                   if ((FLAGS & USER) == 0) {
                       MB &= ~SMASK;
@@ -4596,8 +4596,6 @@ unasign:
                   AB++;
                   MB = ((uint64)(pc_sect) << 18) | ((PC + (trap_flag == 0)) & RMASK);
                   Mem_write_nopage();
-                  extend = 0;
-                  /* Save Effective address */
                   MB = AR;
                   AB ++;
                   Mem_write_nopage();
@@ -4707,7 +4705,7 @@ unasign:
     case 0105:       /* ADJSP */
               BR = get_reg(AC);
 #if KLB
-              if (QKLB && pc_sect != 0 && (BR & SMASK) == 0 && (BR & SECTM) != 0) {
+              if (QKLB && t20_page && pc_sect != 0 && (BR & SMASK) == 0 && (BR & SECTM) != 0) {
                  AD = (((AR & RSIGN)?(LMASK|AR):AR) + BR) & (SECTM|RMASK);
                  AD |= BR & ~(SECTM|RMASK);
               } else {
@@ -5817,9 +5815,9 @@ unasign:
                   if (SC) {
                       int  bpw, left, newb, adjw, adjb;
 
-                      f = 0;
                       FE = (AR >> 30) & 077;  /* P */
 #if KLB
+                      f = 0;
                       if (QKLB && FE > 36) {
                           if (FE == 077)
                               goto muuo;
@@ -5850,14 +5848,19 @@ fprintf(stderr, "ADJBP > 36 %d %d\n\r", SC, FE);
                       }
                       FE = 36 - (adjb * SC) - ((36 - FE) % SC);   /* New P */
 #if KLB
-                      if (QKLB && f) {
+                      if (f) {
                           /* Short pointer */
-                          f = (AR >> 30) & 077;  /* P */
-                          AR = (((uint64)((f + adjb) & 077)) << 30) |    /* Make new BP */
+                          for (f = 0; f < 28; f++) {
+                             if (_byte_adj[f].s == SC && _byte_adj[f].p == FE) {
+                                 FE = f + 37;
+                                 break;
+                             }
+                          }
+                          AR = (((uint64)(FE & 077)) << 30) |    /* Make new BP */
                                 ((AR + adjw) & (SECTM|RMASK));
                           set_reg(AC, AR);
                           break;
-                      } else if (QKLB && pc_sect != 0 && (AR & BIT12) != 0) {
+                      } else if (QKLB && t20_page && pc_sect != 0 && (AR & BIT12) != 0) {
                           /* Full pointer */
                           AB = (AB + 1) & RMASK;
                           if (Mem_read(0, 0, 0))
@@ -5904,7 +5907,7 @@ fprintf(stderr, "ADJBP > 36 %d %d\n\r", SC, FE);
                   AR = MB;
                   SCAD = (AR >> 30) & 077;
 #if KL & KLB
-                  if (QKLB && SCAD > 36) {  /* Extended pointer */
+                  if (QKLB && t20_page && SCAD > 36) {  /* Extended pointer */
                       int i = SCAD - 37;
 //fprintf(stderr, "ILDB %012llo %d %d -> %d %d %d\n\r", AR, SCAD, i, _byte_adj[i].p, _byte_adj[i].s,_byte_adj[i].n);
                       if (SCAD == 077)
@@ -5934,7 +5937,7 @@ fprintf(stderr, "ADJBP > 36 %d %d\n\r", SC, FE);
                       SCAD = ((0777 ^ SC) + 044 + 1) & 0777;
 #if KL
 #if KLB
-                      if (QKLB && pc_sect != 0 && (AR & BIT12) != 0) { /* Full pointer */
+                      if (QKLB && t20_page && pc_sect != 0 && (AR & BIT12) != 0) { /* Full pointer */
                           AB = (AB + 1) & RMASK;
                           if (Mem_read(0, 0, 0))
                               goto last;
@@ -5989,7 +5992,7 @@ fprintf(stderr, "ADJBP > 36 %d %d\n\r", SC, FE);
                   SC = (AR >> 24) & 077;
                   SCAD = (AR >> 30) & 077;
 #if KL & KLB
-                  if (QKLB && SCAD > 36) {   /* Extended pointer */
+                  if (QKLB && t20_page && SCAD > 36) {   /* Extended pointer */
                       int i = SCAD - 37;
                       if (SCAD == 077)
                           goto muuo;
@@ -6017,7 +6020,7 @@ ldb_ptr:
 #if KL
                   ptr_flg = 1;
 #if KLB
-                  if (QKLB && (SC < 36) && (glb_sect || cur_sect != 0) && (AR & BIT12) != 0) {
+                  if (QKLB && t20_page && (SC < 36) && (glb_sect || cur_sect != 0) && (AR & BIT12) != 0) {
                       /* Full pointer */
                       AB = (AB + 1) & RMASK;
 //fprintf(stderr, "LBP %o %o %06o %012llo\n\r", SC, SCAD, AB, MB);
@@ -7314,12 +7317,14 @@ jrstf:
                                 | (prev_sect & 037)
 #endif
                                  ) & FMASK;
+                          /* Save Previous Public context */
                           if ((FLAGS & USER) == 0) {
                               MB &= ~SMASK;
                               MB |= (FLAGS & PRV_PUB) ? SMASK : 0;
                           }
                           if (uuo_cycle | pi_cycle) {
                              FLAGS &= ~(USER|PUBLIC); /* Clear USER */
+                             sect = 0;                /* Force section zero on IRQ */
                           }
                           if (Mem_write(0, 0))
                              goto last;
@@ -7347,7 +7352,6 @@ jrstf:
                         break;
 
               case 014:  /* SFM */
-#if KLB
                         MB = ((((uint64)FLAGS) << 23) | (uint64)(prev_sect & 037)) & FMASK;
                         if ((FLAGS & USER) == 0) {
                             MB &= ~SMASK;
@@ -7355,7 +7359,6 @@ jrstf:
                         }
                         (void)Mem_write(0, 0);
                         goto last;
-#endif
 
               case 003:  /* Invalid */
               case 011:  /* Invalid */
@@ -7388,7 +7391,7 @@ jrstf:
 #endif
               PC = AR & RMASK;
 #if KLB
-              if (QKLB && glb_sect)
+              if (QKLB && t20_page && glb_sect)
                  pc_sect = (AR >> 18) & 07777;
 #endif
 #else
@@ -7569,8 +7572,15 @@ jrstf:
                   flag3 = 1;
               }
 
-              AR = load_tlb(flag1, f, flag3, 0, 0, 0);
-              page_fault = 0;     /* Incase error during lookup */
+              AR = load_tlb(flag1, f, flag3, 0);
+              if (page_fault) {
+                  page_fault = 0;  
+                  AR |= BIT8 | fault_data;
+                  if (flag1)                      /* U */
+                      AR |= SMASK;
+                  set_reg(AC, AR);
+                  break;
+              }
               BR = AR;
               /* Remap the flag bits */
               if (BR & KL_PAG_A) {      /* A */
@@ -7623,7 +7633,7 @@ jrstf:
               /* Stack, JUMP */
     case 0260:  /* PUSHJ */     /* AR Frm PC */
 #if KL & KLB
-              if (QKLB && pc_sect != 0)
+              if (QKLB && t20_page && pc_sect != 0)
                   MB = ((uint64)pc_sect << 18) + (PC + !pi_cycle);
               else {
 #endif
@@ -7843,7 +7853,7 @@ jrstf:
 
     case 0264: /* JSR */       /* AR Frm PC */
 #if KL & KLB
-              if (QKLB && pc_sect != 0)
+              if (QKLB && t20_page && pc_sect != 0)
                   MB = ((uint64)pc_sect << 18) + (PC + !pi_cycle);
               else {
 #endif
@@ -7876,7 +7886,7 @@ jrstf:
 #endif
               PC_CHANGE
 #if KL & KLB
-              if (QKLB) {
+              if (QKLB && t20_page) {
                   AR = AR + 1;
                   if (AR & BIT17)
                       cur_sect++;
@@ -7891,7 +7901,7 @@ jrstf:
 
     case 0265: /* JSP */       /* AR Frm PC */
 #if KL & KLB
-              if (QKLB && pc_sect != 0)
+              if (QKLB && t20_page && pc_sect != 0)
                   AD = ((uint64)pc_sect << 18) + (PC + !pi_cycle);
               else {
 #endif
@@ -7919,7 +7929,7 @@ jrstf:
 #endif
               PC_CHANGE
 #if KL & KLB
-              if (QKLB && glb_sect)
+              if (QKLB && t20_page && glb_sect)
                   pc_sect = cur_sect;
 #endif
               PC = AR & RMASK;
@@ -7941,7 +7951,7 @@ jrstf:
 #endif
               PC_CHANGE
 #if KL & KLB
-              if (QKLB && glb_sect)
+              if (QKLB && t20_page && glb_sect)
                   pc_sect = cur_sect;
 #endif
               PC = AR & RMASK;
@@ -8195,8 +8205,17 @@ skip_op:
               AR = AR & CM(BR);         /* ANDCA */
               break;
 
-    case 0414:    /* SETM  */
     case 0415:    /* SETMI */
+#if KL & KLB
+              /* XMOVEI for extended addressing */
+              if (QKLB && t20_page && pc_sect != 0) {
+                  if (glb_sect == 0 && AR < 020)
+                      AR |= BIT17;
+                  else
+                      AR |= ((uint64)cur_sect) << 18;
+              }
+#endif
+    case 0414:    /* SETM  */
     case 0416:    /* SETMM */
     case 0417:    /* SETMB */
                                          /* SETM */
@@ -8293,8 +8312,13 @@ skip_op:
 
     case 0501:    /* HLLI */
 #if KL && KLB
-              if (IR == 0501 && QKLB && t20_page && pc_sect != 0)
-                  AR = ((AB > 020) ? ((uint64)pc_sect) : 1) << 18;
+              /* XHLLI for extended addressing */
+              if (QKLB && t20_page && IR == 0501 && pc_sect != 0) {
+                  if (glb_sect == 0 && AR < 020)
+                      AR = BIT17;
+                  else
+                      AR = ((uint64)cur_sect) << 18;
+              }
               /* Fall Through */
 #endif
  

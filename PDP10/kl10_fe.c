@@ -1062,8 +1062,14 @@ cty:
 #if (NUM_DEVS_TTY > 0)
         case PRI_EMFLO:            /* Flush output */
                if ((cmd->dev & 0377) == PRI_EMDLS) {
-                  int   ln = ((cmd->sdev >> 8) & 0377) - 2;;
-                  tty_out[ln].in_ptr = tty_out[ln].out_ptr = 0;
+                  int   ln = ((cmd->sdev >> 8) & 0377) - 2;
+                  if (ln == -2) 
+                      cty_out.in_ptr = cty_out.out_ptr = 0;
+                  else
+                      tty_out[ln].in_ptr = tty_out[ln].out_ptr = 0;
+                  data1[0] = cmd->sdev;
+                  if (dte_queue(PRI_EMACK, PRI_EMDLS, 1, data1) == 0)
+                       return;
                }
                break;
         case PRI_EMDSC:            /* Dataset connect */
