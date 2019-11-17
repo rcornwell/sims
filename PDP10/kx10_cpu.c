@@ -1988,7 +1988,7 @@ sim_debug(DEBUG_DATAIO, &cpu_dev, "Rl=%06o Pl=%06o, Rh=%06o, Ph=%06o\n", Rl, Pl,
 
 #if KL
 int
-load_tlb(int uf, int page, int upmp, int wr)
+load_tlb(int uf, int page, int wr)
 {
     uint64  data;
 
@@ -2046,7 +2046,7 @@ load_tlb(int uf, int page, int upmp, int wr)
 #define PG_WRT   0020000
 #define PG_KEP   0010000
 #define PG_CAC   0004000
-#define PG_STG   0000077
+#define PG_STG   (0000077LL << 18)
 #define PG_IDX   0000777
 
 #define PG_MASK  0000003777777LL
@@ -2067,7 +2067,7 @@ load_tlb(int uf, int page, int upmp, int wr)
          int   base = 0540;
 #endif
 
-//fprintf(stderr, "Lookup Page %o %03o upmp=%o u=%o w=%o %06o\r\n", sect, page, upmp, uf, wr, AB);
+//fprintf(stderr, "Lookup Page %o %03o u=%o w=%o %06o\r\n", sect, page, uf, wr, AB);
         /* Get segment pointer */
         /* And save it */
 #if KLB
@@ -2097,7 +2097,9 @@ sect_loop:
        case 2:      /* Shared page */
             acc_bits &= (data >> 18) & RMASK;
             sim_interval--;
-            data = M[(data & RMASK) + spt];
+            index = data & RMASK;
+            data = M[index + spt];
+//fprintf(stderr, "SMap1 %012llo %o %o\n\r", data, index, index + spt);
             break;
 
        case 3:      /* Indirect page */
@@ -2106,29 +2108,18 @@ sect_loop:
             sim_interval--;
             data = M[(data & RMASK) + spt];
 //fprintf(stderr, "IMap1 %012llo %o %o %o\n\r", data, pg << 9, index, page);
-            if (((data >> 18) & PG_STG) != 0) {
+            if ((data & PG_STG) != 0) {
                 fault_data = 0;
                 page_fault = 1;
                 return 0;
             }
             pg = data & PG_PAG;
-            if (cst) {
-                sim_interval--;
-                cst_val = M[cst + pg];
-                if ((cst_val & PG_AGE) == 0) {
-//fprintf(stderr, "ZMap1 %012llo %012llo age\n\r", data, cst_val);
-                    fault_data = 0;
-                    page_fault = 1;
-                    return 0;
-                }
-                M[cst + pg] = (cst_val & cst_msk) | cst_dat;
-            }
             sim_interval--;
             data = M[(pg << 9) | index];
 //fprintf(stderr, "JMap1 %012llo %o %o %o\n\r", data, pg << 9, index, page);
             goto sect_loop;
         }
-        if (((data >> 18) & PG_STG) != 0) {
+        if ((data & PG_STG) != 0) {
             fault_data = 0;
             page_fault = 1;
             return 0;
@@ -2171,7 +2162,9 @@ pg_loop:
         case 2:      /* Shared page */
              acc_bits &= (data >> 18) & RMASK;
              sim_interval--;
-             data = M[(data & RMASK) + spt];
+             index = data & RMASK;
+             data = M[index + spt];
+//fprintf(stderr, "SMap2 %012llo %o %o\n\r", data, index, index + spt);
              break;
 
         case 3:      /* Indirect page */
@@ -2180,23 +2173,12 @@ pg_loop:
              sim_interval--;
              data = M[(data & RMASK) + spt];
 //fprintf(stderr, "IMap2 %012llo %o %o %o\n\r", data, pg << 9, index, page);
-             if (((data >> 18) & PG_STG) != 0) {
+             if ((data & PG_STG) != 0) {
                  fault_data = 0;
                  page_fault = 1;
                  return 0;
              }
              pg = data & RMASK;
-             if (cst) {
-                 sim_interval--;
-                 cst_val = M[cst + pg];
-//fprintf(stderr, "ZMap2 %08o %012llo %012llo age\n\r", cst + pg, data, cst_val);
-                 if ((cst_val & PG_AGE) == 0) {
-                     fault_data = 0;
-                     page_fault = 1;
-                     return 0;
-                 }
-                 M[cst + pg] = (cst_val & cst_msk) | cst_dat;
-             }
              sim_interval--;
              data = M[(pg << 9) | index];
 //fprintf(stderr, "JMap %012llo %o %o %o\n\r", data, pg << 9, index, page);
@@ -2204,14 +2186,8 @@ pg_loop:
         }
 
         /* Now have final page */
-        if ((data >> 18) & PG_STG) {
-            fault_data = BIT2;           /* BIT2 */
-            if (acc_bits & PG_CAC)
-               fault_data |= BIT7;       /* BIT7 */
-            if (acc_bits & PG_PUB)
-               fault_data |= BIT6;       /* BIT6 */
-            if (acc_bits & PG_WRT) 
-               fault_data |= BIT4;       /* BIT4 */
+        if ((data & PG_STG) != 0) {
+           fault_data = 0;
            page_fault = 1;
            return 0;
         }
@@ -2243,11 +2219,11 @@ pg_loop:
            }
         }
         /* Now construct a TBL entry */
-/* A = accessable */
-/* P = public */
-/* W = writable */
-/* S = user */
-/* C = cache */
+        /* A = accessable */
+        /* P = public */
+        /* W = writable */
+        /* S = user */
+        /* C = cache */
         data = pg | KL_PAG_A;
         if (acc_bits & PG_PUB)
            data |= KL_PAG_P;                /* P */
@@ -2272,7 +2248,7 @@ pg_loop:
 
        /* Map the page */
        sim_interval--;
-       if (uf | upmp) {
+       if (uf) {
            data = M[ub_ptr + (page >> 1)];
            u_tlb[page & 01776] = (uint32)(RMASK & (data >> 18));
            u_tlb[page | 1] = (uint32)(RMASK & data);
@@ -2388,7 +2364,7 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
 #endif
     /* If not valid, go refill it */
     if (data == 0) {
-        data = load_tlb(uf, page, upmp, wr);
+        data = load_tlb(uf | upmp, page, wr);
         if (data == 0 && page_fault) {
             fault_data |= ((uint64)addr);
             /* Ignore faults if flag set */
@@ -2419,13 +2395,15 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
     /* Check if we need to modify TLB entry for TOPS 20 */
     if (t20_page && (data & KL_PAG_A) && (wr & ((data & KL_PAG_W) == 0)) && (data & KL_PAG_S)) {
         uint64 cst = FM[(06<<4)|2] & PG_MASK;
+        uint64 cst_msk = FM[(06<<4)|0];
+        uint64 cst_dat = FM[(06<<4)|1];
         /* Update CST entry if needed */
         if (cst) {
            uint64 cst_val;
            int  pg = data & 017777;
            sim_interval--;
            cst_val = M[cst + pg];
-           M[cst + pg] = cst_val | 1;
+           M[cst + pg] = (cst_msk & cst_val) | cst_dat | 1;
         }
         data |= KL_PAG_W;
         /* Map the page */
@@ -2625,7 +2603,7 @@ int exec_page_lookup(t_addr addr, int wr, int *loc)
     /* If not valid, go refill it */
     if (data == 0 || (data & LMASK) != 0) {
         sect = 0;
-        data = load_tlb(0, page, upmp, wr);
+        data = load_tlb(upmp, page, wr);
         if (data == 0) {
            page_fault = 0;
            return 1;
@@ -5818,7 +5796,7 @@ unasign:
                       FE = (AR >> 30) & 077;  /* P */
 #if KLB
                       f = 0;
-                      if (QKLB && FE > 36) {
+                      if (QKLB && t20_page && pc_sect != 0 && FE > 36) {
                           if (FE == 077)
                               goto muuo;
                           f = 1;
@@ -5907,7 +5885,7 @@ fprintf(stderr, "ADJBP > 36 %d %d\n\r", SC, FE);
                   AR = MB;
                   SCAD = (AR >> 30) & 077;
 #if KL & KLB
-                  if (QKLB && t20_page && SCAD > 36) {  /* Extended pointer */
+                  if (QKLB && t20_page && pc_sect != 0 && SCAD > 36) {  /* Extended pointer */
                       int i = SCAD - 37;
 //fprintf(stderr, "ILDB %012llo %d %d -> %d %d %d\n\r", AR, SCAD, i, _byte_adj[i].p, _byte_adj[i].s,_byte_adj[i].n);
                       if (SCAD == 077)
@@ -5992,7 +5970,7 @@ fprintf(stderr, "ADJBP > 36 %d %d\n\r", SC, FE);
                   SC = (AR >> 24) & 077;
                   SCAD = (AR >> 30) & 077;
 #if KL & KLB
-                  if (QKLB && t20_page && SCAD > 36) {   /* Extended pointer */
+                  if (QKLB && t20_page && pc_sect != 0 && SCAD > 36) {   /* Extended pointer */
                       int i = SCAD - 37;
                       if (SCAD == 077)
                           goto muuo;
@@ -6020,7 +5998,7 @@ ldb_ptr:
 #if KL
                   ptr_flg = 1;
 #if KLB
-                  if (QKLB && t20_page && (SC < 36) && (glb_sect || cur_sect != 0) && (AR & BIT12) != 0) {
+                  if (QKLB && t20_page && (SC < 36) && pc_sect != 0 && (glb_sect || cur_sect != 0) && (AR & BIT12) != 0) {
                       /* Full pointer */
                       AB = (AB + 1) & RMASK;
 //fprintf(stderr, "LBP %o %o %06o %012llo\n\r", SC, SCAD, AB, MB);
@@ -7561,6 +7539,7 @@ jrstf:
                   if (flag1)                 /* U */
                      AR |= SMASK;            /* BIT0 */
                   AR |= BIT2|BIT3|BIT4|BIT8;
+fprintf(stderr, "Map reg %012llo %06o\r\n", AR, AB);
                   set_reg(AC, AR);
                   break;
               }
@@ -7572,12 +7551,13 @@ jrstf:
                   flag3 = 1;
               }
 
-              AR = load_tlb(flag1, f, flag3, 0);
+              AR = load_tlb(flag1 | flag3, f, 0);
               if (page_fault) {
                   page_fault = 0;  
-                  AR |= BIT8 | fault_data;
+                  AR |= fault_data;
                   if (flag1)                      /* U */
                       AR |= SMASK;
+fprintf(stderr, "Map fault %012llo %06o\r\n", AR, AB);
                   set_reg(AC, AR);
                   break;
               }
@@ -7599,6 +7579,7 @@ jrstf:
               } else
                  AR = (f & 01740) ? 0 : 0377777LL;
               AR |= BIT8;
+fprintf(stderr, "Map ok %012llo %06o\r\n", AR, AB);
 #else
               /* Figure out if this is a user space access */
               if (xct_flag != 0 && !flag1) {
@@ -8708,7 +8689,7 @@ last:
         Mem_read_nopage();
         FLAGS = (MB >> 23) & 017777;
         /* If transistioning from user to executive adjust flags */
-        if ((FLAGS & USER) != 0 && flag1)
+        if ((FLAGS & USER) == 0 && flag1)
             FLAGS |= USERIO;
         if ((FLAGS & USER) == 0 && (flag3 || (FLAGS & OVR) != 0))
             FLAGS |= PRV_PUB|OVR;
@@ -8872,7 +8853,7 @@ do_byte_setup(int n, int wr, int *pos, int *sz)
     /* Advance pointer */
 //fprintf(stderr, "%s %012llo %012llo %2o %2o %03o\n\r", (wr)?"store":"load", val1, val2, s, p, np);
 #if KLB
-    if (QKLB && t20_page) {
+    if (QKLB && t20_page && pc_sect != 0) {
         if (p > 36) {  /* Extended pointer */
             int i = p - 37;
             *sz = s = _byte_adj[i].s;
@@ -8890,7 +8871,7 @@ do_byte_setup(int n, int wr, int *pos, int *sz)
            sect = (MB >> 18) & 07777;
            glb_sect = 1;
 //fprintf(stderr, "Load_bytex %012llo %012llo %06 %2o %2o\n\r", val1, val2, sect, s, p);
-        } else if (pc_sect != 0 && (val1 & BIT12) != 0) { /* Full pointer */
+        } else if ((val1 & BIT12) != 0) { /* Full pointer */
             if (np & 0400) {
                 np = p = ((0777 ^ s) + 044 + 1) & 0777;
                 if (val2 & SMASK)
@@ -9198,7 +9179,7 @@ adj_byte(int n)
     /* Advance pointer */
     np = (p + (0777 ^ s) + 1) & 0777;
 #if KLB
-    if (QKLB && t20_page) {
+    if (QKLB && t20_page && pc_sect != 0) {
         if (p > 36) {  /* Extended pointer */
             int i = p - 37;
             s = _byte_adj[i].s;
@@ -9209,7 +9190,7 @@ adj_byte(int n)
             set_reg(n+1, val1);
             set_reg(n+2, val2);
             return;
-        } else if (pc_sect != 0 && (val1 & BIT12) != 0) { /* Full pointer */
+        } else if ((val1 & BIT12) != 0) { /* Full pointer */
             if (np & 0400)
                 val2 = (val2 & ~(SECTM|RMASK)) | ((val2 + 1) & (SECTM|RMASK));
         } else {
@@ -9258,7 +9239,7 @@ adv_byte(int n)
     /* Advance pointer */
     np = (p + (0777 ^ s) + 1) & 0777;
 #if KLB
-    if (QKLB && t20_page) {
+    if (QKLB && t20_page && pc_sect != 0) {
         if (p > 36) {  /* Extended pointer */
             int i = p - 37;
             s = _byte_adj[i].s;
@@ -9270,7 +9251,7 @@ adv_byte(int n)
                 np = ((0777 ^ s) + 044 + 1) & 0777;
                 val2 = (val2 & ~(SECTM|RMASK)) | ((val2 + 1) & (SECTM|RMASK));
             }
-        } else if (pc_sect != 0 && (val1 & BIT12) != 0) { /* Full pointer */
+        } else if ((val1 & BIT12) != 0) { /* Full pointer */
             if (np & 0400) {
                 np = ((0777 ^ s) + 044 + 1) & 0777;
                 val2 = (val2 & ~(SECTM|RMASK)) | ((val2 + 1) & (SECTM|RMASK));
