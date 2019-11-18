@@ -651,7 +651,7 @@ void rh_setup(struct rh_if *rhc, uint32 addr)
 int rh_fetch(struct rh_if *rhc) {
      uint64 data;
      int    reg;
-     DEVICE *dptr;
+     DEVICE *dptr = NULL;
 
      for (reg = 0; rh[reg].dev_num != 0; reg++) {
         if (rh[reg].rh == rhc) {

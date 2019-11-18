@@ -889,39 +889,37 @@ int opflags[] = {
 struct {
     int p;
     int s;
-    int n;
-    int l;
 } _byte_adj[] = {
-    { /* 37 */  36, 6, 38, 0 }, /* 45 */
-    { /* 38 */  30, 6, 39, 0 }, /* 46 */
-    { /* 39 */  24, 6, 40, 0 }, /* 47 */
-    { /* 40 */  18, 6, 41, 0 }, /* 50 */
-    { /* 41 */  12, 6, 42, 0 }, /* 51 */
-    { /* 42 */   6, 6, 43, 0 }, /* 52 */
-    { /* 43 */   0, 6, 37, 1 }, /* 53 */
+    { /* 37 */  36, 6 }, /* 45 */
+    { /* 38 */  30, 6 }, /* 46 */
+    { /* 39 */  24, 6 }, /* 47 */
+    { /* 40 */  18, 6 }, /* 50 */
+    { /* 41 */  12, 6 }, /* 51 */
+    { /* 42 */   6, 6 }, /* 52 */
+    { /* 43 */   0, 6 }, /* 53 */
 
-    { /* 44 */  36, 8, 45, 0 }, /* 54 */
-    { /* 45 */  28, 8, 46, 0 }, /* 55 */
-    { /* 46 */  20, 8, 47, 0 }, /* 56 */
-    { /* 47 */  12, 8, 48, 0 }, /* 57 */
-    { /* 48 */   4, 8, 44, 1 }, /* 60 */
+    { /* 44 */  36, 8 }, /* 54 */
+    { /* 45 */  28, 8 }, /* 55 */
+    { /* 46 */  20, 8 }, /* 56 */
+    { /* 47 */  12, 8 }, /* 57 */
+    { /* 48 */   4, 8 }, /* 60 */
 
-    { /* 49 */  36, 7, 50, 0 }, /* 61 */
-    { /* 50 */  29, 7, 51, 0 }, /* 62 */
-    { /* 51 */  22, 7, 52, 0 }, /* 63 */
-    { /* 52 */  15, 7, 53, 0 }, /* 64 */
-    { /* 53 */   8, 7, 54, 0 }, /* 65 */
-    { /* 54 */   1, 7, 49, 1 }, /* 66 */
+    { /* 49 */  36, 7 }, /* 61 */
+    { /* 50 */  29, 7 }, /* 62 */
+    { /* 51 */  22, 7 }, /* 63 */
+    { /* 52 */  15, 7 }, /* 64 */
+    { /* 53 */   8, 7 }, /* 65 */
+    { /* 54 */   1, 7 }, /* 66 */
 
-    { /* 55 */  36, 9, 56, 0 }, /* 67 */
-    { /* 56 */  27, 9, 57, 0 }, /* 70 */
-    { /* 57 */  18, 9, 58, 0 }, /* 71 */
-    { /* 58 */   9, 9, 59, 0 }, /* 72 */
-    { /* 59 */   0, 9, 55, 1 }, /* 73 */
+    { /* 55 */  36, 9 }, /* 67 */
+    { /* 56 */  27, 9 }, /* 70 */
+    { /* 57 */  18, 9 }, /* 71 */
+    { /* 58 */   9, 9 }, /* 72 */
+    { /* 59 */   0, 9 }, /* 73 */
 
-    { /* 60 */  36,18, 61, 0 }, /* 74 */
-    { /* 61 */  18,18, 62, 0 }, /* 75 */
-    { /* 62 */   0,18, 60, 1 }  /* 76 */
+    { /* 60 */  36,18 }, /* 74 */
+    { /* 61 */  18,18 }, /* 75 */
+    { /* 62 */   0,18 }  /* 76 */
 };
 #endif
 
@@ -2315,7 +2313,7 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
     else if (xct_flag != 0 && !uf && !fetch) {
 //fprintf(stderr, "PXCT ir=%03o pc=%06o ad=%06o x=%02o c=%o b=%o p=%o w=%o", IR, PC, addr, xct_flag, cur_context, BYF5, ptr_flg, wr);
 #if KLB
-//fprintf(stderr, " s%o", sect);
+//fprintf(stderr, " s%o %o", sect, glb_sect);
 #endif
         if (((xct_flag & 8) != 0 && cur_context && !ptr_flg) ||
             ((xct_flag & 4) != 0 && !cur_context && !BYF5 && !ptr_flg) ||
@@ -2326,7 +2324,7 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
 #if KLB
             if (QKLB && !glb_sect && !extend)
                sect = prev_sect;
-//fprintf(stderr, " os%o", sect);
+//fprintf(stderr, " ps=%o os%o", prev_sect, sect);
 #endif
         }
 //fprintf(stderr, " %o %o\n\r", uf, pub);
@@ -4421,6 +4419,7 @@ st_pi:
           /* Fall through */
 #else
     case 0052: case 0053:
+          /* Fall through */
 #endif
 muuo:
     case 0000: /* UUO */
@@ -5802,7 +5801,7 @@ unasign:
                           f = 1;
                           SC = _byte_adj[(FE - 37)].s;
                           FE = _byte_adj[(FE - 37)].p;
-fprintf(stderr, "ADJBP > 36 %d %d\n\r", SC, FE);
+//fprintf(stderr, "ADJBP > 36 %d %d\n\r", SC, FE);
                       }
 #endif
                       left = (36 - FE) / SC;  /* Number bytes left (36 - P)/S */
@@ -5887,7 +5886,7 @@ fprintf(stderr, "ADJBP > 36 %d %d\n\r", SC, FE);
 #if KL & KLB
                   if (QKLB && t20_page && pc_sect != 0 && SCAD > 36) {  /* Extended pointer */
                       int i = SCAD - 37;
-//fprintf(stderr, "ILDB %012llo %d %d -> %d %d %d\n\r", AR, SCAD, i, _byte_adj[i].p, _byte_adj[i].s,_byte_adj[i].n);
+//fprintf(stderr, "ILDB %012llo %d %d -> %d %d\n\r", AR, SCAD, i, _byte_adj[i].p, _byte_adj[i].s);
                       if (SCAD == 077)
                           goto muuo;
                       SC = _byte_adj[i].s;
@@ -7539,7 +7538,7 @@ jrstf:
                   if (flag1)                 /* U */
                      AR |= SMASK;            /* BIT0 */
                   AR |= BIT2|BIT3|BIT4|BIT8;
-fprintf(stderr, "Map reg %012llo %06o\r\n", AR, AB);
+//fprintf(stderr, "Map reg %012llo %06o\r\n", AR, AB);
                   set_reg(AC, AR);
                   break;
               }
@@ -7557,7 +7556,7 @@ fprintf(stderr, "Map reg %012llo %06o\r\n", AR, AB);
                   AR |= fault_data;
                   if (flag1)                      /* U */
                       AR |= SMASK;
-fprintf(stderr, "Map fault %012llo %06o\r\n", AR, AB);
+//fprintf(stderr, "Map fault %012llo %06o\r\n", AR, AB);
                   set_reg(AC, AR);
                   break;
               }
@@ -7579,7 +7578,7 @@ fprintf(stderr, "Map fault %012llo %06o\r\n", AR, AB);
               } else
                  AR = (f & 01740) ? 0 : 0377777LL;
               AR |= BIT8;
-fprintf(stderr, "Map ok %012llo %06o\r\n", AR, AB);
+//fprintf(stderr, "Map ok %012llo %06o\r\n", AR, AB);
 #else
               /* Figure out if this is a user space access */
               if (xct_flag != 0 && !flag1) {
@@ -8663,9 +8662,11 @@ last:
         FLAGS |= trap_flag & (TRP1|TRP2);
         trap_flag = (TRP1|TRP2);
 #if KLB
-        if (QKLB && t20_page)
-            MB = (((uint64)(FLAGS) << 23) & LMASK) | (uint64)(pc_sect & 037);
-        else
+        if (QKLB && t20_page) {
+            MB = (((uint64)(FLAGS) << 23) & LMASK); 
+            if ((FLAGS & USER) == 0)
+               MB |= (uint64)(prev_sect & 037);
+        } else
 #endif
             MB = (((uint64)(FLAGS) << 23) & LMASK) | (PC & RMASK);
         if ((FLAGS & USER) == 0) {
