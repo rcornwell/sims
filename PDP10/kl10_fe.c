@@ -1536,7 +1536,6 @@ t_stat dteo_svc (UNIT *uptr)
                             ((ch > 040 && ch < 0177)? ch: '.'));
     }
     cty_done++;
-    dte_input();
     return SCPE_OK;
 }
 

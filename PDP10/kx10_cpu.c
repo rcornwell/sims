@@ -2322,7 +2322,7 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
             uf = (FLAGS & USERIO) != 0;
             pub = (FLAGS & PRV_PUB) != 0;
 #if KLB
-            if (QKLB && !glb_sect && !extend)
+            if (QKLB && (!glb_sect || ((xct_flag & 4) != 0 && prev_sect == 0)) && !extend)
                sect = prev_sect;
 //fprintf(stderr, " ps=%o os%o", prev_sect, sect);
 #endif
@@ -4085,7 +4085,7 @@ no_fetch:
        AD = MB;  /* Save for historical sake */
        IA = AB;
 #if KL & KLB
-       glb_sect = 0;
+//       glb_sect = 0;
 #endif
        i_flags = opflags[IR];
        BYF5 = 0;
@@ -4112,20 +4112,28 @@ no_fetch:
     }
 #endif
 
-    /* Handle indirection repeat until no longer indirect */
 #if KL && KLB
-        /* If we are doing a PXCT with E1 or E2 set, change section */
-         if (QKLB && t20_page) {
-             if (((xct_flag & 8) != 0 && (FLAGS & USER) == 0 && !ptr_flg) ||
-                 ((xct_flag & 2) != 0 && (FLAGS & USER) == 0 && ptr_flg))
-             sect = cur_sect = prev_sect;
-             /* Short cut for extended pointer address */
-             if (ptr_flg && (glb_sect || cur_sect != 0) && (AR & BIT12) != 0) { /* Full pointer */
-                 ind = 1;  /* Allow us to read word, xDB has already bumped AB */
-                 goto in_loop;
-             }
-         }
+    /* If we are doing a PXCT with E1 or E2 set, change section */
+    if (QKLB && t20_page) {
+        if (((xct_flag & 8) != 0 && (FLAGS & USER) == 0 && !ptr_flg) ||
+            ((xct_flag & 2) != 0 && (FLAGS & USER) == 0 && ptr_flg))
+        sect = cur_sect = prev_sect;
+        /* Short cut for extended pointer address */
+        if (ptr_flg && (glb_sect || cur_sect != 0) && (AR & BIT12) != 0) { /* Full pointer */
+            ind = 1;  /* Allow us to read word, xDB has already bumped AB */
+            goto in_loop;
+        }
+        /* If we are evaluating a address from non-zero section to reference zero sections.
+           Then we need to force the current section to zero before starting.
+
+           This fixes the case of a XCT 4,[instr n,addr] that should really be in section
+           zero. */
+//        if ((xct_flag & 4) != 0 && (FLAGS & USER) == 0 && prev_sect == 0)
+ //            cur_sect = prev_sect;
+    }
+    
 #endif
+    /* Handle indirection repeat until no longer indirect */
     do {
          if ((!pi_cycle) & pi_pending
 #if KI | KL
@@ -4451,6 +4459,10 @@ unasign:
               if (QKLB && t20_page) {
                   AR = (((uint64)cur_sect) << 18) | (uint64)AB; /* Save address */
                   MB = (((uint64)((IR << 9) | (AC << 5))) | ((uint64)(FLAGS) << 23)) & FMASK;
+                  if ((FLAGS & USER) == 0) {
+                      MB &= ~SMASK;
+                      MB |= (FLAGS & PRV_PUB) ? SMASK : 0;
+                  }
               } else
 #endif
               MB = ((uint64)(IR) << 27) | ((uint64)(AC) << 23) | (uint64)(AB);
@@ -4496,14 +4508,14 @@ unasign:
 #endif
               /* Save context */
               AB ++;
-              MB = SMASK|BIT1 |
+              MB = SMASK|BIT2|
                    ((uint64)(fm_sel & 0160) << 23) |
                    ((uint64)(prev_ctx & 0160) << 20) |
                    (ub_ptr >> 9);
 #if KLB
-              if (QKLB && t20_page) {
-                 MB |= ((uint64)(prev_sect & 037) << 18);
-                 prev_sect = pc_sect;
+              if (QKLB && t20_page && (FLAGS & USER) == 0) {
+                 MB |= BIT1|((uint64)(prev_sect & 037) << 18);
+//                 prev_sect = pc_sect;
               }
 #endif
               Mem_write_nopage();
@@ -4530,8 +4542,13 @@ unasign:
               if ((FLAGS & USER) == 0) {
                   if ((AB & 4) != 0)
                       FLAGS |= USERIO;
+#if KL
+                  if ((AB & 2))
+                      FLAGS |= PRV_PUB;
+#else
                   if ((AB & 2 || (FLAGS & OVR) != 0))
                       FLAGS |= PRV_PUB|OVR;
+#endif
               }
               PC = MB & RMASK;
               f_pc_inh = 1;
@@ -8661,14 +8678,14 @@ last:
         AB++;
         FLAGS |= trap_flag & (TRP1|TRP2);
         trap_flag = (TRP1|TRP2);
+        MB = (((uint64)(FLAGS) << 23) & LMASK); 
 #if KLB
         if (QKLB && t20_page) {
-            MB = (((uint64)(FLAGS) << 23) & LMASK); 
             if ((FLAGS & USER) == 0)
                MB |= (uint64)(prev_sect & 037);
         } else
 #endif
-            MB = (((uint64)(FLAGS) << 23) & LMASK) | (PC & RMASK);
+            MB |= (PC & RMASK);
         if ((FLAGS & USER) == 0) {
             MB &= ~SMASK;
             MB |= (FLAGS & PRV_PUB) ? SMASK : 0;
@@ -8688,12 +8705,17 @@ last:
         if (FLAGS & USER)
             flag1 = 1;
         Mem_read_nopage();
+#if KLB
+        if (QKLB && t20_page)
+            FLAGS = 0;
+        else
+#endif
         FLAGS = (MB >> 23) & 017777;
         /* If transistioning from user to executive adjust flags */
         if ((FLAGS & USER) == 0 && flag1)
             FLAGS |= USERIO;
-        if ((FLAGS & USER) == 0 && (flag3 || (FLAGS & OVR) != 0))
-            FLAGS |= PRV_PUB|OVR;
+        if ((FLAGS & USER) == 0 && flag3)
+            FLAGS |= PRV_PUB;
         PC = MB & RMASK;
 #if KLB
         if (QKLB && t20_page)

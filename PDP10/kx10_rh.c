@@ -549,16 +549,17 @@ void rh_writecw(struct rh_if *rhc, int nxm) {
                 wrd1 |= RH20_NOT_WC0;
                 if (rhc->status & RH20_XEND) {
                    wrd1 |= RH20_LONG_STS;
-                   rhc->status |= RH20_CHAN_ERR;
-                   if ((rhc->ptcr & 010) == 0) /* Write command */
-                        rhc->status |= RH20_LONG_WC;
+                   if ((rhc->ptcr & 070) == 060) /* Write command */
+                        rhc->status |= RH20_CHAN_ERR|RH20_LONG_WC;
                 }
              } else if ((rhc->status & RH20_XEND) == 0) {
                 wrd1 |= RH20_SHRT_STS;
-                rhc->status |= RH20_CHAN_ERR;
-                if ((rhc->ptcr & 010) == 0) /* Write command */
-                    rhc->status |= RH20_SHRT_WC;
+                if ((rhc->ptcr & 070) == 060) /* Write command */
+                    rhc->status |= RH20_SHRT_WC|RH20_CHAN_ERR;
              }
+             /* No error and not storing */
+             if ((rhc->status & RH20_CHAN_ERR) == 0 && (rhc->ptcr & BIT10) == 0)
+                 return;
              wrd1 |= RH20_NADR_PAR;
              M[eb_ptr|chan|1] = wrd1;
              M[eb_ptr|chan|2] = ((uint64)rhc->cop << 33) |
