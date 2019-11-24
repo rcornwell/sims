@@ -1497,9 +1497,9 @@ t_stat dev_mtr(uint32 dev, uint64 *data) {
             /* Read memory accounting */
             if (page_enable)  {
                 sim_interval--;
-                res = M[ub_ptr + 0506];
+                res = M[ub_ptr + 0507];
                 sim_interval--;
-                BR = (M[ub_ptr + 0507] & CMASK);
+                BR = (M[ub_ptr + 0506] & CMASK);
             } else {
                 res = 0 << 12;
                 BR = 0;
@@ -1515,9 +1515,9 @@ t_stat dev_mtr(uint32 dev, uint64 *data) {
             rtc_tim = ((int)us);
             if (page_enable)  {
                 sim_interval--;
-                res = M[ub_ptr + 0504];
+                res = M[ub_ptr + 0505];
                 sim_interval--;
-                BR = (M[ub_ptr + 0505] & CMASK);
+                BR = (M[ub_ptr + 0504] & CMASK);
             } else {
                 res = 0;
                 BR = t << 12;
@@ -1593,9 +1593,9 @@ t_stat dev_tim(uint32 dev, uint64 *data) {
             rtc_tim = ((int)us);
             if (page_enable)  {
                 sim_interval--;
-                res = (M[ub_ptr + 0504]);
+                res = (M[ub_ptr + 0505]);
                 sim_interval--;
-                BR = M[ub_ptr + 0505];
+                BR = M[ub_ptr + 0504];
             } else {
                 res = 0 << 12;
                 BR = t;
@@ -2308,9 +2308,12 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
     /*  AC = 2 use ptr_flg */
     /*  AC = 4 all general access */
     /*  AC = 8 only in cur_context EA calculations */
-    if (flag)
-        sect = uf = 0;
-    else if (xct_flag != 0 && !uf && !fetch) {
+    if (flag) {
+        uf = 0;
+#if KLB
+        sect = 0;
+#endif
+    } else if (xct_flag != 0 && !uf && !fetch) {
 //fprintf(stderr, "PXCT ir=%03o pc=%06o ad=%06o x=%02o c=%o b=%o p=%o w=%o", IR, PC, addr, xct_flag, cur_context, BYF5, ptr_flg, wr);
 #if KLB
 //fprintf(stderr, " s%o %o", sect, glb_sect);
@@ -2322,7 +2325,7 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
             uf = (FLAGS & USERIO) != 0;
             pub = (FLAGS & PRV_PUB) != 0;
 #if KLB
-            if (QKLB && (!glb_sect || ((xct_flag & 4) != 0 && prev_sect == 0)) && !extend)
+            if (QKLB && (!glb_sect/* || ((xct_flag & 4) != 0 && prev_sect == 0)*/) && !extend)
                sect = prev_sect;
 //fprintf(stderr, " ps=%o os%o", prev_sect, sect);
 #endif
@@ -2519,6 +2522,17 @@ int Mem_read(int flag, int cur_context, int fetch) {
             }
 //fprintf(stderr, "\n\r");
         }
+#if KLB
+        /* Check if invalid section */
+        if (QKLB && t20_page && !flag && (sect & 07740) != 0) {
+            fault_data = (027LL << 30) | (uint64)addr  | (((uint64)sect) << 18);
+            if (USER==0)                 /* U */
+               fault_data |= SMASK;      /*  BIT0 */
+//fprintf(stderr, "Invalid section %012llo\n\r", fault_data);
+            page_fault = 1;
+            return 0;
+        }
+#endif
         MB = get_reg(AB);
     } else {
         if (!page_lookup(AB, flag, &addr, 0, cur_context, fetch))
@@ -2555,6 +2569,17 @@ int Mem_write(int flag, int cur_context) {
             }
 //fprintf(stderr, "\n\r");
         }
+#if KLB
+        /* Check if invalid section */
+        if (QKLB && t20_page && !flag && (sect & 07740) != 0) {
+            fault_data = (027LL << 30) | (uint64)addr  | (((uint64)sect) << 18);
+            if (USER==0)                 /* U */
+               fault_data |= SMASK;      /*  BIT0 */
+//fprintf(stderr, "Invalid section %012llo\n\r", fault_data);
+            page_fault = 1;
+            return 0;
+        }
+#endif
         set_reg(AB, MB);
     } else {
         if (!page_lookup(AB, flag, &addr, 1, cur_context, 0))
@@ -2577,7 +2602,9 @@ int exec_page_lookup(t_addr addr, int wr, int *loc)
     int      data;
     int      page = (RMASK & addr) >> 9;
     int      upmp = 0;
+#if KLB
     int      sav_sect = sect;
+#endif
 
     /* If paging is not enabled, address is direct */
     if (!page_enable) {
@@ -2600,13 +2627,17 @@ int exec_page_lookup(t_addr addr, int wr, int *loc)
 
     /* If not valid, go refill it */
     if (data == 0 || (data & LMASK) != 0) {
+#if KLB
         sect = 0;
+#endif
         data = load_tlb(upmp, page, wr);
         if (data == 0) {
            page_fault = 0;
            return 1;
         }
+#if KLB
         sect = sav_sect;
+#endif
     }
     *loc = ((data & 017777) << 9) + (addr & 0777);
     return 0;
@@ -4085,7 +4116,7 @@ no_fetch:
        AD = MB;  /* Save for historical sake */
        IA = AB;
 #if KL & KLB
-//       glb_sect = 0;
+       glb_sect = 0;
 #endif
        i_flags = opflags[IR];
        BYF5 = 0;
@@ -4123,15 +4154,8 @@ no_fetch:
             ind = 1;  /* Allow us to read word, xDB has already bumped AB */
             goto in_loop;
         }
-        /* If we are evaluating a address from non-zero section to reference zero sections.
-           Then we need to force the current section to zero before starting.
-
-           This fixes the case of a XCT 4,[instr n,addr] that should really be in section
-           zero. */
-//        if ((xct_flag & 4) != 0 && (FLAGS & USER) == 0 && prev_sect == 0)
- //            cur_sect = prev_sect;
     }
-    
+
 #endif
     /* Handle indirection repeat until no longer indirect */
     do {
@@ -4508,15 +4532,15 @@ unasign:
 #endif
               /* Save context */
               AB ++;
-              MB = SMASK|BIT2|
+              MB = SMASK|
                    ((uint64)(fm_sel & 0160) << 23) |
                    ((uint64)(prev_ctx & 0160) << 20) |
                    (ub_ptr >> 9);
 #if KLB
-              if (QKLB && t20_page && (FLAGS & USER) == 0) {
+              if (QKLB && t20_page /*&& (FLAGS & USER) == 0*/)
                  MB |= BIT1|((uint64)(prev_sect & 037) << 18);
-//                 prev_sect = pc_sect;
-              }
+              if (QKLB && t20_page && (FLAGS & USER) != 0)
+                 prev_sect = pc_sect;
 #endif
               Mem_write_nopage();
 #endif
@@ -7284,8 +7308,9 @@ jrstf:
                        FLAGS |= BR & (OVR|NODIV|FLTUND|BYTI|FLTOVR|CRY1|CRY0|\
                                        TRP1|TRP2|PUBLIC|PCHNG|ADRFLT);
                        FLAGS &= ~PRV_PUB;
-                       if ((FLAGS & USER) == 0)
+                       if ((FLAGS & USER) == 0) {
                           FLAGS |= (BR & OVR) ? PRV_PUB : 0;
+                       }
 #if KL_ITS
                        if (QITS)
                            FLAGS |= f;
@@ -7306,77 +7331,83 @@ jrstf:
 
               case 007:  /* XPCW */
 //fprintf(stderr, "XPCW %06o %06o %06o %06o\r\n", pc_sect, AB, PC, FLAGS << 5);
-                          MB = ((((uint64)FLAGS) << 23) 
+                       MB = ((((uint64)FLAGS) << 23)
 #if KLB
-                                | (prev_sect & 037)
+                             | (prev_sect & 037)
 #endif
-                                 ) & FMASK;
-                          /* Save Previous Public context */
-                          if ((FLAGS & USER) == 0) {
-                              MB &= ~SMASK;
-                              MB |= (FLAGS & PRV_PUB) ? SMASK : 0;
-                          }
-                          if (uuo_cycle | pi_cycle) {
-                             FLAGS &= ~(USER|PUBLIC); /* Clear USER */
-                             sect = 0;                /* Force section zero on IRQ */
-                          }
-                          if (Mem_write(0, 0))
-                             goto last;
-                          AB = (AB + 1) & RMASK;
+                              ) & FMASK;
+                       /* Save Previous Public context */
+                       if ((FLAGS & USER) == 0) {
+                           MB &= ~SMASK;
+                           MB |= (FLAGS & PRV_PUB) ? SMASK : 0;
+                       }
+                       if (uuo_cycle | pi_cycle) {
+                          FLAGS &= ~(USER|PUBLIC); /* Clear USER */
 #if KLB
-                          if (QKLB && t20_page)
-                              MB = (((((uint64)pc_sect) << 18) | PC) + !pi_cycle) & (SECTM|RMASK);
-                          else
+                          sect = 0;                /* Force section zero on IRQ */
 #endif
-                          MB = (PC + !pi_cycle) & (RMASK);
-                          if (Mem_write(0, 0))
-                             goto last;
-                          AB = (AB + 1) & RMASK;
-                          goto xjrstf;
+                       }
+                       if (Mem_write(0, 0))
+                          goto last;
+                       AB = (AB + 1) & RMASK;
+#if KLB
+                       if (QKLB && t20_page)
+                           MB = (((((uint64)pc_sect) << 18) | PC) + !pi_cycle) & (SECTM|RMASK);
+                       else
+#endif
+                       MB = (PC + !pi_cycle) & (RMASK);
+                       if (Mem_write(0, 0))
+                          goto last;
+                       AB = (AB + 1) & RMASK;
+                       goto xjrstf;
 
               case 015:  /* XJRST */
-                        if (Mem_read(0, 0, 0))
-                            goto last;
-                        AR = MB;       /* Get PC. */
+                       if (Mem_read(0, 0, 0))
+                           goto last;
+                       AR = MB;       /* Get PC. */
 #if KLB
-                        if (QKLB && t20_page) {
-                           pc_sect = (AR >> 18) & 07777;
-                        }
+                       if (QKLB && t20_page) {
+                          pc_sect = (AR >> 18) & 07777;
+                       }
 #endif
-                        break;
+                       break;
 
               case 014:  /* SFM */
-                        MB = ((((uint64)FLAGS) << 23) | (uint64)(prev_sect & 037)) & FMASK;
-                        if ((FLAGS & USER) == 0) {
-                            MB &= ~SMASK;
-                            MB |= (FLAGS & PRV_PUB) ? SMASK : 0;
-                        }
-                        (void)Mem_write(0, 0);
-                        goto last;
+#if KLB
+                       MB = ((((uint64)FLAGS) << 23) | (uint64)(prev_sect & 037)) & FMASK;
+#else
+                       MB = (((uint64)FLAGS) << 23) & FMASK;
+#endif
+                       if ((FLAGS & USER) == 0) {
+                           MB &= ~SMASK;
+                           MB |= (FLAGS & PRV_PUB) ? SMASK : 0;
+                       }
+                       (void)Mem_write(0, 0);
+                       goto last;
 
               case 003:  /* Invalid */
               case 011:  /* Invalid */
               case 013:  /* Invalid */
               case 016:  /* Invalid */
-                        goto muuo;
+                       goto muuo;
 
               case 004:  /* HALT */
-                        if ((FLAGS & (USER|USERIO)) == USER ||
-                            (FLAGS & (USER|PUBLIC)) == PUBLIC) {
-                             goto muuo;
-                        } else {
-                             reason = STOP_HALT;
-                        }
-                        break;
+                       if ((FLAGS & (USER|USERIO)) == USER ||
+                           (FLAGS & (USER|PUBLIC)) == PUBLIC) {
+                            goto muuo;
+                       } else {
+                            reason = STOP_HALT;
+                       }
+                       break;
               case 010:  /* JEN */
-                        /* Restore interrupt level. */
-                        if ((FLAGS & (USER|USERIO)) == USER ||
-                            (FLAGS & (USER|PUBLIC)) == PUBLIC) {
-                             goto muuo;
-                        } else {
-                             pi_restore = 1;
-                        }
-                        break;
+                       /* Restore interrupt level. */
+                       if ((FLAGS & (USER|USERIO)) == USER ||
+                           (FLAGS & (USER|PUBLIC)) == PUBLIC) {
+                            goto muuo;
+                       } else {
+                            pi_restore = 1;
+                       }
+                       break;
               }
 #if KL_ITS
               if (QITS && (FLAGS & USER)) {
@@ -7549,6 +7580,7 @@ jrstf:
                   break;
               }
 
+#if KLB
               /* Check if access to register */
               if (AB < 020 && ((QKLB && (glb_sect == 0 || sect == 0 || (glb_sect && sect == 1))) || !QKLB)) {
                   AR = AB; /* direct map */
@@ -7559,6 +7591,7 @@ jrstf:
                   set_reg(AC, AR);
                   break;
               }
+#endif
 
               /* Handle KI paging odditiy */
               if (!flag1 && !t20_page && (f & 0740) == 0340) {
@@ -7569,7 +7602,7 @@ jrstf:
 
               AR = load_tlb(flag1 | flag3, f, 0);
               if (page_fault) {
-                  page_fault = 0;  
+                  page_fault = 0;
                   AR |= fault_data;
                   if (flag1)                      /* U */
                       AR |= SMASK;
@@ -7639,6 +7672,7 @@ jrstf:
               if ((FLAGS & USER) == 0) {
                   MB &= ~SMASK;
                   MB |= (FLAGS & PRV_PUB) ? SMASK : 0;
+                  MB &= FMASK;
               }
 #if KL & KLB
               }
@@ -7647,23 +7681,17 @@ jrstf:
 #if KL
               BYF5 = 1;
 #if KLB
-              if (QKLB && t20_page) {
-                  if (pc_sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
-                      AR = (AR + 1) & FMASK;
-                      sect = (AR >> 18) & 07777;
-                  } else {
-                      sect = pc_sect;
-                      AR = AOB(AR);
-                      if (pc_sect != 0 && (AR & RMASK) < 020)
-                          sect = 1;
-                  }
-              } else
+              f = glb_sect;
+              if (QKLB && t20_page && pc_sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
+                  AR = (AR + 1) & FMASK;
+                  sect = (AR >> 18) & 07777;
+                  glb_sect = 1;
+              } else {
+                  sect = pc_sect;
+                  glb_sect = 0;
 #endif
 #endif
               AR = AOB(AR);
-              AB = AR & RMASK;
-              if (Mem_write(uuo_cycle | pi_cycle, 0))
-                 goto last;
               FLAGS &= ~ (BYTI|ADRFLT|TRP1|TRP2);
               if (AR & C1) {
 #if KI | KL
@@ -7674,6 +7702,12 @@ jrstf:
                  check_apr_irq();
 #endif
               }
+#if KL && KLB
+              }
+#endif
+              AB = AR & RMASK;
+              if (Mem_write(uuo_cycle | pi_cycle, 0))
+                 goto last;
 #if !PDP6
               if (uuo_cycle | pi_cycle) {
                  FLAGS &= ~(USER|PUBLIC); /* Clear USER */
@@ -7691,27 +7725,24 @@ jrstf:
               }
 #endif
 #if KL & KLB
-              if (QKLB && glb_sect)
+              if (QKLB && t20_page && f)
                   pc_sect = cur_sect;
 #endif
               PC = BR & RMASK;
               PC_CHANGE
               f_pc_inh = 1;
+//fprintf(stderr, "Pushj %06o %06o %012llo %012llo %06o\n\r", pc_sect, cur_sect, AR, MB, PC);
               break;
 
     case 0261: /* PUSH */
 #if KL
               BYF5 = 1;
 #if KLB
-              if (QKLB && t20_page) {
-                  if (pc_sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
-                      AR = (AR + 1) & FMASK;
-                      sect = (AR >> 18) & 07777;
-                  } else {
-                      sect = pc_sect;
-                      AR = AOB(AR);
-                  }
-              } else
+              if (QKLB && t20_page &&pc_sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
+                  AR = (AR + 1) & FMASK;
+                  sect = (AR >> 18) & 07777;
+              } else {
+                  sect = pc_sect;
 #endif
 #endif
               AR = AOB(AR);
@@ -7727,13 +7758,6 @@ jrstf:
 #endif
               }
 #if KLB
-              if (QKLB && t20_page) {
-                  if ((FLAGS & USER) == 0 && (xct_flag & 1) != 0)
-                      sect = prev_sect;
-                  if (sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
-                      sect = (AR >> 18) & 07777;
-                      glb_sect = 1;
-                  }
               }
 #endif
               if (Mem_write(0, 0))
@@ -7745,19 +7769,16 @@ jrstf:
               BYF5 = 1;   /* Tell PXCT that this is stack */
 #if KLB
               flag1 = glb_sect;
+              glb_sect = 0;
+              sect = pc_sect;
               if (QKLB && t20_page) {
-                  f = (pc_sect != 0);
-                  sect = pc_sect;
-                  if ((FLAGS & USER) == 0 && (xct_flag & 1) != 0) {
-                      sect = prev_sect;
-                      f = (prev_sect != 0);
+                  if ((xct_flag & 1) != 0 && (FLAGS & USER) == 0)
+                     sect = prev_sect;
+                  if (sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
+                     sect = (AR >> 18) & 07777;
+                     glb_sect = 1;
                   }
-                  if (f && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
-                      sect = (AR >> 18) & 07777;
-                      glb_sect = 1;
-                  }
-              } else
-                  f = 0;
+              }
 //fprintf(stderr, "Pop %o %o %06o %06o %06o %012llo %012llo\n\r", f, xct_flag, prev_sect, sect, cur_sect, AR, BR);
 #endif
 #endif
@@ -7777,9 +7798,13 @@ jrstf:
               if (Mem_write(0, 0))
                   goto last;
 #if KL & KLB
-              if (QKLB && f && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
-                  AR = (AR - 1) & FMASK;
-                  break;
+              if (QKLB && t20_page) {
+                  if ((xct_flag & 1) != 0 && (FLAGS & USER) == 0)
+                     sect = prev_sect;
+                  if (sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
+                     AR = (AR - 1) & FMASK;
+                     break;
+                  }
               }
 #endif
               AR = SOB(AR);
@@ -7799,21 +7824,19 @@ jrstf:
 #if KL
               BYF5 = 1;   /* Tell PXCT that this is stack */
 #if KLB
-              if (QKLB && t20_page) {
-                  f = (pc_sect != 0);
-                  sect = pc_sect;
-                  if ((FLAGS & USER) == 0 && (xct_flag & 1) != 0) {
-                      f = (prev_sect != 0);
-                      sect = prev_sect;
-                  }
-                  if (f && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
-                      sect = (AR >> 18) & 07777;
-                      glb_sect = 1;
-                  }
+              glb_sect = 0;
+              sect = pc_sect;
+              if (QKLB && t20_page && (xct_flag & 1) != 0 && (FLAGS & USER) == 0)
+                  sect = prev_sect;
+              if (QKLB && t20_page && sect != 0 && (AR & SMASK) == 0 && (AR & SECTM) != 0) {
+                  sect = (AR >> 18) & 07777;
+                  glb_sect = 1;
+                  AR = (AR - 1) & FMASK;
               } else
-                  f = 0;
 #endif
 #endif
+              AR = SOB(AR);
+
               if (Mem_read(0, 0, 0))
                   goto last;
 #if ITS | KL_ITS
@@ -7827,16 +7850,13 @@ jrstf:
 #if KL
               BYF5 = 0;   /* Tell PXCT that this is stack */
 #if KLB
-              if (QKLB && f) {
+              if (QKLB && t20_page && pc_sect != 0) {
                   pc_sect = (MB >> 18) & 07777;
-                  if ((AR & SMASK) == 0 && (AR & SECTM) != 0) {
-                      AR = (AR - 1) & FMASK;
+                  if ((AR & SMASK) == 0 && (AR & SECTM) != 0)
                       break;
-                  }
               }
 #endif
 #endif
-              AR = SOB(AR);
               if ((AR & C1) == 0) {
 #if KI | KL
                   if (!pi_cycle)
@@ -7846,6 +7866,7 @@ jrstf:
                   check_apr_irq();
 #endif
               }
+//fprintf(stderr, "Popj  %06o %06o %012llo %012llo %06o\n\r", pc_sect, cur_sect, AR, MB, PC);
               break;
 
     case 0264: /* JSR */       /* AR Frm PC */
@@ -8318,7 +8339,7 @@ skip_op:
               }
               /* Fall Through */
 #endif
- 
+
     case 0500:    /* HLL  */
     case 0502:    /* HLLM */
     case 0504:    /* HRL  */
@@ -8678,7 +8699,7 @@ last:
         AB++;
         FLAGS |= trap_flag & (TRP1|TRP2);
         trap_flag = (TRP1|TRP2);
-        MB = (((uint64)(FLAGS) << 23) & LMASK); 
+        MB = (((uint64)(FLAGS) << 23) & LMASK);
 #if KLB
         if (QKLB && t20_page) {
             if ((FLAGS & USER) == 0)
@@ -10150,7 +10171,7 @@ tim_srv(UNIT * uptr)
 
 /*
  * This sequence of instructions is a mix that hopefully
- * represents a resonable instruction set that is a close 
+ * represents a resonable instruction set that is a close
  * estimate to the normal calibrated result.
  */
 

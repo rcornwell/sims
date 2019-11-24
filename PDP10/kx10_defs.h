@@ -51,13 +51,8 @@
 #endif
 
 #if KL
-#define KLA 1
 #define KLB 1
 #define EPT440 0              /* Force KL10A to 440 section address */
-#endif
-
-#ifndef KLA
-#define KLA 0
 #endif
 
 #ifndef KLB
