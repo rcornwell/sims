@@ -2325,7 +2325,7 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
             uf = (FLAGS & USERIO) != 0;
             pub = (FLAGS & PRV_PUB) != 0;
 #if KLB
-            if (QKLB && (!glb_sect/* || ((xct_flag & 4) != 0 && prev_sect == 0)*/) && !extend)
+            if (QKLB && (!glb_sect || ((xct_flag & 4) != 0 && prev_sect == 0)) && !extend)
                sect = prev_sect;
 //fprintf(stderr, " ps=%o os%o", prev_sect, sect);
 #endif
@@ -6017,13 +6017,14 @@ unasign:
                       SC = _byte_adj[i].s;
                       SCAD = _byte_adj[i].p;
 ld_ptr:
+                      glb_sect = 1;
                       sect = (AR >> 18) & 07777;
-                      AB = AR & RMASK;
+                      FLAGS |= BYTI;
+                      BYF5 = 1;
+                      goto ld_exe;
                   }
 #endif
 ldb_ptr:
-                  MQ = (uint64)(1) << SC;
-                  MQ -= 1;
                   f_load_pc = 0;
                   f_inst_fetch = 0;
                   f_pc_inh = 1;
@@ -6051,13 +6052,18 @@ ldb_ptr:
                   }
 #endif
               } else {
-                  AB = AR & RMASK;
 #if KL
                   ptr_flg = 0;
+#if KLB
+ld_exe:
+#endif
 #else
                   if ((IR & 06) == 6)
                       modify = 1;
 #endif
+                  AB = AR & RMASK;
+                  MQ = (uint64)(1) << SC;
+                  MQ -= 1;
                   if (Mem_read(0, 0, 0))
                       goto last;
                   AR = MB;
