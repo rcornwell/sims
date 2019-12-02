@@ -410,6 +410,7 @@ extern int      Mem_deposit_word(int n, int wrd, uint64 *data);
 extern int      Mem_read_byte(int n, uint16 *data, int byte);
 extern int      Mem_write_byte(int n, uint16 *data);
 extern DEVICE   dte_dev;
+extern DEVICE   lp20_dev;
 extern DEVICE   tty_dev;
 #else
 extern DEVICE   cty_dev;
@@ -587,6 +588,7 @@ int auxcpu_write (t_addr addr, t_uint64);
 #define NUM_DEVS_DT     0
 #define NUM_DEVS_DK     0
 #define NUM_DEVS_DP     0
+#define NUM_DEVS_LP20   1
 #define NUM_DEVS_TTY    1
 #define NUM_LINES_TTY   40
 #else
@@ -594,6 +596,7 @@ int auxcpu_write (t_addr addr, t_uint64);
 #define NUM_DEVS_DT     1
 #define NUM_DEVS_DK     1
 #define NUM_DEVS_DP     2
+#define NUM_DEVS_LP20   0
 #define NUM_DEVS_TTY    0
 #endif
 #define NUM_DEVS_RP     4

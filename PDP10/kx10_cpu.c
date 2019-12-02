@@ -102,7 +102,7 @@
 #define HIST_PC2        0x80000000
 #define HIST_PCE        0x20000000
 #define HIST_MIN        64
-#define HIST_MAX        500000
+#define HIST_MAX        5000000
 #define TMR_RTC         0
 #define TMR_QUA         1
 
@@ -2325,7 +2325,10 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
             uf = (FLAGS & USERIO) != 0;
             pub = (FLAGS & PRV_PUB) != 0;
 #if KLB
-            if (QKLB && (!glb_sect || ((xct_flag & 4) != 0 && prev_sect == 0)) && !extend)
+//            if (QKLB && glb_sect && (((xct_flag & 014) == 04 && !BYF5 && !ptr_flg) ||
+//                                      ((xct_flag & 03) == 01 && BYF5)))
+//               sect = prev_sect;
+            if (QKLB && (!glb_sect /*|| ((xct_flag & 4) != 0 && prev_sect == 0)*/) && !extend)
                sect = prev_sect;
 //fprintf(stderr, " ps=%o os%o", prev_sect, sect);
 #endif
@@ -2339,7 +2342,7 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
         fault_data = (027LL << 30) | (((uint64)sect) << 18) | (uint64)addr;
         if (uf)                      /* U */
            fault_data |= SMASK;      /*  BIT0 */
-//fprintf(stderr, "Invalid section %012llo\n\r", fault_data);
+//fprintf(stderr, "Invalid section %012llo %06o\n\r", fault_data, PC);
         page_fault = 1;
         return 0;
     }

@@ -291,16 +291,17 @@ DEVICE dte_dev = {
 
 
 
-#ifndef NUM_DEVS_LP
-#define NUM_DEVS_LP 0
+#ifndef NUM_DEVS_LP20
+#define NUM_DEVS_LP20 0
 #endif
 
-#if (NUM_DEVS_LP > 0)
+#if (NUM_DEVS_LP20 > 0)
 
 #define COL      u4
 #define POS      u5
 #define LINE     u6
 #define LPST     us9
+#define LPCNT    us10
 
 #define PTRMSK   00777     /* Current data load pointer */
 #define EOFFLG   01000     /* Tops 20 wants EOF */
@@ -314,52 +315,53 @@ DEVICE dte_dev = {
 
 
 
-t_stat          lpt_svc (UNIT *uptr);
-t_stat          lpt_reset (DEVICE *dptr);
-t_stat          lpt_attach (UNIT *uptr, CONST char *cptr);
-t_stat          lpt_detach (UNIT *uptr);
-t_stat          lpt_setlpp(UNIT *, int32, CONST char *, void *);
-t_stat          lpt_getlpp(FILE *, UNIT *, int32, CONST void *);
-t_stat          lpt_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
+t_stat          lp20_svc (UNIT *uptr);
+t_stat          lp20_reset (DEVICE *dptr);
+t_stat          lp20_attach (UNIT *uptr, CONST char *cptr);
+t_stat          lp20_detach (UNIT *uptr);
+t_stat          lp20_setlpp(UNIT *, int32, CONST char *, void *);
+t_stat          lp20_getlpp(FILE *, UNIT *, int32, CONST void *);
+t_stat          lp20_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
                          const char *cptr);
-const char     *lpt_description (DEVICE *dptr);
+const char     *lp20_description (DEVICE *dptr);
 
-char            lpt_buffer[134 * 3];
-uint16          lpt_vfu[256];
+char            lp20_buffer[134 * 3];
+uint16          lp20_vfu[256];
+uint16          lp20_ram[256];
 
-struct _buffer lpt_queue;
+struct _buffer lp20_queue;
 
 /* LPT data structures
 
-   lpt_dev      LPT device descriptor
-   lpt_unit     LPT unit descriptor
-   lpt_reg      LPT register list
+   lp20_dev      LPT device descriptor
+   lp20_unit     LPT unit descriptor
+   lp20_reg      LPT register list
 */
 
-UNIT lpt_unit = {
-    UDATA (&lpt_svc, UNIT_SEQ+UNIT_ATTABLE+UNIT_TEXT, 66), 100
+UNIT lp20_unit = {
+    UDATA (&lp20_svc, UNIT_SEQ+UNIT_ATTABLE+UNIT_TEXT, 66), 100
     };
 
-REG lpt_reg[] = {
-    { BRDATA(BUFF, lpt_buffer, 16, 8, sizeof(lpt_buffer)), REG_HRO},
+REG lp20_reg[] = {
+    { BRDATA(BUFF, lp20_buffer, 16, 8, sizeof(lp20_buffer)), REG_HRO},
     { NULL }
 };
 
-MTAB lpt_mod[] = {
+MTAB lp20_mod[] = {
     {UNIT_CT, 0, "Lower case", "LC", NULL},
     {UNIT_CT, UNIT_UC, "Upper case", "UC", NULL},
     {MTAB_XTD|MTAB_VUN|MTAB_VALR, 0, "LINESPERPAGE", "LINESPERPAGE",
-        &lpt_setlpp, &lpt_getlpp, NULL, "Number of lines per page"},
+        &lp20_setlpp, &lp20_getlpp, NULL, "Number of lines per page"},
     { 0 }
 };
 
-DEVICE lpt_dev = {
-    "LPT", &lpt_unit, lpt_reg, lpt_mod,
+DEVICE lp20_dev = {
+    "LP20", &lp20_unit, lp20_reg, lp20_mod,
     1, 10, 31, 1, 8, 8,
-    NULL, NULL, &lpt_reset,
-    NULL, &lpt_attach, &lpt_detach,
+    NULL, NULL, &lp20_reset,
+    NULL, &lp20_attach, &lp20_detach,
     NULL, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
-    NULL, NULL, &lpt_help, NULL, NULL, &lpt_description
+    NULL, NULL, &lp20_help, NULL, NULL, &lp20_description
 };
 #endif
 
@@ -875,7 +877,7 @@ dte_function(UNIT *uptr)
                data1[0] = PRI_CTYDV;
                if (dte_queue(PRI_EM2TI, PRI_EMCTY, 1, data1) == 0)
                    return;
-#if (NUM_DEVS_LP > 0)
+#if (NUM_DEVS_LP20 > 0)
                data1[0] = 140;
                if (dte_queue(PRI_EMHLA, PRI_EMLPT, 1, data1) == 0)
                    return;
@@ -913,21 +915,21 @@ dte_function(UNIT *uptr)
 
         case PRI_EMSTR:            /* String data */
 
-#if (NUM_DEVS_LP > 0)
+#if (NUM_DEVS_LP20 > 0)
                /* Handle printer data */
                if (cmd->dev == PRI_EMLPT) {
-                   if (!sim_is_active(&lpt_unit))
-                       sim_activate(&lpt_unit, 1000);
-                   lpt_unit.LPST &= ~EOFFLG;
+                   if (!sim_is_active(&lp20_unit))
+                       sim_activate(&lp20_unit, 1000);
+                   lp20_unit.LPST &= ~EOFFLG;
                    while (cmd->dptr < cmd->dcnt) {
-                       if (((lpt_queue.in_ptr + 1) & 0xff) == lpt_queue.out_ptr)
+                       if (((lp20_queue.in_ptr + 1) & 0xff) == lp20_queue.out_ptr)
                           return;
                        ch = (int32)(cmd->data[cmd->dptr >> 1]);
                        if ((cmd->dptr & 1) == 0)
                            ch >>= 8;
                        ch &= 0177;
-                       lpt_queue.buff[lpt_queue.in_ptr] = ch;
-                       lpt_queue.in_ptr = (lpt_queue.in_ptr + 1) & 0xff;
+                       lp20_queue.buff[lp20_queue.in_ptr] = ch;
+                       lp20_queue.in_ptr = (lp20_queue.in_ptr + 1) & 0xff;
                        cmd->dptr++;
                    }
                    if (cmd->dptr != cmd->dcnt)
@@ -1030,20 +1032,21 @@ cty:
                break;
 
         case PRI_EMRDS:            /* Request device status */
-#if (NUM_DEVS_LP > 0)
+#if (NUM_DEVS_LP20 > 0)
                if (cmd->dev == PRI_EMLPT) {
                    if (cmd->data[0] != 0) {
                       data1[0] = 2;
                       data1[1] = 0;
                       data1[2] = 0;
                    } else {
-                   data1[0] = (lpt_unit.LINE == 0) ? 0x1: 0;
-                   data1[1] = 0;
-                   if (lpt_unit.LPST & EOFFLG)
+                   data1[0] = 0;
+                   data1[1] = (lp20_unit.LINE == 0) ? 0x1: 0;
+                   if (lp20_unit.LPST & EOFFLG)
                        data1[0] |= 040;
-                   if (lpt_unit.LPST & VFUFLG)
-                       data1[1] |= 04;
-                   data1[2] = 0100220;
+//                   if (lp20_unit.LPST & VFUFLG)
+ //                      data1[1] |= 04;
+                   lp20_unit.LPST &= ~EOFFLG;
+                   data1[2] = 0; //0100220;
                    }
     if (dte_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMLPT, 3, data1) == 0)
                        return;
@@ -1066,32 +1069,48 @@ cty:
         case PRI_EMHDS:            /* Here is device status */
                if (cmd->dev == PRI_EMLPT) {
                    sim_debug(DEBUG_DETAIL, &dte_dev, "TTY HDS %06o %06o %06o\n", cmd->data[0], cmd->data[1], cmd->data[2]);
-                   data1[0] = (lpt_unit.LINE == 0) ? 0x1: 0;
-                   data1[1] = 0;
+                   data1[0] = 0;
+                   data1[1] = (lp20_unit.LINE == 0) ? 0x1: 0;
                    if (cmd->data[0] & 040) {
                        data1[0] |= 040;
-                       lpt_unit.LPST |= EOFFLG;
+                       lp20_unit.LPST |= EOFFLG;
+                       lp20_unit.LPCNT = 0;
                    }
-                   if (lpt_unit.LPST & VFUFLG)
-                       data1[1] |= 04;
+//                   if (lp20_unit.LPST & VFUFLG)
+ //                      data1[1] |= 04;
                    data1[2] = 0100220;
-    if (dte_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMLPT, 3, data1) == 0)
-                       return;
+//    if (dte_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMLPT, 3, data1) == 0)
+ //                      return;
 //                   if (cmd->data[1] & 040) {
- //                      lpt_unit.LPST |= EOFFLG;
+ //                      lp20_unit.LPST |= EOFFLG;
 //                   }
                }
                break;
-
+#if (NUM_DEVS_LP20 > 0)
         case PRI_EMLDV:            /* Load LP VFU */
                if (cmd->dev == PRI_EMLPT) {
-                   int ln = 0;
+                   int ln = lp20_unit.LPCNT;
                    while (cmd->dptr < cmd->dcnt) {
-                        lpt_vfu[ln++] = cmd->data[cmd->dptr++];
+                        lp20_vfu[ln++] = cmd->data[cmd->dptr++];
                    }
-                   lpt_unit.LPST |= VFUFLG;
+                   lp20_unit.LPST |= VFUFLG;
+                   lp20_unit.LPCNT = ln;
                }
                break;
+
+        case PRI_EMLDR:            /* Load LP RAM */
+               if (cmd->dev == PRI_EMLPT) {
+                   int ln = lp20_unit.LPCNT;
+                   for (;cmd->dptr < cmd->dcnt; cmd->dptr++, ln++) {
+                        if (ln < 256)
+                            lp20_ram[ln] = cmd->data[cmd->dptr];
+                   }
+                   lp20_unit.LPCNT = ln;
+                   for (ln = 0; ln < 256; ln++)
+                      sim_debug(DEBUG_DETAIL, &lp20_dev, "LP20 RAM %02x => %04x\n", ln, lp20_ram[ln]);
+               }
+               break;
+#endif
 
 #if (NUM_DEVS_TTY > 0)
         case PRI_EMFLO:            /* Flush output */
@@ -1154,7 +1173,6 @@ cty:
                }
                break;
 #endif
-        case PRI_EMLDR:            /* Load LP RAM */
         default:
                break;
         }
@@ -1724,35 +1742,35 @@ const char *dte_description (DEVICE *dptr)
 }
 
 
-#if (NUM_DEVS_LP > 0)
+#if (NUM_DEVS_LP20 > 0)
 
 void
-lpt_printline(UNIT *uptr, int nl) {
+lp20_printline(UNIT *uptr, int nl) {
     int     trim = 0;
     uint16  data1 = 1;
     /* Trim off trailing blanks */
-    while (uptr->COL >= 0 && lpt_buffer[uptr->POS - 1] == ' ') {
+    while (uptr->COL >= 0 && lp20_buffer[uptr->POS - 1] == ' ') {
          uptr->COL--;
          uptr->POS--;
          trim = 1;
     }
-    lpt_buffer[uptr->POS] = '\0';
-    sim_debug(DEBUG_DETAIL, &lpt_dev, "LP output %d %d [%s]\n", uptr->COL, nl, lpt_buffer);
+    lp20_buffer[uptr->POS] = '\0';
+    sim_debug(DEBUG_DETAIL, &lp20_dev, "LP output %d %d [%s]\n", uptr->COL, nl, lp20_buffer);
     /* Stick a carraige return and linefeed as needed */
     if (uptr->COL != 0 || trim)
-        lpt_buffer[uptr->POS++] = '\r';
+        lp20_buffer[uptr->POS++] = '\r';
     if (nl != 0) {
-        lpt_buffer[uptr->POS++] = '\n';
+        lp20_buffer[uptr->POS++] = '\n';
         uptr->LINE++;
     }
     if (nl > 0 && uptr->LINE >= ((int32)uptr->capac - MARGIN)) {
-        lpt_buffer[uptr->POS++] = '\f';
+        lp20_buffer[uptr->POS++] = '\f';
         uptr->LINE = 0;
     } else if (nl < 0 && uptr->LINE >= (int32)uptr->capac) {
         uptr->LINE = 0;
     }
 
-    sim_fwrite(&lpt_buffer, 1, uptr->POS, uptr->fileref);
+    sim_fwrite(&lp20_buffer, 1, uptr->POS, uptr->fileref);
     uptr->pos += uptr->POS;
     uptr->COL = 0;
     uptr->POS = 0;
@@ -1762,22 +1780,22 @@ lpt_printline(UNIT *uptr, int nl) {
 
 /* Unit service */
 void
-lpt_output(UNIT *uptr, char c) {
+lp20_output(UNIT *uptr, char c) {
 
     if (c == 0)
        return;
     if (uptr->COL == 132)
-        lpt_printline(uptr, 1);
+        lp20_printline(uptr, 1);
     if ((uptr->flags & UNIT_UC) && (c & 0140) == 0140)
         c &= 0137;
     else if (c >= 040 && c < 0177) {
-        lpt_buffer[uptr->POS++] = c;
+        lp20_buffer[uptr->POS++] = c;
         uptr->COL++;
     }
     return;
 }
 
-t_stat lpt_svc (UNIT *uptr)
+t_stat lp20_svc (UNIT *uptr)
 {
     char    c;
     uint16  data1[5];
@@ -1786,30 +1804,31 @@ t_stat lpt_svc (UNIT *uptr)
     if ((uptr->flags & UNIT_ATT) == 0)
         return SCPE_OK;
 
-    while (((lpt_queue.out_ptr + 1) & 0xff) != lpt_queue.in_ptr) {
-        c = lpt_queue.buff[lpt_queue.out_ptr];
-        lpt_queue.out_ptr = (lpt_queue.out_ptr + 1) & 0xff;
+    while (((lp20_queue.out_ptr + 1) & 0xff) != lp20_queue.in_ptr) {
+        c = lp20_queue.buff[lp20_queue.out_ptr];
+        lp20_queue.out_ptr = (lp20_queue.out_ptr + 1) & 0xff;
         if (c < 040) { /* Control character */
+            sim_debug(DEBUG_DETAIL, &lp20_dev, "LP deque %02x %04x\n", c, lp20_ram[c] );
             switch(c) {
             case 011:     /* Horizontal tab, space to 8'th column */
-                      lpt_output(uptr, ' ');
+                      lp20_output(uptr, ' ');
                       while ((uptr->COL & 07) != 0)
-                         lpt_output(uptr, ' ');
+                         lp20_output(uptr, ' ');
                       break;
             case 015:     /* Carriage return, print line */
-                      lpt_printline(uptr, 0);
+                      lp20_printline(uptr, 0);
                       break;
             case 012:     /* Line feed, print line, space one line */
-                      lpt_printline(uptr, 1);
+                      lp20_printline(uptr, 1);
                       break;
             case 014:     /* Form feed, skip to top of page */
-                      lpt_printline(uptr, 0);
+                      lp20_printline(uptr, 0);
                       sim_fwrite("\014", 1, 1, uptr->fileref);
                       uptr->pos++;
                       uptr->LINE = 0;
                       break;
             case 013:     /* Vertical tab, Skip mod 20 */
-                      lpt_printline(uptr, 1);
+                      lp20_printline(uptr, 1);
                       while((uptr->LINE % 20) != 0) {
                           sim_fwrite("\r\n", 1, 2, uptr->fileref);
                           uptr->pos+=2;
@@ -1817,7 +1836,7 @@ t_stat lpt_svc (UNIT *uptr)
                       }
                       break;
             case 020:     /* Skip half page */
-                      lpt_printline(uptr, 1);
+                      lp20_printline(uptr, 1);
                       while((uptr->LINE % 30) != 0) {
                           sim_fwrite("\r\n", 1, 2, uptr->fileref);
                           uptr->pos+=2;
@@ -1825,7 +1844,7 @@ t_stat lpt_svc (UNIT *uptr)
                       }
                       break;
             case 021:     /* Skip even lines */
-                      lpt_printline(uptr, 1);
+                      lp20_printline(uptr, 1);
                       while((uptr->LINE % 2) != 0) {
                           sim_fwrite("\r\n", 1, 2, uptr->fileref);
                           uptr->pos+=2;
@@ -1833,7 +1852,7 @@ t_stat lpt_svc (UNIT *uptr)
                       }
                       break;
             case 022:     /* Skip triple lines */
-                      lpt_printline(uptr, 1);
+                      lp20_printline(uptr, 1);
                       while((uptr->LINE % 3) != 0) {
                           sim_fwrite("\r\n", 1, 2, uptr->fileref);
                           uptr->pos+=2;
@@ -1841,22 +1860,22 @@ t_stat lpt_svc (UNIT *uptr)
                       }
                       break;
             case 023:     /* Skip one line */
-                      lpt_printline(uptr, -1);
+                      lp20_printline(uptr, -1);
                       break;
             default:      /* Ignore */
                       break;
             }
         } else {
-            sim_debug(DEBUG_DETAIL, &lpt_dev, "LP deque %02x '%c'\n", c, c);
-            lpt_output(uptr, c);
+            sim_debug(DEBUG_DETAIL, &lp20_dev, "LP deque %02x '%c' %04x\n", c, c, lp20_ram[c] );
+            lp20_output(uptr, c);
         }
     }
     if ((l != 0 && uptr->LINE == 0) || (l == 0 && uptr->LINE != 0)) {
-        data1[0] = (lpt_unit.LINE == 0) ? 0x1: 0;
-        data1[1] = 0;
-        if (lpt_unit.LPST & VFUFLG)
-            data1[1] |= 04;
-        data1[2] = 0100220;
+        data1[0] = 0;
+        data1[1] = (lp20_unit.LINE == 0) ? 0x1: 0;
+//        if (uptr->LPST & VFUFLG) 
+ //           data1[1] |= 04;
+        data1[2] = 0; //0100220;
         if (dte_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMLPT, 3, data1) == 0)
             sim_activate(uptr, 1000);
     }
@@ -1868,26 +1887,26 @@ t_stat lpt_svc (UNIT *uptr)
 
 /* Reset routine */
 
-t_stat lpt_reset (DEVICE *dptr)
+t_stat lp20_reset (DEVICE *dptr)
 {
-    UNIT *uptr = &lpt_unit;
+    UNIT *uptr = &lp20_unit;
     uptr->POS = 0;
     uptr->COL = 0;
     uptr->LINE = 1;
-    sim_cancel (&lpt_unit);                                 /* deactivate unit */
+    sim_cancel (&lp20_unit);                                 /* deactivate unit */
     return SCPE_OK;
 }
 
 /* Attach routine */
 
-t_stat lpt_attach (UNIT *uptr, CONST char *cptr)
+t_stat lp20_attach (UNIT *uptr, CONST char *cptr)
 {
     return attach_unit (uptr, cptr);
 }
 
 /* Detach routine */
 
-t_stat lpt_detach (UNIT *uptr)
+t_stat lp20_detach (UNIT *uptr)
 {
     return detach_unit (uptr);
 }
@@ -1897,7 +1916,7 @@ t_stat lpt_detach (UNIT *uptr)
  */
 
 t_stat
-lpt_setlpp(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+lp20_setlpp(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
     t_value   i;
     t_stat    r;
@@ -1914,7 +1933,7 @@ lpt_setlpp(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 }
 
 t_stat
-lpt_getlpp(FILE *st, UNIT *uptr, int32 v, CONST void *desc)
+lp20_getlpp(FILE *st, UNIT *uptr, int32 v, CONST void *desc)
 {
     if (uptr == NULL)
         return SCPE_IERR;
@@ -1922,7 +1941,7 @@ lpt_getlpp(FILE *st, UNIT *uptr, int32 v, CONST void *desc)
     return SCPE_OK;
 }
 
-t_stat lpt_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
+t_stat lp20_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
 fprintf (st, "Line Printer (LPT)\n\n");
 fprintf (st, "The line printer (LPT) writes data to a disk file.  The POS register specifies\n");
@@ -1939,9 +1958,9 @@ fprint_reg_help (st, dptr);
 return SCPE_OK;
 }
 
-const char *lpt_description (DEVICE *dptr)
+const char *lp20_description (DEVICE *dptr)
 {
-    return "LPT0 line printer" ;
+    return "LP20 line printer" ;
 }
 
 #endif
