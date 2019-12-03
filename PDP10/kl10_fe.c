@@ -1242,8 +1242,8 @@ void dte_transfer(UNIT *uptr) {
            goto error;
        cnt -= 2;
        if (out->func & PRI_IND_FLG) {
-sim_debug(DEBUG_DATA, &dte_dev, "DTE: Indirect %o %o\n", cnt, out->dcnt);
            uint16 dwrd = out->dcnt;
+sim_debug(DEBUG_DATA, &dte_dev, "DTE: Indirect %o %o\n", cnt, out->dcnt);
            dwrd |= (out->sdev << 8);
            if (!Mem_write_byte(0, &dwrd))
               goto error;

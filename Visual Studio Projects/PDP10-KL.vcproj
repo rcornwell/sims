@@ -222,6 +222,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\PDP10\kx10_lp.c"
+				>
+			</File>
+			<File
 				RelativePath="..\PDP10\kx10_mt.c"
 				>
 			</File>
