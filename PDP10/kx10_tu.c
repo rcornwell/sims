@@ -277,19 +277,30 @@ tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
             case FNC_READ:                        /* read */
             case FNC_READREV:                     /* read w/ headers */
                 tu_frame[ctlr] = 0;
+                tu_tcr[ctlr] |= TC_FCS;
+                 /* Fall through */
+
+            case FNC_WRITE:                       /* write */
+            case FNC_SPACEF:                      /* Space forward */
+            case FNC_SPACEB:                      /* Space backward */
+                 if ((tu_tcr[ctlr] & TC_FCS) == 0) {
+                    uptr->STATUS |= ER1_NEF;
+                    break;
+                 }
                  /* Fall through */
 
             case FNC_ERASE:                       /* Erase gap */
-            case FNC_WRITE:                       /* write */
             case FNC_WTM:                         /* Write tape mark */
-            case FNC_SPACEF:                      /* Space forward */
-            case FNC_SPACEB:                      /* Space backward */
             case FNC_WCHK:                        /* write check */
             case FNC_REWIND:                      /* rewind */
             case FNC_UNLOAD:                      /* unload */
             case FNC_WCHKREV:                     /* write w/ headers */
                 uptr->CMD  |= CS_PIP|CS1_GO;
-                uptr->CMD  &= ~CS_TM;
+                rhc->attn = 0;
+                for (i = 0; i < 8; i++) {
+                    if (dptr->units[i].CMD & CS_ATA)
+                       rhc->attn = 1;
+                }
                 CLR_BUF(uptr);
                 uptr->DATAPTR = 0;
                 sim_activate(uptr, 100);
@@ -333,6 +344,7 @@ tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
         break;
     case  005:  /* frame count */
         tu_frame[ctlr] = data & 0177777;
+        tu_tcr[ctlr] |= TC_FCS;
         break;
     case  006:  /* drive type */
     case  007:  /* look ahead */
@@ -368,12 +380,12 @@ tu_read(DEVICE *dptr, struct rh_if *rhc, int reg) {
         break;
     case  001:  /* status */
         temp = DS_DPR;
-        if (rhc->attn != 0)
+        if (uptr->CMD & CS_ATA)
            temp |= DS_ATA;
         if (uptr->CMD & CS_CHANGE)
            temp |= DS_SSC;
         if ((uptr->STATUS & 0177777) != 0)
-           temp |= DS_ERR|DS_ATA;
+           temp |= DS_ERR;
         if ((uptr->flags & UNIT_ATT) != 0) {
            temp |= DS_MOL;
            if (uptr->CMD & CS_TM)
@@ -471,7 +483,7 @@ void tu_error(UNIT * uptr, t_stat r)
     }
     if (uptr->CMD & CS_ATA)
         rh_setattn(rhc, 0);
-    if (uptr->CMD & (CS_ATA | CS_TM))
+    if (GET_FNC(uptr->CMD) >= FNC_XFER && uptr->CMD & (CS_ATA | CS_TM))
         rh_error(rhc);
     uptr->CMD &= ~(CS_MOTION|CS_PIP|CS1_GO);
     sim_debug(DEBUG_EXP, dptr, "Setting status %d\n", r);
@@ -589,6 +601,8 @@ t_stat tu_srv(UNIT * uptr)
              if ((r = sim_tape_rdrecf(uptr, &tu_buf[ctlr][0], &reclen,
                                  TU_NUMFR)) != MTSE_OK) {
                  sim_debug(DEBUG_DETAIL, dptr, "%s%o read error %d\n", dptr->name, unit, r);
+                 if (r == MTSE_TMK)
+                     uptr->STATUS |= ER1_FCE;
                  tu_error(uptr, r);
                  rh_finish_op(rhc, 0);
              } else {
@@ -620,16 +634,18 @@ t_stat tu_srv(UNIT * uptr)
                      rh_finish_op(rhc, 0);
                      return SCPE_OK;
                  }
-                 sim_debug(DEBUG_DATA, dptr, "%s%o read %012llo\n",
-                           dptr->name, unit, rhc->buf);
+                 sim_debug(DEBUG_DATA, dptr, "%s%o read %012llo %d\n",
+                           dptr->name, unit, rhc->buf, uptr->DATAPTR);
                  rhc->buf = 0;
              }
          } else {
              if (uptr->CPOS != 0) {
-                 sim_debug(DEBUG_DATA, dptr, "%s%o read %012llo\n",
+                 sim_debug(DEBUG_DATA, dptr, "%s%o readf %012llo\n",
                               dptr->name, unit, rhc->buf);
                  rh_write(rhc);
              }
+             if (tu_frame[ctlr] != 0)
+                 uptr->STATUS |= ER1_FCE;
              tu_error(uptr, MTSE_OK);
              (void)rh_blkend(rhc);
              rh_finish_op(rhc, 0);
@@ -681,8 +697,10 @@ t_stat tu_srv(UNIT * uptr)
                 uptr->CPOS &= 010;
              }
              tu_frame[ctlr] = 0177777 & (tu_frame[ctlr] + 1);
-             if (tu_frame[ctlr] == 0)
+             if (tu_frame[ctlr] == 0) {
                 uptr->CPOS = 010;
+                tu_tcr[ctlr] &= ~(TC_FCS);
+             }
          }
          if (uptr->CPOS == 010) {
              /* Write out the block */
@@ -750,6 +768,8 @@ t_stat tu_srv(UNIT * uptr)
          case MTSE_EOM:           /* end of medium */
               if (tu_frame[ctlr] != 0)
                  uptr->STATUS |= ER1_FCE;
+              else
+                 tu_tcr[ctlr] &= ~(TC_FCS);
               uptr->CMD |= CS_ATA;
               /* Stop motion if we recieve any of these */
               tu_error(uptr, r);
@@ -759,8 +779,10 @@ t_stat tu_srv(UNIT * uptr)
             uptr->CMD |= CS_ATA;
             tu_error(uptr, MTSE_OK);
             return SCPE_OK;
-         } else
+         } else {
+            tu_tcr[ctlr] &= ~(TC_FCS);
             sim_activate(uptr, reclen * 50);
+         }
          return SCPE_OK;
     }
     sim_activate(uptr, 50);

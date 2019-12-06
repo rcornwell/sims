@@ -539,23 +539,25 @@ void rh_writecw(struct rh_if *rhc, int nxm) {
          if (wc != 0 || (rhc->status & RH20_XEND) == 0 ||
              (rhc->ptcr & BIT10) != 0 || nxm) {
              uint64 wrd1 = SMASK|(uint64)(rhc->ccw);
-             if ((rhc->ptcr & BIT10) == 0 && (rhc->status & RH20_DR_EXC) != 0)
+             if ((rhc->ptcr & BIT10) == 0 || (rhc->status & RH20_DR_EXC) != 0)
                   return;
              if (nxm) {
                  wrd1 |= RH20_NXM_ERR;
                  rhc->status |= RH20_CHAN_ERR;
              }  
              if (wc != 0) {
-                wrd1 |= RH20_NOT_WC0;
-                if (rhc->status & RH20_XEND) {
-                   wrd1 |= RH20_LONG_STS;
-                   if ((rhc->ptcr & 070) == 060) /* Write command */
-                        rhc->status |= RH20_CHAN_ERR|RH20_LONG_WC;
-                }
+                 wrd1 |= RH20_NOT_WC0;
+                 if (rhc->status & RH20_XEND) {
+                     wrd1 |= RH20_LONG_STS;
+                     if ((rhc->ptcr & 070) == 060) { /* Write command */
+                         rhc->status |= RH20_LONG_WC|RH20_CHAN_ERR;
+                     }
+                 }
              } else if ((rhc->status & RH20_XEND) == 0) {
-                wrd1 |= RH20_SHRT_STS;
-                if ((rhc->ptcr & 070) == 060) /* Write command */
-                    rhc->status |= RH20_SHRT_WC|RH20_CHAN_ERR;
+                 wrd1 |= RH20_SHRT_STS;
+                 if ((rhc->ptcr & 070) == 060) { /* Write command */
+                     rhc->status |= RH20_SHRT_WC|RH20_CHAN_ERR;
+                 }
              }
              /* No error and not storing */
              if ((rhc->status & RH20_CHAN_ERR) == 0 && (rhc->ptcr & BIT10) == 0)
@@ -588,7 +590,8 @@ void rh_finish_op(struct rh_if *rhc, int nxm) {
      rh_setirq(rhc);
 #if KL
      if (rhc->imode == 2 &&
-          (rhc->status & (RH20_SCR_FULL|RH20_PCR_FULL)) == (RH20_SCR_FULL))
+          (rhc->status & (RH20_SCR_FULL|RH20_PCR_FULL)) == (RH20_SCR_FULL) &&
+          (rhc->status & (RH20_DR_EXC|RH20_CHAN_ERR)) == 0)
         rh20_setup(rhc);
 #endif
 }
