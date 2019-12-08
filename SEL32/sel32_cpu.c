@@ -1202,7 +1202,7 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot)
     /* check if valid real address */
     if ((mpl & MASK24) >= MEMSIZE*4) {              /* see if address is within our memory */
         sim_debug(DEBUG_EXP, &cpu_dev,
-            "RealAddr MapFault MPL %06x\n", mpl, M[(mpl+4)>>2]);
+            "RealAddr MapFault MPL %06x %08x\n", mpl, M[(mpl+4)>>2]);
         return NPMEM;                               /* no, non present memory error */
     }
     /* now check the mpl pointer for being valid */
