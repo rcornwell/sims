@@ -1,4 +1,4 @@
-/* sel32_iop.c: SEL-32 Class F IOP processor channel.
+/* sel32_iop.c: SEL-32 Model 8000/8001/8002 IOP processor controller
 
    Copyright (c) 2018-2019, James C. Bevier
 
@@ -55,6 +55,7 @@ const char  *iop_desc(DEVICE *dptr);
 
 /* Held in u3 is the device command and status */
 #define IOP_INCH    0x00    /* Initialize channel command */
+#define IOP_INCH2   0xf0    /* Initialize channel command after start */
 #define IOP_NOP     0x03    /* NOP command */
 #define IOP_MSK     0xff    /* Command mask */
 
@@ -156,7 +157,7 @@ uint8  iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         uptr->u5 = SNS_RDY|SNS_ONLN;                /* status is online & ready */
         uptr->u3 &= LMASK;                          /* leave only chsa */
         sim_debug(DEBUG_CMD, &iop_dev, "iop_startcmd %04x: Cmd INCH\n", chan);
-        uptr->u3 |= IOP_MSK;                        /* save INCH command as 0xff */
+        uptr->u3 |= IOP_INCH2;                      /* save INCH command as 0xf0 */
         sim_activate(uptr, 20);                     /* TRY 07-13-19 */
         return 0;                                   /* no status change */
         break;
@@ -191,12 +192,13 @@ t_stat iop_srv(UNIT *uptr)
     int         cmd = uptr->u3 & IOP_MSK;
 
     /* test for NOP or INCH cmds */
-    if ((cmd == IOP_NOP) || (cmd == IOP_MSK)) {     /* NOP has do nothing */
-        uptr->u3 &= LMASK;                              /* nothing left, command complete */
+    if ((cmd == IOP_NOP) || (cmd == IOP_INCH2)) {   /* NOP has do nothing */
+        uptr->u3 &= LMASK;                          /* nothing left, command complete */
         sim_debug(DEBUG_CMD, &iop_dev, "iop_srv INCH/NOP chan %d: chnend|devend\n", chsa);
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);          /* done */
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* done */
     } else
     if (cmd) {
+        uptr->u3 &= LMASK;                          /* nothing left, command complete */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);  /* done */
     }
     return SCPE_OK;
@@ -231,7 +233,7 @@ t_stat iop_reset(DEVICE *dptr)
 /* sho help iop */
 t_stat iop_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr)
 {
-    fprintf(st, "SEL 32 IOP Channel Controller at 0x7E00\r\n");
+    fprintf(st, "SEL-32 IOP Model 8000 Channel Controller at 0x7E00\r\n");
     fprintf(st, "The IOP fields all interrupts and status posting\r\n");
     fprintf(st, "for each of the controllers on the system.\r\n");
     fprintf(st, "Nothing can be configured for this Channel.\r\n");
@@ -242,7 +244,7 @@ t_stat iop_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr
 
 const char *iop_desc(DEVICE *dptr)
 {
-    return("SEL-32 IOP Channel Controller @ 0x7E00");
+    return("SEL-32 IOP Model 8000 Channel Controller @ 0x7E00");
 }
 
 #endif

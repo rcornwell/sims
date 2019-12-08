@@ -109,14 +109,16 @@
 #define NUM_UNITS_CON   2       /* 2 console input & output */
 #define NUM_DEVS_MT     1       /* 1 mag tape controllers */
 #define NUM_UNITS_MT    4       /* 4 of 8 devices */
-#define NUM_DEVS_DISK   1       /* 1 DP02 disk drive controller */
-#define NUM_UNITS_DISK  4       /* 4 disk drive devices */
+#ifdef FOR_UTX
 #define NUM_DEVS_HSDP   1       /* 1 HSPD disk drive controller */
 #define NUM_UNITS_HSDP  2       /* 2 disk drive devices */
+#else
+#define NUM_DEVS_DISK   1       /* 1 DP02 disk drive controller */
+#define NUM_UNITS_DISK  2       /* 2 disk drive devices */
+//#define NUM_UNITS_DISK  4       /* 4 disk drive devices */
+#endif
 #define NUM_DEVS_SCFI   1       /* 1 scfi (SCSI) disk drive units */
 #define NUM_UNITS_SCFI  1       /* 1 of 4 disk drive devices */
-//#define NUM_DEVS_SCFI   2       /* 2 scfi (SCSI) disk drive units */
-//#define NUM_UNITS_SCFI  2       /* 2 of 4 disk drive devices */
 #define NUM_DEVS_RTOM   1       /* 1 IOP RTOM channel */
 #define NUM_UNITS_RTOM  1       /* 1 IOP RTOM device (clock & interval timer) */
 #define NUM_DEVS_LPR    1       /* 1 IOP Line printer */

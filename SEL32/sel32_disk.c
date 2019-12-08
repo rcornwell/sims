@@ -94,6 +94,7 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 #define DSK_BUSY         0x8000                 /* Flag to send a CUE */
 /* commands */
 #define DSK_INCH           0x00                 /* Initialize channel */
+#define DSK_INCH2          0xf0                 /* Initialize channel for processing */
 #define DSK_WD             0x01                 /* Write data */
 #define DSK_RD             0x02                 /* Read data */
 #define DSK_NOP            0x03                 /* No operation */
@@ -223,8 +224,13 @@ disk_type[] =
     /* Class F Disc Devices */
     {"FL001",   1334,    0,   2,  64, 26, 3, 3,   26, 0x40},   /*    1 M */
     {"MH040",  20000,  625,   5, 192, 20, 2, 1,  400, 0x40},   /*   40 M */
+#ifdef FOR_UTX
+    {"9342",   40000, 1250,   5, 256, 16, 2, 1,  800, 0x40},   /*823    80 M */
+    {"9344",   76000, 2375,  19, 256, 16, 4, 1,  800, 0x40},   /*823   300 M */
+#else
     {"MH080",  40000, 1250,   5, 192, 20, 2, 1,  800, 0x40},   /*   80 M */
     {"MH300",  76000, 2375,  19, 192, 20, 4, 1,  800, 0x40},   /*  300 M */
+#endif
     {"FH005",   5120,  184,   4, 192, 20, 1, 1,   64, 0x80},   /*    5 M */
     {"CD032",   8000,  250,   1, 192, 20, 2, 1,  800, 0x60},   /*   32 M */
     {"CD032",   8000,  250,   1, 192, 20, 2, 1,  800, 0x60},   /*   32 M */
@@ -484,7 +490,7 @@ uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
             uptr->SNS &= 0xff000000;            /* clear status bytes, but leave mode data */
             return SNS_CHNEND|SNS_DEVEND;
         }
-        if (cmd == 0x0)                         /* INCH cmd gives unit check here */
+        if (cmd == 0x00)                        /* INCH cmd gives unit check here */
            return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
 
         uptr->SNS |= (SNS_INTVENT|SNS_CMDREJ);  /* set new error status */
@@ -523,7 +529,7 @@ uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
             up++;                               /* next unit for this device */
         }
         sim_debug(DEBUG_CMD, dptr, "disk_startcmd done inch cmd addr %04x\n", addr);
-        uptr->CMD |= DSK_CMDMSK;                /* use 0xff for inch, just need int */
+        uptr->CMD |= DSK_INCH2;                 /* use 0xf0 for inch, just need int */
         sim_activate(uptr, 20);                 /* start things off */
         return 0;
     }
@@ -579,8 +585,8 @@ t_stat disk_srv(UNIT * uptr)
     int             tsize = disk_type[type].spt * disk_type[type].ssiz * 4; /* get track size in bytes */
     int             ssize = disk_type[type].ssiz * 4;   /* disk sector size in bytes */
     int             tstart;
-    uint8           buf2[768];
-    uint8           buf[768];
+    uint8           buf2[1024];
+    uint8           buf[1024];
 
     sim_debug(DEBUG_DETAIL, &dda_dev,
               "disk_srv entry unit %02x cmd %02x chsa %04x chan %04x count %04x\n",
@@ -595,13 +601,13 @@ t_stat disk_srv(UNIT * uptr)
     sim_debug(DEBUG_CMD, dptr, "disk_srv cmd=%02x chsa %04x count %04x\n",
               cmd, chsa, chp->ccw_count);
     switch (cmd) {
-    case 0:                                     /* No command, stop disk */
+    case 0:                 /* No command, stop disk */
         break;
 
-    case DSK_CMDMSK:        /* use 0xff for inch, just need int */
+    case DSK_INCH2:         /* use 0xff for inch, just need int */
         uptr->CMD &= ~(0xffff);                 /* remove old cmd */
-        sim_debug(DEBUG_CMD, dptr, "disk_srv cmd=%02x chsa %04x count %04x completed\n",
-                 cmd, chsa, chp->ccw_count);
+        sim_debug(DEBUG_CMD, dptr, "disk_srv cmd INCH chsa %04x count %04x completed\n",
+             chsa, chp->ccw_count);
 #ifdef FIX4MPX
         chan_end(chsa, SNS_CHNEND);             /* return just channel end OK */
 #else
@@ -731,7 +737,8 @@ rezero:
         uptr->CMD |= DSK_STAR;                  /* show we have seek STAR in STAR */
         /* calc the sector address of data */
         /* calculate file position in bytes of requested sector */
-        tstart = (cyl * disk_type[type].nhds * tsize) + (trk * tsize) + (buf[3] * 0x300);
+        // FIXME for variable sector size
+        tstart = (cyl * disk_type[type].nhds * tsize) + (trk * tsize) + (buf[3] * ssize);
         data->tpos = trk;                       /* save the track/head number */
         data->spos = buf[3];                    /* save the sector number */
         sim_debug(DEBUG_DETAIL, dptr, "dsk_srv seek start %04x trk %02x sec %02x\n",
@@ -741,7 +748,7 @@ rezero:
         }
 
         /* Check if already on correct cylinder */
-        if (trk != data->cyl) {
+        if (cyl != data->cyl) {
             /* Do seek */
             uptr->CMD |= DSK_SEEKING;           /* show we are seeking */
             sim_debug(DEBUG_DETAIL, dptr, "dsk_srv seek unit=%02x trk %02x cyl %02x\n",
@@ -948,7 +955,7 @@ void disk_ini(UNIT *uptr, t_bool f)
     DEVICE  *dptr = find_dev_from_unit(uptr);
     int     i = GET_TYPE(uptr->flags);
 
-    uptr->CMD &= ~0xffff;                       /* clear out the flags but leave ch/sa */
+    uptr->CMD &= ~0x7fff;                       /* clear out the flags but leave ch/sa */
     /* capacity is total allocation units time sectors per allocation unit */
     /* total sectors on disk */
     uptr->capac  = disk_type[i].taus * disk_type[i].spau;
