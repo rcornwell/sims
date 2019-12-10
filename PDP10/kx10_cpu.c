@@ -4108,7 +4108,7 @@ fetch:
         }
 #endif
        if (Mem_read(pi_cycle | uuo_cycle, 1, 1)) {
-#if !KL
+#if KA | PDP6
            pi_rq = check_irq_level();
            if (pi_rq)
               goto st_pi;
@@ -4159,8 +4159,8 @@ no_fetch:
         if (xct_flag != 0 && (FLAGS & USER) == 0) {
             if (((xct_flag & 8) != 0 && !ptr_flg) ||
                 ((xct_flag & 2) != 0 && ptr_flg) ||
-                ((xct_flag & 014) == 04 && !BYF5/* && !ptr_flg*/) ||
-                ((xct_flag & 03) == 01 && BYF5))
+                (prev_sect == 0 && (xct_flag & 014) == 04 && !BYF5/* && !ptr_flg*/) ||
+                (prev_sect == 0 && (xct_flag & 03) == 01 && BYF5))
             sect = cur_sect = prev_sect;
         }
         /* Short cut for extended pointer address */
@@ -4298,7 +4298,9 @@ in_loop:
 
     /* If there is a interrupt handle it. */
     if (pi_rq) {
+#if KA | PDP6
 st_pi:
+#endif
         sim_debug(DEBUG_IRQ, &cpu_dev, "trap irq %o %03o %03o \n",
                        pi_enc, PIR, PIH);
         pi_cycle = 1;
@@ -4556,7 +4558,7 @@ unasign:
 #endif
               /* Save context */
               AB ++;
-              MB = SMASK|BIT2|
+              MB = SMASK|
                    ((uint64)(fm_sel & 0160) << 23) |
                    ((uint64)(prev_ctx & 0160) << 20) |
                    (ub_ptr >> 9);
