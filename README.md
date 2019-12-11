@@ -99,7 +99,7 @@ The PDP6 runs TOPS 10 4.5 off Dectape.
 
 The KA10 sim has successfully run Tops 10 4.5, 5.03 and Tops 10 6.03, ITS and WAITS.  
 The KI10 sim has successfully run Tops 10 6.03 with VMSER.  
-The KL10 sim has successfully run Tops 10 6.03 with VMSER and ITS.  
+The KL10 sim has successfully run Tops 10 6.03 with VMSER and ITS.  Tops 10 7.03, Tops 20 V2-V7.  
 
    Disk   
    * RC10 RD10/RM10  
@@ -122,6 +122,9 @@ The KL10 sim has successfully run Tops 10 6.03 with VMSER and ITS.
    * Morton tty Mux for ITS.  
    * Knight Kludge mux for ITS.  
    * Terminals on KL10 Front End.  
+
+   * LP10 Line printer.  
+   * LP20 Line printer on KL10 Front End.  
 
    * IMP networking support for ITS and TENEX.  
    * CH10 networking support for ITS.  
