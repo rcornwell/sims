@@ -1,6 +1,6 @@
 /* ka10_rs.c: Dec RH10 RS04
 
-   Copyright (c) 2017, Richard Cornwell
+   Copyright (c) 2017-2019, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),

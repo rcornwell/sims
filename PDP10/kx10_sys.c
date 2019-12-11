@@ -3,7 +3,7 @@
 
 
    Copyright (c) 2005-2009, Robert M Supnik
-   Copyright (c) 2011-2018, Richard Cornwell
+   Copyright (c) 2011-2019, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
