@@ -51,12 +51,7 @@
 #endif
 
 #if KL
-#define KLB 1
-#define EPT440 0              /* Force KL10A to 440 section address */
-#endif
-
-#ifndef KLB
-#define KLB 0
+#define EPT440 0              /* Force KL10 to use as 440 section address */
 #endif
 
 #if (PDP6 + KA + KI + KL) != 1
