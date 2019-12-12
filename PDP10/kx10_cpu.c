@@ -2309,7 +2309,12 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
             ((xct_flag & 1) != 0 && !cur_context && BYF5 )) {
             uf = (FLAGS & USERIO) != 0;
             pub = (FLAGS & PRV_PUB) != 0;
-            if (QKLB && (!glb_sect /*|| ((xct_flag & 4) != 0 && prev_sect == 0)*/) && !extend)
+
+            if ((xct_flag & 014) == 04 && !ptr_flg && glb_sect == 0)
+//            if (QKLB && (!glb_sect /*|| ((xct_flag & 4) != 0 && prev_sect == 0)*/) && !extend)
+                sect = prev_sect;
+            if ((xct_flag & 03) == 01 && BYF5 && glb_sect == 0)
+//            if (QKLB && (!glb_sect /*|| ((xct_flag & 4) != 0 && prev_sect == 0)*/) && !extend)
                 sect = prev_sect;
 //fprintf(stderr, " ps=%o os%o", prev_sect, sect);
         }
@@ -4107,9 +4112,10 @@ no_fetch:
     if (QKLB && t20_page) {
         if (xct_flag != 0 && (FLAGS & USER) == 0) {
             if (((xct_flag & 8) != 0 && !ptr_flg) ||
-                ((xct_flag & 2) != 0 && ptr_flg) ||
-                (prev_sect == 0 && (xct_flag & 014) == 04 && !BYF5/* && !ptr_flg*/) ||
-                (prev_sect == 0 && (xct_flag & 03) == 01 && BYF5))
+                ((xct_flag & 2) != 0 && ptr_flg) //||
+////                (/*prev_sect == 0 && */(xct_flag & 014) == 04 && !BYF5/* && !ptr_flg*/) ||
+// //               (/*prev_sect == 0 && */(xct_flag & 03) == 01 && BYF5)
+)
             sect = cur_sect = prev_sect;
         }
         /* Short cut for extended pointer address */
@@ -4135,7 +4141,7 @@ no_fetch:
          ix = GET_XR(MB);
          if (ix) {
 #if KL
-             if (((xct_flag & 8) != 0 && (FLAGS & USER) == 0) ||
+             if (((xct_flag & 8) != 0 && (FLAGS & USER) == 0 && !ptr_flg) ||
                  ((xct_flag & 2) != 0 && (FLAGS & USER) == 0 && ptr_flg))
                 AR = FM[prev_ctx|ix];
              else
@@ -4177,7 +4183,7 @@ in_loop:
                      ix = GET_XR(MB);
                      AB = MB & RMASK;
                      if (ix) {
-                         if (((xct_flag & 8) != 0 && (FLAGS & USER) == 0) ||
+                         if (((xct_flag & 8) != 0 && (FLAGS & USER) == 0 && !ptr_flg) ||
                              ((xct_flag & 2) != 0 && (FLAGS & USER) == 0 && ptr_flg))
                              AR = FM[prev_ctx|ix];
                          else
@@ -4194,8 +4200,8 @@ in_loop:
                          }
                          MB = AR;
                      } else {
-                         if (((xct_flag & 014) != 014 || (FLAGS & USER) != 0))
-                             glb_sect = 0;
+//                         if (((xct_flag & 014) != 014 || (FLAGS & USER) != 0))
+                            glb_sect = 0;
                          if ((MB & RMASK) < 020)
                             sect = cur_sect = 1;
                          AR = MB;
@@ -4207,7 +4213,7 @@ in_loop:
                      ix = (MB >> 30) & 017;
                      AB = MB & (SECTM|RMASK);
                      if (ix) {
-                         if (((xct_flag & 8) != 0 && (FLAGS & USER) == 0) ||
+                         if (((xct_flag & 8) != 0 && (FLAGS & USER) == 0 && !ptr_flg) ||
                              ((xct_flag & 2) != 0 && (FLAGS & USER) == 0 && ptr_flg))
                             AR = FM[prev_ctx|ix];
                          else
@@ -7352,10 +7358,8 @@ jrstf:
               }
 #endif
               PC = AR & RMASK;
-#if KLB
               if (QKLB && t20_page && glb_sect)
                  pc_sect = (AR >> 18) & 07777;
-#endif
 #else
               if (uuo_cycle | pi_cycle) {
                  FLAGS &= ~USER; /* Clear USER */
@@ -7676,7 +7680,6 @@ jrstf:
 #endif
               AR = AOB(AR);
               AB = AR & RMASK;
-              MB = BR;
               if (AR & C1) {
 #if KI | KL
                  if (!pi_cycle)
@@ -7689,6 +7692,7 @@ jrstf:
 #if KL
               }
 #endif
+              MB = BR;
               if (hst_lnt)
                   hst[hst_p].mb = MB;
               if (Mem_write(0, 0))
