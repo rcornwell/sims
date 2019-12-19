@@ -307,6 +307,7 @@ DEVICE dte_dev = {
 #define PTRMSK   00777     /* Current data load pointer */
 #define EOFFLG   01000     /* Tops 20 wants EOF */
 #define HDSFLG   02000     /* Tell Tops 20 The current device status */
+#define ACKFLG   04000     /* Post an acknowwledge message */
 
 #define MARGIN   6
 
@@ -1077,7 +1078,7 @@ cty:
 
         case PRI_EMHDS:            /* Here is device status */
                if (cmd->dev == PRI_EMLPT) {
-                   sim_debug(DEBUG_DETAIL, &dte_dev, "TTY HDS %06o %06o %06o\n", cmd->data[0], cmd->data[1], cmd->data[2]);
+                   sim_debug(DEBUG_DETAIL, &dte_dev, "LPT HDS %06o %06o %06o\n", cmd->data[0], cmd->data[1], cmd->data[2]);
 //                   data1[0] = 0;
  //                  data1[1] = (lp20_unit.LINE == 0) ? 0x1: 0;
                    if (cmd->data[0] & 040) {
@@ -1093,9 +1094,9 @@ cty:
   //                 data1[2] = 0100220;
 //    if (dte_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMLPT, 3, data1) == 0)
  //                      return;
-//                   if (cmd->data[1] & 040) {
+//                   if (cmd->data[0] & 040) {
  //                      lp20_unit.LPST |= EOFFLG;
-//                   }
+  //                 }
    // if ((lp20_unit.LPST & EOFFLG) != 0 && dte_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMLPT, 3, data1) == 0)
     //                   return;
      //             lp20_unit.LPST &= ~EOFFLG; 
@@ -1109,6 +1110,9 @@ cty:
                         lp20_vfu[ln++] = cmd->data[cmd->dptr++];
                    }
                    lp20_unit.LPCNT = ln;
+             //      lp20_unit.LPST |= ACKFLG;
+            if (dte_queue(PRI_EMACK, PRI_EMLPT, 1, data1) == 0)
+                sim_activate(uptr, 1000);
                }
                break;
 
@@ -1120,8 +1124,11 @@ cty:
                             lp20_ram[ln] = cmd->data[cmd->dptr];
                    }
                    lp20_unit.LPCNT = ln;
+            //       lp20_unit.LPST |= ACKFLG;
                    for (ln = 0; ln < 256; ln++)
                       sim_debug(DEBUG_DETAIL, &lp20_dev, "LP20 RAM %02x => %04x\n", ln, lp20_ram[ln]);
+            if (dte_queue(PRI_EMACK, PRI_EMLPT, 1, data1) == 0)
+                sim_activate(uptr, 1000);
                }
                break;
 #endif
@@ -1822,14 +1829,21 @@ t_stat lp20_svc (UNIT *uptr)
         return SCPE_OK;
     if (uptr->LPST & HDSFLG) {
         data1[0] = 0;
+
         data1[1] = (uptr->LINE == 0) ? 0x1: 0;
         if (uptr->LPST & EOFFLG)
             data1[0] |= 040;
 //        if (uptr->LPST & VFUFLG) 
  //           data1[1] |= 04;
         data1[2] = 0110200; //0100220;
-        if (dte_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMLPT, 3, data1) == 0)
+        if (dte_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMLPT, 4, data1) == 0)
             sim_activate(uptr, 1000);
+        if ((uptr->LPST & (EOFFLG)) == (EOFFLG)) {
+            data1[0] = 0;
+            if (dte_queue(PRI_EMACK, PRI_EMLPT, 1, data1) == 0)
+                sim_activate(uptr, 1000);
+//            uptr->LPST &= ~ACKFLG;
+        }
         uptr->LPST &= ~(HDSFLG|EOFFLG);
     }
 
@@ -1896,6 +1910,10 @@ t_stat lp20_svc (UNIT *uptr)
             default:      /* Ignore */
                       break;
             }
+        if (uptr->LINE == 0) {
+            uptr->LPST |= HDSFLG;
+            sim_activate(uptr, 1000);
+        }
         } else {
             sim_debug(DEBUG_DETAIL, &lp20_dev, "LP deque %02x '%c' %04x\n", c, c, lp20_ram[c] );
             lp20_output(uptr, c);
@@ -1904,10 +1922,10 @@ t_stat lp20_svc (UNIT *uptr)
     if (lp20_queue.out_ptr == lp20_queue.in_ptr) {
         data1[0] = 0;
         if (dte_queue(PRI_EMACK, PRI_EMLPT, 1, data1) == 0)
-            sim_activate(uptr, 1000);
+           sim_activate(uptr, 1000);
         if (uptr->LINE == 0) {
             uptr->LPST |= HDSFLG;
-            sim_activate(uptr, 1000);
+           sim_activate(uptr, 1000);
         }
     }
     return SCPE_OK;
