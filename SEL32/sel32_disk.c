@@ -213,6 +213,7 @@ struct disk_t
 }
 disk_type[] =
 {
+#ifdef NOTUSED_FOR_NOW
     /* Class E Disc Devices */
     {"FE004",   5888,  184, 256, 192, 23, 1, 1,    1, 0x80},   /*    4 M */
     {"CE010",  12800,  200,   2,  96, 16, 1, 2,  400, 0x60},   /*   10 M */
@@ -242,6 +243,16 @@ disk_type[] =
     {"FM600",  80000, 2500,  40, 192, 20, 8, 1,  800, 0x40},   /*  600 M */
     {"FM600",   1600,   50,  40, 192, 20, 1, 1,    2, 0x80},   /*  600 M */
     {NULL, 0}
+#else
+    /* Class F Disc Devices */
+    {"MH040",  20000,  625,   5, 192, 20, 2, 1,  400, 0x40},   /*   40 M */
+    {"MH080",  40000, 1250,   5, 192, 20, 2, 1,  800, 0x40},   /*   80 M */
+    {"MH300",  76000, 2375,  19, 192, 20, 4, 1,  800, 0x40},   /*  300 M */
+    {"MH600",  80000, 2500,  40, 192, 20, 8, 1,  800, 0x40},   /*  600 M */
+    /* For UTX */
+    {"9342",   40000, 1250,   5, 256, 16, 2, 1,  800, 0x40},   /*823    80 M */
+    {"9344",   76000, 2375,  19, 256, 16, 4, 1,  800, 0x40},   /*823   300 M */
+#endif
 };
 
 #if 0
@@ -316,15 +327,16 @@ MTAB            disk_mod[] = {
 };
 
 UNIT            dda_unit[] = {
-/* SET_TYPE(9) DM300 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0x800)},       /* 0 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0x801)},       /* 1 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0x802)},       /* 2 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0x803)},       /* 3 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0x804)},       /* 4 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0x805)},       /* 5 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0x806)},       /* 6 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0x807)},       /* 7 */
+/* SET_TYPE(9) DM300 old */
+/* SET_TYPE(2) DM300 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(2), 0), 0, UNIT_ADDR(0x800)},       /* 0 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(2), 0), 0, UNIT_ADDR(0x801)},       /* 1 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(2), 0), 0, UNIT_ADDR(0x802)},       /* 2 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(2), 0), 0, UNIT_ADDR(0x803)},       /* 3 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(2), 0), 0, UNIT_ADDR(0x804)},       /* 4 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(2), 0), 0, UNIT_ADDR(0x805)},       /* 5 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(2), 0), 0, UNIT_ADDR(0x806)},       /* 6 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(2), 0), 0, UNIT_ADDR(0x807)},       /* 7 */
 };
 
 DIB             dda_dib = {
@@ -341,7 +353,7 @@ DIB             dda_dib = {
     0x0800,                                     /* parent channel address */
     0,                                          /* fifo input index */
     0,                                          /* fifo output index */
-    0,                                          /* interrupt status fifo for channel */
+    {0}                                         /* interrupt status fifo for channel */
 };
 
 DEVICE          dda_dev = {
@@ -357,15 +369,16 @@ DEVICE          dda_dev = {
 CHANP           ddb_chp[NUM_UNITS_DISK] = {0};
 
 UNIT            ddb_unit[] = {
-/* SET_TYPE(9) DM300 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0xC00)},       /* 0 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0xC01)},       /* 1 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0xC02)},       /* 2 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0xC03)},       /* 3 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0xC04)},       /* 4 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0xC05)},       /* 5 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0xC06)},       /* 6 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(9), 0), 0, UNIT_ADDR(0xC07)},       /* 7 */
+/* SET_TYPE(9) DM300 old */
+/* SET_TYPE(2) DM300 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(2), 0), 0, UNIT_ADDR(0xC00)},       /* 0 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(2), 0), 0, UNIT_ADDR(0xC01)},       /* 1 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(2), 0), 0, UNIT_ADDR(0xC02)},       /* 2 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(2), 0), 0, UNIT_ADDR(0xC03)},       /* 3 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(2), 0), 0, UNIT_ADDR(0xC04)},       /* 4 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(2), 0), 0, UNIT_ADDR(0xC05)},       /* 5 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(2), 0), 0, UNIT_ADDR(0xC06)},       /* 6 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(2), 0), 0, UNIT_ADDR(0xC07)},       /* 7 */
 };
 
 

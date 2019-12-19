@@ -138,7 +138,7 @@ DIB             con_dib = {
     0x7e00,         /* uint16 chan_addr */                      /* parent channel address */
     0,              /* uint32 chan_fifo_in */                   /* fifo input index */
     0,              /* uint32 chan_fifo_out */                  /* fifo output index */
-    0,              /* uint32 chan_fifo[FIFO_SIZE] */           /* interrupt status fifo for channel */
+    {0}             /* uint32 chan_fifo[FIFO_SIZE] */           /* interrupt status fifo for channel */
 };
 
 DEVICE  con_dev = {
@@ -453,10 +453,7 @@ t_stat  con_reset(DEVICE *dptr) {
 /* Handle haltio transfers for console */
 uint8   con_haltio(UNIT *uptr) {
     uint16      chsa = GET_UADDR(uptr->u3);
-    int         unit = (uptr - con_unit);       /* unit 0 is read, unit 1 is write */
     int         cmd = uptr->u3 & CON_MSK;
-    uint8       ch;
-    t_stat      r;
 
     sim_debug(DEBUG_EXP, &con_dev, "con_haltio enter chsa %04x cmd = %02x\n", chsa, cmd);
 

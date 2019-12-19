@@ -331,7 +331,7 @@ DIB             sda_dib = {
     0x0400,         /* uint16 chan_addr */                      /* parent channel address */
     0,              /* uint32 chan_fifo_in */                   /* fifo input index */
     0,              /* uint32 chan_fifo_out */                  /* fifo output index */
-    0,              /* uint32 chan_fifo[FIFO_SIZE] */           /* interrupt status fifo for channel */
+    {0}             /* uint32 chan_fifo[FIFO_SIZE] */           /* interrupt status fifo for channel */
 };
 
 DEVICE          sda_dev = {

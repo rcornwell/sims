@@ -470,7 +470,8 @@ loop:
 #endif
 #ifndef CON_BUG
 #ifdef DO_DYNAMIC_DEBUG
-        if ((chp->chan_dev == 0x7efc) && ((chp->ccw_cmd & 0xff) == 0x03) && (chp->ccw_count == 0))
+//        if ((chp->chan_dev == 0x7efc) && ((chp->ccw_cmd & 0xff) == 0x03) && (chp->ccw_count == 0))
+        if ((chp->chan_dev == 0x0800) && ((chp->ccw_cmd & 0xff) == 0x00) && (chp->ccw_count == 0x24))
             /* start debugging */
             cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
 #endif

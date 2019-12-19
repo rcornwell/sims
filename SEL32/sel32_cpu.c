@@ -662,116 +662,148 @@ int base_mode[] = {
 #define WMH(x,y) ((x)&2?(M[(x)>>2]=(M[(x)>>2]&LMASK)|((y)&RMASK)):(M[(x)>>2]=(M[(x)>>2]&RMASK)|((y)<<16)))
 /* write halfword map register to MAP cache address */
 #define WMR(x,y) ((x)&2?(MAPC[(x)>>2]=(MAPC[(x)>>2]&LMASK)|((y)&RMASK)):(MAPC[(x)>>2]=(MAPC[(x)>>2]&RMASK)|((y)<<16)))
-#define RMR(x) ((x)&2?(MAPC[(x)>>2]&RMASK):(MAPC[(x)>>2]>>16)&RMASK)    /* read map register halfword */
+/* read map register halfword from cache address */
+#define RMR(x) ((x)&2?(MAPC[(x)>>2]&RMASK):(MAPC[(x)>>2]>>16)&RMASK)
 
 /* set up the map registers for the current task in the cpu */
 /* the PSD bpix and cpix are used to setup the maps */
 /* return non-zero if mapping error */
-/* if diag set, always load maps on 67, V6, and V7 */
+/* if diag set, always load maps on 67, 97, V6, and V7 */
+/* The RMW and WMW macros are used to read/write memory words */
+/* RMW(addr) or WMW(addr, data) where addr is a byte alligned word address */
+/* The RMR and WMR macros are used to read/write the MAPC cache registers */
+/* RMR(addr) or WMR(addr, data) where addr is a half word alligned address */
+/* We will only get here if the retain maps bit is not set in PSD word 2 */
 t_stat load_maps(uint32 thepsd[2], uint32 diag)
 {
-    uint32 num, sdc, spc;
+    uint32 num, sdc, spc, onlyos=0;
     uint32 mpl, cpixmsdl, bpixmsdl, msdl, midl;
     uint32 cpix, bpix, i, j, map, osmsdl, osmidl;
     uint32 MAXMAP = MAX2048;                        /* default to 2048 maps */
 
-    sim_debug(DEBUG_EXP, &cpu_dev, "Load Maps Entry PSD %08x %08x STATUS %08x diags %01x\n",
-        thepsd[0], thepsd[1], CPUSTATUS, diag);
-    /* check if valid real address */
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "Load Maps Entry PSD %08x %08x STATUS %08x diags %01x CPU Type %2x\n",
+        thepsd[0], thepsd[1], CPUSTATUS, diag, CPU_MODEL);
+
+    /* process 32/7X computers */
     if (CPU_MODEL < MODEL_27) {
         MAXMAP = MAX32;                             /* 32 maps for 32/77 */
         /* 32/7x machine, 8KW maps 32 maps total */
         modes &= ~BASEBIT;                          /* no basemode on 7x */
-        if ((thepsd[1] & 0xc0000000) == 0) {        /* mapped mode? */
+        if ((thepsd[1] & 0xc0000000) == 0)          /* mapped mode? */
             return ALLOK;                           /* no, all OK, no mapping required */
-        }
+
         /* we are mapped, so load the maps for this task into the cpu map cache */
         cpix = (thepsd[1] >> 2) & 0xfff;            /* get cpix 12 bit offset from psd wd 2 */
         bpix = (thepsd[1] >> 18) & 0xfff;           /* get bpix 12 bit offset from psd wd 2 */
         num = 0;                                    /* working map number */
+
         /* master process list is in 0x83 of spad for 7x */
         mpl = SPAD[0x83] >> 2;                      /* get mpl from spad address */
-        /* check if valid real address */
-        if ((mpl & 0x003fffff) >= MEMSIZE) {        /* see if address is within our memory */
+
+        /* diags want the mpl entries checked to make sure valid */
+        if (mpl & 0x7) {                            /* test for double word address */
             sim_debug(DEBUG_EXP, &cpu_dev,
-                "MEMORY0 %08x MPL %08x MPL[0] %08x bad\n",
-                MEMSIZE*4, mpl, M[(mpl)>>2]);
+                "load_maps MPL not on double word boundry %06x\n", mpl);
+            TRAPSTATUS |= 0x8000;                   /* set bit 16 of trap status */
+            return MAPFLT;                          /* no, map fault error */
+        }
+
+        /* check if valid real address */
+        if ((mpl == 0) || ((mpl & MASK24) >= (MEMSIZE*4))) {  /* see if in memory */
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "load_maps MEM SIZE %06x mpl %06x invalid\n", MEMSIZE*4, mpl);
             return NPMEM;                           /* no, none present memory error */
         }
+
+        /* mpl is ok, get the msdl for given cpix */
         cpixmsdl = M[mpl + cpix];                   /* get msdl from mpl for given cpix */
 
         /* if bit zero of mpl entry is set, use bpix first to load maps */
         if (cpixmsdl & BIT0) {
+
             /* load bpix maps first */
-            bpixmsdl = M[mpl + bpix];               /* get bpix msdl word address */
-            /* TODO test for valid bpixmsdl addr here */
+            bpixmsdl = RMW(mpl+bpix);               /* get bpix msdl word address */
+
+            /* check for valid bpix msdl addr */
+            if ((bpixmsdl == 0) || ((bpixmsdl & MASK24) >= (MEMSIZE*4))) { /* see if in memory */
+                sim_debug(DEBUG_EXP, &cpu_dev,
+                    "load_maps MEM SIZE %06x bpix msdl %08x invalid\n", MEMSIZE*4, bpixmsdl);
+                return NPMEM;                       /* no, none present memory error */
+            }
+
             sdc = (bpixmsdl >> 24) & 0x3f;          /* get 6 bit segment description count */
-            msdl = (bpixmsdl >> 2) & 0x3fffff;      /* get 24 bit real address of msdl */
-            /* TODO test for valid msdl addr here */
+            msdl = (bpixmsdl >> 2) & MASK24;        /* get 24 bit real address of msdl */
+            /* check for valid msdl addr */
+            if ((msdl == 0) || ((msdl & MASK24) >= (MEMSIZE*4))) { /* see if in memory */
+                sim_debug(DEBUG_EXP, &cpu_dev,
+                    "load_maps MEM SIZE %06x msdl %08x invalid\n", MEMSIZE*4, msdl);
+                return NPMEM;                       /* no, none present memory error */
+            }
+
+            /* process all of the msdl's */
             for (i = 0; i < sdc; i++) {             /* loop through the msd's */
                 spc = (M[msdl + i] >> 24) & 0xff;   /* get segment page count from msdl */
-                midl = (M[msdl + i] >> 2) & 0x3fffff;   /* get 24 bit real word address of midl */
+                midl = (M[msdl + i] >> 2) & MASK24; /* get 24 bit real word address of midl */
+
+                /* check for valid midl addr */
+                if ((midl == 0) | ((midl & MASK24) >= (MEMSIZE*4))) { /* see if in memory */
+                    sim_debug(DEBUG_EXP, &cpu_dev,
+                        "load_maps MEM SIZE %06x midl %08x invalid\n", MEMSIZE*4, midl);
+                    return NPMEM;                   /* no, none present memory error */
+                }
 
                 for (j = 0; j < spc; j++, num++) {  /* loop throught the midl's */
+                    uint32 pad = RMW(midl+(j<<1));  /* get page descriptor address */
                     if (num >= MAXMAP) {
                         TRAPSTATUS |= 0x8000;       /* set bit 16 of trap status */
                         return MAPFLT;              /* map loading overflow, map fault error */
                     }
                     /* load 16 bit map descriptors */
-                    map = (M[midl + (j / 2)]);      /* get 2 16 bit map entries */
-                    if (j & 1)
-                        map = (map & RMASK);        /* use right half word map entry */
-                    else
-                        map = ((map >> 16) & RMASK);    /* use left half word map entry */
-                    /* the map register contents is now in right 16 bits */
-                    /* now load a 32 bit word with both maps from memory  */
-                    /* and or in the new map entry data */
-                    /* num has the number of maps already loaded */
-                    if (num & 1) {
-                        /* entry going to rt hw, clean it first */
-                        map = (MAPC[num/2] & LMASK) | map;  /* map is in rt hw */
-                    }
-                    else {
-                        /* entry going to left hw, clean it first */
-                        map = (MAPC[num/2] & RMASK) | (map << 16);  /* map is in left hw */
-                    }
-                    MAPC[num/2] = map;              /* store the map reg contents into cache */
+                    map = RMH(pad);                 /* get 16 bit map entries */
+                    WMR((num<<1), map);             /* store the map reg contents into cache */
                 }
             }
         }
+
         /* now load cpix maps */
-        cpixmsdl = M[mpl + cpix];                   /* get cpix msdl word address */
-        /* TODO test for valid cpixmsdl addr here */
+        /* check for valid cpix msdl addr */
+        if ((cpixmsdl == 0) | ((cpixmsdl & MASK24) >= (MEMSIZE*4))) { /* see if in memory */
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "load_maps MEM SIZE %06x cpix msdl %08x invalid\n", MEMSIZE*4, cpixmsdl);
+            return NPMEM;                           /* no, none present memory error */
+        }
+
         sdc = (cpixmsdl >> 24) & 0x3f;              /* get 6 bit segment description count */
         msdl = (cpixmsdl >> 2) & 0x3fffff;          /* get 24 bit real address of msdl */
-        /* TODO test for valid msdl addr here */
+        /* check for valid msdl addr */
+        if ((msdl == 0) | ((msdl & MASK24) >= (MEMSIZE*4))) { /* see if in memory */
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "load_maps MEM SIZE %06x msdl %08x invalid\n", MEMSIZE*4, msdl);
+            return NPMEM;                           /* no, none present memory error */
+        }
+
+        /* process all of the msdl's */
         for (i = 0; i < sdc; i++) {
             spc = (M[msdl + i] >> 24) & 0xff;       /* get segment page count from msdl */
             midl = (M[msdl + i] >> 2) & 0x3fffff;   /* get 24 bit real word address of midl */
 
+            /* check for valid midl addr */
+            if ((midl == 0) | ((midl & MASK24) >= (MEMSIZE*4))) { /* see if in memory */
+                sim_debug(DEBUG_EXP, &cpu_dev,
+                    "load_maps MEM SIZE %06x midl %08x invalid\n", MEMSIZE*4, midl);
+                return NPMEM;                       /* no, none present memory error */
+            }
+
             for (j = 0; j < spc; j++, num++) {      /* loop through the midl's */
+                uint32 pad = RMW(midl+(j<<1));      /* get page descriptor address */
                 if (num >= MAXMAP) {
                     TRAPSTATUS |= 0x8000;           /* set bit 16 of trap status */
                     return MAPFLT;                  /* map loading overflow, map fault error */
                 }
                 /* load 16 bit map descriptors */
-                map = (M[midl + (j / 2)]);          /* get 2 16 bit map entries */
-                if (j & 1)
-                    map = (map & RMASK);            /* use right half word map entry */
-                else
-                    map = ((map >> 16) & RMASK);    /* use left half word map entry */
-                /* the map register contents is now in right 16 bits */
-                /* now load a 32 bit word with both maps from memory  */
-                /* and or in the new map entry data */
-                if (num & 1) {
-                    /* entry going to rt hw, clean it first */
-                    map = (MAPC[num/2] & LMASK) | map;  /* map is in rt hw */
-                }
-                else {
-                    /* entry going to left hw, clean it first */
-                    map = (MAPC[num/2] & RMASK) | (map << 16);  /* map is in left hw */
-                }
-                MAPC[num/2] = map;                  /* store the map reg contents into cache */
+                map = RMH(pad);                     /* get 16 bit map entries */
+                WMR((num<<1), map);                 /* store the map reg unmodified into cache */
             }
         }
         /* if none loaded, map fault */
@@ -779,356 +811,404 @@ t_stat load_maps(uint32 thepsd[2], uint32 diag)
             TRAPSTATUS |= 0x8000;                   /* set bit 16 of trap status */
             return MAPFLT;                          /* map fault error */
         }
-        if (num & 1) {                              /* clear rest of maps */
-            /* left hw of map is good, zero right */
-            map = (MAPC[num/2] & LMASK);            /* clean rt hw */
-            MAPC[num++/2] = map;                    /* store the map reg contents into cache */
-        }
-        /* num should be even at this point, so zero 32 bit words for remaining maps */
-        if ((num/2) > HIWM)                         /* largerst number of maps loaded so far */
-            HIWM = num/2;                           /* yes, set new high water mark */
-        for (i = num/2; i < HIWM; i++)              /* zero any remaining entries */
-            MAPC[i] = 0;                            /* clear the map entry to make not valid */
-        HIWM = num/2;                               /* set new high water mark */
+        /* clear the rest of the previously used maps */
+        for (i = num; i < HIWM; i++)                /* zero any remaining entries */
+            WMR((i<<1), 0);                         /* clear the map entry to make not valid */
+        HIWM = num;                                 /* set new high water mark */
         return ALLOK;                               /* all cache is loaded, return OK */
     }
+    /****************** END-OF-32/7X-MAPPING ********************/
 
     /* process a 32/27, 32/67, 32/87, 32/97, V6, or V9 here with 2KW (8kb) maps */
     /* 32/27 & 32/87 have 256 maps. Others have 2048 maps */
-    /* Concept/32 machine, 2KW maps */
-    if ((modes & MAPMODE) == 0) {                   /* mapped mode? */
+    /* 32/27 & 32/87 must have all maps preallocated and loaded */ 
+    /* 32/67 & 32/97 must load O/S maps and have user preallocated maps loaded on access */
+    /* V6 and V9 must load O/S maps and have user maps allocated and loaded on access */
+
+    /* See if any mapping to take place */
+    if ((modes & MAPMODE) == 0)                     /* mapped mode? */
         return ALLOK;                               /* no, all OK, no mapping required */
-    }
+
+    /* set maximum maps for 32/27 and 32/87 processors */
     if ((CPU_MODEL == MODEL_27) || (CPU_MODEL == MODEL_87))
         MAXMAP = MAX256;                            /* only 256 2KW (8kb) maps */
 
-    /* we are mapped, so calculate real address from map information */
+    /* we are mapped, so load the map definitions */
     cpix = thepsd[1] & 0x3ff8;                      /* get cpix 11 bit offset from psd wd 2 */
     num = 0;                                        /* no maps loaded yet */
-    /* master process list is in 0xf3 of spad for concept */
+
+    /* master process list is in 0xf3 of spad for concept machines */
     mpl = SPAD[0xf3];                               /* get mpl from spad address */
 
-    /* check if valid real address */
-    if ((mpl & MASK24) >= MEMSIZE*4) {              /* see if address is within our memory */
+    /* diags want the mpl entries checked to make sure valid */
+    if (mpl & 0x7) {                                /* test for double word address */
         sim_debug(DEBUG_EXP, &cpu_dev,
-            "MEMORY1 %08x MPL %08x MPL[0] %08x bad\n",
-            MEMSIZE*4, mpl, M[(mpl)>>2]);
-#ifdef DO_DYNAMIC_DEBUG
-            /* start debugging at test 46 of cn.mmm diag */
-            cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
-#endif
-        TRAPSTATUS |= 0x0200;                       /* set bit 22 of trap status */
-        /* clear all maps */
-        for (i=0; i<MAXMAP; i++) {
-            TLB[i] = 0;
-            WMR((i*2),0);                           /* store the map reg contents into cache */
-        }
-        BPIX = 0;                                   /* no os maps loaded */
-        CPIXPL = 0;                                 /* no user pages yet */
-        CPIX = cpix;                                /* save CPIX */
-        return NPMEM;                               /* no, non present memory error */
+            "load_maps MPL not on double word boundry %06x\n", mpl);
+        TRAPSTATUS |= 0x8000;                       /* set bit 16 of trap status */
+        return MAPFLT;                              /* no, map fault error */
     }
+
+#ifdef DO_DYNAMIC_DEBUG
+    /* start debugging at test 46 of cn.mmm diag */
+    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
+#endif
+
+    /* check if valid real address */
+    mpl &= MASK24;                                  /* clean mpl address */
+    if ((mpl == 0) || (mpl >= (MEMSIZE*4))) {       /* see if in our real memory */
+        sim_debug(DEBUG_EXP, &cpu_dev,
+            "load_maps MEM SIZE %06x mpl %06x invalid\n", MEMSIZE*4, mpl);
+npmem:
+        BPIX = 0;                                   /* no os maps loaded */
+        CPIXPL = 0;                                 /* no user pages */
+        CPIX = cpix;                                /* save user CPIX */
+        TRAPSTATUS |= 0x0200;                       /* set bit 22 of trap status */
+        return NPMEM;                               /* non present memory error */
+    }
+
+    /* output O/S and User MPX entries */
     sim_debug(DEBUG_EXP, &cpu_dev,
-        "MEMORYa %08x MPL %08x MPL[0] %08x MPL[1] %08x MPL[%04x] %08x %08x\n",
-        MEMSIZE*4, mpl, M[(mpl)>>2], M[(mpl+4)>>2], cpix, M[(cpix+mpl)>>2], M[(cpix+mpl+4)>>2]);
+        "#MEMORY %06x MPL %06x MPL[0] %08x %06x MPL[%04x] %08x %06x\n",
+        MEMSIZE*4, mpl, RMW(mpl), RMW(mpl+4), cpix,
+        RMW(cpix+mpl), RMW(cpix+mpl+4));
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "MEMORY2 %06x BPIX %04x cpix %04x CPIX %04x CPIXPL %04x HIWM %04x\n",
+        MEMSIZE*4, BPIX, cpix, CPIX, CPIXPL, HIWM);
+
+    /* here we need to look at the CPIX MPL entry to determine if we are to */
+    /* load the users regs first or the O/S.  Verify the User MPL entry too. */
+    /* If bit zero of cpix mpl entry is set, use msd entry 0 first to load maps */
+    /* The load the user maps after the O/S */
+    /* If the cpix is zero, then only load the O/S. */
+    /* This test must be made to allow sysgen to run with a zero cpix */
+    /* If bit 0 of MPL[0] is 0, load the O/S maps. */
+    /* Do not load O/S if bit 0 of O/S MPL[0] s set.  It is set by the */
+    /* swapper on MPX startup */
 
     /* mpl is valid, get msdls for O/S and User */
-    osmsdl = RMW(mpl+4);                            /* get msdl pointer from wd 1 of OS MPL entry */
-    if ((osmsdl & MASK24)>= (MEMSIZE*4)) {          /* see if address is within our memory */
-        sim_debug(DEBUG_EXP, &cpu_dev,
-            "MEMORY2 %08x OS MPL[0] %08x MPL[1] %08x bad\n",
-            MEMSIZE*4, M[(mpl)>>2], M[(mpl+4)>>2]);
-        TRAPSTATUS |= 0x0200;                       /* set bit 22 of trap status */
-        /* clear all maps */
-        for (i=0; i<MAXMAP; i++) {
-            TLB[i] = 0;
-//DIAG            WMR((i*2),0);                           /* store the map reg contents into cache */
-        }
-        BPIX = 0;                                   /* no os maps loaded */
-        CPIXPL = 0;                                 /* no user pages */
-        CPIX = cpix;                                /* save CPIX */
-        return NPMEM;                               /* no, non present memory error */
-    }
-
-    /* we have a valid mpl address, so get map definitions */
-    osmidl = RMW(mpl);                              /* get o/s midl 0 word address */
-    midl = RMW(mpl+cpix);                           /* get midl entry for given cpix */
+    osmidl = RMW(mpl);                              /* get O/S map count & retain flag from MPL[0] */
+    osmsdl = RMW(mpl+4);                            /* get msdl pointer for OS from MPL[1] */
+    midl = RMW(mpl+cpix);                           /* get midl entry for given user cpix */
     msdl = RMW(mpl+cpix+4);                         /* get mpl entry wd 1 for given cpix */
-
-    sim_debug(DEBUG_EXP, &cpu_dev,
-        "loading maps MAXMAP %04x psd2 %08x mpl %08x osmidl %04x osmsdl %08x midl %04x msdl %08x\n",
-         MAXMAP, thepsd[1], mpl, osmidl, osmsdl, midl, msdl);
-    if (cpix != 0)
-        sim_debug(DEBUG_EXP, &cpu_dev,
-            "MSD 0000 for OS SegCnt %04x OSmsdl %08x diag %01x\nMSD %04x for User SegCnt %04x Usermsdl %08x\n",
-            RMW(mpl), RMW(mpl+4), diag, cpix, midl, msdl);
-
-    /* load msd 0 maps first (O/S) */
-    /* if bit zero of cpix mpl entry is set, use msd entry 0 first to load maps */
-    /* This test must be made (cpix == bpix) to allow sysgen to run without using */
-    /* a valid cpix */
-    /* the cpix is zero indicating only load MSD 0 for the target system */
-    /* bit 0 of msd 0 will be zero saying load the maps */
-    /* Do not load O/S if already loaded. Bit zero of O/S midl will be set by */
-    /* swapper on startup */
-#ifdef NOTUSED
     spc = osmidl & MASK16;                          /* get 16 bit O/S segment description count */
-    if ((midl & BIT0) == 0) {                       /* see if user wants O/S loaded first */
-        /* no, only user maps will be loaded */
-        BPIX = 0;                                   /* O/S retain bit not set, so reset retain count */
-    } else {
-        /* user wants O/S loaded first, see if O/S already loaded */
-        if ((osmidl & BIT0) == 0) {
-            /* retain bit not set, so load the O/S first */
-            BPIX = 0;                               /* assume no O/S maps loaded */
-        } else {
-            /* user wants to retain O/S, so just load user maps after O/S */
-            BPIX = spc;                             /* save the O/S map count */
-        }
-    }
-#endif
 
-    BPIX = 0;                                       /* assume no O/S maps loaded */
-    spc = osmidl & MASK16;                          /* get 16 bit O/S segment description count */
-    if ((cpix == 0) || ((cpix != 0) && (midl & BIT0))) {
-        /* load msd 0 maps first (O/S) */
-        spc = osmidl & MASK16;                      /* get 16 bit segment description count */
-        if (osmidl & BIT0) {                        /* see if O/S already loaded */
-            num = spc;                              /* yes, set the number of O/S maps loaded */
-            BPIX = spc;                             /* save the # maps in O/S */
-            goto skipos;                            /* skip OS map loading */
+    /* see if we are to only load the O/S */
+    if (cpix == 0) { 
+        CPIX = cpix;                                /* save CPIX */
+        onlyos = 1;                                 /* flag to only load O/S, nothing else */
+        if (osmidl & BIT0) {                        /* see if the O/S retain bit 0 is on */
+            return ALLOK;                           /* O/S retain bit is set, no mapping required */
         }
-        /* O/S is not loaded, so let's load it */
-        osmsdl &= MASK24;                           /* get 24 bit real address from mpl 0 wd2 */
-        if ((osmsdl & MASK24)>= (MEMSIZE*4)) {      /* see if address is within our memory */
+
+loados: /* merge point for loading O/S first */
+        /* to be followed by user maps */
+        /* the retain bit is not set so load the O/S */
+        if ((spc == 0) || (spc > MAXMAP)) {
             sim_debug(DEBUG_EXP, &cpu_dev,
-                "MEMORY2a %08x OS MPL[0] %08x MPL[1] %08x bad\n",
-                MEMSIZE*4, M[(mpl)>>2], M[(mpl+4)>>2]);
-//          return MAPFLT;                          /* no, none present memory error */
-            TRAPSTATUS |= 0x0200;                   /* set bit 22 of trap status */
-            /* clear all maps */
-            for (i=0; i<MAXMAP; i++) {
-                TLB[i] = 0;
-                WMR((i*2),0);                       /* store the map reg contents into cache */
-            }
+                "load_maps bad O/S page count %04x, map fault\n", spc);
+nomaps:
+            /* Bad map load count specified. */
             BPIX = 0;                               /* no os maps loaded */
             CPIXPL = 0;                             /* no user pages */
             CPIX = cpix;                            /* save CPIX */
-            return NPMEM;                           /* no, non present memory error */
-        }
-        for (j = 0; j < spc; j++, num++) {          /* copy maps from msdl to map cache */
-            if (num >= MAXMAP) {
-                sim_debug(DEBUG_EXP, &cpu_dev, "loadmap 4 map fault\n");
-                TRAPSTATUS |= 0x8000;               /* set bit 16 of trap status */
-                /* clear all maps */
-                for (i=0; i<MAXMAP; i++) {
-                    TLB[i] = 0;
-                    WMR((i*2),0);                   /* store the map reg contents into cache */
-                }
-                BPIX = 0;                           /* no os maps loaded */
-                CPIXPL = 0;                         /* no user pages */
-                CPIX = cpix;                        /* save CPIX */
-                return MAPFLT;                      /* map loading overflow, map fault error */
-            }
-            /* load 16 bit map descriptors */
-            map = RMH(osmsdl+(j<<1));               /* get provided map value */
-            if ((CPU_MODEL >= MODEL_V6) && (map & 0x8000)) {
-                map &= 0xe7ff;                      /* clear access/modify bits in map */
-                WMH(osmsdl+(j<<1),map);             /* write map content */      
-            }
-            /* translate the map number to a real address */
-            /* put this address in the TLB for later translation */
-            /* copy the map status bits too and set hit bit */
-            /* set the hit bit in the TLB */
-            TLB[num] = ((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000) | 0x04000000;
-            WMR((num*2),map);                       /* store the map reg contents into cache */
-            sim_debug(DEBUG_EXP, &cpu_dev, "OS map #%4x, %04x, map2 %08x, TLB %08x MAPC %08x\n",
-                num, map, ((map << 16) & 0xf8000000), TLB[num], MAPC[num/2]);
-        }
-        BPIX = num;                                 /* save the # maps loaded in O/S */
-    }
-
-skipos:
-    /* sysgen in mpx does not have a valid cpix MPL entry, only a bpix entry */
-    /* that entry uses 64 map entries to map between target/host systems */
-    /* When cpix in instruction is zero, just load the O/S specified by MSD 0 */
-    spc = midl & MASK16;                            /* get segment page count from user msdl */
-    if (((cpix == 0) || spc == 0) && (num == 0)) {  /* see if any maps loaded or to load */
-        sim_debug(DEBUG_EXP, &cpu_dev, "loadmap 3 map fault\n");
-        TRAPSTATUS |= 0x8000;                       /* set bit 16 of trap status */
-        /* clear all maps */
-        for (i=0; i<MAXMAP; i++) {
-            TLB[i] = 0;
-//diag            WMR((i*2),0);                           /* store the map reg contents into cache */
-        }
-        BPIX = 0;                                   /* no os maps loaded */
-        CPIXPL = 0;                                 /* no user pages */
-        CPIX = cpix;                                /* save CPIX */
-        return MAPFLT;                              /* no maps loaded, map fault error */
-    }
-    if ((cpix == 0) && (num != 0))                  /* see if any maps loaded */
-        goto skipcpix;                              /* only load maps specified by msd 0 */
-
-    msdl &= MASK24;                                 /* get 24 bit real word address of msdl */
-    // This test fails cn.mmm diag at test 46, subtest 2 with unexpected error
-    if ((msdl & MASK24) >= (MEMSIZE*4)) {           /* see if address is within our memory */
-#ifdef DO_DYNAMIC_DEBUG
-        /* start debugging at test 46 of cn.mmm diag */
-        cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
-#endif
-        sim_debug(DEBUG_EXP, &cpu_dev,
-            "MEMORY3a %08x USER MPL[%04x] %08x %08x bad\n",
-            MEMSIZE*4, cpix, M[(cpix+mpl)>>2], M[(cpix+mpl+4)>>2]);
-        /* clear all maps */
-        for (i=0; i<MAXMAP; i++) {
-            TLB[i] = 0;
-            WMR((i*2),0);                           /* store the map reg contents into cache */
-        }
-        BPIX = 0;                                   /* no os maps loaded */
-        CPIXPL = 0;                                 /* no user pages */
-        CPIX = cpix;                                /* save CPIX */
-        if (CPU_MODEL == MODEL_67) {
-            // 32/67 wants MACHINECHK for test 37/1 in CN.MMM
-            TRAPSTATUS |= 0x0200;                   /* set bit 22 of trap status */
-            return MACHINECHK_TRAP;                 /* diags want machine check error */
-//            return NPMEM;                           /* no, non present memory error */
-//            return PRIVVIOL_TRAP;                   /* set the trap to take */
-//            return SYSTEMCHK_TRAP;                  /* trap condition if F class */
-//            return MAPFLT;                          /* no, map fault error */
-        } else {
-            // 32/27 32/87 wants NPMEM
-            TRAPSTATUS |= 0x0200;                   /* set bit 22 of trap status */
-            return NPMEM;                           /* no, non present memory error */
-        }
-    }
-
-    CPIX = cpix;                                    /* save user MPL offset (CPIX) */
-    CPIXPL = spc;                                   /* save user map load count */
-
-     if (((CPU_MODEL < MODEL_V6) && (CPU_MODEL != MODEL_97) && (CPU_MODEL != MODEL_67)) || diag) {
-        /* handle non virtual page loading or diag LMAP instruction */
-        /* now load user maps specified by the cpix value */
-        for (j = 0; j < spc; j++, num++) {          /* copy maps from midl to map cache */
-            if (num >= MAXMAP) {
-                sim_debug(DEBUG_EXP, &cpu_dev, "loadmap 0 map fault\n");
-                TRAPSTATUS |= 0x8000;               /* set bit 16 of trap status */
-                /* clear all user maps */
-                for (i=BPIX; i<MAXMAP; i++) {
-                    TLB[i] = 0;
-                    WMR((i*2),0);                   /* store the map reg contents into cache */
-                }
-                CPIXPL = 0;                         /* no user pages */
-                CPIX = cpix;                        /* save CPIX */
-                return MAPFLT;                      /* map loading overflow, map fault error */
-            }
-            /* load 16 bit map descriptors */
-            map = RMH(msdl+(j<<1));                 /* get provided map value */
-            if ((CPU_MODEL >= MODEL_V6) && (map & 0x8000)) {
-                map &= 0xe7ff;                      /* clear access/modify bits in map */
-                WMH(msdl+(j<<1),map);               /* write map content */      
-            }
-            /* translate the map number to a real address */
-            /* put this address in the TLB for later translation */
-            /* copy the map status bits too */
-            if (CPU_MODEL < MODEL_V6)
-                if (diag)
-                    TLB[num] = (((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000)) | 0x04000000;
-                else
-                    TLB[num] = (((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000));
-            else
-                TLB[num] = ((map & 0x7ff) << 13) | ((map << 16) & 0xe0000000) | 0x04000000;
-            WMR((num*2),map);                       /* store the map reg contents into cache */
-            if ((num < 0x20) || (num > (MAXMAP - 0x10)))
-                sim_debug(DEBUG_EXP, &cpu_dev,
-                    "UserN map #%4x, %04x, map2 %08x, TLB %08x, MAPC %08x\n",
-                     num, map, ((map << 16) & 0xf8000000), TLB[num], MAPC[num/2]);
-        }
-        if (num & 1) {
-            /* last map was in left hw, zero right halfword */
-            WMR((num*2),0);                         /* zero the map reg contents in cache */
-            TLB[num++] = 0;                         /* zero the TLB entry too */
-        }
-        if (num == 0) {                             /* see if any maps loaded */
-            sim_debug(DEBUG_EXP, &cpu_dev, "loadmap 1a map fault\n");
+            HIWM = 0;                               /* reset high water mark */
             TRAPSTATUS |= 0x8000;                   /* set bit 16 of trap status */
-            /* clear all maps */
-            for (i=0; i<MAXMAP; i++) {
-                TLB[i] = 0;
-                WMR((i*2),0);                       /* store the map reg contents into cache */
-            }
-            BPIX = 0;                               /* no os maps loaded */
-            CPIXPL = 0;                             /* no user pages */
-            CPIX = cpix;                            /* save CPIX */
             return MAPFLT;                          /* map fault error */
         }
-    } else {
-        /* handle virtual memory case for 67, 97, V6 & V9 */
-        /* now clear TLB & maps specified by the cpix value */
-        for (j = 0; j < spc; j++, num++) {          /* clear maps in map cache */
+
+        /* we have a valid count, load the O/S map list address */
+        osmsdl &= MASK24;                           /* get 24 bit real address from mpl 0 wd2 */
+        if (osmsdl >= (MEMSIZE*4)) {                /* see if address is within our memory */
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "load_maps MEM SIZE %06x os page list address %06x invalid\n",
+                MEMSIZE*4, osmsdl);
+            goto npmem;                             /* non present memeory trap */
+        }
+
+        /* load the O/S maps */
+        for (j = 0; j < spc; j++, num++) {          /* copy maps from msdl to map cache */
+            uint32 pad = osmsdl+(j<<1);             /* get page descriptor address */
+
+            /* see if map overflow */
             if (num >= MAXMAP) {
-                sim_debug(DEBUG_EXP, &cpu_dev, "loadmap 2 map fault\n");
-                TRAPSTATUS |= 0x8000;               /* set bit 16 of trap status */
-                /* clear all user maps */
-                for (i=BPIX; i<MAXMAP; i++) {
-                    TLB[i] = 0;
-                    WMR((i*2),0);                   /* store the map reg contents into cache */
-                }
-                CPIXPL = 0;                         /* no user pages */
-                CPIX = cpix;                        /* save CPIX */
-                return MAPFLT;                      /* map loading overflow, map fault error */
-            }
-            /* load 16 bit map descriptors for debugging */
-            map = RMH(msdl+(j<<1));                 /* get provided map value */
-            if ((CPU_MODEL >= MODEL_V6) && (map & 0x8000)) {
-                map &= 0xe7ff;                      /* clear access/modify bits in map */
-//TRY           WMH(msdl+(j<<1),map);               /* write map content */      
-            }
-//HUH       TLB[num] = ((map & 0x7ff) << 13) | ((map << 16) & 0xe0000000) | 0x04000000;
-            TLB[num] = 0;                           /* clear the TLB entry */
-//WAS2      WMR((num*2),map);                       /* store the map reg contents into cache */
-//WAS       WMR((num*2),0);                         /* zero the map reg contents in cache */
-            if ((num < 0x20) || (num > (MAXMAP - 0x10)))
                 sim_debug(DEBUG_EXP, &cpu_dev,
-                    "UserV map #%4x, %04x, map2 %08x, TLB %08x, MAPC %08x\n",
-                    num, map, ((map << 16) & 0xf8000000), TLB[num], MAPC[num/2]);
+                    "load_maps O/S page count overflow %04x, map fault\n", num);
+                goto nomaps;                        /* map overflow, map fault trap */
+            }
+            if (pad >= (MEMSIZE*4)) {               /* see if address is within our memory */
+                sim_debug(DEBUG_EXP, &cpu_dev,
+                    "load_maps MEM SIZE %06x os page address %06x invalid\n",
+                    MEMSIZE*4, pad);
+                goto npmem;                         /* non present memeory trap */
+            }
+            /* load 16 bit map descriptors */
+            map = RMH(pad);                         /* get page descriptor from memory */
+
+            /* for valid maps translate the map number to a real address */
+            /* put this address in the TLB for later translation */
+            /* copy the map status bits too and set hit bit in the TLB */
+            if (map & 0x8000) {                     /* see if map is valid */
+                TLB[num] = (((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000));
+                TLB[num] |= 0x04000000;             /* set HIT bit for non diag */
+                WMR((num<<1), map);                 /* store the map unmodified into cache */
+            } else {
+//?             WMR((num<<1), 0);                   /* zero map reg contents in cache */
+                TLB[num] = 0;                       /* clear the TLB for non valid maps */
+            }
+//          if ((num < 0x20) || (num > (MAXMAP - 0x10)))
+            if ((num < 0x20) || (num > (spc - 0x10)))
+                sim_debug(DEBUG_EXP, &cpu_dev,
+                    "OS pad %06x map #%4x, %04x, map2 %08x, TLB %08x MAPC %08x\n",
+                    pad, num, map, (((map << 16) & 0xf8000000) | ((map & 0x7ff) << 13)),
+                    TLB[num], MAPC[num/2]);
         }
+        BPIX = num;                                 /* save the # maps loaded in O/S */
+        CPIXPL = 0;                                 /* no user pages */
+
+        if (!onlyos)                                /* see if only O/S to be loaded */
+            goto loaduser;                          /* no, go load the user maps */
+
+        for (i = BPIX; i < MAXMAP; i++)             /* zero any remaining entries */
+            TLB[i] = 0;                             /* clear look aside buffer */
+
+        /* Only the O/S is to be loaded, finish up & return */
+        HIWM = num;                                 /* set new high water mark */
+        return ALLOK;                               /* all cache is loaded, return OK */
     }
-skipcpix:
-    if (num == 0) {                                 /* see if any maps loaded */
-        TRAPSTATUS |= 0x8000;                       /* set bit 16 of trap status */
-        /* clear all maps */
-        for (i=0; i<MAXMAP; i++) {
-            TLB[i] = 0;
-            WMR((i*2),0);                           /* store the map reg contents into cache */
+
+    /* The csect is not zero here, so see what we have to do */
+    /* See if O/S is to be loaded first because user MPL entry has BIT 0 set */
+    if (midl & BIT0) {
+        /* the user wants the O/S to load first, if the O/S retain bit set? */
+        if (osmidl & BIT0) {                        /* see if the O/S retain bit 0 is on */
+            num = spc;                              /* yes, set the number of O/S maps loaded */
+            BPIX = spc;                             /* save the # maps in O/S */
+            goto loaduser;                          /* load user map only or after O/S */
         }
-        BPIX = 0;                                   /* no os maps loaded */
+
+        /* no retain bit, load user maps only, or after O/S */
+        /* validate O/S map count */
+        if (spc > MAXMAP) {
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "load_maps bad O/S page count %04x, map fault\n", spc);
+            goto nomaps;                            /* we have error, make way out */
+        }
+
+        /* see if any O/S maps to load */ 
+        if (spc == 0) {
+            /* O/S page count is zero, so just load the user */
+            goto loaduser;                          /* load user map only or after O/S */
+        }
+        /* user wants to have O/S loaded first */
+        onlyos = 0;                                 /* return to loaduser after loading O/S */
+        goto loados;                                /* go load the O/S */
+    }
+
+    /* the user wants to only load the user maps, no O/S maps are to be retained */
+    BPIX = 0;                                       /* clear O/S loaded page count */
+    num = 0;                                        /* nothing loaded yet */
+    /****************** END-OF-O/S-MAPPING ********************/
+
+loaduser:
+    /* the O/S has been loaded if requested or retained, so now load the user */
+    msdl &= MASK24;                                 /* get 24 bit real word address of msdl */
+
+    // This test fails cn.mmm diag at test 46, subtest 2 with unexpected error
+    if (msdl >= (MEMSIZE*4)) {                      /* see if address is within our memory */
+        sim_debug(DEBUG_EXP, &cpu_dev,
+            "load_maps MEM SIZE %06x user page list address %06x invalid\n",
+            MEMSIZE*4, msdl);
+
+        /* All maps are now loaded, finish up & return */
+        for (i = num; i < MAXMAP; i++)              /* zero any remaining entries */
+            TLB[i] = 0;                             /* clear look aside buffer */
+
+        /* Bad map load address specified. */
         CPIXPL = 0;                                 /* no user pages */
         CPIX = cpix;                                /* save CPIX */
-        return MAPFLT;                              /* map fault error */
-    }
-    /* now clear any map entries left over from previous map */
-    if ((num & 1) && (num < MAXMAP)) {
-        /* last map was in left hw, zero right halfword */
-//WAS       WMR((num*2),0);                         /* zero the map reg contents in cache */
-        TLB[num++] = 0;                             /* zero the TLB entry too */
-    }
-    if ((num/2) < HIWM) {                           /* largest number of maps loaded so far */
-        /* we need to zero the left over entries from previous map */
-        /* num should be even at this point, so zero 32 bit words for remaining maps */
-        for (i = num/2; i < HIWM; i++) {            /* zero any remaining entries */
-//WAS       MAPC[i] = 0;                            /* clear the map entry to make not valid */
-            TLB[i*2] = 0;                           /* zero the TLB entry */
-            TLB[(i*2)+1] = 0;                       /* zero the TLB entry */
+
+        /* CPIX msdl address is invalid, anything O/S loaded? */
+        if (BPIX > 0) {                             /* any maps loaded? */
+            HIWM = num;                             /* set new high water mark */
+//          return ALLOK;                           /* all cache is loaded, return OK */
+        } else {
+            BPIX = 0;                               /* no os maps loaded */
+            HIWM = 0;                               /* reset high water mark */
+        }
+
+#ifndef UNEXPECTED_NPM_FOR_67_97
+        /* Fails test 46/2 with unexpected ???? trap for 67 & 97 tried them all */
+        /* Fails test 46/2 with unexpected machine check trap for 67 & 97 */
+        /* Fails test 27/1 with unexpected machine check trap */
+        if ((CPU_MODEL == MODEL_67) || (CPU_MODEL == MODEL_97)) {
+//          TRAPSTATUS |= 0x0200;                   /* set bit 22 of trap status */
+//          return MACHINECHK_TRAP;                 /* diags want machine check error */
+            TRAPSTATUS |= 0x0200;                   /* set bit 22 of trap status */
+            return NPMEM;                           /* non present memory error */
+//          return ADDRSPEC_TRAP;                   /* Address spec trap condition */
+//          TRAPSTATUS |= 0x800;                    /* set bit 20 of trap status */
+//          return SYSTEMCHK_TRAP;                  /* trap condition if F class */
+        /* Fails test 46/2 with unexpected map error trap for 67 */
+//          TRAPSTATUS |= 0x8000;                   /* set bit 16 of trap status */
+//          return MAPFLT;                          /* map fault error */
+        } else
+#endif
+        if (CPU_MODEL == MODEL_87) {
+            // 32/27 & 32/87 wants a MACHINECHK for test 37/1 in CN.MMM
+            TRAPSTATUS |= 0x0200;                   /* set bit 22 of trap status */
+            return NPMEM;                           /* non present memory error */
+        }
+        else
+        if ((CPU_MODEL == MODEL_V6) || (CPU_MODEL == MODEL_V9)) {
+            // 32/67, 32/97, V6, and V9 wants NPMEM for test 37/1 in CN.MMM & VM.MMM */
+//          TRAPSTATUS |= 0x0200;                   /* set bit 22 of trap status */
+//          return MACHINECHK_TRAP;                 /* diags want machine check error */
+            TRAPSTATUS |= 0x0200;                   /* set bit 22 of trap status */
+            return NPMEM;                           /* non present memory error */
         }
     }
-    HIWM = num/2;                                   /* set new high water mark */
+    /* We have a valid user MPL[cpix] address, msdl */
+    spc = midl & MASK16;                            /* get 16 bit User page count */
+
+    if (((num == 0) && (spc == 0)) || (spc > MAXMAP) || ((spc+BPIX) > MAXMAP)) {
+        sim_debug(DEBUG_EXP, &cpu_dev,
+            "load_maps bad User page count %04x num %04x bpix %04x, map fault\n", spc, num, BPIX);
+        goto nomaps;
+    }
+    CPIX = cpix;                                    /* save user MPL offset (cpix) */
+    CPIXPL = spc;                                   /* save user map load count */
+
+    /* Load maps for 32/27 aand 32/87 */
+    if ((CPU_MODEL == MODEL_27) || (CPU_MODEL == MODEL_87)) {
+
+        sim_debug(DEBUG_EXP, &cpu_dev,
+            "load_maps Processing 32/27 & 32/87 Model# %04x\n", CPU_MODEL);
+
+        /* handle non virtual page loading or diag LMAP instruction */
+        /* do 32/27, 32/87, and diags LMAP */
+        /* now load user maps specified by the cpix value */
+        for (j = 0; j < spc; j++, num++) {          /* copy maps from midl to map cache */
+            uint32 pad = msdl+(j<<1);               /* get page descriptor address */
+
+            /* see if map overflow */
+            if (num >= MAXMAP) {
+                sim_debug(DEBUG_EXP, &cpu_dev,
+                    "load_maps User page count overflow %04x, map fault\n", num);
+                TRAPSTATUS |= 0x8000;               /* set bit 16 of trap status */
+                goto nomaps;                        /* map overflow, map fault trap */
+            }
+            if (pad >= (MEMSIZE*4)) {               /* see if address is within our memory */
+                sim_debug(DEBUG_EXP, &cpu_dev,
+                    "load_maps MEM SIZE %06x User page address %06x invalid\n",
+                    MEMSIZE*4, pad);
+                goto npmem;                         /* non present memeory trap */
+            }
+            /* load 16 bit map descriptors */
+            map = RMH(pad);                         /* get page descriptor from memory */
+
+            /* for valid maps translate the map number to a real address */
+            /* put this address in the TLB for later translation */
+            /* copy the map status bits too and set hit bit in the TLB */
+            /* leaving out diags in next statment fails test3/1 of vm.mmm */
+            if ((map & 0x8000)) {                   /* see if map is valid */
+                TLB[num] = (((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000));
+                TLB[num] |= 0x04000000;             /* set HIT bit on */
+            } else
+                TLB[num] = 0;                       /* clear the TLB for non valid maps */
+            WMR((num<<1), map);                     /* store map unmodified into cache */
+
+            /* do partial map dump */
+            if ((num < 0x20) || (num > (spc+BPIX) - 0x10))
+                sim_debug(DEBUG_EXP, &cpu_dev,
+                    "UserN pad %06x map #%4x, %04x, map2 %08x, TLB %08x, MAPC %08x\n",
+                    pad, num, map, (((map << 16) & 0xf8000000) | ((map & 0x7ff) << 13)),
+                    TLB[num], MAPC[num/2]);
+        }
+        if (num == 0) {                             /* see if any maps loaded */
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "load_maps No maps loaded %04x, map fault\n", num);
+            goto nomaps;
+        }
+
+        /* All maps are now loaded, finish up & return */
+        for (i = num; i < MAXMAP; i++)              /* zero any remaining TLB entries */
+            TLB[i] = 0;                             /* clear look aside buffer */
+
+        HIWM = num;                                 /* set new high water mark */
+        return ALLOK;                               /* all cache is loaded, return OK */
+    }
+    /******************NON-VIRTUAL-USER-MAPPING-FOR-27-87********************/
+   
+    /* handle load on memory access case for 67, 97, V6 & V9 */
+    /* now clear TLB & maps specified by the cpix value */
+    for (j = 0; j < spc; j++, num++) {              /* clear maps in map cache */
+        uint32 pad = msdl+(j<<1);                   /* get page descriptor address */
+
+        /* see if map overflow */
+        if (num >= MAXMAP) {
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "load_maps User page count overflow %04x, map fault\n", num);
+            TRAPSTATUS |= 0x8000;                   /* set bit 16 of trap status */
+            goto nomaps;                            /* map overflow, map fault trap */
+        }
+
+        if (pad >= (MEMSIZE*4)) {                   /* see if address is within our memory */
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "load_maps MEM SIZE %06x User page address %06x non present\n",
+                MEMSIZE*4, pad);
+            goto npmem;                             /* non present memeory trap */
+        }
+
+        /* load 16 bit map descriptors */
+        map = RMH(pad);                             /* get page descriptor from memory */
+
+        if (diag) {
+            TLB[num] = (((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000));
+            TLB[num] |= 0x04000000;                 /* set HIT bit for non diag */
+            /* removing this store of map fails test 2 on 97 */
+            WMR((num<<1), map);                     /* store the map unmodified into cache */
+        } else {
+            TLB[num] = 0;                           /* clear the TLB for non valid maps */
+        }
+
+//!!    if ((num == 0x7ff) || ((num < 0x24) || (num > (MAXMAP - 0x10))))
+        if ((num < 0x20) || (num > (spc+BPIX) - 0x10))
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "UserV pad %06x map #%4x, %04x, map2 %08x, TLB %08x, MAPC %08x\n",
+                pad, num, map, (((map << 16) & 0xf8000000)|(map & 0x7ff)<<13)|0x04000000,
+                TLB[num], MAPC[num/2]);
+    }
+
+    /* FIXME debug only */
+    if (num == 0x7ff) {
+        uint32 pad = msdl+((num-BPIX)<<1);                 /* get page descriptor address */
+        map = RMH(pad);                             /* get page descriptor from memory */
+        sim_debug(DEBUG_EXP, &cpu_dev,
+            "UserVX pad %06x map #%4x, %04x, map2 %08x, TLB %08x, MAPC %08x\n",
+            pad, num, map, (((map << 16) & 0xf8000000)|(map & 0x7ff)<<13)|0x04000000,
+            TLB[num], MAPC[num/2]);
+        TLB[num] = 0;
+    }
+
+    if (num == 0) {                                 /* see if any maps loaded */
+        sim_debug(DEBUG_EXP, &cpu_dev,
+            "load_maps No maps loaded %04x, map fault\n", num);
+        goto nomaps;
+    }
+
+    /* All maps are now loaded, finish up & return */
+    for (i = num; i < MAXMAP; i++)                  /* zero any remaining entries */
+        TLB[i] = 0;                                 /* clear look aside buffer */
+    HIWM = num;                                     /* set new high water mark */
     return ALLOK;                                   /* all cache is loaded, return OK */
+    /****************** END-OF-VIRTUAL-USER-MAP-LOADING ********************/
 }
 
 /*
  * Return the real memory address from the logical address
- * Also return the protection status, 1 if write protected address
- * addr is byte address
+ * Also return the protection status, 1 if write protected address.
+ * For 67, 97, V6, & V9 return all protection bits.
+ * Addr is a byte address.
  */
 t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot)
 {
@@ -1163,6 +1243,7 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot)
         else
             /* entry is in left hw, move to rt hw */
             map >>= 16;                             /* map is in left hw */
+
         /* see if map is valid */
         if (map & 0x4000) {
             /* required map is valid, get 9 bit address and merge with 15 bit page offset */
@@ -1182,6 +1263,7 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot)
         /* map is invalid, so return map fault error */
         return MAPFLT;                              /* map fault error */
     }
+    /*****************END-OF-7X-ADDRESS-PROCESSING****************/
 
     /* Everyone else has 2KW maps */
     /* do common processing */
@@ -1189,34 +1271,84 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot)
         word = addr & 0xffffff;                     /* get 24 bit address */
     else
         word = addr & 0x7ffff;                      /* get 19 bit address */
+
     if ((modes & MAPMODE) == 0) {
         /* we are in unmapped mode, check if valid real address */
-        if (word >= (MEMSIZE*4))                    /* see if address is within our memory */
+        if (word >= (MEMSIZE*4)) {                  /* see if address is within our memory */
+            TRAPSTATUS |= 0x0200;                   /* set bit 22 of trap status */
             return NPMEM;                           /* no, none present memory error */
+        }
         *realaddr = word;                           /* return the real address */
         return ALLOK;                               /* all OK, return instruction */
     }
-    /* diag wants the mpl entries checked to make sure valid */
+
+#ifndef DO_IN_LOAD_MAPS_ONLY
+    /* diags want the mpl entries checked to make sure valid */
     /* master process list is in 0xf3 of spad for concept */
-    mpl = SPAD[0xf3] & MASK24;                      /* get mpl from spad address */
-    /* check if valid real address */
-    if ((mpl & MASK24) >= MEMSIZE*4) {              /* see if address is within our memory */
+    mpl = SPAD[0xf3];                               /* get mpl from spad address */
+    if (mpl & 0x7) {                                /* test for double word address */
         sim_debug(DEBUG_EXP, &cpu_dev,
-            "RealAddr MapFault MPL %06x %08x\n", mpl, M[(mpl+4)>>2]);
+            "RealAddr MPL not on double word boundry %06x\n", mpl);
+        TRAPSTATUS |= 0x8000;                       /* set bit 16 of trap status */
+        return MAPFLT;                              /* no, map fault error */
+    }
+
+    mpl &= MASK24;                                  /* 24 bit real dbl wd address */
+    /* check if valid real address */
+    if (mpl >= MEMSIZE*4) {                         /* see if address is within our memory */
+        sim_debug(DEBUG_EXP, &cpu_dev,
+            "RealAddr Non Present Memory MPL %06x\n", mpl);
+        TRAPSTATUS |= 0x0200;                       /* set bit 22 of trap status */
         return NPMEM;                               /* no, non present memory error */
     }
-    /* now check the mpl pointer for being valid */
-    if ((M[(mpl+4)>>2] & MASK24) >= (MEMSIZE*4)) {  /* check OS midl */
+#else
+    mpl = SPAD[0xf3];                               /* get mpl from spad address */
+    mpl &= MASK24;                                  /* 24 bit real dbl wd address */
+#endif
+
+#ifndef DO_IN_LOAD_MAPS_ONLY
+    /* did not get expected machine check trap for 67 in test 27/0 */
+    /* unexpected machine check trap for 67 in test 37/0 cn.mmm */
+    /* now check the O/S midl pointer for being valid */
+    /* we may want to delay checking until we actually use it */
+    if ((RMW(mpl+4) & MASK24) >= (MEMSIZE*4)) {     /* check OS midl */
         sim_debug(DEBUG_EXP, &cpu_dev,
-            "RealAddr Fault MPL Bad %06x MPL[1] %06x\r\n", mpl, M[(mpl+4)>>2]);
-        if (CPU_MODEL == MODEL_67) {
-            // 32/67 wants MAPFLT for test 37/1 in CN.MMM
-            return MAPFLT;                          /* no, map fault error */
-        } else {
-            // 32/27 & 32/87 wants MACHINECHK 37/1 in CN.MMM
+            "RealAddr Fault MPL Bad %06x MPL[1] %06x\r\n", mpl, RMW(mpl+4));
+
+//      if ((CPU_MODEL == MODEL_27) || (CPU_MODEL == MODEL_87) ||
+        if ((CPU_MODEL == MODEL_27) ||
+            (CPU_MODEL == MODEL_97)) {
+            // 32/27 & 32/87 want MACHINECHK for test 37/1 in CN.MMM
+            TRAPSTATUS |= 0x0200;                   /* set bit 22 of trap status */
             return MACHINECHK_TRAP;                 /* diags want machine check error */
+        } else
+    /* unexpected machine check trap for 87 in test 37/0 cn.mmm */
+    /* unexpected map fault trap for 87 in test 37/0 cn.mmm */
+        if (CPU_MODEL == MODEL_87) {
+            TRAPSTATUS |= 0x0200;                   /* set bit 22 of trap status */
+            return MACHINECHK_TRAP;                 /* diags want machine check error */
+//          TRAPSTATUS |= 0x0200;                   /* set bit 22 of trap status */
+//          return NPMEM;                           /* non present memory error */
+//          TRAPSTATUS |= 0x8000;                   /* set bit 16 of trap status */
+//          return MAPFLT;                          /* no, map fault error */
+        } else
+        if (CPU_MODEL == MODEL_67) {
+            /* test 37/0 wants MAPFLT trap for 67 */
+//          TRAPSTATUS |= 0x0200;                   /* set bit 22 of trap status */
+//          return NPMEM;                           /* non present memory error */
+//          TRAPSTATUS |= 0x0200;                   /* set bit 22 of trap status */
+//          return MACHINECHK_TRAP;                 /* diags want machine check error */
+            TRAPSTATUS |= 0x8000;                   /* set bit 16 of trap status */
+            return MAPFLT;                          /* no, map fault error */
+        }
+        else
+        {
+            // 32/67, 32/97, V6, and V9 wants NPMEM for test 37/1 in CN.MMM & VM.MMM */
+            TRAPSTATUS |= 0x0200;                   /* set bit 22 of trap status */
+            return NPMEM;                           /* non present memory error */
         }
     }
+#endif
 
     /* we are mapped, so calculate real address from map information */
     /* get 11 bit page number from address bits 8-18 */
@@ -1224,197 +1356,343 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot)
     index = (word >> 13) & 0x7ff;                   /* get 11 bit page value */
     offset = word & 0x1fff;                         /* get 13 bit page offset */
 
+#ifndef DO_IN_LOAD_MAPS_ONLY
     /* make sure map index is valid */
     if (index >= (BPIX + CPIXPL)) {
         sim_debug(DEBUG_EXP, &cpu_dev,
             "RealAddr %06x word %06x loadmap gets mapfault index %04x B(%x)+C(%x) %04x\n",
             word, addr, index, BPIX, CPIXPL, BPIX+CPIXPL);
+        TRAPSTATUS |= 0x8000;                       /* set bit 16 of trap status */
         return MAPFLT;                              /* no, map fault error */
     }
+#endif
 
-    /* continue processing non virtual machines here */
-///    if ((CPU_MODEL < MODEL_V6) && (CPU_MODEL != MODEL_67)) {
-    if ((CPU_MODEL < MODEL_V6) && (CPU_MODEL != MODEL_67) && (CPU_MODEL != MODEL_97)) {
-        map = MAPC[index/2];                        /* get two hw map entries */
-        if (index & 1)
-            /* entry is in rt hw, clear left hw */
-            map &= RMASK;                           /* map is in rt hw */
-        else
-            /* entry is in left hw, move to rt hw */
-            map >>= 16;                             /* map is in left hw */
-
-        /* see if map is valid */
-        if ((map & 0x8000) == 0) {                  /* see if valid map */
-            sim_debug(DEBUG_EXP, &cpu_dev, "RealAddr loadmap 0a map fault index %04x B+C %04x map %04x TLB %08x\n",
-                index, BPIX+CPIXPL, map, TLB[index]);
-            return MAPFLT;                          /* no, map fault error */
-        }
+    /* continue processing non virtual machines here 32/27 & 32/87 */
+    if ((CPU_MODEL == MODEL_27) || (CPU_MODEL == MODEL_87)) {
+        map = RMR((index<<1));                      /* read the map reg cache contents */
         raddr = TLB[index];                         /* get the base address & bits */
-        if (raddr == 0) {                           /* see if valid address */
-            sim_debug(DEBUG_EXP, &cpu_dev, "RealAddr loadmap 0b map fault index %04x B+C %04x map %04x TLB %08x\n",
-                index, BPIX+CPIXPL, map, raddr);
+        if (((map & 0x8000) == 0) || ((raddr & BIT0) == 0)) {   /* see if valid map */
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "RealAddr loadmap 0a map fault index %04x B+C %04x map %04x TLB %08x\n",
+                index, BPIX+CPIXPL, map, TLB[index]);
+            TRAPSTATUS |= 0x8000;                   /* set bit 16 of trap status */
             return MAPFLT;                          /* no, map fault error */
         }
-#ifndef DIAGS_SAYS_ANY_ADDRESS_OK_IF_MAPPED
-        //test 34/1 fails
+
+        // diag test 34/1 fails in cn.mmm
         // needed for 32/27 & 32/87
         /* check if valid real address */
-        if ((raddr & 0xffffff) >= (MEMSIZE*4)) {    /* see if address is within our memory */
+        if ((raddr & MASK24) >= (MEMSIZE*4)) {      /* see if address is within our memory */
             sim_debug(DEBUG_EXP, &cpu_dev,
-                "RealAddr loadmap 0c non present memory fault addr %08x raddr %08x index %04x\n",
-                addr, raddr, index);
+                "RealAddr loadmap 0c non present memory fault addr %06x raddr %08x index %04x\n",
+                word, raddr, index);
+            TRAPSTATUS |= 0x0200;                   /* set bit 22 of trap status */
             return NPMEM;                           /* no, none present memory error */
         }
-#endif
-        word = (raddr & 0xffe000) | (word & 0x1fff);   /* combine map and offset */
+        word = (raddr & 0xffe000) | offset;         /* combine real addr and offset */
         *realaddr = word;                           /* return the real address */
         if (modes & BIT0)                           /* all OK if privledged */
             return ALLOK;                           /* all OK, return instruction */
-        /* get protection status of map */
-        index = (word >> 11) & 0x3;                 /* see which 1/4 page we are in */
-        if ((BIT1 >> index) & raddr) {              /* is 1/4 page write protected */
+
+        /* get user protection status of map */
+        offset = (word >> 11) & 0x3;                /* see which 1/4 page we are in */
+        if ((BIT1 >> offset) & raddr) {             /* is 1/4 page write protected */
             *prot = 1;                              /* return memory write protection status */
         }
+        sim_debug(DEBUG_EXP, &cpu_dev,
+            "RealAddrRa address %08x, TLB %08x MAPC[%03x] %08x wprot %02x prot %02x\n",
+            word, TLB[index], index/2, MAPC[index/2], (word>>11)&3, *prot);
         return ALLOK;                               /* all OK, return instruction */
     }
-    else
-    {
-        /* handle 32/67, 32/97 and V6 & V9 here */
-        /* Concept 32 machine, 2KW maps */
-        /* the index is less than B+C, so setup to get a map */
-        if ((TLB[index] & 0x04000000) == 0) {       /* is HIT bit on */
-            uint32  nix, msdl;
+    /*****************END-OF-27-87-ADDRESS-PROCESSING****************/
 
-            sim_debug(DEBUG_EXP, &cpu_dev,
-                "MEMORY %08x MPL %08x MPL[0] %08x MPL[1] %08x MPL[%04x] %08x %08x\n",
-                MEMSIZE*4, mpl, M[(mpl)>>2], M[(mpl+4)>>2], CPIX, M[(CPIX+mpl)>>2], M[(CPIX+mpl+4)>>2]);
-            msdl = RMW(mpl+CPIX+4);                 /* get mpl entry wd 1 for given cpix */
-            if ((msdl & MASK24) >= (MEMSIZE*4)) {   /* see if address is within our memory */
-                return NPMEM;                       /* no, non present memory error */
-            }
+    /* handle 32/67, 32/97 and V6 & V9 here */
+    /* Concept 32 machine, 2KW maps */
+    /* the index is less than B+C, so setup to get a map */
+    if ((TLB[index] & 0x04000000) == 0) {           /* is HIT bit on in TLB */
+        uint32  nix, msdl;
+
+        sim_debug(DEBUG_EXP, &cpu_dev,
+            "$MEMORY %06x HIT MPL %06x MPL[0] %08x %06x MPL[%04x] %08x %06x\n",
+            MEMSIZE*4, mpl, RMW(mpl), RMW(mpl+4), CPIX, RMW(CPIX+mpl), RMW(CPIX+mpl+4));
+
+        /* validate the CPIX msdl address */
+        msdl = RMW(mpl+CPIX+4);                     /* get mpl entry wd 1 for given cpix */
+        if ((msdl & MASK24) >= (MEMSIZE*4)) {       /* see if address is within our memory */
+            TRAPSTATUS |= 0x0200;                   /* set bit 22 of trap status */
+            return NPMEM;                           /* no, non present memory error */
+        }
 #ifdef DO_DYNAMIC_DEBUG
-        /* start debugging at test 15/0 of vm.mmm diag */
-            if (RMW(mpl+CPIX) == 0x800007ee)
-        cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
+        /* start debugging at test 15/0 of vm.mmm diag for V6 */
+//      if (RMW(mpl+CPIX) == 0x800007ee)
+        if (addr == 0x020000)
+            cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
 #endif
 
-            /* HIT bit is off, we must load the map entries from memory */
-            /* turn on the map hit flag and set maps real base addr */
+        /* HIT bit is off, we must load the map entries from memory */
+        /* turn on the map hit flag if valid and set maps real base addr */
+        nix = index & 0x7ff;                        /* map # */
+        word = (TLB[nix] & 0xffe000) | offset;      /* combine map and offset */
+        map = RMH(msdl+((nix-BPIX)<<1));            /* map content from memory */      
+        sim_debug(DEBUG_EXP, &cpu_dev,
+            "Addr %06x RealAddr %06x Map0 HIT %04x, TLB[%3x] %08x MAPC[%03x] %08x\n",
+            addr, word, map, nix, TLB[nix], nix/2, MAPC[nix/2]);
+
+        /* generate TLB for this map if page is valid, otherwise do map fault */
+        if (CPU_MODEL < MODEL_V6) {
+            /* process 32/67 & 32/97 load map on access */
+            if (map & 0x8000) {
+                TLB[nix] = ((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000) | 0x04000000;
+                word = (TLB[nix] & 0xffe000) | offset;  /* combine map and offset */
+                WMR((nix<<1), map);                 /* store the map reg contents into MAPC cache */
+                sim_debug(DEBUG_EXP, &cpu_dev,
+                    "Addr1 %06x RealAddr %06x Map1 HIT %04x, TLB[%3x] %08x MAPC[%03x] %08x RMR %04x\n",
+                    addr, word, map, nix, TLB[nix], nix/2, MAPC[nix/2], RMR(nix<<1));
+
+                *realaddr = word;                   /* return the real address */
+                raddr = TLB[nix];                   /* get the base address & bits */
+
+                /* get protection status of map */
+                if ((modes & BIT0) == 0) {          /* OK if privledged */
+                    /* otherwise check protection bit */
+                    offset = (word >> 11) & 0x3;    /* see which 1/4 page we are in */
+                    if ((BIT1 >> offset) & raddr)   /* is 1/4 page write protected */
+                        *prot = 1;                  /* return memory write protection status */
+                }
+
+                /* now do the other halfword of the memory map pair */
+                /* calc index of previous or next halfword */
+                if (((nix-BPIX) & 1) == 0)
+                    nix += 1;                       /* we are at lf hw, so do next hw */
+                else
+                if (((nix-BPIX) & 1) == 1)
+                    nix -= 1;                       /* we are at rt hw, so backup hw */
+
+                if (nix < (BPIX+CPIXPL)) {          /* needs to be a mapped reg */
+                    sim_debug(DEBUG_EXP, &cpu_dev,
+                        "Addr1a BPIX %03x CPIXPL %03x RealAddr %06x TLB[%3x] %08x MAPC[%03x] %08x RMR %04x map %04x\n",
+                        BPIX, CPIXPL, word, nix, TLB[nix], nix/2, MAPC[nix/2], RMR(nix<<1),
+                        RMH(msdl+((nix-BPIX)<<1)));
+
+                    /* nix has other map correct index */
+                    if ((TLB[nix] & 0x04000000) == 0) { /* is HIT bit already on */
+                        /* hit not on, so load the map */
+                        map = RMH(msdl+((nix-BPIX)<<1));    /* do other map content */      
+
+                        if (map & 0x8000) {         /* must be valid to load */
+                            TLB[nix] = ((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000) | 0x04000000;
+                            word = (TLB[nix] & 0xffe000);   /* get real address */
+                            WMR((nix<<1), map);     /* store the map reg contents into MAPC cache */
+                            sim_debug(DEBUG_EXP, &cpu_dev,
+                                "Addr2 %06x RealAddr %06x Map2 HIT %04x, TLB[%3x] %08x MAPC[%03x] %08x\n",
+                                addr, word, map, nix, TLB[nix], nix/2, MAPC[nix/2]);
+                        }
+                    }
+                }
+                return ALLOK;                       /* all OK, return instruction */
+            } else {
+                /* map is not valid, so we have map fault */
+                TRAPSTATUS |= 0x8000;               /* set bit 16 of trap status */
+                return MAPFLT;                      /* no, map fault error */
+            }
+        }
+        /*****************END-OF-67-97-ADDRESS-HIT-PROCESSING****************/
+        else {
+            /* process HIT on V6 & V9 here */
+            if (map & 0x8000) {
+                TLB[nix] = ((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000) | 0x04000000;
+                /* setting the accessed bit fails at 15/0 */
+//??            TLB[nix] = ((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000) | 0x0c000000;
+                word = (TLB[nix] & 0xffe000) | offset;  /* combine map and offset */
+                /* not setting this bit fails test 17/0 in vm.mmm diag */
+                /* setting the bit fails at 15/0 */
+/*??*/ //       map |= 0x800;                       /* set access bit */
+                WMR((nix<<1), map);                 /* store the map reg contents into MAPC cache */
+                sim_debug(DEBUG_EXP, &cpu_dev,
+                    "Addr1c %06x RealAddr %06x Map1 HIT %04x, TLB[%3x] %08x MAPC[%03x] %08x RMR %04x\n",
+                    addr, word, map, nix, TLB[nix], nix/2, MAPC[nix/2], RMR(nix<<1));
+
+                *realaddr = word;                   /* return the real address */
+                raddr = TLB[nix];                   /* get the base address & bits */
+
+                /* get protection status of map */
+                if ((modes & BIT0) || (raddr & BIT1))   /* write OK if privledged or p1 set for user */
+                    *prot = 0;                      /* we have access */
+                else
+                    *prot = 1;                      /* return memory write protection status */
+
+                /* removing this code causes abort at test 15/0 */
+                /* if defined, abort at test 17/0 */
+#ifndef MAYBE_NOT_ON_V6_V7
+                /* now do the other halfword of the memory map pair */
+                /* calc index of previous or next halfword */
+                if (((nix-BPIX) & 1) == 0)
+                    nix += 1;                       /* we are at lf hw, so do next hw */
+                else
+                if (((nix-BPIX) & 1) == 1)
+                    nix -= 1;                       /* we are at rt hw, so backup hw */
+
+                if (nix < (BPIX+CPIXPL)) {          /* needs to be a mapped reg */
+                    sim_debug(DEBUG_EXP, &cpu_dev,
+                        "Addr1d BPIX %03x CPIXPL %03x RealAddr %06x TLB[%3x] %08x MAPC[%03x] %08x RMR %04x\n",
+                        BPIX, CPIXPL, word, nix, TLB[nix], nix/2, MAPC[nix/2], RMR(nix<<1));
+
+                    /* nix has other map correct index */
+                    if ((TLB[nix] & 0x04000000) == 0) { /* is HIT bit already on */
+                        /* hit not on, so load the map */
+                        if (nix < (BPIX+CPIXPL)) {  /* needs to be a mapped reg */
+                            map = RMH(msdl+((nix-BPIX)<<1));    /* do other map content */      
+
+                            if (map & 0x8000) {     /* must be valid to load */
+                                /* setting access bit fails test 15/0 in vm.mmm diag */
+                                TLB[nix] = ((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000) | 0x04000000;
+//FAILS                         TLB[nix] = ((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000) | 0x0c000000;
+                                word = (TLB[nix] & 0xffe000);   /* combine map and offset */
+//FAILS                         map |= 0x800;       /* set access bit */
+                                WMR((nix<<1), map); /* store the map reg contents into MAPC cache */
+                                sim_debug(DEBUG_EXP, &cpu_dev,
+                                    "Addr2a %06x RealAddr %06x Map2 HIT %04x, TLB[%3x] %08x MAPC[%03x] %08x\n",
+                                    addr, word, map, nix, TLB[nix], nix/2, MAPC[nix/2]);
+                            }
+                        }
+                    }
+                }
+#endif
+                return ALLOK;                       /* all OK, return instruction */
+            } else {
+                /* map is not valid, so we have map fault */
+                sim_debug(DEBUG_EXP, &cpu_dev,
+                    "AddrM %06x RealAddr %06x Map0 HIT %04x, TLB[%3x] %08x MAPC[%03x] %08x\n",
+                    addr, word, map, nix, TLB[nix], nix/2, MAPC[nix/2]);
+                TRAPSTATUS |= 0x8000;               /* set bit 16 of trap status */
+                return MAPFLT;                      /* no, map fault error */
+            }
+        }
+        /*****************END-OF-V6-V9-ADDRESS-HIT-PROCESSING****************/
+    } else
+//? }
+    {
+        /* handle HIT bit already on in TLB here */
+
+        /* HIT bit is on in TLB */
+        /* diags wants a NPMEM error if physical addr is exceeded */
+        index &= 0x7ff;                             /* map # */
+        raddr = TLB[index];                         /* get the base address & bits */
+        /* check if valid real address */
+        if ((raddr & MASK24) >= (MEMSIZE*4)) {      /* see if address is within our memory */
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "RealAddr loadmap 2a non present memory fault addr %08x raddr %08x index %04x\n",
+                addr, raddr, index);
+            TRAPSTATUS |= 0x0200;                   /* set bit 22 of trap status */
+            return NPMEM;                           /* no, none present memory error */
+        }
+        map = RMR((index<<1));                      /* read the map reg contents */
+//???   if ((raddr & BIT0) == 0) {                  /* see if valid address */
+        if ((map & 0x8000) == 0) {                  /* see if valid map */
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "RealAddr loadmap 2b map fault addr %06x raddr %08x index %04x\n", addr, raddr, index);
+            return MAPFLT;                          /* no, map fault error */
+        }
+        word = (raddr & 0xffe000) | offset;         /* combine map and offset */
+        *realaddr = word;                           /* return the real address */
+
+        /* handle 32/67 & 32/97 here */
+        if (CPU_MODEL < MODEL_V6) {
+#ifndef NOTYET
+            uint32  nix, msdl;
             nix = index & 0x7ff;                    /* map # */
-            word = (TLB[nix] & 0xffe000) | offset;  /* combine map and offset */
-            map = RMH(msdl+((nix-BPIX)<<1));        /* map content from memory */      
-            sim_debug(DEBUG_EXP, &cpu_dev,
-                "Addr %08x RealAddr %08x Map0 HIT %08x, TLB[%3x] %08x MAPC[%03x] %08x\n",
-                addr, word, map, nix, TLB[nix], nix/2, MAPC[nix/2]);
+            msdl = RMW(mpl+CPIX+4);                 /* get mpl entry wd 1 for given cpix */
 
-            if ((CPU_MODEL >= MODEL_V6) && (map & 0x8000)) {
-                map &= 0xe7ff;                      /* clear access/modify bits in map */
-                WMH(msdl+((nix-BPIX)<<1),map);      /* write map content */      
-            }
-            TLB[nix] = ((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000) | 0x04000000;
-            word = (TLB[nix] & 0xffe000) | offset;  /* combine map and offset */
-            if ((CPU_MODEL >= MODEL_V6) && (map & 0x8000)) {
-//DIAG                map |= 0x800;                       /* set the accessed bit in the map entry */
-            }
-            WMR((nix*2),map);                       /* store the map reg contents into MAPC cache */
-            sim_debug(DEBUG_EXP, &cpu_dev,
-                "Addr1 %08x RealAddr %08x Map1 HIT %08x, TLB[%3x] %08x MAPC[%03x] %08x\n",
-                addr, word, map, nix, TLB[nix], nix/2, MAPC[nix/2]);
-
-#ifndef JUST_ONE
-            /* now do the other map reg in the same word */
-//diag      if ((nix > 0) && (((nix-BPIX) & 1) == 1))   /* is bpix odd count */
-            if ((nix & 1) == 1)                     /* is map odd */
-                nix -= 1;                           /* we are at rt hw, so backup hw */
-            else
+            /* now do the other halfword of the memory map pair */
+            /* calc index of previous or next halfword */
+            if (((nix-BPIX) & 1) == 0)
                 nix += 1;                           /* we are at lf hw, so do next hw */
+            else
+            if (((nix-BPIX) & 1) == 1)
+                nix -= 1;                           /* we are at rt hw, so backup hw */
 
-            /* nix has correct index */
-            if ((nix == (nix & 0x7ff)) && ((TLB[nix] & 0x04000000) == 0)) { /* is HIT bit already on */
+            /* nix has other map correct index */
+            if ((TLB[nix] & 0x04000000) == 0) { /* is HIT bit already on */
                 /* hit not on, so load the map */
                 if (nix < (BPIX+CPIXPL)) {          /* needs to be a mapped reg */
                     map = RMH(msdl+((nix-BPIX)<<1));    /* do other map content */      
-                    if ((CPU_MODEL >= MODEL_V6) && (map & 0x8000)) {
-                        map &= 0xe7ff;              /* clear access/modify bits in map */
-                        WMH(msdl+((nix-BPIX)<<1),map);  /* write map content */      
-                    }
 
-                    if ((CPU_MODEL >= MODEL_V6) && (map & 0x8000)) {
-//DIAG                        map |= 0x800;               /* set the accessed bit in the map entry */
+                    if (map & 0x8000) {             /* must be valid to load */
+                        TLB[nix] = ((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000) | 0x04000000;
+//                      TLB[nix] = ((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000) | 0x0c000000;
+//                      word = (TLB[nix] & 0xffe000) | offset;  /* combine map and offset */
+                        word = (TLB[nix] & 0xffe000);   /* combine map and offset */
+//                      map |= 0x800;       /* set access bit */
+                        WMR((nix<<1), map);         /* store the map reg contents into MAPC cache */
+                        sim_debug(DEBUG_EXP, &cpu_dev,
+                            "Addr3 %06x RealAddr %06x Map2 HIT %04x, TLB[%3x] %08x MAPC[%03x] %08x\n",
+                            addr, word, map, nix, TLB[nix], nix/2, MAPC[nix/2]);
                     }
-                    WMR((nix*2),map);               /* store the map reg contents into cache */
-                    TLB[nix] = ((map&0x7ff) << 13) | ((map<<16) & 0xf8000000) | 0x04000000;
-                    word = (TLB[nix] & 0xffe000);   /* combine map and offset */
-                    sim_debug(DEBUG_EXP, &cpu_dev,
-                        "Addr2 %08x RealAddr %08x Map2 HIT %08x, TLB[%3x] %08x MAPC[%03x] %08x\n",
-                        addr, word, map, nix, TLB[nix], nix/2, MAPC[nix/2]);
                 }
             }
 #endif
-        } else {
-            /* HIT bit is on in TLB */
-            /* diags wants a NPMEM error if physical addr is exceeded */
-            index &= 0x7ff;                         /* map # */
-            raddr = TLB[index];                     /* get the base address & bits */
-            /* check if valid real address */
-            if ((raddr & 0xffffff) >= (MEMSIZE*4)) { /* see if address is within our memory */
-                sim_debug(DEBUG_EXP, &cpu_dev,
-                    "RealAddr loadmap 2b non present memory fault addr %08x raddr %08x index %04x\n",
-                    addr, raddr, index);
-                return NPMEM;                       /* no, none present memory error */
-            }
-            map = RMR((index*2));                   /* read the map reg contents */
-            /* handle user maps */
-//DIAG            if ((CPU_MODEL >= MODEL_V6) && (map & 0x8000)) {
-            if ((CPU_MODEL >= MODEL_V6) && (map & 0x8000) && (index >= BPIX)) {
-                map |= 0x800;                       /* set the accessed bit in the map entry */
-                WMR((index*2),map);                 /* store the map reg contents into cache */
-                TLB[index] |= 0x08000000;           /* set the accessed bit in TLB */
-                sim_debug(DEBUG_EXP, &cpu_dev,
-                    "RealAddrZ loadmap addr %08x raddr %08x TLB[%04x] %08x map %04x\n",
-                    addr, raddr, index, TLB[index], map);
-            }
-            else
-                sim_debug(DEBUG_EXP, &cpu_dev,
-                    "RealAddr loadmap 2Z map addr %08x raddr %08x TLB[%04x] %08x map %04x\n",
-                    addr, raddr, index, TLB[index], map);
-        }
-        raddr = TLB[index];                         /* get the base address & bits */
-        if ((raddr & BIT0) == 0) {                  /* see if valid address */
-            sim_debug(DEBUG_EXP, &cpu_dev,
-                "RealAddr loadmap 2a map fault addr %08x raddr %08x index %04x\n", addr, raddr, index);
-            return MAPFLT;                          /* no, map fault error */
-        }
-#ifdef DIAGS_SAYS_ANY_ADDRESS_OK_IF_MAPPED
-        /* check if valid real address */
-        if ((raddr & 0xffffff) >= (MEMSIZE*4)) {    /* see if address is within our memory */
-            sim_debug(DEBUG_EXP, &cpu_dev,
-                "RealAddr loadmap 2b non present memory fault addr %08x raddr %08x index %04x\n", addr, raddr, index);
-            return NPMEM;                           /* no, none present memory error */
-        }
-#endif
-        word = (raddr & 0xffe000) | offset;         /* combine map and offset */
-        *realaddr = word;                           /* return the real address */
-        sim_debug(DEBUG_EXP, &cpu_dev, "RealAddr address %08x, TLB %08x MAPC[%03x] %08x wprot %02x\n",
-            word, TLB[index], index/2, MAPC[index/2], (word>>11)&3);
-
-        /* handle V6 & V9 different than 32/67 */
-        if (CPU_MODEL >= MODEL_V6) {
-            /* get protection status bits in map, combine with priv bit in psd 1 */
-            /* access bits in bits 24-26 and bit 31 set indicating status returned */
-            *prot = (((modes & BIT0) | (raddr & 0x60000000)) >> 24) | 1;
-        } else {
+            /* process 32/67 & 32/97 load map on access */
             /* handle 32/67 & 32/97 */
             if (modes & BIT0)                       /* all OK if privledged */
                 return ALLOK;                       /* all OK, return instruction */
             /* get protection status of map */
-            index = (word >> 11) & 0x3;             /* see which 1/4 page we are in */
-            if ((BIT1 >> index) & raddr) {          /* is 1/4 page write protected */
+            offset = (word >> 11) & 0x3;            /* see which 1/4 page we are in */
+            if ((BIT1 >> offset) & raddr) {         /* is 1/4 page write protected */
                 *prot = 1;                          /* return memory write protection status */
             }
+            sim_debug(DEBUG_EXP, &cpu_dev, "RealAddrR address %08x, TLB %08x MAPC[%03x] %08x wprot %02x prot %02x\n",
+                word, TLB[index], index/2, MAPC[index/2], (word>>11)&3, *prot);
+            return ALLOK;                           /* all OK, return instruction */
         }
+
+#ifndef NOTYET
+        /* handle valid V6 & V9 HIT bit on */
+        /* handle V6 & V9 here */
+        if (CPU_MODEL >= MODEL_V6) {
+            uint32  nix, msdl;
+            nix = index & 0x7ff;                    /* map # */
+            msdl = RMW(mpl+CPIX+4);                 /* get mpl entry wd 1 for given cpix */
+
+            /* now do the other halfword of the memory map pair */
+            /* calc index of previous or next halfword */
+            if (((nix-BPIX) & 1) == 0)
+                nix += 1;                           /* we are at lf hw, so do next hw */
+            else
+            if (((nix-BPIX) & 1) == 1)
+                nix -= 1;                           /* we are at rt hw, so backup hw */
+
+            /* nix has other map correct index */
+            if ((TLB[nix] & 0x04000000) == 0) { /* is HIT bit already on */
+                /* hit not on, so load the map */
+                if (nix < (BPIX+CPIXPL)) {          /* needs to be a mapped reg */
+                    map = RMH(msdl+((nix-BPIX)<<1));    /* do other map content */      
+
+                    if (map & 0x8000) {             /* must be valid to load */
+//                      TLB[nix] = ((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000) | 0x04000000;
+                        TLB[nix] = ((map & 0x7ff) << 13) | ((map << 16) & 0xf8000000) | 0x0c000000;
+//                      word = (TLB[nix] & 0xffe000) | offset;  /* combine map and offset */
+                        word = (TLB[nix] & 0xffe000);   /* combine map and offset */
+                        map |= 0x800;               /* set access bit */
+                        WMR((nix<<1), map);         /* store the map reg contents into MAPC cache */
+                        sim_debug(DEBUG_EXP, &cpu_dev,
+                            "Addr4 %06x RealAddr %06x Map2 HIT %04x, TLB[%3x] %08x MAPC[%03x] %08x\n",
+                            addr, word, map, nix, TLB[nix], nix/2, MAPC[nix/2]);
+                    }
+                }
+            }
+        }
+#endif
+        /* handle valid V6 & V9 HIT bit on */
+        if ((modes & BIT0) || (raddr & BIT1))       /* write OK if privledged or p1 set for user */
+            *prot = 0;                              /* we have access */
+        else
+            *prot = 1;                              /* no write access */
+
+//      sim_debug(DEBUG_EXP, &cpu_dev, "RealAddrX address %08x, TLB %08x MAPC[%03x] %08x wprot %02x prot %02x\n",
+//          word, TLB[index], index/2, MAPC[index/2], (word>>11)&3, *prot);
         return ALLOK;                               /* all OK, return instruction */
     }
+    return ALLOK;                                   /* all OK, return instruction */
 }
 
 /* fetch the current instruction from the PC address */
@@ -1462,55 +1740,94 @@ t_stat Mem_read(uint32 addr, uint32 *data)
 {
     uint32 status, realaddr, prot, raddr, page, map;
 
-    status = RealAddr(addr, &realaddr, &prot);  /* convert address to real physical address */
-    sim_debug(DEBUG_DETAIL, &cpu_dev, "Mem_read status = %02x\n", status);
+    if ((addr == 0x20000) || (addr == 0x22000))
+    sim_debug(DEBUG_EXP, &cpu_dev,"MEM_READ @ %06x\n", addr);
+    status = RealAddr(addr, &realaddr, &prot);      /* convert address to real physical address */
+    if ((addr == 0x20000) || (addr == 0x22000))
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "Mem_read after call addr %06x raddr %06x prot %02x status %02x\n",
+        addr, realaddr, prot, status);
     if (status == ALLOK) {
-        *data = M[realaddr >> 2];               /* valid address, get physical address contents */
-//        if (((CPU_MODEL >= MODEL_V6) || (CPU_MODEL == MODEL_67)) && (modes & MAPMODE)) {
-          if (((CPU_MODEL >= MODEL_V6) || (CPU_MODEL == MODEL_97) ||
+        *data = M[realaddr >> 2];                   /* valid address, get physical address contents */
+        if (((CPU_MODEL >= MODEL_V6) || (CPU_MODEL == MODEL_97) ||
             (CPU_MODEL == MODEL_67)) && (modes & MAPMODE)) {
-            page = (addr >> 13) & 0x7ff;        /* get 11 bit value */
+            page = (addr >> 13) & 0x7ff;            /* get 11 bit value */
             if (CPU_MODEL >= MODEL_V6) {
+#ifdef NOT_YET
                 /* for v6 & v9, check if we have read access */
                 if ((prot & 0xe0) == 0 || (prot & 0xe0) == 0x20) {
                     /* user has no access, do protection violation */
-    sim_debug(DEBUG_EXP, &cpu_dev, "Mem_read protect error @ %08x prot %02x\n", addr, prot);
-                    return MPVIOL;              /* return memory protection violation */
-                }
-                raddr = TLB[page];              /* get the base address & bits */
-                map = RMR((page*2));            /* read the map reg contents */
-                if ((raddr & BIT0) == 0) {      /* see if page is valid */
-                    /* not valid, but mapped, so do a demand page request */
-                    *data = page;               /* return the page # */
-                    pfault = page;              /* save page number */
                     sim_debug(DEBUG_EXP, &cpu_dev,
-                        "Mem_read Daddr %08x page %04x demand page bits set TLB %08x map %04x\n",
-                        addr, page, TLB[page], map);
-                    return DMDPG;               /* demand page request */
+                        "Mem_readA protect error @ %06x prot %02x\n", addr, prot);
+                    return MPVIOL;                  /* return memory protection violation */
                 }
-                if ((raddr & 0x04000000) == 0) { /* HIT on */
-/*diag*/            TLB[page] |= 0x08000000;    /* no, set accessed */
-//ZZ                    map |= 0x0800;              /* set the accessed bit in the map entry */
-//ZZ                    WMR((page*2),map);          /* store the map reg contents back into cache */
-                     sim_debug(DEBUG_EXP, &cpu_dev,
-                        "Mem_read HIT on addr %08x page %04x access bit set TLB %08x map %04x\n",
-                        addr, page, TLB[page], map);
+#endif
+                raddr = TLB[page];                  /* get the base address & bits */
+                map = RMR((page<<1));               /* read the map reg contents */
+//?             if ((page >= BPIX) && ((map & 0x800) == 0)) {
+                if (((map & 0x800) == 0)) {
+                    /* this fails test 14/0 if raddr checked */
+//???           if ((raddr & 0x10000000) == 0) {
+                    uint32 msdl, mpl, nmap;
+                    map |= 0x800;                   /* set the accessed bit in the map cache entry */
+                    WMR((page<<1),map);             /* store the map reg contents into cache */
+                    TLB[page] |= 0x08000000;        /* set the accessed bit in TLB too */
+                    mpl = SPAD[0xf3];               /* get mpl from spad address */
+                    msdl = RMW(mpl+CPIX+4);         /* get mpl entry for given cpix */
+                    nmap = RMH(msdl+((page-BPIX)<<1));   /* map content from memory */      
+                    nmap |= 0x800;                   /* set the accessed bit in the map entry */
+                    WMH(msdl+((page-BPIX)<<1), nmap);/* save modified map with access bit set */
+                    sim_debug(DEBUG_EXP, &cpu_dev,
+                        "Mem_read Yaddr %06x page %04x set access bit TLB %08x map %04x nmap %04x raddr %08x\n",
+                        addr, page, TLB[page], map, nmap, raddr);
                 }
-                sim_debug(DEBUG_EXP, &cpu_dev,
-                    "Mem_read Yaddr %08x page %04x access bit set TLB %08x map %04x\n",
-                    addr, page, TLB[page], map);
+//              sim_debug(DEBUG_EXP, &cpu_dev,
+//                  "Mem_read Zaddr %06x page %04x access bit set TLB %08x map %04x raddr %08x\n",
+//                  addr, page, TLB[page], map, raddr);
             }
             /* everybody else has read access */
+#ifdef DO_DYNAMIC_DEBUG
+        /* start debugging at test 15/0 of vm.mmm diag for V6 */
+//      if (RMW(mpl+CPIX) == 0x800007ee)
+        if (addr == 0x3ffee0)
+            cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
+#endif
         }
-        sim_debug(DEBUG_DETAIL, &cpu_dev, "Mem_read addr %.8x realaddr %.8x data %.8x prot %d\n",
+        sim_debug(DEBUG_DETAIL, &cpu_dev, "Mem_read addr %06x realaddr %08x data %08x prot %02x\n",
             addr, realaddr, *data, prot);
     } else {
+        /* RealAddr returned an error */
         if (status == NPMEM)                        /* operand nonpresent memory error */
             TRAPSTATUS |= 0x200000;                 /* set bit 10 of trap status */
-        sim_debug(DEBUG_EXP, &cpu_dev, "Mem_read error %02x @ %08x\n", status, addr);
+        /* see if we need to do a demand page trap */
+        if (status == MAPFLT) {
+            if (((CPU_MODEL >= MODEL_V6) || (CPU_MODEL == MODEL_97) ||
+                (CPU_MODEL == MODEL_67)) && (modes & MAPMODE)) {
+                page = (addr >> 13) & 0x7ff;        /* get 11 bit value */
+/*??*/          if (page < (BPIX+CPIXPL)) {         /* needs to be a mapped reg */
+                    if (CPU_MODEL >= MODEL_V6) {
+                        raddr = TLB[page];          /* get the base address & bits */
+                        map = RMR((page<<1));       /* read the cache map reg contents */
+                        sim_debug(DEBUG_EXP, &cpu_dev,
+                            "Mem_read Daddr0 %08x page %04x demand page bits set TLB %08x map %04x\n",
+                            addr, page, TLB[page], map);
+                        if ((raddr & BIT0) == 0) {  /* see if page is valid */
+                            /* not valid, but mapped, so do a demand page request */
+                            *data = page;           /* return the page # */
+                            pfault = page;          /* save page number */
+                            sim_debug(DEBUG_EXP, &cpu_dev,
+                                "Mem_read Daddr1 %08x page %04x demand page bits set TLB %08x map %04x\n",
+                                addr, page, TLB[page], map);
+                            return DMDPG;           /* demand page request */
+                        }
+                    }
+                }
+            }
+        }
+        sim_debug(DEBUG_EXP, &cpu_dev, "Mem_read error %02x @ %06x\n", status, addr);
     }
 
-    return status;                              /* return ALLOK or ERROR status */
+    return status;                                  /* return ALLOK or ERROR status */
 }
 
 /*
@@ -1522,7 +1839,13 @@ t_stat Mem_write(uint32 addr, uint32 *data)
 {
     uint32 status, realaddr, prot, raddr, page, map;
 
-    status = RealAddr(addr, &realaddr, &prot);  /* convert address to real physical address */
+    if ((addr == 0x20000) || (addr == 0x22000))
+    sim_debug(DEBUG_EXP, &cpu_dev,"MEM_WRITE @ %06x\n", addr);
+    status = RealAddr(addr, &realaddr, &prot);      /* convert address to real physical address */
+    if ((addr == 0x20000) || (addr == 0x22000))
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "Mem_write after call addr %06x raddr %06x prot %02x status %02x\n",
+        addr, realaddr, prot, status);
     if (prot) {
 //    fprintf(stderr, "Mem_write addr %.8x realaddr %.8x data %.8x prot %d\n",
 //        addr, realaddr, *data, prot);
@@ -1533,58 +1856,87 @@ t_stat Mem_write(uint32 addr, uint32 *data)
 //        if (((CPU_MODEL >= MODEL_V6) || (CPU_MODEL == MODEL_67)) && (modes & MAPMODE)) {
         if (((CPU_MODEL >= MODEL_V6) || (CPU_MODEL == MODEL_97) ||
             (CPU_MODEL == MODEL_67)) && (modes & MAPMODE)) {
-            page = (addr >> 13) & 0x7ff;        /* get 11 bit value */
+            page = (addr >> 13) & 0x7ff;            /* get 11 bit value */
             if (CPU_MODEL >= MODEL_V6) {
                 /* for v6 & v9, check if we have write access */
-                if (((prot & 0xe0) != 0x40) && ((prot & 0xe0) != 0x80) && ((prot & 0xe0) != 0xc0)){
+/*DIAG*/        if (prot) {                         /* check for write protected memory */
+//NOTYET        if (((prot & 0xe0) != 0x40) && ((prot & 0xe0) != 0x80) && ((prot & 0xe0) != 0xc0)){
                     /* user has no write access, do protection violation */
-    sim_debug(DEBUG_EXP, &cpu_dev, "Mem_write V6 & V7 protect error @ %08x prot %02x\n", addr, prot);
-                    TRAPSTATUS |= 0x080000;     /* set bit 12 of trap status for memory prot */
-                    return MPVIOL;              /* return memory protection violation */
-                }
-                raddr = TLB[page];              /* get the base address & bits */
-                if ((raddr & BIT0) == 0) {      /* see if page is valid */
-                    /* not valid, but mapped, so do a demand page request */
-                    *data = page;               /* return the page # */
-                    pfault = page;              /* save page number */
                     sim_debug(DEBUG_EXP, &cpu_dev,
-                        "Mem_write Daddr %08x page %04x demand page bits set TLB %08x map %04x\n",
-                        addr, page, TLB[page], map);
-                    return DMDPG;               /* demand page request */
+                        "Mem_writeA V6 & V9 protect error @ %06x prot %02x\n", addr, prot);
+                    TRAPSTATUS |= 0x080000;         /* set bit 12 of trap status for memory prot */
+                    return MPVIOL;                  /* return memory protection violation */
                 }
-                map = RMR((page*2));            /* read the map reg contents */
-                if ((raddr & 0x04000000) == 0) { /* is HIT on */
-                    TLB[page] |= 0x18000000;    /* no, set modify/accessed */
-//ZZ                  map |= 0x1000;              /* set the modified bit in the map entry */
-//ZZ                  WMR((page*2),map);          /* store the map reg contents back into cache */
-                     sim_debug(DEBUG_EXP, &cpu_dev,
-                        "Mem_write HIT on addr %08x page %04x modify/access bit set TLB %08x map %04x\n",
-                        addr, page, TLB[page], map);
+                map = RMR((page<<1));               /* read the map reg contents */
+                raddr = TLB[page];                  /* get the base address & bits */
+                /* not testing for BPIX here diag vm.mmm fails here at test 13/0 for V6 */
+//??            if ((page >= BPIX) && ((map & 0x1800) == 0)) {
+                if ((map & 0x1000) == 0) {
+                /* this fails at 15/0 */
+//??            if ((map & 0x1800) == 0) {
+                /* this fails test 14/0 if raddr checked */
+//??            if ((raddr & 0x10000000) == 0) {
+                /* this fails test 15/0 if raddr checked */
+//??            if ((raddr & 0x18000000) == 0) {
+                    uint32 msdl, mpl, nmap;
+                    map |= 0x1800;                  /* set the modify/accessed bit in the map cache entry */
+                    WMR((page<<1),map);             /* store the map reg contents into cache */
+                    TLB[page] |= 0x18000000;        /* set the modify/accessed bits in TLB too */
+                    mpl = SPAD[0xf3];               /* get mpl from spad address */
+                    msdl = RMW(mpl+CPIX+4);         /* get mpl entry for given cpix */
+                    nmap = RMH(msdl+((page-BPIX)<<1));   /* map content from memory */      
+                    nmap |= 0x1800;                  /* set the modify/accessed bit in the map entry */
+                    WMH(msdl+((page-BPIX)<<1), nmap);/* save modified map with access bit set */
+                    sim_debug(DEBUG_EXP, &cpu_dev,
+                        "Mem_write Waddr %06x page %04x set access bit TLB %08x map %04x nmap %04x raddr %08x\n",
+                        addr, page, TLB[page], map, nmap, raddr);
                 }
-                sim_debug(DEBUG_EXP, &cpu_dev,
-                    "Mem_write Xaddr %08x page %04x modify/access bits set TLB %08x map %04x\n",
-                    addr, page, TLB[page], map);
+//              sim_debug(DEBUG_EXP, &cpu_dev,
+//                  "Mem_write Xaddr %06x page %04x modify/access bits set TLB %08x map %04x\n",
+//                  addr, page, TLB[page], map);
             } else {
-                if (prot) {                     /* check for write protected memory */
-    sim_debug(DEBUG_EXP, &cpu_dev, "Mem_write 32/67 protect error @ %08x prot %02x page %04x\n", addr, prot, page);
-                    TRAPSTATUS |= 0x080000;     /* set bit 12 of trap status for memory prot */
-                    return MPVIOL;              /* return memory protection violation */
+                if (prot) {                         /* check for write protected memory */
+                    sim_debug(DEBUG_EXP, &cpu_dev,
+                        "Mem_writeB 32/67 protect error @ %06x prot %02x page %04x\n",
+                        addr, prot, page);
+                    TRAPSTATUS |= 0x080000;         /* set bit 12 of trap status for memory prot */
+                    return MPVIOL;                  /* return memory protection violation */
                 }
             }
             /* everything else has write access */
         } else {
-            if (prot) {                         /* check for write protected memory */
-    sim_debug(DEBUG_EXP, &cpu_dev, "Mem_write protect error @ %08x prot %02x\n", addr, prot);
-                TRAPSTATUS |= 0x080000;         /* set bit 12 of trap status for memory prot */
-                return MPVIOL;                  /* return memory protection violation */
+            if (prot) {                             /* check for write protected memory */
+                sim_debug(DEBUG_EXP, &cpu_dev,
+                    "Mem_writeC protect error @ %06x prot %02x\n", addr, prot);
+                TRAPSTATUS |= 0x080000;             /* set bit 12 of trap status for memory prot */
+                return MPVIOL;                      /* return memory protection violation */
             }
         }
-        M[realaddr >> 2] = *data;               /* valid address, put physical address contents */
+        M[realaddr >> 2] = *data;                   /* valid address, put physical address contents */
     } else {
-        sim_debug(DEBUG_EXP, &cpu_dev, "Mem_write error %02x @ %08x\n", status, addr);
-        TRAPSTATUS |= 0x0200;                   /* set bit 22 of trap status */
+        if (status == NPMEM)                        /* operand nonpresent memory error */
+            TRAPSTATUS |= 0x0200;                   /* set bit 22 of trap status */
+        if (status == MAPFLT) {
+            if ((CPU_MODEL >= MODEL_V6) && (modes & MAPMODE)) {
+                page = (addr >> 13) & 0x7ff;        /* get 11 bit value */
+/*??*/          if (page < (BPIX+CPIXPL)) {         /* needs to be a mapped reg */
+                    raddr = TLB[page];              /* get the base address & bits */
+                    map = RMR((page<<1));           /* read the map reg contents */
+                    if ((raddr & BIT0) == 0) {      /* see if page is valid */
+                        /* not valid, but mapped, so do a demand page request */
+                        *data = page;               /* return the page # */
+                        pfault = page;              /* save page number */
+                        sim_debug(DEBUG_EXP, &cpu_dev,
+                            "Mem_write Daddr2 %06x page %04x demand page bits set TLB %08x map %04x\n",
+                            addr, page, TLB[page], map);
+                        return DMDPG;               /* demand page request */
+                    }
+                }
+            }
+        }
+        sim_debug(DEBUG_EXP, &cpu_dev, "Mem_write error %02x @ %06x\n", status, addr);
     }
-    return status;                              /* return ALLOK or ERROR */
+    return status;                                  /* return ALLOK or ERROR */
 }
 
 /* function to set the CCs in PSD1 */
@@ -1638,9 +1990,9 @@ t_stat sim_instr(void) {
     uint32              skipinstr = 0;    /* Skip test for interrupt on this instruction */
     uint32              drop_nop = 0;     /* Set if right hw instruction is a nop */
     uint32              int_icb;          /* interrupt context block address */
-    uint32              OIR;              /* Original Instruction register */
-    uint32              OPSD1;            /* Original PSD1 */
-    uint32              OPSD2;            /* Original PSD2 */
+    uint32              OIR=0;            /* Original Instruction register */
+    uint32              OPSD1=0;          /* Original PSD1 */
+    uint32              OPSD2=0;          /* Original PSD2 */
     uint32              TPSD[2];          /* Temp PSD */
     int32               int32a;           /* temp int */
     int32               int32b;           /* temp int */
@@ -1684,19 +2036,7 @@ redo:
             int ilev;
             int_icb = scan_chan(&ilev);         /* no, go scan for I/O int pending */
             if (int_icb != 0) {                 /* was ICB returned for an I/O or interrupt */
-#ifdef NONO
-                int il;
-                /* find interrupt level for icb address */
-                for (il=0; il<112; il++) {
-                    /* get the address of the interrupt IVL table in main memory */
-                    uint32 civl = SPAD[0xf1] + (il<<2); /* contents of spad f1 points to chan ivl in mem */
-                    civl = M[civl >> 2];        /* get the interrupt context block addr in memory */
-                    if (civl == int_icb)
-                        break;
-                }
-#else
                 int il = ilev;                  /* get the interrupt level */
-#endif
                 sim_debug(DEBUG_EXP, &cpu_dev,
                     "Normal int scan return icb %08x level %02x irq_pend %02x wait4int %02x\n",
                     int_icb, il, irq_pend, wait4int);
@@ -3093,7 +3433,7 @@ tbr:                                                /* handle basemode TBR too *
                         uint32  DPSD[2];            /* the PC for the instruction */
                         /* get PSD pointed to by real addr in Rd (temp) */
                         DPSD[0] = M[temp>>2];       /* get word one of psd */
-                        DPSD[1] = M[(temp>>2)+1];   /* get word one of psd */
+                        DPSD[1] = M[(temp>>2)+1];   /* get word two of psd */
                         sim_debug(DEBUG_EXP, &cpu_dev,
                             "LMAP PSD %08x %08x DPSD %08x %08x modes %08x temp %06x\n",
                             PSD1, PSD2, DPSD[0], DPSD[1], modes, temp);
@@ -3112,8 +3452,8 @@ tbr:                                                /* handle basemode TBR too *
                         sim_debug(DEBUG_EXP, &cpu_dev,
 //                            "LMAP TRAPME %08x MAPC[0-6] %08x %08x %08x %08x %08x %08x\n",
 //                            TRAPME, MAPC[0], MAPC[1], MAPC[2], MAPC[3], MAPC[4], MAPC[5]);
-                            "LMAP TRAPME %08x MAPC[8-d] %08x %08x %08x %08x %08x %08x\n",
-                            TRAPME, MAPC[8], MAPC[9], MAPC[10], MAPC[11], MAPC[12], MAPC[13]);
+                            "LMAP TRAPME %08x MAPC[8-c] %08x %08x %08x %08x %08x %08x\n",
+                            TRAPME, MAPC[7], MAPC[8], MAPC[9], MAPC[10], MAPC[11], MAPC[12]);
                         modes = temp2;              /* restore modes flags */
                         if (TRAPME) {
                             /* DIAGS wants the cpix for the psd to be the requested one */
@@ -3160,14 +3500,12 @@ tbr:                                                /* handle basemode TBR too *
                         TRAPSTATUS |= 0x1000;       /* set bit 19 of trap status */
                         goto newpsd;                /* handle trap */
                     }
-#ifndef DIAG_CAN_BE_MAPPED_OR_UNMAPPED
-                    if (CPU_MODEL <= MODEL_27) {    /* 77 & 27 must be unmapped */
+                    if (CPU_MODEL <= MODEL_27) {    /* 7X & 27 must be unmapped */
                         if (modes & MAPMODE) {      /* must be unmapped cpu */
                             TRAPME = MAPFAULT_TRAP; /* Map Fault Trap */
                             goto newpsd;            /* handle trap */
                         }
                     }
-#endif
 #ifdef DO_DYNAMIC_DEBUG
                     /* start debugging */
                     cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
@@ -3182,22 +3520,8 @@ tbr:                                                /* handle basemode TBR too *
                         /* 32/27 & 32/87 have 256 maps */
                         addr &= 0xfe;               /* make 0-255 */
                         temp = MAPC[addr>>1];       /* get even/odd maps */
-                    } else
-                    if (CPU_MODEL == MODEL_97) {
-                        /* 32/97 with 2048 maps */
-                        addr &= 0x7ff;              /* make 0-2047 */
-                        temp = MAPC[addr>>1];       /* get even/odd maps */
-                        if ((addr & 1) == 0)        /* if even reg, use left hw */
-                            temp >>= 16;            /* move over reg value */
-                        temp &= 0xffff;             /* just 16 bits */
-                        if (TLB[addr] & 0x04000000) /* see if HIT bit set */
-                            temp |= 0x80000000;     /* show hit BIT is set */
-                        if ((addr < 0x20) || (addr > 0x7f8))
-                            sim_debug(DEBUG_EXP, &cpu_dev,
-                                "TMAPR #%4x val %08x TLB %08x MAPC %04x\n",
-                                addr, temp, TLB[addr], RMR(addr<<1));
                     } else {
-                        /* 32/67, V6 & V9 have 2048 maps demand paging */
+                        /* 32/67, 32/97, V6 & V9 have 2048 maps demand paging */
                         addr &= 0x7ff;              /* make 0-2047 */
                         temp = MAPC[addr>>1];       /* get even/odd maps */
                         if ((addr & 1) == 0)        /* if even reg, use left hw */
@@ -3206,10 +3530,10 @@ tbr:                                                /* handle basemode TBR too *
                         if (TLB[addr] & 0x04000000) /* see if HIT bit set */
                             temp |= 0x80000000;     /* show hit BIT is set */
                         temp |= ((TLB[addr] & 0xf8000000) >> 16);  /* add in protect bits */
-                        if ((addr < 0x20) || (addr > 0x7f8))
+                        if ((addr < 0x26) || (addr > 0x7f8))
                             sim_debug(DEBUG_EXP, &cpu_dev,
-                                "TMAPR #%4x val %08x TLB %08x MAPC %04x\n",
-                                addr, temp, TLB[addr], RMR(addr<<1));
+                                "TMAPR #%4x val %08x TLB %08x RMR %04x MAPC %08x\n",
+                                addr, temp, TLB[addr], RMR(addr<<1), MAPC[addr/2]);
                     }
                     GPR[reg] = temp;                /* save the temp value to Rd reg */
                     goto skipit;
@@ -5364,6 +5688,10 @@ doovr2:
                         /* we are good to load the maps */
                     }
 #endif
+#ifdef DO_DYNAMIC_DEBUG
+    /* start debugging */
+    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
+#endif
 
                     PSD1 = temp;                        /* PSD1 good, so set it */
                     /* set the mode bits and CCs from the new PSD */
@@ -5412,15 +5740,21 @@ doovr2:
                                 "B4 LPSDCM BPIX %04x CPIX %04x CPIXPL %04x\n",
                                 BPIX, CPIX, CPIXPL);
                             sim_debug(DEBUG_EXP, &cpu_dev,
-                                "B4 LPSDCM MAPC[14-19] %08x %08x %08x %08x %08x %08x\n",
-                                MAPC[14], MAPC[15], MAPC[16], MAPC[17], MAPC[18], MAPC[19]);
-//                              "B4 LPSDCM MAPC[0-6] %08x %08x %08x %08x %08x %08x\n",
-//                              MAPC[0], MAPC[1], MAPC[2], MAPC[3], MAPC[4], MAPC[5]);
+                                "B4 LPSDCM OS MAPC[0-5] %08x %08x %08x %08x %08x %08x\n",
+                                MAPC[0], MAPC[1], MAPC[2], MAPC[3], MAPC[4], MAPC[5]);
+                            sim_debug(DEBUG_EXP, &cpu_dev,
+                                "B4 LPSDCM US MAPC[%x-%x] %08x %08x %08x %08x %08x %08x\n",
+                                BPIX, BPIX+5, MAPC[BPIX], MAPC[BPIX+1], MAPC[BPIX+2],
+                                MAPC[BPIX+3], MAPC[BPIX+4], MAPC[BPIX+5]);
+#define FIX_MPX
+#ifdef FIX_MPX
                             /* this mod fixes MPX 1.X 1st swapr load */
-//                            if ((BPIX == 0) && (CPIXPL == 0))   /* any O/S or user maps yet? */
-#ifndef FIX_MPX
-                            if (CPIXPL == 0)            /* any user maps yet? */
+                            /* any O/S or user maps yet? */
+                            /* any user maps yet? */
+                            if (((CPIX != 0) && (CPIXPL == 0)) && (PSD2 & RETMBIT)) {
                                 PSD2 &= ~RETMBIT;       /* no, turn off retain bit in PSD2 */
+                                sim_debug(DEBUG_EXP, &cpu_dev, "Turn off retain bit\n");
+                            }
 #endif
                             if ((PSD2 & RETMBIT) == 0) {    /* don't load maps if retain bit set */
                                 /* we need to load the new maps */
@@ -5432,10 +5766,12 @@ doovr2:
                                     "AF LPSDCM BPIX %04x CPIX %04x CPIXPL %04x\n",
                                     BPIX, CPIX, CPIXPL);
                                 sim_debug(DEBUG_EXP, &cpu_dev,
-//                                    "AF LPSDCM MAPC[0-6] %08x %08x %08x %08x %08x %08x\n",
-//                                    MAPC[0], MAPC[1], MAPC[2], MAPC[3], MAPC[4], MAPC[5]);
-                                    "AF LPSDCM MAPC[14-19] %08x %08x %08x %08x %08x %08x\n",
-                                    MAPC[14], MAPC[15], MAPC[16], MAPC[17], MAPC[18], MAPC[19]);
+                                    "AF LPSDCM OS MAPC[0-5] %08x %08x %08x %08x %08x %08x\n",
+                                    MAPC[0], MAPC[1], MAPC[2], MAPC[3], MAPC[4], MAPC[5]);
+                                sim_debug(DEBUG_EXP, &cpu_dev,
+                                    "AF LPSDCM US MAPC[%x-%x] %08x %08x %08x %08x %08x %08x\n",
+                                    BPIX, BPIX+5, MAPC[BPIX], MAPC[BPIX+1], MAPC[BPIX+2],
+                                    MAPC[BPIX+3], MAPC[BPIX+4], MAPC[BPIX+5]);
                             }
                             PSD2 &= ~RETMBIT;           /* turn off retain bit in PSD2 */
                             SPAD[0xf5] = PSD2;          /* save the current PSD2 */
@@ -5466,7 +5802,8 @@ doovr2:
                         PSD1 = TPSD[0];                 /* restore PSD1 */
                         /* HACK HACK HACK */
                         /* Diags wants the new PSD2, not the original??? */
-//                      PSD2 = TPSD[1];                 /* restore PSD2 */
+                        /* if old one was used, we fail test 21/0 in cn.mmm for 32/67 */
+//DIAG                  PSD2 = TPSD[1];                 /* restore PSD2 */
                         CPUSTATUS = bc;                 /* restore the CPU STATUS */
                         modes = t;                      /* restore modes too */
                         SPAD[0xf5] = ix;                /* restore the current PSD2 to SPAD */
@@ -6255,9 +6592,9 @@ newpsd:
                     SPAD[0xf5] = PSD2;              /* save the current PSD2 */
                     SPAD[0xf9] = CPUSTATUS;         /* save the cpu status in SPAD */
 #ifdef DO_DYNAMIC_DEBUG
-                /* start debugging */
-                if ((PSD1 & 0xffffff) == 0x3468)
-                    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
+        /* start debugging */
+        if ((PSD1 & 0xffffff) == 0x3468)
+            cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
 #endif
                     sim_debug(DEBUG_EXP, &cpu_dev, "Process TRAPME %04x PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
                         TRAPME, PSD1, PSD2, CPUSTATUS);
@@ -6267,7 +6604,7 @@ newpsd:
                         /* pfault will have 11 bit page number and bit 0 set if op fetch */
                         sim_debug(DEBUG_EXP, &cpu_dev,
                     "PAGE TRAP %04x TSTATUS %08x LOAD MAPS PSD1 %08x PSD2 %08x CPUSTATUS %08x pfault %08x\n",
-                            TRAPME, TRAPSTATUS, PSD1, PSD2, CPUSTATUS, pfault);
+                        TRAPME, TRAPSTATUS, PSD1, PSD2, CPUSTATUS, pfault);
                     }
                     TRAPSTATUS = CPU_MODEL;         /* clear all trap status except cpu type */
                     break;                          /* Go execute the trap */

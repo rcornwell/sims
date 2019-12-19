@@ -376,7 +376,7 @@ DIB             mta_dib = {
     0x1000,         /* parent channel address */
     0,              /* fifo input index */
     0,              /* fifo output index */
-    0,              /* interrupt status fifo for channel */
+    {0}             /* interrupt status fifo for channel */
 };
 
 DEVICE          mta_dev = {
