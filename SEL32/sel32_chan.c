@@ -1510,7 +1510,7 @@ uint32 scan_chan(int *ilev) {
                         /* now store the status dw address into word 5 of the ICB for the channel */
                         M[(chan_icba + 20) >> 2] = tempa | BIT1;    /* post sw addr in ICB+5w & set CC2 in SW */
                         INTS[i] |= INTS_REQ;            /* turn on channel interrupt request */
-            sim_debug(DEBUG_EXP, &cpu_dev,
+            sim_debug(DEBUG_IRQ, &cpu_dev,
             "scan_chan %04x FIFO read, set INTS REQ irq %04x inch %08x chan_icba %08x sw1 %08x sw2 %08x\n",
             chan, i, tempa, chan_icba, sw1, sw2);
                     }
@@ -1531,7 +1531,7 @@ uint32 scan_chan(int *ilev) {
                 /* get the address of the interrupt IVL table in main memory */
                 chan_ivl = SPAD[0xf1] + (i<<2);     /* contents of spad f1 points to chan ivl in mem */
                 chan_icba = M[chan_ivl >> 2];       /* get the interrupt context block addr in memory */
-                sim_debug(DEBUG_EXP, &cpu_dev, "scan_chan INTS REQ irq %04x found chan_icba %08x INTS %08x\n",
+                sim_debug(DEBUG_IRQ, &cpu_dev, "scan_chan INTS REQ irq %04x found chan_icba %08x INTS %08x\n",
                     i, chan_icba, INTS[i]);
                 *ilev = i;                          /* return interrupt level */
                 return(chan_icba);                  /* return ICB address */

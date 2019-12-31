@@ -115,8 +115,11 @@ t_stat rtc_srv (UNIT *uptr)
         time_t result = time(NULL);
 //      fprintf(stderr, "Clock int time %08x\r\n", (uint32)result);
         sim_debug(DEBUG_CMD, &rtc_dev, "RT Clock int time %08x\n", (uint32)result);
-        INTS[rtc_lvl] |= INTS_REQ;                  /* request the interrupt */
-        irq_pend = 1;                               /* make sure we scan for int */
+        if ((INTS[rtc_lvl] & INTS_ENAB) &&          /* make sure enabled */
+            (INTS[rtc_lvl] & INTS_ACT) == 0) {      /* and not active */
+            INTS[rtc_lvl] |= INTS_REQ;              /* request the interrupt */
+            irq_pend = 1;                           /* make sure we scan for int */
+        }
     }
     rtc_unit.wait = sim_rtcn_calb (rtc_tps, TMR_RTC);   /* calibrate */
     sim_activate_after (&rtc_unit, 1000000/rtc_tps);/* reactivate 16666 tics / sec */
@@ -138,9 +141,17 @@ void rtc_setup(uint32 ss, uint32 level)
         INTS[level] |= INTS_ENAB;                   /* make sure enabled */
         SPAD[level+0x80] |= SINT_ENAB;              /* in spad too */
         sim_activate(&rtc_unit, 20);                /* start us off */
+        sim_debug(DEBUG_CMD, &rtc_dev,
+            "RT Clock setup enable int %02x rtc_pie %01x ss %01x\n",
+            rtc_lvl, rtc_pie, ss);
     } else {
         INTS[level] &= ~INTS_ENAB;                  /* make sure disabled */
         SPAD[level+0x80] &= ~SINT_ENAB;             /* in spad too */
+//      INTS[level] &= ~INTS_REQ;                   /* make sure request not requesting */
+//      INTS[level] &= ~INTS_ACT;                   /* make sure request not active */
+        sim_debug(DEBUG_CMD, &rtc_dev,
+            "RT Clock setup disable int %02x rtc_pie %01x ss %01x\n",
+            rtc_lvl, rtc_pie, ss);
     }
     rtc_pie = ss;                                   /* set new state */
 }
@@ -257,13 +268,20 @@ DEVICE itm_dev = {
 /* cause interrupt */
 t_stat itm_srv (UNIT *uptr)
 {
-    if (itm_pie) {                              /* interrupt enabled? */
+    if (itm_pie) {                                  /* interrupt enabled? */
         time_t result = time(NULL);
-//        fprintf(stderr, "Clock int time %08x\r\n", (uint32)result);
-        sim_debug(DEBUG_CMD, &itm_dev, "Interval Timer expired interrupt time %08x\n", (uint32)result);
-        INTS[itm_lvl] |= INTS_REQ;              /* request the interrupt on zero value */
-        irq_pend = 1;                           /* make sure we scan for int */
-        if (itm_cmd == 0x3d) {
+        sim_debug(DEBUG_CMD, &itm_dev,
+            "Intv Timer expired status %08x interrupt %02x @ time %08x\n",
+            INTS[itm_lvl], itm_lvl, (uint32)result);
+        if ((INTS[itm_lvl] & INTS_ENAB) &&          /* make sure enabled */
+            (INTS[itm_lvl] & INTS_ACT) == 0) {      /* and not active */
+            INTS[itm_lvl] |= INTS_REQ;              /* request the interrupt on zero value */
+            irq_pend = 1;                           /* make sure we scan for int */
+        }
+        if ((INTS[itm_lvl] & INTS_ENAB) && (itm_cmd == 0x3d) && (itm_cnt != 0)) {
+            sim_debug(DEBUG_CMD, &itm_dev,
+                "Intv Timer reload on expired int %02x value %08x\n",
+                itm_lvl, itm_cnt);
             /* restart timer with value from user */
             sim_activate_after_abs_d (&itm_unit, ((double)itm_cnt * itm_tick_size_x_100) / 100.0);
         }
@@ -288,51 +306,51 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
     itm_cmd = cmd;                                  /* save last cmd */
     switch (cmd) {
     case 0x20:                                      /* stop timer */
-//      fprintf(stderr, "clk kill value %08x (%08d)\r\n", cnt, cnt);
-        sim_debug(DEBUG_CMD, &itm_dev, "clk kill value %08x (%08d)\n", cnt, cnt);
+//      fprintf(stderr, "clk 0x20 kill value %08x (%08d)\r\n", cnt, cnt);
+        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x20 kill value %08x (%08d)\n", cnt, cnt);
         sim_cancel (&itm_unit);                     /* cancel itc */
         itm_cnt = 0;                                /* no count reset value */
+        itm_pie = 0;                                /* stop timer running */
         return 0;                                   /* does not matter, no value returned  */
     case 0x39:                                      /* load timer with new value and start*/
-//      sim_debug(DEBUG_CMD, &itm_dev, "clk 0x39 init value %08x (%08d)\n", cnt, cnt);
+//      sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x39 init value %08x (%08d)\n", cnt, cnt);
         if (cnt <= 0)
             cnt = 26042;                            /* 0x65ba TRY 1,000,000/38.4 */
-//      fprintf(stderr, "clk 0x39 init value %08x (%08d)\r\n", cnt, cnt);
-        sim_debug(DEBUG_CMD, &itm_dev, "clk 0x39 init value %08x (%08d)\n", cnt, cnt);
+        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x39 init value %08x (%08d)\n", cnt, cnt);
         /* start timer with value from user */
         sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);
         itm_cnt = 0;                                /* no count reset value */
+        itm_pie = 1;                                /* set timer running */
         return 0;                                   /* does not matter, no value returned  */
     case 0x3d:                                      /* load timer with new value and start*/
-//      fprintf(stderr, "clk 0x3d init value %08x (%08d)\r\n", cnt, cnt);
-        sim_debug(DEBUG_CMD, &itm_dev, "clk 0x3d init value %08x (%08d)\n", cnt, cnt);
+        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x3d init value %08x (%08d)\n", cnt, cnt);
         /* start timer with value from user, reload on zero time */
         sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);
         itm_cnt = cnt;                              /* count reset value */
+        itm_pie = 1;                                /* set timer running */
         return 0;                                   /* does not matter, no value returned  */
     case 0x60:                                      /* read and stop timer */
         /* get timer value and stop timer */
         temp = (uint32)(100.0 * sim_activate_time_usecs (&itm_unit) / itm_tick_size_x_100);
-//      fprintf(stderr, "clk 0x60 temp value %08x (%08d)\r\n", temp, temp);
-        sim_debug(DEBUG_CMD, &itm_dev, "clk 0x60 temp value %08x (%08d)\n", temp, temp);
+        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x60 temp value %08x (%08d)\n", temp, temp);
         sim_cancel (&itm_unit);
+        itm_pie = 0;                                /* stop timer running */
         return temp;                                /* return current count value */
     case 0x79:                                      /* read the current timer value */
         /* get timer value, load new value and start timer */
         temp = (uint32)(100.0 * sim_activate_time_usecs (&itm_unit) / itm_tick_size_x_100);
-//      fprintf(stderr, "clk 0x79 temp value %08x (%08d)\r\n", temp, temp);
-//      fprintf(stderr, "clk 0x79 init value %08x (%08d)\r\n", cnt, cnt);
-        sim_debug(DEBUG_CMD, &itm_dev, "clk 0x79 temp value %08x (%08d)\n", temp, temp);
-        sim_debug(DEBUG_CMD, &itm_dev, "clk 0x79 init value %08x (%08d)\n", cnt, cnt);
+        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x79 temp value %08x (%08d)\n", temp, temp);
+        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x79 init value %08x (%08d)\n", cnt, cnt);
         /* start timer to fire after cnt ticks */
         sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);
         itm_cnt = 0;                                /* no count reset value */
+        itm_pie = 1;                                /* set timer running */
         return temp;                                /* return current count value */
     case 0x40:                                      /* read the current timer value */
         /* return current count value */
         temp = (uint32)(100.0 * sim_activate_time_usecs (&itm_unit) / itm_tick_size_x_100);
-//      fprintf(stderr, "clk 0x40 temp value %08x (%08d)\r\n", temp, temp);
-        sim_debug(DEBUG_CMD, &itm_dev, "clk 0x40 temp value %08x (%08d)\n", temp, temp);
+        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x40 temp value %08x (%08d)\n", temp, temp);
+        itm_pie = 1;                                /* set timer running */
         return temp;
         break;
     }
@@ -350,10 +368,19 @@ void itm_setup(uint32 ss, uint32 level)
         INTS[level] |= INTS_ENAB;                   /* make sure enabled */
         SPAD[level+0x80] |= SINT_ENAB;              /* in spad too */
 //DIAG  INTS[level] |= INTS_REQ;                    /* request the interrupt */
-        sim_cancel (&itm_unit);                     /* not running yet */
+        sim_debug(DEBUG_CMD, &itm_dev,
+            "Intv Timer setup enable int %02x value %08x itm_pie %01x ss %01x\n",
+            itm_lvl, itm_cnt, itm_pie, ss);
     } else {
+        sim_cancel (&itm_unit);                     /* not running yet */
         INTS[level] &= ~INTS_ENAB;                  /* make sure disabled */
         SPAD[level+0x80] &= ~SINT_ENAB;             /* in spad too */
+//      INTS[level] &= ~INTS_REQ;                   /* make sure request not requesting */
+//      INTS[level] &= ~INTS_ACT;                   /* make sure request not active */
+        SPAD[level+0x80] &= ~SINT_ACT;              /* in spad too */
+        sim_debug(DEBUG_CMD, &itm_dev,
+            "Intv Timer setup disable int %02x value %08x itm_pie %01x ss %01x\n",
+            itm_lvl, itm_cnt, itm_pie, ss);
     }
     itm_pie = ss;                                   /* set new state */
 }

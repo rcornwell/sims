@@ -25,7 +25,6 @@
 #include "sim_defs.h"                   /* simh simulator defns */
 
 /* Simulator stop codes */
-
 #define STOP_IONRDY     1               /* I/O dev not ready */
 #define STOP_HALT       2               /* HALT */
 #define STOP_IBKPT      3               /* breakpoint */
@@ -364,7 +363,11 @@ extern DEBTAB dev_debug[];
 #define INTS_EXTL   0x08000000          /* IOP/RTOM ext interrupt if set, I/O if not set (copy of SPAD) */
 #define INTS_REQ    0x04000000          /* Interrupt is requesting */
 
-/* Rename of global PC variable to avoid namespace conflicts on some platforms */
+/* ReadAddr memory access requested */
+#define MEM_RD  0x0                     /* read memory */
+#define MEM_WR  0x1                     /* write memory */
+#define MEM_EX  0x2                     /* execute memory */
 
+/* Rename of global PC variable to avoid namespace conflicts on some platforms */
 #define PC PC_Global
 
