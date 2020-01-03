@@ -489,24 +489,15 @@ ifeq ($(WIN32),)  #*nix Environments (&& cygwin)
       endif
     endif
   endif
-  # Find available RegEx library.  Prefer libpcreposix - except on OS X.
-  ifneq (,$(and $(call find_include,pcreposix),$(call find_include,pcre),$(subst Darwin,,$(OSTYPE))))
-    ifneq (,$(and $(call find_lib,pcreposix),$(call find_lib,pcre)))
-      OS_CCDEFS += -DHAVE_PCREPOSIX_H
-      OS_LDFLAGS += -lpcreposix -lpcre
-      $(info using libpcreposix: $(call find_lib,pcreposix) $(call find_lib,pcre) $(call find_include,pcreposix) $(call find_include,pcre))
-      ifeq ($(LD_SEARCH_NEEDED),$(call need_search,pcreposix))
-        OS_LDFLAGS += -L$(dir $(call find_lib,pcreposix))
+  # Find PCRE RegEx library.
+  ifneq (,$(call find_include,pcre))
+    ifneq (,$(call find_lib,pcre))
+      OS_CCDEFS += -DHAVE_PCRE_H
+      OS_LDFLAGS += -lpcre
+      $(info using libpcre: $(call find_lib,pcre) $(call find_include,pcre))
+      ifeq ($(LD_SEARCH_NEEDED),$(call need_search,pcre))
+        OS_LDFLAGS += -L$(dir $(call find_lib,pcre))
       endif
-    endif
-  else
-    # If libpcreposix isn't available, fall back to the local regex.h 
-    # Presume that the local regex support is available in the C runtime 
-    # without a specific reference to a library.  This may not be true on
-    # some platforms.
-    ifneq (,$(call find_include,regex))
-      OS_CCDEFS += -DHAVE_REGEX_H
-      $(info using regex: $(call find_include,regex))
     endif
   endif
   # Find available ncurses library.
@@ -1007,6 +998,34 @@ else
   ifneq ($(USE_NETWORK),)
     NETWORK_OPT += -DUSE_SHARED
   endif
+  ifeq (git-repo,$(shell if exist .git echo git-repo))
+    GIT_PATH := $(shell where git)
+    ifeq (,$(GIT_PATH))
+      $(error building using a git repository, but git is not available)
+    endif
+    ifeq (commit-id-exists,$(shell if exist .git-commit-id echo commit-id-exists))
+      CURRENT_GIT_COMMIT_ID=$(shell for /F "tokens=2" %%i in ("$(shell findstr /C:"SIM_GIT_COMMIT_ID" .git-commit-id)") do echo %%i)
+      ACTUAL_GIT_COMMIT_ID=$(strip $(shell git log -1 --pretty=%H))
+      ifneq ($(CURRENT_GIT_COMMIT_ID),$(ACTUAL_GIT_COMMIT_ID))
+        NEED_COMMIT_ID = need-commit-id
+        # make sure that the invalidly formatted .git-commit-id file wasn't generated
+        # by legacy git hooks which need to be removed.
+        $(shell if exist .git\hooks\post-checkout del .git\hooks\post-checkout)
+        $(shell if exist .git\hooks\post-commit   del .git\hooks\post-commit)
+        $(shell if exist .git\hooks\post-merge    del .git\hooks\post-merge)
+      endif
+    else
+      NEED_COMMIT_ID = need-commit-id
+    endif
+    ifeq (need-commit-id,$(NEED_COMMIT_ID))
+      commit_id=$(shell git log -1 --pretty=%H)
+      isodate=$(shell git log -1 --pretty=%ai)
+      commit_time=$(word 1,$(isodate))T$(word 2,$(isodate))$(word 3,$(isodate))
+      $(shell echo SIM_GIT_COMMIT_ID $(commit_id)>.git-commit-id)
+      $(shell echo SIM_GIT_COMMIT_TIME $(commit_time)>>.git-commit-id)
+    endif
+  endif
+
   ifneq (,$(shell if exist .git-commit-id echo git-commit-id))
     GIT_COMMIT_ID=$(shell for /F "tokens=2" %%i in ("$(shell findstr /C:"SIM_GIT_COMMIT_ID" .git-commit-id)") do echo %%i)
     GIT_COMMIT_TIME=$(shell for /F "tokens=2" %%i in ("$(shell findstr /C:"SIM_GIT_COMMIT_TIME" .git-commit-id)") do echo %%i)
@@ -1138,6 +1157,9 @@ ifneq (3,$(GCC_MAJOR_VERSION))
     CFLAGS_O += -Wno-unused-result
   endif
 endif
+  ifneq (,$(findstring -Wformat-truncation,$(shell $(GCC_WARNINGS_CMD))))
+    CFLAGS_O += -Wno-format-truncation
+  endif
 ifneq (clean,$(MAKECMDGOALS))
   BUILD_FEATURES := $(BUILD_FEATURES). $(COMPILER_NAME)
   $(info ***)
