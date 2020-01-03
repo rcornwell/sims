@@ -388,7 +388,8 @@ extern uint32 sim_brk_dflt;
 extern uint32 sim_brk_summ;
 extern uint32 sim_brk_match_type;
 extern t_addr sim_brk_match_addr;
-extern BRKTYPTAB *sim_brk_type_desc;                      /* type descriptions */
+extern BRKTYPTAB *sim_brk_type_desc;                    /* type descriptions */
+extern const char *sim_prog_name;                       /* executable program name */
 extern FILE *stdnul;
 extern t_bool sim_asynch_enabled;
 #if defined(SIM_ASYNCH_IO)
@@ -399,6 +400,7 @@ void sim_aio_activate (ACTIVATE_API caller, UNIT *uptr, int32 event_time);
 /* VM interface */
 
 extern char sim_name[64];
+extern const char *sim_vm_release;
 extern DEVICE *sim_devices[];
 extern REG *sim_PC;
 extern const char *sim_stop_messages[SCPE_BASE];
