@@ -2352,11 +2352,6 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
         data = load_tlb(uf | upmp, page, wr);
         if (data == 0 && page_fault) {
             fault_data |= ((uint64)addr);
-            /* Ignore faults if flag set */
-            if (FLAGS & ADRFLT) {
-                page_fault = 0;
-                return 1;
-            }
             if (uf)                      /* U */
                 fault_data |= SMASK;
 #if KL_ITS
@@ -2398,10 +2393,6 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
 
     /* create location. */
     *loc = ((data & 017777) << 9) + (addr & 0777);
-
-    /* Ignore faults if flag set */
-    if (FLAGS & ADRFLT)
-        return 1;
 
     /* If PUBLIC and private page, make sure we are fetching a Portal */
     if ((data & KL_PAG_A) && !flag && pub && ((data & KL_PAG_P) == 0) &&
@@ -5999,7 +5990,8 @@ ldb_ptr:
                       /* Full pointer */
                       AB = (AB + 1) & RMASK;
 //fprintf(stderr, "LBP %o %o %06o %012llo\n\r", SC, SCAD, AB, MB);
-                  }
+                  } else
+                      glb_sect = 0;
 #endif
 #if ITS
                   if (QITS && pi_cycle == 0 && mem_prot == 0) {
@@ -6031,7 +6023,8 @@ ld_exe:
                       AR &= CM(MQ);
                       AR |= BR & MQ;
                       MB = AR & FMASK;
-                      Mem_write(0, 0);
+                      if (Mem_write(0, 0))
+                         goto last;
                   }
                   FLAGS &= ~BYTI;
                   BYF5 = 0;
