@@ -574,7 +574,7 @@ t_stat mt_srv(UNIT *uptr)
     uint8       ch;
     uint8       zc = 0;
 
-    sim_debug(DEBUG_CMD, &mta_dev, "mt_srv unit %04x cmd %02x\n", unit, cmd);
+    sim_debug(DEBUG_DETAIL, &mta_dev, "mt_srv unit %04x cmd %02x\n", unit, cmd);
     if ((uptr->flags & UNIT_ATT) == 0) {            /* unit attached status */
         uptr->SNS |= SNS_INTVENT;                   /* unit intervention required */
         mt_busy[bufnum] &= ~1;                      /* make our buffer not busy */
@@ -597,16 +597,16 @@ t_stat mt_srv(UNIT *uptr)
     case 0x80:      /* other? */                    /* default to NOP */
         sim_debug(DEBUG_CMD, &mta_dev, "mt_srv cmd 80 DIAG unit=%04x SNS %08x\n", unit, uptr->SNS);
         ch = (uptr->SNS >> 24) & 0xff;              /* get sense byte 0 status */
-        sim_debug(DEBUG_DETAIL, &mta_dev, "sense unit %02x byte 0 %02x\n", unit, ch);
+        sim_debug(DEBUG_CMD, &mta_dev, "sense unit %02x byte 0 %02x\n", unit, ch);
         chan_write_byte(addr, &ch);                 /* write byte 0 */
         ch = (uptr->SNS >> 16) & 0xff;              /* get sense byte 1 status */
-        sim_debug(DEBUG_DETAIL, &mta_dev, "sense unit %02x byte 1 %02x\n", unit, ch);
+        sim_debug(DEBUG_CMD, &mta_dev, "sense unit %02x byte 1 %02x\n", unit, ch);
         chan_write_byte(addr, &ch);                 /* write byte 1 */
         ch = (uptr->SNS >> 8) & 0xff;               /* get sense byte 2 status */
-        sim_debug(DEBUG_DETAIL, &mta_dev, "sense unit %02x byte 2 %02x\n", unit, ch);
+        sim_debug(DEBUG_CMD, &mta_dev, "sense unit %02x byte 2 %02x\n", unit, ch);
         chan_write_byte(addr, &ch);                 /* write byte 2 */
         ch = (uptr->SNS >> 0) & 0xff;               /* get sense byte 3 status */
-        sim_debug(DEBUG_DETAIL, &mta_dev, "sense unit %02x byte 3 %02x\n", unit, ch);
+        sim_debug(DEBUG_CMD, &mta_dev, "sense unit %02x byte 3 %02x\n", unit, ch);
         chan_write_byte(addr, &ch);                 /* write byte 3 */
         for (ch=4; ch < 0xc; ch++) {
 //            chan_write_byte(addr, &ch);             /* write byte */

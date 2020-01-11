@@ -252,6 +252,7 @@ disk_type[] =
     /* For UTX */
     {"9342",   40000, 1250,   5, 256, 16, 2, 1,  800, 0x40},   /*823    80 M */
     {"9344",   76000, 2375,  19, 256, 16, 4, 1,  800, 0x40},   /*823   300 M */
+    {"8887",   76000, 2375,  10, 256, 34, 4, 1,  819, 0x40},   /*823   300 M */
 #endif
 };
 
@@ -839,7 +840,7 @@ rezero:
             for (i=0; i<len; i++) {
                 ch = buf[i];                    /* get a char from buffer */
                 if (chan_write_byte(chsa, &ch)) {   /* put a byte to memory */
-                    sim_debug(DEBUG_DATAIO, dptr,
+                    sim_debug(DEBUG_DATA, dptr,
                       "DISK Read %04x bytes from dskfile cyl %04x hds %02x sec %02x\n",
                        i, data->cyl, data->tpos, data->spos);
                     uptr->CMD &= ~(0xffff);     /* remove old status bits & cmd */
@@ -869,7 +870,7 @@ rezero:
             }
             /* see if we are done reading data */
             if (test_write_byte_end(chsa)) {
-                sim_debug(DEBUG_DATAIO, dptr,
+                sim_debug(DEBUG_DATA, dptr,
                     "DISK Read complete Read bytes from diskfile cyl %04x hds %02x sec %02x\n",
                     data->cyl, data->tpos, data->spos);
                 uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
@@ -916,7 +917,7 @@ rddone:
                 break;
             }
             if (len != 0) {                     /* see if done with write command */
-                sim_debug(DEBUG_DATAIO, dptr,
+                sim_debug(DEBUG_DATA, dptr,
                     "DISK WroteB %04x bytes to diskfile cyl %04x hds %02x sec %02x\n",
                      ssize, data->cyl, data->tpos, data->spos);
                 uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */

@@ -320,6 +320,7 @@ hsdp_type[] =
 //    {"MH300",  76000, 2375,  19, 256, 16, 4, 1,  800, 0, 0x40},   /*3  823 300 M 9346 */
 //    {"MH300",  80000, 2500,  10, 256, 35, 4, 1,  800, 0, 0x40},   /*3  823 300 M 8887 */
 //    {"MH300",  80000, 2500,  10, 256, 34, 4, 1,  820, 0, 0x40},   /*3  823 300 M 8887 */
+    {"8887",  80000, 2500,  10, 256, 34, 4, 1,  844, 0, 0x40},   /*3  823 300 M 8887 */
     {"MH300",  80000, 2500,  10, 256, 34, 4, 1,  844, 0, 0x40},   /*3  823 300 M 8887 */
     {"MH340",  76000, 2375,  24, 256, 16, 4, 1,  800, 0, 0x40},   /*4  711 340 M 8858 */
     {"FH005",   5120,  184,   4, 256, 16, 1, 1,   64, 0, 0x80},   /*5   64   5 M */
@@ -436,6 +437,7 @@ MTAB            hsdp_mod[] = {
 
 UNIT            dpa_unit[] = {
 /* SET_TYPE(3) DM300 */
+/* SET_TYPE(4) 8887 */
     {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(3), 0), 0, UNIT_ADDR(0x800)},       /* 0 */
     {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(3), 0), 0, UNIT_ADDR(0x802)},       /* 1 */
     {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(3), 0), 0, UNIT_ADDR(0x804)},       /* 2 */
@@ -460,7 +462,7 @@ DIB             dpa_dib = {
     0x0800,                                     /* parent channel address */
     0,                                          /* fifo input index */
     0,                                          /* fifo output index */
-    0,                                          /* interrupt status fifo for channel */
+    {0},                                        /* interrupt status fifo for channel */
 };
 
 DEVICE          dpa_dev = {
@@ -502,7 +504,7 @@ DIB             dpb_dib = {
     0x0C00,                                     /* parent channel address */
     0,                                          /* fifo input index */
     0,                                          /* fifo output index */
-    0,                                          /* interrupt status fifo for channel */
+    {0},                                        /* interrupt status fifo for channel */
 };
 
 DEVICE          dpb_dev = {
@@ -1044,7 +1046,7 @@ rezero:
             for (i=0; i<len; i++) {
                 ch = buf[i];                    /* get a char from buffer */
                 if (chan_write_byte(chsa, &ch)) {   /* put a byte to memory */
-                    sim_debug(DEBUG_DATAIO, dptr,
+                    sim_debug(DEBUG_DATA, dptr,
                       "DISK Read %04x bytes from dskfile cyl %04x hds %02x sec %02x\n",
                        i, data->cyl, data->tpos, data->spos);
                     uptr->CMD &= ~(0xffff);     /* remove old status bits & cmd */
@@ -1066,7 +1068,7 @@ rezero:
                     data->cyl++;                /* cylinder position */
                     if (data->cyl >= (int)(hsdp_type[type].cyl)) {
                         /* EOM reached, abort */
-                        sim_debug(DEBUG_DATAIO, dptr,
+                        sim_debug(DEBUG_DATA, dptr,
                             "DISK Read reached EOM for read from disk @ cyl %04x hds %02x sec %02x\n",
                             data->cyl, data->tpos, data->spos);
                         uptr->CMD &= ~(0xffff); /* remove old status bits & cmd */
@@ -1078,7 +1080,7 @@ rezero:
             }
             /* see if we are done reading data */
             if (test_write_byte_end(chsa)) {
-                sim_debug(DEBUG_DATAIO, dptr,
+                sim_debug(DEBUG_DATA, dptr,
                     "DISK Read complete for read from disk @ cyl %04x hds %02x sec %02x\n",
                     data->cyl, data->tpos, data->spos);
                 uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
@@ -1125,7 +1127,7 @@ rddone:
                 break;
             }
             if (len != 0) {                     /* see if done with write command */
-                sim_debug(DEBUG_DATAIO, dptr,
+                sim_debug(DEBUG_DATA, dptr,
                     "DISK WroteB %04x bytes to diskfile cyl %04x hds %02x sec %02x\n",
                      ssize, data->cyl, data->tpos, data->spos);
                 uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */

@@ -108,6 +108,7 @@
 #define NUM_UNITS_CON   2       /* 2 console input & output */
 #define NUM_DEVS_MT     1       /* 1 mag tape controllers */
 #define NUM_UNITS_MT    4       /* 4 of 8 devices */
+//#define FOR_UTX
 #ifdef FOR_UTX
 #define NUM_DEVS_HSDP   1       /* 1 HSPD disk drive controller */
 #define NUM_UNITS_HSDP  2       /* 2 disk drive devices */
@@ -235,12 +236,12 @@ typedef struct dib {
 #define DEBUG_CMD       0x0000001       /* Show device commands */
 #define DEBUG_DATA      0x0000002       /* Show data transfers */
 #define DEBUG_DETAIL    0x0000004       /* Show details */
+#define DEBUG_INFO      0x0000004       /* Show details */
 #define DEBUG_EXP       0x0000008       /* Show error conditions */
 #define DEBUG_INST      0x0000010       /* Show instructions */
-#define DEBUG_DATAIO    0x0000020       /* Show DATA I/O instructions */
+#define DEBUG_XIO       0x0000020       /* Show XIO I/O instructions */
 #define DEBUG_IRQ       0x0000040       /* Show IRQ requests */
 #define DEBUG_TRAP      0x0000080       /* Show TRAP requests */
-#define DEBUG_POS       0x0000080       /* Show disk position data */
 
 extern DEBTAB dev_debug[];
 
@@ -370,4 +371,22 @@ extern DEBTAB dev_debug[];
 
 /* Rename of global PC variable to avoid namespace conflicts on some platforms */
 #define PC PC_Global
+
+/* memory access macros */
+/* The RMW and WMW macros are used to read/write memory words */
+/* RMW(addr) or WMW(addr, data) where addr is a byte alligned word address */
+#define RMB(a) ((M[(a)>>2]>>(8*(7-(a&3))))&0xff)      /* read memory addressed byte */
+#define RMH(a) ((a)&2?(M[(a)>>2]&RMASK):(M[(a)>>2]>>16)&RMASK)    /* read memory addressed halfword */
+#define RMW(a) (M[(a)>>2])                            /* read memory addressed word */
+#define WMW(a,d) (M[(a)>>2]=d)                        /* write memory addressed word */
+/* write halfword to memory address */
+#define WMH(a,d) ((a)&2?(M[(a)>>2]=(M[(a)>>2]&LMASK)|((d)&RMASK)):(M[(a)>>2]=(M[(a)>>2]&RMASK)|((d)<<16)))
+
+/* map register access macros */
+/* The RMR and WMR macros are used to read/write the MAPC cache registers */
+/* RMR(addr) or WMR(addr, data) where addr is a half word alligned address */
+/* read map register halfword from cache address */
+#define RMR(a) ((a)&2?(MAPC[(a)>>2]&RMASK):(MAPC[(a)>>2]>>16)&RMASK)
+/* write halfword map register to MAP cache address */
+#define WMR(a,d) ((a)&2?(MAPC[(a)>>2]=(MAPC[(a)>>2]&LMASK)|((d)&RMASK)):(MAPC[(a)>>2]=(MAPC[(a)>>2]&RMASK)|((d)<<16)))
 

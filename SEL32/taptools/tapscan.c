@@ -50,16 +50,20 @@ int getloi(char *s, int lim)
             if (ln > 0)
             {
                 if (count - lcount > 1)
-                    fprintf(stderr, "file %d: records %d to %d: size %d\n", filen, lcount, count - 1, ln);
+                    fprintf(stderr, "file %d: records %d (0x%x) to %d (0x%x): size %d (0x%x)\n",
+                        filen, lcount, lcount, count-1, count-1, ln, ln);
                 else
-                    fprintf(stderr, "file %d: record %d: size %d\n", filen, lcount, ln);
+                    fprintf(stderr, "file %d: record %d (0x%x): size %d (0x%x)\n",
+                        filen, lcount, lcount, ln, ln);
             }
-            fprintf(stderr, "file %d: eof after %d records: %d bytes\n", filen, count, size);
+            fprintf(stderr, "file %d: eof after %d (0x%x) records: %d (0x%x) bytes\n",
+                filen, count, count, size, size);
             filen++;    /* set next file number */
         }
         else
         {
-            fprintf(stderr, "second eof after %d files: %d bytes\n", filen-1, size);
+            fprintf(stderr, "second eof after %d (0x%x) files: %d (0x%x) bytes\n",
+                filen-1, filen-1, size, size);
         }
         count = 0;      /* file record count back to zero */
         lcount = 0;     /* last record count back to zero */
@@ -75,7 +79,7 @@ int getloi(char *s, int lim)
         /* we have EOM */
         fprintf(stderr, "mpx eot\n");
         /* print out total tape size in bytes */
-        fprintf(stderr, "total length: %ld bytes\n", tsize);
+        fprintf(stderr, "total length: %ld (0x%lx) bytes\n", tsize, tsize);
         return -1;      /* at EOM on disk file */
     }
     /* read the data */
@@ -90,9 +94,11 @@ int getloi(char *s, int lim)
         if (ln > 0)
         {
             if (count - lcount > 1)
-                fprintf(stderr, "file %d: records %d to %d: size %d\n", filen, lcount, count - 1, ln);
+                fprintf(stderr, "file %d: records %d (0x%x) to %d (0x%x): size %d (0x%x)\n",
+                    filen, lcount, lcount, count-1, count-1, ln, ln);
             else
-                fprintf(stderr, "file %d: record %d: size %d\n", filen, lcount, ln);
+                fprintf(stderr, "file %d: record %d (0x%x): size %d (0x%x)\n",
+                    filen, lcount, lcount, ln, ln);
         }
         ln = n;
         lcount = count;

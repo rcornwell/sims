@@ -799,7 +799,7 @@ rezero:
             for (i=0; i<len; i++) {
                 ch = buf[i];                    /* get a char from buffer */
                 if (chan_write_byte(chsa, &ch)) {   /* put a byte to memory */
-                    sim_debug(DEBUG_DATAIO, dptr,
+                    sim_debug(DEBUG_DATA, dptr,
                         "DISK Read %04x bytes from diskfile cyl %04x hds %02x sec %02x tstart %08x\n",
                         dlen+i, data->cyl, data->tpos, data->spos, tstart);
                     uptr->CMD &= ~(0xffff);      /* remove old status bits & cmd */
@@ -815,7 +815,7 @@ rezero:
             data->spos++;
             /* see if we are done reading data */
             if (test_write_byte_end(chsa)) {
-                sim_debug(DEBUG_DATAIO, dptr,
+                sim_debug(DEBUG_DATA, dptr,
                     "DISK Read complete Read %04x bytes from diskfile cyl %04x hds %02x sec %02x tstart %08x\n",
                     dlen, data->cyl, data->tpos, data->spos, tstart);
                 uptr->CMD &= ~(0xffff);          /* remove old status bits & cmd */
@@ -843,7 +843,7 @@ rddone:
                     /* if error on reading 1st byte, we are done writing */
                     if (i == 0) {
                         uptr->CMD &= ~(0xffff);  /* remove old status bits & cmd */
-                        sim_debug(DEBUG_DATAIO, dptr,
+                        sim_debug(DEBUG_DATA, dptr,
                             "DISK Wrote %04x bytes to diskfile cyl %04x hds %02x sec %02x tstart %08x\n",
                             ssize, data->cyl, data->tpos, data->spos, tstart);
                         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
@@ -865,7 +865,7 @@ rddone:
                 break;
             }
             if (len != 0) {                     /* see if done with write command */
-                sim_debug(DEBUG_DATAIO, dptr,
+                sim_debug(DEBUG_DATA, dptr,
                     "DISK WroteB %04x bytes to diskfile cyl %04x hds %02x sec %02x tstart %08x\n",
                     ssize, data->cyl, data->tpos, data->spos, tstart);
                 uptr->CMD &= ~(0xffff);          /* remove old status bits & cmd */

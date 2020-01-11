@@ -153,6 +153,8 @@ uint8  iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 
     /* process the commands */
     switch (cmd & 0xFF) {
+    /* UTX uses the INCH cmd to detect the IOP or MFP */
+    /* IOP has INCH cmd of 0, while MFP uses 0x80 */
     case IOP_INCH:                                  /* INCH command */
         uptr->u5 = SNS_RDY|SNS_ONLN;                /* status is online & ready */
         uptr->u3 &= LMASK;                          /* leave only chsa */
@@ -173,7 +175,7 @@ uint8  iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 
     default:                                        /* invalid command */
         uptr->u5 |= SNS_CMDREJ;                     /* command rejected */
-        sim_debug(DEBUG_CMD, &iop_dev, "iop_startcmd %04x: Cmd Invald %02x status %02x\n",
+        sim_debug(DEBUG_CMD, &iop_dev, "iop_startcmd %04x: Cmd Invalid %02x status %02x\n",
             chan, cmd, uptr->u5);
         uptr->u3 &= LMASK;                          /* leave only chsa */
         uptr->u3 |= (cmd & IOP_MSK);                /* save command */
@@ -194,11 +196,13 @@ t_stat iop_srv(UNIT *uptr)
     /* test for NOP or INCH cmds */
     if ((cmd == IOP_NOP) || (cmd == IOP_INCH2)) {   /* NOP has do nothing */
         uptr->u3 &= LMASK;                          /* nothing left, command complete */
-        sim_debug(DEBUG_CMD, &iop_dev, "iop_srv INCH/NOP chan %d: chnend|devend\n", chsa);
+        sim_debug(DEBUG_CMD, &iop_dev, "iop_srv INCH/NOP chan %02x: chnend|devend\n", chsa);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* done */
     } else
     if (cmd) {
         uptr->u3 &= LMASK;                          /* nothing left, command complete */
+        sim_debug(DEBUG_CMD, &iop_dev,
+            "iop_srv Unknown cmd %02x chan %02x: chnend|devend|unitexp\n", cmd, chsa);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);  /* done */
     }
     return SCPE_OK;

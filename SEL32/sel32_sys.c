@@ -115,7 +115,7 @@ DEBTAB              dev_debug[] = {
     {"DETAIL", DEBUG_DETAIL, "Show details about device"},
     {"EXP", DEBUG_EXP, "Show exception information"},
     {"INST", DEBUG_INST, "Show instruction execution"},
-    {"DATAIO", DEBUG_DATAIO, "Show Data I/O instructions"},
+    {"XIO", DEBUG_XIO, "Show XIO I/O instructions"},
     {"IRQ", DEBUG_IRQ, "Show interrupt requests"},
     {"TRAP", DEBUG_TRAP, "Show trap requests"},
     {0, 0}
@@ -734,10 +734,10 @@ t_opcode  optab[] = {
     {  0xD800,      0xFC00,   TYPE_A,     "STM", },      /* Store Masked B,H,W,D */
     {  0xDC00,      0xFC08,   TYPE_A,     "STF", },      /* Store File */
     {  0xDC08,      0xFC08,   TYPE_A,     "STFBR", },    /* Store Base File */
-    {  0xE000,      0xFC0F,   TYPE_A,     "SUF", },      /* Subtract Floating Memory D,W */
-    {  0xE008,      0xFC0F,   TYPE_A,     "ADF", },      /* Add Floating Memory D,W */
-    {  0xE400,      0xFC0F,   TYPE_A,     "DVF", },      /* Divide Floating Memory D,W */
-    {  0xE408,      0xFC0F,   TYPE_A,     "MPF", },      /* Multiply Floating Memory D,W */
+    {  0xE000,      0xFC08,   TYPE_A,     "SUF", },      /* Subtract Floating Memory D,W */
+    {  0xE008,      0xFC08,   TYPE_A,     "ADF", },      /* Add Floating Memory D,W */
+    {  0xE400,      0xFC08,   TYPE_A,     "DVF", },      /* Divide Floating Memory D,W */
+    {  0xE408,      0xFC08,   TYPE_A,     "MPF", },      /* Multiply Floating Memory D,W */
     {  0xE800,      0xFC00,   TYPE_A,     "ARM", },      /* Add Register to Memory B,H,W,D */
     {  0xEC00,      0xFF80,   TYPE_B,     "BU", },       /* Branch Unconditional */
     {  0xEC00,      0xFF80,   TYPE_A,     "BCT", },      /* Branch Condition True */
@@ -831,6 +831,9 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
             case TYPE_E:                    /* [*]o[,x] or o[(b)][,x] */
                 /* append B, H, W, D to base instruction using F & C bits */
                 i = (val & 3) | ((inst >> 1) & 04);
+                if (((inst&0xfc00) == 0xe000) ||
+                    ((inst&0xfc00) == 0xe400))
+                    i &= ~4;                        /* remode f bit from fpt instr */
                 if (((inst&0xfc00) != 0xdc00) &&
                     ((inst&0xfc00) != 0xd000) &&
                     ((inst&0xfc00) != 0x5400) &&
