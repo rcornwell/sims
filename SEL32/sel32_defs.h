@@ -343,6 +343,35 @@ extern DEBTAB dev_debug[];
 #define BIT0    0x80000000                  /* general use for bit 0 testing */
 #define BIT1    0x40000000                  /* general use for bit 1 testing */
 #define BIT2    0x20000000                  /* general use for bit 2 testing */
+#define BIT3    0x10000000                  /* general use for bit 3 testing */
+#define BIT4    0x80000000                  /* general use for bit 4 testing */
+#define BIT5    0x40000000                  /* general use for bit 5 testing */
+#define BIT6    0x20000000                  /* general use for bit 6 testing */
+#define BIT7    0x10000000                  /* general use for bit 7 testing */
+#define BIT8    0x80000000                  /* general use for bit 8 testing */
+#define BIT9    0x40000000                  /* general use for bit 9 testing */
+#define BIT10   0x20000000                  /* general use for bit 10 testing */
+#define BIT11   0x10000000                  /* general use for bit 11 testing */
+#define BIT12   0x80000000                  /* general use for bit 12 testing */
+#define BIT13   0x40000000                  /* general use for bit 13 testing */
+#define BIT14   0x20000000                  /* general use for bit 14 testing */
+#define BIT15   0x10000000                  /* general use for bit 15 testing */
+#define BIT16   0x80000000                  /* general use for bit 16 testing */
+#define BIT17   0x40000000                  /* general use for bit 17 testing */
+#define BIT18   0x20000000                  /* general use for bit 18 testing */
+#define BIT19   0x10000000                  /* general use for bit 19 testing */
+#define BIT20   0x80000000                  /* general use for bit 20 testing */
+#define BIT21   0x40000000                  /* general use for bit 21 testing */
+#define BIT22   0x20000000                  /* general use for bit 22 testing */
+#define BIT23   0x10000000                  /* general use for bit 23 testing */
+#define BIT24   0x80000000                  /* general use for bit 24 testing */
+#define BIT25   0x40000000                  /* general use for bit 25 testing */
+#define BIT26   0x20000000                  /* general use for bit 26 testing */
+#define BIT27   0x10000000                  /* general use for bit 27 testing */
+#define BIT28   0x80000000                  /* general use for bit 28 testing */
+#define BIT29   0x40000000                  /* general use for bit 29 testing */
+#define BIT30   0x20000000                  /* general use for bit 30 testing */
+#define BIT31   0x10000000                  /* general use for bit 31 testing */
 #define MASK16  0x0000FFFF                  /* 16 bit address mask */
 #define MASK19  0x0007FFFF                  /* 19 bit address mask */
 #define MASK20  0x000FFFFF                  /* 20 bit address mask */
