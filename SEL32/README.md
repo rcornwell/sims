@@ -71,10 +71,14 @@ diag.tap       bootable level one diagnostic tape w/auto testing.  Set cpu type
 Available UTX-21a install tape for testing:
 utxtape1.ini   command file to start UTX install tape.  ./sel32 utxtape1.ini
 utx21a1.tap    bootable UTX install tape for testing basemode.  The current
-               V6 & V9 will boot to wait mode without any console prompt. All
-               basemode instructions have been tested with the CV.BRD diag.
-               UTX needs better support for the console terminal before we
-               move any farther.
+               V6 & V9 will boot UTX into single user mode.  You can run a
+               small subset of the commands that on the installation tape.
+               Prep, the disk preparation UTX program, cannot format a disk
+               drive at this time due to unsupport disk commands that are
+               required. All basemode instructions have been tested with
+               the CV.BRD diag.  The virtual memory has been fully tested
+               with the VM.MMM diag.  UTX needs better support for the disk
+               controller before we can move any farther with the installation.
 
 Other MPX verion support:
                I am still looking for an MPX 3.X user or master SDT tape.  I have
@@ -83,5 +87,5 @@ Other MPX verion support:
                disk image of a bootable system..
 
 James C. Bevier
-12/31/2019
+01/14/2020 
 

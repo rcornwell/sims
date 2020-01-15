@@ -49,6 +49,7 @@ extern  void    post_extirq(void);
 extern  uint32  attention_trap;             /* set when trap is requested */
 extern  void    set_devwake(uint16 addr, uint8 flags);
 
+#define CMD     u3
 /* Held in u3 is the device command and status */
 #define CON_INCH    0x00    /* Initialize channel command */
 #define CON_INCH2   0xf0    /* Initialize channel command for processing */
@@ -74,6 +75,7 @@ extern  void    set_devwake(uint16 addr, uint8 flags);
 
 /* Input buffer pointer held in u4 */
 
+#define SNS     u5
 /* in u5 packs sense byte 0,1 and 3 */
 /* Sense byte 0 */
 #define SNS_CMDREJ  0x80000000    /* Command reject */
@@ -102,10 +104,11 @@ con_data[NUM_UNITS_CON];
 uint32  atbuf=0;                /* attention buffer */
 
 /* forward definitions */
-uint8   con_startcmd(UNIT *, uint16,  uint8);
-void    con_ini(UNIT *, t_bool);
-t_stat  con_srvi(UNIT *);
-t_stat  con_srvo(UNIT *);
+uint8   con_preio(UNIT *uptr, uint16 chan);
+uint8   con_startcmd(UNIT*, uint16, uint8);
+void    con_ini(UNIT*, t_bool);
+t_stat  con_srvi(UNIT*);
+t_stat  con_srvo(UNIT*);
 uint8   con_haltio(UNIT *);
 t_stat  con_poll(UNIT *);
 t_stat  con_reset(DEVICE *);
@@ -125,7 +128,7 @@ UNIT            con_unit[] = {
 
 //DIB               con_dib = {NULL, con_startcmd, NULL, NULL, NULL, con_ini, con_unit, con_chp, NUM_UNITS_CON, 0xf, 0x7e00, 0, 0, 0};
 DIB             con_dib = {
-    NULL,           /* uint8 (*pre_io)(UNIT *uptr, uint16 chan)*/       /* Start I/O */
+    con_preio,      /* uint8 (*pre_io)(UNIT *uptr, uint16 chan)*/       /* Start I/O */
     con_startcmd,   /* uint8 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start a command */
     con_haltio,     /* uint8 (*halt_io)(UNIT *uptr) */          /* Stop I/O */
     NULL,           /* uint8 (*test_io)(UNIT *uptr) */          /* Test I/O */
@@ -153,14 +156,29 @@ DEVICE  con_dev = {
  */
 /* initialize the console chan/unit */
 void con_ini(UNIT *uptr, t_bool f) {
-    int     unit = (uptr - con_unit);   /* unit 0 */
+//  int     unit = (uptr - con_unit);   /* unit 0 */
 //  DEVICE *dptr = find_dev_from_unit(uptr);
 
 //  con_data[unit].incnt = 0;           /* no input data */
     con_data[0].incnt = 0;              /* no input data */
     con_data[1].incnt = 0;              /* no output data */
-    uptr->u5 = SNS_RDY|SNS_ONLN;        /* status is online & ready */
+    uptr->SNS = SNS_RDY|SNS_ONLN;       /* status is online & ready */
     sim_activate(uptr, 1000);           /* time increment */
+}
+
+/* start a console operation */
+uint8  con_preio(UNIT *uptr, uint16 chan)
+{
+    DEVICE         *dptr = find_dev_from_unit(uptr);
+    int            unit = (uptr - dptr->units);
+
+    if ((uptr->CMD & 0xff00) != 0) {    /* just return if busy */
+        sim_debug(DEBUG_CMD, &con_dev, "con_preio unit=%02x BUSY\n", unit);
+        return SNS_BSY;
+    }
+
+    sim_debug(DEBUG_CMD, &con_dev, "con_preio unit=%02x OK\n", unit);
+    return 0;                           /* good to go */
 }
 
 /* start an I/O operation */
@@ -168,17 +186,7 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
     int     unit = (uptr - con_unit);   /* unit 0,1 */
     uint8   ch;
 
-#ifdef DOES_NOT_WORK
-    if ((uptr->u3 & CON_MSK) && ((cmd & 0xff) == CON_INCH)) { /* is unit busy */
-        /* unit is busy and we have an INCH cmd, haltio and restart */
-        sim_debug(DEBUG_CMD, &con_dev,
-            "con_startcmd INCH request unit %01x chan %02x cmd %02x busy\n",
-            unit, chan, cmd);
-        con_haltio(uptr);               /* halt any I/O */
-    }
-#endif
-
-    if ((uptr->u3 & CON_MSK) != 0)      /* is unit busy */
+    if ((uptr->CMD & CON_MSK) != 0)     /* is unit busy */
         return SNS_BSY;                 /* yes, return busy */
 
     sim_debug(DEBUG_CMD, &con_dev,
@@ -187,9 +195,9 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
     switch (cmd & 0xFF) {
     case CON_INCH:      /* 0x00 */      /* INCH command */
         sim_debug(DEBUG_CMD, &con_dev, "con_startcmd %04x: Cmd INCH\n", chan);
-        uptr->u3 &= LMASK;              /* leave only chsa */
-        uptr->u3 |= CON_INCH2;          /* save INCH command as 0xf0 */
-        uptr->u5 = SNS_RDY|SNS_ONLN;    /* status is online & ready */
+        uptr->CMD &= LMASK;             /* leave only chsa */
+        uptr->CMD |= CON_INCH2;         /* save INCH command as 0xf0 */
+        uptr->SNS = SNS_RDY|SNS_ONLN;   /* status is online & ready */
         sim_activate(uptr, 10);         /* start us off */
         return 0;                       /* no status change */
         break;
@@ -198,12 +206,12 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
     case CON_WR:        /* 0x01 */      /* Write command */
         /* if input requested for output device, give error */
         if (unit == 0) {
-            uptr->u5 |= SNS_CMDREJ;     /* command rejected */
+            uptr->SNS |= SNS_CMDREJ;    /* command rejected */
             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* unit check */
         }
-        uptr->u3 &= LMASK;              /* leave only chsa */
-        uptr->u3 |= (cmd & CON_MSK);    /* save command */
-        uptr->u5 = SNS_RDY|SNS_ONLN;    /* status is online & ready */
+        uptr->CMD &= LMASK;             /* leave only chsa */
+        uptr->CMD |= (cmd & CON_MSK);   /* save command */
+        uptr->SNS = SNS_RDY|SNS_ONLN;   /* status is online & ready */
         sim_activate(uptr, 20);         /* start us off */
 //TRIED sim_activate(uptr, 10);         /* start us off */
         return 0;                       /* no status change */
@@ -213,26 +221,26 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
     case CON_ECHO:      /* 0x0a */      /* Read command w/ECHO */
         /* if output requested for input device, give error */
         if (unit == 1) {
-            uptr->u5 |= SNS_CMDREJ;     /* command rejected */
+            uptr->SNS |= SNS_CMDREJ;    /* command rejected */
             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* unit check */
         }
-        uptr->u3 &= LMASK;              /* leave only chsa */
-        uptr->u3 |= (cmd & CON_MSK);    /* save command */
+        uptr->CMD &= LMASK;             /* leave only chsa */
+        uptr->CMD |= (cmd & CON_MSK);   /* save command */
         if (cmd == CON_ECHO)            /* echo command? */
-            uptr->u3 |= CON_EKO;        /* save echo status */
-        uptr->u3 |= CON_READ;           /* show read mode */
+            uptr->CMD |= CON_EKO;       /* save echo status */
+        uptr->CMD |= CON_READ;          /* show read mode */
         atbuf = 0;                      /* reset attention buffer */
         uptr->u4 = 0;                   /* no I/O yet */
         con_data[unit].incnt = 0;       /* clear any input data */
-        uptr->u5 = SNS_RDY|SNS_ONLN;    /* status is online & ready */
+        uptr->SNS = SNS_RDY|SNS_ONLN;   /* status is online & ready */
         sim_activate(uptr, 20);         /* start us off */
         return 0;
         break;
 
     case CON_NOP:       /* 0x03 */      /* NOP has do nothing */
-        uptr->u5 = SNS_RDY|SNS_ONLN;    /* status is online & ready */
-        uptr->u3 &= LMASK;              /* leave only chsa */
-        uptr->u3 |= (cmd & CON_MSK);    /* save command */
+        uptr->SNS = SNS_RDY|SNS_ONLN;   /* status is online & ready */
+        uptr->CMD &= LMASK;             /* leave only chsa */
+        uptr->CMD |= (cmd & CON_MSK);   /* save command */
         sim_activate(uptr, 10);         /* start us off */
 //TRIED sim_activate(uptr, 2);          /* start us off */
         return 0;                       /* no status change */
@@ -240,9 +248,9 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
 
 #ifdef JUNK
     case 0x0c:          /* 0x0C */      /* Unknown command */
-        uptr->u5 = SNS_RDY|SNS_ONLN;    /* status is online & ready */
-        uptr->u3 &= LMASK;              /* leave only chsa */
-        uptr->u3 |= (cmd & CON_MSK);    /* save command */
+        uptr->SNS = SNS_RDY|SNS_ONLN;   /* status is online & ready */
+        uptr->CND &= LMASK;             /* leave only chsa */
+        uptr->CMD |= (cmd & CON_MSK);   /* save command */
         sim_activate(uptr, 10);         /* start us off */
         return 0;                       /* no status change */
         break;
@@ -250,13 +258,13 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
 
     case CON_CON:       /* 0x1f */      /* Connect, return Data Set ready */
         sim_debug(DEBUG_CMD, &con_dev, "con_startcmd %04x: Cmd %02x CON\n", chan, cmd);
-        uptr->u5 |= (SNS_DSR|SNS_DCD);  /* Data set ready, Data Carrier detected */
+        uptr->SNS |= (SNS_DSR|SNS_DCD); /* Data set ready, Data Carrier detected */
         return SNS_CHNEND|SNS_DEVEND;   /* good return */
         break;
 
     case CON_DIS:       /* 0x23 */      /* Disconnect has do nothing */
         sim_debug(DEBUG_CMD, &con_dev, "con_startcmd %04x: Cmd %02x DIS\n", chan, cmd);
-        uptr->u5 &= ~(SNS_DSR|SNS_DCD); /* Data set not ready */
+        uptr->SNS &= ~(SNS_DSR|SNS_DCD); /* Data set not ready */
         return SNS_CHNEND|SNS_DEVEND;   /* good return */
         break;
 
@@ -265,33 +273,33 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
 #endif
     case CON_SNS:       /* 0x04 */      /* Sense */
         sim_debug(DEBUG_CMD, &con_dev,
-            "con_startcmd %04x: Cmd Sense %02x\n", chan, uptr->u5);
+            "con_startcmd %04x: Cmd Sense %02x\n", chan, uptr->SNS);
         /* value 4 is Data Set Ready */
         /* value 5 is Data carrier detected n/u */
-        ch = uptr->u5;                  /* status */
-        chan_write_byte(GET_UADDR(uptr->u3), &ch);  /* write status */
+        ch = uptr->SNS;                 /* status */
+        chan_write_byte(GET_UADDR(uptr->CMD), &ch);  /* write status */
         return SNS_CHNEND|SNS_DEVEND;   /* good return */
         break;
 
     default:                            /* invalid command */
-        uptr->u5 |= SNS_CMDREJ;         /* command rejected */
+        uptr->SNS |= SNS_CMDREJ;        /* command rejected */
         sim_debug(DEBUG_CMD, &con_dev,
             "con_startcmd %04x: Invalid command %02x Sense %02x\n",
-            chan, cmd, uptr->u5);
+            chan, cmd, uptr->SNS);
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* unit check */
         break;
     }
 
-    if (uptr->u5 & (~(SNS_RDY|SNS_ONLN|SNS_DSR)))
+    if (uptr->SNS & (~(SNS_RDY|SNS_ONLN|SNS_DSR)))
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     return SNS_CHNEND|SNS_DEVEND;
 }
 
 /* Handle output transfers for console */
 t_stat con_srvo(UNIT *uptr) {
-    uint16      chsa = GET_UADDR(uptr->u3);
+    uint16      chsa = GET_UADDR(uptr->CMD);
     int         unit = (uptr - con_unit);           /* unit 0 is read, unit 1 is write */
-    int         cmd = uptr->u3 & CON_MSK;
+    int         cmd = uptr->CMD & CON_MSK;
     uint8       ch, cp;
 
     sim_debug(DEBUG_DETAIL, &con_dev, "con_srvo enter chsa %04x cmd = %02x\n", chsa, cmd);
@@ -302,7 +310,7 @@ t_stat con_srvo(UNIT *uptr) {
     }
 
     if ((cmd == CON_NOP) || (cmd == CON_INCH2)) {   /* NOP has to do nothing */
-        uptr->u3 &= LMASK;                          /* nothing left, command complete */
+        uptr->CMD &= LMASK;                         /* nothing left, command complete */
         if (cmd == CON_INCH2) {                     /* Channel end only for INCH */
             sim_debug(DEBUG_CMD, &con_dev, "con_srvo INCH chsa %04x cmd = %02x\n", chsa, cmd);
             chan_end(chsa, SNS_CHNEND);             /* done */
@@ -313,10 +321,11 @@ t_stat con_srvo(UNIT *uptr) {
         return SCPE_OK;
     }
 
+    static uint32 lastch = 0;
     if ((cmd == CON_WR) || (cmd == CON_RWD)) {
         /* Write to device */
         if (chan_read_byte(chsa, &ch)) {    /* get byte from memory */
-            uptr->u3 &= LMASK;              /* nothing left, command complete */
+            uptr->CMD &= LMASK;             /* nothing left, command complete */
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
         } else {
             /* HACK HACK HACK */
@@ -330,6 +339,11 @@ t_stat con_srvo(UNIT *uptr) {
             else
                 cp = '^';
             sim_debug(DEBUG_CMD, &con_dev, "con_srvo write %01x: putch 0x%02x %c\n", unit, ch, cp);
+            lastch = (lastch << 8) | cp;
+#ifdef DO_DYNAMIC_DEBUG
+            if ((lastch & 0xffff) == 0x6e29)    /* check for ion) */
+                cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
+#endif
 //WAS       sim_putchar(ch);                /* output next char to device */
             sim_putchar(cp);                /* output next char to device */
             sim_activate(uptr, 20);         /* start us off */
@@ -340,16 +354,16 @@ t_stat con_srvo(UNIT *uptr) {
 
 /* Handle input transfers for console */
 t_stat con_srvi(UNIT *uptr) {
-    uint16      chsa = GET_UADDR(uptr->u3);
+    uint16      chsa = GET_UADDR(uptr->CMD);
     int         unit = (uptr - con_unit);       /* unit 0 is read, unit 1 is write */
-    int         cmd = uptr->u3 & CON_MSK;
+    int         cmd = uptr->CMD & CON_MSK;
     uint8       ch;
     t_stat      r;
 
     sim_debug(DEBUG_DETAIL, &con_dev, "con_srvi enter chsa %04x cmd = %02x\n", chsa, cmd);
 
 #ifdef JUNK
-    if (cmd == 0x0C) {                              /* unknown has to do nothing */
+    if (cmd == 0x0C) {                          /* unknown has to do nothing */
         sim_debug(DEBUG_CMD, &con_dev, "con_srvi Unknown (0x0C) chsa %04x cmd = %02x\n", chsa, cmd);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
         return SCPE_OK;
@@ -357,7 +371,7 @@ t_stat con_srvi(UNIT *uptr) {
 #endif
 
     if ((cmd == CON_NOP) || (cmd == CON_INCH2)) { /* NOP is do nothing */
-        uptr->u3 &= LMASK;                      /* nothing left, command complete */
+        uptr->CMD &= LMASK;                     /* nothing left, command complete */
         if (cmd == CON_INCH2) {                 /* Channel end only for INCH */
             sim_debug(DEBUG_CMD, &con_dev, "con_srvi INCH chsa %04x cmd = %02x\n", chsa, cmd);
             chan_end(chsa, SNS_CHNEND);         /* done */
@@ -374,7 +388,7 @@ t_stat con_srvi(UNIT *uptr) {
 
     case CON_RD:        /* 0x02 */              /* read from device */
     case CON_ECHO:      /* 0x0a */              /* read from device w/ECHO */
-        if (uptr->u3 & CON_INPUT) {             /* input waiting? */
+        if (uptr->CMD & CON_INPUT) {            /* input waiting? */
             ch = con_data[unit].ibuff[uptr->u4++];  /* get char from read buffer */
 #ifdef DO_DYNAMIC_DEBUG
     cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
@@ -383,13 +397,13 @@ t_stat con_srvi(UNIT *uptr) {
             if (chan_write_byte(chsa, &ch)) {   /* write byte to memory */
                 con_data[unit].incnt = 0;       /* buffer empty */
                 cmd = 0;                        /* no cmd either */
-                uptr->u3 &= LMASK;              /* nothing left, command complete */
+                uptr->CMD &= LMASK;             /* nothing left, command complete */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we done */
             } else {
                 if (uptr->u4 == con_data[unit].incnt) { /* read completed */
                     con_data[unit].incnt = 0;   /* buffer is empty */
                     cmd = 0;                    /* no cmd either */
-                    uptr->u3 &= LMASK;          /* nothing left, command complete */
+                    uptr->CMD &= LMASK;         /* nothing left, command complete */
                     chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we done */
                 }
             }
@@ -401,8 +415,10 @@ t_stat con_srvi(UNIT *uptr) {
     r = sim_poll_kbd();                         /* poll for a char */
     if (r & SCPE_KFLAG) {                       /* got a char */
         ch = r & 0377;                          /* drop any extra bits */
+#ifdef LEAVE_LOWER
         if ((ch >= 'a') && (ch <= 'z'))
             ch &= 0xdf;                         /* make upper case */
+#endif
         if ((cmd == CON_RD) || (cmd == CON_ECHO)) { /* looking for input? */
             atbuf = 0;                          /* reset attention buffer */
             if (ch == '\n')                     /* convert newline */
@@ -431,14 +447,14 @@ t_stat con_srvi(UNIT *uptr) {
 #endif
             case '\r':                          /* return */
             case '\n':                          /* newline */
-                uptr->u3 |= CON_CR;             /* C/R received */
+                uptr->CMD |= CON_CR;            /* C/R received */
                 /* fall through */
             default:
                 if (con_data[unit].incnt < sizeof(con_data[unit].ibuff)) {
-                    if (uptr->u3 & CON_EKO)     /* ECHO requested */
+                    if (uptr->CMD & CON_EKO)    /* ECHO requested */
                         sim_putchar(ch);        /* ECHO the char */
                     con_data[unit].ibuff[con_data[unit].incnt++] = ch;
-                    uptr->u3 |= CON_INPUT;      /* we have a char available */
+                    uptr->CMD |= CON_INPUT;     /* we have a char available */
                 }
                 break;
             }
@@ -478,21 +494,26 @@ t_stat  con_reset(DEVICE *dptr) {
 
 /* Handle haltio transfers for console */
 uint8   con_haltio(UNIT *uptr) {
-    uint16      chsa = GET_UADDR(uptr->u3);
-    int         cmd = uptr->u3 & CON_MSK;
+    uint16      chsa = GET_UADDR(uptr->CMD);
+    int         cmd = uptr->CMD & CON_MSK;
+//  int         unit = (uptr - con_unit);       /* unit # */
 
     sim_debug(DEBUG_EXP, &con_dev, "con_haltio enter chsa %04x cmd = %02x\n", chsa, cmd);
 
-    /* terminate any command */
-    if ((uptr->u3 & CON_MSK) != 0) {            /* is unit busy */
-        uptr->u3 &= LMASK;                      /* nothing left, command complete */
-        uptr->u5 = SNS_RDY|SNS_ONLN;            /* status is online & ready */
-        sim_debug(DEBUG_CMD, &con_dev, "con_srvi HIO chsa %04x cmd = %02x\n", chsa, cmd);
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);  /* done */
-//WAS   tmxr_set_console_units (&con_unit[0], &con_unit[1]);    /* reset console I/O */
+//  if ((unit == 0) && ((uptr->CMD & 0xff00) != 0)) {   /* just return if busy */
+//      return SNS_BSY;
+//  }
+    /* terminate any input command */
+    if ((uptr->CMD & CON_MSK) != 0) {           /* is unit busy */
+        uptr->CMD &= LMASK;                     /* make non-busy */
+        uptr->SNS = SNS_RDY|SNS_ONLN;           /* status is online & ready */
+        sim_debug(DEBUG_CMD, &con_dev, "con_haltio HIO chsa %04x cmd = %02x\n", chsa, cmd);
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
+//      chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);  /* done bit 14 */ /* bad status */
+//      chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);  /* done bit 15 */ /* bad status */
         return SCPE_IOERR;
     }
-    return SCPE_OK;
+    return SCPE_OK;                             /* not busy */
 }
 #endif
 
