@@ -403,6 +403,7 @@ extern int      Mem_write_byte(int n, uint16 *data);
 extern DEVICE   dte_dev;
 extern DEVICE   lp20_dev;
 extern DEVICE   tty_dev;
+extern DEVICE   nia_dev;
 #else
 extern DEVICE   cty_dev;
 #endif
@@ -531,13 +532,19 @@ t_stat  rh_set_type(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat  rh_show_type (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat  rh_devio(uint32 dev, t_uint64 *data);
 t_addr  rh_devirq(uint32 dev, t_addr addr);
+#if KL
+void    rh20_setup(struct rh_if *rhc);
+#endif
+void    rh_setup(struct rh_if *rh, uint32 addr);
 void    rh_setattn(struct rh_if *rh, int unit);
 void    rh_error(struct rh_if *rh);
 int     rh_blkend(struct rh_if *rh);
 void    rh_setirq(struct rh_if *rh);
+void    rh_writecw(struct rh_if *rh, int nxm);
 void    rh_finish_op(struct rh_if *rh, int flags);
 int     rh_read(struct rh_if *rh);
 int     rh_write(struct rh_if *rh);
+
 
 int ten11_read (t_addr addr, t_uint64 *data);
 int ten11_write (t_addr addr, t_uint64 data);
@@ -582,6 +589,7 @@ int auxcpu_write (t_addr addr, t_uint64);
 #define NUM_DEVS_LP20   1
 #define NUM_DEVS_TTY    1
 #define NUM_LINES_TTY   40
+#define NUM_DEVS_NIA    1
 #else
 #define NUM_DEVS_RC     1
 #define NUM_DEVS_DT     1
@@ -589,6 +597,7 @@ int auxcpu_write (t_addr addr, t_uint64);
 #define NUM_DEVS_DP     2
 #define NUM_DEVS_LP20   0
 #define NUM_DEVS_TTY    0
+#define NUM_DEVS_NIA    0
 #endif
 #define NUM_DEVS_RP     4
 #define NUM_DEVS_RS     1

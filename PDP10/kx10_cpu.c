@@ -23,7 +23,7 @@
    used in advertising or otherwise to promote the sale, use or other dealings
    in this Software without prior written authorization from Richard Cornwell
 
-   cpu          KA10/KL10 central processor
+   cpu          KA10/KI10/KL10 central processor
 
 
    The 36b system family had six different implementions: PDP-6, KA10, KI10,
@@ -283,6 +283,9 @@ DEVICE *rh_devs[] = {
 #endif
 #if (NUM_DEVS_TU > 0)
     &tua_dev,
+#endif
+#if (NUM_DEVS_NIA > 0)
+    &nia_dev,
 #endif
     NULL,
 };
@@ -10275,6 +10278,7 @@ if (QBBN)
    dev_tab[024>>2] = &dev_pag;
 #endif
 
+
 /* Assign all RH10 & RH20  devices */
 rh20 = 0540;
 rh_idx = 0;
@@ -10288,9 +10292,21 @@ for (i = 0; (dptr = rh_devs[i]) != NULL; i++) {
                 sim_printf ("To many RH10 devices %s\n", sim_dname (dptr));
                 return TRUE;
             }
+#if KL
         } else if (d & RH20_DEV) {                      /* RH20, grab next device */
+#if NUM_DEVS_NIA > 0
+            /* If NIA20 installed, skip this slot */
+            if ((nia_dev.flags & DEV_DIS) == 0 && dptr != &nia_dev &&
+                rh20 == (((DIB *)nia_dev.ctxt)->dev_num & 0777))
+                rh20 += 4;
+            /* If NIA20, then assign it to it's requested address */
+            if ((nia_dev.flags & DEV_DIS) == 0 && dptr == &nia_dev)
+                d = dibp->dev_num & 0777;
+            else
+#endif
             d = rh20;
             rh20 += 4;
+#endif
         }
         dev_tab[(d >> 2)] = dibp->io;
         dev_irqv[(d >> 2)] = dibp->irq;

@@ -146,10 +146,6 @@
 */
 
 extern uint32  eb_ptr;
-void    rh20_setup(struct rh_if *rhc);
-void    rh_setup(struct rh_if *rh, uint32 addr);
-void    rh_writecw(struct rh_if *rh, int nxm);
-
 
 t_stat
 rh_set_type(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
@@ -618,12 +614,10 @@ void rh20_setup(struct rh_if *rhc)
      rhc->status &= ~(RH20_DATA_OVR|RH20_CHAN_RDY|RH20_DR_RESP|RH20_CHAN_ERR|RH20_SHRT_WC|\
                       RH20_LONG_WC|RH20_DR_EXC|RH20_SCR_FULL|PI_ENABLE|RH20_XEND);
      rhc->status |= RH20_PCR_FULL;
-//     reg = rhc->dev_read(dptr, rhc, 1);
- //    if ((reg & (DS_DRY|DS_DPR|DS_ERR)) != (DS_DRY|DS_DPR))
-  //       return;
      if (rhc->status & RH20_SBAR) {
          rhc->drive = (rhc->pbar >> 18) & 07;
-         rhc->dev_write(dptr, rhc, 5, (rhc->pbar & 0177777));
+         if (rhc->dev_write != NULL)
+             rhc->dev_write(dptr, rhc, 5, (rhc->pbar & 0177777));
          rhc->status &= ~RH20_SBAR;
      }
      if (rhc->ptcr & BIT7) {  /* If RCPL reset I/O pointers */
@@ -633,7 +627,8 @@ void rh20_setup(struct rh_if *rhc)
      /* Hold block count in cia */
      rhc->drive = (rhc->ptcr >> 18) & 07;
      rhc->cia = (rhc->ptcr >> 6) & 01777;
-     rhc->dev_write(dptr, rhc, 0, (rhc->ptcr & 077));
+     if (rhc->dev_write != NULL)
+         rhc->dev_write(dptr, rhc, 0, (rhc->ptcr & 077));
      rhc->cop = 0;
      rhc->wcr = 0;
      rhc->status &= ~RH20_CHAN_RDY;
