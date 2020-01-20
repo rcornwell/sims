@@ -146,12 +146,8 @@ extern int sim_vax_snprintf(char *buf, size_t buf_size, const char *fmt, ...);
 #ifdef USE_REGEX
 #undef USE_REGEX
 #endif
-#if defined(HAVE_PCREPOSIX_H)
-#include <pcreposix.h>
+#if defined(HAVE_PCRE_H)
 #include <pcre.h>
-#define USE_REGEX 1
-#elif defined(HAVE_REGEX_H)
-#include <regex.h>
 #define USE_REGEX 1
 #endif
 
@@ -417,8 +413,9 @@ typedef uint32          t_addr;
 #define SCPE_INVEXPR    (SCPE_BASE + 47)                /* invalid expression */
 #define SCPE_SIGTERM    (SCPE_BASE + 48)                /* SIGTERM has been received */
 #define SCPE_FSSIZE     (SCPE_BASE + 49)                /* File System size larger than disk size */
+#define SCPE_RUNTIME    (SCPE_BASE + 50)                /* Run Time Limit Exhausted */
 
-#define SCPE_MAX_ERR    (SCPE_BASE + 49)                /* Maximum SCPE Error Value */
+#define SCPE_MAX_ERR    (SCPE_BASE + 50)                /* Maximum SCPE Error Value */
 #define SCPE_KFLAG      0x10000000                      /* tti data flag */
 #define SCPE_BREAK      0x20000000                      /* tti break flag */
 #define SCPE_NOMESSAGE  0x40000000                      /* message display supression flag */
@@ -818,7 +815,8 @@ struct EXPTAB {
 #define EXP_TYP_REGEX_I         (SWMASK ('I'))      /* regular expression pattern matching should be case independent */
 #define EXP_TYP_TIME            (SWMASK ('T'))      /* halt delay is in microseconds instead of instructions */
 #if defined(USE_REGEX)
-    regex_t             regex;                          /* compiled regular expression */
+    pcre                *regex;                         /* compiled regular expression */
+    int                 re_nsub;                        /* regular expression sub expression count */
 #endif
     char                *act;                           /* action string */
     };
