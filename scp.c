@@ -480,6 +480,7 @@ t_stat show_version (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char 
 t_stat show_default (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
 t_stat show_break (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
 t_stat show_on (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
+t_stat show_runlimit (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
 t_stat sim_show_send (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
 t_stat sim_show_expect (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
 t_stat show_device (FILE *st, DEVICE *dptr, int32 flag);
@@ -545,6 +546,7 @@ t_stat dep_addr (int32 flag, const char *cptr, t_addr addr, DEVICE *dptr,
     UNIT *uptr, int32 dfltinc);
 void fprint_fields (FILE *stream, t_value before, t_value after, BITFIELD* bitdefs);
 t_stat step_svc (UNIT *ptr);
+t_stat runlimit_svc (UNIT *ptr);
 t_stat expect_svc (UNIT *ptr);
 t_stat flush_svc (UNIT *ptr);
 t_stat shift_args (char *do_arg[], size_t arg_count);
@@ -557,6 +559,7 @@ t_stat sim_show_asynch (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST ch
 t_stat do_cmd_label (int32 flag, CONST char *cptr, CONST char *label);
 void int_handler (int signal);
 t_stat set_prompt (int32 flag, CONST char *cptr);
+t_stat set_runlimit (int32 flag, CONST char *cptr);
 t_stat sim_set_asynch (int32 flag, CONST char *cptr);
 static const char *_get_dbg_verb (uint32 dbits, DEVICE* dptr, UNIT *uptr);
 static t_stat sim_library_unit_tests (void);
@@ -596,6 +599,12 @@ int32 sim_brk_lnt = 0;
 int32 sim_brk_ins = 0;
 int32 sim_quiet = 0;
 int32 sim_step = 0;
+int32 sim_runlimit = 0;
+int32 sim_runlimit_initial = 0;
+double sim_runlimit_d = 0.0;
+double sim_runlimit_d_initial = 0.0;
+int32 sim_runlimit_switches = 0;
+t_bool sim_runlimit_enabled = FALSE;
 char *sim_sub_instr = NULL;         /* Copy of pre-substitution buffer contents */
 char *sim_sub_instr_buf = NULL;     /* Buffer address that substitutions were saved in */
 size_t sim_sub_instr_size = 0;      /* substitution buffer size */
@@ -661,6 +670,31 @@ DEVICE sim_step_dev = {
     NULL, DEV_NOSAVE, 0, 
     NULL, NULL, NULL, NULL, NULL, NULL,
     sim_int_step_description};
+
+static const char *sim_int_runlimit_description (DEVICE *dptr)
+{
+return "Run time limit facility";
+}
+
+static t_stat sim_int_runlimit_reset (DEVICE *dptr)
+{
+if (sim_runlimit_enabled) {
+    if (sim_runlimit_switches & SWMASK ('T'))
+        return sim_activate_after_d (dptr->units, sim_runlimit_d);
+    else
+        return sim_activate (dptr->units, sim_runlimit);
+    }
+return SCPE_OK;
+}
+
+static UNIT sim_runlimit_unit = { UDATA (&runlimit_svc, UNIT_IDLE, 0) };
+DEVICE sim_runlimit_dev = {
+    "INT-RUNLIMIT", &sim_runlimit_unit, NULL, NULL, 
+    1, 0, 0, 0, 0, 0, 
+    NULL, NULL, &sim_int_runlimit_reset, NULL, NULL, NULL, 
+    NULL, DEV_NOSAVE, 0, 
+    NULL, NULL, NULL, NULL, NULL, NULL,
+    sim_int_runlimit_description};
 
 static const char *sim_int_expect_description (DEVICE *dptr)
 {
@@ -764,6 +798,7 @@ const struct scp_error {
          {"INVEXPR", "invalid expression"},
          {"SIGTERM", "SIGTERM received"},
          {"FSSIZE",  "File System size larger than disk size"},
+         {"RUNTIME", "Run time limit exhausted"},
     };
 
 const size_t size_map[] = { sizeof (int8),
@@ -1072,6 +1107,25 @@ static const char simh_help[] =
       " \"SET NODEBUG\" commands.  Additionally, support is provided that is\n"
       " equivalent to the \"SET <dev> DEBUG=opt1{;opt2}\" and\n"
       " \"SET <dev> NODEBUG=opt1{;opt2}\" commands.\n\n"
+#define HLP_RUNLIMIT      "*Commands Stopping_The_Simulator User_Specified_Stop_Conditions RUNLIMIT"
+      "4RUNLIMIT\n"
+      " A simulator user may want to limit the maximum execution time that a\n"
+      " simulator may run for.  This might be appropriate to limit a runaway\n"
+      " diagnostic which didn't achieve explicit success or failure within\n"
+      " some user specified time.  The RUNLIMIT command provides ways to\n"
+      " limit execution.\n\n"
+      "++RUNLIMIT n {CYCLES|MICROSECONDS|SECONDS|MINUTES|HOURS}\n"
+      "++NORUNLIMIT\n\n"
+      "  Equivalently:\n\n"
+      "++SET RUNLIMIT n {CYCLES|MICROSECONDS|SECONDS|MINUTES|HOURS}\n"
+      "++SET NORUNLIMIT\n\n"
+      " The run limit state can be examined with:\n\n"
+      "++SHOW RUNLIMIT\n\n"
+      " If the units of the run limit are not specified, the default units are\n"
+      " cycles.  Once an execution run limit has beenn reached, any subsequent\n"
+      " GO, RUN, CONTINUE, STEP or BOOT commands will cause the simulator to\n"
+      " exit.  A previously defined RUNLIMIT can be cleared with the NORUNLIMIT\n"
+      " command or the establishment of a new run limit.\n"
        /***************** 80 character line width template *************************/
       "2Connecting and Disconnecting Devices\n"
       " Except for main memory and network devices, units are simulated as\n"
@@ -1485,6 +1539,7 @@ static const char simh_help[] =
       "+sh{ow} clocks               show calibrated timer information\n"
       "+sh{ow} throttle             show throttle info\n"
       "+sh{ow} on                   show on condition actions\n"
+      "+sh{ow} runlimit             show execution limit states\n"
       "+h{elp} <dev> show           displays the device specific show commands\n"
       "++++++++                     available\n"
 #define HLP_SHOW_CONFIG         "*Commands SHOW"
@@ -1510,6 +1565,7 @@ static const char simh_help[] =
 #define HLP_SHOW_VIDEO          "*Commands SHOW"
 #define HLP_SHOW_CLOCKS         "*Commands SHOW"
 #define HLP_SHOW_ON             "*Commands SHOW"
+#define HLP_SHOW_RUNLIMIT       "*Commands SHOW"
 #define HLP_SHOW_SEND           "*Commands SHOW"
 #define HLP_SHOW_EXPECT         "*Commands SHOW"
 #define HLP_HELP                "*Commands HELP"
@@ -1802,6 +1858,8 @@ static const char simh_help[] =
       " Invalid remote console command\n"
       "5 AMBREG\n"
       " Ambiguous register\n"
+      "5 RUNTIME\n"
+      " Run time limit exhausted\n"
 #define HLP_SHIFT       "*Commands Executing_Command_Files SHIFT"
       "3SHIFT\n"
       "++shift                    shift the command file's positional parameters\n"
@@ -2061,15 +2119,11 @@ static const char simh_help[] =
       " as a regular expression applied to the output data stream.  This regular\n"
       " expression may contain parentheses delimited sub-groups.\n\n"
        /***************** 80 character line width template *************************/
-#if defined (HAVE_PCREPOSIX_H)
+#if defined (HAVE_PCRE_H)
       " The syntax of the regular expressions available are those supported by\n"
       " the Perl Compatible Regular Expression package (aka PCRE).  As the name\n"
       " implies, the syntax is generally the same as Perl regular expressions.\n"
       " See http://perldoc.perl.org/perlre.html for more details\n"
-#elif defined (HAVE_REGEX_H)
-      " The syntax of the regular expressions available are those supported by\n"
-      " your local system's Regular Expression library using the Extended POSIX\n"
-      " Regular Expressiona\n"
 #else
       " Regular expression support is not currently available on your environment.\n"
       " This simulator could use regular expression support provided by the\n"
@@ -2393,6 +2447,8 @@ static CTAB cmd_table[] = {
 #if defined(USE_SIM_VIDEO)
     { "SCREENSHOT", &screenshot_cmd,0,          HLP_SCREENSHOT, NULL, NULL },
 #endif
+    { "RUNLIMIT",   &runlimit_cmd,  1,          HLP_RUNLIMIT,   NULL, NULL },
+    { "NORUNLIMIT", &runlimit_cmd,  0,          HLP_RUNLIMIT,   NULL, NULL },
     { NULL,         NULL,           0,          NULL,           NULL, NULL }
     };
 
@@ -2425,6 +2481,8 @@ static CTAB set_glob_tab[] = {
     { "QUIET",      &set_quiet,                 1, HLP_SET_QUIET },
     { "NOQUIET",    &set_quiet,                 0, HLP_SET_QUIET },
     { "PROMPT",     &set_prompt,                0, HLP_SET_PROMPT },
+    { "RUNLIMIT",   &set_runlimit,              1, HLP_RUNLIMIT },
+    { "NORUNLIMIT", &set_runlimit,              0, HLP_RUNLIMIT },
     { NULL,         NULL,                       0 }
     };
 
@@ -2478,6 +2536,7 @@ static SHTAB show_glob_tab[] = {
     { "SEND",           &sim_show_send,             0, HLP_SHOW_SEND },
     { "EXPECT",         &sim_show_expect,           0, HLP_SHOW_EXPECT },
     { "ON",             &show_on,                   0, HLP_SHOW_ON },
+    { "RUNLIMIT",       &show_runlimit,             0, HLP_SHOW_RUNLIMIT },
     { NULL,             NULL,                       0 }
     };
 
@@ -2600,6 +2659,7 @@ sim_register_internal_device (&sim_scp_dev);
 sim_register_internal_device (&sim_expect_dev);
 sim_register_internal_device (&sim_step_dev);
 sim_register_internal_device (&sim_flush_dev);
+sim_register_internal_device (&sim_runlimit_dev);
 
 if ((stat = sim_ttinit ()) != SCPE_OK) {
     fprintf (stderr, "Fatal terminal initialization error\n%s\n",
@@ -5899,14 +5959,21 @@ if (flag) {
 #undef S_xstr
 #endif
 #endif
+#if defined (SIM_BUILD_TOOL)
+#define S_xstr(a) S_str(a)
+#define S_str(a) #a
+    fprintf (st, "\n        Build Tool: %s", S_xstr(SIM_BUILD_TOOL));
+#undef S_str
+#undef S_xstr
+#else
+    fprintf (st, "\n        Build Tool: undefined (probably cmake)");
+#endif
     fprintf (st, "\n        Memory Access: %s Endian", sim_end ? "Little" : "Big");
     fprintf (st, "\n        Memory Pointer Size: %d bits", (int)sizeof(dptr)*8);
     fprintf (st, "\n        %s", sim_toffset_64 ? "Large File (>2GB) support" : "No Large File support");
     fprintf (st, "\n        SDL Video support: %s", vid_version());
-#if defined (HAVE_PCREPOSIX_H)
+#if defined (HAVE_PCRE_H)
     fprintf (st, "\n        PCRE RegEx (Version %s) support for EXPECT commands", pcre_version());
-#elif defined (HAVE_REGEX_H)
-    fprintf (st, "\n        RegEx support for EXPECT commands");
 #else
     fprintf (st, "\n        No RegEx support for EXPECT commands");
 #endif
@@ -6054,7 +6121,6 @@ t_stat show_queue (FILE *st, DEVICE *dnotused, UNIT *unotused, int32 flag, CONST
 {
 DEVICE *dptr;
 UNIT *uptr;
-int32 accum;
 MEMFILE buf;
 
 memset (&buf, 0, sizeof (buf));
@@ -6069,7 +6135,6 @@ else {
 
     fprintf (st, "%s event queue status, time = %.0f, executing %s instructions/sec\n",
              sim_name, sim_time, sim_fmt_numeric (inst_per_sec));
-    accum = 0;
     for (uptr = sim_clock_queue; uptr != QUEUE_LIST_END; uptr = uptr->next) {
         if (uptr == &sim_step_unit)
             fprintf (st, "  Step timer");
@@ -6085,16 +6150,15 @@ else {
                 else
                     fprintf (st, "  Unknown");
         if (inst_per_sec != 0.0)
-            tim = sim_fmt_secs(((accum + uptr->time) / sim_timer_inst_per_sec ()) + (uptr->usecs_remaining / 1000000.0));
+            tim = sim_fmt_secs(((_sim_activate_queue_time (uptr) - 1) / sim_timer_inst_per_sec ()) + (uptr->usecs_remaining / 1000000.0));
         if (uptr->usecs_remaining)
-            fprintf (st, " at %d plus %.0f usecs%s%s%s%s\n", accum + uptr->time, uptr->usecs_remaining,
+            fprintf (st, " at %d plus %.0f usecs%s%s%s%s\n", _sim_activate_queue_time (uptr) - 1, uptr->usecs_remaining,
                                             (*tim) ? " (" : "", tim, (*tim) ? " total)" : "",
                                             (uptr->flags & UNIT_IDLE) ? " (Idle capable)" : "");
         else
-            fprintf (st, " at %d%s%s%s%s\n", accum + uptr->time, 
+            fprintf (st, " at %d%s%s%s%s\n", _sim_activate_queue_time (uptr) - 1, 
                                             (*tim) ? " (" : "", tim, (*tim) ? ")" : "",
                                             (uptr->flags & UNIT_IDLE) ? " (Idle capable)" : "");
-        accum = accum + uptr->time;
         }
     }
 sim_show_clock_queues (st, dnotused, unotused, flag, cptr);
@@ -6822,6 +6886,108 @@ if (dptr == NULL)                                       /* found it? */
 if (dptr->reset != NULL)
     return dptr->reset (dptr);
 else return SCPE_OK;
+}
+
+t_stat runlimit_cmd (int32 flag, CONST char *cptr)
+{
+char gbuf[CBUFSIZE];
+int32 num;
+t_stat r;
+double usec_factor = 1.0;
+
+GET_SWITCHES (cptr);                                    /* get switches */
+if (0 == flag) {
+    if (*cptr)
+        return sim_messagef (SCPE_ARG, "NORUNLIMIT expects no arguments: %s\n", cptr);
+    sim_runlimit = 0;
+    sim_runlimit_switches = 0;
+    sim_runlimit_enabled = FALSE;
+    sim_cancel (&sim_runlimit_unit);
+    return SCPE_OK;
+    }
+
+cptr = get_glyph (cptr, gbuf, 0);               /* get next glyph */
+num = (int32) get_uint (gbuf, 10, INT_MAX, &r);
+if ((r != SCPE_OK) || (num == 0))               /* error? */
+    return sim_messagef (SCPE_ARG, "Invalid argument: %s\n", gbuf);
+cptr = get_glyph (cptr, gbuf, 0);               /* get next glyph */
+if ((gbuf[0] == '\0') ||
+    (MATCH_CMD (gbuf, "CYCLES") == 0))
+    sim_switches &= ~SWMASK ('T');
+else {
+    int i;
+    struct {
+        const char *name;
+        double usec_factor;
+        } time_units[] = {
+            {"MICROSECONDS",             1.0},
+            {"USECONDS",                 1.0},
+            {"SECONDS",            1000000.0},
+            {"MINUTES",         60*1000000.0},
+            {"HOURS",        60*60*1000000.0},
+            {NULL,                       0.0}};
+
+    for (i=0; time_units[i].name; i++) {
+        if (MATCH_CMD (gbuf, time_units[i].name) == 0) {
+            sim_switches |= SWMASK ('T');
+            usec_factor = time_units[i].usec_factor;
+            break;
+            }
+        }
+    if (time_units[i].name == NULL)
+        return sim_messagef (SCPE_2MARG, "Too many arguments: %s %s\n", gbuf, cptr);
+    }
+if (*cptr)
+    return sim_messagef (SCPE_2MARG, "Too many arguments: %s\n", cptr);
+sim_runlimit_enabled = TRUE;
+sim_cancel (&sim_runlimit_unit);
+sim_runlimit_switches = sim_switches;
+if (sim_runlimit_switches & SWMASK ('T')) {
+    sim_runlimit_d_initial = sim_runlimit_d = num * usec_factor;
+    return sim_activate_after_d (&sim_runlimit_unit, sim_runlimit_d);
+    }
+else {
+    sim_runlimit_initial = sim_runlimit = num;
+    return sim_activate (&sim_runlimit_unit, sim_runlimit);
+    }
+}
+
+t_stat set_runlimit (int32 flag, CONST char *cptr)
+{
+return runlimit_cmd (flag, cptr);
+}
+
+t_stat show_runlimit (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr)
+{
+if (sim_runlimit_enabled) {
+    if (sim_runlimit_switches & SWMASK ('T')) {
+        double inst_per_sec = sim_timer_inst_per_sec ();
+
+        if (sim_runlimit_d_initial != sim_runlimit_d) {
+            fprintf (st, "%s initially, ", sim_fmt_secs (sim_runlimit_d_initial / 1000000.0));
+            if (sim_is_active (&sim_runlimit_unit))
+                fprintf (st, "and %s remaining\n", sim_fmt_secs (sim_runlimit_d / 1000000.0));
+            else
+                fprintf (st, "expired now\n");
+            }
+        else
+            fprintf (st, "%s\n", sim_fmt_secs (sim_runlimit_d_initial / 1000000.0));
+        }
+    else {
+        if (sim_runlimit_initial != sim_runlimit) {
+            fprintf (st, "%d cycles initially, ", sim_runlimit_initial);
+            if (sim_is_active (&sim_runlimit_unit))
+                fprintf (st, "and %d cycles remaining\n", sim_activate_time (&sim_runlimit_unit));
+            else
+                fprintf (st, "expired now\n");
+            }
+        else
+            fprintf (st, "%d cycles\n", sim_runlimit_initial);
+        }
+    }
+else
+    fprintf (st, "Run Limit Disabled\n");
+return SCPE_OK;
 }
 
 /* Reset devices start..end
@@ -7947,6 +8113,11 @@ t_stat r;
 DEVICE *dptr;
 UNIT *uptr;
 
+if (sim_runlimit_enabled &&                             /* If the run limit has been hit? */
+    (!sim_is_active (&sim_runlimit_unit))) {
+    sim_messagef (SCPE_RUNTIME, "Execution limit exceeded, can't proceed.  Exiting...\n");
+    exit (SCPE_RUNTIME);                                /* Execution can't proceed */
+    }
 GET_SWITCHES (cptr);                                    /* get switches */
 sim_step = 0;
 if ((flag == RU_RUN) || (flag == RU_GO)) {              /* run or go */
@@ -8165,6 +8336,13 @@ if ((SCPE_BARE_STATUS(r) == SCPE_STOP) &&
     sigterm_received)
     r = SCPE_SIGTERM;
 
+if (sim_runlimit_enabled) {
+    if (sim_runlimit_switches & SWMASK ('T'))
+        sim_runlimit_d = sim_activate_time_usecs (&sim_runlimit_unit);
+    else
+        sim_runlimit = sim_activate_time (&sim_runlimit_unit) - 1;
+    }
+
 if ((SCPE_BARE_STATUS(r) == SCPE_STOP) &&               /* WRU exit from sim_instr() */
     (sim_on_actions[sim_do_depth][SCPE_STOP] == NULL) &&/* without a handler for a STOP condition */
     (sim_on_actions[sim_do_depth][0] == NULL))
@@ -8293,6 +8471,14 @@ fprint_stopped_gen (st, v, sim_PC, sim_dflt_dev);
 t_stat step_svc (UNIT *uptr)
 {
 return SCPE_STEP;
+}
+
+/* Unit service for run for timeout, originally scheduled by RUNFOR n command
+   Return runlimit timeout SCP code, will cause simulation to stop */
+
+t_stat runlimit_svc (UNIT *uptr)
+{
+return SCPE_RUNTIME;
 }
 
 /* Unit service to facilitate expect matching to stop simulation.
@@ -10890,13 +11076,14 @@ do {
         }
     AIO_EVENT_COMPLETE(uptr, reason);
     bare_reason = SCPE_BARE_STATUS (reason);
-    if ((bare_reason != SCPE_OK)     &&  /* Provide context for unexpected errors */
-        (bare_reason >= SCPE_BASE)   &&
-        (bare_reason != SCPE_EXPECT) &&
-        (bare_reason != SCPE_REMOTE) &&
-        (bare_reason != SCPE_MTRLNT) && 
-        (bare_reason != SCPE_STOP)   && 
-        (bare_reason != SCPE_STEP)   && 
+    if ((bare_reason != SCPE_OK)      && /* Provide context for unexpected errors */
+        (bare_reason >= SCPE_BASE)    &&
+        (bare_reason != SCPE_EXPECT)  &&
+        (bare_reason != SCPE_REMOTE)  &&
+        (bare_reason != SCPE_MTRLNT)  && 
+        (bare_reason != SCPE_STOP)    && 
+        (bare_reason != SCPE_STEP)    && 
+        (bare_reason != SCPE_RUNTIME) && 
         (bare_reason != SCPE_EXIT))
         sim_messagef (reason, "\nUnexpected internal error while processing event for %s which returned %d - %s\n", sim_uname (uptr), reason, sim_error_text (reason));
     } while ((reason == SCPE_OK) && 
@@ -11136,7 +11323,7 @@ return (((uptr->next) || AIO_IS_ACTIVE(uptr) || ((uptr->dynflags & UNIT_TMR_UNIT
         result =        absolute activation time + 1, 0 if inactive
 */
 
-int32 _sim_activate_time (UNIT *uptr)
+int32 _sim_activate_queue_time (UNIT *uptr)
 {
 UNIT *cptr;
 int32 accum;
@@ -11150,8 +11337,17 @@ for (cptr = sim_clock_queue; cptr != QUEUE_LIST_END; cptr = cptr->next) {
     else
         accum = accum + cptr->time;
     if (cptr == uptr)
-        return accum + 1 + (int32)((uptr->usecs_remaining * sim_timer_inst_per_sec ()) / 1000000.0);
+        return accum + 1;
     }
+return 0;
+}
+
+int32 _sim_activate_time (UNIT *uptr)
+{
+int32 accum = _sim_activate_queue_time (uptr);
+
+if (accum)
+    return accum + (int32)((uptr->usecs_remaining * sim_timer_inst_per_sec ()) / 1000000.0);
 return 0;
 }
 
@@ -11977,7 +12173,7 @@ if (switches & EXP_TYP_REGEX) {
 
     memcpy (match_buf, match+1, strlen(match)-2);       /* extract string without surrounding quotes */
     match_buf[strlen(match)-2] = '\0';
-    re = pcre_compile (match_buf, (switches & EXP_TYP_REGEX_I) ? PCRE_CASELESS : 0, &errmsg, &erroffset, NULL);
+    re = pcre_compile ((char *)match_buf, (switches & EXP_TYP_REGEX_I) ? PCRE_CASELESS : 0, &errmsg, &erroffset, NULL);
     if (re == NULL) {
         sim_messagef (SCPE_ARG, "Regular Expression Error: %s\n", errmsg);
         free (match_buf);
