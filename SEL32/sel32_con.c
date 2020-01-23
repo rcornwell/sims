@@ -301,6 +301,7 @@ t_stat con_srvo(UNIT *uptr) {
     int         unit = (uptr - con_unit);           /* unit 0 is read, unit 1 is write */
     int         cmd = uptr->CMD & CON_MSK;
     uint8       ch, cp;
+    static uint32 lastch = 0;
 
     sim_debug(DEBUG_DETAIL, &con_dev, "con_srvo enter chsa %04x cmd = %02x\n", chsa, cmd);
     if (cmd == 0x0C) {                              /* unknown has to do nothing */
@@ -321,7 +322,6 @@ t_stat con_srvo(UNIT *uptr) {
         return SCPE_OK;
     }
 
-    static uint32 lastch = 0;
     if ((cmd == CON_WR) || (cmd == CON_RWD)) {
         /* Write to device */
         if (chan_read_byte(chsa, &ch)) {    /* get byte from memory */
