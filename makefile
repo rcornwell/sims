@@ -1136,10 +1136,14 @@ else
   ifneq (3,$(GCC_MAJOR_VERSION))
     ifeq (,$(GCC_OPTIMIZERS_CMD))
       GCC_OPTIMIZERS_CMD = ${GCC} --help=optimizers
+      GCC_COMMON_CMD = ${GCC} --help=common
     endif
   endif
   ifneq (,$(GCC_OPTIMIZERS_CMD))
     GCC_OPTIMIZERS = $(shell $(GCC_OPTIMIZERS_CMD))
+  endif
+  ifneq (,$(GCC_COMMON_CMD))
+    GCC_OPTIMIZERS += $(shell $(GCC_COMMON_CMD))
   endif
   ifneq (,$(findstring $(GCC_VERSION),$(LTO_EXCLUDE_VERSIONS)))
     NO_LTO = 1
@@ -1161,6 +1165,9 @@ else
   endif
   ifneq (,$(findstring -fstrict-overflow,$(GCC_OPTIMIZERS)))
     CFLAGS_O += -fno-strict-overflow
+  endif
+  ifneq (,$(findstring -fcommon,$(GCC_OPTIMIZERS))$(findstring -fno-common,$(GCC_OPTIMIZERS)))
+    CFLAGS_O += -fcommon
   endif
   ifeq (,$(NO_LTO))
     ifneq (,$(findstring -flto,$(GCC_OPTIMIZERS)))
@@ -1884,10 +1891,36 @@ BESM6 = ${BESM6D}/besm6_cpu.c ${BESM6D}/besm6_sys.c ${BESM6D}/besm6_mmu.c \
         ${BESM6D}/besm6_punch.c ${BESM6D}/besm6_punchcard.c
 
 ifneq (,$(BESM6_BUILD))
+    BESM6_OPT = -I ${BESM6D} -DUSE_INT64 $(BESM6_PANEL_OPT)
     ifneq (,$(and ${SDLX_CONFIG},${VIDEO_LDFLAGS}, $(or $(and $(call find_include,SDL2/SDL_ttf),$(call find_lib,SDL2_ttf)), $(and $(call find_include,SDL/SDL_ttf),$(call find_lib,SDL_ttf)))))
         FONTPATH += /usr/share/fonts /Library/Fonts /usr/lib/jvm /System/Library/Frameworks/JavaVM.framework/Versions C:/Windows/Fonts
         FONTPATH := $(dir $(foreach dir,$(strip $(FONTPATH)),$(wildcard $(dir)/.)))
         FONTNAME += DejaVuSans.ttf LucidaSansRegular.ttf FreeSans.ttf AppleGothic.ttf tahoma.ttf
+#cmake-insert:set(BESM6_FONT)
+#cmake-insert:foreach (fdir IN ITEMS
+#cmake-insert:            "/usr/share/fonts" "/Library/Fonts" "/usr/lib/jvm"
+#cmake-insert:            "/System/Library/Frameworks/JavaVM.framework/Versions"
+#cmake-insert:            "$ENV{WINDIR}/Fonts")
+#cmake-insert:    foreach (font IN ITEMS
+#cmake-insert:                "DejaVuSans.ttf" "LucidaSansRegular.ttf" "FreeSans.ttf" "AppleGothic.ttf" "tahoma.ttf")
+#cmake-insert:        if (EXISTS ${fdir})
+#cmake-insert:            file(GLOB_RECURSE found_font ${fdir}/${font})
+#cmake-insert:            if (found_font)
+#cmake-insert:                get_filename_component(fontfile ${found_font} ABSOLUTE)
+#cmake-insert:                list(APPEND BESM6_FONT ${fontfile})
+#cmake-insert:            endif ()
+#cmake-insert:        endif ()
+#cmake-insert:    endforeach()
+#cmake-insert:endforeach()
+#cmake-insert:
+#cmake-insert:if (NOT BESM6_FONT)
+#cmake-insert:    message("No font file available, BESM-6 video panel disabled")
+#cmake-insert:    set(BESM6_PANEL_OPT)
+#cmake-insert:endif ()
+#cmake-insert:
+#cmake-insert:if (BESM6_FONT AND WITH_VIDEO)
+#cmake-insert:    list(GET BESM6_FONT 0 BESM6_FONT)
+#cmake-insert:endif ()
         $(info font paths are: $(FONTPATH))
         $(info font names are: $(FONTNAME))
         find_fontfile = $(strip $(firstword $(foreach dir,$(strip $(FONTPATH)),$(wildcard $(dir)/$(1))$(wildcard $(dir)/*/$(1))$(wildcard $(dir)/*/*/$(1))$(wildcard $(dir)/*/*/*/$(1)))))
@@ -1937,13 +1970,11 @@ ifneq (,$(BESM6_BUILD))
     else ifneq (,$(and $(findstring sdl2,${VIDEO_LDFLAGS}),$(call find_include,SDL2/SDL_ttf),$(call find_lib,SDL2_ttf)))
         $(info using libSDL2_ttf: $(call find_lib,SDL2_ttf) $(call find_include,SDL2/SDL_ttf))
         $(info ***)
-        BESM6_OPT = -I ${BESM6D} -DFONTFILE=${FONTFILE} -DUSE_INT64 ${VIDEO_CCDEFS} ${VIDEO_LDFLAGS} -lSDL2_ttf
+        BESM6_PANEL_OPT = -DFONTFILE=${FONTFILE} ${VIDEO_CCDEFS} ${VIDEO_LDFLAGS} -lSDL2_ttf
     else ifneq (,$(and $(call find_include,SDL/SDL_ttf),$(call find_lib,SDL_ttf)))
         $(info using libSDL_ttf: $(call find_lib,SDL_ttf) $(call find_include,SDL/SDL_ttf))
         $(info ***)
-        BESM6_OPT = -I ${BESM6D} -DFONTFILE=${FONTFILE} -DUSE_INT64 ${VIDEO_CCDEFS} ${VIDEO_LDFLAGS} -lSDL_ttf
-    else
-        BESM6_OPT = -I ${BESM6D} -DUSE_INT64 
+        BESM6_PANEL_OPT = -DFONTFILE=${FONTFILE} ${VIDEO_CCDEFS} ${VIDEO_LDFLAGS} -lSDL_ttf
     endif
 endif
 
@@ -1982,7 +2013,7 @@ PDP6 = ${PDP6D}/kx10_cpu.c ${PDP6D}/kx10_sys.c ${PDP6D}/kx10_cty.c \
 	${PDP6D}/kx10_lp.c ${PDP6D}/kx10_pt.c ${PDP6D}/kx10_cr.c \
 	${PDP6D}/kx10_cp.c ${PDP6D}/pdp6_dct.c ${PDP6D}/pdp6_dtc.c \
 	${PDP6D}/pdp6_mtc.c ${PDP6D}/pdp6_dsk.c ${PDP6D}/pdp6_dcs.c \
-	${PDP6D}/kx10_dpy.c ${DISPLAYL} $(DISPLAY340)
+	${PDP6D}/kx10_dpy.c ${DISPLAYL} ${DISPLAY340}
 PDP6_OPT = -DPDP6=1 -DUSE_INT64 -I ${PDP6D} -DUSE_SIM_CARD ${DISPLAY_OPT} ${PDP6_DISPLAY_OPT}
 
 KA10D = ${SIMHD}/PDP10
@@ -2001,7 +2032,7 @@ KA10 = ${KA10D}/kx10_cpu.c ${KA10D}/kx10_sys.c ${KA10D}/kx10_df.c \
 	$(KA10D)/ka10_pmp.c ${KA10D}/ka10_dkb.c ${KA10D}/pdp6_dct.c \
 	${KA10D}/pdp6_dtc.c ${KA10D}/pdp6_mtc.c ${KA10D}/pdp6_dsk.c \
 	${KA10D}/pdp6_dcs.c ${KA10D}/ka10_dpk.c ${KA10D}/kx10_dpy.c \
-	${PDP10D}/ka10_ai.c ${DISPLAYL} $(DISPLAY340)
+	${PDP10D}/ka10_ai.c ${DISPLAYL} ${DISPLAY340}
 KA10_OPT = -DKA=1 -DUSE_INT64 -I ${KA10D} -DUSE_SIM_CARD ${NETWORK_OPT} ${DISPLAY_OPT} ${KA10_DISPLAY_OPT}
 ifneq (${PANDA_LIGHTS},)
 # ONLY for Panda display.
@@ -2020,7 +2051,7 @@ KI10 = ${KI10D}/kx10_cpu.c ${KI10D}/kx10_sys.c ${KI10D}/kx10_df.c \
 	${KI10D}/kx10_rp.c ${KI10D}/kx10_rc.c \
 	${KI10D}/kx10_dt.c ${KI10D}/kx10_dk.c ${KI10D}/kx10_cr.c \
 	${KI10D}/kx10_cp.c ${KI10D}/kx10_tu.c ${KI10D}/kx10_rs.c \
-	${KI10D}/kx10_imp.c ${KI10D}/kx10_dpy.c ${DISPLAYL} $(DISPLAY340)
+	${KI10D}/kx10_imp.c ${KI10D}/kx10_dpy.c ${DISPLAYL} ${DISPLAY340}
 KI10_OPT = -DKI=1 -DUSE_INT64 -I ${KI10D} -DUSE_SIM_CARD ${NETWORK_OPT} ${DISPLAY_OPT} ${KI10_DISPLAY_OPT}
 ifneq (${PANDA_LIGHTS},)
 # ONLY for Panda display.
