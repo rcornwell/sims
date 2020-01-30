@@ -296,7 +296,7 @@ typedef struct dib {
 */
 
 #define     MAX_CHAN        3
-#define     SUB_CHANS       128
+#define     SUB_CHANS       192
 
 void post_extirq();
 

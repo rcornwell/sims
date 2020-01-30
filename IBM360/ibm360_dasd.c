@@ -246,6 +246,8 @@ t_stat              dasd_detach(UNIT *);
 t_stat              dasd_boot(int32, DEVICE *);
 t_stat              dasd_set_type(UNIT * uptr, int32 val, CONST char *cptr,
                                  void *desc);
+t_stat              dasd_setd_type(UNIT * uptr, int32 val, CONST char *cptr,
+                                 void *desc);
 t_stat              dasd_get_type(FILE * st, UNIT * uptr, int32 v,
                                  CONST void *desc);
 t_stat              dasd_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
@@ -255,7 +257,9 @@ const char          *dasd_description (DEVICE *dptr);
 MTAB                dasd_mod[] = {
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "TYPE", "TYPE",
      &dasd_set_type, &dasd_get_type, NULL, "Type of disk"},
-    {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "DEV", "DEV", &set_dev_addr,
+    {MTAB_XTD | MTAB_VDV | MTAB_VALR, 0, NULL, "MODEL",
+     &dasd_setd_type, NULL, NULL, "Set all drives to type"},
+    {MTAB_XTD | MTAB_VDV | MTAB_VALR, 0, "DEV", "DEV", &set_dev_addr,
         &show_dev_addr, NULL},
     {0}
 };
@@ -1769,7 +1773,7 @@ dasd_boot(int32 unit_num, DEVICE * dptr)
 t_stat
 dasd_set_type(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 {
-    int                 i, u;
+    int                 i;
 
     if (cptr == NULL)
         return SCPE_ARG;
@@ -1782,6 +1786,31 @@ dasd_set_type(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
             uptr->flags &= ~UNIT_TYPE;
             uptr->flags |= SET_TYPE(i);
             uptr->capac = disk_type[i].bpt * disk_type[i].heads * disk_type[i].cyl;
+            return SCPE_OK;
+        }
+    }
+    return SCPE_ARG;
+}
+
+t_stat
+dasd_setd_type(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
+{
+    int                 i, u;
+
+    if (cptr == NULL)
+        return SCPE_ARG;
+    if (uptr == NULL)
+        return SCPE_IERR;
+    if (uptr->flags & UNIT_ATT)
+        return SCPE_ALATT;
+    for (i = 0; disk_type[i].name != 0; i++) {
+        if (strcmp(disk_type[i].name, cptr) == 0) {
+            for (u = 0; u < 8; u++) {
+                uptr->flags &= ~UNIT_TYPE;
+                uptr->flags |= SET_TYPE(i);
+                uptr->capac = disk_type[i].bpt * disk_type[i].heads * disk_type[i].cyl;
+                uptr++;
+            }
             return SCPE_OK;
         }
     }

@@ -279,6 +279,7 @@ cdr_detach(UNIT * uptr)
     if (uptr->up7 != 0)
         free(uptr->up7);
     uptr->up7 = 0;
+    uptr->u5 = 0;
     return sim_card_detach(uptr);
 }
 

@@ -207,7 +207,7 @@ cdp_srv(UNIT *uptr) {
         if (uptr->u3 & CDP_CARD) {
             uptr->u3 &= ~(CDP_CMDMSK);
             chan_end(addr, SNS_CHNEND);
-            sim_activate(uptr, 1000);
+            sim_activate(uptr, 10000);
         } else
             sim_activate(uptr, 10);
     }

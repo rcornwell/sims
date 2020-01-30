@@ -327,7 +327,7 @@ loop:
     /* Copy SLI indicator on CD command */
     if ((ccw_flags[chan] & (FLAG_CD|FLAG_SLI)) == (FLAG_CD|FLAG_SLI))
          word |= (FLAG_SLI<<16);
-    ccw_flags[chan] = (word >> 16) & 0xffff;
+    ccw_flags[chan] = (word >> 16) & 0xff00;
     chan_byte[chan] = BUFF_EMPTY;
     /* Check invalid count */
     if (ccw_count[chan] == 0) {
@@ -1046,14 +1046,14 @@ set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
         dev_unit[devaddr] = dibp;
         uptr->u3 &= ~UNIT_ADDR(0x7ff);
         uptr->u3 |= UNIT_ADDR(devaddr);
-        fprintf(stderr, "Set dev %x\n\r", GET_UADDR(uptr->u3));
+        fprintf(stderr, "Set dev %s %x\n\r", dptr->name, GET_UADDR(uptr->u3));
     } else {
+        fprintf(stderr, "Set dev %s0 %x\n\r", dptr->name, GET_UADDR(uptr->u3));
         for (i = 0; i < dibp->numunits; i++)  {
              dev_unit[devaddr + i] = dibp;
              uptr = &((dibp->units)[i]);
              uptr->u3 &= ~UNIT_ADDR(0x7ff);
              uptr->u3 |= UNIT_ADDR(devaddr + i);
-             fprintf(stderr, "Set dev %x\n\r", GET_UADDR(uptr->u3));
         }
     }
     return r;

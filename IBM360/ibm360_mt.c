@@ -897,6 +897,8 @@ t_stat
 mt_detach(UNIT * uptr)
 {
     uptr->u3 &= UNIT_ADDR_MASK;
+    uptr->u4 = 0;
+    uptr->u5 = 0;
     return sim_tape_detach(uptr);
 }
 

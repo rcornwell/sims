@@ -263,10 +263,10 @@ lpr_srv(UNIT *uptr) {
            sim_activate(uptr, 20);
            uptr->u6++;
        }
-       if (uptr->u3 & LPR_FULL || uptr->u6 >= 132) {
+       if (uptr->u3 & LPR_FULL || uptr->u6 > 132) {
            uptr->u3 |= LPR_FULL;
            chan_end(addr, SNS_CHNEND);
-           sim_activate(uptr, 3000);
+           sim_activate(uptr, 5000);
        }
     }
     return SCPE_OK;
