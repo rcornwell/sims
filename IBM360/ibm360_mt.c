@@ -855,6 +855,7 @@ t_stat mt_srv(UNIT * uptr)
              sim_debug(DEBUG_DETAIL, dptr, "Unload unit=%d\n", unit);
              uptr->u3 &= ~(MT_CMDMSK);
              r = sim_tape_detach(uptr);
+    set_devattn(addr, SNS_DEVEND);
          }
          break;
     }

@@ -247,10 +247,19 @@ lpr_srv(UNIT *uptr) {
          return SCPE_OK;
     }
 
+    if (cmd == 7) {
+       uptr->u3 &= ~(LPR_FULL|LPR_CMDMSK);
+       uptr->u6 = 0;
+       chan_end(addr, SNS_DEVEND|SNS_CHNEND);
+       return SCPE_OK;
+    }
+
     if ((uptr->u3 & LPR_FULL) || cmd == 0x3) {
        print_line(uptr);
        uptr->u3 &= ~(LPR_FULL|LPR_CMDMSK);
        uptr->u6 = 0;
+       if (cmd == 0x3)
+           chan_end(addr, SNS_CHNEND);
        set_devattn(addr, SNS_DEVEND);
        return SCPE_OK;
     }

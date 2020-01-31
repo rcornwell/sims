@@ -205,6 +205,7 @@ typedef struct _opcode {
 #define RS       03
 #define SI       04
 #define SS       05
+#define XX       06
 #define LNMSK    07
 #define ONEOP    010
 #define IMDOP    020
@@ -366,10 +367,23 @@ t_opcode  optab[] = {
        { OP_SP,        "SP",   SS|TWOOP },
        { OP_MP,        "MP",   SS|TWOOP },
        { OP_DP,        "DP",   SS|TWOOP },
+       { OP_MVCL,      "MVCL", RR },
+       { OP_CLCL,      "CLCL", RR },
+       { OP_STNSM,     "STNSM", SI },
+       { OP_STOSM,     "STOSM", SI },
+       { OP_SIGP,      "SIGP",  RS },
+       { OP_MC,        "MC",    SI },
+       { OP_370,       "I370",  XX },
+       { OP_STCTL,     "STCTL", RS },
+       { OP_LCTL,      "LCTL",  RS },
+       { OP_CS,        "CS",    RS },
+       { OP_CDS,       "CDS",   RS },
+       { OP_CLM,       "CLM",   RS },
+       { OP_STCM,      "STCM",  RS },
+       { OP_ICM,       "ICM",   RS },
+       { OP_SRP,       "SRP",   SS|TWOOP },
        { 0,            NULL, 0 }
 };
-
-
 
 void fprint_inst(FILE *of, uint16 *val) {
 uint8           inst = (val[0] >> 8) &  0xff;

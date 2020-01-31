@@ -33,6 +33,44 @@
 #define MEMSIZE           (cpu_unit.capac)    /* actual memory size */
 #define MEM_ADDR_OK(x)    (((x)) < MEMSIZE)
 
+/* channel:
+
+        Channels 0 and 4 are multiplexer channels.
+        subchannels = 128
+        0 - 7       0x80-0xff
+        8 - 127     0x00-0x7f
+        256 - +6    0x1xx - 0x6xx
+
+        subchannels = 192
+        0 - 3       0xd0-0xff
+        4 - 192     0x00-0xcf
+        384 - +6    0x1xx - 0x6xx
+
+        Channels 1,2,3,5,6 are selector channels.
+        Devices on channel 0 below number of subchannels have there own
+        virtual channel.
+        Devices on channel 0 above the number of subchannels are mapped in
+        groups of 16 into channels 0 to n.
+
+        Channels 1-n run on channels virtual channels above subchannels.
+*/
+
+#define     MAX_CHAN        6
+#define     SUB_CHANS       192
+#define     MAX_MUX         2
+
+/* Define number of supported units for each device type */
+#define NUM_DEVS_CDP        1
+#define NUM_DEVS_CDR        1
+#define NUM_DEVS_CON        1
+#define NUM_DEVS_LPR        1
+#define NUM_DEVS_MT         1
+#define NUM_UNITS_MT        8
+#define NUM_DEVS_DASD       4
+#define NUM_UNITS_DASD      8
+#define NUM_DEVS_COM        1
+#define NUM_UNITS_COM       16
+
 /* Device information block */
 typedef struct dib {
         uint8             mask;               /* Device mask */
@@ -60,15 +98,17 @@ typedef struct dib {
 #define GET_UADDR(x)      ((UNIT_ADDR_MASK & x) >> UNIT_V_ADDR)
 #define UNIT_ADDR(x)      ((x) << UNIT_V_ADDR)
 
-/* CPU options, needed by channel */
-#define FEAT_PROT    (1 << (UNIT_V_UF + 8))      /* Storage protection feature */
-#define FEAT_DEC     (1 << (UNIT_V_UF + 9))      /* Decimal instruction set */
-#define FEAT_FLOAT   (1 << (UNIT_V_UF + 10))     /* Floating point instruction set */
-#define FEAT_UNIV    (3 << (UNIT_V_UF + 9))      /* All instructions */
-#define FEAT_STOR    (1 << (UNIT_V_UF + 11))     /* No alignment restrictions */
-#define FEAT_TIMER   (1 << (UNIT_V_UF + 12))     /* Interval timer */
-#define FEAT_DAT     (1 << (UNIT_V_UF + 13))     /* Dynamic address translation */
-#define EXT_IRQ      (1 << (UNIT_V_UF_31))       /* External interrupt */
+/* CPU options */
+#define FEAT_PROT    (1 << (UNIT_V_UF + 0))     /* Storage protection feature */
+#define FEAT_DEC     (1 << (UNIT_V_UF + 1))     /* Decimal instruction set */
+#define FEAT_FLOAT   (1 << (UNIT_V_UF + 2))     /* Floating point instruction set */
+#define FEAT_UNIV    (3 << (UNIT_V_UF + 1))     /* All instructions */
+#define FEAT_STOR    (1 << (UNIT_V_UF + 3))     /* No alignment restrictions */
+#define FEAT_TIMER   (1 << (UNIT_V_UF + 4))     /* Interval timer */
+#define FEAT_DAT     (1 << (UNIT_V_UF + 5))     /* Dynamic address translation */
+#define FEAT_EFP     (1 << (UNIT_V_UF + 6))     /* Extended floating point */
+#define FEAT_370     (1 << (UNIT_V_UF + 7))     /* Is a 370 */
+#define EXT_IRQ      (1 << (UNIT_V_UF + 8))     /* External interrupt */
 
 /* low addresses */
 #define IPSW              0x00        /* IPSW */
@@ -98,6 +138,8 @@ typedef struct dib {
 #define OP_ISK            0x09
 #define OP_SVC            0x0A
 #define OP_BASR           0x0D
+#define OP_MVCL           0x0E    /* 370 Move long */
+#define OP_CLCL           0x0F    /* 370 Compare logical long */
 #define OP_LPR            0x10
 #define OP_LNR            0x11
 #define OP_LTR            0x12
@@ -220,9 +262,21 @@ typedef struct dib {
 #define OP_TIO            0x9D
 #define OP_HIO            0x9E
 #define OP_TCH            0x9F
-#define OP_STMC           0xB0
+#define OP_STNSM          0xAC  /* 370 Store then and system mask */
+#define OP_STOSM          0xAD  /* 370 Store then or system mask */
+#define OP_SIGP           0xAE  /* 370 Signal processor */
+#define OP_MC             0xAF  /* 370 Monitor call */
+#define OP_STMC           0xB0  /* 360/67 Store control */
 #define OP_LRA            0xB1
-#define OP_LMC            0xB8
+#define OP_370            0xB2  /* Misc 370 system instructions */
+#define OP_STCTL          0xB6  /* 370 Store control */
+#define OP_LCTL           0xB7  /* 370 Load control */
+#define OP_LMC            0xB8  /* 360/67 Load Control */
+#define OP_CS             0xBA  /* 370 Compare and swap */
+#define OP_CDS            0xBB  /* 370 Compare double and swap */
+#define OP_CLM            0xBD  /* 370 Compare character under mask */
+#define OP_STCM           0xBE  /* 370 Store character under mask */
+#define OP_ICM            0xBF  /* 370 Insert character under mask */
 #define OP_MVN            0xD1
 #define OP_MVC            0xD2
 #define OP_MVZ            0xD3
@@ -234,6 +288,7 @@ typedef struct dib {
 #define OP_TRT            0xDD
 #define OP_ED             0xDE
 #define OP_EDMK           0xDF
+#define OP_SRP            0xF0   /* 370 Shift and round decimal */
 #define OP_MVO            0xF1
 #define OP_PACK           0xF2
 #define OP_UNPK           0xF3
@@ -280,23 +335,6 @@ typedef struct dib {
 #define     STATUS_CCNTL  0x0004               /* Channel control check */
 #define     STATUS_INTER  0x0002               /* Channel interface check */
 #define     STATUS_CHAIN  0x0001               /* Channel chain check */
-
-/* channel:
-        subchannels = 128
-        0 - 7       0x80-0xff
-        8 - 127     0x00-0x7f
-        128 - +6    0x1xx - 0x6xx
-
-        Devices on channel 0 below number of subchannels have there own
-        virtual channel.
-        Devices on channel 0 above the number of subchannels are mapped in
-        groups of 16 into channels 0 to n.
-
-        Channels 1-n run on channels virtual channels above subchannels.
-*/
-
-#define     MAX_CHAN        3
-#define     SUB_CHANS       192
 
 void post_extirq();
 
@@ -348,16 +386,5 @@ extern DEVICE ddd_dev;
 extern DEVICE coml_dev;
 extern DEVICE com_dev;
 extern UNIT cpu_unit;
-
-#define NUM_DEVS_CDP        1
-#define NUM_DEVS_CDR        1
-#define NUM_DEVS_CON        1
-#define NUM_DEVS_LPR        1
-#define NUM_DEVS_MT         1
-#define NUM_UNITS_MT        8
-#define NUM_DEVS_DASD       4
-#define NUM_UNITS_DASD      8
-#define NUM_DEVS_COM        1
-#define NUM_UNITS_COM       16
 
 extern void fprint_inst(FILE *, uint16 *);
