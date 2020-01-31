@@ -1166,9 +1166,6 @@ else
   ifneq (,$(findstring -fstrict-overflow,$(GCC_OPTIMIZERS)))
     CFLAGS_O += -fno-strict-overflow
   endif
-  ifneq (,$(findstring -fcommon,$(GCC_OPTIMIZERS))$(findstring -fno-common,$(GCC_OPTIMIZERS)))
-    CFLAGS_O += -fcommon
-  endif
   ifeq (,$(NO_LTO))
     ifneq (,$(findstring -flto,$(GCC_OPTIMIZERS)))
       CFLAGS_O += -flto -fwhole-program
@@ -2815,7 +2812,7 @@ besm6 : ${BIN}besm6${EXE}
 ${BIN}besm6${EXE} : ${BESM6} ${SIM}
 ifneq (1,${CPP_BUILD}${CPP_FORCE})
 	${MKDIRBIN}
-	${CC} ${BESM6} ${SIM} ${BESM6_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+	${CC} ${BESM6} ${SIM} ${BESM6_OPT} ${BESM6_PANEL_OPT} ${CC_OUTSPEC} ${LDFLAGS}
 ifneq (,$(call find_test,${BESM6D},besm6))
 	$@ $(call find_test,${BESM6D},besm6) ${TEST_ARG}
 endif
