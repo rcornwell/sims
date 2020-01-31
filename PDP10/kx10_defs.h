@@ -604,7 +604,7 @@ int auxcpu_write (t_addr addr, t_uint64);
 #define NUM_DEVS_TU     1
 #define NUM_DEVS_PMP    WAITS
 #define NUM_DEVS_DKB    WAITS
-#define NUM_DEVS_III    (WAITS * USE_DISPLAY)
+#define NUM_DEVS_III    0       /* (WAITS * USE_DISPLAY) *//* Disabled until working */
 #define NUM_DEVS_PD     ITS | KL_ITS
 #define NUM_DEVS_IMX    ITS
 #define NUM_DEVS_STK    ITS
