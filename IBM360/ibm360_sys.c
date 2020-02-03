@@ -26,7 +26,6 @@
 #include "sim_card.h"
 
 extern DEVICE cpu_dev;
-extern UNIT cpu_unit;
 extern REG cpu_reg[];
 extern uint32 M[MAXMEMSIZE];
 

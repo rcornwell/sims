@@ -23,19 +23,7 @@
 
 #include "ibm360_defs.h"                            /* simulator defns */
 
-#define FEAT_PROT    (1 << (UNIT_V_UF + 8))      /* Storage protection feature */
-#define FEAT_DEC     (1 << (UNIT_V_UF + 9))      /* Decimal instruction set */
-#define FEAT_FLOAT   (1 << (UNIT_V_UF + 10))     /* Floating point instruction set */
-#define FEAT_UNIV    (3 << (UNIT_V_UF + 9))      /* All instructions */
-#define FEAT_STOR    (1 << (UNIT_V_UF + 11))     /* No alignment restrictions */
-#define FEAT_TIMER   (1 << (UNIT_V_UF + 12))     /* Interval timer */
-#define FEAT_DAT     (1 << (UNIT_V_UF + 13))     /* Dynamic address translation */
-#define FEAT_EFP     (1 << (UNIT_V_UF + 14))     /* Extended floating point */
-#define EXT_IRQ      (1 << (UNIT_V_UF_31))       /* External interrupt */
-
-#define UNIT_V_MSIZE (UNIT_V_UF + 0)             /* dummy mask */
-#define UNIT_MSIZE   (0xff << UNIT_V_MSIZE)
-#define MEMAMOUNT(x) (x << UNIT_V_MSIZE)
+#define MEMAMOUNT(x) (x)
 
 #define TMR_RTC      0
 
@@ -236,7 +224,7 @@ int32               rtc_tps = 300;
    cpu_mod      CPU modifier list
 */
 
-UNIT cpu_unit = { UDATA (&rtc_srv, UNIT_BINK, MAXMEMSIZE) };
+UNIT cpu_unit[] = { { UDATA (&rtc_srv, UNIT_BINK|UNIT_FIX, MAXMEMSIZE)} };
 
 REG cpu_reg[] = {
     { HRDATA (PC, PC, 24) },
@@ -272,24 +260,25 @@ REG cpu_reg[] = {
 MTAB cpu_mod[] = {
     { MTAB_XTD|MTAB_VDV, 0, "IDLE", "IDLE", &sim_set_idle, &sim_show_idle },
     { MTAB_XTD|MTAB_VDV, 0, NULL, "NOIDLE", &sim_clr_idle, NULL },
-    { UNIT_MSIZE, MEMAMOUNT(1), "16K", "16K", &cpu_set_size },
-    { UNIT_MSIZE, MEMAMOUNT(2), "32K", "32K", &cpu_set_size },
-    { UNIT_MSIZE, MEMAMOUNT(4), "64K", "64K", &cpu_set_size },
-    { UNIT_MSIZE, MEMAMOUNT(8), "128K", "128K", &cpu_set_size },
-    { UNIT_MSIZE, MEMAMOUNT(12), "196K", "196K", &cpu_set_size },
-    { UNIT_MSIZE, MEMAMOUNT(16), "256K", "256K", &cpu_set_size },
-    { UNIT_MSIZE, MEMAMOUNT(32), "512K", "512K", &cpu_set_size },
-    { UNIT_MSIZE, MEMAMOUNT(128), "2M", "2M", &cpu_set_size },
+    { MTAB_VDV, MEMAMOUNT(1), NULL, "16K", &cpu_set_size },
+    { MTAB_VDV, MEMAMOUNT(2), NULL, "32K", &cpu_set_size },
+    { MTAB_VDV, MEMAMOUNT(4), NULL, "64K", &cpu_set_size },
+    { MTAB_VDV, MEMAMOUNT(8), NULL, "128K", &cpu_set_size },
+    { MTAB_VDV, MEMAMOUNT(12), NULL, "196K", &cpu_set_size },
+    { MTAB_VDV, MEMAMOUNT(16), NULL, "256K", &cpu_set_size },
+    { MTAB_VDV, MEMAMOUNT(32), NULL, "512K", &cpu_set_size },
+    { MTAB_VDV, MEMAMOUNT(64), NULL, "1M", &cpu_set_size },
+    { MTAB_VDV, MEMAMOUNT(128), NULL, "2M", &cpu_set_size },
     { FEAT_PROT, 0, NULL, "NOPROT", NULL, NULL, NULL, "No Storage protection"},
     { FEAT_PROT, FEAT_PROT, "PROT", "PROT", NULL, NULL, NULL, "Storage protection"},
     { FEAT_UNIV, FEAT_UNIV, "UNIV", "UNIV", NULL, NULL, NULL, "Universal instruction"},
     { FEAT_UNIV, 0, NULL, "NOUNIV", NULL, NULL, NULL, "Basic instructions"},
-    { FEAT_UNIV, FEAT_FLOAT, "FLOAT", "FLOAT", NULL, NULL, NULL, 
+    { FEAT_UNIV, FEAT_FLOAT, "FLOAT", "FLOAT", NULL, NULL, NULL,
                                 "Floating point instructions"},
     { FEAT_FLOAT, 0, NULL, "NOFLOAT", NULL, NULL, NULL, "No floating point instructions"},
     { FEAT_UNIV, FEAT_DEC, "DECIMAL", "DECIMAL", NULL, NULL, NULL, "Decimal instruction set"},
     { FEAT_DEC, 0, NULL, "NODECIMAL", NULL, NULL, NULL, "No decimal instructions"},
-    { FEAT_EFP|FEAT_FLOAT, FEAT_EFP|FEAT_FLOAT, "EFLOAT", "EFLOAT", NULL, NULL, NULL, 
+    { FEAT_EFP|FEAT_FLOAT, FEAT_EFP|FEAT_FLOAT, "EFLOAT", "EFLOAT", NULL, NULL, NULL,
                                 "Extended Floating point instruction"},
     { FEAT_EFP, 0, NULL, "NOEFLOAT", NULL, NULL, NULL, "No extended floating point"},
     { FEAT_STOR, FEAT_STOR, "STORE", "STORE", NULL, NULL, NULL, "No storage alignment"},
@@ -306,7 +295,7 @@ MTAB cpu_mod[] = {
     };
 
 DEVICE cpu_dev = {
-    "CPU", &cpu_unit, cpu_reg, cpu_mod,
+    "CPU", cpu_unit, cpu_reg, cpu_mod,
     1, 16, 24, 1, 16, 8,
     &cpu_ex, &cpu_dep, &cpu_reset, NULL, NULL, NULL,
     NULL, DEV_DEBUG, 0, dev_debug,
@@ -333,7 +322,7 @@ ICM   BF                RS
 #endif
 
 void post_extirq() {
-     cpu_unit.flags |= EXT_IRQ;
+     cpu_unit[0].flags |= EXT_IRQ;
 }
 
 
@@ -495,7 +484,7 @@ int  ReadFull(uint32 addr, uint32 *data) {
 
      /* Check storage key */
      if (st_key != 0) {
-         if ((cpu_unit.flags & FEAT_PROT) == 0) {
+         if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
@@ -508,7 +497,7 @@ int  ReadFull(uint32 addr, uint32 *data) {
 
      *data = M[addr];
      if (offset != 0) {
-         if ((cpu_unit.flags & FEAT_STOR) == 0) {
+         if ((cpu_unit[0].flags & FEAT_STOR) == 0) {
               storepsw(OPPSW, IRC_SPEC);
               return 1;
          }
@@ -545,7 +534,7 @@ int ReadByte(uint32 addr, uint32 *data) {
 
 int ReadHalf(uint32 addr, uint32 *data) {
      if (addr & 0x1) {
-         if ((cpu_unit.flags & FEAT_STOR) == 0) {
+         if ((cpu_unit[0].flags & FEAT_STOR) == 0) {
               storepsw(OPPSW, IRC_SPEC);
               return 1;
          }
@@ -590,7 +579,7 @@ int WriteFull(uint32 addr, uint32 data) {
 
      /* Check storage key */
      if (st_key != 0) {
-         if ((cpu_unit.flags & FEAT_PROT) == 0) {
+         if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
@@ -603,7 +592,7 @@ int WriteFull(uint32 addr, uint32 data) {
 
      /* Check if we handle unaligned access */
      if (offset != 0) {
-         if ((cpu_unit.flags & FEAT_STOR) == 0) {
+         if ((cpu_unit[0].flags & FEAT_STOR) == 0) {
              storepsw(OPPSW, IRC_SPEC);
              return 1;
          }
@@ -621,7 +610,7 @@ int WriteFull(uint32 addr, uint32 data) {
                     return 1;
                 }
              }
-        } else 
+        } else
              pa2 = pa + 1;
      }
 
@@ -666,7 +655,7 @@ int WriteByte(uint32 addr, uint32 data) {
 
      /* Check storage key */
      if (st_key != 0) {
-         if ((cpu_unit.flags & FEAT_PROT) == 0) {
+         if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
@@ -702,14 +691,14 @@ int WriteHalf(uint32 addr, uint32 data) {
      pa >>= 2;
 
      /* Check if we handle unaligned access */
-     if ((offset & 1) != 0 && (cpu_unit.flags & FEAT_STOR) == 0) {
+     if ((offset & 1) != 0 && (cpu_unit[0].flags & FEAT_STOR) == 0) {
          storepsw(OPPSW, IRC_SPEC);
          return 1;
      }
 
      /* Check storage key */
      if (st_key != 0) {
-        if ((cpu_unit.flags & FEAT_PROT) == 0) {
+        if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
             storepsw(OPPSW, IRC_PROT);
             return 1;
         }
@@ -734,7 +723,7 @@ int WriteHalf(uint32 addr, uint32 data) {
                     return 1;
                 }
              }
-        } else 
+        } else
              pa2 = pa + 1;
      }
 
@@ -797,8 +786,8 @@ sim_instr(void)
     reason = SCPE_OK;
     ilc = 0;
     /* Enable timer if option set */
-    if (cpu_unit.flags & FEAT_TIMER) {
-        sim_activate(&cpu_unit, 100);
+    if (cpu_unit[0].flags & FEAT_TIMER) {
+        sim_activate(&cpu_unit[0], 100);
     }
     interval_irq = 0;
     irq_en |= (loading != 0);
@@ -813,7 +802,7 @@ wait_loop:
         }
 
         /* Check if we should see if an IRQ is pending */
-        irq= scan_chan(sysmsk);
+        irq= scan_chan(sysmsk, irq_en);
         if (irq!= 0) {
             ilc = 0;
             sim_debug(DEBUG_DETAIL, &cpu_dev, "IRQ=%04x %08x\n", irq, PC);
@@ -829,9 +818,9 @@ wait_loop:
 
         /* Check for external interrupts */
         if (ext_en) {
-            if ((cpu_unit.flags & EXT_IRQ) && (cregs[4] & 0x40) != 0) {
+            if ((cpu_unit[0].flags & EXT_IRQ) && (cregs[4] & 0x40) != 0) {
                 ilc = 0;
-                cpu_unit.flags &= ~EXT_IRQ;
+                cpu_unit[0].flags &= ~EXT_IRQ;
                 storepsw(OEPSW, 0x40);
                 goto supress;
             }
@@ -957,7 +946,7 @@ opr:
 
         /* Check if floating point */
         if ((op & 0xA0) == 0x20) {
-            if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
+            if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
                 storepsw(OPPSW, IRC_OPR);
                 goto supress;
             }
@@ -1029,7 +1018,7 @@ opr:
 
         case OP_BASR:
         case OP_BAS:
-                if ((cpu_unit.flags & FEAT_DAT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                 } else {
                     dest = PC;
@@ -1082,7 +1071,7 @@ opr:
 
         case OP_SSK:
                 dest = src1;
-                if ((cpu_unit.flags & FEAT_PROT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if (flags & PROBLEM) {
                     storepsw(OPPSW, IRC_PRIV);
@@ -1090,7 +1079,7 @@ opr:
                     storepsw(OPPSW, IRC_SPEC);
                 } else if (addr1 >= MEMSIZE) {
                     storepsw(OPPSW, IRC_ADDR);
-                } else if (cpu_unit.flags & FEAT_PROT) {
+                } else if (cpu_unit[0].flags & FEAT_PROT) {
                     if (TransAddr(addr1, &addr2))
                         break;
                     key[addr2 >> 11] = src1 & 0xf8;
@@ -1099,7 +1088,7 @@ opr:
 
         case OP_ISK:
                 dest = src1;
-                if ((cpu_unit.flags & FEAT_PROT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
                     storepsw(OPPSW, IRC_PROT);
                 } if (flags & PROBLEM) {
                     storepsw(OPPSW, IRC_PRIV);
@@ -1168,28 +1157,28 @@ opr:
                 if (flags & PROBLEM)
                     storepsw(OPPSW, IRC_PRIV);
                 else
-                    cc = startio(addr1);
+                    cc = startio(addr1 & 0xfff);
                 break;
 
         case OP_TIO:
                 if (flags & PROBLEM)
                     storepsw(OPPSW, IRC_PRIV);
                 else
-                    cc = testio(addr1);
+                    cc = testio(addr1 & 0xfff);
                 break;
 
         case OP_HIO:
                 if (flags & PROBLEM)
                     storepsw(OPPSW, IRC_PRIV);
                 else
-                    cc = haltio(addr1);
+                    cc = haltio(addr1 & 0xfff);
                 break;
 
         case OP_TCH:
                 if (flags & PROBLEM)
                     storepsw(OPPSW, IRC_PRIV);
                 else
-                    cc = testchan(addr1);
+                    cc = testchan(addr1 & 0xfff);
                 break;
 
         case OP_DIAG:
@@ -1307,7 +1296,7 @@ set_cc3:
                 }
 #ifdef USE_64BIT
                 src1L = ((t_uint64)src1) * ((t_uint64)src2);
-                if (fill) 
+                if (fill)
                     src1L = -src1L;
                 if (op != OP_MH) {
                     STDBL(reg1, src1L);
@@ -1720,7 +1709,7 @@ save_dbl:
                 break;
 
         case OP_STMC:
-                if ((cpu_unit.flags & FEAT_DAT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if (flags & PROBLEM) {
                     storepsw(OPPSW, IRC_PRIV);
@@ -1765,7 +1754,7 @@ save_dbl:
                 break;
 
         case OP_LMC:
-                if ((cpu_unit.flags & FEAT_DAT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if (flags & PROBLEM) {
                     storepsw(OPPSW, IRC_PRIV);
@@ -1787,7 +1776,7 @@ save_dbl:
                         case 0x6:     /* Maskes */
                                   sysmsk = (dest >> 16) & 0xfefe;
                                   cregs[reg] &= 0xfefe0000;
-                                  if (sysmsk & 0xfe00) 
+                                  if (sysmsk & 0xfe00)
                                       cregs[reg] |= 0x1000000;
                                   if (sysmsk & 0x00fe)
                                       cregs[reg] |= 0x0010000;
@@ -1822,7 +1811,7 @@ save_dbl:
                 break;
 
         case OP_LRA:
-                if ((cpu_unit.flags & FEAT_DAT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if (flags & PROBLEM) {
                     storepsw(OPPSW, IRC_PRIV);
@@ -2279,7 +2268,7 @@ save_dbl:
         case OP_HDR:
         case OP_HER:
 //fprintf(stderr, "FP HD Op=%0x src2=%08x %08x %.12e\n\r", op, src2, src2h, cnvt_float(src2, src2h));
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -2322,7 +2311,7 @@ save_dbl:
         case OP_LE:
         case OP_LD:
 //fprintf(stderr, "FP LD Op=%0x src1=%08x %08x\n\r", op, src1, src1h);
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -2341,7 +2330,7 @@ save_dbl:
         case OP_LTER:
         case OP_LCER:
 //fprintf(stderr, "FP LD Op=%0x src1=%08x %08x\n\r", op, src1, src1h);
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -2362,7 +2351,7 @@ save_dbl:
 
                   /* Floating Store register */
         case OP_STD:
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -2372,7 +2361,7 @@ save_dbl:
 
         case OP_STE:
 //fprintf(stderr, "FP STD Op=%0x src1=%08x %08x\n\r", op, src1, src1h);
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -2382,7 +2371,7 @@ save_dbl:
                   /* Floating Compare */
         case OP_CE:      /* 79 */
         case OP_CER:     /* 39 */
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -2471,7 +2460,7 @@ save_dbl:
         case OP_AU:      /* 7E */
         case OP_AER:     /* 3A */
         case OP_AUR:     /* 3E */
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -2604,7 +2593,7 @@ save_dbl:
                   /* Floating Compare */
         case OP_CD:      /* 69 */
         case OP_CDR:     /* 29 */
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -2766,7 +2755,7 @@ save_dbl:
         case OP_AW:      /* 6E */
         case OP_ADR:     /* 2A */
         case OP_AWR:     /* 2E */
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -3040,7 +3029,7 @@ fpstore:
         case OP_MER:
         case OP_ME:
         case OP_MD:
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -3211,7 +3200,7 @@ fpnorm:
         case OP_DDR:
         case OP_DD:
         case OP_DE:
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -3393,7 +3382,7 @@ fpnorm:
         case OP_SP:    /* 1011 */
         case OP_ZAP:   /* 1000 */
         case OP_AP:    /* 1010 */
-                if ((cpu_unit.flags & FEAT_DEC) == 0) {
+                if ((cpu_unit[0].flags & FEAT_DEC) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -3401,7 +3390,7 @@ fpnorm:
                 break;
 
         case OP_MP:
-                if ((cpu_unit.flags & FEAT_DEC) == 0) {
+                if ((cpu_unit[0].flags & FEAT_DEC) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -3409,7 +3398,7 @@ fpnorm:
                 break;
 
         case OP_DP:
-                if ((cpu_unit.flags & FEAT_DEC) == 0) {
+                if ((cpu_unit[0].flags & FEAT_DEC) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -3418,7 +3407,7 @@ fpnorm:
 
                   /* Extended precision load round */
         case OP_LRER:
-                if ((cpu_unit.flags & FEAT_EFP) == 0) {
+                if ((cpu_unit[0].flags & FEAT_EFP) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -3451,7 +3440,7 @@ fpnorm:
                 break;
 
         case OP_LRDR:
-                if ((cpu_unit.flags & FEAT_EFP) == 0) {
+                if ((cpu_unit[0].flags & FEAT_EFP) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -3472,7 +3461,7 @@ fpnorm:
                     /* Add round */
                     desth = src2h + 1;
                     dest = src2;
-		    if (desth == 0) 
+                    if (desth == 0)
                         dest ++;
 
                     /* If overflow, shift right 4 bits */
@@ -3496,7 +3485,7 @@ fpnorm:
 
         case OP_MXDR:
         case OP_MXD:
-                if ((cpu_unit.flags & FEAT_EFP) == 0) {
+                if ((cpu_unit[0].flags & FEAT_EFP) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -3690,7 +3679,7 @@ fpnorm:
                 src1 ^= MSIGN;
                 /* Fall through */
         case OP_AXR:
-                if ((cpu_unit.flags & FEAT_EFP) == 0) {
+                if ((cpu_unit[0].flags & FEAT_EFP) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -4090,7 +4079,7 @@ fpnorm:
                 break;
 
         case OP_MXR:
-                if ((cpu_unit.flags & FEAT_EFP) == 0) {
+                if ((cpu_unit[0].flags & FEAT_EFP) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -4486,6 +4475,7 @@ dec_div(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
 t_stat cpu_reset (DEVICE *dptr)
 {
     st_key = cc = pmsk = irqcode = flags = irqaddr = loading = 0;
+    dat_en = irq_en = ext_en = 0;
     chan_set_devs();
     if (M == NULL) {                        /* first time init? */
         sim_brk_types = sim_brk_dflt = SWMASK ('E');
@@ -4502,7 +4492,7 @@ t_stat cpu_reset (DEVICE *dptr)
 t_stat
 rtc_srv(UNIT * uptr)
 {
-    if (cpu_unit.flags & FEAT_TIMER) {
+    if (cpu_unit[0].flags & FEAT_TIMER) {
         int32 t;
         t = sim_rtcn_calb (rtc_tps, TMR_RTC);
         sim_activate_after(uptr, 1000000/rtc_tps);
@@ -4569,7 +4559,7 @@ int32 i, clim;
 uint32 *nM = NULL;
 int32 max = MEMSIZE >> 2;
 
-val = val >> UNIT_V_MSIZE;
+//val = val >> UNIT_V_MSIZE;
 val = 16 * 1024 * val;
 if ((val <= 0) || (val > MAXMEMSIZE))
     return SCPE_ARG;
@@ -4587,8 +4577,8 @@ free (M);
 M = nM;
 fprintf(stderr, "Mem size=%x\n\r", val);
 MEMSIZE = val;
-cpu_unit.flags &= ~UNIT_MSIZE;
-cpu_unit.flags |= val / (16 * 1024);
+//cpu_unit.flags &= ~UNIT_MSIZE;
+//cpu_unit.flags |= val / (16 * 1024);
 reset_all (0);
 return SCPE_OK;
 }

@@ -430,7 +430,7 @@ uint8  dasd_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
          return 0;
 
     case 0x0:               /* Status */
-         if (cmd == 0x4) {  /* Sense */
+         if ((cmd & 0xF) == 0x4) {  /* Sense */
             uptr->u3 |= cmd;
             return 0;
          }
@@ -724,7 +724,8 @@ index:
     switch (cmd) {
     case 0:                               /* No command, stop tape */
          break;
-
+    case 0x14:
+    case 0x34:
     case 0x4:                 /* Sense */
          ch = uptr->u5 & 0xff;
          sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 1 %x\n", unit, ch);
@@ -1557,6 +1558,7 @@ wrckd:
          }
 
          break;
+
 
     case DK_WR_SCKD:         /* Write special count, key and data */
     default:

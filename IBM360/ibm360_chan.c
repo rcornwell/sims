@@ -79,18 +79,21 @@ extern uint32  *M;
 extern uint8   key[MAXMEMSIZE / 2048];
 
 #define MAX_DEV         (MAX_CHAN * 256)
+
+#define SEL_BASE      (SUB_CHANS * MAX_MUX)
+#define CHAN_SZ       (SEL_BASE + MAX_CHAN)
 int         channels            = MAX_CHAN;
 int         subchannels         = SUB_CHANS;         /* Number of subchannels */
 int         irq_pend = 0;
-uint32      caw[256];                       /* Channel command address word */
-uint32      ccw_addr[256];                  /* Channel address */
-uint16      ccw_count[256];                 /* Channel count */
-uint8       ccw_cmd[256];                   /* Channel command and flags */
-uint16      ccw_flags[256];                 /* Channel flags */
-uint16      chan_status[256];               /* Channel status */
-uint16      chan_dev[256];                  /* Device on channel */
-uint32      chan_buf[256];                  /* Channel data buffer */
-uint8       chan_byte[256];                 /* Current byte, dirty/full */
+uint32      caw[CHAN_SZ];                   /* Channel command address word */
+uint32      ccw_addr[CHAN_SZ];              /* Channel address */
+uint16      ccw_count[CHAN_SZ];             /* Channel count */
+uint8       ccw_cmd[CHAN_SZ];               /* Channel command and flags */
+uint16      ccw_flags[CHAN_SZ];             /* Channel flags */
+uint16      chan_status[CHAN_SZ];           /* Channel status */
+uint16      chan_dev[CHAN_SZ];              /* Device on channel */
+uint32      chan_buf[CHAN_SZ];              /* Channel data buffer */
+uint8       chan_byte[CHAN_SZ];             /* Current byte, dirty/full */
 DIB         *dev_unit[MAX_DEV];             /* Pointer to Device info block */
 uint8       dev_status[MAX_DEV];            /* last device status flags */
 
@@ -128,17 +131,37 @@ find_chan_dev(uint16 addr) {
 int
 find_subchan(uint16 device) {
     int     chan;
+    int     base = 0;
     if (device > MAX_DEV)
         return -1;
-    if (device > 0xff) {
-        chan = (device >> 8) & 0x7;
-        if (chan > channels)
-            return -1;
-        return subchannels + chan;
+    chan = (device >> 8) & 0xf;
+    device &= 0xff;
+    if (chan > channels)
+        return -1;
+    switch(chan) {
+    case 4:
+           base += subchannels;
+           /* Fall through */
+
+    case 0:      /* Multiplexer channel */
+           if (device >= subchannels)
+               device = ((device - subchannels) >> 4) & 0x7;
+           return base + device;
+    case 1:      /* Selector channel */
+    case 2:
+    case 3:
+    case 5:
+    case 6:
+    case 7:
+           return SEL_BASE + chan;
     }
-    if (device < subchannels)
-        return device;
-    return ((device - subchannels)>>4) & 0xf;
+    return -1;
+}
+
+/* find a channel for a given index */
+int
+find_chan(int chan) {
+    return (chan_dev[chan] >> 8);
 }
 
 /* Read a full word into memory.
@@ -157,7 +180,7 @@ readfull(int chan, uint32 addr, uint32 *word) {
     addr &= AMASK;
     addr >>= 2;
     if (sk != 0) {
-        if ((cpu_unit.flags & FEAT_PROT) == 0) {
+        if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
             chan_status[chan] |= STATUS_PROT;
             irq_pend = 1;
             return 1;
@@ -192,7 +215,7 @@ readbuff(int chan) {
     addr &= AMASK;
     addr >>= 2;
     if (sk != 0) {
-        if ((cpu_unit.flags & FEAT_PROT) == 0) {
+        if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
             chan_status[chan] |= STATUS_PROT;
             chan_byte[chan] = BUFF_CHNEND;
             irq_pend = 1;
@@ -241,7 +264,7 @@ writebuff(int chan) {
     addr &= AMASK;
     addr >>= 2;
     if (sk != 0) {
-        if ((cpu_unit.flags & FEAT_PROT) == 0) {
+        if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
             chan_status[chan] |= STATUS_PROT;
             chan_byte[chan] = BUFF_CHNEND;
             irq_pend = 1;
@@ -647,7 +670,7 @@ startio(uint16 addr) {
 
     /* Try to load first command */
     if (load_ccw(chan, 0)) {
-        if (chan_status[chan] & 
+        if (chan_status[chan] &
                   (STATUS_ATTN|STATUS_CHECK|STATUS_PROT|STATUS_PCHK|STATUS_EXPT)) {
             M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | (M[0x44 >> 2] & 0xffff);
             sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %x %x cc=2\n", addr, chan,
@@ -692,11 +715,15 @@ int testio(uint16 addr) {
     uint16       status;
 
     /* Find channel this device is on, if no none return cc=3 */
-    if (chan < 0 || dibp == 0)
+    if (chan < 0 || dibp == 0) {
+        sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x cc=3\n", addr, chan);
         return 3;
+    }
     uptr = find_chan_dev(addr);
-    if (uptr == 0)
+    if (uptr == 0) {
+        sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x uptr cc=3\n", addr, chan);
         return 3;
+    }
 
     /* If any error pending save csw and return cc=1 */
     if (chan_status[chan] & (STATUS_PCI|STATUS_ATTN|STATUS_CHECK|\
@@ -804,7 +831,7 @@ int testchan(uint16 channel) {
         return 0;
     if (channel > channels)
         return 3;
-    st = chan_status[subchannels + channel];
+    st = chan_status[SEL_BASE + channel];
     if (st & STATUS_BUSY)
         return 2;
     if (st & (STATUS_ATTN|STATUS_PCI|STATUS_EXPT|STATUS_CHECK|
@@ -859,7 +886,7 @@ t_stat chan_boot(uint16 addr, DEVICE *dptyr) {
  * interrupt pending.
  */
 uint16
-scan_chan(uint16 mask) {
+scan_chan(uint16 mask, int irq_en) {
      int         i;
      int         ch;
      int         pend = 0;         /* No device */
@@ -870,14 +897,11 @@ scan_chan(uint16 mask) {
          return 0;
      irq_pend = 0;
      /* Start with channel 0 and work through all channels */
-     for (i = 0; i < subchannels + channels; i++) {
-         /* If onto channel 1 or above shift mask */
-         if (i >= subchannels)
-            imask = imask / 2;
-
+     for (i = 0; i < CHAN_SZ; i++) {
          /* Check if PCI pending */
-         if (chan_status[i] & STATUS_PCI) {
-                sim_debug(DEBUG_EXP, &cpu_dev, "Scan PCI(%x %x %x %x) end\n", i,
+         if (irq_en && (chan_status[i] & STATUS_PCI) != 0) {
+             imask = 0x8000 >> find_chan(i);
+             sim_debug(DEBUG_EXP, &cpu_dev, "Scan PCI(%x %x %x %x) end\n", i,
                          chan_status[i], imask, mask);
              if ((imask & mask) != 0) {
                 pend = chan_dev[i];
@@ -892,10 +916,12 @@ scan_chan(uint16 mask) {
                           (void)load_ccw(i, 1);
                 else
                     irq_pend = 1;
-             } else {
+             } else if (irq_en || loading) {
+                imask = 0x8000 >> find_chan(i);
                 sim_debug(DEBUG_EXP, &cpu_dev, "Scan(%x %x %x %x) end\n", i,
                          chan_status[i], imask, mask);
-                if ((imask & mask) != 0 || loading != 0) {
+                if ((chan_status[i] & STATUS_DEND) != 0 &&
+                     (imask & mask) != 0 || loading != 0) {
                     pend = chan_dev[i];
                     break;
                 }
@@ -921,6 +947,8 @@ scan_chan(uint16 mask) {
               return pend;
           }
      } else {
+          if (!irq_en)
+             return 0;
           for (pend = 0; pend < MAX_DEV; pend++) {
              if (dev_status[pend] != 0) {
                  ch = find_subchan(pend);
@@ -1048,7 +1076,7 @@ set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
         uptr->u3 |= UNIT_ADDR(devaddr);
         fprintf(stderr, "Set dev %s %x\n\r", dptr->name, GET_UADDR(uptr->u3));
     } else {
-        fprintf(stderr, "Set dev %s0 %x\n\r", dptr->name, GET_UADDR(uptr->u3));
+        fprintf(stderr, "Set dev %s0 %x\n\r",  dptr->name, devaddr);
         for (i = 0; i < dibp->numunits; i++)  {
              dev_unit[devaddr + i] = dibp;
              uptr = &((dibp->units)[i]);
@@ -1073,7 +1101,7 @@ show_dev_addr(FILE * st, UNIT * uptr, int32 v, CONST void *desc)
     if (dptr == NULL)
         return SCPE_IERR;
     addr = GET_UADDR(uptr->u3);
-    fprintf(st, "%03x", addr);
+    fprintf(st, "DEV=%03x", addr);
     return SCPE_OK;
 }
 
