@@ -66,7 +66,21 @@ int          pte_shift;            /* Bits to shift a PTE entry */
 int          per_en;               /* Enable PER tracing */
 uint32       per_mod;              /* Module modification mask */
 int          per_code;             /* Code for PER */
-uint32       per_addr;             /* Address of last reference */ 
+uint32       per_addr;             /* Address of last reference */
+#ifdef USE_64BIT
+t_uint64     tod_clock;            /* Current Time of Day Clock */
+t_uint64     clk_cmp;              /* Clock compare value */
+t_uint64     cpu_timer;            /* CPU timer value */
+#else
+uint32       tod_clock[2];         /* Current Time of Day Clock */
+uint32       clk_cmp[2];           /* Clock compare value */
+uint32       cpu_timer[2];         /* CPU timer value */
+#endif
+int          clk_state;
+
+#define CLOCK_UNSET   0            /* Clock not set */
+#define CLOCK_SET     1            /* Clock set */
+
 
 #define DAT_ENABLE  0x01           /* DAT enabled */
 
@@ -228,8 +242,10 @@ t_bool build_dev_tab (void);
 
 /* Interval timer option */
 t_stat              rtc_srv(UNIT * uptr);
+t_stat              clk_srv(UNIT * uptr);
 t_stat              rtc_reset(DEVICE * dptr);
 int32               rtc_tps = 300;
+int32               clk_tps = 1000;
 
 
 /* CPU data structures
@@ -240,7 +256,9 @@ int32               rtc_tps = 300;
    cpu_mod      CPU modifier list
 */
 
-UNIT cpu_unit = { UDATA (&rtc_srv, UNIT_IDLE|UNIT_BINK|UNIT_FIX, MAXMEMSIZE) };
+UNIT cpu_unit[] = { {UDATA (&rtc_srv, UNIT_IDLE|UNIT_BINK|UNIT_FIX, MAXMEMSIZE)},
+                    {UDATA (&clk_srv, UNIT_DIS, 0)}
+};
 
 REG cpu_reg[] = {
     { HRDATA (PC, PC, 24) },
@@ -270,6 +288,7 @@ REG cpu_reg[] = {
     { HRDATA (FP4, fpregs[04], 32) },
     { HRDATA (FP6, fpregs[06], 32) },
     { BRDATA (FP, fpregs, 16, 32, 8) },
+    { BRDATA (CR, cregs, 16, 32, 16) },
     { NULL }
     };
 
@@ -291,12 +310,12 @@ MTAB cpu_mod[] = {
     { FEAT_PROT, FEAT_PROT, "PROT", "PROT", NULL, NULL, NULL, "Storage protection"},
     { FEAT_UNIV, FEAT_UNIV, "UNIV", "UNIV", NULL, NULL, NULL, "Universal instruction"},
     { FEAT_UNIV, 0, NULL, "NOUNIV", NULL, NULL, NULL, "Basic instructions"},
-    { FEAT_UNIV, FEAT_FLOAT, "FLOAT", "FLOAT", NULL, NULL, NULL, 
+    { FEAT_UNIV, FEAT_FLOAT, "FLOAT", "FLOAT", NULL, NULL, NULL,
                                 "Floating point instructions"},
     { FEAT_FLOAT, 0, NULL, "NOFLOAT", NULL, NULL, NULL, "No floating point instructions"},
     { FEAT_UNIV, FEAT_DEC, "DECIMAL", "DECIMAL", NULL, NULL, NULL, "Decimal instruction set"},
     { FEAT_DEC, 0, NULL, "NODECIMAL", NULL, NULL, NULL, "No decimal instructions"},
-    { FEAT_EFP|FEAT_FLOAT, FEAT_EFP|FEAT_FLOAT, "EFLOAT", "EFLOAT", NULL, NULL, NULL, 
+    { FEAT_EFP|FEAT_FLOAT, FEAT_EFP|FEAT_FLOAT, "EFLOAT", "EFLOAT", NULL, NULL, NULL,
                                 "Extended Floating point instruction"},
     { FEAT_EFP, 0, NULL, "NOEFLOAT", NULL, NULL, NULL, "No extended floating point"},
     { FEAT_STOR, FEAT_STOR, "STORE", "STORE", NULL, NULL, NULL, "No storage alignment"},
@@ -313,7 +332,7 @@ MTAB cpu_mod[] = {
     };
 
 DEVICE cpu_dev = {
-    "CPU", &cpu_unit, cpu_reg, cpu_mod,
+    "CPU", cpu_unit, cpu_reg, cpu_mod,
     1, 16, 24, 1, 16, 8,
     &cpu_ex, &cpu_dep, &cpu_reset, NULL, NULL, NULL,
     NULL, DEV_DEBUG, 0, dev_debug,
@@ -340,7 +359,7 @@ ICM   BF                RS
 #endif
 
 void post_extirq() {
-     cpu_unit.flags |= EXT_IRQ;
+     cpu_unit[0].flags |= EXT_IRQ;
 }
 
 
@@ -353,7 +372,7 @@ void storepsw(uint32 addr, uint16 ircode) {
         ircode |= IRC_PER;
      if (ec_mode) {
          /* Generate first word */
-         if ((cpu_unit.flags & FEAT_370) == 0) { /* IBM 360/67 in EC mode */
+         if ((cpu_unit[0].flags & FEAT_370) == 0) { /* IBM 360/67 in EC mode */
               word = (((uint32)dat_en) << 26) |
                      ((irq_en) ? 1<<25:0) |
                      ((ext_en) ? 1<<24:0) |
@@ -363,13 +382,13 @@ void storepsw(uint32 addr, uint16 ircode) {
                      (((uint32)cc) << 12) |
                      (((uint32)pmsk) << 8);
              switch(addr) {
-             case OEPSW: 
+             case OEPSW:
                    M[0xc >> 2] = (M[0xc >> 2] & 0xffff0000) | ircode;
                    break;
-             case OSPSW: 
+             case OSPSW:
                    M[0x10 >> 2] = (M[0x10 >> 2] & 0x0000ffff) | ((uint32)ircode << 16);
                    break;
-             case OPPSW: 
+             case OPPSW:
                    M[0x10 >> 2] = (M[0x10 >> 2] & 0xffff0000) | ircode;
                    break;
              case OIOPSW:
@@ -388,13 +407,13 @@ void storepsw(uint32 addr, uint16 ircode) {
                      (((uint32)cc) << 12) |
                      (((uint32)pmsk) << 8);
              switch(addr) {
-             case OEPSW: 
+             case OEPSW:
                    M[0x84 >> 2] = (M[0x84 >> 2] & 0xffff0000) | ircode;
                    break;
-             case OSPSW: 
+             case OSPSW:
                    M[0x88 >> 2] = (ilc << 17) | ircode;
                    break;
-             case OPPSW: 
+             case OPPSW:
                    M[0x8C >> 2] = (ilc << 17) | ircode;
                    break;
              case OIOPSW:
@@ -439,7 +458,7 @@ void storepsw(uint32 addr, uint16 ircode) {
 }
 
 /*
- * For 370 
+ * For 370
  *     PS = 2K     page_shift = 11   pte_avail = 0x4  pte_mbz = 0x2 pte_shift = 3
  *     PS = 4K     page_shift = 12   pte_avail = 0x8  pte_mbz = 0x6 pte_shift = 4
  *
@@ -485,6 +504,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
      seg = (page & 0xff00) << 4;
      /* Quick check if TLB correct */
      entry = tlb[page & 0xff];
+ fprintf(stderr, "translatex: %08x %08x\r\n", entry, page);
      if ((entry & TLB_VALID) != 0 && ((entry ^ seg) & TLB_SEG) == 0) {
          *pa = (va & page_mask) | ((entry & TLB_PHY) << page_shift);
          if (va >= MEMSIZE) {
@@ -496,9 +516,10 @@ int  TransAddr(uint32 va, uint32 *pa) {
      /* TLB not correct, try loading correct entry */
      seg = (va >> seg_shift) & seg_mask;   /* Segment number to word address */
      page = (va >> page_shift) & page_index;
+ fprintf(stderr, "translate: %08x %03x %03x\r\n", va, seg, page);
      /* Check address against lenght of segment table */
      if (seg > seg_len) {
-         if ((cpu_unit.flags & FEAT_370) == 0)
+         if ((cpu_unit[0].flags & FEAT_370) == 0)
              cregs[2] = va;
          else
              M[0x90 >> 2] = va;
@@ -507,15 +528,17 @@ int  TransAddr(uint32 va, uint32 *pa) {
          return 1;
      }
      addr = (((seg << 2) + seg_addr) & AMASK);
+ fprintf(stderr, "translate0: %08x\r\n", addr);
      if (addr >= MEMSIZE) {
          storepsw(OPPSW, IRC_ADDR);
          return 1;
      }
      /* Get pointer to page table */
      entry = M[addr >> 2];
+ fprintf(stderr, "translate1: %08x\r\n", entry);
      /* Check if entry valid and in correct length */
      if (entry & PTE_VALID || page > (entry >> 24)) {
-         if ((cpu_unit.flags & FEAT_370) == 0)
+         if ((cpu_unit[0].flags & FEAT_370) == 0)
              cregs[2] = va;
          else
              M[0x90 >> 2] = va;
@@ -524,8 +547,9 @@ int  TransAddr(uint32 va, uint32 *pa) {
      }
 
      /* Now we need to fetch the actual entry */
-     addr = (((entry & PTE_ADR) >> 1) + page) << 2;
+     addr = (entry & PTE_ADR) + (page << 1);
      addr &= AMASK;
+ fprintf(stderr, "translate2: %08x\r\n", entry);
      if (addr >= MEMSIZE) {
          storepsw(OPPSW, IRC_ADDR);
          return 1;
@@ -533,9 +557,10 @@ int  TransAddr(uint32 va, uint32 *pa) {
      entry = M[addr >> 2];
      entry >>= (addr & 2) ? 0 : 16;
      entry &= 0xffff;
+ fprintf(stderr, "translate3: %08x\r\n", entry);
 
      if ((entry & pte_mbz) != 0) {
-         if ((cpu_unit.flags & FEAT_370) == 0)
+         if ((cpu_unit[0].flags & FEAT_370) == 0)
              cregs[2] = va;
          else
              M[0x90 >> 2] = va;
@@ -545,7 +570,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
 
      /* Check if entry valid and in correct length */
      if (entry & pte_avail) {
-         if ((cpu_unit.flags & FEAT_370) == 0)
+         if ((cpu_unit[0].flags & FEAT_370) == 0)
              cregs[2] = va;
          else
              M[0x90 >> 2] = va;
@@ -560,6 +585,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
      seg = (page & 0xff00) << 4;
      tlb[page & 0xff] = entry;
      *pa = (va & page_mask) | ((entry & TLB_PHY) << page_shift);
+ fprintf(stderr, "translatef: %08x\r\n", *pa);
      if (va >= MEMSIZE) {
         storepsw(OPPSW, IRC_ADDR);
         return 1;
@@ -586,7 +612,7 @@ int  ReadFull(uint32 addr, uint32 *data) {
 
      /* Check storage key */
      if (st_key != 0) {
-         if ((cpu_unit.flags & FEAT_PROT) == 0) {
+         if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
@@ -600,7 +626,7 @@ int  ReadFull(uint32 addr, uint32 *data) {
 
      *data = M[addr];
      if (offset != 0) {
-         if ((cpu_unit.flags & FEAT_STOR) == 0) {
+         if ((cpu_unit[0].flags & FEAT_STOR) == 0) {
               storepsw(OPPSW, IRC_SPEC);
               return 1;
          }
@@ -637,7 +663,7 @@ int ReadByte(uint32 addr, uint32 *data) {
 
 int ReadHalf(uint32 addr, uint32 *data) {
      if (addr & 0x1) {
-         if ((cpu_unit.flags & FEAT_STOR) == 0) {
+         if ((cpu_unit[0].flags & FEAT_STOR) == 0) {
               storepsw(OPPSW, IRC_SPEC);
               return 1;
          }
@@ -695,7 +721,7 @@ int WriteFull(uint32 addr, uint32 data) {
 
      /* Check storage key */
      if (st_key != 0) {
-         if ((cpu_unit.flags & FEAT_PROT) == 0) {
+         if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
@@ -709,7 +735,7 @@ int WriteFull(uint32 addr, uint32 data) {
 
      /* Check if we handle unaligned access */
      if (offset != 0) {
-         if ((cpu_unit.flags & FEAT_STOR) == 0) {
+         if ((cpu_unit[0].flags & FEAT_STOR) == 0) {
              storepsw(OPPSW, IRC_SPEC);
              return 1;
          }
@@ -728,7 +754,7 @@ int WriteFull(uint32 addr, uint32 data) {
                 }
                 key[pa2 >> 9] |= 0x6;
              }
-        } else 
+        } else
              pa2 = pa + 1;
      }
 
@@ -773,7 +799,7 @@ int WriteByte(uint32 addr, uint32 data) {
 
      /* Check storage key */
      if (st_key != 0) {
-         if ((cpu_unit.flags & FEAT_PROT) == 0) {
+         if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
@@ -810,14 +836,14 @@ int WriteHalf(uint32 addr, uint32 data) {
      pa >>= 2;
 
      /* Check if we handle unaligned access */
-     if ((offset & 1) != 0 && (cpu_unit.flags & FEAT_STOR) == 0) {
+     if ((offset & 1) != 0 && (cpu_unit[0].flags & FEAT_STOR) == 0) {
          storepsw(OPPSW, IRC_SPEC);
          return 1;
      }
 
      /* Check storage key */
      if (st_key != 0) {
-        if ((cpu_unit.flags & FEAT_PROT) == 0) {
+        if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
             storepsw(OPPSW, IRC_PROT);
             return 1;
         }
@@ -844,7 +870,7 @@ int WriteHalf(uint32 addr, uint32 data) {
                 }
                 key[pa2 >> 9] |= 0x6;
              }
-        } else 
+        } else
              pa2 = pa + 1;
      }
 
@@ -904,7 +930,7 @@ sim_instr(void)
     uint16          ops[3];
 //double    a, b, c;
 
-    if ((cpu_unit.flags & FEAT_370) == 0) {
+    if ((cpu_unit[0].flags & FEAT_370) == 0) {
         page_shift = 12;
         page_mask = 0xfff;
         seg_shift = 20;
@@ -913,7 +939,7 @@ sim_instr(void)
         pte_mbz = 0x7;
         pte_shift = 3;
         seg_addr = cregs[0] & AMASK;
-        seg_len = (cregs[0] >> 24) & 0xff;
+        seg_len = (((cregs[0] >> 24) & 0xff) + 1) << 4;
     } else {
         switch((cregs[0] >> 22) & 03) {
         default:   /* Generate translation exception */
@@ -934,7 +960,7 @@ sim_instr(void)
         }
         switch((cregs[0] >> 20) & 07) {
         default: /* Generate translation exception */
-        case 1:  /* 64K segments  */
+        case 0:  /* 64K segments  */
                  seg_shift = 16;
                  seg_mask = AMASK >> 16;
                  break;
@@ -944,15 +970,15 @@ sim_instr(void)
                  break;
         }
         seg_addr = cregs[1] & AMASK;
-        seg_len = (cregs[1] >> 24) & 0xff;
+        seg_len = (((cregs[1] >> 24) & 0xff) + 1) << 4;
     }
     /* Generate pte index mask */
     page_index = (~(seg_mask << seg_shift) & ~page_mask) & AMASK;
     reason = SCPE_OK;
     ilc = 0;
     /* Enable timer if option set */
-    if (cpu_unit.flags & FEAT_TIMER) {
-        sim_activate(&cpu_unit, 100);
+    if (cpu_unit[0].flags & FEAT_TIMER) {
+        sim_activate(&cpu_unit[0], 100);
     }
     interval_irq = 0;
     irq_en |= (loading != 0);
@@ -966,14 +992,12 @@ wait_loop:
         }
 
         /* Check if we should see if an IRQ is pending */
-        irq= scan_chan(sysmsk);
+        irq= scan_chan(sysmsk, irq_en);
         if (irq!= 0) {
             ilc = 0;
             sim_debug(DEBUG_DETAIL, &cpu_dev, "IRQ=%04x %08x\n", irq, PC);
             if (loading) {
                irqcode = irq;
-               if ((cpu_unit.flags & FEAT_370) != 0) 
-                  (void)WriteHalf(0xBA, irq);
                (void)WriteHalf(0x2, irq);
                loading = 0;
                irqaddr = 0;
@@ -984,9 +1008,9 @@ wait_loop:
 
         /* Check for external interrupts */
         if (ext_en) {
-            if ((cpu_unit.flags & EXT_IRQ) && (cregs[4] & 0x40) != 0) {
+            if ((cpu_unit[0].flags & EXT_IRQ) && (cregs[4] & 0x40) != 0) {
                 ilc = 0;
-                cpu_unit.flags &= ~EXT_IRQ;
+                cpu_unit[0].flags &= ~EXT_IRQ;
                 storepsw(OEPSW, 0x40);
                 goto supress;
             }
@@ -1128,7 +1152,7 @@ opr:
 
         /* Check if floating point */
         if ((op & 0xA0) == 0x20) {
-            if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
+            if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
                 storepsw(OPPSW, IRC_OPR);
                 goto supress;
             }
@@ -1189,7 +1213,7 @@ opr:
              hst[hst_p].src1 = src1;
              hst[hst_p].src2 = src2;
         }
-
+exe:
         /* Preform opcode */
         switch (op) {
         case OP_SPM:
@@ -1200,9 +1224,9 @@ opr:
 
         case OP_BASR:
         case OP_BAS:
-                if ((cpu_unit.flags & FEAT_370) != 0) {
+                if ((cpu_unit[0].flags & FEAT_370) != 0) {
                     storepsw(OPPSW, IRC_OPR);
-                } else if ((cpu_unit.flags & FEAT_DAT) == 0) {
+                } else if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                 } else {
                     dest = PC;
@@ -1283,7 +1307,7 @@ opr:
 
         case OP_SSK:
                 dest = src1;
-                if ((cpu_unit.flags & FEAT_PROT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if (flags & PROBLEM) {
                     storepsw(OPPSW, IRC_PRIV);
@@ -1291,7 +1315,7 @@ opr:
                     storepsw(OPPSW, IRC_SPEC);
                 } else if (addr1 >= MEMSIZE) {
                     storepsw(OPPSW, IRC_ADDR);
-                } else if (cpu_unit.flags & FEAT_PROT) {
+                } else if (cpu_unit[0].flags & FEAT_PROT) {
                     if (TransAddr(addr1, &addr2))
                         break;
                     /* 370 mask = 0xfe */
@@ -1301,7 +1325,7 @@ opr:
 
         case OP_ISK:
                 dest = src1;
-                if ((cpu_unit.flags & FEAT_PROT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
                     storepsw(OPPSW, IRC_PROT);
                 } if (flags & PROBLEM) {
                     storepsw(OPPSW, IRC_PRIV);
@@ -1328,14 +1352,16 @@ opr:
                 if (flags & PROBLEM) {
                     storepsw(OPPSW, IRC_PRIV);
                 } else {
-                    if ((cpu_unit.flags & FEAT_370) != 0 && (cregs[0] & 0x40000000) != 0) {
+fprintf(stderr, "SSM: %08x\r\n", addr1);
+                    if ((cpu_unit[0].flags & FEAT_370) != 0 && (cregs[0] & 0x40000000) != 0) {
                         storepsw(OPPSW, IRC_SPOP);
                         goto supress;
                     }
                     if (ReadByte(addr1, &src1))
                         break;
+fprintf(stderr, "SSM0: %02x\r\n", src1);
                     if (ec_mode) {
-                        if ((cpu_unit.flags & FEAT_370) != 0) {
+                        if ((cpu_unit[0].flags & FEAT_370) != 0) {
                             if (src1 & 0xb8) {
                                 storepsw(OPPSW, IRC_SPEC);
                                 break;
@@ -1344,6 +1370,9 @@ opr:
                             dat_en = (src1 & 04) != 0;
                             irq_en = (src1 & 02) != 0;
                             ext_en = (src1 & 01) != 0;
+                            cregs[0] &= ~0x20;
+                            if (ext_en)
+                                 cregs[0] |= 0x20;
                         } else {
                             if (src1 & 0xf8)
                                 storepsw(OPPSW, IRC_SPEC);
@@ -1353,9 +1382,14 @@ opr:
                     } else {
                         sysmsk = (src1 & 0xfe) << 8;
                         irq_en = (sysmsk != 0);
-                        ext_en = (src1 & 0x1) != 0;
-                        cregs[6] &= 0x0000ffff;
-                        cregs[6] |= (uint32)(sysmsk) << 16;
+                        if ((cpu_unit[0].flags & FEAT_370) != 0) {
+                            ext_en = (src1 & 0x1) != 0;
+                            cregs[2] &= 0x0000ffff;
+                            cregs[2] |= (uint32)(sysmsk) << 16;
+                        } else {
+                            cregs[4] &= 0x00ffffff;
+                            cregs[4] |= (uint32)(sysmsk) << 16;
+                        }
                         irq_pend = 1;
                     }
                 }
@@ -1530,7 +1564,7 @@ set_cc3:
                 }
 #ifdef USE_64BIT
                 src1L = ((t_uint64)src1) * ((t_uint64)src2);
-                if (fill) 
+                if (fill)
                     src1L = -src1L;
                 if (op != OP_MH) {
                     STDBL(reg1, src1L);
@@ -1953,9 +1987,9 @@ save_dbl:
                 break;
 
         case OP_STMC:
-                if ((cpu_unit.flags & FEAT_370) != 0) {
+                if ((cpu_unit[0].flags & FEAT_370) != 0) {
                     storepsw(OPPSW, IRC_OPR);
-                } else if ((cpu_unit.flags & FEAT_DAT) == 0) {
+                } else if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if (flags & PROBLEM) {
                     storepsw(OPPSW, IRC_PRIV);
@@ -1963,12 +1997,12 @@ save_dbl:
                     reg = R2(reg);
                     for (;;) {
                         dest = 0;
-                        switch (reg) {
+                        switch (reg1) {
                         case 0x0:     /* Segment table address */
                         case 0x6:     /* Maskes */
                         case 0x4:     /* Extended mask */
                         case 0x2:     /* Translation execption */
-                                  dest = cregs[reg];
+                                  dest = cregs[reg1];
                                   break;
                         case 0x8:     /* Partitioning register */
                         case 0x9:     /* Partitioning register */
@@ -2000,9 +2034,9 @@ save_dbl:
                 break;
 
         case OP_LMC:
-                if ((cpu_unit.flags & FEAT_370) != 0) {
+                if ((cpu_unit[0].flags & FEAT_370) != 0) {
                     storepsw(OPPSW, IRC_OPR);
-                } else if ((cpu_unit.flags & FEAT_DAT) == 0) {
+                } else if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if (flags & PROBLEM) {
                     storepsw(OPPSW, IRC_PRIV);
@@ -2011,8 +2045,8 @@ save_dbl:
                     for (;;) {
                         if (ReadFull(addr1, &dest))
                             goto supress;
-                        cregs[reg] = dest;
-                        switch (reg) {
+                        cregs[reg1] = dest;
+                        switch (reg1) {
                         case 0x0:     /* Segment table address */
                                   for (temp = 0;
                                        temp < sizeof(tlb)/sizeof(uint32);
@@ -2021,12 +2055,12 @@ save_dbl:
                                   if ((dest & 0x3f) != 0)
                                      storepsw(OPPSW, IRC_DATA);
                                   seg_addr = dest & AMASK;
-                                  seg_len = (dest >> 24) & 0xff;
+                                  seg_len = (((dest >> 24) & 0xff) + 1) << 4;
                                   break;
                         case 0x6:     /* Maskes */
                                   sysmsk = (dest >> 16) & 0xfefe;
                                   cregs[reg] &= 0xfefe0000;
-                                  if (sysmsk & 0xfe00) 
+                                  if (sysmsk & 0xfe00)
                                       cregs[reg] |= 0x1000000;
                                   if (sysmsk & 0x00fe)
                                       cregs[reg] |= 0x0010000;
@@ -2061,9 +2095,7 @@ save_dbl:
                 break;
 
         case OP_LRA:
-                if ((cpu_unit.flags & FEAT_370) != 0) {
-                    storepsw(OPPSW, IRC_OPR);
-                } else if ((cpu_unit.flags & FEAT_DAT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if (flags & PROBLEM) {
                     storepsw(OPPSW, IRC_PRIV);
@@ -2072,17 +2104,19 @@ save_dbl:
                     uint32      page;
                     uint32      entry;
 
+ fprintf(stderr, "LRA0: %08x\r\n", addr1);
                     /* RX in RS range */
                     if (X2(reg) != 0)
                         addr1 = (addr1 + regs[X2(reg)]) & AMASK;
 
                     addr1 &= AMASK;
-                    seg = (addr1 >> seg_shift) & seg_mask;   /* Segment number to word address */
+                    /* Segment number to word address */
+                    seg = (addr1 >> seg_shift) & seg_mask;
                     page = (addr1 >> page_shift) & page_index;
                     if (seg > seg_len) {
                         cc = 3;
                         regs[reg1] = addr1;
-                    per_mod |= 1 << reg1;
+                        per_mod |= 1 << reg1;
                         break;
                     }
                     addr2 = (((seg << 2) + seg_addr) & AMASK);
@@ -2107,26 +2141,27 @@ save_dbl:
                     }
 
                     /* Now we need to fetch the actual entry */
-                    addr2 = (((entry & PTE_ADR) >> 1) + page) << 2;
+                    addr2 = (entry & PTE_ADR) + (page << 1);
                     addr2 &= AMASK;
                     if (addr2 >= MEMSIZE) {
                         storepsw(OPPSW, IRC_ADDR);
                         goto supress;
                     }
-                    
+
                     entry = M[addr2 >> 2];
                     entry >>= (addr2 & 2) ? 0 : 16;
                     entry &= 0xffff;
 
                     /* Check if entry valid */
                     if (entry & pte_avail) {
-                        cc = 1;
+                        cc = 2;
                         regs[reg1] = addr2;
                         per_mod |= 1 << reg1;
                         break;
                     }
 
-                    addr2 = (addr1 & page_mask) | ((entry & TLB_PHY) << page_shift);
+                    addr2 = (addr1 & page_mask) | ((entry & TLB_PHY) << 8);
+ fprintf(stderr, "LRA7: %08x\r\n",addr2);
                     cc = 0;
                     regs[reg1] = addr2;
                     per_mod |= 1 << reg1;
@@ -2534,7 +2569,7 @@ save_dbl:
 
                 /* 370 specific instructions */
         case OP_ICM:
-                if ((cpu_unit.flags & FEAT_370) != 0) {
+                if ((cpu_unit[0].flags & FEAT_370) != 0) {
                     int i, j;
 
                     dest = regs[reg1];
@@ -2554,7 +2589,7 @@ save_dbl:
                                     cc = 2;
                             }
                             fill = 0;
-                        } 
+                        }
                     }
                     regs[reg1] = dest;
                     per_mod |= 1 << reg1;
@@ -2565,7 +2600,7 @@ save_dbl:
                 break;
 
          case OP_STCM:
-                if ((cpu_unit.flags & FEAT_370) != 0) {
+                if ((cpu_unit[0].flags & FEAT_370) != 0) {
                     int i, j;
 
                     dest = regs[reg1];
@@ -2575,7 +2610,7 @@ save_dbl:
                             if(WriteByte(addr1, src1))
                                break;
                             addr1++;
-                        } 
+                        }
                     }
                 } else {
                     storepsw(OPPSW, IRC_OPR);
@@ -2584,7 +2619,7 @@ save_dbl:
                 break;
 
         case OP_CLM:
-                if ((cpu_unit.flags & FEAT_370) != 0) {
+                if ((cpu_unit[0].flags & FEAT_370) != 0) {
                     uint32  rval[4];
                     int i, j, k;
 
@@ -2610,7 +2645,7 @@ save_dbl:
                 break;
 
         case OP_370:
-                if ((cpu_unit.flags & FEAT_370) != 0) {
+                if ((cpu_unit[0].flags & FEAT_370) != 0) {
                    if (reg < 2 || reg > 0x13) {
                        storepsw(OPPSW, IRC_OPR);
                        goto supress;
@@ -2622,47 +2657,158 @@ save_dbl:
                    switch(reg) {
                    case 0x2: /* STIDP */
                               /* Store CPUID in double word */
+                              dest = 100;
+                              if (WriteFull(addr1, dest))
+                                 goto supress;
+                              dest = 0x145 << 16;
+                              if (WriteFull(addr1 + 4, dest))
+                                 goto supress;
                               break;
+
+                   case 0x3: /* STIDC */
+                              /* Store channel id */
+                              addr1 = 168;
+                              dest = (addr1 >> 8) & 0xff;
+                              if (dest > MAX_CHAN) {
+                                  cc = 3;
+                                  break;
+                              }
+                              if (dest == 0 || dest == 4)
+                                  dest = 0x10000000;
+                              else
+                                  dest = 0;
+                              if (WriteFull(addr1, dest))
+                                 goto supress;
+                              dest = 0;
+                              if (WriteFull(addr1+1, dest))
+                                 goto supress;
+                              break;
+
                    case 0x4: /* SCK */
                               /* Load clock with double word */
+#if USE_64BIT
+                              if (ReadFull(addr1, &src1))
+                                 goto supress;
+                              if (ReadFull(addr1+4, &src1h))
+                                 goto supress;
+                              tod_clock = (((t_uint64)(src1)) << 32) | ((t_uint64)src1h);
+fprintf(stderr, "Set TOD %016llx\r\n", tod_clock);
+#else
+                              if (ReadFull(addr1, &src1))
+                                 goto supress;
+                              if (ReadFull(addr1+4, &src1h))
+                                 goto supress;
+                              tod_clock[0] = src1;
+                              tod_clock[1] = src1h;
+#endif
+                              clk_state = CLOCK_SET;
+                              cc = 0;
                               break;
                    case 0x5: /* STCK */
                               /* Store TOD clock in location */
+#if USE_64BIT
+                              src1h = (uint32)(tod_clock & 0xFFFFF000);
+                              src1 = (uint32)((tod_clock >> 32) & 0xffffffff);
+                              if (WriteFull(addr1, src1))
+                                 goto supress;
+                              if (WriteFull(addr1+4, src1h))
+                                 goto supress;
+#else
+                              if (WriteFull(addr1, tod_clock[0]))
+                                 goto supress;
+                              if (WriteFull(addr1+4, tod_clock[1]))
+                                 goto supress;
+#endif
+                              cc = !clk_state;
                               break;
                    case 0x6: /* SCKC */
                               /* Load clock compare with double word */
+#if USE_64BIT
+                              if (ReadFull(addr1, &src1))
+                                 goto supress;
+                              if (ReadFull(addr1+4, &src1h))
+                                 goto supress;
+                              clk_cmp = (((t_uint64)(src1)) << 32) | ((t_uint64)src1h);
+#else
+                              if (ReadFull(addr1, &src1))
+                                 goto supress;
+                              if (ReadFull(addr1+4, &src1h))
+                                 goto supress;
+                              clk_cmp[0] = src1;
+                              clk_cmp[1] = src1h;
+#endif
                               break;
                    case 0x7: /* STCKC */
                               /* Store clock compare in double word */
+#if USE_64BIT
+                              src1h = (uint32)(clk_cmp & 0xFFFFF000);
+                              src1 = (uint32)((clk_cmp >> 32) & 0xffffffff);
+                              if (WriteFull(addr1, src1))
+                                 goto supress;
+                              if (WriteFull(addr1+4, src1h))
+                                 goto supress;
+#else
+                              if (WriteFull(addr1, clk_cmp[0]))
+                                 goto supress;
+                              if (WriteFull(addr1+4, clk_cmp[1]))
+                                 goto supress;
+#endif
                               break;
                    case 0x8: /* SPT */
                               /* Set the CPU timer with double word */
+#if USE_64BIT
+                              if (ReadFull(addr1, &src1))
+                                 goto supress;
+                              if (ReadFull(addr1+4, &src1h))
+                                 goto supress;
+                              cpu_timer = (((t_uint64)(src1)) << 32) | ((t_uint64)src1h);
+#else
+                              if (ReadFull(addr1, &src1))
+                                 goto supress;
+                              if (ReadFull(addr1+4, &src1h))
+                                 goto supress;
+                              cpu_timer[0] = src1;
+                              cpu_timer[1] = src1h;
+#endif
                               break;
                    case 0x9: /* STPT */
                               /* Store the CPU timer in double word */
+#if USE_64BIT
+                              src1h = (uint32)(cpu_timer & 0xFFFFF000);
+                              src1 = (uint32)((cpu_timer >> 32) & 0xffffffff);
+                              if (WriteFull(addr1, src1))
+                                 goto supress;
+                              if (WriteFull(addr1+4, src1h))
+                                 goto supress;
+#else
+                              if (WriteFull(addr1, cpu_timer[0]))
+                                 goto supress;
+                              if (WriteFull(addr1+4, cpu_timer[1]))
+                                 goto supress;
+#endif
                               break;
                    case 0xa:  /* SPKA */
-                              if ((cpu_unit.flags & FEAT_PROT) == 0) {
+                              if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
                                   storepsw(OPPSW, IRC_OPR);
                                   goto supress;
                               }
                               st_key = 0xf0 & addr1;
                               break;
                    case 0xb:  /* IPK */
-                              if ((cpu_unit.flags & FEAT_PROT) == 0) {
+                              if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
                                   storepsw(OPPSW, IRC_OPR);
                                   goto supress;
                               }
                               regs[2] = (regs[2] & 0xffffff00) | st_key;
                               break;
                    case 0xd: /* PTLB */
-                              if ((cpu_unit.flags & FEAT_DAT) == 0) {
+                              if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                                   storepsw(OPPSW, IRC_OPR);
                                   goto supress;
                               }
                               for (temp = 0; temp < 256; temp++)
                                   tlb[temp] = 0;
-                              break; 
+                              break;
                    case 0x10: /* SPX */
                               storepsw(OPPSW, IRC_OPR);
                               goto supress;
@@ -2673,7 +2819,7 @@ save_dbl:
                               storepsw(OPPSW, IRC_OPR);
                               goto supress;
                    case 0x13: /* RRB */
-                              if ((cpu_unit.flags & FEAT_DAT) == 0) {
+                              if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                                   storepsw(OPPSW, IRC_OPR);
                                   goto supress;
                               }
@@ -2689,12 +2835,12 @@ save_dbl:
                 }
                 break;
         case OP_STNSM:
-                if ((cpu_unit.flags & FEAT_370) != 0) {
+                if ((cpu_unit[0].flags & FEAT_370) != 0) {
                     if (flags & PROBLEM) {
                         storepsw(OPPSW, IRC_PRIV);
                         goto supress;
                     }
-                    if ((cpu_unit.flags & FEAT_DAT) == 0) {
+                    if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                         storepsw(OPPSW, IRC_OPR);
                         goto supress;
                     }
@@ -2721,27 +2867,28 @@ save_dbl:
                        ext_en = (dest & 1);
                     } else {
                        sysmsk = (dest << 8) & 0xfe00;
-                       cregs[6] = (sysmsk << 16);
-                       if (sysmsk) {
-                           cregs[6] |= 0x1000000;
+                       cregs[2] = (sysmsk << 16);
+                       if (sysmsk)
                            irq_en = 1;
-                       } else
+                       else
                            irq_en = 0;
                        ext_en = (dest & 1);
-                       per_en = 0;
                     }
+                    cregs[0] &= ~0x20;
+                    if (ext_en)
+                         cregs[0] |= 0x20;
                 } else {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
                 break;
         case OP_STOSM:
-                if ((cpu_unit.flags & FEAT_370) != 0) {
+                if ((cpu_unit[0].flags & FEAT_370) != 0) {
                     if (flags & PROBLEM) {
                         storepsw(OPPSW, IRC_PRIV);
                         goto supress;
                     }
-                    if ((cpu_unit.flags & FEAT_DAT) == 0) {
+                    if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                         storepsw(OPPSW, IRC_OPR);
                         goto supress;
                     }
@@ -2768,22 +2915,23 @@ save_dbl:
                        ext_en = (dest & 1);
                     } else {
                        sysmsk = (dest << 8) & 0xfe00;
-                       cregs[6] = (sysmsk << 16);
-                       if (sysmsk) {
-                           cregs[6] |= 0x1000000;
+                       cregs[2] = (sysmsk << 16);
+                       if (sysmsk)
                            irq_en = 1;
-                       } else
+                       else
                            irq_en = 0;
-                       per_en = 0;
                        ext_en = (dest & 1);
                     }
+                    cregs[0] &= ~0x20;
+                    if (ext_en)
+                         cregs[0] |= 0x20;
                 } else {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
                 break;
         case OP_SIGP:
-                if ((cpu_unit.flags & FEAT_370) != 0) {
+                if ((cpu_unit[0].flags & FEAT_370) != 0) {
                     if (flags & PROBLEM) {
                         storepsw(OPPSW, IRC_PRIV);
                         goto supress;
@@ -2792,7 +2940,7 @@ save_dbl:
                 storepsw(OPPSW, IRC_OPR);
                 goto supress;
         case OP_MC:
-                if ((cpu_unit.flags & FEAT_370) != 0) {
+                if ((cpu_unit[0].flags & FEAT_370) != 0) {
                     if ((reg & 0xf0) != 0) {
                         storepsw(OPPSW, IRC_SPEC);
                         goto supress;
@@ -2813,7 +2961,7 @@ save_dbl:
                 break;
 
         case OP_LCTL:
-                if ((cpu_unit.flags & FEAT_370) == 0) {
+                if ((cpu_unit[0].flags & FEAT_370) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if (flags & PROBLEM) {
                     storepsw(OPPSW, IRC_PRIV);
@@ -2822,9 +2970,19 @@ save_dbl:
                     for (;;) {
                         if (ReadFull(addr1, &dest))
                             goto supress;
-                        cregs[reg] = dest;
-                        switch (reg) {
+                        cregs[reg1] = dest;
+fprintf(stderr, "Loading: CR %x %08x IC=%08x %x\n\r", reg1, dest, PC, reg);
+                        switch (reg1) {
                         case 0x0:     /* General controll register */
+                                 /* CR0 values
+                                           |    |     |     |   |   |   |   |
+                                    0 0 0 00000 00 1 11 111 1111222222222231|
+                                    0 1 2 34567 89 0 12 345 6789012345678901|
+                                    b s t xxxxx ps 0 ss xxx iiiiiixxiiixxxxx|
+                                    m s d                   mmmmct  iIE     |
+                                  */
+                                  page_shift = 0;
+                                  seg_shift = 0;
                                   switch((dest >> 22) & 03) {
                                   default:   /* Generate translation exception */
                                   case 1:  /* 2K pages */
@@ -2844,7 +3002,7 @@ save_dbl:
                                   }
                                   switch((dest >> 20) & 07) {
                                   default: /* Generate translation exception */
-                                  case 1:  /* 64K segments  */
+                                  case 0:  /* 64K segments  */
                                            seg_shift = 16;
                                            seg_mask = AMASK >> 16;
                                            break;
@@ -2853,12 +3011,15 @@ save_dbl:
                                            seg_mask = AMASK >> 20;
                                            break;
                                   }
+fprintf(stderr, "Setting paging: shift: %d seg: %d\n\r", page_shift, seg_shift);
                                   /* Generate pte index mask */
-                                  page_index = (~(seg_mask << seg_shift) & ~page_mask) & AMASK;
+                                  page_index = ((~(seg_mask << seg_shift) & ~page_mask) & AMASK) >> page_shift;
+                                  ext_en = dest & 0x20;
                                   break;
                         case 0x1:     /* Segment table address and length */
                                   seg_addr = dest & AMASK;
-                                  seg_len = (dest >> 24) & 0xff;
+                                  seg_len = (((dest >> 24) & 0xff) + 1) << 4;
+fprintf(stderr, "Setting paging: addr: %06x len: %d\n\r", seg_addr, seg_len);
                                   break;
                         case 0x2:     /* Maskes */
                                   sysmsk = (dest >> 16) & 0xffff;
@@ -2887,17 +3048,16 @@ save_dbl:
                 break;
 
         case OP_STCTL:
-                if ((cpu_unit.flags & FEAT_370) == 0) {
+                if ((cpu_unit[0].flags & FEAT_370) == 0) {
                     storepsw(OPPSW, IRC_OPR);
-                } else if ((cpu_unit.flags & FEAT_DAT) == 0) {
+                } else if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if (flags & PROBLEM) {
                     storepsw(OPPSW, IRC_PRIV);
                 } else {
                     reg = R2(reg);
                     for (;;) {
-                        dest = cregs[reg];
-                        if (WriteFull(addr1, dest))
+                        if (WriteFull(addr1, cregs[reg1]))
                             goto supress;
                         if (reg1 == reg)
                             break;
@@ -2909,9 +3069,9 @@ save_dbl:
                 break;
 
         case OP_CS:
-                if ((cpu_unit.flags & FEAT_370) == 0) {
+                if ((cpu_unit[0].flags & FEAT_370) == 0) {
                     storepsw(OPPSW, IRC_OPR);
-                } else if ((addr1 & 0x3) != 0 || (reg1 & 1) != 0 || (reg & 1) != 0) { 
+                } else if ((addr1 & 0x3) != 0 || (reg1 & 1) != 0 || (reg & 1) != 0) {
                    storepsw(OPPSW, IRC_SPEC);
                 } else {
                     if (ReadFull(addr1, &src2))
@@ -2931,7 +3091,7 @@ save_dbl:
                 break;
 
         case OP_CDS:
-                if ((cpu_unit.flags & FEAT_370) == 0) {
+                if ((cpu_unit[0].flags & FEAT_370) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if ((addr1 & 0x7) != 0) {
                    storepsw(OPPSW, IRC_SPEC);
@@ -2959,10 +3119,10 @@ save_dbl:
                 }
                 break;
         case OP_SRP:
-                if ((cpu_unit.flags & FEAT_370) == 0) {
+                if ((cpu_unit[0].flags & FEAT_370) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
-                } else if ((cpu_unit.flags & FEAT_DEC) == 0) {
+                } else if ((cpu_unit[0].flags & FEAT_DEC) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 } else {
@@ -2970,7 +3130,7 @@ save_dbl:
                 }
                 break;
         case OP_MVCL:
-                if ((cpu_unit.flags & FEAT_370) == 0) {
+                if ((cpu_unit[0].flags & FEAT_370) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if (reg & 1 || reg1 & 1) {
                    storepsw(OPPSW, IRC_SPEC);
@@ -3029,7 +3189,7 @@ save_dbl:
                 }
                 break;
         case OP_CLCL:
-                if ((cpu_unit.flags & FEAT_370) == 0) {
+                if ((cpu_unit[0].flags & FEAT_370) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if (reg & 1 || reg1 & 1) {
                    storepsw(OPPSW, IRC_SPEC);
@@ -3082,10 +3242,10 @@ save_dbl:
         case OP_HDR:
         case OP_HER:
 //fprintf(stderr, "FP HD Op=%0x src2=%08x %08x %.12e\n\r", op, src2, src2h, cnvt_float(src2, src2h));
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
-                    storepsw(OPPSW, IRC_OPR);
-                    goto supress;
-                }
+//                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
+ //                   storepsw(OPPSW, IRC_OPR);
+  //                  goto supress;
+   //             }
                 /* Split number apart */
                 e1 = (src2 & EMASK) >> 24;
                 dest = src2 & MSIGN;  /* Save sign */
@@ -3125,10 +3285,10 @@ save_dbl:
         case OP_LE:
         case OP_LD:
 //fprintf(stderr, "FP LD Op=%0x src1=%08x %08x\n\r", op, src1, src1h);
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
-                    storepsw(OPPSW, IRC_OPR);
-                    goto supress;
-                }
+    //            if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
+     //               storepsw(OPPSW, IRC_OPR);
+      //              goto supress;
+       //         }
                 if ((op & 0x10) == 0)
                     fpregs[reg1|1] = src2h;
                 fpregs[reg1] = src2;
@@ -3144,10 +3304,10 @@ save_dbl:
         case OP_LTER:
         case OP_LCER:
 //fprintf(stderr, "FP LD Op=%0x src1=%08x %08x\n\r", op, src1, src1h);
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
-                    storepsw(OPPSW, IRC_OPR);
-                    goto supress;
-                }
+        //        if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
+         //           storepsw(OPPSW, IRC_OPR);
+          //          goto supress;
+           //     }
                 if ((op & 0x2) == 0)  /* LP, LN */
                     src2 &= ~MSIGN;
                 if ((op & 0x1))       /* LN, LC */
@@ -3165,30 +3325,30 @@ save_dbl:
 
                   /* Floating Store register */
         case OP_STD:
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
-                    storepsw(OPPSW, IRC_OPR);
-                    goto supress;
-                }
+//                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
+ //                   storepsw(OPPSW, IRC_OPR);
+  //                  goto supress;
+   //             }
                 if (WriteFull(addr1 + 4, src1h))
                     break;
                 /* Fall through */
 
         case OP_STE:
 //fprintf(stderr, "FP STD Op=%0x src1=%08x %08x\n\r", op, src1, src1h);
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
-                    storepsw(OPPSW, IRC_OPR);
-                    goto supress;
-                }
+//                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
+ //                   storepsw(OPPSW, IRC_OPR);
+  //                  goto supress;
+   //             }
                 WriteFull(addr1, src1);
                 break;
 
                   /* Floating Compare */
         case OP_CE:      /* 79 */
         case OP_CER:     /* 39 */
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
-                    storepsw(OPPSW, IRC_OPR);
-                    goto supress;
-                }
+//                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
+ //                   storepsw(OPPSW, IRC_OPR);
+  //                  goto supress;
+   //             }
 //                a = cnvt_float(src1, 0);
 //                b = cnvt_float(src2, 0);
 //fprintf(stderr, "FP = Op=%0x src1=%08x, src2=%08x %.12e %.12e %.12e\n\r", op, src1, src2, a, b, a-b);
@@ -3274,10 +3434,10 @@ save_dbl:
         case OP_AU:      /* 7E */
         case OP_AER:     /* 3A */
         case OP_AUR:     /* 3E */
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
-                    storepsw(OPPSW, IRC_OPR);
-                    goto supress;
-                }
+//                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
+ //                   storepsw(OPPSW, IRC_OPR);
+  //                  goto supress;
+   //             }
 //                a = cnvt_float(src1, 0);
 //                b = cnvt_float(src2, 0);
 //fprintf(stderr, "FP + Op=%0x src1=%08x, src2=%08x %.12e %.12e %.12e\n\r", op, src1, src2, a, b, a+b);
@@ -3407,10 +3567,10 @@ save_dbl:
                   /* Floating Compare */
         case OP_CD:      /* 69 */
         case OP_CDR:     /* 29 */
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
-                    storepsw(OPPSW, IRC_OPR);
-                    goto supress;
-                }
+//                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
+ //                   storepsw(OPPSW, IRC_OPR);
+  //                  goto supress;
+   //             }
 //                a = cnvt_float(src1, src1h);
 //                b = cnvt_float(src2, src2h);
 //fprintf(stderr, "FP = Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a-b);
@@ -3569,10 +3729,10 @@ save_dbl:
         case OP_AW:      /* 6E */
         case OP_ADR:     /* 2A */
         case OP_AWR:     /* 2E */
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
-                    storepsw(OPPSW, IRC_OPR);
-                    goto supress;
-                }
+//                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
+ //                   storepsw(OPPSW, IRC_OPR);
+  //                  goto supress;
+   //             }
 //                a = cnvt_float(src1, src1h);
 //                b = cnvt_float(src2, src2h);
 //fprintf(stderr, "FP + Op=%0x src1=%08x %08x, src2=%08x %08x %.12e %.12e %.12e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
@@ -3843,10 +4003,10 @@ fpstore:
         case OP_MER:
         case OP_ME:
         case OP_MD:
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
-                    storepsw(OPPSW, IRC_OPR);
-                    goto supress;
-                }
+//                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
+ //                   storepsw(OPPSW, IRC_OPR);
+  //                  goto supress;
+   //             }
 
 //                a = cnvt_float(src1, src1h);
 //                b = cnvt_float(src2, src2h);
@@ -4014,10 +4174,10 @@ fpnorm:
         case OP_DDR:
         case OP_DD:
         case OP_DE:
-                if ((cpu_unit.flags & FEAT_FLOAT) == 0) {
-                    storepsw(OPPSW, IRC_OPR);
-                    goto supress;
-                }
+//                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
+ //                   storepsw(OPPSW, IRC_OPR);
+  //                  goto supress;
+   //             }
 //                a = cnvt_float(src1, src1h);
 //                b = cnvt_float(src2, src2h);
 //fprintf(stderr, "FP / Op=%0x src1=%08x %08x, src2=%08x %08x %.12e %.12e %.12e\n\r", op, src1, src1h, src2, src2h, a, b, a/b);
@@ -4196,7 +4356,7 @@ fpnorm:
         case OP_SP:    /* 1011 */
         case OP_ZAP:   /* 1000 */
         case OP_AP:    /* 1010 */
-                if ((cpu_unit.flags & FEAT_DEC) == 0) {
+                if ((cpu_unit[0].flags & FEAT_DEC) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -4204,7 +4364,7 @@ fpnorm:
                 break;
 
         case OP_MP:
-                if ((cpu_unit.flags & FEAT_DEC) == 0) {
+                if ((cpu_unit[0].flags & FEAT_DEC) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -4212,7 +4372,7 @@ fpnorm:
                 break;
 
         case OP_DP:
-                if ((cpu_unit.flags & FEAT_DEC) == 0) {
+                if ((cpu_unit[0].flags & FEAT_DEC) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -4221,7 +4381,7 @@ fpnorm:
 
                   /* Extended precision load round */
         case OP_LRER:
-                if ((cpu_unit.flags & FEAT_EFP) == 0) {
+                if ((cpu_unit[0].flags & FEAT_EFP) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -4254,7 +4414,7 @@ fpnorm:
                 break;
 
         case OP_LRDR:
-                if ((cpu_unit.flags & FEAT_EFP) == 0) {
+                if ((cpu_unit[0].flags & FEAT_EFP) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -4275,7 +4435,7 @@ fpnorm:
                     /* Add round */
                     desth = src2h + 1;
                     dest = src2;
-		    if (desth == 0) 
+                    if (desth == 0)
                         dest ++;
 
                     /* If overflow, shift right 4 bits */
@@ -4299,7 +4459,7 @@ fpnorm:
 
         case OP_MXDR:
         case OP_MXD:
-                if ((cpu_unit.flags & FEAT_EFP) == 0) {
+                if ((cpu_unit[0].flags & FEAT_EFP) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -4493,7 +4653,7 @@ fpnorm:
                 src1 ^= MSIGN;
                 /* Fall through */
         case OP_AXR:
-                if ((cpu_unit.flags & FEAT_EFP) == 0) {
+                if ((cpu_unit[0].flags & FEAT_EFP) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -4892,7 +5052,7 @@ fpnorm:
                 break;
 
         case OP_MXR:
-                if ((cpu_unit.flags & FEAT_EFP) == 0) {
+                if ((cpu_unit[0].flags & FEAT_EFP) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
@@ -4957,33 +5117,49 @@ supress:
                   hst[hst_p].src2 = src2;
              }
 lpsw:
-             if ((cpu_unit.flags & FEAT_370) != 0)
+             if ((cpu_unit[0].flags & FEAT_370) != 0)
                  ec_mode = (src1 & 0x00080000) != 0;
              if (ec_mode) {
-                 if ((cpu_unit.flags & FEAT_370) != 0) {
-                     ext_en = (src1 & 0x1000000) != 0;
-                     irq_en = (src1 & 0x2000000) != 0;
+                 if ((cpu_unit[0].flags & FEAT_370) != 0) {
+                     ext_en = (src1 & 0x01000000) != 0;
+                     irq_en = (src1 & 0x02000000) != 0;
                      per_en = (src1 & 0x40000000) != 0;
+                     cregs[0] &= ~0x20;
+                     if (ext_en)
+                         cregs[0] |= 0x20;
+                     if (irqaddr == 4)
+                        (void)WriteHalf(0xBA, irq);
                  }
                  dat_en = (src1 >> 26) & 1;
                  cc = (src1 >> 12) & 3;
                  pmsk = (src1 >> 8) & 0xf;
              } else {
-                 cregs[6] = src1 & 0xfe000000;
-                 sysmsk = (cregs[6] >> 16) & 0xfe00;
+                 ext_en = (src1 & 0x1000000) != 0;
+                 sysmsk = (src1 >> 16) & 0xfe00;
+                 if ((cpu_unit[0].flags & FEAT_370) != 0) {
+                     cregs[2] = src1 & 0xfe000000;
+                     cregs[0] &= ~0x20;
+                     if (ext_en)
+                         cregs[0] |= 0x20;
+                 } else {
+                     cregs[4] = src1 & 0xfe000000;
+                     if (sysmsk)
+                        cregs[4] |= 0x1000000;
+                 }
                  if (sysmsk) {
-                     cregs[6] |= 0x1000000;
                      irq_en = 1;
                  } else
                      irq_en = 0;
                  per_en = 0;
                  pmsk = (src2 >> 24) & 0xf;
                  cc = (src2 >> 28) & 0x3;
-                 ext_en = (src1 & 0x1000000) != 0;
              }
              irqaddr = 0;
              st_key = (src1 >> 16)  & 0xf0;
-             flags = (src1 >> 16) & 0xf;
+             if ((cpu_unit[0].flags & FEAT_370) != 0)
+                flags = (src1 >> 16) & 0x7;
+             else
+                flags = (src1 >> 16) & 0xf;
              PC = src2 & AMASK;
              irq_pend = 1;
              sim_debug(DEBUG_INST, &cpu_dev, "PSW=%08x %08x  ", src1, src2);
@@ -5116,7 +5292,7 @@ dec_srp(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
                zero = 0;
         }
         /* Now fill zeros until at bottom */
-        for (; i > 0; i--) 
+        for (; i > 0; i--)
             a[i] = 0;
     } else {
         /* Check if number is zero */
@@ -5127,7 +5303,7 @@ dec_srp(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
             }
         }
     }
-            
+
     if (zero && !ov)
        sa = 0;
     cc = 0;
@@ -5373,7 +5549,9 @@ dec_div(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
 
 t_stat cpu_reset (DEVICE *dptr)
 {
-    st_key = cc = pmsk = irqcode = flags = irqaddr = loading = 0;
+    int     i;
+    sysmsk = st_key = cc = pmsk = irqcode = flags = irqaddr = loading = 0;
+    dat_en = irq_en = ext_en = per_en = 0;
     chan_set_devs();
     if (M == NULL) {                        /* first time init? */
         sim_brk_types = sim_brk_dflt = SWMASK ('E');
@@ -5381,7 +5559,8 @@ t_stat cpu_reset (DEVICE *dptr)
         if (M == NULL)
             return SCPE_MEM;
     }
-    cregs[4] = 0xff;
+    for (i = 0; i < 16; i++)
+       cregs[i] = 0;
     return SCPE_OK;
 }
 
@@ -5390,12 +5569,11 @@ t_stat cpu_reset (DEVICE *dptr)
 t_stat
 rtc_srv(UNIT * uptr)
 {
-    if (cpu_unit.flags & FEAT_TIMER) {
-        int32 t;
-        t = sim_rtcn_calb (rtc_tps, TMR_RTC);
+    if (cpu_unit[0].flags & FEAT_TIMER) {
+        (void)sim_rtcn_calb (rtc_tps, TMR_RTC);
         sim_activate_after(uptr, 1000000/rtc_tps);
         if ((M[0x50>>2] & 0xfffffc00) == 0)  {
-            sim_debug(DEBUG_INST, &cpu_dev, "TIMER IRQ %08x\n\r", M[0x50>>2]);
+            sim_debug(DEBUG_INST, &cpu_dev, "TIMER IRQ %08x\n", M[0x50>>2]);
             interval_irq = 1;
         }
         M[0x50>>2] -= 0x100;
@@ -5404,6 +5582,32 @@ rtc_srv(UNIT * uptr)
     return SCPE_OK;
 }
 
+/* Time of day clock and timer on IBM 370 */
+t_stat
+clk_srv(UNIT * uptr)
+{
+    int32 t;
+    (void)sim_rtcn_calb (clk_tps, TMR_RTC);
+    sim_activate_after(uptr, 1000000/clk_tps);
+#ifdef USE_64BIT
+    if (clk_state && (cregs[0] & 0x20000000) == 0)
+       tod_clock += 1000 << 12;
+    cpu_timer -= 1000 << 12;
+#else
+    if (clk_state && (cregs[0] & 0x20000000) == 0) {
+       t = tod_clock[1] + (1000 << 12);
+       if (t < tod_clock[1])
+            tod_clock[0]++;
+       tod_clock[1] = t;
+    }
+    t = cpu_timer[1] - (1000 << 12);
+    if (t > cpu_timer[1])
+        cpu_timer[0]--;
+    cpu_timer[1] = t;
+#endif
+    sim_debug(DEBUG_INST, &cpu_dev, "Clock = \n");
+    return SCPE_OK;
+}
 
 /* Memory examine */
 

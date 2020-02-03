@@ -26,7 +26,6 @@
 #include "sim_card.h"
 
 extern DEVICE cpu_dev;
-extern UNIT cpu_unit;
 extern REG cpu_reg[];
 extern uint32 M[MAXMEMSIZE];
 
@@ -373,7 +372,7 @@ t_opcode  optab[] = {
        { OP_STOSM,     "STOSM", SI },
        { OP_SIGP,      "SIGP",  RS },
        { OP_MC,        "MC",    SI },
-       { OP_370,       "I370",  XX },
+       { OP_370,       "",      XX },
        { OP_STCTL,     "STCTL", RS },
        { OP_LCTL,      "LCTL",  RS },
        { OP_CS,        "CS",    RS },
@@ -383,6 +382,25 @@ t_opcode  optab[] = {
        { OP_ICM,       "ICM",   RS },
        { OP_SRP,       "SRP",   SS|TWOOP },
        { 0,            NULL, 0 }
+};
+
+t_opcode  soptab[] = {
+       { 0x02,        "STIDP", RS },
+       { 0x03,        "STIDC", RS },
+       { 0x04,        "SCK",   RS },
+       { 0x05,        "STCK",  RS },
+       { 0x06,        "SCKC",  RS },
+       { 0x07,        "STCKC", RS },
+       { 0x08,        "SPT",   RS },
+       { 0x09,        "STPT",  RS },
+       { 0x0A,        "SPKA",  RS },
+       { 0x0B,        "IPK",   RS },
+       { 0x0D,        "PTLB",  RS|ZEROOP },
+       { 0x10,        "SPX",   RS },
+       { 0x11,        "STPX",  RS },
+       { 0x12,        "STAP",  RS },
+       { 0x13,        "RRB",   RS },
+       { 0,           NULL,    0}
 };
 
 void fprint_inst(FILE *of, uint16 *val) {
@@ -410,6 +428,20 @@ t_opcode        *tab;
                     fprintf(of, "%d,", (val[0] >> 4) & 0xf);
                     fprint_val(of, val[1] & 0xfff, 16, 12, PV_RZRO);
                     fprintf(of, "(%d,%d)", val[0] & 0xf, (val[1] >> 12) & 0xf);
+                    break;
+          case XX:
+                    inst = val[0] & 0xff;
+                    for (tab = soptab; tab->name != NULL; tab++) {
+                       if (tab->opbase == inst) {
+                          fputs(tab->name, of);
+                          if ((tab->type & ZEROOP) == 0) {
+                              fputc(' ', of);
+                              fprint_val(of, val[1] & 0xfff, 16, 12, PV_RZRO);
+                              if (val[1] & 0xf000)
+                                  fprintf(of, "(%d)", (val[1] >> 12) & 0xf);
+                          }
+                       }
+                    }
                     break;
           case RS:
                     fprintf(of, "%d,", (val[0] >> 4) & 0xf);
@@ -485,6 +517,7 @@ if (sw & SWMASK ('M')) {
           case RR:
                     l = 2;
                     break;
+          case XX:
           case RX:
           case RS:
           case SI:

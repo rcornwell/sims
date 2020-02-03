@@ -30,7 +30,7 @@
 
 #define MAXMEMSIZE        (16*1024*1024)      /* max memory size */
 #define PAMASK            (MAXMEMSIZE - 1)    /* physical addr mask */
-#define MEMSIZE           (cpu_unit.capac)    /* actual memory size */
+#define MEMSIZE           (cpu_unit[0].capac) /* actual memory size */
 #define MEM_ADDR_OK(x)    (((x)) < MEMSIZE)
 
 /* channel:
@@ -88,12 +88,12 @@ typedef struct dib {
 
 #define DEV_V_ADDR        DEV_V_UF        /* Pointer to device address */
 #define DEV_ADDR_MASK     (0x7ff << DEV_V_ADDR)
-#define DEV_V_UADDR       (DEV_V_UF + 12)        /* Device address in Unit */
+#define DEV_V_UADDR       (DEV_V_UF + 10)        /* Device address in Unit */
 #define DEV_UADDR         (1 << DEV_V_UADDR)
 #define GET_DADDR(x)      (0x7ff & ((x) >> DEV_V_ADDR))
 #define DEV_ADDR(x)       ((x) << DEV_V_ADDR)
 
-#define UNIT_V_ADDR       21
+#define UNIT_V_ADDR       20
 #define UNIT_ADDR_MASK    (0x7ff << UNIT_V_ADDR)
 #define GET_UADDR(x)      ((UNIT_ADDR_MASK & x) >> UNIT_V_ADDR)
 #define UNIT_ADDR(x)      ((x) << UNIT_V_ADDR)
@@ -348,7 +348,7 @@ int  startio(uint16 addr) ;
 int testio(uint16 addr);
 int haltio(uint16 addr);
 int testchan(uint16 channel);
-uint16 scan_chan(uint16 mask);
+uint16 scan_chan(uint16 mask, int irq_en);
 t_stat chan_boot(uint16 addr, DEVICE *dptr);
 t_stat chan_set_devs();
 t_stat set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc);
@@ -385,6 +385,6 @@ extern DEVICE ddc_dev;
 extern DEVICE ddd_dev;
 extern DEVICE coml_dev;
 extern DEVICE com_dev;
-extern UNIT cpu_unit;
+extern UNIT cpu_unit[];
 
 extern void fprint_inst(FILE *, uint16 *);

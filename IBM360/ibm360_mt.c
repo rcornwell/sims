@@ -255,6 +255,8 @@ uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
           /* Fall through */
 
     case 0x4:              /* Sense */
+         if ((cmd & 0xf) == 0x4)
+            cmd = 0x4;
          uptr->u3 &= ~(MT_CMDMSK);
          uptr->u3 |= cmd & MT_CMDMSK;
          sim_activate(uptr, 1000);       /* Start unit off */
@@ -855,7 +857,7 @@ t_stat mt_srv(UNIT * uptr)
              sim_debug(DEBUG_DETAIL, dptr, "Unload unit=%d\n", unit);
              uptr->u3 &= ~(MT_CMDMSK);
              r = sim_tape_detach(uptr);
-    set_devattn(addr, SNS_DEVEND);
+             set_devattn(addr, SNS_DEVEND);
          }
          break;
     }
