@@ -547,5 +547,92 @@ t_stat wcnsls_devio(uint32 dev, uint64 *data) {
     }
     return SCPE_OK;
 }
+
+/*
+ * Old MIT Spacewar console switches
+ */
+#if NUM_DEVS_OCNSLS > 0
+#define OCNSLS_DEVNUM 0724
+
+t_stat ocnsls_devio(uint32 dev, uint64 *data);
+const char *ocnsls_description (DEVICE *dptr);
+
+DIB ocnsls_dib[] = {
+    { OCNSLS_DEVNUM, 1, &ocnsls_devio, NULL }};
+
+UNIT ocnsls_unit[] = {
+    { UDATA (NULL, UNIT_IDLE, 0) }};
+
+DEVICE ocnsls_dev = {
+    "OCNSLS", ocnsls_unit, NULL, NULL,
+    NUM_DEVS_OCNSLS, 0, 0, 0, 0, 0,
+    NULL, NULL, NULL,
+    NULL, NULL, NULL,
+    &ocnsls_dib, DEV_DISABLE | DEV_DIS | DEV_DEBUG, 0, NULL,
+    NULL, NULL, NULL, NULL, NULL, &ocnsls_description
+    };
+
+const char *ocnsls_description (DEVICE *dptr)
+{
+    return "Old MIT Spacewar Consoles";
+}
+
+#define OHYPER  0004LL          /* Hyperspace. */
+#define OFIRE   0010LL          /* Fire torpedo. */
+#define OCW     0020LL          /* Turn clockwise. */
+#define OCCW    0040LL          /* Turn counter clockwise. */
+#define SLOW    0100LL          /* Weak thrust. */
+#define FAST    0200LL          /* Strong thrust. */
+#define BEACON  020000LL        /* Aiming beacon. */
+
+static uint64 old_switches (void)
+{
+  uint64 switches = 0;
+
+  if (joy_axes[JOY0] > JOY_TRIG)
+    switches |= OCCW;
+  else if (joy_axes[JOY0] < -JOY_TRIG)
+    switches |= OCW;
+  if (joy_axes[JOY0+1] < -JOY_TRIG)
+    switches |= FAST;
+  if (joy_axes[JOY0+1] > JOY_TRIG)
+    switches |= SLOW;
+  if (joy_buttons[BUT0])
+    switches |= OFIRE;
+  if (joy_buttons[BUT0+1])
+    switches |= OHYPER;
+  if (joy_buttons[BUT0+2])
+    switches |= BEACON;
+
+  if (joy_axes[JOY1] > JOY_TRIG)
+    switches |= OCCW << 18;
+  else if (joy_axes[JOY1] < -JOY_TRIG)
+    switches |= OCW << 18;
+  if (joy_axes[JOY1+1] < -JOY_TRIG)
+    switches |= FAST << 18;
+  if (joy_axes[JOY1+1] > JOY_TRIG)
+    switches |= SLOW << 18;
+  if (joy_buttons[BUT1])
+    switches |= OFIRE << 18;
+  if (joy_buttons[BUT1+1])
+    switches |= OHYPER << 18;
+  if (joy_buttons[BUT1+2])
+    switches |= BEACON << 18;
+
+  return switches;
+}
+
+t_stat ocnsls_devio(uint32 dev, uint64 *data) {
+    switch (dev & 3) {
+    case DATAI:
+        *data = old_switches ();
+        break;
+    case CONI:
+        *data = 0;
+        break;
+    }
+    return SCPE_OK;
+}
+#endif
 #endif
 #endif
