@@ -300,7 +300,9 @@ t_stat dpy_svc (UNIT *uptr)
 
 t_stat dpy_reset (DEVICE *dptr)
 {
-    if (!(dptr->flags & DEV_DIS)) {
+    if (dptr->flags & DEV_DIS) {
+        display_close(dptr);
+    } else {
         display_reset();
         ty340_reset(dptr);
     }
