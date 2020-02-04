@@ -1128,6 +1128,7 @@ opr:
                         cregs[6] |= (uint32)(sysmsk) << 16;
                         irq_pend = 1;
                     }
+                    dest = src1;
                 }
                 break;
 
@@ -4139,6 +4140,7 @@ supress:
                   hst[hst_p].src2 = src2;
              }
 lpsw:
+            sim_debug(DEBUG_DETAIL, &cpu_dev, " LPSW  %08x %08x\n", src1, src2);
              if (ec_mode) {
                  dat_en = (src1 >> 26) & 3;
                  irq_en = (src1 & 0x2000000) != 0;
@@ -4148,7 +4150,7 @@ lpsw:
                  cregs[6] = src1 & 0xfe000000;
                  sysmsk = (cregs[6] >> 16) & 0xfe00;
                  if (sysmsk) {
-                     cregs[reg] |= 0x1000000;
+                     cregs[6] |= 0x1000000;
                      irq_en = 1;
                  } else
                      irq_en = 0;
