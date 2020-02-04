@@ -477,6 +477,7 @@ t_opcode        *tab;
                     fprintf(of, "%d)", (val[2] >> 12) & 0xf);
                     break;
           }
+          break;
       }
    }
 }

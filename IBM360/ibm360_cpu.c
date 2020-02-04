@@ -77,6 +77,7 @@ uint32       clk_cmp[2];           /* Clock compare value */
 uint32       cpu_timer[2];         /* CPU timer value */
 #endif
 int          clk_state;
+int          timer_tics;           /* Access count for TOD */
 
 #define CLOCK_UNSET   0            /* Clock not set */
 #define CLOCK_SET     1            /* Clock set */
@@ -941,6 +942,7 @@ sim_instr(void)
         seg_addr = cregs[0] & AMASK;
         seg_len = (((cregs[0] >> 24) & 0xff) + 1) << 4;
     } else {
+        sim_activate(&cpu_unit[1], 1000);
         switch((cregs[0] >> 22) & 03) {
         default:   /* Generate translation exception */
         case 1:  /* 2K pages */
@@ -1352,14 +1354,12 @@ exe:
                 if (flags & PROBLEM) {
                     storepsw(OPPSW, IRC_PRIV);
                 } else {
-fprintf(stderr, "SSM: %08x\r\n", addr1);
                     if ((cpu_unit[0].flags & FEAT_370) != 0 && (cregs[0] & 0x40000000) != 0) {
                         storepsw(OPPSW, IRC_SPOP);
                         goto supress;
                     }
                     if (ReadByte(addr1, &src1))
                         break;
-fprintf(stderr, "SSM0: %02x\r\n", src1);
                     if (ec_mode) {
                         if ((cpu_unit[0].flags & FEAT_370) != 0) {
                             if (src1 & 0xb8) {
@@ -2713,11 +2713,19 @@ fprintf(stderr, "Set TOD %016llx\r\n", tod_clock);
                                  goto supress;
                               if (WriteFull(addr1+4, src1h))
                                  goto supress;
+                              if (clk_state && (cregs[0] & 0x20000000) == 0) {
+                                  tod_clock += 0x1000;
+                                  timer_tics += 0x1000;
+                              }
 #else
                               if (WriteFull(addr1, tod_clock[0]))
                                  goto supress;
                               if (WriteFull(addr1+4, tod_clock[1]))
                                  goto supress;
+                              if (clk_state && (cregs[0] & 0x20000000) == 0) {
+                                  tod_clock[1] += 0x1000;
+                                  timer_tics += 0x1000;
+                              }
 #endif
                               cc = !clk_state;
                               break;
@@ -2971,6 +2979,7 @@ fprintf(stderr, "Set TOD %016llx\r\n", tod_clock);
                         if (ReadFull(addr1, &dest))
                             goto supress;
                         cregs[reg1] = dest;
+sim_debug(DEBUG_CDATA, &cpu_dev,"Loading: CR %x %08x IC=%08x %x\n\r", reg1, dest, PC, reg);
 fprintf(stderr, "Loading: CR %x %08x IC=%08x %x\n\r", reg1, dest, PC, reg);
                         switch (reg1) {
                         case 0x0:     /* General controll register */
@@ -5590,15 +5599,18 @@ clk_srv(UNIT * uptr)
     (void)sim_rtcn_calb (clk_tps, TMR_RTC);
     sim_activate_after(uptr, 1000000/clk_tps);
 #ifdef USE_64BIT
-    if (clk_state && (cregs[0] & 0x20000000) == 0)
-       tod_clock += 1000 << 12;
+    if (clk_state && (cregs[0] & 0x20000000) == 0) {
+       tod_clock += (1000 << 12) - timer_tics;
+       timer_tics = 0;
+    }
     cpu_timer -= 1000 << 12;
 #else
     if (clk_state && (cregs[0] & 0x20000000) == 0) {
-       t = tod_clock[1] + (1000 << 12);
+       t = tod_clock[1] + (1000 << 12) - timer_tics;
        if (t < tod_clock[1])
             tod_clock[0]++;
        tod_clock[1] = t;
+       timer_tics = 0;
     }
     t = cpu_timer[1] - (1000 << 12);
     if (t > cpu_timer[1])
