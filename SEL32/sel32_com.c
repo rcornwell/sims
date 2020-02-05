@@ -35,6 +35,7 @@ extern  void    chan_end(uint16 chan, uint8 flags);
 extern  int     chan_read_byte(uint16 chan, uint8 *data);
 extern  int     chan_write_byte(uint16 chan, uint8 *data);
 extern  void    set_devwake(uint16 addr, uint8 flags);
+extern  DEVICE *get_dev(UNIT *uptr);
 
 /* Constants */
 #define COM_LINES       8                               /* max lines */
@@ -377,7 +378,7 @@ void coml_ini(UNIT *uptr, t_bool f)
 /* 8-line serial routines */
 void com_ini(UNIT *uptr, t_bool f)
 {
-    DEVICE *dptr = find_dev_from_unit(uptr);
+    DEVICE *dptr = get_dev(uptr);
 
     sim_debug(DEBUG_CMD, &com_dev, "COM init device %s controller 0x7e00\n", dptr->name);
     sim_activate(uptr, 1000);               /* time increment */
@@ -386,7 +387,7 @@ void com_ini(UNIT *uptr, t_bool f)
 /* called from sel32_chan to start an I/O operation */
 uint8  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 {
-    DEVICE      *dptr = find_dev_from_unit(uptr);
+    DEVICE      *dptr = get_dev(uptr);
     int         unit = (uptr - dptr->units);
     uint8       ch;
 

@@ -1983,9 +1983,11 @@ wait_loop:
         }
 redo:
         if (skipinstr) {                        /* need to skip interrupt test? */
+#ifdef NOTNOW
             sim_debug(DEBUG_TRAP, &cpu_dev,
                 "Skipinstr set to zero PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
                 PSD1, PSD2, CPUSTATUS);
+#endif
             skipinstr = 0;                      /* skip only once */
             goto skipi;                         /* skip int test */
         }
@@ -2662,9 +2664,11 @@ exec:
                         PSD2 |= 0x00004000;         /* set bit 49 only */
                         SPAD[0xf5] = PSD2;          /* save the current PSD2 */
                         SPAD[0xf9] = CPUSTATUS;     /* save the cpu status in SPAD */
+#ifdef NOTNOW
                         sim_debug(DEBUG_IRQ, &cpu_dev,
                 "BEI skipinstr %x irq_pend %x PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
                 skipinstr, irq_pend, PSD1, PSD2, CPUSTATUS);
+#endif
                         break;
                 case 0x7:   /* UEI */
                         if ((modes & PRIVBIT) == 0) {   /* must be privileged to UEI */
@@ -2681,9 +2685,11 @@ exec:
                         PSD2 &= ~0x0000c000;        /* clear bit 48 & 49 to be unblocked */
                         SPAD[0xf5] = PSD2;          /* save the current PSD2 */
                         SPAD[0xf9] = CPUSTATUS;     /* save the cpu status in SPAD */
+#ifdef NOTNOW
                         sim_debug(DEBUG_IRQ, &cpu_dev,
                 "UEI skipinstr %x irq_pend %x PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
                 skipinstr, irq_pend, PSD1, PSD2, CPUSTATUS);
+#endif
                         break;
                 case 0x8:   /* EAE */
                         PSD1 |= AEXPBIT;            /* set the enable AEXP flag in PSD */
@@ -5950,16 +5956,16 @@ doovr2:
                         if (PSD2 & MAPBIT) {
                             /* set mapped mode in cpu status */
                             CPUSTATUS |= 0x00800000;    /* set bit 8 of cpu status */
-                            sim_debug(DEBUG_EXP, &cpu_dev,
+                            sim_debug(DEBUG_DETAIL, &cpu_dev,
                                 "B4 LPSDCM temp %06x TPSD %08x %08x PSD %08x %08x\n",
                                 temp, TPSD[0], TPSD[1], PSD1, PSD2);
-                            sim_debug(DEBUG_EXP, &cpu_dev,
+                            sim_debug(DEBUG_DETAIL, &cpu_dev,
                                 "B4 LPSDCM BPIX %04x CPIX %04x CPIXPL %04x\n",
                                 BPIX, CPIX, CPIXPL);
-                            sim_debug(DEBUG_EXP, &cpu_dev,
+                            sim_debug(DEBUG_DETAIL, &cpu_dev,
                                 "B4 LPSDCM OS MAPC[0-5] %08x %08x %08x %08x %08x %08x\n",
                                 MAPC[0], MAPC[1], MAPC[2], MAPC[3], MAPC[4], MAPC[5]);
-                            sim_debug(DEBUG_EXP, &cpu_dev,
+                            sim_debug(DEBUG_DETAIL, &cpu_dev,
                                 "B4 LPSDCM US MAPC[%x-%x] %08x %08x %08x %08x %08x %08x\n",
                                 BPIX, BPIX+5, MAPC[BPIX], MAPC[BPIX+1], MAPC[BPIX+2],
                                 MAPC[BPIX+3], MAPC[BPIX+4], MAPC[BPIX+5]);
@@ -5974,23 +5980,18 @@ doovr2:
                             }
 #endif
                             if ((PSD2 & RETMBIT) == 0) {    /* don't load maps if retain bit set */
-#ifdef DO_DYNAMIC_DEBUG
-                /* start debugging */
-                if ((PSD1&0xffffff) == 0x11314)
-                    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
-#endif
                                 /* we need to load the new maps */
                                 TRAPME = load_maps(PSD, 0); /* load maps for new PSD */
-                                sim_debug(DEBUG_EXP, &cpu_dev,
+                                sim_debug(DEBUG_DETAIL, &cpu_dev,
                                     "AF LPSDCM TPSD %08x %08x PSD %08x %08x TRAPME %02x\n",
                                     TPSD[0], TPSD[1], PSD1, PSD2, TRAPME);
-                                sim_debug(DEBUG_EXP, &cpu_dev,
+                                sim_debug(DEBUG_DETAIL, &cpu_dev,
                                     "AF LPSDCM BPIX %04x CPIX %04x CPIXPL %04x\n",
                                     BPIX, CPIX, CPIXPL);
-                                sim_debug(DEBUG_EXP, &cpu_dev,
+                                sim_debug(DEBUG_DETAIL, &cpu_dev,
                                     "AF LPSDCM OS MAPC[0-5] %08x %08x %08x %08x %08x %08x\n",
                                     MAPC[0], MAPC[1], MAPC[2], MAPC[3], MAPC[4], MAPC[5]);
-                                sim_debug(DEBUG_EXP, &cpu_dev,
+                                sim_debug(DEBUG_DETAIL, &cpu_dev,
                                     "AF LPSDCM US MAPC[%x-%x] %08x %08x %08x %08x %08x %08x\n",
                                     BPIX, BPIX+5, MAPC[BPIX], MAPC[BPIX+1], MAPC[BPIX+2],
                                     MAPC[BPIX+3], MAPC[BPIX+4], MAPC[BPIX+5]);
@@ -5998,7 +5999,7 @@ doovr2:
                             PSD2 &= ~RETMBIT;           /* turn off retain bit in PSD2 */
                             SPAD[0xf5] = PSD2;          /* save the current PSD2 */
                             SPAD[0xf9] = CPUSTATUS;     /* save the cpu status in SPAD */
-                            sim_debug(DEBUG_EXP, &cpu_dev,
+                            sim_debug(DEBUG_CMD, &cpu_dev,
                                 "LPSDCM MAPS LOADED TRAPME = %02x PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
                                 TRAPME, PSD1, PSD2, CPUSTATUS);
                         }

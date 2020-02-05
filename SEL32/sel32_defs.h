@@ -108,11 +108,11 @@
 #define NUM_UNITS_CON   2       /* 2 console input & output */
 #define NUM_DEVS_MT     1       /* 1 mag tape controllers */
 #define NUM_UNITS_MT    4       /* 4 of 8 devices */
-//#define FOR_UTX
+#define FOR_UTX
 #ifdef FOR_UTX
 #define NUM_DEVS_HSDP   1       /* 1 HSPD disk drive controller */
 #define NUM_UNITS_HSDP  2       /* 2 disk drive devices */
-#else
+//#else
 #define NUM_DEVS_DISK   1       /* 1 DP02 disk drive controller */
 #define NUM_UNITS_DISK  2       /* 2 disk drive devices */
 //#define NUM_UNITS_DISK  4       /* 4 disk drive devices */
@@ -181,12 +181,12 @@ typedef struct chp {
     uint32      chan_inch_addr;         /* Channel status dw in memory */
     uint32      chan_caw;               /* Channel command address word */
     uint32      ccw_addr;               /* Channel address */
+    uint32      chan_buf;               /* Channel data buffer */
     uint16      ccw_count;              /* Channel count */
-    uint8       ccw_cmd;                /* Channel command and flags */
     uint16      ccw_flags;              /* Channel flags */
     uint16      chan_status;            /* Channel status */
     uint16      chan_dev;               /* Device on channel */
-    uint32      chan_buf;               /* Channel data buffer */
+    uint8       ccw_cmd;                /* Channel command and flags */
     uint8       chan_byte;              /* Current byte, dirty/full */
 } CHANP;
 
@@ -223,6 +223,13 @@ typedef struct dib {
 #define DEV_UADDR         (1 << DEV_V_UADDR)
 #define GET_DADDR(x)      (0x7f & ((x) >> DEV_V_ADDR))
 #define DEV_ADDR(x)       ((x) << DEV_V_ADDR)
+
+/* allow 255 type disks */
+#define UNIT_V_TYPE        (UNIT_V_UF + 0)
+#define UNIT_TYPE          (0xff << UNIT_V_TYPE)
+/* get & set disk types */
+#define GET_TYPE(x)        ((UNIT_TYPE & (x)) >> UNIT_V_TYPE)
+#define SET_TYPE(x)        (UNIT_TYPE & ((x) << UNIT_V_TYPE))
 
 #define UNIT_V_ADDR       16
 #define UNIT_ADDR_MASK    (0x7fff << UNIT_V_ADDR)
@@ -344,34 +351,34 @@ extern DEBTAB dev_debug[];
 #define BIT1    0x40000000                  /* general use for bit 1 testing */
 #define BIT2    0x20000000                  /* general use for bit 2 testing */
 #define BIT3    0x10000000                  /* general use for bit 3 testing */
-#define BIT4    0x80000000                  /* general use for bit 4 testing */
-#define BIT5    0x40000000                  /* general use for bit 5 testing */
-#define BIT6    0x20000000                  /* general use for bit 6 testing */
-#define BIT7    0x10000000                  /* general use for bit 7 testing */
-#define BIT8    0x80000000                  /* general use for bit 8 testing */
-#define BIT9    0x40000000                  /* general use for bit 9 testing */
-#define BIT10   0x20000000                  /* general use for bit 10 testing */
-#define BIT11   0x10000000                  /* general use for bit 11 testing */
-#define BIT12   0x80000000                  /* general use for bit 12 testing */
-#define BIT13   0x40000000                  /* general use for bit 13 testing */
-#define BIT14   0x20000000                  /* general use for bit 14 testing */
-#define BIT15   0x10000000                  /* general use for bit 15 testing */
-#define BIT16   0x80000000                  /* general use for bit 16 testing */
-#define BIT17   0x40000000                  /* general use for bit 17 testing */
-#define BIT18   0x20000000                  /* general use for bit 18 testing */
-#define BIT19   0x10000000                  /* general use for bit 19 testing */
-#define BIT20   0x80000000                  /* general use for bit 20 testing */
-#define BIT21   0x40000000                  /* general use for bit 21 testing */
-#define BIT22   0x20000000                  /* general use for bit 22 testing */
-#define BIT23   0x10000000                  /* general use for bit 23 testing */
-#define BIT24   0x80000000                  /* general use for bit 24 testing */
-#define BIT25   0x40000000                  /* general use for bit 25 testing */
-#define BIT26   0x20000000                  /* general use for bit 26 testing */
-#define BIT27   0x10000000                  /* general use for bit 27 testing */
-#define BIT28   0x80000000                  /* general use for bit 28 testing */
-#define BIT29   0x40000000                  /* general use for bit 29 testing */
-#define BIT30   0x20000000                  /* general use for bit 30 testing */
-#define BIT31   0x10000000                  /* general use for bit 31 testing */
+#define BIT4    0x08000000                  /* general use for bit 4 testing */
+#define BIT5    0x04000000                  /* general use for bit 5 testing */
+#define BIT6    0x02000000                  /* general use for bit 6 testing */
+#define BIT7    0x01000000                  /* general use for bit 7 testing */
+#define BIT8    0x00800000                  /* general use for bit 8 testing */
+#define BIT9    0x00400000                  /* general use for bit 9 testing */
+#define BIT10   0x00200000                  /* general use for bit 10 testing */
+#define BIT11   0x00100000                  /* general use for bit 11 testing */
+#define BIT12   0x00080000                  /* general use for bit 12 testing */
+#define BIT13   0x00040000                  /* general use for bit 13 testing */
+#define BIT14   0x00020000                  /* general use for bit 14 testing */
+#define BIT15   0x00010000                  /* general use for bit 15 testing */
+#define BIT16   0x00008000                  /* general use for bit 16 testing */
+#define BIT17   0x00004000                  /* general use for bit 17 testing */
+#define BIT18   0x00002000                  /* general use for bit 18 testing */
+#define BIT19   0x00001000                  /* general use for bit 19 testing */
+#define BIT20   0x00000800                  /* general use for bit 20 testing */
+#define BIT21   0x00000400                  /* general use for bit 21 testing */
+#define BIT22   0x00000200                  /* general use for bit 22 testing */
+#define BIT23   0x00000100                  /* general use for bit 23 testing */
+#define BIT24   0x00000080                  /* general use for bit 24 testing */
+#define BIT25   0x00000040                  /* general use for bit 25 testing */
+#define BIT26   0x00000020                  /* general use for bit 26 testing */
+#define BIT27   0x00000010                  /* general use for bit 27 testing */
+#define BIT28   0x00000008                  /* general use for bit 28 testing */
+#define BIT29   0x00000004                  /* general use for bit 29 testing */
+#define BIT30   0x00000002                  /* general use for bit 30 testing */
+#define BIT31   0x00000001                  /* general use for bit 31 testing */
 #define MASK16  0x0000FFFF                  /* 16 bit address mask */
 #define MASK19  0x0007FFFF                  /* 19 bit address mask */
 #define MASK20  0x000FFFFF                  /* 20 bit address mask */

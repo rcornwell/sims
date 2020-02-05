@@ -123,6 +123,7 @@ t_stat chan_boot(uint16 chsa, DEVICE *dptr);
 t_stat chan_set_devs();
 t_stat set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat show_dev_addr(FILE *st, UNIT *uptr, int32 v, CONST void *desc);
+DEVICE *get_dev(UNIT *uptr);
 
 /* FIFO support */
 /* These are FIFO queues which return an error when full.
@@ -303,7 +304,7 @@ int readfull(CHANP *chp, uint32 maddr, uint32 *word)
     }
     maddr >>= 2;                                /* get 32 bit word index */
     *word = M[maddr];                           /* get the contents */
-    sim_debug(DEBUG_EXP, &cpu_dev, "readfull read %08x from addr %08x\n", *word, maddr<<2);
+    sim_debug(DEBUG_EXP, &cpu_dev, "READFULL read %08x from addr %08x\n", *word, maddr<<2);
     return 0;                                   /* return OK */
 }
 
@@ -327,7 +328,7 @@ int readbuff(CHANP *chp)
     addr >>= 2;                                 /* byte to word address */
     chp->chan_buf = M[addr];                    /* get 4 bytes */
 
-    sim_debug(DEBUG_DETAIL, &cpu_dev, "readbuff read memory bytes into buffer %02x %06x %08x %08x [",
+    sim_debug(DEBUG_DETAIL, &cpu_dev, "readbuff read memory bytes into buffer %02x %06x %06x %04x [",
           chan, chp->ccw_addr & 0xFFFFFC, chp->chan_buf, chp->ccw_count);
     for(k = 24; k >= 0; k -= 8) {
         char ch = (chp->chan_buf >> k) & 0xFF;
@@ -349,13 +350,17 @@ int writebuff(CHANP *chp)
 
     if ((addr & MASK24) > (MEMSIZE*4)) {
         chp->chan_status |= STATUS_PCHK;
-    sim_debug(DEBUG_DETAIL, &cpu_dev, "writebuff PCHK addr %08x to big mem %08x status %04x\n", addr, MEMSIZE, chp->chan_status);
+        sim_debug(DEBUG_DETAIL, &cpu_dev,
+            "writebuff PCHK addr %08x to big mem %08x status %04x\n",
+            addr, MEMSIZE, chp->chan_status);
         chp->chan_byte = BUFF_CHNEND;
         irq_pend = 1;
         return 1;
     }
     addr &= MASK24;
-    sim_debug(DEBUG_DETAIL, &cpu_dev, "writebuff WRITE addr %08x MEMSIZE %08x status %04x\n", addr, MEMSIZE, chp->chan_status);
+    sim_debug(DEBUG_DETAIL, &cpu_dev,
+        "writebuff WRITE addr %06x DATA %08x status %04x\n",
+        addr, chp->chan_buf, chp->chan_status);
     M[addr>>2] = chp->chan_buf;
     return 0;
 }
@@ -372,10 +377,12 @@ int load_ccw(CHANP *chp, int tic_ok)
     CHANP       *pchp;
 
 loop:
-    sim_debug(DEBUG_XIO, &cpu_dev, "load_ccw entry chan_status[%04x] %04x\n", chan, chp->chan_status);
+    sim_debug(DEBUG_XIO, &cpu_dev,
+        "load_ccw entry chan_status[%04x] %04x\n", chan, chp->chan_status);
     /* Abort if we have any errors */
-    if (chp->chan_status & 0x3f03) {                    /* check channel status */
-        sim_debug(DEBUG_EXP, &cpu_dev, "load_ccw ERROR chan_status[%04x] %04x\n", chan, chp->chan_status);
+    if (chp->chan_status & 0x3f03) {                /* check channel status */
+        sim_debug(DEBUG_EXP, &cpu_dev,
+            "load_ccw ERROR chan_status[%04x] %04x\n", chan, chp->chan_status);
         return 1;
     }
 
@@ -388,13 +395,16 @@ loop:
     /* Read in first or next CCW */
     if (readfull(chp, chp->chan_caw, &word) != 0) { /* read word from memory */
         chp->chan_status |= STATUS_PCHK;            /* memory read error, program check */
-        sim_debug(DEBUG_EXP, &cpu_dev, "load_ccw ERROR chan_status[%04x] %04x\n", chan, chp->chan_status);
+        sim_debug(DEBUG_EXP, &cpu_dev,
+            "load_ccw ERROR chan_status[%04x] %04x\n", chan, chp->chan_status);
         return 1;                                   /* error return */
     }
 
-    sim_debug(DEBUG_XIO, &cpu_dev, "load_ccw read ccw chan %02x caw %06x IOCD wd 1 %08x\n",
+    sim_debug(DEBUG_XIO, &cpu_dev,
+        "load_ccw read ccw chan %02x caw %06x IOCD wd 1 %08x\n",
         chan, chp->chan_caw, word);
-    sim_debug(DEBUG_XIO, &cpu_dev, "load_ccw read data @ IOCD wd 1 %08x data wd 1 %08x\n",
+    sim_debug(DEBUG_XIO, &cpu_dev,
+        "load_ccw read data @ IOCD wd 1 %08x data wd 1 %08x\n",
         word, M[(word & 0xffffff)>>2]);
 
 #ifdef DO_DYNAMIC_DEBUG
@@ -641,8 +651,8 @@ int chan_write_byte(uint16 chsa, uint8 *data)
         return 1;                                   /* return error */
     }
     if (chp->ccw_count == 0) {
-        sim_debug(DEBUG_DATA, &cpu_dev, "chan_write_byte ccw_count is zero ccw_count[%04x] %04x\n",
-                chan, chp->ccw_count);
+        sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_write_byte ccw_count is zero ccw_count[%04x] %04x\n",
+            chan, chp->ccw_count);
         if (chp->chan_byte & BUFF_DIRTY) {
             sim_debug(DEBUG_DATA, &cpu_dev, "chan_write_byte 2 BUF DIRTY ret\n");
             if (writebuff(chp))                     /* write it */
@@ -660,7 +670,8 @@ int chan_write_byte(uint16 chsa, uint8 *data)
                 return 1;                           /* return error */
          }
     }
-    sim_debug(DEBUG_DATA, &cpu_dev, "chan_write_byte non zero ccw_count[%04x]=%04x\n", chan, chp->ccw_count);
+    sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_write_byte non zero ccw_count[%04x]=%04x\n",
+        chan, chp->ccw_count);
     if (chp->ccw_flags & FLAG_SKIP) {
         chp->ccw_count--;
         chp->chan_byte = BUFF_EMPTY;
@@ -735,8 +746,9 @@ void chan_end(uint16 chsa, uint16 flags) {
     uint32  chan_icb = find_int_icb(chsa);          /* get icb address */
     CHANP   *chp = find_chanp_ptr(chsa);            /* get channel prog pointer */
 
-    sim_debug(DEBUG_EXP, &cpu_dev, "chan_end entry chsa %04x flags %04x chan_icb %06x status %04x\n",
-            chsa, flags, chan_icb, chp->chan_status);
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "chan_end entry chsa %04x flags %04x chan_icb %06x status %04x\n",
+        chsa, flags, chan_icb, chp->chan_status);
     if (chp->chan_byte & BUFF_DIRTY) {
         if (writebuff(chp))                         /* write remaining data */
             return;                                 /* error */
@@ -746,8 +758,9 @@ void chan_end(uint16 chsa, uint16 flags) {
     chp->chan_status |= ((uint16)flags);            /* add in the callers flags */
 //  chp->ccw_cmd = 0;                               /* reset the completed channel command */
 
-    sim_debug(DEBUG_EXP, &cpu_dev, "chan_end SLI test chsa %04x ccw_flags %04x count %04x status %04x\n",
-            chsa, chp->ccw_flags, chp->ccw_count, chp->chan_status);
+    sim_debug(DEBUG_EXP, &cpu_dev,
+       "chan_end SLI test chsa %04x ccw_flags %04x count %04x status %04x\n",
+       chsa, chp->ccw_flags, chp->ccw_count, chp->chan_status);
 #ifdef HACK_HACK
     /* hack - rewind had byte count of 1, so triggered this error when it is not */
     /* remove until I figure out what is required */
@@ -876,13 +889,15 @@ t_stat checkxio(uint16 lchsa, uint32 *status) {
     chan_ivl = SPAD[0xf1] + (inta<<2);              /* contents of spad f1 points to chan ivl in mem */
     chan_ivl = M[chan_ivl >> 2];                    /* get the interrupt context block addr in memory */
     iocla = M[(chan_ivl+16)>>2];                    /* iocla is in wd 4 of ICB */
+    tempa = M[(chan_ivl+20)>>2];                    /* status is in wd 5 of ICB */
     sim_debug(DEBUG_CMD, &cpu_dev,
-        "checkxio busy test chsa %04x cmd %02x iocla %08x flags %04x IOCD1 %08x IOCD2 %08x\n",
-        chsa, chp->ccw_cmd, iocla, chp->ccw_flags, M[iocla>>2], M[(iocla+4)>>2]);
+        "checkxio busy ck chsa %04x cmd %02x iocla %08x flags %04x IOCD1 %08x IOCD2 %08x status %08x\n",
+        chsa, chp->ccw_cmd, iocla, chp->ccw_flags, M[iocla>>2], M[(iocla+4)>>2], tempa);
 
     /* check for a Command or data chain operation in progresss */
     if (chp->ccw_cmd != 0 || (chp->ccw_flags & (FLAG_DC|FLAG_CC)) != 0) {
-        sim_debug(DEBUG_XIO, &cpu_dev, "checkxio busy return CC4 chsa %04x chan %04x\n", chsa, chan);
+        sim_debug(DEBUG_XIO, &cpu_dev,
+            "checkxio busy return CC4 chsa %04x chan %04x\n", chsa, chan);
         *status = CC4BIT;                           /* busy, so CC4 */
         return SCPE_OK;                             /* just busy CC4 */
     }
@@ -1640,6 +1655,32 @@ uint32 scan_chan(int *ilev) {
     return 0;                                       /* done */
 }
 
+/* Find_dev pointer for a unit
+   Input:  uptr = pointer to unit
+   Output: dptr = pointer to device
+*/
+DEVICE *get_dev(UNIT *uptr)
+{
+    DEVICE *dptr;
+    uint32 i, j;
+
+    if (uptr == NULL)                               /* must be valid unit */
+        return NULL;
+    if (uptr->dptr)                                 /* get device pointer from unit */
+        return uptr->dptr;                          /* return valid pointer */
+    /* the device pointer in the unit is not set up, do it now */
+    /* This should never happed as the pointer is setup in first reset call */
+    for (i = 0; (dptr = sim_devices[i]) != NULL; i++) { /* do all devices */
+        for (j = 0; j < dptr->numunits; j++) {      /* do all units for device */
+            if (uptr == (dptr->units + j)) {        /* match found? */
+                uptr->dptr = dptr;                  /* set the pointer in unit */
+                return dptr;                        /* return valid pointer */
+            }
+        }
+    }
+    return NULL;
+}
+
 /* set up the devices configured into the simulator */
 /* only devices with a DIB will be processed */
 t_stat chan_set_devs() {
@@ -1652,20 +1693,29 @@ t_stat chan_set_devs() {
     for (i = 0; sim_devices[i] != NULL; i++) {
         DEVICE  *dptr = sim_devices[i];             /* get pointer to next configured device */
         UNIT    *uptr = dptr->units;                /* get pointer to units defined for this device */
-        DIB     *dibp = (DIB *)dptr->ctxt;          /* get pointer to Device Information Block for this device */
+        DIB     *dibp = (DIB *)dptr->ctxt;          /* get pointer to DIB for this device */
         CHANP   *chp;                               /* channel program pointer */
         int     chsa;                               /* addr of device chan & subaddress */
 
+        /* set the device back pointer in the unit structure */
+        for (j = 0; j < dptr->numunits; j++) {      /* loop through unit entries */
+            uptr->dptr = dptr;                      /* set the device pointer in unit structure */
+            uptr++;                                 /* next UNIT pointer */
+        }
+        uptr = dptr->units;                         /* get pointer to units again */
+
         if (dibp == NULL)                           /* If no DIB, not channel device */
             continue;
-        if (dptr->flags & DEV_DIS) {                /* Skip disabled devices */
+        if (dptr->flags & DEV_DIS)                  /* Skip disabled devices */
             continue;
-        }
+
         if ((chp = (CHANP *)dibp->chan_prg) == NULL)/* must have channel information for each device */
             continue;
         /* Check if address is in unit or dev entry */
         for (j = 0; j < dptr->numunits; j++) {      /* loop through unit entries */
             chsa = GET_UADDR(uptr->u3);             /* ch/sa value */
+//printf("Setup device %s%d chsa %04x type %03d dptr %x\n",
+//      dptr->name, j, chsa, GET_TYPE(uptr->flags), uptr->dptr);  
             /* zero some channel data loc's for device */
             dev_status[chsa] = 0;                   /* zero device status flags */
             dev_status[chsa&0x7f00] = 0;            /* clear the channel status location */
@@ -1678,8 +1728,11 @@ t_stat chan_set_devs() {
             chp->ccw_flags = 0;                     /* Command chain and supress incorrect length */
             chp->ccw_cmd = 0;                       /* read command */
             chp->chan_inch_addr = 0;                /* clear address of stat dw in memory */
-            if ((uptr->flags & UNIT_DIS) == 0)      /* is unit marked disabled? */
+            if ((uptr->flags & UNIT_DIS) == 0) {    /* is unit marked disabled? */
+                if (dev_unit[chsa] != 0)
+                    printf("Channel/SubAddress %04x multiple defined\n", chsa);
                 dev_unit[chsa] = dibp;              /* no, save the dib address */
+            }
             if (dibp->dev_ini != NULL)              /* if there is an init routine, call it now */
                 dibp->dev_ini(uptr, 1);             /* init the channel */
             uptr++;                                 /* next UNIT pointer */
@@ -1691,91 +1744,67 @@ t_stat chan_set_devs() {
 
 /* Validate and set the device onto a given channel */
 t_stat set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc) {
-    DEVICE             *dptr;
-    DIB                *dibp;
-    t_value             newdev;
-    t_stat              r;
-    int                 i;
-    int                 devaddr;
+    DEVICE  *dptr;                                  /* device pointer */
+    DIB     *dibp;                                  /* dib pointer */
+    UNIT    *tuptr;                                 /* temp unit pointer */
+    t_value chan;                                   /* new channel addr */
+    t_stat  r;                                      /* return status */
+    int     i;                                      /* temp */
+    int     chsa;                                   /* dev addr */
 
+//  dptr = uptr->dptr                               /* get device pointer from unit */
     if (cptr == NULL)                               /* is there a UNIT name specified */
         return SCPE_ARG;                            /* no, arg error */
     if (uptr == NULL)                               /* is there a UNIT pointer */
         return SCPE_IERR;                           /* no, arg error */
-    dptr = find_dev_from_unit(uptr);                /* find the device from unit pointer */
+    dptr = get_dev(uptr);                           /* find the device from unit pointer */
     if (dptr == NULL)                               /* device not found, so error */
         return SCPE_IERR;                           /* error */
 
-    dibp = (DIB *)dptr->ctxt;
-    if (dibp == NULL)
-        return SCPE_IERR;
+    dibp = (DIB *)dptr->ctxt;                       /* get dib pointer from device struct */
+    if (dibp == NULL)                               /* we need a DIB */
+        return SCPE_IERR;                           /* no DIB, so error */
 
-    newdev = get_uint(cptr, 16, 0xffff, &r);
+    chan = get_uint(cptr, 16, 0xffff, &r);          /* get new device address */
+    if (r != SCPE_OK)                               /* need good number */
+        return r;                                   /* number error, return error */
+//printf("finding chan %s (%x) with unit address %04x dptr %x\n",
+//        cptr, chan, GET_UADDR(uptr->u3), uptr->dptr);
 
-    if (r != SCPE_OK)
-        return r;
+//  if ((chan == 0) || ((chan & 0x7f00) != chan))   /* is chan 1-7f */
+//      return SCPE_ARG;                            /* no, bad channel # */
+    chan &= 0x7f00;                                 /* clean channel address */
+    dibp->chan_addr = chan;                         /* set new parent channel addr */
 
-    if ((newdev >> 8) > channels) 
-        return SCPE_ARG;
-
-    if (newdev >= MAX_DEV)
-        return SCPE_ARG;
-
-    devaddr = GET_UADDR(uptr->u3);
-
-    /* Clear out existing entry */
-    if (dptr->flags & DEV_UADDR) {
-        dev_unit[devaddr] = NULL;
-    } else {
-        devaddr &= (dibp->mask | 0x7f00);
-        for (i = 0; i < dibp->numunits; i++)
-             dev_unit[devaddr + i] = NULL;
+    /* change all the unit addresses with the new channel, but keep sub address */
+    /* Clear out existing entries for all units on this device */
+    tuptr = dptr->units;                            /* get pointer to units defined for this device */
+    /* loop through all units for this device */
+    for (i = 0; i < dibp->numunits; i++) {
+        chsa = GET_UADDR(tuptr->u3);                /* get old chsa for this unit */
+        dev_unit[chsa] = NULL;                      /* clear sa dib pointer */
+        dev_unit[chsa&0x7f00] = NULL;               /* clear the channel dib address */
+        chsa = chan | (chsa & 0xff);                /* merge new channel with new sa */
+        tuptr->u3 &= ~UNIT_ADDR_MASK;               /* clear old chsa for this unit */
+        tuptr->u3 |= UNIT_ADDR(chsa);               /* clear old chsa for this unit */
+        dev_unit[chan&0x7f00] = dibp;               /* set the channel dib address */
+        dev_unit[chsa] = dibp;                      /* save the dib address for new chsa */
+        fprintf(stderr, "Set dev %04x to %04x\r\n", GET_UADDR(tuptr->u3), chsa);
+        tuptr++;                                    /* next unit pointer */
     }
-
-    /* Check if device already at newdev */
-    if (dptr->flags & DEV_UADDR) {
-        if (dev_unit[newdev] != NULL)
-            r = SCPE_ARG;
-    } else {
-        newdev &= (dibp->mask | 0x7f00);
-        for (i = 0; i < dibp->numunits; i++) {
-             if (dev_unit[newdev + i] != NULL)
-                r = SCPE_ARG;
-        }
-    }
-
-    /* If not, point to new dev, else restore old */
-    if (r == SCPE_OK)
-       devaddr = newdev;
-
-    /* Update device entry */
-    if (dptr->flags & DEV_UADDR) {
-        dev_unit[devaddr] = dibp;
-        uptr->u3 &= ~UNIT_ADDR(0x7fff);
-        uptr->u3 |= UNIT_ADDR(devaddr);
-        fprintf(stderr, "Set dev %04x\r\n", GET_UADDR(uptr->u3));
-    } else {
-        for (i = 0; i < dibp->numunits; i++)  {
-             dev_unit[devaddr + i] = dibp;
-             uptr = &((dibp->units)[i]);
-             uptr->u3 &= ~UNIT_ADDR(0x7fff);
-             uptr->u3 |= UNIT_ADDR(devaddr + i);
-             fprintf(stderr, "Set dev %04x\r\n", GET_UADDR(uptr->u3));
-        }
-    }
-    return r;
+    return SCPE_OK;
 }
 
 t_stat show_dev_addr(FILE *st, UNIT *uptr, int32 v, CONST void *desc) {
     DEVICE      *dptr;
     int         chsa;
 
-    if (uptr == NULL)
-        return SCPE_IERR;
-    dptr = find_dev_from_unit(uptr);
-    if (dptr == NULL)
-        return SCPE_IERR;
-    chsa = GET_UADDR(uptr->u3);
-    fprintf(st, "CHAN/SA %04x", chsa);
-    return SCPE_OK;
+    if (uptr == NULL)                               /* valid unit? */
+        return SCPE_IERR;                           /* no, error return */
+    dptr = get_dev(uptr);                           /* get the device pointer from unit */
+    if (dptr == NULL)                               /* valid pointer? */
+        return SCPE_IERR;                           /* retunr error */
+    chsa = GET_UADDR(uptr->u3);                     /* get the unit address */
+    fprintf(st, "CHAN/SA %04x", chsa);              /* display channel/subaddress */
+    return SCPE_OK;                                 /* we done */
 }

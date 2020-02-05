@@ -39,14 +39,16 @@
 #include "sel32_defs.h"
 #include "sim_tape.h"
 
-extern t_stat     set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
-extern t_stat     show_dev_addr(FILE *st, UNIT *uptr, int32 v, CONST void *desc);
-extern void       chan_end(uint16 chan, uint8 flags);
-extern int        chan_read_byte(uint16 chan, uint8 *data);
-extern int        chan_write_byte(uint16 chan, uint8 *data);
-extern void       set_devattn(uint16 addr, uint8 flags);
-extern t_stat     chan_boot(uint16 addr, DEVICE *dptr);
-extern uint32     SPAD[];           /* cpu SPAD */
+extern  t_stat  set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+extern  t_stat  show_dev_addr(FILE *st, UNIT *uptr, int32 v, CONST void *desc);
+extern  void    chan_end(uint16 chan, uint8 flags);
+extern  int     chan_read_byte(uint16 chan, uint8 *data);
+extern  int     chan_write_byte(uint16 chan, uint8 *data);
+extern  void    set_devattn(uint16 addr, uint8 flags);
+extern  t_stat  chan_boot(uint16 addr, DEVICE *dptr);
+extern  DEVICE *get_dev(UNIT *uptr);
+
+extern uint32   SPAD[];             /* cpu SPAD */
 
 #ifdef NUM_DEVS_MT
 #define BUFFSIZE        (64 * 1024)
@@ -383,6 +385,7 @@ DEVICE          mta_dev = {
     "MTA", mta_unit, NULL, mt_mod,
     NUM_UNITS_MT, 16, 24, 4, 16, 32,
     NULL, NULL, &mt_reset, &mt_boot, &mt_attach, &mt_detach,
+    /* ctxt is the DIB pointer */
     &mta_dib, DEV_BUF_NUM(0) | DEV_DISABLE | DEV_DEBUG | DEV_TAPE, 0, dev_debug,
     NULL, NULL, &mt_help, NULL, NULL, &mt_description
 
@@ -433,7 +436,7 @@ DEVICE          mtb_dev = {
 /* start an I/O operation */
 uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 {
-    DEVICE      *dptr = find_dev_from_unit(uptr);
+    DEVICE      *dptr = get_dev(uptr);
     int         unit = (uptr - dptr->units);
 
     sim_debug(DEBUG_EXP, &mta_dev, "mt_startcmd entry chan %04x cmd %02x\n", chan, cmd);
@@ -565,7 +568,7 @@ t_stat mt_error(UNIT *uptr, uint16 addr, t_stat r, DEVICE *dptr)
 t_stat mt_srv(UNIT *uptr)
 {
     uint16      addr = GET_UADDR(uptr->CMD);
-    DEVICE      *dptr = find_dev_from_unit(uptr);
+    DEVICE      *dptr = get_dev(uptr);
     int         unit = (uptr - dptr->units);
     int         cmd = uptr->CMD & MT_CMDMSK;
     int         bufnum = GET_DEV_BUF(dptr->flags);
@@ -1083,7 +1086,7 @@ t_stat mt_srv(UNIT *uptr)
 /* initialize the tape chan/unit */
 void mt_ini(UNIT *uptr, t_bool f)
 {
-    DEVICE *dptr = find_dev_from_unit(uptr);
+    DEVICE *dptr = get_dev(uptr);
     if (MT_DENS(uptr->dynflags) == 0)
         uptr->dynflags |= MT_DENS_6250 << UNIT_S_DF_TAPE;
 
@@ -1091,8 +1094,8 @@ void mt_ini(UNIT *uptr, t_bool f)
     uptr->SNS = 0;                                  /* clear sense data */
     uptr->SNS |= (SNS_RDY|SNS_ONLN|SNS_LOAD);       /* set initial status */
     mt_busy[GET_DEV_BUF(dptr->flags)] = 0;          /* set not busy */
-    sim_debug(DEBUG_EXP, dptr, "MT init device %s unit %02x\n", dptr->name,
-                 GET_UADDR(uptr->CMD));
+    sim_debug(DEBUG_EXP, dptr, "MT init device %s unit %02x\n",
+        dptr->name, GET_UADDR(uptr->CMD));
 }
 
 /* reset the mag tape */
@@ -1106,8 +1109,8 @@ t_stat mt_reset(DEVICE *dptr)
 /* attach the specified file to the tape device */
 t_stat mt_attach(UNIT *uptr, CONST char *file)
 {
-    uint16              addr = GET_UADDR(uptr->CMD);     /* get address of mt device */
-    t_stat              r;
+    uint16         addr = GET_UADDR(uptr->CMD);     /* get address of mt device */
+    t_stat         r;
 
     /* mount the specified file to the MT */
     if ((r = sim_tape_attach(uptr, file)) != SCPE_OK) {
@@ -1123,7 +1126,7 @@ t_stat mt_attach(UNIT *uptr, CONST char *file)
 t_stat mt_detach(UNIT *uptr)
 {
     sim_debug(DEBUG_EXP, &mta_dev, "mt_detach\n");
-    uptr->CMD = 0;
+    uptr->CMD &= ~0xffff;                           /* clear out the flags but leave ch/sa */
     return sim_tape_detach(uptr);
 }
 

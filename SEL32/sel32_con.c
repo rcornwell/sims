@@ -48,6 +48,7 @@ extern  void    set_devattn(uint16 addr, uint8 flags);
 extern  void    post_extirq(void);
 extern  uint32  attention_trap;             /* set when trap is requested */
 extern  void    set_devwake(uint16 addr, uint8 flags);
+extern  DEVICE *get_dev(UNIT *uptr);
 
 #define CMD     u3
 /* Held in u3 is the device command and status */
@@ -157,7 +158,7 @@ DEVICE  con_dev = {
 /* initialize the console chan/unit */
 void con_ini(UNIT *uptr, t_bool f) {
 //  int     unit = (uptr - con_unit);   /* unit 0 */
-//  DEVICE *dptr = find_dev_from_unit(uptr);
+//  DEVICE *dptr = get_dev(uptr);
 
 //  con_data[unit].incnt = 0;           /* no input data */
     con_data[0].incnt = 0;              /* no input data */
@@ -169,7 +170,7 @@ void con_ini(UNIT *uptr, t_bool f) {
 /* start a console operation */
 uint8  con_preio(UNIT *uptr, uint16 chan)
 {
-    DEVICE         *dptr = find_dev_from_unit(uptr);
+    DEVICE         *dptr = get_dev(uptr);
     int            unit = (uptr - dptr->units);
 
     if ((uptr->CMD & 0xff00) != 0) {    /* just return if busy */
@@ -301,7 +302,6 @@ t_stat con_srvo(UNIT *uptr) {
     int         unit = (uptr - con_unit);           /* unit 0 is read, unit 1 is write */
     int         cmd = uptr->CMD & CON_MSK;
     uint8       ch, cp;
-    static uint32 lastch = 0;
 
     sim_debug(DEBUG_DETAIL, &con_dev, "con_srvo enter chsa %04x cmd = %02x\n", chsa, cmd);
     if (cmd == 0x0C) {                              /* unknown has to do nothing */
@@ -322,6 +322,7 @@ t_stat con_srvo(UNIT *uptr) {
         return SCPE_OK;
     }
 
+//  static uint32 lastch = 0;
     if ((cmd == CON_WR) || (cmd == CON_RWD)) {
         /* Write to device */
         if (chan_read_byte(chsa, &ch)) {    /* get byte from memory */
@@ -339,8 +340,8 @@ t_stat con_srvo(UNIT *uptr) {
             else
                 cp = '^';
             sim_debug(DEBUG_CMD, &con_dev, "con_srvo write %01x: putch 0x%02x %c\n", unit, ch, cp);
-            lastch = (lastch << 8) | cp;
 #ifdef DO_DYNAMIC_DEBUG
+            lastch = (lastch << 8) | cp;
             if ((lastch & 0xffff) == 0x6e29)    /* check for ion) */
                 cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
 #endif
