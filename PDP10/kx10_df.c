@@ -32,10 +32,12 @@ void df10_setirq(struct df10 *df) {
 
 /* Generate the DF10 complete word */
 void df10_writecw(struct df10 *df) {
+      uint64  wrd;
       df->status |= 1 << df->ccw_comp;
       if (df->wcr != 0)
           df->cda++;
-      M[df->cia|1] = ((uint64)(df->ccw & WMASK) << CSHIFT) | ((uint64)(df->cda) & AMASK);
+      wrd = ((uint64)(df->ccw & WMASK) << CSHIFT) | ((uint64)(df->cda) & AMASK);
+      (void)Mem_write_word(df->cia|1, &wrd, 0);
 }
 
 /* Finish off a DF10 transfer */
@@ -58,22 +60,20 @@ void df10_setup(struct df10 *df, uint32 addr) {
 /* Fetch the next IO control word */
 int df10_fetch(struct df10 *df) {
       uint64 data;
-      if (df->ccw > MEMSIZE) {
+      if (Mem_read_word(df->ccw, &data, 0)) {
            df10_finish_op(df, df->nxmerr);
            return 0;
       }
-      data = M[df->ccw];
       while((data & (WMASK << CSHIFT)) == 0) {
           if ((data & AMASK) == 0 || (uint32)(data & AMASK) == df->ccw) {
                 df10_finish_op(df,0);
                 return 0;
           }
           df->ccw = (uint32)(data & AMASK);
-          if (df->ccw > MEMSIZE) {
+          if (Mem_read_word(df->ccw, &data, 0)) {
                 df10_finish_op(df, 1<<df->nxmerr);
                 return 0;
           }
-          data = M[df->ccw];
       }
 #if KA & ITS
       if (cpu_unit[0].flags & UNIT_ITSPAGE) {
@@ -109,7 +109,10 @@ int df10_read(struct df10 *df) {
         else
 #endif
         df->cda = (uint32)((df->cda + 1) & AMASK);
-        data = M[df->cda];
+        if (Mem_read_word(df->cda, &data, 0)) {
+            df10_finish_op(df, 1<<df->nxmerr);
+            return 0;
+        }
      } else {
         data = 0;
      }
@@ -138,7 +141,10 @@ int df10_write(struct df10 *df) {
         else
 #endif
         df->cda = (uint32)((df->cda + 1) & AMASK);
-        M[df->cda] = df->buf;
+        if (Mem_write_word(df->cda, &df->buf, 0)) {
+           df10_finish_op(df, 1<<df->nxmerr);
+           return 0;
+        }
      }
      if (df->wcr == 0) {
         return df10_fetch(df);

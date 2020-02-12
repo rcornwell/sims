@@ -797,7 +797,6 @@ tu_reset(DEVICE * dptr)
 {
     int ctlr;
     for (ctlr = 0; ctlr < NUM_DEVS_TU; ctlr++) {
-        tu_rh[ctlr].devnum = tu_dib[ctlr].dev_num;
         tu_rh[ctlr].attn = 0;
         tu_rh[ctlr].rae = 0;
     }

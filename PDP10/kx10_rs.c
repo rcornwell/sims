@@ -603,7 +603,6 @@ rs_reset(DEVICE * rstr)
 {
     int ctlr;
     for (ctlr = 0; ctlr < NUM_DEVS_RS; ctlr++) {
-        rs_rh[ctlr].devnum = rs_dib[ctlr].dev_num;
         rs_rh[ctlr].status = 0;
         rs_rh[ctlr].attn = 0;
         rs_rh[ctlr].rae = 0;

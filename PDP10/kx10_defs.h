@@ -379,6 +379,20 @@ extern DEBTAB crd_debug[];
 #define TYPE_RH10       (0 << DEV_V_RH)
 #define TYPE_RH20       (1 << DEV_V_RH)
 
+#if KL
+/* DTE memory access functions, n = DTE# */
+extern int      Mem_examine_word(int n, int wrd, uint64 *data);
+extern int      Mem_deposit_word(int n, int wrd, uint64 *data);
+extern int      Mem_read_byte(int n, uint16 *data, int byte);
+extern int      Mem_write_byte(int n, uint16 *data);
+#endif
+
+/*
+ * Access main memory. Returns 0 if access ok, 1 if out of memory range.
+ * On KI10 and KL10, optional EPT flag indicates address relative to ept.
+ */
+extern int      Mem_read_word(t_addr addr, uint64 *data, int ept);
+extern int      Mem_write_word(t_addr addr, uint64 *data, int ept);
 
 #if MPX_DEV
 extern void set_interrupt_mpx(int dev, int lvl, int mpx);
@@ -395,11 +409,6 @@ extern UNIT     cpu_unit[];
 extern UNIT     ten11_unit[];
 extern UNIT     auxcpu_unit[];
 #if KL
-/* DTE memory access functions, n = DTE# */
-extern int      Mem_examine_word(int n, int wrd, uint64 *data);
-extern int      Mem_deposit_word(int n, int wrd, uint64 *data);
-extern int      Mem_read_byte(int n, uint16 *data, int byte);
-extern int      Mem_write_byte(int n, uint16 *data);
 extern DEVICE   dte_dev;
 extern DEVICE   lp20_dev;
 extern DEVICE   tty_dev;

@@ -192,7 +192,6 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
      }
      if (rhc == NULL)
         return SCPE_OK;
-     rhc->devnum = dev & 0774;
 #if KL
      if (dptr->flags & TYPE_RH20) {
          switch(dev & 3) {
@@ -526,6 +525,7 @@ void rh_setirq(struct rh_if *rhc) {
 
 /* Generate the DF10 complete word */
 void rh_writecw(struct rh_if *rhc, int nxm) {
+     uint64       wrd1;
 #if KL
      if (rhc->imode == 2) {
          uint32   chan = (rhc->devnum - 0540);
@@ -534,7 +534,8 @@ void rh_writecw(struct rh_if *rhc, int nxm) {
          rhc->status &= ~(RH20_PCR_FULL);
          if (wc != 0 || (rhc->status & RH20_XEND) == 0 ||
              (rhc->ptcr & BIT10) != 0 || nxm) {
-             uint64 wrd1 = SMASK|(uint64)(rhc->ccw);
+             uint64 wrd2;
+             wrd1 = SMASK|(uint64)(rhc->ccw);
              if ((rhc->ptcr & BIT10) == 0 || (rhc->status & RH20_DR_EXC) != 0)
                   return;
              if (nxm) {
@@ -559,11 +560,11 @@ void rh_writecw(struct rh_if *rhc, int nxm) {
              if ((rhc->status & RH20_CHAN_ERR) == 0 && (rhc->ptcr & BIT10) == 0)
                  return;
              wrd1 |= RH20_NADR_PAR;
-             M[eb_ptr|chan|1] = wrd1;
-             M[eb_ptr|chan|2] = ((uint64)rhc->cop << 33) |
-                                (((uint64)wc) << CSHIFT) |
+             wrd2 = ((uint64)rhc->cop << 33) | (((uint64)wc) << CSHIFT) |
                                 ((uint64)(rhc->cda) & AMASK);
-//fprintf(stderr, "RH20 final %012llo %012llo %06o\n\r", M[eb_ptr|chan|1], M[eb_ptr|chan|2], wc);
+             (void)Mem_write_word(chan+1, &wrd1, 1);
+             (void)Mem_write_word(chan+2, &wrd2, 1);
+//fprintf(stderr, "RH20 final %012llo %012llo %06o\n\r", wrd1, wrd2, wc);
          }
          return;
      }
@@ -573,7 +574,8 @@ void rh_writecw(struct rh_if *rhc, int nxm) {
      rhc->status |= CCW_COMP_1;
      if (rhc->wcr != 0)
          rhc->cda++;
-     M[rhc->cia|1] = ((uint64)(rhc->ccw & WMASK) << CSHIFT) | ((uint64)(rhc->cda) & AMASK);
+     wrd1 = ((uint64)(rhc->ccw & WMASK) << CSHIFT) | ((uint64)(rhc->cda) & AMASK);
+     (void)Mem_write_word(rhc->cia|1, &wrd1, 0);
 }
 
 /* Finish off a DF10 transfer */
@@ -596,8 +598,8 @@ void rh_finish_op(struct rh_if *rhc, int nxm) {
 /* Set up for a RH20 transfer */
 void rh20_setup(struct rh_if *rhc)
 {
-     int     reg;
-     DEVICE *dptr;
+     DEVICE        *dptr = NULL;
+     int           reg;
 
      for (reg = 0; rh[reg].dev_num != 0; reg++) {
         if (rh[reg].rh == rhc) {
@@ -648,9 +650,9 @@ void rh_setup(struct rh_if *rhc, uint32 addr)
 
 /* Fetch the next IO control word */
 int rh_fetch(struct rh_if *rhc) {
-     uint64 data;
-     int    reg;
-     DEVICE *dptr = NULL;
+     uint64      data;
+     int         reg;
+     DEVICE      *dptr = NULL;
 
      for (reg = 0; rh[reg].dev_num != 0; reg++) {
         if (rh[reg].rh == rhc) {
@@ -660,29 +662,25 @@ int rh_fetch(struct rh_if *rhc) {
      }
 #if KL
      if (rhc->imode == 2 && (rhc->cop & 2) != 0) {
-//         rh_finish_op(rhc, 0);
          return 0;
      }
 #endif
-     if (rhc->ccw > MEMSIZE) {
+     if (Mem_read_word(rhc->ccw, &data, 0)) {
          rh_finish_op(rhc, 1);
          return 0;
      }
-     data = M[rhc->ccw];
      sim_debug(DEBUG_EXP, dptr, "%s fetch %06o %012llo\n\r", dptr->name, rhc->ccw, data);
 #if KL
      if (rhc->imode == 2) {
          while((data & RH20_XFER) == 0) {
              rhc->ccw = (uint32)(data & AMASK);
              if ((data & (BIT1|BIT2)) == 0) {
-//                 rh_finish_op(rhc, 0);
                  return 0;
              }
-             if (rhc->ccw > MEMSIZE) {
+             if (Mem_read_word(rhc->ccw, &data, 0)) {
                  rh_finish_op(rhc, 1);
                  return 0;
              }
-             data = M[rhc->ccw];
              sim_debug(DEBUG_EXP, dptr, "%s fetch2 %06o %012llo\n\r", dptr->name, rhc->ccw, data);
 //fprintf(stderr, "RH20 fetch2 %06o %012llo\n\r", rhc->ccw, data);
          }
@@ -699,11 +697,10 @@ int rh_fetch(struct rh_if *rhc) {
              return 0;
          }
          rhc->ccw = (uint32)(data & AMASK);
-         if (rhc->ccw > MEMSIZE) {
+         if (Mem_read_word(rhc->ccw, &data, 0)) {
              rh_finish_op(rhc, 1);
              return 0;
          }
-         data = M[rhc->ccw];
          sim_debug(DEBUG_EXP, dptr, "%s fetch2 %06o %012llo\n\r", dptr->name, rhc->ccw, data);
      }
      rhc->wcr = (uint32)((data >> CSHIFT) & WMASK);
@@ -727,18 +724,27 @@ int rh_read(struct rh_if *rhc) {
         }
 #if KL
         if (rhc->imode == 2) {
-            data = M[rhc->cda];
+            if (Mem_read_word(rhc->cda, &data, 0)) {
+                rh_finish_op(rhc, 1);
+                return 0;
+            }
             if (rhc->cop & 01)
                 rhc->cda = (uint32)((rhc->cda - 1) & AMASK);
             else
                 rhc->cda = (uint32)((rhc->cda + 1) & AMASK);
         } else {
             rhc->cda = (uint32)((rhc->cda + 1) & AMASK);
-            data = M[rhc->cda];
+            if (Mem_read_word(rhc->cda, &data, 0)) {
+                rh_finish_op(rhc, 1);
+                return 0;
+            }
         }
 #else
         rhc->cda = (uint32)((rhc->cda + 1) & AMASK);
-        data = M[rhc->cda];
+        if (Mem_read_word(rhc->cda, &data, 0)) {
+            rh_finish_op(rhc, 1);
+            return 0;
+        }
 #endif
      } else {
         data = 0;
@@ -764,18 +770,27 @@ int rh_write(struct rh_if *rhc) {
         }
 #if KL
         if (rhc->imode == 2) {
-            M[rhc->cda] = rhc->buf;
+            if (Mem_write_word(rhc->cda, &rhc->buf, 0)) {
+                rh_finish_op(rhc, 1);
+                return 0;
+            }
             if (rhc->cop & 01)
                 rhc->cda = (uint32)((rhc->cda - 1) & AMASK);
             else
                 rhc->cda = (uint32)((rhc->cda + 1) & AMASK);
         } else {
             rhc->cda = (uint32)((rhc->cda + 1) & AMASK);
-            M[rhc->cda] = rhc->buf;
+            if (Mem_write_word(rhc->cda, &rhc->buf, 0)) {
+                rh_finish_op(rhc, 1);
+                return 0;
+            }
         }
 #else
         rhc->cda = (uint32)((rhc->cda + 1) & AMASK);
-        M[rhc->cda] = rhc->buf;
+        if (Mem_write_word(rhc->cda, &rhc->buf, 0)) {
+            rh_finish_op(rhc, 1);
+            return 0;
+        }
 #endif
      }
      if (rhc->wcr == 0) {

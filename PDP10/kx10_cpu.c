@@ -2992,7 +2992,7 @@ int its_load_tlb(uint32 reg, int page, uint32 *tlb) {
        fault_data |= 0200;
        return 1;
     }
-    if (entry > (int)MEMSIZE) {
+    if (entry >= (int)MEMSIZE) {
         nxm_flag = 1;
         fault_data |= 0400;
         return 1;
@@ -3924,6 +3924,34 @@ int Mem_write_nopage() {
     return 0;
 }
 
+/*
+ * Access main memory. Returns 0 if access ok, 1 if out of memory range.
+ * On KI10 and KL10, optional EPT flag indicates address relative to ept.
+ */
+int Mem_read_word(t_addr addr, uint64 *data, int ept)
+{
+#if KL | KI
+    if (ept)
+       addr += eb_ptr;
+#endif
+    if (addr >= MEMSIZE)
+        return 1;
+    *data = M[addr];
+    return 0;
+}
+
+int Mem_write_word(t_addr addr, uint64 *data, int ept)
+{
+#if KL | KI
+    if (ept)
+       addr += eb_ptr;
+#endif
+    if (addr >= MEMSIZE)
+        return 1;
+    M[addr] = *data;
+    return 0;
+}
+
 
 /*
  * Function to determine number of leading zero bits in a work
@@ -4403,7 +4431,7 @@ st_pi:
                 goto last;
              AB = MB & (SECTM|RMASK);
              if (IR & 1) {
-                 AR = get_reg(AC);
+                 MB = get_reg(AC);
                  if (Mem_write_nopage())
                      goto last;
              } else {
@@ -4632,7 +4660,7 @@ unasign:
     case 0076:     /* LMR */
               if (QITS && (FLAGS & USER) == 0) {
                   /* Load store ITS pager info */
-                  if ((AB + 8) > MEMSIZE) {
+                  if ((AB + 8) >= MEMSIZE) {
                      break;
                   }
                   MB = M[AB];                /* WD 0 */
@@ -4657,7 +4685,7 @@ unasign:
               goto unasign;
     case 0077:     /* SPM */
               if (QITS && (FLAGS & USER) == 0) {
-                  if ((AB + 8) > MEMSIZE) {
+                  if ((AB + 8) >= MEMSIZE) {
                      break;
                   }
                   MB = (uint64)jpc;
@@ -5546,7 +5574,7 @@ dpnorm:
                   /* Load store ITS pager info */
                   /* AC & 1 = Store */
                   if (AC & 1) {
-                      if ((AB + 8) > MEMSIZE) {
+                      if ((AB + 8) >= MEMSIZE) {
                          fault_data |= 0400;
                          mem_prot = 1;
                          break;
@@ -5579,7 +5607,7 @@ dpnorm:
                       MB = (uint64)ac_stack;
                       M[AB] = MB;
                   } else {
-                      if ((AB + 8) > MEMSIZE) {
+                      if ((AB + 8) >= MEMSIZE) {
                          fault_data |= 0400;
                          mem_prot = 1;
                          break;
@@ -5863,10 +5891,10 @@ unasign:
     case 0134: /* ILDB */
     case 0136: /* IDPB */
               if ((FLAGS & BYTI) == 0) {      /* BYF6 */
-                  modify = 1;
 #if KL
                   if (Mem_read(0, 0, 0)) {
 #else
+                  modify = 1;
                   if (Mem_read(0, !QITS, 0)) {
 #endif
 #if PDP6
@@ -5943,6 +5971,7 @@ unasign:
                       goto last;
                   if ((IR & 04) == 0)
                       break;
+                  modify = 0;
                   goto ldb_ptr;
               }
               /* Fall through */
@@ -7563,7 +7592,7 @@ jrstf:
               } else
                  AR = (f & 01740) ? 0 : 0377777LL;
               AR |= BIT8;
-//fprintf(stderr, "Map ok %012llo %06o\r\n", AR, AB);
+//fprintf(stderr, "Map ok %012llo %03o %06o\r\n", AR, cur_sect, AB);
 #else
               /* Check if Paging Enabled */
               if (!page_enable || AB < 020) {
@@ -10313,6 +10342,7 @@ for (i = 0; (dptr = rh_devs[i]) != NULL; i++) {
         rh[rh_idx].dev_num = d;
         rh[rh_idx].dev = dptr;
         rh[rh_idx].rh = dibp->rh;
+        dibp->rh->devnum = d;
         rh_idx++;
     }
 }

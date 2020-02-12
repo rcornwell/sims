@@ -1001,7 +1001,6 @@ rp_reset(DEVICE * rptr)
 {
     int ctlr;
     for (ctlr = 0; ctlr < NUM_DEVS_RP; ctlr++) {
-        rp_rh[ctlr].devnum = rp_dib[ctlr].dev_num;
         rp_rh[ctlr].status = 0;
         rp_rh[ctlr].attn = 0;
         rp_rh[ctlr].rae = 0;
