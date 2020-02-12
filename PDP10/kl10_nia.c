@@ -91,6 +91,18 @@
 #define SLFTST      07751
 #define INTERR      07750
 
+/* 12 Bit Shift */
+#define NIA_CMD_SND   0001                     /* Send a datagram */
+#define NIA_CMD_LMAC  0002                     /* Load Multicast table */
+#define NIA_CMD_LPTT  0003                     /* Load Protocol Type table */
+#define NIA_CMD_RCNT  0004                     /* Read counts */
+#define NIA_CMD_RCV   0005                     /* Received datagram */
+#define NIA_CMD_WPLI  0006                     /* Write PLI */
+#define NIA_CMD_RPLI  0007                     /* Read PLI */
+#define NIA_CMD_RNSA  0010                     /* Read Station Address */
+#define NIA_CMD_WNSA  0011                     /* Write Station Address */
+
+/* 20 Bit shift */
 #define NIA_FLG_RESP  0001                     /* Command wants a response */
 #define NIA_FLG_CLRC  0002                     /* Clear counters (Read counters) */
 #define NIA_FLG_BSD   0010                     /* Send BSD packet */
@@ -101,6 +113,7 @@
 #define NIA_STS_SR    0100                     /* Send receive */
 #define NIA_STS_ERR   0001                     /* Error bits valid */
 
+/* 28 bit shift ERR +1 */
 #define NIA_ERR_ECL   000                      /* Excessive collisions */
 #define NIA_ERR_CAR   001                      /* Carrier check failed */
 #define NIA_ERR_COL   002                      /* Collision detect failed */
@@ -121,21 +134,135 @@
 #define NIA_ERR_PAR   036                      /* Parity error */
 #define NIA_ERR_INT   037                      /* Internal error */
 
+#ifdef _MSC_VER
+# define PACKED_BEGIN __pragma( pack(push, 1) )
+# define PACKED_END __pragma( pack(pop) )
+# define QEMU_PACKED
+#else
+# define PACKED_BEGIN
+#if defined(_WIN32)
+# define PACKED_END __attribute__((gcc_struct, packed))
+# define QEMU_PACKED __attribute__((gcc_struct, packed))
+#else
+# define PACKED_END __attribute__((packed))
+# define QEMU_PACKED __attribute__((packed))
+#endif
+#endif
+
+typedef uint32 in_addr_T;
+
+#define ETHTYPE_ARP 0x0806
+#define ETHTYPE_IP  0x0800
+
+PACKED_BEGIN
+struct nia_eth_hdr {
+    ETH_MAC    dest;
+    ETH_MAC    src;
+    uint16     type;
+} PACKED_END;
+
+/*
+ * Structure of an internet header, naked of options.
+ */
+PACKED_BEGIN
+struct ip {
+    uint8           ip_v_hl;            /* version,header length */
+    uint8           ip_tos;             /* type of service */
+    uint16          ip_len;             /* total length */
+    uint16          ip_id;              /* identification */
+    uint16          ip_off;             /* fragment offset field */
+#define IP_DF 0x4000                    /* don't fragment flag */
+#define IP_MF 0x2000                    /* more fragments flag */
+#define IP_OFFMASK 0x1fff               /* mask for fragmenting bits */
+    uint8           ip_ttl;             /* time to live */
+    uint8           ip_p;               /* protocol */
+    uint16          ip_sum;             /* checksum */
+    in_addr_T       ip_src;
+    in_addr_T       ip_dst;             /* source and dest address */
+} PACKED_END;
+
+#define TCP_PROTO  6
+PACKED_BEGIN
+struct tcp {
+    uint16          tcp_sport;          /* Source port */
+    uint16          tcp_dport;          /* Destination port */
+    uint32          seq;                /* Sequence number */
+    uint32          ack;                /* Ack number */
+    uint16          flags;              /* Flags */
+#define TCP_FL_FIN  0x01
+#define TCP_FL_SYN  0x02
+#define TCP_FL_RST  0x04
+#define TCP_FL_PSH  0x08
+#define TCP_FL_ACK  0x10
+#define TCP_FL_URG  0x20
+    uint16          window;             /* Window size */
+    uint16          chksum;             /* packet checksum */
+    uint16          urgent;             /* Urgent pointer */
+} PACKED_END;
+
+#define UDP_PROTO 17
+PACKED_BEGIN
+struct udp {
+    uint16          udp_sport;          /* Source port */
+    uint16          udp_dport;          /* Destination port */
+    uint16          len;                /* Length */
+    uint16          chksum;             /* packet checksum */
+} PACKED_END;
+
+PACKED_BEGIN
+struct udp_hdr {
+    in_addr_T       ip_src;
+    in_addr_T       ip_dst;             /* source and dest address */
+    uint8           zero;
+    uint8           proto;              /* Protocol */
+    uint16          hlen;               /* Length of header and data */
+} PACKED_END;
+
+#define ICMP_PROTO 1
+PACKED_BEGIN
+struct icmp {
+    uint8           type;               /* Type of packet */
+    uint8           code;               /* Code */
+    uint16          chksum;             /* packet checksum */
+} PACKED_END;
+
+PACKED_BEGIN
+struct ip_hdr {
+    struct nia_eth_hdr  ethhdr;
+    struct ip           iphdr;
+} PACKED_END;
+
+#define ARP_REQUEST     1
+#define ARP_REPLY       2
+#define ARP_HWTYPE_ETH  1
+
+PACKED_BEGIN
+struct arp_hdr {
+    struct nia_eth_hdr  ethhdr;
+    uint16              hwtype;
+    uint16              protocol;
+    uint8               hwlen;
+    uint8               protolen;
+    uint16              opcode;
+    ETH_MAC             shwaddr;
+    in_addr_T           sipaddr;
+    ETH_MAC             dhwaddr;
+    in_addr_T           dipaddr;
+    uint8               padding[18];
+} PACKED_END;
+
 struct nia_device {
     ETH_PCALLBACK     rcallback;               /* read callback routine */
     ETH_PCALLBACK     wcallback;               /* write callback routine */
-    ETH_MAC           macs[2];                 /* Hardware MAC addresses */
+    ETH_MAC           mac;                     /* Hardware MAC addresses */
     ETH_DEV           etherface;
     ETH_QUE           ReadQ;
-#define mac macs[0]
-#define bcast macs[1]
-
-    uint8             rec_buff[2000];          /* Buffer for recieved packet */
-    uint8             snd_buff[2000];          /* Buffer for sending packet */
+    ETH_PACK          rec_buff;                /* Buffer for recieved packet */
+    ETH_PACK          snd_buff;                /* Buffer for sending packet */
     t_addr            cmd_entry;               /* Pointer to current command entry */
+    t_addr            cmd_rply;                /* Pointer to reply entry */
+    uint8             cmd_status;              /* Status feild of current command */
     t_addr            rec_entry;               /* Pointer to current recieve entry */
-    t_addr            free_hdr;                /* Queue to save command entry */
-    t_addr            rec_hdr;                 /* Queue to get free entry from */
     t_addr            pcb;                     /* Address of PCB */
     t_addr            rcb;                     /* Read count buffer address */
 #define cmd_hdr pcb                            /* Command queue is at PCB */
@@ -143,20 +270,21 @@ struct nia_device {
     t_addr            unk_hdr;                 /* Unknown protocol free queue */
     int               unk_len;                 /* Length of Unknown entries */
     t_addr            ptt_addr;                /* Address of Protocol table */
-    t_addr            mat_addr;                /* Address of Multicast table */
+    t_addr            mcast_addr;              /* Address of Multicast table */
     int               pia;                     /* Interrupt channel */
     t_addr            cnt_addr;                /* Address of counters */
 
     int               ptt_n;                   /* Number of Protocol entries */
     uint16            ptt_proto[17];           /* Protocol for entry */
     t_addr            ptt_head[17];            /* Head of protocol queue */
-    int               mat_n;                   /* Number of multi-cast addresses */
-    ETH_MAC           mat_mac[17];             /* Watched Multi-cast addresses */
+    int               macs_n;                  /* Number of multi-cast addresses */
+    ETH_MAC           macs[20];                /* Watched Multi-cast addresses */
     int               rar;
     uint64            ebuf;
-    uint32            uver;
-    uint32            uedit;
+    uint32            uver[4];                 /* Version information */
+    int               r_pkt;                   /* Packet pending */
 } nia_data;
+
 
 #define STATUS   u3
 extern int32 tmxr_poll;
@@ -167,6 +295,7 @@ t_stat         nia_devio(uint32 dev, uint64 *data);
 void           nia_start(UNIT *);
 void           nia_stop(UNIT *);
 void           nia_enable(UNIT *);
+void           nia_disable(UNIT *);
 void           nia_error(UNIT *, int);
 t_stat         nia_srv(UNIT *);
 t_stat         nia_eth_srv(UNIT *);
@@ -207,12 +336,18 @@ DEBTAB              nia_debug[] = {
     {"CONO", DEBUG_CONO, "Show coni instructions"},
     {"DATAIO", DEBUG_DATAIO, "Show datai and datao instructions"},
     {"IRQ", DEBUG_IRQ, "Show IRQ requests"},
-#define DEBUG_ETHER (DEBUG_IRQ<<1)
+#define DEBUG_ARP (DEBUG_IRQ<<1)
+    {"ARP", DEBUG_ARP, "Show ARP activities"},
+#define DEBUG_TCP (DEBUG_ARP<<1)
+    {"TCP", DEBUG_TCP, "Show TCP packet activities"},
+#define DEBUG_UDP (DEBUG_TCP<<1)
+    {"UDP", DEBUG_UDP, "Show UDP packet activities"},
+#define DEBUG_ICMP (DEBUG_UDP<<1)
+    {"ICMP", DEBUG_ICMP, "Show ICMP packet activities"},
+#define DEBUG_ETHER (DEBUG_ICMP<<1)
     {"ETHER", DEBUG_ETHER, "Show ETHER activities"},
     {0, 0}
 };
-
-
 
 DEVICE nia_dev = {
     "NI", nia_unit, NULL, nia_mod,
@@ -222,21 +357,37 @@ DEVICE nia_dev = {
     NULL, NULL, &nia_help, NULL, NULL, &nia_description
 };
 
+static char *
+ipv4_inet_ntoa(struct in_addr ip)
+{
+   static char str[20];
+
+   if (sim_end)
+       sprintf (str, "%d.%d.%d.%d", ip.s_addr & 0xFF, (ip.s_addr >> 8) & 0xFF,
+                              (ip.s_addr >> 16) & 0xFF, (ip.s_addr >> 24) & 0xFF);
+   else
+       sprintf (str, "%d.%d.%d.%d", (ip.s_addr >> 24) & 0xFF, (ip.s_addr >> 16) & 0xFF,
+                              (ip.s_addr >> 8) & 0xFF, ip.s_addr & 0xFF);
+   return str;
+}
+
+
 
 t_stat nia_devio(uint32 dev, uint64 *data)
 {
     DEVICE *dptr = &nia_dev;
     UNIT   *uptr = nia_unit;
 
-    switch(dev & 07) {
+    switch(dev & 03) {
     case CONO:
         if (*data & NIA_CPT)
             nia_reset(dptr);
-        
-        uptr->STATUS &= ~(NIA_SEB|NIA_LAR|NIA_SSC|NIA_CQA|NIA_DIS|NIA_ENB|NIA_PIA);
-        uptr->STATUS |= *data & (NIA_SEB|NIA_LAR|NIA_SSC|NIA_CQA|NIA_DIS|NIA_ENB|NIA_PIA);
+
+        uptr->STATUS &= ~(NIA_SEB|NIA_LAR|NIA_SSC|NIA_DIS|NIA_ENB|NIA_PIA);
+        uptr->STATUS |= *data & (NIA_SEB|NIA_LAR|NIA_SSC|NIA_DIS|NIA_ENB|NIA_PIA);
         uptr->STATUS &= ~(*data & (NIA_EPE|NIA_FQE|NIA_DME|NIA_RQA));
-        if (*data & NIA_MRN ) {
+        clr_interrupt(NIA_DEVNUM);
+        if (*data & NIA_MRN) {
            if ((uptr->STATUS & NIA_MRN) == 0)
               nia_start(uptr);
         } else {
@@ -244,37 +395,53 @@ t_stat nia_devio(uint32 dev, uint64 *data)
               nia_stop(uptr);
         }
         if (*data & NIA_ENB) {
-           if ((uptr->STATUS & NIA_MRN) != 0)
+           if ((uptr->STATUS & NIA_MRN) != 0 && (uptr->STATUS & NIA_ECP) == 0)
                nia_enable(uptr);
            else
                uptr->STATUS |= NIA_ECP;
         } else
            uptr->STATUS &= ~NIA_ECP;
-        if (*data & NIA_CQA && (uptr->STATUS & NIA_MRN) != 0)
-           sim_activate(uptr, 100);
-        sim_debug(DEBUG_CONO, dptr, "IMP %03o CONO %06o PC=%o\n", dev,
-                 (uint32)*data, PC);
+        if (*data & NIA_DIS) {
+           if ((uptr->STATUS & NIA_MRN) != 0 && (uptr->STATUS & NIA_DCP) == 0)
+               nia_disable(uptr);
+           else
+               uptr->STATUS |= NIA_DCP;
+        } else
+           uptr->STATUS &= ~NIA_DCP;
+        if (*data & NIA_CQA &&
+            (uptr->STATUS & NIA_CQA) == 0 &&
+            (uptr->STATUS & NIA_MRN) != 0) {
+           uptr->STATUS |= NIA_CQA;
+           sim_activate(uptr, 200);
+        }
+        if (uptr->STATUS & (NIA_CPE|NIA_RQA))
+            set_interrupt(NIA_DEVNUM, uptr->STATUS & NIA_PIA);
+        sim_debug(DEBUG_CONO, dptr, "NIA %03o CONO %06o PC=%o %06o\n", dev,
+                 (uint32)*data, PC, uptr->STATUS);
         break;
     case CONI:
         *data = (uint64)uptr->STATUS;
-        *data = NIA_PPT|NIA_PID;
-        sim_debug(DEBUG_CONI, dptr, "IMP %03o CONI %012llo PC=%o\n", dev,
+        *data |= NIA_PPT|NIA_PID;
+//        *data &= ~NIA_CQA;
+        sim_debug(DEBUG_CONI, dptr, "NIA %03o CONI %012llo PC=%o\n", dev,
                            *data, PC);
         break;
     case DATAO:
         if (uptr->STATUS & NIA_SEB) {
             nia_data.ebuf = *data;
         } else {
-            if (*data & NIA_LRA)
-                nia_data.rar = (uint32)((*data & NIA_RAR) >> 20);
-            else {
-                if(nia_data.rar = 0275) 
-                   nia_data.uver = (uint32)(*data & RMASK); 
-                else if(nia_data.rar = 0277) 
-                   nia_data.uedit = (uint32)(*data & RMASK); 
+            if (*data & NIA_LRA) {
+                nia_data.rar = (uint32)((*data & NIA_RAR) >> 22);
+                sim_debug(DEBUG_DETAIL, dptr, "NIA %03o set RAR=%o\n",
+                 dev, nia_data.rar);
+            } else {
+                if (nia_data.rar >= 0274 && nia_data.rar <= 0277)
+                   nia_data.uver[nia_data.rar - 0274] = (uint32)(*data & RMASK);
+                sim_debug(DEBUG_DETAIL, dptr, "NIA %03o set data=%o %06o\n",
+                 dev, nia_data.rar, (uint32)(*data & RMASK));
             }
         }
-        sim_debug(DEBUG_DATAIO, dptr, "IMP %03o DATO %012llo PC=%o\n",
+        sim_debug(DEBUG_DATAIO, dptr, "NIA %03o DATO %012llo PC=%o\n",
                  dev, *data, PC);
         break;
     case DATAI:
@@ -285,14 +452,11 @@ t_stat nia_devio(uint32 dev, uint64 *data)
                 *data = ((uint64)nia_data.rar) << 20;
                 *data &= ~NIA_MSB;
                 *data |= NIA_LRA;
-            } else {
-                if(nia_data.rar == 0275)
-                   *data = (uint64)(nia_data.uver);
-                else if(nia_data.rar == 0277)
-                   *data = (uint64)(nia_data.uedit);
+            } else if (nia_data.rar >= 0274 && nia_data.rar <= 0277) {
+                   *data = (uint64)nia_data.uver[nia_data.rar - 0274];
             }
         }
-        sim_debug(DEBUG_DATAIO, dptr, "IMP %03o DATI %012llo PC=%o\n",
+        sim_debug(DEBUG_DATAIO, dptr, "NIA %03o DATI %012llo PC=%o\n",
                  dev, *data, PC);
         break;
     }
@@ -303,12 +467,14 @@ t_stat nia_devio(uint32 dev, uint64 *data)
 void nia_error(UNIT * uptr, int err)
 {
     nia_data.rar = err;
+    sim_debug(DEBUG_DETAIL, &nia_dev, "NIA error %03o\n", err);
     uptr->STATUS |= NIA_CPE;
     set_interrupt(NIA_DEVNUM, uptr->STATUS & NIA_PIA);
 }
 
 void nia_start(UNIT * uptr)
 {
+    sim_debug(DEBUG_DETAIL, &nia_dev, "NIA start\n");
     nia_rh.stcr = BIT7;
     nia_rh.imode = 2;
     rh20_setup(&nia_rh);
@@ -317,32 +483,410 @@ void nia_start(UNIT * uptr)
           nia_error(uptr, CHNERR);
           return;
     }
+    sim_debug(DEBUG_DETAIL, &nia_dev, "NIA PCB %012llo %o\n", nia_rh.buf, nia_rh.wcr);
     nia_data.pcb = (t_addr)(nia_rh.buf & AMASK);
+    nia_data.resp_hdr = (t_addr)((nia_rh.buf + 4) & AMASK);
+    nia_data.unk_hdr = (t_addr)((nia_rh.buf + 8) & AMASK);
     /* Read PIA value */
     if (!rh_read(&nia_rh)) {
           nia_error(uptr, CHNERR);
           return;
     }
+    sim_debug(DEBUG_DETAIL, &nia_dev, "NIA PIA %012llo %o\n", nia_rh.buf, nia_rh.wcr);
     nia_data.pia = (int)(nia_rh.buf & 7);
-    /* Read reserve word */
-    if (!rh_read(&nia_rh)) {
-          nia_error(uptr, CHNERR);
-          return;
-    }
     uptr->STATUS |= NIA_MRN;
+    memcpy(&nia_data.macs[0], &nia_data.mac, sizeof (ETH_MAC));
+    memcpy(&nia_data.macs[1], &broadcast_ethaddr, sizeof(ETH_MAC));
 }
 
 void nia_stop(UNIT *uptr)
 {
+    sim_debug(DEBUG_DETAIL, &nia_dev, "NIA stop\n");
     uptr->STATUS &= ~NIA_MRN;
+}
+
+void nia_cpy_mac(UNIT *uptr, uint64 word1, uint64 word2, ETH_MAC *mac)
+{
+    ETH_MAC  m;
+    m[0] = (unsigned char)((word1 >> 28) & 0xff);
+    m[1] = (unsigned char)((word1 >> 20) & 0xff);
+    m[2] = (unsigned char)((word1 >> 12) & 0xff);
+    m[3] = (unsigned char)((word1 >> 4) & 0xff);
+    m[4] = (unsigned char)((word2 >> 28) & 0xff);
+    m[5] = (unsigned char)((word2 >> 20) & 0xff);
+    memcpy(mac, &m, sizeof(ETH_MAC));
+}
+
+uint8 *nia_cpy_to(UNIT *uptr, t_addr addr, uint8 *data, int len)
+{
+    uint64    word;
+    while (len > 3) {
+        word = M[addr++];
+        *data++ = (uint8)((word >> 28) & 0xff);
+        *data++ = (uint8)((word >> 20) & 0xff);
+        *data++ = (uint8)((word >> 12) & 0xff);
+        *data++ = (uint8)((word >> 4) & 0xff);
+         len -= 4;
+    }
+    if (len) {
+        word = M[addr++];
+        switch (len) {
+        case 3:
+                *data++ = (uint8)((word >> 28) & 0xff);
+                *data++ = (uint8)((word >> 20) & 0xff);
+                *data++ = (uint8)((word >> 12) & 0xff);
+                break;
+        case 2:
+                *data++ = (uint8)((word >> 28) & 0xff);
+                *data++ = (uint8)((word >> 20) & 0xff);
+                break;
+        case 1:
+                *data++ = (uint8)((word >> 28) & 0xff);
+                break;
+        }
+    }
+    return data;
+}
+
+uint8 *nia_cpy_from(UNIT *uptr, t_addr addr, uint8 *data, int len)
+{
+    uint64    word;
+
+    while (len > 3) {
+        word =  (uint64)(*data++) << 28;
+        word |= (uint64)(*data++) << 20;
+        word |= (uint64)(*data++) << 12;
+        word |= (uint64)(*data++) << 4;
+        M[addr++] = word;
+        len -= 4;
+    }
+    if (len) {
+        switch (len) {
+        case 3:
+                word =  (uint64)(*data++) << 28;
+                word |= (uint64)(*data++) << 20;
+                word |= (uint64)(*data++) << 12;
+                break;
+        case 2:
+                word =  (uint64)(*data++) << 28;
+                word |= (uint64)(*data++) << 20;
+                break;
+        case 1:
+                word =  (uint64)(*data++) << 28;
+                break;
+        }
+    }
+    M[addr++] = word;
+    return data;
+}
+
+/*
+ * Load in the protocol type table
+ */
+void nia_load_ptt(UNIT *uptr)
+{
+    int      i;
+    int      n = 0;
+    t_addr   addr = nia_data.ptt_addr;
+
+    for (i = 0; i < 17; i++) {
+        uint64     word1, word2;
+
+        word1 = M[addr++];
+        word2 = M[addr++];
+       sim_debug(DEBUG_DETAIL, &nia_dev, "NIA load ptt%d: %012llo %012llo\n\r",n,  word1, word2);
+        if (word1 & SMASK) {
+           uint16 type;
+           type = (uint16)(word1 >> 12) & 0xff;
+           type |= (uint16)(word1 << 4) & 0xff00;
+           nia_data.ptt_proto[n] = type;
+           nia_data.ptt_head[n] = (t_addr)(word2 &AMASK) - 1;
+           n++;
+        }
+        addr++;
+    }
+    for (i = 0; i < n; i++) {
+       sim_debug(DEBUG_DETAIL, &nia_dev, "NIA load ptt%d: %04x %010o\n\r",n,  nia_data.ptt_proto[i], nia_data.ptt_head[i]);
+    }
+    nia_data.ptt_n = n;
+}
+
+/*
+ * Load in the multi-cast table
+ */
+void nia_load_mcast(UNIT *uptr)
+{
+    int      i;
+    int      n = 0;
+    char buffer[20];
+    t_addr   addr = nia_data.mcast_addr;
+
+    memcpy(&nia_data.macs[n], &nia_data.mac, sizeof (ETH_MAC));
+    n++;
+    memcpy(&nia_data.macs[n], &broadcast_ethaddr, sizeof (ETH_MAC));
+    n++;
+    for (i = 0; i < 17; i++) {
+         uint64 word1, word2;
+
+         word1 = M[addr++];
+         word2 = M[addr++];
+         if (word2 & 1) {
+             nia_cpy_mac(uptr, word1, word2, &nia_data.macs[n]);
+             n++;
+         }
+     }
+     for(i = 0; i< n; i++) {
+         eth_mac_fmt(&nia_data.macs[i], buffer);
+       sim_debug(DEBUG_DETAIL, &nia_dev, "NIA load mcast%d: %s\n\r",i, buffer);
+     }
+     nia_data.macs_n = n - 2;
+     if (uptr->flags & UNIT_ATT)
+         eth_filter (&nia_data.etherface, n, nia_data.macs, 0, 0);
+}
+
+void nia_packet_debug(struct nia_device *nia, const char *action, ETH_PACK *packet) {
+    struct nia_eth_hdr *eth = (struct nia_eth_hdr *)&packet->msg[0];
+    struct arp_hdr     *arp = (struct arp_hdr *)eth;
+    struct ip          *ip = (struct ip *)&packet->msg[sizeof(struct nia_eth_hdr)];
+    struct udp         *udp;
+    struct tcp         *tcp;
+    struct icmp        *icmp;
+    uint8              *payload;
+    struct in_addr     ipaddr;
+    size_t             len;
+    int                flag;
+    char               src_ip[20];
+    char               dst_ip[20];
+    char               src_port[8];
+    char               dst_port[8];
+    char               mac_buf[20];
+    char               flags[64];
+    static struct tcp_flag_bits {
+        const char *name;
+        uint16      bitmask;
+        } bits[] = {
+            {"FIN", TCP_FL_FIN},
+            {"SYN", TCP_FL_SYN},
+            {"RST", TCP_FL_RST},
+            {"PSH", TCP_FL_PSH},
+            {"ACK", TCP_FL_ACK},
+            {"URG", TCP_FL_URG},
+            {NULL, 0}
+        };
+    static const char *icmp_types[] = {
+        "Echo Reply",                                   // Type 0
+        "Type 1 - Unassigned",
+        "Type 2 - Unassigned",
+        "Destination Unreachable",                      // Type 3
+        "Source Quench (Deprecated)",                   // Type 4
+        "Redirect",                                     // Type 5
+        "Type 6 - Alternate Host Address (Deprecated)",
+        "Type 7 - Unassigned",
+        "Echo Request",                                 // Type 8
+        "Router Advertisement",                         // Type 9
+        "Router Selection",                             // Type 10
+        "Time Exceeded",                                // Type 11
+        "Type 12 - Parameter Problem",
+        "Type 13 - Timestamp",
+        "Type 14 - Timestamp Reply",
+        "Type 15 - Information Request (Deprecated)",
+        "Type 16 - Information Reply (Deprecated)",
+        "Type 17 - Address Mask Request (Deprecated)",
+        "Type 18 - Address Mask Reply (Deprecated)",
+        "Type 19 - Reserved (for Security)",
+        "Type 20 - Reserved (for Robustness Experiment)",
+        "Type 21 - Reserved (for Robustness Experiment)",
+        "Type 22 - Reserved (for Robustness Experiment)",
+        "Type 23 - Reserved (for Robustness Experiment)",
+        "Type 24 - Reserved (for Robustness Experiment)",
+        "Type 25 - Reserved (for Robustness Experiment)",
+        "Type 26 - Reserved (for Robustness Experiment)",
+        "Type 27 - Reserved (for Robustness Experiment)",
+        "Type 28 - Reserved (for Robustness Experiment)",
+        "Type 29 - Reserved (for Robustness Experiment)",
+        "Type 30 - Traceroute (Deprecated)",
+        "Type 31 - Datagram Conversion Error (Deprecated)",
+        "Type 32 - Mobile Host Redirect (Deprecated)",
+        "Type 33 - IPv6 Where-Are-You (Deprecated)",
+        "Type 34 - IPv6 I-Am-Here (Deprecated)",
+        "Type 35 - Mobile Registration Request (Deprecated)",
+        "Type 36 - Mobile Registration Reply (Deprecated)",
+        "Type 37 - Domain Name Request (Deprecated)",
+        "Type 38 - Domain Name Reply (Deprecated)",
+        "Type 39 - SKIP (Deprecated)",
+        "Type 40 - Photuris",
+        "Type 41 - ICMP messages utilized by experimental mobility protocols such as Seamoby",
+        "Type 42 - Extended Echo Request",
+        "Type 43 - Extended Echo Reply"
+    };
+
+    if (ntohs(eth->type) == ETHTYPE_ARP) {
+        struct in_addr in_addr;
+        const char *arp_op = (ARP_REQUEST == ntohs(arp->opcode)) ? "REQUEST" : ((ARP_REPLY == ntohs(arp->opcode)) ? "REPLY" : "Unknown");
+        char eth_src[20], eth_dst[20];
+        char arp_shwaddr[20], arp_dhwaddr[20];
+        char arp_sipaddr[20], arp_dipaddr[20];
+
+        if (!(nia_dev.dctrl & DEBUG_ARP))
+            return;
+        eth_mac_fmt(&arp->ethhdr.src, eth_src);
+        eth_mac_fmt(&arp->ethhdr.dest, eth_dst);
+        eth_mac_fmt(&arp->shwaddr, arp_shwaddr);
+        memcpy(&in_addr, &arp->sipaddr, sizeof(in_addr));
+        strlcpy(arp_sipaddr, ipv4_inet_ntoa(in_addr), sizeof(arp_sipaddr));
+        eth_mac_fmt(&arp->dhwaddr, arp_dhwaddr);
+        memcpy(&in_addr, &arp->dipaddr, sizeof(in_addr));
+        strlcpy(arp_dipaddr, ipv4_inet_ntoa(in_addr), sizeof(arp_dipaddr));
+        sim_debug(DEBUG_ARP, &nia_dev,
+            "%s %s EthDst=%s EthSrc=%s shwaddr=%s sipaddr=%s dhwaddr=%s dipaddr=%s\n",
+            action, arp_op, eth_dst, eth_src, arp_shwaddr, arp_sipaddr, arp_dhwaddr, arp_dipaddr);
+        return;
+    }
+    if (ntohs(eth->type) != ETHTYPE_IP) {
+        payload = (uint8 *)&packet->msg[sizeof(struct nia_eth_hdr)];
+        len = packet->len - sizeof(struct nia_eth_hdr);
+        sim_data_trace(&nia_dev, nia_unit, payload, "", len, "", DEBUG_DATA);
+        return;
+    }
+    if (!(nia_dev.dctrl & (DEBUG_TCP|DEBUG_UDP|DEBUG_ICMP)))
+        return;
+    memcpy(&ipaddr, &ip->ip_src, sizeof(ipaddr));
+    strlcpy(src_ip, ipv4_inet_ntoa(ipaddr), sizeof(src_ip));
+    memcpy(&ipaddr, &ip->ip_dst, sizeof(ipaddr));
+    strlcpy(dst_ip, ipv4_inet_ntoa(ipaddr), sizeof(dst_ip));
+    payload = (uint8 *)&packet->msg[sizeof(struct nia_eth_hdr) + (ip->ip_v_hl & 0xf) * 4];
+    switch (ip->ip_p) {
+        case UDP_PROTO:
+            udp = (struct udp *)payload;
+            snprintf(src_port, sizeof(src_port), "%d", ntohs(udp->udp_sport));
+            snprintf(dst_port, sizeof(dst_port), "%d", ntohs(udp->udp_dport));
+            sim_debug(DEBUG_UDP, &nia_dev, "%s %d byte packet from %s:%s to %s:%s\n", action,
+                ntohs(udp->len), src_ip, src_port, dst_ip, dst_port);
+                if (udp->len && (nia_dev.dctrl & DEBUG_UDP))
+                    sim_data_trace(&nia_dev, nia_unit, payload + sizeof(struct udp), "",
+                                                       ntohs(udp->len), "", DEBUG_DATA);
+            break;
+        case TCP_PROTO:
+            tcp = (struct tcp *)payload;
+            snprintf(src_port, sizeof(src_port), "%d", ntohs(tcp->tcp_sport));
+            snprintf(dst_port, sizeof(dst_port), "%d", ntohs(tcp->tcp_dport));
+            strlcpy(flags, "", sizeof(flags));
+            for (flag=0; bits[flag].name; flag++) {
+                if (ntohs(tcp->flags) & bits[flag].bitmask) {
+                    if (*flags)
+                        strlcat(flags, ",", sizeof(flags));
+                    strlcat(flags, bits[flag].name, sizeof(flags));
+                }
+
+            }
+            len = ntohs(ip->ip_len) - ((ip->ip_v_hl & 0xf) * 4 + (ntohs(tcp->flags) >> 12) * 4);
+            sim_debug(DEBUG_TCP, &nia_dev, "%s %s%s %d byte packet from %s:%s to %s:%s\n", action,
+                        flags, *flags ? ":" : "", (int)len, src_ip, src_port, dst_ip, dst_port);
+            if (len && (nia_dev.dctrl & DEBUG_TCP))
+                sim_data_trace(&nia_dev, nia_unit, payload + 4 * (ntohs(tcp->flags) >> 12), "", len, "", DEBUG_DATA);
+            break;
+        case ICMP_PROTO:
+            icmp = (struct icmp *)payload;
+            len = ntohs(ip->ip_len) - (ip->ip_v_hl & 0xf) * 4;
+            sim_debug(DEBUG_ICMP, &nia_dev, "%s %s %d byte packet from %s to %s\n", action,
+                (icmp->type < sizeof(icmp_types)/sizeof(icmp_types[0])) ? icmp_types[icmp->type] : "", (int)len, src_ip, dst_ip);
+            if (len && (nia_dev.dctrl & DEBUG_ICMP))
+                sim_data_trace(&nia_dev, nia_unit, payload + sizeof(struct icmp), "", len, "", DEBUG_DATA);
+            break;
+    }
+}
+
+
+/*
+ * Send out a packet.
+ */
+void nia_send_pkt(UNIT *uptr, int len)
+{
+    uint64    word1, word2, cmd;
+    struct nia_eth_hdr  *hdr = (struct nia_eth_hdr *)(&nia_data.snd_buff.msg[0]);
+    uint8     *data = &nia_data.snd_buff.msg[sizeof(struct nia_eth_hdr)];
+    ETH_MAC   dest;
+    uint16    type;
+    int       blen;
+
+    /* flink   0 */
+    /* blink   1 */
+    /* resv    2 */
+    /* cmd     3 */
+    /* len     4 */
+    /* prot    5 */
+    /* freeq   6 */
+    /* dest    7 */
+    /* text/bsd 9 */
+    /* flink   0 */
+    /* blink   1 */
+    /* resv    2 */
+    /* cmd     3 */
+    /* len     4 */
+    /* prot    5, 8 */
+    /* freeq   6, 5 */
+    /* dest    7, 6 */
+    /* text/bsd 9 */
+    /* Load destination address */
+    word1 = M[nia_data.cmd_entry+7];
+    word2 = M[nia_data.cmd_entry+8];
+    nia_cpy_mac(uptr, word1, word2, &dest);
+    memcpy(hdr->dest, dest, sizeof(ETH_MAC));
+    /* Copy our address over */
+    memcpy(hdr->src, nia_data.mac, sizeof(ETH_MAC));
+    /* Copy protocol type */
+    word1 = M[nia_data.cmd_entry+5];
+    type = (uint16)(word1 >> 12) & 0xff;
+    type |= (uint16)(word1 << 4) & 0xff00;
+    hdr->type = htons(type);
+    nia_data.snd_buff.len = len + sizeof(struct nia_eth_hdr);
+    /* Copy over rest of packet */
+    cmd = (M[nia_data.cmd_entry + 3] >> 20);
+    if (cmd & NIA_FLG_BSD) {
+        word1 = M[nia_data.cmd_entry + 9] & AMASK;
+        while (len > 0) {
+            word2 = M[word1] & AMASK;
+            blen = (int)(M[word1+2] & 0177777);
+            data = nia_cpy_to(uptr, word2, data, blen);
+            len -= blen;
+            word1 = M[word1+1] & AMASK;
+        }
+    } else {
+        data = nia_cpy_to(uptr, nia_data.cmd_entry + 9, data, len);
+    }
+    if (cmd & NIA_FLG_PAD && nia_data.snd_buff.len < ETH_MIN_PACKET) {
+        while (nia_data.snd_buff.len < ETH_MIN_PACKET) {
+           *data = 0;
+           nia_data.snd_buff.len++;
+        }
+    }
+    nia_packet_debug(&nia_data, "send", &nia_data.snd_buff);
+    eth_write(&nia_data.etherface, &nia_data.snd_buff, NULL);
 }
 
 void nia_enable(UNIT *uptr)
 {
-    /* Load Unknown queue len */
+    sim_debug(DEBUG_DETAIL, &nia_dev, "NIA enable\n");
+    /* Load pointers to various table */
+    nia_data.unk_len = (int)(M[(nia_data.unk_hdr + 3) & AMASK] & AMASK);
     /* Load PTT */
+    nia_data.ptt_addr = (t_addr)(M[(nia_data.pcb + 015) & AMASK] & AMASK);
+    nia_load_ptt(uptr);
     /* Load MCT */
+    nia_data.mcast_addr = (t_addr)(M[(nia_data.pcb + 016) & AMASK] & AMASK);
+    nia_load_mcast(uptr);
     /* Load read count buffer address */
+    nia_data.rcb = (t_addr)(M[(nia_data.pcb + 030) & AMASK] & AMASK);
+    uptr->STATUS |= NIA_ECP;
+    uptr->STATUS &= ~NIA_DCP;
+    sim_activate(&nia_unit[1], 200);
+}
+
+void nia_disable(UNIT *uptr)
+{
+    uptr->STATUS |= NIA_DCP;
+    uptr->STATUS &= ~NIA_ECP;
+    sim_cancel(&nia_unit[1]);
 }
 
 /* Get next entry off a queue. Returns 0 if fail */
@@ -350,8 +894,10 @@ int nia_getq(t_addr head, t_addr *entry)
 {
     uint64    temp;
     uint64    flink;
+    uint64    blink;
+    int       i;
     *entry = 0;  /* For safty */
-    
+
     temp = M[head];
     /* Check if entry locked */
     if ((temp & SMASK) == 0)
@@ -359,17 +905,21 @@ int nia_getq(t_addr head, t_addr *entry)
 
     /* Increment lock here */
 
-    /* Get forward link */
-    flink = M[head+1];
+    flink = M[head+1] & AMASK;
     /* Check if queue empty */
     if (flink == (head+1)) {
+       sim_debug(DEBUG_DETAIL, &nia_dev, "NIA empty %08o\n", head);
        /* Decrement lock here */
        return 1;
     }
-    temp = M[flink];
-    M[head+1] = temp; /* Set Head Flink to point to next */
-    M[temp + 1] = head + 1; /* Set Next Blink to head */
-    *entry = temp;
+    blink = M[flink] & AMASK;
+    sim_debug(DEBUG_DETAIL, &nia_dev, "NIA head: %08o %08llo %012llo\n", head, blink, M[flink+1]);
+    M[head+1] = blink; /* Set Head Flink to point to next */
+    M[blink+1] = head + 1; /* Set Next Blink to head */
+    *entry = flink;
+    sim_debug(DEBUG_DETAIL, &nia_dev, "NIA get head: %08o %08o %012llo %012llo\n", head, head+1, M[head+1], M[head+2]);
+    sim_debug(DEBUG_DETAIL, &nia_dev, "NIA get entry: %08o %08o %012llo %012llo\n", head, *entry, M[*entry], M[*entry+1]);
+    sim_debug(DEBUG_DETAIL, &nia_dev, "NIA get next: %08o %08llo %012llo %012llo\n", head, blink, M[blink], M[blink+1]);
     /* Decrement lock here */
     return 1;
 }
@@ -379,49 +929,60 @@ int nia_putq(UNIT *uptr, t_addr head, t_addr *entry)
 {
     uint64    temp;
     uint64    blink;
-    
+
     temp = M[head];
     /* Check if entry locked */
     if ((temp & SMASK) == 0)
         return 0;
 
     /* Increment lock here */
-    
-    /* Set up entry. */
-    M[*entry] = head+1;  /* Flink is head of queue */
-    blink = M[head+2];  /* Get back link */
-    M[*entry+1] = blink;
-    temp = M[blink];    /* Old prevous entry */
-    M[temp] = *entry;    /* Old forward is new */
+    sim_debug(DEBUG_DETAIL, &nia_dev, "NIA put: %08o %08o %012llo %012llo\n", head, *entry, M[head+1], M[head+2]);
 
+    /* Set up entry. */
+    blink = M[head+2];  /* Get back link */
+    M[blink] = *entry;     /* Old prevous entry */
+    M[*entry+1] = blink;   /* Back link points to previous */
+    M[*entry] = head+1;    /* Flink is head of queue */
+    M[head+2] = *entry;    /* Old forward is new */
+
+    sim_debug(DEBUG_DETAIL, &nia_dev, "NIA put head: %08o %08o %012llo %012llo\n", head, head+1, M[head+1], M[head+2]);
+    sim_debug(DEBUG_DETAIL, &nia_dev, "NIA put entry: %08o %08o %012llo %012llo\n", head, *entry, M[*entry], M[*entry+1]);
+    sim_debug(DEBUG_DETAIL, &nia_dev, "NIA put next: %08o %08llo %012llo %012llo\n", head, blink, M[blink], M[blink+1]);
     *entry = 0;
     /* Decement lock here */
 
     /* Check if Queue was empty, and response queue */
-    if (temp == (head+1) && head == nia_data.resp_hdr) {
+    if (blink == (head+1) && head == nia_data.resp_hdr) {
         uptr->STATUS |= NIA_RQA;
         set_interrupt(NIA_DEVNUM, nia_data.pia);
+        sim_debug(DEBUG_DETAIL, &nia_dev, "NIA set response\n");
     }
     return 1;
 }
 
 t_stat nia_srv(UNIT * uptr)
 {
+    t_addr free_q = nia_data.unk_hdr;
+    uint64    cmd, word1, word2;
+    int       len, i;
 
-    /* Check if we are running */
-    if ((uptr->STATUS & NIA_MRN) == 0) 
-        return SCPE_OK;
     /* See if we have command to process */
     if (nia_data.cmd_entry != 0) {
        /* Have to put this either on response queue or free queue */
-       if (nia_putq(uptr, nia_data.resp_hdr, &nia_data.cmd_entry) == 0) {
-           sim_activate(uptr, 100); /* Reschedule ourselves to deal with it */
+       if (nia_putq(uptr, nia_data.cmd_rply, &nia_data.cmd_entry) == 0) {
+           sim_activate(uptr, 200); /* Reschedule ourselves to deal with it */
            return SCPE_OK;
        }
+       nia_data.cmd_rply = 0;
     }
+    /* Check if we are running */
+    if ((uptr->STATUS & NIA_MRN) == 0 || (uptr->STATUS & NIA_CQA) == 0) {
+        return SCPE_OK;
+    }
+    /* or no commands pending, just idle out */
     /* Try to get command off queue */
     if (nia_getq(nia_data.cmd_hdr, &nia_data.cmd_entry) == 0) {
-       sim_activate(uptr, 100); /* Reschedule ourselves to deal with it */
+       sim_activate(uptr, 200); /* Reschedule ourselves to deal with it */
        return SCPE_OK;
     }
     /* Check if we got one */
@@ -430,15 +991,168 @@ t_stat nia_srv(UNIT * uptr)
        uptr->STATUS &= ~NIA_CQA;
        return SCPE_OK;
     }
+    /* Preform function of command */
+    cmd = M[nia_data.cmd_entry + 3];
+    nia_data.cmd_status = (uint8)((M[nia_data.cmd_entry + 3] >> 20) & 0xff);
+//    cmd &= ~(0xFFLL<<20); /* Clear status field */
+    sim_debug(DEBUG_DETAIL, &nia_dev, "NIA cmd: %08x\n", (uint32)(cmd >> 12));
+    len = 5;
+    switch((cmd >> 12) & 0xff) {
+    case NIA_CMD_SND:  /* Send a datagram */
+         len = (int)(M[nia_data.cmd_entry + 4] & 0177777) + sizeof(struct nia_eth_hdr);
+         if (len < ETH_MIN_PACKET && (cmd & (NIA_FLG_PAD << 20)) == 0) {
+             cmd |= (((uint64)NIA_ERR_RUN) << 29) | ((uint64)NIA_STS_ERR << 28);
+             break;
+         } if (len > ETH_MAX_PACKET) {
+             cmd |= (((uint64)NIA_ERR_LNG) << 29) | ((uint64)NIA_STS_ERR << 28);
+             break;
+         } else
+             nia_send_pkt(uptr, len - sizeof(struct nia_eth_hdr));
+         cmd |= (uint64)NIA_STS_SR << 28;
+         len = 10;
+         break;
+    case NIA_CMD_LPTT: /* Load Protocol Type table */
+         nia_load_ptt(uptr);
+         break;
+    case NIA_CMD_LMAC: /* Load Multicast table */
+         nia_load_mcast(uptr);
+         break;
+    case NIA_CMD_RCNT: /* Read counts */
+         break;
+    case NIA_CMD_WPLI: /* Write PLI */
+         break;
+    case NIA_CMD_RPLI: /* Read PLI */
+         break;
+    case NIA_CMD_RNSA: /* Read Station Address */
+         len = 8;
+         word1 = ((uint64)nia_data.mac[0]) << 28;
+         word1 |= ((uint64)nia_data.mac[1]) << 20;
+         word1 |= ((uint64)nia_data.mac[2]) << 12;
+         word1 |= ((uint64)nia_data.mac[3]) << 4;
+         M[nia_data.cmd_entry + 4] = word1;
+         word2 = ((uint64)nia_data.mac[4]) << 28;
+         word2 |= ((uint64)nia_data.mac[5]) << 20;
+         M[nia_data.cmd_entry + 5] = word2;
+         M[nia_data.cmd_entry + 6] = 0;
+         M[nia_data.cmd_entry + 7] = (nia_data.uver[3] << 12) | (0xF << 6) | 0xF;
+         break;
+    case NIA_CMD_WNSA: /* Write Station Address */
+         len = 8;
+         word1 = M[nia_data.cmd_entry+4];
+         word2 = M[nia_data.cmd_entry+5];
+         nia_cpy_mac(uptr, word1, word2, &nia_data.mac);
+         memcpy(&nia_data.macs[0], &nia_data.mac, sizeof (ETH_MAC));
+         eth_filter (&nia_data.etherface, nia_data.macs_n + 2, nia_data.macs, 0, 0);
+         break;
+
+    case NIA_CMD_RCV:  /* Received datagram */
+    default:           /* Invalid command */
+         break;
+    }
+
+    nia_data.cmd_rply = nia_data.unk_hdr;
+    M[nia_data.cmd_entry+3] = cmd;
+    if ((nia_data.cmd_status & 1) || ((M[nia_data.cmd_entry+3] >> 28) & 0xFF) != 0) {
+       nia_data.cmd_rply = nia_data.resp_hdr;
+    } else if (((cmd >> 12) & 0xff) == NIA_CMD_SND) {
+       nia_data.cmd_rply = M[nia_data.cmd_entry + 5];
+    }
+    for(i = 0; i < len; i++)
+    sim_debug(DEBUG_DETAIL, &nia_dev, "NIA rcmd: %d %09llx %012llo\n", i, M[nia_data.cmd_entry + i],
+           M[nia_data.cmd_entry + i]);
+    (void)nia_putq(uptr, nia_data.cmd_rply, &nia_data.cmd_entry);
+    sim_activate(uptr, 500);
     return SCPE_OK;
 }
 
 
 t_stat nia_eth_srv(UNIT * uptr)
 {
-    sim_clock_coschedule(uptr, 1000);              /* continue poll */
+    struct nia_eth_hdr  *hdr;
+    uint16              type;
+    int                 i;
+    int                 len;
+    t_addr              queue;
+    t_addr              bsd;
+    t_addr              word;
+    uint8               *data;
+    sim_clock_coschedule(uptr, 100);              /* continue poll */
+    /* Check if we are running */
+    if ((nia_unit[0].STATUS & NIA_MRN) == 0)
+        return SCPE_OK;
+    /* See if we have command to process */
+    if (nia_data.rec_entry != 0) {
+       /* Have to put this response queue */
+       if (nia_putq(&nia_unit[0], nia_data.resp_hdr, &nia_data.rec_entry) == 0)
+           return SCPE_OK;
+    }
+loop:
+    /* Check if we need to get a packet */
+    if (nia_data.r_pkt == 0) {
+        if (eth_read(&nia_data.etherface, &nia_data.rec_buff, NULL) <= 0)
+            return SCPE_OK;
+    hdr = (struct nia_eth_hdr *)(&nia_data.rec_buff.msg[0]);
+    type = ntohs(hdr->type);
+        sim_debug(DEBUG_DETAIL, &nia_dev, "NIA read packet: %d %04x\n",
+                nia_data.rec_buff.len, type);
+        nia_data.r_pkt = 1;
+        nia_packet_debug(&nia_data, "recv", &nia_data.rec_buff);
+    }
 
-    return SCPE_OK;
+    /* Determine which queue to get free packet from */
+    hdr = (struct nia_eth_hdr *)(&nia_data.rec_buff.msg[0]);
+    type = ntohs(hdr->type);
+
+
+    queue = nia_data.unk_hdr;
+    for (i = 0; i < nia_data.ptt_n; i++) {
+        if (nia_data.ptt_proto[i] == type) {
+            queue = nia_data.ptt_head[i];
+            break;
+        }
+    }
+
+    /* Try to grab place to save packet */
+    if (nia_getq(queue, &nia_data.rec_entry) == 0) {
+       return SCPE_OK;
+    }
+
+    if (nia_data.rec_entry == 0) {
+       if (queue == nia_data.unk_hdr) {
+           sim_debug(DEBUG_DETAIL, &nia_dev, "NIA drop packet\n");
+           nia_data.r_pkt = 0;  /* Drop packet it queue empty */
+       }
+       return SCPE_OK;
+    }
+    /* Got one, now fill in data */
+    M[nia_data.rec_entry + 3] = (uint64)(NIA_CMD_RCV << 12);
+    (void)nia_cpy_from(&nia_unit[0], nia_data.rec_entry + 5, (uint8 *)&hdr->dest, sizeof(ETH_MAC));
+    (void)nia_cpy_from(&nia_unit[0], nia_data.rec_entry + 7, (uint8 *)&hdr->src, sizeof(ETH_MAC));
+    M[nia_data.rec_entry + 9] = (uint64)(((type & 0xff00) >> 4) | ((type & 0xff) << 12));
+    data = &nia_data.rec_buff.msg[sizeof(struct nia_eth_hdr)];
+    len = nia_data.rec_buff.len - sizeof(struct nia_eth_hdr);
+    M[nia_data.rec_entry + 4] = len + 4;
+    bsd = (t_addr)(M[nia_data.rec_entry + 10] & AMASK);
+    while (len > 0) {
+        int  blen;
+        word = (t_addr)(M[bsd] & AMASK);
+        blen = (int)(M[bsd+2] & 0177777);
+        if (blen > len)
+           blen = len;
+        data = nia_cpy_from(&nia_unit[0], word, data, blen);
+        len -= blen;
+        bsd = M[bsd+1] & AMASK;
+    }
+
+    for(i = 0; i < 10; i++)
+    sim_debug(DEBUG_DETAIL, &nia_dev, "NIA recv: %d %09llx %012llo\n", i, M[nia_data.rec_entry + i],
+           M[nia_data.rec_entry + i]);
+    /* Put on response queue */
+    if (nia_putq(&nia_unit[0], nia_data.resp_hdr, &nia_data.rec_entry) == 0)
+       return SCPE_OK;
+    nia_data.r_pkt = 0;
+    goto loop;
+//    return SCPE_OK;
 }
 
 t_stat nia_tim_srv(UNIT * uptr)
@@ -469,7 +1183,6 @@ t_stat nia_set_mac (UNIT* uptr, int32 val, CONST char* cptr, void* desc)
     if (status != SCPE_OK)
       return status;
 
-    memcpy(&nia_data.bcast, &broadcast_ethaddr, 6);
     return SCPE_OK;
 }
 
@@ -500,6 +1213,8 @@ t_stat nia_attach(UNIT* uptr, CONST char* cptr)
     if (tptr == NULL) return SCPE_MEM;
     strcpy(tptr, cptr);
 
+    memcpy(&nia_data.macs[0], &nia_data.mac, sizeof (ETH_MAC));
+    memcpy(&nia_data.macs[1], &broadcast_ethaddr, 6);
     status = eth_open(&nia_data.etherface, cptr, &nia_dev, DEBUG_ETHER);
     if (status != SCPE_OK) {
       free(tptr);
@@ -512,7 +1227,7 @@ t_stat nia_attach(UNIT* uptr, CONST char* cptr)
       return sim_messagef (SCPE_NOATT, "%s: MAC Address Conflict on LAN for address %s\n",
                       nia_dev.name, buf);
     }
-    if (SCPE_OK != eth_filter(&nia_data.etherface, 2, &nia_data.mac, 0, 0)) {
+    if (SCPE_OK != eth_filter(&nia_data.etherface, 2, nia_data.macs, 0, 0)) {
       eth_close(&nia_data.etherface);
       free(tptr);
       return sim_messagef (SCPE_NOATT, "%s: Can't set packet filter for MAC Address %s\n",
@@ -543,7 +1258,6 @@ t_stat nia_detach(UNIT* uptr)
 {
 
     if (uptr->flags & UNIT_ATT) {
-        /* If DHCP, release our IP address */
         eth_close (&nia_data.etherface);
         free(uptr->filename);
         uptr->filename = NULL;
@@ -558,28 +1272,15 @@ t_stat nia_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cpt
 {
 fprintf (st, "NIA interface\n\n");
 fprintf (st, "The IMP acted as an interface to the early internet. ");
-fprintf (st, "This interface operated\nat the TCP/IP level rather than the ");
-fprintf (st, "Ethernet level. This interface allows for\nITS or Tenex to be ");
-fprintf (st, "placed on the internet. The interface connects up to a TAP\n");
-fprintf (st, "or direct ethernet connection. If the host is to be run at an ");
-fprintf (st, "arbitrary IP\naddress, then the HOST should be set to the IP ");
-fprintf (st, "of ITS. The network interface\nwill translate this IP address ");
-fprintf (st, "to the one set in IP. If HOST is set to 0.0.0.0,\nno ");
-fprintf (st, "translation will take place. IP should be set to the external ");
-fprintf (st, "address of\nthe IMP, along the number of bits in the net mask. ");
-fprintf (st, "GW points to the default\nrouter. If DHCP is enabled these ");
-fprintf (st, "will be set from DHCP when the IMP is attached.\nIf IP is set ");
-fprintf (st, "and DHCP is enabled, when the IMP is attached it will inform\n");
-fprintf (st, "the local DHCP server of it's address.\n\n");
 fprint_set_help (st, dptr);
 fprint_show_help (st, dptr);
 eth_attach_help(st, dptr, uptr, flag, cptr);
 return SCPE_OK;
 }
 
-
 const char *nia_description (DEVICE *dptr)
 {
     return "KL NIA interface";
 }
 #endif
+
