@@ -305,10 +305,11 @@ DEVICE dte_dev = {
 #define LPST     us9
 #define LPCNT    us10
 
-#define PTRMSK   00777     /* Current data load pointer */
-#define EOFFLG   01000     /* Tops 20 wants EOF */
-#define HDSFLG   02000     /* Tell Tops 20 The current device status */
-#define ACKFLG   04000     /* Post an acknowwledge message */
+#define EOFFLG   001      /* Tops 20 wants EOF */
+#define HDSFLG   002      /* Tell Tops 20 The current device status */
+#define ACKFLG   004      /* Post an acknowwledge message */
+#define INTFLG   010      /* Send interrupt */
+#define DELFLG   020      /* Previous character was delimiter */
 
 #define MARGIN   6
 
@@ -329,8 +330,86 @@ t_stat          lp20_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
 const char     *lp20_description (DEVICE *dptr);
 
 char            lp20_buffer[134 * 3];
+
+#define LP20_RAM_RAP  010000     /* RAM Parity */
+#define LP20_RAM_INT  04000      /* Interrrupt bit */
+#define LP20_RAM_DEL  02000      /* Delimiter bit */
+#define LP20_RAM_TRN  01000      /* Translation bite */
+#define LP20_RAM_PI   00400      /* Paper Instruction */
+#define LP20_RAM_CHR  00377      /* Character translation */
+
 uint16          lp20_vfu[256];
 uint16          lp20_ram[256];
+uint16          lp20_dvfu[] = {   /* Default VFU */
+    /* 66 line page with 6 line margin */
+    00377,    /* Line   0     8  7  6  5  4  3  2  1 */
+    00220,    /* Line   1     8        5             */
+    00224,    /* Line   2     8        5     3       */
+    00230,    /* Line   3     8        5  4          */
+    00224,    /* Line   4     8        5     3       */
+    00220,    /* Line   5     8        5             */
+    00234,    /* Line   6     8        5  4  3       */
+    00220,    /* Line   7     8        5             */
+    00224,    /* Line   8     8        5     3       */
+    00230,    /* Line   9     8        5  4          */
+    00264,    /* Line  10     8     6  5     3       */
+    00220,    /* Line  11     8        5             */
+    00234,    /* Line  12     8        5  4  3       */
+    00220,    /* Line  13     8        5             */
+    00224,    /* Line  14     8        5     3       */
+    00230,    /* Line  15     8        5  4          */
+    00224,    /* Line  16     8        5     3       */
+    00220,    /* Line  17     8        5             */
+    00234,    /* Line  18     8        5  4  3       */
+    00220,    /* Line  19     8        5             */
+    00364,    /* Line  20     8  7  6  5     3       */
+    00230,    /* Line  21     8        5  4          */
+    00224,    /* Line  22     8        5     3       */
+    00220,    /* Line  23     8        5             */
+    00234,    /* Line  24     8        5  4  3       */
+    00220,    /* Line  25     8        5             */
+    00224,    /* Line  26     8        5     3       */
+    00230,    /* Line  27     8        5  4          */
+    00224,    /* Line  28     8        5     3       */
+    00220,    /* Line  29     8        5             */
+    00276,    /* Line  30     8     6  5  4  3  2    */
+    00220,    /* Line  31     8        5             */
+    00224,    /* Line  32     8        5     3       */
+    00230,    /* Line  33     8        5  4          */
+    00224,    /* Line  34     8        5     3       */
+    00220,    /* Line  35     8        5             */
+    00234,    /* Line  36     8        5  4  3       */
+    00220,    /* Line  37     8        5             */
+    00224,    /* Line  38     8        5     3       */
+    00230,    /* Line  39     8        5  4          */
+    00364,    /* Line  40     8  7  6  5     3       */
+    00220,    /* Line  41     8        5             */
+    00234,    /* Line  42     8        5  4  3       */
+    00220,    /* Line  43     8        5             */
+    00224,    /* Line  44     8        5     3       */
+    00230,    /* Line  45     8        5  4          */
+    00224,    /* Line  46     8        5     3       */
+    00220,    /* Line  47     8        5             */
+    00234,    /* Line  48     8        5  4  3       */
+    00220,    /* Line  49     8        5             */
+    00264,    /* Line  50     8     6  5     3       */
+    00230,    /* Line  51     8        5  4          */
+    00224,    /* Line  52     8        5     3       */
+    00220,    /* Line  53     8        5             */
+    00234,    /* Line  54     8        5  4  3       */
+    00220,    /* Line  55     8        5             */
+    00224,    /* Line  56     8        5     3       */
+    00230,    /* Line  57     8        5  4          */
+    00224,    /* Line  58     8        5     3       */
+    00220,    /* Line  59     8        5             */
+    00020,    /* Line  60              5             */
+    00020,    /* Line  61              5             */
+    00020,    /* Line  62              5             */
+    00020,    /* Line  63              5             */
+    00020,    /* Line  64              5             */
+    04020,    /* Line  65 12           5             */
+   010000,    /* End of form */
+};
 
 struct _buffer lp20_queue;
 
@@ -476,7 +555,7 @@ t_stat dte_devio(uint32 dev, uint64 *data) {
          if (res & DTE_CO11SR)
              dte_unit[0].STATUS |= (DTE_11RELD);
          if (res & DTE_CO11DB) {
-sim_debug(DEBUG_CONO, &dte_dev, "CTY Ring 11 DB\n");
+             sim_debug(DEBUG_CONO, &dte_dev, "CTY Ring 11 DB\n");
              dte_unit[0].STATUS |= DTE_11DB;
              sim_activate(&dte_unit[0], 200);
          }
@@ -765,6 +844,7 @@ error:
              uptr->STATUS |= DTE_10DB;
              set_interrupt(DTE_DEVNUM, dte_unit[0].STATUS);
          }
+         sim_debug(DEBUG_DETAIL, &dte_dev, "DTE: error %012llo\n", word);
          return;
     }
 
@@ -786,14 +866,14 @@ error:
         in->dcnt = (uint16)(iword & 0177777);
         /* Read in data */
         dp = &in->data[0];
-        for (cnt = in->dcnt; cnt >= 0; cnt --) {
+        for (cnt = in->dcnt; cnt > 0; cnt --) {
             /* Read in data */
             s = Mem_read_byte(0, dp, 0);
             if (s == 0)
                goto error;
             in->sz = s;
-            sim_debug(DEBUG_DATA, &dte_dev, "DTE: Read Idata: %06o %03o %03o %06o\n",
-                         *dp, *dp >> 8, *dp & 0377, ((*dp & 0377) << 8) | ((*dp >> 8) & 0377));
+            sim_debug(DEBUG_DATA, &dte_dev, "DTE: Read Idata: %06o %03o %03o %06o cnt=%o\n",
+                         *dp, *dp >> 8, *dp & 0377, ((*dp & 0377) << 8) | ((*dp >> 8) & 0377), cnt);
             dp++;
             if (s <= 8)
                cnt--;
@@ -921,22 +1001,23 @@ dte_function(UNIT *uptr)
 #if (NUM_DEVS_LP20 > 0)
                /* Handle printer data */
                if (cmd->dev == PRI_EMLPT) {
+                   uptr->LPST &= ~(EOFFLG);
                    if (!sim_is_active(&lp20_unit))
                        sim_activate(&lp20_unit, 1000);
-//                   lp20_unit.LPST &= ~EOFFLG;
                    while (cmd->dptr < cmd->dcnt) {
-                       if (((lp20_queue.in_ptr + 1) & 0xff) == lp20_queue.out_ptr)
-                          return;
                        ch = (int32)(cmd->data[cmd->dptr >> 1]);
                        if ((cmd->dptr & 1) == 0)
                            ch >>= 8;
                        ch &= 0177;
+                       if (((lp20_queue.in_ptr + 1) & 0xff) == lp20_queue.out_ptr)
+                          return;
                        lp20_queue.buff[lp20_queue.in_ptr] = ch;
                        lp20_queue.in_ptr = (lp20_queue.in_ptr + 1) & 0xff;
                        cmd->dptr++;
                    }
                    if (cmd->dptr != cmd->dcnt)
                        return;
+                   sim_debug(DEBUG_DETAIL, &dte_dev, "LP20 done\n");
                    break;
                }
 #endif
@@ -955,16 +1036,16 @@ dte_function(UNIT *uptr)
                    if (cmd->sz > 8)
                       cmd->dcnt += cmd->dcnt;
                    while (cmd->dptr < cmd->dcnt) {
-                       if (((otty->in_ptr + 1) & 0xff) == otty->out_ptr)
-                          return;
                        ch = (int32)(cmd->data[cmd->dptr >> 1]);
                        if ((cmd->dptr & 1) == 0)
                            ch >>= 8;
                        ch &= 0177;
                        if (ch != 0) {
-                           sim_debug(DEBUG_DETAIL, &dte_dev, "TTY queue %o %d\n", ch, ln);
+                           if (((otty->in_ptr + 1) & 0xff) == otty->out_ptr)
+                              return;
                            otty->buff[otty->in_ptr] = ch;
                            otty->in_ptr = (otty->in_ptr + 1) & 0xff;
+                           sim_debug(DEBUG_DATA, &dte_dev, "TTY queue %o %d\n", ch, ln);
                        }
                        cmd->dptr++;
                    }
@@ -983,17 +1064,17 @@ cty:
                if (cmd->sz > 8)
                    cmd->dcnt += cmd->dcnt;
                while (cmd->dptr < cmd->dcnt) {
-                    if (((cty_out.in_ptr + 1) & 0xff) == cty_out.out_ptr)
-                        return;
                     ch = (int32)(cmd->data[cmd->dptr >> 1]);
                     if ((cmd->dptr & 1) == 0)
                         ch >>= 8;
                     ch &= 0177;
                     if (ch != 0) {
-                        sim_debug(DEBUG_DETAIL, &dte_dev, "CTY queue %o\n", ch);
                         ch = sim_tt_outcvt( ch, TT_GET_MODE(uptr->flags));
+                        if (((cty_out.in_ptr + 1) & 0xff) == cty_out.out_ptr)
+                            return;
                         cty_out.buff[cty_out.in_ptr] = (char)(ch & 0xff);
                         cty_out.in_ptr = (cty_out.in_ptr + 1) & 0xff;
+                        sim_debug(DEBUG_DATA, &dte_dev, "CTY queue %o\n", ch);
                     }
                     cmd->dptr++;
                }
@@ -1010,12 +1091,12 @@ cty:
                         ln = (ch >> 8);
                         ch &= 0177;
                         if (ch != 0 && ln == PRI_CTYDV) {
-                            if (((cty_out.in_ptr + 1) & 0xff) == cty_out.out_ptr)
-                                return;
-                            sim_debug(DEBUG_DETAIL, &dte_dev, "CTY queue %o\n", ch);
                             ch = sim_tt_outcvt( ch, TT_GET_MODE(uptr->flags));
                             cty_out.buff[cty_out.in_ptr] = (char)(ch & 0xff);
                             cty_out.in_ptr = (cty_out.in_ptr + 1) & 0xff;
+                            if (((cty_out.in_ptr + 1) & 0xff) == cty_out.out_ptr)
+                                return;
+                            sim_debug(DEBUG_DATA, &dte_dev, "CTY queue %o\n", ch);
                         } else
                         if (ch != 0 && ln >= NUM_DLS && ln <= tty_desc.lines) {
                             struct _buffer *otty;
@@ -1023,9 +1104,9 @@ cty:
                             otty = &tty_out[ln];
                             if (((otty->in_ptr + 1) & 0xff) == otty->out_ptr)
                                 return;
-                            sim_debug(DEBUG_DETAIL, &dte_dev, "TTY queue %o %d\n", ch, ln);
                             otty->buff[otty->in_ptr] = ch;
                             otty->in_ptr = (otty->in_ptr + 1) & 0xff;
+                            sim_debug(DEBUG_DATA, &dte_dev, "TTY queue %o %d\n", ch, ln);
                         }
                         cmd->dptr+=2;
                    }
@@ -1043,23 +1124,15 @@ cty:
 #if (NUM_DEVS_LP20 > 0)
                if (cmd->dev == PRI_EMLPT) {
                    if (cmd->data[0] != 0) {
-                      data1[0] = 2;
+                      data1[0] = 2 << 8;
                       data1[1] = 0;
                       data1[2] = 0;
-    if (dte_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMLPT, 3, data1) == 0)
-                       return;
+                      if (dte_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMLPT, 3, data1) == 0)
+                          return;
                    } else {
                       lp20_unit.LPST |= HDSFLG;
                    if (!sim_is_active(&lp20_unit))
                        sim_activate(&lp20_unit, 1000);
-//                   data1[0] = 0;
- //                  data1[1] = (lp20_unit.LINE == 0) ? 0x1: 0;
-  //                 if (lp20_unit.LPST & EOFFLG)
-   //                    data1[0] |= 040;
-    //               
-//                   if (lp20_unit.LPST & VFUFLG)
- //                      data1[1] |= 04;
-     //              data1[2] = 0; //0100220;
                    }
                }
 #endif
@@ -1080,27 +1153,14 @@ cty:
         case PRI_EMHDS:            /* Here is device status */
                if (cmd->dev == PRI_EMLPT) {
                    sim_debug(DEBUG_DETAIL, &dte_dev, "LPT HDS %06o %06o %06o\n", cmd->data[0], cmd->data[1], cmd->data[2]);
-//                   data1[0] = 0;
- //                  data1[1] = (lp20_unit.LINE == 0) ? 0x1: 0;
                    if (cmd->data[0] & 040) {
-                   //    data1[0] |= 040;
                        lp20_unit.LPST |= EOFFLG;
                        lp20_unit.LPCNT = 0;
                    }
                    lp20_unit.LPST |= HDSFLG;
+                   sim_debug(DEBUG_DETAIL, &dte_dev, "LPT HDS %06o \n", lp20_unit.LPST);
                    if (!sim_is_active(&lp20_unit))
                        sim_activate(&lp20_unit, 1000);
-//                   if (lp20_unit.LPST & VFUFLG)
- //                      data1[1] |= 04;
-  //                 data1[2] = 0100220;
-//    if (dte_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMLPT, 3, data1) == 0)
- //                      return;
-//                   if (cmd->data[0] & 040) {
- //                      lp20_unit.LPST |= EOFFLG;
-  //                 }
-   // if ((lp20_unit.LPST & EOFFLG) != 0 && dte_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMLPT, 3, data1) == 0)
-    //                   return;
-     //             lp20_unit.LPST &= ~EOFFLG; 
                }
                break;
 #if (NUM_DEVS_LP20 > 0)
@@ -1108,11 +1168,16 @@ cty:
                if (cmd->dev == PRI_EMLPT) {
                    int ln = lp20_unit.LPCNT;
                    while (cmd->dptr < cmd->dcnt) {
-                        lp20_vfu[ln++] = cmd->data[cmd->dptr++];
+                        uint16 d = cmd->data[cmd->dptr++];
+                        if (d == (0357 << 8))
+                            lp20_vfu[ln++] = 010000; /* Signal end of page */
+                        else
+                            lp20_vfu[ln++] = ((d >> 8) & 077) | ((d <<6) & 07700);
                    }
                    lp20_unit.LPCNT = ln;
-             //      lp20_unit.LPST |= ACKFLG;
-             data1[0] = 0;
+                   for (ln = 0; ln < 256; ln++)
+                      sim_debug(DEBUG_DETAIL, &lp20_dev, "LP20 VFU %02d => %04o\n", ln, lp20_vfu[ln]);
+               data1[0] = 0;
             if (dte_queue(PRI_EMLBE, PRI_EMLPT, 1, data1) == 0)
                 sim_activate(uptr, 1000);
                }
@@ -1126,7 +1191,6 @@ cty:
                             lp20_ram[ln] = cmd->data[cmd->dptr];
                    }
                    lp20_unit.LPCNT = ln;
-            //       lp20_unit.LPST |= ACKFLG;
                    for (ln = 0; ln < 256; ln++)
                       sim_debug(DEBUG_DETAIL, &lp20_dev, "LP20 RAM %02x => %04x\n", ln, lp20_ram[ln]);
              data1[0] = 0;
@@ -1143,7 +1207,7 @@ cty:
                   int   ln = cmd->data[0] - NUM_DLS;
 
                   sim_debug(DEBUG_DETAIL, &dte_dev, "Flush out %d %o\n", ln, cmd->data[0]);
-                  if (ln == (NUM_DLS - PRI_CTYDV)) 
+                  if (ln == (NUM_DLS - PRI_CTYDV))
                       cty_out.in_ptr = cty_out.out_ptr = 0;
                   else
                       tty_out[ln].in_ptr = tty_out[ln].out_ptr = 0;
@@ -1283,7 +1347,7 @@ void dte_transfer(UNIT *uptr) {
        cnt -= 2;
        if (out->func & PRI_IND_FLG) {
            uint16 dwrd = out->dcnt;
-sim_debug(DEBUG_DATA, &dte_dev, "DTE: Indirect %o %o\n", cnt, out->dcnt);
+           sim_debug(DEBUG_DATA, &dte_dev, "DTE: Indirect %o %o\n", cnt, out->dcnt);
            dwrd |= (out->sdev << 8);
            if (!Mem_write_byte(0, &dwrd))
               goto error;
@@ -1492,7 +1556,6 @@ dte_queue(int func, int dev, int dcnt, uint16 *data)
     out->func = func;
     out->dev = dev;
     out->dcnt = (dcnt-1)*2;
-//    out->dcnt = dcnt*2;
     out->spare = 0;
     sim_debug(DEBUG_DATA, &dte_dev, "DTE: %d %d queue resp: %o (%o) f=%o %s d=%o\n",
                     dte_out_ptr, dte_out_res, out->cnt, out->dcnt, out->func,
@@ -1788,31 +1851,29 @@ lp20_printline(UNIT *uptr, int nl) {
     int     trim = 0;
     uint16  data1 = 1;
     /* Trim off trailing blanks */
-    while (uptr->COL >= 0 && lp20_buffer[uptr->POS - 1] == ' ') {
+    while (uptr->COL >= 0 && lp20_buffer[uptr->COL - 1] == ' ') {
          uptr->COL--;
-         uptr->POS--;
          trim = 1;
     }
-    lp20_buffer[uptr->POS] = '\0';
+    lp20_buffer[uptr->COL] = '\0';
     sim_debug(DEBUG_DETAIL, &lp20_dev, "LP output %d %d [%s]\n", uptr->COL, nl, lp20_buffer);
     /* Stick a carraige return and linefeed as needed */
     if (uptr->COL != 0 || trim)
-        lp20_buffer[uptr->POS++] = '\r';
+        lp20_buffer[uptr->COL++] = '\r';
     if (nl != 0) {
-        lp20_buffer[uptr->POS++] = '\n';
+        lp20_buffer[uptr->COL++] = '\n';
         uptr->LINE++;
     }
-    if (nl > 0 && uptr->LINE >= ((int32)uptr->capac - MARGIN)) {
-        lp20_buffer[uptr->POS++] = '\f';
-        uptr->LINE = 0;
+    if (nl > 0 && lp20_vfu[uptr->LINE] == 010000) {
+        lp20_buffer[uptr->COL++] = '\f';
+        uptr->LINE = 1;
     } else if (nl < 0 && uptr->LINE >= (int32)uptr->capac) {
-        uptr->LINE = 0;
+        uptr->LINE = 1;
     }
 
-    sim_fwrite(&lp20_buffer, 1, uptr->POS, uptr->fileref);
-    uptr->pos += uptr->POS;
+    sim_fwrite(&lp20_buffer, 1, uptr->COL, uptr->fileref);
+    uptr->pos += uptr->COL;
     uptr->COL = 0;
-    uptr->POS = 0;
     return;
 }
 
@@ -1827,16 +1888,20 @@ lp20_output(UNIT *uptr, char c) {
         lp20_printline(uptr, 1);
     if ((uptr->flags & UNIT_UC) && (c & 0140) == 0140)
         c &= 0137;
-    else if (c >= 040 && c < 0177) {
-        lp20_buffer[uptr->POS++] = c;
-        uptr->COL++;
+    else if (c >= 040 && c < 0177) { /* If printable */
+        lp20_buffer[uptr->COL++] = c;
+    } if (c == 011) { /* Tab */
+        lp20_buffer[uptr->COL++] = ' ';
+        while ((uptr->COL & 07) != 0)
+            lp20_buffer[uptr->COL++] = ' ';
     }
     return;
 }
 
 t_stat lp20_svc (UNIT *uptr)
 {
-    char    c;
+    char    ch;
+    uint16  ram_ch;
     uint16  data1[5];
     int     l = uptr->LINE;
 
@@ -1845,93 +1910,78 @@ t_stat lp20_svc (UNIT *uptr)
     if (dte_dev.flags & TYPE_RSX20 && uptr->LPST & HDSFLG) {
         data1[0] = 0;
 
-        data1[1] = (uptr->LINE == 0) ? 0x1: 0;
-        if (uptr->LPST & EOFFLG)
-            data1[0] |= 040;
-//        if (uptr->LPST & VFUFLG) 
- //           data1[1] |= 04;
+        data1[1] = (uptr->LINE == 1) ? 01<<8: 0;
+        sim_debug(DEBUG_DETAIL, &dte_dev, "LPT queue %06o %06o \n", lp20_unit.LPST, uptr->LPST);
+        if (uptr->LPST & EOFFLG) {
+            data1[0] |= 040 << 8;
+            uptr->LPCNT = 0;
+        }
+        if (uptr->LPST & INTFLG) {
+            data1[1] |= 02 << 8;
+            uptr->LPCNT = 0;
+        }
         data1[2] = 0110200; //0100220;
         if (dte_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMLPT, 4, data1) == 0)
             sim_activate(uptr, 1000);
-//        if ((uptr->LPST & (EOFFLG)) == (EOFFLG)) {
- //           data1[0] = (PRI_EMLPT << 8);
-  //          if (dte_queue(PRI_EMLBE, PRI_EMLPT, 1, data1) == 0)
-   //             sim_activate(uptr, 1000);
-//            uptr->LPST &= ~ACKFLG;
-    //    }
-        uptr->LPST &= ~(HDSFLG|EOFFLG);
+        uptr->LPST &= ~(HDSFLG);
     }
 
         if (lp20_queue.out_ptr == lp20_queue.in_ptr)
            return SCPE_OK;
     while (lp20_queue.out_ptr != lp20_queue.in_ptr) {
-        c = lp20_queue.buff[lp20_queue.out_ptr];
+        ch = lp20_queue.buff[lp20_queue.out_ptr];
         lp20_queue.out_ptr = (lp20_queue.out_ptr + 1) & 0xff;
-        if (c < 040) { /* Control character */
-            sim_debug(DEBUG_DETAIL, &lp20_dev, "LP deque %02x %04x\n", c, lp20_ram[c] );
-            switch(c) {
-            case 011:     /* Horizontal tab, space to 8'th column */
-                      lp20_output(uptr, ' ');
-                      while ((uptr->COL & 07) != 0)
-                         lp20_output(uptr, ' ');
-                      break;
-            case 015:     /* Carriage return, print line */
-                      lp20_printline(uptr, 0);
-                      break;
-            case 012:     /* Line feed, print line, space one line */
-                      lp20_printline(uptr, 1);
-                      break;
-            case 014:     /* Form feed, skip to top of page */
-                      lp20_printline(uptr, 0);
+        ram_ch = lp20_ram[ch];
+
+        /* If previous was delimiter or translation do it */
+        if (uptr->LPST & DELFLG || (ram_ch & (LP20_RAM_DEL|LP20_RAM_TRN)) != 0) {
+            ch = ram_ch & LP20_RAM_CHR;
+            uptr->LPST &= ~DELFLG;
+            if (ram_ch & LP20_RAM_DEL)
+               uptr->LPST |= DELFLG;
+        }
+        /* Flag if interrupt set */
+        if (ram_ch & LP20_RAM_INT)
+            uptr->LPST |= HDSFLG|INTFLG;
+        /* Check if paper motion */
+        if (ram_ch & LP20_RAM_PI) {
+            int   lines = 0;  /* Number of new lines to output */
+            lp20_printline(uptr, (ram_ch & 037) != 020); /* Print any buffered line */
+            sim_debug(DEBUG_DETAIL, &lp20_dev, "LP deque %02x %04x\n", ch, ram_ch);
+            if ((ram_ch & 020) == 0) { /* Find channel mark in output */
+               while ((lp20_vfu[uptr->LINE] & (1 << (ram_ch & 017))) == 0) {
+            sim_debug(DEBUG_DETAIL, &lp20_dev, "LP skip chan %04x %04x %d\n", lp20_vfu[uptr->LINE], ram_ch, uptr->LINE);
+                   if (lp20_vfu[uptr->LINE] & 010000) { /* Hit bottom of form */
                       sim_fwrite("\014", 1, 1, uptr->fileref);
                       uptr->pos++;
-                      uptr->LINE = 0;
+                      lines = 0;
+                      uptr->LINE = 1;
                       break;
-            case 013:     /* Vertical tab, Skip mod 20 */
-                      lp20_printline(uptr, 1);
-                      while((uptr->LINE % 20) != 0) {
-                          sim_fwrite("\r\n", 1, 2, uptr->fileref);
-                          uptr->pos+=2;
-                          uptr->LINE++;
-                      }
-                      break;
-            case 020:     /* Skip half page */
-                      lp20_printline(uptr, 1);
-                      while((uptr->LINE % 30) != 0) {
-                          sim_fwrite("\r\n", 1, 2, uptr->fileref);
-                          uptr->pos+=2;
-                          uptr->LINE++;
-                      }
-                      break;
-            case 021:     /* Skip even lines */
-                      lp20_printline(uptr, 1);
-                      while((uptr->LINE % 2) != 0) {
-                          sim_fwrite("\r\n", 1, 2, uptr->fileref);
-                          uptr->pos+=2;
-                          uptr->LINE++;
-                      }
-                      break;
-            case 022:     /* Skip triple lines */
-                      lp20_printline(uptr, 1);
-                      while((uptr->LINE % 3) != 0) {
-                          sim_fwrite("\r\n", 1, 2, uptr->fileref);
-                          uptr->pos+=2;
-                          uptr->LINE++;
-                      }
-                      break;
-            case 023:     /* Skip one line */
-                      lp20_printline(uptr, -1);
-                      break;
-            default:      /* Ignore */
-                      break;
+                   }
+                   lines++;
+                   uptr->LINE++;
+               }
+            } else {
+               while ((ram_ch & 017) != 0) {
+            sim_debug(DEBUG_DETAIL, &lp20_dev, "LP skip line %04x %04x %d\n", lp20_vfu[uptr->LINE], ram_ch, uptr->LINE);
+                   if (lp20_vfu[uptr->LINE] & 010000) { /* Hit bottom of form */
+                      sim_fwrite("\014", 1, 1, uptr->fileref);
+                      uptr->pos++;
+                      lines = 0;
+                      uptr->LINE = 1;
+                   }
+                   lines++;
+                   uptr->LINE++;
+                   ram_ch--;
+               }
             }
-        if (uptr->LINE == 0) {
-            uptr->LPST |= HDSFLG;
-            sim_activate(uptr, 1000);
-        }
-        } else {
-            sim_debug(DEBUG_DETAIL, &lp20_dev, "LP deque %02x '%c' %04x\n", c, c, lp20_ram[c] );
-            lp20_output(uptr, c);
+            for(;lines > 0; lines--) {
+               sim_fwrite("\r\n", 1, 2, uptr->fileref);
+               uptr->pos+=2;
+            }
+        } else if (ch != 0) {
+            sim_debug(DEBUG_DETAIL, &lp20_dev, "LP deque %02x '%c' %04x\n", ch, ch, ram_ch);
+            lp20_output(uptr, ch);
         }
     }
     if (lp20_queue.out_ptr == lp20_queue.in_ptr) {
@@ -1953,9 +2003,27 @@ t_stat lp20_svc (UNIT *uptr)
 t_stat lp20_reset (DEVICE *dptr)
 {
     UNIT *uptr = &lp20_unit;
+    int   i;
     uptr->POS = 0;
     uptr->COL = 0;
     uptr->LINE = 1;
+    /* Clear RAM & VFU */
+    for (i = 0; i < 256; i++) {
+       lp20_ram[i] = 0;
+       lp20_vfu[i] = 0;
+    }
+
+    /* Load default VFU into VFU */
+    memcpy(&lp20_vfu, lp20_dvfu, sizeof(lp20_dvfu));
+    lp20_ram[012] = LP20_RAM_TRN|LP20_RAM_PI|7;   /* Line feed, print line, space one line */
+    lp20_ram[013] = LP20_RAM_TRN|LP20_RAM_PI|6;   /* Vertical tab, Skip mod 20 */
+    lp20_ram[014] = LP20_RAM_TRN|LP20_RAM_PI|0;   /* Form feed, skip to top of page */
+    lp20_ram[015] = LP20_RAM_TRN|LP20_RAM_PI|020; /* Carrage return */
+    lp20_ram[020] = LP20_RAM_TRN|LP20_RAM_PI|1;   /* Skip half page */
+    lp20_ram[021] = LP20_RAM_TRN|LP20_RAM_PI|2;   /* Skip even lines */
+    lp20_ram[022] = LP20_RAM_TRN|LP20_RAM_PI|3;   /* Skip triple lines */
+    lp20_ram[023] = LP20_RAM_TRN|LP20_RAM_PI|4;   /* Skip one line */
+    lp20_ram[024] = LP20_RAM_TRN|LP20_RAM_PI|5;
     sim_cancel (&lp20_unit);                                 /* deactivate unit */
     return SCPE_OK;
 }
