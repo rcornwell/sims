@@ -785,7 +785,7 @@ t_stat tu_srv(UNIT * uptr)
          }
          return SCPE_OK;
     }
-    sim_activate(uptr, 50);
+    sim_activate(uptr, 20);
     return SCPE_OK;
 }
 

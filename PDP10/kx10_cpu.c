@@ -1179,12 +1179,24 @@ t_stat dev_pi(uint32 dev, uint64 *data) {
         if (dev & 040) {   /* SBDIAG */
             AB = (AB + 1) & RMASK;
             res = 0;
-            if (((*data >> 31) & 037) == 010) {
-                switch(*data & 037) {
-                case 0:  res = 06000000000LL; break;
-                case 1:  res = 0500000000LL; break;
-                case 2:  res = 0; break;
-                default: res = 0; break;
+            if (((*data >> 31) & 030) == 010) {
+                int mc = MEMSIZE / 262144;
+                int c = (*data >> 31) & 07;
+                int s = 0;
+                if (c < mc) {
+                    switch(*data & 037) {
+                    case 0:  res = 06000000000LL; break;
+                    case 1:  res = 00500000000LL; break;
+                    case 2:  res = 0; break;
+                    case 012:
+                           res = 0;
+                           s = (int)(0176000 & *data) << 6;
+                           s /= 262144;
+                           if (s != c)
+                              res = 010000000LL;
+                           break;
+                    default: res = 0; break;
+                    }
                 }
             }
             MB = res;
@@ -1996,7 +2008,6 @@ load_tlb(int uf, int page, int wr)
         pg = (page & 0377) >> 2;   /* 2 1024 word page entries */
         sim_interval--;
         data = M[dbr + pg];
-//fprintf(stderr, "Load page %06o dbr%012llo pg%06o data=%012llo -> ", page, dbr, pg, data);
         if ((page & 02) == 0)
             data &= ~0160000000000LL;
         else
@@ -2033,7 +2044,6 @@ load_tlb(int uf, int page, int wr)
             e_tlb[(page & 0776)|1] = pg|1;
             data = e_tlb[page];
         }
-//fprintf(stderr, " %06o %06o\n\r", pg, pg | 1);
     } else
 #endif
 #define PG_PUB   0040000
@@ -2061,7 +2071,6 @@ load_tlb(int uf, int page, int wr)
          int   base = 0540;
 #endif
 
-//fprintf(stderr, "Lookup Page %o %03o u=%o w=%o %06o\r\n", sect, page, uf, wr, AB);
         /* Get segment pointer */
         /* And save it */
         if (QKLB)
@@ -2071,7 +2080,6 @@ load_tlb(int uf, int page, int wr)
            data = M[ub_ptr + base];
         else
            data = M[eb_ptr + base];
-//fprintf(stderr, "Map %06o %03o %012llo %012llo %012llo\n\r", base, sect, data, spt, cst);
         /* Find correct page table */
 sect_loop:
        switch ((data >> 33) & 07) {
@@ -2091,7 +2099,6 @@ sect_loop:
             sim_interval--;
             index = data & RMASK;
             data = M[index + spt];
-//fprintf(stderr, "SMap1 %012llo %o %o\n\r", data, index, index + spt);
             break;
 
        case 3:      /* Indirect page */
@@ -2099,7 +2106,6 @@ sect_loop:
             index = (data >> 18) & PG_IDX;
             sim_interval--;
             data = M[(data & RMASK) + spt];
-//fprintf(stderr, "IMap1 %012llo %o %o %o\n\r", data, pg << 9, index, page);
             if ((data & PG_STG) != 0) {
                 fault_data = 0;
                 page_fault = 1;
@@ -2108,7 +2114,6 @@ sect_loop:
             pg = data & PG_PAG;
             sim_interval--;
             data = M[(pg << 9) | index];
-//fprintf(stderr, "JMap1 %012llo %o %o %o\n\r", data, pg << 9, index, page);
             goto sect_loop;
         }
         if ((data & PG_STG) != 0) {
@@ -2116,14 +2121,12 @@ sect_loop:
             page_fault = 1;
             return 0;
         }
-//fprintf(stderr, "XMap %012llo\n\r", data);
         pg = data & PG_PAG;
 
         /* Update CST entry if needed */
         if (cst) {
             sim_interval--;
             cst_val = M[cst + pg];
-//fprintf(stderr, "ZMap %08o %012llo %012llo age\n\r", cst+pg, data, cst_val);
             if ((cst_val & PG_AGE) == 0) {
                 fault_data = 0;
                 page_fault = 1;
@@ -2135,7 +2138,6 @@ sect_loop:
         /* Get address of page */
         sim_interval--;
         data = M[(pg << 9) | page];
-//fprintf(stderr, "YMap %012llo %o %o\n\r", data, pg << 9, page);
 pg_loop:
 
         /* Decode map pointer */
@@ -2156,7 +2158,6 @@ pg_loop:
              sim_interval--;
              index = data & RMASK;
              data = M[index + spt];
-//fprintf(stderr, "SMap2 %012llo %o %o\n\r", data, index, index + spt);
              break;
 
         case 3:      /* Indirect page */
@@ -2164,7 +2165,6 @@ pg_loop:
              index = (data >> 18) & PG_IDX;
              sim_interval--;
              data = M[(data & RMASK) + spt];
-//fprintf(stderr, "IMap2 %012llo %o %o %o\n\r", data, pg << 9, index, page);
              if ((data & PG_STG) != 0) {
                  fault_data = 0;
                  page_fault = 1;
@@ -2173,7 +2173,6 @@ pg_loop:
              pg = data & RMASK;
              sim_interval--;
              data = M[(pg << 9) | index];
-//fprintf(stderr, "JMap %012llo %o %o %o\n\r", data, pg << 9, index, page);
              goto pg_loop;
         }
 
@@ -2189,7 +2188,6 @@ pg_loop:
         if (cst) {
            sim_interval--;
            cst_val = M[cst + pg];
-//fprintf(stderr, "CMap %08o %012llo %012llo age\n\r", cst + pg, data, cst_val);
            if ((cst_val  & PG_AGE) == 0) {
                fault_data = 0;
                page_fault = 1;
@@ -2199,7 +2197,6 @@ pg_loop:
                if (wr)
                   cst_val  |= 1;
           } else if (wr) { /* Trying to write and not writable */
-//fprintf(stderr, "WMap %012llo %012llo age\n\r", data, cst_val);
                fault_data = 0 /* Write fault */;
                page_fault = 1;
                return 0;
@@ -2227,13 +2224,12 @@ pg_loop:
         if (acc_bits & PG_CAC)
            data |= KL_PAG_C;
         if (QKLB)
-           data |=  (sect & 037) << 18;
+           data |= (sect & 037) << 18;
         /* And save it */
         if (uf)
            u_tlb[page] = data & (SECTM|RMASK);
         else
            e_tlb[page] = data & (SECTM|RMASK);
-//fprintf(stderr, "Page %03o %08o %o\r\n", page, data, uf);
     } else {
 
        /* Map the page */
@@ -2304,8 +2300,6 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
         uf = 0;
         sect = 0;
     } else if (xct_flag != 0 && !fetch) {
-//fprintf(stderr, "PXCT ir=%03o pc=%06o ad=%06o x=%02o c=%o b=%o p=%o w=%o", IR, PC, addr, xct_flag, cur_context, BYF5, ptr_flg, wr);
-//fprintf(stderr, " s%o %o", sect, glb_sect);
         if (((xct_flag & 8) != 0 && cur_context && !ptr_flg) ||
             ((xct_flag & 4) != 0 && !cur_context && !BYF5 && !ptr_flg) ||
             ((xct_flag & 2) != 0 && !cur_context && ptr_flg) ||
@@ -2314,14 +2308,10 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
             pub = (FLAGS & PRV_PUB) != 0;
 
             if ((xct_flag & 014) == 04 && !ptr_flg && glb_sect == 0)
-//            if (QKLB && (!glb_sect /*|| ((xct_flag & 4) != 0 && prev_sect == 0)*/) && !extend)
                 sect = prev_sect;
             if ((xct_flag & 03) == 01 && BYF5 && glb_sect == 0)
-//            if (QKLB && (!glb_sect /*|| ((xct_flag & 4) != 0 && prev_sect == 0)*/) && !extend)
                 sect = prev_sect;
-//fprintf(stderr, " ps=%o os%o", prev_sect, sect);
         }
-//fprintf(stderr, " %o %o\n\r", uf, pub);
     }
 
     /* Check if invalid section */
@@ -2329,7 +2319,6 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
         fault_data = (027LL << 30) | (((uint64)sect) << 18) | (uint64)addr;
         if (uf)                      /* U */
            fault_data |= SMASK;      /*  BIT0 */
-//fprintf(stderr, "Invalid section %012llo %06o\n\r", fault_data, PC);
         page_fault = 1;
         return 0;
     }
@@ -2347,7 +2336,6 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
     else
        data = e_tlb[page];
 
-//fprintf(stderr, "Map page %06o -> %06o %06o %o\n\r", page, data, sect, flag);
     if (QKLB && t20_page && ((data >> 18) & 037) != sect)
         data = 0;
     /* If not valid, go refill it */
@@ -2368,7 +2356,6 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
                 return 0;
             if (wr)                      /* T */
                fault_data |= BIT5;       /* BIT5 */
-//fprintf(stderr, "Page fault %06o a=%o wr=%o w=%o %06o d=%012llo\n\r", addr, (data & KL_PAG_A) == 0, wr, (data & KL_PAG_W) == 0, data, fault_data);
             return 0;
         }
     }
@@ -2404,7 +2391,6 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
         fault_data = ((uint64)addr) | 021LL << 30 | BIT8 |((uf)?SMASK:0);
         if (QKLB && t20_page)
             fault_data |= (((uint64)sect) << 18);
-//fprintf(stderr, "Public fault %012llo %06o %06o %012llo\n\r", fault_data, FLAGS << 5, PC, data);
         page_fault = 1;
         return 0;
     }
@@ -2451,7 +2437,6 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
            fault_data |= BIT3;       /* BIT3 */
         if (data & KL_PAG_A)         /* A */
            fault_data |= BIT2;       /* BIT2 */
-//fprintf(stderr, "Page fault %06o a=%o wr=%o w=%o %06o %06o %012llo\n\r", addr, (data & KL_PAG_A) == 0, wr, (data & KL_PAG_W) == 0, data, PC, fault_data);
         page_fault = 1;
         return 0;
     }
@@ -2479,23 +2464,19 @@ int Mem_read(int flag, int cur_context, int fetch) {
 
     if (AB < 020 && ((QKLB && (glb_sect == 0 || sect == 0 || (glb_sect && sect == 1))) || !QKLB)) {
         if (xct_flag != 0 && !fetch) {
-//fprintf(stderr, "PXCT ir=%03o pc=%06o ad=%06o x=%02o c=%o b=%o p=%o rgr ", IR, PC, AB, xct_flag, cur_context, BYF5, ptr_flg);
             if (((xct_flag & 8) != 0 && cur_context && !ptr_flg) ||
                 ((xct_flag & 4) != 0 && !cur_context && !BYF5 && !ptr_flg) ||
                 ((xct_flag & 2) != 0 && !cur_context && ptr_flg) ||
                 ((xct_flag & 1) != 0 && !cur_context && BYF5 )) {
                MB = FM[prev_ctx|AB];
-//fprintf(stderr, "prev \n\r");
                return 0;
             }
-//fprintf(stderr, "\n\r");
         }
         /* Check if invalid section */
         if (QKLB && t20_page && !flag && (sect & 07740) != 0) {
             fault_data = (027LL << 30) | (uint64)addr  | (((uint64)sect) << 18);
             if (USER==0)                 /* U */
                fault_data |= SMASK;      /*  BIT0 */
-//fprintf(stderr, "Invalid section %012llo\n\r", fault_data);
             page_fault = 1;
             return 0;
         }
@@ -2504,7 +2485,6 @@ int Mem_read(int flag, int cur_context, int fetch) {
         if (!page_lookup(AB, flag, &addr, 0, cur_context, fetch))
             return 1;
         if (addr >= (int)MEMSIZE) {
-//fprintf(stderr, "NXM error r %08o\n\r", addr);
             irq_flags |= 02000;
             return 1;
         }
@@ -2521,23 +2501,19 @@ int Mem_write(int flag, int cur_context) {
 
     if (AB < 020 && ((QKLB && (glb_sect == 0 || sect == 0 || (glb_sect && sect == 1))) || !QKLB)) {
         if (xct_flag != 0) {
-//fprintf(stderr, "PXCT ir=%03o pc=%06o ad=%06o x=%02o c=%o b=%o p=%o rgw ", IR, PC, addr, xct_flag, cur_context, BYF5, ptr_flg);
             if (((xct_flag & 8) != 0 && cur_context && !ptr_flg) ||
                 ((xct_flag & 4) != 0 && !cur_context && !BYF5 && !ptr_flg) ||
                 ((xct_flag & 2) != 0 && !cur_context && ptr_flg) ||
                 ((xct_flag & 1) != 0 && !cur_context && BYF5 )) {
-//fprintf(stderr, "prev \n\r");
                FM[prev_ctx|AB] = MB;
                return 0;
             }
-//fprintf(stderr, "\n\r");
         }
         /* Check if invalid section */
         if (QKLB && t20_page && !flag && (sect & 07740) != 0) {
             fault_data = (027LL << 30) | (uint64)addr  | (((uint64)sect) << 18);
             if (USER==0)                 /* U */
                fault_data |= SMASK;      /*  BIT0 */
-//fprintf(stderr, "Invalid section %012llo\n\r", fault_data);
             page_fault = 1;
             return 0;
         }
@@ -2546,7 +2522,6 @@ int Mem_write(int flag, int cur_context) {
         if (!page_lookup(AB, flag, &addr, 1, cur_context, 0))
             return 1;
         if (addr >= (int)MEMSIZE) {
-//fprintf(stderr, "NXM error w %08o\n\r", addr);
             irq_flags |= 02000;
             return 1;
         }
@@ -2586,7 +2561,7 @@ int exec_page_lookup(t_addr addr, int wr, int *loc)
        data = e_tlb[page];
 
     /* If not valid, go refill it */
-    if (data == 0 || (data & LMASK) != 0) {
+    if (data == 0 || (data & 037) != 0) {
         sect = 0;
         data = load_tlb(upmp, page, wr);
         if (data == 0) {
@@ -2610,7 +2585,6 @@ int Mem_examine_word(int n, int wrd, uint64 *data) {
     addr = (M[addr+1] + wrd) & RMASK;
     if (exec_page_lookup(addr, 0, &addr))
         return 1;
-//fprintf(stderr, "Examine: %06o %012llo\n\r", addr, M[addr]);
     *data = M[addr];
     return 0;
 }
@@ -2626,7 +2600,6 @@ int Mem_deposit_word(int n, int wrd, uint64 *data) {
     addr = (M[addr+1] + wrd) & RMASK;
     if (exec_page_lookup(addr, 1, &addr))
         return 1;
-//fprintf(stderr, "Deposit: %06o %012llo -> %012llo\n\r", addr, M[addr], *data);
     M[addr] = *data;
     return 0;
 }
@@ -2647,7 +2620,6 @@ int Mem_read_byte(int n, uint16 *data, int byte) {
         if (addr >= MEMSIZE)
             return 0;
         val = M[addr];
-//    fprintf(stderr, "Read: %06o %012llo -> ", addr, val);
         s = (val >> 24) & 077;
         p = (((val >> 30) & 077) + (0777 ^ s) + 1) & 0777;
         if (p & 0400) {
@@ -2658,7 +2630,6 @@ int Mem_read_byte(int n, uint16 *data, int byte) {
         np &= 077;
         val &= PMASK;
         val |= (uint64)(np) << 30;
-//    fprintf(stderr, " %012llo %d %d %d\n\r", val, s, p, np);
         M[addr] = val;
         addr = val & RMASK;
         if (exec_page_lookup((int)(val & RMASK), 0, &addr))
@@ -2667,14 +2638,12 @@ int Mem_read_byte(int n, uint16 *data, int byte) {
         msk = (uint64)(1) << s;
         msk--;
         val = M[addr];
-//   fprintf(stderr, "Byte: %06o %012llo %012llo %012llo %d %d %d -> ", addr, val, msk, val >> p, s, p, need);
         val = (val >> p) & msk;
         if (s > 8)
            need -= 16;
         else
            need -= 8;
         *data |= val << need;
-//    fprintf(stderr, " %012llo %06o \n\r", val, *data);
     }
     return s;
 }
@@ -2695,7 +2664,6 @@ int Mem_write_byte(int n, uint16 *data) {
         val = M[addr];
         if (val == 0)
             return 1;
-//    fprintf(stderr, "Write: %06o %012llo -> ", addr, val);
         s = (val >> 24) & 077;
         p = (((val >> 30) & 077) + (0777 ^ s) + 1) & 0777;
         if (p & 0400) {
@@ -2706,7 +2674,6 @@ int Mem_write_byte(int n, uint16 *data) {
         np &= 077;
         val &= PMASK;
         val |= (uint64)(np) << 30;
-//    fprintf(stderr, "%06o %012llo %d %d %d\n\r", addr, val, s, p, np);
         M[addr] = val;
         addr = val & RMASK;
         if (exec_page_lookup((int)(val & RMASK), 1, &addr))
@@ -2716,11 +2683,9 @@ int Mem_write_byte(int n, uint16 *data) {
         msk--;
         msk <<= p;
         val = M[addr];
-//    fprintf(stderr, "Byte: %06o %012llo %012llo %o %o %o -> ", addr, val, msk, s, p, need);
         val &= CM(msk);
         val |= msk & (((uint64)(dat >> (need - s))) << p);
         M[addr] = val;
-//    fprintf(stderr, " %012llo %06o \n\r", val, dat);
         need -= s;
     }
     return s;
@@ -3886,7 +3851,6 @@ int Mem_read_nopage() {
         MB =  get_reg(AB);
     } else {
         if (AB >= (int)MEMSIZE) {
-//fprintf(stderr, "NXM non-page error r %08o\n\r", AB);
 #if KL
             irq_flags |= 02000;
 #else
@@ -3910,7 +3874,6 @@ int Mem_write_nopage() {
         set_reg(AB, MB);
     } else {
         if (AB >= (int)MEMSIZE) {
-//fprintf(stderr, "NXM non-page error w %08o\n\r", AB);
 #if KL
             irq_flags |= 02000;
 #else
@@ -4198,7 +4161,6 @@ in_loop:
              if (QKLB && t20_page && (cur_sect != 0 || glb_sect)) {
                  if (MB & SMASK || cur_sect == 0) {    /* Instruction format IFIW */
                      if (MB & BIT1 && cur_sect != 0) { /* Illegal index word */
-//fprintf(stderr, "Illegal fault %06o %012llo\n\r", PC, MB);
                          fault_data = 024LL << 30 | (((FLAGS & USER) != 0)?SMASK:0) |
                                       (AR & RMASK) | ((uint64)cur_sect << 18);
                          page_fault = 1;
@@ -4225,14 +4187,12 @@ in_loop:
                          }
                          MB = AR;
                      } else {
-//                         if (((xct_flag & 014) != 014 || (FLAGS & USER) != 0))
-                            glb_sect = 0;
+                         glb_sect = 0;
                          if ((MB & RMASK) < 020)
                             sect = cur_sect = 1;
                          AR = MB;
                      }
                      AB = AR & RMASK;
-//fprintf(stderr, "LFIW %012llo %o %02o %06o %06o %o\n\r", MB, ind, ix, cur_sect, AB, glb_sect);
                  } else {             /* Extended index EFIW */
                      ind = (MB & BIT1) != 0;
                      ix = (MB >> 30) & 017;
@@ -4254,7 +4214,6 @@ in_loop:
                      sect = cur_sect = (AR >> 18) & 07777;
                      AB = AR & RMASK;
                      glb_sect = 1;
-//fprintf(stderr, "EFIW %012llo %o %02o %06o %06o\n\r", AR, ind, ix, cur_sect, AB);
                  }
                  if (ind)
                      goto in_loop;
@@ -4423,7 +4382,7 @@ st_pi:
 
     /* Process the instruction */
     switch (IR) {
-#if KL 
+#if KL
     case 0052:  /* PMOVE */
     case 0053:  /* PMOVEM */
          if (QKLB && t20_page && (FLAGS & USER) == 0) {
@@ -5825,7 +5784,6 @@ unasign:
                           f = 1;
                           SC = _byte_adj[(FE - 37)].s;
                           FE = _byte_adj[(FE - 37)].p;
-//fprintf(stderr, "ADJBP > 36 %d %d\n\r", SC, FE);
                       }
                       left = (36 - FE) / SC;  /* Number bytes left (36 - P)/S */
                       bpw = left + (FE / SC); /* Bytes per word */
@@ -5907,7 +5865,6 @@ unasign:
 #if KL
                   if (QKLB && t20_page && pc_sect != 0 && SCAD > 36) {  /* Extended pointer */
                       int i = SCAD - 37;
-//fprintf(stderr, "ILDB %012llo %d %d -> %d %d\n\r", AR, SCAD, i, _byte_adj[i].p, _byte_adj[i].s);
                       if (SCAD == 077)
                           goto muuo;
                       SC = _byte_adj[i].s;
@@ -5938,7 +5895,6 @@ unasign:
                           AB = (AB + 1) & RMASK;
                           if (Mem_read(0, 0, 0))
                               goto last;
-//fprintf(stderr, "ILBP %o %o %06o %012llo\n\r", SC, SCAD, AB, MB);
                           if (MB & SMASK) {
                               if (MB & BIT1) {
                                   fault_data = 024LL << 30 | (((FLAGS & USER) != 0)?SMASK:0) |
@@ -5991,7 +5947,6 @@ unasign:
 #if KL
                   if (QKLB && t20_page && pc_sect != 0 && SCAD > 36) {   /* Extended pointer */
                       int i = SCAD - 37;
-//fprintf(stderr, "LDB %012llo %d %d -> %d %d\n\r", AR, SCAD, i, _byte_adj[i].p, _byte_adj[i].s);
                       if (SCAD == 077)
                           goto muuo;
                       SC = _byte_adj[i].s;
@@ -6018,10 +5973,11 @@ ldb_ptr:
                   BYF5 = 1;
 #if KL
                   ptr_flg = 1;
-                  if (QKLB && t20_page && (SC < 36) && pc_sect != 0 && (glb_sect || cur_sect != 0) && (AR & BIT12) != 0) {
+                  if (QKLB && t20_page && (SC < 36) &&
+                       pc_sect != 0 && (glb_sect || cur_sect != 0) &&
+                       (AR & BIT12) != 0) {
                       /* Full pointer */
                       AB = (AB + 1) & RMASK;
-//fprintf(stderr, "LBP %o %o %06o %012llo\n\r", SC, SCAD, AB, MB);
                   } else
                       glb_sect = 0;
 #endif
@@ -7304,7 +7260,6 @@ jrstf:
                            FLAGS |= f;
 #endif
                        check_apr_irq();
-//fprintf(stderr, "XJRST %06o %06o %06o %06o %012llo\r\n", pc_sect, PC, prev_sect, FLAGS << 5, BR);
                        break;
 
               case 017:  /* Invalid */
@@ -7318,7 +7273,6 @@ jrstf:
                        goto muuo;
 
               case 007:  /* XPCW */
-//fprintf(stderr, "XPCW %06o %06o %06o %06o\r\n", pc_sect, AB, PC, FLAGS << 5);
                        MB = (((uint64)FLAGS) << 23) & FMASK;
                        /* Save Previous Public context */
                        if ((FLAGS & USER) == 0) {
@@ -7547,12 +7501,12 @@ jrstf:
               }
 
               /* Check if access to register */
-              if (AB < 020 && ((QKLB && (glb_sect == 0 || sect == 0 || (glb_sect && sect == 1))) || !QKLB)) {
+              if (AB < 020 && ((QKLB &&
+                      (glb_sect == 0 || sect == 0 || (glb_sect && sect == 1))) || !QKLB)) {
                   AR = AB; /* direct map */
                   if (flag1)                 /* U */
                      AR |= SMASK;            /* BIT0 */
                   AR |= BIT2|BIT3|BIT4|BIT8;
-//fprintf(stderr, "Map reg %012llo %06o\r\n", AR, AB);
                   set_reg(AC, AR);
                   break;
               }
@@ -7570,7 +7524,6 @@ jrstf:
                   AR |= fault_data;
                   if (flag1)                      /* U */
                       AR |= SMASK;
-//fprintf(stderr, "Map fault %012llo %06o\r\n", AR, AB);
                   set_reg(AC, AR);
                   break;
               }
@@ -7592,7 +7545,6 @@ jrstf:
               } else
                  AR = (f & 01740) ? 0 : 0377777LL;
               AR |= BIT8;
-//fprintf(stderr, "Map ok %012llo %03o %06o\r\n", AR, cur_sect, AB);
 #else
               /* Check if Paging Enabled */
               if (!page_enable || AB < 020) {
@@ -7701,7 +7653,6 @@ jrstf:
               PC = BR & RMASK;
               PC_CHANGE
               f_pc_inh = 1;
-//fprintf(stderr, "Pushj %06o %06o %012llo %012llo %06o\n\r", pc_sect, cur_sect, AR, MB, PC);
               break;
 
     case 0261: /* PUSH */
@@ -7748,7 +7699,6 @@ jrstf:
                      glb_sect = 1;
                   }
               }
-//fprintf(stderr, "Pop %o %o %06o %06o %06o %012llo %012llo\n\r", f, xct_flag, prev_sect, sect, cur_sect, AR, BR);
 #endif
               AB = AR & RMASK;
               if (Mem_read(0, 0, 0))
@@ -7805,8 +7755,14 @@ jrstf:
 
               if (Mem_read(0, 0, 0))
                   goto last;
-              if (hst_lnt)
+              if (hst_lnt) {
+#if KL
+                  hst[hst_p].ea = AB | (sect << 18);
+#else
+                  hst[hst_p].ea = AB;
+#endif
                   hst[hst_p].mb = MB;
+              }
 #if ITS | KL_ITS
               if (QITS && (FLAGS & USER)) {
                   jpc = PC;
@@ -7832,7 +7788,6 @@ jrstf:
                   check_apr_irq();
 #endif
               }
-//fprintf(stderr, "Popj  %06o %06o %012llo %012llo %06o\n\r", pc_sect, cur_sect, AR, MB, PC);
               break;
 
     case 0264: /* JSR */       /* AR Frm PC */
@@ -8643,7 +8598,6 @@ last:
     /* Handle page fault and traps */
     if (page_enable && page_fault) {
         page_fault = 0;
-//fprintf(stderr, "Page fault %06o %012llo %06o\n\r", PC, fault_data, FLAGS << 5);
         BYF5 = 0;
 #if KL_ITS
         if (QITS) {
@@ -8703,26 +8657,17 @@ last:
         f_load_pc = 1;
         f_pc_inh = 1;
         if (pi_cycle) {
-//fprintf(stderr, "Page fault trap %06o\n\r", PC);
             pi_cycle = 0;
             irq_flags |= 01000;
             FM[(7 << 4) | 2] = fault_data;
               pi_enable = 0;
-//            pi_rq = check_irq_level();
- //           goto st_pi;
         }
-//        if (pi_cycle) {
- //           pi_cycle = 0;
-  //          set_pi_hold(); /* Hold off all lower interrupts */
-   //         pi_restore = 1; /* Release the pending IRQ */
-    //    }
     }
 #endif
 #if KI
     /* Handle page fault and traps */
     if (page_enable && page_fault) {
         if (pi_cycle) {
-//fprintf(stderr, "Page fault trap %06o\n\r", PC);
             inout_fail = 1;
         }
         page_fault = 0;
@@ -8855,7 +8800,6 @@ do_byte_setup(int n, int wr, int *pos, int *sz)
     p = (val1 >> 30) & 077;
     np = (p + (0777 ^ s) + 1) & 0777;
     /* Advance pointer */
-//fprintf(stderr, "%s %012llo %012llo %2o %2o %03o\n\r", (wr)?"store":"load", val1, val2, s, p, np);
     if (QKLB && t20_page && pc_sect != 0) {
         if (p > 36) {  /* Extended pointer */
             int i = p - 37;
@@ -8873,7 +8817,6 @@ do_byte_setup(int n, int wr, int *pos, int *sz)
            MB = val2 & (SECTM|RMASK);
            sect = (MB >> 18) & 07777;
            glb_sect = 1;
-//fprintf(stderr, "Load_bytex %012llo %012llo %06 %2o %2o\n\r", val1, val2, sect, s, p);
         } else if ((val1 & BIT12) != 0) { /* Full pointer */
             if (np & 0400) {
                 np = p = ((0777 ^ s) + 044 + 1) & 0777;
@@ -8881,7 +8824,6 @@ do_byte_setup(int n, int wr, int *pos, int *sz)
                     val2 = (val2 & LMASK) | ((val2 + 1) & RMASK);
                 else
                     val2 = (val2 & ~(SECTM|RMASK)) | ((val2 + 1) & (SECTM|RMASK));
-//fprintf(stderr, "Load_byte0 %012llo %012llo %06 %2o %2o\n\r", val1, val2, sect, s, p);
             }
             if (val2 & SMASK) {
                 if (val2 & BIT1) {
@@ -8894,18 +8836,13 @@ do_byte_setup(int n, int wr, int *pos, int *sz)
                 ix = GET_XR(val2);
                 MB = (val2 & RMASK) | ((val2 & RSIGN)? LMASK:0);
                 sect = cur_sect;
-//                if ((FLAGS & USER) == 0 &&
-  //                  (((xct_flag & 2) != 0 && !wr) || ((xct_flag & 1) != 0 && wr)))
-    //                sect = prev_sect;
                 glb_sect = 0;
-//fprintf(stderr, "Load_byte1 %012llo %012llo %2o %2o\n\r", val1, val2, s, p);
             } else {
                 ind = (val2 & BIT1) != 0;
                 ix = (val2 >> 30) & 017;
                 MB = val2 & (SECTM|RMASK);
                 sect = (MB >> 18) & 07777;
                 glb_sect = 1;
-//fprintf(stderr, "Load_byte2 %012llo %012llo %2o %2o\n\r", val1, val2, s, p);
             }
         } else {
             if (np & 0400) {
@@ -8916,11 +8853,7 @@ do_byte_setup(int n, int wr, int *pos, int *sz)
             ind = TST_IND(val1) != 0;
             MB = (val1 & RMASK) | ((val1 & RSIGN)? LMASK:0);
             sect = cur_sect;
-//            if ((FLAGS & USER) == 0 &&
- //               (((xct_flag & 2) != 0 && !wr) || ((xct_flag & 1) != 0 && wr)))
-  //             sect = prev_sect;
             glb_sect = 0;
-//fprintf(stderr, "Load_byte3 %012llo %012llo %2o %2o\n\r", val1, val2, s, p);
         }
     } else {
         if (np & 0400) {
@@ -8931,11 +8864,7 @@ do_byte_setup(int n, int wr, int *pos, int *sz)
         ind = TST_IND(val1) != 0;
         MB = (val1 & RMASK) | ((val1 & RSIGN)? LMASK:0);
         sect = cur_sect;
-   //     if ((FLAGS & USER) == 0 &&
-    //        (((xct_flag & 2) != 0 && !wr) || ((xct_flag & 1) != 0 && wr)))
-     //       sect = prev_sect;
         glb_sect = 0;
-//fprintf(stderr, "Load_byte4 %012llo %012llo %2o %2o\n\r", val1, val2, s, p);
     }
     *pos = np & 077;
 
@@ -8944,24 +8873,19 @@ do_byte_setup(int n, int wr, int *pos, int *sz)
        temp = get_reg(ix);
        /* Check if extended indexing */
        if (QKLB && t20_page && glb_sect != 0 && (temp & SMASK) == 0 && (temp & SECTM) != 0) {
-//fprintf(stderr, "Index %06o %012llo %06o\n\r", AB, temp, sect);
            temp = (temp + MB) & (SECTM|RMASK);
            sect = (temp >> 18) & 07777;
            MB = 0;
            glb_sect = 1;
-//fprintf(stderr, "Index2 %06o %012llo %06o\n\r", AB, temp, sect);
        } else
            glb_sect = 0;
        temp = MB = (MB + temp) & FMASK;
        AB = MB & RMASK;
     }
     while (ind & !check_irq_level()) {
-      //   ptr_flg = 1;
          if (Mem_read(0, 1, 0)) {
-       //      ptr_flg = 0;
              return 1;
          }
-        // ptr_flg = 0;
          /* Check if extended indexing */
          if (QKLB && sect != 0) {
              if (MB & SMASK) {    /* Instruction format IFIW */
@@ -8989,7 +8913,6 @@ do_byte_setup(int n, int wr, int *pos, int *sz)
                  } else
                      temp = MB;
                  AB = temp & RMASK;
-//fprintf(stderr, "IFIW %012llo %o %02o %06o %06o\n\r", MB, ind, ix, cur_sect, AB);
              } else {             /* Extended index EFIW */
                  ind = (MB & BIT1) != 0;
                  ix = (MB >> 30) & 017;
@@ -9007,7 +8930,6 @@ do_byte_setup(int n, int wr, int *pos, int *sz)
                  sect = cur_sect = (temp >> 18) & 07777;
                  AB = temp & RMASK;
                  glb_sect = 1;
-//fprintf(stderr, "EFIW %012llo %o %02o %06o %06o\n\r", MB, ind, ix, sect, AB);
              }
          } else {
              ix = GET_XR(MB);
@@ -9017,12 +8939,11 @@ do_byte_setup(int n, int wr, int *pos, int *sz)
                 temp = get_reg(ix);
                 /* Check if extended indexing */
                 if (QKLB && sect != 0 && (temp & SMASK) == 0 && (temp & SECTM) != 0) {
-//fprintf(stderr, "Index %06o %012llo %06o\n\r", AB, temp, sect);
-                    temp = (temp + ((AB & RSIGN) ? SECTM|((uint64)AB): (uint64)AB)) & (SECTM|RMASK);
+                    temp = (temp + ((AB & RSIGN) ?
+                          SECTM|((uint64)AB): (uint64)AB)) & (SECTM|RMASK);
                     sect = (temp >> 18) & 07777;
                     MB = 0;
                     glb_sect = 1;
-//fprintf(stderr, "Index2 %06o %012llo %06o\n\r", AB, temp, sect);
                     AB = 0;
                 } else
                     glb_sect = 0;
@@ -9048,14 +8969,11 @@ do_byte_setup(int n, int wr, int *pos, int *sz)
     set_reg(n+2, val2);
 
     modify = wr;
-//    ptr_flg = !wr;
- //   BYF5 = wr;
     /* Read final value */
     if (Mem_read(0, 0, 0)) {
         modify = ptr_flg = BYF5 = 0;
         return 1;
     }
-//fprintf(stderr, "Load %06o %06llo -> %012llo\n\r", sect, AB, MB);
     modify = 0;
     return 0;
 }
@@ -9084,7 +9002,6 @@ load_byte(int n, uint64 *data, uint64 fill, int cnt)
     msk = (uint64)(1) << s;
     msk--;
     *data = (MB >> p) & msk;
-//fprintf(stderr, "Load_bytes %2o %2o %06o %06o %012llo\n\r", s, p, sect, AB, *data);
     if (cnt) {
         /* Decrement count */
         val1 = get_reg(n);
@@ -9095,7 +9012,6 @@ load_byte(int n, uint64 *data, uint64 fill, int cnt)
     return 1;
 
 back:
-//fprintf(stderr, "Load_bytef %2o %2o %06o %06o %012llo\n\r", s, p, sect, AB, *data);
     ptr_flg = 0;
     val1 = get_reg(n+1);
     val1 &= PMASK;
@@ -9122,7 +9038,6 @@ store_byte(int n, uint64 data, int cnt)
     msk <<= p;
     MB &= CM(msk);
     MB |= msk & ((uint64)(data) << p);
-//fprintf(stderr, "store_bytes %2o %2o %06o %06o %012llo\n\r", s, p, sect, AB, data);
     if (Mem_write(0, 0))
         goto back;
 
@@ -9492,7 +9407,6 @@ do_extend(uint32 ia)
                  reg |= ((uint64)i) << 30;
                  i = 0;
                  a = 0;
-//fprintf(stderr, "Edit pat %03o %012llo %012llo\n\r", val1, reg, MB);
                  switch ((val1 >> 6) & 07) {
                  case 0:   /* Individual options */
                          switch (val1 & 077) {
@@ -9623,7 +9537,6 @@ do_extend(uint32 ia)
                                     return 0;
                                 if (Mem_write(0, 0))
                                     return 0;
-//fprintf(stderr, "Edit exchange %06o %06o %012llo %012llo\n\r", sect, AB, BR, MB);
                                 if (QKLB && pc_sect != 0 && (BR & BIT12) != 0) {
                                     AB = (AR + 1) & RMASK;
                                     sect = ((AR + 1)>> 18) & 07777;
@@ -9631,18 +9544,15 @@ do_extend(uint32 ia)
                                         AB = AR & RMASK;   /* Restore lower pointer */
                                         sect = (AR >> 18) & 07777;
                                         MB = BR;
-//fprintf(stderr, "Restore %06o %06o %012llo\n\r", sect, AB, MB);
                                         (void)Mem_write(0, 0);
                                         return 0;
                                     }
                                     AD = MB;
                                     MB = get_reg(ext_ac+5);
-//fprintf(stderr, "Edit exchange2 %06o %06o %012llo %012llo\n\r", sect, AB, AD, MB);
                                     if (Mem_write(0, 0)) {
                                         AB = AR & RMASK;   /* Restore lower pointer */
                                         sect = (AR >> 18) & 07777;
                                         MB = BR;
-//fprintf(stderr, "Restore %06o %06o %012llo\n\r", sect, AB, MB);
                                         (void)Mem_write(0, 0);
                                         return 0;
                                     }
@@ -9718,7 +9628,6 @@ do_extend(uint32 ia)
                  fill2 |= SMASK;
                  set_reg(ext_ac, fill2);
               }
-//fprintf(stderr, "CVD %04llo %012lld %012llo c=%012llo\n\r", val1, ARX, AR, get_reg(ext_ac));
               while ((get_reg(ext_ac) & MANT) != 0) {
                   if (!load_byte(ext_ac, &val1, 0, 1)) {
                       set_reg(ext_ac+3, AR);
@@ -9755,7 +9664,6 @@ do_extend(uint32 ia)
                   AR = AR + BR + f;
                   ARX &= CMASK;
                   AR &= FMASK;
-//fprintf(stderr, "CVD %04llo %012lld %012llo\n\r", val1, ARX, AR);
               }
               ARX &= CMASK;
               if ((get_reg(ext_ac) & MANT) == 0) {
@@ -9957,7 +9865,6 @@ do_extend(uint32 ia)
                   reg = get_reg(ext_ac);
                   val1 = get_reg(ext_ac + 1);
                   val2 = get_reg(ext_ac + 2);
-//fprintf(stderr, "XBLT: %012llo %012llo %012llo\n\r", reg, val1, val2);
                   while (reg != 0) {
                       if (reg & SMASK) {
                           val1 = (val1 - 1) & (SECTM|RMASK);
@@ -9968,7 +9875,6 @@ do_extend(uint32 ia)
                              val1 = (val1 + 1) & (SECTM|RMASK);
                              goto xblt_done;
                           }
-//fprintf(stderr, " XBLT: D=%012llo 1-%012llo 2-%012llo\n\r", MB, val1, val2);
                           val2 = (val2 - 1) & (SECTM|RMASK);
                           sect = (val2 >> 18) & 00037;
                           AB = val2 & RMASK;
@@ -9987,7 +9893,6 @@ do_extend(uint32 ia)
                           ptr_flg = 1;
                           if (Mem_read(0, 0, 0))
                              goto xblt_done;
-//fprintf(stderr, " XBLT: D=%012llo 1-%012llo 2-%012llo\n\r", MB, val1, val2);
                           sect = (val2 >> 18) & 00037;
                           AB = val2 & RMASK;
                           ptr_flg = 0;
@@ -10001,7 +9906,6 @@ do_extend(uint32 ia)
                       }
                   }
 xblt_done:
-//fprintf(stderr, "XBLT done: %012llo %012llo %012llo\n\r", reg, val1, val2);
                   ptr_flg = BYF5 = 0;
                   set_reg(ext_ac, reg);
                   set_reg(ext_ac + 1, val1);
