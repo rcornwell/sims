@@ -127,7 +127,7 @@ The KL10 sim has successfully run Tops 10 6.03-7.03, ITS and Tops 20 V2-V7.
    * LP20 Line printer on KL10 Front End.  
 
    * IMP networking support for ITS and TENEX.  
-   * NIA20 networking support for KL10 (in progress).  
+   * NIA20 networking support for KL10.  
    * CH10 networking support for ITS.  
 
    * 340 Display Station support.  
