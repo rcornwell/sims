@@ -182,7 +182,6 @@ int     mtr_enable;                           /* Enable Timer */
 int     mtr_flags;                            /* Flags for accounting */
 int     tim_per;                              /* Timer period */
 int     tim_val;                              /* Current timer value */
-int     mem_cnt;                              /* Number of memory cycles */
 int     rtc_tim;                              /* Time till next 60hz clock */
 uint32  brk_addr;                             /* Address break */
 int     brk_flags;                            /* Break flags */
@@ -465,6 +464,28 @@ REG cpu_reg[] = {
     { ORDATAD (OPC, opc, 36, "Saved PC and flags")},
     { ORDATAD (MAR, mar, 18, "Memory address register")},
     { ORDATAD (QUA_TIME, qua_time, 36, "Quantum timer"), REG_RO},
+#endif
+#if KL
+    { ORDATAD (EXT_AC, ext_ac, 4, "Extended Instruction AC"), REG_HRO},
+    { ORDATAD (PREV_CTX, prev_ctx, 5, "Previous context"), REG_HRO},
+    { ORDATAD (ITQ_EN, irq_enable, 16, "Interrupt enable"), REG_HRO},
+    { ORDATAD (ITQ_FLGS, irq_flags, 16, "Interrupt Flags"), REG_HRO},
+    { ORDATAD (MTR_IRQ, mtr_irq, 1, "Timer IRQ"), REG_HRO},
+    { ORDATAD (MTR_EN, mtr_enable, 1, "Timer Enable"), REG_HRO},
+    { ORDATAD (MTR_FLGS, mtr_flags, 3, "Timer Flags"), REG_HRO},
+    { ORDATAD (TIM_PER, tim_per, 12, "Timer period"), REG_HRO},
+    { ORDATAD (TIM_VAl, tim_val, 12, "Timer period"), REG_HRO},
+    { ORDATAD (RTC_TIM, rtc_tim, 12, "RTC timer"), REG_HRO},
+    { ORDATAD (BRK_ADDR, brk_addr, 18, "Break address"), REG_HRO},
+    { ORDATAD (BRK_FLGS, brk_flags, 18, "Break address"), REG_HRO},
+    { ORDATAD (T20_PAGE, t20_page, 1, "TOPS20 paging"), REG_HRO},
+    { ORDATAD (PTR_FLG, ptr_flg, 1, "Accessing pointer"), REG_HRO},
+    { ORDATAD (EXTEND, extend, 1, "Execute Extend"), REG_HRO},
+    { ORDATAD (SECT, sect, 12, "access section"), REG_HRO},
+    { ORDATAD (CUR_SECT, cur_sect, 12, "Current section"), REG_HRO},
+    { ORDATAD (PREV_SECT, prev_sect, 12, "Previous section"), REG_HRO},
+    { ORDATAD (PC_SECT, pc_sect, 12, "PC section"), REG_HRO},
+    { ORDATAD (GLB_SECT, glb_sect, 1, "Global section"), REG_HRO},
 #endif
     { NULL }
     };

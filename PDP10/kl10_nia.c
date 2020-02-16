@@ -386,6 +386,12 @@ UNIT nia_unit[] = {
     {UDATA(nia_cmd_srv, UNIT_IDLE+UNIT_DIS,     0)},  /* 2 */
 };
 
+REG                 nia_reg[] = {
+    {BRDATA(DATA, &nia_data, 16, 8, sizeof(struct nia_device)), REG_HRO},
+    {0}
+};  
+
+
 #define nia_cmd_uptr  (&nia_unit[2])  /* Unit for processing commands */
 #define nia_recv_uptr (&nia_unit[0])  /* Unit doing receive digestion */
 #define nia_proc_uptr (&nia_unit[1])  /* Unit doing receive dispatching */
@@ -424,7 +430,7 @@ DEBTAB              nia_debug[] = {
 };
 
 DEVICE nia_dev = {
-    "NI", nia_unit, NULL, nia_mod,
+    "NI", nia_unit, nia_reg, nia_mod,
     3, 8, 0, 1, 8, 36,
     NULL, NULL, &nia_reset, NULL, &nia_attach, &nia_detach,
     &nia_dib, DEV_DISABLE | DEV_DIS | DEV_DEBUG, 0, nia_debug,
