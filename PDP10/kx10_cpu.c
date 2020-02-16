@@ -2462,7 +2462,8 @@ void   set_reg(int reg, uint64 value) {
 int Mem_read(int flag, int cur_context, int fetch) {
     t_addr addr;
 
-    if (AB < 020 && ((QKLB && (glb_sect == 0 || sect == 0 || (glb_sect && sect == 1))) || !QKLB)) {
+    if (AB < 020 && ((QKLB && (glb_sect == 0 || sect == 0 ||
+              (glb_sect && sect == 1))) || !QKLB)) {
         if (xct_flag != 0 && !fetch) {
             if (((xct_flag & 8) != 0 && cur_context && !ptr_flg) ||
                 ((xct_flag & 4) != 0 && !cur_context && !BYF5 && !ptr_flg) ||
@@ -2474,7 +2475,7 @@ int Mem_read(int flag, int cur_context, int fetch) {
         }
         /* Check if invalid section */
         if (QKLB && t20_page && !flag && (sect & 07740) != 0) {
-            fault_data = (027LL << 30) | (uint64)addr  | (((uint64)sect) << 18);
+            fault_data = (027LL << 30) | (uint64)AB  | (((uint64)sect) << 18);
             if (USER==0)                 /* U */
                fault_data |= SMASK;      /*  BIT0 */
             page_fault = 1;
@@ -2499,7 +2500,8 @@ int Mem_read(int flag, int cur_context, int fetch) {
 int Mem_write(int flag, int cur_context) {
     t_addr addr;
 
-    if (AB < 020 && ((QKLB && (glb_sect == 0 || sect == 0 || (glb_sect && sect == 1))) || !QKLB)) {
+    if (AB < 020 && ((QKLB && (glb_sect == 0 || sect == 0 ||
+                        (glb_sect && sect == 1))) || !QKLB)) {
         if (xct_flag != 0) {
             if (((xct_flag & 8) != 0 && cur_context && !ptr_flg) ||
                 ((xct_flag & 4) != 0 && !cur_context && !BYF5 && !ptr_flg) ||
@@ -2511,7 +2513,7 @@ int Mem_write(int flag, int cur_context) {
         }
         /* Check if invalid section */
         if (QKLB && t20_page && !flag && (sect & 07740) != 0) {
-            fault_data = (027LL << 30) | (uint64)addr  | (((uint64)sect) << 18);
+            fault_data = (027LL << 30) | (uint64)AB  | (((uint64)sect) << 18);
             if (USER==0)                 /* U */
                fault_data |= SMASK;      /*  BIT0 */
             page_fault = 1;

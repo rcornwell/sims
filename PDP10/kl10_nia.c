@@ -737,7 +737,6 @@ int nia_getq(t_addr head, t_addr *entry)
     uint64    temp;
     t_addr    flink;
     t_addr    nlink;
-    int       i;
     *entry = 0;  /* For safty */
 
     /* Try and get lock */
@@ -958,7 +957,6 @@ void nia_packet_debug(struct nia_device *nia, const char *action,
     char               dst_ip[20];
     char               src_port[8];
     char               dst_port[8];
-    char               mac_buf[20];
     char               flags[64];
     static struct tcp_flag_bits {
         const char *name;
@@ -1172,7 +1170,7 @@ int nia_send_pkt(uint64 cmd)
                 return 0;
             }
             blen = (int)(tlen & 0177777);
-            data = nia_cpy_to(word2, data, blen);
+            data = nia_cpy_to((t_addr)(word2 & AMASK), data, blen);
             len -= blen;
             if (Mem_read_word((t_addr)((word1 + 1) & AMASK), &word1, 0)) {
                 nia_error(EBSERR);
@@ -1182,7 +1180,7 @@ int nia_send_pkt(uint64 cmd)
     } else {
         data = nia_cpy_to(nia_data.cmd_entry + 9, data, len);
     }
-    if ((cmd & (NIA_FLG_PAD << 8) != 0) &&
+    if (((cmd & (NIA_FLG_PAD << 8)) != 0) &&
                nia_data.snd_buff.len < ETH_MIN_PACKET) {
         while (nia_data.snd_buff.len < ETH_MIN_PACKET) {
            *data = 0;
@@ -1352,7 +1350,11 @@ t_stat nia_cmd_srv(UNIT * uptr)
     if (((cmd >> 16) & 1) != 0 || (cmd & (NIA_FLG_RESP << 8)) != 0) {
        nia_data.cmd_rply = nia_data.resp_hdr;
     } else if ((cmd & 0xff) == NIA_CMD_SND) {
-       nia_data.cmd_rply = M[nia_data.cmd_entry + 5];
+       if (Mem_read_word(nia_data.cmd_entry + 5, &word1, 0)) {
+           nia_error(EBSERR);
+           return SCPE_OK;
+       }
+       nia_data.cmd_rply = (t_addr)(word1 & AMASK);
     }
     for(i = 0; i < len; i++)
         sim_debug(DEBUG_DETAIL, &nia_dev, "NIA rcmd: %d %09llx %012llo\n",
@@ -1461,14 +1463,14 @@ nia_rec_pkt()
             nia_error(EBSERR);
             return 0;
         }
-        data = nia_cpy_from(word, data, blen);
+        data = nia_cpy_from((t_addr)(word & AMASK), data, blen);
         len -= blen;
         /* Get pointer to next segment */
         if (Mem_read_word(bsd+1, &word, 0)) {
             nia_error(EBSERR);
             return 0;
         }
-        bsd = word & AMASK;
+        bsd = (t_addr)(word & AMASK);
     }
 
     for(i = 0; i < 10; i++)
@@ -1565,7 +1567,6 @@ t_stat nia_set_mac (UNIT* uptr, int32 val, CONST char* cptr, void* desc)
 t_stat nia_reset (DEVICE *dptr)
 {
     int  i;
-    struct nia_packet *p;
 
     for (i = 0; i < 6; i++) {
         if (nia_data.mac[i] != 0)
