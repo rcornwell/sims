@@ -1,6 +1,6 @@
 /* sel32_clk.c: SEL 32 Class F IOP processor RTOM functions.
 
-   Copyright (c) 2018, James C. Bevier
+   Copyright (c) 2018-2020, James C. Bevier
    Portions provided by Richard Cornwell and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a

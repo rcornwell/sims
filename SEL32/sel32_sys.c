@@ -1,6 +1,6 @@
 /* sel32_sys.c: SEL-32 Gould Concept/32 (orignal SEL-32) Simulator system interface.
 
-   Copyright (c) 2018, James C. Bevier
+   Copyright (c) 2018-2020, James C. Bevier
    Portions provided by Richard Cornwell and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a

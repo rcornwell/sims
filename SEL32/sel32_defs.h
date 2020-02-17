@@ -1,6 +1,6 @@
 /* sel32_defs.h: SEL-32 Concept/32 simulator definitions 
 
-   Copyright (c) 2018-2019, James C. Bevier
+   Copyright (c) 2018-2020, James C. Bevier
    Portions provided by Richard Cornwell and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
@@ -417,6 +417,8 @@ extern DEBTAB dev_debug[];
 #define WMW(a,d) (M[(a)>>2]=d)                        /* write memory addressed word */
 /* write halfword to memory address */
 #define WMH(a,d) ((a)&2?(M[(a)>>2]=(M[(a)>>2]&LMASK)|((d)&RMASK)):(M[(a)>>2]=(M[(a)>>2]&RMASK)|((d)<<16)))
+/* write byte to memory */
+#define WMB(a,d) (M[(a)>>2]=(M[(a)>>2]&(~(0xff<<(8*(7-(a&3)))))|((d&0xff)<<(8*(7-(a&3))))))
 
 /* map register access macros */
 /* The RMR and WMR macros are used to read/write the MAPC cache registers */

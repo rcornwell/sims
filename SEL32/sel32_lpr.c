@@ -1,6 +1,6 @@
 /* sel32_lpr.c: SEL 32 Line Printer
 
-   Copyright (c) 2018, James C. Bevier
+   Copyright (c) 2018-2020, James C. Bevier
    Portions provided by Richard Cornwell and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
@@ -161,9 +161,9 @@ MTAB            lpr_mod[] = {
 };
 
 UNIT            lpr_unit[] = {
-    {UDATA(lpr_srv, UNIT_LPR, 66), 300, UNIT_ADDR(0x7EF8)},     /* A */
+    {UDATA(&lpr_srv, UNIT_LPR, 66), 300, UNIT_ADDR(0x7EF8)},     /* A */
 #if NUM_DEVS_LPR > 1
-    {UDATA(lpr_srv, UNIT_LPR, 66), 300, UNIT_ADDR(0x7EF9)},     /* B */
+    {UDATA(&lpr_srv, UNIT_LPR, 66), 300, UNIT_ADDR(0x7EF9)},     /* B */
 #endif
 };
 
@@ -217,6 +217,7 @@ uint8 lpr_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
     /* process the command */
     switch (cmd & LPR_CMDMSK) {
     case 0x00:                                  /* INCH command */
+        /* the IOP should already have the inch buffer set, so ignore */
         sim_debug(DEBUG_CMD, &lpr_dev, "lpr_startcmd %04x: Cmd INCH\n", chan);
 //fprintf(stderr, "lpr_startcmd %04x: Cmd INCH\n", chan);
         return SNS_CHNEND|SNS_DEVEND;           /* all is well */

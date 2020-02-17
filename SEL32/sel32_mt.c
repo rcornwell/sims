@@ -1,6 +1,6 @@
 /* sel32_mt.c: SEL-32 8051 Buffered Tape Processor
 
-   Copyright (c) 2018, James C. Bevier
+   Copyright (c) 2018-2020, James C. Bevier
    Portions provided by Richard Cornwell and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
@@ -47,78 +47,17 @@ extern  int     chan_write_byte(uint16 chan, uint8 *data);
 extern  void    set_devattn(uint16 addr, uint8 flags);
 extern  t_stat  chan_boot(uint16 addr, DEVICE *dptr);
 extern  DEVICE *get_dev(UNIT *uptr);
+extern  t_stat  set_inch(UNIT *uptr, uint32 inch_addr); /* set channel inch address */
+extern  CHANP  *find_chanp_ptr(uint16 chsa);             /* find chanp pointer */
 
-extern uint32   SPAD[];             /* cpu SPAD */
+extern  uint32  M[];                            /* our memory */
+extern  uint32  SPAD[];                         /* cpu SPAD */
 
 #ifdef NUM_DEVS_MT
 #define BUFFSIZE        (64 * 1024)
 #define UNIT_MT         UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE
 #define DEV_BUF_NUM(x)  (((x) & 07) << DEV_V_UF)
 #define GET_DEV_BUF(x)  (((x) >> DEV_V_UF) & 07)
-
-#if 0
-CMNDCODE EQU       $-1B
-/*           IOCD cmd bits 0-7       OP */
-         DATAB     X'23'           1 REW
-         DATAB     X'02'           2 READ
-         DATAB     X'01'           3 WRITE
-         DATAB     X'93'           4 WEOF
-         DATAB     X'FF'           5 XCHANP
-         DATAB     X'43'           6 ADVR
-         DATAB     X'63'           7 ADVF
-         DATAB     X'53'           8 BKSR
-         DATAB     X'73'           9 BKXF
-         DATAB     X'01'           A UPSPACE  (REALLY A WRITE)
-         DATAB     X'A3'           B ERASE
-         SPACE     3
-*        TIMER TABLE VALUES
-*
-*        ENTRIES CORRESPOND ONE-FOR-ONE WITH ENTRIES IN OTAB
-*        AND REPRESENT THE MAXIMUM NUMBER OF SECONDS WHICH THE
-*    CORRESPONDING FUNCTION WOULD REQUIRE TO COMPLETE ON A 25 IPS
-*    TAPE DRIVE ON WHICH WAS MOUNTED A 2400 ft REEL OF TAPE.
-         BOUND     1W
-TIMETBL  DATAH     0               OPEN
-         DATAH     2               REWIND
-         DATAH     128             READ  ASSUME TRANSFER OF 128K
-         DATAH     128             WRITE ASSUME TRANSFER OF 128K
-         DATAH     2               WRITE END-OF-FILE
-         DATAH     0               EXECUTE CHANNEL PROGRAM
-         DATAH     2               ADVANCE RECORD
-         DATAH     1152            SPACE FORWARD TO END-OF-FILE
-         DATAH     2               BACKSPACE RECORD
-         DATAH     1152            SPACE BACKWARD TO END-OF-FILE
-         DATAH     2               UPSPACE
-         DATAH     2               ERASE
-         DATAH     0               EJECT
-         DATAH     0               CLOSE
-         DATAH     0               TERM
-         DATAH     0               TEST
-TOENTS   EQU       $-TIMETBL/2     NUMBER OF ENTRIES IN TABLE
-         SPACE     2
-*
-*    HANDLER OP CODE VECTOR TABLE
-*
-         BOUND     1W
-OTAB     EQU       $
-         ACH      OPEN            0 OPEN
-         ACH      RWND            1 RWND
-         ACH      READ            2 READ
-         ACH      WRITE           3 WRITE
-         ACH      WEOF            4 WEOF
-         ACH      XCHANP          5 EXECUTE CHANNEL PROGRAM
-         ACH      ADVR            6 ADVR
-         ACH      ADVF            7 ADVF
-         ACH      BKSR            8 BKSR
-         ACH      BKSF            9 BKSF
-         ACH      UPSP            A UPSP
-         ACH      ERASE           B ERASE
-         ACH      EJCT            C EJCT
-         ACH      CLOSE           D CLOSE
-         ACH      TERM            E TERM
-         ACH      TEST            F TEST
-         SPACE     3
-#endif
 
 #define CMD      u3
 /* BTP tape commands */
@@ -436,8 +375,10 @@ DEVICE          mtb_dev = {
 /* start an I/O operation */
 uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 {
+    uint16      chsa = GET_UADDR(uptr->CMD);
     DEVICE      *dptr = get_dev(uptr);
     int         unit = (uptr - dptr->units);
+    CHANP       *chp = find_chanp_ptr(chsa);    /* find the chanp pointer */
 
     sim_debug(DEBUG_EXP, &mta_dev, "mt_startcmd entry chan %04x cmd %02x\n", chan, cmd);
     if (mt_busy[GET_DEV_BUF(dptr->flags)] != 0 || (uptr->CMD & MT_CMDMSK) != 0) {
@@ -450,10 +391,12 @@ uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 
     switch (cmd & 0xFF) {
     case 0x00:                                      /* INCH command */
-        /* POS has INCH buffer address and us9 the count */
-        /* just return OK and channel software will use POS as status buffer */
-        sim_debug(DEBUG_EXP, &mta_dev, "mt_startcmd INCH done unit %04x cmd %02x\n",
-                 unit, cmd);
+        sim_debug(DEBUG_CMD, dptr, "start INCH command\n");
+
+        sim_debug(DEBUG_CMD, dptr,
+            "mt_startcmd starting INCH %06x cmd, chsa %04x MemBuf %08x cnt %04x\n",
+            uptr->u4, chsa, chp->ccw_addr, chp->ccw_count);
+
         /* UTX_needs_interrupt */
         cmd = MT_CMDMSK;                            /* insert INCH cmd as 0xff */
         /* fall through */
@@ -477,7 +420,6 @@ uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
             uptr->SNS = (uptr->SNS & 0x0000ff00);   /* clear all but byte 2 */
         uptr->SNS |= (SNS_RDY|SNS_ONLN);            /* set ready status */
         /* Fall through */
-//    case 0x4:              /* Sense */
         if (sim_tape_wrp(uptr))
             uptr->SNS |= (SNS_WRP);                 /* write protected */
         if (sim_tape_bot(uptr))
@@ -572,28 +514,71 @@ t_stat mt_srv(UNIT *uptr)
     int         unit = (uptr - dptr->units);
     int         cmd = uptr->CMD & MT_CMDMSK;
     int         bufnum = GET_DEV_BUF(dptr->flags);
+    CHANP       *chp = find_chanp_ptr(addr);    /* find the chanp pointer */
     t_mtrlnt    reclen;
-    t_stat      r = SCPE_ARG;                       /* Force error if not set */
+    t_stat      r = SCPE_ARG;                   /* Force error if not set */
+    int         i;
+    uint32      mema;
+    uint16      len;
     uint8       ch;
     uint8       zc = 0;
+    uint8       buf[1024];
 
     sim_debug(DEBUG_DETAIL, &mta_dev, "mt_srv unit %04x cmd %02x\n", unit, cmd);
-    if ((uptr->flags & UNIT_ATT) == 0) {            /* unit attached status */
-        uptr->SNS |= SNS_INTVENT;                   /* unit intervention required */
-        mt_busy[bufnum] &= ~1;                      /* make our buffer not busy */
-        if (cmd != MT_SENSE) {                      /* we are completed with unit check status */
+    if ((uptr->flags & UNIT_ATT) == 0) {        /* unit attached status */
+        uptr->SNS |= SNS_INTVENT;               /* unit intervention required */
+        mt_busy[bufnum] &= ~1;                  /* make our buffer not busy */
+        if (cmd != MT_SENSE) {                  /* we are completed with unit check status */
             chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             return SCPE_OK;
         }
     }
 
     switch (cmd) {
-    case MT_CMDMSK:   /* 0x0ff for inch 0x00 */     /* INCH is for channel, nothing for us */
+    case MT_CMDMSK:   /* 0x0ff for inch 0x00 */ /* INCH is for channel, nothing for us */
+        len = chp->ccw_count;                   /* INCH command count */
+        mema = chp->ccw_addr;                   /* get inch or buffer addr */
+        sim_debug(DEBUG_CMD, dptr,
+            "mt_srv starting INCH %06x cmd, chsa %04x MemBuf %06x cnt %04x\n",
+            mema, addr, chp->ccw_addr, chp->ccw_count);
+
+        if (len == 0) {
+                /* we have invalid count, error, bail out */
+                uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
+                uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
+                chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                break;
+        }
+        for (i=0; i < len; i++) {
+            if (chan_read_byte(addr, &buf[i])) {
+                /* we have error, bail out */
+                uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
+                uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
+                chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                break;
+            }
+            /* just dump data */
+        }
         /* uptr->POS has INCH buffer address, just leave it */
-        sim_debug(DEBUG_CMD, &mta_dev, "mt_srv cmd 0 INCH unit=%04x\n", unit);
-        uptr->CMD &= ~MT_CMDMSK;                    /* clear the cmd */
-        mt_busy[bufnum] &= ~1;                      /* make our buffer not busy */
-        chan_end(addr, SNS_CHNEND|SNS_DEVEND);      /* we are done dev|chan end */
+        /* the chp->ccw_addr location contains the inch address */
+        /* call set_inch() to setup inch buffer */
+        i = set_inch(uptr, mema);               /* new address */
+
+#ifdef NOTYET
+        if ((i == SCPE_MEM) || (i == SCPE_ARG)) {   /* any error */
+            /* we have error, bail out */
+            uptr->CMD &= ~(0xffff);             /* remove old status bits & cmd */
+            uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
+            chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+            break;
+        }
+#endif
+        sim_debug(DEBUG_CMD, dptr,
+            "mt_srv cmd INCH chsa %04x addr %06x count %04x completed\n",
+            addr, mema, chp->ccw_count);
+        uptr->CMD &= ~MT_CMDMSK;                /* clear the cmd */
+        mt_busy[bufnum] &= ~1;                  /* make our buffer not busy */
+        chan_end(addr, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
         break;
 
 #ifndef FIX_DIAG
@@ -976,7 +961,7 @@ t_stat mt_srv(UNIT *uptr)
             uptr->CMD &= ~(MT_CMDMSK);
             mt_busy[bufnum] &= ~1;
             sim_debug(DEBUG_CMD, &mta_dev, "Skip record at EOT\n");
-//BAD       chan_end(addr, SNS_DEVEND|SNS_UNITCHK); //NEW chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+//BAD       chan_end(addr, SNS_DEVEND|SNS_UNITCHK);
             chan_end(addr, SNS_DEVEND|SNS_UNITEXP);
             break;
         }
@@ -1019,7 +1004,7 @@ t_stat mt_srv(UNIT *uptr)
             uptr->SNS &= ~SNS_LOAD;                 /* reset BOT */
             mt_busy[bufnum] &= ~1;
             sim_debug(DEBUG_CMD, &mta_dev, "Skip file got EOT sense %08x unit %02x\n", uptr->SNS, unit);
-//BAD       chan_end(addr, SNS_DEVEND|SNS_UNITCHK); //NEW chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+//BAD       chan_end(addr, SNS_DEVEND|SNS_UNITCHK);
             chan_end(addr, SNS_DEVEND|SNS_UNITEXP);
             break;
         }
@@ -1032,7 +1017,8 @@ t_stat mt_srv(UNIT *uptr)
                 uptr->SNS |= SNS_CMDREJ;
                 uptr->CMD &= ~MT_CMDMSK;
                 mt_busy[bufnum] &= ~1;
-                chan_end(addr, SNS_DEVEND|SNS_UNITCHK); //NEW chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+//BAD           chan_end(addr, SNS_DEVEND|SNS_UNITCHK);
+                chan_end(addr, SNS_DEVEND|SNS_UNITEXP);
             } else {
                 uptr->POS ++;
                 sim_activate(uptr, 500);
@@ -1048,7 +1034,7 @@ t_stat mt_srv(UNIT *uptr)
             uptr->CMD &= ~(MT_CMDMSK);
             mt_busy[bufnum] &= ~1;
             /* we are done dev|chan end */
-            chan_end(addr, SNS_DEVEND); //NEW chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+            chan_end(addr, SNS_DEVEND);
             break;
         }
         break;
@@ -1118,6 +1104,9 @@ t_stat mt_attach(UNIT *uptr, CONST char *file)
        return r;                                    /* report any error */
     }
     sim_debug(DEBUG_EXP, &mta_dev, "mt_attach complete filename %s\n", file);
+    uptr->CMD &= ~0xffff;                           /* clear out the flags but leave ch/sa */
+    uptr->POS = 0;                                  /* clear position data */
+    uptr->SNS = 0;                                  /* clear sense data */
     set_devattn(addr, SNS_DEVEND);                  /* ready int???? */
     return SCPE_OK;                                 /* return good status */
 }
@@ -1127,6 +1116,8 @@ t_stat mt_detach(UNIT *uptr)
 {
     sim_debug(DEBUG_EXP, &mta_dev, "mt_detach\n");
     uptr->CMD &= ~0xffff;                           /* clear out the flags but leave ch/sa */
+    uptr->POS = 0;                                  /* clear position data */
+    uptr->SNS = 0;                                  /* clear sense data */
     return sim_tape_detach(uptr);
 }
 

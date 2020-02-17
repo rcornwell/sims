@@ -1,6 +1,6 @@
 /* sel32_cpu.c: Sel 32 CPU simulator
 
-   Copyright (c) 2018, James C. Bevier
+   Copyright (c) 2018-2020, James C. Bevier
    Portions provided by Richard Cornwell and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
@@ -316,7 +316,7 @@ UNIT  cpu_unit =
 
 REG                 cpu_reg[] = {
     {HRDATAD(PC, PC, 24, "Program Counter"), REG_FIT},
-    {BRDATAD(PSD, PSD, 16, 32, 2, "Progtam Status Doubleword"), REG_FIT},
+    {BRDATAD(PSD, PSD, 16, 32, 2, "Program Status Doubleword"), REG_FIT},
     {BRDATAD(GPR, GPR, 16, 32, 8, "Index registers"), REG_FIT},
     {BRDATAD(BR, BR, 16, 32, 8, "Base registers"), REG_FIT},
     {BRDATAD(BOOTR, BOOTR, 16, 32, 8, "Boot registers"), REG_FIT},
@@ -1458,6 +1458,9 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot, uint32 access)
         else
             *prot = offset;                         /* return memory write protection status */
 
+//    if (addr != word)
+//sim_debug(DEBUG_EXP, &cpu_dev,
+//"At RealAddr Hit convert %06x to addr %08x\n", addr, word);
         sim_debug(DEBUG_DETAIL, &cpu_dev,
             "RealAddrX address %06x, TLB %06x MAPC[%03x] %08x wprot %02x prot %02x\n",
             word, TLB[index], index/2, MAPC[index/2], (word>>11)&3, *prot);
@@ -1554,7 +1557,7 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot, uint32 access)
             sim_debug(DEBUG_TRAP, &cpu_dev,
                 "AddrMa %06x RealAddr %06x Map0 HIT %04x, TLB[%3x] %08x MAPC[%03x] %08x\n",
                 addr, word, map, nix, TLB[nix], nix/2, MAPC[nix/2]);
-            /* do a demand page request for the reqired page */
+            /* do a demand page request for the required page */
             pfault = nix;                           /* save page number */
             sim_debug(DEBUG_TRAP, &cpu_dev,
                 "Mem_write Daddr2 %06x page %04x demand page bits set TLB %08x map %04x\n",
@@ -1592,6 +1595,9 @@ cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ | DEBUG_XIO);
 #endif
     *realaddr = word;                               /* return the real address */
     raddr = TLB[nix];                               /* get the base address & bits */
+//  if (addr != word)
+//sim_debug(DEBUG_EXP, &cpu_dev,
+//"At RealAddr Miss convert %06x to addr %08x\n", addr, word);
 
     if ((CPU_MODEL == MODEL_67) || (CPU_MODEL == MODEL_97)) {
         /* get protection status of map */
@@ -1708,6 +1714,9 @@ t_stat Mem_read(uint32 addr, uint32 *data)
     uint32 status, realaddr, prot, page, map, mix, nix, msdl, mpl, nmap;
 
     status = RealAddr(addr, &realaddr, &prot, MEM_RD);  /* convert address to real physical address */
+//  if (addr != realaddr)
+//sim_debug(DEBUG_EXP, &cpu_dev,
+//"At Mem_read convert %06x to addr %08x\n", addr, realaddr);
 
     if (status == ALLOK) {
 //      *data = M[realaddr >> 2];                   /* valid address, get physical address contents */
@@ -2044,9 +2053,17 @@ redo:
                 SPAD[0xf5] = PSD2;              /* save the current PSD2 */
                 SPAD[0xf9] = CPUSTATUS;         /* save the cpu status in SPAD */
                 sim_debug(DEBUG_IRQ, &cpu_dev,
-                    "Interrupt %04x OPSD1 %08x OPSD2 %08x NPSD1 %08x NPSD2 %08x ICBA %08x\n",
-                    il, RMW(int_icb), RMW(int_icb+4), PSD1, PSD2, int_icb);
-//                  il, M[int_icb>>2], M[(int_icb>>2)+1], PSD1, PSD2, int_icb);
+                    "Inter %03x OPSD1 %08x OPSD2 %08x NPSD1 %08x NPSD2 %08x\n",
+                    il, RMW(int_icb), RMW(int_icb+4), PSD1, PSD2);
+                bc = RMW(int_icb+20) & 0xffffff;
+                if (RMW(int_icb+16) == 0)
+                    sim_debug(DEBUG_IRQ, &cpu_dev,
+                        "Inter2 %03x ICBA %06x IOCLA %06x\n",
+                        il, int_icb, RMW(int_icb+16));
+                else
+                    sim_debug(DEBUG_IRQ, &cpu_dev,
+                        "Inter2 %03x ICBA %06x IOCLA %06x STAT %08x SW1 %08x SW2 %08x\n",
+                        il, int_icb, RMW(int_icb+16), RMW(int_icb+20), RMW(bc), RMW(bc+4));
                 wait4int = 0;                   /* wait is over for int */
                 irq_pend = 1;                   /* scan for interrupts again */
                 skipinstr = 1;                  /* skip next inter test after this instr */
@@ -2091,14 +2108,6 @@ redo:
         /* Check for external interrupt here */
         /* see if we have an attention request from console */
         if (!skipinstr && attention_trap) {
-#ifdef DO_DYNAMIC_DEBUG
-            /* start debugging */
-            cpu_dev.dctrl |= (DEBUG_INST | DEBUG_EXP | DEBUG_IRQ | DEBUG_XIO);
-            sim_debug(DEBUG_EXP, &cpu_dev, "Attention TRAP %04x skip %01x wait4int %01x irq_pend %01x\n",
-                TRAPME, skipinstr, wait4int, irq_pend);
-            sim_debug(DEBUG_EXP, &cpu_dev, "Attention TRAPME %04x PSD %08x %08x\n",
-                TRAPME, PSD1, PSD2);
-#endif
             TRAPME = attention_trap;            /* get trap number */
             attention_trap = 0;                 /* clear flag */
             sim_debug(DEBUG_XIO, &cpu_dev, "Attention TRAP %04x\n", TRAPME);
@@ -2110,17 +2119,9 @@ skipi:
         i_flags = 0;                            /* do not update pc if MF or NPM */
         skipinstr = 0;                          /* skip only once */
         TRAPSTATUS = CPUSTATUS & 0x57;          /* clear all trap status except cpu type */
-//WAS   if (sim_brk_summ && sim_brk_test(PC, SWMASK('E'))) {
-//WAS       reason = STOP_IBKPT;
-//WAS       break;
-//WAS   }
 
         /* fill IR from logical memory address */
         if ((TRAPME = read_instruction(PSD, &IR))) {
-#ifdef DO_DYNAMIC_DEBUG
-            /* start debugging */
-            cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
-#endif
             sim_debug(DEBUG_TRAP, &cpu_dev,
                 "read_instr TRAPME %04x PSD %08x %08x i_flags %04x drop_nop %01x\n",
                 TRAPME, PSD1, PSD2, i_flags, drop_nop);
@@ -2698,8 +2699,8 @@ exec:
                         break;
                 case 0x9:   /* RDSTS */
                         GPR[reg] = CPUSTATUS;       /* get CPU status word */
-                        sim_debug(DEBUG_CMD, &cpu_dev,
-                            "RDSTS CPUSTATUS %08x SPAD[0xf9] %08x\n", CPUSTATUS, SPAD[0xf9]);
+//sim_debug(DEBUG_CMD, &cpu_dev,
+//"RDSTS CPUSTATUS %08x SPAD[0xf9] %08x\n", CPUSTATUS, SPAD[0xf9]);
 #ifdef DO_DYNAMIC_DEBUG
                     /* start debugging */
                     cpu_dev.dctrl |= (DEBUG_INST | DEBUG_TRAP | DEBUG_EXP | DEBUG_IRQ);
@@ -3689,8 +3690,8 @@ tbr:                                                /* handle basemode TBR too *
                     t = (GPR[reg] >> 16) & 0xff;    /* get SPAD address from Rd (6-8) */
                     temp2 = SPAD[t];                /* get old SPAD data */
                     SPAD[t] = GPR[sreg];            /* store Rs into SPAD */
-                    sim_debug(DEBUG_CMD, &cpu_dev,
-                        "At TRSC with spad[%02x] %08x old %08x\n", t, SPAD[t], temp2);
+//sim_debug(DEBUG_CMD, &cpu_dev,
+//"At TRSC with spad[%02x] %08x old %08x\n", t, SPAD[t], temp2);
                     break;
 
                 case 0xF:           /* TSCR */      /* Transfer scratchpad to register */
@@ -3704,8 +3705,8 @@ tbr:                                                /* handle basemode TBR too *
                     }
                     t = (GPR[sreg] >> 16) & 0xff;   /* get SPAD address from Rs (9-11) */
                     temp = SPAD[t];                 /* get SPAD data into Rd (6-8) */
-                    sim_debug(DEBUG_CMD, &cpu_dev,
-                        "At TSCR with spad[%02x] %08x\n", t, SPAD[t]);
+//sim_debug(DEBUG_CMD, &cpu_dev,
+//"At TSCR with spad[%02x] %08x\n", t, SPAD[t]);
                     break;
                 }
                 GPR[reg] = temp;                    /* save the temp value to Rd reg */
@@ -4013,6 +4014,8 @@ skipit:
                             break;
                         }
                         td = (t_int64)dest % (t_int64)source;   /* remainder */
+//                      dbl = !(td >= 0);               /* double reg is neg remainder */
+//                      dbl = ((t_int64)td < 0);        /* double reg is neg remainder */
                         dbl = (td < 0);                 /* double reg is neg remainder */
                         if (((td & DMSIGN) ^ (dest & DMSIGN)) != 0) /* Fix sign if needed */
                             td = NEGATE32(td);          /* dividend and remainder must be same sign */
@@ -4641,6 +4644,8 @@ doovr3:
         case 0x80>>2:           /* 0x80 SD|ADR - SD|ADR */ /* LEAR */
                 /* convert address to real physical address */
                 TRAPME = RealAddr(addr, &temp, &t, MEM_RD);
+//sim_debug(DEBUG_EXP, &cpu_dev,
+//"At LEAR convert %06x to addr %08x\n", addr, temp);
                 // diag allows any addr if mapped
                 if (TRAPME != ALLOK) {
                     sim_debug(DEBUG_TRAP, &cpu_dev,
@@ -4687,7 +4692,7 @@ doovr3:
                         WMR((nix<<1), map);             /* store the map reg contents into cache */
                         TLB[nix] |= 0x0c000000;         /* set the accessed & hit bits in TLB too */
                         WMH(msdl+(mix<<1), mmap);       /* save modified memory map with access bit set */
-                        sim_debug(DEBUG_CMD, &cpu_dev,
+                        sim_debug(DEBUG_EXP, &cpu_dev,
                             "LEAR Laddr %06x page %04x set access bit TLB %08x map %04x nmap %04x\n",
                             addr, nix, TLB[nix], map, mmap);
                     }
@@ -4697,6 +4702,8 @@ doovr3:
                 /* DIAGS needs it, so put it back */
                 if (FC & 4)                             /* see if F bit was set */
                     temp |= 0x01000000;                 /* set bit 7 of address */
+//sim_debug(DEBUG_EXP, &cpu_dev,
+//"At LEAR convert %06x to addr %08x\n", addr, temp);
                 dest = temp;                            /* put in dest to go out */
                 break;
 
@@ -5022,6 +5029,11 @@ meoa:           /* merge point for eor, and, or */
                     "\n\tR0=%.8x R1=%.8x R2=%.8x R3=%.8x", GPR[0], GPR[1], GPR[2], GPR[3]);
                 sim_debug(DEBUG_INST, &cpu_dev,
                     " R4=%.8x R5=%.8x R6=%.8x R7=%.8x\n", GPR[4], GPR[5], GPR[6], GPR[7]);
+#ifdef NOTNOW
+                 sim_debug(DEBUG_IRQ, &cpu_dev,
+                    "EXM skipinstr %x irq_pend %x PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
+                    skipinstr, irq_pend, PSD1, PSD2, CPUSTATUS);
+#endif
 /*DIAG*/        skipinstr = 0;                      /* only test this once */
                 goto exec;                          /* go execute the instruction */
                 break;
@@ -5320,7 +5332,7 @@ doovr2:
                         TRAPME = ADDRSPEC_TRAP;     /* Not setup, error */
                         goto newpsd;                /* program error */
                     }
-                    temp2 = ((IR>>12) & 0x0f) << 2;     /* get SVC index from IR */
+                    temp2 = ((IR>>12) & 0x0f) << 2; /* get SVC index from IR */
                     t = M[(temp+temp2)>>2];         /* get secondary trap vector address ICB address */
                     if (t == 0 || t == 0xffffffff) {    /* see if ICB set up */
                         TRAPME = ADDRSPEC_TRAP;     /* Not setup, error */
@@ -5403,6 +5415,11 @@ doovr2:
                         "\n\tR0=%.8x R1=%.8x R2=%.8x R3=%.8x", GPR[0], GPR[1], GPR[2], GPR[3]);
                     sim_debug(DEBUG_INST, &cpu_dev,
                         " R4=%.8x R5=%.8x R6=%.8x R7=%.8x\n", GPR[4], GPR[5], GPR[6], GPR[7]);
+#ifdef NOTNOW
+                 sim_debug(DEBUG_IRQ, &cpu_dev,
+                    "EXR skipinstr %x irq_pend %x PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
+                    skipinstr, irq_pend, PSD1, PSD2, CPUSTATUS);
+#endif
 /*DIAG*/            skipinstr = 0;                  /* only test this once */
                     goto exec;                      /* go execute the instruction */
                     break;
@@ -6347,9 +6364,6 @@ mcheck:
                         sim_debug(DEBUG_XIO, &cpu_dev,
                             "XIO SIO ret chan %04x chsa %04x status %08x\n",
                             chan, (chan<<8)|suba, status);
-                        sim_debug(DEBUG_IRQ, &cpu_dev,
-                "SIO skipinstr %x irq_pend %x PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
-                skipinstr, irq_pend, PSD1, PSD2, CPUSTATUS);
                         break;
                             
                     case 0x03:      /* Test I/O TIO */
@@ -6364,6 +6378,10 @@ mcheck:
                         sim_debug(DEBUG_XIO, &cpu_dev,
                             "XIO TIO ret chan %04x sa %04x status %08x spad %08x INTS[%02x] %08x\n",
                             chan, suba, status, t, ix, INTS[ix]);
+#ifdef DO_DYNAMIC_DEBUG
+                /* start debugging */
+                cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
+#endif
                         break;
                             
                     case 0x04:      /* Stop I/O STPIO */
