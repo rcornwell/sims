@@ -454,6 +454,7 @@ extern DEVICE   dkb_dev;
 extern DEVICE   auxcpu_dev;
 extern DEVICE   dpk_dev;
 extern DEVICE   wcnsls_dev;             /* MIT Spacewar Consoles */
+extern DEVICE   ocnsls_dev;             /* Old MIT Spacewar Consoles */
 extern DEVICE   ai_dev;
 extern DEVICE   dct_dev;                /* PDP6 devices. */
 extern DEVICE   dtc_dev;
@@ -580,6 +581,7 @@ int auxcpu_write (t_addr addr, t_uint64);
 #endif
 #define NUM_DEVS_DPY    USE_DISPLAY
 #define NUM_DEVS_WCNSLS USE_DISPLAY
+#define NUM_DEVS_OCNSLS USE_DISPLAY
 #if PDP6_DEV
 #define NUM_DEVS_DTC    1
 #define NUM_DEVS_DCT    2
