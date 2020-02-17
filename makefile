@@ -32,8 +32,8 @@
 # installed, gmake should be invoked with LPATH=/usr/lib:/usr/local/lib 
 # defined (adjusted as needed depending on where they may be installed).
 #
-# In the unlikely event that someone wants to build network capable
-# simulators without networking support, invoking GNU make with
+# In the unlikely event that someone wants to build network capable 
+# simulators without networking support, invoking GNU make with 
 # NONETWORK=1 will do the trick.
 #
 # The default build will build compiler optimized binaries.
@@ -255,7 +255,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
   LTO_EXCLUDE_VERSIONS = 
   PCAPLIB = pcap
   ifeq (agcc,$(findstring agcc,${GCC})) # Android target build?
-    OS_CCDEFS = -D_GNU_SOURCE -DSIM_ASYNCH_IO
+    OS_CCDEFS = -D_GNU_SOURCE -DSIM_ASYNCH_IO 
     OS_LDFLAGS = -lm
   else # Non-Android (or Native Android) Builds
     ifeq (,$(INCLUDES)$(LIBRARIES))
@@ -464,19 +464,19 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
   endif
   ifneq (,$(call find_include,pthread))
     ifneq (,$(call find_lib,pthread))
-      OS_CCDEFS += -DUSE_READER_THREAD -DSIM_ASYNCH_IO
+      OS_CCDEFS += -DUSE_READER_THREAD -DSIM_ASYNCH_IO 
       OS_LDFLAGS += -lpthread
       $(info using libpthread: $(call find_lib,pthread) $(call find_include,pthread))
     else
       LIBEXTSAVE := ${LIBEXT}
       LIBEXT = a
       ifneq (,$(call find_lib,pthread))
-        OS_CCDEFS += -DUSE_READER_THREAD -DSIM_ASYNCH_IO
+        OS_CCDEFS += -DUSE_READER_THREAD -DSIM_ASYNCH_IO 
         OS_LDFLAGS += -lpthread
         $(info using libpthread: $(call find_lib,pthread) $(call find_include,pthread))
       else
         ifneq (,$(findstring Haiku,$(OSTYPE)))
-          OS_CCDEFS += -DUSE_READER_THREAD -DSIM_ASYNCH_IO
+          OS_CCDEFS += -DUSE_READER_THREAD -DSIM_ASYNCH_IO 
           $(info using libpthread: $(call find_include,pthread))
         endif
       endif
@@ -1165,9 +1165,6 @@ else
   endif
   ifneq (,$(findstring -fstrict-overflow,$(GCC_OPTIMIZERS)))
     CFLAGS_O += -fno-strict-overflow
-  endif
-  ifneq (,$(findstring -fcommon,$(GCC_OPTIMIZERS))$(findstring -fno-common,$(GCC_OPTIMIZERS)))
-    CFLAGS_O += -fcommon
   endif
   ifeq (,$(NO_LTO))
     ifneq (,$(findstring -flto,$(GCC_OPTIMIZERS)))
@@ -2823,7 +2820,7 @@ besm6 : ${BIN}besm6${EXE}
 ${BIN}besm6${EXE} : ${BESM6} ${SIM}
 ifneq (1,${CPP_BUILD}${CPP_FORCE})
 	${MKDIRBIN}
-	${CC} ${BESM6} ${SIM} ${BESM6_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+	${CC} ${BESM6} ${SIM} ${BESM6_OPT} ${BESM6_PANEL_OPT} ${CC_OUTSPEC} ${LDFLAGS}
 ifneq (,$(call find_test,${BESM6D},besm6))
 	$@ $(call find_test,${BESM6D},besm6) ${TEST_ARG}
 endif
