@@ -156,7 +156,6 @@
 #define CPOS          u4
 #define DATAPTR       u6
 
-struct rh_if  tu_rh[NUM_DEVS_TU];
 uint8         tu_buf[NUM_DEVS_TU][TU_NUMFR];
 uint16        tu_frame[NUM_DEVS_TU];
 uint16        tu_tcr[NUM_DEVS_TU];
@@ -188,7 +187,7 @@ UNIT                tu_unit[] = {
     { UDATA (&tu_srv, TU_UNIT+CNTRL_RH(0), 0) },
 };
 
-struct rh_if  tu_rh[] = {
+struct rh_if  tu_rh[NUM_DEVS_TU] = {
      { &tu_write, &tu_read}
 };
 

@@ -909,7 +909,7 @@ int opflags[] = {
 #endif
 
 #if KL
-struct {
+struct _byte {
     int p;
     int s;
 } _byte_adj[] = {
@@ -2557,7 +2557,7 @@ int Mem_write(int flag, int cur_context) {
 }
 
 /* executive page table lookup */
-int exec_page_lookup(t_addr addr, int wr, int *loc)
+int exec_page_lookup(t_addr addr, int wr, t_addr *loc)
 {
     int      data;
     int      page = (RMASK & addr) >> 9;
@@ -5854,9 +5854,9 @@ unasign:
                                   page_fault = 1;
                                   goto last;
                               }
-                              BR = (MB + adjw) & RMASK | (MB & LMASK);
+                              BR = ((MB + adjw) & RMASK) | (MB & LMASK);
                           } else
-                              BR = (MB + adjw) & (SECTM|RMASK) | (MB & ~(SECTM|RMASK));
+                              BR = ((MB + adjw) & (SECTM|RMASK)) | (MB & ~(SECTM|RMASK));
                           set_reg(AC, AR);
                           set_reg(AC+1, BR);
                           break;
@@ -5887,22 +5887,22 @@ unasign:
                   SCAD = (AR >> 30) & 077;
 #if KL
                   if (QKLB && t20_page && pc_sect != 0 && SCAD > 36) {  /* Extended pointer */
-                      int i = SCAD - 37;
+                      f = SCAD - 37;
                       if (SCAD == 077)
                           goto muuo;
-                      SC = _byte_adj[i].s;
-                      SCAD = (_byte_adj[i].p + (0777 ^ SC) + 1) & 0777;
-                      i++;
+                      SC = _byte_adj[f].s;
+                      SCAD = (_byte_adj[f].p + (0777 ^ SC) + 1) & 0777;
+                      f++;
                       if (SCAD & 0400) {
                           SCAD = ((0777 ^ SC) + 044 + 1) & 0777;
                           AR++;
-                          for(i = 0; i < 28; i++) {
-                             if (_byte_adj[i].s == SC && _byte_adj[i].p == SCAD)
+                          for(f = 0; f < 28; f++) {
+                             if (_byte_adj[f].s == SC && _byte_adj[f].p == SCAD)
                                  break;
                           }
                       }
                       AR &= (SECTM|RMASK);
-                      AR |= ((uint64)(i + 37)) << 30;
+                      AR |= ((uint64)(f + 37)) << 30;
                       MB = AR;
                       if (Mem_write(0, 0))
                           goto last;
@@ -5925,9 +5925,9 @@ unasign:
                                   page_fault = 1;
                                   goto last;
                               }
-                              MB = (MB + 1) & RMASK | (MB & LMASK);
+                              MB = ((MB + 1) & RMASK) | (MB & LMASK);
                           } else
-                              MB = (MB + 1) & (SECTM|RMASK) | (MB & ~(SECTM|RMASK));
+                              MB = ((MB + 1) & (SECTM|RMASK)) | (MB & ~(SECTM|RMASK));
                           if (Mem_write(0,0))
                               goto last;
                           AB = (AB - 1) & RMASK;
@@ -5969,11 +5969,11 @@ unasign:
                   SCAD = (AR >> 30) & 077;
 #if KL
                   if (QKLB && t20_page && pc_sect != 0 && SCAD > 36) {   /* Extended pointer */
-                      int i = SCAD - 37;
+                      f = SCAD - 37;
                       if (SCAD == 077)
                           goto muuo;
-                      SC = _byte_adj[i].s;
-                      SCAD = _byte_adj[i].p;
+                      SC = _byte_adj[f].s;
+                      SCAD = _byte_adj[f].p;
 ld_ptr:
                       glb_sect = 1;
                       sect = (AR >> 18) & 07777;
