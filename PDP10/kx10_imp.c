@@ -451,6 +451,7 @@ static CONST ETH_MAC broadcast_ethaddr = {0xff,0xff,0xff,0xff,0xff,0xff};
 static CONST in_addr_T broadcast_ipaddr = {0xffffffff};
 
 t_stat         imp_devio(uint32 dev, uint64 *data);
+t_addr         imp_devirq(uint32 dev, t_addr addr);
 t_stat         imp_srv(UNIT *);
 t_stat         imp_eth_srv(UNIT *);
 t_stat         imp_tim_srv(UNIT *);
@@ -503,7 +504,13 @@ UNIT imp_unit[] = {
     {UDATA(imp_eth_srv, UNIT_IDLE+UNIT_DIS,     0)},  /* 0 */
     {UDATA(imp_tim_srv, UNIT_IDLE+UNIT_DIS,     0)},  /* 0 */
 };
-DIB imp_dib = {IMP_DEVNUM, 1, &imp_devio, NULL};
+DIB imp_dib = {IMP_DEVNUM, 1, &imp_devio, 
+#if KL
+        &imp_devirq,
+#else
+        NULL
+#endif
+};
 
 MTAB imp_mod[] = {
     { MTAB_XTD|MTAB_VDV|MTAB_VALR|MTAB_NC, 0, "MAC", "MAC=xx:xx:xx:xx:xx:xx",
@@ -562,10 +569,13 @@ DEBTAB              imp_debug[] = {
     {0, 0}
 };
 
-
+REG                 imp_reg[] = {
+    {BRDATA(DATA, &imp_data, 16, 8, sizeof(struct imp_device)), REG_HRO},
+    {0}
+};
 
 DEVICE imp_dev = {
-    "IMP", imp_unit, NULL, imp_mod,
+    "IMP", imp_unit, imp_reg, imp_mod,
     3, 8, 0, 1, 8, 36,
     NULL, NULL, &imp_reset, NULL, &imp_attach, &imp_detach,
     &imp_dib, DEV_DISABLE | DEV_DIS | DEV_DEBUG, 0, imp_debug,
@@ -635,6 +645,7 @@ t_stat imp_devio(uint32 dev, uint64 *data)
                  uptr->STATUS |= IMPIHE;
              if (*data & IMPLHW) /* Last host word. */
                  uptr->STATUS |= IMPLHW;
+             check_interrupts(uptr);
              break;
         case TYPE_BBN:
              break;
@@ -730,6 +741,20 @@ t_stat imp_devio(uint32 dev, uint64 *data)
     check_interrupts (uptr);
     return SCPE_OK;
 }
+
+#if KL
+/* Handle KL style interrupt vectors for ITS */
+t_addr
+imp_devirq(uint32 dev, t_addr addr) {
+    if ((cpu_unit[0].flags & UNIT_ITSPAGE) != 0 && (imp_data.pia & 7) == 1) {
+        if (imp_unit[0].STATUS & IMPID && (imp_unit[0].STATUS & IMPLW) == 0)
+            return 070|RSIGN;
+        if (imp_unit[0].STATUS & IMPOD)
+            return 072|RSIGN;
+    }
+    return  addr;
+}
+#endif
 
 t_stat imp_srv(UNIT * uptr)
 {

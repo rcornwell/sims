@@ -1061,6 +1061,7 @@ dt_boot(int32 unit_num, DEVICE * dptr)
         addr = (addr + 1) & RMASK;
         word = ((uint64)fbuf[off++]) << 18;
         word |= (uint64)fbuf[off++];
+fprintf(stderr, "%06o %012llo %06o\n\r", addr, word, wc);
         if (addr < 020)
            FM[addr] = word;
         else
@@ -1073,6 +1074,7 @@ dt_boot(int32 unit_num, DEVICE * dptr)
     uptr->DSTATE = (1 << DTC_V_BLK) | DTC_BLOCK | DTC_MOT;
     sim_activate(uptr,30000);
     PC = word & RMASK;
+fprintf(stderr, "%06o\n\r", PC);
     return SCPE_OK;
 }
 

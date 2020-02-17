@@ -423,7 +423,6 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
          if (*data & BUSY) {
              /* Stop controller */
              sim_cancel(uptr);
-             uptr->STATUS &= ~BUSY;
              df10_finish_op(df10, 0);
          }
          /* Clear flags */
@@ -722,7 +721,7 @@ t_stat dp_svc (UNIT *uptr)
                 CLR_BUF(uptr);
            }
            if (r)
-               sim_activate(uptr, 25);
+               sim_activate(uptr, 40);
            else {
                uptr->STATUS &= ~(SRC_DONE|END_CYL|BUSY);
                uptr->UFLAGS |= DONE;

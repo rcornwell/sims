@@ -246,7 +246,7 @@ static int transaction (unsigned char *request, unsigned char *response)
   return 0;
 }
 
-int auxcpu_read (int addr, t_uint64 *data)
+int auxcpu_read (t_addr addr, t_uint64 *data)
 {
   unsigned char request[12];
   unsigned char response[12];
@@ -292,7 +292,7 @@ int auxcpu_read (int addr, t_uint64 *data)
   return 0;
 }
 
-int auxcpu_write (int addr, t_uint64 data)
+int auxcpu_write (t_addr addr, t_uint64 data)
 {
   unsigned char request[12];
   unsigned char response[12];

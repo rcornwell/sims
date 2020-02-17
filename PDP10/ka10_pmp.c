@@ -142,7 +142,7 @@
 #define DK_MSK_SKNONE      0x18       /* Allow no seeks */
 #define DK_MSK_SK          0x18       /* Seek mask */
 
-#define POS     u4 
+#define POS     u4
 /* u4 */
 /* Holds the current track and head */
 #define DK_V_TRACK         8
@@ -348,9 +348,9 @@ uint64              pmp_status;      /* CONI status for device 500 */
 int                 pmp_statusb;
 uint32              pmp_cmd_hold;    /* Command hold register */
 uint32              pmp_wc_hold;     /* Word count hold */
-uint32              pmp_addr_hold;   /* Address register hold */
+t_addr              pmp_addr_hold;   /* Address register hold */
 uint32              pmp_wc;          /* Current word count register */
-uint32              pmp_addr;        /* Current address register */
+t_addr              pmp_addr;        /* Current address register */
 uint64              pmp_data;        /* Data assembly register */
 int                 pmp_cnt;         /* Character count in asm register */
 int                 pmp_cmd;         /* Current command */
@@ -382,7 +382,7 @@ t_stat              pmp_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
                         const char *cptr);
 const char          *pmp_description (DEVICE *dptr);
 
-DIB pmp_dib[] = { 
+DIB pmp_dib[] = {
     {PMP_DEV, 2, &pmp_devio, NULL}};
 
 
@@ -433,13 +433,13 @@ pmp_devio(uint32 dev, uint64 *data) {
           if ((pmp_statusb & (WCMA_LD|CMD_LD)) != (WCMA_LD|CMD_LD))
               *data |= HOLD_EMPTY;
           if (pmp_cur_unit != NULL)
-              *data |= ((uint64)GET_UADDR(pmp_cur_unit->flags)) << 24; 
+              *data |= ((uint64)GET_UADDR(pmp_cur_unit->flags)) << 24;
           if ((pmp_status & (NXM_ERR|CHA_ERR|SEL_ERR)) != 0)
               *data |= UNU_END;
           sim_debug(DEBUG_CONI, &pmp_dev, "PMP %03o CONI %012llo PC=%o\n",
                dev, *data, PC);
           break;
-    
+
      case CONO:
           sim_debug(DEBUG_CONO, &pmp_dev, "PMP %03o CONO %012llo PC=%06o\n",
                     dev, *data, PC);
@@ -597,9 +597,8 @@ chan_read_byte(uint8 *data) {
     pmp_statusb |= TRANS_CH;                 /* Tranfer in progress */
     /* Read in next work if buffer is in empty status */
     if (pmp_cnt & BUFF_EMPTY) {
-        if (pmp_addr >= (int)MEMSIZE) 
+        if (Mem_read_word(pmp_addr, &pmp_data, 0))
             return pmp_posterror(NXM_ERR);
-        pmp_data = M[pmp_addr];
          sim_debug(DEBUG_DETAIL, &pmp_dev, "chan_read %06o %012llo\n", pmp_addr, pmp_data);
         pmp_addr++;
         pmp_cnt = 0;
@@ -616,10 +615,9 @@ chan_read_byte(uint8 *data) {
         if ((pmp_cnt & 0xf) > 0x3) {
            if ((pmp_cnt & 0xf) == 0x4) {   /* Split byte */
               byte = (pmp_data << 4) & 0xf0;
-              if (pmp_addr >= (int)MEMSIZE)
+              if (Mem_read_word(pmp_addr, &pmp_data, 0))
                   return pmp_posterror(NXM_ERR);
-              pmp_data = M[pmp_addr];
-         sim_debug(DEBUG_DETAIL, &pmp_dev, "chan_read %06o %012llo\n", pmp_addr, pmp_data);
+              sim_debug(DEBUG_DETAIL, &pmp_dev, "chan_read %06o %012llo\n", pmp_addr, pmp_data);
               pmp_addr++;
               xfer = 1;  /* Read in a word */
               byte |= pmp_data & 0xf;
@@ -639,7 +637,7 @@ chan_read_byte(uint8 *data) {
      } else if (xfer) {
          pmp_wc ++;
      }
-     if (pmp_wc & 07000000) 
+     if (pmp_wc & 07000000)
          pmp_cnt |= BUFF_CHNEND;
      return 0;
 #if 0
@@ -693,11 +691,10 @@ chan_write_byte(uint8 *data) {
         pmp_cnt |= BUFF_DIRTY;
         if ((pmp_cnt & 03) == 0) {
             pmp_cnt &= ~(BUFF_DIRTY|7);
-            if (pmp_addr >= (int)MEMSIZE)
+            if (Mem_write_word(pmp_addr, &pmp_data, 0))
                 return pmp_posterror(NXM_ERR);
-            M[pmp_addr] = pmp_data;
-              sim_debug(DEBUG_DETAIL, &pmp_dev, "chan_write %06o %012llo\n", pmp_addr, pmp_data);
-              pmp_addr++;
+            sim_debug(DEBUG_DETAIL, &pmp_dev, "chan_write %06o %012llo\n", pmp_addr, pmp_data);
+            pmp_addr++;
             xfer = 1;
         }
     } else {
@@ -705,9 +702,8 @@ chan_write_byte(uint8 *data) {
            if ((pmp_cnt & 0xf) == 0x4) {   /* Split byte */
               pmp_data &= ~0xf;
               pmp_data |= (uint64)((*data >> 4) & 0xf);
-              if (pmp_addr >= (int)MEMSIZE)
+              if (Mem_write_word(pmp_addr, &pmp_data, 0))
                   return pmp_posterror(NXM_ERR);
-              M[pmp_addr] = pmp_data;
               sim_debug(DEBUG_DETAIL, &pmp_dev, "chan_write %06o %012llo %2x\n", pmp_addr, pmp_data, pmp_cnt);
               pmp_addr++;
               xfer = 1;  /* Read in a word */
@@ -726,9 +722,8 @@ chan_write_byte(uint8 *data) {
         pmp_cnt++;
         if ((pmp_cnt & 0xf) == 9) {
             pmp_cnt = BUFF_EMPTY;
-            if (pmp_addr >= (int)MEMSIZE)
+            if (Mem_write_word(pmp_addr, &pmp_data, 0))
                 return pmp_posterror(NXM_ERR);
-            M[pmp_addr] = pmp_data;
             sim_debug(DEBUG_DETAIL, &pmp_dev, "chan_write %06o %012llo %2x\n", pmp_addr, pmp_data, pmp_cnt);
             pmp_addr++;
             xfer = 1;  /* Read in a word */
@@ -774,16 +769,15 @@ chan_end(uint8 flags) {
     /* Flush buffer if there was any change */
     if (pmp_cnt & BUFF_DIRTY) {
         pmp_cnt = BUFF_EMPTY;
-        if (pmp_addr >= (int)MEMSIZE) {
+        if (Mem_write_word(pmp_addr, &pmp_data, 0)) {
             (void) pmp_posterror(NXM_ERR);
             return;
         }
-        M[pmp_addr] = pmp_data;
         sim_debug(DEBUG_DATA, &pmp_dev, "chan_write %012llo\n", pmp_data);
         pmp_addr++;
     }
     pmp_statusb &= ~TRANS_CH;                 /* Clear transfer in progress */
-    pmp_statusb |= IDLE_CH; 
+    pmp_statusb |= IDLE_CH;
     pmp_status |= NEW_STS | CHN_END | ((uint64)flags) << 5;
 
     if (pmp_status & (BSY|UNIT_CHK))
@@ -798,7 +792,7 @@ chan_end(uint8 flags) {
         if (pmp_cmd & DATCH_ON) {
             (void) pmp_posterror(CHA_ERR);
             return;
-        } 
+        }
 
         if (pmp_cmd & CMDCH_ON) {
            pmp_startcmd();
