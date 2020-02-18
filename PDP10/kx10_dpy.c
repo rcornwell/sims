@@ -429,11 +429,11 @@ const char *wcnsls_description (DEVICE *dptr)
  * (four 9-bit bytes)
  */
 /* bits inside the bytes */
-#define CCW     0400                    /* counter clockwise (L) */
-#define CW      0200                    /* clockwise (R) */
-#define THRUST  0100
-#define HYPER   040
-#define FIRE    020
+#define CCW     0400LL                  /* counter clockwise (L) */
+#define CW      0200LL                  /* clockwise (R) */
+#define THRUST  0100LL
+#define HYPER   040LL
+#define FIRE    020LL
 
 /* shift values for the players' bytes */
 #define UR      0               /* upper right: enterprise "top plug" */
