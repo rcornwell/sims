@@ -196,9 +196,9 @@ struct dasd_t
 struct disk_t
 {
     const char         *name;         /* Type Name */
-    unsigned int        cyl;          /* Number of cylinders */
-    unsigned int        heads;        /* Number of heads/cylinder */
-    unsigned int        bpt;          /* Max bytes per track */
+    int                 cyl;          /* Number of cylinders */
+    int                 heads;        /* Number of heads/cylinder */
+    int                 bpt;          /* Max bytes per track */
     uint8               sen_cnt;      /* Number of sense bytes */
     uint8               dev_type;     /* Device type code */
 }
@@ -454,7 +454,8 @@ void dasd_adjpos(UNIT * uptr)
 
     /* Set ourselves to start of track */
     data->state = DK_POS_HA;
-    data->rpos = data->rec = data->count = data->klen = data->dlen = 0;
+    data->rec = data->klen = 0;
+    data->rpos = data->count = data->dlen = 0;
     data->tstart = (uptr->u4 & 0xff) * data->tsize;
     rec = &data->cbuf[data->rpos + data->tstart];
     /* Skip forward until we reach pos */
@@ -1762,7 +1763,6 @@ dasd_boot(int32 unit_num, DEVICE * dptr)
 {
     UNIT               *uptr = &dptr->units[unit_num];
     struct dasd_t      *data = (struct dasd_t *)(uptr->up7);
-    t_stat              r;
 
     if ((uptr->flags & UNIT_ATT) == 0)
         return SCPE_UNATT;      /* attached? */

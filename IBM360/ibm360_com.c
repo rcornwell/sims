@@ -238,7 +238,6 @@ uint8  coml_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     uint16         addr = GET_UADDR(uptr->u3);
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
-    uint8          ch;
 
     sim_debug(DEBUG_CMD, dptr, "CMD unit=%d %x\n", unit, cmd);
     if ((uptr->u3 & 0xff) != 0) {
@@ -274,7 +273,6 @@ uint8  coml_haltio(UNIT *uptr) {
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
     int            cmd = uptr->u3 & 0xff;
-    uint8          ch;
 
     sim_debug(DEBUG_CMD, dptr, "HLTIO unit=%d %x\n", unit, cmd);
 
@@ -476,7 +474,6 @@ com_reset(DEVICE * dptr)
 void
 coml_ini(UNIT * uptr, t_bool f)
 {
-    UNIT          *srv;
 }
 
 t_stat
@@ -502,7 +499,6 @@ com_detach(UNIT * uptr)
 {
     t_stat        r;
     int           i;
-    UNIT          *srv;
 
     for (i = 0; i< com_desc.lines; i++) {
         (void)tmxr_set_get_modem_bits(&com_ldsc[i], 0, TMXR_MDM_DTR, NULL);
@@ -517,7 +513,6 @@ com_detach(UNIT * uptr)
 t_stat com_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
     const char *cptr)
 {
-      int i;
 fprint_set_help (st, dptr);
 fprint_show_help (st, dptr);
 return SCPE_OK;

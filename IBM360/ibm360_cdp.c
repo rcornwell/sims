@@ -115,7 +115,6 @@ DEVICE              cdp_dev = {
 uint8  cdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
-    uint8   ch;
 
     if ((uptr->u3 & (CDP_CARD|CDP_CMDMSK)) != 0) {
         if ((uptr->flags & UNIT_ATT) != 0)

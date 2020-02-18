@@ -142,6 +142,7 @@ uint32       tlb[256];             /* Translation look aside buffer */
 #define B1(x)   (((x) >> 12) & 0xf)
 #define D1(x)   ((x) & 0xfff)
 #define X2(x)   R2(x)
+#define NEG(x)  (uint32)(-(int32)(x))
 
 #define PTE_LEN     0xff000000     /* Page table length */
 #define PTE_ADR     0x00fffffe     /* Address of table */
@@ -681,7 +682,6 @@ int WriteHalf(uint32 addr, uint32 data) {
      uint32     pa;
      uint32     pa2;
      int        offset;
-     int        o;
 
      /* Validate address */
      if (TransAddr(addr, &pa))
@@ -774,7 +774,7 @@ sim_instr(void)
     uint8           zone;
     uint16          irq;
     int             e1, e2;
-    int             temp, temp2;
+    int             temp;
 #ifdef USE_64BIT
     t_uint64        src1L;
     t_uint64        src2L;
@@ -1080,9 +1080,7 @@ opr:
                 } else if (addr1 >= MEMSIZE) {
                     storepsw(OPPSW, IRC_ADDR);
                 } else if (cpu_unit[0].flags & FEAT_PROT) {
-                    if (TransAddr(addr1, &addr2))
-                        break;
-                    key[addr2 >> 11] = src1 & 0xf8;
+                    key[addr1 >> 11] = src1 & 0xf8;
                 }
                 break;
 
@@ -1097,10 +1095,8 @@ opr:
                 } else if (addr1 >= MEMSIZE) {
                     storepsw(OPPSW, IRC_ADDR);
                 } else {
-                    if (TransAddr(addr1, &addr2))
-                        break;
                     dest &= 0xffffff00;
-                    dest |= key[addr2 >> 11];
+                    dest |= key[addr1 >> 11] & 0xf8;
                     regs[reg1] = dest;
                 }
                 break;
@@ -1197,7 +1193,7 @@ opr:
         case OP_LCR:
                 if (dest == MSIGN)
                    goto set_cc3;
-                dest = -dest;
+                dest = NEG(dest);
                 /* Fall through */
 
         case OP_LTR:
@@ -1208,7 +1204,7 @@ set_cc:
 
         case OP_LNR:
                 if ((dest & MSIGN) == 0)
-                   dest = -dest;
+                   dest = NEG(dest);
                 goto set_cc;
 
         case OP_LA:
@@ -1233,7 +1229,7 @@ set_cc:
         case OP_S:
         case OP_SR:
         case OP_SH:
-                src2 = -src2;
+                src2 = NEG(src2);
                 /* Fall through */
 
         case OP_A:
@@ -1253,7 +1249,7 @@ set_cc3:
 
         case OP_SL:
         case OP_SLR:
-                src2 = -src2;
+                src2 = NEG(src2);
                 /* Fall through */
 
         case OP_AL:
@@ -1289,16 +1285,16 @@ set_cc3:
 
                 if (src1 & MSIGN) {
                     fill = 1;
-                    src1 = -src1;
+                    src1 = NEG(src1);
                 }
                 if (src2 & MSIGN) {
                     fill ^= 1;
-                    src2 = -src2;
+                    src2 = NEG(src2);
                 }
 #ifdef USE_64BIT
                 src1L = ((t_uint64)src1) * ((t_uint64)src2);
                 if (fill)
-                    src1L = -src1L;
+                    src1L = NEG(src1L);
                 if (op != OP_MH) {
                     STDBL(reg1, src1L);
                 } else {
@@ -1348,11 +1344,11 @@ set_cc3:
 
                 if (src1L & MSIGNL) {
                     fill = 3;
-                    src1L = -src1L;
+                    src1L = NEG(src1L);
                 }
                 if (src2 & MSIGN) {
                     fill ^= 1;
-                    src2 = -src2;
+                    src2 = NEG(src2);
                 }
                 src2L = src1L % (t_uint64)src2;
                 src1L = src1L / (t_uint64)src2;
@@ -1377,7 +1373,7 @@ set_cc3:
                 }
                 if (src2 & MSIGN) {
                     fill ^= 1;
-                    src2 = -src2;
+                    src2 = NEG(src2);
                 }
                 dest = 0;
                 for (reg = 0; reg < 32; reg++) {
@@ -1405,9 +1401,9 @@ set_cc3:
                 }
 #endif
                 if (fill & 1)
-                    dest = -dest;
+                    dest = NEG(dest);
                 if (fill & 2)
-                    src1 = -src1;
+                    src1 = NEG(src1);
                 regs[reg1] = src1;
                 regs[reg1|1] = dest;
                 break;
@@ -1817,9 +1813,6 @@ save_dbl:
                 } else if (flags & PROBLEM) {
                     storepsw(OPPSW, IRC_PRIV);
                 } else {
-                    uint32  seg;
-                    uint32  page;
-
                     /* RX in RS range */
                     if (X2(reg) != 0)
                         addr1 = (addr1 + regs[X2(reg)]) & AMASK;
@@ -2096,7 +2089,7 @@ save_dbl:
                 }
                 /* Twos compliment if needed */
                 if (fill == 0xB || fill == 0xD)
-                    dest = -dest;
+                    dest = NEG(dest);
                 regs[reg1] = dest;
                 break;
 
@@ -2106,7 +2099,7 @@ save_dbl:
                 src1 = 0;
                 src1h = 0;
                 if (dest & MSIGN) {  /* Save sign */
-                    dest = -dest;
+                    dest = NEG(dest);
                     fill = 1;
                 } else
                     fill = 0;
@@ -4476,7 +4469,8 @@ dec_div(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
 
 t_stat cpu_reset (DEVICE *dptr)
 {
-    st_key = cc = pmsk = irqcode = flags = irqaddr = loading = 0;
+    st_key = cc = pmsk = flags = 0;
+    irqcode = irqaddr = loading = 0;
     dat_en = irq_en = ext_en = 0;
     chan_set_devs();
     if (M == NULL) {                        /* first time init? */
@@ -4572,7 +4566,7 @@ if ((mc != 0) && !get_yn ("Really truncate memory [N]?", FALSE))
 nM = (uint32 *) calloc (val >> 2, sizeof (uint32));
 if (nM == NULL)
     return SCPE_MEM;
-clim = (val < MEMSIZE)? val >> 2: max;
+clim = ((t_addr)val < MEMSIZE)? val >> 2: max;
 for (i = 0; i < clim; i++)
     nM[i] = M[i];
 free (M);
@@ -4644,7 +4638,6 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
     for (k = 0; k < lnt; k++) { /* print specified */
         h = &hst[(++di) % hst_lnt];     /* entry pointer */
         if (h->pc & HIST_PC) {   /* instruction? */
-            int i;
             fprintf(st, "%06x %06x %06x %08x %08x %08x %1x %04x ",
                        h->pc & PAMASK, h->addr1 & PAMASK, h->addr2 & PAMASK,
                        h->src1, h->src2, h->dest, h->cc, h->inst[0]);
@@ -4661,12 +4654,10 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
             fputc('\n', st);    /* end line */
         }                       /* end else instruction */
         if (h->pc & HIST_LPW) {   /* load PSW */
-            int i;
-            fprintf(st, " LPSW  %06x     %08x %08x\n", h->pc & PAMASK, h->src1, h->src2);
+            fprintf(st," LPSW  %06x     %08x %08x\n", h->pc & PAMASK, h->src1, h->src2);
         }                       /* end else instruction */
         if (h->pc & HIST_SPW) {   /* load PSW */
-            int i;
-            fprintf(st, " SPSW  %06x     %08x %08x\n", h->pc & PAMASK,  h->src1, h->src2);
+            fprintf(st," SPSW  %06x     %08x %08x\n", h->pc & PAMASK,  h->src1, h->src2);
         }                       /* end else instruction */
     }                           /* end for */
     return SCPE_OK;

@@ -228,7 +228,6 @@ uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     uint16         addr = GET_UADDR(uptr->u3);
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
-    uint8          ch;
 
     if (mt_busy[GET_DEV_BUF(dptr->flags)] != 0 || (uptr->u3 & MT_CMDMSK) != 0) {
         sim_debug(DEBUG_CMD, dptr, "CMD busy unit=%d %x\n", unit, cmd);
@@ -451,7 +450,7 @@ t_stat mt_srv(UNIT * uptr)
              if (uptr->u3 & MT_CONV) {
                  sim_debug(DEBUG_DATA, dptr, "Read raw data unit=%d %d %02x %02x\n",
                        unit, uptr->u4, ch, uptr->u6);
-                 if (uptr->u6 == 0 && uptr->u4 < uptr->hwmark) {
+                 if (uptr->u6 == 0 && (t_addr)uptr->u4 < uptr->hwmark) {
                      uptr->u6 = MT_CONV1 | ch;
                      sim_activate(uptr, 20);
                      return SCPE_OK;
@@ -474,7 +473,7 @@ t_stat mt_srv(UNIT * uptr)
          if (chan_write_byte(addr, &ch)) {
              sim_debug(DEBUG_DATA, dptr, "Read unit=%d EOR\n\r", unit);
              /* If not read whole record, skip till end */
-             if (uptr->u4 < uptr->hwmark) {
+             if ((t_addr)uptr->u4 < uptr->hwmark) {
                  /* Send dummy character to force SLI */
                  chan_write_byte(addr, &ch);
                  sim_activate(uptr, (uptr->hwmark-uptr->u4) * 20);
@@ -487,7 +486,7 @@ t_stat mt_srv(UNIT * uptr)
          } else {
               sim_debug(DEBUG_DATA, dptr, "Read data unit=%d %d %02x\n\r",
                        unit, uptr->u4, ch);
-              if (uptr->u4 >= uptr->hwmark) {       /* In IRG */
+              if ((t_addr)uptr->u4 >= uptr->hwmark) {       /* In IRG */
                   /* Handle end of record */
                   uptr->u3 &= ~MT_CMDMSK;
                   mt_busy[bufnum] &= ~1;
@@ -591,7 +590,7 @@ t_stat mt_srv(UNIT * uptr)
              if (uptr->u3 & MT_TRANS)
                  ch = bcd_to_ebcdic[ch];
              if (uptr->u3 & MT_CONV) {
-                 if (uptr->u6 == 0 && uptr->u4 < uptr->hwmark) {
+                 if (uptr->u6 == 0 && (t_addr)uptr->u4 < uptr->hwmark) {
                      uptr->u6 = MT_CONV1 | ch;
                      sim_activate(uptr, 20);
                      return SCPE_OK;
@@ -907,7 +906,6 @@ t_stat
 mt_boot(int32 unit_num, DEVICE * dptr)
 {
     UNIT               *uptr = &dptr->units[unit_num];
-    t_stat              r;
 
     if ((uptr->flags & UNIT_ATT) == 0)
         return SCPE_UNATT;      /* attached? */

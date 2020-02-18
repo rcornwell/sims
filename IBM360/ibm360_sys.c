@@ -372,8 +372,6 @@ t_opcode  optab[] = {
 
 void fprint_inst(FILE *of, uint16 *val) {
 uint8           inst = (val[0] >> 8) &  0xff;
-int             i;
-int             l = 1;
 t_opcode        *tab;
 
     for (tab = optab; tab->name != NULL; tab++) {
