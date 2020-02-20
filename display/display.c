@@ -241,7 +241,13 @@ static struct display displays[] = {
      * 512x512, out of 800x600
      * 0,0 at middle
      */
-    { DIS_NG, "NG Display", &color_p31, NULL, 512, 512 }
+    { DIS_NG, "NG Display", &color_p31, NULL, 512, 512 },
+
+    /*
+     * III display
+     * on PDP-10
+     */
+    { DIS_III, "III Display", &color_p31, NULL, 1024, 1024 }
 };
 
 /*

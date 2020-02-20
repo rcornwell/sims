@@ -587,6 +587,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
           DISPLAYVT = ${DISPLAYD}/vt11.c
           DISPLAY340 = ${DISPLAYD}/type340.c
           DISPLAYNG = ${DISPLAYD}/ng.c
+          DISPLAYIII = ${DISPLAYD}/iii.c
           DISPLAY_OPT += -DUSE_DISPLAY $(VIDEO_CCDEFS) $(VIDEO_LDFLAGS)
           $(info using libSDL2: $(call find_include,SDL2/SDL))
           ifeq (Darwin,$(OSTYPE))
@@ -612,6 +613,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
             DISPLAYVT = ${DISPLAYD}/vt11.c
             DISPLAY340 = ${DISPLAYD}/type340.c
             DISPLAYNG = ${DISPLAYD}/ng.c
+            DISPLAYIII = ${DISPLAYD}/iii.c
             DISPLAY_OPT += -DUSE_DISPLAY $(VIDEO_CCDEFS) $(VIDEO_LDFLAGS)
             $(info using libSDL: $(call find_include,SDL/SDL))
             ifeq (Darwin,$(OSTYPE))
@@ -976,6 +978,7 @@ else
       DISPLAYVT = ${DISPLAYD}/vt11.c
       DISPLAY340 = ${DISPLAYD}/type340.c
       DISPLAYNG = ${DISPLAYD}/ng.c
+      DISPLAYIII = ${DISPLAYD}/iii.c
       DISPLAY_OPT += -DUSE_DISPLAY $(VIDEO_CCDEFS) $(VIDEO_LDFLAGS)
     else
       $(info ***********************************************************************)
@@ -2029,7 +2032,8 @@ KA10 = ${KA10D}/kx10_cpu.c ${KA10D}/kx10_sys.c ${KA10D}/kx10_df.c \
 	$(KA10D)/ka10_pmp.c ${KA10D}/ka10_dkb.c ${KA10D}/pdp6_dct.c \
 	${KA10D}/pdp6_dtc.c ${KA10D}/pdp6_mtc.c ${KA10D}/pdp6_dsk.c \
 	${KA10D}/pdp6_dcs.c ${KA10D}/ka10_dpk.c ${KA10D}/kx10_dpy.c \
-	${PDP10D}/ka10_ai.c ${KA10D}/ka10_iii.c ${DISPLAYL} ${DISPLAY340}
+	${PDP10D}/ka10_ai.c ${KA10D}/ka10_iii.c ${DISPLAYL} ${DISPLAY340} \
+	$(DISPLAYIII)
 KA10_OPT = -DKA=1 -DUSE_INT64 -I ${KA10D} -DUSE_SIM_CARD ${NETWORK_OPT} ${DISPLAY_OPT} ${KA10_DISPLAY_OPT}
 ifneq (${PANDA_LIGHTS},)
 # ONLY for Panda display.

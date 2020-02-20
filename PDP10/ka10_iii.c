@@ -32,6 +32,7 @@
 
 #if NUM_DEVS_III > 0 
 #include "display/display.h"
+#include "display/iii.h"
 
 
 #define III_DEVNUM        0430
@@ -261,6 +262,7 @@ int            iii_sel;         /* Select mask */
 
 t_stat iii_devio(uint32 dev, uint64 *data);
 t_stat iii_svc(UNIT *uptr);
+t_stat iii_reset(DEVICE *dptr);
 static void draw_point(int x, int y, int b);
 static void draw_line(int x1, int y1, int x2, int y2, int b);
 t_stat iii_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
@@ -281,7 +283,7 @@ MTAB iii_mod[] = {
 DEVICE iii_dev = {
     "III", iii_unit, NULL, iii_mod,
     2, 10, 31, 1, 8, 8,
-    NULL, NULL, NULL,
+    NULL, NULL, iii_reset,
     NULL, NULL, NULL, &iii_dib, DEV_DEBUG | DEV_DISABLE | DEV_DIS, 0, dev_debug,
     NULL, NULL, &iii_help, NULL, NULL, &iii_description
     };
@@ -348,6 +350,9 @@ iii_svc (UNIT *uptr)
      int       A;
      int       ox, oy, nx, ny, br, sz;
      int       i, j, ch;
+
+     iii_cycle (10, 0);
+
      switch(iii_instr & 017) {
      case 000: /* JMP and HLT */
                if (iii_instr & 020) {
@@ -528,12 +533,24 @@ iii_svc (UNIT *uptr)
 }
 
 
+t_stat iii_reset (DEVICE *dptr)
+{
+    if (dptr->flags & DEV_DIS) {
+        display_close(dptr);
+    } else {
+        display_reset();
+        iii_init(dptr);
+    }
+    return SCPE_OK;
+}
+
+
 /* Draw a point at x,y with intensity b. */
 /* X and Y runs from -512 to 512. */
 static void
 draw_point(int x, int y, int b)
 {
-   display_point(x, y, b, 0);
+   iii_point(x, y, b, 0);
 }
 
 /* Draw a line between two points */
