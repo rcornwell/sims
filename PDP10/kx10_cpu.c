@@ -155,7 +155,6 @@ int     pi_enable;                            /* Interrupts enabled */
 int     parity_irq;                           /* Parity interupt */
 int     pi_pending;                           /* Interrupt pending. */
 int     pi_enc;                               /* Flag for pi */
-int     pi_vect;                              /* Last pi location used for IRQ */
 int     apr_irq;                              /* Apr Irq level */
 int     clk_en;                               /* Enable clock interrupts */
 int     clk_irq;                              /* Clock interrupt */
@@ -173,6 +172,7 @@ uint8   fm_sel;                               /* User fast memory block */
 int32   apr_serial = -1;                      /* CPU Serial number */
 int     inout_fail;                           /* In out fail flag */
 #if KL
+int     pi_vect;                              /* Last pi location used for IRQ */
 int     ext_ac;                               /* Extended instruction AC */
 uint8   prev_ctx;                             /* Previous AC context */
 uint16  irq_enable;                           /* Apr IRQ enable bits */
@@ -4291,11 +4291,12 @@ st_pi:
             AB &= 0777;
         else
             AB |= eb_ptr;
+#if KL
         pi_vect = AB;
+#endif
         Mem_read_nopage();
         goto no_fetch;
 #else
-        pi_vect = AB;
         goto fetch;
 #endif
     }
@@ -5874,6 +5875,9 @@ unasign:
               if ((FLAGS & BYTI) == 0) {      /* BYF6 */
 #if KL
                   if (Mem_read(0, 0, 0)) {
+#elif KI
+                  modify = 1;
+                  if (Mem_read(0, 1, 0)) {
 #else
                   modify = 1;
                   if (Mem_read(0, !QITS, 0)) {
@@ -5944,6 +5948,8 @@ unasign:
                   MB = AR;
 #if KL
                   if (Mem_write(0, 0))
+#elif KI
+                  if (Mem_write(0, 1))
 #else
                   if (Mem_write(0, !QITS))
 #endif
@@ -5960,6 +5966,8 @@ unasign:
               if ((FLAGS & BYTI) == 0 || !BYF5) {
 #if KL
                   if (Mem_read(0, 0, 0))
+#elif KI
+                  if (Mem_read(0, 1, 0))
 #else
                   if (Mem_read(0, !QITS, 0))
 #endif
@@ -8738,7 +8746,11 @@ last:
            if ((!pi_hold) & f_inst_fetch) {
                 pi_cycle = 0;
            } else {
+#if KL
                 AB = pi_vect | pi_ov;
+#else
+                AB = 040 | (pi_enc << 1) | maoff | pi_ov;
+#endif
 #if KI | KL
                 Mem_read_nopage();
 #else
@@ -8750,7 +8762,11 @@ last:
             if ((IR & 0700) == 0700) {
                 (void)check_irq_level();
             }
+#if KL
             AB = pi_vect | pi_ov;
+#else
+            AB = 040 | (pi_enc << 1) | maoff | pi_ov;
+#endif
             pi_ov = 0;
             pi_hold = 0;
 #if KI | KL
