@@ -250,7 +250,7 @@
 
 #define ABS(x)          (((x) < 0)? (-(x)): (x))
 
-#define DT_WRDTIM       15000
+#define DT_WRDTIM       10000
 
 int32 dtsa = 0;                                         /* status A */
 uint64 dtsb = 0;                                        /* status B */
@@ -1061,7 +1061,6 @@ dt_boot(int32 unit_num, DEVICE * dptr)
         addr = (addr + 1) & RMASK;
         word = ((uint64)fbuf[off++]) << 18;
         word |= (uint64)fbuf[off++];
-fprintf(stderr, "%06o %012llo %06o\n\r", addr, word, wc);
         if (addr < 020)
            FM[addr] = word;
         else
@@ -1074,7 +1073,6 @@ fprintf(stderr, "%06o %012llo %06o\n\r", addr, word, wc);
     uptr->DSTATE = (1 << DTC_V_BLK) | DTC_BLOCK | DTC_MOT;
     sim_activate(uptr,30000);
     PC = word & RMASK;
-fprintf(stderr, "%06o\n\r", PC);
     return SCPE_OK;
 }
 
