@@ -432,6 +432,14 @@
 					>
 				</File>
 				<File
+					RelativePath="..\display\iii.c"
+					>
+				</File>
+				<File
+					RelativePath="..\display\iii.h"
+					>
+				</File>
+				<File
 					RelativePath="..\display\type340.c"
 					>
 				</File>
