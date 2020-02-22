@@ -1,6 +1,6 @@
-/* ka10_defs.h: PDP-10 simulator definitions
+/* kx10_defs.h: PDP-10 simulator definitions
 
-   Copyright (c) 2011-2017, Richard Cornwell
+   Copyright (c) 2011-2020, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -615,7 +615,7 @@ int auxcpu_write (t_addr addr, t_uint64);
 #define NUM_DEVS_TU     1
 #define NUM_DEVS_PMP    WAITS
 #define NUM_DEVS_DKB    WAITS
-#define NUM_DEVS_III    0       /* (WAITS * USE_DISPLAY) *//* Disabled until working */
+#define NUM_DEVS_III    (WAITS * USE_DISPLAY)   /* Disabled until working */
 #define NUM_DEVS_PD     ITS | KL_ITS
 #define NUM_DEVS_IMX    ITS
 #define NUM_DEVS_STK    ITS

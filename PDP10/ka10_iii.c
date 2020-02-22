@@ -429,6 +429,8 @@ iii_svc (UNIT *uptr)
                    lx = ox;
                    ly = oy + cy;
      sim_debug(DEBUG_DATA, &iii_dev, "III: ch %d %d %o %o %o\n", lx, ly, ch, sz, br);
+                   if (ch == '\t')
+                      continue;
                    if (ch == '\r') {
                       ox = -512;
                       continue;
