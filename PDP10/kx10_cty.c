@@ -1,6 +1,6 @@
-/* ka10_cty.c: KA-10 front end (console terminal) simulator
+/* kx10_cty.c: PDP6, KA-10 and KI-10 front end (console terminal) simulator
 
-   Copyright (c) 2013-2017, Richard Cornwell
+   Copyright (c) 2013-2020, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),

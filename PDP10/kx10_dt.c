@@ -1,6 +1,6 @@
-/* pdp10_dt.c: 18b DECtape simulator
+/* kx10_dt.c: 18b DECtape simulator
 
-   Copyright (c) 2017 Richard Cornwell
+   Copyright (c) 2017-2020 Richard Cornwell based on work by Bob Supnik
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),

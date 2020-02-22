@@ -1,6 +1,6 @@
-/* ka10_rp.c: Dec RH10 RP04/5/6
+/* kx10_rp.c: DEC Massbus RP04/5/6
 
-   Copyright (c) 2013-2019, Richard Cornwell
+   Copyright (c) 2013-2020, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),

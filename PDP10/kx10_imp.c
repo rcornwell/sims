@@ -1,6 +1,6 @@
-/* ka10_imp.c: IMP, interface message processor.
+/* kx10_imp.c: IMP, interface message processor.
 
-   Copyright (c) 2018, Richard Cornwell based on code provided by
+   Copyright (c) 2018-2020, Richard Cornwell based on code provided by
          Lars Brinkhoff and Danny Gasparovski.
 
    Permission is hereby granted, free of charge, to any person obtaining a

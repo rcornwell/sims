@@ -1,9 +1,9 @@
-/* ka10_sys.c: PDP-10 simulator interface
+/* kx10_sys.c: PDP-10 simulator interface
    Derived from Bob Supnik's pdp10_sys.c
 
 
    Copyright (c) 2005-2009, Robert M Supnik
-   Copyright (c) 2011-2019, Richard Cornwell
+   Copyright (c) 2011-2020, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
