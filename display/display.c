@@ -128,8 +128,8 @@ static struct phosphor p31[] = {{0.0, 1.0, 0.77, 0.5, .1}};
 struct color color_p31 = { p31, ELEMENTS(p31), 25000 };
 
 /* green phosphor for III */
-static struct phosphor p39[] = {{0.2, 1.0, 0.0, 0.5, 0.10}};
-struct color color_p39 = { p39, ELEMENTS(p39), 25000 };
+static struct phosphor p39[] = {{0.2, 1.0, 0.0, 0.5, 0.01}};
+struct color color_p39 = { p39, ELEMENTS(p39), 20000 };
 
 static struct phosphor p40[] = {
     /* P40 blue-white spot with yellow-green decay (.045s to 10%?) */

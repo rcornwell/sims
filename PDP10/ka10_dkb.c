@@ -129,11 +129,11 @@ int dkb_modifiers (SIM_KEY_EVENT *kev)
             return 1;
         case SIM_KEY_WIN_L:
         case SIM_KEY_WIN_R:
-            dkb_kmod |= TOP;
+            dkb_kmod |= META;
             return 1;
         case SIM_KEY_ALT_L:
         case SIM_KEY_ALT_R:
-            dkb_kmod |= META;
+            dkb_kmod |= TOP;
             return 1;
         }
         return 0;
@@ -151,11 +151,11 @@ int dkb_modifiers (SIM_KEY_EVENT *kev)
             return 1;
         case SIM_KEY_WIN_L:
         case SIM_KEY_WIN_R:
-            dkb_kmod &= ~TOP;
+            dkb_kmod &= ~META;
             return 1;
         case SIM_KEY_ALT_L:
         case SIM_KEY_ALT_R:
-            dkb_kmod &= ~META;
+            dkb_kmod &= ~TOP;
             return 1;
         }
         return 0;
@@ -173,61 +173,61 @@ int dkb_keys (SIM_KEY_EVENT *kev, UNIT *uptr)
     if ((dkb_kmod & SHFT) == 0)
         uptr->DATA = (META|CTRL|TOP|SHFT) | 051; /* ( */
     else
-        uptr->DATA = (META|CTRL|TOP|SHFT) | 060;
+        uptr->DATA = dkb_kmod | 060;
     return 1;
   case SIM_KEY_1:
     if ((dkb_kmod & SHFT) == 0)
         uptr->DATA = (META|CTRL|SHFT) | 054;     /* ! */
     else
-        uptr->DATA = (META|CTRL|TOP|SHFT) | 061;
+        uptr->DATA = dkb_kmod | 061;
     return 1;
   case SIM_KEY_2:
     if ((dkb_kmod & SHFT) == 0)
         uptr->DATA = (META|CTRL|SHFT) | 052;   /* Circle Star */
     else
-        uptr->DATA = (META|CTRL|TOP|SHFT) | 062;
+        uptr->DATA = dkb_kmod | 062;
     return 1;
   case SIM_KEY_3:
     if ((dkb_kmod & SHFT) == 0)
         uptr->DATA = (META|CTRL|SHFT) | 022;  /* # */
     else
-        uptr->DATA = (META|CTRL|TOP|SHFT) | 063;
+        uptr->DATA = dkb_kmod | 063;
     return 1;
   case SIM_KEY_4:
     if ((dkb_kmod & SHFT) == 0)
         uptr->DATA = (META|CTRL|SHFT) | 066; /* $ */
     else
-        uptr->DATA = (META|CTRL|TOP|SHFT) | 064;
+        uptr->DATA = dkb_kmod | 064;
     return 1;
   case SIM_KEY_5:
     if ((dkb_kmod & SHFT) == 0)
         uptr->DATA = (META|CTRL|SHFT) | 067; /* % */
     else
-        uptr->DATA = (META|CTRL|TOP|SHFT) | 065;
+        uptr->DATA = dkb_kmod | 065;
     return 1;
   case SIM_KEY_6:
     if ((dkb_kmod & SHFT) == 0)
         uptr->DATA = (META|CTRL|SHFT) | 021; /* ^ */
     else
-        uptr->DATA = (META|CTRL|TOP|SHFT) | 066;
+        uptr->DATA = dkb_kmod | 066;
     return 1;
   case SIM_KEY_7:
     if ((dkb_kmod & SHFT) == 0)
         uptr->DATA = (META|CTRL|SHFT) | 024 ;      /* & */
     else
-        uptr->DATA = (META|CTRL|TOP|SHFT) | 067;
+        uptr->DATA = dkb_kmod | 067;
     return 1;
   case SIM_KEY_8:
     if ((dkb_kmod & SHFT) == 0)
-        uptr->DATA = (META|CTRL|SHFT) | 052;
+        uptr->DATA = (META|CTRL|TOP|SHFT) | 052;
     else
-        uptr->DATA = (META|CTRL|TOP|SHFT) | 070;
+        uptr->DATA = dkb_kmod | 070;
     return 1;
   case SIM_KEY_9:
     if ((dkb_kmod & SHFT) == 0)
         uptr->DATA = (META|CTRL|TOP|SHFT) | 050;
     else
-        uptr->DATA = (META|CTRL|TOP|SHFT) | 071;
+        uptr->DATA = dkb_kmod | 071;
     return 1;
   case SIM_KEY_A:
     uptr->DATA = dkb_kmod | 001;
@@ -350,13 +350,17 @@ int dkb_keys (SIM_KEY_EVENT *kev, UNIT *uptr)
         uptr->DATA = (META|CTRL|SHFT) | 011;
     return 1;
   case SIM_KEY_BACKSLASH:
-    if ((dkb_kmod & SHFT) == 0)
-        uptr->DATA = (META|CTRL|SHFT) | 053;
+    if ((dkb_kmod & TOP) == 0)
+        uptr->DATA = (META|CTRL|SHFT) | 034;
+    else if ((dkb_kmod & SHFT) == 0)
+        uptr->DATA = (META|CTRL|SHFT) | 056;
     else
         uptr->DATA = (META|CTRL|TOP|SHFT) | 034;
     return 1;
   case SIM_KEY_LEFT_BACKSLASH:
-    if ((dkb_kmod & SHFT) == 0)
+    if ((dkb_kmod & TOP) == 0)
+        uptr->DATA = (META|CTRL|SHFT) | 034;
+    else if ((dkb_kmod & SHFT) == 0)
         uptr->DATA = (META|CTRL|TOP|SHFT) | 034;
     else
         uptr->DATA = (META|CTRL|SHFT) | 011;

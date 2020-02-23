@@ -428,8 +428,9 @@ iii_svc (UNIT *uptr)
                    cy = (int)(6.0 * ch_sz);
                    lx = ox;
                    ly = oy + cy;
-     sim_debug(DEBUG_DATA, &iii_dev, "III: ch %d %d %o %o %o\n", lx, ly, ch, sz, br);
-                   if (ch == '\t')
+     sim_debug(DEBUG_DETAIL, &iii_dev, "III: ch %d %d %o '%c' %o %o\n", lx, ly, ch,
+                    (ch < ' ')? '.' : ch, sz, br);
+                   if (ch == '\t' || ch == 0)
                       continue;
                    if (ch == '\r') {
                       ox = -512;
@@ -472,9 +473,11 @@ iii_svc (UNIT *uptr)
                nx = (nx ^ 040) - 040;
                ny = (ny ^ 040) - 040;
                /* Compute relative position. */
-     sim_debug(DEBUG_DATA, &iii_dev, "III: short %d %d %o %d\n", nx, ny, sz, br);
+     sim_debug(DEBUG_DETAIL, &iii_dev, "III: short %d %d %o %d\n", nx, ny, sz, br);
                nx += ox;
                ny += oy;
+               if (nx < -512 || nx > 512 || ny < -512 || ny > 512)
+                   uptr->STATUS |= EDG_FBIT;
                i = (int)((iii_instr >> 18) & 3);
                if ((i & 02) == 0 && (iii_sel & 04000) != 0) { /* Check if visible */
                    if ((i & 01) == 0) { /* Draw a line */
@@ -491,7 +494,7 @@ iii_svc (UNIT *uptr)
                /* Sign extend */
                nx = (nx ^ 040) - 040;
                ny = (ny ^ 040) - 040;
-     sim_debug(DEBUG_DATA, &iii_dev, "III: short2 %d %d %o %d\n", nx, ny, sz, br);
+     sim_debug(DEBUG_DETAIL, &iii_dev, "III: short2 %d %d %o %d\n", nx, ny, sz, br);
                /* Compute relative position. */
                nx += ox;
                ny += oy;
@@ -534,15 +537,13 @@ iii_svc (UNIT *uptr)
                ny = (iii_instr >> 14) & 03777;
                nx = (nx ^ 02000) - 02000;
                ny = (ny ^ 02000) - 02000;
-     sim_debug(DEBUG_DATA, &iii_dev, "III: long %d %d %o %o\n", nx, ny, sz, br);
-               if (nx < -512 || nx > 512 || ny < -512 || ny > 512)
-                   uptr->STATUS |= EDG_FBIT;
+     sim_debug(DEBUG_DETAIL, &iii_dev, "III: long %d %d %o %o\n", nx, ny, sz, br);
                if ((iii_instr & 0100) == 0) { /* Relative mode */
-                  nx += ox;
-                  ny += oy;
+                   nx += ox;
+                   ny += oy;
+                   if (nx < -512 || nx > 512 || ny < -512 || ny > 512)
+                       uptr->STATUS |= EDG_FBIT;
                }
-               if (nx < -512 || nx > 512 || ny < -512 || ny > 512)
-                   uptr->STATUS |= EDG_FBIT;
                if ((iii_instr & 040) == 0 && (iii_sel & 04000) != 0) { /* Check if visible */
                    if ((iii_instr & 020) == 0) /* Draw a line */
                       draw_line(ox, oy, nx, ny, br, uptr);
@@ -598,7 +599,7 @@ skip_up:
          sim_debug(DEBUG_DETAIL, &iii_dev, "III: fetch %06o %012llo\n", uptr->MAR, iii_instr);
          uptr->MAR++;
          uptr->MAR &= RMASK;
-         sim_activate(uptr, 10);
+         sim_activate(uptr, 50);
      }
 
      if (((uptr->STATUS >> 3) & (uptr->STATUS & (WRAP_MSK|EDGE_MSK|LIGH_MSK))) != 0)
