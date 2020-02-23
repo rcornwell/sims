@@ -5749,9 +5749,6 @@ dpnorm:
 #endif
 #if WAITS
               if (QWAITS) {   /* WAITS FIX instruction */
-                  if (Mem_read(0, 0, 0))
-                      goto last;
-                  AR = MB;
                   BR = get_reg(AC);
                   if (hst_lnt) {
                       hst[hst_p].mb = AR;
