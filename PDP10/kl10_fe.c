@@ -181,8 +181,6 @@
 #define ITS_DTEHNG     0412         /* Hangup/dialup */
 #endif
 
-#define TMR_RTC        2
-
 extern int32 tmxr_poll;
 t_stat dte_devio(uint32 dev, uint64 *data);
 t_addr dte_devirq(uint32 dev, t_addr addr);
@@ -1867,7 +1865,6 @@ t_stat dte_reset (DEVICE *dptr)
     dte_unit[2].STATUS = 0;
     dte_unit[3].STATUS = 0;
     cty_done = 0;
-    sim_rtcn_init_unit (&dte_unit[3], 1000, TMR_RTC);
     sim_activate(&dte_unit[3], 1000);
     sim_activate(&dte_unit[2], 1000);
     return SCPE_OK;
@@ -2019,7 +2016,7 @@ t_stat lp20_svc (UNIT *uptr)
             data1[1] |= 02 << 8;
             uptr->LPCNT = 0;
         }
-        data1[2] = 0110200; //0100220;
+        data1[2] = 0110200; 
         if (dte_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMLPT, 4, data1) == 0)
             sim_activate(uptr, 1000);
         uptr->LPST &= ~(HDSFLG);

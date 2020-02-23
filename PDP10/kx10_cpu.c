@@ -10072,11 +10072,6 @@ sim_brk_dflt = SWMASK ('E');
 sim_clock_precalibrate_commands = pdp10_clock_precalibrate_commands;
 sim_rtcn_init_unit (&cpu_unit[0], cpu_unit[0].wait, TMR_RTC);
 sim_activate(&cpu_unit[0], 10000);
-#if ITS
-if (QITS) {
-    sim_rtcn_init_unit (&cpu_unit[1], cpu_unit[1].wait, TMR_RTC);
-}
-#endif
 #if MPX_DEV
 mpx_enable = 0;
 #endif
