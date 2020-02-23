@@ -131,7 +131,7 @@ The KL10 sim has successfully run Tops 10 6.03-7.03, ITS and Tops 20 V2-V7.
    * CH10 networking support for ITS.  
 
    * 340 Display Station support.  
-   * III Display support for WAITS (in progress).  
+   * III Display support for WAITS.  
 
    * Optional support for PDP6 devices (standard if WAITS included).  
 
