@@ -52,7 +52,7 @@ void
 iii_draw_line(int x1, int y1, int x2, int y2, int l)
 {
     int                 dx, ax;
-    int                 dy, ay;
+    int                 dy;
     int                 i, j;
     int                 pu, pd, ws, et;
     int                 ipc, fpc;

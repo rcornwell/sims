@@ -276,14 +276,14 @@ uint8 map[128][18] = {
                   { M(0,12), V(6,6) },
 };
 
-float scale[] = { 1.0,
-    1.0,  /* 128 chars per line */
-    1.3,  /* 96 chars per line */
-    2.0,  /* 64 chars per line */
-    2.5,  /* 48 chars per line */
-    4.0,  /* 32 chars per line */
-    5.3,  /* 24 chars per line */
-    8.0   /* 16 chars per line */
+float scale[] = { 1.0F,
+    1.0F,  /* 128 chars per line */
+    1.3F,  /* 96 chars per line */
+    2.0F,  /* 64 chars per line */
+    2.5F,  /* 48 chars per line */
+    4.0F,  /* 32 chars per line */
+    5.3F,  /* 24 chars per line */
+    8.0F   /* 16 chars per line */
 };
 
 
@@ -634,12 +634,6 @@ draw_point(int x, int y, int b, UNIT *uptr)
 static void
 draw_line(int x1, int y1, int x2, int y2, int b, UNIT *uptr)
 {
-    int                 dx, ax;
-    int                 dy, ay;
-    int                 i, j;
-    int                 pu, pd, ws, et;
-    int                 ipc, fpc;
-
     if (x1 < -512 || x1 > 512 || y1 < -512 || y1 > 512)
        uptr->STATUS |= WRP_FBIT;
     if (x2 < -512 || x2 > 512 || y2 < -512 || y2 > 512)
