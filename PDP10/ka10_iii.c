@@ -236,44 +236,50 @@ uint8 map[128][18] = {
    /* [ */        { M(3,5), V(0,5), V(0,15), V(3,15) },
    /* \ */        { M(0,12), V(6,6) },
    /* ] */        { M(0,5), V(3,5), V(3,15), V(0,15) },
-                  { M(0,11), V(3,14), V(6,11), M(3,14), V(3,6) },
-                  { M(3,7), V(0,10), V(3,13), M(0,10), V(6,10) },
-                  { M(2,14), V(4,12) },
-                  { M(0,9), V(1,10), V(3,10), V(4,9), V(4,6), M(4,8), V(3,9), V(1,9), V(0,8), V(0,7),
-                    V(1,6), V(3,6), V(4,7) },
-                  { V(0,13), M(0,9), V(1,10), V(3,10), V(4,9), V(4,7), V(3,6), V(1,6), V(0,7) },
-                  { M(4,9), V(3,10), V(1,10), V(0,9), V(0,7), V(1,6), V(3,6), V(4,7) },
-                  { M(0,7), V(0,9), V(1,10), V(3,10), V(4,9), V(4,7), V(3,6), V(1,6), V(0,7), M(4,6),
-                    V(4,13) },
-                  { M(4,7), V(3,6), V(1,6), V(0,7), V(0,9), V(1,10), V(3,10), V(4,9), V(4,8), V(0,8) },
-                  { M(2,6), V(2,12), V(3,13), V(4,13), V(5,12), M(0,11), V(4,11) },
-                  { M(4,9), V(3,10), V(1,10), V(0,9), V(0,7), V(1,6), V(3,6), V(4,7), M(4,10), V(4,5),
-                    V(3,4), V(1,4), V(0,5) },
-                  { V(0,13), M(0,9), V(1,10), V(3,10), V(4,9), V(4,6) },
-                  { M(3,12), V(3,11), M(3,10), V(3,7), V(4,6), V(5,6) },
-                  { M(3,12), V(3,11), M(3,10), V(3,5), V(2,4), V(1,3) },
-                  { V(0,13), M(0,8), V(2,10), M(0,8), V(2,6) },
-                  { M(2,6), V(2,13) },
-                  { V(0,10), M(0,9), V(1,10), V(2,10), V(3,9), V(3,6), M(3,9), V(4,10), V(5,10), V(6,9),
-                    V(6,6) },
-                  { V(0,10), M(0,9), V(1,10), V(2,10), V(3,9), V(3,6) },
-                  { M(0,7), V(0,9), V(1,10), V(3,10), V(4,9), V(4,7), V(3,6), V(1,6), V(0,7) },
-                  { M(0,4), V(0,10), M(0,9), V(1,10), V(3,10), V(4,9), V(4,7), V(3,6), V(1,6), V(0,7) },
-                  { M(4,9), V(3,10), V(1,10), V(0,9), V(0,7), V(1,6), V(3,6), V(4,7), M(4,10), V(4,4) },
-                  { V(0,10), M(0,9), V(1,10), V(3,10), V(4,9) },
-                  { M(0,7), V(1,6), V(3,6), V(4,7), V(3,8), V(1,8), V(0,9), V(1,10), V(3,10), V(4,9) },
-                  { M(2,13), V(2,7), V(3,6), V(4,6), V(5,7), M(1,11), V(3,11) },
-                  { M(0,10), V(0,7), V(1,6), V(3,6), V(4,7), V(4,10), V(4,6) },
-                  { M(0,9), V(3,6), V(6,9) },
-                  { M(0,10), V(0,6), V(2,8), V(4,6), V(4,10) },
-                  { V(4,10), M(0,10), V(4,6) },
-                  { M(0,9), V(3,6), M(6,9), V(1,4), V(0,4) },
-                  { M(0,10), V(4,10), V(0,6), V(4,6) },
-                  { M(3,15), V(2,14), V(2,12), V(0,10), V(2,8), V(2,6), V(3,5) },
-                  { M(2,4), V(2,14) },
-                  { M(3,6), V(0,9), V(3,12), V(6,9), V(3,6) },
-                  { M(0,15), V(1,14), V(1,12), V(3,10), V(1,8), V(1,6), V(0,5) },
-                  { M(0,12), V(6,6) },
+   /* up arrow */ { M(0,11), V(3,14), V(6,11), M(3,14), V(3,6) },
+   /* left arrow*/{ M(3,7), V(0,10), V(3,13), M(0,10), V(6,10) },
+   /* ` */        { M(2,14), V(4,12) },
+   /* a */        { M(0,9), V(1,10), V(3,10), V(4,9), V(4,6), M(4,8), V(3,9), V(1,9),
+                    V(0,8), V(0,7), V(1,6), V(3,6), V(4,7) },
+   /* b */        { V(0,13), M(0,9), V(1,10), V(3,10), V(4,9), V(4,7), V(3,6), V(1,6),
+                    V(0,7) },
+   /* c */        { M(4,9), V(3,10), V(1,10), V(0,9), V(0,7), V(1,6), V(3,6), V(4,7) },
+   /* d */        { M(0,7), V(0,9), V(1,10), V(3,10), V(4,9), V(4,7), V(3,6), V(1,6),
+                    V(0,7), M(4,6), V(4,13) },
+   /* e */        { M(4,7), V(3,6), V(1,6), V(0,7), V(0,9), V(1,10), V(3,10), V(4,9),
+                    V(4,8), V(0,8) },
+   /* f */        { M(2,6), V(2,12), V(3,13), V(4,13), V(5,12), M(0,11), V(4,11) },
+   /* g */        { M(4,9), V(3,10), V(1,10), V(0,9), V(0,7), V(1,6), V(3,6), V(4,7),
+                    M(4,10), V(4,5), V(3,4), V(1,4), V(0,5) },
+   /* h */        { V(0,13), M(0,9), V(1,10), V(3,10), V(4,9), V(4,6) },
+   /* i */        { M(3,12), V(3,11), M(3,10), V(3,7), V(4,6), V(5,6) },
+   /* k */        { M(3,12), V(3,11), M(3,10), V(3,5), V(2,4), V(1,3) },
+   /* j */        { V(0,13), M(0,8), V(2,10), M(0,8), V(2,6) },
+   /* l */        { M(2,6), V(2,13) },
+   /* m */        { V(0,10), M(0,9), V(1,10), V(2,10), V(3,9), V(3,6), M(3,9), V(4,10),
+                    V(5,10), V(6,9), V(6,6) },
+   /* n */        { V(0,10), M(0,9), V(1,10), V(2,10), V(3,9), V(3,6) },
+   /* o */        { M(0,7), V(0,9), V(1,10), V(3,10), V(4,9), V(4,7), V(3,6), V(1,6),
+                    V(0,7) },
+   /* p */        { M(0,4), V(0,10), M(0,9), V(1,10), V(3,10), V(4,9), V(4,7), V(3,6),
+                    V(1,6), V(0,7) },
+   /* q */        { M(4,9), V(3,10), V(1,10), V(0,9), V(0,7), V(1,6), V(3,6), V(4,7),
+                    M(4,10), V(4,4) },
+   /* r */        { V(0,10), M(0,9), V(1,10), V(3,10), V(4,9) },
+   /* s */        { M(0,7), V(1,6), V(3,6), V(4,7), V(3,8), V(1,8), V(0,9), V(1,10),
+                    V(3,10), V(4,9) },
+   /* t */        { M(2,13), V(2,7), V(3,6), V(4,6), V(5,7), M(1,11), V(3,11) },
+   /* u */        { M(0,10), V(0,7), V(1,6), V(3,6), V(4,7), V(4,10), V(4,6) },
+   /* v */        { M(0,9), V(3,6), V(6,9) },
+   /* w */        { M(0,10), V(0,6), V(2,8), V(4,6), V(4,10) },
+   /* x */        { V(4,10), M(0,10), V(4,6) },
+   /* y */        { M(0,9), V(3,6), M(6,9), V(1,4), V(0,4) },
+   /* z */        { M(0,10), V(4,10), V(0,6), V(4,6) },
+   /* { */        { M(3,15), V(2,14), V(2,12), V(0,10), V(2,8), V(2,6), V(3,5) },
+   /* | */        { M(2,4), V(2,14) },
+   /* diamon */   { M(3,6), V(0,9), V(3,12), V(6,9), V(3,6) },
+   /* } */        { M(0,15), V(1,14), V(1,12), V(3,10), V(1,8), V(1,6), V(0,5) },
+   /* \ */        { M(0,12), V(6,6) },
 };
 
 float scale[] = { 1.0F,
@@ -341,7 +347,8 @@ t_stat iii_devio(uint32 dev, uint64 *data) {
             *data |= EDGE_FLG;
         if (uptr->STATUS & LIT_FBIT)
             *data |= LIGHT_FLG;
-        sim_debug(DEBUG_CONI, &iii_dev, "III %03o CONI %06o %06o\n", dev, (uint32)*data, PC);
+        sim_debug(DEBUG_CONI, &iii_dev, "III %03o CONI %06o %06o\n", dev, (uint32)*data,
+               PC);
         break;
      case CONO:
          clr_interrupt(III_DEVNUM);
@@ -362,7 +369,8 @@ t_stat iii_devio(uint32 dev, uint64 *data) {
              set_interrupt(III_DEVNUM, uptr->PIA);
          if (uptr->STATUS & HLT_MSK)
             set_interrupt(III_DEVNUM, uptr->PIA);
-         sim_debug(DEBUG_CONO, &iii_dev, "III %03o CONO %06o %06o\n", dev, (uint32)*data, PC);
+         sim_debug(DEBUG_CONO, &iii_dev, "III %03o CONO %06o %06o\n", dev,
+                     (uint32)*data, PC);
          break;
      case DATAI:
          sim_debug(DEBUG_DATAIO, &iii_dev, "III %03o DATAI %06o\n", dev, (uint32)*data);
@@ -389,7 +397,8 @@ iii_svc (UNIT *uptr)
      int       i, j, ch;
      float     ch_sz;
 
-     iii_cycle(10,0);
+     iii_cycle(10, 0);
+
      /* Extract X,Y,Bright and Size */
      sz = (uptr->POS & CSIZE) >> CSIZE_V;
      br = (uptr->POS & CBRT) >> CBRT_V;
@@ -399,7 +408,8 @@ iii_svc (UNIT *uptr)
      ny = oy = (oy ^ 02000) - 02000;
      ch_sz = scale[sz];
 
-     sim_debug(DEBUG_DETAIL, &iii_dev, "III: pos %d %d %d %d %o\n", ox, oy, br, sz, uptr->STATUS );
+     sim_debug(DEBUG_DETAIL, &iii_dev, "III: pos %d %d %d %d %o\n", ox, oy, br, sz,
+             uptr->STATUS );
      switch(iii_instr & 017) {
      case 000: /* JMP and HLT */
                if (iii_instr & 020) {
@@ -428,8 +438,8 @@ iii_svc (UNIT *uptr)
                    cy = (int)(6.0 * ch_sz);
                    lx = ox;
                    ly = oy + cy;
-     sim_debug(DEBUG_DETAIL, &iii_dev, "III: ch %d %d %o '%c' %o %o\n", lx, ly, ch,
-                    (ch < ' ')? '.' : ch, sz, br);
+                   sim_debug(DEBUG_DETAIL, &iii_dev, "III: ch %d %d %o '%c' %o %o\n",
+                             lx, ly, ch, (ch < ' ')? '.' : ch, sz, br);
                    if (ch == '\t' || ch == 0)
                       continue;
                    if (ch == '\r') {
@@ -450,7 +460,8 @@ iii_svc (UNIT *uptr)
                           cy = (int)((float)(v & 017) * ch_sz);
                           nx = ox + cx;
                           ny = oy + cy;
-         sim_debug(DEBUG_DATA, &iii_dev, "III: map %d %d %d %d %02x\n", lx, ly, nx, ny, v);
+                          sim_debug(DEBUG_DATA, &iii_dev, "III: map %d %d %d %d %02x\n",
+                                  lx, ly, nx, ny, v);
                           if (v & 0200)
                               draw_line(lx, ly, nx, ny, br, uptr);
                           lx = nx;
@@ -473,7 +484,8 @@ iii_svc (UNIT *uptr)
                nx = (nx ^ 040) - 040;
                ny = (ny ^ 040) - 040;
                /* Compute relative position. */
-     sim_debug(DEBUG_DETAIL, &iii_dev, "III: short %d %d %o %d\n", nx, ny, sz, br);
+               sim_debug(DEBUG_DETAIL, &iii_dev, "III: short %d %d %o %d\n",
+                          nx, ny, sz, br);
                nx += ox;
                ny += oy;
                if (nx < -512 || nx > 512 || ny < -512 || ny > 512)
@@ -494,13 +506,15 @@ iii_svc (UNIT *uptr)
                /* Sign extend */
                nx = (nx ^ 040) - 040;
                ny = (ny ^ 040) - 040;
-     sim_debug(DEBUG_DETAIL, &iii_dev, "III: short2 %d %d %o %d\n", nx, ny, sz, br);
+               sim_debug(DEBUG_DETAIL, &iii_dev, "III: short2 %d %d %o %d\n",
+                          nx, ny, sz, br);
                /* Compute relative position. */
                nx += ox;
                ny += oy;
                if (nx < -512 || nx > 512 || ny < -512 || ny > 512)
                    uptr->STATUS |= EDG_FBIT;
-               if ((iii_instr & 040) == 0 && (iii_sel & 04000) != 0) { /* Check if visible */
+               /* Check if visible */
+               if ((iii_instr & 040) == 0 && (iii_sel & 04000) != 0) {
                    if ((iii_instr & 020) == 0) { /* Draw a line */
                       draw_line(ox, oy, nx, ny, br, uptr);
                    } else {
@@ -537,14 +551,16 @@ iii_svc (UNIT *uptr)
                ny = (iii_instr >> 14) & 03777;
                nx = (nx ^ 02000) - 02000;
                ny = (ny ^ 02000) - 02000;
-     sim_debug(DEBUG_DETAIL, &iii_dev, "III: long %d %d %o %o\n", nx, ny, sz, br);
+               sim_debug(DEBUG_DETAIL, &iii_dev, "III: long %d %d %o %o\n",
+                         nx, ny, sz, br);
                if ((iii_instr & 0100) == 0) { /* Relative mode */
                    nx += ox;
                    ny += oy;
                    if (nx < -512 || nx > 512 || ny < -512 || ny > 512)
                        uptr->STATUS |= EDG_FBIT;
                }
-               if ((iii_instr & 040) == 0 && (iii_sel & 04000) != 0) { /* Check if visible */
+               /* Check if visible */
+               if ((iii_instr & 040) == 0 && (iii_sel & 04000) != 0) {
                    if ((iii_instr & 020) == 0) /* Draw a line */
                       draw_line(ox, oy, nx, ny, br, uptr);
                    else
@@ -596,7 +612,8 @@ iii_svc (UNIT *uptr)
 skip_up:
      if (uptr->STATUS & RUN_FLG) {
          iii_instr = M[uptr->MAR];
-         sim_debug(DEBUG_DETAIL, &iii_dev, "III: fetch %06o %012llo\n", uptr->MAR, iii_instr);
+         sim_debug(DEBUG_DETAIL, &iii_dev, "III: fetch %06o %012llo\n",
+                      uptr->MAR, iii_instr);
          uptr->MAR++;
          uptr->MAR &= RMASK;
          sim_activate(uptr, 50);
