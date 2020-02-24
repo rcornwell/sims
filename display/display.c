@@ -369,6 +369,7 @@ static long queue_interval;
 #define Y(P) (((P) - points) / xpixels)
 
 static int initialized = 0;
+static void *device = NULL;  /* Current display device. */
 
 /*
  * global set by O/S display level to indicate "light pen tip switch activated"
@@ -979,6 +980,7 @@ display_init(enum display_type type, int sf, void *dptr)
 
     initialized = 1;
     init_failed = 0;            /* hey, we made it! */
+    device = dptr;
     return 1;
 
  failed:
@@ -992,10 +994,14 @@ display_close(void *dptr)
     if (!initialized)
         return;
 
+    if (device != dptr)
+        return;
+
     free (points);
     ws_shutdown();
 
     initialized = 0;
+    device = NULL;
 }
 
 void
