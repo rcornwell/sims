@@ -286,9 +286,28 @@ UNIT dte_unit[] = {
     { UDATA (&dtertc_srv, UNIT_IDLE|UNIT_DIS, 0), 1000 }
     };
 
+REG  dte_reg[] = {
+    {BRDATA(IN, &dte_in, 16, 8, sizeof(dte_in)), REG_HRO},
+    {BRDATA(OUT, &dte_out, 16, 8, sizeof(dte_out)), REG_HRO},
+    {BRDATA(IN_PTR, &dte_in_ptr, 16, 32, 1), REG_HRO},
+    {BRDATA(IN_CMD, &dte_in_cmd, 16, 32, 1), REG_HRO},
+    {BRDATA(OUT_PTR, &dte_out_ptr, 16, 32, 1), REG_HRO},
+    {BRDATA(OUT_RES, &dte_out_res, 16, 32, 1), REG_HRO},
+    {BRDATA(BASE, &dte_base, 16, 32, 1), REG_HRO},
+    {BRDATA(OFF, &dte_off, 16, 32, 1), REG_HRO},
+    {BRDATA(DTOFF, &dte_dt10_off, 16, 32, 1), REG_HRO},
+    {BRDATA(ETOFF, &dte_et10_off, 16, 32, 1), REG_HRO},
+    {BRDATA(E1OFF, &dte_et11_off, 16, 32, 1), REG_HRO},
+    {BRDATA(PROC, &dte_proc_num, 16, 32, 1), REG_HRO},
+    {BRDATA(CTYIN, &cty_in, 16, 8, sizeof(cty_in)), REG_HRO},
+    {BRDATA(CTYOUT, &cty_out, 16, 8, sizeof(cty_out)), REG_HRO},
+    {BRDATA(DONE, &cty_done, 16, 8, 1), REG_HRO},
+    { 0 },
+    };
+
 
 DEVICE dte_dev = {
-    "CTY", dte_unit, NULL, dte_mod,
+    "CTY", dte_unit, dte_reg, dte_mod,
     4, 10, 31, 1, 8, 8,
     NULL, NULL, &dte_reset,
     NULL, NULL, NULL, &dte_dib, DEV_DEBUG, 0, dev_debug,
@@ -429,7 +448,10 @@ UNIT lp20_unit = {
     };
 
 REG lp20_reg[] = {
-    { BRDATA(BUFF, lp20_buffer, 16, 8, sizeof(lp20_buffer)), REG_HRO},
+   {BRDATA(BUFFER, &lp20_buffer, 16, 8, sizeof(lp20_buffer)), REG_HRO},
+   {BRDATA(VFU, &lp20_vfu, 16, 16, sizeof(lp20_vfu)), REG_HRO},
+   {BRDATA(RAM, &lp20_ram, 16, 16, sizeof(lp20_ram)), REG_HRO},
+   {BRDATA(QUEUE, &lp20_queue, 16, 8, sizeof(lp20_queue)), REG_HRO},
     { NULL }
 };
 
@@ -494,7 +516,12 @@ UNIT tty_unit[] = {
 
 REG tty_reg[] = {
     { DRDATA (TIME, tty_unit[0].wait, 24), REG_NZ + PV_LEFT },
-    { NULL }
+    { BRDATA (OUT, &tty_out, 8, 8, sizeof(tty_out)), REG_HRO },
+    { BRDATA (IN, &tty_in, 8, 8, sizeof(tty_in)), REG_HRO },
+    { BRDATA (CONN, &tty_connect, 8, 8, sizeof(tty_connect)), REG_HRO },
+    { BRDATA (DONE, &tty_done, 8, 8, sizeof(tty_done)), REG_HRO },
+    { ORDATA (EN, tty_enable, 1), REG_HRO },
+    { 0 }
     };
 
 MTAB tty_mod[] = {

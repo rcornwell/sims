@@ -574,7 +574,7 @@ DEBTAB              cpu_debug[] = {
 
 DEVICE cpu_dev = {
     "CPU", &cpu_unit[0], cpu_reg, cpu_mod,
-    1, 8, 22, 1, 8, 36,
+    1+ITS+KL, 8, 22, 1, 8, 36,
     &cpu_ex, &cpu_dep, &cpu_reset,
     NULL, NULL, NULL, NULL, DEV_DEBUG, 0, cpu_debug,
     NULL, NULL, &cpu_help, NULL, NULL, &cpu_description
