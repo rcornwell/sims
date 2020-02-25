@@ -230,7 +230,7 @@ REG                 tua_reg[] = {
     {ORDATA(CDA, tu_rh[0].cda, 18)},
     {ORDATA(DEVNUM, tu_rh[0].devnum, 9), REG_HRO},
     {ORDATA(BUF, tu_rh[0].buf, 36), REG_HRO},
-    {BRDATA(BUFF, &tu_buf[0][0], 16, 64, TU_NUMFR), REG_HRO},
+    {BRDATA(BUFF, &tu_buf[0][0], 16, 8, TU_NUMFR), REG_HRO},
     {0}
 };
 
