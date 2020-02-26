@@ -2429,24 +2429,20 @@ t_stat tty_detach (UNIT *uptr)
 {
   int32  i;
   t_stat reason;
+sim_cancel (uptr);
 reason = tmxr_detach (&tty_desc, uptr);
 for (i = 0; i < tty_desc.lines; i++)
     tty_ldsc[i].rcve = 0;
-sim_cancel (uptr);
 return reason;
 }
 
 t_stat tty_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-fprintf (st, "DC10E Terminal Interfaces\n\n");
-fprintf (st, "The DC10 supported up to 8 blocks of 8 lines. Modem control was on a seperate\n");
-fprintf (st, "line. The simulator supports this by setting modem control to a fixed offset\n");
-fprintf (st, "from the given line. The number of lines is specified with a SET command:\n\n");
-fprintf (st, "   sim> SET DC LINES=n          set number of additional lines to n [8-32]\n\n");
+fprintf (st, "FE Terminal Interfaces\n\n");
+fprintf (st, "The FE terminal could support up to 256 lines, in groups of 16\n");
+fprintf (st, "lines. The number of lines is specified with a SET command:\n\n");
+fprintf (st, "   sim> SET TTY LINES=n          set number of additional lines to n [8-32]\n\n");
 fprintf (st, "Lines must be set in multiples of 8.\n");
-fprintf (st, "The default offset for modem lines is 32. This can be changed with\n\n");
-fprintf (st, "   sim> SET DC MODEM=n          set offset for modem control to n [8-32]\n\n");
-fprintf (st, "Modem control must be set larger then the number of lines\n");
 fprintf (st, "The ATTACH command specifies the port to be used:\n\n");
 tmxr_attach_help (st, dptr, uptr, flag, cptr);
 fprintf (st, "The additional terminals can be set to one of four modes: UC, 7P, 7B, or 8B.\n\n");
@@ -2459,28 +2455,28 @@ fprintf (st, "                                non-printing characters suppressed
 fprintf (st, "  7B    high-order bit cleared  high-order bit cleared\n");
 fprintf (st, "  8B    no changes              no changes\n\n");
 fprintf (st, "The default mode is 7P.\n");
-fprintf (st, "Finally, each line supports output logging.  The SET DCn LOG command enables\n");
+fprintf (st, "Finally, each line supports output logging.  The SET TTYn LOG command enables\n");
 fprintf (st, "logging on a line:\n\n");
-fprintf (st, "   sim> SET DCn LOG=filename   log output of line n to filename\n\n");
-fprintf (st, "The SET DCn NOLOG command disables logging and closes the open log file,\n");
+fprintf (st, "   sim> SET TTYn LOG=filename   log output of line n to filename\n\n");
+fprintf (st, "The SET TTYn NOLOG command disables logging and closes the open log file,\n");
 fprintf (st, "if any.\n\n");
-fprintf (st, "Once DC is attached and the simulator is running, the terminals listen for\n");
+fprintf (st, "Once TTY is attached and the simulator is running, the terminals listen for\n");
 fprintf (st, "connections on the specified port.  They assume that the incoming connections\n");
 fprintf (st, "are Telnet connections.  The connections remain open until disconnected either\n");
-fprintf (st, "by the Telnet client, a SET DC DISCONNECT command, or a DETACH DC command.\n\n");
+fprintf (st, "by the Telnet client, a SET TTY DISCONNECT command, or a DETACH TTY command.\n\n");
 fprintf (st, "Other special commands:\n\n");
-fprintf (st, "   sim> SHOW DC CONNECTIONS    show current connections\n");
-fprintf (st, "   sim> SHOW DC STATISTICS     show statistics for active connections\n");
-fprintf (st, "   sim> SET DCn DISCONNECT     disconnects the specified line.\n");
+fprintf (st, "   sim> SHOW TTY CONNECTIONS    show current connections\n");
+fprintf (st, "   sim> SHOW TTY STATISTICS     show statistics for active connections\n");
+fprintf (st, "   sim> SET TTYn DISCONNECT     disconnects the specified line.\n");
 fprint_reg_help (st, &tty_dev);
 fprintf (st, "\nThe additional terminals do not support save and restore.  All open connections\n");
-fprintf (st, "are lost when the simulator shuts down or DC is detached.\n");
+fprintf (st, "are lost when the simulator shuts down or TTY is detached.\n");
 return SCPE_OK;
 }
 
 const char *tty_description (DEVICE *dptr)
 {
-return "DC10E asynchronous line interface";
+return "FE asynchronous line interface";
 }
 
 #endif

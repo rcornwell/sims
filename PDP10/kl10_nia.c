@@ -1646,6 +1646,8 @@ t_stat nia_detach(UNIT* uptr)
 {
 
     if (uptr->flags & UNIT_ATT) {
+        sim_cancel(&nia_unit[1]);
+        sim_cancel(&nia_unit[2]);
         eth_close (&nia_data.etherface);
         free(uptr->filename);
         uptr->filename = NULL;

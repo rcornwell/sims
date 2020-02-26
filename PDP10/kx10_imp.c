@@ -2772,12 +2772,12 @@ t_stat imp_detach(UNIT* uptr)
         if (uptr->flags & UNIT_DHCP) {
           imp_dhcp_release(&imp_data);
         }
+        sim_cancel (uptr+1);                /* stop the packet timing services */
+        sim_cancel (uptr+2);                /* stop the clock timer services */
         eth_close (&imp_data.etherface);
         free(uptr->filename);
         uptr->filename = NULL;
         uptr->flags &= ~UNIT_ATT;
-        sim_cancel (uptr+1);                /* stop the packet timing services */
-        sim_cancel (uptr+2);                /* stop the clock timer services */
     }
     return SCPE_OK;
 }
