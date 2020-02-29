@@ -2,6 +2,9 @@
 
    Copyright (c) 2017 Richard Cornwell
 
+   Based on PDP18B/pdp18b_dt.c by:
+   Copyright (c) 1993-2017, Robert M Supnik
+
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
    to deal in the Software without restriction, including without limitation
@@ -18,6 +21,10 @@
    RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+   Except as contained in this notice, the name of Robert M Supnik shall not be
+   used in advertising or otherwise to promote the sale, use or other dealings
+   in this Software without prior written authorization from Robert M Supnik.
 
    Except as contained in this notice, the name of Richard Cornwell shall not be
    used in advertising or otherwise to promote the sale, use or other dealings
