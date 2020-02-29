@@ -246,22 +246,23 @@ UNIT                cpu_unit =
 
 REG                 cpu_reg[] = {
     {DRDATAD(IC, IC, 32, "Instruction register")},
-    {"A", &AC, 8, 8, 0, 256, "A Register", NULL, REG_VMIO|REG_CIRC, 0, },
-    {"ASU1", &AC[256], 8, 8, 256, 16, "ASU1 Register", NULL, REG_VMIO|REG_CIRC, 0},
-    {"ASU2", &AC[256], 8, 8, 256, 16, "ASU2 Register", NULL, REG_VMIO|REG_CIRC, 0},
-    {"ASU3", &AC[256], 8, 8, 256, 16, "ASU3 Register", NULL, REG_VMIO|REG_CIRC, 0},
-    {"ASU4", &AC[256], 8, 8, 256, 16, "ASU4 Register", NULL, REG_VMIO|REG_CIRC, 0},
-    {"ASU5", &AC[256], 8, 8, 256, 16, "ASU5 Register", NULL, REG_VMIO|REG_CIRC, 0},
-    {"ASU6", &AC[256], 8, 8, 256, 16, "ASU6 Register", NULL, REG_VMIO|REG_CIRC, 0},
-    {"ASU7", &AC[256], 8, 8, 256, 16, "ASU7 Register", NULL, REG_VMIO|REG_CIRC, 0},
-    {"ASU8", &AC[256], 8, 8, 256, 16, "ASU8 Register", NULL, REG_VMIO|REG_CIRC, 0},
-    {"ASU9", &AC[256], 8, 8, 256, 16, "ASU9 Register", NULL, REG_VMIO|REG_CIRC, 0},
-    {"ASU10", &AC[256], 8, 8, 256, 16, "ASU10 Register", NULL, REG_VMIO|REG_CIRC, 0},
-    {"ASU11", &AC[256], 8, 8, 256, 16, "ASU11 Register", NULL, REG_VMIO|REG_CIRC, 0},
-    {"ASU12", &AC[256], 8, 8, 256, 16, "ASU12 Register", NULL, REG_VMIO|REG_CIRC, 0},
-    {"ASU13", &AC[256], 8, 8, 256, 16, "ASU13 Register", NULL, REG_VMIO|REG_CIRC, 0},
-    {"ASU14", &AC[256], 8, 8, 256, 16, "ASU14 Register", NULL, REG_VMIO|REG_CIRC, 0},
-    {"ASU15", &AC[256], 8, 8, 256, 32, "ASU15 Register", NULL, REG_VMIO|REG_CIRC, 0},
+    {BRDATAD(A, &AC, 8, 8, 256, "A Register"), REG_VMIO|REG_CIRC },
+    {BRDATAD(B, &AC[256], 8, 8, 256, "B Register"), REG_VMIO|REG_CIRC },
+    {BRDATAD(ASU1,  &AC[256], 8, 8, 16, "ASU1 Register"), REG_VMIO|REG_CIRC},
+    {BRDATAD(ASU2,  &AC[272], 8, 8, 16, "ASU2 Register"), REG_VMIO|REG_CIRC},
+    {BRDATAD(ASU3,  &AC[288], 8, 8, 16, "ASU3 Register"), REG_VMIO|REG_CIRC},
+    {BRDATAD(ASU4,  &AC[304], 8, 8, 16, "ASU4 Register"), REG_VMIO|REG_CIRC},
+    {BRDATAD(ASU5,  &AC[320], 8, 8, 16, "ASU5 Register"), REG_VMIO|REG_CIRC},
+    {BRDATAD(ASU6,  &AC[336], 8, 8, 16, "ASU6 Register"), REG_VMIO|REG_CIRC},
+    {BRDATAD(ASU7,  &AC[352], 8, 8, 16, "ASU7 Register"), REG_VMIO|REG_CIRC},
+    {BRDATAD(ASU8,  &AC[368], 8, 8, 16, "ASU8 Register"), REG_VMIO|REG_CIRC},
+    {BRDATAD(ASU9,  &AC[384], 8, 8, 16, "ASU9 Register"), REG_VMIO|REG_CIRC},
+    {BRDATAD(ASU10, &AC[400], 8, 8, 16, "ASU10 Register"), REG_VMIO|REG_CIRC},
+    {BRDATAD(ASU11, &AC[416], 8, 8, 16, "ASU11 Register"), REG_VMIO|REG_CIRC},
+    {BRDATAD(ASU12, &AC[432], 8, 8, 16, "ASU12 Register"), REG_VMIO|REG_CIRC},
+    {BRDATAD(ASU13, &AC[448], 8, 8, 16, "ASU13 Register"), REG_VMIO|REG_CIRC},
+    {BRDATAD(ASU14, &AC[464], 8, 8, 16, "ASU14 Register"), REG_VMIO|REG_CIRC},
+    {BRDATAD(ASU15, &AC[480], 8, 8, 32, "ASU15 Register"), REG_VMIO|REG_CIRC},
     {BRDATA(SW, &SW, 2, 6, 1), REG_FIT},
     {FLDATA(SW911, SW, 0), REG_FIT},
     {FLDATA(SW912, SW, 1), REG_FIT},
@@ -3194,7 +3195,8 @@ cpu_reset(DEVICE * dptr)
            next_half[i+512] = 512 + h;
         }
         cpu_reg[1].depth = 512;
-        cpu_reg[2].offset = 512;
+        cpu_reg[1].offset = 0;
+        cpu_reg[2].offset = 0;
         cpu_reg[2].depth = 512;
         cpu_reg[2].loc = &AC[512];
      } else {
@@ -3218,12 +3220,14 @@ cpu_reset(DEVICE * dptr)
            prev_addr[i+1280] = 1280 + p;
            next_half[i+1280] = 1280 + h;
         }
-        cpu_reg[1].depth = 256;
-        cpu_reg[2].offset = 256;
-        for(i = 0; i < 15; i++) {
-            cpu_reg[i+2].loc = &AC[256 + 16*i];
-            cpu_reg[i+2].depth = 256;
-        }
+        cpu_reg[1].depth = 256;   /* A register */
+        cpu_reg[1].offset = 0;
+        cpu_reg[2].depth = 256;   /* B register */
+        cpu_reg[2].offset = 0;
+        cpu_reg[2].loc = &AC[256];
+        /* Set up ASU locations */
+        for(i = 0; i < 15; i++)
+            cpu_reg[i+3].loc = &AC[256 + 16*i];
     }
 
     /* Clear io error flags */
