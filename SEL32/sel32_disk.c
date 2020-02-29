@@ -813,7 +813,16 @@ t_stat disk_srv(UNIT *uptr)
                 sim_activate(uptr, 20);
                 break;
             } else {
-                /* we have wasted enough time, we there */
+                /* we have wasted enough time, we are there */
+#ifndef DO_SEEK_AGAIN
+        /* calculate file position in bytes of requested sector */
+        /* file offset in bytes */
+        tstart = STAR2SEC(uptr->STAR, SPT(type), SPC(type)) * SSB(type);
+        /* just reseek to the location where we will r/w data */
+        if ((sim_fseek(uptr->fileref, tstart, SEEK_SET)) != 0) {  /* do seek */
+            sim_debug(DEBUG_DETAIL, dptr, "disk_srv Error on seek to %04x\n", tstart);
+        }
+#endif
                 uptr->CHS = uptr->STAR;         /* we are there */
                 sim_activate(uptr, 10);
                 break;
@@ -1027,7 +1036,7 @@ rezero:
             uptr->CHS = disksec2star(tstart, type);
             /* see of over end of disk */
 //          if (tstart >= CAPB(type)) {
-            if (tstart >= CAP(type)) {
+            if (tstart >= (uint32)CAP(type)) {
                 /* EOM reached, abort */
                 sim_debug(DEBUG_CMD, dptr,
                     "DISK Read reached EOM for read from disk @ /%04x/%02x/%02x\n",
@@ -1108,7 +1117,7 @@ rddone:
             uptr->CHS = disksec2star(tstart, type);
             /* see if over end of disk */
 //          if (tstart >= CAPB(type)) {
-            if (tstart >= CAP(type)) {
+            if (tstart >= (uint32)CAP(type)) {
                 /* EOM reached, abort */
                 sim_debug(DEBUG_CMD, dptr,
                     "DISK Write reached EOM for write to disk @ /%04x/%02x/%02x\n",
@@ -1138,10 +1147,15 @@ wrdone:
         /* reserves the last cylinder, SEL diags reserve the next two, so the */
         /* addr is CYL-4/HDS-1/0 and is VDT.  The UTX/MPX media table is on */
         /* previous track, so MDT = VDT-SPT is CYL-4/HDS-2/0 */
-        /* The UTX flaw map is at FMAP = MDT-SPT CYL-4/HDS-3/0 */
-        /* UTX media map is 1 track lower at UTXMM=FMAP-SPT CYL-4/HDS-4/0 */
-        /* The UTX med map is pointed to by sector label 1 */
-        /* simulate pointers here, set wd[3] in label to VDT */
+        /* The UTX flaw map is at DMAP = MDT-SPT CYL-4/HDS-3/0 */
+        /* UTX media map is 1 track lower at UMAP=DMAP-SPT CYL-4/HDS-4/0 */
+        /* The UTX media map is pointed to by sector label 1 */
+        /* simulate pointers here, set wd[3] in label to UMAP */
+
+        /* VDT  249264 (819/18/0) 0x3cdb0 for 9346 - 823/19/16 */ 
+        /* MDT  249248 (819/17/0) 0x3cda0 for 9346 - 823/19/16 */ 
+        /* DMAP 249232 (819/16/0) 0x3cd90 for 9346 - 823/19/16 */ 
+        /* UMAP 249216 (819/15/0) 0x3cd80 for 9346 - 823/19/16 */ 
 
         sim_debug(DEBUG_CMD, dptr, "disk_startcmd RSL STAR %08x disk geom %08x\n",
             uptr->CHS, GEOM(type));
@@ -1159,9 +1173,12 @@ wrdone:
             unit, buf[0], buf[1], buf[2], buf[3]);
 
         /* get sector address of UTX media descriptor */
-        /* 819/7/0 is right for 8887, 819/16/0 for 9346  */
+        /* 819/6/0 is right for 8887, 819/15/0 for 9346  */
+        /* UMAP 249216 (819/15/0) 0x3cd80 for 9346 - 823/19/16 */ 
         tstart = ((CYL(type)-4) * SPC(type)) +
-            ((HDS(type)-2) * SPT(type)) - SPT(type);
+            ((HDS(type)-4) * SPT(type)) - SPT(type);
+//WAS   tstart = ((CYL(type)-4) * SPC(type)) +
+//WAS       ((HDS(type)-2) * SPT(type)) - SPT(type);
 
         sim_debug(DEBUG_CMD, dptr,
             "disk_srv SL1 RSL sector %d %x star %02x %02x %02x %02x\n",
@@ -1171,7 +1188,8 @@ wrdone:
         /* on HSDP UMAP is in wd 4 on label 1 */
         /* on UDP & DPII DMAP is in wd 3 on label 0 */
         /* on UDP & DPII UMAP is in wd 4 on label 0 */
-//      tstart = 0x3cd90;                       /* 819/16/0 physical 249232 */
+//WAS   tstart = 0x3cd90;                       /* 819/16/0 physical 249232 */
+        /* UMAP 249216 (819/15/0) 0x3cd80 for 9346 - 823/19/16 */ 
         /* the address must be physical for UDP */
         /* store into sec 1 label */
         buf[16] = (tstart >> 24) & 0xff;        /* UMAP pointer */
@@ -1255,13 +1273,16 @@ wrdone:
         /* reserves the last cylinder, SEL diags reserve the next two, so the */
         /* addr is CYL-4/HDS-1/0 and is VDT.  The UTX/MPX media table is on */
         /* previous track, so MDT = VDT-SPT is CYL-4/HDS-2/0 */
-        /* The UTX flaw map is at FMAP = MDT-SPT CYL-4/HDS-3/0 */
-        /* UTX media map is 1 track lower at UTXMM=FMAP-SPT CYL-4/HDS-4/0 */
+        /* The UTX flaw map is at DMAP = MDT-SPT CYL-4/HDS-3/0 */
+        /* UTX media map is 1 track lower at UMAP=FMAP-SPT CYL-4/HDS-4/0 */
         /* The UTX media map is pointed to by sector label 1 */
         /* simulate pointers here, set wd[3] in label to VDT */
 
         /* get sector address of media defect table */
-        /* 249264 (819/17/0) 0x3cda0 for 9346 - 823/19/16 */ 
+        /* VDT  249264 (819/18/0) 0x3cdb0 for 9346 - 823/19/16 */ 
+        /* MDT  249248 (819/17/0) 0x3cda0 for 9346 - 823/19/16 */ 
+        /* DMAP 249232 (819/16/0) 0x3cd90 for 9346 - 823/19/16 */ 
+        /* UMAP 249216 (819/15/0) 0x3cd80 for 9346 - 823/19/16 */ 
         tstart = (CYL(type)-4) * SPC(type) + (HDS(type)-2) * SPT(type);
 
         cyl = disk_type[type].cyl-1;            /* last cyl */
@@ -1283,18 +1304,17 @@ wrdone:
             buf[15] = (tstart) & 0xff;
         }
 
-#ifndef NOTNOW
         /* get sector address of umap table */
-        /* 249232 (819/16/0) 0x3cd90 for 9346 - 823/19/16 */ 
-        tstart -= SPT(type);                    /* calc utxfmap address */
+        /* UMAP 249216 (819/15/0) 0x3cd80 for 9346 - 823/19/16 */ 
+//WAS   tstart -= SPT(type);                    /* calc umap address */
+        tstart -= (2*SPT(type));                /* calc umap address */
         /* the address must be physical for UDP */
-        if (uptr->CHS == 0) {                   /* only write dmap address on trk 0 */
+        if (uptr->CHS == 0) {                   /* only write umap address on trk 0 */
             buf[16] = (tstart >> 24) & 0xff;    /* ldeallp UMAP */
             buf[17] = (tstart >> 16) & 0xff;
             buf[18] = (tstart >> 8) & 0xff;
             buf[19] = (tstart) & 0xff;
         }
-#endif
 
         /* the tech doc shows the cyl/trk/sec data is in the first 4 bytes */
         /* of the track label, BUT it is really in the configuration data */
@@ -1369,7 +1389,7 @@ int disk_format(UNIT *uptr) {
     uint32      tsize = disk_type[type].spt;            /* get track size in sectors */
     uint32      csize = disk_type[type].nhds * tsize;   /* get cylinder size in sectors */
     uint32      cyl = disk_type[type].cyl;              /* get # cylinders */
-    uint32      spc = disk_type[type].nhds * disk_type[type].spt;   /* sectors/cyl */
+//  uint32      spc = disk_type[type].nhds * disk_type[type].spt;   /* sectors/cyl */
     uint32      cap = disk_type[type].cyl * csize;      /* disk capacity in sectors */
     uint32      cylv = cyl;                             /* number of cylinders */
     uint8       *buff;
@@ -1384,7 +1404,10 @@ int disk_format(UNIT *uptr) {
     int32       daddr = vaddr - SPT(type);
                 /* get sector address of utx flaw map sec 1 pointer */
                 /* use this address for sec 1 label pointer */
-    int32       uaddr = daddr - SPT(type);
+//WASint32       uaddr = daddr - SPT(type);
+    int32       uaddr = daddr - (2*SPT(type));
+                /* last block available */
+    int32       luaddr = (CYL(type)-4) * SPC(type);
 #ifdef MAYBE
                 /* get sector address of utx flaw data (1 track long) */
                 /* set trace data to zero */
@@ -1404,15 +1427,19 @@ int disk_format(UNIT *uptr) {
                 };
 #else
                 {
+                    0x4e554d50,(cap-1),luaddr-1,0,0,0,0,0xe10,
+                    0,0x5320,0,0x4e60,0x46,luaddr,0,0xd360,
+                    0x88,0x186b0,0x13a,0xd100,0x283,0,0,0,
+                    0,0x22c2813e,0,0x06020000,0xf4,0,0x431b1c,0,
                     /* try to makeup a utx dmap */
 //                  0xf003d14f,0x8a03cda0,0x9a03cdbf,0x8903cdc0,
 //                  0x9903d01f,0x8c03d020,0x9c03d14f,0xf4000000,
-                    0xf0000000 | (cap-1), 0x8a000000 | daddr,
-                        0x9a000000 | (daddr + ((2 * tsize) - 1)),
-                        0x89000000 | (daddr + (2 * tsize)),
-                        0x99000000 | ((cap-1)-spc),
-                        0x8c000000 | (cap-spc),
-                        0x9c000000 | (cap-1), 0xf4000000,
+///                 0xf0000000 | (cap-1), 0x8a000000 | daddr,
+///                     0x9a000000 | (daddr + ((2 * tsize) - 1)),
+///                     0x89000000 | (daddr + (2 * tsize)),
+///                     0x99000000 | ((cap-1)-spc),
+///                     0x8c000000 | (cap-spc),
+///                     0x9c000000 | (cap-1), 0xf4000000,
                 };
 #endif
                 /*            250191     249248      250191     0   */
@@ -1510,7 +1537,7 @@ int disk_format(UNIT *uptr) {
     /* vaddr is (cap) - 3 cyl - 1 track */
 
     /* seek to vendor label area */
-    sim_fseek(uptr->fileref, (vaddr)*ssize, SEEK_SET);  /* seek UMAP */
+    sim_fseek(uptr->fileref, (vaddr)*ssize, SEEK_SET);  /* seek VMAP */
     if ((sim_fwrite((char *)&vmap, sizeof(uint32), 2, uptr->fileref)) != 2) {
         sim_debug(DEBUG_CMD, dptr,
         "Error on vendor map write to diskfile sect %06x\n", vaddr * ssize);
@@ -1526,18 +1553,16 @@ int disk_format(UNIT *uptr) {
         "Error on dmap write to diskfile sect %06x\n", daddr * ssize);
     }
 
-#ifndef MAYBE
     sim_fseek(uptr->fileref, (uaddr)*ssize, SEEK_SET);   /* seek UMAP */
     if ((sim_fwrite((char *)&umap, sizeof(uint32), 256, uptr->fileref)) != 256) {
         sim_debug(DEBUG_CMD, dptr,
         "Error on umap write to diskfile sect %06x\n", uaddr * ssize);
     }
-#endif
 
-    printf("writing to vmap sec %x bytes %x\n",
-        vaddr, (vaddr)*ssize);
-    printf("writing zeros to umap sec %x bytes %x\n",
-        uaddr, (uaddr)*ssize);
+    printf("writing to vmap sec %x (%d) bytes %x (%d)\n",
+        vaddr, vaddr, (vaddr)*ssize, (vaddr)*ssize);
+    printf("writing to umap sec %x (%d) bytes %x (%d)\n",
+        uaddr, uaddr, (uaddr)*ssize, (uaddr)*ssize);
     printf("writing dmap to %x %d %x %d dmap to %x %d %x %d\n",
        cap-1, cap-1, (cap-1)*ssize, (cap-1)*ssize,
        daddr, daddr, daddr*ssize, daddr*ssize);

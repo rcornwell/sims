@@ -1424,6 +1424,11 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot, uint32 access)
                 else
                 if (access == MEM_WR)
                     TRAPSTATUS |= BIT2;             /* set bit 2 of trap status */
+                /* returning this error fails test 34/2 of mmm diag */
+/*NEW*///       return MAPFLT;                      /* map fault error on memory access */
+/*NEW*///       return MACHINECHK_TRAP;             /* diags want machine check error */
+                /* returning this error fixes 34/2, but still fails 46/2 */
+                return NPMEM;                       /* none present memory error */
             } else
                 TRAPSTATUS |= BIT28;                /* set bit 28 of trap status */
             return NPMEM;                           /* none present memory error */
@@ -1488,6 +1493,10 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot, uint32 access)
             // 32/97 wants MAPFLT for test 37/1 in CN.MMM
             TRAPSTATUS |= BIT12;                /* set bit 12 of trap status */
             return MAPFLT;                      /* no, map fault error */
+/*TRY*///   return NPMEM;                       /* no, none present memory error */
+/*TRY*///   return MACHINECHK_TRAP;             /* diags want machine check error */
+/*TRY*///   return SYSTEMCHK_TRAP;              /* diags want machine check error */
+/*TRY*///   return PRIVVIOL_TRAP;               /* set the trap to take */
 //          if (access == MEM_RD)
 //              TRAPSTATUS |= BIT1;             /* set bit 1 of trap status */
 //          else

@@ -160,7 +160,8 @@ void rtc_setup(uint32 ss, uint32 level)
 t_stat rtc_reset(DEVICE *dptr)
 {
     rtc_pie = 0;                                    /* disable pulse */
-    rtc_unit.wait = sim_rtcn_init_unit(&rtc_unit, rtc_unit.wait, TMR_RTC); /* initialize clock calibration */
+    /* initialize clock calibration */
+    rtc_unit.wait = sim_rtcn_init_unit(&rtc_unit, rtc_unit.wait, TMR_RTC);
     sim_activate (&rtc_unit, rtc_unit.wait);        /* activate unit */
     return SCPE_OK;
 }

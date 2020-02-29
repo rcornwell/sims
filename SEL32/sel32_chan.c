@@ -1426,6 +1426,7 @@ t_stat haltxio(uint16 lchsa, uint32 *status) {       /* halt XIO */
     }
 
     chp->chan_byte = BUFF_CHNEND;                   /* thats all the data we want */
+#ifndef TRY_THIS_02282020
     /* see if we have a haltio device entry */
     if (dibp->halt_io != NULL) {                    /* NULL if no haltio function */
         /* call the device controller to get halt_io status */
@@ -1453,7 +1454,9 @@ t_stat haltxio(uint16 lchsa, uint32 *status) {       /* halt XIO */
             chp->ccw_count = 0;                     /* force zero count */
             dev_status[chsa] = 0;                   /* no device status */
 
-            if (CPU_MODEL >= MODEL_V6) {
+#ifndef TRY_02282020
+//WAS0229   if (CPU_MODEL >= MODEL_V6) {
+            if (CPU_MODEL >= MODEL_27) {
                 /* UTX wants the status posted now, MPX wants interrupt */
 
                 /* the channel is not busy, see if any status to post */
@@ -1474,25 +1477,29 @@ t_stat haltxio(uint16 lchsa, uint32 *status) {       /* halt XIO */
                         "haltxio 1 FIFO status stored OK, sw1 %08x sw2 %08x\n", sw1, sw2);
                     irq_pend = 1;                   /* still pending int */
                     // UTX likes this return and does not panic */
-                    // The diag's want an interrupt generated, so want 
-                    *status = CC2BIT;               /* status stored from SIO, so CC2 */
+                    // The diag's want an interrupt generated, so wait 
+                    *status = CC2BIT;               /* status stored from HIO, so CC2 */
+                    /* if 0 returned, UTX hans on input */
                     goto hioret;                    /* CC2 and OK */
                 }
                 /* nothing going on, so say all OK */
                 *status = CC1BIT;                   /* request accepted, no status, so CC1 */
+//TRYIED        *status = 0;                        /* CCs = 0, accepted */
                 goto hioret;                        /* CC2 and OK */
-            } else {
+            } else 
+#endif
+            {
                 sim_debug(DEBUG_IRQ, &cpu_dev,
                     "haltxio FIFO 2 status stored OK, sw1 %08x sw2 %08x\n", sw1, sw2);
                 irq_pend = 1;                       /* still pending int */
-//TUE           *status = 0;                        /* request accepted, no status, so CC1 */
-/*TUE*/         *status = CC1BIT;                   /* request accepted, no status, so CC1 */
+/*LAST*/        *status = CC1BIT;                   /* request accepted, no status, so CC1 */
+//TRIED         *status = CC2BIT;                   /* sub channel status posted, CC2BIT */
                 goto hioret;                        /* CC2 and OK */
             }
         } else {
             /* we have completed the I/O without error */
             /* the channel is not busy, so return OK */
-            *status = 0;                            /* CCs = 0, accepted */
+//WAS       *status = 0;                            /* CCs = 0, accepted */
             sim_debug(DEBUG_CMD, &cpu_dev,
                 "$$$ HALTIO good return chsa %04x chan %04x cmd %02x flags %04x status %04x\n",
                 chsa, chan, chp->ccw_cmd, chp->ccw_flags, *status);
@@ -1500,24 +1507,28 @@ t_stat haltxio(uint16 lchsa, uint32 *status) {       /* halt XIO */
             goto hioret;                            /* just return */
         }
     }
+#endif /*TRY_THIS_02282020*/
     /* device does not have a HIO entry, so terminate the I/O */
     /* check for a Command or data chain operation in progresss */
     if (chp->ccw_cmd != 0 || (chp->ccw_flags & (FLAG_DC|FLAG_CC)) != 0) {
         sim_debug(DEBUG_XIO, &cpu_dev, "haltxio busy return CC4 chsa %04x chan %04x\n", chsa, chan);
         /* reset the DC or CC bits to force completion after current IOCD */
         chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);       /* reset chaining bits */
-        dev_status[chsa] |= STATUS_ECHO;            /* show we stopped the cmd */
+//CHG   dev_status[chsa] |= STATUS_ECHO;            /* show we stopped the cmd */
+/*ADD*/ chp->ccw_count = 0;                         /* clear remaining count */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* show I/O complete */
+/*ADD*/ chp->chan_status &= ~STATUS_LENGTH;         /* remove SLI status bit */
         store_csw(chp);                             /* store the status in the inch status dw */
         chp->chan_status &= ~STATUS_PCI;            /* remove PCI status bit */
         dev_status[chsa] = 0;                       /* no device status */
         irq_pend = 1;                               /* still pending int */
         *status = CC2BIT;                           /* sub channel status posted, CC2BIT */
+//TRY   *status = CC1BIT;                           /* request accepted, no status, so CC1 */
         goto hioret;                                /* just return */
     }
     /* the channel is not busy, so return OK */
     *status = CC1BIT;                               /* request accepted, no status, so CC1 */
-    goto hioret;                                    /* just busy CC4 */
+    goto hioret;                                    /* just return */
 
 hioret:
     sim_debug(DEBUG_CMD, &cpu_dev, "$$$ HIO END chsa %04x chan %04x cmd %02x flags %04x status %04x\n",

@@ -6,7 +6,7 @@
  * MPX 3.x master SDT.  For user SDT tapes or MPX 1.X master SDT tapes
  * leave the #define FMGRTAPE uncommented so it will be defined.  The
  * program will stop on two EOFs.  For non MPX tapes, the 2nd EOF means
- * EOT. Some tapes have only one EOT and will termonate on EOT detected.
+ * EOT. Some tapes have only one EOT and will terminate on EOT detected.
  * Leave off the output file name to just scan the tape and output record
  * sizes and counts.
  */
