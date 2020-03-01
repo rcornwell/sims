@@ -325,7 +325,7 @@ t_stat imx_show_channel (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
         } else
           negate = "";
 
-        fprintf (st, "%sCHANNEL=%d;JOY%d;AXIS%d%s", comma, chan, i, j, negate);
+        fprintf (st, "%sCHANNEL=%o;JOY%d;AXIS%d%s", comma, chan, i, j, negate);
         comma = ", ";
         nothing = 0;
       }
