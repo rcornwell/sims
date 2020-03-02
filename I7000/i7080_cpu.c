@@ -246,8 +246,9 @@ UNIT                cpu_unit =
 
 REG                 cpu_reg[] = {
     {DRDATAD(IC, IC, 32, "Instruction register")},
-    {BRDATAD(A, &AC, 8, 8, 256, "A Register"), REG_VMIO|REG_CIRC },
-    {BRDATAD(B, &AC[256], 8, 8, 256, "B Register"), REG_VMIO|REG_CIRC },
+    {BRDATAD(ADATA,      &AC, 8, 8, sizeof(AC), "All Possible Register Data"), REG_HRO },
+    {BRDATAD(A,       &AC[0], 8, 8, 256, "A Register"), REG_VMIO|REG_CIRC },
+    {BRDATAD(B,     &AC[256], 8, 8, 256, "B Register"), REG_VMIO|REG_CIRC },
     {BRDATAD(ASU1,  &AC[256], 8, 8, 16, "ASU1 Register"), REG_VMIO|REG_CIRC},
     {BRDATAD(ASU2,  &AC[272], 8, 8, 16, "ASU2 Register"), REG_VMIO|REG_CIRC},
     {BRDATAD(ASU3,  &AC[288], 8, 8, 16, "ASU3 Register"), REG_VMIO|REG_CIRC},
@@ -3175,6 +3176,7 @@ cpu_reset(DEVICE * dptr)
     int                 i;
     int                 n,p,h;
     static int          initialized;
+    REG                 *reg;
 
     if (initialized == 0) {
         initialized = 1;
@@ -3194,11 +3196,13 @@ cpu_reset(DEVICE * dptr)
            prev_addr[i+512] = 512 + p;
            next_half[i+512] = 512 + h;
         }
-        cpu_reg[1].depth = 512;
-        cpu_reg[1].offset = 0;
-        cpu_reg[2].offset = 0;
-        cpu_reg[2].depth = 512;
-        cpu_reg[2].loc = &AC[512];
+        reg = find_reg("A", NULL, dptr);
+        reg->depth = 512;
+        reg->offset = 0;
+        reg = find_reg("B", NULL, dptr);
+        reg->offset = 0;
+        reg->depth = 512;
+        reg->loc = &AC[512];
      } else {
         for(i = 0; i < 256; i++) {
            n = next_addr[i] = (i + 1) & 0377;           /* A */
@@ -3220,14 +3224,17 @@ cpu_reset(DEVICE * dptr)
            prev_addr[i+1280] = 1280 + p;
            next_half[i+1280] = 1280 + h;
         }
-        cpu_reg[1].depth = 256;   /* A register */
-        cpu_reg[1].offset = 0;
-        cpu_reg[2].depth = 256;   /* B register */
-        cpu_reg[2].offset = 0;
-        cpu_reg[2].loc = &AC[256];
+        reg = find_reg("A", NULL, dptr);
+        reg->depth = 256;   /* A register */
+        reg->offset = 0;
+        reg = find_reg("B", NULL, dptr);
+        reg->depth = 256;   /* B register */
+        reg->offset = 0;
+        reg->loc = &AC[256];
         /* Set up ASU locations */
+        reg = find_reg("ASU1", NULL, dptr);
         for(i = 0; i < 15; i++)
-            cpu_reg[i+3].loc = &AC[256 + 16*i];
+            (reg + i)->loc = &AC[256 + 16*i];
     }
 
     /* Clear io error flags */
