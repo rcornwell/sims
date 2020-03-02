@@ -449,8 +449,8 @@ UNIT lp20_unit = {
 
 REG lp20_reg[] = {
    {BRDATA(BUFFER, &lp20_buffer, 16, 8, sizeof(lp20_buffer)), REG_HRO},
-   {BRDATA(VFU, &lp20_vfu, 16, 16, sizeof(lp20_vfu)), REG_HRO},
-   {BRDATA(RAM, &lp20_ram, 16, 16, sizeof(lp20_ram)), REG_HRO},
+   {BRDATA(VFU, &lp20_vfu, 16, 16, (sizeof(lp20_vfu)/sizeof(uint16))), REG_HRO},
+   {BRDATA(RAM, &lp20_ram, 16, 16, (sizeof(lp20_ram)/sizeof(uint16))), REG_HRO},
    {BRDATA(QUEUE, &lp20_queue, 16, 8, sizeof(lp20_queue)), REG_HRO},
     { NULL }
 };
