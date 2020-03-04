@@ -415,7 +415,6 @@ extern void     restore_pi_hold();
 extern void     set_pi_hold();
 extern UNIT     cpu_unit[];
 extern UNIT     ten11_unit[];
-extern UNIT     auxcpu_unit[];
 #if KL
 extern DEVICE   dte_dev;
 extern DEVICE   lp20_dev;
@@ -460,6 +459,7 @@ extern DEVICE   mty_dev;
 extern DEVICE   ten11_dev;
 extern DEVICE   dkb_dev;
 extern DEVICE   auxcpu_dev;
+extern DEVICE   slave_dev;
 extern DEVICE   dpk_dev;
 extern DEVICE   wcnsls_dev;             /* MIT Spacewar Consoles */
 extern DEVICE   ocnsls_dev;             /* Old MIT Spacewar Consoles */
@@ -573,8 +573,6 @@ extern void ka10_lights_main (t_uint64);
 extern void ka10_lights_set_aux (int);
 extern void ka10_lights_clear_aux (int);
 
-int auxcpu_read (t_addr addr, t_uint64 *);
-int auxcpu_write (t_addr addr, t_uint64);
 
 /* I/O system parameters */
 #define NUM_DEVS_LP     1
@@ -596,6 +594,7 @@ int auxcpu_write (t_addr addr, t_uint64);
 #define NUM_DEVS_MTC    1
 #define NUM_DEVS_DSK    1
 #define NUM_DEVS_DCS    1
+#define NUM_DEVS_SLAVE  PDP6
 #endif
 #if !PDP6
 #define NUM_DEVS_DC     1
@@ -649,5 +648,17 @@ extern t_uint64   M[MAXMEMSIZE];
 extern t_uint64   FM[];
 extern uint32   PC;
 extern uint32   FLAGS;
+
+#if NUM_DEVS_AUXCPU
+extern t_addr   auxcpu_base;
+int auxcpu_read (t_addr addr, uint64 *);
+int auxcpu_write (t_addr addr, uint64);
+extern UNIT     auxcpu_unit[];
+#endif
+#if NUM_DEVS_SLAVE
+//int slave_read (t_addr addr);
+//int slave_write (t_addr addr, uint64);
+//extern UNIT     slave_unit[];
+#endif
 
 #endif

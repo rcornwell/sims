@@ -197,6 +197,9 @@ DEVICE *sim_devices[] = {
 #if NUM_DEVS_AUXCPU > 0
     &auxcpu_dev,
 #endif
+#if NUM_DEVS_SLAVE > 0
+    &slave_dev,
+#endif
 #if NUM_DEVS_DKB > 0
     &dkb_dev,
 #endif

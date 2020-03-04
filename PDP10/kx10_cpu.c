@@ -263,7 +263,7 @@ int32   tmxr_poll = 10000;
 /* Physical address range for Rubin 10-11 interface. */
 #define T11RANGE(addr)  ((addr) >= 03040000)
 /* Physical address range for auxiliary PDP-6. */
-#define AUXCPURANGE(addr)  ((addr) >= 03000000 && (addr) < 03040000)
+#define AUXCPURANGE(addr)  ((addr) >= auxcpu_base && (addr) < (auxcpu_base + 040000))
 
 
 /* List of RH10 & RH20 devices */
@@ -912,6 +912,11 @@ int opflags[] = {
 #define QKLB            (cpu_unit[0].flags & UNIT_KL10B)
 #else
 #define QKLB            0
+#endif
+#if PDP6
+#define QSLAVE          (slave_unit[0].flags & UNIT_ATT)
+#else
+#define QSLAVE          0
 #endif
 
 #if KL
@@ -3171,7 +3176,6 @@ int Mem_read_its(int flag, int cur_context, int fetch) {
                 nxm_flag = 1;
                 return 1;
             }
-            return 0;
         }
 #endif
         if (addr >= (int)MEMSIZE) {
@@ -3218,7 +3222,6 @@ int Mem_write_its(int flag, int cur_context) {
                 nxm_flag = 1;
                 return 1;
             }
-            return 0;
         }
 #endif
         if (addr >= (int)MEMSIZE) {
