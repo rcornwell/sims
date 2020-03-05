@@ -284,9 +284,6 @@ int auxcpu_write (t_addr addr, uint64 data)
 {
   unsigned char request[12];
   unsigned char response[12];
-  t_addr        address;
-  size_t        size;
-  t_stat        stat;
 
   addr &= 037777;
 

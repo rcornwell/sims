@@ -173,7 +173,7 @@ static void build (uint8 *request, uint8 octet)
 static t_stat process_request (UNIT *uptr, const uint8 *request, size_t size)
 {
   uint8 response[12];
-  int address;
+  t_addr address;
   uint64 data;
   t_stat stat;
 
@@ -192,11 +192,11 @@ static t_stat process_request (UNIT *uptr, const uint8 *request, size_t size)
     if (address < MEMSIZE) {
       data = M[address];
       build (response, ACK);
-      build (response, data);
-      build (response, data >> 8);
-      build (response, data >> 16);
-      build (response, data >> 24);
-      build (response, data >> 32);
+      build (response, (uint8)(data & 0xff));
+      build (response, (uint8)((data >> 8)) & 0xff);
+      build (response, (uint8)((data >> 16) & 0xff));
+      build (response, (uint8)((data >> 24) & 0xff));
+      build (response, (uint8)((data >> 32) & 0xff));
       sim_debug(DEBUG_DATAIO, &slave_dev, "DATI %06o -> %012llo\n",
                 address, data);
     } else {
@@ -288,141 +288,6 @@ static const char *slave_description (DEVICE *dptr)
 {
   return "Auxiliary processor";
 }
-
-#if 0
-static int transaction (uint8 *request, uint8 *response)
-{
-  const uint8 *slave_request;
-  size_t size;
-  t_stat stat;
-
-  stat = tmxr_put_packet_ln (&slave_ldsc, request + 1, (size_t)request[0]);
-  if (stat != SCPE_OK)
-    return error ("Write error in transaction");
-  do {
-    tmxr_poll_rx (&slave_desc);
-    stat = tmxr_get_packet_ln (&slave_ldsc, &slave_request, &size);
-  } while (stat != SCPE_OK || size == 0);
-
-  if (size > 9)
-    return error ("Malformed transaction");
-
-  memcpy (response, slave_request, size);
-  return 0;
-}
-
-int slave_read (t_addr addr)
-{
-  uint64  data;
-  uint8 request[12];
-  uint8 response[12];
-
-  if ((slave_unit[0].flags & UNIT_ATT) == 0)
-      return 0;
-
-  addr &= 037777;
-
-  if (slave_valid[addr] || slave_ldsc.rcve == 0)
-      return 0;
-
-  memset (request, 0, sizeof request);
-  build (request, DATI);
-  build (request, addr & 0377);
-  build (request, (addr >> 8) & 0377);
-  build (request, (addr >> 16) & 0377);
-
-  transaction (request, response);
-
-  switch (response[0])
-    {
-    case ACK:
-      data = (uint64)response[1];
-      data |= (uint64)response[2] << 8;
-      data |= (uint64)response[3] << 16;
-      data |= (uint64)response[4] << 24;
-      data |= (uint64)response[5] << 32;
-      M[addr] = data;
-      slave_valid[addr] = 1;
-      break;
-    case ERR:
-      fprintf (stderr, "SLAVE: Read error %06o\r\n", addr);
-      break;
-    case TIMEOUT:
-      fprintf (stderr, "SLAVE: Read timeout %06o\r\n", addr);
-      break;
-    default:
-      return error ("Protocol error");
-    }
-  return 0;
-}
-
-int slave_write (t_addr addr, uint64 data)
-{
-  uint8 request[12];
-  uint8 response[12];
-
-  if ((slave_unit[0].flags & UNIT_ATT) == 0)
-      return 0;
-
-  addr &= 037777;
-  slave_valid[addr] = 1;
-
-  memset (request, 0, sizeof request);
-  build (request, DATO);
-  build (request, (addr) & 0377);
-  build (request, (addr >> 8) & 0377);
-  build (request, (addr >> 16) & 0377);
-  build (request, (data) & 0377);
-  build (request, (data >> 8) & 0377);
-  build (request, (data >> 16) & 0377);
-  build (request, (data >> 24) & 0377);
-  build (request, (data >> 32) & 0377);
-
-  transaction (request, response);
-
-  switch (response[0])
-    {
-    case ACK:
-      break;
-    case ERR:
-      fprintf (stderr, "SLAVE: Write error %06o\r\n", addr);
-      break;
-    case TIMEOUT:
-      fprintf (stderr, "SLAVE: Write timeout %06o\r\n", addr);
-      break;
-    default:
-      return error ("Protocol error");
-    }
-  return 0;
-}
-
-static int slave_interrupt (void)
-{
-  uint8 request[12];
-  uint8 response[12];
-  memset (request, 0, sizeof request);
-
-  sim_debug(DEBUG_IRQ, &slave_dev, "PDP-6 interrupting the PDP-10\n");
-
-  build (request, IRQ);
-
-  transaction (request, response);
-
-  switch (response[1])
-    {
-    case ACK:
-      break;
-    case ERR:
-    case TIMEOUT:
-      fprintf (stderr, "SLAVE: Interrupt error or timeout\r\n");
-      break;
-    default:
-      return error ("Protocol error");
-    }
-
-  return 0;
-}
-#endif
 
 t_stat slave_devio(uint32 dev, uint64 *data)
 {
