@@ -997,7 +997,7 @@ t_stat ai_attach (UNIT *uptr, CONST char *cptr)
     DIB *dib;
 
     r = attach_unit (uptr, cptr);
-    if (r != SCPE_OK)
+    if (r != SCPE_OK || (sim_switches & SIM_SW_REST) != 0)
         return r;
     rptr = find_dev_from_unit(uptr);
     if (rptr == 0)

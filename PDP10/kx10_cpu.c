@@ -129,7 +129,6 @@ uint32  AC;                                   /* Operand accumulator */
 uint64  SW;                                   /* Switch register */
 int     BYF5;                                 /* Flag for second half of LDB/DPB instruction */
 int     uuo_cycle;                            /* Uuo cycle in progress */
-int     sac_inh;                              /* Don't store AR in AC */
 int     SC;                                   /* Shift count */
 int     SCAD;                                 /* Shift count extension */
 int     FE;                                   /* Exponent */
@@ -151,6 +150,7 @@ int     ex_uuo_sync;                          /* Execute a UUO op */
 uint8   PIR;                                  /* Current priority level */
 uint8   PIH;                                  /* Highest priority */
 uint8   PIE;                                  /* Priority enable mask */
+int     pi_cycle;                             /* Executing an interrupt */
 int     pi_enable;                            /* Interrupts enabled */
 int     parity_irq;                           /* Parity interupt */
 int     pi_pending;                           /* Interrupt pending. */
@@ -410,17 +410,20 @@ REG cpu_reg[] = {
 #else
     { FLDATAD (FOV, fov_irq, 0, "Floating overflow enable") },
 #endif
-    { FLDATA (PI_PEND, pi_pending, 0), REG_HRO},
+    { FLDATA (PIPEND, pi_pending, 0), REG_HRO},
     { FLDATA (PARITY, parity_irq, 0) },
     { ORDATAD (APRIRQ, apr_irq, 0, "APR Interrupt number") },
     { ORDATAD (CLKIRQ, clk_irq, 0, "CLK Interrupt number") },
     { FLDATA (CLKEN, clk_en, 0), REG_HRO},
     { FLDATA (XCT, xct_flag, 0), REG_HRO},
+    { BRDATA (IRQV, dev_irq, 8, 16, 128 ), REG_HRO},
+    { ORDATA (PIEN, pi_enc, 8), REG_HRO},
+    { FLDATA (PIHOLD, pi_hold, 0), REG_HRO},
+    { FLDATA (PIREST, pi_restore, 0), REG_HRO},
+    { FLDATA (PICYC, pi_cycle, 0), REG_HRO},
 #if MPX_DEV
     { FLDATA (MPX, mpx_enable, 0), REG_HRO},
 #endif
-    { FLDATA (PIHOLD, pi_hold, 0), REG_HRO},
-    { FLDATA (PIREST, pi_restore, 0), REG_HRO},
 #if KI
     { ORDATAD (UB, ub_ptr, 18, "User Base Pointer") },
     { ORDATAD (EB, eb_ptr, 18, "Executive Base Pointer") },
@@ -492,6 +495,10 @@ REG cpu_reg[] = {
     { ORDATAD (PREV_SECT, prev_sect, 12, "Previous section"), REG_HRO},
     { ORDATAD (PC_SECT, pc_sect, 12, "PC section"), REG_HRO},
     { ORDATAD (GLB_SECT, glb_sect, 1, "Global section"), REG_HRO},
+#endif
+#if !PDP6
+    { BRDATA (ETLB, e_tlb, 8, 32, 512), REG_HRO},
+    { BRDATA (UTLB, u_tlb, 8, 32, 546), REG_HRO},
 #endif
     { NULL }
     };
@@ -3969,9 +3976,8 @@ t_stat reason;
 int     i_flags;                 /* Instruction mode flags */
 int     pi_rq;                   /* Interrupt request */
 int     pi_ov;                   /* Overflow during PI cycle */
-int     pi_cycle;                /* Executing an interrupt */
 int     ind;                     /* Indirect bit */
-int     ix;
+int     ix;                      /* Index register */
 int     f_load_pc;               /* Load AB from PC at start of instruction */
 int     f_inst_fetch;            /* Fetch new instruction */
 int     f_pc_inh;                /* Inhibit PC increment after instruction */
@@ -3982,7 +3988,7 @@ int     f;                       /* Temporary variables */
 int     flag1;
 int     flag3;
 int     instr_count = 0;         /* Number of instructions to execute */
-uint32  IA;
+uint32  IA;                      /* Initial address of first fetch */
 #if ITS | KL_ITS
 char    one_p_arm = 0;           /* One proceed arm */
 #endif
@@ -10334,10 +10340,14 @@ if (cptr == NULL) {
     apr_serial = -1;
     return SCPE_OK;
     }
+#if KI
 lnt = (int32) get_uint (cptr, 10, 001777, &r);
+#else
+lnt = (int32) get_uint (cptr, 10, 007777, &r);
+#endif
 if ((r != SCPE_OK) || (lnt <= 0))
     return SCPE_ARG;
-apr_serial = lnt & 01777;
+apr_serial = lnt;
 return SCPE_OK;
 }
 

@@ -82,7 +82,6 @@ DEVICE dkb_dev = {
     NULL, NULL, &dkb_help, NULL, NULL, &dkb_description
     };
 
-int status;
 t_stat dkb_devio(uint32 dev, uint64 *data) {
      UNIT    *uptr = &dkb_unit[0];
      switch(dev & 3) {

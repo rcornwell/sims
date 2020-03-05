@@ -877,7 +877,7 @@ tu_attach(UNIT * uptr, CONST char *file)
     uptr->CMD = 0;
     uptr->STATUS = 0;
     r = sim_tape_attach_ex(uptr, file, 0, 0);
-    if (r == SCPE_OK) {
+    if (r == SCPE_OK && (sim_switches & SIM_SW_REST) == 0) {
         uptr->CMD = CS_ATA|CS_CHANGE;
         rh_setattn(rhc, 0);
     }

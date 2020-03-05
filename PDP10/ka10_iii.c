@@ -324,7 +324,6 @@ DEVICE iii_dev = {
     NULL, NULL, &iii_help, NULL, NULL, &iii_description
     };
 
-int status;
 t_stat iii_devio(uint32 dev, uint64 *data) {
      UNIT       *uptr = &iii_unit[0];
      switch(dev & 3) {

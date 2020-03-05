@@ -2278,12 +2278,14 @@ pmp_attach(UNIT * uptr, CONST char *file)
         detach_unit(uptr);
         return SCPE_ARG;
     }
-    (void)sim_fseek(uptr->fileref, sizeof(struct pmp_header), SEEK_SET);
-    (void)sim_fread(data->cbuf, 1, tsize, uptr->fileref);
-    data->cpos = sizeof(struct pmp_header);
-    data->ccyl = 0;
-    uptr->CMD |= DK_ATTN;
-    pmp_statusb |= REQ_CH;
+    if ((sim_switches & SIM_SW_REST) == 0) {
+        (void)sim_fseek(uptr->fileref, sizeof(struct pmp_header), SEEK_SET);
+        (void)sim_fread(data->cbuf, 1, tsize, uptr->fileref);
+        data->cpos = sizeof(struct pmp_header);
+        data->ccyl = 0;
+        uptr->CMD |= DK_ATTN;
+        pmp_statusb |= REQ_CH;
+    }
     sim_activate(uptr, 100);
     return SCPE_OK;
 }

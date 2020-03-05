@@ -129,16 +129,12 @@ static t_stat slave_reset (DEVICE *dptr)
 
 static t_stat slave_attach (UNIT *uptr, CONST char *cptr)
 {
-  char *peer = "localhost:6666";
-  char linkinfo[256];
   t_stat r;
 
   if (!cptr || !*cptr)
     return SCPE_ARG;
   if (!(uptr->flags & UNIT_ATTABLE))
     return SCPE_NOATT;
-  snprintf (linkinfo, sizeof linkinfo, "%s,connect=%s;notelnet",
-            cptr, peer);
   r = tmxr_attach_ex (&slave_desc, uptr, cptr, FALSE);
   if (r != SCPE_OK)                                       /* error? */
     return r;

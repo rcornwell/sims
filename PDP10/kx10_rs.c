@@ -672,11 +672,13 @@ t_stat rs_attach (UNIT *uptr, CONST char *cptr)
         if (rh[ctlr].dev == rstr)
             break;
     }
+    if (uptr->flags & UNIT_WLK)
+        uptr->CMD |= DS_WRL;
+    if (sim_switches & SIM_SW_REST)
+        return SCPE_OK;
     uptr->DA = 0;
     uptr->CMD &= ~DS_VV;
     uptr->CMD |= DS_DPR|DS_MOL|DS_DRY;
-    if (uptr->flags & UNIT_WLK)
-         uptr->CMD |= DS_WRL;
     rs_rh[ctlr].status |= PI_ENABLE;
     set_interrupt(dib->dev_num, rs_rh[ctlr].status);
     return SCPE_OK;

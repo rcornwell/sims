@@ -394,6 +394,8 @@ t_stat lpt_attach (UNIT *uptr, CONST char *cptr)
     t_stat reason;
 
     reason = attach_unit (uptr, cptr);
+    if (sim_switches & SIM_SW_REST)
+        return reason;
     uptr->STATUS &= ~ERR_FLG;
     clr_interrupt(LP_DEVNUM);
     return reason;

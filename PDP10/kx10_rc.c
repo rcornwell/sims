@@ -533,7 +533,7 @@ t_stat r;
 
 uptr->capac = rc_drv_tab[GET_DTYPE (uptr->flags)].size;
 r = attach_unit (uptr, cptr);
-if (r != SCPE_OK)
+if (r != SCPE_OK || (sim_switches & SIM_SW_REST) != 0)
     return r;
 uptr->CUR_CYL = 0;
 uptr->UFLAGS = 0;
