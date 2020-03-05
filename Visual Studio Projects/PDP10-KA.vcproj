@@ -274,6 +274,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\PDP10\kx10_disk.c"
+				>
+			</File>
+			<File
 				RelativePath="..\PDP10\kx10_dp.c"
 				>
 			</File>
@@ -619,6 +623,10 @@
 			>
 			<File
 				RelativePath="..\PDP10\kx10_defs.h"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_disk.h"
 				>
 			</File>
 			<File

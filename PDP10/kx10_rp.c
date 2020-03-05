@@ -22,6 +22,7 @@
 */
 
 #include "kx10_defs.h"
+#include "kx10_disk.h"
 
 #ifndef NUM_DEVS_RP
 #define NUM_DEVS_RP 0
@@ -36,14 +37,11 @@
 
 /* Flags in the unit flags word */
 
-#define UNIT_V_WLK      (UNIT_V_UF + 0)                 /* write locked */
 #define UNIT_V_DTYPE    (UNIT_V_UF + 1)                 /* disk type */
 #define UNIT_M_DTYPE    7
-#define UNIT_WLK        (1 << UNIT_V_WLK)
 #define UNIT_DTYPE      (UNIT_M_DTYPE << UNIT_V_DTYPE)
 #define DTYPE(x)        (((x) & UNIT_M_DTYPE) << UNIT_V_DTYPE)
 #define GET_DTYPE(x)    (((x) >> UNIT_V_DTYPE) & UNIT_M_DTYPE)
-#define UNIT_WPRT       (UNIT_WLK | UNIT_RO)            /* write protect */
 
 /* Parameters in the unit descriptor */
 #define CMD      u3
@@ -345,6 +343,7 @@ MTAB                rp_mod[] = {
     {UNIT_DTYPE, (RP07_DTYPE << UNIT_V_DTYPE), "RP07", "RP07", &rp_set_type },
     {UNIT_DTYPE, (RP06_DTYPE << UNIT_V_DTYPE), "RP06", "RP06", &rp_set_type },
     {UNIT_DTYPE, (RP04_DTYPE << UNIT_V_DTYPE), "RP04", "RP04", &rp_set_type },
+    {MTAB_XTD|MTAB_VUN, 0, "FORMAT", "FORMAT", NULL, &disk_show_fmt },
     {0}
 };
 
@@ -834,8 +833,6 @@ t_stat rp_svc (UNIT *uptr)
         }
 
         if (BUF_EMPTY(uptr)) {
-            int wc;
-
             if (GET_SC(uptr->DA) >= rp_drv_tab[dtype].sect ||
                 GET_SF(uptr->DA) >= rp_drv_tab[dtype].surf) {
                 uptr->CMD |= (ER1_IAE << 16)|DS_ERR|DS_DRY|DS_ATA;
@@ -846,12 +843,8 @@ t_stat rp_svc (UNIT *uptr)
             }
             sim_debug(DEBUG_DETAIL, dptr, "%s%o read (%d,%d,%d)\n", dptr->name, unit, cyl,
                    GET_SF(uptr->DA), GET_SC(uptr->DA));
-            da = GET_DA(uptr->DA, dtype) * RP_NUMWD;
-            (void)sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
-            wc = sim_fread (&rp_buf[ctlr][0], sizeof(uint64), RP_NUMWD,
-                                uptr->fileref);
-            while (wc < RP_NUMWD)
-                rp_buf[ctlr][wc++] = 0;
+            da = GET_DA(uptr->DA, dtype);
+            (void)disk_read(uptr, &rp_buf[ctlr][0], da, RP_NUMWD);
             uptr->hwmark = RP_NUMWD;
             uptr->DATAPTR = 0;
             /* On read headers, transfer 2 words to start */
@@ -945,10 +938,8 @@ rd_end:
         if (uptr->DATAPTR == RP_NUMWD) {
             sim_debug(DEBUG_DETAIL, dptr, "%s%o write (%d,%d,%d)\n", dptr->name,
                    unit, cyl, GET_SF(uptr->DA), GET_SC(uptr->DA));
-            da = GET_DA(uptr->DA, dtype) * RP_NUMWD;
-            (void)sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
-            (void)sim_fwrite (&rp_buf[ctlr][0], sizeof(uint64), RP_NUMWD,
-                                uptr->fileref);
+            da = GET_DA(uptr->DA, dtype);
+            (void)disk_write(uptr, &rp_buf[ctlr][0], da, RP_NUMWD);
             uptr->DATAPTR = 0;
             CLR_BUF(uptr);
             if (sts) {
@@ -1023,11 +1014,10 @@ rp_boot(int32 unit_num, DEVICE * rptr)
 #if KL
     int           sect;
     /* KL does not support readin, so fake it by reading in sectors 4 to 7 */
-    /* Possible in future fine boot loader in FE file system */
+    /* Possible in future find boot loader in FE file system */
     addr = (MEMSIZE - 512) & RMASK;
     for (sect = 4; sect <= 7; sect++) {
-        (void)sim_fseek(uptr->fileref, (sect * RP_NUMWD) * sizeof(uint64), SEEK_SET);
-        (void)sim_fread (&rp_buf[0][0], sizeof(uint64), RP_NUMWD, uptr->fileref);
+        disk_read(uptr, &rp_buf[0][0], sect, RP_NUMWD);
         ptr = 0;
         for(wc = RP_NUMWD; wc > 0; wc--) {
             word = rp_buf[0][ptr++];
@@ -1036,8 +1026,7 @@ rp_boot(int32 unit_num, DEVICE * rptr)
     }
     word = (MEMSIZE - 512) & RMASK;
 #else
-    (void)sim_fseek(uptr->fileref, 0, SEEK_SET);
-    (void)sim_fread (&rp_buf[0][0], sizeof(uint64), RP_NUMWD, uptr->fileref);
+    disk_read(uptr, &rp_buf[0][0], 0, RP_NUMWD);
     addr = rp_buf[0][ptr] & RMASK;
     wc = (rp_buf[0][ptr++] >> 18) & RMASK;
     while (wc != 0) {
@@ -1071,7 +1060,7 @@ t_stat rp_attach (UNIT *uptr, CONST char *cptr)
     int ctlr;
 
     uptr->capac = rp_drv_tab[GET_DTYPE (uptr->flags)].size;
-    r = attach_unit (uptr, cptr);
+    r = disk_attach (uptr, cptr);
     if (r != SCPE_OK)
         return r;
     rptr = find_dev_from_unit(uptr);
@@ -1082,11 +1071,13 @@ t_stat rp_attach (UNIT *uptr, CONST char *cptr)
         if (rh[ctlr].dev == rptr)
             break;
     }
+    if (uptr->flags & UNIT_WLK)
+         uptr->CMD |= DS_WRL;
+    if (sim_switches & SIM_SW_REST)
+        return SCPE_OK;
     uptr->DA = 0;
     uptr->CMD &= ~DS_VV;
     uptr->CMD |= DS_DPR|DS_MOL|DS_DRY;
-    if (uptr->flags & UNIT_WLK)
-         uptr->CMD |= DS_WRL;
     rp_rh[ctlr].status |= PI_ENABLE;
     set_interrupt(dib->dev_num, rp_rh[ctlr].status);
     return SCPE_OK;
@@ -1101,7 +1092,7 @@ t_stat rp_detach (UNIT *uptr)
     if (sim_is_active (uptr))                              /* unit active? */
         sim_cancel (uptr);                                  /* cancel operation */
     uptr->CMD &= ~(DS_VV|DS_WRL|DS_DPR|DS_DRY);
-    return detach_unit (uptr);
+    return disk_detach (uptr);
 }
 
 t_stat rp_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
@@ -1111,6 +1102,7 @@ fprintf (st, "The RP controller implements the Massbus family of large disk driv
 fprintf (st, "options include the ability to set units write enabled or write locked, to\n");
 fprintf (st, "set the drive type to one of six disk types or autosize, and to write a DEC\n");
 fprintf (st, "standard 044 compliant bad block table on the last track.\n\n");
+disk_attach_help(st, dptr, uptr, flag, cptr);
 fprint_set_help (st, dptr);
 fprint_show_help (st, dptr);
 fprintf (st, "\nThe type options can be used only when a unit is not attached to a file.\n");
