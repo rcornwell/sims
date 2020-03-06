@@ -10075,13 +10075,15 @@ PIR = PIH = PIE = pi_enable = parity_irq = 0;
 pi_pending = pi_enc = apr_irq = 0;
 ov_irq =fov_irq =clk_en =clk_irq = 0;
 pi_restore = pi_hold = 0;
+FLAGS = 0;
 #if KI | KL
 ub_ptr = eb_ptr = 0;
 pag_reload = ac_stack = 0;
 #if KI
 fm_sel = small_user = user_addr_cmp = page_enable = 0;
 #else
-fm_sel = prev_ctx = user_addr_cmp = page_enable = 0;
+fm_sel = prev_ctx = user_addr_cmp = page_enable = t20_page = 0;
+sect = cur_sect = pc_sect = 0;
 #endif
 #endif
 #if BBN
