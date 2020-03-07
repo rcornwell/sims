@@ -102,6 +102,8 @@
 /* simulator devices configuration */
 #define NUM_DEVS_IOP    1       /* 1 device IOP channel controller */
 #define NUM_UNITS_IOP   1       /* 1 master IOP channel device */
+#define NUM_DEVS_MFP    1       /* 1 device MFP channel controller */
+#define NUM_UNITS_MFP   1       /* 1 master MFP channel device */
 #define NUM_DEVS_COM    2       /* 8-Line async controller */
 #define NUM_UNITS_COM   16      /* 8-Line async units */
 #define NUM_DEVS_CON    1       /* 1 I/O console controller */
@@ -128,6 +130,9 @@ extern DEVICE cpu_dev;      /* cpu device */
 extern UNIT cpu_unit;       /* the cpu unit */
 #ifdef NUM_DEVS_IOP
 extern DEVICE iop_dev;      /* IOP channel controller */
+#endif
+#ifdef NUM_DEVS_MFP
+extern DEVICE mfp_dev;      /* MFP channel controller */
 #endif
 #ifdef NUM_DEVS_RTOM
 extern DEVICE rtc_dev;      /* RTOM rtc */

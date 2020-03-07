@@ -115,8 +115,10 @@ t_stat rtc_srv (UNIT *uptr)
         time_t result = time(NULL);
 //      fprintf(stderr, "Clock int time %08x\r\n", (uint32)result);
         sim_debug(DEBUG_CMD, &rtc_dev, "RT Clock int time %08x\n", (uint32)result);
-        if ((INTS[rtc_lvl] & INTS_ENAB) &&          /* make sure enabled */
-            (INTS[rtc_lvl] & INTS_ACT) == 0) {      /* and not active */
+        if (((INTS[rtc_lvl] & INTS_ENAB) ||         /* make sure enabled */
+            (SPAD[rtc_lvl+0x80] & SINT_ENAB)) &&    /* in spad too */
+            (((INTS[rtc_lvl] & INTS_ACT) == 0) ||   /* and not active */
+            ((SPAD[rtc_lvl+0x80] & SINT_ACT) == 0))) { /* in spad too */
             INTS[rtc_lvl] |= INTS_REQ;              /* request the interrupt */
             irq_pend = 1;                           /* make sure we scan for int */
         }
@@ -149,6 +151,7 @@ void rtc_setup(uint32 ss, uint32 level)
         SPAD[level+0x80] &= ~SINT_ENAB;             /* in spad too */
 //      INTS[level] &= ~INTS_REQ;                   /* make sure request not requesting */
 //      INTS[level] &= ~INTS_ACT;                   /* make sure request not active */
+//      SPAD[level+0x80] &= ~SINT_ACT;              /* in spad too */
         sim_debug(DEBUG_CMD, &rtc_dev,
             "RT Clock setup disable int %02x rtc_pie %01x ss %01x\n",
             rtc_lvl, rtc_pie, ss);
@@ -274,9 +277,11 @@ t_stat itm_srv (UNIT *uptr)
         sim_debug(DEBUG_CMD, &itm_dev,
             "Intv Timer expired status %08x interrupt %02x @ time %08x\n",
             INTS[itm_lvl], itm_lvl, (uint32)result);
-        if ((INTS[itm_lvl] & INTS_ENAB) &&          /* make sure enabled */
-            (INTS[itm_lvl] & INTS_ACT) == 0) {      /* and not active */
-            INTS[itm_lvl] |= INTS_REQ;              /* request the interrupt on zero value */
+        if (((INTS[itm_lvl] & INTS_ENAB) ||        /* make sure enabled */
+            (SPAD[itm_lvl+0x80] & SINT_ENAB)) &&    /* in spad too */
+            (((INTS[itm_lvl] & INTS_ACT) == 0) ||   /* and not active */
+            ((SPAD[itm_lvl+0x80] & SINT_ACT) == 0))) { /* in spad too */
+            INTS[itm_lvl] |= INTS_REQ;              /* request the interrupt */
             irq_pend = 1;                           /* make sure we scan for int */
         }
         if ((INTS[itm_lvl] & INTS_ENAB) && (itm_cmd == 0x3d) && (itm_cnt != 0)) {

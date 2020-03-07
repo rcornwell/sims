@@ -62,6 +62,9 @@ DEVICE *sim_devices[] = {
 #ifdef NUM_DEVS_IOP
         &iop_dev,                           /* IOP channel controller */
 #endif
+#ifdef NUM_DEVS_MFP
+        &mfp_dev,                           /* MFP channel controller */
+#endif
 #ifdef NUM_DEVS_RTOM
         &rtc_dev,
         &itm_dev,
@@ -532,7 +535,9 @@ t_stat sim_load (FILE *fileref, CONST char *cptr, CONST char *fnam, int flag)
     case FMT_ICL:                       /* icl file image */
         return load_icl(fileref);
 
+#ifdef NO_TAP_FOR_NOW
     case FMT_NONE:                      /* nothing */
+#endif
     default:
         break;
     }
