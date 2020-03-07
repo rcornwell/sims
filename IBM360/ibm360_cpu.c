@@ -472,50 +472,53 @@ int  TransAddr(uint32 va, uint32 *pa) {
  * success.
  */
 int  ReadFull(uint32 addr, uint32 *data) {
-     uint32     temp;
+     uint32     pa;
      int        offset;
-     uint8      k;
 
      /* Validate address */
-     if (TransAddr(addr, &addr))
+     if (TransAddr(addr, &pa))
          return 1;
-
-     offset = addr & 0x3;
-     addr >>= 2;
 
      /* Check storage key */
      if (st_key != 0) {
+         uint8      k;
+
          if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
-         k = key[addr >> 9];
+         k = key[pa >> 11];
          if ((k & 0x8) != 0 && (k & 0xf0) != st_key) {
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
      }
 
-     *data = M[addr];
+     offset = pa & 0x3;
+     if (offset != 0 && (cpu_unit[0].flags & FEAT_STOR) == 0) {
+          storepsw(OPPSW, IRC_SPEC);
+          return 1;
+     }
+     pa >>= 2;
+     *data = M[pa];
      if (offset != 0) {
-         if ((cpu_unit[0].flags & FEAT_STOR) == 0) {
-              storepsw(OPPSW, IRC_SPEC);
-              return 1;
-         }
-         temp = addr + 1;
-         /* Check if possible next page */
-         if ((temp & 0x3ff) == 0) {
-             if (TransAddr(temp << 2, &temp))
+         uint32     temp;
+         uint8      k;
+
+         temp = pa + 4;
+         if ((temp & 0x7FC) == 0) {
+             /* Check if possible next page */
+             if (TransAddr(addr + 4, &temp))
                  return 1;
-             temp >>= 2;
-         }
-         if ((temp & 0x1ff) == 0 && st_key != 0) {
-             k = key[temp >> 9];
-             if ((k & 0x8) != 0 && (k & 0xf0) != st_key) {
-                 storepsw(OPPSW, IRC_PROT);
-                 return 1;
+             if (st_key != 0) {
+                 k = key[temp >> 11];
+                 if ((k & 0x8) != 0 && (k & 0xf0) != st_key) {
+                     storepsw(OPPSW, IRC_PROT);
+                     return 1;
+                 }
              }
          }
+         temp >>= 2;
          temp = M[temp];
          *data <<= 8 * offset;
          temp >>= 8 * (4 - offset);
@@ -576,7 +579,10 @@ int WriteFull(uint32 addr, uint32 data) {
          return 1;
 
      offset = pa & 0x3;
-     pa >>= 2;
+     if (offset != 0 && (cpu_unit[0].flags & FEAT_STOR) == 0) {
+         storepsw(OPPSW, IRC_SPEC);
+         return 1;
+     }
 
      /* Check storage key */
      if (st_key != 0) {
@@ -584,36 +590,29 @@ int WriteFull(uint32 addr, uint32 data) {
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
-         k = key[pa >> 9];
+         k = key[pa >> 11];
          if ((k & 0xf0) != st_key) {
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
      }
 
+     pa2 = pa + 4;
      /* Check if we handle unaligned access */
-     if (offset != 0) {
-         if ((cpu_unit[0].flags & FEAT_STOR) == 0) {
-             storepsw(OPPSW, IRC_SPEC);
+     if (offset != 0 && (pa2 & 0x7FC) == 0) {
+         /* Validate address */
+         if (TransAddr(addr + 4, &pa2))
              return 1;
+         if (st_key != 0) {
+            k = key[(pa2) >> 11];
+            if ((k & 0xf0) != st_key) {
+                storepsw(OPPSW, IRC_PROT);
+                return 1;
+            }
          }
-
-         /* Check if new page or new protection zone */
-         if ((pa & 0x1ff) == 0x1ff) {
-             /* Validate address */
-             if (TransAddr(addr + 4, &pa2))
-                 return 1;
-             pa2 >>= 2;
-             if (st_key != 0) {
-                k = key[(pa2) >> 9];
-                if ((k & 0xf0) != st_key) {
-                    storepsw(OPPSW, IRC_PROT);
-                    return 1;
-                }
-             }
-        } else
-             pa2 = pa + 1;
      }
+     pa >>= 2;
+     pa2 >>= 2;
 
      switch (offset) {
      case 0:
@@ -651,22 +650,21 @@ int WriteByte(uint32 addr, uint32 data) {
      if (TransAddr(addr, &pa))
          return 1;
 
-     offset = 8 * (3 - (pa & 0x3));
-     pa >>= 2;
-
      /* Check storage key */
      if (st_key != 0) {
          if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
-         k = key[pa >> 9];
+         k = key[pa >> 11];
          if ((k & 0xf0) != st_key) {
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
      }
 
+     offset = 8 * (3 - (pa & 0x3));
+     pa >>= 2;
      mask = 0xff;
      data &= mask;
      data <<= offset;
@@ -688,44 +686,40 @@ int WriteHalf(uint32 addr, uint32 data) {
          return 1;
 
      offset = pa & 0x3;
-     pa >>= 2;
-
      /* Check if we handle unaligned access */
      if ((offset & 1) != 0 && (cpu_unit[0].flags & FEAT_STOR) == 0) {
          storepsw(OPPSW, IRC_SPEC);
          return 1;
      }
-
+ 
      /* Check storage key */
      if (st_key != 0) {
         if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
             storepsw(OPPSW, IRC_PROT);
             return 1;
         }
-        k = key[pa >> 9];
+        k = key[pa >> 11];
         if ((k & 0xf0) != st_key) {
             storepsw(OPPSW, IRC_PROT);
             return 1;
         }
      }
 
-     if (offset == 3) {
-         /* Check if new page or new protection zone */
-         if ((pa & 0x1ff) == 0x1ff) {
-             /* Validate address */
-             if (TransAddr(addr + 4, &pa2))
-                 return 1;
-             pa2 >>= 2;
-             if (st_key != 0) {
-                k = key[(pa2) >> 9];
-                if ((k & 0xf0) != st_key) {
-                    storepsw(OPPSW, IRC_PROT);
-                    return 1;
-                }
-             }
-        } else
-             pa2 = pa + 1;
+     pa2 = pa + 4;
+     if (offset == 3 && (pa2 & 0x7FC) == 0) {
+         /* Validate address */
+         if (TransAddr(addr + 4, &pa2))
+             return 1;
+         if (st_key != 0) {
+            k = key[(pa2) >> 11];
+            if ((k & 0xf0) != st_key) {
+                storepsw(OPPSW, IRC_PROT);
+                return 1;
+            }
+        }
      }
+     pa >>= 2;
+     pa2 >>= 2;
 
      mask = 0xffff;
      data &= mask;

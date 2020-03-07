@@ -275,14 +275,16 @@ uint8  coml_haltio(UNIT *uptr) {
     int            cmd = uptr->u3 & 0xff;
 
     sim_debug(DEBUG_CMD, dptr, "HLTIO unit=%d %x\n", unit, cmd);
+    if ((uptr->flags & UNIT_ATT) == 0)              /* attached? */
+        return 3;
 
     switch (cmd) {
     case 0:
     case CMD_DIS:        /* Disable line */
     case CMD_DIAL:       /* Dial call */
     case 0x4:
-    /* Short commands nothing to do */
-         return 0;
+         /* Short commands nothing to do */
+         break;
 
     case CMD_INH:        /* Read data without timeout  */
     case CMD_RD:         /* Read in data from com line */
@@ -300,7 +302,7 @@ uint8  coml_haltio(UNIT *uptr) {
          uptr->u3 &= ~0xffff;
          break;
     }
-    return SNS_CHNEND|SNS_DEVEND;
+    return 1;
 }
 
 /* Handle per unit commands */

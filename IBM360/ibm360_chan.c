@@ -825,6 +825,7 @@ int haltio(uint16 addr) {
     int           chan = find_subchan(addr);
     DIB          *dibp = dev_unit[addr];
     UNIT         *uptr;
+    int           cc;
 
     /* Find channel this device is on, if no none return cc=3 */
     if (chan < 0 || dibp == 0) {
@@ -839,16 +840,35 @@ int haltio(uint16 addr) {
     sim_debug(DEBUG_CMD, &cpu_dev, "HIO %x %x %x %x\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
 
-    /* If channel busy, set end of buffer, return cc=2 */
-    if (ccw_cmd[chan]) {
-        chan_byte[chan] = BUFF_CHNEND;
-        return 2;
+    /* Generic halt I/O, tell device to stop and
+    /* If any error pending save csw and return cc=1 */
+    if (chan_status[chan] & (STATUS_PCI|STATUS_ATTN|STATUS_CHECK|\
+            STATUS_PROT|STATUS_PCHK|STATUS_EXPT)) {
+        sim_debug(DEBUG_CMD, &cpu_dev, "HIO %x %x %x cc=0\n", addr, chan,
+              chan_status[chan]);
+        return 0;
     }
 
-    /* Not executing a command, issue halt if available */
-    if (dibp->halt_io != NULL)
-        chan_status[chan] = dibp->halt_io(uptr) << 8;
-    return 0;
+    /* Ask device to halt if it knows how to */
+    if (dibp->halt_io != NULL) {
+        /* Let device do it's thing */
+        cc = dibp->halt_io(uptr);
+        sim_debug(DEBUG_CMD, &cpu_dev, "HIO %x %x cc=%d\n", addr, chan, cc);
+        if (cc == 1)
+            M[0x44 >> 2] = (((uint32)chan_status[chan]) << 16) |
+                       (M[0x44 >> 2] & 0xffff);
+        return cc;
+    }
+
+    /* If channel busy, set end of buffer, return cc=2 */
+    if (ccw_cmd[chan])
+        chan_byte[chan] = BUFF_CHNEND;
+
+    /* Store CSW and return 1. */
+    sim_debug(DEBUG_CMD, &cpu_dev, "HIO %x %x cc=1\n", addr, chan);
+    M[0x44 >> 2] = (((uint32)chan_status[chan]) << 16) |
+                   (M[0x44 >> 2] & 0xffff);
+    return 1;
 }
 
 /*

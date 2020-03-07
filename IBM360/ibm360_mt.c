@@ -386,7 +386,7 @@ t_stat mt_srv(UNIT * uptr)
         }
     }
 
-    switch (cmd) {
+    switch (cmd & 0xf) {
     case 0:                               /* No command, stop tape */
          sim_debug(DEBUG_DETAIL, dptr, "Idle unit=%d\n", unit);
          break;
@@ -631,232 +631,234 @@ t_stat mt_srv(UNIT * uptr)
                   sim_activate(uptr, 20);
          }
          break;
-
-    case MT_WTM:
-         if (uptr->u4 == 0) {
-            if (sim_tape_wrp(uptr)) {
-                uptr->u5 |= SNS_CMDREJ;
-                uptr->u3 &= ~MT_CMDMSK;
-                mt_busy[GET_DEV_BUF(dptr->flags)] &= ~1;
-                set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
-                return SCPE_OK;
-            }
-            uptr->u4 ++;
-            sim_activate(uptr, 500);
-         } else {
-            sim_debug(DEBUG_DETAIL, dptr, "Write Mark unit=%d\n", unit);
-            uptr->u3 &= ~(MT_CMDMSK);
-            r = sim_tape_wrtmk(uptr);
-            set_devattn(addr, SNS_DEVEND);
-            mt_busy[bufnum] &= ~1;
-         }
-         break;
-
-    case MT_BSR:
-         switch (uptr->u4 ) {
-         case 0:
-              if (sim_tape_bot(uptr)) {
-                  uptr->u3 &= ~MT_CMDMSK;
-                  mt_busy[GET_DEV_BUF(dptr->flags)] &= ~1;
-                  set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
-                  return SCPE_OK;
-              }
-              uptr->u4 ++;
-              sim_activate(uptr, 500);
-              break;
-         case 1:
-              uptr->u4++;
-              sim_debug(DEBUG_DETAIL, dptr, "Backspace rec unit=%d ", unit);
-              r = sim_tape_sprecr(uptr, &reclen);
-              /* We don't set EOF on BSR */
-              if (r == MTSE_TMK) {
-                  uptr->u4++;
-                  sim_debug(DEBUG_DETAIL, dptr, "MARK\n");
-                  sim_activate(uptr, 50);
+    case 0x7:
+    case 0xf:
+         switch (cmd) {
+         case MT_WTM:
+              if (uptr->u4 == 0) {
+                 if (sim_tape_wrp(uptr)) {
+                     uptr->u5 |= SNS_CMDREJ;
+                     uptr->u3 &= ~MT_CMDMSK;
+                     mt_busy[GET_DEV_BUF(dptr->flags)] &= ~1;
+                     set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
+                     return SCPE_OK;
+                 }
+                 uptr->u4 ++;
+                 sim_activate(uptr, 500);
               } else {
-                  sim_debug(DEBUG_DETAIL, dptr, "%d \n", reclen);
-                  sim_activate(uptr, 10 + (10 * reclen));
+                 sim_debug(DEBUG_DETAIL, dptr, "Write Mark unit=%d\n", unit);
+                 uptr->u3 &= ~(MT_CMDMSK);
+                 r = sim_tape_wrtmk(uptr);
+                 set_devattn(addr, SNS_DEVEND);
+                 mt_busy[bufnum] &= ~1;
               }
               break;
-         case 2:
-              uptr->u3 &= ~(MT_CMDMSK);
-              set_devattn(addr, SNS_DEVEND);
-              mt_busy[bufnum] &= ~1;
-              break;
-         case 3:
-              uptr->u3 &= ~(MT_CMDMSK);
-              set_devattn(addr, SNS_DEVEND|SNS_UNITEXP);
-              mt_busy[bufnum] &= ~1;
-              break;
-         }
-         break;
 
-    case MT_BSF:
-         switch(uptr->u4) {
-         case 0:
-              if (sim_tape_bot(uptr)) {
-                  uptr->u3 &= ~MT_CMDMSK;
-                  mt_busy[bufnum] &= ~1;
-                  set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
-                  break;
-               }
-               uptr->u4 ++;
-               sim_activate(uptr, 500);
-               break;
-         case 1:
-              sim_debug(DEBUG_DETAIL, dptr, "Backspace file unit=%d\n", unit);
-              r = sim_tape_sprecr(uptr, &reclen);
-              if (r == MTSE_TMK) {
-                  uptr->u4++;
-                  sim_debug(DEBUG_DETAIL, dptr, "MARK\n");
-                  sim_activate(uptr, 50);
-               } else if (r == MTSE_BOT) {
-                  uptr->u4+= 2;
-                  sim_activate(uptr, 50);
-               } else {
-                  sim_activate(uptr, 10 + (10 * reclen));
-               }
-               break;
-         case 2:
-              uptr->u3 &= ~(MT_CMDMSK);
-              set_devattn(addr, SNS_DEVEND|SNS_UNITEXP);
-              mt_busy[bufnum] &= ~1;
-              break;
-         case 3:
-              uptr->u3 &= ~(MT_CMDMSK);
-              set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
-              mt_busy[bufnum] &= ~1;
-              break;
-         }
-         break;
-
-    case MT_FSR:
-         switch(uptr->u4) {
-         case 0:
-              uptr->u4 ++;
-              sim_activate(uptr, 500);
-              break;
-         case 1:
-              uptr->u4++;
-              sim_debug(DEBUG_DETAIL, dptr, "Skip rec unit=%d ", unit);
-              r = sim_tape_sprecf(uptr, &reclen);
-              if (r == MTSE_TMK) {
-                  uptr->u4 = 3;
-                  sim_debug(DEBUG_DETAIL, dptr, "MARK\n");
-                  sim_activate(uptr, 50);
-              } else if (r == MTSE_EOM) {
-                  uptr->u4 = 4;
-                  sim_activate(uptr, 50);
-              } else {
-                  sim_debug(DEBUG_DETAIL, dptr, "%d\n", reclen);
-                  sim_activate(uptr, 10 + (10 * reclen));
+         case MT_BSR:
+              switch (uptr->u4 ) {
+              case 0:
+                   if (sim_tape_bot(uptr)) {
+                       uptr->u3 &= ~MT_CMDMSK;
+                       mt_busy[GET_DEV_BUF(dptr->flags)] &= ~1;
+                       set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
+                       return SCPE_OK;
+                   }
+                   uptr->u4 ++;
+                   sim_activate(uptr, 500);
+                   break;
+              case 1:
+                   uptr->u4++;
+                   sim_debug(DEBUG_DETAIL, dptr, "Backspace rec unit=%d ", unit);
+                   r = sim_tape_sprecr(uptr, &reclen);
+                   /* We don't set EOF on BSR */
+                   if (r == MTSE_TMK) {
+                       uptr->u4++;
+                       sim_debug(DEBUG_DETAIL, dptr, "MARK\n");
+                       sim_activate(uptr, 50);
+                   } else {
+                       sim_debug(DEBUG_DETAIL, dptr, "%d \n", reclen);
+                       sim_activate(uptr, 10 + (10 * reclen));
+                   }
+                   break;
+              case 2:
+                   uptr->u3 &= ~(MT_CMDMSK);
+                   set_devattn(addr, SNS_DEVEND);
+                   mt_busy[bufnum] &= ~1;
+                   break;
+              case 3:
+                   uptr->u3 &= ~(MT_CMDMSK);
+                   set_devattn(addr, SNS_DEVEND|SNS_UNITEXP);
+                   mt_busy[bufnum] &= ~1;
+                   break;
               }
               break;
-         case 2:
-              uptr->u3 &= ~(MT_CMDMSK);
-              set_devattn(addr, SNS_DEVEND);
-              mt_busy[bufnum] &= ~1;
-              break;
-         case 3:
-              uptr->u3 &= ~(MT_CMDMSK);
-              set_devattn(addr, SNS_DEVEND|SNS_UNITEXP);
-              mt_busy[bufnum] &= ~1;
-              break;
-         case 4:
-              uptr->u3 &= ~(MT_CMDMSK);
-              set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
-              mt_busy[bufnum] &= ~1;
-              break;
-         }
-         break;
 
-    case MT_FSF:
-         switch(uptr->u4) {
-         case 0:
-              uptr->u4 ++;
-              sim_activate(uptr, 500);
-              break;
-         case 1:
-              sim_debug(DEBUG_DETAIL, dptr, "Skip rec unit=%d ", unit);
-              r = sim_tape_sprecf(uptr, &reclen);
-              if (r == MTSE_TMK) {
-                  uptr->u4++;
-                  sim_debug(DEBUG_DETAIL, dptr, "MARK\n");
-                  sim_activate(uptr, 50);
-              } else if (r == MTSE_EOM) {
-                  uptr->u4+= 2;
-                  sim_activate(uptr, 50);
-              } else {
-                  sim_debug(DEBUG_DETAIL, dptr, "%d\n", reclen);
-                  sim_activate(uptr, 10 + (10 * reclen));
+         case MT_BSF:
+              switch(uptr->u4) {
+              case 0:
+                   if (sim_tape_bot(uptr)) {
+                       uptr->u3 &= ~MT_CMDMSK;
+                       mt_busy[bufnum] &= ~1;
+                       set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
+                       break;
+                    }
+                    uptr->u4 ++;
+                    sim_activate(uptr, 500);
+                    break;
+              case 1:
+                   sim_debug(DEBUG_DETAIL, dptr, "Backspace file unit=%d\n", unit);
+                   r = sim_tape_sprecr(uptr, &reclen);
+                   if (r == MTSE_TMK) {
+                       uptr->u4++;
+                       sim_debug(DEBUG_DETAIL, dptr, "MARK\n");
+                       sim_activate(uptr, 50);
+                    } else if (r == MTSE_BOT) {
+                       uptr->u4+= 2;
+                       sim_activate(uptr, 50);
+                    } else {
+                       sim_activate(uptr, 10 + (10 * reclen));
+                    }
+                    break;
+              case 2:
+                   uptr->u3 &= ~(MT_CMDMSK);
+                   set_devattn(addr, SNS_DEVEND|SNS_UNITEXP);
+                   mt_busy[bufnum] &= ~1;
+                   break;
+              case 3:
+                   uptr->u3 &= ~(MT_CMDMSK);
+                   set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
+                   mt_busy[bufnum] &= ~1;
+                   break;
               }
               break;
-         case 2:
-              uptr->u3 &= ~(MT_CMDMSK);
-              set_devattn(addr, SNS_DEVEND);
-              mt_busy[bufnum] &= ~1;
-              sim_debug(DEBUG_DETAIL, dptr, "Skip done unit=%d\n", unit);
-              break;
-         case 3:
-              uptr->u3 &= ~(MT_CMDMSK);
-              set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
-              mt_busy[bufnum] &= ~1;
-              break;
-         }
-         break;
 
+         case MT_FSR:
+              switch(uptr->u4) {
+              case 0:
+                   uptr->u4 ++;
+                   sim_activate(uptr, 500);
+                   break;
+              case 1:
+                   uptr->u4++;
+                   sim_debug(DEBUG_DETAIL, dptr, "Skip rec unit=%d ", unit);
+                   r = sim_tape_sprecf(uptr, &reclen);
+                   if (r == MTSE_TMK) {
+                       uptr->u4 = 3;
+                       sim_debug(DEBUG_DETAIL, dptr, "MARK\n");
+                       sim_activate(uptr, 50);
+                   } else if (r == MTSE_EOM) {
+                       uptr->u4 = 4;
+                       sim_activate(uptr, 50);
+                   } else {
+                       sim_debug(DEBUG_DETAIL, dptr, "%d\n", reclen);
+                       sim_activate(uptr, 10 + (10 * reclen));
+                   }
+                   break;
+              case 2:
+                   uptr->u3 &= ~(MT_CMDMSK);
+                   set_devattn(addr, SNS_DEVEND);
+                   mt_busy[bufnum] &= ~1;
+                   break;
+              case 3:
+                   uptr->u3 &= ~(MT_CMDMSK);
+                   set_devattn(addr, SNS_DEVEND|SNS_UNITEXP);
+                   mt_busy[bufnum] &= ~1;
+                   break;
+              case 4:
+                   uptr->u3 &= ~(MT_CMDMSK);
+                   set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
+                   mt_busy[bufnum] &= ~1;
+                   break;
+              }
+              break;
 
-    case MT_ERG:
-         switch (uptr->u4) {
-         case 0:
-              if (sim_tape_wrp(uptr)) {
-                  uptr->u5 |= SNS_CMDREJ;
-                  uptr->u3 &= ~MT_CMDMSK;
-                  mt_busy[bufnum] &= ~1;
-                  set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
-              } else {
+         case MT_FSF:
+              switch(uptr->u4) {
+              case 0:
+                   uptr->u4 ++;
+                   sim_activate(uptr, 500);
+                   break;
+              case 1:
+                   sim_debug(DEBUG_DETAIL, dptr, "Skip rec unit=%d ", unit);
+                   r = sim_tape_sprecf(uptr, &reclen);
+                   if (r == MTSE_TMK) {
+                       uptr->u4++;
+                       sim_debug(DEBUG_DETAIL, dptr, "MARK\n");
+                       sim_activate(uptr, 50);
+                   } else if (r == MTSE_EOM) {
+                       uptr->u4+= 2;
+                       sim_activate(uptr, 50);
+                   } else {
+                       sim_debug(DEBUG_DETAIL, dptr, "%d\n", reclen);
+                       sim_activate(uptr, 10 + (10 * reclen));
+                   }
+                   break;
+              case 2:
+                   uptr->u3 &= ~(MT_CMDMSK);
+                   set_devattn(addr, SNS_DEVEND);
+                   mt_busy[bufnum] &= ~1;
+                   sim_debug(DEBUG_DETAIL, dptr, "Skip done unit=%d\n", unit);
+                   break;
+              case 3:
+                   uptr->u3 &= ~(MT_CMDMSK);
+                   set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
+                   mt_busy[bufnum] &= ~1;
+                   break;
+              }
+              break;
+
+         case MT_ERG:
+              switch (uptr->u4) {
+              case 0:
+                   if (sim_tape_wrp(uptr)) {
+                       uptr->u5 |= SNS_CMDREJ;
+                       uptr->u3 &= ~MT_CMDMSK;
+                       mt_busy[bufnum] &= ~1;
+                       set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
+                   } else {
+                       uptr->u4 ++;
+                       sim_activate(uptr, 500);
+                   }
+                   break;
+              case 1:
+                   sim_debug(DEBUG_DETAIL, dptr, "Erase unit=%d\n", unit);
+                   r = sim_tape_wrgap(uptr, 35);
+                   sim_activate(uptr, 5000);
+                   uptr->u4++;
+                   break;
+              case 2:
+                   uptr->u3 &= ~(MT_CMDMSK);
+                   set_devattn(addr, SNS_DEVEND);
+                   mt_busy[bufnum] &= ~1;
+              }
+              break;
+
+         case MT_REW:
+              if (uptr->u4 == 0) {
                   uptr->u4 ++;
-                  sim_activate(uptr, 500);
+                  sim_activate(uptr, 30000);
+                  mt_busy[bufnum] &= ~1;
+              } else {
+                  sim_debug(DEBUG_DETAIL, dptr, "Rewind unit=%d\n", unit);
+                  uptr->u3 &= ~(MT_CMDMSK);
+                  r = sim_tape_rewind(uptr);
+                  set_devattn(addr, SNS_DEVEND);
               }
               break;
-         case 1:
-              sim_debug(DEBUG_DETAIL, dptr, "Erase unit=%d\n", unit);
-              r = sim_tape_wrgap(uptr, 35);
-              sim_activate(uptr, 5000);
-              uptr->u4++;
+
+         case MT_RUN:
+              if (uptr->u4 == 0) {
+                  uptr->u4 ++;
+                  mt_busy[bufnum] &= ~1;
+                  sim_activate(uptr, 30000);
+              } else {
+                  sim_debug(DEBUG_DETAIL, dptr, "Unload unit=%d\n", unit);
+                  uptr->u3 &= ~(MT_CMDMSK);
+                  r = sim_tape_detach(uptr);
+                  set_devattn(addr, SNS_DEVEND);
+              }
               break;
-         case 2:
-              uptr->u3 &= ~(MT_CMDMSK);
-              set_devattn(addr, SNS_DEVEND);
-              mt_busy[bufnum] &= ~1;
          }
-         break;
-
-    case MT_REW:
-         if (uptr->u4 == 0) {
-             uptr->u4 ++;
-             sim_activate(uptr, 30000);
-             mt_busy[bufnum] &= ~1;
-         } else {
-             sim_debug(DEBUG_DETAIL, dptr, "Rewind unit=%d\n", unit);
-             uptr->u3 &= ~(MT_CMDMSK);
-             r = sim_tape_rewind(uptr);
-             set_devattn(addr, SNS_DEVEND);
-         }
-         break;
-
-    case MT_RUN:
-         if (uptr->u4 == 0) {
-             uptr->u4 ++;
-             mt_busy[bufnum] &= ~1;
-             sim_activate(uptr, 30000);
-         } else {
-             sim_debug(DEBUG_DETAIL, dptr, "Unload unit=%d\n", unit);
-             uptr->u3 &= ~(MT_CMDMSK);
-             r = sim_tape_detach(uptr);
-             set_devattn(addr, SNS_DEVEND);
-         }
-         break;
     }
     return SCPE_OK;
 }

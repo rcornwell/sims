@@ -185,7 +185,7 @@ struct dasd_t
      uint16             tpos;    /* Track position */
      uint16             rpos;    /* Start of current record */
      uint16             dlen;    /* remaining in data */
-     uint16             tsize;   /* Size of one track include rounding */
+     uint32             tsize;   /* Size of one track include rounding */
      uint8              state;   /* Current state */
      uint8              klen;    /* remaining in key */
      uint8              filemsk; /* Current file mask */
@@ -723,7 +723,7 @@ index:
     }
 
     switch (cmd) {
-    case 0:                               /* No command, stop tape */
+    case 0:                               /* No command */
          break;
     case 0x14:
     case 0x34:
@@ -1560,6 +1560,13 @@ wrckd:
 
          break;
 
+    case DK_NOP:
+         sim_debug(DEBUG_DETAIL, dptr, "NOP=%d %x\n", unit, cmd);
+         (void)chan_read_byte(addr, &ch);
+         uptr->u6 = 0;
+         uptr->u3 &= ~(0xff);
+         chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+         break;
 
     case DK_WR_SCKD:         /* Write special count, key and data */
     default:

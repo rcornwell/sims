@@ -116,7 +116,6 @@ con_ini(UNIT *uptr, t_bool f) {
 
 uint8  con_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
      int                 u = (uptr - con_unit);
-    uint8   ch;
 
     if ((uptr->u3 & CON_MSK) != 0)
         return SNS_BSY;
@@ -171,11 +170,8 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
        break;
 
     case 4:              /* Sense */
-         sim_debug(DEBUG_CMD, &con_dev, "%d: Cmd SNS %02x\n", u, uptr->u5);
-         /* Check if request pending */
-         ch = uptr->u5;
-         chan_write_byte(GET_UADDR(uptr->u3), &ch);
-         return SNS_CHNEND|SNS_DEVEND;
+         uptr->u3 |= cmd & CON_MSK;
+         return 0;
 
     default:              /* invalid command */
          uptr->u5 |= SNS_CMDREJ;
@@ -199,6 +195,15 @@ con_srv(UNIT *uptr) {
 
 
     switch (cmd) {
+    case 0x4:
+         sim_debug(DEBUG_CMD, &con_dev, "%d: Cmd SNS %02x\n", u, uptr->u5);
+         /* Check if request pending */
+         ch = uptr->u5;
+         chan_write_byte(addr, &ch);
+         chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+         uptr->u3 &= ~(CON_MSK);
+         break;
+
     case CON_WR:
     case CON_ACR:
        if (chan_read_byte(addr, &ch)) {

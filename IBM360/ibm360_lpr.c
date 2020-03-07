@@ -256,8 +256,6 @@ lpr_srv(UNIT *uptr) {
        print_line(uptr);
        uptr->u3 &= ~(LPR_FULL|LPR_CMDMSK);
        uptr->u6 = 0;
-       if (cmd == 0x3)
-           chan_end(addr, SNS_CHNEND);
        set_devattn(addr, SNS_DEVEND);
        return SCPE_OK;
     }
