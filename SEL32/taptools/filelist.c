@@ -159,25 +159,21 @@ int main (int argc, char *argv[])
     /* get lines until eof */
     while ((ll=getloi(buf, buf_size)) != EOF)
     {
-        if (ll == 0)
-        {
+        if (ll == 0) {
             /* eof found, process new file */
             skipfile = 0;
             file_byte_count = 0;
             fileaddr = 0;
             printf("\nfile %d:\n", filen);
-        }
-        else
-        {
+        } else {
             int cc = 0;
             buffptr = 0;
             char buff[257];
             int ans;
-
-{
-            /* dump first 2 words */
             int w1, w2, i, j;
             char path[64], command[128];
+        {
+            /* dump first 2 words */
             w1 = (buf[0] & 0xff) << 24 | buf[1] << 16 | buf[2] << 8 | (buf[3] & 0xff);
             w2 = (buf[4] & 0xff) << 24 | buf[5] << 16 | buf[6] << 8 | (buf[7] & 0xff);
             if (filen > 480)

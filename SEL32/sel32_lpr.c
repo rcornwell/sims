@@ -190,6 +190,7 @@ DEVICE          lpr_dev = {
     "LPR", lpr_unit, NULL, lpr_mod,
     NUM_DEVS_LPR, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, NULL, &lpr_attach, &lpr_detach,
+    /* ctxt is the DIB pointer */
     &lpr_dib, DEV_UADDR | DEV_DISABLE | DEV_DEBUG, 0, dev_debug
 };
 

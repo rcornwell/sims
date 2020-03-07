@@ -163,7 +163,7 @@ void con_ini(UNIT *uptr, t_bool f) {
     int     unit = (uptr - con_unit);   /* unit 0 */
 //  DEVICE *dptr = get_dev(uptr);
 
-    uptr->u4 = 0;                       /* no input cpunt */
+    uptr->u4 = 0;                       /* no input count */
     con_data[unit].incnt = 0;           /* no input data */
 //  con_data[0].incnt = 0;              /* no input data */
 //  con_data[1].incnt = 0;              /* no output data */
@@ -208,7 +208,6 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         uptr->CMD |= CON_INCH2;         /* save INCH command as 0xf0 */
         uptr->SNS = SNS_RDY|SNS_ONLN;   /* status is online & ready */
         sim_activate(uptr, 20);         /* start us off */
-//WAS   sim_activate(uptr, 10);         /* start us off */
         return 0;                       /* no status change */
         break;
 
@@ -219,7 +218,6 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         uptr->CMD |= (cmd & CON_MSK);   /* save command */
         uptr->SNS = SNS_RDY|SNS_ONLN;   /* status is online & ready */
         sim_activate(uptr, 20);         /* start us off */
-//TRIED sim_activate(uptr, 10);         /* start us off */
         return 0;                       /* no status change */
         break;
 
@@ -245,7 +243,7 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         uptr->CMD |= (cmd & CON_MSK);   /* save command */
 //      uptr->u4 = 0;                   /* no I/O yet */
 //      con_data[unit].incnt = 0;       /* clear any input data */
-        sim_activate(uptr, 10);         /* start us off */
+        sim_activate(uptr, 20);         /* start us off */
         return 0;                       /* no status change */
         break;
 
@@ -254,7 +252,7 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         uptr->SNS = SNS_RDY|SNS_ONLN;   /* status is online & ready */
         uptr->CMD &= LMASK;             /* leave only chsa */
         uptr->CMD |= (cmd & CON_MSK);   /* save command */
-        sim_activate(uptr, 10);         /* start us off */
+        sim_activate(uptr, 20);         /* start us off */
         return 0;                       /* no status change */
         break;
 #endif
@@ -282,19 +280,16 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         break;
 
     default:                            /* invalid command */
-        uptr->SNS |= SNS_CMDREJ;        /* command rejected */
-//      uptr->u4 = 0;                   /* no I/O yet */
-//      con_data[unit].incnt = 0;       /* clear any input data */
-        sim_debug(DEBUG_CMD, &con_dev,
-            "con_startcmd %04x: Invalid command %02x Sense %02x\n",
-            chan, cmd, uptr->SNS);
-        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* unit check */
         break;
     }
-
-    if (uptr->SNS & (~(SNS_RDY|SNS_ONLN|SNS_DSR)))
-        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
-    return SNS_CHNEND|SNS_DEVEND;
+    /* invalid command */
+    uptr->SNS |= SNS_CMDREJ;        /* command rejected */
+//  uptr->u4 = 0;                   /* no I/O yet */
+//  con_data[unit].incnt = 0;       /* clear any input data */
+    sim_debug(DEBUG_CMD, &con_dev,
+        "con_startcmd %04x: Invalid command %02x Sense %02x\n",
+        chan, cmd, uptr->SNS);
+    return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* unit check */
 }
 
 /* Handle output transfers for console */
@@ -317,7 +312,6 @@ t_stat con_srvo(UNIT *uptr) {
             uptr->CMD &= LMASK;                 /* nothing left, command complete */
             sim_debug(DEBUG_CMD, &con_dev,
                 "con_srvo Read to output device chsa %04x cmd = %02x\n", chsa, cmd);
-//DIAG_TUE  chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);    /* unit check */
             chan_end(chsa, SNS_CHNEND|SNS_UNITCHK);    /* unit check */
             return SCPE_OK;
         }
@@ -401,9 +395,8 @@ t_stat con_srvi(UNIT *uptr) {
             uptr->CMD &= LMASK;                 /* nothing left, command complete */
             sim_debug(DEBUG_CMD, &con_dev,
                 "con_srvi Write to input device chsa %04x cmd = %02x\n", chsa, cmd);
-//DIAGTUE   chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);    /* unit check */
             chan_end(chsa, SNS_CHNEND|SNS_UNITCHK);    /* unit check */
-//fall thru return SCPE_OK;
+            // fall thru return SCPE_OK;
         }
     }
 #ifdef JUNK

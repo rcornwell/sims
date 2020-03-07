@@ -352,9 +352,9 @@ hsdp_type[] =
 
 uint8   hsdp_preio(UNIT *uptr, uint16 chan) ;
 uint8   hsdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) ;
-uint8   hsdp_haltio(uint16 addr);
+uint8   hsdp_haltio(UNIT *uptr);
 t_stat  hsdp_srv(UNIT *);
-t_stat  hsdp_boot(int32, DEVICE *);
+t_stat  hsdp_boot(int32 unitnum, DEVICE *);
 void    hsdp_ini(UNIT *, t_bool);
 t_stat  hsdp_reset(DEVICE *);
 t_stat  hsdp_attach(UNIT *, CONST char *);
@@ -409,6 +409,7 @@ DEVICE          dpa_dev = {
     "DPA", dpa_unit, NULL, hsdp_mod,
     NUM_UNITS_HSDP, 16, 24, 4, 16, 32,
     NULL, NULL, &hsdp_reset, &hsdp_boot, &hsdp_attach, &hsdp_detach,
+    /* ctxt is the DIB pointer */
     &dpa_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug,
     NULL, NULL, &hsdp_help, NULL, NULL, &hsdp_description
 };
@@ -451,6 +452,7 @@ DEVICE          dpb_dev = {
     "DPB", dpb_unit, NULL, hsdp_mod,
     NUM_UNITS_HSDP, 16, 24, 4, 16, 32,
     NULL, NULL, &hsdp_reset, &hsdp_boot, &hsdp_attach, &hsdp_detach,
+    /* ctxt is the DIB pointer */
     &dpb_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug,
     NULL, NULL, &hsdp_help, NULL, NULL, &hsdp_description
 };
@@ -723,6 +725,7 @@ t_stat hsdp_srv(UNIT *uptr)
                 /* we have write error, bail out */
                 uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                goto goout;
                 break;
             }
             if ((i%16) == 0)
@@ -730,8 +733,8 @@ t_stat hsdp_srv(UNIT *uptr)
             sim_debug(DEBUG_DETAIL, dptr, " %02x", buf[i]);
         }
         sim_debug(DEBUG_DETAIL, dptr, "\n");
-
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
+goout:
         break;
 
     case DSK_WTL:                               /* WTL 0x51 make into NOP */
@@ -747,6 +750,7 @@ t_stat hsdp_srv(UNIT *uptr)
                 /* we have read error, bail out */
                 uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                goto goout;
                 break;
             }
             if (i == 16)
@@ -857,17 +861,20 @@ t_stat hsdp_srv(UNIT *uptr)
                 /* we have already seeked to the required sector */
                 /* we do not need to seek again, so move on */
                 chan_end(chsa, SNS_DEVEND|SNS_CHNEND);
-                sim_activate(uptr, 20);
+                return SCPE_OK;
+//XXX           sim_activate(uptr, 20);
                 break;
             } else {
                 /* we have wasted enough time, we there */
-#ifndef DO_SEEK_AGAIN
+#ifdef DO_SEEK_AGAIN
         /* calculate file position in bytes of requested sector */
         /* file offseet in bytes */
         tstart = STAR2SEC(uptr->STAR, SPT(type), SPC(type)) * SSB(type);
         /* just reseek to the location where we will r/w data */
         if ((sim_fseek(uptr->fileref, tstart, SEEK_SET)) != 0) {  /* do seek */
             sim_debug(DEBUG_DETAIL, dptr, "hsdp_srv Error on seek to %04x\n", tstart);
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+            return SCPE_OK;
         }
 #endif
                 uptr->CHS = uptr->STAR;         /* we are there */
@@ -903,12 +910,13 @@ t_stat hsdp_srv(UNIT *uptr)
                     break;
                 }
                 /* just read the next byte */
+                /* done reading, see how many we read */
+                if (i == 1) {
+                    /* UTX wants to set seek STAR to zero */
+                    buf[0] = buf[1] = buf[2] = buf[3] = 0;
+                    break;
+                }
             }
-        }
-        /* done reading, see how many we read */
-        if (i == 1) {
-            /* UTX wants to set seek STAR to zero */
-            buf[0] = buf[1] = buf[2] = buf[3] = 0;
         }
         /* else the cyl, trk, and sect are ready to update */
         sim_debug(DEBUG_CMD, dptr,
@@ -958,6 +966,8 @@ rezero:
         /* just seek to the location where we will r/w data */
         if ((sim_fseek(uptr->fileref, tstart, SEEK_SET)) != 0) {  /* seek home */
             sim_debug(DEBUG_DETAIL, dptr, "hsdp_srv Error on seek to %08x\n", tstart);
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+            return SCPE_OK;
         }
 
         /* Check if already on correct cylinder */
@@ -1471,6 +1481,9 @@ void hsdp_ini(UNIT *uptr, t_bool f)
     DEVICE  *dptr = get_dev(uptr);
     int     i = GET_TYPE(uptr->flags);
 
+    /* start out at sector 0 */
+    uptr->CHS = 0;                              /* set CHS to cyl/hd/sec = 0 */
+    uptr->STAR = 0;                             /* set STAR to cyl/hd/sec = 0 */
     uptr->CMD &= ~0x7fff;                       /* clear out the flags but leave ch/sa */
     uptr->SNS = ((uptr->SNS & 0x00ffffff) | (hsdp_type[i].type << 24));  /* save mode value */
     /* total sectors on disk */
@@ -1600,6 +1613,7 @@ int hsdp_format(UNIT *uptr) {
     /* seek to sector 0 */
     if ((sim_fseek(uptr->fileref, 0, SEEK_SET)) != 0) { /* seek home */
         fprintf (stderr, "Error on seek to 0\r\n");
+        return 1;
     }
 
     /* get buffer for track data in bytes */
@@ -1652,10 +1666,14 @@ int hsdp_format(UNIT *uptr) {
     /* setup dmap pointed to by track label 0 wd[3] = (cyl-4) * spt + (spt - 1) */
 
     /* write dmap data to last sector on disk */
-    sim_fseek(uptr->fileref, laddr*ssize, SEEK_SET);    /* seek last sector */
+    if ((sim_fseek(uptr->fileref, laddr*ssize, SEEK_SET)) != 0) { /* seek last sector */
+        sim_debug(DEBUG_CMD, dptr,
+        "Error on last sector seek to diskfile sect %06x\n", (cap-1) * ssize);
+        return 1;
+    }
     if ((sim_fwrite((char *)&dmap, sizeof(uint32), 4, uptr->fileref)) != 4) {
         sim_debug(DEBUG_CMD, dptr,
-        "Error on vendor map write to diskfile sect %06x\n", (cap-1) * ssize);
+        "Error on last sectdor write to diskfile sect %06x\n", (cap-1) * ssize);
     }
 
     /* 1 cylinder is saved for disk manufacture */
@@ -1665,7 +1683,11 @@ int hsdp_format(UNIT *uptr) {
     /* vaddr is (cap) - 3 cyl - 1 track */
 
     /* seek to vendor label area */
-    sim_fseek(uptr->fileref, (vaddr)*ssize, SEEK_SET);  /* seek UMAP */
+    if ((sim_fseek(uptr->fileref, vaddr*ssize, SEEK_SET)) != 0) { /* seek VMAP */
+        sim_debug(DEBUG_CMD, dptr,
+        "Error on vendor map seek to diskfile sect %06x\n", (cap-1) * ssize);
+        return 1;
+    }
     if ((sim_fwrite((char *)&vmap, sizeof(uint32), 2, uptr->fileref)) != 2) {
         sim_debug(DEBUG_CMD, dptr,
         "Error on vendor map write to diskfile sect %06x\n", vaddr * ssize);
@@ -1675,16 +1697,26 @@ int hsdp_format(UNIT *uptr) {
     /* daddr is (cap) - 3 cyl - 2 tracks */
     /* vaddr is daddr - spt */
 
-    sim_fseek(uptr->fileref, (daddr)*ssize, SEEK_SET);   /* seek DMAP */
+    if ((sim_fseek(uptr->fileref, daddr*ssize, SEEK_SET)) != 0) { /* seek DMAP */
+        sim_debug(DEBUG_CMD, dptr,
+        "Error on dmap seek to diskfile sect %06x\n", (cap-1) * ssize);
+        return 1;
+    }
     if ((sim_fwrite((char *)&dmap, sizeof(uint32), 4, uptr->fileref)) != 4) {
         sim_debug(DEBUG_CMD, dptr,
         "Error on dmap write to diskfile sect %06x\n", daddr * ssize);
+        return 1;
     }
 
-    sim_fseek(uptr->fileref, (uaddr)*ssize, SEEK_SET);   /* seek UMAP */
+    if ((sim_fseek(uptr->fileref, uaddr*ssize, SEEK_SET)) != 0) { /* seek UMAP */
+        sim_debug(DEBUG_CMD, dptr,
+        "Error on umap seek to diskfile sect %06x\n", (cap-1) * ssize);
+        return 1;
+    }
     if ((sim_fwrite((char *)&umap, sizeof(uint32), 256, uptr->fileref)) != 256) {
         sim_debug(DEBUG_CMD, dptr,
-          "Error on umap write to diskfile sect %06x\n", uaddr * ssize);
+        "Error on umap write to diskfile sect %06x\n", uaddr * ssize);
+        return 1;
     }
 
     printf("writing to vmap sec %x (%d) bytes %x (%d)\n",
@@ -1696,7 +1728,11 @@ int hsdp_format(UNIT *uptr) {
        daddr, daddr, daddr*ssize, daddr*ssize);
 
     /* seek home again */
-    sim_fseek(uptr->fileref, 0, SEEK_SET);      /* seek home */
+    if ((sim_fseek(uptr->fileref, 0, SEEK_SET)) != 0) { /* seek home */
+        fprintf (stderr, "Error on seek to 0\r\n");
+        return 1;
+    }
+    free(buff);                                 /* free cylinder buffer */
     free(buff);                                 /* free cylinder buffer */
     return 0;
 }

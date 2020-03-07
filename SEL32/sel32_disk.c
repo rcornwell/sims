@@ -25,7 +25,7 @@
 
 extern  t_stat  set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 extern  t_stat  show_dev_addr(FILE *st, UNIT *uptr, int32 v, CONST void *desc);
-extern  void    chan_end(uint16 chan, uint8 flags);
+extern  void    chan_end(uint16 chsa, uint8 flags);
 extern  int     chan_read_byte(uint16 chsa, uint8 *data);
 extern  int     chan_write_byte(uint16 chsa, uint8 *data);
 extern  void    set_devattn(uint16 addr, uint8 flags);
@@ -44,13 +44,13 @@ extern  uint32  SPAD[];                         /* cpu SPAD memory */
 
 /* useful conversions */
 /* Fill STAR value from cyl, trk, sec data */
-#define CHS2STAR(c,h,s)	        (((c<<16) & 0xffff0000)|((h<<8) & 0xff00)|(s & 0xff))
+#define CHS2STAR(c,h,s)	        (((c<<16) & LMASK)|((h<<8) & 0xff00)|(s & 0xff))
 /* convert STAR value to number of sectors */
 #define STAR2SEC(star,spt,spc)  ((star&0xff)+(((star>>8)&0xff)*spt)+((star>>16)*spc))
 /* convert STAR value to number of heads or tracks */
 #define STAR2TRK(star,tpc)      ((star >> 16) * tpc + ((star >> 8) & 0x0ff))
 /* convert STAR value to number of cylinders */
-#define STAR2CYL(star)          ((star >> 16) & 0xffff)
+#define STAR2CYL(star)          ((star >> 16) & RMASK)
 /* convert byte value to number of sectors mod sector size */
 #define BYTES2SEC(bytes,ssize)  (((bytes) + (ssize-1)) >> 10)
 /* get sectors per track for specified type */
@@ -144,7 +144,7 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
     char ldatrfhdc;     FHD head count
  */
 
-#define CMD     u3
+#define CMDu3   u3
 /* u3 */
 /* in u3 is device command code and status */
 #define DSK_CMDMSK      0x00ff                  /* Command being run */
@@ -254,7 +254,7 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
     mini-module)
 */
 
-/* Not Used     up7 */
+/* INCH addr    up7 */
 
 #ifdef  NOUSED
 /* registers */
@@ -298,9 +298,9 @@ disk_type[] =
 
 uint8   disk_preio(UNIT *uptr, uint16 chan) ;
 uint8   disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) ;
-uint8   disk_haltio(uint16 addr);
-t_stat  disk_srv(UNIT *);
-t_stat  disk_boot(int32, DEVICE *);
+uint8   disk_haltio(UNIT *uptr);
+t_stat  disk_srv(UNIT *uptr);
+t_stat  disk_boot(int32 unitnum, DEVICE *dptr);
 void    disk_ini(UNIT *, t_bool);
 t_stat  disk_reset(DEVICE *);
 t_stat  disk_attach(UNIT *, CONST char *);
@@ -363,6 +363,7 @@ DEVICE          dda_dev = {
     "DMA", dda_unit, NULL/*dda_reg*/, disk_mod,
     NUM_UNITS_DISK, 16, 24, 4, 16, 32,
     NULL, NULL, &disk_reset, &disk_boot, &disk_attach, &disk_detach,
+    /* ctxt is the DIB pointer */
     &dda_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug,
     NULL, NULL, &disk_help, NULL, NULL, &disk_description
 };
@@ -413,6 +414,7 @@ DEVICE          ddb_dev = {
     "DMB", ddb_unit, NULL, /*ddb_reg*/, disk_mod,
     NUM_UNITS_DISK, 16, 24, 4, 16, 32,
     NULL, NULL, &disk_reset, &disk_boot, &disk_attach, &disk_detach,
+    /* ctxt is the DIB pointer */
     &ddb_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug,
     NULL, NULL, &disk_help, NULL, NULL, &disk_description
 };
@@ -434,11 +436,11 @@ uint32 disksec2star(uint32 daddr, int type)
 uint8  disk_preio(UNIT *uptr, uint16 chan)
 {
     DEVICE      *dptr = get_dev(uptr);
-    uint16      chsa = GET_UADDR(uptr->CMD);
+    uint16      chsa = GET_UADDR(uptr->CMDu3);
     int         unit = (uptr - dptr->units);
 
-    sim_debug(DEBUG_CMD, dptr, "disk_preio CMD %08x unit %02x\n", uptr->CMD, unit);
-    if ((uptr->CMD & 0xff00) != 0) {            /* just return if busy */
+    sim_debug(DEBUG_CMD, dptr, "disk_preio CMD %08x unit %02x\n", uptr->CMDu3, unit);
+    if ((uptr->CMDu3 & 0xff00) != 0) {            /* just return if busy */
         return SNS_BSY;
     }
 
@@ -448,25 +450,25 @@ uint8  disk_preio(UNIT *uptr, uint16 chan)
 
 uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 {
-    uint16      chsa = GET_UADDR(uptr->CMD);
+    uint16      chsa = GET_UADDR(uptr->CMDu3);
     DEVICE      *dptr = get_dev(uptr);
     int         unit = (uptr - dptr->units);
     CHANP       *chp = find_chanp_ptr(chsa);    /* find the chanp pointer */
 
     sim_debug(DEBUG_CMD, dptr,
         "disk_startcmd chsa %04x unit %02x cmd %02x CMD %08x\n",
-        chsa, unit, cmd, uptr->CMD);
+        chsa, unit, cmd, uptr->CMDu3);
     if ((uptr->flags & UNIT_ATT) == 0) {        /* unit attached status */
         uptr->SNS |= SNS_INTVENT;               /* unit intervention required */
         if (cmd != DSK_SNS)                     /* we are completed with unit check status */
             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     }
 
-    if ((uptr->CMD & DSK_CMDMSK) != 0) {
-        uptr->CMD |= DSK_BUSY;                  /* Flag we are busy */
+    if ((uptr->CMDu3 & DSK_CMDMSK) != 0) {
+        uptr->CMDu3 |= DSK_BUSY;                  /* Flag we are busy */
         return SNS_BSY;
     }
-    if ((uptr->CMD & 0xff00) != 0) {            /* if any status info, we are busy */
+    if ((uptr->CMDu3 & 0xff00) != 0) {            /* if any status info, we are busy */
         return SNS_BSY;
     }
     sim_debug(DEBUG_CMD, dptr, "disk_startcmd CMD continue unit=%02x cmd %02x\n", unit, cmd);
@@ -479,18 +481,18 @@ uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
             "disk_startcmd starting INCH %06x cmd, chsa %04x MemBuf %06x cnt %04x\n",
             uptr->u4, chsa, chp->ccw_addr, chp->ccw_count);
 
-        uptr->CMD |= DSK_INCH2;                 /* use 0xf0 for inch, just need int */
+        uptr->CMDu3 |= DSK_INCH2;                 /* use 0xf0 for inch, just need int */
         sim_activate(uptr, 20);                 /* start things off */
         return 0;
         break;
 
     case DSK_SCK:                               /* Seek command 0x07 */
-    case DSK_XEZ:                               /* Rezero & Read IPL record 0x1f */
+    case DSK_XEZ:                               /* Rezero & Read IPL record 0x37 */
     case DSK_WD:                                /* Write command 0x01 */
     case DSK_RD:                                /* Read command 0x02 */
-    case DSK_LMR:                               /* read mode register */
+    case DSK_LMR:                               /* read mode register 0x15 */
 
-        uptr->CMD |= cmd;                       /* save cmd */
+        uptr->CMDu3 |= cmd;                       /* save cmd */
         sim_debug(DEBUG_CMD, dptr,
             "disk_startcmd starting disk seek r/w cmd %02x chsa %04x\n",
             cmd, chsa);
@@ -499,36 +501,36 @@ uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         break;
 
     case DSK_NOP:                               /* NOP 0x03 */
-        uptr->CMD |= cmd;                       /* save cmd */
+        uptr->CMDu3 |= cmd;                       /* save cmd */
         sim_activate(uptr, 20);                 /* start things off */
         return 0;
         break;
 
     case DSK_SNS:                               /* Sense 0x04 */
-        uptr->CMD |= cmd;                       /* save cmd */
+        uptr->CMDu3 |= cmd;                       /* save cmd */
         sim_activate(uptr, 20);                 /* start things off */
         break;
      
     case DSK_WSL:                               /* WSL 0x31 */
-        uptr->CMD |= cmd;                       /* save cmd */
+        uptr->CMDu3 |= cmd;                       /* save cmd */
         sim_activate(uptr, 20);                 /* start things off */
         return 0;
         break;
 
     case DSK_RSL:                               /* RSL 0x32 */
-        uptr->CMD |= cmd;                       /* save cmd */
+        uptr->CMDu3 |= cmd;                       /* save cmd */
         sim_activate(uptr, 20);                 /* start things off */
         return 0;
         break;
 
     case DSK_WTL:                               /* WTL 0x51 */
-        uptr->CMD |= cmd;                       /* save cmd */
+        uptr->CMDu3 |= cmd;                       /* save cmd */
         sim_activate(uptr, 20);                 /* start things off */
         return 0;
         break;
 
     case DSK_RTL:                               /* RTL 0x52 */
-        uptr->CMD |= cmd;                       /* save cmd */
+        uptr->CMDu3 |= cmd;                       /* save cmd */
         sim_activate(uptr, 20);                 /* start things off */
         return 0;
         break;
@@ -546,11 +548,11 @@ uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 /* Handle processing of disk requests. */
 t_stat disk_srv(UNIT *uptr)
 {
-    uint16          chsa = GET_UADDR(uptr->CMD);
+    uint16          chsa = GET_UADDR(uptr->CMDu3);
     DEVICE          *dptr = get_dev(uptr);
     DIB             *dibp = (DIB *)dptr->ctxt;          /* get DIB address */
     CHANP           *chp = (CHANP *)dibp->chan_prg;     /* get pointer to channel program */
-    int             cmd = uptr->CMD & DSK_CMDMSK;
+    int             cmd = uptr->CMDu3 & DSK_CMDMSK;
     int             type = GET_TYPE(uptr->flags);
     uint32          trk, cyl, sec;
     int             unit = (uptr - dptr->units);
@@ -564,7 +566,7 @@ t_stat disk_srv(UNIT *uptr)
 
     sim_debug(DEBUG_CMD, dptr,
         "disk_srv entry unit %02x CMD %08x chsa %04x count %04x %x/%x/%x \n",
-        unit, uptr->CMD, chsa, chp->ccw_count,
+        unit, uptr->CMDu3, chsa, chp->ccw_count,
         STAR2CYL(uptr->CHS), (uptr->CHS >> 8)&0xff, (uptr->CHS&0xff));
 
     if ((uptr->flags & UNIT_ATT) == 0) {        /* unit attached status */
@@ -597,7 +599,7 @@ t_stat disk_srv(UNIT *uptr)
         /* a pointer to the INCH buffer followed by 8 drive attribute words that */
         /* contains the flags, sector count, MHD head count, and FHD count */
         /* len has the byte count from IOCD wd2 and should be 0x24 (36) */
-        /* the INCH buffer address must be set for the parrent channel as well */
+        /* the INCH buffer address must be set for the parent channel as well */
         /* as all other devices on the channel.  Call set_inch() to do this for us */
         /* just return OK and channel software will use u4 as status buffer addr */
 
@@ -605,7 +607,7 @@ t_stat disk_srv(UNIT *uptr)
 
         if (len != 36) {
                 /* we have invalid count, error, bail out */
-                uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
+                uptr->CMDu3 &= LMASK;             /* remove old status bits & cmd */
                 uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
@@ -620,7 +622,7 @@ t_stat disk_srv(UNIT *uptr)
         for (i=0; i < 36; i++) {
             if (chan_read_byte(chsa, &buf[i])) {
                 /* we have error, bail out */
-                uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
+                uptr->CMDu3 &= LMASK;             /* remove old status bits & cmd */
                 uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
@@ -645,13 +647,13 @@ t_stat disk_srv(UNIT *uptr)
 #ifdef NOTYET
         if ((i == SCPE_MEM) || (i == SCPE_ARG)) {   /* any error */
             /* we have error, bail out */
-            uptr->CMD &= ~(0xffff);             /* remove old status bits & cmd */
+            uptr->CMDu3 &= LMASK;                 /* remove old status bits & cmd */
             uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             break;
         }
 #endif
-        uptr->CMD &= ~(0xffff);                 /* remove old cmd */
+        uptr->CMDu3 &= LMASK;                     /* remove old status bits & cmd */
         sim_debug(DEBUG_CMD, dptr,
             "disk_srv cmd INCH chsa %04x addr %06x count %04x completed\n",
             chsa, mema, chp->ccw_count);
@@ -664,7 +666,7 @@ t_stat disk_srv(UNIT *uptr)
         break;
 
     case DSK_WSL:                               /* WSL 0x31 make into NOP */
-        uptr->CMD &= ~(0xffff);                 /* remove old cmd */
+        uptr->CMDu3 &= LMASK;                     /* remove old status bits & cmd */
         sim_debug(DEBUG_CMD, dptr,
             "disk_srv cmd WSL chsa %04x count %04x completed\n",
             chsa, chp->ccw_count);
@@ -675,8 +677,10 @@ t_stat disk_srv(UNIT *uptr)
         for (i = 0; i < len; i++) {
             if (chan_read_byte(chsa, &buf[i])) {
                 /* we have write error, bail out */
-                uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
+                uptr->CMDu3 &= LMASK;             /* remove old status bits & cmd */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+//XXX           goto goout;
+                return SCPE_OK;
                 break;
             }
             if ((i%16) == 0)
@@ -684,12 +688,12 @@ t_stat disk_srv(UNIT *uptr)
             sim_debug(DEBUG_DETAIL, dptr, " %02x", buf[i]);
         }
         sim_debug(DEBUG_DETAIL, dptr, "\n");
-
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
+//XXXgoout:
         break;
 
     case DSK_WTL:                               /* WTL 0x51 make into NOP */
-        uptr->CMD &= ~(0xffff);                 /* remove old cmd */
+        uptr->CMDu3 &= LMASK;                     /* remove old status bits & cmd */
         sim_debug(DEBUG_CMD, dptr,
             "disk_srv cmd WTL chsa %04x count %04x completed\n",
             chsa, chp->ccw_count);
@@ -699,8 +703,10 @@ t_stat disk_srv(UNIT *uptr)
         for (i = 0; i < 30; i++) {
             if (chan_read_byte(chsa, &buf[i])) {
                 /* we have read error, bail out */
-                uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
+                uptr->CMDu3 &= LMASK;             /* remove old status bits & cmd */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                return SCPE_OK;
+//XXX           goto goout;
                 break;
             }
             if (i == 16)
@@ -708,12 +714,11 @@ t_stat disk_srv(UNIT *uptr)
             sim_debug(DEBUG_DETAIL, dptr, " %02x", buf[i]);
         }
         sim_debug(DEBUG_DETAIL, dptr, "\n");
-
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
         break;
 
     case DSK_NOP:                               /* NOP 0x03 */
-        uptr->CMD &= ~(0xffff);                 /* remove old cmd */
+        uptr->CMDu3 &= LMASK;                     /* remove old status bits & cmd */
         sim_debug(DEBUG_CMD, dptr,
             "disk_srv cmd NOP chsa %04x count %04x completed\n",
             chsa, chp->ccw_count);
@@ -794,33 +799,36 @@ t_stat disk_srv(UNIT *uptr)
                 unit, ch);
             chan_write_byte(chsa, &ch);
         }
-        uptr->CMD &= ~(0xffff);                 /* remove old status bits & cmd */
+        uptr->CMDu3 &= LMASK;                     /* remove old status bits & cmd */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
         break;
 
     case DSK_SCK:                               /* Seek cylinder, track, sector 0x07 */
         /* If we are waiting on seek to finish, check if there yet. */
-        if (uptr->CMD & DSK_SEEKING) {
+        if (uptr->CMDu3 & DSK_SEEKING) {
             /* see if on cylinder yet */
             if (STAR2CYL(uptr->STAR) == STAR2CYL(uptr->CHS)) {
                 /* we are on cylinder, seek is done */
                 sim_debug(DEBUG_CMD, dptr, "disk_srv seek on cylinder unit=%02x %04x %04x\n",
                     unit, uptr->STAR >> 16, uptr->CHS >> 16);
-                uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
+                uptr->CMDu3 &= LMASK;             /* remove old status bits & cmd */
                 /* we have already seeked to the required sector */
                 /* we do not need to seek again, so move on */
                 chan_end(chsa, SNS_DEVEND|SNS_CHNEND);
-                sim_activate(uptr, 20);
+                return SCPE_OK;
+//XXX           sim_activate(uptr, 20);
                 break;
             } else {
                 /* we have wasted enough time, we are there */
-#ifndef DO_SEEK_AGAIN
+#ifdef DO_SEEK_AGAIN
         /* calculate file position in bytes of requested sector */
         /* file offset in bytes */
         tstart = STAR2SEC(uptr->STAR, SPT(type), SPC(type)) * SSB(type);
         /* just reseek to the location where we will r/w data */
         if ((sim_fseek(uptr->fileref, tstart, SEEK_SET)) != 0) {  /* do seek */
             sim_debug(DEBUG_DETAIL, dptr, "disk_srv Error on seek to %04x\n", tstart);
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+            return SCPE_OK;
         }
 #endif
                 uptr->CHS = uptr->STAR;         /* we are there */
@@ -849,25 +857,26 @@ t_stat disk_srv(UNIT *uptr)
                         "disk_srv seek error unit=%02x star %02x %02x %02x %02x\n",
                         unit, buf[0], buf[1], buf[2], buf[3]);
                     /* we have error, bail out */
-                    uptr->CMD &= ~(0xffff);     /* remove old status bits & cmd */
+                    uptr->CMDu3 &= LMASK;         /* remove old status bits & cmd */
                     uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
                     chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                     return SCPE_OK;
                     break;
                 }
+                /* done reading, see how many we read */
+                if (i == 1) {
+                    /* UTX wants to set seek STAR to zero */
+                    buf[0] = buf[1] = buf[2] = buf[3] = 0;
+                    break;
+                }
                 /* just read the next byte */
             }
-        }
-        /* done reading, see how many we read */
-        if (i == 1) {
-            /* UTX wants to set seek STAR to zero */
-            buf[0] = buf[1] = buf[2] = buf[3] = 0;
         }
         /* else the cyl, trk, and sect are ready to update */
         sim_debug(DEBUG_CMD, dptr,
             "disk_srv STAR unit=%02x star %02x %02x %02x %02x\n",
             unit, buf[0], buf[1], buf[2], buf[3]);
-rezero:
+//XXXrezero:
         sim_debug(DEBUG_DETAIL, dptr,
             "disk_srv seek unit=%02x star %02x %02x %02x %02x\n",
             unit, buf[0], buf[1], buf[2], buf[3]);
@@ -886,11 +895,11 @@ rezero:
             trk >= disk_type[type].nhds ||
             buf[3] >= disk_type[type].spt) {
 
-            sim_debug(DEBUG_CMD, dptr,
+            sim_debug(DEBUG_EXP, dptr,
                 "disk_srv seek ERROR cyl %04x trk %02x sec %02x unit=%02x\n",
                 cyl, trk, buf[3], unit);
 
-            uptr->CMD &= ~(0xffff);             /* remove old status bits & cmd */
+            uptr->CMDu3 &= LMASK;                 /* remove old status bits & cmd */
             uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK; /* set error status */
 
             /* we have an error, tell user */
@@ -911,15 +920,18 @@ rezero:
 
         /* just seek to the location where we will r/w data */
         if ((sim_fseek(uptr->fileref, tstart, SEEK_SET)) != 0) {  /* do seek */
-            sim_debug(DEBUG_DETAIL, dptr, "disk_srv Error on seek to %04x\n", tstart);
+            sim_debug(DEBUG_EXP, dptr, "disk_srv Error on seek to %04x\n", tstart);
+            uptr->CMDu3 &= LMASK;                 /* remove old status bits & cmd */
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+            return SCPE_OK;
         }
 
         /* Check if already on correct cylinder */
         /* if not, do a delay to slow things down */
         if (STAR2CYL(uptr->STAR) != STAR2CYL(uptr->CHS)) {
             /* Do a fake seek to kill time */
-            uptr->CMD |= DSK_SEEKING;           /* show we are seeking */
-            sim_debug(DEBUG_DETAIL, dptr,
+            uptr->CMDu3 |= DSK_SEEKING;           /* show we are seeking */
+            sim_debug(DEBUG_EXP, dptr,
                 "disk_srv seeking unit=%02x to cyl %04x trk %02x sec %02x\n",
                 unit, cyl, trk, buf[3]);
             sim_activate(uptr, 20);             /* start us off */
@@ -928,7 +940,7 @@ rezero:
             sim_debug(DEBUG_DETAIL, dptr,
                 "disk_srv done seeking to %04x cyl %04x trk %02x sec %02x\n",
                 tstart, cyl, trk, buf[3]);
-            uptr->CMD &= ~(0xffff);             /* remove old status bits & cmd */
+            uptr->CMDu3 &= LMASK;                 /* remove old status bits & cmd */
             chan_end(chsa, SNS_DEVEND|SNS_CHNEND);
         }
         return SCPE_OK;
@@ -939,20 +951,38 @@ rezero:
         /* Do a seek to 0 */
         uptr->STAR = 0;                         /* set STAR to 0, 0, 0 */
         uptr->CHS = 0;                          /* set current CHS to 0, 0, 0 */
-        uptr->CMD &= ~(0xffff);                 /* remove old cmd */
-        uptr->CMD |= DSK_SCK;                   /* show as seek command */
+        uptr->CMDu3 &= LMASK;                     /* remove old status bits & cmd */
+        uptr->CMDu3 |= DSK_SCK;                   /* show as seek command */
         tstart = 0;                             /* byte offset is 0 */
+#ifdef NOT_NEEDED
         /* Read in 1 dummy character for length to inhibit SLI posting */
         if (chan_read_byte(chsa, &buf[0])) {
             /* we have error, bail out */
-            uptr->CMD &= ~(0xffff);             /* remove old status bits & cmd */
+            uptr->CMDu3 &= LMASK;                 /* remove old status bits & cmd */
             uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
-            break;
+            return SCPE_OK;
+//XXX       break;
         }
+#endif
+#ifndef DO_NEW_WAY
+        /* just seek to the location where we will r/w data */
+        if ((sim_fseek(uptr->fileref, tstart, SEEK_SET)) != 0) {  /* do seek */
+            sim_debug(DEBUG_EXP, dptr, "disk_srv Error on seek to %04x\n", tstart);
+            uptr->CMDu3 &= LMASK;                 /* remove old status bits & cmd */
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+            return SCPE_OK;
+        }
+        /* we are on cylinder/track/sector zero, so go on */
+        sim_debug(DEBUG_DETAIL, dptr, "disk_srv done seek trk 0\n");
+        uptr->CMDu3 &= LMASK;                     /* remove old status bits & cmd */
+        chan_end(chsa, SNS_DEVEND|SNS_CHNEND);
+        return SCPE_OK;
+#else
         /* zero stuff */
         buf[0] = buf[1] = buf[2] = buf[3] = 0;
         goto rezero;                            /* merge with seek code */
+#endif
         break;
 
     case DSK_LMR:
@@ -960,28 +990,28 @@ rezero:
         /* Read in 1 character of mode data */
         if (chan_read_byte(chsa, &buf[0])) {
             /* we have error, bail out */
-            uptr->CMD &= ~(0xffff);             /* remove old status bits & cmd */
+            uptr->CMDu3 &= LMASK;                 /* remove old status bits & cmd */
             uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             break;
         }
         sim_debug(DEBUG_CMD, dptr, "Load Mode Reg unit=%02x old %x new %x\n",
             unit, (uptr->SNS)&0xff, buf[0]);
-        uptr->CMD &= ~(0xffff);                 /* remove old cmd */
-        uptr->SNS &= 0x00ffffff;                /* clear old mode data */
+        uptr->CMDu3 &= LMASK;                     /* remove old cmd */
+        uptr->SNS &= MASK24;                    /* clear old mode data */
         uptr->SNS |= (buf[0] << 24);            /* save mode value */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
         break;
 
     case DSK_RD:                                /* Read Data */
-        if ((uptr->CMD & DSK_READING) == 0) {   /* see if we are reading data */
-            uptr->CMD |= DSK_READING;           /* read from disk starting */
+        if ((uptr->CMDu3 & DSK_READING) == 0) {   /* see if we are reading data */
+            uptr->CMDu3 |= DSK_READING;           /* read from disk starting */
             sim_debug(DEBUG_CMD, dptr,
                 "DISK READ starting CMD %08x chsa %04x buffer %06x count %04x\n",
-                uptr->CMD, chsa, chp->ccw_addr, chp->ccw_count);
+                uptr->CMDu3, chsa, chp->ccw_addr, chp->ccw_count);
         }
 
-        if (uptr->CMD & DSK_READING) {          /* see if we are reading data */
+        if (uptr->CMDu3 & DSK_READING) {          /* see if we are reading data */
             cyl = STAR2CYL(uptr->CHS);          /* get current cyl */
             trk = (uptr->CHS >> 8) & 0xff;      /* get trk/head */
             sec = uptr->CHS & 0xff;             /* get sec */
@@ -989,12 +1019,16 @@ rezero:
 //          tstart = STAR2SEC(uptr->STAR, SPT(type), SPC(type));
             tstart = STAR2SEC(uptr->CHS, SPT(type), SPC(type));
 
+            sim_debug(DEBUG_CMD, dptr,
+                "DISK READ reading CMD %08x chsa %04x tstart %04x buffer %06x count %04x\n",
+                uptr->CMDu3, chsa, tstart, chp->ccw_addr, chp->ccw_count);
+
             /* read in a sector of data from disk */
             if ((len=sim_fread(buf, 1, ssize, uptr->fileref)) != ssize) {
                 sim_debug(DEBUG_CMD, dptr,
                     "Error %08x on read %04x of diskfile cyl %04x hds %02x sec %02x\n",
                     len, ssize, cyl, trk, sec);
-                uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
+                uptr->CMDu3 &= LMASK;             /* remove old status bits & cmd */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
             }
@@ -1010,10 +1044,14 @@ rezero:
                     sim_debug(DEBUG_DATA, dptr,
                         "DISK Read %04x bytes leaving %04x from diskfile /%04x/%02x/%02x\n",
                         i, chp->ccw_count, cyl, trk, sec);
-                    uptr->CMD &= ~(0xffff);     /* remove old status bits & cmd */
+                    uptr->CMDu3 &= LMASK;         /* remove old status bits & cmd */
                     chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
-                    goto rddone;
+                    return SCPE_OK;
+//XXX               goto rddone;
                 }
+//              sim_debug(DEBUG_DATA, dptr,
+//                  "DISK Read2 %04x bytes leaving %04x from diskfile /%04x/%02x/%02x\n",
+//                  i, chp->ccw_count, cyl, trk, sec);
             }
 
             sim_debug(DEBUG_CMD, dptr,
@@ -1025,7 +1063,7 @@ rezero:
                 sim_debug(DEBUG_DATA, dptr,
                     "DISK Read complete for read from diskfile /%04x/%02x/%02x\n",
                     STAR2CYL(uptr->CHS), (uptr->CHS >> 8)&0xff, (uptr->CHS&0xff));
-                uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
+                uptr->CMDu3 &= LMASK;             /* remove old status bits & cmd */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
                 break;
             }
@@ -1041,7 +1079,7 @@ rezero:
                 sim_debug(DEBUG_CMD, dptr,
                     "DISK Read reached EOM for read from disk @ /%04x/%02x/%02x\n",
                     STAR2CYL(uptr->CHS), (uptr->CHS >> 8)&0xff, (uptr->CHS&0xff));
-                uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
+                uptr->CMDu3 &= LMASK;             /* remove old status bits & cmd */
                 uptr->CHS = 0;                  /* reset cylinder position */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
@@ -1052,18 +1090,18 @@ rezero:
                 chp->ccw_count, STAR2CYL(uptr->CHS), ((uptr->CHS) >> 8)&0xff, (uptr->CHS&0xff));
             sim_activate(uptr, 10);         /* wait to read next sector */
             break;
-rddone:
-            uptr->CMD &= ~(0xffff);             /* remove old status bits & cmd */
+//XXXrddone:
+//XXX       uptr->CMDu3 &= ~(0xffff);             /* remove old status bits & cmd */
         }
         break;
 
     case DSK_WD:            /* Write Data */
-        if ((uptr->CMD & DSK_WRITING) == 0) {   /* see if we are writing data */
-            uptr->CMD |= DSK_WRITING;           /* write to disk starting */
+        if ((uptr->CMDu3 & DSK_WRITING) == 0) {   /* see if we are writing data */
+            uptr->CMDu3 |= DSK_WRITING;           /* write to disk starting */
             sim_debug(DEBUG_CMD, dptr,
-                "DISK WRITE starting unit=%02x CMD %02x\n", unit, uptr->CMD);
+                "DISK WRITE starting unit=%02x CMD %02x\n", unit, uptr->CMDu3);
         }
-        if (uptr->CMD & DSK_WRITING) {          /* see if we are writing data */
+        if (uptr->CMDu3 & DSK_WRITING) {          /* see if we are writing data */
             cyl = STAR2CYL(uptr->CHS);          /* get current cyl */
             trk = (uptr->CHS >> 8) & 0xff;      /* get trk/head */
             sec = uptr->CHS & 0xff;             /* get sec */
@@ -1077,12 +1115,13 @@ rddone:
                 if (chan_read_byte(chsa, &ch)) {    /* get a byte from memory */
                     /* if error on reading 1st byte, we are done writing */
                     if (i == 0) {
-                        uptr->CMD &= ~(0xffff);  /* remove old status bits & cmd */
+                        uptr->CMDu3 &= LMASK;      /* remove old status bits & cmd */
                         sim_debug(DEBUG_CMD, dptr,
                             "DISK Wrote %04x bytes to diskfile cyl %04x hds %02x sec %02x\n",
                             ssize, cyl, trk, sec);
                         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
-                        goto wrdone;
+                        return SCPE_OK;
+//XXX                   goto wrdone;
                     }
                     ch = 0;                     /* finish out the sector with zero */
                     len++;                      /* show we have no more data to write */
@@ -1095,7 +1134,7 @@ rddone:
                 sim_debug(DEBUG_CMD, dptr,
                     "Error %08x on write %04x bytes to diskfile cyl %04x hds %02x sec %02x\n",
                     i, ssize, cyl, trk, sec);
-                uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
+                uptr->CMDu3 &= LMASK;             /* remove old status bits & cmd */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
             }
@@ -1103,7 +1142,7 @@ rddone:
                 sim_debug(DEBUG_DATA, dptr,
                     "DISK WroteB %04x bytes to diskfile cyl %04x hds %02x sec %02x\n",
                     ssize, cyl, trk, sec);
-                uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
+                uptr->CMDu3 &= LMASK;             /* remove old status bits & cmd */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we done */
                 break;
             }
@@ -1122,15 +1161,15 @@ rddone:
                 sim_debug(DEBUG_CMD, dptr,
                     "DISK Write reached EOM for write to disk @ /%04x/%02x/%02x\n",
                     STAR2CYL(uptr->CHS), (uptr->CHS >> 8)&0xff, (uptr->CHS&0xff));
-                uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
+                uptr->CMDu3 &= LMASK;             /* remove old status bits & cmd */
                 uptr->CHS = 0;                  /* reset cylinder position */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
             }
             sim_activate(uptr, 10);             /* keep writing */
             break;
-wrdone:
-            uptr->CMD &= ~(0xffff);             /* remove old status bits & cmd */
+//XXXwrdone:
+//XXX       uptr->CMDu3 &= ~(0xffff);             /* remove old status bits & cmd */
          }
          break;
 
@@ -1216,7 +1255,7 @@ wrdone:
         for (i = 0; i < 30; i++) {
             if (chan_write_byte(chsa, &buf[i])) {
                 /* we have write error, bail out */
-                uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
+                uptr->CMDu3 &= LMASK;             /* remove old status bits & cmd */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
             }
@@ -1227,7 +1266,7 @@ wrdone:
         sim_debug(DEBUG_DETAIL, dptr, "\n");
 
         /* command done */
-        uptr->CMD &= ~(0xffff);                 /* remove old cmd */
+        uptr->CMDu3 &= LMASK;                     /* remove old status bits & cmd */
         sim_debug(DEBUG_CMD, dptr, "hsdp_srv cmd RSL done chsa %04x count %04x completed\n",
             chsa, chp->ccw_count);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
@@ -1331,7 +1370,7 @@ wrdone:
         for (i = 0; i < 30; i++) {
             if (chan_write_byte(chsa, &buf[i])) {
                 /* we have write error, bail out */
-                uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
+                uptr->CMDu3 &= LMASK;             /* remove old status bits & cmd */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
             }
@@ -1342,7 +1381,7 @@ wrdone:
         sim_debug(DEBUG_DETAIL, dptr, "\n");
 
         /* command done */
-        uptr->CMD &= ~(0xffff);                 /* remove old cmd */
+        uptr->CMDu3 &= LMASK;                     /* remove old status bits & cmd */
         sim_debug(DEBUG_CMD, dptr, "disk_srv cmd RTL done chsa %04x count %04x completed\n",
             chsa, chp->ccw_count);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
@@ -1351,7 +1390,7 @@ wrdone:
     default:
         sim_debug(DEBUG_CMD, dptr, "invalid command %02x unit %02x\n", cmd, unit);
         uptr->SNS |= SNS_CMDREJ;
-        uptr->CMD &= ~(0xffff);                 /* remove old status bits & cmd */
+        uptr->CMDu3 &= LMASK;                     /* remove old status bits & cmd */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
         break;
     }
@@ -1366,13 +1405,16 @@ void disk_ini(UNIT *uptr, t_bool f)
     DEVICE  *dptr = get_dev(uptr);
     int     i = GET_TYPE(uptr->flags);
 
-    uptr->CMD &= ~0x7fff;                       /* clear out the flags but leave ch/sa */
+    /* start out at sector 0 */
+    uptr->CHS = 0;                              /* set CHS to cyl/hd/sec = 0 */
+    uptr->STAR = 0;                             /* set STAR to cyl/hd/sec = 0 */
+    uptr->CMDu3 &= LMASK;                         /* remove old status bits & cmd */
     uptr->SNS = ((uptr->SNS & 0x00ffffff) | (disk_type[i].type << 24));  /* save mode value */
     /* total sectors on disk */
     uptr->capac = CAP(i);                       /* size in sectors */
 
     sim_debug(DEBUG_EXP, &dda_dev, "DMA init device %s on unit DMA%.1x cap %x %d\n",
-        dptr->name, GET_UADDR(uptr->CMD), uptr->capac, uptr->capac);
+        dptr->name, GET_UADDR(uptr->CMDu3), uptr->capac, uptr->capac);
 }
 
 t_stat disk_reset(DEVICE *dptr)
@@ -1472,6 +1514,7 @@ int disk_format(UNIT *uptr) {
     /* seek to sector 0 */
     if ((sim_fseek(uptr->fileref, 0, SEEK_SET)) != 0) { /* seek home */
         fprintf (stderr, "Error on seek to 0\r\n");
+        return 1;
     }
 
     /* get buffer for track data in bytes */
@@ -1524,10 +1567,15 @@ int disk_format(UNIT *uptr) {
     /* setup dmap pointed to by track label 0 wd[3] = (cyl-4) * spt + (spt - 1) */
 
     /* write dmap data to last sector on disk */
-    sim_fseek(uptr->fileref, laddr*ssize, SEEK_SET);    /* seek last sector */
+    if ((sim_fseek(uptr->fileref, laddr*ssize, SEEK_SET)) != 0) { /* seek last sector */
+        sim_debug(DEBUG_CMD, dptr,
+        "Error on last sector seek to diskfile sect %06x\n", (cap-1) * ssize);
+        return 1;
+    }
     if ((sim_fwrite((char *)&dmap, sizeof(uint32), 4, uptr->fileref)) != 4) {
         sim_debug(DEBUG_CMD, dptr,
-        "Error on vendor map write to diskfile sect %06x\n", (cap-1) * ssize);
+        "Error on last sector write to diskfile sect %06x\n", (cap-1) * ssize);
+        return 1;
     }
 
     /* 1 cylinder is saved for disk manufacture */
@@ -1537,26 +1585,41 @@ int disk_format(UNIT *uptr) {
     /* vaddr is (cap) - 3 cyl - 1 track */
 
     /* seek to vendor label area */
-    sim_fseek(uptr->fileref, (vaddr)*ssize, SEEK_SET);  /* seek VMAP */
+    if ((sim_fseek(uptr->fileref, vaddr*ssize, SEEK_SET)) != 0) { /* seek VMAP */
+        sim_debug(DEBUG_CMD, dptr,
+        "Error on vendor map seek to diskfile sect %06x\n", (cap-1) * ssize);
+        return 1;
+    }
     if ((sim_fwrite((char *)&vmap, sizeof(uint32), 2, uptr->fileref)) != 2) {
         sim_debug(DEBUG_CMD, dptr,
         "Error on vendor map write to diskfile sect %06x\n", vaddr * ssize);
+        return 1;
     }
 
     /* write dmap to daddr that is the address in trk 0 label */
     /* daddr is (cap) - 3 cyl - 2 tracks */
     /* vaddr is daddr - spt */
 
-    sim_fseek(uptr->fileref, (daddr)*ssize, SEEK_SET);   /* seek DMAP */
+    if ((sim_fseek(uptr->fileref, daddr*ssize, SEEK_SET)) != 0) { /* seek DMAP */
+        sim_debug(DEBUG_CMD, dptr,
+        "Error on daddr seek to diskfile sect %06x\n", (cap-1) * ssize);
+        return 1;
+    }
     if ((sim_fwrite((char *)&dmap, sizeof(uint32), 4, uptr->fileref)) != 4) {
         sim_debug(DEBUG_CMD, dptr,
-        "Error on dmap write to diskfile sect %06x\n", daddr * ssize);
+        "Error on daddr write to diskfile sect %06x\n", daddr * ssize);
+        return 1;
     }
 
-    sim_fseek(uptr->fileref, (uaddr)*ssize, SEEK_SET);   /* seek UMAP */
+    if ((sim_fseek(uptr->fileref, uaddr*ssize, SEEK_SET)) != 0) { /* seek UMAP */
+        sim_debug(DEBUG_CMD, dptr,
+        "Error on umap seek to diskfile sect %06x\n", (cap-1) * ssize);
+        return 1;
+    }
     if ((sim_fwrite((char *)&umap, sizeof(uint32), 256, uptr->fileref)) != 256) {
         sim_debug(DEBUG_CMD, dptr,
         "Error on umap write to diskfile sect %06x\n", uaddr * ssize);
+        return 1;
     }
 
     printf("writing to vmap sec %x (%d) bytes %x (%d)\n",
@@ -1568,7 +1631,10 @@ int disk_format(UNIT *uptr) {
        daddr, daddr, daddr*ssize, daddr*ssize);
 
     /* seek home again */
-    sim_fseek(uptr->fileref, 0, SEEK_SET);      /* seek home */
+    if ((sim_fseek(uptr->fileref, 0, SEEK_SET)) != 0) { /* seek home */
+        fprintf (stderr, "Error on seek to 0\r\n");
+        return 1;
+    }
     free(buff);                                 /* free cylinder buffer */
     return 0;
 }
@@ -1576,7 +1642,7 @@ int disk_format(UNIT *uptr) {
 /* attach the selected file to the disk */
 t_stat disk_attach(UNIT *uptr, CONST char *file)
 {
-    uint16          chsa = GET_UADDR(uptr->CMD);
+    uint16          chsa = GET_UADDR(uptr->CMDu3);
     int             type = GET_TYPE(uptr->flags);
     DEVICE          *dptr = get_dev(uptr);
     t_stat          r;
@@ -1647,7 +1713,7 @@ fmt:
 /* detach a disk device */
 t_stat disk_detach(UNIT *uptr) {
     uptr->SNS = 0;                              /* clear sense data */
-    uptr->CMD &= ~0xffff;                       /* no cmd and flags */
+    uptr->CMDu3 &= LMASK;                         /* remove old status bits & cmd */
     return detach_unit(uptr);                   /* tell simh we are done with disk */
 }
 
@@ -1655,13 +1721,19 @@ t_stat disk_detach(UNIT *uptr) {
 t_stat disk_boot(int32 unit_num, DEVICE *dptr) {
     UNIT    *uptr = &dptr->units[unit_num];     /* find disk unit number */
 
-    sim_debug(DEBUG_CMD, dptr, "Disk Boot dev/unit %x\n", GET_UADDR(uptr->CMD));
-    SPAD[0xf4] = GET_UADDR(uptr->CMD);          /* put boot device chan/sa into spad */
-    SPAD[0xf8] = 0xF000;                        /* show as F class device */
-    if ((uptr->flags & UNIT_ATT) == 0)
+    sim_debug(DEBUG_CMD, dptr, "Disk Boot dev/unit %x\n", GET_UADDR(uptr->CMDu3));
+
+    if ((uptr->flags & UNIT_ATT) == 0) {
+        sim_debug(DEBUG_EXP, &mta_dev, "Disk Boot attach error dev/unit %04x\n",
+            GET_UADDR(uptr->CMDu3));
         return SCPE_UNATT;                      /* attached? */
+    }
+    SPAD[0xf4] = GET_UADDR(uptr->CMDu3);          /* put boot device chan/sa into spad */
+    SPAD[0xf8] = 0xF000;                        /* show as F class device */
+
     /* now boot the disk */
-    return chan_boot(GET_UADDR(uptr->CMD), dptr); /* boot the ch/sa */
+    uptr->CMDu3 &= LMASK;                         /* remove old status bits & cmd */
+    return chan_boot(GET_UADDR(uptr->CMDu3), dptr); /* boot the ch/sa */
 }
 
 /* Disk option setting commands */

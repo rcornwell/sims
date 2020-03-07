@@ -833,7 +833,7 @@ uint32 s_dvfw(uint32 reg, uint32 mem, uint32 *cc) {
     if (temp2 >= 0x7fffffc0)            /* check for special rounding */
         goto RRND2;                     /* no special handling */
     /* FIXME dead code */
-    if (temp2 == MSIGN) {               /* check for minux zero */
+    if (temp2 == MSIGN) {               /* check for minus zero */
         temp2 = 0xF8000000;             /* yes, fixup value */
         expr++;                         /* bump exponent */
     }
@@ -844,9 +844,11 @@ uint32 s_dvfw(uint32 reg, uint32 mem, uint32 *cc) {
     if ((sign & MSIGN) == 0)
         goto RRND1;                     /* if sign set, don't round yet */
     expr += temp;                       /* add exponent */
-    if (expr < 0)                       /* test for underflow */
+    /* FIX unsigned CMP */
+//  if (expr < 0)                       /* test for underflow */
+    if ((int32)expr < 0)                /* test for underflow */
         goto DUNFLO;                    /* go process underflow */
-    if (expr > 0x7f)                    /* test for overflow */
+    if ((int32)expr > 0x7f)             /* test for overflow */
         goto DOVFLO;                    /* go process overflow */
     expr ^= FMASK;                      /* complement exponent */
     temp2 += 0x40;                      /* round at bit 25 */
@@ -858,7 +860,7 @@ RRND2:
     if ((int32)expr < 0) {              /* test for underflow */
         goto DUNFLO;                    /* go process underflow */
     }
-    if (expr > 0x7f) {                  /* test for overflow */
+    if ((int32)expr > 0x7f) {           /* test for overflow */
         goto DOVFLO;                    /* go process overflow */
     }
     if (sign & MSIGN)                   /* test for negative */
