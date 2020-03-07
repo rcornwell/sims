@@ -40,7 +40,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="../../windows-build/libSDL/SDL2-2.0.5/include;./;../;../slirp;../slirp_glue;../slirp_glue/qemu;../slirp_glue/qemu/win32/include;../../windows-build/winpcap/Wpdpack/Include;../../windows-build/PCRE/include/;../../windows-build/pthreads;../../windows-build/libSDL/SDL2-2.0.8/include;../../windows-build/libpng-1.6.18"
+				AdditionalIncludeDirectories="./IBM360;.;..;../../windows-build/PCRE/include/;../../windows-build/pthreads"
 				PreprocessorDefinitions="IBM360;SIM_BUILD_TOOL=simh-Visual-Studio-Project;_CRT_NONSTDC_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;USE_SIM_CARD;SIM_NEED_GIT_COMMIT_ID;HAVE_PCREPOSIX_H;PCRE_STATIC"
 				KeepComments="false"
 				MinimalRebuild="true"
@@ -63,7 +63,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="libcmtd.lib wsock32.lib winmm.lib Iphlpapi.lib pcrestaticd.lib pcreposixstaticd.lib SDL2-StaticD.lib SDL2_ttf-StaticD.lib freetype2412MT_D.lib libpng16.lib zlib.lib dxguid.lib Imm32.lib Version.lib"
+				AdditionalDependencies="libcmtd.lib wsock32.lib winmm.lib Iphlpapi.lib pcrestaticd.lib pcreposixstaticd.lib zlib.lib dxguid.lib Imm32.lib Version.lib"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="../../windows-build/lib/Debug/"
 				GenerateDebugInformation="true"
@@ -96,7 +96,7 @@
 			<Tool
 				Name="VCPostBuildEventTool"
 				Description="Running Available Tests"
-				CommandLine="Post-Build-Event.cmd B5500 &quot;$(TargetDir)$(TargetName).exe&quot;"
+				CommandLine="Post-Build-Event.cmd IBM360 &quot;$(TargetDir)$(TargetName).exe&quot;"
 			/>
 		</Configuration>
 		<Configuration
@@ -126,7 +126,7 @@
 				InlineFunctionExpansion="1"
 				OmitFramePointers="true"
 				WholeProgramOptimization="true"
-				AdditionalIncludeDirectories="../../windows-build/libSDL/SDL2-2.0.5/include;./;../;../slirp;../slirp_glue;../slirp_glue/qemu;../slirp_glue/qemu/win32/include;../../windows-build/winpcap/Wpdpack/Include;../../windows-build/PCRE/include/;../../windows-build/pthreads;../../windows-build/libSDL/SDL2-2.0.8/include;../../windows-build/libpng-1.6.18"
+				AdditionalIncludeDirectories="./IBM360;.;..;../../windows-build/PCRE/include/;../../windows-build/pthreads"
 				PreprocessorDefinitions="IBM360;SIM_BUILD_TOOL=simh-Visual-Studio-Project;_CRT_NONSTDC_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;USE_SIM_CARD;SIM_NEED_GIT_COMMIT_ID;HAVE_PCREPOSIX_H;PCRE_STATIC"
 				StringPooling="true"
 				RuntimeLibrary="0"
@@ -147,7 +147,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="libcmt.lib wsock32.lib winmm.lib Iphlpapi.lib pcrestatic.lib pcreposixstatic.lib SDL2-Static.lib SDL2_ttf-Static.lib freetype2412MT.lib libpng16.lib zlib.lib dxguid.lib Imm32.lib Version.lib"
+				AdditionalDependencies="libcmt.lib wsock32.lib winmm.lib Iphlpapi.lib pcrestatic.lib pcreposixstatic.lib zlib.lib dxguid.lib Imm32.lib Version.lib"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="../../windows-build/lib/Release/"
 				GenerateDebugInformation="false"
@@ -182,7 +182,7 @@
 			<Tool
 				Name="VCPostBuildEventTool"
 				Description="Running Available Tests"
-				CommandLine="Post-Build-Event.cmd B5500 &quot;$(TargetDir)$(TargetName).exe&quot;"
+				CommandLine="Post-Build-Event.cmd IBM360 &quot;$(TargetDir)$(TargetName).exe&quot;"
 			/>
 		</Configuration>
 	</Configurations>
