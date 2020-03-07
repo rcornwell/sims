@@ -283,6 +283,8 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
             /* Convert bits into image */
             memset(image, 0, sizeof(image));
             for (j = 0; j < 80; j++) {
+                if (buffer[j] == '\r' && buffer[j+1] == '\n')
+                   break;
                 if (buffer[j] == '\n')
                    break;
                 if ((buffer[j] & 0377) == 0243)
@@ -311,6 +313,8 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
             /* Convert bits into image */
             memset(image, 0, sizeof(image));
             for (j = 0; j < 80; j++) {
+                if (buffer[j] == '\r' && buffer[j+1] == '\n')
+                   break;
                 if (buffer[j] == '\n')
                    break;
                 if ((buffer[j] & 0377) == 0243)
