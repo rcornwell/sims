@@ -387,7 +387,7 @@ UNIT nia_unit[] = {
 };
 
 REG                 nia_reg[] = {
-    {BRDATA(DATA, &nia_data, 16, 8, sizeof(struct nia_device)), REG_HRO},
+    {SAVEDATA(DATA, nia_data) },
     {0}
 };  
 

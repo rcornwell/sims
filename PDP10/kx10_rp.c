@@ -362,7 +362,7 @@ REG                 rpa_reg[] = {
     {ORDATA(CDA, rp_rh[0].cda, 18)},
     {ORDATA(DEVNUM, rp_rh[0].devnum, 9), REG_HRO},
     {ORDATA(BUF, rp_rh[0].buf, 36), REG_HRO},
-    {BRDATA(BUFF, &rp_buf[0][0], 16, 64, RP_NUMWD), REG_HRO},
+    {BRDATA(BUFF, rp_buf[0], 16, 64, RP_NUMWD), REG_HRO},
     {0}
 };  
 
@@ -390,7 +390,7 @@ REG                 rpb_reg[] = {
     {ORDATA(CDA, rp_rh[1].cda, 18)},
     {ORDATA(DEVNUM, rp_rh[1].devnum, 9), REG_HRO},
     {ORDATA(BUF, rp_rh[1].buf, 36), REG_HRO},
-    {BRDATA(BUFF, &rp_buf[1][0], 16, 64, RP_NUMWD), REG_HRO},
+    {BRDATA(BUFF, rp_buf[1], 16, 64, RP_NUMWD), REG_HRO},
     {0}
 };  
 
@@ -418,7 +418,7 @@ REG                 rpc_reg[] = {
     {ORDATA(CDA, rp_rh[2].cda, 18)},
     {ORDATA(DEVNUM, rp_rh[2].devnum, 9), REG_HRO},
     {ORDATA(BUF, rp_rh[2].buf, 36), REG_HRO},
-    {BRDATA(BUFF, &rp_buf[2][0], 16, 64, RP_NUMWD), REG_HRO},
+    {BRDATA(BUFF, rp_buf[2], 16, 64, RP_NUMWD), REG_HRO},
     {0}
 };  
 
@@ -446,7 +446,7 @@ REG                 rpd_reg[] = {
     {ORDATA(CDA, rp_rh[3].cda, 18)},
     {ORDATA(DEVNUM, rp_rh[3].devnum, 9), REG_HRO},
     {ORDATA(BUF, rp_rh[3].buf, 36), REG_HRO},
-    {BRDATA(BUFF, &rp_buf[3][0], 16, 64, RP_NUMWD), REG_HRO},
+    {BRDATA(BUFF, rp_buf[3], 16, 64, RP_NUMWD), REG_HRO},
     {0}
 };  
 

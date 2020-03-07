@@ -67,7 +67,7 @@ UNIT slave_unit[1] = {
 
 static REG slave_reg[] = {
   { DRDATAD  (POLL, slave_unit[0].wait,   24,    "poll interval"), PV_LEFT },
-  {BRDATA(BUFF, &slave_valid[0], 8, 8, sizeof(slave_valid)), REG_HRO},
+  {BRDATA(BUFF, slave_valid, 8, 8, sizeof(slave_valid)), REG_HRO},
   { NULL }
 };
 

@@ -238,23 +238,23 @@ struct _dte_queue {
     uint16      sz;        /* Byte size */
 } dte_in[32], dte_out[32];
 
-int dte_in_ptr;
-int dte_in_cmd;
-int dte_out_ptr;
-int dte_out_res;
-int dte_base;            /* Base */
-int dte_off;             /* Our offset */
-int dte_dt10_off;        /* Offset to 10 deposit region */
-int dte_et10_off;        /* Offset to 10 examine region */
-int dte_et11_off;        /* Offset to 11 examine region */
-int dte_proc_num;        /* Our processor number */
+int32 dte_in_ptr;
+int32 dte_in_cmd;
+int32 dte_out_ptr;
+int32 dte_out_res;
+int32 dte_base;            /* Base */
+int32 dte_off;             /* Our offset */
+int32 dte_dt10_off;        /* Offset to 10 deposit region */
+int32 dte_et10_off;        /* Offset to 10 examine region */
+int32 dte_et11_off;        /* Offset to 11 examine region */
+int32 dte_proc_num;        /* Our processor number */
 
 struct _buffer {
     int      in_ptr;     /* Insert pointer */
     int      out_ptr;    /* Remove pointer */
     char     buff[256];  /* Buffer */
 } cty_in, cty_out;
-int cty_done;
+int32 cty_done;
 
 #define full(q)       ((((q)->in_ptr + 1) & 0xff) == (q)->out_ptr)
 #define empty(q)      ((q)->in_ptr == (q)->out_ptr)
@@ -287,21 +287,21 @@ UNIT dte_unit[] = {
     };
 
 REG  dte_reg[] = {
-    {BRDATA(IN, &dte_in, 16, 8, sizeof(dte_in)), REG_HRO},
-    {BRDATA(OUT, &dte_out, 16, 8, sizeof(dte_out)), REG_HRO},
-    {BRDATA(IN_PTR, &dte_in_ptr, 16, 32, 1), REG_HRO},
-    {BRDATA(IN_CMD, &dte_in_cmd, 16, 32, 1), REG_HRO},
-    {BRDATA(OUT_PTR, &dte_out_ptr, 16, 32, 1), REG_HRO},
-    {BRDATA(OUT_RES, &dte_out_res, 16, 32, 1), REG_HRO},
-    {BRDATA(BASE, &dte_base, 16, 32, 1), REG_HRO},
-    {BRDATA(OFF, &dte_off, 16, 32, 1), REG_HRO},
-    {BRDATA(DTOFF, &dte_dt10_off, 16, 32, 1), REG_HRO},
-    {BRDATA(ETOFF, &dte_et10_off, 16, 32, 1), REG_HRO},
-    {BRDATA(E1OFF, &dte_et11_off, 16, 32, 1), REG_HRO},
-    {BRDATA(PROC, &dte_proc_num, 16, 32, 1), REG_HRO},
-    {BRDATA(CTYIN, &cty_in, 16, 8, sizeof(cty_in)), REG_HRO},
-    {BRDATA(CTYOUT, &cty_out, 16, 8, sizeof(cty_out)), REG_HRO},
-    {BRDATA(DONE, &cty_done, 16, 8, 1), REG_HRO},
+    {SAVEDATA(IN, dte_in) },
+    {SAVEDATA(OUT, dte_out) },
+    {HRDATA(IN_PTR, dte_in_ptr, 32), REG_HRO},
+    {HRDATA(IN_CMD, dte_in_cmd, 32), REG_HRO},
+    {HRDATA(OUT_PTR, dte_out_ptr, 32), REG_HRO},
+    {HRDATA(OUT_RES, dte_out_res, 32), REG_HRO},
+    {HRDATA(BASE, dte_base, 32), REG_HRO},
+    {HRDATA(OFF, dte_off, 32), REG_HRO},
+    {HRDATA(DTOFF, dte_dt10_off, 32), REG_HRO},
+    {HRDATA(ETOFF, dte_et10_off, 32), REG_HRO},
+    {HRDATA(E1OFF, dte_et11_off, 32), REG_HRO},
+    {HRDATA(PROC, dte_proc_num, 32), REG_HRO},
+    {SAVEDATA(CTYIN, cty_in) },
+    {SAVEDATA(CTYOUT, cty_out) },
+    {HRDATA(DONE, cty_done, 8), REG_HRO},
     { 0 },
     };
 
@@ -448,10 +448,10 @@ UNIT lp20_unit = {
     };
 
 REG lp20_reg[] = {
-   {BRDATA(BUFFER, &lp20_buffer, 16, 8, sizeof(lp20_buffer)), REG_HRO},
-   {BRDATA(VFU, &lp20_vfu, 16, 16, (sizeof(lp20_vfu)/sizeof(uint16))), REG_HRO},
-   {BRDATA(RAM, &lp20_ram, 16, 16, (sizeof(lp20_ram)/sizeof(uint16))), REG_HRO},
-   {BRDATA(QUEUE, &lp20_queue, 16, 8, sizeof(lp20_queue)), REG_HRO},
+   {BRDATA(BUFFER, lp20_buffer, 16, 8, sizeof(lp20_buffer)), REG_HRO},
+   {BRDATA(VFU, lp20_vfu, 16, 16, (sizeof(lp20_vfu)/sizeof(uint16))), REG_HRO},
+   {BRDATA(RAM, lp20_ram, 16, 16, (sizeof(lp20_ram)/sizeof(uint16))), REG_HRO},
+   {SAVEDATA(QUEUE, lp20_queue) },
     { NULL }
 };
 
@@ -482,8 +482,8 @@ DEVICE lp20_dev = {
 struct _buffer tty_out[NUM_LINES_TTY], tty_in[NUM_LINES_TTY];
 TMLN     tty_ldsc[NUM_LINES_TTY] = { 0 };            /* Line descriptors */
 TMXR     tty_desc = { NUM_LINES_TTY, 0, 0, tty_ldsc };
-int      tty_connect[NUM_LINES_TTY];
-int      tty_done[NUM_LINES_TTY];
+int32    tty_connect[NUM_LINES_TTY];
+int32    tty_done[NUM_LINES_TTY];
 int      tty_enable = 0;
 extern int32 tmxr_poll;
 
@@ -516,10 +516,10 @@ UNIT tty_unit[] = {
 
 REG tty_reg[] = {
     { DRDATA (TIME, tty_unit[0].wait, 24), REG_NZ + PV_LEFT },
-    { BRDATA (OUT, &tty_out, 8, 8, sizeof(tty_out)), REG_HRO },
-    { BRDATA (IN, &tty_in, 8, 8, sizeof(tty_in)), REG_HRO },
-    { BRDATA (CONN, &tty_connect, 8, 8, sizeof(tty_connect)), REG_HRO },
-    { BRDATA (DONE, &tty_done, 8, 8, sizeof(tty_done)), REG_HRO },
+    { SAVEDATA (OUT, tty_out) },
+    { SAVEDATA (IN, tty_in) },
+    { BRDATA (CONN, tty_connect, 8, 32, sizeof(tty_connect)/sizeof(int32)), REG_HRO },
+    { BRDATA (DONE, tty_done, 8, 32, sizeof(tty_done)/sizeof(int32)), REG_HRO },
     { ORDATA (EN, tty_enable, 1), REG_HRO },
     { 0 }
     };

@@ -570,7 +570,7 @@ DEBTAB              imp_debug[] = {
 };
 
 REG                 imp_reg[] = {
-    {BRDATA(DATA, &imp_data, 16, 8, sizeof(struct imp_device)), REG_HRO},
+    {SAVEDATA(DATA, imp_data) },
     {0}
 };
 

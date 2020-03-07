@@ -245,7 +245,7 @@ REG                 rsa_reg[] = {
     {ORDATA(CDA, rs_rh[0].cda, 18)},
     {ORDATA(DEVNUM, rs_rh[0].devnum, 9), REG_HRO},
     {ORDATA(BUF, rs_rh[0].buf, 36), REG_HRO},
-    {BRDATA(BUFF, &rs_buf[0][0], 16, 64, RS_NUMWD), REG_HRO},
+    {BRDATA(BUFF, rs_buf[0], 16, 64, RS_NUMWD), REG_HRO},
     {0}
 };  
 

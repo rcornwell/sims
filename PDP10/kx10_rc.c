@@ -163,7 +163,7 @@ MTAB                rc_mod[] = {
 };
 
 REG                 rca_reg[] = {
-    {BRDATA(BUFF, &rc_buf[0][0], 16, 64, RM10_WDS), REG_HRO},
+    {BRDATA(BUFF, rc_buf[0], 16, 64, RM10_WDS), REG_HRO},
     {ORDATA(IPR, rc_ipr[0], 2), REG_HRO},
     {ORDATA(STATUS, rc_df10[0].status, 18), REG_RO},
     {ORDATA(CIA, rc_df10[0].cia, 18)},
