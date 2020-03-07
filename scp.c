@@ -2703,6 +2703,13 @@ if ((sim_eval = (t_value *) calloc (sim_emax, sizeof (t_value))) == NULL) {
     };
 if (sim_dflt_dev == NULL)                               /* if no default */
     sim_dflt_dev = sim_devices[0];
+if (sim_timer_init ()) {
+    fprintf (stderr, "Fatal timer initialization error\n");
+    read_line_p ("Hit Return to exit: ", cbuf, sizeof (cbuf) - 1, stdin);
+    return EXIT_FAILURE;
+    }
+/* Invoke power reset again in case some devices depend on timer 
+   initialization having occurred */
 if ((stat = reset_all_p (0)) != SCPE_OK) {
     fprintf (stderr, "Fatal simulator initialization error\n%s\n",
         sim_error_text (stat));
@@ -2723,20 +2730,6 @@ if (register_check) {
     sim_printf ("*** Good Registers in %s simulator.\n", sim_name);
     if (argc < 2)                                   /* No remaining command arguments? */
         return EXIT_SUCCESS;                        /* then we're done */
-    }
-if (sim_timer_init ()) {
-    fprintf (stderr, "Fatal timer initialization error\n");
-    read_line_p ("Hit Return to exit: ", cbuf, sizeof (cbuf) - 1, stdin);
-    return EXIT_FAILURE;
-    }
-/* Invoke power reset again in case some devices depend on timer 
-   initialization having occurred */
-if ((stat = reset_all_p (0)) != SCPE_OK) {
-    fprintf (stderr, "Fatal simulator initialization error\n%s\n",
-        sim_error_text (stat));
-    if (sim_ttisatty())
-        read_line_p ("Hit Return to exit: ", cbuf, sizeof (cbuf) - 1, stdin);
-    return EXIT_FAILURE;
     }
 if ((stat = sim_brk_init ()) != SCPE_OK) {
     fprintf (stderr, "Fatal breakpoint table initialization error\n%s\n",
