@@ -275,7 +275,8 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
         return SCPE_OK;
 
     } else if (match_ext(fnam, "card")) {
-        fgets(buffer, 100, fileref);
+        if (fgets(buffer, 100, fileref) == NULL)
+            return SCPE_OK;
 
         addr = 020;
         while (fgets(buffer, 100, fileref)) {
