@@ -621,8 +621,8 @@ extern void ka10_lights_clear_aux (int);
 #define NUM_DEVS_RS     1
 #define NUM_DEVS_TU     1
 #define NUM_DEVS_PMP    WAITS
-#define NUM_DEVS_DKB    WAITS
-#define NUM_DEVS_III    (WAITS * USE_DISPLAY)   /* Disabled until working */
+#define NUM_DEVS_DKB    (WAITS * USE_DISPLAY)
+#define NUM_DEVS_III    (WAITS * USE_DISPLAY)
 #define NUM_DEVS_PD     ITS | KL_ITS
 #define NUM_DEVS_IMX    ITS
 #define NUM_DEVS_STK    ITS
