@@ -1,8 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 10.00
 # Visual C++ Express 2008
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BuildROMs", "BuildROMs.vcproj", "{D40F3AF1-EEE7-4432-9807-2AD287B490F8}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "B5500", "B5500.vcproj", "{BA514FA1-D029-4D25-91CC-255E5953FF6E}"
 	ProjectSection(ProjectDependencies) = postProject
 		{D40F3AF1-EEE7-4432-9807-2AD287B490F8} = {D40F3AF1-EEE7-4432-9807-2AD287B490F8}

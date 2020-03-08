@@ -429,6 +429,8 @@ extern t_bool (*sim_vm_fprint_stopped) (FILE *st, t_stat reason);
 extern t_value (*sim_vm_pc_value) (void);
 extern t_bool (*sim_vm_is_subroutine_call) (t_addr **ret_addrs);
 extern const char **sim_clock_precalibrate_commands;
+extern const char *sim_vm_interval_units;               /* Simulator can change this - default "instructions" */
+extern const char *sim_vm_step_unit;                    /* Simulator can change this - default "instruction" */
 
 
 /* Core SCP libraries can potentially have unit test routines.
