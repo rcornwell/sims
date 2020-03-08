@@ -10102,6 +10102,8 @@ mpx_enable = 0;
 #ifdef PANDA_LIGHTS
 ka10_lights_init ();
 #endif
+sim_vm_interval_units = "cycles";
+sim_vm_step_unit = "instruction";
 return SCPE_OK;
 }
 
