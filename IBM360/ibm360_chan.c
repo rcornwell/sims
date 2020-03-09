@@ -840,7 +840,6 @@ int haltio(uint16 addr) {
     sim_debug(DEBUG_CMD, &cpu_dev, "HIO %x %x %x %x\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
 
-    /* Generic halt I/O, tell device to stop and
     /* If any error pending save csw and return cc=1 */
     if (chan_status[chan] & (STATUS_PCI|STATUS_ATTN|STATUS_CHECK|\
             STATUS_PROT|STATUS_PCHK|STATUS_EXPT)) {
