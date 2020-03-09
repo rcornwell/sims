@@ -23,22 +23,7 @@
 
 #include "sel32_defs.h"
 
-extern  t_stat  set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
-extern  t_stat  show_dev_addr(FILE *st, UNIT *uptr, int32 v, CONST void *desc);
-extern  void    chan_end(uint16 chsa, uint8 flags);
-extern  int     chan_read_byte(uint16 chsa, uint8 *data);
-extern  int     chan_write_byte(uint16 chsa, uint8 *data);
-extern  void    set_devattn(uint16 addr, uint8 flags);
-extern  t_stat  chan_boot(uint16 addr, DEVICE *dptr);
-extern  int     test_write_byte_end(uint16 chsa);
-extern  DEVICE *get_dev(UNIT *uptr);
-extern  t_stat  set_inch(UNIT *uptr, uint32 inch_addr); /* set channel inch address */
-extern  CHANP  *find_chanp_ptr(uint16 chsa);             /* find chanp pointer */
-
-extern  uint32  M[];                            /* our memory */
-extern  uint32  SPAD[];                         /* cpu SPAD memory */
-
-#ifdef NUM_DEVS_DISK
+#if NUM_DEVS_DISK > 0
 
 #define UNIT_DISK   UNIT_ATTABLE | UNIT_IDLE | UNIT_DISABLE
 
@@ -510,7 +495,7 @@ uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         uptr->CMDu3 |= cmd;                       /* save cmd */
         sim_activate(uptr, 20);                 /* start things off */
         break;
-     
+
     case DSK_WSL:                               /* WSL 0x31 */
         uptr->CMDu3 |= cmd;                       /* save cmd */
         sim_activate(uptr, 20);                 /* start things off */
@@ -636,7 +621,7 @@ t_stat disk_srv(UNIT *uptr)
                     /* drive attribute registers */
  //                 daws[j++] = (buf[i-3]<<24) | (buf[i-2]<<16)
  //                     | (buf[i-1]<<8) | (buf[i]);
-                    /* may want to use this later */    
+                    /* may want to use this later */
                     /* clear warning errors */
                     tstart = (buf[i-3]<<24) | (buf[i-2]<<16)
                         | (buf[i-1]<<8) | (buf[i]);
@@ -1549,6 +1534,9 @@ int disk_format(UNIT *uptr) {
     fputc('\r', stderr);
     fputc('\n', stderr);
 
+    free(buff);                                 /* free cylinder buffer */
+    buff = NULL;
+
     /* byte swap the buffers for dmap and umap */
     for (i=0; i<256; i++) {
         umap[i] = (((umap[i] & 0xff) << 24) | ((umap[i] & 0xff00) << 8) |
@@ -1635,7 +1623,6 @@ int disk_format(UNIT *uptr) {
         fprintf (stderr, "Error on seek to 0\r\n");
         return 1;
     }
-    free(buff);                                 /* free cylinder buffer */
     return 0;
 }
 
@@ -1700,7 +1687,7 @@ fmt:
 
     sim_debug(DEBUG_CMD, dptr,
         "Attach %s cyl %d hds %d spt %d spc %d cap sec %d cap bytes %d\n",
-        disk_type[type].name, CYL(type), HDS(type), SPT(type), SPC(type),  
+        disk_type[type].name, CYL(type), HDS(type), SPT(type), SPC(type), 
         CAP(type), CAPB(type));
 
     sim_debug(DEBUG_CMD, dptr, "File %s attached to %s\r\n",

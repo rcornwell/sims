@@ -7149,8 +7149,8 @@ uint32 memwds [] = {
 
 t_stat cpu_set_size(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
-    t_uint64            mc = 0;
-    uint32              i;
+    uint32              mc = 0;
+    int32               i;
 
     cpu_unit.flags &= ~UNIT_MSIZE;      /* clear old size value 0-31 */
     cpu_unit.flags |= val;              /* set new memory size index value (0-31) */
@@ -7162,7 +7162,7 @@ t_stat cpu_set_size(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
         mc |= M[i];                     /* or in any bits in memory */
     if ((mc != 0) && (!get_yn("Really truncate memory [N]?", FALSE)))
         return SCPE_OK;                 /* return OK if user says no */
-    MEMSIZE = val;                      /* set new size in words */
+    MEMSIZE = val - 1;                  /* set new size in words */
     for (i = MEMSIZE; i < MAXMEMSIZE; i++)
         M[i] = 0;                       /* zero all of the new memory */
     return SCPE_OK;                     /* we done */

@@ -23,22 +23,7 @@
 
 #include "sel32_defs.h"
 
-extern  t_stat  set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
-extern  t_stat  show_dev_addr(FILE *st, UNIT *uptr, int32 v, CONST void *desc);
-extern  void    chan_end(uint16 chan, uint8 flags);
-extern  int     chan_read_byte(uint16 chsa, uint8 *data);
-extern  int     chan_write_byte(uint16 chsa, uint8 *data);
-extern  void    set_devattn(uint16 addr, uint8 flags);
-extern  t_stat  chan_boot(uint16 addr, DEVICE *dptr);
-extern  int     test_write_byte_end(uint16 chsa);
-extern  DEVICE *get_dev(UNIT *uptr);
-extern  t_stat  set_inch(UNIT *uptr, uint32 inch_addr); /* set channel inch address */
-extern  CHANP  *find_chanp_ptr(uint16 chsa);             /* find chanp pointer */
-
-extern  uint32  M[];                            /* our memory */
-extern  uint32  SPAD[];                         /* cpu SPAD memory */
-
-#ifdef NUM_DEVS_HSDP
+#if NUM_DEVS_HSDP > 0
 
 #define UNIT_HSDP   UNIT_ATTABLE | UNIT_IDLE | UNIT_DISABLE
 
@@ -1647,6 +1632,8 @@ int hsdp_format(UNIT *uptr) {
     }
     fputc('\r', stderr);
     fputc('\n', stderr);
+    free(buff);                                 /* free cylinder buffer */
+    buff = NULL;
 
     /* byte swap the buffers for dmap and umap */
     for (i=0; i<256; i++) {
@@ -1732,8 +1719,6 @@ int hsdp_format(UNIT *uptr) {
         fprintf (stderr, "Error on seek to 0\r\n");
         return 1;
     }
-    free(buff);                                 /* free cylinder buffer */
-    free(buff);                                 /* free cylinder buffer */
     return 0;
 }
 

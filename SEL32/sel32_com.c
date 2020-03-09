@@ -27,15 +27,7 @@
 #include "sim_tmxr.h"
 #include <ctype.h>
 
-#ifdef NUM_DEVS_COM
-
-extern  t_stat  set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
-extern  t_stat  show_dev_addr(FILE *st, UNIT * uptr, int32 v, CONST void *desc);
-extern  void    chan_end(uint16 chan, uint8 flags);
-extern  int     chan_read_byte(uint16 chan, uint8 *data);
-extern  int     chan_write_byte(uint16 chan, uint8 *data);
-extern  void    set_devwake(uint16 addr, uint8 flags);
-extern  DEVICE *get_dev(UNIT *uptr);
+#if NUM_DEVS_COM > 0
 
 /* Constants */
 #define COM_LINES       8                               /* max lines */

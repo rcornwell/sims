@@ -73,16 +73,10 @@ P0006F        30                      DATAB     C'0'    0x30    FORMS CONTROL FO
 P00070  20                            DATAB     C' '    0x20    FORMS CONTROL FOR LF THEN PRINT
 */
   
-#ifdef NUM_DEVS_LPR
+#if NUM_DEVS_LPR > 0
 //#define UNIT_LPR        UNIT_ATTABLE | UNIT_DISABLE
 #define UNIT_LPR        UNIT_ATTABLE | UNIT_IDLE
 
-extern  t_stat  set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
-extern  t_stat  show_dev_addr(FILE *st, UNIT * uptr, int32 v, CONST void *desc);
-extern  void    chan_end(uint16 chan, uint8 flags);
-extern  int     chan_read_byte(uint16 chan, uint8 *data);
-extern  int     chan_write_byte(uint16 chan, uint8 *data);
-extern  void    set_devattn(uint16 addr, uint8 flags);
 
 /* u3 hold command and status information */
 #define LPR_INCH        0x00        /* INCH command */

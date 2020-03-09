@@ -87,8 +87,6 @@ uint32  channels        = MAX_CHAN;         /* maximum number of channels */
 int     subchannels     = SUB_CHANS;        /* maximum number of subchannel devices */
 int     irq_pend        = 0;                /* pending interrupt flag */
 
-extern uint32   M[];                        /* our memory */
-extern uint32   SPAD[];                     /* CPU scratchpad memory */
 extern uint32   CPUSTATUS;                  /* CPU status word */
 extern uint32   INTS[];                     /* Interrupt status flags */
 
@@ -395,7 +393,7 @@ int readbuff(CHANP *chp)
         chp->chan_dev, chp->ccw_addr & 0xFFFFFC, chp->chan_buf, chp->ccw_count);
     for(k = 24; k >= 0; k -= 8) {
         char ch = (chp->chan_buf >> k) & 0xFF;
-        if (ch < 0x20 || ch == 0xff)
+        if (!isprint(ch))
            ch = '.';
         sim_debug(DEBUG_DETAIL, &cpu_dev, "%c", ch);
     }

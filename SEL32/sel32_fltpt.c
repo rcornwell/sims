@@ -832,7 +832,7 @@ uint32 s_dvfw(uint32 reg, uint32 mem, uint32 *cc) {
 
     if (temp2 >= 0x7fffffc0)            /* check for special rounding */
         goto RRND2;                     /* no special handling */
-    /* FIXME dead code */
+    /* FIXME dead code */ /* Should this not be before the previous test? RPC */
     if (temp2 == MSIGN) {               /* check for minus zero */
         temp2 = 0xF8000000;             /* yes, fixup value */
         expr++;                         /* bump exponent */
@@ -1161,6 +1161,11 @@ DUNFLO:
         CC |= CC2BIT;                   /* set pos fraction bit CC2 */
     *cc = CC;                           /* return CC's */
     /* return value is not valid, but return fixup value anyway */
+    /* Why not use and Array here? RPC */
+#if 0
+    static retval[4] = { 0, MSIGN-1, 0, MSIGN}; /* At top of function */
+    return retval[((CC >> 27) & 3];
+#endif
     switch ((CC >> 27) & 3) {           /* rt justify CC3 & CC4 */
     case 0:
         return 0;                       /* pos underflow */

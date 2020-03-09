@@ -33,15 +33,8 @@
 
 #include "sel32_defs.h"
 
-#ifdef NUM_DEVS_RTOM
+#if NUM_DEVS_RTOM > 0
 
-extern t_stat set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
-extern t_stat show_dev_addr(FILE *st, UNIT * uptr, int32 v, CONST void *desc);
-extern void chan_end(uint16 chan, uint8 flags);
-extern int  chan_read_byte(uint16 chan, uint8 *data);
-extern int  chan_write_byte(uint16 chan, uint8 *data);
-extern void set_devattn(uint16 addr, uint8 flags);
-extern void post_extirq(void);
 
 void rtc_setup (uint32 ss, uint32 level);
 t_stat rtc_srv (UNIT *uptr);

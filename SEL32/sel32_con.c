@@ -37,21 +37,7 @@
 #include "sel32_defs.h"
 #include "sim_tmxr.h"
 
-#ifdef NUM_DEVS_CON
-
-extern  t_stat  set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
-extern  t_stat  show_dev_addr(FILE *st, UNIT * uptr, int32 v, CONST void *desc);
-extern  void    chan_end(uint16 chan, uint8 flags);
-extern  int     chan_read_byte(uint16 chan, uint8 *data);
-extern  int     chan_write_byte(uint16 chan, uint8 *data);
-extern  void    set_devattn(uint16 addr, uint8 flags);
-extern  void    post_extirq(void);
-extern  uint32  attention_trap;             /* set when trap is requested */
-extern  void    set_devwake(uint16 addr, uint8 flags);
-extern  int     test_write_byte_end(uint16 chsa);
-extern  DEVICE *get_dev(UNIT *uptr);
-extern  t_stat  set_inch(UNIT *uptr, uint32 inch_addr); /* set channel inch address */
-extern  CHANP  *find_chanp_ptr(uint16 chsa);             /* find chanp pointer */
+#if NUM_DEVS_CON > 0
 
 #define CMD     u3
 /* Held in u3 is the device command and status */

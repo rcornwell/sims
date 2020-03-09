@@ -22,12 +22,11 @@
 
 */
 
+#include "sim_defs.h"
 #include "sel32_defs.h"
 #include <ctype.h>
 
 extern REG cpu_reg[];
-extern uint32 M[MAXMEMSIZE];
-extern uint32 SPAD[];
 extern uint32 PSD[];
 
 /* SCP data structures and interface routines

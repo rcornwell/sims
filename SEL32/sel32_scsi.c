@@ -23,22 +23,7 @@
 
 #include "sel32_defs.h"
 
-extern  t_stat  set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
-extern  t_stat  show_dev_addr(FILE * st, UNIT *uptr, int32 v, CONST void *desc);
-extern  void    chan_end(uint16 chan, uint8 flags);
-extern  int     chan_read_byte(uint16 chsa, uint8 *data);
-extern  int     chan_write_byte(uint16 chsa, uint8 *data);
-extern  void    set_devattn(uint16 addr, uint8 flags);
-extern  t_stat  chan_boot(uint16 addr, DEVICE *dptr);
-extern  int     test_write_byte_end(uint16 chsa);
-extern  DEVICE *get_dev(UNIT *uptr);
-extern  t_stat  set_inch(UNIT *uptr, uint32 inch_addr); /* set channel inch address */
-extern  CHANP  *find_chanp_ptr(uint16 chsa);             /* find chanp pointer */
-
-extern  uint32  M[];                            /* our memory */
-extern  uint32  SPAD[];                         /* cpu SPAD memory */
-
-#ifdef NUM_DEVS_SCSI
+#if NUM_DEVS_SCSI > 0
 
 #define UNIT_SCSI   UNIT_ATTABLE | UNIT_IDLE | UNIT_DISABLE
 
