@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="9.00"
 	Name="PDP10-KL"
-	ProjectGUID="{0BA63EC5-BD4F-44FB-AE89-7DD2C84CB1D9}"
+	ProjectGUID="{DA2AA7A0-B679-456B-B152-DEF40FAE5A7A}"
 	RootNamespace="PDP10-KL"
 	Keyword="Win32Proj"
 	TargetFrameworkVersion="131072"
