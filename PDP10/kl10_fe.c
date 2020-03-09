@@ -1077,7 +1077,7 @@ dte_function(UNIT *uptr)
                        goto cty;
 #if (NUM_DEVS_TTY > 0)
                    ln -= NUM_DLS;
-                   if (ln > 0 && ln >= tty_desc.lines)
+                   if (ln < 0 || ln >= tty_desc.lines)
                        break;
                    otty = &tty_out[ln];
                    if (cmd->sz > 8)
