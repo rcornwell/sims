@@ -238,7 +238,6 @@ uint8  coml_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     uint16         addr = GET_UADDR(uptr->u3);
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
-    uint8          ch;
 
     sim_debug(DEBUG_CMD, dptr, "CMD unit=%d %x\n", unit, cmd);
     if ((uptr->u3 & 0xff) != 0) {
@@ -274,17 +273,18 @@ uint8  coml_haltio(UNIT *uptr) {
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
     int            cmd = uptr->u3 & 0xff;
-    uint8          ch;
 
     sim_debug(DEBUG_CMD, dptr, "HLTIO unit=%d %x\n", unit, cmd);
+    if ((uptr->flags & UNIT_ATT) == 0)              /* attached? */
+        return 3;
 
     switch (cmd) {
     case 0:
     case CMD_DIS:        /* Disable line */
     case CMD_DIAL:       /* Dial call */
     case 0x4:
-    /* Short commands nothing to do */
-         return 0;
+         /* Short commands nothing to do */
+         break;
 
     case CMD_INH:        /* Read data without timeout  */
     case CMD_RD:         /* Read in data from com line */
@@ -302,7 +302,7 @@ uint8  coml_haltio(UNIT *uptr) {
          uptr->u3 &= ~0xffff;
          break;
     }
-    return SNS_CHNEND|SNS_DEVEND;
+    return 1;
 }
 
 /* Handle per unit commands */
@@ -476,7 +476,6 @@ com_reset(DEVICE * dptr)
 void
 coml_ini(UNIT * uptr, t_bool f)
 {
-    UNIT          *srv;
 }
 
 t_stat
@@ -502,7 +501,6 @@ com_detach(UNIT * uptr)
 {
     t_stat        r;
     int           i;
-    UNIT          *srv;
 
     for (i = 0; i< com_desc.lines; i++) {
         (void)tmxr_set_get_modem_bits(&com_ldsc[i], 0, TMXR_MDM_DTR, NULL);
@@ -517,7 +515,6 @@ com_detach(UNIT * uptr)
 t_stat com_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
     const char *cptr)
 {
-      int i;
 fprint_set_help (st, dptr);
 fprint_show_help (st, dptr);
 return SCPE_OK;

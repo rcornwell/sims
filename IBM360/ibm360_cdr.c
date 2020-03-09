@@ -110,7 +110,6 @@ DEVICE              cdr_dev = {
 uint8  cdr_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
-    uint8          ch;
 
     if ((uptr->u3 & CDR_CMDMSK) != 0) {
         if ((uptr->flags & UNIT_ATT) != 0)
@@ -249,7 +248,6 @@ t_stat
 cdr_boot(int32 unit_num, DEVICE * dptr)
 {
     UNIT               *uptr = &dptr->units[unit_num];
-    t_stat              r;
 
     if ((uptr->flags & UNIT_ATT) == 0)
        return SCPE_UNATT;       /* attached? */

@@ -118,7 +118,7 @@ DEVICE              lpr_dev = {
 t_stat
 lpr_setlpp(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
-    int i;
+    t_addr i;
     if (cptr == NULL)
        return SCPE_ARG;
     if (uptr == NULL)
@@ -177,7 +177,7 @@ print_line(UNIT * uptr)
     uptr->pos += i;
     sim_debug(DEBUG_DETAIL, &lpr_dev, "%s", out);
     uptr->u4++;
-    if (uptr->u4 > uptr->capac) {
+    if ((t_addr)uptr->u4 > uptr->capac) {
        uptr->u4 = 1;
     }
 
@@ -187,8 +187,6 @@ print_line(UNIT * uptr)
 
 uint8 lpr_startcmd(UNIT * uptr, uint16 chan, uint8 cmd)
 {
-    uint8   ch;
-
     if ((uptr->u3 & LPR_CMDMSK) != 0) {
        if ((uptr->flags & UNIT_ATT) != 0)
             return SNS_BSY;
@@ -258,8 +256,6 @@ lpr_srv(UNIT *uptr) {
        print_line(uptr);
        uptr->u3 &= ~(LPR_FULL|LPR_CMDMSK);
        uptr->u6 = 0;
-       if (cmd == 0x3)
-           chan_end(addr, SNS_CHNEND);
        set_devattn(addr, SNS_DEVEND);
        return SCPE_OK;
     }

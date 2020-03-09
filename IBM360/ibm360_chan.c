@@ -410,7 +410,6 @@ int
 chan_read_byte(uint16 addr, uint8 *data) {
     int         chan = find_subchan(addr);
     int         byte;
-    int         k;
 
     /* Abort if we have any errors */
     if (chan < 0)
@@ -466,9 +465,7 @@ chan_read_byte(uint16 addr, uint8 *data) {
 int
 chan_write_byte(uint16 addr, uint8 *data) {
     int          chan = find_subchan(addr);
-    int          byte;
     int          offset;
-    int          k;
     uint32       mask;
 
     /* Abort if we have any errors */
@@ -685,7 +682,6 @@ startio(uint16 addr) {
     int          chan = find_subchan(addr);
     DIB         *dibp = dev_unit[addr];
     UNIT        *uptr;
-    uint8        status;
 
     /* Find channel this device is on, if no none return cc=3 */
     if (chan < 0 || dibp == 0) {
@@ -879,7 +875,7 @@ int haltio(uint16 addr) {
     int           chan = find_subchan(addr);
     DIB          *dibp = dev_unit[addr];
     UNIT         *uptr;
-    uint8         status;
+    int           cc;
 
     /* Find channel this device is on, if no none return cc=3 */
     if (chan < 0 || dibp == 0) {
@@ -894,16 +890,34 @@ int haltio(uint16 addr) {
     sim_debug(DEBUG_CMD, &cpu_dev, "HIO %x %x %x %x\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
 
-    /* If channel busy, set end of buffer, return cc=2 */
-    if (ccw_cmd[chan]) {
-        chan_byte[chan] = BUFF_CHNEND;
-        return 2;
+    /* If any error pending save csw and return cc=1 */
+    if (chan_status[chan] & (STATUS_PCI|STATUS_ATTN|STATUS_CHECK|\
+            STATUS_PROT|STATUS_PCHK|STATUS_EXPT)) {
+        sim_debug(DEBUG_CMD, &cpu_dev, "HIO %x %x %x cc=0\n", addr, chan,
+              chan_status[chan]);
+        return 0;
     }
 
     /* Not executing a command, issue halt if available */
-    if (dibp->halt_io != NULL)
-        chan_status[chan] = dibp->halt_io(uptr) << 8;
-    return 0;
+    if (dibp->halt_io != NULL) {
+        /* Let device do it's thing */
+        cc = dibp->halt_io(uptr);
+        sim_debug(DEBUG_CMD, &cpu_dev, "HIO %x %x cc=%d\n", addr, chan, cc);
+        if (cc == 1)
+            M[0x44 >> 2] = (((uint32)chan_status[chan]) << 16) |
+                       (M[0x44 >> 2] & 0xffff);
+        return cc;
+    }
+
+    /* If channel active, tell it to terminate */
+    if (ccw_cmd[chan])
+        chan_byte[chan] = BUFF_CHNEND;
+
+    /* Store CSW and return 1. */
+    sim_debug(DEBUG_CMD, &cpu_dev, "HIO %x %x cc=1\n", addr, chan);
+    M[0x44 >> 2] = (((uint32)chan_status[chan]) << 16) |
+                   (M[0x44 >> 2] & 0xffff);
+    return 1;
 }
 
 /*
@@ -934,7 +948,6 @@ t_stat chan_boot(uint16 addr, DEVICE *dptyr) {
     int          chan = find_subchan(addr);
     DIB         *dibp = dev_unit[addr];
     UNIT        *uptr;
-    uint8        status;
     int          i;
 
     if (chan < 0 || dibp == 0)
@@ -1006,7 +1019,7 @@ scan_chan(uint16 mask, int irq_en) {
                 sim_debug(DEBUG_EXP, &cpu_dev, "Scan(%x %x %x %x) end\n", i,
                          chan_status[i], imask, mask);
                 if ((chan_status[i] & STATUS_DEND) != 0 &&
-                     (imask & mask) != 0 || loading != 0) {
+                     ((imask & mask) != 0 || loading != 0)) {
                     pend = chan_dev[i];
                     break;
                 }
@@ -1059,7 +1072,7 @@ scan_chan(uint16 mask, int irq_en) {
 t_stat
 chan_set_devs()
 {
-    int                 i, j;
+    uint32              i, j;
 
     for(i = 0; i < MAX_DEV; i++) {
         dev_unit[i] = NULL;                  /* Device pointer */
@@ -1070,7 +1083,6 @@ chan_set_devs()
         UNIT               *uptr = dptr->units;
         DIB                *dibp = (DIB *) dptr->ctxt;
         int                 addr;
-        int                 chan;
 
         /* If no DIB, not channel device */
         if (dibp == NULL)
@@ -1100,8 +1112,6 @@ set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     DIB                *dibp;
     t_value             newdev;
     t_stat              r;
-    int                 num;
-    int                 type;
     int                 i;
     int                 devaddr;
 
@@ -1122,7 +1132,7 @@ set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     if (r != SCPE_OK)
         return r;
 
-    if ((newdev >> 8) > channels)
+    if ((newdev >> 8) > (t_value)channels)
         return SCPE_ARG;
 
     if (newdev >= MAX_DEV)
@@ -1177,7 +1187,6 @@ t_stat
 show_dev_addr(FILE * st, UNIT * uptr, int32 v, CONST void *desc)
 {
     DEVICE             *dptr;
-    DIB                *dibp;
     int                 addr;
 
 
