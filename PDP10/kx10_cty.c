@@ -74,8 +74,13 @@ MTAB cty_mod[] = {
     { 0 }
     };
 
+REG cty_reg[] = {
+    { HRDATAD (WRU, sim_int_char, 8, "interrupt character") },
+    { 0 }
+    };
+
 DEVICE cty_dev = {
-    "CTY", cty_unit, NULL, cty_mod,
+    "CTY", cty_unit, cty_reg, cty_mod,
     2, 10, 31, 1, 8, 8,
     NULL, NULL, &cty_reset,
     NULL, NULL, NULL, &cty_dib, DEV_DEBUG, 0, dev_debug,

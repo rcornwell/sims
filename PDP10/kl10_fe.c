@@ -302,6 +302,7 @@ REG  dte_reg[] = {
     {SAVEDATA(CTYIN, cty_in) },
     {SAVEDATA(CTYOUT, cty_out) },
     {HRDATA(DONE, cty_done, 8), REG_HRO},
+    {HRDATAD(WRU, sim_int_char, 8, "interrupt character") },
     { 0 },
     };
 
