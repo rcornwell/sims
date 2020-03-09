@@ -7156,9 +7156,9 @@ t_stat cpu_set_size(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
     cpu_unit.flags |= val;              /* set new memory size index value (0-31) */
     val >>= UNIT_V_MSIZE;               /* shift index right 19 bits */
     val = memwds[val];                  /* (128KB/4) << index == memory size in KW */
-    if ((val < 0) || (val > MAXMEMSIZE))    /* is size valid */
+    if ((val < 0) || (val > MAXMEMSIZE))/* is size valid */
         return SCPE_ARG;                /* nope, argument error */
-    for (i = val; i < MEMSIZE; i++)     /* see if memory contains anything */
+    for (i = val - 1; i < MEMSIZE; i++) /* see if memory contains anything */
         mc |= M[i];                     /* or in any bits in memory */
     if ((mc != 0) && (!get_yn("Really truncate memory [N]?", FALSE)))
         return SCPE_OK;                 /* return OK if user says no */
