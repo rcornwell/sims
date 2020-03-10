@@ -211,6 +211,7 @@ uint32          TLB[2048];                  /* Translated addresses for each map
 uint32          dummy2=0;
 uint32          modes;                      /* Operating modes, bits 0, 5, 6, 7 of PSD1 */
 uint8           wait4int = 0;               /* waiting for interrupt if set */
+int32           irq_auto = 0;               /* auto reset interrupt processing flag */
 
 /* define traps */
 uint32          TRAPME = 0;                 /* trap to be executed */
@@ -257,6 +258,7 @@ extern uint32 scan_chan(int *ilev);                     /* go scan for I/O int p
 extern uint16 loading;                                  /* set when doing IPL */
 extern int fprint_inst(FILE *of, uint32 val, int32 sw); /* instruction print function */
 extern int irq_pend;                                    /* go scan for pending interrupt */
+extern int irq_auto;                                    /* set when in auto reset interrupt */
 extern void rtc_setup(uint32 ss, uint32 level);         /* tell rtc to start/stop */
 extern void itm_setup(uint32 ss, uint32 level);         /* tell itm to start/stop */
 extern int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level); /* read/write the interval timer */
@@ -2003,7 +2005,8 @@ wait_loop:
             goto skipi;                         /* skip int test */
         }
         /* process pending I/O interrupts */
-        if (!loading && (wait4int || irq_pend)) {   /* see if ints are pending */
+//      if (!loading && (wait4int || irq_pend)) {   /* see if ints are pending */
+/*AIR*/ if (!loading && !irq_auto && (wait4int || irq_pend)) {   /* see if ints are pending */
             int ilev;
             int_icb = scan_chan(&ilev);         /* no, go scan for I/O int pending */
             if (int_icb != 0) {                 /* was ICB returned for an I/O or interrupt */
@@ -2033,19 +2036,26 @@ wait_loop:
                         CPUSTATUS |= 0x80;      /* yes, set blk state in cpu status bit 24 */
 
                         /* This test fixed the hangs on terminal input for diags & UTX! */
+#ifdef ALLOW_RTC
 /*TRY*/                 t = SPAD[il+0x80];      /* get spad entry for interrupt */
+#endif
                         /* Class F I/O spec says to reset interrupt active if user's */
                         /* interrupt service routine runs with interrupts blocked */
+#ifdef ALLOW_RTC
 /*TRY*/                 if ((t & 0x0f000000) == 0x0f000000) { /* if class F clear interrupt */
+#endif
                             /* if this is F class I/O interrupt, clear the active level */
                             /* SPAD entries for interrupts begin at 0x80 */
                             INTS[il] &= ~INTS_ACT;      /* deactivate specified int level */
                             SPAD[il+0x80] &= ~SINT_ACT; /* deactivate in SPAD too */
-                            irq_pend = 1;               /* scan for interrupts again */
+//AIR                       irq_pend = 1;               /* scan for interrupts again */
+/*AIR*/                     irq_auto = 1;               /* show processing in blocked mode */
                             sim_debug(DEBUG_IRQ, &cpu_dev,
                                 "<>Auto-reset interrupt INTS[%02x] %08x SPAD[%03x] %08x\n",
                                 il, INTS[il], il+0x80, SPAD[il+0x80]);
+#ifdef ALLOW_RT
 /*TRY*/                 }
+#endif
                     }
                     else
                         CPUSTATUS &= ~0x80;     /* no, reset blk state in cpu status bit 24 */
@@ -2069,7 +2079,7 @@ wait_loop:
                         "<>Int2 %03x ICBA %06x IOCLA %06x STAT %08x SW1 %08x SW2 %08x\n",
                         il, int_icb, RMW(int_icb+16), RMW(int_icb+20), RMW(bc), RMW(bc+4));
                 wait4int = 0;                   /* wait is over for int */
-                irq_pend = 1;                   /* scan for interrupts again */
+//AIR           irq_pend = 1;                   /* scan for interrupts again */
                 skipinstr = 1;                  /* skip next inter test after this instr */
 #ifdef NOTNOW
             sim_debug(DEBUG_IRQ, &cpu_dev,
@@ -2695,8 +2705,15 @@ exec:
                                 TRAPSTATUS |= BIT19;    /* set bit 19 of trap status */
                             goto newpsd;            /* Privlege violation trap */
                         }
+#ifdef AIR
                         if (CPUSTATUS & 0x80)       /* see if old mode is blocked */
                             irq_pend = 1;           /* start scanning interrupts again */
+#else
+/*AIR*/                 if (CPUSTATUS & 0x80) {     /* see if old mode is blocked */
+                            irq_pend = 1;           /* start scanning interrupts again */
+/*AIR*/                     irq_auto = 0;           /* show done processing in blocked mode */
+/*AIR*/                 }
+#endif
                         CPUSTATUS &= ~0x80;         /* into status word bit 24 too */
                         PSD2 &= ~0x0000c000;        /* clear bit 48 & 49 to be unblocked */
                         SPAD[0xf5] = PSD2;          /* save the current PSD2 */
@@ -3798,6 +3815,7 @@ skipit:
                         else {
                             CPUSTATUS &= ~0x80;     /* no, reset blk state in cpu status bit 24 */
                             irq_pend = 1;           /* start scanning interrupts again */
+/*AIR*/                     irq_auto = 0;           /* show done processing in blocked mode */
                         }
                     }
                     PSD2 &= ~0x0000c000;            /* clear bit 48 & 49 to be unblocked */
@@ -4159,7 +4177,7 @@ doovr4:
                             goto newpsd;                /* go execute the trap now */
                         }
                         source = (((t_uint64)GPR[sreg]) << 32); /* get upper reg value */
-                        source |= (t_uint64)GPR[sreg+1];        /* insert low order reg value */
+                        source |= (t_uint64)GPR[sreg+1];    /* insert low order reg value */
                         dest = s_fltd(source, &CC);     /* do conversion & set CC's */
                         sim_debug(DEBUG_CMD, &cpu_dev,
                             "FLTD GPR[%d] %08x %08x result %016llx\n",
@@ -5387,6 +5405,7 @@ doovr2:
                         else {
                             CPUSTATUS &= ~0x80;     /* no, reset blk state in cpu status bit 24 */
                             irq_pend = 1;           /* start scanning interrupts again */
+/*AIR*/                     irq_auto = 0;           /* show done processing in blocked mode */
                         }
                     }
                     PSD2 &= ~0x0000c000;            /* clear bit 48 & 49 to be unblocked */
@@ -5987,6 +6006,7 @@ doovr2:
                         else {
                             CPUSTATUS &= ~0x80;         /* no, reset blk state in cpu status bit 24 */
                             irq_pend = 1;               /* start scanning interrupts again */
+/*AIR*/                     irq_auto = 0;               /* show done processing in blocked mode */
                         }
                     }
                     PSD2 &= ~0x0000c000;                /* clear bit 48 & 49 to be unblocked */
@@ -7150,19 +7170,21 @@ uint32 memwds [] = {
 t_stat cpu_set_size(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
     uint32              mc = 0;
-    int32               i;
+    uint32              i;
 
     cpu_unit.flags &= ~UNIT_MSIZE;      /* clear old size value 0-31 */
     cpu_unit.flags |= val;              /* set new memory size index value (0-31) */
     val >>= UNIT_V_MSIZE;               /* shift index right 19 bits */
     val = memwds[val];                  /* (128KB/4) << index == memory size in KW */
-    if ((val < 0) || (val > MAXMEMSIZE))/* is size valid */
+    if ((val < 0) || (val > MAXMEMSIZE))    /* is size valid */
         return SCPE_ARG;                /* nope, argument error */
-    for (i = val - 1; i < MEMSIZE; i++) /* see if memory contains anything */
+//Z for (i = val - 1; i < MEMSIZE; i++) /* see if memory contains anything */
+    for (i = val; i < MEMSIZE; i++)     /* see if memory contains anything */
         mc |= M[i];                     /* or in any bits in memory */
     if ((mc != 0) && (!get_yn("Really truncate memory [N]?", FALSE)))
         return SCPE_OK;                 /* return OK if user says no */
-    MEMSIZE = val - 1;                  /* set new size in words */
+//Z MEMSIZE = val - 1;                  /* set new size in words */
+    MEMSIZE = val;                      /* set new size in words */
     for (i = MEMSIZE; i < MAXMEMSIZE; i++)
         M[i] = 0;                       /* zero all of the new memory */
     return SCPE_OK;                     /* we done */

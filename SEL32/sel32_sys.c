@@ -22,11 +22,12 @@
 
 */
 
-#include "sim_defs.h"
 #include "sel32_defs.h"
 #include <ctype.h>
 
 extern REG cpu_reg[];
+extern uint32 M[MAXMEMSIZE];
+extern uint32 SPAD[];
 extern uint32 PSD[];
 
 /* SCP data structures and interface routines
@@ -1080,7 +1081,7 @@ t_stat fprint_sym (FILE *of, t_addr addr, t_value *val, UNIT *uptr, int32 sw)
 /* 
  * Collect offset in radix.
  */
-t_stat get_off (CONST char *cptr, CONST char **tptr, uint32 radix, uint32 *val, char *m)
+t_stat get_off (CONST char *cptr, CONST char **tptr, uint32 radix, t_value *val, char *m)
 {
     t_stat r = SCPE_OK;                         /* assume OK return */
 
@@ -1105,7 +1106,7 @@ t_stat get_off (CONST char *cptr, CONST char **tptr, uint32 radix, uint32 *val, 
 /* 
  * Collect immediate in radix.
  */
-t_stat get_imm (CONST char *cptr, CONST char **tptr, uint32 radix, uint32 *val)
+t_stat get_imm (CONST char *cptr, CONST char **tptr, uint32 radix, t_value *val)
 {
     t_stat r;
 

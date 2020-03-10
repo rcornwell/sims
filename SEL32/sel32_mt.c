@@ -39,8 +39,8 @@
 #include "sel32_defs.h"
 #include "sim_tape.h"
 
-
 #if NUM_DEVS_MT > 0
+
 #define BUFFSIZE        (64 * 1024)
 #define UNIT_MT         UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE
 #define DEV_BUF_NUM(x)  (((x) & 07) << DEV_V_UF)
@@ -558,6 +558,7 @@ t_stat mt_srv(UNIT *uptr)
             }
             /* just dump data */
         }
+#ifdef CHANGE_FOR_UTX_TEST
         /* a BTP uses a 41 word INCH memory buffer */
 //      for (i=0; i<41; i++) {
         for (i=0; i<9; i++) {
@@ -571,6 +572,7 @@ t_stat mt_srv(UNIT *uptr)
             else
                 WMW(mema+(4*i),0);              /* zero work location */
         }
+#endif
         /* the chp->ccw_addr location contains the inch address */
         /* call set_inch() to setup inch buffer */
         i = set_inch(uptr, mema);               /* new address */
