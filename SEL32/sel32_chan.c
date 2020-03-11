@@ -185,7 +185,7 @@ t_stat set_inch(UNIT *uptr, uint32 inch_addr) {
         return SCPE_MEM;                            /* return memory error */
 
     /* see if valid memory address */
-    if (inch_addr >= (MEMSIZE*4))                   /* see if mem addr >= MEMSIZE */
+    if (inch_addr >= (MEMSIZEP1*4))                 /* see if mem addr >= MEMSIZEP1 */
         return SCPE_MEM;                            /* return memory error */
 
 #ifdef NOT_YET
@@ -344,7 +344,7 @@ CHANP *find_chanp_ptr(uint16 chsa)
 int readfull(CHANP *chp, uint32 maddr, uint32 *word)
 {
     maddr &= MASK24;                            /* mask addr to 24 bits */
-    if (maddr >= (MEMSIZE*4)) {                 /* see if mem addr >= MEMSIZE */
+    if (maddr >= (MEMSIZEP1*4)) {               /* see if mem addr >= MEMSIZEP1 */
         chp->chan_status |= STATUS_PCHK;        /* program check error */
         sim_debug(DEBUG_EXP, &cpu_dev, "readfull read %08x from addr %08x ERROR\n", *word, maddr<<2);
         return 1;                               /* show we have error */
@@ -370,11 +370,11 @@ int readbuff(CHANP *chp)
     uint32 addr = chp->ccw_addr;                /* channel buffer address */
 //XXX    uint16 chan = get_chan(chp->chan_dev);      /* our channel */
 
-    if ((addr & MASK24) >= (MEMSIZE*4)) {       /* see if memory address invalid */
+    if ((addr & MASK24) >= (MEMSIZEP1*4)) {     /* see if memory address invalid */
         chp->chan_status |= STATUS_PCHK;        /* bad, program check */
         sim_debug(DEBUG_EXP, &cpu_dev,
             "readbuff PCHK addr %08x to big mem %08x status %04x\n",
-            addr, MEMSIZE, chp->chan_status);
+            addr, MEMSIZEP1, chp->chan_status);
         chp->chan_byte = BUFF_CHNEND;           /* force channel end */
         irq_pend = 1;                           /* and we have an interrupt */
         return 1;                               /* done, with error */
@@ -410,11 +410,11 @@ int writebuff(CHANP *chp)
 {
     uint32 addr = chp->ccw_addr;
 
-    if ((addr & MASK24) >= (MEMSIZE*4)) {
+    if ((addr & MASK24) >= (MEMSIZEP1*4)) {
         chp->chan_status |= STATUS_PCHK;
         sim_debug(DEBUG_EXP, &cpu_dev,
             "writebuff PCHK addr %08x to big mem %08x status %04x\n",
-            addr, MEMSIZE, chp->chan_status);
+            addr, MEMSIZEP1, chp->chan_status);
         chp->chan_byte = BUFF_CHNEND;
         irq_pend = 1;
         return 1;
@@ -528,10 +528,10 @@ loop:
     if ((chp->ccw_cmd & 0xFF) != CMD_TIC) {
         /* see if buffer address is in real memory */
         /* diags want the count from IOCD2 in status */
-        if (chp->ccw_addr >= (MEMSIZE*4)) {         /* see if mem addr >= MEMSIZE */
+        if (chp->ccw_addr >= (MEMSIZEP1*4)) {       /* see if mem addr >= MEMSIZEP1 */
             chp->chan_status |= STATUS_PCHK;        /* program check error */
             sim_debug(DEBUG_EXP, &cpu_dev,
-                "load_ccw data start addr %08x ERROR chan_status[%04x] %04x\n",
+                "load_ccw data start addr %06x ERROR chan_status[%04x] %04x\n",
                 chp->ccw_addr, chan, chp->chan_status);
             irq_pend = 1;                           /* status pending */
             return 1;                               /* show we have error */
@@ -539,11 +539,11 @@ loop:
 
         /* see if buffer end address is in real memory */
         /* diags want the count from IOCD2 in status */
-        if ((chp->ccw_addr + chp->ccw_count) > (MEMSIZE*4)) {  /* see if mem addr > MEMSIZE */
+        if ((chp->ccw_addr + chp->ccw_count) > (MEMSIZEP1*4)) {  /* see if mem addr > MEMSIZEP1 */
             chp->chan_status |= STATUS_PCHK;        /* program check error */
             sim_debug(DEBUG_EXP, &cpu_dev,
-                "load_ccw data end addr %08x ERROR chan_status[%04x] %04x\n",
-                chp->ccw_addr, chan, chp->chan_status);
+                "load_ccw data end addr %06x ERROR cnt %04x chan_status[%04x] %04x\n",
+                chp->ccw_addr, chp->ccw_count, chan, chp->chan_status);
             irq_pend = 1;                           /* status pending */
             return 1;                               /* show we have error */
         }
