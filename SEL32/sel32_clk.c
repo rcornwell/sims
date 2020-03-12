@@ -35,7 +35,6 @@
 
 #if NUM_DEVS_RTOM > 0
 
-
 void rtc_setup (uint32 ss, uint32 level);
 t_stat rtc_srv (UNIT *uptr);
 t_stat rtc_reset (DEVICE *dptr);

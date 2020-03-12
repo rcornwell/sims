@@ -211,6 +211,7 @@ uint32          TLB[2048];                  /* Translated addresses for each map
 uint32          dummy2=0;
 uint32          modes;                      /* Operating modes, bits 0, 5, 6, 7 of PSD1 */
 uint8           wait4int = 0;               /* waiting for interrupt if set */
+int32           irq_auto = 0;               /* auto reset interrupt processing flag */
 
 /* define traps */
 uint32          TRAPME = 0;                 /* trap to be executed */
@@ -257,6 +258,7 @@ extern uint32 scan_chan(int *ilev);                     /* go scan for I/O int p
 extern uint16 loading;                                  /* set when doing IPL */
 extern int fprint_inst(FILE *of, uint32 val, int32 sw); /* instruction print function */
 extern int irq_pend;                                    /* go scan for pending interrupt */
+extern int irq_auto;                                    /* set when in auto reset interrupt */
 extern void rtc_setup(uint32 ss, uint32 level);         /* tell rtc to start/stop */
 extern void itm_setup(uint32 ss, uint32 level);         /* tell itm to start/stop */
 extern int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level); /* read/write the interval timer */
@@ -720,10 +722,10 @@ t_stat load_maps(uint32 thepsd[2], uint32 lmap)
         }
 
         /* check if valid real address */
-        if ((mpl == 0) || ((mpl & MASK24) >= (MEMSIZE*4))) {  /* see if in memory */
+        if ((mpl == 0) || ((mpl & MASK24) >= (MEMSIZEP1*4))) {  /* see if in memory */
             sim_debug(DEBUG_TRAP, &cpu_dev,
                 "load_maps MEM SIZE7 %06x mpl %06x invalid\n",
-                MEMSIZE*4, mpl);
+                MEMSIZEP1*4, mpl);
             TRAPSTATUS |= BIT18;                    /* set bit 18 of trap status */
             return MAPFLT;                          /* no, map fault error */
 //          return NPMEM;                           /* no, none present memory error */
@@ -741,10 +743,10 @@ t_stat load_maps(uint32 thepsd[2], uint32 lmap)
             bpixmsdl = RMW(mpl+bpix);               /* get bpix msdl word address */
 
             /* check for valid bpix msdl addr */
-            if ((bpixmsdl & MASK24) >= (MEMSIZE*4)) {   /* see if in memory */
+            if ((bpixmsdl & MASK24) >= (MEMSIZEP1*4)) { /* see if in memory */
                 sim_debug(DEBUG_TRAP, &cpu_dev,
                     "load_maps MEM SIZE8 %06x bpix msdl %08x invalid\n",
-                    MEMSIZE*4, bpixmsdl);
+                    MEMSIZEP1*4, bpixmsdl);
                 return NPMEM;                       /* no, none present memory error */
             }
 
@@ -752,9 +754,9 @@ t_stat load_maps(uint32 thepsd[2], uint32 lmap)
 //          msdl = (bpixmsdl >> 2) & MASK24;        /* get 24 bit real address of msdl */
             msdl = bpixmsdl & MASK24;               /* get 24 bit real address of msdl */
             /* check for valid msdl addr */
-            if ((msdl & MASK24) >= (MEMSIZE*4)) {   /* see if in memory */
+            if ((msdl & MASK24) >= (MEMSIZEP1*4)) { /* see if in memory */
                 sim_debug(DEBUG_TRAP, &cpu_dev,
-                    "load_maps MEM SIZE9 %06x msdl %08x invalid\n", MEMSIZE*4, msdl);
+                    "load_maps MEM SIZE9 %06x msdl %08x invalid\n", MEMSIZEP1*4, msdl);
                 return NPMEM;                       /* no, none present memory error */
             }
 
@@ -766,9 +768,9 @@ t_stat load_maps(uint32 thepsd[2], uint32 lmap)
                 midl = RMW(msdl+i) & MASK24;        /* get 24 bit real word address of midl */
 
                 /* check for valid midl addr */
-                if ((midl & MASK24) >= (MEMSIZE*4)) {   /* see if in memory */
+                if ((midl & MASK24) >= (MEMSIZEP1*4)) { /* see if in memory */
                     sim_debug(DEBUG_TRAP, &cpu_dev,
-                        "load_maps MEM SIZEa %06x midl %08x invalid\n", MEMSIZE*4, midl);
+                        "load_maps MEM SIZEa %06x midl %08x invalid\n", MEMSIZEP1*4, midl);
                     return NPMEM;                   /* no, none present memory error */
                 }
 
@@ -787,9 +789,9 @@ t_stat load_maps(uint32 thepsd[2], uint32 lmap)
 
         /* now load cpix maps */
         /* check for valid cpix msdl addr */
-        if ((cpixmsdl & MASK24) >= (MEMSIZE*4)) {   /* see if in memory */
+        if ((cpixmsdl & MASK24) >= (MEMSIZEP1*4)) { /* see if in memory */
             sim_debug(DEBUG_TRAP, &cpu_dev,
-                "load_maps MEM SIZEb %06x cpix msdl %08x invalid\n", MEMSIZE*4, cpixmsdl);
+                "load_maps MEM SIZEb %06x cpix msdl %08x invalid\n", MEMSIZEP1*4, cpixmsdl);
             return NPMEM;                           /* no, none present memory error */
         }
 
@@ -797,9 +799,9 @@ t_stat load_maps(uint32 thepsd[2], uint32 lmap)
 //      msdl = (cpixmsdl >> 2) & 0x3fffff;          /* get 24 bit real address of msdl */
         msdl = cpixmsdl & 0xffffff;                 /* get 24 bit real address of msdl */
         /* check for valid msdl addr */
-        if ((msdl & MASK24) >= (MEMSIZE*4)) {       /* see if in memory */
+        if ((msdl & MASK24) >= (MEMSIZEP1*4)) {     /* see if in memory */
             sim_debug(DEBUG_TRAP, &cpu_dev,
-                "load_maps MEM SIZEc %06x msdl %08x invalid\n", MEMSIZE*4, msdl);
+                "load_maps MEM SIZEc %06x msdl %08x invalid\n", MEMSIZEP1*4, msdl);
             return NPMEM;                           /* no, none present memory error */
         }
 
@@ -811,9 +813,9 @@ t_stat load_maps(uint32 thepsd[2], uint32 lmap)
             midl = RMW(msdl+i) & MASK24;            /* get 24 bit real word address of midl */
 
             /* check for valid midl addr */
-            if ((midl & MASK24) >= (MEMSIZE*4)) {   /* see if in memory */
+            if ((midl & MASK24) >= (MEMSIZEP1*4)) { /* see if in memory */
                 sim_debug(DEBUG_TRAP, &cpu_dev,
-                    "load_maps MEM SIZEd %06x midl %08x invalid\n", MEMSIZE*4, midl);
+                    "load_maps MEM SIZEd %06x midl %08x invalid\n", MEMSIZEP1*4, midl);
                 return NPMEM;                       /* no, none present memory error */
             }
 
@@ -880,9 +882,9 @@ t_stat load_maps(uint32 thepsd[2], uint32 lmap)
 
     /* check if valid real address */
     mpl &= MASK24;                                  /* clean mpl address */
-    if (mpl >= (MEMSIZE*4)) {                       /* see if in our real memory */
+    if (mpl >= (MEMSIZEP1*4)) {                     /* see if in our real memory */
         sim_debug(DEBUG_TRAP, &cpu_dev,
-            "load_maps MEM SIZE1 %06x mpl %06x invalid\n", MEMSIZE*4, mpl);
+            "load_maps MEM SIZE1 %06x mpl %06x invalid\n", MEMSIZEP1*4, mpl);
 npmem:
         BPIX = 0;                                   /* no os maps loaded */
         CPIXPL = 0;                                 /* no user pages */
@@ -897,11 +899,11 @@ npmem:
     /* output O/S and User MPX entries */
     sim_debug(DEBUG_DETAIL, &cpu_dev,
         "#MEMORY %06x MPL %06x MPL[0] %08x %06x MPL[%04x] %08x %06x\n",
-        MEMSIZE*4, mpl, RMW(mpl), RMW(mpl+4), cpix,
+        MEMSIZEP1*4, mpl, RMW(mpl), RMW(mpl+4), cpix,
         RMW(cpix+mpl), RMW(cpix+mpl+4));
     sim_debug(DEBUG_DETAIL, &cpu_dev,
         "MEMORY2 %06x BPIX %04x cpix %04x CPIX %04x CPIXPL %04x HIWM %04x\n",
-        MEMSIZE*4, BPIX, cpix, CPIX, CPIXPL, HIWM);
+        MEMSIZEP1*4, BPIX, cpix, CPIX, CPIXPL, HIWM);
 
     /* load the users regs first or the O/S.  Verify the User MPL entry too. */
     /* If bit zero of cpix mpl entry is set, use msd entry 0 first to load maps */
@@ -948,10 +950,10 @@ nomaps:
 
         /* we have a valid count, load the O/S map list address */
         osmsdl &= MASK24;                           /* get 24 bit real address from mpl 0 wd2 */
-        if (osmsdl >= (MEMSIZE*4)) {                /* see if address is within our memory */
+        if (osmsdl >= (MEMSIZEP1*4)) {              /* see if address is within our memory */
             sim_debug(DEBUG_TRAP, &cpu_dev,
                 "load_maps MEM SIZE2 %06x os page list address %06x invalid\n",
-                MEMSIZE*4, osmsdl);
+                MEMSIZEP1*4, osmsdl);
             goto npmem;                             /* non present memory trap */
         }
 
@@ -965,10 +967,10 @@ nomaps:
                     "load_maps O/S page count overflow %04x, map fault\n", num);
                 goto nomaps;                        /* map overflow, map fault trap */
             }
-            if (pad >= (MEMSIZE*4)) {               /* see if address is within our memory */
+            if (pad >= (MEMSIZEP1*4)) {             /* see if address is within our memory */
                 sim_debug(DEBUG_TRAP, &cpu_dev,
                     "load_maps MEM SIZE3 %06x os page address %06x invalid\n",
-                    MEMSIZE*4, pad);
+                    MEMSIZEP1*4, pad);
                 goto npmem;                         /* non present memeory trap */
             }
             /* load 16 bit map descriptors */
@@ -1064,10 +1066,10 @@ loaduser:
 
     /* This test fails cn.mmm diag at test 46, subtest 2 with unexpected error */
     /* Do this test if we are a LMAP instruction and not a 32/27 or 32/87 */
-    if (lmap && (msdl >= (MEMSIZE*4))) {            /* see if address is within our memory */
+    if (lmap && (msdl >= (MEMSIZEP1*4))) {          /* see if address is within our memory */
         sim_debug(DEBUG_TRAP, &cpu_dev,
             "load_maps MEM SIZE4 %06x user page list address %06x invalid\n",
-            MEMSIZE*4, msdl);
+            MEMSIZEP1*4, msdl);
         if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9)) {
             TRAPSTATUS |= BIT1;                     /* set bit 1 of trap status */
         } else
@@ -1116,10 +1118,10 @@ loaduser:
                 TRAPSTATUS |= BIT16;                /* set bit 16 of trap status */
                 goto nomaps;                        /* map overflow, map fault trap */
             }
-            if (pad >= (MEMSIZE*4)) {               /* see if address is within our memory */
+            if (pad >= (MEMSIZEP1*4)) {             /* see if address is within our memory */
                 sim_debug(DEBUG_TRAP, &cpu_dev,
                     "load_maps MEM SIZE5 %06x User page address %06x invalid\n",
-                    MEMSIZE*4, pad);
+                    MEMSIZEP1*4, pad);
                 goto npmem;                         /* non present memeory trap */
             }
             /* load 16 bit map descriptors */
@@ -1188,10 +1190,10 @@ loaduser:
             goto nomaps;                            /* map overflow, map fault trap */
         }
 
-        if (pad >= (MEMSIZE*4)) {                   /* see if address is within our memory */
+        if (pad >= (MEMSIZEP1*4)) {                 /* see if address is within our memory */
             sim_debug(DEBUG_TRAP, &cpu_dev,
                 "load_maps MEM SIZE6 %06x User page address %06x non present\n",
-                MEMSIZE*4, pad);
+                MEMSIZEP1*4, pad);
             goto npmem;                             /* non present memeory trap */
         }
 
@@ -1252,7 +1254,7 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot, uint32 access)
             word = addr & 0x7ffff;                  /* get 19 bit logical word address */
         if ((modes & MAPMODE) == 0) {
             /* check if valid real address */
-            if (word >= (MEMSIZE*4)) {              /* see if address is within our memory */
+            if (word >= (MEMSIZEP1*4)) {            /* see if address is within our memory */
                 return NPMEM;                       /* no, none present memory error */
             }
             *realaddr = word;                       /* return the real address */
@@ -1272,7 +1274,7 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot, uint32 access)
         /* required map is valid, get 9 bit address and merge with 15 bit page offset */
         word = ((map & 0x1ff) << 15) | (word & 0x7fff);
         /* check if valid real address */
-        if (word >= (MEMSIZE*4))                    /* see if address is within our memory */
+        if (word >= (MEMSIZEP1*4))                  /* see if address is within our memory */
             return NPMEM;                           /* no, none present memory error */
         if ((modes & PRIVBIT) == 0) {               /* see if we are in unprivileged mode */
             if (map & 0x2000)                       /* check if protect bit is set in map entry */
@@ -1293,7 +1295,7 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot, uint32 access)
 
     if ((modes & MAPMODE) == 0) {
         /* we are in unmapped mode, check if valid real address */
-        if (word >= (MEMSIZE*4)) {                  /* see if address is within our memory */
+        if (word >= (MEMSIZEP1*4)) {                /* see if address is within our memory */
             if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9)) {
                 if (access == MEM_RD)
                     TRAPSTATUS |= BIT1;             /* set bit 1 of trap status */
@@ -1315,7 +1317,7 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot, uint32 access)
     /* unexpected machine check trap for 67 in test 37/0 cn.mmm */
     /* now check the O/S midl pointer for being valid */
     /* we may want to delay checking until we actually use it */
-    if ((RMW(mpl+4) & MASK24) >= (MEMSIZE*4)) {     /* check OS midl */
+    if ((RMW(mpl+4) & MASK24) >= (MEMSIZEP1*4)) {   /* check OS midl */
         sim_debug(DEBUG_TRAP, &cpu_dev,
             "RealAddr Non Present Memory O/S msdl MPL %06x MPL[1] %06x\n",
             mpl, RMW(mpl+4));
@@ -1362,7 +1364,7 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot, uint32 access)
         map = RMR((index<<1));                      /* read the map reg cache contents */
         raddr = TLB[index];                         /* get the base address & bits */
 #ifndef MAYBE_NOT_NEEDED
-        if ((RMW(mpl+CPIX+4) & MASK24) >= (MEMSIZE*4)) {     /* check user midl */
+        if ((RMW(mpl+CPIX+4) & MASK24) >= (MEMSIZEP1*4)) {  /* check user midl */
             sim_debug(DEBUG_TRAP, &cpu_dev,
                 "RealAddr 27 & 87 map fault index %04x B+C %04x map %04x TLB %08x\n",
                 index, BPIX+CPIXPL, map, TLB[index]);
@@ -1382,7 +1384,7 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot, uint32 access)
         // diag test 34/1 fails in cn.mmm
         // needed for 32/27 & 32/87
         /* check if valid real address */
-        if ((raddr & MASK24) >= (MEMSIZE*4)) {      /* see if address is within our memory */
+        if ((raddr & MASK24) >= (MEMSIZEP1*4)) {    /* see if address is within our memory */
             sim_debug(DEBUG_TRAP, &cpu_dev,
                 "RealAddr loadmap 0c non present memory fault addr %06x raddr %08x index %04x\n",
                 word, raddr, index);
@@ -1415,7 +1417,7 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot, uint32 access)
         index &= 0x7ff;                             /* map # */
         raddr = TLB[index];                         /* get the base address & bits */
         /* check if valid real address */
-        if ((raddr & MASK24) >= (MEMSIZE*4)) {      /* see if address is within our memory */
+        if ((raddr & MASK24) >= (MEMSIZEP1*4)) {    /* see if address is within our memory */
             sim_debug(DEBUG_TRAP, &cpu_dev,
                 "RealAddr loadmap 2a non present memory fault addr %08x raddr %08x index %04x\n",
                 addr, raddr, index);
@@ -1480,11 +1482,11 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot, uint32 access)
     /* Hit bit is off in TLB, so lets go get some maps */
     sim_debug(DEBUG_DETAIL, &cpu_dev,
         "$MEMORY %06x HIT MPL %06x MPL[0] %08x %06x MPL[%04x] %08x %06x\n",
-        MEMSIZE*4, mpl, RMW(mpl), RMW(mpl+4), CPIX, RMW(CPIX+mpl), RMW(CPIX+mpl+4));
+        MEMSIZEP1*4, mpl, RMW(mpl), RMW(mpl+4), CPIX, RMW(CPIX+mpl), RMW(CPIX+mpl+4));
 
     /* check user msdl address now that we are going to access it */
     msdl = RMW(mpl+CPIX+4);                     /* get msdl entry for given CPIX */
-    if ((msdl & MASK24) >= (MEMSIZE*4)) {       /* check user midl */
+    if ((msdl & MASK24) >= (MEMSIZEP1*4)) {     /* check user midl */
         sim_debug(DEBUG_TRAP, &cpu_dev,
             "RealAddr User CPIX Non Present Memory User msdl %06x CPIX %04x\n",
             msdl, CPIX);
@@ -2003,7 +2005,8 @@ wait_loop:
             goto skipi;                         /* skip int test */
         }
         /* process pending I/O interrupts */
-        if (!loading && (wait4int || irq_pend)) {   /* see if ints are pending */
+//      if (!loading && (wait4int || irq_pend)) {   /* see if ints are pending */
+/*AIR*/ if (!loading && !irq_auto && (wait4int || irq_pend)) {   /* see if ints are pending */
             int ilev;
             int_icb = scan_chan(&ilev);         /* no, go scan for I/O int pending */
             if (int_icb != 0) {                 /* was ICB returned for an I/O or interrupt */
@@ -2033,19 +2036,26 @@ wait_loop:
                         CPUSTATUS |= 0x80;      /* yes, set blk state in cpu status bit 24 */
 
                         /* This test fixed the hangs on terminal input for diags & UTX! */
+#ifdef ALLOW_RTC
 /*TRY*/                 t = SPAD[il+0x80];      /* get spad entry for interrupt */
+#endif
                         /* Class F I/O spec says to reset interrupt active if user's */
                         /* interrupt service routine runs with interrupts blocked */
+#ifdef ALLOW_RTC
 /*TRY*/                 if ((t & 0x0f000000) == 0x0f000000) { /* if class F clear interrupt */
+#endif
                             /* if this is F class I/O interrupt, clear the active level */
                             /* SPAD entries for interrupts begin at 0x80 */
                             INTS[il] &= ~INTS_ACT;      /* deactivate specified int level */
                             SPAD[il+0x80] &= ~SINT_ACT; /* deactivate in SPAD too */
-                            irq_pend = 1;               /* scan for interrupts again */
+//AIR                       irq_pend = 1;               /* scan for interrupts again */
+/*AIR*/                     irq_auto = 1;               /* show processing in blocked mode */
                             sim_debug(DEBUG_IRQ, &cpu_dev,
                                 "<>Auto-reset interrupt INTS[%02x] %08x SPAD[%03x] %08x\n",
                                 il, INTS[il], il+0x80, SPAD[il+0x80]);
+#ifdef ALLOW_RT
 /*TRY*/                 }
+#endif
                     }
                     else
                         CPUSTATUS &= ~0x80;     /* no, reset blk state in cpu status bit 24 */
@@ -2069,7 +2079,7 @@ wait_loop:
                         "<>Int2 %03x ICBA %06x IOCLA %06x STAT %08x SW1 %08x SW2 %08x\n",
                         il, int_icb, RMW(int_icb+16), RMW(int_icb+20), RMW(bc), RMW(bc+4));
                 wait4int = 0;                   /* wait is over for int */
-                irq_pend = 1;                   /* scan for interrupts again */
+//AIR           irq_pend = 1;                   /* scan for interrupts again */
                 skipinstr = 1;                  /* skip next inter test after this instr */
 #ifdef NOTNOW
             sim_debug(DEBUG_IRQ, &cpu_dev,
@@ -2695,8 +2705,15 @@ exec:
                                 TRAPSTATUS |= BIT19;    /* set bit 19 of trap status */
                             goto newpsd;            /* Privlege violation trap */
                         }
+#ifdef AIR
                         if (CPUSTATUS & 0x80)       /* see if old mode is blocked */
                             irq_pend = 1;           /* start scanning interrupts again */
+#else
+/*AIR*/                 if (CPUSTATUS & 0x80) {     /* see if old mode is blocked */
+                            irq_pend = 1;           /* start scanning interrupts again */
+/*AIR*/                     irq_auto = 0;           /* show done processing in blocked mode */
+/*AIR*/                 }
+#endif
                         CPUSTATUS &= ~0x80;         /* into status word bit 24 too */
                         PSD2 &= ~0x0000c000;        /* clear bit 48 & 49 to be unblocked */
                         SPAD[0xf5] = PSD2;          /* save the current PSD2 */
@@ -3798,6 +3815,7 @@ skipit:
                         else {
                             CPUSTATUS &= ~0x80;     /* no, reset blk state in cpu status bit 24 */
                             irq_pend = 1;           /* start scanning interrupts again */
+/*AIR*/                     irq_auto = 0;           /* show done processing in blocked mode */
                         }
                     }
                     PSD2 &= ~0x0000c000;            /* clear bit 48 & 49 to be unblocked */
@@ -4159,7 +4177,7 @@ doovr4:
                             goto newpsd;                /* go execute the trap now */
                         }
                         source = (((t_uint64)GPR[sreg]) << 32); /* get upper reg value */
-                        source |= (t_uint64)GPR[sreg+1];        /* insert low order reg value */
+                        source |= (t_uint64)GPR[sreg+1];    /* insert low order reg value */
                         dest = s_fltd(source, &CC);     /* do conversion & set CC's */
                         sim_debug(DEBUG_CMD, &cpu_dev,
                             "FLTD GPR[%d] %08x %08x result %016llx\n",
@@ -5387,6 +5405,7 @@ doovr2:
                         else {
                             CPUSTATUS &= ~0x80;     /* no, reset blk state in cpu status bit 24 */
                             irq_pend = 1;           /* start scanning interrupts again */
+/*AIR*/                     irq_auto = 0;           /* show done processing in blocked mode */
                         }
                     }
                     PSD2 &= ~0x0000c000;            /* clear bit 48 & 49 to be unblocked */
@@ -5987,6 +6006,7 @@ doovr2:
                         else {
                             CPUSTATUS &= ~0x80;         /* no, reset blk state in cpu status bit 24 */
                             irq_pend = 1;               /* start scanning interrupts again */
+/*AIR*/                     irq_auto = 0;               /* show done processing in blocked mode */
                         }
                     }
                     PSD2 &= ~0x0000c000;                /* clear bit 48 & 49 to be unblocked */
@@ -7107,7 +7127,7 @@ t_stat cpu_ex(t_value *vptr, t_addr baddr, UNIT *uptr, int32 sw)
         return SCPE_NXM;                /* no, none existant memory error */
     }
     /* MSIZE is in 32 bit words */
-    if (addr >= MEMSIZE)                /* see if address is within our memory */
+    if (addr >= MEMSIZEP1)              /* see if address is within our memory */
         return SCPE_NXM;                /* no, none existant memory error */
     if (vptr == NULL)                   /* any address specified by user */
         return SCPE_OK;                 /* no, just ignore the request */
@@ -7124,7 +7144,7 @@ t_stat cpu_dep(t_value val, t_addr baddr, UNIT *uptr, int32 sw)
     static const uint32 bmasks[4] = {0x00FFFFFF, 0xFF00FFFF, 0xFFFF00FF, 0xFFFFFF00};
 
     /* MSIZE is in 32 bit words */
-    if (addr >= MEMSIZE)                /* see if address is within our memory */
+    if (addr >= MEMSIZEP1)              /* see if address is within our memory */
         return SCPE_NXM;                /* no, none existant memory error */
     val = (M[addr] & bmasks[baddr & 0x3]) | (val << (8 * (3 - (baddr & 0x3))));
     M[addr] = val;                      /* set new value */
@@ -7147,24 +7167,30 @@ uint32 memwds [] = {
     0x400000,   /*           10 -  16MB =   4MW */
 };
 
-t_stat cpu_set_size(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+t_stat cpu_set_size(UNIT *uptr, int32 sval, CONST char *cptr, void *desc)
 {
-    uint32              mc = 0;
-    int32               i;
+    uint32      i;
+    uint32      sz;
+    int32       val = (int32)sval;
 
-    cpu_unit.flags &= ~UNIT_MSIZE;      /* clear old size value 0-31 */
-    cpu_unit.flags |= val;              /* set new memory size index value (0-31) */
     val >>= UNIT_V_MSIZE;               /* shift index right 19 bits */
-    val = memwds[val];                  /* (128KB/4) << index == memory size in KW */
-    if ((val < 0) || (val > MAXMEMSIZE))/* is size valid */
+    if (val >= (sizeof(memwds)/sizeof(uint32)))  /* is size valid */
         return SCPE_ARG;                /* nope, argument error */
-    for (i = val - 1; i < MEMSIZE; i++) /* see if memory contains anything */
-        mc |= M[i];                     /* or in any bits in memory */
-    if ((mc != 0) && (!get_yn("Really truncate memory [N]?", FALSE)))
-        return SCPE_OK;                 /* return OK if user says no */
-    MEMSIZE = val - 1;                  /* set new size in words */
-    for (i = MEMSIZE; i < MAXMEMSIZE; i++)
+    sz = memwds[val];                   /* (128KB/4) << index == memory size in KW */
+    if ((sz <= 0) || (sz > MAXMEMSIZE)) /* is size valid */
+        return SCPE_ARG;                /* nope, argument error */
+    if (sz < MEMSIZE) {                 /* is size smaller */
+        uint32 mc = 0;                  /* yes, see if larger memory was used */
+        for (i = sz-1; i < MEMSIZE; i++)
+            mc = mc | M[i];             /* or in any bits we might find */
+        if ((mc != 0) && (!get_yn ("Really truncate memory [N]?", FALSE)))
+            return SCPE_OK;             /* forget update */
+    }
+    for (i = MEMSIZE; i < sz; i++)
         M[i] = 0;                       /* zero all of the new memory */
+    cpu_unit.flags &= ~UNIT_MSIZE;      /* clear old size value 0-31 */
+    cpu_unit.flags |= val << UNIT_V_MSIZE; /* set new memory size index value (0-31) */
+    cpu_unit.capac = sz;                /* set new size */
     return SCPE_OK;                     /* we done */
 }
 

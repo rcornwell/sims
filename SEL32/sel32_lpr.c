@@ -77,7 +77,6 @@ P00070  20                            DATAB     C' '    0x20    FORMS CONTROL FO
 //#define UNIT_LPR        UNIT_ATTABLE | UNIT_DISABLE
 #define UNIT_LPR        UNIT_ATTABLE | UNIT_IDLE
 
-
 /* u3 hold command and status information */
 #define LPR_INCH        0x00        /* INCH command */
 /* print buffer then CC commands */
