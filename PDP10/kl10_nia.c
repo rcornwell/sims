@@ -352,6 +352,7 @@ struct nia_device {
     uint64            status;                  /* Status of device. */
     uint32            uver[4];                 /* Version information */
     int               r_pkt;                   /* Packet pending */
+    int               poll;                    /* Need to poll receiver */
 } nia_data;
 
 
@@ -1496,6 +1497,8 @@ t_stat nia_eth_srv(UNIT * uptr)
     struct nia_eth_hdr  *hdr;
     uint16              type;
 
+    if (nia_data.poll)
+        sim_clock_coschedule(uptr, 1000);             /* continue poll */
     /* Check if we need to get a packet */
     while (nia_data.r_pkt == 0) {
         if (eth_read(&nia_data.etherface, &nia_data.rec_buff, NULL) <= 0)
@@ -1636,7 +1639,12 @@ t_stat nia_attach(UNIT* uptr, CONST char* cptr)
 
 
     /* Allow Asynchronous inbound packets */
-    eth_set_async (&nia_data.etherface, 0);
+    if (eth_set_async (&nia_data.etherface, 0) == SCPE_OK)
+        nia_data.poll = 0;
+    else {
+        nia_data.poll = 1;
+        sim_activate (&nia_unit[0], 100);
+    }
     return SCPE_OK;
 }
 
