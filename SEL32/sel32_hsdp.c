@@ -1742,7 +1742,7 @@ int hsdp_format(UNIT *uptr) {
     /* write dmap data to last sector on disk */
     if ((sim_fseek(uptr->fileref, laddr*ssize, SEEK_SET)) != 0) { /* seek last sector */
         sim_debug(DEBUG_CMD, dptr,
-        "Error on last sector seek to sect 0x06 offset %06x\n",
+        "Error on last sector seek to sect %06x offset %06x\n",
         cap-1, (cap-1)*ssize);
         return 1;
     }
