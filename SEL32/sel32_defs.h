@@ -176,10 +176,8 @@ extern DEVICE lpr_dev;
 /* Memory */
 
 #define MAXMEMSIZE  ((16*1024*1024)/4)      /* max memory size in 32bit words */
-#define PAMASK      (MAXMEMSIZE - 1)        /* physical addr mask */
 #define MEMSIZE     (cpu_unit.capac)        /* actual memory size */
 #define MEM_ADDR_OK(x)  (((x)) < MEMSIZE)
-#define MEMSIZEP1 (MEMSIZE+1)               /* memory size rounded to 128KW multiple */
 
 /* channel program data for a chan/sub-address */
 typedef struct chp {
