@@ -198,21 +198,6 @@
 #define NIA_CNT_RS8   053           /* Reserved for ucode */
 #define NIA_CNT_LEN   054           /* # of counters */
 
-#ifdef _MSC_VER
-# define PACKED_BEGIN __pragma( pack(push, 1) )
-# define PACKED_END __pragma( pack(pop) )
-# define QEMU_PACKED
-#else
-# define PACKED_BEGIN
-#if defined(_WIN32)
-# define PACKED_END __attribute__((gcc_struct, packed))
-# define QEMU_PACKED __attribute__((gcc_struct, packed))
-#else
-# define PACKED_END __attribute__((packed))
-# define QEMU_PACKED __attribute__((packed))
-#endif
-#endif
-
 typedef uint32 in_addr_T;
 
 #define ETHTYPE_ARP 0x0806
