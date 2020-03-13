@@ -539,7 +539,9 @@ loop:
 
         /* see if buffer end address is in real memory */
         /* diags want the count from IOCD2 in status */
-        if (!MEM_ADDR_OK(chp->ccw_addr + chp->ccw_count)) {  /* see if mem addr > MEMSIZE*/
+        /* MPX will fail if 1 is not subtracted from test value */
+        /* when adding start + size we will be one over, so backup 1 */
+        if (!MEM_ADDR_OK(chp->ccw_addr + chp->ccw_count - 1)) {  /* see if mem addr > MEMSIZE*/
             chp->chan_status |= STATUS_PCHK;        /* program check error */
             sim_debug(DEBUG_EXP, &cpu_dev,
                 "load_ccw data end addr %06x ERROR cnt %04x chan_status[%04x] %04x\n",

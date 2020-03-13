@@ -310,13 +310,13 @@ UNIT            dda_unit[] = {
 /* SET_TYPE(9) DM300 old */
 /* SET_TYPE(3) DM300 */
     {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x800)},  /* 0 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x801)},  /* 1 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x802)},  /* 2 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x803)},  /* 3 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x804)},  /* 4 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x805)},  /* 5 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x806)},  /* 6 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x807)},  /* 7 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x802)},  /* 1 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x804)},  /* 2 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x806)},  /* 3 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x808)},  /* 4 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x80a)},  /* 5 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x80c)},  /* 6 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x80e)},  /* 7 */
 };
 
 #ifdef  NOUSED
@@ -361,13 +361,13 @@ UNIT            ddb_unit[] = {
 /* SET_TYPE(9) DM300 old */
 /* SET_TYPE(3) DM300 */
     {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC00)},  /* 0 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC01)},  /* 1 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC02)},  /* 2 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC03)},  /* 3 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC04)},  /* 4 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC05)},  /* 5 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC06)},  /* 6 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC07)},  /* 7 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC02)},  /* 1 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC04)},  /* 2 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC06)},  /* 3 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC08)},  /* 4 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC0a)},  /* 5 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC0c)},  /* 6 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC0e)},  /* 7 */
 };
 
 #ifdef  NOUSED
