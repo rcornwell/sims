@@ -77,7 +77,7 @@ bits 0-7 - Flags
         bit  3   - 0=Reserved
         bit  4   - 1=Drive not present
         bit  5   - 1=Dual Port
-        bit  6   - 0=Blk size   00=768 byte blk 
+        bit  6   - 0=Blk size   00=768 byte blk
         bit  7   - 0=Blk size   01=1024 byte blk
 bits 8-15 - sector count (sectors per track)(F16=16, F20=20)
 bits 16-23 - MHD Head count (number of heads on MHD)
@@ -92,8 +92,8 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 /*   4 words of label buffer registers */
 
 /* track label / sector label definations */
-/* 
-    short lcyl;	        cylinder 
+/*
+    short lcyl;	        cylinder
     char ltkn;			track
     char lid;			sector id
     char lflg1;         track/sector status flags
@@ -310,13 +310,13 @@ UNIT            dda_unit[] = {
 /* SET_TYPE(9) DM300 old */
 /* SET_TYPE(3) DM300 */
     {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x800)},  /* 0 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x801)},  /* 1 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x802)},  /* 2 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x803)},  /* 3 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x804)},  /* 4 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x805)},  /* 5 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x806)},  /* 6 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x807)},  /* 7 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x802)},  /* 1 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x804)},  /* 2 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x806)},  /* 3 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x808)},  /* 4 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x80a)},  /* 5 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x80c)},  /* 6 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x80e)},  /* 7 */
 };
 
 #ifdef  NOUSED
@@ -361,13 +361,13 @@ UNIT            ddb_unit[] = {
 /* SET_TYPE(9) DM300 old */
 /* SET_TYPE(3) DM300 */
     {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC00)},  /* 0 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC01)},  /* 1 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC02)},  /* 2 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC03)},  /* 3 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC04)},  /* 4 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC05)},  /* 5 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC06)},  /* 6 */
-    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC07)},  /* 7 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC02)},  /* 1 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC04)},  /* 2 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC06)},  /* 3 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC08)},  /* 4 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC0a)},  /* 5 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC0c)},  /* 6 */
+    {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC0e)},  /* 7 */
 };
 
 #ifdef  NOUSED
@@ -411,7 +411,7 @@ uint32 disksec2star(uint32 daddr, int type)
     int32 sec = daddr % disk_type[type].spt;    /* get sector value */
     int32 spc = disk_type[type].nhds * disk_type[type].spt; /* sec per cyl */
     int32 cyl = daddr / spc;                    /* cylinders */
-    int32 hds = (daddr % spc) / disk_type[type].spt;    /* heads */ 
+    int32 hds = (daddr % spc) / disk_type[type].spt;    /* heads */
 
     /* now return the star value */
     return (CHS2STAR(cyl,hds,sec));             /* return STAR */
@@ -495,7 +495,7 @@ uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         uptr->CMDu3 |= cmd;                       /* save cmd */
         sim_activate(uptr, 20);                 /* start things off */
         break;
-     
+
     case DSK_WSL:                               /* WSL 0x31 */
         uptr->CMDu3 |= cmd;                       /* save cmd */
         sim_activate(uptr, 20);                 /* start things off */
@@ -621,7 +621,7 @@ t_stat disk_srv(UNIT *uptr)
                     /* drive attribute registers */
  //                 daws[j++] = (buf[i-3]<<24) | (buf[i-2]<<16)
  //                     | (buf[i-1]<<8) | (buf[i]);
-                    /* may want to use this later */    
+                    /* may want to use this later */
                     /* clear warning errors */
                     tstart = (buf[i-3]<<24) | (buf[i-2]<<16)
                         | (buf[i-1]<<8) | (buf[i]);
@@ -1061,8 +1061,7 @@ t_stat disk_srv(UNIT *uptr)
 //          if (tstart >= CAPB(type)) {
             if (tstart >= (uint32)CAP(type)) {
                 /* EOM reached, abort */
-                sim_debug(DEBUG_CMD, dptr,
-                    "DISK Read reached EOM for read from disk @ /%04x/%02x/%02x\n",
+                sim_debug(DEBUG_CMD, dptr, "DISK Read reached EOM for read from disk @ /%04x/%02x/%02x\n",
                     STAR2CYL(uptr->CHS), (uptr->CHS >> 8)&0xff, (uptr->CHS&0xff));
                 uptr->CMDu3 &= LMASK;             /* remove old status bits & cmd */
                 uptr->CHS = 0;                  /* reset cylinder position */
@@ -1176,10 +1175,10 @@ t_stat disk_srv(UNIT *uptr)
         /* The UTX media map is pointed to by sector label 1 */
         /* simulate pointers here, set wd[3] in label to UMAP */
 
-        /* VDT  249264 (819/18/0) 0x3cdb0 for 9346 - 823/19/16 */ 
-        /* MDT  249248 (819/17/0) 0x3cda0 for 9346 - 823/19/16 */ 
-        /* DMAP 249232 (819/16/0) 0x3cd90 for 9346 - 823/19/16 */ 
-        /* UMAP 249216 (819/15/0) 0x3cd80 for 9346 - 823/19/16 */ 
+        /* VDT  249264 (819/18/0) 0x3cdb0 for 9346 - 823/19/16 */
+        /* MDT  249248 (819/17/0) 0x3cda0 for 9346 - 823/19/16 */
+        /* DMAP 249232 (819/16/0) 0x3cd90 for 9346 - 823/19/16 */
+        /* UMAP 249216 (819/15/0) 0x3cd80 for 9346 - 823/19/16 */
 
         sim_debug(DEBUG_CMD, dptr, "disk_startcmd RSL STAR %08x disk geom %08x\n",
             uptr->CHS, GEOM(type));
@@ -1197,7 +1196,7 @@ t_stat disk_srv(UNIT *uptr)
             unit, buf[0], buf[1], buf[2], buf[3]);
 
         /* get sector address of UMAP */
-        /* UMAP 249216 (819/15/0) 0x3cd80 for 9346 - 823/19/16 */ 
+        /* UMAP 249216 (819/15/0) 0x3cd80 for 9346 - 823/19/16 */
         tstart = ((CYL(type)-4) * SPC(type)) +
             ((HDS(type)-4) * SPT(type));
 
@@ -1207,7 +1206,7 @@ t_stat disk_srv(UNIT *uptr)
 
         /* on UDP & DPII DMAP is in wd 3 on label 0 */
         /* on UDP & DPII UMAP is in wd 4 on label 0 */
-        /* UMAP 249216 (819/15/0) 0x3cd80 for 9346 - 823/19/16 */ 
+        /* UMAP 249216 (819/15/0) 0x3cd80 for 9346 - 823/19/16 */
 
         /* the address must be physical for UDP */
         /* store into sec 1 label */
@@ -1296,10 +1295,10 @@ t_stat disk_srv(UNIT *uptr)
         /* simulate pointers here, set wd[3] in label to VDT */
 
         /* get sector address of media defect table */
-        /* VDT  249264 (819/18/0) 0x3cdb0 for 9346 - 823/19/16 */ 
-        /* MDT  249248 (819/17/0) 0x3cda0 for 9346 - 823/19/16 Trk 0 */ 
-        /* DMAP 249232 (819/16/0) 0x3cd90 for 9346 - 823/19/16 */ 
-        /* UMAP 249216 (819/15/0) 0x3cd80 for 9346 - 823/19/16 Trk 0/Sec 1 */ 
+        /* VDT  249264 (819/18/0) 0x3cdb0 for 9346 - 823/19/16 */
+        /* MDT  249248 (819/17/0) 0x3cda0 for 9346 - 823/19/16 Trk 0 */
+        /* DMAP 249232 (819/16/0) 0x3cd90 for 9346 - 823/19/16 */
+        /* UMAP 249216 (819/15/0) 0x3cd80 for 9346 - 823/19/16 Trk 0/Sec 1 */
 
         tstart = (CYL(type)-4) * SPC(type) + (HDS(type)-2) * SPT(type);
 
@@ -1323,7 +1322,7 @@ t_stat disk_srv(UNIT *uptr)
         }
 
         /* get sector address of umap table */
-        /* UMAP 249216 (819/15/0) 0x3cd80 for 9346 - 823/19/16 */ 
+        /* UMAP 249216 (819/15/0) 0x3cd80 for 9346 - 823/19/16 */
 //WAS   tstart -= SPT(type);                    /* calc umap address */
         tstart -= (2*SPT(type));                /* calc umap address */
 
@@ -1501,10 +1500,10 @@ int disk_format(UNIT *uptr) {
     dmap[3] = 0xf4000000;
 #endif
 
-    /* VDT  249264 (819/18/0) 0x3cdb0 for 9346 - 823/19/16 vaddr */ 
-    /* MDT  249248 (819/17/0) 0x3cda0 for 9346 - 823/19/16 daddr */ 
-    /* DMAP 249232 (819/16/0) 0x3cd90 for 9346 - 823/19/16 faddr */ 
-    /* UMAP 249216 (819/15/0) 0x3cd80 for 9346 - 823/19/16 uaddr */ 
+    /* VDT  249264 (819/18/0) 0x3cdb0 for 9346 - 823/19/16 vaddr */
+    /* MDT  249248 (819/17/0) 0x3cda0 for 9346 - 823/19/16 daddr */
+    /* DMAP 249232 (819/16/0) 0x3cd90 for 9346 - 823/19/16 faddr */
+    /* UMAP 249216 (819/15/0) 0x3cd80 for 9346 - 823/19/16 uaddr */
 
     /* seek to sector 0 */
     if ((sim_fseek(uptr->fileref, 0, SEEK_SET)) != 0) { /* seek home */
@@ -1682,7 +1681,7 @@ t_stat disk_attach(UNIT *uptr, CONST char *file)
     ssize = SSB(type);                          /* get sector size in bytes */
 
     sim_debug(DEBUG_CMD, dptr, "Disk %s cyl %d hds %d sec %d ssiz %d capacity %d\n",
-        disk_type[type].name, disk_type[type].cyl, disk_type[type].nhds, 
+        disk_type[type].name, disk_type[type].cyl, disk_type[type].nhds,
         disk_type[type].spt, ssize, uptr->capac); /* disk capacity */
 
     if ((sim_fseek(uptr->fileref, 0, SEEK_SET)) != 0) { /* seek home */
@@ -1719,7 +1718,7 @@ fmt:
 
     sim_debug(DEBUG_CMD, dptr,
         "Attach %s cyl %d hds %d spt %d spc %d cap sec %d cap bytes %d\n",
-        disk_type[type].name, CYL(type), HDS(type), SPT(type), SPC(type),  
+        disk_type[type].name, CYL(type), HDS(type), SPT(type), SPC(type),
         CAP(type), CAPB(type));
 
     sim_debug(DEBUG_CMD, dptr, "File %s attached to %s\r\n",

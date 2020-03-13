@@ -539,7 +539,9 @@ loop:
 
         /* see if buffer end address is in real memory */
         /* diags want the count from IOCD2 in status */
-        if (!MEM_ADDR_OK(chp->ccw_addr + chp->ccw_count)) {  /* see if mem addr > MEMSIZE*/
+        /* MPX will fail if 1 is not subtracted from test value */
+        /* when adding start + size we will be one over, so backup 1 */
+        if (!MEM_ADDR_OK(chp->ccw_addr + chp->ccw_count - 1)) {  /* see if mem addr > MEMSIZE*/
             chp->chan_status |= STATUS_PCHK;        /* program check error */
             sim_debug(DEBUG_EXP, &cpu_dev,
                 "load_ccw data end addr %06x ERROR cnt %04x chan_status[%04x] %04x\n",
@@ -660,7 +662,7 @@ int chan_read_byte(uint16 chsa, uint8 *data)
             return 1;                               /* return error */
          } else {
             /* we have data chaining, process iocl */
-            if (load_ccw(chp, 1))                   /* process data chaining */ 
+            if (load_ccw(chp, 1))                   /* process data chaining */
                 return 1;                           /* return error */
          }
     }
@@ -755,7 +757,7 @@ int chan_write_byte(uint16 chsa, uint8 *data)
             /* we have data chaining, process iocl */
             sim_debug(DEBUG_EXP, &cpu_dev,
                 "chan_write_byte got DC, calling load_ccw chan %04x\n", chan);
-            if (load_ccw(chp, 1))                   /* process data chaining */ 
+            if (load_ccw(chp, 1))                   /* process data chaining */
                 return 1;                           /* return error */
          }
     }
@@ -773,7 +775,7 @@ int chan_write_byte(uint16 chsa, uint8 *data)
         return 0;
     }
     if (chp->chan_byte == (BUFF_EMPTY|BUFF_DIRTY)) {
-        if (writebuff(chp)) 
+        if (writebuff(chp))
             return 1;
         sim_debug(DEBUG_DATA, &cpu_dev, "chan_write_byte BUF EMPTY|DIRTY ret\n");
 #ifdef TEST
@@ -1413,7 +1415,7 @@ t_stat rschnlxio(uint16 lchsa, uint32 *status) {      /* reset channel XIO */
         chp = find_chanp_ptr(chsa);                 /* find the chanp pointer */
         if (chp == 0) {
             continue;                               /* not used */
-        }   
+        }
         dev_status[chsa] = 0;                       /* clear device status */
         chp->chan_status = 0;                       /* clear the channel status */
         chp->chan_byte = BUFF_EMPTY;                /* no data yet */
@@ -1562,7 +1564,7 @@ t_stat haltxio(uint16 lchsa, uint32 *status) {       /* halt XIO */
                         "haltxio 1 FIFO status stored OK, sw1 %08x sw2 %08x\n", sw1, sw2);
                     irq_pend = 1;                   /* still pending int */
                     // UTX likes this return and does not panic */
-                    // The diag's want an interrupt generated, so wait 
+                    // The diag's want an interrupt generated, so wait
                     *status = CC2BIT;               /* status stored from HIO, so CC2 */
                     /* if 0 returned, UTX hangs on input */
                     goto hioret;                    /* CC2 and OK */
@@ -1571,7 +1573,7 @@ t_stat haltxio(uint16 lchsa, uint32 *status) {       /* halt XIO */
                 *status = CC1BIT;                   /* request accepted, no status, so CC1 */
 //TRYIED        *status = 0;                        /* CCs = 0, accepted */
                 goto hioret;                        /* CC2 and OK */
-            } else 
+            } else
 #endif
             {
                 sim_debug(DEBUG_IRQ, &cpu_dev,
@@ -1697,7 +1699,7 @@ t_stat rsctlxio(uint16 lchsa, uint32 *status) {       /* reset controller XIO */
         chp = find_chanp_ptr(chsa);                 /* find the chanp pointer */
         if (chp == 0) {
             continue;                               /* not used */
-        }   
+        }
         dev_status[chsa] = 0;                       /* clear device status */
         chp->chan_status = 0;                       /* clear the channel status */
         chp->chan_byte = BUFF_EMPTY;                /* no data yet */
@@ -2048,7 +2050,7 @@ t_stat chan_set_devs() {
         for (j = 0; j < dptr->numunits; j++) {      /* loop through unit entries */
             chsa = GET_UADDR(uptr->u3);             /* ch/sa value */
 //printf("Setup device %s%d chsa %04x type %03d dptr %x\n",
-//      dptr->name, j, chsa, GET_TYPE(uptr->flags), uptr->dptr);  
+//      dptr->name, j, chsa, GET_TYPE(uptr->flags), uptr->dptr);
             /* zero some channel data loc's for device */
             dev_status[chsa] = 0;                   /* zero device status flags */
             dev_status[chsa&0x7f00] = 0;            /* clear the channel status location */
