@@ -161,8 +161,8 @@ uint16        tu_frame[NUM_DEVS_TU];
 uint16        tu_tcr[NUM_DEVS_TU];
 static uint64 tu_boot_buffer;
 
-void          tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data);
-uint32        tu_read(DEVICE *dptr, struct rh_if *rhc, int reg);
+int           tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data);
+int           tu_read(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 *data);
 void          tu_rst(DEVICE *dptr);
 t_stat        tu_srv(UNIT *);
 t_stat        tu_boot(int32, DEVICE *);
@@ -247,7 +247,7 @@ DEVICE *tu_devs[] = {
     &tua_dev,
 };
 
-void
+int
 tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
     int            ctlr = GET_CNTRL_RH(dptr->units[0].flags);
     int            unit = tu_tcr[ctlr] & 07;
@@ -255,11 +255,11 @@ tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
     int            i;
 
     if (rhc->drive != 0)   /* Only one unit at 0 */
-       return;
+       return 1;
 
     if (uptr->CMD & CS1_GO) {
        uptr->STATUS |= (ER1_RMR);
-       return;
+       return 0;
     }
 
     switch(reg) {
@@ -323,7 +323,7 @@ tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
             sim_debug(DEBUG_DETAIL, dptr, "%s%o AStatus=%06o\n", dptr->name, unit,
                                       uptr->CMD);
         }
-        return;
+        return 0;
     case  001:  /* status */
         break;
     case  002:  /* error register 1 */
@@ -356,10 +356,11 @@ tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
         rhc->attn = 1;
         rhc->rae = 1;
     }
+    return 0;
 }
 
-uint32
-tu_read(DEVICE *dptr, struct rh_if *rhc, int reg) {
+int
+tu_read(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 *data) {
     int            ctlr = GET_CNTRL_RH(dptr->units[0].flags);
     int            unit = tu_tcr[ctlr] & 07;
     UNIT          *uptr = &dptr->units[unit];
@@ -367,13 +368,12 @@ tu_read(DEVICE *dptr, struct rh_if *rhc, int reg) {
     int            i;
 
     if (rhc->drive != 0)   /* Only one unit at 0 */
-       return 0;
+       return 1;
 
     switch(reg) {
     case  000:  /* control */
         temp = uptr->CMD & 076;
-        if (uptr->flags & UNIT_ATT)
-           temp |= CS1_DVA;
+        temp |= CS1_DVA;
         if (uptr->CMD & CS1_GO)
            temp |= CS1_GO;
         break;
@@ -417,7 +417,8 @@ tu_read(DEVICE *dptr, struct rh_if *rhc, int reg) {
         temp = tu_frame[ctlr];
         break;
     case  006:  /* drive type */
-        temp = 042054;
+        if ((uptr->flags & UNIT_DIS) == 0)
+            temp = 042054;
         break;
     case  011: /* tape control register */
         temp = tu_tcr[ctlr];
@@ -434,7 +435,8 @@ tu_read(DEVICE *dptr, struct rh_if *rhc, int reg) {
         rhc->attn = 1;
         rhc->rae = 1;
     }
-    return temp;
+    *data = temp;
+    return 0;
 }
 
 
