@@ -2014,6 +2014,12 @@ PDP6 = ${PDP6D}/kx10_cpu.c ${PDP6D}/kx10_sys.c ${PDP6D}/kx10_cty.c \
 	${PDP6D}/pdp6_mtc.c ${PDP6D}/pdp6_dsk.c ${PDP6D}/pdp6_dcs.c \
 	${PDP6D}/kx10_dpy.c ${PDP6D}/pdp6_slave.c ${DISPLAYL} ${DISPLAY340}
 PDP6_OPT = -DPDP6=1 -DUSE_INT64 -I ${PDP6D} -DUSE_SIM_CARD ${DISPLAY_OPT} ${PDP6_DISPLAY_OPT}
+ifneq (${PANDA_LIGHTS},)
+# ONLY for Panda display.
+PDP6_OPT += -DPANDA_LIGHTS
+PDP6 += ${PDP6D}/kx10_lights.c
+PDP6_LDFLAGS += -lusb-1.0
+endif
 
 KA10D = ${SIMHD}/PDP10
 ifneq (,${DISPLAY_OPT})
