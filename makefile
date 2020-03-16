@@ -2037,7 +2037,7 @@ KA10_OPT = -DKA=1 -DUSE_INT64 -I ${KA10D} -DUSE_SIM_CARD ${NETWORK_OPT} ${DISPLA
 ifneq (${PANDA_LIGHTS},)
 # ONLY for Panda display.
 KA10_OPT += -DPANDA_LIGHTS
-KA10 += ${KA10D}/ka10_lights.c
+KA10 += ${KA10D}/kx10_lights.c
 KA10_LDFLAGS += -lusb-1.0
 endif
 
@@ -2057,7 +2057,7 @@ KI10_OPT = -DKI=1 -DUSE_INT64 -I ${KI10D} -DUSE_SIM_CARD ${NETWORK_OPT} ${DISPLA
 ifneq (${PANDA_LIGHTS},)
 # ONLY for Panda display.
 KI10_OPT += -DPANDA_LIGHTS
-KI10 += ${KA10D}/ka10_lights.c
+KI10 += ${KA10D}/kx10_lights.c
 KI10_LDFLAGS = -lusb-1.0
 endif
 
