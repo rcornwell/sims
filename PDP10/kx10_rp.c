@@ -497,7 +497,7 @@ rp_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
     UNIT          *uptr = &dptr->units[unit];
     int            dtype = GET_DTYPE(uptr->flags);
 
-    if ((uptr->flags & UNIT_DIS) != 0)
+    if ((uptr->flags & UNIT_DIS) != 0 && reg != 04)
         return 1;
     if ((uptr->CMD & CS1_GO) && reg != 04) {
         uptr->CMD |= (ER1_RMR << 16)|DS_ERR;
@@ -661,7 +661,7 @@ rp_read(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 *data) {
     uint32        temp = 0;
     int           i;
 
-    if ((uptr->flags & UNIT_DIS) != 0)
+    if ((uptr->flags & UNIT_DIS) != 0 && reg != 04)
         return 1;
     if ((uptr->flags & UNIT_ATT) == 0 && reg != 04) {    /* not attached? */
         *data = 0;

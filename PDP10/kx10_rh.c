@@ -243,10 +243,8 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
               }
               if (rhc->reg < 040) {
                   int parity;
-                  if (rhc->dev_read(dptr, rhc, rhc->reg, &drdat)) {
-                      rhc->rae |= 1 << rhc->drive;
+                  if (rhc->dev_read(dptr, rhc, rhc->reg, &drdat))
                       rhc->status |= RH20_DR_RESP;
-                  }
                   *data = (uint64)(drdat & 0177777);
                   parity = (int)((*data >> 8) ^ *data);
                   parity = (parity >> 4) ^ parity;
@@ -290,10 +288,8 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
                          set_interrupt(rhc->devnum, rhc->status);
                          return SCPE_OK;
                      }
-                     if (rhc->dev_write(dptr, rhc, rhc->reg & 037, (int)(*data & 0777777))) {
-                          rhc->rae |= 1 << rhc->drive;
+                     if (rhc->dev_write(dptr, rhc, rhc->reg & 037, (int)(*data & 0777777)))
                           rhc->status |= RH20_DR_RESP;
-                     }
                      if (((rhc->status & IADR_ATTN) != 0 && rhc->attn != 0)
                              || (rhc->status & PI_ENABLE))
                          set_interrupt(rhc->devnum, rhc->status);
@@ -390,10 +386,8 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
             return SCPE_OK;
         }
         if (rhc->reg == 040) {
-              if (rhc->dev_read(dptr, rhc, 0, &drdat)) {
-                  rhc->rae |= (1 << rhc->drive);
+              if (rhc->dev_read(dptr, rhc, 0, &drdat))
                   rhc->status |= CR_DRE;
-              }
               *data = (uint64)(drdat & 077);
               *data |= ((uint64)(rhc->cia)) << 6;
               *data |= ((uint64)(rhc->xfer_drive)) << 18;
@@ -459,7 +453,6 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
                 rh_setup(rhc, (uint32)(*data >> 6));
                 rhc->xfer_drive = (int)(*data >> 18) & 07;
                 if (rhc->dev_write(dptr, rhc, 0, (uint32)(*data & 077))) {
-                    rhc->rae |= 1 << rhc->drive;
                     rhc->status |= CR_DRE;
                 }
                 sim_debug(DEBUG_DATAIO, dptr,
@@ -482,10 +475,8 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
                 if (rhc->rae & (1 << rhc->drive)) {
                     return SCPE_OK;
                 }
-                if (rhc->dev_write(dptr, rhc, rhc->reg & 037, (uint32)(*data & 0777777))) {
-                    rhc->rae |= 1 << rhc->drive;
+                if (rhc->dev_write(dptr, rhc, rhc->reg & 037, (uint32)(*data & 0777777)))
                     rhc->status |= CR_DRE;
-                }
              }
          }
          clr_interrupt(dev);

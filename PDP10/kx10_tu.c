@@ -254,7 +254,7 @@ tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
     UNIT          *uptr = &dptr->units[unit];
     int            i;
 
-    if (rhc->drive != 0)   /* Only one unit at 0 */
+    if (rhc->drive != 0 && reg != 04)   /* Only one unit at 0 */
        return 1;
 
     if (uptr->CMD & CS1_GO) {
@@ -334,11 +334,9 @@ tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
         break;
     case  004:  /* atten summary */
         rhc->attn = 0;
-        for (i = 0; i < 8; i++) {
-            if (data & (1<<i))
+        if (data & 1) {
+            for (i = 0; i < 8; i++)
                 dptr->units[i].CMD &= ~CS_ATA;
-            if (dptr->units[i].CMD & CS_ATA)
-               rhc->attn = 1;
         }
         break;
     case  005:  /* frame count */
@@ -367,7 +365,7 @@ tu_read(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 *data) {
     uint32         temp = 0;
     int            i;
 
-    if (rhc->drive != 0)   /* Only one unit at 0 */
+    if (rhc->drive != 0 && reg != 4)   /* Only one unit at 0 */
        return 1;
 
     switch(reg) {
@@ -408,9 +406,8 @@ tu_read(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 *data) {
         break;
     case  004:  /* atten summary */
         for (i = 0; i < 8; i++) {
-            if (dptr->units[i].CMD & CS_ATA) {
-                temp |= 1 << i;
-            }
+            if (dptr->units[i].CMD & CS_ATA)
+                temp |= 1;
         }
         break;
     case  005:  /* frame count */
