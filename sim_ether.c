@@ -1077,7 +1077,7 @@ static const char* lib_name =
 
 static char no_pcap[PCAP_ERRBUF_SIZE] =
 #if defined(_WIN32) || defined(__CYGWIN__)
-    "wpcap.dll failed to load, install Npcap or WinPcap 4.x to use pcap networking";
+    "wpcap.dll failed to load, install Npcap or WinPcap 4.1.3 to use pcap networking";
 #elif defined(__APPLE__)
     "/usr/lib/libpcap.A.dylib failed to load, install libpcap to use pcap networking";
 #else
@@ -1389,7 +1389,7 @@ struct _PACKET_OID_DATA {
 }; 
 typedef struct _PACKET_OID_DATA PACKET_OID_DATA, *PPACKET_OID_DATA;
 typedef void **LPADAPTER;
-#define OID_802_3_CURRENT_ADDRESS               0x01010102 /* Extracted from ntddmdis.h */
+#define OID_802_3_CURRENT_ADDRESS               0x01010102 /* Extracted from ntddndis.h */
 
 static int pcap_mac_if_win32(const char *AdapterName, unsigned char MACAddress[6])
 {
@@ -1653,7 +1653,9 @@ static int _eth_get_system_id (char *buf, size_t buf_size)
 #endif
   if ((status = RegOpenKeyExA (HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Cryptography", 0, KEY_QUERY_VALUE|KEY_WOW64_64KEY, &reghnd)) != ERROR_SUCCESS)
     return -1;
-  reglen = buf_size;
+  if (buf_size < 37)
+    return -1;
+  reglen = buf_size - 1;
   if ((status = RegQueryValueExA (reghnd, "MachineGuid", NULL, &regtype, (LPBYTE)buf, &reglen)) != ERROR_SUCCESS) {
     RegCloseKey (reghnd);
     return -1;
@@ -1672,19 +1674,16 @@ static int _eth_get_system_id (char *buf, size_t buf_size)
 FILE *f;
 
 memset (buf, 0, buf_size);
-if ((f = fopen ("/etc/machine-id", "r"))) {
-  if (fread (buf, 1, buf_size - 1, f))
-    fclose (f);
-  else
-    fclose (f);
-  }
-else {
-  if ((f = popen ("hostname", "r"))) {
-    if (fread (buf, 1, buf_size - 1, f))
-      pclose (f);
-    else
-      pclose (f);
-    }
+if (buf_size < 37)
+    return -1;
+if ((f = fopen ("/etc/machine-id", "r")) == NULL)
+  f = popen ("hostname", "r");
+if (f) {
+  size_t read_size;
+
+  read_size = fread (buf, 1, buf_size - 1, f);
+  buf[read_size] = '\0';
+  fclose (f);
   }
 while ((strlen (buf) > 0) && sim_isspace(buf[strlen (buf) - 1]))
   buf[strlen (buf) - 1] = '\0';
@@ -2073,7 +2072,7 @@ if (0 == strncmp("tap:", savname, 4)) {
         strcpy(savname, devname);
         }
 #if defined (__APPLE__)
-      if (1) {
+      if (tun < 0) {    /* Not good yet? */
         struct ifreq ifr;
         int s;
 
@@ -2474,7 +2473,15 @@ return SCPE_OK;
 const char *eth_version (void)
 {
 #if defined(HAVE_PCAP_NETWORK)
-return pcap_lib_version();
+static char version[256];
+
+if (!version[0]) {
+  if (memcmp(pcap_lib_version(), "Npcap", 5))
+    strlcpy(version, pcap_lib_version(), sizeof(version));
+  else
+    snprintf(version, sizeof(version), "Unsupported - %s", pcap_lib_version());
+  }
+return version;
 #else
 return NULL;
 #endif
@@ -3088,15 +3095,22 @@ cksum += (cksum >> 16);
 return (uint16)(~cksum);
 }
 
+/* 
+ * src_addr and dest_addr are presented in network byte order
+ */
+
 static uint16 
-pseudo_checksum(uint16 len, uint16 proto, uint16 *src_addr, uint16 *dest_addr, uint8 *buff)
+pseudo_checksum(uint16 len, uint16 proto, void *nsrc_addr, void *ndest_addr, uint8 *buff)
 {
 uint32 sum;
+uint16 *src_addr = (uint16 *)nsrc_addr;
+uint16 *dest_addr = (uint16 *)ndest_addr;
 
 /* Sum the data first */
 sum = 0xffff&(~ip_checksum((uint16 *)buff, len));
 
-/* add the pseudo header which contains the IP source and destinationn addresses */
+/* add the pseudo header which contains the IP source and 
+   destination addresses already in network byte order */
 sum += src_addr[0];
 sum += src_addr[1];
 sum += dest_addr[0];
@@ -3157,7 +3171,7 @@ switch (IP->proto) {
       break; /* UDP Checksums are disabled */
     orig_checksum = UDP->checksum;
     UDP->checksum = 0;
-    UDP->checksum = pseudo_checksum(ntohs(UDP->length), IPPROTO_UDP, (uint16 *)(&IP->source_ip), (uint16 *)(&IP->dest_ip), (uint8 *)UDP);
+    UDP->checksum = pseudo_checksum(ntohs(UDP->length), IPPROTO_UDP, &IP->source_ip, &IP->dest_ip, (uint8 *)UDP);
     if (orig_checksum != UDP->checksum)
       eth_packet_trace (dev, msg, len, "reading jumbo UDP header Checksum Fixed");
     break;
@@ -3266,7 +3280,7 @@ switch (IP->proto) {
       IP->checksum = 0;
       IP->checksum = ip_checksum((uint16 *)IP, IP_HLEN(IP));
       TCP->checksum = 0;
-      TCP->checksum = pseudo_checksum(ntohs(IP->total_len)-IP_HLEN(IP), IPPROTO_TCP, (uint16 *)(&IP->source_ip), (uint16 *)(&IP->dest_ip), (uint8 *)TCP);
+      TCP->checksum = pseudo_checksum(ntohs(IP->total_len)-IP_HLEN(IP), IPPROTO_TCP, &IP->source_ip, &IP->dest_ip, (uint8 *)TCP);
       header.caplen = header.len = 14 + ntohs(IP->total_len);
       eth_packet_trace_ex (dev, ((u_char *)IP)-14, header.len, "reading TCP segment", 1, dev->dbit);
 #if ETH_MIN_JUMBO_FRAME < ETH_MAX_PACKET
@@ -3338,7 +3352,7 @@ switch (IP->proto) {
       return; /* UDP Checksums are disabled */
     orig_checksum = UDP->checksum;
     UDP->checksum = 0;
-    UDP->checksum = pseudo_checksum(ntohs(UDP->length), IPPROTO_UDP, (uint16 *)(&IP->source_ip), (uint16 *)(&IP->dest_ip), (uint8 *)UDP);
+    UDP->checksum = pseudo_checksum(ntohs(UDP->length), IPPROTO_UDP, &IP->source_ip, &IP->dest_ip, (uint8 *)UDP);
     if (orig_checksum != UDP->checksum)
       eth_packet_trace (dev, msg, len, "reading UDP header Checksum Fixed");
     break;
@@ -3346,7 +3360,7 @@ switch (IP->proto) {
     TCP = (struct TCPHeader *)(((char *)IP)+IP_HLEN(IP));
     orig_checksum = TCP->checksum;
     TCP->checksum = 0;
-    TCP->checksum = pseudo_checksum(ntohs(IP->total_len)-IP_HLEN(IP), IPPROTO_TCP, (uint16 *)(&IP->source_ip), (uint16 *)(&IP->dest_ip), (uint8 *)TCP);
+    TCP->checksum = pseudo_checksum(ntohs(IP->total_len)-IP_HLEN(IP), IPPROTO_TCP, &IP->source_ip, &IP->dest_ip, (uint8 *)TCP);
     if (orig_checksum != TCP->checksum)
       eth_packet_trace (dev, msg, len, "reading TCP header Checksum Fixed");
     break;
@@ -3825,7 +3839,7 @@ else
 /* test reflections.  This is done early in this routine since eth_reflect */
 /* calls eth_filter recursively and thus changes the state of the device. */
 if (dev->reflections == -1)
-  eth_reflect(dev);
+  status = eth_reflect(dev);
 
 /* set new filter addresses */
 for (i = 0; i < addr_count; i++)

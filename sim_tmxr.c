@@ -303,11 +303,6 @@
 
      sim> set MUX disconnect=2
 
-   A line which is connected to a serial port can be manually closed by
-   adding the -C switch to a disconnect command.
-
-     sim> set -C MUX disconnect=2
-
     Full Modem Control serial port support.
 
     This library supports devices which wish to emulate full modem 
@@ -4405,6 +4400,9 @@ if (single_line) {          /* Single Line Multiplexer */
         }
     fprintf (st, "A Telnet listening port can be configured with:\n\n");
     fprintf (st, "   sim> ATTACH %s {interface:}port\n\n", dptr->name);
+    fprintf (st, "The -U switch can be specified on the attach command that specifies\n");
+    fprintf (st, "a listening port.  This will allow a listening port to be reused if\n");
+    fprintf (st, "some prior connections haven't completely shutdown.\n\n");
     fprintf (st, "Line buffering can be enabled for the %s device with:\n\n", dptr->name);
     fprintf (st, "   sim> ATTACH %s Buffer{=bufsize}\n\n", dptr->name);
     fprintf (st, "Line buffering can be disabled for the %s device with:\n\n", dptr->name);
@@ -4431,6 +4429,9 @@ else {
     fprintf (st, "   sim> ATTACH %s Line=n,NoModem\n\n", dptr->name);
     fprintf (st, "A Telnet listening port can be configured with:\n\n");
     fprintf (st, "   sim> ATTACH %s {interface:}port\n\n", dptr->name);
+    fprintf (st, "The -U switch can be specified on the attach command that specifies\n");
+    fprintf (st, "a listening port.  This will allow a listening port to be reused if\n");
+    fprintf (st, "some prior connections haven't completely shutdown.\n\n");
     if (mux)
         fprintf (st, "Line buffering for all %d lines on the %s device can be configured with:\n\n", mux->lines, dptr->name);
     else
@@ -4611,9 +4612,12 @@ if (dptr->modifiers) {
             fprintf (st, "This will cause a telnet connection to be closed, but a serial port will\n");
             fprintf (st, "normally have DTR dropped for 500ms and raised again (thus hanging up a\n");
             fprintf (st, "modem on that serial port).\n\n");
-            fprintf (st, "A line which is connected to a serial port can be manually closed by\n");
-            fprintf (st, "adding the -C switch to a %s command.\n\n", mptr->mstring);
-            fprintf (st, "   sim> SET -C %s %s=n\n\n", dptr->name, mptr->mstring);
+            fprintf (st, "Any lines connected to serial port can be manually closed by unplugging\n");
+            fprintf (st, "the serial cable from the host computer.  Dynamically adding or removing\n");
+            fprintf (st, "a serial port from a mux while the simulated operating system is running\n");
+            fprintf (st, "is guaranteed to have an inconsistent state between the running OS and\n");
+            fprintf (st, "the simulated port state.  Restart the simulator without the serial port\n");
+            fprintf (st, "attached.\n\n");
             }
     }
 return SCPE_OK;
@@ -4848,8 +4852,7 @@ if (lp->txstall)
    If the line was connected to a tcp session, the socket associated with the
    line will be closed.  If the line was connected to a serial port, the port
    will NOT be closed, but DTR will be dropped.  After a 500ms delay DTR will
-   be raised again.  If the sim_switches -C flag is set, then a serial port 
-   connection will be closed.
+   be raised again.
 
    Implementation notes:
 
@@ -4875,8 +4878,11 @@ if (lp == NULL)                                                 /* bad line numb
 if ((lp->sock) || (lp->serport)) {                              /* connection active? */
     if (!lp->notelnet)
         tmxr_linemsg (lp, "\r\nOperator disconnected line\r\n\n");/* report closure */
-    if (lp->serport && (sim_switches & SWMASK ('C')))
-        return tmxr_detach_ln (lp);
+    if (lp->serport && (sim_switches & SWMASK ('C'))) {
+        sim_messagef (SCPE_OK, "If you really feel the need to disconnect this serial port, unplug the cable\n");
+        sim_messagef (SCPE_OK, "from the serial port on your system.  Alternatively, you should restart the\n");
+        sim_messagef (SCPE_OK, "simulator without attaching the serial port in your configuration.\n");
+        }
     return tmxr_reset_ln_ex (lp, FALSE);                        /* drop the line */
     }
 

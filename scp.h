@@ -403,6 +403,7 @@ void sim_aio_activate (ACTIVATE_API caller, UNIT *uptr, int32 event_time);
 
 extern char sim_name[64];
 extern const char *sim_vm_release;
+extern const char *sim_vm_release_message;
 extern DEVICE *sim_devices[];
 extern REG *sim_PC;
 extern const char *sim_stop_messages[SCPE_BASE];
@@ -428,6 +429,8 @@ extern t_bool (*sim_vm_fprint_stopped) (FILE *st, t_stat reason);
 extern t_value (*sim_vm_pc_value) (void);
 extern t_bool (*sim_vm_is_subroutine_call) (t_addr **ret_addrs);
 extern const char **sim_clock_precalibrate_commands;
+extern const char *sim_vm_interval_units;               /* Simulator can change this - default "instructions" */
+extern const char *sim_vm_step_unit;                    /* Simulator can change this - default "instruction" */
 
 
 /* Core SCP libraries can potentially have unit test routines.
