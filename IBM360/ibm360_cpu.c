@@ -1030,7 +1030,7 @@ sim_instr(void)
         seg_len = (((cregs[1] >> 24) & 0xff) + 1) << 4;
     }
     /* Generate pte index mask */
-    page_index = (~(seg_mask << seg_shift) & ~page_mask) & AMASK;
+    page_index = ((~(seg_mask << seg_shift) & ~page_mask) & AMASK) >> page_shift;
     reason = SCPE_OK;
     ilc = 0;
     /* Enable timer if option set */
@@ -2881,7 +2881,7 @@ fprintf(stderr, "Set TOD %016llx\r\n", tod_clock);
                               goto supress;
                    case 0x13: /* RRB */
                               /* Set storage block reference bit to zero */
-                              addr1 >>= 1;
+                              addr1 >>= 11;
                               dest = key[addr1];
                               key[addr1] &= 0xfd;  /* Clear reference bit */
                               cc = (dest >> 1) & 03;

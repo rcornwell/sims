@@ -145,6 +145,8 @@ find_subchan(uint16 device) {
     switch(chan) {
     case 4:
            base += subchannels;
+           /* Fall through */
+
     case 0:      /* Multiplexer channel */
            if (device >= subchannels)
                device = ((device - subchannels) >> 4) & 0x7;
@@ -162,8 +164,8 @@ find_subchan(uint16 device) {
 
 /* find a channel for a given index */
 int
-find_chan(int index) {
-    return (chan_dev[index] >> 8) & 0xf;
+find_chan(int chan) {
+    return (chan_dev[chan] >> 8) & 0xf;
 }
 
 /* Read a full word into memory.
@@ -206,9 +208,11 @@ readfull(int chan, uint32 addr, uint32 *word) {
 int
 readbuff(int chan) {
     int sk, k;
-    uint32 addr = ccw_addr[chan];
+    uint32 addr;
     if (ccw_flags[chan] & FLAG_IDA && cpu_unit[0].flags & FEAT_370)
        addr = ccw_iaddr[chan];
+    else
+       addr = ccw_addr[chan];
     if ((addr & AMASK) > MEMSIZE) {
         chan_status[chan] |= STATUS_PCHK;
         chan_byte[chan] = BUFF_CHNEND;
@@ -257,9 +261,11 @@ readbuff(int chan) {
 int
 writebuff(int chan) {
     int sk, k;
-    uint32 addr = ccw_addr[chan];
+    uint32 addr;
     if (ccw_flags[chan] & FLAG_IDA && cpu_unit[0].flags & FEAT_370)
        addr = ccw_iaddr[chan];
+    else
+       addr = ccw_addr[chan];
     if ((addr & AMASK) > MEMSIZE) {
         chan_status[chan] |= STATUS_PCHK;
         chan_byte[chan] = BUFF_CHNEND;
@@ -890,6 +896,7 @@ int haltio(uint16 addr) {
     sim_debug(DEBUG_CMD, &cpu_dev, "HIO %x %x %x %x\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
 
+    /* Generic halt I/O, tell device to stop and 
     /* If any error pending save csw and return cc=1 */
     if (chan_status[chan] & (STATUS_PCI|STATUS_ATTN|STATUS_CHECK|\
             STATUS_PROT|STATUS_PCHK|STATUS_EXPT)) {
@@ -908,14 +915,14 @@ int haltio(uint16 addr) {
                        (M[0x44 >> 2] & 0xffff);
         return cc;
     }
-
+           
     /* If channel active, tell it to terminate */
     if (ccw_cmd[chan])
         chan_byte[chan] = BUFF_CHNEND;
 
     /* Store CSW and return 1. */
     sim_debug(DEBUG_CMD, &cpu_dev, "HIO %x %x cc=1\n", addr, chan);
-    M[0x44 >> 2] = (((uint32)chan_status[chan]) << 16) |
+    M[0x44 >> 2] = (((uint32)chan_status[chan]) << 16) | 
                    (M[0x44 >> 2] & 0xffff);
     return 1;
 }
