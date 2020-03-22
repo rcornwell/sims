@@ -1958,7 +1958,8 @@ return NULL;
 t_stat eth_set_async (ETH_DEV *dev, int latency)
 {
 #if !defined(USE_READER_THREAD) || !defined(SIM_ASYNCH_IO)
-char *msg = "Eth: can't operate asynchronously, must poll\n";
+char *msg = "Eth: Can't operate asynchronously, must poll.\n"
+            " *** Build with USE_READER_THREAD defined and link with pthreads for asynchronous operation. ***\n";
 return sim_messagef (SCPE_NOFNC, "%s", msg);
 #else
 int wakeup_needed;
@@ -2069,13 +2070,14 @@ if (0 == strncmp("tap:", savname, 4)) {
         }
       else {
         *fd_handle = (SOCKET)tun;
-        strcpy(savname, devname);
+        memmove(savname, devname, strlen(devname) + 1);
         }
 #if defined (__APPLE__)
-      if (tun < 0) {    /* Not good yet? */
+      if (tun >= 0) {       /* Good so far? */
         struct ifreq ifr;
         int s;
 
+        /* Now make sure the interface is up */
         memset (&ifr, 0, sizeof(ifr));
         ifr.ifr_addr.sa_family = AF_INET;
         strlcpy(ifr.ifr_name, savname, sizeof(ifr.ifr_name));
