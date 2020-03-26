@@ -36,6 +36,7 @@ uint32       *M = NULL;
 uint8        key[MAXMEMSIZE/2048];
 uint32       regs[16];             /* CPU Registers */
 uint32       PC;                   /* Program counter */
+uint32       iPC;                  /* Initial PC for instruction */
 uint32       fpregs[8];            /* Floating point registers */
 uint32       cregs[16];            /* Control registers /67 or 370 only */
 uint16       sysmsk;               /* Interupt mask */
@@ -341,25 +342,6 @@ DEVICE cpu_dev = {
 //    NULL, NULL, &cpu_help, NULL, NULL, &cpu_description
     };
 
-#if 0       /* 370 Operators */
-MVCL 0e
-CLCL 0f
-STNSM ac                SI
-STOSM ad                SI
-SIGP  ae                RS
-MC    af                SI
-LRA   B1                RX
-spec  B2                S
-STCTL B6                RS
-LCTL  B7                RS
-CS    BA                RS
-CDS   bb                RS
-CLM   bd                RS
-STCM  BE                RS
-ICM   BF                RS
-
-#endif
-
 void post_extirq() {
      cpu_unit[0].flags |= EXT_IRQ;
 }
@@ -400,7 +382,7 @@ void storepsw(uint32 addr, uint16 ircode) {
          } else {  /* IBM 370 under EC mode */
               uint32  code_addr;
               word = (((uint32)dat_en) << 26) |
-                     ((per_en) ? 1<<31:0) |
+                     ((per_en) ? 1<<30:0) |
                      ((irq_en) ? 1<<25:0) |
                      ((ext_en) ? 1<<24:0) |
                      0x80000 |
@@ -523,8 +505,10 @@ int  TransAddr(uint32 va, uint32 *pa) {
      if (seg > seg_len) {
          if ((cpu_unit[0].flags & FEAT_370) == 0)
              cregs[2] = va;
-         else
+         else {
              M[0x90 >> 2] = va;
+             PC = iPC;
+         }
          storepsw(OPPSW, IRC_SEG);
          /* Not valid address */
          return 1;
@@ -542,8 +526,10 @@ int  TransAddr(uint32 va, uint32 *pa) {
      if (entry & PTE_VALID || page > (entry >> 24)) {
          if ((cpu_unit[0].flags & FEAT_370) == 0)
              cregs[2] = va;
-         else
+         else {
              M[0x90 >> 2] = va;
+             PC = iPC;
+         }
          storepsw(OPPSW, IRC_PAGE);
          return 1;
      }
@@ -564,8 +550,10 @@ int  TransAddr(uint32 va, uint32 *pa) {
      if ((entry & pte_mbz) != 0) {
          if ((cpu_unit[0].flags & FEAT_370) == 0)
              cregs[2] = va;
-         else
+         else {
              M[0x90 >> 2] = va;
+             PC = iPC;
+         }
          storepsw(OPPSW, IRC_SPEC);
          return 1;
      }
@@ -574,8 +562,10 @@ int  TransAddr(uint32 va, uint32 *pa) {
      if (entry & pte_avail) {
          if ((cpu_unit[0].flags & FEAT_370) == 0)
              cregs[2] = va;
-         else
+         else {
              M[0x90 >> 2] = va;
+             PC = iPC;
+         }
          storepsw(OPPSW, IRC_PAGE);
          return 1;
      }
@@ -1065,14 +1055,14 @@ wait_loop:
 
         /* Check for external interrupts */
         if (ext_en) {
-            if ((cpu_unit[0].flags & EXT_IRQ) && (cregs[4] & 0x40) != 0) {
+            if ((cpu_unit[0].flags & EXT_IRQ) && (cregs[0] & 0x40) != 0) {
                 ilc = 0;
                 cpu_unit[0].flags &= ~EXT_IRQ;
                 storepsw(OEPSW, 0x40);
                 goto supress;
             }
 
-            if (interval_irq && (cregs[4] & 0x80) != 0) {
+            if (interval_irq && (cregs[0] & 0x80) != 0) {
                 ilc = 0;
                 interval_irq = 0;
                 storepsw(OEPSW, 0x80);
@@ -1109,14 +1099,28 @@ wait_loop:
         }
 
         if (sim_deb && (cpu_dev.dctrl & DEBUG_INST)) {
-            sim_debug(DEBUG_INST, &cpu_dev, "PSW=%08x %08x  ",
-                ((uint32)(ext_en) << 24) | (((uint32)sysmsk & 0xfe00) << 16) |
-                (((uint32)st_key) << 16) | (((uint32)flags) << 16) | ((uint32)irqcode),
-                 (((uint32)ilc) << 30) | (((uint32)cc) << 28) | (((uint32)pmsk) << 24) | PC);
+            if (ec_mode) {
+                if ((cpu_unit[0].flags & FEAT_370) != 0)
+                    sim_debug(DEBUG_INST, &cpu_dev, "PSW=%08x %08x  ",
+                       (((uint32)dat_en) << 26) | ((per_en) ? 1<<30:0) | ((irq_en) ? 1<<25:0) |
+                       ((ext_en) ? 1<<24:0) | 0x80000 | (((uint32)st_key) << 16) |
+                       (((uint32)flags) << 16) | (((uint32)cc) << 12) | (((uint32)pmsk) << 8), PC);
+                else
+                    sim_debug(DEBUG_INST, &cpu_dev, "PSW=%08x %08x  ",
+                       (((uint32)dat_en) << 26) | ((irq_en) ? 1<<25:0) | ((ext_en) ? 1<<24:0) |
+                       (((uint32)st_key) << 16) | (((uint32)flags) << 16) | (((uint32)ilc) << 14) |
+                       (((uint32)cc) << 12) | (((uint32)pmsk) << 8), PC);
+            } else {
+                sim_debug(DEBUG_INST, &cpu_dev, "PSW=%08x %08x  ",
+                    ((uint32)(ext_en) << 24) | (((uint32)sysmsk & 0xfe00) << 16) |
+                    (((uint32)st_key) << 16) | (((uint32)flags) << 16) | ((uint32)irqcode),
+                     (((uint32)ilc) << 30) | (((uint32)cc) << 28) | (((uint32)pmsk) << 24) | PC);
+            }
         }
         per_mod = 0;
         per_code = 0;
         per_addr = PC;
+        iPC = PC;
         ilc = 0;
         if (ReadHalf(PC, &dest))
             goto supress;
@@ -1141,20 +1145,20 @@ wait_loop:
         op = (uint8)(ops[0] >> 8);
         /* Check if RX, RR, SI, RS, SS opcode */
         if (op & 0xc0) {
+            ilc = 2;
             if (ReadHalf(PC, &dest))
                 goto supress;
             ops[1] = dest;
-            ilc = 2;
             PC += 2;
             if (hst_lnt)
                 hst[hst_p].inst[1] = ops[1];
             /* Check if SS */
             if ((op & 0xc0) == 0xc0) {
+                ilc = 3;
                 if (ReadHalf(PC, &dest))
                     goto supress;;
                 ops[2] = dest;
                 PC += 2;
-                ilc = 3;
                 if (hst_lnt)
                      hst[hst_p].inst[2] = ops[2];
             }
@@ -1415,7 +1419,9 @@ exe:
                     }
                     if (ReadByte(addr1, &src1))
                         break;
+                    ext_en = (src1 & 01) != 0;
                     if (ec_mode) {
+                        irq_en = (src1 & 02) != 0;
                         if ((cpu_unit[0].flags & FEAT_370) != 0) {
                             if (src1 & 0xb8) {
                                 storepsw(OPPSW, IRC_SPEC);
@@ -1423,31 +1429,27 @@ exe:
                             }
                             per_en = ((src1 & 0x40) != 0);
                             dat_en = (src1 & 04) != 0;
-                            irq_en = (src1 & 02) != 0;
-                            ext_en = (src1 & 01) != 0;
-                            cregs[0] &= ~0x20;
-                            if (ext_en)
-                                 cregs[0] |= 0x20;
+                            sysmsk = irq_en ? (cregs[2] >> 16) : 0;
                         } else {
                             if (src1 & 0xf8)
                                 storepsw(OPPSW, IRC_SPEC);
                             else
                                 dat_en = (src1 & 04) != 0;
+                            sysmsk = irq_en ? (cregs[6] >> 16) : 0;
                         }
                     } else {
-                        sysmsk = (src1 & 0xfe) << 8;
+                        sysmsk = (src1 & 0xfc) << 8;
+                        ext_en = (src1 & 0x1) != 0;
                         irq_en = (sysmsk != 0);
-                        if ((cpu_unit[0].flags & FEAT_370) != 0) {
-                            ext_en = (src1 & 0x1) != 0;
-                            cregs[2] &= 0x0000ffff;
-                            cregs[2] |= (uint32)(sysmsk) << 16;
-                        } else {
-                            cregs[4] &= 0x00ffffff;
-                            cregs[4] |= (uint32)(sysmsk) << 16;
+                        if (src1 & 0x2) {
+                            if ((cpu_unit[0].flags & FEAT_370) != 0)
+                               sysmsk |= (cregs[2] >> 16) & 0x3ff;
+                            else
+                               sysmsk |= 0x3ff;
                         }
-                        irq_pend = 1;
                     }
                 }
+                irq_pend = 1;
                 break;
 
         case OP_LPSW:
@@ -2054,7 +2056,7 @@ save_dbl:
                         dest = 0;
                         switch (reg1) {
                         case 0x0:     /* Segment table address */
-                        case 0x6:     /* Maskes */
+                        case 0x6:     /* Masks */
                         case 0x4:     /* Extended mask */
                         case 0x2:     /* Translation execption */
                                   dest = cregs[reg1];
@@ -2112,16 +2114,25 @@ save_dbl:
                                   seg_addr = dest & AMASK;
                                   seg_len = (((dest >> 24) & 0xff) + 1) << 4;
                                   break;
-                        case 0x6:     /* Maskes */
-                                  sysmsk = (dest >> 16) & 0xfefe;
+                        case 0x6:     /* Masks */
                                   cregs[reg] &= 0xfefe0000;
-                                  if (sysmsk & 0xfe00)
+                                  if (dest & 0xfe000000)
                                       cregs[reg] |= 0x1000000;
-                                  if (sysmsk & 0x00fe)
+                                  if (dest & 0x00fe0000)
                                       cregs[reg] |= 0x0010000;
+                                  if (ec_mode && irq_en) {
+                                      sysmsk = (dest >> 16) & 0xfe00;
+                                      sysmsk |= (dest >> 15) & 0x01ff;
+                                      irq_pend = 1;
+                                  }
                                   break;
                         case 0x4:     /* Extended mask */
                                   ec_mode = (dest & 0x00800000) != 0;
+                                  if (ec_mode && irq_en) {
+                                      sysmsk = (cregs[6] >> 16) & 0xfe00;
+                                      sysmsk |= (cregs[6] >> 15) & 0x01ff;
+                                      irq_pend = 1;
+                                  }
                                   cregs[reg] &= 0xf08000ff;
                                   break;
                         case 0x2:     /* Translation execption */
@@ -2916,7 +2927,7 @@ fprintf(stderr, "Set TOD %016llx\r\n", tod_clock);
                        if (ext_en)
                            src1 |= 0x1;
                     } else {
-                       src1 = (sysmsk >> 8) | ext_en;
+                       src1 = ((sysmsk >> 8) & 0xfe) | ext_en;
                     }
                     dest = reg & src1;
                     if (WriteByte(addr1, src1))
@@ -2925,19 +2936,15 @@ fprintf(stderr, "Set TOD %016llx\r\n", tod_clock);
                        dat_en = ((dest & 0x4) != 0);
                        irq_en = ((dest & 0x2) != 0);
                        per_en = ((dest & 0x40) != 0);
-                       ext_en = (dest & 1);
+                       sysmsk = irq_en ? cregs[2] >> 16 : 0;
                     } else {
-                       sysmsk = (dest << 8) & 0xfe00;
-                       cregs[2] = (sysmsk << 16);
-                       if (sysmsk)
-                           irq_en = 1;
-                       else
-                           irq_en = 0;
-                       ext_en = (dest & 1);
+                       sysmsk = (dest << 8) & 0xfc00;
+                       if (dest & 0x2)
+                           sysmsk |= (cregs[2] >> 16) & 0x3ff;
+                       irq_en = (sysmsk != 0);
                     }
-                    cregs[0] &= ~0x20;
-                    if (ext_en)
-                         cregs[0] |= 0x20;
+                    irq_pend = 1;
+                    ext_en = (dest & 1);
                 } else {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
@@ -2964,7 +2971,7 @@ fprintf(stderr, "Set TOD %016llx\r\n", tod_clock);
                        if (ext_en)
                            src1 |= 0x1;
                     } else {
-                       src1 = (sysmsk >> 8) | ext_en;
+                       src1 = ((sysmsk >> 8) & 0xfe) | ext_en;
                     }
                     dest = reg | src1;
                     if (WriteByte(addr1, src1))
@@ -2973,19 +2980,15 @@ fprintf(stderr, "Set TOD %016llx\r\n", tod_clock);
                        dat_en = ((dest & 0x4) != 0);
                        irq_en = ((dest & 0x2) != 0);
                        per_en = ((dest & 0x40) != 0);
-                       ext_en = (dest & 1);
+                       sysmsk = irq_en ? cregs[2] >> 16 : 0;
                     } else {
-                       sysmsk = (dest << 8) & 0xfe00;
-                       cregs[2] = (sysmsk << 16);
-                       if (sysmsk)
-                           irq_en = 1;
-                       else
-                           irq_en = 0;
-                       ext_en = (dest & 1);
+                       sysmsk = (dest << 8) & 0xfc00;
+                       if (dest & 0x2)
+                           sysmsk |= (cregs[2] >> 16) & 0x3ff;
+                       irq_en = (sysmsk != 0);
                     }
-                    cregs[0] &= ~0x20;
-                    if (ext_en)
-                         cregs[0] |= 0x20;
+                    ext_en = (dest & 1);
+                    irq_pend = 1;
                 } else {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
@@ -3032,8 +3035,9 @@ fprintf(stderr, "Set TOD %016llx\r\n", tod_clock);
                         if (ReadFull(addr1, &dest))
                             goto supress;
                         cregs[reg1] = dest;
-sim_debug(DEBUG_CDATA, &cpu_dev,"Loading: CR %x %06x %08x IC=%08x %x\n\r", reg1, addr1, dest, PC, reg);
-fprintf(stderr, "Loading: CR %x %06x %08x IC=%08x %x\n\r", reg1, addr1, dest, PC, reg);
+                        sim_debug(DEBUG_INST, &cpu_dev,"Loading: CR %x %06x %08x IC=%08x %x\n\r",
+                                       reg1, addr1, dest, PC, reg);
+//fprintf(stderr, "Loading: CR %x %06x %08x IC=%08x %x\n\r", reg1, addr1, dest, PC, reg);
                         switch (reg1) {
                         case 0x0:     /* General controll register */
                                  /* CR0 values
@@ -3073,18 +3077,17 @@ fprintf(stderr, "Loading: CR %x %06x %08x IC=%08x %x\n\r", reg1, addr1, dest, PC
                                            seg_mask = AMASK >> 20;
                                            break;
                                   }
-fprintf(stderr, "Setting paging: shift: %d seg: %d\n\r", page_shift, seg_shift);
                                   /* Generate pte index mask */
                                   page_index = ((~(seg_mask << seg_shift) & ~page_mask) & AMASK) >> page_shift;
-                                  ext_en = dest & 0x20;
                                   break;
                         case 0x1:     /* Segment table address and length */
                                   seg_addr = dest & AMASK;
                                   seg_len = (((dest >> 24) & 0xff) + 1) << 4;
-fprintf(stderr, "Setting paging: addr: %06x len: %d\n\r", seg_addr, seg_len);
                                   break;
-                        case 0x2:     /* Maskes */
-                                  sysmsk = (dest >> 16) & 0xffff;
+                        case 0x2:     /* Masks */
+                                  if (ec_mode)
+                                      sysmsk = irq_en ? (dest >> 16) : 0;
+                                  irq_pend = 1;
                                   break;
                         case 0x3:     /* Unassigned */
                         case 0x4:     /* Unassigned */
@@ -5181,42 +5184,35 @@ supress:
 lpsw:
              if ((cpu_unit[0].flags & FEAT_370) != 0)
                  ec_mode = (src1 & 0x00080000) != 0;
+             ext_en = (src1 & 0x01000000) != 0;
              if (ec_mode) {
+                 irq_en = (src1 & 0x02000000) != 0;
                  if ((cpu_unit[0].flags & FEAT_370) != 0) {
-                     ext_en = (src1 & 0x01000000) != 0;
-                     irq_en = (src1 & 0x02000000) != 0;
                      per_en = (src1 & 0x40000000) != 0;
-                     cregs[0] &= ~0x20;
-                     if (ext_en)
-                         cregs[0] |= 0x20;
+                     sysmsk = irq_en ? (cregs[2] >> 16) : 0;
                      if (irqaddr == 4)
                         (void)WriteHalf(0xBA, irq);
+                 } else {
+                     sysmsk = irq_en ? (cregs[6] >> 16) : 0;
                  }
                  dat_en = (src1 >> 26) & 1;
                  cc = (src1 >> 12) & 3;
                  pmsk = (src1 >> 8) & 0xf;
              } else {
-                 ext_en = (src1 & 0x1000000) != 0;
-                 sysmsk = (src1 >> 16) & 0xfe00;
-                 if ((cpu_unit[0].flags & FEAT_370) != 0) {
-                     cregs[2] = src1 & 0xfe000000;
-                     cregs[0] &= ~0x20;
-                     if (ext_en)
-                         cregs[0] |= 0x20;
-                 } else {
-                     cregs[4] = src1 & 0xfe000000;
-                     if (sysmsk)
-                        cregs[4] |= 0x1000000;
+                 sysmsk = (src1 >> 16) & 0xfc00;
+                 if ((src1 & 0x2000000) != 0) {
+                     if ((cpu_unit[0].flags & FEAT_370) != 0)
+                          sysmsk |= (cregs[2] >> 16) & 0x3ff;
+                     else
+                          sysmsk |= 0x3ff;
                  }
-                 if (sysmsk) {
-                     irq_en = 1;
-                 } else
-                     irq_en = 0;
+                 irq_en = (sysmsk != 0);
                  per_en = 0;
                  pmsk = (src2 >> 24) & 0xf;
                  cc = (src2 >> 28) & 0x3;
              }
              irqaddr = 0;
+             irq_pend = 1;
              st_key = (src1 >> 16)  & 0xf0;
              if ((cpu_unit[0].flags & FEAT_370) != 0)
                 flags = (src1 >> 16) & 0x7;
@@ -5679,7 +5675,6 @@ clk_srv(UNIT * uptr)
         cpu_timer[0]--;
     cpu_timer[1] = t;
 #endif
-    sim_debug(DEBUG_INST, &cpu_dev, "Clock = \n");
     return SCPE_OK;
 }
 

@@ -1758,7 +1758,8 @@ dasd_detach(UNIT * uptr)
     if (cmd != 0)
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
     sim_cancel(uptr);
-    free(data->cbuf);
+    if (data)
+        free(data->cbuf);
     free(data);
     uptr->up7 = 0;
     uptr->u3 &= ~0xffff;
