@@ -1626,7 +1626,7 @@ dasd_format(UNIT * uptr, int flag) {
         data->tsize = hdr.tracksize;
         if ((data->cbuf = (uint8 *)calloc(tsize, sizeof(uint8))) == 0)
             return 1;
-        for (cyl = 0; cyl <= disk_type[type].cyl; cyl++) {
+        for (cyl = 0; cyl < disk_type[type].cyl; cyl++) {
             pos = 0;
             for (hd = 0; hd < disk_type[type].heads; hd++) {
                 int cpos = pos;
@@ -1686,6 +1686,8 @@ dasd_attach(UNIT * uptr, CONST char *file)
     struct dasd_header  hdr;
     struct dasd_t       *data;
     int                 tsize;
+    size_t              isize;
+    size_t              dsize;
 
     if ((r = attach_unit(uptr, file)) != SCPE_OK)
        return r;
@@ -1699,12 +1701,14 @@ dasd_attach(UNIT * uptr, CONST char *file)
         return SCPE_OK;
     }
 
-    sim_messagef(SCPE_OK, "Drive %03x=%d %d %02x %d\n\r",  addr,
-             hdr.heads, hdr.tracksize, hdr.devtype, hdr.highcyl);
+    isize = sim_fsize(uptr->fileref);
+    sim_messagef(SCPE_OK, "Drive %03x=%d %d %02x %02x %d\n\r",  addr,
+             hdr.heads, hdr.tracksize, hdr.devtype, hdr.fileseq, hdr.highcyl);
     for (i = 0; disk_type[i].name != 0; i++) {
          tsize = (disk_type[i].bpt | 0x1ff) + 1;
+         dsize = 512 + (tsize * disk_type[i].heads * disk_type[i].cyl);
          if (hdr.devtype == disk_type[i].dev_type && hdr.tracksize == tsize &&
-             hdr.heads == disk_type[i].heads) {
+             hdr.heads == disk_type[i].heads && dsize == isize) {
              if (GET_TYPE(uptr->flags) != i) {
                   /* Ask if we should change */
                   fprintf(stderr, "Wrong type %s\n\r", disk_type[i].name);
@@ -1758,7 +1762,8 @@ dasd_detach(UNIT * uptr)
     if (cmd != 0)
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
     sim_cancel(uptr);
-    free(data->cbuf);
+    if (data)
+        free(data->cbuf);
     free(data);
     uptr->up7 = 0;
     uptr->u3 &= ~0xffff;
