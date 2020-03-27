@@ -464,6 +464,7 @@ t_stat set_dev_radix (DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
 t_stat set_dev_enbdis (DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
 t_stat set_dev_debug (DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
 t_stat set_unit_enbdis (DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
+t_stat set_unit_append (DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
 t_stat ssh_break (FILE *st, const char *cptr, int32 flg);
 t_stat show_cmd_fi (FILE *ofile, int32 flag, CONST char *cptr);
 t_stat show_config (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
@@ -1755,6 +1756,10 @@ static const char simh_help[] =
       " in the current do command file which is encountered.  Since labels\n"
       " don't do anything else besides being the targets of goto's, they could\n"
       " also be used to provide comments in do command files.\n\n"
+      "++GOTO :EOF\n\n"
+      " The target label of :EOF is explicitly defined to mean the end of the\n"
+      " DO command file.  This will cause the execution to return from the current\n"
+      " command file.\n\n"
       "4Examples\n\n"
       "++:: This is a comment\n"
       "++echo Some Message to Output\n"
@@ -2502,6 +2507,8 @@ static C1TAB set_dev_tab[] = {
     { "DISABLED",   &set_dev_enbdis,    0 },
     { "DEBUG",      &set_dev_debug,     1 },
     { "NODEBUG",    &set_dev_debug,     0 },
+    { "APPEND",     &set_unit_append,   0 },
+    { "EOF",        &set_unit_append,   0 },
     { NULL,         NULL,               0 }
     };
 
@@ -2510,6 +2517,8 @@ static C1TAB set_unit_tab[] = {
     { "DISABLED",   &set_unit_enbdis,   0 },
     { "DEBUG",      &set_dev_debug,     2+1 },
     { "NODEBUG",    &set_dev_debug,     2+0 },
+    { "APPEND",     &set_unit_append,   0 },
+    { "EOF",        &set_unit_append,   0 },
     { NULL,         NULL,               0 }
     };
 
@@ -3226,6 +3235,16 @@ if ((dptr->modifiers) && (dptr->units) && (enabled_units != 1)) {
                 fprintf (st,  "%-30s\t%s\n", "", mptr->help);
             }
         }
+    }
+if (enabled_units) {
+    for (unit=0; unit < dptr->numunits; unit++)
+        if ((!(dptr->units[unit].flags & UNIT_DIS)) &&
+            (dptr->units[unit].flags & UNIT_SEQ) && 
+            (!(dptr->units[unit].flags & UNIT_MUSTBUF))) {
+            sprintf (buf, "set %s%s APPEND", sim_uname (&dptr->units[unit]), (enabled_units > 1) ? "n" : "");
+            fprintf (st,  "%-30s\tSets %s%s position to EOF\n", buf, sim_uname (&dptr->units[unit]), (enabled_units > 1) ? "n" : "");
+            break;
+            }
     }
 if (deb_desc_available) {
     fprintf (st, "\n*%s device DEBUG settings:\n", sim_dname (dptr));
@@ -5049,6 +5068,13 @@ if ('\0' == gbuf1[0])                                   /* unspecified goto targ
 fpos = ftell(sim_gotofile);                             /* Save start position */
 if (fpos < 0)
     return sim_messagef (SCPE_IERR, "goto ftell error: %s\n", strerror (errno));
+if (strcasecmp(":EOF", gbuf1) == 0) {
+    if (fseek (sim_gotofile, 0, SEEK_END))
+        return sim_messagef (SCPE_IERR, "goto seek error: %s\n", strerror (errno));
+    sim_brk_clract ();                                  /* goto defangs current actions */
+    sim_do_echo = saved_do_echo;                        /* restore echo mode */
+    return SCPE_OK;
+    }
 rewind(sim_gotofile);                                   /* start search for label */
 sim_goto_line[sim_do_depth] = 0;                        /* reset line number */
 sim_do_echo = 0;                                        /* Don't echo while searching for label */
@@ -5549,7 +5575,7 @@ else {
     for (i = 0; i < dptr->numunits; i++) {              /* check units */
         up = (dptr->units) + i;                         /* att or active? */
         if ((up->flags & UNIT_ATT) || sim_is_active (up))
-            return SCPE_NOFNC;                          /* can't do it */
+            return sim_messagef (SCPE_NOFNC, "%s has attached or busy units\n", sim_dname (dptr));                          /* can't do it */
         }
     dptr->flags = dptr->flags | DEV_DIS;                /* disable */
     }
@@ -5571,7 +5597,7 @@ if (flag)                                               /* enb? enable */
 else {
     if ((uptr->flags & UNIT_ATT) ||                     /* dsb */
         sim_is_active (uptr))                           /* more tests */
-        return SCPE_NOFNC;
+        return sim_messagef (SCPE_NOFNC, "%s is attached or busy\n", sim_uname (uptr));
     uptr->flags = uptr->flags | UNIT_DIS;               /* disable */
     }
 return SCPE_OK;
@@ -5626,6 +5652,25 @@ while (*cptr) {
         r = sim_messagef (SCPE_ARG, "Invalid DEBUG option '%s' for %s device\n", gbuf, dptr->name);
     }                                                   /* end while */
 return r;
+}
+
+/* Set sequential unit position to EOF */
+
+t_stat set_unit_append (DEVICE *dptr, UNIT *uptr, int32 flags, CONST char *cptr)
+{
+if (!(uptr->flags & UNIT_SEQ))
+    return sim_messagef (SCPE_NOFNC, "%s is not a sequential device.\n", sim_uname (uptr));
+if (uptr->flags & UNIT_BUF)
+    return sim_messagef (SCPE_NOFNC, "Can't append to a buffered device %s.\n", sim_uname (uptr));
+if (!(uptr->flags & UNIT_ATT))
+    return SCPE_UNATT;
+
+if (0 == sim_fseek (uptr->fileref, 0, SEEK_END)) {
+    uptr->pos = (t_addr)sim_ftell (uptr->fileref);      /* Position at end of file */
+    return SCPE_OK;
+    }
+
+return sim_messagef (SCPE_IERR, "%s Can't seek to end of file: %s - %s\n", sim_uname (uptr), uptr->filename, strerror (errno));
 }
 
 /* Show command */
@@ -9255,7 +9300,10 @@ if (flag & EX_I) {
         return dfltinc;
     }
 if (uptr->flags & UNIT_RO)                              /* read only? */
-    return SCPE_RO;
+    return sim_messagef (SCPE_RO, "%s is read only.\n"
+                                  "%sse a writable device to change %s\n", 
+                                  sim_uname (uptr), (uptr->flags & UNIT_ROABLE) ? "Attach Read/Write or u" : "U",
+                                  uptr->filename ? uptr->filename : "it");
 mask = width_mask[dptr->dwidth];
 
 GET_RADIX (rdx, dptr->dradix);
