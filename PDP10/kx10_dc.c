@@ -433,7 +433,7 @@ t_stat dc_setnl (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
         return r;
     if (newln > dc_modem)
         return SCPE_ARG;
-    if ((newln == 0) || (newln >= DC10_MLINES) || (newln % 8) != 0)
+    if ((newln == 0) || (newln > DC10_MLINES) || (newln % 8) != 0)
         return SCPE_ARG;
     if (newln < dc_desc.lines) {
         for (i = newln, t = 0; i < dc_desc.lines; i++)
