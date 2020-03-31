@@ -35,6 +35,8 @@
 
 #if NUM_DEVS_RTOM > 0
 
+#define UNIT_CLK UNIT_ATTABLE|UNIT_IDLE|UNIT_DISABLE
+
 void rtc_setup (uint32 ss, uint32 level);
 t_stat rtc_srv (UNIT *uptr);
 t_stat rtc_reset (DEVICE *dptr);
@@ -51,6 +53,8 @@ extern uint32 M[];                  /* system memory */
 int32 rtc_pie = 0;                  /* rtc pulse ie */
 int32 rtc_tps = 60;                 /* rtc ticks/sec */
 int32 rtc_lvl = 0x18;               /* rtc interrupt level */
+time_t lastcresult = 0;             /* last clock int time for rtc */
+time_t lastiresult = 0;             /* last clock int time for tim */
 
 /* Clock data structures
 
@@ -62,6 +66,7 @@ int32 rtc_lvl = 0x18;               /* rtc interrupt level */
 /* clock is attached all the time */
 /* default to 60 HZ RTC */
 UNIT rtc_unit = { UDATA (&rtc_srv, UNIT_IDLE, 0), 16666, UNIT_ADDR(0x7F06)};
+//UNIT rtc_unit = { UDATA (&rtc_srv, UNIT_CLK, 0), 16666, UNIT_ADDR(0x7F06)};
 
 REG rtc_reg[] = {
     { FLDATA (PIE, rtc_pie, 0) },
@@ -106,11 +111,14 @@ t_stat rtc_srv (UNIT *uptr)
     if (rtc_pie) {                                  /* set pulse intr */
         time_t result = time(NULL);
 //      fprintf(stderr, "Clock int time %08x\r\n", (uint32)result);
-        sim_debug(DEBUG_CMD, &rtc_dev, "RT Clock int time %08x\n", (uint32)result);
+        sim_debug(DEBUG_CMD, &rtc_dev, "RT Clock int time %08x diff from last %08x\n",
+            (uint32)result, (uint32)(result-lastcresult));
+//      lastcresult = result;                       /* save last clock time */
         if (((INTS[rtc_lvl] & INTS_ENAB) ||         /* make sure enabled */
             (SPAD[rtc_lvl+0x80] & SINT_ENAB)) &&    /* in spad too */
             (((INTS[rtc_lvl] & INTS_ACT) == 0) ||   /* and not active */
             ((SPAD[rtc_lvl+0x80] & SINT_ACT) == 0))) { /* in spad too */
+//DIAGHELP  INTS[rtc_lvl] |= INTS_REQ;              /* request the interrupt */
             INTS[rtc_lvl] |= INTS_REQ;              /* request the interrupt */
             irq_pend = 1;                           /* make sure we scan for int */
         }
@@ -142,12 +150,13 @@ void rtc_setup(uint32 ss, uint32 level)
         INTS[level] &= ~INTS_ENAB;                  /* make sure disabled */
         SPAD[level+0x80] &= ~SINT_ENAB;             /* in spad too */
 //      INTS[level] &= ~INTS_REQ;                   /* make sure request not requesting */
-//      INTS[level] &= ~INTS_ACT;                   /* make sure request not active */
-//      SPAD[level+0x80] &= ~SINT_ACT;              /* in spad too */
+        INTS[level] &= ~INTS_ACT;                   /* make sure request not active */
+        SPAD[level+0x80] &= ~SINT_ACT;              /* in spad too */
         sim_debug(DEBUG_CMD, &rtc_dev,
             "RT Clock setup disable int %02x rtc_pie %01x ss %01x\n",
             rtc_lvl, rtc_pie, ss);
     }
+    lastcresult = time(NULL);                       /* save start time */
     rtc_pie = ss;                                   /* set new state */
 }
 
@@ -374,12 +383,13 @@ void itm_setup(uint32 ss, uint32 level)
         INTS[level] &= ~INTS_ENAB;                  /* make sure disabled */
         SPAD[level+0x80] &= ~SINT_ENAB;             /* in spad too */
 //      INTS[level] &= ~INTS_REQ;                   /* make sure request not requesting */
-//      INTS[level] &= ~INTS_ACT;                   /* make sure request not active */
+        INTS[level] &= ~INTS_ACT;                   /* make sure request not active */
         SPAD[level+0x80] &= ~SINT_ACT;              /* in spad too */
         sim_debug(DEBUG_CMD, &itm_dev,
             "Intv Timer setup disable int %02x value %08x itm_pie %01x ss %01x\n",
             itm_lvl, itm_cnt, itm_pie, ss);
     }
+    lastiresult = time(NULL);                       /* save start time */
     itm_pie = ss;                                   /* set new state */
 }
 

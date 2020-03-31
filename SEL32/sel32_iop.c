@@ -93,7 +93,7 @@ MTAB            iop_mod[] = {
 };
 
 UNIT            iop_unit[] = {
-    {UDATA(&iop_srv, UNIT_IDLE, 0), 0, UNIT_ADDR(0x7E00)},       /* Channel controller */
+    {UDATA(&iop_srv, UNIT_IDLE|UNIT_DISABLE, 0), 0, UNIT_ADDR(0x7E00)}, /* Channel controller */
 };
 
 //DIB iop_dib = {NULL, iop_startcmd, NULL, NULL, NULL, iop_ini, iop_unit, iop_chp, NUM_UNITS_IOP, 0xff, 0x7e00,0,0,0};
@@ -163,7 +163,8 @@ uint8  iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 //      set_inch(uptr, iop_chp[0].ccw_addr);        /* new address */
 
         uptr->u3 |= IOP_INCH2;                      /* save INCH command as 0xf0 */
-        sim_activate(uptr, 20);                     /* go on */
+//@     sim_activate(uptr, 20);                     /* go on */
+        sim_activate(uptr, 40);                     /* go on */
         return 0;                                   /* no status change */
         break;
 
@@ -172,7 +173,8 @@ uint8  iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         uptr->u5 = SNS_RDY|SNS_ONLN;                /* status is online & ready */
         uptr->u3 &= LMASK;                          /* leave only chsa */
         uptr->u3 |= (cmd & IOP_MSK);                /* save NOP command */
-        sim_activate(uptr, 20);                     /* TRY 07-13-19 */
+//@     sim_activate(uptr, 20);                     /* TRY 07-13-19 */
+        sim_activate(uptr, 40);                     /* TRY 07-13-19 */
         return 0;                                   /* no status change */
         break;
 
@@ -182,8 +184,10 @@ uint8  iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
             chan, cmd, uptr->u5);
         uptr->u3 &= LMASK;                          /* leave only chsa */
         uptr->u3 |= (cmd & IOP_MSK);                /* save command */
-        sim_activate(uptr, 20);                     /* force interrupt */
-        return 0;                                   /* no status change */
+//@     sim_activate(uptr, 20);                     /* force interrupt */
+/*UTX*/ sim_activate(uptr, 40);                     /* force interrupt */
+//UTX   return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* not a valid cmd */
+/*UTX*/ return 0;                                   /* no status change */
         break;
     }
 

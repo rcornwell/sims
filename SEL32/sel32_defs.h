@@ -80,6 +80,9 @@
 #define STATUS_DEND      0x0004             /* Device end */
 #define STATUS_CHECK     0x0002             /* Unit check */
 #define STATUS_EXPT      0x0001             /* Unit exception */
+#define STATUS_ERROR     0x3f03             /* bad errors */
+//#define STATUS_ERROR   (STATUS_LENGTH|STATUS_PCHK|STATUS_CDATA|STATUS_CCNTL|
+//                        STATUS_INTER|STATUS_CHAIN|STATUS_CHECK|STATUS_EXPT)
 
 /* Class F channel bits */
 /* bit 32 - 37 of IOCD word 2 (0-5) */
@@ -94,6 +97,8 @@
 #define BUFF_DIRTY       0x8                /* Buffer is dirty flag */
 #define BUFF_NEWCMD      0x10               /* Channel ready for new command */
 #define BUFF_CHNEND      0x20               /* Channel end */
+#define BUFF_DONE        0x40               /* Channel program done */
+#define BUFF_NEXT        0x80               /* Continue Channel with next IOCB */
 
 #define     MAX_CHAN        128             /* max channels that can be defined */
 #define     SUB_CHANS       256             /* max sub channels that can be defined */
@@ -110,17 +115,15 @@
 #define NUM_UNITS_CON   2       /* 2 console input & output */
 #define NUM_DEVS_MT     1       /* 1 mag tape controllers */
 #define NUM_UNITS_MT    4       /* 4 of 8 devices */
-#define FOR_UTX
-#ifdef FOR_UTX
-#define NUM_DEVS_HSDP   1       /* 1 HSPD disk drive controller */
+#define NUM_DEVS_HSDP   1       /* 1 hspd disk drive controller */
 #define NUM_UNITS_HSDP  2       /* 2 disk drive devices */
-//#else
-#define NUM_DEVS_DISK   1       /* 1 DP02 disk drive controller */
+#define NUM_DEVS_DISK   1       /* 1 dp02 disk drive controller */
 #define NUM_UNITS_DISK  2       /* 2 disk drive devices */
 //#define NUM_UNITS_DISK  4       /* 4 disk drive devices */
-#endif
 #define NUM_DEVS_SCFI   1       /* 1 scfi (SCSI) disk drive units */
 #define NUM_UNITS_SCFI  1       /* 1 of 4 disk drive devices */
+#define NUM_DEVS_SCSI   1       /* 1 scsi (MFP SCSI) disk drive units */
+#define NUM_UNITS_SCSI  1       /* 1 of 4 disk drive devices */
 #define NUM_DEVS_RTOM   1       /* 1 IOP RTOM channel */
 #define NUM_UNITS_RTOM  1       /* 1 IOP RTOM device (clock & interval timer) */
 #define NUM_DEVS_LPR    1       /* 1 IOP Line printer */
@@ -192,6 +195,7 @@ typedef struct chp {
     uint16      chan_dev;               /* Device on channel */
     uint8       ccw_cmd;                /* Channel command and flags */
     uint8       chan_byte;              /* Current byte, dirty/full */
+    uint8       chan_int;               /* channel interrupt level */
 } CHANP;
 
 /* Device information block */
@@ -394,15 +398,15 @@ extern DEBTAB dev_debug[];
 #define SINT_EWCS   0x40000000          /* Enabled channel WCS executed (XIO) */
 #define SINT_ACT    0x20000000          /* Interrupt active when set (copy is in INTS */
 #define SINT_ENAB   0x10000000          /* Interrupt enabled when set (copy is in INTS */
-#define SINT_EXTL   0x08000000          /* IOP/RTOM ext interrupt if set, I/O if not set (copy in INTS) */
+#define SINT_EXTL   0x00800000          /* IOP/RTOM ext interrupt if set, I/O if not set (copy in INTS) */
 
 /* INTS int entry equates, entries accessed by interrupt level number */
 #define INTS_NU1    0x80000000          /* Not used */
 #define INTS_NU2    0x40000000          /* Not used */
 #define INTS_ACT    0x20000000          /* Interrupt active when set (copy is of SPAD */
 #define INTS_ENAB   0x10000000          /* Interrupt enabled when set (copy is of SPAD */
-#define INTS_EXTL   0x08000000          /* IOP/RTOM ext interrupt if set, I/O if not set (copy of SPAD) */
-#define INTS_REQ    0x04000000          /* Interrupt is requesting */
+#define INTS_EXTL   0x00800000          /* IOP/RTOM ext interrupt if set, I/O if not set (copy of SPAD) */
+#define INTS_REQ    0x40000000          /* Interrupt is requesting (use bit 1) */
 
 /* ReadAddr memory access requested */
 #define MEM_RD  0x0                     /* read memory */
@@ -417,12 +421,12 @@ extern DEBTAB dev_debug[];
 /* RMW(addr) or WMW(addr, data) where addr is a byte alligned word address */
 #define RMB(a) ((M[(a)>>2]>>(8*(7-(a&3))))&0xff)      /* read memory addressed byte */
 #define RMH(a) ((a)&2?(M[(a)>>2]&RMASK):(M[(a)>>2]>>16)&RMASK)    /* read memory addressed halfword */
-#define RMW(a) (M[(a)>>2])                            /* read memory addressed word */
-#define WMW(a,d) (M[(a)>>2]=d)                        /* write memory addressed word */
+#define RMW(a) (M[((a)&MASK24)>>2])                     /* read memory addressed word */
+#define WMW(a,d) (M[((a)&MASK24)>>2]=d)                 /* write memory addressed word */
 /* write halfword to memory address */
 #define WMH(a,d) ((a)&2?(M[(a)>>2]=(M[(a)>>2]&LMASK)|((d)&RMASK)):(M[(a)>>2]=(M[(a)>>2]&RMASK)|((d)<<16)))
 /* write byte to memory */
-#define WMB(a,d) (M[(a)>>2]=(M[(a)>>2]&(~(0xff<<(8*(7-(a&3)))))|((d&0xff)<<(8*(7-(a&3))))))
+#define WMB(a,d) (M[(a)>>2]=(((M[(a)>>2])&(~(0xff<<(8*(7-(a&3))))))|((d&0xff)<<(8*(7-(a&3))))))
 
 /* map register access macros */
 /* The RMR and WMR macros are used to read/write the MAPC cache registers */
@@ -432,7 +436,7 @@ extern DEBTAB dev_debug[];
 /* write halfword map register to MAP cache address */
 #define WMR(a,d) ((a)&2?(MAPC[(a)>>2]=(MAPC[(a)>>2]&LMASK)|((d)&RMASK)):(MAPC[(a)>>2]=(MAPC[(a)>>2]&RMASK)|((d)<<16)))
 
-/* Definitions for common used functions */
+/* Definitions for commonly used functions */
 extern  t_stat  set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 extern  t_stat  show_dev_addr(FILE * st, UNIT *uptr, int32 v, CONST void *desc);
 extern  void    chan_end(uint16 chan, uint16 flags);
@@ -449,4 +453,11 @@ extern  CHANP  *find_chanp_ptr(uint16 chsa);             /* find chanp pointer *
 extern  uint32  M[];                            /* our memory */
 extern  uint32  SPAD[];                         /* cpu SPAD memory */
 extern  uint32  attention_trap;
+extern  uint32  RDYQ[];                         /* ready queue */
+extern  uint32  RDYQIN;                         /* input index */
+extern  uint32  RDYQOUT;                        /* output index */
+#define RDYQ_SIZE 128
+extern  int32   RDYQ_Put(uint32 entry);
+extern  int32   RDYQ_Get(uint32 *old);
+extern  int32   RDYQ_Num(void);
 

@@ -244,7 +244,7 @@ t_stat  scsi_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *c
 const   char  *scsi_description (DEVICE *dptr);
 
 /* channel program information */
-CHANP           sda_chp[NUM_UNITS_SCSI] = {0};
+CHANP           sca_chp[NUM_UNITS_SCSI] = {0};
 
 MTAB            scsi_mod[] = {
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "TYPE", "TYPE",
@@ -254,7 +254,7 @@ MTAB            scsi_mod[] = {
     {0}
 };
 
-UNIT            sda_unit[] = {
+UNIT            sca_unit[] = {
 /* SET_TYPE(2) SG120 */
     {UDATA(&scsi_srv, UNIT_SCSI|SET_TYPE(2), 0), 0, UNIT_ADDR(0x400)},  /* 0 */
     {UDATA(&scsi_srv, UNIT_SCSI|SET_TYPE(2), 0), 0, UNIT_ADDR(0x410)},  /* 1 */
@@ -266,17 +266,17 @@ UNIT            sda_unit[] = {
     {UDATA(&scsi_srv, UNIT_SCSI|SET_TYPE(2), 0), 0, UNIT_ADDR(0x470)},  /* 7 */
 };
 
-//DIB sda_dib = {scsi_preio, scsi_startcmd, NULL, NULL, NULL, scsi_ini, sda_unit, sda_chp, NUM_UNITS_SCSI, 0x0f, 0x0400, 0, 0, 0};
+//DIB sca_dib = {scsi_preio, scsi_startcmd, NULL, NULL, NULL, scsi_ini, sca_unit, sca_chp, NUM_UNITS_SCSI, 0x0f, 0x0400, 0, 0, 0};
 
-DIB             sda_dib = {
+DIB             sca_dib = {
     scsi_preio,     /* uint8 (*pre_io)(UNIT *uptr, uint16 chan)*/   /* Pre Start I/O */
     scsi_startcmd,  /* uint8 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start a command */
     NULL,           /* uint8 (*halt_io)(UNIT *uptr) */          /* Stop I/O */
     NULL,           /* uint8 (*test_io)(UNIT *uptr) */          /* Test I/O */
     NULL,           /* uint8 (*post_io)(UNIT *uptr) */          /* Post I/O */
     scsi_ini,       /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
-    sda_unit,       /* UNIT* units */                           /* Pointer to units structure */
-    sda_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
+    sca_unit,       /* UNIT* units */                           /* Pointer to units structure */
+    sca_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
     NUM_UNITS_SCSI, /* uint8 numunits */                        /* number of units defined */
     0xF0,           /* uint8 mask */                            /* 16 devices - device mask */
     0x0400,         /* uint16 chan_addr */                      /* parent channel address */
@@ -285,12 +285,12 @@ DIB             sda_dib = {
     {0}             /* uint32 chan_fifo[FIFO_SIZE] */           /* interrupt status fifo for channel */
 };
 
-DEVICE          sda_dev = {
-    "SDA", sda_unit, NULL, scsi_mod,
+DEVICE          sca_dev = {
+    "SCA", sca_unit, NULL, scsi_mod,
     NUM_UNITS_SCSI, 16, 24, 4, 16, 32,
     NULL, NULL, &scsi_reset, &scsi_boot, &scsi_attach, &scsi_detach,
     /* ctxt is the DIB pointer */
-    &sda_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug,
+    &sca_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug,
     NULL, NULL, &scsi_help, NULL, NULL, &scsi_description
 };
 
@@ -330,7 +330,7 @@ DIB             sdb_dib = {
 };
 
 DEVICE          sdb_dev = {
-    "SDB", sdb_unit, NULL, scsi_mod,
+    "SCB", sdb_unit, NULL, scsi_mod,
     NUM_UNITS_SCSI, 16, 24, 4, 16, 32,
     NULL, NULL, &scsi_reset, &scsi_boot, &scsi_attach, &scsi_detach,
     /* ctxt is the DIB pointer */
@@ -458,7 +458,7 @@ t_stat scsi_srv(UNIT *uptr)
     uint8           buf2[1024];
     uint8           buf[1024];
 
-    sim_debug(DEBUG_DETAIL, &sda_dev,
+    sim_debug(DEBUG_DETAIL, &sca_dev,
         "scsi_srv entry unit %02x CMD %08x chsa %04x count %04x %x/%x/%x \n",
         unit, uptr->CMD, chsa, chp->ccw_count,
         STAR2CYL(uptr->CHS), (uptr->CHS >> 8)&0xff, (uptr->CHS&0xff));
@@ -917,7 +917,7 @@ void scsi_ini(UNIT *uptr, t_bool f)
     /* total sectors on disk */
     uptr->capac = CAP(i);                       /* disk size in sectors */
 
-    sim_debug(DEBUG_EXP, &sda_dev, "SDA init device %s on unit SDA%.1x cap %x\n",
+    sim_debug(DEBUG_EXP, &sca_dev, "SCA init device %s on unit SCA%.1x cap %x\n",
         dptr->name, GET_UADDR(uptr->CMD), uptr->CMD);
 }
 
@@ -1022,12 +1022,12 @@ t_stat scsi_attach(UNIT *uptr, CONST char *file) {
 
     /* read in the 1st sector of the 'disk' */
     if ((r = sim_fread(&buff[0], sizeof(uint8), ssize, uptr->fileref) != ssize)) {
-        sim_debug(DEBUG_CMD, &sda_dev, "Disk format fread ret = %04x\n", r);
+        sim_debug(DEBUG_CMD, &sca_dev, "Disk format fread ret = %04x\n", r);
         goto fmt;
     }
 
     if ((buff[0] | buff[1] | buff[2] | buff[3]) == 0) {
-        sim_debug(DEBUG_CMD, &sda_dev,
+        sim_debug(DEBUG_CMD, &sca_dev,
         "Disk format buf0 %02x buf1 %02x buf2 %02x buf3 %02x\n",
         buff[0], buff[1], buff[2], buff[3]);
 fmt:
@@ -1045,12 +1045,12 @@ fmt:
 
     uptr->CHS = 0;                              /* set CHS to cyl/hd/sec = 0 */
 
-    sim_debug(DEBUG_CMD, &sda_dev,
+    sim_debug(DEBUG_CMD, &sca_dev,
         "Attach %s cyl %d hds %d spt %d spc %d cap sec %d cap bytes %d\n",
         scsi_type[type].name, CYL(type), HDS(type), SPT(type), SPC(type),  
         CAP(type), CAPB(type));
 
-    sim_debug(DEBUG_CMD, &sda_dev, "File %s attached to %s\r\n",
+    sim_debug(DEBUG_CMD, &sca_dev, "File %s attached to %s\r\n",
         file, scsi_type[type].name);
 
     set_devattn(addr, SNS_DEVEND);
@@ -1068,7 +1068,7 @@ t_stat scsi_detach(UNIT *uptr) {
 t_stat scsi_boot(int32 unit_num, DEVICE *dptr) {
     UNIT    *uptr = &dptr->units[unit_num];     /* find disk unit number */
 
-    sim_debug(DEBUG_CMD, &sda_dev, "SCSI Disk Boot dev/unit %04x\n", GET_UADDR(uptr->CMD));
+    sim_debug(DEBUG_CMD, &sca_dev, "SCSI Disk Boot dev/unit %04x\n", GET_UADDR(uptr->CMD));
     SPAD[0xf4] = GET_UADDR(uptr->CMD);          /* put boot device chan/sa into spad */
     SPAD[0xf8] = 0xF000;                        /* show as F class device */
     if ((uptr->flags & UNIT_ATT) == 0)

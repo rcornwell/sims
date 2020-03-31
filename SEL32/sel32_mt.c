@@ -400,7 +400,15 @@ uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         /* UTX_needs_interrupt on NOP or INCH */
         /* fall through */
     case 0x01:                                      /* Write command */
+        if (cmd == 0x01)
+        sim_debug(DEBUG_EXP, &mta_dev,
+            "mt_startcmd WRITE chan %04x addr %06x cnt %04x\n",
+            chan, chp->ccw_addr, chp->ccw_count);
     case 0x02:                                      /* Read command */
+        if (cmd == 0x02)
+        sim_debug(DEBUG_EXP, &mta_dev,
+            "mt_startcmd READ chan %04x addr %06x cnt %04x\n",
+            chan, chp->ccw_addr, chp->ccw_count);
     case 0x0C:                                      /* Read backward */
         if (cmd != 0x03)                            /* if this is a nop do not zero status */
             uptr->SNS = (uptr->SNS & 0x0000ff00);   /* clear all but byte 2 */
@@ -414,15 +422,13 @@ uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
             uptr->SNS |= (SNS_EOT);                 /* tape at EOM */
         /* Fall through */
 
-    case 0x4:              /* Sense */
-#ifndef FIX_DIAG
+    case 0x04:             /* Sense */
     case 0x80:                                      /* Unknown diag cmd with byte cnt of 0x0c */
 #ifdef DO_DYNAMIC_DEBUG
         if ((cmd & 0xff) == 0x80) {
                 /* start debugging */
-                cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
+                cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ | DEBUG_TRAP);
         }
-#endif
 #endif
         uptr->CMD &= ~(MT_CMDMSK);                  /* clear out last cmd */
         uptr->CMD |= cmd & MT_CMDMSK;               /* insert new cmd */
@@ -431,7 +437,8 @@ uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         mt_busy[GET_DEV_BUF(dptr->flags)] = 1;      /* show we are busy */
         sim_debug(DEBUG_EXP, &mta_dev, "mt_startcmd sense %08x return 0 chan %04x cmd %02x\n",
             uptr->SNS, chan, cmd);
-        sim_activate(uptr, 100);                    /* Start unit off */
+//@     sim_activate(uptr, 100);                    /* Start unit off */
+        sim_activate(uptr, 150);                    /* Start unit off */
         return 0;
 
     default:                                        /* invalid command */
@@ -558,7 +565,7 @@ t_stat mt_srv(UNIT *uptr)
             }
             /* just dump data */
         }
-#ifdef CHANGE_FOR_UTX_TEST
+#ifdef CHANGE_FOR_UTX_BTP_TEST
         /* a BTP uses a 41 word INCH memory buffer */
 //      for (i=0; i<41; i++) {
         for (i=0; i<9; i++) {
@@ -577,7 +584,7 @@ t_stat mt_srv(UNIT *uptr)
         /* call set_inch() to setup inch buffer */
         i = set_inch(uptr, mema);               /* new address */
 
-#ifndef NOTYET
+#ifdef NOTYET
         if ((i == SCPE_MEM) || (i == SCPE_ARG)) {   /* any error */
             /* we have error, bail out */
             uptr->CMD &= ~(0xffff);             /* remove old status bits & cmd */
@@ -614,13 +621,15 @@ t_stat mt_srv(UNIT *uptr)
         ch = (uptr->SNS >> 0) & 0xff;               /* get sense byte 3 status */
         sim_debug(DEBUG_CMD, &mta_dev, "sense unit %02x byte 3 %02x\n", unit, ch);
         chan_write_byte(addr, &ch);                 /* write byte 3 */
-#ifdef TRYTHIS
+#ifndef NO_HARDWARE_STATUS_FOR_DIAGS
         /* write zero extra status */
         for (ch=4; ch < 0xc; ch++) {
             uint8   zc = 0;
             chan_write_byte(addr, &zc);             /* write zero byte */
+            sim_debug(DEBUG_CMD, &mta_dev,
+                "sense unit %02x byte %1x %02x\n", unit, ch, zc);
         }
-#else
+#else /* FOR UTX */
         /* write status 2 more times */
         ch = (uptr->SNS >> 24) & 0xff;              /* get sense byte 0 status */
         sim_debug(DEBUG_CMD, &mta_dev, "sense unit %02x byte 0 %02x\n", unit, ch);
@@ -684,12 +693,13 @@ t_stat mt_srv(UNIT *uptr)
         break;
 
     case MT_READ:   /* 0x02 */                      /* read a record from the device */
-        sim_debug(DEBUG_DATA, &mta_dev, "mt_srv cmd 2 READ unit=%02x\n", unit);
+        sim_debug(DEBUG_DETAIL, &mta_dev, "mt_srv cmd 2 READ unit=%02x\n", unit);
         if (uptr->CMD & MT_READDONE) {              /* is the read complete */
             uptr->SNS &= ~(SNS_LOAD|SNS_EOT);       /* reset BOT & EOT */
             if (sim_tape_eot(uptr)) {               /* see if at EOM */
                 uptr->SNS |= SNS_EOT;               /* set EOT status */
             }
+
             uptr->CMD &= ~(MT_CMDMSK|MT_READDONE);  /* clear all but readdone & cmd */
             uptr->CMD &= ~MT_CMDMSK;                /* clear the cmd */
             mt_busy[bufnum] &= ~1;                  /* not busy anymore */
@@ -718,14 +728,17 @@ t_stat mt_srv(UNIT *uptr)
 
         /* Send character over to channel */
         if (chan_write_byte(addr, &ch)) {
-            sim_debug(DEBUG_CMD, &mta_dev, "Read unit %02x EOR cnt %04x\n", unit, uptr->POS);
+            sim_debug(DEBUG_CMD, &mta_dev,
+                "Read unit %02x EOR cnt %04x hwm %04x\n", unit, uptr->POS, uptr->hwmark);
             /* If not read whole record, skip till end */
             if ((uint32)uptr->POS < uptr->hwmark) {
                 /* Send dummy character to force SLI */
                 chan_write_byte(addr, &ch);         /* write the byte */
                 sim_debug(DEBUG_CMD, &mta_dev, "Read unit %02x send dump SLI\n", unit);
+//@             sim_activate(uptr, (uptr->hwmark-uptr->POS) * 10); /* wait again */
                 sim_activate(uptr, (uptr->hwmark-uptr->POS) * 10); /* wait again */
                 uptr->CMD |= MT_READDONE;           /* read is done */
+//NEW           uptr->POS -= 1;                     /* uncount dummy char */
                 break;
             }
             sim_debug(DEBUG_CMD, &mta_dev,
@@ -735,9 +748,9 @@ t_stat mt_srv(UNIT *uptr)
             mt_busy[bufnum] &= ~1;                  /* set not busy */
             chan_end(addr, SNS_CHNEND|SNS_DEVEND);  /* return end status */
         } else {
-            sim_debug(DEBUG_DATA, &mta_dev,
+            sim_debug(DEBUG_DETAIL, &mta_dev,
                 "Read data @2 unit %02x cnt %04x ch %02x hwm %04x\n", unit, uptr->POS, ch,
-                          uptr->hwmark);
+                uptr->hwmark);
             if ((uint32)uptr->POS >= uptr->hwmark) { /* In IRG */
                 /* Handle end of data record */
                 sim_debug(DEBUG_CMD, &mta_dev,
@@ -749,10 +762,12 @@ t_stat mt_srv(UNIT *uptr)
                 chan_end(addr, SNS_CHNEND|SNS_DEVEND);  /* return end status */
 #else
                 uptr->CMD |= MT_READDONE;           /* read is done */
-                sim_activate(uptr, 20);             /* wait again */
+//@             sim_activate(uptr, 20);             /* wait again */
+                sim_activate(uptr, 40);            /* wait again */
 #endif
             } else
-                sim_activate(uptr, 20);             /* wait again */
+//@             sim_activate(uptr, 20);             /* wait again */
+                sim_activate(uptr, 40);            /* wait again */
         }
         break;
 
@@ -777,7 +792,8 @@ t_stat mt_srv(UNIT *uptr)
             sim_debug(DEBUG_CMD, &mta_dev, "Write mode data in unit %02x POS %04x ch %02x\n",
                   unit, uptr->POS, ch);
             uptr->hwmark = uptr->POS;               /* set high water mark */
-            sim_activate(uptr, 20);                 /* wait time */
+//@         sim_activate(uptr, 20);                 /* wait time */
+            sim_activate(uptr, 40);                 /* wait again */
         }
         break;
 
@@ -805,11 +821,12 @@ t_stat mt_srv(UNIT *uptr)
             }
         } else {
             mt_buffer[bufnum][uptr->POS++] = ch;
-            sim_debug(DEBUG_DATA, &mta_dev, "Write data unit=%02x %04x %02x\n",
+            sim_debug(DEBUG_DETAIL, &mta_dev, "Write data unit=%02x %04x %02x\n",
                 unit, uptr->POS, ch);
             uptr->hwmark = uptr->POS;
         }
-        sim_activate(uptr, 20);
+//@     sim_activate(uptr, 20);
+        sim_activate(uptr, 40);
         break;
 
     case MT_RDBK:   /* 0x0C */                      /* Read Backwards */
@@ -843,24 +860,26 @@ t_stat mt_srv(UNIT *uptr)
         if (chan_write_byte(addr, &ch)) {
             sim_debug(DEBUG_CMD, &mta_dev, "Read unit=%02x EOR cnt %04x\n",
                 unit, uptr->POS);
-             /* If not read whole record, skip till end */
-             if (uptr->POS >= 0) {
-                 sim_activate(uptr, (uptr->POS) * 20);
-                 uptr->CMD |= MT_READDONE;
-                 return SCPE_OK;
-             }
-             uptr->CMD &= ~MT_CMDMSK;
-             mt_busy[bufnum] &= ~1;
-             chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+            /* If not read whole record, skip till end */
+            if (uptr->POS >= 0) {
+//@             sim_activate(uptr, (uptr->POS) * 20);
+                sim_activate(uptr, (uptr->POS) * 20);
+                uptr->CMD |= MT_READDONE;
+                return SCPE_OK;
+            }
+            uptr->CMD &= ~MT_CMDMSK;
+            mt_busy[bufnum] &= ~1;
+            chan_end(addr, SNS_CHNEND|SNS_DEVEND);
         } else {
-            sim_debug(DEBUG_DATA, &mta_dev, "Read data unit=%02x %04x %02x\n",
+            sim_debug(DEBUG_DETAIL, &mta_dev, "Read data unit=%02x %04x %02x\n",
                 unit, uptr->POS, ch);
             if (uptr->POS == 0) {      /* In IRG */
                 uptr->CMD &= ~MT_CMDMSK;
                 mt_busy[bufnum] &= ~1;
                 chan_end(addr, SNS_CHNEND|SNS_DEVEND);
             } else
-                sim_activate(uptr, 20);
+//@             sim_activate(uptr, 20);
+                sim_activate(uptr, 40);
         }
         break;
 
@@ -896,7 +915,8 @@ t_stat mt_srv(UNIT *uptr)
                  return SCPE_OK;
             }
             uptr->POS++;
-            sim_activate(uptr, 50);
+//@         sim_activate(uptr, 50);
+            sim_activate(uptr, 80);
             break;
         case 1:
             uptr->POS++;
@@ -907,10 +927,12 @@ t_stat mt_srv(UNIT *uptr)
             if (r == MTSE_TMK) {
                 uptr->POS++;
                 sim_debug(DEBUG_CMD, &mta_dev, "MARK\n");
-                sim_activate(uptr, 50);
+//@             sim_activate(uptr, 50);
+                sim_activate(uptr, 80);
             } else {
                 sim_debug(DEBUG_CMD, &mta_dev, "Backspace reclen %04x\n", reclen);
-                sim_activate(uptr, 50);
+//@             sim_activate(uptr, 50);
+                sim_activate(uptr, 80);
             }
             break;
         case 2:
@@ -945,12 +967,15 @@ t_stat mt_srv(UNIT *uptr)
             if (r == MTSE_TMK) {
                 uptr->POS++;
                 sim_debug(DEBUG_DETAIL, &mta_dev, "MARK\n");
-                sim_activate(uptr, 50);
+//@             sim_activate(uptr, 50);
+                sim_activate(uptr, 80);
             } else if (r == MTSE_BOT) {
                 uptr->POS+= 2;
-                sim_activate(uptr, 50);
+//@             sim_activate(uptr, 50);
+                sim_activate(uptr, 80);
             } else {
-                sim_activate(uptr, 20);
+//@             sim_activate(uptr, 20);
+                sim_activate(uptr, 80);
             }
             break;
         case 2:        /* File Mark */
@@ -971,7 +996,8 @@ t_stat mt_srv(UNIT *uptr)
         case 0:
             sim_debug(DEBUG_CMD, &mta_dev, "Skip rec entry unit=%02x ", unit);
             uptr->POS++;
-            sim_activate(uptr, 50);
+//@         sim_activate(uptr, 50);
+            sim_activate(uptr, 80);
             break;
         case 1:
             uptr->POS++;
@@ -981,14 +1007,17 @@ t_stat mt_srv(UNIT *uptr)
                 uptr->POS = 3;
                 uptr->SNS |= SNS_FMRKDT;            /* file mark detected */
                 sim_debug(DEBUG_CMD, &mta_dev, "FSR MARK\n");
-                sim_activate(uptr, 50);
+//@             sim_activate(uptr, 50);
+                sim_activate(uptr, 80);
             } else if (r == MTSE_EOM) {
                 uptr->POS = 4;
                 uptr->SNS |= SNS_EOT;               /* set EOT status */
-                sim_activate(uptr, 50);
+//@             sim_activate(uptr, 50);
+                sim_activate(uptr, 80);
             } else {
                 sim_debug(DEBUG_CMD, &mta_dev, "FSR skipped %04x byte record\n",
                     reclen);
+//@             sim_activate(uptr, 10 + (10 * reclen));
                 sim_activate(uptr, 10 + (10 * reclen));
             }
             break;
@@ -1019,7 +1048,8 @@ t_stat mt_srv(UNIT *uptr)
         case 0:
             sim_debug(DEBUG_CMD, &mta_dev, "Skip file entry sense %08x unit %02x\n", uptr->SNS, unit);
             uptr->POS++;
-            sim_activate(uptr, 50);
+//@         sim_activate(uptr, 50);
+            sim_activate(uptr, 80);
             break;
         case 1:
             sim_debug(DEBUG_CMD, &mta_dev, "Skip file unit=%02x\n", unit);
@@ -1028,15 +1058,18 @@ t_stat mt_srv(UNIT *uptr)
                 uptr->POS++;
                 uptr->SNS |= SNS_FMRKDT;            /* file mark detected */
                 sim_debug(DEBUG_CMD, &mta_dev, "FSF EOF MARK sense %08x\n", uptr->SNS);
-                sim_activate(uptr, 50);
+//@             sim_activate(uptr, 50);
+                sim_activate(uptr, 80);
             } else if (r == MTSE_EOM) {
                 uptr->SNS |= SNS_EOT;               /* set EOT status */
                 sim_debug(DEBUG_CMD, &mta_dev, "FSF EOT sense %08x\n", uptr->SNS);
                 uptr->POS+= 2;
-                sim_activate(uptr, 50);
+//@             sim_activate(uptr, 50);
+                sim_activate(uptr, 80);
             } else {
                 sim_debug(DEBUG_CMD, &mta_dev, "FSF skipped %04x byte record\n", reclen);
-                sim_activate(uptr, 50);
+//@             sim_activate(uptr, 50);
+                sim_activate(uptr, 80);
             }
             break;
         case 2:
@@ -1068,7 +1101,8 @@ t_stat mt_srv(UNIT *uptr)
                 chan_end(addr, SNS_DEVEND|SNS_UNITEXP);
             } else {
                 uptr->POS ++;
-                sim_activate(uptr, 500);
+//@             sim_activate(uptr, 500);
+                sim_activate(uptr, 200);
             }
             break;
         case 1:

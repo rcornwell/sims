@@ -662,7 +662,8 @@ t_opcode  optab[] = {
     {  0x2C0E,      0xFC0F,   H|TYPE_F,   "TRSC", },     /* Transfer Register to Scratchpad # * */
     {  0x2C0F,      0xFC0F,   H|TYPE_F,   "TSCR", },     /* Transfer Scratchpad to Register # * */
     {  0x3000,      0xFC0F, X|H|TYPE_F,   "CALM", },     /* Call Monitor 32/55 # */
-    {  0x3400,      0xFC08,   N|TYPE_D,   "LA", },       /* Load Address NBR Note! FW instruction */
+//FF{  0x3400,      0xFC08,   N|TYPE_D,   "LA", },       /* Load Address NBR Note! FW instruction */
+    {  0x3400,      0xFC00,   N|TYPE_D,   "LA", },       /* Load Address NBR Note! FW instruction */
     {  0x3800,      0xFC0F,   H|TYPE_F,   "ADR", },      /* Add Register to Register # */
     {  0x3801,      0xFC0F,   H|TYPE_F,   "ADRFW", },    /* Add Floating Point to Register # */
     {  0x3802,      0xFC0F, B|H|TYPE_F,   "MPR", },      /* Multiply Register BR # */
