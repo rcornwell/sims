@@ -29,13 +29,13 @@
 
 /* useful conversions */
 /* Fill STAR value from cyl, trk, sec data */
-#define CHS2STAR(c,h,s)	        (((c<<16) & 0xffff0000)|((h<<8) & 0xff00)|(s & 0xff))
+#define CHS2STAR(c,h,s)	        (((c<<16) & LMASK)|((h<<8) & 0xff00)|(s & 0xff))
 /* convert STAR value to number of sectors */
 #define STAR2SEC(star,spt,spc)  ((star&0xff)+(((star>>8)&0xff)*spt)+((star>>16)*spc))
 /* convert STAR value to number of heads or tracks */
 #define STAR2TRK(star,tpc)      ((star >> 16) * tpc + ((star >> 8) & 0x0ff))
 /* convert STAR value to number of cylinders */
-#define STAR2CYL(star)          ((star >> 16) & 0xffff)
+#define STAR2CYL(star)          ((star >> 16) & RMASK)
 /* convert byte value to number of sectors mod sector size */
 #define BYTES2SEC(bytes,ssize)  (((bytes) + (ssize-1)) >> 10)
 /* get sectors per track for specified type */
@@ -970,6 +970,9 @@ int scsi_format(UNIT *uptr) {
         if ((sim_fwrite(buff, 1, tsize*ssize, uptr->fileref)) != tsize*ssize) {
             sim_debug(DEBUG_CMD, dptr,
                 "Error on write to diskfile cyl %04x\n", cyl);
+            free(buff);                         /* free cylinder buffer */
+            buff = 0;
+            return 1;
         }
         if (cyl == 0) {
             buff[0] = 0;
@@ -977,15 +980,19 @@ int scsi_format(UNIT *uptr) {
             buff[2] = 0;
             buff[3] = 0;
         }
+        if ((cyl % 100) == 0)
+            fputc('.', stderr);
     }
-    if ((cyl % 100) == 0)
-        fputc('.', stderr);
     fputc('\r', stderr);
     fputc('\n', stderr);
-    /* seek home again */
-    sim_fseek(uptr->fileref, 0, SEEK_SET);      /* seek home */
     free(buff);                                 /* free cylinder buffer */
-    set_devattn(addr, SNS_DEVEND);              /* start us up */
+    buff = 0;
+
+    /* seek home again */
+    if ((sim_fseek(uptr->fileref, 0, SEEK_SET)) != 0) { /* seek home */
+        fprintf (stderr, "Error on seek to 0\r\n");
+        return 1;
+    }
     return 0;
 }
 

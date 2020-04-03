@@ -193,8 +193,8 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         uptr->CMD &= LMASK;             /* leave only chsa */
         uptr->CMD |= CON_INCH2;         /* save INCH command as 0xf0 */
         uptr->SNS = SNS_RDY|SNS_ONLN;   /* status is online & ready */
-//@     sim_activate(uptr, 20);         /* start us off */
-        sim_activate(uptr, 40);         /* start us off */
+        sim_activate(uptr, 20);         /* start us off */
+//@41   sim_activate(uptr, 40);         /* start us off */
         return 0;                       /* no status change */
         break;
 
@@ -204,8 +204,9 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         uptr->CMD &= LMASK;             /* leave only chsa */
         uptr->CMD |= (cmd & CON_MSK);   /* save command */
         uptr->SNS = SNS_RDY|SNS_ONLN;   /* status is online & ready */
-//@     sim_activate(uptr, 20);         /* start us off */
-        sim_activate(uptr, 40);         /* start us off */
+        sim_activate(uptr, 20);         /* start us off */
+//@41   sim_activate(uptr, 40);         /* start us off */
+//@41   sim_activate(uptr, 20);         /* start us off */
         return 0;                       /* no status change */
         break;
 
@@ -221,8 +222,9 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         uptr->u4 = 0;                   /* no I/O yet */
         con_data[unit].incnt = 0;       /* clear any input data */
         uptr->SNS = SNS_RDY|SNS_ONLN;   /* status is online & ready */
-//@     sim_activate(uptr, 20);         /* start us off */
-        sim_activate(uptr, 40);         /* start us off */
+        sim_activate(uptr, 20);         /* start us off */
+//@41   sim_activate(uptr, 40);         /* start us off */
+//@41   sim_activate(uptr, 140);        /* start us off */
         return 0;
         break;
 
@@ -232,8 +234,8 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         uptr->CMD |= (cmd & CON_MSK);   /* save command */
 //      uptr->u4 = 0;                   /* no I/O yet */
 //      con_data[unit].incnt = 0;       /* clear any input data */
-//@     sim_activate(uptr, 20);         /* start us off */
-        sim_activate(uptr, 40);         /* start us off */
+        sim_activate(uptr, 20);         /* start us off */
+//@41   sim_activate(uptr, 40);         /* start us off */
         return 0;                       /* no status change */
         break;
 
@@ -242,8 +244,8 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         uptr->SNS = SNS_RDY|SNS_ONLN;   /* status is online & ready */
         uptr->CMD &= LMASK;             /* leave only chsa */
         uptr->CMD |= (cmd & CON_MSK);   /* save command */
-//@     sim_activate(uptr, 20);         /* start us off */
-        sim_activate(uptr, 40);         /* start us off */
+        sim_activate(uptr, 20);         /* start us off */
+//@41   sim_activate(uptr, 40);         /* start us off */
         return 0;                       /* no status change */
         break;
 #endif
@@ -320,6 +322,7 @@ t_stat con_srvo(UNIT *uptr) {
         if (cmd == CON_INCH2) {                 /* Channel end only for INCH */
             int len = chp->ccw_count;           /* INCH command count */
             uint32 mema = chp->ccw_addr;        /* get inch or buffer addr */
+            //FIXME - test error return for error
 //          int i = set_inch(uptr, mema);       /* new address */
             set_inch(uptr, mema);               /* new address */
 
@@ -369,8 +372,9 @@ t_stat con_srvo(UNIT *uptr) {
             sim_putchar(ch);                /* output next char to device */
 //WAS       sim_putchar(cp);                /* output next char to device */
 #endif
-//@         sim_activate(uptr, 20);         /* keep going */
-            sim_activate(uptr, 30);         /* start us off */
+            sim_activate(uptr, 20);         /* keep going */
+//@41       sim_activate(uptr, 30);         /* start us off */
+//@41       sim_activate(uptr, 50);         /* start us off */
         }
     }
     return SCPE_OK;
@@ -419,6 +423,7 @@ t_stat con_srvi(UNIT *uptr) {
         if (cmd == CON_INCH2) {                 /* Channel end only for INCH */
             int len = chp->ccw_count;           /* INCH command count */
             uint32 mema = chp->ccw_addr;        /* get inch or buffer addr */
+            //FIXME add code to test return from set_inch
 //          int i = set_inch(uptr, mema);       /* new address */
             set_inch(uptr, mema);               /* new address */
 

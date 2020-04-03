@@ -174,8 +174,8 @@ uint8  mfp_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         uptr->u5 = SNS_RDY|SNS_ONLN;                /* status is online & ready */
         uptr->u3 &= LMASK;                          /* leave only chsa */
         uptr->u3 |= (cmd & MFP_MSK);                /* save NOP command */
-//@     sim_activate(uptr, 20);                     /* TRY 07-13-19 */
-        sim_activate(uptr, 40);                     /* TRY 07-13-19 */
+        sim_activate(uptr, 20);                     /* TRY 07-13-19 */
+//@41   sim_activate(uptr, 40);                     /* TRY 07-13-19 */
         return 0;                                   /* no status change */
         break;
 
@@ -185,10 +185,9 @@ uint8  mfp_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
             chan, cmd, uptr->u5);
         uptr->u3 &= LMASK;                          /* leave only chsa */
         uptr->u3 |= (cmd & MFP_MSK);                /* save command */
-//@     sim_activate(uptr, 20);                     /* force interrupt */
-//@     sim_activate(uptr, 40);                     /* force interrupt */
-        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* not a valid command */
-//WAS   return 0;                                   /* no status change */
+        sim_activate(uptr, 20);                     /* force interrupt */
+//@41   sim_activate(uptr, 40);                     /* force interrupt */
+        return 0;                                   /* no status change */
         break;
     }
 
@@ -200,7 +199,6 @@ t_stat mfp_srv(UNIT *uptr)
 {
     uint16  chsa = GET_UADDR(uptr->u3);
     int     cmd = uptr->u3 & MFP_MSK;
-//  CHANP   *chp = find_chanp_ptr(chsa);            /* find the chanp pointer */
     CHANP   *chp = &mfp_chp[0];                     /* find the chanp pointer */
 //  int     i;
 //  int     len = chp->ccw_count;                   /* INCH command count */
@@ -230,6 +228,7 @@ t_stat mfp_srv(UNIT *uptr)
 
         /* the chp->ccw_addr location contains the inch address */
         /* call set_inch() to setup inch buffer */
+        //FIXME add code to test return
 //      i = set_inch(uptr, mema);                   /* new address */
         set_inch(uptr, mema);                       /* new address */
 //      chp->chan_inch_addr = mema;                 /* set inch buffer addr */

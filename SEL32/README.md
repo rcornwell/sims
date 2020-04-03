@@ -44,9 +44,10 @@ sim32sdt.tap - MPX 1.5f user SDT install tape.  Uses 300mb disk, IOP 8-line
 Available Level One Diagnostic boot tape:
 diag.ini       command file to start diags. ./sel32 diag.ini
 diag.tap       bootable level one diagnostic tape w/auto testing.  Set cpu type
-               to 32/27, 32/67, 32/87, 32/97, V6 or V9.  32/97 and V9 diags 
-               halt at test 46,subtest 2 in the CN.MMM & VM.MMM diags.  The
-               rest of the machines stop in the CN.COM console diagnostic.
+               to 32/27, 32/67, 32/87, 32/97, V6 or V9.  All cpu models now
+               run all diagnostics except cv.dxp which is used to run level 2
+               diagnostics. The diag stops at random places after a few
+               characters are entered into the console.
 
                CV.CSL - Firmware control diag.  Disabled in auto testing.
                CV.CP1 - CPU diag part 1 runs OK.
@@ -57,11 +58,11 @@ diag.tap       bootable level one diagnostic tape w/auto testing.  Set cpu type
                CV.INT - Interrupt diag runs OK.
                CV.TRP - Traps diag runs OK.
                CV.CMD - Cache/Shadow diag.  Disabled in auto testing.
-               CN.MMM - Non virtual memory diag runs OK, except for 32/97.
-               VM.MMM - virtual memory diag for V6 & V9 runs OK, except for V9.
+               CN.MMM - Non virtual memory diag runs OK.
+               VM.MMM - virtual memory diag for V6 & V9 runs OK.
                CV.IPT - IPU trap diag.  Disabled in auto testing.
                CV.CSD - WCS read/write trap diag.  Disabled in auto testing.
-               CV.CON - Operators Console diag halts at 0x852e for all CPUs.
+               CV.CON - Operators Console runs all tests for all CPUs.
 
                Set GPR[0] = 0xffffffff before booting from tape to disable the
                auto test and go to the Diagnostic Overlay Loader (DOL>) prompt.
@@ -72,20 +73,21 @@ Available UTX-21a install tape for testing:
 utxtape1.ini   command file to start UTX install tape.  ./sel32 utxtape1.ini
 utx21a1.tap    bootable UTX install tape for testing basemode.  The current
                V6 & V9 will boot UTX into single user mode.  You can run a
-               small subset of the commands that on the installation tape.
-               Prep, the disk preparation UTX program, cannot format a disk
-               drive at this time due to unsupport disk commands that are
-               required. All basemode instructions have been tested with
-               the CV.BRD diag.  The virtual memory has been fully tested
-               with the VM.MMM diag.  UTX needs better support for the disk
-               controller before we can move any farther with the installation.
+               small subset of the commands that are on the installation tape.
+               Prep, the disk preparation UTX program, can format a disk
+               drive.  Other files systems can be created, but cause the
+               system to hang at various places during the fsck command.
+               All basemode instructions have been tested with the CV.BRD diag.
+               The virtual memory has been fully tested with the VM.MMM diag.
+               UTX needs better support for the disk controller before we can
+               move any farther with the installation.
 
 Other MPX verion support:
                I am still looking for an MPX 3.X user or master SDT tape.  I have
-               much of the source, but no loadable code to creat a bootable system.
+               much of the source, but no loadable code to create a bootable system.
                Please keep looking for anyone who can provide these tapes or a
                disk image of a bootable system..
 
 James C. Bevier
-01/14/2020 
+03/30/2020 
 
