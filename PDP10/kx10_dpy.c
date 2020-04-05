@@ -44,7 +44,7 @@
  *    ;340 CONO BITS ARE:
  *            ;2.3            CLEAR NO INK MODE
  *            ;2.2            SET NO INK MODE (IN NO INK MODE, NO INTENSIFICATION CAN \
- *     OCCUR) 
+ *     OCCUR)
  *            ;2.1            CLEAR HALF WORD MODE
  *            ;1.9            SET HALF WORD MODE
  *            ;1.8            RESUME DISPLAY (TO CONTINUE AFTER A SPECIAL INTERUPT)
@@ -78,7 +78,7 @@
  *           7 PI channel?
  *   DISCON = CHAN + 140 (continue?)
  * *NO* DATAO or BLKO to device 130!
- *    
+ *
  * It appears that the reloc/protect mechanism is on I/O device 134.
  * (referred to by number, not symbol!)
  * DATAO sets reloc/protect, start addr
@@ -193,7 +193,7 @@ DEVICE dpy_dev = {
     NUM_DEVS_DPY, 0, 0, 0, 0, 0,
     NULL, NULL, dpy_reset,
     NULL, NULL, NULL,
-    &dpy_dib, DEV_DISABLE | DEV_DIS | DEV_DEBUG, 0, NULL,      
+    &dpy_dib, DEV_DISABLE | DEV_DIS | DEV_DEBUG | DEV_DISPLAY, 0, NULL,
     NULL, NULL, NULL, NULL, NULL, &dpy_description
     };
 
@@ -297,7 +297,7 @@ t_stat dpy_devio(uint32 dev, uint64 *data) {
         /* if fed using BLKO from interrupt vector, PC will be wrong! */
         sim_debug(DEBUG_DATAIO, &dpy_dev, "DPY %03o DATO %012llo PC=%06o\n",
                   dev, *data, PC);
-        
+
         inst = (uint32)LRZ(*data);
         if (dpy_update_status(uptr, ty340_instruction(inst), 0)) {
             /* still running */
