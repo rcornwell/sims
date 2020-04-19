@@ -491,7 +491,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
 // fprintf(stderr, "translatex: %08x %08x\r\n", entry, page);
      if ((entry & TLB_VALID) != 0 && ((entry ^ seg) & TLB_SEG) == 0) {
          *pa = (va & page_mask) | ((entry & TLB_PHY) << page_shift);
-         if (va >= MEMSIZE) {
+         if (*pa >= MEMSIZE) {
             storepsw(OPPSW, IRC_ADDR);
             return 1;
          }
@@ -575,10 +575,10 @@ int  TransAddr(uint32 va, uint32 *pa) {
      page = (va >> page_shift);
      entry |= ((page & 0xff00) << 4) | TLB_VALID;
      seg = (page & 0xff00) << 4;
-     tlb[page & 0xff] = entry;
+     tlb[page & 0xff] = entry | seg;
      *pa = (va & page_mask) | ((entry & TLB_PHY) << page_shift);
 // fprintf(stderr, "translatef: %08x\r\n", *pa);
-     if (va >= MEMSIZE) {
+     if (*pa >= MEMSIZE) {
         storepsw(OPPSW, IRC_ADDR);
         return 1;
      }
@@ -1012,8 +1012,8 @@ sim_instr(void)
                  seg_mask = AMASK >> 16;
                  break;
         case 2:  /* 1M segments */
-                 seg_shift = 20;
-                 seg_mask = AMASK >> 20;
+                 seg_shift = 19;
+                 seg_mask = AMASK >> 19;
                  break;
         }
         seg_addr = cregs[1] & AMASK;
@@ -2225,7 +2225,7 @@ save_dbl:
                         break;
                     }
 
-                    addr2 = (addr1 & page_mask) | ((entry & TLB_PHY) << 8);
+                    addr2 = (addr1 & page_mask) | ((entry & 0xfff8) << 8);
                     cc = 0;
                     regs[reg1] = addr2;
                     per_mod |= 1 << reg1;
@@ -3073,8 +3073,8 @@ fprintf(stderr, "Set TOD %016llx\r\n", tod_clock);
                                            seg_mask = AMASK >> 16;
                                            break;
                                   case 2:  /* 1M segments */
-                                           seg_shift = 20;
-                                           seg_mask = AMASK >> 20;
+                                           seg_shift = 19;
+                                           seg_mask = AMASK >> 19;
                                            break;
                                   }
                                   /* Generate pte index mask */
@@ -5628,6 +5628,10 @@ t_stat cpu_reset (DEVICE *dptr)
        key[i] = 0;
     for (i = 0; i < 16; i++)
        cregs[i] = 0;
+//    cregs[0]  = 0x000000e0;
+    cregs[2]  = 0xffffffff;
+    cregs[14] = 0xc2000000;
+    cregs[15] = 512;
     return SCPE_OK;
 }
 
