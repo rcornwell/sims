@@ -122,8 +122,8 @@
 //#define NUM_UNITS_DISK  4       /* 4 disk drive devices */
 #define NUM_DEVS_SCFI   1       /* 1 scfi (SCSI) disk drive units */
 #define NUM_UNITS_SCFI  1       /* 1 of 4 disk drive devices */
-#define NUM_DEVS_SCSI   1       /* 1 scsi (MFP SCSI) disk drive units */
-#define NUM_UNITS_SCSI  1       /* 1 of 4 disk drive devices */
+#define NUM_DEVS_SCSI   2       /* 2 scsi (MFP SCSI) scsi buss units */
+#define NUM_UNITS_SCSI  2       /* 2 of 4 scsi disk drive devices */
 #define NUM_DEVS_RTOM   1       /* 1 IOP RTOM channel */
 #define NUM_UNITS_RTOM  1       /* 1 IOP RTOM device (clock & interval timer) */
 #define NUM_DEVS_LPR    1       /* 1 IOP Line printer */
@@ -168,6 +168,12 @@ extern DEVICE sda_dev;
 #if NUM_DEVS_SCFI > 1
 extern DEVICE sdb_dev;
 #endif
+#ifdef NUM_DEVS_SCSI
+extern DEVICE sba_dev;
+#endif
+#if NUM_DEVS_SCSI > 1
+extern DEVICE sbb_dev;
+#endif
 #ifdef NUM_DEVS_COM
 extern DEVICE coml_dev;
 extern DEVICE com_dev;
@@ -202,15 +208,15 @@ typedef struct chp {
 #define FIFO_SIZE 256       /* fifo to hold 128 double words of status */
 typedef struct dib {
         /* Pre start I/O operation */
-        uint8       (*pre_io)(UNIT *uptr, uint16 chan);
+        uint16      (*pre_io)(UNIT *uptr, uint16 chan);
         /* Start a channel command SIO */
-        uint8       (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd);
+        uint16      (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd);
         /* Halt I/O HIO */
-        uint8       (*halt_io)(UNIT *uptr);
+        uint16      (*halt_io)(UNIT *uptr);
         /* Test I/O TESTIO */
-        uint8       (*test_io)(UNIT *uptr);
+        uint16      (*test_io)(UNIT *uptr);
         /* Post I/O processing  */
-        uint8       (*post_io)(UNIT *uptr);
+        uint16      (*post_io)(UNIT *uptr);
         /* Controller init */
         void        (*dev_ini)(UNIT *, t_bool); /* init function */
         UNIT        *units;             /* Pointer to units structure */
@@ -223,14 +229,18 @@ typedef struct dib {
         uint32      chan_fifo[FIFO_SIZE];   /* interrupt status fifo for each channel */
 } DIB;
 
-/* DEV 0x7F000000 UNIT 0x00ff0000 */
-#define DEV_V_ADDR        DEV_V_UF              /* Pointer to device address (16) */
-#define DEV_V_DADDR       (DEV_V_UF + 8)        /* Device address */
-#define DEV_ADDR_MASK     (0x7f << DEV_V_DADDR) /* 24 bits shift */
-#define DEV_V_UADDR       (DEV_V_UF)            /* Device address in Unit */
-#define DEV_UADDR         (1 << DEV_V_UADDR)
-#define GET_DADDR(x)      (0x7f & ((x) >> DEV_V_ADDR))
-#define DEV_ADDR(x)       ((x) << DEV_V_ADDR)
+#define DEV_CHAN          (1 << DEV_V_UF)       /* Device is channel mux if set */
+#define DEV_V_UF2         (DEV_V_UF+1)          /* current usage */
+
+#ifdef NOT_USED_NOW
+//#define DEV_V_ADDR        DEV_V_UF              /* Pointer to device address (16) */
+//#define DEV_V_DADDR       (DEV_V_UF + 8)        /* Device address */
+//#define DEV_ADDR_MASK     (0x7f << DEV_V_DADDR) /* 24 bits shift */
+//#define DEV_V_UADDR       (DEV_V_UF)            /* Device address in Unit */
+//#define DEV_UADDR         (1 << DEV_V_UADDR)
+//#define GET_DADDR(x)      (0x7f & ((x) >> DEV_V_ADDR))
+//#define DEV_ADDR(x)       ((x) << DEV_V_ADDR)
+#endif
 
 /* allow 255 type disks */
 #define UNIT_V_TYPE        (UNIT_V_UF + 0)
@@ -239,6 +249,7 @@ typedef struct dib {
 #define GET_TYPE(x)        ((UNIT_TYPE & (x)) >> UNIT_V_TYPE)
 #define SET_TYPE(x)        (UNIT_TYPE & ((x) << UNIT_V_TYPE))
 
+/* DEV 0x7F000000 UNIT 0x00ff0000 */
 #define UNIT_V_ADDR       16
 #define UNIT_ADDR_MASK    (0x7fff << UNIT_V_ADDR)
 #define GET_UADDR(x)      ((UNIT_ADDR_MASK & x) >> UNIT_V_ADDR)

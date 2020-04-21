@@ -74,7 +74,8 @@ P00070  20                            DATAB     C' '    0x20    FORMS CONTROL FO
 */
   
 #if NUM_DEVS_LPR > 0
-//#define UNIT_LPR        UNIT_ATTABLE | UNIT_DISABLE
+
+//#define UNIT_LPR        UNIT_ATTABLE | UNIT_IDLE | UNIT_DISABLE
 #define UNIT_LPR        UNIT_ATTABLE | UNIT_IDLE
 
 /* u3 hold command and status information */
@@ -133,7 +134,7 @@ struct _lpr_data
 
 lpr_data[NUM_DEVS_LPR];
 
-uint8           lpr_startcmd(UNIT *, uint16, uint8);
+uint16          lpr_startcmd(UNIT *, uint16, uint8);
 void            lpr_ini(UNIT *, t_bool);
 t_stat          lpr_srv(UNIT *);
 t_stat          lpr_reset(DEVICE *);
@@ -163,11 +164,11 @@ UNIT            lpr_unit[] = {
 /* Device Information Block */
 //DIB lpr_dib = {NULL, lpr_startcmd, NULL, NULL, lpr_ini, lpr_unit, lpr_chp, NUM_DEVS_LPR, 0xff, 0x7e00, 0, 0, 0};
 DIB             lpr_dib = {
-    NULL,           /* uint8 (*pre_io)(UNIT *uptr, uint16 chan)*/       /* Start I/O */
-    lpr_startcmd,   /* uint8 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start a command */
-    NULL,           /* uint8 (*halt_io)(UNIT *uptr) */          /* Stop I/O */
-    NULL,           /* uint8 (*test_io)(UNIT *uptr) */          /* Test I/O */
-    NULL,           /* uint8 (*post_io)(UNIT *uptr) */          /* Post I/O */
+    NULL,           /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Start I/O */
+    lpr_startcmd,   /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
+    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
+    NULL,           /* uint16 (*post_io)(UNIT *uptr) */         /* Post I/O */
     lpr_ini,        /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     lpr_unit,       /* UNIT* units */                           /* Pointer to units structure */
     lpr_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
@@ -184,7 +185,8 @@ DEVICE          lpr_dev = {
     NUM_DEVS_LPR, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, NULL, &lpr_attach, &lpr_detach,
     /* ctxt is the DIB pointer */
-    &lpr_dib, DEV_UADDR | DEV_DISABLE | DEV_DEBUG, 0, dev_debug
+//  &lpr_dib, DEV_DIS|DEV_DISABLE|DEV_DEBUG, 0, dev_debug
+    &lpr_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug
 };
 
 /* initialize the line printer */
@@ -193,7 +195,7 @@ void lpr_ini(UNIT *uptr, t_bool f) {
 }
 
 /* start an I/O operation */
-uint8 lpr_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
+uint16  lpr_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 {
     if ((uptr->u3 & LPR_CMDMSK) != 0) {         /* unit busy */
         return SNS_BSY;                         /* yes, busy (already tested) */
@@ -257,12 +259,14 @@ uint8 lpr_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         return 0;                       /* we are good to go */
 
     default:                            /* invalid command */
-        sim_debug(DEBUG_CMD, &lpr_dev, "lpr_startcmd %04x: Cmd %02x INVALID\n", chan, cmd&LPR_CMDMSK);
+        sim_debug(DEBUG_CMD, &lpr_dev,
+            "lpr_startcmd %04x: Cmd %02x INVALID\n", chan, cmd&LPR_CMDMSK);
         uptr->u5 |= SNS_CMDREJ;
         break;
     }
     if (uptr->u5 & 0xff)
-        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
+//      return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
+        return SNS_CHNEND|STATUS_PCHK;
     return SNS_CHNEND|SNS_DEVEND;
 }
 

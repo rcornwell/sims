@@ -35,8 +35,11 @@
 
 #if NUM_DEVS_IOP > 0
 
+//#define UNIT_IOP    UNIT_ATTABLE | UNIT_IDLE | UNIT_DISABLE
+#define UNIT_IOP    UNIT_IDLE | UNIT_DISABLE
+
 /* forward definitions */
-uint8   iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
+uint16  iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
 void    iop_ini(UNIT *uptr, t_bool f);
 t_stat  iop_srv(UNIT *uptr);
 t_stat  iop_reset(DEVICE *dptr);
@@ -88,25 +91,25 @@ CHANP           iop_chp[NUM_UNITS_IOP] = {0};
 
 MTAB            iop_mod[] = {
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "DEV", "DEV",
-        &set_dev_addr, &show_dev_addr, NULL, "Device address"},
+        &set_dev_addr, &show_dev_addr, NULL, "Controller Channel address"},
     {0}
 };
 
 UNIT            iop_unit[] = {
-    {UDATA(&iop_srv, UNIT_IDLE|UNIT_DISABLE, 0), 0, UNIT_ADDR(0x7E00)}, /* Channel controller */
+    {UDATA(&iop_srv, UNIT_IOP, 0), 0, UNIT_ADDR(0x7E00)}, /* Channel controller */
 };
 
 //DIB iop_dib = {NULL, iop_startcmd, NULL, NULL, NULL, iop_ini, iop_unit, iop_chp, NUM_UNITS_IOP, 0xff, 0x7e00,0,0,0};
 DIB             iop_dib = {
-    NULL,           /* uint8 (*pre_io)(UNIT *uptr, uint16 chan)*/       /* Start I/O */
-    iop_startcmd,   /* uint8 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start a command SIO */
-    NULL,           /* uint8 (*halt_io)(UNIT *uptr) */          /* Stop I/O HIO */
-    NULL,           /* uint8 (*test_io)(UNIT *uptr) */          /* Test I/O TIO */
-    NULL,           /* uint8 (*post_io)(UNIT *uptr) */          /* Post I/O */
+    NULL,           /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Start I/O */
+    iop_startcmd,   /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command SIO */
+    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Stop I/O HIO */
+    NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O TIO */
+    NULL,           /* uint16 (*post_io)(UNIT *uptr) */         /* Post I/O */
     iop_ini,        /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     iop_unit,       /* UNIT* units */                           /* Pointer to units structure */
     iop_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
-    NUM_UNITS_IOP,   /* uint8 numunits */                        /* number of units defined */
+    NUM_UNITS_IOP,  /* uint8 numunits */                        /* number of units defined */
     0xff,           /* uint8 mask */                            /* 16 devices - device mask */
     0x7e00,         /* uint16 chan_addr */                      /* parent channel address */
     0,              /* uint32 chan_fifo_in */                   /* fifo input index */
@@ -119,7 +122,9 @@ DEVICE          iop_dev = {
     NUM_UNITS_IOP, 8, 15, 1, 8, 8,
     NULL, NULL, &iop_reset,         /* examine, deposit, reset */
     NULL, NULL, NULL,               /* boot, attach, detach */
-    &iop_dib, DEV_UADDR|DEV_DISABLE|DEV_DEBUG, 0, dev_debug,  /* dib, dev flags, debug flags, debug */
+    /* dib ptr, dev flags, debug flags, debug */
+    &iop_dib, DEV_CHAN|DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
+//  &iop_dib, DEV_CHAN|DEV_DIS|DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
 //  NULL, NULL, &iop_help,          /* ?, ?, help */
 //  NULL, NULL, &iop_desc           /* ?, ?, description */
 };
@@ -139,7 +144,7 @@ void iop_ini(UNIT *uptr, t_bool f)
 }
 
 /* start an I/O operation */
-uint8  iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
+uint16 iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 {
     sim_debug(DEBUG_CMD, &iop_dev,
         "IOP startcmd %02x controller/device %04x\n",

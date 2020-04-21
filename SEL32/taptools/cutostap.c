@@ -28,7 +28,7 @@ int ln;
 int getloi(char *s, int lim)
 {
     int c, i;
-    int32_t n1, n2, hc, tc, n;
+    int n1, n2, hc, tc, n;
 
     /* read the byte count in 32 bit word as header */
     n1 = read(inp, (char *)(&hc), (size_t)4);
@@ -46,27 +46,23 @@ int getloi(char *s, int lim)
     /* check for EOF & EOM on tape data */
     if (hc == 0) {
         /* we are at tape EOF */
-        if (++EOFcnt < 2)       /* if 1st EOF, print file info */
-        {
-            if (ln > 0)
-            {
+        if (++EOFcnt < 2) {     /* if 1st EOF, print file info */
+            if (ln > 0) {
                 if (count - lcount > 1)
                     fprintf(stderr, "file %d: records %d to %d: size %d\n", filen, lcount, count - 1, ln);
                 else
                     fprintf(stderr, "file %d: record %d: size %d\n", filen, lcount, ln);
             }
             fprintf(stderr, "file %d: EOF after %d records: %d bytes\n\n", filen, count, size);
-            filen++;    /* set next file number */
-        }
-        else
-        {
+            filen++;            /* set next file number */
+        } else {
             fprintf(stderr, "second EOF after %d files: %d bytes\n", filen-1, tsize+size);
         }
-        count = 0;      /* file record count back to zero */
-        lcount = 0;     /* last record count back to zero */
-        tsize += size;  /* add to total tape size */
-        size = 0;       /* file size back to zero */
-        ln = -1;        /* set ln to -1 showing we are at EOF */
+        count = 0;              /* file record count back to zero */
+        lcount = 0;             /* last record count back to zero */
+        tsize += size;          /* add to total tape size */
+        size = 0;               /* file size back to zero */
+        ln = -1;                /* set ln to -1 showing we are at EOF */
         return 0;               /* return EOF on tape data */
     }
 
@@ -80,6 +76,13 @@ int getloi(char *s, int lim)
     if (n <= 0)
         return -1;              /* at EOM on disk file */
 
+    /* if odd byte record, read extra byte and throw it away */
+    if (n & 0x1) {
+        n2 = read(inp, (char *)(&tc), (size_t)1);
+        if (n2 <= 0)
+            return -1;          /* at EOM on disk file */
+    }
+
     /* read the byte count in 32 bit word as trailer */
     n2 = read(inp, (char *)(&tc), (size_t)4);
     if (n2 <= 0)
@@ -88,10 +91,8 @@ int getloi(char *s, int lim)
     count++;                    /* bump record count */
     size += n;                  /* update bytes read */
     EOFcnt = 0;                 /* not an EOF */
-    if (n != ln)
-    {
-        if (ln > 0)
-        {
+    if (n != ln) {
+        if (ln > 0) {
             if (count - lcount > 1)
                 fprintf(stderr, "file %d: records %d to %d: size %d\n", filen, lcount, count - 1, ln);
             else
@@ -106,8 +107,8 @@ int getloi(char *s, int lim)
 
 void putrec(int cnt, char *buf)
 {
-    int32_t n1, n2, nw;
-    int32_t hc = (cnt + 1) & ~1;        /* make byte count even */
+    int  n1, n2, nw;
+    int  hc = (cnt + 1) & ~1;        /* make byte count even */
 
 //printf("writing %d chars\n", cnt);
     /* write actual byte count to 32 bit word as header */
@@ -116,7 +117,7 @@ void putrec(int cnt, char *buf)
     nw = fwrite((char *)buf, (size_t)1, (size_t)hc, outfp);
     /* write the byte count in 32 bit word as footer */
     n2 = fwrite((char *)(&hc), (size_t)1, (size_t)4, outfp);
-    if (n1 != sizeof(hc) || nw != hc || n2 != sizeof(hc))
+    if (n1 != 4 || nw != hc || n2 != 4)
     {
         fprintf(stderr, "write (%d) failure\n", nw);
         fprintf(stderr, "Operation aborted\n");
@@ -129,10 +130,10 @@ void putrec(int cnt, char *buf)
 
 int main (int argc, char *argv[])
 {
-    char *buf;
-    size_t buf_size = 256 * 1024;
-    int ll, gotboth = 0;
-    int32_t zero = 0;
+    char    *buf;
+    size_t  buf_size = 256 * 1024;
+    size_t  ll, gotboth = 0;
+    int     zero = 0;
 
     if (argc != 3) {
         fprintf(stderr, "usage: %s infile outfile\n", argv[0]);

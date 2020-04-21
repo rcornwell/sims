@@ -105,6 +105,12 @@ DEVICE *sim_devices[] = {
         &dpb_dev,
 #endif
 #endif
+#ifdef NUM_DEVS_SCSI
+        &sba_dev,
+#if NUM_DEVS_SCSI > 1
+        &sbb_dev,
+#endif
+#endif
 #ifdef NUM_DEVS_COM
         &coml_dev,
         &com_dev,
@@ -813,7 +819,7 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
     int      mode = 0;                              /* assume non base mode instructions */
     t_opcode *tab;
 
-///    printf("inst %x sw %x\r\n", val, sw);
+//  printf("inst %x sw %x\r\n", val, sw);
     if ((PSD[0] & 0x02000000) || (sw & SWMASK('M'))) /* bit 6 is base mode */
         mode = 1;
     /* loop through the instruction table for an opcode match and get the type */ 

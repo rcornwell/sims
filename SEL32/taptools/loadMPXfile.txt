@@ -1,0 +1,119 @@
+Following are the instructions for loading an ASCII file to an
+MPX-1.X system.  It is assumed that the reader has compiled the
+utilities in the taptools directory using the provided makefile.
+Filenames on MPX-1.X must be 8 chars or less.
+
+1. Create an ASCII file on Windows or Linux using your favorite editor.
+   The EDIT program on MPX works with numbered or unnumbered text files.
+   Each record in the text file uses columns 1-72 for text and columns
+   73-80 for a line number (xxx.xxx).  This is 80 column card format.
+
+2. To convert a newline terminated file to an MPX file use the utility
+   "renum" included in the taptools directory. Lines in the file will
+   be expanded to 72 characters or truncated to 72 characters. The
+   carriage return characters (\r) will be removed and lines will be
+   terminated with a newline (\n).  Line numbers of the form (xxx.xxx)
+   will then be appended to the text line to create the card format.
+   /somewhere/renum <textfile >cardfile
+   
+3. The next step is to convert the card image text file to an MPX
+   blocked file format.  This involves removing the carriage return
+   character and then encoding the line into the blocked format.
+   The block file format is the standard file format for MPX.
+   /somewhere/mpxblk <cardfile >blkfile
+
+4. Once we have the files converted, the next step involves creating
+   a FILEMGR formatted save tape.  The output file will be in SIMH
+   .tap simulated tape format.  The tape can then be read by the
+   FILEMGR on MPX to load the files into the desired directory.
+   The file system on MPX is a flat file where all files are in
+   the same file system.  A username is used to separate files for
+   each user.  A blank filename implies the system directory.
+   /somewhere/mkfmtape -t -u username usertape.tap file1 file2 ...
+   Valid options are:
+   -p : use file type 0xca for executable programs
+   -t : use file type 0xee for text files
+   -l : use file type 0xff for library files
+   -a : append current files to output tape
+   -u username : the username (directory) for the files
+
+    Make sure the usertape.tap file is assigned to the tape drive
+    in the .ini file or use the following commands at the sim>
+    prompt for SEL32.
+    hit ^E to get the sim> prompt.
+    sim>detach mta0                remove current assignment
+    sim>attach mta0 usertape.tap   assign your restore tape
+    sim>go
+
+5. Boot MPX-1.X.  Input @@A to get OPCOM prompt ??.  Use cap lock for
+   uppercase input.  Type "EXIT" to OPCOM prompt to get a TSM> prompt.
+   If you type WHO, TSM will display your current logon information. 
+
+TSM>WHO
+ADDRESS    OWNERNAME   USERNAME
+=======    =========   ========
+*TY7EFC    CONSOLE              
+
+   The username will be blank for system directory.  Use the command
+   TSM>USERNAME JOHNDOE to set username to the one specified in the
+   -u option above or just TSM>USERNAME to make it blank.  There is a
+   command file on MPX that is handy to restore files from tape that
+   does the device assignments to the FILEMGR program.  The file is
+   FMGR and can be run to input files from the assigned tape.  MPX-1.X
+   has been SYSGEN'd to have 4 tape drives defined at 1000, 1001, 1002,
+   & 1003.  SIMH names are mta0, mta1, mta2, & mta3.  So attach the
+   restore file to mta0 as show above.  Now execute the FILEMGR program.
+   TSM>FMGR 1000
+TSM>FMGR 1000
+                             * * *   F I L E    M A N A G E R   * * *
+ FUNCTION   USER NAME  FILE NAME  DEVICE   START      LENGTH     SPEED
+                                         (FIRST BLK) (# BLKS)
+
+   FILEMGR output will be assigned to the terminal and tape input from
+   device MT1000. The FILEMGR will output a heading and then the FILEMGR
+   prompt FIL>.  At this point you can use the command FIL>SAVELOG to
+   list the files on the tape or you can use the command FIL>RESTORE to
+   restore the files to the disk.  You can then type EXIT or X to the
+   FIL> prompt to exit the FILEMGR.
+FIL>RESTORE
+ RESTORE  JOHNDOE   FILE1    DM0800      234656       1052       SLOW    
+FIL>REWIND IN
+       REWIND          (IN)    
+FIL>X
+TSM>
+   If you would like to see your files listed in the system, use
+   FMGR again without any parameters.  Then use LOGU to log your
+   username files or LOG to log all files.
+TSM>FMGR
+   heading here
+FIL>LOGU
+ LOG      JOHNDOE     FILE1      DM0800     234656     1052     SLOW
+ LOG      JOHNDOE     XX*WRKFL   DM0800     233536     1120     SLOW
+FIL>LOG
+ LOG                  1X.PRE     DM0800     302916       24     SLOW
+ LOG                  7X.PRE     DM0800     302892       24     SLOW
+ LOG                  ALOC.L     DM0800     241312      800     SLOW
+ LOG                  ASM        DM0800     302884        8     SLOW
+ LOG                  ASSEMBLE   DM0800     296784       84     SLOW
+ LOG                  ASSM       DM0800     302872       12     SLOW
+ LOG                  ASSMJ      DM0800     302864        8     SLOW
+ LOG                  ASSML      DM0800     302860        4     SLOW
+ LOG                  BOOT27     DM0800     303424       24     SLOW
+   all files list here
+
+6. You can use the program EDIT to view or modify the file.  At the
+   TSM> prompt type EDIT XX, where XX is a two character editor
+   workfile name.  It will show up in the directory listing as XX*WRKFL.
+   At the EDT> prompt type USE FILE1.  You will get another prompt when
+   the editor is done reading the file.  Hit return to list the file.
+
+TSM>EDIT XX
+ BEGIN TEXT EDITOR     
+XX*WRKFL CLEAR
+EDT> USE FILE1
+   File listing will be here.
+
+See the MPX-1.X reference manuals for the other FILEMGR and EDIT commands.
+
+Jim Bevier
+03/10/2020

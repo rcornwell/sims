@@ -78,6 +78,7 @@ t_uint64 s_dvfd(t_uint64 reg, t_uint64 mem, uint32 *cc);
 #define FRMASK 0x80ffffff               /* fraction mask */
 #define DEXMASK 0x7f00000000000000ll    /* exponent mask */
 #define DFRMASK 0x80ffffffffffffffll    /* fraction mask */
+#define NEGATE32(val)   ((~val) + 1)    /* negate a value 16/32/64 bits */
 
 /* normalize floating point number */
 uint32 s_nor(uint32 reg, uint32 *exp) {
@@ -232,64 +233,66 @@ uint32 s_adfw(uint32 reg, uint32 mem, uint32 *cc) {
     if (exp & MSIGN)
         /* we have exponent underflow if result is negative */
         goto ARUNFLO;
+
     /* if both signs are neg and result sign is positive, overflow */
     /* if both signs are pos and result sign is negative, overflow */
     if ((sign == 3 && (exp & MSIGN) == 0) ||
         (sign == 0 && (exp & MSIGN) != 0)) {
         /* we have exponent overflow from addition */
-        CC |= CC4BIT;               /* set CC4 for exponent overflow */
+//AROVFLO:
+        CC |= CC4BIT;                   /* set CC4 for exponent overflow */
 ARUNFLO:
         /* we have exponent underflow from addition */
-        CC |= CC1BIT;               /* set CC1 for arithmetic exception */
-        ret = frac;                 /* get return value */
+        CC |= CC1BIT;                   /* set CC1 for arithmetic exception */
+        ret = frac;                     /* get return value */
         if ((frac & MSIGN) == 0) {
-            CC |= CC2BIT;           /* set pos fraction bit CC2 */
+            CC |= CC2BIT;               /* set pos fraction bit CC2 */
         } else {
-            CC |= CC3BIT;           /* set neg fraction bit CC3 */
+            CC |= CC3BIT;               /* set neg fraction bit CC3 */
         }
-        *cc = CC;                   /* return CC's */
+        *cc = CC;                       /* return CC's */
         /* return value is not valid, but return fixup value anyway */
-        switch ((CC >> 27) & 3) {   /* rt justify CC3 & CC4 */
+        switch ((CC >> 27) & 3) {       /* rt justify CC3 & CC4 */
         case 0x0:
-            return 0;               /* pos underflow */
+            return 0;                   /* pos underflow */
             break;
         case 0x1:
-            return 0x7fffffff;      /* positive overflow */
+            return 0x7fffffff;          /* positive overflow */
             break;
         case 0x2:
-            return 0;               /* neg underflow */
+            return 0;                   /* neg underflow */
             break;
         case 0x3:
-            return 0x80000001;      /* negative overflow */
+            return 0x80000001;          /* negative overflow */
             break;
         }
         /* never here */
-        goto goout2;                /* go set cc's and return */
+        goto goout2;                    /* go set cc's and return */
     }
     /* no over/underflow */
-    frac = (int32)frac >> 7;        /* positive fraction sra r7,7 */
-    frac &= FRMASK;                 /* mask out the exponent field */
-    if ((int32)frac > 0) {          /* see if positive */
-        ret = exp | frac;           /* combine exponent & fraction */
+    frac = (int32)frac >> 7;            /* positive fraction sra r7,7 */
+    frac &= FRMASK;                     /* mask out the exponent field */
+    if ((int32)frac > 0) {              /* see if positive */
+        ret = exp | frac;               /* combine exponent & fraction */
     } else {
         if (frac != 0) {
-            exp ^= EXMASK;          /* for neg fraction, complement exponent */
-            ret = exp | frac;       /* combine exponent & fraction */
+            exp ^= EXMASK;              /* for neg fraction, complement exponent */
+            ret = exp | frac;           /* combine exponent & fraction */
         }
     }
     /* come here to set cc's and return */
     /* ret has return value */
 goout:
     if (ret & MSIGN)
-        CC |= CC3BIT;               /* CC3 for neg */
+        CC |= CC3BIT;                   /* CC3 for neg */
     else if (ret == 0)
-        CC |= CC4BIT;               /* CC4 for zero */
+        CC |= CC4BIT;                   /* CC4 for zero */
     else 
-        CC |= CC2BIT;               /* CC2 for greater than zero */
+        CC |= CC2BIT;                   /* CC2 for greater than zero */
 goout2:
     /* return temp to destination reg */
-    *cc = CC;                       /* return CC's */
-    return ret;                     /* return result */
+    *cc = CC;                           /* return CC's */
+    return ret;                         /* return result */
 }
 
 /* subtract memory floating point number from register floating point number */
@@ -399,10 +402,13 @@ t_uint64 s_adfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
     ret &= DFRMASK;                     /* mask out exponent field leaving fraction */
     /* test sign of fraction */
     if (ret != 0) {                     /* test for zero, to return zero */
-        if (ret & DMSIGN)               /* see if negative */
+        if (ret & DMSIGN) {             /* see if negative */
             /* fraction is negative */
             exp ^= EXMASK;              /* neg fraction, so complement exponent */
-        ret = ret | ((t_uint64)exp << 32);  /* position and insert exponent */
+            ret = ret | ((t_uint64)exp << 32);  /* position and insert exponent */
+        }
+/*NEW*/ else
+/*NEW*/     ret = ret | ((t_uint64)exp << 32);  /* position and insert exponent */
     }
 
     /* come here to set cc's and return */
@@ -410,7 +416,8 @@ t_uint64 s_adfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
 goout:
     if (ret & DMSIGN)
         CC |= CC3BIT;                   /* CC3 for neg */
-    else if (ret == 0)
+    else
+    if (ret == 0)
         CC |= CC4BIT;                   /* CC4 for zero */
     else 
         CC |= CC2BIT;                   /* CC2 for greater than zero */
@@ -671,30 +678,27 @@ uint32 s_mpfw(uint32 reg, uint32 mem, uint32 *cc) {
     t_uint64 dtemp;
 
     /* process operator */
-    sign = mem;                         /* save original value for sign */
-    if (mem & MSIGN) {                  /* check for negative */
-        mem = NEGATE32(mem);            /* make mem positive */
-    } else {
-        if (mem == 0) {
-            temp = 0;                   /* return zero */
-            goto setcc;                 /* go set CC's */
-        }
-        /* gt 0, fall through */
+    sign = mem & MSIGN;                 /* save original value for sign */
+    if (mem == 0) {
+        temp = 0;                       /* return zero */
+        goto setcc;                     /* go set CC's */
     }
+
+    if (mem & MSIGN)                    /* check for negative */
+        mem = NEGATE32(mem);            /* make mem positive */
+
     expm = (mem >> 24);                 /* get operator exponent */
     mem <<= 8;                          /* move fraction to upper 3 bytes */
     mem >>= 1;                          /* adjust fraction */
 
     /* process operand */
+    if (reg == 0) {
+        temp = 0;                       /* return zero */
+        goto setcc;                     /* go set CC's */
+    }
     if (reg & MSIGN) {                  /* check for negative */
-        sign ^= reg;                    /* adjust sign */
         reg = NEGATE32(reg);            /* make reg positive */
-    } else {
-        if (reg == 0) {
-            temp = 0;                   /* return zero */
-            goto setcc;                 /* go set CC's */
-        }
-        /* gt 0, fall through */
+        sign ^= MSIGN;                  /* adjust sign */
     }
     expr = (reg >> 24);                 /* get operand exponent */
     reg <<= 8;                          /* move fraction to upper 3 bytes */
@@ -703,14 +707,23 @@ uint32 s_mpfw(uint32 reg, uint32 mem, uint32 *cc) {
     temp = expm + expr;                 /* add exponents */
     dtemp = (t_uint64)mem * (t_uint64)reg;  /* multiply fractions */
     dtemp <<= 1;                        /* adjust fraction */
+
     if (sign & MSIGN)
         dtemp = NEGATE32(dtemp);        /* if negative, negate fraction */
+
     /* normalize the value in dtemp and put exponent into expr */
     dtemp = s_nord(dtemp, &expr);       /* normalize fraction */
     temp -= 0x80;                       /* resize exponent */
+
+//RROUND:
+    /* temp2 has normalized fraction */
+    /* expr has exponent from normalization */
+    /* temp has exponent from divide */
+    /* sign has final sign of result */
     temp2 = (uint32)(dtemp >> 32);      /* get upper 32 bits */
     if ((int32)temp2 >= 0x7fffffc0)     /* check for special rounding */
         goto RRND2;                     /* no special handling */
+
     if (temp2 == MSIGN) {               /* check for minux zero */
         temp2 = 0xF8000000;             /* yes, fixup value */
         expr++;                         /* bump exponent */
@@ -722,23 +735,28 @@ uint32 s_mpfw(uint32 reg, uint32 mem, uint32 *cc) {
     if ((sign & MSIGN) == 0)
         goto RRND1;                     /* if sign not set, don't round yet */
     expr += temp;                       /* add exponent */
-    if ((int32)expr < 0)                /* test for underflow */
+
+    if (expr & MSIGN)                   /* test for underflow */
         goto DUNFLO;                    /* go process underflow */
+
     if ((int32)expr > 0x7f)             /* test for overflow */
         goto DOVFLO;                    /* go process overflow */
-    expr ^= 0xffffffff;                 /* complement exponent */
+
+    expr ^= FMASK;                      /* complement exponent */
     temp2 += 0x40;                      /* round at bit 25 */
     goto RRND3;                         /* go merge code */
+
 RRND1:
     temp2 += 0x40;                      /* round at bit 25 */
 RRND2:
     expr += temp;                       /* add exponent */
-    if ((int32)expr < 0) {              /* test for underflow */
+
+    if (expr & MSIGN)                   /* test for underflow */
         goto DUNFLO;                    /* go process underflow */
-    }
-    if ((int32)expr > 0x7f) {           /* test for overflow */
+
+    if ((int32)expr > 0x7f)             /* test for overflow */
         goto DOVFLO;                    /* go process overflow */
-    }
+
     if (sign & MSIGN)                   /* test for negative */
         expr ^= FMASK;                  /* yes, complement exponent */
 RRND3:
@@ -791,52 +809,52 @@ uint32 s_dvfw(uint32 reg, uint32 mem, uint32 *cc) {
     t_uint64 dtemp;
 
     /* process operator */
-    sign = mem;                         /* save original value for sign */
-    if (mem & MSIGN) {                  /* check for negative */
+    sign = mem & MSIGN;                 /* save original value for sign */
+    if (mem == 0)                       /* check for divide by zero */
+        goto DOVFLO;                    /* go process divide overflow */
+
+    if (mem & MSIGN)                    /* check for negative */
         mem = NEGATE32(mem);            /* make mem positive */
-    } else {
-        if (mem == 0) {                 /* check for divide by zero */
-            goto DOVFLO;                /* go process overflow */
-        }
-        /* gt 0, fall through */
-    }
+
     expm = (mem >> 24);                 /* get operand exponent */
     mem <<= 8;                          /* move fraction to upper 3 bytes */
     mem >>= 1;                          /* adjust fraction for divide */
 
     /* process operand */
+    if (reg == 0) {
+        temp = 0;                       /* return zero */
+        goto setcc;                     /* go set CC's */
+    }
     if (reg & MSIGN) {                  /* check for negative */
-        sign ^= reg;                    /* adjust sign */
         reg = NEGATE32(reg);            /* make reg positive */
-    } else {
-        if (reg == 0) {
-            temp = 0;                   /* return zero */
-            goto setcc;                 /* go set CC's */
-        }
-        /* gt 0, fall through */
+        sign ^= MSIGN;                  /* complement sign */
     }
     expr = (reg >> 24);                 /* get operator exponent */
     reg <<= 8;                          /* move fraction to upper 3 bytes */
     reg >>= 6;                          /* adjust fraction for divide */
 
     temp = expr - expm;                 /* subtract exponents */
+//BAD here temp = NEGATE32(temp);       /* make reg positive */
     dtemp = ((t_uint64)reg) << 32;      /* put reg fraction in upper 32 bits */
     temp2 = (uint32)(dtemp / mem);      /* divide reg fraction by mem fraction */
     temp2 >>= 3;                        /* shift out excess bits */
     temp2 <<= 3;                        /* replace with zero bits */
+
     if (sign & MSIGN)
         temp2 = NEGATE32(temp2);        /* if negative, negate fraction */
     /* normalize the result in temp and put exponent into expr */
     temp2 = s_nor(temp2, &expr);        /* normalize fraction */
     temp += 1;                          /* adjust exponent */
 
-    if (temp2 >= 0x7fffffc0)            /* check for special rounding */
+//RROUND:
+    if ((int32)temp2 >= 0x7fffffc0)     /* check for special rounding */
         goto RRND2;                     /* no special handling */
-    /* FIXME dead code */ /* Should this not be before the previous test? RPC */
+
     if (temp2 == MSIGN) {               /* check for minus zero */
         temp2 = 0xF8000000;             /* yes, fixup value */
         expr++;                         /* bump exponent */
     }
+
     if (expr != 0x40) {                 /* result normalized? */
         goto RRND2;                     /* if not, don't round */
     }
@@ -844,27 +862,30 @@ uint32 s_dvfw(uint32 reg, uint32 mem, uint32 *cc) {
     if ((sign & MSIGN) == 0)
         goto RRND1;                     /* if sign set, don't round yet */
     expr += temp;                       /* add exponent */
-    /* FIX unsigned CMP */
-//  if (expr < 0)                       /* test for underflow */
-    if ((int32)expr < 0)                /* test for underflow */
+
+    if (expr & MSIGN)                   /* test for underflow */
         goto DUNFLO;                    /* go process underflow */
+
     if ((int32)expr > 0x7f)             /* test for overflow */
         goto DOVFLO;                    /* go process overflow */
+
     expr ^= FMASK;                      /* complement exponent */
     temp2 += 0x40;                      /* round at bit 25 */
     goto RRND3;                         /* go merge code */
+
 RRND1:
     temp2 += 0x40;                      /* round at bit 25 */
 RRND2:
     expr += temp;                       /* add exponent */
-    if ((int32)expr < 0) {              /* test for underflow */
+
+    if (expr & MSIGN)                   /* test for underflow */
         goto DUNFLO;                    /* go process underflow */
-    }
-    if ((int32)expr > 0x7f) {           /* test for overflow */
+
+    if ((int32)expr > 0x7f)             /* test for overflow */
         goto DOVFLO;                    /* go process overflow */
-    }
+
     if (sign & MSIGN)                   /* test for negative */
-        expr ^= DMASK;                  /* yes, complement exponent */
+        expr ^= FMASK;                  /* yes, complement exponent */
 RRND3:
     temp2 <<= 1;                        /* adjust fraction */
     temp = (expr << 24) | (temp2 >> 8); /* merge exp & fraction */
@@ -899,7 +920,8 @@ setcc:
     /* temp has return value */
     if (temp & MSIGN)
         CC |= CC3BIT;                   /* CC3 for neg */
-    else if (temp == 0)
+    else
+    if (temp == 0)
         CC |= CC4BIT;                   /* CC4 for zero */
     else 
         CC |= CC2BIT;                   /* CC2 for greater than zero */
@@ -1117,7 +1139,10 @@ t_uint64 s_dvfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
     dtemp1 = dtemp1 / tl1;              /* r orp*(l opd/l opr)/l opr */
     dtemp1 = ((t_int64)dtemp1) << 3;    /* adjust sub total */
     dblreg -= dtemp1;                   /* subtract from quotient */
-    dblreg &= 0xffffffffffffffe0;       /* fixup quotient */
+    /* changing this mask by 2 bits gives mostly same result as real V6 */
+    /* changed 04/20/20 */
+//  dblreg &= 0xffffffffffffffe0;       /* fixup quotient */
+    dblreg &= 0xfffffffffffffff8;       /* fixup quotient */
     /* exp in temp */
     if (sign)                           /* neg input */
         dblreg = NEGATE32(dblreg);      /* yes, negate result */
@@ -1161,7 +1186,7 @@ DUNFLO:
         CC |= CC2BIT;                   /* set pos fraction bit CC2 */
     *cc = CC;                           /* return CC's */
     /* return value is not valid, but return fixup value anyway */
-    /* Why not use and Array here? RPC */
+    /* Why not use an Array here? RPC */
 #if 0
     static retval[4] = { 0, MSIGN-1, 0, MSIGN}; /* At top of function */
     return retval[((CC >> 27) & 3];

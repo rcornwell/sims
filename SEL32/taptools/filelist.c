@@ -36,7 +36,7 @@ int getloi(char *s, int lim)
 
     errno = 0;
     /* read the byte count in 32 bit word as header */
-    n1 = read(inp, (char *)(&hc), (size_t)sizeof(hc));
+    n1 = read(inp, (char *)(&hc), (size_t)4);
     if (n1 <= 0)
         hc = -1;        /* at EOM on disk file */
 
@@ -45,14 +45,11 @@ int getloi(char *s, int lim)
         hc = -1;        /* at EOM on disk file */
 
     /* check for EOF & EOM on tape data */
-    if (hc == 0)
-    {
+    if (hc == 0) {
         /* we are at tape EOF */
-        if (++EOFcnt < 2)       /* if 1st EOF, print file info */
-        {
+        if (++EOFcnt < 2) {     /* if 1st EOF, print file info */
 #ifdef NOTDUMP
-            if (ln > 0)
-            {
+            if (ln > 0) {
                 if (count - lcount > 1)
                     fprintf(stderr, "file %d: records %d to %d: size %d\n", filen, lcount, count - 1, ln);
                 else
@@ -61,9 +58,7 @@ int getloi(char *s, int lim)
             fprintf(stderr, "file %d: eof after %d records: %d bytes\n", filen, count, size);
 #endif
             filen++;    /* set next file number */
-        }
-        else
-        {
+        } else {
 #ifdef NOTDUMP
             fprintf(stderr, "second eof after %d files: %d bytes\n", filen, size);
 #endif
@@ -77,8 +72,7 @@ int getloi(char *s, int lim)
         /* we have EOF */
         return 0;       /* return EOF on tape data */
     }
-    if (hc == -1)
-    {
+    if (hc == -1) {
 #ifdef NOTDUMP
         /* we have EOM */
         fprintf(stderr, "mpx eot\n");
@@ -89,16 +83,22 @@ int getloi(char *s, int lim)
     }
     /* read the data */
     n = read(inp, s, (size_t)hc);
+
+    /* if odd byte record, read extra byte and throw it away */
+    if (n & 0x1) {
+        n2 = read(inp, (char *)(&tc), (size_t)1);
+        if (n2 <= 0)
+            return -1;          /* at EOM on disk file */
+    }
+
     /* read the byte count in 32 bit word as trailer */
-    n2 = read(inp, (char *)(&tc), (size_t)sizeof(tc));
+    n2 = read(inp, (char *)(&tc), (size_t)4);
     count++;        /* bump record count */
     size += n;      /* update bytes read */
     EOFcnt = 0;     /* not an EOF */
-    if (n != ln)
-    {
+    if (n != ln) {
 #ifdef NOTDUMP
-        if (ln > 0)
-        {
+        if (ln > 0) {
             if (count - lcount > 1)
                 fprintf(stderr, "file %d: records %d to %d: size %d\n", filen, lcount, count - 1, ln);
             else
@@ -124,21 +124,18 @@ int main (int argc, char *argv[])
     unsigned int fileaddr, file_byte_count=0, curchar, buffptr, bufflen;
     int skipfile = 0;
 
-    if (argc != 2)
-    {
+    if (argc != 2) {
         fprintf(stderr, "usage: %s infile\n", argv[0]);
         exit(1);
     } /* end of if */
 
-    if ((inp = open(argv[1], O_RDONLY, 0666)) < 0)
-    {
+    if ((inp = open(argv[1], O_RDONLY, 0666)) < 0) {
         fprintf(stderr,"%s: fopen: unable to open input file %s\n", argv[0], argv[1]);
         return (1);
     }
 
     /* get a 512k buffer */
-    if ((buf = malloc(buf_size)) == NULL)
-    {
+    if ((buf = malloc(buf_size)) == NULL) {
         fprintf(stderr, "Can't allocate memory for %s\n", argv[0]);
         return (4);
     }
@@ -157,8 +154,7 @@ int main (int argc, char *argv[])
     printf("\nfile %d:\n", filen);
 
     /* get lines until eof */
-    while ((ll=getloi(buf, buf_size)) != EOF)
-    {
+    while ((ll=getloi(buf, buf_size)) != EOF) {
         if (ll == 0) {
             /* eof found, process new file */
             skipfile = 0;
@@ -178,24 +174,20 @@ int main (int argc, char *argv[])
             w2 = (buf[4] & 0xff) << 24 | buf[5] << 16 | buf[6] << 8 | (buf[7] & 0xff);
             if (filen > 480)
             printf("w1 = %x, w2 = %d count = %d\n", w1, w2, count);
-            if (count == 1 && w1 == 1)
-            {
+            if (count == 1 && w1 == 1) {
                 char file[20], dir[20], vol[20];
                 int off = 8;
                 int l = 0;
                 /* we have directory entries */
-                for (j=0; j<w2; j++)
-                {
+                for (j=0; j<w2; j++) {
                     int k = l++ * 48;
-                    if (k > (6144-48-off))
-                    {
+                    if (k > (6144-48-off)) {
                         ll=getloi(buf, buf_size);
                         off = 0;
                         l = 0;
                         k = 0;
                         printf("reread: got ll= %d\n", ll);
-                        for (i=0; i<16; i++)
-                        {
+                        for (i=0; i<16; i++) {
                             file[i] = tolower(buf[k+off+i]);
                             if (file[i] == ' ')
                                 file[i] = '\0';
@@ -203,22 +195,19 @@ int main (int argc, char *argv[])
                         file[16] = '\0';
                         printf("file %s\n", file);
                     }
-                    for (i=0; i<16; i++)
-                    {
+                    for (i=0; i<16; i++) {
                         file[i] = tolower(buf[k+off+i]);
                         if (file[i] == ' ')
                             file[i] = '\0';
                     }
                     file[16] = '\0';
-                    for (i=0; i<16; i++)
-                    {
+                    for (i=0; i<16; i++) {
                         dir[i] = tolower(buf[k+off+16+i]);
                         if (dir[i] == ' ')
                             dir[i] = '\0';
                     }
                     dir[16] = '\0';
-                    for (i=0; i<16; i++)
-                    {
+                    for (i=0; i<16; i++) {
                         vol[i] = tolower(buf[k+off+32+i]);
                         if (vol[i] == ' ')
                             vol[i] = '\0';
@@ -234,27 +223,23 @@ int main (int argc, char *argv[])
 //                  system(command);
                 }
             } else
-            if (count == 1 && w1 == 2 && w2 == 0)
-            {
+            if (count == 1 && w1 == 2 && w2 == 0) {
                 char file[20], dir[20], vol[20];
                 /* process file definition */
                 /* we have a file definition entry */
-                for (i=0; i<16; i++)
-                {
+                for (i=0; i<16; i++) {
                     file[i] = tolower(buf[8+i]);
                     if (file[i] == ' ')
                         file[i] = '\0';
                 }
                 file[16] = '\0';
-                for (i=0; i<16; i++)
-                {
+                for (i=0; i<16; i++) {
                     dir[i] = tolower(buf[24+i]);
                     if (dir[i] == ' ')
                         dir[i] = '\0';
                 }
                 dir[16] = '\0';
-                for (i=0; i<16; i++)
-                {
+                for (i=0; i<16; i++) {
                     vol[i] = tolower(buf[40+i]);
                     if (vol[i] == ' ')
                         vol[i] = '\0';
@@ -263,17 +248,15 @@ int main (int argc, char *argv[])
                 sprintf(path, "./%s/%s/%s", vol, dir, file);
                 printf("path2 = %s\n", path);
             }
-}
+        }
             /* see if skipping to next file */
-            if (skipfile == 1)
-            {
+            if (skipfile == 1) {
                 continue;
             }
 
 #ifdef NODUMP
             /* process the returned buffer */
-            while (cc < ll)
-            {
+            while (cc < ll) {
                 curchar = (unsigned int)buf[cc++] & 0xff;
                 file_byte_count++;
                 if (!buffptr)
@@ -282,18 +265,15 @@ int main (int argc, char *argv[])
                 buff[buffptr++] = PRINTABLE(curchar);
                 if (!(buffptr % 4))
                     printf(" ");
-                if (buffptr >= bufflen)
-                {
+                if (buffptr >= bufflen) {
                     buff[buffptr] = 0;
                     printf(" |%s|\n",buff);
                     buffptr = 0;
                     fileaddr += bufflen;
-                    if (!(file_byte_count % 256))
-                    {
+                    if (!(file_byte_count % 256)) {
                         printf("\n<cr> - continue, q = quit, s = skip > ");
                         ans = getchar();
-                        if (ans == 'q')
-                        {
+                        if (ans == 'q') {
                             close(inp);
                             free(buf);
                             exit(1);
@@ -311,11 +291,9 @@ int main (int argc, char *argv[])
 #endif
 
 #ifdef NODUMP
-            if (buffptr && !skipfile)
-            {
+            if (buffptr && !skipfile) {
                 buff[buffptr] = 0;
-                while (buffptr++ < bufflen)
-                {
+                while (buffptr++ < bufflen) {
                     printf("  ");
                     if (!(buffptr % 4))
                         printf(" ");
@@ -325,8 +303,7 @@ int main (int argc, char *argv[])
                 /* see what user wants to do */
                 printf("\n<cr> - continue, q = quit > ");
                 ans = getchar();
-                if (ans == 'q')
-                {
+                if (ans == 'q') {
                     close(inp);
                     free(buf);
                     exit(1);

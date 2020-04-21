@@ -82,8 +82,7 @@ char *argv[];
                 fprintf(stderr, "Usage: %s -la program diskfile\n", *--argv);
                 exit(1);
             }
-        }
-        else {
+        } else {
             argc++;
             argv--;
         }

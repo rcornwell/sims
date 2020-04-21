@@ -2,21 +2,22 @@
 # SEL32 Development Simulator
 
 This is a working copy of a simulator for the SEL Concept/32 computer.
-The current test version is for the SEL 32/27, 32/67, 32/77, 32/87 and
-32/97 computers.  Initial support is provided for the V6 and V9 cpus.
-Support for 32/55 computers may be added in the future.
+The current test version is for the SEL 32/27, 32/67, 32/77, 32/87,
+32/97, V6, and V9 computers.  All of the processors except for the
+32/77 can run Gould diags.  Support for 32/55 computers may be added
+in the future.
 
 # SEL Concept/32 
 
-This simulator is running a test version of MPX-32 1.5F.  It is capable of
-creating a disk image of the O/S from a SDT tape.  The disk image can be
-booted, initialized, and run many of the MPX utilities; including OPCOM & TSM.
-Eight terminals can be used to access TSM via Telnet port 4747.  Initial
-support has been added for excess 64 floating point arithmetic.  More testing
-is still required.  The sim32disk.gz can be uncompressed and booted with the
+This simulator is running a test version of MPX-32 1.5F.  It is capable
+of creating a disk image of the O/S from a SDT tape.  The disk image
+can be booted, initialized, and run many of the MPX utilities; including
+OPCOM & TSM.  Eight terminals can be used to access TSM via Telnet port
+4747. The sumulator has support for excess 64 floating point arithmetic.
+The sim32disk.gz can be uncompressed and booted with the
 sel32.27.sim32.disk.ini initialization file.  The sim32sdt.tap.gz file can
-also be uncompressed and started with the sel32.27.sim32.tape.ini initialization
-file to install to disk from tape.
+also be uncompressed and started with the sel32.27.sim32.tape.ini
+initialization file to do a sdt install to disk from tape.
 
 Available tap tools:
 taptools.tgz - set of tools to work with .tap formatted tapes.  Also tools
@@ -26,7 +27,7 @@ taptools.tgz - set of tools to work with .tap formatted tapes.  Also tools
 Available disk images:
 sim32disk.gz - bootable 300mb disk with MPX1.5F installed.  Unzip before
                any attempt to use it.  Use sel32.27.sim32.disk.ini command
-               file to start MPX 1.5.  ./sel32 sel32.27.sim32.disk.ini
+               file to start MPX 1.5. Type "./sel32 sel32.27.sim32.disk.ini"
 
 Available configuration SDT tapes:
 sim32sdt.tap - MPX 1.5f user SDT install tape.  Uses 300mb disk, IOP 8-line
@@ -42,12 +43,13 @@ sim32sdt.tap - MPX 1.5f user SDT install tape.  Uses 300mb disk, IOP 8-line
                FIL> X
 
 Available Level One Diagnostic boot tape:
-diag.ini       command file to start diags. ./sel32 diag.ini
-diag.tap       bootable level one diagnostic tape w/auto testing.  Set cpu type
-               to 32/27, 32/67, 32/87, 32/97, V6 or V9.  All cpu models now
-               run all diagnostics except cv.dxp which is used to run level 2
-               diagnostics. The diag stops at random places after a few
-               characters are entered into the console.
+diag.ini       command file to start diags. Type "./sel32 diag.ini"
+diag.tap       bootable level one diagnostic tape w/auto testing.  Set
+               cpu type to 32/27, 32/67, 32/87, 32/97, V6 or V9.  All
+               cpu models now run all diagnostics provided on the
+               diagnostic tape.  Running DEXP stand alone causes input
+               to stop after a few characters are entered.  More
+               itesting is still required.
 
                CV.CSL - Firmware control diag.  Disabled in auto testing.
                CV.CP1 - CPU diag part 1 runs OK.
@@ -59,10 +61,13 @@ diag.tap       bootable level one diagnostic tape w/auto testing.  Set cpu type
                CV.TRP - Traps diag runs OK.
                CV.CMD - Cache/Shadow diag.  Disabled in auto testing.
                CN.MMM - Non virtual memory diag runs OK.
-               VM.MMM - virtual memory diag for V6 & V9 runs OK.
+               VM.MMM - Virtual memory diag for V6 & V9 runs OK.
                CV.IPT - IPU trap diag.  Disabled in auto testing.
                CV.CSD - WCS read/write trap diag.  Disabled in auto testing.
                CV.CON - Operators Console runs all tests for all CPUs.
+               CV.DXP - Diagnostic executive for level 2 diags. OK in batch.
+               CV.MMM - Level two shared memory diag runs under DXP OK.
+               CV.ITD - Level two interval timer diag runs under DXP OK.
 
                Set GPR[0] = 0xffffffff before booting from tape to disable the
                auto test and go to the Diagnostic Overlay Loader (DOL>) prompt.
@@ -75,12 +80,11 @@ utx21a1.tap    bootable UTX install tape for testing basemode.  The current
                V6 & V9 will boot UTX into single user mode.  You can run a
                small subset of the commands that are on the installation tape.
                Prep, the disk preparation UTX program, can format a disk
-               drive.  Other files systems can be created, but cause the
-               system to hang at various places during the fsck command.
+               drive.  Other file systems can be created and saves restored.
                All basemode instructions have been tested with the CV.BRD diag.
                The virtual memory has been fully tested with the VM.MMM diag.
-               UTX needs better support for the disk controller before we can
-               move any farther with the installation.
+               UTX needs better support for operator console.  There are still
+               some random panics/halts.  More testing is still needed.
 
 Other MPX verion support:
                I am still looking for an MPX 3.X user or master SDT tape.  I have
@@ -89,5 +93,5 @@ Other MPX verion support:
                disk image of a bootable system..
 
 James C. Bevier
-03/30/2020 
+04/21/2020 
 

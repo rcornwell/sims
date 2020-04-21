@@ -103,12 +103,31 @@ DEVICE rtc_dev = {
    sets an interrupt that invokes the clock counter.
 */
 
+#ifdef DO_TIME
+uint32 lastms = 0;
+uint32 grtime = 0;
+#endif
+
 /* service clock signal from simulator */
 t_stat rtc_srv (UNIT *uptr)
 {
+#ifdef STOP_CLOCK_INTS_FOR_DEXP_TEST
+    /* stop clock interrupts for dexp debugging */
+    rtc_pie = 0;
+#endif
     if (rtc_pie) {                                  /* set pulse intr */
-//      time_t result = time(NULL);
-//      fprintf(stderr, "Clock int time %08x\r\n", (uint32)result);
+        time_t result = time(NULL);
+        sim_debug(DEBUG_CMD, &rtc_dev, "RT Clock int time %08x\n", (uint32)result);
+#ifdef DO_TIME
+        time_t result = time(NULL);
+        uint32 tms = sim_os_msec();
+        uint32 tus = sim_grtime();
+        if (lastms != 0)
+        fprintf(stderr, "Clock time %08x ms %d val %x\r\n", (uint32)result, tms-lastms, tms);
+//      fprintf(stderr, "Clock time %08x ms %d us %d\r\n", (uint32)result, tms-lastms, tus-grtime);
+        lastms = tms;
+        grtime = tus;
+#endif
         if (((INTS[rtc_lvl] & INTS_ENAB) ||         /* make sure enabled */
             (SPAD[rtc_lvl+0x80] & SINT_ENAB)) &&    /* in spad too */
             (((INTS[rtc_lvl] & INTS_ACT) == 0) ||   /* and not active */
@@ -207,11 +226,16 @@ const char *rtc_desc(DEVICE *dptr)
 /************************************************************************/
 
 /* Interval Timer support */
+int32 itm_src = 0;                                  /* itm source freq 0=itm 1=rtc */
 int32 itm_pie = 0;                                  /* itm pulse enable */
+int32 itm_run = 0;                                  /* itm is running */
 int32 itm_cmd = 0;                                  /* itm last user cmd */
-int32 itm_cnt = 0;                                  /* itm pulse count enable */
-int32 itm_tick_size_x_100 = 3840;                   /* itm 26041 ticks/sec = 38.4 us per tic */
+int32 itm_cnt = 0;                                  /* itm reload pulse count */
+int32 itm_tick_size_x_100 = 3840;                   /* itm 26042 ticks/sec = 38.4 us per tic */
 int32 itm_lvl = 0x5f;                               /* itm interrupt level */
+int32 itm_strt = 0;                                 /* clock start time in usec */
+int32 itm_load = 0;                                 /* clock loaded */
+int32 itm_big = 26042 * 6000;                       /* about 100 minutes */
 t_stat itm_srv (UNIT *uptr);
 t_stat itm_set_freq (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat itm_reset (DEVICE *dptr);
@@ -270,27 +294,62 @@ t_stat itm_srv (UNIT *uptr)
     if (itm_pie) {                                  /* interrupt enabled? */
         time_t result = time(NULL);
         sim_debug(DEBUG_CMD, &itm_dev,
-            "Intv Timer expired status %08x interrupt %02x @ time %08x\n",
-            INTS[itm_lvl], itm_lvl, (uint32)result);
-        if (((INTS[itm_lvl] & INTS_ENAB) ||        /* make sure enabled */
+            "Intv Timer expired status %08x lev %02x cnt %x @ time %08x\n",
+            INTS[itm_lvl], itm_lvl, itm_cnt, (uint32)result);
+        if (((INTS[itm_lvl] & INTS_ENAB) ||         /* make sure enabled */
             (SPAD[itm_lvl+0x80] & SINT_ENAB)) &&    /* in spad too */
             (((INTS[itm_lvl] & INTS_ACT) == 0) ||   /* and not active */
             ((SPAD[itm_lvl+0x80] & SINT_ACT) == 0))) { /* in spad too */
             INTS[itm_lvl] |= INTS_REQ;              /* request the interrupt */
             irq_pend = 1;                           /* make sure we scan for int */
         }
-        if ((INTS[itm_lvl] & INTS_ENAB) && (itm_cmd == 0x3d) && (itm_cnt != 0)) {
+        sim_cancel (&itm_unit);                     /* cancel current timer */
+        itm_run = 0;                                /* timer is no longer running */
+        /* if cmd BIT29 is set, reload & restart */
+        if ((INTS[itm_lvl] & INTS_ENAB) && (itm_cmd & 0x04) && (itm_cnt != 0)) {
             sim_debug(DEBUG_CMD, &itm_dev,
                 "Intv Timer reload on expired int %02x value %08x\n",
                 itm_lvl, itm_cnt);
             /* restart timer with value from user */
-            sim_activate_after_abs_d (&itm_unit, ((double)itm_cnt * itm_tick_size_x_100) / 100.0);
+            if (itm_src)                            /* use specified src freq */
+                sim_activate_after_abs_d(&itm_unit, ((double)itm_cnt*400000)/rtc_tps);
+//              sim_activate_after_abs_d(&itm_unit, ((double)itm_cnt*1000000)/rtc_tps);
+            else
+                sim_activate_after_abs_d(&itm_unit, ((double)itm_cnt*itm_tick_size_x_100)/100.0);
+            itm_run = 1;                            /* show timer running */
+            itm_load = itm_cnt;                     /* save loaded value */
+            itm_strt = 0;                           /* no negative start time */
+        } else {
+//          int32 cnt = 26042*1000;                 /* 0x65ba TRY 1,000,000/38.4 10 secs */
+            int32 cnt = itm_big;                    /* 0x65ba TRY 1,000,000/38.4 10 secs */
+            itm_strt = cnt;                         /* get negative start time */
+            sim_debug(DEBUG_CMD, &itm_dev,
+                "Intv Timer reload for neg cnts on expired int %02x value %08x\n",
+                itm_lvl, cnt);
+            /* restart timer with large value for negative timer value simulation */
+            if (itm_src)                            /* use specified src freq */
+                sim_activate_after_abs_d(&itm_unit, ((double)cnt*1000000)/rtc_tps);
+            else
+                sim_activate_after_abs_d(&itm_unit, ((double)cnt*itm_tick_size_x_100) / 100.0);
+            itm_run = 1;                            /* show timer running */
+            itm_load = cnt;                         /* save loaded value */
         }
-    }   
+    }
     return SCPE_OK;
 }
 
 /* ITM read/load function called from CD command processing */
+/* cmd bit assignments */
+/* 0x40 = BIT25 = Read ITM value into R0 at anythime */
+/* 0x20 = BIT26 = Program ITM and BIT27-BIT31 are valid */
+/* 0x10 = BIT27 = =1 start timer, =0 stop timer */
+/* 0x08 = BIT28 = =1 store R0 into ITM, =0 do not alter clock value */
+/* 0x04 = BIT29 = =1 generate multiple ints on countdown to 0, reload start value */
+/*                =0 generate single int on countdown to 0, continue counting negative */
+/* 0x02 = BIT30 = BIT30 = 0 BIT31 = 0 = use jumpered clock frequency */
+/* 0x01 = BIT31 = BIT30 = 0 BIT31 = 1 = use jumpered clock frequency */
+/*              = BIT30 = 1 BIT31 = 0 = use RT clock frequency 50/60/100/120 HZ */
+/*              = BIT30 = 1 BIT31 = 1 = use external clock frequency */
 /* level = interrupt level */
 /* cmd = 0x20 stop timer, do not transfer any value */
 /*     = 0x39 load and enable interval timer, no return value */
@@ -304,55 +363,256 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
 {
     uint32  temp;
 
+    cmd &= 0x7f;                                    /* just need the cmd */
     itm_cmd = cmd;                                  /* save last cmd */
     switch (cmd) {
     case 0x20:                                      /* stop timer */
+        /* stop the timer and save the curr value for later */
 //      fprintf(stderr, "clk 0x20 kill value %08x (%08d)\r\n", cnt, cnt);
-        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x20 kill value %08x (%08d)\n", cnt, cnt);
+        temp = itm_load;                            /* use last loaded value */
+        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%2x kill value %08x (%08d) itm_load %08x\n",
+            cmd, cnt, cnt, temp);
+        if (itm_run) {                              /* if we were running save curr cnt */
+            /* read timer value */
+            temp = (uint32)(100.0*sim_activate_time_usecs(&itm_unit)/itm_tick_size_x_100);
+            sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%2x temp value %08x (%d)\n", cmd, temp, temp);
+            if (itm_strt) {                         /* see if running neg */
+                /* we only get here if timer ran out and no reload value */
+                /* get simulated negative start time in counts */
+                temp = temp - itm_strt;             /* make into a negative number */
+            } 
+        }
         sim_cancel (&itm_unit);                     /* cancel itc */
+        itm_run = 0;                                /* timer is not running */
         itm_cnt = 0;                                /* no count reset value */
-        itm_pie = 0;                                /* stop timer running */
+        itm_load = temp;                            /* last loaded value */
+//TRY*/ itm_load = 0;                               /* last loaded value */
+/*TRY*/ itm_strt = 0;                               /* not restarted neg */
         return 0;                                   /* does not matter, no value returned  */
-    case 0x39:                                      /* load timer with new value and start*/
-//      sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x39 init value %08x (%08d)\n", cnt, cnt);
-        if (cnt <= 0)
-            cnt = 26042;                            /* 0x65ba TRY 1,000,000/38.4 */
-        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x39 init value %08x (%08d)\n", cnt, cnt);
-        /* start timer with value from user */
-        sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);
+        break;
+
+    case 0x29:                                      /* load timer with new value and start lo rate */
+    case 0x28:                                      /* load timer with new value and start hi rate */
+    case 0x2a:                                      /* load timer with new value and use RTC */
+    case 0x2b:                                      /* load timer with new value and start hi rate */
+    case 0x38:                                      /* load timer with new value and start hi rate */
+    case 0x39:                                      /* load timer with new value and start lo rate */
+    case 0x3a:                                      /* load timer with new value and start hi rate */
+    case 0x3b:                                      /* load timer with new value and start lo rate */
+//      sim_activate_after (&rtc_unit, 1000000/rtc_tps);/* reactivate 16666 tics / sec */
+        if (itm_run)                                /* if we were running stop timer */
+            sim_cancel (&itm_unit);                 /* cancel timer */
+        itm_run = 0;                                /* stop timer running */
+        if (cmd & 0x10) {                           /* clock to start? */
+            /* start timer with value from user */
+            /* if bits 30-31 == 20, use RTC freq */
+            itm_src = (cmd>>1)&1;                   /* set src */
+            if (itm_src)                            /* use specified src freq */
+//              sim_activate_after_abs_d(&itm_unit, ((double)cnt*400000)/rtc_tps);
+                /* use clock frequency */
+                sim_activate_after_abs_d(&itm_unit, ((double)cnt*1000000)/rtc_tps);
+            else
+                /* use interval timer freq */
+                sim_activate_after_abs_d(&itm_unit, ((double)cnt*itm_tick_size_x_100)/100.0);
+            itm_run = 1;                            /* set timer running */
+        }
+        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%02x init value %08x (%08d)\n", cmd, cnt, cnt);
         itm_cnt = 0;                                /* no count reset value */
-        itm_pie = 1;                                /* set timer running */
+        itm_load = cnt;                             /* now loaded */
+        itm_strt = 0;                               /* not restarted neg */
         return 0;                                   /* does not matter, no value returned  */
-    case 0x3d:                                      /* load timer with new value and start*/
-        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x3d init value %08x (%08d)\n", cnt, cnt);
-        /* start timer with value from user, reload on zero time */
-        sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);
-        itm_cnt = cnt;                              /* count reset value */
-        itm_pie = 1;                                /* set timer running */
-        return 0;                                   /* does not matter, no value returned  */
+        break;
+
+    case 0x70:                                      /* start timer with curr value*/
+    case 0x71:                                      /* start timer with curr value */
+    case 0x72:                                      /* start timer with RTC value*/
+    case 0x74:                                      /* start timer with curr value*/
+    case 0x75:                                      /* start timer with curr value */
+    case 0x76:                                      /* start timer with RTC value*/
+    case 0x30:                                      /* start timer with curr value*/
+    case 0x31:                                      /* start timer with curr value*/
+    case 0x32:                                      /* start timer with RTC value*/
+    case 0x34:                                      /* start timer with curr value*/
+    case 0x35:                                      /* start timer with curr value */
+    case 0x36:                                      /* start timer with RTC value*/
+    case 0x37:                                      /* start timer with curr value */
+        temp = itm_load;                            /* get last loaded value */
+        if (itm_run) {                              /* if we were running save curr cnt */
+            /* read timer value */
+            temp = (uint32)(100.0*sim_activate_time_usecs(&itm_unit)/itm_tick_size_x_100);
+            sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%2x temp value %08x (%d)\n", cmd, temp, temp);
+            if (itm_strt) {                         /* see if running neg */
+                /* we only get here if timer ran out and no reload value */
+                /* get simulated negative start time in counts */
+                temp = temp - itm_strt;             /* make into a negative number */
+            } 
+            sim_cancel (&itm_unit);                 /* cancel timer */
+        }
+        if (cmd & 0x40) {
+            /* timer value already read into temp */
+            ;
+        }
+        if (cmd & 0x80) {
+            /* use value from user to load timer */
+            temp = cnt;                             /* set user count */
+        }
+        /* start timer with current or user value, reload on zero time */
+        cnt = temp;                                 /* use current value */
+        /* if bits 30-31 == 20, use RTC freq */
+        itm_src = (cmd>>1)&1;                       /* set src */
+        if (itm_src)                                /* use specified src freq */
+//          sim_activate_after_abs_d(&itm_unit, ((double)cnt*400000)/rtc_tps);
+            sim_activate_after_abs_d(&itm_unit, ((double)cnt*1000000)/rtc_tps);
+        else
+            sim_activate_after_abs_d(&itm_unit, ((double)cnt*itm_tick_size_x_100)/100.0);
+        itm_run = 1;                                /* set timer running */
+
+        if (cmd & 0x04)                             /* do we reload on zero? */
+            itm_cnt = cnt;                          /* count reset value */
+        else
+            itm_cnt = 0;                            /* no count reset value */
+        itm_strt = 0;                               /* not restarted neg */
+        itm_load = cnt;                             /* now loaded */
+        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%02x return value %08x (%08d)\n", cmd, temp, temp);
+        return temp;                                /* return curr count */
+        break;
+
+    case 0x3c:                                      /* load timer with new value and start */
+    case 0x3d:                                      /* load timer with new value and start */
+    /* load timer with new value and start using RTC as source */
+    case 0x3e:                                      /* load timer with new value and start RTC*/
+        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%2x init value %08x (%d)\n", cmd, cnt, cnt);
+//TRY   if (itm_run)                                /* if we were running save curr cnt */
+            sim_cancel (&itm_unit);                 /* cancel timer */
+        /* if bits 30-31 == 20, use RTC freq */
+        itm_src = (cmd>>1)&1;                       /* set src */
+        if (itm_src)                                /* use specified src freq */
+//          sim_activate_after_abs_d(&itm_unit, ((double)cnt*400000)/rtc_tps);
+            sim_activate_after_abs_d(&itm_unit, ((double)cnt*1000000)/rtc_tps);
+        else
+            sim_activate_after_abs_d(&itm_unit, ((double)cnt*itm_tick_size_x_100)/100.0);
+        itm_run = 1;                                /* set timer running */
+
+        if (cmd & 0x04)                             /* do we reload on zero? */
+            itm_cnt = cnt;                          /* count reset value */
+        else
+            itm_cnt = 0;                            /* no count reset value */
+        itm_strt = 0;                               /* not restarted neg */
+        itm_load = cnt;                             /* now loaded */
+        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%02x return value %08x (%08d)\n", cmd, cnt, cnt);
+        return temp;                                /* return curr count */
+        break;
+
+    case 0x40:                                      /* read the current timer value */
+        /* return current count value from timer */
+        temp = itm_load;                            /* get last loaded value */
+        if (itm_run) {                              /* if we were running save curr cnt */
+            /* read timer value */
+            temp = (uint32)(100.0*sim_activate_time_usecs(&itm_unit)/itm_tick_size_x_100);
+            sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%2x temp value %08x (%d)\n", cmd, temp, temp);
+            if (itm_strt) {                         /* see if running neg */
+                /* we only get here if timer ran out and no reload value */
+                /* get simulated negative start time in counts */
+                temp = temp - itm_strt;             /* make into a negative number */
+            } 
+        }
+        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x40 return value %08x (%d)\n", temp, temp);
+        return temp;
+        break;
+
     case 0x60:                                      /* read and stop timer */
         /* get timer value and stop timer */
-        temp = (uint32)(100.0 * sim_activate_time_usecs (&itm_unit) / itm_tick_size_x_100);
-        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x60 temp value %08x (%08d)\n", temp, temp);
-        sim_cancel (&itm_unit);
-        itm_pie = 0;                                /* stop timer running */
+        temp = itm_load;                            /* get last loaded value */
+        if (itm_run) {                              /* if we were running save curr cnt */
+            /* read timer value */
+            temp = (uint32)(100.0*sim_activate_time_usecs(&itm_unit)/itm_tick_size_x_100);
+            sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%2x temp value %08x (%d)\n", cmd, temp, temp);
+            if (itm_strt) {                         /* see if running neg */
+                /* we only get here if timer ran out and no reload value */
+                /* get simulated negative start time in counts */
+                temp = temp - itm_strt;             /* make into a negative number */
+            } 
+            sim_cancel (&itm_unit);                 /* cancel timer */
+        }
+        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%2x temp value %08x (%d)\n", cmd, temp, temp);
+        itm_run = 0;                                /* stop timer running */
+        itm_cnt = 0;                                /* no reload count value */
+        itm_load = temp;                            /* current loaded value */
+        itm_strt = 0;                               /* not restarted neg */
         return temp;                                /* return current count value */
-    case 0x79:                                      /* read the current timer value */
-        /* get timer value, load new value and start timer */
-        temp = (uint32)(100.0 * sim_activate_time_usecs (&itm_unit) / itm_tick_size_x_100);
-        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x79 temp value %08x (%08d)\n", temp, temp);
-        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x79 init value %08x (%08d)\n", cnt, cnt);
-        /* start timer to fire after cnt ticks */
-        sim_activate_after_abs_d (&itm_unit, ((double)cnt * itm_tick_size_x_100) / 100.0);
+        break;
+
+    case 0x6a:                                      /* read value & load new one */
+#ifdef DO_DYNAMIC_DEBUG
+//          if (itm_cmd == 0x31)
+        /* start debugging */
+        cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ | DEBUG_TRAP);
+#endif
+    case 0x68:                                      /* read value & load new one */
+    case 0x69:                                      /* read value & load new one */
+        /* get timer value and load new value, do not start timer */
+        temp = itm_load;                            /* get last loaded value */
+        if (itm_run) {                              /* if we were running save curr cnt */
+            /* read timer value */
+            temp = (uint32)(100.0*sim_activate_time_usecs(&itm_unit)/itm_tick_size_x_100);
+            sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%2x temp value %08x (%d)\n", cmd, temp, temp);
+            if (itm_strt) {                         /* see if running neg */
+                /* we only get here if timer ran out and no reload value */
+                /* get simulated negative start time in counts */
+                temp = temp - itm_strt;             /* make into a negative number */
+            } 
+            sim_cancel (&itm_unit);                 /* cancel timer */
+        }
+        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%02x temp value %08x (%08d)\n", cmd, temp, temp);
+        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%02x init value %08x (%08d)\n", cmd, cnt, cnt);
+        itm_src = (cmd>>1)&1;                       /* set src */
+        itm_run = 0;                                /* stop timer running */
         itm_cnt = 0;                                /* no count reset value */
-        itm_pie = 1;                                /* set timer running */
+        itm_strt = 0;                               /* not restarted neg */
+        itm_load = cnt;                             /* now loaded */
         return temp;                                /* return current count value */
-    case 0x40:                                      /* read the current timer value */
-        /* return current count value */
-        temp = (uint32)(100.0 * sim_activate_time_usecs (&itm_unit) / itm_tick_size_x_100);
-        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x40 temp value %08x (%08d)\n", temp, temp);
-        itm_pie = 1;                                /* set timer running */
-        return temp;
+        break;
+
+    case 0x7d:                                      /* read the current timer value */
+    case 0x78:                                      /* read the current timer value */
+    case 0x79:                                      /* read the current timer value */
+    case 0x7a:                                      /* read the current timer value */
+    case 0x7b:                                      /* read the current timer value */
+    case 0x7c:                                      /* read the current timer value */
+    case 0x7e:                                      /* read the current timer value */
+    case 0x7f:                                      /* read the current timer value */
+        /* get timer value, load new value and start timer */
+        temp = itm_load;                            /* get last loaded value */
+        if (itm_run) {                              /* if we were running save curr cnt */
+            /* read timer value */
+            temp = (uint32)(100.0*sim_activate_time_usecs(&itm_unit)/itm_tick_size_x_100);
+            sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%2x temp value %08x (%d)\n", cmd, temp, temp);
+            if (itm_strt) {                         /* see if running neg */
+                /* we only get here if timer ran out and no reload value */
+                /* get simulated negative start time in counts */
+                temp = temp - itm_strt;             /* make into a negative number */
+            } 
+            sim_cancel (&itm_unit);                 /* cancel timer */
+        }
+        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%02x temp value %08x (%08d)\n", cmd, temp, temp);
+        sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%02x init value %08x (%08d)\n", cmd, cnt, cnt);
+        sim_cancel (&itm_unit);                     /* cancel timer */
+        /* start timer to fire after cnt ticks */
+        itm_src = (cmd>>1)&1;                       /* set src */
+        if (itm_src)                                /* use specified src freq */
+            sim_activate_after_abs_d(&itm_unit, ((double)cnt*1000000)/rtc_tps);
+        else
+            sim_activate_after_abs_d(&itm_unit, ((double)cnt*itm_tick_size_x_100)/100.0);
+        itm_cnt = 0;                                /* no count reset value */
+        if (cmd & 0x04)                             /* reload on int? */
+            itm_cnt = cnt;                          /* set reload count value */
+        itm_run = 1;                                /* set timer running */
+        itm_strt = 0;                               /* not restarted neg */
+        itm_load = cnt;                             /* now loaded */
+        return temp;                                /* return current count value */
+        break;
+    default:
+        sim_debug(DEBUG_CMD, &itm_dev, "Intv unknown cmd %02x level %02x\n", cmd, level);
         break;
     }
     return 0;                                       /* does not matter, no value returned  */
@@ -365,20 +625,21 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
 void itm_setup(uint32 ss, uint32 level)
 {
     itm_lvl = level;                                /* save the interrupt level */
+    itm_load = 0;                                   /* not loaded */
+    itm_src = 0;                                    /* use itm for freq */
+    itm_strt = 0;                                   /* not restarted neg */
+    itm_run = 0;                                    /* not running */
+    itm_cnt = 0;                                    /* no count reset value */
+    sim_cancel (&itm_unit);                         /* not running yet */
     if (ss == 1) {                                  /* starting? */
         INTS[level] |= INTS_ENAB;                   /* make sure enabled */
         SPAD[level+0x80] |= SINT_ENAB;              /* in spad too */
-//DIAG  INTS[level] |= INTS_REQ;                    /* request the interrupt */
         sim_debug(DEBUG_CMD, &itm_dev,
             "Intv Timer setup enable int %02x value %08x itm_pie %01x ss %01x\n",
             itm_lvl, itm_cnt, itm_pie, ss);
     } else {
-        sim_cancel (&itm_unit);                     /* not running yet */
         INTS[level] &= ~INTS_ENAB;                  /* make sure disabled */
         SPAD[level+0x80] &= ~SINT_ENAB;             /* in spad too */
-//      INTS[level] &= ~INTS_REQ;                   /* make sure request not requesting */
-/*@41*/ INTS[level] &= ~INTS_ACT;                   /* make sure request not active */
-/*@41*/ SPAD[level+0x80] &= ~SINT_ACT;              /* in spad too */
         sim_debug(DEBUG_CMD, &itm_dev,
             "Intv Timer setup disable int %02x value %08x itm_pie %01x ss %01x\n",
             itm_lvl, itm_cnt, itm_pie, ss);
@@ -390,6 +651,11 @@ void itm_setup(uint32 ss, uint32 level)
 t_stat itm_reset (DEVICE *dptr)
 {
     itm_pie = 0;                                    /* disable pulse */
+    itm_run = 0;                                    /* not running */
+    itm_load = 0;                                   /* not loaded */
+    itm_src = 0;                                    /* use itm for freq */
+    itm_strt = 0;                                   /* not restarted neg */
+    itm_cnt = 0;                                    /* no count reset value */
     sim_cancel (&itm_unit);                         /* not running yet */
     return SCPE_OK;
 }

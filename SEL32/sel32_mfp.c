@@ -36,8 +36,10 @@
 
 #if NUM_DEVS_MFP > 0
 
+#define UNIT_MFP    UNIT_IDLE | UNIT_DISABLE
+
 /* forward definitions */
-uint8   mfp_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
+uint16  mfp_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
 void    mfp_ini(UNIT *uptr, t_bool f);
 t_stat  mfp_srv(UNIT *uptr);
 t_stat  mfp_reset(DEVICE *dptr);
@@ -89,27 +91,27 @@ CHANP           mfp_chp[NUM_UNITS_MFP] = {0};
 
 MTAB            mfp_mod[] = {
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "DEV", "DEV",
-        &set_dev_addr, &show_dev_addr, NULL, "Device address"},
+        &set_dev_addr, &show_dev_addr, NULL, "Controller Channel address"},
     {0}
 };
 
 UNIT            mfp_unit[] = {
-    {UDATA(&mfp_srv, UNIT_IDLE|UNIT_DISABLE, 0), 0, UNIT_ADDR(0x7600)}, /* Channel controller */
+    {UDATA(&mfp_srv, UNIT_MFP, 0), 0, UNIT_ADDR(0x7600)}, /* Channel controller */
 };
 
-//DIB mfp_dib = {NULL, mfp_startcmd, NULL, NULL, NULL, mfp_ini, mfp_unit, mfp_chp, NUM_UNITS_MFP, 0xff, 0x7e00,0,0,0};
+//DIB mfp_dib = {NULL, mfp_startcmd, NULL, NULL, NULL, mfp_ini, mfp_unit, mfp_chp, NUM_UNITS_MFP, 0xff, 0x7600,0,0,0};
 DIB             mfp_dib = {
-    NULL,           /* uint8 (*pre_io)(UNIT *uptr, uint16 chan)*/       /* Start I/O */
-    mfp_startcmd,   /* uint8 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start a command SIO */
-    NULL,           /* uint8 (*halt_io)(UNIT *uptr) */          /* Stop I/O HIO */
-    NULL,           /* uint8 (*test_io)(UNIT *uptr) */          /* Test I/O TIO */
-    NULL,           /* uint8 (*post_io)(UNIT *uptr) */          /* Post I/O */
+    NULL,           /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Start I/O */
+    mfp_startcmd,   /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
+    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Stop I/O HIO */
+    NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O TIO */
+    NULL,           /* uint16 (*post_io)(UNIT *uptr) */         /* Post I/O */
     mfp_ini,        /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     mfp_unit,       /* UNIT* units */                           /* Pointer to units structure */
     mfp_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
-    NUM_UNITS_MFP,   /* uint8 numunits */                        /* number of units defined */
+    NUM_UNITS_MFP,  /* uint8 numunits */                        /* number of units defined */
     0xff,           /* uint8 mask */                            /* 16 devices - device mask */
-    0x7e00,         /* uint16 chan_addr */                      /* parent channel address */
+    0x7600,         /* uint16 chan_addr */                      /* parent channel address */
     0,              /* uint32 chan_fifo_in */                   /* fifo input index */
     0,              /* uint32 chan_fifo_out */                  /* fifo output index */
     {0}             /* uint32 chan_fifo[FIFO_SIZE] */           /* interrupt status fifo for channel */
@@ -120,7 +122,8 @@ DEVICE          mfp_dev = {
     NUM_UNITS_MFP, 8, 15, 1, 8, 8,
     NULL, NULL, &mfp_reset,         /* examine, deposit, reset */
     NULL, NULL, NULL,               /* boot, attach, detach */
-    &mfp_dib, DEV_UADDR|DEV_DISABLE|DEV_DEBUG, 0, dev_debug,  /* dib, dev flags, debug flags, debug */
+    /* dib ptr, dev flags, debug flags, debug */
+    &mfp_dib, DEV_CHAN|DEV_DIS|DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
 //  NULL, NULL, &mfp_help,          /* ?, ?, help */
 //  NULL, NULL, &mfp_desc           /* ?, ?, description */
 };
@@ -140,7 +143,7 @@ void mfp_ini(UNIT *uptr, t_bool f)
 }
 
 /* start an I/O operation */
-uint8  mfp_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
+uint16 mfp_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 {
     sim_debug(DEBUG_CMD, &mfp_dev,
         "MFP startcmd %02x controller/device %04x\n",

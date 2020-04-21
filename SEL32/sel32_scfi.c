@@ -229,9 +229,9 @@ scfi_type[] =
     {NULL, 0}
 };
 
-uint8   scfi_preio(UNIT *uptr, uint16 chan);
-uint8   scfi_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
-uint8   scfi_haltio(UNIT *uptr);
+uint16  scfi_preio(UNIT *uptr, uint16 chan);
+uint16  scfi_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
+uint16  scfi_haltio(UNIT *uptr);
 t_stat  scfi_srv(UNIT *);
 t_stat  scfi_boot(int32 unitnum, DEVICE *);
 void    scfi_ini(UNIT *, t_bool);
@@ -269,11 +269,11 @@ UNIT            sda_unit[] = {
 //DIB sda_dib = {scfi_preio, scfi_startcmd, NULL, NULL, NULL, scfi_ini, sda_unit, sda_chp, NUM_UNITS_SCFI, 0x0f, 0x0400, 0, 0, 0};
 
 DIB             sda_dib = {
-    scfi_preio,     /* uint8 (*pre_io)(UNIT *uptr, uint16 chan)*/   /* Pre Start I/O */
-    scfi_startcmd,  /* uint8 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start a command */
-    NULL,           /* uint8 (*halt_io)(UNIT *uptr) */          /* Stop I/O */
-    NULL,           /* uint8 (*test_io)(UNIT *uptr) */          /* Test I/O */
-    NULL,           /* uint8 (*post_io)(UNIT *uptr) */          /* Post I/O */
+    scfi_preio,     /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
+    scfi_startcmd,  /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
+    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
+    NULL,           /* uint16 (*post_io)(UNIT *uptr) */         /* Post I/O */
     scfi_ini,       /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     sda_unit,       /* UNIT* units */                           /* Pointer to units structure */
     sda_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
@@ -313,11 +313,11 @@ UNIT            sdb_unit[] = {
 //DIB sdb_dib = {scfi_preio, scfi_startcmd, NULL, NULL, NULL, scfi_ini, sdb_unit, sdb_chp, NUM_UNITS_SCFI, 0x0f, 0x0c00, 0, 0, 0};
 
 DIB             sdb_dib = {
-    scfi_preio,     /* uint8 (*pre_io)(UNIT *uptr, uint16 chan)*/   /* Pre Start I/O */
-    scfi_startcmd,  /* uint8 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start a command */
-    NULL,           /* uint8 (*halt_io)(UNIT *uptr) */          /* Stop I/O */
-    NULL,           /* uint8 (*test_io)(UNIT *uptr) */          /* Test I/O */
-    NULL,           /* uint8 (*post_io)(UNIT *uptr) */          /* Post I/O */
+    scfi_preio,     /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
+    scfi_startcmd,  /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
+    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
+    NULL,           /* uint16 (*post_io)(UNIT *uptr) */         /* Post I/O */
     scfi_ini,       /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     sdb_unit,       /* UNIT* units */                           /* Pointer to units structure */
     sdb_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
@@ -352,7 +352,7 @@ uint32 scfisec2star(uint32 daddr, int type)
 }
 
 /* start a disk operation */
-uint8  scfi_preio(UNIT *uptr, uint16 chan)
+uint16 scfi_preio(UNIT *uptr, uint16 chan)
 {
     DEVICE      *dptr = get_dev(uptr);
     uint16      chsa = GET_UADDR(uptr->CMD);
@@ -366,7 +366,7 @@ uint8  scfi_preio(UNIT *uptr, uint16 chan)
     return 0;                                   /* good to go */
 }
 
-uint8  scfi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
+uint16 scfi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 {
     uint16      addr = GET_UADDR(uptr->CMD);
     DEVICE      *dptr = get_dev(uptr);
@@ -900,7 +900,8 @@ wrdone:
         sim_debug(DEBUG_CMD, dptr, "invalid command %02x unit %02x\n", cmd, unit);
         uptr->SNS |= SNS_CMDREJ;
         uptr->CMD &= ~(0xffff);                 /* remove old status bits & cmd */
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+//      chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+        return SNS_CHNEND|STATUS_PCHK;
         break;
     }
     sim_debug(DEBUG_CMD, dptr,

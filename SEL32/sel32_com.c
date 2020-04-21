@@ -184,8 +184,8 @@ TMXR com_desc = { COM_LINES_DFLT, 0, 0, com_ldsc };     /* com descr */
 
 /* u6 */
 
-uint8       com_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd);
-uint8       com_haltio(UNIT *uptr);
+uint16      com_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd);
+uint16      com_haltio(UNIT *uptr);
 void        com_ini(UNIT *, t_bool);
 void        coml_ini(UNIT *, t_bool);
 t_stat      com_reset(DEVICE *);
@@ -243,11 +243,11 @@ UNIT            com_unit[] = {
 //DIB com_dib = {NULL, com_startcmd, NULL, NULL, com_ini, com_unit, com_chp, COM_UNITS, 0x0f, 0x7e00, 0, 0, 0};
 
 DIB             com_dib = {
-    NULL,           /* uint8 (*pre_io)(UNIT *uptr, uint16 chan)*/   /* Pre Start I/O */
-    com_startcmd,   /* uint8 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start a command */
-    NULL,           /* uint8 (*halt_io)(UNIT *uptr) */          /* Stop I/O */
-    NULL,           /* uint8 (*test_io)(UNIT *uptr) */          /* Test I/O */
-    NULL,           /* uint8 (*post_io)(UNIT *uptr) */          /* Post I/O */
+    NULL,           /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
+    com_startcmd,   /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
+    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
+    NULL,           /* uint16 (*post_io)(UNIT *uptr) */         /* Post I/O */
     com_ini,        /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     com_unit,       /* UNIT* units */                           /* Pointer to units structure */
     com_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
@@ -275,7 +275,8 @@ DEVICE          com_dev = {
     COM_UNITS, 8, 15, 1, 8, 8,
     &tmxr_ex, &tmxr_dep, &com_reset, NULL, &com_attach, &com_detach,
     /* ctxt is the DIB pointer */
-    &com_dib, DEV_NET | DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &com_dib, DEV_NET|DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
+//  &com_dib, DEV_NET|DEV_DIS|DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
     NULL, NULL, NULL, NULL, NULL, &com_description
 };
 
@@ -314,11 +315,11 @@ UNIT            coml_unit[] = {
 
 //DIB coml_dib = { NULL, com_startcmd, NULL, NULL, NULL, coml_ini, coml_unit, coml_chp, COM_LINES*2, 0x0f, 0x7E00};
 DIB             coml_dib = {
-    NULL,           /* uint8 (*pre_io)(UNIT *uptr, uint16 chan)*/   /* Pre Start I/O */
-    com_startcmd,   /* uint8 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start a command */
-    NULL,           /* uint8 (*halt_io)(UNIT *uptr) */          /* Stop I/O */
-    NULL,           /* uint8 (*test_io)(UNIT *uptr) */          /* Test I/O */
-    NULL,           /* uint8 (*post_io)(UNIT *uptr) */          /* Post I/O */
+    NULL,           /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
+    com_startcmd,   /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
+    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
+    NULL,           /* uint16 (*post_io)(UNIT *uptr) */         /* Post I/O */
     coml_ini,       /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     coml_unit,      /* UNIT* units */                           /* Pointer to units structure */
     coml_chp,       /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
@@ -352,7 +353,8 @@ DEVICE          coml_dev = {
     NULL, NULL, &com_reset,
     NULL, NULL, NULL,
     /* ctxt is the DIB pointer */
-    &coml_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &coml_dib, DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
+//  &coml_dib, DEV_DIS|DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
     NULL, NULL, NULL, NULL, NULL, &com_description
 };
 
@@ -379,7 +381,7 @@ void com_ini(UNIT *uptr, t_bool f)
 }
 
 /* called from sel32_chan to start an I/O operation */
-uint8  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
+uint16  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 {
     DEVICE      *dptr = get_dev(uptr);
     int         unit = (uptr - dptr->units);
@@ -643,7 +645,8 @@ uint8  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         uptr->u5 |= SNS_CMDREJ;                     /* command rejected */
         sim_debug(DEBUG_CMD, dptr, "com_startcmd %04x: Cmd Invald %02x status %02x\n",
             chan, cmd, uptr->u5);
-        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* unit check */
+//      return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* unit check */
+        return SNS_CHNEND|STATUS_PCHK;
         break;
     }
 

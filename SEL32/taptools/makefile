@@ -27,6 +27,7 @@ PROGS =			\
 	$(ROOT)/filelist \
 	$(ROOT)/fmgrcopy \
 	$(ROOT)/mkfmtape \
+	$(ROOT)/mkvmtape \
 	$(ROOT)/sdtfmgrcopy \
 	$(ROOT)/tapdump	\
 	$(ROOT)/tape2disk \
@@ -76,6 +77,12 @@ $B/fmgrcopy:	$D fmgrcopy.c
 	@echo $(@F) installed in $B
 
 $B/mkfmtape:	$D mkfmtape.c
+	@-$(CC) $(CFLAGS) $(@F).c $(LFLAGS) -o $@
+	@chmod 755 $@
+	@cp $(@F) $B
+	@echo $(@F) installed in $B
+
+$B/mkvmtape:	$D mkvmtape.c
 	@-$(CC) $(CFLAGS) $(@F).c $(LFLAGS) -o $@
 	@chmod 755 $@
 	@cp $(@F) $B

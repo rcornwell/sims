@@ -39,7 +39,7 @@ int getloi(char *s, int lim)
 
     errno = 0;
     /* read the byte count in 32 bit word as header */
-    n1 = read(inp, (char *)(&hc), (size_t)sizeof(hc));
+    n1 = read(inp, (char *)(&hc), (size_t)4);
     if (n1 <= 0)
         hc = -1;        /* at EOM on disk file */
 
@@ -68,8 +68,16 @@ int getloi(char *s, int lim)
 
     /* read the data */
     n = read(inp, s, (size_t)hc);
+
+    /* if odd byte record, read extra byte and throw it away */
+    if (n & 0x1) {
+        n2 = read(inp, (char *)(&tc), (size_t)1);
+        if (n2 <= 0)
+            return -1;          /* at EOM on disk file */
+    }
+
     /* read the byte count in 32 bit word as trailer */
-    n2 = read(inp, (char *)(&tc), (size_t)sizeof(tc));
+    n2 = read(inp, (char *)(&tc), (size_t)4);
     count++;        /* bump record count */
     size += n;      /* update bytes read */
     EOFcnt = 0;     /* not an EOF */

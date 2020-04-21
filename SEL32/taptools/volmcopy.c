@@ -42,7 +42,7 @@ int getloi(char *s, int lim)
 
     errno = 0;
     /* read the byte count in 32 bit word as header */
-    n1 = read(inp, (char *)(&hc), (size_t)sizeof(hc));
+    n1 = read(inp, (char *)(&hc), (size_t)4);
     if (n1 <= 0)
         hc = -1;        /* at EOM on disk file */
 
@@ -51,11 +51,9 @@ int getloi(char *s, int lim)
         hc = -1;        /* at EOM on disk file */
 
     /* check for EOF & EOM on tape data */
-    if (hc == 0)
-    {
+    if (hc == 0) {
         /* we are at tape EOF */
-        if (++EOFcnt < 2)       /* if 1st EOF, print file info */
-        {
+        if (++EOFcnt < 2) {     /* if 1st EOF, print file info */
             filen++;    /* set next file number */
         }
         count = 0;      /* file record count back to zero */
@@ -72,13 +70,20 @@ int getloi(char *s, int lim)
 
     /* read the data */
     n = read(inp, s, (size_t)hc);
+
+    /* if odd byte record, read extra byte and throw it away */
+    if (n & 0x1) {
+        n2 = read(inp, (char *)(&tc), (size_t)1);
+        if (n2 <= 0)
+            return -1;          /* at EOM on disk file */
+    }
+
     /* read the byte count in 32 bit word as trailer */
-    n2 = read(inp, (char *)(&tc), (size_t)sizeof(tc));
+    n2 = read(inp, (char *)(&tc), (size_t)4);
     count++;        /* bump record count */
     size += n;      /* update bytes read */
     EOFcnt = 0;     /* not an EOF */
-    if (n != ln)
-    {
+    if (n != ln) {
         ln = n;
         lcount = count;
     }
@@ -96,22 +101,19 @@ int main (int argc, char *argv[])
     int lfilen = filen;
     char path[64], command[128];
 
-    if (argc != 2)
-    {
+    if (argc != 2) {
         fprintf(stderr, "usage: %s infile\n", argv[0]);
         exit(1);
     } /* end of if */
 
-    if ((inp = open(argv[1], O_RDONLY, 0666)) < 0)
-    {
+    if ((inp = open(argv[1], O_RDONLY, 0666)) < 0) {
         fprintf(stderr,"%s: fopen: unable to open input file %s\n", argv[0], argv[1]);
         return (1);
     }
     outp = -1;
 
     /* get a 512k buffer */
-    if ((buf = malloc(buf_size)) == NULL)
-    {
+    if ((buf = malloc(buf_size)) == NULL) {
         fprintf(stderr, "Can't allocate memory for tscan\n");
         return (4);
     }
@@ -126,15 +128,11 @@ int main (int argc, char *argv[])
     printf("\nfile %d:\n", filen);
 
     /* get lines until eof */
-    while ((ll=getloi(buf, buf_size)) != EOF)
-    {
-        if (ll == 0)
-        {
+    while ((ll=getloi(buf, buf_size)) != EOF) {
+        if (ll == 0) {
             /* eof found, process new file */
             printf("\nfile %d:\n", filen);
-        }
-        else
-        {
+        } else {
             int cc = 0;
             unsigned int curchar;
 
@@ -143,39 +141,33 @@ int main (int argc, char *argv[])
             w1 = (buf[0] & 0xff) << 24 | buf[1] << 16 | buf[2] << 8 | (buf[3] & 0xff);
             w2 = (buf[4] & 0xff) << 24 | buf[5] << 16 | buf[6] << 8 | (buf[7] & 0xff);
 //          printf("w1 = %x, w2 = %d count = %d\n", w1, w2, count);
-            if (count == 1 && w1 == 1)
-            {
+            if (count == 1 && w1 == 1) {
                 char file[20], dir[20], vol[20];
                 int off = 8;
                 int l = 0;
                 /* we have directory entries */
-                for (j=0; j<w2; j++)
-                {
+                for (j=0; j<w2; j++) {
                     int k = l++ * 48;
-                    if (k > (6144-48-off))
-                    {
+                    if (k > (6144-48-off)) {
                         ll=getloi(buf, buf_size);
                         off = 0;
                         l = 0;
                         k = 0;
                         printf("reread: got ll= %d\n", ll);
                     }
-                    for (i=0; i<16; i++)
-                    {
+                    for (i=0; i<16; i++) {
                         file[i] = tolower(buf[k+off+i]);
                         if (file[i] == ' ')
                             file[i] = '\0';
                     }
                     file[16] = '\0';
-                    for (i=0; i<16; i++)
-                    {
+                    for (i=0; i<16; i++) {
                         dir[i] = tolower(buf[k+off+16+i]);
                         if (dir[i] == ' ')
                             dir[i] = '\0';
                     }
                     dir[16] = '\0';
-                    for (i=0; i<16; i++)
-                    {
+                    for (i=0; i<16; i++) {
                         vol[i] = tolower(buf[k+off+32+i]);
                         if (vol[i] == ' ')
                             vol[i] = '\0';
@@ -190,30 +182,26 @@ int main (int argc, char *argv[])
                     system(command);
                 }
             } else
-            if (count == 1 && w1 == 2 && w2 == 0)
-            {
+            if (count == 1 && w1 == 2 && w2 == 0) {
                 char file[20], dir[20], vol[20];
                 if (outp >= 0)
                     close(outp);
                 outp = -1;
                 /* process file definition */
                 /* we have a file definition entry */
-                for (i=0; i<16; i++)
-                {
+                for (i=0; i<16; i++) {
                     file[i] = tolower(buf[8+i]);
                     if (file[i] == ' ')
                         file[i] = '\0';
                 }
                 file[16] = '\0';
-                for (i=0; i<16; i++)
-                {
+                for (i=0; i<16; i++) {
                     dir[i] = tolower(buf[24+i]);
                     if (dir[i] == ' ')
                         dir[i] = '\0';
                 }
                 dir[16] = '\0';
-                for (i=0; i<16; i++)
-                {
+                for (i=0; i<16; i++) {
                     vol[i] = tolower(buf[40+i]);
                     if (vol[i] == ' ')
                         vol[i] = '\0';
@@ -223,23 +211,20 @@ int main (int argc, char *argv[])
                 printf("path = %s\n", path);
 
                 /* open output file, create it if necessary */
-                if ((outp = open(path, O_WRONLY|O_CREAT|O_TRUNC, 0666)) < 0)
-                {
+                if ((outp = open(path, O_WRONLY|O_CREAT|O_TRUNC, 0666)) < 0) {
                     (void)fprintf(stderr, "Can't open %s\n", path);
                     close(inp);
                     free(buf);
                     return (3);
                 }
                 /* process file data for file */
-                if (ll > 1536)
-                {
+                if (ll > 1536) {
                     int no = write(outp, buf+1536, ll-1536);
                     if (no != ll)
                         fprintf(stderr, "write (%d) != read (%d) on file %s\n", no, ll, path);
                 }
             } else
-            if (count > 1)
-            {
+            if (count > 1) {
                 /* process file data for file */
                 int no = write(outp, buf, ll);
                 if (no != ll)
@@ -247,8 +232,7 @@ int main (int argc, char *argv[])
             }
 
             /* process the returned buffer */
-//          while (cc < ll)
-//          {
+//          while (cc < ll) {
 //              curchar = (unsigned int)buf[cc++] & 0xff;
 //          } /* end of while */
         }

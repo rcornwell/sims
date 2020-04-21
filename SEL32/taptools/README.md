@@ -69,7 +69,7 @@ mkfmtape - This program creates an MPX 1.x filemgr save tape.  The
 
            command mkfmtape opts output.tap file1 file2 ...
            input - list of filename to save to tape.
-           output - output.tap a tap formated file.
+           output - output.tap a tap formatted file.
            options - -p = file type 0xca for programs
                    - -t = ascii text file 0xee
                    - -l = library/directory file 0xff
@@ -77,27 +77,29 @@ mkfmtape - This program creates an MPX 1.x filemgr save tape.  The
                    - -a = append entries to current file
                    - -u = username (directory)
 
-sdtfmgrcopy - This program reads a MPX 1.x filemgr save tape or a
-           user SDT followed by filemgr saves.  The filemgr tape 
-           must contain a filemgr save image with 4608 byte records.
-           A sdt tape starts with a 1920 byte record followed by
-           multiple 768 byte records to finish the sdt system image.
-           A sdt tape can be followed by one or more filemgr save
-           images of 4608 bytes. The boot image is put into bootfile1
-           in the current directory.  The program will create a
-           directory in the current directory for each different
-           username.  A null username will be the system directory.
-           Within each directory each file contained on the tape is
-           extracted and written as binary data to the named file.
-           The .tap file MUST be a filemgr save tape and not a
-           MPX 3.x volmgr save tape.
+mkvmtape - This program reads MPX files and stores them into a
+           simulated volmgr save tape. The tape may then become a 
+           MPX 3.X sdt boot tape to install MPX 3.X from or a volmgr
+           file restore tape for a running MPX system.  The output
+           will be in SIMH simulated .tap format.
 
-           command sdtfmgrcopy file.tap >stdout
-           input - file.tap file to dump
-           output - stdout filelist and sizes
-           output - if tape contains a sdt image, it will be output
-                    to the file bootfil1
-           output - directory/files extracted to current directory
+           command mkfmtape [-ptloa] [-bboot] [-iimage] [-jj.vfmt]
+                            [-uusername] tapname file1 file2 ...
+           intput - [options] volmtape filename, filename, etc.
+           output - volmtape file, file list to stdout
+
+           options - -p = file type 0xca for programs
+                   - -t = ascii text file 0xee
+                   - -l = library/directory file 0xff
+                   - -o = other 0x00
+                   - -a = append entries to current file
+                   - -u = username (username)
+                   - -d = dirname (directory)
+                   - -v = volname (volume)
+                   - -b = bootfile name
+                   - -i = system image file
+                   - -j = j.vfmt filename
+                   04/11/2020 update for mpx3.x
 
 diagcopy - This program reads a SEL .tap diagnostic boot tape and splits
            the contents into multiple files.  The first tape record
@@ -220,4 +222,4 @@ small -   Remove line numbers and trailing blanks from an ascii '\n'
           output -   write stripped ascii file to stdout
 
 James C. Bevier
-03/10/2020
+04/21/2020

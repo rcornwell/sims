@@ -52,9 +52,9 @@ char *argv[];
     unsigned int typ;                       /* file type requested by user */
     char *userp = username;                 /* pointer to username */
     int ofd;                                /* output file number */
-    int32_t filen;                          /* file number */
+    int filen;                              /* file number */
     u_int32_t *dirp;                        /* directory entry pointer */
-    int32_t totent;                         /* total smd entries */
+    int totent;                             /* total smd entries */
 
     memset((char *)dir, 0, 4608);           /* zero smd storage */
     memset((char *)data, 0, 4608);          /* zero data storage */
@@ -104,8 +104,7 @@ char *argv[];
                     case 'U':
                     case 'u':
                         option |= DOUSER;   /* save username for files */
-                        if (*p == '\0')
-                        {
+                        if (*p == '\0') {
                             p = *++argv;    /* next parameter */
                             --argc;         /* one less arg */
                         };
@@ -145,7 +144,7 @@ char *argv[];
                 fseek(dp, 0, SEEK_SET);             /* rewind file to beginning */
                 if (bytes > 8) {                    /* see if file written to already */
                     /* we need to find the EOT */
-                    int32_t n1, n2, hc, tc, n;
+                    int n1, n2, hc, tc, n;
                     int EOFcnt = 0;
 readmore:
                     n1 = fread((char *)(&hc), 1, (size_t)4, dp);    /* read 4 byte record size */
@@ -184,6 +183,14 @@ backup4:
                     if (n <= 0) {                   /* check for read error */
                         goto doabort;               /* bad tape format */
                     }
+
+                    /* if odd byte record, read extra byte and throw it away */
+                    if (n & 0x1) {
+                        n2 = fread((char *)(&hc), (size_t)1, (size_t)1, dp);
+                        if (n2 <= 0)
+                            return -1;              /* at EOM on disk file */
+                    }
+
                     n2 = fread((char *)(&hc), 1, (size_t)4, dp);    /* read 4 byte record size */
                     if (n2 <= 0) {                  /* check for read error */
 doabort:
@@ -293,16 +300,17 @@ getout:
         totent++;                               /* bump total count */
         if (filen == 144) {                     /* see if entry is full */
             /* we need to write out the directory entries */
-            int32_t n1, n2, nw;
+            int32_t n1, nw;
             /* we have data to write */
             int32_t hc = (4608 + 1) & ~1;       /* make byte count even */
+            int32_t n2 = 4608;                  /* get actual byte count */
             /* write actual byte count to 32 bit word as header */
-            n1 = fwrite((char *)(&hc), 1, (size_t)sizeof(hc), dp);
+            n1 = fwrite((char *)(&n2), 1, (size_t)4, dp);
             /* write the data mod 2 */
             nw = fwrite((unsigned char *)dir, 1, (size_t)hc, dp);
             /* write the byte count in 32 bit word as footer */
-            n2 = fwrite((char *)(&hc), 1, (size_t)sizeof(hc), dp);
-            if (n1 != sizeof(hc) || nw != hc || n2 != sizeof(hc))
+            n2 = fwrite((char *)(&hc), 1, (size_t)4, dp);
+            if (n1 != 4 || nw != hc || n2 != 4)
             {
                 fprintf(stderr, "write (%d) failure\n", nw);
                 fprintf(stderr, "Operation aborted\n");
@@ -316,16 +324,17 @@ getout:
     /* write out the directory entries for the files to save */
     if (filen != 0) {
         /* we need to write out the directory entries */
-        int32_t n1, n2, nw;
+        int32_t n1, nw;
         /* we have data to write */
         int32_t hc = (4608 + 1) & ~1;           /* make byte count even */
+        int32_t n2 = 4608;                      /* get actual byte count */
         /* write actual byte count to 32 bit word as header */
-        n1 = fwrite((char *)(&hc), 1, (size_t)sizeof(hc), dp);
+        n1 = fwrite((char *)(&n2), 1, (size_t)4, dp);
         /* write the data mod 2 */
         nw = fwrite((unsigned char *)dir, 1, (size_t)hc, dp);
         /* write the byte count in 32 bit word as footer */
-        n2 = fwrite((char *)(&hc), 1, (size_t)sizeof(hc), dp);
-        if (n1 != sizeof(hc) || nw != hc || n2 != sizeof(hc))
+        n2 = fwrite((char *)(&hc), 1, (size_t)4, dp);
+        if (n1 != 4 || nw != hc || n2 != 4)
         {
             fprintf(stderr, "write (%d) failure\n", nw);
             fprintf(stderr, "Operation aborted\n");
@@ -360,16 +369,17 @@ getout:
             blks++; 
 //      rewind(fp);                             /* back to beginning */
         while (fread((char *)data, 1, 4608, fp) > 0) {
-            int32_t n1, n2, nw;
+            int32_t n1, nw;
             /* we have data to write */
             int32_t hc = (4608 + 1) & ~1;       /* make byte count even */
+            int32_t n2 = 4608;                  /* get actual byte count */
             /* write actual byte count to 32 bit word as header */
-            n1 = fwrite((char *)(&hc), 1, (size_t)sizeof(hc), dp);
+            n1 = fwrite((char *)(&n2), 1, (size_t)4, dp);
             /* write the data mod 2 */
             nw = fwrite((unsigned char *)data, 1, (size_t)hc, dp);
             /* write the byte count in 32 bit word as footer */
-            n2 = fwrite((char *)(&hc), 1, (size_t)sizeof(hc), dp);
-            if (n1 != sizeof(hc) || nw != hc || n2 != sizeof(hc))
+            n2 = fwrite((char *)(&hc), 1, (size_t)4, dp);
+            if (n1 != 4 || nw != hc || n2 != 4)
             {
                 fprintf(stderr, "write (%d) failure\n", nw);
                 fprintf(stderr, "Operation aborted\n");
@@ -383,12 +393,12 @@ getout:
     }
     /* write EOF (zero) to file */
     filen = 0;                                  /* zero count */
-    fwrite((char *)(&filen), 1, (size_t)sizeof(filen), dp);
+    fwrite((char *)(&filen), 1, (size_t)4, dp);
     /* do second EOF */
-    fwrite((char *)(&filen), 1, (size_t)sizeof(filen), dp);
+    fwrite((char *)(&filen), 1, (size_t)4, dp);
     filen = -1;                                 /* make in -1 for EOM */
     /* do EOM */
-    fwrite((char *)(&filen), 1, (size_t)sizeof(filen), dp);
+    fwrite((char *)(&filen), 1, (size_t)4, dp);
 //  printf("setting at %ld bytes in file after EOM\n", ftell(dp));
     fclose(dp);
     exit(0);

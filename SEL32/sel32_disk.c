@@ -143,7 +143,7 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 #define DSK_BUSY        0x8000                  /* Disk is busy */
 /* commands */
 #define DSK_INCH        0x00                    /* Initialize channel */
-#define DSK_INCH2       0xf0                    /* Initialize channel for processing */
+#define DSK_INCH2       0xF0                    /* Initialize channel for processing */
 #define DSK_WD          0x01                    /* Write data */
 #define DSK_RD          0x02                    /* Read data */
 #define DSK_NOP         0x03                    /* No operation */
@@ -241,12 +241,6 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 
 /* INCH addr    up7 */
 
-#ifdef  NOUSED
-/* registers */
-uint32  star[NUM_UNITS_DISK];
-uint32  attr[NUM_UNITS_DISK];
-#endif
-
 /* disk definition structure */
 struct disk_t
 {
@@ -281,9 +275,9 @@ disk_type[] =
     {NULL, 0}
 };
 
-uint8   disk_preio(UNIT *uptr, uint16 chan) ;
-uint8   disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) ;
-uint8   disk_haltio(UNIT *uptr);
+uint16  disk_preio(UNIT *uptr, uint16 chan) ;
+uint16  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) ;
+uint16  disk_haltio(UNIT *uptr);
 t_stat  disk_srv(UNIT *uptr);
 t_stat  disk_boot(int32 unitnum, DEVICE *dptr);
 void    disk_ini(UNIT *, t_bool);
@@ -318,14 +312,6 @@ UNIT            dda_unit[] = {
     {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0x80e)},  /* 7 */
 };
 
-#ifdef  NOUSED
-REG             dda_reg = {
-    (BRDATAD(STAR, astar, 16, 32, NUM_UNITS_DISK, "Current STAR position"), REG_FIT,
-    (BRDATAD(ATTR, aattr, 16, 32, NUM_UNITS_DISK, "Disk Attributes"), RET_FIT,
-    {NULL}
-};
-#endif
-
 DIB             dda_dib = {
     disk_preio,                                 /* Pre start I/O */
     disk_startcmd,                              /* Start a command */
@@ -348,7 +334,8 @@ DEVICE          dda_dev = {
     NUM_UNITS_DISK, 16, 24, 4, 16, 32,
     NULL, NULL, &disk_reset, &disk_boot, &disk_attach, &disk_detach,
     /* ctxt is the DIB pointer */
-    &dda_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug,
+//  &dda_dib, DEV_DISABLE|DEV_DEBUG|DEV_DISK, 0, dev_debug,
+    &dda_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS|DEV_DISK, 0, dev_debug,
     NULL, NULL, &disk_help, NULL, NULL, &disk_description
 };
 
@@ -367,14 +354,6 @@ UNIT            ddb_unit[] = {
     {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC06)},  /* 6 */
     {UDATA(&disk_srv, UNIT_DISK|SET_TYPE(3), 0), 0, UNIT_ADDR(0xC07)},  /* 7 */
 };
-
-#ifdef  NOUSED
-REG             ddb_reg = {
-    (BRDATAD(STAR, bstar, 16, 32, NUM_UNITS_DISK, "Current STAR position"), REG_FIT,
-    (BRDATAD(ATTR, battr, 16, 32, NUM_UNITS_DISK, "Disk Attributes"), RET_FIT,
-    {NULL}
-};
-#endif
 
 DIB             ddb_dib = {
     disk_preio,                                 /* Pre Start I/O */
@@ -398,7 +377,8 @@ DEVICE          ddb_dev = {
     NUM_UNITS_DISK, 16, 24, 4, 16, 32,
     NULL, NULL, &disk_reset, &disk_boot, &disk_attach, &disk_detach,
     /* ctxt is the DIB pointer */
-    &ddb_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug,
+    &ddb_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS|DEV_DISK, 0, dev_debug,
+//  &ddb_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug,
     NULL, NULL, &disk_help, NULL, NULL, &disk_description
 };
 #endif
@@ -416,7 +396,7 @@ uint32 disksec2star(uint32 daddr, int type)
 }
 
 /* start a disk operation */
-uint8  disk_preio(UNIT *uptr, uint16 chan)
+uint16 disk_preio(UNIT *uptr, uint16 chan)
 {
     DEVICE      *dptr = get_dev(uptr);
     uint16      chsa = GET_UADDR(uptr->CMDu3);
@@ -431,7 +411,7 @@ uint8  disk_preio(UNIT *uptr, uint16 chan)
     return 0;                                   /* good to go */
 }
 
-uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
+uint16 disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 {
     uint16      chsa = GET_UADDR(uptr->CMDu3);
     DEVICE      *dptr = get_dev(uptr);
@@ -464,7 +444,7 @@ uint8  disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
             "disk_startcmd starting INCH %06x cmd, chsa %04x MemBuf %06x cnt %04x\n",
             uptr->u4, chsa, chp->ccw_addr, chp->ccw_count);
 
-        uptr->CMDu3 |= DSK_INCH2;               /* use 0xf0 for inch, just need int */
+        uptr->CMDu3 |= DSK_INCH2;               /* use 0xF0 for inch, just need int */
         sim_activate(uptr, 20);                 /* start things off */
 //@41   sim_activate(uptr, 40);                 /* start things off */
         return 0;
@@ -575,7 +555,7 @@ t_stat disk_srv(UNIT *uptr)
     case 0:                                     /* No command, stop disk */
         break;
 
-    case DSK_INCH2:                             /* used 0xff for inch, just need int */
+    case DSK_INCH2:                             /* used 0xF0 for inch, just need int */
     {
         uint32  mema;                           /* memory address */
 //      uint32  daws[8];                        /* drive attribute registers */
@@ -906,7 +886,7 @@ t_stat disk_srv(UNIT *uptr)
 
         /* calc the new sector address of data */
         /* calculate file position in bytes of requested sector */
-        /* file offseet in bytes */
+        /* file offset in bytes */
         tstart = STAR2SEC(uptr->STAR, SPT(type), SPC(type)) * SSB(type);
         /* set new STAR value using old cyl value */
         uptr->CHS = CHS2STAR(STAR2CYL(uptr->CHS), trk, buf[3]);
@@ -952,7 +932,7 @@ t_stat disk_srv(UNIT *uptr)
         uptr->CMDu3 &= LMASK;                   /* remove old status bits & cmd */
         uptr->CMDu3 |= DSK_SCK;                 /* show as seek command */
         tstart = 0;                             /* byte offset is 0 */
-#ifndef DO_NEW_WAY
+
         /* just seek to the location where we will r/w data */
         if ((sim_fseek(uptr->fileref, tstart, SEEK_SET)) != 0) {  /* do seek */
             sim_debug(DEBUG_EXP, dptr, "disk_srv Error on seek to %04x\n", tstart);
@@ -965,11 +945,6 @@ t_stat disk_srv(UNIT *uptr)
         uptr->CMDu3 &= LMASK;                   /* remove old status bits & cmd */
         chan_end(chsa, SNS_DEVEND|SNS_CHNEND);
         return SCPE_OK;
-#else
-        /* zero stuff */
-        buf[0] = buf[1] = buf[2] = buf[3] = 0;
-        goto rezero;                            /* merge with seek code */
-#endif
         break;
 
     case DSK_LMR:
@@ -1084,8 +1059,6 @@ t_stat disk_srv(UNIT *uptr)
             sim_activate(uptr, 10);             /* wait to read next sector */
 //@41       sim_activate(uptr, 30);             /* wait to read next sector */
             break;
-//XXXrddone:
-//XXX       uptr->CMDu3 &= ~(0xffff);           /* remove old status bits & cmd */
         }
         break;
 
@@ -1389,7 +1362,8 @@ t_stat disk_srv(UNIT *uptr)
         sim_debug(DEBUG_CMD, dptr, "invalid command %02x unit %02x\n", cmd, unit);
         uptr->SNS |= SNS_CMDREJ;
         uptr->CMDu3 &= LMASK;                   /* remove old status bits & cmd */
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+//      chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+        return SNS_CHNEND|STATUS_PCHK;
         break;
     }
     sim_debug(DEBUG_DETAIL, dptr,
@@ -1407,7 +1381,7 @@ void disk_ini(UNIT *uptr, t_bool f)
     uptr->CHS = 0;                              /* set CHS to cyl/hd/sec = 0 */
     uptr->STAR = 0;                             /* set STAR to cyl/hd/sec = 0 */
     uptr->CMDu3 &= LMASK;                         /* remove old status bits & cmd */
-    uptr->SNS = ((uptr->SNS & 0x00ffffff) | (disk_type[i].type << 24));  /* save mode value */
+    uptr->SNS = ((uptr->SNS & MASK24) | (disk_type[i].type << 24));  /* save mode value */
     /* total sectors on disk */
     uptr->capac = CAP(i);                       /* size in sectors */
 
@@ -1505,19 +1479,6 @@ int disk_format(UNIT *uptr) {
     if (!get_yn("Initialize disk? [Y] ", TRUE)) {
         return 1;
     }
-#ifdef OLD_WAY
-    /* dmap data */
-    /* the diag map (dmap) is in last sec of disk */
-    /* (cyl * trk * sec) - 1  = cap - 1*/
-    /* 0xf0046531 - 288049 - 822/9/34 */
-    /* 0x8a0460d2 - 286930 - 819/8/0 */
-    /* 0x9a046531 - 288049 - 822/9/34 */
-    /* 0xf4000000 */
-    dmap[0] = 0xf0000000 | (cap-1);         /* 0xf003d14f */
-    dmap[1] = 0x8a000000 | daddr;           /* 0x8a03ccaf */
-    dmap[2] = 0x9a000000 | (cap-1);         /* 0x9a03d14f */
-    dmap[3] = 0xf4000000;
-#endif
 
     /* VDT  249264 (819/18/0) 0x3cdb0 for 9346 - 823/19/16 vaddr */
     /* MDT  249248 (819/17/0) 0x3cda0 for 9346 - 823/19/16 daddr */
@@ -1761,7 +1722,7 @@ t_stat disk_boot(int32 unit_num, DEVICE *dptr) {
     sim_debug(DEBUG_CMD, dptr, "Disk Boot dev/unit %x\n", GET_UADDR(uptr->CMDu3));
 
     if ((uptr->flags & UNIT_ATT) == 0) {
-        sim_debug(DEBUG_EXP, &mta_dev, "Disk Boot attach error dev/unit %04x\n",
+        sim_debug(DEBUG_EXP, dptr, "Disk Boot attach error dev/unit %04x\n",
             GET_UADDR(uptr->CMDu3));
         return SCPE_UNATT;                          /* attached? */
     }

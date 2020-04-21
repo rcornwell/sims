@@ -32,8 +32,8 @@ off_t size=0, tsize=0;          /* number of bytes in file, total */
 int ln;
 char *inf, *outf;
 int copy;
-size_t size_128K = 128 * 1024;
-size_t size_256K = 256 * 1024;
+int32_t size_128K = 128 * 1024;
+int32_t size_256K = 256 * 1024;
 
 int main(argc, argv)
 int argc;
@@ -41,37 +41,31 @@ char **argv;
 {
     int n, nw, inp, outp;
     struct mtop op;
-    size_t buf_size = size_256K;
+    int32_t buf_size = size_256K;
     int EOFcnt = 0;     /* count the number of EOFs in a row. */
 
-    if (argc <= 1 || argc > 3)
-    {
+    if (argc <= 1 || argc > 3) {
         (void)fprintf(stderr, "Usage: tape2disk src [dest]\n");
         return (1);
     }
     inf = argv[1];
-    if (argc == 3)
-    {
+    if (argc == 3) {
         outf = argv[2];
         copy = 1;
     }
-    if ((inp = open(inf, O_RDONLY, 0666)) < 0)
-    {
+    if ((inp = open(inf, O_RDONLY, 0666)) < 0) {
         (void)fprintf(stderr, "Can't open %s\n", inf);
         return (1);
     }
-    if (copy)
-    {
+    if (copy) {
         /* open output file, create it if necessary */
-        if ((outp = open(outf, O_WRONLY|O_CREAT, 0666)) < 0)
-        {
+        if ((outp = open(outf, O_WRONLY|O_CREAT, 0666)) < 0) {
             (void)fprintf(stderr, "Can't open %s\n", outf);
             return (3);
         }
     }
     /* get a 128k buffer */
-    if ((buff = malloc(buf_size)) == NULL)
-    {
+    if ((buff = malloc(buf_size)) == NULL) {
         (void)fprintf(stderr, "Can't allocate memory for tapecopy\n");
         return (4);
     }
@@ -79,29 +73,24 @@ char **argv;
         (void)signal(SIGINT, RUBOUT);
 
     ln = -2;
-    for (;;)
-    {
+    for (;;) {
         count++;
         errno = 0;
         /* read first record to get size for buffer, doubling each time unsuccessful */
-        while ((n = read(inp, buff, buf_size)) < 0)
-        {
-            if (errno == ENOMEM)
-            {
+        while ((n = read(inp, buff, buf_size)) < 0) {
+            if (errno == ENOMEM) {
                 if (buf_size < size_256K)
                     buf_size = size_256K;
                 else
                     buf_size *= 2;
                 free(buff);
-                if ((buff = malloc(buf_size)) == NULL)
-                {
+                if ((buff = malloc(buf_size)) == NULL) {
                     (void)fprintf(stderr, "Can't allocate memory for tapecopy\n");
                     return (4);
                 }
                 op.mt_op = MTFSF;   /* Rewind to start of file */
                 op.mt_count = (daddr_t) 0;
-                if (ioctl(inp, MTIOCTOP, (char *)&op) < 0)
-                {
+                if (ioctl(inp, MTIOCTOP, (char *)&op) < 0) {
                     perror("Read buffer size error");
                     return (6);
                 }
@@ -112,33 +101,29 @@ char **argv;
             errno = 0;
 //          return (6);     /* abort on error, comment out to ignore taoe errors */
         }
-        if (n > 0)
-        {
+        if (n > 0) {
             /* we read some data, see if scanning or writing */
             EOFcnt = 0;     /* not at EOF anymore */
-            if (copy)
-            {
-                int n1, n2;
+            if (copy) {
+                int32_t n1, n2;
                 /* we have data to write */
-                int hc = (n + 1) & ~1;      /* make byte count even */
+                int32_t hc = (n + 1) & ~1;      /* make byte count even */
+                int32_t wc = n;                 /* get actual byte count */
                 /* write actual byte count to 32 bit word as header */
-                n1 = write(outp, (char *)(&hc), (size_t)sizeof(hc));
+                n1 = write(outp, (char *)(&wc), (int32_t)4);
                 /* write the data mod 2 */
-                nw = write(outp, buff, (size_t)hc);
+                nw = write(outp, buff, (int32_t)hc);
                 /* write the byte count in 32 bit word as footer */
-                n2 = write(outp, (char *)(&hc), (size_t)sizeof(hc));
-                if (n1 != sizeof(hc) || nw != hc || n2 != sizeof(hc))
-                {
+                n2 = write(outp, (char *)(&wc), (int32_t)4);
+                if (n1 != 4 || nw != hc || n2 != 4) {
                     fprintf(stderr, "write (%d) !=" " read (%d)\n", nw, n);
                     fprintf(stderr, "COPY " "Aborted\n");
                     return (5);
                 }
             }
             size += n;      /* update bytes read */
-            if (n != ln)    /* must be last record of file if different */
-            {
-                if (ln > 0)
-                {
+            if (n != ln) {  /* must be last record of file if different */
+                if (ln > 0) {
                     /* we read something */
                     if ((count - lcount) > 1)
                         (void)printf("file %d: records %ld to %ld: size %d\n", filen, lcount, count - 1, ln);
@@ -148,30 +133,25 @@ char **argv;
                 ln = n;             /* save last record size */
                 lcount = count;     /* also record count */
             }
-        }
-        else
-        {
+        } else {
             /* we did not read data, it must be an EOF */
             /* if ln is -1, last operation was EOF, now we have a second */
 #ifdef FMGRTAPE
             /* filemgr has 2 EOF's at end of tape */
-            if (++EOFcnt > 1)
-            {
+            if (++EOFcnt > 1) {
                 /* two EOFs mean we are at EOT */
                 (void)printf("fmgr eot\n");
                 break;
             }
 #else
             /* volmgr has 3 EOF's at end of tape */
-            if (++EOFcnt > 2)
-            {
+            if (++EOFcnt > 2) {
                 /* three EOFs mean we are at EOT on MPX */
                 (void)printf("volm eot\n");
                 break;
             }
 #endif
-            if (ln > 0)
-            {
+            if (ln > 0) {
                 if (count - lcount > 1)
                     (void)printf("file %d: records %ld to %ld: size %d\n", filen, lcount, count - 1, ln);
                 else
@@ -183,15 +163,13 @@ char **argv;
             if (EOFcnt == 2)        /* if 2nd EOF, print file info */
                 (void)printf("second eof after %d files: %ld bytes\n", filen, size);
 #endif
-            if (copy)
-            {
+            if (copy) {
                 /* write a sudo EOF to disk file as a zero 4 byte record */
                 int n1, hc = 0;
                 /* write the EOF */
                 /* write a zero as the byte count in 32 bit word as EOF */
-                n1 = write(outp, (char *)(&hc), (size_t)sizeof(hc));
-                if (n1 != sizeof(hc))
-                {
+                n1 = write(outp, (char *)(&hc), (int32_t)4);
+                if (n1 != 4) {
                     perror("Write EOF");
                     return (6);
                 }
@@ -209,15 +187,13 @@ char **argv;
             ln = n;         /* set ln to -1 showing we are at EOF */
         }
     }
-    if (copy)
-    {
+    if (copy) {
         /* write a sudo EOM to disk file as a -1 4 byte record */
-        int n1, hc = 0xffffffff;
+        int32_t n1, hc = 0xffffffff;
         /* write the EOM to disk */
         /* write a -1 as the byte count in 32 bit word as EOM */
-        n1 = write(outp, (char *)(&hc), (size_t)sizeof(hc));
-        if (n1 != sizeof(hc))
-        {
+        n1 = write(outp, (char *)(&hc), (int32_t)4);
+        if (n1 != 4) {
             perror("Write EOM");
             return (6);
         }
