@@ -1906,8 +1906,8 @@ t_stat chan_set_devs() {
             continue;
         if (dptr->flags & DEV_DIS) {                /* Skip disabled devices */
             chsa = GET_UADDR(uptr->u3);             /* ch/sa value */
-            printf("Device %s chsa %04x not set up dptr %x\n",
-                dptr->name, chsa, uptr->dptr);
+            printf("Device %s chsa %04x not set up dptr %p\n",
+                dptr->name, chsa, (void *)uptr->dptr);
             continue;
         }
 
@@ -1916,8 +1916,8 @@ t_stat chan_set_devs() {
         /* Check if address is in unit or dev entry */
         for (j = 0; j < dptr->numunits; j++) {      /* loop through unit entries */
             chsa = GET_UADDR(uptr->u3);             /* ch/sa value */
-printf("Setup device %s%d chsa %04x type %03d dptr %x\n",
-      dptr->name, j, chsa, GET_TYPE(uptr->flags), uptr->dptr);
+printf("Setup device %s%d chsa %04x type %03d dptr %p\n",
+      dptr->name, j, chsa, GET_TYPE(uptr->flags), (void *)uptr->dptr);
             /* zero some channel data loc's for device */
 //0401      dev_status[chsa] = 0;                   /* zero device status flags */
 //0401      dev_status[chsa&0x7f00] = 0;            /* clear the channel status location */
