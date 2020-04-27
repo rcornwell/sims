@@ -438,6 +438,7 @@ t_opcode        *tab;
                               if (val[1] & 0xf000)
                                   fprintf(of, "(%d)", (val[1] >> 12) & 0xf);
                           }
+                          break;
                        }
                     }
                     break;

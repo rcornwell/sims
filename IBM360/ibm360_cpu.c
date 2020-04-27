@@ -42,6 +42,8 @@ uint32       cregs[16];            /* Control registers /67 or 370 only */
 uint16       sysmsk;               /* Interupt mask */
 uint8        ext_en;               /* Enable external and timer IRQ's */
 uint8        irq_en;               /* Enable channel IRQ's */
+uint8        tod_en;               /* Enable TOD compare irq's */
+uint8        intval_en;            /* Enable interval irq's */
 uint8        st_key;               /* Storage key */
 uint8        ec_mode;              /* EC mode PSW */
 uint8        cc;                   /* CC */
@@ -60,6 +62,7 @@ int          page_mask;            /* Mask of bits in page address */
 int          seg_shift;            /* Amount to shift for segment */
 int          seg_mask;             /* Mask bits for segment */
 int          seg_len;              /* Length of segment table */
+int          pte_len_shift;        /* Shift to Check if out out page table */
 int          seg_addr;             /* Address of segment table */
 int          pte_avail;            /* Mask of available bit in PTE */
 int          pte_mbz;              /* Bits that must be zero in PTE */
@@ -68,17 +71,13 @@ int          per_en;               /* Enable PER tracing */
 uint32       per_mod;              /* Module modification mask */
 int          per_code;             /* Code for PER */
 uint32       per_addr;             /* Address of last reference */
-#ifdef USE_64BIT
-t_uint64     tod_clock;            /* Current Time of Day Clock */
-t_uint64     clk_cmp;              /* Clock compare value */
-t_uint64     cpu_timer;            /* CPU timer value */
-#else
 uint32       tod_clock[2];         /* Current Time of Day Clock */
 uint32       clk_cmp[2];           /* Clock compare value */
 uint32       cpu_timer[2];         /* CPU timer value */
-#endif
+uint8        clk_irq;              /* Clock compare IRQ */
+uint8        tod_irq;              /* TOD compare IRQ */
 int          clk_state;
-int          timer_tics;           /* Access count for TOD */
+int          timer_tics;           /* Interval Timer is ever 3 tics */
 
 #define CLOCK_UNSET   0            /* Clock not set */
 #define CLOCK_SET     1            /* Clock set */
@@ -183,7 +182,7 @@ int          timer_tics;           /* Access count for TOD */
 #define PTE_ADR     0x00fffffe     /* Address of table */
 #define PTE_VALID   0x00000001     /* table valid */
 
-#define TLB_SEG     0x7ffff000     /* Segment address */
+#define TLB_SEG     0x0001f000     /* Segment address */
 #define TLB_VALID   0x80000000     /* Entry valid */
 #define TLB_PHY     0x00000fff     /* Physical page */
 
@@ -240,15 +239,15 @@ void   dec_srp(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2);
 void   dec_add(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2);
 void   dec_mul(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2);
 void   dec_div(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2);
+//void   check_timer_irq();
+void   check_tod_irq();
 
 t_bool build_dev_tab (void);
 
 /* Interval timer option */
 t_stat              rtc_srv(UNIT * uptr);
-t_stat              clk_srv(UNIT * uptr);
 t_stat              rtc_reset(DEVICE * dptr);
 int32               rtc_tps = 300;
-int32               clk_tps = 1000;
 
 
 /* CPU data structures
@@ -259,9 +258,7 @@ int32               clk_tps = 1000;
    cpu_mod      CPU modifier list
 */
 
-UNIT cpu_unit[] = { {UDATA (&rtc_srv, UNIT_IDLE|UNIT_BINK|UNIT_FIX, MAXMEMSIZE)},
-                    {UDATA (&clk_srv, UNIT_DIS, 0)}
-};
+UNIT cpu_unit[] = { {UDATA (&rtc_srv, UNIT_IDLE|UNIT_BINK|UNIT_FIX, MAXMEMSIZE)} };
 
 REG cpu_reg[] = {
     { HRDATA (PC, PC, 24) },
@@ -307,6 +304,7 @@ MTAB cpu_mod[] = {
     { MTAB_VDV, MEMAMOUNT(32), NULL, "512K", &cpu_set_size },
     { MTAB_VDV, MEMAMOUNT(64), NULL, "1M", &cpu_set_size },
     { MTAB_VDV, MEMAMOUNT(128), NULL, "2M", &cpu_set_size },
+    { MTAB_VDV, MEMAMOUNT(256), NULL, "4M", &cpu_set_size },
     { FEAT_370, FEAT_370, "IBM370", "IBM370", NULL, NULL, NULL, "Sets CPU to be a IBM370"},
     { FEAT_370, 0, "IBM360", "IBM360", NULL, NULL, NULL, "Sets CPU to be a IBM360"},
     { FEAT_PROT, 0, NULL, "NOPROT", NULL, NULL, NULL, "No Storage protection"},
@@ -436,8 +434,8 @@ void storepsw(uint32 addr, uint16 ircode) {
          hst[hst_p].src1 = word;
          hst[hst_p].src2 = word2;
      }
-     sim_debug(DEBUG_INST, &cpu_dev, "store %02x %d %x PSW=%08x %08x\n\r", addr, ilc,
-             cc, word, word2);
+     sim_debug(DEBUG_INST, &cpu_dev, "store %02x %d %x %03x PSW=%08x %08x\n\r", addr, ilc,
+             cc, ircode, word, word2);
      irqcode = ircode;
 }
 
@@ -485,12 +483,13 @@ int  TransAddr(uint32 va, uint32 *pa) {
      }
 
      page = (va >> page_shift);
-     seg = (page & 0xff00) << 4;
+     seg = (page & 0x1f00) << 4;
      /* Quick check if TLB correct */
      entry = tlb[page & 0xff];
-// fprintf(stderr, "translatex: %08x %08x\r\n", entry, page);
+//fprintf(stderr, "translatex: %08x %08x %08x ", va, entry, page);
      if ((entry & TLB_VALID) != 0 && ((entry ^ seg) & TLB_SEG) == 0) {
          *pa = (va & page_mask) | ((entry & TLB_PHY) << page_shift);
+//fprintf(stderr, " -> %08x\n\r", *pa);
          if (*pa >= MEMSIZE) {
             storepsw(OPPSW, IRC_ADDR);
             return 1;
@@ -500,7 +499,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
      /* TLB not correct, try loading correct entry */
      seg = (va >> seg_shift) & seg_mask;   /* Segment number to word address */
      page = (va >> page_shift) & page_index;
-// fprintf(stderr, "translate: %08x %03x %03x\r\n", va, seg, page);
+ //fprintf(stderr, "translatex: %08x %03x %03x\r\n", va, seg, page);
      /* Check address against lenght of segment table */
      if (seg > seg_len) {
          if ((cpu_unit[0].flags & FEAT_370) == 0)
@@ -514,30 +513,32 @@ int  TransAddr(uint32 va, uint32 *pa) {
          return 1;
      }
      addr = (((seg << 2) + seg_addr) & AMASK);
-// fprintf(stderr, "translate0: %08x\r\n", addr);
+ //fprintf(stderr, "translate0: %08x\r\n", addr);
      if (addr >= MEMSIZE) {
          storepsw(OPPSW, IRC_ADDR);
          return 1;
      }
      /* Get pointer to page table */
      entry = M[addr >> 2];
-// fprintf(stderr, "translate1: %08x\r\n", entry);
+ //fprintf(stderr, "translate1: %08x\r\n", entry);
+     addr = (entry >> 28) + 1;
      /* Check if entry valid and in correct length */
-     if (entry & PTE_VALID || page > (entry >> 24)) {
+     if (entry & PTE_VALID || (page >> pte_len_shift) > addr) {
          if ((cpu_unit[0].flags & FEAT_370) == 0)
              cregs[2] = va;
          else {
              M[0x90 >> 2] = va;
              PC = iPC;
          }
-         storepsw(OPPSW, IRC_PAGE);
+ //fprintf(stderr, "translatep1: %08x\r\n", entry);
+         storepsw(OPPSW, (entry & PTE_VALID) ? IRC_SEG : IRC_PAGE);
          return 1;
      }
 
      /* Now we need to fetch the actual entry */
      addr = (entry & PTE_ADR) + (page << 1);
      addr &= AMASK;
-// fprintf(stderr, "translate2: %08x\r\n", entry);
+ //fprintf(stderr, "translate2: %08x\r\n", addr);
      if (addr >= MEMSIZE) {
          storepsw(OPPSW, IRC_ADDR);
          return 1;
@@ -545,7 +546,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
      entry = M[addr >> 2];
      entry >>= (addr & 2) ? 0 : 16;
      entry &= 0xffff;
-// fprintf(stderr, "translate3: %08x\r\n", entry);
+ //fprintf(stderr, "translate3: %08x\r\n", entry);
 
      if ((entry & pte_mbz) != 0) {
          if ((cpu_unit[0].flags & FEAT_370) == 0)
@@ -554,6 +555,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
              M[0x90 >> 2] = va;
              PC = iPC;
          }
+ //fprintf(stderr, "translatesp: %08x\r\n", entry);
          storepsw(OPPSW, IRC_SPEC);
          return 1;
      }
@@ -566,6 +568,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
              M[0x90 >> 2] = va;
              PC = iPC;
          }
+ //fprintf(stderr, "translatep2: %08x\r\n", entry);
          storepsw(OPPSW, IRC_PAGE);
          return 1;
      }
@@ -573,11 +576,10 @@ int  TransAddr(uint32 va, uint32 *pa) {
      /* Compute correct entry */
      entry >>= pte_shift; /* Move physical to correct spot */
      page = (va >> page_shift);
-     entry |= ((page & 0xff00) << 4) | TLB_VALID;
-     seg = (page & 0xff00) << 4;
-     tlb[page & 0xff] = entry | seg;
+     entry |= ((page & 0x1f00) << 4) | TLB_VALID;
+     tlb[page & 0xff] = entry;
      *pa = (va & page_mask) | ((entry & TLB_PHY) << page_shift);
-// fprintf(stderr, "translatef: %08x\r\n", *pa);
+ //fprintf(stderr, "translatef: %08x\r\n", *pa);
      if (*pa >= MEMSIZE) {
         storepsw(OPPSW, IRC_ADDR);
         return 1;
@@ -610,16 +612,15 @@ int  ReadFull(uint32 addr, uint32 *data) {
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
-         key[pa >> 11] |= 0x4;
      }
+     key[pa >> 11] |= 0x4;
 
      offset = pa & 0x3;
      if (offset != 0 && (cpu_unit[0].flags & FEAT_STOR) == 0) {
           storepsw(OPPSW, IRC_SPEC);
           return 1;
      }
-     pa >>= 2;
-     *data = M[pa];
+     *data = M[pa >> 2];
      if (offset != 0) {
          uint32     temp;
          uint8      k;
@@ -638,11 +639,12 @@ int  ReadFull(uint32 addr, uint32 *data) {
                 }
             }
          }
+         key[temp >> 11] |= 0x4;
          temp >>= 2;
          temp = M[temp];
          *data <<= 8 * offset;
          temp >>= 8 * (4 - offset);
-         *data = temp;
+         *data |= temp;
      }
      return 0;
 }
@@ -711,7 +713,7 @@ int WriteFull(uint32 addr, uint32 data) {
      }
 
      offset = pa & 0x3;
- 
+
      if (offset != 0 && (cpu_unit[0].flags & FEAT_STOR) == 0) {
          storepsw(OPPSW, IRC_SPEC);
          return 1;
@@ -728,8 +730,8 @@ int WriteFull(uint32 addr, uint32 data) {
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
-         key[pa >> 11] |= 0x6;
      }
+     key[pa >> 11] |= 0x6;
 
      pa2 = pa + 4;
      /* Check if we handle unaligned access */
@@ -760,8 +762,8 @@ int WriteFull(uint32 addr, uint32 data) {
                  storepsw(OPPSW, IRC_PROT);
                  return 1;
              }
-             key[pa2 >> 11] |= 0x6;
          }
+         key[pa2 >> 11] |= 0x6;
      }
      pa >>= 2;
      pa2 >>= 2;
@@ -826,8 +828,8 @@ int WriteByte(uint32 addr, uint32 data) {
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
-         key[pa >> 11] |= 0x6;
      }
+     key[pa >> 11] |= 0x6;
 
      offset = 8 * (3 - (pa & 0x3));
      pa >>= 2;
@@ -883,8 +885,8 @@ int WriteHalf(uint32 addr, uint32 data) {
             storepsw(OPPSW, IRC_PROT);
             return 1;
         }
-        key[pa >> 11] |= 0x6;
      }
+     key[pa >> 11] |= 0x6;
 
      pa2 = pa + 4;
      if (offset == 3 && (pa2 & 0x7FC) == 0) {
@@ -915,8 +917,8 @@ int WriteHalf(uint32 addr, uint32 data) {
                 storepsw(OPPSW, IRC_PROT);
                 return 1;
             }
-            key[pa2 >> 11] |= 0x6;
         }
+        key[pa2 >> 11] |= 0x6;
      }
      pa >>= 2;
      pa2 >>= 2;
@@ -996,6 +998,7 @@ sim_instr(void)
                  pte_avail = 0x4;
                  pte_mbz = 0x2;
                  pte_shift = 3;
+                 pte_len_shift = 1;
                  break;
         case 2:  /* 4K pages */
                  page_shift = 12;
@@ -1003,17 +1006,19 @@ sim_instr(void)
                  pte_avail = 0x8;
                  pte_mbz = 0x6;
                  pte_shift = 4;
+                 pte_len_shift = 0;
                  break;
         }
-        switch((cregs[0] >> 20) & 07) {
+        switch((cregs[0] >> 19) & 07) {
         default: /* Generate translation exception */
         case 0:  /* 64K segments  */
                  seg_shift = 16;
                  seg_mask = AMASK >> 16;
                  break;
         case 2:  /* 1M segments */
-                 seg_shift = 19;
-                 seg_mask = AMASK >> 19;
+                 seg_shift = 20;
+                 seg_mask = AMASK >> 20;
+                 pte_len_shift += 4;
                  break;
         }
         seg_addr = cregs[1] & AMASK;
@@ -1023,11 +1028,6 @@ sim_instr(void)
     page_index = ((~(seg_mask << seg_shift) & ~page_mask) & AMASK) >> page_shift;
     reason = SCPE_OK;
     ilc = 0;
-    /* Enable timer if option set */
-    if (cpu_unit[0].flags & FEAT_TIMER) {
-        sim_activate(&cpu_unit[0], 100);
-    }
-    interval_irq = 0;
     irq_en |= (loading != 0);
 
     while (reason == SCPE_OK) {
@@ -1055,17 +1055,36 @@ wait_loop:
 
         /* Check for external interrupts */
         if (ext_en) {
-            if ((cpu_unit[0].flags & EXT_IRQ) && (cregs[0] & 0x40) != 0) {
-                ilc = 0;
-                cpu_unit[0].flags &= ~EXT_IRQ;
-                storepsw(OEPSW, 0x40);
-                goto supress;
+            if ((cpu_unit[0].flags & EXT_IRQ) != 0) {
+                if (!ec_mode ||
+                    ((cpu_unit[0].flags & FEAT_370) != 0 && ((cregs[0] & 0x20) != 0)) ||
+                    ((cpu_unit[0].flags & FEAT_370) == 0 && ((cregs[6] & 0x40) != 0))) {
+                    ilc = 0;
+                    cpu_unit[0].flags &= ~EXT_IRQ;
+                    storepsw(OEPSW, 0x40);
+                    goto supress;
+                }
             }
 
-            if (interval_irq && (cregs[0] & 0x80) != 0) {
+            if (interval_irq &&
+                    ((((cpu_unit[0].flags & (FEAT_370|FEAT_DAT)) != 0 &&
+                         ((cregs[0] & 0x80) != 0))) ||
+                        ((cpu_unit[0].flags & (FEAT_TIMER)) != 0))) {
                 ilc = 0;
                 interval_irq = 0;
                 storepsw(OEPSW, 0x80);
+                goto supress;
+            }
+            if (clk_irq && intval_en) {
+                ilc = 0;
+                clk_irq = 0;
+                storepsw(OEPSW, 0x1005);
+                goto supress;
+            }
+            if (tod_irq && tod_en) {
+                ilc = 0;
+                tod_irq = 0;
+                storepsw(OEPSW, 0x1004);
                 goto supress;
             }
         }
@@ -1376,8 +1395,8 @@ exe:
                     storepsw(OPPSW, IRC_SPEC);
                 } else if (addr1 >= MEMSIZE) {
                     storepsw(OPPSW, IRC_ADDR);
-                } else if (cpu_unit[0].flags & FEAT_PROT) {
-                    if ((cpu_unit[0].flags & FEAT_370) != 0)
+                } else {
+                    if ((cpu_unit[0].flags & FEAT_DAT) != 0)
                         key[addr1 >> 11] = src1 & 0xfe;
                     else
                         key[addr1 >> 11] = src1 & 0xf8;
@@ -1396,7 +1415,7 @@ exe:
                     storepsw(OPPSW, IRC_ADDR);
                 } else {
                     dest &= 0xffffff00;
-                    if ((cpu_unit[0].flags & FEAT_370) != 0)
+                    if (ec_mode)
                         dest |= key[addr1 >> 11] & 0xfe;
                     else
                         dest |= key[addr1 >> 11] & 0xf8;
@@ -2197,8 +2216,9 @@ save_dbl:
                         per_mod |= 1 << reg1;
                         break;
                     }
+                    addr2 = (entry >> 28) + 1;
                     /* Check if over end of table */
-                    if (page > (entry >> 24)) {
+                    if ((page >> pte_len_shift) > addr2) {
                         cc = 3;
                         regs[reg1] = addr1;
                         per_mod |= 1 << reg1;
@@ -2731,7 +2751,6 @@ save_dbl:
 
                    case 0x3: /* STIDC */
                               /* Store channel id */
-                              addr1 = 168;
                               dest = (addr1 >> 8) & 0xff;
                               if (dest > MAX_CHAN) {
                                   cc = 3;
@@ -2743,121 +2762,89 @@ save_dbl:
                                   dest = 0;
                               if (WriteFull(addr1, dest))
                                  goto supress;
-                              dest = 0;
-                              if (WriteFull(addr1+1, dest))
-                                 goto supress;
+                              cc = 0;
                               break;
 
                    case 0x4: /* SCK */
                               /* Load clock with double word */
-#if USE_64BIT
                               if (ReadFull(addr1, &src1))
-                                 goto supress;
-                              if (ReadFull(addr1+4, &src1h))
-                                 goto supress;
-                              tod_clock = (((t_uint64)(src1)) << 32) | ((t_uint64)src1h);
-fprintf(stderr, "Set TOD %016llx\r\n", tod_clock);
-#else
-                              if (ReadFull(addr1, &src1))
-                                 goto supress;
-                              if (ReadFull(addr1+4, &src1h))
                                  goto supress;
                               tod_clock[0] = src1;
-                              tod_clock[1] = src1h;
-#endif
+                              tod_clock[1] = 0;
                               clk_state = CLOCK_SET;
+                              check_tod_irq();
                               cc = 0;
                               break;
                    case 0x5: /* STCK */
                               /* Store TOD clock in location */
-#if USE_64BIT
-                              src1h = (uint32)(tod_clock & 0xFFFFF000);
-                              src1 = (uint32)((tod_clock >> 32) & 0xffffffff);
+                              src1 = tod_clock[0];
+                              src1h = tod_clock[1];
+                              if (clk_state && sim_is_active(&cpu_unit[0])) {
+                                  double us = (1000000.0/(double)rtc_tps);
+                                  us -= sim_activate_time_usecs(&cpu_unit[0]);
+                                  dest = src1h + (((int)us) << 12);
+                                  if (dest < src1h)
+                                     src1++;
+                                  src1h = dest & ~0xfff;
+//fprintf(stderr, "Store tod %08x %08x %d %08x %08x\r\n", tod_clock[0], tod_clock[1], (int)us, src1, src1h);
+                              }
                               if (WriteFull(addr1, src1))
                                  goto supress;
                               if (WriteFull(addr1+4, src1h))
                                  goto supress;
-                              if (clk_state && (cregs[0] & 0x20000000) == 0) {
-                                  tod_clock += 0x1000;
-                                  timer_tics += 0x1000;
-                              }
-#else
-                              if (WriteFull(addr1, tod_clock[0]))
-                                 goto supress;
-                              if (WriteFull(addr1+4, tod_clock[1]))
-                                 goto supress;
-                              if (clk_state && (cregs[0] & 0x20000000) == 0) {
-                                  tod_clock[1] += 0x1000;
-                                  timer_tics += 0x1000;
-                              }
-#endif
                               cc = !clk_state;
                               break;
                    case 0x6: /* SCKC */
                               /* Load clock compare with double word */
-#if USE_64BIT
-                              if (ReadFull(addr1, &src1))
-                                 goto supress;
-                              if (ReadFull(addr1+4, &src1h))
-                                 goto supress;
-                              clk_cmp = (((t_uint64)(src1)) << 32) | ((t_uint64)src1h);
-#else
                               if (ReadFull(addr1, &src1))
                                  goto supress;
                               if (ReadFull(addr1+4, &src1h))
                                  goto supress;
                               clk_cmp[0] = src1;
                               clk_cmp[1] = src1h;
-#endif
+                              check_tod_irq();
                               break;
                    case 0x7: /* STCKC */
                               /* Store clock compare in double word */
-#if USE_64BIT
-                              src1h = (uint32)(clk_cmp & 0xFFFFF000);
-                              src1 = (uint32)((clk_cmp >> 32) & 0xffffffff);
-                              if (WriteFull(addr1, src1))
-                                 goto supress;
-                              if (WriteFull(addr1+4, src1h))
-                                 goto supress;
-#else
                               if (WriteFull(addr1, clk_cmp[0]))
                                  goto supress;
                               if (WriteFull(addr1+4, clk_cmp[1]))
                                  goto supress;
-#endif
                               break;
                    case 0x8: /* SPT */
                               /* Set the CPU timer with double word */
-#if USE_64BIT
-                              if (ReadFull(addr1, &src1))
-                                 goto supress;
-                              if (ReadFull(addr1+4, &src1h))
-                                 goto supress;
-                              cpu_timer = (((t_uint64)(src1)) << 32) | ((t_uint64)src1h);
-#else
                               if (ReadFull(addr1, &src1))
                                  goto supress;
                               if (ReadFull(addr1+4, &src1h))
                                  goto supress;
                               cpu_timer[0] = src1;
                               cpu_timer[1] = src1h;
-#endif
+                              if (sim_is_active(&cpu_unit[0])) {
+                                  double nus = sim_activate_time_usecs(&cpu_unit[0]);
+                                  timer_tics = (int)(nus);
+//fprintf(stderr, "Set timer %08x %08x %g%d\r\n", cpu_timer[0], cpu_timer[1], nus,timer_tics);
+                              }
+//fprintf(stderr, "Set timer %08x %08x %d\r\n", cpu_timer[0], cpu_timer[1], timer_tics);
+                              clk_irq = (cpu_timer[0] & MSIGN) != 0;
                               break;
                    case 0x9: /* STPT */
                               /* Store the CPU timer in double word */
-#if USE_64BIT
-                              src1h = (uint32)(cpu_timer & 0xFFFFF000);
-                              src1 = (uint32)((cpu_timer >> 32) & 0xffffffff);
+                              src1 = cpu_timer[0];
+                              src1h = cpu_timer[1];
+                              if (sim_is_active(&cpu_unit[0])) {
+                                  double nus = sim_activate_time_usecs(&cpu_unit[0]);
+                                  int   tics = (int)(timer_tics - nus) ;
+                                  dest = src1h - (tics << 12);
+                                  if (dest > src1h) {
+                                     src1--;
+                                  }
+                                  src1h = dest;
+//fprintf(stderr, "Store timer %08x %08x %d %g %d %08x %08x\r\n", cpu_timer[0], cpu_timer[1], timer_tics, nus, tics, src1, src1h );
+                              }
                               if (WriteFull(addr1, src1))
                                  goto supress;
                               if (WriteFull(addr1+4, src1h))
                                  goto supress;
-#else
-                              if (WriteFull(addr1, cpu_timer[0]))
-                                 goto supress;
-                              if (WriteFull(addr1+4, cpu_timer[1]))
-                                 goto supress;
-#endif
                               break;
                    case 0xa:  /* SPKA */
                               if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
@@ -2880,6 +2867,7 @@ fprintf(stderr, "Set TOD %016llx\r\n", tod_clock);
                               }
                               for (temp = 0; temp < 256; temp++)
                                   tlb[temp] = 0;
+//fprintf(stderr, "purge tlb\r\n");
                               break;
                    case 0x10: /* SPX */
                               storepsw(OPPSW, IRC_OPR);
@@ -2894,7 +2882,7 @@ fprintf(stderr, "Set TOD %016llx\r\n", tod_clock);
                               /* Set storage block reference bit to zero */
                               addr1 >>= 11;
                               dest = key[addr1];
-                              key[addr1] &= 0xfd;  /* Clear reference bit */
+                              key[addr1] &= 0xf9;  /* Clear reference bit */
                               cc = (dest >> 1) & 03;
                               break;
                    default:
@@ -3066,19 +3054,22 @@ fprintf(stderr, "Set TOD %016llx\r\n", tod_clock);
                                            pte_shift = 4;
                                            break;
                                   }
-                                  switch((dest >> 20) & 07) {
+                                  switch((dest >> 19) & 07) {
                                   default: /* Generate translation exception */
                                   case 0:  /* 64K segments  */
                                            seg_shift = 16;
                                            seg_mask = AMASK >> 16;
                                            break;
                                   case 2:  /* 1M segments */
-                                           seg_shift = 19;
-                                           seg_mask = AMASK >> 19;
+                                           seg_shift = 20;
+                                           seg_mask = AMASK >> 20;
                                            break;
                                   }
                                   /* Generate pte index mask */
-                                  page_index = ((~(seg_mask << seg_shift) & ~page_mask) & AMASK) >> page_shift;
+                                  page_index = ((~(seg_mask << seg_shift) &
+                                                  ~page_mask) & AMASK) >> page_shift;
+                                  intval_en = ((dest & 0x400) != 0);
+                                  tod_en = ((dest & 0x800) != 0);
                                   break;
                         case 0x1:     /* Segment table address and length */
                                   seg_addr = dest & AMASK;
@@ -5184,6 +5175,8 @@ supress:
 lpsw:
              if ((cpu_unit[0].flags & FEAT_370) != 0)
                  ec_mode = (src1 & 0x00080000) != 0;
+             else
+                 ec_mode = 0;
              ext_en = (src1 & 0x01000000) != 0;
              if (ec_mode) {
                  irq_en = (src1 & 0x02000000) != 0;
@@ -5628,10 +5621,15 @@ t_stat cpu_reset (DEVICE *dptr)
        key[i] = 0;
     for (i = 0; i < 16; i++)
        cregs[i] = 0;
-//    cregs[0]  = 0x000000e0;
+    clk_cmp[0] = clk_cmp[1] = 0xffffffff;
+    cregs[0]  = 0x000000e0;
     cregs[2]  = 0xffffffff;
     cregs[14] = 0xc2000000;
     cregs[15] = 512;
+    if (cpu_unit[0].flags & (FEAT_370|FEAT_TIMER)) {
+       sim_rtcn_init_unit (&cpu_unit[0], cpu_unit[0].wait, TMR_RTC);
+       sim_activate(&cpu_unit[0], 10000);
+    }
     return SCPE_OK;
 }
 
@@ -5640,47 +5638,54 @@ t_stat cpu_reset (DEVICE *dptr)
 t_stat
 rtc_srv(UNIT * uptr)
 {
-    if (cpu_unit[0].flags & FEAT_TIMER) {
-        (void)sim_rtcn_calb (rtc_tps, TMR_RTC);
-        sim_activate_after(uptr, 1000000/rtc_tps);
-        if ((M[0x50>>2] & 0xfffffc00) == 0)  {
-            sim_debug(DEBUG_INST, &cpu_dev, "TIMER IRQ %08x\n", M[0x50>>2]);
-            interval_irq = 1;
+    int32 t;
+    (void)sim_rtcn_calb (rtc_tps, TMR_RTC);
+    sim_activate_after(uptr, 1000000/rtc_tps);
+    if ((M[0x50>>2] & 0xfffff00) == 0)  {
+        sim_debug(DEBUG_INST, &cpu_dev, "TIMER IRQ %08x\n", M[0x50>>2]);
+        interval_irq = 1;
+    }
+    M[0x50>>2] -= 0x100;
+    sim_debug(DEBUG_INST, &cpu_dev, "TIMER = %08x\n", M[0x50>>2]);
+    /* Time of day clock and timer on IBM 370 */
+    if (cpu_unit[0].flags & (FEAT_370)) {
+        if (clk_state && (cregs[0] & 0x20000000) == 0) {
+           t = tod_clock[1] + (13333333);
+           if (t < tod_clock[1]) {
+                tod_clock[0]++;
+           }
+           tod_clock[1] = t;
+           sim_debug(DEBUG_INST, &cpu_dev, "TOD = %08x %08x\n", tod_clock[0], tod_clock[1]);
+           check_tod_irq();
         }
-        M[0x50>>2] -= 0x100;
-        sim_debug(DEBUG_INST, &cpu_dev, "TIMER = %08x\n", M[0x50>>2]);
+        t = cpu_timer[1] - (timer_tics << 12);
+        if (t > cpu_timer[1])
+            cpu_timer[0]--;
+        cpu_timer[1] = t;
+        sim_debug(DEBUG_INST, &cpu_dev, "INTER = %08x %08x\n", cpu_timer[0], cpu_timer[1]);
+        timer_tics = 3333;
+        if (cpu_timer[0] & MSIGN) {
+            sim_debug(DEBUG_INST, &cpu_dev, "CPU TIMER IRQ %08x%08x\n", cpu_timer[0],
+              cpu_timer[1]);
+            clk_irq = 1;
+        }
     }
     return SCPE_OK;
 }
 
-/* Time of day clock and timer on IBM 370 */
-t_stat
-clk_srv(UNIT * uptr)
+
+void
+check_tod_irq()
 {
-    int32 t;
-    (void)sim_rtcn_calb (clk_tps, TMR_RTC);
-    sim_activate_after(uptr, 1000000/clk_tps);
-#ifdef USE_64BIT
-    if (clk_state && (cregs[0] & 0x20000000) == 0) {
-       tod_clock += (1000 << 12) - timer_tics;
-       timer_tics = 0;
+    tod_irq = 0;
+    if ((clk_cmp[0] < tod_clock[0]) ||
+       ((clk_cmp[0] == tod_clock[0]) && (clk_cmp[1] < tod_clock[1]))) {
+        sim_debug(DEBUG_INST, &cpu_dev, "CPU TIMER CCK IRQ %08x %08x\n", clk_cmp[0],
+                  clk_cmp[1]);
+        tod_irq = 1;
     }
-    cpu_timer -= 1000 << 12;
-#else
-    if (clk_state && (cregs[0] & 0x20000000) == 0) {
-       t = tod_clock[1] + (1000 << 12) - timer_tics;
-       if (t < tod_clock[1])
-            tod_clock[0]++;
-       tod_clock[1] = t;
-       timer_tics = 0;
-    }
-    t = cpu_timer[1] - (1000 << 12);
-    if (t > cpu_timer[1])
-        cpu_timer[0]--;
-    cpu_timer[1] = t;
-#endif
-    return SCPE_OK;
 }
+
 
 /* Memory examine */
 

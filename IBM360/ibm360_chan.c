@@ -373,6 +373,7 @@ loop:
     if (ccw_flags[chan] & FLAG_IDA && cpu_unit[0].flags & FEAT_370) {
         readfull(chan, ccw_addr[chan], &word);
         ccw_iaddr[chan] = word & AMASK;
+        ccw_iaddr[chan] |= ccw_addr[chan] & 0xf000000;
     }
     if (cmd) {
          DIB         *dibp = dev_unit[chan_dev[chan]];
@@ -452,8 +453,10 @@ chan_read_byte(uint16 addr, uint8 *data) {
          if (ccw_flags[chan] & FLAG_IDA && cpu_unit[0].flags & FEAT_370) {
              ccw_iaddr[chan] += 4 - chan_byte[chan];
              if ((ccw_iaddr[chan] & 0x7fc) == 0) {
+                 uint32 temp;
                  ccw_addr[chan] += 4;
-                 readfull(chan, ccw_addr[chan], &ccw_iaddr[chan]);
+                 readfull(chan, ccw_addr[chan], &temp);
+                 ccw_iaddr[chan] = (temp & 0xf000000) | (temp & AMASK);
              }
          } else {
              ccw_addr[chan] += 4 - chan_byte[chan];
@@ -520,14 +523,18 @@ chan_write_byte(uint16 addr, uint8 *data) {
             if ((ccw_cmd[chan] & 0xf) == CMD_RDBWD) {
                 ccw_iaddr[chan]--;
                 if ((ccw_iaddr[chan] & 0x7ff) == 0x7ff) {
+                    uint32 temp;
                     ccw_addr[chan] += 4;
-                    readfull(chan, ccw_addr[chan], &ccw_iaddr[chan]);
+                    readfull(chan, ccw_addr[chan], &temp);
+                    ccw_iaddr[chan] = (temp & 0xf000000) | (temp & AMASK);
                 }
             } else {
                 ccw_iaddr[chan]++;
                 if ((ccw_iaddr[chan] & 0x7ff) == 0) {
+                    uint32 temp;
                     ccw_addr[chan] += 4;
-                    readfull(chan, ccw_addr[chan], &ccw_iaddr[chan]);
+                    readfull(chan, ccw_addr[chan], &temp);
+                    ccw_iaddr[chan] = (temp & 0xf000000) | (temp & AMASK);
                 }
             }
         } else {
@@ -546,14 +553,18 @@ chan_write_byte(uint16 addr, uint8 *data) {
             if ((ccw_cmd[chan] & 0xf) == CMD_RDBWD) {
                ccw_iaddr[chan] -= 1 + (ccw_iaddr[chan] & 0x3);
                if ((ccw_iaddr[chan] & 0x7fc) == 0x7fc) {
+                   uint32 temp;
                    ccw_addr[chan] += 4;
-                   readfull(chan, ccw_addr[chan], &ccw_iaddr[chan]);
+                   readfull(chan, ccw_addr[chan], &temp);
+                   ccw_iaddr[chan] = (temp & 0xf000000) | (temp & AMASK);
                }
             } else {
                ccw_iaddr[chan] += 4 - (ccw_iaddr[chan] & 0x3);
                if ((ccw_iaddr[chan] & 0x7fc) == 0) {
+                   uint32 temp;
                    ccw_addr[chan] += 4;
-                   readfull(chan, ccw_addr[chan], &ccw_iaddr[chan]);
+                   readfull(chan, ccw_addr[chan], &temp);
+                   ccw_iaddr[chan] = (temp & 0xf000000) | (temp & AMASK);
                }
             }
         } else {
@@ -896,7 +907,7 @@ int haltio(uint16 addr) {
     sim_debug(DEBUG_CMD, &cpu_dev, "HIO %x %x %x %x\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
 
-    /* Generic halt I/O, tell device to stop and 
+    /* Generic halt I/O, tell device to stop and */
     /* If any error pending save csw and return cc=1 */
     if (chan_status[chan] & (STATUS_PCI|STATUS_ATTN|STATUS_CHECK|\
             STATUS_PROT|STATUS_PCHK|STATUS_EXPT)) {
@@ -915,14 +926,14 @@ int haltio(uint16 addr) {
                        (M[0x44 >> 2] & 0xffff);
         return cc;
     }
-           
+
     /* If channel active, tell it to terminate */
     if (ccw_cmd[chan])
         chan_byte[chan] = BUFF_CHNEND;
 
     /* Store CSW and return 1. */
     sim_debug(DEBUG_CMD, &cpu_dev, "HIO %x %x cc=1\n", addr, chan);
-    M[0x44 >> 2] = (((uint32)chan_status[chan]) << 16) | 
+    M[0x44 >> 2] = (((uint32)chan_status[chan]) << 16) |
                    (M[0x44 >> 2] & 0xffff);
     return 1;
 }
