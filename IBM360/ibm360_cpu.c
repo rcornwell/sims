@@ -499,7 +499,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
      /* TLB not correct, try loading correct entry */
      seg = (va >> seg_shift) & seg_mask;   /* Segment number to word address */
      page = (va >> page_shift) & page_index;
- //fprintf(stderr, "translatex: %08x %03x %03x\r\n", va, seg, page);
+//fprintf(stderr, "\n\rtranslatex: %08x %03x %03x\r\n", va, seg, page);
      /* Check address against lenght of segment table */
      if (seg > seg_len) {
          if ((cpu_unit[0].flags & FEAT_370) == 0)
@@ -513,14 +513,14 @@ int  TransAddr(uint32 va, uint32 *pa) {
          return 1;
      }
      addr = (((seg << 2) + seg_addr) & AMASK);
- //fprintf(stderr, "translate0: %08x\r\n", addr);
+//fprintf(stderr, "translate0: %08x\r\n", addr);
      if (addr >= MEMSIZE) {
          storepsw(OPPSW, IRC_ADDR);
          return 1;
      }
      /* Get pointer to page table */
      entry = M[addr >> 2];
- //fprintf(stderr, "translate1: %08x\r\n", entry);
+//fprintf(stderr, "translate1: %08x\r\n", entry);
      addr = (entry >> 28) + 1;
      /* Check if entry valid and in correct length */
      if (entry & PTE_VALID || (page >> pte_len_shift) > addr) {
@@ -530,7 +530,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
              M[0x90 >> 2] = va;
              PC = iPC;
          }
- //fprintf(stderr, "translatep1: %08x\r\n", entry);
+//fprintf(stderr, "translatep1: %08x\r\n", entry);
          storepsw(OPPSW, (entry & PTE_VALID) ? IRC_SEG : IRC_PAGE);
          return 1;
      }
@@ -538,7 +538,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
      /* Now we need to fetch the actual entry */
      addr = (entry & PTE_ADR) + (page << 1);
      addr &= AMASK;
- //fprintf(stderr, "translate2: %08x\r\n", addr);
+//fprintf(stderr, "translate2: %08x\r\n", addr);
      if (addr >= MEMSIZE) {
          storepsw(OPPSW, IRC_ADDR);
          return 1;
@@ -546,7 +546,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
      entry = M[addr >> 2];
      entry >>= (addr & 2) ? 0 : 16;
      entry &= 0xffff;
- //fprintf(stderr, "translate3: %08x\r\n", entry);
+//fprintf(stderr, "translate3: %08x\r\n", entry);
 
      if ((entry & pte_mbz) != 0) {
          if ((cpu_unit[0].flags & FEAT_370) == 0)
@@ -555,7 +555,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
              M[0x90 >> 2] = va;
              PC = iPC;
          }
- //fprintf(stderr, "translatesp: %08x\r\n", entry);
+//fprintf(stderr, "translatesp: %08x\r\n", entry);
          storepsw(OPPSW, IRC_SPEC);
          return 1;
      }
@@ -568,7 +568,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
              M[0x90 >> 2] = va;
              PC = iPC;
          }
- //fprintf(stderr, "translatep2: %08x\r\n", entry);
+//fprintf(stderr, "translatep2: %08x\r\n", entry);
          storepsw(OPPSW, IRC_PAGE);
          return 1;
      }
@@ -579,7 +579,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
      entry |= ((page & 0x1f00) << 4) | TLB_VALID;
      tlb[page & 0xff] = entry;
      *pa = (va & page_mask) | ((entry & TLB_PHY) << page_shift);
- //fprintf(stderr, "translatef: %08x\r\n", *pa);
+//fprintf(stderr, "translatef: %08x\r\n", *pa);
      if (*pa >= MEMSIZE) {
         storepsw(OPPSW, IRC_ADDR);
         return 1;
@@ -1115,8 +1115,8 @@ wait_loop:
              if (hst_p >= hst_lnt)
                 hst_p = 0;
              hst[hst_p].pc = PC | HIST_PC;
+             hst[hst_p].inst[0] = 0x00;
         }
-
         if (sim_deb && (cpu_dev.dctrl & DEBUG_INST)) {
             if (ec_mode) {
                 if ((cpu_unit[0].flags & FEAT_370) != 0)
@@ -1141,6 +1141,7 @@ wait_loop:
         per_addr = PC;
         iPC = PC;
         ilc = 0;
+
         if (ReadHalf(PC, &dest))
             goto supress;
         if (per_en && (cregs[9] & 0x40000000) != 0) {
@@ -2882,7 +2883,7 @@ save_dbl:
                               /* Set storage block reference bit to zero */
                               addr1 >>= 11;
                               dest = key[addr1];
-                              key[addr1] &= 0xf9;  /* Clear reference bit */
+                              key[addr1] &= 0xfb;  /* Clear reference bit */
                               cc = (dest >> 1) & 03;
                               break;
                    default:

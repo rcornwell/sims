@@ -374,6 +374,8 @@ loop:
         readfull(chan, ccw_addr[chan], &word);
         ccw_iaddr[chan] = word & AMASK;
         ccw_iaddr[chan] |= ccw_addr[chan] & 0xf000000;
+        sim_debug(DEBUG_DETAIL, &cpu_dev, "Channel fetch idaw %02x %08x\n",
+             chan, ccw_iaddr[chan]);
     }
     if (cmd) {
          DIB         *dibp = dev_unit[chan_dev[chan]];
@@ -456,7 +458,9 @@ chan_read_byte(uint16 addr, uint8 *data) {
                  uint32 temp;
                  ccw_addr[chan] += 4;
                  readfull(chan, ccw_addr[chan], &temp);
-                 ccw_iaddr[chan] = (temp & 0xf000000) | (temp & AMASK);
+                 ccw_iaddr[chan] = (ccw_addr[chan] & 0xf000000) | (temp & AMASK);
+                 sim_debug(DEBUG_DETAIL, &cpu_dev, "Channel fetch idaw %02x %08x\n",
+                      chan, ccw_iaddr[chan]);
              }
          } else {
              ccw_addr[chan] += 4 - chan_byte[chan];
@@ -526,7 +530,9 @@ chan_write_byte(uint16 addr, uint8 *data) {
                     uint32 temp;
                     ccw_addr[chan] += 4;
                     readfull(chan, ccw_addr[chan], &temp);
-                    ccw_iaddr[chan] = (temp & 0xf000000) | (temp & AMASK);
+                    ccw_iaddr[chan] = (ccw_addr[chan] & 0xf000000) | (temp & AMASK);
+                    sim_debug(DEBUG_DETAIL, &cpu_dev, "Channel fetch idaw %02x %08x\n",
+                         chan, ccw_iaddr[chan]);
                 }
             } else {
                 ccw_iaddr[chan]++;
@@ -534,7 +540,9 @@ chan_write_byte(uint16 addr, uint8 *data) {
                     uint32 temp;
                     ccw_addr[chan] += 4;
                     readfull(chan, ccw_addr[chan], &temp);
-                    ccw_iaddr[chan] = (temp & 0xf000000) | (temp & AMASK);
+                    ccw_iaddr[chan] = (ccw_addr[chan] & 0xf000000) | (temp & AMASK);
+                    sim_debug(DEBUG_DETAIL, &cpu_dev, "Channel fetch idaw %02x %08x\n",
+                         chan, ccw_iaddr[chan]);
                 }
             }
         } else {
@@ -556,7 +564,9 @@ chan_write_byte(uint16 addr, uint8 *data) {
                    uint32 temp;
                    ccw_addr[chan] += 4;
                    readfull(chan, ccw_addr[chan], &temp);
-                   ccw_iaddr[chan] = (temp & 0xf000000) | (temp & AMASK);
+                   ccw_iaddr[chan] = (ccw_addr[chan] & 0xf000000) | (temp & AMASK);
+                   sim_debug(DEBUG_DETAIL, &cpu_dev, "Channel fetch idaw %02x %08x\n",
+                         chan, ccw_iaddr[chan]);
                }
             } else {
                ccw_iaddr[chan] += 4 - (ccw_iaddr[chan] & 0x3);
@@ -564,7 +574,9 @@ chan_write_byte(uint16 addr, uint8 *data) {
                    uint32 temp;
                    ccw_addr[chan] += 4;
                    readfull(chan, ccw_addr[chan], &temp);
-                   ccw_iaddr[chan] = (temp & 0xf000000) | (temp & AMASK);
+                   ccw_iaddr[chan] = (ccw_addr[chan] & 0xf000000) | (temp & AMASK);
+                   sim_debug(DEBUG_DETAIL, &cpu_dev, "Channel fetch idaw %02x %08x\n",
+                         chan, ccw_iaddr[chan]);
                }
             }
         } else {
