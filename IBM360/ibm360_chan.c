@@ -213,35 +213,13 @@ readbuff(int chan) {
        addr = ccw_iaddr[chan];
     else
        addr = ccw_addr[chan];
-    if ((addr & AMASK) > MEMSIZE) {
-        chan_status[chan] |= STATUS_PCHK;
+    if (readfull(chan, addr, &chan_buf[chan])) {
         chan_byte[chan] = BUFF_CHNEND;
-        irq_pend = 1;
         return 1;
     }
-    sk = (addr >> 24) & 0xf0;
-    addr &= AMASK;
-    addr >>= 2;
-    if (sk != 0) {
-        if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
-            chan_status[chan] |= STATUS_PROT;
-            chan_byte[chan] = BUFF_CHNEND;
-            irq_pend = 1;
-            return 1;
-        }
-        k = key[addr >> 9];
-        if ((k & 0x8) != 0 && (k & 0xf0) != sk) {
-//fprintf(stderr, "Prot %08x %x %x\n\r", addr << 2, k, sk);
-            chan_status[chan] |= STATUS_PROT;
-            chan_byte[chan] = BUFF_CHNEND;
-            irq_pend = 1;
-            return 1;
-        }
-    }
-    chan_buf[chan] = M[addr];
     if ((ccw_cmd[chan] & CMD_TYPE) == CMD_WRITE) {
         sim_debug(DEBUG_CDATA, &cpu_dev, "Channel write %02x %06x %08x %08x '",
-              chan, addr<<2, chan_buf[chan], ccw_count[chan]);
+              chan, addr, chan_buf[chan], ccw_count[chan]);
         for(k = 24; k >= 0; k -= 8) {
             unsigned char ch = ebcdic_to_ascii[(chan_buf[chan] >> k) & 0xFF];
             if (ch < 0x20 || ch == 0xff)
@@ -372,8 +350,7 @@ loop:
     }
     if (ccw_flags[chan] & FLAG_IDA && cpu_unit[0].flags & FEAT_370) {
         readfull(chan, ccw_addr[chan], &word);
-        ccw_iaddr[chan] = word & AMASK;
-        ccw_iaddr[chan] |= ccw_addr[chan] & 0xf000000;
+        ccw_iaddr[chan] = (ccw_addr[chan] & 0xf000000) | (word & AMASK);
         sim_debug(DEBUG_DETAIL, &cpu_dev, "Channel fetch idaw %02x %08x\n",
              chan, ccw_iaddr[chan]);
     }
@@ -451,10 +428,10 @@ chan_read_byte(uint16 addr, uint8 *data) {
     if (chan_byte[chan] == BUFF_EMPTY) {
          if (readbuff(chan))
             return 1;
-         chan_byte[chan] = ccw_addr[chan] & 0x3;
          if (ccw_flags[chan] & FLAG_IDA && cpu_unit[0].flags & FEAT_370) {
+             chan_byte[chan] = ccw_iaddr[chan] & 0x3;
              ccw_iaddr[chan] += 4 - chan_byte[chan];
-             if ((ccw_iaddr[chan] & 0x7fc) == 0) {
+             if ((ccw_iaddr[chan] & 0x7ff) == 0) {
                  uint32 temp;
                  ccw_addr[chan] += 4;
                  readfull(chan, ccw_addr[chan], &temp);
@@ -463,6 +440,7 @@ chan_read_byte(uint16 addr, uint8 *data) {
                       chan, ccw_iaddr[chan]);
              }
          } else {
+             chan_byte[chan] = ccw_addr[chan] & 0x3;
              ccw_addr[chan] += 4 - chan_byte[chan];
          }
     }
@@ -560,7 +538,7 @@ chan_write_byte(uint16 addr, uint8 *data) {
         if (ccw_flags[chan] & FLAG_IDA && cpu_unit[0].flags & FEAT_370) {
             if ((ccw_cmd[chan] & 0xf) == CMD_RDBWD) {
                ccw_iaddr[chan] -= 1 + (ccw_iaddr[chan] & 0x3);
-               if ((ccw_iaddr[chan] & 0x7fc) == 0x7fc) {
+               if ((ccw_iaddr[chan] & 0x7ff) == 0x7fc) {
                    uint32 temp;
                    ccw_addr[chan] += 4;
                    readfull(chan, ccw_addr[chan], &temp);
@@ -570,7 +548,7 @@ chan_write_byte(uint16 addr, uint8 *data) {
                }
             } else {
                ccw_iaddr[chan] += 4 - (ccw_iaddr[chan] & 0x3);
-               if ((ccw_iaddr[chan] & 0x7fc) == 0) {
+               if ((ccw_iaddr[chan] & 0x7ff) == 0) {
                    uint32 temp;
                    ccw_addr[chan] += 4;
                    readfull(chan, ccw_addr[chan], &temp);
@@ -585,12 +563,15 @@ chan_write_byte(uint16 addr, uint8 *data) {
             else
                ccw_addr[chan] += 4 - (ccw_addr[chan] & 0x3);
         }
-         chan_byte[chan] = BUFF_EMPTY;
+        chan_byte[chan] = BUFF_EMPTY;
     }
     if (chan_byte[chan] == BUFF_EMPTY) {
         if (readbuff(chan))
             return 1;
-        chan_byte[chan] = ccw_addr[chan] & 0x3;
+        if (ccw_flags[chan] & FLAG_IDA && cpu_unit[0].flags & FEAT_370)
+            chan_byte[chan] = ccw_iaddr[chan] & 0x3;
+        else
+            chan_byte[chan] = ccw_addr[chan] & 0x3;
     }
     /* Store it in buffer and adjust pointer */
     ccw_count[chan]--;
