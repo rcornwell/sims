@@ -197,6 +197,7 @@ readfull(int chan, uint32 addr, uint32 *word) {
             return 1;
         }
     }
+    key[addr >> 9] |= 0x4;
     *word = M[addr];
     return 0;
 }
@@ -269,6 +270,7 @@ writebuff(int chan) {
             return 1;
         }
     }
+    key[addr >> 9] |= 0x6;
     M[addr] = chan_buf[chan];
     sim_debug(DEBUG_CDATA, &cpu_dev, "Channel readf %02x %06x %08x %08x '",
           chan, addr << 2, chan_buf[chan], ccw_count[chan]);
@@ -673,6 +675,7 @@ void
 store_csw(uint16 chan) {
     M[0x40 >> 2] = caw[chan];
     M[0x44 >> 2] = (((uint32)ccw_count[chan])) | ((uint32)chan_status[chan]<<16);
+    key[0] |= 0x6;
     if (chan_status[chan] & STATUS_PCI) {
         chan_status[chan] &= ~STATUS_PCI;
         ccw_flags[chan] &= ~FLAG_PCI;
@@ -712,7 +715,8 @@ startio(uint16 addr) {
 
    if (dev_status[addr] != 0) {
        M[0x44 >> 2] = (((uint32)dev_status[addr]) << 24);
-       M[0x40>>2] = 0;
+       M[0x40 >> 2] = 0;
+       key[0] |= 0x6;
        sim_debug(DEBUG_EXP, &cpu_dev,
            "SIO Set atten %03x %x %02x [%08x] %08x\n",
            addr, chan, dev_status[addr], M[0x40 >> 2], M[0x44 >> 2]);
@@ -728,6 +732,7 @@ startio(uint16 addr) {
     chan_status[chan] = 0;
     dev_status[addr] = 0;
     caw[chan] = M[0x48>>2];
+    key[0] |= 0x4;
     chan_dev[chan] = addr;
 
     /* If device has start_io function run it */
@@ -747,6 +752,7 @@ startio(uint16 addr) {
         if (chan_status[chan] &
                   (STATUS_ATTN|STATUS_CHECK|STATUS_PROT|STATUS_PCHK|STATUS_EXPT)) {
             M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | (M[0x44 >> 2] & 0xffff);
+            key[0] |= 0x6;
             sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %x %x cc=2\n", addr, chan,
                   ccw_cmd[chan], ccw_flags[chan]);
             chan_status[chan] = 0;
@@ -756,6 +762,7 @@ startio(uint16 addr) {
         }
         if (chan_status[chan] & (STATUS_PCI)) {
             M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | (M[0x44 >> 2] & 0xffff);
+            key[0] |= 0x6;
             sim_debug(DEBUG_EXP, &cpu_dev, "Channel store csw  %02x %08x\n",
                        chan, M[0x44 >> 2]);
             chan_status[chan] &= ~STATUS_PCI;
@@ -768,6 +775,7 @@ startio(uint16 addr) {
     if (chan_status[chan] & STATUS_BUSY) {
         M[0x40 >> 2] = 0;
         M[0x44 >> 2] = ((uint32)chan_status[chan]<<16);
+        key[0] |= 0x6;
         sim_debug(DEBUG_EXP, &cpu_dev, "Channel store csw  %02x %08x\n",
                    chan, M[0x44 >> 2]);
         chan_status[chan] = 0;
@@ -830,6 +838,7 @@ int testio(uint16 addr) {
               ccw_cmd[chan], ccw_flags[chan]);
         M[0x40 >> 2] = 0;
         M[0x44 >> 2] = ((uint32)dev_status[addr]) << 24;
+        key[0] |= 0x6;
         dev_status[addr] = 0;
         chan_pend[chan] = 0;
         return 1;
@@ -867,6 +876,7 @@ int testio(uint16 addr) {
     /* If we get a error, save csw and return cc=1 */
     if (status & (STATUS_ATTN|STATUS_CHECK|STATUS_EXPT)) {
         M[0x44 >> 2] = ((uint32)status<<24) | (M[0x44 >> 2] & 0xffff);
+        key[0] |= 0x6;
         sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x %x %x cc=1d\n", addr, chan,
               ccw_cmd[chan], ccw_flags[chan]);
         return 1;
@@ -914,9 +924,11 @@ int haltio(uint16 addr) {
         /* Let device do it's thing */
         cc = dibp->halt_io(uptr);
         sim_debug(DEBUG_CMD, &cpu_dev, "HIO %x %x cc=%d\n", addr, chan, cc);
-        if (cc == 1)
+        if (cc == 1) {
             M[0x44 >> 2] = (((uint32)chan_status[chan]) << 16) |
                        (M[0x44 >> 2] & 0xffff);
+            key[0] |= 0x6;
+        }
         return cc;
     }
 
@@ -928,6 +940,7 @@ int haltio(uint16 addr) {
     sim_debug(DEBUG_CMD, &cpu_dev, "HIO %x %x cc=1\n", addr, chan);
     M[0x44 >> 2] = (((uint32)chan_status[chan]) << 16) |
                    (M[0x44 >> 2] & 0xffff);
+    key[0] |= 0x6;
     return 1;
 }
 
@@ -1067,6 +1080,7 @@ scan_chan(uint16 mask, int irq_en) {
                      irq_pend = 1;
                      M[0x44 >> 2] = (((uint32)dev_status[pend]) << 24);
                      M[0x40>>2] = 0;
+                     key[0] |= 0x6;
                      sim_debug(DEBUG_EXP, &cpu_dev,
                             "Set atten %03x %02x [%08x] %08x\n",
                             ch, dev_status[pend], M[0x40 >> 2], M[0x44 >> 2]);

@@ -425,6 +425,7 @@ void storepsw(uint32 addr, uint16 ircode) {
      M[addr >> 2] = word;
      addr += 4;
      M[addr >> 2] = word2;
+     key[0] |= 0x6;
      /* Update history */
      if (hst_lnt) {
          hst_p = hst_p + 1;
@@ -506,6 +507,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
              cregs[2] = va;
          else {
              M[0x90 >> 2] = va;
+             key[0] |= 0x6;
              PC = iPC;
          }
          storepsw(OPPSW, IRC_SEG);
@@ -520,6 +522,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
      }
      /* Get pointer to page table */
      entry = M[addr >> 2];
+     key[addr >> 11] |= 0x4;
 //fprintf(stderr, "translate1: %08x\r\n", entry);
      addr = (entry >> 28) + 1;
      /* Check if entry valid and in correct length */
@@ -528,6 +531,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
              cregs[2] = va;
          else {
              M[0x90 >> 2] = va;
+             key[0] |= 0x6;
              PC = iPC;
          }
 //fprintf(stderr, "translatep1: %08x\r\n", entry);
@@ -544,6 +548,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
          return 1;
      }
      entry = M[addr >> 2];
+     key[addr >> 11] |= 0x4;
      entry >>= (addr & 2) ? 0 : 16;
      entry &= 0xffff;
 //fprintf(stderr, "translate3: %08x\r\n", entry);
@@ -553,6 +558,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
              cregs[2] = va;
          else {
              M[0x90 >> 2] = va;
+             key[0] |= 0x6;
              PC = iPC;
          }
 //fprintf(stderr, "translatesp: %08x\r\n", entry);
@@ -566,6 +572,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
              cregs[2] = va;
          else {
              M[0x90 >> 2] = va;
+             key[0] |= 0x6;
              PC = iPC;
          }
 //fprintf(stderr, "translatep2: %08x\r\n", entry);
@@ -986,6 +993,7 @@ sim_instr(void)
         pte_avail = 0x8;
         pte_mbz = 0x7;
         pte_shift = 3;
+        pte_len_shift = 4;
         seg_addr = cregs[0] & AMASK;
         seg_len = (((cregs[0] >> 24) & 0xff) + 1) << 4;
     } else {
@@ -2210,6 +2218,7 @@ save_dbl:
                         goto supress;
                     }
                     entry = M[addr2 >> 2];
+                    key[addr2 >> 11] |= 0x4;
                     /* Check if entry valid */
                     if (entry & PTE_VALID) {
                         cc = 1;
@@ -2235,6 +2244,7 @@ save_dbl:
                     }
 
                     entry = M[addr2 >> 2];
+                    key[addr2 >> 11] |= 0x4;
                     entry >>= (addr2 & 2) ? 0 : 16;
                     entry &= 0xffff;
 
@@ -3004,6 +3014,7 @@ save_dbl:
                         M[addr2] &= 0xffff;
                         M[addr2] |= src1 << 16;
                         M[0x9C >> 2] = addr1;
+			key[0] |= 0x6;
                         storepsw(OPPSW, IRC_MCE);
                         goto supress;
                     }
@@ -3046,6 +3057,7 @@ save_dbl:
                                            pte_avail = 0x4;
                                            pte_mbz = 0x2;
                                            pte_shift = 3;
+                                           pte_len_shift = 1;
                                            break;
                                   case 2:  /* 4K pages */
                                            page_shift = 12;
@@ -3053,6 +3065,7 @@ save_dbl:
                                            pte_avail = 0x8;
                                            pte_mbz = 0x6;
                                            pte_shift = 4;
+                                           pte_len_shift = 0;
                                            break;
                                   }
                                   switch((dest >> 19) & 07) {
@@ -3064,6 +3077,7 @@ save_dbl:
                                   case 2:  /* 1M segments */
                                            seg_shift = 20;
                                            seg_mask = AMASK >> 20;
+                                           pte_len_shift += 4;
                                            break;
                                   }
                                   /* Generate pte index mask */
@@ -5161,6 +5175,7 @@ fpnorm:
         if (irqaddr != 0) {
 supress:
              src1 = M[irqaddr>>2];
+	     key[0] |= 0x4;
              if (hst_lnt) {
                  hst_p = hst_p + 1;
                  if (hst_p >= hst_lnt)
@@ -5647,6 +5662,7 @@ rtc_srv(UNIT * uptr)
         interval_irq = 1;
     }
     M[0x50>>2] -= 0x100;
+    key[0] |= 0x6;
     sim_debug(DEBUG_INST, &cpu_dev, "TIMER = %08x\n", M[0x50>>2]);
     /* Time of day clock and timer on IBM 370 */
     if (cpu_unit[0].flags & (FEAT_370)) {
