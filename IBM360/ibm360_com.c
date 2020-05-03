@@ -47,6 +47,7 @@
 #define SEND               0x0200     /* Sending data */
 #define ENAB               0x0400     /* Line enabled */
 #define POLL               0x0800     /* Waiting for connection */
+#define BOT                0x1000     /* Need to send BOT */
 
 /* u5 */
 /* Sense byte 0 */
@@ -249,8 +250,9 @@ uint8  coml_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     case 0x3:              /* Control */
          if (cmd == CMD_NOP)
              break;
-    case 0x1:              /* Write command */
     case 0x2:              /* Read command */
+         uptr->u3 |= BOT;
+    case 0x1:              /* Write command */
          uptr->u3 |= cmd;
          sim_activate(uptr, 200);
          return 0;
@@ -275,7 +277,7 @@ uint8  coml_haltio(UNIT *uptr) {
     int            cmd = uptr->u3 & 0xff;
 
     sim_debug(DEBUG_CMD, dptr, "HLTIO unit=%d %x\n", unit, cmd);
-    if ((uptr->flags & UNIT_ATT) == 0)              /* attached? */
+    if ((com_unit[0].flags & UNIT_ATT) == 0)              /* attached? */
         return 3;
 
     switch (cmd) {
@@ -292,7 +294,7 @@ uint8  coml_haltio(UNIT *uptr) {
     case CMD_BRK:        /* Send break signal  */
     case CMD_PREP:       /* Wait for incoming data  */
     case CMD_SRCH:       /* Wait for EOT character  */
-         uptr->u3 &= ~0xffff;
+         uptr->u3 &= ~0xff;
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          break;
     case CMD_ENB:        /* Enable line */
@@ -343,9 +345,15 @@ t_stat coml_srv(UNIT * uptr)
                     chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                     return SCPE_OK;
                  } else {
+                    if (uptr->u3 & BOT) {
+                       ch = 0x16;
+                       (void)chan_write_byte( addr, &ch);
+                       uptr->u3 &= ~BOT;
+                    }
                     ch = sim_tt_inpcvt (data, TT_GET_MODE(uptr->flags) |
                                                      TTUF_KSR);
                     ch = com_2741_in[data & 0x7f];
+                 sim_debug(DEBUG_CMD, dptr, "COM: unit=%d read '%c'\n", unit, data & 0x7f);
                     if (chan_write_byte( addr, &ch)) {
                         uptr->u3 &= ~0xff;
                         chan_end(addr, SNS_CHNEND|SNS_DEVEND);
@@ -355,7 +363,7 @@ t_stat coml_srv(UNIT * uptr)
                         ch = 0x1f;
                         (void)chan_write_byte( addr, &ch);
                         uptr->u3 &= ~0xff;
-                        chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
+                        chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                         return SCPE_OK;
                     }
                 }
@@ -375,8 +383,10 @@ t_stat coml_srv(UNIT * uptr)
                  data = com_2741_out[ch];
                  data = sim_tt_outcvt(data, TT_GET_MODE(uptr->flags) |
                                                                   TTUF_KSR);
+                 sim_debug(DEBUG_CMD, dptr, "COM: unit=%d send '%c'\n", unit,
+			isprint(data)? data: '^');
                  tmxr_putc_ln( &com_ldsc[unit], data);
-                 sim_activate(uptr, 200);
+                 sim_activate(uptr, 20000);
              }
          } else {
              sim_debug(DEBUG_CMD, dptr, "COM: unit=%d write error\n", unit);

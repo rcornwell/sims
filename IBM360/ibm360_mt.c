@@ -548,7 +548,6 @@ t_stat mt_srv(UNIT * uptr)
              sim_debug(DEBUG_DATA, dptr, "Write data unit=%d %d %02o\n\r",
                       unit, uptr->u4, ch);
              uptr->hwmark = uptr->u4;
-             break;
          }
          sim_activate(uptr, 20);
          break;

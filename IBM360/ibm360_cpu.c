@@ -3014,7 +3014,7 @@ save_dbl:
                         M[addr2] &= 0xffff;
                         M[addr2] |= src1 << 16;
                         M[0x9C >> 2] = addr1;
-			key[0] |= 0x6;
+                        key[0] |= 0x6;
                         storepsw(OPPSW, IRC_MCE);
                         goto supress;
                     }
@@ -5175,7 +5175,7 @@ fpnorm:
         if (irqaddr != 0) {
 supress:
              src1 = M[irqaddr>>2];
-	     key[0] |= 0x4;
+             key[0] |= 0x4;
              if (hst_lnt) {
                  hst_p = hst_p + 1;
                  if (hst_p >= hst_lnt)
@@ -5191,6 +5191,8 @@ supress:
 lpsw:
              if ((cpu_unit[0].flags & FEAT_370) != 0)
                  ec_mode = (src1 & 0x00080000) != 0;
+             else if ((cpu_unit[0].flags & FEAT_DAT) != 0)
+                 ec_mode = (cregs[4] & 0x00800000) != 0;
              else
                  ec_mode = 0;
              ext_en = (src1 & 0x01000000) != 0;
@@ -5228,7 +5230,6 @@ lpsw:
              else
                 flags = (src1 >> 16) & 0xf;
              PC = src2 & AMASK;
-             irq_pend = 1;
              sim_debug(DEBUG_INST, &cpu_dev, "PSW=%08x %08x  ", src1, src2);
              if (dat_en & 0x2)
                  storepsw(OPPSW, IRC_SPEC);
