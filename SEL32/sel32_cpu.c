@@ -283,6 +283,8 @@ extern uint32 s_mpfw(uint32 reg, uint32 mem, uint32 *cc);
 extern t_uint64 s_dvfw(uint32 reg, uint32 mem, uint32 *cc);
 extern uint32 s_mpfd(t_uint64 reg, t_uint64 mem, uint32 *cc);
 extern t_uint64 s_dvfd(t_uint64 reg, t_uint64 mem, uint32 *cc);
+extern uint32   s_normfw(uint32 mem, uint32 *cc);
+extern t_uint64 s_normfd(t_uint64 mem, uint32 *cc);
 
 /* History information */
 int32               hst_p = 0;       /* History pointer */
@@ -526,8 +528,7 @@ int nobase_mode[] = {
 int base_mode[] = {
    /* 00        04            08         0C      */
    /* 00        AND,          OR,        EOR  */
-//   HLF,      SCC|R1|RR|SD|HLF,     SCC|R1|RR|SD|HLF,     SCC|R1|RR|SD|HLF,  
-     HLF,      R1|RR|SD|HLF,     SCC|R1|RR|SD|HLF,     SCC|R1|RR|SD|HLF,  
+     HLF,      SCC|R1|RR|SD|HLF,     SCC|R1|RR|SD|HLF,     SCC|R1|RR|SD|HLF,  
 
    /* 10        14           18        1C  */
    /* SACZ      CMR         xBR         SRx */
@@ -896,13 +897,13 @@ npmem:
     }
 
     /* output O/S and User MPX entries */
-//041420    sim_debug(DEBUG_DETAIL, &cpu_dev,
-    sim_debug(DEBUG_EXP, &cpu_dev,
+//  sim_debug(DEBUG_EXP, &cpu_dev,
+    sim_debug(DEBUG_DETAIL, &cpu_dev,
         "#MEMORY %06x MPL %06x MPL[0] %08x %06x MPL[%04x] %08x %06x\n",
         MEMSIZE, mpl, RMW(mpl), RMW(mpl+4), cpix,
         RMW(cpix+mpl), RMW(cpix+mpl+4));
-//041420    sim_debug(DEBUG_DETAIL, &cpu_dev,
-    sim_debug(DEBUG_EXP, &cpu_dev,
+//  sim_debug(DEBUG_EXP, &cpu_dev,
+    sim_debug(DEBUG_DETAIL, &cpu_dev,
         "MEMORY2 %06x BPIX %04x cpix %04x CPIX %04x CPIXPL %04x HIWM %04x\n",
         MEMSIZE, BPIX, cpix, CPIX, CPIXPL, HIWM);
 
@@ -1765,11 +1766,11 @@ t_stat Mem_read(uint32 addr, uint32 *data)
             }
             /* everybody else has read access */
         }
-        sim_debug(DEBUG_DETAIL, &cpu_dev, "Mem_read addr %06x realaddr %08x data %08x prot %02x\n",
+        sim_debug(DEBUG_DETAIL, &cpu_dev, "Mem_read addr %06x realaddr %06x data %08x prot %02x\n",
             addr, realaddr, *data, prot);
     } else {
         /* RealAddr returned an error */
-        sim_debug(DEBUG_EXP, &cpu_dev, "Mem_read error addr %.8x realaddr %.8x data %.8x prot %02x status %04x\n",
+        sim_debug(DEBUG_EXP, &cpu_dev, "Mem_read error addr %06x realaddr %06x data %08x prot %02x status %04x\n",
             addr, realaddr, *data, prot, status);
         if (status == NPMEM) {                      /* operand nonpresent memory error */
             if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9)) {
@@ -1929,8 +1930,8 @@ uint32              OPSD2=0;                    /* Original PSD2 */
 /* called from simulator */
 t_stat sim_instr(void) {
     t_stat              reason = 0;       /* reason for stopping */
-    t_uint64            dest;             /* Holds destination/source register */
-    t_uint64            source;           /* Holds source or memory data */
+    t_uint64            dest = 0;         /* Holds destination/source register */
+    t_uint64            source = 0;       /* Holds source or memory data */
     t_uint64            td;               /* Temporary */
     t_int64             int64a;           /* temp int */
     t_int64             int64b;           /* temp int */
@@ -1952,7 +1953,7 @@ t_stat sim_instr(void) {
     uint8               EXM_EXR=0;        /* PC Increment for EXM/EXR instructions */
     uint32              reg;              /* GPR or Base register bits 6-8 */
     uint32              sreg;             /* Source reg in from bits 9-11 reg-reg instructions */
-    uint32              ix;               /* index register */
+    uint32              ix = 0;           /* index register */
     uint32              dbl;              /* Double word */
     uint32              ovr=0;            /* Overflow flag */
 //FORSTEP    uint32              stopnext = 0;     /* Stop on next instruction */
@@ -2035,11 +2036,14 @@ wait_loop:
                     sim_debug(DEBUG_IRQ, &cpu_dev,
                         "CPU RDYQ entry for chsa %04x processed\n", chsa);
             }
+            waitqcnt = 20;                      /* wait 10 instructions */
+//          waitqcnt = 50;                      /* wait 10 instructions */
             }
             else
                 waitqcnt -= 1;                  /* wait another instruction */
         }
         else
+//          waitqcnt = 50;                      /* wait 10 instructions */
             waitqcnt = 20;                      /* wait 10 instructions */
 //040120    waitqcnt = 10;                      /* wait 10 instructions */
 //
@@ -2333,7 +2337,7 @@ exec:
             case IMM:
                 if (PC & 02) {                  /* if pc is on HW boundry, bad address */
                     TRAPME = ADDRSPEC_TRAP;     /* bad address, error */
-                    sim_debug(DEBUG_EXP, &cpu_dev,
+                    sim_debug(DEBUG_TRAP, &cpu_dev,
                         "ADDRSPEC1 OP %04x addr %08x\n", OP, addr);
                     goto newpsd;                /* go execute the trap now */
                 }
@@ -2345,7 +2349,7 @@ exec:
             case WRD:
                 if (PC & 02) {                  /* if pc is on HW boundry, bad address */
                     TRAPME = ADDRSPEC_TRAP;     /* bad address, error */
-                    sim_debug(DEBUG_EXP, &cpu_dev,
+                    sim_debug(DEBUG_TRAP, &cpu_dev,
                         "ADDRSPEC2 OP %04x addr %08x\n", OP, addr);
                     goto newpsd;                /* go execute the trap now */
                 }
@@ -2416,7 +2420,7 @@ exec:
             case IMM:           /* Immediate mode */
                 if (PC & 02) {                  /* if pc is on HW boundry, bad address */
                     TRAPME = ADDRSPEC_TRAP;     /* bad address, error */
-                    sim_debug(DEBUG_EXP, &cpu_dev,
+                    sim_debug(DEBUG_TRAP, &cpu_dev,
                         "ADDRSPEC3 OP %04x addr %08x\n", OP, addr);
                     goto newpsd;                /* go execute the trap now */
                 }
@@ -2561,7 +2565,7 @@ exec:
             case 2:                             /* double word address */
                 if ((addr & 7) != 2) {          /* must be double word adddress */
                     TRAPME = ADDRSPEC_TRAP;     /* bad address, error */
-                    sim_debug(DEBUG_EXP, &cpu_dev,
+                    sim_debug(DEBUG_TRAP, &cpu_dev,
                         "ADDRSPEC5 OP %04x addr %08x\n", OP, addr);
                     goto newpsd;                /* go execute the trap now */
                 }
@@ -2590,7 +2594,7 @@ exec:
             if (dbl) {                              /* is it double regs */
                 if (reg & 1) {                      /* check for odd reg load */
                     TRAPME = ADDRSPEC_TRAP;         /* bad address, error */
-                    sim_debug(DEBUG_EXP, &cpu_dev,
+                    sim_debug(DEBUG_TRAP, &cpu_dev,
                         "ADDRSPEC6 OP %04x addr %08x\n", OP, addr);
                     goto newpsd;                    /* go execute the trap now */
                 }
@@ -2613,7 +2617,7 @@ exec:
             if (dbl) {
                 if (sreg & 1) {
                     TRAPME = ADDRSPEC_TRAP;         /* bad address, error */
-                    sim_debug(DEBUG_EXP, &cpu_dev,
+                    sim_debug(DEBUG_TRAP, &cpu_dev,
                         "ADDRSPEC7 OP %04x addr %08x\n", OP, addr);
                     goto newpsd;                    /* go execute the trap now */
                 }
@@ -2860,6 +2864,7 @@ sim_debug(DEBUG_CMD, &cpu_dev,
                 }
                 break;
         case 0x04>>2:               /* 0x04 RR|R1|SD|HLF - SD|HLF */ /* ANR, SMC, CMC, RPSWT */
+                i_flags &=  ~SCC;                   /* make sure we do not set CC's for dest value */
                 switch(opr & 0xF) {
                 case 0x0:   /* ANR */
                     dest &= source;                 /* just an and reg to reg */
@@ -2918,7 +2923,8 @@ sim_debug(DEBUG_CMD, &cpu_dev,
                     /*    7 - Read & Lock Enabled (=1)/Disabled (=0) */
                     /* 8-12 - Lower Bound of Shared Memory */
                     /* 3-31 - Reserved and must be zero */
-                    sim_debug(DEBUG_EXP, &cpu_dev,
+//                  sim_debug(DEBUG_EXP, &cpu_dev,
+                    sim_debug(DEBUG_CMD, &cpu_dev,
                         "SMC V6/67 GPR[%02x] = %08x SMCR = %08x CPU STATUS SPAD[f9] = %08x\n",
                         reg, GPR[reg], SMCR, SPAD[0xf9]);
                     SMCR = GPR[reg];                /* write reg bits 0-12 to shared memory controller */
@@ -3427,7 +3433,7 @@ tbr:                                                /* handle basemode TBR too *
                     /* update the PSD with new address from reg */
                     PSD1 &= ~temp;                  /* clean the bits to be changed */
                     PSD1 |= (addr & temp);          /* insert the CC's and address */
-                    sim_debug(DEBUG_EXP, &cpu_dev,
+                    sim_debug(DEBUG_CMD, &cpu_dev,
                         "TRSW REG %01x PSD %08x %08x modes %08x temp %06x\n",
                         reg, PSD1, PSD2, modes, temp);
                     i_flags |= BT;                  /* we branched, so no PC update */
@@ -3703,7 +3709,8 @@ tbr:                                                /* handle basemode TBR too *
                         goto newpsd;                /* handle trap */
                     }
                     temp2 = CPUSTATUS;              /* save original */
-                    sim_debug(DEBUG_EXP, &cpu_dev,
+//                  sim_debug(DEBUG_EXP, &cpu_dev,
+                    sim_debug(DEBUG_CMD, &cpu_dev,
                         "SETCPU orig %08x user bits %08x New CPUSTATUS %08x\n",
                         temp2, temp, CPUSTATUS);
                     /* bits 20-23 and bit 25 can change */
@@ -3933,12 +3940,44 @@ skipit:
                         temp = GPR[reg];                /* reg contents specified by Rd */
                         addr = GPR[sreg];               /* reg contents specified by Rs */
                         /* temp has Rd (GPR[reg]), addr has Rs (GPR[sreg]) */
-                        if ((opr & 0xF) == 0x3)
+                        if ((opr & 0xF) == 0x3) {
                             addr = NEGATE32(addr);      /* subtract, so negate source */
-                        temp2 = s_adfw(temp, addr, &CC);    /* all add float numbers */
-                        sim_debug(DEBUG_CMD, &cpu_dev,
-                            "%s GPR[%d] %08x addr %08x result %08x\n",
-                            (opr&0xf)==3 ? "SURFW":"ADRFW", reg, GPR[reg], GPR[sreg], temp2);
+                        }
+//                          temp2 = s_adfw(temp, addr, &CC);    /* add float numbers */
+//                      } else {                        /* handle add */
+//                      }
+                        /* test for zero reg value */
+                        if (temp == 0) {                /* reg value is zero */
+                            temp2 = s_normfw(addr, &CC); /* normalize addr value */
+                            if (CC & CC1BIT) {
+                                CC = 0;                 /* remove addr except */
+                                if (temp2 & FSIGN)
+                                    CC |= CC3BIT;       /* CC3 for neg */
+                                else if (temp2 == 0)
+                                    CC |= CC4BIT;       /* CC4 for zero */
+                                else 
+                                    CC |= CC2BIT;       /* CC2 for greater than zero */
+                            }
+                        }
+                        else
+                        if (addr == 0) {                /* mem value is zero */
+                            temp2 = s_normfw(temp, &CC); /* normalize addr value */
+                            if (CC & CC1BIT) {
+                                CC = 0;                 /* remove addr except */
+                                if (temp2 & FSIGN)
+                                    CC |= CC3BIT;       /* CC3 for neg */
+                                else if (temp2 == 0)
+                                    CC |= CC4BIT;       /* CC4 for zero */
+                                else 
+                                    CC |= CC2BIT;       /* CC2 for greater than zero */
+                            }
+                        }
+                        else
+                            temp2 = s_adfw(temp, addr, &CC);    /* do ADFW */
+                        sim_debug(DEBUG_EXP, &cpu_dev,
+                            "%s GPR[%d] %08x addr %08x result %08x CC %08x\n",
+                            (opr&0xf)==3 ? "SURFW":"ADRFW",
+                            reg, GPR[reg], GPR[sreg], temp2, CC);
                         PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
                         PSD1 |= (CC & 0x78000000);      /* update the CC's in the PSD */
                         if (CC & CC1BIT) {              /* check for arithmetic exception */
@@ -3980,7 +4019,7 @@ skipit:
                         addr = GPR[sreg];               /* reg contents specified by Rs */
                         /* temp has Rd (GPR[reg]), addr has Rs (GPR[sreg]) */
                         temp2 = (uint32)s_dvfw(temp, addr, &CC);    /* divide reg by sreg */
-                        sim_debug(DEBUG_CMD, &cpu_dev,
+                        sim_debug(DEBUG_EXP, &cpu_dev,
                             "DVRFW GPR[%d] %08x src %08x result %08x\n",
                             reg, GPR[reg], addr, temp2);
                         PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
@@ -4003,7 +4042,7 @@ skipit:
                         /* convert from 32 bit float to 32 bit fixed */
                         addr = GPR[sreg];               /* reg contents specified by Rs */
                         temp2 = s_fixw(addr, &CC);      /* do conversion */
-                        sim_debug(DEBUG_CMD, &cpu_dev,
+                        sim_debug(DEBUG_EXP, &cpu_dev,
                             "FIXW GPR[%d] %08x result %08x\n",
                             sreg, GPR[sreg], temp2);
                         PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
@@ -4027,7 +4066,7 @@ skipit:
                         addr = GPR[sreg];               /* reg contents specified by Rs */
                         /* temp has Rd (GPR[reg]), addr has Rs (GPR[sreg]) */
                         temp2 = s_mpfw(temp, addr, &CC);    /* mult reg by sreg */
-                        sim_debug(DEBUG_CMD, &cpu_dev,
+                        sim_debug(DEBUG_EXP, &cpu_dev,
                             "MPRFW GPR[%d] %08x src %08x result %08x\n",
                             reg, GPR[reg], addr, temp2);
                         PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
@@ -4050,7 +4089,7 @@ skipit:
                         /* convert from 32 bit integer to 32 bit float */
                         addr = GPR[sreg];               /* reg contents specified by Rs */
                         GPR[reg] = s_fltw(addr, &CC);   /* do conversion & set CC's */
-                        sim_debug(DEBUG_CMD, &cpu_dev,
+                        sim_debug(DEBUG_EXP, &cpu_dev,
                             "FLTW GPR[%d] %08x result %08x\n",
                             sreg, GPR[sreg], GPR[reg]);
                         PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
@@ -4082,12 +4121,39 @@ skipit:
                         td = (((t_uint64)GPR[reg]) << 32);  /* get upper reg value */
                         td |= (t_uint64)GPR[reg+1];         /* insert low order reg value */
                         source = (((t_uint64)GPR[sreg]) << 32); /* get upper reg value */
-                        source |= (t_uint64)GPR[sreg+1];        /* insert low order reg value */
-                        if ((opr & 0xF) == 0x9)
-                            dest = s_adfd(td, source, &CC); /* add */
-                        else                        
-                            dest = s_sufd(td, source, &CC); /* subtract */
-                        sim_debug(DEBUG_CMD, &cpu_dev,
+                        source |= (t_uint64)GPR[sreg+1];    /* insert low order reg value */
+                        if ((opr & 0xF) == 0xb) {
+                            td = NEGATE32(td);          /* make negative for subtract */
+                        }
+                        if (td == 0) {                  /* is reg value zero */
+                            dest = s_normfd(source, &CC); /* normalize addr value */
+                            if (CC & CC1BIT) {
+                                CC = 0;                 /* remove addr except */
+                                if (dest & DMSIGN)
+                                    CC |= CC3BIT;       /* CC3 for neg */
+                                else if (dest == 0)
+                                    CC |= CC4BIT;       /* CC4 for zero */
+                                else 
+                                    CC |= CC2BIT;       /* CC2 for greater than zero */
+                            }
+                        }
+                        else
+                        if (source == 0) {              /* memory value zero? */
+                            dest = s_normfd(td, &CC);   /* normalize reg value */
+                            if (CC & CC1BIT) {
+                                CC = 0;                 /* remove addr except */
+                                if (dest & DMSIGN)
+                                    CC |= CC3BIT;       /* CC3 for neg */
+                                else if (dest == 0)
+                                    CC |= CC4BIT;       /* CC4 for zero */
+                                else 
+                                    CC |= CC2BIT;       /* CC2 for greater than zero */
+                            }
+                        }
+                        else
+                            dest = s_adfd(td, source, &CC); /* do ADFD */
+
+                        sim_debug(DEBUG_EXP, &cpu_dev,
                             "%s GPR[%d] %08x %08x src %016llx result %016llx\n",
                             (opr&0xf)==8 ? "ADRFD":"SURFD", reg, GPR[reg], GPR[reg+1], source, dest);
                         PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
@@ -4157,7 +4223,7 @@ doovr4:
                         source = (((t_uint64)GPR[sreg]) << 32); /* get upper reg value */
                         source |= (t_uint64)GPR[sreg+1];    /* insert low order reg value */
                         dest = s_dvfd(td, source, &CC); /* divide double values */
-                        sim_debug(DEBUG_CMD, &cpu_dev,
+                        sim_debug(DEBUG_EXP, &cpu_dev,
                             "DVRFD GPR[%d] %08x %08x src %016llx result %016llx\n",
                             reg, GPR[reg], GPR[reg+1], source, dest);
                         PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
@@ -4187,7 +4253,7 @@ doovr4:
                         source = (((t_uint64)GPR[sreg]) << 32) | ((t_uint64)GPR[sreg+1]);
                         /* convert from 64 bit double to 64 bit int */
                         dest = s_fixd(source, &CC);
-                        sim_debug(DEBUG_CMD, &cpu_dev,
+                        sim_debug(DEBUG_EXP, &cpu_dev,
                             "FIXD GPR[%d] %08x %08x result %016llx\n",
                             sreg, GPR[sreg], GPR[sreg+1], dest);
                         PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
@@ -4217,7 +4283,7 @@ doovr4:
                         source = (((t_uint64)GPR[sreg]) << 32); /* get upper reg value */
                         source |= (t_uint64)GPR[sreg+1];   /* insert low order reg value */
                         dest = s_mpfd(td, source, &CC); /* multiply double values */
-                        sim_debug(DEBUG_CMD, &cpu_dev,
+                        sim_debug(DEBUG_EXP, &cpu_dev,
                             "MPRFD GPR[%d] %08x %08x src %016llx result %016llx\n",
                             reg, GPR[reg], GPR[reg+1], source, dest);
                         PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
@@ -4246,7 +4312,7 @@ doovr4:
                         source = (((t_uint64)GPR[sreg]) << 32); /* get upper reg value */
                         source |= (t_uint64)GPR[sreg+1];    /* insert low order reg value */
                         dest = s_fltd(source, &CC);     /* do conversion & set CC's */
-                        sim_debug(DEBUG_CMD, &cpu_dev,
+                        sim_debug(DEBUG_EXP, &cpu_dev,
                             "FLTD GPR[%d] %08x %08x result %016llx\n",
                             sreg, GPR[sreg], GPR[sreg+1], dest);
                         PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
@@ -4437,7 +4503,7 @@ doovr3:
                     goto inv;                           /* invalid instruction in nonbased mode */
                 if (FC != 0) {                          /* word address only */
                     TRAPME = ADDRSPEC_TRAP;             /* bad reg address, error */
-                    sim_debug(DEBUG_EXP, &cpu_dev,
+                    sim_debug(DEBUG_TRAP, &cpu_dev,
                         "ADDRSPEC8 OP %04x addr %08x\n", OP, addr);
                     goto newpsd;                        /* go execute the trap now */
                 }
@@ -4458,7 +4524,7 @@ doovr3:
                     goto inv;                           /* invalid instruction in nonbased mode */
                 if ((FC & 3) != 0) {                    /* word address only */
                     TRAPME = ADDRSPEC_TRAP;             /* bad reg address, error */
-                    sim_debug(DEBUG_EXP, &cpu_dev,
+                    sim_debug(DEBUG_TRAP, &cpu_dev,
                         "ADDRSPEC9 OP %04x addr %08x\n", OP, addr);
                     goto newpsd;                        /* go execute the trap now */
                 }
@@ -4578,8 +4644,8 @@ doovr3:
                 /* exponent must not be zero or all 1's */
                 /* normalize the value Rd in GPR[reg] and put exponent into Rs GPR[sreg] */
                 temp = s_nor(GPR[reg], &GPR[sreg]);
-                sim_debug(DEBUG_CMD, &cpu_dev,
-                    "NOR GPR[%d] %08x result %08x exp %08x\n",
+                sim_debug(DEBUG_EXP, &cpu_dev,
+                    "NOR GPR[%d] %08x result %08x exp %02x\n",
                     reg, GPR[reg], temp, GPR[sreg]);
                 GPR[reg] = temp;
                 break;
@@ -4606,8 +4672,8 @@ doovr3:
                 td = (((t_uint64)GPR[reg]) << 32) | ((t_uint64)GPR[reg+1]);
                 /* normalize the value Rd in GPR[reg] and put exponent into Rs GPR[sreg] */
                 dest = s_nord(td, &GPR[sreg]);
-                sim_debug(DEBUG_CMD, &cpu_dev,
-                    "NORD GPR[%d] %08x %08x result %016llx exp %08x\n",
+                sim_debug(DEBUG_EXP, &cpu_dev,
+                    "NORD GPR[%d] %08x %08x result %016llx exp %02x\n",
                     reg, GPR[reg], GPR[reg+1], dest, GPR[sreg]);
                 GPR[reg+1] = (uint32)(dest & FMASK);    /* save the low order reg */
                 GPR[reg] = (uint32)((dest>>32) & FMASK);/* save the hi order reg */
@@ -5100,9 +5166,14 @@ meoa:           /* merge point for eor, and, or */
                 IR = temp;                          /* get instruction from memory */
                 if (FC == 3)                        /* see if right halfword specified */
                     IR <<= 16;                      /* move over the HW instruction */
-                if ((IR & 0xFC7F0000) == 0xC8070000 ||
-                    (IR & 0xFF800000) == 0xA8000000 ||
+#ifdef DIAG_SAYS_OK_TO_EXECUTE_ANOTHER_EXECUTE
+                if ((IR & 0xFC7F0000) == 0xC8070000 ||  /* No EXR target */
+                    (IR & 0xFF800000) == 0xA8000000 ||  /* No EXM target */
                     (IR & 0xFC000000) == 0x80000000) {
+#else
+                /* 32/67 diag says execute of execute is OK */
+                if ((IR & 0xFC000000) == 0x80000000) {
+#endif
                     /* Fault, attempt to execute another EXR, EXRR, EXM, or LEAR  */
                     goto inv;                       /* invalid instruction */
                 }
@@ -5505,11 +5576,14 @@ doovr2:
                     /* if bit 30 set, instruction is in right hw, do EXRR */
                     if (addr & 2)
                         IR <<= 16;                  /* move instruction to left HW */
+#ifdef DIAG_SAYS_OK_TO_EXECUTE_ANOTHER_EXECUTE
+                    /* 32/67 diag says execute of execute is OK */
                     if ((IR & 0xFC7F0000) == 0xC8070000 ||
                         (IR & 0xFF800000) == 0xA8000000) {
                         /* Fault, attempt to execute another EXR, EXRR, or EXM  */
                         goto inv;                   /* invalid instruction */
                     }
+#endif
                     EXM_EXR = 4;                    /* set PC increment for EXR */
                     OPSD1 &= 0x87FFFFFE;            /* clear the old CC's */
                     OPSD1 |= PSD1 & 0x78000000;     /* update the CC's in the PSD */
@@ -5691,15 +5765,47 @@ doovr2:
                     /* do ADFW or SUFW instructions */
                     temp2 = GPR[reg];                   /* dest - reg contents specified by Rd */
                     addr = (uint32)(source & D32RMASK); /* get 32 bits from source memory */
-                    if (opr & 8) {                      /* Was it ADFW? */
-                        temp = s_adfw(temp2, addr, &CC);    /* do ADFW */
-                    } else {
-                        /* s_sufw will negate the value before calling add */
-                        temp = s_sufw(temp2, addr, &CC);    /* do SUFW */
+                    if ((opr & 8) == 0) {               /* Was it SUFW? */
+                        addr = NEGATE32(addr);          /* take negative for add */
                     }
-                    sim_debug(DEBUG_CMD, &cpu_dev,
-                        "%s GPR[%d] %08x addr %08x result %08x\n",
-                        (opr&8) ? "ADFW":"SUFW", reg, GPR[reg], addr, temp);
+//                  if (opr & 8) {                      /* Was it ADFW? */
+                        /* test for zero reg value */
+//                  if ((temp2 == 0) && ((addr & 0x80000000) == 0)) {  /* is reg value zero */
+                    if (temp2 == 0) {                   /* reg value is zero */
+                        temp = s_normfw(addr, &CC);     /* normalize addr value */
+                        if (CC & CC1BIT) {
+                            CC = 0;                     /* remove addr except */
+                            if (temp & FSIGN)
+                                CC |= CC3BIT;           /* CC3 for neg */
+                            else if (temp == 0)
+                                CC |= CC4BIT;           /* CC4 for zero */
+                            else 
+                                CC |= CC2BIT;           /* CC2 for greater than zero */
+                        }
+                    }
+                    else
+//                  if ((addr == 0) && ((temp2 & 0x80000000) == 0)) {  /* is reg value zero */
+                    if (addr == 0) {                    /* mem value is zero */
+                        temp = s_normfw(temp2, &CC);    /* normalize addr value */
+                        if (CC & CC1BIT) {
+                            CC = 0;                     /* remove addr except */
+                            if (temp & FSIGN)
+                                CC |= CC3BIT;           /* CC3 for neg */
+                            else if (temp == 0)
+                                CC |= CC4BIT;           /* CC4 for zero */
+                            else 
+                                CC |= CC2BIT;           /* CC2 for greater than zero */
+                        }
+                    }
+                    else
+                        temp = s_adfw(temp2, addr, &CC);    /* do ADFW */
+//                  } else {
+//                      /* s_sufw will negate the value before calling add */
+//                      temp = s_sufw(temp2, addr, &CC);    /* do SUFW */
+//                  }
+                    sim_debug(DEBUG_EXP, &cpu_dev,
+                        "%s GPR[%d] %08x addr %08x result %08x CC %08x\n",
+                        (opr&8) ? "ADFW":"SUFW", reg, GPR[reg], addr, temp, CC);
                     ovr = 0;
                     if (CC & CC1BIT)
                         ovr = 1;
@@ -5723,15 +5829,45 @@ doovr2:
                     td = (((t_uint64)GPR[reg]) << 32);  /* get upper reg value */
                     td |= (t_uint64)GPR[reg+1];         /* insert low order reg value */
                     /* source has 64 bit memory data */
-                    if (opr & 8) {                      /* Was it ADFD? */
-                        dest = s_adfd(td, source, &CC); /* do ADFD */
-                    } else {
-                        /* s_sufd will negate the memory value before calling add */
-                        dest = s_sufd(td, source, &CC); /* do SUFD */
+                    if ((opr & 8) == 0) {               /* Was it SUFD? */
+                        td = NEGATE32(td);              /* make negative for subtract */
                     }
-                    sim_debug(DEBUG_CMD, &cpu_dev,
-                        "%s GPR[%d] %08x %08x src %016llx result %016llx\n",
-                        (opr&8) ? "ADFD":"SUFD", reg, GPR[reg], GPR[reg+1], source, dest);
+                        /* test for zero reg value */
+//                      if ((td == 0) && ((GPR[reg] & 0x80000000) == 0)) {  /* is reg value zero */
+                        if (td == 0) {                  /* is reg value zero */
+                            dest = s_normfd(source, &CC); /* normalize addr value */
+                        if (CC & CC1BIT) {
+                           CC = 0;                      /* remove addr except */
+                            if (dest & DMSIGN)
+                                CC |= CC3BIT;           /* CC3 for neg */
+                            else if (dest == 0)
+                                CC |= CC4BIT;           /* CC4 for zero */
+                            else 
+                                CC |= CC2BIT;           /* CC2 for greater than zero */
+                        }
+                    }
+                    else
+                    if (source == 0) {                  /* memory value zero? */
+                        dest = s_normfd(td, &CC);       /* normalize reg value */
+                        if (CC & CC1BIT) {
+                            CC = 0;                     /* remove addr except */
+                            if (dest & DMSIGN)
+                                CC |= CC3BIT;           /* CC3 for neg */
+                            else if (dest == 0)
+                                CC |= CC4BIT;           /* CC4 for zero */
+                            else 
+                                CC |= CC2BIT;           /* CC2 for greater than zero */
+                        }
+                    }
+                    else
+                        dest = s_adfd(td, source, &CC); /* do ADFD */
+//                  } else {
+//                      /* s_sufd will negate the memory value before calling add */
+//                      dest = s_sufd(td, source, &CC); /* do SUFD */
+//                  }
+                    sim_debug(DEBUG_EXP, &cpu_dev,
+                        "%s GPR[%d] %08x %08x src %016llx result %016llx CC %08x\n",
+                        (opr&8) ? "ADFD":"SUFD", reg, GPR[reg], GPR[reg+1], source, dest, CC);
                     ovr = 0;
                     if (CC & CC1BIT)                    /* test for overflow detection */
                         ovr = 1;
@@ -5769,7 +5905,7 @@ doovr2:
                 CC = 0;                                 /* clear the CC'ss */
                 /* handle float or double mul/div instructions */
                 if (dbl == 0) {
-                    /* do MPFW or DIVW instructions */
+                    /* do MPFW or DVFW instructions */
                     temp2 = GPR[reg];                   /* dest - reg contents specified by Rd */
                     addr = (uint32)(source & D32RMASK); /* get 32 bits from source memory */
                     if (opr & 8) {                      /* Was it MPFW? */
@@ -5777,7 +5913,7 @@ doovr2:
                     } else {
                         temp = (uint32)s_dvfw(temp2, addr, &CC);    /* do DVFW */
                     }
-                    sim_debug(DEBUG_CMD, &cpu_dev,
+                    sim_debug(DEBUG_EXP, &cpu_dev,
                         "%s GPR[%d] %08x addr %08x result %08x\n",
                         (opr&8) ? "MPFW":"DVFW", reg, GPR[reg], addr, temp);
                     if (CC & CC1BIT)
@@ -5807,7 +5943,7 @@ doovr2:
                     } else {
                         dest = s_dvfd(td, source, &CC); /* do DVFD */
                     }
-                    sim_debug(DEBUG_CMD, &cpu_dev,
+                    sim_debug(DEBUG_EXP, &cpu_dev,
                         "%s GPR[%d] %08x %08x src %016llx result %016llx\n",
                         (opr&8) ? "MPFD":"DVFD", reg, GPR[reg], GPR[reg+1], source, dest);
                     if (CC & CC1BIT)                    /* test for overflow detection */
@@ -5914,7 +6050,7 @@ doovr2:
                 /* if ((FC & 5) != 0) { */
                 if ((FC & 4) != 0) {
                     TRAPME = ADDRSPEC_TRAP;             /* bad address, error */
-                    sim_debug(DEBUG_EXP, &cpu_dev,
+                    sim_debug(DEBUG_TRAP, &cpu_dev,
                         "ADDRSPEC10 OP %04x addr %08x\n", OP, addr);
                     goto newpsd;                        /* go execute the trap now */
                 }
@@ -5949,7 +6085,7 @@ doovr2:
                 /* if ((FC & 5) != 0) { */
                 if ((FC & 4) != 0) {
                     TRAPME = ADDRSPEC_TRAP;             /* bad address, error */
-                    sim_debug(DEBUG_EXP, &cpu_dev,
+                    sim_debug(DEBUG_TRAP, &cpu_dev,
                         "ADDRSPEC11 OP %04x addr %08x\n", OP, addr);
                     goto newpsd;                        /* go execute the trap now */
                 }
@@ -6036,7 +6172,7 @@ doovr2:
                     if ((FC & 04) != 0 || FC == 2) {    /* can not be byte or doubleword */
                         /* Fault */
                         TRAPME = ADDRSPEC_TRAP;         /* bad reg address, error */
-                        sim_debug(DEBUG_EXP, &cpu_dev,
+                        sim_debug(DEBUG_TRAP, &cpu_dev,
                             "ADDRSPEC12 OP %04x addr %08x\n", OP, addr);
                         goto newpsd;                    /* go execute the trap now */
                     }
@@ -6127,12 +6263,12 @@ doovr2:
                         if (PSD2 & MAPBIT) {
                             /* set mapped mode in cpu status */
                             CPUSTATUS |= 0x00800000;    /* set bit 8 of cpu status */
-//041420                    sim_debug(DEBUG_DETAIL, &cpu_dev,
-                            sim_debug(DEBUG_EXP, &cpu_dev,
+//                          sim_debug(DEBUG_EXP, &cpu_dev,
+                            sim_debug(DEBUG_DETAIL, &cpu_dev,
                                 "B4 LPSDCM temp %06x TPSD %08x %08x PSD %08x %08x\n",
                                 temp, TPSD[0], TPSD[1], PSD1, PSD2);
-//041420                    sim_debug(DEBUG_DETAIL, &cpu_dev,
-                            sim_debug(DEBUG_EXP, &cpu_dev,
+//                          sim_debug(DEBUG_EXP, &cpu_dev,
+                            sim_debug(DEBUG_DETAIL, &cpu_dev,
                                 "B4 LPSDCM BPIX %04x CPIX %04x CPIXPL %04x\n",
                                 BPIX, CPIX, CPIXPL);
 #ifdef FOR_DEBUG_MPX_041420
@@ -6199,20 +6335,20 @@ doovr2:
                             if ((PSD2 & RETMBIT) == 0) {    /* don't load maps if retain bit set */
                                 /* we need to load the new maps */
                                 TRAPME = load_maps(PSD, 0); /* load maps for new PSD */
-//041420                    sim_debug(DEBUG_DETAIL, &cpu_dev,
-                                sim_debug(DEBUG_EXP, &cpu_dev,
+//                              sim_debug(DEBUG_EXP, &cpu_dev,
+                                sim_debug(DEBUG_DETAIL, &cpu_dev,
                                     "AF LPSDCM TPSD %08x %08x PSD %08x %08x TRAPME %02x\n",
                                     TPSD[0], TPSD[1], PSD1, PSD2, TRAPME);
-//041420                    sim_debug(DEBUG_DETAIL, &cpu_dev,
-                                sim_debug(DEBUG_EXP, &cpu_dev,
+//                              sim_debug(DEBUG_EXP, &cpu_dev,
+                                sim_debug(DEBUG_DETAIL, &cpu_dev,
                                     "AF LPSDCM BPIX %04x CPIX %04x CPIXPL %04x\n",
                                     BPIX, CPIX, CPIXPL);
-//041420                    sim_debug(DEBUG_DETAIL, &cpu_dev,
-                                sim_debug(DEBUG_EXP, &cpu_dev,
+//                              sim_debug(DEBUG_EXP, &cpu_dev,
+                                sim_debug(DEBUG_DETAIL, &cpu_dev,
                                     "AF LPSDCM OS MAPC[0-5] %08x %08x %08x %08x %08x %08x\n",
                                     MAPC[0], MAPC[1], MAPC[2], MAPC[3], MAPC[4], MAPC[5]);
-//041420                    sim_debug(DEBUG_DETAIL, &cpu_dev,
-                                sim_debug(DEBUG_EXP, &cpu_dev,
+//                              sim_debug(DEBUG_EXP, &cpu_dev,
+                                sim_debug(DEBUG_DETAIL, &cpu_dev,
                                     "AF LPSDCM US MAPC[%x-%x] %08x %08x %08x %08x %08x %08x\n",
                                     BPIX, BPIX+5, MAPC[BPIX], MAPC[BPIX+1], MAPC[BPIX+2],
                                     MAPC[BPIX+3], MAPC[BPIX+4], MAPC[BPIX+5]);
@@ -6797,7 +6933,7 @@ mcheck:
             if (dbl) {                              /* if double reg, store 2nd reg */
                 if (reg & 1) {                      /* is it double regs into odd reg */
                     TRAPME = ADDRSPEC_TRAP;         /* bad address, error */
-                    sim_debug(DEBUG_EXP, &cpu_dev,
+                    sim_debug(DEBUG_TRAP, &cpu_dev,
                         "ADDRSPEC13 OP %04x addr %08x\n", OP, addr);
                     goto newpsd;                    /* go execute the trap now */
                 }
@@ -7223,7 +7359,8 @@ uint32 def_floppy = 0x7ef0;             /* IOP floppy disk channel 7e, device f0
 /* do any one time initialization here for cpu */
 t_stat cpu_reset(DEVICE *dptr)
 {
-    int i;
+    int     i;
+    t_stat  devs = SCPE_OK;
 
     /* leave regs alone so values can be passed to boot code */
     PSD1 = 0x80000000;                  /* privileged, non mapped, non extended, address 0 */
@@ -7246,7 +7383,7 @@ t_stat cpu_reset(DEVICE *dptr)
     ISMCW = 0;                          /* No V9 IPU Shadow Memory Configuration */
     RDYQIN = RDYQOUT = 0;               /* initialize cheannel ready queue */
 
-    chan_set_devs();                    /* set up the defined devices on the simulator */
+    devs = chan_set_devs();             /* set up the defined devices on the simulator */
 
     /* set default breaks to execution tracing */
     sim_brk_types = sim_brk_dflt = SWMASK('E');
@@ -7306,7 +7443,9 @@ t_stat cpu_reset(DEVICE *dptr)
     M[4] = 0x02000000;                  /* 0x10 IOCD 3 Read into address 0 */
     M[5] = 0x000006EC;                  /* 0x14 IOCD 3 Read 0x6EC bytes */
     loading = 0;                        /* not loading yet */
-    /* we are good to go */
+    /* we are good to go or error from device setup */
+    if (devs != SCPE_OK)
+        return devs;
     return SCPE_OK;
 }
 

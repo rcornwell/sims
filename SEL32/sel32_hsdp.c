@@ -630,7 +630,7 @@ t_stat hsdp_srv(UNIT *uptr)
         /* a pointer to the INCH buffer followed by 8 drive attribute words that */
         /* contains the flags, sector count, MHD head count, and FHD count */
         /* len has the byte count from IOCD wd2 and should be 0x24 (36) */
-        /* the INCH buffer address must be set for the parrent channel as well */
+        /* the INCH buffer address must be set for the parent channel as well */
         /* as all other devices on the channel.  Call set_inch() to do this for us */
         /* just return OK and channel software will use u4 as status buffer addr */
 
@@ -909,7 +909,7 @@ goout:
         sim_debug(DEBUG_CMD, dptr,
             "hsdp_srv STAR unit=%02x star %02x %02x %02x %02x\n",
             unit, buf[0], buf[1], buf[2], buf[3]);
-rezero:
+//rezero:
         sim_debug(DEBUG_DETAIL, dptr,
             "hsdp_srv seek unit=%02x star %02x %02x %02x %02x\n",
             unit, buf[0], buf[1], buf[2], buf[3]);

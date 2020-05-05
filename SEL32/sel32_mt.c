@@ -387,6 +387,10 @@ uint16 mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     case 0x00:                                      /* INCH command */
         sim_debug(DEBUG_CMD, dptr, "start INCH command\n");
 
+#ifdef DO_DYNAMIC_DEBUG
+        /* start debugging */
+        cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ | DEBUG_TRAP);
+#endif
         sim_debug(DEBUG_CMD, dptr,
             "mt_startcmd starting INCH cmd, chsa %04x MemBuf %08x cnt %04x\n",
             chsa, chp->ccw_addr, chp->ccw_count);
@@ -581,10 +585,8 @@ t_stat mt_srv(UNIT *uptr)
             "mt_srv starting INCH %06x cmd, chsa %04x MemBuf %06x cnt %04x\n",
             mema, addr, chp->ccw_addr, chp->ccw_count);
 #ifdef DO_DYNAMIC_DEBUG
-        if (mema == 0x149d8) {
                 /* start debugging */
-                cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
-        }
+                cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ | DEBUG_TRAP);
 #endif
 
         if (len == 0) {
@@ -636,11 +638,11 @@ t_stat mt_srv(UNIT *uptr)
         /* set halfwords 16 & 17 to 5 as default retry count in inch data */
         /* UTX uses this value to see if the device is a buffered tape processor */
         /* they must be non-zero and equal to be BTP */
-        WMH(mema+(16*2),5);                     /* write left HW with count */
-        WMH(mema+(17*2),5);                     /* write right HW with count */
+        WMH(mema+(16<<1),5);                    /* write left HW with count */
+        WMH(mema+(17<<1),5);                    /* write right HW with count */
         sim_debug(DEBUG_CMD, dptr,
-            "mt_srv cmd INCH chsa %04x addr %06x count %04x completed\n",
-            addr, mema, chp->ccw_count);
+            "mt_srv cmd INCH chsa %04x addr %06x count %04x completed INCH16 %08x\n",
+            addr, mema, chp->ccw_count, RMW(mema+(8<<2)));
         uptr->CMD &= ~MT_CMDMSK;                /* clear the cmd */
         mt_busy[bufnum] &= ~1;                  /* make our buffer not busy */
         chan_end(addr, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
@@ -1118,9 +1120,11 @@ t_stat mt_srv(UNIT *uptr)
         case 3:
             uptr->CMD &= ~(MT_CMDMSK);
             uptr->SNS &= ~SNS_LOAD;                 /* reset BOT */
+            uptr->SNS |= SNS_EOT;                   /* set EOT status */
             mt_busy[bufnum] &= ~1;
             sim_debug(DEBUG_CMD, &mta_dev, "Skip file got EOT sense %08x unit %02x\n", uptr->SNS, unit);
 //BAD       chan_end(addr, SNS_DEVEND|SNS_UNITCHK);
+//*##*/      chan_end(addr, SNS_DEVEND|SNS_UNITCHK);
             chan_end(addr, SNS_DEVEND|SNS_UNITEXP);
             break;
         }

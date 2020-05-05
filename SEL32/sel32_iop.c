@@ -123,8 +123,8 @@ DEVICE          iop_dev = {
     NULL, NULL, &iop_reset,         /* examine, deposit, reset */
     NULL, NULL, NULL,               /* boot, attach, detach */
     /* dib ptr, dev flags, debug flags, debug */
-    &iop_dib, DEV_CHAN|DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
-//  &iop_dib, DEV_CHAN|DEV_DIS|DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
+//  &iop_dib, DEV_CHAN|DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
+    &iop_dib, DEV_CHAN|DEV_DIS|DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
 //  NULL, NULL, &iop_help,          /* ?, ?, help */
 //  NULL, NULL, &iop_desc           /* ?, ?, description */
 };

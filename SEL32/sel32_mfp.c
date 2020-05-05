@@ -50,6 +50,7 @@ const char  *mfp_desc(DEVICE *dptr);
 #define MFP_INCH    0x00    /* Initialize channel command */
 #define MFP_INCH2   0xf0    /* Initialize channel command after start */
 #define MFP_NOP     0x03    /* NOP command */
+#define MFP_SID     0x80    /* MFP status command */
 #define MFP_MSK     0xff    /* Command mask */
 
 /* Status held in u3 */
@@ -182,6 +183,16 @@ uint16 mfp_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         return 0;                                   /* no status change */
         break;
 
+    case MFP_SID:                                   /* status ID command */
+        sim_debug(DEBUG_CMD, &mfp_dev, "mfp_startcmd %04x: Cmd SID\n", chan);
+        uptr->u5 = SNS_RDY|SNS_ONLN;                /* status is online & ready */
+        uptr->u3 &= LMASK;                          /* leave only chsa */
+        uptr->u3 |= (cmd & MFP_MSK);                /* save SID command */
+        sim_activate(uptr, 20);                     /* TRY 07-13-19 */
+//@41   sim_activate(uptr, 40);                     /* TRY 07-13-19 */
+        return 0;                                   /* no status change */
+        break;
+
     default:                                        /* invalid command */
         uptr->u5 |= SNS_CMDREJ;                     /* command rejected */
         sim_debug(DEBUG_CMD, &mfp_dev, "mfp_startcmd %04x: Cmd Invalid %02x status %02x\n",
@@ -208,7 +219,7 @@ t_stat mfp_srv(UNIT *uptr)
     uint32  mema = chp->ccw_addr;                   /* get inch or buffer addr */
 
     /* test for NOP or INCH cmds */
-    if ((cmd != MFP_NOP) && (cmd != MFP_INCH2)) {   /* NOP or INCH */
+    if ((cmd != MFP_NOP) && (cmd != MFP_INCH2) && (cmd != MFP_SID)) {   /* NOP, SID or INCH */
         uptr->u3 &= LMASK;                          /* nothing left, command complete */
         sim_debug(DEBUG_CMD, &mfp_dev,
             "mfp_srv Unknown cmd %02x chan %02x: chnend|devend|unitexp\n", cmd, chsa);
@@ -218,7 +229,46 @@ t_stat mfp_srv(UNIT *uptr)
 
     if (cmd == MFP_NOP) {                           /* NOP do nothing */
         uptr->u3 &= LMASK;                          /* nothing left, command complete */
-        sim_debug(DEBUG_CMD, &mfp_dev, "mfp_srv INCH/NOP chan %02x: chnend|devend\n", chsa);
+        sim_debug(DEBUG_CMD, &mfp_dev, "mfp_srv NOP chan %02x: chnend|devend\n", chsa);
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* done */
+        return SCPE_OK;
+    } else
+
+    /* 3 status wds are to be returned */
+    /* Wd 1 MMXXXXXX board model # assume 00 00 08 02*/
+    /* Wd 2 MMXXXXXX board firmware model # assume 00 00 08 02*/
+    /* Wd 3 MMXXXXXX board firmware revision # assume 00 00 00 14*/
+    if (cmd == MFP_SID) {                           /* send 12 byte Status ID data */
+        uint8   ch;
+
+        /* Word 0 */
+        ch = 0x00;
+        chan_write_byte(chsa, &ch);                 /* write byte 0 */
+        chan_write_byte(chsa, &ch);                 /* write byte 1 */
+        ch = 0x80;
+        chan_write_byte(chsa, &ch);                 /* write byte 2 */
+        ch = 0x02;
+        chan_write_byte(chsa, &ch);                 /* write byte 3 */
+
+        /* Word 1 */
+        ch = 0x00;
+        chan_write_byte(chsa, &ch);                 /* write byte 4 */
+        chan_write_byte(chsa, &ch);                 /* write byte 5 */
+        ch = 0x80;
+        chan_write_byte(chsa, &ch);                 /* write byte 6 */
+        ch = 0x02;
+        chan_write_byte(chsa, &ch);                 /* write byte 7 */
+
+        /* Word 2 */
+        ch = 0x00;
+        chan_write_byte(chsa, &ch);                 /* write byte 8 */
+        chan_write_byte(chsa, &ch);                 /* write byte 9 */
+        chan_write_byte(chsa, &ch);                 /* write byte 10 */
+        ch = 0x14;
+        chan_write_byte(chsa, &ch);                 /* write byte 11 */
+
+        uptr->u3 &= LMASK;                          /* nothing left, command complete */
+        sim_debug(DEBUG_CMD, &mfp_dev, "mfp_srv SID chan %02x: chnend|devend\n", chsa);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* done */
         return SCPE_OK;
     } else

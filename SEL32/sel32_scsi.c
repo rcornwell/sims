@@ -274,10 +274,10 @@ scsi_type[] =
     {"SD300",   9, 192, 32,   648,  1409, 0x40},   /*1  8828  300M  396674 sec */
     {"SD700",  15, 192, 35,   648,  1546, 0x40},   /*2  8833  700M  797129 sec */
     {"SD1200", 15, 192, 49,   648,  1931, 0x40},   /*3  8835 1200M 1389584 sec */
-    {"8820",    9, 192, 18,   324,   966, 0x40},   /*4  8820  150M */
-    {"8828",    9, 192, 36,   648,   966, 0x40},   /*5  8828  300M */
-    {"8833",   18, 192, 20,   648, 46725, 0x40},   /*6  8833  700M */
-    {"8835",   18, 192, 20,   648, 46725, 0x40},   /*7  8835 1200M */
+    {"8820",    9, 256, 18,   324,   967, 0x41},   /*4  8820  150M */
+    {"8821",    9, 256, 36,   648,   967, 0x41},   /*5  8828  300M */
+    {"8833",   18, 256, 20,   648, 46725, 0x41},   /*6  8833  700M */
+    {"8835",   18, 256, 20,   648, 46725, 0x41},   /*7  8835 1200M */
     /* For UTX */
     {NULL, 0}
 };
@@ -385,7 +385,7 @@ DIB     sbb_dib = {
     0x7600,         /* uint16 chan_addr */                      /* parent channel address */
     0,              /* uint32 chan_fifo_in */                   /* fifo input index */
     0,              /* uint32 chan_fifo_out */                  /* fifo output index */
-    0,              /* uint32 chan_fifo[FIFO_SIZE] */           /* interrupt status fifo for channel */
+    {0},              /* uint32 chan_fifo[FIFO_SIZE] */           /* interrupt status fifo for channel */
 };
 
 DEVICE  sbb_dev = {
@@ -531,8 +531,8 @@ t_stat scsi_srv(UNIT *uptr)
     int             i;
     uint32          cap = CAP(type);
     uint8           ch;
-    uint16          ssize = scsi_type[type].ssiz*4; /* Size of one sector in bytes */
-    int32           tstart = 0;                 /* Location of start of cyl/track/sect in data */
+    int32           ssize = scsi_type[type].ssiz*4; /* Size of one sector in bytes */
+    uint32          tstart = 0;                 /* Location of start of cyl/track/sect in data */
     uint8           buf2[1024];
     uint8           buf[1024];
 
@@ -558,7 +558,7 @@ t_stat scsi_srv(UNIT *uptr)
         uint32  mema;                           /* memory address */
 //      uint32  daws[8];                        /* drive attribute registers */
 //      uint32  i, j;
-        uint32  i;   
+//      uint32  i;   
 
         len = chp->ccw_count;                   /* INCH command count */
         mema = chp->ccw_addr;                   /* get inch or buffer addr */
@@ -858,8 +858,8 @@ t_stat scsi_srv(UNIT *uptr)
             buf[4] = 0x81;
             buf[8] = 0x91;
             buf[12] = 0xf4;
-            buf[17] = HDS(type);                    /* # of heads */
-            buf[23] = SPT(type);                    /* Sect/track */
+            buf[17] = (uint8)HDS(type);             /* # of heads */
+            buf[23] = (uint8)SPT(type);             /* Sect/track */
 //          buf[27] = SPT(type);                    /* Sect/track */
             for (i=0; i<cnt; i++) {
                 if (chan_write_byte(chsa, &buf[i])) {
@@ -1051,7 +1051,7 @@ t_stat scsi_srv(UNIT *uptr)
         }
         /* ssize has sector size in bytes */
         for (i=0; i<4; i++) {
-            ch = (ssize >> ((3-i)*8)) & 0xff;
+            ch = (((int32)ssize) >> ((3-i)*8)) & 0xff;
             if (chan_write_byte(chsa, &ch)) {
                 /* we have error, bail out */
                 uptr->CMD &= LMASK;             /* remove old status bits & cmd */
@@ -1077,7 +1077,7 @@ t_stat scsi_srv(UNIT *uptr)
         uint32  mema;                           /* memory address */
 //      uint32  daws[8];                        /* drive attribute registers */
 //      uint32  i, j;
-        uint32  i;
+        int32   i;
 
         uptr->SNS &= ~SNS_TCMD;                 /* show not presessing TCMD cmd chain */
         len = chp->ccw_count;                   /* INCH command count */

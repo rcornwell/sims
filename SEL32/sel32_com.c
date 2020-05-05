@@ -237,7 +237,8 @@ MTAB            com_mod[] = {
 };
 
 UNIT            com_unit[] = {
-    {UDATA(&comi_srv, UNIT_ATTABLE|UNIT_IDLE, 0), COM_WAIT, UNIT_ADDR(0x0000)},       /* 0 */
+//  {UDATA(&comi_srv, UNIT_ATTABLE|UNIT_IDLE, 0), COM_WAIT, UNIT_ADDR(0x0000)},       /* 0 */
+    {UDATA(&comi_srv, UNIT_ATTABLE|UNIT_IDLE, 0), COM_WAIT, UNIT_ADDR(0x4747)},       /* dummy */
 };
 
 //DIB com_dib = {NULL, com_startcmd, NULL, NULL, com_ini, com_unit, com_chp, COM_UNITS, 0x0f, 0x7e00, 0, 0, 0};
@@ -679,7 +680,7 @@ t_stat comi_srv(UNIT *uptr)
         return SCPE_OK;                                 /* return */
     }
 
-    /* handle SACE, 3 char alread read, so we are done */
+    /* handle SACE, 3 char already read, so we are done */
     if (cmd == COM_SACE) {                              /* check for SACE 0xff */
         uptr->u3 &= LMASK;                              /* leave only chsa */
         sim_debug(DEBUG_CMD, &com_dev,

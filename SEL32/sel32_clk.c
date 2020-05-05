@@ -35,7 +35,7 @@
 
 #if NUM_DEVS_RTOM > 0
 
-#define UNIT_CLK UNIT_ATTABLE|UNIT_IDLE|UNIT_DISABLE
+#define UNIT_CLK UNIT_IDLE|UNIT_DISABLE
 
 void rtc_setup (uint32 ss, uint32 level);
 t_stat rtc_srv (UNIT *uptr);
@@ -61,7 +61,7 @@ int32 rtc_lvl = 0x18;               /* rtc interrupt level */
    rtc_reg      RTC register list
 */
 
-/* clock is attached all the time */
+/* clock can be enabled / disabled */
 /* default to 60 HZ RTC */
 UNIT rtc_unit = { UDATA (&rtc_srv, UNIT_IDLE, 0), 16666, UNIT_ADDR(0x7F06)};
 //UNIT rtc_unit = { UDATA (&rtc_srv, UNIT_CLK, 0), 16666, UNIT_ADDR(0x7F06)};
@@ -93,7 +93,7 @@ DEVICE rtc_dev = {
     NULL, NULL, &rtc_reset,         /* examine, deposit, reset */
     NULL, NULL, NULL,               /* boot, attach, detach */
 //  NULL, 0, 0, NULL,               /* dib, dev flags, debug flags, debug */
-    NULL, DEV_DEBUG, 0, dev_debug,  /* dib, dev flags, debug flags, debug */
+    NULL, DEV_DEBUG|DEV_DISABLE, 0, dev_debug,  /* dib, dev flags, debug flags, debug */
     NULL, NULL, &rtc_help,          /* ?, ?, help */
     NULL, NULL, &rtc_desc,          /* ?, ?, description */
     };
@@ -115,7 +115,9 @@ t_stat rtc_srv (UNIT *uptr)
     /* stop clock interrupts for dexp debugging */
     rtc_pie = 0;
 #endif
-    if (rtc_pie) {                                  /* set pulse intr */
+    /* id clock sisabled, do not do interrupts */
+    if (((uptr->flags & DEV_DIS) == 0) && rtc_pie) {
+//  if (rtc_pie) {                                  /* set pulse intr */
         time_t result = time(NULL);
         sim_debug(DEBUG_CMD, &rtc_dev, "RT Clock int time %08x\n", (uint32)result);
 #ifdef DO_TIME
@@ -137,7 +139,13 @@ t_stat rtc_srv (UNIT *uptr)
             irq_pend = 1;                           /* make sure we scan for int */
         }
     }
+#define FOR_MIKE
+#ifdef FOR_MIKE
+//Mike  rtc_unit.wait = sim_rtcn_calb (rtc_tps, TMR_RTC);   /* calibrate */
     rtc_unit.wait = sim_rtcn_calb (rtc_tps, TMR_RTC);   /* calibrate */
+#else
+    rtc_unit.wait = sim_rtcn_calb (rtc_tps, TMR_RTC);   /* calibrate */
+#endif
     sim_activate_after (&rtc_unit, 1000000/rtc_tps);/* reactivate 16666 tics / sec */
     return SCPE_OK;
 }
@@ -160,6 +168,10 @@ void rtc_setup(uint32 ss, uint32 level)
         sim_debug(DEBUG_CMD, &rtc_dev,
             "RT Clock setup enable int %02x rtc_pie %01x ss %01x\n",
             rtc_lvl, rtc_pie, ss);
+#ifdef DO_DYNAMIC_DEBUG
+        /* start debugging */
+        cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ | DEBUG_TRAP);
+#endif
     } else {
         INTS[level] &= ~INTS_ENAB;                  /* make sure disabled */
         SPAD[level+0x80] &= ~SINT_ENAB;             /* in spad too */
@@ -178,7 +190,12 @@ t_stat rtc_reset(DEVICE *dptr)
 {
     rtc_pie = 0;                                    /* disable pulse */
     /* initialize clock calibration */
+#ifdef FOR_MIKE
+//Mike rtc_unit.wait = sim_rtcn_init_unit(&rtc_unit, rtc_unit.wait, TMR_RTC);
     rtc_unit.wait = sim_rtcn_init_unit(&rtc_unit, rtc_unit.wait, TMR_RTC);
+#else
+    rtc_unit.wait = sim_rtcn_init_unit(&rtc_unit, rtc_unit.wait, TMR_RTC);
+#endif
     sim_activate (&rtc_unit, rtc_unit.wait);        /* activate unit */
     return SCPE_OK;
 }
@@ -208,7 +225,7 @@ t_stat rtc_show_freq (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 /* sho help rtc */
 t_stat rtc_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr)
 {
-    fprintf(st, "SEL 32 IOP realtime clock at 0x7F06\r\n");
+    fprintf(st, "SEL 32 IOP/MFP realtime clock at 0x7F06\r\n");
     fprintf(st, "Use:\r\n");
     fprintf(st, "    sim> SET RTC [50][60][100][120]\r\n");
     fprintf(st, "to set clock interrupt rate in HZ\r\n");
@@ -220,7 +237,7 @@ t_stat rtc_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr
 /* device description */
 const char *rtc_desc(DEVICE *dptr)
 {
-    return "SEL IOP realtime clock @ address 0x7F06";
+    return "SEL IOP/MFP realtime clock @ address 0x7F06";
 }
 
 /************************************************************************/
@@ -250,7 +267,14 @@ const char *itm_desc(DEVICE *dptr);
    itm_reg      Interval Timer ITM register list
 */
 
+#ifdef FOR_MIKE
+/* Mike suggested I remove the UNIT_IDLE flag from ITM.  This causes SEL32 */
+/* to use 100% of the CPU instead of waiting amd ruinning 10% cpu usage */
+//BAD Mike UNIT itm_unit = { UDATA (&itm_srv, 0, 0), 26042, UNIT_ADDR(0x7F04)};
+UNIT itm_unit = { UDATA (&itm_srv, 0, 0), 26042, UNIT_ADDR(0x7F04)};
+#else
 UNIT itm_unit = { UDATA (&itm_srv, UNIT_IDLE, 0), 26042, UNIT_ADDR(0x7F04)};
+#endif
 
 REG itm_reg[] = {
     { FLDATA (PIE, itm_pie, 0) },
@@ -312,7 +336,8 @@ t_stat itm_srv (UNIT *uptr)
                 itm_lvl, itm_cnt);
             /* restart timer with value from user */
             if (itm_src)                            /* use specified src freq */
-                sim_activate_after_abs_d(&itm_unit, ((double)itm_cnt*400000)/rtc_tps);
+                sim_activate_after_abs_d(&itm_unit, ((double)itm_cnt*350000)/rtc_tps);
+//              sim_activate_after_abs_d(&itm_unit, ((double)itm_cnt*400000)/rtc_tps);
 //              sim_activate_after_abs_d(&itm_unit, ((double)itm_cnt*1000000)/rtc_tps);
             else
                 sim_activate_after_abs_d(&itm_unit, ((double)itm_cnt*itm_tick_size_x_100)/100.0);
@@ -386,8 +411,7 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
         itm_run = 0;                                /* timer is not running */
         itm_cnt = 0;                                /* no count reset value */
         itm_load = temp;                            /* last loaded value */
-//TRY*/ itm_load = 0;                               /* last loaded value */
-/*TRY*/ itm_strt = 0;                               /* not restarted neg */
+        itm_strt = 0;                               /* not restarted neg */
         return 0;                                   /* does not matter, no value returned  */
         break;
 
@@ -399,6 +423,11 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
     case 0x39:                                      /* load timer with new value and start lo rate */
     case 0x3a:                                      /* load timer with new value and start hi rate */
     case 0x3b:                                      /* load timer with new value and start lo rate */
+#ifdef DO_DYNAMIC_DEBUG
+        if (itm_cmd == 0x38)
+        /* start debugging */
+        cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ | DEBUG_TRAP);
+#endif
 //      sim_activate_after (&rtc_unit, 1000000/rtc_tps);/* reactivate 16666 tics / sec */
         if (itm_run)                                /* if we were running stop timer */
             sim_cancel (&itm_unit);                 /* cancel timer */
@@ -448,11 +477,11 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
             } 
             sim_cancel (&itm_unit);                 /* cancel timer */
         }
-        if (cmd & 0x40) {
-            /* timer value already read into temp */
-            ;
-        }
-        if (cmd & 0x80) {
+//      if (cmd & 0x40) {
+//          /* timer value already read into temp */
+//          ;
+//      }
+        if (cmd & 0x08) {
             /* use value from user to load timer */
             temp = cnt;                             /* set user count */
         }
@@ -487,8 +516,8 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
         /* if bits 30-31 == 20, use RTC freq */
         itm_src = (cmd>>1)&1;                       /* set src */
         if (itm_src)                                /* use specified src freq */
-//          sim_activate_after_abs_d(&itm_unit, ((double)cnt*400000)/rtc_tps);
-            sim_activate_after_abs_d(&itm_unit, ((double)cnt*1000000)/rtc_tps);
+            sim_activate_after_abs_d(&itm_unit, ((double)cnt*700000)/rtc_tps);
+//          sim_activate_after_abs_d(&itm_unit, ((double)cnt*1000000)/rtc_tps);
         else
             sim_activate_after_abs_d(&itm_unit, ((double)cnt*itm_tick_size_x_100)/100.0);
         itm_run = 1;                                /* set timer running */
@@ -500,7 +529,7 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
         itm_strt = 0;                               /* not restarted neg */
         itm_load = cnt;                             /* now loaded */
         sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%02x return value %08x (%08d)\n", cmd, cnt, cnt);
-        return temp;                                /* return curr count */
+        return 0;                                   /* does not matter, no value returned  */
         break;
 
     case 0x40:                                      /* read the current timer value */
@@ -518,6 +547,7 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
         }
         sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x40 return value %08x (%d)\n", temp, temp);
         return temp;
+//TRIED return temp << 6;
         break;
 
     case 0x60:                                      /* read and stop timer */
@@ -682,7 +712,7 @@ t_stat itm_show_freq (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 /* sho help rtc */
 t_stat itm_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr)
 {
-    fprintf(st, "SEL 32 IOP interval timer at 0x7F04\r\n");
+    fprintf(st, "SEL 32 IOP/MFP interval timer at 0x7F04\r\n");
     fprintf(st, "Use:\r\n");
     fprintf(st, "    sim> SET ITM [3840][7680]\r\n");
     fprintf(st, "to set interval timer clock rate in us x 100\r\n");
@@ -694,7 +724,7 @@ t_stat itm_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr
 /* device description */
 const char *itm_desc(DEVICE *dptr)
 {
-    return "SEL IOP Interval Timer @ address 0x7F04";
+    return "SEL IOP/MFP Interval Timer @ address 0x7F04";
 }
 
 #endif

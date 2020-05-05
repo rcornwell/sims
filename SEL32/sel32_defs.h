@@ -191,6 +191,9 @@ extern DEVICE lpr_dev;
 /* channel program data for a chan/sub-address */
 typedef struct chp {
     /* channel program values */
+#ifndef OLD_CHAN
+    UNIT        *unitptr;               /* Back pointer to units structure */
+#endif
     uint32      chan_inch_addr;         /* Channel status dw in memory */
     uint32      chan_caw;               /* Channel command address word */
     uint32      ccw_addr;               /* Channel address */

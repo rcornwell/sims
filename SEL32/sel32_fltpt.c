@@ -71,19 +71,24 @@ uint32   s_mpfw(uint32 reg, uint32 mem, uint32 *cc);
 uint32   s_dvfw(uint32 reg, uint32 mem, uint32 *cc);
 t_uint64 s_mpfd(t_uint64 reg, t_uint64 mem, uint32 *cc);
 t_uint64 s_dvfd(t_uint64 reg, t_uint64 mem, uint32 *cc);
+uint32   s_normfw(uint32 mem, uint32 *cc);
+t_uint64 s_normfd(t_uint64 mem, uint32 *cc);
 
 #define NORMASK 0xf8000000              /* normalize 5 bit mask */
 #define DNORMASK 0xf800000000000000ll   /* double normalize 5 bit mask */
-#define EXMASK 0x7f000000               /* exponent mask */
-#define FRMASK 0x80ffffff               /* fraction mask */
+#define EXMASK  0x7f000000              /* exponent mask */
+#define FRMASK  0x80ffffff              /* fraction mask */
 #define DEXMASK 0x7f00000000000000ll    /* exponent mask */
+#define DFSVAL  0xff00000000000000ll    /* minus full scale value */
 #define DFRMASK 0x80ffffffffffffffll    /* fraction mask */
 #define NEGATE32(val)   ((~val) + 1)    /* negate a value 16/32/64 bits */
 
-/* normalize floating point number */
+/* normalize floating point fraction */
 uint32 s_nor(uint32 reg, uint32 *exp) {
     uint32 texp = 0;                    /* no exponent yet */
 
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "s_nor entry reg %08x texp %08x\n", reg, texp);
     if (reg != 0) {                     /* do nothing if reg is already zero */
         uint32 mv = reg & NORMASK;      /* mask off bits 0-4 */
         while ((mv == 0) || (mv == NORMASK)) {
@@ -94,9 +99,11 @@ uint32 s_nor(uint32 reg, uint32 *exp) {
         }
         /* bits 0-4 of reg is neither 0 nor all ones */
         /* show that reg is normalized */
-        texp = 0x40 - texp;             /* subtract shift count from 0x40 */
+        texp = (uint32)(0x40-(int32)texp);  /* subtract shift count from 0x40 */
     }
     *exp = texp;                        /* return exponent */
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "s_nor exit reg %08x texp %08x\n", reg, texp);
     return (reg);                       /* return normalized register */
 }
 
@@ -104,6 +111,8 @@ uint32 s_nor(uint32 reg, uint32 *exp) {
 t_uint64 s_nord(t_uint64 reg, uint32 *exp) {
     uint32 texp = 0;                    /* no exponent yet */
 
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "s_nord entry regs %016llx texp %08x\n", reg, texp);
     if (reg != 0) {                     /* do nothing if reg is already zero */
         t_uint64 mv = reg & DNORMASK;   /* mask off bits 0-4 */
         while ((mv == 0) || (mv == DNORMASK)) {
@@ -114,10 +123,280 @@ t_uint64 s_nord(t_uint64 reg, uint32 *exp) {
         }
         /* bits 0-4 of reg is neither 0 nor all ones */
         /* show that reg is normalized */
-        texp = 0x40 - texp;             /* subtract shift count from 0x40 */
+        texp = (uint32)(0x40-(int32)texp);  /* subtract shift count from 0x40 */
     }
     *exp = texp;                        /* return exponent */
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "s_nord exit reg %016llx texp %08x\n", reg, texp);
     return (reg);                       /* return normalized double register */
+}
+
+/**************************************************************
+* This routine unpacks the floating point number in (r6,r7).  *
+* The unbiased, right justified, two's complement exponent    *
+* is returned in r1.  If xxfw is set, the two's complement    *
+* fraction (with the binary point to the left of bit 8) is    *
+* returned in r6, and r7 is cleared.  if xxfd is reset, the   *
+* two's complement double precision fraction is returned in   *
+* (r6,r7).                                                    *
+***************************************************************/
+struct fpnum {
+    int32   msw;                        /* most significent word */
+    int32   lsw;                        /* least significient word */
+    int32   exp;                        /* exponent */
+    int32   CCs;                        /* condition codes */
+};
+
+/* unpack single precision floating point number */
+void unpacks(struct fpnum *np) {
+    uint32 ex = np->msw & 0xff000000;   /* get exponent & sign from msw */
+
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "unpacks entry msw %08x exp %08x\n", np->msw, ex);
+    np->lsw = 0;                        /* 1 word for single precision */
+//  ex = np->msw & 0xff000000;          /* get exponent & sign from msw */
+    if (ex & 0x80000000)                /* check for negative */
+        ex ^= 0xff000000;               /* reset sign & complement exponent */
+    np->msw ^= ex;                      /* replace exponent with sign extension */
+    ex = ((uint32)ex) >> 24;            /* right justify the exponent */
+    ex -= 0x40;                         /* unbias exponent */
+    np->exp = ex;                       /* save the exponent */
+    np->CCs = 0;                        /* zero CCs for later */
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "unpacks return msw %08x exp %08x\n", np->msw, ex);
+    return;
+}
+
+/* unpack double precision floating point number */
+void unpackd(struct fpnum *np) {
+    int32 ex = np->msw & 0xff000000;    /* get exponent & sign from msw */
+    if (ex & 0x80000000)                /* check for negative */
+        ex ^= 0xff000000;               /* reset sign & complement exponent */
+    np->msw ^= ex;                      /* replace exponent with sign extension */
+    ex = ((uint32)ex) >> 24;            /* right justify the exponent */
+    ex -= 0x40;                         /* unbias exponent */
+    np->exp = ex;                       /* save exponent */
+    np->CCs = 0;                        /* zero CCs for later */
+    return;
+}
+
+/**************************************************************
+* Common routine for finishing the various F.P. instruction   *
+* simulations.  at this point, r1 = raw exponent, and         *
+* (r6,r7) = unnormalized fraction, with the binary point to   *
+* the left of r6[8].  The simulated condition codes will be   *
+* returned in bits 1 through 4 of "sim.flag."                 *
+*                                                             *
+* Floating point operations not terminating with an arith-    *
+* metic exception produce the following condition codes:      *
+*                                                             *
+* CC1   CC2   CC3   CC4               Definition              *
+* -------------------------------------------------------     *
+*  0     1     0     0    no exception, fraction positive     *
+*  0     0     1     0    no exception, fraction negative     *
+*  0     0     0     1    no exception, fraction = zero       *
+*                                                             *
+*                                                             *
+* an arithmetic exception produces the follwing condition     *
+* code settings:                                              *
+*                                                             *
+* CC1   CC2   CC3   CC4               Definition              *
+* --------------------------------------------------------    *
+*  1     0     1     0    exp underflow, fraction negative    *
+*  1     0     1     1    exp overflow, fraction negative     *
+*  1     1     0     0    exp underflow, fraction positive    *
+*  1     1     0     1    exp overflow, fraction positive     *
+*                                                             *
+**************************************************************/  
+/**   Normalization and rounding of single precision number */                                 
+void packs(struct fpnum *np) {
+    uint32  ex, tmp, tmp2;
+
+    t_uint64 num = ((t_uint64)np->msw << 32) | np->lsw; /* make 64 bit num */
+
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "pack entry msw %08x lsw %08x exp %08x num %016llx\n",
+        np->msw, np->lsw, np->exp, num);
+
+    num = ((t_int64)num) << 3;      /* slad 3 to align for normalization */
+
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "pack pl 0 num %016llx ex %08x exp %08x\n", num, ex, np->exp);
+
+    num = s_nord(num, &ex);         /* normalize the number with cnt in ex */
+
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "pack pl 1 num %016llx ex %08x exp %08x\n", num, ex, np->exp);
+
+    num = ((t_int64)num) >> 7;      /* srad 7 to align & sign extend number */
+
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "pack pl 2 num %016llx ex %08x exp %08x\n", num, ex, np->exp);
+
+    if (num & DMSIGN)               /* test for negative fraction */
+        np->CCs = CC3BIT;           /* show fraction negative */
+    else
+    if (num == 0) {
+        np->CCs = CC4BIT;           /* show fraction zero */
+        np->msw = 0;                /* save msw */
+        np->lsw = 0;                /* save lsw */
+        np->exp = 0;                /* save exp */
+        return;                     /* done if zero */
+    }
+    else
+        np->CCs = CC2BIT;           /* show fraction positive */
+
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "pack pl 3 CC %08x num = %016llx ex = %08x\n", np->CCs, num, ex);
+    /* we need to round single precision number */
+    tmp = (num >> 32) & 0xffffffff; /* get msw */
+    tmp2 = num & 0xffffffff;        /* get lsw */
+    if ((int32)tmp >= 0x00ffffff) { /* if at max, no rounding */
+        if (tmp2 & 0x80000000)      /* round if set */
+            tmp += 1;               /* round fraction */
+    }
+    num = (((t_uint64)tmp) << 32);  /* make 64 bit num with lo 32 bits zero */
+
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "pack pl 4 num %016llx msw %08x exp %08x ex %08x\n", num, np->msw, np->exp, ex);
+//4110000 bad    if ((t_int64)num <= DFSVAL) {   /* see if > 0xff00000000000000 */
+//4110000 bad    if ((t_int64)num == DFSVAL) {   /* see if > 0xff00000000000000 */
+//80000001 has cc bad    if ((t_int64)num >= DFSVAL) {   /* see if > 0xff00000000000000 */
+//needs >= for BEF -> BEF is EQ to DFSVAL
+    if (((t_int64)num) >= DFSVAL) {  /* see if > 0xff00000000000000 */
+        /* fixup fraction to not have -1 in results */
+        num = ((t_int64)num) >> 4;  /* sra 4 shift over 4 bits */
+        ex += 1;                    /* bump exponent */
+        sim_debug(DEBUG_EXP, &cpu_dev,
+            "pack pl 4a num = %016llx exp = %08x ex = %08x\n", num, np->exp, ex);
+    }
+    /*  end normalization and rounding */                                   
+    np->exp += ex;                  /* normalized, biased exp */
+    np->exp += 1;                   /* correct shift count */
+
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "pack n&r num %016llx msw %08x exp %08x ex %08x\n", num, np->msw, np->exp, ex);
+    if (((int32)(np->exp)) < 0) {   /* check for exp neg underflow */
+        np->CCs |= CC1BIT;          /* set CC1 & return zero */
+        np->msw = 0;
+        np->lsw = 0;
+        return;
+    }
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "pack exp num %016llx msw %08x exp %08x ex %08x\n", num, np->msw, np->exp, ex);
+    /* if no exponent overflow merge exp & fraction and return */
+    if (((int32)(np->exp)) <= 0x7f) {
+        np->msw = (num >> 32);      /* get msw */
+        np->lsw = num & 0xffffffff; /* get lsw */
+        sim_debug(DEBUG_EXP, &cpu_dev,
+            "packs ret msw %08x exp %08x\n", np->msw, np->exp);
+        ex = np->exp << 24;         /* put exponent in bits 1-7 */
+        sim_debug(DEBUG_EXP, &cpu_dev,
+            "packs ret msw %08x exp %08x ex %08x\n", np->msw, np->exp, ex);
+        np->msw ^= ex;              /* merge exponent & fraction */
+        sim_debug(DEBUG_EXP, &cpu_dev,
+            "packs ret CCs %08x msw %08x exp %08x ex %08x\n", np->CCs, np->msw, np->exp, ex);
+        return;                     /* CCs already set */
+    }
+    /* process overflow exponent */
+    np->CCs |= CC1BIT;              /* set CC1 */
+    np->CCs |= CC4BIT;              /* set CC4 */
+    /* do SP max value */
+    if (np->CCs & CC2BIT) {         /* see if CC2 is set */
+        np->msw = 0x7fffffff;       /* yes, use max pos value */
+        np->lsw = 0;                /* zero for SP */
+        sim_debug(DEBUG_EXP, &cpu_dev,
+            "pack SP xit1 CCs %08x msw %08x exp %08x ex %08x\n",
+            np->CCs, np->msw, np->exp, ex);
+        return;
+    }
+    np->msw = 0x80000001;           /* set max neg value */
+    np->lsw = 0;                    /* zero for sp */
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "pack SP xit2 CCs %08x msw %08x exp %08x ex %08x\n",
+        np->CCs, np->msw, np->exp, ex);
+    return;
+}
+
+/**   Normalization and rounding of double precision number */                                 
+void packd(struct fpnum *np) {
+    uint32  ex;
+
+    t_uint64 num = ((t_uint64)np->msw << 32) | np->lsw; /* make 64 bit num */
+
+    num = ((t_int64)num) << 3;      /* sla 3 to align for normalization */
+    num = s_nord(num, &ex);         /* normalize the number with cnt in ex */
+    num = ((t_int64)num) >> 7;      /* align & sign extend number */
+    if (num & DMSIGN)               /* test for negative fraction */
+        np->CCs = CC3BIT;           /* show fraction negative */
+    else
+    if (num == 0) {
+        np->CCs = CC4BIT;           /* show fraction zero */
+        np->msw = 0;                /* save msw */
+        np->lsw = 0;                /* save lsw */
+        np->exp = 0;                /* save exp */
+        return;                     /* done if zero */
+    }
+    else
+        np->CCs = CC2BIT;           /* show fraction positive */
+
+//  if ((t_int64)num <= DFSVAL) {   /* see if > 0xff00000000000000 */
+    if ((t_int64)num >= DFSVAL) {   /* see if > 0xff00000000000000 */
+        num >>= 4;                  /* shift over 4 bits */
+        ex += 1;                    /* bump exponent */
+    }
+    /* end normalization and rounding */                                   
+    np->exp += ex;                  /* normalized, biased exp */
+    np->exp += 1;                   /* correct shift count */
+    if (((int32)(np->exp)) < 0) {   /* check for exp neg underflow */
+        np->CCs |= CC1BIT;          /* set CC1 & return zero */
+        np->msw = 0;
+        np->lsw = 0;
+        return;
+    }
+    /* if no exponent overflow merge exp & fraction & return */
+    if (((int32)(np->exp)) <= 0x7f) {
+        np->msw = (num >> 32);      /* get msw */
+        np->lsw = num & 0xffffffff; /* get lsw */
+        ex = np->exp << 24;         /* put exponent in bits 1-7 */
+        np->msw ^= ex;              /* merge exponent & fraction */
+        return;                     /* CCs already set */
+    }
+    /* process overflow exponent */
+    np->CCs |= CC1BIT;              /* set CC1 & return zero */
+    np->CCs |= CC4BIT;              /* set CC4 & return zero */
+    /* do DP max value */
+    if (np->CCs & CC2BIT) {         /* see if CC2 is set */
+        np->msw = 0x7fffffff;       /* CC2=1 set exp overflow, pos frac */
+        np->lsw = 0xffffffff;
+        return;
+    }
+    np->msw = 0x80000000;           /* CC2=0 set exp underflow, frac pos */
+    np->lsw = 0x00000001;
+    return;
+}
+
+/* normalize the memory value when adding number to zero */
+uint32 s_normfw(uint32 mem, uint32 *cc) {
+    struct fpnum fpn = {0};
+    uint32  ret;
+
+    if (mem == 0) {                     /* make sure we have a number */
+        *cc = CC4BIT;                   /* set the cc's */
+        return 0;                       /* return zero */
+    }
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "NORMFW entry mem %08x\n", mem);
+    fpn.msw = mem;                      /* save upper 32 bits */
+    fpn.lsw = 0;                        /* clear lower 32 bits */
+    unpacks(&fpn);                      /* unpack number */
+    packs(&fpn);                        /* pack it back up */
+    ret = fpn.msw;                      /* return normalized number */
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "NORMFW return mem %08x result %08x CC's %08x\n", mem, ret, fpn.CCs);
+    /* return normalized number */
+    *cc = fpn.CCs;                      /* set the cc's */
+    return ret;                         /* return result */
 }
 
 /* add memory floating point number to register floating point number */
@@ -125,12 +404,30 @@ t_uint64 s_nord(t_uint64 reg, uint32 *exp) {
 uint32 s_adfw(uint32 reg, uint32 mem, uint32 *cc) {
     uint32 mfrac, rfrac, frac, ret=0, oexp;
     uint32 CC, sc, sign, expr, expm, exp;
+#ifdef DO_NORMALIZE
+    struct fpnum fpn = {0};
+#endif
 
     *cc = 0;                            /* clear the CC'ss */
     CC = 0;                             /* clear local CC's */
+
+    sim_debug(DEBUG_EXP, &cpu_dev,
+//      "ADFW entry mem %08x reg %08x result %08x\n", mem, reg, ret);
+        "ADFW entry mem %08x reg %08x\n", mem, reg);
     /* process the memory operand value */
     if (mem == 0) {                     /* test for zero operand */
         ret = reg;                      /* return original register value */
+#ifdef DO_NORMALIZE
+        if (ret == 0)
+            goto goout;                 /* nothing + nothing = nothing */
+        fpn.msw = ret;                  /* save upper 32 bits */
+        fpn.lsw = 0;                    /* clear lower 32 bits */
+        unpacks(&fpn);                  /* unpack number */
+        packs(&fpn);                    /* pack it back up */
+        ret = fpn.msw;                  /* return normalized number */
+        CC = fpn.CCs;                   /* set the cc's */
+        goto goout2;                    /* go set cc's and return */
+#endif
         goto goout;                     /* go set cc's and return */
     }
     expm = mem & EXMASK;                /* extract exponent from operand */
@@ -145,6 +442,18 @@ uint32 s_adfw(uint32 reg, uint32 mem, uint32 *cc) {
     /* process the register operator value */
     if (reg == 0) {
         ret = mem;                      /* return original mem operand value */
+#ifdef DO_NORMALIZE
+        if (ret == 0)
+            goto goout;                 /* nothing + nothing = nothing */
+        /* reg is 0 and mem is not zero, normalize mem */
+        fpn.msw = ret;                  /* save upper 32 bits */
+        fpn.lsw = 0;                    /* clear lower 32 bits */
+        unpacks(&fpn);                  /* unpack number */
+        packs(&fpn);                    /* pack it back up */
+        ret = fpn.msw;                  /* return normalized number */
+        CC = fpn.CCs;                   /* set the cc's */
+        goto goout2;                    /* go set cc's and return */
+#endif
         goto goout;                     /* go set cc's and return */
     }
     expr = reg & EXMASK;                /* extract exponent from reg operand */
@@ -157,6 +466,8 @@ uint32 s_adfw(uint32 reg, uint32 mem, uint32 *cc) {
     rfrac = ((int32)rfrac) << 4;        /* do sla 4 of fraction */
 
     exp = expr - expm;                  /* subtract memory exponent from reg exponent */
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "ADFW2 exp calc expr %04x expm %04x exp %04x\n", expr, expm, exp);
     if (exp & MSIGN) {                  /* test for negative */
         /* difference is negative, so memory exponent is larger */
         exp = NEGATE32(exp);            /* make difference positive */
@@ -167,7 +478,8 @@ uint32 s_adfw(uint32 reg, uint32 mem, uint32 *cc) {
         /* difference is <= 6, so adjust to smaller value for add */
         /* difference is number of 4 bit right shifts to do */
         /* (exp >> 24) * 4 */
-        sc = exp >> (24 - 2);           /* shift count down to do x4 the count */
+//42220 sc = exp >> (24 - 2);           /* shift count down to do x4 the count */
+/*try*/ sc = (exp >> 24) * 4;           /* shift count down to do x4 the count */
         rfrac = ((int32)rfrac) >> sc;
         oexp = expm;                    /* mem is larger exponent, save for final exponent add */
     } else {
@@ -181,11 +493,16 @@ uint32 s_adfw(uint32 reg, uint32 mem, uint32 *cc) {
         /* difference is <= 6, so adjust to smaller value for add */
         /* difference is number of 4 bit right shifts to do */
         /* (exp >> 24) * 4 */
-        sc = exp >> (24 - 2);           /* shift count down to do x4 the count */
-        mfrac = ((int32)mfrac) >> sc;
+//42220 sc = exp >> (24 - 2);           /* shift count down to do x4 the count */
+/*try*/ sc = (exp >> 24) * 4;           /* shift count down to do x4 the count */
+        frac = ((int32)mfrac) >> sc;
         oexp = expr;                    /* reg is larger exponent, save for final exponent add */
     }
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "ADFW3 after exp calc exp %04x sc %04x oexp %04x\n", exp, sc, oexp);
     frac = rfrac + mfrac;               /* add fractions */
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "ADFW4 frac calc rfrac %06x mfrac %06x frac %04x\n", rfrac, mfrac, frac);
     if (frac == 0) {
         /* return the zero value */
         ret = frac;                     /* return zero to caller */
@@ -290,6 +607,8 @@ goout:
     else 
         CC |= CC2BIT;                   /* CC2 for greater than zero */
 goout2:
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "ADFW return mem %08x reg %08x result %08x CC %08x\n", mem, reg, ret, CC);
     /* return temp to destination reg */
     *cc = CC;                           /* return CC's */
     return ret;                         /* return result */
@@ -300,6 +619,27 @@ uint32 s_sufw(uint32 reg, uint32 mem, uint32 *cc) {
     return s_adfw(reg, NEGATE32(mem), cc);
 }
 
+/* normalize the memory value when adding number to zero */
+t_uint64 s_normfd(t_uint64 mem, uint32 *cc) {
+    struct fpnum fpn = {0};
+    t_uint64   ret;
+
+    if (mem == 0) {                     /* make sure we have a number */
+        *cc = CC4BIT;                   /* set the cc's */
+        return 0;                       /* return zero */
+    }
+    fpn.msw = (mem >> 32);              /* get msw */
+    fpn.lsw = mem & 0xffffffff;         /* get lsw */
+    unpackd(&fpn);                      /* unpack number */
+    packd(&fpn);                        /* pack it back up */
+    ret = ((t_uint64)fpn.msw << 32) | fpn.lsw;  /* make 64 bit num */
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "NORMFD return mem %016llx result %016llx CC's %08x\n", mem, ret, fpn.CCs);
+    /* return normalized number */
+    *cc = fpn.CCs;                      /* set the cc's */
+    return ret;                         /* return normalized result */
+}
+
 /* add memory floating point number to register floating point number */
 /* set CC1 if overflow/underflow */
 t_uint64 s_adfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
@@ -308,11 +648,14 @@ t_uint64 s_adfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
 
     *cc = 0;                            /* clear the CC'ss */
     CC = 0;                             /* clear local CC's */
+
+#ifndef DO_NORMALIZE
     /* process the memory operand value */
     if (mem == 0) {                     /* test for zero operand */
         ret = reg;                      /* return original reg value */
         goto goout;                     /* go set cc's and return */
     }
+#endif
     /* separate mem dw into two 32 bit numbers */
     /* mem value is not zero, so extract exponent and mantissa */
     expm = (uint32)((mem & DEXMASK) >> 32); /* extract exponent */
@@ -323,11 +666,13 @@ t_uint64 s_adfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
         dblmem |= DEXMASK;              /* adjust the fraction */
     }
 
+#ifndef DO_NORMALIZE
     /* process the register operator value */
     if (reg == 0) {                     /* see if reg value is zero */
         ret = mem;                      /* return original mem operand value */
         goto goout;                     /* go set cc's and return */
     }
+#endif
     /* separate reg dw into two 32 bit numbers */
     /* reg value is not zero, so extract exponent and mantissa */
     expr = (uint32)((reg & DEXMASK) >> 32); /* extract exponent */
