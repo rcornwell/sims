@@ -1545,6 +1545,10 @@ wrckd:
                  for(i = 0; i < 8; i++)
                     rec[i] = 0xff;
 
+                 for(i = 0; i < 8; i++) {
+                    if(chan_read_byte(addr, &ch))
+                       break;
+                 }
                  uptr->u6 = cmd;
                  uptr->u3 &= ~(0xff|DK_PARAM|DK_INDEX|DK_INDEX2);
                  uptr->u3 |= DK_CYL_DIRTY;

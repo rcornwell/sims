@@ -72,8 +72,7 @@
 
 #define BUFF_EMPTY       0x4                /* Buffer is empty */
 #define BUFF_DIRTY       0x8                /* Buffer is dirty flag */
-#define BUFF_NEWCMD      0x10               /* Channel ready for new command */
-#define BUFF_CHNEND      0x20               /* Channel end */
+#define BUFF_CHNEND      0x10               /* Channel end */
 
 #define AMASK            0x00ffffff
 #define PMASK            0xf0000000         /* Storage protection mask */
@@ -190,7 +189,6 @@ readfull(int chan, uint32 addr, uint32 *word) {
         }
         k = key[addr >> 9];
         if ((k & 0x8) != 0 && (k & 0xf0) != ccw_key[chan]) {
-//fprintf(stderr, "Prot %08x %x %x\n\r", addr << 2, k, sk);
             chan_status[chan] |= STATUS_PROT;
             irq_pend = 1;
             return 1;
@@ -245,7 +243,6 @@ writebuff(int chan) {
     else
        addr = ccw_addr[chan];
     if ((addr & AMASK) > MEMSIZE) {
-fprintf(stderr, "Mem %08x\n\r", addr);
         chan_status[chan] |= STATUS_PCHK;
         chan_byte[chan] = BUFF_CHNEND;
         irq_pend = 1;
@@ -261,7 +258,6 @@ fprintf(stderr, "Mem %08x\n\r", addr);
         }
         k = key[addr >> 9];
         if ((k & 0xf0) != ccw_key[chan]) {
-fprintf(stderr, "Prot %08x %x %x\n\r", addr << 2, k, ccw_key[addr]);
             chan_status[chan] |= STATUS_PROT;
             chan_byte[chan] = BUFF_CHNEND;
             irq_pend = 1;
@@ -375,7 +371,6 @@ loop:
          }
          if (chan_status[chan] & (STATUS_DEND|STATUS_CEND)) {
              chan_status[chan] |= STATUS_CEND;
-             chan_byte[chan] = BUFF_NEWCMD;
              ccw_cmd[chan] = 0;
              irq_pend = 1;
         }
@@ -642,24 +637,15 @@ chan_end(uint16 addr, uint8 flags) {
         chan_status[chan] |= STATUS_LENGTH;
         ccw_flags[chan] = 0;
     }
+    if (ccw_count[chan] != 0 && (ccw_flags[chan] & (FLAG_CD|FLAG_SLI)) == (FLAG_CD|FLAG_SLI)) {
+        sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end length 2\n");
+        chan_status[chan] |= STATUS_LENGTH;
+    }
     if (flags & (SNS_ATTN|SNS_UNITCHK|SNS_UNITEXP))
         ccw_flags[chan] = 0;
 
-    /* If channel is also finished, then skip any more data commands. */
-    if (chan_status[chan] & (STATUS_DEND|STATUS_CEND)) {
-        chan_byte[chan] = BUFF_NEWCMD;
-
-        /* While command has chain data set, continue to skip */
-        while ((ccw_flags[chan] & FLAG_CD)) {
-            if (load_ccw(chan, 1))
-                break;
-            if ((ccw_flags[chan] & FLAG_SLI) == 0) {
-                sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end length\n");
-                chan_status[chan] |= STATUS_LENGTH;
-                ccw_flags[chan] = 0;
-            }
-        }
-    }
+    if ((flags & SNS_DEVEND) != 0)
+        ccw_flags[chan] &= ~FLAG_CD;
 
     irq_pend = 1;
 }
@@ -704,7 +690,9 @@ startio(uint16 addr) {
     }
 
     /* If channel is active return cc=2 */
-   if (ccw_cmd[chan] != 0 || (ccw_flags[chan] & (FLAG_CD|FLAG_CC)) != 0 || chan_status[chan] != 0) {
+   if (ccw_cmd[chan] != 0 ||
+       (ccw_flags[chan] & (FLAG_CD|FLAG_CC)) != 0 ||
+        chan_status[chan] != 0) {
        sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x cc=2\n", addr, chan);
        return 2;
    }
@@ -1032,11 +1020,9 @@ scan_chan(uint16 mask, int irq_en) {
 
          /* If channel end, check if we should continue */
          if (chan_status[i] & STATUS_CEND) {
-                sim_debug(DEBUG_EXP, &cpu_dev, "Scan(%x %x %x %x) end\n", i,
-                         chan_status[i], imask, mask);
              if (ccw_flags[i] & FLAG_CC) {
                 if (chan_status[i] & STATUS_DEND)
-                          (void)load_ccw(i, 1);
+                   (void)load_ccw(i, 1);
                 else
                     irq_pend = 1;
              } else if (irq_en || loading) {

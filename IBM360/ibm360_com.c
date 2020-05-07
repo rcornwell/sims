@@ -47,7 +47,7 @@
 #define SEND               0x0200     /* Sending data */
 #define ENAB               0x0400     /* Line enabled */
 #define POLL               0x0800     /* Waiting for connection */
-#define BOT                0x1000     /* Need to send BOT */
+#define INPUT              0x1000     /* Need to send BOT */
 
 /* u5 */
 /* Sense byte 0 */
@@ -70,6 +70,8 @@ t_stat      com_reset(DEVICE *dptr);
 t_stat      com_scan(UNIT *uptr);
 t_stat      com_attach(UNIT *uptr, CONST char *);
 t_stat      com_detach(UNIT *uptr);
+uint8       com_buf[NUM_UNITS_COM][256];
+int         com_ptr[NUM_UNITS_COM];
 
 TMLN        com_ldsc[NUM_UNITS_COM];
 TMXR        com_desc = { NUM_UNITS_COM, 0, 0, com_ldsc};
@@ -176,7 +178,7 @@ static const uint8 com_2741_out[256] = {
    /*  0,    1,    2,    3,    4,    5,    6,    7,  */
      '8', 0xff, 0xff,  '9', 0xff,  '0',  '#', 0xff,       /* 0x1x */
    /*  8,    9,    A,    B,    C,    D,    E,    F,  */
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x04,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
    /*  0,    1,    2,    3,    4,    5,    6,    7,  */
      '@', 0xff, 0xff,  '/', 0xff,  's',  't', 0xff,       /* 0x2x */
    /*  8,    9,    A,    B,    C,    D,    E,    F,  */
@@ -251,7 +253,6 @@ uint8  coml_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
          if (cmd == CMD_NOP)
              break;
     case 0x2:              /* Read command */
-         uptr->u3 |= BOT;
     case 0x1:              /* Write command */
          uptr->u3 |= cmd;
          sim_activate(uptr, 200);
@@ -345,11 +346,6 @@ t_stat coml_srv(UNIT * uptr)
                     chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                     return SCPE_OK;
                  } else {
-                    if (uptr->u3 & BOT) {
-                       ch = 0x16;
-                       (void)chan_write_byte( addr, &ch);
-                       uptr->u3 &= ~BOT;
-                    }
                     ch = sim_tt_inpcvt (data, TT_GET_MODE(uptr->flags) |
                                                      TTUF_KSR);
                     ch = com_2741_in[data & 0x7f];
@@ -366,6 +362,8 @@ t_stat coml_srv(UNIT * uptr)
                         chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                         return SCPE_OK;
                     }
+                 ch = sim_tt_outcvt(data, TT_GET_MODE(uptr->flags) | TTUF_KSR);
+                 tmxr_putc_ln( &com_ldsc[unit], ch);
                 }
              }
              sim_activate(uptr, 200);
@@ -381,11 +379,15 @@ t_stat coml_srv(UNIT * uptr)
              } else {
                  int32 data;
                  data = com_2741_out[ch];
-                 data = sim_tt_outcvt(data, TT_GET_MODE(uptr->flags) |
+                 if (data != 0xff) {
+                     data = sim_tt_outcvt(data, TT_GET_MODE(uptr->flags) |
                                                                   TTUF_KSR);
-                 sim_debug(DEBUG_CMD, dptr, "COM: unit=%d send '%c'\n", unit,
-			isprint(data)? data: '^');
-                 tmxr_putc_ln( &com_ldsc[unit], data);
+                     sim_debug(DEBUG_CMD, dptr, "COM: unit=%d send '%c'\n",
+                              unit, isprint(data)? data: '^');
+                     tmxr_putc_ln( &com_ldsc[unit], data);
+                     if (ch == 0x5b) 
+                         tmxr_putc_ln( &com_ldsc[unit], '\r');
+                 }
                  sim_activate(uptr, 20000);
              }
          } else {
@@ -405,8 +407,10 @@ t_stat coml_srv(UNIT * uptr)
              if (tmxr_rqln(&com_ldsc[unit]) > 0) {
                  uptr->u3 &= ~0xff;
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND);
-             } else
+             } else {
+                 uptr->u3 |= INPUT;
                  sim_activate(uptr, 200);
+             }
          } else {
              uptr->u3 &= ~0xff;
              chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
@@ -439,6 +443,58 @@ t_stat coml_srv(UNIT * uptr)
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          break;
     }
+
+#if 0
+    r = sim_poll_kbd();
+    if (r & SCPE_KFLAG) {
+       ch = r & 0377;
+       if ((uptr->u3 & INPUT) == 0) {
+          /* Handle end of buffer */
+          switch (ch) {
+          case '\r':
+          case '\n':
+                sim_debug(DEBUG_DATA, &con_dev, "%d: ent\n", u);
+                uptr->u3 &= ~INPUT;
+                tmxr_putc_ln( &com_ldsc[unit], '\r');
+                tmxr_putc_ln( &com_ldsc[unit], '\n');
+                break;
+          case 0177:
+          case '\b':
+                if (com_ptr[unit] != 0) {
+                     com_ptr[unit].inptr--;
+                     tmxr_putc_ln( &com_ldsc[unit], '\b');
+                     tmxr_putc_ln( &com_ldsc[unit], ' ');
+                     tmxr_putc_ln( &com_ldsc[unit], '\b');
+                }
+                break;
+           case 03:  /* ^C */
+           case 025: /* ^U clear line */
+                for (i = com_ptr[unit]; i> 0; i--) {
+                    tmxr_putc_ln( &com_ldsc[unit], '\b');
+                    tmxr_putc_ln( &com_ldsc[unit], ' ');
+                    tmxr_putc_ln( &com_ldsc[unit], '\b');
+                }
+                com_ptr[unit].inptr = 0;
+                break;
+
+          default:
+                sim_debug(DEBUG_DATA, &con_dev, "%d: key '%c'\n", u, ch);
+                if (com_ptr[unit] < 256) {
+                    ch = com_2741_in[ch & 0x7f];
+                    if (ch == 0xff) {
+                       sim_putchar('\007');
+                       break;
+                    }
+                    com_buf[unit][com_ptr[unit]++] = ch;
+                    ch = com_2741_out[ch];
+                    tmxr_putc_ln( &com_ldsc[unit], ch);
+                }   
+          }
+       } else {
+          tmxr_putc_ln( &com_ldsc[unit], '\07');
+       }
+    }
+#endif
     return SCPE_OK;
 }
 
