@@ -2411,7 +2411,11 @@ static const char simh_help2[] =
       " Switches can be used to influence the behavior of the TESTLIB command\n\n"
       "4-d\n"
       " Many tests are capable of producing various amounts of debug output\n"
-      " during their execution.  The -d switch enables that output\n";
+      " during their execution.  The -d switch enables that output\n"
+#define HLP_DISKINFO    "*Commands DISKINFO"
+      "2Disk Container Information\n"
+      " Information about a Disk Container can be displayed with the DISKINFO command:\n\n"
+      "++DISKINFO container-spec    show information about a disk container\n\n";
 
 
 static CTAB cmd_table[] = {
@@ -2486,6 +2490,8 @@ static CTAB cmd_table[] = {
     { "RUNLIMIT",   &runlimit_cmd,  1,          HLP_RUNLIMIT,   NULL, NULL },
     { "NORUNLIMIT", &runlimit_cmd,  0,          HLP_RUNLIMIT,   NULL, NULL },
     { "TESTLIB",    &test_lib_cmd,  0,          HLP_TESTLIB,    NULL, NULL },
+    { "DISKINFO",   &sim_disk_info_cmd,  0,     HLP_DISKINFO,   NULL, NULL },
+    { "ZAPTYPE",    &sim_disk_info_cmd,  1,     NULL,           NULL, NULL },
     { NULL,         NULL,           0,          NULL,           NULL, NULL }
     };
 
@@ -4353,7 +4359,6 @@ char *ip = instr, *op, *oend, *istart, *tmpbuf;
 const char *ap;
 char rbuf[CBUFSIZE];
 int i;
-size_t instr_off = 0;
 size_t outstr_off = 0;
 
 sim_exp_argv = do_arg;
@@ -6715,7 +6720,6 @@ static void sim_type_entry (const char *directory,
                             const struct stat *filestat,
                             void *context)
 {
-TYPE_CTX *ctx = (TYPE_CTX *)context;
 char FullPath[PATH_MAX + 1];
 FILE *file;
 char lbuf[4*CBUFSIZE];
@@ -7163,8 +7167,6 @@ t_stat show_runlimit (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char
 {
 if (sim_runlimit_enabled) {
     if (sim_runlimit_switches & SWMASK ('T')) {
-        double inst_per_sec = sim_timer_inst_per_sec ();
-
         if (sim_runlimit_d_initial != sim_runlimit_d) {
             fprintf (st, "%s initially, ", sim_fmt_secs (sim_runlimit_d_initial / 1000000.0));
             if (sim_is_active (&sim_runlimit_unit))
@@ -14940,7 +14942,6 @@ return cptr;
  */
 static const char *sim_into_postfix (Stack *stack1, const char *cptr, t_stat *stat, t_bool parens_required)
 {
-const char *start = cptr;
 const char *last_cptr;
 int parens = 0;
 Operator *op = NULL, *last_op;
@@ -15397,7 +15398,6 @@ return stat;
 t_stat test_lib_cmd (int32 flag, CONST char *cptr)
 {
 int i;
-int bad_regs = 0;
 DEVICE *dptr;
 int32 saved_switches = sim_switches & ~SWMASK ('T');
 t_stat stat = SCPE_OK;
@@ -15406,6 +15406,10 @@ char gbuf[CBUFSIZE];
 cptr = get_glyph (cptr, gbuf, 0);
 if (gbuf[0] == '\0')
     strcpy (gbuf, "ALL");
+else {
+    if (!find_dev (gbuf))
+        return sim_messagef (SCPE_ARG, "No such device: %s\n", gbuf);
+    }
 if (sim_switches & SWMASK ('D')) {
     sim_switches &= ~(SWMASK ('D') | SWMASK ('R') | SWMASK ('F') | SWMASK ('T'));
     sim_set_debon (0, "STDOUT");
