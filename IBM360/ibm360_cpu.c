@@ -434,6 +434,7 @@ void storepsw(uint32 addr, uint16 ircode) {
          hst[hst_p].pc = addr | HIST_SPW;
          hst[hst_p].src1 = word;
          hst[hst_p].src2 = word2;
+         hst[hst_p].addr1 = ircode;
      }
      sim_debug(DEBUG_INST, &cpu_dev, "store %02x %d %x %03x PSW=%08x %08x\n\r", addr, ilc,
              cc, ircode, word, word2);
@@ -1313,9 +1314,7 @@ exe:
 
         case OP_BASR:
         case OP_BAS:
-                if ((cpu_unit[0].flags & FEAT_370) != 0) {
-                    storepsw(OPPSW, IRC_OPR);
-                } else if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
+                if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                 } else {
                     dest = PC;
@@ -3142,7 +3141,7 @@ save_dbl:
         case OP_CS:
                 if ((cpu_unit[0].flags & FEAT_370) == 0) {
                     storepsw(OPPSW, IRC_OPR);
-                } else if ((addr1 & 0x3) != 0 || (reg1 & 1) != 0 || (reg & 1) != 0) {
+                } else if ((addr1 & 0x3) != 0) {
                    storepsw(OPPSW, IRC_SPEC);
                 } else {
                     if (ReadFull(addr1, &src2))
@@ -3164,7 +3163,7 @@ save_dbl:
         case OP_CDS:
                 if ((cpu_unit[0].flags & FEAT_370) == 0) {
                     storepsw(OPPSW, IRC_OPR);
-                } else if ((addr1 & 0x7) != 0) {
+                } else if ((addr1 & 0x7) != 0 || (reg1 & 1) != 0 || (reg & 1) != 0) {
                    storepsw(OPPSW, IRC_SPEC);
                 } else {
                     if (ReadFull(addr1, &src2))
@@ -3313,10 +3312,6 @@ save_dbl:
         case OP_HDR:
         case OP_HER:
 //fprintf(stderr, "FP HD Op=%0x src2=%08x %08x %.12e\n\r", op, src2, src2h, cnvt_float(src2, src2h));
-//                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
- //                   storepsw(OPPSW, IRC_OPR);
-  //                  goto supress;
-   //             }
                 /* Split number apart */
                 e1 = (src2 & EMASK) >> 24;
                 dest = src2 & MSIGN;  /* Save sign */
@@ -3356,10 +3351,6 @@ save_dbl:
         case OP_LE:
         case OP_LD:
 //fprintf(stderr, "FP LD Op=%0x src1=%08x %08x\n\r", op, src1, src1h);
-    //            if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
-     //               storepsw(OPPSW, IRC_OPR);
-      //              goto supress;
-       //         }
                 if ((op & 0x10) == 0)
                     fpregs[reg1|1] = src2h;
                 fpregs[reg1] = src2;
@@ -3375,10 +3366,6 @@ save_dbl:
         case OP_LTER:
         case OP_LCER:
 //fprintf(stderr, "FP LD Op=%0x src1=%08x %08x\n\r", op, src1, src1h);
-        //        if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
-         //           storepsw(OPPSW, IRC_OPR);
-          //          goto supress;
-           //     }
                 if ((op & 0x2) == 0)  /* LP, LN */
                     src2 &= ~MSIGN;
                 if ((op & 0x1))       /* LN, LC */
@@ -3396,30 +3383,18 @@ save_dbl:
 
                   /* Floating Store register */
         case OP_STD:
-//                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
- //                   storepsw(OPPSW, IRC_OPR);
-  //                  goto supress;
-   //             }
                 if (WriteFull(addr1 + 4, src1h))
                     break;
                 /* Fall through */
 
         case OP_STE:
 //fprintf(stderr, "FP STD Op=%0x src1=%08x %08x\n\r", op, src1, src1h);
-//                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
- //                   storepsw(OPPSW, IRC_OPR);
-  //                  goto supress;
-   //             }
                 WriteFull(addr1, src1);
                 break;
 
                   /* Floating Compare */
         case OP_CE:      /* 79 */
         case OP_CER:     /* 39 */
-//                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
- //                   storepsw(OPPSW, IRC_OPR);
-  //                  goto supress;
-   //             }
 //                a = cnvt_float(src1, 0);
 //                b = cnvt_float(src2, 0);
 //fprintf(stderr, "FP = Op=%0x src1=%08x, src2=%08x %.12e %.12e %.12e\n\r", op, src1, src2, a, b, a-b);
@@ -3505,10 +3480,6 @@ save_dbl:
         case OP_AU:      /* 7E */
         case OP_AER:     /* 3A */
         case OP_AUR:     /* 3E */
-//                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
- //                   storepsw(OPPSW, IRC_OPR);
-  //                  goto supress;
-   //             }
 //                a = cnvt_float(src1, 0);
 //                b = cnvt_float(src2, 0);
 //fprintf(stderr, "FP + Op=%0x src1=%08x, src2=%08x %.12e %.12e %.12e\n\r", op, src1, src2, a, b, a+b);
@@ -3638,10 +3609,6 @@ save_dbl:
                   /* Floating Compare */
         case OP_CD:      /* 69 */
         case OP_CDR:     /* 29 */
-//                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
- //                   storepsw(OPPSW, IRC_OPR);
-  //                  goto supress;
-   //             }
 //                a = cnvt_float(src1, src1h);
 //                b = cnvt_float(src2, src2h);
 //fprintf(stderr, "FP = Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a-b);
@@ -3800,10 +3767,6 @@ save_dbl:
         case OP_AW:      /* 6E */
         case OP_ADR:     /* 2A */
         case OP_AWR:     /* 2E */
-//                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
- //                   storepsw(OPPSW, IRC_OPR);
-  //                  goto supress;
-   //             }
 //                a = cnvt_float(src1, src1h);
 //                b = cnvt_float(src2, src2h);
 //fprintf(stderr, "FP + Op=%0x src1=%08x %08x, src2=%08x %08x %.12e %.12e %.12e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
@@ -4074,11 +4037,6 @@ fpstore:
         case OP_MER:
         case OP_ME:
         case OP_MD:
-//                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
- //                   storepsw(OPPSW, IRC_OPR);
-  //                  goto supress;
-   //             }
-
 //                a = cnvt_float(src1, src1h);
 //                b = cnvt_float(src2, src2h);
 //fprintf(stderr, "FP * Op=%0x src1=%08x %08x, src2=%08x %08x %.12e %.12e %.12e\n\r", op, src1, src1h, src2, src2h, a, b, a*b);
@@ -4245,10 +4203,6 @@ fpnorm:
         case OP_DDR:
         case OP_DD:
         case OP_DE:
-//                if ((cpu_unit[0].flags & FEAT_FLOAT) == 0) {
- //                   storepsw(OPPSW, IRC_OPR);
-  //                  goto supress;
-   //             }
 //                a = cnvt_float(src1, src1h);
 //                b = cnvt_float(src2, src2h);
 //fprintf(stderr, "FP / Op=%0x src1=%08x %08x, src2=%08x %08x %.12e %.12e %.12e\n\r", op, src1, src1h, src2, src2h, a, b, a/b);
@@ -5856,7 +5810,7 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
             fprintf(st," LPSW  %06x     %08x %08x\n", h->pc & PAMASK, h->src1, h->src2);
         }                       /* end else instruction */
         if (h->pc & HIST_SPW) {   /* load PSW */
-            fprintf(st," SPSW  %06x     %08x %08x\n", h->pc & PAMASK,  h->src1, h->src2);
+            fprintf(st," SPSW  %06x     %08x %08x %04x\n", h->pc & PAMASK,  h->src1, h->src2, h->addr1);
         }                       /* end else instruction */
     }                           /* end for */
     return SCPE_OK;
