@@ -214,11 +214,9 @@ disk_type[] =
        {"2314",  203, 20,  7294,  6,  0x14},   /*  29.17 M */
        {"3330",  411, 19, 13165, 24,  0x30},   /* 100.00 M */
        {"3330-2",815, 19, 13165, 24,  0x30},
-#if 0
-       {"3340",  349, 12,  8535},       /*  34.94 M */
-       {"3340-2",698, 12,  8535},       /*  69.89 M */
-       {"3350",  560, 12, 19254},       /* */
-#endif
+       {"3340",  349, 12,  8535, 24,  0x40},   /*  34.94 M */
+       {"3340-2",698, 12,  8535, 24,  0x40},   /*  69.89 M */
+       {"3350",  560, 30, 19254, 24,  0x50},   /* 304.80 M */
        {NULL, 0}
 };
 
@@ -641,6 +639,10 @@ index:
              if ((rec[0] & rec[1] & rec[2] & rec[3]) == 0xff) {
                 state = DK_POS_END;
                 data->state = DK_POS_END;
+                if (data->ovfl == 0) {
+                    data->klen = rec[5];
+                    data->dlen = (rec[6] << 8) | rec[7];
+                }
                 sim_debug(DEBUG_POS, dptr, "state end tr unit=%d\n", unit);
              } else {
                 if (rec[0] & 0x80)
@@ -1047,7 +1049,7 @@ sense_end:
              ch = *da;
              sim_debug(DEBUG_DETAIL, dptr, "readcnt ID unit=%d %d %x %02x %x %d %x\n",
                  unit, count, state, ch, uptr->u4, data->tpos, uptr->u4);
-             if (count = 0)   /* Mask off overflow bit */
+             if (count == 0)   /* Mask off overflow bit */
                 ch &= 0x7f;
              if (chan_write_byte(addr, &ch) || count == 7) {
                 uptr->u6 = cmd;
@@ -1075,13 +1077,15 @@ sense_end:
              /* Wait for start of record */
              if (chan_read_byte(addr, &ch)) {
                   uptr->u3 |= DK_SHORTSRC;
-             } else if (ch != *da) {
-                  if (count = 0)   /* Mask off overflow bit */
+             } else {
+                  if (count == 0)   /* Mask off overflow bit */
                      ch &= 0x7f;
-                  if ((uptr->u3 & DK_NOEQ) == 0) {
-                      uptr->u3 |= DK_NOEQ;
-                      if (ch < *da)
-                         uptr->u3 |= DK_HIGH;
+                  if (ch != *da) {
+                      if ((uptr->u3 & DK_NOEQ) == 0) {
+                          uptr->u3 |= DK_NOEQ;
+                          if (ch < *da)
+                             uptr->u3 |= DK_HIGH;
+                      }
                   }
              }
              sim_debug(DEBUG_DETAIL, dptr,
@@ -1234,6 +1238,16 @@ sense_end:
          goto rd;
 
     case DK_RD_CKD:          /* Read count, key and data */
+         if (data->ovfl) {
+             if (count == 0 && state == DK_POS_DATA && data->rec != 0) {
+                uptr->u3 |= DK_PARAM;
+                sim_debug(DEBUG_DETAIL, dptr, "RD CKD ov unit=%d %d k=%d d=%d %02x %04x %04x\n",
+                 unit, data->rec, data->klen, data->dlen, data->state, data->dlen,
+                 8 + data->klen + data->dlen);
+              }
+              goto rd;
+         }
+              
          /* Wait for any count */
          if (count == 0 && state == DK_POS_CNT && data->rec != 0) {
              uptr->u3 |= DK_PARAM;
@@ -1245,6 +1259,15 @@ sense_end:
          goto rd;
 
     case DK_RD_KD:           /* Read key and data */
+         if (data->ovfl) {
+             if (count == 0 && state == DK_POS_DATA && data->rec != 0) {
+                uptr->u3 |= DK_PARAM;
+                sim_debug(DEBUG_DETAIL, dptr, "RD CKD ov unit=%d %d k=%d d=%d %02x %04x %04x\n",
+                 unit, data->rec, data->klen, data->dlen, data->state, data->dlen,
+                 8 + data->klen + data->dlen);
+              }
+              goto rd;
+         }
          /* Wait for next key */
          if (count == 0 && ((data->klen != 0 && state == DK_POS_KEY) ||
                             (data->klen == 0 && state == DK_POS_DATA))) {
@@ -1262,6 +1285,7 @@ sense_end:
     case DK_RD_D:            /* Read Data */
          /* Wait for next data */
          if (count == 0 && state == DK_POS_DATA) {
+             /* Skip R0 */
              if ((uptr->u3 & DK_INDEX) && data->rec == 0 &&
                  (uptr->u3 & DK_SRCOK) == 0)
                  break;
@@ -1283,11 +1307,16 @@ rd:
                 chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
                 break;
              }
-             if (state == DK_POS_INDEX && data->ovfl == 0) {
-                 uptr->u5 = SNS_TRKOVR << 8;
-                 uptr->u3 &= ~(0xff|DK_PARAM);
-                 chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
-                 break;
+             if (state == DK_POS_INDEX) {
+                 if (data->ovfl == 0) {
+                     uptr->u5 = SNS_TRKOVR << 8;
+                     uptr->u3 &= ~(0xff|DK_PARAM);
+                     chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                     break;
+                 } else {
+                     uptr->u3 &= ~(DK_PARAM);
+                     break;
+                 }
              }
              if (state == DK_POS_DATA && count == data->dlen) {
                  sim_debug(DEBUG_DETAIL, dptr,
