@@ -61,7 +61,7 @@ int          page_index;           /* Mask of page index feild */
 int          page_mask;            /* Mask of bits in page address */
 int          seg_shift;            /* Amount to shift for segment */
 int          seg_mask;             /* Mask bits for segment */
-int          seg_len;              /* Length of segment table */
+uint32       seg_len;              /* Length of segment table */
 int          pte_len_shift;        /* Shift to Check if out out page table */
 int          seg_addr;             /* Address of segment table */
 int          pte_avail;            /* Mask of available bit in PTE */
@@ -378,7 +378,6 @@ void storepsw(uint32 addr, uint16 ircode) {
                    break;
              }
          } else {  /* IBM 370 under EC mode */
-              uint32  code_addr;
               word = (((uint32)dat_en) << 26) |
                      ((per_en) ? 1<<30:0) |
                      ((irq_en) ? 1<<25:0) |
@@ -852,7 +851,6 @@ int WriteByte(uint32 addr, uint32 data) {
 
 int WriteHalf(uint32 addr, uint32 data) {
      uint32     mask;
-     uint8      k;
      uint32     pa;
      uint32     pa2;
      int        offset;
@@ -1303,7 +1301,7 @@ opr:
              hst[hst_p].src1 = src1;
              hst[hst_p].src2 = src2;
         }
-exe:
+
         /* Preform opcode */
         switch (op) {
         case OP_SPM:
@@ -1731,7 +1729,7 @@ set_cc3:
                 }
                 if (src2 & MSIGN) {
                     fill ^= 1;
-                    src2 = -src2;
+                    src2 = NEG(src2);
                 }
                 dest = 0;
                 for (reg = 0; reg < 32; reg++) {
@@ -1759,9 +1757,9 @@ set_cc3:
                 }
 #endif
                 if (fill & 1)
-                    dest = -dest;
+                    dest = NEG(dest);
                 if (fill & 2)
-                    src1 = -src1;
+                    src1 = NEG(src1);
                 regs[reg1] = src1;
                 regs[reg1|1] = dest;
                 per_mod |= 3 << reg1;
@@ -5609,7 +5607,6 @@ t_stat cpu_reset (DEVICE *dptr)
 t_stat
 rtc_srv(UNIT * uptr)
 {
-    int32 t;
     (void)sim_rtcn_calb (rtc_tps, TMR_RTC);
     sim_activate_after(uptr, 1000000/rtc_tps);
     if ((M[0x50>>2] & 0xfffff00) == 0)  {
@@ -5621,6 +5618,7 @@ rtc_srv(UNIT * uptr)
     sim_debug(DEBUG_INST, &cpu_dev, "TIMER = %08x\n", M[0x50>>2]);
     /* Time of day clock and timer on IBM 370 */
     if (cpu_unit[0].flags & (FEAT_370)) {
+        uint32 t;
         if (clk_state && (cregs[0] & 0x20000000) == 0) {
            t = tod_clock[1] + (13333333);
            if (t < tod_clock[1]) {

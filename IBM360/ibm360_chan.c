@@ -205,7 +205,7 @@ readfull(int chan, uint32 addr, uint32 *word) {
  */
 int
 readbuff(int chan) {
-    int sk, k;
+    int k;
     uint32 addr;
     if (ccw_flags[chan] & FLAG_IDA && cpu_unit[0].flags & FEAT_370)
        addr = ccw_iaddr[chan];
