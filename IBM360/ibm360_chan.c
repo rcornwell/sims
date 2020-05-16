@@ -905,6 +905,12 @@ int haltio(uint16 addr) {
         return 0;
     }
 
+    /* If channel active, tell it to terminate */
+    if (ccw_cmd[chan]) {
+        chan_byte[chan] = BUFF_CHNEND;
+        ccw_flags[chan] = 0;
+    }
+
     /* Not executing a command, issue halt if available */
     if (dibp->halt_io != NULL) {
         /* Let device do it's thing */
@@ -918,9 +924,6 @@ int haltio(uint16 addr) {
         return cc;
     }
 
-    /* If channel active, tell it to terminate */
-    if (ccw_cmd[chan])
-        chan_byte[chan] = BUFF_CHNEND;
 
     /* Store CSW and return 1. */
     sim_debug(DEBUG_CMD, &cpu_dev, "HIOx %x %x cc=1\n", addr, chan);

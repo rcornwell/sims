@@ -1446,12 +1446,12 @@ opr:
                         break;
                     ext_en = (src1 & 01) != 0;
                     if (ec_mode) {
-                        irq_en = (src1 & 02) != 0;
                         if ((cpu_unit[0].flags & FEAT_370) != 0) {
                             if (src1 & 0xb8) {
                                 storepsw(OPPSW, IRC_SPEC);
                                 break;
                             }
+                            irq_en = (src1 & 02) != 0;
                             per_en = ((src1 & 0x40) != 0);
                             dat_en = (src1 & 04) != 0;
                             sysmsk = irq_en ? (cregs[2] >> 16) : 0;
@@ -1460,6 +1460,7 @@ opr:
                                 storepsw(OPPSW, IRC_SPEC);
                             else
                                 dat_en = (src1 & 04) != 0;
+                            irq_en = (src1 & 02) != 0;
                             sysmsk = irq_en ? (cregs[6] >> 16) : 0;
                         }
                     } else {
@@ -2794,7 +2795,6 @@ save_dbl:
                                   if (dest < src1h)
                                      src1++;
                                   src1h = dest & ~0xfff;
-//fprintf(stderr, "Store tod %08x %08x %d %08x %08x\r\n", tod_clock[0], tod_clock[1], (int)us, src1, src1h);
                               }
                               if (WriteFull(addr1, src1))
                                  goto supress;
@@ -2830,9 +2830,7 @@ save_dbl:
                               if (sim_is_active(&cpu_unit[0])) {
                                   double nus = sim_activate_time_usecs(&cpu_unit[0]);
                                   timer_tics = (int)(nus);
-//fprintf(stderr, "Set timer %08x %08x %g%d\r\n", cpu_timer[0], cpu_timer[1], nus,timer_tics);
                               }
-//fprintf(stderr, "Set timer %08x %08x %d\r\n", cpu_timer[0], cpu_timer[1], timer_tics);
                               clk_irq = (cpu_timer[0] & MSIGN) != 0;
                               break;
                    case 0x9: /* STPT */
@@ -2847,7 +2845,6 @@ save_dbl:
                                      src1--;
                                   }
                                   src1h = dest;
-//fprintf(stderr, "Store timer %08x %08x %d %g %d %08x %08x\r\n", cpu_timer[0], cpu_timer[1], timer_tics, nus, tics, src1, src1h );
                               }
                               if (WriteFull(addr1, src1))
                                  goto supress;
@@ -2875,7 +2872,6 @@ save_dbl:
                               }
                               for (temp = 0; temp < 256; temp++)
                                   tlb[temp] = 0;
-//fprintf(stderr, "purge tlb\r\n");
                               break;
                    case 0x10: /* SPX */
                               storepsw(OPPSW, IRC_OPR);
@@ -2902,6 +2898,7 @@ save_dbl:
                     goto supress;
                 }
                 break;
+
         case OP_STNSM:
                 if ((cpu_unit[0].flags & FEAT_370) != 0) {
                     if (flags & PROBLEM) {
@@ -2946,6 +2943,7 @@ save_dbl:
                     goto supress;
                 }
                 break;
+
         case OP_STOSM:
                 if ((cpu_unit[0].flags & FEAT_370) != 0) {
                     if (flags & PROBLEM) {
@@ -2990,6 +2988,7 @@ save_dbl:
                     goto supress;
                 }
                 break;
+
         case OP_SIGP:
                 if ((cpu_unit[0].flags & FEAT_370) != 0) {
                     if (flags & PROBLEM) {
@@ -2999,6 +2998,7 @@ save_dbl:
                 }
                 storepsw(OPPSW, IRC_OPR);
                 goto supress;
+
         case OP_MC:
                 if ((cpu_unit[0].flags & FEAT_370) != 0) {
                     if ((reg & 0xf0) != 0) {
@@ -3032,9 +3032,9 @@ save_dbl:
                         if (ReadFull(addr1, &dest))
                             goto supress;
                         cregs[reg1] = dest;
-                        sim_debug(DEBUG_INST, &cpu_dev,"Loading: CR %x %06x %08x IC=%08x %x\n\r",
-                                       reg1, addr1, dest, PC, reg);
-//fprintf(stderr, "Loading: CR %x %06x %08x IC=%08x %x\n\r", reg1, addr1, dest, PC, reg);
+                        sim_debug(DEBUG_INST, &cpu_dev,
+                                 "Loading: CR %x %06x %08x IC=%08x %x\n\r",
+                                    reg1, addr1, dest, PC, reg);
                         switch (reg1) {
                         case 0x0:     /* General controll register */
                                  /* CR0 values
@@ -3047,7 +3047,7 @@ save_dbl:
                                   page_shift = 0;
                                   seg_shift = 0;
                                   switch((dest >> 22) & 03) {
-                                  default:   /* Generate translation exception */
+                                  default:  /* Generate translation exception */
                                   case 1:  /* 2K pages */
                                            page_shift = 11;
                                            page_mask = 0x7ff;
@@ -3186,6 +3186,7 @@ save_dbl:
                     }
                 }
                 break;
+
         case OP_SRP:
                 if ((cpu_unit[0].flags & FEAT_370) == 0) {
                     storepsw(OPPSW, IRC_OPR);
@@ -3197,6 +3198,7 @@ save_dbl:
                     dec_srp(op, addr1, reg1, addr2, reg & 0xf);
                 }
                 break;
+
         case OP_MVCL:
                 if ((cpu_unit[0].flags & FEAT_370) == 0) {
                     storepsw(OPPSW, IRC_OPR);
@@ -3256,6 +3258,7 @@ save_dbl:
                        cc = 1;
                 }
                 break;
+
         case OP_CLCL:
                 if ((cpu_unit[0].flags & FEAT_370) == 0) {
                     storepsw(OPPSW, IRC_OPR);
