@@ -571,6 +571,7 @@ if (sw & SWMASK ('C')) {
    sval[l++] = num;
    fprint_val(of, num, 16, 16, PV_RZRO);
    fputc(' ', of);
+   l = i;
    for(; i < 6; i+=2)
        fputs("     ", of);
    fputc(' ', of);

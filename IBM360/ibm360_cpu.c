@@ -980,6 +980,7 @@ sim_instr(void)
     t_uint64        src1L;
     t_uint64        src2L;
     t_uint64        destL;
+    t_uint64        dest2L;
 #endif
     uint16          ops[3];
 //double    a, b, c;
@@ -2057,6 +2058,22 @@ save_dbl:
 
         case OP_LM:
                 reg &= 0xf;
+                if ((cpu_unit[0].flags & FEAT_DAT) != 0) {
+                   /* Make sure we can access whole area */
+                   temp = reg1;
+                   /* Find last location. */
+                   addr2 = addr1;
+                   for (;;) {
+                       if (temp == reg)
+                           break;
+                       temp++;
+                       temp &= 0xf;
+                       addr2 += 4;
+                   }
+                   /* If we can acces this, we will fault on first */
+                   if (TransAddr(addr2, &src1))
+                      goto supress;
+                }
                 for (;;) {
                     if (ReadFull(addr1, &regs[reg1]))
                         goto supress;
@@ -2270,6 +2287,17 @@ save_dbl:
         case OP_MVN:
         case OP_MVZ:
         case OP_MVC:
+                if ((cpu_unit[0].flags & FEAT_DAT) != 0) {
+                   /* Make sure we can access whole area */
+                   if (TransAddr(addr1, &src1))
+                      goto supress;
+                   if (TransAddr(addr1+reg, &src1))
+                      goto supress;
+                   if (TransAddr(addr2, &src1))
+                      goto supress;
+                   if (TransAddr(addr2+reg, &src1))
+                      goto supress;
+                }
                 do {
                    if (ReadByte(addr2, &src1))
                        break;
@@ -2296,6 +2324,17 @@ save_dbl:
 
         case OP_CLC:
                 cc = 0;
+                if ((cpu_unit[0].flags & FEAT_DAT) != 0) {
+                   /* Make sure we can access whole area */
+                   if (TransAddr(addr1, &src1))
+                      goto supress;
+                   if (TransAddr(addr1+reg, &src1))
+                      goto supress;
+                   if (TransAddr(addr2, &src1))
+                      goto supress;
+                   if (TransAddr(addr2+reg, &src1))
+                      goto supress;
+                }
                 do {
                     if (ReadByte(addr1, &src1))
                        break;
@@ -2313,6 +2352,17 @@ save_dbl:
                 break;
 
         case OP_TR:
+                if ((cpu_unit[0].flags & FEAT_DAT) != 0) {
+                   /* Make sure we can access whole area */
+                   if (TransAddr(addr1, &src1))
+                      goto supress;
+                   if (TransAddr(addr1+reg, &src1))
+                      goto supress;
+                   if (TransAddr(addr2, &src1))
+                      goto supress;
+                   if (TransAddr(addr2+256, &src1))
+                      goto supress;
+                }
                 do {
                    if (ReadByte(addr1, &src1))
                        break;
@@ -2327,6 +2377,17 @@ save_dbl:
 
         case OP_TRT:
                 cc = 0;
+                if ((cpu_unit[0].flags & FEAT_DAT) != 0) {
+                   /* Make sure we can access whole area */
+                   if (TransAddr(addr1, &src1))
+                      goto supress;
+                   if (TransAddr(addr1+reg, &src1))
+                      goto supress;
+                   if (TransAddr(addr2, &src1))
+                      goto supress;
+                   if (TransAddr(addr2+256, &src1))
+                      goto supress;
+                }
                 do {
                    if (ReadByte(addr1, &src1))
                        break;
@@ -2347,6 +2408,13 @@ save_dbl:
                 break;
 
         case OP_PACK:
+                if ((cpu_unit[0].flags & FEAT_DAT) != 0) {
+                   /* Make sure we can access whole area */
+                   if (TransAddr(addr1, &src1))
+                      goto supress;
+                   if (TransAddr(addr2, &src1))
+                      goto supress;
+                }
                 reg &= 0xf;
                 addr2 += reg;
                 addr1 += reg1;
@@ -2387,6 +2455,13 @@ save_dbl:
                 break;
 
         case OP_UNPK:
+                if ((cpu_unit[0].flags & FEAT_DAT) != 0) {
+                   /* Make sure we can access whole area */
+                   if (TransAddr(addr1, &src1))
+                      goto supress;
+                   if (TransAddr(addr2, &src1))
+                      goto supress;
+                }
                 reg &= 0xf;
                 addr2 += reg;
                 addr1 += reg1;
@@ -2426,6 +2501,13 @@ save_dbl:
 
                 /* Move with offset, packed odd shift */
         case OP_MVO:
+                if ((cpu_unit[0].flags & FEAT_DAT) != 0) {
+                   /* Make sure we can access whole area */
+                   if (TransAddr(addr1, &src1))
+                      goto supress;
+                   if (TransAddr(addr2, &src1))
+                      goto supress;
+                }
                 reg &= 0xf;
                 addr2 += reg;
                 addr1 += reg1;
@@ -3151,7 +3233,7 @@ save_dbl:
                            goto supress;
                         cc = 0;
                     } else {
-                        regs[reg1] = dest;
+                        regs[reg1] = src2;
                         per_mod |= 1 << reg1;
                         cc = 1;
                     }
@@ -3179,8 +3261,8 @@ save_dbl:
                            goto supress;
                         cc = 0;
                     } else {
-                        regs[reg1] = dest;
-                        regs[reg1|1] = desth;
+                        regs[reg1] = src2;
+                        regs[reg1|1] = src2h;
                         per_mod |= 3 << reg1;
                         cc = 1;
                     }
@@ -5082,11 +5164,119 @@ fpnorm:
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
-                if ((reg & 0xBB) != 0) {
+                if ((reg1 & 0xBB) != 0) {
                     storepsw(OPPSW, IRC_SPEC);
                     goto supress;
                 }
-//fprintf(stderr, "FP * DP \n\r");
+//                a = cnvt_float(src1, src1h);
+//                b = cnvt_float(src2, src2h);
+//fprintf(stderr, "FP * Op=%0x src1=%08x %08x, src2=%08x %08x %.12e %.12e %.12e\n\r", op, src1, src1h, src2, src2h, a, b, a*b);
+                /* Extract numbers and adjust */
+                e1 = (src1 & EMASK) >> 24;
+                e2 = (src2 & EMASK) >> 24;
+                fill = 0;
+                if ((src1 & MSIGN) != (src2 & MSIGN))
+                   fill = 1;
+                src1 &= MMASK;
+#ifdef USE_64BIT
+             
+                src1L = (((t_uint64)(src1)) << 36) | (((t_uint64)fpregs[reg1|1]) << 4);
+                src2L = (((t_uint64)(fpregs[reg1|2] & MMASK) << 36)) |
+                         (((t_uint64)fpregs[reg1|3]) << 4);
+                /* Normalize first operand */
+                if (src1L != 0) {
+                    while ((src1L & NMASKL) == 0) {
+                       src1L <<= 4;
+                       src1L |= (src2L >> 56) & 0xf0;
+                       src2L <<= 4;
+                       e1 --;
+                    }
+                }
+                src1L &= UMASKL;
+                src2L &= UMASKL;
+
+                /* Normalize second operand. */
+                fpregs[reg1|3] = fpregs[reg|3];
+                fpregs[reg1|2] = (fpregs[reg|2] & MMASK) | ((fpregs[reg|1] & 0xff) << 24);
+                fpregs[reg1|1] = (fpregs[reg|1] >> 8) | ((fpregs[reg] & 0xff) << 24);
+                fpregs[reg1] = (fpregs[reg] & MMASK) >> 8;
+                /* Save second operand in result */
+                temp = fpregs[reg1] | fpregs[reg1|1] | fpregs[reg1|2] | fpregs[reg1|3];
+                if (temp != 0) {
+                    while ((fpregs[reg1] & 0x00f000) == 0) {
+                       fpregs[reg1] = (fpregs[reg1] << 4) | ((fpregs[reg1|1] >> 28) & 0xf);
+                       fpregs[reg1|1] = (fpregs[reg1|1] << 4) | ((fpregs[reg1|2] >> 28) & 0xf);
+                       fpregs[reg1|2] = (fpregs[reg1|2] << 4) | ((fpregs[reg1|3] >> 28) & 0xf);
+                       fpregs[reg1|3] <<= 4;
+                       e2 --;
+                    }
+                }
+
+                /* Compute exponent */
+                e1 = e1 + e2 - 64;
+
+                /* Do multiply */
+                destL = 0;
+                dest2L = 0;
+                for (temp = 0; temp < 112; temp++) {
+//fprintf(stderr, "FP *s  src1=%016llx, src2=%016llx dest=%016llx %d\n\r", src1L, src2L, destL, temp);
+                     /* Add if we need too */
+                     if (fpregs[reg1|3] & 1) {
+                         destL += src1L;
+                         dest2L += src2L;
+                         if (dest2L & CMASKL)
+                             destL += 0x10;
+                         dest2L &= UMASKL;
+                      }
+                      /* Shift right by one */
+                      dest2L >>= 1;
+                      destL >>= 1;
+                      if (destL & 0x8) {
+                          dest2L |= 0x0800000000000000LL;
+                      }
+                      fpregs[reg1|3] >>= 1;
+                      if (fpregs[reg1|2] & 1)
+                         fpregs[reg1|3] |= MSIGN;
+                      fpregs[reg1|2] >>= 1;
+                      if (fpregs[reg1|1] & 1)
+                         fpregs[reg1|2] |= MSIGN;
+                      fpregs[reg1|1] >>= 1;
+                      if (fpregs[reg1] & 1)
+                         fpregs[reg1|1] |= MSIGN;
+                }
+//fprintf(stderr, "FP *r res=%016llx %x\n\r", destL, e1);
+                /* If overflow, shift right 4 bits */
+                if (destL & EMASKL) {
+                   src1L >>= 4;
+                   src1L |= (destL & 0xF) << 60;
+                   destL >>= 4;
+                   e1 ++;
+                   if (e1 >= 128) {
+                       storepsw(OPPSW, IRC_EXPOVR);
+//fprintf(stderr, "FP ov\n\r");
+                   }
+                }
+
+//fprintf(stderr, "FP *f res=%016llx %x\n\r", destL, e1);
+                dest = (uint32)((dest2L >> 36) & MMASK);
+                desth = (uint32)((dest2L >> 4) & FMASK);
+                src1 = (uint32)((destL >> 36) & MMASK);
+                src1h = (uint32)((destL >> 4) & MMASK);
+#else
+#endif
+                if (e1) {
+                    dest |= (e1 << 24) & EMASK;
+                    src1 |= ((e1 - 14) << 24) & EMASK;
+                    if (fill) {
+                       dest |= MSIGN;
+                       src1 |= MSIGN;
+                    }
+                }
+                fpregs[reg1|3] = src1h;
+                fpregs[reg1|2] = src1;
+                fpregs[reg1|1] = desth;
+                fpregs[reg1] = dest;
+//fprintf(stderr, "FP * res=%08x %08x %d %.12e\n\r", dest, desth, cc, cnvt_float(dest,desth));
                 break;
 
         default:   /* Unknown op code */
