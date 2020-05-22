@@ -237,8 +237,8 @@ MTAB            com_mod[] = {
 };
 
 UNIT            com_unit[] = {
-//  {UDATA(&comi_srv, UNIT_ATTABLE|UNIT_IDLE, 0), COM_WAIT, UNIT_ADDR(0x0000)},       /* 0 */
-    {UDATA(&comi_srv, UNIT_ATTABLE|UNIT_IDLE, 0), COM_WAIT, UNIT_ADDR(0x4747)},       /* dummy */
+    {UDATA(&comi_srv, UNIT_ATTABLE|UNIT_IDLE, 0), COM_WAIT, UNIT_ADDR(0x0000)},       /* 0 */
+//  {UDATA(&comi_srv, UNIT_ATTABLE|UNIT_IDLE, 0), COM_WAIT, UNIT_ADDR(0x4747)},       /* dummy */
 };
 
 //DIB com_dib = {NULL, com_startcmd, NULL, NULL, com_ini, com_unit, com_chp, COM_UNITS, 0x0f, 0x7e00, 0, 0, 0};
@@ -261,9 +261,9 @@ DIB             com_dib = {
 };
 
 REG             com_reg[] = {
-    { BRDATAD (STA, com_sta, 16, 8, COM_LINES, "status buffers, lines 0 to 8") },
-    { BRDATAD (RBUF, com_rbuf, 16, 8, COM_LINES, "input buffer, lines 0 to 8") },
-    { BRDATAD (XBUF, com_xbuf, 16, 8, COM_LINES, "output buffer, lines 0 to 8") },
+    { BRDATAD (STA, com_sta, 16, 8, COM_LINES, "status buffers, lines 0 to 7") },
+    { BRDATAD (RBUF, com_rbuf, 16, 8, COM_LINES, "input buffer, lines 0 to 7") },
+    { BRDATAD (XBUF, com_xbuf, 16, 8, COM_LINES, "output buffer, lines 0 to 7") },
     { ORDATAD (SCAN, com_scan, 6, "scanner line number") },
     { FLDATAD (SLCK, com_slck, 0, "scanner lock") },
     { DRDATA (TPS, com_tps, 8), REG_HRO},

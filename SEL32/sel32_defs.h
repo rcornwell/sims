@@ -93,12 +93,11 @@
 #define FLAG_PCI         0x0800             /* Program controlled interrupt */
 #define FLAG_RTO         0x0400             /* Real-Time Option */
 
-#define BUFF_EMPTY       0x4                /* Buffer is empty */
-#define BUFF_DIRTY       0x8                /* Buffer is dirty flag */
-#define BUFF_NEWCMD      0x10               /* Channel ready for new command */
-#define BUFF_CHNEND      0x20               /* Channel end */
-#define BUFF_DONE        0x40               /* Channel program done */
-#define BUFF_NEXT        0x80               /* Continue Channel with next IOCB */
+#define BUFF_EMPTY       0x0                /* Buffer is empty */
+#define BUFF_BUSY        0x4                /* Channel program busy & empty */
+#define BUFF_NEXT        0xC                /* 0x08|0x04 Continue Channel with next IOCB */
+#define BUFF_CHNEND      0x14               /* 0x10|0x04 Channel end */
+#define BUFF_DONE        0x20               /* 0x20 Channel ready for new command */
 
 #define     MAX_CHAN        128             /* max channels that can be defined */
 #define     SUB_CHANS       256             /* max sub channels that can be defined */
@@ -203,7 +202,7 @@ typedef struct chp {
     uint16      chan_status;            /* Channel status */
     uint16      chan_dev;               /* Device on channel */
     uint8       ccw_cmd;                /* Channel command and flags */
-    uint8       chan_byte;              /* Current byte, dirty/full */
+    uint8       chan_byte;              /* Current byte, empty/full */
     uint8       chan_int;               /* channel interrupt level */
 } CHANP;
 

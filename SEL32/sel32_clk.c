@@ -49,6 +49,8 @@ extern int irq_pend;                /* go scan for pending int or I/O */
 extern uint32 INTS[];               /* interrupt control flags */
 extern uint32 SPAD[];               /* computer SPAD */
 extern uint32 M[];                  /* system memory */
+extern uint32  outbusy;             /* output waiting on timeout */
+extern uint32  inbusy;              /* input waiting on timeout */
 
 int32 rtc_pie = 0;                  /* rtc pulse ie */
 int32 rtc_tps = 60;                 /* rtc ticks/sec */
@@ -135,15 +137,14 @@ t_stat rtc_srv (UNIT *uptr)
             (((INTS[rtc_lvl] & INTS_ACT) == 0) ||   /* and not active */
             ((SPAD[rtc_lvl+0x80] & SINT_ACT) == 0))) { /* in spad too */
 //DIAGHELP  INTS[rtc_lvl] |= INTS_REQ;              /* request the interrupt */
+            if ((outbusy==0) && (inbusy==0))        /* skip interrupt if con I/O in busy wait */
             INTS[rtc_lvl] |= INTS_REQ;              /* request the interrupt */
             irq_pend = 1;                           /* make sure we scan for int */
         }
     }
 #define FOR_MIKE
-#ifdef FOR_MIKE
+#ifndef FOR_MIKE
 //Mike  rtc_unit.wait = sim_rtcn_calb (rtc_tps, TMR_RTC);   /* calibrate */
-    rtc_unit.wait = sim_rtcn_calb (rtc_tps, TMR_RTC);   /* calibrate */
-#else
     rtc_unit.wait = sim_rtcn_calb (rtc_tps, TMR_RTC);   /* calibrate */
 #endif
     sim_activate_after (&rtc_unit, 1000000/rtc_tps);/* reactivate 16666 tics / sec */
@@ -190,10 +191,8 @@ t_stat rtc_reset(DEVICE *dptr)
 {
     rtc_pie = 0;                                    /* disable pulse */
     /* initialize clock calibration */
-#ifdef FOR_MIKE
+#ifndef FOR_MIKE
 //Mike rtc_unit.wait = sim_rtcn_init_unit(&rtc_unit, rtc_unit.wait, TMR_RTC);
-    rtc_unit.wait = sim_rtcn_init_unit(&rtc_unit, rtc_unit.wait, TMR_RTC);
-#else
     rtc_unit.wait = sim_rtcn_init_unit(&rtc_unit, rtc_unit.wait, TMR_RTC);
 #endif
     sim_activate (&rtc_unit, rtc_unit.wait);        /* activate unit */
@@ -269,7 +268,7 @@ const char *itm_desc(DEVICE *dptr);
 
 #ifdef FOR_MIKE
 /* Mike suggested I remove the UNIT_IDLE flag from ITM.  This causes SEL32 */
-/* to use 100% of the CPU instead of waiting amd ruinning 10% cpu usage */
+/* to use 100% of the CPU instead of waiting and running 10% cpu usage */
 //BAD Mike UNIT itm_unit = { UDATA (&itm_srv, 0, 0), 26042, UNIT_ADDR(0x7F04)};
 UNIT itm_unit = { UDATA (&itm_srv, 0, 0), 26042, UNIT_ADDR(0x7F04)};
 #else

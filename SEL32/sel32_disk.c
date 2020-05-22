@@ -741,7 +741,8 @@ t_stat disk_srv(UNIT *uptr)
         chan_write_byte(chsa, &ch);
 
         /* bytes 8-11 - drive mode register entries from assigned disk */
-        ch = disk_type[type].type & 0xff;       /* type byte */
+//051520  ch = disk_type[type].type & 0xff;       /* type byte */
+        ch = disk_type[type].type & 0xfc;       /* zero bits 6 & 7 in type byte */
         sim_debug(DEBUG_DETAIL, dptr, "disk_srv datr unit=%02x 1 %02x\n",
             unit, ch);
         chan_write_byte(chsa, &ch);
@@ -1332,7 +1333,8 @@ t_stat disk_srv(UNIT *uptr)
         /* and byte 28 is number of heads. Byte 26 is mode. */
         /* Byte 25 is copy of byte 27. */
         buf[25] = disk_type[type].spt & 0xff;
-        buf[26] = disk_type[type].type;         /* mode data in UDP/DPII */
+//051520  buf[26] = disk_type[type].type & 0xff;  /* mode data in UDP/DPII */
+        buf[26] = disk_type[type].type & 0xfc;  /* zero bits 6 & 7 in type byte */
         buf[27] = disk_type[type].spt & 0xff;
         buf[28] = disk_type[type].nhds & 0xff;
 
