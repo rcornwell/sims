@@ -1323,16 +1323,10 @@ rd:
                 break;
              }
              if (state == DK_POS_INDEX) {
-                 if (data->ovfl == 0) {
-                     uptr->u5 = SNS_TRKOVR << 8;
-                     uptr->u3 &= ~(0xff|DK_PARAM|DK_OVFLOW);
-                     chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
-                     break;
-                 } else {
-                     uptr->u3 &= ~(DK_PARAM);
-                     uptr->u3 |= DK_OVFLOW;
-                     break;
-                 }
+                 uptr->u5 = SNS_TRKOVR << 8;
+                 uptr->u3 &= ~(0xff|DK_PARAM|DK_OVFLOW);
+                 chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                 break;
              }
              if (state == DK_POS_DATA && count == data->dlen) {
                  sim_debug(DEBUG_DETAIL, dptr,
@@ -1341,11 +1335,11 @@ rd:
                  if (data->ovfl == 0) {
                      uptr->u3 &= ~(0xff|DK_PARAM|DK_OVFLOW);
                      chan_end(addr, SNS_CHNEND|SNS_DEVEND);
-                     break;
                  } else {
                      uptr->u3 &= ~(DK_PARAM);  /* Start a new search */
                      uptr->u3 |= DK_OVFLOW;
                  }
+                 break;
              }
              ch = *da;
              if (state == DK_POS_CNT && count == 0) /* Mask off overflow bit */

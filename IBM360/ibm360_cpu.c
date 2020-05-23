@@ -1315,6 +1315,7 @@ opr:
         case OP_BAS:
                 if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
+                    goto supress;
                 } else {
                     dest = PC;
                     if (op != OP_BASR || R2(reg) != 0) {
@@ -1396,12 +1397,16 @@ opr:
                 dest = src1;
                 if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
+                    goto supress;
                 } else if (flags & PROBLEM) {
                     storepsw(OPPSW, IRC_PRIV);
+                    goto supress;
                 } else if ((addr1 & 0xF) != 0) {
                     storepsw(OPPSW, IRC_SPEC);
+                    goto supress;
                 } else if (addr1 >= MEMSIZE) {
                     storepsw(OPPSW, IRC_ADDR);
+                    goto supress;
                 } else {
                     if ((cpu_unit[0].flags & FEAT_DAT) != 0)
                         key[addr1 >> 11] = src1 & 0xfe;
@@ -1438,28 +1443,30 @@ opr:
         case OP_SSM:
                 if (flags & PROBLEM) {
                     storepsw(OPPSW, IRC_PRIV);
+                    goto supress;
                 } else {
                     if ((cpu_unit[0].flags & FEAT_370) != 0 && (cregs[0] & 0x40000000) != 0) {
                         storepsw(OPPSW, IRC_SPOP);
                         goto supress;
                     }
                     if (ReadByte(addr1, &src1))
-                        break;
+                        goto supress;
                     ext_en = (src1 & 01) != 0;
                     if (ec_mode) {
                         if ((cpu_unit[0].flags & FEAT_370) != 0) {
                             if (src1 & 0xb8) {
                                 storepsw(OPPSW, IRC_SPEC);
-                                break;
+                                goto supress;
                             }
                             irq_en = (src1 & 02) != 0;
                             per_en = ((src1 & 0x40) != 0);
                             dat_en = (src1 & 04) != 0;
                             sysmsk = irq_en ? (cregs[2] >> 16) : 0;
                         } else {
-                            if (src1 & 0xf8)
+                            if (src1 & 0xf8) {
                                 storepsw(OPPSW, IRC_SPEC);
-                            else
+                                goto supress;
+                            } else
                                 dat_en = (src1 & 04) != 0;
                             irq_en = (src1 & 02) != 0;
                             sysmsk = irq_en ? (cregs[6] >> 16) : 0;
@@ -1468,6 +1475,7 @@ opr:
                         sysmsk = (src1 & 0xfc) << 8;
                         ext_en = (src1 & 0x1) != 0;
                         irq_en = (sysmsk != 0);
+                        dat_en = 0;
                         if (src1 & 0x2) {
                             if ((cpu_unit[0].flags & FEAT_370) != 0)
                                sysmsk |= (cregs[2] >> 16) & 0x3ff;
@@ -1482,8 +1490,10 @@ opr:
         case OP_LPSW:
                 if (flags & PROBLEM) {
                     storepsw(OPPSW, IRC_PRIV);
+                    goto supress;
                 } else if ((addr1 & 0x7) != 0) {
                     storepsw(OPPSW, IRC_SPEC);
+                    goto supress;
                 } else {
                     if (ReadFull(addr1, &src1))
                         goto supress;
@@ -1689,12 +1699,12 @@ set_cc3:
         case OP_D:
         case OP_DR:
                 if (reg1 & 1) {
-                   storepsw(OPPSW, IRC_SPEC);
-                   break;
+                    storepsw(OPPSW, IRC_SPEC);
+                    goto supress;
                 }
                 if (src2 == 0) {
                     storepsw(OPPSW, IRC_FIXDIV);
-                    break;
+                    goto supress;
                 }
                 fill = 0;
 #ifdef USE_64BIT
@@ -1714,7 +1724,7 @@ set_cc3:
                 /* Check for overflow */
                 if ((src1L & 0xFFFFFFFF80000000LL) != 0) {
                     storepsw(OPPSW, IRC_FIXDIV);
-                    break;
+                    goto supress;
                 }
 
                 src1 = (uint32)(src2L & FMASK);
@@ -1755,7 +1765,7 @@ set_cc3:
                 /* Check for overflow */
                 if ((dest & MSIGN) != 0) {
                     storepsw(OPPSW, IRC_FIXDIV);
-                    break;
+                    goto supress;
                 }
 #endif
                 if (fill & 1)
@@ -1801,18 +1811,19 @@ set_cc3:
 
         case OP_NI:
                 if (ReadByte(addr1, &dest))
-                    break;
+                    goto supress;
                 if (hst_lnt)
                     hst[hst_p].src1 = dest;
                 dest &= reg;
 char_save:
+                if (WriteByte(addr1, dest))
+                    goto supress;
                 cc = (dest == 0) ? 0 : 1;
-                WriteByte(addr1, dest);
                 break;
 
         case OP_OI:
                 if (ReadByte(addr1, &dest))
-                    break;
+                    goto supress;
                 if (hst_lnt)
                     hst[hst_p].src1 = dest;
                 dest |= reg;
@@ -1820,7 +1831,7 @@ char_save:
 
         case OP_XI:
                 if (ReadByte(addr1, &dest))
-                    break;
+                    goto supress;
                 if (hst_lnt)
                     hst[hst_p].src1 = dest;
                 dest ^= reg;
@@ -1828,7 +1839,7 @@ char_save:
 
         case OP_CLI:
                 if (ReadByte(addr1, &dest))
-                    break;
+                    goto supress;
                 if (hst_lnt)
                     hst[hst_p].src1 = dest;
                 dest &= 0xff;
@@ -1837,7 +1848,7 @@ char_save:
 
         case OP_IC:
                 if (ReadByte(addr1, &dest))
-                    break;
+                    goto supress;
                 dest = (src1 & 0xffffff00) | (dest & 0xff);
                 regs[reg1] = dest;
                 break;
@@ -1855,16 +1866,17 @@ char_save:
         case OP_TS:
                 dest = 0xff;
                 if (ReadByte(addr1, &src1))
-                  break;
+                    goto supress;
                 if (hst_lnt)
                     hst[hst_p].src1 = src1;
+                if (WriteByte(addr1, dest))
+                    goto supress;
                 cc = (src1 & 0x80) ? 1 : 0;
-                WriteByte(addr1, dest);
                 break;
 
         case OP_TM:
                 if (ReadByte(addr1, &dest))
-                    break;
+                    goto supress;
                 if (hst_lnt)
                     hst[hst_p].src1 = dest;
                 dest &= reg;
@@ -1925,7 +1937,8 @@ char_save:
 
         case OP_SRDL:
                 if (reg & 1) {
-                   storepsw(OPPSW, IRC_SPEC);
+                    storepsw(OPPSW, IRC_SPEC);
+                    goto supress;
                 } else {
                    addr1 &= 0x3f;
 #ifdef USE_64BIT
@@ -1948,9 +1961,10 @@ char_save:
                 break;
 
         case OP_SLDL:
-                if (reg & 1)
-                   storepsw(OPPSW, IRC_SPEC);
-                else {
+                if (reg & 1) {
+                    storepsw(OPPSW, IRC_SPEC);
+                    goto supress;
+                } else {
                    addr1 &= 0x3f;
 #ifdef USE_64BIT
                    LDDBL(reg1, src1L);
@@ -1972,9 +1986,10 @@ char_save:
                 break;
 
         case OP_SLDA:
-                if (reg & 1)
-                   storepsw(OPPSW, IRC_SPEC);
-                else {
+                if (reg & 1) {
+                    storepsw(OPPSW, IRC_SPEC);
+                    goto supress;
+                } else {
                    addr1 &= 0x3f;
                    cc = 0;
 #ifdef USE_64BIT
@@ -2014,9 +2029,10 @@ save_dbl:
                 break;
 
         case OP_SRDA:
-                if (reg & 1)
-                   storepsw(OPPSW, IRC_SPEC);
-                else {
+                if (reg & 1) {
+                    storepsw(OPPSW, IRC_SPEC);
+                    goto supress;
+                } else {
                    addr1 &= 0x3f;
                    cc = 0;
 #ifdef USE_64BIT
@@ -2300,10 +2316,10 @@ save_dbl:
                 }
                 do {
                    if (ReadByte(addr2, &src1))
-                       break;
+                       goto supress;
                    if (op != OP_MVC) {
                        if (ReadByte(addr1, &dest))
-                           break;
+                           goto supress;
                        switch(op) {
                        case OP_MVZ: dest = (dest & 0x0f) | (src1 & 0xf0); break;
                        case OP_MVN: dest = (dest & 0xf0) | (src1 & 0x0f); break;
@@ -2315,7 +2331,7 @@ save_dbl:
                        dest = src1;
                    }
                    if (WriteByte(addr1, dest))
-                       break;
+                       goto supress;
                    addr1++;
                    addr2++;
                    reg--;
@@ -2337,9 +2353,9 @@ save_dbl:
                 }
                 do {
                     if (ReadByte(addr1, &src1))
-                       break;
+                       goto supress;
                     if (ReadByte(addr2, &src2))
-                       break;
+                       goto supress;
                     if (src1 != src2) {
                        dest = src1 - src2;
                        cc = (dest & MSIGN) ? 1 : (dest == 0) ? 0 : 2;
@@ -2365,11 +2381,11 @@ save_dbl:
                 }
                 do {
                    if (ReadByte(addr1, &src1))
-                       break;
+                       goto supress;
                    if (ReadByte(addr2 + (src1 & 0xff), &dest))
-                       break;
+                       goto supress;
                    if (WriteByte(addr1, dest))
-                       break;
+                       goto supress;
                    addr1++;
                    reg--;
                 } while (reg != 0xff);
@@ -2390,9 +2406,9 @@ save_dbl:
                 }
                 do {
                    if (ReadByte(addr1, &src1))
-                       break;
+                       goto supress;
                    if (ReadByte(addr2 + (src1 & 0xff), &dest))
-                       break;
+                       goto supress;
                    if (dest != 0) {
                        regs[1] &= 0xff000000;
                        regs[1] |= addr1 & AMASK;
@@ -2420,10 +2436,10 @@ save_dbl:
                 addr1 += reg1;
                 /* Flip first location */
                 if (ReadByte(addr2, &dest))
-                    break;
+                    goto supress;
                 dest = ((dest >> 4) & 0xf) | ((dest << 4) & 0xf0);
                 if (WriteByte(addr1, dest))
-                    break;
+                    goto supress;
                 addr1--;
                 addr2--;
                 dest = 0;
@@ -2448,7 +2464,7 @@ save_dbl:
                 dest = 0;
                 while(reg1 != 0) {
                      if (WriteByte(addr1, dest))
-                         break;
+                         goto supress;
                      addr1--;
                      reg1--;
                 };
@@ -2466,10 +2482,10 @@ save_dbl:
                 addr2 += reg;
                 addr1 += reg1;
                 if (ReadByte(addr2, &dest))
-                    break;
+                    goto supress;
                 dest = ((dest >> 4) & 0xf) | ((dest << 4) & 0xf0);
                 if (WriteByte(addr1, dest))
-                    break;
+                    goto supress;
                 addr1--;
                 addr2--;
                 zone = (flags & ASCII)? 0x50 : 0xf0;
@@ -2493,7 +2509,7 @@ save_dbl:
                 };
                 while(reg1 != 0) {
                     if (WriteByte(addr1, zone))
-                        break;
+                        goto supress;
                     addr1--;
                     reg1--;
                 };
@@ -2512,9 +2528,9 @@ save_dbl:
                 addr2 += reg;
                 addr1 += reg1;
                 if (ReadByte(addr1, &dest))
-                    break;
+                    goto supress;
                 if (ReadByte(addr2, &src1))
-                    break;
+                    goto supress;
                 addr2--;
                 dest = (dest & 0xf) | ((src1 << 4) & 0xf0);
                 WriteByte(addr1, dest);
@@ -2523,14 +2539,14 @@ save_dbl:
                     dest = (src1 >> 4) & 0xf;
                     if (reg != 0) {
                         if (ReadByte(addr2, &src1))
-                            break;
+                            goto supress;
                         addr2--;
                         reg--;
                     } else
                         src1 = 0;
                     dest |= (src1 << 4) & 0xf0;
                     if (WriteByte(addr1, dest))
-                        break;
+                        goto supress;
                     reg1--;
                     addr1--;
                 };
@@ -2539,13 +2555,13 @@ save_dbl:
                 /* Convert packed decimal to binary */
         case OP_CVB:
                 if (ReadFull(addr1, &src1))
-                    break;
+                    goto supress;
                 if (ReadFull(addr1+4, &src1h))
-                    break;
+                    goto supress;
                 fill = src1h & 0xf; /* Save away sign */
                 if (fill < 0xA) {
                     storepsw(OPPSW, IRC_DATA);
-                    break;
+                    goto supress;
                 }
                 dest = 0;
                 /* Convert upper first */
@@ -2553,7 +2569,7 @@ save_dbl:
                     int d = (src1 >> temp) & 0xf;
                     if (d >= 0xA) {
                         storepsw(OPPSW, IRC_DATA);
-                        break;
+                        goto supress;
                     }
                     dest = (dest * 10) + d;
                 }
@@ -2562,14 +2578,14 @@ save_dbl:
                     int d = (src1h >> temp) & 0xf;
                     if (d >= 0xA) {
                         storepsw(OPPSW, IRC_DATA);
-                        break;
+                        goto supress;
                     }
                     dest = (dest * 10) + d;
                 }
                 /* Check if too big */
                 if (dest & MSIGN) {
                     storepsw(OPPSW, IRC_FIXDIV);
-                    break;
+                    goto supress;
                 }
                 /* Twos compliment if needed */
                 if (fill == 0xB || fill == 0xD)
@@ -2604,15 +2620,16 @@ save_dbl:
                 }
 
                 if (WriteFull(addr1, src1))
-                    break;
-                WriteFull(addr1+4, src1h);
+                    goto supress;
+                if (WriteFull(addr1+4, src1h))
+                    goto supress;
                 break;
 
                 /* Edit string, mark saves address of significant digit */
         case OP_ED:
         case OP_EDMK:
                 if (ReadByte(addr1, &src1))
-                    break;
+                    goto supress;
                 zone = (flags & ASCII) ? 0x50: 0xf0;
                 fill = digit = (uint8)src1;
                 temp = 0;    /* Hold zero flag */
@@ -2627,7 +2644,7 @@ save_dbl:
                          /* If we have not run out of source, grab next pair */
                          if (e1) {
                              if (ReadByte(addr2, &src2))
-                                 break;
+                                 goto supress;
                              addr2++;
                              /* Check if valid */
                              if (src2 > 0xa0) {
@@ -2680,13 +2697,13 @@ save_dbl:
                             digit = fill;
                     }
                     if (WriteByte(addr1, digit))
-                        break;
+                        goto supress;
                     addr1++;
                     if (reg == 0)
                         break;
                     reg --;
                     if (ReadByte(addr1, &src1))
-                        break;
+                        goto supress;
                     digit = src1;
                 }
                 cc = temp;
@@ -2698,10 +2715,10 @@ save_dbl:
         case OP_EX:
                 if (addr1 & 1) {
                    storepsw(OPPSW, IRC_SPEC);
-                   break;
+                   goto supress;
                 }
                 if (ReadHalf(addr1, &dest))
-                   break;
+                   goto supress;
                 ops[0] = dest;
                 if (reg1) {
                    ops[0] |= src1 & 0xff;
@@ -2724,13 +2741,13 @@ save_dbl:
                 else {
                     if (op & 0xc0) {
                         if (ReadHalf(addr1, &dest))
-                            break;
+                            goto supress;
                         ops[1] = dest;
                         addr1+=2;
                         /* Check if SS */
                         if ((op & 0xc0) == 0xc0) {
                             if(ReadHalf(addr1, &dest))
-                               break;
+                               goto supress;
                             ops[2] = dest;
                         }
                         if (hst_lnt) {
@@ -2749,11 +2766,16 @@ save_dbl:
 
                     dest = regs[reg1];
                     cc = 0;
+                    if (R2(reg) == 0) {
+                       if(ReadByte(addr1, &src1))
+                          goto supress;
+                       break;
+                    }
                     fill = 0x80;
                     for (i = 0x8, j=24; i != 0; i >>= 1, j-=8) {
                         if ((R2(reg) & i) != 0) {
                             if(ReadByte(addr1, &src1))
-                               break;
+                               goto supress;
                             addr1++;
                             temp = 0xff << j;
                             dest = (dest & ~temp) | (src1 << j);
@@ -2783,7 +2805,7 @@ save_dbl:
                         if ((R2(reg) & i) != 0) {
                             src1 = (dest >> j) & 0xff;
                             if(WriteByte(addr1, src1))
-                               break;
+                               goto supress;
                             addr1++;
                         }
                     }
@@ -2798,6 +2820,11 @@ save_dbl:
                     uint32  rval[4];
                     int i, j, k;
 
+                    if (R2(reg) == 0) {
+                       if(ReadByte(addr1, &src1))
+                          goto supress;
+                       break;
+                    }
                     dest = regs[reg1];
                     for (i = 0x8, j=24, k=0; i != 0; i >>= 1, j-=8) {
                         if ((R2(reg) & i) != 0)
@@ -2806,7 +2833,7 @@ save_dbl:
                     cc = 0;
                     for (i = 0; i < k; i++) {
                         if (ReadByte(addr1, &src1))
-                            break;
+                            goto supress;
                         addr1++;
                         if (rval[i] != src1) {
                            cc = (rval[i] < src1)? 1: 2;
@@ -3352,10 +3379,10 @@ save_dbl:
                    src1 &= AMASK;
                    addr2 = regs[R2(reg)] & AMASK;
                    src2 = regs[R2(reg)|1];
-                   fill = (src2 >> 24) & 0xff;
+                   fill = (src-2 >> 24) & 0xff;
                    src2 &= AMASK;
                    cc = 0;
-                   while (src1 != 0 && src2 != 0) {
+                   while (src1 != 0 || src2 != 0) {
                        if (src1 == 0) {
                           dest = fill;
                        } else {
@@ -3367,17 +3394,19 @@ save_dbl:
                        } else {
                           if (ReadByte(addr2, &desth))
                               break;
-                          addr2 ++;
-                          src2 --;
+                       }
+                       if (dest != desth) {
+                           dest = dest - desth;
+                           cc = (dest & MSIGN) ? 1 : (dest == 0) ? 0 : 2;
+                           break;
                        }
                        if (src1 != 0) {
                           addr1 ++;
                           src1 --;
                        }
-                       if (dest != desth) {
-                           dest = dest - desth;
-                           cc = (dest & MSIGN) ? 1 : 2;
-                           break;
+                       if (src2 != 0) {
+                          addr2 ++;
+                          src2 --;
                        }
                    }
                    regs[reg1] = addr1 & AMASK;
@@ -5362,6 +5391,7 @@ lpsw:
                      else
                           sysmsk |= 0x3ff;
                  }
+                 dat_en = 0;
                  irq_en = (sysmsk != 0);
                  per_en = 0;
                  pmsk = (src2 >> 24) & 0xf;
