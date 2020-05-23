@@ -1566,7 +1566,7 @@ set_cc:
 
         case OP_LNR:
                 if ((dest & MSIGN) == 0)
-                   dest = (dest ^ FMASK) + 1;
+                   dest = NEG(dest);
                 goto set_cc;
 
         case OP_LA:
@@ -3379,7 +3379,7 @@ save_dbl:
                    src1 &= AMASK;
                    addr2 = regs[R2(reg)] & AMASK;
                    src2 = regs[R2(reg)|1];
-                   fill = (src-2 >> 24) & 0xff;
+                   fill = (src2 >> 24) & 0xff;
                    src2 &= AMASK;
                    cc = 0;
                    while (src1 != 0 || src2 != 0) {
