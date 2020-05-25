@@ -303,6 +303,8 @@ MTAB cpu_mod[] = {
     { MTAB_VDV, MEMAMOUNT(16), NULL, "256K", &cpu_set_size },
     { MTAB_VDV, MEMAMOUNT(32), NULL, "512K", &cpu_set_size },
     { MTAB_VDV, MEMAMOUNT(64), NULL, "1M", &cpu_set_size },
+    { MTAB_VDV, MEMAMOUNT(64), NULL, "1024K", &cpu_set_size },
+    { MTAB_VDV, MEMAMOUNT(64), NULL, "1536K", &cpu_set_size },
     { MTAB_VDV, MEMAMOUNT(128), NULL, "2M", &cpu_set_size },
     { MTAB_VDV, MEMAMOUNT(256), NULL, "4M", &cpu_set_size },
     { FEAT_370, FEAT_370, "IBM370", "IBM370", NULL, NULL, NULL, "Sets CPU to be a IBM370"},
@@ -524,19 +526,26 @@ int  TransAddr(uint32 va, uint32 *pa) {
      entry = M[addr >> 2];
      key[addr >> 11] |= 0x4;
 //fprintf(stderr, "translate1: %08x\r\n", entry);
-     addr = (entry >> 28) + 1;
-     /* Check if entry valid and in correct length */
-     if (entry & PTE_VALID || (page >> pte_len_shift) > addr) {
-         if ((cpu_unit[0].flags & FEAT_370) == 0)
+     if ((cpu_unit[0].flags & FEAT_370) == 0) {
+         addr = (entry >> 24) + 1;
+         /* Check if entry valid and in correct length */
+         if (entry & PTE_VALID || page > addr) {
              cregs[2] = va;
-         else {
+             fprintf(stderr, "translatep1: %08x\r\n", entry);
+             storepsw(OPPSW, IRC_PAGE);
+             return 1;
+         }
+     } else {
+         addr = (entry >> 28) + 1;
+         /* Check if entry valid and in correct length */
+         if (entry & PTE_VALID || (page >> pte_len_shift) > addr) {
              M[0x90 >> 2] = va;
              key[0] |= 0x6;
              PC = iPC;
+             fprintf(stderr, "translatep1: %08x\r\n", entry);
+             storepsw(OPPSW, (entry & PTE_VALID) ? IRC_SEG : IRC_PAGE);
+             return 1;
          }
-//fprintf(stderr, "translatep1: %08x\r\n", entry);
-         storepsw(OPPSW, (entry & PTE_VALID) ? IRC_SEG : IRC_PAGE);
-         return 1;
      }
 
      /* Now we need to fetch the actual entry */
@@ -992,8 +1001,8 @@ sim_instr(void)
         seg_mask = AMASK >> 20;
         pte_avail = 0x8;
         pte_mbz = 0x7;
-        pte_shift = 3;
-        pte_len_shift = 4;
+        pte_shift = 4;
+        pte_len_shift = 0;
         seg_addr = cregs[0] & AMASK;
         seg_len = (((cregs[0] >> 24) & 0xff) + 1) << 4;
     } else {
@@ -2121,21 +2130,34 @@ save_dbl:
                                   dest = cregs[reg1];
                                   break;
                         case 0x8:     /* Partitioning register */
+                                  dest = 0x88888888;
+                                  break;
                         case 0x9:     /* Partitioning register */
                                    /* Compute amount of memory and
                                       assign in 256k blocks to CPU 1 */
+                                  dest = 0x88880000;
+                                  break;
                         case 0xA:     /* Partitioning register */
                                    /* Address each 256k bank to 0-0xF */
+                                  dest = 0x02468ace;
+                                  break;
+                        case 0xE:     /* Partitioning register */
+                                  dest = 0x00000200;
+                                  break;
                         case 0xB:     /* Partitioning register */
+                                  dest = 0x80008000;
+                                  break;
                         case 0xC:     /* Partitioning register */
                         case 0xD:     /* Partitioning register */
-                        case 0xE:     /* Partitioning register */
+                                  dest = 0xFFFFFFFF;
+                                  break;
                                    /* Return 0 */
                         case 0x1:     /* Unassigned */
                         case 0x3:     /* Unassigned */
                         case 0x5:     /* Unassigned */
                         case 0x7:     /* Unassigned */
                         case 0xF:     /* Unassigned */
+                                  dest = 0;
                                   break;
                         }
                         if (WriteFull(addr1, dest))
@@ -2162,6 +2184,9 @@ save_dbl:
                         if (ReadFull(addr1, &dest))
                             goto supress;
                         cregs[reg1] = dest;
+                        sim_debug(DEBUG_INST, &cpu_dev,
+                                 "Loading: CR %x %06x %08x IC=%08x %x\n\r",
+                                    reg1, addr1, dest, PC, reg);
                         switch (reg1) {
                         case 0x0:     /* Segment table address */
                                   for (temp = 0;
@@ -2257,13 +2282,23 @@ save_dbl:
                         per_mod |= 1 << reg1;
                         break;
                     }
-                    addr2 = (entry >> 28) + 1;
-                    /* Check if over end of table */
-                    if ((page >> pte_len_shift) > addr2) {
-                        cc = 3;
-                        regs[reg1] = addr1;
-                        per_mod |= 1 << reg1;
-                        break;
+
+                    if ((cpu_unit[0].flags & FEAT_370) != 0) {
+                        addr2 = (entry >> 28) + 1;
+                        /* Check if over end of table */
+                        if ((page >> pte_len_shift) > addr2) {
+                            cc = 3;
+                            regs[reg1] = addr1;
+                            per_mod |= 1 << reg1;
+                            break;
+                        }
+                    } else {
+                         addr2 = (entry >> 24) + 1;
+                        /* Check if in correct length */
+                         if (page > addr2) {
+                            cc = 2;
+                            break;
+                         }
                     }
 
                     /* Now we need to fetch the actual entry */
@@ -2297,6 +2332,7 @@ save_dbl:
         case OP_NC:
         case OP_OC:
         case OP_XC:
+                fill = cc;
                 cc = 0;
                 /* Fall through */
 
@@ -2305,15 +2341,14 @@ save_dbl:
         case OP_MVC:
                 if ((cpu_unit[0].flags & FEAT_DAT) != 0) {
                    /* Make sure we can access whole area */
-                   if (TransAddr(addr1, &src1))
+                   if (TransAddr(addr1, &src1) || TransAddr(addr1+reg, &src1) ||
+                       TransAddr(addr2, &src1) || TransAddr(addr2+reg, &src1)) {
+                      if (op == OP_NC || op == OP_OC || op == OP_XC)
+                          cc = fill;  /* restore CC on abort */
                       goto supress;
-                   if (TransAddr(addr1+reg, &src1))
-                      goto supress;
-                   if (TransAddr(addr2, &src1))
-                      goto supress;
-                   if (TransAddr(addr2+reg, &src1))
-                      goto supress;
+                   }
                 }
+                /* Fall through */
                 do {
                    if (ReadByte(addr2, &src1))
                        goto supress;
@@ -2339,7 +2374,6 @@ save_dbl:
                 break;
 
         case OP_CLC:
-                cc = 0;
                 if ((cpu_unit[0].flags & FEAT_DAT) != 0) {
                    /* Make sure we can access whole area */
                    if (TransAddr(addr1, &src1))
@@ -2351,6 +2385,7 @@ save_dbl:
                    if (TransAddr(addr2+reg, &src1))
                       goto supress;
                 }
+                cc = 0;
                 do {
                     if (ReadByte(addr1, &src1))
                        goto supress;
@@ -2392,7 +2427,6 @@ save_dbl:
                 break;
 
         case OP_TRT:
-                cc = 0;
                 if ((cpu_unit[0].flags & FEAT_DAT) != 0) {
                    /* Make sure we can access whole area */
                    if (TransAddr(addr1, &src1))
@@ -2404,6 +2438,7 @@ save_dbl:
                    if (TransAddr(addr2+256, &src1))
                       goto supress;
                 }
+                cc = 0;
                 do {
                    if (ReadByte(addr1, &src1))
                        goto supress;
@@ -2533,7 +2568,8 @@ save_dbl:
                     goto supress;
                 addr2--;
                 dest = (dest & 0xf) | ((src1 << 4) & 0xf0);
-                WriteByte(addr1, dest);
+                if (WriteByte(addr1, dest))
+                    goto supress;
                 addr1--;
                 while(reg1 != 0) {
                     dest = (src1 >> 4) & 0xf;
@@ -2909,7 +2945,7 @@ save_dbl:
                                  goto supress;
                               if (WriteFull(addr1+4, src1h))
                                  goto supress;
-                              cc = !clk_state;
+                              cc = (clk_state == CLOCK_UNSET);
                               break;
                    case 0x6: /* SCKC */
                               /* Load clock compare with double word */
