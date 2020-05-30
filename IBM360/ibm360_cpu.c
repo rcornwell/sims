@@ -2135,21 +2135,21 @@ save_dbl:
                         case 0x9:     /* Partitioning register */
                                    /* Compute amount of memory and
                                       assign in 256k blocks to CPU 1 */
-                                  dest = 0x88880000;
+                                  dest = 0x88884444;
                                   break;
                         case 0xA:     /* Partitioning register */
                                    /* Address each 256k bank to 0-0xF */
                                   dest = 0x02468ace;
                                   break;
-                        case 0xE:     /* Partitioning register */
-                                  dest = 0x00000200;
-                                  break;
                         case 0xB:     /* Partitioning register */
-                                  dest = 0x80008000;
+                                  dest = 0x80000000;
                                   break;
                         case 0xC:     /* Partitioning register */
                         case 0xD:     /* Partitioning register */
-                                  dest = 0xFFFFFFFF;
+                                  dest = 0xAAAAAAAA;
+                                  break;
+                        case 0xE:     /* Partitioning register */
+                                  dest = 0x00000200;
                                   break;
                                    /* Return 0 */
                         case 0x1:     /* Unassigned */
@@ -5876,13 +5876,12 @@ rtc_srv(UNIT * uptr)
     key[0] |= 0x6;
     sim_debug(DEBUG_INST, &cpu_dev, "TIMER = %08x\n", M[0x50>>2]);
     /* Time of day clock and timer on IBM 370 */
-    if (cpu_unit[0].flags & (FEAT_370)) {
+    if ((cpu_unit[0].flags & FEAT_370) != 0) {
         uint32 t;
         if (clk_state && (cregs[0] & 0x20000000) == 0) {
            t = tod_clock[1] + (13333333);
-           if (t < tod_clock[1]) {
+           if (t < tod_clock[1])
                 tod_clock[0]++;
-           }
            tod_clock[1] = t;
            sim_debug(DEBUG_INST, &cpu_dev, "TOD = %08x %08x\n", tod_clock[0], tod_clock[1]);
            check_tod_irq();
