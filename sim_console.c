@@ -750,7 +750,6 @@ static CTAB allowed_remote_cmds[] = {
     { "REPEAT",   &x_repeat_cmd,      0 },
     { "COLLECT",  &x_collect_cmd,     0 },
     { "SAMPLEOUT",&x_sampleout_cmd,   0 },
-    { "STEP",     &x_step_cmd,        0 },
     { "PWD",      &pwd_cmd,           0 },
     { "SAVE",     &save_cmd,          0 },
     { "DIR",      &dir_cmd,           0 },
@@ -772,11 +771,11 @@ static CTAB allowed_master_remote_cmds[] = {
     { "ASSIGN",   &assign_cmd,        0 },
     { "DEASSIGN", &deassign_cmd,      0 },
     { "CONTINUE", &x_continue_cmd,    0 },
+    { "STEP",     &x_step_cmd,        0 },
     { "REPEAT",   &x_repeat_cmd,      0 },
     { "COLLECT",  &x_collect_cmd,     0 },
     { "SAMPLEOUT",&x_sampleout_cmd,   0 },
     { "EXECUTE",  &x_execute_cmd,     0 },
-    { "STEP",     &x_step_cmd,        0 },
     { "PWD",      &pwd_cmd,           0 },
     { "SAVE",     &save_cmd,          0 },
     { "CD",       &set_default_cmd,   0 },
@@ -3454,8 +3453,8 @@ if ((sim_ttisatty ()) &&
 if ((std_output) &&                                     /* If Not Background process? */
     (std_output != INVALID_HANDLE_VALUE)) {
     if (GetConsoleMode(std_output, &saved_output_mode))
-        if (!SetConsoleMode(std_output, ENABLE_VIRTUAL_TERMINAL_PROCESSING|ENABLE_PROCESSED_OUTPUT))
-            SetConsoleMode(std_output, ENABLE_PROCESSED_OUTPUT);
+        if (!SetConsoleMode(std_output, ENABLE_VIRTUAL_TERMINAL_PROCESSING|ENABLE_PROCESSED_OUTPUT|ENABLE_WRAP_AT_EOL_OUTPUT))
+            SetConsoleMode(std_output, ENABLE_PROCESSED_OUTPUT|ENABLE_WRAP_AT_EOL_OUTPUT);
     }
 if (sim_log) {
     fflush (sim_log);
