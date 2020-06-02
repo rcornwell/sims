@@ -531,7 +531,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
          /* Check if entry valid and in correct length */
          if (entry & PTE_VALID || page > addr) {
              cregs[2] = va;
-             fprintf(stderr, "translatep1: %08x\r\n", entry);
+//             fprintf(stderr, "translatep1: %08x\r\n", entry);
              storepsw(OPPSW, IRC_PAGE);
              return 1;
          }
@@ -542,7 +542,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
              M[0x90 >> 2] = va;
              key[0] |= 0x6;
              PC = iPC;
-             fprintf(stderr, "translatep1: %08x\r\n", entry);
+ //            fprintf(stderr, "translatep1: %08x\r\n", entry);
              storepsw(OPPSW, (entry & PTE_VALID) ? IRC_SEG : IRC_PAGE);
              return 1;
          }
@@ -1201,6 +1201,7 @@ wait_loop:
             }
         }
 
+opr:
         if (sim_deb && (cpu_dev.dctrl & DEBUG_INST)) {
            sim_debug(DEBUG_INST, &cpu_dev, "%d INST=%04x", ilc, ops[0]);
            if (ops[0] & 0xc000) {
@@ -1217,7 +1218,6 @@ wait_loop:
         }
 
         /* Add in history here */
-opr:
 
         /* If RX or RS or SS SI etc compute first address */
         if (op & 0xc0) {
@@ -1482,8 +1482,8 @@ opr:
                         }
                     } else {
                         sysmsk = (src1 & 0xfc) << 8;
-                        ext_en = (src1 & 0x1) != 0;
                         irq_en = (sysmsk != 0);
+                        ext_en = (src1 & 0x1) != 0;
                         dat_en = 0;
                         if (src1 & 0x2) {
                             if ((cpu_unit[0].flags & FEAT_370) != 0)
@@ -3015,8 +3015,10 @@ save_dbl:
                                   storepsw(OPPSW, IRC_OPR);
                                   goto supress;
                               }
-                              for (temp = 0; temp < 256; temp++)
-                                  tlb[temp] = 0;
+                              for (temp = 0;
+                                   temp < sizeof(tlb)/sizeof(uint32);
+                                   temp++)
+                                   tlb[temp] = 0;
                               break;
                    case 0x10: /* SPX */
                               storepsw(OPPSW, IRC_OPR);
@@ -3181,7 +3183,7 @@ save_dbl:
                                  "Loading: CR %x %06x %08x IC=%08x %x\n\r",
                                     reg1, addr1, dest, PC, reg);
                         switch (reg1) {
-                        case 0x0:     /* General controll register */
+                        case 0x0:     /* General control register */
                                  /* CR0 values
                                            |    |     |     |   |   |   |   |
                                     0 0 0 00000 00 1 11 111 1111222222222231|
@@ -3231,6 +3233,10 @@ save_dbl:
                         case 0x1:     /* Segment table address and length */
                                   seg_addr = dest & AMASK;
                                   seg_len = (((dest >> 24) & 0xff) + 1) << 4;
+                                  for (temp = 0;
+                                       temp < sizeof(tlb)/sizeof(uint32);
+                                       temp++)
+                                       tlb[temp] = 0;
                                   break;
                         case 0x2:     /* Masks */
                                   if (ec_mode)

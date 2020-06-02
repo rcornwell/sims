@@ -224,12 +224,19 @@ con_srv(UNIT *uptr) {
            chan_end(addr, SNS_CHNEND|SNS_DEVEND);
            delay = 40000;
        } else {
-           ch = ebcdic_to_ascii[ch];
-           if (ch != 0) {
-               if (!isprint(ch))
-                   ch = '_';
-               sim_putchar(ch);
+           if (ch == 0x15) {
+               sim_putchar('\r');
+               sim_putchar('\n');
+               uptr->u3 |= CON_CR;
                uptr->u3 &= ~CON_OUTPUT;
+           } else {
+               ch = ebcdic_to_ascii[ch];
+               if (ch != 0) {
+                   if (!isprint(ch))
+                       ch = '_';
+                   sim_putchar(ch);
+                   uptr->u3 &= ~CON_OUTPUT;
+               }
            }
        }
        break;

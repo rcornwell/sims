@@ -1333,7 +1333,7 @@ rd:
                  sim_debug(DEBUG_DETAIL, dptr,
                      "RD next unit=%d %02x %02x %02x %02x %02x %02x %02x %02x\n",
                      unit, da[0], da[1], da[2], da[3], da[4], da[5], da[6], da[7]);
-                 if (data->ovfl == 0) {
+                 if (data->ovfl == 0 || cmd == DK_RD_CKD) {
                      uptr->u3 &= ~(0xff|DK_PARAM|DK_OVFLOW);
                      chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                  } else {
@@ -1352,6 +1352,7 @@ rd:
                      "RD next unit=%d %02x %02x %02x %02x %02x %02x %02x %02x\n",
                      unit, da[0], da[1], da[2], da[3], da[4], da[5], da[6], da[7]);
                  uptr->u3 &= ~(0xff|DK_PARAM);
+                 data->ovfl = 0;
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                  break;
              }
