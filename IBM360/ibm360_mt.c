@@ -720,7 +720,7 @@ t_stat mt_srv(UNIT * uptr)
                     break;
               case 2:
                    uptr->u3 &= ~(MT_CMDMSK);
-                   set_devattn(addr, SNS_DEVEND|SNS_UNITEXP);
+                   set_devattn(addr, SNS_DEVEND);
                    mt_busy[bufnum] &= ~1;
                    break;
               case 3:

@@ -499,6 +499,8 @@ int  TransAddr(uint32 va, uint32 *pa) {
          }
          return 0;
      }
+     /* Clear whatever was in entry */
+     tlb[page & 0xff] = 0;
      /* TLB not correct, try loading correct entry */
      seg = (va >> seg_shift) & seg_mask;   /* Segment number to word address */
      page = (va >> page_shift) & page_index;
@@ -3357,7 +3359,7 @@ save_dbl:
                    storepsw(OPPSW, IRC_SPEC);
                 } else {
                    addr1 = regs[reg1] & AMASK;
-                   src1 = regs[reg1|1];
+                   src1 = regs[reg1|1] & AMASK;
                    addr2 = regs[R2(reg)] & AMASK;
                    src2 = regs[R2(reg)|1];
                    fill = (src2 >> 24) & 0xff;
@@ -3417,8 +3419,7 @@ save_dbl:
                    storepsw(OPPSW, IRC_SPEC);
                 } else {
                    addr1 = regs[reg1] & AMASK;
-                   src1 = regs[reg1|1];
-                   src1 &= AMASK;
+                   src1 = regs[reg1|1] & AMASK;
                    addr2 = regs[R2(reg)] & AMASK;
                    src2 = regs[R2(reg)|1];
                    fill = (src2 >> 24) & 0xff;

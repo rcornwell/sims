@@ -261,10 +261,11 @@ uint8  coml_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     switch (cmd & 0x3) {
     case 0x3:              /* Control */
          if (cmd == CMD_NOP)
-             break;
+             return SNS_CHNEND|SNS_DEVEND;
     case 0x2:              /* Read command */
     case 0x1:              /* Write command */
          uptr->u3 |= cmd;
+         uptr->u4 = 0;
          sim_activate(uptr, 200);
          return 0;
 
