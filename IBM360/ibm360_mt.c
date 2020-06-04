@@ -548,7 +548,6 @@ t_stat mt_srv(UNIT * uptr)
              sim_debug(DEBUG_DATA, dptr, "Write data unit=%d %d %02o\n\r",
                       unit, uptr->u4, ch);
              uptr->hwmark = uptr->u4;
-             break;
          }
          sim_activate(uptr, 20);
          break;
@@ -721,7 +720,7 @@ t_stat mt_srv(UNIT * uptr)
                     break;
               case 2:
                    uptr->u3 &= ~(MT_CMDMSK);
-                   set_devattn(addr, SNS_DEVEND|SNS_UNITEXP);
+                   set_devattn(addr, SNS_DEVEND);
                    mt_busy[bufnum] &= ~1;
                    break;
               case 3:

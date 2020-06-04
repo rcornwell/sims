@@ -47,6 +47,7 @@
 #define CON_INPUT       0x100   /* Input ready for unit */
 #define CON_CR          0x200   /* Output at beginning of line */
 #define CON_REQ         0x400   /* Request key pressed */
+#define CON_OUTPUT      0x800   /* Output characters since R */
 
 /* Input buffer pointer held in u4 */
 
@@ -115,7 +116,7 @@ con_ini(UNIT *uptr, t_bool f) {
 }
 
 uint8  con_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
-     int                 u = (uptr - con_unit);
+    int                 u = (uptr - con_unit);
 
     if ((uptr->u3 & CON_MSK) != 0)
         return SNS_BSY;
@@ -135,9 +136,13 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
          if ((uptr->u3 & CON_INPUT) == 0 &&
                 (con_data[u].inptr == 0 || uptr->u3 & CON_CR)) {
              /* Activate input so we can get response */
+             if ((uptr->u3 & CON_OUTPUT) != 0) {
+                sim_putchar('\r');
+                sim_putchar('\n');
+                uptr->u3 &= ~CON_OUTPUT;
+             }
              sim_putchar('I');
              sim_putchar(' ');
-              uptr->u5 &= ~CON_CR;
          }
          uptr->u4 = 0;
          uptr->u3 |= cmd & CON_MSK;
@@ -154,7 +159,8 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
          if (uptr->u3 & CON_CR) {
             sim_putchar('R');
             sim_putchar(' ');
-             uptr->u3 &= ~CON_CR;
+            uptr->u3 &= ~CON_CR;
+            uptr->u3 |= CON_OUTPUT;
          }
          return 0;
 
@@ -167,7 +173,7 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
          return SNS_CHNEND|SNS_DEVEND;
 
     case 0:               /* Status */
-       break;
+         break;
 
     case 4:              /* Sense */
          uptr->u3 |= cmd & CON_MSK;
@@ -192,10 +198,11 @@ con_srv(UNIT *uptr) {
     t_stat              r = SCPE_ARG;       /* Force error if not set */
     uint8               ch;
     int                 i;
+    int                 delay = 1000;
 
 
     switch (cmd) {
-    case 0x4:
+    case 4:              /* Sense */
          sim_debug(DEBUG_CMD, &con_dev, "%d: Cmd SNS %02x\n", u, uptr->u5);
          /* Check if request pending */
          ch = uptr->u5;
@@ -211,14 +218,26 @@ con_srv(UNIT *uptr) {
                sim_putchar('\r');
                sim_putchar('\n');
                uptr->u3 |= CON_CR;
+               uptr->u3 &= ~CON_OUTPUT;
            }
            uptr->u3 &= ~CON_MSK;
            chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+           delay = 40000;
        } else {
-           ch = ebcdic_to_ascii[ch];
-           if (!isprint(ch))
-               ch = '_';
-           sim_putchar(ch);
+           if (ch == 0x15) {
+               sim_putchar('\r');
+               sim_putchar('\n');
+               uptr->u3 |= CON_CR;
+               uptr->u3 &= ~CON_OUTPUT;
+           } else {
+               ch = ebcdic_to_ascii[ch];
+               if (ch != 0) {
+                   if (!isprint(ch))
+                       ch = '_';
+                   sim_putchar(ch);
+                   uptr->u3 &= ~CON_OUTPUT;
+               }
+           }
        }
        break;
 
@@ -267,8 +286,9 @@ con_srv(UNIT *uptr) {
           case '\r':
           case '\n':
                 sim_debug(DEBUG_DATA, &con_dev, "%d: ent\n", u);
-                   uptr->u3 |= CON_INPUT;
+                uptr->u3 |= CON_INPUT;
                 uptr->u3 |= CON_CR;
+                uptr->u3 &= ~CON_OUTPUT;
                 sim_putchar('\r');
                 sim_putchar('\n');
                /* Fall through */
@@ -331,7 +351,7 @@ con_srv(UNIT *uptr) {
           set_devattn(addr, SNS_ATTN);
           uptr->u3 &= ~CON_REQ;
     }
-    sim_activate(uptr, 500);
+    sim_activate(uptr, delay);
     return SCPE_OK;
 }
 

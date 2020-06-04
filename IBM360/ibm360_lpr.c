@@ -289,11 +289,13 @@ lpr_attach(UNIT * uptr, CONST char *file)
 {
     t_stat              r;
 
+    sim_switches |= SWMASK ('A');   /* Position to EOF */
     if ((r = attach_unit(uptr, file)) != SCPE_OK)
        return r;
     uptr->u3 &= ~(LPR_FULL|LPR_CMDMSK);
     uptr->u4 = 0;
     uptr->u5 = 0;
+    set_devattn(GET_UADDR(uptr->u3), SNS_DEVEND);
     return SCPE_OK;
 }
 

@@ -137,48 +137,48 @@ const char ascii_to_ebcdic[128] = {
    /*  P     Q     R     S     T     U     V     W */
     0xd7, 0xd8, 0xd9, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6,
    /*  X     Y     Z     [     \     ]     ^     _ */
-    0xe7, 0xe8, 0xe9, 0x4a, 0xff, 0x5a, 0x5f, 0x6d,
+    0xe7, 0xe8, 0xe9, 0xff, 0xe0, 0xff, 0x5f, 0x6d,
    /*  `     a     b     c     d     e     f     g */
-    0x7c, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,     /* 140 - 177 */
+    0x79, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,     /* 140 - 177 */
    /*  h     i     j     k     l     m     n     o */
     0x88, 0x89, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96,
    /*  p     q     r     s     t     u     v      w */
     0x97, 0x98, 0x99, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6,
    /*  x     y     z     {     |     }     ~   del */
-    0xa7, 0xa8, 0xa9, 0xff, 0x47, 0xff, 0xff, 0x6d,
+    0xa7, 0xa8, 0xa9, 0xc0, 0x47, 0xd0, 0xa1, 0x6d,
 };
 
 const char ebcdic_to_ascii[256] = {
 /*      0     1     2     3    4     5      6   7 */
-    0x00, 0x01, 0x02, 0x03, 0xFF, 0x09, 0xff, 0x7f,      /* 0x */
+    0x00, 0x01, 0x02, 0x03, 0xFF, 0x09, 0x00, 0x7f,      /* 0x */
     0xff, 0xff, 0xff, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
     0x10, 0x11, 0x12, 0x19, 0x0a, 0x08, 0x08, 0xff,      /* 1x */
     0x18, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0x1c, 0xff, 0xff, 0x0a, 0xff, 0xff,      /* 2x */
     0xff, 0xff, 0xff, 0xff, 0xff, 0x05, 0x06, 0x07,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0x1e, 0xff, 0xff,      /* 3x */
+    0xff, 0xff, 0xff, 0xff, 0xff, 0x1e, 0x00, 0xff,      /* 3x */
     0xff, 0xff, 0xff, 0xff, 0x14, 0x15, 0xff, 0xff,
     ' ',  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,      /* 4x */
     0xff, 0xff, '[',  '.',  '<',  '(',  '+',  '|',
     '&',  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,      /* 5x */
-    0xff, 0xff, ']',  '$',  '*',  ')',  ';',  '^',
+    0xff, 0xff, '!',  '$',  '*',  ')',  ';',  '^',
     '-',  '/',  0xff, 0xff, 0xff, 0xff, 0xff, 0xff,      /* 6x */
     0xff, 0xff, 0xff, ',',  '%',  '_',  '>',  '?',
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,      /* 7x */
-    0xff, 0xff, ':',  '#',  '@',  '\'', '=',  '"',
+    0xff, '`',  ':',  '#',  '@',  '\'', '=',  '"',
     0xff, 'a',  'b',  'c',  'd',  'e',  'f',  'g',       /* 8x */
     'h',  'i',  0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 'j',  'k',  'l',  'm',  'n',  'o',  'p',       /* 9x */
     'q',  'r',  0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 's',  't',  'u',  'v',  'w',  'x',       /* Ax */
+    0xff, '~',  's',  't',  'u',  'v',  'w',  'x',       /* Ax */
     'y',  'z',  0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,      /* Bx */
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 'A',  'B',  'C',  'D',  'E',  'F',  'G',       /* Cx */
+    '{',  'A',  'B',  'C',  'D',  'E',  'F',  'G',       /* Cx */
     'H',  'I',  0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 'J',  'K',  'L',  'M',  'N',  'O',  'P',       /* Dx */
+    '}',  'J',  'K',  'L',  'M',  'N',  'O',  'P',       /* Dx */
     'Q',  'R',  0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 'S',  'T',  'U',  'V',  'W',  'X',       /* Ex */
+    '\\', 0xff, 'S',  'T',  'U',  'V',  'W',  'X',       /* Ex */
     'Y',  'Z',  0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     '0',  '1',  '2',  '3',  '4',  '5',  '6',  '7',       /* Fx */
     '8',  '9',  0xff, 0xff, 0xff, 0xff, 0xff, 0xff
@@ -204,6 +204,7 @@ typedef struct _opcode {
 #define RS       03
 #define SI       04
 #define SS       05
+#define XX       06
 #define LNMSK    07
 #define ONEOP    010
 #define IMDOP    020
@@ -365,10 +366,42 @@ t_opcode  optab[] = {
        { OP_SP,        "SP",   SS|TWOOP },
        { OP_MP,        "MP",   SS|TWOOP },
        { OP_DP,        "DP",   SS|TWOOP },
+       { OP_MVCL,      "MVCL", RR },
+       { OP_CLCL,      "CLCL", RR },
+       { OP_STNSM,     "STNSM", SI },
+       { OP_STOSM,     "STOSM", SI },
+       { OP_SIGP,      "SIGP",  RS },
+       { OP_MC,        "MC",    SI },
+       { OP_370,       "",      XX },
+       { OP_STCTL,     "STCTL", RS },
+       { OP_LCTL,      "LCTL",  RS },
+       { OP_CS,        "CS",    RS },
+       { OP_CDS,       "CDS",   RS },
+       { OP_CLM,       "CLM",   RS },
+       { OP_STCM,      "STCM",  RS },
+       { OP_ICM,       "ICM",   RS },
+       { OP_SRP,       "SRP",   SS|TWOOP },
        { 0,            NULL, 0 }
 };
 
-
+t_opcode  soptab[] = {
+       { 0x02,        "STIDP", RS },
+       { 0x03,        "STIDC", RS },
+       { 0x04,        "SCK",   RS },
+       { 0x05,        "STCK",  RS },
+       { 0x06,        "SCKC",  RS },
+       { 0x07,        "STCKC", RS },
+       { 0x08,        "SPT",   RS },
+       { 0x09,        "STPT",  RS },
+       { 0x0A,        "SPKA",  RS },
+       { 0x0B,        "IPK",   RS },
+       { 0x0D,        "PTLB",  RS|ZEROOP },
+       { 0x10,        "SPX",   RS },
+       { 0x11,        "STPX",  RS },
+       { 0x12,        "STAP",  RS },
+       { 0x13,        "RRB",   RS },
+       { 0,           NULL,    0}
+};
 
 void fprint_inst(FILE *of, uint16 *val) {
 uint8           inst = (val[0] >> 8) &  0xff;
@@ -393,6 +426,21 @@ t_opcode        *tab;
                     fprintf(of, "%d,", (val[0] >> 4) & 0xf);
                     fprint_val(of, val[1] & 0xfff, 16, 12, PV_RZRO);
                     fprintf(of, "(%d,%d)", val[0] & 0xf, (val[1] >> 12) & 0xf);
+                    break;
+          case XX:
+                    inst = val[0] & 0xff;
+                    for (tab = soptab; tab->name != NULL; tab++) {
+                       if (tab->opbase == inst) {
+                          fputs(tab->name, of);
+                          if ((tab->type & ZEROOP) == 0) {
+                              fputc(' ', of);
+                              fprint_val(of, val[1] & 0xfff, 16, 12, PV_RZRO);
+                              if (val[1] & 0xf000)
+                                  fprintf(of, "(%d)", (val[1] >> 12) & 0xf);
+                          }
+                          break;
+                       }
+                    }
                     break;
           case RS:
                     fprintf(of, "%d,", (val[0] >> 4) & 0xf);
@@ -428,8 +476,11 @@ t_opcode        *tab;
                     fprintf(of, "%d)", (val[2] >> 12) & 0xf);
                     break;
           }
+          break;
       }
    }
+   if (tab->name == NULL)
+       fprintf(of, "?%02x?", inst);
 }
 
 /* Symbolic decode
@@ -468,6 +519,7 @@ if (sw & SWMASK ('M')) {
           case RR:
                     l = 2;
                     break;
+          case XX:
           case RX:
           case RS:
           case SI:
@@ -519,6 +571,7 @@ if (sw & SWMASK ('C')) {
    sval[l++] = num;
    fprint_val(of, num, 16, 16, PV_RZRO);
    fputc(' ', of);
+   l = i;
    for(; i < 6; i+=2)
        fputs("     ", of);
    fputc(' ', of);
