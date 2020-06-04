@@ -151,12 +151,12 @@ are supported on most device.
 
 # IBM 360 simulator.
 
-Currently will run IPL TOS/360, DOS/360, OS/360. TSO support still in progress.
-IBM 360/67 support added for MTS early versions. 
+Currently will run TOS/360, DOS/360, OS/360. IBM 360/67 support added for MTS early
+versions.  IBM 370 support will currently run VM/370, MVS, TSS.
 Support for the following units:
 
     DASD (Disk) Up to 4 devices of 8.
-    * 2301, 2302, 2303, 2305, 2311, 2314, 3330.
+    * 2301, 2302, 2303, 2305, 2311, 2314, 3330, 3340, 3350.
     
     Tape, 8 devices.
     * 2400 (7 track and 9 track).
@@ -168,7 +168,7 @@ Support for the following units:
     * 1050 Console
 
     Communications
-    * 2703 with 16 lines of 2741 or 1050.
+    * 2703 with 16 lines of 1050.
 
 # SEL32 Development Simulator
 
