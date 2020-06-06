@@ -1412,6 +1412,18 @@ rd:
              *da = ch;
              uptr->u3 |= DK_CYL_DIRTY;
              if (count == 4) {
+                  uint8 *dax = &data->cbuf[data->tstart];
+                  ch = 0;
+                  /* Check if we wrote all zeros, */
+                  for (i = 0; i < 5; i++)
+                     ch |= dax[i];
+                  if (ch == 0) {  /* If we did reset HA to correct value */
+                     dax[0] = 0;
+                     dax[1] = (uptr->u4 >> 24) & 0xff;
+                     dax[2] = (uptr->u4 >> 16) & 0xff;
+                     dax[3] = (uptr->u4 >>  8) & 0xff;
+                     dax[4] = uptr->u4 & 0xff;
+                  }
                   uptr->u6 = cmd;
                   uptr->u3 &= ~(0xff|DK_PARAM);
                   chan_end(addr, SNS_CHNEND|SNS_DEVEND);
@@ -1707,6 +1719,26 @@ dasd_reset(DEVICE * dptr)
     return SCPE_OK;
 }
 
+
+static uint8  ipl1rec[28] = {0xC9,0xD7,0xD3,0xF1,   /* IPL1 */
+                             0x00,0x06,0x00,0x00,0x00,0x00,0x00,0x0F,
+                             0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x01,
+                             0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+static uint8  ipl2key[4] = {0xC9,0xD7,0xD3,0xF2};   /* IPL2 */
+static uint8  volrec[84] = {0xE5,0xD6,0xD3,0xF1,    /* VOL1, key */
+                            0xE5,0xD6,0xD3,0xF1,    /* VOL1 */
+                            0xF1,0xF1,0xF1,0xF1,0xF1,0xF1,  /* volid */
+                            0x40,0x00,0x00,0x00,0x01,0x01,  /* CCHHR */
+                            0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,
+                            0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,
+                            0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,  
+                            0x40,0xE2,0xC9,0xD4,0xC8,0x40,  /* SIMH */
+                            0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,
+                            0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,
+                            0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40, 
+                            0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,
+                            0x40,0x40};
+
 int
 dasd_format(UNIT * uptr, int flag) {
     struct dasd_header  hdr;
@@ -1756,9 +1788,42 @@ dasd_format(UNIT * uptr, int flag) {
                 data->cbuf[pos++] = (hd >> 8);
                 data->cbuf[pos++] = (hd & 0xff);
                 data->cbuf[pos++] = 1;              /* Rec */
-                data->cbuf[pos++] = 0;              /* keylen */
-                data->cbuf[pos++] = 0;              /* dlen */
-                data->cbuf[pos++] = 0;              /*  */
+                if (cyl == 0 && hd == 0 && (sim_switches & SWMASK ('V')) != 0) {
+                    int p;
+                    /* R1, IPL1 */
+                    data->cbuf[pos++] = 4;              /* keylen */
+                    data->cbuf[pos++] = 0;              /* dlen */
+                    data->cbuf[pos++] = 24;              /*  */
+                    for (p = 0; p < sizeof (ipl1rec); p++) 
+                        data->cbuf[pos++] = ipl1rec[p];
+                    data->cbuf[pos++] = (cyl >> 8);   /* R2 */
+                    data->cbuf[pos++] = (cyl & 0xff);
+                    data->cbuf[pos++] = (hd >> 8);
+                    data->cbuf[pos++] = (hd & 0xff);
+                    data->cbuf[pos++] = 2;              /* Rec */
+                    /* R2, IPL2 */
+                    data->cbuf[pos++] = 4;              /* keylen */
+                    data->cbuf[pos++] = 0;              /* dlen */
+                    data->cbuf[pos++] = 144;            /*  */
+                    for (p = 0; p < sizeof (ipl2key); p++) 
+                        data->cbuf[pos++] = ipl2key[p];
+                    pos += 144;
+                    data->cbuf[pos++] = (cyl >> 8);   /* R3 */
+                    data->cbuf[pos++] = (cyl & 0xff);
+                    data->cbuf[pos++] = (hd >> 8);
+                    data->cbuf[pos++] = (hd & 0xff);
+                    data->cbuf[pos++] = 3;              /* Rec */
+                    /* R3, VOL1 */
+                    data->cbuf[pos++] = 4;              /* keylen */
+                    data->cbuf[pos++] = 0;              /* dlen */
+                    data->cbuf[pos++] = 80;             /*  */
+                    for (p = 0; p < sizeof (volrec); p++) 
+                        data->cbuf[pos++] = volrec[p];
+                } else {
+                    data->cbuf[pos++] = 0;              /* keylen */
+                    data->cbuf[pos++] = 0;              /* dlen */
+                    data->cbuf[pos++] = 0;              /*  */
+                }
                 data->cbuf[pos++] = 0xff;           /* End record */
                 data->cbuf[pos++] = 0xff;
                 data->cbuf[pos++] = 0xff;
@@ -1972,6 +2037,7 @@ t_stat dasd_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
     }
     fprintf (st, "Attach command switches\n");
     fprintf (st, "    -I          Initialize the drive. No prompting.\n");
+    fprintf (st, "    -V          Adds in a volume label of 11111\n");
     fprint_set_help (st, dptr);
     fprint_show_help (st, dptr);
     return SCPE_OK;
