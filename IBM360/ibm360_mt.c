@@ -197,7 +197,7 @@ DEVICE              mtb_dev = {
     "MTB", mtb_unit, NULL, mt_mod,
     NUM_UNITS_MT, 8, 15, 1, 8, 8,
     NULL, NULL, &mt_reset, &mt_boot, &mt_attach, &mt_detach,
-    &mtb_dib, DEV_BUF_NUM(1) | DEV_DISABLE | DEV_DEBUG | DEV_TAPE, 0, dev_debug
+    &mtb_dib, DEV_BUF_NUM(1) | DEV_DISABLE | DEV_DIS | DEV_DEBUG | DEV_TAPE, 0, dev_debug
 };
 #endif
 

@@ -90,7 +90,13 @@ t_stat              lpr_getlpp(FILE *, UNIT *, int32, CONST void *);
 UNIT                lpr_unit[] = {
     {UDATA(lpr_srv, UNIT_LPR, 55), 300, UNIT_ADDR(0x0E)},       /* A */
 #if NUM_DEVS_LPR > 1
-    {UDATA(lpr_srv, UNIT_LPR, 55), 300, UNIT_ADDR(0x1E)},       /* B */
+    {UDATA(lpr_srv, UNIT_LPR | UNIT_DIS, 55), 300, UNIT_ADDR(0x1E)},       /* B */
+#if NUM_DEVS_LPR > 2
+    {UDATA(lpr_srv, UNIT_LPR | UNIT_DIS, 55), 300, UNIT_ADDR(0x40E)},       /* B */
+#if NUM_DEVS_LPR > 3
+    {UDATA(lpr_srv, UNIT_LPR | UNIT_DIS, 55), 300, UNIT_ADDR(0x41E)},       /* B */
+#endif
+#endif
 #endif
 };
 

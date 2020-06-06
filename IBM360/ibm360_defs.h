@@ -60,11 +60,11 @@
 #define     MAX_MUX         2
 
 /* Define number of supported units for each device type */
-#define NUM_DEVS_CDP        1
-#define NUM_DEVS_CDR        1
+#define NUM_DEVS_CDP        4
+#define NUM_DEVS_CDR        4
 #define NUM_DEVS_CON        1
-#define NUM_DEVS_LPR        1
-#define NUM_DEVS_MT         1
+#define NUM_DEVS_LPR        4
+#define NUM_DEVS_MT         2
 #define NUM_UNITS_MT        8
 #define NUM_DEVS_DASD       4
 #define NUM_UNITS_DASD      8

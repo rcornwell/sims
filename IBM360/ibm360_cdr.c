@@ -85,7 +85,13 @@ t_stat              cdr_detach(UNIT *);
 UNIT                cdr_unit[] = {
    {UDATA(cdr_srv, UNIT_CDR, 0), 300, UNIT_ADDR(0x0C)},       /* A */
 #if NUM_DEVS_CDR > 1
-   {UDATA(cdr_srv, UNIT_CDR, 0), 300, UNIT_ADDR(0x1C)},       /* B */
+   {UDATA(cdr_srv, UNIT_CDR | UNIT_DIS, 0), 300, UNIT_ADDR(0x1C)},       /* B */
+#if NUM_DEVS_CDR > 2
+   {UDATA(cdr_srv, UNIT_CDR | UNIT_DIS, 0), 300, UNIT_ADDR(0x40C)},       /* B */
+#if NUM_DEVS_CDR > 3
+   {UDATA(cdr_srv, UNIT_CDR | UNIT_DIS, 0), 300, UNIT_ADDR(0x41C)},       /* B */
+#endif
+#endif
 #endif
 };
 

@@ -80,7 +80,13 @@ t_stat              cdp_detach(UNIT *);
 UNIT                cdp_unit[] = {
     {UDATA(cdp_srv, UNIT_CDP, 0), 600, UNIT_ADDR(0x00D) },       /* A */
 #if NUM_DEVS_CDP > 1
-    {UDATA(cdp_srv, UNIT_CDP, 0), 600, UNIT_ADDR(0x01D)},       /* A */
+    {UDATA(cdp_srv, UNIT_CDP | UNIT_DIS, 0), 600, UNIT_ADDR(0x01D)},       /* A */
+#if NUM_DEVS_CDP > 2
+    {UDATA(cdp_srv, UNIT_CDP | UNIT_DIS, 0), 600, UNIT_ADDR(0x40D)},       /* A */
+#if NUM_DEVS_CDP > 3
+    {UDATA(cdp_srv, UNIT_CDP | UNIT_DIS, 0), 600, UNIT_ADDR(0x41D)},       /* A */
+#endif
+#endif
 #endif
 };
 
