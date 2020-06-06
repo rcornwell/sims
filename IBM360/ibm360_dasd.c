@@ -1189,6 +1189,9 @@ sense_end:
     case DK_RD_HA:           /* Read home address */
          /* Wait until next index pulse */
          if (state == DK_POS_INDEX) {
+             uint8 *dax = &data->cbuf[data->tstart];
+             sim_debug(DEBUG_DETAIL, dptr, "RD HA f unit=%d %02x %02x %02x %02x %02x\n",
+                    unit, dax[0], dax[1], dax[2], dax[3], dax[4]);
              uptr->u3 |= DK_PARAM;
          }
 
@@ -1389,6 +1392,9 @@ rd:
     case DK_WR_HA:           /* Write home address */
          /* Wait for index */
          if (state == DK_POS_INDEX) {
+             uint8 *dax = &data->cbuf[data->tstart];
+             sim_debug(DEBUG_DETAIL, dptr, "WR HA unit=%d %02x %02x %02x %02x %02x\n",
+                    unit, dax[0], dax[1], dax[2], dax[3], dax[4]);
              /* Check if command ok based on mask */
              if ((data->filemsk & DK_MSK_WRT) != DK_MSK_ALLWRT) {
                  uptr->u5 |= SNS_CMDREJ;
@@ -1419,16 +1425,19 @@ rd:
                      ch |= dax[i];
                   if (ch == 0) {  /* If we did reset HA to correct value */
                      dax[0] = 0;
-                     dax[1] = (uptr->u4 >> 24) & 0xff;
-                     dax[2] = (uptr->u4 >> 16) & 0xff;
-                     dax[3] = (uptr->u4 >>  8) & 0xff;
+                     dax[1] = (uptr->u4 >> 16) & 0xff;
+                     dax[2] = (uptr->u4 >>  8) & 0xff;
+                     dax[3] = 0;
                      dax[4] = uptr->u4 & 0xff;
                   }
+             sim_debug(DEBUG_DETAIL, dptr, "WR HA f unit=%d %02x %02x %02x %02x %02x\n",
+                    unit, dax[0], dax[1], dax[2], dax[3], dax[4]);
                   uptr->u6 = cmd;
                   uptr->u3 &= ~(0xff|DK_PARAM);
-                  chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+                  /* Write end of track marker */
                   for(i = 1; i < 9; i++)
                      da[i] = 0xff;
+                  chan_end(addr, SNS_CHNEND|SNS_DEVEND);
              }
          }
          break;
@@ -1595,10 +1604,11 @@ wrckd:
              } else if (state == DK_POS_DATA && data->count == data->dlen) {
                  if (cmd == DK_WR_HA || cmd == DK_WR_R0 || cmd == DK_WR_CKD ||
                       cmd == DK_WR_SCKD) {
+                      /* Write end of track marker */
                       for(i = 0; i < 8; i++)
                          da[i] = 0xff;
                       sim_debug(DEBUG_DETAIL, dptr, "WCKD eot unit=%d\n",unit);
-                      data->ovfl = 0;
+                      data->ovfl = 0;     /* Kill overflow if any */
                  }
                  if (data->ovfl == 0 || cmd == DK_WR_CKD || cmd == DK_WR_SCKD) {
                      uptr->u6 = cmd;
