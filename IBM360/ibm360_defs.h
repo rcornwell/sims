@@ -1,6 +1,6 @@
 /* ibm360_defs.h: IBM 360 simulator definitions
 
-   Copyright (c) 2017, Richard Cornwell
+   Copyright (c) 2017-2020, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -86,12 +86,8 @@ typedef struct dib {
 
 } DIB;
 
-#define DEV_V_ADDR        DEV_V_UF        /* Pointer to device address */
-#define DEV_ADDR_MASK     (0x7ff << DEV_V_ADDR)
 #define DEV_V_UADDR       (DEV_V_UF + 10)        /* Device address in Unit */
 #define DEV_UADDR         (1 << DEV_V_UADDR)
-#define GET_DADDR(x)      (0x7ff & ((x) >> DEV_V_ADDR))
-#define DEV_ADDR(x)       ((x) << DEV_V_ADDR)
 
 #define UNIT_V_ADDR       20
 #define UNIT_ADDR_MASK    (0x7ff << UNIT_V_ADDR)

@@ -1,6 +1,6 @@
 /* ibm360_lpr.c: IBM 360 Line Printer
 
-   Copyright (c) 2017, Richard Cornwell
+   Copyright (c) 2017-2020, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -48,6 +48,8 @@
 #define LPR_CMDMSK     0xff       /* Mask command part. */
 #define LPR_FULL       0x100      /* Buffer full */
 
+/* Upper 11 bits of u3 hold the device address */
+
 /* u4 holds current line */
 /* in u5 packs sense byte 0,1 and 3 */
 /* Sense byte 0 */
@@ -60,6 +62,11 @@
 #define SNS_SEQUENCE    0x02      /* Unusual sequence */
 #define SNS_CHN9        0x01      /* Channel 9 on printer */
 /* u6 hold buffer position */
+
+#define CMD    u3
+#define LINE   u4
+#define SNS    u5
+#define POS    u6
 
 
 /* std devices. data structures
@@ -138,7 +145,7 @@ lpr_setlpp(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
     if (i < 20 || i > 100)
        return SCPE_ARG;
     uptr->capac = i;
-    uptr->u4 = 0;
+    uptr->LINE = 0;
     return SCPE_OK;
 }
 
@@ -163,7 +170,7 @@ print_line(UNIT * uptr)
     memset(out, ' ', sizeof(out));
 
     /* Scan each column */
-    for (i = 0; i < uptr->u6; i++) {
+    for (i = 0; i < uptr->POS; i++) {
        int         ch = lpr_data[u].lbuff[i];
 
        ch = ebcdic_to_ascii[ch];
@@ -182,9 +189,9 @@ print_line(UNIT * uptr)
     sim_fwrite(&out, 1, i, uptr->fileref);
     uptr->pos += i;
     sim_debug(DEBUG_DETAIL, &lpr_dev, "%s", out);
-    uptr->u4++;
-    if ((t_addr)uptr->u4 > uptr->capac) {
-       uptr->u4 = 1;
+    uptr->LINE++;
+    if ((t_addr)uptr->LINE > uptr->capac) {
+       uptr->LINE = 1;
     }
 
     memset(&lpr_data[u].lbuff[0], 0, 144);
@@ -193,7 +200,7 @@ print_line(UNIT * uptr)
 
 uint8 lpr_startcmd(UNIT * uptr, uint16 chan, uint8 cmd)
 {
-    if ((uptr->u3 & LPR_CMDMSK) != 0) {
+    if ((uptr->CMD & LPR_CMDMSK) != 0) {
        if ((uptr->flags & UNIT_ATT) != 0)
             return SNS_BSY;
        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
@@ -203,35 +210,35 @@ uint8 lpr_startcmd(UNIT * uptr, uint16 chan, uint8 cmd)
 
     switch (cmd & 0x3) {
     case 1:              /* Write command */
-         uptr->u3 &= ~(LPR_CMDMSK);
-         uptr->u3 |= (cmd & LPR_CMDMSK);
+         uptr->CMD &= ~(LPR_CMDMSK);
+         uptr->CMD |= (cmd & LPR_CMDMSK);
          sim_activate(uptr, 10);          /* Start unit off */
-         uptr->u5 = 0;
-         uptr->u6 = 0;
+         uptr->SNS = 0;
+         uptr->POS = 0;
          return 0;
 
     case 3:              /* Carrage control */
-         uptr->u3 &= ~(LPR_CMDMSK);
-         uptr->u3 |= (cmd & LPR_CMDMSK);
+         uptr->CMD &= ~(LPR_CMDMSK);
+         uptr->CMD |= (cmd & LPR_CMDMSK);
          sim_activate(uptr, 10);          /* Start unit off */
-         uptr->u5 = 0;
-         uptr->u6 = 0;
+         uptr->SNS = 0;
+         uptr->POS = 0;
          return SNS_CHNEND;
 
     case 0:               /* Status */
          if (cmd == 0x4) {           /* Sense */
-             uptr->u3 &= ~(LPR_CMDMSK);
-             uptr->u3 |= (cmd & LPR_CMDMSK);
+             uptr->CMD &= ~(LPR_CMDMSK);
+             uptr->CMD |= (cmd & LPR_CMDMSK);
              sim_activate(uptr, 10);       /* Start unit off */
              return 0;
          }
          break;
 
     default:              /* invalid command */
-         uptr->u5 |= SNS_CMDREJ;
+         uptr->SNS |= SNS_CMDREJ;
          break;
     }
-    if (uptr->u5 & 0xff)
+    if (uptr->SNS & 0xff)
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     return SNS_CHNEND|SNS_DEVEND;
 }
@@ -239,43 +246,43 @@ uint8 lpr_startcmd(UNIT * uptr, uint16 chan, uint8 cmd)
 /* Handle transfer of data for printer */
 t_stat
 lpr_srv(UNIT *uptr) {
-    int             addr = GET_UADDR(uptr->u3);
+    int             addr = GET_UADDR(uptr->CMD);
     int             u = (uptr - lpr_unit);
-    int             cmd = (uptr->u3 & 0x7);
+    int             cmd = (uptr->CMD & 0x7);
 
     if (cmd == 4) {
-         uint8 ch = uptr->u5;
-         uptr->u3 &= ~(LPR_CMDMSK);
+         uint8 ch = uptr->SNS;
+         uptr->CMD &= ~(LPR_CMDMSK);
          chan_write_byte(addr, &ch);
          chan_end(addr, SNS_DEVEND|SNS_CHNEND);
          return SCPE_OK;
     }
 
     if (cmd == 7) {
-       uptr->u3 &= ~(LPR_FULL|LPR_CMDMSK);
-       uptr->u6 = 0;
+       uptr->CMD &= ~(LPR_FULL|LPR_CMDMSK);
+       uptr->POS = 0;
        chan_end(addr, SNS_DEVEND|SNS_CHNEND);
        return SCPE_OK;
     }
 
-    if ((uptr->u3 & LPR_FULL) || cmd == 0x3) {
+    if ((uptr->CMD & LPR_FULL) || cmd == 0x3) {
        print_line(uptr);
-       uptr->u3 &= ~(LPR_FULL|LPR_CMDMSK);
-       uptr->u6 = 0;
+       uptr->CMD &= ~(LPR_FULL|LPR_CMDMSK);
+       uptr->POS = 0;
        set_devattn(addr, SNS_DEVEND);
        return SCPE_OK;
     }
 
     /* Copy next column over */
-    if (cmd == 1 && (uptr->u3 & LPR_FULL) == 0) {
-       if(chan_read_byte(addr, &lpr_data[u].lbuff[uptr->u6])) {
-           uptr->u3 |= LPR_FULL;
+    if (cmd == 1 && (uptr->CMD & LPR_FULL) == 0) {
+       if(chan_read_byte(addr, &lpr_data[u].lbuff[uptr->POS])) {
+           uptr->CMD |= LPR_FULL;
        } else {
            sim_activate(uptr, 20);
-           uptr->u6++;
+           uptr->POS++;
        }
-       if (uptr->u3 & LPR_FULL || uptr->u6 > 132) {
-           uptr->u3 |= LPR_FULL;
+       if (uptr->CMD & LPR_FULL || uptr->POS > 132) {
+           uptr->CMD |= LPR_FULL;
            chan_end(addr, SNS_CHNEND);
            sim_activate(uptr, 5000);
        }
@@ -285,9 +292,9 @@ lpr_srv(UNIT *uptr) {
 
 void
 lpr_ini(UNIT *uptr, t_bool f) {
-    uptr->u3 &= ~(LPR_FULL|LPR_CMDMSK);
-    uptr->u4 = 0;
-    uptr->u5 = 0;
+    uptr->CMD &= ~(LPR_FULL|LPR_CMDMSK);
+    uptr->LINE = 0;
+    uptr->SNS = 0;
 }
 
 t_stat
@@ -298,17 +305,17 @@ lpr_attach(UNIT * uptr, CONST char *file)
     sim_switches |= SWMASK ('A');   /* Position to EOF */
     if ((r = attach_unit(uptr, file)) != SCPE_OK)
        return r;
-    uptr->u3 &= ~(LPR_FULL|LPR_CMDMSK);
-    uptr->u4 = 0;
-    uptr->u5 = 0;
-    set_devattn(GET_UADDR(uptr->u3), SNS_DEVEND);
+    uptr->CMD &= ~(LPR_FULL|LPR_CMDMSK);
+    uptr->LINE = 0;
+    uptr->SNS = 0;
+    set_devattn(GET_UADDR(uptr->CMD), SNS_DEVEND);
     return SCPE_OK;
 }
 
 t_stat
 lpr_detach(UNIT * uptr)
 {
-    if (uptr->u3 & LPR_FULL)
+    if (uptr->CMD & LPR_FULL)
         print_line(uptr);
     return detach_unit(uptr);
 }

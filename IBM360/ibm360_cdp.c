@@ -1,6 +1,6 @@
 /* ibm360_cdp.c: IBM 360 Card Punch
 
-   Copyright (c) 2017, Richard Cornwell
+   Copyright (c) 2017-2020, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -48,6 +48,9 @@
 #define CDP_WR         0x01       /* Punch command */
 #define CDP_CARD       0x100      /* Unit has card in buffer */
 
+/* Upper 11 bits of u3 hold the device address */
+
+/* u4 holds current column, */
 
 /* in u5 packs sense byte 0,1 and 3 */
 /* Sense byte 0 */
@@ -59,6 +62,10 @@
 #define SNS_OVRRUN     0x04       /* Data overrun */
 #define SNS_SEQUENCE   0x02       /* Unusual sequence */
 #define SNS_CHN9       0x01       /* Channel 9 on printer */
+
+#define CMD    u3
+#define COL    u4
+#define SNS    u5
 
 
 
@@ -122,7 +129,7 @@ uint8  cdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
 
-    if ((uptr->u3 & (CDP_CARD|CDP_CMDMSK)) != 0) {
+    if ((uptr->CMD & (CDP_CARD|CDP_CMDMSK)) != 0) {
         if ((uptr->flags & UNIT_ATT) != 0)
             return SNS_BSY;
         return SNS_DEVEND|SNS_UNITCHK;
@@ -131,16 +138,16 @@ uint8  cdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     sim_debug(DEBUG_CMD, dptr, "CMD unit=%d %x\n", unit, cmd);
     switch (cmd & 0x7) {
     case 1:              /* Write command */
-         uptr->u3 &= ~(CDP_CMDMSK);
-         uptr->u3 |= (cmd & CDP_CMDMSK);
+         uptr->CMD &= ~(CDP_CMDMSK);
+         uptr->CMD |= (cmd & CDP_CMDMSK);
          sim_activate(uptr, 10);       /* Start unit off */
-         uptr->u4 = 0;
-         uptr->u5 = 0;
+         uptr->COL = 0;
+         uptr->SNS = 0;
          return 0;
 
     case 3:
          if (cmd != 0x3) {
-             uptr->u5 |= SNS_CMDREJ;
+             uptr->SNS |= SNS_CMDREJ;
              return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
          }
          return SNS_CHNEND|SNS_DEVEND;
@@ -149,16 +156,16 @@ uint8  cdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
          break;
 
     case 4:                /* Sense */
-         uptr->u3 &= ~(CDP_CMDMSK);
-         uptr->u3 |= (cmd & CDP_CMDMSK);
+         uptr->CMD &= ~(CDP_CMDMSK);
+         uptr->CMD |= (cmd & CDP_CMDMSK);
          sim_activate(uptr, 10);
          return 0;
 
     default:              /* invalid command */
-         uptr->u5 |= SNS_CMDREJ;
+         uptr->SNS |= SNS_CMDREJ;
          break;
     }
-    if (uptr->u5 & 0xff)
+    if (uptr->SNS & 0xff)
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     return SNS_CHNEND|SNS_DEVEND;
 }
@@ -169,19 +176,19 @@ t_stat
 cdp_srv(UNIT *uptr) {
     int       u = uptr-cdp_unit;
     uint16   *image = (uint16 *)(uptr->up7);
-    uint16    addr = GET_UADDR(uptr->u3);
+    uint16    addr = GET_UADDR(uptr->CMD);
 
     /* Handle sense */
-    if ((uptr->u3 & CDP_CMDMSK) == 0x4) {
-         uint8 ch = uptr->u5;
+    if ((uptr->CMD & CDP_CMDMSK) == 0x4) {
+         uint8 ch = uptr->SNS;
          chan_write_byte(addr, &ch);
          chan_end(addr, SNS_DEVEND|SNS_CHNEND);
          return SCPE_OK;
     }
 
-    if (uptr->u3 & CDP_CARD) {
+    if (uptr->CMD & CDP_CARD) {
         /* Done waiting, punch card */
-        uptr->u3 &= ~CDP_CARD;
+        uptr->CMD &= ~CDP_CARD;
         sim_debug(DEBUG_DETAIL, &cdp_dev, "unit=%d:punch\n", u);
         switch(sim_punch_card(uptr, image)) {
         /* If we get here, something is wrong */
@@ -197,20 +204,20 @@ cdp_srv(UNIT *uptr) {
     }
 
     /* Copy next column over */
-    if (uptr->u4 < 80) {
+    if (uptr->COL < 80) {
         uint8               ch = 0;
 
         if (chan_read_byte(addr, &ch)) {
-            uptr->u3 |= CDP_CARD;
+            uptr->CMD |= CDP_CARD;
         } else {
             sim_debug(DEBUG_DATA, &cdp_dev, "%d: Char < %02o\n", u, ch);
-            image[uptr->u4++] = sim_ebcdic_to_hol(ch);
-            if (uptr->u4 == 80) {
-                uptr->u3 |= CDP_CARD;
+            image[uptr->COL++] = sim_ebcdic_to_hol(ch);
+            if (uptr->COL == 80) {
+                uptr->CMD |= CDP_CARD;
             }
         }
-        if (uptr->u3 & CDP_CARD) {
-            uptr->u3 &= ~(CDP_CMDMSK);
+        if (uptr->CMD & CDP_CARD) {
+            uptr->CMD &= ~(CDP_CMDMSK);
             chan_end(addr, SNS_CHNEND);
             sim_activate(uptr, 10000);
         } else
@@ -229,7 +236,7 @@ cdp_attach(UNIT * uptr, CONST char *file)
        return r;
     if (uptr->up7 == 0) {
         uptr->up7 = calloc(80, sizeof(uint16));
-        uptr->u5 = 0;
+        uptr->SNS = 0;
     }
     return SCPE_OK;
 }
@@ -239,7 +246,7 @@ cdp_detach(UNIT * uptr)
 {
     uint16   *image = (uint16 *)(uptr->up7);
 
-    if (uptr->u5 & CDP_CARD)
+    if (uptr->SNS & CDP_CARD)
         sim_punch_card(uptr, image);
     if (uptr->up7 != 0)
         free(uptr->up7);

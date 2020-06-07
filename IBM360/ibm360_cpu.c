@@ -1,6 +1,6 @@
 /* ibm360_cpu.c: ibm 360 cpu simulator.
 
-   Copyright (c) 2019, Richard Cornwell
+   Copyright (c) 2019-2020, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),

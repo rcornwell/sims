@@ -1,6 +1,6 @@
 /* ibm360_cdr.c: IBM 360 Card Reader.
 
-   Copyright (c) 2017, Richard Cornwell
+   Copyright (c) 2017-2020, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -48,6 +48,9 @@
 #define CDP_WR         0x09       /* Punch command */
 #define CDR_CARD       0x100      /* Unit has card in buffer */
 
+/* Upper 11 bits of u3 hold the device address */
+
+/* u4 holds current column, */
 
 /* in u5 packs sense byte 0,1 and 3 */
 /* Sense byte 0 */
@@ -60,6 +63,9 @@
 #define SNS_SEQUENCE   0x02       /* Unusual sequence */
 #define SNS_CHN9       0x01       /* Channel 9 on printer */
 
+#define CMD    u3
+#define COL    u4
+#define SNS    u5
 
 
 /* std devices. data structures
@@ -69,8 +75,6 @@
    cdr_reg       Card Reader register list
    cdr_mod       Card Reader modifiers list
 */
-
-
 
 
 uint8               cdr_startcmd(UNIT *, uint16,  uint8);
@@ -117,7 +121,7 @@ uint8  cdr_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
 
-    if ((uptr->u3 & CDR_CMDMSK) != 0) {
+    if ((uptr->CMD & CDR_CMDMSK) != 0) {
         if ((uptr->flags & UNIT_ATT) != 0)
             return SNS_BSY;
         return SNS_DEVEND;
@@ -126,36 +130,36 @@ uint8  cdr_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     sim_debug(DEBUG_CMD, dptr, "CMD unit=%d %x\n", unit, cmd);
     if (cmd != 4 && sim_card_eof(uptr) == 1) {
         uint16   *image = (uint16 *)(uptr->up7);
-        uptr->u5 = SNS_INTVENT;
+        uptr->SNS = SNS_INTVENT;
         sim_read_card(uptr, image);   /* Read in the EOF */
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     }
     if (cmd != 4 && (uptr->flags & UNIT_ATT) == 0) {
-        uptr->u5 = SNS_INTVENT;
+        uptr->SNS = SNS_INTVENT;
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     }
     switch (cmd & 0x7) {
     case 2:              /* Read command */
          if ((cmd & 0xc0) != 0xc0)
-             uptr->u3 &= ~CDR_CARD;
-         uptr->u3 &= ~(CDR_CMDMSK);
-         uptr->u3 |= (cmd & CDR_CMDMSK);
+             uptr->CMD &= ~CDR_CARD;
+         uptr->CMD &= ~(CDR_CMDMSK);
+         uptr->CMD |= (cmd & CDR_CMDMSK);
          sim_activate(uptr, 1000);       /* Start unit off */
-         uptr->u4 = 0;
-         uptr->u5 = 0;
+         uptr->COL = 0;
+         uptr->SNS = 0;
          return 0;
 
     case 3:              /* Control */
-         uptr->u5 = 0;
-         uptr->u3 &= ~(CDR_CMDMSK|CDR_CARD);
+         uptr->SNS = 0;
+         uptr->CMD &= ~(CDR_CMDMSK|CDR_CARD);
          if (cmd == 0x3)
              return SNS_CHNEND|SNS_DEVEND;
          if ((cmd & 0x30) != 0x20 || (cmd & 0xc0) == 0xc0) {
-             uptr->u5 |= SNS_CMDREJ;
+             uptr->SNS |= SNS_CMDREJ;
              return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
          }
-         uptr->u3 |= (cmd & CDR_CMDMSK);
-         uptr->u4 = 0;
+         uptr->CMD |= (cmd & CDR_CMDMSK);
+         uptr->COL = 0;
          sim_activate(uptr, 1000);       /* Start unit off */
          return 0;
 
@@ -163,17 +167,17 @@ uint8  cdr_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
          break;
 
     case 4:               /* Sense */
-         uptr->u3 &= ~(CDR_CMDMSK);
-         uptr->u3 |= (cmd & CDR_CMDMSK);
+         uptr->CMD &= ~(CDR_CMDMSK);
+         uptr->CMD |= (cmd & CDR_CMDMSK);
          sim_activate(uptr, 10);
          return 0;
 
     default:              /* invalid command */
-         uptr->u5 |= SNS_CMDREJ;
+         uptr->SNS |= SNS_CMDREJ;
          break;
     }
 
-    if (uptr->u5)
+    if (uptr->SNS)
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     return SNS_CHNEND|SNS_DEVEND;
 }
@@ -181,38 +185,38 @@ uint8  cdr_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
 /* Handle transfer of data for card reader */
 t_stat
 cdr_srv(UNIT *uptr) {
-    int       addr = GET_UADDR(uptr->u3);
+    int       addr = GET_UADDR(uptr->CMD);
     uint16   *image = (uint16 *)(uptr->up7);
 
-    if ((uptr->u3 & CDR_CMDMSK) == CHN_SNS) {
-         uint8 ch = uptr->u5;
+    if ((uptr->CMD & CDR_CMDMSK) == CHN_SNS) {
+         uint8 ch = uptr->SNS;
          if (ch == 0 && (uptr->flags & UNIT_ATT) == 0)
              ch = SNS_INTVENT;
          chan_write_byte(addr, &ch);
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
-         uptr->u3 &= ~(CDR_CMDMSK);
+         uptr->CMD &= ~(CDR_CMDMSK);
          return SCPE_OK;
     }
 
     /* Check if new card requested. */
-    if ((uptr->u3 & CDR_CARD) == 0) {
+    if ((uptr->CMD & CDR_CARD) == 0) {
        switch(sim_read_card(uptr, image)) {
        case CDSE_EMPTY:
-            uptr->u5 = SNS_INTVENT;
+            uptr->SNS = SNS_INTVENT;
        case CDSE_EOF:
-            uptr->u3 &= ~CDR_CMDMSK;
+            uptr->CMD &= ~CDR_CMDMSK;
             chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
             return SCPE_OK;
        case CDSE_ERROR:
-            uptr->u5 = SNS_INTVENT;
-            uptr->u3 &= ~CDR_CMDMSK;
+            uptr->SNS = SNS_INTVENT;
+            uptr->CMD &= ~CDR_CMDMSK;
             chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             return SCPE_OK;
        case CDSE_OK:
-            uptr->u3 |= CDR_CARD;
-            if ((uptr->u3 & CDR_CMDMSK) == CDR_FEED) {
+            uptr->CMD |= CDR_CARD;
+            if ((uptr->CMD & CDR_CMDMSK) == CDR_FEED) {
                 chan_end(addr, SNS_CHNEND|SNS_DEVEND);
-                uptr->u3 &= ~(CDR_CMDMSK);
+                uptr->CMD &= ~(CDR_CMDMSK);
                 return SCPE_OK;
             }
             break;
@@ -220,29 +224,29 @@ cdr_srv(UNIT *uptr) {
     }
 
     /* Copy next column over */
-    if ((uptr->u3 & CDR_CMDMSK) == CDR_RD) {
+    if ((uptr->CMD & CDR_CMDMSK) == CDR_RD) {
         int                  u = uptr-cdr_unit;
         uint16               xlat;
         uint8                ch = 0;
 
-        xlat = sim_hol_to_ebcdic(image[uptr->u4]);
+        xlat = sim_hol_to_ebcdic(image[uptr->COL]);
 
         if (xlat == 0x100) {
-            uptr->u5 |= SNS_DATCHK;
+            uptr->SNS |= SNS_DATCHK;
             ch = 0x00;
         } else
             ch = (uint8)(xlat&0xff);
         if (chan_write_byte(addr, &ch)) {
-           uptr->u3 &= ~(CDR_CMDMSK);
-           chan_end(addr, SNS_CHNEND|SNS_DEVEND|(uptr->u5 ? SNS_UNITCHK:0));
+           uptr->CMD &= ~(CDR_CMDMSK);
+           chan_end(addr, SNS_CHNEND|SNS_DEVEND|(uptr->SNS ? SNS_UNITCHK:0));
            return SCPE_OK;
        } else {
-           uptr->u4++;
+           uptr->COL++;
            sim_debug(DEBUG_DATA, &cdr_dev, "%d: Char > %02o\n", u, ch);
         }
-        if (uptr->u4 == 80) {
-            uptr->u3 &= ~(CDR_CMDMSK);
-            chan_end(addr, SNS_CHNEND|SNS_DEVEND|(uptr->u5 ? SNS_UNITCHK:0));
+        if (uptr->COL == 80) {
+            uptr->CMD &= ~(CDR_CMDMSK);
+            chan_end(addr, SNS_CHNEND|SNS_DEVEND|(uptr->SNS ? SNS_UNITCHK:0));
         }
         sim_activate(uptr, 10);
     }
@@ -257,13 +261,13 @@ cdr_boot(int32 unit_num, DEVICE * dptr)
 
     if ((uptr->flags & UNIT_ATT) == 0)
        return SCPE_UNATT;       /* attached? */
-    return chan_boot(GET_UADDR(uptr->u3), dptr);
+    return chan_boot(GET_UADDR(uptr->CMD), dptr);
 }
 
 t_stat
 cdr_attach(UNIT * uptr, CONST char *file)
 {
-    int                 addr = GET_UADDR(uptr->u3);
+    int                 addr = GET_UADDR(uptr->CMD);
     t_stat              r;
 
     if ((r = sim_card_attach(uptr, file)) != SCPE_OK)
@@ -271,8 +275,8 @@ cdr_attach(UNIT * uptr, CONST char *file)
     if (uptr->up7 == 0)
         uptr->up7 = malloc(sizeof(uint16)*80);
     set_devattn(addr, SNS_DEVEND);
-    uptr->u3 &= ~(CDR_CARD);
-    uptr->u4 = 0;
+    uptr->CMD &= ~(CDR_CARD);
+    uptr->COL = 0;
     uptr->u6 = 0;
     return SCPE_OK;
 }
@@ -283,7 +287,7 @@ cdr_detach(UNIT * uptr)
     if (uptr->up7 != 0)
         free(uptr->up7);
     uptr->up7 = 0;
-    uptr->u5 = 0;
+    uptr->SNS = 0;
     return sim_card_detach(uptr);
 }
 

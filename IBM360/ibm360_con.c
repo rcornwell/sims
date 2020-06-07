@@ -1,6 +1,6 @@
 /* ibm360_con.c: IBM 360 Inquiry console.
 
-   Copyright (c) 2017, Richard Cornwell
+   Copyright (c) 2017-2020, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -49,6 +49,8 @@
 #define CON_REQ         0x400   /* Request key pressed */
 #define CON_OUTPUT      0x800   /* Output characters since R */
 
+/* Upper 11 bits of u3 hold the device address */
+
 /* Input buffer pointer held in u4 */
 
 /* in u5 packs sense byte 0,1 and 3 */
@@ -56,7 +58,9 @@
 #define SNS_CMDREJ      0x80    /* Command reject */
 #define SNS_INTVENT     0x40    /* Unit intervention required */
 
-
+#define CMD     u3
+#define IPTR    u4
+#define SNS     u5
 
 /* std devices. data structures
 
@@ -110,81 +114,81 @@ void
 con_ini(UNIT *uptr, t_bool f) {
      int                 u = (uptr - con_unit);
      con_data[u].inptr = 0;
-     uptr->u3 &= ~CON_MSK;
-     uptr->u5 = 0;
+     uptr->CMD &= ~CON_MSK;
+     uptr->SNS = 0;
      sim_activate(uptr, 1000);
 }
 
 uint8  con_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     int                 u = (uptr - con_unit);
 
-    if ((uptr->u3 & CON_MSK) != 0)
+    if ((uptr->CMD & CON_MSK) != 0)
         return SNS_BSY;
 
     if ((cmd & 0xf0) != 0) {
-        uptr->u5 |= SNS_CMDREJ;
+        uptr->SNS |= SNS_CMDREJ;
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     }
 
     switch (cmd & 0x7) {
     case 2:                        /* Read command */
          sim_debug(DEBUG_CMD, &con_dev, "%d: Cmd RD\n", u);
-         if (uptr->u3 & CON_REQ) {
+         if (uptr->CMD & CON_REQ) {
               return SNS_ATTN|SNS_BSY;
          }
 
-         if ((uptr->u3 & CON_INPUT) == 0 &&
-                (con_data[u].inptr == 0 || uptr->u3 & CON_CR)) {
+         if ((uptr->CMD & CON_INPUT) == 0 &&
+                (con_data[u].inptr == 0 || uptr->CMD & CON_CR)) {
              /* Activate input so we can get response */
-             if ((uptr->u3 & CON_OUTPUT) != 0) {
+             if ((uptr->CMD & CON_OUTPUT) != 0) {
                 sim_putchar('\r');
                 sim_putchar('\n');
-                uptr->u3 &= ~CON_OUTPUT;
+                uptr->CMD &= ~CON_OUTPUT;
              }
              sim_putchar('I');
              sim_putchar(' ');
          }
-         uptr->u4 = 0;
-         uptr->u3 |= cmd & CON_MSK;
-         uptr->u5 = 0;
+         uptr->IPTR = 0;
+         uptr->CMD |= cmd & CON_MSK;
+         uptr->SNS = 0;
          return 0;
 
     case 1:                    /* Write command */
          sim_debug(DEBUG_CMD, &con_dev, "%d: Cmd WR\n", u);
-         if (uptr->u3 & CON_REQ) {
+         if (uptr->CMD & CON_REQ) {
               return SNS_ATTN|SNS_BSY;
          }
-         uptr->u3 |= cmd & CON_MSK;
-         uptr->u5 = 0;
-         if (uptr->u3 & CON_CR) {
+         uptr->CMD |= cmd & CON_MSK;
+         uptr->SNS = 0;
+         if (uptr->CMD & CON_CR) {
             sim_putchar('R');
             sim_putchar(' ');
-            uptr->u3 &= ~CON_CR;
-            uptr->u3 |= CON_OUTPUT;
+            uptr->CMD &= ~CON_CR;
+            uptr->CMD |= CON_OUTPUT;
          }
          return 0;
 
     case 3:              /* Control */
          sim_debug(DEBUG_CMD, &con_dev, "%d: Cmd NOP\n", u);
-         if (uptr->u3 & CON_REQ) {
+         if (uptr->CMD & CON_REQ) {
               return SNS_ATTN|SNS_BSY;
          }
-         uptr->u5 = 0;
+         uptr->SNS = 0;
          return SNS_CHNEND|SNS_DEVEND;
 
     case 0:               /* Status */
          break;
 
     case 4:              /* Sense */
-         uptr->u3 |= cmd & CON_MSK;
+         uptr->CMD |= cmd & CON_MSK;
          return 0;
 
     default:              /* invalid command */
-         uptr->u5 |= SNS_CMDREJ;
+         uptr->SNS |= SNS_CMDREJ;
          break;
     }
 
-    if (uptr->u5)
+    if (uptr->SNS)
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     return SNS_CHNEND|SNS_DEVEND;
 }
@@ -192,9 +196,9 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
 /* Handle transfer of data for printer */
 t_stat
 con_srv(UNIT *uptr) {
-    uint16              addr = GET_UADDR(uptr->u3);
+    uint16              addr = GET_UADDR(uptr->CMD);
     int                 u = (uptr - con_unit);
-    int                 cmd = uptr->u3 & CON_MSK;
+    int                 cmd = uptr->CMD & CON_MSK;
     t_stat              r = SCPE_ARG;       /* Force error if not set */
     uint8               ch;
     int                 i;
@@ -203,12 +207,12 @@ con_srv(UNIT *uptr) {
 
     switch (cmd) {
     case 4:              /* Sense */
-         sim_debug(DEBUG_CMD, &con_dev, "%d: Cmd SNS %02x\n", u, uptr->u5);
+         sim_debug(DEBUG_CMD, &con_dev, "%d: Cmd SNS %02x\n", u, uptr->SNS);
          /* Check if request pending */
-         ch = uptr->u5;
+         ch = uptr->SNS;
          chan_write_byte(addr, &ch);
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
-         uptr->u3 &= ~(CON_MSK);
+         uptr->CMD &= ~(CON_MSK);
          break;
 
     case CON_WR:
@@ -217,58 +221,58 @@ con_srv(UNIT *uptr) {
            if (cmd == CON_ACR) {
                sim_putchar('\r');
                sim_putchar('\n');
-               uptr->u3 |= CON_CR;
-               uptr->u3 &= ~CON_OUTPUT;
+               uptr->CMD |= CON_CR;
+               uptr->CMD &= ~CON_OUTPUT;
            }
-           uptr->u3 &= ~CON_MSK;
+           uptr->CMD &= ~CON_MSK;
            chan_end(addr, SNS_CHNEND|SNS_DEVEND);
            delay = 40000;
        } else {
            if (ch == 0x15) {
                sim_putchar('\r');
                sim_putchar('\n');
-               uptr->u3 |= CON_CR;
-               uptr->u3 &= ~CON_OUTPUT;
+               uptr->CMD |= CON_CR;
+               uptr->CMD &= ~CON_OUTPUT;
            } else {
                ch = ebcdic_to_ascii[ch];
                if (ch != 0) {
                    if (!isprint(ch))
                        ch = '_';
                    sim_putchar(ch);
-                   uptr->u3 &= ~CON_OUTPUT;
+                   uptr->CMD &= ~CON_OUTPUT;
                }
            }
        }
        break;
 
     case CON_RD:
-       if (uptr->u3 & CON_INPUT) {
-           uptr->u3 &= ~CON_REQ;
+       if (uptr->CMD & CON_INPUT) {
+           uptr->CMD &= ~CON_REQ;
            if (con_data[u].inptr == 0) {
-                   uptr->u3 &= ~CON_INPUT;
+                   uptr->CMD &= ~CON_INPUT;
                    con_data[u].inptr = 0;
                    cmd = 0;
-                   uptr->u3 &= ~(CON_MSK);
+                   uptr->CMD &= ~(CON_MSK);
                    sim_debug(DEBUG_CMD, &con_dev, "%d: devend\n", u);
                    chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                    break;
            }
 
-           ch = con_data[u].ibuff[uptr->u4++];
+           ch = con_data[u].ibuff[uptr->IPTR++];
            sim_debug(DEBUG_CMD, &con_dev, "%d: rd %02x\n", u, ch);
            if (chan_write_byte(addr, &ch)) {
-               uptr->u3 &= ~CON_INPUT;
+               uptr->CMD &= ~CON_INPUT;
                con_data[u].inptr = 0;
                cmd = 0;
-               uptr->u3 &= ~(CON_MSK);
+               uptr->CMD &= ~(CON_MSK);
                sim_debug(DEBUG_CMD, &con_dev, "%d: devend input\n", u);
                chan_end(addr, SNS_CHNEND|SNS_DEVEND);
            } else {
-               if (uptr->u4 == con_data[u].inptr) {
-                   uptr->u3 &= ~CON_INPUT;
+               if (uptr->IPTR == con_data[u].inptr) {
+                   uptr->CMD &= ~CON_INPUT;
                    con_data[u].inptr = 0;
                    cmd = 0;
-                   uptr->u3 &= ~(CON_MSK);
+                   uptr->CMD &= ~(CON_MSK);
                    sim_debug(DEBUG_CMD, &con_dev, "%d: devend\n", u);
                    chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                }
@@ -280,22 +284,22 @@ con_srv(UNIT *uptr) {
     r = sim_poll_kbd();
     if (r & SCPE_KFLAG) {
        ch = r & 0377;
-       if ((uptr->u3 & CON_INPUT) == 0) {
+       if ((uptr->CMD & CON_INPUT) == 0) {
           /* Handle end of buffer */
           switch (ch) {
           case '\r':
           case '\n':
                 sim_debug(DEBUG_DATA, &con_dev, "%d: ent\n", u);
-                uptr->u3 |= CON_INPUT;
-                uptr->u3 |= CON_CR;
-                uptr->u3 &= ~CON_OUTPUT;
+                uptr->CMD |= CON_INPUT;
+                uptr->CMD |= CON_CR;
+                uptr->CMD &= ~CON_OUTPUT;
                 sim_putchar('\r');
                 sim_putchar('\n');
                /* Fall through */
 
           case 033: /* request key */
                 if (cmd != CON_RD) {
-                    uptr->u3 |= CON_REQ;
+                    uptr->CMD |= CON_REQ;
                 }
                 break;
           case 0177:
@@ -337,7 +341,7 @@ con_srv(UNIT *uptr) {
         } else {
            if (cmd == CON_RD && ch == 03) { /* Cancel */
                chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
-               uptr->u3 &= ~CON_INPUT;
+               uptr->CMD &= ~CON_INPUT;
                con_data[u].inptr = 0;
                cmd = 0;
             } else {
@@ -346,10 +350,10 @@ con_srv(UNIT *uptr) {
         }
     }
 
-    if (cmd == 0 && uptr->u3 & CON_REQ) {
+    if (cmd == 0 && uptr->CMD & CON_REQ) {
           sim_debug(DEBUG_CMD, &con_dev, "%d: setattn %x\n", u, addr);
           set_devattn(addr, SNS_ATTN);
-          uptr->u3 &= ~CON_REQ;
+          uptr->CMD &= ~CON_REQ;
     }
     sim_activate(uptr, delay);
     return SCPE_OK;
