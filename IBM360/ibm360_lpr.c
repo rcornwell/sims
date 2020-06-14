@@ -61,6 +61,7 @@
 #define SNS_OVRRUN      0x04      /* Data overrun */
 #define SNS_SEQUENCE    0x02      /* Unusual sequence */
 #define SNS_CHN9        0x01      /* Channel 9 on printer */
+#define SNS_CHN12       0x100
 /* u6 hold buffer position */
 
 #define CMD    u3
@@ -93,15 +94,17 @@ t_stat              lpr_attach(UNIT *, CONST char *);
 t_stat              lpr_detach(UNIT *);
 t_stat              lpr_setlpp(UNIT *, int32, CONST char *, void *);
 t_stat              lpr_getlpp(FILE *, UNIT *, int32, CONST void *);
+t_stat              lpr_help(FILE *, DEVICE *, UNIT *, int32, const char *);
+const char         *lpr_description(DEVICE *dptr);
 
 UNIT                lpr_unit[] = {
-    {UDATA(lpr_srv, UNIT_LPR, 55), 300, UNIT_ADDR(0x0E)},       /* A */
+    {UDATA(lpr_srv, UNIT_LPR, 66), 300, UNIT_ADDR(0x0E)},
 #if NUM_DEVS_LPR > 1
-    {UDATA(lpr_srv, UNIT_LPR | UNIT_DIS, 55), 300, UNIT_ADDR(0x1E)},       /* B */
+    {UDATA(lpr_srv, UNIT_LPR | UNIT_DIS, 66), 300, UNIT_ADDR(0x1E)},
 #if NUM_DEVS_LPR > 2
-    {UDATA(lpr_srv, UNIT_LPR | UNIT_DIS, 55), 300, UNIT_ADDR(0x40E)},       /* B */
+    {UDATA(lpr_srv, UNIT_LPR | UNIT_DIS, 66), 300, UNIT_ADDR(0x40E)},
 #if NUM_DEVS_LPR > 3
-    {UDATA(lpr_srv, UNIT_LPR | UNIT_DIS, 55), 300, UNIT_ADDR(0x41E)},       /* B */
+    {UDATA(lpr_srv, UNIT_LPR | UNIT_DIS, 66), 300, UNIT_ADDR(0x41E)},
 #endif
 #endif
 #endif
@@ -121,7 +124,8 @@ DEVICE              lpr_dev = {
     "LPR", lpr_unit, NULL, lpr_mod,
     NUM_DEVS_LPR, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, NULL, &lpr_attach, &lpr_detach,
-    &lpr_dib, DEV_UADDR | DEV_DISABLE | DEV_DEBUG, 0, dev_debug
+    &lpr_dib, DEV_UADDR | DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    NULL, NULL, &lpr_help, NULL, NULL, &lpr_description
 };
 
 
@@ -165,32 +169,125 @@ print_line(UNIT * uptr)
     char                out[150];       /* Temp conversion buffer */
     int                 i;
     int                 u = (uptr - lpr_unit);
+    int                 l = (uptr->CMD >> 3) & 0x1f;
+    int                 f = 1;
 
-    /* Try to convert to text */
-    memset(out, ' ', sizeof(out));
+    /* Check if valid form motion */
+    if ((uptr->CMD & 0x5) != 0x1 || 
+        (l > 3 && l < 0x10) || l > 0x1c) {
+        uptr->SNS = SNS_CMDREJ;
+        return;
+    }
+    /* Dump buffer if full */
+    if (uptr->CMD & LPR_FULL) {
 
-    /* Scan each column */
-    for (i = 0; i < uptr->POS; i++) {
-       int         ch = lpr_data[u].lbuff[i];
+        /* Try to convert to text */
+        memset(out, ' ', sizeof(out));
 
-       ch = ebcdic_to_ascii[ch];
-       if (!isprint(ch))
-          ch = '.';
-       out[i] = ch;
+        /* Scan each column */
+        for (i = 0; i < uptr->POS; i++) {
+           int         ch = lpr_data[u].lbuff[i];
+
+           ch = ebcdic_to_ascii[ch];
+           if (!isprint(ch))
+              ch = '.';
+           out[i] = ch;
+        }
+
+        /* Trim trailing spaces */
+        for (--i; i > 0 && out[i] == ' '; i--) ;
+        out[++i] = '\0';
+
+        /* Print out buffer */
+        sim_fwrite(&out, 1, i, uptr->fileref);
+        uptr->pos += i;
+        sim_debug(DEBUG_DETAIL, &lpr_dev, "%s", out);
     }
 
-    /* Trim trailing spaces */
-    for (--i; i > 0 && out[i] == ' '; i--) ;
-    out[++i] = '\r';
-    out[++i] = '\n';
-    out[++i] = '\0';
+    if (l < 4) {
+        while(l != 0) {
+            sim_fwrite("\r\n", 1, 2, uptr->fileref);
+            f = 0;
+            uptr->pos += 2;
+            uptr->LINE++;
+            if (((uint32)uptr->LINE) > uptr->capac)
+                break;
+            l--;
+        }
+        if ((t_addr)uptr->LINE > uptr->capac) {
+           if (f)
+               sim_fwrite("\r\n", 1, 2, uptr->fileref);
+           sim_fwrite("\f", 1, 1, uptr->fileref);
+           uptr->LINE = 1;
+        }
+        return;
+    }
 
-    /* Print out buffer */
-    sim_fwrite(&out, 1, i, uptr->fileref);
-    uptr->pos += i;
-    sim_debug(DEBUG_DETAIL, &lpr_dev, "%s", out);
-    uptr->LINE++;
+    switch (l & 0xf) {
+    case 0:     /* Not available */
+        break;
+    case 1:
+    case 2:     /* Skip to top of form */
+    case 12:
+        uptr->LINE = uptr->capac+1;
+        break;
+
+    case 3:     /* Even lines */
+        if ((uptr->LINE & 1) == 1) {
+            sim_fwrite("\r\n", 1, 2, uptr->fileref);
+            f = 0;
+            uptr->pos += 2;
+            uptr->LINE++;
+        }
+        break;
+    case 4:     /* Odd lines */
+        if ((uptr->LINE & 1) == 0) {
+            sim_fwrite("\r\n", 1, 2, uptr->fileref);
+            f = 0;
+            uptr->pos += 2;
+            uptr->LINE++;
+        }
+        break;
+    case 5:     /* Half page */
+        while((uptr->LINE != (uptr->capac/2)) ||
+              (uptr->LINE != (uptr->capac))) {
+            sim_fwrite("\r\n", 1, 2, uptr->fileref);
+            f = 0;
+            uptr->pos += 2;
+            uptr->LINE++;
+            if (((uint32)uptr->LINE) > uptr->capac)
+                break;
+        }
+        break;
+    case 6:     /* 1/4 Page */
+        while((uptr->LINE != (uptr->capac/4)) ||
+              (uptr->LINE != (uptr->capac/2)) ||
+              (uptr->LINE != (uptr->capac/2+uptr->capac/4)) ||
+              (uptr->LINE != (uptr->capac))) {
+            sim_fwrite("\r\n", 1, 2, uptr->fileref);
+            f = 0;
+            uptr->pos += 2;
+            uptr->LINE++;
+            if (((uint32)uptr->LINE) > uptr->capac)
+                break;
+        }
+        break;
+    case 7:     /* User defined, now 1 line */
+    case 8:
+    case 9:
+    case 10:
+    case 11:
+        sim_fwrite("\r\n", 1, 2, uptr->fileref);
+        f = 0;
+        uptr->pos += 2;
+        uptr->LINE++;
+        break;
+    }
+
     if ((t_addr)uptr->LINE > uptr->capac) {
+       if (f)
+           sim_fwrite("\r\n", 1, 2, uptr->fileref);
+       sim_fwrite("\f", 1, 1, uptr->fileref);
        uptr->LINE = 1;
     }
 
@@ -249,6 +346,7 @@ lpr_srv(UNIT *uptr) {
     int             addr = GET_UADDR(uptr->CMD);
     int             u = (uptr - lpr_unit);
     int             cmd = (uptr->CMD & 0x7);
+    int             l = (uptr->CMD >> 3) & 0x1f;
 
     if (cmd == 4) {
          uint8 ch = uptr->SNS;
@@ -265,11 +363,25 @@ lpr_srv(UNIT *uptr) {
        return SCPE_OK;
     }
 
+
+    /* Check if valid form motion */
+    if ((uptr->CMD & 0x5) != 0x1 || 
+        (l > 3 && l < 0x10) || l > 0x1c) {
+        uptr->SNS = SNS_CMDREJ;
+        chan_end(addr, SNS_CHNEND|SNS_UNITCHK);
+        return SCPE_OK;
+    }
+
     if ((uptr->CMD & LPR_FULL) || cmd == 0x3) {
        print_line(uptr);
        uptr->CMD &= ~(LPR_FULL|LPR_CMDMSK);
        uptr->POS = 0;
-       set_devattn(addr, SNS_DEVEND);
+       if (uptr->SNS & SNS_CHN12) {
+           set_devattn(addr, SNS_DEVEND|SNS_UNITEXP);
+           uptr->SNS &= 0xff;
+       } else {
+           set_devattn(addr, SNS_DEVEND);
+       }
        return SCPE_OK;
     }
 
@@ -318,6 +430,38 @@ lpr_detach(UNIT * uptr)
     if (uptr->CMD & LPR_FULL)
         print_line(uptr);
     return detach_unit(uptr);
+}
+
+t_stat
+lpr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
+{
+   fprintf (st, "1403 Line Printer\n\n");
+   fprintf (st, "The 1403 Line printer can be configured to any number of\n");
+   fprintf (st, "lines per page with the:\n");
+   fprintf (st, "        sim> SET LPn LINESPERPAGE=n\n\n");
+   fprintf (st, "The default is 59 lines per page. The Line Printer has the following\n");
+   fprintf (st, "control tape attached.\n");
+   fprintf (st, "     Channel 1:     Skip to top of page\n");
+   fprintf (st, "     Channel 2:     Skip to top of page\n");
+   fprintf (st, "     Channel 3:     Skip to next even line\n");
+   fprintf (st, "     Channel 4:     Skip to next odd line\n");
+   fprintf (st, "     Channel 5:     Skip to middle or top of page\n");
+   fprintf (st, "     Channel 6:     Skip 1/4 of page\n");
+   fprintf (st, "     Channel 7:     Skip one line\n");
+   fprintf (st, "     Channel 8:     Skip one line\n");
+   fprintf (st, "     Channel 9:     Skip one line\n");
+   fprintf (st, "     Channel 10:    Skip one line\n");
+   fprintf (st, "     Channel 11:    Skip one line\n");
+   fprintf (st, "     Channel 12:    Skip to top of page\n");
+   fprint_set_help(st, dptr);
+   fprint_show_help(st, dptr);
+   return SCPE_OK;
+}
+
+const char *
+lpr_description(DEVICE *dptr)
+{
+   return "1403 Line Printer";
 }
 
 #endif
