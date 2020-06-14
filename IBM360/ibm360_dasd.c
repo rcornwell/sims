@@ -872,7 +872,9 @@ sense_end:
          }
 
          if (i != DK_MSK_SKALLSKR) { /* Some restrictions */
-             if ((cmd == DK_SEEKHD && i != DK_MSK_SKALLHD) || (cmd == DK_SEEK)) {
+             if ((cmd == DK_SEEKHD && i == DK_MSK_SKNONE) || 
+                 (cmd == DK_SEEKCYL && (i & DK_MSK_SKALLHD) != 0) ||
+                 (cmd == DK_SEEK)) {
                  sim_debug(DEBUG_DETAIL, dptr, "seek unit=%d not allow\n", unit);
                  uptr->LCMD = cmd;
                  uptr->CMD &= ~(0xff);
@@ -1363,7 +1365,6 @@ rd:
                  uptr->CMD &= ~(0xff|DK_PARAM);
                  data->ovfl = 0;
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND);
-                 break;
              }
          }
          break;
@@ -1371,29 +1372,26 @@ rd:
     case DK_RD_SECT:         /* Read sector */
          /* Not valid for drives before 3330 */
          sim_debug(DEBUG_DETAIL, dptr, "readsector unit=%d\n", unit);
+         uptr->LCMD = 0;
          if (disk_type[type].sen_cnt > 6) {
              ch = data->tpos / 110;
              if (chan_write_byte(addr, &ch)) {
                  sim_debug(DEBUG_DETAIL, dptr, "readsector rdr\n");
-                 uptr->LCMD = 0;
-                 uptr->CMD &= ~(0xff);
                  uptr->SNS |= SNS_CMDREJ;
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
-                 break;
+             } else {
+                 /* Nothing more to do */
+                 uptr->LCMD = cmd;
+                 chan_end(addr, SNS_DEVEND|SNS_CHNEND);
+                 sim_debug(DEBUG_DETAIL, dptr, "readsector %02x\n", ch);
              }
-             /* Nothing more to do */
-             uptr->LCMD = cmd;
-             uptr->CMD &= ~(0xff);
-             chan_end(addr, SNS_DEVEND|SNS_CHNEND);
-             sim_debug(DEBUG_DETAIL, dptr, "readsector %02x\n", ch);
-             break;
-          }
-          /* Otherwise report as invalid command */
-          uptr->LCMD = 0;
-          uptr->CMD &= ~(0xff);
-          uptr->SNS |= SNS_CMDREJ;
-          chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
-          break;
+         } else {
+             /* Otherwise report as invalid command */
+             uptr->SNS |= SNS_CMDREJ;
+             chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+         }
+         uptr->CMD &= ~(0xff);
+         break;
 
     case DK_WR_HA:           /* Write home address */
          /* Wait for index */
