@@ -109,6 +109,10 @@ ifneq (,$(findstring besm6,${MAKECMDGOALS}))
   VIDEO_USEFUL = true
   BESM6_BUILD = true
 endif
+# building the Imlac needs video support
+ifneq (,$(findstring imlac,${MAKECMDGOALS}))
+  VIDEO_USEFUL = true
+endif
 # building the PDP6, KA10 or KI10 needs video support
 ifneq (,$(or $(findstring pdp6,${MAKECMDGOALS}),$(findstring pdp10-ka,${MAKECMDGOALS}),$(findstring pdp10-ki,${MAKECMDGOALS})))
   VIDEO_USEFUL = true
@@ -153,6 +157,19 @@ endif
 ifneq ($(NOVIDEO),)
   VIDEO_USEFUL =
 endif
+ifneq ($(findstring Windows,${OS}),)
+  ifeq ($(findstring .exe,${SHELL}),.exe)
+    # MinGW
+    WIN32 := 1
+    # Tests don't run under MinGW
+    TESTS := 0
+  else # Msys or cygwin
+    ifeq (MINGW,$(findstring MINGW,$(shell uname)))
+      $(info *** This makefile can not be used with the Msys bash shell)
+      $(error Use build_mingw.bat ${MAKECMDGOALS} from a Windows command prompt)
+    endif
+  endif
+endif
 find_exe = $(abspath $(strip $(firstword $(foreach dir,$(strip $(subst :, ,${PATH})),$(wildcard $(dir)/$(1))))))
 find_lib = $(abspath $(strip $(firstword $(foreach dir,$(strip ${LIBPATH}),$(wildcard $(dir)/lib$(1).${LIBEXT})))))
 find_include = $(abspath $(strip $(firstword $(foreach dir,$(strip ${INCPATH}),$(wildcard $(dir)/$(1).h)))))
@@ -161,17 +178,6 @@ ifneq (0,$(TESTS))
   TESTING_FEATURES = - Per simulator tests will be run
 else
   TESTING_FEATURES = - Per simulator tests will be skipped
-endif
-ifneq ($(findstring Windows,${OS}),)
-  ifeq ($(findstring .exe,${SHELL}),.exe)
-    # MinGW
-    WIN32 := 1
-  else # Msys or cygwin
-    ifeq (MINGW,$(findstring MINGW,$(shell uname)))
-      $(info *** This makefile can not be used with the Msys bash shell)
-      $(error Use build_mingw.bat ${MAKECMDGOALS} from a Windows command prompt)
-    endif
-  endif
 endif
 ifeq (${WIN32},)  #*nix Environments (&& cygwin)
   ifeq (${GCC},)
@@ -256,8 +262,11 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
       NEED_COMMIT_ID = need-commit-id
     endif
     ifeq (need-commit-id,$(NEED_COMMIT_ID))
+      ifneq (,$(shell git update-index --refresh --))
+        GIT_EXTRA_FILES=+uncommitted-changes
+      endif
       isodate=$(shell git log -1 --pretty="%ai"|sed -e 's/ /T/'|sed -e 's/ //')
-      $(shell git log -1 --pretty="SIM_GIT_COMMIT_ID %H%nSIM_GIT_COMMIT_TIME $(isodate)" >.git-commit-id)
+      $(shell git log -1 --pretty="SIM_GIT_COMMIT_ID %H$(GIT_EXTRA_FILES)%nSIM_GIT_COMMIT_TIME $(isodate)" >.git-commit-id)
     endif
   endif
   LTO_EXCLUDE_VERSIONS = 
@@ -596,6 +605,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
           DISPLAY340 = ${DISPLAYD}/type340.c
           DISPLAYNG = ${DISPLAYD}/ng.c
           DISPLAYIII = ${DISPLAYD}/iii.c
+          DISPLAYIMLAC = ${DISPLAYD}/imlac.c
           DISPLAY_OPT += -DUSE_DISPLAY $(VIDEO_CCDEFS) $(VIDEO_LDFLAGS)
           $(info using libSDL2: $(call find_include,SDL2/SDL))
           ifeq (Darwin,$(OSTYPE))
@@ -992,7 +1002,10 @@ else
     endif
     ifeq (commit-id-exists,$(shell if exist .git-commit-id echo commit-id-exists))
       CURRENT_GIT_COMMIT_ID=$(shell for /F "tokens=2" %%i in ("$(shell findstr /C:"SIM_GIT_COMMIT_ID" .git-commit-id)") do echo %%i)
-      ACTUAL_GIT_COMMIT_ID=$(strip $(shell git log -1 --pretty=%H))
+      ifneq (, $(shell git update-index --refresh --))
+        ACTUAL_GIT_COMMIT_EXTRAS=+uncommitted-changes
+      endif
+      ACTUAL_GIT_COMMIT_ID=$(strip $(shell git log -1 --pretty=%H))$(ACTUAL_GIT_COMMIT_EXTRAS)
       ifneq ($(CURRENT_GIT_COMMIT_ID),$(ACTUAL_GIT_COMMIT_ID))
         NEED_COMMIT_ID = need-commit-id
         # make sure that the invalidly formatted .git-commit-id file wasn't generated
@@ -1005,11 +1018,13 @@ else
       NEED_COMMIT_ID = need-commit-id
     endif
     ifeq (need-commit-id,$(NEED_COMMIT_ID))
-      commit_id=$(shell git log -1 --pretty=%H)
+      ifneq (, $(shell git update-index --refresh --))
+        ACTUAL_GIT_COMMIT_EXTRAS=+uncommitted-changes
+      endif
+      ACTUAL_GIT_COMMIT_ID=$(strip $(shell git log -1 --pretty=%H))$(ACTUAL_GIT_COMMIT_EXTRAS)
       isodate=$(shell git log -1 --pretty=%ai)
       commit_time=$(word 1,$(isodate))T$(word 2,$(isodate))$(word 3,$(isodate))
-      $(shell echo SIM_GIT_COMMIT_ID $(commit_id)>.git-commit-id)
-      $(shell echo SIM_GIT_COMMIT_TIME $(commit_time)>>.git-commit-id)
+      $(shell echo SIM_GIT_COMMIT_ID $(ACTUAL_GIT_COMMIT_ID)>.git-commit-id)
     endif
   endif
   ifneq (,$(shell if exist .git-commit-id echo git-commit-id))
@@ -1935,13 +1950,11 @@ ifneq (,$(BESM6_BUILD))
           endif
         else
           ifneq (,$(and $(findstring Linux,$(OSTYPE)),$(call find_exe,apt-get)))
-            $(info *** Info *** Install the development components of libSDL-ttf or libSDL2-ttf)
+            $(info *** Info *** Install the development components of libSDL2-ttf)
             $(info *** Info *** packaged for your Linux operating system distribution:)
             $(info *** Info ***        $$ sudo apt-get install libsdl2-ttf-dev)
-            $(info *** Info ***    or)
-            $(info *** Info ***        $$ sudo apt-get install libsdl-ttf-dev)
           else
-            $(info *** Info *** Install the development components of libSDL-ttf packaged by your)
+            $(info *** Info *** Install the development components of libSDL2-ttf packaged by your)
             $(info *** Info *** operating system distribution and rebuild your simulator to)
             $(info *** Info *** enable this extra functionality.)
           endif
@@ -1951,10 +1964,6 @@ ifneq (,$(BESM6_BUILD))
         $(info using libSDL2_ttf: $(call find_lib,SDL2_ttf) $(call find_include,SDL2/SDL_ttf))
         $(info ***)
         BESM6_PANEL_OPT = -DFONTFILE=${FONTFILE} ${VIDEO_CCDEFS} ${VIDEO_LDFLAGS} -lSDL2_ttf
-    else ifneq (,$(and $(call find_include,SDL/SDL_ttf),$(call find_lib,SDL_ttf)))
-        $(info using libSDL_ttf: $(call find_lib,SDL_ttf) $(call find_include,SDL/SDL_ttf))
-        $(info ***)
-        BESM6_PANEL_OPT = -DFONTFILE=${FONTFILE} ${VIDEO_CCDEFS} ${VIDEO_LDFLAGS} -lSDL_ttf
     endif
 endif
 

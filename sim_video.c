@@ -88,6 +88,11 @@ t_stat vid_show (FILE* st, DEVICE *dptr,  UNIT* uptr, int32 val, CONST char* des
 return vid_show_video (st, uptr, val, desc);
 }
 
+static const char *vid_dname (DEVICE *dev)
+{
+return dev ? sim_dname(dev) : "Video Device";
+}
+
 #if defined(USE_SIM_VIDEO) && defined(HAVE_LIBSDL)
 
 char vid_release_key[64] = "Ctrl-Right-Shift";
@@ -349,6 +354,8 @@ t_bool vid_ready;
 char vid_title[128];
 static void vid_beep_setup (int duration_ms, int tone_frequency);
 static void vid_beep_cleanup (void);
+static void vid_controllers_setup (void);
+static void vid_controllers_cleanup (void);
 t_bool vid_key_state[SDL_NUM_SCANCODES];
 SDL_Texture *vid_texture;                               /* video buffer in GPU */
 SDL_Renderer *vid_renderer;
@@ -356,6 +363,7 @@ SDL_Window *vid_window;                                 /* window handle */
 SDL_PixelFormat *vid_format;
 uint32 vid_windowID;
 SDL_Thread *vid_thread_handle = NULL;                   /* event thread handle */
+SDL_mutex *vid_draw_mutex = NULL;                       /* window update mutex */
 SDL_Cursor *vid_cursor = NULL;                          /* current cursor */
 t_bool vid_cursor_visible = FALSE;                      /* cursor visibility state */
 KEY_EVENT_QUEUE vid_key_events;                         /* keyboard events */
@@ -398,14 +406,17 @@ SDL_SetHint (SDL_HINT_RENDER_DRIVER, "software");
 
 status = SDL_Init (SDL_INIT_VIDEO);
 
-vid_main_thread_handle = SDL_CreateThread (main_thread , "simh-main", NULL);
-
 if (status) {
-    fprintf (stderr, "SDL Video subsystem can't initialize\n");
+    fprintf (stderr, "SDL Video subsystem can't initialize: %s\n", SDL_GetError ());
     exit (1);
     }
 
-sim_os_set_thread_priority (PRIORITY_ABOVE_NORMAL);
+vid_main_thread_handle = SDL_CreateThread (main_thread , "simh-main", NULL);
+
+if (vid_main_thread_handle == NULL) {
+    fprintf (stderr, "SDL_CreateThread failed: %s\n", SDL_GetError ());
+    exit (1);
+    }
 
 vid_beep_setup (400, 660);
 
@@ -424,12 +435,8 @@ while (1) {
                     if (event.user.code == EVENT_SCREENSHOT)
                         vid_screenshot_event ();
                     else {
-                        if (event.user.code == EVENT_BEEP)
-                            vid_beep_event ();
-                        else {
-                            sim_printf ("main(): Unexpected User event: %d\n", event.user.code);
-                            break;
-                            }
+                        sim_printf ("main(): Unexpected User event: %d\n", event.user.code);
+                        break;
                         }
                     }
                 }
@@ -489,67 +496,78 @@ return SCPE_OK;
 }
 #endif
 
-static t_stat vid_init_controllers (void)
+static void vid_controllers_setup (void)
 {
-    SDL_Joystick *y;
-    SDL_version ver;
-    int i, n;
+SDL_Joystick *y;
+SDL_version ver;
+int i, n;
 
-    if (vid_gamepad_inited)
-        return SCPE_OK;
+if (vid_gamepad_inited++)
+    return;
 
-    /* Chech that the SDL_GameControllerFromInstanceID function is
-       available at run time. */
-    SDL_GetVersion(&ver);
-    vid_gamepad_ok = (ver.major > 2 ||
-                      (ver.major == 2 && (ver.minor > 0 || ver.patch >= 4)));
+/* Chech that the SDL_GameControllerFromInstanceID function is
+   available at run time. */
+SDL_GetVersion(&ver);
+vid_gamepad_ok = (ver.major > 2 ||
+                  (ver.major == 2 && (ver.minor > 0 || ver.patch >= 4)));
 
+if (vid_gamepad_ok)
+    SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER);
+else
+    SDL_InitSubSystem(SDL_INIT_JOYSTICK);
+
+if (SDL_JoystickEventState (SDL_ENABLE) < 0) {
     if (vid_gamepad_ok)
-        SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER);
+        SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
     else
-        SDL_InitSubSystem(SDL_INIT_JOYSTICK);
+        SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
+    sim_printf ("%s: vid_controllers_setup(): SDL_JoystickEventState error: %s\n", vid_dname(vid_dev), SDL_GetError());
+    return;
+    }
 
-    if (SDL_JoystickEventState (SDL_ENABLE) < 0) {
-        if (vid_gamepad_ok)
-            SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
-        else
-            SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
-        return SCPE_IOERR;
-        }
+if (vid_gamepad_ok && SDL_GameControllerEventState (SDL_ENABLE) < 0) {
+    if (vid_gamepad_ok)
+        SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
+    else
+        SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
+    sim_printf ("%s: vid_controllers_setup(): SDL_GameControllerEventState error: %s\n", vid_dname(vid_dev), SDL_GetError());
+    return;
+    }
 
-    if (vid_gamepad_ok && SDL_GameControllerEventState (SDL_ENABLE) < 0) {
-        if (vid_gamepad_ok)
-            SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
-        else
-            SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
-        return SCPE_IOERR;
-        }
+n = SDL_NumJoysticks();
 
-    n = SDL_NumJoysticks();
-
-    for (i = 0; i < n; i++) {
-        if (vid_gamepad_ok && SDL_IsGameController (i)) {
-            SDL_GameController *x = SDL_GameControllerOpen (i);
-            if (x != NULL) {
-                sim_debug (SIM_VID_DBG_VIDEO, vid_dev,
-                "Game controller: %s\n", SDL_GameControllerNameForIndex(i));
-                }
-            }
-        else {
-            y = SDL_JoystickOpen (i);
-            if (y != NULL) {
-                sim_debug (SIM_VID_DBG_VIDEO, vid_dev,
-                "Joystick: %s\n", SDL_JoystickNameForIndex(i));
-                sim_debug (SIM_VID_DBG_VIDEO, vid_dev,
-                "Number of axes: %d, buttons: %d\n",
-                SDL_JoystickNumAxes(y),
-                SDL_JoystickNumButtons(y));
-                }
+for (i = 0; i < n; i++) {
+    if (vid_gamepad_ok && SDL_IsGameController (i)) {
+        SDL_GameController *x = SDL_GameControllerOpen (i);
+        if (x != NULL) {
+            sim_debug (SIM_VID_DBG_VIDEO, vid_dev,
+            "Game controller: %s\n", SDL_GameControllerNameForIndex(i));
             }
         }
+    else {
+        y = SDL_JoystickOpen (i);
+        if (y != NULL) {
+            sim_debug (SIM_VID_DBG_VIDEO, vid_dev,
+            "Joystick: %s\n", SDL_JoystickNameForIndex(i));
+            sim_debug (SIM_VID_DBG_VIDEO, vid_dev,
+            "Number of axes: %d, buttons: %d\n",
+            SDL_JoystickNumAxes(y),
+            SDL_JoystickNumButtons(y));
+            }
+        }
+    }
+}
 
-    vid_gamepad_inited = 1;
-    return SCPE_OK;
+static void vid_controllers_cleanup (void)
+{
+if (0 == (--vid_gamepad_inited)) {
+    memset (motion_callback, 0, sizeof motion_callback);
+    memset (button_callback, 0, sizeof button_callback);
+    if (vid_gamepad_ok)
+        SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
+    else
+        SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
+    }
 }
 
 t_stat vid_open (DEVICE *dptr, const char *title, uint32 width, uint32 height, int flags)
@@ -587,11 +605,6 @@ if (!vid_active) {
     if (stat != SCPE_OK)
         return stat;
 
-    if (vid_init_controllers () != SCPE_OK) {
-        sim_debug (SIM_VID_DBG_VIDEO, vid_dev,
-                   "vid_open() - Failed initializing game controllers\n");
-        }
-
     sim_debug (SIM_VID_DBG_VIDEO|SIM_VID_DBG_KEY|SIM_VID_DBG_MOUSE, vid_dev, "vid_open() - Success\n");
     }
 return SCPE_OK;
@@ -603,15 +616,7 @@ if (vid_active) {
     SDL_Event user_event;
     int status;
 
-    vid_gamepad_inited = 0;
-    memset (motion_callback, 0, sizeof motion_callback);
-    memset (button_callback, 0, sizeof button_callback);
-    if (vid_gamepad_ok)
-        SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
-    else
-        SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
-
-    vid_active = FALSE;
+    vid_active = FALSE;     /* Signal rendering thread we'd like to exit */
     if (vid_ready) {
         sim_debug (SIM_VID_DBG_VIDEO|SIM_VID_DBG_KEY|SIM_VID_DBG_MOUSE, vid_dev, "vid_close()\n");
         user_event.type = SDL_USEREVENT;
@@ -629,6 +634,7 @@ if (vid_active) {
         }
     while (vid_ready)
         sim_os_ms_sleep (10);
+
     if (vid_mouse_events.sem) {
         SDL_DestroySemaphore(vid_mouse_events.sem);
         vid_mouse_events.sem = NULL;
@@ -684,7 +690,7 @@ if (SDL_SemTryWait (vid_mouse_events.sem) == 0) {
             }
         }
     if (SDL_SemPost (vid_mouse_events.sem))
-        sim_printf ("%s: vid_poll_mouse(): SDL_SemPost error: %s\n", sim_dname(vid_dev), SDL_GetError());
+        sim_printf ("%s: vid_poll_mouse(): SDL_SemPost error: %s\n", vid_dname(vid_dev), SDL_GetError());
     }
 return stat;
 }
@@ -694,6 +700,9 @@ uint32 vid_map_rgb (uint8 r, uint8 g, uint8 b)
 return SDL_MapRGB (vid_format, r, g, b);
 }
 
+static SDL_Rect *vid_dst_last;
+static uint32 *vid_data_last;
+
 void vid_draw (int32 x, int32 y, int32 w, int32 h, uint32 *buf)
 {
 SDL_Event user_event;
@@ -702,9 +711,19 @@ uint32 *vid_data;
 
 sim_debug (SIM_VID_DBG_VIDEO, vid_dev, "vid_draw(%d, %d, %d, %d)\n", x, y, w, h);
 
+SDL_LockMutex (vid_draw_mutex);                         /* Synchronize to check region dimensions */
+if (vid_dst_last                                     && /* As yet unprocessed draw rectangle? */
+    (vid_dst_last->x == x) && (vid_dst_last->y == y) && /* AND identical position? */
+    (vid_dst_last->w == w) && (vid_dst_last->h == h)) { /* AND identical dimensions? */
+    memcpy (vid_data_last, buf, w*h*sizeof(*buf));      /* Replace region contents */
+    SDL_UnlockMutex (vid_draw_mutex);                   /* Done */
+    return;
+    }
+SDL_UnlockMutex (vid_draw_mutex);
+
 vid_dst = (SDL_Rect *)malloc (sizeof(*vid_dst));
 if (!vid_dst) {
-    sim_printf ("%s: vid_draw() memory allocation error\n", vid_dev ? sim_dname(vid_dev) : "Video Device");
+    sim_printf ("%s: vid_draw() memory allocation error\n", vid_dname(vid_dev));
     return;
     }
 vid_dst->x = x;
@@ -713,7 +732,7 @@ vid_dst->w = w;
 vid_dst->h = h;
 vid_data = (uint32 *)malloc (w*h*sizeof(*buf));
 if (!vid_data) {
-    sim_printf ("%s: vid_draw() memory allocation error\n", vid_dev ? sim_dname(vid_dev) : "Video Device");
+    sim_printf ("%s: vid_draw() memory allocation error\n", vid_dname(vid_dev));
     free (vid_dst);
     return;
     }
@@ -722,8 +741,12 @@ user_event.type = SDL_USEREVENT;
 user_event.user.code = EVENT_DRAW;
 user_event.user.data1 = (void *)vid_dst;
 user_event.user.data2 = (void *)vid_data;
+SDL_LockMutex (vid_draw_mutex);         /* protect vid_dst_last & vid_data_last */
+vid_dst_last = vid_dst;
+vid_data_last = vid_data;
+SDL_UnlockMutex (vid_draw_mutex);       /* done protection */
 if (SDL_PushEvent (&user_event) < 0) {
-    sim_printf ("%s: vid_draw() SDL_PushEvent error: %s\n", vid_dev ? sim_dname(vid_dev) : "Video Device", SDL_GetError());
+    sim_printf ("%s: vid_draw() SDL_PushEvent error: %s\n", vid_dname(vid_dev), SDL_GetError());
     free (vid_dst);
     free (vid_data);
     }
@@ -757,7 +780,7 @@ user_event.user.data1 = cursor;
 user_event.user.data2 = (void *)((size_t)visible);
 
 if (SDL_PushEvent (&user_event) < 0) {
-    sim_printf ("%s: vid_set_cursor() SDL_PushEvent error: %s\n", vid_dev ? sim_dname(vid_dev) : "Video Device", SDL_GetError());
+    sim_printf ("%s: vid_set_cursor() SDL_PushEvent error: %s\n", vid_dname(vid_dev), SDL_GetError());
     SDL_FreeCursor (cursor);
     }
 
@@ -787,10 +810,10 @@ if ((x_delta) || (y_delta)) {
             ev->y_rel += y_delta;
             }
         if (SDL_SemPost (vid_mouse_events.sem))
-            sim_printf ("%s: vid_set_cursor_position(): SDL_SemPost error: %s\n", vid_dev ? sim_dname(vid_dev) : "Video Device", SDL_GetError());
+            sim_printf ("%s: vid_set_cursor_position(): SDL_SemPost error: %s\n", vid_dname(vid_dev), SDL_GetError());
         }
     else {
-        sim_printf ("%s: vid_set_cursor_position(): SDL_SemWait error: %s\n", vid_dev ? sim_dname(vid_dev) : "Video Device", SDL_GetError());
+        sim_printf ("%s: vid_set_cursor_position(): SDL_SemWait error: %s\n", vid_dname(vid_dev), SDL_GetError());
         }
     vid_cursor_x = x;
     vid_cursor_y = y;
@@ -803,7 +826,7 @@ if ((x_delta) || (y_delta)) {
         user_event.user.data2 = NULL;
 
         if (SDL_PushEvent (&user_event) < 0)
-            sim_printf ("%s: vid_set_cursor_position() SDL_PushEvent error: %s\n", sim_dname(vid_dev), SDL_GetError());
+            sim_printf ("%s: vid_set_cursor_position() SDL_PushEvent error: %s\n", vid_dname(vid_dev), SDL_GetError());
         sim_debug (SIM_VID_DBG_CURSOR, vid_dev, "vid_set_cursor_position() - Warp Queued\n");
         }
     else {
@@ -824,7 +847,7 @@ user_event.user.data1 = NULL;
 user_event.user.data2 = NULL;
 
 if (SDL_PushEvent (&user_event) < 0)
-    sim_printf ("%s: vid_refresh() SDL_PushEvent error: %s\n", sim_dname(vid_dev), SDL_GetError());
+    sim_printf ("%s: vid_refresh() SDL_PushEvent error: %s\n", vid_dname(vid_dev), SDL_GetError());
 }
 
 int vid_map_key (int key)
@@ -1218,7 +1241,7 @@ if (vid_mouse_captured) {
         (KeyStates[SDL_SCANCODE_LCTRL] || KeyStates[SDL_SCANCODE_RCTRL])) {
         sim_debug (SIM_VID_DBG_KEY, vid_dev, "vid_key() - Cursor Release\n");
         if (SDL_SetRelativeMouseMode(SDL_FALSE) < 0)    /* release cursor, show cursor */
-            sim_printf ("%s: vid_key(): SDL_SetRelativeMouseMode error: %s\n", sim_dname(vid_dev), SDL_GetError());
+            sim_printf ("%s: vid_key(): SDL_SetRelativeMouseMode error: %s\n", vid_dname(vid_dev), SDL_GetError());
         vid_mouse_captured = FALSE;
         return;
         }
@@ -1250,7 +1273,7 @@ if (SDL_SemWait (vid_key_events.sem) == 0) {
         sim_debug (SIM_VID_DBG_KEY, vid_dev, "Keyboard Event DISCARDED: State: %s, Keysym: Scancode: %d, Keysym: %d\n", (event->state == SDL_PRESSED) ? "PRESSED" : "RELEASED", event->keysym.scancode, event->keysym.sym);
         }
     if (SDL_SemPost (vid_key_events.sem))
-        sim_printf ("%s: vid_key(): SDL_SemPost error: %s\n", sim_dname(vid_dev), SDL_GetError());
+        sim_printf ("%s: vid_key(): SDL_SemPost error: %s\n", vid_dname(vid_dev), SDL_GetError());
     }
 }
 
@@ -1321,7 +1344,7 @@ if (SDL_SemWait (vid_mouse_events.sem) == 0) {
         sim_debug (SIM_VID_DBG_MOUSE, vid_dev, "Mouse Move Event Discarded: Count: %d\n", vid_mouse_events.count);
         }
     if (SDL_SemPost (vid_mouse_events.sem))
-        sim_printf ("%s: vid_mouse_move(): SDL_SemPost error: %s\n", sim_dname(vid_dev), SDL_GetError());
+        sim_printf ("%s: vid_mouse_move(): SDL_SemPost error: %s\n", vid_dname(vid_dev), SDL_GetError());
     }
 }
 
@@ -1336,7 +1359,7 @@ if ((!vid_mouse_captured) && (vid_flags & SIM_VID_INPUTCAPTURED)) {
         (event->button == SDL_BUTTON_LEFT)) {               /* left click and cursor not captured? */
         sim_debug (SIM_VID_DBG_KEY, vid_dev, "vid_mouse_button() - Cursor Captured\n");
         if (SDL_SetRelativeMouseMode (SDL_TRUE) < 0)        /* lock cursor to window, hide cursor */
-            sim_printf ("%s: vid_mouse_button(): SDL_SetRelativeMouseMode error: %s\n", sim_dname(vid_dev), SDL_GetError());
+            sim_printf ("%s: vid_mouse_button(): SDL_SetRelativeMouseMode error: %s\n", vid_dname(vid_dev), SDL_GetError());
         SDL_WarpMouseInWindow (NULL, vid_width/2, vid_height/2);/* back to center */
         SDL_PumpEvents ();
         while (SDL_PeepEvents (&dummy_event, 1, SDL_GETEVENT, SDL_MOUSEMOTION, SDL_MOUSEMOTION)) {};
@@ -1377,7 +1400,7 @@ if (SDL_SemWait (vid_mouse_events.sem) == 0) {
         sim_debug (SIM_VID_DBG_MOUSE, vid_dev, "Mouse Button Event Discarded: Count: %d\n", vid_mouse_events.count);
         }
     if (SDL_SemPost (vid_mouse_events.sem))
-        sim_printf ("%s: Mouse Button Event: SDL_SemPost error: %s\n", sim_dname(vid_dev), SDL_GetError());
+        sim_printf ("%s: Mouse Button Event: SDL_SemPost error: %s\n", vid_dname(vid_dev), SDL_GetError());
     }
 }
 
@@ -1394,9 +1417,9 @@ sim_debug (SIM_VID_DBG_VIDEO, vid_dev, "Video Update Event: \n");
 if (sim_deb)
     fflush (sim_deb);
 if (SDL_RenderClear (vid_renderer))
-    sim_printf ("%s: Video Update Event: SDL_RenderClear error: %s\n", sim_dname(vid_dev), SDL_GetError());
+    sim_printf ("%s: Video Update Event: SDL_RenderClear error: %s\n", vid_dname(vid_dev), SDL_GetError());
 if (SDL_RenderCopy (vid_renderer, vid_texture, NULL, NULL))
-    sim_printf ("%s: Video Update Event: SDL_RenderCopy error: %s\n", sim_dname(vid_dev), SDL_GetError());
+    sim_printf ("%s: Video Update Event: SDL_RenderCopy error: %s\n", vid_dname(vid_dev), SDL_GetError());
 SDL_RenderPresent (vid_renderer);
 }
 
@@ -1432,8 +1455,15 @@ uint32 *buf = (uint32 *)event->data2;
 
 sim_debug (SIM_VID_DBG_VIDEO, vid_dev, "Draw Region Event: (%d,%d,%d,%d)\n", vid_dst->x, vid_dst->x, vid_dst->w, vid_dst->h);
 
+SDL_LockMutex (vid_draw_mutex);
+if (vid_dst == vid_dst_last) {
+    vid_dst_last = NULL;
+    vid_data_last = NULL;
+    }
+SDL_UnlockMutex (vid_draw_mutex);
+
 if (SDL_UpdateTexture(vid_texture, vid_dst, buf, vid_dst->w*sizeof(*buf)))
-    sim_printf ("%s: vid_draw() - SDL_UpdateTexture error: %s\n", sim_dname(vid_dev), SDL_GetError());
+    sim_printf ("%s: vid_draw_region() - SDL_UpdateTexture error: %s\n", vid_dname(vid_dev), SDL_GetError());
 
 free (vid_dst);
 free (buf);
@@ -1565,12 +1595,22 @@ if (!initialized) {
 
 sim_debug (SIM_VID_DBG_VIDEO|SIM_VID_DBG_KEY|SIM_VID_DBG_MOUSE, vid_dev, "vid_thread() - Starting\n");
 
+sim_os_set_thread_priority (PRIORITY_ABOVE_NORMAL);
+
 memset (&vid_key_state, 0, sizeof(vid_key_state));
 
 SDL_CreateWindowAndRenderer (vid_width, vid_height, SDL_WINDOW_SHOWN, &vid_window, &vid_renderer);
 
 if ((vid_window == NULL) || (vid_renderer == NULL)) {
-    sim_printf ("%s: Error Creating Video Window: %s\n", sim_dname(vid_dev), SDL_GetError());
+    sim_printf ("%s: Error Creating Video Window: %s\n", vid_dname(vid_dev), SDL_GetError());
+    SDL_Quit ();
+    return 0;
+    }
+
+vid_draw_mutex = SDL_CreateMutex();
+
+if (vid_draw_mutex == NULL) {
+    fprintf (stderr, "%s: SDL_CreateMutex failed: %s\n", vid_dname(vid_dev), SDL_GetError ());
     SDL_Quit ();
     return 0;
     }
@@ -1584,7 +1624,7 @@ vid_texture = SDL_CreateTexture (vid_renderer,
                                  SDL_TEXTUREACCESS_STREAMING,
                                  vid_width, vid_height);
 if (!vid_texture) {
-    sim_printf ("%s: Error configuring Video environment: %s\n", sim_dname(vid_dev), SDL_GetError());
+    sim_printf ("%s: Error configuring Video environment: %s\n", vid_dname(vid_dev), SDL_GetError());
     SDL_DestroyRenderer(vid_renderer);
     vid_renderer = NULL;
     SDL_DestroyWindow(vid_window);
@@ -1610,6 +1650,9 @@ if (vid_flags & SIM_VID_INPUTCAPTURED) {
     }
 else
     SDL_SetWindowTitle (vid_window, vid_title);
+
+vid_beep_setup (400, 660);
+vid_controllers_setup ();
 
 vid_ready = TRUE;
 
@@ -1736,7 +1779,7 @@ if (0)                        while (SDL_PeepEvents (&event, 1, SDL_GETEVENT, SD
         }
     else {
         if (status < 0)
-            sim_printf ("%s: vid_thread() - SDL_WaitEvent error: %s\n", sim_dname(vid_dev), SDL_GetError());
+            sim_printf ("%s: vid_thread() - SDL_WaitEvent error: %s\n", vid_dname(vid_dev), SDL_GetError());
         }
     }
 vid_ready = FALSE;
@@ -1750,6 +1793,10 @@ SDL_DestroyRenderer(vid_renderer);
 vid_renderer = NULL;
 SDL_DestroyWindow(vid_window);
 vid_window = NULL;
+SDL_DestroyMutex (vid_draw_mutex);
+vid_draw_mutex = NULL;
+vid_controllers_cleanup ();
+vid_beep_cleanup ();
 sim_debug (SIM_VID_DBG_VIDEO|SIM_VID_DBG_KEY|SIM_VID_DBG_MOUSE|SIM_VID_DBG_CURSOR, vid_dev, "vid_thread() - Exiting\n");
 return 0;
 }
@@ -1766,9 +1813,7 @@ if (stat) {
     sim_printf ("SDL Video subsystem can't initialize\n");
     return 0;
     }
-vid_beep_setup (400, 660);
 vid_video_events ();
-vid_beep_cleanup ();
 SDL_Quit ();
 return 0;
 }
@@ -2194,6 +2239,7 @@ if (!vid_beep_data) {
     int i;
     SDL_AudioSpec desiredSpec;
 
+    SDL_InitSubSystem (SDL_INIT_AUDIO);
     memset (&desiredSpec, 0, sizeof(desiredSpec));
     desiredSpec.freq = SAMPLE_FREQUENCY;
     desiredSpec.format = AUDIO_S16SYS;
@@ -2216,6 +2262,7 @@ static void vid_beep_cleanup (void)
 SDL_CloseAudio();
 free (vid_beep_data);
 vid_beep_data = NULL;
+SDL_QuitSubSystem (SDL_INIT_AUDIO);
 }
 
 void vid_beep_event (void)
