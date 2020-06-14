@@ -27,7 +27,7 @@
 #include "sim_tmxr.h"
 
 #ifdef NUM_DEVS_COM
-#define UNIT_COM          TT_MODE_7B
+#define UNIT_COM           0
 
 
 /* u3 */
@@ -81,13 +81,14 @@
 uint8       coml_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) ;
 uint8       coml_haltio(UNIT *uptr);
 t_stat      coml_srv(UNIT *uptr);
-void        coml_ini(UNIT *uptr, t_bool);
 t_stat      com_reset(DEVICE *dptr);
 t_stat      com_scan(UNIT *uptr);
 t_stat      com_attach(UNIT *uptr, CONST char *);
 t_stat      com_detach(UNIT *uptr);
-uint8       com_buf[NUM_UNITS_COM][256];
+t_stat      com_help (FILE *, DEVICE *, UNIT *, int32, const char *);
+const char *com_description (DEVICE *);
 
+uint8       com_buf[NUM_UNITS_COM][256];
 TMLN        com_ldsc[NUM_UNITS_COM];
 TMXR        com_desc = { NUM_UNITS_COM, 0, 0, com_ldsc};
 int32       tmxr_poll = 10000;
@@ -100,10 +101,6 @@ MTAB                com_mod[] = {
 MTAB                coml_mod[] = {
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "DEV", "DEV", &set_dev_addr,
         &show_dev_addr, NULL},
-    { TT_MODE, TT_MODE_KSR, "KSR", "KSR", NULL },
-    { TT_MODE, TT_MODE_7B,  "7b",  "7B",  NULL },
-    { TT_MODE, TT_MODE_8B,  "8b",  "8B",  NULL },
-    { TT_MODE, TT_MODE_7P,  "7p",  "7P",  NULL },
     {0}
 };
 
@@ -131,13 +128,14 @@ UNIT                coml_unit[] = {
 };
 
 struct dib com_dib = { 0xF0, NUM_UNITS_COM, NULL, coml_startcmd,
-    coml_haltio, coml_unit, coml_ini};
+    coml_haltio, coml_unit, NULL};
 
 DEVICE              com_dev = {
     "COM", com_unit, NULL, com_mod,
     NUM_DEVS_COM, 8, 15, 1, 8, 8,
     NULL, NULL, com_reset, NULL, &com_attach, &com_detach,
-    NULL, DEV_MUX | DEV_DISABLE | DEV_DEBUG, 0, dev_debug
+    NULL, DEV_MUX | DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    NULL, NULL, &com_help, NULL, NULL, &com_description
 };
 
 DEVICE              coml_dev = {
@@ -252,6 +250,9 @@ static const uint8 com_2741_out[256] = {
     0xff, 0xff, 0x09, 0xff, 0xff, 0xff, 0xff, 0x7f
 };
 
+/*
+ * Issue a command to the 2701 controller.
+ */
 uint8  coml_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     uint16         addr = GET_UADDR(uptr->CMD);
     DEVICE         *dptr = find_dev_from_unit(uptr);
@@ -287,6 +288,9 @@ uint8  coml_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     return SNS_CHNEND|SNS_DEVEND;
 }
 
+/*
+ * Handle halt I/O instruction by stoping running command.
+ */
 uint8  coml_haltio(UNIT *uptr) {
     uint16         addr = GET_UADDR(uptr->CMD);
     DEVICE         *dptr = find_dev_from_unit(uptr);
@@ -437,8 +441,6 @@ t_stat coml_srv(UNIT * uptr)
                  } else if ((uptr->CMD & ADDR) != 0 && ch == 0x13) {
                      uptr->CMD |= ADDR9;
                  } else if ((uptr->CMD & ADDR) == 0 && data != 0xff) {
-                     data = sim_tt_outcvt(data, TT_GET_MODE(uptr->flags) |
-                                                                  TTUF_KSR);
                      tmxr_putc_ln( &com_ldsc[unit], data);
                      if (ch == 0x5b)
                          tmxr_putc_ln( &com_ldsc[unit], '\r');
@@ -621,11 +623,6 @@ com_reset(DEVICE * dptr)
     return SCPE_OK;
 }
 
-
-void
-coml_ini(UNIT * uptr, t_bool f)
-{
-}
 
 t_stat
 com_attach(UNIT * uptr, CONST char *cptr)

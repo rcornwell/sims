@@ -215,7 +215,7 @@ readbuff(int chan) {
         chan_byte[chan] = BUFF_CHNEND;
         return 1;
     }
-    if ((ccw_cmd[chan] & CMD_TYPE) == CMD_WRITE) {
+    if ((ccw_cmd[chan] & 1) == 1) {
         sim_debug(DEBUG_CDATA, &cpu_dev, "Channel write %02x %06x %08x %08x '",
               chan, addr, chan_buf[chan], ccw_count[chan]);
         for(k = 24; k >= 0; k -= 8) {
@@ -379,7 +379,7 @@ loop:
         chan_status[chan] |= STATUS_PCI;
         ccw_flags[chan] &= ~FLAG_PCI;
         irq_pend = 1;
-        sim_debug(DEBUG_CMD, &cpu_dev, "Set PCI %02x\n", chan);
+        sim_debug(DEBUG_CMD, &cpu_dev, "Set PCI %02x load\n", chan);
     }
     return 0;
 }
@@ -615,13 +615,17 @@ chan_end(uint16 addr, uint8 flags) {
     if (chan < 0)
         return;
 
-    sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end(%x, %x) %x\n", addr, flags, ccw_count[chan]);
+    sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end(%x, %x) %x %04x %04x\n", addr, flags,
+                 ccw_count[chan], ccw_flags[chan], chan_status[chan]);
+#if 0
     /* If PCI flag set, trigger interrupt */
     if (ccw_flags[chan] & FLAG_PCI) {
         chan_status[chan] |= STATUS_PCI;
         ccw_flags[chan] &= ~FLAG_PCI;
+        sim_debug(DEBUG_CMD, &cpu_dev, "Set PCI %02x end\n", chan);
         irq_pend = 1;
     }
+#endif
     /* Flush buffer if there was any change */
     if (chan_byte[chan] & BUFF_DIRTY) {
         (void)(writebuff(chan));
@@ -648,6 +652,8 @@ chan_end(uint16 addr, uint8 flags) {
         ccw_flags[chan] &= ~FLAG_CD;
 
     irq_pend = 1;
+    sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end(%x, %x) %x %04x end\n", addr, flags,
+                 chan_status[chan], ccw_flags[chan]);
 }
 
 /*
@@ -660,11 +666,11 @@ store_csw(uint16 chan) {
     key[0] |= 0x6;
     if (chan_status[chan] & STATUS_PCI) {
         chan_status[chan] &= ~STATUS_PCI;
-        ccw_flags[chan] &= ~FLAG_PCI;
+        sim_debug(DEBUG_CMD, &cpu_dev, "Clr PCI %02x store\n", chan);
     } else {
         chan_status[chan] = 0;
-        ccw_flags[chan] &= ~FLAG_PCI;
     }
+    ccw_flags[chan] &= ~FLAG_PCI;
     sim_debug(DEBUG_EXP, &cpu_dev, "Channel store csw  %02x %06x %08x\n",
           chan, M[0x40>>2], M[0x44 >> 2]);
 }
@@ -1083,6 +1089,9 @@ scan_chan(uint16 mask, int irq_en) {
 }
 
 
+/*
+ * Scan all devices and create the device mapping.
+ */
 t_stat
 chan_set_devs()
 {
@@ -1197,6 +1206,7 @@ set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     return r;
 }
 
+/* Display the address of the device */
 t_stat
 show_dev_addr(FILE * st, UNIT * uptr, int32 v, CONST void *desc)
 {

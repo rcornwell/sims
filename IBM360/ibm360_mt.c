@@ -144,10 +144,11 @@ uint8               mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) ;
 t_stat              mt_srv(UNIT *);
 t_stat              mt_boot(int32, DEVICE *);
 void                mt_ini(UNIT *, t_bool);
-t_stat              mt_reset(DEVICE *);
+t_stat              mt_boot(int32, DEVICE *);
 t_stat              mt_attach(UNIT *, CONST char *);
 t_stat              mt_detach(UNIT *);
-t_stat              mt_boot(int32, DEVICE *);
+t_stat              mt_help (FILE *, DEVICE *, UNIT *, int32, const char *);
+const char         *mt_description (DEVICE *);
 
 
 /* One buffer per channel */
@@ -182,8 +183,9 @@ struct dib mta_dib = { 0xF8, NUM_UNITS_MT, NULL, mt_startcmd, NULL, mta_unit, mt
 DEVICE              mta_dev = {
     "MTA", mta_unit, NULL, mt_mod,
     NUM_UNITS_MT, 8, 15, 1, 8, 8,
-    NULL, NULL, &mt_reset, &mt_boot, &mt_attach, &mt_detach,
-    &mta_dib, DEV_BUF_NUM(0) | DEV_DISABLE | DEV_DEBUG | DEV_TAPE, 0, dev_debug
+    NULL, NULL, NULL, &mt_boot, &mt_attach, &mt_detach,
+    &mta_dib, DEV_BUF_NUM(0) | DEV_DISABLE | DEV_DEBUG | DEV_TAPE, 0, dev_debug,
+    NULL, NULL, &mt_help, NULL, NULL, &mt_description
 };
 
 #if NUM_DEVS_MT > 1
@@ -203,8 +205,9 @@ struct dib mtb_dib = { 0xF8, NUM_UNITS_MT, NULL, mt_startcmd, NULL, mtb_unit, mt
 DEVICE              mtb_dev = {
     "MTB", mtb_unit, NULL, mt_mod,
     NUM_UNITS_MT, 8, 15, 1, 8, 8,
-    NULL, NULL, &mt_reset, &mt_boot, &mt_attach, &mt_detach,
-    &mtb_dib, DEV_BUF_NUM(1) | DEV_DISABLE | DEV_DIS | DEV_DEBUG | DEV_TAPE, 0, dev_debug
+    NULL, NULL, NULL, &mt_boot, &mt_attach, &mt_detach,
+    &mtb_dib, DEV_BUF_NUM(1) | DEV_DISABLE | DEV_DIS | DEV_DEBUG | DEV_TAPE, 0,
+    dev_debug, NULL, NULL, &mt_help, NULL, NULL, &mt_description
 };
 #endif
 
@@ -674,8 +677,9 @@ t_stat mt_srv(UNIT * uptr)
                    break;
               case 1:
                    uptr->POS++;
-                   sim_debug(DEBUG_DETAIL, dptr, "Backspace rec unit=%d ", unit);
                    r = sim_tape_sprecr(uptr, &reclen);
+                   sim_debug(DEBUG_DETAIL, dptr, "Backspace rec unit=%d %d ",
+                           unit, reclen);
                    /* We don't set EOF on BSR */
                    if (r == MTSE_TMK) {
                        uptr->POS++;
@@ -712,8 +716,9 @@ t_stat mt_srv(UNIT * uptr)
                     sim_activate(uptr, 500);
                     break;
               case 1:
-                   sim_debug(DEBUG_DETAIL, dptr, "Backspace file unit=%d\n", unit);
                    r = sim_tape_sprecr(uptr, &reclen);
+                   sim_debug(DEBUG_DETAIL, dptr, "Backspace file unit=%d %d\n",
+                            unit, reclen);
                    if (r == MTSE_TMK) {
                        uptr->POS++;
                        sim_debug(DEBUG_DETAIL, dptr, "MARK\n");
@@ -746,8 +751,8 @@ t_stat mt_srv(UNIT * uptr)
                    break;
               case 1:
                    uptr->POS++;
-                   sim_debug(DEBUG_DETAIL, dptr, "Skip rec unit=%d ", unit);
                    r = sim_tape_sprecf(uptr, &reclen);
+                   sim_debug(DEBUG_DETAIL, dptr, "Skip rec unit=%d %d ", unit, reclen);
                    if (r == MTSE_TMK) {
                        uptr->POS = 3;
                        sim_debug(DEBUG_DETAIL, dptr, "MARK\n");
@@ -785,8 +790,8 @@ t_stat mt_srv(UNIT * uptr)
                    sim_activate(uptr, 500);
                    break;
               case 1:
-                   sim_debug(DEBUG_DETAIL, dptr, "Skip rec unit=%d ", unit);
                    r = sim_tape_sprecf(uptr, &reclen);
+                   sim_debug(DEBUG_DETAIL, dptr, "Skip frec unit=%d %d", unit, reclen);
                    if (r == MTSE_TMK) {
                        uptr->POS++;
                        sim_debug(DEBUG_DETAIL, dptr, "MARK\n");
@@ -881,9 +886,17 @@ mt_ini(UNIT * uptr, t_bool f)
 }
 
 t_stat
-mt_reset(DEVICE * dptr)
+mt_boot(int32 unit_num, DEVICE * dptr)
 {
-    return SCPE_OK;
+    UNIT               *uptr = &dptr->units[unit_num];
+
+    if ((uptr->flags & UNIT_ATT) == 0)
+        return SCPE_UNATT;      /* attached? */
+    if ((uptr->flags & MTUF_9TR) == 0)  {
+        uptr->CMD &= UNIT_ADDR_MASK;
+        uptr->CMD |= MT_ODD|MT_CONV|MT_MDEN_800;
+    }
+    return chan_boot(GET_UADDR(uptr->CMD), dptr);
 }
 
 t_stat
@@ -910,18 +923,21 @@ mt_detach(UNIT * uptr)
     return sim_tape_detach(uptr);
 }
 
-t_stat
-mt_boot(int32 unit_num, DEVICE * dptr)
+t_stat mt_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-    UNIT               *uptr = &dptr->units[unit_num];
+fprintf (st, "2400 Magnetic Tape\n\n");
+fprint_set_help (st, dptr);
+fprint_show_help (st, dptr);
+fprintf (st, "\nThe type options can be used only when a unit is not attached to a file.  The\n");
+fprintf (st, "bad block option can be used only when a unit is attached to a file.\n");
+fprintf (st, "The magtape supports the BOOT command.\n");
+sim_tape_attach_help (st, dptr, uptr, flag, cptr);
+return SCPE_OK;
+}
 
-    if ((uptr->flags & UNIT_ATT) == 0)
-        return SCPE_UNATT;      /* attached? */
-    if ((uptr->flags & MTUF_9TR) == 0)  {
-        uptr->CMD &= UNIT_ADDR_MASK;
-        uptr->CMD |= MT_ODD|MT_CONV|MT_MDEN_800;
-    }
-    return chan_boot(GET_UADDR(uptr->CMD), dptr);
+const char *mt_description (DEVICE *dptr)
+{
+return "2400 magnetic tape" ;
 }
 
 #endif

@@ -83,15 +83,17 @@ t_stat              cdp_srv(UNIT *);
 t_stat              cdp_reset(DEVICE *);
 t_stat              cdp_attach(UNIT *, CONST char *);
 t_stat              cdp_detach(UNIT *);
+t_stat              cdp_help(FILE *, DEVICE *, UNIT *, int32, const char *);
+const char         *cdp_description(DEVICE *);
 
 UNIT                cdp_unit[] = {
-    {UDATA(cdp_srv, UNIT_CDP, 0), 600, UNIT_ADDR(0x00D) },       /* A */
+    {UDATA(cdp_srv, UNIT_CDP, 0), 600, UNIT_ADDR(0x00D) },
 #if NUM_DEVS_CDP > 1
-    {UDATA(cdp_srv, UNIT_CDP | UNIT_DIS, 0), 600, UNIT_ADDR(0x01D)},       /* A */
+    {UDATA(cdp_srv, UNIT_CDP | UNIT_DIS, 0), 600, UNIT_ADDR(0x01D)},
 #if NUM_DEVS_CDP > 2
-    {UDATA(cdp_srv, UNIT_CDP | UNIT_DIS, 0), 600, UNIT_ADDR(0x40D)},       /* A */
+    {UDATA(cdp_srv, UNIT_CDP | UNIT_DIS, 0), 600, UNIT_ADDR(0x40D)},
 #if NUM_DEVS_CDP > 3
-    {UDATA(cdp_srv, UNIT_CDP | UNIT_DIS, 0), 600, UNIT_ADDR(0x41D)},       /* A */
+    {UDATA(cdp_srv, UNIT_CDP | UNIT_DIS, 0), 600, UNIT_ADDR(0x41D)},
 #endif
 #endif
 #endif
@@ -112,19 +114,17 @@ DEVICE              cdp_dev = {
     "CDP", cdp_unit, NULL, cdp_mod,
     NUM_DEVS_CDP, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, NULL, &cdp_attach, &cdp_detach,
-    &cdp_dib, DEV_UADDR | DEV_DISABLE | DEV_DEBUG | DEV_CARD, 0, crd_debug
+    &cdp_dib, DEV_UADDR | DEV_DISABLE | DEV_DEBUG | DEV_CARD, 0, crd_debug,
+    NULL, NULL, &cdp_help, NULL, NULL, &cdp_description
 };
 
 
 
 
-/* Card punch routine
+/*
+ * Start the card punch to punch one card.
+ */
 
-   Modifiers have been checked by the caller
-   C modifier is recognized (column binary is implemented)
-*/
-
-
 uint8  cdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
@@ -252,6 +252,22 @@ cdp_detach(UNIT * uptr)
         free(uptr->up7);
     uptr->up7 = 0;
     return sim_card_detach(uptr);
+}
+
+t_stat
+cdp_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
+{
+   fprintf (st, "2540P Card Punch\n\n");
+   sim_card_attach_help(st, dptr, uptr, flag, cptr);
+   fprint_set_help(st, dptr);
+   fprint_show_help(st, dptr);
+   return SCPE_OK;
+}
+
+const char *
+cdp_description(DEVICE *dptr)
+{
+   return "2540P Card Punch";
 }
 #endif
 

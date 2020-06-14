@@ -83,17 +83,18 @@ t_stat              cdr_srv(UNIT *);
 t_stat              cdr_reset(DEVICE *);
 t_stat              cdr_attach(UNIT *, CONST char *);
 t_stat              cdr_detach(UNIT *);
-
+t_stat              cdr_help(FILE *, DEVICE *, UNIT *, int32, const char *);
+const char         *cdr_description(DEVICE *);
 
 
 UNIT                cdr_unit[] = {
-   {UDATA(cdr_srv, UNIT_CDR, 0), 300, UNIT_ADDR(0x0C)},       /* A */
+   {UDATA(cdr_srv, UNIT_CDR, 0), 300, UNIT_ADDR(0x0C)},
 #if NUM_DEVS_CDR > 1
-   {UDATA(cdr_srv, UNIT_CDR | UNIT_DIS, 0), 300, UNIT_ADDR(0x1C)},       /* B */
+   {UDATA(cdr_srv, UNIT_CDR | UNIT_DIS, 0), 300, UNIT_ADDR(0x1C)},
 #if NUM_DEVS_CDR > 2
-   {UDATA(cdr_srv, UNIT_CDR | UNIT_DIS, 0), 300, UNIT_ADDR(0x40C)},       /* B */
+   {UDATA(cdr_srv, UNIT_CDR | UNIT_DIS, 0), 300, UNIT_ADDR(0x40C)},
 #if NUM_DEVS_CDR > 3
-   {UDATA(cdr_srv, UNIT_CDR | UNIT_DIS, 0), 300, UNIT_ADDR(0x41C)},       /* B */
+   {UDATA(cdr_srv, UNIT_CDR | UNIT_DIS, 0), 300, UNIT_ADDR(0x41C)},
 #endif
 #endif
 #endif
@@ -117,6 +118,9 @@ DEVICE              cdr_dev = {
 };
 
 
+/*
+ * Start card reader to read in one card.
+ */
 uint8  cdr_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
@@ -291,5 +295,19 @@ cdr_detach(UNIT * uptr)
     return sim_card_detach(uptr);
 }
 
+t_stat
+cdr_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
+{
+   fprintf (st, "2540R Card Reader\n\n");
+   sim_card_attach_help(st, dptr, uptr, flag, cptr);
+   fprint_set_help(st, dptr);
+   fprint_show_help(st, dptr);
+   return SCPE_OK;
+}
 
+const char *
+cdr_description(DEVICE *dptr)
+{
+   return "2540R Card Reader";
+}
 #endif

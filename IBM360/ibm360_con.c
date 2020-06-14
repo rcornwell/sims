@@ -83,7 +83,8 @@ void                con_ini(UNIT *, t_bool);
 t_stat              con_srv(UNIT *);
 t_stat              con_attach(UNIT *, char *);
 t_stat              con_detach(UNIT *);
-
+t_stat              con_help(FILE *, DEVICE *, UNIT *, int32, const char *);
+const char         *con_description(DEVICE *d);
 
 UNIT                con_unit[] = {
     {UDATA(con_srv, UNIT_ATT, 0), 0, UNIT_ADDR(0x1F)},       /* A */
@@ -101,7 +102,8 @@ DEVICE              con_dev = {
     "INQ", con_unit, NULL, con_mod,
     NUM_DEVS_CON, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, NULL, NULL, NULL,
-    &con_dib, DEV_UADDR | DEV_DISABLE | DEV_DEBUG, 0, dev_debug
+    &con_dib, DEV_UADDR | DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    NULL, NULL, &con_help, NULL, NULL, &con_description
 };
 
 
@@ -358,6 +360,28 @@ con_srv(UNIT *uptr) {
     sim_activate(uptr, delay);
     return SCPE_OK;
 }
+
+t_stat
+con_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
+{
+   fprintf (st, "1050 Console Terminal\n");
+   fprintf (st, "This is the interface from the operator to the system. To request the\n");
+   fprintf (st, "system to accept input press the <esc> key and wait until the system\n");
+   fprintf (st, "responds with a line with I as the first character. When you have\n");
+   fprintf (st, "finished typing your line, press return or enter key. Backspace will\n");
+   fprintf (st, "delete the last character. All responses from the system are prefixed\n");
+   fprintf (st, "with a R and blank as the first character. Not all operating systems\n");
+   fprintf (st, "require the use of <esc> to enter data\n");
+   fprintf (st, "Pressing control-X will issue a external interrupt to the CPU\n");
+   return SCPE_OK;
+}
+
+const char *
+con_description(DEVICE *dptr)
+{
+   return "1050 Console Terminal";
+}
+
 
 #endif
 
