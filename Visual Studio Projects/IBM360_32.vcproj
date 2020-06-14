@@ -26,7 +26,7 @@
 			<Tool
 				Name="VCPreBuildEventTool"
 				Description="Check for required build dependencies &amp; git commit id"
-				CommandLine="Pre-Build-Event.cmd &quot;$(TargetDir)$(TargetName).exe&quot; LIBPCRE"
+				CommandLine="Pre-Build-Event.cmd &quot;$(TargetDir)$(TargetName).exe&quot; LIBPCRE BUILD LIBSDL"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
@@ -40,10 +40,9 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="./IBM360;.;..;../../windows-build/PCRE/include/;../../windows-build/pthreads"
-				PreprocessorDefinitions="IBM360;SIM_BUILD_TOOL=simh-Visual-Studio-Project;_CRT_NONSTDC_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;USE_SIM_CARD;SIM_NEED_GIT_COMMIT_ID;HAVE_PCREPOSIX_H;PCRE_STATIC"
+				AdditionalIncludeDirectories="./IBM360;.;..;../slirp;../slirp_glue;../slirp_glue/qemu;../slirp_glue/qemu/win32/include;../../windows-build/include;;../../windows-build/include/SDL2"
+				PreprocessorDefinitions="IBM360;SIM_BUILD_TOOL=simh-Visual-Studio-Project;_CRT_NONSTDC_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;USE_SIM_CARD;SIM_NEED_GIT_COMMIT_ID;HAVE_PCRE_H;PCRE_STATIC;PTW32_STATIC_LIB;USE_READER_THREAD;SIM_ASYNC_H_IO"
 				KeepComments="false"
-				MinimalRebuild="true"
 				BasicRuntimeChecks="0"
 				RuntimeLibrary="1"
 				UsePrecompiledHeader="0"
@@ -63,7 +62,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="libcmtd.lib wsock32.lib winmm.lib Iphlpapi.lib pcrestaticd.lib pcreposixstaticd.lib zlib.lib dxguid.lib Imm32.lib Version.lib"
+				AdditionalDependencies="libcmtd.lib wsock32.lib winmm.lib Iphlpapi.lib pcrestaticd.lib SDL2-StaticD.lib SDL2_ttf-StaticD.lib freetype2412MT_D.lib libpng16.lib zlib.lib dxguid.lib Imm32.lib Version.lib"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="../../windows-build/lib/Debug/"
 				GenerateDebugInformation="true"
@@ -109,7 +108,7 @@
 			<Tool
 				Name="VCPreBuildEventTool"
 				Description="Check for required build dependencies &amp; git commit id"
-				CommandLine="Pre-Build-Event.cmd &quot;$(TargetDir)$(TargetName).exe&quot; LIBPCRE"
+				CommandLine="Pre-Build-Event.cmd &quot;$(TargetDir)$(TargetName).exe&quot; LIBPCRE BUILD LIBSDL"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
@@ -126,8 +125,8 @@
 				InlineFunctionExpansion="1"
 				OmitFramePointers="true"
 				WholeProgramOptimization="true"
-				AdditionalIncludeDirectories="./IBM360;.;..;../../windows-build/PCRE/include/;../../windows-build/pthreads"
-				PreprocessorDefinitions="IBM360;SIM_BUILD_TOOL=simh-Visual-Studio-Project;_CRT_NONSTDC_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;USE_SIM_CARD;SIM_NEED_GIT_COMMIT_ID;HAVE_PCREPOSIX_H;PCRE_STATIC"
+				AdditionalIncludeDirectories="./IBM360;.;..;../slirp;../slirp_glue;../slirp_glue/qemu;../slirp_glue/qemu/win32/include;../../windows-build/include;;../../windows-build/include/SDL2"
+				PreprocessorDefinitions="IBM360;SIM_BUILD_TOOL=simh-Visual-Studio-Project;_CRT_NONSTDC_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;USE_SIM_CARD;SIM_NEED_GIT_COMMIT_ID;HAVE_PCRE_H;PCRE_STATIC;PTW32_STATIC_LIB;USE_READER_THREAD;SIM_ASYNC_H_IO"
 				StringPooling="true"
 				RuntimeLibrary="0"
 				EnableFunctionLevelLinking="true"
@@ -147,7 +146,8 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="libcmt.lib wsock32.lib winmm.lib Iphlpapi.lib pcrestatic.lib pcreposixstatic.lib zlib.lib dxguid.lib Imm32.lib Version.lib"
+                                AdditionalOptions="/fixed:no"
+				AdditionalDependencies="libcmt.lib wsock32.lib winmm.lib Iphlpapi.lib pcrestatic.lib SDL2-Static.lib SDL2_ttf-Static.lib freetype2412MT.lib libpng16.lib zlib.lib dxguid.lib Imm32.lib Version.lib"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="../../windows-build/lib/Release/"
 				GenerateDebugInformation="false"
@@ -233,6 +233,29 @@
 				RelativePath="..\IBM360\ibm360_sys.c"
 				>
 			</File>
+ 			<File
+ 				RelativePath="..\..\windows-build\pthreads\pthread.c"
+ 				>
+ 				<FileConfiguration
+ 					Name="Debug|Win32"
+ 					>
+ 					<Tool
+ 						Name="VCCLCompilerTool"
+ 						PreprocessorDefinitions="HAVE_CONFIG_H;PTW32_BUILD_INLINED;PTW32_STATIC_LIB;__CLEANUP_C;$(NOINHERIT)"
+ 						CompileAs="1"
+ 					/>
+ 				</FileConfiguration>
+ 				<FileConfiguration
+ 					Name="Release|Win32"
+ 					>
+ 					<Tool
+ 						Name="VCCLCompilerTool"
+ 						WholeProgramOptimization="false"
+ 						PreprocessorDefinitions="HAVE_CONFIG_H;PTW32_BUILD_INLINED;PTW32_STATIC_LIB;__CLEANUP_C;$(NOINHERIT)"
+ 						CompileAs="1"
+ 					/>
+ 				</FileConfiguration>
+ 			</File>
 			<File
 				RelativePath="..\scp.c"
 				>
