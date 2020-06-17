@@ -47,6 +47,7 @@
 #define LPR_SKPCHN     0x78       /* Skip Channel */
 #define LPR_CMDMSK     0xff       /* Mask command part. */
 #define LPR_FULL       0x100      /* Buffer full */
+#define LPR_DATCHK     0x200      /* Don't return data-check */
 
 /* Upper 11 bits of u3 hold the device address */
 
@@ -62,6 +63,7 @@
 #define SNS_SEQUENCE    0x02      /* Unusual sequence */
 #define SNS_CHN9        0x01      /* Channel 9 on printer */
 #define SNS_CHN12       0x100
+
 /* u6 hold buffer position */
 
 #define CMD    u3
@@ -172,12 +174,6 @@ print_line(UNIT * uptr)
     int                 l = (uptr->CMD >> 3) & 0x1f;
     int                 f = 1;
 
-    /* Check if valid form motion */
-    if ((uptr->CMD & 0x5) != 0x1 || 
-        (l > 3 && l < 0x10) || l > 0x1c) {
-        uptr->SNS = SNS_CMDREJ;
-        return;
-    }
     /* Dump buffer if full */
     if (uptr->CMD & LPR_FULL) {
 
@@ -303,7 +299,7 @@ uint8 lpr_startcmd(UNIT * uptr, uint16 chan, uint8 cmd)
        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     }
 
-    sim_debug(DEBUG_CMD, &lpr_dev, "Cmd %02x\n", cmd);
+    sim_debug(DEBUG_CMD, &lpr_dev, "Cmd %02x %02x\n", cmd, (cmd >> 3) & 0x1f);
 
     switch (cmd & 0x3) {
     case 1:              /* Write command */
@@ -320,7 +316,7 @@ uint8 lpr_startcmd(UNIT * uptr, uint16 chan, uint8 cmd)
          sim_activate(uptr, 10);          /* Start unit off */
          uptr->SNS = 0;
          uptr->POS = 0;
-         return SNS_CHNEND;
+         return 0;
 
     case 0:               /* Status */
          if (cmd == 0x4) {           /* Sense */
@@ -363,16 +359,44 @@ lpr_srv(UNIT *uptr) {
        return SCPE_OK;
     }
 
+    /* Handle Block-Data-check */
+    if ((uptr->CMD & 0xf7) == 0x73) {
+        if (uptr->CMD & 0x8)
+            uptr->CMD &= ~LPR_DATCHK;
+        else
+            uptr->CMD |= LPR_DATCHK;
+       uptr->CMD &= ~(LPR_CMDMSK);
+       chan_end(addr, SNS_DEVEND|SNS_CHNEND);
+       return SCPE_OK;
+    }
+
+    /* Handle UCS Load */
+    if ((uptr->CMD & 0xf7) == 0xf3) {
+       uint8   ch;
+       for (l = 0; l < 240; l++) {
+           if(chan_read_byte(addr, &ch)) 
+              break;
+       }
+       chan_end(addr, SNS_DEVEND|SNS_CHNEND);
+       uptr->CMD &= ~(LPR_CMDMSK);
+       return SCPE_OK;
+    }
 
     /* Check if valid form motion */
-    if ((uptr->CMD & 0x5) != 0x1 || 
-        (l > 3 && l < 0x10) || l > 0x1c) {
+    if ((cmd == 1 || cmd == 3) && 
+        (l > 3 && l < 0x10) || l > 0x1d) {
         uptr->SNS = SNS_CMDREJ;
-        chan_end(addr, SNS_CHNEND|SNS_UNITCHK);
+        uptr->CMD &= ~(LPR_CMDMSK);
+        chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
         return SCPE_OK;
     }
 
-    if ((uptr->CMD & LPR_FULL) || cmd == 0x3) {
+    /* On control end channel */
+    if (cmd == 3)
+       chan_end(addr, SNS_CHNEND);
+
+    /* If at end of buffer, or control do command */
+    if ((uptr->CMD & LPR_FULL) || cmd == 3) {
        print_line(uptr);
        uptr->CMD &= ~(LPR_FULL|LPR_CMDMSK);
        uptr->POS = 0;

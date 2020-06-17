@@ -1495,7 +1495,7 @@ rd:
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                  break;
              }
-             if (uptr->LCMD == DK_WR_R0 || uptr->LCMD == DK_WR_CKD ||
+             if (uptr->LCMD == DK_WR_R0 || uptr->LCMD == DK_WR_CKD || uptr->LCMD == DK_WR_SCKD ||
                 ((uptr->LCMD & 0x7) == 1 && (uptr->LCMD & 0x60) != 0 &&
                      (uptr->CMD & (DK_SHORTSRC|DK_SRCOK)) == DK_SRCOK)) {
                  sim_debug(DEBUG_DETAIL, dptr, "WR CKD unit=%d ok\n", unit);
@@ -1606,8 +1606,7 @@ wrckd:
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
                  break;
              } else if (state == DK_POS_DATA && data->count == data->dlen) {
-                 if (cmd == DK_WR_HA || cmd == DK_WR_R0 || cmd == DK_WR_CKD ||
-                      cmd == DK_WR_SCKD) {
+                 if (cmd == DK_WR_HA || cmd == DK_WR_R0 || cmd == DK_WR_CKD || cmd == DK_WR_SCKD) {
                       /* Write end of track marker */
                       for(i = 0; i < 8; i++)
                          da[i] = 0xff;
