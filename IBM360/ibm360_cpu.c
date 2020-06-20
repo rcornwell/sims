@@ -73,6 +73,7 @@
 */
 
 #include "ibm360_defs.h"                        /* simulator defns */
+#include <sys/time.h>
 
 #define MEMAMOUNT(x) (x)
 #define TMR_RTC      0
@@ -341,6 +342,7 @@ MTAB cpu_mod[] = {
     { MTAB_VDV, MEMAMOUNT(64), NULL, "1536K", &cpu_set_size },
     { MTAB_VDV, MEMAMOUNT(128), NULL, "2M", &cpu_set_size },
     { MTAB_VDV, MEMAMOUNT(256), NULL, "4M", &cpu_set_size },
+    { MTAB_VDV, MEMAMOUNT(512), NULL, "8M", &cpu_set_size },
     { FEAT_370, FEAT_370, "IBM370", "IBM370", NULL, NULL, NULL, "Sets CPU to be a IBM370"},
     { FEAT_370, 0, "IBM360", "IBM360", NULL, NULL, NULL, "Sets CPU to be a IBM360"},
     { FEAT_PROT, 0, NULL, "NOPROT", NULL, NULL, NULL, "No Storage protection"},
@@ -3018,8 +3020,10 @@ save_dbl:
                               /* Load clock with double word */
                               if (ReadFull(addr1, &src1))
                                  goto supress;
+                              if (ReadFull(addr1 + 4, &src2))
+                                 goto supress;
                               tod_clock[0] = src1;
-                              tod_clock[1] = 0;
+                              tod_clock[1] = src2;
                               clk_state = CLOCK_SET;
                               check_tod_irq();
                               cc = 0;
@@ -5860,10 +5864,22 @@ t_stat cpu_reset (DEVICE *dptr)
     for (i = 0; i < 16; i++)
        cregs[i] = 0;
     clk_cmp[0] = clk_cmp[1] = 0xffffffff;
-    cregs[0]  = 0x000000e0;
-    cregs[2]  = 0xffffffff;
-    cregs[14] = 0xc2000000;
-    cregs[15] = 512;
+    if ((cpu_unit[0].flags & FEAT_370) != 0) {
+        if (clk_state == CLOCK_UNSET) {
+            /* Set TOD to current time */
+            time_t seconds = time(NULL);
+            seconds += ((70 * 365) + 17) * 86400ULL;
+            seconds *= 1000000ULL;
+            seconds <<= 12;
+            tod_clock[0] = (uint32)(seconds >> 32);
+            tod_clock[1] = (uint32)(seconds & FMASK);
+        }
+        cregs[0]  = 0x000000e0;
+        cregs[2]  = 0xffffffff;
+        cregs[14] = 0xc2000000;
+        cregs[15] = 512;
+    }
+
     if (cpu_unit[0].flags & (FEAT_370|FEAT_TIMER)) {
        sim_rtcn_init_unit (&cpu_unit[0], cpu_unit[0].wait, TMR_RTC);
        sim_activate(&cpu_unit[0], 10000);
