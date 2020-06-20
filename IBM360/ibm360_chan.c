@@ -363,6 +363,8 @@ loop:
          chan_status[chan] &= 0xff;
          chan_status[chan] |= dibp->start_cmd(uptr, chan, ccw_cmd[chan]) << 8;
          if (chan_status[chan] & (STATUS_ATTN|STATUS_CHECK|STATUS_EXPT)) {
+             sim_debug(DEBUG_DETAIL, &cpu_dev, "Channel %03x abort %04x\n", 
+                     chan, chan_status[chan]);
              chan_status[chan] |= STATUS_CEND;
              ccw_flags[chan] = 0;
              ccw_cmd[chan] = 0;
@@ -617,15 +619,7 @@ chan_end(uint16 addr, uint8 flags) {
 
     sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end(%x, %x) %x %04x %04x\n", addr, flags,
                  ccw_count[chan], ccw_flags[chan], chan_status[chan]);
-#if 0
-    /* If PCI flag set, trigger interrupt */
-    if (ccw_flags[chan] & FLAG_PCI) {
-        chan_status[chan] |= STATUS_PCI;
-        ccw_flags[chan] &= ~FLAG_PCI;
-        sim_debug(DEBUG_CMD, &cpu_dev, "Set PCI %02x end\n", chan);
-        irq_pend = 1;
-    }
-#endif
+
     /* Flush buffer if there was any change */
     if (chan_byte[chan] & BUFF_DIRTY) {
         (void)(writebuff(chan));
@@ -649,7 +643,7 @@ chan_end(uint16 addr, uint8 flags) {
         ccw_flags[chan] = 0;
 
     if ((flags & SNS_DEVEND) != 0)
-        ccw_flags[chan] &= ~FLAG_CD;
+        ccw_flags[chan] &= ~(FLAG_CD|FLAG_SLI);
 
     irq_pend = 1;
     sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end(%x, %x) %x %04x end\n", addr, flags,
@@ -695,13 +689,24 @@ startio(uint16 addr) {
         return 3;
     }
 
+    sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %x %x %x\n", addr, chan,
+              ccw_cmd[chan], ccw_flags[chan], chan_status[chan]);
+
+    /* If pending status is for us, return it with status code */
+    if (chan_dev[chan] == addr && chan_status[chan] != 0) {
+        store_csw(chan);
+        return 1;
+    }
+
     /* If channel is active return cc=2 */
     if (ccw_cmd[chan] != 0 ||
         (ccw_flags[chan] & (FLAG_CD|FLAG_CC)) != 0 ||
-         chan_status[chan] != 0) {
-        sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x cc=2\n", addr, chan);
+        chan_status[chan] != 0) {
+        sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %08x cc=2\n", addr, chan, 
+               chan_status[chan]);
         return 2;
     }
+
 
     if (dev_status[addr] != 0) {
         M[0x44 >> 2] = (((uint32)dev_status[addr]) << 24);
@@ -713,10 +718,6 @@ startio(uint16 addr) {
         dev_status[addr] = 0;
         return 1;
     }
-
-
-    sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %x %x\n", addr, chan,
-              ccw_cmd[chan], ccw_flags[chan]);
 
     /* All ok, get caw address */
     chan_status[chan] = 0;
@@ -741,8 +742,8 @@ startio(uint16 addr) {
 
     /* Try to load first command */
     if (load_ccw(chan, 0)) {
-        if (chan_status[chan] &
-                  (STATUS_ATTN|STATUS_CHECK|STATUS_PROT|STATUS_PCHK|STATUS_EXPT)) {
+//        if (chan_status[chan] &
+ //                 (STATUS_ATTN|STATUS_CHECK|STATUS_PROT|STATUS_PCHK|STATUS_EXPT)) {
             M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | (M[0x44 >> 2] & 0xffff);
             key[0] |= 0x6;
             sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %x %x cc=2\n", addr, chan,
@@ -751,7 +752,9 @@ startio(uint16 addr) {
             dev_status[addr] = 0;
             ccw_cmd[chan] = 0;
             return 1;
-        }
+  //      }
+    }
+#if 0
         if (chan_status[chan] & (STATUS_PCI)) {
             M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | (M[0x44 >> 2] & 0xffff);
             key[0] |= 0x6;
@@ -761,7 +764,7 @@ startio(uint16 addr) {
             dev_status[addr] = 0;
             return 1;
         }
-    }
+#endif
 
     /* If channel returned busy save CSW and return cc=1 */
     if (chan_status[chan] & STATUS_BUSY) {
@@ -776,6 +779,7 @@ startio(uint16 addr) {
         ccw_cmd[chan] = 0;
         return 1;
     }
+
     return 0;
 }
 

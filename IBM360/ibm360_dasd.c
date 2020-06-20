@@ -52,7 +52,6 @@
    cpos points to where data is actually read/written from
 
    Pad to being track to multiple of 512 bytes.
-
    Last record has cyl and head = 0xffffffff
 
 */
@@ -397,22 +396,66 @@ uint8  dasd_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     sim_debug(DEBUG_CMD, dptr, "CMD unit=%d %02x\n", unit, cmd);
     if ((uptr->flags & UNIT_ATT) == 0) {
        if (cmd == 0x4) {  /* Sense */
+           int     type = GET_TYPE(uptr->flags);
+           int     i;
            sim_debug(DEBUG_CMD, dptr, "CMD sense\n");
            ch = uptr->SNS & 0xff;
            sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 1 %x\n", unit, ch);
-           chan_write_byte(addr, &ch) ;
+           if (chan_write_byte(addr, &ch))
+               goto sense_end;
            ch = (uptr->SNS >> 8) & 0xff;
            sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 2 %x\n", unit, ch);
-           chan_write_byte(addr, &ch) ;
+           if (chan_write_byte(addr, &ch))
+               goto sense_end;
            ch = 0;
            sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 3 %x\n", unit, ch);
-           chan_write_byte(addr, &ch) ;
-           ch = unit;
-           sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 4 %x\n", unit, ch);
-           chan_write_byte(addr, &ch) ;
+           if (chan_write_byte(addr, &ch))
+               goto sense_end;
+           if (disk_type[type].sen_cnt > 6) {
+               ch = (unit & 07) | ((~unit & 07) << 3);
+               sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 4 %x\n", unit, ch);
+               if (chan_write_byte(addr, &ch))
+                   goto sense_end;
+               ch = unit;
+               sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 5 %x\n", unit, ch);
+               if (chan_write_byte(addr, &ch))
+                   goto sense_end;
+               ch = (uptr->CCH >> 8) & 0xff;
+               sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 6 %x\n", unit, ch);
+               if (chan_write_byte(addr, &ch))
+                   goto sense_end;
+               ch = (uptr->CCH & 0x1f) | ((uptr->CCH & 0x10000) ? 0x40 : 0);
+               sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 7 %x\n", unit, ch);
+               if (chan_write_byte(addr, &ch))
+                   goto sense_end;
+               ch = 0;              /* Compute message code */
+               sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 8 %x\n", unit, ch);
+               if (chan_write_byte(addr, &ch))
+                   goto sense_end;
+               i = 8;
+           } else {
+               if (disk_type[type].dev_type == 0x11)
+                   ch = 0xc8;
+               else
+                   ch = 0x40;
+               if ((uptr->CCH >> 8) & SNS_ENDCYL)
+                  ch |= 4;
+               sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 4 %x\n", unit, ch);
+               if (chan_write_byte(addr, &ch))
+                   goto sense_end;
+               ch = unit;
+               sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 5 %x\n", unit, ch);
+               if (chan_write_byte(addr, &ch))
+                   goto sense_end;
+               i = 5;
+           }
            ch = 0;
-           chan_write_byte(addr, &ch) ;
-           chan_write_byte(addr, &ch) ;
+           for (; i < disk_type[type].sen_cnt; i++) {
+               sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d %d %x\n", unit, i, ch);
+               if (chan_write_byte(addr, &ch))
+                   goto sense_end;
+           }
+sense_end:
            uptr->SNS = 0;
            return SNS_CHNEND|SNS_DEVEND;
        }
@@ -2043,7 +2086,6 @@ t_stat dasd_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
     fprintf (st, ".\nEach drive has the following storage capacity:\n\n");
     for (i = 0; disk_type[i].name != 0; i++) {
         int32 size = disk_type[i].bpt * disk_type[i].heads * disk_type[i].cyl;
-        char  sm = 'K';
         size /= 1024;
         size = (10 * size) / 1024;
         fprintf(st, "      %-8s %4d.%1dMB\n", disk_type[i].name, size/10, size%10);

@@ -387,13 +387,10 @@ lpr_srv(UNIT *uptr) {
         (l > 3 && l < 0x10) || l > 0x1d) {
         uptr->SNS = SNS_CMDREJ;
         uptr->CMD &= ~(LPR_CMDMSK);
+        sim_debug(DEBUG_DETAIL, &lpr_dev, "%d Invalid skip %x %d", u, l, l);
         chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
         return SCPE_OK;
     }
-
-    /* On control end channel */
-    if (cmd == 3)
-       chan_end(addr, SNS_CHNEND);
 
     /* If at end of buffer, or control do command */
     if ((uptr->CMD & LPR_FULL) || cmd == 3) {
@@ -401,10 +398,10 @@ lpr_srv(UNIT *uptr) {
        uptr->CMD &= ~(LPR_FULL|LPR_CMDMSK);
        uptr->POS = 0;
        if (uptr->SNS & SNS_CHN12) {
-           set_devattn(addr, SNS_DEVEND|SNS_UNITEXP);
+           chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
            uptr->SNS &= 0xff;
        } else {
-           set_devattn(addr, SNS_DEVEND);
+           chan_end(addr, SNS_CHNEND|SNS_DEVEND);
        }
        return SCPE_OK;
     }
