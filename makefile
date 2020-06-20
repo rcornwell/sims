@@ -1025,6 +1025,7 @@ else
       isodate=$(shell git log -1 --pretty=%ai)
       commit_time=$(word 1,$(isodate))T$(word 2,$(isodate))$(word 3,$(isodate))
       $(shell echo SIM_GIT_COMMIT_ID $(ACTUAL_GIT_COMMIT_ID)>.git-commit-id)
+      $(shell echo SIM_GIT_COMMIT_TIME $(commit_time)>>.git-commit-id)
     endif
   endif
   ifneq (,$(shell if exist .git-commit-id echo git-commit-id))
