@@ -412,8 +412,8 @@ REG cpu_reg[] = {
 #endif
     { FLDATA (PIPEND, pi_pending, 0), REG_HRO},
     { FLDATA (PARITY, parity_irq, 0) },
-    { ORDATAD (APRIRQ, apr_irq, 0, "APR Interrupt number") },
-    { ORDATAD (CLKIRQ, clk_irq, 0, "CLK Interrupt number") },
+    { ORDATAD (APRIRQ, apr_irq, 3, "APR Interrupt number") },
+    { ORDATAD (CLKIRQ, clk_irq, 3, "CLK Interrupt number") },
     { FLDATA (CLKEN, clk_en, 0), REG_HRO},
     { FLDATA (XCT, xct_flag, 0), REG_HRO},
     { BRDATA (IRQV, dev_irq, 8, 16, 128 ), REG_HRO},
