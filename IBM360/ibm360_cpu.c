@@ -3011,6 +3011,7 @@ save_dbl:
                                   dest = 0x10000000;
                               else
                                   dest = 0;
+                              addr1 = 0xA8;
                               if (WriteFull(addr1, dest))
                                  goto supress;
                               cc = 0;

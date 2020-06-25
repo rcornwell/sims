@@ -28,6 +28,9 @@
 
 #ifdef NUM_DEVS_COM
 #define UNIT_COM           0
+
+#define UNIT_V_DIRECT      (UNIT_V_UF + 0)
+#define UNIT_DIRECT        (1 << UNIT_V_DIRECT)
 
 
 /* u3 */
@@ -101,6 +104,9 @@ MTAB                com_mod[] = {
 MTAB                coml_mod[] = {
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "DEV", "DEV", &set_dev_addr,
         &show_dev_addr, NULL},
+    {UNIT_DIRECT, 0, "DIALUP", "DIALUP", NULL, NULL, NULL, "Dailup line" },
+    {UNIT_DIRECT, UNIT_DIRECT, "NODIAL", "NODIAL", NULL, NULL, NULL,
+               "Hard wired line" },
     {0}
 };
 
@@ -172,7 +178,7 @@ static const uint8 com_2741_in[128] = {
    /*  P    Q     R     S     T     U     V     W */
     0xCF, 0xD1, 0xD2, 0xA5, 0xA6, 0xA9, 0xAA, 0xAC,
    /*  X    Y     Z     [     \     ]     ^     _ */
-    0xAF, 0xB1, 0xB2, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0xAF, 0xB1, 0xB2, 0x00, 0x00, 0x00, 0x00, 0x40,
    /*  `    a     b     c     d     e     f     g */
     0x00, 0x62, 0x64, 0x67, 0x68, 0x6B, 0x6D, 0x6E,    /* 140 - 177 */
    /*  h    i     j     k     l     m     n     o */
@@ -201,7 +207,7 @@ static const uint8 com_2741_out[256] = {
    /*  8,    9,    A,    B,    C,    D,    E,    F,  */
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
    /*  0,    1,    2,    3,    4,    5,    6,    7,  */
-     '-', 0xff, 0xff,  'j', 0xff,  'k',  'l', 0xff,       /* 0x4x */
+     '_', 0xff, 0xff,  'j', 0xff,  'k',  'l', 0xff,       /* 0x4x */
    /*  8,    9,    A,    B,    C,    D,    E,    F,  */
     0xff,  'm',  'n', 0xff,  'o', 0xff, 0xff,  'p',
    /*  0,    1,    2,    3,    4,    5,    6,    7,  */
@@ -233,7 +239,7 @@ static const uint8 com_2741_out[256] = {
    /*  8,    9,    A,    B,    C,    D,    E,    F,  */
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
    /*  0,    1,    2,    3,    4,    5,    6,    7,  */
-    0xff,  '-', 0xff,  'J', 0xff,  'K',  'L', 0xff,       /* 0xCx */
+     '-',  '-', 0xff,  'J', 0xff,  'K',  'L', 0xff,       /* 0xCx */
    /*  8,    9,    A,    B,    C,    D,    E,    F,  */
     0xff,  'M',  'N', 0xff,  'O', 0xff, 0xff,  'P',
    /*  0,    1,    2,    3,    4,    5,    6,    7,  */
@@ -309,11 +315,15 @@ uint8  coml_haltio(UNIT *uptr) {
          /* Short commands nothing to do */
          break;
 
+    case CMD_PREP:       /* Wait for incoming data  */
+         uptr->CMD &= ~(ADDR9|ADDR|0xff);
+         chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
+         break;
+
     case CMD_INH:        /* Read data without timeout  */
     case CMD_RD:         /* Read in data from com line */
     case CMD_WR:         /* Write data to com line */
     case CMD_BRK:        /* Send break signal  */
-    case CMD_PREP:       /* Wait for incoming data  */
     case CMD_SRCH:       /* Wait for EOT character  */
          uptr->CMD &= ~(ADDR9|ADDR|0xff);
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
@@ -442,7 +452,7 @@ t_stat coml_srv(UNIT * uptr)
                      uptr->CMD |= ADDR9;
                  } else if ((uptr->CMD & ADDR) == 0 && data != 0xff) {
                      tmxr_putc_ln( &com_ldsc[unit], data);
-                     if (ch == 0x5b)
+                     if (ch == 0x5b || ch == 0xdb)
                          tmxr_putc_ln( &com_ldsc[unit], '\r');
                  }
                  sim_activate(uptr, 20000);
@@ -517,7 +527,7 @@ t_stat coml_srv(UNIT * uptr)
     }
 
     if (uptr->CMD & ENAB) {
-        if (cmd == CMD_RD || cmd == CMD_PREP) {
+        if (cmd == CMD_INH || cmd == CMD_RD || cmd == CMD_PREP) {
             if (tmxr_rqln(&com_ldsc[unit]) > 0) {
                 int32   data = tmxr_getc_ln (&com_ldsc[unit]);
                 ch = com_2741_in[data & 0x7f];
@@ -600,15 +610,29 @@ t_stat com_scan(UNIT * uptr)
         if (line->CMD & ENAB)                        /* Already connected */
             return SCPE_OK;
         if ((line->CMD & POLL) == 0) {               /* Check if not polling */
-            (void)tmxr_set_get_modem_bits(&com_ldsc[ln], 0,
-                           TMXR_MDM_DTR, NULL);
-            (void)tmxr_reset_ln(&com_ldsc[ln]);
+            if (line->flags & UNIT_DIRECT) {
+                 set_devattn(GET_UADDR(line->CMD), SNS_ATTN);
+                 line->CMD |= ENAB|ADDR;
+                 com_ldsc[ln].rcve = 1;                 /* Mark as ok */
+                 sim_activate(line, 200);
+            } else {
+                 (void)tmxr_set_get_modem_bits(&com_ldsc[ln], 0, TMXR_MDM_DTR, NULL);
+                 (void)tmxr_reset_ln(&com_ldsc[ln]);
+            }
         } else {
              com_ldsc[ln].rcve = 1;                 /* Mark as ok */
              line->CMD &= ~POLL;
              line->CMD |= ENAB;
-             sim_debug(DEBUG_DETAIL, &com_dev, "COM line connect %d\n", ln);
              sim_activate(line, 200);
+        }
+    }
+
+    /* See if a line is disconnected with no command on it. */
+    for (ln = 0; ln < com_desc.lines; ln++) {
+        line = &coml_unit[ln];
+        if ((line->CMD & 0xff) == 0 && (line->CMD & ENAB) != 0
+                  && tmxr_rqln(&com_ldsc[ln]) > 0) {
+            set_devattn(GET_UADDR(line->CMD), SNS_ATTN);
         }
     }
     tmxr_poll_tx(&com_desc);

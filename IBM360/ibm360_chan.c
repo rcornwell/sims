@@ -108,6 +108,8 @@ find_chan_dev(uint16 addr) {
     UNIT               *uptr;
     int                 i;
 
+    if (addr > MAX_DEV)
+       return NULL;
     dibp = dev_unit[addr];
     if (dibp == 0)
        return NULL;
@@ -917,7 +919,7 @@ int haltio(uint16 addr) {
     /* If channel active, tell it to terminate */
     if (ccw_cmd[chan]) {
         chan_byte[chan] = BUFF_CHNEND;
-        ccw_flags[chan] = 0;
+        ccw_flags[chan] &= ~(FLAG_CD|FLAG_CC);
     }
 
     /* Not executing a command, issue halt if available */
