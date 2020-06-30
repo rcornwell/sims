@@ -1987,11 +1987,10 @@ ICL1900 = ${ICL1900D}/icl1900_cpu.c ${ICL1900D}/icl1900_sys.c \
 ICL1900_OPT = -I $(ICL1900D) -DICL1900 -DUSE_SIM_CARD
 
 IBM360D = ${SIMHD}/IBM360
-IBM360 = ${IBM360D}/ibm360_cpu.c ${IBM360D}/ibm360_sys.c \
-	${IBM360D}/ibm360_con.c ${IBM360D}/ibm360_chan.c \
-	${IBM360D}/ibm360_cdr.c ${IBM360D}/ibm360_cdp.c \
-	${IBM360D}/ibm360_mt.c ${IBM360D}/ibm360_lpr.c \
-	${IBM360D}/ibm360_dasd.c ${IBM360D}/ibm360_com.c
+IBM360 = ${IBM360D}/ibm360_cpu.c ${IBM360D}/ibm360_sys.c ${IBM360D}/ibm360_con.c \
+	${IBM360D}/ibm360_chan.c ${IBM360D}/ibm360_cdr.c ${IBM360D}/ibm360_cdp.c \
+	${IBM360D}/ibm360_mt.c ${IBM360D}/ibm360_lpr.c ${IBM360D}/ibm360_dasd.c \
+	${IBM360D}/ibm360_com.c ${IBM360D}/ibm360_scom.c
 IBM360_OPT = -I $(IBM360D) -DIBM360 -DUSE_64BIT -DUSE_SIM_CARD
 IBM360_OPT32 = -I $(IBM360D) -DIBM360 -DUSE_SIM_CARD
 

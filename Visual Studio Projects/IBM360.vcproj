@@ -231,6 +231,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\IBM360\ibm360_scom.c"
+				>
+			</File>
+			<File
 				RelativePath="..\IBM360\ibm360_sys.c"
 				>
 			</File>

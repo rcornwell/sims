@@ -81,6 +81,10 @@ DEVICE *sim_devices[] = {
         &coml_dev,
         &com_dev,
 #endif
+#ifdef NUM_DEVS_SCOM
+        &scoml_dev,
+        &scom_dev,
+#endif
        NULL };
 
 
@@ -103,6 +107,7 @@ DEBTAB              crd_debug[] = {
     {"DETAIL", DEBUG_DETAIL, "Show details about device"},
     {"EXP", DEBUG_EXP, "Show exception information"},
     {"CARD", DEBUG_CARD, "Show Card read/punches"},
+    {"CDATA", DEBUG_CDATA, "Show channel data"},
     {0, 0}
 };
 

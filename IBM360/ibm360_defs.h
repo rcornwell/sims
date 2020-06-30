@@ -70,6 +70,8 @@
 #define NUM_UNITS_DASD      8
 #define NUM_DEVS_COM        1
 #define NUM_UNITS_COM       16
+#define NUM_DEVS_SCOM       1
+#define NUM_UNITS_SCOM      8
 
 /* Device information block */
 typedef struct dib {
@@ -381,6 +383,8 @@ extern DEVICE ddc_dev;
 extern DEVICE ddd_dev;
 extern DEVICE coml_dev;
 extern DEVICE com_dev;
+extern DEVICE scoml_dev;
+extern DEVICE scom_dev;
 extern UNIT cpu_unit[];
 
 extern void fprint_inst(FILE *, uint16 *);
