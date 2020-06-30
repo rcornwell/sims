@@ -330,10 +330,10 @@ uint8  coml_haltio(UNIT *uptr) {
          break;
     case CMD_ENB:        /* Enable line */
          /* Terminate the operation */
-         (void)tmxr_set_get_modem_bits(&com_ldsc[unit], 0, TMXR_MDM_DTR, NULL);
+         uptr->CMD &= ~(POLL|ADDR9|ADDR|0xff);
          (void)tmxr_reset_ln(&com_ldsc[unit]);
-         uptr->CMD &= ~0xffff;
-         break;
+         chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
+         return 1;
     }
     return 1;
 }
@@ -369,8 +369,9 @@ t_stat coml_srv(UNIT * uptr)
     case CMD_RD:         /* Read in data from com line */
          uptr->SNS = 0;
          if (uptr->CMD & ENAB) {
+             uptr->CMD |= RECV;
              if (com_ldsc[unit].conn == 0) {
-                 uptr->CMD &= ~(0xff|BREAK|INPUT|ENAB|POLL);
+                 uptr->CMD &= ~(0xff|BREAK|INPUT|ENAB|POLL|RECV);
                  uptr->SNS = SNS_INTVENT;
                  uptr->BPTR = 0;
                  uptr->IPTR = 0;
@@ -393,7 +394,7 @@ t_stat coml_srv(UNIT * uptr)
                      return SCPE_OK;
                  }
              } else if (uptr->CMD & BREAK) {
-                 uptr->CMD &= ~(0xff|BREAK|INPUT);
+                 uptr->CMD &= ~(0xff|BREAK|INPUT|RECV);
                  uptr->SNS = SNS_INTVENT;
                  uptr->BPTR = 0;
                  uptr->IPTR = 0;
@@ -401,7 +402,7 @@ t_stat coml_srv(UNIT * uptr)
                  return SCPE_OK;
              } else if (uptr->CMD & INPUT) {
                  if (uptr->BPTR == uptr->IPTR) {
-                     uptr->CMD &= ~(0xff|INPUT);
+                     uptr->CMD &= ~(0xff|INPUT|RECV);
                      uptr->BPTR = 0;
                      uptr->IPTR = 0;
                      chan_end(addr, SNS_CHNEND|SNS_DEVEND);
@@ -409,7 +410,7 @@ t_stat coml_srv(UNIT * uptr)
                  }
                  ch = com_buf[unit][uptr->IPTR++];
                  if (chan_write_byte( addr, &ch)) {
-                     uptr->CMD &= ~(0xff|INPUT);
+                     uptr->CMD &= ~(0xff|INPUT|RECV);
                      uptr->IPTR = 0;
                      uptr->BPTR = 0;
                      chan_end(addr, SNS_CHNEND|SNS_DEVEND);
@@ -417,6 +418,10 @@ t_stat coml_srv(UNIT * uptr)
                  }
              }
              sim_activate(uptr, 200);
+         } else {
+             sim_debug(DEBUG_CMD, dptr, "COM: unit=%d read error\n", unit);
+             uptr->CMD &= ~0xff;
+             chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
          }
          break;
 
@@ -455,7 +460,7 @@ t_stat coml_srv(UNIT * uptr)
                      if (ch == 0x5b || ch == 0xdb)
                          tmxr_putc_ln( &com_ldsc[unit], '\r');
                  }
-                 sim_activate(uptr, 20000);
+                 sim_activate(uptr, 2000);
              }
          } else {
              sim_debug(DEBUG_CMD, dptr, "COM: unit=%d write error\n", unit);
@@ -481,6 +486,7 @@ t_stat coml_srv(UNIT * uptr)
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
                  return SCPE_OK;
              }
+             uptr->CMD |= RECV;
              uptr->CMD &= ~(ADDR|ADDR9);
              if (uptr->CMD & (INPUT|BREAK)) {
                  uptr->CMD &= ~0xff;
@@ -526,67 +532,68 @@ t_stat coml_srv(UNIT * uptr)
          break;
     }
 
-    if (uptr->CMD & ENAB) {
-        if (cmd == CMD_INH || cmd == CMD_RD || cmd == CMD_PREP) {
-            if (tmxr_rqln(&com_ldsc[unit]) > 0) {
-                int32   data = tmxr_getc_ln (&com_ldsc[unit]);
-                ch = com_2741_in[data & 0x7f];
-                sim_debug(DEBUG_DATA, dptr, "COML: unit=%d read '%c' %02x\n", unit, data, ch);
-                if (data & SCPE_BREAK) {
-                     uptr->CMD |= BREAK;
-                     return SCPE_OK;
-                }
-                /* Handle end of buffer */
-                switch (data & 0x7f) {
-                case '\r':
-                case '\n':
-                      com_buf[unit][uptr->BPTR++] = 0x5b;
-                      com_buf[unit][uptr->BPTR++] = 0x1f;
-                      uptr->CMD |= INPUT;
-                      uptr->IPTR = 0;
-                      tmxr_putc_ln( &com_ldsc[unit], '\r');
-                      tmxr_putc_ln( &com_ldsc[unit], '\n');
-                      break;
+    if ((uptr->CMD & (ENAB|RECV)) == (ENAB|RECV)) {
+       int32 data = tmxr_getc_ln(&com_ldsc[unit]);
+       if ((data & TMXR_VALID) != 0) {
+           ch = com_2741_in[data & 0x7f];
+           sim_debug(DEBUG_DATA, dptr, "COML: unit=%d read '%c' %02x\n", unit, data, ch);
+           if (data & SCPE_BREAK) {
+                uptr->CMD |= BREAK;
+                return SCPE_OK;
+           }
+           /* Handle end of buffer */
+           switch (data & 0x7f) {
+           case '\r':
+           case '\n':
+                 com_buf[unit][uptr->BPTR++] = 0x5b;
+                 com_buf[unit][uptr->BPTR++] = 0x1f;
+                 uptr->CMD |= INPUT;
+                 uptr->CMD &= ~RECV;
+                 uptr->IPTR = 0;
+                 tmxr_putc_ln( &com_ldsc[unit], '\r');
+                 tmxr_putc_ln( &com_ldsc[unit], '\n');
+                 break;
 
-                case 0177:
-                case '\b':
-                      if (uptr->BPTR != 0) {
-                           uptr->BPTR--;
-                           tmxr_putc_ln( &com_ldsc[unit], '\b');
-                           tmxr_putc_ln( &com_ldsc[unit], ' ');
-                           tmxr_putc_ln( &com_ldsc[unit], '\b');
-                      }
-                      break;
+           case 0177:
+           case '\b':
+                 if (uptr->BPTR != 0) {
+                      uptr->BPTR--;
+                      tmxr_putc_ln( &com_ldsc[unit], '\b');
+                      tmxr_putc_ln( &com_ldsc[unit], ' ');
+                      tmxr_putc_ln( &com_ldsc[unit], '\b');
+                 }
+                 break;
 
-                case 025: /* ^U clear line */
-                      while(uptr->BPTR > 0) {
-                          tmxr_putc_ln( &com_ldsc[unit], '\b');
-                          tmxr_putc_ln( &com_ldsc[unit], ' ');
-                          tmxr_putc_ln( &com_ldsc[unit], '\b');
-                          uptr->BPTR--;
-                      }
-                      break;
+           case 025: /* ^U clear line */
+                 while(uptr->BPTR > 0) {
+                     tmxr_putc_ln( &com_ldsc[unit], '\b');
+                     tmxr_putc_ln( &com_ldsc[unit], ' ');
+                     tmxr_putc_ln( &com_ldsc[unit], '\b');
+                     uptr->BPTR--;
+                 }
+                 break;
 
-                case 03:  /* ^C */
-                      uptr->CMD |= BREAK;
-                      break;
+           case 03:  /* ^C */
+                 uptr->CMD |= BREAK;
+                 uptr->CMD &= ~RECV;
+                 break;
 
-                default:
-                      if (uptr->BPTR < 253) {
-                          if (ch == 0x00) {
-                             sim_putchar('\007');
-                          } else {
-                             com_buf[unit][uptr->BPTR++] = ch;
-                             if ((uptr->CMD & BYPASS) == 0)
-                                 tmxr_putc_ln( &com_ldsc[unit], data);
-                          }
-                      } else {
-                          com_buf[unit][uptr->BPTR++] = 0x5b;
-                          com_buf[unit][uptr->BPTR++] = 0x1f;
-                          uptr->CMD |= INPUT;
-                          uptr->BPTR &= 0xff;
-                      }
-                }
+           default:
+                 if (uptr->BPTR < 253) {
+                     if (ch == 0x00) {
+                        sim_putchar('\007');
+                     } else {
+                        com_buf[unit][uptr->BPTR++] = ch;
+                        if ((uptr->CMD & BYPASS) == 0)
+                            tmxr_putc_ln( &com_ldsc[unit], data);
+                     }
+                 } else {
+                     com_buf[unit][uptr->BPTR++] = 0x5b;
+                     com_buf[unit][uptr->BPTR++] = 0x1f;
+                     uptr->CMD |= INPUT;
+                     uptr->CMD &= ~RECV;
+                     uptr->BPTR &= 0xff;
+                 }
            }
        }
     }
@@ -603,7 +610,6 @@ t_stat com_scan(UNIT * uptr)
     if ((uptr->flags & UNIT_ATT) == 0)              /* attached? */
         return SCPE_OK;
     ln = tmxr_poll_conn (&com_desc);                 /* look for connect */
-    sim_debug(DEBUG_DETAIL, &com_dev, "COM Poll %d\n", ln);
     if (ln >= 0) {                                  /* got one? rcv enb*/
         line = &coml_unit[ln];
         sim_debug(DEBUG_DETAIL, &com_dev, "COM line connect %d\n", ln);
@@ -630,8 +636,7 @@ t_stat com_scan(UNIT * uptr)
     /* See if a line is disconnected with no command on it. */
     for (ln = 0; ln < com_desc.lines; ln++) {
         line = &coml_unit[ln];
-        if ((line->CMD & 0xff) == 0 && (line->CMD & ENAB) != 0
-                  && tmxr_rqln(&com_ldsc[ln]) > 0) {
+        if ((line->CMD & (RECV|ENAB)) == ENAB && tmxr_rqln(&com_ldsc[ln]) > 0) {
             set_devattn(GET_UADDR(line->CMD), SNS_ATTN);
         }
     }
@@ -657,9 +662,6 @@ com_attach(UNIT * uptr, CONST char *cptr)
     if ((r = tmxr_attach(&com_desc, uptr, cptr)) != SCPE_OK)
        return r;
     for (i = 0; i< com_desc.lines; i++) {
- //       (void)tmxr_set_line_modem_control(&com_ldsc[i], TRUE);
-//        (void)tmxr_set_get_modem_bits(&com_ldsc[i], 0, TMXR_MDM_DTR, NULL);
-//        (void)tmxr_reset_ln(&com_ldsc[i]);
         coml_unit[i].CMD &= ~0xffff;
     }
     sim_activate(uptr, tmxr_poll);
