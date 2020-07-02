@@ -527,10 +527,8 @@ int  TransAddr(uint32 va, uint32 *pa) {
      seg = (page & 0x1f00) << 4;
      /* Quick check if TLB correct */
      entry = tlb[page & 0xff];
-//fprintf(stderr, "translatex: %08x %08x %08x ", va, entry, page);
      if ((entry & TLB_VALID) != 0 && ((entry ^ seg) & TLB_SEG) == 0) {
          *pa = (va & page_mask) | ((entry & TLB_PHY) << page_shift);
-//fprintf(stderr, " -> %08x\n\r", *pa);
          if (*pa >= MEMSIZE) {
             storepsw(OPPSW, IRC_ADDR);
             return 1;
@@ -542,7 +540,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
      /* TLB not correct, try loading correct entry */
      seg = (va >> seg_shift) & seg_mask;   /* Segment number to word address */
      page = (va >> page_shift) & page_index;
-//fprintf(stderr, "\n\rtranslatex: %08x %03x %03x\r\n", va, seg, page);
+
      /* Check address against lenght of segment table */
      if (seg > seg_len) {
          if ((cpu_unit[0].flags & FEAT_370) == 0)
@@ -557,7 +555,6 @@ int  TransAddr(uint32 va, uint32 *pa) {
          return 1;
      }
      addr = (((seg << 2) + seg_addr) & AMASK);
-//fprintf(stderr, "translate0: %08x\r\n", addr);
      if (addr >= MEMSIZE) {
          storepsw(OPPSW, IRC_ADDR);
          return 1;
@@ -565,13 +562,11 @@ int  TransAddr(uint32 va, uint32 *pa) {
      /* Get pointer to page table */
      entry = M[addr >> 2];
      key[addr >> 11] |= 0x4;
-//fprintf(stderr, "translate1: %08x\r\n", entry);
      if ((cpu_unit[0].flags & FEAT_370) == 0) {
          addr = (entry >> 24) + 1;
          /* Check if entry valid and in correct length */
          if (entry & PTE_VALID || page > addr) {
              cregs[2] = va;
-//             fprintf(stderr, "translatep1: %08x\r\n", entry);
              storepsw(OPPSW, IRC_PAGE);
              return 1;
          }
@@ -582,7 +577,6 @@ int  TransAddr(uint32 va, uint32 *pa) {
              M[0x90 >> 2] = va;
              key[0] |= 0x6;
              PC = iPC;
- //            fprintf(stderr, "translatep1: %08x\r\n", entry);
              storepsw(OPPSW, (entry & PTE_VALID) ? IRC_SEG : IRC_PAGE);
              return 1;
          }
@@ -591,7 +585,6 @@ int  TransAddr(uint32 va, uint32 *pa) {
      /* Now we need to fetch the actual entry */
      addr = (entry & PTE_ADR) + (page << 1);
      addr &= AMASK;
-//fprintf(stderr, "translate2: %08x\r\n", addr);
      if (addr >= MEMSIZE) {
          storepsw(OPPSW, IRC_ADDR);
          return 1;
@@ -600,7 +593,6 @@ int  TransAddr(uint32 va, uint32 *pa) {
      key[addr >> 11] |= 0x4;
      entry >>= (addr & 2) ? 0 : 16;
      entry &= 0xffff;
-//fprintf(stderr, "translate3: %08x\r\n", entry);
 
      if ((entry & pte_mbz) != 0) {
          if ((cpu_unit[0].flags & FEAT_370) == 0)
@@ -610,7 +602,6 @@ int  TransAddr(uint32 va, uint32 *pa) {
              key[0] |= 0x6;
              PC = iPC;
          }
-//fprintf(stderr, "translatesp: %08x\r\n", entry);
          storepsw(OPPSW, IRC_SPEC);
          return 1;
      }
@@ -624,7 +615,6 @@ int  TransAddr(uint32 va, uint32 *pa) {
              key[0] |= 0x6;
              PC = iPC;
          }
-//fprintf(stderr, "translatep2: %08x\r\n", entry);
          storepsw(OPPSW, IRC_PAGE);
          return 1;
      }
@@ -635,7 +625,6 @@ int  TransAddr(uint32 va, uint32 *pa) {
      entry |= ((page & 0x1f00) << 4) | TLB_VALID;
      tlb[page & 0xff] = entry;
      *pa = (va & page_mask) | ((entry & TLB_PHY) << page_shift);
-//fprintf(stderr, "translatef: %08x\r\n", *pa);
      if (*pa >= MEMSIZE) {
         storepsw(OPPSW, IRC_ADDR);
         return 1;
@@ -4582,13 +4571,11 @@ fpnorm:
                     src2 &= MMASK;
                     dest = src2 + 1;
                     /* If overflow, shift right 4 bits */
-//fprintf(stderr, "FP LRER res=%08x %d\n\r", dest, cc);
                     if (dest & CMASK) {
                         dest >>= 4;
                         e1 ++;
                         if (e1 >= 128) {
                             storepsw(OPPSW, IRC_EXPOVR);
-// fprintf(stderr, "FP ov %d\n\r", e1);
                         }
                     }
 
@@ -4599,7 +4586,6 @@ fpnorm:
                  } else
                     dest = src2;
                  fpregs[reg1] = dest;
-//fprintf(stderr, "FP LRER res=%08x %d %.12e\n\r", dest, cc, cnvt_float(dest,0));
                 break;
 
         case OP_LRDR:
@@ -4612,8 +4598,6 @@ fpnorm:
                     goto supress;
                 }
                 if (fpregs[(reg & 0xf)|2] & 0x00800000) {
-//                b = cnvt_float(src2, src2h);
-//fprintf(stderr, "FP LRDR Op=%0x src2=%08x %08x %.12e\n\r", op, src2, src2h, b);
                     /* Extract numbers and adjust */
                     e1 = (src2 & EMASK) >> 24;
                     fill = 0;
@@ -4628,7 +4612,6 @@ fpnorm:
                         dest ++;
 
                     /* If overflow, shift right 4 bits */
-//fprintf(stderr, "FP +n res=%08x %08x\n\r", dest, desth);
                     if (dest & CMASK) {
                         desth >>= 4;
                         desth |= (dest & 0xf) << 28;
@@ -4636,7 +4619,6 @@ fpnorm:
                         e1 ++;
                         if (e1 >= 128) {
                             storepsw(OPPSW, IRC_EXPOVR);
-// fprintf(stderr, "FP ov %d\n\r", e1);
                         }
                     }
                     goto fpstore;
@@ -4656,9 +4638,6 @@ fpnorm:
                     storepsw(OPPSW, IRC_SPEC);
                     goto supress;
                 }
-//                a = cnvt_float(src1, src1h);
-//                b = cnvt_float(src2, src2h);
-//fprintf(stderr, "FP * Op=%0x src1=%08x %08x, src2=%08x %08x %.12e %.12e %.12e\n\r", op, src1, src1h, src2, src2h, a, b, a*b);
                 /* Extract numbers and adjust */
                 e1 = (src1 & EMASK) >> 24;
                 e2 = (src2 & EMASK) >> 24;
@@ -4691,7 +4670,6 @@ fpnorm:
                 destL = 0;
                 /* Do multiply */
                 for (temp = 0; temp < 56; temp++) {
-//fprintf(stderr, "FP *s  src1=%016llx, src2=%016llx dest=%016llx %d\n\r", src1L, src2L, destL, temp);
                      /* Add if we need too */
                      if (src1L & 1)
                          destL += src2L;
@@ -4701,7 +4679,7 @@ fpnorm:
                         src1L |= MSIGNL;
                      destL >>= 1;
                 }
-//fprintf(stderr, "FP *r res=%016llx %x\n\r", destL, e1);
+
                 /* If overflow, shift right 4 bits */
                 if (destL & EMASKL) {
                    src1L >>= 4;
@@ -4710,14 +4688,12 @@ fpnorm:
                    e1 ++;
                    if (e1 >= 128) {
                        storepsw(OPPSW, IRC_EXPOVR);
-//fprintf(stderr, "FP ov\n\r");
                    }
                 }
 
                 /* Align the results */
                 if ((destL | src1L) != 0) {
                     while ((destL & NMASKL) == 0) {
-//fprintf(stderr, "FP *n res=%016llx %x\n\r", destL, e1);
                         destL <<= 4;
                         destL |= (src1L >> 60) & 0xf;
                         src1L <<= 4;
@@ -4727,7 +4703,6 @@ fpnorm:
                     if (e1 < 0) {
                         if (pmsk & EXPUND) {
                             storepsw(OPPSW, IRC_EXPUND);
-// fprintf(stderr, "FP un\n\r");
                         } else {
                             destL = src1L = 0;
                             fill = e1 = 0;
@@ -4735,7 +4710,6 @@ fpnorm:
                     }
                 } else
                     e1 = fill = 0;
-//fprintf(stderr, "FP *f res=%016llx %x\n\r", destL, e1);
                 dest = ((uint32)(destL >> 32)) & MMASK;
                 desth = (uint32)(destL & FMASK);
                 src1 = ((uint32)(src1L >> 40)) & MMASK;
@@ -4763,7 +4737,6 @@ fpnorm:
                 dest = desth = 0;
                 /* Do multiply */
                 for (temp = 0; temp < 56; temp++) {
-//fprintf(stderr, "FP *s  src1=%08x %08x, src2=%08x %08x dest=%08x %08x %d\n\r", src1, src1h, src2, src2h, dest, desth, temp);
                      /* Add if we need too */
                      if (src1h & 1) {
                          desth += src2h;
@@ -4796,14 +4769,12 @@ fpnorm:
                    e1 ++;
                    if (e1 >= 128) {
                        storepsw(OPPSW, IRC_EXPOVR);
-//fprintf(stderr, "FP ov\n\r");
                    }
                 }
 
                 /* Align the results */
                 if ((dest | desth | src1 | src1h) != 0) {
                     while ((dest & NMASK) == 0) {
-//fprintf(stderr, "FP *n res=%08x %08x %x\n\r", dest, desth, e1);
                         dest = (dest << 4) | ((desth >> 28) & 0xf);
                         desth = (desth << 4) | ((src1 >> 20) & 0xf);
                         src1 = ((src1 << 4) | ((src1h >> 28) & 0xf)) & MMASK;
@@ -4814,7 +4785,6 @@ fpnorm:
                     if (e1 < 0) {
                         if (pmsk & EXPUND) {
                             storepsw(OPPSW, IRC_EXPUND);
-// fprintf(stderr, "FP un\n\r");
                         } else {
                             desth = dest = src1 = src1h = 0;
                             fill = e1 = 0;
@@ -4835,7 +4805,6 @@ fpnorm:
                 fpregs[reg1|2] = src1;
                 fpregs[reg1|1] = desth;
                 fpregs[reg1] = dest;
-//fprintf(stderr, "FP * res=%08x %08x %d %.12e\n\r", dest, desth, cc, cnvt_float(dest,desth));
                 break;
 
         case OP_SXR:
@@ -4850,9 +4819,7 @@ fpnorm:
                     storepsw(OPPSW, IRC_SPEC);
                     goto supress;
                 }
-//                a = cnvt_float(src1, src1h);
-//                b = cnvt_float(src2, src2h);
-//fprintf(stderr, "FP + Op=%0x src1=%08x %08x, src2=%08x %08x %.12e %.12e %.12e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
+
                 /* Extract numbers and adjust */
                 e1 = (src1 & EMASK) >> 24;
                 e2 = (src2 & EMASK) >> 24;
@@ -4878,9 +4845,7 @@ fpnorm:
                             src2L |= ((src1L >> 8) & 0xf) << 60;
                             src1L >>= 4;
                             src1L &= UMASKL;
-//fprintf(stderr, "FP +2 Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
                         }
-//fprintf(stderr, "FP =2 Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
                     }
                 } else if (temp < 0) {
                     /* Flip operands around */
@@ -4905,7 +4870,6 @@ fpnorm:
                             src2L |= ((src1L >> 8) & 0xf) << 60;
                             src1L >>= 4;
                             src1L &= UMASKL;
-//fprintf(stderr, "FP =1 Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
                         }
                     }
                     e1 = e2;
@@ -4956,7 +4920,6 @@ fpnorm:
                      }
                 }
                 /* If overflow, shift right 4 bits */
-//fprintf(stderr, "FP +n res=%08x %08x\n\r", dest, desth);
                 if (src1L & CMASKL) {
                     destL >>= 4;
                     destL |= ((src1L >> 8) & 0xf) << 60;
@@ -4965,7 +4928,6 @@ fpnorm:
                     e1 ++;
                     if (e1 >= 128) {
                         storepsw(OPPSW, IRC_EXPOVR);
-// fprintf(stderr, "FP ov %d\n\r", e1);
                     }
                 }
 
@@ -4979,7 +4941,6 @@ fpnorm:
                 /* Check signifigance exception */
                 if (cc == 0 && pmsk & SIGMSK) {
                     storepsw(OPPSW, IRC_EXPOVR);
-// fprintf(stderr, "FP Signifigance\n\r");
                     fpregs[reg1] = 0;
                     fpregs[reg1|1] = 0;
                     fpregs[reg1|2] = 0;
@@ -4990,7 +4951,6 @@ fpnorm:
                 /* Check if we are normalized addition */
                 if (cc != 0) {   /* Only if non-zero result */
                     while ((src1L & SNMASKL) == 0) {
-//fprintf(stderr, "FP +n res=%08x %08x %x\n\r", dest, desth, e1);
                           src1L <<= 4;
                           src1L |= ((destL >> 60) & 0xf) << 8;
                           destL <<= 4;
@@ -5000,7 +4960,6 @@ fpnorm:
                        if (e1 < 0) {
                            if (pmsk & EXPUND) {
                               storepsw(OPPSW, IRC_EXPUND);
-// fprintf(stderr, "FP under\n\r");
                            } else {
                               src2L = destL = 0;
                               fill = e1 = 0;
@@ -5037,9 +4996,7 @@ fpnorm:
                             src1h |= (src1 & 0xf) << 24;
                             src1h &= 0xfffffff0;
                             src1  >>= 4;
-//fprintf(stderr, "FP +2 Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
                         }
-//fprintf(stderr, "FP =2 Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
                     }
                 } else if (temp < 0) {
                     /* Flip operands around */
@@ -5069,7 +5026,6 @@ fpnorm:
                             src1h |= (src1 & 0xf) << 24;
                             src1h &= 0xfffffff0;
                             src1  >>= 4;
-//fprintf(stderr, "FP =1 Op=%0x src1=%08x %08x, src2=%08x %08x %e %e %e\n\r", op, src1, src1h, src2, src2h, a, b, a+b);
                         }
                     }
                     e1 = e2;
@@ -5159,7 +5115,6 @@ fpnorm:
                 }
 
                 /* If overflow, shift right 4 bits */
-//fprintf(stderr, "FP +n res=%08x %08x\n\r", dest, desth);
                 if (dest & CMASK) {
                     src1h >>= 4;
                     src1h |= (src1 & 0xf) << 24;
@@ -5171,7 +5126,6 @@ fpnorm:
                     e1 ++;
                     if (e1 >= 128) {
                         storepsw(OPPSW, IRC_EXPOVR);
-// fprintf(stderr, "FP ov %d\n\r", e1);
                     }
                 }
 
@@ -5185,7 +5139,6 @@ fpnorm:
                 /* Check signifigance exception */
                 if (cc == 0 && pmsk & SIGMSK) {
                     storepsw(OPPSW, IRC_EXPOVR);
-// fprintf(stderr, "FP Signifigance\n\r");
                     fpregs[reg1] = 0;
                     fpregs[reg1|1] = 0;
                     fpregs[reg1|2] = 0;
@@ -5196,7 +5149,6 @@ fpnorm:
                 /* Check if we are normalized addition */
                 if (cc != 0) {   /* Only if non-zero result */
                     while ((dest & SNMASK) == 0) {
-//fprintf(stderr, "FP +n res=%08x %08x %x\n\r", dest, desth, e1);
                           dest = (dest << 4) | ((desth >> 28) & 0xf);
                           desth = (desth << 4) | ((src1 >> 24) & 0xf);
                           src1 = (src1 << 4) | ((src1h >> 28) & 0xf);
@@ -5207,7 +5159,6 @@ fpnorm:
                     if (e1 < 0) {
                         if (pmsk & EXPUND) {
                             storepsw(OPPSW, IRC_EXPUND);
-// fprintf(stderr, "FP under\n\r");
                         } else {
                            desth = dest = 0;
                            fill = e1 = 0;
@@ -5236,8 +5187,6 @@ fpnorm:
                 fpregs[reg1|2] = src1;
                 fpregs[reg1|1] = desth;
                 fpregs[reg1] = dest;
-//fprintf(stderr, "FP + res=%08x %08x %d %.12e\n\r", dest, desth, cc, cnvt_float(dest,desth));
-//fprintf(stderr, "FP + DP \n\r");
                 break;
 
         case OP_MXR:
@@ -5249,9 +5198,7 @@ fpnorm:
                     storepsw(OPPSW, IRC_SPEC);
                     goto supress;
                 }
-//                a = cnvt_float(src1, src1h);
-//                b = cnvt_float(src2, src2h);
-//fprintf(stderr, "FP * Op=%0x src1=%08x %08x, src2=%08x %08x %.12e %.12e %.12e\n\r", op, src1, src1h, src2, src2h, a, b, a*b);
+
                 /* Extract numbers and adjust */
                 e1 = (src1 & EMASK) >> 24;
                 e2 = (src2 & EMASK) >> 24;
@@ -5299,7 +5246,6 @@ fpnorm:
                 destL = 0;
                 dest2L = 0;
                 for (temp = 0; temp < 112; temp++) {
-//fprintf(stderr, "FP *s  src1=%016llx, src2=%016llx dest=%016llx %d\n\r", src1L, src2L, destL, temp);
                      /* Add if we need too */
                      if (fpregs[reg1|3] & 1) {
                          destL += src1L;
@@ -5324,7 +5270,6 @@ fpnorm:
                       if (fpregs[reg1] & 1)
                          fpregs[reg1|1] |= MSIGN;
                 }
-//fprintf(stderr, "FP *r res=%016llx %x\n\r", destL, e1);
                 /* If overflow, shift right 4 bits */
                 if (destL & EMASKL) {
                    src1L >>= 4;
@@ -5333,11 +5278,9 @@ fpnorm:
                    e1 ++;
                    if (e1 >= 128) {
                        storepsw(OPPSW, IRC_EXPOVR);
-//fprintf(stderr, "FP ov\n\r");
                    }
                 }
 
-//fprintf(stderr, "FP *f res=%016llx %x\n\r", destL, e1);
                 dest = (uint32)((dest2L >> 36) & MMASK);
                 desth = (uint32)((dest2L >> 4) & FMASK);
                 src1 = (uint32)((destL >> 36) & MMASK);
@@ -5356,7 +5299,6 @@ fpnorm:
                 fpregs[reg1|2] = src1;
                 fpregs[reg1|1] = desth;
                 fpregs[reg1] = dest;
-//fprintf(stderr, "FP * res=%08x %08x %d %.12e\n\r", dest, desth, cc, cnvt_float(dest,desth));
                 break;
 
         default:   /* Unknown op code */
@@ -5866,6 +5808,7 @@ t_stat cpu_reset (DEVICE *dptr)
        cregs[i] = 0;
     clk_cmp[0] = clk_cmp[1] = 0xffffffff;
     if ((cpu_unit[0].flags & FEAT_370) != 0) {
+#ifdef USE_64BIT
         if (clk_state == CLOCK_UNSET) {
             /* Set TOD to current time */
             time_t seconds = time(NULL);
@@ -5875,6 +5818,7 @@ t_stat cpu_reset (DEVICE *dptr)
             tod_clock[0] = (uint32)(seconds >> 32);
             tod_clock[1] = (uint32)(seconds & FMASK);
         }
+#endif
         cregs[0]  = 0x000000e0;
         cregs[2]  = 0xffffffff;
         cregs[14] = 0xc2000000;

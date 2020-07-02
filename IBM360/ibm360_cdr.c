@@ -225,6 +225,8 @@ cdr_srv(UNIT *uptr) {
             }
             break;
        }
+       sim_activate(uptr, 80000);       /* Start unit off */
+       return SCPE_OK;
     }
 
     /* Copy next column over */
@@ -252,7 +254,7 @@ cdr_srv(UNIT *uptr) {
             uptr->CMD &= ~(CDR_CMDMSK);
             chan_end(addr, SNS_CHNEND|SNS_DEVEND|(uptr->SNS ? SNS_UNITCHK:0));
         }
-        sim_activate(uptr, 10);
+        sim_activate(uptr, 100);
     }
     return SCPE_OK;
 }

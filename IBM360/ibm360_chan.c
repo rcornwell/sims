@@ -108,7 +108,7 @@ find_chan_dev(uint16 addr) {
     UNIT               *uptr;
     int                 i;
 
-    if (addr > MAX_DEV)
+    if (addr >= MAX_DEV)
        return NULL;
     dibp = dev_unit[addr];
     if (dibp == 0)
@@ -138,7 +138,7 @@ int
 find_subchan(uint16 device) {
     int     chan;
     int     base = 0;
-    if (device > MAX_DEV)
+    if (device >= MAX_DEV)
         return -1;
     chan = (device >> 8) & 0xf;
     device &= 0xff;
@@ -677,11 +677,14 @@ store_csw(uint16 chan) {
 int
 startio(uint16 addr) {
     int          chan = find_subchan(addr);
-    DIB         *dibp = dev_unit[addr];
+    DIB         *dibp = NULL;
     UNIT        *uptr;
 
+    if (addr < MAX_DEV)
+        dibp = dev_unit[addr];
+
     /* Find channel this device is on, if no none return cc=3 */
-    if (chan < 0 || dibp == 0) {
+    if (chan < 0 || dibp == NULL) {
         sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x cc=3\n", addr, chan);
         return 3;
     }
@@ -744,29 +747,15 @@ startio(uint16 addr) {
 
     /* Try to load first command */
     if (load_ccw(chan, 0)) {
-//        if (chan_status[chan] &
- //                 (STATUS_ATTN|STATUS_CHECK|STATUS_PROT|STATUS_PCHK|STATUS_EXPT)) {
-            M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | (M[0x44 >> 2] & 0xffff);
-            key[0] |= 0x6;
-            sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %x %x cc=2\n", addr, chan,
-                  ccw_cmd[chan], ccw_flags[chan]);
-            chan_status[chan] = 0;
-            dev_status[addr] = 0;
-            ccw_cmd[chan] = 0;
-            return 1;
-  //      }
+        M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | (M[0x44 >> 2] & 0xffff);
+        key[0] |= 0x6;
+        sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %x %x cc=2\n", addr, chan,
+              ccw_cmd[chan], ccw_flags[chan]);
+        chan_status[chan] = 0;
+        dev_status[addr] = 0;
+        ccw_cmd[chan] = 0;
+        return 1;
     }
-#if 0
-        if (chan_status[chan] & (STATUS_PCI)) {
-            M[0x44 >> 2] = ((uint32)chan_status[chan]<<16) | (M[0x44 >> 2] & 0xffff);
-            key[0] |= 0x6;
-            sim_debug(DEBUG_EXP, &cpu_dev, "Channel store csw  %02x %08x\n",
-                       chan, M[0x44 >> 2]);
-            chan_status[chan] &= ~STATUS_PCI;
-            dev_status[addr] = 0;
-            return 1;
-        }
-#endif
 
     /* If channel returned busy save CSW and return cc=1 */
     if (chan_status[chan] & STATUS_BUSY) {
@@ -790,12 +779,15 @@ startio(uint16 addr) {
  */
 int testio(uint16 addr) {
     int          chan = find_subchan(addr);
-    DIB         *dibp = dev_unit[addr];
+    DIB         *dibp = NULL;
     UNIT        *uptr;
     uint16       status;
 
+    if (addr < MAX_DEV)
+        dibp = dev_unit[addr];
+
     /* Find channel this device is on, if no none return cc=3 */
-    if (chan < 0 || dibp == 0) {
+    if (chan < 0 || dibp == NULL) {
         sim_debug(DEBUG_CMD, &cpu_dev, "TIO %x %x cc=3\n", addr, chan);
         return 3;
     }
@@ -890,12 +882,15 @@ int testio(uint16 addr) {
  */
 int haltio(uint16 addr) {
     int           chan = find_subchan(addr);
-    DIB          *dibp = dev_unit[addr];
+    DIB          *dibp = NULL;
     UNIT         *uptr;
     int           cc;
 
+    if (addr < MAX_DEV)
+        dibp = dev_unit[addr];
+
     /* Find channel this device is on, if no none return cc=3 */
-    if (chan < 0 || dibp == 0) {
+    if (chan < 0 || dibp == NULL) {
         sim_debug(DEBUG_CMD, &cpu_dev, "HIO %x %x\n", addr, chan);
         return 3;
     }
@@ -970,11 +965,14 @@ int testchan(uint16 channel) {
  */
 t_stat chan_boot(uint16 addr, DEVICE *dptyr) {
     int          chan = find_subchan(addr);
-    DIB         *dibp = dev_unit[addr];
+    DIB         *dibp = NULL;
     UNIT        *uptr;
     int          i;
 
-    if (chan < 0 || dibp == 0)
+    if (addr < MAX_DEV)
+        dibp = dev_unit[addr];
+
+    if (chan < 0 || dibp == NULL)
         return SCPE_IOERR;
     for (i = 0; i < MAX_DEV; i++) {
         dev_status[i] = 0;

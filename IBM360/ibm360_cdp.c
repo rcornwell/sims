@@ -140,7 +140,7 @@ uint8  cdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     case 1:              /* Write command */
          uptr->CMD &= ~(CDP_CMDMSK);
          uptr->CMD |= (cmd & CDP_CMDMSK);
-         sim_activate(uptr, 10);       /* Start unit off */
+         sim_activate(uptr, 100);       /* Start unit off */
          uptr->COL = 0;
          uptr->SNS = 0;
          return 0;
@@ -158,7 +158,7 @@ uint8  cdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     case 4:                /* Sense */
          uptr->CMD &= ~(CDP_CMDMSK);
          uptr->CMD |= (cmd & CDP_CMDMSK);
-         sim_activate(uptr, 10);
+         sim_activate(uptr, 100);
          return 0;
 
     default:              /* invalid command */
@@ -219,9 +219,9 @@ cdp_srv(UNIT *uptr) {
         if (uptr->CMD & CDP_CARD) {
             uptr->CMD &= ~(CDP_CMDMSK);
             chan_end(addr, SNS_CHNEND);
-            sim_activate(uptr, 10000);
+            sim_activate(uptr, 80000);
         } else
-            sim_activate(uptr, 10);
+            sim_activate(uptr, 100);
     }
     return SCPE_OK;
 }
