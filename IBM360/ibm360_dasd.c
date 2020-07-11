@@ -1052,9 +1052,6 @@ sense_end:
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          break;
 
-    case DK_SPACE:           /* Space record */
-         /* Not implemented yet */
-         break;
 
     case DK_SRCH_HAEQ:       /* Search HA equal */
 
@@ -1744,6 +1741,8 @@ wrckd:
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          break;
 
+    case DK_SPACE:           /* Space record */
+         /* Not implemented yet */
     default:
          sim_debug(DEBUG_DETAIL, dptr, "invalid command=%d %x\n", unit, cmd);
          uptr->SNS |= SNS_CMDREJ;

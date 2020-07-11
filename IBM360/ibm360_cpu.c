@@ -807,12 +807,6 @@ int WriteFull(uint32 addr, uint32 data) {
      }
      key[pa >> 11] |= 0x6;
 
-     /* Put data in correct locations */
-     if (offset == 0) {
-        M[pa >> 2] = data;
-        return 0;
-     }
-
      pa2 = pa + 4;
      /* Check if we handle unaligned access */
      if (offset != 0 && (pa2 & 0x7FC) == 0) {
@@ -1042,8 +1036,6 @@ int WriteHalf(uint32 addr, uint32 data) {
      case 2:
           M[pa] &= ~mask;
           M[pa] |= data;
-          break;
-     case 3:
           break;
      }
      return 0;
@@ -2899,8 +2891,8 @@ save_dbl:
                             if(ReadByte(addr1, &src1))
                                goto supress;
                             addr1++;
-                            temp = 0xff << j;
-                            dest = (dest & ~temp) | (src1 << j);
+                            src2 = 0xff << j;
+                            dest = (dest & ~src2) | (src1 << j);
                             if (src1) {
                                 if ((src1 & fill) != 0) {
                                     cc = 1;
@@ -2940,7 +2932,7 @@ save_dbl:
         case OP_CLM:
                 if ((cpu_unit[0].flags & FEAT_370) != 0) {
                     uint32  rval[4];
-                    int i, j, k;
+                    int i, k = 0;
 
                     if (R2(reg) == 0) {
                        if(ReadByte(addr1, &src1))
@@ -2948,10 +2940,10 @@ save_dbl:
                        break;
                     }
                     dest = regs[reg1];
-                    for (i = 0x8, j=24, k=0; i != 0; i >>= 1, j-=8) {
-                        if ((R2(reg) & i) != 0)
-                            rval[k++] = (dest >> j) & 0xff;
-                    }
+                    if ((R2(reg) & 0x8) != 0) rval[k++] = (dest >> 24) & 0xff;
+                    if ((R2(reg) & 0x4) != 0) rval[k++] = (dest >> 16) & 0xff;
+                    if ((R2(reg) & 0x2) != 0) rval[k++] = (dest >> 8) & 0xff;
+                    if ((R2(reg) & 0x1) != 0) rval[k++] = dest & 0xff;
                     cc = 0;
                     for (i = 0; i < k; i++) {
                         if (ReadByte(addr1, &src1))

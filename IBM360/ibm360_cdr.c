@@ -225,7 +225,7 @@ cdr_srv(UNIT *uptr) {
             }
             break;
        }
-       sim_activate(uptr, 80000);       /* Start unit off */
+       sim_activate(uptr, 10000);       /* Start unit off */
        return SCPE_OK;
     }
 
