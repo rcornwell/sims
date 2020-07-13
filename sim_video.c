@@ -1404,21 +1404,52 @@ if (SDL_SemWait (vid_mouse_events.sem) == 0) {
     }
 }
 
+t_bool vid_is_fullscreen (void)
+{
+    return SDL_GetWindowFlags (vid_window) & SDL_WINDOW_FULLSCREEN_DESKTOP;
+}
+
+t_stat vid_set_fullscreen (t_bool flag)
+{
+if (flag)
+    SDL_SetWindowFullscreen (vid_window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+else
+    SDL_SetWindowFullscreen (vid_window, 0);
+return SCPE_OK;
+}
+
+static void vid_stretch(SDL_Rect *r)
+{
+/* Return in r a rectangle with the same aspect ratio as the video
+   buffer but scaled to fit precisely in the output window.  Normally,
+   the buffer and the window have the same sizes, but if the window is
+   resized, or fullscreen is in effect, they are not. */
+int w, h;
+SDL_GetRendererOutputSize(vid_renderer, &w, &h);
+if ((double)h / vid_height < (double)w / vid_width) {
+    r->w = vid_width * h / vid_height;
+    r->h = h;
+    r->x = (w - r->w) / 2;
+    r->y = 0;
+    }
+else {
+    r->w = w;
+    r->h = vid_height * w / vid_width;
+    r->x = 0;
+    r->y = (h - r->h) / 2;
+    }
+}
+
 void vid_update (void)
 {
 SDL_Rect vid_dst;
-
-vid_dst.x = 0;
-vid_dst.y = 0;
-vid_dst.w = vid_width;
-vid_dst.h = vid_height;
-
+vid_stretch(&vid_dst);
 sim_debug (SIM_VID_DBG_VIDEO, vid_dev, "Video Update Event: \n");
 if (sim_deb)
     fflush (sim_deb);
 if (SDL_RenderClear (vid_renderer))
     sim_printf ("%s: Video Update Event: SDL_RenderClear error: %s\n", vid_dname(vid_dev), SDL_GetError());
-if (SDL_RenderCopy (vid_renderer, vid_texture, NULL, NULL))
+if (SDL_RenderCopy (vid_renderer, vid_texture, NULL, &vid_dst))
     sim_printf ("%s: Video Update Event: SDL_RenderCopy error: %s\n", vid_dname(vid_dev), SDL_GetError());
 SDL_RenderPresent (vid_renderer);
 }
@@ -2367,5 +2398,17 @@ t_stat vid_screenshot (const char *filename)
 {
 sim_printf ("video support unavailable\n");
 return SCPE_NOFNC|SCPE_NOMESSAGE;
+}
+
+t_bool vid_is_fullscreen (void)
+{
+sim_printf ("video support unavailable\n");
+return FALSE;
+}
+
+t_stat vid_set_fullscreen (t_bool flag)
+{
+sim_printf ("video support unavailable\n");
+return SCPE_OK;
 }
 #endif /* defined(USE_SIM_VIDEO) */
