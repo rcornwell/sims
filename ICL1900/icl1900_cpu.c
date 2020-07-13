@@ -1840,7 +1840,6 @@ fn:
                     }
                     faccl &= FMASK;
                     facch &= MMASK;
-fexp:
                     /* Check if exponent in range */
                     if (e1 < -256) {
                         facch = faccl = 0;
@@ -2459,7 +2458,6 @@ time_read(uint32 *word)
 {
     time_t              curtim;
     struct tm          *tptr;
-    int                 ms;
 
     curtim = time(NULL);        /* get time */
     tptr = localtime(&curtim);  /* decompose */
@@ -2611,7 +2609,7 @@ cpu_show_mult(FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 t_stat
 cpu_set_hist(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 {
-    int32               i, lnt;
+    int32               lnt;
     t_stat              r;
 
     if (cptr == NULL) {
@@ -2664,7 +2662,6 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
         h = &hst[(++di) % hst_lnt];     /* entry pointer */
 
         if (h->rc & HIST_PC) {   /* instruction? */
-            int i;
             fprintf(st, " %07o %08o %08o %08o %08o %08o %o %o %o %02o ",
                     h->rc & M22 , h->ea, h->xr, h->ra, h->rb, h->rr,
                     h->c, h->v, h->e, h->mode);

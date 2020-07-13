@@ -123,7 +123,7 @@ DEVICE lpr_dev = {
 
 
 void lpr_cmd(int dev, uint32 cmd, uint32 *resp) {
-   int     i;
+   uint32  i;
    UNIT    *uptr = NULL;
 
    *resp = 0;
@@ -186,7 +186,7 @@ void lpr_cmd(int dev, uint32 cmd, uint32 *resp) {
  * xxxx10     Stop print.
  */
 void lpr_nsi_cmd(int dev, uint32 cmd) {
-   int     i;
+   uint32  i;
    UNIT    *uptr = NULL;
 
    /* Find the unit from dev */
@@ -236,7 +236,7 @@ void lpr_nsi_cmd(int dev, uint32 cmd) {
  *  040   BUSY
  */
 void lpr_nsi_status(int dev, uint32 *resp) {
-   int     i;
+   uint32  i;
    UNIT    *uptr = NULL;
 
    *resp = 0;
@@ -266,9 +266,7 @@ void lpr_nsi_status(int dev, uint32 *resp) {
 
 t_stat lpr_svc (UNIT *uptr)
 {
-    t_stat  r;
     uint8   ch;
-    int     data;
     char    buffer[200];
     int     i;
     int     len;
@@ -317,7 +315,6 @@ t_stat lpr_svc (UNIT *uptr)
     buffer[i++] = '\n';
     buffer[i] = '\0';
 
-fprintf(stderr, "Buffer: %s", buffer);
     sim_fwrite(&buffer, 1, i, uptr->fileref);
     uptr->pos += i;
     /* Check if Done */

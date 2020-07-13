@@ -41,9 +41,9 @@ DIB nul_dib = { 0, NULL, NULL, NULL};
 t_stat
 chan_set_devs()
 {
-     int   i;
-     int   j;
-     int   chan;
+     int     i;
+     uint32  j;
+     int     chan;
 
      /* Clear device table */
      for (i = 0; i < sizeof(devs)/sizeof(DIB *); i++)
@@ -73,7 +73,7 @@ chan_set_devs()
                 if (sim_devices[i]->units[j].flags & UNIT_DIS)
                     continue;
                 if (devs[chan+j] != NULL) {
-                    fprintf(stderr, "Conflict between devices %d %s\n", chan+j, sim_devices[i]->name);
+                    sim_printf("Conflict between devices %d %s\n", chan+j, sim_devices[i]->name);
                     f = 0;
                 }
             }
@@ -90,7 +90,7 @@ chan_set_devs()
             if (chan < 2 || chan > 36)
                continue;
             if (devs[chan] != NULL) {
-               fprintf(stderr, "Conflict between devices %d %s\n", chan, sim_devices[i]->name);
+               sim_printf("Conflict between devices %d %s\n", chan, sim_devices[i]->name);
             } else {
                devs[chan] = dibp;
             }
@@ -106,7 +106,7 @@ chan_set_devs()
                 if (chan < 2 || chan > 36)
                    continue;
                 if (devs[chan] != NULL) {
-                   fprintf(stderr, "Conflict between devices %d %s%d\n", chan, sim_devices[i]->name, unit);
+                   sim_printf("Conflict between devices %d %s%d\n", chan, sim_devices[i]->name, unit);
                 } else {
                    devs[chan] = dibp;
                 }
@@ -126,7 +126,7 @@ set_chan(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
      int             new_chan;
      int             cur_chan;
      t_stat          r;
-     int             i;
+     uint32          i;
 
      if (cptr == NULL)
          return SCPE_ARG;
@@ -203,7 +203,7 @@ set_chan(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
          devs[new_chan] = dibp;
          return SCPE_OK;
      } else {
-        fprintf(stderr, "Device already on channel %d\n", new_chan);
+        sim_printf("Device already on channel %d\n", new_chan);
      }
      return SCPE_ARG;
 }
@@ -215,7 +215,6 @@ get_chan(FILE *st, UNIT *uptr, int32 v, CONST void *desc)
      DEVICE          *dptr;
      DIB             *dibp;
      int             chan;
-     int             i;
 
      if (uptr == NULL)
          return SCPE_IERR;

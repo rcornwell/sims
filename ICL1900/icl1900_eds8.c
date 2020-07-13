@@ -239,7 +239,6 @@ t_stat eds8_svc (UNIT *uptr)
     DEVICE      *dptr = &eds8_dev;
     int          unit = (uptr - dptr->units);
     int          dev = GET_UADDR(dptr->flags);
-    t_stat       r;
     uint32       word;
     int          i;
     int          wc;
@@ -593,8 +592,8 @@ t_stat eds8_svc (UNIT *uptr)
 
 t_stat eds8_reset (DEVICE *dptr)
 {
-    UNIT *uptr = dptr->units;
-    int unit;
+    UNIT  *uptr = dptr->units;
+    uint32 unit;
 
     for (unit = 0; unit < dptr->numunits; unit++, uptr++) {
        uptr->CMD = 0;

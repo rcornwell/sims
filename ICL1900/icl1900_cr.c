@@ -114,7 +114,7 @@ DEVICE cdr_dev = {
 
 
 void cdr_cmd(int dev, uint32 cmd, uint32 *resp) {
-   int     i;
+   uint32   i;
    UNIT    *uptr = NULL;
 
    *resp = 0;
@@ -179,7 +179,7 @@ void cdr_cmd(int dev, uint32 cmd, uint32 *resp) {
  * xxxx10     Stop reader.
  */
 void cdr_nsi_cmd(int dev, uint32 cmd) {
-   int     i;
+   uint32   i;
    UNIT    *uptr = NULL;
 
    /* Find the unit from dev */
@@ -229,7 +229,7 @@ void cdr_nsi_cmd(int dev, uint32 cmd) {
  *  040   BUSY
  */
 void cdr_nsi_status(int dev, uint32 *resp) {
-   int     i;
+   uint32   i;
    UNIT    *uptr = NULL;
 
    *resp = 0;

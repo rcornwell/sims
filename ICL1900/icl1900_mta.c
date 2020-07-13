@@ -149,7 +149,7 @@ DEVICE mta_dev = {
     };
 
 void mta_nsi_cmd(int dev, uint32 cmd) {
-   int     d;
+   uint32   d;
    UNIT    *uptr;
 
    d = dev - GET_UADDR(mta_dev.flags);
@@ -186,7 +186,7 @@ void mta_nsi_cmd(int dev, uint32 cmd) {
 }
 
 void mta_nsi_status(int dev, uint32 *resp) {
-   int     d;
+   uint32   d;
    UNIT    *uptr;
 
    *resp = 0;
@@ -268,7 +268,7 @@ t_stat mta_svc (UNIT *uptr)
              word = 0;
              uptr->STATUS &= ~CMASK;
              for(i = 16; i >= 0; i-=8) {
-                 if (uptr->POS >= uptr->hwmark) {
+                 if ((uint32)uptr->POS >= uptr->hwmark) {
                     /* Add in fill characters */
                     stop = 1;
                     if (i == 8) {
@@ -289,7 +289,7 @@ t_stat mta_svc (UNIT *uptr)
              mode = (uptr->CMD & BCD) ? 0 : 0100;
              uptr->STATUS &= ~CMASK;
              for(i = 18; i >= 0; i-=6) {
-                 if (stop || uptr->POS >= uptr->hwmark) {
+                 if (stop || (uint32)uptr->POS >= uptr->hwmark) {
                     stop = 1;
                     ch = 074;
                  } else {
@@ -312,14 +312,14 @@ t_stat mta_svc (UNIT *uptr)
              M[uptr->ADDR++] = word;
              uptr->ADDR &= M15;
              uptr->CMD -= 1 << 16;
-             if (stop || (uptr->CMD & (M15 << 16)) == 0 || uptr->POS >= uptr->hwmark) {
+             if (stop || (uptr->CMD & (M15 << 16)) == 0 || (uint32)uptr->POS >= uptr->hwmark) {
                  /* Done with transfer */
                  sim_debug(DEBUG_DETAIL, dptr, "unit=%d %08o left %08o\n", unit, uptr->ADDR,
                                     uptr->CMD >> 16);
-                 if ((uptr->CMD & (M15 << 16)) == 0 && uptr->POS < uptr->hwmark)
+                 if ((uptr->CMD & (M15 << 16)) == 0 && (uint32)uptr->POS < uptr->hwmark)
                      uptr->STATUS |= LONGBLK;
                  if ((uptr->CMD & BCD) != 0 && (uptr->CMD & (M15 << 16)) != 0
-                                  && uptr->POS >= uptr->hwmark) {
+                                  && (uint32)uptr->POS >= uptr->hwmark) {
                      uptr->STATUS |= FILLWRD;
                      M[uptr->ADDR++] = 074747474;
                      uptr->ADDR &= M15;
@@ -623,8 +623,8 @@ t_stat mta_svc (UNIT *uptr)
 
 t_stat mta_reset (DEVICE *dptr)
 {
-    UNIT *uptr = dptr->units;
-    int unit;
+    UNIT  *uptr = dptr->units;
+    uint32 unit;
 
     for (unit = 0; unit < dptr->numunits; unit++, uptr++) {
        uptr->CMD = 0;

@@ -621,7 +621,7 @@ find_opcode(char *op, int *val)
 {
     int        i;
     int        v;
-    t_opcode   *tab;
+
     *val = -1;
     if (*op >= '0' && *op <= '7') {
         for (v = i = 0; op[i] != '\0'; i++) {

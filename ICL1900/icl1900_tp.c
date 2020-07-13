@@ -160,7 +160,7 @@ DEVICE ptp_dev = {
 
 
 void ptp_cmd(int dev, uint32 cmd, uint32 *resp) {
-   int     i;
+   uint32  i;
    UNIT    *uptr = NULL;
 
    *resp = 0;
@@ -242,7 +242,7 @@ void ptp_cmd(int dev, uint32 cmd, uint32 *resp) {
  * 1xxxxx     Punch blanks.
  */
 void ptp_nsi_cmd(int dev, uint32 cmd) {
-   int     i;
+   uint32  i;
    UNIT    *uptr = NULL;
 
    /* Find the unit from dev */
@@ -299,7 +299,7 @@ void ptp_nsi_cmd(int dev, uint32 cmd) {
  *  040   BUSY
  */
 void ptp_nsi_status(int dev, uint32 *resp) {
-   int     i;
+   uint32  i;
    UNIT    *uptr = NULL;
 
    *resp = 0;

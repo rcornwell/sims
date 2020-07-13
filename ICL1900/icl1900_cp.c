@@ -103,7 +103,7 @@ DEVICE cdp_dev = {
 
 
 void cdp_cmd(int dev, uint32 cmd, uint32 *resp) {
-   int     i;
+   uint32   i;
    UNIT    *uptr = NULL;
 
    *resp = 0;
@@ -165,7 +165,7 @@ void cdp_cmd(int dev, uint32 cmd, uint32 *resp) {
  * xxxx10     Stop punch.
  */
 void cdp_nsi_cmd(int dev, uint32 cmd) {
-   int     i;
+   uint32   i;
    UNIT    *uptr = NULL;
 
    /* Find the unit from dev */
@@ -215,7 +215,7 @@ void cdp_nsi_cmd(int dev, uint32 cmd) {
  *  040   BUSY
  */
 void cdp_nsi_status(int dev, uint32 *resp) {
-   int     i;
+   uint32   i;
    UNIT    *uptr = NULL;
 
    *resp = 0;

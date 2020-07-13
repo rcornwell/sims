@@ -238,7 +238,6 @@ t_stat mt_svc (UNIT *uptr)
     int          dev = GET_UADDR(dptr->flags);
     t_mtrlnt     reclen;
     t_stat       r;
-    uint8        ch;
     uint32       word;
     int          i;
     int          stop;
@@ -278,7 +277,7 @@ t_stat mt_svc (UNIT *uptr)
          /* Grab three chars off buffer */
          word = 0;
          for(i = 16; i >= 0; i-=8) {
-             if (uptr->POS >= uptr->hwmark) {
+             if ((uint32)uptr->POS >= uptr->hwmark) {
                 /* Add in fill characters */
                 if (i == 8) {
                    stop = 2;
@@ -291,9 +290,9 @@ t_stat mt_svc (UNIT *uptr)
          }
          sim_debug(DEBUG_DATA, dptr, "unit=%d read %08o\n", unit, word);
          eor = chan_input_word(dev, &word, 0);
-         if (eor || uptr->POS >= uptr->hwmark) {
+         if (eor || (uint32)uptr->POS >= uptr->hwmark) {
              uptr->STATUS = (stop << 12) | STQ_TERM;
-             if (uptr->POS < uptr->hwmark)
+             if ((uint32)uptr->POS < uptr->hwmark)
                   uptr->STATUS |= ST1_LONG;
              sim_debug(DEBUG_DATA, dptr, "unit=%d read done %08o %d\n", unit, uptr->STATUS, uptr->POS);
              uptr->CMD = 0;
@@ -548,8 +547,8 @@ t_stat mt_svc (UNIT *uptr)
 
 t_stat mt_reset (DEVICE *dptr)
 {
-    UNIT *uptr = dptr->units;
-    int unit;
+    UNIT  *uptr = dptr->units;
+    uint32 unit;
 
     for (unit = 0; unit < dptr->numunits; unit++, uptr++) {
        uptr->CMD = 0;
