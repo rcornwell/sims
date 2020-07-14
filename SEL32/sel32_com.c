@@ -238,7 +238,6 @@ MTAB            com_mod[] = {
 
 UNIT            com_unit[] = {
     {UDATA(&comi_srv, UNIT_ATTABLE|UNIT_IDLE, 0), COM_WAIT, UNIT_ADDR(0x0000)},       /* 0 */
-//  {UDATA(&comi_srv, UNIT_ATTABLE|UNIT_IDLE, 0), COM_WAIT, UNIT_ADDR(0x4747)},       /* dummy */
 };
 
 //DIB com_dib = {NULL, com_startcmd, NULL, NULL, com_ini, com_unit, com_chp, COM_UNITS, 0x0f, 0x7e00, 0, 0, 0};
@@ -362,12 +361,6 @@ DEVICE          coml_dev = {
 /* 8-line serial routines */
 void coml_ini(UNIT *uptr, t_bool f)
 {
-//  int unit;
-//  uint16 chsa;
-
-//  unit = uptr - coml_unit;                /* unit # */
-//  chsa = GET_UADDR(uptr->u3);             /* get channel/sub-addr */
-
     /* maybe do someting here on master channel init */
     uptr->u5 = SNS_RDY|SNS_ONLN;            /* status is online & ready */
 }
@@ -402,7 +395,6 @@ uint16  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         uptr->u3 |= (0x7f & COM_MSK);   /* save 0x7f as INCH cmd command */
         uptr->u5 = SNS_RDY|SNS_ONLN;    /* status is online & ready */
         sim_activate(uptr, 20);         /* start us up */
-//        return SNS_CHNEND|SNS_DEVEND;   /* all is well */
         break;
 
     /* write commands must use address 8-f */
@@ -449,7 +441,6 @@ uint16  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         uptr->u3 &= LMASK;              /* leave only chsa */
         uptr->u3 |= (cmd & COM_MSK);    /* save command */
         sim_activate(uptr, 20);         /* start us up */
-//        return SNS_CHNEND|SNS_DEVEND;   /* good return */
         break;
 
     case COM_SNS:       /* 0x04 */      /* Sense (8 bytes) */
@@ -459,68 +450,36 @@ uint16  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         /* value 5 is Data carrier detected n/u */
         sim_debug(DEBUG_CMD, dptr,
             "com_startcmd %04x: unit %04x Cmd Sense %02x\n", chan, unit, uptr->u5);
-/* Sense byte 0 */
-//#define SNS_CMDREJ    0x80000000  /* Command reject */
-//#define SNS_INTVENT   0x40000000  /* Unit intervention required (N/U) */
-//#define SNS_BOCHK     0x20000000  /* Bus out check (IOP parity error */
-//#define SNS_EQUIPCK   0x10000000  /* Equipment check (device error) */
-//#define SNS_DATACK    0x08000000  /* Data check */
-//#define SNS_OVERRN    0x04000000  /* Overrun (N/U) */
-//#define SNS_NUB01     0x02000000  /* Zero (N/U) */
-//#define SNS_NUB02     0x01000000  /* Zero (N/U) */
-//      com_lstat[unit][0] |= (SNS_ASCIICD | SNS_SPCLCD|SNS_RING);  /* set char detect status */
-//      com_lstat[unit][0] |= (SNS_ASCIICD | SNS_SPCLCD);   /* set char detect status */
-//      com_lstat[unit][0] |= (SNS_RING);       /* set char detect status */
+
         ch = (com_lstat[unit][0] >> 24) & 0xff;
         chan_write_byte(GET_UADDR(uptr->u3), &ch);  /* write status */
-/* Sense byte 1 */
-//#define SNS_ASCIICD   0x00800000  /* ASCII control char detected interrupt */
-//#define SNS_SPCLCD    0x00400000  /* Special char detected interrupt */
-//#define SNS_ETX       0x00200000  /* ETX interrupt */
-//#define SNS_BREAK     0x00100000  /* X BREAK interrupt */
-//#define SNS_ACEFE     0x00080000  /* ACE framing error interrupt */
-//#define SNS_ACEPEI    0x00040000  /* ACE parity error interrupt */
-//#define SNS_ACEOVR    0x00020000  /* ACE overrun error interrupt */
-//#define SNS_RING      0x00010000  /* X Ring character interrupt */
+
         com_lstat[unit][0] |= (SNS_RING);           /* set char detect status */
         com_lstat[unit][0] |= (SNS_ASCIICD);        /* set char detect status */
         ch = (com_lstat[unit][0] >> 16) & 0xff;
         chan_write_byte(GET_UADDR(uptr->u3), &ch);  /* write status */
-/* Sense byte 2  Modem status */
-//#define SNS_RLSDS     0x00008000  /* S Received line signal detect status */
-//#define SNS_RINGST    0x00004000  /* Ring indicator line status */
-//#define SNS_DSRS      0x00002000  /* C DSR Data set ready line status */
-//#define SNS_CTSS      0x00001000  /* C CTS Clear to send line status */
-//#define SNS_DELTA     0x00000800  /* BS Delta receive line signal detect failure interrupt */
-//#define SNS_MRING     0x00000400  /* X RI Modem ring interrupt */
-//#define SNS_DELDSR    0x00000200  /* BS Delta data set ready interrupt */
-//#define SNS_DELCLR    0x00000100  /* B Delta data set CTS failure interrupt */
-        com_lstat[unit][0] |= (SNS_CTSS|SNS_DSRS);      /* set CTS & DSR status */
+
+        com_lstat[unit][0] |= (SNS_CTSS|SNS_DSRS);  /* set CTS & DSR status */
         com_lstat[unit][0] |= (SNS_MRING);          /* set char detect status */
         ch = (com_lstat[unit][0] >> 8) & 0xff;
         chan_write_byte(GET_UADDR(uptr->u3), &ch);  /* write status */
-/* Sense byte 3  Modem Control/Operation status */
-//#define SNS_HALFD     0x00000080  /* Half-duplix operation set */
-//#define SNS_MRINGE    0x00000040  /* Modem ring enabled (1) */
-//#define SNS_ACEDEF    0x00000020  /* ACE parameters defined */
-//#define SNS_DIAGM     0x00000010  /* Diagnostic mode set */
-//#define SNS_AUXOL2    0x00000008  /* Auxiliary output level 2 */
-//#define SNS_AUXOL1    0x00000004  /* Auxiliary output level 1 */
-//#define SNS_RTS       0x00000002  /* RTS Request to send set */
-//#define SNS_DTR       0x00000001  /* DTR Data terminal ready set */
-//      com_lstat[unit][0] |= (SNS_RTS|SNS_DTR);    /* set RTS & DTR status */
-        com_lstat[unit][0] |= (SNS_DTR);    /* set DTR status */
-        ch = (com_lstat[unit][0] >> 0) & 0xff;
 
+        com_lstat[unit][0] |= (SNS_DTR);            /* set DTR status */
+        ch = (com_lstat[unit][0] >> 0) & 0xff;
         chan_write_byte(GET_UADDR(uptr->u3), &ch);  /* write status */
+
         ch = (com_lstat[unit][1] >> 24) & 0xff;
         chan_write_byte(GET_UADDR(uptr->u3), &ch);  /* write status */
+
         ch = (com_lstat[unit][1] >> 16) & 0xff;
         chan_write_byte(GET_UADDR(uptr->u3), &ch);  /* write status */
+
         ch = (com_lstat[unit][1] >> 8) & 0xff;
         chan_write_byte(GET_UADDR(uptr->u3), &ch);  /* write status */
+
         ch = (com_lstat[unit][1] >> 0) & 0xff;
         chan_write_byte(GET_UADDR(uptr->u3), &ch);  /* write status */
+
         sim_debug(DEBUG_CMD, dptr,
             "com_startcmd Cmd SENSE return chan %04x u5-status %04x ls0 %08x ls1 %08x\n",
             chan, uptr->u5, com_lstat[unit][0], com_lstat[unit][1]);
@@ -631,14 +590,7 @@ uint16  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         uptr->u4 |= ((uint32)ch)<<8;                /* byte 2 of ACE data */
         sim_debug(DEBUG_CMD, dptr, "com_startcmd %04x: Cmd %02x ACE bytes %08x\n",
             chan, cmd, uptr->u4);
-#ifdef USE_INTERUPT
-        uptr->u5 = SNS_RDY|SNS_ONLN;                /* status is online & ready */
-        uptr->u3 &= LMASK;                          /* leave only chsa */
-        uptr->u3 |= (cmd & COM_MSK);                /* save command */
-        sim_activate(uptr, 20);                     /* start us up */
-#else
         return SNS_CHNEND|SNS_DEVEND;               /* good return */
-#endif
         break;
 
 
@@ -646,8 +598,7 @@ uint16  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         uptr->u5 |= SNS_CMDREJ;                     /* command rejected */
         sim_debug(DEBUG_CMD, dptr, "com_startcmd %04x: Cmd Invald %02x status %02x\n",
             chan, cmd, uptr->u5);
-//      return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* unit check */
-        return SNS_CHNEND|STATUS_PCHK;
+        return SNS_CHNEND|STATUS_PCHK;              /* program check */
         break;
     }
 
@@ -697,17 +648,11 @@ t_stat comi_srv(UNIT *uptr)
     newln = tmxr_poll_conn(&com_desc);                  /* look for connect */
     if (newln >= 0) {                                   /* rcv enb pending? */
         uint16  chsa = GET_UADDR(coml_unit[newln].u3);  /* get channel/sub-addr */
-//      int     chan = ((chsa >> 8) & 0x7f);            /* get the channel number */
-//      UNIT    *comlp = coml_unit+ln;                  /* get uptr for coml line */
-//      int     cmd = comlp->u3 & 0xff;                 /* get the active cmd */
-//fprintf(stderr, "comi_srv poll chsa %04x new line %04x\r\n", chsa, newln);
         com_ldsc[newln].rcve = 1;                       /* enable rcv */
-//BAD   com_ldsc[newln+8].xmte = 1;                     /* enable xmt for output line */
         com_ldsc[newln].xmte = 1;                       /* enable xmt for output line */
         com_sta[newln] &= ~COML_REP;                    /* clr pending */
         /* send attention to OS here for this channel */
         /* need to get chsa here for the channel */
-//fprintf(stderr, "comi_srv chsa %04x chan %04x\r\n", chsa, chan);
         set_devwake(chsa, SNS_ATTN|SNS_DEVEND|SNS_CHNEND);  /* tell user */
     }
     /* poll all devices for input */
@@ -718,7 +663,6 @@ t_stat comi_srv(UNIT *uptr)
         uint16  chsa = GET_UADDR(comlp->u3);            /* get channel/sub-addr */
         if (com_ldsc[ln].conn) {                        /* connected? */
             if ((c = tmxr_getc_ln(&com_ldsc[ln]))) {    /* get char */
-//fprintf(stderr, "comi_srv chsa %04x input %02x cmd %02x\r\n", chsa, c, cmd);
                 ch = c;                                 /* just the char */
                 /* echo the char out */
                 tmxr_putc_ln(&com_ldsc[ln], ch);        /* output char */
@@ -736,12 +680,10 @@ t_stat comi_srv(UNIT *uptr)
                         /* write byte to memory */
                         if (chan_write_byte(chsa, &ch)) {
                             /* done, reading chars */
-//fprintf(stderr, "comi_srv chsa %04x input %02x complete cmd %02x\r\n", chsa, c, cmd);
                             comlp->u3 &= LMASK;         /* nothing left, clear cmd */
                             chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we done */
                         } else {
                             /* more to go, continue */
-//fprintf(stderr, "comi_srv chsa %04x input %02x cmd %02x\r\n", chsa, c, cmd);
                             if (ch == '\r') {           /* see if done */
                                 comlp->u3 &= LMASK;     /* nothing left, clear cmd */
                                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we done */
@@ -753,8 +695,6 @@ t_stat comi_srv(UNIT *uptr)
                         if (((comlp->u4 & ACE_WAKE) >> 8) == ch) {
                             /* send attention to OS here for this channel */
                             /* need to get chsa here for the channel */
-//      fprintf(stderr, "comi_srv WAKEUP chsa %04x ch %02x wake %04x\r\n",
-//      chsa, ch, (comlp->u4 & ACE_WAKE)>>8);
                             set_devwake(chsa, SNS_ATTN|SNS_DEVEND|SNS_CHNEND);  /* tell user */
                         }
                     }
@@ -836,10 +776,8 @@ endit:
             if (done)                                   /* are we done writing */
                 goto endit;                             /* done */
             /* just dump the char */
-//          /* xmt disabled, just wait around */
             sim_debug(DEBUG_CMD, dptr, "com_srvo write dumping char 0x%02x on line %04x\n", ch, ln);
             tmxr_poll_tx(&com_desc);                    /* poll xmt */
-//??            sim_activate(uptr, coml_unit[ln].wait);     /* wait */
             sim_activate(uptr, uptr->wait);             /* wait */
             return SCPE_OK;
         }
@@ -861,12 +799,10 @@ t_stat com_reset (DEVICE *dptr)
 {
     int32 i;
 
-#ifndef JUNK
     if (com_dev.flags & DEV_DIS)                        /* master disabled? */
         com_dev.flags |= DEV_DIS;                       /* disable lines */
     else
         com_dev.flags &= ~DEV_DIS;
-#endif
     if (com_unit[COMC].flags & UNIT_ATT)                /* master att? */
         sim_clock_coschedule(&com_unit[0], 200);        /* activate */
     for (i = 0; i < COM_LINES; i++)                     /* reset lines */
@@ -879,11 +815,8 @@ t_stat com_reset (DEVICE *dptr)
 t_stat com_attach(UNIT *uptr, CONST char *cptr)
 {
     DEVICE  *dptr = get_dev(uptr);
-//  uint16  chsa = GET_UADDR(com_unit[COMC].u3); /* get channel/subaddress */
-//  uint16  chsa = GET_UADDR(uptr->u3);         /* get channel/subaddress */
     t_stat  r;
 
-//  chsa = GET_UADDR(com_unit[COMC].u3);        /* get channel/subaddress */
     r = tmxr_attach(&com_desc, uptr, cptr);     /* attach */
     if (r != SCPE_OK)                           /* error? */
         return r;                               /* return error */

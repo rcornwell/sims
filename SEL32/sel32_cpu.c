@@ -1,7 +1,7 @@
 /* sel32_cpu.c: Sel 32 CPU simulator
 
    Copyright (c) 2018-2020, James C. Bevier
-   Portions provided by Richard Cornwell and other SIMH contributers
+   Portions provided by Richard Cornwell, Geert Rolf and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -271,26 +271,26 @@ extern int16 post_csw(CHANP *chp, uint32 rstat);
 extern DIB  *dib_chan[MAX_CHAN];
 
 /* floating point subroutines definitions */
-extern uint32 s_fixw(uint32 val, uint32 *cc);
-extern uint32 s_fltw(uint32 val, uint32 *cc);
+extern uint32   s_fixw(uint32 val, uint32 *cc);
+extern uint32   s_fltw(uint32 val, uint32 *cc);
 extern t_uint64 s_fixd(t_uint64 val, uint32 *cc);
 extern t_uint64 s_fltd(t_uint64 val, uint32 *cc);
-extern uint32 s_nor(uint32 reg, uint32 *exp);
+extern uint32   s_nor(uint32 reg, uint32 *exp);
 extern t_uint64 s_nord(t_uint64 reg, uint32 *exp);
-extern uint32 s_adfw(uint32 reg, uint32 mem, uint32 *cc);
-extern uint32 s_sufw(uint32 reg, uint32 mem, uint32 *cc);
+extern uint32   s_adfw(uint32 reg, uint32 mem, uint32 *cc);
+extern uint32   s_sufw(uint32 reg, uint32 mem, uint32 *cc);
 extern t_uint64 s_adfd(t_uint64 reg, t_uint64 mem, uint32 *cc);
 extern t_uint64 s_sufd(t_uint64 reg, t_uint64 mem, uint32 *cc);
-extern uint32 s_mpfw(uint32 reg, uint32 mem, uint32 *cc);
-extern t_uint64 s_dvfw(uint32 reg, uint32 mem, uint32 *cc);
-extern uint32 s_mpfd(t_uint64 reg, t_uint64 mem, uint32 *cc);
+extern uint32   s_mpfw(uint32 reg, uint32 mem, uint32 *cc);
+extern uint32   s_dvfw(uint32 reg, uint32 mem, uint32 *cc);
+extern t_uint64 s_mpfd(t_uint64 reg, t_uint64 mem, uint32 *cc);
 extern t_uint64 s_dvfd(t_uint64 reg, t_uint64 mem, uint32 *cc);
 extern uint32   s_normfw(uint32 mem, uint32 *cc);
 extern t_uint64 s_normfd(t_uint64 mem, uint32 *cc);
 
 /* History information */
-int32               hst_p = 0;       /* History pointer */
-int32               hst_lnt = 0;     /* History length */
+int32           hst_p = 0;       /* History pointer */
+int32           hst_lnt = 0;     /* History length */
 struct InstHistory *hst = NULL;      /* History stack */
 
 /* CPU data structures
@@ -303,29 +303,29 @@ struct InstHistory *hst = NULL;      /* History stack */
 
 UNIT  cpu_unit =
     /* Unit data layout for CPU */
-/*  { UDATA(rtc_srv, UNIT_BINK | MODEL(MODEL_27) | MEMAMOUNT(0), MAXMEMSIZE ), 120 }; */
+/*  { UDATA(rtc_srv, UNIT_BINK | MODEL(MODEL_27) | MEMAMOUNT(0),
+ *  MAXMEMSIZE ), 120 }; */
     {
-    NULL,               /* UNIT *next */             /* next active */
-    NULL,               /* t_stat (*action) */       /* action routine */
-    NULL,               /* char *filename */         /* open file name */
-    NULL,               /* FILE *fileref */          /* file reference */
-    NULL,               /* void *filebuf */          /* memory buffer */
-    0,                  /* uint32 hwmark */          /* high water mark */
-    0,                  /* int32 time */             /* time out */
-//was    UNIT_BINK|MODEL(MODEL_27)|MEMAMOUNT(1), /* uint32 flags */ /* flags */
+    NULL,       /* UNIT *next */             /* next active */
+    NULL,       /* t_stat (*action) */       /* action routine */
+    NULL,       /* char *filename */         /* open file name */
+    NULL,       /* FILE *fileref */          /* file reference */
+    NULL,       /* void *filebuf */          /* memory buffer */
+    0,          /* uint32 hwmark */          /* high water mark */
+    0,          /* int32 time */             /* time out */
     UNIT_IDLE|UNIT_FIX|UNIT_BINK|MODEL(MODEL_27)|MEMAMOUNT(4), /* flags */
-    0,                  /* uint32 dynflags */        /* dynamic flags */
-    0x800000,           /* t_addr capac */           /* capacity */
-    0,                  /* t_addr pos */             /* file position */
-    NULL,               /* void (*io_flush) */       /* io flush routine */
-    0,                  /* uint32 iostarttime */     /* I/O start time */
-    0,                  /* int32 buf */              /* buffer */
-    80,                 /* int32 wait */             /* wait */
+    0,          /* uint32 dynflags */        /* dynamic flags */
+    0x800000,   /* t_addr capac */           /* capacity */
+    0,          /* t_addr pos */             /* file position */
+    NULL,       /* void (*io_flush) */       /* io flush routine */
+    0,          /* uint32 iostarttime */     /* I/O start time */
+    0,          /* int32 buf */              /* buffer */
+    80,         /* int32 wait */             /* wait */
 };
 
 //UNIT cpu_unit = { UDATA (&rtc_srv, UNIT_BINK, MAXMEMSIZE) };
 
-REG                 cpu_reg[] = {
+REG cpu_reg[] = {
     {HRDATAD(PC, PC, 24, "Program Counter"), REG_FIT},
     {BRDATAD(PSD, PSD, 16, 32, 2, "Program Status Doubleword"), REG_FIT},
     {BRDATAD(GPR, GPR, 16, 32, 8, "Index registers"), REG_FIT},
@@ -442,23 +442,23 @@ DEVICE cpu_dev = {
 };
 
 /* CPU Instruction decode flags */
-#define INV     0x0000            /* Instruction is invalid */
-#define HLF     0x0001            /* Half word instruction */
-#define ADR     0x0002            /* Normal addressing mode */
-#define IMM     0x0004            /* Immediate mode */
-#define WRD     0x0008            /* Word addressing, no index */
-#define SCC     0x0010            /* Sets CC */
-#define RR      0x0020            /* Read source register */
-#define R1      0x0040            /* Read destination register */
-#define RB      0x0080            /* Read base register into dest */
-#define SD      0x0100            /* Stores into destination register */
-#define RNX     0x0200            /* Reads memory without sign extend */
-#define RM      0x0400            /* Reads memory */
-#define SM      0x0800            /* Stores memory */
-#define DBL     0x1000            /* Double word operation */
-#define SB      0x2000            /* Store Base register */
-#define BT      0x4000            /* Branch taken, no PC incr */
-#define SF      0x8000            /* Special flag */
+#define INV     0x0000      /* Instruction is invalid */
+#define HLF     0x0001      /* Half word instruction */
+#define ADR     0x0002      /* Normal addressing mode */
+#define IMM     0x0004      /* Immediate mode */
+#define WRD     0x0008      /* Word addressing, no index */
+#define SCC     0x0010      /* Sets CC */
+#define RR      0x0020      /* Read source register */
+#define R1      0x0040      /* Read destination register */
+#define RB      0x0080      /* Read base register into dest */
+#define SD      0x0100      /* Stores into destination register */
+#define RNX     0x0200      /* Reads memory without sign extend */
+#define RM      0x0400      /* Reads memory */
+#define SM      0x0800      /* Stores memory */
+#define DBL     0x1000      /* Double word operation */
+#define SB      0x2000      /* Store Base register */
+#define BT      0x4000      /* Branch taken, no PC incr */
+#define SF      0x8000      /* Special flag */
 
 int nobase_mode[] = {
    /*    00            04             08             0C  */
@@ -507,7 +507,6 @@ int nobase_mode[] = {
 
    /*    B0            B4             B8             BC */
    /*    LM            LN             ADM            SUM  */ 
-//   SCC|SD|RM|ADR,    SCC|SD|RM|ADR,  SCC|SD|RR|RM|ADR,  SCC|SD|RR|RM|ADR,
      SCC|SD|RM|ADR,    SCC|SD|RM|ADR,  SD|RR|RM|ADR,  SD|RR|RM|ADR,
 
    /*    C0            C4             C8             CC    */
@@ -574,7 +573,6 @@ int base_mode[] = {
 
    /* B0        B4            B8         BC   */
    /* LM        LN            ADM        SUM  */ 
-// SCC|SD|RM|ADR,   SCC|SD|RM|ADR,  SCC|SD|RR|RM|ADR, SCC|SD|RR|RM|ADR,
    SCC|SD|RM|ADR,   SCC|SD|RM|ADR,      SD|RR|RM|ADR,     SD|RR|RM|ADR,
 
    /* C0        C4            C8         CC   */
@@ -670,6 +668,7 @@ int base_mode[] = {
 /* BIT 4 = 0    (MA) A first read or write (access) to the map block (page) has not occurred */
 /*       = 1    (MA) A first read or write (access) to the map block (page) has occurred */
 /*  5-15 =      11 most significant bits of the 24 bit real address for page */
+
 /* Note */
 /* If a map is valid, a MAP (page) hit occurs and logical to physical translation occures */
 /* If the map is not valid, a demand MAP (page) fault occures and the faulting page is provided */
@@ -736,7 +735,6 @@ t_stat load_maps(uint32 thepsd[2], uint32 lmap)
                 MEMSIZE, mpl);
             TRAPSTATUS |= BIT18;                    /* set bit 18 of trap status */
             return MAPFLT;                          /* no, map fault error */
-//          return NPMEM;                           /* no, none present memory error */
         }
 
         /* mpl is ok, get the msdl for given cpix */
@@ -822,8 +820,7 @@ t_stat load_maps(uint32 thepsd[2], uint32 lmap)
             for (j = 0; j < spc; j++, num++) {      /* loop through the midl's */
                 uint32 pad = RMW(midl+(j<<1));      /* get page descriptor address */
                 if (num >= MAXMAP) {
-//                  TRAPSTATUS |= BIT16;            /* set bit 16 of trap status */
-/*96V9*/            TRAPSTATUS |= (BIT16|BIT9);     /* set bit 5 of trap status */
+/*97V9*/            TRAPSTATUS |= (BIT16|BIT9);     /* set bit 5 of trap status */
                     return MAPFLT;                  /* map loading overflow, map fault error */
                 }
                 /* load 16 bit map descriptors */
@@ -833,8 +830,7 @@ t_stat load_maps(uint32 thepsd[2], uint32 lmap)
         }
         /* if none loaded, map fault */
         if (num == 0) {
-//          TRAPSTATUS |= BIT16;                    /* set bit 16 of trap status */
-/*96V9*/    TRAPSTATUS |= (BIT16|BIT9);             /* set bit 5 of trap status */
+/*97V9*/    TRAPSTATUS |= (BIT16|BIT9);             /* set bit 5 of trap status */
             return MAPFLT;                          /* attempt to load 0 maps, map fault error */
         }
         /* clear the rest of the previously used maps */
@@ -877,11 +873,6 @@ t_stat load_maps(uint32 thepsd[2], uint32 lmap)
         return MAPFLT;                              /* no, map fault error */
     }
 
-#ifdef DO_DYNAMIC_DEBUG
-    /* start debugging at test 46 of cn.mmm diag */
-    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
-#endif
-
     /* check if valid real address */
     mpl &= MASK24;                                  /* clean mpl address */
     if (!MEM_ADDR_OK(mpl)) {                        /* see if in our real memory */
@@ -899,12 +890,10 @@ npmem:
     }
 
     /* output O/S and User MPX entries */
-//  sim_debug(DEBUG_EXP, &cpu_dev,
     sim_debug(DEBUG_DETAIL, &cpu_dev,
         "#MEMORY %06x MPL %06x MPL[0] %08x %06x MPL[%04x] %08x %06x\n",
         MEMSIZE, mpl, RMW(mpl), RMW(mpl+4), cpix,
         RMW(cpix+mpl), RMW(cpix+mpl+4));
-//  sim_debug(DEBUG_EXP, &cpu_dev,
     sim_debug(DEBUG_DETAIL, &cpu_dev,
         "MEMORY2 %06x BPIX %04x cpix %04x CPIX %04x CPIXPL %04x HIWM %04x\n",
         MEMSIZE, BPIX, cpix, CPIX, CPIXPL, HIWM);
@@ -946,8 +935,7 @@ nomaps:
             CPIX = cpix;                            /* save CPIX */
             HIWM = 0;                               /* reset high water mark */
             if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9))
-//              TRAPSTATUS |= BIT5;                 /* set bit 5 of trap status */
-                TRAPSTATUS |= (BIT5|BIT9);          /* set bit 5 of trap status */
+                TRAPSTATUS |= (BIT5|BIT9);          /* set bit 5/9 of trap status */
             else
                 TRAPSTATUS |= BIT16;                /* set bit 16 of trap status */
             return MAPFLT;                          /* map loading overflow, map fault error */
@@ -991,7 +979,7 @@ nomaps:
             } else {
                 TLB[num] = 0;                       /* clear the TLB for non valid maps */
             }
-#ifndef FOR_DEBUG
+#ifdef FOR_DEBUG
             if ((num < 0x20) || (num > (spc - 0x10)))
                 sim_debug(DEBUG_DETAIL, &cpu_dev,
                     "OS pad %06x=%04x map #%4x, %04x, map2 %08x, TLB %08x MAPC %08x\n",
@@ -1097,12 +1085,10 @@ loaduser:
         CPIX = cpix;                                /* save CPIX */
         HIWM = 0;                                   /* reset high water mark */
         if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9))
-//          TRAPSTATUS |= BIT5;                     /* set bit 5 of trap status */
-            TRAPSTATUS |= (BIT5|BIT9);              /* set bit 5 of trap status */
+            TRAPSTATUS |= (BIT5|BIT9);              /* set bit 5/9 of trap status */
         else
             TRAPSTATUS |= BIT16;                    /* set bit 16 of trap status */
         return MAPFLT;                              /* map overflow fault error */
-//      goto nomaps;                                /* non presemt memory */
     }
     CPIX = cpix;                                    /* save user MPL offset (cpix) */
     CPIXPL = spc;                                   /* save user map load count */
@@ -1147,7 +1133,7 @@ loaduser:
                 TLB[num] = 0;                       /* clear the TLB for non valid maps */
             WMR((num<<1), map);                     /* store map unmodified into cache */
 
-#ifndef FOR_DEBUG
+#ifdef FOR_DEBUG
             /* do partial map dump */
             if ((num < 0x20) || (num > (spc+BPIX) - 0x10))
                 sim_debug(DEBUG_DETAIL, &cpu_dev,
@@ -1195,8 +1181,7 @@ loaduser:
             sim_debug(DEBUG_TRAP, &cpu_dev,
                 "load_maps User page count overflow %04x, map fault\n", num);
             if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9))
-//              TRAPSTATUS |= BIT5;                 /* set bit 5 of trap status */
-                TRAPSTATUS |= (BIT5|BIT9);          /* set bit 5 of trap status */
+                TRAPSTATUS |= (BIT5|BIT9);          /* set bit 5/9 of trap status */
             else
                 TRAPSTATUS |= BIT16;                /* set bit 16 of trap status */
             goto nomaps;                            /* map overflow, map fault trap */
@@ -1346,7 +1331,6 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot, uint32 access)
         else
         if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9)) {
             // V9  & 32/97 wants MACHINECHK for test 37/1 in CN.MMM & VM.MMM */
-//          TRAPSTATUS |= BIT7;                     /* set bit 7 of trap status */
 /*97&V6*/   TRAPSTATUS |= (BIT7|BIT9);              /* set bit 7 of trap status */
             TRAPSTATUS |= BIT28;                    /* set bit 28 of trap status */
             return MACHINECHK_TRAP;                 /* diags want machine check error */
@@ -1359,18 +1343,12 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot, uint32 access)
     offset = word & 0x1fff;                         /* get 13 bit page offset */
 
     /* make sure map index is valid */
-    // This change will allow MPX3x to run, but fails diags
-    // TRY 041420
-// WAS if (index >= (BPIX + CPIXPL)) {
-// MPX3x like this:    if (index > (BPIX + CPIXPL)) {
-//DIAG if (index >= (BPIX + CPIXPL)) {
       if (index >= (BPIX + CPIXPL)) {
             sim_debug(DEBUG_TRAP, &cpu_dev,
             "RealAddr %06x word %06x loadmap gets mapfault index %04x B(%x)+C(%x) %04x\n",
             word, addr, index, BPIX, CPIXPL, BPIX+CPIXPL);
         if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9))
-//          TRAPSTATUS |= BIT5;                     /* set bit 5 of trap status */
-            TRAPSTATUS |= (BIT5|BIT9);              /* set bit 5 of trap status */
+            TRAPSTATUS |= (BIT5|BIT9);              /* set bit 5/9 of trap status */
         else
             TRAPSTATUS |= BIT16;                    /* set bit 16 of trap status */
         return MAPFLT;                              /* map fault error */
@@ -1382,7 +1360,7 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot, uint32 access)
     if ((CPU_MODEL == MODEL_27) || (CPU_MODEL == MODEL_87)) {
         map = RMR((index<<1));                      /* read the map reg cache contents */
         raddr = TLB[index];                         /* get the base address & bits */
-#ifndef MAYBE_NOT_NEEDED
+
         if (!MEM_ADDR_OK(RMW(mpl+CPIX+4) & MASK24)) {  /* check user midl */
             sim_debug(DEBUG_TRAP, &cpu_dev,
                 "RealAddr 27 & 87 map fault index %04x B+C %04x map %04x TLB %08x\n",
@@ -1391,7 +1369,7 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot, uint32 access)
             TRAPSTATUS |= BIT10;                    /* set bit 10 of trap status */
             return MACHINECHK_TRAP;                 /* diags want machine check error */
         }
-#endif
+
         if (((map & 0x8000) == 0) || ((raddr & BIT0) == 0)) {   /* see if valid map */
             sim_debug(DEBUG_TRAP, &cpu_dev,
                 "RealAddr loadmap 0a map fault index %04x B+C %04x map %04x TLB %08x\n",
@@ -1400,7 +1378,6 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot, uint32 access)
             return MAPFLT;                          /* no, map fault error */
         }
 
-        // diag test 34/1 fails in cn.mmm
         // needed for 32/27 & 32/87
         /* check if valid real address */
         if (!MEM_ADDR_OK(raddr & MASK24)) {         /* see if address is within our memory */
@@ -1441,24 +1418,11 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot, uint32 access)
                 "RealAddr loadmap 2a non present memory fault addr %08x raddr %08x index %04x\n",
                 addr, raddr, index);
             if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9)) {
-#ifndef TRY_AGAIN_97V6
                 if (access == MEM_RD)
                     TRAPSTATUS |= BIT1;             /* set bit 1 of trap status */
                 else
                 if (access == MEM_WR)
                     TRAPSTATUS |= BIT2;             /* set bit 2 of trap status */
-                /* returning this error fixes 34/2, but still fails 46/2 */
-                return NPMEM;                       /* none present memory error */
-#else
-//              TRAPSTATUS |= BIT7;                 /* set bit 7 of trap status */
-/*97&V6*/       TRAPSTATUS |= (BIT7|BIT9);          /* set bit 7 of trap status */
-                TRAPSTATUS |= BIT12;                /* set bit 12 of trap status */
-                /* returning this error fails test 34/2 of mmm diag */
-                return MAPFLT;                      /* map fault error on memory access */
-#endif
-/*NEW*///       return MAPFLT;                      /* map fault error on memory access */
-                /* returning this error fails test 34/2 of mmm diag */
-/*NEW*///       return MACHINECHK_TRAP;             /* diags want machine check error */
             } else
                 TRAPSTATUS |= BIT28;                /* set bit 28 of trap status */
             return NPMEM;                           /* none present memory error */
@@ -1519,8 +1483,8 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot, uint32 access)
         if (CPU_MODEL == MODEL_97) {
             // 32/97 wants MAPFLT for test 37/1 in CN.MMM
             TRAPSTATUS |= BIT12;                /* set bit 12 of trap status */
-/*97&V6*/   TRAPSTATUS |= (BIT7|BIT9);          /* set bit 7 of trap status */
-/* 97V9*/   TRAPSTATUS |= BIT10;                /* set bit 10 of trap status */
+/*97&V6*/   TRAPSTATUS |= (BIT7|BIT9);          /* set bit 7/9 of trap status */
+/*97&V9*/   TRAPSTATUS |= BIT10;                /* set bit 10 of trap status */
             return MAPFLT;                      /* no, map fault error */
         } else
         if (CPU_MODEL == MODEL_V6) {
@@ -1719,7 +1683,6 @@ t_stat Mem_read(uint32 addr, uint32 *data)
     status = RealAddr(addr, &realaddr, &prot, MEM_RD);  /* convert address to real physical address */
 
     if (status == ALLOK) {
-//      *data = M[realaddr >> 2];                   /* valid address, get physical address contents */
         *data = RMW(realaddr);                      /* valid address, get physical address contents */
         if (((CPU_MODEL >= MODEL_V6) || (CPU_MODEL == MODEL_97) ||
             (CPU_MODEL == MODEL_67)) && (modes & MAPMODE)) {
@@ -1782,7 +1745,6 @@ t_stat Mem_read(uint32 addr, uint32 *data)
         }
         if (status == MAPFLT) {
             if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9))
-//              TRAPSTATUS |= BIT12;                /* set bit 12 of trap status */
 /*97V9*/        TRAPSTATUS |= (BIT12|BIT16);        /* set bit 12 of trap status */
             else
                 TRAPSTATUS |= BIT10;                /* set bit 10 of trap status */
@@ -1842,12 +1804,11 @@ t_stat Mem_write(uint32 addr, uint32 *data)
                     msdl = RMW(mpl+CPIX+4);         /* get mpl entry for given cpix */
                 }
                 nmap = RMH(msdl+(mix<<1));          /* map content from memory */      
-//                if ((nmap & 0x1800) == 0) {
                 if ((nmap & 0x1000) == 0) {
-                    nmap |= 0x1800;                  /* set the modify/accessed bit in the map cache entry */
-                    WMR((page<<1), nmap);            /* store the map reg contents into cache */
-                    TLB[page] |= 0x18000000;         /* set the modify/accessed bits in TLB too */
-                    WMH((msdl+(mix << 1)), nmap);    /* save modified map with access bit set */
+                    nmap |= 0x1800;                 /* set the modify/accessed bit in the map cache entry */
+                    WMR((page<<1), nmap);           /* store the map reg contents into cache */
+                    TLB[page] |= 0x18000000;        /* set the modify/accessed bits in TLB too */
+                    WMH((msdl+(mix << 1)), nmap);   /* save modified map with access bit set */
                     sim_debug(DEBUG_DETAIL, &cpu_dev,
                         "Mem_write Waddr %06x page %04x set access bit TLB %08x map %04x nmap %04x raddr %08x\n",
                         addr, page, TLB[page], map, nmap, raddr);
@@ -1876,7 +1837,6 @@ t_stat Mem_write(uint32 addr, uint32 *data)
                 return MPVIOL;                      /* return memory protection violation */
             }
         }
-//      M[realaddr >> 2] = *data;                   /* valid address, put physical address contents */
         WMW(realaddr, *data);                       /* valid address, put physical address contents */
     } else {
         /* RealAddr returned an error */
@@ -1891,7 +1851,6 @@ t_stat Mem_write(uint32 addr, uint32 *data)
         }
         if (status == MAPFLT) {
             if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9))
-//              TRAPSTATUS |= BIT12;                /* set bit 12 of trap status */
 /*97V9*/        TRAPSTATUS |= (BIT12|BIT16);        /* set bit 12 of trap status */
             else
                 TRAPSTATUS |= BIT10;                /* set bit 10 of trap status */
@@ -1922,12 +1881,12 @@ void set_CCs(uint32 value, int ovr)
 }
 
 /* retain these values across calls to sim_instr */
-uint32              skipinstr = 0;              /* Skip test for interrupt on this instruction */
-uint32              drop_nop = 0;               /* Set if right hw instruction is a nop */
-uint32              OIR=0;                      /* Original Instruction register */
-uint32              OPSD1=0;                    /* Original PSD1 */
-uint32              OPSD2=0;                    /* Original PSD2 */
-uint32              TPSD[2];                    /* Temp PSD */
+uint32  skipinstr = 0;                          /* Skip test for interrupt on this instruction */
+uint32  drop_nop = 0;                           /* Set if right hw instruction is a nop */
+uint32  OIR=0;                                  /* Original Instruction register */
+uint32  OPSD1=0;                                /* Original PSD1 */
+uint32  OPSD2=0;                                /* Original PSD2 */
+uint32  TPSD[2];                                /* Temp PSD */
 
 /* Opcode definitions */
 /* called from simulator */
@@ -1999,7 +1958,7 @@ wait_loop:
         }
 
         if (skipinstr) {                        /* need to skip interrupt test? */
-#ifndef NOTNOW
+#ifdef NOTNOW
             sim_debug(DEBUG_IRQ, &cpu_dev,
                 "Skipinstr %1x zeroed after skip PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
                 skipinstr, PSD1, PSD2, CPUSTATUS);
@@ -2009,39 +1968,31 @@ wait_loop:
         }
 
         /* process any channel programs */
-//mm    if (RDYQ_Num()) {
         if (RDYQ_Num() && (skipinstr == 0)) {
             uint32  chsa;                       /* channel/sub adddress */
             int32   stat;                       /* return status 0/1 from loadccw */
 
             if (waitqcnt == 0) {
-//TRY051020 if ((waitqcnt == 0) && (irq_auto == 0)) {
-            /* we have entries, continue channel program */
-            if (RDYQ_Get(&chsa) == SCPE_OK) {   /* get chsa for program */
-                sim_debug(DEBUG_XIO, &cpu_dev,
-                    "CPU RDYQ entry for chsa %04x starting\n", chsa);
-                stat = cont_chan(chsa);         /* resume the channel program */
-                if (stat)
+                /* we have entries, continue channel program */
+                if (RDYQ_Get(&chsa) == SCPE_OK) {   /* get chsa for program */
                     sim_debug(DEBUG_XIO, &cpu_dev,
-                        "CPU RDYQ entry for chsa %04x processed\n", chsa);
-            }
-            /* NOTE!  This wait instruction count can not be larger than 30 */
-            /* for UTX.  UTX will fail trying to write to device disk 0801 */
-            waitqcnt = 35;                      /* wait 10 instructions */
-//          waitqcnt = 20;                      /* wait 10 instructions */
-//BAD4UTX   waitqcnt = 50;                      /* wait 10 instructions */
-//BAD4UTX   waitqcnt = 70;                      /* wait 10 instructions */
-//          waitqcnt = 30;                      /* wait 10 instructions */
-            }
-            else
+                        "CPU RDYQ entry for chsa %04x starting\n", chsa);
+                    stat = cont_chan(chsa);     /* resume the channel program */
+                    if (stat)
+                        sim_debug(DEBUG_XIO, &cpu_dev,
+                            "CPU RDYQ entry for chsa %04x processed\n", chsa);
+                }
+                /* NOTE!  This wait instruction count can not be larger than 30 */
+                /* for UTX.  UTX will fail trying to write to device disk 0801 */
+//              waitqcnt = 35;                  /* wait 10 instructions */
+//              waitqcnt = 10;                  /* wait 10 instructions */
+                waitqcnt = 20;                  /* wait 10 instructions */
+            } else
                 waitqcnt -= 1;                  /* wait another instruction */
         }
         else
-            waitqcnt = 35;                      /* wait 10 instructions */
-//          waitqcnt = 30;                      /* wait 10 instructions */
-//BAD4UTX   waitqcnt = 70;                      /* wait 10 instructions */
-//BAD4UTX   waitqcnt = 50;                      /* wait 10 instructions */
-//          waitqcnt = 20;                      /* wait 10 instructions */
+//          waitqcnt = 35;                      /* wait 10 instructions */
+            waitqcnt = 20;                      /* wait 10 instructions */
 //040120    waitqcnt = 10;                      /* wait 10 instructions */
 
 
@@ -2086,22 +2037,19 @@ wait_loop:
                         /* Class F I/O spec says to reset active interrupt if user's */
                         /* interrupt service routine runs with interrupts blocked */
                         if (((t & 0x0f800000) == 0x0f000000) || /* if class F clear interrupt */
-//HANGS DEXP            if (((t & 0x0f000000) == 0x0f000000) || /* if class F clear interrupt */
-//DIAGS                     ((t & 0x0f807fff) == 0x00807f06) || /* RT Clock */
 /*NEW*/                     ((t & 0x0000ffff) == 0x00007f06) || /* RT Clock */
-//DIAGS                     ((t & 0x0f807fff) == 0x03007f04)) { /* Interval timer */
 /*NEW*/                     ((t & 0x0f00ffff) == 0x03007f04)) { /* Interval timer */
                             /* if this is F class I/O interrupt, clear the active level */
                             /* SPAD entries for interrupts begin at 0x80 */
 /*AIR*/                     irq_auto = il;              /* show processing in blocked mode */
-#ifndef LEAVE_ACT_051020
+#ifdef LEAVE_AUTO_INT_ACT_051020
                             INTS[il] &= ~INTS_ACT;      /* deactivate specified int level */
                             SPAD[il+0x80] &= ~SINT_ACT; /* deactivate in SPAD too */
 #endif
                             sim_debug(DEBUG_IRQ, &cpu_dev,
                                 "<|>Auto-reset interrupt INTS[%02x] %08x SPAD[%02x] %08x simi %02x\n",
                                 il, INTS[il], il+0x80, SPAD[il+0x80], sim_interval);
-/*TRY*/                 }
+                        }
                     } else {
                         sim_debug(DEBUG_IRQ, &cpu_dev,
                             "<|>RUN ACTIVE interrupt INTS[%02x] %08x SPAD[%02x] %08x\n",
@@ -2159,10 +2107,10 @@ wait_loop:
                     SPAD[0xf5] = PSD2;          /* save the current PSD2 */
                     SPAD[0xf9] = CPUSTATUS;     /* save the cpu status in SPAD */
                     loading = 0;                /* we are done loading */
-#ifndef NOTNOW
-            sim_debug(DEBUG_IRQ, &cpu_dev,
-                "Load Skipinstr %1x set loading PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
-                skipinstr, PSD1, PSD2, CPUSTATUS);
+#ifdef NOTNOW
+                    sim_debug(DEBUG_IRQ, &cpu_dev,
+                        "Load Skipinstr %1x set loading PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
+                        skipinstr, PSD1, PSD2, CPUSTATUS);
 #endif
                     skipinstr = 1;              /* skip next interrupt test only once */
                 }
@@ -2182,7 +2130,7 @@ wait_loop:
             TRAPME = attention_trap;            /* get trap number */
             attention_trap = 0;                 /* clear flag */
             sim_debug(DEBUG_XIO, &cpu_dev, "Attention TRAP %04x\n", TRAPME);
-#ifndef NOTNOW
+#ifdef NOTNOW
             sim_debug(DEBUG_IRQ, &cpu_dev,
                 "Skipinstr %1x set @ attn int PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
                 skipinstr, PSD1, PSD2, CPUSTATUS);
@@ -2230,11 +2178,11 @@ skipi:
             IR <<= 16;                          /* put instruction in left hw */
             if ((CPU_MODEL <= MODEL_27) || (CPU_MODEL == MODEL_87) ||
                     (CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9)) {
-#ifndef NOTNOW
+#ifdef NOTNOW
                 if (skipinstr)
-            sim_debug(DEBUG_IRQ, &cpu_dev,
-                "1Rt HW instruction skipinstr %1x is set PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
-                skipinstr, PSD1, PSD2, CPUSTATUS);
+                    sim_debug(DEBUG_IRQ, &cpu_dev,
+                        "1Rt HW instruction skipinstr %1x is set PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
+                        skipinstr, PSD1, PSD2, CPUSTATUS);
 #endif
                 drop_nop = 0;                   /* not dropping nop for these machines */
                 goto exec;                      /* machine does not drop nop instructions */
@@ -2242,15 +2190,15 @@ skipi:
             /* We have 67 or V6 and have a rt hw instruction */
             if (IR == 0x00020000) {             /* is this a NOP from rt hw? */
                 PSD1 = (PSD1 + 2) | (((PSD1 & 2) >> 1) & 1);    /* skip this instruction */
-//                fprintf(stderr, "RIGHT HW skip NOP instr %x skip nop at %x\n", IR, PSD1);
+//              fprintf(stderr, "RIGHT HW skip NOP instr %x skip nop at %x\n", IR, PSD1);
                 if (skipinstr)
-            sim_debug(DEBUG_IRQ, &cpu_dev,
-                "2Rt HW instruction skipinstr %1x is set PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
-                skipinstr, PSD1, PSD2, CPUSTATUS);
+                    sim_debug(DEBUG_IRQ, &cpu_dev,
+                        "2Rt HW instruction skipinstr %1x is set PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
+                        skipinstr, PSD1, PSD2, CPUSTATUS);
                 goto skipi;                     /* go read next instruction */
             }
-                if (skipinstr)
-            sim_debug(DEBUG_IRQ, &cpu_dev,
+            if (skipinstr)
+                sim_debug(DEBUG_IRQ, &cpu_dev,
                 "3Rt HW instruction skipinstr %1x is set PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
                 skipinstr, PSD1, PSD2, CPUSTATUS);
         } else {
@@ -2350,7 +2298,7 @@ exec:
                     addr += (BR[ix] & MASK24);  /* if not zero, add to base reg contents */
                 FC = ((IR & F_BIT) ? 4 : 0);    /* get F bit from original instruction */
                 FC |= addr & 3;                 /* set new C bits to address from orig or regs */
-/*TRY*/         addr &= MASK24;                 /* make pure 24 bit addr */
+                addr &= MASK24;                 /* make pure 24 bit addr */
                 break;
             case INV:
                 TRAPME = UNDEFINSTR_TRAP;       /* Undefined Instruction Trap */
@@ -2439,7 +2387,7 @@ exec:
             case WRD:           /* Word addressing, no index */
                 bc = 0xC0000000;                /* set bits 0, 1 for instruction if not indirect */
                 t = IR;                         /* get current IR */
-/*TRY*/         addr &= MASK24;                 /* make pure 24 bit addr */
+                addr &= MASK24;                 /* make pure 24 bit addr */
                 while ((t & IND) != 0) {        /* process indirection */
                     if ((TRAPME = Mem_read(addr, &temp))) {   /* get the word from memory */
                         sim_debug(DEBUG_TRAP, &cpu_dev,
@@ -2470,13 +2418,6 @@ exec:
                 dest = (t_uint64)addr;          /* make into 64 bit variable */
                 break;
             case INV:                           /* Invalid instruction */
-#ifdef WHAT_IS_THIS
-                if ((TRAPME = Mem_read(addr, &temp))) {   /* get the word from memory */
-                    sim_debug(DEBUG_TRAP, &cpu_dev,
-                        "case INV Mem_read status %02x @ %08x\n", TRAPME, addr);
-                    goto newpsd;                /* memory read error or map fault */
-                }
-#endif
                 TRAPME = UNDEFINSTR_TRAP;       /* Undefined Instruction Trap */
                 if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9))
                     TRAPSTATUS |= BIT0;         /* set bit 0 of trap status */
@@ -2651,7 +2592,7 @@ exec:
                         }
                         sim_debug(DEBUG_EXP, &cpu_dev, "Starting HALT instruction\n");
                         
-//                        if (cpu_dev.dctrl & DEBUG_EXP) {
+//          if (cpu_dev.dctrl & DEBUG_EXP) {
                 sim_debug(DEBUG_EXP, &cpu_dev, "\n[][][][][][][][][][] HALT [][][][][][][][][][]\n");
                 sim_debug(DEBUG_EXP, &cpu_dev, "PSD1 %.8x PSD2 %.8x TRAPME %.4x CPUSTATUS %08x\n",
                     PSD1, PSD2, TRAPME, CPUSTATUS);
@@ -2659,7 +2600,7 @@ exec:
                     sim_debug(DEBUG_EXP, &cpu_dev, "GPR[%d] %.8x GPR[%d] %.8x\n", ix, GPR[ix], ix+1, GPR[ix+1]);
                 }
                 sim_debug(DEBUG_EXP, &cpu_dev, "[][][][][][][][][][] HALT [][][][][][][][][][]\n");
-//                        }
+//          }
                 fprintf(stdout, "\r\n[][][][][][][][][][] HALT [][][][][][][][][][]\r\n");
                 fprintf(stdout, "PSD1 %.8x PSD2 %.8x TRAPME %.4x\r\n", PSD1, PSD2, TRAPME);
                 for (ix=0; ix<8; ix+=2) {
@@ -2774,7 +2715,7 @@ exec:
                         }
                         if (CPUSTATUS & 0x80) {     /* see if old mode is blocked */
                             irq_pend = 1;           /* start scanning interrupts again */
-                            if (irq_auto ) {
+                            if (irq_auto) {
 /*AIR*/                         INTS[irq_auto] &= ~INTS_ACT;  /* deactivate specified int level */
 /*AIR*/                         SPAD[irq_auto+0x80] &= ~SINT_ACT; /* deactivate in SPAD too */
                                 sim_debug(DEBUG_IRQ, &cpu_dev,
@@ -2796,8 +2737,8 @@ exec:
                         break;
                 case 0x9:   /* RDSTS */
                         GPR[reg] = CPUSTATUS;       /* get CPU status word */
-sim_debug(DEBUG_CMD, &cpu_dev,
-"RDSTS CPUSTATUS %08x SPAD[0xf9] %08x\n", CPUSTATUS, SPAD[0xf9]);
+//sim_debug(DEBUG_CMD, &cpu_dev,
+//"RDSTS CPUSTATUS %08x SPAD[0xf9] %08x\n", CPUSTATUS, SPAD[0xf9]);
 #ifdef DO_DYNAMIC_DEBUG
                     /* start debugging */
                     cpu_dev.dctrl |= (DEBUG_INST | DEBUG_TRAP | DEBUG_EXP | DEBUG_IRQ);
@@ -3555,15 +3496,15 @@ tbr:                                                /* handle basemode TBR too *
                     i_flags |= BT;                  /* we changed the PC, so no PC update */
                     break;
 
-                case 0x1:               /* INV */
-                case 0x3:               /* INV */
-                case 0x6:               /* INV */
-                case 0x7:               /* INV */
-                case 0x9:               /* INV */
-                case 0xA:               /* INV */
-                case 0xB:               /* INV */
-                case 0xD:               /* INV */
-                case 0xF:               /* INV */
+                case 0x1:                           /* INV */
+                case 0x3:                           /* INV */
+                case 0x6:                           /* INV */
+                case 0x7:                           /* INV */
+                case 0x9:                           /* INV */
+                case 0xA:                           /* INV */
+                case 0xB:                           /* INV */
+                case 0xD:                           /* INV */
+                case 0xF:                           /* INV */
                     TRAPME = UNDEFINSTR_TRAP;       /* Undefined Instruction Trap */
                     if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9))
                         TRAPSTATUS |= BIT0;         /* set bit 0 of trap status */
@@ -3844,15 +3785,8 @@ skipit:
                         goto newpsd;                /* program error */
                     }
                     bc = PSD2 & 0x3ff8;             /* get copy of cpix */
-#ifdef DIAG_HACK
-                    if ((IR & 0xffff) == 2 )        /* if nop in rt hw, bump pc a word */
-                        PSD1 = (PSD1 + 4) | (((PSD1 & 2) >> 1) & 1);
-                    else
-                        PSD1 = (PSD1 + 2) | (((PSD1 & 2) >> 1) & 1);
-#else
                     /* this will skip over rt hw instruction if any */
                     PSD1 = (PSD1 + 4) | (((PSD1 & 2) >> 1) & 1);    /* bump pc by 1 wd */
-#endif
                     M[t>>2] = PSD1 & 0xfffffffe;    /* store PSD 1 + 1HW to point to next instruction */
                     M[(t>>2)+1] = PSD2;             /* store PSD 2 */
                     PSD1 = M[(t>>2)+2];             /* get new PSD 1 */
@@ -3880,7 +3814,8 @@ skipit:
 /*AIR*/                         INTS[irq_auto] &= ~INTS_ACT;  /* deactivate specified int level */
 /*AIR*/                         SPAD[irq_auto+0x80] &= ~SINT_ACT; /* deactivate in SPAD too */
                                 sim_debug(DEBUG_IRQ, &cpu_dev,
-                                "<|>IntX deactivate level %02x at CALM PSD1 %08x\n", irq_auto, PSD1);
+                                    "<|>IntX deactivate level %02x at CALM PSD1 %08x\n",
+                                    irq_auto, PSD1);
 /*AIR*/                         irq_auto = 0;       /* show done processing in blocked mode */
 /*051920*/                      skipinstr = 1;      /* skip interrupt test */
                             }
@@ -3896,7 +3831,7 @@ skipit:
                     TRAPME = 0;                     /* not to be processed as trap */
                     goto newpsd;                    /* new psd loaded */
                 } else {
-//                    fprintf(stderr, "got CALM trap\r\n");
+//                  fprintf(stderr, "got CALM trap\r\n");
                     goto inv;                       /* invalid instr */
                 }
                 break;
@@ -3905,9 +3840,9 @@ skipit:
                 if (modes & BASEBIT)                /* see if based */
                     goto inv;                       /* invalid instruction in based mode */
                 if (modes & EXTDBIT) {              /* see if extended mode */
-/*TRY*/             dest = (t_uint64)(addr&MASK24); /* just pure 24 bit address */
+                    dest = (t_uint64)(addr&MASK24); /* just pure 24 bit address */
                 } else {                            /* use bits 13-31 */
-/*TRY*/             dest = (t_uint64)((addr&0x7ffff) | ((FC & 4) << 17));   /* F bit to bit 12 */
+                    dest = (t_uint64)((addr&0x7ffff) | ((FC & 4) << 17));   /* F bit to bit 12 */
                 }
                 break;
 
@@ -3937,38 +3872,6 @@ skipit:
                         if ((opr & 0xF) == 0x3) {
                             addr = NEGATE32(addr);      /* subtract, so negate source */
                         }
-#ifdef NO_NORMALIZE
-//                          temp2 = s_adfw(temp, addr, &CC);    /* add float numbers */
-//                      } else {                        /* handle add */
-//                      }
-                        /* test for zero reg value */
-                        if (temp == 0) {                /* reg value is zero */
-                            temp2 = s_normfw(addr, &CC); /* normalize addr value */
-                            if (CC & CC1BIT) {
-                                CC = 0;                 /* remove addr except */
-                                if (temp2 & FSIGN)
-                                    CC |= CC3BIT;       /* CC3 for neg */
-                                else if (temp2 == 0)
-                                    CC |= CC4BIT;       /* CC4 for zero */
-                                else 
-                                    CC |= CC2BIT;       /* CC2 for greater than zero */
-                            }
-                        }
-                        else
-                        if (addr == 0) {                /* mem value is zero */
-                            temp2 = s_normfw(temp, &CC); /* normalize addr value */
-                            if (CC & CC1BIT) {
-                                CC = 0;                 /* remove addr except */
-                                if (temp2 & FSIGN)
-                                    CC |= CC3BIT;       /* CC3 for neg */
-                                else if (temp2 == 0)
-                                    CC |= CC4BIT;       /* CC4 for zero */
-                                else 
-                                    CC |= CC2BIT;       /* CC2 for greater than zero */
-                            }
-                        }
-                        else
-#endif
                             temp2 = s_adfw(temp, addr, &CC);    /* do ADFW */
                         sim_debug(DEBUG_EXP, &cpu_dev,
                             "%s GPR[%d] %08x addr %08x result %08x CC %08x\n",
@@ -4121,34 +4024,6 @@ skipit:
                         if ((opr & 0xF) == 0xb) {
                             td = NEGATE32(td);          /* make negative for subtract */
                         }
-#ifdef NO_NORMALIZE
-                        if (td == 0) {                  /* is reg value zero */
-                            dest = s_normfd(source, &CC); /* normalize addr value */
-                            if (CC & CC1BIT) {
-                                CC = 0;                 /* remove addr except */
-                                if (dest & DMSIGN)
-                                    CC |= CC3BIT;       /* CC3 for neg */
-                                else if (dest == 0)
-                                    CC |= CC4BIT;       /* CC4 for zero */
-                                else 
-                                    CC |= CC2BIT;       /* CC2 for greater than zero */
-                            }
-                        }
-                        else
-                        if (source == 0) {              /* memory value zero? */
-                            dest = s_normfd(td, &CC);   /* normalize reg value */
-                            if (CC & CC1BIT) {
-                                CC = 0;                 /* remove addr except */
-                                if (dest & DMSIGN)
-                                    CC |= CC3BIT;       /* CC3 for neg */
-                                else if (dest == 0)
-                                    CC |= CC4BIT;       /* CC4 for zero */
-                                else 
-                                    CC |= CC2BIT;       /* CC2 for greater than zero */
-                            }
-                        }
-                        else
-#endif
                             dest = s_adfd(td, source, &CC); /* do ADFD */
 
                         sim_debug(DEBUG_EXP, &cpu_dev,
@@ -4386,7 +4261,6 @@ doovr4:
                     goto inv;                           /* invalid instruction in basemode */
                 if (reg & 1) {                          /* odd reg specified? */
                     /* Spec fault */
-#ifndef NO_HACK
                     /* HACK HACK HACK for DIAGS */
                     if (CPU_MODEL <= MODEL_27) {        /* DIAG error for 32/27 only */
                         if ((PSD1 & 2) == 0)            /* if lf hw instruction */
@@ -4394,7 +4268,6 @@ doovr4:
                         else
                             PSD1 &= ~3;                 /* fake out 32/27 diag error */
                     }
-#endif
                     TRAPME = ADDRSPEC_TRAP;             /* bad reg address, error */
                     goto newpsd;                        /* go execute the trap now */
                 }
@@ -4418,7 +4291,6 @@ doovr4:
                 /* sreg has Rs */
                 if (reg & 1) {
                     /* Spec fault */
-#ifndef NO_HACK
                     /* HACK HACK HACK for DIAGS */
                     if (CPU_MODEL <= MODEL_27) {        /* DIAG error for 32/27 only */
                         if ((PSD1 & 2) == 0)            /* if lf hw instruction */
@@ -4426,13 +4298,12 @@ doovr4:
                         else
                             PSD1 &= ~3;                 /* fake out 32/27 diag error */
                     }
-#endif
                     TRAPME = ADDRSPEC_TRAP;             /* bad reg address, error */
                     goto newpsd;                        /* go execute the trap now */
                 }
                 if (opr & 0xf) {                        /* any subop not zero is error */
                     if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9))
-                        TRAPSTATUS |= BIT0;         /* set bit 0 of trap status */
+                        TRAPSTATUS |= BIT0;             /* set bit 0 of trap status */
                     TRAPME = UNDEFINSTR_TRAP;           /* Undefined Instruction Trap */
                     goto newpsd;                        /* handle trap */
                 }
@@ -4493,7 +4364,7 @@ doovr3:
         case 0x50>>2:               /* 0x50 INV - SD|ADR */ /* LA basemode LABRM */
                 if ((modes & BASEBIT) == 0)             /* see if nonbased */
                     goto inv;                           /* invalid instruction in nonbased mode */
-/*TRY*/         dest = (t_uint64)(addr&MASK24);         /* just pure 24 bit address */
+                dest = (t_uint64)(addr&MASK24);         /* just pure 24 bit address */
                 break;
 
         case 0x54>>2:               /* 0x54 SM|ADR - INV */ /* (basemode STWBR) */
@@ -5034,19 +4905,19 @@ meoa:           /* merge point for eor, and, or */
                 if (dbl) {
                     /* we need to and both regs with R4 */
                     t_uint64 nm = (((t_uint64)GPR[4]) << 32) | (((t_uint64)GPR[4]) & D32RMASK);
-                    td = dest;              /* save dest */
+                    td = dest;                      /* save dest */
                     dest ^= source;
-                    dest &= nm;             /* mask both regs with reg 4 contents */
+                    dest &= nm;                     /* mask both regs with reg 4 contents */
                 } else {
-                    td = dest;              /* save dest */
-                    dest ^= source;         /* <= 32 bits, so just do lower 32 bits */
-                    dest &= (((t_uint64)GPR[4]) & D32RMASK);        /* mask with reg 4 contents */
+                    td = dest;                      /* save dest */
+                    dest ^= source;                 /* <= 32 bits, so just do lower 32 bits */
+                    dest &= (((t_uint64)GPR[4]) & D32RMASK);    /* mask with reg 4 contents */
                 }           
                 CC = 0;
                 if (dest == 0ll)
                     CC |= CC4BIT;
-                PSD1 &= 0x87FFFFFE;     /* clear the old CC's from PSD1 */
-                PSD1 |= CC;             /* update the CC's in the PSD */
+                PSD1 &= 0x87FFFFFE;                 /* clear the old CC's from PSD1 */
+                PSD1 |= CC;                         /* update the CC's in the PSD */
                 break;
 
         case 0x98>>2:               /* 0x98 ADR - ADR */ /* SBM */
@@ -5212,11 +5083,11 @@ meoa:           /* merge point for eor, and, or */
                     "\n\tR0=%.8x R1=%.8x R2=%.8x R3=%.8x", GPR[0], GPR[1], GPR[2], GPR[3]);
                 sim_debug(DEBUG_INST, &cpu_dev,
                     " R4=%.8x R5=%.8x R6=%.8x R7=%.8x\n", GPR[4], GPR[5], GPR[6], GPR[7]);
-#ifndef NOTNOW
-                    if (skipinstr)
-                 sim_debug(DEBUG_IRQ, &cpu_dev,
-                    "EXM skipinstr %x reset irq_pend %x PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
-                    skipinstr, irq_pend, PSD1, PSD2, CPUSTATUS);
+#ifdef NOTNOW
+                if (skipinstr)
+                    sim_debug(DEBUG_IRQ, &cpu_dev,
+                        "EXM skipinstr %x reset irq_pend %x PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
+                        skipinstr, irq_pend, PSD1, PSD2, CPUSTATUS);
 #endif
 /*DIAG*/        skipinstr = 0;                      /* only test this once */
                 goto exec;                          /* go execute the instruction */
@@ -5427,17 +5298,17 @@ doovr:
                     break;
 
                 case 0x3:       /* MPI */
-                    if (reg & 1) {              /* see if odd reg specified */
-                        TRAPME = ADDRSPEC_TRAP; /* bad reg address, error */
-                        goto newpsd;            /* go execute the trap now */
+                    if (reg & 1) {                      /* see if odd reg specified */
+                        TRAPME = ADDRSPEC_TRAP;         /* bad reg address, error */
+                        goto newpsd;                    /* go execute the trap now */
                     }
                     /* change immediate value into a 64 bit value */
                     source = ((t_uint64)(addr & FMASK)) | ((addr & FSIGN) ? D32LMASK : 0);
-                    temp = GPR[reg+1];          /* get reg multiplier */
+                    temp = GPR[reg+1];                  /* get reg multiplier */
                     dest = ((t_uint64)(temp & FMASK)) | ((temp & FSIGN) ? D32LMASK : 0);
-                    dest = dest * source;       /* do the multiply */
-                    i_flags |= (SD|SCC);        /* save regs and set CC's */
-                    dbl = 1;                    /* double reg save */
+                    dest = dest * source;               /* do the multiply */
+                    i_flags |= (SD|SCC);                /* save regs and set CC's */
+                    dbl = 1;                            /* double reg save */
                     break;
 
                 case 0x4:       /* DVI */
@@ -5618,7 +5489,7 @@ doovr2:
                         "\n\tR0=%.8x R1=%.8x R2=%.8x R3=%.8x", GPR[0], GPR[1], GPR[2], GPR[3]);
                     sim_debug(DEBUG_INST, &cpu_dev,
                         " R4=%.8x R5=%.8x R6=%.8x R7=%.8x\n", GPR[4], GPR[5], GPR[6], GPR[7]);
-#ifndef NOTNOW
+#ifdef NOTNOW
                     if (skipinstr)
                  sim_debug(DEBUG_IRQ, &cpu_dev,
                     "EXR skipinstr %x reset irq_pend %x PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
@@ -5767,43 +5638,7 @@ doovr2:
                     if ((opr & 8) == 0) {               /* Was it SUFW? */
                         addr = NEGATE32(addr);          /* take negative for add */
                     }
-#ifdef NO_NORMALIZE
-//                  if (opr & 8) {                      /* Was it ADFW? */
-                        /* test for zero reg value */
-//                  if ((temp2 == 0) && ((addr & 0x80000000) == 0)) {  /* is reg value zero */
-                    if (temp2 == 0) {                   /* reg value is zero */
-                        temp = s_normfw(addr, &CC);     /* normalize addr value */
-                        if (CC & CC1BIT) {
-                            CC = 0;                     /* remove addr except */
-                            if (temp & FSIGN)
-                                CC |= CC3BIT;           /* CC3 for neg */
-                            else if (temp == 0)
-                                CC |= CC4BIT;           /* CC4 for zero */
-                            else 
-                                CC |= CC2BIT;           /* CC2 for greater than zero */
-                        }
-                    }
-                    else
-//                  if ((addr == 0) && ((temp2 & 0x80000000) == 0)) {  /* is reg value zero */
-                    if (addr == 0) {                    /* mem value is zero */
-                        temp = s_normfw(temp2, &CC);    /* normalize addr value */
-                        if (CC & CC1BIT) {
-                            CC = 0;                     /* remove addr except */
-                            if (temp & FSIGN)
-                                CC |= CC3BIT;           /* CC3 for neg */
-                            else if (temp == 0)
-                                CC |= CC4BIT;           /* CC4 for zero */
-                            else 
-                                CC |= CC2BIT;           /* CC2 for greater than zero */
-                        }
-                    }
-                    else
-#endif
-                        temp = s_adfw(temp2, addr, &CC);    /* do ADFW */
-//                  } else {
-//                      /* s_sufw will negate the value before calling add */
-//                      temp = s_sufw(temp2, addr, &CC);    /* do SUFW */
-//                  }
+                    temp = s_adfw(temp2, addr, &CC);    /* do ADFW */
                     sim_debug(DEBUG_EXP, &cpu_dev,
                         "%s GPR[%d] %08x addr %08x result %08x CC %08x\n",
                         (opr&8) ? "ADFW":"SUFW", reg, GPR[reg], addr, temp, CC);
@@ -5831,43 +5666,9 @@ doovr2:
                     td |= (t_uint64)GPR[reg+1];         /* insert low order reg value */
                     /* source has 64 bit memory data */
                     if ((opr & 8) == 0) {               /* Was it SUFD? */
-                        td = NEGATE32(td);              /* make negative for subtract */
+                        source = NEGATE32(source);      /* make negative for subtract */
                     }
-#ifdef NO_NORMALIZE
-                        /* test for zero reg value */
-//                      if ((td == 0) && ((GPR[reg] & 0x80000000) == 0)) {  /* is reg value zero */
-                        if (td == 0) {                  /* is reg value zero */
-                            dest = s_normfd(source, &CC); /* normalize addr value */
-                        if (CC & CC1BIT) {
-                           CC = 0;                      /* remove addr except */
-                            if (dest & DMSIGN)
-                                CC |= CC3BIT;           /* CC3 for neg */
-                            else if (dest == 0)
-                                CC |= CC4BIT;           /* CC4 for zero */
-                            else 
-                                CC |= CC2BIT;           /* CC2 for greater than zero */
-                        }
-                    }
-                    else
-                    if (source == 0) {                  /* memory value zero? */
-                        dest = s_normfd(td, &CC);       /* normalize reg value */
-                        if (CC & CC1BIT) {
-                            CC = 0;                     /* remove addr except */
-                            if (dest & DMSIGN)
-                                CC |= CC3BIT;           /* CC3 for neg */
-                            else if (dest == 0)
-                                CC |= CC4BIT;           /* CC4 for zero */
-                            else 
-                                CC |= CC2BIT;           /* CC2 for greater than zero */
-                        }
-                    }
-                    else
-#endif
-                        dest = s_adfd(td, source, &CC); /* do ADFD */
-//                  } else {
-//                      /* s_sufd will negate the memory value before calling add */
-//                      dest = s_sufd(td, source, &CC); /* do SUFD */
-//                  }
+                    dest = s_adfd(td, source, &CC);     /* do ADFD */
                     sim_debug(DEBUG_EXP, &cpu_dev,
                         "%s GPR[%d] %08x %08x src %016llx result %016llx CC %08x\n",
                         (opr&8) ? "ADFD":"SUFD", reg, GPR[reg], GPR[reg+1], source, dest, CC);
@@ -6121,8 +5922,9 @@ doovr2:
                 if (dest != 0) {                        /* if reg is not 0, take the branch */
                     /* we are taking the branch, set CC's if indirect, else leave'm */
                     /* update the PSD with new address */
-#if 0  /* set to 1 to stop branch to self while tracing, for now */
-/* FIXME */         if (PC == (addr & 0xFFFFFC)) {       /* BIB to current PC, bump branch addr */
+
+#if 0               /* set #if to 1 to stop branch to self while tracing, for now */
+                    if (PC == (addr & 0xFFFFFC)) {       /* BIB to current PC, bump branch addr */
                         addr += 4;
 //                      fprintf(stderr, "BI? stopping BIB $ addr %x PC %x\r\n", addr, PC);
                         dest = 0;                       /* force reg to zero */
@@ -6267,56 +6069,15 @@ doovr2:
                         if (PSD2 & MAPBIT) {
                             /* set mapped mode in cpu status */
                             CPUSTATUS |= 0x00800000;    /* set bit 8 of cpu status */
-//                          sim_debug(DEBUG_EXP, &cpu_dev,
                             sim_debug(DEBUG_DETAIL, &cpu_dev,
                                 "B4 LPSDCM temp %06x TPSD %08x %08x PSD %08x %08x\n",
                                 temp, TPSD[0], TPSD[1], PSD1, PSD2);
-//                          sim_debug(DEBUG_EXP, &cpu_dev,
                             sim_debug(DEBUG_DETAIL, &cpu_dev,
                                 "B4 LPSDCM BPIX %04x CPIX %04x CPIXPL %04x\n",
                                 BPIX, CPIX, CPIXPL);
-#ifdef FOR_DEBUG_MPX_041420
-                            {
-                            int i;
-                            uint32 mpl = SPAD[0xf3];    /* get mpl from spad address */
-                            uint32 osmidl = RMW(mpl);   /* get O/S map count & retain flag from MPL[0] */
-                            uint32 osmsdl = RMW(mpl+4); /* get msdl pointer for OS from MPL[1] */
-                            int spc = osmidl & MASK16;  /* get 16 bit O/S segment description count */
-                            uint32 cpix = PSD2 & 0x3ff8;    /* get cpix 11 bit offset from psd wd 2 */
-                            uint32 midl = RMW(mpl+cpix);    /* get midl entry for given user cpix */
-                            uint32 msdl = RMW(mpl+cpix+4);  /* get mpl entry wd 1 for given cpix */
-                            int osc = osmidl & MASK16;  /* get 16 bit O/S segment description count */
 
-                            sim_debug(DEBUG_EXP, &cpu_dev,
-                                "B4 LPSDCM O/S cnt %04x User cnt %04x Last cnt %04x\n",
-                                osmidl&MASK16, midl&MASK16, CPIXPL);
-                            for (i=0; i<spc; i++) {
-                                uint32 pad = osmsdl+(i<<1); /* get page descriptor address */
-                                uint16 map = RMH(pad);  /* get page descriptor from memory */
-
-                                if ((i < 0x20) || (i > (osc - 0x10)))
-                                    sim_debug(DEBUG_TRAP, &cpu_dev,
-                    "OS pad %06x=%04x map #%3x, %04x, map2 %08x, TLB %08x MAPC %08x\n",
-                    pad, map, i, map, (((map << 16) & 0xf8000000) | ((map & 0x7ff) << 13)),
-                    TLB[i], MAPC[i/2]);
-                            }
-
-                            spc = midl & MASK16;        /* get 16 bit user segment description count */
-                            for (i=0; i<spc; i++) {
-                                uint32 pad = msdl+(i<<1); /* get page descriptor address */
-                                uint16 map = RMH(pad);  /* get page descriptor from memory */
-
-                                if ((i < 0x20) || (i > (spc+osc) - 0x10))
-                                    sim_debug(DEBUG_EXP, &cpu_dev,
-                    "UserV pad %06x=%04x map #%3x, %04x, map2 %08x, TLB %08x, MAPC %08x\n",
-                    pad, map, osc+i, map, (((map << 16) & 0xf8000000)|(map & 0x7ff)<<13)|0x04000000,
-                    TLB[BPIX+i], MAPC[(BPIX+i)/2]);
-                            }
-                            }
-#endif
                             /* this mod fixes MPX 1.X 1st swapr load */
                             /* any O/S or user maps yet? */
-                            /* any user maps yet? */
                             if (((CPIX != 0) && (CPIXPL == 0)) && (PSD2 & RETMBIT)) {
                                 PSD2 &= ~RETMBIT;       /* no, turn off retain bit in PSD2 */
                                 sim_debug(DEBUG_EXP, &cpu_dev, "Turn off retain bit\n");
@@ -6339,19 +6100,15 @@ doovr2:
                             if ((PSD2 & RETMBIT) == 0) {    /* don't load maps if retain bit set */
                                 /* we need to load the new maps */
                                 TRAPME = load_maps(PSD, 0); /* load maps for new PSD */
-//                              sim_debug(DEBUG_EXP, &cpu_dev,
                                 sim_debug(DEBUG_DETAIL, &cpu_dev,
                                     "AF LPSDCM TPSD %08x %08x PSD %08x %08x TRAPME %02x\n",
                                     TPSD[0], TPSD[1], PSD1, PSD2, TRAPME);
-//                              sim_debug(DEBUG_EXP, &cpu_dev,
                                 sim_debug(DEBUG_DETAIL, &cpu_dev,
                                     "AF LPSDCM BPIX %04x CPIX %04x CPIXPL %04x\n",
                                     BPIX, CPIX, CPIXPL);
-//                              sim_debug(DEBUG_EXP, &cpu_dev,
                                 sim_debug(DEBUG_DETAIL, &cpu_dev,
                                     "AF LPSDCM OS MAPC[0-5] %08x %08x %08x %08x %08x %08x\n",
                                     MAPC[0], MAPC[1], MAPC[2], MAPC[3], MAPC[4], MAPC[5]);
-//                              sim_debug(DEBUG_EXP, &cpu_dev,
                                 sim_debug(DEBUG_DETAIL, &cpu_dev,
                                     "AF LPSDCM US MAPC[%x-%x] %08x %08x %08x %08x %08x %08x\n",
                                     BPIX, BPIX+5, MAPC[BPIX], MAPC[BPIX+1], MAPC[BPIX+2],
@@ -6365,7 +6122,6 @@ doovr2:
                                 TRAPME, PSD1, PSD2, BPIX, CPIXPL);
                         }
                         PSD2 &= ~RETMBIT;               /* turn off retain bit in PSD2 */
-///* 041820*/           skipinstr = 1;                  /* skip interrupt test */
                     } else {
                         /* LPSD */
                         /* if cpix is zero, copy cpix from PSD2 in SPAD[0xf5] */
@@ -6457,11 +6213,6 @@ doovr2:
 
                     switch(opr & 0x7) {                 /* use bits 13-15 to determine instruction */
                     case 0x0:       /* EI  FC00  Enable Interrupt */
-#ifdef DO_DYNAMIC_DEBUG
-                    if (prior >= 0x6f)
-                /* start debugging */
-                cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ | DEBUG_TRAP);
-#endif
                         if (prior > maxlev)             /* ignore for invalid levels */
                             break;                      /* ignore */
                         /* SPAD entries for interrupts begin at 0x80 */
@@ -6574,7 +6325,7 @@ doovr2:
                         irq_pend = 1;                   /* start scanning interrupts again */
                         /* instruction following a DAI can not be interrupted */
                         /* skip tests for interrupts if this is the case */
-#ifndef NOTNOW
+#ifdef NOTNOW
             sim_debug(DEBUG_IRQ, &cpu_dev,
                 "DAI lev %02x Skipinstr %1x set PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
                 prior, skipinstr, PSD1, PSD2, CPUSTATUS);
@@ -6614,10 +6365,6 @@ doovr2:
                                 /* return status has new CC's in bits 1-4 of status word */
                                 /* insert status CCs */
                                 PSD1 = ((PSD1 & 0x87fffffe) | (status & 0x78000000));
-#ifdef DO_DYNAMIC_DEBUG
-                /* start debugging */
-                cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ | DEBUG_TRAP);
-#endif
                             } else {
                                 /* may want to handle class E someday */
 //                              if ((TRAPME = testEIO(device, testcode, &status)))
@@ -6815,11 +6562,6 @@ mcheck:
                         sim_debug(DEBUG_XIO, &cpu_dev,
                             "HIO HALTXIO ret chan %04x chsa %04x status %08x\n",
                             chan, rchsa, rstatus);
-#ifndef NOTNOW
-                        sim_debug(DEBUG_IRQ, &cpu_dev,
-                "HIO skipinstr %x irq_pend %x PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
-                skipinstr, irq_pend, PSD1, PSD2, CPUSTATUS);
-#endif
                         break;
 
                     case 0x07:      /* Grab controller GRIO n/u */
@@ -6920,17 +6662,18 @@ mcheck:
                         SPAD[ix+0x80] &= ~SINT_ACT;     /* deactivate in SPAD too */
                         irq_pend = 1;                   /* start scanning interrupts again */
                         skipinstr = 1;                  /* skip interrupt test */
-#ifndef NOTNOW
+#ifdef NOTNOW
             sim_debug(DEBUG_XIO, &cpu_dev,
                 "DACI INTS[%02x] %08x Skipinstr %1x set PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
                 ix, INTS[ix], skipinstr, PSD1, PSD2, CPUSTATUS);
 #endif
-/*XXX*/                 drop_nop = 0;                   /* nothing to drop */
+                        drop_nop = 0;                   /* nothing to drop */
                         PSD1 = ((PSD1 & 0x87fffffe) | (rstatus & 0x78000000));   /* insert status */
                         break;
                 }                   /* end of XIO switch */
                 break;
         }                   /* End of Instruction Switch */
+
         /* [*][*][*][*][*][*][*][*][*][*][*][*][*][*][*][*][*][*][*][*][*][*] */
 
         /* any instruction with an arithmetic exception will still end up here */
@@ -7383,7 +7126,7 @@ t_stat cpu_reset(DEVICE *dptr)
     TRAPSTATUS = CPU_MODEL;             /* clear all trap status except cpu type */
     CMCR = 0;                           /* No Cache Enabled */
     SMCR = 0;                           /* No Shared Memory Enabled */
-//@42    CMSMC = 0xfffffe10;                 /* No V9 Cache/Shadow Memory Configuration */
+//@42    CMSMC = 0xfffffe10;            /* No V9 Cache/Shadow Memory Configuration */
 //@ CMSMC = 0x00ff3e10;                 /* No V9 Cache/Shadow Memory Configuration */
 //@ CMSMC = 0x00ff3e00;                 /* No V9 Cache/Shadow Memory Configuration */
 //@ CMSMC = 0x00000e10;                 /* No V9 Cache/Shadow Memory Configuration */

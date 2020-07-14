@@ -172,9 +172,9 @@ Support for the following units:
 
 # SEL32 Development Simulator
 
-This is a working copy of a simulator for the SEL Concept/32 computer.
-The current test version is for the SEL 32/27, 32/67, 32/87, 32/97 computers.
-Support for 32/55, 32/75, V6, and V9 computers may be added in the future.
+This is a working simulator for the SEL Concept/32 line of computers.  The
+current test version is for the SEL 32/27, 32/67, 32/87, 32/97, V6, and V9
+computers.  Support for 32/55, and 32/75 computers may be added in the future.
 This simulator is co-authors with James C. Bevier. I did the initial parts
 of the simulator, James took it to a working simulator, I am assisting him
 in maintaining and enhancing the simulator. This simulator is running a test
@@ -183,8 +183,14 @@ from a SDT tape.  The disk image can be booted, initialized, and run many of
 the MPX utilities; including OPCOM & TSM.  Eight terminals can be used to
 access TSM via Telnet port 4747.  Initial support has been added for excess
 64 floating point arithmetic.  More testing is still required.  The sim32disk.gz
-can be uncompressed and booted with the sel32.27.sim32.disk.ini initialization file.
-The sim32sdt.tap.gz file can also be uncompressed and started with the
+can be uncompressed and booted with the sel32.27.sim32.disk.ini initialization
+file.  The sim32sdt.tap.gz file can also be uncompressed and started with the
 sel32.27.sim32.tape.ini initialization file to install from tape.
 
+The current version can also install and run UTX 2.1A from an install tape.
+It is the SEL version of System V Unix and BSD Unix ported to the V6 and V9
+processors.  It can run in single or multi user mode.  UTX utilizes the basemode
+instruction set and a virtual memory system provided by the V6 & V9 CPUs.
+There are still some random halts and panics.  The system needs further
+testing to solidify the SEL32 simulator code.
 

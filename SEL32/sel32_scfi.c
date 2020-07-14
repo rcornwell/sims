@@ -223,7 +223,7 @@ scfi_type[] =
     /* Class F Disc Devices */
     /* MPX SCSI disks for SCFI controller */
     {"MH1GB", 1, 192, 40, 34960, 34960, 0x40},   /*0 69920 1000M */
-    {"SG038", 1, 192, 20,  2190,  2190, 0x40},   /*1 21900   38M */
+    {"SG038", 1, 192, 20, 21900, 21900, 0x40},   /*1 21900   38M */
     {"SG120", 1, 192, 40, 34970, 34970, 0x40},   /*2 69940 1200M */
     {"SG076", 1, 192, 20, 46725, 46725, 0x40},   /*3 46725  760M */
     {NULL, 0}
@@ -550,11 +550,7 @@ t_stat scfi_srv(UNIT *uptr)
         sim_debug(DEBUG_CMD, dptr,
             "scfi_srv cmd INCH chsa %04x addr %06x count %04x completed\n",
             chsa, mema, chp->ccw_count);
-#ifdef FIX4MPX
-        chan_end(chsa, SNS_CHNEND);             /* return just channel end OK */
-#else
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
-#endif
     }
         break;
 
@@ -746,7 +742,6 @@ rezero:
             trk = (uptr->CHS >> 8) & 0xff;      /* get trk/head */
             sec = uptr->CHS & 0xff;             /* get sec */
             /* get sector offset */
-//          tstart = STAR2SEC(uptr->STAR, SPT(type), SPC(type));
             tstart = STAR2SEC(uptr->CHS, SPT(type), SPC(type));
 
             /* read in a sector of data from disk */
@@ -783,8 +778,7 @@ rezero:
             tstart++;                           /* bump to next sector */
             /* convert sect back to chs value */
             uptr->CHS = scfisec2star(tstart, type);
-            /* see of over end of disk */
-//          if (tstart >= CAPB(type)) {
+            /* see if over end of disk */
             if (tstart >= CAP(type)) {
                 /* EOM reached, abort */
                 sim_debug(DEBUG_CMD, dptr,
@@ -830,7 +824,6 @@ rddone:
             trk = (uptr->CHS >> 8) & 0xff;      /* get trk/head */
             sec = uptr->CHS & 0xff;             /* get sec */
             /* get sector offset */
-//          tstart = STAR2SEC(uptr->STAR, SPT(type), SPC(type));
             tstart = STAR2SEC(uptr->CHS, SPT(type), SPC(type));
 
             /* process the next sector of data */
@@ -877,8 +870,7 @@ rddone:
             tstart++;                           /* bump to next sector */
             /* convert sect back to chs value */
             uptr->CHS = scfisec2star(tstart, type);
-            /* see of over end of disk */
-//          if (tstart >= CAPB(type)) {
+            /* see if over end of disk */
             if (tstart >= CAP(type)) {
                 /* EOM reached, abort */
                 sim_debug(DEBUG_CMD, dptr,
@@ -900,7 +892,6 @@ wrdone:
         sim_debug(DEBUG_CMD, dptr, "invalid command %02x unit %02x\n", cmd, unit);
         uptr->SNS |= SNS_CMDREJ;
         uptr->CMD &= ~(0xffff);                 /* remove old status bits & cmd */
-//      chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
         return SNS_CHNEND|STATUS_PCHK;
         break;
     }
@@ -932,7 +923,6 @@ t_stat scfi_reset(DEVICE * dptr)
 
 /* create the disk file for the specified device */
 int scfi_format(UNIT *uptr) {
-//  struct ddata_t  *data = (struct ddata_t *)uptr->up7;
     uint16      addr = GET_UADDR(uptr->CMD);
     int         type = GET_TYPE(uptr->flags);
     DEVICE      *dptr = get_dev(uptr);
@@ -940,7 +930,6 @@ int scfi_format(UNIT *uptr) {
     uint32      tsize = scfi_type[type].spt;            /* get track size in sectors */
     uint32      csize = scfi_type[type].nhds * tsize;   /* get cylinder size in sectors */
     uint32      cyl = scfi_type[type].cyl;              /* get # cyl */
-//  uint16      spc = scfi_type[type].nhds * scfi_type[type].spt;   /* sectors/cyl */
     uint32      cap = scfi_type[type].cyl * csize;      /* disk capacity in sectors */
     uint32      cylv = cyl;                             /* number of cylinders */
     uint8       *buff;
@@ -992,15 +981,15 @@ int scfi_format(UNIT *uptr) {
         return 1;
     }
     free(buff);                                 /* free cylinder buffer */
-    set_devattn(addr, SNS_DEVEND);              /* start us up */
     return 0;
 }
 
 /* attach the selected file to the disk */
 t_stat scfi_attach(UNIT *uptr, CONST char *file) {
-    uint16          addr = GET_UADDR(uptr->CMD);
+    uint16          chsa = GET_UADDR(uptr->CMD);
     int             type = GET_TYPE(uptr->flags);
     DEVICE          *dptr = get_dev(uptr);
+    DIB             *dibp = 0;
     t_stat          r;
     uint32          ssize;                      /* sector size in bytes */
     uint8           buff[1024];
@@ -1060,7 +1049,19 @@ fmt:
     sim_debug(DEBUG_CMD, &sda_dev, "File %s attached to %s\r\n",
         file, scfi_type[type].name);
 
-    set_devattn(addr, SNS_DEVEND);
+    /* check for valid configured disk */
+    /* must have valid DIB and Channel Program pointer */
+    dibp = (DIB *)dptr->ctxt;                   /* get the DIB pointer */
+    if ((dib_unit[chsa] == NULL) || (dibp == NULL) || (dibp->chan_prg == NULL)) {
+        sim_debug(DEBUG_CMD, dptr,
+            "ERROR===ERROR\nSCFI device %s not configured on system, aborting\n",
+            dptr->name);
+        printf("ERROR===ERROR\nSCFI device %s not configured on system, aborting\n",
+            dptr->name);
+        detach_unit(uptr);                      /* detach if error */
+        return SCPE_UNATT;                      /* error */
+    }
+    set_devattn(chsa, SNS_DEVEND);
     return SCPE_OK;
 }
 
@@ -1118,8 +1119,7 @@ t_stat scfi_get_type(FILE * st, UNIT *uptr, int32 v, CONST void *desc)
 }
 
 /* help information for disk */
-t_stat scfi_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
-    const char *cptr)
+t_stat scfi_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
     int i;
     fprintf (st, "SEL-32 SCFI Disk Processor\r\n");
@@ -1148,5 +1148,4 @@ const char *scfi_description (DEVICE *dptr)
 {
     return "SEL-32 SCFI Disk Processor";
 }
-
 #endif

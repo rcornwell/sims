@@ -231,6 +231,9 @@ typedef struct dib {
         uint32      chan_fifo[FIFO_SIZE];   /* interrupt status fifo for each channel */
 } DIB;
 
+extern  DIB     *dib_unit[MAX_DEV];     /* Pointer to Device info block */
+extern  DIB     *dib_chan[MAX_CHAN];    /* Pointer to channel mux dib */
+
 #define DEV_CHAN          (1 << DEV_V_UF)       /* Device is channel mux if set */
 #define DEV_V_UF2         (DEV_V_UF+1)          /* current usage */
 

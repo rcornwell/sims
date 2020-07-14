@@ -668,7 +668,6 @@ t_opcode  optab[] = {
     {  0x2C0E,      0xFC0F,   H|TYPE_F,   "TRSC", },     /* Transfer Register to Scratchpad # * */
     {  0x2C0F,      0xFC0F,   H|TYPE_F,   "TSCR", },     /* Transfer Scratchpad to Register # * */
     {  0x3000,      0xFC0F, X|H|TYPE_F,   "CALM", },     /* Call Monitor 32/55 # */
-//FF{  0x3400,      0xFC08,   N|TYPE_D,   "LA", },       /* Load Address NBR Note! FW instruction */
     {  0x3400,      0xFC00,   N|TYPE_D,   "LA", },       /* Load Address NBR Note! FW instruction */
     {  0x3800,      0xFC0F,   H|TYPE_F,   "ADR", },      /* Add Register to Register # */
     {  0x3801,      0xFC0F,   H|TYPE_F,   "ADRFW", },    /* Add Floating Point to Register # */
@@ -873,7 +872,6 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
                     fputc(' ', of);
                 if (mode) {
                     /* base reg mode */
-//UTX               fprint_val(of, val&0xffff, 16, 16, PV_RZRO);    /* output 16 bit offset */
                     fprint_val(of, val&0xffff, 16, 16, PV_LEFT);    /* output 16 bit offset */
                     if (inst & 07) {
                         fputc('(', of);
@@ -881,8 +879,6 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
                         fputc(('0'+(inst & 07)), of);           /* output the base reg number */
                         fputc(')', of);
                     }
-//                    if (inst & 0x70) {
-//                    if ((inst & 0x70) && (tab->type != TYPE_D)) {
                     if (inst & 0x70) {
                         fputc(',', of);
 //                        fputc('R', of);
@@ -1029,8 +1025,8 @@ t_stat fprint_sym (FILE *of, t_addr addr, t_value *val, UNIT *uptr, int32 sw)
         rdx = 16;                               /* hex */
 
     if (sw & SWMASK ('M')) {                    /* machine base mode? */
-//        sw &= ~ SWMASK('F');                    /* Can't do F and M at same time */
-//        sw &= ~ SWMASK('W');                    /* Can't do W and M at same time */
+//      sw &= ~ SWMASK('F');                    /* Can't do F and M at same time */
+//      sw &= ~ SWMASK('W');                    /* Can't do W and M at same time */
         sw &= ~ SWMASK('B');                    /* Can't do B and M at same time */
         sw &= ~ SWMASK('C');                    /* Can't do C and M at same time */
         if (addr & 0x02)

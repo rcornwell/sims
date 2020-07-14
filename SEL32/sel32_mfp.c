@@ -1,4 +1,4 @@
-/* sel32_mfp.c: SEL-32 Model 8000/8001/8002 MFP processor controller
+/* sel32_mfp.c: SEL-32 Model 8002 MFP processor controller
 
    Copyright (c) 2018-2020, James C. Bevier
 
@@ -125,8 +125,6 @@ DEVICE          mfp_dev = {
     NULL, NULL, NULL,               /* boot, attach, detach */
     /* dib ptr, dev flags, debug flags, debug */
     &mfp_dib, DEV_CHAN|DEV_DIS|DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
-//  NULL, NULL, &mfp_help,          /* ?, ?, help */
-//  NULL, NULL, &mfp_desc           /* ?, ?, description */
 };
 
 /* MFP controller routines */
@@ -165,10 +163,8 @@ uint16 mfp_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
             mfp_chp[0].chan_inch_addr);             /* set inch buffer addr */
 
         mfp_chp[0].chan_inch_addr = mfp_chp[0].ccw_addr;   /* set inch buffer addr */
-//      set_inch(uptr, mfp_chp[0].ccw_addr);        /* new address */
 
         uptr->u3 |= MFP_INCH2;                      /* save INCH command as 0xf0 */
-//@     sim_activate(uptr, 20);                     /* go on */
         sim_activate(uptr, 40);                     /* go on */
         return 0;                                   /* no status change */
         break;
@@ -178,8 +174,7 @@ uint16 mfp_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         uptr->u5 = SNS_RDY|SNS_ONLN;                /* status is online & ready */
         uptr->u3 &= LMASK;                          /* leave only chsa */
         uptr->u3 |= (cmd & MFP_MSK);                /* save NOP command */
-        sim_activate(uptr, 20);                     /* TRY 07-13-19 */
-//@41   sim_activate(uptr, 40);                     /* TRY 07-13-19 */
+        sim_activate(uptr, 40);                     /* TRY 07-13-19 */
         return 0;                                   /* no status change */
         break;
 
@@ -188,8 +183,7 @@ uint16 mfp_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         uptr->u5 = SNS_RDY|SNS_ONLN;                /* status is online & ready */
         uptr->u3 &= LMASK;                          /* leave only chsa */
         uptr->u3 |= (cmd & MFP_MSK);                /* save SID command */
-        sim_activate(uptr, 20);                     /* TRY 07-13-19 */
-//@41   sim_activate(uptr, 40);                     /* TRY 07-13-19 */
+        sim_activate(uptr, 40);                     /* TRY 07-13-19 */
         return 0;                                   /* no status change */
         break;
 
@@ -199,8 +193,7 @@ uint16 mfp_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
             chan, cmd, uptr->u5);
         uptr->u3 &= LMASK;                          /* leave only chsa */
         uptr->u3 |= (cmd & MFP_MSK);                /* save command */
-        sim_activate(uptr, 20);                     /* force interrupt */
-//@41   sim_activate(uptr, 40);                     /* force interrupt */
+        sim_activate(uptr, 40);                     /* force interrupt */
         return 0;                                   /* no status change */
         break;
     }
@@ -214,8 +207,6 @@ t_stat mfp_srv(UNIT *uptr)
     uint16  chsa = GET_UADDR(uptr->u3);
     int     cmd = uptr->u3 & MFP_MSK;
     CHANP   *chp = &mfp_chp[0];                     /* find the chanp pointer */
-//  int     i;
-//  int     len = chp->ccw_count;                   /* INCH command count */
     uint32  mema = chp->ccw_addr;                   /* get inch or buffer addr */
 
     /* test for NOP or INCH cmds */
@@ -282,12 +273,9 @@ t_stat mfp_srv(UNIT *uptr)
         /* the chp->ccw_addr location contains the inch address */
         /* call set_inch() to setup inch buffer */
         //FIXME add code to test return
-//      i = set_inch(uptr, mema);                   /* new address */
         set_inch(uptr, mema);                       /* new address */
-//      chp->chan_inch_addr = mema;                 /* set inch buffer addr */
         uptr->u3 &= LMASK;                          /* clear the cmd */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* we are done dev|chan end */
-//      chan_end(chsa, SNS_CHNEND);                 /* we are done dev|chan end */
     }
     return SCPE_OK;
 }
@@ -305,8 +293,6 @@ t_stat mfp_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr
     fprintf(st, "The MFP fields all interrupts and status posting\r\n");
     fprintf(st, "for each of the controllers on the system.\r\n");
     fprintf(st, "Nothing can be configured for this Channel.\r\n");
-//    fprint_set_help(st, dptr);
-//    fprint_show_help(st, dptr);
     return SCPE_OK;
 }
 

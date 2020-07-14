@@ -66,18 +66,19 @@ LP.CMD17 DATAW     X'37000000'     <LF> <LF> <LF> (SPARE)
 ** LINE PRINTER FORMS CONTROL TABLE
 *
 LPFCTBL  EQU       $
-P0006C  2B                            DATAB     C'+'    0x2b    FORMS CONTROL FOR CR THEN PRINT
-P0006D    31                          DATAB     C'1'    0x31    FORMS CONTROL FOR FF THEN PRINT
-P0006E      2D                        DATAB     C'-'    0x2d    FORMS CONTROL FOR FF THEN PRINT
-P0006F        30                      DATAB     C'0'    0x30    FORMS CONTROL FOR 2 LF'S THEN PRINT
-P00070  20                            DATAB     C' '    0x20    FORMS CONTROL FOR LF THEN PRINT
+  2B     DATAB     C'+'    0x2b    FORMS CONTROL FOR CR THEN PRINT
+  31     DATAB     C'1'    0x31    FORMS CONTROL FOR FF THEN PRINT
+  2D     DATAB     C'-'    0x2d    FORMS CONTROL FOR FF THEN PRINT
+  30     DATAB     C'0'    0x30    FORMS CONTROL FOR 2 LF'S THEN PRINT
+  20     DATAB     C' '    0x20    FORMS CONTROL FOR LF THEN PRINT
 */
   
 #if NUM_DEVS_LPR > 0
 
-//#define UNIT_LPR        UNIT_ATTABLE | UNIT_IDLE | UNIT_DISABLE
-#define UNIT_LPR        UNIT_ATTABLE | UNIT_IDLE
+#define UNIT_LPR        UNIT_ATTABLE | UNIT_IDLE | UNIT_DISABLE
+//#define UNIT_LPR        UNIT_ATTABLE | UNIT_IDLE
 
+#define CMDu3   u3
 /* u3 hold command and status information */
 #define LPR_INCH        0x00        /* INCH command */
 /* print buffer then CC commands */
@@ -107,7 +108,10 @@ P00070  20                            DATAB     C' '    0x20    FORMS CONTROL FO
 #define LPR_PRE         0x200       /* Apply pre CC */
 #define LPR_POST        0x400       /* Apply post CC */
 
-/* u4 holds current line */
+#define CNTu4   u4
+/* u4 holds current line count */
+
+#define SNSu5   u5
 /* in u5 packs sense byte 0,1 and 3 */
 /* Sense byte 0 */
 #define SNS_CMDREJ      0x80        /* Command reject */
@@ -118,6 +122,8 @@ P00070  20                            DATAB     C' '    0x20    FORMS CONTROL FO
 #define SNS_OVRRUN      0x04        /* Data overrun */
 #define SNS_SEQUENCE    0x02        /* Unusual sequence */
 #define SNS_BOF         0x01        /* BOF on printer */
+
+#define CBPu6   u6
 /* u6 hold buffer position */
 
 /* std devices. data structures
@@ -129,7 +135,7 @@ P00070  20                            DATAB     C' '    0x20    FORMS CONTROL FO
 
 struct _lpr_data
 {
-    uint8           lbuff[160];     /* Output line buffer */
+    uint8       lbuff[160];     /* Output line buffer */
 }
 
 lpr_data[NUM_DEVS_LPR];
@@ -185,8 +191,8 @@ DEVICE          lpr_dev = {
     NUM_DEVS_LPR, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, NULL, &lpr_attach, &lpr_detach,
     /* ctxt is the DIB pointer */
-//  &lpr_dib, DEV_DIS|DEV_DISABLE|DEV_DEBUG, 0, dev_debug
-    &lpr_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug
+    &lpr_dib, DEV_DISABLE|DEV_DEBUG, 0, dev_debug
+//  &lpr_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug
 };
 
 /* initialize the line printer */
@@ -197,16 +203,16 @@ void lpr_ini(UNIT *uptr, t_bool f) {
 /* start an I/O operation */
 uint16  lpr_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 {
-    if ((uptr->u3 & LPR_CMDMSK) != 0) {         /* unit busy */
+    if ((uptr->CMDu3 & LPR_CMDMSK) != 0) {      /* unit busy */
         return SNS_BSY;                         /* yes, busy (already tested) */
     }
 
-    uptr->u3 &= ~(LPR_POST|LPR_PRE);            /* set no CC */
+    uptr->CMDu3 &= ~(LPR_POST|LPR_PRE);         /* set no CC */
     if (((cmd & 0x03) == 0x03) || (cmd & 0x0f) == 0x0d) {
-        uptr->u3 |= LPR_PRE;                    /* apply pre CC */
+        uptr->CMDu3 |= LPR_PRE;                 /* apply pre CC */
     }
     if (((cmd & 0x0f) == 0x05) || (cmd & 0x0f) == 0x0d) {
-        uptr->u3 |= LPR_POST;                   /* apply post CC */
+        uptr->CMDu3 |= LPR_POST;                /* apply post CC */
     }
     sim_debug(DEBUG_CMD, &lpr_dev, "lpr_startcmd Cmd %02x\n", cmd);
 
@@ -215,7 +221,6 @@ uint16  lpr_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
     case 0x00:                                  /* INCH command */
         /* the IOP should already have the inch buffer set, so ignore */
         sim_debug(DEBUG_CMD, &lpr_dev, "lpr_startcmd %04x: Cmd INCH\n", chan);
-//fprintf(stderr, "lpr_startcmd %04x: Cmd INCH\n", chan);
         return SNS_CHNEND|SNS_DEVEND;           /* all is well */
         break;
 
@@ -241,157 +246,162 @@ uint16  lpr_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
     case 0x37:                          /* <LF> <LF> <LF> */
     case 0x47:                          /* <FF> */
         /* process the command */
-        sim_debug(DEBUG_CMD, &lpr_dev, "lpr_startcmd %04x: Cmd %02x print\n", chan, cmd&LPR_CMDMSK);
-        uptr->u3 &= ~(LPR_CMDMSK);      /* zero cmd */
-        uptr->u3 |= (cmd & LPR_CMDMSK); /* save new command in u3 */
+        sim_debug(DEBUG_CMD, &lpr_dev,
+            "lpr_startcmd %04x: Cmd %02x print\n", chan, cmd&LPR_CMDMSK);
+        uptr->CMDu3 &= ~(LPR_CMDMSK);   /* zero cmd */
+        uptr->CMDu3 |= (cmd & LPR_CMDMSK); /* save new command in CMDu3 */
         sim_activate(uptr, 100);        /* Start unit off */
-        uptr->u5 = 0;                   /* no status */
-        uptr->u6 = 0;                   /* start of buffer */
+        uptr->SNSu5 = 0;                /* no status */
+        uptr->CBPu6 = 0;                /* start of buffer */
         return 0;                       /* we are good to go */
 
     case 0x4:                           /* Sense Status */
-        sim_debug(DEBUG_CMD, &lpr_dev, "lpr_startcmd %04x: Cmd %02x sense\n", chan, cmd&LPR_CMDMSK);
-        uptr->u3 &= ~(LPR_CMDMSK);      /* zero cmd */
-        uptr->u3 |= (cmd & LPR_CMDMSK); /* save new command in u3 */
+        sim_debug(DEBUG_CMD, &lpr_dev,
+            "lpr_startcmd %04x: Cmd %02x sense\n", chan, cmd&LPR_CMDMSK);
+        uptr->CMDu3 &= ~(LPR_CMDMSK);   /* zero cmd */
+        uptr->CMDu3 |= (cmd & LPR_CMDMSK); /* save new command in CMDu3 */
         sim_activate(uptr, 100);        /* Start unit off */
-        uptr->u5 = 0;                   /* no status */
-        uptr->u6 = 0;                   /* start of buffer */
+        uptr->SNSu5 = 0;                /* no status */
+        uptr->CBPu6 = 0;                /* start of buffer */
         return 0;                       /* we are good to go */
 
     default:                            /* invalid command */
         sim_debug(DEBUG_CMD, &lpr_dev,
             "lpr_startcmd %04x: Cmd %02x INVALID\n", chan, cmd&LPR_CMDMSK);
-        uptr->u5 |= SNS_CMDREJ;
+        uptr->SNSu5 |= SNS_CMDREJ;
         break;
     }
-    if (uptr->u5 & 0xff)
-//      return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
+    if (uptr->SNSu5 & 0xff)
         return SNS_CHNEND|STATUS_PCHK;
     return SNS_CHNEND|SNS_DEVEND;
 }
 
 /* Handle transfer of data for printer */
 t_stat lpr_srv(UNIT *uptr) {
-    int         chsa = GET_UADDR(uptr->u3);
-    int         u = (uptr - lpr_unit);
-    int         cmd = (uptr->u3 & 0xff);
+    int     chsa = GET_UADDR(uptr->CMDu3);
+    int     u = (uptr - lpr_unit);
+    int     cmd = (uptr->CMDu3 & 0xff);
 
-    sim_debug(DEBUG_CMD, &lpr_dev, "lpr_srv called chsa %04x cmd %02x u3 %08x cnt %04x\r\n",
-            chsa, cmd, uptr->u3, uptr->u6);
+    sim_debug(DEBUG_CMD, &lpr_dev,
+        "lpr_srv called chsa %04x cmd %02x CMDu3 %08x cnt %04x\r\n",
+        chsa, cmd, uptr->CMDu3, uptr->CBPu6);
 
     /* FIXME, need IOP lp status bit assignments */
     if (cmd == 0x04) {                          /* sense? */
-        uint8 ch = uptr->u5;                    /* get current status */
-        uptr->u3 &= ~(LPR_CMDMSK);              /* clear command */
+        uint8 ch = uptr->SNSu5;                 /* get current status */
+        uptr->CMDu3 &= ~(LPR_CMDMSK);           /* clear command */
         chan_write_byte(chsa, &ch);             /* write the status to memory */
-        uptr->u6 = 0;                           /* reset to beginning of buffer */
+        uptr->CBPu6 = 0;                        /* reset to beginning of buffer */
         chan_end(chsa, SNS_DEVEND|SNS_CHNEND);  /* we are done */
         return SCPE_OK;
     }
 
     /* process any CC before printing buffer */
-    if ((uptr->u3 & LPR_PRE) && (((cmd & 0x03) == 0x03) || (cmd & 0x0f) == 0x0d)) {
-        uptr->u3 &= ~LPR_PRE;                   /* remove pre flag */
+    if ((uptr->CMDu3 & LPR_PRE) && (((cmd & 0x03) == 0x03) ||
+        (cmd & 0x0f) == 0x0d)) {
+        uptr->CMDu3 &= ~LPR_PRE;                /* remove pre flag */
         /* we have CC to do */
         switch ((cmd & 0xf0) >> 4) {
         case 0:                                 /* <CR> (0x0d) */
-            lpr_data[u].lbuff[uptr->u6++] = 0x0d;
+            lpr_data[u].lbuff[uptr->CBPu6++] = 0x0d;
             break;
         case 3:                                 /* <LF> <LF> <LF> */
-            lpr_data[u].lbuff[uptr->u6++] = 0x0a;
-            uptr->u4++;                         /* increment the line count */
+            lpr_data[u].lbuff[uptr->CBPu6++] = 0x0a;
+            uptr->CNTu4++;                      /* increment the line count */
             /* drop thru */
         case 2:                                 /* <LF> <LF> */
-            lpr_data[u].lbuff[uptr->u6++] = 0x0a;
-            uptr->u4++;                         /* increment the line count */
+            lpr_data[u].lbuff[uptr->CBPu6++] = 0x0a;
+            uptr->CNTu4++;                      /* increment the line count */
             /* drop thru */
         case 1:                                 /* <LF> (0x0a) */
-            lpr_data[u].lbuff[uptr->u6++] = 0x0a;
-            uptr->u4++;                         /* increment the line count */
+            lpr_data[u].lbuff[uptr->CBPu6++] = 0x0a;
+            uptr->CNTu4++;                      /* increment the line count */
             break;
         case 4:                                 /* <FF> (0x0c) */
-            lpr_data[u].lbuff[uptr->u6++] = 0x0d;   /* add C/R */
-            lpr_data[u].lbuff[uptr->u6++] = 0x0a;   /* add L/F */
-            lpr_data[u].lbuff[uptr->u6++] = 0x0c;   /* add FF */
-            uptr->u4 = 0;                       /* restart line count */
+            lpr_data[u].lbuff[uptr->CBPu6++] = 0x0d;    /* add C/R */
+            lpr_data[u].lbuff[uptr->CBPu6++] = 0x0a;    /* add L/F */
+            lpr_data[u].lbuff[uptr->CBPu6++] = 0x0c;    /* add FF */
+            uptr->CNTu4 = 0;                    /* restart line count */
             break;
         }
     }
 
     /* Copy next byte from users buffer */
-    while ((uptr->u3 & LPR_FULL) == 0) {        /* copy in a char if not full */
-        if(chan_read_byte(chsa, &lpr_data[u].lbuff[uptr->u6])) {
-            uptr->u3 |= LPR_FULL;               /* end of buffer or error */
+    while ((uptr->CMDu3 & LPR_FULL) == 0) {     /* copy in a char if not full */
+        if(chan_read_byte(chsa, &lpr_data[u].lbuff[uptr->CBPu6])) {
+            uptr->CMDu3 |= LPR_FULL;            /* end of buffer or error */
             break;                              /* done reading */
         } else {
             /* remove nulls */
-            if (lpr_data[u].lbuff[uptr->u6] == '\0') {
-                lpr_data[u].lbuff[uptr->u6] = ' ';
+            if (lpr_data[u].lbuff[uptr->CBPu6] == '\0') {
+                lpr_data[u].lbuff[uptr->CBPu6] = ' ';
             }
             /* remove backspace */
-            if (lpr_data[u].lbuff[uptr->u6] == 0x8) {
-                lpr_data[u].lbuff[uptr->u6] = ' ';
+            if (lpr_data[u].lbuff[uptr->CBPu6] == 0x8) {
+                lpr_data[u].lbuff[uptr->CBPu6] = ' ';
             }
-            uptr->u6++;                         /* next buffer loc */
+            uptr->CBPu6++;                      /* next buffer loc */
         }
     }
 
     /* remove trailing blanks before we apply trailing carriage control */
-    while (uptr->u6 > 0) {
-        if ((lpr_data[u].lbuff[uptr->u6-1] == ' ') ||
-            (lpr_data[u].lbuff[uptr->u6-1] == '\0')) {
-            uptr->u6--;
+    while (uptr->CBPu6 > 0) {
+        if ((lpr_data[u].lbuff[uptr->CBPu6-1] == ' ') ||
+            (lpr_data[u].lbuff[uptr->CBPu6-1] == '\0')) {
+            uptr->CBPu6--;
             continue;
         }
         break;
     }
 
     /* process any CC after printing buffer */
-    if ((uptr->u3 & LPR_FULL) && (uptr->u3 & LPR_POST) && ((cmd & 0x0f) == 0x0d)) {
+    if ((uptr->CMDu3 & LPR_FULL) && (uptr->CMDu3 & LPR_POST) &&
+        ((cmd & 0x0f) == 0x0d)) {
         /* we have CC to do */
-        uptr->u3 &= ~LPR_POST;                  /* remove post flag */
-        lpr_data[u].lbuff[uptr->u6++] = 0x0d;   /* just a <CR> */
+        uptr->CMDu3 &= ~LPR_POST;               /* remove post flag */
+        lpr_data[u].lbuff[uptr->CBPu6++] = 0x0d;    /* just a <CR> */
     }
 
     /* process any CC after printing buffer */
-    if ((uptr->u3 & LPR_FULL) && (uptr->u3 & LPR_POST) && ((cmd & 0x0f) == 0x05)) {
+    if ((uptr->CMDu3 & LPR_FULL) && (uptr->CMDu3 & LPR_POST) && 
+        ((cmd & 0x0f) == 0x05)) {
         /* we have CC to do */
-        uptr->u3 &= ~LPR_POST;                  /* remove post flag */
+        uptr->CMDu3 &= ~LPR_POST;               /* remove post flag */
         switch ((cmd & 0xf0) >> 4) {
         case 0:                                 /* <CR> (0x0d) */
-            lpr_data[u].lbuff[uptr->u6++] = 0x0d;
+            lpr_data[u].lbuff[uptr->CBPu6++] = 0x0d;
             break;
         case 3:                                 /* <LF> <LF> <LF> */
-            lpr_data[u].lbuff[uptr->u6++] = 0x0a;
-            uptr->u4++;                         /* increment the line count */
+            lpr_data[u].lbuff[uptr->CBPu6++] = 0x0a;
+            uptr->CNTu4++;                      /* increment the line count */
             /* drop thru */
         case 2:                                 /* <LF> <LF> */
-            lpr_data[u].lbuff[uptr->u6++] = 0x0a;
-            uptr->u4++;                         /* increment the line count */
+            lpr_data[u].lbuff[uptr->CBPu6++] = 0x0a;
+            uptr->CNTu4++;                      /* increment the line count */
             /* drop thru */
         case 1:                                 /* <LF> (0x0a) */
-            lpr_data[u].lbuff[uptr->u6++] = 0x0a;
-            uptr->u4++;                         /* increment the line count */
+            lpr_data[u].lbuff[uptr->CBPu6++] = 0x0a;
+            uptr->CNTu4++;                      /* increment the line count */
             break;
         case 4:                                 /* <FF> (0x0c) */
-            lpr_data[u].lbuff[uptr->u6++] = 0x0d;   /* add C/R */
-            lpr_data[u].lbuff[uptr->u6++] = 0x0a;   /* add L/F */
-            lpr_data[u].lbuff[uptr->u6++] = 0x0c;   /* add FF */
-            uptr->u4 = 0;                       /* restart line count */
+            lpr_data[u].lbuff[uptr->CBPu6++] = 0x0d;    /* add C/R */
+            lpr_data[u].lbuff[uptr->CBPu6++] = 0x0a;    /* add L/F */
+            lpr_data[u].lbuff[uptr->CBPu6++] = 0x0c;    /* add FF */
+            uptr->CNTu4 = 0;                    /* restart line count */
             break;
         }
     }
 
     /* print the line if buffer is full */
-    if (uptr->u3 & LPR_FULL || uptr->u6 >= 156) {
-        lpr_data[u].lbuff[uptr->u6] = 0x00;     /* NULL terminate */
-        sim_fwrite(&lpr_data[u].lbuff, 1, uptr->u6, uptr->fileref); /* Print our buffer */
+    if (uptr->CMDu3 & LPR_FULL || uptr->CBPu6 >= 156) {
+        lpr_data[u].lbuff[uptr->CBPu6] = 0x00;  /* NULL terminate */
+        sim_fwrite(&lpr_data[u].lbuff, 1, uptr->CBPu6, uptr->fileref); /* Print our buffer */
         sim_debug(DEBUG_DETAIL, &lpr_dev, "LPR %s", (char*)&lpr_data[u].lbuff);
-        uptr->u3 &= ~(LPR_FULL|LPR_CMDMSK);     /* clear old status */
-        uptr->u6 = 0;                           /* start at beginning of buffer */
-        uptr->u4++;                             /* increment the line count */
-        if ((uint32)uptr->u4 > uptr->capac) {   /* see if at max lines/page */
-            uptr->u4 = 0;                       /* yes, restart count */
+        uptr->CMDu3 &= ~(LPR_FULL|LPR_CMDMSK);  /* clear old status */
+        uptr->CBPu6 = 0;                        /* start at beginning of buffer */
+        uptr->CNTu4++;                          /* increment the line count */
+        if ((uint32)uptr->CNTu4 > uptr->capac) {    /* see if at max lines/page */
+            uptr->CNTu4 = 0;                    /* yes, restart count */
             chan_end(chsa, SNS_DEVEND|SNS_CHNEND|SNS_UNITEXP);  /* we are done */
         } else
             chan_end(chsa, SNS_DEVEND|SNS_CHNEND);  /* we are done */
@@ -420,7 +430,7 @@ t_stat lpr_setlpp(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
     if (i < 20 || i > 100)
         return SCPE_ARG;
     uptr->capac = i;
-    uptr->u4 = 0;
+    uptr->CNTu4 = 0;
     return SCPE_OK;
 }
 
@@ -434,15 +444,32 @@ t_stat lpr_getlpp(FILE *st, UNIT *uptr, int32 v, CONST void *desc)
 }
 
 /* attach a file to the line printer device */
-t_stat lpr_attach(UNIT * uptr, CONST char *file)
+t_stat lpr_attach(UNIT *uptr, CONST char *file)
 {
-    t_stat          r;
+    t_stat      r;
+    uint16      chsa = GET_UADDR(uptr->CMDu3);      /* get address of lpr device */
+    DEVICE      *dptr = get_dev(uptr);              /* get device pointer */
+    DIB         *dibp = 0;
 
     if ((r = attach_unit(uptr, file)) != SCPE_OK)
         return r;
-    uptr->u3 &= ~(LPR_FULL|LPR_CMDMSK);
-    uptr->u4 = 0;
-    uptr->u5 = 0;
+    uptr->CMDu3 &= ~(LPR_FULL|LPR_CMDMSK);
+    uptr->CNTu4 = 0;
+    uptr->SNSu5 = 0;
+
+    /* check for valid configured lpr */
+    /* must have valid DIB and Channel Program pointer */
+    dibp = (DIB *)dptr->ctxt;                       /* get the DIB pointer */
+    if ((dib_unit[chsa] == NULL) || (dibp == NULL) || (dibp->chan_prg == NULL)) {
+        sim_debug(DEBUG_CMD, dptr,
+            "ERROR===ERROR\nLPR device %s not configured on system, aborting\n",
+            dptr->name);
+        printf("ERROR===ERROR\nLPR device %s not configured on system, aborting\n",
+            dptr->name);
+        detach_unit(uptr);                          /* detach if error */
+        return SCPE_UNATT;                          /* error */
+    }
+    set_devattn(chsa, SNS_DEVEND);                  /* ready int???? */
     return SCPE_OK;
 }
 

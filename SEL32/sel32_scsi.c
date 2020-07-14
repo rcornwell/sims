@@ -524,7 +524,6 @@ t_stat scsi_srv(UNIT *uptr)
     CHANP           *chp = (CHANP *)dibp->chan_prg; /* get pointer to channel program */
     int             cmd = uptr->CMD & DSK_CMDMSK;
     int             type = GET_TYPE(uptr->flags);
-//  uint32          trk, cyl, sec;
     int             unit = (uptr - dptr->units);
     int             bufnum = GET_DEV_BUF(dptr->flags);
     int             len=0;
@@ -556,9 +555,6 @@ t_stat scsi_srv(UNIT *uptr)
     case DSK_INCH2:                             /* use 0xF0 for inch, just need int */
     {
         uint32  mema;                           /* memory address */
-//      uint32  daws[8];                        /* drive attribute registers */
-//      uint32  i, j;
-//      uint32  i;   
 
         len = chp->ccw_count;                   /* INCH command count */
         mema = chp->ccw_addr;                   /* get inch or buffer addr */
@@ -588,9 +584,6 @@ t_stat scsi_srv(UNIT *uptr)
             "scsi_srv cmd INCH chsa %04x addr %06x count %04x completed\n",
             chsa, mema, chp->ccw_count);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
-#ifdef DO_DYNAMIC_DEBUG
-    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ);
-#endif
     }
         break;
 
@@ -763,7 +756,6 @@ t_stat scsi_srv(UNIT *uptr)
         /* calculate file position in bytes of requested sector */
         /* file offset in bytes */
         tstart = uptr->STAR * SSB(type);
-//      uptr->CHS = uptr->STAR;
 
         sim_debug(DEBUG_DETAIL, dptr,
             "scsi_srv seek start %04x sector %06x\n",
@@ -1075,8 +1067,6 @@ t_stat scsi_srv(UNIT *uptr)
     case DSK_TCMD:                              /* Transfer command packet 0xD3 */
         {
         uint32  mema;                           /* memory address */
-//      uint32  daws[8];                        /* drive attribute registers */
-//      uint32  i, j;
         int32   i;
 
         uptr->SNS &= ~SNS_TCMD;                 /* show not presessing TCMD cmd chain */
@@ -1093,11 +1083,11 @@ t_stat scsi_srv(UNIT *uptr)
 
 #ifdef NOTNOW
         if (len != 36) {
-                /* we have invalid count, error, bail out */
-                uptr->CMD &= LMASK;             /* remove old status bits & cmd */
-                uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
-                chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
-                break;
+            /* we have invalid count, error, bail out */
+            uptr->CMD &= LMASK;             /* remove old status bits & cmd */
+            uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+            break;
         }
 #endif
 
@@ -1135,7 +1125,6 @@ t_stat scsi_srv(UNIT *uptr)
         sim_debug(DEBUG_CMD, dptr, "invalid command %02x unit %02x\n", cmd, unit);
         uptr->SNS |= SNS_CMDREJ;
         uptr->CMD &= LMASK;                     /* remove old status bits & cmd */
-//      chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
         return SNS_CHNEND|STATUS_PCHK;
         break;
     }
@@ -1195,18 +1184,14 @@ int scsi_format(UNIT *uptr) {
                 /* get sector address of utx diag map (DMAP) track 0 pointer */
                 /* put data = 0xf0000000 + (cyl-1), 0x8a000000 + daddr, */
                 /* 0x9a000000 + (cyl-1), 0xf4000008 */
-//WASint32       daddr = vaddr - SPT(type);
     int32       daddr = (CYL(type)-4) * SPC(type) + (HDS(type)-2) * SPT(type);
 
                 /* get sector address of utx flaw data (1 track long) */
                 /* set trace data to zero */
-//WASint32       faddr = daddr - SPT(type);
     int32       faddr = (CYL(type)-4) * SPC(type) + (HDS(type)-3) * SPT(type);
 
                 /* get sector address of utx flaw map sec 1 pointer */
                 /* use this address for sec 1 label pointer */
-//WASint32       uaddr = daddr - SPT(type);
-//WASint32       uaddr = daddr - (2*SPT(type));
     int32       uaddr = (CYL(type)-4) * SPC(type) + (HDS(type)-4) * SPT(type);
 
                 /* last user block available */
@@ -1242,12 +1227,10 @@ int scsi_format(UNIT *uptr) {
                 /* defect map */
     uint32      dmap[4] = {0xf0000000 | (cap-1), 0x8a000000 | daddr,
                     0x9a000000 | (cap-1), 0xf4000000};
-//TRY               0x9a000000 | (cap-1), 0xf4000008};
 
                 /* utx flaw map */
     uint32      fmap[4] = {0xf0000000 | (cap-1), 0x8a000000 | daddr,
                     0x9a000000 | ltaddr, 0xf4000000};
-//TRY               0x9a000000 | ltaddr, 0xf4000008};
 
     /* see if user wants to initialize the disk */
     if (!get_yn("Initialize disk? [Y] ", TRUE)) {
@@ -1412,9 +1395,10 @@ int scsi_format(UNIT *uptr) {
 
 /* attach the selected file to the disk */
 t_stat scsi_attach(UNIT *uptr, CONST char *file) {
-    uint16          addr = GET_UADDR(uptr->CMD);
+    uint16          chsa = GET_UADDR(uptr->CMD);
     int             type = GET_TYPE(uptr->flags);
     DEVICE          *dptr = get_dev(uptr);
+    DIB             *dibp = 0;
     t_stat          r;
     uint32          ssize;                      /* sector size in bytes */
     uint8           buff[1024];
@@ -1432,7 +1416,7 @@ t_stat scsi_attach(UNIT *uptr, CONST char *file) {
     ssize = SSB(type);                          /* get sector size in bytes */
 
     sim_debug(DEBUG_CMD, dptr, "Disk %s %04x cyl %d hds %d sec %d ssiz %d capacity %d\n",
-        scsi_type[type].name, addr, scsi_type[type].cyl, scsi_type[type].nhds, 
+        scsi_type[type].name, chsa, scsi_type[type].cyl, scsi_type[type].nhds, 
         scsi_type[type].spt, ssize, uptr->capac); /* disk capacity */
 
 
@@ -1468,13 +1452,25 @@ fmt:
 
     sim_debug(DEBUG_CMD, dptr,
         "Attach %s %04x cyl %d hds %d spt %d spc %d cap sec %d cap bytes %d\n",
-        scsi_type[type].name, addr, CYL(type), HDS(type), SPT(type), SPC(type),  
+        scsi_type[type].name, chsa, CYL(type), HDS(type), SPT(type), SPC(type),  
         CAP(type), CAPB(type));
 
-    sim_debug(DEBUG_CMD, dptr, "File %s at addr %04x attached to %s\r\n",
-        file, addr, scsi_type[type].name);
+    sim_debug(DEBUG_CMD, dptr, "File %s at chsa %04x attached to %s\r\n",
+        file, chsa, scsi_type[type].name);
 
-    set_devattn(addr, SNS_DEVEND);
+    /* check for valid configured disk */
+    /* must have valid DIB and Channel Program pointer */
+    dibp = (DIB *)dptr->ctxt;                   /* get the DIB pointer */
+    if ((dib_unit[chsa] == NULL) || (dibp == NULL) || (dibp->chan_prg == NULL)) {
+        sim_debug(DEBUG_CMD, dptr,
+            "ERROR===ERROR\nSCSI device %s not configured on system, aborting\n",
+            dptr->name);
+        printf("ERROR===ERROR\nSCSI device %s not configured on system, aborting\n",
+            dptr->name);
+        detach_unit(uptr);                      /* detach if error */
+        return SCPE_UNATT;                      /* error */
+    }
+    set_devattn(chsa, SNS_DEVEND);
     return SCPE_OK;
 }
 

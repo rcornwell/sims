@@ -4,7 +4,7 @@
 This is a working copy of a simulator for the SEL Concept/32 computer.
 The current test version is for the SEL 32/27, 32/67, 32/77, 32/87,
 32/97, V6, and V9 computers.  All of the processors except for the
-32/77 can run Gould diags.  Support for 32/55 computers may be added
+32/77 can run the Gould diags.  Support for 32/55 computers may be added
 in the future.
 
 # SEL Concept/32 
@@ -77,8 +77,8 @@ diag.tap       bootable level one diagnostic tape w/auto testing.  Set
 Available UTX-21a install tape for testing:
 utxtape1.ini   command file to start UTX install tape.  ./sel32 utxtape1.ini
 utx21a1.tap    bootable UTX install tape for testing basemode.  The current
-               V6 & V9 will boot UTX into single user mode.  You can run a
-               small subset of the commands that are on the installation tape.
+               V6 & V9 will boot UTX into single/multi user mode.  You can run
+               the full set of the commands that are on the installation tapes.
                Prep, the disk preparation UTX program, can format a disk
                drive.  Other file systems can be created and saves restored.
                All basemode instructions have been tested with the CV.BRD diag.
@@ -90,8 +90,8 @@ Other MPX verion support:
                I am still looking for an MPX 3.X user or master SDT tape.  I have
                much of the source, but no loadable code to create a bootable system.
                Please keep looking for anyone who can provide these tapes or a
-               disk image of a bootable system..
+               disk image of a bootable system.
 
 James C. Bevier
-05/19/2020 
+06/30/2020 
 
