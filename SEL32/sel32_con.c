@@ -334,6 +334,7 @@ t_stat con_srvo(UNIT *uptr) {
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
             return SCPE_OK;
         }
+/*RTC*/ outbusy = 1;                        /* tell clock output waiting */
         /* Write to device */
         while (chan_read_byte(chsa, &ch) == SCPE_OK) {  /* get byte from memory */
             /* HACK HACK HACK */
@@ -346,7 +347,6 @@ t_stat con_srvo(UNIT *uptr) {
             "con_srvo write wait %03x CMD %08x chsa %04x cmd %02x to complete\n",
             19*cnt+23, uptr->CMD, chsa, cmd);
         sim_activate(uptr, 19*cnt+23);      /* wait for a while */
-/*RTC*/ outbusy = 1;                        /* tell clock output waiting */
     }
     return SCPE_OK;
 }

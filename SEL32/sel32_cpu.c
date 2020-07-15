@@ -2086,7 +2086,8 @@ wait_loop:
             /* see if waiting at a wait instruction */
             if (wait4int || loading) {
                 /* tell simh we will be waiting */
-                sim_idle(TMR_RTC, 1);           /* wait for clock tick */
+//              sim_idle(TMR_RTC, 1);           /* wait for clock tick */
+                sim_idle(0, 1);                 /* wait for clock tick */
                 goto wait_loop;                 /* continue waiting */
             }
         } else {
@@ -2119,7 +2120,8 @@ wait_loop:
             /* see if in wait instruction */
             if (wait4int) {                     /* keep waiting */
                 /* tell simh we will be waiting */
-                sim_idle(TMR_RTC, 1);           /* wait for clock tick */
+//              sim_idle(TMR_RTC, 1);           /* wait for clock tick */
+                sim_idle(0, 1);                 /* wait for clock tick */
                 goto wait_loop;                 /* continue waiting */
             }
         }
@@ -2640,7 +2642,8 @@ exec:
                         }
                         wait4int = 1;               /* show we are waiting for interrupt */
                         /* tell simh we will be waiting */
-                        sim_idle(TMR_RTC, 0);       /* wait for next pending device event */
+//                      sim_idle(TMR_RTC, 0);       /* wait for next pending device event */
+                        sim_idle(0, 0);             /* wait for clock tick */
                         i_flags |= BT;              /* keep PC from being incremented while waiting */
                         break;
                 case 0x2:   /* NOP */

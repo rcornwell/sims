@@ -1241,15 +1241,15 @@ t_stat testxio(uint16 chsa, uint32 *status) {       /* test XIO */
         *status = CC3BIT;                           /* not found, so CC3 */
         sim_debug(DEBUG_EXP, &cpu_dev,
             "testxio chsa %04x device not present, CC3 returned\n", chsa);
-        goto tioret;                                /* not found, CC3 */
+        return SCPE_OK;                             /* Not found, CC3 */
     }
 
     uptr = chp->unitptr;                            /* get the unit ptr */
     if ((uptr->flags & UNIT_ATTABLE) && ((uptr->flags & UNIT_ATT) == 0)) {    /* is unit attached? */
         *status = CC3BIT;                           /* not attached, so error CC3 */
         sim_debug(DEBUG_EXP, &cpu_dev,
-            "testxio chsa %04x device not present, CC3 returned\n", chsa);
-        goto tioret;                                /* not found, CC3 */
+            "testxio chsa %04x device not attached, CC3 returned\n", chsa);
+        return SCPE_OK;                             /* Not found, CC3 */
     }
 
     /* check for a Command or data chain operation in progresss */
@@ -1257,7 +1257,7 @@ t_stat testxio(uint16 chsa, uint32 *status) {       /* test XIO */
         sim_debug(DEBUG_XIO, &cpu_dev,
             "testxio busy return CC4 chsa %04x chan %04x\n", chsa, chan);
         *status = CC4BIT|CC3BIT;                    /* busy, so CC3&CC4 */
-        goto tioret;                                /* just busy CC3&CC4 */
+        return SCPE_OK;                             /* just busy CC3&CC4 */
     }
 
     /* the XIO opcode processing software has already checked for F class */
@@ -1285,11 +1285,10 @@ t_stat testxio(uint16 chsa, uint32 *status) {       /* test XIO */
             "testxio END status stored incha %06x chsa %04x sw1 %08x sw2 %08x\n",
             incha, chsa, RMW(incha), RMW(incha+4));
         INTS[inta] &= ~INTS_REQ;                    /* clear any level request */
-        goto tioret;                                /* CC2 and OK */
+        return SCPE_OK;                             /* CC2 and OK */
     }
     /* nothing going on, so say all OK */
     *status = CC1BIT;                               /* request accepted, no status, so CC1 */
-tioret:
     sim_debug(DEBUG_XIO, &cpu_dev,
         "$$$ TIO END chsa %04x chan %04x cmd %02x ccw_flags %04x chan_stat %04x CCs %08x\n",
         chsa, chan, chp->ccw_cmd, chp->ccw_flags, chp->chan_status, *status);

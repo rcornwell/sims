@@ -923,7 +923,7 @@ t_stat scfi_reset(DEVICE * dptr)
 
 /* create the disk file for the specified device */
 int scfi_format(UNIT *uptr) {
-    uint16      addr = GET_UADDR(uptr->CMD);
+//  uint16      addr = GET_UADDR(uptr->CMD);
     int         type = GET_TYPE(uptr->flags);
     DEVICE      *dptr = get_dev(uptr);
     int32       ssize = scfi_type[type].ssiz * 4;       /* disk sector size in bytes */

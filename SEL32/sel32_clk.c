@@ -111,7 +111,7 @@ uint32 grtime = 0;
 /* service clock signal from simulator */
 t_stat rtc_srv (UNIT *uptr)
 {
-    int32   temp;
+//  int32   temp;
 #ifdef STOP_CLOCK_INTS_FOR_DEXP_TEST_DEBUGGING
     /* stop clock interrupts for dexp debugging */
     rtc_pie = 0;
@@ -132,7 +132,8 @@ t_stat rtc_srv (UNIT *uptr)
             irq_pend = 1;                           /* make sure we scan for int */
         }
     }
-    temp = sim_rtcn_calb(rtc_tps, TMR_RTC);               /* timer 0 for RTC */
+//  temp = sim_rtcn_calb(rtc_tps, TMR_RTC);         /* timer 0 for RTC */
+    sim_rtcn_calb(rtc_tps, TMR_RTC);                /* timer 0 for RTC */
     sim_activate_after(&rtc_unit, 1000000/rtc_tps); /* reactivate 16666 tics / sec */
     return SCPE_OK;
 }
@@ -437,10 +438,6 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
                 temp = temp - itm_strt;             /* make into a negative number */
             } 
             sim_cancel (&itm_unit);                 /* cancel timer */
-        }
-        if (cmd & 0x08) {
-            /* use value from user to load timer */
-            temp = cnt;                             /* set user count */
         }
         /* start timer with current or user value, reload on zero time */
         cnt = temp;                                 /* use current value */
