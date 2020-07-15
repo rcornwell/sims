@@ -149,12 +149,12 @@ DEVICE mta_dev = {
     };
 
 void mta_nsi_cmd(int dev, uint32 cmd) {
-   uint32   d;
+   int32    d;
    UNIT    *uptr;
 
    d = dev - GET_UADDR(mta_dev.flags);
    sim_debug(DEBUG_CMD, &mta_dev, "CMD: %d: %d c=%08o\n", dev, d, cmd);
-   if (d < 0 || d > mta_dev.numunits)
+   if (d < 0 || d > (int32)mta_dev.numunits)
        return;
    uptr = &mta_dev.units[d];
 
@@ -186,12 +186,12 @@ void mta_nsi_cmd(int dev, uint32 cmd) {
 }
 
 void mta_nsi_status(int dev, uint32 *resp) {
-   uint32   d;
+   int32    d;
    UNIT    *uptr;
 
    *resp = 0;
    d = dev - GET_UADDR(mta_dev.flags);
-   if (d < 0 || d > mta_dev.numunits)
+   if (d < 0 || d > (int32)mta_dev.numunits)
        return;
    uptr = &mta_dev.units[d];
 
