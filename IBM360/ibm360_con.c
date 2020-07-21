@@ -79,6 +79,7 @@ struct _con_data
 con_data[NUM_DEVS_CON];
 
 uint8  con_startcmd(UNIT *, uint16,  uint8);
+uint8  con_haltio(UNIT *);
 void                con_ini(UNIT *, t_bool);
 t_stat              con_srv(UNIT *);
 t_stat              con_attach(UNIT *, char *);
@@ -96,7 +97,7 @@ MTAB                con_mod[] = {
     {0}
 };
 
-struct dib con_dib = { 0xFF, 1, NULL, con_startcmd, NULL, con_unit, con_ini};
+struct dib con_dib = { 0xFF, 1, NULL, con_startcmd, con_haltio, con_unit, con_ini};
 
 DEVICE              con_dev = {
     "INQ", con_unit, NULL, con_mod,
@@ -195,6 +196,35 @@ uint8  con_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     return SNS_CHNEND|SNS_DEVEND;
 }
 
+/*
+ * Handle halt I/O instruction by stoping running command.
+ */
+uint8  con_haltio(UNIT *uptr) {
+    uint16         addr = GET_UADDR(uptr->CMD);
+    DEVICE         *dptr = find_dev_from_unit(uptr);
+    int            u = (uptr - con_unit);
+    int            cmd = uptr->CMD & 0xff;
+
+    sim_debug(DEBUG_CMD, dptr, "HLTIO inq %x\n", cmd);
+
+    switch (cmd) {
+    case 0:
+    case 0x4:
+         /* Short commands nothing to do */
+         break;
+
+    case CON_WR:
+    case CON_ACR:
+    case CON_RD:
+         uptr->CMD &= ~(CON_MSK|CON_INPUT);
+         con_data[u].inptr = 0;
+         chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+         break;
+    }
+    return 1;
+}
+
+
 /* Handle transfer of data for printer */
 t_stat
 con_srv(UNIT *uptr) {
@@ -250,7 +280,8 @@ con_srv(UNIT *uptr) {
     case CON_RD:
        if (uptr->CMD & CON_INPUT) {
            uptr->CMD &= ~CON_REQ;
-           if (con_data[u].inptr == 0) {
+           /* Check for empty line, or end of data */
+           if (con_data[u].inptr == 0 || uptr->IPTR == con_data[u].inptr) {
                    uptr->CMD &= ~CON_INPUT;
                    con_data[u].inptr = 0;
                    cmd = 0;
@@ -260,6 +291,7 @@ con_srv(UNIT *uptr) {
                    break;
            }
 
+           /* Grab next character and send it to CPU */
            ch = con_data[u].ibuff[uptr->IPTR++];
            sim_debug(DEBUG_CMD, &con_dev, "%d: rd %02x\n", u, ch);
            if (chan_write_byte(addr, &ch)) {
@@ -269,15 +301,6 @@ con_srv(UNIT *uptr) {
                uptr->CMD &= ~(CON_MSK);
                sim_debug(DEBUG_CMD, &con_dev, "%d: devend input\n", u);
                chan_end(addr, SNS_CHNEND|SNS_DEVEND);
-           } else {
-               if (uptr->IPTR == con_data[u].inptr) {
-                   uptr->CMD &= ~CON_INPUT;
-                   con_data[u].inptr = 0;
-                   cmd = 0;
-                   uptr->CMD &= ~(CON_MSK);
-                   sim_debug(DEBUG_CMD, &con_dev, "%d: devend\n", u);
-                   chan_end(addr, SNS_CHNEND|SNS_DEVEND);
-               }
             }
          }
          break;

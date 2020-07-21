@@ -447,6 +447,13 @@ chan_read_byte(uint16 addr, uint8 *data) {
     byte = (chan_buf[chan] >>  (8 * (3 - (chan_byte[chan] & 0x3)))) & 0xff;
     chan_byte[chan]++;
     *data = byte;
+    /* If count is zero and chainging load in new CCW */
+    if (ccw_count[chan] == 0 && (ccw_flags[chan] & FLAG_CD) != 0) {
+        chan_byte[chan] = BUFF_EMPTY;
+        /* Try and grab next CCW */
+        if (load_ccw(chan, 1))
+            return 1;
+    }
     return 0;
 }
 
@@ -585,6 +592,16 @@ chan_write_byte(uint16 addr, uint8 *data) {
     } else
         chan_byte[chan]++;
     chan_byte[chan] |= BUFF_DIRTY;
+    /* If count is zero and chainging load in new CCW */
+    if (ccw_count[chan] == 0 && (ccw_flags[chan] & FLAG_CD) != 0) {
+        /* Flush buffer */
+        if (writebuff(chan))
+            return 1;
+        chan_byte[chan] = BUFF_EMPTY;
+        /* Try and grab next CCW */
+        if (load_ccw(chan, 1))
+            return 1;
+    }
     return 0;
 }
 

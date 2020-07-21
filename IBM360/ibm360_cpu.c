@@ -2276,7 +2276,7 @@ save_dbl:
                                   seg_addr = dest & AMASK;
                                   seg_len = (((dest >> 24) & 0xff) + 1) << 4;
                                   break;
-                        case 0x6:     /* Masks */
+                        case 0x4:     /* Extended mask */
                                   cregs[reg] &= 0xfefe0000;
                                   if (dest & 0xfe000000)
                                       cregs[reg] |= 0x1000000;
@@ -2288,7 +2288,7 @@ save_dbl:
                                       irq_pend = 1;
                                   }
                                   break;
-                        case 0x4:     /* Extended mask */
+                        case 0x6:     /* Masks */
                                   ec_mode = (dest & 0x00800000) != 0;
                                   if (ec_mode && irq_en) {
                                       sysmsk = (cregs[6] >> 16) & 0xfe00;
