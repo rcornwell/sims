@@ -121,8 +121,6 @@ t_uint64 s_normfd(t_uint64 num, uint32 *cc);
 uint32 s_nor(uint32 reg, uint32 *exp) {
     uint32 texp = 0;                    /* no exponent yet */
 
-    sim_debug(DEBUG_EXP, &cpu_dev,
-        "s_nor entry reg %08x texp %08x\n", reg, texp);
     if (reg != 0) {                     /* do nothing if reg is already zero */
         uint32 mv = reg & NORMASK;      /* mask off bits 0-4 */
         while ((mv == 0) || (mv == NORMASK)) {
@@ -136,8 +134,6 @@ uint32 s_nor(uint32 reg, uint32 *exp) {
         texp = (uint32)(0x40-(int32)texp);  /* subtract shift count from 0x40 */
     }
     *exp = texp;                        /* return exponent */
-    sim_debug(DEBUG_EXP, &cpu_dev,
-        "s_nor exit reg %08x texp %08x\n", reg, texp);
     return (reg);                       /* return normalized register */
 }
 
@@ -145,8 +141,6 @@ uint32 s_nor(uint32 reg, uint32 *exp) {
 t_uint64 s_nord(t_uint64 reg, uint32 *exp) {
     uint32 texp = 0;                    /* no exponent yet */
 
-    sim_debug(DEBUG_EXP, &cpu_dev,
-        "s_nord entry regs %016llx texp %08x\n", reg, texp);
     if (reg != 0) {                     /* do nothing if reg is already zero */
         t_uint64 mv = reg & DNORMASK;   /* mask off bits 0-4 */
         while ((mv == 0) || (mv == DNORMASK)) {
@@ -160,8 +154,6 @@ t_uint64 s_nord(t_uint64 reg, uint32 *exp) {
         texp = (uint32)(0x40-(int32)texp);  /* subtract shift count from 0x40 */
     }
     *exp = texp;                        /* return exponent */
-    sim_debug(DEBUG_EXP, &cpu_dev,
-        "s_nord exit reg %016llx texp %08x\n", reg, texp);
     return (reg);                       /* return normalized double register */
 }
 
@@ -177,16 +169,13 @@ uint32 s_normfw(uint32 num, uint32 *cc) {
         *cc = CC4BIT;               /* set the cc's */
         return 0;                   /* return zero */
     }
-    sim_debug(DEBUG_EXP, &cpu_dev,
-        "NORMFW entry num %08x\n", num);
     sign = 0;
 
     /* special case 0x80000000 (-0) to set CCs to 1011 * value to 0x80000001 */
     if (num == 0x80000000) {
         CCs = CC1BIT|CC3BIT|CC4BIT; /* we have AE, exp overflow, neg frac */
         ret = 0x80000001;           /* return max neg value */
-        sim_debug(DEBUG_EXP, &cpu_dev,
-            "NORMFW AE return num %08x result %08x CC's %08x\n", num, ret, CCs);
+
         /* return normalized number */
         *cc = CCs;                  /* set the cc's */
         return ret;                 /* return result */
@@ -196,8 +185,7 @@ uint32 s_normfw(uint32 num, uint32 *cc) {
     if (((num & 0x80000000) == 0) && ((num & 0xff000000) > 0) && ((num & 0x00ffffff) == 0)) {
         ret = 0;                    /* 0 to any power is still 0 */
         CCs = CC4BIT;               /* set zero CC */
-        sim_debug(DEBUG_EXP, &cpu_dev,
-            "NORMFW -ZERO num %08x result %08x CC's %08x\n", num, ret, CCs);
+
         /* return normalized number */
         *cc = CCs;                  /* set the cc's */
         return ret;                 /* return result */
@@ -233,8 +221,7 @@ uint32 s_normfw(uint32 num, uint32 *cc) {
             CCs |= CC2BIT;          /* set pos CC */
         ret = 0;                    /* number too small, make 0 */
         exp = 0;                    /* exponent too */
-        sim_debug(DEBUG_EXP, &cpu_dev,
-            "NORMFW UNDR return num %08x result %08x CC's %08x\n", num, ret, CCs);
+
         /* return normalized number */
         *cc = CCs;                  /* set the cc's */
         return ret;                 /* return result */
@@ -251,8 +238,7 @@ uint32 s_normfw(uint32 num, uint32 *cc) {
     else
         CCs = CC2BIT;               /* show positive */
     ret = val;                      /* return normalized number */
-    sim_debug(DEBUG_EXP, &cpu_dev,
-        "NORMFW return num %08x result %08x CC's %08x\n", num, ret, CCs);
+
     /* return normalized number */
     *cc = CCs;                      /* set the cc's */
     return ret;                     /* return result */
@@ -306,8 +292,6 @@ t_uint64 s_normfd(t_uint64 num, uint32 *cc) {
         *cc = CC4BIT;                   /* set the cc's */
         return 0;                       /* return zero */
     }
-    sim_debug(DEBUG_EXP, &cpu_dev,
-        "NORMFD entry num %016llx\n", num);
     sign = 0;
 
     /* special case 0x8000000000000000 (-0) to set CCs to 1011 */
@@ -374,8 +358,7 @@ t_uint64 s_normfd(t_uint64 num, uint32 *cc) {
         CCs = CC3BIT;                   /* show negative */
     else
         CCs = CC2BIT;                   /* show positive */
-    sim_debug(DEBUG_EXP, &cpu_dev,
-        "NORMFD return num %016llx result %016llx CC's %08x\n", num, ret, CCs);
+
     /* return normalized number */
     *cc = CCs;                          /* set the cc's */
     return ret;                         /* return normalized result */
@@ -467,53 +450,50 @@ UNFLO:
 /* convert from 32 bit integer to 32 bit float */
 /* No overflow (CC1) can be generated */
 uint32 s_fltw(uint32 intv, uint32 *cc) {
-    uint32 CC = 0, temp;
-    uint32 neg = 0;                     /* zero sign flag */
-    uint32 sc = 0;                      /* zero shift count */
+    uint32  CC = 0;
+    uint32  ret;
+    uint32  neg = 0;                    /* zero sign flag */
+    uint32  exp = 0;                    /* exponent */
+    uint32  val = (int32)intv;          /* integer value */
 
-    if (intv & MSIGN) {
-        intv = NEGATE32(intv);          /* make src positive */
-        neg = 1;                        /* set neg flag */
-    } else {
-        if (intv == 0) {                /* see if zero */
-            temp = 0;                   /* return zero */
-            goto setcc;                 /* set cc's and exit */
+    if (intv & 0x80000000) {
+        val = NEGATE32(intv);
+        neg = 1;
+    }
+    while ((val != 0) && ((val & 0xf0000000) == 0)) {
+        val <<= 4;                      /* no round up */
+        exp--;
+    }
+    if (val != 0)
+        exp += 0x48;                    /* set default exponent */
+    /* shift value rt 8 bits and round */
+    if (val & 0x80) {
+        if (neg) {
+            if (val & 0x7f)
+                val = (val >> 8) + 1;   /* round up */
+            else
+                val = (val >> 8);       /* no round up */
+        } else {
+            val = (val >> 8) + 1;       /* round up */
         }
-        /* gt 0, fall through */
+    } else
+        val = (val >> 8);               /* no round up */
+    if (val & 0x01000000) {
+        val = (val >> 4);               /* move 1 nibble */
+        exp++;
     }
-    temp = intv;
-    while ((temp & FSIGN) == 0) {       /* shift the val until bit 0 is set */
-        temp <<= 1;                     /* shift left 1 bit */
-        sc++;                           /* incr shift count */
-    }
-    if (sc & 0x2)                       /* see if shift count mod 2 */
-        temp >>= 2;                     /* two more zeros */
-    if (sc & 0x1)                       /* see if shift count odd */
-        temp >>= 1;                     /* one more zeros */
-    sc >>= 2;                           /* normalize radix */
-    sc -= 72;                           /* make excess 64 notation */
-    sc = NEGATE32(sc);                  /* make positive */
-    temp &= 0xffffff80;                 /* clean bits */
-    if (neg)                            /* was input negative */
-        temp -= 0x80;                   /* round */
-    else
-        temp += 0x80;                   /* round */
-
-    temp = (temp >> 8) | (sc << 24);    /* merge exp with fraction */
-    if (neg)                            /* was input negative */
-        temp = NEGATE32(temp);          /* make neg again */
-    /* come here to set cc's and return */
-    /* temp has return value */
-setcc:
-    if (temp & MSIGN)
+    ret = (exp << 24) | (val & 0x00ffffff); /* merge value */
+    if (neg)
+        ret = NEGATE32(ret);
+    if (ret & MSIGN)
         CC |= CC3BIT;                   /* CC3 for neg */
-    else if (temp == 0)
+    else if (ret == 0)
         CC |= CC4BIT;                   /* CC4 for zero */
     else 
         CC |= CC2BIT;                   /* CC2 for greater than zero */
     /* return temp for destination reg */
-    *cc = CC;                           /* return CC's */
-    return temp;                        /* return result */
+    *cc = CC;                           /* save CC's */
+    return ret;                         /* return results */
 }
 
 /* convert from 64 bit double to 64 bit integer */
@@ -558,7 +538,6 @@ t_uint64 s_fixd(t_uint64 dblv, uint32 *cc) {
     if ((int32)temp2 > 0) {
         /* set CC1 for overflow */
         dest = 0;                       /* assume zero for small values */
-//      dest = 0x7fffffffffffffffll;    /* too big, set max */
         goto DOVFLO;                    /* go set CC's */
     }
     sc = (NEGATE32(temp2) * 4);         /* pos shift cnt * 4 */
@@ -568,7 +547,6 @@ t_uint64 s_fixd(t_uint64 dblv, uint32 *cc) {
     if (dblv & DMSIGN) {
         /* set CC1 for overflow */
         dest = 0;                       /* assume zero for small values */
-//      dest = 0x7fffffffffffffffll;    /* too big, set max */
         goto DOVFLO;                    /* go set CC's */
     }
     /* see if original values was negative */
@@ -603,47 +581,67 @@ DUNFLO:
 /* convert from 64 bit integer to 64 bit double */
 /* No overflow (CC1) can be generated */
 t_uint64 s_fltd(t_uint64 intv, uint32 *cc) {
-    t_uint64 temp;
-    int32   sc = 0;                     /* zero shift count */
-    uint32 neg = 0;                     /* zero sign flag */
-    uint32 CC = 0;                      /* n0 CC's yet */
+    t_uint64 ret = 0;                   /* zero return val */
+    uint32  neg = 0;                    /* zero sign flag */
+    uint32  CC = 0;                     /* n0 CC's yet */
+    uint32  exp = 0;                    /* exponent */
+    t_uint64 val = intv;                /* integer value */
 
     if (intv & DMSIGN) {
-        intv = NEGATE32(intv);          /* make src positive */
+        val = NEGATE32(intv);           /* make src positive */
         neg = 1;                        /* set neg flag */
     } else {
         if (intv == 0) {                /* see if zero */
-            temp = 0;                   /* return zero */
-            goto setcc;                 /* set cc's and exit */
+            ret = 0;                    /* return zero */
+            CC = CC4BIT;                /* CC4 for zero */
+            /* return 0 for destination regs */
+            *cc = CC;                   /* return CC's */
+            return ret;                 /* return result */
         }
         /* gt 0, fall through */
     }
-    if ((neg) && (intv & 0xfffffffffffffff0ll) && ((intv & 0x0fll)))
-        intv += 0x17ll;                 /* round */
-    temp = intv;                        /* get input t_uint64 */
-    while ((temp) && ((temp & 0xf000000000000000ll) == 0)) {    /* see if normalized */
-        temp <<= 4;                     /* zero, shift in next nibble */
-        sc++;                           /* incr shift count */
-    }
-    temp >>= 8;                         /* make room for exponent */
-    sc -= 2;                            /* adjust exp count */
-    sc = (NEGATE32(sc) + 78);           /* normalized, make into excess 64 */
-    temp = ((t_uint64)sc << 56) | temp;    /* merge exponent into fraction */
-    if (neg)                            /* was input negative */
-        temp = NEGATE32(temp);          /* make neg again */
 
-    /* come here to set cc's and return */
-    /* temp has return dbl value */
-setcc:
-    if (temp & DMSIGN)
+    while ((val) && ((val & 0xf000000000000000ll) == 0)) {    /* see if normalized */
+        val <<= 4;                      /* zero, shift in next nibble */
+        exp--;                          /* decr exp value */
+    }
+    if (val != 0)
+        exp += 0x50;                    /* default exponent */
+
+    /* shift value rt 8 bits and round */
+    if (val & 0x91ll) {
+        if (neg) {
+            if (val & 0x7fl)
+                val = (val >> 8) + 1;   /* round up */
+            else
+                val = (val >> 8);       /* no round up */
+        } else {
+            if (val & 0x7fl)
+                val = (val >> 8);       /* no round up */
+            else
+                val = (val >> 8) + 1;   /* round up */
+        }
+    } else
+        val = (val >> 8);               /* no round up */
+
+    if (val & 0x0100000000000000ll) {
+        val = (val >> 4);               /* no round up */
+        exp++;
+    }
+    ret = (((t_uint64)exp) << 56) | (val & 0x00ffffffffffffffll); /* merge value */
+
+    if (neg)
+        ret = NEGATE32(ret);
+    if (ret & DMSIGN)
         CC |= CC3BIT;                   /* CC3 for neg */
-    else if (temp == 0)
+    else if (ret == 0)
         CC |= CC4BIT;                   /* CC4 for zero */
     else 
         CC |= CC2BIT;                   /* CC2 for greater than zero */
+
     /* return temp for destination regs */
     *cc = CC;                           /* return CC's */
-    return temp;                        /* return result */
+    return ret;                        /* return result */
 }
 
 #define CMASK   0x10000000              /* carry mask */
@@ -749,7 +747,6 @@ uint32 s_adfw(uint32 reg, uint32 mem, uint32 *cc)
         res = reg + mem;                /* same sign, just add */
         if (sign == 3)
             res += 7;                   /* round number */
-//          res += 8;                   /* round number */
     }
 
     /* If overflow, shift right 4 bits */
@@ -775,10 +772,8 @@ uint32 s_adfw(uint32 reg, uint32 mem, uint32 *cc)
     /* Set condition codes */
     if (res != 0)                       /* see if non zero */
         CC |= (sign & 2) ? 1 : 2;
-//      CC |= (sign & 2)?CC3BIT:CC2BIT; /* neg is CC3, pos is CC2 */
     else {
         er = sign = 0;                  /* we have zero CC4 */
-//      CC |= CC4BIT;                   /* set zero cc */
     }
 
     /* normalize the fraction */
@@ -793,7 +788,6 @@ uint32 s_adfw(uint32 reg, uint32 mem, uint32 *cc)
             CC |= CC1BIT;               /* set arithmetic exception */
             CC |= (sign & 2)?CC3BIT:CC2BIT;  /* neg is CC3, pos is CC2 */
             res = 0;                    /* make all zero */
-//          sign = er = 0;              /* zero */
             /* Store result */
             *cc = CC;                   /* save CC's */
             return res;                 /* return value */
@@ -801,7 +795,6 @@ uint32 s_adfw(uint32 reg, uint32 mem, uint32 *cc)
     } else {
         /* result is zero */
         sign = er = 0;                  /* make abs zero */
-//      CC = CC4BIT;                    /* zero value */
     }
 
     res >>= 4;                          /* remove the guard nibble */
@@ -1121,8 +1114,6 @@ t_uint64 s_adfd(t_uint64 reg, t_uint64 mem, uint32 *cc)
     int         er, em, temp;
     uint32      CC;
 
-    sim_debug(DEBUG_EXP, &cpu_dev,
-        "ADFD entry mem %016llx reg %016llx\n", mem, reg);
     /* first we want to make sure the numbers are normalized */
     ret = s_normfd(reg, &CC);           /* get the reg value */
     if (CC & CC1BIT) {                  /* see if we have AE */
@@ -1212,8 +1203,6 @@ t_uint64 s_adfd(t_uint64 reg, t_uint64 mem, uint32 *cc)
     /* following statement effectively removes guard nibble to be like SEL */
     res &= 0xfffffffffffffff0ll;        /* remove extra bits */
 
-    sim_debug(DEBUG_EXP, &cpu_dev,
-        "ADFD test OVF res %016llx er %02x sign %01x\n", res, er, sign);
     /* If overflow, shift right 4 bits */
     if (res & DCMASK) {                 /* see if overflow carry */
         res >>= 4;                      /* move mantissa down 4 bits */
@@ -1222,8 +1211,6 @@ t_uint64 s_adfd(t_uint64 reg, t_uint64 mem, uint32 *cc)
             /* OVERFLOW */
             CC = CC1BIT|CC4BIT;         /* set arithmetic overflow */
             /* set CC2 & CC3 on exit */
-            sim_debug(DEBUG_EXP, &cpu_dev,
-                "OVERFLOW res %016llx er %02x sign %01x\n", res, er, sign);
             CC |= (sign & 2)?CC3BIT:CC2BIT;  /* neg is CC3, pos is CC2 */
             if (CC & CC3BIT)            /* NEG overflow? */
                 res = 0x8000000000000001;   /* double yes */
@@ -1252,8 +1239,6 @@ t_uint64 s_adfd(t_uint64 reg, t_uint64 mem, uint32 *cc)
         /* Check if exponent underflow */
         if (er < 0) {
             /* UNDERFLOW */
-            sim_debug(DEBUG_EXP, &cpu_dev,
-                "UNDERFLOW res %016llx er %02x sign %01x\n", res, er, sign);
             CC |= CC1BIT;               /* set arithmetic exception */
             CC |= (sign & 2)?CC3BIT:CC2BIT;  /* neg is CC3, pos is CC2 */
             res = 0;                    /* make all zero */
@@ -1298,9 +1283,6 @@ t_uint64 s_mpfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
     int         lsb = 0;
     int         er, em, temp;
     uint32      CC;
-
-    sim_debug(DEBUG_EXP, &cpu_dev,
-        "MPFD entry mem %016llx reg %016llx\n", mem, reg);
 
     /* first we want to make sure the numbers are normalized */
     ret = s_normfd(reg, &CC);           /* get the reg value */
@@ -1461,9 +1443,6 @@ t_uint64 s_dvfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
     int         lsb = 0;
     int         er, em, temp;
     uint32      CC;
-
-    sim_debug(DEBUG_EXP, &cpu_dev,
-        "DVFD entry reg %016llx mem %016llx\n", reg, mem);
 
     /* first we want to make sure the numbers are normalized */
     ret = s_normfd(reg, &CC);           /* get the reg value */

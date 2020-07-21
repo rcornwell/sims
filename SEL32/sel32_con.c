@@ -190,7 +190,8 @@ uint16 con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         uptr->CMD |= CON_INCH2;         /* save INCH command as 0xf0 */
         uptr->SNS = SNS_RDY|SNS_ONLN;   /* status is online & ready */
         if (unit == 1)
-            sim_activate(uptr, 40);     /* start us off */
+//720       sim_activate(uptr, 240);     /* start us off */
+            sim_activate(uptr, 200);     /* start us off */
         return 0;                       /* no status change */
         break;
 
@@ -201,7 +202,8 @@ uint16 con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         uptr->CMD |= (cmd & CON_MSK);   /* save command */
         uptr->SNS = SNS_RDY|SNS_ONLN;   /* status is online & ready */
         if (unit == 1)
-            sim_activate(uptr, 30);     /* start us off */
+//720       sim_activate(uptr, 240);     /* start us off */
+            sim_activate(uptr, 200);     /* start us off */
         return 0;                       /* no status change */
         break;
 
@@ -216,7 +218,8 @@ uint16 con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         atbuf = 0;                      /* reset attention buffer */
         uptr->SNS = SNS_RDY|SNS_ONLN;   /* status is online & ready */
         if (unit == 1)
-            sim_activate(uptr, 40);     /* start us off */
+//720       sim_activate(uptr, 240);     /* start us off */
+            sim_activate(uptr, 200);     /* start us off */
         return 0;
         break;
 
@@ -225,7 +228,8 @@ uint16 con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         uptr->CMD &= ~CON_MSK;          /* remove old CMD */
         uptr->CMD |= (cmd & CON_MSK);   /* save command */
         if (unit == 1)
-            sim_activate(uptr, 40);     /* start us off */
+//720       sim_activate(uptr, 240);     /* start us off */
+            sim_activate(uptr, 200);     /* start us off */
         return 0;                       /* no status change */
         break;
 
@@ -234,7 +238,8 @@ uint16 con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         uptr->CMD &= LMASK;             /* leave only chsa */
         uptr->CMD |= (cmd & CON_MSK);   /* save command */
         if (unit == 1)
-            sim_activate(uptr, 40);     /* start us off */
+//720       sim_activate(uptr, 240);     /* start us off */
+            sim_activate(uptr, 200);     /* start us off */
         return 0;                       /* no status change */
         break;
 
@@ -334,7 +339,8 @@ t_stat con_srvo(UNIT *uptr) {
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
             return SCPE_OK;
         }
-/*RTC*/ outbusy = 1;                        /* tell clock output waiting */
+//Comment out clock flag 072020
+//*RTC*/ outbusy = 1;                        /* tell clock output waiting */
         /* Write to device */
         while (chan_read_byte(chsa, &ch) == SCPE_OK) {  /* get byte from memory */
             /* HACK HACK HACK */
@@ -346,7 +352,10 @@ t_stat con_srvo(UNIT *uptr) {
         sim_debug(DEBUG_CMD, &con_dev,
             "con_srvo write wait %03x CMD %08x chsa %04x cmd %02x to complete\n",
             19*cnt+23, uptr->CMD, chsa, cmd);
-        sim_activate(uptr, 19*cnt+23);      /* wait for a while */
+//      sim_activate(uptr, 19*cnt+23);      /* wait for a while */
+//      sim_activate(uptr, 31*cnt+47);      /* wait for a while */
+/*719*/ sim_activate(uptr, 41*cnt+47);      /* wait for a while */
+//719   sim_activate(uptr, 81*cnt+87);      /* wait for a while */
     }
     return SCPE_OK;
 }

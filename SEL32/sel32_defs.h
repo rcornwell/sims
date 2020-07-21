@@ -98,6 +98,7 @@
 #define BUFF_NEXT        0xC                /* 0x08|0x04 Continue Channel with next IOCB */
 #define BUFF_CHNEND      0x14               /* 0x10|0x04 Channel end */
 #define BUFF_DONE        0x20               /* 0x20 Channel ready for new command */
+#define BUFF_POST        0x24               /* 0x20|0x04 Waiting for status to be posted */
 
 #define     MAX_CHAN        128             /* max channels that can be defined */
 #define     SUB_CHANS       256             /* max sub channels that can be defined */
@@ -435,14 +436,17 @@ extern DEBTAB dev_debug[];
 /* memory access macros */
 /* The RMW and WMW macros are used to read/write memory words */
 /* RMW(addr) or WMW(addr, data) where addr is a byte alligned word address */
-#define RMB(a) ((M[(a)>>2]>>(8*(7-(a&3))))&0xff)      /* read memory addressed byte */
+
+//#define RMB(a) ((M[(a)>>2]>>(8*(7-(a&3))))&0xff)      /* read memory addressed byte */
+#define RMB(a) ((M[(a)>>2]>>(8*(3-(a&3))))&0xff)        /* read memory addressed byte */
 #define RMH(a) ((a)&2?(M[(a)>>2]&RMASK):(M[(a)>>2]>>16)&RMASK)    /* read memory addressed halfword */
 #define RMW(a) (M[((a)&MASK24)>>2])                     /* read memory addressed word */
 #define WMW(a,d) (M[((a)&MASK24)>>2]=d)                 /* write memory addressed word */
 /* write halfword to memory address */
 #define WMH(a,d) ((a)&2?(M[(a)>>2]=(M[(a)>>2]&LMASK)|((d)&RMASK)):(M[(a)>>2]=(M[(a)>>2]&RMASK)|((d)<<16)))
 /* write byte to memory */
-#define WMB(a,d) (M[(a)>>2]=(((M[(a)>>2])&(~(0xff<<(8*(7-(a&3))))))|((d&0xff)<<(8*(7-(a&3))))))
+//#define WMB(a,d) (M[(a)>>2]=(((M[(a)>>2])&(~(0xff<<(8*(7-(a&3))))))|((d&0xff)<<(8*(7-(a&3))))))
+#define WMB(a,d) (M[(a)>>2]=(((M[(a)>>2])&(~(0xff<<(8*(3-(a&3))))))|((d&0xff)<<(8*(3-(a&3))))))
 
 /* map register access macros */
 /* The RMR and WMR macros are used to read/write the MAPC cache registers */

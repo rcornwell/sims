@@ -1967,40 +1967,57 @@ wait_loop:
             goto skipi;                         /* skip int test */
         }
 
-        /* process any channel programs */
-        if (RDYQ_Num() && (skipinstr == 0)) {
-            uint32  chsa;                       /* channel/sub adddress */
-            int32   stat;                       /* return status 0/1 from loadccw */
+        /* we are booting the system, so see if boot channel prog is completed */
+        if (loading) {
+            uint32 il;
+            uint32 chsa  = scan_chan(&il);      /* go scan for load complete pending */
+            if (chsa != 0) {                    /* see if a boot channel/subaddress were returned */
+                /* take interrupt, store the PSD, fetch new PSD */
+                PSD1 = TPSD[0];                 /* PSD1 from location 0 */
+                PSD2 = TPSD[1];                 /* PSD2 from location 4 */
+                modes = PSD1 & 0x87000000;      /* extract bits 0, 5, 6, 7 from PSD 1 */
+                CPUSTATUS &= ~0x87000000;       /* reset bits in CPUSTATUS */
+                CPUSTATUS |= modes;             /* now insert into CPUSTATUS */
+                sim_debug(DEBUG_IRQ, &cpu_dev, "Boot Loading PSD1 %.8x PSD2 %.8x\n", PSD1, PSD2);
+                /* set interrupt blocking state in CPUSTATUS */
+                CPUSTATUS |= 0x80;              /* set blocked state in cpu status, bit 24 too */
+                PSD2 &= ~RETMBIT;               /* turn off retain bit in PSD2 */
+                SPAD[0xf5] = PSD2;              /* save the current PSD2 */
+                SPAD[0xf9] = CPUSTATUS;         /* save the cpu status in SPAD */
+                loading = 0;                    /* we are done loading */
+                sim_debug(DEBUG_IRQ, &cpu_dev,
+                    "Load Skipinstr %1x set loading PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
+                    skipinstr, PSD1, PSD2, CPUSTATUS);
+                skipinstr = 1;                  /* skip next interrupt test only once */
+                goto skipi;                     /* skip int test */
+            }
+            /* process any channel programs that are queued */
+            if (RDYQ_Num() && (skipinstr == 0)) {
+                uint32  chsa;                   /* channel/sub adddress */
+                int32   stat;                   /* return status 0/1 from loadccw */
 
-            if (waitqcnt == 0) {
                 /* we have entries, continue channel program */
                 if (RDYQ_Get(&chsa) == SCPE_OK) {   /* get chsa for program */
                     sim_debug(DEBUG_XIO, &cpu_dev,
-                        "CPU RDYQ entry for chsa %04x starting\n", chsa);
+                        "CPU RDYQ entry for chsa %04x starting irq_pend %01x irq_auto %01x\n",
+                        chsa, irq_pend, irq_auto);
                     stat = cont_chan(chsa);     /* resume the channel program */
                     if (stat)
                         sim_debug(DEBUG_XIO, &cpu_dev,
                             "CPU RDYQ entry for chsa %04x processed\n", chsa);
                 }
-                /* NOTE!  This wait instruction count can not be larger than 30 */
-                /* for UTX.  UTX will fail trying to write to device disk 0801 */
-//              waitqcnt = 35;                  /* wait 10 instructions */
-//              waitqcnt = 10;                  /* wait 10 instructions */
-                waitqcnt = 20;                  /* wait 10 instructions */
-            } else
-                waitqcnt -= 1;                  /* wait another instruction */
+            }
+            goto wait_loop;                     /* continue waiting for boot */
         }
-        else
-//          waitqcnt = 35;                      /* wait 10 instructions */
-            waitqcnt = 20;                      /* wait 10 instructions */
-//040120    waitqcnt = 10;                      /* wait 10 instructions */
 
-
-        /* process pending I/O interrupts */
-//AIR*/ if (!loading && (irq_auto==0) && (wait4int || irq_pend)) {  /* see if ints are pending */
-/*AIR*/ if (!loading && (irq_auto==0) && (irq_pend)) {  /* see if ints are pending */
+        /* we get here when not booting */
+        /* process any pending interrupts */
+//      if (!loading && (irq_auto==0) && (wait4int || irq_pend)) {  /* see if ints are pending */
+//      if (!loading && (irq_auto==0) && (irq_pend)) {  /* see if ints are pending */
+        if (irq_pend || wait4int) {             /* see if ints are pending */
             uint32 ilev;
             SPAD[0xf9] = CPUSTATUS;             /* save the cpu status in SPAD */
+
             int_icb = scan_chan(&ilev);         /* no, go scan for I/O int pending */
             if (int_icb != 0) {                 /* was ICB returned for an I/O or interrupt */
                 uint32 il = ilev;               /* get the interrupt level */
@@ -2010,7 +2027,7 @@ wait_loop:
 
                 /* take interrupt, store the PSD, fetch new PSD */
                 bc = PSD2 & 0x3ff8;             /* get copy of cpix */
-                M[int_icb>>2] = PSD1&0xfffffffe;    /* store PSD 1 */
+                M[int_icb>>2] = PSD1&0xfffffffe;/* store PSD 1 */
                 M[(int_icb>>2)+1] = PSD2;       /* store PSD 2 */
                 PSD1 = M[(int_icb>>2)+2];       /* get new PSD 1 */
                 PSD2 = (M[(int_icb>>2)+3] & ~0x3ff8) | bc;  /* get new PSD 2 w/old cpix */
@@ -2037,13 +2054,13 @@ wait_loop:
                         /* Class F I/O spec says to reset active interrupt if user's */
                         /* interrupt service routine runs with interrupts blocked */
                         if (((t & 0x0f800000) == 0x0f000000) || /* if class F clear interrupt */
-/*NEW*/                     ((t & 0x0000ffff) == 0x00007f06) || /* RT Clock */
-/*NEW*/                     ((t & 0x0f00ffff) == 0x03007f04)) { /* Interval timer */
+                            ((t & 0x0000ffff) == 0x00007f06) || /* RT Clock */
+                            ((t & 0x0f00ffff) == 0x03007f04)) { /* Interval timer */
                             /* if this is F class I/O interrupt, clear the active level */
                             /* SPAD entries for interrupts begin at 0x80 */
-/*AIR*/                     irq_auto = il;              /* show processing in blocked mode */
+                            irq_auto = il;      /* show processing in blocked mode */
 #ifdef LEAVE_AUTO_INT_ACT_051020
-                            INTS[il] &= ~INTS_ACT;      /* deactivate specified int level */
+                            INTS[il] &= ~INTS_ACT;  /* deactivate specified int level */
                             SPAD[il+0x80] &= ~SINT_ACT; /* deactivate in SPAD too */
 #endif
                             sim_debug(DEBUG_IRQ, &cpu_dev,
@@ -2075,54 +2092,13 @@ wait_loop:
                         "<|>Int2 %02x ICBA %06x IOCLA %06x STAT %08x SW1 %08x SW2 %08x\n",
                         il, int_icb, RMW(int_icb+16), RMW(int_icb+20), RMW(bc), RMW(bc+4));
                 wait4int = 0;                   /* wait is over for int */
-#ifndef NOTNOW
-            sim_debug(DEBUG_IRQ, &cpu_dev,
-                "<|> Skipinstr %1x set intr %02x PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
-                skipinstr, il, PSD1, PSD2, CPUSTATUS);
+#ifdef NOTNOW
+                sim_debug(DEBUG_IRQ, &cpu_dev,
+                    "<|> Skipinstr %1x set intr %02x PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
+                    skipinstr, il, PSD1, PSD2, CPUSTATUS);
 #endif
                 skipinstr = 1;                  /* skip next inter test after this instr */
                 goto skipi;                     /* skip int test */
-            }
-            /* see if waiting at a wait instruction */
-            if (wait4int || loading) {
-                /* tell simh we will be waiting */
-//              sim_idle(TMR_RTC, 1);           /* wait for clock tick */
-                sim_idle(0, 1);                 /* wait for clock tick */
-                goto wait_loop;                 /* continue waiting */
-            }
-        } else {
-            if (loading) {
-                uint32 il;
-                uint32 chsa  = scan_chan(&il);  /* go scan for load complete pending */
-                if (chsa != 0) {                /* see if a boot channel/subaddress were returned */
-                    /* take interrupt, store the PSD, fetch new PSD */
-                    PSD1 = M[0>>2];             /* PSD1 from location 0 */
-                    PSD2 = M[4>>2];             /* PSD2 from location 4 */
-                    modes = PSD1 & 0x87000000;  /* extract bits 0, 5, 6, 7 from PSD 1 */
-                    CPUSTATUS &= ~0x87000000;   /* reset bits in CPUSTATUS */
-                    CPUSTATUS |= modes;         /* now insert into CPUSTATUS */
-                    sim_debug(DEBUG_IRQ, &cpu_dev, "Boot Loading PSD1 %.8x PSD2 %.8x\n", PSD1, PSD2);
-                    /* set interrupt blocking state in CPUSTATUS */
-                    CPUSTATUS |= 0x80;          /* set blocked state in cpu status, bit 24 too */
-                    PSD2 &= ~RETMBIT;           /* turn off retain bit in PSD2 */
-                    SPAD[0xf5] = PSD2;          /* save the current PSD2 */
-                    SPAD[0xf9] = CPUSTATUS;     /* save the cpu status in SPAD */
-                    loading = 0;                /* we are done loading */
-#ifdef NOTNOW
-                    sim_debug(DEBUG_IRQ, &cpu_dev,
-                        "Load Skipinstr %1x set loading PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
-                        skipinstr, PSD1, PSD2, CPUSTATUS);
-#endif
-                    skipinstr = 1;              /* skip next interrupt test only once */
-                }
-                goto wait_loop;                 /* continue waiting */
-            }
-            /* see if in wait instruction */
-            if (wait4int) {                     /* keep waiting */
-                /* tell simh we will be waiting */
-//              sim_idle(TMR_RTC, 1);           /* wait for clock tick */
-                sim_idle(0, 1);                 /* wait for clock tick */
-                goto wait_loop;                 /* continue waiting */
             }
         }
 
@@ -2644,6 +2620,7 @@ exec:
                         /* tell simh we will be waiting */
 //                      sim_idle(TMR_RTC, 0);       /* wait for next pending device event */
                         sim_idle(0, 0);             /* wait for clock tick */
+/*719*/                 irq_pend = 1;               /* start scanning interrupts again */
                         i_flags |= BT;              /* keep PC from being incremented while waiting */
                         break;
                 case 0x2:   /* NOP */
@@ -2701,6 +2678,11 @@ exec:
                                 TRAPSTATUS |= BIT19;    /* set bit 19 of trap status */
                             goto newpsd;            /* Privlege violation trap */
                         }
+#ifdef FOR_DEBUG
+sim_debug(DEBUG_IRQ, &cpu_dev,
+"bei int was %01x at PSD1 %08x PSD2 %08x\n",
+CPUSTATUS&0x80 ? 1 : 0, PSD1, PSD2);
+#endif
                         CPUSTATUS |= 0x80;          /* into status word bit 24 too */
                         PSD2 &= ~0x0000c000;        /* clear bit 48 & 49 */
                         PSD2 |= 0x00004000;         /* set bit 49 only */
@@ -2716,6 +2698,11 @@ exec:
                                 TRAPSTATUS |= BIT19;    /* set bit 19 of trap status */
                             goto newpsd;            /* Privlege violation trap */
                         }
+#ifdef FOR_DEBUG
+sim_debug(DEBUG_IRQ, &cpu_dev,
+"uei int was %01x at PSD1 %08x PSD2 %08x\n",
+CPUSTATUS&0x80 ? 1 : 0, PSD1, PSD2);
+#endif
                         if (CPUSTATUS & 0x80) {     /* see if old mode is blocked */
                             irq_pend = 1;           /* start scanning interrupts again */
                             if (irq_auto) {
@@ -2725,7 +2712,6 @@ exec:
                                     "<|>IntX deactivate level %02x at UEI PSD1 %08x PSD2 %08x\n",
                                     irq_auto, PSD1, PSD2);
 /*AIR*/                         irq_auto = 0;       /* show done processing in blocked mode */
-/*051920*/                      skipinstr = 1;      /* skip interrupt test */
                             }
                         }
                         CPUSTATUS &= ~0x80;         /* into status word bit 24 too */
@@ -3370,7 +3356,7 @@ tbr:                                                /* handle basemode TBR too *
                     /* update the PSD with new address from reg */
                     PSD1 &= ~temp;                  /* clean the bits to be changed */
                     PSD1 |= (addr & temp);          /* insert the CC's and address */
-                    sim_debug(DEBUG_CMD, &cpu_dev,
+                    sim_debug(DEBUG_DETAIL, &cpu_dev,
                         "TRSW REG %01x PSD %08x %08x modes %08x temp %06x\n",
                         reg, PSD1, PSD2, modes, temp);
                     i_flags |= BT;                  /* we branched, so no PC update */
@@ -3875,7 +3861,7 @@ skipit:
                         if ((opr & 0xF) == 0x3) {
                             addr = NEGATE32(addr);      /* subtract, so negate source */
                         }
-                            temp2 = s_adfw(temp, addr, &CC);    /* do ADFW */
+                        temp2 = s_adfw(temp, addr, &CC);    /* do ADFW */
                         sim_debug(DEBUG_EXP, &cpu_dev,
                             "%s GPR[%d] %08x addr %08x result %08x CC %08x\n",
                             (opr&0xf)==3 ? "SURFW":"ADRFW",
@@ -4021,13 +4007,13 @@ skipit:
                             goto newpsd;                /* go execute the trap now */
                         }
                         td = (((t_uint64)GPR[reg]) << 32);  /* get upper reg value */
-                        td |= (t_uint64)GPR[reg+1];         /* insert low order reg value */
+                        td |= (t_uint64)GPR[reg+1];     /* insert low order reg value */
                         source = (((t_uint64)GPR[sreg]) << 32); /* get upper reg value */
                         source |= (t_uint64)GPR[sreg+1];    /* insert low order reg value */
                         if ((opr & 0xF) == 0xb) {
-                            td = NEGATE32(td);          /* make negative for subtract */
+/*720*/                     source = NEGATE32(source);  /* make negative for subtract */
                         }
-                            dest = s_adfd(td, source, &CC); /* do ADFD */
+                        dest = s_adfd(td, source, &CC); /* do ADFD */
 
                         sim_debug(DEBUG_EXP, &cpu_dev,
                             "%s GPR[%d] %08x %08x src %016llx result %016llx\n",
@@ -6059,7 +6045,7 @@ doovr2:
                                 sim_debug(DEBUG_IRQ, &cpu_dev,
                                     "<|>IntX deactivate level %02x at LPSD(CM) %08x\n", irq_auto, PSD1);
 /*AIR*/                         irq_auto = 0;           /* show done processing in blocked mode */
-/*051920*/                      skipinstr = 1;      /* skip interrupt test */
+                                skipinstr = 1;          /* skip interrupt test */
                             }
                         }
                     }
@@ -6302,7 +6288,7 @@ doovr2:
                         if ((t & 0x0f800000) == 0x0f000000) /* if class F ignore instruction */
                             break;                      /* ignore for F class */
 
-                        sim_debug(DEBUG_IRQ, &cpu_dev, "RI:B4 %02x ACT %1x REQ %1x ENAB %1x\n",
+                        sim_debug(DEBUG_IRQ, &cpu_dev, "AI:B4 %02x ACT %1x REQ %1x ENAB %1x\n",
                             prior, INTS[prior]&INTS_ACT?1:0,
                             INTS[prior]&INTS_REQ?1:0, INTS[prior]&INTS_ENAB?1:0);
 
@@ -6326,7 +6312,7 @@ doovr2:
                         INTS[prior] &= ~INTS_ACT;       /* deactivate specified int level */
                         SPAD[prior+0x80] &= ~SINT_ACT;  /* deactivate in SPAD too */
                         irq_pend = 1;                   /* start scanning interrupts again */
-                        /* instruction following a DAI can not be interrupted */
+                        /* instruction following a DAI cn not be interrupted */
                         /* skip tests for interrupts if this is the case */
 #ifdef NOTNOW
             sim_debug(DEBUG_IRQ, &cpu_dev,
@@ -6334,7 +6320,6 @@ doovr2:
                 prior, skipinstr, PSD1, PSD2, CPUSTATUS);
 #endif
                         skipinstr = 1;                  /* skip interrupt test */
-                        drop_nop = 0;                   /* nothing to drop */
                         break;
 
                     case 0x5:       /* TD FC05 */       /* bits 13-15 is test code type */
@@ -6670,7 +6655,6 @@ mcheck:
                 "DACI INTS[%02x] %08x Skipinstr %1x set PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
                 ix, INTS[ix], skipinstr, PSD1, PSD2, CPUSTATUS);
 #endif
-                        drop_nop = 0;                   /* nothing to drop */
                         PSD1 = ((PSD1 & 0x87fffffe) | (rstatus & 0x78000000));   /* insert status */
                         break;
                 }                   /* end of XIO switch */
