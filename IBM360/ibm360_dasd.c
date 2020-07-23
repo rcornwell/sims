@@ -650,12 +650,13 @@ endcyl:
          }
          /* Check for overflow record */
          if (data->ovfl) {
-             if (cmd == DK_RD_D || cmd == DK_RD_KD || cmd == DK_RD_CKD ||
-                 cmd == DK_WR_D || cmd == DK_WR_KD) {
+             data->ovfl = 0;
+             if (uptr->CMD & DK_OVFLOW) {
                   uptr->CCH ++;
+                  sim_debug(DEBUG_DETAIL, dptr, "over unit=%d %04x\n", unit, uptr->CCH);
+                  uptr->CMD &= ~(DK_INDEX);
                   if ((uptr->CCH & 0xff) >= disk_type[type].heads)
                       goto endcyl;
-                  uptr->CMD &= ~(DK_INDEX|DK_INDEX2);
              }
          }
 index:
@@ -1300,6 +1301,13 @@ sense_end:
                  unit, data->rec, data->klen, data->dlen, data->state, data->dlen,
                  8 + data->klen + data->dlen);
               }
+              if (data->ovfl == 0 && state == DK_POS_END) {
+                uptr->CMD |= DK_PARAM;
+                uptr->CMD &= ~DK_OVFLOW;
+                sim_debug(DEBUG_DETAIL, dptr, "RD CKD ov end unit=%d %d k=%d d=%d %02x %04x %04x\n",
+                 unit, data->rec, data->klen, data->dlen, data->state, data->dlen,
+                 8 + data->klen + data->dlen);
+              }
               goto rd;
          }
 
@@ -1318,7 +1326,14 @@ sense_end:
              if (count == 0 && state == DK_POS_DATA && data->rec != 0) {
                 uptr->CMD |= DK_PARAM;
                 uptr->CMD &= ~DK_OVFLOW;
-                sim_debug(DEBUG_DETAIL, dptr, "RD CKD ov unit=%d %d k=%d d=%d %02x %04x %04x\n",
+                sim_debug(DEBUG_DETAIL, dptr, "RD KD ov unit=%d %d k=%d d=%d %02x %04x %04x\n",
+                 unit, data->rec, data->klen, data->dlen, data->state, data->dlen,
+                 8 + data->klen + data->dlen);
+              }
+              if (data->ovfl == 0 && state == DK_POS_END) {
+                uptr->CMD |= DK_PARAM;
+                uptr->CMD &= ~DK_OVFLOW;
+                sim_debug(DEBUG_DETAIL, dptr, "RD CKD ov end unit=%d %d k=%d d=%d %02x %04x %04x\n",
                  unit, data->rec, data->klen, data->dlen, data->state, data->dlen,
                  8 + data->klen + data->dlen);
               }
@@ -1343,7 +1358,14 @@ sense_end:
              if (count == 0 && state == DK_POS_DATA && data->rec != 0) {
                 uptr->CMD |= DK_PARAM;
                 uptr->CMD &= ~DK_OVFLOW;
-                sim_debug(DEBUG_DETAIL, dptr, "RD CKD ov unit=%d %d k=%d d=%d %02x %04x %04x\n",
+                sim_debug(DEBUG_DETAIL, dptr, "RD D ov unit=%d %d k=%d d=%d %02x %04x %04x\n",
+                 unit, data->rec, data->klen, data->dlen, data->state, data->dlen,
+                 8 + data->klen + data->dlen);
+              }
+              if (data->ovfl == 0 && state == DK_POS_END) {
+                uptr->CMD |= DK_PARAM;
+                uptr->CMD &= ~DK_OVFLOW;
+                sim_debug(DEBUG_DETAIL, dptr, "RD CKD ov end unit=%d %d k=%d d=%d %02x %04x %04x\n",
                  unit, data->rec, data->klen, data->dlen, data->state, data->dlen,
                  8 + data->klen + data->dlen);
               }
@@ -1384,7 +1406,7 @@ rd:
                  sim_debug(DEBUG_DETAIL, dptr,
                      "RD next unit=%d %02x %02x %02x %02x %02x %02x %02x %02x\n",
                      unit, da[0], da[1], da[2], da[3], da[4], da[5], da[6], da[7]);
-                 if (data->ovfl == 0 || cmd == DK_RD_CKD) {
+                 if (data->ovfl == 0) {
                      uptr->CMD &= ~(0xff|DK_PARAM|DK_OVFLOW);
                      chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                  } else {
@@ -1673,17 +1695,19 @@ wrckd:
              }
              sim_debug(DEBUG_DATA, dptr, "Char %02x, %02x %d %d\n", ch, state,
                    count, data->tpos);
+             if (state == DK_POS_CNT && count == 0 && cmd == DK_WR_SCKD)
+                   ch |= 0x80; /* Set overflow flag */
              *da = ch;
              uptr->CMD |= DK_CYL_DIRTY;
              if (state == DK_POS_CNT && count == 7) {
-                 if (cmd == DK_WR_SCKD)
-                     rec[0] |= 0x80; /* Set overflow flag */
+//                 if (cmd == DK_WR_SCKD)
+ //                    rec[0] |= 0x80; /* Set overflow flag */
                  data->klen = rec[5];
                  data->dlen = (rec[6] << 8) | rec[7];
                  sim_debug(DEBUG_DETAIL, dptr,
-                     "WCKD count unit=%d %d k=%d d=%d %02x %04x\n",
+                     "WCKD count unit=%d %d k=%d d=%d %02x %04x - %02x\n",
                      unit, data->rec, data->klen, data->dlen, data->state,
-                     8 + data->klen + data->dlen);
+                     8 + data->klen + data->dlen, rec[0]);
                  if (data->klen == 0)
                      data->state = DK_POS_DATA;
                  else

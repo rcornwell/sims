@@ -563,7 +563,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
      entry = M[addr >> 2];
      key[addr >> 11] |= 0x4;
      if ((cpu_unit[0].flags & FEAT_370) == 0) {
-         addr = (entry >> 24) + 1;
+         addr = (entry >> 24);
          /* Check if entry valid and in correct length */
          if (entry & PTE_VALID || page > addr) {
              cregs[2] = va;
@@ -1076,12 +1076,12 @@ sim_instr(void)
         /* 360/67 only supports 4k pages */
         page_shift = 12;
         page_mask = 0xfff;
-        seg_shift = 20;
-        seg_mask = AMASK >> 20;
         pte_avail = 0x8;
         pte_mbz = 0x7;
         pte_shift = 4;
         pte_len_shift = 0;
+        seg_shift = 20;
+        seg_mask = AMASK >> 20;
         seg_addr = cregs[0] & AMASK;
         seg_len = (((cregs[0] >> 24) & 0xff) + 1) << 4;
     } else {
@@ -1556,7 +1556,12 @@ opr:
                             } else
                                 dat_en = (src1 & 04) != 0;
                             irq_en = (src1 & 02) != 0;
-                            sysmsk = irq_en ? (cregs[6] >> 16) : 0;
+                            if (irq_en) {
+                                sysmsk = (cregs[4] >> 16) & 0xfe00;
+                                sysmsk |= (cregs[4] >> 15) & 0x01ff;
+                            } else {
+                                sysmsk = 0;
+                            }
                         }
                     } else {
                         sysmsk = (src1 & 0xfc) << 8;
@@ -2282,17 +2287,25 @@ save_dbl:
                                       cregs[reg] |= 0x1000000;
                                   if (dest & 0x00fe0000)
                                       cregs[reg] |= 0x0010000;
-                                  if (ec_mode && irq_en) {
-                                      sysmsk = (dest >> 16) & 0xfe00;
-                                      sysmsk |= (dest >> 15) & 0x01ff;
+                                  if (ec_mode) {
+                                      if (irq_en) {
+                                          sysmsk = (dest >> 16) & 0xfe00;
+                                          sysmsk |= (dest >> 15) & 0x01ff;
+                                      } else {
+                                          sysmsk = 0;
+                                      }
                                       irq_pend = 1;
                                   }
                                   break;
                         case 0x6:     /* Masks */
                                   ec_mode = (dest & 0x00800000) != 0;
-                                  if (ec_mode && irq_en) {
-                                      sysmsk = (cregs[6] >> 16) & 0xfe00;
-                                      sysmsk |= (cregs[6] >> 15) & 0x01ff;
+                                  if (ec_mode) {
+                                      if (irq_en) {
+                                          sysmsk = (cregs[4] >> 16) & 0xfe00;
+                                          sysmsk |= (cregs[4] >> 15) & 0x01ff;
+                                      } else {
+                                          sysmsk = 0;
+                                      }
                                       irq_pend = 1;
                                   }
                                   cregs[reg] &= 0xf08000ff;
@@ -2371,7 +2384,7 @@ save_dbl:
                             break;
                         }
                     } else {
-                         addr2 = (entry >> 24) + 1;
+                         addr2 = (entry >> 24);
                         /* Check if in correct length */
                          if (page > addr2) {
                             cc = 2;
@@ -5351,23 +5364,28 @@ lpsw:
              if ((cpu_unit[0].flags & FEAT_370) != 0)
                  ec_mode = (src1 & 0x00080000) != 0;
              else if ((cpu_unit[0].flags & FEAT_DAT) != 0)
-                 ec_mode = (cregs[4] & 0x00800000) != 0;
+                 ec_mode = (cregs[6] & 0x00800000) != 0;
              else
                  ec_mode = 0;
              ext_en = (src1 & 0x01000000) != 0;
              if (ec_mode) {
                  irq_en = (src1 & 0x02000000) != 0;
+                 dat_en = (src1 >> 26) & 1;
+                 cc = (src1 >> 12) & 3;
+                 pmsk = (src1 >> 8) & 0xf;
                  if ((cpu_unit[0].flags & FEAT_370) != 0) {
                      per_en = (src1 & 0x40000000) != 0;
                      sysmsk = irq_en ? (cregs[2] >> 16) : 0;
                      if (irqaddr == 4)
                         (void)WriteHalf(0xBA, irq);
                  } else {
-                     sysmsk = irq_en ? (cregs[6] >> 16) : 0;
+                     if (irq_en) {
+                         sysmsk = (cregs[4] >> 16) & 0xfe00;
+                         sysmsk |= (cregs[4] >> 15) & 0x01ff;
+                     } else {
+                         sysmsk = 0;
+                     }
                  }
-                 dat_en = (src1 >> 26) & 1;
-                 cc = (src1 >> 12) & 3;
-                 pmsk = (src1 >> 8) & 0xf;
              } else {
                  sysmsk = (src1 >> 16) & 0xfc00;
                  if ((src1 & 0x2000000) != 0) {

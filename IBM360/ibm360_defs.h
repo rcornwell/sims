@@ -91,8 +91,8 @@ typedef struct dib {
 #define DEV_V_UADDR       (DEV_V_UF + 10)        /* Device address in Unit */
 #define DEV_UADDR         (1 << DEV_V_UADDR)
 
-#define UNIT_V_ADDR       20
-#define UNIT_ADDR_MASK    (0x7ff << UNIT_V_ADDR)
+#define UNIT_V_ADDR       19
+#define UNIT_ADDR_MASK    (0xfff << UNIT_V_ADDR)
 #define GET_UADDR(x)      ((UNIT_ADDR_MASK & x) >> UNIT_V_ADDR)
 #define UNIT_ADDR(x)      ((x) << UNIT_V_ADDR)
 

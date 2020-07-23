@@ -159,6 +159,14 @@ find_subchan(uint16 device) {
     case 5:
     case 6:
     case 7:
+    case 8:
+    case 9:
+    case 10:
+    case 11:
+    case 12:
+    case 13:
+    case 14:
+    case 15:
            return SEL_BASE + chan;
     }
     return -1;
@@ -1188,7 +1196,7 @@ set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     if (dptr->flags & DEV_UADDR) {
         dev_unit[devaddr] = NULL;
     } else {
-        devaddr &= dibp->mask | 0x700;
+        devaddr &= dibp->mask | 0xf00;
         for (i = 0; i < dibp->numunits; i++)
              dev_unit[devaddr + i] = NULL;
     }
@@ -1198,7 +1206,7 @@ set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
         if (dev_unit[newdev] != NULL)
             r = SCPE_ARG;
     } else {
-        newdev &= dibp->mask | 0x700;
+        newdev &= dibp->mask | 0xf00;
         for (i = 0; i < dibp->numunits; i++) {
              if (dev_unit[newdev + i] != NULL)
                 r = SCPE_ARG;
@@ -1212,7 +1220,7 @@ set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     /* Update device entry */
     if (dptr->flags & DEV_UADDR) {
         dev_unit[devaddr] = dibp;
-        uptr->u3 &= ~UNIT_ADDR(0x7ff);
+        uptr->u3 &= ~UNIT_ADDR(0xfff);
         uptr->u3 |= UNIT_ADDR(devaddr);
         fprintf(stderr, "Set dev %s %x\n\r", dptr->name, GET_UADDR(uptr->u3));
     } else {
@@ -1220,7 +1228,7 @@ set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
         for (i = 0; i < dibp->numunits; i++)  {
              dev_unit[devaddr + i] = dibp;
              uptr = &((dibp->units)[i]);
-             uptr->u3 &= ~UNIT_ADDR(0x7ff);
+             uptr->u3 &= ~UNIT_ADDR(0xfff);
              uptr->u3 |= UNIT_ADDR(devaddr + i);
         }
     }
