@@ -600,7 +600,7 @@ t_stat disk_srv(UNIT *uptr)
                         | (buf[i-1]<<8) | (buf[i]);
             }
         }
-        /* now call set_inch() function to write and test inch bybber addresses */
+        /* now call set_inch() function to write and test inch buffer addresses */
         i = set_inch(uptr, mema);               /* new address */
 #ifdef NOTYET
         if ((i == SCPE_MEM) || (i == SCPE_ARG)) {   /* any error */

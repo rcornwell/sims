@@ -33,14 +33,14 @@
 /* memory access macros */
 /* The RMW and WMW macros are used to read/write memory words */
 /* RMW(addr) or WMW(addr, data) where addr is a byte alligned word address */
-#define RMB(a) ((M[(a)>>2]>>(8*(7-(a&3))))&0xff)    /* read memory addressed byte */
+#define RMB(a) ((M[(a)>>2]>>(8*(3-(a&3))))&0xff)    /* read memory addressed byte */
 #define RMH(a) ((a)&2?(M[(a)>>2]&RMASK):(M[(a)>>2]>>16)&RMASK)  /* read memory addressed halfword */
 #define RMW(a) (M[((a)&MASK24)>>2])     /* read memory addressed word */
 #define WMW(a,d) (M[((a)&MASK24)>>2]=d) /* write memory addressed word */
 /* write halfword to memory address */
 #define WMH(a,d) ((a)&2?(M[(a)>>2]=(M[(a)>>2]&LMASK)|((d)&RMASK)):(M[(a)>>2]=(M[(a)>>2]&RMASK)|((d)<<16)))
 /* write byte to memory */
-#define WMB(a,d) (M[(a)>>2]=(((M[(a)>>2])&(~(0xff<<(8*(7-(a&3))))))|((d&0xff)<<(8*(7-(a&3))))))
+#define WMB(a,d) (M[(a)>>2]=(((M[(a)>>2])&(~(0xff<<(8*(3-(a&3))))))|((d&0xff)<<(8*(3-(a&3))))))
 
 #define BLKSIZE 768                     /* MPX file sector size */
 u_int32_t dir[32];                      /* directory name */
@@ -258,7 +258,7 @@ char *argv[];
                         break;
                     case 'A':
                     case 'a':
-                        if (option & DOBOOT) { /* error if boor specified with append command */
+                        if (option & DOBOOT) { /* error if boot specified with append command */
                             fprintf(stderr, "Error: -a cannot be specified with -b option\n");
                             goto error1;    /* we are done here */
                         }
@@ -424,7 +424,7 @@ getout:
     if (option & DOBOOT) {
         int32_t w2, n1, n2, nw, hc, blks;
         fnp = bootp;                                /* get file name pointer */
-#ifdef USE_FILENAME
+#ifndef USE_FILENAME
         memset((char *)data, 0, 0x800);              /* zero data storage */
         if ((fp = fopen(bootp, "r")) == NULL) {
             fprintf(stderr, "error: can't open boot file %s\n", bootp);
@@ -442,7 +442,8 @@ printf("bootfile %s is %x (%d) bytes\n", bootp, word, word);
         w2 = fread((char *)data, 1, word, fp);      /* read the boot file */
 #else
         /* go cut the boot code from the volmgr load module */
-        w2 = readboot("volmgr", (char *)data, 0x1c9a0, 0x1d144);
+//      w2 = readboot("volmgr", (char *)data, 0x1c9a0, 0x1d144);
+        w2 = readboot("volmgr", (char *)data, 0x1c9a0, 0x1d140);
 #endif
         /* we have data to write */
         hc = (w2 + 1) & ~1;                         /* make byte count even */

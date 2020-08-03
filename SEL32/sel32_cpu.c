@@ -2101,6 +2101,14 @@ wait_loop:
                 goto skipi;                     /* skip int test */
             }
         }
+            /* see if in wait instruction */
+            if (wait4int) {                     /* keep waiting */
+                /* tell simh we will be waiting */
+//              sim_idle(TMR_RTC, 1);           /* wait for clock tick */
+                sim_idle(0, 1);                 /* wait for clock tick */
+/*722*/         irq_pend = 1;                   /* start scanning interrupts again */
+                goto wait_loop;                 /* continue waiting */
+            }
 
         /* Check for external interrupt here */
         /* see if we have an attention request from console */
@@ -5389,6 +5397,14 @@ doovr2:
                     PSD2 = (M[(t>>2)+3] & ~0x3ff8) | bc;    /* get new PSD 2 w/old cpix */
                     M[(t>>2)+4] = IR&0xFFF;         /* store call number */
 
+#ifdef DO_DYNAMIC_DEBUG
+                    if ((temp2 == 0) && ((IR&0xFFF) == 0xa11))
+                    /* start debugging */
+                    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_TRAP | DEBUG_EXP | DEBUG_IRQ);
+#endif
+sim_debug(DEBUG_IRQ, &cpu_dev,
+"SVC #%02x call #%03x PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
+temp2, IR&0xFFF, PSD1, PSD2, CPUSTATUS);
                     /* set the mode bits and CCs from the new PSD */
                     CC = PSD1 & 0x78000000;         /* extract bits 1-4 from PSD1 */
                     modes = PSD1 & 0x87000000;      /* extract bits 0, 5, 6, 7 from PSD 1 */
@@ -5978,6 +5994,7 @@ doovr2:
                             TRAPSTATUS |= BIT18;        /* set bit 18 of trap status */
                         goto newpsd;                    /* memory read error or map fault */
                     }
+//bad   /* 723 */   temp &= ~0x02000000;                /* reset base reg bit 6 */
                     bc = CPUSTATUS;                     /* save the CPU STATUS */
                     TPSD[0] = PSD1;                     /* save the PSD for the instruction */
                     TPSD[1] = PSD2;
