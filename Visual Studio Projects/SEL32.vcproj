@@ -221,6 +221,10 @@
 				>  
 			</File>
 			<File
+				RelativePath="..\SEL32\sel32_ec.c"
+				>  
+			</File>
+			<File
 				RelativePath="..\SEL32\sel32_fltpt.c"
 				>  
 			</File>

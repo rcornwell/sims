@@ -121,6 +121,10 @@ endif
 ifneq (,$(or $(findstring pdp10-ka,${MAKECMDGOALS}),$(findstring pdp10-ki,${MAKECMDGOALS},$(findstring pdp10-kl,${MAKECMDGOALS}))))
   NETWORK_USEFUL = true
 endif
+# building the SEL32 networking can be ussed
+ifneq (,$(findstring sel32,${MAKECMDGOALS}))
+  NETWORK_USEFUL = true
+endif
 # building the PDP-7 needs video support
 ifneq (,$(findstring pdp7,${MAKECMDGOALS}))
   VIDEO_USEFUL = true
@@ -1973,8 +1977,9 @@ SEL32 = ${SEL32D}/sel32_cpu.c ${SEL32D}/sel32_sys.c ${SEL32D}/sel32_chan.c \
 	${SEL32D}/sel32_iop.c ${SEL32D}/sel32_com.c ${SEL32D}/sel32_con.c \
 	${SEL32D}/sel32_clk.c ${SEL32D}/sel32_mt.c ${SEL32D}/sel32_lpr.c \
 	${SEL32D}/sel32_scfi.c ${SEL32D}/sel32_fltpt.c ${SEL32D}/sel32_disk.c \
-	${SEL32D}/sel32_hsdp.c ${SEL32D}/sel32_mfp.c ${SEL32D}/sel32_scsi.c
-SEL32_OPT = -I $(SEL32D) -DSEL32 
+	${SEL32D}/sel32_hsdp.c ${SEL32D}/sel32_mfp.c ${SEL32D}/sel32_scsi.c \
+        ${SEL32D}/sel32_ec.c
+SEL32_OPT = -I $(SEL32D) -DSEL32  ${NETWORK_OPT}
 #SEL32_OPT = -I $(SEL32D) -DUSE_INT64 -DSEL32 
 
 ICL1900D = ${SIMHD}/ICL1900

@@ -600,7 +600,6 @@ loop:
             chp->chan_caw, chan, chp->chan_status, chp->ccw_count);
 
         /* see if bad status */
-//      if (chp->chan_status & (STATUS_ATTN|STATUS_CHECK|STATUS_EXPT)) {
         if (chp->chan_status & (STATUS_ATTN|STATUS_ERROR)) {
             chp->chan_status |= STATUS_CEND;        /* channel end status */
             chp->ccw_flags = 0;                     /* no flags */
@@ -1070,7 +1069,6 @@ nothere:
     sim_debug(DEBUG_EXP, &cpu_dev,
         "checkxio chsa %04x flags UNIT_ATTABLE %1x UNIT_ATT %1x\n",
         chsa, (uptr->flags & UNIT_ATTABLE)?1:0, (uptr->flags & UNIT_ATT)?1:0);
-#ifndef TEST_ETHERNET
     /* check for the device being defined and attached in simh */
     if ((uptr->flags & UNIT_ATTABLE) && ((uptr->flags & UNIT_ATT) == 0)) {
         sim_debug(DEBUG_EXP, &cpu_dev,
@@ -1078,7 +1076,6 @@ nothere:
         *status = CC3BIT;                           /* not attached, so error CC3 */
         return SCPE_OK;                             /* not found, CC3 */
     }
-#endif
 
     inta = find_int_lev(chsa&0x7f00);               /* Interrupt Level for channel */
     chan_icb = find_int_icb(chsa&0x7f00);           /* Interrupt level context block address */
@@ -1151,7 +1148,8 @@ t_stat startxio(uint16 chsa, uint32 *status) {
     }
 
     uptr = chp->unitptr;                            /* get the unit ptr */
-    if ((uptr->flags & UNIT_ATTABLE) && ((uptr->flags & UNIT_ATT) == 0)) {    /* is unit attached? */
+    if ((uptr->flags & UNIT_ATTABLE) && ((uptr->flags & UNIT_ATT) == 0) &&
+            (uptr->flags & UNIT_SUBCHAN) == 0) {    /* is unit attached? */
         sim_debug(DEBUG_EXP, &cpu_dev,
             "startxio chsa %04x device not present, CC3 returned flags %08x\n", chsa, uptr->flags);
         *status = CC3BIT;                           /* not attached, so error CC3 */
@@ -2086,7 +2084,7 @@ t_stat chan_set_devs() {
             chp->ccw_cmd = 0;                       /* read command */
             chp->chan_inch_addr = 0;                /* clear address of stat dw in memory */
 
-            if ((uptr->flags & UNIT_DIS) == 0) {    /* is unit marked disabled? */
+            if ((uptr->flags & UNIT_DIS) == 0 || (uptr->flags & UNIT_SUBCHAN) != 0) {    /* is unit marked disabled? */
                 /* see if this is unit zero */
                 if ((chsa & 0xff) == 0) {
                     /* we have channel mux or dev 0 of units */
@@ -2173,13 +2171,11 @@ t_stat set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc) {
         return SCPE_IERR;                           /* no, arg error */
     dptr = get_dev(uptr);                           /* find the device from unit pointer */
     if (dptr == NULL) {                             /* device not found, so error */
-        fprintf(stderr, "Set dev no DEVICE ptr %s\r\n", cptr);
         return SCPE_IERR;                           /* error */
     }
 
     dibp = (DIB *)dptr->ctxt;                       /* get dib pointer from device struct */
     if (dibp == NULL) {                             /* we need a DIB */
-        fprintf(stderr, "Set dev no DIB ptr %s\r\n", GET_UADDR(tuptr->u3), chsa);
         return SCPE_IERR;                           /* no DIB, so error */
     }
 

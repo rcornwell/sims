@@ -111,6 +111,9 @@ DEVICE *sim_devices[] = {
         &sbb_dev,
 #endif
 #endif
+#ifdef NUM_DEVS_ETHER
+        &ec_dev,
+#endif
 #ifdef NUM_DEVS_COM
         &coml_dev,
         &com_dev,
