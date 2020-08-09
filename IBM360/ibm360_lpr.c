@@ -384,7 +384,7 @@ lpr_srv(UNIT *uptr) {
 
     /* Check if valid form motion */
     if ((cmd == 1 || cmd == 3) && 
-        (l > 3 && l < 0x10) || l > 0x1d) {
+        ((l > 3 && l < 0x10) || l > 0x1d)) {
         uptr->SNS = SNS_CMDREJ;
         uptr->CMD &= ~(LPR_CMDMSK);
         sim_debug(DEBUG_DETAIL, &lpr_dev, "%d Invalid skip %x %d", u, l, l);

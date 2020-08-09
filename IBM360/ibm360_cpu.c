@@ -1282,7 +1282,7 @@ wait_loop:
 
 opr:
         if (sim_deb && (cpu_dev.dctrl & DEBUG_INST)) {
-           sim_debug(DEBUG_INST, &cpu_dev, "%d INST=%04x", ilc, ops[0]);
+           sim_debug(DEBUG_INST, &cpu_dev, "%d %d INST=%04x", ilc, cc, ops[0]);
            if (ops[0] & 0xc000) {
                sim_debug(DEBUG_INST, &cpu_dev, "%04x",  ops[1]);
                if ((ops[0] & 0xc000) == 0xc000)
@@ -1724,7 +1724,7 @@ set_cc3:
         case OP_CLR:
                 dest = src1;
                 cc = 0;
-                if ((uint32)(src1) > (uint32)(src2))
+                if ((uint32)src1 > (uint32)src2)
                     cc = 2;
                 else if (src1 != src2)
                     cc = 1;
@@ -2483,8 +2483,12 @@ save_dbl:
                     if (ReadByte(addr2, &src2))
                        goto supress;
                     if (src1 != src2) {
-                       dest = src1 - src2;
-                       cc = (dest & MSIGN) ? 1 : (dest == 0) ? 0 : 2;
+                       if ((uint32)src1 > (uint32)src2)
+                          cc = 2;
+                       else
+                          cc = 1;
+//                       dest = src1 + NEG(src2);
+ //                      cc = (dest & MSIGN) ? 1 : (dest == 0) ? 0 : 2;
                        break;
                     }
                     addr1++;
