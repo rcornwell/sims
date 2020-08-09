@@ -274,7 +274,6 @@ void   dec_srp(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2);
 void   dec_add(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2);
 void   dec_mul(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2);
 void   dec_div(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2);
-//void   check_timer_irq();
 void   check_tod_irq();
 
 t_bool build_dev_tab (void);
@@ -375,7 +374,7 @@ DEVICE cpu_dev = {
     1, 16, 24, 1, 16, 8,
     &cpu_ex, &cpu_dep, &cpu_reset, NULL, NULL, NULL,
     NULL, DEV_DEBUG, 0, dev_debug,
-//    NULL, NULL, &cpu_help, NULL, NULL, &cpu_description
+    NULL, NULL, &cpu_help, NULL, NULL, &cpu_description
     };
 
 void post_extirq() {
@@ -2487,8 +2486,6 @@ save_dbl:
                           cc = 2;
                        else
                           cc = 1;
-//                       dest = src1 + NEG(src2);
- //                      cc = (dest & MSIGN) ? 1 : (dest == 0) ? 0 : 2;
                        break;
                     }
                     addr1++;
