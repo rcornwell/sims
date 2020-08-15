@@ -307,7 +307,7 @@ uint16 ec_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 {
     DEVICE      *dptr = get_dev(uptr);
     uint16      chsa = GET_UADDR(uptr->CMD);
-    CHANP       *chp = find_chanp_ptr(chsa);   /* find the chanp pointer */
+//  CHANP       *chp = find_chanp_ptr(chsa);   /* find the chanp pointer */
 
     sim_debug(DEBUG_CMD, dptr,
         "ec_startcmd chsa %04x unit %d cmd %02x CMD %08x\n",
@@ -349,8 +349,7 @@ t_stat ec_srv(UNIT *uptr)
 {
     uint16          chsa = GET_UADDR(uptr->CMD);
     DEVICE          *dptr = get_dev(uptr);
-    DIB             *dibp = (DIB *)dptr->ctxt;          /* get DIB address */
-    CHANP           *chp = (CHANP *)dibp->chan_prg;     /* get pointer to channel program */
+    CHANP           *chp = find_chanp_ptr(chsa);        /* get channel prog pointer */
     int             cmd = uptr->CMD & EC_CMDMSK;
     uint32          mema;
     int             i;
@@ -631,17 +630,16 @@ runt:
     return SCPE_OK;
 }
 
-/* initialize the disk */
+/* initialize the ethernet */
 void ec_ini(UNIT *uptr, t_bool f)
 {
     DEVICE  *dptr = get_dev(uptr);
 
-    /* start out at sector 0 */
-    uptr->CMD &= LMASK;                     /* remove old status bits & cmd */
-    uptr->SNS = 0;                            /* save mode value */
+    uptr->CMD &= LMASK;                         /* remove old status bits & cmd */
+    uptr->SNS = 0;                              /* save mode value */
 
-    sim_debug(DEBUG_EXP, &dda_dev, "EC init device %s on unit EC%.1x cap %x %d\n",
-        dptr->name, GET_UADDR(uptr->CMD), uptr->capac, uptr->capac);
+    sim_debug(DEBUG_EXP, &dda_dev,
+        "EC init device %s on unit EC%04x\n", dptr->name, GET_UADDR(uptr->CMD));
 }
 
 static char *
@@ -818,8 +816,6 @@ void ec_packet_debug(struct ec_device *ec, const char *action,
     }
 }
 
-
-
 t_stat ec_show_mode (FILE* st, UNIT* uptr, int32 val, CONST void* desc)
 {
     fprintf(st, "MODE=%d", GET_MODE(uptr->flags));

@@ -313,20 +313,20 @@ UNIT            dda_unit[] = {
 };
 
 DIB             dda_dib = {
-    disk_preio,                                 /* Pre start I/O */
-    disk_startcmd,                              /* Start a command */
-    NULL,                                       /* Stop I/O */
-    NULL,                                       /* Test I/O */
-    NULL,                                       /* Post I/O */
-    disk_ini,                                   /* init function */
-    dda_unit,                                   /* Pointer to units structure */
-    dda_chp,                                    /* Pointer to chan_prg structure */
-    NUM_UNITS_DISK,                             /* number of units defined */
-    0x07,                                       /* 8 devices - device mask */
-    0x0800,                                     /* parent channel address */
-    0,                                          /* fifo input index */
-    0,                                          /* fifo output index */
-    {0},                                        /* interrupt status fifo for channel */
+    disk_preio,     /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
+    disk_startcmd,  /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
+    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
+    NULL,           /* uint16 (*post_io)(UNIT *uptr) */         /* Post I/O */
+    disk_ini,       /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
+    dda_unit,       /* UNIT* units */                           /* Pointer to units structure */
+    dda_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
+    NUM_UNITS_DISK, /* uint8 numunits */                        /* number of units defined */
+    0x07,           /* uint8 mask */                            /* 8 devices - device mask */
+    0x0800,         /* uint16 chan_addr */                      /* parent channel address */
+    0,              /* uint32 chan_fifo_in */                   /* fifo input index */
+    0,              /* uint32 chan_fifo_out */                  /* fifo output index */
+    {0}             /* uint32 chan_fifo[FIFO_SIZE] */           /* interrupt status fifo for channel */
 };
 
 DEVICE          dda_dev = {
@@ -356,20 +356,20 @@ UNIT            ddb_unit[] = {
 };
 
 DIB             ddb_dib = {
-    disk_preio,                                 /* Pre Start I/O */
-    disk_startcmd,                              /* Start a command SIO */
-    NULL,                                       /* Stop I/O HIO */
-    NULL,                                       /* Test I/O TIO */
-    NULL,                                       /* Post I/O */
-    disk_ini,                                   /* init function */
-    ddb_unit,                                   /* Pointer to units structure */
-    ddb_chp,                                    /* Pointer to chan_prg structure */
-    NUM_UNITS_DISK,                             /* number of units defined */
-    0x07,                                       /* 8 devices - device mask */
-    0x0C00,                                     /* parent channel address */
-    0,                                          /* fifo input index */
-    0,                                          /* fifo output index */
-    {0},                                        /* interrupt status fifo for channel */
+    disk_preio,     /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
+    disk_startcmd,  /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
+    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
+    NULL,           /* uint16 (*post_io)(UNIT *uptr) */         /* Post I/O */
+    disk_ini,       /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
+    ddb_unit,       /* UNIT* units */                           /* Pointer to units structure */
+    ddb_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
+    NUM_UNITS_DISK, /* uint8 numunits */                        /* number of units defined */
+    0x07,           /* uint8 mask */                            /* 8 devices - device mask */
+    0x0C00,         /* uint16 chan_addr */                      /* parent channel address */
+    0,              /* uint32 chan_fifo_in */                   /* fifo input index */
+    0,              /* uint32 chan_fifo_out */                  /* fifo output index */
+    {0}             /* uint32 chan_fifo[FIFO_SIZE] */           /* interrupt status fifo for channel */
 };
 
 DEVICE          ddb_dev = {
@@ -445,7 +445,8 @@ uint16 disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
             uptr->u4, chsa, chp->ccw_addr, chp->ccw_count);
 
         uptr->CMDu3 |= DSK_INCH2;               /* use 0xF0 for inch, just need int */
-        sim_activate(uptr, 20);                 /* start things off */
+//J     sim_activate(uptr, 20);                 /* start things off */
+        sim_activate(uptr, 50);                 /* start things off */
         return 0;
         break;
 
@@ -454,57 +455,29 @@ uint16 disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     case DSK_WD:                                /* Write command 0x01 */
     case DSK_RD:                                /* Read command 0x02 */
     case DSK_LMR:                               /* read mode register 0x15 */
-
+    case DSK_NOP:                               /* NOP 0x03 */
+    case DSK_SNS:                               /* Sense 0x04 */
+    case DSK_WSL:                               /* WSL 0x31 */
+    case DSK_RSL:                               /* RSL 0x32 */
+    case DSK_WTL:                               /* WTL 0x51 */
+    case DSK_RTL:                               /* RTL 0x52 */
         uptr->CMDu3 |= cmd;                     /* save cmd */
         sim_debug(DEBUG_CMD, dptr,
             "disk_startcmd starting disk seek r/w cmd %02x chsa %04x\n",
             cmd, chsa);
-        sim_activate(uptr, 20);                 /* start things off */
-        return 0;
-        break;
-
-    case DSK_NOP:                               /* NOP 0x03 */
-        uptr->CMDu3 |= cmd;                     /* save cmd */
-        sim_activate(uptr, 20);                 /* start things off */
-        return 0;
-        break;
-
-    case DSK_SNS:                               /* Sense 0x04 */
-        uptr->CMDu3 |= cmd;                     /* save cmd */
-        sim_activate(uptr, 20);                 /* start things off */
-        break;
-
-    case DSK_WSL:                               /* WSL 0x31 */
-        uptr->CMDu3 |= cmd;                     /* save cmd */
-        sim_activate(uptr, 20);                 /* start things off */
-        return 0;
-        break;
-
-    case DSK_RSL:                               /* RSL 0x32 */
-        uptr->CMDu3 |= cmd;                     /* save cmd */
-        sim_activate(uptr, 20);                 /* start things off */
-        return 0;
-        break;
-
-    case DSK_WTL:                               /* WTL 0x51 */
-        uptr->CMDu3 |= cmd;                     /* save cmd */
-        sim_activate(uptr, 20);                 /* start things off */
-        return 0;
-        break;
-
-    case DSK_RTL:                               /* RTL 0x52 */
-        uptr->CMDu3 |= cmd;                     /* save cmd */
-        sim_activate(uptr, 20);                 /* start things off */
+//J     sim_activate(uptr, 20);                 /* start things off */
+        sim_activate(uptr, 30);                 /* start things off */
         return 0;
         break;
     }
 
     sim_debug(DEBUG_CMD, dptr,
-        "disk_startcmd done with disk_startcmd %02x chsa %04x SNS %08x\n",
+        "disk_startcmd done with bad disk cmd %02x chsa %04x SNS %08x\n",
         cmd, chsa, uptr->SNS);
-    if (uptr->SNS & 0xff)                      /* any other cmd is error */
+    if (uptr->SNS & 0xff)                       /* any other cmd is error */
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
-    sim_activate(uptr, 20);                     /* start things off */
+//J sim_activate(uptr, 20);                     /* start things off */
+    sim_activate(uptr, 50);                     /* start things off */
     return SNS_CHNEND|SNS_DEVEND;
 }
 
@@ -513,8 +486,7 @@ t_stat disk_srv(UNIT *uptr)
 {
     uint16          chsa = GET_UADDR(uptr->CMDu3);
     DEVICE          *dptr = get_dev(uptr);
-    DIB             *dibp = (DIB *)dptr->ctxt;          /* get DIB address */
-    CHANP           *chp = (CHANP *)dibp->chan_prg;     /* get pointer to channel program */
+    CHANP           *chp = find_chanp_ptr(chsa);    /* get channel prog pointer */
     int             cmd = uptr->CMDu3 & DSK_CMDMSK;
     int             type = GET_TYPE(uptr->flags);
     uint32          trk=0, cyl=0, sec=0;
@@ -785,7 +757,8 @@ t_stat disk_srv(UNIT *uptr)
                 sim_debug(DEBUG_CMD, dptr, "disk_srv seek over on cylinder unit=%02x %04x %04x\n",
                     unit, uptr->STAR >> 16, uptr->CHS >> 16);
                 uptr->CHS = uptr->STAR;         /* we are there */
-                sim_activate(uptr, 10);
+//J             sim_activate(uptr, 10);
+                sim_activate(uptr, 15);
                 break;
             }
         }
@@ -886,6 +859,7 @@ t_stat disk_srv(UNIT *uptr)
             sim_debug(DEBUG_EXP, dptr,
                 "disk_srv seeking unit=%02x to cyl %04x trk %02x sec %02x\n",
                 unit, cyl, trk, buf[3]);
+//J         sim_activate(uptr, 20);             /* start us off */
             sim_activate(uptr, 20);             /* start us off */
         } else {
             /* we are on cylinder/track/sector, so go on */
@@ -1018,7 +992,8 @@ t_stat disk_srv(UNIT *uptr)
             sim_debug(DEBUG_DATA, dptr,
                 "DISK sector read complete, %x bytes to go from diskfile /%04x/%02x/%02x\n",
                 chp->ccw_count, STAR2CYL(uptr->CHS), ((uptr->CHS) >> 8)&0xff, (uptr->CHS&0xff));
-            sim_activate(uptr, 10);             /* wait to read next sector */
+//J         sim_activate(uptr, 10);             /* wait to read next sector */
+            sim_activate(uptr, 15);             /* wait to read next sector */
             break;
         }
         break;
@@ -1092,7 +1067,8 @@ t_stat disk_srv(UNIT *uptr)
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
             }
-            sim_activate(uptr, 10);             /* keep writing */
+//J         sim_activate(uptr, 10);             /* keep writing */
+            sim_activate(uptr, 15);             /* keep writing */
             break;
          }
          break;
@@ -1326,11 +1302,11 @@ void disk_ini(UNIT *uptr, t_bool f)
     uptr->CHS = 0;                              /* set CHS to cyl/hd/sec = 0 */
     uptr->STAR = 0;                             /* set STAR to cyl/hd/sec = 0 */
     uptr->CMDu3 &= LMASK;                         /* remove old status bits & cmd */
-    uptr->SNS = ((uptr->SNS & MASK24) | (disk_type[i].type << 24));  /* save mode value */
+//  uptr->SNS = ((uptr->SNS & MASK24) | (disk_type[i].type << 24));  /* save mode value */
     /* total sectors on disk */
     uptr->capac = CAP(i);                       /* size in sectors */
 
-    sim_debug(DEBUG_EXP, &dda_dev, "DMA init device %s on unit DMA%.1x cap %x %d\n",
+    sim_debug(DEBUG_EXP, &dda_dev, "DMA init device %s on unit DMA%04x cap %x %d\n",
         dptr->name, GET_UADDR(uptr->CMDu3), uptr->capac, uptr->capac);
 }
 
@@ -1566,6 +1542,7 @@ int disk_format(UNIT *uptr) {
 t_stat disk_attach(UNIT *uptr, CONST char *file)
 {
     uint16          chsa = GET_UADDR(uptr->CMDu3);
+    CHANP           *chp = find_chanp_ptr(chsa);    /* get channel prog pointer */
     int             type = GET_TYPE(uptr->flags);
     DEVICE          *dptr = get_dev(uptr);
     DIB             *dibp = 0;
@@ -1633,7 +1610,8 @@ fmt:
     /* check for valid configured disk */
     /* must have valid DIB and Channel Program pointer */
     dibp = (DIB *)dptr->ctxt;                       /* get the DIB pointer */
-    if ((dib_unit[chsa] == NULL) || (dibp == NULL) || (dibp->chan_prg == NULL)) {
+//??if ((dib_unit[chsa] == NULL) || (dibp == NULL) || (dibp->chan_prg == NULL)) {
+    if ((dib_unit[chsa] == NULL) || (dibp == NULL) || (chp == NULL)) {
         sim_debug(DEBUG_CMD, dptr, "ERROR===ERROR\nDISK device %s not configured on system, aborting\n",
             dptr->name);
         printf("ERROR===ERROR\nDISK device %s not configured on system, aborting\n",

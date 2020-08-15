@@ -368,10 +368,10 @@ uint16 scfi_preio(UNIT *uptr, uint16 chan)
 
 uint16 scfi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 {
-    uint16      addr = GET_UADDR(uptr->CMD);
+    uint16      chsa = GET_UADDR(uptr->CMD);
     DEVICE      *dptr = get_dev(uptr);
     int         unit = (uptr - dptr->units);
-    CHANP       *chp = find_chanp_ptr(addr);    /* find the chanp pointer */
+    CHANP       *chp = find_chanp_ptr(chsa);    /* find the chanp pointer */
 
     sim_debug(DEBUG_CMD, dptr,
         "scfi_startcmd unit %02x cmd %04x CMD %08x\n",
@@ -397,7 +397,7 @@ uint16 scfi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     case DSK_INCH:                              /* INCH 0x00 */
         sim_debug(DEBUG_CMD, dptr,
             "scfi_startcmd starting INCH %06x cmd, chsa %04x MemBuf %08x cnt %04x\n",
-            uptr->u4, addr, chp->ccw_addr, chp->ccw_count);
+            uptr->u4, chsa, chp->ccw_addr, chp->ccw_count);
 
         uptr->CMD |= DSK_INCH2;                 /* use 0xf0 for inch, just need int */
         sim_activate(uptr, 20);                 /* start things off */
@@ -409,29 +409,18 @@ uint16 scfi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     case DSK_WD:                                /* Write command 0x01 */
     case DSK_RD:                                /* Read command 0x02 */
     case DSK_LMR:                               /* read mode register */
-
-        uptr->CMD |= cmd;                       /* save cmd */
-        sim_debug(DEBUG_CMD, dptr,
-            "scfi_startcmd starting disk seek r/w cmd %02x addr %04x\n", cmd, addr);
-        sim_activate(uptr, 20);                 /* start things off */
-        return 0;
-        break;
-
     case DSK_NOP:                               /* NOP 0x03 */
-        uptr->CMD |= cmd;                       /* save cmd */
-        sim_activate(uptr, 20);                 /* start things off */
-        return 0;
-        break;
-
     case DSK_SNS:                               /* Sense 0x04 */
+        sim_debug(DEBUG_CMD, dptr,
+            "scfi_startcmd starting disk seek r/w cmd %02x chsa %04x\n", cmd, chsa);
         uptr->CMD |= cmd;                       /* save cmd */
         sim_activate(uptr, 20);                 /* start things off */
         return 0;
         break;
     }
     sim_debug(DEBUG_CMD, dptr,
-        "scfi_startcmd done with scfi_startcmd %02x addr %04x SNS %08x\n",
-        cmd, addr, uptr->SNS);
+        "scfi_startcmd done with scfi_startcmd %02x chsa %04x SNS %08x\n",
+        cmd, chsa, uptr->SNS);
     if (uptr->SNS & 0xff)                       /* any other cmd is error */
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     sim_activate(uptr, 20);                     /* start things off */
@@ -444,8 +433,7 @@ t_stat scfi_srv(UNIT *uptr)
     uint16          chsa = GET_UADDR(uptr->CMD);
     DEVICE          *dptr = get_dev(uptr);
     /* get pointer to Dev Info Blk for this device */
-    DIB             *dibp = (DIB *)dptr->ctxt;
-    CHANP           *chp = (CHANP *)dibp->chan_prg;     /* get pointer to channel program */
+    CHANP           *chp = find_chanp_ptr(chsa);        /* get channel prog pointer */
     int             cmd = uptr->CMD & DSK_CMDMSK;
     int             type = GET_TYPE(uptr->flags);
     uint32          trk, cyl, sec;
@@ -478,7 +466,6 @@ t_stat scfi_srv(UNIT *uptr)
     case DSK_INCH2:                             /* use 0xff for inch, just need int */
     {
         uint32  mema;                           /* memory address */
-//      uint32  daws[8];                        /* drive attribute registers */
 //      uint32  i, j;
         uint32  i;   
 
@@ -907,7 +894,7 @@ void scfi_ini(UNIT *uptr, t_bool f)
     int     i = GET_TYPE(uptr->flags);
 
     uptr->CMD &= ~0xffff;                       /* clear out the flags but leave ch/sa */
-    uptr->SNS = ((uptr->SNS & 0x00ffffff) | (scfi_type[i].type << 24));  /* save mode value */
+//  uptr->SNS = ((uptr->SNS & 0x00ffffff) | (scfi_type[i].type << 24));  /* save mode value */
     /* total sectors on disk */
     uptr->capac = CAP(i);                       /* disk size in sectors */
 
@@ -923,7 +910,6 @@ t_stat scfi_reset(DEVICE * dptr)
 
 /* create the disk file for the specified device */
 int scfi_format(UNIT *uptr) {
-//  uint16      addr = GET_UADDR(uptr->CMD);
     int         type = GET_TYPE(uptr->flags);
     DEVICE      *dptr = get_dev(uptr);
     int32       ssize = scfi_type[type].ssiz * 4;       /* disk sector size in bytes */
@@ -987,6 +973,7 @@ int scfi_format(UNIT *uptr) {
 /* attach the selected file to the disk */
 t_stat scfi_attach(UNIT *uptr, CONST char *file) {
     uint16          chsa = GET_UADDR(uptr->CMD);
+    CHANP           *chp = find_chanp_ptr(chsa);    /* get channel prog pointer */
     int             type = GET_TYPE(uptr->flags);
     DEVICE          *dptr = get_dev(uptr);
     DIB             *dibp = 0;
@@ -1052,7 +1039,8 @@ fmt:
     /* check for valid configured disk */
     /* must have valid DIB and Channel Program pointer */
     dibp = (DIB *)dptr->ctxt;                   /* get the DIB pointer */
-    if ((dib_unit[chsa] == NULL) || (dibp == NULL) || (dibp->chan_prg == NULL)) {
+//??if ((dib_unit[chsa] == NULL) || (dibp == NULL) || (dibp->chan_prg == NULL)) {
+    if ((dib_unit[chsa] == NULL) || (dibp == NULL) || (chp == NULL)) {
         sim_debug(DEBUG_CMD, dptr,
             "ERROR===ERROR\nSCFI device %s not configured on system, aborting\n",
             dptr->name);

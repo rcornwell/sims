@@ -448,6 +448,7 @@ t_stat lpr_attach(UNIT *uptr, CONST char *file)
 {
     t_stat      r;
     uint16      chsa = GET_UADDR(uptr->CMDu3);      /* get address of lpr device */
+    CHANP       *chp = find_chanp_ptr(chsa);        /* get channel prog pointer */
     DEVICE      *dptr = get_dev(uptr);              /* get device pointer */
     DIB         *dibp = 0;
 
@@ -460,7 +461,8 @@ t_stat lpr_attach(UNIT *uptr, CONST char *file)
     /* check for valid configured lpr */
     /* must have valid DIB and Channel Program pointer */
     dibp = (DIB *)dptr->ctxt;                       /* get the DIB pointer */
-    if ((dib_unit[chsa] == NULL) || (dibp == NULL) || (dibp->chan_prg == NULL)) {
+//??if ((dib_unit[chsa] == NULL) || (dibp == NULL) || (dibp->chan_prg == NULL)) {
+    if ((dib_unit[chsa] == NULL) || (dibp == NULL) || (chp == NULL)) {
         sim_debug(DEBUG_CMD, dptr,
             "ERROR===ERROR\nLPR device %s not configured on system, aborting\n",
             dptr->name);

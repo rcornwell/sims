@@ -123,7 +123,7 @@
 #define NUM_DEVS_SCFI   1       /* 1 scfi (SCSI) disk drive units */
 #define NUM_UNITS_SCFI  1       /* 1 of 4 disk drive devices */
 #define NUM_DEVS_SCSI   2       /* 2 scsi (MFP SCSI) scsi buss units */
-#define NUM_UNITS_SCSI  2       /* 2 of 4 scsi disk drive devices */
+#define NUM_UNITS_SCSI  2       /* 2 scsi disk drive devices */
 #define NUM_DEVS_RTOM   1       /* 1 IOP RTOM channel */
 #define NUM_UNITS_RTOM  1       /* 1 IOP RTOM device (clock & interval timer) */
 #define NUM_DEVS_LPR    1       /* 1 IOP Line printer */

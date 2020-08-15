@@ -175,6 +175,7 @@ uint32          CPUSTATUS;                  /* cpu status word */
 uint32          TRAPSTATUS;                 /* trap status word */
 uint32          SPAD[256];                  /* Scratch pad memory */
 uint32          INTS[112];                  /* Interrupt status flags */
+uint32          pad[16];                    /* In case of wrong access */
 uint32          CMCR;                       /* Cache Memory Control Register */
 uint32          SMCR;                       /* Shared Memory Control Register */
 uint32          CMSMC;                      /* V9 Cache/Shadow Memory Configuration */
@@ -6619,8 +6620,9 @@ mcheck:
 #ifdef TEST
                         {
                         DIB     *dibp = dib_chan[chan]; /* get channel dib pointer */
+//??                    CHANP   *chp = dibp->chan_prg;  /* get channel prog pointer */
+                        CHANP   *chp = find_chanp_ptr(chan<<8);  /* get channel prog pointer */
                         if (dibp != 0) {
-                            CHANP   *chp = dibp->chan_prg;  /* get channel prog pointer */
                             if ((chp != 0) && post_csw(chp, 0)) {
                                 sim_debug(DEBUG_XIO, &cpu_dev,
                                     "DCI After checkxio call removed FIFO entry chp %p\n", chp);

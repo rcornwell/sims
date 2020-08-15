@@ -134,11 +134,11 @@ void mfp_ini(UNIT *uptr, t_bool f)
     int     unit = (uptr - mfp_unit);               /* unit 0 */
     DEVICE *dptr = &mfp_dev;                        /* one and only dummy device */
 
-    sim_debug(DEBUG_CMD, &mfp_dev,
-        "MFP init device %s controller/device %04x\n",
-        dptr->name, GET_UADDR(uptr->u3));
     mfp_data[unit].incnt = 0;                       /* no input data */
     uptr->u5 = SNS_RDY|SNS_ONLN;                    /* status is online & ready */
+    sim_debug(DEBUG_CMD, &mfp_dev,
+        "MFP init device %s controller/device %04x SNS %08x\n",
+        dptr->name, GET_UADDR(uptr->u3), uptr->u5);
 }
 
 /* start an I/O operation */
@@ -232,31 +232,68 @@ t_stat mfp_srv(UNIT *uptr)
     if (cmd == MFP_SID) {                           /* send 12 byte Status ID data */
         uint8   ch;
 
-        /* Word 0 */
+        /* Word 0 */        /* board mod 4324724 = 0x0041fd74 */
+#ifdef USE_OLD_UTX
         ch = 0x00;
         chan_write_byte(chsa, &ch);                 /* write byte 0 */
+        ch = 0x41;
         chan_write_byte(chsa, &ch);                 /* write byte 1 */
-        ch = 0x80;
+        ch = 0xfd;
+        chan_write_byte(chsa, &ch);                 /* write byte 2 */
+        ch = 0x74;
+        chan_write_byte(chsa, &ch);                 /* write byte 3 */
+#else
+        ch = 0x00;
+        chan_write_byte(chsa, &ch);                 /* write byte 0 */
+        ch = 0x00;
+        chan_write_byte(chsa, &ch);                 /* write byte 1 */
+        ch = 0x81;
         chan_write_byte(chsa, &ch);                 /* write byte 2 */
         ch = 0x02;
         chan_write_byte(chsa, &ch);                 /* write byte 3 */
+#endif
 
-        /* Word 1 */
+        /* Word 1 */        /* firmware 4407519 = 0x004340df */
+#ifdef USE_OLD_UTX
         ch = 0x00;
         chan_write_byte(chsa, &ch);                 /* write byte 4 */
+        ch = 0x43;
+        chan_write_byte(chsa, &ch);                 /* write byte 5 */
+        ch = 0x40;
+        chan_write_byte(chsa, &ch);                 /* write byte 6 */
+        ch = 0xdf;
+        chan_write_byte(chsa, &ch);                 /* write byte 7 */
+#else
+        ch = 0x00;
+        chan_write_byte(chsa, &ch);                 /* write byte 4 */
+        ch = 0x00;
         chan_write_byte(chsa, &ch);                 /* write byte 5 */
         ch = 0x80;
         chan_write_byte(chsa, &ch);                 /* write byte 6 */
         ch = 0x02;
         chan_write_byte(chsa, &ch);                 /* write byte 7 */
+#endif
 
-        /* Word 2 */
+        /* Word 2 */        /* firmware rev 4259588 = 0x0040ff04 */
+#ifdef USE_OLD_UTX
         ch = 0x00;
         chan_write_byte(chsa, &ch);                 /* write byte 8 */
+        ch = 0x40;
         chan_write_byte(chsa, &ch);                 /* write byte 9 */
+        ch = 0xff;
+        chan_write_byte(chsa, &ch);                 /* write byte 10 */
+        ch = 0x04;
+        chan_write_byte(chsa, &ch);                 /* write byte 11 */
+#else
+        ch = 0x00;
+        chan_write_byte(chsa, &ch);                 /* write byte 8 */
+        ch = 0x00;
+        chan_write_byte(chsa, &ch);                 /* write byte 9 */
+        ch = 0x00;
         chan_write_byte(chsa, &ch);                 /* write byte 10 */
         ch = 0x14;
         chan_write_byte(chsa, &ch);                 /* write byte 11 */
+#endif
 
         uptr->u3 &= LMASK;                          /* nothing left, command complete */
         sim_debug(DEBUG_CMD, &mfp_dev, "mfp_srv SID chan %02x: chnend|devend\n", chsa);

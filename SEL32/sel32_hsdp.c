@@ -29,13 +29,13 @@
 
 /* useful conversions */
 /* Fill STAR value from cyl, trk, sec data */
-#define CHS2STAR(c,h,s)	        (((c<<16) & 0xffff0000)|((h<<8) & 0xff00)|(s & 0xff))
+#define CHS2STAR(c,h,s)	        (((c<<16) & LMASK)|((h<<8) & 0xff00)|(s & 0xff))
 /* convert STAR value to number of sectors */
 #define STAR2SEC(star,spt,spc)  ((star&0xff)+(((star>>8)&0xff)*spt)+((star>>16)*spc))
 /* convert STAR value to number of heads or tracks */
 #define STAR2TRK(star,tpc)      ((star >> 16) * tpc + ((star >> 8) & 0x0ff))
 /* convert STAR value to number of cylinders */
-#define STAR2CYL(star)          ((star >> 16) & 0xffff)
+#define STAR2CYL(star)          ((star >> 16) & RMASK)
 /* convert byte value to number of sectors mod sector size */
 #define BYTES2SEC(bytes,ssize)  (((bytes) + (ssize-1)) >> 10)
 /* get sectors per track for specified type */
@@ -374,20 +374,20 @@ UNIT            dpa_unit[] = {
 };
 
 DIB             dpa_dib = {
-    hsdp_preio,                                 /* Pre start I/O */
-    hsdp_startcmd,                              /* Start a command */
-    NULL,                                       /* Stop I/O */
-    NULL,                                       /* Test I/O */
-    NULL,                                       /* Post I/O */
-    hsdp_ini,                                   /* init function */
-    dpa_unit,                                   /* Pointer to units structure */
-    dpa_chp,                                    /* Pointer to chan_prg structure */
-    NUM_UNITS_HSDP,                             /* number of units defined */
-    0x0E,                                       /* 8 devices - device mask */
-    0x0800,                                     /* parent channel address */
-    0,                                          /* fifo input index */
-    0,                                          /* fifo output index */
-    {0},                                        /* interrupt status fifo for channel */
+    hsdp_preio,     /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
+    hsdp_startcmd,  /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
+    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
+    NULL,           /* uint16 (*post_io)(UNIT *uptr) */         /* Post I/O */
+    hsdp_ini,       /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
+    dpa_unit,       /* UNIT* units */                           /* Pointer to units structure */
+    dpa_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
+    NUM_UNITS_HSDP, /* uint8 numunits */                        /* number of units defined */
+    0x0E,           /* uint8 mask */                            /* 8 devices - device mask */
+    0x0800,         /* uint16 chan_addr */                      /* parent channel address */
+    0,              /* uint32 chan_fifo_in */                   /* fifo input index */
+    0,              /* uint32 chan_fifo_out */                  /* fifo output index */
+    {0}             /* uint32 chan_fifo[FIFO_SIZE] */           /* interrupt status fifo for channel */
 };
 
 DEVICE          dpa_dev = {
@@ -417,20 +417,20 @@ UNIT            dpb_unit[] = {
 
 
 DIB             dpb_dib = {
-    hsdp_preio,                                 /* Pre Start I/O */
-    hsdp_startcmd,                              /* Start a command SIO */
-    NULL,                                       /* Stop I/O HIO */
-    NULL,                                       /* Test I/O TIO */
-    NULL,                                       /* Post I/O */
-    hsdp_ini,                                   /* init function */
-    dpb_unit,                                   /* Pointer to units structure */
-    dpb_chp,                                    /* Pointer to chan_prg structure */
-    NUM_UNITS_HSDP,                             /* number of units defined */
-    0x0E,                                       /* 8 devices - device mask */
-    0x0C00,                                     /* parent channel address */
-    0,                                          /* fifo input index */
-    0,                                          /* fifo output index */
-    {0},                                        /* interrupt status fifo for channel */
+    hsdp_preio,     /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
+    hsdp_startcmd,  /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
+    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
+    NULL,           /* uint16 (*post_io)(UNIT *uptr) */         /* Post I/O */
+    hsdp_ini,       /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
+    dpb_unit,       /* UNIT* units */                           /* Pointer to units structure */
+    dpb_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
+    NUM_UNITS_HSDP, /* uint8 numunits */                        /* number of units defined */
+    0x0E,           /* uint8 mask */                            /* 8 devices - device mask */
+    0x0C00,         /* uint16 chan_addr */                      /* parent channel address */
+    0,              /* uint32 chan_fifo_in */                   /* fifo input index */
+    0,              /* uint32 chan_fifo_out */                  /* fifo output index */
+    {0}             /* uint32 chan_fifo[FIFO_SIZE] */           /* interrupt status fifo for channel */
 };
 
 DEVICE          dpb_dev = {
@@ -459,28 +459,28 @@ uint32 hsdpsec2star(uint32 daddr, int type)
 uint16 hsdp_preio(UNIT *uptr, uint16 chan)
 {
     DEVICE      *dptr = get_dev(uptr);
-    uint16      addr = GET_UADDR(uptr->CMD);
+    uint16      chsa = GET_UADDR(uptr->CMD);
     int         unit = (uptr - dptr->units);
 
-    sim_debug(DEBUG_CMD, dptr, "hsdp_preio CMD %08x unit %02x\n", uptr->CMD, unit);
+    sim_debug(DEBUG_DETAIL, dptr, "hsdp_preio CMD %08x unit %02x\n", uptr->CMD, unit);
     if ((uptr->CMD & 0xff00) != 0) {            /* just return if busy */
         return SNS_BSY;
     }
 
-    sim_debug(DEBUG_CMD, dptr, "hsdp_preio unit %02x chsa %04x OK\n", unit, addr);
+    sim_debug(DEBUG_DETAIL, dptr, "hsdp_preio unit %02x chsa %04x OK\n", unit, chsa);
     return 0;                                   /* good to go */
 }
 
 uint16 hsdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 {
-    uint16      addr = GET_UADDR(uptr->CMD);
+    uint16      chsa = GET_UADDR(uptr->CMD);
     DEVICE      *dptr = get_dev(uptr);
     int         unit = (uptr - dptr->units);
-    CHANP       *chp = find_chanp_ptr(addr);    /* find the chanp pointer */
+    CHANP       *chp = find_chanp_ptr(chsa);    /* find the chanp pointer */
 
     sim_debug(DEBUG_CMD, dptr,
-        "hsdp_startcmd addr %04x unit %02x cmd %02x CMD %08x\n",
-        addr, unit, cmd, uptr->CMD);
+        "hsdp_startcmd chsa %04x unit %02x cmd %02x CMD %08x\n",
+        chsa, unit, cmd, uptr->CMD);
     if ((uptr->flags & UNIT_ATT) == 0) {        /* unit attached status */
         sim_debug(DEBUG_CMD, dptr, "hsdp_startcmd unit %02x not attached\n", unit);
         uptr->SNS |= SNS_INTVENT;               /* unit intervention required */
@@ -505,7 +505,7 @@ uint16 hsdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     case DSK_INCH:                              /* INCH 0x0 */
         sim_debug(DEBUG_CMD, dptr,
             "hsdp_startcmd starting INCH %06x cmd, chsa %04x MemBuf %08x cnt %04x\n",
-            uptr->u4, addr, chp->ccw_addr, chp->ccw_count);
+            uptr->u4, chsa, chp->ccw_addr, chp->ccw_count);
 
         uptr->CMD |= DSK_INCH2;                 /* use 0xF0 for inch, just need int */
         sim_activate(uptr, 20);                 /* start things off */
@@ -517,54 +517,25 @@ uint16 hsdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     case DSK_WD:                                /* Write command 0x01 */
     case DSK_RD:                                /* Read command 0x02 */
     case DSK_LMR:                               /* read mode register */
-
-        uptr->CMD |= cmd;                       /* save cmd */
-        sim_debug(DEBUG_CMD, dptr,
-            "hsdp_startcmd starting disk seek r/w cmd %02x addr %04x\n",
-            cmd, addr);
-        sim_activate(uptr, 20);                 /* start things off */
-        return 0;
-        break;
-
     case DSK_NOP:                               /* NOP 0x03 */
-        uptr->CMD |= cmd;                       /* save cmd */
-        sim_activate(uptr, 20);                 /* start things off */
-        return 0;
-        break;
-
     case DSK_SNS:                               /* Sense 0x04 */
-        uptr->CMD |= cmd;                       /* save cmd */
-        sim_activate(uptr, 20);                 /* start things off */
-        break;
-
     case DSK_WSL:                               /* WSL 0x31 */
-        uptr->CMD |= cmd;                       /* save cmd */
-        sim_activate(uptr, 20);                 /* start things off */
-        return 0;
-        break;
-
     case DSK_RSL:                               /* RSL 0x32 */
-        uptr->CMD |= cmd;                       /* save cmd */
-        sim_activate(uptr, 20);                 /* start things off */
-        return 0;
-        break;
-
     case DSK_WTL:                               /* WTL 0x51 */
-        uptr->CMD |= cmd;                       /* save cmd */
-        sim_activate(uptr, 20);                 /* start things off */
-        return 0;
-        break;
-
     case DSK_RTL:                               /* RTL 0x52 */
         uptr->CMD |= cmd;                       /* save cmd */
+        sim_debug(DEBUG_CMD, dptr,
+            "hsdp_startcmd starting disk cmd %02x chsa %04x\n",
+            cmd, chsa);
         sim_activate(uptr, 20);                 /* start things off */
         return 0;
         break;
+
     }
 
     sim_debug(DEBUG_CMD, dptr,
-        "hsdp_startcmd done with hsdp_startcmd %02x addr %04x SNS %08x\n",
-        cmd, addr, uptr->SNS);
+        "hsdp_startcmd done with hsdp_startcmd %02x chsa %04x SNS %08x\n",
+        cmd, chsa, uptr->SNS);
     if (uptr->SNS & 0xff)                       /* any other cmd is error */
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     sim_activate(uptr, 20);                     /* start things off */
@@ -576,8 +547,7 @@ t_stat hsdp_srv(UNIT *uptr)
 {
     uint16          chsa = GET_UADDR(uptr->CMD);
     DEVICE          *dptr = get_dev(uptr);
-    DIB             *dibp = (DIB *)dptr->ctxt;          /* get DIB address */
-    CHANP           *chp = (CHANP *)dibp->chan_prg;     /* get pointer to channel program */
+    CHANP           *chp = find_chanp_ptr(chsa);    /* get channel prog pointer */
     int             cmd = uptr->CMD & DSK_CMDMSK;
     int             type = GET_TYPE(uptr->flags);
     uint32          trk, cyl, sec;
@@ -676,7 +646,7 @@ t_stat hsdp_srv(UNIT *uptr)
 #endif
         uptr->CMD &= LMASK;                     /* remove old cmd */
         sim_debug(DEBUG_CMD, dptr,
-            "hsdp_srv cmd INCH chsa %04x addr %06x count %04x completed\n",
+            "hsdp_srv cmd INCH chsa %04x chsa %06x count %04x completed\n",
             chsa, mema, chp->ccw_count);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
     }
@@ -975,13 +945,13 @@ goout:
 
         /* just seek to the location where we will r/w data */
         if ((sim_fseek(uptr->fileref, tstart, SEEK_SET)) != 0) {  /* do seek */
-            sim_debug(DEBUG_EXP, dptr, "disk_srv Error on seek to %04x\n", tstart);
+            sim_debug(DEBUG_EXP, dptr, "hsdp_srv Error on seek to %04x\n", tstart);
             uptr->CMD &= LMASK;                 /* remove old status bits & cmd */
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             return SCPE_OK;
         }
         /* we are on cylinder/track/sector zero, so go on */
-        sim_debug(DEBUG_DETAIL, dptr, "disk_srv done seek trk 0\n");
+        sim_debug(DEBUG_DETAIL, dptr, "hsdp_srv done seek trk 0\n");
         uptr->CMD &= LMASK;                     /* remove old status bits & cmd */
         chan_end(chsa, SNS_DEVEND|SNS_CHNEND);
         return SCPE_OK;
@@ -1423,7 +1393,7 @@ void hsdp_ini(UNIT *uptr, t_bool f)
     uptr->CHS = 0;                              /* set CHS to cyl/hd/sec = 0 */
     uptr->STAR = 0;                             /* set STAR to cyl/hd/sec = 0 */
     uptr->CMD &= LMASK;                         /* clear out the flags but leave ch/sa */
-    uptr->SNS = ((uptr->SNS & MASK24) | (hsdp_type[i].type << 24));  /* save mode value */
+//  uptr->SNS = ((uptr->SNS & MASK24) | (hsdp_type[i].type << 24));  /* save mode value */
     /* total sectors on disk */
     uptr->capac = CAP(i);                       /* size in sectors */
 
@@ -1655,6 +1625,7 @@ int hsdp_format(UNIT *uptr) {
 t_stat hsdp_attach(UNIT *uptr, CONST char *file)
 {
     uint16          chsa = GET_UADDR(uptr->CMD);
+    CHANP           *chp = find_chanp_ptr(chsa);    /* get channel prog pointer */
     int             type = GET_TYPE(uptr->flags);
     DEVICE          *dptr = get_dev(uptr);
     DIB             *dibp = 0;
@@ -1722,7 +1693,8 @@ fmt:
     /* check for valid configured disk */
     /* must have valid DIB and Channel Program pointer */
     dibp = (DIB *)dptr->ctxt;                       /* get the DIB pointer */
-    if ((dib_unit[chsa] == NULL) || (dibp == NULL) || (dibp->chan_prg == NULL)) {
+//??if ((dib_unit[chsa] == NULL) || (dibp == NULL) || (dibp->chan_prg == NULL)) {
+    if ((dib_unit[chsa] == NULL) || (dibp == NULL) || (chp == NULL)) {
         sim_debug(DEBUG_CMD, dptr,
             "ERROR===ERROR\nHSDP device %s not configured on system, aborting\n",
             dptr->name);

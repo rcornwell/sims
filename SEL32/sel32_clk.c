@@ -93,7 +93,8 @@ DEVICE rtc_dev = {
     1, 8, 8, 1, 8, 8,
     NULL, NULL, &rtc_reset,         /* examine, deposit, reset */
     NULL, NULL, NULL,               /* boot, attach, detach */
-    NULL, DEV_DEBUG|DEV_DISABLE, 0, dev_debug,  /* dib, dev flags, debug flags, debug */
+    NULL, DEV_DEBUG|DEV_DIS|DEV_DISABLE, 0, dev_debug,  /* dib, dev flags, debug flags, debug */
+//  NULL, DEV_DEBUG|DEV_DISABLE, 0, dev_debug,  /* dib, dev flags, debug flags, debug */
     NULL, NULL, &rtc_help,          /* ?, ?, help */
     NULL, NULL, &rtc_desc,          /* ?, ?, description */
     };
@@ -116,8 +117,8 @@ t_stat rtc_srv (UNIT *uptr)
     /* stop clock interrupts for dexp debugging */
     rtc_pie = 0;
 #endif
-    /* id clock sisabled, do not do interrupts */
-    if (((uptr->flags & DEV_DIS) == 0) && rtc_pie) {
+    /* if clock disabled, do not do interrupts */
+    if (((rtc_dev.flags & DEV_DIS) == 0) && rtc_pie) {
         time_t result = time(NULL);
         sim_debug(DEBUG_CMD, &rtc_dev, "RT Clock int time %08x\n", (uint32)result);
         if (((INTS[rtc_lvl] & INTS_ENAB) ||         /* make sure enabled */
