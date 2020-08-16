@@ -314,14 +314,6 @@
     else if (sz == sizeof (uint16)) *(((uint16 *) mb) + ((uint32) j)) = (uint16) v; \
     else *(((uint32 *) mb) + ((uint32) j)) = v;
 #endif
-#define GET_SWITCHES(cp) \
-    if ((cp = get_sim_sw (cp)) == NULL) return SCPE_INVSW
-#define GET_RADIX(val,dft) \
-    if (sim_switches & SWMASK ('O')) val = 8; \
-    else if (sim_switches & SWMASK ('D')) val = 10; \
-    else if (sim_switches & SWMASK ('H')) val = 16; \
-    else if ((sim_switch_number >= 2) && (sim_switch_number <= 36)) val = sim_switch_number; \
-    else val = dft;
 
 #define SIM_DBG_EVENT       0x02000000      /* event dispatch activities */
 #define SIM_DBG_ACTIVATE    0x04000000      /* queue insertion activities */
@@ -15517,6 +15509,10 @@ int32 saved_switches = sim_switches & ~SWMASK ('T');
 t_stat stat = SCPE_OK;
 char gbuf[CBUFSIZE];
 
+if (sim_time != 0.0)
+    return sim_messagef (SCPE_UNK, "Library tests can not be performed after instructions have been executed.\n");
+detach_all (0, 0);                          /* Assure that all units are unattached */
+
 cptr = get_glyph (cptr, gbuf, 0);
 if (gbuf[0] == '\0')
     strcpy (gbuf, "ALL");
@@ -15571,9 +15567,9 @@ for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {
         tstat = SCPE_OK;        /* can't enable, just skip device */
     if (tstat != SCPE_OK) {
         stat = tstat;
-        sim_printf ("%s device tests returned: %d - %s\n", dptr->name, tstat, sim_error_text (tstat));
+        sim_printf ("%s device tests returned: %d - %s\n", dptr->name, SCPE_BARE_STATUS (tstat), sim_error_text (tstat));
         if (sim_ttisatty()) {
-            if (get_yn ("Continue with additional tests? [N]", SCPE_STOP) == SCPE_STOP)
+            if (get_yn ("Continue with additional tests? [N] ", SCPE_STOP) == SCPE_STOP)
                 break;
             }
         else
