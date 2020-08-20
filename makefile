@@ -2071,6 +2071,12 @@ KL10 = ${KL10D}/kx10_cpu.c ${KL10D}/kx10_sys.c ${KL10D}/kx10_df.c \
         ${KL10D}/kx10_disk.c
 KL10_OPT = -DKL=1 -DUSE_INT64 -I $(KL10D) -DUSE_SIM_CARD ${NETWORK_OPT} 
 
+RIDGE32D = ${SIMHD}/Ridge32
+RIDGE32 = ${RIDGE32D}/ridge32_cpu.c ${RIDGE32D}/ridge32_sys.c \
+	${RIDGE32D}/ridge32_iobus.c ${RIDGE32D}/ridge32_flp.c \
+	${RIDGE32D}/ridge32_dsk.c
+RIDGE32_OPT = -I $(RIDGE32D) -DRIDGE32 -DUSE_SIM_IMD
+
 ATT3B2D = ${SIMHD}/3B2
 ATT3B2 = ${ATT3B2D}/3b2_cpu.c ${ATT3B2D}/3b2_mmu.c \
 	${ATT3B2D}/3b2_iu.c ${ATT3B2D}/3b2_if.c \
@@ -2145,7 +2151,7 @@ ALL = pdp1 pdp4 pdp7 pdp8 pdp9 pdp15 pdp11 pdp10 \
 	scelbi 3b2 i701 i704 i7010 i7070 i7080 i7090 \
 	sigma uc15 pdp10-ka pdp10-ki pdp6
 
-ALL = b5500 i701 i704 i7010 i7070 i7080 i7090 pdp10-ka pdp10-ki pdp10-kl pdp6 ibm360 ibm360_32 icl1900 sel32
+ALL = b5500 i701 i704 i7010 i7070 i7080 i7090 pdp10-ka pdp10-ki pdp10-kl pdp6 ibm360 ibm360_32 icl1900 sel32 ridge32
 
 all : ${ALL}
 
@@ -2986,6 +2992,15 @@ ${BIN}pdp10-kl${EXE} : ${KL10} ${SIM}
 	${CC} ${KL10} ${SIM} ${KL10_OPT} ${CC_OUTSPEC} ${LDFLAGS}
 ifneq (,$(call find_test,${PDP10D},kl10))
 	$@ $(call find_test,${PDP10D},kl10) ${TEST_ARG}
+endif
+
+ridge32: $(BIN)ridge32$(EXE)
+
+${BIN}ridge32${EXE}: ${RIDGE32} ${SIM}
+	${MKDIRBIN}
+	${CC} ${RIDGE32} ${SIM} ${RIDGE32_OPT} $(CC_OUTSPEC) ${LDFLAGS}
+ifneq (,$(call find_test,${RIDGE32D},ridge32))
+	$@ $(call find_test,${RIDGE32D},ridge32) $(TEST_ARG)
 endif
 
 # Front Panel API Demo/Test program
