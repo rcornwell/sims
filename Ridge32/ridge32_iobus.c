@@ -158,6 +158,15 @@ io_dcbwrite_half(UNIT *uptr, int off, uint16 data)
 }
 
 void
+io_dcbwrite_addr(UNIT *uptr, int off, uint32 data)
+{
+     io_dcbwrite_byte(uptr, off, (uint8)((data >> 16) & 0xff));
+     io_dcbwrite_byte(uptr, off+1, (uint8)((data >> 8) & 0xff));
+     io_dcbwrite_byte(uptr, off+2, (uint8)(data & 0xff));
+     return;
+}
+
+void
 io_dcbwrite_blk(UNIT *uptr, int off, uint8 *data, int sz)
 {
      io_write_blk(uptr->DCB + off, data, sz);

@@ -654,6 +654,7 @@ flp_svc (UNIT *uptr)
                               flp_dcb.stat[4], flp_dcb.stat[5], 
                     &flp_buf[0], sizeof(flp_buf), &flags, &len) != SCPE_OK) {
                     uptr->PHASE = PHASE_RES;
+                    flp_dcb.stat[0] = 0x40;
                     sim_activate(uptr, 1000);
                     return SCPE_OK;
                 }
@@ -686,6 +687,7 @@ flp_svc (UNIT *uptr)
                     flp_dcb.stat[5]++;
                 }
                 if (flp_dcb.count == 0) {
+//                    flp_dcb.stat[0] = 0x20 | (flp_dcb.cmd[1] & 0x7);
                     uptr->PHASE = PHASE_RES;
                     sim_activate(uptr, 10);
                 } else {
@@ -734,6 +736,7 @@ flp_svc (UNIT *uptr)
                 }
                 if (flp_dcb.count == 0) {
                     uptr->PHASE = PHASE_RES;
+                    flp_dcb.stat[0] = 0x20 | (flp_dcb.cmd[1] & 0x7);
                     sim_activate(uptr, 10);
                 } else {
                     sim_activate(uptr, 100);
@@ -775,12 +778,17 @@ flp_svc (UNIT *uptr)
           /* Save results back to memory */
           io_dcbwrite_blk(uptr, 0xD9, &flp_dcb.stat[0], flp_dcb.stat_len);
           io_dcbwrite_byte(uptr, 0xc2, flp_dcb.gstat);
-          flags = flp_dcb.hd & 7;
+          flags = (flp_dcb.hd & 7);
           flags |= 0x28; /* Ready & Two sided */
           if (uptr->CYL == 0)
              flags |= 0x10;
           io_dcbwrite_byte(uptr, 0xc3, flags);
           io_dcbwrite_half(uptr, 0xca, flp_dcb.xcount);
+          io_dcbwrite_byte(uptr, 0xCE, flp_dcb.stat[3]);
+          io_dcbwrite_byte(uptr, 0xCD, (flp_dcb.stat[4] << 2) | 0);
+          io_dcbwrite_byte(uptr, 0xCF, flp_dcb.stat[5]);
+          io_dcbwrite_addr(uptr, 0xC5, flp_dcb.addr);
+          io_dcbwrite_half(uptr, 0xC8, flp_dcb.count);
           sim_debug(DEBUG_DETAIL, &flp_dev,"Stop floppy %2x %4x %2x\n\r", 
                   flags, flp_dcb.xcount, flp_dcb.gstat);
           uptr->PHASE = PHASE_IRQ;

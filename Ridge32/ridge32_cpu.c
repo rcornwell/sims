@@ -215,6 +215,8 @@ int  TransAddr(t_addr va, t_addr *pa, uint8 code, uint wr) {
                  addr = M[tag++]; 
                  link = M[tag];
                  ntag = (link >> 16);
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                      "Load trans: %08x %08x -> %08x %08x %08x\n", seg, va, tag, addr, link);
              } while (addr != mat && ntag != 0);
              /* Did we find entry? */
              if (addr != mat || (link & 0x7000) != 0x7000) {
@@ -415,15 +417,18 @@ wait_loop:
            return STOP_IBKPT;
         }
 
-trap:
 
         /* If in user mode and no PCB, just wait */
         if (user && (sregs[11] == 1 || sregs[14] == 1)) {
            sim_interval--;
+           if (sregs[11] != 1 && (timer1_irq || timer2_irq))
+              goto trap;
            if (trapcode == 0 && ext_irq == 0)
               goto wait_loop;
            sim_debug(DEBUG_CMD, &cpu_dev, "Exit wait %4x %d\n", trapcode, ext_irq);
         }
+
+trap:
 
         if (trapcode) {
             uint32 ccb = sregs[11] >> 2;
@@ -1165,7 +1170,9 @@ trap:
                             a = (na + sregs[12]) >> 2;
                             link = M[a++]; 
                             e = M[a];
-                            na = (link >> 16);
+                            na = (e >> 16);
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                      "Load trans: %08x %08x -> %08x %08x %08x\n", seg, regs[(reg2 + 1) & 0xf], a, link, e);
                         } while (link != mat && na != 0);
                         /* Did we find entry? */
                         if (link != mat || (e & 0x7000) != 0x7000) {

@@ -50,6 +50,7 @@ DEVICE *sim_devices[] = {
        &cpu_dev,
        &flp_dev,
        &dsk_dev,
+       &ct_dev,
        NULL
 };
 
@@ -89,6 +90,23 @@ t_stat sim_load (FILE *fileref, CONST char *cptr, CONST char *fnam, int flag)
     uint32        pa;
     int           offset;
 
+    while((len = fread(&buf[0], 1, sizeof(buf), fileref)) > 0) {
+       for (i = 0; i <len; i++) {
+           offset = 8 * (3 - (addr & 0x3));
+           pa = addr >> 2;
+           mask = 0xff;
+           data = buf[i];
+           data <<= offset;
+           mask <<= offset;
+           M[pa] &= ~mask;
+           M[pa] |= data;
+           fprintf(stderr, "%02x ", buf[i]);
+           addr++;
+           if ((i & 0xf) == 0xf)
+              fprintf(stderr, "\n %06x ", addr);
+       }
+    }
+#if 0
     disk = diskOpen(fileref, TRUE);
 
     fprintf(stderr, " %06x ", addr);
@@ -115,8 +133,9 @@ t_stat sim_load (FILE *fileref, CONST char *cptr, CONST char *fnam, int flag)
     
 
     diskClose(&disk);
+#endif
 
-return SCPE_NOFNC;
+return SCPE_OK;
 }
 
 /* Symbol tables */

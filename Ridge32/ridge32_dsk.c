@@ -172,8 +172,8 @@ DEVICE              dsk_dev = {
 struct _dcb {
     uint8           retries;
     uint32          addr;        /* transfer address */
-    uint16          count;       /* byte count */
-    uint16          xcount;      /* transfer count */
+    uint32          count;       /* byte count */
+    uint32          xcount;      /* transfer count */
     uint8           hd;          /* Head */
     uint16          cyl;         /* Cylinder */
     uint8           sect;        /* Sector */
@@ -224,9 +224,11 @@ dsk_write(uint32 dev, uint32 data)
          dsk_dcb[drive].hd = io_dcbread_byte(uptr, offset + 0xd);
          dsk_dcb[drive].cyl = io_dcbread_byte(uptr, offset + 0xe);
          dsk_dcb[drive].sect = io_dcbread_byte(uptr, offset + 0xf);
-         dsk_dcb[drive].cyl |= (dsk_dcb[drive].hd & 0xf) << 4;
+         dsk_dcb[drive].cyl |= (dsk_dcb[drive].hd & 0xf) << 8;
          dsk_dcb[drive].hd = (dsk_dcb[drive].hd >> 4) & 0xf;
          
+         if (dsk_dcb[drive].count == 0)
+             dsk_dcb[drive].count = 0x10000;
          cmd = duptr->CMD & 0xf;
          sim_debug(DEBUG_DETAIL, &dsk_dev,
                "Start Disk %2x %6x %4x c=%4d h=%d s=%2d\n",
@@ -350,14 +352,14 @@ dsk_svc (UNIT *uptr)
          sim_debug(DEBUG_DETAIL, &dsk_dev, "Disk Read: %d bytes\n", len);
          for (i = 0; i < len; i++)  {
              sim_debug(DEBUG_DATA, &dsk_dev, "%02x ", dsk_buf[i]);
-             if ((i & 0xf) == 0xf)
+             if ((i & 0x1f) == 0x1f)
                   sim_debug(DEBUG_DATA, &dsk_dev, "\n");
          }
          sim_debug(DEBUG_DATA, &dsk_dev, "\n");
           io_write_blk(dsk_dcb[drive].addr, &dsk_buf[0], len);
           dsk_dcb[drive].count -= len;
           dsk_dcb[drive].xcount += len;
-          dsk_dcb[drive].addr += len;
+          dsk_dcb[drive].addr = (dsk_dcb[drive].addr + len) & 0xffffff;
           if (dsk_dcb[drive].count != 0) {
               if (dsk_incsect(uptr, drive)) {
                  io_dcbwrite_half(uptr, offset + 0xa, dsk_dcb[drive].xcount);
@@ -369,6 +371,12 @@ dsk_svc (UNIT *uptr)
               sim_activate(uptr, 100);
               return SCPE_OK;
           }
+          io_dcbwrite_addr(uptr, offset + 0x5, dsk_dcb[drive].addr);
+          io_dcbwrite_half(uptr, offset + 0x8, dsk_dcb[drive].count);
+          io_dcbwrite_byte(uptr, offset + 0xd, (dsk_dcb[drive].hd << 4) |
+                                               ((dsk_dcb[drive].cyl >> 8) & 0xf));
+          io_dcbwrite_byte(uptr, offset + 0xe, dsk_dcb[drive].cyl & 0xff);
+          io_dcbwrite_byte(uptr, offset + 0xf, dsk_dcb[drive].sect);
           io_dcbwrite_half(uptr, offset + 0xa, dsk_dcb[drive].xcount);
           io_dcbwrite_byte(uptr, offset + 0x2, 0);
           dsk_unit[0].STATUS = 0x400001 | (drive << 16);
@@ -391,7 +399,7 @@ dsk_svc (UNIT *uptr)
          sim_debug(DEBUG_DETAIL, &dsk_dev, "Disk Write: %d bytes\n", len);
          for (i = 0; i < len; i++)  {
              sim_debug(DEBUG_DATA, &dsk_dev, "%02x ", dsk_buf[i]);
-             if ((i & 0xf) == 0xf)
+             if ((i & 0xf) == 0x1f)
                   sim_debug(DEBUG_DATA, &dsk_dev, "\n");
          }
          sim_debug(DEBUG_DATA, &dsk_dev, "\n");
@@ -400,9 +408,10 @@ dsk_svc (UNIT *uptr)
               len = dsk_dcb[drive].count;
           dsk_dcb[drive].count -= len;
           dsk_dcb[drive].xcount += len;
-          dsk_dcb[drive].addr += len;
+          dsk_dcb[drive].addr = (dsk_dcb[drive].addr + len) & 0xffffff;
           if (dsk_dcb[drive].count != 0) {
               if (dsk_incsect(uptr, drive)) {
+                 sim_debug(DEBUG_DETAIL, &dsk_dev, "Invalid seek\n");
                  io_dcbwrite_half(uptr, offset + 0xa, dsk_dcb[drive].xcount);
                  io_dcbwrite_byte(uptr, offset + 0x2, 0xb);
                  dsk_unit[0].STATUS = 0x400001 | (drive << 16);
@@ -412,6 +421,12 @@ dsk_svc (UNIT *uptr)
               sim_activate(uptr, 100);
               return SCPE_OK;
           }
+          io_dcbwrite_addr(uptr, offset + 0x5, dsk_dcb[drive].addr);
+          io_dcbwrite_half(uptr, offset + 0x8, dsk_dcb[drive].count);
+          io_dcbwrite_byte(uptr, offset + 0xd, (dsk_dcb[drive].hd << 4) |
+                                               ((dsk_dcb[drive].cyl >> 8) & 0xf));
+          io_dcbwrite_byte(uptr, offset + 0xe, dsk_dcb[drive].cyl & 0xff);
+          io_dcbwrite_byte(uptr, offset + 0xf, dsk_dcb[drive].sect);
           io_dcbwrite_half(uptr, offset + 0xa, dsk_dcb[drive].xcount);
           io_dcbwrite_byte(uptr, offset + 0x2, 0);
           dsk_unit[0].STATUS = 0x400001 | (drive << 16);
@@ -451,7 +466,7 @@ dsk_svc (UNIT *uptr)
                                       (((dsk_type[type].cyl - 1) >> 8) & 0xF));
           io_dcbwrite_byte(uptr, offset + 0xe, (dsk_type[type].cyl - 1) & 0xFF);
           io_dcbwrite_byte(uptr, offset + 0xf, dsk_type[type].sect - 1);
-          io_dcbwrite_half(uptr, offset + 0xa, 20160 / 18);
+          io_dcbwrite_half(uptr, offset + 0xa, 20160 / dsk_type[type].sect);
           io_dcbwrite_byte(uptr, offset + 0x2, 0x00);
           dsk_unit[0].STATUS = 0x400001 | (drive << 16);
           ext_irq = 1;
