@@ -227,7 +227,7 @@ t_stat con_svc(UNIT *uptr);
 uint8 flp_buf[4096];
 
 /* Device context block */
-struct ridge_dib flp_dib = {1, 1, flp_read, flp_write, flp_iord};
+struct ridge_dib flp_dib = {1, 1, flp_read, flp_write, flp_iord, 0};
 
 MTAB flp_mod[] = {
     {MTAB_XTD | MTAB_VDV | MTAB_VALR, 0, "SLOT", "SLOT", &set_slot_num,

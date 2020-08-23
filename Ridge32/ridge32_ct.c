@@ -88,7 +88,7 @@ t_stat ct_reset(DEVICE *dp);
 uint8  ct_buf[64*1024];
 
 /* Device context block */
-struct ridge_dib ct_dib = {0x20, 3, ct_read, ct_write, ct_iord};
+struct ridge_dib ct_dib = {0x20, 3, ct_read, ct_write, ct_iord, 0};
 
 MTAB ct_mod[] = {
     {MTAB_XTD | MTAB_VUN, 0, "FORMAT", "FORMAT",
@@ -114,7 +114,7 @@ DEVICE              ct_dev = {
     "CT", ct_unit, NULL, ct_mod,
     1, 16, 24, 1, 16, 8,
     NULL, NULL, &ct_reset, &ct_boot, &ct_attach, &ct_detach,
-    &ct_dib, DEV_DEBUG, 0, dev_debug, NULL, NULL, 
+    &ct_dib, DEV_DEBUG | DEV_DISABLE, 0, dev_debug, NULL, NULL, 
 };
 
 
@@ -148,7 +148,7 @@ ct_read(uint32 dev, uint32 *data)
              break;
     }
     *data |= (ct_dib.dev_num << 24) & 0xff000000;
-    sim_debug(DEBUG_EXP, &ct_dev, "read status %08x %88x\n", dev, *data);
+    sim_debug(DEBUG_EXP, &ct_dev, "read status %08x %08x\n", dev, *data);
     return (uptr->STATUS & 0x2) ? 1 : 0;
 }
 
@@ -185,7 +185,7 @@ ct_iord(uint32 *data)
 
     *data = ct_mkstatus(uptr);
     *data |= ((uint32)ct_dib.dev_num) << 24;
-    sim_debug(DEBUG_EXP, &ct_dev, "itest status %88x\n", *data);
+    sim_debug(DEBUG_EXP, &ct_dev, "itest status %08x\n", *data);
     /* Check if irq pending */
     if (uptr->STATUS & IRQ) {
         uptr->STATUS &= ~(IRQ);

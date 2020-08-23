@@ -125,6 +125,10 @@ endif
 ifneq (,$(findstring sel32,${MAKECMDGOALS}))
   NETWORK_USEFUL = true
 endif
+# building the Ridge32 needs video support
+ifneq (,$(findstring ridge32,${MAKECMDGOALS}))
+  VIDEO_USEFUL = true
+endif
 # building the PDP-7 needs video support
 ifneq (,$(findstring pdp7,${MAKECMDGOALS}))
   VIDEO_USEFUL = true
@@ -2074,8 +2078,9 @@ KL10_OPT = -DKL=1 -DUSE_INT64 -I $(KL10D) -DUSE_SIM_CARD ${NETWORK_OPT}
 RIDGE32D = ${SIMHD}/Ridge32
 RIDGE32 = ${RIDGE32D}/ridge32_cpu.c ${RIDGE32D}/ridge32_sys.c \
 	${RIDGE32D}/ridge32_iobus.c ${RIDGE32D}/ridge32_flp.c \
-	${RIDGE32D}/ridge32_dsk.c ${RIDGE32D}/ridge32_ct.c
-RIDGE32_OPT = -I $(RIDGE32D) -DRIDGE32 -DUSE_SIM_IMD
+	${RIDGE32D}/ridge32_dsk.c ${RIDGE32D}/ridge32_ct.c \
+        ${RIDGE32D}/ridge32_vid.c
+RIDGE32_OPT = -I $(RIDGE32D) -DRIDGE32 -DUSE_SIM_IMD ${VIDEO_CCDEFS} ${VIDEO_LDFLAGS}
 
 ATT3B2D = ${SIMHD}/3B2
 ATT3B2 = ${ATT3B2D}/3b2_cpu.c ${ATT3B2D}/3b2_mmu.c \

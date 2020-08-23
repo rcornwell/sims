@@ -51,6 +51,7 @@ DEVICE *sim_devices[] = {
        &flp_dev,
        &dsk_dev,
        &ct_dev,
+       &mono_dev,
        NULL
 };
 

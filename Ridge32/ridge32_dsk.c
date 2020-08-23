@@ -134,7 +134,7 @@ uint8  dsk_sect_lab[LBL_SZ];
 uint8  dsk_buf[SECT_SZ];
 
 /* Device context block */
-struct ridge_dib dsk_dib = {2, 2, dsk_read, dsk_write, dsk_iord};
+struct ridge_dib dsk_dib = {2, 2, dsk_read, dsk_write, dsk_iord, 0};
 
 MTAB dsk_mod[] = {
     {UNIT_DTYPE, (P142_DTYPE << UNIT_V_DTYPE), "P142", "P142", &dsk_set_type },
@@ -163,7 +163,7 @@ DEVICE              dsk_dev = {
     "DSK", dsk_unit, NULL, dsk_mod,
     4, 16, 24, 1, 16, 8,
     NULL, NULL, &dsk_reset, &dsk_boot, &dsk_attach, &dsk_detach,
-    &dsk_dib, DEV_DEBUG, 0, dev_debug, NULL, NULL, 
+    &dsk_dib, DEV_DEBUG | DEV_DISABLE, 0, dev_debug, NULL, NULL, 
 };
 
 
@@ -466,7 +466,7 @@ dsk_svc (UNIT *uptr)
                                       (((dsk_type[type].cyl - 1) >> 8) & 0xF));
           io_dcbwrite_byte(uptr, offset + 0xe, (dsk_type[type].cyl - 1) & 0xFF);
           io_dcbwrite_byte(uptr, offset + 0xf, dsk_type[type].sect - 1);
-          io_dcbwrite_half(uptr, offset + 0xa, 20160 / dsk_type[type].sect);
+          io_dcbwrite_half(uptr, offset + 0xa, dsk_type[type].bpt / dsk_type[type].sect);
           io_dcbwrite_byte(uptr, offset + 0x2, 0x00);
           dsk_unit[0].STATUS = 0x400001 | (drive << 16);
           ext_irq = 1;

@@ -291,12 +291,27 @@ chan_set_devs()
         addr = dibp->dev_num;
         slot = dibp->slot_num;
         if (dev_table[addr] != &null_dev) {
-            fprintf(stderr, "Device conflict\n\r");
+            sim_printf("Device conflict %02x\n\r", addr);
             return SCPE_IERR;
         }
         if (slot_dev[slot] != 0) {
-            fprintf(stderr, "Slot error\n\r");
+            sim_printf("Slot error %02x %x\n\r", addr, slot);
             return SCPE_IERR;
+        }
+        if (dibp->dev_mask != 0) {
+            int        addr2 = dibp->dev_num & ~dibp->dev_mask;
+            int        i;
+
+            /* Check for conflict */
+            for (i = addr2; i != addr; i++) {
+                if (dev_table[i] != &null_dev) {
+                    sim_printf("Device conflict %02x\n\r", i);
+                    return SCPE_IERR;
+                }
+            }
+            /* Assign devices */
+            for (i = addr2; i != addr; i++)
+                dev_table[i] = dibp;
         }
         dev_table[addr] = dibp;
         slot_dev[slot] = addr;
@@ -346,6 +361,7 @@ set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     if (r == SCPE_OK)
        addr = newdev;
 
+    dibp->dev_num = addr;
     /* Update device entry */
     dev_table[addr] = dibp;
     return r;
@@ -370,6 +386,15 @@ show_dev_addr(FILE * st, UNIT * uptr, int32 v, CONST void *desc)
 
     addr = dibp->dev_num;
     fprintf(st, "dev=%02x", addr);
+
+    /* Multiunit device */ 
+    if (dibp->dev_mask != 0) {
+        int        addr2 = dibp->dev_num & ~dibp->dev_mask;
+
+        /* Check for conflict */
+        for (; addr2 != addr; addr2++)
+            fprintf(st, ",%02x", addr2);
+    }
     return SCPE_OK;
 }
 
@@ -409,6 +434,7 @@ set_slot_num(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     addr = dibp->dev_num;
     slot = dibp->slot_num;
 
+    dibp->slot_num = newslot;
     slot_dev[slot] = 0;
     slot_dev[newslot] = addr;
     return r;

@@ -30,7 +30,7 @@
 /* Conditional error returns */
 
 /* Memory */
-#define MAXMEMSIZE        (16*1024*1024)      /* max memory size */
+#define MAXMEMSIZE        (8*1024*1024)       /* max memory size */
 #define PAMASK            (MAXMEMSIZE - 1)    /* physical addr mask */
 #define MEMSIZE           (cpu_unit.capac)    /* actual memory size */
 #define MEM_ADDR_OK(x)    (((x)) < MEMSIZE)
@@ -126,6 +126,7 @@ struct ridge_dib {
     int                 (*io_read)(uint32 dev, uint32 *data);
     int                 (*io_write)(uint32 dev, uint32 data);
     int                 (*io_iord)(uint32 *data);
+    int                 dev_mask;                       /* Mask for device */
 };
 
 typedef struct ridge_dib DIB;
@@ -145,6 +146,7 @@ extern DEVICE       cpu_dev;
 extern DEVICE       flp_dev;
 extern DEVICE       dsk_dev;
 extern DEVICE       ct_dev;
+extern DEVICE       mono_dev;
 extern uint8        ext_irq;
 extern UNIT         cpu_unit;
 extern int32        tmxr_poll;

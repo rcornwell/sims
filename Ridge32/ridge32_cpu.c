@@ -115,7 +115,7 @@ t_bool build_dev_tab (void);
 t_stat       rtc_srv(UNIT * uptr);
 t_stat       rtc_reset(DEVICE * dptr);
 int32        rtc_tps = 1000;
-int32        tmxr_poll;
+int32        tmxr_poll = 1000;
 
 
 /* CPU data structures
@@ -174,9 +174,8 @@ MTAB cpu_mod[] = {
     { UNIT_MSIZE, MEMAMOUNT(1),   "1M",  "1M", &cpu_set_size },
     { UNIT_MSIZE, MEMAMOUNT(2),   "2M",  "2M", &cpu_set_size },
     { UNIT_MSIZE, MEMAMOUNT(4),   "4M",  "4M", &cpu_set_size },
+    { UNIT_MSIZE, MEMAMOUNT(6),   "6M",  "6M", &cpu_set_size },
     { UNIT_MSIZE, MEMAMOUNT(8),   "8M",  "8M", &cpu_set_size },
-    { UNIT_MSIZE, MEMAMOUNT(12), "12M", "12M", &cpu_set_size },
-    { UNIT_MSIZE, MEMAMOUNT(16), "16M", "16M", &cpu_set_size },
     { UNIT_LDENA, 0, NULL, "NOLOAD", NULL, NULL, NULL, "Turns off load enable switch"},
     { UNIT_LDENA, UNIT_LDENA, "LOAD", "LOAD", NULL, NULL, NULL, "Turns on load enable switch"},
     { MTAB_XTD|MTAB_VDV|MTAB_NMO|MTAB_SHP, 0, "HISTORY", "HISTORY",
@@ -1546,6 +1545,7 @@ cpu_reset (DEVICE *dptr)
         if (M == NULL)
             return SCPE_MEM;
     }
+    chan_set_devs();
     sregs[2] = MEMSIZE;
     sregs[4] = 0xff;
     sregs[11] = 1;
