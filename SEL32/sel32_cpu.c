@@ -221,7 +221,12 @@ uint32          attention_trap = 0;         /* set when trap is requested */
 uint32          RDYQIN;                     /* fifo input index */
 uint32          RDYQOUT;                    /* fifo output index */
 uint32          RDYQ[128];                  /* channel ready queue */
+#ifndef TRY_UTX_DELAY
 uint8           waitqcnt = 0;               /* # instructions before start */
+#endif
+#ifdef NOT_NOW
+uint8           waitrdyq = 0;               /* # instructions before start */
+#endif
 
 struct InstHistory
 {
@@ -1968,6 +1973,13 @@ wait_loop:
             goto skipi;                         /* skip int test */
         }
 
+#ifndef TRY_UTX_DELAY
+        if (waitqcnt > 0)
+            waitqcnt--;                         /* wait b4 ints */
+        if (wait4int)                           /* if waiting let the ints in */
+            waitqcnt = 0;                       /* let in the ints */
+#endif
+
         /* we are booting the system, so see if boot channel prog is completed */
         if (loading) {
             uint32 il;
@@ -1997,6 +2009,11 @@ wait_loop:
                 uint32  chsa;                   /* channel/sub adddress */
                 int32   stat;                   /* return status 0/1 from loadccw */
 
+#ifdef NOT_NOW
+                if (waitrdyq > 0) {
+                    waitrdyq--;
+                } else
+#endif
                 /* we have entries, continue channel program */
                 if (RDYQ_Get(&chsa) == SCPE_OK) {   /* get chsa for program */
                     sim_debug(DEBUG_XIO, &cpu_dev,
@@ -2102,14 +2119,36 @@ wait_loop:
                 goto skipi;                     /* skip int test */
             }
         }
-            /* see if in wait instruction */
-            if (wait4int) {                     /* keep waiting */
-                /* tell simh we will be waiting */
-//              sim_idle(TMR_RTC, 1);           /* wait for clock tick */
-                sim_idle(0, 1);                 /* wait for clock tick */
-/*722*/         irq_pend = 1;                   /* start scanning interrupts again */
-                goto wait_loop;                 /* continue waiting */
+#ifdef TEST_082520
+/*25*/  irq_pend = 0;                           /* not pending anymore */
+        if (RDYQ_Num()) {
+            uint32  chsa;                       /* channel/sub adddress */
+#ifdef NOTNOW
+            if (waitrdyq > 0) {
+                waitrdyq--;
+            } else
+#endif
+            /* we have entries, continue channel program */
+            if (RDYQ_Get(&chsa) == SCPE_OK) {   /* get chsa for program */
+                int32 stat;
+//25            irq_pend = 0;                   /* not pending anymore */
+                sim_debug(DEBUG_XIO, &cpu_dev,
+                    "scan_chan CPU RDYQ entry for chsa %04x starting\n", chsa);
+                stat = cont_chan(chsa);         /* resume the channel program */
+                if (stat)
+                    sim_debug(DEBUG_XIO, &cpu_dev,
+                    "CPU RDYQ entry for chsa %04x processed\n", chsa);
             }
+        }
+#endif
+        /* see if in wait instruction */
+        if (wait4int) {                         /* keep waiting */
+            /* tell simh we will be waiting */
+//          sim_idle(TMR_RTC, 1);               /* wait for clock tick */
+            sim_idle(0, 1);                     /* wait for clock tick */
+/*722*/     irq_pend = 1;                       /* start scanning interrupts again */
+            goto wait_loop;                     /* continue waiting */
+        }
 
         /* Check for external interrupt here */
         /* see if we have an attention request from console */

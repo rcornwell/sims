@@ -24,8 +24,8 @@ cutostap - This program scans a metadata .tap file and copies files
            .tap sdt image.  The mkfmcopy can be used to create a
            user sdt tape with files following the sdt image.
 
-           command filelist <file.tap >stdout
-           input - stdin  <file to remove sdt from
+           command: cutostap <file.tap >stdout
+           input -  stdin  <file to remove sdt from
            output - stdout >file to be written with sdt image
 
 diskload - This program reads an MPX load module and stores it into
@@ -36,16 +36,16 @@ diskload - This program reads an MPX load module and stores it into
            command: diskload -la program diskfile
            option -a - add filename to diskfile
            option -l - list files in diskfile SMD, ignore filename
-           input - filename - file to copy to system disk
-                 - diskfile - simulated system disk
+           input -  filename - file to copy to system disk
+                 -  diskfile - simulated system disk
            output - modified system disk
 
 filelist - This program scans a metadata .tap file and prints the
            file count and sizes.  Used to determine the file
            format contained in the metadata .tap file.
 
-           command filelist <file.tap >stdout
-           input - stdin  <file to dump
+           command: filelist <file.tap >stdout
+           input -  stdin  <file to dump
            output - stdout
 
 fmgrcopy - This program reads a MPX 1.x filemgr save tape.  The tape
@@ -58,8 +58,8 @@ fmgrcopy - This program reads a MPX 1.x filemgr save tape.  The tape
            as binary data to the named file.  The .tap file MUST be
            a filemgr save tape and not a MPX-1.x SDT tape.
 
-           command fmgrcopy file.tap >stdout
-           input - file.tap file to dump
+           command: fmgrcopy file.tap >stdout
+           input -  file.tap file to dump
            output - stdout filelist and sizes
            output - directory/files extracted to current directory
 
@@ -67,7 +67,7 @@ mkfmtape - This program creates an MPX 1.x filemgr save tape.  The
            tape can then be used to restore files to the MPX-1.X
            system.  The output will be in SIMH simulated .tap format.
 
-           command mkfmtape opts output.tap file1 file2 ...
+           command: mkfmtape opts output.tap file1 file2 ...
            input - list of filename to save to tape.
            output - output.tap a tap formatted file.
            options - -p = file type 0xca for programs
@@ -78,12 +78,12 @@ mkfmtape - This program creates an MPX 1.x filemgr save tape.  The
                    - -u = username (directory)
 
 mkvmtape - This program reads MPX files and stores them into a
-           simulated volmgr save tape. The tape may then become a 
-           MPX 3.X sdt boot tape to install MPX 3.X from or a volmgr
-           file restore tape for a running MPX system.  The output
-           will be in SIMH simulated .tap format.
+           simulated volmgr save tape. The tape may then become
+           a MPX 3.X sdt boot tape to install MPX 3.X from or a
+           volmgr file restore tape for a running MPX system.
+           The output will be in SIMH simulated .tap format.
 
-           command mkfmtape [-ptloa] [-bboot] [-iimage] [-jj.vfmt]
+           command: mkfmtape [-ptloa] [-bboot] [-iimage] [-jj.vfmt]
                             [-uusername] tapname file1 file2 ...
            intput - [options] volmtape filename, filename, etc.
            output - volmtape file, file list to stdout
@@ -101,6 +101,33 @@ mkvmtape - This program reads MPX files and stores them into a
                    - -j = j.vfmt filename
                    04/11/2020 update for mpx3.x
 
+mkdiagtape.c - This program extracts the diag command file (file 2)
+           from a diagnostic tape in .tap format and replaces it
+           with a new command file.  The rest of the tape is copied
+           unchanged.  The original command file from the diag tape
+           must be extracted from the diag tape using the diagcopy
+           utility.  This file can then be deblocked using the deblk
+           utility. The file can then be editied using VI or your
+           favorite editor.  Lines must be blank filled to 80 chars
+           exactly after editing.  The mpxblk utility must then be
+           used to restore the file to blocked MPX format before
+           installing it on the new diag tape.
+
+           1. mkdir temp; Create temp directory.
+           2. cp diag.tap temp; Copy in current diag tape.
+           3. cd temp; Move to temp directory.
+           4. diagcopy diag.tap; Extract diag tape contents.
+           5. deblk cmdfile >cmd.txt;  Creat unblocked text file.
+           6. vi cmd.txt; Edit text file with new commands and save.
+           7. mpxblk <cmd.txt >cmd.blk; Restore blocked file format.
+           8. mkdiagtape -c cmd.txt diag.tap newdiag.tap.
+           9. copy newdiag.tap to execution directory and run sel32.
+
+           command: mkdiagtape -c cmdfile olddiag newdiag
+           intput - simulated in_diagtape
+           output - simulated newtape
+           option - -c cmdfile
+
 diagcopy - This program reads a SEL .tap diagnostic boot tape and splits
            the contents into multiple files.  The first tape record
            is 204 bytes of boot code and is put into the file bootcode.
@@ -116,8 +143,8 @@ diagcopy - This program reads a SEL .tap diagnostic boot tape and splits
            the tape.  These records are all multiple of 768 bytes each
            and contain binary programs.
 
-           command diagcopy diag.tap
-           input - diag.tap file to dump
+           command: diagcopy diag.tap
+           input  - diag.tap file to dump
            output - stdout filelist and sizes
            output - if tape contains a valid diag image, it will be
                     output to files bootfile, cmdfile, dolfile and
@@ -130,8 +157,8 @@ tapdump -  This program reads a metadata .tap file and prints a side
            hitting <q> will terminate the display, and hitting <s>
            will skip to the next file on the simulated tape.
 
-           command tapdump <file.tap >stdout
-           input - stdin  <file to dump
+           command: tapdump <file.tap >stdout
+           input -  stdin  <file to dump
            output - stdout
 
 tape2disk - This program reads a tape assigned as input device.  It
@@ -142,8 +169,8 @@ tape2disk - This program reads a tape assigned as input device.  It
            MPX 3.x volmgr save tapes contain three EOFs so comment out
            the define for that case. 
 
-           command - tape2disk mt00 [file.tap]
-           input - mag tape device being read
+           command: tape2disk mt00 [file.tap]
+           input -  mag tape device being read
            output - list of files and sizes read from input tape
            output - metadata .tap file optionally specified
 
@@ -151,8 +178,8 @@ tapscan -  This program scans a metadata .tap file and prints the
            file count and sizes.  Used to determine the file
 
            format contained in the metadata .tap file.
-           command - tapscan file.tap >stdout
-           input - file.tap file to scan
+           command: tapscan file.tap >stdout
+           input -  file.tap file to scan
            output - stdout filelist and sizes
 
 volmcopy - This program reads a MPX 3.x volmgr save tape.  The tape
@@ -168,8 +195,8 @@ volmcopy - This program reads a MPX 3.x volmgr save tape.  The tape
            file MUST be a volmgr save tape and not a MPX-1.x SDT/save
            tape.
 
-           command fmgrcopy file.tap >stdout
-           input - file.tap file to dump
+           command: fmgrcopy file.tap >stdout
+           input -  file.tap file to dump
            output - stdout filelist and sizes
            output - directory/files extracted to current directory
 
@@ -181,7 +208,7 @@ ddump -    Create a sys by side ascii dump of a file.  Same operation
            hex address can be input to display data at a given offset
            in the file.  Optionall, the file data can be modified.
 
-           command - ddump -r filename
+           command:  ddump -r filename
            option -  -r means open file read only 
            input -   filename file to read
            output -  side by size ascii dump of file
@@ -190,7 +217,7 @@ deblk -    read and convert mpx blocked ifile to unblocked unix file
            format.  Compressed and uncompressed files records can be
            read.  Output is an ascii string with '\n' termination.
 
-           command - deblk [filename]
+           command:  deblk [filename]
            input -   filename or if non specified, stdin
            output -  ascii sting to stdout
 
@@ -198,7 +225,7 @@ mpxblk -   Create an MPX blocked file from a '\n' terminated ascii
            character string file.  Trailing blanks are not deleted
            from the source file.  Max line size is 254 bytes.
 
-           command - mpxblk <filein >fileout
+           command:  mpxblk <filein >fileout
            input   - read ascii file from stdin
            output  - write mpx blocked file to stdout
 
@@ -208,7 +235,7 @@ renum -    Create a numbered file from a '\n' terminated ascii file.
            A line number in the form of XXXX.000 are appended to
            create 80 char '\n' terminated lines.
 
-           command - renum <filein >fileout
+           command:  renum <filein >fileout
            input -   read ascii file from stdin
            output -  write numbered ascii file to stdout
 
@@ -217,9 +244,9 @@ small -   Remove line numbers and trailing blanks from an ascii '\n'
           stripped of trailing blanks.  Output is '\n' terminated
           ascii files.
 
-          command -  small <filein >fileout
+          command:   small <filein >fileout
           input -    read ascii file from stdin
           output -   write stripped ascii file to stdout
 
 James C. Bevier
-04/21/2020
+08/21/2020

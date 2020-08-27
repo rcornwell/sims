@@ -440,7 +440,7 @@ uint16 mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
             chan, cmd);
         uptr->SNS |= SNS_CMDREJ;
         /* send program check */
-        return SNS_CHNEND|STATUS_PCHK;
+        return SNS_CHNEND|SNS_DEVEND|STATUS_PCHK;   /* add DEVEND 08/16/20 */
         break;
     }
 #if 0
@@ -520,7 +520,7 @@ t_stat mt_srv(UNIT *uptr)
     uint32      mema;
     uint16      len;
     uint8       ch;
-    uint8       buf[1024];
+//  uint8       buf[1024];
 
     sim_debug(DEBUG_DETAIL, &mta_dev, "mt_srv unit %04x cmd %02x\n", unit, cmd);
     if ((uptr->flags & UNIT_ATT) == 0) {        /* unit attached status */
@@ -547,6 +547,7 @@ t_stat mt_srv(UNIT *uptr)
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
         }
+#ifdef DIAG_WANTS_COUNT
         for (i=0; i < len; i++) {
             if (chan_read_byte(chsa, &buf[i])) {
                 /* we have error, bail out */
@@ -557,6 +558,7 @@ t_stat mt_srv(UNIT *uptr)
             }
             /* just dump data */
         }
+#endif
         /* the chp->ccw_addr location contains the inch address */
         /* call set_inch() to setup inch buffer */
         i = set_inch(uptr, mema);               /* new address */

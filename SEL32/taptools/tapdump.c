@@ -50,11 +50,13 @@ int getloi(char *s, int lim)
                     fprintf(stderr, "file %d: record %d: size %d (%x)\n", filen, lcount, ln, ln);
             }
             fprintf(stderr, "file %d: eof after %d records: %d bytes (%x)\n", filen, count, size, size);
+            fprintf(stderr, "file %d EOFcnt %d offset %x\n", filen, EOFcnt, tsize);
 #endif
             filen++;    /* set next file number */
         } else {
 #ifndef NOTDUMP
             fprintf(stderr, "second eof after %d files: %d bytes (%x)\n", filen, size, size);
+            fprintf(stderr, "second file %d EOFcnt %d offset %x\n", filen, EOFcnt, tsize);
 #endif
         }
         count = 0;      /* file record count back to zero */

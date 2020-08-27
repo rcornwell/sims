@@ -826,7 +826,6 @@ t_stat scsi_srv(UNIT *uptr)
         if (uptr->SNS & SNS_TCMD) {
             /* we need to process a read TCMD data */
             int cnt = scsi_buf[bufnum][unit][4];    /* byte count of status to send */
-            ch = scsi_buf[bufnum][unit][0];     /* return TCMD cmd */
             uint32  cyl = CYL(type);            /* number of cylinders */
             uint32  spt = SPT(type);            /* sectors per track */
             uint32  ssb = SSB(type);            /* sector size in bytes */
@@ -834,6 +833,7 @@ t_stat scsi_srv(UNIT *uptr)
             /* cnt has # bytes to return (0xf0) */
             uint8   pagecode = scsi_buf[bufnum][unit][2] & 0x3f;   /* get page code */
             uint8   pagecont = (scsi_buf[bufnum][unit][2] & 0xc0) >> 6; /* get page control */
+            ch = scsi_buf[bufnum][unit][0];     /* return TCMD cmd */
             uptr->SNS &= ~SNS_TCMD;             /* show not presessing TCMD cmd chain */
             sim_debug(DEBUG_CMD, dptr,
                 "scsi_srv processing TCMD read cmd %02x, chsa %04x tcma %06x cnt %04x\n",

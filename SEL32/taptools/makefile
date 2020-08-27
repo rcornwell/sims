@@ -29,6 +29,7 @@ PROGS =			\
 	$(ROOT)/mkfmtape \
 	$(ROOT)/mkvmtape \
 	$(ROOT)/sdtfmgrcopy \
+	$(ROOT)/mkdiagtape \
 	$(ROOT)/tapdump	\
 	$(ROOT)/tape2disk \
 	$(ROOT)/tapscan \
@@ -89,6 +90,12 @@ $B/mkvmtape:	$D mkvmtape.c
 	@echo $(@F) installed in $B
 
 $B/sdtfmgrcopy:	$D sdtfmgrcopy.c
+	@-$(CC) $(CFLAGS) $(@F).c $(LFLAGS) -o $@
+	@chmod 755 $@
+	@cp $(@F) $B
+	@echo $(@F) installed in $B
+
+$B/mkdiagtape:	$D mkdiagtape.c
 	@-$(CC) $(CFLAGS) $(@F).c $(LFLAGS) -o $@
 	@chmod 755 $@
 	@cp $(@F) $B

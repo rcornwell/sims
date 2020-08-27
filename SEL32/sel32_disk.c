@@ -454,7 +454,7 @@ uint16 disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     case DSK_XEZ:                               /* Rezero & Read IPL record 0x37 */
     case DSK_WD:                                /* Write command 0x01 */
     case DSK_RD:                                /* Read command 0x02 */
-    case DSK_LMR:                               /* read mode register 0x15 */
+    case DSK_LMR:                               /* read mode register 0x1F */
     case DSK_NOP:                               /* NOP 0x03 */
     case DSK_SNS:                               /* Sense 0x04 */
     case DSK_WSL:                               /* WSL 0x31 */
@@ -474,11 +474,14 @@ uint16 disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     sim_debug(DEBUG_CMD, dptr,
         "disk_startcmd done with bad disk cmd %02x chsa %04x SNS %08x\n",
         cmd, chsa, uptr->SNS);
-    if (uptr->SNS & 0xff)                       /* any other cmd is error */
-        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
+//25if (uptr->SNS & 0xff)                       /* any other cmd is error */
+//      return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
+///     return SNS_CHNEND|SNS_DEVEND|SNS_CHNTCHK;
+//25    return SNS_CHNEND|SNS_DEVEND|STATUS_PCHK;
 //J sim_activate(uptr, 20);                     /* start things off */
     sim_activate(uptr, 50);                     /* start things off */
-    return SNS_CHNEND|SNS_DEVEND;
+//25return SNS_CHNEND|SNS_DEVEND;
+    return SNS_CHNEND|SNS_DEVEND|STATUS_PCHK;
 }
 
 /* Handle processing of disk requests. */
@@ -541,7 +544,8 @@ t_stat disk_srv(UNIT *uptr)
         if (len != 36) {
                 /* we have invalid count, error, bail out */
                 uptr->CMDu3 &= LMASK;           /* remove old status bits & cmd */
-                uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
+//25            uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
+                uptr->SNS |= SNS_CMDREJ;
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
         }
@@ -555,7 +559,8 @@ t_stat disk_srv(UNIT *uptr)
             if (chan_read_byte(chsa, &buf[i])) {
                 /* we have error, bail out */
                 uptr->CMDu3 &= LMASK;           /* remove old status bits & cmd */
-                uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
+//25            uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
+                uptr->SNS |= SNS_CMDREJ;
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
             }
@@ -578,7 +583,8 @@ t_stat disk_srv(UNIT *uptr)
         if ((i == SCPE_MEM) || (i == SCPE_ARG)) {   /* any error */
             /* we have error, bail out */
             uptr->CMDu3 &= LMASK;               /* remove old status bits & cmd */
-            uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
+//25        uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
+            uptr->SNS |= SNS_CMDREJ;
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             break;
         }
@@ -712,7 +718,7 @@ t_stat disk_srv(UNIT *uptr)
         /* TODO add drive status bits here */
         if ((test_write_byte_end(chsa)) == 0) {
             /* bytes 12 & 13 contain drive related status */
-            ch = 0;                             /* zero for now */
+            ch = 0xc0;                          /* seek end and unit selected for now */
             sim_debug(DEBUG_DETAIL, dptr, "disk_srv dsr unit=%02x 1 %02x\n",
                 unit, ch);
             chan_write_byte(chsa, &ch);
@@ -784,7 +790,8 @@ t_stat disk_srv(UNIT *uptr)
                         unit, buf[0], buf[1], buf[2], buf[3]);
                     /* we have error, bail out */
                     uptr->CMDu3 &= LMASK;         /* remove old status bits & cmd */
-                    uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
+//25                uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
+                    uptr->SNS |= SNS_CMDREJ;
                     chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                     return SCPE_OK;
                     break;
@@ -825,7 +832,8 @@ t_stat disk_srv(UNIT *uptr)
                 cyl, trk, buf[3], unit);
 
             uptr->CMDu3 &= LMASK;               /* remove old status bits & cmd */
-            uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK; /* set error status */
+//25        uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK; /* set error status */
+            uptr->SNS |= SNS_CMDREJ;            /* set error status */
 
             /* we have an error, tell user */
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);  /* end command */
@@ -901,7 +909,8 @@ t_stat disk_srv(UNIT *uptr)
         if (chan_read_byte(chsa, &buf[0])) {
             /* we have error, bail out */
             uptr->CMDu3 &= LMASK;               /* remove old status bits & cmd */
-            uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
+//25        uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
+            uptr->SNS |= SNS_CMDREJ;
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             break;
         }
@@ -1162,6 +1171,7 @@ t_stat disk_srv(UNIT *uptr)
         uptr->CMDu3 &= LMASK;                   /* remove old status bits & cmd */
         sim_debug(DEBUG_CMD, dptr, "hsdp_srv cmd RSL done chsa %04x count %04x completed\n",
             chsa, chp->ccw_count);
+/*25*/  chp->ccw_count = 0;
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
         break;
 

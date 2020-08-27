@@ -351,7 +351,9 @@ t_stat con_srvo(UNIT *uptr) {
         uptr->CMD |= CON_OUTPUT;            /* output command complete */
         sim_debug(DEBUG_CMD, &con_dev,
             "con_srvo write wait %03x CMD %08x chsa %04x cmd %02x to complete\n",
+//          41*cnt+47, uptr->CMD, chsa, cmd);
             19*cnt+23, uptr->CMD, chsa, cmd);
+fflush(sim_deb);
 //      sim_activate(uptr, 19*cnt+23);      /* wait for a while */
 //      sim_activate(uptr, 31*cnt+47);      /* wait for a while */
 /*719*/ sim_activate(uptr, 41*cnt+47);      /* wait for a while */
@@ -490,6 +492,13 @@ t_stat con_srvi(UNIT *uptr) {
             }
             if (ch == '\n')                     /* convert newline */
                 ch = '\r';                      /* make newline into carriage return */ 
+#ifdef TESTING
+            if (ch == 3) {                      /* see if <clt>C */
+            sim_debug(DEBUG_CMD, &con_dev,
+                "con_srvi ctrl^C readch unit %02x: CMD %08x read %02x u4 %02x incnt %02x\n",
+                unit, uptr->CMD, ch, uptr->u4, con_data[unit].incnt);
+            }
+#endif
             sim_debug(DEBUG_CMD, &con_dev,
                 "con_srvi handle readch unit %02x: CMD %08x read %02x u4 %02x incnt %02x\n",
                 unit, uptr->CMD, ch, uptr->u4, con_data[unit].incnt);
@@ -582,19 +591,24 @@ uint16  con_haltio(UNIT *uptr) {
     sim_debug(DEBUG_EXP, &con_dev, "con_haltio enter chsa %04x cmd = %02x\n", chsa, cmd);
 
     /* terminate any input command */
+    /* UTX wants SLI bit, but no unit exception */
+    /* status must not have an error bit set */
+    /* otherwise, UTX will panic with "bad status" */
     if ((uptr->CMD & CON_MSK) != 0) {       /* is unit busy */
         sim_debug(DEBUG_CMD, &con_dev,
             "con_haltio HIO chsa %04x cmd = %02x ccw_count %02x\n", chsa, cmd, chp->ccw_count);
         // stop any I/O and post status and return error status */
         chp->chan_byte = BUFF_EMPTY;        /* there is no data to read/store */
-        chp->ccw_flags = 0;                 /* stop any chaining */
+//      chp->ccw_count = 0;                 /* zero the count */
+        chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);   /* reset chaining bits */
         uptr->CMD &= LMASK;                 /* make non-busy */
         uptr->u4 = 0;                       /* no I/O yet */
         con_data[unit].incnt = 0;           /* no input data */
         uptr->SNS = SNS_RDY|SNS_ONLN;       /* status is online & ready */
         sim_debug(DEBUG_CMD, &con_dev,
             "con_haltio HIO I/O stop chsa %04x cmd = %02x\n", chsa, cmd);
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);  /* force error */
+//      chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);  /* force error */
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
         return SCPE_IOERR;
     }
     uptr->u4 = 0;                           /* no I/O yet */
