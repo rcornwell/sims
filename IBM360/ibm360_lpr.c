@@ -356,7 +356,7 @@ lpr_srv(UNIT *uptr) {
     if (cmd == 7) {
        uptr->CMD &= ~(LPR_FULL|LPR_CMDMSK);
        uptr->POS = 0;
-       chan_read_byte(addr, &ch);
+       (void)chan_read_byte(addr, &ch);
        chan_end(addr, SNS_DEVEND|SNS_CHNEND);
        return SCPE_OK;
     }
@@ -368,7 +368,7 @@ lpr_srv(UNIT *uptr) {
         else
             uptr->CMD |= LPR_DATCHK;
        uptr->CMD &= ~(LPR_CMDMSK);
-       chan_read_byte(addr, &ch);
+       (void)chan_read_byte(addr, &ch);
        chan_end(addr, SNS_DEVEND|SNS_CHNEND);
        return SCPE_OK;
     }
