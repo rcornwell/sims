@@ -9676,10 +9676,10 @@ while ((*iptr != 0) && (!got_quoted) &&
     else *optr = *iptr;
     iptr++; optr++;
     }
-*optr = 0;
-if (mchar && (*iptr == mchar))                          /* skip terminator */
+if (mchar && (*iptr == mchar))              /* skip input terminator */
     iptr++;
-while (sim_isspace (*iptr))                             /* absorb spaces */
+*optr = 0;                                  /* terminate result string */
+while (sim_isspace (*iptr))                 /* absorb additional input spaces */
     iptr++;
 return iptr;
 }
@@ -15509,17 +15509,23 @@ int32 saved_switches = sim_switches & ~SWMASK ('T');
 t_stat stat = SCPE_OK;
 char gbuf[CBUFSIZE];
 
+GET_SWITCHES (cptr);                        /* get switches */
+saved_switches |= sim_switches;
 if (sim_time != 0.0)
     return sim_messagef (SCPE_UNK, "Library tests can not be performed after instructions have been executed.\n");
+sim_switches = 0;
 detach_all (0, 0);                          /* Assure that all units are unattached */
+sim_switches = saved_switches;
 
 cptr = get_glyph (cptr, gbuf, 0);
 if (gbuf[0] == '\0')
     strcpy (gbuf, "ALL");
-else {
+if (strcmp (gbuf, "ALL") != 0) {
     if (!find_dev (gbuf))
         return sim_messagef (SCPE_ARG, "No such device: %s\n", gbuf);
     }
+GET_SWITCHES (cptr);                        /* get extra switches after a device specifier */
+saved_switches |= sim_switches;
 if (sim_switches & SWMASK ('D')) {
     sim_switches &= ~(SWMASK ('D') | SWMASK ('R') | SWMASK ('F') | SWMASK ('T'));
     sim_set_debon (0, "STDOUT");
