@@ -197,7 +197,7 @@ print_line(UNIT * uptr)
         /* Print out buffer */
         sim_fwrite(&out, 1, i, uptr->fileref);
         uptr->pos += i;
-        sim_debug(DEBUG_DETAIL, &lpr_dev, "%s", out);
+        sim_debug(DEBUG_DETAIL, &lpr_dev, "%s\n", out);
     }
 
     if (l < 4) {
@@ -343,9 +343,10 @@ lpr_srv(UNIT *uptr) {
     int             u = (uptr - lpr_unit);
     int             cmd = (uptr->CMD & 0x7);
     int             l = (uptr->CMD >> 3) & 0x1f;
+    uint8           ch;
 
     if (cmd == 4) {
-         uint8 ch = uptr->SNS;
+         ch = uptr->SNS;
          uptr->CMD &= ~(LPR_CMDMSK);
          chan_write_byte(addr, &ch);
          chan_end(addr, SNS_DEVEND|SNS_CHNEND);
@@ -355,6 +356,7 @@ lpr_srv(UNIT *uptr) {
     if (cmd == 7) {
        uptr->CMD &= ~(LPR_FULL|LPR_CMDMSK);
        uptr->POS = 0;
+       chan_read_byte(addr, &ch);
        chan_end(addr, SNS_DEVEND|SNS_CHNEND);
        return SCPE_OK;
     }
@@ -366,19 +368,19 @@ lpr_srv(UNIT *uptr) {
         else
             uptr->CMD |= LPR_DATCHK;
        uptr->CMD &= ~(LPR_CMDMSK);
+       chan_read_byte(addr, &ch);
        chan_end(addr, SNS_DEVEND|SNS_CHNEND);
        return SCPE_OK;
     }
 
     /* Handle UCS Load */
     if ((uptr->CMD & 0xf7) == 0xf3) {
-       uint8   ch;
        for (l = 0; l < 240; l++) {
            if(chan_read_byte(addr, &ch)) 
               break;
        }
-       chan_end(addr, SNS_DEVEND|SNS_CHNEND);
        uptr->CMD &= ~(LPR_CMDMSK);
+       chan_end(addr, SNS_DEVEND|SNS_CHNEND);
        return SCPE_OK;
     }
 

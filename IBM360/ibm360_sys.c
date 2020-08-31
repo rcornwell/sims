@@ -114,7 +114,7 @@ DEBTAB              crd_debug[] = {
 
 const char *sim_stop_messages[] = {
     "Unknown error",
-    "HALT instruction",
+    "Uninterruptable wait",
     "Breakpoint"
      };
 

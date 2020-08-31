@@ -199,6 +199,7 @@ cdr_srv(UNIT *uptr) {
          chan_write_byte(addr, &ch);
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          uptr->CMD &= ~(CDR_CMDMSK);
+         uptr->SNS = 0;
          return SCPE_OK;
     }
 

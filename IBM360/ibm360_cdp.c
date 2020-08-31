@@ -210,7 +210,7 @@ cdp_srv(UNIT *uptr) {
         if (chan_read_byte(addr, &ch)) {
             uptr->CMD |= CDP_CARD;
         } else {
-            sim_debug(DEBUG_DATA, &cdp_dev, "%d: Char < %02o\n", u, ch);
+            sim_debug(DEBUG_DATA, &cdp_dev, "%d: Char < %02x\n", u, ch);
             image[uptr->COL++] = sim_ebcdic_to_hol(ch);
             if (uptr->COL == 80) {
                 uptr->CMD |= CDP_CARD;
@@ -230,15 +230,11 @@ cdp_srv(UNIT *uptr) {
 t_stat
 cdp_attach(UNIT * uptr, CONST char *file)
 {
-    t_stat              r;
-
-    if ((r = sim_card_attach(uptr, file)) != SCPE_OK)
-       return r;
     if (uptr->up7 == 0) {
         uptr->up7 = calloc(80, sizeof(uint16));
         uptr->SNS = 0;
     }
-    return SCPE_OK;
+    return sim_card_attach(uptr, file);
 }
 
 t_stat

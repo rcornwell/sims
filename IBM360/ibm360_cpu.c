@@ -26,7 +26,7 @@
    The IBM 360 supported 32 bit memory and 16 32 bit registers. Optionally
    it could have 4 64 bit floating point registers. Optionally the machine
    could also process packed decimal numbers directly. There was also a
-   64 bit processor status word. Up to 16MB of memory could be supported, 
+   64 bit processor status word. Up to 16MB of memory could be supported,
    however 1MB or less was much more common. 8MB being the practical max.
 
    Instructions ranged from 2 bytes to up to 6 bytes. In the following formats:
@@ -363,7 +363,8 @@ MTAB cpu_mod[] = {
     { FEAT_DAT, FEAT_DAT, "DAT", "DAT", NULL, NULL, NULL, "DAT /67"},
     { FEAT_DAT, 0, NULL,  "NODAT", NULL, NULL},
     { EXT_IRQ, 0, "NOEXT",  NULL, NULL, NULL},
-    { EXT_IRQ, EXT_IRQ, "EXT", "EXT", NULL, NULL, NULL, "External Irq"},
+    { EXT_IRQ, EXT_IRQ, "EXT", "EXT", NULL, NULL, NULL,
+                      "SET CPU EXT causes external interrupt"},
     { MTAB_XTD|MTAB_VDV|MTAB_NMO|MTAB_SHP, 0, "HISTORY", "HISTORY",
       &cpu_set_hist, &cpu_show_hist },
     { 0 }
@@ -474,7 +475,7 @@ void storepsw(uint32 addr, uint16 ircode) {
          hst[hst_p].src2 = word2;
          hst[hst_p].addr1 = ircode;
      }
-     sim_debug(DEBUG_INST, &cpu_dev, "store %02x %d %x %03x PSW=%08x %08x\n\r", addr, ilc,
+     sim_debug(DEBUG_INST, &cpu_dev, "store %02x %d %x %03x PSW=%08x %08x\n", addr, ilc,
              cc, ircode, word, word2);
      irqcode = ircode;
 }
@@ -1606,28 +1607,28 @@ opr:
                 if (flags & PROBLEM)
                     storepsw(OPPSW, IRC_PRIV);
                 else
-                    cc = startio(addr1 & 0xfff);
+                    cc = startio(addr1 & 0x1fff);
                 break;
 
         case OP_TIO:
                 if (flags & PROBLEM)
                     storepsw(OPPSW, IRC_PRIV);
                 else
-                    cc = testio(addr1 & 0xfff);
+                    cc = testio(addr1 & 0x1fff);
                 break;
 
         case OP_HIO:
                 if (flags & PROBLEM)
                     storepsw(OPPSW, IRC_PRIV);
                 else
-                    cc = haltio(addr1 & 0xfff);
+                    cc = haltio(addr1 & 0x1fff);
                 break;
 
         case OP_TCH:
                 if (flags & PROBLEM)
                     storepsw(OPPSW, IRC_PRIV);
                 else
-                    cc = testchan(addr1 & 0xfff);
+                    cc = testchan(addr1 & 0x1fff);
                 break;
 
         case OP_DIAG:
@@ -1737,6 +1738,15 @@ set_cc3:
                 }
                 src1 = regs[reg1|1];
         case OP_MH:
+#ifdef USE_64BIT
+                src1L = (((t_int64) ((t_uint64)src1 << 32)) >> 32) * (int32)src2;
+                if (op != OP_MH) {
+                    STDBL(reg1, src1L);
+                } else {
+                    regs[reg1] = (uint32)(src1L & FMASK);
+                    per_mod |= 1 << reg1;
+                }
+#else
                 fill = 0;
 
                 if (src1 & MSIGN) {
@@ -1747,17 +1757,6 @@ set_cc3:
                     fill ^= 1;
                     src2 = NEG(src2);
                 }
-#ifdef USE_64BIT
-                src1L = ((t_uint64)src1) * ((t_uint64)src2);
-                if (fill)
-                    src1L = NEG(src1L);
-                if (op != OP_MH) {
-                    STDBL(reg1, src1L);
-                } else {
-                    regs[reg1] = (uint32)(src1L & FMASK);
-                    per_mod |= 1 << reg1;
-                }
-#else
                 src1h = 0;
                 if (src1 != 0 || src2 != 0) {
                     for (reg = 32; reg > 0; reg--) {
@@ -2267,7 +2266,7 @@ save_dbl:
                             goto supress;
                         cregs[reg1] = dest;
                         sim_debug(DEBUG_INST, &cpu_dev,
-                                 "Loading: CR %x %06x %08x IC=%08x %x\n\r",
+                                 "Loading: CR %x %06x %08x IC=%08x %x\n",
                                     reg1, addr1, dest, PC, reg);
                         switch (reg1) {
                         case 0x0:     /* Segment table address */
@@ -3275,7 +3274,7 @@ save_dbl:
                             goto supress;
                         cregs[reg1] = dest;
                         sim_debug(DEBUG_INST, &cpu_dev,
-                                 "Loading: CR %x %06x %08x IC=%08x %x\n\r",
+                                 "Loading: CR %x %06x %08x IC=%08x %x\n",
                                     reg1, addr1, dest, PC, reg);
                         switch (reg1) {
                         case 0x0:     /* General control register */
@@ -3324,6 +3323,10 @@ save_dbl:
                                                   ~page_mask) & AMASK) >> page_shift;
                                   intval_en = ((dest & 0x400) != 0);
                                   tod_en = ((dest & 0x800) != 0);
+                                  for (temp = 0;
+                                       temp < sizeof(tlb)/sizeof(uint32);
+                                       temp++)
+                                       tlb[temp] = 0;
                                   break;
                         case 0x1:     /* Segment table address and length */
                                   seg_addr = dest & AMASK;
@@ -5901,73 +5904,181 @@ check_tod_irq()
 
 t_stat cpu_ex (t_value *vptr, t_addr exta, UNIT *uptr, int32 sw)
 {
-uint32 addr = (uint32) exta;
-uint32 byte;
-uint32 offset = 8 * (3 - (addr & 0x3));
+    uint32 addr = (uint32) exta;
+    uint32 byte;
+    uint32 offset = 8 * (3 - (addr & 0x3));
 
-if (vptr == NULL)
-    return SCPE_ARG;
-/* Ignore high order bits */
-addr &= AMASK;
-if (addr >= MEMSIZE)
-    return SCPE_NXM;
-addr >>= 2;
-byte = M[addr] >> offset;
-byte &= 0xff;
-*vptr = byte;
-return SCPE_OK;
+    if (vptr == NULL)
+        return SCPE_ARG;
+    if (sw & SWMASK ('V')) {
+        /* Virtual address, simulate LRA */
+        uint32      seg;
+        uint32      page;
+        uint32      entry;
+        uint32      addr1, addr2;
+
+        if ((cpu_unit[0].flags & FEAT_DAT) == 0)
+            return SCPE_NXM;
+
+        /* Segment number to word address */
+        addr1 = addr & AMASK;
+        seg = (addr1 >> seg_shift) & seg_mask;
+        page = (addr1 >> page_shift) & page_index;
+        if (seg > seg_len)
+            return SCPE_NXM;
+        addr2 = (((seg << 2) + seg_addr) & AMASK);
+        if (addr2 >= MEMSIZE)
+            return SCPE_NXM;
+
+        /* Check if entry valid */
+        entry = M[addr2 >> 2];
+        if (entry & PTE_VALID)
+            return SCPE_NXM;
+
+        if ((cpu_unit[0].flags & FEAT_370) != 0) {
+            addr2 = (entry >> 28) + 1;
+            /* Check if over end of table */
+            if ((page >> pte_len_shift) > addr2)
+                return SCPE_NXM;
+        } else {
+            addr2 = (entry >> 24);
+            if (page > addr2)
+                return SCPE_NXM;
+        }
+
+        /* Now we need to fetch the actual entry */
+        addr2 = (entry & PTE_ADR) + (page << 1);
+        addr2 &= AMASK;
+        if (addr2 >= MEMSIZE)
+            return SCPE_NXM;
+
+        entry = M[addr2 >> 2];
+        entry >>= (addr2 & 2) ? 0 : 16;
+        entry &= 0xffff;
+
+        /* Check if entry valid */
+        if (entry & pte_avail)
+            return SCPE_NXM;
+
+        addr = (addr1 & page_mask) | ((entry & 0xfff8) << 8);
+    }
+
+    /* Real address, just return it, but ignore high order bits */
+    addr &= AMASK;
+    if (addr >= MEMSIZE)
+        return SCPE_NXM;
+
+    addr >>= 2;
+    byte = M[addr] >> offset;
+    byte &= 0xff;
+    *vptr = byte;
+    return SCPE_OK;
 }
 
 /* Memory deposit */
 
 t_stat cpu_dep (t_value val, t_addr exta, UNIT *uptr, int32 sw)
 {
-uint32 addr = (uint32) exta;
-uint32 offset = 8 * (3 - (addr & 0x3));
-uint32 word;
-uint32 mask;
+    uint32 addr = (uint32) exta;
+    uint32 offset = 8 * (3 - (addr & 0x3));
+    uint32 word;
+    uint32 mask;
 
-/* Ignore high order bits */
-addr &= AMASK;
-if (addr >= MEMSIZE)
-    return SCPE_NXM;
-addr >>= 2;
-mask = 0xff << offset;
-word = M[addr];
-word &= ~mask;
-word |= (val & 0xff) << offset;
-M[addr] = word;
-return SCPE_OK;
+    if (sw & SWMASK ('V')) {
+        /* Virtual address, simulate LRA */
+        uint32      seg;
+        uint32      page;
+        uint32      entry;
+        uint32      addr1, addr2;
+
+        if ((cpu_unit[0].flags & FEAT_DAT) == 0)
+            return SCPE_NXM;
+
+        /* Segment number to word address */
+        addr1 = addr & AMASK;
+        seg = (addr1 >> seg_shift) & seg_mask;
+        page = (addr1 >> page_shift) & page_index;
+        if (seg > seg_len)
+            return SCPE_NXM;
+        addr2 = (((seg << 2) + seg_addr) & AMASK);
+        if (addr2 >= MEMSIZE)
+            return SCPE_NXM;
+
+        /* Check if entry valid */
+        entry = M[addr2 >> 2];
+        if (entry & PTE_VALID)
+            return SCPE_NXM;
+
+        if ((cpu_unit[0].flags & FEAT_370) != 0) {
+            addr2 = (entry >> 28) + 1;
+            /* Check if over end of table */
+            if ((page >> pte_len_shift) > addr2)
+                return SCPE_NXM;
+        } else {
+            addr2 = (entry >> 24);
+            if (page > addr2)
+                return SCPE_NXM;
+        }
+
+        /* Now we need to fetch the actual entry */
+        addr2 = (entry & PTE_ADR) + (page << 1);
+        addr2 &= AMASK;
+        if (addr2 >= MEMSIZE)
+            return SCPE_NXM;
+
+        entry = M[addr2 >> 2];
+        entry >>= (addr2 & 2) ? 0 : 16;
+        entry &= 0xffff;
+
+        /* Check if entry valid */
+        if (entry & pte_avail)
+            return SCPE_NXM;
+
+        addr = (addr1 & page_mask) | ((entry & 0xfff8) << 8);
+    }
+
+    /* Ignore high order bits */
+    addr &= AMASK;
+    if (addr >= MEMSIZE)
+        return SCPE_NXM;
+
+    addr >>= 2;
+    mask = 0xff << offset;
+    word = M[addr];
+    word &= ~mask;
+    word |= (val & 0xff) << offset;
+    M[addr] = word;
+    return SCPE_OK;
 }
 
 /* Memory allocation */
 
 t_stat cpu_set_size (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
-int32 mc = 0;
-int32 i, clim;
-uint32 *nM = NULL;
-int32 max = MEMSIZE >> 2;
+    int32 mc = 0;
+    int32 i, clim;
+    uint32 *nM = NULL;
+    int32 max = MEMSIZE >> 2;
 
-val = 16 * 1024 * val;
-if ((val <= 0) || (val > MAXMEMSIZE))
-    return SCPE_ARG;
-for (i = val>>2; i < max; i++)
-    mc = mc | M[i];
-if ((mc != 0) && !get_yn ("Really truncate memory [N]?", FALSE))
-    return SCPE_OK;
-nM = (uint32 *) calloc (val >> 2, sizeof (uint32));
-if (nM == NULL)
-    return SCPE_MEM;
-clim = ((t_addr)val < MEMSIZE)? val >> 2: max;
-for (i = 0; i < clim; i++)
-    nM[i] = M[i];
-free (M);
-M = nM;
-fprintf(stderr, "Mem size=%x\n\r", val);
-MEMSIZE = val;
-reset_all (0);
-return SCPE_OK;
+    val = 16 * 1024 * val;
+    if ((val <= 0) || (val > MAXMEMSIZE))
+        return SCPE_ARG;
+    for (i = val>>2; i < max; i++)
+        mc = mc | M[i];
+    if ((mc != 0) && !get_yn ("Really truncate memory [N]?", FALSE))
+        return SCPE_OK;
+    nM = (uint32 *) calloc (val >> 2, sizeof (uint32));
+    if (nM == NULL)
+        return SCPE_MEM;
+    clim = ((t_addr)val < MEMSIZE)? val >> 2: max;
+    for (i = 0; i < clim; i++)
+        nM[i] = M[i];
+    free (M);
+    M = nM;
+    fprintf(stderr, "Mem size=%x\n\r", val);
+    MEMSIZE = val;
+    reset_all (0);
+        return SCPE_OK;
 }
 
 /* Handle execute history */

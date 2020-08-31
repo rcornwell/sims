@@ -47,7 +47,7 @@
         384 - +6    0x1xx - 0x6xx
 
         Channels 1,2,3,5,6 are selector channels.
-        Devices on channel 0 below number of subchannels have there own
+        Devices on channel 0 below number of subchannels have their own
         virtual channel.
         Devices on channel 0 above the number of subchannels are mapped in
         groups of 16 into channels 0 to n.

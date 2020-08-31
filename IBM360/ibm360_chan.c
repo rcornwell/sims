@@ -373,7 +373,7 @@ loop:
          chan_status[chan] &= 0xff;
          chan_status[chan] |= dibp->start_cmd(uptr, chan, ccw_cmd[chan]) << 8;
          if (chan_status[chan] & (STATUS_ATTN|STATUS_CHECK|STATUS_EXPT)) {
-             sim_debug(DEBUG_DETAIL, &cpu_dev, "Channel %03x abort %04x\n", 
+             sim_debug(DEBUG_DETAIL, &cpu_dev, "Channel %03x abort %04x\n",
                      chan, chan_status[chan]);
              chan_status[chan] |= STATUS_CEND;
              ccw_flags[chan] = 0;
@@ -385,6 +385,8 @@ loop:
              chan_status[chan] |= STATUS_CEND;
              ccw_cmd[chan] = 0;
              irq_pend = 1;
+             if ((ccw_flags[chan] & (FLAG_CD|FLAG_CC)) == 0)
+                return 1;  /* No chain? Give imm. SIO response. */
         }
     }
     if (ccw_flags[chan] & FLAG_PCI) {
@@ -732,7 +734,7 @@ startio(uint16 addr) {
     if (ccw_cmd[chan] != 0 ||
         (ccw_flags[chan] & (FLAG_CD|FLAG_CC)) != 0 ||
         chan_status[chan] != 0) {
-        sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %08x cc=2\n", addr, chan, 
+        sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x %x %08x cc=2\n", addr, chan,
                chan_status[chan]);
         return 2;
     }
@@ -951,6 +953,8 @@ int haltio(uint16 addr) {
             M[0x44 >> 2] = (((uint32)chan_status[chan]) << 16) |
                        (M[0x44 >> 2] & 0xffff);
             key[0] |= 0x6;
+            sim_debug(DEBUG_EXP, &cpu_dev, "Channel store csw %02x %08x\n",
+                    chan, M[0x44 >> 2]);
         }
         return cc;
     }
@@ -961,6 +965,7 @@ int haltio(uint16 addr) {
     M[0x44 >> 2] = (((uint32)chan_status[chan]) << 16) |
                    (M[0x44 >> 2] & 0xffff);
     key[0] |= 0x6;
+    sim_debug(DEBUG_EXP, &cpu_dev, "Channel store csw %02x %08x\n", chan, M[0x44 >> 2]);
     return 1;
 }
 
@@ -969,8 +974,37 @@ int haltio(uint16 addr) {
  */
 int testchan(uint16 channel) {
     uint16         st = 0;
-    channel >>= 8;
-    if (channel == 0 || channel == 4)
+    uint8          cc = 0;
+
+    /* 360 Principles of Operation says, "Bit positions 21-23 of the
+    sum formed by the addition of the content of register B1 and the
+    content of the D1 field identify the channel to which the
+    instruction applies. Bit positions 24-31 of the address are ignored.”
+    /67 Functional Characteristics do not mention any changes in basic or
+    extended control mode of the TCH instruction behaviour.
+    However, historic /67 code for MTS suggests that bits 19-20 of the
+    address indicate the channel controller which should be used to query
+    the channel.
+
+    Original testchan code did not recognize the channel controller (CC) part
+    of the address and treats the query as referring to a channel # like so:
+    CC = 0 channel# 0  1  2  3  4  5  6
+    CC = 1    "     8  9 10 11 12 13 14
+    CC = 2    "    16 17 18 19 20 21 22
+    CC = 3    "    24 25 26 27 28 29 30
+    which may interfere with subchannel mapping.
+
+    For the nonce, TCH only indicates that channels connected to CC 0 & 1 are
+    attached.  Channels 0, 4, 8 (0 on CC 1) & 12 (4 on CC 1) are multiplexer
+    channels. */
+
+    cc = (channel >> 11) & 0x03;
+    channel = (channel >> 8) & 0x0f;
+    if (cc > 1 || channel > channels) {
+        sim_debug(DEBUG_CMD, &cpu_dev, "TCH CC %x %x cc=3\n", cc, channel);
+        return 3;
+    }
+    if (channel == 0 || channel == 4 || channel == 8 || channel == 12)
         return 0;
     if (channel > channels)
         return 3;

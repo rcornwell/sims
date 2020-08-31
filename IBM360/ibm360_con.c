@@ -245,6 +245,7 @@ con_srv(UNIT *uptr) {
          chan_write_byte(addr, &ch);
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          uptr->CMD &= ~(CON_MSK);
+         uptr->SNS = 0;
          break;
 
     case CON_WR:

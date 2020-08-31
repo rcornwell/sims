@@ -272,7 +272,7 @@ uint8  coml_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
 
     switch (cmd & 0x3) {
     case 0x3:              /* Control */
-         if (cmd == CMD_NOP)
+         if ((cmd == CMD_NOP) || (cmd & 0x8) != 0)
              return SNS_CHNEND|SNS_DEVEND;
     case 0x2:              /* Read command */
     case 0x1:              /* Write command */
