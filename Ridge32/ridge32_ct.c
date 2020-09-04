@@ -295,7 +295,7 @@ ct_svc (UNIT *uptr)
                            ct_dcb.count = ct_dcb.count + reclen;
                            if (ct_dcb.count & ~CMASK)
                                uptr->STATUS |= BCO;
-                           sim_debug(DEBUG_CMD, &ct_dev, "CT spacef %d %d\n", reclen, len);
+                           sim_debug(DEBUG_CMD, &ct_dev, "CT spacef %d\n", reclen);
                            if (uptr->MODE & MARK) {
                               sim_activate(uptr, 1000);
                               return SCPE_OK;

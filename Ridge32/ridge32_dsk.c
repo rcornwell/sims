@@ -272,7 +272,7 @@ dsk_write(uint32 dev, uint32 data)
 
     case 0xc4:           /* Update DCB */
          M[0x3c13c >> 2] &= 0xffff0000;
-         M[0x3c13c >> 2] = (uptr->DCB >> 8) & 0xffff;
+         M[0x3c13c >> 2] |= (uptr->DCB >> 8) & 0xffff;
          io_dcbwrite_byte(uptr, offset + 0x2, 0x0);
          uptr->STATUS = 0x400001;
          ext_irq = 1;
@@ -405,7 +405,7 @@ dsk_svc (UNIT *uptr)
          sim_debug(DEBUG_DETAIL, &dsk_dev, "Disk Write: %d bytes\n", len);
          for (i = 0; i < len; i++)  {
              sim_debug(DEBUG_DATA, &dsk_dev, "%02x ", dsk_buf[i]);
-             if ((i & 0xf) == 0x1f)
+             if ((i & 0x1f) == 0x1f)
                   sim_debug(DEBUG_DATA, &dsk_dev, "\n");
          }
          sim_debug(DEBUG_DATA, &dsk_dev, "\n");

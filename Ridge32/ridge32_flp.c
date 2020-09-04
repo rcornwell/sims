@@ -290,6 +290,8 @@ flp_write(uint32 dev, uint32 data)
 
        case 0xc1:           /* Update DCB */
             uptr->DCB = M[0x3c0fc >> 2];
+            /* Fall through */
+
        case 0xc3:           /* Read one char port 0 no irq */
             uptr->STATUS = (0x80 << 16) | 1;
             ext_irq = 1;

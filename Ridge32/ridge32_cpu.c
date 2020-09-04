@@ -296,14 +296,6 @@ int WriteFull(t_addr addr, uint32 data) {
      int        offset;
      t_addr     pa;
 
-     /* Check alignment */
-     if ((addr & 3) != 0) {
-         trapcode = DATAAL;
-         sregs[2] = sregs[9];
-         sregs[3] = addr;
-         return 1;
-     }
-
      /* Validate address */
      if (TransAddr(addr, &pa, 0, 1))
          return 1;
@@ -322,14 +314,6 @@ int WriteHalf(t_addr addr, uint32 data) {
      uint32     mask;
      t_addr     pa;
      int        offset;
-
-     /* Check alignment */
-     if ((addr & 1) != 0) {
-         trapcode = DATAAL;
-         sregs[2] = sregs[9];
-         sregs[3] = addr;
-         return 1;
-     }
 
      /* Validate address */
      if (TransAddr(addr, &pa, 0, 1))
@@ -1391,31 +1375,59 @@ priv_trap:              sregs[1] = op;
         case 0xb0:    /* StoreB */
         case 0xb1:    /* StoreB */
                    if (WriteByte(disp, src1))
-                        break;
+                      break;
+                   sim_debug(DEBUG_INST, &cpu_dev,
+                      "Write byte: %08x %08x\n", disp, src1);
                    break;
 
         case 0xa2:    /* StoreH */
         case 0xa3:    /* StoreH */
         case 0xb2:    /* StoreH */
         case 0xb3:    /* StoreH */
-                   /* Check if we handle unaligned access */
+                   /* Check alignment */
+                   if ((disp & 1) != 0) {
+                       trapcode = DATAAL;
+                       sregs[2] = sregs[9];
+                       sregs[3] = disp;
+                       break;
+                   }
+
                    if (WriteHalf(disp, src1))
-                        break;
+                       break;
+                   sim_debug(DEBUG_INST, &cpu_dev,
+                      "Write half: %08x %08x\n", disp, src1);
                    break;
 
         case 0xa6:    /* Store */
         case 0xa7:    /* Store */
         case 0xb6:    /* Store */
         case 0xb7:    /* Store */
+                   /* Check alignment */
+                   if ((disp & 3) != 0) {
+                       trapcode = DATAAL;
+                       sregs[2] = sregs[9];
+                       sregs[3] = disp;
+                       break;
+                   }
+
                    if (WriteFull(disp, src1))
-                        break;
+                       break;
+                   sim_debug(DEBUG_INST, &cpu_dev,
+                      "Write dbl:  %08x %08x %08x\n", disp, src1, src1h);
                    break;
 
         case 0xa8:    /* StoreD */
         case 0xa9:    /* StoreD */
         case 0xb8:    /* StoreD */
         case 0xb9:    /* StoreD */
-                   /* Check if we handle unaligned access */
+                   /* Check alignment */
+                   if ((disp & 3) != 0) {
+                       trapcode = DATAAL;
+                       sregs[2] = sregs[9];
+                       sregs[3] = disp;
+                       break;
+                   }
+
                    src1h = regs[(reg1 + 1) & 0xf];
                    if (hst_lnt) {
                        hst[hst_p].src2 = src1h; 
@@ -1424,6 +1436,8 @@ priv_trap:              sregs[1] = op;
                         break;
                    if (WriteFull(disp+4, src1h))
                         break;
+                   sim_debug(DEBUG_INST, &cpu_dev,
+                      "Write dbl:  %08x %08x %08x\n", disp, src1, src1h);
                    break;
 
         case 0xe0:    /* LoadB */
@@ -1437,6 +1451,8 @@ priv_trap:              sregs[1] = op;
                    dest = 0;
                    if (ReadFull(disp & ~(3), &dest, code_seg))
                        break;
+                   sim_debug(DEBUG_INST, &cpu_dev,
+                      "Read  byte:  %08x %08x\n", disp, dest);
                    dest >>= 8 * (3 - (disp & 0x3));
                    regs[reg1] = dest & 0xff;
                    break;
@@ -1459,6 +1475,8 @@ priv_trap:              sregs[1] = op;
                    }
                    if (ReadFull(disp & ~(3), &dest, code_seg))
                        break;
+                   sim_debug(DEBUG_INST, &cpu_dev,
+                      "Read  half:  %08x %08x\n", disp, dest);
                    if ((disp & 2) == 0)
                        dest >>= 16;
                    regs[reg1] = dest & 0xffff;
@@ -1475,6 +1493,8 @@ priv_trap:              sregs[1] = op;
                    dest = 0;
                    if (ReadFull(disp & ~(0x3), &dest, code_seg))
                        break;
+                   sim_debug(DEBUG_INST, &cpu_dev,
+                      "Read  full:  %08x %08x\n", disp, dest);
                    regs[reg1] = dest;
                    break;
 
@@ -1492,6 +1512,8 @@ priv_trap:              sregs[1] = op;
                        break;
                    if (ReadFull(disp+4, &desth, code_seg))
                        break;
+                   sim_debug(DEBUG_INST, &cpu_dev,
+                      "Read  dbl:   %08x %08x %08x\n", disp, dest, desth);
                    regs[reg1] = dest;
                    regs[(reg1+1) &0xf] = desth;
                    if (hst_lnt) {

@@ -756,7 +756,7 @@ if (sw & SWMASK ('M')) {
                 if (*cptr == ',') {
                     cptr++;
                     while (sim_isspace (*cptr)) cptr++;
-                    if (*cptr != 'L' || *cptr != 'l')
+                    if (*cptr != 'L' && *cptr != 'l')
                         return SCPE_ARG;
                     val[0] |= 0x10;
                     l = 4;
@@ -777,7 +777,7 @@ if (sw & SWMASK ('M')) {
                 if (*cptr == ',') {
                     cptr++;
                     while (sim_isspace (*cptr)) cptr++;
-                    if (*cptr != 'L' || *cptr != 'l')
+                    if (*cptr != 'L' && *cptr != 'l')
                         return SCPE_ARG;
                     val[0] |= 0x10;
                     l = 4;
@@ -814,7 +814,7 @@ if (sw & SWMASK ('M')) {
             if (*cptr == ',') {
                 cptr++;
                 while (sim_isspace (*cptr)) cptr++;
-                if (*cptr != 'L' || *cptr != 'l')
+                if (*cptr != 'L' && *cptr != 'l')
                     return SCPE_ARG;
                 val[0] |= 0x10;
                 l = 4;
