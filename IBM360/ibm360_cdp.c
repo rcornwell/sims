@@ -34,7 +34,7 @@
 #include "sim_card.h"
 
 #ifdef NUM_DEVS_CDP
-#define UNIT_CDP       UNIT_ATTABLE | UNIT_DISABLE | MODE_029
+#define UNIT_CDP       UNIT_ATTABLE | UNIT_DISABLE | UNIT_SEQ | MODE_029
 
 
 #define CHN_SNS        0x04       /* Sense command */

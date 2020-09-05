@@ -34,7 +34,7 @@
 #include <ctype.h>
 
 #ifdef NUM_DEVS_LPR
-#define UNIT_LPR       UNIT_ATTABLE | UNIT_DISABLE
+#define UNIT_LPR       UNIT_ATTABLE | UNIT_DISABLE | UNIT_SEQ
 
 
 /* u3 hold command and status information */
