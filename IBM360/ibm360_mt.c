@@ -255,12 +255,6 @@ uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     case 0xc:              /* Read backward */
          uptr->SNS = 0;
          uptr->SNS |= SNS_TUASTA << 8;
-         if ((uptr->flags & MTUF_9TR) == 0)
-             uptr->SNS |= (SNS_7TRACK << 8);
-         if (sim_tape_wrp(uptr))
-             uptr->SNS |= (SNS_WRP << 8);
-         if (sim_tape_bot(uptr))
-             uptr->SNS |= (SNS_LOAD << 8);
           /* Fall through */
 
     case 0x4:              /* Sense */
@@ -406,6 +400,12 @@ t_stat mt_srv(UNIT * uptr)
          sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 1 %x\n", unit, ch);
          chan_write_byte(addr, &ch) ;
          ch = (uptr->SNS >> 8) & 0xff;
+         if ((uptr->flags & MTUF_9TR) == 0)
+             ch |= SNS_7TRACK;
+         if (sim_tape_wrp(uptr))
+             ch |= SNS_WRP;
+         if (sim_tape_bot(uptr))
+             ch |= SNS_LOAD;
          sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 2 %x\n", unit, ch);
          chan_write_byte(addr, &ch) ;
          ch = 0xc0;
