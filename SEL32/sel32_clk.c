@@ -119,8 +119,9 @@ t_stat rtc_srv (UNIT *uptr)
 #endif
     /* if clock disabled, do not do interrupts */
     if (((rtc_dev.flags & DEV_DIS) == 0) && rtc_pie) {
-        time_t result = time(NULL);
-        sim_debug(DEBUG_CMD, &rtc_dev, "RT Clock int time %08x\n", (uint32)result);
+        sim_debug(DEBUG_CMD, &rtc_dev,
+            "RT Clock int INTS[%02x] %08x SPAD[%02x] %08x\n",
+            rtc_lvl, INTS[rtc_lvl], rtc_lvl+0x80, SPAD[rtc_lvl+0x80]);
         if (((INTS[rtc_lvl] & INTS_ENAB) ||         /* make sure enabled */
             (SPAD[rtc_lvl+0x80] & SINT_ENAB)) &&    /* in spad too */
             (((INTS[rtc_lvl] & INTS_ACT) == 0) ||   /* and not active */
@@ -132,10 +133,13 @@ t_stat rtc_srv (UNIT *uptr)
                 INTS[rtc_lvl] |= INTS_REQ;          /* request the interrupt */
             irq_pend = 1;                           /* make sure we scan for int */
         }
+        sim_debug(DEBUG_CMD, &rtc_dev,
+            "RT Clock int INTS[%02x] %08x SPAD[%02x] %08x\n",
+            rtc_lvl, INTS[rtc_lvl], rtc_lvl+0x80, SPAD[rtc_lvl+0x80]);
     }
 //  temp = sim_rtcn_calb(rtc_tps, TMR_RTC);         /* timer 0 for RTC */
     sim_rtcn_calb(rtc_tps, TMR_RTC);                /* timer 0 for RTC */
-    sim_activate_after(&rtc_unit, 1000000/rtc_tps); /* reactivate 16666 tics / sec */
+    sim_activate_after(uptr, 1000000/rtc_tps);      /* reactivate 16666 tics / sec */
     return SCPE_OK;
 }
 

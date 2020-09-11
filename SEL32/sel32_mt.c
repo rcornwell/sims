@@ -620,7 +620,8 @@ t_stat mt_srv(UNIT *uptr)
     case MT_SENSE:  /* 0x04 */                      /* get sense data */
         /* write requested status */
         len = chp->ccw_count;                       /* command count */
-        for (i=0; i<len; i++) {
+//0905  for (i=0; i<len; i++) {
+        for (i=0; i<4; i++) {
             ch = 0;
             if (i<4)
                 ch = (uptr->SNS >> (24-(i*8))) & 0xff;  /* get 8 bits of status */

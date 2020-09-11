@@ -340,7 +340,7 @@ t_stat con_srvo(UNIT *uptr) {
             return SCPE_OK;
         }
 //Comment out clock flag 072020
-//*RTC*/ outbusy = 1;                        /* tell clock output waiting */
+/*RTC*/ outbusy = 1;                        /* tell clock output waiting */
         /* Write to device */
         while (chan_read_byte(chsa, &ch) == SCPE_OK) {  /* get byte from memory */
             /* HACK HACK HACK */
@@ -597,9 +597,9 @@ uint16  con_haltio(UNIT *uptr) {
     if ((uptr->CMD & CON_MSK) != 0) {       /* is unit busy */
         sim_debug(DEBUG_CMD, &con_dev,
             "con_haltio HIO chsa %04x cmd = %02x ccw_count %02x\n", chsa, cmd, chp->ccw_count);
-        // stop any I/O and post status and return error status */
-        chp->chan_byte = BUFF_EMPTY;        /* there is no data to read/store */
-//      chp->ccw_count = 0;                 /* zero the count */
+        /* stop any I/O and post status and return error status */
+//      chp->chan_byte = BUFF_EMPTY;        /* there is no data to read/store */
+/*0906*/chp->ccw_count = 0;                 /* zero the count */
         chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);   /* reset chaining bits */
         uptr->CMD &= LMASK;                 /* make non-busy */
         uptr->u4 = 0;                       /* no I/O yet */
@@ -607,9 +607,9 @@ uint16  con_haltio(UNIT *uptr) {
         uptr->SNS = SNS_RDY|SNS_ONLN;       /* status is online & ready */
         sim_debug(DEBUG_CMD, &con_dev,
             "con_haltio HIO I/O stop chsa %04x cmd = %02x\n", chsa, cmd);
-//      chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);  /* force error */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
-        return SCPE_IOERR;
+//      return SCPE_IOERR;
+        return 1;                           /* tell chan code to post status */
     }
     uptr->u4 = 0;                           /* no I/O yet */
     con_data[unit].incnt = 0;               /* no input data */

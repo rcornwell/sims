@@ -86,6 +86,7 @@
 
 /* Class F channel bits */
 /* bit 32 - 37 of IOCD word 2 (0-5) */
+/* ccw_flags bit assignment */
 #define FLAG_DC          0x8000             /* Data chain */
 #define FLAG_CC          0x4000             /* Chain command */
 #define FLAG_SLI         0x2000             /* Suppress length indicator */
@@ -93,12 +94,17 @@
 #define FLAG_PCI         0x0800             /* Program controlled interrupt */
 #define FLAG_RTO         0x0400             /* Real-Time Option */
 
+/* chan_byte bit assignments */
 #define BUFF_EMPTY       0x0                /* Buffer is empty */
 #define BUFF_BUSY        0x4                /* Channel program busy & empty */
 #define BUFF_NEXT        0xC                /* 0x08|0x04 Continue Channel with next IOCB */
 #define BUFF_CHNEND      0x14               /* 0x10|0x04 Channel end */
 #define BUFF_DONE        0x20               /* 0x20 Channel ready for new command */
 #define BUFF_POST        0x24               /* 0x20|0x04 Waiting for status to be posted */
+
+/* chan_info bit flags */
+#define INFO_SIOCD       0x01               /* Initial IOCD from SIO if set */
+/* bits 0-6 unused */
 
 #define     MAX_CHAN        128             /* max channels that can be defined */
 #define     SUB_CHANS       256             /* max sub channels that can be defined */
@@ -118,8 +124,8 @@
 #define NUM_DEVS_HSDP   1       /* 1 hspd disk drive controller */
 #define NUM_UNITS_HSDP  2       /* 2 disk drive devices */
 #define NUM_DEVS_DISK   1       /* 1 dp02 disk drive controller */
-#define NUM_UNITS_DISK  2       /* 2 disk drive devices */
-//#define NUM_UNITS_DISK  4       /* 4 disk drive devices */
+//#define NUM_UNITS_DISK  2       /* 2 disk drive devices */
+#define NUM_UNITS_DISK  4       /* 4 disk drive devices */
 #define NUM_DEVS_SCFI   1       /* 1 scfi (SCSI) disk drive units */
 #define NUM_UNITS_SCFI  1       /* 1 of 4 disk drive devices */
 #define NUM_DEVS_SCSI   2       /* 2 scsi (MFP SCSI) scsi buss units */
@@ -196,9 +202,7 @@ extern DEVICE ec_dev;
 /* channel program data for a chan/sub-address */
 typedef struct chp {
     /* channel program values */
-#ifndef OLD_CHAN
     UNIT        *unitptr;               /* Back pointer to units structure */
-#endif
     uint32      chan_inch_addr;         /* Channel status dw in memory */
     uint32      chan_caw;               /* Channel command address word */
     uint32      ccw_addr;               /* Channel address */
@@ -210,6 +214,7 @@ typedef struct chp {
     uint8       ccw_cmd;                /* Channel command and flags */
     uint8       chan_byte;              /* Current byte, empty/full */
     uint8       chan_int;               /* channel interrupt level */
+    uint8       chan_info;              /* misc flags for channel */
 } CHANP;
 
 /* Device information block */
@@ -320,6 +325,7 @@ extern DEBTAB dev_debug[];
 #define MODEL_V9        7                     /* V9 CPU */
 
 #define TMR_RTC         1
+//#define TMR_RTC         0
 
 #define HIST_MIN        64
 #define HIST_MAX        10000
