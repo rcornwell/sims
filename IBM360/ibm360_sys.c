@@ -112,7 +112,7 @@ DEBTAB              crd_debug[] = {
 };
 
 
-const char *sim_stop_messages[] = {
+const char *sim_stop_messages[SCPE_BASE] = {
     "Unknown error",
     "Uninterruptable wait",
     "Breakpoint"
