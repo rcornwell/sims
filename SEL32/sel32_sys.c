@@ -133,7 +133,7 @@ DEBTAB              dev_debug[] = {
     {0, 0}
 };
 
-const char *sim_stop_messages[] = {
+const char *sim_stop_messages[SCPE_BASE] = {
        "Unknown error",
        "IO device not ready",
        "HALT instruction",
