@@ -81,7 +81,7 @@ DEVICE             *sim_devices[] = {
 };
 
 /* Simulator stop codes */
-const char         *sim_stop_messages[] = {
+const char         *sim_stop_messages[SCPE_BASE] = {
     0,
 };
 
