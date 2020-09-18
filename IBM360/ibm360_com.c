@@ -272,7 +272,7 @@ uint8  coml_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
 
     switch (cmd & 0x3) {
     case 0x3:              /* Control */
-         if ((cmd == CMD_NOP) || (cmd & 0x8) != 0)
+         if ((cmd == CMD_NOP) || (cmd & 0x10) != 0)
              return SNS_CHNEND|SNS_DEVEND;
     case 0x2:              /* Read command */
     case 0x1:              /* Write command */
@@ -378,7 +378,7 @@ t_stat coml_srv(UNIT * uptr)
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
                  return SCPE_OK;
              }
-             if (uptr->CMD & ADDR) {
+             if ((uptr->CMD & ADDR) != 0 && uptr->BPTR == 0) {
                  ch = 0x16;
                  sim_debug(DEBUG_CMD, dptr, "COM: unit=%d addr %02x\n", unit, ch);
                  uptr->CMD &= ~ADDR;
@@ -408,6 +408,8 @@ t_stat coml_srv(UNIT * uptr)
                      chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                      return SCPE_OK;
                  }
+//                 if (ch == 0x1f)
+//                     uptr->CMD |= ADDR;
                  ch = com_buf[unit][uptr->IPTR++];
                  if (chan_write_byte( addr, &ch)) {
                      uptr->CMD &= ~(0xff|INPUT|RECV);
@@ -434,6 +436,13 @@ t_stat coml_srv(UNIT * uptr)
                  uptr->BPTR = 0;
                  uptr->IPTR = 0;
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
+                 return SCPE_OK;
+             }
+             if (uptr->CMD & BREAK) {
+                 sim_debug(DEBUG_CMD, dptr, "COM: unit=%d attn write\n", unit);
+                 uptr->CMD &= ~(0xff|BREAK);
+                 uptr->SNS |= SNS_INTVENT;
+                 chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                  return SCPE_OK;
              }
              sim_debug(DEBUG_CMD, dptr, "COM: unit=%d write\n", unit);
@@ -471,6 +480,7 @@ t_stat coml_srv(UNIT * uptr)
 
     case CMD_BRK:        /* Send break signal  */
          uptr->CMD &= ~0xff;
+         uptr->CMD |= ADDR;
          uptr->SNS = 0;
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          break;
@@ -694,7 +704,7 @@ return SCPE_OK;
 
 const char *com_description (DEVICE *dptr)
 {
-return "IBM 2701 communications controller";
+return "IBM 2703 communications controller";
 }
 
 #endif
