@@ -172,3 +172,18 @@ t_stat set_slot_num(UNIT * uptr, int32 val, CONST char *cptr, void *desc);
 t_stat show_slot_num(FILE * st, UNIT * uptr, int32 v, CONST void *desc);
 void   fprint_inst(FILE *, t_addr addr, t_value *);
 
+/* Floating point routines. */
+int    rfloat(uint32 *res, uint32 src1);
+int    rfix(uint32 *res, uint32 src, int round);
+void   makerd(uint32 *resl, uint32 *resh,  uint32 src);
+int    rcomp(uint32 src1, uint32 src2);
+int    radd(uint32 *res, uint32 src1, uint32 src2);
+int    rmult(uint32 *res, uint32 src1, uint32 src2);
+int    rdiv(uint32 *res, uint32 src1, uint32 src2);
+int    dfloat(uint32 *resl, uint32 *resh, uint32 src1);
+int    dfix(uint32 *res, uint32 src, uint32 srch, int round);
+int    makedr(uint32 *res, uint32 src, uint32 srch);
+int    drcomp(uint32 src1, uint32 src1h, uint32 src2, uint32 src2h);
+int    dradd(uint32 *resl, uint32 *resh, uint32 src1, uint32 src1h, uint32 src2, uint32 src2h);
+int    drmult(uint32 *resl, uint32 *resh, uint32 src1, uint32 src1h, uint32 src2, uint32 src2h);
+int    drdiv(uint32 *resl, uint32 *resh, uint32 src1, uint32 src1h, uint32 src2, uint32 src2h);

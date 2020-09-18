@@ -31,12 +31,14 @@
 #define UNIT_LDENA   (0x1 << UNIT_V_LDENA)
 
 #define TMR_RTC      0
+#define VRT2         0
 
 #define HIST_MAX     5000000
 #define HIST_MIN     64
-#define HIST_PC      0x1000000
-#define HIST_TRAP    0x2000000
-#define HIST_USER    0x4000000
+#define HIST_PC      0x2000000
+#define HIST_TRAP    0x4000000
+#define HIST_USER    0x8000000
+#define HIST_MASK    0x1ffffff
 
 uint32       *M = NULL;
 uint32       regs[16];             /* CPU Registers */
@@ -44,6 +46,7 @@ uint32       PC;                   /* Program counter */
 uint32       sregs[16];            /* Special registers */
 uint32       tlb[32];              /* Translation look aside buffer */
 uint32       vrt[32];              /* VRT address for Modify */
+uint32       link[32];             /* Link to next entry */
 uint8        user;                 /* Set when in user mode */
 uint8        wait;                 /* Wait for interrupt */
 uint8        ext_irq;              /* External interrupt pending */
@@ -78,7 +81,7 @@ int          boot_sw;              /* Boot device */
 #define FMASK     0xffffffff
 #define AMASK     0x00ffffff
 #define MSIGN     0x80000000
-#define WMASK     0x00fffffe
+#define WMASK     0xfffffffe
 
 int hst_lnt;
 int hst_p;
@@ -204,57 +207,174 @@ int  TransAddr(t_addr va, t_addr *pa, uint8 code, uint wr) {
          uint32      seg = ((code) ? sregs[8] : sregs[9]) & 0xFFFF;
          uint32      mat = (seg << 16) | (va >> 16);
          uint32      addr;
+         uint32      tag;
+         uint32      lk;
+#if VRT2
          /* If not the same, walk through VRT to find correct page */
-         if ((vrt[entry] & 0x7000) != 0x7000 || tlb[entry] != mat) {
-             uint32 ntag = (((seg + page) & sregs[13]) << 3);
-             uint32 tag;
-             uint32 link;
-             do {
-                 tag = (ntag + sregs[12]) >> 2;
-                 addr = M[tag++]; 
-                 link = M[tag];
-                 ntag = (link >> 16);
-            sim_debug(DEBUG_EXP, &cpu_dev,
-                      "Load trans: %08x %08x -> %08x %08x %08x\n", seg, va, tag, addr, link);
-             } while (addr != mat && ntag != 0);
-             /* Did we find entry? */
-             if (addr != mat || (link & 0x7000) != 0x7000) {
+         if ((vrt[entry] & 0x2) == 0 || tlb[entry] != mat) {
+             uint32 ntag = (((seg + page) & sregs[13]) << 2) + sregs[12];
+             ntag = M[ntag >> 2];
+             if (ntag == 0) {
                  /* Nope this is a fault */
-                 sregs[1] = -1;
+                 sregs[1] = FMASK;
                  sregs[2] = seg;
                  sregs[3] = va;
                  trapcode = PGFLT;
-            sim_debug(DEBUG_EXP, &cpu_dev,
-                      "Page fault: %08x %08x -> %08x %08x %08x\n", seg, va, tag, addr, link);
+                 sim_debug(DEBUG_EXP, &cpu_dev,
+                      "Page fault: %08x %08x -> %08x %08x %08x\n",
+                                           seg, va, tag << 2, addr, lk);
+                 return 1;
+             }
+             do {
+                 tag = ntag >> 2;
+                 addr = M[tag++]; 
+                 ntag = M[tag++];
+                 lk = M[tag];
+                 sim_debug(DEBUG_EXP, &cpu_dev,
+                      "Load trans: %08x %08x %08x -> %08x %08x %08x\n",
+                                           seg, va, mat, tag << 2, addr, lk);
+             } while (addr != mat && ntag != 0);
+             /* Did we find entry? */
+             if (addr != mat || (lk & 0x2) == 0) {
+                 /* Nope this is a fault */
+                 sregs[1] = FMASK;
+                 sregs[2] = seg;
+                 sregs[3] = va;
+                 trapcode = PGFLT;
+                 sim_debug(DEBUG_EXP, &cpu_dev,
+                      "Page fault: %08x %08x -> %08x %08x %08x\n",
+                                           seg, va, tag << 2, addr, lk);
+                 return 1;
+             }
+             /* Check for write access */
+             if (wr && (lk & 0x4) == 0) {
+                 /* Nope this is a fault */
+                 sregs[1] = FMASK-1;
+                 sregs[2] = seg;
+                 sregs[3] = va;
+                 trapcode = PGFLT;
+                 sim_debug(DEBUG_EXP, &cpu_dev,
+                      "Write fault: %08x %08x -> %08x %08x %08x\n",
+                                           seg, va, tag << 2, addr, lk);
                  return 1;
              }
              /* Update reference and modify bits */
-            sim_debug(DEBUG_EXP, &cpu_dev,
-                      "Load Tlb: %08x %08x -> %08x %08x %08x\n", seg, va, tag, addr, link);
-             link |= 0x8000;
+             lk |= 0x10;
              if (wr)
-                 link |= 0x800;
+                 lk |= 0x1;
              /* Update the tlb entry */
-             M[tag] = link;
-             tag -= sregs[12] >> 2;   /* Subtract offset. */
-             tag <<= 16;              /* Move to upper half */
-             tag |= link & 0xFFFF;    /* Copy link over */
-             vrt[entry] = tag;        /* Save for furture */
+             M[tag] = lk;
+             link[entry] = tag;       /* Save pointer to tag for modify */
+             vrt[entry] = lk;         /* Save for furture */
              tlb[entry] = mat;
-             addr = link;
+             addr = lk;
+             sim_debug(DEBUG_EXP, &cpu_dev, "Load Tlb: %08x %08x -> %08x %08x %08x\n",
+                                     seg, va, tag << 2, addr, lk);
          } else {
              /* Update modify bit if not already set */
              addr = vrt[entry];  /* Tag and flag bits */
+             /* Check for write access */
+             if (wr && (lk & 0x4) == 0) {
+                 /* Nope this is a fault */
+                 sregs[1] = FMASK-1;
+                 sregs[2] = seg;
+                 sregs[3] = va;
+                 trapcode = PGFLT;
+                 sim_debug(DEBUG_EXP, &cpu_dev,
+                      "Write fault: %08x %08x -> %08x %08x %08x\n",
+                                           seg, va, tag << 2, addr, lk);
+                 return 1;
+             }
+             if (wr && (addr & 0x1) == 0) {
+                 tag = link[entry];
+                 M[tag] |= 0x1;
+                 vrt[entry] |= 0x1;
+                 sim_debug(DEBUG_EXP, &cpu_dev,
+                      "Mod Tlb: %08x %08x -> %08x %08x\n", seg, va, tag << 2, vrt[entry]);
+             }
+         }
+         *pa = ((addr & 0x7fff0000) >> 4) | (va & 0xfff);
+#else
+         /* If not the same, walk through VRT to find correct page */
+         if ((vrt[entry] & 0x7000) == 0 || tlb[entry] != mat) {
+             uint32 ntag = (((seg + page) & sregs[13]) << 3);
+             do {
+                 tag = (ntag + sregs[12]) >> 2;
+                 addr = M[tag++]; 
+                 lk = M[tag];
+                 ntag = (lk >> 16);
+                 sim_debug(DEBUG_EXP, &cpu_dev,
+                      "Load trans: %08x %08x %08x -> %08x %08x %08x\n",
+                                           seg, va, mat, tag << 2, addr, lk);
+             } while (addr != mat && ntag != 0);
+             /* Did we find entry? */
+             if (addr != mat || (lk & 0x7000) == 0) {
+                 /* Nope this is a fault */
+                 sregs[1] = FMASK;
+                 sregs[2] = seg;
+                 sregs[3] = va;
+                 trapcode = PGFLT;
+                 sim_debug(DEBUG_EXP, &cpu_dev,
+                      "Page fault: %08x %08x -> %08x %08x %08x\n",
+                                           seg, va, tag << 2, addr, lk);
+                 return 1;
+             }
+#if 0
+             /* Check if copy on write */
+             if (wr && (lk & 0x4000) == 0) {
+                 /* Nope this is a fault */
+                 /* Update the tlb entry */
+                 M[tag] = lk | 0xc800;
+                 sregs[1] = FMASK;
+                 sregs[2] = seg;
+                 sregs[3] = va;
+                 trapcode = PGFLT;
+                 sim_debug(DEBUG_EXP, &cpu_dev,
+                      "Write fault: %08x %08x -> %08x %08x %08x\n",
+                                           seg, va, tag << 2, addr, lk);
+                 return 1;
+             }
+#endif
+             /* Update reference and modify bits */
+             lk |= 0x8000;
+             if (wr)
+                 lk |= 0x800;
+             /* Update the tlb entry */
+             M[tag] = lk;
+             link[entry] = tag;       /* Save pointer to tag for modify */
+             vrt[entry] = lk;         /* Save for furture */
+             tlb[entry] = mat;
+             addr = lk;
+             sim_debug(DEBUG_EXP, &cpu_dev, "Load Tlb: %08x %08x -> %08x %08x %08x\n",
+                                     seg, va, tag << 2, addr, lk);
+         } else {
+             /* Update modify bit if not already set */
+             addr = vrt[entry];  /* Tag and flag bits */
+#if 0
+             if (wr && (lk & 0x4000) == 0) {
+                 /* Nope this is a fault */
+                 M[tag] = lk | 0xc800;
+                 sregs[1] = FMASK;
+                 sregs[2] = seg;
+                 sregs[3] = va;
+                 trapcode = PGFLT;
+                 sim_debug(DEBUG_EXP, &cpu_dev,
+                      "Write fault: %08x %08x -> %08x %08x %08x\n",
+                                           seg, va, tag << 2, addr, lk);
+                 return 1;
+             }
+#endif
              if (wr && (addr & 0x800) == 0) {
-                 uint32  link = (vrt[entry] >> 16) & 0xffff;
-                 link += sregs[12] >> 2;
-                 M[link] |= 0x800;
+                 tag = link[entry];
+                 M[tag] |= 0x800;
                  vrt[entry] |= 0x800;
-            sim_debug(DEBUG_EXP, &cpu_dev,
-                      "Mod Tlb: %08x %08x -> %08x %08x\n", seg, va, link, vrt[entry]);
+                 sim_debug(DEBUG_EXP, &cpu_dev,
+                      "Mod Tlb: %08x %08x -> %08x %08x\n", seg, va, tag << 2, vrt[entry]);
              }
          }
          *pa = ((addr & 0x7ff) << 12) | (va & 0xfff);
+#endif
+         sim_debug(DEBUG_EXP, &cpu_dev, "map: %08x %08x -> %08x\n", seg, va, *pa);
      } else {
          *pa = va & 0x7fffff;
      }
@@ -263,20 +383,11 @@ int  TransAddr(t_addr va, t_addr *pa, uint8 code, uint wr) {
 
 /*
  * Read a full word from memory, checking protection
- * and alignment restrictions. Return 1 if failure, 0 if
- * success.
+ * Return 1 if failure, 0 if success.
  */
 int  ReadFull(t_addr addr, uint32 *data, uint8 code) {
      uint32     temp;
      t_addr     pa;
-
-     /* Check alignment */
-     if ((addr & 3) != 0) {
-         trapcode = DATAAL;
-         sregs[2] = code ? sregs[8] : sregs[9];
-         sregs[3] = addr;
-         return 1;
-     }
 
      /* Validate address */
      if (TransAddr(addr, &pa, code, 0))
@@ -286,12 +397,19 @@ int  ReadFull(t_addr addr, uint32 *data, uint8 code) {
      if (pa >= MEMSIZE)
          return 0;
 
+     if ((pa & 0xffffe0) == 0x3c0c0)
+        sim_debug(DEBUG_CMD, &cpu_dev, "Read %08x %08x\n", pa, M[pa >> 2]);
+
      /* Actual read */
      pa >>= 2;
      *data = M[pa];
      return 0;
 }
 
+/*
+ * Write a full word from memory, checking protection
+ * Return 1 if failure, 0 if success.
+ */
 int WriteFull(t_addr addr, uint32 data) {
      int        offset;
      t_addr     pa;
@@ -310,6 +428,10 @@ int WriteFull(t_addr addr, uint32 data) {
      return 0;
 }
 
+/*
+ * Write a half word to memory, checking protection
+ * Return 1 if failure, 0 if success.
+ */
 int WriteHalf(t_addr addr, uint32 data) {
      uint32     mask;
      t_addr     pa;
@@ -337,6 +459,10 @@ int WriteHalf(t_addr addr, uint32 data) {
      return 0;
 }
 
+/*
+ * Write a byte to memory, checking protection
+ * Return 1 if failure, 0 if success.
+ */
 int WriteByte(t_addr addr, uint32 data) {
      uint32     mask;
      t_addr     pa;
@@ -427,7 +553,7 @@ trap:
                  hst_p = hst_p + 1;
                  if (hst_p >= hst_lnt)
                      hst_p = 0;
-                 hst[hst_p].pc = PC | HIST_TRAP;
+                 hst[hst_p].pc = (PC & HIST_MASK) | HIST_TRAP;
                  hst[hst_p].addr = trapcode << 2;
             }
             trapcode = 0;
@@ -444,7 +570,7 @@ trap:
                  hst_p = hst_p + 1;
                  if (hst_p >= hst_lnt)
                      hst_p = 0;
-                 hst[hst_p].pc = PC | HIST_TRAP;
+                 hst[hst_p].pc = (PC & HIST_MASK) | HIST_TRAP;
                  hst[hst_p].addr = EXTIRQ << 2;
             }
             user = 0;
@@ -459,7 +585,7 @@ trap:
                      hst_p = hst_p + 1;
                      if (hst_p >= hst_lnt)
                          hst_p = 0;
-                     hst[hst_p].pc = PC | HIST_TRAP;
+                     hst[hst_p].pc = (PC & HIST_MASK) | HIST_TRAP;
                      hst[hst_p].addr = TIMER1 << 2;
                 }
                 user = 0;
@@ -476,7 +602,7 @@ trap:
                      hst_p = hst_p + 1;
                      if (hst_p >= hst_lnt)
                          hst_p = 0;
-                     hst[hst_p].pc = PC | HIST_TRAP;
+                     hst[hst_p].pc = (PC & HIST_MASK) | HIST_TRAP;
                      hst[hst_p].addr = TIMER2 << 2;
                 }
                 user = 0;
@@ -488,11 +614,11 @@ trap:
              hst_p = hst_p + 1;
              if (hst_p >= hst_lnt)
                 hst_p = 0;
-             hst[hst_p].pc = PC | HIST_PC | (user?HIST_USER:0);
+             hst[hst_p].pc = (PC & HIST_MASK) | HIST_PC | (user?HIST_USER:0);
         }
 
         /* Fetch the operator and possible displacement */
-        if (ReadFull(PC & ~3, &dest, 1)) {
+        if (ReadFull(PC, &dest, 1)) {
             goto trap;
         }
         nPC = PC + 2;
@@ -504,7 +630,7 @@ trap:
            /* Check if need displacment */
            if (op & 0x80) {
                /* In next word */
-               if (ReadFull((PC + 2) & ~3, &disp, 1)) {
+               if (ReadFull(PC + 2, &disp, 1)) {
                    goto trap;
                }
                /* Check if short displacement */
@@ -519,7 +645,7 @@ trap:
            /* Check if long half of displacment */
            if ((op & 0x90) == 0x90) {
                /* Rest in high part of next word */
-               if (ReadFull((PC + 4) & ~3, &disp, 1)) {
+               if (ReadFull(PC + 4, &disp, 1)) {
                    goto trap;
                }
                /* Merge current lower and next upper */
@@ -561,6 +687,10 @@ trap:
                           "SR12=%08x SR13=%08x SR14=%08x SR15=%08x\n",
                            sregs[12], sregs[13], sregs[14], sregs[15]);
             }
+            if (M[0xea28 >> 2] == 0xe901) 
+                  sim_debug(DEBUG_INST, &cpu_dev, "Location ea28 changed\n");
+            if (M[0xead0 >> 2] == 0xe901) 
+                  sim_debug(DEBUG_INST, &cpu_dev, "Location ead0 changed\n");
             sim_debug(DEBUG_INST, &cpu_dev, "PC=%06x %c INST=%02x%02x ", PC,
                     (user) ? 'u': 'k', inst[0], inst[1]);
             if (op & 0x80) {
@@ -665,8 +795,10 @@ trap:
                      src2 = (src2 & MSIGN) != 0;
                      if ((src1 && src2 && (dest & MSIGN) == 0) ||
                          (!src1 && !src2 && (dest & MSIGN) != 0)) {
-                         if (trapwd & INTOVR) {
-                             sregs[2] = 16;
+                         if (user && trapwd & INTOVR) {
+                             sregs[1] = op;
+                             sregs[2] = (reg1 << 4) | reg2;
+                             sregs[3] = 16;
                              trapcode = TRPWD;
                          }
                      }
@@ -686,7 +818,7 @@ trap:
                          (!src1 && !src2 && (dest & MSIGN) != 0)) {
                          regs[0] = 2;
                      }
-                     if (src1 < src2) {
+                     if ((uint32)dest < (uint32)src1) {
                          regs[0] |= 1;
                      }
                      if (temp) {
@@ -716,6 +848,22 @@ trap:
                      break;
 
         case OP_EMPY:
+                     dest = desth = 0;
+                     if (src1 != 0 && src2 != 0) {
+                         for (temp = 32; temp > 0; temp--) {
+                              if (src1 & 1)
+                                 desth += src2;
+                              src1 >>= 1;
+                              dest >>= 1;
+                              if (desth & 1)
+                                  dest |= MSIGN;
+                              desth >>= 1;
+                         }
+                     }
+                     regs[reg1] = desth;
+                     regs[(reg1+1) & 0xf] = dest;
+                     break;
+
         case OP_MPYI:
         case OP_MPY:
                      reg2 = 0;
@@ -740,8 +888,10 @@ trap:
                          }
                      }
                      if (op != OP_EMPY && desth != 0) {
-                         if (trapwd & INTOVR) {
-                             sregs[2] = 16;
+                         if (user && trapwd & INTOVR) {
+                             sregs[1] = op;
+                             sregs[2] = (reg1 << 4) | reg2;
+                             sregs[3] = 16;
                              trapcode = TRPWD;
                          }
                      }   
@@ -763,8 +913,10 @@ trap:
                          hst[hst_p].src1h = src1h;
                      }
                      if (src2 == 0) {
-                         if (trapwd & DIVZER) {
-                             sregs[2] = 17;
+                         if (user && trapwd & DIVZER) {
+                             sregs[1] = op;
+                             sregs[2] = (reg1 << 4) | reg2;
+                             sregs[3] = 17;
                              trapcode = TRPWD;
                          }
                          break;
@@ -790,8 +942,10 @@ trap:
                      }
                      /* Check for overflow */
                      if ((dest & MSIGN) != 0) {
-                         if (trapwd & INTOVR) {
-                             sregs[2] = 16;
+                         if (user && trapwd & INTOVR) {
+                             sregs[1] = op;
+                             sregs[2] = (reg1 << 4) | reg2;
+                             sregs[3] = 16;
                              trapcode = TRPWD;
                          }
                      }
@@ -802,8 +956,10 @@ trap:
         case OP_DIV:
         case OP_REM:
                      if (src2 == 0) {
-                         if (trapwd & DIVZER) {
-                             sregs[2] = 17;
+                         if (user && trapwd & DIVZER) {
+                             sregs[1] = op;
+                             sregs[2] = (reg1 << 4) | reg2;
+                             sregs[3] = 17;
                              trapcode = TRPWD;
                          }
                          break;
@@ -840,8 +996,10 @@ trap:
                      }
                      /* Check for overflow */
                      if ((dest & MSIGN) != 0) {
-                         if (trapwd & INTOVR) {
-                             sregs[2] = 16;
+                         if (user && trapwd & INTOVR) {
+                             sregs[1] = op;
+                             sregs[2] = (reg1 << 4) | reg2;
+                             sregs[3] = 16;
                              trapcode = TRPWD;
                          }
                          goto trap;
@@ -858,7 +1016,7 @@ trap:
                      dest = (MSIGN >> (src2 & 037)); 
                      if (src2 & 040) {
                          if (op & 1) 
-                             regs[(reg1+1)& 0xf] |= dest;
+                             regs[(reg1+1)&0xf] |= dest;
                          else
                              regs[(reg1+1)&0xf] &= ~dest;
                      } else {  
@@ -881,6 +1039,7 @@ trap:
 
         case OP_CHK:
                      if ((int32)src1 > (int32)src2) {
+                          sregs[1] = op;
                           sregs[2] = reg1;
                           sregs[3] = reg2;
                           trapcode = CHKTRP;
@@ -889,6 +1048,7 @@ trap:
 
         case OP_CHKI:
                      if (!((src1 & MSIGN) == 0 && src1 <= (int32)src2)) {
+                          sregs[1] = op;
                           sregs[2] = reg1;
                           sregs[3] = reg2;
                           trapcode = CHKTRP;
@@ -914,7 +1074,7 @@ trap:
                          else if (src1 != src2)
                              dest = 1;
                          else
-                              dest = 0;
+                             dest = 0;
                      } else if ((int32)src1 < (int32)src2)
                          dest = FMASK;
                      else
@@ -947,8 +1107,10 @@ trap:
                     src2 &= 037;
                     while (src2 > 0) {
                         dest <<= 1;
-                        if ((dest & MSIGN) != src2h && trapwd & INTOVR) {
-                              sregs[2] = 16;
+                        if ((dest & MSIGN) != src2h && user && trapwd & INTOVR) {
+                              sregs[1] = op;
+                              sregs[2] = (reg1 << 4) | reg2;
+                              sregs[3] = 16;
                               trapcode = TRPWD;
                         }
                         src2--;
@@ -958,6 +1120,7 @@ trap:
 
         case OP_DLSRI:
         case OP_DLSR:
+                   src1h = regs[(reg1 + 1) & 0xf];
                    src2 &= 077;
                    while(src2 > 0) {
                        src1h >>= 1;
@@ -972,6 +1135,7 @@ trap:
    
         case OP_DLSLI:
         case OP_DLSL:
+                   src1h = regs[(reg1 + 1) & 0xf];
                    src2 &= 077;
                    while(src2 > 0) {
                        src1 <<= 1;
@@ -1047,32 +1211,110 @@ trap:
                    regs[reg1] = ((int32)src1) >= ((int32)src2);
                    break;
 
+        case OP_RNEG:   /* Negate real */
+                   if (src2 != 0)
+                       src2 ^= MSIGN;
+                   regs[reg1] = src2;
+                   break;
+
+        case OP_DRNEG:  /* Negate real */
+                   src2h = regs[(reg2 + 1) & 0xf];
+                   if (src2 != 0 && src2h != 0)
+                       src2 ^= MSIGN;
+                   regs[reg1] = src2;
+                   regs[(reg2 + 1) & 0xf] = src2h;
+                   break;
+/* Floating point routines. */
+
+        case OP_FLOAT:  /* Make integer real */
+                   temp = rfloat(&regs[reg1], src2);
+                   goto fptrap;
+
         case OP_FIXT:   /* Fix with truncate to integer */
         case OP_FIXR:   /* Fix with round to integer */
-        case OP_RNEG:   /* Negate real */
-        case OP_RADD:   /* Real add */
+                   temp = rfix(&regs[reg1], src2, op & 1);
+                   goto fptrap;
+
         case OP_RSUB:   /* Real subtract */
+                   src2 ^= MSIGN;
+                   /* Fall through */
+
+        case OP_RADD:   /* Real add */
+                   temp = radd(&regs[reg1], src1, src2);
+                   goto fptrap;
+
         case OP_RMPY:   /* Real product */
+                   temp = rmult(&regs[reg1], src1, src2);
+                   goto fptrap;
+
         case OP_RDIV:   /* Real divide */
-        case OP_FLOAT:  /* Make integer real */
+                   temp = rdiv(&regs[reg1], src1, src2);
+                   goto fptrap;
+
         case OP_MAKERD: /* Convert real to double */
+                   makerd(&regs[reg1], &regs[(reg1 + 1) & 0xf], src2);
+                   break;
+
         case OP_RCOMP:  /* Compare two reals */
+                   regs[reg1] = rcomp(src1, src2);
+                   break;
+
+        case OP_DFLOAT: /* Convert integer to double */
+                   temp = dfloat(&regs[reg1], &regs[(reg1 + 1) & 0xf], src2);
+                   break;
+
         case OP_DFIXT:  /* Fix with trancate to integer */
         case OP_DFIXR:  /* Fix with round to integer */
-        case OP_DRNEG:  /* Negate real */
-        case OP_DRADD:  /* Double add */
-        case OP_DRSUB:  /* Double subtract */
-        case OP_DRMPY:  /* Double product */
-        case OP_DRDIV:  /* Double divide */
+                   src2h = regs[(reg2 + 1) & 0xf];
+                   temp = dfix(&regs[reg1], src2, src2h, op & 1);
+                   goto fptrap;
+
         case OP_MAKEDR: /* Convert double to real */
-        case OP_DFLOAT: /* Convert integer to double */
+                   src2h = regs[(reg2 + 1) & 0xf];
+                   temp = makedr(&regs[reg1], src2, src2h);
+                   goto fptrap;
+
+        case OP_DRSUB:  /* Double subtract */
+                   src2 ^= MSIGN;
+                   /* Fall through */
+
+        case OP_DRADD:  /* Double add */
+                   src2h = regs[(reg2 + 1) & 0xf];
+                   src1h = regs[(reg1 + 1) & 0xf];
+                   temp = dradd(&regs[reg1], &regs[(reg1 + 1) & 0xf], src1, src1h, src2, src2h);
+                   goto fptrap;
+
+        case OP_DRMPY:  /* Double product */
+                   src2h = regs[(reg2 + 1) & 0xf];
+                   src1h = regs[(reg1 + 1) & 0xf];
+                   temp = drmult(&regs[reg1], &regs[(reg1 + 1) & 0xf], src1, src1h, src2, src2h);
+                   goto fptrap;
+
+        case OP_DRDIV:  /* Double divide */
+                   src2h = regs[(reg2 + 1) & 0xf];
+                   src1h = regs[(reg1 + 1) & 0xf];
+                   temp = drdiv(&regs[reg1], &regs[(reg1 + 1) & 0xf], src1, src1h, src2, src2h);
+fptrap:
+                   if (temp != 0 && user && (trapwd & (MSIGN >> temp)) != 0) {
+                       sregs[1] = op;
+                       sregs[2] = (reg1 << 4) | reg2;
+                       sregs[3] = temp;
+                       trapcode = TRPWD;
+                   }
+                   break;
+
         case OP_DRCOMP: /* Compare two doubles */
+                   src2h = regs[(reg2 + 1) & 0xf];
+                   src1h = regs[(reg1 + 1) & 0xf];
+                   regs[reg1] = drcomp(src1, src1h, src2, src2h);
                    break;
 
         case OP_TRAP:
-                   if ((MSIGN >> reg2) & trapwd) {
+                   if ((user && (MSIGN >> reg2) & trapwd) || !user) {
+                       sregs[1] = op;
+                       sregs[2] = (reg1 << 4) | reg2;
+                       sregs[3] = reg2;
                        trapcode = TRPWD;
-                       sregs[2] = reg2;
                    }
                    break;
 
@@ -1105,6 +1347,7 @@ trap:
                             sregs[9] =  M[pcb + 17] & 0xFFFF;
                             sregs[10] = M[pcb + 19];
                             sregs[15] = M[pcb + 16];
+                            trapwd = sregs[10];
                             for (reg1 = 0;
                                  reg1 < (sizeof(tlb)/sizeof(uint32));
                                  reg1++)
@@ -1138,27 +1381,58 @@ trap:
 
         case OP_TRANS:
         case OP_DIRT:
+                   src1 = regs[reg2];                       /* Segment */
+                   src2 = regs[(reg2 + 1) & 0xf];           /* VA */
                    if (user) {
                         goto priv_trap;
                    } else {
-                        uint32 seg  = regs[reg2];                       /* Segment */
-                        uint32 page = regs[(reg2 + 1) & 0xf] >> 12;     /* Address = page */
-                        uint32 mat  = (seg << 16) | (page >> 4);        /* Match word */
-                        uint32 na  = (((seg + page) & sregs[13]) << 3); /* Next address */
+                        uint32 page = src2 >> 12;                       /* Address = page */
+                        uint32 mat  = (src1 << 16) | (page >> 4);       /* Match word */
+                        uint32 na;                                      /* Next address */
                         uint32 a;                                       /* Current address */
-                        uint32 link;                                    /* Link word */
+                        uint32 l;                                       /* Link word */
                         uint32 e;                                       /* Entry */
-                        src1 = regs[(reg2 + 1) & 0xf];
+#if VRT2
+                        na  = (((src1 + page) & sregs[13]) << 2) + sregs[12];
+                        na = M[na >> 2];
+                        if (na == 0) {
+                           regs[reg1] = FMASK;
+                           break;
+                        }
+                        do {
+                            a = na >> 2;
+                            l = M[a++]; 
+                            na = M[a++];
+                            e = M[a];
+                            sim_debug(DEBUG_EXP, &cpu_dev,
+                                      "Load trans: %08x %08x -> %08x %08x %08x\n",
+                                           src1, src2, a << 2, l, e);
+                        } while (l != mat && na != 0);
+                        /* Did we find entry? */
+                        if (l != mat || (e & 0x2) == 0) {
+                            regs[reg1] = FMASK;
+                        } else {
+                            /* Update reference and modify bits */
+                            e |= 0x10;
+                            if ((op & 1) != 0)
+                                e |= 0x1;
+                            /* Update the tlb entry */
+                            M[a] = e;
+                            regs[reg1] = ((e & 0x7fff0000) >> 4) | (src2 & 0xfff);
+                        }
+#else
+                        na  = (((src1 + page) & sregs[13]) << 3);        /* Next address */
                         do {
                             a = (na + sregs[12]) >> 2;
-                            link = M[a++]; 
+                            l = M[a++]; 
                             e = M[a];
                             na = (e >> 16);
-            sim_debug(DEBUG_EXP, &cpu_dev,
-                      "Load trans: %08x %08x -> %08x %08x %08x\n", seg, regs[(reg2 + 1) & 0xf], a, link, e);
-                        } while (link != mat && na != 0);
+                            sim_debug(DEBUG_EXP, &cpu_dev,
+                                      "Load trans: %08x %08x -> %08x %08x %08x\n",
+                                           src1, src2, a << 2, l, e);
+                        } while (l != mat && na != 0);
                         /* Did we find entry? */
-                        if (link != mat || (e & 0x7000) != 0x7000) {
+                        if (l != mat || (e & 0x7000) == 0) {
                             regs[reg1] = FMASK;
                         } else {
                             /* Update reference and modify bits */
@@ -1166,8 +1440,9 @@ trap:
                             if ((op & 1) != 0)
                                 e |= 0x800;
                             M[a] = e;
-                            regs[reg1] = ((e & 0x7ff) << 12) | (src1 & 0xfff);
+                            regs[reg1] = ((e & 0x7ff) << 12) | (src2 & 0xfff);
                         }
+#endif
                    }
                    break;
 
@@ -1189,7 +1464,7 @@ trap:
 
         case OP_MAINT:
                    /* Reg2 determines actual opcode */
-                   if (user && (sregs[10] & 1) == 0) {
+                   if (user && (trapwd & 1) == 0) {
 priv_trap:              sregs[1] = op;
                         sregs[2] = reg1;
                         sregs[3] = reg2;
@@ -1235,13 +1510,15 @@ priv_trap:              sregs[1] = op;
                          break;
 
                    case 10:   /* MACHINEID */
-                         regs[reg1] = 0;
+                         regs[(reg1 +1) & 0xf] = 0 | (VRT2 * 04);
                          break;
 
                    case 11:   /* Version */
                    case 12:   /* CREG */
+                         regs[(reg1 + 1) & 0xf] = 1;
+                         break;
                    case 13:   /* RDLOG */
-                        fprintf(stderr, "Maint %d %d %08x\n\r", reg1, reg2, src1);
+                         fprintf(stderr, "Maint %d %d %08x\n\r", reg1, reg2, src1);
                          regs[reg1] = 0;
                          break;
 
@@ -1251,20 +1528,18 @@ priv_trap:              sregs[1] = op;
                    break;
 
         case OP_READ:
-                    if (user && (sregs[10] & 1) == 0) {
+                    if (user && (trapwd & 1) == 0) {
                          goto priv_trap;
                     } else {
-                         src2 = regs[reg2];
                          dest = io_read(src2, &regs[(reg1+1) & 0xf]);
                          regs[reg1] = dest;
                     }
                     break;
 
         case OP_WRITE:
-                    if (user && (sregs[10] & 1) == 0) {
+                    if (user && (trapwd & 1) == 0) {
                          goto priv_trap;
                     } else {
-                         src2 = regs[reg2];
                          dest = io_write(src2, regs[reg1]);
                          regs[reg1] = dest;
                     }
@@ -1274,6 +1549,7 @@ priv_trap:              sregs[1] = op;
                     if (user) {
                         trapcode = TRAP | (reg1 << 4) | reg2;
                         PC = nPC & WMASK;   /* Low order bit can't be set */
+                //        sregs[1] = trapcode & 0xff;
                     } else {
                         trapcode =KERVOL;
                         sregs[1] = op;
@@ -1411,9 +1687,9 @@ priv_trap:              sregs[1] = op;
                    }
 
                    if (WriteFull(disp, src1))
-                       break;
+                        break;
                    sim_debug(DEBUG_INST, &cpu_dev,
-                      "Write dbl:  %08x %08x %08x\n", disp, src1, src1h);
+                      "Write full: %08x %08x\n", disp, src1);
                    break;
 
         case 0xa8:    /* StoreD */
@@ -1449,7 +1725,7 @@ priv_trap:              sregs[1] = op;
         case 0xd0:    /* LoadB */
         case 0xd1:    /* LoadB */
                    dest = 0;
-                   if (ReadFull(disp & ~(3), &dest, code_seg))
+                   if (ReadFull(disp, &dest, code_seg))
                        break;
                    sim_debug(DEBUG_INST, &cpu_dev,
                       "Read  byte:  %08x %08x\n", disp, dest);
@@ -1473,7 +1749,7 @@ priv_trap:              sregs[1] = op;
                        sregs[3] = disp;
                        break;
                    }
-                   if (ReadFull(disp & ~(3), &dest, code_seg))
+                   if (ReadFull(disp, &dest, code_seg))
                        break;
                    sim_debug(DEBUG_INST, &cpu_dev,
                       "Read  half:  %08x %08x\n", disp, dest);
@@ -1491,7 +1767,14 @@ priv_trap:              sregs[1] = op;
         case 0xd6:    /* Load */
         case 0xd7:    /* Load */
                    dest = 0;
-                   if (ReadFull(disp & ~(0x3), &dest, code_seg))
+                   /* Check alignment */
+                   if ((disp & 3) != 0) {
+                       trapcode = DATAAL;
+                       sregs[2] = code_seg ? sregs[8] : sregs[9];
+                       sregs[3] = disp;
+                       break;
+                   }
+                   if (ReadFull(disp, &dest, code_seg))
                        break;
                    sim_debug(DEBUG_INST, &cpu_dev,
                       "Read  full:  %08x %08x\n", disp, dest);
@@ -1508,6 +1791,13 @@ priv_trap:              sregs[1] = op;
         case 0xd9:    /* LoadD */
                    dest = 0;
                    desth = 0;
+                   /* Check alignment */
+                   if ((disp & 3) != 0) {
+                       trapcode = DATAAL;
+                       sregs[2] = code_seg ? sregs[8] : sregs[9];
+                       sregs[3] = disp;
+                       break;
+                   }
                    if (ReadFull(disp, &dest, code_seg))
                        break;
                    if (ReadFull(disp+4, &desth, code_seg))
@@ -1607,7 +1897,7 @@ rtc_srv(UNIT * uptr)
        uint32 ccb = sregs[11] >> 2;
        uint32 s;
        if ((sregs[14] & 1) == 0) {
-           M[(sregs[14] + 0x80) >> 2] ++;
+           M[(sregs[14] + 80) >> 2] ++;
        } else {
            M[ccb + 0x10F]++;
        }
@@ -1621,8 +1911,8 @@ rtc_srv(UNIT * uptr)
        if (s < M[ccb + 0x113])
            M[ccb + 0x112] ++;
        M[ccb + 0x113] = s;
-       sim_debug(DEBUG_EXP, &cpu_dev, "Timer: %08x t1=%08x t2=%08x d=%08x %08x\n",
-            M[ccb + 0x10F], M[ccb + 0x110], M[ccb + 0x111], M[ccb + 0x112], M[ccb+0x113]);
+       sim_debug(DEBUG_EXP, &cpu_dev, "Timer: %08x %08x t1=%08x t2=%08x d=%08x %08x\n",
+            sregs[14] + 80, M[ccb + 0x10F], M[ccb + 0x110], M[ccb + 0x111], M[ccb + 0x112], M[ccb+0x113]);
    }
    return SCPE_OK;
 }
@@ -1766,8 +2056,7 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
         if (h->pc & HIST_PC) {   /* instruction? */
             int i;
             fprintf(st, "%06x%c %06x %08x %08x %08x %02x%02x ",
-                      h->pc & AMASK, (h->pc & HIST_USER) ? 'v':' ',
-                      h->addr & AMASK,
+                      h->pc & HIST_MASK, (h->pc & HIST_USER) ? 'v':' ', h->addr,
                       h->src1, h->src2, h->dest, h->inst[0], h->inst[1]);
             if ((h->inst[0] & 0x80) != 0)
                   fprintf(st, "%02x%02x ", h->inst[2], h->inst[3]);
@@ -1778,13 +2067,13 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
             else
                   fprintf(st, "     ");
             fprintf(st, "  ");
-            fprint_inst(st, h->pc & AMASK, h->inst);
+            fprint_inst(st, h->pc & HIST_MASK, h->inst);
             fputc('\n', st);    /* end line */
         }                       /* end else instruction */
         else if (h->pc & HIST_TRAP) {   /* Trap */
             int i;
             fprintf(st, "%06x %06x\n",
-                      h->pc & AMASK, h->addr & AMASK);
+                      h->pc & HIST_MASK, h->addr);
         }                       /* end else trap */
     }                           /* end for */
     return SCPE_OK;

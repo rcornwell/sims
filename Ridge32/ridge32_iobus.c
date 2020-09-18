@@ -146,6 +146,9 @@ io_dcbwrite_byte(UNIT *uptr, int off, uint8 data)
      offset = 8 * (3 - (addr & 0x3));
      M[addr >> 2] &= ~(0xff << offset);
      M[addr >> 2] |= ((uint32)(data)) << offset;
+     if ((addr & ~3) == 0x0e1200)
+        sim_debug(DEBUG_CMD, &cpu_dev, "Set %08x %08x\n", addr, M[addr>>2]);
+
      return;
 }
 
@@ -191,6 +194,8 @@ io_write_blk(int addr, uint8 *data, int sz)
                    isprint((word >> 8) & 0xff)?(word >> 8)& 0xff:'.',
                    isprint(word & 0xff)?word& 0xff:'.');
          }
+     if ((addr & ~3) == 0x0e1200)
+        sim_debug(DEBUG_CMD, &cpu_dev, "Set %08x %08x\n", addr, M[addr>>2]);
      }
 }
 
@@ -202,7 +207,7 @@ io_read(uint32 dev_data, uint32 *data)
 
     dev = (dev_data >> 24) & 0xff;
     r = dev_table[dev]->io_read(dev_data, data);
-    sim_debug(DEBUG_CMD, &cpu_dev, "Read %02x, data=%08x\n", dev, *data);
+    sim_debug(DEBUG_CMD, &cpu_dev, "Read %02x, dev=%08x data=%08x\n", dev, dev_data, *data);
     return r;
 }
 
@@ -213,7 +218,7 @@ io_write(uint32 dev_data, uint32 data)
     int     r;
 
     dev = (dev_data >> 24) & 0xff;
-    sim_debug(DEBUG_CMD, &cpu_dev, "Write %02x, data=%08x\n", dev, data);
+    sim_debug(DEBUG_CMD, &cpu_dev, "Write %02x, dev=%08x data=%08x\n", dev, dev_data, data);
     r = dev_table[dev]->io_write(dev_data, data);
     return r;
 }

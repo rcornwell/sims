@@ -2076,10 +2076,10 @@ KL10 = ${KL10D}/kx10_cpu.c ${KL10D}/kx10_sys.c ${KL10D}/kx10_df.c \
 KL10_OPT = -DKL=1 -DUSE_INT64 -I $(KL10D) -DUSE_SIM_CARD ${NETWORK_OPT} 
 
 RIDGE32D = ${SIMHD}/Ridge32
-RIDGE32 = ${RIDGE32D}/ridge32_cpu.c ${RIDGE32D}/ridge32_sys.c \
-	${RIDGE32D}/ridge32_iobus.c ${RIDGE32D}/ridge32_flp.c \
-	${RIDGE32D}/ridge32_dsk.c ${RIDGE32D}/ridge32_ct.c \
-        ${RIDGE32D}/ridge32_vid.c
+RIDGE32 = ${RIDGE32D}/ridge32_cpu.c ${RIDGE32D}/ridge32_flt.c \
+	${RIDGE32D}/ridge32_sys.c ${RIDGE32D}/ridge32_iobus.c \
+	${RIDGE32D}/ridge32_flp.c ${RIDGE32D}/ridge32_dsk.c \
+	${RIDGE32D}/ridge32_ct.c ${RIDGE32D}/ridge32_vid.c
 RIDGE32_OPT = -I $(RIDGE32D) -DRIDGE32 -DUSE_SIM_IMD ${VIDEO_CCDEFS} ${VIDEO_LDFLAGS}
 
 ATT3B2D = ${SIMHD}/3B2

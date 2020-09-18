@@ -85,7 +85,7 @@ t_stat sim_load (FILE *fileref, CONST char *cptr, CONST char *fnam, int flag)
     int           i, sect;
     uint32        flags;
     uint32        len;
-    uint32        addr = 0x3e000;
+    uint32        addr = 0x3a000;
     uint32        data;
     uint32        mask;
     uint32        pa;
@@ -702,7 +702,7 @@ if (sw & SWMASK ('M')) {
                 if (*cptr == ',') {
                     cptr++;
                     while (sim_isspace (*cptr)) cptr++;
-                    if (*cptr != 'L' || *cptr != 'l')
+                    if (*cptr != 'L' && *cptr != 'l')
                         return SCPE_ARG;
                     val[0] |= 0x10;
                     l = 4;

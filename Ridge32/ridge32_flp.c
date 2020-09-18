@@ -281,6 +281,7 @@ flp_write(uint32 dev, uint32 data)
     sim_debug(DEBUG_EXP, &flp_dev, "Start cmd %2x\n", cmd);
     if (cmd < 0x80) {
        com_write_char(0, cmd);
+       sim_debug(DEBUG_EXP, &flp_dev, "print '%c'\n", isprint(cmd)? cmd: '.');
        uptr->STATUS = (0x80 << 16);
     } else if ((cmd & 0xc0) == 0xc0) {
        switch (cmd) {
@@ -300,6 +301,7 @@ flp_write(uint32 dev, uint32 data)
        case 0xc2:           /* Read one char port 0 no irq */
             uptr->STATUS = 2;
             /* Fall through */
+
        case 0xff:           /* Read one char port 0 irq */
             flp_unit[2].u3 = cmd;
             break;
@@ -619,12 +621,14 @@ flp_svc (UNIT *uptr)
           case  CMD_WRDEL:       /* Write delete */
           case  CMD_RDDEL:       /* Read delete */
                  /* Make sure cylinder is correct */
+#if 0
                  flp_dcb.stat[1] = 0;
                  flp_dcb.stat[2] = 0;
                  flp_dcb.stat[3] = flp_dcb.cmd[2];  /* C */
                  flp_dcb.stat[4] = flp_dcb.cmd[3];  /* H */
                  flp_dcb.stat[5] = flp_dcb.cmd[4];  /* R */
                  flp_dcb.stat[6] = flp_dcb.cmd[5];  /* N */
+#endif
                  flp_dcb.stat_len = 7;
                  if (uptr->CYL != flp_dcb.cmd[2]) {
                      flp_dcb.stat[0] |= 0x40;
@@ -649,11 +653,12 @@ flp_svc (UNIT *uptr)
      case PHASE_EXEC:
           /* Transfer data to/from memory */
           switch(flp_dcb.cmd[0] & 0xf) {
+          case  CMD_RDDEL:       /* Read delete */
           case  CMD_RDSEC:       /* Read sector */
                              /*   cyl head sect */
                 flags = 0;
-                if (sectRead((DISK_INFO *)uptr->up7, flp_dcb.stat[3], 
-                              flp_dcb.stat[4], flp_dcb.stat[5], 
+                if (sectRead((DISK_INFO *)uptr->up7, flp_dcb.cmd[2], 
+                              flp_dcb.cmd[3], flp_dcb.cmd[4], 
                     &flp_buf[0], sizeof(flp_buf), &flags, &len) != SCPE_OK) {
                     uptr->PHASE = PHASE_RES;
                     flp_dcb.stat[0] = 0x40;
@@ -661,15 +666,15 @@ flp_svc (UNIT *uptr)
                     return SCPE_OK;
                 }
     sim_debug(DEBUG_DETAIL, &flp_dev, "Read a=%6x c=%4x h=%x t=%d s=%d l=%d\n\r",
-              flp_dcb.addr, flp_dcb.count, flp_dcb.stat[4], flp_dcb.stat[3], flp_dcb.stat[5], len);
+              flp_dcb.addr, flp_dcb.count, flp_dcb.cmd[3], flp_dcb.cmd[2], flp_dcb.cmd[4], len);
 
-         sim_debug(DEBUG_DATA, &dsk_dev, "Disk Read: %d bytes\n", len);
-         for (i = 0; i < len; i++)  {
-             sim_debug(DEBUG_DATA, &dsk_dev, "%02x ", flp_buf[i]);
-             if ((i & 0xf) == 0xf)
-                  sim_debug(DEBUG_DATA, &dsk_dev, "\n");
-         }
-         sim_debug(DEBUG_DATA, &dsk_dev, "\n");
+               sim_debug(DEBUG_DATA, &dsk_dev, "Disk Read: %d bytes\n", len);
+               for (i = 0; i < len; i++)  {
+                   sim_debug(DEBUG_DATA, &dsk_dev, "%02x ", flp_buf[i]);
+                   if ((i & 0xf) == 0xf)
+                        sim_debug(DEBUG_DATA, &dsk_dev, "\n");
+               }
+               sim_debug(DEBUG_DATA, &dsk_dev, "\n");
 
                 if (len > flp_dcb.count)
                     len = flp_dcb.count;
@@ -677,16 +682,16 @@ flp_svc (UNIT *uptr)
                 flp_dcb.count -= len;
                 flp_dcb.xcount += len;
                 flp_dcb.addr += len;
-                if (flp_dcb.stat[5] == flp_dcb.cmd[6]) {
-                    flp_dcb.stat[5] = 1;
-                    if(flp_dcb.stat[4]) {
-                       flp_dcb.stat[3]++;
-                       flp_dcb.stat[4] = 0;
+                if (flp_dcb.cmd[4] == flp_dcb.cmd[6]) {
+                    flp_dcb.cmd[4] = 1;
+                    if(flp_dcb.cmd[3]) {
+                       flp_dcb.cmd[2]++;
+                       flp_dcb.cmd[3] = 0;
                     } else {
-                       flp_dcb.stat[4] = 1;
+                       flp_dcb.cmd[3] = 1;
                     }
                 } else {
-                    flp_dcb.stat[5]++;
+                    flp_dcb.cmd[4]++;
                 }
                 if (flp_dcb.count == 0) {
 //                    flp_dcb.stat[0] = 0x20 | (flp_dcb.cmd[1] & 0x7);
@@ -697,8 +702,10 @@ flp_svc (UNIT *uptr)
                 }
                 return SCPE_OK;
 
+          case  CMD_WRDEL:       /* Write delete */
           case  CMD_WRSEC:       /* Write sector */
-                flags = 0;
+                flags = ((flp_dcb.cmd[0] & 0xf) == CMD_WRDEL) ?
+                            IMD_DISK_IO_DELETED_ADDR_MARK : 0;
                 len = flp_dcb.cmd[5];
                 if (len == 0) {
                     len = flp_dcb.cmd[8];
@@ -708,15 +715,15 @@ flp_svc (UNIT *uptr)
                 if (len > flp_dcb.count)
                     len = flp_dcb.count;
                 io_read_blk(flp_dcb.addr, &flp_buf[0], len);
-         sim_debug(DEBUG_DATA, &dsk_dev, "Disk Write: %d bytes\n", len);
-         for (i = 0; i < len; i++)  {
-             sim_debug(DEBUG_DATA, &dsk_dev, "%02x ", flp_buf[i]);
-             if ((i & 0xf) == 0xf)
-                  sim_debug(DEBUG_DATA, &dsk_dev, "\n");
-         }
-         sim_debug(DEBUG_DATA, &dsk_dev, "\n");
-                if (sectWrite((DISK_INFO *)uptr->up7, flp_dcb.stat[3], 
-                              flp_dcb.stat[4], flp_dcb.stat[5], 
+                sim_debug(DEBUG_DATA, &dsk_dev, "Disk Write: %d bytes\n", len);
+                for (i = 0; i < len; i++)  {
+                    sim_debug(DEBUG_DATA, &dsk_dev, "%02x ", flp_buf[i]);
+                    if ((i & 0xf) == 0xf)
+                         sim_debug(DEBUG_DATA, &dsk_dev, "\n");
+                }
+                sim_debug(DEBUG_DATA, &dsk_dev, "\n");
+                if (sectWrite((DISK_INFO *)uptr->up7, flp_dcb.cmd[2], 
+                              flp_dcb.cmd[3], flp_dcb.cmd[4], 
                     &flp_buf[0], sizeof(flp_buf), &flags, &len) != SCPE_OK) {
                     uptr->PHASE = PHASE_RES;
                     sim_activate(uptr, 1000);
@@ -725,16 +732,16 @@ flp_svc (UNIT *uptr)
                 flp_dcb.count -= len;
                 flp_dcb.xcount += len;
                 flp_dcb.addr += len;
-                if (flp_dcb.stat[5] == flp_dcb.cmd[6]) {
-                    flp_dcb.stat[5] = 1;
-                    if(flp_dcb.stat[4]) {
-                       flp_dcb.stat[3]++;
-                       flp_dcb.stat[4] = 0;
+                if (flp_dcb.cmd[4] == flp_dcb.cmd[6]) {
+                    flp_dcb.cmd[4] = 1;
+                    if(flp_dcb.cmd[3]) {
+                       flp_dcb.cmd[2]++;
+                       flp_dcb.cmd[3] = 0;
                     } else {
-                       flp_dcb.stat[4] = 1;
+                       flp_dcb.cmd[3] = 1;
                     }
                 } else {
-                    flp_dcb.stat[5]++;
+                    flp_dcb.cmd[4]++;
                 }
                 if (flp_dcb.count == 0) {
                     uptr->PHASE = PHASE_RES;
@@ -746,8 +753,6 @@ flp_svc (UNIT *uptr)
                 return SCPE_OK;
 
           case  CMD_RDTRK:       /* Read track */
-          case  CMD_WRDEL:       /* Write delete */
-          case  CMD_RDDEL:       /* Read delete */
                  /* Make sure cylinder is correct */
                  flp_dcb.stat[1] = 0;
                  flp_dcb.stat[2] = 0;
@@ -777,6 +782,26 @@ flp_svc (UNIT *uptr)
                  return SCPE_OK;
           }
      case PHASE_RES:
+          switch(flp_dcb.cmd[0] & 0xf) {
+          case  CMD_RDSEC:       /* Read sector */
+          case  CMD_WRSEC:       /* Write sector */
+          case  CMD_RDTRK:       /* Read track */
+          case  CMD_WRDEL:       /* Write delete */
+          case  CMD_RDDEL:       /* Read delete */
+                 /* Make sure cylinder is correct */
+                 flp_dcb.stat[3] = flp_dcb.cmd[2];  /* C */
+                 flp_dcb.stat[4] = flp_dcb.cmd[3];  /* H */
+                 flp_dcb.stat[5] = flp_dcb.cmd[4];  /* R */
+                 flp_dcb.stat[6] = flp_dcb.cmd[5];  /* N */
+                 flp_dcb.stat_len = 7;
+                 break;
+
+          case  CMD_FIXDR:       /* Fix drive */
+          case  CMD_RDSID:       /* Read sector ID */
+          case  CMD_FMTTK:       /* Format track */
+          default:               /* Invalid command */
+                  break;
+          }
           /* Save results back to memory */
           io_dcbwrite_blk(uptr, 0xD9, &flp_dcb.stat[0], flp_dcb.stat_len);
           io_dcbwrite_byte(uptr, 0xc2, flp_dcb.gstat);
@@ -785,12 +810,13 @@ flp_svc (UNIT *uptr)
           if (uptr->CYL == 0)
              flags |= 0x10;
           io_dcbwrite_byte(uptr, 0xc3, flags);
-          io_dcbwrite_half(uptr, 0xca, flp_dcb.xcount);
-          io_dcbwrite_byte(uptr, 0xCE, flp_dcb.stat[3]);
-          io_dcbwrite_byte(uptr, 0xCD, (flp_dcb.stat[4] << 2) | 0);
-          io_dcbwrite_byte(uptr, 0xCF, flp_dcb.stat[5]);
           io_dcbwrite_addr(uptr, 0xC5, flp_dcb.addr);
+//          io_dcbwrite_byte(uptr, 0xc4, 0);
           io_dcbwrite_half(uptr, 0xC8, flp_dcb.count);
+          io_dcbwrite_half(uptr, 0xca, flp_dcb.xcount);
+          io_dcbwrite_byte(uptr, 0xCD, (flp_dcb.stat[4] << 2) | 0);
+          io_dcbwrite_byte(uptr, 0xCE, flp_dcb.stat[3]);
+          io_dcbwrite_byte(uptr, 0xCF, flp_dcb.stat[5]);
           sim_debug(DEBUG_DETAIL, &flp_dev,"Stop floppy %2x %4x %2x\n\r", 
                   flags, flp_dcb.xcount, flp_dcb.gstat);
           uptr->PHASE = PHASE_IRQ;
