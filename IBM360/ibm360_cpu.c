@@ -2734,7 +2734,7 @@ save_dbl:
                 while (dest != 0) {  /* Convert digits until zero */
                     int d = dest % 10;
                     dest /= 10;
-                    if (temp > 32)
+                    if (temp >= 32)
                         src1 |= (d << (temp - 32));
                     else
                         src1h |= (d << temp);
