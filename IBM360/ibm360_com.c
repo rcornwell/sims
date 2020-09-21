@@ -170,7 +170,7 @@ static const uint8 com_2741_in[128] = {
    /*  0    1     2     3     4     5     6     7 */
     0x15, 0x02, 0x04, 0x07, 0x08, 0x0B, 0x0D, 0x0E,
    /*  8    9     :     ;     <     =     >     ? */
-    0x10, 0x13, 0x88, 0x87, 0x00, 0x82, 0x8E, 0xA3,
+    0x10, 0x13, 0x88, 0x87, 0x84, 0x82, 0x8E, 0xA3,
    /*  @    A     B     C     D     E     F     G */
     0x20, 0xE2, 0xE4, 0xE7, 0xE8, 0xEB, 0xED, 0xEE,    /* 100 - 137 */
    /*  H    I     J     K     L     M     N     O */
@@ -201,7 +201,7 @@ static const uint8 com_2741_out[256] = {
    /*  0,    1,    2,    3,    4,    5,    6,    7,  */
      '@', 0xff, 0xff,  '/', 0xff,  's',  't', 0xff,       /* 0x2x */
    /*  8,    9,    A,    B,    C,    D,    E,    F,  */
-    0xff,  'u',  'v', 0xff,  'w', 0xff,  'x', 0xff,
+    0xff,  'u',  'v', 0xff,  'w', 0xff,  0xff, 'x',
    /*  0,    1,    2,    3,    4,    5,    6,    7,  */
     0xff,  'y',  'z', 0xff, 0xff, 0xff, 0xff,  ',',       /* 0x3x */
    /*  8,    9,    A,    B,    C,    D,    E,    F,  */
