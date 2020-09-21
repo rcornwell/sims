@@ -350,6 +350,7 @@ loop:
     /* Check invalid count */
     if (ccw_count[chan] == 0) {
         chan_status[chan] |= STATUS_PCHK;
+        ccw_cmd[chan] = 0;
         irq_pend = 1;
         return 1;
     }
@@ -364,6 +365,7 @@ loop:
          /* Check if invalid command */
          if ((ccw_cmd[chan] & 0xF) == 0) {
              chan_status[chan] |= STATUS_PCHK;
+             ccw_cmd[chan] = 0;
              irq_pend = 1;
              return 1;
          }
