@@ -7289,12 +7289,14 @@ t_stat reset_all (uint32 start)
 DEVICE *dptr;
 uint32 i;
 t_stat reason;
+int32 saved_sim_switches = sim_switches;
 
 for (i = 0; i < start; i++) {
     if (sim_devices[i] == NULL)
         return SCPE_IERR;
     }
 for (i = start; (dptr = sim_devices[i]) != NULL; i++) {
+    sim_switches = saved_sim_switches;  /* restore initial switches */
     if (sim_switches & SWMASK('P')) {
         tmxr_add_debug (dptr);          /* Add TMXR debug to MUX devices */
         sim_tape_add_debug (dptr);      /* Add TAPE debug to TAPE devices */
@@ -7306,6 +7308,7 @@ for (i = start; (dptr = sim_devices[i]) != NULL; i++) {
         }
     }
 for (i = 0; sim_internal_device_count && (dptr = sim_internal_devices[i]); ++i) {
+    sim_switches = saved_sim_switches;  /* restore initial switches */
     if (dptr->reset != NULL) {
         reason = dptr->reset (dptr);
         if (reason != SCPE_OK)
@@ -8637,9 +8640,9 @@ sim_stop_timer_services ();                             /* disable wall clock ti
 sim_ttcmd ();                                           /* restore console */
 sim_brk_clrall (BRK_TYP_DYN_STEPOVER);                  /* cancel any step/over subroutine breakpoints */
 #ifdef SIGHUP
-signal (SIGHUP, SIG_DFL);                               /* cancel WRU */
+signal (SIGHUP, sigterm_received ? SIG_IGN : SIG_DFL);  /* cancel WRU */
 #endif
-signal (SIGTERM, SIG_DFL);                              /* cancel WRU */
+signal (SIGTERM, sigterm_received ? SIG_IGN : SIG_DFL); /* cancel WRU */
 sim_flush_buffered_files();
 sim_cancel (&sim_flush_unit);                           /* cancel flush timer */
 sim_cancel_step ();                                     /* cancel step timer */
