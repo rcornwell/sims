@@ -115,7 +115,7 @@ UNIT            con_unit[] = {
     {UDATA(&con_srvo, UNIT_CON, 0), 0, UNIT_ADDR(0x7EFD)},   /* Output */
 };
 
-//DIB               con_dib = {NULL, con_startcmd, NULL, NULL, NULL, con_ini, con_unit, con_chp, NUM_UNITS_CON, 0xf, 0x7e00, 0, 0, 0};
+//DIB   con_dib = {NULL,con_startcmd,NULL,NULL,NULL,con_ini,con_unit,con_chp,NUM_UNITS_CON,0xf,0x7e00,0,0,0};
 DIB             con_dib = {
     con_preio,      /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Start I/O */
     con_startcmd,   /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
@@ -282,82 +282,93 @@ t_stat con_srvo(UNIT *uptr) {
     int         unit = (uptr - con_unit);       /* unit 0 is read, unit 1 is write */
     int         cmd = uptr->CMD & CON_MSK;
     CHANP       *chp = find_chanp_ptr(chsa);    /* find the chanp pointer */
+    int         len = chp->ccw_count;           /* INCH command count */
+    uint32      mema = chp->ccw_addr;           /* get inch or buffer addr */
+    uint32      tstart;
+    int         cnt = 0;
     uint8       ch;
 
     sim_debug(DEBUG_CMD, &con_dev,
         "con_srvo enter CMD %08x chsa %04x cmd = %02x\n", uptr->CMD, chsa, cmd);
 
-    /* if input tried from output device, error */
-    if ((cmd == CON_RD) || (cmd == CON_ECHO) || (cmd == 0xC0)) {  /* check for output */
-        /* CON_RD:      0x02 */      /* Read command */
-        /* CON_ECHO:    0x0a */      /* Read command w/ECHO */
-        /* if input requested for output device, give error */
-        if (unit == 1) {
-            uptr->SNS |= SNS_CMDREJ;            /* command rejected */
-            uptr->CMD &= LMASK;                 /* nothing left, command complete */
-            sim_debug(DEBUG_CMD, &con_dev,
-                "con_srvo Read to output device CMD %08x chsa %04x cmd = %02x\n", uptr->CMD, chsa, cmd);
-            chan_end(chsa, SNS_CHNEND|SNS_UNITCHK);    /* unit check */
-            return SCPE_OK;
-        }
-    }
+    switch (cmd) {
 
-    if ((cmd == CON_NOP) || (cmd == CON_INCH2)) {   /* NOP has to do nothing */
+    /* if input tried from output device, error */
+    case CON_RD:        /* 0x02 */              /* Read command */
+    case CON_ECHO:      /* 0x0a */              /* Read command w/ECHO */
+    case 0x0C:          /* 0x0C */              /* Unknown command */
+        /* if input requested for output device, give error */
+        uptr->SNS |= SNS_CMDREJ;                /* command rejected */
         uptr->CMD &= LMASK;                     /* nothing left, command complete */
         sim_debug(DEBUG_CMD, &con_dev,
-            "con_srvo INCH/NOP unit %02x: CMD %08x cmd %02x incnt %02x u4 %02x\n",
+            "con_srvo Read to output device CMD %08x chsa %04x cmd = %02x\n", uptr->CMD, chsa, cmd);
+        chan_end(chsa, SNS_CHNEND|SNS_UNITCHK); /* unit check */
+        break;
+
+    case CON_INCH2:      /* 0xf0 */             /* INCH command */
+        uptr->CMD &= LMASK;                     /* nothing left, command complete */
+        sim_debug(DEBUG_CMD, &con_dev,
+            "con_srvo INCH unit %02x: CMD %08x cmd %02x incnt %02x u4 %02x\n",
             unit, uptr->CMD, cmd, con_data[unit].incnt, uptr->u4);
-        if (cmd == CON_INCH2) {                 /* Channel end only for INCH */
-            int len = chp->ccw_count;           /* INCH command count */
-            uint32 mema = chp->ccw_addr;        /* get inch or buffer addr */
-            //FIXME - test error return for error
-//          int i = set_inch(uptr, mema);       /* new address */
-            set_inch(uptr, mema);               /* new address */
 
+        /* now call set_inch() function to write and test inch buffer addresses */
+        tstart = set_inch(uptr, mema);          /* new address */
+        if ((tstart == SCPE_MEM) || (tstart == SCPE_ARG)) { /* any error */
+            /* we have error, bail out */
+            uptr->SNS |= SNS_CMDREJ;
             sim_debug(DEBUG_CMD, &con_dev,
-                "con_srvo INCH CMD %08x chsa %04x len %02x inch %06x\n", uptr->CMD, chsa, len, mema);
-            chan_end(chsa, SNS_CHNEND);         /* INCH done */
-        } else {
-            sim_debug(DEBUG_CMD, &con_dev,
-                "con_srvo NOP CMD %08x chsa %04x cmd = %02x\n", uptr->CMD, chsa, cmd);
-            chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
+                "con_srvo INCH Error unit %02x: CMD %08x cmd %02x incnt %02x u4 %02x\n",
+                unit, uptr->CMD, cmd, con_data[unit].incnt, uptr->u4);
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+            break;
         }
-        return SCPE_OK;
-    }
+        sim_debug(DEBUG_CMD, &con_dev,
+            "con_srvo INCH CMD %08x chsa %04x len %02x inch %06x\n", uptr->CMD, chsa, len, mema);
+        chan_end(chsa, SNS_CHNEND);         /* return OK */
+        break;
 
-    if ((cmd == CON_WR) || (cmd == CON_RWD)) {
-        int cnt = 0;
+    case CON_NOP:       /* 0x03 */              /* NOP has do nothing */
+        uptr->CMD &= LMASK;                     /* nothing left, command complete */
+        sim_debug(DEBUG_CMD, &con_dev,
+            "con_srvo NOP unit %02x: CMD %08x cmd %02x incnt %02x u4 %02x\n",
+            unit, uptr->CMD, cmd, con_data[unit].incnt, uptr->u4);
+        sim_debug(DEBUG_CMD, &con_dev,
+            "con_srvo NOP CMD %08x chsa %04x cmd = %02x\n", uptr->CMD, chsa, cmd);
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
+        break;
+
+    case CON_RWD:       /* 0x37 */              /* TOF and write line */
+    case CON_WR:        /* 0x01 */              /* Write command */
         /* see if write complete */
         if (uptr->CMD & CON_OUTPUT) {
             /* write is complete, post status */
             sim_debug(DEBUG_CMD, &con_dev,
                 "con_srvo write CMD %08x chsa %04x cmd %02x complete\n",
                 uptr->CMD, chsa, cmd);
-            uptr->CMD &= LMASK;             /* nothing left, command complete */
-/*RTC*/     outbusy = 0;                    /* output done */
-
+            uptr->CMD &= LMASK;                 /* nothing left, command complete */
+/*RTC*/     outbusy = 0;                        /* output done */
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
-            return SCPE_OK;
+            break;
         }
 //Comment out clock flag 072020
-/*RTC*/ outbusy = 1;                        /* tell clock output waiting */
+/*RTC*/ outbusy = 1;                            /* tell clock output waiting */
         /* Write to device */
         while (chan_read_byte(chsa, &ch) == SCPE_OK) {  /* get byte from memory */
             /* HACK HACK HACK */
-            ch &= 0x7f;                     /* make 7 bit w/o parity */
-            sim_putchar(ch);                /* output next char to device */
-            cnt++;                          /* count chars output */
+            ch &= 0x7f;                         /* make 7 bit w/o parity */
+            sim_putchar(ch);                    /* output next char to device */
+            cnt++;                              /* count chars output */
         }
-        uptr->CMD |= CON_OUTPUT;            /* output command complete */
+        uptr->CMD |= CON_OUTPUT;                /* output command complete */
         sim_debug(DEBUG_CMD, &con_dev,
             "con_srvo write wait %03x CMD %08x chsa %04x cmd %02x to complete\n",
 //          41*cnt+47, uptr->CMD, chsa, cmd);
             19*cnt+23, uptr->CMD, chsa, cmd);
-fflush(sim_deb);
-//      sim_activate(uptr, 19*cnt+23);      /* wait for a while */
-//      sim_activate(uptr, 31*cnt+47);      /* wait for a while */
-/*719*/ sim_activate(uptr, 41*cnt+47);      /* wait for a while */
-//719   sim_activate(uptr, 81*cnt+87);      /* wait for a while */
+//      sim_activate(uptr, 19*cnt+23);          /* wait for a while */
+//      sim_activate(uptr, 31*cnt+47);          /* wait for a while */
+/*719*/ sim_activate(uptr, 41*cnt+47);          /* wait for a while */
+//719   sim_activate(uptr, 81*cnt+87);          /* wait for a while */
+        break;
     }
     return SCPE_OK;
 }
@@ -368,6 +379,9 @@ t_stat con_srvi(UNIT *uptr) {
     int         unit = (uptr - con_unit);       /* unit 0 is read, unit 1 is write */
     int         cmd = uptr->CMD & CON_MSK;
     CHANP       *chp = find_chanp_ptr(chsa);    /* find the chanp pointer */
+    int         len = chp->ccw_count;           /* INCH command count */
+    uint32      mema = chp->ccw_addr;           /* get inch or buffer addr */
+    uint32      tstart;
     uint8       ch;
     t_stat      r;
 
@@ -378,46 +392,55 @@ t_stat con_srvi(UNIT *uptr) {
         "con_srvi enter CMD %08x chsa %04x cmd %02x incnt %02x u4 %02x\n",
         uptr->CMD, chsa, cmd, con_data[unit].incnt, uptr->u4);
 
-    /* if output tried to input device, error */
-    if ((cmd == CON_RWD) || (cmd == CON_WR) || (cmd == 0x0C)) {  /* check for output */
-        /* CON_RWD: 0x37 */                     /* TOF and write line */
-        /* CON_WR:  0x01 */                     /* Write command */
-        /* if input requested for output device, give error */
-        if (unit == 0) {
-            uptr->SNS |= SNS_CMDREJ;            /* command rejected */
-            uptr->CMD &= LMASK;                 /* nothing left, command complete */
-            sim_debug(DEBUG_CMD, &con_dev,
-                "con_srvi Write to input device CMD %08x chsa %04x cmd = %02x\n", uptr->CMD, chsa, cmd);
-            chan_end(chsa, SNS_CHNEND|SNS_UNITCHK);    /* unit check */
-            // fall thru return SCPE_OK;
-        }
-    }
+    switch (cmd) {
 
-    if ((cmd == CON_NOP) || (cmd == CON_INCH2)) { /* NOP is do nothing */
+    /* if output tried to input device, error */
+    case CON_RWD:       /* 0x37 */              /* TOF and write line */
+    case CON_WR:        /* 0x01 */              /* Write command */
+    case 0x0C:          /* 0x0C */              /* Unknown command */
+        /* if input requested for output device, give error */
+        uptr->SNS |= SNS_CMDREJ;                /* command rejected */
         uptr->CMD &= LMASK;                     /* nothing left, command complete */
         sim_debug(DEBUG_CMD, &con_dev,
-            "con_srvi INCH/NOP unit %02x: CMD %08x cmd %02x incnt %02x u4 %02x\n",
+            "con_srvi Write to input device CMD %08x chsa %04x cmd = %02x\n", uptr->CMD, chsa, cmd);
+        chan_end(chsa, SNS_CHNEND|SNS_UNITCHK); /* unit check */
+        break;
+
+    case CON_INCH2:      /* 0xf0 */             /* INCH command */
+        uptr->CMD &= LMASK;                     /* nothing left, command complete */
+        sim_debug(DEBUG_CMD, &con_dev,
+            "con_srvi INCH unit %02x: CMD %08x cmd %02x incnt %02x u4 %02x\n",
             unit, uptr->CMD, cmd, con_data[unit].incnt, uptr->u4);
-        if (cmd == CON_INCH2) {                 /* Channel end only for INCH */
-            int len = chp->ccw_count;           /* INCH command count */
-            uint32 mema = chp->ccw_addr;        /* get inch or buffer addr */
-            //FIXME add code to test return from set_inch
-            set_inch(uptr, mema);               /* new address */
 
-            con_data[unit].incnt = 0;           /* buffer empty */
-            uptr->u4 = 0;                       /* no I/O yet */
+        /* now call set_inch() function to write and test inch buffer addresses */
+        tstart = set_inch(uptr, mema);          /* new address */
+        if ((tstart == SCPE_MEM) || (tstart == SCPE_ARG)) { /* any error */
+            /* we have error, bail out */
+            uptr->SNS |= SNS_CMDREJ;
             sim_debug(DEBUG_CMD, &con_dev,
-                "con_srvi INCH CMD %08x chsa %04x len %02x inch %06x\n", uptr->CMD, chsa, len, mema);
-            chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
-        } else {
-            sim_debug(DEBUG_CMD, &con_dev,
-                "con_srvi NOP CMD %08x chsa %04x cmd = %02x\n", uptr->CMD, chsa, cmd);
-            chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* NOP done */
+                "con_srvi INCH Error unit %02x: CMD %08x cmd %02x incnt %02x u4 %02x\n",
+                unit, uptr->CMD, cmd, con_data[unit].incnt, uptr->u4);
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+            break;
         }
+        con_data[unit].incnt = 0;               /* buffer empty */
+        uptr->u4 = 0;                           /* no I/O yet */
+        sim_debug(DEBUG_CMD, &con_dev,
+            "con_srvi INCH CMD %08x chsa %04x len %02x inch %06x\n", uptr->CMD, chsa, len, mema);
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
         /* drop through to poll input */
-    }
+        break;
 
-    switch (cmd) {
+    case CON_NOP:       /* 0x03 */              /* NOP has do nothing */
+        uptr->CMD &= LMASK;                     /* nothing left, command complete */
+        sim_debug(DEBUG_CMD, &con_dev,
+            "con_srvi NOP unit %02x: CMD %08x cmd %02x incnt %02x u4 %02x\n",
+            unit, uptr->CMD, cmd, con_data[unit].incnt, uptr->u4);
+        sim_debug(DEBUG_CMD, &con_dev,
+            "con_srvi NOP CMD %08x chsa %04x cmd = %02x\n", uptr->CMD, chsa, cmd);
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
+        /* drop through to poll input */
+        break;
 
     case CON_RD:        /* 0x02 */              /* read from device */
     case CON_ECHO:      /* 0x0a */              /* read from device w/ECHO */
@@ -432,6 +455,12 @@ t_stat con_srvi(UNIT *uptr) {
             /* process any characters */
             if (uptr->u4 != con_data[unit].incnt) { /* input available */
                 ch = con_data[unit].ibuff[uptr->u4];    /* get char from read buffer */
+#ifndef ECHO_ON_READ_092220
+                /* this fixes mpx1x time entry on startup */
+                if (uptr->CMD & CON_EKO)            /* ECHO requested */
+                    sim_putchar(ch);                /* ECHO the char */
+#endif
+
                 if (chan_write_byte(chsa, &ch)) {   /* write byte to memory */
                     /* write error */
                     cmd = 0;                    /* no cmd now */
@@ -503,8 +532,11 @@ t_stat con_srvi(UNIT *uptr) {
                 "con_srvi handle readch unit %02x: CMD %08x read %02x u4 %02x incnt %02x\n",
                 unit, uptr->CMD, ch, uptr->u4, con_data[unit].incnt);
 
+#ifdef ECHO_ON_READ_092220
+            /* this fixes mpx1x time entry on startup */
             if (uptr->CMD & CON_EKO)            /* ECHO requested */
                 sim_putchar(ch);                /* ECHO the char */
+#endif
 
             /* put char in buffer */
             con_data[unit].ibuff[con_data[unit].incnt++] = ch;

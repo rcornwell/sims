@@ -23,6 +23,11 @@
 
 #include "sel32_defs.h"
 
+/* uncomment to use fast sim_activate times when running UTX */
+/* UTX gets an ioi error for dm0801 if slow times are used */
+/* dm0801 is not even a valid unit number for UDP controller */
+#define FAST_FOR_UTX
+
 #if NUM_DEVS_HSDP > 0
 
 #define UNIT_HSDP   UNIT_ATTABLE | UNIT_IDLE | UNIT_DISABLE
@@ -246,20 +251,20 @@ Byte 1 bits 7-15
 #define SNS_DIAGMOD    0x08000000               /* Diagnostic Mode ECC Code generation and checking */
 #define SNS_RSVTRK     0x04000000               /* Reserve Track mode: 1=OK to write, 0=read only */
 #define SNS_FHDOPT     0x02000000               /* FHD or FHD option = 1 */
-#define SNS_RESERV     0x01000000               /* Reserved */
+#define SNS_RES1       0x01000000               /* Reserved */
 
 /* Sense byte 1 */
 #define SNS_CMDREJ     0x800000                 /* Command reject */
 #define SNS_INTVENT    0x400000                 /* Unit intervention required */
-#define SNS_SPARE1     0x200000                 /* Spare */
+#define SNS_USELE      0x200000                 /* Unit Select Error */
 #define SNS_EQUCHK     0x100000                 /* Equipment check */
-#define SNS_DATCHK     0x080000                 /* Data Check */
-#define SNS_OVRRUN     0x040000                 /* Data overrun/underrun */
+#define SNS_RES2       0x080000                 /* Reserved */
+#define SNS_RES3       0x040000                 /* Reserved */
 #define SNS_DSKFERR    0x020000                 /* Disk format error */
 #define SNS_DEFTRK     0x010000                 /* Defective track encountered */
 
 /* Sense byte 2 */
-#define SNS_LAST       0x8000                   /* Last track flag encountered */
+#define SNS_RES4       0x8000                   /* Reserved */
 #define SNS_AATT       0x4000                   /* At Alternate track */
 #define SNS_WPER       0x2000                   /* Write protection error */
 #define SNS_WRL        0x1000                   /* Write lock error */
@@ -271,11 +276,11 @@ Byte 1 bits 7-15
 /* Sense byte 3 */
 #define SNS_REVL       0x80                     /* Revolution lost */
 #define SNS_DADE       0x40                     /* Disc addressing or seek error */
-#define SNS_BUCK       0x20                     /* Buffer check */
-#define SNS_ECCS       0x10                     /* ECC error in sector label */
-#define SNS_ECCD       0x08                     /* ECC error iin data */
-#define SNS_ECCT       0x04                     /* ECC error in track label */
-#define SNS_RTAE       0x02                     /* Reserve track access error */
+#define SNS_RES5       0x20                     /* Reserved */
+#define SNS_RES6       0x10                     /* Reserved */
+#define SNS_ECCD       0x08                     /* ECC error in data */
+#define SNS_RES7       0x04                     /* Reserved */
+#define SNS_RES8       0x02                     /* Reserved */
 #define SNS_UESS       0x01                     /* Uncorrectable ECC error */
 
 #define SNS2    us9
@@ -345,17 +350,20 @@ hsdp_type[] =
     /* Class F Disc Devices */
     /* For MPX */
     {"MH040",   5, 192, 20, 407, 411, 0x40},   /* 0  411   40M XXXX */
-    {"MH080",   5, 192, 20, 819, 823, 0x40},   /* 1  823   80M 8138 */
+//  {"MH080",   5, 192, 20, 819, 823, 0x40},   /* 1  823   80M 8138 */
+    {"MH080",   5, 192, 22, 819, 823, 0x40},   /* 1  823   80M 8138 */
     {"MH160",  10, 192, 20, 819, 823, 0x40},   /* 2  823  160M 8148 */
     {"MH300",  19, 192, 20, 819, 823, 0x40},   /* 3  823  300M 9346 */
     {"MH600",  40, 192, 20, 839, 843, 0x40},   /* 4  843  600M 8155 */
+    {"MH689",  16, 192, 54, 861, 865, 0x40},   /* 5  823  674M 8888 DP689 */
     /* For UTX */
-    {"9342",   5, 256, 16, 819, 823, 0x41},    /* 5  823   80M 9342 MH080 */
-    {"8148",  10, 256, 16, 819, 823, 0x41},    /* 6  823  160M 8146 MH160 */
-    {"9346",  19, 256, 16, 819, 823, 0x41},    /* 7  823  300M 9344 MH300 */
-    {"8858",  24, 256, 16, 707, 711, 0x41},    /* 8  711  340M 8858 DC340 */
-    {"8887",  10, 256, 35, 819, 823, 0x41},    /* 9  823  337M 8887 DP337 */
-    {"8155",  40, 256, 16, 839, 843, 0x41},    /* 10 843  600M 8155 MH600 */
+    {"9342",   5, 256, 16, 819, 823, 0x41},    /* 6  823   80M 9342 MH080 */
+    {"8148",  10, 256, 16, 819, 823, 0x41},    /* 7  823  160M 8146 MH160 */
+    {"9346",  19, 256, 16, 819, 823, 0x41},    /* 8  823  300M 9344 MH300 */
+    {"8858",  24, 256, 16, 707, 711, 0x41},    /* 9  711  340M 8858 DC340 */
+    {"8887",  10, 256, 35, 819, 823, 0x41},    /* 10 823  337M 8887 DP337 */
+    {"8155",  40, 256, 16, 839, 843, 0x41},    /* 11 843  600M 8155 MH600 */
+    {"8888",  16, 256, 43, 861, 865, 0x41},    /* 12 823  674M 8888 DP689 */
     {NULL, 0}
 };
 
@@ -386,15 +394,15 @@ MTAB            hsdp_mod[] = {
 
 UNIT            dpa_unit[] = {
 /* SET_TYPE(3) DM300 */
-/* SET_TYPE(8) 8887 */
-    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(8), 0), 0, UNIT_ADDR(0x800)},  /* 0 */
-    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(8), 0), 0, UNIT_ADDR(0x802)},  /* 1 */
-    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(8), 0), 0, UNIT_ADDR(0x804)},  /* 2 */
-    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(8), 0), 0, UNIT_ADDR(0x806)},  /* 3 */
-    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(8), 0), 0, UNIT_ADDR(0x808)},  /* 4 */
-    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(8), 0), 0, UNIT_ADDR(0x80A)},  /* 5 */
-    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(8), 0), 0, UNIT_ADDR(0x80C)},  /* 6 */
-    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(8), 0), 0, UNIT_ADDR(0x80E)},  /* 7 */
+/* SET_TYPE(10) 8887 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(10), 0), 0, UNIT_ADDR(0x800)},  /* 0 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(10), 0), 0, UNIT_ADDR(0x802)},  /* 1 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(10), 0), 0, UNIT_ADDR(0x804)},  /* 2 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(10), 0), 0, UNIT_ADDR(0x806)},  /* 3 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(10), 0), 0, UNIT_ADDR(0x808)},  /* 4 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(10), 0), 0, UNIT_ADDR(0x80A)},  /* 5 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(10), 0), 0, UNIT_ADDR(0x80C)},  /* 6 */
+    {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(10), 0), 0, UNIT_ADDR(0x80E)},  /* 7 */
 };
 
 DIB             dpa_dib = {
@@ -530,16 +538,27 @@ uint16 hsdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 
         uptr->SNS &= ~SNS_CMDREJ;               /* not rejected yet */
         uptr->CMD |= DSK_INCH2;                 /* use 0xF0 for inch, just need int */
-        sim_activate(uptr, 20);                 /* start things off */
+#ifdef FAST_FOR_UTX
+//      sim_activate(uptr, 20);                 /* start things off */
+        sim_activate(uptr, 30);                 /* start things off */
+#else
+        sim_activate(uptr, 250);                /* start things off */
+#endif
         return SCPE_OK;                         /* good to go */
         break;
 
     case DSK_NOP:                               /* NOP 0x03 */
+#ifdef NOT4HSDP
         if ((cmd == DSK_NOP) &&
             (chp->chan_info & INFO_SIOCD)) {    /* is NOP 1st IOCD? */
             chp->chan_caw -= 8;                 /* backup iocd address for diags */
             break;                              /* yes, can't be 1st */
         }
+#endif
+    case DSK_INC:                               /* 0xFF Initialize controller */
+        if ((cmd == DSK_INC) &&
+            (chp->ccw_count != 0x20))           /* count must be 32 to be valid */
+            break;
     case DSK_SCK:                               /* Seek command 0x07 */
     case DSK_XEZ:                               /* Rezero & Read IPL record 0x1f */
     case DSK_WD:                                /* Write command 0x01 */
@@ -558,7 +577,12 @@ uint16 hsdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         sim_debug(DEBUG_CMD, dptr,
             "hsdp_startcmd starting disk cmd %02x chsa %04x\n",
             cmd, chsa);
-        sim_activate(uptr, 20);                 /* start things off */
+#ifdef FAST_FOR_UTX
+//      sim_activate(uptr, 20);                 /* start things off */
+        sim_activate(uptr, 30);                 /* start things off */
+#else
+        sim_activate(uptr, 250);                /* start things off */
+#endif
         return SCPE_OK;                         /* good to go */
         break;
 
@@ -567,6 +591,8 @@ uint16 hsdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     sim_debug(DEBUG_CMD, dptr,
         "hsdp_startcmd done with hsdp_startcmd %02x chsa %04x SNS %08x\n",
         cmd, chsa, uptr->SNS);
+    /* diags want the chan addr to point at bad command?? */
+    chp->chan_caw -= 8;                         /* backup iocd address for diags */
     uptr->SNS |= SNS_CMDREJ;                    /* cmd rejected */
     return SNS_CHNEND|SNS_DEVEND|STATUS_PCHK;   /* return error */
 }
@@ -643,6 +669,49 @@ t_stat hsdp_srv(UNIT *uptr)
 
     switch (cmd) {
     case 0:                                     /* No command, stop disk */
+        break;
+
+    case DSK_INC:                               /* 0xFF Initialize controller */
+        uptr->CMD &= LMASK;                     /* remove old status bits & cmd */
+        len = chp->ccw_count;                   /* INCH command count */
+        mema = chp->ccw_addr;                   /* get inch or buffer addr */
+        sim_debug(DEBUG_CMD, dptr,
+            "disk_srv cmd CONT INC %06x chsa %04x addr %06x count %04x completed\n",
+            chp->chan_inch_addr, chsa, mema, chp->ccw_count);
+        /* to use this inch method, byte count must be 0x20 */
+        if (len != 0x20) {
+                /* we have invalid count, error, bail out */
+                uptr->SNS |= SNS_CMDREJ;
+                chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                break;
+        }
+        /* read all 32 bytes, stopping every 4 bytes to make words */
+        /* the 8 words have drive data for each unit */
+        /* WARNING 8 drives must be defined for this controller */
+        /* so we will not have a map fault */
+        for (i=0; i < 32; i++) {
+            if (chan_read_byte(chsa, &buf[i])) {
+                if (chp->chan_status & STATUS_PCHK) /* test for memory error */
+                    uptr->SNS |= SNS_INAD;      /* invalid address */
+                /* we have error, bail out */
+                uptr->CMD &= LMASK;             /* remove old status bits & cmd */
+                uptr->SNS |= SNS_CMDREJ;
+                chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                break;
+            }
+            if (((i+1)%4) == 0) {               /* see if we have a word yet */
+                /* drive attribute registers */
+                /* may want to use this later */
+                /* clear warning errors */
+                tstart = (buf[i-3]<<24) | (buf[i-2]<<16)
+                    | (buf[i-1]<<8) | (buf[i]);
+            }
+        }
+        uptr->CMD &= LMASK;                     /* remove old cmd */
+        sim_debug(DEBUG_CMD, dptr,
+            "hsdp_srv cmd INC chsa %04x chsa %06x count %04x completed\n",
+            chsa, mema, chp->ccw_count);
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
         break;
 
     case DSK_INCH2:                             /* use 0xF0 for inch, just need int */
@@ -970,7 +1039,12 @@ t_stat hsdp_srv(UNIT *uptr)
                 sim_debug(DEBUG_CMD, dptr, "hsdp_srv seek over on cylinder unit=%02x %04x %04x\n",
                     unit, uptr->STAR >> 16, uptr->CHS >> 16);
                 uptr->CHS = uptr->STAR;         /* we are there */
-                sim_activate(uptr, 15);
+#ifdef FAST_FOR_UTX
+//              sim_activate(uptr, 15);
+                sim_activate(uptr, 20);         /* start things off */
+#else
+                sim_activate(uptr, 150);        /* start things off */
+#endif
                 break;
             }
         }
@@ -1092,8 +1166,14 @@ t_stat hsdp_srv(UNIT *uptr)
             sim_debug(DEBUG_DETAIL, dptr,
                 "hsdp_srv seek unit=%02x cyl %04x trk %02x sec %02x\n",
                 unit, cyl, trk, buf[3]);
-            sim_activate(uptr, 20);             /* start us off */
+#ifdef FAST_FOR_UTX
+//          sim_activate(uptr, 15);
+            sim_activate(uptr, 20);             /* start things off */
 //          sim_activate(uptr, 20+diff);        /* start us off */
+#else
+//          sim_activate(uptr, 150);            /* start things off */
+            sim_activate(uptr, 200+diff);       /* start us off */
+#endif
         } else {
             /* we are on cylinder/track/sector, so go on */
             sim_debug(DEBUG_DETAIL, dptr,
@@ -1236,9 +1316,6 @@ t_stat hsdp_srv(UNIT *uptr)
                 break;
             }
 
-            /* get sector offset */
-            tstart = STAR2SEC(uptr->CHS, SPT(type), SPC(type));
-
             /* see of over end of disk */
             if (tstart >= (uint32)CAP(type)) {
                 /* EOM reached, abort */
@@ -1264,7 +1341,13 @@ t_stat hsdp_srv(UNIT *uptr)
             sim_debug(DEBUG_DATA, dptr,
                 "HSDP sector read complete, %x bytes to go from diskfile /%04x/%02x/%02x\n",
                 chp->ccw_count, STAR2CYL(uptr->CHS), ((uptr->CHS) >> 8)&0xff, (uptr->CHS&0xff));
-            sim_activate(uptr, 10);             /* wait to read next sector */
+#ifdef FAST_FOR_UTX
+//          sim_activate(uptr, 10);             /* wait to read next sector */
+//          sim_activate(uptr, 15);             /* wait to read next sector */
+            sim_activate(uptr, 20);             /* wait to read next sector */
+#else
+            sim_activate(uptr, 150);            /* wait to read next sector */
+#endif
             break;
         }
         uptr->CMD &= LMASK;                     /* remove old status bits & cmd */
@@ -1358,7 +1441,12 @@ t_stat hsdp_srv(UNIT *uptr)
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
             }
-            sim_activate(uptr, 10);             /* keep writing */
+#ifdef FAST_FOR_UTX
+//          sim_activate(uptr, 10);             /* keep writing */
+            sim_activate(uptr, 15);             /* keep writing */
+#else
+            sim_activate(uptr, 150);            /* wait to read next sector */
+#endif
             break;
          }
          uptr->CMD &= LMASK;                    /* remove old status bits & cmd */
@@ -1642,11 +1730,12 @@ t_stat hsdp_srv(UNIT *uptr)
         sim_debug(DEBUG_CMD, dptr, "invalid command %02x unit %02x\n", cmd, unit);
         uptr->SNS |= SNS_CMDREJ;
         uptr->CMD &= LMASK;                     /* remove old status bits & cmd */
-        return SNS_CHNEND|STATUS_PCHK;
+        chan_end(chsa, SNS_CHNEND|STATUS_PCHK); /* return prog check */
         break;
     }
-    sim_debug(DEBUG_DETAIL, dptr, "hsdp_srv done cmd=%02x chsa %04x count %04x\n",
-        cmd, chsa, chp->ccw_count);
+    sim_debug(DEBUG_DETAIL, dptr,
+        "hsdp_srv done cmd %02x chsa %04x chs %04x/%02x/%02x\n",
+        cmd, chsa, ((uptr->CHS)>>16)&0xffff, ((uptr->CHS)>>8)&0xff, (uptr->CHS)&0xff);
     return SCPE_OK;
 }
 

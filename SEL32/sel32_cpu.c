@@ -1981,7 +1981,9 @@ wait_loop:
                 sim_debug(DEBUG_IRQ, &cpu_dev,
                     "Load Skipinstr %1x set loading PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
                     skipinstr, PSD1, PSD2, CPUSTATUS);
+#ifdef NO_SKIP_HERE
                 skipinstr = 1;                  /* skip next interrupt test only once */
+#endif
                 goto skipi;                     /* skip int test */
             }
             /* process any channel programs that are queued */
@@ -1989,7 +1991,7 @@ wait_loop:
                 uint32  chsa;                   /* channel/sub adddress */
                 int32   stat;                   /* return status 0/1 from loadccw */
 
-#ifdef NOT_NOW
+#ifdef USE_RDYQ
                 if (waitrdyq > 0) {
                     waitrdyq--;
                 } else
@@ -2093,12 +2095,15 @@ wait_loop:
                         "<|>Int2 %02x ICBA %06x IOCLA %06x STAT %08x SW1 %08x SW2 %08x\n",
                         il, int_icb, RMW(int_icb+16), RMW(int_icb+20), RMW(bc), RMW(bc+4));
                 wait4int = 0;                   /* wait is over for int */
+/*917*/         drop_nop = 0;                   /* no nop skipping */
 #ifdef NOTNOW
                 sim_debug(DEBUG_IRQ, &cpu_dev,
                     "<|> Skipinstr %1x set intr %02x PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
                     skipinstr, il, PSD1, PSD2, CPUSTATUS);
 #endif
+#ifdef NO_SKIP_HERE
                 skipinstr = 1;                  /* skip next inter test after this instr */
+#endif
                 goto skipi;                     /* skip int test */
             }
         }
@@ -2106,7 +2111,7 @@ wait_loop:
 /*25*/  irq_pend = 0;                           /* not pending anymore */
         if (RDYQ_Num()) {
             uint32  chsa;                       /* channel/sub adddress */
-#ifndef NOTNOW
+#ifdef USE_RDYQ
             if (waitrdyq > 0) {
                 waitrdyq--;
                 irq_pend = 1;                   /* still pending */
@@ -2145,7 +2150,9 @@ wait_loop:
                 "Skipinstr %1x set @ attn int PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
                 skipinstr, PSD1, PSD2, CPUSTATUS);
 #endif
+#ifdef NO_SKIP_HERE
             skipinstr = 1;                      /* skip next interrupt test only once */
+#endif
             goto newpsd;                        /* got process trap */
         }
 
@@ -3838,7 +3845,9 @@ skipit:
                                     "<|>IntX deactivate level %02x at CALM PSD1 %08x\n",
                                     irq_auto, PSD1);
 /*AIR*/                         irq_auto = 0;       /* show done processing in blocked mode */
+#ifdef NO_SKIP_HERE
 /*051920*/                      skipinstr = 1;      /* skip interrupt test */
+#endif
                             }
                         }
                     }
@@ -5456,7 +5465,9 @@ temp2, IR&0xFFF, PSD1, PSD2, CPUSTATUS);
                                     "<|>IntX deactivate level %02x at SVC #%2x PSD1 %08x\n",
                                     irq_auto, temp2, PSD1);
 /*AIR*/                         irq_auto = 0;       /* show done processing in blocked mode */
+#ifdef NO_SKIP_HERE
 /*051920*/                      skipinstr = 1;      /* skip interrupt test */
+#endif
                             }
                         }
                     }
@@ -6019,7 +6030,6 @@ temp2, IR&0xFFF, PSD1, PSD2, CPUSTATUS);
                             TRAPSTATUS |= BIT18;        /* set bit 18 of trap status */
                         goto newpsd;                    /* memory read error or map fault */
                     }
-//bad   /* 723 */   temp &= ~0x02000000;                /* reset base reg bit 6 */
                     bc = CPUSTATUS;                     /* save the CPU STATUS */
                     TPSD[0] = PSD1;                     /* save the PSD for the instruction */
                     TPSD[1] = PSD2;
@@ -6027,6 +6037,11 @@ temp2, IR&0xFFF, PSD1, PSD2, CPUSTATUS);
                     ix = SPAD[0xf5];                    /* save the current PSD2 */
                     reg = irq_pend;                     /* save intr status */
 
+#ifdef DO_DYNAMIC_DEBUG
+                    /* start debugging */
+                    if (PC == 0x1e59c)
+                    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_TRAP | DEBUG_EXP | DEBUG_IRQ);
+#endif
                     if (opr & 0x0200) {                 /* Was it LPSDCM? */
                         if ((TRAPME = Mem_read(addr+4, &temp2))) {   /* get PSD2 from memory */
                             if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9)) {
@@ -6056,6 +6071,7 @@ temp2, IR&0xFFF, PSD1, PSD2, CPUSTATUS);
                     modes = PSD1 & 0x87000000;          /* extract bits 0, 5, 6, 7 from PSD 1 */
                     CPUSTATUS &= ~0x87000000;           /* reset bits in CPUSTATUS */
                     CPUSTATUS |= modes;                 /* now insert into CPUSTATUS */
+#ifdef NOTNEEDED
                     /* set new arithmetic trap state in CPUSTATUS */
                     if (PSD1 & AEXPBIT) {
                         CPUSTATUS |= AEXPBIT;           /* set bit 7 of cpu status */
@@ -6068,6 +6084,7 @@ temp2, IR&0xFFF, PSD1, PSD2, CPUSTATUS);
                         modes |= EXTDBIT;               /* set extended mode */
                     } else
                         CPUSTATUS &= ~EXTDBIT;          /* reset bit 5 of cpu status */
+#endif
                     /* set new map mode and interrupt blocking state in CPUSTATUS */
                     if (PSD2 & MAPBIT) {
                         CPUSTATUS |= 0x00800000;        /* set bit 8 of cpu status */
@@ -6087,7 +6104,9 @@ temp2, IR&0xFFF, PSD1, PSD2, CPUSTATUS);
                                 sim_debug(DEBUG_IRQ, &cpu_dev,
                                     "<|>IntX deactivate level %02x at LPSD(CM) %08x\n", irq_auto, PSD1);
 /*AIR*/                         irq_auto = 0;           /* show done processing in blocked mode */
+#ifdef NO_SKIP_HERE
                                 skipinstr = 1;          /* skip interrupt test */
+#endif
                             }
                         }
                     }
@@ -6366,7 +6385,7 @@ TPSD[0], TPSD[1], PSD1, PSD2, TRAPME);
                         INTS[prior] &= ~INTS_ACT;       /* deactivate specified int level */
                         SPAD[prior+0x80] &= ~SINT_ACT;  /* deactivate in SPAD too */
                         irq_pend = 1;                   /* start scanning interrupts again */
-                        /* instruction following a DAI cn not be interrupted */
+                        /* instruction following a DAI can not be interrupted */
                         /* skip tests for interrupts if this is the case */
 #ifdef NOTNOW
             sim_debug(DEBUG_IRQ, &cpu_dev,
@@ -6688,6 +6707,10 @@ mcheck:
                         }
                         }
 #endif
+                        if ((INTS[ix] & INTS_ACT) == 0)
+                            sim_debug(DEBUG_XIO, &cpu_dev,
+                                "DCI INT %02x is NOT set chan %04x suba %04x status %08x\n",
+                                ix, chan, suba, rstatus);
                         /* SPAD entries for interrupts begin at 0x80 */
                         INTS[ix] &= ~INTS_ENAB;         /* disable specified int level */
                         SPAD[ix+0x80] &= ~SINT_ENAB;    /* disable in SPAD too */
@@ -6704,10 +6727,16 @@ mcheck:
 
                         if ((TRAPME = checkxio(rchsa, &rstatus)))
                             goto newpsd;                /* error returned, trap cpu */
+                        if ((INTS[ix] & INTS_ACT) == 0)
+                            sim_debug(DEBUG_XIO, &cpu_dev,
+                                "ACI INT %02x is NOT set chan %04x suba %04x status %08x\n",
+                                ix, chan, suba, rstatus);
                         /* SPAD entries for interrupts begin at 0x80 */
                         INTS[ix] |= INTS_ACT;           /* activate specified int level */
                         SPAD[ix+0x80] |= SINT_ACT;      /* enable in SPAD too */
-//WAS                   INTS[ix] &= ~INTS_REQ;          /* clears any requests also */
+//WAS NOT DONE          INTS[ix] &= ~INTS_REQ;          /* clears any requests also */
+/*917*/                 /* tech manual says to remove any request */
+/*917*/                 INTS[ix] &= ~INTS_REQ;          /* clears any requests also */
                         PSD1 = ((PSD1 & 0x87fffffe) | (rstatus & 0x78000000));   /* insert status */
                         break;
 
@@ -6720,18 +6749,15 @@ mcheck:
 
                         if ((TRAPME = checkxio(rchsa, &rstatus)))
                             goto newpsd;                /* error returned, trap cpu */
-                        sim_debug(DEBUG_XIO, &cpu_dev,
-                            "DACI after checkxio chan %04x suba %04x status %08x\n", chan, suba, rstatus);
+                        if ((INTS[ix] & INTS_ACT) == 0)
+                            sim_debug(DEBUG_XIO, &cpu_dev,
+                                "DACI INT %02x is NOT set chan %04x suba %04x status %08x\n",
+                                ix, chan, suba, rstatus);
                         /* SPAD entries for interrupts begin at 0x80 */
                         INTS[ix] &= ~INTS_ACT;          /* deactivate specified int level */
                         SPAD[ix+0x80] &= ~SINT_ACT;     /* deactivate in SPAD too */
                         irq_pend = 1;                   /* start scanning interrupts again */
                         skipinstr = 1;                  /* skip interrupt test */
-#ifdef NOTNOW
-            sim_debug(DEBUG_XIO, &cpu_dev,
-                "DACI INTS[%02x] %08x Skipinstr %1x set PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
-                ix, INTS[ix], skipinstr, PSD1, PSD2, CPUSTATUS);
-#endif
                         PSD1 = ((PSD1 & 0x87fffffe) | (rstatus & 0x78000000));   /* insert status */
                         break;
                 }                   /* end of XIO switch */
@@ -7078,6 +7104,20 @@ newpsd:
                     modes = PSD1 & 0x87000000;      /* extract bits 0, 5, 6, 7 from PSD 1 */
                     CPUSTATUS &= ~0x87000000;       /* reset bits in CPUSTATUS */
                     CPUSTATUS |= modes;             /* not insert into CPUSTATUS */
+#ifdef NOTNEEDED
+                    /* set new arithmetic trap state in CPUSTATUS */
+/*917*/             if (PSD1 & AEXPBIT) {
+                        CPUSTATUS |= AEXPBIT;           /* set bit 7 of cpu status */
+                        modes |= AEXPBIT;               /* set arithmetic exception mode */
+                    } else
+                        CPUSTATUS &= ~AEXPBIT;          /* reset bit 7 of cpu status */
+/*917*/             /* set new extended state in CPUSTATUS */
+                    if (PSD1 & EXTDBIT) {
+                        CPUSTATUS |= EXTDBIT;           /* set bit 5 of cpu status */
+                        modes |= EXTDBIT;               /* set extended mode */
+                    } else
+                        CPUSTATUS &= ~EXTDBIT;          /* reset bit 5 of cpu status */
+#endif
                     /* set new map mode and interrupt blocking state in CPUSTATUS */
                     if (PSD2 & MAPBIT) {
                         CPUSTATUS |= 0x00800000;    /* set bit 8 of cpu status */

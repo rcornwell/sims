@@ -215,9 +215,11 @@ int32 RDYQ_Put(uint32 entry)
     RDYQIN += 1;                                    /* next entry */
     RDYQIN %= RDYQ_SIZE;                            /* modulo RDYQ size */
     irq_pend = 1;                                   /* do a scan */
+#ifdef USE_RDYQ
 //  waitrdyq = 5;
 //25waitrdyq = 2;
     waitrdyq = 1;                                   /* wait at least 1 instruction */
+#endif
     return 0;                                       /* all OK */
 }
 
@@ -339,6 +341,11 @@ uint32 find_int_icb(uint16 chsa)
         return 0;                                   /* not found */
     }
     icba = RMW(icba);                               /* get address of ICB from memory */
+    if (!MEM_ADDR_OK(icba)) {                       /* needs to be valid address in memory */
+        sim_debug(DEBUG_EXP, &cpu_dev,
+            "find_int_icb ERR chsa %04x icba %02x\n", chsa, icba);
+        return 0;                                   /* not found */
+    }
     sim_debug(DEBUG_IRQ, &cpu_dev,
         "find_int_icb icba %06x SPADC %08x chsa %04x lev %02x SPADI %08x INTS %08x\n",
        icba, spadent, chsa, inta, SPAD[inta+0x80], INTS[inta]);
@@ -1255,27 +1262,32 @@ missing:
 #ifndef NOTHERE
     /* check for a Command or data chain operation in progresss */
     if ((chp->chan_byte & BUFF_BUSY) && chp->chan_byte != BUFF_POST) {
-        uint16  tstat, tcnt;
+        uint16  tstat = chp->chan_status;           /* save status */
+        uint16  tcnt = chp->ccw_count;              /* save count */
+        DEVICE  *dptr = get_dev(uptr);
 
         sim_debug(DEBUG_EXP, &cpu_dev,
             "startxio busy return CC3&CC4 chsa %04x chp %p cmd %02x flags %04x byte %02x\n",
             chsa, chp, chp->ccw_cmd, chp->ccw_flags, chp->chan_byte);
-#ifdef OLDWAY
-        *status = CC4BIT|CC3BIT;                    /* busy, so CC3&CC4 */
-#else
-        *status = CC1BIT;                           /* CCs = 1, SIO accepted & queued, no echo status */
-        /* handle an Ethernet controller busy by sending interrupt/status */
-        tstat = chp->chan_status;                   /* save status */
-        tcnt = chp->ccw_count;                      /* save count */
-        chp->chan_status = STATUS_BUSY|STATUS_CEND|STATUS_DEND; /* set busy status */
-        chp->ccw_count = 0;                         /* zero count */
-        store_csw(chp);                             /* store the status */
-        chp->chan_status = tstat;                   /* restore status */
-        chp->ccw_count = tcnt;                      /* restore count */
-        sim_debug(DEBUG_XIO, &cpu_dev,
-            "startxio done BUSY chp %p chsa %04x ccw_flags %04x stat %04x cnt %04x\n",
-            chp, chsa, chp->ccw_flags, tstat, tcnt);
-#endif
+        /* ethernet controller wants an interrupt for busy status */
+        if (DEV_TYPE(dptr) == DEV_ETHER) {
+            *status = CC1BIT;                       /* CCs = 1, SIO accepted & queued, no echo status */
+            /* handle an Ethernet controller busy by sending interrupt/status */
+            chp->chan_status = STATUS_BUSY|STATUS_CEND|STATUS_DEND; /* set busy status */
+            chp->ccw_count = 0;                     /* zero count */
+            store_csw(chp);                         /* store the status */
+            chp->chan_status = tstat;               /* restore status */
+            chp->ccw_count = tcnt;                  /* restore count */
+            sim_debug(DEBUG_XIO, &cpu_dev,
+                "startxio done BUSY/INT chp %p chsa %04x ccw_flags %04x stat %04x cnt %04x\n",
+                chp, chsa, chp->ccw_flags, tstat, tcnt);
+        } else {
+            /* everyone else just gets a busy return */
+            *status = CC4BIT|CC3BIT;                /* busy, so CC3&CC4 */
+            sim_debug(DEBUG_XIO, &cpu_dev,
+                "startxio done BUSY chp %p chsa %04x ccw_flags %04x stat %04x cnt %04x\n",
+                chp, chsa, chp->ccw_flags, tstat, tcnt);
+        }
 #ifdef DO_DYNAMIC_DEBUG
         /* start debugging */
         if (chsa == 0x0c00)
@@ -1428,6 +1440,10 @@ t_stat testxio(uint16 chsa, uint32 *status) {       /* test XIO */
 
     /* the channel is not busy, see if any status to post */
     if (post_csw(chp, 0)) {
+#ifdef DO_DYNAMIC_DEBUG
+        /* start debugging */
+        cpu_dev.dctrl |= (DEBUG_INST | DEBUG_TRAP | DEBUG_EXP | DEBUG_IRQ);
+#endif
         *status = CC2BIT;                           /* status stored from SIO, so CC2 */
         sim_debug(DEBUG_XIO, &cpu_dev,
             "testxio END status stored incha %06x chsa %04x sw1 %08x sw2 %08x\n",
@@ -1876,9 +1892,9 @@ uint32 cont_chan(uint16 chsa)
     int32   stat;                                   /* return status 0/1 from loadccw */
     CHANP   *chp = find_chanp_ptr(chsa);            /* channel program */
 
-        sim_debug(DEBUG_EXP, &cpu_dev,
-            "cont_chan entry chp %p chan_byte %02x chsa %04x addr %06x\n",
-            chp, chp->chan_byte, chsa, chp->ccw_addr);
+    sim_debug(DEBUG_EXP, &cpu_dev,
+        "cont_chan entry chp %p chan_byte %02x chsa %04x addr %06x\n",
+        chp, chp->chan_byte, chsa, chp->ccw_addr);
     /* we have entries, continue channel program */
     if (chp->chan_byte != BUFF_NEXT) {
         /* channel program terminated already, ignore entry */
@@ -2139,6 +2155,17 @@ sim_debug(DEBUG_EXP, &cpu_dev, "scan_chanx BUFF_DONE chp %p chan_byte %04x\n", c
                 *ilev = i;                          /* return interrupt level */
                 irq_pend = 0;                       /* not pending anymore */
                 return(chan_icba);                  /* return ICB address */
+            } else {
+                /* we had an interrupt request, but no status is available */
+                /* clear the interrupt and go on */
+                /* this is a fix for MPX1X restart 092220 */
+                sim_debug(DEBUG_IRQ, &cpu_dev,
+                    "scan_chan highest int has no stat irq %02x SPAD %08x INTS %08x\n",
+                    i, SPAD[i+0x80], INTS[i]);
+
+                /* requesting, make active and turn off request flag */
+                INTS[i] &= ~INTS_ACT;               /* turn off active int */
+                SPAD[i+0x80] &= ~SINT_ACT;          /* clear active in SPAD too */
             }
         }
     }
@@ -2148,7 +2175,7 @@ tryme:
 //25irq_pend = 0;                                   /* not pending anymore */
 #ifndef TEST_082520
     if (RDYQ_Num()) {
-#ifndef NOTNOW
+#ifdef USE_RDYQ
         if (waitrdyq > 0) {
             waitrdyq--;
             irq_pend = 1;                           /* still pending */

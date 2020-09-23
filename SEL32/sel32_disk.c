@@ -98,30 +98,44 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 /*  26 words of scratchpad */
 /*   4 words of label buffer registers */
 
-/* track label / sector label definations */
+/************************************/
+/* track label definations 34 bytes */
+    /* for track 0, write max cyl/head/sec values in 0-3 */
+    /* otherwise write current values */
 /*
-    short lcyl;	        cylinder
-    char ltkn;			track
-    char lid;			sector id
-    char lflg1;         track/sector status flags
-        bit 0           good
-            1           alternate
-            2           spare
-            3           reserved
-            4           flaw
+0   short lcyl;	        cylinder
+2   char ltkn;			head or track number
+3   char lid;			track label id (0xff means last track)
+4   char lflg1;         track status flags
+        bit 0           good trk
+            1           alternate trk
+            2           spare trk
+            3           reserved trk
+            4           defective trk
             5           last track
-            6           start of alternate
-    char lflg2;
-    short lspar1;
-    short lspar2;
-    short ldef1;
-    int ldeallp;        DMAP block number trk0
-    int lumapp;			UMAP block number sec1
-    short ladef3;
-    short laltcyl;
-    char lalttk;        sectors per track
-    char ldscnt;        number of heads
-    char ldatrflg;		device attributes
+          6-7           n/u = 0
+5   char lflg2;
+        bit 0           write lock
+            1           write protected
+          2-7           n/u = 0
+6   short lspar1;       n/u = 0
+8   short lspar2;       n/u = 0
+10  short ldef1;        defect #1 sec and byte position
+    * for track 0 write DMAP
+    * write sector number of cyl-4, hds-2, sec 0 value in 12-15
+    * otherwise write current values
+12  short ldef2;        defect #2 sec and byte position
+14  short ldef3;        defect #3 sec and byte position
+    * for track 0 write UMAP which is DMAP - 2 * SPT
+    * write sector number of cyl-4, hds-4, sec 0 value in 16-19
+    * otherwise write current values
+16  short ladef1;       defect #1 abs position
+18  short ladef2;       defect #2 abs position
+20  short ladef3;       defect #3 abs position
+22  short laltcyl;      alternate cylinder number or return cyl num
+24  char lalttk;        alrernate track number or return track num
+25  char ldscnt;        data sector count 16/20
+26  char ldatrflg;		device attributes
         bit 0           n/u
             1           disk is mhd
             2           n/u
@@ -131,9 +145,58 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
             6/7         00 768 bytes/blk
                         01 1024 bytes/blk
                         10 2048 bytes/blk
-    char ldatrscnt;     sectors per track (again)
-    char ldatrmhdc;     MHD head count
-    char ldatrfhdc;     FHD head count
+27  char ldatrscnt;     sectors per track (again)
+28  char ldatrmhdc;     MHD head count
+29  char ldatrfhdc;     FHD head count
+30  uint32 lcrc;        Label CRC-32 value
+ */
+
+/*************************************/
+/* sector label definations 34 bytes */
+/*
+0   short lcyl;	        cylinder number
+2   char lhd;			head number
+3   char lsec;		    sec # 0-15 or 0-19 for 16/20 format
+4   char lflg1;         track/sector status flags
+        bit 0           good sec
+            1           alternate sec
+            2           spare sec
+            3           reserved sec
+            4           defective sec
+            5           last sec
+          6-7           n/u = 0
+5   char lflg2;
+        bit 0           write lock
+            1           write protected
+          2-7           n/u = 0
+6   short lspar1;       n/u = 0
+8   short lspar2;       n/u = 0
+10  short ldef1;        defect #1 sec and byte position
+12  short ldef2;        defect #2 sec and byte position
+14  short ldef3;        defect #3 sec and byte position
+    * for track 0 write UMAP which is DMAP - 2 * SPT
+    * write sector number of cyl-4, hds-4, sec 0 value in 16-19
+    * otherwise write zeros
+16  short lspar3;       n/u = 0
+18  short lspar4;       n/u = 0
+20  short lspar5;       n/u = 0
+22  short laltcyl;      alternate cylinder number or return cyl num
+24  char lalttk;        alrernate track number or return track num
+25  char ldscnt;        data sector count 16/20
+26  char ldatrflg;		device attributes
+        bit 0           n/u
+            1           disk is mhd
+            2           n/u
+            3           n/u
+            4           n/u
+            5           dual ported
+            6/7         00 768 bytes/blk
+                        01 1024 bytes/blk
+                        10 2048 bytes/blk
+27  char ldatrscnt;     sectors per track (again)
+28  char ldatrmhdc;     MHD head count
+29  char ldatrfhdc;     FHD head count
+30  uint32 lcrc;        Label CRC-32 value
  */
 
 #define CMD   u3
@@ -220,7 +283,7 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 #define SNS_DADE        0x40                    /* Disc addressing or seek error */
 #define SNS_BUCK        0x20                    /* Buffer check */
 #define SNS_ECCS        0x10                    /* ECC error in sector label */
-#define SNS_ECCD        0x08                    /* ECC error iin data */
+#define SNS_ECCD        0x08                    /* ECC error in data */
 #define SNS_ECCT        0x04                    /* ECC error in track label */
 #define SNS_RTAE        0x02                    /* Reserve track access error */
 #define SNS_UESS        0x01                    /* Uncorrectable ECC error */
@@ -292,11 +355,19 @@ disk_type[] =
 {
     /* Class F Disc Devices */
     /* For MPX */
+#ifndef NOTFORMPX1X
     {"MH040",   5, 192, 20, 407, 411, 0x40},   /* 0  411   40M XXXX */
     {"MH080",   5, 192, 20, 819, 823, 0x40},   /* 1  823   80M 8138 */
     {"MH160",  10, 192, 20, 819, 823, 0x40},   /* 2  823  160M 8148 */
     {"MH300",  19, 192, 20, 819, 823, 0x40},   /* 3  823  300M 8127 */
     {"MH600",  40, 192, 20, 839, 843, 0x40},   /* 4  843  600M 8155 */
+#else
+    {"MH040",   5, 192, 20, 400, 411, 0x40},   /* 0  411   40M XXXX */
+    {"MH080",   5, 192, 20, 800, 823, 0x40},   /* 1  823   80M 8138 */
+    {"MH160",  10, 192, 20, 800, 823, 0x40},   /* 2  823  160M 8148 */
+    {"MH300",  19, 192, 20, 800, 823, 0x40},   /* 3  823  300M 8127 */
+    {"MH600",  40, 192, 20, 800, 843, 0x40},   /* 4  843  600M 8155 */
+#endif
     /* For UTX */
     {"9342",    5, 256, 16, 819, 823, 0x41},   /* 5  823   80M XXXX */
     {"8148",   10, 256, 16, 819, 823, 0x41},   /* 6  823  160M 8148 */
@@ -968,7 +1039,7 @@ t_stat disk_srv(UNIT *uptr)
 //              sim_activate(uptr, 20);         /* start things off */
                 sim_activate(uptr, 15);         /* start things off */
 #else
-                sim_activate(uptr, 150);
+                sim_activate(uptr, 150);        /* start things off */
 #endif
                 break;
             }
@@ -1600,7 +1671,8 @@ t_stat disk_srv(UNIT *uptr)
         buf[0] = (cyl >> 8) & 0xff;             /* lcyl  cyl upper 8 bits */
         buf[1] = cyl & 0xff;                    /* lcyl  cyl lower 8 bits */
         buf[2] = trk & 0xff;                    /* ltkn  trk */
-        buf[3] = sec & 0xff;                    /* lid   sector ID */
+//      buf[3] = sec & 0xff;                    /* lid   sector ID */
+        buf[3] = 0xff;                          /* lid   show as track label */
         buf[4] = 0x80;                          /* show good sector */
 
         sim_debug(DEBUG_DETAIL, dptr,
@@ -1682,7 +1754,8 @@ t_stat disk_srv(UNIT *uptr)
         sim_debug(DEBUG_DETAIL, dptr, "\n");
 
         /* leave STAR "unnormalized" for diags */
-        uptr->CHS += 0x10;                      /* bump to next track */
+        if (uptr->CHS != 0)                     /* only incr address if not trk 0 */
+            uptr->CHS += 0x10;                  /* bump to next track */
 
         /* command done */
         uptr->CMD &= LMASK;                     /* remove old status bits & cmd */
