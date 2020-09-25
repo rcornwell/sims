@@ -106,6 +106,7 @@ UNIT         *
 find_chan_dev(uint16 addr) {
     struct dib         *dibp;
     UNIT               *uptr;
+    DEVICE             *dptr;
     int                 i;
 
     if (addr >= MAX_DEV)
@@ -114,7 +115,10 @@ find_chan_dev(uint16 addr) {
     if (dibp == 0)
        return NULL;
     uptr = dibp->units;
-    if (dibp->mask == 0) {
+    dptr = find_dev_from_unit(uptr);
+    if (dptr == NULL)
+       return NULL;
+    if (dptr->flags & DEV_UADDR) {
        for (i = 0; i < dibp->numunits; i++) {
             if (addr == GET_UADDR(uptr->u3))
                 return uptr;
