@@ -3465,7 +3465,7 @@ save_dbl:
                       dest = addr2 + ((src2 < src1) ? src2 : src1) - 1;
                       dest &= AMASK;
                       if ((dest > addr2 && (addr1 > addr2 && addr1 <= dest)) ||
-                          (dest <= addr2 && (addr1 > addr1 || addr1 <= dest))) {
+                          (dest <= addr2 && (addr1 > addr2 || addr1 <= dest))) {
                           cc = 3;
                           break;
                       }

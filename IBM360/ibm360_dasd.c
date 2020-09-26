@@ -863,9 +863,9 @@ sense_end:
          break;
 
     case DK_SETSECT:
-         /* Not valid for drives before 3330 */
+         /* Not valid for drives before 3330 except 2305 */
          sim_debug(DEBUG_DETAIL, dptr, "setsector unit=%d\n", unit);
-         if (disk_type[type].sen_cnt > 6) {
+         if (disk_type[type].sen_cnt > 6 || disk_type[type].dev_type == 0x05) {
              if (chan_read_byte(addr, &ch)) {
                  sim_debug(DEBUG_DETAIL, dptr, "setsector rdr\n");
                  uptr->LCMD = 0;
@@ -1432,10 +1432,10 @@ rd:
          break;
 
     case DK_RD_SECT:         /* Read sector */
-         /* Not valid for drives before 3330 */
+         /* Not valid for drives before 3330 except 2305 */
          sim_debug(DEBUG_DETAIL, dptr, "readsector unit=%d\n", unit);
          uptr->LCMD = 0;
-         if (disk_type[type].sen_cnt > 6) {
+         if (disk_type[type].sen_cnt > 6 || disk_type[type].dev_type == 0x05) {
              ch = data->tpos / 110;
              if (chan_write_byte(addr, &ch)) {
                  sim_debug(DEBUG_DETAIL, dptr, "readsector rdr\n");
