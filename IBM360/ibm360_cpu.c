@@ -2963,7 +2963,10 @@ save_dbl:
                             goto supress;
                         addr1++;
                         if (rval[i] != src1) {
-                           cc = (rval[i] < src1)? 1: 2;
+                           if ((uint32)rval[i] > (uint32)src1)
+                              cc = 2;
+                           else
+                              cc = 1;
                            break;
                         }
                     }
@@ -3532,8 +3535,10 @@ save_dbl:
                               break;
                        }
                        if (dest != desth) {
-                           dest = dest - desth;
-                           cc = (dest & MSIGN) ? 1 : (dest == 0) ? 0 : 2;
+                           if ((uint32)dest > (uint32)desth)
+                              cc = 2;
+                           else
+                              cc = 1;
                            break;
                        }
                        if (src1 != 0) {

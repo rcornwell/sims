@@ -265,6 +265,15 @@ t_stat scoml_srv(UNIT * uptr)
     int                 cmd = uptr->CMD & 0xff;
     uint8               ch;
 
+    if (scom_ldsc[unit].conn == 0 && cmd != 0x4) {
+         /* If no connection yet, pretend unit is powered off.
+            ATTN & DE at connection will revive activity.  */
+         uptr->SNS |= SNS_INTVENT;
+         uptr->CMD &= ~0xff;
+         chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+         return SCPE_OK;
+    }
+
     if ((uptr->CMD & (RECV|DATA)) != 0) {
         sim_activate(uptr, 200);
         return scom_readinput(uptr);
@@ -407,6 +416,7 @@ t_stat scom_scan(UNIT * uptr)
         scom_sendoption(line, ln, DO, OPTION_EOR);
         line->CMD |= ENAB|DATA|INIT1;
         line->CMD &= ~(RECV|SEND);
+        line->SNS = 0;
         sim_activate(line, 20000);
     }
 
