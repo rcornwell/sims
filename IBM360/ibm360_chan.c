@@ -190,6 +190,7 @@ int
 readfull(int chan, uint32 addr, uint32 *word) {
     if ((addr & AMASK) > MEMSIZE) {
         chan_status[chan] |= STATUS_PCHK;
+        *word = 0;
         irq_pend = 1;
         return 1;
     }
@@ -198,12 +199,14 @@ readfull(int chan, uint32 addr, uint32 *word) {
         int k;
         if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
             chan_status[chan] |= STATUS_PROT;
+            *word = 0;
             irq_pend = 1;
             return 1;
         }
         k = key[addr >> 9];
         if ((k & 0x8) != 0 && (k & 0xf0) != ccw_key[chan]) {
             chan_status[chan] |= STATUS_PROT;
+            *word = 0;
             irq_pend = 1;
             return 1;
         }

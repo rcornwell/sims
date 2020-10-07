@@ -235,7 +235,6 @@ uint8                  bcd_to_ebcdic[64] = {
 
 
 uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
-    uint16         addr = GET_UADDR(uptr->CMD);
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
 

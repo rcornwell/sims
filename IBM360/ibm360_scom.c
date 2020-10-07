@@ -189,7 +189,6 @@ DEVICE              scoml_dev = {
  * Issue a scommand to the 2701 controller.
  */
 uint8  scoml_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
-    uint16         addr = GET_UADDR(uptr->CMD);
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
 
@@ -442,7 +441,6 @@ scom_readinput(UNIT *uptr)
     DEVICE             *dptr = find_dev_from_unit(uptr);
     uint16              addr = GET_UADDR(uptr->CMD);
     int                 unit = (uptr - dptr->units);
-    int                 cmd = uptr->CMD & 0xff;
     int32               r;
     struct _line        *data = (struct _line *)(uptr->up7);
     uint8               ch;

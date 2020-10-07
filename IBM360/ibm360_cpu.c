@@ -1375,7 +1375,7 @@ opr:
         } else if ((op & 0xe0) == 0x40) {
                 dest = src1 = regs[reg1];
                 /* Read half word if 010010xx or 01001100 */
-                if ((op & 0x1c) == 0x08 || op == OP_MH)  {
+                if ((op & 0xfc) == 0x48 || op == OP_MH)  {
                      if (ReadHalf(addr1, &src2))
                         goto supress;
                 /* Read full word if 0101xxx and not xxxx00xx (ST) */
@@ -4858,7 +4858,7 @@ fpnorm:
                             src1L &= UMASKL;
                         }
                     }
-                } else if (temp < 0) {
+                } else {
                     /* Flip operands around */
                     src1L = (((t_uint64)(src1)) << 36) | (((t_uint64)src1h) << 4);
                     src2L = (((t_uint64)(fpregs[reg1|2] & MMASK) << 36)) |

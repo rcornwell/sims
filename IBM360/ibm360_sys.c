@@ -699,7 +699,7 @@ if (sw & SWMASK('F')) {
 if (sw & SWMASK ('C')) {
    cptr = get_glyph_quoted(cptr, gbuf, 0);   /* Get string */
    for(i = 0; gbuf[i] != 0; i++) {
-      val[i] = ascii_to_ebcdic[gbuf[i]];
+      val[i] = ascii_to_ebcdic[(int)gbuf[i]];
    }
    return -(i - 1);
 }

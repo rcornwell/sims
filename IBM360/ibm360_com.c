@@ -260,7 +260,6 @@ static const uint8 com_2741_out[256] = {
  * Issue a command to the 2701 controller.
  */
 uint8  coml_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
-    uint16         addr = GET_UADDR(uptr->CMD);
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
 

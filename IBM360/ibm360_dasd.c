@@ -366,7 +366,6 @@ DEVICE              ddd_dev = {
 #endif
 
 uint8  dasd_startio(UNIT *uptr, uint16 chan) {
-    uint16         addr = GET_UADDR(uptr->CMD);
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
 
@@ -385,7 +384,6 @@ uint8  dasd_startio(UNIT *uptr, uint16 chan) {
 uint8  dasd_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
     uint16         addr = GET_UADDR(uptr->CMD);
     DEVICE         *dptr = find_dev_from_unit(uptr);
-    struct dasd_t      *data = (struct dasd_t *)(uptr->up7);
     int            unit = (uptr - dptr->units);
     uint8          ch;
 
@@ -494,7 +492,6 @@ sense_end:
 /* Compute position on new track. */
 void dasd_adjpos(UNIT * uptr)
 {
-    uint16              addr = GET_UADDR(uptr->CMD);
     struct dasd_t      *data = (struct dasd_t *)(uptr->up7);
     uint8               *rec;
     int                 pos;
@@ -1785,7 +1782,6 @@ wrckd:
 void
 dasd_ini(UNIT * uptr, t_bool f)
 {
-    DEVICE             *dptr = find_dev_from_unit(uptr);
     int                i = GET_TYPE(uptr->flags);
     uptr->capac = disk_type[i].bpt * disk_type[i].heads * disk_type[i].cyl;
     if ((uptr->flags & UNIT_ATT) != 0)
