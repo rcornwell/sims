@@ -534,6 +534,7 @@ obey:
                RB = RB | ((RB & 020000) ? 017740000 : 0); /* Sign extend RB */
                RB = (RB + RC) & M22;
            }
+           m = 0;
        } else {
            RA = XR[RX];
            m = 03 & (RM >> 12);
@@ -2435,9 +2436,7 @@ voluntary:
 t_stat
 rtc_srv(UNIT * uptr)
 {
-    int32 t;
-
-    t = sim_rtcn_calb(rtc_tps, TMR_RTC);
+    (void)sim_rtcn_calb(rtc_tps, TMR_RTC);
     sim_activate_after(uptr, 1000000/rtc_tps);
     SR64 |= B3;
     return SCPE_OK;

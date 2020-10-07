@@ -301,7 +301,7 @@ t_stat lpr_svc (UNIT *uptr)
     else if (LW_160(uptr->flags))
         len = 160;
     i = 0;
-    while (eor == 0 && i <sizeof(buffer)-4) {
+    while (eor == 0 && i < len && i <sizeof(buffer)-4) {
         eor = chan_output_char(GET_UADDR(uptr->flags), &ch, 0);
         if (uptr->CMD & AUTO) {
             uptr->CMD |= (int32)ch << 8;

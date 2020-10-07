@@ -402,134 +402,134 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
 
 /* Opcodes */
 t_opcode  ops[] = {
-        "LDX",          TYPE_A,        /* Load to X */
-        "ADX",          TYPE_A,        /* Add to X */
-        "NGX",          TYPE_A,        /* Negative to X */
-        "SBX",          TYPE_A,        /* Subtract from X */
-        "LDXC",         TYPE_A,        /* Load into X with carry */
-        "ADXC",         TYPE_A,        /* Add to X with carry */
-        "NGXC",         TYPE_A,        /* Negative to X with carry */
-        "SBXC",         TYPE_A,        /* Subtract from X with carry */
-        "STO",          TYPE_A,        /* Store contents of X */
-        "ADS",          TYPE_A,        /* Add X to store */
-        "NGS",          TYPE_A,        /* Negative into Store */
-        "SBS",          TYPE_A,        /* Subtract from store */
-        "STOC",         TYPE_A,        /* Store contents of X with carry */
-        "ADSC",         TYPE_A,        /* Add X to store with carry */
-        "NGSC",         TYPE_A,        /* Negative into Store with carry */
-        "SBSC",         TYPE_A,        /* Subtract from store with carry */
-        "ANDX",         TYPE_A,        /* Logical AND into X */
-        "ORX",          TYPE_A,        /* Logical OR into X */
-        "ERX",          TYPE_A,        /* Logical XOR into X */
-        "OBEY",         TYPE_A,        /* Obey instruction at N */
-        "LDCH",         TYPE_A,        /* Load Character to X */
-        "LDEX",         TYPE_A,        /* Load Exponent */
-        "TXU",          TYPE_A,        /* Test X unequal */
-        "TXL",          TYPE_A,        /* Test X Less */
-        "ANDS",         TYPE_A,        /* Logical AND into store */
-        "ORS",          TYPE_A,        /* Logical OR into store */
-        "ERS",          TYPE_A,        /* Logical XOR into store */
-        "STOZ",         TYPE_A,        /* Store Zero */
-        "DCH",          TYPE_A,        /* Deposit Character to X */
-        "DEX",          TYPE_A,        /* Deposit Exponent */
-        "DSA",          TYPE_A,        /* Deposit Short Address */
-        "DLA",          TYPE_A,        /* Deposit Long Address */
-        "MPY",          TYPE_A,        /* Multiply */
-        "MPR",          TYPE_A,        /* Multiply and Round */
-        "MPA",          TYPE_A,        /* Multiply and Accumulate */
-        "CDB",          TYPE_A,        /* Convert Decimal to Binary */
-        "DVD",          TYPE_A,        /* Unrounded Double Length Divide */
-        "DVR",          TYPE_A,        /* Rounded Double Length Divide */
-        "DVS",          TYPE_A,        /* Single Length Divide */
-        "CBD",          TYPE_A,        /* Convert Binary to Decimal */
-        "BZE",          TYPE_B,        /* Branch if X is Zero */
-        "BZE",          TYPE_B,
-        "BNZ",          TYPE_B,        /* Branch if X is not Zero */
-        "BNZ",          TYPE_B,
-        "BPZ",          TYPE_B,        /* Branch if X is Positive or zero */
-        "BPZ",          TYPE_B,
-        "BNG",          TYPE_B,        /* Branch if X is Positive or zero */
-        "BNG",          TYPE_B,
-        "BUX",          TYPE_B,        /* Branch on Unit indexing */
-        "BUX",          TYPE_B,
-        "BDX",          TYPE_B,        /* Branch on Double Indexing */
-        "BDX",          TYPE_B,
-        "BCHX",         TYPE_B,        /* Branch on Character Indexing */
-        "BCHX",         TYPE_B,
-        "BCT",          TYPE_B,        /* Branch on Count - BC */
-        "BCT",          TYPE_B,
-        "CALL",         TYPE_B,        /* Call Subroutine */
-        "CALL",         TYPE_B,
-        "EXIT",         TYPE_B,        /* Exit Subroutine */
-        "EXIT",         TYPE_B,
-        NULL,           TYPE_D,        /* Branch unconditional */
-        NULL,           TYPE_D,
-        "BFP",          TYPE_B,        /* Branch state of floating point accumulator */
-        "BFP",          TYPE_B,
-        "LDN",          TYPE_A,        /* Load direct to X */
-        "ADN",          TYPE_A,        /* Add direct to X */
-        "NGN",          TYPE_A,        /* Negative direct to X */
-        "SBN",          TYPE_A,        /* Subtract direct from X */
-        "LDNC",         TYPE_A,        /* Load direct into X with carry */
-        "ADNC",         TYPE_A,        /* Add direct to X with carry */
-        "NGNC",         TYPE_A,        /* Negative direct to X with carry */
-        "SBNC",         TYPE_A,        /* Subtract direct from X with carry */
-        "SL",           TYPE_C,        /* Shift Left */
-        "SLD",          TYPE_C,        /* Shift Left Double */
-        "SR",           TYPE_C,        /* Shift Right */
-        "SRD",          TYPE_C,        /* Shift Right Double */
-        "NORM",         TYPE_A,        /* Nomarlize Single -2 +FP */
-        "NORMD",        TYPE_A,        /* Normalize Double -2 +FP */
-        "MVCH",         TYPE_A,        /* Move Characters - BC */
-        "SMO",          TYPE_A,        /* Supplementary Modifier - BC  */
-        "ANDN",         TYPE_A,        /* Logical AND direct into X */
-        "ORN",          TYPE_A,        /* Logical OR direct into X */
-        "ERN",          TYPE_A,        /* Logical XOR direct into X */
-        "NULL",         TYPE_A,        /* No Operation */
-        "LDCT",         TYPE_A,        /* Load Count */
-        "MODE",         TYPE_A,        /* Set Mode */
-        "MOVE",         TYPE_A,        /* Copy N words */
-        "SUM",          TYPE_A,        /* Sum N words */
-        "FLOAT",        TYPE_A,        /* Convert Fixed to Float +FP */
-        "FIX",          TYPE_A,        /* Convert Float to Fixed +FP */
-        "FAD",          TYPE_A,        /* Floating Point Add +FP */
-        "FSB",          TYPE_A,        /* Floating Point Subtract +FP */
-        "FMPY",         TYPE_A,        /* Floating Point Multiply +FP */
-        "FDVD",         TYPE_A,        /* Floating Point Divide +FP */
-        "LFP",          TYPE_A,        /* Load Floating Point +FP */
-        "SFP",          TYPE_A,        /* Store Floating Point +FP */
-        "140",          TYPE_A,
-        "141",          TYPE_A,
-        "142",          TYPE_A,
-        "143",          TYPE_A,
-        "144",          TYPE_A,
-        "145",          TYPE_A,
-        "146",          TYPE_A,
-        "147",          TYPE_A,
-        "150",          TYPE_A,
-        "151",          TYPE_A,
-        "152",          TYPE_A,
-        "153",          TYPE_A,
-        "154",          TYPE_A,
-        "155",          TYPE_A,
-        "156",          TYPE_A,
-        "157",          TYPE_A,
-        "160",          TYPE_A,
-        "161",          TYPE_A,
-        "162",          TYPE_A,
-        "163",          TYPE_A,
-        "164",          TYPE_A,
-        "165",          TYPE_A,
-        "166",          TYPE_A,
-        "167",          TYPE_A,
-        "170",          TYPE_A,
-        "171",          TYPE_A,
-        "172",          TYPE_A,
-        "173",          TYPE_A,
-        "174",          TYPE_A,
-        "175",          TYPE_A,
-        "176",          TYPE_A,
-        "177",          TYPE_A,
+       { "LDX",     TYPE_A },       /* Load to X */
+       { "ADX",     TYPE_A },       /* Add to X */
+       { "NGX",     TYPE_A },       /* Negative to X */
+       { "SBX",     TYPE_A },       /* Subtract from X */
+       { "LDXC",    TYPE_A },       /* Load into X with carry */
+       { "ADXC",    TYPE_A },       /* Add to X with carry */
+       { "NGXC",    TYPE_A },       /* Negative to X with carry */
+       { "SBXC",    TYPE_A },       /* Subtract from X with carry */
+       { "STO",     TYPE_A },       /* Store contents of X */
+       { "ADS",     TYPE_A },       /* Add X to store */
+       { "NGS",     TYPE_A },       /* Negative into Store */
+       { "SBS",     TYPE_A },       /* Subtract from store */
+       { "STOC",    TYPE_A },       /* Store contents of X with carry */
+       { "ADSC",    TYPE_A },       /* Add X to store with carry */
+       { "NGSC",    TYPE_A },       /* Negative into Store with carry */
+       { "SBSC",    TYPE_A },       /* Subtract from store with carry */
+       { "ANDX",    TYPE_A },       /* Logical AND into X */
+       { "ORX",     TYPE_A },       /* Logical OR into X */
+       { "ERX",     TYPE_A },       /* Logical XOR into X */
+       { "OBEY",    TYPE_A },       /* Obey instruction at N */
+       { "LDCH",    TYPE_A },       /* Load Character to X */
+       { "LDEX",    TYPE_A },       /* Load Exponent */
+       { "TXU",     TYPE_A },       /* Test X unequal */
+       { "TXL",     TYPE_A },       /* Test X Less */
+       { "ANDS",    TYPE_A },       /* Logical AND into store */
+       { "ORS",     TYPE_A },       /* Logical OR into store */
+       { "ERS",     TYPE_A },       /* Logical XOR into store */
+       { "STOZ",    TYPE_A },       /* Store Zero */
+       { "DCH",     TYPE_A },       /* Deposit Character to X */
+       { "DEX",     TYPE_A },       /* Deposit Exponent */
+       { "DSA",     TYPE_A },       /* Deposit Short Address */
+       { "DLA",     TYPE_A },       /* Deposit Long Address */
+       { "MPY",     TYPE_A },       /* Multiply */
+       { "MPR",     TYPE_A },       /* Multiply and Round */
+       { "MPA",     TYPE_A },       /* Multiply and Accumulate */
+       { "CDB",     TYPE_A },       /* Convert Decimal to Binary */
+       { "DVD",     TYPE_A },       /* Unrounded Double Length Divide */
+       { "DVR",     TYPE_A },       /* Rounded Double Length Divide */
+       { "DVS",     TYPE_A },       /* Single Length Divide */
+       { "CBD",     TYPE_A },       /* Convert Binary to Decimal */
+       { "BZE",     TYPE_B },       /* Branch if X is Zero */
+       { "BZE",     TYPE_B },
+       { "BNZ",     TYPE_B },       /* Branch if X is not Zero */
+       { "BNZ",     TYPE_B },
+       { "BPZ",     TYPE_B },       /* Branch if X is Positive or zero */
+       { "BPZ",     TYPE_B },
+       { "BNG",     TYPE_B },       /* Branch if X is Positive or zero */
+       { "BNG",     TYPE_B },
+       { "BUX",     TYPE_B },       /* Branch on Unit indexing */
+       { "BUX",     TYPE_B },
+       { "BDX",     TYPE_B },       /* Branch on Double Indexing */
+       { "BDX",     TYPE_B },
+       { "BCHX",    TYPE_B },       /* Branch on Character Indexing */
+       { "BCHX",    TYPE_B },
+       { "BCT",     TYPE_B },       /* Branch on Count - BC */
+       { "BCT",     TYPE_B },
+       { "CALL",    TYPE_B },       /* Call Subroutine */
+       { "CALL",    TYPE_B },
+       { "EXIT",    TYPE_B },       /* Exit Subroutine */
+       { "EXIT",    TYPE_B },
+       { NULL,      TYPE_D },       /* Branch unconditional */
+       { NULL,      TYPE_D },
+       { "BFP",     TYPE_B },       /* Branch state of floating point accumulator */
+       { "BFP",     TYPE_B },
+       { "LDN",     TYPE_A },       /* Load direct to X */
+       { "ADN",     TYPE_A },       /* Add direct to X */
+       { "NGN",     TYPE_A },       /* Negative direct to X */
+       { "SBN",     TYPE_A },       /* Subtract direct from X */
+       { "LDNC",    TYPE_A },       /* Load direct into X with carry */
+       { "ADNC",    TYPE_A },       /* Add direct to X with carry */
+       { "NGNC",    TYPE_A },       /* Negative direct to X with carry */
+       { "SBNC",    TYPE_A },       /* Subtract direct from X with carry */
+       { "SL",      TYPE_C },       /* Shift Left */
+       { "SLD",     TYPE_C },       /* Shift Left Double */
+       { "SR",      TYPE_C },       /* Shift Right */
+       { "SRD",     TYPE_C },       /* Shift Right Double */
+       { "NORM",    TYPE_A },       /* Nomarlize Single -2 +FP */
+       { "NORMD",   TYPE_A },       /* Normalize Double -2 +FP */
+       { "MVCH",    TYPE_A },       /* Move Characters - BC */
+       { "SMO",     TYPE_A },       /* Supplementary Modifier - BC  */
+       { "ANDN",    TYPE_A },       /* Logical AND direct into X */
+       { "ORN",     TYPE_A },       /* Logical OR direct into X */
+       { "ERN",     TYPE_A },       /* Logical XOR direct into X */
+       { "NULL",    TYPE_A },       /* No Operation */
+       { "LDCT",    TYPE_A },       /* Load Count */
+       { "MODE",    TYPE_A },       /* Set Mode */
+       { "MOVE",    TYPE_A },       /* Copy N words */
+       { "SUM",     TYPE_A },       /* Sum N words */
+       { "FLOAT",   TYPE_A },       /* Convert Fixed to Float +FP */
+       { "FIX",     TYPE_A },       /* Convert Float to Fixed +FP */
+       { "FAD",     TYPE_A },       /* Floating Point Add +FP */
+       { "FSB",     TYPE_A },       /* Floating Point Subtract +FP */
+       { "FMPY",    TYPE_A },       /* Floating Point Multiply +FP */
+       { "FDVD",    TYPE_A },       /* Floating Point Divide +FP */
+       { "LFP",     TYPE_A },       /* Load Floating Point +FP */
+       { "SFP",     TYPE_A },       /* Store Floating Point +FP */
+       { "140",     TYPE_A },
+       { "141",     TYPE_A },
+       { "142",     TYPE_A },
+       { "143",     TYPE_A },
+       { "144",     TYPE_A },
+       { "145",     TYPE_A },
+       { "146",     TYPE_A },
+       { "147",     TYPE_A },
+       { "150",     TYPE_A },
+       { "151",     TYPE_A },
+       { "152",     TYPE_A },
+       { "153",     TYPE_A },
+       { "154",     TYPE_A },
+       { "155",     TYPE_A },
+       { "156",     TYPE_A },
+       { "157",     TYPE_A },
+       { "160",     TYPE_A },
+       { "161",     TYPE_A },
+       { "162",     TYPE_A },
+       { "163",     TYPE_A },
+       { "164",     TYPE_A },
+       { "165",     TYPE_A },
+       { "166",     TYPE_A },
+       { "167",     TYPE_A },
+       { "170",     TYPE_A },
+       { "171",     TYPE_A },
+       { "172",     TYPE_A },
+       { "173",     TYPE_A },
+       { "174",     TYPE_A },
+       { "175",     TYPE_A },
+       { "176",     TYPE_A },
+       { "177",     TYPE_A }
 };
 
 const char  *type_d[] = {   "BRN", "BVS", "BVSR", "BVC", "BVCR", "BCS", "BCC", "BVCI" };
@@ -677,7 +677,7 @@ if (sw & SWMASK ('C')) {
    n = 0;
    m = 0;
    for(i = 0; gbuf[i] != 0; i++) {
-      char c = ascii_to_mem[gbuf[i]];
+      char c = ascii_to_mem[(int)gbuf[i]];
       if (c == -1)
          return SCPE_ARG;
       n |= c << x;
