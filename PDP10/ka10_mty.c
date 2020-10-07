@@ -100,7 +100,6 @@ DEVICE mty_dev = {
 
 static t_stat mty_devio(uint32 dev, uint64 *data)
 {
-    DEVICE *dptr = &mty_dev;
     TMLN *lp;
     int line;
     uint64 word;
