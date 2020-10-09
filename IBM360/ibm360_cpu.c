@@ -1260,7 +1260,7 @@ wait_loop:
         reg1 = R1(reg);
         op = (uint8)(ops[0] >> 8);
         /* Check if RX, RR, SI, RS, SS opcode */
-        if (op & 0xc0) {
+        if ((op & 0xc0) != 0) {
             ilc = 2;
             if (ReadHalf(PC, &dest))
                 goto supress;
@@ -1297,7 +1297,7 @@ opr:
         }
 
         /* If RX or RS or SS SI etc compute first address */
-        if (op & 0xc0) {
+        if ((op & 0xc0) != 0) {
             uint32        temp;
 
             temp = B1(ops[1]);
@@ -2421,10 +2421,6 @@ save_dbl:
         case OP_NC:
         case OP_OC:
         case OP_XC:
-                fill = cc;
-                cc = 0;
-                /* Fall through */
-
         case OP_MVN:
         case OP_MVZ:
         case OP_MVC:
@@ -2432,12 +2428,12 @@ save_dbl:
                    /* Make sure we can access whole area */
                    if (TransAddr(addr1, &src1) || TransAddr(addr1+reg, &src1) ||
                        TransAddr(addr2, &src1) || TransAddr(addr2+reg, &src1)) {
-                      if (op == OP_NC || op == OP_OC || op == OP_XC)
-                          cc = fill;  /* restore CC on abort */
                       goto supress;
                    }
                 }
-                /* Fall through */
+
+                if (op == OP_NC || op == OP_OC || op == OP_XC)
+                    cc = 0; 
                 do {
                    if (ReadByte(addr2, &src1))
                        goto supress;
@@ -2465,14 +2461,10 @@ save_dbl:
         case OP_CLC:
                 if ((cpu_unit[0].flags & FEAT_DAT) != 0) {
                    /* Make sure we can access whole area */
-                   if (TransAddr(addr1, &src1))
+                   if (TransAddr(addr1, &src1) || TransAddr(addr1+reg, &src1) ||
+                       TransAddr(addr2, &src1) || TransAddr(addr2+reg, &src1)) {
                       goto supress;
-                   if (TransAddr(addr1+reg, &src1))
-                      goto supress;
-                   if (TransAddr(addr2, &src1))
-                      goto supress;
-                   if (TransAddr(addr2+reg, &src1))
-                      goto supress;
+                   }
                 }
                 cc = 0;
                 do {
@@ -2496,14 +2488,10 @@ save_dbl:
         case OP_TR:
                 if ((cpu_unit[0].flags & FEAT_DAT) != 0) {
                    /* Make sure we can access whole area */
-                   if (TransAddr(addr1, &src1))
+                   if (TransAddr(addr1, &src1) || TransAddr(addr1+reg, &src1) ||
+                       TransAddr(addr2, &src1) || TransAddr(addr2+256, &src1)) {
                       goto supress;
-                   if (TransAddr(addr1+reg, &src1))
-                      goto supress;
-                   if (TransAddr(addr2, &src1))
-                      goto supress;
-                   if (TransAddr(addr2+256, &src1))
-                      goto supress;
+                   }
                 }
                 do {
                    if (ReadByte(addr1, &src1))
@@ -2520,14 +2508,10 @@ save_dbl:
         case OP_TRT:
                 if ((cpu_unit[0].flags & FEAT_DAT) != 0) {
                    /* Make sure we can access whole area */
-                   if (TransAddr(addr1, &src1))
+                   if (TransAddr(addr1, &src1) || TransAddr(addr1+reg, &src1) ||
+                       TransAddr(addr2, &src1) || TransAddr(addr2+256, &src1)) {
                       goto supress;
-                   if (TransAddr(addr1+reg, &src1))
-                      goto supress;
-                   if (TransAddr(addr2, &src1))
-                      goto supress;
-                   if (TransAddr(addr2+256, &src1))
-                      goto supress;
+                   }
                 }
                 cc = 0;
                 do {
@@ -2866,7 +2850,7 @@ save_dbl:
                     storepsw(OPPSW, IRC_EXEC);
                 /* Check if RX, RR, SI, RS, SS opcode */
                 else {
-                    if (op & 0xc0) {
+                    if ((op & 0xc0) != 0) {
                         if (ReadHalf(addr1, &dest))
                             goto supress;
                         ops[1] = dest;
