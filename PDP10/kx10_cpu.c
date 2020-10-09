@@ -5377,7 +5377,7 @@ dpnorm:
               MQ = CCM(MB) + 1;   /* Low */
               /* High */
 #if KL
-              flag3 = 0;
+              flag1 = flag3 = 0;
               if ((CCM(AR) + ((MQ & SMASK) != 0)) & SMASK) {
                   FLAGS |= CRY1;
                   flag1 = 1;
@@ -8988,7 +8988,7 @@ do_byte_setup(int n, int wr, int *pos, int *sz)
              if (MB & SMASK) {    /* Instruction format IFIW */
                  if (MB & BIT1) { /* Illegal index word */
                      fault_data = 024LL << 30 | (((FLAGS & USER) != 0)?SMASK:0) |
-                                  (temp & RMASK) | ((uint64)sect << 18);
+                                  AB | ((uint64)sect << 18);
                      page_fault = 1;
                      return 1;
                  }
