@@ -1297,6 +1297,7 @@ branch:
                     if ((RX & 04) == 0 && fovr)
                         BV = 1;
                     switch (RX & 06) {
+                    default:
                     case 0:  n = (faccl | facch) != 0; break;
                     case 2:  n = (faccl & B0) != 0; break;
                     case 4:  n = fovr; break;
