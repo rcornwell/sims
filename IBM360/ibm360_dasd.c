@@ -204,7 +204,7 @@ struct disk_t
 {
     const char         *name;         /* Type Name */
     int                 cyl;          /* Number of cylinders */
-    int                 heads;        /* Number of heads/cylinder */
+    uint32              heads;        /* Number of heads/cylinder */
     int                 bpt;          /* Max bytes per track */
     uint8               sen_cnt;      /* Number of sense bytes */
     uint8               dev_type;     /* Device type code */
@@ -621,7 +621,7 @@ t_stat dasd_srv(UNIT * uptr)
                  goto index;
              }
              uptr->CCH ++;
-             if ((uptr->CCH & 0xff) >= disk_type[type].heads) {
+             if ((uint32)(uptr->CCH & 0xff) >= disk_type[type].heads) {
 endcyl:
                  sim_debug(DEBUG_DETAIL, dptr, "end cyl unit=%d %02x %d\n",
                            unit, state, data->tpos);
@@ -652,7 +652,7 @@ endcyl:
                   uptr->CCH ++;
                   sim_debug(DEBUG_DETAIL, dptr, "over unit=%d %04x\n", unit, uptr->CCH);
                   uptr->CMD &= ~(DK_INDEX);
-                  if ((uptr->CCH & 0xff) >= disk_type[type].heads)
+                  if ((uint32)(uptr->CCH & 0xff) >= disk_type[type].heads)
                       goto endcyl;
              }
          }
@@ -1822,7 +1822,7 @@ dasd_format(UNIT * uptr, int flag) {
     int                 type = GET_TYPE(uptr->flags);
     int                 tsize;
     int                 cyl;
-    int                 hd;
+    uint32              hd;
     int                 pos;
 
     if (flag || get_yn("Initialize dasd? [Y] ", TRUE)) {
@@ -1864,7 +1864,7 @@ dasd_format(UNIT * uptr, int flag) {
                 data->cbuf[pos++] = (hd & 0xff);
                 data->cbuf[pos++] = 1;              /* Rec */
                 if (cyl == 0 && hd == 0 && (sim_switches & SWMASK ('V')) != 0) {
-                    int p;
+                    unsigned int p;
                     /* R1, IPL1 */
                     data->cbuf[pos++] = 4;              /* keylen */
                     data->cbuf[pos++] = 0;              /* dlen */
@@ -1929,10 +1929,10 @@ dasd_attach(UNIT * uptr, CONST char *file)
     uint16              addr = GET_UADDR(uptr->CMD);
     int                 flag = (sim_switches & SWMASK ('I')) != 0;
     t_stat              r;
-    int                 i;
+    uint32              i;
     struct dasd_header  hdr;
     struct dasd_t       *data;
-    int                 tsize;
+    uint32              tsize;
     size_t              isize;
     size_t              dsize;
 

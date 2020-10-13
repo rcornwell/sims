@@ -547,7 +547,7 @@ if (sw & SWMASK ('M')) {
 if (sw & SWMASK ('C')) {
    fputc('\'', of);
    for(i = 0; i < l; i++) {
-      char ch = ebcdic_to_ascii[val[i] & 0xff];
+      uint8 ch = ebcdic_to_ascii[val[i] & 0xff];
       if (ch >= 0x20 && ch <= 0x7f)
           fprintf(of, "%c", ch);
       else

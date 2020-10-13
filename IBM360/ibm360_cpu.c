@@ -2270,10 +2270,10 @@ save_dbl:
                                     reg1, addr1, dest, PC, reg);
                         switch (reg1) {
                         case 0x0:     /* Segment table address */
-                                  for (temp = 0;
-                                       temp < sizeof(tlb)/sizeof(uint32);
-                                       temp++)
-                                      tlb[temp] = 0;
+                                  for (addr2 = 0;
+                                       addr2 < sizeof(tlb)/sizeof(uint32);
+                                       addr2++)
+                                      tlb[addr2] = 0;
                                   if ((dest & 0x3f) != 0)
                                      storepsw(OPPSW, IRC_DATA);
                                   seg_addr = dest & AMASK;
@@ -3096,10 +3096,10 @@ save_dbl:
                                   storepsw(OPPSW, IRC_OPR);
                                   goto supress;
                               }
-                              for (temp = 0;
-                                   temp < sizeof(tlb)/sizeof(uint32);
-                                   temp++)
-                                   tlb[temp] = 0;
+                              for (addr2 = 0;
+                                   addr2 < sizeof(tlb)/sizeof(uint32);
+                                   addr2++)
+                                   tlb[addr2] = 0;
                               break;
                    case 0x10: /* SPX */
                               storepsw(OPPSW, IRC_OPR);
@@ -3310,18 +3310,18 @@ save_dbl:
                                                   ~page_mask) & AMASK) >> page_shift;
                                   intval_en = ((dest & 0x400) != 0);
                                   tod_en = ((dest & 0x800) != 0);
-                                  for (temp = 0;
-                                       temp < sizeof(tlb)/sizeof(uint32);
-                                       temp++)
-                                       tlb[temp] = 0;
+                                  for (addr2 = 0;
+                                       addr2 < sizeof(tlb)/sizeof(uint32);
+                                       addr2++)
+                                       tlb[addr2] = 0;
                                   break;
                         case 0x1:     /* Segment table address and length */
                                   seg_addr = dest & AMASK;
                                   seg_len = (((dest >> 24) & 0xff) + 1) << 4;
-                                  for (temp = 0;
-                                       temp < sizeof(tlb)/sizeof(uint32);
-                                       temp++)
-                                       tlb[temp] = 0;
+                                  for (addr2 = 0;
+                                       addr2 < sizeof(tlb)/sizeof(uint32);
+                                       addr2++)
+                                       tlb[addr2] = 0;
                                   break;
                         case 0x2:     /* Masks */
                                   if (ec_mode)

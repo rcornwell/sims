@@ -245,26 +245,26 @@ print_line(UNIT * uptr)
         }
         break;
     case 5:     /* Half page */
-        while((uptr->LINE != (uptr->capac/2)) ||
-              (uptr->LINE != (uptr->capac))) {
+        while((uptr->LINE != (int)(uptr->capac/2)) ||
+              (uptr->LINE != (int)(uptr->capac))) {
             sim_fwrite("\r\n", 1, 2, uptr->fileref);
             f = 0;
             uptr->pos += 2;
             uptr->LINE++;
-            if (((uint32)uptr->LINE) > uptr->capac)
+            if (uptr->LINE > (int)uptr->capac)
                 break;
         }
         break;
     case 6:     /* 1/4 Page */
-        while((uptr->LINE != (uptr->capac/4)) ||
-              (uptr->LINE != (uptr->capac/2)) ||
-              (uptr->LINE != (uptr->capac/2+uptr->capac/4)) ||
-              (uptr->LINE != (uptr->capac))) {
+        while((uptr->LINE != (int)(uptr->capac/4)) ||
+              (uptr->LINE != (int)(uptr->capac/2)) ||
+              (uptr->LINE != (int)(uptr->capac/2+uptr->capac/4)) ||
+              (uptr->LINE != (int)(uptr->capac))) {
             sim_fwrite("\r\n", 1, 2, uptr->fileref);
             f = 0;
             uptr->pos += 2;
             uptr->LINE++;
-            if (((uint32)uptr->LINE) > uptr->capac)
+            if (uptr->LINE > (int)uptr->capac)
                 break;
         }
         break;
@@ -280,7 +280,7 @@ print_line(UNIT * uptr)
         break;
     }
 
-    if ((t_addr)uptr->LINE > uptr->capac) {
+    if (uptr->LINE > (int)uptr->capac) {
        if (f)
            sim_fwrite("\r\n", 1, 2, uptr->fileref);
        sim_fwrite("\f", 1, 1, uptr->fileref);
