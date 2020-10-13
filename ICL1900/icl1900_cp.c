@@ -60,9 +60,9 @@
                           MODE_029
 
 
-void cdp_cmd (int dev, uint32 cmd, uint32 *resp);
-void cdp_nsi_cmd (int dev, uint32 cmd);
-void cdp_nsi_status (int dev, uint32 *resp);
+void cdp_cmd (uint32 dev, uint32 cmd, uint32 *resp);
+void cdp_nsi_cmd (uint32 dev, uint32 cmd);
+void cdp_nsi_status (uint32 dev, uint32 *resp);
 t_stat cdp_svc (UNIT *uptr);
 t_stat cdp_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
 CONST char *cdp_description (DEVICE *dptr);
@@ -102,7 +102,7 @@ DEVICE cdp_dev = {
  */
 
 
-void cdp_cmd(int dev, uint32 cmd, uint32 *resp) {
+void cdp_cmd(uint32 dev, uint32 cmd, uint32 *resp) {
    uint32   i;
    UNIT    *uptr = NULL;
 
@@ -164,7 +164,7 @@ void cdp_cmd(int dev, uint32 cmd, uint32 *resp) {
  * xxxx01     Start punch.
  * xxxx10     Stop punch.
  */
-void cdp_nsi_cmd(int dev, uint32 cmd) {
+void cdp_nsi_cmd(uint32 dev, uint32 cmd) {
    uint32   i;
    UNIT    *uptr = NULL;
 
@@ -214,7 +214,7 @@ void cdp_nsi_cmd(int dev, uint32 cmd) {
  *  020   ACCEPT
  *  040   BUSY
  */
-void cdp_nsi_status(int dev, uint32 *resp) {
+void cdp_nsi_status(uint32 dev, uint32 *resp) {
    uint32   i;
    UNIT    *uptr = NULL;
 

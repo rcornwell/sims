@@ -108,9 +108,9 @@
  *
  */
 
-void ptr_cmd (int dev, uint32 cmd, uint32 *resp);
-void ptr_nsi_cmd (int dev, uint32 cmd);
-void ptr_nsi_status (int dev, uint32 *resp);
+void ptr_cmd (uint32 dev, uint32 cmd, uint32 *resp);
+void ptr_nsi_cmd (uint32 dev, uint32 cmd);
+void ptr_nsi_status (uint32 dev, uint32 *resp);
 t_stat ptr_svc (UNIT *uptr);
 t_stat ptr_reset (DEVICE *dptr);
 t_stat ptr_boot (int32 unit_num, DEVICE * dptr);
@@ -163,7 +163,7 @@ DEVICE ptr_dev = {
  */
 
 
-void ptr_cmd(int dev, uint32 cmd, uint32 *resp) {
+void ptr_cmd(uint32 dev, uint32 cmd, uint32 *resp) {
    uint32  i;
    UNIT    *uptr = NULL;
 
@@ -247,7 +247,7 @@ void ptr_cmd(int dev, uint32 cmd, uint32 *resp) {
  * x1xxxx     Graphics mode.
  * 1xxxxx     All characters.
  */
-void ptr_nsi_cmd(int dev, uint32 cmd) {
+void ptr_nsi_cmd(uint32 dev, uint32 cmd) {
    uint32  i;
    UNIT    *uptr = NULL;
 
@@ -308,7 +308,7 @@ void ptr_nsi_cmd(int dev, uint32 cmd) {
  *  020   ACCEPT
  *  040   BUSY
  */
-void ptr_nsi_status(int dev, uint32 *resp) {
+void ptr_nsi_status(uint32 dev, uint32 *resp) {
    uint32  i;
    UNIT    *uptr = NULL;
 

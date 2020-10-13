@@ -64,9 +64,9 @@
                               UNIT_DISABLE|UNIT_RO|MODE_029
 
 
-void cdr_cmd (int dev, uint32 cmd, uint32 *resp);
-void cdr_nsi_cmd (int dev, uint32 cmd);
-void cdr_nsi_status (int dev, uint32 *resp);
+void cdr_cmd (uint32 dev, uint32 cmd, uint32 *resp);
+void cdr_nsi_cmd (uint32 dev, uint32 cmd);
+void cdr_nsi_status (uint32 dev, uint32 *resp);
 t_stat cdr_svc (UNIT *uptr);
 t_stat cdr_boot (int32 unit_num, DEVICE * dptr);
 t_stat cdr_reset (DEVICE *dptr);
@@ -113,7 +113,7 @@ DEVICE cdr_dev = {
  */
 
 
-void cdr_cmd(int dev, uint32 cmd, uint32 *resp) {
+void cdr_cmd(uint32 dev, uint32 cmd, uint32 *resp) {
    uint32   i;
    UNIT    *uptr = NULL;
 
@@ -178,7 +178,7 @@ void cdr_cmd(int dev, uint32 cmd, uint32 *resp) {
  * xxxx01     Start reader.
  * xxxx10     Stop reader.
  */
-void cdr_nsi_cmd(int dev, uint32 cmd) {
+void cdr_nsi_cmd(uint32 dev, uint32 cmd) {
    uint32   i;
    UNIT    *uptr = NULL;
 
@@ -228,7 +228,7 @@ void cdr_nsi_cmd(int dev, uint32 cmd) {
  *  020   ACCEPT
  *  040   BUSY
  */
-void cdr_nsi_status(int dev, uint32 *resp) {
+void cdr_nsi_status(uint32 dev, uint32 *resp) {
    uint32   i;
    UNIT    *uptr = NULL;
 
@@ -323,7 +323,7 @@ t_stat cdr_svc (UNIT *uptr)
 t_stat
 cdr_reset(DEVICE *dptr) 
 {
-    int i;
+    unsigned int i;
 
     memset(&hol_to_mem[0], 0xff, 4096);
     for(i = 0; i < (sizeof(mem_to_hol)/sizeof(uint16)); i++) {

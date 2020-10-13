@@ -100,7 +100,7 @@
 int  eds8_busy;    /* Indicates that controller is talking to a drive */
 int  eds8_drive;   /* Indicates last selected drive */
 uint32 eds8_buffer[WD_SEC];
-void eds8_cmd (int dev, uint32 cmd, uint32 *resp);
+void eds8_cmd (uint32 dev, uint32 cmd, uint32 *resp);
 t_stat eds8_svc (UNIT *uptr);
 t_stat eds8_reset (DEVICE *dptr);
 t_stat eds8_boot (int32 unit_num, DEVICE * dptr);
@@ -139,7 +139,7 @@ DEVICE eds8_dev = {
     NULL, NULL, &eds8_help, NULL, NULL, &eds8_description
     };
 
-void eds8_cmd(int dev, uint32 cmd, uint32 *resp) {
+void eds8_cmd(uint32 dev, uint32 cmd, uint32 *resp) {
     UNIT  *uptr = &eds8_unit[eds8_drive];
     *resp = 0;
     if (cmd & 0400) {

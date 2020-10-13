@@ -41,9 +41,9 @@ DIB nul_dib = { 0, NULL, NULL, NULL};
 t_stat
 chan_set_devs()
 {
-     int     i;
-     uint32  j;
-     int     chan;
+     unsigned int     i;
+     uint32           j;
+     int              chan;
 
      /* Clear device table */
      for (i = 0; i < sizeof(devs)/sizeof(DIB *); i++)

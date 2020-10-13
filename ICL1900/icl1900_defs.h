@@ -250,9 +250,9 @@ t_opcode;
 
 struct icl_dib {
        uint8     type;            /* Type of device */
-       void      (*si_cmd)(int dev, uint32 cmd, uint32 *resp); /* Start io on device */
-       void      (*nsi_cmd)(int dev, uint32 cmd);              /* Start non-standard I/O on device */
-       void      (*nsi_status)(int dev, uint32 *resp);         /* Non-Standard I/O status */
+       void      (*si_cmd)(uint32 dev, uint32 cmd, uint32 *resp); /* Start io on device */
+       void      (*nsi_cmd)(uint32 dev, uint32 cmd);              /* Start non-standard I/O on device */
+       void      (*nsi_status)(uint32 dev, uint32 *resp);         /* Non-Standard I/O status */
 };
 
 typedef struct icl_dib DIB;

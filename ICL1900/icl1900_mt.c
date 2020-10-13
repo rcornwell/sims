@@ -102,7 +102,7 @@
 int  mt_busy;    /* Indicates that controller is talking to a drive */
 int  mt_drive;   /* Indicates last selected drive */
 uint8 mt_buffer[BUFFSIZE];
-void mt_cmd (int dev, uint32 cmd, uint32 *resp);
+void mt_cmd (uint32 dev, uint32 cmd, uint32 *resp);
 t_stat mt_svc (UNIT *uptr);
 t_stat mt_reset (DEVICE *dptr);
 t_stat mt_boot (int32 unit_num, DEVICE * dptr);
@@ -143,7 +143,7 @@ DEVICE mt_dev = {
     NULL, NULL, &mt_help, NULL, NULL, &mt_description
     };
 
-void mt_cmd(int dev, uint32 cmd, uint32 *resp) {
+void mt_cmd(uint32 dev, uint32 cmd, uint32 *resp) {
     UNIT  *uptr = &mt_unit[mt_drive];
     *resp = 0;
     if (cmd & 0400) {

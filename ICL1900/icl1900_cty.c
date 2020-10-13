@@ -28,8 +28,8 @@
 #include "icl1900_defs.h"
 
 extern int32 tmxr_poll;
-void cty_cmd(int dev, uint32 cmd);
-void cty_status(int dev, uint32 *resp);
+void cty_cmd(uint32 dev, uint32 cmd);
+void cty_status(uint32 dev, uint32 *resp);
 t_stat ctyi_svc (UNIT *uptr);
 t_stat ctyo_svc (UNIT *uptr);
 t_stat cty_reset (DEVICE *dptr);
@@ -101,7 +101,7 @@ DEVICE cty_dev = {
  *    11xxxx -> 101xxxx
  *
  */
-void cty_cmd(int dev, uint32 cmd) {
+void cty_cmd(uint32 dev, uint32 cmd) {
     int   u = 0;
 
     if (dev > 3)
@@ -122,7 +122,7 @@ void cty_cmd(int dev, uint32 cmd) {
     chan_clr_done(GET_UADDR(cty_unit[u].flags));
 }
 
-void cty_status(int dev, uint32 *resp) {
+void cty_status(uint32 dev, uint32 *resp) {
     int   u = 0;
 
     if (dev > 3)

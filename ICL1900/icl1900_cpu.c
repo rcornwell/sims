@@ -1362,7 +1362,7 @@ branch:
                                RB &= M23;
                                n = (RA & B0) != 0;
                                temp = (RA & BM1) != 0;
-                               if (n != temp) {
+                               if ((uint32)n != temp) {
                                    BV = 1;
                                    if (!exe_mode && (Mode & 7) == 4)
                                        SR64 |= B2;

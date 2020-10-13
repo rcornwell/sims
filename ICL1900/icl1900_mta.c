@@ -104,8 +104,8 @@
 
 int  mta_busy;   /* Indicates that controller is talking to a drive */
 uint8 mta_buffer[BUFFSIZE];
-void mta_nsi_cmd (int dev, uint32 cmd);
-void mta_nsi_status (int dev, uint32 *resp);
+void mta_nsi_cmd (uint32 dev, uint32 cmd);
+void mta_nsi_status (uint32 dev, uint32 *resp);
 t_stat mta_svc (UNIT *uptr);
 t_stat mta_reset (DEVICE *dptr);
 t_stat mta_boot (int32 unit_num, DEVICE * dptr);
@@ -148,7 +148,7 @@ DEVICE mta_dev = {
     NULL, NULL, &mta_help, NULL, NULL, &mta_description
     };
 
-void mta_nsi_cmd(int dev, uint32 cmd) {
+void mta_nsi_cmd(uint32 dev, uint32 cmd) {
    int32    d;
    UNIT    *uptr;
 
@@ -185,7 +185,7 @@ void mta_nsi_cmd(int dev, uint32 cmd) {
    }
 }
 
-void mta_nsi_status(int dev, uint32 *resp) {
+void mta_nsi_status(uint32 dev, uint32 *resp) {
    int32    d;
    UNIT    *uptr;
 

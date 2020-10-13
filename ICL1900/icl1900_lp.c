@@ -73,9 +73,9 @@
 #define UNIT_LPR(x)      UNIT_ADDR(x)|SET_TYPE(T1931_2)|UNIT_ATTABLE|UNIT_DISABLE
 
 
-void lpr_cmd (int dev, uint32 cmd, uint32 *resp);
-void lpr_nsi_cmd (int dev, uint32 cmd);
-void lpr_nsi_status (int dev, uint32 *resp);
+void lpr_cmd (uint32 dev, uint32 cmd, uint32 *resp);
+void lpr_nsi_cmd (uint32 dev, uint32 cmd);
+void lpr_nsi_status (uint32 dev, uint32 *resp);
 t_stat lpr_svc (UNIT *uptr);
 t_stat lpr_reset (DEVICE *dptr);
 t_stat lpr_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
@@ -122,7 +122,7 @@ DEVICE lpr_dev = {
  */
 
 
-void lpr_cmd(int dev, uint32 cmd, uint32 *resp) {
+void lpr_cmd(uint32 dev, uint32 cmd, uint32 *resp) {
    uint32  i;
    UNIT    *uptr = NULL;
 
@@ -185,7 +185,7 @@ void lpr_cmd(int dev, uint32 cmd, uint32 *resp) {
  * xxxx01     Start print.
  * xxxx10     Stop print.
  */
-void lpr_nsi_cmd(int dev, uint32 cmd) {
+void lpr_nsi_cmd(uint32 dev, uint32 cmd) {
    uint32  i;
    UNIT    *uptr = NULL;
 
@@ -235,7 +235,7 @@ void lpr_nsi_cmd(int dev, uint32 cmd) {
  *  020   ACCEPT
  *  040   BUSY
  */
-void lpr_nsi_status(int dev, uint32 *resp) {
+void lpr_nsi_status(uint32 dev, uint32 *resp) {
    uint32  i;
    UNIT    *uptr = NULL;
 
@@ -301,7 +301,7 @@ t_stat lpr_svc (UNIT *uptr)
     else if (LW_160(uptr->flags))
         len = 160;
     i = 0;
-    while (eor == 0 && i < len && i <sizeof(buffer)-4) {
+    while (eor == 0 && i < len && i < (int)(sizeof(buffer)-4)) {
         eor = chan_output_char(GET_UADDR(uptr->flags), &ch, 0);
         if (uptr->CMD & AUTO) {
             uptr->CMD |= (int32)ch << 8;

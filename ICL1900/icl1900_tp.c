@@ -107,9 +107,9 @@
  *
  */
 
-void ptp_cmd (int dev, uint32 cmd, uint32 *resp);
-void ptp_nsi_cmd (int dev, uint32 cmd);
-void ptp_nsi_status (int dev, uint32 *resp);
+void ptp_cmd (uint32 dev, uint32 cmd, uint32 *resp);
+void ptp_nsi_cmd (uint32 dev, uint32 cmd);
+void ptp_nsi_status (uint32 dev, uint32 *resp);
 t_stat ptp_svc (UNIT *uptr);
 t_stat ptp_reset (DEVICE *dptr);
 t_stat ptp_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
@@ -159,7 +159,7 @@ DEVICE ptp_dev = {
  */
 
 
-void ptp_cmd(int dev, uint32 cmd, uint32 *resp) {
+void ptp_cmd(uint32 dev, uint32 cmd, uint32 *resp) {
    uint32  i;
    UNIT    *uptr = NULL;
 
@@ -241,7 +241,7 @@ void ptp_cmd(int dev, uint32 cmd, uint32 *resp) {
  * x1xxxx     Graphics mode.
  * 1xxxxx     Punch blanks.
  */
-void ptp_nsi_cmd(int dev, uint32 cmd) {
+void ptp_nsi_cmd(uint32 dev, uint32 cmd) {
    uint32  i;
    UNIT    *uptr = NULL;
 
@@ -298,7 +298,7 @@ void ptp_nsi_cmd(int dev, uint32 cmd) {
  *  020   ACCEPT
  *  040   BUSY
  */
-void ptp_nsi_status(int dev, uint32 *resp) {
+void ptp_nsi_status(uint32 dev, uint32 *resp) {
    uint32  i;
    UNIT    *uptr = NULL;
 
