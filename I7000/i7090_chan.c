@@ -814,8 +814,7 @@ chan_proc()
                             uptr = (*dptr)->units;
                             for (j = 0; j < num; j++, uptr++) {
                                 if ((uptr->flags & UNIT_DIS) == 0 &&
-                                    UNIT_G_CHAN(uptr->flags) ==
-                                          (unsigned int)chan &&
+                                    UNIT_G_CHAN(uptr->flags) == chan &&
                                     (sms[chan] & 1) ==
                                           ((UNIT_SELECT & uptr->flags) != 0)) {
                                     goto found;
@@ -1247,7 +1246,7 @@ int
 chan_cmd(uint16 dev, uint16 dcmd)
 {
     UNIT               *uptr;
-    uint32              chan;
+    int32               chan;
     DEVICE            **dptr;
     DIB                *dibp;
     int                 j;

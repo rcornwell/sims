@@ -253,7 +253,7 @@ extern DEBTAB crd_debug[];
 #define UNIT_V_CHAN     (UNIT_V_SELECT + 1)          /* 10 */
 #define UNIT_CHAN       (017 << UNIT_V_CHAN)         /* 10-14 */
 #define UNIT_S_CHAN(x)  (UNIT_CHAN & ((x) << UNIT_V_CHAN))
-#define UNIT_G_CHAN(x)  ((UNIT_CHAN & (x)) >> UNIT_V_CHAN)
+#define UNIT_G_CHAN(x)  ((int)((UNIT_CHAN & (x)) >> UNIT_V_CHAN))
 #define UNIT_V_LOCAL    (UNIT_V_UF + 0)              /* 0 */
 #define DEV_BUF_NUM(x)  (((x) & 07) << DEV_V_UF)
 #define GET_DEV_BUF(x)  (((x) >> DEV_V_UF) & 07)
