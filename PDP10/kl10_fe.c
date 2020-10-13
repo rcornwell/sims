@@ -835,7 +835,7 @@ void dte_its(UNIT *uptr) {
          if (word == 0)
              cty_done++;
 #if (NUM_DEVS_TTY > 0)
-         else if (word > 0 && word < tty_desc.lines) {
+         else if (word > 0 && word < (uint64)tty_desc.lines) {
             tty_done[word-1] = 1;
          }
 #endif

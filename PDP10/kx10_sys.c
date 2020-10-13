@@ -277,7 +277,7 @@ t_stat load_dmp (FILE *fileref)
    char    *p;
    uint32  addr = 074;
    uint64  data;
-   int     high = 0;
+   uint32  high = 0;
 
    while (fgets((char *)buffer, 80, fileref) != 0) {
         p = (char *)buffer;

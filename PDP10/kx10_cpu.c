@@ -2521,7 +2521,7 @@ int Mem_read(int flag, int cur_context, int fetch) {
     } else {
         if (!page_lookup(AB, flag, &addr, 0, cur_context, fetch))
             return 1;
-        if (addr >= (int)MEMSIZE) {
+        if (addr >= MEMSIZE) {
             irq_flags |= 02000;
             return 1;
         }
@@ -2559,7 +2559,7 @@ int Mem_write(int flag, int cur_context) {
     } else {
         if (!page_lookup(AB, flag, &addr, 1, cur_context, 0))
             return 1;
-        if (addr >= (int)MEMSIZE) {
+        if (addr >= MEMSIZE) {
             irq_flags |= 02000;
             return 1;
         }
@@ -2617,7 +2617,7 @@ int Mem_examine_word(int n, int wrd, uint64 *data) {
 
     if (addr >= MEMSIZE)
         return 1;
-    if (M[addr] == 0 || wrd > M[addr])
+    if (M[addr] == 0 || (uint64)wrd > M[addr])
         return 1;
     addr = (M[addr+1] + wrd) & RMASK;
     if (exec_page_lookup(addr, 0, &addr))
@@ -2631,7 +2631,7 @@ int Mem_deposit_word(int n, int wrd, uint64 *data) {
 
     if (addr >= MEMSIZE)
         return 1;
-    if (M[addr] == 0 || wrd > M[addr])
+    if (M[addr] == 0 || (uint64)wrd > M[addr])
         return 1;
     addr = (M[addr+1] + wrd) & RMASK;
     if (exec_page_lookup(addr, 1, &addr))
@@ -2922,7 +2922,7 @@ int Mem_read(int flag, int cur_context, int fetch) {
 read:
         if (!page_lookup(AB, flag, &addr, 0, cur_context, fetch))
             return 1;
-        if (addr >= (int)MEMSIZE) {
+        if (addr >= MEMSIZE) {
             nxm_flag = 1;
             return 1;
         }
@@ -2961,7 +2961,7 @@ int Mem_write(int flag, int cur_context) {
 write:
         if (!page_lookup(AB, flag, &addr, 1, cur_context, 0))
             return 1;
-        if (addr >= (int)MEMSIZE) {
+        if (addr >= MEMSIZE) {
             nxm_flag = 1;
             return 1;
         }
@@ -2987,12 +2987,12 @@ write:
 int its_load_tlb(uint32 reg, int page, uint32 *tlb) {
     uint64 data;
     int len = (reg >> 19) & 0177;
-    int entry = (reg & 01777777) + ((page & 0377) >> 1);
+    unsigned int entry = (reg & 01777777) + ((page & 0377) >> 1);
     if ((page >> 1) > len) {
        fault_data |= 0200;
        return 1;
     }
-    if (entry >= (int)MEMSIZE) {
+    if (entry >= MEMSIZE) {
         nxm_flag = 1;
         fault_data |= 0400;
         return 1;
@@ -3178,7 +3178,7 @@ int Mem_read_its(int flag, int cur_context, int fetch) {
             }
         }
 #endif
-        if (addr >= (int)MEMSIZE) {
+        if (addr >= MEMSIZE) {
             nxm_flag = 1;
             return 1;
         }
@@ -3224,7 +3224,7 @@ int Mem_write_its(int flag, int cur_context) {
             }
         }
 #endif
-        if (addr >= (int)MEMSIZE) {
+        if (addr >= MEMSIZE) {
             nxm_flag = 1;
             return 1;
         }
@@ -3512,7 +3512,7 @@ int Mem_read_bbn(int flag, int cur_context, int fetch) {
         MB = get_reg(AB);
         return 0;
     }
-    if (addr >= (int)MEMSIZE) {
+    if (addr >= MEMSIZE) {
         nxm_flag = 1;
         return 1;
     }
@@ -3542,7 +3542,7 @@ int Mem_write_bbn(int flag, int cur_context) {
         set_reg(AB, MB);
         return 0;
     }
-    if (addr >= (int)MEMSIZE) {
+    if (addr >= MEMSIZE) {
         nxm_flag = 1;
         return 1;
     }
@@ -3601,7 +3601,7 @@ int Mem_read_waits(int flag, int cur_context, int fetch) {
     }
     if (!page_lookup_waits(AB, flag, &addr, 0, cur_context, fetch))
         return 1;
-    if (addr >= (int)MEMSIZE) {
+    if (addr >= MEMSIZE) {
         nxm_flag = 1;
         return 1;
     }
@@ -3628,7 +3628,7 @@ int Mem_write_waits(int flag, int cur_context) {
     }
     if (!page_lookup_waits(AB, flag, &addr, 1, cur_context, 0))
         return 1;
-    if (addr >= (int)MEMSIZE) {
+    if (addr >= MEMSIZE) {
         nxm_flag = 1;
         return 1;
     }
@@ -3669,7 +3669,7 @@ int Mem_read_ka(int flag, int cur_context, int fetch) {
     } else {
         if (!page_lookup_ka(AB, flag, &addr, 0, cur_context, fetch))
             return 1;
-        if (addr >= (int)MEMSIZE) {
+        if (addr >= MEMSIZE) {
             nxm_flag = 1;
             return 1;
         }
@@ -3695,7 +3695,7 @@ int Mem_write_ka(int flag, int cur_context) {
     } else {
         if (!page_lookup_ka(AB, flag, &addr, 1, cur_context, 0))
             return 1;
-        if (addr >= (int)MEMSIZE) {
+        if (addr >= MEMSIZE) {
             nxm_flag = 1;
             return 1;
         }
@@ -3834,7 +3834,7 @@ int Mem_read(int flag, int cur_context, int fetch) {
     } else {
         if (!page_lookup(AB, flag, &addr, 0, cur_context, fetch))
             return 1;
-        if (addr >= (int)MEMSIZE) {
+        if (addr >= MEMSIZE) {
             nxm_flag = 1;
             return 1;
         }
@@ -3860,7 +3860,7 @@ int Mem_write(int flag, int cur_context) {
     } else {
         if (!page_lookup(AB, flag, &addr, 1, cur_context, 0))
             return 1;
-        if (addr >= (int)MEMSIZE) {
+        if (addr >= MEMSIZE) {
             nxm_flag = 1;
             return 1;
         }
@@ -3881,7 +3881,7 @@ int Mem_read_nopage() {
     if (AB < 020) {
         MB =  get_reg(AB);
     } else {
-        if (AB >= (int)MEMSIZE) {
+        if (AB >= MEMSIZE) {
 #if KL
             irq_flags |= 02000;
 #else
@@ -3904,7 +3904,7 @@ int Mem_write_nopage() {
     if (AB < 020) {
         set_reg(AB, MB);
     } else {
-        if (AB >= (int)MEMSIZE) {
+        if (AB >= MEMSIZE) {
 #if KL
             irq_flags |= 02000;
 #else
@@ -6458,7 +6458,7 @@ fnormx:
                       SC--;
                   }
                   AR &= FMASK;
-                  if ((SC & 01600) != 1600)
+                  if ((SC & 01600) != 01600)
                       fxu_hold_set = 1;
                   if (AR == (SMASK|EXPO)) {
                       AR = (AR >> 1) | (AR & SMASK);
@@ -6827,7 +6827,7 @@ left:
               AR = (AR << 1) + (MQ >> 35);
               MQ &= CMASK;                   /* low order only has 35 bits */
               if ((IR & 4) == 0) {           /* IMUL */
-                  if (AR > flag3 && !pi_cycle) {
+                  if (AR > (uint64)flag3 && !pi_cycle) {
                      FLAGS |= OVR|TRP1;
                      check_apr_irq();
                   }
@@ -9817,11 +9817,11 @@ do_extend(uint32 ia)
               if (f == 0)
                   f = 1;
               /* Check if room to save it */
-              if (f > (reg & MANT))
+              if (f > (int)(reg & MANT))
                   return 0;
               /* Fill out left justify */
               /* If L, fill leading zeros with fill char */
-              while ((reg & SMASK) != 0 && (reg & MANT) > f) {
+              while ((reg & SMASK) != 0 && (int)(reg & MANT) > f) {
                   if (!store_byte(ext_ac + 3, fill1, 1))
                      return 0;
                   reg = get_reg(ext_ac + 3);
@@ -10256,7 +10256,7 @@ DEVICE *dptr;
 DIB    *dibp;
 uint32 i, j, d;
 #if KL
-int     rh20;
+uint32  rh20;
 #endif
 int     rh_idx;
 

@@ -311,7 +311,7 @@ struct disk_t
 {
     const char         *name;         /* Type Name */
     int                 cyl;          /* Number of cylinders */
-    int                 heads;        /* Number of heads/cylinder */
+    uint32              heads;        /* Number of heads/cylinder */
     int                 bpt;          /* Max bytes per track */
     uint8               sen_cnt;      /* Number of sense bytes */
     uint8               dev_type;     /* Device type code */
@@ -335,7 +335,7 @@ disk_type[] =
 struct pmp_header
 {
        uint8    devid[8];      /* device header. */
-       int      heads;         /* number of heads per cylinder */
+       uint32   heads;         /* number of heads per cylinder */
        uint32   tracksize;     /* size of track */
        uint8    devtype;       /* Hex code of last two digits of device type. */
        uint8    fileseq;       /* always 0. */
@@ -1096,7 +1096,7 @@ t_stat pmp_srv(UNIT * uptr)
                  goto index;
              }
              uptr->POS ++;
-             if ((uptr->POS & 0xff) >= disk_type[type].heads) {
+             if ((uint32)(uptr->POS & 0xff) >= disk_type[type].heads) {
                  sim_debug(DEBUG_DETAIL, dptr, "end cyl unit=%d %02x %d\n",
                            unit, state, data->tpos);
                  uptr->SENSE = (SNS_ENDCYL << 8);
@@ -2142,7 +2142,7 @@ pmp_format(UNIT * uptr, int flag) {
     int                 cyl;
     int                 sector;
     int                 rec;
-    int                 hd;
+    uint32              hd;
     uint32              pos;
 
     if (flag || get_yn("Initialize dasd? [Y] ", TRUE)) {
@@ -2225,10 +2225,10 @@ pmp_attach(UNIT * uptr, CONST char *file)
     uint16              addr = GET_UADDR(uptr->flags);
     int                 flag = (sim_switches & SWMASK ('I')) != 0;
     t_stat              r;
-    int                 i;
-    struct pmp_header  hdr;
+    unsigned int        i;
+    struct pmp_header   hdr;
     struct pmp_t       *data;
-    int                 tsize;
+    uint32              tsize;
 
     if ((r = attach_unit(uptr, file)) != SCPE_OK)
        return r;
@@ -2246,7 +2246,7 @@ pmp_attach(UNIT * uptr, CONST char *file)
     sim_messagef(SCPE_OK, "Drive %03x=%d %d %02x %d\n\r",  addr,
              hdr.heads, hdr.tracksize, hdr.devtype, hdr.highcyl);
     for (i = 0; disk_type[i].name != 0; i++) {
-         tsize = (disk_type[i].bpt | 0x1ff) + 1;
+         tsize = (uint32)((disk_type[i].bpt | 0x1ff) + 1);
          if (hdr.devtype == disk_type[i].dev_type && hdr.tracksize == tsize &&
              hdr.heads == disk_type[i].heads && hdr.highcyl == disk_type[i].cyl) {
              if (GET_TYPE(uptr->flags) != i) {
