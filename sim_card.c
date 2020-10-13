@@ -630,7 +630,7 @@ static int _cmpcard(const uint8 *p, const char *s) {
 
 t_stat
 _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf, uint16 (*image)[80]) {
-    int                   mode;
+    unsigned int          mode;
     uint16                temp;
     int                   i;
     char                  c;
@@ -1269,7 +1269,7 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
     }
 
     memset(&data->hol_to_ascii[0], 0xff, 4096);
-    for(i = 0; i < (sizeof(ascii_to_hol_026)/sizeof(uint16)); i++) {
+    for(i = 0; i < (int)(sizeof(ascii_to_hol_026)/sizeof(uint16)); i++) {
          uint16          temp;
          switch(uptr->flags & MODE_CHAR) {
          default:
@@ -1312,7 +1312,7 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
         }
         if (r == SCPE_OK) {
             const char    *fmt = "AUTO";
-            int            mode = uptr->flags & UNIT_CARD_MODE;
+            unsigned int   mode = uptr->flags & UNIT_CARD_MODE;
             for (i = 0; fmts[i].name != 0; i++) {
                 if (fmts[i].mode == mode) {
                     fmt = fmts[i].name;
