@@ -1135,7 +1135,7 @@ wait_loop:
 
         /* Check if we should see if an IRQ is pending */
         irq = scan_chan(sysmsk, irq_en);
-        if (irq != 0) {
+        if (irq != NO_DEV) {
             ilc = 0;
             sim_debug(DEBUG_DETAIL, &cpu_dev, "IRQ=%04x %08x\n", irq, PC);
             if (loading) {
@@ -5796,6 +5796,7 @@ t_stat cpu_reset (DEVICE *dptr)
     }
     /* Set up channels */
     chan_set_devs();
+
     sysmsk = irqcode = irqaddr = loading = 0;
     st_key = cc = pmsk = ec_mode = interval_irq = flags = 0;
     dat_en = irq_en = ext_en = per_en = 0;

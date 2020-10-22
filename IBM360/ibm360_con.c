@@ -78,7 +78,7 @@ struct _con_data
 }
 con_data[NUM_DEVS_CON];
 
-uint8  con_startcmd(UNIT *, uint16,  uint8);
+uint8  con_startcmd(UNIT *, uint8);
 uint8  con_haltio(UNIT *);
 void                con_ini(UNIT *, t_bool);
 t_stat              con_srv(UNIT *);
@@ -122,7 +122,7 @@ con_ini(UNIT *uptr, t_bool f) {
      sim_activate(uptr, 1000);
 }
 
-uint8  con_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
+uint8  con_startcmd(UNIT *uptr, uint8 cmd) {
     int                 u = (uptr - con_unit);
 
     if ((uptr->CMD & CON_MSK) != 0)

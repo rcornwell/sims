@@ -88,7 +88,8 @@ struct _lpr_data
 }
 lpr_data[NUM_DEVS_LPR];
 
-uint8               lpr_startcmd(UNIT *, uint16, uint8);
+uint8               lpr_startio(UNIT *uptr);
+uint8               lpr_startcmd(UNIT *, uint8);
 void                lpr_ini(UNIT *, t_bool);
 t_stat              lpr_srv(UNIT *);
 t_stat              lpr_reset(DEVICE *);
@@ -120,7 +121,7 @@ MTAB                lpr_mod[] = {
     {0}
 };
 
-struct dib lpr_dib = { 0xFF, 1, NULL, lpr_startcmd, NULL, lpr_unit, lpr_ini};
+struct dib lpr_dib = { 0xFF, 1, lpr_startio, lpr_startcmd, NULL, lpr_unit, lpr_ini};
 
 DEVICE              lpr_dev = {
     "LPR", lpr_unit, NULL, lpr_mod,
@@ -291,7 +292,19 @@ print_line(UNIT * uptr)
 }
 
 
-uint8 lpr_startcmd(UNIT * uptr, uint16 chan, uint8 cmd)
+uint8  lpr_startio(UNIT *uptr) {
+
+    if ((uptr->CMD & LPR_CMDMSK) != 0) {
+       if ((uptr->flags & UNIT_ATT) != 0)
+            return SNS_BSY;
+       return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
+    }
+    sim_debug(DEBUG_CMD, &lpr_dev, "start io unit\n");
+    return 0;
+}
+
+
+uint8 lpr_startcmd(UNIT * uptr, uint8 cmd)
 {
     if ((uptr->CMD & LPR_CMDMSK) != 0) {
        if ((uptr->flags & UNIT_ATT) != 0)
@@ -316,6 +329,9 @@ uint8 lpr_startcmd(UNIT * uptr, uint16 chan, uint8 cmd)
          sim_activate(uptr, 10);          /* Start unit off */
          uptr->SNS = 0;
          uptr->POS = 0;
+         /* Motion and not load UCS */
+         if ((cmd & 0x77) != 0x73 && (cmd & 07) == 3)
+             return SNS_CHNEND;
          return 0;
 
     case 0:               /* Status */
@@ -390,7 +406,10 @@ lpr_srv(UNIT *uptr) {
         uptr->SNS = SNS_CMDREJ;
         uptr->CMD &= ~(LPR_CMDMSK);
         sim_debug(DEBUG_DETAIL, &lpr_dev, "%d Invalid skip %x %d", u, l, l);
-        chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+        if (cmd == 3) 
+            set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
+        else
+            chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
         return SCPE_OK;
     }
 
@@ -400,10 +419,10 @@ lpr_srv(UNIT *uptr) {
        uptr->CMD &= ~(LPR_FULL|LPR_CMDMSK);
        uptr->POS = 0;
        if (uptr->SNS & SNS_CHN12) {
-           chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
+           set_devattn(addr, SNS_DEVEND|SNS_UNITEXP);
            uptr->SNS &= 0xff;
        } else {
-           chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+           set_devattn(addr, SNS_DEVEND);
        }
        return SCPE_OK;
     }

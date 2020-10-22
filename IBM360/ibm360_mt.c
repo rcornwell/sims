@@ -140,7 +140,8 @@
 #define SNS    u5
 #define CPOS   u6
 
-uint8               mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) ;
+uint8               mt_startio(UNIT *uptr);
+uint8               mt_startcmd(UNIT *uptr, uint8 cmd);
 t_stat              mt_srv(UNIT *);
 t_stat              mt_boot(int32, DEVICE *);
 void                mt_ini(UNIT *, t_bool);
@@ -178,7 +179,7 @@ UNIT                mta_unit[] = {
     {UDATA(&mt_srv, UNIT_MT(0), 0), 0, UNIT_ADDR(0x187)},       /* 7 */
 };
 
-struct dib mta_dib = { 0xF8, NUM_UNITS_MT, NULL, mt_startcmd, NULL, mta_unit, mt_ini};
+struct dib mta_dib = { 0xF8, NUM_UNITS_MT, mt_startio, mt_startcmd, NULL, mta_unit, mt_ini};
 
 DEVICE              mta_dev = {
     "MTA", mta_unit, NULL, mt_mod,
@@ -200,7 +201,7 @@ UNIT                mtb_unit[] = {
     {UDATA(&mt_srv, UNIT_MT(1), 0), 0, UNIT_ADDR(0x287)},       /* 7 */
 };
 
-struct dib mtb_dib = { 0xF8, NUM_UNITS_MT, NULL, mt_startcmd, NULL, mtb_unit, mt_ini};
+struct dib mtb_dib = { 0xF8, NUM_UNITS_MT, mt_startio, mt_startcmd, NULL, mtb_unit, mt_ini};
 
 DEVICE              mtb_dev = {
     "MTB", mtb_unit, NULL, mt_mod,
@@ -233,8 +234,29 @@ uint8                  bcd_to_ebcdic[64] = {
      0x50, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,
      0xc8, 0xc9, 0xc0, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f};
 
+uint8  mt_startio(UNIT *uptr) {
+    DEVICE         *dptr = find_dev_from_unit(uptr);
+    unsigned int    i;
 
-uint8  mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
+#if 0
+    if (mt_busy[GET_DEV_BUF(dptr->flags)] != 0) {
+        sim_debug(DEBUG_CMD, dptr, "busy\n");
+        uptr->flags |= MT_BUSY;   /* Flag we need to send CUE */
+        return SNS_BSY;
+    }
+    /* Check if controller is free */
+    for (i = 0; i < dptr->numunits; i++) {
+       if ((dptr->units[i].CMD & MT_CMDMSK) != 0) {
+           uptr->flags |= MT_BUSY;   /* Flag we need to send CUE */
+           return SNS_BSY;
+       }
+    }
+    sim_debug(DEBUG_CMD, dptr, "start io\n");
+#endif
+    return 0;
+}
+
+uint8  mt_startcmd(UNIT *uptr,  uint8 cmd) {
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
 

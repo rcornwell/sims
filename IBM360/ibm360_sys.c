@@ -47,43 +47,44 @@ int32 sim_emax = 16;
 
 DEVICE *sim_devices[] = {
        &cpu_dev,
+       &chan_dev,
 #ifdef NUM_DEVS_CON
-        &con_dev,
+       &con_dev,
 #endif
 #ifdef NUM_DEVS_CDR
-        &cdr_dev,
+       &cdr_dev,
 #endif
 #ifdef NUM_DEVS_CDP
-        &cdp_dev,
+       &cdp_dev,
 #endif
 #ifdef NUM_DEVS_LPR
-        &lpr_dev,
+       &lpr_dev,
 #endif
 #ifdef NUM_DEVS_MT
-        &mta_dev,
+       &mta_dev,
 #if NUM_DEVS_MT > 1
-        &mtb_dev,
+       &mtb_dev,
 #endif
 #endif
 #ifdef NUM_DEVS_DASD
-        &dda_dev,
+       &dda_dev,
 #if NUM_DEVS_DASD > 1
-        &ddb_dev,
+       &ddb_dev,
 #if NUM_DEVS_DASD > 2
-        &ddc_dev,
+       &ddc_dev,
 #if NUM_DEVS_DASD > 3
-        &ddd_dev,
+       &ddd_dev,
 #endif
 #endif
 #endif
 #endif
 #ifdef NUM_DEVS_COM
-        &coml_dev,
-        &com_dev,
+       &coml_dev,
+       &com_dev,
 #endif
 #ifdef NUM_DEVS_SCOM
-        &scoml_dev,
-        &scom_dev,
+       &scoml_dev,
+       &scom_dev,
 #endif
        NULL };
 

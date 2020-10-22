@@ -240,8 +240,8 @@ struct dasd_header
        uint8    resv[492];     /* pad to 512 byte block */
 };
 
-uint8               dasd_startio(UNIT *uptr, uint16 chan) ;
-uint8               dasd_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) ;
+uint8               dasd_startio(UNIT *uptr) ;
+uint8               dasd_startcmd(UNIT *uptr,  uint8 cmd) ;
 uint8               dasd_haltio(uint16 addr);
 t_stat              dasd_srv(UNIT *);
 t_stat              dasd_boot(int32, DEVICE *);
@@ -365,13 +365,19 @@ DEVICE              ddd_dev = {
 #endif
 #endif
 
-uint8  dasd_startio(UNIT *uptr, uint16 chan) {
+uint8  dasd_startio(UNIT *uptr) {
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
+    unsigned int   i;
 
-    if ((uptr->CMD & 0xff) != 0) {
-       return SNS_BSY;
+#if 0
+    /* Check if controller is free */
+    for (i = 0; i < dptr->numunits; i++) {
+       int cmd = (dptr->units[i].CMD) & 0xff;
+       if (cmd != 0 && cmd != DK_SEEK)
+           return SNS_BSY;
     }
+#endif
     uptr->CMD &= ~(DK_INDEX|DK_NOEQ|DK_HIGH|DK_PARAM|DK_MSET|DK_DONE|DK_INDEX2);
     if ((uptr->flags & UNIT_ATT) != 0) {
         struct dasd_t  *data = (struct dasd_t *)(uptr->up7);
@@ -381,7 +387,7 @@ uint8  dasd_startio(UNIT *uptr, uint16 chan) {
     return 0;
 }
 
-uint8  dasd_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
+uint8  dasd_startcmd(UNIT *uptr,  uint8 cmd) {
     uint16         addr = GET_UADDR(uptr->CMD);
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);

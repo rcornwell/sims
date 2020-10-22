@@ -77,7 +77,7 @@
 */
 
 
-uint8               cdr_startcmd(UNIT *, uint16,  uint8);
+uint8               cdr_startcmd(UNIT *,  uint8);
 t_stat              cdr_boot(int32, DEVICE *);
 t_stat              cdr_srv(UNIT *);
 t_stat              cdr_reset(DEVICE *);
@@ -121,7 +121,7 @@ DEVICE              cdr_dev = {
 /*
  * Start card reader to read in one card.
  */
-uint8  cdr_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
+uint8  cdr_startcmd(UNIT *uptr,  uint8 cmd) {
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
 

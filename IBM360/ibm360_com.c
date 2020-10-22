@@ -81,7 +81,7 @@
 #define SNS        u5
 #define BPTR       u6
 
-uint8       coml_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) ;
+uint8       coml_startcmd(UNIT *uptr, uint8 cmd) ;
 uint8       coml_haltio(UNIT *uptr);
 t_stat      coml_srv(UNIT *uptr);
 t_stat      com_reset(DEVICE *dptr);
@@ -164,7 +164,7 @@ static const uint8 com_2741_in[128] = {
    /*CAN  EM    SUB   ESC   FS    GS    RS    US */
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
    /*  sp    !    "     #     $     %     &     ' */
-    0x81, 0xD7, 0x00, 0x16, 0x57, 0x8B, 0x61, 0x8D,    /* 40 - 77 */
+    0x81, 0xD7, 0x96, 0x16, 0x57, 0x8B, 0x61, 0x8D,    /* 40 - 77 */
    /*  (     )    *     +     ,     -     .     / */
     0x93, 0x95, 0x90, 0xE1, 0x37, 0xC0, 0x76, 0x23,
    /*  0    1     2     3     4     5     6     7 */
@@ -259,7 +259,7 @@ static const uint8 com_2741_out[256] = {
 /*
  * Issue a command to the 2701 controller.
  */
-uint8  coml_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
+uint8  coml_startcmd(UNIT *uptr,  uint8 cmd) {
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
 
@@ -397,7 +397,7 @@ t_stat coml_srv(UNIT * uptr)
                  uptr->SNS = SNS_INTVENT;
                  uptr->BPTR = 0;
                  uptr->IPTR = 0;
-                 chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
+                 chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK|SNS_UNITEXP);
                  return SCPE_OK;
              } else if (uptr->CMD & INPUT) {
                  if (uptr->BPTR == uptr->IPTR) {
@@ -407,8 +407,6 @@ t_stat coml_srv(UNIT * uptr)
                      chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                      return SCPE_OK;
                  }
-//                 if (ch == 0x1f)
-//                     uptr->CMD |= ADDR;
                  ch = com_buf[unit][uptr->IPTR++];
                  if (chan_write_byte( addr, &ch)) {
                      uptr->CMD &= ~(0xff|INPUT|RECV);

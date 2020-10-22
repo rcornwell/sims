@@ -77,7 +77,7 @@
    cdp_mod       Card Punch modifiers list
 */
 
-uint8               cdp_startcmd(UNIT *, uint16,  uint8);
+uint8               cdp_startcmd(UNIT *,  uint8);
 void                cdp_ini(UNIT *, t_bool);
 t_stat              cdp_srv(UNIT *);
 t_stat              cdp_reset(DEVICE *);
@@ -125,7 +125,7 @@ DEVICE              cdp_dev = {
  * Start the card punch to punch one card.
  */
 
-uint8  cdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
+uint8  cdp_startcmd(UNIT *uptr,  uint8 cmd) {
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
 

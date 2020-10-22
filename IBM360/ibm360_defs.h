@@ -55,9 +55,8 @@
         Channels 1-n run on channels virtual channels above subchannels.
 */
 
-#define     MAX_CHAN        6
-#define     SUB_CHANS       192
-#define     MAX_MUX         2
+#define     MAX_CHAN        12
+#define     SUB_CHANS       128
 
 /* Define number of supported units for each device type */
 #define NUM_DEVS_CDP        4
@@ -78,9 +77,9 @@ typedef struct dib {
         uint8             mask;               /* Device mask */
         uint8             numunits;           /* Number of units */
                           /* Start I/O */
-        uint8            (*start_io)(UNIT *uptr, uint16 chan);
+        uint8            (*start_io)(UNIT *uptr);
                           /* Start a command */
-        uint8            (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd);
+        uint8            (*start_cmd)(UNIT *uptr, uint8 cmd);
                           /* Stop I/O */
         uint8            (*halt_io)(UNIT *uptr);
         UNIT             *units;                /* Pointer to units structure */
@@ -334,14 +333,15 @@ typedef struct dib {
 #define     STATUS_INTER  0x0002               /* Channel interface check */
 #define     STATUS_CHAIN  0x0001               /* Channel chain check */
 
+#define     NO_DEV        0xffff               /* Code for no device */
+
 void post_extirq();
 
 /* look up device to find subchannel device is on */
-int  find_subchan(uint16 device);
-int  chan_read_byte(uint16 chan, uint8 *data);
-int  chan_write_byte(uint16 chan, uint8 *data);
+int  chan_read_byte(uint16 addr, uint8 *data);
+int  chan_write_byte(uint16 addr, uint8 *data);
 void set_devattn(uint16 addr, uint8 flags);
-void chan_end(uint16 chan, uint8 flags);
+void chan_end(uint16 addr, uint8 flags);
 int  startio(uint16 addr) ;
 int testio(uint16 addr);
 int haltio(uint16 addr);
@@ -371,6 +371,7 @@ extern DEBTAB dev_debug[];
 extern DEBTAB crd_debug[];
 
 extern DEVICE cpu_dev;
+extern DEVICE chan_dev;
 extern DEVICE cdp_dev;
 extern DEVICE cdr_dev;
 extern DEVICE lpr_dev;

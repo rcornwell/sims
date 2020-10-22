@@ -116,7 +116,7 @@ struct _line {
 
 extern int32     tmxr_poll;
 
-uint8       scoml_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) ;
+uint8       scoml_startcmd(UNIT *uptr, uint8 cmd) ;
 uint8       scoml_haltio(UNIT *uptr);
 t_stat      scoml_srv(UNIT *uptr);
 t_stat      scom_reset(DEVICE *dptr);
@@ -188,7 +188,7 @@ DEVICE              scoml_dev = {
 /*
  * Issue a scommand to the 2701 controller.
  */
-uint8  scoml_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) {
+uint8  scoml_startcmd(UNIT *uptr,  uint8 cmd) {
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
 
