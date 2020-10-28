@@ -441,6 +441,7 @@ sim_instr(void)
               exe_mode = 1;
               RC = 020;
            }
+           sim_interval--;
        }
 
 intr:
