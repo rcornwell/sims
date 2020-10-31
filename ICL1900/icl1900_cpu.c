@@ -31,7 +31,6 @@
 */
 
 #include "icl1900_defs.h"
-#include <time.h>
 #include "sim_timer.h"
 
 #define UNIT_V_MSIZE    (UNIT_V_UF + 0)
@@ -2460,7 +2459,7 @@ time_read(uint32 *word)
     time_t              curtim;
     struct tm          *tptr;
 
-    curtim = time(NULL);        /* get time */
+    curtim = sim_get_time(NULL);/* get time */
     tptr = localtime(&curtim);  /* decompose */
     if (tptr == NULL)
         return;                 /* error? */
