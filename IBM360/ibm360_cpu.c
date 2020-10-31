@@ -73,7 +73,6 @@
 */
 
 #include "ibm360_defs.h"                        /* simulator defns */
-#include <sys/time.h>
 
 #define MEMAMOUNT(x) (x)
 #define TMR_RTC      0
@@ -5812,12 +5811,13 @@ t_stat cpu_reset (DEVICE *dptr)
 #ifdef USE_64BIT
         if (clk_state == CLOCK_UNSET) {
             /* Set TOD to current time */
-            time_t seconds = time(NULL);
-            seconds += ((70 * 365) + 17) * 86400ULL;
-            seconds *= 1000000ULL;
-            seconds <<= 12;
-            tod_clock[0] = (uint32)(seconds >> 32);
-            tod_clock[1] = (uint32)(seconds & FMASK);
+            time_t seconds = sim_get_time(NULL);
+            t_uint64  lsec = (t_uint64)seconds;
+            lsec += ((70 * 365) + 17) * 86400ULL;
+            lsec *= 1000000ULL;
+            lsec <<= 12;
+            tod_clock[0] = (uint32)(lsec >> 32);
+            tod_clock[1] = (uint32)(lsec & FMASK);
         }
 #endif
         cregs[0]  = 0x000000e0;

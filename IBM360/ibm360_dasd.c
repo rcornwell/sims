@@ -370,14 +370,12 @@ uint8  dasd_startio(UNIT *uptr) {
     int            unit = (uptr - dptr->units);
     unsigned int   i;
 
-#if 0
     /* Check if controller is free */
     for (i = 0; i < dptr->numunits; i++) {
        int cmd = (dptr->units[i].CMD) & 0xff;
        if (cmd != 0 && cmd != DK_SEEK)
            return SNS_BSY;
     }
-#endif
     uptr->CMD &= ~(DK_INDEX|DK_NOEQ|DK_HIGH|DK_PARAM|DK_MSET|DK_DONE|DK_INDEX2);
     if ((uptr->flags & UNIT_ATT) != 0) {
         struct dasd_t  *data = (struct dasd_t *)(uptr->up7);

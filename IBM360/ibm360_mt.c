@@ -238,7 +238,6 @@ uint8  mt_startio(UNIT *uptr) {
     DEVICE         *dptr = find_dev_from_unit(uptr);
     unsigned int    i;
 
-#if 0
     if (mt_busy[GET_DEV_BUF(dptr->flags)] != 0) {
         sim_debug(DEBUG_CMD, dptr, "busy\n");
         uptr->flags |= MT_BUSY;   /* Flag we need to send CUE */
@@ -252,7 +251,6 @@ uint8  mt_startio(UNIT *uptr) {
        }
     }
     sim_debug(DEBUG_CMD, dptr, "start io\n");
-#endif
     return 0;
 }
 
