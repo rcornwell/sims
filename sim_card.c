@@ -339,7 +339,7 @@ static uint16 ebcdic_to_hol[256] = {
  /* E8       E9     TE928  TE938  TE948  TE958  TE968  TE978  */
    0x402,  0x401, 0xC83, 0xC43, 0xC23, 0xC13, 0xC0B, 0xC07,
  /* 028      E091   02     03     04     05     06     07    0xex  */
-   0x182,  0x701, 0x280, 0x240, 0x220, 0x210, 0x208, 0x204,
+   0x282,  0x701, 0x280, 0x240, 0x220, 0x210, 0x208, 0x204,
  /* 08       09     E0928  E0938  E0948  E0958  E0968  E0978  */
    0x202,  0x201, 0x683, 0x643, 0x623, 0x613, 0x60B, 0x607,
  /* 0        1      2      3      4      5      6      7     0xfx */
@@ -630,7 +630,7 @@ static int _cmpcard(const uint8 *p, const char *s) {
 
 t_stat
 _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf, uint16 (*image)[80]) {
-    int                   mode;
+    unsigned int          mode;
     uint16                temp;
     int                   i;
     char                  c;
@@ -1192,7 +1192,7 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
     int                  eof = 0;
     struct card_context *data;
     char                 gbuf[30];
-    int                  i;
+    unsigned int         i;
     char                *saved_filename;
     t_bool              was_attached = (uptr->flags & UNIT_ATT);
     t_addr              saved_pos;
@@ -1312,7 +1312,7 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
         }
         if (r == SCPE_OK) {
             const char    *fmt = "AUTO";
-            int            mode = uptr->flags & UNIT_CARD_MODE;
+            unsigned int   mode = uptr->flags & UNIT_CARD_MODE;
             for (i = 0; fmts[i].name != 0; i++) {
                 if (fmts[i].mode == mode) {
                     fmt = fmts[i].name;
