@@ -87,6 +87,8 @@ extern uint8   key[MAXMEMSIZE / 2048];
 #define UNIT_V_TYPE        (UNIT_V_UF + 0)
 #define UNIT_SEL           (1 << UNIT_V_TYPE)   /* Selector channel */
 #define UNIT_MUX           (0 << UNIT_V_TYPE)   /* Multiplexer channel */
+#define UNIT_BMUX          (2 << UNIT_V_TYPE)   /* Multiplexer channel */
+#define UNIT_M_TYPE        (3 << UNIT_V_TYPE)
 
 #define UNIT_V_SUBCHAN     (UNIT_V_UF + 2)
 #define UNIT_M_SUBCHAN     0xff
@@ -97,10 +99,13 @@ int         irq_pend = 0;
 t_stat      chan_reset(DEVICE *);
 t_stat      set_subchan(UNIT * uptr, int32 val, CONST char *cptr, void *desc);
 t_stat      show_subchan(FILE * st, UNIT * uptr, int32 v, CONST void *desc);
+t_stat      chan_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
+const char *chan_description (DEVICE *dptr);
 
 MTAB                chan_mod[] = {
-    { UNIT_SEL, 0,        NULL, "MUX", NULL, NULL, NULL, "Multiplexer channel"},
-    { UNIT_SEL, UNIT_SEL, NULL, "SEL", NULL, NULL, NULL, "Selector channel"},
+    { UNIT_M_TYPE, UNIT_MUX,  NULL, "MUX", NULL, NULL, NULL, "Multiplexer channel"},
+    { UNIT_M_TYPE, UNIT_SEL,  NULL, "SEL", NULL, NULL, NULL, "Selector channel"},
+    { UNIT_M_TYPE, UNIT_BMUX, NULL, "BMUX", NULL, NULL, NULL, "Block Multiplexer channel"},
     { MTAB_XTD|MTAB_VUN|MTAB_VALR, 0, "SUB", "SUB", set_subchan, show_subchan, NULL,
                                     "Number of subchannels"},
     {0}
@@ -157,7 +162,7 @@ DEVICE              chan_dev = {
     MAX_CHAN, 8, 15, 1, 8, 8,
     NULL, NULL, &chan_reset, NULL, NULL, NULL,
     NULL, DEV_DEBUG, 0, dev_debug,
-//    NULL, NULL, &chan_help, NULL, NULL, &chan_description
+    NULL, NULL, &chan_help, NULL, NULL, &chan_description
 };
 
 struct _dev {
@@ -225,12 +230,23 @@ find_subchan(uint16 device) {
     uptr = &chan_unit[chan];
     if ((uptr->flags & UNIT_DIS) != 0)
        return NULL;
-    if ((uptr->flags & UNIT_SEL) != 0)
+    if ((uptr->flags & UNIT_M_TYPE) == UNIT_SEL) {
        return &(chan_ctl[0]);
+    }
     device &= 0xff;
+    if ((uptr->flags & UNIT_M_TYPE) == UNIT_BMUX) {
+        extern uint32    cregs[16];
+        if ((cpu_unit[0].flags & FEAT_370) != 0 &&
+            (cregs[0] & 0x80000000) != 0) {
+            device = (device >> 3) & 0x1f;
+            return &(chan_ctl[device]);
+        }
+        return &(chan_ctl[0]);
+    }
     if (device >= uptr->schans) {
-       if (device >= 128)   /* All shared devices over subchannels */
+       if (device <= 128) { /* All shared devices over subchannels */
            return NULL;
+       }
        device = (device >> 4) & 0x7;
     }
     return &(chan_ctl[device]);
@@ -757,7 +773,6 @@ chan_end(uint16 addr, uint8 flags) {
     if ((flags & SNS_DEVEND) != 0)
         chan->ccw_flags &= ~(FLAG_CD|FLAG_SLI);
 
-//    dev_status[addr] = 0;
     irq_pend = 1;
     sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end(%x, %x) %x %04x end\n", addr, flags,
                  chan->chan_status, chan->ccw_flags);
@@ -794,7 +809,7 @@ startio(uint16 addr) {
     uint16          status;
 
     if (dev == NULL || chan == NULL) {
-        sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x cc=3\n", addr);
+        sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x dc cc=3\n", addr);
         return 3;
     }
 
@@ -803,7 +818,7 @@ startio(uint16 addr) {
 
     /* Find channel this device is on, if no none return cc=3 */
     if (dibp == NULL || uptr == NULL) {
-        sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x cc=3\n", addr);
+        sim_debug(DEBUG_CMD, &cpu_dev, "SIO %x cu cc=3\n", addr);
         return 3;
     }
 
@@ -1108,9 +1123,19 @@ int testchan(uint16 channel) {
      }
 
     /* Multiplexer channels return channel is available */
-    if ((uptr->flags & UNIT_SEL) == 0) {
+    if ((uptr->flags & UNIT_M_TYPE) == UNIT_MUX) {
         sim_debug(DEBUG_CMD, &cpu_dev, "TCH CC %x cc=0, mux\n", channel);
         return 0;
+    }
+
+    /* Block Multiplexer channels operating in select mode */
+    if ((uptr->flags & UNIT_M_TYPE) == UNIT_BMUX) {
+        extern uint32    cregs[16];
+        if ((cpu_unit[0].flags & FEAT_370) != 0 &&
+            (cregs[0] & 0x80000000) != 0) {
+            sim_debug(DEBUG_CMD, &cpu_dev, "TCH CC %x cc=0, bmux\n", channel);
+            return 0;
+        }
     }
 
     chan = &(chan_ctl[0]);
@@ -1212,8 +1237,15 @@ scan_chan(uint16 mask, int irq_en) {
          if ((uptr->flags & UNIT_DIS) != 0)
             continue;
          nchan = 1;
-         if ((uptr->flags & UNIT_SEL) == 0)
+         if ((uptr->flags & UNIT_M_TYPE) == UNIT_BMUX) {
+             extern uint32    cregs[16];
+             if ((cpu_unit[0].flags & FEAT_370) != 0 &&
+                 (cregs[0] & 0x80000000) != 0) {
+                   nchan = 32;
+             }
+         } else if ((uptr->flags & UNIT_M_TYPE) == UNIT_MUX) {
              nchan = UNIT_G_SCHAN(uptr->flags);
+         }
          /* Scan all subchannels on this channel */
          for (j = 0; j < nchan; j++) {
              chan = &(chan_ctl[j]);
@@ -1305,7 +1337,7 @@ chan_reset(DEVICE * dptr)
 
     for (i = 0; i < dptr->numunits; i++) {
          UNIT   *uptr = &dptr->units[i];
-         int     n;
+         unsigned int   n;
 
          if (uptr->up7 != NULL)
              free(uptr->up7);
@@ -1316,8 +1348,10 @@ chan_reset(DEVICE * dptr)
          if (uptr->flags & UNIT_DIS)
              continue;
          n = 1;
-         if ((uptr->flags & UNIT_SEL) == 0)
+         if ((uptr->flags & UNIT_M_TYPE) == UNIT_MUX)
              n = UNIT_G_SCHAN(uptr->flags)+1;
+         if ((uptr->flags & UNIT_M_TYPE) == UNIT_BMUX)
+             n = 32;
          uptr->schans = n;
          uptr->up7 = calloc(n, sizeof(struct _chanctl));
          uptr->up8 = calloc(256, sizeof(struct _dev));
@@ -1340,7 +1374,7 @@ chan_set_devs()
     /* Readjust subchannels if there was a change */
     for (i = 0; i < chan_dev.numunits; i++) {
          UNIT   *uptr = &chan_unit[i];
-         int     n;
+         unsigned int   n;
 
          /* If channel disconnected free the buffers */
          if (uptr->flags & UNIT_DIS) {
@@ -1353,12 +1387,14 @@ chan_set_devs()
              continue;
          }
          n = 1;
-         if ((uptr->flags & UNIT_SEL) == 0)
-             n = UNIT_G_SCHAN(uptr->flags) + 1;
+         if ((uptr->flags & UNIT_M_TYPE) == UNIT_MUX)
+             n = UNIT_G_SCHAN(uptr->flags)+1;
+         if ((uptr->flags & UNIT_M_TYPE) == UNIT_BMUX)
+             n = 32;
          /* If no device array, create one */
          if (uptr->up8 == NULL)
              uptr->up8 = calloc(256, sizeof(struct _dev));
-         if (uptr->up7 == NULL || uptr->schans != n) {
+         if (uptr->up7 == NULL || (uint32)uptr->schans != n) {
              if (uptr->up7 != NULL)
                 free(uptr->up7);
              uptr->up7 = calloc(n, sizeof(struct _chanctl));
@@ -1442,8 +1478,10 @@ show_subchan(FILE * st, UNIT * uptr, int32 v, CONST void *desc)
 
     if (uptr == NULL)
         return SCPE_IERR;
-    if ((uptr->flags & UNIT_SEL) != 0) {
+    if ((uptr->flags & UNIT_M_TYPE) == UNIT_SEL) {
         fprintf(st, "SEL");
+    } else if ((uptr->flags & UNIT_M_TYPE) == UNIT_BMUX) {
+        fprintf(st, "BMUX");
     } else {
         n = UNIT_G_SCHAN(uptr->flags);
         fprintf(st, "MUX SUB=%d", n);
@@ -1573,4 +1611,20 @@ show_dev_addr(FILE * st, UNIT * uptr, int32 v, CONST void *desc)
     fprintf(st, "DEV=%03x", addr);
     return SCPE_OK;
 }
+
+t_stat
+chan_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
+{
+    fprintf(st, "IBM360/370 Chan\n\n");
+    fprint_set_help(st, dptr);
+    fprint_show_help(st, dptr);
+    return SCPE_OK;
+}
+
+const char *
+chan_description (DEVICE *dptr)
+{
+       return "IBM 360/370 Channel";
+}
+
 
