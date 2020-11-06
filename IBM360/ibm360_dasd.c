@@ -370,16 +370,25 @@ uint8  dasd_startio(UNIT *uptr) {
     int            unit = (uptr - dptr->units);
     unsigned int   i;
 
+    /* Check if unit is busy */
+    if ((uptr->CMD & 0xff) != 0) {
+       return SNS_BSY;
+    }
+
     /* Check if controller is free */
     for (i = 0; i < dptr->numunits; i++) {
        int cmd = (dptr->units[i].CMD) & 0xff;
        if (cmd != 0 && cmd != DK_SEEK)
            return SNS_BSY;
     }
+
+    /* Set up for command to start */
     uptr->CMD &= ~(DK_INDEX|DK_NOEQ|DK_HIGH|DK_PARAM|DK_MSET|DK_DONE|DK_INDEX2);
     if ((uptr->flags & UNIT_ATT) != 0) {
         struct dasd_t  *data = (struct dasd_t *)(uptr->up7);
         data->filemsk = 0;
+    sim_debug(DEBUG_CMD, dptr, "start io unit=%d %d %d %d\n", unit, data->tstart,
+            data->tpos, data->rpos);
     }
     sim_debug(DEBUG_CMD, dptr, "start io unit=%d\n", unit);
     return 0;
@@ -589,18 +598,21 @@ t_stat dasd_srv(UNIT * uptr)
     uint8               buf[8];
 
     /* Check if read or write command, if so grab correct cylinder */
-    if (rd && data->cyl != data->ccyl) {
+    if (state != DK_POS_SEEK && rd && data->cyl != data->ccyl) {
         uint32 tsize = data->tsize * disk_type[type].heads;
         if (uptr->CMD & DK_CYL_DIRTY) {
+              sim_debug(DEBUG_DETAIL, dptr, "Save unit=%d cyl=%d %x\n", unit, data->ccyl, data->cpos);
               (void)sim_fseek(uptr->fileref, data->cpos, SEEK_SET);
               (void)sim_fwrite(data->cbuf, 1, tsize, uptr->fileref);
               uptr->CMD &= ~DK_CYL_DIRTY;
         }
         data->ccyl = data->cyl;
-        sim_debug(DEBUG_DETAIL, dptr, "Load unit=%d cyl=%d\n", unit, data->cyl);
         data->cpos = sizeof(struct dasd_header) + (data->ccyl * tsize);
+        sim_debug(DEBUG_DETAIL, dptr, "Load unit=%d cyl=%d %x\n", unit, data->cyl, data->cpos);
         (void)sim_fseek(uptr->fileref, data->cpos, SEEK_SET);
         (void)sim_fread(data->cbuf, 1, tsize, uptr->fileref);
+        state = DK_POS_INDEX;
+        goto ntrack;
     }
     sim_debug(DEBUG_POS, dptr, "state unit=%d %02x %d\n", unit, state, data->tpos);
 
@@ -636,11 +648,12 @@ endcyl:
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                  goto index;
              }
-             if ((uptr->CMD & 0x7) == 1 && (uptr->CMD & 0x60) != 0)
-                 uptr->CMD &= ~(DK_INDEX|DK_INDEX2);
+             /* Clear index flag */
+             uptr->CMD &= ~(DK_INDEX2);
          }
          /* If INDEX set signal no record if read */
-         if ((cmd & 0x03) == 0x01 && uptr->CMD & DK_INDEX2) {
+         if (((cmd & 0x3) == 0x1 || (cmd & 0x3) == 0x2) &&
+             uptr->CMD & DK_INDEX2) {
              sim_debug(DEBUG_DETAIL, dptr, "index unit=%d %02x %d %04x\n",
                    unit, state, data->tpos, uptr->SNS);
              /* Unless command is Read Header, return No record found */
@@ -662,6 +675,7 @@ endcyl:
          }
 index:
          uptr->CMD |= (uptr->CMD & DK_INDEX) ? DK_INDEX2 : DK_INDEX;
+ntrack:
          uptr->CMD &= ~DK_SRCOK;
          data->tstart = data->tsize * (uptr->CCH & 0xff);
          data->tpos = data->rpos = 0;
@@ -1404,6 +1418,10 @@ rd:
                  break;
              }
              if (state == DK_POS_DATA && count == data->dlen) {
+             sim_debug(DEBUG_DETAIL, dptr,
+                 "RD end unit=%d %d k=%d d=%d %02x %04x %04x %d\n",
+                 unit, data->rec, data->klen, data->dlen, data->state, data->dlen,
+                 8 + data->klen + data->dlen, count);
                  sim_debug(DEBUG_DETAIL, dptr,
                      "RD next unit=%d %02x %02x %02x %02x %02x %02x %02x %02x\n",
                      unit, da[0], da[1], da[2], da[3], da[4], da[5], da[6], da[7]);
