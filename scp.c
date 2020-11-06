@@ -1235,9 +1235,21 @@ static const char simh_help1[] =
 #define HLP_TYPE         "*Commands Displaying_Files TYPE"
       "3TYPE\n"
       "++TYPE file                 display a file contents\n"
+      "4Switches\n"
+      " The -O switch start displaying file contents at the specified\n"
+      " file offset.\n\n"
+      " The -N switch will display up to a specified number of lines\n"
+      " from the file.\n\n"
+      "++TYPE -{O}{N} {offset} {lines} file\n\n"
 #define HLP_CAT          "*Commands Displaying_Files CAT"
       "3CAT\n"
       "++CAT file                  display a file contents\n"
+      "4Switches\n"
+      " The -O switch start displaying file contents at the specified\n"
+      " file offset.\n\n"
+      " The -N switch will display up to a specified number of lines\n"
+      " from the file.\n\n"
+      "++TYPE -{O}{N} {offset} {lines} file\n\n"
       "2Removing Files\n"
 #define HLP_DELETE       "*Commands Removing_Files DEL"
       "3DELETE\n"
@@ -1333,7 +1345,9 @@ static const char simh_help1[] =
       "+SET NOLOG                   disables any currently active logging\n"
       "4Switches\n"
       " By default, log output is written at the end of the specified log file.\n"
-      " A new log file can created if the -N switch is used on the command line.\n"
+      " A new log file can created if the -N switch is used on the command line.\n\n"
+      " By default, log output is written in text mode.  The log file can be\n"
+      " opened for binary mode writing if the -B switch is used on the command line.\n"
 #define HLP_SET_DEBUG  "*Commands SET Debug"
        /***************** 80 character line width template *************************/
       "3Debug\n"
@@ -2333,8 +2347,11 @@ static const char simh_help2[] =
       " file.  Otherwise, the next command in the command file is processed.\n\n"
       "5String Comparison Expressions\n"
       " String Values can be compared with:\n"
-      "++{-i} {NOT} \"<string1>\"|EnVarName1 <compare-op> \"<string2>|EnvVarName2\"\n\n"
+      "++{-i}{-w} {NOT} \"<string1>\"|EnVarName1 <compare-op> \"<string2>|EnvVarName2\"\n\n"
       " The -i switch, if present, causes comparisons to be case insensitive.\n"
+      " The -w switch, if present, causes comparisons to allow arbitrary runs of\n"
+      " whitespace to be equivalent to a single space.\n"
+      " The -i and -w switches may be combined.\n"
       " <string1> and <string2> are quoted string values which may have\n"
       " environment variables substituted as desired.\n"
       " Either quoted string may alternatively be an environment variable name.\n"
@@ -2362,9 +2379,14 @@ static const char simh_help2[] =
       " Specifies a true (false {NOT}) condition if the file exists.\n"
       "5File Comparison Expressions\n"
       " Files can have their contents compared with:\n\n"
-      "++-F {NOT} \"<filespec1>\" == \"<filespec2>\" \n\n"
+      "++-F{W} {NOT} \"<filespec1>\" == \"<filespec2>\" \n\n"
       " Specifies a true (false {NOT}) condition if the indicated files\n"
-      " have the same contents.\n\n"
+      " have the same contents.  If the -W switch is present, allows\n"
+      " arbitrary runs of whitespace to be considered a single space\n"
+      " during file content comparison.\n\n"
+      " When a file comparison determines that files are different, the environment\n"
+      " variable _FILE_COMPARE_DIFF_OFFSET is set to the file offset where the first\n"
+      " difference in the files was observed\n\n"
       "5Debugging Expression Evaluation\n"
       " Debug output can be produced which will walk through the details\n"
       " involved during expression evaluation.  This output can, for example,\n"
@@ -3718,11 +3740,11 @@ if ((*cptr == '"') || (*cptr == '\'')) {
     cptr = (char *)dbuf;
     }
 if (lp) {
-    tmxr_linemsgf (lp, "%s%s", cptr, (sim_switches & SWMASK('N')) ? "" : "\r\n");
+    tmxr_linemsgf (lp, "%s%s", cptr, (sim_switches & SWMASK ('N')) ? "" : "\r\n");
     tmxr_send_buffered_data (lp);
     }
 else
-    sim_printf ("%s%s", cptr, (sim_switches & SWMASK('N')) ? "" : "\n");
+    sim_printf ("%s%s", cptr, (sim_switches & SWMASK ('N')) ? "" : "\n");
 return SCPE_OK;
 }
 
@@ -4566,6 +4588,7 @@ char *ep1, *ep2;
 if (sim_switches & SWMASK ('F')) {      /* File Compare? */
     FILE *f1, *f2;
     int c1, c2;
+    size_t diff_offset = 0;
     char *filename1, *filename2;
 
     filename1 = (char *)malloc (strlen (s1));
@@ -4575,6 +4598,7 @@ if (sim_switches & SWMASK ('F')) {      /* File Compare? */
     strcpy (filename2, s2 + 1);
     filename2[strlen (filename2) - 1] = '\0';
 
+    setenv ("_FILE_COMPARE_DIFF_OFFSET", "", 1);    /* Remove previous environment variable */
     f1 = fopen (filename1, "rb");
     f2 = fopen (filename2, "rb");
     free (filename1);
@@ -4589,10 +4613,50 @@ if (sim_switches & SWMASK ('F')) {      /* File Compare? */
         fclose (f1);
         return 1;
         }
-    while (((c1 = fgetc (f1)) == (c2 = fgetc (f2))) &&
-           (c1 != EOF)) ;
+    if (sim_switches & SWMASK ('W')) {  /* whitespace runs equivalent? */
+        c1 = c2 = 0;
+        while ((c1 == c2) && (c1 != EOF)) {
+            if (c1 == ' ') {            /* last character was space? */
+                while (c1 == ' ') {     /* read until not a space */
+                    c1 = fgetc (f1);
+                    ++diff_offset;
+                    if (sim_isspace (c1))
+                        c1 = ' ';       /* all whitespace is a space */
+                    }
+                }
+            else {                      /* get new character */
+                c1 = fgetc (f1);
+                ++diff_offset;
+                if (sim_isspace (c1))
+                    c1 = ' ';           /* all whitespace is a space */
+                }
+            if (c2 == ' ') {            /* last character was space? */
+                while (c2 == ' ') {     /* read until not a space */
+                    c2 = fgetc (f2);
+                    if (sim_isspace (c2))
+                        c2 = ' ';       /* all whitespace is a space */
+                    }
+                }
+            else {                      /* get new character */
+                c2 = fgetc (f2);
+                if (sim_isspace (c2))
+                    c2 = ' ';           /* all whitespace is a space */
+                }
+            };
+        }
+    else {          /* Binary File Compare */
+        while (((c1 = fgetc (f1)) == (c2 = fgetc (f2))) &&
+               (c1 != EOF))
+            ++diff_offset;
+        }
     fclose (f1);
     fclose (f2);
+    if (c1 != c2) {
+        char offset_buf[32];
+
+        snprintf (offset_buf, sizeof (offset_buf), "%u", (uint32)diff_offset);
+        setenv ("_FILE_COMPARE_DIFF_OFFSET", offset_buf, 1);
+        }
     return c1 - c2;
     }
 v1 = strtol(s1+1, &ep1, 0);
@@ -6875,6 +6939,8 @@ if (r != SCPE_OK) {
 return r;
 }
 
+static long sim_type_file_offset;
+static long sim_type_line_count;
 
 typedef struct {
     t_stat stat;
@@ -6888,6 +6954,7 @@ static void sim_type_entry (const char *directory,
 {
 char FullPath[PATH_MAX + 1];
 FILE *file;
+long lines = 0;
 char lbuf[4*CBUFSIZE];
 
 sprintf (FullPath, "%s%s", directory, filename);
@@ -6897,7 +6964,10 @@ if (file == NULL)                           /* open failed? */
     return;
 sim_printf ("\n%s\n\n", FullPath);
 lbuf[sizeof(lbuf)-1] = '\0';
-while (fgets (lbuf, sizeof(lbuf)-1, file))
+if (sim_type_file_offset)
+    (void)fseek (file, sim_type_file_offset, SEEK_SET);
+while ((NULL != fgets (lbuf, sizeof(lbuf)-1, file)) && 
+       (lines++ < sim_type_line_count))
     sim_printf ("%s", lbuf);
 fclose (file);
 }
@@ -6906,11 +6976,36 @@ fclose (file);
 t_stat type_cmd (int32 flg, CONST char *cptr)
 {
 FILE *file;
+long lines = 0;
 char lbuf[4*CBUFSIZE];
 
+sim_type_file_offset = 0;                           /* beginning of file */
+sim_type_line_count = 0X7FFFFFFF;                   /* output many lines */
 GET_SWITCHES (cptr);                                    /* get switches */
 if ((!cptr) || (*cptr == 0))
     return SCPE_2FARG;
+if (sim_switches & SWMASK ('O')) {      /* Specify Offset in file */
+    char gbuf[CBUFSIZE];
+    char *eptr;
+
+    cptr = get_glyph (cptr, gbuf, 0);
+    if ((!cptr) || (*cptr == 0))
+        return SCPE_2FARG;
+    sim_type_file_offset = strtol (gbuf, &eptr, 0);
+    if ((*eptr) || (sim_type_file_offset < 0))
+        return sim_messagef (SCPE_ARG, "Invalid file offset: %s\n", gbuf);
+    }
+if (sim_switches & SWMASK ('N')) {      /* Specify Line Count to display */
+    char gbuf[CBUFSIZE];
+    char *eptr;
+
+    cptr = get_glyph (cptr, gbuf, 0);
+    if ((!cptr) || (*cptr == 0))
+        return SCPE_2FARG;
+    sim_type_line_count = strtol (gbuf, &eptr, 0);
+    if ((*eptr) || (sim_type_line_count < 0))
+        return sim_messagef (SCPE_ARG, "Invalid file line count: %s\n", gbuf);
+    }
 lbuf[sizeof(lbuf)-1] = '\0';
 strlcpy (lbuf, cptr, sizeof(lbuf));
 sim_trim_endspc(lbuf);
@@ -6926,7 +7021,10 @@ if (file == NULL) {                         /* open failed? */
     return sim_messagef (SCPE_OPENERR, "The system cannot find the file specified.\n");
     }
 lbuf[sizeof(lbuf)-1] = '\0';
-while (fgets (lbuf, sizeof(lbuf)-1, file))
+if (sim_type_file_offset)
+    (void)fseek (file, sim_type_file_offset, SEEK_SET);
+while ((NULL != fgets (lbuf, sizeof(lbuf)-1, file)) && 
+       (lines++ < sim_type_line_count))
     sim_printf ("%s", lbuf);
 fclose (file);
 return SCPE_OK;
@@ -7385,7 +7483,7 @@ for (i = 0; i < start; i++) {
     }
 for (i = start; (dptr = sim_devices[i]) != NULL; i++) {
     sim_switches = saved_sim_switches;  /* restore initial switches */
-    if (sim_switches & SWMASK('P')) {
+    if (sim_switches & SWMASK ('P')) {
         tmxr_add_debug (dptr);          /* Add TMXR debug to MUX devices */
         sim_tape_add_debug (dptr);      /* Add TAPE debug to TAPE devices */
         }
@@ -8831,7 +8929,7 @@ if ((dptr != NULL) && (dptr->examine != NULL)) {
         }
     if ((r == SCPE_OK) || (i > 0)) {
         fprintf (st, " (");
-        if (fprint_sym (st, (t_addr) pcval, sim_eval, NULL, SWMASK('M')|SIM_SW_STOP) > 0)
+        if (fprint_sym (st, (t_addr) pcval, sim_eval, NULL, SWMASK ('M') | SIM_SW_STOP) > 0)
             fprint_val (st, sim_eval[0], dptr->dradix, dptr->dwidth, PV_RZRO);
         fprintf (st, ")");
         }
@@ -9908,6 +10006,64 @@ while (1) {
         if (s1 == 0)
             return 0;
         i++;
+        continue;
+        }
+    if (s1 < s2)
+        return -1;
+    if (s1 > s2)
+        return 1;
+    }
+return 0;
+}
+
+int sim_strwhitecasecmp (const char *string1, const char *string2, t_bool casecmp)
+{
+unsigned char s1 = 1, s2 = 1;   /* start with equal, but not space */
+
+while ((s1 == s2) && (s1 != '\0')) {
+    if (s1 == ' ') {            /* last character was space? */
+        while (s1 == ' ') {     /* read until not a space */
+            s1 = *string1++;
+            if (sim_isspace (s1))
+                s1 = ' ';       /* all whitespace is a space */
+            else {
+                if (casecmp)
+                    s1 = (unsigned char)sim_toupper (s1);
+                }
+            }
+        }
+    else {                      /* get new character */
+        s1 = *string1++;
+        if (sim_isspace (s1))
+            s1 = ' ';           /* all whitespace is a space */
+        else {
+            if (casecmp)
+                s1 = (unsigned char)sim_toupper (s1);
+            }
+        }
+    if (s2 == ' ') {            /* last character was space? */
+        while (s2 == ' ') {     /* read until not a space */
+            s2 = *string2++;
+            if (sim_isspace (s2))
+                s2 = ' ';       /* all whitespace is a space */
+            else {
+                if (casecmp)
+                    s2 = (unsigned char)sim_toupper (s2);
+                }
+            }
+        }
+    else {                      /* get new character */
+        s2 = *string2++;
+        if (sim_isspace (s2))
+            s2 = ' ';           /* all whitespace is a space */
+        else {
+            if (casecmp)
+                s2 = (unsigned char)sim_toupper (s2);
+            }
+        }
+    if (s1 == s2) {
+        if (s1 == 0)
+            return 0;
         continue;
         }
     if (s1 < s2)
@@ -14995,7 +15151,9 @@ return data2 > data1;
 
 static int _i_strcmp (const char *s1, const char *s2)
 {
-return ((sim_switches & SWMASK('I')) ? strcasecmp (s2, s1) : strcmp (s2, s1));
+if (sim_switches & SWMASK ('W'))         /* Whitespace compress? */
+    return sim_strwhitecasecmp (s1, s2, sim_switches & SWMASK ('I'));
+return ((sim_switches & SWMASK ('I')) ? strcasecmp (s2, s1) : strcmp (s2, s1));
 }
 
 static t_svalue _op_str_eq (const char *str1, const char *str2)
