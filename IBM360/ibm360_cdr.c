@@ -125,23 +125,25 @@ uint8  cdr_startcmd(UNIT *uptr,  uint8 cmd) {
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
 
-    if ((uptr->CMD & CDR_CMDMSK) != 0) {
-        if ((uptr->flags & UNIT_ATT) != 0)
-            return SNS_BSY;
-        return SNS_DEVEND;
-    }
+    if ((uptr->CMD & CDR_CMDMSK) != 0)
+        return SNS_BSY;
 
     sim_debug(DEBUG_CMD, dptr, "CMD unit=%d %x\n", unit, cmd);
+
+    /* Check if not sense and end of file */
     if (cmd != 4 && sim_card_eof(uptr) == 1) {
         uint16   *image = (uint16 *)(uptr->up7);
         uptr->SNS = SNS_INTVENT;
         sim_read_card(uptr, image);   /* Read in the EOF */
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     }
+
+    /* If not attached and not sense, return error */
     if (cmd != 4 && (uptr->flags & UNIT_ATT) == 0) {
         uptr->SNS = SNS_INTVENT;
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     }
+
     switch (cmd & 0x7) {
     case 2:              /* Read command */
          if ((cmd & 0xc0) != 0xc0)
@@ -283,6 +285,7 @@ cdr_attach(UNIT * uptr, CONST char *file)
         uptr->up7 = malloc(sizeof(uint16)*80);
     set_devattn(addr, SNS_DEVEND);
     uptr->CMD &= ~(CDR_CARD);
+    uptr->SNS = 0;
     uptr->COL = 0;
     uptr->u6 = 0;
     return SCPE_OK;

@@ -77,6 +77,7 @@
    cdp_mod       Card Punch modifiers list
 */
 
+uint8               cdp_startio(UNIT *uptr);
 uint8               cdp_startcmd(UNIT *,  uint8);
 void                cdp_ini(UNIT *, t_bool);
 t_stat              cdp_srv(UNIT *);
@@ -108,7 +109,7 @@ MTAB                cdp_mod[] = {
     {0}
 };
 
-struct dib cdp_dib = { 0xFF, 1, NULL, cdp_startcmd, NULL, cdp_unit, NULL};
+struct dib cdp_dib = { 0xFF, 1, cdp_startio, cdp_startcmd, NULL, cdp_unit, NULL};
 
 DEVICE              cdp_dev = {
     "CDP", cdp_unit, NULL, cdp_mod,
@@ -120,6 +121,20 @@ DEVICE              cdp_dev = {
 
 
 
+/*
+ * Check if device ready to start commands.
+ */
+
+uint8  cdp_startio(UNIT *uptr) {
+    DEVICE         *dptr = find_dev_from_unit(uptr);
+
+    /* Check if unit is free */
+    if ((uptr->CMD & (CDP_CARD|CDP_CMDMSK)) != 0) {
+        return SNS_BSY;
+    }
+    sim_debug(DEBUG_CMD, dptr, "start io\n");
+    return 0;
+}
 
 /*
  * Start the card punch to punch one card.
@@ -129,11 +144,8 @@ uint8  cdp_startcmd(UNIT *uptr,  uint8 cmd) {
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
 
-    if ((uptr->CMD & (CDP_CARD|CDP_CMDMSK)) != 0) {
-        if ((uptr->flags & UNIT_ATT) != 0)
-            return SNS_BSY;
-        return SNS_DEVEND|SNS_UNITCHK;
-    }
+    if ((uptr->CMD & (CDP_CARD|CDP_CMDMSK)) != 0)
+        return SNS_BSY;
 
     sim_debug(DEBUG_CMD, dptr, "CMD unit=%d %x\n", unit, cmd);
     switch (cmd & 0x7) {
@@ -181,6 +193,7 @@ cdp_srv(UNIT *uptr) {
     /* Handle sense */
     if ((uptr->CMD & CDP_CMDMSK) == 0x4) {
          uint8 ch = uptr->SNS;
+         uptr->CMD &= ~(CDP_CMDMSK);
          chan_write_byte(addr, &ch);
          chan_end(addr, SNS_DEVEND|SNS_CHNEND);
          return SCPE_OK;
@@ -193,7 +206,7 @@ cdp_srv(UNIT *uptr) {
         switch(sim_punch_card(uptr, image)) {
         /* If we get here, something is wrong */
         default:
-        sim_debug(DEBUG_DETAIL, &cdp_dev, "unit=%d:punch error\n", u);
+             sim_debug(DEBUG_DETAIL, &cdp_dev, "unit=%d:punch error\n", u);
              set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
              break;
         case CDSE_OK:

@@ -292,13 +292,14 @@ print_line(UNIT * uptr)
 }
 
 
+/*
+ * Check if device ready to start commands.
+ */
+
 uint8  lpr_startio(UNIT *uptr) {
 
-    if ((uptr->CMD & LPR_CMDMSK) != 0) {
-       if ((uptr->flags & UNIT_ATT) != 0)
-            return SNS_BSY;
-       return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
-    }
+    if ((uptr->CMD & LPR_CMDMSK) != 0)
+        return SNS_BSY;
     sim_debug(DEBUG_CMD, &lpr_dev, "start io unit\n");
     return 0;
 }

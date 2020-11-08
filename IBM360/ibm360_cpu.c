@@ -2210,23 +2210,25 @@ save_dbl:
                                   dest = cregs[reg1];
                                   break;
                         case 0x8:     /* Partitioning register */
-                                  dest = 0x88888888;
+                                  dest = 0x8c8c8c8c;
                                   break;
                         case 0x9:     /* Partitioning register */
                                    /* Compute amount of memory and
                                       assign in 256k blocks to CPU 1 */
-                                  dest = 0x88884444;
+                                  dest = 0x8c8c0000;
                                   break;
                         case 0xA:     /* Partitioning register */
                                    /* Address each 256k bank to 0-0xF */
                                   dest = 0x02468ace;
                                   break;
                         case 0xB:     /* Partitioning register */
-                                  dest = 0x80000000;
+                                  dest = 0x88000000;
                                   break;
                         case 0xC:     /* Partitioning register */
+                                  dest = 0xFFFFFFFF;
+                                  break;
                         case 0xD:     /* Partitioning register */
-                                  dest = 0xAAAAAAAA;
+                                  dest = 0xFFFFFFFF;
                                   break;
                         case 0xE:     /* Partitioning register */
                                   dest = 0x00000200;

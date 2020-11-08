@@ -841,6 +841,8 @@ startio(uint16 addr) {
 
     /* Check for any pending status for this device */
     if (dev_status[addr] != 0) {
+        if (dev_status[addr] & SNS_DEVEND)
+            dev_status[addr] |= SNS_BSY;
         M[0x44 >> 2] = (((uint32)dev_status[addr]) << 24);
         M[0x40 >> 2] = 0;
         key[0] |= 0x6;
@@ -854,8 +856,11 @@ startio(uint16 addr) {
     /* If device has start_io function run it */
     if (dibp->start_io != NULL) {
         status = dibp->start_io(uptr) << 8;
-        if (status & STATUS_BUSY)
+        sim_debug(DEBUG_CMD, &cpu_dev, "SIO %03x %x\n", addr, status);
+        if (status & STATUS_BUSY) {
+            sim_debug(DEBUG_CMD, &cpu_dev, "SIO %03x busy cc=2\n", addr);
             return 2;
+        }
         if (status != 0) {
             M[0x44 >> 2] = ((uint32)status<<16) | (M[0x44 >> 2] & 0xffff);
             sim_debug(DEBUG_EXP, &cpu_dev, "Channel store csw  %03x %08x\n",
@@ -878,14 +883,14 @@ startio(uint16 addr) {
     if (load_ccw(chan, 0)) {
         M[0x44 >> 2] = ((uint32)chan->chan_status<<16) | (M[0x44 >> 2] & 0xffff);
         key[0] |= 0x6;
-        sim_debug(DEBUG_CMD, &cpu_dev, "SIO %03x %02x %x cc=2\n", addr,
+        sim_debug(DEBUG_CMD, &cpu_dev, "SIO %03x %02x %x cc=1\n", addr,
               chan->ccw_cmd, chan->ccw_flags);
         chan->chan_status = 0;
         chan->ccw_cmd = 0;
         dev_status[addr] = 0;
         chan->daddr = NO_DEV;
         chan->dev = NULL;
-        return 1;
+        return ((uptr->flags & UNIT_ATT) == 0) ? 3 : 1;
     }
 
     /* If channel returned busy save CSW and return cc=1 */
@@ -951,7 +956,6 @@ int testio(uint16 addr) {
         sim_debug(DEBUG_CMD, &cpu_dev, "TIO %03x %03x %02x %x cc=1a\n", addr,
               chan->daddr, chan->ccw_cmd, chan->ccw_flags);
         store_csw(chan);
-//        dev_status[addr] = 0;
         chan->daddr = NO_DEV;
         chan->dev = NULL;
         return 1;
@@ -990,18 +994,20 @@ int testio(uint16 addr) {
     status = dibp->start_cmd(uptr, 0) << 8;
 
     /* If no status and unattached device return cc=3 */
-    if (status == 0 && (uptr->flags & UNIT_ATT) == 0) {
-        sim_debug(DEBUG_CMD, &cpu_dev, "TIO %03x %03x %02x %x cc=1c\n", addr,
-              chan->daddr, chan->ccw_cmd, chan->ccw_flags);
-        return 3;
+#if 0
+    if (status != 0 && (uptr->flags & UNIT_ATT) == 0) {
+        sim_debug(DEBUG_CMD, &cpu_dev, "TIO %03x %03x %02x %x %x cc=1c\n", addr,
+              chan->daddr, chan->ccw_cmd, chan->ccw_flags, status);
+        return 0;
     }
+#endif
 
     /* If we get a error, save csw and return cc=1 */
     if (status & ERROR_STATUS) {
-        M[0x44 >> 2] = ((uint32)status<<24) | (M[0x44 >> 2] & 0xffff);
+        M[0x44 >> 2] = ((uint32)status<<16) | (M[0x44 >> 2] & 0xffff);
         key[0] |= 0x6;
-        sim_debug(DEBUG_CMD, &cpu_dev, "TIO %03x %03x %02x %x cc=1d\n", addr,
-              chan->daddr, chan->ccw_cmd, chan->ccw_flags);
+        sim_debug(DEBUG_CMD, &cpu_dev, "TIO %03x %03x %02x %x %x cc=1d\n", addr,
+              chan->daddr, chan->ccw_cmd, chan->ccw_flags, status);
         return 1;
     }
 
