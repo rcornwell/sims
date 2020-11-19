@@ -3457,10 +3457,12 @@ while (*cmd)
      exdep_cmd (EX_D, *(cmd++));
 sim_switches = saved_switches;
 sim_cancel (&SIM_INTERNAL_UNIT);
-sim_activate (&precalib_unit, sim_precalibrate_ips);
 start = sim_os_msec();
-sim_instr();
-end = sim_os_msec();
+do {
+    sim_activate (&precalib_unit, sim_precalibrate_ips);
+    sim_instr();
+    end = sim_os_msec();
+    } while ((end - start) < SIM_PRE_CALIBRATE_MIN_MS);
 sim_precalibrate_ips = (int32)(1000.0 * (sim_precalibrate_ips / (double)(end - start)));
 
 for (tmr=0; tmr<=SIM_NTIMERS; tmr++) {
