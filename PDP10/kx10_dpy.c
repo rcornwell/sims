@@ -120,6 +120,8 @@
 
 #define DPY_DEVNUM       0130
 
+#define FULLSCREEN      (1 << (UNIT_V_UF))
+
 #define RRZ(W) ((W) & RMASK)
 #define XWD(L,R) ((((uint64)(L))<<18)|((uint64)(R)))
 
@@ -187,12 +189,19 @@ UNIT dpy_unit[] = {
 
 #define UPTR(UNIT) (dpy_unit+(UNIT))
 
+MTAB dpy_mod[] = {
+    { FULLSCREEN, FULLSCREEN, "FULLSCREEN", "FULLSCREEN", NULL, NULL, NULL,
+              "Display in fullscreen"},
+    { FULLSCREEN, 0, NULL, "WINDOW", NULL, NULL, NULL,
+              "Display in window"},
+};
+
 DEVICE dpy_dev = {
-    "DPY", dpy_unit, NULL, NULL,
+    "DPY", dpy_unit, NULL, dpy_mod,
     NUM_DEVS_DPY, 0, 0, 0, 0, 0,
     NULL, NULL, dpy_reset,
     NULL, NULL, NULL,
-    &dpy_dib, DEV_DISABLE | DEV_DIS | DEV_DEBUG | DEV_DISPLAY, 0, NULL,
+    &dpy_dib, DEV_DISABLE | DEV_DIS | DEV_DEBUG | DEV_DISPLAY, 0, dev_debug,
     NULL, NULL, NULL, NULL, NULL, &dpy_description
     };
 
@@ -352,6 +361,17 @@ static void dpy_joy_button(int which, int button, int state)
   }
 }
 
+static int dpy_keyboard (SIM_KEY_EVENT *ev)
+{
+    sim_debug(DEBUG_DATA, &dpy_dev, "Key %d %s\n",
+              ev->key, ev->state == SIM_KEYPRESS_DOWN ? "down" : "up");
+    if (ev->state == SIM_KEYPRESS_UP && ev->key == SIM_KEY_F11) {
+        vid_set_fullscreen (!vid_is_fullscreen ());
+        return 1;
+    }
+    return 0;
+}
+
 /* Reset routine */
 
 t_stat dpy_reset (DEVICE *dptr)
@@ -359,8 +379,13 @@ t_stat dpy_reset (DEVICE *dptr)
     if (dptr->flags & DEV_DIS) {
         display_close(dptr);
     } else {
+        if (stk_dev.flags & DEV_DIS) {
+            sim_debug(DEBUG_DETAIL, &dpy_dev, "Grabbing keyboard\n");
+            vid_display_kb_event_process = dpy_keyboard;
+        }
         display_reset();
         ty340_reset(dptr);
+        vid_set_fullscreen (dpy_unit[0].flags & FULLSCREEN);
         vid_register_gamepad_motion_callback (dpy_joy_motion);
         vid_register_gamepad_button_callback (dpy_joy_button);
     }
