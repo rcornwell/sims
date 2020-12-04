@@ -386,7 +386,6 @@ int  TransAddr(t_addr va, t_addr *pa, uint8 code, uint wr) {
  * Return 1 if failure, 0 if success.
  */
 int  ReadFull(t_addr addr, uint32 *data, uint8 code) {
-     uint32     temp;
      t_addr     pa;
 
      /* Validate address */
@@ -411,7 +410,6 @@ int  ReadFull(t_addr addr, uint32 *data, uint8 code) {
  * Return 1 if failure, 0 if success.
  */
 int WriteFull(t_addr addr, uint32 data) {
-     int        offset;
      t_addr     pa;
 
      /* Validate address */
@@ -435,7 +433,6 @@ int WriteFull(t_addr addr, uint32 data) {
 int WriteHalf(t_addr addr, uint32 data) {
      uint32     mask;
      t_addr     pa;
-     int        offset;
 
      /* Validate address */
      if (TransAddr(addr, &pa, 0, 1))
@@ -504,9 +501,7 @@ sim_instr(void)
     uint8           op;            /* Current opcode */
     uint8           reg1;          /* First register */
     uint8           reg2;          /* Second register */
-    uint16          irq;
-    int             temp, temp2;
-    uint16          ops[3];
+    int             temp;
     int             code_seg;
 
     reason = SCPE_OK;
@@ -1047,7 +1042,7 @@ trap:
                      break;
 
         case OP_CHKI:
-                     if (!((src1 & MSIGN) == 0 && src1 <= (int32)src2)) {
+                     if (!((src1 & MSIGN) == 0 && (int32)src1 <= (int32)src2)) {
                           sregs[1] = op;
                           sregs[2] = reg1;
                           sregs[3] = reg2;
@@ -1824,7 +1819,6 @@ priv_trap:              sregs[1] = op;
                    break;
 
         default:
-ill_inst:
                    trapcode = ILLINS;
                    sregs[1] = op;
                    sregs[2] = reg1;
@@ -1843,6 +1837,7 @@ ill_inst:
 
     }
     PC = nPC & WMASK;   /* Low order bit can't be set */
+    return SCPE_OK;
 }
 
 
@@ -1981,13 +1976,13 @@ if ((mc != 0) && !get_yn ("Really truncate memory [N]?", FALSE))
 nM = (uint32 *) calloc (val >> 2, sizeof (uint32));
 if (nM == NULL)
     return SCPE_MEM;
-clim = (val < MEMSIZE)? val >> 2: max;
+clim = ((uint32)val < MEMSIZE)? val >> 2: max;
 for (i = 0; i < clim; i++)
     nM[i] = M[i];
 free (M);
 M = nM;
 fprintf(stderr, "Mem size=%x\n\r", val);
-MEMSIZE = val;
+MEMSIZE = (uint32)val;
 cpu_unit.flags &= ~UNIT_MSIZE;
 cpu_unit.flags |= (val / (1024 * 1024)) << UNIT_V_MSIZE;
 reset_all (0);
@@ -2036,7 +2031,6 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
     int32               k, di, lnt;
     const char          *cptr = (const char *) desc;
     t_stat              r;
-    t_value             sim_eval;
     struct InstHistory *h;
 
     if (hst_lnt == 0)
@@ -2054,7 +2048,6 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
     for (k = 0; k < lnt; k++) { /* print specified */
         h = &hst[(++di) % hst_lnt];     /* entry pointer */
         if (h->pc & HIST_PC) {   /* instruction? */
-            int i;
             fprintf(st, "%06x%c %06x %08x %08x %08x %02x%02x ",
                       h->pc & HIST_MASK, (h->pc & HIST_USER) ? 'v':' ', h->addr,
                       h->src1, h->src2, h->dest, h->inst[0], h->inst[1]);
@@ -2071,7 +2064,6 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
             fputc('\n', st);    /* end line */
         }                       /* end else instruction */
         else if (h->pc & HIST_TRAP) {   /* Trap */
-            int i;
             fprintf(st, "%06x %06x\n",
                       h->pc & HIST_MASK, h->addr);
         }                       /* end else trap */

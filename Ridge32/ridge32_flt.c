@@ -117,7 +117,7 @@ rfix(uint32 *res, uint32 src, int round)
         e1 ++;
      }
 
-     if (round) 
+     if (round)
         src++;
      src >>= 1;  /* Remove guard bit */
      if (s)
@@ -145,13 +145,12 @@ makerd(uint32 *resl, uint32 *resh,  uint32 src)
     *resl = (src & MSIGN) | ((e << 20) & DEMSK) | ((src & MMASK) >> 3);
 }
 
-     
+
 /* Compare to floating point numbers */
 int
 rcomp(uint32 src1, uint32 src2)
 {
     int  e1, e2;        /* Hold the two exponents */
-    int  s;             /* Hold resulting sign */
     int  temp;          /* Hold exponent difference */
     uint32  m1, m2;
 
@@ -159,11 +158,11 @@ rcomp(uint32 src1, uint32 src2)
     e1 = (src1 & EMASK) >> 23;
     m1 = src1 & MMASK;      /* extract mantissa */
     if (e1 != 0)        /* Add in hidden bit if needed */
-       m1 |= ONE;   
+       m1 |= ONE;
     e2 = (src2 & EMASK) >> 23;
     m2 = src2 & MMASK;      /* extract mantissa */
     if (e2 != 0)        /* Add in hidden bit if needed */
-       m2 |= ONE;   
+       m2 |= ONE;
     temp = e1 - e2;
     /* Align operands */
     if (temp > 0) {
@@ -185,7 +184,7 @@ rcomp(uint32 src1, uint32 src2)
     /* Exponents should be equal now. */
     if (src1 & MSIGN)
         m1 = (m1 ^ FMASK) + 1;
-    
+
     if ((src2 & MSIGN) == 0)
         m2 = (m2 ^ FMASK) + 1;
 
@@ -201,7 +200,7 @@ rcomp(uint32 src1, uint32 src2)
     return 0;
 }
 
-    
+
 /* Add two single precision numbers */
 int
 radd(uint32 *res, uint32 src1, uint32 src2)
@@ -220,10 +219,10 @@ radd(uint32 *res, uint32 src1, uint32 src2)
        s |= 1;
     src2 &= MMASK;      /* extract mantissa */
     if (e2 != 0)        /* Add in hidden bit if needed */
-       src2 |= ONE;   
+       src2 |= ONE;
     src1 &= MMASK;      /* extract mantissa */
     if (e1 != 0)        /* Add in hidden bit if needed */
-       src1 |= ONE;   
+       src1 |= ONE;
     temp = e1 - e2;
     /* Create guard digit */
     src2 <<= 1;
@@ -249,7 +248,7 @@ radd(uint32 *res, uint32 src1, uint32 src2)
     /* Exponents should be equal now. */
     if (s & 2)
         src1 = (src1 ^ FMASK) + 1;
-    
+
     if (s & 1)
         src2 = (src2 ^ FMASK) + 1;
 
@@ -311,10 +310,10 @@ rmult(uint32 *res, uint32 src1, uint32 src2)
        s = 1;
     src2 &= MMASK;      /* extract mantissa */
     if (e2 != 0)        /* Add in hidden bit if needed */
-       src2 |= ONE;   
+       src2 |= ONE;
     src1 &= MMASK;      /* extract mantissa */
     if (e1 != 0)        /* Add in hidden bit if needed */
-       src1 |= ONE;   
+       src1 |= ONE;
 
     /* Compute exponent */
     e1 = e1 + e2 - 127;
@@ -388,16 +387,16 @@ rdiv(uint32 *res, uint32 src1, uint32 src2)
     e1 = (src1 & EMASK) >> 23;
     e2 = (src2 & EMASK) >> 23;
     s = 0;
-    if (e2 == 0) 
+    if (e2 == 0)
        return 20;
     if ((src1 & MSIGN) != (src2 & MSIGN))
        s = 1;
     src2 &= MMASK;      /* extract mantissa */
     if (e2 != 0)        /* Add in hidden bit if needed */
-       src2 |= ONE;   
+       src2 |= ONE;
     src1 &= MMASK;      /* extract mantissa */
     if (e1 != 0)        /* Add in hidden bit if needed */
-       src1 |= ONE;   
+       src1 |= ONE;
 
     /* Compute exponent */
     e1 = e1 - e2 + 127;
@@ -419,10 +418,10 @@ rdiv(uint32 *res, uint32 src1, uint32 src2)
 
          /* Subtract remainder to dividend */
          desth = src1 - src2;
-     
+
          /* Shift quotent left one bit */
          dest <<= 1;
-     
+
          /* If remainder larger then divisor replace */
          if ((desth & MSIGN) == 0) {
              src1 = desth;
@@ -533,7 +532,7 @@ dfix(uint32 *res, uint32 src, uint32 srch, int round)
         e1 ++;
      }
 
-     if (round && (srch & MSIGN) != 0) 
+     if (round && (srch & MSIGN) != 0)
         src++;
      if (s)
         src = (src ^ FMASK) + 1;
@@ -562,13 +561,12 @@ makedr(uint32 *res, uint32 src, uint32 srch)
     return 0;
 }
 
-     
+
 /* Compare to floating point numbers */
 int
 drcomp(uint32 src1, uint32 src1h, uint32 src2,  uint32 src2h)
 {
     int  e1, e2;        /* Hold the two exponents */
-    int  s;             /* Hold resulting sign */
     int  temp;          /* Hold exponent difference */
     uint32  m1, m2, mh;
 
@@ -576,11 +574,11 @@ drcomp(uint32 src1, uint32 src1h, uint32 src2,  uint32 src2h)
     e1 = (src1 & DEMSK) >> 20;
     m1 = src1 & DMMSK;      /* extract mantissa */
     if (e1 != 0)        /* Add in hidden bit if needed */
-       m1 |= DONE;   
+       m1 |= DONE;
     e2 = (src2 & DEMSK) >> 20;
     m2 = src2 & DMMSK;      /* extract mantissa */
     if (e2 != 0)        /* Add in hidden bit if needed */
-       m2 |= DONE;   
+       m2 |= DONE;
     temp = e1 - e2;
     /* Align operands */
     if (temp > 0) {
@@ -618,7 +616,7 @@ drcomp(uint32 src1, uint32 src1h, uint32 src2,  uint32 src2h)
         if (src1h == 0)
             m1++;
     }
-    
+
     if ((src2 & MSIGN) == 0) {
         src2h = (src2h ^ FMASK) + 1;
         m2 = m2 ^ FMASK;
@@ -641,7 +639,7 @@ drcomp(uint32 src1, uint32 src1h, uint32 src2,  uint32 src2h)
     return 0;
 }
 
-    
+
 /* Add two double precision numbers */
 int
 dradd(uint32 *resl, uint32 *resh, uint32 src1, uint32 src1h, uint32 src2, uint32 src2h)
@@ -655,11 +653,11 @@ dradd(uint32 *resl, uint32 *resh, uint32 src1, uint32 src1h, uint32 src2, uint32
     e1 = (src1 & DEMSK) >> 20;
     m1 = src1 & DMMSK;      /* extract mantissa */
     if (e1 != 0)        /* Add in hidden bit if needed */
-       m1 |= DONE;   
+       m1 |= DONE;
     e2 = (src2 & DEMSK) >> 20;
     m2 = src2 & DMMSK;      /* extract mantissa */
     if (e2 != 0)        /* Add in hidden bit if needed */
-       m2 |= DONE;   
+       m2 |= DONE;
     temp = e1 - e2;
 //printf(" %08x %08x  %08x %08x  %d %d %d\n", m1, src1h, m2, src2h, e1, e2, temp);
     /* Align operands */
@@ -696,7 +694,7 @@ dradd(uint32 *resl, uint32 *resh, uint32 src1, uint32 src1h, uint32 src2, uint32
         if (src1h == 0)
             m1++;
     }
-    
+
     if ((src2 & MSIGN) != 0) {
         src2h = (src2h ^ FMASK) + 1;
         m2 = m2 ^ FMASK;
@@ -767,7 +765,7 @@ drmult(uint32 *resl, uint32 *resh, uint32 src1, uint32 src1h, uint32 src2, uint3
     int  e1, e2;        /* Hold the two exponents */
     int  s = 0;         /* Hold resulting sign */
     int  temp;          /* Hold exponent difference */
-    uint32  m1, m2, mh;
+    uint32  m1, m2;
     uint32  dest, desth;
 
     /* Extract numbers and adjust */
@@ -776,11 +774,11 @@ drmult(uint32 *resl, uint32 *resh, uint32 src1, uint32 src1h, uint32 src2, uint3
        s = 1;
     m1 = src1 & DMMSK;      /* extract mantissa */
     if (e1 != 0)        /* Add in hidden bit if needed */
-       m1 |= DONE;   
+       m1 |= DONE;
     e2 = (src2 & DEMSK) >> 20;
     m2 = src2 & DMMSK;      /* extract mantissa */
     if (e2 != 0)        /* Add in hidden bit if needed */
-       m2 |= DONE;   
+       m2 |= DONE;
     temp = e1 - e2;
 
     /* Compute exponent */
@@ -855,7 +853,7 @@ drdiv(uint32 *resl, uint32 *resh, uint32 src1, uint32 src1h, uint32 src2, uint32
     int  e1, e2;        /* Hold the two exponents */
     int  s = 0;         /* Hold resulting sign */
     int  temp;          /* Hold exponent difference */
-    uint32  m1, m2, mh;
+    uint32  m1, m2;
     uint32  dest, desth;
 
     /* Extract numbers and adjust */
@@ -864,11 +862,11 @@ drdiv(uint32 *resl, uint32 *resh, uint32 src1, uint32 src1h, uint32 src2, uint32
        s = 1;
     m1 = src1 & DMMSK;      /* extract mantissa */
     if (e1 != 0)        /* Add in hidden bit if needed */
-       m1 |= DONE;   
+       m1 |= DONE;
     e2 = (src2 & DEMSK) >> 20;
     m2 = src2 & DMMSK;      /* extract mantissa */
     if (e2 != 0)        /* Add in hidden bit if needed */
-       m2 |= DONE;   
+       m2 |= DONE;
     temp = e1 - e2;
 
     /* Compute exponent */

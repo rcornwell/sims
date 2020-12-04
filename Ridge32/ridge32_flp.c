@@ -564,9 +564,9 @@ flp_start(UNIT *uptr, int drive)
 t_stat
 flp_svc (UNIT *uptr)
 {
-     int flags;
-     int len;
-     int i;
+     uint32 flags;
+     uint32 len;
+     uint32 i;
      /* Read status to decide action */
      switch (uptr->PHASE) {
      case PHASE_IDLE:    /* Done with commands, just idle out */
@@ -996,7 +996,6 @@ flp_attach(UNIT *uptr, CONST char *cptr)
 t_stat flp_detach(UNIT *uptr)
 {
     t_stat r;
-    int8 i;
 
     r = diskClose((DISK_INFO **)&uptr->up7);
     if (r != SCPE_OK)

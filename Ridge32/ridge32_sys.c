@@ -80,11 +80,9 @@ const char *sim_stop_messages[] = {
 
 t_stat sim_load (FILE *fileref, CONST char *cptr, CONST char *fnam, int flag)
 {
-    DISK_INFO    *disk;
     uint8         buf[1024];
-    int           i, sect;
-    uint32        flags;
-    uint32        len;
+    size_t        len;
+    size_t        i;
     uint32        addr = 0x3a000;
     uint32        data;
     uint32        mask;
@@ -92,7 +90,7 @@ t_stat sim_load (FILE *fileref, CONST char *cptr, CONST char *fnam, int flag)
     int           offset;
 
     while((len = fread(&buf[0], 1, sizeof(buf), fileref)) > 0) {
-       for (i = 0; i <len; i++) {
+       for (i = 0; i < len; i++) {
            offset = 8 * (3 - (addr & 0x3));
            pa = addr >> 2;
            mask = 0xff;
@@ -108,6 +106,8 @@ t_stat sim_load (FILE *fileref, CONST char *cptr, CONST char *fnam, int flag)
        }
     }
 #if 0
+    DISK_INFO    *disk;
+    uint32        flags;
     disk = diskOpen(fileref, TRUE);
 
     fprintf(stderr, " %06x ", addr);
@@ -354,8 +354,6 @@ CONST char *rone[] = {
 
 void fprint_inst(FILE *of, t_addr addr, t_value *val) {
 uint8           inst = val[0];
-int             i;
-int             l = 1;
 t_opcode        *tab;
 uint32          disp = 0;
 
@@ -449,7 +447,6 @@ uint8           inst = *val;
 int             i;
 int             l = 1;
 int             rdx = 16;
-t_opcode        *tab;
 uint32          num;
 
 if (sw & SWMASK ('D'))
@@ -477,7 +474,7 @@ if (sw & SWMASK ('M')) {
 if (sw & SWMASK ('C')) {
    fputc('\'', of);
    for(i = 0; i < l; i++) {
-      char ch = val[i] & 0xff;
+      uint8 ch = val[i] & 0xff;
       if (ch >= 0x20 && ch <= 0x7f)
           fprintf(of, "%c", ch);
       else
@@ -615,7 +612,6 @@ t_stat parse_sym (CONST char *cptr, t_addr addr, UNIT *uptr, t_value *val, int32
 int             i;
 int             l = 1;
 int             rdx = 16;
-char            mod = 0;
 t_opcode        *tab;
 t_stat          r;
 uint32          num;
@@ -741,9 +737,9 @@ if (sw & SWMASK ('M')) {
                 cptr++;
             }
             while (sim_isspace (*cptr)) cptr++;
-            if ((r = get_imm(cptr, &tptr, rdx, &i)) != SCPE_OK)
+            if ((r = get_imm(cptr, &tptr, rdx, &num)) != SCPE_OK)
                  return r;
-            val[1] |= i;
+            val[1] |= num;
             cptr = tptr;
             if (tab->type & PCREL) {
                 if (*cptr != ',')
@@ -827,9 +823,9 @@ if (sw & SWMASK ('M')) {
                  val[i+2] = (num >> (((l - 1) - i) * 8)) & 0xff;
             return -(l-1);
     case RN:
-            if ((r = get_n(cptr, &tptr, rdx, &i)) != SCPE_OK)
+            if ((r = get_n(cptr, &tptr, rdx, &num)) != SCPE_OK)
                 return r;
-            val[1] = i;
+            val[1] = num;
             return -1;
     }
 }

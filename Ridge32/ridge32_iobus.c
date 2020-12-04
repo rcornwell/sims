@@ -271,7 +271,7 @@ empty_iord(uint32 *data)
 t_stat
 chan_set_devs()
 {
-    int                 i, j;
+    int                 i;
 
     for (i = 0; i < 256; i++) {
         dev_table[i] = &null_dev;        /* Empty device */
@@ -450,7 +450,6 @@ show_slot_num(FILE * st, UNIT * uptr, int32 v, CONST void *desc)
 {
     DEVICE             *dptr;
     DIB                *dibp;
-    int                 addr;
     int                 slot;
 
     if (uptr == NULL)

@@ -331,7 +331,7 @@ mono_disp (UNIT *uptr)
 }
 
 struct _keytab {
-    int8    syms;            /* Key symbol */
+    uint8   syms;            /* Key symbol */
     char    norm;            /* Normal unshifted key */
     char    shift;           /* Shifted key */
     char    cap;             /* Capslock on */
@@ -391,7 +391,7 @@ struct _keytab {
         {SIM_KEY_TAB,             '\t', '\t', '\t', '\t', '\t', },
         {SIM_KEY_ENTER,           '\r', '\r', '\r', '\r', '\r', },
         {SIM_KEY_SPACE,           ' ', ' ', ' ', ' ', '0', },
-        {-1,                      ' ', ' ', ' ', ' ', '0', },
+        {SIM_KEY_UNKNOWN,         ' ', ' ', ' ', ' ', '0', },
 };
 
 void
@@ -425,7 +425,7 @@ mono_key_event(UNIT *uptr, SIM_KEY_EVENT *kev)
                 uptr->KEYFLG |= SH_R;
                 break;
          default:
-                for(i = 0; mono_keytab[i].syms != -1; i++) {
+                for(i = 0; mono_keytab[i].syms != SIM_KEY_UNKNOWN; i++) {
                     if (mono_keytab[i].syms == kev->key) {
                         if ((uptr->KEYFLG & (CTL_L|CTL_R)) != 0) {
                             ch = mono_keytab[i].cntrl;

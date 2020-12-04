@@ -221,7 +221,6 @@ ct_mkstatus(UNIT *uptr)
 t_stat
 ct_svc (UNIT *uptr)
 {
-     int         len;
      t_mtrlnt    reclen;
      t_stat      r;
 
@@ -229,7 +228,7 @@ ct_svc (UNIT *uptr)
      case 0:
          if (uptr->MODE & FEN) {
              if (uptr->MODE & DMA) {
-                 len = (ct_dcb.count ^ CMASK) + 1;
+                 int len = (ct_dcb.count ^ CMASK) + 1;
                  /* Write a block to the tape. */
                  if (uptr->MODE & WRITE) {
                      io_read_blk(ct_dcb.addr, &ct_buf[0], len);
@@ -245,8 +244,8 @@ ct_svc (UNIT *uptr)
                      switch(r) {
                      case MTSE_OK:
                            /* Copy record */
-                           if (reclen < len) {
-                               len = reclen;
+                           if (reclen < (t_mtrlnt)len) {
+                               len = (int)reclen;
                            }
                            io_write_blk(ct_dcb.addr, &ct_buf[0], len);
                            ct_dcb.addr += len;
@@ -274,7 +273,7 @@ ct_svc (UNIT *uptr)
                            ct_dcb.count = ct_dcb.count + reclen;
                            if (ct_dcb.count & ~CMASK)
                                uptr->STATUS |= BCO;
-                           sim_debug(DEBUG_CMD, &ct_dev, "CT spaceb %d %d\n", reclen, len);
+                           sim_debug(DEBUG_CMD, &ct_dev, "CT spaceb %d\n", reclen);
                            if (uptr->MODE & MARK) {
                               sim_activate(uptr, 1000);
                               return SCPE_OK;
@@ -334,8 +333,6 @@ ct_svc (UNIT *uptr)
 t_stat
 ct_reset(DEVICE *dptr)
 {
-    int i,t;
-
     return SCPE_OK;
 }
 
@@ -365,7 +362,6 @@ ct_boot (int32 unit, DEVICE *dptr)
 t_stat
 ct_attach(UNIT *uptr, CONST char *cptr)
 {
-    char header[4];
     t_stat r;
 
     r = sim_tape_attach_ex(uptr, cptr, 0, 0);    /* attach unit  */
@@ -379,10 +375,8 @@ ct_attach(UNIT *uptr, CONST char *cptr)
 /* Detach routine */
 t_stat ct_detach(UNIT *uptr)
 {
-    t_stat r;
-
-    r = sim_tape_detach(uptr);  /* detach unit */
-    return r;
+    uptr->STATUS &= ~(IRQ|ONL|RDY);
+    return sim_tape_detach(uptr);  /* detach unit */
 }
 
 

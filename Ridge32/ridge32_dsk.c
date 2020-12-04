@@ -204,7 +204,6 @@ dsk_write(uint32 dev, uint32 data)
     int       cmd = (data >> 24) & 0xff;
     int       drive = cmd & 3;
     int       offset = drive << 6;;
-    int       i;
     uint8     buff[64];
 
     /* Check if command can be accepted */
@@ -323,15 +322,14 @@ dsk_incsect(UNIT *uptr, int drive)
 t_stat
 dsk_svc (UNIT *uptr)
 {
-     UNIT *dcb = &dsk_unit[0];
-     int drive = uptr - dsk_unit;
-     int offset = drive << 6;;
-     int type = GET_DTYPE(uptr->flags);
-     int da;
-     int flags;
-     int len;
-     int i;
-     int sc;
+     UNIT  *dcb = &dsk_unit[0];
+     int    drive = uptr - dsk_unit;
+     int    offset = drive << 6;;
+     int    type = GET_DTYPE(uptr->flags);
+     int    da;
+     size_t len;
+     size_t i;
+     int    sc;
 
      /* Check if disk attached */
      if ((uptr->flags & UNIT_ATT) == 0) {
@@ -370,7 +368,7 @@ dsk_svc (UNIT *uptr)
           }
           if (len > dsk_dcb[drive].count)
               len = dsk_dcb[drive].count;
-         sim_debug(DEBUG_DETAIL, &dsk_dev, "Disk Read: %d bytes\n", len);
+         sim_debug(DEBUG_DETAIL, &dsk_dev, "Disk Read: %lu bytes\n", len);
          for (i = 0; i < len; i++)  {
              sim_debug(DEBUG_DATA, &dsk_dev, "%02x ", dsk_buf[i]);
              if ((i & 0x1f) == 0x1f)
@@ -393,11 +391,11 @@ dsk_svc (UNIT *uptr)
               uptr->CMD += DSK_INC;
               if ((uptr->CMD & DSK_SMSK) == 0) {
                   uint32    t;
-                  i = ((uptr->CMD & DSK_CNT) >> 14) - 1;
-                  t = io_dcbread_half(dcb, offset + 0x20 + (i * 2));
+                  t = ((uptr->CMD & DSK_CNT) >> 14) - 1;
+                  t = io_dcbread_half(dcb, offset + 0x20 + (t * 2));
                   if (t != 0)
                       dsk_dcb[drive].addr = t << 8;
-                  sim_debug(DEBUG_DETAIL, &dsk_dev, "Disk new address: %08x %x\n", t, i);
+                  sim_debug(DEBUG_DETAIL, &dsk_dev, "Disk new address: %08x\n", t);
               }
               sim_activate(uptr, 100);
               return SCPE_OK;
@@ -430,7 +428,7 @@ dsk_svc (UNIT *uptr)
           while (len < sizeof(dsk_buf)) {
               dsk_buf[len++] = 0;
           }
-         sim_debug(DEBUG_DETAIL, &dsk_dev, "Disk Write: %d bytes\n", len);
+         sim_debug(DEBUG_DETAIL, &dsk_dev, "Disk Write: %lu bytes\n", len);
          for (i = 0; i < len; i++)  {
              sim_debug(DEBUG_DATA, &dsk_dev, "%02x ", dsk_buf[i]);
              if ((i & 0x1f) == 0x1f)
@@ -456,11 +454,11 @@ dsk_svc (UNIT *uptr)
               uptr->CMD += DSK_INC;
               if ((uptr->CMD & DSK_SMSK) == 0) {
                   uint32    t;
-                  i = ((uptr->CMD & DSK_CNT) >> 14) - 1;
-                  t = io_dcbread_half(dcb, offset + 0x20 + (i * 2));
+                  t = ((uptr->CMD & DSK_CNT) >> 14) - 1;
+                  t = io_dcbread_half(dcb, offset + 0x20 + (t * 2));
                   if (t != 0)
                       dsk_dcb[drive].addr = t << 8;
-                  sim_debug(DEBUG_DETAIL, &dsk_dev, "Disk new address: %08x %x\n", t, i);
+                  sim_debug(DEBUG_DETAIL, &dsk_dev, "Disk new address: %08x\n", t);
               }
               sim_activate(uptr, 100);
               return SCPE_OK;
@@ -593,7 +591,6 @@ t_stat
 dsk_boot(int32 unit_num, DEVICE *dptr)
 {
     UNIT    *dkuptr = &dptr->units[unit_num];
-    int     i = 0;
 
     if (unit_num != 0)
         return SCPE_ARG;
@@ -621,7 +618,7 @@ dsk_boot(int32 unit_num, DEVICE *dptr)
 t_stat
 dsk_reset(DEVICE *dptr)
 {
-    int i,t;
+    uint32  i,t;
 
     dsk_unit[0].DCB = 0x3c100;
     for (i = 0; i < dptr->numunits; i++) {
@@ -637,7 +634,8 @@ dsk_set_type(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
     int         i;
 
-    if (uptr == NULL) return SCPE_IERR;
+    if (uptr == NULL)
+       return SCPE_IERR;
     i = GET_DTYPE(val);
     uptr->capac = dsk_type[i].cyl * dsk_type[i].hds *
                      dsk_type[i].sect * 1024;
@@ -649,26 +647,14 @@ dsk_set_type(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 t_stat
 dsk_attach(UNIT *uptr, CONST char *cptr)
 {
-    char header[4];
-    t_stat r;
-
-    r = attach_unit(uptr, cptr);    /* attach unit  */
-    if ( r != SCPE_OK)              /* error?       */
-        return r;
-
-    /* Determine length of this disk */
-    uptr->capac = sim_fsize(uptr->fileref);
-    return SCPE_OK;
+    return attach_unit(uptr, cptr);    /* attach unit  */
 }
 
 
 /* Detach routine */
 t_stat dsk_detach(UNIT *uptr)
 {
-    t_stat r;
-
-    r = detach_unit(uptr);  /* detach unit */
-    return r;
+    return detach_unit(uptr);  /* detach unit */
 }
 
 
