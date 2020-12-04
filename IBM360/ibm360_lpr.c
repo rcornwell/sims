@@ -325,11 +325,14 @@ uint8 lpr_startcmd(UNIT * uptr, uint8 cmd)
          return 0;
 
     case 3:              /* Carrage control */
-         uptr->CMD &= ~(LPR_CMDMSK);
-         uptr->CMD |= (cmd & LPR_CMDMSK);
-         sim_activate(uptr, 10);          /* Start unit off */
          uptr->SNS = 0;
          uptr->POS = 0;
+         uptr->CMD &= ~(LPR_CMDMSK);
+         /* Nop is immediate command */
+         if (cmd == 0x3)
+             return SNS_CHNEND|SNS_DEVEND;
+         uptr->CMD |= (cmd & LPR_CMDMSK);
+         sim_activate(uptr, 10);          /* Start unit off */
          /* Motion and not load UCS */
          if ((cmd & 0x77) != 0x73 && (cmd & 07) == 3)
              return SNS_CHNEND;

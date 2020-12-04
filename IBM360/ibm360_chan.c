@@ -473,7 +473,7 @@ loop:
          /* Check if immediate channel end */
          if (chan->chan_status & STATUS_CEND) {
              chan->ccw_cmd = 0;
-             if ((chan->chan_status & SNS_DEVEND) != 0)
+             if ((chan->chan_status & STATUS_DEND) != 0)
                  chan->ccw_flags &= ~(FLAG_CD|FLAG_SLI);
 
              sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end(%x load) %x %04x end\n", 
@@ -993,15 +993,6 @@ int testio(uint16 addr) {
     /* Nothing pending, send a 0 command to device to get status */
     status = dibp->start_cmd(uptr, 0) << 8;
 
-    /* If no status and unattached device return cc=3 */
-#if 0
-    if (status != 0 && (uptr->flags & UNIT_ATT) == 0) {
-        sim_debug(DEBUG_CMD, &cpu_dev, "TIO %03x %03x %02x %x %x cc=1c\n", addr,
-              chan->daddr, chan->ccw_cmd, chan->ccw_flags, status);
-        return 0;
-    }
-#endif
-
     /* If we get a error, save csw and return cc=1 */
     if (status & ERROR_STATUS) {
         M[0x44 >> 2] = ((uint32)status<<16) | (M[0x44 >> 2] & 0xffff);
@@ -1147,15 +1138,18 @@ int testchan(uint16 channel) {
     chan = &(chan_ctl[0]);
 
     /* If channel is processing a command, return 2 */
-    if (chan->ccw_cmd != 0) { 
+    if (chan->ccw_cmd != 0 || (chan->ccw_flags & (FLAG_CD|FLAG_CC)) != 0) {
         sim_debug(DEBUG_CMD, &cpu_dev, "TCH CC %x cc=2, sel busy\n", channel);
         return 2;
     }
 
+    /* If channel has pending status, return 1 */
     if (chan->chan_status != 0) {
         sim_debug(DEBUG_CMD, &cpu_dev, "TCH CC %x cc=1, error\n", channel);
         return 1;
     }
+
+    /* Otherwise return 0. */
     sim_debug(DEBUG_CMD, &cpu_dev, "TCH CC %x cc=0, ok\n", channel);
     return 0;
 }

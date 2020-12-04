@@ -117,7 +117,7 @@ void
 con_ini(UNIT *uptr, t_bool f) {
      int                 u = (uptr - con_unit);
      con_data[u].inptr = 0;
-     uptr->CMD &= ~CON_MSK;
+     uptr->CMD &= ~(CON_MSK|CON_REQ|CON_INPUT|CON_CR);
      uptr->SNS = 0;
      sim_activate(uptr, 1000);
 }

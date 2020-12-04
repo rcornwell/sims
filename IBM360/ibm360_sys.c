@@ -98,6 +98,7 @@ DEBTAB              dev_debug[] = {
     {"POS", DEBUG_POS, "Dasd positioning information"},
     {"INST", DEBUG_INST, "Show instruction execution"},
     {"CDATA", DEBUG_CDATA, "Show channel data"},
+    {"TRACE", DEBUG_TRACE, "Show instruction history"},
     {0, 0}
 };
 
@@ -190,12 +191,13 @@ const char ebcdic_to_ascii[256] = {
     '8',  '9',  0xff, 0xff, 0xff, 0xff, 0xff, 0xff
 };
 
+
 
 /* Load a card image file into memory.  */
 
 t_stat sim_load (FILE *fileref, CONST char *cptr, CONST char *fnam, int flag)
 {
-return SCPE_NOFNC;
+    return SCPE_NOFNC;
 }
 
 /* Symbol tables */
@@ -504,92 +506,92 @@ t_opcode        *tab;
 t_stat fprint_sym (FILE *of, t_addr addr, t_value *val,
        UNIT *uptr, int32 sw)
 {
-uint8           inst = *val;
-uint16          sval[4];
-int             i;
-int             l = 1;
-int             rdx = 16;
-t_opcode        *tab;
-uint32          num;
+    uint8           inst = *val;
+    uint16          sval[4];
+    int             i;
+    int             l = 1;
+    int             rdx = 16;
+    t_opcode        *tab;
+    uint32          num;
 
-if (sw & SWMASK ('D'))
-    rdx = 10;
-else if (sw & SWMASK ('O'))
-    rdx = 8;
-else if (sw & SWMASK ('H'))
-    rdx = 16;
-if (sw & SWMASK ('M')) {
-    for (tab = optab; tab->name != NULL; tab++) {
-       if (tab->opbase == inst) {
-          switch (tab->type & LNMSK) {
-          case RR:
-                    l = 2;
-                    break;
-          case XX:
-          case RX:
-          case RS:
-          case SI:
-                    l = 4;
-                    break;
-          case SS:
-                    l = 6;
-          }
+    if (sw & SWMASK ('D'))
+        rdx = 10;
+    else if (sw & SWMASK ('O'))
+        rdx = 8;
+    else if (sw & SWMASK ('H'))
+        rdx = 16;
+    if (sw & SWMASK ('M')) {
+        for (tab = optab; tab->name != NULL; tab++) {
+           if (tab->opbase == inst) {
+              switch (tab->type & LNMSK) {
+              case RR:
+                        l = 2;
+                        break;
+              case XX:
+              case RX:
+              case RS:
+              case SI:
+                        l = 4;
+                        break;
+              case SS:
+                        l = 6;
+              }
+           }
+         }
+         sw &= ~ SWMASK('F'); /* Can't do F and M at same time */
+    } else if (sw & SWMASK('F')) {
+         l = 4;
+    } else if (sw & SWMASK('W')) {
+         l = 2;
+    } else if (sw & SWMASK('B')) {
+         l = 1;
+    }
+
+    if (sw & SWMASK ('C')) {
+       fputc('\'', of);
+       for(i = 0; i < l; i++) {
+          uint8 ch = ebcdic_to_ascii[val[i] & 0xff];
+          if (ch >= 0x20 && ch <= 0x7f)
+              fprintf(of, "%c", ch);
+          else
+              fputc('_', of);
        }
-     }
-     sw &= ~ SWMASK('F'); /* Can't do F and M at same time */
-} else if (sw & SWMASK('F')) {
-     l = 4;
-} else if (sw & SWMASK('W')) {
-     l = 2;
-} else if (sw & SWMASK('B')) {
-     l = 1;
-}
-
-if (sw & SWMASK ('C')) {
-   fputc('\'', of);
-   for(i = 0; i < l; i++) {
-      uint8 ch = ebcdic_to_ascii[val[i] & 0xff];
-      if (ch >= 0x20 && ch <= 0x7f)
-          fprintf(of, "%c", ch);
-      else
-          fputc('_', of);
-   }
-   fputc('\'', of);
-} else if (sw & SWMASK ('M')) {
-   i = 0;
-   l = 0;
-   if ((inst & 0xC0) == 0xC0) {
+       fputc('\'', of);
+    } else if (sw & SWMASK ('M')) {
+       i = 0;
+       l = 0;
+       if ((inst & 0xC0) == 0xC0) {
+           num = (uint32)(val[i++] << 8);
+           num |= (uint32)val[i++];
+           sval[l++] = num;
+           fprint_val(of, num, 16, 16, PV_RZRO);
+           fputc(' ', of);
+       }
+       if ((inst & 0xC0) != 0) {
+           num = (uint32)(val[i++] << 8);
+           num |= (uint32)val[i++];
+           sval[l++] = num;
+           fprint_val(of, num, 16, 16, PV_RZRO);
+           fputc(' ', of);
+       }
        num = (uint32)(val[i++] << 8);
        num |= (uint32)val[i++];
        sval[l++] = num;
        fprint_val(of, num, 16, 16, PV_RZRO);
        fputc(' ', of);
-   }
-   if ((inst & 0xC0) != 0) {
-       num = (uint32)(val[i++] << 8);
-       num |= (uint32)val[i++];
-       sval[l++] = num;
-       fprint_val(of, num, 16, 16, PV_RZRO);
+       l = i;
+       for(; i < 6; i+=2)
+           fputs("     ", of);
        fputc(' ', of);
-   }
-   num = (uint32)(val[i++] << 8);
-   num |= (uint32)val[i++];
-   sval[l++] = num;
-   fprint_val(of, num, 16, 16, PV_RZRO);
-   fputc(' ', of);
-   l = i;
-   for(; i < 6; i+=2)
-       fputs("     ", of);
-   fputc(' ', of);
-   fprint_inst(of, sval);
-} else {
-    num = 0;
-    for (i = 0; i < l && i < 4; i++)
-       num |= (uint32)val[i] << ((l-i-1) * 8);
-    fprint_val(of, num, rdx, l*8, PV_RZRO);
-}
+       fprint_inst(of, sval);
+    } else {
+        num = 0;
+        for (i = 0; i < l && i < 4; i++)
+           num |= (uint32)val[i] << ((l-i-1) * 8);
+        fprint_val(of, num, rdx, l*8, PV_RZRO);
+    }
 
-return -(l-1);
+    return -(l-1);
 }
 
 /*
@@ -622,23 +624,23 @@ t_stat get_reg (CONST char *cptr, CONST char **tptr, int *reg)
  */
 t_stat get_off (CONST char *cptr, CONST char **tptr, uint32 radix, uint32 *val, char *m)
 {
-t_stat r;
+    t_stat r;
 
-r = SCPE_OK;
-*m = 0;
-*val = (uint32)strtotv (cptr, tptr, radix);
-if ((cptr == *tptr) || (*val > 0xfff))
-    r = SCPE_ARG;
-else {
-    cptr = *tptr;
-    while (sim_isspace (*cptr)) cptr++;
-    if (*cptr++ == '(') {
-       *m = 1;
+    r = SCPE_OK;
+    *m = 0;
+    *val = (uint32)strtotv (cptr, tptr, radix);
+    if ((cptr == *tptr) || (*val > 0xfff))
+        r = SCPE_ARG;
+    else {
+        cptr = *tptr;
         while (sim_isspace (*cptr)) cptr++;
+        if (*cptr++ == '(') {
+           *m = 1;
+            while (sim_isspace (*cptr)) cptr++;
+        }
+        *tptr = cptr;
     }
-    *tptr = cptr;
-}
-return r;
+    return r;
 }
 
 /*
@@ -646,18 +648,18 @@ return r;
  */
 t_stat get_imm (CONST char *cptr, CONST char **tptr, uint32 radix, uint32 *val)
 {
-t_stat r;
+    t_stat r;
 
-r = SCPE_OK;
-*val = (uint32)strtotv (cptr, tptr, radix);
-if ((cptr == *tptr) || (*val > 0xff))
-    r = SCPE_ARG;
-else {
-    cptr = *tptr;
-    while (sim_isspace (*cptr)) cptr++;
-    *tptr = cptr;
-}
-return r;
+    r = SCPE_OK;
+    *val = (uint32)strtotv (cptr, tptr, radix);
+    if ((cptr == *tptr) || (*val > 0xff))
+        r = SCPE_ARG;
+    else {
+        cptr = *tptr;
+        while (sim_isspace (*cptr)) cptr++;
+        *tptr = cptr;
+    }
+    return r;
 }
 
 /* Symbolic input
@@ -674,216 +676,216 @@ return r;
 
 t_stat parse_sym (CONST char *cptr, t_addr addr, UNIT *uptr, t_value *val, int32 sw)
 {
-int             i;
-int             l = 1;
-int             rdx = 16;
-char            mod = 0;
-t_opcode        *tab;
-t_stat          r;
-uint32          num;
-uint32          max[5] = { 0, 0xff, 0xffff, 0, 0xffffffff };
-CONST char      *tptr;
-char            gbuf[CBUFSIZE];
+    int             i;
+    int             l = 1;
+    int             rdx = 16;
+    char            mod = 0;
+    t_opcode        *tab;
+    t_stat          r;
+    uint32          num;
+    uint32          max[5] = { 0, 0xff, 0xffff, 0, 0xffffffff };
+    CONST char      *tptr;
+    char            gbuf[CBUFSIZE];
 
-if (sw & SWMASK ('D'))
-    rdx = 10;
-else if (sw & SWMASK ('O'))
-    rdx = 8;
-else if (sw & SWMASK ('H'))
-    rdx = 16;
-if (sw & SWMASK('F')) {
-     l = 4;
-} else if (sw & SWMASK('W')) {
-     l = 2;
-}
-
-if (sw & SWMASK ('C')) {
-   cptr = get_glyph_quoted(cptr, gbuf, 0);   /* Get string */
-   for(i = 0; gbuf[i] != 0; i++) {
-      val[i] = ascii_to_ebcdic[(int)gbuf[i]];
-   }
-   return -(i - 1);
-}
-
-if (sw & SWMASK ('M')) {
-    cptr = get_glyph(cptr, gbuf, 0);         /* Get opcode */
-    for (tab = optab; tab->name != NULL; tab++) {
-       if (sim_strcasecmp(tab->name, gbuf) == 0)
-          break;
+    if (sw & SWMASK ('D'))
+        rdx = 10;
+    else if (sw & SWMASK ('O'))
+        rdx = 8;
+    else if (sw & SWMASK ('H'))
+        rdx = 16;
+    if (sw & SWMASK('F')) {
+         l = 4;
+    } else if (sw & SWMASK('W')) {
+         l = 2;
     }
-    if (tab->name == NULL)
-       return SCPE_ARG;
-    val[0] = tab->opbase;
-    switch (tab->type & LNMSK) {
-    case RR:
-           if (tab->type & IMDOP) {         /* Op number */
-               if ((r = get_imm(cptr, &tptr, rdx, &num)) != SCPE_OK)
-                   return r;
-               val[1] = num;
-           } else {                         /* Op r,r or Op r */
+
+    if (sw & SWMASK ('C')) {
+       cptr = get_glyph_quoted(cptr, gbuf, 0);   /* Get string */
+       for(i = 0; gbuf[i] != 0; i++) {
+          val[i] = ascii_to_ebcdic[(int)gbuf[i]];
+       }
+       return -(i - 1);
+    }
+
+    if (sw & SWMASK ('M')) {
+        cptr = get_glyph(cptr, gbuf, 0);         /* Get opcode */
+        for (tab = optab; tab->name != NULL; tab++) {
+           if (sim_strcasecmp(tab->name, gbuf) == 0)
+              break;
+        }
+        if (tab->name == NULL)
+           return SCPE_ARG;
+        val[0] = tab->opbase;
+        switch (tab->type & LNMSK) {
+        case RR:
+               if (tab->type & IMDOP) {         /* Op number */
+                   if ((r = get_imm(cptr, &tptr, rdx, &num)) != SCPE_OK)
+                       return r;
+                   val[1] = num;
+               } else {                         /* Op r,r or Op r */
+                   if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
+                        return r;
+                   cptr = tptr;
+                   val[1] = i << 4;
+                   if (tab->type & ONEOP)
+                       return -1;
+                   if (*cptr != ',')
+                       return SCPE_ARG;
+                   cptr++;
+                   if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
+                        return r;
+                   val[1] |= i;
+               }
+               return -1;
+        case RX:                                   /* Op r,off(r,r) */
                if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
-                    return r;
+                   return r;
+               cptr = tptr;
+               if (*cptr != ',')
+                   return SCPE_ARG;
+               cptr++;
+               val[1] = i << 4;
+               if ((r = get_off(cptr, &tptr, rdx, &num, &mod)) != SCPE_OK)
+                   return r;
+               cptr = tptr;
+               if (mod) {
+                   if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
+                        return r;
+                   cptr = tptr;
+                   val[1] |= i;
+                   if (*cptr == ',') {
+                      cptr++;
+                      while (sim_isspace (*cptr)) cptr++;
+                      if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
+                          return r;
+                      cptr = tptr;
+                      num |= (i << 12);
+                   }
+                   if (*cptr != ')')
+                     return SCPE_ARG;
+               }
+               val[2] = (num >> 8) & 0xff;
+               val[3] = num & 0xff;
+               return -3;
+        case RS:                            /* Op r,r,off(r) or Op r,off(r) */
+               if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
+                   return r;
                cptr = tptr;
                val[1] = i << 4;
-               if (tab->type & ONEOP)
-                   return -1;
                if (*cptr != ',')
                    return SCPE_ARG;
                cptr++;
-               if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
-                    return r;
-               val[1] |= i;
-           }
-           return -1;
-    case RX:                                   /* Op r,off(r,r) */
-           if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
-               return r;
-           cptr = tptr;
-           if (*cptr != ',')
-               return SCPE_ARG;
-           cptr++;
-           val[1] = i << 4;
-           if ((r = get_off(cptr, &tptr, rdx, &num, &mod)) != SCPE_OK)
-               return r;
-           cptr = tptr;
-           if (mod) {
-               if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
-                    return r;
-               cptr = tptr;
-               val[1] |= i;
-               if (*cptr == ',') {
-                  cptr++;
-                  while (sim_isspace (*cptr)) cptr++;
-                  if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
-                      return r;
-                  cptr = tptr;
-                  num |= (i << 12);
-               }
-               if (*cptr != ')')
-                 return SCPE_ARG;
-           }
-           val[2] = (num >> 8) & 0xff;
-           val[3] = num & 0xff;
-           return -3;
-    case RS:                            /* Op r,r,off(r) or Op r,off(r) */
-           if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
-               return r;
-           cptr = tptr;
-           val[1] = i << 4;
-           if (*cptr != ',')
-               return SCPE_ARG;
-           cptr++;
-           if ((tab->type & ZEROOP) == 0) {
-               if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
-                   return r;
-               cptr = tptr;
-               val[1] |= i;
-               if (*cptr != ',')
-                   return SCPE_ARG;
-               cptr++;
-               while (sim_isspace (*cptr)) cptr++;
-           }
-           if ((r = get_off(cptr, &tptr, rdx, &num, &mod)) != SCPE_OK)
-               return r;
-           cptr = tptr;
-           if (mod) {
-               if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
-                   return r;
-               cptr = tptr;
-               num |= (i << 12);
-               if (*cptr != ')')
-                   return SCPE_ARG;
-           }
-           val[2] = (num >> 8) & 0xff;
-           val[3] = num & 0xff;
-           return -3;
-    case SI:                               /* Op off(r),num */
-           if ((r = get_off(cptr, &tptr, rdx, &num, &mod)) != SCPE_OK)
-               return r;
-           cptr = tptr;
-           val[1] = 0;
-           if (mod) {
-               if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
-                   return r;
-               cptr = tptr;
-               num |= (i << 12);
-               if (*cptr != ')')
-                   return SCPE_ARG;
-               cptr++;
-           }
-           if ((tab->type & ZEROOP) == 0) {
-               if (*cptr != ',')
-                  return SCPE_ARG;
-               cptr++;
-               if ((r = get_imm(cptr, &tptr, rdx, &num)) != SCPE_OK)
-                  return r;
-               val[1] = num;
-           }
-           val[2] = (num >> 8) & 0xff;
-           val[3] = num & 0xff;
-           return -3;
-    case SS:                          /* Op off(l,r),off(l,r) or Op off(l,r),off(r) */
-           if ((r = get_off(cptr, &tptr, rdx, &num, &mod)) != SCPE_OK)
-               return r;
-           cptr = tptr;
-           if (mod) {
-               uint32  imm;
-               if ((r = get_imm(cptr, &tptr, rdx, &imm)) != SCPE_OK)
-                  return r;
-               cptr = tptr;
-               if (tab->type & TWOOP) {
-                   if (imm > 0xf)
-                      return SCPE_ARG;
-                   imm <<= 4;
-               }
-               val[1] = imm;
-               if (*cptr == ',') {
+               if ((tab->type & ZEROOP) == 0) {
+                   if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
+                       return r;
+                   cptr = tptr;
+                   val[1] |= i;
+                   if (*cptr != ',')
+                       return SCPE_ARG;
                    cptr++;
+                   while (sim_isspace (*cptr)) cptr++;
+               }
+               if ((r = get_off(cptr, &tptr, rdx, &num, &mod)) != SCPE_OK)
+                   return r;
+               cptr = tptr;
+               if (mod) {
                    if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
                        return r;
                    cptr = tptr;
                    num |= (i << 12);
+                   if (*cptr != ')')
+                       return SCPE_ARG;
                }
-               if (*cptr++ != ')')
-                 return SCPE_ARG;
-               while (sim_isspace (*cptr)) cptr++;
-           }
-           if (*cptr++ != ',')
-              return SCPE_ARG;
-           val[2] = (num >> 8) & 0xff;
-           val[3] = num & 0xff;
-           if ((r = get_off(cptr, &tptr, rdx, &num, &mod)) != SCPE_OK)
-               return r;
-           cptr = tptr;
-           if (mod) {
-               if (tab->type & TWOOP) {
+               val[2] = (num >> 8) & 0xff;
+               val[3] = num & 0xff;
+               return -3;
+        case SI:                               /* Op off(r),num */
+               if ((r = get_off(cptr, &tptr, rdx, &num, &mod)) != SCPE_OK)
+                   return r;
+               cptr = tptr;
+               val[1] = 0;
+               if (mod) {
+                   if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
+                       return r;
+                   cptr = tptr;
+                   num |= (i << 12);
+                   if (*cptr != ')')
+                       return SCPE_ARG;
+                   cptr++;
+               }
+               if ((tab->type & ZEROOP) == 0) {
+                   if (*cptr != ',')
+                      return SCPE_ARG;
+                   cptr++;
+                   if ((r = get_imm(cptr, &tptr, rdx, &num)) != SCPE_OK)
+                      return r;
+                   val[1] = num;
+               }
+               val[2] = (num >> 8) & 0xff;
+               val[3] = num & 0xff;
+               return -3;
+        case SS:                          /* Op off(l,r),off(l,r) or Op off(l,r),off(r) */
+               if ((r = get_off(cptr, &tptr, rdx, &num, &mod)) != SCPE_OK)
+                   return r;
+               cptr = tptr;
+               if (mod) {
                    uint32  imm;
                    if ((r = get_imm(cptr, &tptr, rdx, &imm)) != SCPE_OK)
                       return r;
                    cptr = tptr;
-                   if (imm > 0xf)
+                   if (tab->type & TWOOP) {
+                       if (imm > 0xf)
+                          return SCPE_ARG;
+                       imm <<= 4;
+                   }
+                   val[1] = imm;
+                   if (*cptr == ',') {
+                       cptr++;
+                       if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
+                           return r;
+                       cptr = tptr;
+                       num |= (i << 12);
+                   }
+                   if (*cptr++ != ')')
+                     return SCPE_ARG;
+                   while (sim_isspace (*cptr)) cptr++;
+               }
+               if (*cptr++ != ',')
+                  return SCPE_ARG;
+               val[2] = (num >> 8) & 0xff;
+               val[3] = num & 0xff;
+               if ((r = get_off(cptr, &tptr, rdx, &num, &mod)) != SCPE_OK)
+                   return r;
+               cptr = tptr;
+               if (mod) {
+                   if (tab->type & TWOOP) {
+                       uint32  imm;
+                       if ((r = get_imm(cptr, &tptr, rdx, &imm)) != SCPE_OK)
+                          return r;
+                       cptr = tptr;
+                       if (imm > 0xf)
+                           return SCPE_ARG;
+                       val[1] |= imm;
+                       if (*cptr++ != ',')
+                          return SCPE_ARG;
+                   }
+                   if (*cptr != ')') {
+                        if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
+                            return r;
+                        cptr = tptr;
+                        num |= (i << 12);
+                   }
+                   if (*cptr != ')')
                        return SCPE_ARG;
-                   val[1] |= imm;
-                   if (*cptr++ != ',')
-                      return SCPE_ARG;
                }
-               if (*cptr != ')') {
-                    if ((r = get_reg(cptr, &tptr, &i)) != SCPE_OK)
-                        return r;
-                    cptr = tptr;
-                    num |= (i << 12);
-               }
-               if (*cptr != ')')
-                   return SCPE_ARG;
-           }
-           val[4] = (num >> 8) & 0xff;
-           val[5] = num & 0xff;
-           return -5;
+               val[4] = (num >> 8) & 0xff;
+               val[5] = num & 0xff;
+               return -5;
+        }
     }
-}
-num = get_uint(cptr, rdx, max[l], &r);
-for (i = 0; i < l && i < 4; i++)
-    val[i] = (num >> (((l - 1) - i) * 8)) & 0xff;
-return -(l-1);
+    num = get_uint(cptr, rdx, max[l], &r);
+    for (i = 0; i < l && i < 4; i++)
+        val[i] = (num >> (((l - 1) - i) * 8)) & 0xff;
+    return -(l-1);
 }
 

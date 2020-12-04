@@ -395,10 +395,8 @@ uint8  dasd_startio(UNIT *uptr) {
 }
 
 uint8  dasd_startcmd(UNIT *uptr,  uint8 cmd) {
-    uint16         addr = GET_UADDR(uptr->CMD);
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
-    uint8          ch;
 
     if ((uptr->CMD & 0xff) != 0) {
        return SNS_BSY;
@@ -412,7 +410,7 @@ uint8  dasd_startcmd(UNIT *uptr,  uint8 cmd) {
             return 0;
          }
          sim_debug(DEBUG_CMD, dptr, "CMD unit=%d disco\n", unit);
-         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
+         return SNS_CHNEND|SNS_UNITCHK;
     }
 
     switch (cmd & 0x3) {
@@ -428,16 +426,18 @@ uint8  dasd_startcmd(UNIT *uptr,  uint8 cmd) {
          uptr->SNS = 0;
          return 0;
 
+    default:
     case 0x0:               /* Status */
          if ((cmd & 0xF) == 0x4) {  /* Sense */
             uptr->CMD |= cmd;
             return 0;
          }
-         break;
+         if (uptr->SNS & 0xff) {
+             sim_debug(DEBUG_CMD, dptr, "CMD unit=%d test %08x\n", unit, uptr->SNS);
+             return SNS_CHNEND|SNS_UNITCHK;
+         }
     }
-    if (uptr->SNS & 0xff)
-        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
-    return SNS_CHNEND|SNS_DEVEND;
+    return SNS_CHNEND;
 }
 
 /* Compute position on new track. */
@@ -1001,7 +1001,7 @@ sense_end:
          } else {
              dasd_adjpos(uptr);
              uptr->LCMD = cmd;
-             uptr->CMD &= ~(0xff);
+             uptr->CMD &= ~(DK_INDEX|DK_INDEX2|0xff);
              chan_end(addr, SNS_DEVEND|SNS_CHNEND);
          }
          return SCPE_OK;

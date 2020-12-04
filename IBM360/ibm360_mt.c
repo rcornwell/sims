@@ -433,6 +433,8 @@ t_stat mt_srv(UNIT * uptr)
          sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 3 %x\n", unit, ch);
          chan_write_byte(addr, &ch) ;
          ch = (uptr->SNS >> 16) & 0xff;
+         if ((uptr->flags & MTUF_9TR) != 0)
+            ch |= 04;
          sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 4 %x\n", unit, ch);
          chan_write_byte(addr, &ch) ;
          ch = 0;

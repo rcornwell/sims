@@ -239,6 +239,9 @@ int          timer_tics;           /* Interval Timer is ever 3 tics */
 
 #define SEG_MASK    0xfffff000     /* Mask segment */
 
+#define Q360 (cpu_unit[0].flags & FEAT_370) == 0
+#define Q370 (cpu_unit[0].flags & FEAT_370) != 0
+
 int hst_lnt;
 int hst_p;
 struct InstHistory
@@ -262,6 +265,7 @@ struct InstHistory *hst = NULL;
 t_stat cpu_ex (t_value *vptr, t_addr addr, UNIT *uptr, int32 sw);
 t_stat cpu_dep (t_value val, t_addr addr, UNIT *uptr, int32 sw);
 t_stat cpu_reset (DEVICE *dptr);
+t_bool cpu_fprint_stopped (FILE *st, t_stat v);
 t_stat cpu_set_size (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat cpu_set_hist (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat cpu_show_hist (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
@@ -391,31 +395,7 @@ void storepsw(uint32 addr, uint16 ircode) {
         ircode |= IRC_PER;
      if (ec_mode) {
          /* Generate first word */
-         if ((cpu_unit[0].flags & FEAT_370) == 0) { /* IBM 360/67 in EC mode */
-              word = (((uint32)dat_en) << 26) |
-                     ((irq_en) ? 1<<25:0) |
-                     ((ext_en) ? 1<<24:0) |
-                     (((uint32)st_key) << 16) |
-                     (((uint32)flags) << 16) |
-                     (((uint32)ilc) << 14) |
-                     (((uint32)cc) << 12) |
-                     (((uint32)pmsk) << 8);
-             /* Save code where 360/67 expects it to be */
-             switch(addr) {
-             case OEPSW:
-                   M[0xc >> 2] = (M[0xc >> 2] & 0xffff0000) | ircode;
-                   break;
-             case OSPSW:
-                   M[0x10 >> 2] = (M[0x10 >> 2] & 0x0000ffff) | ((uint32)ircode << 16);
-                   break;
-             case OPPSW:
-                   M[0x10 >> 2] = (M[0x10 >> 2] & 0xffff0000) | ircode;
-                   break;
-             case OIOPSW:
-                   M[0x14 >> 2] = (M[0x14 >> 2] & 0xffff0000) | ircode;
-                   break;
-             }
-         } else {  /* IBM 370 under EC mode */
+         if (Q370) { /* IBM 360/67 in EC mode */
               word = (((uint32)dat_en) << 26) |
                      ((per_en) ? 1<<30:0) |
                      ((irq_en) ? 1<<25:0) |
@@ -443,6 +423,30 @@ void storepsw(uint32 addr, uint16 ircode) {
              if (per_en && per_code) {
                 M[150 >> 2] = (M[150 >> 2] & 0xFFFF0000) | per_code;
                 M[152 >> 2] = per_addr;
+             }
+         } else {  /* IBM 370 under EC mode */
+             word = (((uint32)dat_en) << 26) |
+                    ((irq_en) ? 1<<25:0) |
+                    ((ext_en) ? 1<<24:0) |
+                    (((uint32)st_key) << 16) |
+                    (((uint32)flags) << 16) |
+                    (((uint32)ilc) << 14) |
+                    (((uint32)cc) << 12) |
+                    (((uint32)pmsk) << 8);
+             /* Save code where 360/67 expects it to be */
+             switch(addr) {
+             case OEPSW:
+                   M[0xc >> 2] = (M[0xc >> 2] & 0xffff0000) | ircode;
+                   break;
+             case OSPSW:
+                   M[0x10 >> 2] = (M[0x10 >> 2] & 0x0000ffff) | ((uint32)ircode << 16);
+                   break;
+             case OPPSW:
+                   M[0x10 >> 2] = (M[0x10 >> 2] & 0xffff0000) | ircode;
+                   break;
+             case OIOPSW:
+                   M[0x14 >> 2] = (M[0x14 >> 2] & 0xffff0000) | ircode;
+                   break;
              }
          }
          /* Generate second word. */
@@ -542,12 +546,12 @@ int  TransAddr(uint32 va, uint32 *pa) {
 
      /* Check address against lenght of segment table */
      if (seg > seg_len) {
-         if ((cpu_unit[0].flags & FEAT_370) == 0)
-             cregs[2] = va;
-         else {
+         if (Q370) {
              M[0x90 >> 2] = va;
              key[0] |= 0x6;
              PC = iPC;
+         } else {
+             cregs[2] = va;
          }
          storepsw(OPPSW, IRC_SEG);
          /* Not valid address */
@@ -561,15 +565,7 @@ int  TransAddr(uint32 va, uint32 *pa) {
      /* Get pointer to page table */
      entry = M[addr >> 2];
      key[addr >> 11] |= 0x4;
-     if ((cpu_unit[0].flags & FEAT_370) == 0) {
-         addr = (entry >> 24);
-         /* Check if entry valid and in correct length */
-         if (entry & PTE_VALID || page > addr) {
-             cregs[2] = va;
-             storepsw(OPPSW, IRC_PAGE);
-             return 1;
-         }
-     } else {
+     if (Q370) {
          addr = (entry >> 28) + 1;
          /* Check if entry valid and in correct length */
          if (entry & PTE_VALID || (page >> pte_len_shift) >= addr) {
@@ -577,6 +573,14 @@ int  TransAddr(uint32 va, uint32 *pa) {
              key[0] |= 0x6;
              PC = iPC;
              storepsw(OPPSW, (entry & PTE_VALID) ? IRC_SEG : IRC_PAGE);
+             return 1;
+         }
+     } else {
+         addr = (entry >> 24);
+         /* Check if entry valid and in correct length */
+         if (entry & PTE_VALID || page > addr) {
+             cregs[2] = va;
+             storepsw(OPPSW, IRC_PAGE);
              return 1;
          }
      }
@@ -594,12 +598,12 @@ int  TransAddr(uint32 va, uint32 *pa) {
      entry &= 0xffff;
 
      if ((entry & pte_mbz) != 0) {
-         if ((cpu_unit[0].flags & FEAT_370) == 0)
-             cregs[2] = va;
-         else {
+         if (Q370) {
              M[0x90 >> 2] = va;
              key[0] |= 0x6;
              PC = iPC;
+         } else {
+             cregs[2] = va;
          }
          storepsw(OPPSW, IRC_SPEC);
          return 1;
@@ -607,12 +611,12 @@ int  TransAddr(uint32 va, uint32 *pa) {
 
      /* Check if entry valid and in correct length */
      if (entry & pte_avail) {
-         if ((cpu_unit[0].flags & FEAT_370) == 0)
-             cregs[2] = va;
-         else {
+         if (Q370) {
              M[0x90 >> 2] = va;
              key[0] |= 0x6;
              PC = iPC;
+         } else {
+             cregs[2] = va;
          }
          storepsw(OPPSW, IRC_PAGE);
          return 1;
@@ -1071,19 +1075,7 @@ sim_instr(void)
 #endif
 
     /* Initialize DAT translation values */
-    if ((cpu_unit[0].flags & FEAT_370) == 0) {
-        /* 360/67 only supports 4k pages */
-        page_shift = 12;
-        page_mask = 0xfff;
-        pte_avail = 0x8;
-        pte_mbz = 0x7;
-        pte_shift = 4;
-        pte_len_shift = 0;
-        seg_shift = 20;
-        seg_mask = AMASK >> 20;
-        seg_addr = cregs[0] & AMASK;
-        seg_len = (((cregs[0] >> 24) & 0xff) + 1) << 4;
-    } else {
+    if (Q370) {
         switch((cregs[0] >> 22) & 03) {
         default:   /* Generate translation exception */
         case 1:  /* 2K pages */
@@ -1117,6 +1109,18 @@ sim_instr(void)
         }
         seg_addr = cregs[1] & AMASK;
         seg_len = (((cregs[1] >> 24) & 0xff) + 1) << 4;
+    } else {
+        /* 360/67 only supports 4k pages */
+        page_shift = 12;
+        page_mask = 0xfff;
+        pte_avail = 0x8;
+        pte_mbz = 0x7;
+        pte_shift = 4;
+        pte_len_shift = 0;
+        seg_shift = 20;
+        seg_mask = AMASK >> 20;
+        seg_addr = cregs[0] & AMASK;
+        seg_len = (((cregs[0] >> 24) & 0xff) + 1) << 4;
     }
     /* Generate pte index mask */
     page_index = ((~(seg_mask << seg_shift) & ~page_mask) & AMASK) >> page_shift;
@@ -1151,8 +1155,8 @@ wait_loop:
         if (ext_en) {
             if ((cpu_unit[0].flags & EXT_IRQ) != 0) {
                 if (!ec_mode ||
-                    ((cpu_unit[0].flags & FEAT_370) != 0 && ((cregs[0] & 0x20) != 0)) ||
-                    ((cpu_unit[0].flags & FEAT_370) == 0 && ((cregs[6] & 0x40) != 0))) {
+                    (Q370 && ((cregs[0] & 0x20) != 0)) ||
+                    (Q360 && ((cregs[6] & 0x40) != 0))) {
                     ilc = 0;
                     cpu_unit[0].flags &= ~EXT_IRQ;
                     storepsw(OEPSW, 0x40);
@@ -1213,7 +1217,7 @@ wait_loop:
         }
         if (sim_deb && (cpu_dev.dctrl & DEBUG_INST)) {
             if (ec_mode) {
-                if ((cpu_unit[0].flags & FEAT_370) != 0)
+                if (Q370)
                     sim_debug(DEBUG_INST, &cpu_dev, "PSW=%08x %08x  ",
                        (((uint32)dat_en) << 26) | ((per_en) ? 1<<30:0) | ((irq_en) ? 1<<25:0) |
                        ((ext_en) ? 1<<24:0) | 0x80000 | (((uint32)st_key) << 16) |
@@ -1313,17 +1317,19 @@ opr:
                 if (temp)
                     addr2 = (addr2 + regs[temp]) & AMASK;
             }
-         }
+        }
 
-         /* update history */
-         if (hst_lnt) {
-              hst[hst_p].op = op;
-              hst[hst_p].reg = reg;
-              hst[hst_p].addr1 = addr1;
-              hst[hst_p].addr2 = addr2;
-              hst[hst_p].src1 = 0;
-              hst[hst_p].src2 = 0;
-         }
+        sim_debug(DEBUG_TRACE, &cpu_dev, "OP=%02x R=%02x A1=%06x A2=%06x ",
+                op, reg, addr1, addr2);
+        /* update history */
+        if (hst_lnt) {
+             hst[hst_p].op = op;
+             hst[hst_p].reg = reg;
+             hst[hst_p].addr1 = addr1;
+             hst[hst_p].addr2 = addr2;
+             hst[hst_p].src1 = 0;
+             hst[hst_p].src2 = 0;
+        }
 
         /* Check if floating point */
         if ((op & 0xA0) == 0x20) {
@@ -1341,8 +1347,8 @@ opr:
                  src1h = fpregs[reg1|1];
             else
                  src1h = 0;
-            if (op & 0x40) {
-                if ((op & 0x10) != 0 && (addr1 & 0x3) != 0) {
+            if ((op & 0x48) == 0x48) {
+                if ((op & 0x10) == 0 && (addr1 & 0x3) != 0) {
                    storepsw(OPPSW, IRC_SPEC);
                    goto supress;
                 }
@@ -1350,11 +1356,11 @@ opr:
                 if (ReadFull(addr1, &src2))
                    goto supress;
                 if ((op & 0x10) == 0) {
-                   if (ReadFull(addr1+ 4, &src2h))
+                   if (ReadFull(addr1 + 4, &src2h))
                        goto supress;
                 } else
                    src2h = 0;
-            } else {
+            } else if ((op & 0xe0) == 0x20) {
                 if (reg & 0x9) {
                    storepsw(OPPSW, IRC_SPEC);
                    goto supress;
@@ -1388,6 +1394,7 @@ opr:
              hst[hst_p].src1 = src1;
              hst[hst_p].src2 = src2;
         }
+        sim_debug(DEBUG_TRACE, &cpu_dev, "S1=%08x S2=%08x ", src1, src2);
 
         /* Preform opcode */
         switch (op) {
@@ -1458,6 +1465,7 @@ opr:
                 reg = R2(reg);
                 src1 = regs[reg|1];
                 dest = regs[reg1] = regs[reg1] + regs[reg];
+                per_mod |= 1 << reg1;
                 if ((int32)dest > (int32)src1) {
                     if (per_en && (cregs[9] & 0x80000000) != 0) {
                         per_code |= 0x8000; /* Set PER branch */
@@ -1531,7 +1539,7 @@ opr:
                     storepsw(OPPSW, IRC_PRIV);
                     goto supress;
                 } else {
-                    if ((cpu_unit[0].flags & FEAT_370) != 0 && (cregs[0] & 0x40000000) != 0) {
+                    if (Q370 && (cregs[0] & 0x40000000) != 0) {
                         storepsw(OPPSW, IRC_SPOP);
                         goto supress;
                     }
@@ -1539,7 +1547,7 @@ opr:
                         goto supress;
                     ext_en = (src1 & 01) != 0;
                     if (ec_mode) {
-                        if ((cpu_unit[0].flags & FEAT_370) != 0) {
+                        if (Q370) {
                             if (src1 & 0xb8) {
                                 storepsw(OPPSW, IRC_SPEC);
                                 goto supress;
@@ -1568,7 +1576,7 @@ opr:
                         ext_en = (src1 & 0x1) != 0;
                         dat_en = 0;
                         if (src1 & 0x2) {
-                            if ((cpu_unit[0].flags & FEAT_370) != 0)
+                            if (Q370)
                                sysmsk |= (cregs[2] >> 16) & 0x3ff;
                             else
                                sysmsk |= 0x3ff;
@@ -1775,8 +1783,8 @@ set_cc3:
                     src1++;
                 }
                 if (op != OP_MH) {
-                    regs[reg1|1] = src1;
                     regs[reg1] = src1h;
+                    regs[reg1|1] = src1;
                     per_mod |= 3 << reg1;
                 } else {
                     regs[reg1] = src1;
@@ -2192,7 +2200,7 @@ save_dbl:
                 break;
 
         case OP_STMC:
-                if ((cpu_unit[0].flags & FEAT_370) != 0) {
+                if (Q370) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
@@ -2254,7 +2262,7 @@ save_dbl:
                 break;
 
         case OP_LMC:
-                if ((cpu_unit[0].flags & FEAT_370) != 0) {
+                if (Q370) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
@@ -2373,7 +2381,7 @@ save_dbl:
                         break;
                     }
 
-                    if ((cpu_unit[0].flags & FEAT_370) != 0) {
+                    if (Q370) {
                         addr2 = (entry >> 28) + 1;
                         /* Check if over end of table */
                         if ((page >> pte_len_shift) >= addr2) {
@@ -2434,7 +2442,7 @@ save_dbl:
                 }
 
                 if (op == OP_NC || op == OP_OC || op == OP_XC)
-                    cc = 0; 
+                    cc = 0;
                 do {
                    if (ReadByte(addr2, &src1))
                        goto supress;
@@ -2873,34 +2881,36 @@ save_dbl:
 
                 /* 370 specific instructions */
         case OP_ICM:
-                if ((cpu_unit[0].flags & FEAT_370) != 0) {
+                if (Q370) {
                     int i, j;
 
                     dest = regs[reg1];
-                    cc = 0;
                     if (R2(reg) == 0) {
                        if(ReadByte(addr1, &src1))
                           goto supress;
+                       cc = 0;
                        break;
                     }
                     fill = 0x80;
+                    digit = 0;
                     for (i = 0x8, j=24; i != 0; i >>= 1, j-=8) {
                         if ((R2(reg) & i) != 0) {
                             if(ReadByte(addr1, &src1))
                                goto supress;
                             addr1++;
                             src2 = 0xff << j;
-                            dest = (dest & ~src2) | (src1 << j);
+                            dest = (dest & ~src2) | ((src1 & 0xff) << j);
                             if (src1) {
-                                if ((src1 & fill) != 0) {
-                                    cc = 1;
-                                } else if (cc == 0)
-                                    cc = 2;
+                                if ((src1 & fill) != 0)
+                                    digit = 1;
+                                else if (digit == 0)
+                                    digit = 2;
                             }
                             fill = 0;
                         }
                     }
                     regs[reg1] = dest;
+                    cc = digit;
                     per_mod |= 1 << reg1;
                 } else {
                     storepsw(OPPSW, IRC_OPR);
@@ -2909,17 +2919,19 @@ save_dbl:
                 break;
 
          case OP_STCM:
-                if ((cpu_unit[0].flags & FEAT_370) != 0) {
-                    int i, j;
+                if (Q370) {
+                    uint32  rval[4];
+                    int i, k = 0;
 
                     dest = regs[reg1];
-                    for (i = 0x8, j=24; i != 0; i >>= 1, j-=8) {
-                        if ((R2(reg) & i) != 0) {
-                            src1 = (dest >> j) & 0xff;
-                            if(WriteByte(addr1, src1))
-                               goto supress;
-                            addr1++;
-                        }
+                    if ((R2(reg) & 0x8) != 0) rval[k++] = (dest >> 24) & 0xff;
+                    if ((R2(reg) & 0x4) != 0) rval[k++] = (dest >> 16) & 0xff;
+                    if ((R2(reg) & 0x2) != 0) rval[k++] = (dest >> 8) & 0xff;
+                    if ((R2(reg) & 0x1) != 0) rval[k++] = dest & 0xff;
+                    for (i = 0; i < k; i++) {
+                        if(WriteByte(addr1, rval[i]))
+                           goto supress;
+                        addr1++;
                     }
                 } else {
                     storepsw(OPPSW, IRC_OPR);
@@ -2928,27 +2940,29 @@ save_dbl:
                 break;
 
         case OP_CLM:
-                if ((cpu_unit[0].flags & FEAT_370) != 0) {
-                    uint32  rval[4];
+                if (Q370) {
+                    uint8  rval[4];
                     int i, k = 0;
 
+                    cc = 0;
                     if (R2(reg) == 0) {
                        if(ReadByte(addr1, &src1))
                           goto supress;
                        break;
                     }
                     dest = regs[reg1];
-                    if ((R2(reg) & 0x8) != 0) rval[k++] = (dest >> 24) & 0xff;
-                    if ((R2(reg) & 0x4) != 0) rval[k++] = (dest >> 16) & 0xff;
-                    if ((R2(reg) & 0x2) != 0) rval[k++] = (dest >> 8) & 0xff;
-                    if ((R2(reg) & 0x1) != 0) rval[k++] = dest & 0xff;
-                    cc = 0;
+                    if ((R2(reg) & 0x8) != 0) rval[k++] = (uint8)((dest >> 24) & 0xff);
+                    if ((R2(reg) & 0x4) != 0) rval[k++] = (uint8)((dest >> 16) & 0xff);
+                    if ((R2(reg) & 0x2) != 0) rval[k++] = (uint8)((dest >> 8) & 0xff);
+                    if ((R2(reg) & 0x1) != 0) rval[k++] = (uint8)(dest & 0xff);
                     for (i = 0; i < k; i++) {
+                        uint8   m;
                         if (ReadByte(addr1, &src1))
                             goto supress;
                         addr1++;
-                        if (rval[i] != src1) {
-                           if ((uint32)rval[i] > (uint32)src1)
+                        m = (uint8)(src1 & 0xff);
+                        if (rval[i] != m) {
+                           if (rval[i] > m)
                               cc = 2;
                            else
                               cc = 1;
@@ -2962,7 +2976,7 @@ save_dbl:
                 break;
 
         case OP_370:
-                if ((cpu_unit[0].flags & FEAT_370) != 0) {
+                if (Q370) {
                    if (reg < 2 || reg > 0x13) {
                        storepsw(OPPSW, IRC_OPR);
                        goto supress;
@@ -3129,7 +3143,7 @@ save_dbl:
                 break;
 
         case OP_STNSM:
-                if ((cpu_unit[0].flags & FEAT_370) != 0) {
+                if (Q370) {
                     if (flags & PROBLEM) {
                         storepsw(OPPSW, IRC_PRIV);
                         goto supress;
@@ -3174,7 +3188,7 @@ save_dbl:
                 break;
 
         case OP_STOSM:
-                if ((cpu_unit[0].flags & FEAT_370) != 0) {
+                if (Q370) {
                     if (flags & PROBLEM) {
                         storepsw(OPPSW, IRC_PRIV);
                         goto supress;
@@ -3219,7 +3233,7 @@ save_dbl:
                 break;
 
         case OP_SIGP:
-                if ((cpu_unit[0].flags & FEAT_370) != 0) {
+                if (Q370) {
                     if (flags & PROBLEM) {
                         storepsw(OPPSW, IRC_PRIV);
                         goto supress;
@@ -3229,7 +3243,7 @@ save_dbl:
                 goto supress;
 
         case OP_MC:
-                if ((cpu_unit[0].flags & FEAT_370) != 0) {
+                if (Q370) {
                     if ((reg & 0xf0) != 0) {
                         storepsw(OPPSW, IRC_SPEC);
                         goto supress;
@@ -3251,7 +3265,7 @@ save_dbl:
                 break;
 
         case OP_LCTL:
-                if ((cpu_unit[0].flags & FEAT_370) == 0) {
+                if (Q360) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if (flags & PROBLEM) {
                     storepsw(OPPSW, IRC_PRIV);
@@ -3311,18 +3325,14 @@ save_dbl:
                                                   ~page_mask) & AMASK) >> page_shift;
                                   intval_en = ((dest & 0x400) != 0);
                                   tod_en = ((dest & 0x800) != 0);
-                                  for (addr2 = 0;
-                                       addr2 < sizeof(tlb)/sizeof(uint32);
-                                       addr2++)
-                                       tlb[addr2] = 0;
                                   break;
                         case 0x1:     /* Segment table address and length */
-                                  seg_addr = dest & AMASK;
-                                  seg_len = (((dest >> 24) & 0xff) + 1) << 4;
                                   for (addr2 = 0;
                                        addr2 < sizeof(tlb)/sizeof(uint32);
                                        addr2++)
                                        tlb[addr2] = 0;
+                                  seg_addr = dest & AMASK;
+                                  seg_len = (((dest >> 24) & 0xff) + 1) << 4;
                                   break;
                         case 0x2:     /* Masks */
                                   if (ec_mode)
@@ -3353,7 +3363,7 @@ save_dbl:
                 break;
 
         case OP_STCTL:
-                if ((cpu_unit[0].flags & FEAT_370) == 0) {
+                if (Q360) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
@@ -3374,7 +3384,7 @@ save_dbl:
                 break;
 
         case OP_CS:
-                if ((cpu_unit[0].flags & FEAT_370) == 0) {
+                if (Q360) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if ((addr1 & 0x3) != 0) {
                    storepsw(OPPSW, IRC_SPEC);
@@ -3396,7 +3406,7 @@ save_dbl:
                 break;
 
         case OP_CDS:
-                if ((cpu_unit[0].flags & FEAT_370) == 0) {
+                if (Q360) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if ((addr1 & 0x7) != 0 || (reg1 & 1) != 0 || (reg & 1) != 0) {
                    storepsw(OPPSW, IRC_SPEC);
@@ -3425,7 +3435,7 @@ save_dbl:
                 break;
 
         case OP_SRP:
-                if ((cpu_unit[0].flags & FEAT_370) == 0) {
+                if (Q360) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 } else if ((cpu_unit[0].flags & FEAT_DEC) == 0) {
@@ -3437,7 +3447,7 @@ save_dbl:
                 break;
 
         case OP_MVCL:
-                if ((cpu_unit[0].flags & FEAT_370) == 0) {
+                if (Q360) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if (reg & 1 || reg1 & 1) {
                    storepsw(OPPSW, IRC_SPEC);
@@ -3473,10 +3483,12 @@ save_dbl:
                            break;
                        if (src2 != 0) {
                           addr2 ++;
+                          addr2 &= AMASK;
                           src2 --;
                        }
                        if (src1 != 0) {
                           addr1 ++;
+                          addr1 &= AMASK;
                           src1 --;
                        }
                    }
@@ -3494,7 +3506,7 @@ save_dbl:
                 break;
 
         case OP_CLCL:
-                if ((cpu_unit[0].flags & FEAT_370) == 0) {
+                if (Q360) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if (reg & 1 || reg1 & 1) {
                    storepsw(OPPSW, IRC_SPEC);
@@ -3528,10 +3540,12 @@ save_dbl:
                        }
                        if (src1 != 0) {
                           addr1 ++;
+                          addr1 &= AMASK;
                           src1 --;
                        }
                        if (src2 != 0) {
                           addr2 ++;
+                          addr2 &= AMASK;
                           src2 --;
                        }
                    }
@@ -3615,6 +3629,10 @@ save_dbl:
 
                   /* Floating Store register */
         case OP_STD:
+                if ((addr1 & 0x3) != 0) {
+                   storepsw(OPPSW, IRC_SPEC);
+                   goto supress;
+                }
                 if (WriteFull(addr1 + 4, src1h))
                     break;
                 /* Fall through */
@@ -4624,16 +4642,32 @@ fpnorm:
                 }
                 break;
 
-        case OP_MXDR:
         case OP_MXD:
                 if ((cpu_unit[0].flags & FEAT_EFP) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
-                if (reg1 & 0xB) {
+                if ((reg1 & 0xB) != 0 || (addr1 & 0x3) != 0) {
                     storepsw(OPPSW, IRC_SPEC);
                     goto supress;
                 }
+
+                if (ReadFull(addr1, &src2))
+                   goto supress;
+                if (ReadFull(addr1 + 4, &src2h))
+                   goto supress;
+
+                /* Fall through */
+        case OP_MXDR:
+                if ((cpu_unit[0].flags & FEAT_EFP) == 0) {
+                    storepsw(OPPSW, IRC_OPR);
+                    goto supress;
+                }
+                if ((reg1 & 0xB) != 0) {
+                    storepsw(OPPSW, IRC_SPEC);
+                    goto supress;
+                }
+
                 /* Extract numbers and adjust */
                 e1 = (src1 & EMASK) >> 24;
                 e2 = (src2 & EMASK) >> 24;
@@ -5310,6 +5344,7 @@ fpnorm:
              hst[hst_p].cc = cc;
         }
 
+        sim_debug(DEBUG_TRACE, &cpu_dev, "D=%08x CC=%d\n", dest, cc);
         if (sim_deb && (cpu_dev.dctrl & DEBUG_INST)) {
             sim_debug(DEBUG_INST, &cpu_dev,
                       "GR00=%08x GR01=%08x GR02=%08x GR03=%08x\n",
@@ -5337,6 +5372,7 @@ fpnorm:
 
         if (irqaddr != 0) {
 supress:
+        sim_debug(DEBUG_TRACE, &cpu_dev, "suppress\n");
              src1 = M[irqaddr>>2];
              key[0] |= 0x4;
              if (hst_lnt) {
@@ -5352,7 +5388,7 @@ supress:
                   hst[hst_p].src2 = src2;
              }
 lpsw:
-             if ((cpu_unit[0].flags & FEAT_370) != 0)
+             if (Q370)
                  ec_mode = (src1 & 0x00080000) != 0;
              else if ((cpu_unit[0].flags & FEAT_DAT) != 0)
                  ec_mode = (cregs[6] & 0x00800000) != 0;
@@ -5364,7 +5400,7 @@ lpsw:
                  dat_en = (src1 >> 26) & 1;
                  cc = (src1 >> 12) & 3;
                  pmsk = (src1 >> 8) & 0xf;
-                 if ((cpu_unit[0].flags & FEAT_370) != 0) {
+                 if (Q370) {
                      per_en = (src1 & 0x40000000) != 0;
                      sysmsk = irq_en ? (cregs[2] >> 16) : 0;
                      if (irqaddr == 4)
@@ -5394,7 +5430,7 @@ lpsw:
              irqaddr = 0;
              irq_pend = 1;
              st_key = (src1 >> 16)  & 0xf0;
-             if ((cpu_unit[0].flags & FEAT_370) != 0)
+             if (Q370)
                 flags = (src1 >> 16) & 0x7;
              else
                 flags = (src1 >> 16) & 0xf;
@@ -5788,6 +5824,7 @@ t_stat cpu_reset (DEVICE *dptr)
 {
     int     i;
 
+    sim_vm_fprint_stopped = &cpu_fprint_stopped;
     /* Create memory array if it does not exist. */
     if (M == NULL) {                        /* first time init? */
         sim_brk_types = sim_brk_dflt = SWMASK ('E');
@@ -5809,17 +5846,20 @@ t_stat cpu_reset (DEVICE *dptr)
     for (i = 0; i < 16; i++)
        cregs[i] = 0;
     clk_cmp[0] = clk_cmp[1] = 0xffffffff;
-    if ((cpu_unit[0].flags & FEAT_370) != 0) {
+    if (Q370) {
 #ifdef USE_64BIT
         if (clk_state == CLOCK_UNSET) {
             /* Set TOD to current time */
             time_t seconds = sim_get_time(NULL);
             t_uint64  lsec = (t_uint64)seconds;
+            /* IBM measures time from 1900, Unix starts at 1970 */
+            /* Add in number of years from 1900 to 1970 + 17 leap days */
             lsec += ((70 * 365) + 17) * 86400ULL;
             lsec *= 1000000ULL;
             lsec <<= 12;
             tod_clock[0] = (uint32)(lsec >> 32);
             tod_clock[1] = (uint32)(lsec & FMASK);
+            clk_state = CLOCK_SET;
         }
 #endif
         cregs[0]  = 0x000000e0;
@@ -5850,7 +5890,7 @@ rtc_srv(UNIT * uptr)
     key[0] |= 0x6;
     sim_debug(DEBUG_INST, &cpu_dev, "TIMER = %08x\n", M[0x50>>2]);
     /* Time of day clock and timer on IBM 370 */
-    if ((cpu_unit[0].flags & FEAT_370) != 0) {
+    if (Q370) {
         uint32 t;
         if (clk_state && (cregs[0] & 0x20000000) == 0) {
            t = tod_clock[1] + (13333333);
@@ -5924,7 +5964,7 @@ t_stat cpu_ex (t_value *vptr, t_addr exta, UNIT *uptr, int32 sw)
         if (entry & PTE_VALID)
             return SCPE_NXM;
 
-        if ((cpu_unit[0].flags & FEAT_370) != 0) {
+        if (Q370) {
             addr2 = (entry >> 28) + 1;
             /* Check if over end of table */
             if ((page >> pte_len_shift) > addr2)
@@ -5998,7 +6038,7 @@ t_stat cpu_dep (t_value val, t_addr exta, UNIT *uptr, int32 sw)
         if (entry & PTE_VALID)
             return SCPE_NXM;
 
-        if ((cpu_unit[0].flags & FEAT_370) != 0) {
+        if (Q370) {
             addr2 = (entry >> 28) + 1;
             /* Check if over end of table */
             if ((page >> pte_len_shift) > addr2)
@@ -6067,7 +6107,30 @@ t_stat cpu_set_size (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
     fprintf(stderr, "Mem size=%x\n\r", val);
     MEMSIZE = val;
     reset_all (0);
-        return SCPE_OK;
+    return SCPE_OK;
+}
+
+t_bool
+cpu_fprint_stopped (FILE *st, t_stat v)
+{
+    if (ec_mode) {
+        if (Q370)
+            fprintf(st, " PSW=%08x %08x\n",
+               (((uint32)dat_en) << 26) | ((per_en) ? 1<<30:0) | ((irq_en) ? 1<<25:0) |
+               ((ext_en) ? 1<<24:0) | 0x80000 | (((uint32)st_key) << 16) |
+               (((uint32)flags) << 16) | (((uint32)cc) << 12) | (((uint32)pmsk) << 8), PC);
+        else
+            fprintf(st, " PSW=%08x %08x\n",
+               (((uint32)dat_en) << 26) | ((irq_en) ? 1<<25:0) | ((ext_en) ? 1<<24:0) |
+               (((uint32)st_key) << 16) | (((uint32)flags) << 16) |
+               (((uint32)ilc) << 14) | (((uint32)cc) << 12) | (((uint32)pmsk) << 8), PC);
+    } else {
+        fprintf(st, " PSW=%08x %08x\n",
+            ((uint32)(ext_en) << 24) | (((uint32)sysmsk & 0xfe00) << 16) |
+            (((uint32)st_key) << 16) | (((uint32)flags) << 16) | ((uint32)irqcode),
+            (((uint32)ilc) << 30) | (((uint32)cc) << 28) | (((uint32)pmsk) << 24) | PC);
+    }
+    return FALSE;
 }
 
 /* Handle execute history */

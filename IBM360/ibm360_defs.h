@@ -127,32 +127,32 @@ typedef struct dib {
 #define DIAGAREA          0x80        /* Diag scan area. */
 
 /* Opcode definitions */
-#define OP_SPM            0x04
-#define OP_BALR           0x05
-#define OP_BCTR           0x06
-#define OP_BCR            0x07
-#define OP_SSK            0x08
-#define OP_ISK            0x09
-#define OP_SVC            0x0A
-#define OP_BASR           0x0D
+#define OP_SPM            0x04     /* src1 = R1, src2 = R2 */
+#define OP_BALR           0x05     /* src1 = R1, src2 = R2 */
+#define OP_BCTR           0x06     /* src1 = R1, src2 = R2 */
+#define OP_BCR            0x07     /* src1 = R1, src2 = R2 */
+#define OP_SSK            0x08     /* src1 = R1, src2 = R2 */
+#define OP_ISK            0x09     /* src1 = R1, src2 = R2 */
+#define OP_SVC            0x0A     /* src1 = R1, src2 = R2 */
+#define OP_BASR           0x0D     /* src1 = R1, src2 = R2 */
 #define OP_MVCL           0x0E    /* 370 Move long */
 #define OP_CLCL           0x0F    /* 370 Compare logical long */
-#define OP_LPR            0x10
-#define OP_LNR            0x11
-#define OP_LTR            0x12
-#define OP_LCR            0x13
-#define OP_NR             0x14
-#define OP_CLR            0x15
-#define OP_OR             0x16
-#define OP_XR             0x17
-#define OP_CR             0x19
-#define OP_LR             0x18
-#define OP_AR             0x1A
-#define OP_SR             0x1B
-#define OP_MR             0x1C
-#define OP_DR             0x1D
-#define OP_ALR            0x1E
-#define OP_SLR            0x1F
+#define OP_LPR            0x10     /* src1 = R1, src2 = R2 */
+#define OP_LNR            0x11     /* src1 = R1, src2 = R2 */
+#define OP_LTR            0x12     /* src1 = R1, src2 = R2 */
+#define OP_LCR            0x13     /* src1 = R1, src2 = R2 */
+#define OP_NR             0x14     /* src1 = R1, src2 = R2 */
+#define OP_CLR            0x15     /* src1 = R1, src2 = R2 */
+#define OP_OR             0x16     /* src1 = R1, src2 = R2 */
+#define OP_XR             0x17     /* src1 = R1, src2 = R2 */
+#define OP_CR             0x19     /* src1 = R1, src2 = R2 */
+#define OP_LR             0x18     /* src1 = R1, src2 = R2 */
+#define OP_AR             0x1A     /* src1 = R1, src2 = R2 */
+#define OP_SR             0x1B     /* src1 = R1, src2 = R2 */
+#define OP_MR             0x1C     /* src1 = R1, src2 = R2 */
+#define OP_DR             0x1D     /* src1 = R1, src2 = R2 */
+#define OP_ALR            0x1E     /* src1 = R1, src2 = R2 */
+#define OP_SLR            0x1F     /* src1 = R1, src2 = R2 */
 #define OP_LPDR           0x20
 #define OP_LNDR           0x21
 #define OP_LTDR           0x22
@@ -185,35 +185,35 @@ typedef struct dib {
 #define OP_DER            0x3D
 #define OP_AUR            0x3E
 #define OP_SUR            0x3F
-#define OP_STH            0x40
-#define OP_LA             0x41
-#define OP_STC            0x42
-#define OP_IC             0x43
-#define OP_EX             0x44
-#define OP_BAL            0x45
-#define OP_BCT            0x46
-#define OP_BC             0x47
-#define OP_LH             0x48
-#define OP_CH             0x49
-#define OP_AH             0x4A
-#define OP_SH             0x4B
-#define OP_MH             0x4C
-#define OP_BAS            0x4D
-#define OP_CVD            0x4E
-#define OP_CVB            0x4F
-#define OP_ST             0x50
-#define OP_N              0x54
-#define OP_CL             0x55
-#define OP_O              0x56
-#define OP_X              0x57
-#define OP_L              0x58
-#define OP_C              0x59
-#define OP_A              0x5A
-#define OP_S              0x5B
-#define OP_M              0x5C
-#define OP_D              0x5D
-#define OP_AL             0x5E
-#define OP_SL             0x5F
+#define OP_STH            0x40  /* src1 = R1, src2= A1 */
+#define OP_LA             0x41  /* src1 = R1, src2= A1 */
+#define OP_STC            0x42  /* src1 = R1, src2= A1 */
+#define OP_IC             0x43  /* src1 = R1, src2= A1 */
+#define OP_EX             0x44  /* src1 = R1, src2= A1 */
+#define OP_BAL            0x45  /* src1 = R1, src2= A1 */
+#define OP_BCT            0x46  /* src1 = R1, src2= A1 */
+#define OP_BC             0x47  /* src1 = R1, src2= A1 */
+#define OP_LH             0x48  /* src1 = R1, src2= MH */
+#define OP_CH             0x49  /* src1 = R1, src2= MH */
+#define OP_AH             0x4A  /* src1 = R1, src2= MH */
+#define OP_SH             0x4B  /* src1 = R1, src2= MH */
+#define OP_MH             0x4C  /* src1 = R1, src2= MH */
+#define OP_BAS            0x4D  /* src1 = R1, src2= A1 */
+#define OP_CVD            0x4E  /* src1 = R1, src2= A1 */
+#define OP_CVB            0x4F  /* src1 = R1, src2= A1 */
+#define OP_ST             0x50  /* src1 = R1, src2= A1 */
+#define OP_N              0x54  /* src1 = R1, src2= M */
+#define OP_CL             0x55  /* src1 = R1, src2= M */
+#define OP_O              0x56  /* src1 = R1, src2= M */
+#define OP_X              0x57  /* src1 = R1, src2= M */
+#define OP_L              0x58  /* src1 = R1, src2= M */
+#define OP_C              0x59  /* src1 = R1, src2= M */
+#define OP_A              0x5A  /* src1 = R1, src2= M */
+#define OP_S              0x5B  /* src1 = R1, src2= M */
+#define OP_M              0x5C  /* src1 = R1, src2= M */
+#define OP_D              0x5D  /* src1 = R1, src2= M */
+#define OP_AL             0x5E  /* src1 = R1, src2= M */
+#define OP_SL             0x5F  /* src1 = R1, src2= M */
 #define OP_STD            0x60
 #define OP_MXD            0x67
 #define OP_LD             0x68
@@ -366,6 +366,7 @@ extern const char ebcdic_to_ascii[256];
 #define DEBUG_INST      0x0000020       /* Show instruction execution */
 #define DEBUG_IRQ       0x0000100       /* Show IRQ requests */
 #define DEBUG_CDATA     0x0000200       /* Show channel data */
+#define DEBUG_TRACE     0x0000400       /* Show instruction trace */
 
 extern DEBTAB dev_debug[];
 extern DEBTAB crd_debug[];
