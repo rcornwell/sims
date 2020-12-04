@@ -379,10 +379,12 @@ t_stat dpy_reset (DEVICE *dptr)
     if (dptr->flags & DEV_DIS) {
         display_close(dptr);
     } else {
+#if ITS
         if (stk_dev.flags & DEV_DIS) {
             sim_debug(DEBUG_DETAIL, &dpy_dev, "Grabbing keyboard\n");
             vid_display_kb_event_process = dpy_keyboard;
         }
+#endif
         display_reset();
         ty340_reset(dptr);
         vid_set_fullscreen (dpy_unit[0].flags & FULLSCREEN);
