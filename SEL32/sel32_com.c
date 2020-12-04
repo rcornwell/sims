@@ -242,12 +242,16 @@ UNIT            com_unit[] = {
 DIB             com_dib = {
     NULL,           /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
     com_startcmd,   /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O */
+    NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O */
     NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
-    NULL,           /* uint16 (*post_io)(UNIT *uptr) */         /* Post I/O */
+    NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
+    NULL,           /* uint16 (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
+    NULL,           /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     com_ini,        /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     com_unit,       /* UNIT* units */                           /* Pointer to units structure */
     com_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
+    NULL,           /* IOCLQ *ioclq_ptr */                      /* IOCL entries, 1 per UNIT */
     COM_UNITS,      /* uint8 numunits */                        /* number of units defined */
     0xFF,           /* uint8 mask */                            /* 16 devices - device mask */
     0x7E00,         /* uint16 chan_addr */                      /* parent channel address */
@@ -314,12 +318,16 @@ UNIT            coml_unit[] = {
 DIB             coml_dib = {
     NULL,           /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
     com_startcmd,   /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O */
+    NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O */
     NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
-    NULL,           /* uint16 (*post_io)(UNIT *uptr) */         /* Post I/O */
+    NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
+    NULL,           /* uint16 (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
+    NULL,           /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     coml_ini,       /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     coml_unit,      /* UNIT* units */                           /* Pointer to units structure */
     coml_chp,       /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
+    NULL,           /* IOCLQ *ioclq_ptr */                      /* IOCL entries, 1 per UNIT */
     COM_LINES*2,    /* uint8 numunits */                        /* number of units defined */
     0xff,           /* uint8 mask */                            /* 16 devices - device mask */
     0x7E00,         /* uint16 chan_addr */                      /* parent channel address */

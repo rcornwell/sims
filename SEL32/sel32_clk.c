@@ -128,7 +128,7 @@ t_stat rtc_srv (UNIT *uptr)
             ((SPAD[rtc_lvl+0x80] & SINT_ACT) == 0))) { /* in spad too */
             /* HACK for console I/O stopping */
             /* This reduces the number of console I/O stopping errors */
-            /* need tp find real cause of I/O stopping on clock interrupt */
+            /* need to find real cause of I/O stopping on clock interrupt */
             if ((outbusy==0) && (inbusy==0))        /* skip interrupt if con I/O in busy wait */
                 INTS[rtc_lvl] |= INTS_REQ;          /* request the interrupt */
             irq_pend = 1;                           /* make sure we scan for int */
@@ -247,9 +247,9 @@ const char *itm_desc(DEVICE *dptr);
    itm_reg      Interval Timer ITM register list
 */
 
-/* Mike suggested I remove the UNIT_IDLE flag from ITM.  This causes SEL32 */
+/* Mark suggested I remove the UNIT_IDLE flag from ITM.  This causes SEL32 */
 /* to use 100% of the CPU instead of waiting and running 10% cpu usage */
-//BAD Mike UNIT itm_unit = { UDATA (&itm_srv, 0, 0), 26042, UNIT_ADDR(0x7F04)};
+//BAD Mark UNIT itm_unit = { UDATA (&itm_srv, UNIT_IDLE, 0), 26042, UNIT_ADDR(0x7F04)};
 UNIT itm_unit = { UDATA (&itm_srv, 0, 0), 26042, UNIT_ADDR(0x7F04)};
 
 REG itm_reg[] = {
@@ -493,7 +493,7 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
         if (itm_run) {                              /* if we were running save curr cnt */
             /* read timer value */
             temp = (uint32)(100.0*sim_activate_time_usecs(&itm_unit)/itm_tick_size_x_100);
-            sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%2x temp value %08x (%d)\n", cmd, temp, temp);
+            sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%2x read value %08x (%d)\n", cmd, temp, temp);
             if (itm_strt) {                         /* see if running neg */
                 /* we only get here if timer ran out and no reload value */
                 /* get simulated negative start time in counts */
@@ -510,7 +510,7 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
         if (itm_run) {                              /* if we were running save curr cnt */
             /* read timer value */
             temp = (uint32)(100.0*sim_activate_time_usecs(&itm_unit)/itm_tick_size_x_100);
-            sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%2x temp value %08x (%d)\n", cmd, temp, temp);
+            sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%2x read value %08x (%d)\n", cmd, temp, temp);
             if (itm_strt) {                         /* see if running neg */
                 /* we only get here if timer ran out and no reload value */
                 /* get simulated negative start time in counts */
@@ -534,7 +534,7 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
         if (itm_run) {                              /* if we were running save curr cnt */
             /* read timer value */
             temp = (uint32)(100.0*sim_activate_time_usecs(&itm_unit)/itm_tick_size_x_100);
-            sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%2x temp value %08x (%d)\n", cmd, temp, temp);
+            sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%2x read value %08x (%d)\n", cmd, temp, temp);
             if (itm_strt) {                         /* see if running neg */
                 /* we only get here if timer ran out and no reload value */
                 /* get simulated negative start time in counts */
@@ -565,7 +565,7 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
         if (itm_run) {                              /* if we were running save curr cnt */
             /* read timer value */
             temp = (uint32)(100.0*sim_activate_time_usecs(&itm_unit)/itm_tick_size_x_100);
-            sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%2x temp value %08x (%d)\n", cmd, temp, temp);
+            sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%2x read value %08x (%d)\n", cmd, temp, temp);
             if (itm_strt) {                         /* see if running neg */
                 /* we only get here if timer ran out and no reload value */
                 /* get simulated negative start time in counts */

@@ -104,12 +104,16 @@ UNIT            mfp_unit[] = {
 DIB             mfp_dib = {
     NULL,           /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Start I/O */
     mfp_startcmd,   /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Stop I/O HIO */
+    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O HIO */
+    NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O HIO */
     NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O TIO */
-    NULL,           /* uint16 (*post_io)(UNIT *uptr) */         /* Post I/O */
+    NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
+    NULL,           /* uint16 (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
+    NULL,           /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     mfp_ini,        /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     mfp_unit,       /* UNIT* units */                           /* Pointer to units structure */
     mfp_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
+    NULL,           /* IOCLQ *ioclq_ptr */                      /* IOCL entries, 1 per UNIT */
     NUM_UNITS_MFP,  /* uint8 numunits */                        /* number of units defined */
     0xff,           /* uint8 mask */                            /* 16 devices - device mask */
     0x7600,         /* uint16 chan_addr */                      /* parent channel address */

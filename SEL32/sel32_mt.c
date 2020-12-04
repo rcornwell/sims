@@ -293,12 +293,16 @@ CHANP           mta_chp[NUM_UNITS_MT] = {0};
 DIB             mta_dib = {
     NULL,           /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
     mt_startcmd,    /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O */
+    NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O */
     NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
-    NULL,           /* uint16 (*post_io)(UNIT *uptr) */         /* Post I/O */
+    NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
+    NULL,           /* uint16 (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
+    NULL,           /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     mt_ini,         /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     mta_unit,       /* UNIT* units */                           /* Pointer to units structure */
     mta_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
+    NULL,           /* IOCLQ *ioclq_ptr */                      /* IOCL entries, 1 per UNIT */
     NUM_UNITS_MT,   /* uint8 numunits */                        /* number of units defined */
     0x07,           /* uint8 mask */                            /* 8 devices - device mask */
     0x1000,         /* uint16 chan_addr */                      /* parent channel address */
@@ -337,12 +341,16 @@ UNIT            mtb_unit[] = {
 DIB             mtb_dib = {
     NULL,           /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
     mt_startcmd,    /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O */
+    NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O */
     NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
-    NULL,           /* uint16 (*post_io)(UNIT *uptr) */         /* Post I/O */
+    NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
+    NULL,           /* uint16 (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
+    NULL,           /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     mt_ini,         /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     mtb_unit,       /* UNIT* units */                           /* Pointer to units structure */
     mtb_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
+    NULL,           /* IOCLQ *ioclq_ptr */                      /* IOCL entries, 1 per UNIT */
     NUM_UNITS_MT,   /* uint8 numunits */                        /* number of units defined */
     0x07,           /* uint8 mask */                            /* 8 devices - device mask */
     0x1800,         /* uint16 chan_addr */                      /* parent channel address */

@@ -207,19 +207,21 @@ struct ec_device {
     int               poll;                    /* Need to poll receiver */
 } ec_data;
 
-int8    conf[12] = {0};                        /* user specified configuration */
+uint8   conf[12] = {0};                       /* user specified configuration */
 
-extern int32 tmxr_poll;
+extern  int32 tmxr_poll;
+extern  uint32  readfull(CHANP *chp, uint32 maddr, uint32 *word);
 
 static CONST ETH_MAC broadcast_ethaddr = {0xff,0xff,0xff,0xff,0xff,0xff};
 
 /* channel program information */
 //CHANP           ec_chp[8] = {0};
-CHANP           ec_chp[10] = {0};
+CHANP           ec_chp[NUM_UNITS_ETHER] = {0};
 
-uint16         ec_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) ;
+uint16         ec_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
 t_stat         ec_srv(UNIT *uptr);
 uint16         ec_haltio(UNIT *uptr);
+uint16         ec_iocl(CHANP *chp, int32 tic_ok);
 void           ec_packet_debug(struct ec_device *ec, const char *action, ETH_PACK *packet);
 t_stat         ec_reset (DEVICE *dptr);
 void           ec_ini(UNIT *, t_bool);
@@ -260,14 +262,18 @@ UNIT ec_unit[] = {
 DIB             ec_dib = {
     NULL,                                       /* Pre start I/O */
     ec_startcmd,                                /* Start a command */
-    ec_haltio,                                  /* Halt I/O */
-    NULL,                                       /* Test I/O */
-    NULL,                                       /* Post I/O */
-    ec_ini,                                     /* init function */
-    ec_unit,                                    /* Pointer to units structure */
-    ec_chp,                                     /* Pointer to chan_prg structure */
+    ec_haltio,      /* uint16 (*halt_io)(UNIT *uptr) */ /* Halt I/O */
+    NULL,           /* uint16 (*stop_io)(UNIT *uptr) */ /* Stop I/O */
+    NULL,           /* uint16 (*test_io)(UNIT *uptr) */ /* Test I/O */
+    NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */    /* Reset Controller */
+    NULL,           /* uint16 (*rschnl_io)(UNIT *uptr) */   /* Reset Channel */
+    ec_iocl,        /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
+    ec_ini,         /* void (*dev_ini)(UNIT *uptr) */   /* init function */
+    ec_unit,        /* UNIT *units */           /* Pointer to units structure */
+    ec_chp,         /* CHANP *chan_prg */       /* Pointer to chan_prg structure */
+    NULL,           /* IOCLQ *ioclq_ptr */      /* IOCL entries, 1 per UNIT */
 //  8,                                          /* number of units defined */
-    10,                                         /* number of units defined */
+    NUM_UNITS_ETHER,                            /* number of units defined */
     0x0F,                                       /* device mask */
     0x0E00,                                     /* parent channel address */
     0,                                          /* fifo input index */
@@ -311,11 +317,273 @@ DEBTAB              ec_debug[] = {
 DEVICE ec_dev = {
     "EC", ec_unit, NULL, ec_mod,
 //  8, 16, 24, 4, 16, 32,
-    10, 16, 24, 4, 16, 32,
+    NUM_UNITS_ETHER, 16, 24, 4, 16, 32,
     NULL, NULL, &ec_reset, NULL, &ec_attach, &ec_detach,
     &ec_dib, DEV_DISABLE | DEV_DEBUG | DEV_ETHER, 0, ec_debug,
     NULL, NULL, &ec_help, NULL, NULL, &ec_description
 };
+
+/* load in the IOCD and process the commands */
+/* return = 0 OK */
+/* return = 1 error, chan_status will have reason */
+uint16  ec_iocl(CHANP *chp, int32 tic_ok)
+{
+    uint32      word1 = 0;
+    uint32      word2 = 0;
+    int32       docmd = 0;
+//  DIB         *dibp = dib_unit[chp->chan_dev];/* get the DIB pointer */
+    UNIT        *uptr = chp->unitptr;           /* get the unit ptr */
+    uint16      chan = get_chan(chp->chan_dev); /* our channel */
+    uint16      devstat = 0;
+    DEVICE      *dptr = get_dev(uptr);
+
+    /* check for valid iocd address if 1st iocd */
+    if (chp->chan_info & INFO_SIOCD) {          /* see if 1st IOCD in channel prog */
+        if (chp->chan_caw & 0x3) {              /* must be word bounded */
+            sim_debug(DEBUG_EXP, dptr,
+                "ec_iocl iocd bad address chan %02x caw %06x\n",
+                chan, chp->chan_caw);
+            chp->ccw_addr = chp->chan_caw;      /* set the bad iocl address */
+            chp->chan_status |= STATUS_PCHK;    /* program check for invalid iocd addr */
+//          uptr->SNS |= SNS_INAD;              /* invalid address status */
+            return 1;                           /* error return */
+        }
+    }
+loop:
+    sim_debug(DEBUG_EXP, dptr,
+        "ec_iocl @%06x entry chan_status[%04x] %04x SNS %08x\n",
+        chp->chan_caw, chan, chp->chan_status, uptr->SNS);
+
+    /* Abort if we have any errors */
+    if (chp->chan_status & STATUS_ERROR) {      /* check channel error status */
+        sim_debug(DEBUG_EXP, dptr,
+            "ec_iocl ERROR1 chan_status[%04x] %04x\n", chan, chp->chan_status);
+        return 1;                               /* return error */
+    }
+
+#ifdef WHATISTHIS
+    /* Check if we have status modifier set */
+    if (chp->chan_status & STATUS_MOD) {
+        chp->chan_caw += 8;                     /* move to next IOCD */
+        chp->chan_status &= ~STATUS_MOD;        /* turn off status modifier flag */
+    }
+#endif
+
+    /* Read in first CCW */
+    if (readfull(chp, chp->chan_caw, &word1) != 0) { /* read word1 from memory */
+        chp->chan_status |= STATUS_PCHK;        /* memory read error, program check */
+        sim_debug(DEBUG_EXP, dptr,
+            "ec_iocl ERROR2 chan_status[%04x] %04x\n", chan, chp->chan_status);
+        return 1;                               /* error return */
+    }
+
+    /* Read in second CCW */
+    if (readfull(chp, chp->chan_caw+4, &word2) != 0) { /* read word2 from memory */
+        chp->chan_status |= STATUS_PCHK;        /* memory read error, program check */
+        sim_debug(DEBUG_EXP, dptr,
+            "ec_iocl ERROR3 chan_status[%04x] %04x\n", chan, chp->chan_status);
+        return 1;                               /* error return */
+    }
+
+    sim_debug(DEBUG_CMD, dptr,
+        "ec_iocl @%06x read ccw chan %02x IOCD wd 1 %08x wd 2 %08x SNS %08x\n",
+        chp->chan_caw, chan, word1, word2, uptr->SNS);
+
+    chp->chan_caw = (chp->chan_caw & 0xfffffc) + 8; /* point to next IOCD */
+    chp->ccw_cmd = (word1 >> 24) & 0xff;        /* set command from IOCD wd 1 */
+
+    if (!MEM_ADDR_OK(word1 & MASK24)) {         /* see if memory address invalid */
+        chp->chan_status |= STATUS_PCHK;        /* bad, program check */
+//      uptr->SNS |= SNS_INAD;                  /* invalid address status */
+        sim_debug(DEBUG_EXP, dptr,
+            "ec_iocl bad IOCD1 chan_status[%04x] %04x\n", chan, chp->chan_status);
+        return 1;                               /* error return */
+    }
+
+    chp->ccw_count = 0;
+
+    /* this switch is here to satisify the SEL diag who wants a program */
+    /* check error instead of a unit check error for these cmd values??? */
+    /* validate the commands for the ethernet */
+    switch (chp->ccw_cmd) {
+    case 0x18: case 0x20: case 0x28: case 0x30: case 0x38: case 0x40: case 0x48:
+    case 0x50: case 0x58: case 0x60: case 0x68: case 0x70: case 0x78: case 0x80:
+    case 0x88: case 0x90: case 0x98: case 0xa0: case 0xa8: case 0xb0: case 0xb8:
+    case 0xc0: case 0xc8: case 0xd0: case 0xd8: case 0xe0: case 0xe8: case 0xf0:
+    case 0xf8:
+//      uptr->SNS |= SNS_CMDREJ;
+        uptr->SNS &= ~SNS_CMDREJ;               /* remove CMD reject status */
+        sim_debug(DEBUG_CMD, dptr,
+            "ec_startcmd illegal at ec_startcmd %02x SNS %08x\n",
+            chp->ccw_cmd, uptr->SNS);
+        chp->ccw_count = 0;                     /* diags want zero count */
+        chp->chan_status |= STATUS_PCHK;        /* program check for invalid cmd */
+        return 1;                               /* error return */
+
+    case EC_INCH: case EC_WRITE: case EC_READ: case EC_NOP: case EC_SNS:
+    case EC_LIA: case EC_TIC: case EC_CGA: case EC_LGA: case EC_LCC:
+    case EC_STATS: case EC_CSTATS:
+        break;
+    default:
+        uptr->SNS |= SNS_CMDREJ;
+        chp->chan_status |= STATUS_CHECK;       /* diags want unit check */
+        sim_debug(DEBUG_CMD, dptr,
+            "ec_startcmd illegal cmd %02x SNS %08x\n",
+            chp->ccw_cmd, uptr->SNS);
+        return 1;                               /* error return */
+        break;
+    }
+
+    chp->ccw_count = word2 & 0xffff;            /* get 16 bit byte count from IOCD WD 2 */
+
+    if (chp->chan_info & INFO_SIOCD) {          /* see if 1st IOCD in channel prog */
+        /* 1st command can not be a TIC */
+        if (chp->ccw_cmd == CMD_TIC) {
+            chp->chan_status |= STATUS_PCHK;    /* program check for invalid tic */
+            uptr->SNS |= SNS_CMDREJ;            /* cmd rejected status */
+            sim_debug(DEBUG_EXP, dptr,
+                "ec_iocl TIC bad cmd chan_status[%04x] %04x\n",
+                chan, chp->chan_status);
+            return 1;                           /* error return */
+        }
+    }
+
+    /* TIC can't follow TIC or be first in command chain */
+    /* diags send bad commands for testing.  Use all of op */
+    if (chp->ccw_cmd == CMD_TIC) {
+        if (tic_ok) {
+            if (((word1 & MASK24) == 0) || (word1 & 0x3)) {
+                sim_debug(DEBUG_EXP, dptr,
+                    "ec_iocl tic cmd bad address chan %02x tic caw %06x IOCD wd 1 %08x\n",
+                    chan, chp->chan_caw, word1);
+                chp->chan_status |= STATUS_PCHK; /* program check for invalid tic */
+//              chp->chan_caw = word1;          /* get new IOCD address */
+                chp->chan_caw = word1 & MASK24; /* get new IOCD address */
+                uptr->SNS |= SNS_CMDREJ;        /* cmd rejected status */
+//              uptr->SNS |= SNS_INAD;          /* invalid address status */
+                return 1;                       /* error return */
+            }
+            tic_ok = 0;                         /* another tic not allowed */
+            chp->chan_caw = word1 & MASK24;     /* get new IOCD address */
+            sim_debug(DEBUG_CMD, dptr,
+                "ec_iocl tic cmd ccw chan %02x tic caw %06x IOCD wd 1 %08x\n",
+                chan, chp->chan_caw, word1);
+            goto loop;                          /* restart the IOCD processing */
+        }
+//      chp->chan_caw = word1;                  /* get new IOCD address */
+        chp->chan_caw = word1 & MASK24;         /* get new IOCD address */
+        chp->chan_status |= STATUS_PCHK;        /* program check for invalid tic */
+        uptr->SNS |= SNS_CMDREJ;                /* cmd rejected status */
+//      if (((word1 & MASK24) == 0) || (word1 & 0x3))
+//          uptr->SNS |= SNS_INAD;              /* invalid address status */
+        sim_debug(DEBUG_EXP, dptr,
+            "ec_iocl TIC ERROR chan_status[%04x] %04x\n", chan, chp->chan_status);
+        return 1;                               /* error return */
+    }
+
+    /* Check if we had data chaining in previous iocd */
+    if ((chp->chan_info & INFO_SIOCD) ||        /* see if 1st IOCD in channel prog */
+        ((chp->ccw_flags & FLAG_DC) == 0)) {    /* last IOCD have DC set? */
+        sim_debug(DEBUG_CMD, dptr,
+            "ec_iocl @%06x DO CMD No DC, ccw_flags %04x cmd %02x\n",
+            chp->chan_caw, chp->ccw_flags, chp->ccw_cmd);
+        docmd = 1;                              /* show we have a command */
+    }
+
+    /* Set up for this command */
+    chp->ccw_flags = (word2 >> 16) & 0xf800;    /* get flags from bits 0-4 of WD 2 of IOCD */
+    chp->chan_status = 0;                       /* clear status for next IOCD */
+    /* make a 24 bit address */
+    chp->ccw_addr = word1 & MASK24;             /* set the data/seek address */
+
+    /* validate parts of IOCD2 that are reserved */    
+    if (word2 & 0x07ff0000) {                   /* bits 5-15 must be zero */
+        chp->chan_status |= STATUS_PCHK;        /* program check for invalid iocd */
+        sim_debug(DEBUG_EXP, dptr,
+            "ec_iocl IOCD2 chan_status[%04x] %04x\n", chan, chp->chan_status);
+        return 1;                               /* error return */
+    }
+
+    /* DC can only be used with a read/write cmd */
+    if (chp->ccw_flags & FLAG_DC) {
+        if ((chp->ccw_cmd == EC_INCH) || (chp->ccw_cmd == EC_NOP) ||
+            (chp->ccw_cmd == EC_CGA) || (chp->ccw_cmd == EC_CSTATS)) {
+            chp->chan_status |= STATUS_PCHK;    /* program check for invalid DC */
+//          uptr->SNS |= SNS_CHER;              /* chaining error */
+            sim_debug(DEBUG_EXP, dptr,
+                "ec_iocl DC ERROR chan_status[%04x] %04x\n", chan, chp->chan_status);
+            return 1;                           /* error return */
+        }
+    }
+
+    chp->chan_byte = BUFF_BUSY;                 /* busy & no bytes transferred yet */
+
+    sim_debug(DEBUG_XIO, dptr,
+        "ec_iocl @%06x read docmd %01x addr %06x count %04x chan %04x ccw_flags %04x\n",
+        chp->chan_caw, docmd, chp->ccw_addr, chp->ccw_count, chan, chp->ccw_flags);
+
+    if (docmd) {                                /* see if we need to process a command */
+        DIB *dibp = dib_unit[chp->chan_dev];    /* get the DIB pointer */
+ 
+        uptr = chp->unitptr;                    /* get the unit ptr */
+        if (dibp == 0 || uptr == 0) {
+            chp->chan_status |= STATUS_PCHK;    /* program check if it is */
+            return 1;                           /* if none, error */
+        }
+
+        sim_debug(DEBUG_XIO, dptr,
+            "ec_iocl @%06x before start_cmd chan %04x status %04x count %04x SNS %08x\n",
+            chp->chan_caw, chan, chp->chan_status, chp->ccw_count, uptr->u5);
+
+        /* call the device startcmd function to process the current command */
+        /* just replace device status bits */
+        devstat = dibp->start_cmd(uptr, chan, chp->ccw_cmd);
+        chp->chan_status = (chp->chan_status & 0xff00) | devstat;
+        chp->chan_info &= ~INFO_SIOCD;          /* show not first IOCD in channel prog */
+
+        sim_debug(DEBUG_XIO, dptr,
+            "ec_iocl @%06x after start_cmd chan %04x status %08x count %04x\n",
+            chp->chan_caw, chan, chp->chan_status, chp->ccw_count);
+
+        /* see if bad status */
+        if (chp->chan_status & (STATUS_ATTN|STATUS_ERROR)) {
+            chp->chan_status |= STATUS_CEND;    /* channel end status */
+            chp->ccw_flags = 0;                 /* no flags */
+            /* see if chan_end already called */
+            if (chp->chan_byte == BUFF_NEXT) {
+                sim_debug(DEBUG_EXP, dptr,
+                    "ec_iocl BUFF_NEXT ERROR chp %p chan_byte %04x\n",
+                    chp, chp->chan_byte);
+            } else {
+                chp->chan_byte = BUFF_NEXT;     /* have main pick us up */
+                sim_debug(DEBUG_EXP, dptr,
+                    "ec_iocl bad status chan %04x status %04x cmd %02x\n",
+                    chan, chp->chan_status, chp->ccw_cmd);
+                RDYQ_Put(chp->chan_dev);        /* queue us up */
+                sim_debug(DEBUG_EXP, dptr,
+                    "ec_iocl continue wait chsa %04x status %08x\n",
+                    chp->chan_dev, chp->chan_status);
+            }
+        } else
+
+        /* NOTE this code needed for MPX 1.X to run! */
+        /* see if command completed */
+        /* we have good status */
+        if (chp->chan_status & (STATUS_DEND|STATUS_CEND)) {
+            uint16  chsa = GET_UADDR(uptr->u3); /* get channel & sub address */
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* show I/O complete */
+            sim_debug(DEBUG_XIO, dptr,
+                "ec_iocl @%06x FIFO #%1x cmd complete chan %04x status %04x count %04x\n",
+                chp->chan_caw, FIFO_Num(chsa), chan, chp->chan_status, chp->ccw_count);
+        }
+    }
+    /* the device processor returned OK (0), so wait for I/O to complete */
+    /* nothing happening, so return */
+    sim_debug(DEBUG_XIO, dptr,
+        "ec_iocl @%06x return, chan %04x status %04x count %04x\n",
+        chp->chan_caw, chan, chp->chan_status, chp->ccw_count);
+    return 0;                                   /* good return */
+}
 
 
 /* Start ethernet command */
@@ -331,25 +599,6 @@ uint16 ec_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     if ((uptr->CMD & 0xff) != 0) {          /* if any status info, we are busy */
         sim_debug(DEBUG_CMD, dptr, "ec_startcmd busy\n");
         return SNS_BSY;
-    }
-    /* this switch is here to satisify the SEL diag who wants a program */
-    /* check error instead of a unit check error for these cmd values??? */
-    switch (cmd) {
-    case 0x18: case 0x20: case 0x28: case 0x30: case 0x38: case 0x40: case 0x48:
-    case 0x50: case 0x58: case 0x60: case 0x68: case 0x70: case 0x78: case 0x80:
-    case 0x88: case 0x90: case 0x98: case 0xa0: case 0xa8: case 0xb0: case 0xb8:
-    case 0xc0: case 0xc8: case 0xd0: case 0xd8: case 0xe0: case 0xe8: case 0xf0:
-    case 0xf8:
-//      uptr->SNS |= SNS_CMDREJ;
-        uptr->SNS &= ~SNS_CMDREJ;               /* remove CMD reject status */
-        sim_debug(DEBUG_CMD, dptr,
-            "ec_startcmd illegal at ec_startcmd %02x SNS %08x\n",
-            cmd, uptr->SNS);
-        chp->ccw_count = 0;                     /* diags want zero count */
-        return SNS_CHNEND|SNS_DEVEND|STATUS_PCHK;   /* diags want prog check */
-//      return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* diags want unit check */
-    default:
-        break;
     }
 
     /* Unit is online, so process a command */
@@ -368,7 +617,7 @@ uint16 ec_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     case EC_LGA:                                /* Load Multicast address */
         uptr->SNS &= 0xffff0000;
 //      uptr->SNS &= 0x7fff0000;                /* remove invalid cmd status */
-        uptr->SNS &= ~SNS_CMDREJ;               /* remove CMD reject status */
+//      uptr->SNS &= ~SNS_CMDREJ;               /* remove CMD reject status */
         /* Fall through */
     case EC_SNS:                                /* Sense 0x04 */
         /* nop must have non zero count */
@@ -386,7 +635,6 @@ uint16 ec_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         cmd, uptr->SNS);
     chp->ccw_count = 0;                         /* diags want zero count */
     return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* diags want unit check */
-//  return SNS_CHNEND|SNS_DEVEND|STATUS_PCHK;   /* diags want prog check */
 }
 
 /* Handle processing of ethernet requests. */
@@ -415,7 +663,7 @@ t_stat ec_srv(UNIT *uptr)
         sim_debug(DEBUG_CMD, dptr,
             "ec_srv starting INCH %06x cmd, chsa %04x addr %06x cnt %04x\n",
             chp->chan_inch_addr, chsa, chp->ccw_addr, chp->ccw_count);
-        uptr->CMD &= LMASK;                     /* remove old status bits & */
+        uptr->CMD &= LMASK;                     /* remove old status bits & cmd */
 
         /* now call set_inch() function to write and test inch buffer addresses */
         i = set_inch(uptr, mema);               /* new address */
@@ -429,7 +677,6 @@ t_stat ec_srv(UNIT *uptr)
         for (i=0; i < len; i++) {
             if (chan_read_byte(chsa, &buf[i])) {
                 /* we have error, bail out */
-                uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
                 uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
@@ -724,7 +971,10 @@ runt:
                 "ec_startcmd CMD sense excess cnt %02x\n", chp->ccw_count);
             break;
         }
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
+
+        uptr->SNS &= ~(SNS_CMDREJ|SNS_EQUCHK);  /* clear old status */
+
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
         break;
 
     default:
@@ -734,7 +984,7 @@ runt:
         uptr->CMD &= LMASK;                   /* remove old status bits & cmd */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
 #else
-        sim_debug(DEBUG_CMD, dptr, "allow unknown command %02x\n", cmd);
+        sim_debug(DEBUG_CMD, dptr, "for testing, allow unknown command %02x\n", cmd);
 #endif
     }
     sim_debug(DEBUG_DETAIL, dptr,
@@ -760,7 +1010,6 @@ uint16  ec_haltio(UNIT *uptr) {
             "ec_haltio HIO chsa %04x cmd = %02x ccw_count %02x\n", chsa, cmd, chp->ccw_count);
         // stop any I/O and post status and return error status */
         chp->chan_byte = BUFF_EMPTY;        /* there is no data to read/store */
-//      chp->ccw_count = 0;                 /* zero the count */
         chp->ccw_count = 0;                 /* zero the count */
         chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);/* stop any chaining */
         uptr->CMD &= LMASK;                 /* make non-busy */
@@ -768,7 +1017,6 @@ uint16  ec_haltio(UNIT *uptr) {
         sim_cancel(uptr);                   /* clear the input timer */
         sim_debug(DEBUG_CMD, dptr,
             "ec_haltio HIO I/O stop chsa %04x cmd = %02x\n", chsa, cmd);
-//      chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);  /* force error */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
         return SCPE_IOERR;
     }
@@ -978,7 +1226,7 @@ t_stat ec_set_mode (UNIT* uptr, int32 val, CONST char* cptr, void* desc)
 
     if (!cptr) return SCPE_IERR;
 
-    newmode = get_uint (cptr, 10, 4, &r);
+    newmode = get_uint(cptr, 10, 4, &r);
 
     if (r != SCPE_OK)
         return r;

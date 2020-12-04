@@ -324,12 +324,16 @@ UNIT    sba_unit[] = {
 DIB     sba_dib = {
     scsi_preio,     /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
     scsi_startcmd,  /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O */
+    NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O */
     NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
-    NULL,           /* uint16 (*post_io)(UNIT *uptr) */         /* Post I/O */
+    NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
+    NULL,           /* uint16 (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
+    NULL,           /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     scsi_ini,       /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     sba_unit,       /* UNIT* units */                           /* Pointer to units structure */
     sba_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
+    NULL,           /* IOCLQ *ioclq_ptr */                      /* IOCL entries, 1 per UNIT */
     NUM_UNITS_SCSI, /* uint8 numunits */                        /* number of units defined */
     0x0f,           /* uint8 mask */                            /* 8 devices - device mask */
     0x7600,         /* uint16 chan_addr */                      /* parent channel address */
@@ -363,18 +367,22 @@ UNIT    sbb_unit[] = {
 DIB     sbb_dib = {
     scsi_preio,     /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
     scsi_startcmd,  /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O */
+    NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O */
     NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
-    NULL,           /* uint16 (*post_io)(UNIT *uptr) */         /* Post I/O */
+    NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
+    NULL,           /* uint16 (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
+    NULL,           /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     scsi_ini,       /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     sbb_unit,       /* UNIT* units */                           /* Pointer to units structure */
     sbb_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
+    NULL,           /* IOCLQ *ioclq_ptr */                      /* IOCL entries, 1 per UNIT */
     NUM_UNITS_SCSI, /* uint8 numunits */                        /* number of units defined */
     0x0f,           /* uint8 mask */                            /* 2 devices - device mask */
     0x7600,         /* uint16 chan_addr */                      /* parent channel address */
     0,              /* uint32 chan_fifo_in */                   /* fifo input index */
     0,              /* uint32 chan_fifo_out */                  /* fifo output index */
-    {0},              /* uint32 chan_fifo[FIFO_SIZE] */           /* interrupt status fifo for channel */
+    {0}             /* uint32 chan_fifo[FIFO_SIZE] */           /* interrupt status fifo for channel */
 };
 
 DEVICE  sbb_dev = {
@@ -509,6 +517,7 @@ t_stat scsi_srv(UNIT *uptr)
     int             len=0;
     int             i;
     uint32          cap = CAP(type);
+    uint32          mema;                       /* memory address */
     uint8           ch;
     int32           ssize = scsi_type[type].ssiz*4; /* Size of one sector in bytes */
     uint32          tstart = 0;                 /* Location of start of cyl/track/sect in data */
@@ -534,9 +543,6 @@ t_stat scsi_srv(UNIT *uptr)
         break;
 
     case DSK_INCH2:                             /* use 0xF0 for inch, just need int */
-    {
-        uint32  mema;                           /* memory address */
-
         len = chp->ccw_count;                   /* INCH command count */
         mema = chp->ccw_addr;                   /* get inch or buffer addr */
         sim_debug(DEBUG_CMD, dptr,
@@ -551,7 +557,6 @@ t_stat scsi_srv(UNIT *uptr)
 
         /* now call set_inch() function to write and test inch buffer addresses */
         i = set_inch(uptr, mema);               /* new address */
-#ifdef NOTYET
         if ((i == SCPE_MEM) || (i == SCPE_ARG)) {   /* any error */
             /* we have error, bail out */
             uptr->CMD &= LMASK;                 /* remove old status bits & cmd */
@@ -559,13 +564,11 @@ t_stat scsi_srv(UNIT *uptr)
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             break;
         }
-#endif
         uptr->CMD &= LMASK;                     /* remove old cmd */
         sim_debug(DEBUG_CMD, dptr,
             "scsi_srv cmd INCH chsa %04x chsa %06x count %04x completed\n",
             chsa, mema, chp->ccw_count);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
-    }
         break;
 
     case DSK_NOP:                               /* NOP 0x03 */

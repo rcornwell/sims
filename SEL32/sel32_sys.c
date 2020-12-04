@@ -847,7 +847,7 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
                 i = (val & 3) | ((inst >> 1) & 04);
                 if (((inst&0xfc00) == 0xe000) ||
                     ((inst&0xfc00) == 0xe400))
-                    i &= ~4;                        /* remode f bit from fpt instr */
+                    i &= ~4;                        /* remove f bit from fpt instr */
                 if (((inst&0xfc00) != 0xdc00) &&
                     ((inst&0xfc00) != 0xd000) &&
                     ((inst&0xfc00) != 0x5400) &&
@@ -1050,7 +1050,7 @@ t_stat fprint_sym (FILE *of, t_addr addr, t_value *val, UNIT *uptr, int32 sw)
     if (sw & SWMASK ('C')) {
         fputc('\'', of);                        /* opening apostorphe */
         for(i = 0; i < l; i++) {
-            char ch = val[i] & 0xff;            /* get the char */
+            int ch = val[i] & 0xff;             /* get the char */
             if (ch >= 0x20 && ch <= 0x7f)       /* see if printable */
                 fprintf(of, "%c", ch);          /* output the ascii char */
             else

@@ -42,72 +42,73 @@
 
 /* I/O equates */
 /* Channel sense bytes set by device */
-#define     SNS_BSY       0x80                /* Unit Busy */
-#define     SNS_SMS       0x40                /* Status modified */
-#define     SNS_CTLEND    0x20                /* Control unit end */
-#define     SNS_ATTN      0x10                /* Unit attention */
-#define     SNS_CHNEND    0x08                /* Channel end */
-#define     SNS_DEVEND    0x04                /* Device end */
-#define     SNS_UNITCHK   0x02                /* Unit check */
-#define     SNS_UNITEXP   0x01                /* Unit exception */
+#define     SNS_BSY       0x80          /* Unit Busy */
+#define     SNS_SMS       0x40          /* Status modified */
+#define     SNS_CTLEND    0x20          /* Control unit end */
+#define     SNS_ATTN      0x10          /* Unit attention */
+#define     SNS_CHNEND    0x08          /* Channel end */
+#define     SNS_DEVEND    0x04          /* Device end */
+#define     SNS_UNITCHK   0x02          /* Unit check */
+#define     SNS_UNITEXP   0x01          /* Unit exception */
 
 /* Command masks */
-#define CCMDMSK          0xff000000          /* Mask for command */
-#define CMD_CHAN         0x00                /* Channel control */
-#define CMD_SENSE        0x04                /* Sense channel command */
-#define CMD_TIC          0x08                /* Transfer in channel */
-#define CMD_RDBWD        0x0c                /* Read backward (not used) */
+#define CCMDMSK          0xff000000     /* Mask for command */
+#define CMD_CHAN         0x00           /* Channel control */
+#define CMD_SENSE        0x04           /* Sense channel command */
+#define CMD_TIC          0x08           /* Transfer in channel */
+#define CMD_RDBWD        0x0c           /* Read backward */
 /* operation types */
-#define CMD_TYPE         0x03                /* Type mask */
-#define CMD_WRITE        0x01                /* Write command */
-#define CMD_READ         0x02                /* Read command */
-#define CMD_CTL          0x03                /* Control command */
+#define CMD_TYPE         0x03           /* Type mask */
+#define CMD_WRITE        0x01           /* Write command */
+#define CMD_READ         0x02           /* Read command */
+#define CMD_CTL          0x03           /* Control command */
 
 /* IOCD word 2 status bits */
-#define STATUS_ECHO      0x8000             /* Halt I/O and Stop I/O function */
-#define STATUS_PCI       0x4000             /* Program controlled interrupt */
-#define STATUS_LENGTH    0x2000             /* Incorrect length */
-#define STATUS_PCHK      0x1000             /* Channel program check */
-#define STATUS_CDATA     0x0800             /* Channel data check */
-#define STATUS_CCNTL     0x0400             /* Channel control check */
-#define STATUS_INTER     0x0200             /* Channel interface check */
-#define STATUS_CHAIN     0x0100             /* Channel chain check */
-#define STATUS_BUSY      0x0080             /* Device busy */
-#define STATUS_MOD       0x0040             /* Status modified */
-#define STATUS_CTLEND    0x0020             /* Controller end */
-#define STATUS_ATTN      0x0010             /* Device raised attention */
-#define STATUS_CEND      0x0008             /* Channel end */
-#define STATUS_DEND      0x0004             /* Device end */
-#define STATUS_CHECK     0x0002             /* Unit check */
-#define STATUS_EXPT      0x0001             /* Unit exception */
-#define STATUS_ERROR     0x3f03             /* bad errors */
+#define STATUS_ECHO      0x8000         /* Halt I/O and Stop I/O function */
+#define STATUS_PCI       0x4000         /* Program controlled interrupt */
+#define STATUS_LENGTH    0x2000         /* Incorrect length */
+#define STATUS_PCHK      0x1000         /* Channel program check */
+#define STATUS_CDATA     0x0800         /* Channel data check */
+#define STATUS_CCNTL     0x0400         /* Channel control check */
+#define STATUS_INTER     0x0200         /* Channel interface check */
+#define STATUS_CHAIN     0x0100         /* Channel chain check */
+#define STATUS_BUSY      0x0080         /* Device busy */
+#define STATUS_MOD       0x0040         /* Status modified */
+#define STATUS_CTLEND    0x0020         /* Controller end */
+#define STATUS_ATTN      0x0010         /* Device raised attention */
+#define STATUS_CEND      0x0008         /* Channel end */
+#define STATUS_DEND      0x0004         /* Device end */
+#define STATUS_CHECK     0x0002         /* Unit check */
+#define STATUS_EXPT      0x0001         /* Unit exception */
+#define STATUS_ERROR     0x3f03         /* bad errors */
 //#define STATUS_ERROR   (STATUS_LENGTH|STATUS_PCHK|STATUS_CDATA|STATUS_CCNTL|
 //                        STATUS_INTER|STATUS_CHAIN|STATUS_CHECK|STATUS_EXPT)
 
 /* Class F channel bits */
 /* bit 32 - 37 of IOCD word 2 (0-5) */
 /* ccw_flags bit assignment */
-#define FLAG_DC          0x8000             /* Data chain */
-#define FLAG_CC          0x4000             /* Chain command */
-#define FLAG_SLI         0x2000             /* Suppress length indicator */
-#define FLAG_SKIP        0x1000             /* Suppress memory write */
-#define FLAG_PCI         0x0800             /* Program controlled interrupt */
-#define FLAG_RTO         0x0400             /* Real-Time Option */
+#define FLAG_DC          0x8000         /* Data chain */
+#define FLAG_CC          0x4000         /* Chain command */
+#define FLAG_SLI         0x2000         /* Suppress length indicator */
+#define FLAG_SKIP        0x1000         /* Suppress memory write */
+#define FLAG_PCI         0x0800         /* Program controlled interrupt */
+#define FLAG_RTO         0x0400         /* Real-Time Option */
 
 /* chan_byte bit assignments */
-#define BUFF_EMPTY       0x0                /* Buffer is empty */
-#define BUFF_BUSY        0x4                /* Channel program busy & empty */
-#define BUFF_NEXT        0xC                /* 0x08|0x04 Continue Channel with next IOCB */
-#define BUFF_CHNEND      0x14               /* 0x10|0x04 Channel end */
-#define BUFF_DONE        0x20               /* 0x20 Channel ready for new command */
-#define BUFF_POST        0x24               /* 0x20|0x04 Waiting for status to be posted */
+#define BUFF_EMPTY       0x00           /* Buffer is empty */
+#define BUFF_BUSY        0x04           /* Channel program busy & empty */
+#define BUFF_NEXT        0x0C           /* 0x08|0x04 Continue Channel with next IOCB */
+#define BUFF_CHNEND      0x14           /* 0x10|0x04 Channel end */
+#define BUFF_DONE        0x20           /* 0x20 Channel ready for new command */
+#define BUFF_POST        0x24           /* 0x20|0x04 Waiting for status to be posted */
 
 /* chan_info bit flags */
-#define INFO_SIOCD       0x01               /* Initial IOCD from SIO if set */
-/* bits 0-6 unused */
+#define INFO_SIOCD       0x01           /* Initial IOCD from SIO if set */
+#define INFO_CEND        0x02           /* Channel End (chan_end) called if set */
+/* bits 0-5 unused */
 
-#define     MAX_CHAN        128             /* max channels that can be defined */
-#define     SUB_CHANS       256             /* max sub channels that can be defined */
+#define     MAX_CHAN        128         /* max channels that can be defined */
+#define     SUB_CHANS       256         /* max sub channels that can be defined */
 #define     MAX_DEV         (MAX_CHAN * SUB_CHANS)  /* max possible */
 
 /* simulator devices configuration */
@@ -127,7 +128,7 @@
 //#define NUM_UNITS_DISK  2       /* 2 disk drive devices */
 #define NUM_UNITS_DISK  4       /* 4 disk drive devices */
 #define NUM_DEVS_SCFI   1       /* 1 scfi (SCSI) disk drive units */
-#define NUM_UNITS_SCFI  1       /* 1 of 4 disk drive devices */
+#define NUM_UNITS_SCFI  2       /* 1 of 4 disk drive devices */
 #define NUM_DEVS_SCSI   2       /* 2 scsi (MFP SCSI) scsi buss units */
 #define NUM_UNITS_SCSI  2       /* 2 scsi disk drive devices */
 #define NUM_DEVS_RTOM   1       /* 1 IOP RTOM channel */
@@ -135,7 +136,7 @@
 #define NUM_DEVS_LPR    1       /* 1 IOP Line printer */
 #define NUM_UNITS_LPR   1       /* 1 IOP Line printer device */
 #define NUM_DEVS_ETHER  1       /* 1 Ethernet controller */
-#define NUM_UNITS_ETHER 1       /* 1 Ethernet controller */
+#define NUM_UNITS_ETHER 10      /* 10 Ethernet devices */
 
 extern DEVICE cpu_dev;      /* cpu device */
 extern UNIT cpu_unit;       /* the cpu unit */
@@ -203,7 +204,7 @@ extern DEVICE ec_dev;
 typedef struct chp {
     /* channel program values */
     UNIT        *unitptr;               /* Back pointer to units structure */
-    uint32      chan_inch_addr;         /* Channel status dw in memory */
+    uint32      chan_inch_addr;         /* Channel status dw addr in memory */
     uint32      chan_caw;               /* Channel command address word */
     uint32      ccw_addr;               /* Channel address */
     uint32      chan_buf;               /* Channel data buffer */
@@ -219,31 +220,54 @@ typedef struct chp {
 
 /* Device information block */
 #define FIFO_SIZE 256       /* fifo to hold 128 double words of status */
+extern  int32   FIFO_Put(uint16 chsa, uint32 entry);
+extern  int32   FIFO_Get(uint16 chsa, uint32 *old);
+extern  int32   FIFO_Num(uint16 chsa);
+
+#define IOCLQ_SIZE 32       /* fifo to hold 32 iocl cmds */
+
+typedef struct ioclq {
+        uint32  ioclq_fifo[IOCLQ_SIZE];
+        int16   ioclq_in;
+        int16   ioclq_out;
+} IOCLQ;
+
+extern  int32   IOCLQ_Put(IOCLQ *qptr, uint32 entry);
+extern  int32   IOCLQ_Get(IOCLQ *qptr, uint32 *old);
+extern  int32   IOCLQ_Num(IOCLQ *qptr);
+
 typedef struct dib {
         /* Pre start I/O operation */
         uint16      (*pre_io)(UNIT *uptr, uint16 chan);
         /* Start a channel command SIO */
         uint16      (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd);
         /* Halt I/O HIO */
-        uint16      (*halt_io)(UNIT *uptr);
+        uint16      (*halt_io)(UNIT *uptr);     /* Halt I/O */
+        /* Test I/O STOPIO */
+        uint16      (*stop_io)(UNIT *uptr);     /* Stop I/O */
         /* Test I/O TESTIO */
-        uint16      (*test_io)(UNIT *uptr);
+        uint16      (*test_io)(UNIT *uptr);     /* Test I/O */
+        /* Reset Controller RSCTL */
+        uint16      (*rsctl_io)(UNIT *uptr);    /* Reset Controller */
+        /* Reset Controller RSCHNL */
+        uint16      (*rschnl_io)(UNIT *uptr);   /* Reset Channel */
         /* Post I/O processing  */
-        uint16      (*post_io)(UNIT *uptr);
+        uint16      (*iocl_io)(CHANP *chp, int32 tic_ok);   /* IOCL processing */
         /* Controller init */
         void        (*dev_ini)(UNIT *, t_bool); /* init function */
-        UNIT        *units;             /* Pointer to units structure */
-        CHANP       *chan_prg;          /* Pointer to channel program */
-        uint8       numunits;           /* number of units */
-        uint8       mask;               /* device mask */
-        uint16      chan_addr;          /* parent channel address */
-        uint32      chan_fifo_in;       /* fifo input index */
-        uint32      chan_fifo_out;      /* fifo output index */
+        UNIT        *units;                 /* Pointer to units structure */
+        CHANP       *chan_prg;              /* Pointer to channel program */
+        IOCLQ       *ioclq_ptr;             /* pointer to array of IOCLQ entries */
+        uint8       numunits;               /* number of units */
+        uint8       mask;                   /* device mask */
+        uint16      chan_addr;              /* parent channel address */
+        uint32      chan_fifo_in;           /* fifo input index */
+        uint32      chan_fifo_out;          /* fifo output index */
         uint32      chan_fifo[FIFO_SIZE];   /* interrupt status fifo for each channel */
 } DIB;
 
-extern  DIB     *dib_unit[MAX_DEV];     /* Pointer to Device info block */
-extern  DIB     *dib_chan[MAX_CHAN];    /* Pointer to channel mux dib */
+extern  DIB     *dib_unit[MAX_DEV];         /* Pointer to Device info block */
+extern  DIB     *dib_chan[MAX_CHAN];        /* Pointer to channel mux dib */
 
 #define DEV_CHAN          (1 << DEV_V_UF)       /* Device is channel mux if set */
 #define DEV_V_UF2         (DEV_V_UF+1)          /* current usage */
@@ -324,7 +348,7 @@ extern DEBTAB dev_debug[];
 #define MODEL_V6        6                     /* V6 CPU */
 #define MODEL_V9        7                     /* V9 CPU */
 
-#define TMR_RTC         1
+#define TMR_RTC         1                   /* RTC will not work if set to 0!! */ 
 //#define TMR_RTC         0
 
 #define HIST_MIN        64
@@ -348,7 +372,7 @@ extern DEBTAB dev_debug[];
 #define BASEBIT  0x02000000                 /* Base Mode PSD 1 bit 6 */
 #define AEXPBIT  0x01000000                 /* Arithmetic exception PSD 1 bit 7 */
 
-#define BLKEDBIT 0x00004000                 /* Set blocked mode, PSD 2 bit 17 */
+#define SETBBIT  0x00004000                 /* Set blocked mode, PSD 2 bit 17 */
 #define RETBBIT  0x00008000                 /* Retain current blocking state, PSD 2 bit 16 */
 #define RETMBIT  0x00010000                 /* Retain current maps, PSD 2 bit 15 */
 #define MAPBIT   0x80000000                 /* Map mode, PSD 2 bit 0 */
@@ -431,11 +455,10 @@ extern DEBTAB dev_debug[];
 
 /* INTS int entry equates, entries accessed by interrupt level number */
 #define INTS_NU1    0x80000000          /* Not used */
-#define INTS_NU2    0x40000000          /* Not used */
+#define INTS_REQ    0x40000000          /* Interrupt is requesting (use bit 1) */
 #define INTS_ACT    0x20000000          /* Interrupt active when set (copy is of SPAD */
 #define INTS_ENAB   0x10000000          /* Interrupt enabled when set (copy is of SPAD */
 #define INTS_EXTL   0x00800000          /* IOP/RTOM ext interrupt if set, I/O if not set (copy of SPAD) */
-#define INTS_REQ    0x40000000          /* Interrupt is requesting (use bit 1) */
 
 /* ReadAddr memory access requested */
 #define MEM_RD  0x0                     /* read memory */
@@ -492,4 +515,6 @@ extern  uint32  RDYQOUT;                        /* output index */
 extern  int32   RDYQ_Put(uint32 entry);
 extern  int32   RDYQ_Get(uint32 *old);
 extern  int32   RDYQ_Num(void);
+
+#define get_chan(chsa)  ((chsa>>8)&0x7f)        /* get channel number from ch/sa */
 
