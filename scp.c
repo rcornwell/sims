@@ -520,6 +520,7 @@ typedef enum {
     SW_NUMBER           /* Numeric Value */
     } SWITCH_PARSE;
 SWITCH_PARSE get_switches (const char *cptr, int32 *sw_val, int32 *sw_number);
+void put_rval_pcchk (REG *rptr, uint32 idx, t_value val, t_bool pc_chk);
 void put_rval (REG *rptr, uint32 idx, t_value val);
 void fprint_help (FILE *st);
 void fprint_stopped (FILE *st, t_stat r);
@@ -1567,9 +1568,7 @@ static const char simh_help2[] =
       "+sh{ow} ethernet             show ethernet devices\n"
       "+sh{ow} serial               show serial devices\n"
       "+sh{ow} multiplexer {dev}    show open multiplexer device info\n"
-#if defined(USE_SIM_VIDEO)
       "+sh{ow} video                show video capabilities\n"
-#endif
       "+sh{ow} clocks               show calibrated timer information\n"
       "+sh{ow} throttle             show throttle info\n"
       "+sh{ow} on                   show on condition actions\n"
@@ -2416,7 +2415,7 @@ static const char simh_help2[] =
        /***************** 80 character line width template *************************/
 #define HLP_SCREENSHOT  "*Commands Screenshot_Video_Window"
       "2Screenshot Video Window\n"
-      " Simulators with Video devices display the simulated video in a window\n"
+      " Simulators with Video devices display the simulated video in a window(s)\n"
       " on the local system.  The contents of that display can be saved in a\n"
       " file with the SCREENSHOT command:\n\n"
       "++SCREENSHOT screenshotfile\n\n"
@@ -2472,7 +2471,7 @@ static const char simh_help2[] =
 #define HLP_CURL        "*Commands File_Tools Curl_Tool"
       "3Curl Tool\n"
       " curl is a utility to transfer a URL\n\n"
-      " The quick and dirty help for the TAR command can be viewed with:\n\n"
+      " The quick and dirty help for the CURL command can be viewed with:\n\n"
       "++sim> curl --help\n\n"
 #define HLP_DISKINFO    "*Commands DISKINFO"
       "2Disk Container Information\n"
@@ -2546,9 +2545,7 @@ static CTAB cmd_table[] = {
     { "SLEEP",      &sleep_cmd,     0,          HLP_SLEEP,      NULL, NULL },
     { "!",          &spawn_cmd,     0,          HLP_SPAWN,      NULL, NULL },
     { "HELP",       &help_cmd,      0,          HLP_HELP,       NULL, NULL },
-#if defined(USE_SIM_VIDEO)
     { "SCREENSHOT", &screenshot_cmd,0,          HLP_SCREENSHOT, NULL, NULL },
-#endif
     { "TAR",        &tar_cmd,       0,          HLP_TAR,        NULL, NULL },
     { "CURL",       &curl_cmd,      0,          HLP_CURL,       NULL, NULL },
     { "RUNLIMIT",   &runlimit_cmd,  1,          HLP_RUNLIMIT,   NULL, NULL },
@@ -2640,9 +2637,7 @@ static SHTAB show_glob_tab[] = {
     { "SERIAL",         &sim_show_serial,           0, HLP_SHOW_SERIAL },
     { "MULTIPLEXER",    &tmxr_show_open_devices,    0, HLP_SHOW_MULTIPLEXER },
     { "MUX",            &tmxr_show_open_devices,    0, HLP_SHOW_MULTIPLEXER },
-#if defined(USE_SIM_VIDEO)
     { "VIDEO",          &vid_show,                  0, HLP_SHOW_VIDEO },
-#endif
     { "CLOCKS",         &sim_show_timers,           0, HLP_SHOW_CLOCKS },
     { "SEND",           &sim_show_send,             0, HLP_SHOW_SEND },
     { "EXPECT",         &sim_show_expect,           0, HLP_SHOW_EXPECT },
@@ -2803,15 +2798,15 @@ if ((stat = sim_ttinit ()) != SCPE_OK) {
         sim_error_text (stat));
     if (sim_ttisatty())
         read_line_p ("Hit Return to exit: ", cbuf, sizeof (cbuf) - 1, stdin);
-    free (targv);
-    return EXIT_FAILURE;
+    sim_exit_status = EXIT_FAILURE;
+    goto cleanup_and_exit;
     }
 if ((sim_eval = (t_value *) calloc (sim_emax, sizeof (t_value))) == NULL) {
     fprintf (stderr, "Unable to allocate examine buffer\n");
     if (sim_ttisatty())
         read_line_p ("Hit Return to exit: ", cbuf, sizeof (cbuf) - 1, stdin);
-    free (targv);
-    return EXIT_FAILURE;
+    sim_exit_status = EXIT_FAILURE;
+    goto cleanup_and_exit;
     };
 if (sim_dflt_dev == NULL)                               /* if no default */
     sim_dflt_dev = sim_devices[0];
@@ -2820,8 +2815,8 @@ if ((stat = reset_all_p (0)) != SCPE_OK) {
         sim_failed_reset_dptr->name, sim_error_text (stat));
     if (sim_ttisatty())
         read_line_p ("Hit Return to exit: ", cbuf, sizeof (cbuf) - 1, stdin);
-    free (targv);
-    return EXIT_FAILURE;
+    sim_exit_status = EXIT_FAILURE;
+    goto cleanup_and_exit;
     }
 if (register_check) {
     /* This test is explicitly run after the above reset_all_p() so that any devices 
@@ -2831,13 +2826,13 @@ if (register_check) {
         sim_printf ("Simulator device register sanity check error\n");
         if (sim_ttisatty())
             read_line_p ("Hit Return to exit: ", cbuf, sizeof (cbuf) - 1, stdin);
-        free (targv);
-        return EXIT_FAILURE;
+        sim_exit_status = EXIT_FAILURE;
+        goto cleanup_and_exit;
         }
     sim_printf ("*** Good Registers in %s simulator.\n", sim_name);
     if (argc < 2) {                                 /* No remaining command arguments? */
-        free (targv);
-        return EXIT_SUCCESS;                        /* then we're done */
+        sim_exit_status = EXIT_SUCCESS;             /* then we're done */
+        goto cleanup_and_exit;
         }
     }
 if ((stat = sim_brk_init ()) != SCPE_OK) {
@@ -2845,8 +2840,8 @@ if ((stat = sim_brk_init ()) != SCPE_OK) {
         sim_error_text (stat));
     if (sim_ttisatty())
         read_line_p ("Hit Return to exit: ", cbuf, sizeof (cbuf) - 1, stdin);
-    free (targv);
-    return EXIT_FAILURE;
+    sim_exit_status = EXIT_FAILURE;
+    goto cleanup_and_exit;
     }
 /* always check for register definition problems */
 sim_sanity_check_register_declarations ();
@@ -2907,11 +2902,13 @@ if (SCPE_BARE_STATUS(stat) == SCPE_OPENERR)             /* didn't exist/can't op
 if (SCPE_BARE_STATUS(stat) != SCPE_EXIT)
     process_stdin_commands (SCPE_BARE_STATUS(stat), argv, FALSE);
 
+cleanup_and_exit:
+
 detach_all (0, TRUE);                                   /* close files */
 sim_set_deboff (0, NULL);                               /* close debug */
 sim_set_logoff (0, NULL);                               /* close log */
 sim_set_notelnet (0, NULL);                             /* close Telnet */
-vid_close ();                                           /* close video */
+vid_close_all ();                                       /* close video */
 sim_ttclose ();                                         /* close console */
 AIO_CLEANUP;                                            /* Asynch I/O */
 sim_cleanup_sock ();                                    /* cleanup sockets */
@@ -3706,12 +3703,7 @@ t_stat screenshot_cmd (int32 flag, CONST char *cptr)
 {
 if ((cptr == NULL) || (strlen (cptr) == 0))
     return sim_messagef (SCPE_ARG, "Missing screen shot filename\n");
-#if defined (USE_SIM_VIDEO)
 return vid_screenshot (cptr);
-#else
-sim_printf ("No video device\n");
-return SCPE_UNK|SCPE_NOMESSAGE;
-#endif
 }
 
 /* Echo command */
@@ -8600,7 +8592,7 @@ CONST char *tptr;
 uint32 i, j;
 int32 sim_next = 0;
 int32 unitno;
-t_value pcv, orig_pcv;
+t_value new_pcv, orig_pcv;
 t_stat r;
 DEVICE *dptr;
 UNIT *uptr;
@@ -8613,22 +8605,25 @@ if (sim_runlimit_enabled &&                             /* If the run limit has 
 GET_SWITCHES (cptr);                                    /* get switches */
 sim_step = 0;
 if ((flag == RU_RUN) || (flag == RU_GO)) {              /* run or go */
-    orig_pcv = get_rval (sim_PC, 0);                    /* get current PC value */
+    t_bool new_pc = FALSE;
+
+    new_pcv = orig_pcv = get_rval (sim_PC, 0);          /* get current PC value */
     if (*cptr != 0) {                                   /* argument? */
         cptr = get_glyph (cptr, gbuf, 0);               /* get next glyph */
         if (MATCH_CMD (gbuf, "UNTIL") != 0) {
             if (sim_vm_parse_addr)                      /* address parser? */
-                pcv = sim_vm_parse_addr (sim_dflt_dev, gbuf, &tptr);
-            else pcv = strtotv (gbuf, &tptr, sim_PC->radix);/* parse PC */
+                new_pcv = sim_vm_parse_addr (sim_dflt_dev, gbuf, &tptr);
+            else
+                new_pcv = strtotv (gbuf, &tptr, sim_PC->radix);/* parse PC */
             if ((tptr == gbuf) || (*tptr != 0) ||       /* error? */
-                (pcv > width_mask[sim_PC->width]))
+                (new_pcv > width_mask[sim_PC->width]))
                 return SCPE_ARG;
-            put_rval (sim_PC, 0, pcv);                  /* Save in PC */
+            new_pc = TRUE;
             }
         }
     if ((flag == RU_RUN) &&                             /* run? */
         ((r = sim_run_boot_prep (flag)) != SCPE_OK)) {  /* reset sim */
-        put_rval (sim_PC, 0, orig_pcv);                 /* restore original PC */
+        put_rval_pcchk (sim_PC, 0, orig_pcv, FALSE);    /* restore original PC */
         return r;
         }
     if ((*cptr) || (MATCH_CMD (gbuf, "UNTIL") == 0)) {  /* should be end */
@@ -8658,6 +8653,7 @@ if ((flag == RU_RUN) || (flag == RU_GO)) {              /* run or go */
             }
         sim_switches = saved_switches;
         }
+    put_rval_pcchk (sim_PC, 0, new_pcv, new_pc);        /* Save in PC */
     }
 
 else if ((flag == RU_STEP) ||
@@ -9414,7 +9410,7 @@ return SCPE_OK;
         none
 */
 
-void put_rval (REG *rptr, uint32 idx, t_value val)
+void put_rval_pcchk (REG *rptr, uint32 idx, t_value val, t_bool pc_chk)
 {
 size_t sz;
 t_value mask;
@@ -9425,7 +9421,7 @@ uint32 *ptr;
             (sz)((*(((sz *) rp->loc) + id) & \
             ~((m) << (rp)->offset)) | ((v) << (rp)->offset))
 
-if (rptr == sim_PC)
+if (pc_chk && (rptr == sim_PC))
     sim_brk_npc (0);
 sz = SZ_R (rptr);
 mask = width_mask[rptr->width];
@@ -9478,6 +9474,12 @@ else PUT_RVAL (t_uint64, rptr, idx, val, mask);
 else PUT_RVAL (uint32, rptr, idx, val, mask);
 #endif
 }
+
+void put_rval (REG *rptr, uint32 idx, t_value val)
+{
+put_rval_pcchk (rptr, idx, val, TRUE);
+}
+
 
 /* Examine address routine
 
