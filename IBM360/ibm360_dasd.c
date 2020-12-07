@@ -541,6 +541,10 @@ t_stat dasd_srv(UNIT * uptr)
            int     i;
            sim_debug(DEBUG_CMD, dptr, "CMD sense\n");
            ch = SNS_INTVENT;
+           sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 0 %x\n", unit, ch);
+           if (chan_write_byte(addr, &ch))
+               goto sns_end;
+           ch = 0;
            sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 1 %x\n", unit, ch);
            if (chan_write_byte(addr, &ch))
                goto sns_end;
@@ -548,44 +552,41 @@ t_stat dasd_srv(UNIT * uptr)
            sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 2 %x\n", unit, ch);
            if (chan_write_byte(addr, &ch))
                goto sns_end;
-           ch = 0;
-           sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 3 %x\n", unit, ch);
-           if (chan_write_byte(addr, &ch))
-               goto sns_end;
            if (disk_type[type].sen_cnt > 6) {
-               ch = (unit & 07) | ((~unit & 07) << 3);
+               sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 3 %x\n", unit, ch);
+               if (chan_write_byte(addr, &ch))
+                   goto sns_end;
+               if (disk_type[type].dev_type == 0x30)
+                   ch = (unit & 0x7) | ((~unit & 0x7) << 3);
+               else
+                   ch = 0x80 >> (unit & 0x7);
                sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 4 %x\n", unit, ch);
                if (chan_write_byte(addr, &ch))
                    goto sns_end;
-               ch = unit;
+               ch = (uptr->CCH >> 8) & 0xff;
                sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 5 %x\n", unit, ch);
                if (chan_write_byte(addr, &ch))
                    goto sns_end;
-               ch = (uptr->CCH >> 8) & 0xff;
+               ch = (uptr->CCH & 0x1f);
+               if (disk_type[type].cyl > 512)
+                  ch |= (uptr->CCH >> 11) & 0x60;
+               else
+                  ch |= (uptr->CCH >> 10) & 0x40;
                sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 6 %x\n", unit, ch);
                if (chan_write_byte(addr, &ch))
                    goto sns_end;
-               ch = (uptr->CCH & 0x1f) | ((uptr->CCH & 0x10000) ? 0x40 : 0);
-               sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 7 %x\n", unit, ch);
-               if (chan_write_byte(addr, &ch))
-                   goto sns_end;
                ch = 0;              /* Compute message code */
-               sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 8 %x\n", unit, ch);
+               sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 7 %x\n", unit, ch);
                if (chan_write_byte(addr, &ch))
                    goto sns_end;
                i = 8;
            } else {
-               if (disk_type[type].dev_type == 0x11)
-                   ch = 0xc8;
-               else
-                   ch = 0x40;
-               if ((uptr->CCH >> 8) & SNS_ENDCYL)
-                  ch |= 4;
-               sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 4 %x\n", unit, ch);
+               ch = 0x0;
+               sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 3 %x\n", unit, ch);
                if (chan_write_byte(addr, &ch))
                    goto sns_end;
                ch = unit;
-               sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 5 %x\n", unit, ch);
+               sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 4 %x\n", unit, ch);
                if (chan_write_byte(addr, &ch))
                    goto sns_end;
                i = 5;
@@ -642,6 +643,8 @@ sns_end:
                  sim_debug(DEBUG_DETAIL, dptr, "end cyl skmsk unit=%d %02x %d %02x\n",
                            unit, state, data->tpos, data->filemsk);
                  uptr->SNS = (SNS_WRP << 8);
+                 if (data->ovfl)
+                    uptr->SNS |= (SNS_OVRINC << 8) | ((uptr->CMD & 0x3) | 0x4) << 16;
                  uptr->CMD &= ~0xff;
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                  goto index;
@@ -652,6 +655,8 @@ endcyl:
                  sim_debug(DEBUG_DETAIL, dptr, "end cyl unit=%d %02x %d\n",
                            unit, state, data->tpos);
                  uptr->SNS = (SNS_ENDCYL << 8);
+                 if (data->ovfl)
+                    uptr->SNS |= (SNS_OVRINC << 8) | ((uptr->CMD & 0x3) | 0x4) << 16;
                  data->tstart = 0;
                  uptr->CCH &= ~0xff;
                  uptr->CMD &= ~0xff;
@@ -829,36 +834,43 @@ ntrack:
     case 0x34:
     case 0x4:                 /* Sense */
          ch = uptr->SNS & 0xff;
-         sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 1 %x\n", unit, ch);
+         sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 0 %x\n", unit, ch);
          if (chan_write_byte(addr, &ch))
              goto sense_end;
          ch = (uptr->SNS >> 8) & 0xff;
-         sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 2 %x\n", unit, ch);
+         sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 1 %x\n", unit, ch);
          if (chan_write_byte(addr, &ch))
              goto sense_end;
          ch = 0;
-         sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 3 %x\n", unit, ch);
+         sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 2 %x\n", unit, ch);
          if (chan_write_byte(addr, &ch))
              goto sense_end;
          if (disk_type[type].sen_cnt > 6) {
-             ch = (unit & 07) | ((~unit & 07) << 3);
+             ch = (uptr->SNS >> 16);
+             sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 3 %x\n", unit, ch);
+             if (chan_write_byte(addr, &ch))
+                 goto sense_end;
+             if (disk_type[type].dev_type == 0x30)
+                 ch = (unit & 0x7) | ((~unit & 0x7) << 3);
+             else
+                 ch = 0x80 >> (unit & 0x7);
              sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 4 %x\n", unit, ch);
              if (chan_write_byte(addr, &ch))
                  goto sense_end;
-             ch = unit;
+             ch = (uptr->CCH >> 8) & 0xff;
              sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 5 %x\n", unit, ch);
              if (chan_write_byte(addr, &ch))
                  goto sense_end;
-             ch = (uptr->CCH >> 8) & 0xff;
+             ch = (uptr->CCH & 0x1f);
+             if (disk_type[type].cyl > 512)
+                ch |= (uptr->CCH >> 11) & 0x60;
+             else
+                ch |= (uptr->CCH >> 10) & 0x40;
              sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 6 %x\n", unit, ch);
              if (chan_write_byte(addr, &ch))
                  goto sense_end;
-             ch = (uptr->CCH & 0x1f) | ((uptr->CCH & 0x10000) ? 0x40 : 0);
-             sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 7 %x\n", unit, ch);
-             if (chan_write_byte(addr, &ch))
-                 goto sense_end;
              ch = 0;              /* Compute message code */
-             sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 8 %x\n", unit, ch);
+             sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 7 %x\n", unit, ch);
              if (chan_write_byte(addr, &ch))
                  goto sense_end;
              i = 8;
@@ -869,14 +881,18 @@ ntrack:
                  ch = 0x40;
              if ((uptr->CCH >> 8) & SNS_ENDCYL)
                 ch |= 4;
-             sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 4 %x\n", unit, ch);
+             sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 3 %x\n", unit, ch);
              if (chan_write_byte(addr, &ch))
                  goto sense_end;
              ch = unit;
+             sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 4 %x\n", unit, ch);
+             if (chan_write_byte(addr, &ch))
+                 goto sense_end;
+             ch = (uptr->SNS >> 16);
              sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 5 %x\n", unit, ch);
              if (chan_write_byte(addr, &ch))
                  goto sense_end;
-             i = 5;
+             i = 6;
          }
          ch = 0;
          for (; i < disk_type[type].sen_cnt; i++) {
