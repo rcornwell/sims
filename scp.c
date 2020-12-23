@@ -1171,8 +1171,9 @@ static const char simh_help1[] =
       "5-a\n"
       " If the -a switch is specified, and the device being attached is a\n"
       " sequential output only device (like a line printer, paper tape punch,\n"
-      " etc.), the file being attached will be opened in append mode thus adding\n"
-      " to any existing file data beyond what may have already been there.\n"
+      " etc.), the file being attached will be opened for write and positioned\n"
+      " at the end of the file's current contents, thus adding to any existing\n"
+      " file data beyond what may have already been there.\n"
       "5-q\n"
       " If the -q switch is specified when creating a new file (-n) or opening one\n"
       " read only (-r), any messages announcing these facts will be suppressed.\n"
@@ -8736,7 +8737,8 @@ for (i = 1; (dptr = sim_devices[i]) != NULL; i++) {     /* reposition all */
     for (j = 0; j < dptr->numunits; j++) {              /* seq devices */
         uptr = dptr->units + j;
         if ((uptr->flags & (UNIT_ATT + UNIT_SEQ)) == (UNIT_ATT + UNIT_SEQ))
-            if (sim_fseek (uptr->fileref, uptr->pos, SEEK_SET))
+            if (sim_can_seek (uptr->fileref) &&
+                (0 != sim_fseek (uptr->fileref, uptr->pos, SEEK_SET)))
                 return sim_messagef (SCPE_IERR, "Can't seek to %u in %s for %s\n", (unsigned)uptr->pos, uptr->filename, sim_uname (uptr));
         }
     }
