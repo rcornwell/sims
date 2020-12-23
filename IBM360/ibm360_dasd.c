@@ -99,6 +99,7 @@
 #define DK_ERASE           0x11       /* Erase to end of track */
 #define DK_RD_SECT         0x22       /* Read sector counter */
 #define DK_SETSECT         0x23       /* Set sector */
+#define DK_RD_BUFF         0xA4       /* Read and reset record log */
 #define DK_MT              0x80       /* Multi track flag */
 
 /* u3 */
@@ -1811,6 +1812,20 @@ wrckd:
          uptr->CMD &= ~(0xff);
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          break;
+
+    case DK_RD_BUFF & 0x7f:
+         if (disk_type[type].sen_cnt > 6 && (cmd = uptr->CMD & 0xff) == DK_RD_BUFF) {
+             ch = 0;
+             for (i = 0; i < 32; i++) {
+                 if (chan_write_byte(addr, &ch))
+                     break;
+             }
+             uptr->LCMD = 0;
+             uptr->CMD &= ~(0xff);
+             chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+             break;
+         }
+         /* Fall through */
 
     case DK_SPACE:           /* Space record */
          /* Not implemented yet */
