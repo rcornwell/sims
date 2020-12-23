@@ -1,6 +1,6 @@
 /* sel32_cpu.c: Sel 32 CPU simulator
 
-   Copyright (c) 2018-2020, James C. Bevier
+   Copyright (c) 2018-2021, James C. Bevier
    Portions provided by Richard Cornwell, Geert Rolf and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
@@ -25,70 +25,6 @@
 #include "sel32_defs.h"
 
 #define DO_DYNAMIC_DEBUG
-
-/* 32/7x PSW/PSD Mode Trap/Interrupt Priorities */
-/* Relative Logical  Int Vect TCW  IOCD Description */
-/* Priority Priority Location Addr Addr             */
-/*   0                 0F4              Power Fail Safe Trap */
-/*   1                 0FC              System Override Trap (Not Used) */
-/*   2                 0E8*             Memory Parity Trap */
-/*   3                 190              Nonpresent Memory Trap */
-/*   4                 194              Undefined Instruction Trap */
-/*   5                 198              Privilege Violation Trap */
-/*   6                 180              Supervisor Call Trap (SVC) */
-/*   7                 184              Machine Check Trap */
-/*   8                 188              System Check Trap */
-/*   9                 18C              Map Fault Trap */
-/*   A                                  Not Used */
-/*   B                                  Not Used */
-/*   C                                  Not Used */
-/*   D                                  Not Used */
-/*   E                 0E4              Block Mode Timeout Trap */
-/*   F                 1A4*             Arithmetic Exception Trap */
-/*  10        00       0F0              Power Fail Safe Interrupt */
-/*  11        01       0F8              System Override Interrupt */
-/*  12        12       0E8*             Memory Parity Trap */
-/*  13        13       0EC              Attention Interrupt */
-/*  14        14       140    100  700  I/O Channel 0 interrupt */  
-/*  15        15       144    104  708  I/O Channel 1 interrupt */  
-/*  16        16       148    108  710  I/O Channel 2 interrupt */  
-/*  17        17       14C    10C  718  I/O Channel 3 interrupt */  
-/*  18        18       150    110  720  I/O Channel 4 interrupt */  
-/*  19        19       154    114  728  I/O Channel 5 interrupt */  
-/*  1A        1A       158    118  730  I/O Channel 6 interrupt */  
-/*  1B        1B       15C    11C  738  I/O Channel 7 interrupt */  
-/*  1C        1C       160    120  740  I/O Channel 8 interrupt */  
-/*  1D        1D       164    124  748  I/O Channel 9 interrupt */  
-/*  1E        1E       168    128  750  I/O Channel A interrupt */  
-/*  1F        1F       16C    12C  758  I/O Channel B interrupt */  
-/*  20        20       170    130  760  I/O Channel C interrupt */  
-/*  21        21       174    134  768  I/O Channel D interrupt */  
-/*  22        22       178    138  770  I/O Channel E interrupt */  
-/*  23        23       17C    13C  778  I/O Channel F interrupt */  
-/*  24        24       190*             Nonpresent Memory Trap */
-/*  25        25       194*             Undefined Instruction Trap */
-/*  26        26       198*             Privlege Violation Trap */
-/*  27        27       19C              Call Monitor Interrupt */
-/*  28        28       1A0              Real-Time Clock Interrupt */
-/*  29        29       1A4*             Arithmetic Exception Interrupt */
-/*  2A        2A       1A8              External/Software Interrupt */
-/*  2B        2B       1AC              External/Software Interrupt */
-/*  2C        2C       1B0              External/Software Interrupt */
-/*  2D        2D       1B4              External/Software Interrupt */
-/*  2E        2E       1B8              External/Software Interrupt */
-/*  2F        2F       1BC              External/Software Interrupt */
-/*  30        30       1C0              External/Software Interrupt */
-/*  31        31       1C4              External/Software Interrupt */
-/* THRU      THRU     THRU                        THRU              */ 
-/*  77        77       2DC              External/Software Interrupt */
-/*  78                 2E0              End of IPU Processing Trap (CPU) */
-/*  79                 2E4              Start IPU Processing Trap (IPU) */
-/*  7A                 2E8              Supervisor Call Trap (IPU) */
-/*  7B                 2EC              Error Trap (IPU) */
-/*  7C                 2F0              Call Monitor Trap (IPU) */
-/*  7D        7D       2F4              Stop IPU Processing Trap (IPU) */
-/*  7E        7E       2F8              External/Software Interrupt */
-/*  7F        7F       2FC              External/Software Interrupt */
 
 /* Concept 32 PSD Mode Trap/Interrupt Priorities */
 /* Relative|Logical |Int Vect|TCW |IOCD|Description */
@@ -227,13 +163,13 @@ uint8           waitqcnt = 0;               /* # instructions before start */
 
 struct InstHistory
 {
-    uint32   opsd1;     /* original PSD1 */
-    uint32   opsd2;     /* original PSD2 */
-    uint32   npsd1;     /* new PSD1 after instruction */
-    uint32   npsd2;     /* new PSD2 after instruction */
-    uint32   oir;       /* the instruction itself */
-    uint32   modes;     /* current cpu mode bits */
-    uint32   reg[16];   /* regs/bregs for operation */
+    uint32   opsd1;                         /* original PSD1 */
+    uint32   opsd2;                         /* original PSD2 */
+    uint32   npsd1;                         /* new PSD1 after instruction */
+    uint32   npsd2;                         /* new PSD2 after instruction */
+    uint32   oir;                           /* the instruction itself */
+    uint32   modes;                         /* current cpu mode bits */
+    uint32   reg[16];                       /* regs/bregs for operation */
 };
 
 /* forward definitions */
@@ -292,9 +228,9 @@ extern uint32   s_normfw(uint32 mem, uint32 *cc);
 extern t_uint64 s_normfd(t_uint64 mem, uint32 *cc);
 
 /* History information */
-int32           hst_p = 0;       /* History pointer */
-int32           hst_lnt = 0;     /* History length */
-struct InstHistory *hst = NULL;      /* History stack */
+int32           hst_p = 0;                  /* History pointer */
+int32           hst_lnt = 0;                /* History length */
+struct InstHistory *hst = NULL;             /* History stack */
 
 /* CPU data structures
 
@@ -1966,8 +1902,11 @@ wait_loop:
         }
 
 #ifndef TRY_UTX_DELAY
-        if (waitqcnt > 0)
+        if (waitqcnt > 0) {
             waitqcnt--;                         /* wait b4 ints */
+/*121420*/  if (waitqcnt == 0)
+/*121420*/      irq_pend = 1;                   /* start scanning interrupts again */
+        }
 #endif
 
         /* we are booting the system, so see if boot channel prog is completed */
@@ -2013,18 +1952,7 @@ wait_loop:
                         sim_debug(DEBUG_XIO, &cpu_dev,
                             "CPU RDYQ entry loading for chsa %04x processed\n", chsa);
                 }
-#ifdef XXXXX
-                goto wait_loop;                 /* continue waiting for boot */
-#endif
             }
-#ifdef XXXXX
-            /* see if in wait instruction */
-            if (wait4int) {                     /* keep waiting */
-                /* tell simh we will be waiting */
-//0905          sim_idle(TMR_RTC, 1);           /* wait for clock tick */
-                sim_idle(TMR_RTC, 1);           /* wait for clock tick */
-            }
-#endif
             goto wait_loop;                     /* continue waiting */
         }
 
@@ -2085,10 +2013,6 @@ wait_loop:
                                     irq_auto, il, INTS[il], il+0x80, SPAD[il+0x80]);
                             }
                             irq_auto = il;      /* show processing in blocked mode */
-#ifdef LEAVE_AUTO_INT_ACT_051020
-                            INTS[il] &= ~INTS_ACT;  /* deactivate specified int level */
-                            SPAD[il+0x80] &= ~SINT_ACT; /* deactivate in SPAD too */
-#endif
                             sim_debug(DEBUG_IRQ, &cpu_dev,
                                 "<|>Auto-reset interrupt INTS[%02x] %08x SPAD[%02x] %08x simi %02x\n",
                                 il, INTS[il], il+0x80, SPAD[il+0x80], sim_interval);
@@ -2100,10 +2024,6 @@ wait_loop:
                         CPUSTATUS &= ~BIT24;    /* no, reset blk state in cpu status bit 24 */
                         MODES &= ~BLKMODE;      /* reset blocked mode */
                     }
-#ifndef DO_DYNAMIC_DEBUG
-                    /* start debugging */
-                    cpu_dev.dctrl |= DEBUG_INST;
-#endif
                 } else {
                     /* handle retain blocking state */
                     PSD2 &= ~RETMBIT;           /* turn off retain bit in PSD2 */
@@ -2158,7 +2078,6 @@ wait_loop:
                         "scan_chan CPU RDYQ entry for chsa %04x processed w/error byte %04x\n",
                         chsa, chp->chan_byte);
                 }
-//              goto wait_loop;        /*1119*/ /* continue waiting */
             }
         }
 #else
@@ -2189,7 +2108,6 @@ wait_loop:
         /* see if in wait instruction */
         if (wait4int) {                         /* keep waiting */
             /* tell simh we will be waiting */
-//0905      sim_idle(TMR_RTC, 1);               /* wait for clock tick */
             sim_idle(TMR_RTC, 1);               /* wait for clock tick */
             irq_pend = 1;                       /* start scanning interrupts again */
             goto wait_loop;                     /* continue waiting */
@@ -2249,19 +2167,12 @@ skipi:
             IR <<= 16;                          /* put instruction in left hw */
             if ((CPU_MODEL <= MODEL_27) || (CPU_MODEL == MODEL_87) ||
                     (CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9)) {
-#ifdef NOTNOW
-                if (skipinstr)
-                    sim_debug(DEBUG_IRQ, &cpu_dev,
-                        "1Rt HW instruction skipinstr %1x is set PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
-                        skipinstr, PSD1, PSD2, CPUSTATUS);
-#endif
                 drop_nop = 0;                   /* not dropping nop for these machines */
                 goto exec;                      /* machine does not drop nop instructions */
             }
             /* We have 67 or V6 and have a rt hw instruction */
             if (IR == 0x00020000) {             /* is this a NOP from rt hw? */
                 PSD1 = (PSD1 + 2) | (((PSD1 & 2) >> 1) & 1);    /* skip this instruction */
-//              fprintf(stderr, "RIGHT HW skip NOP instr %x skip nop at %x\n", IR, PSD1);
                 if (skipinstr)
                     sim_debug(DEBUG_IRQ, &cpu_dev,
                         "2Rt HW instruction skipinstr %1x is set PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
@@ -2287,7 +2198,6 @@ skipi:
                 if ((IR & 0xffff) == 0x0002) {  /* see if rt hw is a nop */
                     /* treat this as a fw instruction */
                     drop_nop = 1;               /* we need to skip nop next time */
-//                  fprintf(stderr, "LEFT HW skip NOP instr %x skip nop at %x\r\n", IR, PSD1);
                 }
             }
         }
@@ -2303,14 +2213,6 @@ exec:
         PC = PSD1 & 0xfffffe;                   /* get 24 bit addr from PSD1 */
         sim_debug(DEBUG_DETAIL, &cpu_dev, "-----Instr @ PC %08x PSD1 %08x PSD2 %08x IR %08x\n",
             PC, PSD1, PSD2, IR);
-
-#ifdef OLDPLACE
-        /* check for breakpoint request */
-        if (sim_brk_summ && sim_brk_test(PC, SWMASK('E'))) {
-            reason = STOP_IBKPT;
-            break;
-        }
-#endif
 
         /* Update history for this instruction */
         if (hst_lnt) {
@@ -2685,7 +2587,6 @@ exec:
                 }
                 fprintf(stdout, "[][][][][][][][][][] HALT [][][][][][][][][][]\r\n");
 /*TEST DIAG*/           reason = STOP_HALT;         /* do halt for now */
-///*TEST DIAG*/           return STOP_HALT;           /* exit to simh for halt */
                         break;
                 case 0x1:   /* WAIT */
                         if ((MODES & PRIVBIT) == 0) { /* must be privileged to wait */
@@ -2713,7 +2614,6 @@ exec:
                         }
                         wait4int = 1;               /* show we are waiting for interrupt */
                         /* tell simh we will be waiting */
-//0905                  sim_idle(TMR_RTC, 1);       /* wait for clock tick */
                         sim_idle(TMR_RTC, 0);       /* wait for next pending device event */
 /*719*/                 irq_pend = 1;               /* start scanning interrupts again */
                         i_flags |= BT;              /* keep PC from being incremented while waiting */
@@ -2773,11 +2673,6 @@ exec:
                                 TRAPSTATUS |= BIT19;    /* set bit 19 of trap status */
                             goto newpsd;            /* Privlege violation trap */
                         }
-#ifdef FOR_DEBUG
-sim_debug(DEBUG_IRQ, &cpu_dev,
-"bei int was %01x at PSD1 %08x PSD2 %08x\n",
-CPUSTATUS&0x80 ? 1 : 0, PSD1, PSD2);
-#endif
                         CPUSTATUS |= BIT24;         /* into status word bit 24 too */
                         PSD2 &= ~(SETBBIT|RETBBIT); /* clear bit 48 & 49 */
                         MODES &= ~(BLKMODE|RETMODE);/* reset blocked & retain mode bits */
@@ -2796,11 +2691,6 @@ CPUSTATUS&0x80 ? 1 : 0, PSD1, PSD2);
                                 TRAPSTATUS |= BIT19;    /* set bit 19 of trap status */
                             goto newpsd;            /* Privlege violation trap */
                         }
-#ifdef FOR_DEBUG
-sim_debug(DEBUG_IRQ, &cpu_dev,
-"uei int was %01x at PSD1 %08x PSD2 %08x\n",
-CPUSTATUS&0x80 ? 1 : 0, PSD1, PSD2);
-#endif
                         if (CPUSTATUS & BIT24) {    /* see if old mode is blocked */
                             irq_pend = 1;           /* start scanning interrupts again */
                             if (irq_auto) {
@@ -2811,10 +2701,6 @@ CPUSTATUS&0x80 ? 1 : 0, PSD1, PSD2);
                                     irq_auto, PSD1, PSD2);
 /*AIR*/                         irq_auto = 0;       /* show done processing in blocked mode */
 /*103020*/                      skipinstr = 1;      /* skip interrupt test */
-#ifndef DO_DYNAMIC_DEBUG
-                                /* stop debugging */
-                                cpu_dev.dctrl &= ~DEBUG_INST;
-#endif
                             }
                         }
                         CPUSTATUS &= ~BIT24;        /* clear status word bit 24 */
@@ -2830,8 +2716,6 @@ CPUSTATUS&0x80 ? 1 : 0, PSD1, PSD2);
                         break;
                 case 0x9:   /* RDSTS */
                         GPR[reg] = CPUSTATUS;       /* get CPU status word */
-//sim_debug(DEBUG_CMD, &cpu_dev,
-//"RDSTS CPUSTATUS %08x SPAD[0xf9] %08x\n", CPUSTATUS, SPAD[0xf9]);
                         break;
                 case 0xA:   /* SIPU */              /* ignore for now */
                         sim_debug(DEBUG_CMD, &cpu_dev,
@@ -3093,13 +2977,11 @@ CPUSTATUS&0x80 ? 1 : 0, PSD1, PSD2);
                     break;
 
                 case 0x08:  /* 0x0408 INV (Diag Illegal instruction) */
-#ifndef NO_HACK
                     /* HACK HACK HACK for DIAGS */
                     if (CPU_MODEL <= MODEL_27) {    /* DIAG error for 32/27 only */
                         if ((PSD1 & 2) == 0)        /* if lf hw instruction */
                             i_flags |= HLF;         /* if nop in rt hw, bump pc a word */
                     }
-#endif
                     /* drop through */
                 default:    /* INV */               /* everything else is invalid instruction */
                     TRAPME = UNDEFINSTR_TRAP;       /* Undefined Instruction Trap */
@@ -3825,8 +3707,6 @@ tbr:                                                /* handle basemode TBR too *
                     t = (GPR[reg] >> 16) & 0xff;    /* get SPAD address from Rd (6-8) */
                     temp2 = SPAD[t];                /* get old SPAD data */
                     SPAD[t] = GPR[sreg];            /* store Rs into SPAD */
-//sim_debug(DEBUG_CMD, &cpu_dev,
-//"At TRSC with spad[%02x] %08x old %08x\n", t, SPAD[t], temp2);
                     break;
 
                 case 0xF:           /* TSCR */      /* Transfer scratchpad to register */
@@ -3840,8 +3720,6 @@ tbr:                                                /* handle basemode TBR too *
                     }
                     t = (GPR[sreg] >> 16) & 0xff;   /* get SPAD address from Rs (9-11) */
                     temp = SPAD[t];                 /* get SPAD data into Rd (6-8) */
-//sim_debug(DEBUG_CMD, &cpu_dev,
-//"At TSCR with spad[%02x] %08x\n", t, SPAD[t]);
                     break;
                 }
                 GPR[reg] = temp;                    /* save the temp value to Rd reg */
@@ -3915,10 +3793,6 @@ skipit:
                                     irq_auto, PSD1);
 /*AIR*/                         irq_auto = 0;       /* show done processing in blocked mode */
 /*103020*/                      skipinstr = 1;      /* skip interrupt test */
-#ifndef DO_DYNAMIC_DEBUG
-                                /* stop debugging */
-                                cpu_dev.dctrl &= ~DEBUG_INST;
-#endif
                             }
                         }
                     } else {
@@ -5190,13 +5064,6 @@ meoa:           /* merge point for eor, and, or */
                     "\n\tR0=%.8x R1=%.8x R2=%.8x R3=%.8x", GPR[0], GPR[1], GPR[2], GPR[3]);
                 sim_debug(DEBUG_INST, &cpu_dev,
                     " R4=%.8x R5=%.8x R6=%.8x R7=%.8x\n", GPR[4], GPR[5], GPR[6], GPR[7]);
-#ifdef NOTNOW
-                if (skipinstr)
-                    sim_debug(DEBUG_IRQ, &cpu_dev,
-                        "EXM skipinstr %x reset irq_pend %x PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
-                        skipinstr, irq_pend, PSD1, PSD2, CPUSTATUS);
-#endif
-/*DIAG*/ //1106 skipinstr = 0;                      /* only test this once */
                 goto exec;                          /* go execute the instruction */
                 break;
  
@@ -5542,10 +5409,6 @@ temp2, IR&0xFFF, PSD1, PSD2, CPUSTATUS);
                                     irq_auto, temp2, PSD1);
 /*AIR*/                         irq_auto = 0;       /* show done processing in blocked mode */
 /*103020*/                      skipinstr = 1;      /* skip interrupt test */
-#ifndef DO_DYNAMIC_DEBUG
-                                /* stop debugging */
-                                cpu_dev.dctrl &= ~DEBUG_INST;
-#endif
                             }
                         }
                     } else {
@@ -5614,13 +5477,6 @@ temp2, IR&0xFFF, PSD1, PSD2, CPUSTATUS);
                         "\n\tR0=%.8x R1=%.8x R2=%.8x R3=%.8x", GPR[0], GPR[1], GPR[2], GPR[3]);
                     sim_debug(DEBUG_INST, &cpu_dev,
                         " R4=%.8x R5=%.8x R6=%.8x R7=%.8x\n", GPR[4], GPR[5], GPR[6], GPR[7]);
-#ifdef NOTNOW
-                    if (skipinstr)
-                 sim_debug(DEBUG_IRQ, &cpu_dev,
-                    "EXR skipinstr %x reset irq_pend %x PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
-                    skipinstr, irq_pend, PSD1, PSD2, CPUSTATUS);
-#endif
-/*DIAG*/ //1106     skipinstr = 0;                  /* only test this once */
                     goto exec;                      /* go execute the instruction */
                     break;
 
@@ -6176,10 +6032,6 @@ temp2, IR&0xFFF, PSD1, PSD2, CPUSTATUS);
                                     irq_auto, PSD1, PSD2);
 /*AIR*/                         irq_auto = 0;           /* show done processing in blocked mode */
 /*103020*/                      skipinstr = 1;          /* skip interrupt test */
-#ifndef DO_DYNAMIC_DEBUG
-                                /* stop debugging */
-                                cpu_dev.dctrl &= ~DEBUG_INST;
-#endif
                             }
                         }
                     } else {
@@ -6662,14 +6514,14 @@ mcheck:
                     case 0x02:      /* Start I/O SIO */
 //                      chsa = temp2 & 0x7fff;          /* logical address */
                         sim_debug(DEBUG_XIO, &cpu_dev,
-                            "XIO SIO b4 call PSD1 %08x rchsa %04x lchsa %04x BLK %1x\n",
+                            "SIO b4 call PSD1 %08x rchsa %04x lchsa %04x BLK %1x\n",
                             PSD1, rchsa, lchsa, CPUSTATUS&0x80?1:0);
 //                          PSD1, lchan, lchsa, CPUSTATUS&0x80?1:0);
                         if ((TRAPME = startxio(lchsa, &rstatus)))
                             goto newpsd;                /* error returned, trap cpu */
                         PSD1 = ((PSD1 & 0x87fffffe) | (rstatus & 0x78000000));   /* insert status */
                         sim_debug(DEBUG_XIO, &cpu_dev,
-                            "XIO SIO ret PSD1 %08x chan %04x chsa %04x status %08x BLK %1x\n",
+                            "SIO ret PSD1 %08x chan %04x chsa %04x status %08x BLK %1x\n",
                             PSD1, rchsa, lchsa, rstatus, CPUSTATUS&0x80?1:0);
                         break;
                             
@@ -6677,28 +6529,26 @@ mcheck:
 //                      lchsa = (lchan << 8) | suba;    /* logical address */
                         if ((TRAPME = testxio(lchsa, &rstatus))) {
                             sim_debug(DEBUG_TRAP, &cpu_dev,
-                                "XIO TIO ret PSD1 %x rchsa %x lchsa %x status %x BLK %1x\n",
+                                "TIO ret PSD1 %x rchsa %x lchsa %x status %x BLK %1x\n",
                                 PSD1, rchsa, lchsa, rstatus, CPUSTATUS&0x80?1:0);
                             goto newpsd;                /* error returned, trap cpu */
                         }
                         PSD1 = ((PSD1 & 0x87fffffe) | (rstatus & 0x78000000));   /* insert status */
                         sim_debug(DEBUG_XIO, &cpu_dev,
-                        "XIO TIO ret PSD1 %08x lchsa %04x stat %08x spad %08x INTS[%02x] %08x BLK %1x\n",
+                        "TIO ret PSD1 %08x lchsa %04x stat %08x spad %08x INTS[%02x] %08x BLK %1x\n",
                         PSD1, lchsa, rstatus, t, ix, INTS[ix], CPUSTATUS&0x80?1:0);
                         break;
                             
                     case 0x04:      /* Stop I/O STPIO */
-//                      lchsa = (lchan << 8) | suba;    /* logical address */
                         if ((TRAPME = stopxio(lchsa, &rstatus)))
                             goto newpsd;                /* error returned, trap cpu */
                         PSD1 = ((PSD1 & 0x87fffffe) | (rstatus & 0x78000000));   /* insert status */
-                        sim_debug(DEBUG_XIO, &cpu_dev, "XIO STPIO ret rchsa %04x lchsa %04x status %08x\n",
+                        sim_debug(DEBUG_XIO, &cpu_dev, "STPIO ret rchsa %04x lchsa %04x status %08x\n",
                             rchsa, lchsa, rstatus);
                         break;
 
                     /* TODO Finish XIO */
                     case 0x05:      /* Reset channel RSCHNL */
-//                      lchsa = (lchan << 8) | suba;    /* logical address */
                         /* TODO Maybe we need to disable int too???? */
                         if ((TRAPME = rschnlxio(lchsa, &rstatus)))
                             goto newpsd;                /* error returned, trap cpu */
@@ -6707,43 +6557,39 @@ mcheck:
                         INTS[ix] &= ~INTS_ACT;          /* deactivate specified int level */
                         SPAD[ix+0x80] &= ~SINT_ACT;     /* deactivate in SPAD too */
                         PSD1 = ((PSD1 & 0x87fffffe) | (rstatus & 0x78000000));   /* insert status */
-                        sim_debug(DEBUG_XIO, &cpu_dev, "XIO RSCHNL ret rchsa %04x lchsa %04x status %08x\n",
+                        sim_debug(DEBUG_XIO, &cpu_dev, "RSCHNL rschnlxio ret rchsa %04x lchsa %04x status %08x\n",
                             rchsa, lchsa, rstatus);
                         break;
 
                     case 0x06:      /* Halt I/O HIO */
-//                      lchsa = (lchan << 8) | suba;    /* logical address */
                         if ((TRAPME = haltxio(lchsa, &rstatus)))
                             goto newpsd;                /* error returned, trap cpu */
                         PSD1 = ((PSD1 & 0x87fffffe) | (rstatus & 0x78000000));   /* insert status */
                         sim_debug(DEBUG_XIO, &cpu_dev,
-                            "HIO HALTXIO ret rchsa %04x lchsa %04x status %08x\n",
+                            "HIO haltxio ret rchsa %04x lchsa %04x status %08x\n",
                             rchsa, lchsa, rstatus);
                         break;
 
                     case 0x07:      /* Grab controller GRIO n/u */
-                        lchsa = (lchan << 8) | suba;    /* logical address */
                         if ((TRAPME = grabxio(lchsa, &rstatus)))
                             goto newpsd;                /* error returned, trap cpu */
                         PSD1 = ((PSD1 & 0x87fffffe) | (rstatus & 0x78000000));   /* insert status */
-                        sim_debug(DEBUG_XIO, &cpu_dev, "XIO GRIO ret rchsa %04x lchsa %04x status %08x\n",
+                        sim_debug(DEBUG_XIO, &cpu_dev, "GRIO ret rchsa %04x lchsa %04x status %08x\n",
                             rchsa, lchsa, rstatus);
                         break;
 
                     case 0x08:      /* Reset controller RSCTL */
-//                      lchsa = (lchan << 8) | suba;    /* logical address */
                         if ((TRAPME = rsctlxio(lchsa, &rstatus)))
                             goto newpsd;                /* error returned, trap cpu */
                         PSD1 = ((PSD1 & 0x87fffffe) | (rstatus & 0x78000000));   /* insert status */
-                        sim_debug(DEBUG_XIO, &cpu_dev, "XIO RSCTL ret rchsa %04x lchsa %04x status %08x\n",
+                        sim_debug(DEBUG_XIO, &cpu_dev, "RSCTL ret rchsa %04x lchsa %04x status %08x\n",
                             rchsa, lchsa, rstatus);
                         break;
 
                     case 0x0C:      /* Enable channel interrupt ECI */
                                     /* disable int only */
-//                      lchsa = (lchan << 8) | suba;    /* logical address */
                         sim_debug(DEBUG_XIO, &cpu_dev,
-                            "XIO ECI chsa %04x lchsa %04x spad %08x INTS[%02x] %08x\n",
+                            "ECI chsa %04x lchsa %04x spad %08x INTS[%02x] %08x\n",
                             rchsa, lchsa, t, ix, INTS[ix]);
 
                         if ((TRAPME = checkxio(lchsa, &rstatus)))
@@ -6766,9 +6612,8 @@ mcheck:
 
                     case 0x0D:      /* Disable channel interrupt DCI */
                                     /* disable int, leave req */
-//                      lchsa = (lchan << 8) | suba;    /* logical address */
                         sim_debug(DEBUG_XIO, &cpu_dev,
-                            "XIO DCI rchsa %04x lchsa %04x spad %08x INTS[%02x] %08x\n",
+                            "DCI rchsa %04x lchsa %04x spad %08x INTS[%02x] %08x\n",
                             rchsa, lchsa, t, ix, INTS[ix]);
 
                         if ((TRAPME = checkxio(lchsa, &rstatus)))
@@ -6783,16 +6628,13 @@ mcheck:
                         /* SPAD entries for interrupts begin at 0x80 */
                         INTS[ix] &= ~INTS_ENAB;         /* disable specified int level */
                         SPAD[ix+0x80] &= ~SINT_ENAB;    /* disable in SPAD too */
-                        /* MFP doc says req is dropped, 67 cpu says no */
-// TRYING 032920 */     INTS[ix] &= ~INTS_REQ;          /* clears any requests also */
                         PSD1 = ((PSD1 & 0x87fffffe) | (rstatus & 0x78000000));   /* insert status */
                         break;
 
                     case 0x0E:      /* Activate channel interrupt ACI */
                                     /* Set int active, clear request */
-//                      lchsa = (lchan << 8) | suba;    /* logical address */
                         sim_debug(DEBUG_XIO, &cpu_dev,
-                            "XIO ACI rchsa %04x lchsa %04x spad %08x INTS[%02x] %08x\n",
+                            "ACI rchsa %04x lchsa %04x spad %08x INTS[%02x] %08x\n",
                             rchsa, lchsa, t, ix, INTS[ix]);
 
                         if ((TRAPME = checkxio(lchsa, &rstatus)))
@@ -6804,17 +6646,14 @@ mcheck:
                         /* SPAD entries for interrupts begin at 0x80 */
                         INTS[ix] |= INTS_ACT;           /* activate specified int level */
                         SPAD[ix+0x80] |= SINT_ACT;      /* enable in SPAD too */
-/*917*/                 /* tech manual says to remove any request */
-//BAD/*1030*/           INTS[ix] &= ~INTS_REQ;          /* clears any requests also */
                         PSD1 = ((PSD1 & 0x87fffffe) | (rstatus & 0x78000000));   /* insert status */
                         break;
 
                     case 0x0F:      /* Deactivate channel interrupt DACI */
                                     /* Clear active and leave any request */
                                     /* Note, instruction following DACI is not interruptable */
-//                      lchsa = (lchan << 8) | suba;    /* logical address */
                         sim_debug(DEBUG_XIO, &cpu_dev,
-                            "XIO DACI rchsa %04x lchsa %04x spad %08x INTS[%02x] %08x\n",
+                            "DACI rchsa %04x lchsa %04x spad %08x INTS[%02x] %08x\n",
                             rchsa, lchsa, t, ix, INTS[ix]);
 
                         if ((TRAPME = checkxio(rchsa, &rstatus)))
@@ -6830,12 +6669,8 @@ mcheck:
                         skipinstr = 1;                  /* skip interrupt test */
                         PSD1 = ((PSD1 & 0x87fffffe) | (rstatus & 0x78000000));   /* insert status */
                         sim_debug(DEBUG_XIO, &cpu_dev,
-                        "XIO DACI ret lchsa %04x status %08x spad %08x INTS[%02x] %08x BLK %1x\n",
+                        "DACI ret lchsa %04x status %08x spad %08x INTS[%02x] %08x BLK %1x\n",
                         lchsa, rstatus, t, ix, INTS[ix], CPUSTATUS&0x80?1:0);
-#ifndef DO_DYNAMIC_DEBUG
-                        /* stop debugging */
-                        cpu_dev.dctrl &= ~DEBUG_INST;
-#endif
                         break;
                 }                   /* end of XIO switch */
                 break;
@@ -7323,11 +7158,6 @@ t_stat cpu_reset(DEVICE *dptr)
         GPR[i] = BOOTR[i];              /* set boot register values */
         BR[i] = 0;                      /* clear the registers */
     }
-#ifdef NOTNOW
-    /* TEMP for UTX boot messages */
-    if (GPR[7] != 0)
-        GPR[7] = 0x40;                  /* set RE_VERBOSE bit for UTX tape boot */
-#endif
 
     /* set console switch settings */
     M[0x780>>2] = CSW;                  /* set console switch settings */

@@ -1,7 +1,7 @@
 /* sel32_defs.h: SEL-32 Concept/32 simulator definitions 
 
-   Copyright (c) 2018-2020, James C. Bevier
-   Portions provided by Richard Cornwell and other SIMH contributers
+   Copyright (c) 2018-2021, James C. Bevier
+   Portions provided by Richard Cornwell, Geert Rolf and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -196,8 +196,8 @@ extern DEVICE ec_dev;
 
 /* Memory */
 
-#define MAXMEMSIZE  ((16*1024*1024)/4)      /* max memory size in 32bit words */
-#define MEMSIZE     (cpu_unit.capac)        /* actual memory size */
+#define MAXMEMSIZE  ((16*1024*1024)/4)  /* max memory size in 32bit words */
+#define MEMSIZE     (cpu_unit.capac)    /* actual memory size */
 #define MEM_ADDR_OK(x)  (((x)) < MEMSIZE)
 
 /* channel program data for a chan/sub-address */
@@ -219,12 +219,12 @@ typedef struct chp {
 } CHANP;
 
 /* Device information block */
-#define FIFO_SIZE 256       /* fifo to hold 128 double words of status */
+#define FIFO_SIZE 256                   /* fifo to hold 128 double words of status */
 extern  int32   FIFO_Put(uint16 chsa, uint32 entry);
 extern  int32   FIFO_Get(uint16 chsa, uint32 *old);
 extern  int32   FIFO_Num(uint16 chsa);
 
-#define IOCLQ_SIZE 32       /* fifo to hold 32 iocl cmds */
+#define IOCLQ_SIZE 32                   /* fifo to hold 32 iocl cmds */
 
 typedef struct ioclq {
         uint32  ioclq_fifo[IOCLQ_SIZE];
@@ -242,11 +242,11 @@ typedef struct dib {
         /* Start a channel command SIO */
         uint16      (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd);
         /* Halt I/O HIO */
-        uint16      (*halt_io)(UNIT *uptr);     /* Halt I/O */
+        uint16      (*halt_io)(UNIT *uptr); /* Halt I/O */
         /* Test I/O STOPIO */
-        uint16      (*stop_io)(UNIT *uptr);     /* Stop I/O */
+        uint16      (*stop_io)(UNIT *uptr); /* Stop I/O */
         /* Test I/O TESTIO */
-        uint16      (*test_io)(UNIT *uptr);     /* Test I/O */
+        uint16      (*test_io)(UNIT *uptr); /* Test I/O */
         /* Reset Controller RSCTL */
         uint16      (*rsctl_io)(UNIT *uptr);    /* Reset Controller */
         /* Reset Controller RSCHNL */
@@ -255,22 +255,22 @@ typedef struct dib {
         uint16      (*iocl_io)(CHANP *chp, int32 tic_ok);   /* IOCL processing */
         /* Controller init */
         void        (*dev_ini)(UNIT *, t_bool); /* init function */
-        UNIT        *units;                 /* Pointer to units structure */
-        CHANP       *chan_prg;              /* Pointer to channel program */
-        IOCLQ       *ioclq_ptr;             /* pointer to array of IOCLQ entries */
-        uint8       numunits;               /* number of units */
-        uint8       mask;                   /* device mask */
-        uint16      chan_addr;              /* parent channel address */
-        uint32      chan_fifo_in;           /* fifo input index */
-        uint32      chan_fifo_out;          /* fifo output index */
+        UNIT        *units;             /* Pointer to units structure */
+        CHANP       *chan_prg;          /* Pointer to channel program */
+        IOCLQ       *ioclq_ptr;         /* pointer to array of IOCLQ entries */
+        uint8       numunits;           /* number of units */
+        uint8       mask;               /* device mask */
+        uint16      chan_addr;          /* parent channel address */
+        uint32      chan_fifo_in;       /* fifo input index */
+        uint32      chan_fifo_out;      /* fifo output index */
         uint32      chan_fifo[FIFO_SIZE];   /* interrupt status fifo for each channel */
 } DIB;
 
-extern  DIB     *dib_unit[MAX_DEV];         /* Pointer to Device info block */
-extern  DIB     *dib_chan[MAX_CHAN];        /* Pointer to channel mux dib */
+extern  DIB     *dib_unit[MAX_DEV];     /* Pointer to Device info block */
+extern  DIB     *dib_chan[MAX_CHAN];    /* Pointer to channel mux dib */
 
-#define DEV_CHAN          (1 << DEV_V_UF)       /* Device is channel mux if set */
-#define DEV_V_UF2         (DEV_V_UF+1)          /* current usage */
+#define DEV_CHAN          (1 << DEV_V_UF)   /* Device is channel mux if set */
+#define DEV_V_UF2         (DEV_V_UF+1)  /* current usage */
 
 #ifdef NOT_USED_NOW
 //#define DEV_V_ADDR        DEV_V_UF              /* Pointer to device address (16) */
@@ -339,16 +339,16 @@ extern DEBTAB dev_debug[];
 #define MEMAMOUNT(x)    (x << UNIT_V_MSIZE)
 #define CPU_MODEL       ((cpu_unit.flags >> UNIT_V_MODEL) & 0x7)    /* cpu model 0-7 */
 
-#define MODEL_55        0                     /* 512K Mode Only */
-#define MODEL_75        1                     /* Extended */
-#define MODEL_27        2                     /* */
-#define MODEL_67        3                     /* */
-#define MODEL_87        4                     /* */
-#define MODEL_97        5                     /* */
-#define MODEL_V6        6                     /* V6 CPU */
-#define MODEL_V9        7                     /* V9 CPU */
+#define MODEL_55        0               /* 512K Mode Only */
+#define MODEL_75        1               /* Extended */
+#define MODEL_27        2               /* */
+#define MODEL_67        3               /* */
+#define MODEL_87        4               /* */
+#define MODEL_97        5               /* */
+#define MODEL_V6        6               /* V6 CPU */
+#define MODEL_V9        7               /* V9 CPU */
 
-#define TMR_RTC         1                   /* RTC will not work if set to 0!! */ 
+#define TMR_RTC         1               /* RTC will not work if set to 0!! */ 
 //#define TMR_RTC         0
 
 #define HIST_MIN        64
@@ -356,95 +356,95 @@ extern DEBTAB dev_debug[];
 #define HIST_PC         0x80000000
 
 /* CC defs Held in CC */
-#define CC1BIT   0x40000000                 /* CC1 in PSD1 */
-#define CC2BIT   0x20000000                 /* CC2 in PSD1 */
-#define CC3BIT   0x10000000                 /* CC3 in PSD1 */
-#define CC4BIT   0x08000000                 /* CC4 in PSD1 */
+#define CC1BIT   0x40000000             /* CC1 in PSD1 */
+#define CC2BIT   0x20000000             /* CC2 in PSD1 */
+#define CC3BIT   0x10000000             /* CC3 in PSD1 */
+#define CC4BIT   0x08000000             /* CC4 in PSD1 */
 
-#define MAPMODE  0x40                       /* Map mode, PSD 2 bit 0 */
-#define RETMODE  0x20                       /* Retain current maps, PSD 2 bit 15 */
-#define BLKMODE  0x10                       /* Set blocked mode, PSD 2 bit 17 */
-#define RETBLKM  0x08                       /* Set retain blocked mode, PSD 2 bit 16 */
+#define MAPMODE  0x40                   /* Map mode, PSD 2 bit 0 */
+#define RETMODE  0x20                   /* Retain current maps, PSD 2 bit 15 */
+#define BLKMODE  0x10                   /* Set blocked mode, PSD 2 bit 17 */
+#define RETBLKM  0x08                   /* Set retain blocked mode, PSD 2 bit 16 */
 
 /* PSD mode bits in PSD words 1&2 variable */
-#define PRIVBIT  0x80000000                 /* Privileged mode  PSD 1 bit 0 */
-#define EXTDBIT  0x04000000                 /* Extended Addressing PSD 1 bit 5 */
-#define BASEBIT  0x02000000                 /* Base Mode PSD 1 bit 6 */
-#define AEXPBIT  0x01000000                 /* Arithmetic exception PSD 1 bit 7 */
+#define PRIVBIT  0x80000000             /* Privileged mode  PSD 1 bit 0 */
+#define EXTDBIT  0x04000000             /* Extended Addressing PSD 1 bit 5 */
+#define BASEBIT  0x02000000             /* Base Mode PSD 1 bit 6 */
+#define AEXPBIT  0x01000000             /* Arithmetic exception PSD 1 bit 7 */
 
-#define SETBBIT  0x00004000                 /* Set blocked mode, PSD 2 bit 17 */
-#define RETBBIT  0x00008000                 /* Retain current blocking state, PSD 2 bit 16 */
-#define RETMBIT  0x00010000                 /* Retain current maps, PSD 2 bit 15 */
-#define MAPBIT   0x80000000                 /* Map mode, PSD 2 bit 0 */
+#define SETBBIT  0x00004000             /* Set blocked mode, PSD 2 bit 17 */
+#define RETBBIT  0x00008000             /* Retain current blocking state, PSD 2 bit 16 */
+#define RETMBIT  0x00010000             /* Retain current maps, PSD 2 bit 15 */
+#define MAPBIT   0x80000000             /* Map mode, PSD 2 bit 0 */
 
 /* Trap Table Address in memory is pointed to by SPAD 0xF0 */
-#define POWERFAIL_TRAP  0x80                /* Power fail trap */
-#define POWERON_TRAP    0x84                /* Power-On trap */
-#define MEMPARITY_TRAP  0x88                /* Memory Parity Error trap */
-#define NONPRESMEM_TRAP 0x8C                /* Non Present Memory trap */
-#define UNDEFINSTR_TRAP 0x90                /* Undefined Instruction Trap */
-#define PRIVVIOL_TRAP   0x94                /* Privlege Violation Trap */
-#define SVCCALL_TRAP    0x98                /* Supervisor Call Trap */
-#define MACHINECHK_TRAP 0x9C                /* Machine Check Trap */
-#define SYSTEMCHK_TRAP  0xA0                /* System Check Trap */
-#define MAPFAULT_TRAP   0xA4                /* Map Fault Trap */
-#define IPUUNDEFI_TRAP  0xA8                /* IPU Undefined Instruction Trap */
-#define SIGNALIPU_TRAP  0xAC                /* Signal IPU/CPU Trap */
-#define ADDRSPEC_TRAP   0xB0                /* Address Specification Trap */
-#define CONSOLEATN_TRAP 0xB4                /* Console Attention Trap */
-#define PRIVHALT_TRAP   0xB8                /* Privlege Mode Halt Trap */
-#define AEXPCEPT_TRAP   0xBC                /* Arithmetic Exception Trap */
-#define CACHEERR_TRAP   0xC0                /* Cache Error Trap (V9 Only) */
-#define DEMANDPG_TRAP   0xC4                /* Demand Page Fault Trap (V6&V9 Only) */
+#define POWERFAIL_TRAP  0x80            /* Power fail trap */
+#define POWERON_TRAP    0x84            /* Power-On trap */
+#define MEMPARITY_TRAP  0x88            /* Memory Parity Error trap */
+#define NONPRESMEM_TRAP 0x8C            /* Non Present Memory trap */
+#define UNDEFINSTR_TRAP 0x90            /* Undefined Instruction Trap */
+#define PRIVVIOL_TRAP   0x94            /* Privlege Violation Trap */
+#define SVCCALL_TRAP    0x98            /* Supervisor Call Trap */
+#define MACHINECHK_TRAP 0x9C            /* Machine Check Trap */
+#define SYSTEMCHK_TRAP  0xA0            /* System Check Trap */
+#define MAPFAULT_TRAP   0xA4            /* Map Fault Trap */
+#define IPUUNDEFI_TRAP  0xA8            /* IPU Undefined Instruction Trap */
+#define SIGNALIPU_TRAP  0xAC            /* Signal IPU/CPU Trap */
+#define ADDRSPEC_TRAP   0xB0            /* Address Specification Trap */
+#define CONSOLEATN_TRAP 0xB4            /* Console Attention Trap */
+#define PRIVHALT_TRAP   0xB8            /* Privlege Mode Halt Trap */
+#define AEXPCEPT_TRAP   0xBC            /* Arithmetic Exception Trap */
+#define CACHEERR_TRAP   0xC0            /* Cache Error Trap (V9 Only) */
+#define DEMANDPG_TRAP   0xC4            /* Demand Page Fault Trap (V6&V9 Only) */
 
 /* Errors returned from various functions */
-#define ALLOK   0x0000                      /* no error, all is OK */
-#define MAPFLT  MAPFAULT_TRAP               /* map fault error */
-#define NPMEM   NONPRESMEM_TRAP             /* non present memory */
-#define MPVIOL  PRIVVIOL_TRAP               /* memory protection violation */
-#define DMDPG   DEMANDPG_TRAP               /* Demand Page Fault Trap (V6&V9 Only) */
+#define ALLOK   0x0000                  /* no error, all is OK */
+#define MAPFLT  MAPFAULT_TRAP           /* map fault error */
+#define NPMEM   NONPRESMEM_TRAP         /* non present memory */
+#define MPVIOL  PRIVVIOL_TRAP           /* memory protection violation */
+#define DMDPG   DEMANDPG_TRAP           /* Demand Page Fault Trap (V6&V9 Only) */
 
 /* general instruction decode equates */
-#define IND     0x00100000                  /* indirect bit in instruction, bit 11 */
-#define F_BIT   0x00080000                  /* byte flag addressing bit 11 in instruction */
-#define C_BITS  0x00000003                  /* byte number or hw, dw, dw flags bits 20 & 31 */
-#define BIT0    0x80000000                  /* general use for bit 0 testing */
-#define BIT1    0x40000000                  /* general use for bit 1 testing */
-#define BIT2    0x20000000                  /* general use for bit 2 testing */
-#define BIT3    0x10000000                  /* general use for bit 3 testing */
-#define BIT4    0x08000000                  /* general use for bit 4 testing */
-#define BIT5    0x04000000                  /* general use for bit 5 testing */
-#define BIT6    0x02000000                  /* general use for bit 6 testing */
-#define BIT7    0x01000000                  /* general use for bit 7 testing */
-#define BIT8    0x00800000                  /* general use for bit 8 testing */
-#define BIT9    0x00400000                  /* general use for bit 9 testing */
-#define BIT10   0x00200000                  /* general use for bit 10 testing */
-#define BIT11   0x00100000                  /* general use for bit 11 testing */
-#define BIT12   0x00080000                  /* general use for bit 12 testing */
-#define BIT13   0x00040000                  /* general use for bit 13 testing */
-#define BIT14   0x00020000                  /* general use for bit 14 testing */
-#define BIT15   0x00010000                  /* general use for bit 15 testing */
-#define BIT16   0x00008000                  /* general use for bit 16 testing */
-#define BIT17   0x00004000                  /* general use for bit 17 testing */
-#define BIT18   0x00002000                  /* general use for bit 18 testing */
-#define BIT19   0x00001000                  /* general use for bit 19 testing */
-#define BIT20   0x00000800                  /* general use for bit 20 testing */
-#define BIT21   0x00000400                  /* general use for bit 21 testing */
-#define BIT22   0x00000200                  /* general use for bit 22 testing */
-#define BIT23   0x00000100                  /* general use for bit 23 testing */
-#define BIT24   0x00000080                  /* general use for bit 24 testing */
-#define BIT25   0x00000040                  /* general use for bit 25 testing */
-#define BIT26   0x00000020                  /* general use for bit 26 testing */
-#define BIT27   0x00000010                  /* general use for bit 27 testing */
-#define BIT28   0x00000008                  /* general use for bit 28 testing */
-#define BIT29   0x00000004                  /* general use for bit 29 testing */
-#define BIT30   0x00000002                  /* general use for bit 30 testing */
-#define BIT31   0x00000001                  /* general use for bit 31 testing */
-#define MASK16  0x0000FFFF                  /* 16 bit address mask */
-#define MASK19  0x0007FFFF                  /* 19 bit address mask */
-#define MASK20  0x000FFFFF                  /* 20 bit address mask */
-#define MASK24  0x00FFFFFF                  /* 24 bit address mask */
-#define MASK32  0xFFFFFFFF                  /* 32 bit address mask */
+#define IND     0x00100000              /* indirect bit in instruction, bit 11 */
+#define F_BIT   0x00080000              /* byte flag addressing bit 11 in instruction */
+#define C_BITS  0x00000003              /* byte number or hw, dw, dw flags bits 20 & 31 */
+#define BIT0    0x80000000              /* general use for bit 0 testing */
+#define BIT1    0x40000000              /* general use for bit 1 testing */
+#define BIT2    0x20000000              /* general use for bit 2 testing */
+#define BIT3    0x10000000              /* general use for bit 3 testing */
+#define BIT4    0x08000000              /* general use for bit 4 testing */
+#define BIT5    0x04000000              /* general use for bit 5 testing */
+#define BIT6    0x02000000              /* general use for bit 6 testing */
+#define BIT7    0x01000000              /* general use for bit 7 testing */
+#define BIT8    0x00800000              /* general use for bit 8 testing */
+#define BIT9    0x00400000              /* general use for bit 9 testing */
+#define BIT10   0x00200000              /* general use for bit 10 testing */
+#define BIT11   0x00100000              /* general use for bit 11 testing */
+#define BIT12   0x00080000              /* general use for bit 12 testing */
+#define BIT13   0x00040000              /* general use for bit 13 testing */
+#define BIT14   0x00020000              /* general use for bit 14 testing */
+#define BIT15   0x00010000              /* general use for bit 15 testing */
+#define BIT16   0x00008000              /* general use for bit 16 testing */
+#define BIT17   0x00004000              /* general use for bit 17 testing */
+#define BIT18   0x00002000              /* general use for bit 18 testing */
+#define BIT19   0x00001000              /* general use for bit 19 testing */
+#define BIT20   0x00000800              /* general use for bit 20 testing */
+#define BIT21   0x00000400              /* general use for bit 21 testing */
+#define BIT22   0x00000200              /* general use for bit 22 testing */
+#define BIT23   0x00000100              /* general use for bit 23 testing */
+#define BIT24   0x00000080              /* general use for bit 24 testing */
+#define BIT25   0x00000040              /* general use for bit 25 testing */
+#define BIT26   0x00000020              /* general use for bit 26 testing */
+#define BIT27   0x00000010              /* general use for bit 27 testing */
+#define BIT28   0x00000008              /* general use for bit 28 testing */
+#define BIT29   0x00000004              /* general use for bit 29 testing */
+#define BIT30   0x00000002              /* general use for bit 30 testing */
+#define BIT31   0x00000001              /* general use for bit 31 testing */
+#define MASK16  0x0000FFFF              /* 16 bit address mask */
+#define MASK19  0x0007FFFF              /* 19 bit address mask */
+#define MASK20  0x000FFFFF              /* 20 bit address mask */
+#define MASK24  0x00FFFFFF              /* 24 bit address mask */
+#define MASK32  0xFFFFFFFF              /* 32 bit address mask */
 
 /* SPAD int entry equates, entries accessed by interrupt level number */
 #define SINT_RAML   0x80000000          /* ram loaded (n/u) */
@@ -472,11 +472,10 @@ extern DEBTAB dev_debug[];
 /* The RMW and WMW macros are used to read/write memory words */
 /* RMW(addr) or WMW(addr, data) where addr is a byte alligned word address */
 
-//#define RMB(a) ((M[(a)>>2]>>(8*(7-(a&3))))&0xff)      /* read memory addressed byte */
-#define RMB(a) ((M[(a)>>2]>>(8*(3-(a&3))))&0xff)        /* read memory addressed byte */
+#define RMB(a) ((M[(a)>>2]>>(8*(3-(a&3))))&0xff)    /* read memory addressed byte */
 #define RMH(a) ((a)&2?(M[(a)>>2]&RMASK):(M[(a)>>2]>>16)&RMASK)    /* read memory addressed halfword */
-#define RMW(a) (M[((a)&MASK24)>>2])                     /* read memory addressed word */
-#define WMW(a,d) (M[((a)&MASK24)>>2]=d)                 /* write memory addressed word */
+#define RMW(a) (M[((a)&MASK24)>>2])     /* read memory addressed word */
+#define WMW(a,d) (M[((a)&MASK24)>>2]=d) /* write memory addressed word */
 /* write halfword to memory address */
 #define WMH(a,d) ((a)&2?(M[(a)>>2]=(M[(a)>>2]&LMASK)|((d)&RMASK)):(M[(a)>>2]=(M[(a)>>2]&RMASK)|((d)<<16)))
 /* write byte to memory */
@@ -503,18 +502,18 @@ extern  t_stat  chan_boot(uint16 addr, DEVICE *dptr);
 extern  int     test_write_byte_end(uint16 chsa);
 extern  DEVICE *get_dev(UNIT *uptr);
 extern  t_stat  set_inch(UNIT *uptr, uint32 inch_addr); /* set channel inch address */
-extern  CHANP  *find_chanp_ptr(uint16 chsa);             /* find chanp pointer */
+extern  CHANP  *find_chanp_ptr(uint16 chsa);    /* find chanp pointer */
 
-extern  uint32  M[];                            /* our memory */
-extern  uint32  SPAD[];                         /* cpu SPAD memory */
+extern  uint32  M[];                    /* our memory */
+extern  uint32  SPAD[];                 /* cpu SPAD memory */
 extern  uint32  attention_trap;
-extern  uint32  RDYQ[];                         /* ready queue */
-extern  uint32  RDYQIN;                         /* input index */
-extern  uint32  RDYQOUT;                        /* output index */
+extern  uint32  RDYQ[];                 /* ready queue */
+extern  uint32  RDYQIN;                 /* input index */
+extern  uint32  RDYQOUT;                /* output index */
 #define RDYQ_SIZE 128
 extern  int32   RDYQ_Put(uint32 entry);
 extern  int32   RDYQ_Get(uint32 *old);
 extern  int32   RDYQ_Num(void);
 
-#define get_chan(chsa)  ((chsa>>8)&0x7f)        /* get channel number from ch/sa */
+#define get_chan(chsa)  ((chsa>>8)&0x7f)    /* get channel number from ch/sa */
 

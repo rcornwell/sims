@@ -1,6 +1,6 @@
 /* sel32_iop.c: SEL-32 Model 8000/8001/8002 IOP processor controller
 
-   Copyright (c) 2018-2020, James C. Bevier
+   Copyright (c) 2018-2021, James C. Bevier
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),

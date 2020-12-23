@@ -1,6 +1,6 @@
 /* sel32_con.c: SEL 32 Class F IOP processor console.
 
-   Copyright (c) 2018-2020, James C. Bevier
+   Copyright (c) 2018-2021, James C. Bevier
    Portions provided by Richard Cornwell, Geert Rolf and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
@@ -214,35 +214,11 @@ uint16 con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
         uptr->CMD |= (cmd & CON_MSK);   /* save command */
         if (unit == 0)
             sim_cancel(uptr);           /* stop input poll */
-//      sim_activate(uptr, 400);        /* start us off */
+        sim_activate(uptr, 400);        /* start us off */
 //      sim_activate(uptr,1000);        /* start us off */
-        sim_activate(uptr, 500);        /* start us off */
+//      sim_activate(uptr, 500);        /* start us off */
         return SCPE_OK;                 /* no status change */
         break;
-
-#ifdef NONO
-    case CON_CON:       /* 0x1f */      /* Connect, return Data Set ready */
-        sim_debug(DEBUG_CMD, &con_dev, "con_startcmd %04x: Cmd %02xN\n", chan, cmd);
-        uptr->SNS |= (SNS_DSR|SNS_DCD); /* Data set ready, Data Carrier detected */
-        return SNS_CHNEND|SNS_DEVEND;   /* good return */
-        break;
-
-    case CON_DIS:       /* 0x23 */      /* Disconnect has do nothing */
-        sim_debug(DEBUG_CMD, &con_dev, "con_startcmd %04x: Cmd %02x DIS\n", chan, cmd);
-        uptr->SNS &= ~(SNS_DSR|SNS_DCD); /* Data set not ready */
-        return SNS_CHNEND|SNS_DEVEND;   /* good return */
-        break;
-
-    case CON_SNS:       /* 0x04 */      /* Sense */
-        sim_debug(DEBUG_CMD, &con_dev,
-            "con_startcmd %04x: Cmd Sense %02x\n", chan, uptr->SNS);
-        /* value 4 is Data Set Ready */
-        /* value 5 is Data carrier detected n/u */
-        ch = uptr->SNS;                 /* status */
-        chan_write_byte(GET_UADDR(uptr->CMD), &ch);  /* write status */
-        return SNS_CHNEND|SNS_DEVEND;   /* good return */
-        break;
-#endif
 
     default:                            /* invalid command */
         break;

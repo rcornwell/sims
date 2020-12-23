@@ -1,6 +1,6 @@
 /* sel32_lpr.c: SEL 32 Line Printer
 
-   Copyright (c) 2018-2020, James C. Bevier
+   Copyright (c) 2018-2021, James C. Bevier
    Portions provided by Richard Cornwell and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
@@ -136,9 +136,9 @@ LPFCTBL  EQU       $
 struct _lpr_data
 {
     uint8       lbuff[160];     /* Output line buffer */
-}
+};
 
-lpr_data[NUM_DEVS_LPR];
+struct _lpr_data lpr_data[NUM_DEVS_LPR];
 
 uint16          lpr_startcmd(UNIT *, uint16, uint8);
 void            lpr_ini(UNIT *, t_bool);
@@ -465,7 +465,6 @@ t_stat lpr_attach(UNIT *uptr, CONST char *file)
     /* check for valid configured lpr */
     /* must have valid DIB and Channel Program pointer */
     dibp = (DIB *)dptr->ctxt;                       /* get the DIB pointer */
-//??if ((dib_unit[chsa] == NULL) || (dibp == NULL) || (dibp->chan_prg == NULL)) {
     if ((dib_unit[chsa] == NULL) || (dibp == NULL) || (chp == NULL)) {
         sim_debug(DEBUG_CMD, dptr,
             "ERROR===ERROR\nLPR device %s not configured on system, aborting\n",

@@ -1,7 +1,7 @@
 /* sel32_sys.c: SEL-32 Gould Concept/32 (orignal SEL-32) Simulator system interface.
 
-   Copyright (c) 2018-2020, James C. Bevier
-   Portions provided by Richard Cornwell and other SIMH contributers
+   Copyright (c) 2018-2021, James C. Bevier
+   Portions provided by Richard Cornwell, Geert Rolf and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -19,7 +19,6 @@
    JAMES C. BEVIER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 */
 
 #include "sel32_defs.h"
@@ -49,7 +48,6 @@ architecture specific formats
 
 fprint_sym          print symbolic output
 fparse_sym          parse symbolic input
-
 */
 
 char sim_name[] = "SEL-32";                 /* our simulator name */
@@ -821,7 +819,6 @@ int fprint_inst(FILE *of, uint32 val, int32 sw)
     int      mode = 0;                              /* assume non base mode instructions */
     t_opcode *tab;
 
-//  printf("inst %x sw %x\r\n", val, sw);
     if ((PSD[0] & 0x02000000) || (sw & SWMASK('M'))) /* bit 6 is base mode */
         mode = 1;
     /* loop through the instruction table for an opcode match and get the type */ 
@@ -1066,7 +1063,6 @@ t_stat fprint_sym (FILE *of, t_addr addr, t_value *val, UNIT *uptr, int32 sw)
         }
         if (addr & 0x02)
             num <<= 16;                         /* use rt hw */
-//printf("call pr_sym addr %x inst %x sw %x num %x\r\n", addr, tmp, sw, num);
         l = fprint_inst(of, num, sw);           /* go print the instruction */
         if (((addr & 2) == 0) && (l == 2)) {    /* did we execute a left halfword instruction */
             fprintf(of, "; ");
@@ -1078,7 +1074,6 @@ t_stat fprint_sym (FILE *of, t_addr addr, t_value *val, UNIT *uptr, int32 sw)
         num = 0;
         for (i = 0; i < l && i < 4; i++) 
             num |= (uint32)val[i] << ((l-i-1) * 8); /* collect 8-32 bit data value to print */
-//printf("call pr_val addr %x inst %x sw %x num %x\r\n", addr, tmp, sw, num);
         fprint_val(of, num, rdx, l*8, PV_RZRO); /* print it in requested radix */
     }
     return -(l-1);                              /* will be negative if we did anything */

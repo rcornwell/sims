@@ -1,7 +1,7 @@
 /* sel32_clk.c: SEL 32 Class F IOP processor RTOM functions.
 
-   Copyright (c) 2018-2020, James C. Bevier
-   Portions provided by Richard Cornwell and other SIMH contributers
+   Copyright (c) 2018-2021, James C. Bevier
+   Portions provided by Richard Cornwell, Geert Rolf and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -28,7 +28,6 @@
    when the count reaches zero,  The clock continues down counting
    until read/reset by the programmer.  The rate can be external or
    38.4 microseconds per count.
-
 */
 
 #include "sel32_defs.h"
@@ -104,15 +103,9 @@ DEVICE rtc_dev = {
    sets an interrupt that invokes the clock counter.
 */
 
-#ifdef DO_TIME
-uint32 lastms = 0;
-uint32 grtime = 0;
-#endif
-
 /* service clock signal from simulator */
 t_stat rtc_srv (UNIT *uptr)
 {
-//  int32   temp;
 #ifdef STOP_CLOCK_INTS_FOR_DEXP_TEST_DEBUGGING
     /* stop clock interrupts for dexp debugging */
     rtc_pie = 0;
@@ -367,7 +360,6 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
     switch (cmd) {
     case 0x20:                                      /* stop timer */
         /* stop the timer and save the curr value for later */
-//      fprintf(stderr, "clk 0x20 kill value %08x (%08d)\r\n", cnt, cnt);
         temp = itm_load;                            /* use last loaded value */
         sim_debug(DEBUG_CMD, &itm_dev, "Intv 0x%2x kill value %08x (%08d) itm_load %08x\n",
             cmd, cnt, cnt, temp);

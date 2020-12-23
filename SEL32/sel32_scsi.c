@@ -1,6 +1,6 @@
 /* sel32_scsi.c: SEL-32 MFP SCSI Disk controller
 
-   Copyright (c) 2018-2020, James C. Bevier
+   Copyright (c) 2018-2021, James C. Bevier
    Portions provided by Richard Cornwell and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a

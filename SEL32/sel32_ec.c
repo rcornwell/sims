@@ -361,14 +361,6 @@ loop:
         return 1;                               /* return error */
     }
 
-#ifdef WHATISTHIS
-    /* Check if we have status modifier set */
-    if (chp->chan_status & STATUS_MOD) {
-        chp->chan_caw += 8;                     /* move to next IOCD */
-        chp->chan_status &= ~STATUS_MOD;        /* turn off status modifier flag */
-    }
-#endif
-
     /* Read in first CCW */
     if (readfull(chp, chp->chan_caw, &word1) != 0) { /* read word1 from memory */
         chp->chan_status |= STATUS_PCHK;        /* memory read error, program check */
@@ -457,7 +449,6 @@ loop:
                     "ec_iocl tic cmd bad address chan %02x tic caw %06x IOCD wd 1 %08x\n",
                     chan, chp->chan_caw, word1);
                 chp->chan_status |= STATUS_PCHK; /* program check for invalid tic */
-//              chp->chan_caw = word1;          /* get new IOCD address */
                 chp->chan_caw = word1 & MASK24; /* get new IOCD address */
                 uptr->SNS |= SNS_CMDREJ;        /* cmd rejected status */
 //              uptr->SNS |= SNS_INAD;          /* invalid address status */
@@ -470,7 +461,6 @@ loop:
                 chan, chp->chan_caw, word1);
             goto loop;                          /* restart the IOCD processing */
         }
-//      chp->chan_caw = word1;                  /* get new IOCD address */
         chp->chan_caw = word1 & MASK24;         /* get new IOCD address */
         chp->chan_status |= STATUS_PCHK;        /* program check for invalid tic */
         uptr->SNS |= SNS_CMDREJ;                /* cmd rejected status */
@@ -1013,7 +1003,7 @@ uint16  ec_haltio(UNIT *uptr) {
         chp->ccw_count = 0;                 /* zero the count */
         chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);/* stop any chaining */
         uptr->CMD &= LMASK;                 /* make non-busy */
-        uptr->SNS = SNS_RCV_RDY;            /* status is online & ready */
+//12    uptr->SNS = SNS_RCV_RDY;            /* status is online & ready */
         sim_cancel(uptr);                   /* clear the input timer */
         sim_debug(DEBUG_CMD, dptr,
             "ec_haltio HIO I/O stop chsa %04x cmd = %02x\n", chsa, cmd);
@@ -1021,7 +1011,7 @@ uint16  ec_haltio(UNIT *uptr) {
         return SCPE_IOERR;
     }
     uptr->CMD &= LMASK;                     /* make non-busy */
-    uptr->SNS = SNS_RCV_RDY;                /* status is online & ready */
+//12uptr->SNS = SNS_RCV_RDY;                /* status is online & ready */
     sim_debug(DEBUG_CMD, dptr,
         "ec_haltio HIO I/O not busy chsa %04x cmd = %02x\n", chsa, cmd);
     return SCPE_OK;                         /* not busy */

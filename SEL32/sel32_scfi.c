@@ -570,7 +570,6 @@ loop:
         return 1;                               /* error return */
     }
 
-#ifndef NOT_FOR_EVERYONE
     /* DC can only be used with a read/write cmd */
     if (chp->ccw_flags & FLAG_DC) {
         if ((chp->ccw_cmd != DSK_RD) && (chp->ccw_cmd != DSK_WD)) {
@@ -581,7 +580,6 @@ loop:
             return 1;                           /* error return */
         }
     }
-#endif
 
     chp->chan_byte = BUFF_BUSY;                 /* busy & no bytes transferred yet */
 
@@ -1502,6 +1500,16 @@ int scfi_format(UNIT *uptr) {
     uint32      cap = CAP(type);                /* disk capacity in sectors */
     uint32      cylv = cyl;                     /* number of cylinders */
     uint8       *buff;
+    int32       i;
+
+                /* last sector address of disk (cyl * hds * spt) - 1 */
+    uint32      laddr = CAP(type) - 1;          /* last sector of disk */
+
+                /* make up dummy defect map */
+//  uint32      dmap[4] = {0xf0000000 | (cap-1), 0x8a000000 | daddr,
+    uint32      dmap[4] = {0xf0000000 | (cap-1), 0x8a000000,
+                    0x9a000000 | (cap-1), 0xf4000000};
+
 
     /* see if user wants to initialize the disk */
     if (!get_yn("Initialize disk? [Y] ", TRUE)) {
@@ -1519,11 +1527,6 @@ int scfi_format(UNIT *uptr) {
         detach_unit(uptr);
         return SCPE_ARG;
     }
-    /* put dummy data in first word of disk */
-    buff[0] = 'Z';
-    buff[1] = 'E';
-    buff[2] = 'R';
-    buff[3] = 'O';
     sim_debug(DEBUG_CMD, dptr,
         "Creating disk file of trk size %04x bytes, capacity %d\n",
         tsize*ssize, cap*ssize);
@@ -1537,12 +1540,6 @@ int scfi_format(UNIT *uptr) {
             buff = 0;
             return 1;
         }
-        if (cyl == 0) {
-            buff[0] = 0;
-            buff[1] = 0;
-            buff[2] = 0;
-            buff[3] = 0;
-        }
         if ((cyl % 100) == 0)
             fputc('.', stderr);
     }
@@ -1551,7 +1548,32 @@ int scfi_format(UNIT *uptr) {
     free(buff);                                 /* free cylinder buffer */
     buff = 0;
 
+    /* byte swap the buffer for dmap */
+    for (i=0; i<4; i++) {
+        dmap[i] = (((dmap[i] & 0xff) << 24) | ((dmap[i] & 0xff00) << 8) |
+            ((dmap[i] & 0xff0000) >> 8) | ((dmap[i] >> 24) & 0xff));
+    }
+
+    /* now seek to end of disk and write the dmap data to last sector */
+    /* write dmap data to last sector on disk */
+    if ((sim_fseek(uptr->fileref, laddr*ssize, SEEK_SET)) != 0) { /* seek last sector */
+        sim_debug(DEBUG_CMD, dptr,
+        "Error on last sector seek to sect %06x offset %06x\n",
+        cap-1, (cap-1)*ssize);
+        return 1;
+    }
+    if ((sim_fwrite((char *)&dmap, sizeof(uint32), 4, uptr->fileref)) != 4) {
+        sim_debug(DEBUG_CMD, dptr,
+        "Error writing DMAP to sect %06x offset %06x\n",
+        cap-1, (cap-1)*ssize);
+        return 1;
+    }
+
+    printf("Disk %s has %x (%d) cyl, %x (%d) hds, %x (%d) sec\r\n",
+        scfi_type[type].name, CYL(type), CYL(type), HDS(type), HDS(type),
+        SPT(type), SPT(type));
     /* seek home again */
+
     if ((sim_fseek(uptr->fileref, 0, SEEK_SET)) != 0) { /* seek home */
         fprintf (stderr, "Error on seek to 0\r\n");
         return 1;
@@ -1577,10 +1599,11 @@ t_stat scfi_attach(UNIT *uptr, CONST char *file)
     uint32          laddr = CAP(type) - 1;      /* last sector of disk */
                     /* get sector address of utx diag map (DMAP) track 0 pointer */
                     /* put data = 0xf0000000 + (cyl-1), 0x8a000000 + daddr, */
-                    /* 0x9a000000 + (cyl-1), 0xf4000008 */
-    int32           daddr = (CYL(type)-4) * SPC(type) + (HDS(type)-2) * SPT(type);
+                    /* 0x9a000000 + (cyl-1), 0xf4000000 */
+//  int32           daddr = (CYL(type)-4) * SPC(type) + (HDS(type)-2) * SPT(type);
                     /* defect map */
-    uint32          dmap[4] = {0xf0000000 | (CAP(type)-1), 0x8a000000 | daddr,
+//  uint32          dmap[4] = {0xf0000000 | (CAP(type)-1), 0x8a000000 | daddr,
+    uint32          dmap[4] = {0xf0000000 | (CAP(type)-1), 0x8a000000,
                         0x9a000000 | (CAP(type)-1), 0xf4000000};
 
     for (i=0; i<4; i++) {                       /* byte swap data for last sector */
@@ -1600,7 +1623,7 @@ t_stat scfi_attach(UNIT *uptr, CONST char *file)
 
     uptr->capac = CAP(type);                    /* disk capacity in sectors */
     ssize = SSB(type);                          /* get sector size in bytes */
-    for (i=0; i<ssize; i++)
+    for (i=0; i<(int)ssize; i++)
         buff[i] = 0;                            /* zero the buffer */
 
     sim_debug(DEBUG_CMD, dptr,
@@ -1628,7 +1651,7 @@ t_stat scfi_attach(UNIT *uptr, CONST char *file)
     sim_debug(DEBUG_CMD, dptr, "SCFI Disk attach ftell value s=%06d b=%06d CAP %06d\n", s/ssize, s, CAP(type));
     printf("SCFI Disk attach ftell value s=%06d b=%06d CAP %06d\r\n", s/ssize, s, CAP(type));
 
-    if ((s/ssize) < (CAP(type))) {              /* full sized disk? */
+    if (((int)s/(int)ssize) < ((int)CAP(type))) {   /* full sized disk? */
         j = (CAP(type) - (s/ssize));            /* get # sectors to write */
         sim_debug(DEBUG_CMD, dptr,
             "SCFI Disk attach for MPX 1.X needs %04d more sectors added to disk\n", j);
@@ -1666,20 +1689,18 @@ add_size:
             /* write dmap data to last sector on disk for mpx 1.x */
             if ((sim_fseek(uptr->fileref, laddr*ssize, SEEK_SET)) != 0) { /* seek last sector */
                 sim_debug(DEBUG_CMD, dptr,
-                "SCFI Error on last sector seek to sect %06d offset %06d bytes\n",
-                (CAP(type)-1), (CAP(type)-1)*ssize);
-                printf(
-                "SCFI Error on last sector seek to sect %06d offset %06d bytes\r\n",
-                (CAP(type)-1), (CAP(type)-1)*ssize);
+                    "SCFI Error on last sector seek to sect %06d offset %06d bytes\n",
+                    (CAP(type)-1), (CAP(type)-1)*ssize);
+                printf("SCFI Error on last sector seek to sect %06d offset %06d bytes\r\n",
+                    (CAP(type)-1), (CAP(type)-1)*ssize);
                 goto fmt;
             }
             if ((sim_fwrite((char *)&dmap, sizeof(uint32), 4, uptr->fileref)) != 4) {
                 sim_debug(DEBUG_CMD, dptr,
-                "SCFI Error writing DMAP to sect %06x offset %06d bytes\n",
-                (CAP(type)-1), (CAP(type)-1)*ssize);
-                printf(
-                "SCFI Error writing DMAP to sect %06x offset %06d bytes\r\n",
-                (CAP(type)-1), (CAP(type)-1)*ssize);
+                    "SCFI Error writing DMAP to sect %06x offset %06d bytes\n",
+                    (CAP(type)-1), (CAP(type)-1)*ssize);
+                printf("SCFI Error writing DMAP to sect %06x offset %06d bytes\r\n",
+                    (CAP(type)-1), (CAP(type)-1)*ssize);
                 goto fmt;
             }
 
@@ -1743,6 +1764,12 @@ ldone:
         "SCFI Attach %s cyl %d hds %d spt %d spc %d cap sec %d cap bytes %d\r\n",
         scfi_type[type].name, CYL(type), HDS(type), SPT(type), SPC(type),
         CAP(type), CAPB(type));
+
+    sim_debug(DEBUG_CMD, dptr,
+       "SCFI File %s attached to %s is ready\n",
+        file, scfi_type[type].name);
+    printf("SCFI File %s attached to %s is ready\r\n",
+        file, scfi_type[type].name);
 
     /* check for valid configured disk */
     /* must have valid DIB and Channel Program pointer */
