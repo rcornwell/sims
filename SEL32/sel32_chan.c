@@ -219,9 +219,12 @@ int32 RDYQ_Put(uint32 entry)
 //  num = (RDYQIN - RDYQOUT + RDYQ_SIZE) % RDYQ_SIZE; /* number of entries */
 //  sim_debug(DEBUG_XIO, &cpu_dev, "RDYQ_Put entry %04x count %02x\n", entry, num);
     irq_pend = 1;                                   /* do a scan */
-#ifdef USE_RDYQ
-//  waitrdyq = 5;
-//25waitrdyq = 2;
+#ifndef USE_RDYQ
+//XXwaitrdyq = 10;  /* UTX21A installs with this, but diags hang */
+//ZZwaitrdyq = 8;
+//XXwaitrdyq = 5;
+//  waitrdyq = 2;
+//  waitrdyq = 1;                                   /* wait at least 1 instruction */
     waitrdyq = 1;                                   /* wait at least 1 instruction */
 #endif
     return SCPE_OK;                                 /* all OK */
@@ -1069,16 +1072,20 @@ void chan_end(uint16 chsa, uint16 flags) {
         chp->ccw_flags = 0;                         /* no flags */
     }
 
-    sim_debug(DEBUG_DETAIL, &cpu_dev,
+//  sim_debug(DEBUG_DETAIL, &cpu_dev,
+    sim_debug(DEBUG_XIO, &cpu_dev,
         "chan_end test end chsa %04x ccw_flags %04x status %04x\n",
         chsa, chp->ccw_flags, chp->chan_status);
 
     /* test for device or controller end */
     if (chp->chan_status & (STATUS_DEND|STATUS_CEND)) {
+#ifdef DO_NOT_DO_HERE
         chp->chan_byte = BUFF_BUSY;                 /* we are empty & still busy now */
-
         /* see if we have DC to finish */ 
         while ((chp->ccw_flags & FLAG_DC)) {        /* handle data chaining */
+    sim_debug(DEBUG_XIO, &cpu_dev,
+        "chan_end DO CMD with DC chsa %04x ccw_flags %04x status %04x\n",
+        chsa, chp->ccw_flags, chp->chan_status);
             if (load_ccw(chp, 1))                   /* continue channel program */
                 break;                              /* error */
             if ((chp->ccw_flags & FLAG_SLI) == 0) { /* suppress incorrect length? */
@@ -1086,6 +1093,7 @@ void chan_end(uint16 chsa, uint16 flags) {
                 chp->ccw_flags = 0;                 /* no flags */
             }
         }
+#endif
         chp->chan_byte = BUFF_BUSY;                 /* we are empty & still busy now */
         sim_debug(DEBUG_XIO, &cpu_dev,
             "chan_end FIFO #%1x IOCL done chsa %04x ccw_flags %04x status %04x\n",
@@ -1198,6 +1206,7 @@ void chan_end(uint16 chsa, uint16 flags) {
 #ifndef TRY_UTX_DELAY
                 if (waitqcnt == 0)
                     waitqcnt = 25;                  /* tell cpu to wait 20 instructions before int */
+//XX                waitqcnt = 15;                  /* tell cpu to wait 20 instructions before int */
 #endif
             }
         }
@@ -1238,7 +1247,7 @@ int16 post_csw(CHANP *chp, uint32 rstat)
         }
         if (chp->chan_byte != BUFF_POST) {
             sim_debug(DEBUG_EXP, &cpu_dev,
-            "post_csw %04x CHP %p not BUFF_POST byte %04x, ERROR FIFO #%1x inch %06x chan_icb %06x\n",
+            "post_csw %04x CHP %p not BUFF_POST byte %04x ERROR FIFO #%1x inch %06x icb %06x\n",
             chsa, chp, chp->chan_byte, FIFO_Num(chsa), incha, chan_icb);
         }
         /* remove user specified bits */
@@ -1603,8 +1612,9 @@ missing:
     /* a value < 25 gets error ioi: sio at 801 failed, cc2 in UTX 21B */
     if (waitqcnt == 0)
 //      waitqcnt = 20;                              /* tell cpu to wait 20 instructions before int */
-        waitqcnt = 25;                              /* tell cpu to wait 20 instructions before int */
 //      waitqcnt = 35;                              /* tell cpu to wait 20 instructions before int */
+        waitqcnt = 25;                              /* tell cpu to wait 20 instructions before int */
+//XX    waitqcnt = 15;                              /* tell cpu to wait 20 instructions before int */
 #endif
 
     *status = CC1BIT;                               /* CCs = 1, SIO accepted & queued, no echo status */
@@ -1897,6 +1907,7 @@ t_stat rschnlxio(uint16 lchsa, uint32 *status) {    /* reset channel XIO */
 
     /* now go through all the sa for the channel and stop any IOCLs */
     for (i=0; i<SUB_CHANS; i++) {
+        int     j;
         rchsa = rchan | i;                          /* merge sa to real channel */
         dibp = dib_unit[rchsa];                     /* get the DIB pointer */
         if (dibp == 0)
@@ -1904,6 +1915,14 @@ t_stat rschnlxio(uint16 lchsa, uint32 *status) {    /* reset channel XIO */
         chp = find_chanp_ptr(rchsa);                /* find the chanp pointer */
         if (chp == 0)
             continue;                               /* not used */
+
+        /* see if we have a rschnl device entry */
+        if (dibp->rschnl_io != NULL) {              /* NULL if no rschnl_io function */
+            /* call the device controller to process rschnl */
+            j = dibp->rschnl_io(uptr);              /* get status from device */
+            sim_debug(DEBUG_CMD, &cpu_dev,
+                "rschnl_io returned %02x chsa %04x\n", j, rchsa);
+        }
         chp->chan_status = 0;                       /* clear the channel status */
         chp->chan_byte = BUFF_EMPTY;                /* no data yet */
 //sim_debug(DEBUG_EXP, &cpu_dev, "chan_set_devs BUFF_EMPTY chp %p chan_byte %04x\n", chp, chp->chan_byte);
@@ -1960,7 +1979,7 @@ t_stat haltxio(uint16 lchsa, uint32 *status) {      /* halt XIO */
 //  inta = ((spadent & 0x007f0000) >> 16);          /* 1's complement of chan int level */
 //  inta = 127 - inta;                              /* get positive int level */
 //  spadent = SPAD[inta + 0x80];                    /* get interrupt spad entry */
-    sim_debug(DEBUG_XIO, &cpu_dev, "HIO int spad %08x inta %02x rchan %04x\n", spadent, inta, rchan);
+    sim_debug(DEBUG_XIO, &cpu_dev, "HIO int spad %08x inta %02x rchan %02x\n", spadent, inta, rchan);
 
     /* get the address of the interrupt IVL in main memory */
     itva = SPAD[0xf1] + (inta<<2);                  /* int vector address */
@@ -2224,18 +2243,20 @@ t_stat rsctlxio(uint16 lchsa, uint32 *status) {     /* reset controller XIO */
 
         uptr = chp->unitptr;                        /* get the unit ptr */
         unit = uptr - dptr->units;                  /* get the UNIT number */
-        qp = &dibp->ioclq_ptr[unit];                /* IOCLQ pointer */
-        if (qp != NULL) {
-            qp->ioclq_in = 0;                       /* clear any entries */
-            qp->ioclq_out = 0;                      /* clear any entries */
+        if (dibp->ioclq_ptr != NULL) {
+            qp = &dibp->ioclq_ptr[unit];            /* IOCLQ pointer */
+            if (qp != NULL) {
+                qp->ioclq_in = 0;                   /* clear any entries */
+                qp->ioclq_out = 0;                  /* clear any entries */
+            }
         }
 
         /* see if we have a rsctl device entry */
-        if (dibp->rsctl_io != NULL) {               /* NULL if no haltio function */
+        if (dibp->rsctl_io != NULL) {               /* NULL if no rsctl_io function */
             /* call the device controller to process rsctl */
             j = dibp->rsctl_io(uptr);               /* get status from device */
             sim_debug(DEBUG_CMD, &cpu_dev,
-                "rsctl_io returned %02x chsa %04x\n", j, chan);
+                "rsctl_io returned %02x chsa %04x\n", j, chsa);
         }
         chp->chan_status = 0;                       /* clear the channel status */
         chp->chan_byte = BUFF_EMPTY;                /* no data yet */
@@ -2422,7 +2443,7 @@ uint32 scan_chan(uint32 *ilev) {
             TPSD[1] = M[1];
             /* save the status double word to memory */
 //          WMW(tempa, sw1);                        /* save sa & IOCD address in status WD 1 loc */
-            /* sete BIT 1 to show status stored */
+            /* set BIT 1 to show status stored */
             WMW(tempa, sw1|BIT1);                   /* save sa & IOCD address in status WD 1 loc */
             WMW(tempa+4, sw2);                      /* save status and residual cnt in status WD 2 loc */
             /* now store the status dw address into word 5 of the ICB for the channel */
@@ -2479,7 +2500,8 @@ uint32 scan_chan(uint32 *ilev) {
             sim_debug(DEBUG_EXP, &cpu_dev,
                 "scan_chan FIFO REQ FIFO #%1x irq %02x SPAD %08x INTS %08x\n",
                 FIFO_Num(SPAD[i+0x80] & 0x7f00), i, SPAD[i+0x80], INTS[i]);
-//1003/*092520*/  irq_pend = 1;                           /* we have pending interrupt */
+//1003/*092520*/  irq_pend = 1;                     /* we have pending interrupt */
+/*1231*/    irq_pend = 1;                           /* we have pending interrupt */
             continue;
         }
     }

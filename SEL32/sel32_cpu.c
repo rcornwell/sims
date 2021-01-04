@@ -160,6 +160,7 @@ uint32          RDYQIN;                     /* fifo input index */
 uint32          RDYQOUT;                    /* fifo output index */
 uint32          RDYQ[128];                  /* channel ready queue */
 uint8           waitqcnt = 0;               /* # instructions before start */
+uint8           waitrdyq = 0;               /* # instructions before post inturrupt */
 
 struct InstHistory
 {
@@ -1942,6 +1943,11 @@ wait_loop:
                 uint32  chsa;                   /* channel/sub adddress */
                 int32   stat;                   /* return status 0/1 from loadccw */
 
+#ifndef USE_RDYQ
+                if (waitrdyq > 0) {
+                    waitrdyq--;
+                } else
+#endif
                 /* we have entries, continue channel program */
                 if (RDYQ_Get(&chsa) == SCPE_OK) {   /* get chsa for program */
                     sim_debug(DEBUG_XIO, &cpu_dev,
@@ -2016,6 +2022,11 @@ wait_loop:
                             sim_debug(DEBUG_IRQ, &cpu_dev,
                                 "<|>Auto-reset interrupt INTS[%02x] %08x SPAD[%02x] %08x simi %02x\n",
                                 il, INTS[il], il+0x80, SPAD[il+0x80], sim_interval);
+#ifndef LEAVE_ACTIVE
+/*AIR*/                         INTS[irq_auto] &= ~INTS_ACT;  /* deactivate specified int level */
+/*AIR*/                         SPAD[irq_auto+0x80] &= ~SINT_ACT; /* deactivate in SPAD too */
+                                irq_auto = 0;
+#endif
                         }
                     } else {
                         sim_debug(DEBUG_IRQ, &cpu_dev,
@@ -2062,6 +2073,11 @@ wait_loop:
             chp = find_chanp_ptr(chsa);         /* get channel prog pointer */
             if (chp->chan_byte == BUFF_NEXT) {
                 /* we have entries, continue channel program */
+#ifndef USE_RDYQ
+                if (waitrdyq > 0) {
+                    waitrdyq--;
+                } else
+#endif
                 if (RDYQ_Get(&chsa) == SCPE_OK) {   /* get chsa for program */
                     int32 stat;
                     CHANP *chp = find_chanp_ptr(chsa);  /* get channel prog pointer */
@@ -2693,6 +2709,7 @@ exec:
                         }
                         if (CPUSTATUS & BIT24) {    /* see if old mode is blocked */
                             irq_pend = 1;           /* start scanning interrupts again */
+#ifdef LEAVE_ACTIVE
                             if (irq_auto) {
 /*AIR*/                         INTS[irq_auto] &= ~INTS_ACT;  /* deactivate specified int level */
 /*AIR*/                         SPAD[irq_auto+0x80] &= ~SINT_ACT; /* deactivate in SPAD too */
@@ -2702,6 +2719,7 @@ exec:
 /*AIR*/                         irq_auto = 0;       /* show done processing in blocked mode */
 /*103020*/                      skipinstr = 1;      /* skip interrupt test */
                             }
+#endif
                         }
                         CPUSTATUS &= ~BIT24;        /* clear status word bit 24 */
                         MODES &= ~(BLKMODE|RETMODE);/* reset blocked & retain mode bits */
@@ -3785,6 +3803,7 @@ skipit:
                             CPUSTATUS &= ~BIT24;    /* no, reset blk state in cpu status bit 24 */
                             MODES &= ~BLKMODE;      /* reset blocked mode */
                             irq_pend = 1;           /* start scanning interrupts again */
+#ifdef LEAVE_ACTIVE
                             if (irq_auto) {
 /*AIR*/                         INTS[irq_auto] &= ~INTS_ACT;  /* deactivate specified int level */
 /*AIR*/                         SPAD[irq_auto+0x80] &= ~SINT_ACT; /* deactivate in SPAD too */
@@ -3794,6 +3813,7 @@ skipit:
 /*AIR*/                         irq_auto = 0;       /* show done processing in blocked mode */
 /*103020*/                      skipinstr = 1;      /* skip interrupt test */
                             }
+#endif
                         }
                     } else {
                         /* handle retain blocking state */
@@ -3854,7 +3874,7 @@ skipit:
                             addr = NEGATE32(addr);      /* subtract, so negate source */
                         }
                         temp2 = s_adfw(temp, addr, &CC);    /* do ADFW */
-                        sim_debug(DEBUG_EXP, &cpu_dev,
+                        sim_debug(DEBUG_DETAIL, &cpu_dev,
                             "%s GPR[%d] %08x addr %08x result %08x CC %08x\n",
                             (opr&0xf)==3 ? "SURFW":"ADRFW",
                             reg, GPR[reg], GPR[sreg], temp2, CC);
@@ -3899,7 +3919,7 @@ skipit:
                         addr = GPR[sreg];               /* reg contents specified by Rs */
                         /* temp has Rd (GPR[reg]), addr has Rs (GPR[sreg]) */
                         temp2 = (uint32)s_dvfw(temp, addr, &CC);    /* divide reg by sreg */
-                        sim_debug(DEBUG_EXP, &cpu_dev,
+                        sim_debug(DEBUG_DETAIL, &cpu_dev,
                             "DVRFW GPR[%d] %08x src %08x result %08x\n",
                             reg, GPR[reg], addr, temp2);
                         PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
@@ -3922,7 +3942,7 @@ skipit:
                         /* convert from 32 bit float to 32 bit fixed */
                         addr = GPR[sreg];               /* reg contents specified by Rs */
                         temp2 = s_fixw(addr, &CC);      /* do conversion */
-                        sim_debug(DEBUG_EXP, &cpu_dev,
+                        sim_debug(DEBUG_DETAIL, &cpu_dev,
                             "FIXW GPR[%d] %08x result %08x\n",
                             sreg, GPR[sreg], temp2);
                         PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
@@ -3946,7 +3966,7 @@ skipit:
                         addr = GPR[sreg];               /* reg contents specified by Rs */
                         /* temp has Rd (GPR[reg]), addr has Rs (GPR[sreg]) */
                         temp2 = s_mpfw(temp, addr, &CC);    /* mult reg by sreg */
-                        sim_debug(DEBUG_EXP, &cpu_dev,
+                        sim_debug(DEBUG_DETAIL, &cpu_dev,
                             "MPRFW GPR[%d] %08x src %08x result %08x\n",
                             reg, GPR[reg], addr, temp2);
                         PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
@@ -3969,7 +3989,7 @@ skipit:
                         /* convert from 32 bit integer to 32 bit float */
                         addr = GPR[sreg];               /* reg contents specified by Rs */
                         GPR[reg] = s_fltw(addr, &CC);   /* do conversion & set CC's */
-                        sim_debug(DEBUG_EXP, &cpu_dev,
+                        sim_debug(DEBUG_DETAIL, &cpu_dev,
                             "FLTW GPR[%d] %08x result %08x\n",
                             sreg, GPR[sreg], GPR[reg]);
                         PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
@@ -4007,7 +4027,7 @@ skipit:
                         }
                         dest = s_adfd(td, source, &CC); /* do ADFD */
 
-                        sim_debug(DEBUG_EXP, &cpu_dev,
+                        sim_debug(DEBUG_DETAIL, &cpu_dev,
                             "%s GPR[%d] %08x %08x src %016llx result %016llx\n",
                             (opr&0xf)==8 ? "ADRFD":"SURFD", reg, GPR[reg], GPR[reg+1], source, dest);
                         PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
@@ -4077,7 +4097,7 @@ doovr4:
                         source = (((t_uint64)GPR[sreg]) << 32); /* get upper reg value */
                         source |= (t_uint64)GPR[sreg+1];    /* insert low order reg value */
                         dest = s_dvfd(td, source, &CC); /* divide double values */
-                        sim_debug(DEBUG_EXP, &cpu_dev,
+                        sim_debug(DEBUG_DETAIL, &cpu_dev,
                             "DVRFD GPR[%d] %08x %08x src %016llx result %016llx\n",
                             reg, GPR[reg], GPR[reg+1], source, dest);
                         PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
@@ -4107,7 +4127,7 @@ doovr4:
                         source = (((t_uint64)GPR[sreg]) << 32) | ((t_uint64)GPR[sreg+1]);
                         /* convert from 64 bit double to 64 bit int */
                         dest = s_fixd(source, &CC);
-                        sim_debug(DEBUG_EXP, &cpu_dev,
+                        sim_debug(DEBUG_DETAIL, &cpu_dev,
                             "FIXD GPR[%d] %08x %08x result %016llx\n",
                             sreg, GPR[sreg], GPR[sreg+1], dest);
                         PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
@@ -4137,7 +4157,7 @@ doovr4:
                         source = (((t_uint64)GPR[sreg]) << 32); /* get upper reg value */
                         source |= (t_uint64)GPR[sreg+1];   /* insert low order reg value */
                         dest = s_mpfd(td, source, &CC); /* multiply double values */
-                        sim_debug(DEBUG_EXP, &cpu_dev,
+                        sim_debug(DEBUG_DETAIL, &cpu_dev,
                             "MPRFD GPR[%d] %08x %08x src %016llx result %016llx\n",
                             reg, GPR[reg], GPR[reg+1], source, dest);
                         PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
@@ -4166,7 +4186,7 @@ doovr4:
                         source = (((t_uint64)GPR[sreg]) << 32); /* get upper reg value */
                         source |= (t_uint64)GPR[sreg+1];    /* insert low order reg value */
                         dest = s_fltd(source, &CC);     /* do conversion & set CC's */
-                        sim_debug(DEBUG_EXP, &cpu_dev,
+                        sim_debug(DEBUG_DETAIL, &cpu_dev,
                             "FLTD GPR[%d] %08x %08x result %016llx\n",
                             sreg, GPR[sreg], GPR[sreg+1], dest);
                         PSD1 &= 0x87FFFFFE;             /* clear the old CC's */
@@ -4494,7 +4514,7 @@ doovr3:
                 /* exponent must not be zero or all 1's */
                 /* normalize the value Rd in GPR[reg] and put exponent into Rs GPR[sreg] */
                 temp = s_nor(GPR[reg], &GPR[sreg]);
-                sim_debug(DEBUG_EXP, &cpu_dev,
+                sim_debug(DEBUG_DETAIL, &cpu_dev,
                     "NOR GPR[%d] %08x result %08x exp %02x\n",
                     reg, GPR[reg], temp, GPR[sreg]);
                 GPR[reg] = temp;
@@ -4522,7 +4542,7 @@ doovr3:
                 td = (((t_uint64)GPR[reg]) << 32) | ((t_uint64)GPR[reg+1]);
                 /* normalize the value Rd in GPR[reg] and put exponent into Rs GPR[sreg] */
                 dest = s_nord(td, &GPR[sreg]);
-                sim_debug(DEBUG_EXP, &cpu_dev,
+                sim_debug(DEBUG_DETAIL, &cpu_dev,
                     "NORD GPR[%d] %08x %08x result %016llx exp %02x\n",
                     reg, GPR[reg], GPR[reg+1], dest, GPR[sreg]);
                 GPR[reg+1] = (uint32)(dest & FMASK);    /* save the low order reg */
@@ -5401,6 +5421,7 @@ temp2, IR&0xFFF, PSD1, PSD2, CPUSTATUS);
                             CPUSTATUS &= ~BIT24;    /* no, reset blk state in cpu status bit 24 */
                             MODES &= ~BLKMODE;      /* reset blocked mode */
                             irq_pend = 1;           /* start scanning interrupts again */
+#ifdef LEAVE_ACTIVE
                             if (irq_auto) {
 /*AIR*/                         INTS[irq_auto] &= ~INTS_ACT;  /* deactivate specified int level */
 /*AIR*/                         SPAD[irq_auto+0x80] &= ~SINT_ACT; /* deactivate in SPAD too */
@@ -5410,6 +5431,7 @@ temp2, IR&0xFFF, PSD1, PSD2, CPUSTATUS);
 /*AIR*/                         irq_auto = 0;       /* show done processing in blocked mode */
 /*103020*/                      skipinstr = 1;      /* skip interrupt test */
                             }
+#endif
                         }
                     } else {
                         /* handle retain blocking state */
@@ -5620,7 +5642,7 @@ temp2, IR&0xFFF, PSD1, PSD2, CPUSTATUS);
                         addr = NEGATE32(addr);          /* take negative for add */
                     }
                     temp = s_adfw(temp2, addr, &CC);    /* do ADFW */
-                    sim_debug(DEBUG_EXP, &cpu_dev,
+                    sim_debug(DEBUG_DETAIL, &cpu_dev,
                         "%s GPR[%d] %08x addr %08x result %08x CC %08x\n",
                         (opr&8) ? "ADFW":"SUFW", reg, GPR[reg], addr, temp, CC);
                     ovr = 0;
@@ -5650,7 +5672,7 @@ temp2, IR&0xFFF, PSD1, PSD2, CPUSTATUS);
                         source = NEGATE32(source);      /* make negative for subtract */
                     }
                     dest = s_adfd(td, source, &CC);     /* do ADFD */
-                    sim_debug(DEBUG_EXP, &cpu_dev,
+                    sim_debug(DEBUG_DETAIL, &cpu_dev,
                         "%s GPR[%d] %08x %08x src %016llx result %016llx CC %08x\n",
                         (opr&8) ? "ADFD":"SUFD", reg, GPR[reg], GPR[reg+1], source, dest, CC);
                     ovr = 0;
@@ -5698,7 +5720,7 @@ temp2, IR&0xFFF, PSD1, PSD2, CPUSTATUS);
                     } else {
                         temp = (uint32)s_dvfw(temp2, addr, &CC);    /* do DVFW */
                     }
-                    sim_debug(DEBUG_EXP, &cpu_dev,
+                    sim_debug(DEBUG_DETAIL, &cpu_dev,
                         "%s GPR[%d] %08x addr %08x result %08x\n",
                         (opr&8) ? "MPFW":"DVFW", reg, GPR[reg], addr, temp);
                     if (CC & CC1BIT)
@@ -5728,7 +5750,7 @@ temp2, IR&0xFFF, PSD1, PSD2, CPUSTATUS);
                     } else {
                         dest = s_dvfd(td, source, &CC); /* do DVFD */
                     }
-                    sim_debug(DEBUG_EXP, &cpu_dev,
+                    sim_debug(DEBUG_DETAIL, &cpu_dev,
                         "%s GPR[%d] %08x %08x src %016llx result %016llx\n",
                         (opr&8) ? "MPFD":"DVFD", reg, GPR[reg], GPR[reg+1], source, dest);
                     if (CC & CC1BIT)                    /* test for overflow detection */
@@ -6024,6 +6046,7 @@ temp2, IR&0xFFF, PSD1, PSD2, CPUSTATUS);
                             CPUSTATUS &= ~BIT24;        /* no, reset blk state in cpu status bit 24 */
                             MODES &= ~BLKMODE;          /* reset blocked mode */
                             irq_pend = 1;               /* start scanning interrupts again */
+#ifdef LEAVE_ACTIVE
                             if (irq_auto) {
 /*AIR*/                         INTS[irq_auto] &= ~INTS_ACT;  /* deactivate specified int level */
 /*AIR*/                         SPAD[irq_auto+0x80] &= ~SINT_ACT; /* deactivate in SPAD too */
@@ -6033,6 +6056,7 @@ temp2, IR&0xFFF, PSD1, PSD2, CPUSTATUS);
 /*AIR*/                         irq_auto = 0;           /* show done processing in blocked mode */
 /*103020*/                      skipinstr = 1;          /* skip interrupt test */
                             }
+#endif
                         }
                     } else {
 #ifdef NOTRIGHT
