@@ -645,7 +645,8 @@ t_stat mt_srv(UNIT *uptr)
         break;
 
     case MT_READ:   /* 0x02 */                      /* read a record from the device */
-        sim_debug(DEBUG_DETAIL, &mta_dev, "mt_srv cmd 2 READ unit=%02x\n", unit);
+//      sim_debug(DEBUG_DETAIL, &mta_dev, "mt_srv cmd 2 READ unit=%02x\n", unit);
+        sim_debug(DEBUG_CMD, &mta_dev, "mt_srv cmd 2 READ unit=%02x\n", unit);
         if (uptr->CMD & MT_READDONE) {              /* is the read complete */
             uptr->SNS &= ~(SNS_LOAD|SNS_EOT);       /* reset BOT & EOT */
             if (sim_tape_eot(uptr)) {               /* see if at EOM */
@@ -703,13 +704,14 @@ t_stat mt_srv(UNIT *uptr)
             mt_busy[bufnum] &= ~1;                  /* set not busy */
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return end status */
         } else {
+//          sim_debug(DEBUG_CMD, &mta_dev,
             sim_debug(DEBUG_DETAIL, &mta_dev,
                 "Read data @2 unit %02x cnt %04x ch %02x hwm %04x\n",
                 unit, uptr->POS, ch, uptr->hwmark);
             if ((uint32)uptr->POS >= uptr->hwmark) { /* In IRG */
                 /* Handle end of data record */
                 sim_debug(DEBUG_CMD, &mta_dev,
-                    "Read too much data unit %02x cnt %04x ch %02x hwm %04x\n",
+                    "Read end of data unit %02x cnt %04x ch %02x hwm %04x\n",
                     unit, uptr->POS, ch, uptr->hwmark);
                 uptr->CMD |= MT_READDONE;           /* read is done */
                 sim_activate(uptr, 40);             /* wait again */

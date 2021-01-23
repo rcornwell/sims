@@ -761,6 +761,16 @@ loop:
     chp->chan_caw = (chp->chan_caw & 0xfffffc) + 8; /* point to next IOCD */
     chp->ccw_cmd = (word1 >> 24) & 0xff;        /* set command from IOCD wd 1 */
 
+    /* Check if we had data chaining in previous iocd */
+    /* if we did, use previous cmd value */
+    if (((chp->chan_info & INFO_SIOCD) == 0) && /* see if 1st IOCD in channel prog */
+       (chp->ccw_flags & FLAG_DC)) {            /* last IOCD have DC set? */
+        sim_debug(DEBUG_CMD, dptr,
+            "ec_iocl @%06x DO DC, ccw_flags %04x cmd %02x\n",
+            chp->chan_caw, chp->ccw_flags, chp->ccw_cmd);
+    } else
+        chp->ccw_cmd = (word1 >> 24) & 0xff;    /* set new command from IOCD wd 1 */
+
     if (!MEM_ADDR_OK(word1 & MASK24)) {         /* see if memory address invalid */
         chp->chan_status |= STATUS_PCHK;        /* bad, program check */
         uptr->SNS |= SNS_INAD;                  /* invalid address status */
@@ -861,7 +871,6 @@ loop:
         return 1;                               /* error return */
     }
 
-#ifndef NOT_FOR_EVERYONE
     /* DC can only be used with a read/write cmd */
     if (chp->ccw_flags & FLAG_DC) {
         if ((chp->ccw_cmd != DSK_RD) && (chp->ccw_cmd != DSK_WD)) {
@@ -872,7 +881,6 @@ loop:
             return 1;                           /* error return */
         }
     }
-#endif
 
     chp->chan_byte = BUFF_BUSY;                 /* busy & no bytes transferred yet */
 
@@ -1569,9 +1577,6 @@ iha_error:
         sim_debug(DEBUG_CMD, dptr,
             "disk_srv STAR unit=%02x star %02x %02x %02x %02x\n",
             unit, buf[0], buf[1], buf[2], buf[3]);
-//      sim_debug(DEBUG_DETAIL, dptr,
-//          "disk_srv seek unit=%02x star %02x %02x %02x %02x\n",
-//          unit, buf[0], buf[1], buf[2], buf[3]);
 
         /* save STAR (target sector) data in STAR */
         uptr->STAR = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | (buf[3]);
@@ -1620,11 +1625,6 @@ iha_error:
 
         /* calc the new sector address of data */
         /* calculate file position in bytes of requested sector */
-        /* file offset in bytes */
-//29    tstart = STAR2SEC(uptr->STAR, SPT(type), SPC(type)) * SSB(type);
-        /* set new STAR value using old cyl value */
-//      uptr->CHS = CHS2STAR(STAR2CYL(uptr->CHS), trk, buf[3]);
-
         /* set new STAR value using new values */
 /*05*/  uptr->STAR = CHS2STAR(cyl, trk, sec);
         /* file offset in bytes to std or alt track */
@@ -1910,10 +1910,10 @@ iha_error:
                 "disk_srv after READ chsa %04x buffer %06x count %04x\n",
                 chsa, chp->ccw_addr, chp->ccw_count);
             sim_debug(DEBUG_CMD, dptr,
-                "disk_srv after READ buffer %06x count %04x data %02x%02x%02x%02x %02x%02x%02x%02x\n",
-//              chp->ccw_addr, chp->ccw_count, buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
-                chp->ccw_addr, chp->ccw_count, buf[1016], buf[1017], buf[1018], buf[1019],
-                buf[1020], buf[1021], buf[1022], buf[1023]);
+                "hsdp_srv READ data %02x%02x%02x%02x %02x%02x%02x%02x "
+                "%02x%02x%02x%02x %02x%02x%02x%02x\n",
+                buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7],
+                buf[8], buf[9], buf[10], buf[11], buf[12], buf[13], buf[14], buf[15]);
 
             uptr->CHS++;                        /* next sector number */
             /* process the next sector of data */
@@ -2137,11 +2137,13 @@ iha_error:
             }
 
             sim_debug(DEBUG_CMD, dptr,
-                "disk_srv after WRITE buffer %06x count %04x data %02x%02x%02x%02x %02x%02x%02x%02x\n",
-//              chp->ccw_addr, chp->ccw_count,
-//              buf2[0], buf2[1], buf2[2], buf2[3], buf2[4], buf2[5], buf2[6], buf2[7]);
-                chp->ccw_addr, chp->ccw_count, buf2[1016], buf2[1017], buf2[1018], buf2[1019],
-                buf2[1020], buf2[1021], buf2[1022], buf2[1023]);
+                "hsdp_srv after WRITE buffer %06x count %04x\n",
+                chp->ccw_addr, chp->ccw_count);
+            sim_debug(DEBUG_CMD, dptr,
+                "hsdp_srv WRITE data %02x%02x%02x%02x %02x%02x%02x%02x "
+                "%02x%02x%02x%02x %02x%02x%02x%02x\n",
+                buf2[0], buf2[1], buf2[2], buf2[3], buf2[4], buf2[5], buf2[6], buf2[7],
+                buf2[8], buf2[9], buf2[10], buf2[11], buf2[12], buf2[13], buf2[14], buf2[15]);
             sim_debug(DEBUG_CMD, dptr,
                 "disk_srv after WRITE CAP %06x DIAG %06x\n",
                 CAP(type), (((CYL(type) - 3) * HDS(type)) * SPT(type)));    /* diag start */
@@ -3096,8 +3098,7 @@ t_stat disk_attach(UNIT *uptr, CONST char *file)
         "Disk %s cyl %d hds %d sec %d ssiz %d capacity %d\n",
         disk_type[type].name, disk_type[type].cyl, disk_type[type].nhds,
         disk_type[type].spt, ssize, uptr->capac);   /* disk capacity */
-    printf(
-        "Disk %s cyl %d hds %d sec %d ssiz %d capacity %d\r\n",
+    printf("Disk %s cyl %d hds %d sec %d ssiz %d capacity %d\r\n",
         disk_type[type].name, disk_type[type].cyl, disk_type[type].nhds,
         disk_type[type].spt, ssize, uptr->capac);   /* disk capacity */
 
@@ -3121,8 +3122,7 @@ t_stat disk_attach(UNIT *uptr, CONST char *file)
         j = (CAP(type) - (s/ssize));                /* get # sectors to write */
         sim_debug(DEBUG_CMD, dptr,
             "Disk attach for MPX 1.X needs %04d more sectors added to disk\n", j);
-        printf(
-            "Disk attach for MPX 1.X needs %04d more sectors added to disk\r\n", j);
+        printf("Disk attach for MPX 1.X needs %04d more sectors added to disk\r\n", j);
         /* must be MPX 1.X disk, extend to MPX 3.X size */
         /* write sectors of zero to end of disk to fill it out */
         for (i=0; i<j; i++) {
@@ -3171,7 +3171,7 @@ add_size:
         /* seek last sector of disk */
         if ((sim_fseek(uptr->fileref, (CAP(type))*ssize, SEEK_SET)) != 0) {
             sim_debug(DEBUG_CMD, dptr, "Disk attach SEEK last sector failed\n");
-            printf( "Disk attach SEEK last sector failed\r\n");
+            printf("Disk attach SEEK last sector failed\r\n");
             goto fmt;
         }
         s = ftell(uptr->fileref);               /* get current file position */
@@ -3196,8 +3196,7 @@ add_size:
         sim_debug(DEBUG_CMD, dptr,
             "Disk format error buf0 %02x buf1 %02x buf2 %02x buf3 %02x\n",
             buff[0], buff[1], buff[2], buff[3]);
-        printf(
-            "Disk format error buf0 %02x buf1 %02x buf2 %02x buf3 %02x\r\n",
+        printf("Disk format error buf0 %02x buf1 %02x buf2 %02x buf3 %02x\r\n",
             buff[0], buff[1], buff[2], buff[3]);
 fmt:
         /* format the drive */
@@ -3222,8 +3221,7 @@ ldone:
         sim_debug(DEBUG_CMD, dptr,
             "File %s attached to %s creating labels\n",
             file, disk_type[type].name);
-        printf(
-            "File %s attached to %s creating labels\r\n",
+        printf("File %s attached to %s creating labels\r\n",
             file, disk_type[type].name);
         i = disk_label(uptr);                       /* label disk */
         if (i != 0) {

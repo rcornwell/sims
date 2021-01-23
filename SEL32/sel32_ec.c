@@ -388,7 +388,6 @@ loop:
 
     chp->chan_caw = (chp->chan_caw & 0xfffffc) + 8; /* point to next IOCD */
 
-#ifndef NOT_HERE
     /* Check if we had data chaining in previous iocd */
     /* if we did, use previous cmd value */
     if (((chp->chan_info & INFO_SIOCD) == 0) && /* see if 1st IOCD in channel prog */
@@ -396,16 +395,8 @@ loop:
         sim_debug(DEBUG_CMD, dptr,
             "ec_iocl @%06x DO DC, ccw_flags %04x cmd %02x\n",
             chp->chan_caw, chp->ccw_flags, chp->ccw_cmd);
-//      chp->ccw_flags = (word2 >> 16) & 0xf800;/* get flags from bits 0-4 of WD 2 of IOCD */
-//      if (chp->ccw_cmd == EC_READ)            /* Force SLI on READ */
-//         chp->ccw_flags |= FLAG_SLI;
-//      chp->ccw_count = word2 & 0xffff;        /* get 16 bit byte count from IOCD WD 2 */
-//      return 0;
     } else
         chp->ccw_cmd = (word1 >> 24) & 0xff;    /* set new command from IOCD wd 1 */
-#else
-    chp->ccw_cmd = (word1 >> 24) & 0xff;        /* set command from IOCD wd 1 */
-#endif
     chp->ccw_count = 0;
 
     if (!MEM_ADDR_OK(word1 & MASK24)) {         /* see if memory address invalid */
@@ -942,7 +933,7 @@ wr_end:
         pck = (uint8 *)(&ec_data.rec_buff[ec_data.xtr_ptr].msg[0]);
         len = (int)(ec_data.rec_buff[ec_data.xtr_ptr].len);
         if (len < ec_data.conf[9]) {
-           sim_debug(DEBUG_DETAIL, &ec_dev, "ec_srv short read size %x %x %x\n",chp->ccw_count, i, ec_data.conf[9]);
+           sim_debug(DEBUG_DETAIL, &ec_dev, "ec_srv short read size %x %x\n",chp->ccw_count, ec_data.conf[9]);
            ec_data.xtr_ptr = (ec_data.xtr_ptr + 1) & 0xf;
            chp->ccw_count = 0;
            /* diags wants prog check instead of unit check */
@@ -1162,8 +1153,6 @@ wr_end:
                 "ec_startcmd CMD sense excess cnt %02x\n", chp->ccw_count);
             break;
         }
-/*JB*/  ec_data.rec_buff[ec_data.xtr_ptr].len = 0;  /* reset last buffer length */
-
         uptr->SNS &= ~(SNS_CMDREJ|SNS_EQUCHK);  /* clear old status */
 
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
