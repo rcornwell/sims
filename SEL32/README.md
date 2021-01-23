@@ -49,7 +49,7 @@ diag.tap       bootable level one diagnostic tape w/auto testing.  Set
                cpu models now run all diagnostics provided on the
                diagnostic tape.  Running DEXP stand alone causes input
                to stop after a few characters are entered.  More
-               itesting is still required.
+               testing is still required.
 
                CV.CSL - Firmware control diag.  Disabled in auto testing.
                CV.CP1 - CPU diag part 1 runs OK.
@@ -93,5 +93,5 @@ Other MPX verion support:
                disk image of a bootable system.
 
 James C. Bevier
-06/30/2020 
+01/23/2021 
 

@@ -477,6 +477,16 @@ loop:
     chp->chan_caw = (chp->chan_caw & 0xfffffc) + 8; /* point to next IOCD */
     chp->ccw_cmd = (word1 >> 24) & 0xff;        /* set command from IOCD wd 1 */
 
+    /* Check if we had data chaining in previous iocd */
+    /* if we did, use previous cmd value */
+    if (((chp->chan_info & INFO_SIOCD) == 0) && /* see if 1st IOCD in channel prog */
+       (chp->ccw_flags & FLAG_DC)) {            /* last IOCD have DC set? */
+        sim_debug(DEBUG_CMD, dptr,
+            "ec_iocl @%06x DO DC, ccw_flags %04x cmd %02x\n",
+            chp->chan_caw, chp->ccw_flags, chp->ccw_cmd);
+    } else
+        chp->ccw_cmd = (word1 >> 24) & 0xff;    /* set new command from IOCD wd 1 */
+
     if (!MEM_ADDR_OK(word1 & MASK24)) {         /* see if memory address invalid */
         chp->chan_status |= STATUS_PCHK;        /* bad, program check */
         uptr->SNS |= SNS_INAD;                  /* invalid address status */

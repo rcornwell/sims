@@ -54,13 +54,13 @@
 
 /* Status held in u3 */
 /* controller/unit address in upper 16 bits */
-#define CON_INPUT   0x0100  /* Input ready for unit */
-#define CON_CR      0x0200  /* Output at beginning of line */
-#define CON_REQ     0x0400  /* Request key pressed */
-#define CON_EKO     0x0800  /* Echo input character */
-#define CON_OUTPUT  0x1000  /* Output ready for unit */
-#define CON_READ    0x2000  /* Read mode selected */
 #define CON_ATAT    0x4000  /* working on @@A input */
+#define CON_READ    0x2000  /* Read mode selected */
+#define CON_OUTPUT  0x1000  /* Output ready for unit */
+#define CON_EKO     0x0800  /* Echo input character */
+#define CON_REQ     0x0400  /* Request key pressed */
+#define CON_CR      0x0200  /* Output at beginning of line */
+#define CON_INPUT   0x0100  /* Input ready for unit */
 
 /* Input buffer pointer held in u4 */
 
@@ -156,7 +156,10 @@ void con_ini(UNIT *uptr, t_bool f) {
     con_data[unit].incnt = 0;           /* no input data */
     uptr->CMD &= LMASK;                 /* leave only chsa */
     uptr->SNS = SNS_RDY|SNS_ONLN;       /* status is online & ready */
-    sim_activate(uptr, 1000);           /* time increment */
+    if (unit == 0) {
+        sim_cancel(uptr);               /* stop input poll */
+        sim_activate(uptr, 1000);       /* start input poll */
+    }
 }
 
 /* start a console operation */

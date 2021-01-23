@@ -177,7 +177,7 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 #define DSK_TCMD        0xD3                    /* Transfer Command Packet (specifies CDB to send) */
 //#define DSK_ICH         0xFF                    /* Initialize Controller */
 #define DSK_FRE         0xF3                    /* Reserved */
-#define DSK_SID         0x80                    /* MFP stataus command */
+#define DSK_SID         0x80                    /* MFP status command */
 
 #define STAR    u4
 /* u4 - sector target address register (STAR) */
@@ -445,32 +445,23 @@ uint16 scsi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     if ((uptr->CMD & 0xff00) != 0) {            /* if any status info, we are busy */
         return SNS_BSY;
     }
-    sim_debug(DEBUG_CMD, dptr, "scsi_startcmd CMD 2 unit=%02x cmd %02x\n", unit, cmd);
+    sim_debug(DEBUG_CMD, dptr, "scsi_startcmd enter unit=%02x cmd %02x\n", unit, cmd);
 
     /* Unit is online, so process a command */
     switch (cmd) {
 
     case DSK_INCH:                              /* INCH 0x00 */
 #ifdef DO_DYNAMIC_DEBUG
-    cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ | DEBUG_XIO);
+//  cpu_dev.dctrl |= (DEBUG_INST | DEBUG_CMD | DEBUG_EXP | DEBUG_IRQ | DEBUG_XIO);
 #endif
         sim_debug(DEBUG_CMD, dptr,
             "scsi_startcmd starting INCH %06x cmd, chsa %04x MemBuf %08x cnt %04x\n",
             uptr->u4, chsa, chp->ccw_addr, chp->ccw_count);
 
         uptr->CMD |= DSK_INCH2;                 /* use 0xF0 for inch, just need int */
-//      sim_activate(uptr, 20);                 /* start things off */
+        /* leave the TCMD bit */
+        uptr->SNS &= ~MASK24;                   /* clear all but old mode data */
         sim_activate(uptr, 100);                /* start things off */
-        return 0;
-        break;
-
-    case DSK_RCAP:                              /* Read Capacity 0x53 */
-        uptr->CMD |= cmd;                       /* save cmd */
-        sim_debug(DEBUG_CMD, dptr,
-            "scsi_startcmd starting disk RCAP cmd %02x chsa %04x\n", cmd, chsa);
-//      sim_activate(uptr, 200);                /* start things off */
-        sim_activate(uptr, 100);                /* start things off */
-//      sim_activate(uptr, 20);                 /* start things off */
         return 0;
         break;
 
@@ -480,11 +471,13 @@ uint16 scsi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     case DSK_RD:                                /* Read command 0x02 */
     case DSK_LMR:                               /* read mode register */
     case DSK_NOP:                               /* NOP 0x03 */
-    case DSK_SNS:                               /* Sense 0x04 */
-//  case DSK_RCAP:                              /* Read Capacity 0x53 */
+    case DSK_RCAP:                              /* Read Capacity 0x53 */
     /* Transfer Command Packet (specifies CDB to send) */
     case DSK_TCMD:                              /* Transfer command packet 0xD3 */
     case DSK_SID:                               /* channel Sense 0x80 */
+        /* leave the TCMD bit */
+        uptr->SNS &= ~MASK24;                   /* clear all but old mode data */
+    case DSK_SNS:                               /* Sense 0x04 */
         uptr->CMD |= cmd;                       /* save cmd */
         sim_debug(DEBUG_CMD, dptr,
             "scsi_startcmd starting disk seek r/w cmd %02x chsa %04x\n", cmd, chsa);
@@ -644,7 +637,9 @@ t_stat scsi_srv(UNIT *uptr)
         chan_write_byte(chsa, &ch);
 
         /* bytes 4 - mode reg, byte 0 of SNS */
-        ch = (uptr->SNS >> 24) & 0xff;          /* return the sense data */
+//      ch = (uptr->SNS >> 24) & 0xff;          /* return the sense data */
+        /* skip the TCMD bit */
+        ch = (uptr->SNS >> 24) & 0xfe;          /* return the sense data */
         sim_debug(DEBUG_DETAIL, dptr, "scsi_srv sense unit=%02x 1 %02x\n",
             unit, ch);
         chan_write_byte(chsa, &ch);
@@ -820,12 +815,16 @@ t_stat scsi_srv(UNIT *uptr)
         sim_debug(DEBUG_CMD, dptr, "Load Mode Reg unit=%02x old %x new %x\n",
             unit, (uptr->SNS)&0xff, buf[0]);
         uptr->CMD &= LMASK;                     /* remove old cmd */
-        uptr->SNS &= MASK24;                    /* clear old mode data */
-        uptr->SNS |= (buf[0] << 24);            /* save mode value */
+//      uptr->SNS &= MASK24;                    /* clear old mode data */
+        /* leave the TCMD bit */
+        uptr->SNS &= (MASK24 | SNS_TCMD);       /* clear old mode data */
+//      uptr->SNS |= (buf[0] << 24);            /* save mode value */
+        /* do not change TCMD bit */
+        uptr->SNS |= ((buf[0]&0xfe) << 24);     /* save mode value */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
         break;
 
-    case DSK_RD:                                /* Read Data */
+    case DSK_RD:                                /* 0x02 Read Data */
         if (uptr->SNS & SNS_TCMD) {
             /* we need to process a read TCMD data */
             int cnt = scsi_buf[bufnum][unit][4];    /* byte count of status to send */
@@ -833,9 +832,11 @@ t_stat scsi_srv(UNIT *uptr)
             uint32  spt = SPT(type);            /* sectors per track */
             uint32  ssb = SSB(type);            /* sector size in bytes */
             int     bcnt;
+
             /* cnt has # bytes to return (0xf0) */
             uint8   pagecode = scsi_buf[bufnum][unit][2] & 0x3f;   /* get page code */
             uint8   pagecont = (scsi_buf[bufnum][unit][2] & 0xc0) >> 6; /* get page control */
+
             ch = scsi_buf[bufnum][unit][0];     /* return TCMD cmd */
             uptr->SNS &= ~SNS_TCMD;             /* show not presessing TCMD cmd chain */
             sim_debug(DEBUG_CMD, dptr,
@@ -954,6 +955,22 @@ t_stat scsi_srv(UNIT *uptr)
                     buf[9] = (uint8)HDS(type);  /* # of heads */
                     goto merge;                 /* go output data and return */
                 }
+
+            case 0x12:                          /* inquiry */
+                /* size is 0x24 = 36 bytes */
+                /* ssize has sector size in bytes */
+                for (i=0; i<cnt; i++) {
+                    buf[i] = 0;                 /* clear buffer */
+                }
+                /* set some sense data from SH.DCSCI driver code */
+                buf[0] = 0xf0;                  /* page length */
+                buf[4] = 0x81;                  /* savable and page type 1 */
+                buf[8] = 0x91;
+                buf[12] = 0xf4;
+                buf[17] = (uint8)HDS(type);     /* # of heads */
+                buf[23] = (uint8)SPT(type);     /* Sect/track */
+//              buf[27] = SPT(type);            /* Sect/track */
+
 merge:
                 /* output response data */
                 for (i=0; i<cnt; i++) {
@@ -1210,6 +1227,7 @@ read_cap:                                       /* merge point from TCMD process
                 uptr->CMD &= LMASK;             /* remove old status bits & cmd */
                 uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                return SCPE_OK;
                 break;
             }
         }
@@ -1221,6 +1239,7 @@ read_cap:                                       /* merge point from TCMD process
                 uptr->CMD &= LMASK;             /* remove old status bits & cmd */
                 uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                return SCPE_OK;
                 break;
             }
         }
@@ -1231,7 +1250,7 @@ read_cap:                                       /* merge point from TCMD process
             "scsi_srv cmd RCAP chsa %04x capacity %06x secsize %03x completed\n",
             chsa, cap, ssize);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
-        return SCPE_OK;
+//      return SCPE_OK;
         break;
 
     /* Transfer Command Packet (specifies CDB to send) */
@@ -1269,6 +1288,7 @@ read_cap:                                       /* merge point from TCMD process
                 uptr->CMD &= LMASK;             /* remove old status bits & cmd */
                 uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                return SCPE_OK;
                 break;
             }
         }
@@ -1320,7 +1340,7 @@ void scsi_ini(UNIT *uptr, t_bool f)
     uptr->CHS = 0;                              /* set CHS to cyl/hd/sec = 0 */
     uptr->STAR = 0;                             /* set STAR to cyl/hd/sec = 0 */
     uptr->CMD &= LMASK;                         /* remove old status bits & cmd */
-    uptr->SNS = ((uptr->SNS & MASK24) | (scsi_type[i].type << 24));  /* save mode value */
+    uptr->SNS = 0;                              /* clear any status */
     /* total sectors on disk */
     uptr->capac = CAP(i);                       /* disk size in sectors */
 
@@ -1565,6 +1585,7 @@ t_stat scsi_attach(UNIT *uptr, CONST char *file) {
     uint32          ssize;                      /* sector size in bytes */
     uint8           buff[1024];
 
+    uptr->SNS = 0;                              /* clear any status */
     if (scsi_type[type].name == 0) {            /* does the assigned disk have a name */
         detach_unit(uptr);                      /* no, reject */
         return SCPE_FMT;                        /* error */
@@ -1577,7 +1598,10 @@ t_stat scsi_attach(UNIT *uptr, CONST char *file) {
     uptr->capac = CAP(type);                    /* disk capacity in sectors */
     ssize = SSB(type);                          /* get sector size in bytes */
 
-    sim_debug(DEBUG_CMD, dptr, "Disk %s %04x cyl %d hds %d sec %d ssiz %d capacity %d\n",
+    sim_debug(DEBUG_CMD, dptr, "SCSI Disk %s %04x cyl %d hds %d sec %d ssiz %d capacity %d\n",
+        scsi_type[type].name, chsa, scsi_type[type].cyl, scsi_type[type].nhds, 
+        scsi_type[type].spt, ssize, uptr->capac); /* disk capacity */
+    printf("SCSI Disk %s %04x cyl %d hds %d sec %d ssiz %d capacity %d\r\n",
         scsi_type[type].name, chsa, scsi_type[type].cyl, scsi_type[type].nhds, 
         scsi_type[type].spt, ssize, uptr->capac); /* disk capacity */
 
@@ -1617,7 +1641,13 @@ fmt:
         scsi_type[type].name, chsa, CYL(type), HDS(type), SPT(type), SPC(type),  
         CAP(type), CAPB(type));
 
+    printf("Attach %s %04x cyl %d hds %d spt %d spc %d cap sec %d cap bytes %d\r\n",
+        scsi_type[type].name, chsa, CYL(type), HDS(type), SPT(type), SPC(type),  
+        CAP(type), CAPB(type));
+
     sim_debug(DEBUG_CMD, dptr, "File %s at chsa %04x attached to %s\n",
+        file, chsa, scsi_type[type].name);
+    printf("File %s at chsa %04x attached to %s\r\n",
         file, chsa, scsi_type[type].name);
 
     /* check for valid configured disk */

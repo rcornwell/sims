@@ -376,7 +376,9 @@ void com_ini(UNIT *uptr, t_bool f)
     DEVICE *dptr = get_dev(uptr);
 
     sim_debug(DEBUG_CMD, dptr, "COM init device %s controller 0x7e00\n", dptr->name);
-    sim_activate(uptr, 1000);               /* time increment */
+//01sim_activate(uptr, 1000);               /* time increment */
+    sim_cancel(uptr);                       /* stop input poll */
+    sim_activate(uptr, 1000);               /* start input poll */
 }
 
 /* called from sel32_chan to start an I/O operation */
