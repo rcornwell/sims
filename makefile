@@ -277,7 +277,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
       OS_CCDEFS += -Wno-deprecated
     endif
   endif
-  ifeq (git-repo,$(shell if ${TEST} -d ./.git; then echo git-repo; fi))
+  ifeq (git-repo,$(shell if ${TEST} -e ./.git; then echo git-repo; fi))
     GIT_PATH=$(strip $(shell which git))
     ifeq (,$(GIT_PATH))
       $(error building using a git repository, but git is not available)
@@ -1196,6 +1196,7 @@ else
     ifeq (Darwin,$(OSTYPE))
       CFLAGS_O += -O4 -flto -fwhole-program
     else
+#     CFLAGS_O := -O2 -fprofile-arcs -ftest-coverage
       CFLAGS_O := -O2
     endif
   endif
@@ -2138,7 +2139,13 @@ KL10 = ${KL10D}/kx10_cpu.c ${KL10D}/kx10_sys.c ${KL10D}/kx10_df.c \
 	${KL10D}/kx10_imp.c ${KL10D}/kl10_fe.c ${KL10D}/ka10_pd.c \
 	${KL10D}/ka10_ch10.c ${KL10D}/kx10_lp.c ${KL10D}/kl10_nia.c \
         ${KL10D}/kx10_disk.c
-KL10_OPT = -DKL=1 -DUSE_INT64 -I $(KL10D) -DUSE_SIM_CARD ${NETWORK_OPT} 
+KL10_OPT = -DKL=1 -DUSE_INT64 -I $(KL10D) ${NETWORK_OPT} 
+
+KS10D = ${SIMHD}/PDP10
+KS10 = ${KS10D}/kx10_cpu.c ${KS10D}/kx10_sys.c ${KS10D}/kx10_disk.c \
+	${KS10D}/ks10_cty.c ${KS10D}/ks10_uba.c ${KS10D}/ks10_rp.c \
+	${KS10D}/ks10_tu.c
+KS10_OPT = -DKS=1 -DUSE_INT64 -I $(KS10D) ${NETWORK_OPT} 
 
 ATT3B2D = ${SIMHD}/3B2
 ATT3B2 = ${ATT3B2D}/3b2_cpu.c ${ATT3B2D}/3b2_mmu.c \
@@ -2214,7 +2221,7 @@ ALL = pdp1 pdp4 pdp7 pdp8 pdp9 pdp15 pdp11 pdp10 \
 	scelbi 3b2 i701 i704 i7010 i7070 i7080 i7090 \
 	sigma uc15 pdp10-ka pdp10-ki pdp6
 
-ALL = b5500 i701 i704 i7010 i7070 i7080 i7090 pdp10-ka pdp10-ki pdp10-kl pdp6 ibm360 ibm360_32 icl1900 sel32
+ALL = b5500 i701 i704 i7010 i7070 i7080 i7090 pdp10-ka pdp10-ki pdp10-kl pdp10-ks pdp6 ibm360 ibm360_32 icl1900 sel32
 
 all : ${ALL}
 
@@ -3055,6 +3062,15 @@ ${BIN}pdp10-kl${EXE} : ${KL10} ${SIM}
 	${CC} ${KL10} ${SIM} ${KL10_OPT} ${CC_OUTSPEC} ${LDFLAGS}
 ifneq (,$(call find_test,${PDP10D},kl10))
 	$@ $(call find_test,${PDP10D},kl10) ${TEST_ARG}
+endif
+
+pdp10-ks : ${BIN}pdp10-ks${EXE}
+
+${BIN}pdp10-ks${EXE} : ${KS10} ${SIM}
+	${MKDIRBIN}
+	${CC} ${KS10} ${SIM} ${KS10_OPT} ${CC_OUTSPEC} ${LDFLAGS}
+ifneq (,$(call find_test,${PDP10D},ks10))
+	$@ $(call find_test,${PDP10D},ks10) ${TEST_ARG}
 endif
 
 # Front Panel API Demo/Test program

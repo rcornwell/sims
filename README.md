@@ -1,7 +1,7 @@
 
 [![Coverity Scan Build Status](https://scan.coverity.com/projects/12020/badge.svg)](https://scan.coverity.com/projects/rcornwell-sims)  
 
-This is a working copy of my Burroughs B5500, Dec PDP6, KA10, KI10, KL10, SEL32, IBM 360
+This is a working copy of my Burroughs B5500, Dec PDP6, KA10, KI10, KL10, KS10, SEL32, IBM 360
 and IBM7000 series simulators for SimH.
 
 # Stable released simulators.
@@ -95,11 +95,12 @@ The PDP6 runs TOPS 10 4.5 off Dectape.
 
   Type 340 graphics display.  
 
-# Dec KA10 & KI10 & KL10
+# Dec KA10 & KI10 & KL10 & KS10
 
 The KA10 sim has successfully run Tops 10 4.5, 5.03 and 6.03, ITS and WAITS.  
 The KI10 sim has successfully run Tops 10 6.03 with VMSER.  
 The KL10 sim has successfully run Tops 10 6.03-7.03, ITS and Tops 20 V2-V7.  
+The KS10 is still in testing.
 
    Disk   
    * RC10 RD10/RM10  
@@ -137,6 +138,8 @@ The KL10 sim has successfully run Tops 10 6.03-7.03, ITS and Tops 20 V2-V7.
 
    The RP10 supports boot (actual hardware did not), by reading in Blocks 4-7
 and transfering to the loaded value. RC10, RH10, TM10 support readin mode. 
+
+   The KS10 supports RH11/RP and RH11/TM03 drives.
 
 # ICL 1900 simulator.
 
