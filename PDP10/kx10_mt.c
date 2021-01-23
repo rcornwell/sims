@@ -532,7 +532,7 @@ t_stat mt_error(UNIT * uptr, t_stat r, DEVICE * dptr)
 /* Handle processing of tape requests. */
 t_stat mt_srv(UNIT * uptr)
 {
-    DEVICE             *dptr = find_dev_from_unit(uptr);
+    DEVICE             *dptr = uptr->dptr;
     int                 unit = (uptr - dptr->units) & 7;
     int                 cmd = (uptr->CNTRL & FUNCTION) >> 9;
     t_mtrlnt            reclen;
@@ -556,6 +556,9 @@ t_stat mt_srv(UNIT * uptr)
     } else {
        cc_max = (4 + ((uptr->CNTRL & CORE_DUMP) != 0));
     }
+
+    if (dptr == NULL)
+        dptr = find_dev_from_unit(uptr);
 
     switch(cmd) {
     case NOP_IDLE:
