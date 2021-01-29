@@ -3700,6 +3700,13 @@ tbr:                                                /* handle basemode TBR too *
                     }
                     t = (GPR[reg] >> 16) & 0xff;    /* get SPAD address from Rd (6-8) */
                     temp2 = SPAD[t];                /* get old SPAD data */
+#if 1
+                    if (t == 0x83) {
+                        sim_debug(DEBUG_EXP, &cpu_dev,
+                            "TRSC SPAD[%02x] changed from %08x to %08x @ PSD1 %08x\n",
+                            t, temp2, GPR[sreg], PSD1);
+                    }
+#endif
                     SPAD[t] = GPR[sreg];            /* store Rs into SPAD */
                     break;
 
@@ -6242,11 +6249,23 @@ TPSD[0], TPSD[1], PSD1, PSD2, TRAPME);
                             break;                      /* ignore */
                         /* SPAD entries for interrupts begin at 0x80 */
                         t = SPAD[prior+0x80];           /* get spad entry for interrupt */
+#if 1
+/*GEERT*/               if ((t == 0) || (t == 0xffffffff)) /* if unused, ignore instruction */
+/*GEERT*/                   break;                      /* ignore */
+#endif
                         if ((t & 0x0f800000) == 0x0f000000) /* if class F ignore instruction */
+//                      if ((t & 0x0f808000) == 0x0f000000) /* if class F ignore instruction */
                             break;                      /* ignore for F class */
+#if 0
+/*GEERT*/               if (t & 0x00008000)             /* bit 16 must be zero */
+/*GEERT*/                   break;                      /* ignore */
+/*GEERT*/               /* if not RTOM, ignore instruction */
+/*GEERT*/               if (!(((t & 0x0f808000) == 0x03000000) || ((t & 0x0f808000) == 0x00800000)))
+/*GEERT*/                   break;                      /* ignore */
+#endif
 
-                        sim_debug(DEBUG_IRQ, &cpu_dev, "EI:B4 %02x ACT %1x REQ %1x ENAB %1x\n",
-                            prior, INTS[prior]&INTS_ACT?1:0,
+                        sim_debug(DEBUG_IRQ, &cpu_dev, "EI:B4 %02x SPAD[%d] %08x ACT %1x REQ %1x ENAB %1x\n",
+                            prior, prior+0x80, t, INTS[prior]&INTS_ACT?1:0,
                             INTS[prior]&INTS_REQ?1:0, INTS[prior]&INTS_ENAB?1:0);
 
                         /* does not effect REQ status */
@@ -6255,15 +6274,20 @@ TPSD[0], TPSD[1], PSD1, PSD2, TRAPME);
                         irq_pend = 1;                   /* start scanning interrupts again */
 
                         /* test for clock at address 0x7f06 and interrupt level 0x18 */
-                        /* the diags want the type to be 0, others want 3, so ignore */
-//DIAGS                 if ((SPAD[prior+0x80] & 0x0f807fff) == 0x08007f06) {
+                        /* the diags want the type to be 0 */
+                        /* UTX wants the type to be 3?? */
+                        /* UTX would be 0x03807f06 Diags would be 0x00807f06 */
+///                     if ((SPAD[prior+0x80] & 0x0f80ffff) == 0x00807f06) {
                         if ((SPAD[prior+0x80] & 0x0000ffff) == 0x00007f06) {
-                            sim_debug(DEBUG_IRQ, &cpu_dev, "Clock EI %02x Turn on\n", prior);
+                            sim_debug(DEBUG_IRQ, &cpu_dev,
+                                "Clock EI %02x SPAD %08x Turn on\n", prior, t);
                             rtc_setup(1, prior);        /* tell clock to start */
                         }
-//DIAGS                 if ((SPAD[prior+0x80] & 0x0f807fff) == 0x03007f04) {
+                        /* the diags want the type to be 3 */
+///                     if ((SPAD[prior+0x80] & 0x0f80ffff) == 0x03007f04) {
                         if ((SPAD[prior+0x80] & 0x0f00ffff) == 0x03007f04) {
-                            sim_debug(DEBUG_IRQ, &cpu_dev, "Intv Timer EI %02x Turn on\n", prior);
+                            sim_debug(DEBUG_IRQ, &cpu_dev,
+                                "Intv Timer EI %02x SPAD %08x Turn on\n", prior, t);
                             itm_setup(1, prior);        /* tell timer to start */
                         }
                         break;
@@ -6273,11 +6297,23 @@ TPSD[0], TPSD[1], PSD1, PSD2, TRAPME);
                             break;                      /* ignore */
                         /* SPAD entries for interrupts begin at 0x80 */
                         t = SPAD[prior+0x80];           /* get spad entry for interrupt */
+#if 1
+/*GEERT*/               if ((t == 0) || (t == 0xffffffff)) /* if unused, ignore instruction */
+/*GEERT*/                   break;                      /* ignore */
+#endif
                         if ((t & 0x0f800000) == 0x0f000000) /* if class F ignore instruction */
+//                      if ((t & 0x0f808000) == 0x0f000000) /* if class F ignore instruction */
                             break;                      /* ignore for F class */
+#if 0
+/*GEERT*/               if (t & 0x00008000)             /* bit 16 must be zero */
+/*GEERT*/                   break;                      /* ignore */
+/*GEERT*/               /* if not RTOM, ignore instruction */
+/*GEERT*/               if (!(((t & 0x0f808000) == 0x03000000) || ((t & 0x0f808000) == 0x00800000)))
+/*GEERT*/                   break;                      /* ignore */
+#endif
 
-                        sim_debug(DEBUG_IRQ, &cpu_dev, "DI:B4 %02x ACT %1x REQ %1x ENAB %1x\n",
-                            prior, INTS[prior]&INTS_ACT?1:0,
+                        sim_debug(DEBUG_IRQ, &cpu_dev, "DI:B4 %02x SPAD[%d] %08x ACT %1x REQ %1x ENAB %1x\n",
+                            prior, prior+0x80, t, INTS[prior]&INTS_ACT?1:0,
                             INTS[prior]&INTS_REQ?1:0, INTS[prior]&INTS_ENAB?1:0);
 
                         /* active state is left alone */
@@ -6287,15 +6323,27 @@ TPSD[0], TPSD[1], PSD1, PSD2, TRAPME);
 /*031820*/              irq_pend = 1;                   /* start scanning interrupts again */
 
                         /* test for clock at address 0x7f06 and interrupt level 0x18 */
-                        /* the diags want the type to be 0, others want 3, so ignore */
-//DIAGS                 if ((SPAD[prior+0x80] & 0x0f807fff) == 0x00807f06) {
+                        /* the diags want the type to be 0 */
+                        /* UTX wants the type to be 3?? */
+                        /* UTX would be 0x03807f06 Diags would be 0x00807f06 */
+///                     if ((SPAD[prior+0x80] & 0x0f80ffff) == 0x00807f06) {
                         if ((SPAD[prior+0x80] & 0x0000ffff) == 0x00007f06) {
-                            sim_debug(DEBUG_IRQ, &cpu_dev, "Clock DI %02x Turn off\n", prior);
+                            sim_debug(DEBUG_IRQ, &cpu_dev,
+                                "Clock DI %02x SPAD %08x Turn off\n", prior, t);
                             rtc_setup(0, prior);        /* tell clock to stop */
+#if 0
+#define DO_DYNAMIC_DEBUG
+#ifdef DO_DYNAMIC_DEBUG
+//      cpu_dev.dctrl |= (DEBUG_INST|DEBUG_DETAIL); /* start instruction trace */
+        cpu_dev.dctrl |= (DEBUG_INST); /* start instruction trace */
+#endif
+#endif
                         }
-//DIAGS                 if ((SPAD[prior+0x80] & 0x0f807fff) == 0x03007f04) {
+                        /* the diags want the type to be 3 */
+///                     if ((SPAD[prior+0x80] & 0x0f80ffff) == 0x03007f04) {
                         if ((SPAD[prior+0x80] & 0x0f00ffff) == 0x03007f04) {
-                            sim_debug(DEBUG_IRQ, &cpu_dev, "Intv Timer DI %02x Turn off\n", prior);
+                            sim_debug(DEBUG_IRQ, &cpu_dev,
+                                "Intv Timer DI %02x SPAD %08x Turn off\n", prior, t);
                             itm_setup(0, prior);        /* tell timer to stop */
                         }
                         break;
@@ -6305,11 +6353,23 @@ TPSD[0], TPSD[1], PSD1, PSD2, TRAPME);
                             break;                      /* ignore */
                         /* SPAD entries for interrupts begin at 0x80 */
                         t = SPAD[prior+0x80];           /* get spad entry for interrupt */
+#if 1
+/*GEERT*/               if ((t == 0) || (t == 0xffffffff)) /* if unused, ignore instruction */
+/*GEERT*/                   break;                      /* ignore */
+#endif
                         if ((t & 0x0f800000) == 0x0f000000) /* if class F ignore instruction */
+//                      if ((t & 0x0f808000) == 0x0f000000) /* if class F ignore instruction */
                             break;                      /* ignore for F class */
+#if 0
+/*GEERT*/               if (t & 0x00008000)             /* bit 16 must be zero */
+/*GEERT*/                   break;                      /* ignore */
+/*GEERT*/               /* if not RTOM, ignore instruction */
+/*GEERT*/               if (!(((t & 0x0f808000) == 0x03000000) || ((t & 0x0f808000) == 0x00800000)))
+/*GEERT*/                   break;                      /* ignore */
+#endif
 
-                        sim_debug(DEBUG_IRQ, &cpu_dev, "RI:B4 %02x ACT %1x REQ %1x ENAB %1x\n",
-                            prior, INTS[prior]&INTS_ACT?1:0,
+                        sim_debug(DEBUG_IRQ, &cpu_dev, "RI:B4 %02x SPAD[%d] %08x ACT %1x REQ %1x ENAB %1x\n",
+                            prior, prior+0x80, t, INTS[prior]&INTS_ACT?1:0,
                             INTS[prior]&INTS_REQ?1:0, INTS[prior]&INTS_ENAB?1:0);
 
                         INTS[prior] |= INTS_REQ;        /* set the request flag for this level */
@@ -6321,11 +6381,23 @@ TPSD[0], TPSD[1], PSD1, PSD2, TRAPME);
                             break;                      /* ignore */
                         /* SPAD entries for interrupts begin at 0x80 */
                         t = SPAD[prior+0x80];           /* get spad entry for interrupt */
+#if 1
+/*GEERT*/               if ((t == 0) || (t == 0xffffffff)) /* if unused, ignore instruction */
+/*GEERT*/                   break;                      /* ignore */
+#endif
                         if ((t & 0x0f800000) == 0x0f000000) /* if class F ignore instruction */
+//                      if ((t & 0x0f808000) == 0x0f000000) /* if class F ignore instruction */
                             break;                      /* ignore for F class */
+#if 0
+/*GEERT*/               if (t & 0x00008000)             /* bit 16 must be zero */
+/*GEERT*/                   break;                      /* ignore */
+/*GEERT*/               /* if not RTOM, ignore instruction */
+/*GEERT*/               if (!(((t & 0x0f808000) == 0x03000000) || ((t & 0x0f808000) == 0x00800000)))
+/*GEERT*/                   break;                      /* ignore */
+#endif
 
-                        sim_debug(DEBUG_IRQ, &cpu_dev, "AI:B4 %02x ACT %1x REQ %1x ENAB %1x\n",
-                            prior, INTS[prior]&INTS_ACT?1:0,
+                        sim_debug(DEBUG_IRQ, &cpu_dev, "AI:B4 %02x SPAD[%d] %08x ACT %1x REQ %1x ENAB %1x\n",
+                            prior, prior+0x80, t, INTS[prior]&INTS_ACT?1:0,
                             INTS[prior]&INTS_REQ?1:0, INTS[prior]&INTS_ENAB?1:0);
 
                         INTS[prior] |= INTS_ACT;        /* activate specified int level */
@@ -6338,11 +6410,23 @@ TPSD[0], TPSD[1], PSD1, PSD2, TRAPME);
                             break;                      /* ignore */
                         /* SPAD entries for interrupts begin at 0x80 */
                         t = SPAD[prior+0x80];           /* get spad entry for interrupt */
+#if 1
+/*GEERT*/               if ((t == 0) || (t == 0xffffffff)) /* if unused, ignore instruction */
+/*GEERT*/                   break;                      /* ignore */
+#endif
                         if ((t & 0x0f800000) == 0x0f000000) /* if class F ignore instruction */
+//                      if ((t & 0x0f808000) == 0x0f000000) /* if class F ignore instruction */
                             break;                      /* ignore for F class */
+#if 0
+/*GEERT*/               if (t & 0x00008000)             /* bit 16 must be zero */
+/*GEERT*/                   break;                      /* ignore */
+/*GEERT*/               /* if not RTOM, ignore instruction */
+/*GEERT*/               if (!(((t & 0x0f808000) == 0x03000000) || ((t & 0x0f808000) == 0x00800000)))
+/*GEERT*/                   break;                      /* ignore */
+#endif
 
-                        sim_debug(DEBUG_IRQ, &cpu_dev, "DAI:B4 %02x ACT %1x REQ %1x ENAB %1x\n",
-                            prior, INTS[prior]&INTS_ACT?1:0,
+                        sim_debug(DEBUG_IRQ, &cpu_dev, "DAI:B4 %02x SPAD[%d] %08x ACT %1x REQ %1x ENAB %1x\n",
+                            prior, prior+0x80, t, INTS[prior]&INTS_ACT?1:0,
                             INTS[prior]&INTS_REQ?1:0, INTS[prior]&INTS_ENAB?1:0);
 
                         INTS[prior] &= ~INTS_ACT;       /* deactivate specified int level */

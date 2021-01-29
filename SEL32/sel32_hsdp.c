@@ -3056,7 +3056,7 @@ int hsdp_label(UNIT *uptr, int use_strep) {
         }
 
         sim_debug(DEBUG_CMD, dptr,
-            "hsdp_label RTL star %02x %02x %02x %02x\n",
+            "hsdp_label WTL star %02x %02x %02x %02x\n",
             label[0], label[1], label[2], label[3]);
 
         /* daddr has dmap value for track zero label */
@@ -3598,15 +3598,6 @@ add_size:
             goto add_size;
         }
     }
-
-#ifdef NOT_USED
-    if ((buff[0] | buff[1] | buff[2] | buff[3]) == 0) {
-        sim_debug(DEBUG_CMD, dptr,
-            "Disk format buf0 %02x buf1 %02x buf2 %02x buf3 %02x\n",
-            buff[0], buff[1], buff[2], buff[3]);
-        goto fmt;
-    }
-#endif
 
     info = (buff[0]<<24) | (buff[1]<<16) | (buff[2]<<8) | buff[3];
     good = 0xf0000000 | (CAP(type)-1);
