@@ -65,11 +65,7 @@
 #define  FNC_READREV    037             /* read reverse */
 #define CS1_DVA         0004000         /* drive avail NI */
 #define GET_FNC(x)      (((x) >> CS1_V_FNC) & CS1_M_FNC)
-#define CS_TM           001000          /* Tape mark sensed */
 #define CS_MOTION       002000          /* Tape moving */
-#define CS_PIP          004000          /* Tape Position command */
-#define CS_ATA          010000          /* Tape signals attention */
-#define CS_CHANGE       020000          /* Status changed */
 
 #define STATUS          u5
 /* u5  low */
@@ -258,7 +254,7 @@ tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
        return 1;
 
     if (uptr->CMD & CS1_GO) {
-       uptr->STATUS |= (ER1_RMR);
+       uptr->STATUS |= (ER1_RMR << 16);
        return 0;
     }
 
@@ -294,10 +290,11 @@ tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
             case FNC_REWIND:                      /* rewind */
             case FNC_UNLOAD:                      /* unload */
             case FNC_WCHKREV:                     /* write w/ headers */
-                uptr->CMD  |= CS_PIP|CS1_GO;
+                uptr->CMD |= CS1_GO;
+                uptr->STATUS |= DS_PIP;
                 rhc->attn = 0;
-                for (i = 0; i < 8; i++) {
-                    if (dptr->units[i].CMD & CS_ATA)
+                for (i = 0; i < NUM_UNITS_TU; i++) {
+                    if (dptr->units[i].STATUS & DS_ATA)
                        rhc->attn = 1;
                 }
                 CLR_BUF(uptr);
@@ -306,18 +303,17 @@ tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
                 break;
 
             case FNC_DCLR:                        /* drive clear */
-                uptr->CMD &= ~(CS_ATA|CS1_GO|CS_TM);
+                uptr->CMD &= ~(CS1_GO);
                 uptr->STATUS = 0;
                 rhc->status &= ~PI_ENABLE;
                 rhc->attn = 0;
-                for (i = 0; i < 8; i++) {
-                    if (dptr->units[i].CMD & CS_ATA)
+                for (i = 0; i < NUM_UNITS_TU; i++) {
+                    if (dptr->units[i].STATUS & DS_ATA)
                        rhc->attn = 1;
                 }
                 break;
             default:
-                uptr->STATUS |= (ER1_ILF);
-                uptr->CMD |= CS_ATA;
+                uptr->STATUS |= (ER1_ILF << 16) | DS_ATA;
                 rhc->attn = 1;
             }
             sim_debug(DEBUG_DETAIL, dptr, "%s%o AStatus=%06o\n", dptr->name, unit,
@@ -327,16 +323,16 @@ tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
     case  001:  /* status */
         break;
     case  002:  /* error register 1 */
-        uptr->STATUS &= ~0177777;
-        uptr->STATUS |= data;
+        uptr->STATUS &= 0177777;
+        uptr->STATUS |= (uint32)data << 16;
         break;
     case  003:  /* maintenance */
         break;
     case  004:  /* atten summary */
         rhc->attn = 0;
         if (data & 1) {
-            for (i = 0; i < 8; i++)
-                dptr->units[i].CMD &= ~CS_ATA;
+            for (i = 0; i < NUM_UNITS_TU; i++)
+                dptr->units[i].STATUS &= ~DS_ATA;
         }
         break;
     case  005:  /* frame count */
@@ -349,8 +345,7 @@ tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
         tu_tcr[ctlr]  = data & 0177777 ;
         break;
     default:
-        uptr->STATUS |= ER1_ILR;
-        uptr->CMD |= CS_ATA;
+        uptr->STATUS |= (ER1_ILR << 16) | DS_ATA;
         rhc->attn = 1;
         rhc->rae = 1;
     }
@@ -376,20 +371,15 @@ tu_read(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 *data) {
            temp |= CS1_GO;
         break;
     case  001:  /* status */
-        temp = DS_DPR;
-        if (uptr->CMD & CS_ATA)
-           temp |= DS_ATA;
-        if (uptr->CMD & CS_CHANGE)
-           temp |= DS_SSC;
-        if ((uptr->STATUS & 0177777) != 0)
+        temp = uptr->STATUS & 01777777;
+        temp |= DS_DPR;
+        if (((uptr->STATUS >> 16) & 0177777) != 0)
            temp |= DS_ERR;
         if ((uptr->flags & UNIT_ATT) != 0) {
            temp |= DS_MOL;
-           if (uptr->CMD & CS_TM)
-              temp |= DS_TM;
            if (uptr->flags & MTUF_WLK)
               temp |= DS_WRL;
-           if ((uptr->CMD & (CS_MOTION|CS_PIP|CS1_GO)) == 0)
+           if ((uptr->CMD & (CS_MOTION|CS1_GO)) == 0 && (uptr->STATUS & DS_PIP) == 0)
               temp |= DS_DRY;
            if (sim_tape_bot(uptr))
               temp |= DS_BOT;
@@ -397,16 +387,14 @@ tu_read(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 *data) {
               temp |= DS_EOT;
            if ((uptr->CMD & CS_MOTION) == 0)
               temp |= DS_SDWN;
-           if (uptr->CMD & CS_PIP)
-              temp |= DS_PIP;
         }
         break;
     case  002:  /* error register 1 */
-        temp = uptr->STATUS & 0177777;
+        temp = (uptr->STATUS >> 16) & 0177777;
         break;
     case  004:  /* atten summary */
-        for (i = 0; i < 8; i++) {
-            if (dptr->units[i].CMD & CS_ATA)
+        for (i = 0; i < NUM_UNITS_TU; i++) {
+            if (dptr->units[i].STATUS & DS_ATA)
                 temp |= 1;
         }
         break;
@@ -415,7 +403,7 @@ tu_read(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 *data) {
         break;
     case  006:  /* drive type */
         if ((uptr->flags & UNIT_DIS) == 0)
-            temp = 042054;
+            temp = 0142054;
         break;
     case  011: /* tape control register */
         temp = tu_tcr[ctlr];
@@ -427,8 +415,7 @@ tu_read(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 *data) {
     case  007:  /* look ahead */
         break;
     default:
-        uptr->STATUS |= (ER1_ILR);
-        uptr->CMD |= CS_ATA;
+        uptr->STATUS |= (ER1_ILR << 16) | DS_ATA;
         rhc->attn = 1;
         rhc->rae = 1;
     }
@@ -449,12 +436,11 @@ void tu_error(UNIT * uptr, t_stat r)
          break;
 
     case MTSE_TMK:           /* tape mark */
-         uptr->CMD |= CS_TM;
+         uptr->STATUS |= DS_TM;
          break;
 
     case MTSE_WRP:           /* write protected */
-         uptr->STATUS |= (ER1_NEF);
-         uptr->CMD |= CS_ATA;
+         uptr->STATUS |= (ER1_NEF << 16) | DS_ATA;
          break;
 
     case MTSE_UNATT:         /* unattached */
@@ -464,26 +450,24 @@ void tu_error(UNIT * uptr, t_stat r)
 
     case MTSE_IOERR:         /* IO error */
     case MTSE_FMT:           /* invalid format */
-         uptr->STATUS |= (ER1_PEF);
-         uptr->CMD |= CS_ATA;
+         uptr->STATUS |= (ER1_PEF << 16) | DS_ATA;
          break;
 
     case MTSE_RECE:          /* error in record */
-         uptr->STATUS |= (ER1_DPAR);
-         uptr->CMD |= CS_ATA;
+         uptr->STATUS |= (ER1_DPAR << 16) | DS_ATA;
          break;
 
     case MTSE_INVRL:         /* invalid rec lnt */
-         uptr->STATUS |= (ER1_FCE);
-         uptr->CMD |= CS_ATA;
+         uptr->STATUS |= (ER1_FCE << 16) | DS_ATA;
          break;
 
     }
-    if (uptr->CMD & CS_ATA)
+    if (uptr->STATUS & DS_ATA)
         rh_setattn(rhc, 0);
-    if (GET_FNC(uptr->CMD) >= FNC_XFER && uptr->CMD & (CS_ATA | CS_TM))
+    if (GET_FNC(uptr->CMD) >= FNC_XFER && uptr->STATUS & (DS_ATA | DS_TM))
         rh_error(rhc);
-    uptr->CMD &= ~(CS_MOTION|CS_PIP|CS1_GO);
+    uptr->CMD &= ~(CS_MOTION|CS1_GO);
+    uptr->STATUS &= ~(DS_PIP);
     sim_debug(DEBUG_EXP, dptr, "Setting status %d\n", r);
 }
 
@@ -525,8 +509,9 @@ t_stat tu_srv(UNIT * uptr)
              uptr->CMD |= CS_MOTION;
              uptr->CMD &= ~(CS1_GO);
          } else {
-             uptr->CMD &= ~(CS_MOTION|CS_PIP);
-             uptr->CMD |= CS_CHANGE|CS_ATA;
+             uptr->CMD &= ~(CS_MOTION);
+             uptr->STATUS &= ~(DS_PIP);
+             uptr->STATUS |= DS_SSC|DS_ATA;
              rh_setattn(rhc, 0);
              (void)sim_tape_rewind(uptr);
          }
@@ -534,19 +519,19 @@ t_stat tu_srv(UNIT * uptr)
 
     case FNC_UNLOAD:
          sim_debug(DEBUG_DETAIL, dptr, "%s%o unload\n", dptr->name, unit);
-         uptr->CMD |= CS_CHANGE|CS_ATA;
+         uptr->STATUS |= DS_SSC|DS_ATA;
          tu_error(uptr, sim_tape_detach(uptr));
          return SCPE_OK;
 
     case FNC_WCHKREV:
     case FNC_READREV:
          if (BUF_EMPTY(uptr)) {
-             uptr->CMD &= ~CS_PIP;
+             uptr->STATUS &= ~DS_PIP;
              if ((r = sim_tape_rdrecr(uptr, &tu_buf[ctlr][0], &reclen,
                                  TU_NUMFR)) != MTSE_OK) {
                  sim_debug(DEBUG_DETAIL, dptr, "%s%o read error %d\n", dptr->name, unit, r);
                  if (r == MTSE_BOT)
-                     uptr->STATUS |= ER1_NEF;
+                     uptr->STATUS |= (ER1_NEF << 16);
                  tu_error(uptr, r);
                  rh_finish_op(rhc, 0);
              } else {
@@ -594,13 +579,13 @@ t_stat tu_srv(UNIT * uptr)
     case FNC_WCHK:
     case FNC_READ:
          if (BUF_EMPTY(uptr)) {
-             uptr->CMD &= ~CS_PIP;
+             uptr->STATUS &= ~DS_PIP;
              uptr->CMD |= CS_MOTION;
              if ((r = sim_tape_rdrecf(uptr, &tu_buf[ctlr][0], &reclen,
                                  TU_NUMFR)) != MTSE_OK) {
                  sim_debug(DEBUG_DETAIL, dptr, "%s%o read error %d\n", dptr->name, unit, r);
                  if (r == MTSE_TMK)
-                     uptr->STATUS |= ER1_FCE;
+                     uptr->STATUS |= (ER1_FCE << 16);
                  tu_error(uptr, r);
                  rh_finish_op(rhc, 0);
              } else {
@@ -643,7 +628,7 @@ t_stat tu_srv(UNIT * uptr)
                  rh_write(rhc);
              }
              if (tu_frame[ctlr] != 0)
-                 uptr->STATUS |= ER1_FCE;
+                 uptr->STATUS |= ER1_FCE << 16;
              tu_error(uptr, MTSE_OK);
              (void)rh_blkend(rhc);
              rh_finish_op(rhc, 0);
@@ -653,10 +638,9 @@ t_stat tu_srv(UNIT * uptr)
 
     case FNC_WRITE:
          if (BUF_EMPTY(uptr)) {
-             uptr->CMD &= ~CS_PIP;
+             uptr->STATUS &= ~DS_PIP;
              if (tu_frame[ctlr] == 0) {
-                  uptr->STATUS |= ER1_NEF;
-                  uptr->CMD |= CS_ATA;
+                  uptr->STATUS |= (ER1_NEF << 16) | DS_ATA;
                   rhc->attn = 1;
                   tu_error(uptr, MTSE_OK);
                   rh_finish_op(rhc, 0);
@@ -716,8 +700,8 @@ t_stat tu_srv(UNIT * uptr)
          break;
 
     case FNC_WTM:
-         uptr->CMD &= ~CS_PIP;
-         uptr->CMD |= CS_ATA;
+         uptr->STATUS &= ~DS_PIP;
+         uptr->STATUS |= DS_ATA;
          if ((uptr->flags & MTUF_WLK) != 0) {
              tu_error(uptr, MTSE_WRP);
          } else {
@@ -727,8 +711,8 @@ t_stat tu_srv(UNIT * uptr)
          return SCPE_OK;
 
     case FNC_ERASE:
-         uptr->CMD &= ~CS_PIP;
-         uptr->CMD |= CS_ATA;
+         uptr->STATUS &= ~DS_PIP;
+         uptr->STATUS |= DS_ATA;
          if ((uptr->flags & MTUF_WLK) != 0) {
              tu_error(uptr, MTSE_WRP);
          } else {
@@ -740,10 +724,9 @@ t_stat tu_srv(UNIT * uptr)
     case FNC_SPACEF:
     case FNC_SPACEB:
          sim_debug(DEBUG_DETAIL, dptr, "%s%o space %o\n", dptr->name, unit, GET_FNC(uptr->CMD));
-         uptr->CMD &= ~CS_PIP;
+         uptr->STATUS &= ~DS_PIP;
          if (tu_frame[ctlr] == 0) {
-              uptr->STATUS |= ER1_NEF;
-              uptr->CMD |= CS_ATA;
+              uptr->STATUS |= (ER1_NEF << 16) | DS_ATA;
               tu_error(uptr, MTSE_OK);
               return SCPE_OK;
          }
@@ -759,22 +742,22 @@ t_stat tu_srv(UNIT * uptr)
               break;
 
          case MTSE_BOT:           /* beginning of tape */
-              uptr->STATUS |= ER1_NEF;
+              uptr->STATUS |= ER1_NEF << 16;
               /* Fall Through */
 
          case MTSE_TMK:           /* tape mark */
          case MTSE_EOM:           /* end of medium */
               if (tu_frame[ctlr] != 0)
-                 uptr->STATUS |= ER1_FCE;
+                 uptr->STATUS |= ER1_FCE << 16;
               else
                  tu_tcr[ctlr] &= ~(TC_FCS);
-              uptr->CMD |= CS_ATA;
+              uptr->STATUS |= DS_ATA;
               /* Stop motion if we recieve any of these */
               tu_error(uptr, r);
               return SCPE_OK;
          }
          if (tu_frame[ctlr] == 0) {
-            uptr->CMD |= CS_ATA;
+            uptr->STATUS |= DS_ATA;
             tu_error(uptr, MTSE_OK);
             return SCPE_OK;
          } else {
@@ -877,7 +860,7 @@ tu_attach(UNIT * uptr, CONST char *file)
     uptr->STATUS = 0;
     r = sim_tape_attach_ex(uptr, file, 0, 0);
     if (r == SCPE_OK && (sim_switches & SIM_SW_REST) == 0) {
-        uptr->CMD = CS_ATA|CS_CHANGE;
+        uptr->STATUS = DS_ATA|DS_SSC;
         rh_setattn(rhc, 0);
     }
     return r;
@@ -890,8 +873,7 @@ tu_detach(UNIT * uptr)
     struct rh_if *rhc = &tu_rh[ctlr];
 
     /* Find df10 */
-    uptr->STATUS = 0;
-    uptr->CMD = CS_ATA|CS_CHANGE;
+    uptr->STATUS = DS_ATA|DS_SSC;
     rh_setattn(rhc, 0);
     return sim_tape_detach(uptr);
 }

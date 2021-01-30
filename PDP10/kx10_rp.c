@@ -905,7 +905,7 @@ t_stat rp_svc (UNIT *uptr)
             }
             if (rh_blkend(rhc))
                 goto rd_end;
-            sim_activate(uptr, 10);
+            sim_activate(uptr, 100);
             return SCPE_OK;
         }
 rd_end:
