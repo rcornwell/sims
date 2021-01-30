@@ -970,7 +970,7 @@ static const char *opcode[] = {
  "RDSPB", "RDCSB", "RDPUR", "RDCSTM",
  "RDTIME", "RDINT", "RDHSB", "SPM",
  "WRSPB", "WRCSB", "WRPUR", "WRCSTM",
- "WRINT", "WRTIME", "WRHSB", "LPMR",
+ "WRTIME", "WRINT", "WRHSB", "LPMR",
  "UMOVE", "UMOVEM",
  "TIOE", "TION", "RDIO", "WRIO",
  "BSIO", "BCIO", 
