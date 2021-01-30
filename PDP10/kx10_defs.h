@@ -314,16 +314,12 @@ extern DEBTAB crd_debug[];
 
 #if KI_22BIT|KI
 #define MAXMEMSIZE      4096 * 1024
-#else
-#if PDP6
+#elif PDP6
 #define MAXMEMSIZE      256 * 1024
-#else
-#if KS
-#define MAXMEMSIZE      512 * 1024
+#elif KS
+#define MAXMEMSIZE      1024 * 1024
 #else
 #define MAXMEMSIZE      1024 * 1024
-#endif
-#endif
 #endif
 #define MEMSIZE         (cpu_unit[0].capac)
 
@@ -527,6 +523,7 @@ struct pdp_dib {
     uint16              uba_ctl;                        /* Unibus controller number */
     t_stat              (*rd_io)(t_addr addr, uint16 *data, int32 access);
     t_stat              (*wr_io)(t_addr addr, uint16 data, int32 access);
+    uint8               (*irqv)(struct pdp_dib *dibp);
     uint8               uba_irq_pend;                   /* Device has pending */
 };
 typedef struct pdp_dib DIB;

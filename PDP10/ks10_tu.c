@@ -30,7 +30,7 @@
 
 #if (NUM_DEVS_TU > 0)
 
-#define NUM_UNITS_TU    8
+#define NUM_UNITS_TU    4
 #define TU_NUMFR        (64*1024)
 
 #define BUF_EMPTY(u)  (u->hwmark == 0xFFFFFFFF)
@@ -215,10 +215,6 @@ UNIT                tua_unit[] = {
     { UDATA (&tu_srv, TU_UNIT+CNTRL_RH(0), 0) },
     { UDATA (&tu_srv, TU_UNIT+CNTRL_RH(0), 0) },
     { UDATA (&tu_srv, TU_UNIT+CNTRL_RH(0), 0) },
-    { UDATA (&tu_srv, TU_UNIT+CNTRL_RH(0), 0) },
-    { UDATA (&tu_srv, TU_UNIT+CNTRL_RH(0), 0) },
-    { UDATA (&tu_srv, TU_UNIT+CNTRL_RH(0), 0) },
-    { UDATA (&tu_srv, TU_UNIT+CNTRL_RH(0), 0) },
 };
 
 DIB tua_dib = {0772440, 037, 0224, 6, 3, &tu_read, &tu_write, 0};
@@ -279,11 +275,11 @@ tu_write(t_addr addr, uint16 data, int32 access) {
 
     switch(addr & 036) {
     case  000:  /*  TUCS - control */
-        sim_debug(DEBUG_DETAIL, &tua_dev, "TU %d Status=%06o\n", unit, uptr->STATUS);
+        sim_debug(DEBUG_DETAIL, &tua_dev, "TU %d Status=%06o %08o\n", unit, uptr->STATUS, 
+                 uptr->CMD);
         if (access == BYTE && addr & 1)
            return 0;
 
-        sim_debug(DEBUG_DETAIL, &tua_dev, "TU %d Status=%06o\n", unit, uptr->CMD);
         tu_ba = ((data << 7) & 0600000) | (tu_ba & 0177777);
         tu_ie = data & CS1_IE;
         uptr->CMD = data & 076;
@@ -316,9 +312,9 @@ tu_write(t_addr addr, uint16 data, int32 access) {
             case FNC_UNLOAD:                      /* unload */
             case FNC_WCHKREV:                     /* write w/ headers */
                 uptr->CMD  |= CS1_GO;
-                uptr->STATUS |= DS_PIP;
+                uptr->STATUS = DS_PIP;
                 tu_attn = 0;
-                for (i = 0; i < 8; i++) {
+                for (i = 0; i < NUM_UNITS_TU; i++) {
                     if (tua_unit[i].STATUS & DS_ATA)
                        tu_attn = 1;
                 }
@@ -332,7 +328,7 @@ tu_write(t_addr addr, uint16 data, int32 access) {
                 uptr->STATUS = 0;
                 tu_ie = 0;
                 tu_attn = 0;
-                for (i = 0; i < 8; i++) {
+                for (i = 0; i < NUM_UNITS_TU; i++) {
                     if (tua_unit[i].STATUS & DS_ATA)
                        tu_attn = 1;
                 }
@@ -342,6 +338,8 @@ tu_write(t_addr addr, uint16 data, int32 access) {
                 tu_attn = 1;
             }
             sim_debug(DEBUG_DETAIL, &tua_dev, "TU %o AStatus=%06o\n", unit, uptr->CMD);
+            if (tu_attn && tu_ie)
+                uba_set_irq(&tua_dib);
         }
         break;
      case 002: /* TUWC  - 172442 - word count */
@@ -379,7 +377,6 @@ tu_write(t_addr addr, uint16 data, int32 access) {
         tu_cs2 = data & (CS2_PAT|CS2_UAI|CS2_UNIT);
         break;
 
-
     case  012:  /* 772452 status */
         break;
 
@@ -390,7 +387,7 @@ tu_write(t_addr addr, uint16 data, int32 access) {
     case  016:  /* 772456 atten summary */
         tu_attn = 0;
         if (data & 1) {
-            for (i = 0; i < 8; i++)
+            for (i = 0; i < NUM_UNITS_TU; i++)
                 tua_unit[i].STATUS &= ~DS_ATA;
         }
         break;
@@ -410,16 +407,16 @@ tu_write(t_addr addr, uint16 data, int32 access) {
         tu_tcr = data;
         break;
     }
-    sim_debug(DEBUG_DETAIL, &tua_dev, "TU %o write %02o %06o\n", tu_tcr & 7,
-             addr & 036, data);
+    sim_debug(DEBUG_DETAIL, &tua_dev, "TU %o write %02o %06o %06o %06o\n", unit,
+             addr & 036, data, PC, tu_tcr);
     return 0;
 }
 
 int
 tu_read(t_addr addr, uint16 *data, int32 access)
 {
-    UNIT       *uptr = &tua_unit[tu_tcr & 07];
     int         tu_drive = tu_tcr & 07;
+    UNIT       *uptr = &tua_unit[tu_drive];
     uint16      temp = 0;
     int         i;
 
@@ -427,7 +424,8 @@ tu_read(t_addr addr, uint16 *data, int32 access)
     switch(addr & 036) {
     case  000:  /*  772440 control */
         temp = uptr->CMD & 076;
-        temp |= CS1_DVA;
+        if ((tu_cs2 & 07) == 0)
+            temp |= CS1_DVA;
         temp |= (uint16)tu_ie;
         temp |= (tu_ba & 0600000) << 7;
         if (uptr->CMD & CS1_GO)
@@ -455,25 +453,29 @@ tu_read(t_addr addr, uint16 *data, int32 access)
         break;
     case  012:  /* 772452 - status */
         temp = uptr->STATUS & 0177777;
+        temp |= DS_PES;
+        temp |= ((tu_cs2 & 07) == 0) ? DS_DPR : 0;
         if (((uptr->STATUS >> 16) & 0177777) != 0)
            temp |= DS_ERR;
-        if ((uptr->flags & UNIT_ATT) != 0) {
+        if ((tu_cs2 & 07) == 0) {
            temp |= DS_MOL;
-           if (uptr->flags & MTUF_WLK)
-              temp |= DS_WRL;
-           if ((uptr->CMD & CS1_GO) == 0 && (uptr->STATUS & DS_PIP) == 0)
-              temp |= DS_DRY;
-           if (sim_tape_bot(uptr))
-              temp |= DS_BOT;
-           if (sim_tape_eot(uptr))
-              temp |= DS_EOT;
+           if ((uptr->flags & UNIT_ATT) != 0) {
+              if (uptr->flags & MTUF_WLK)
+                 temp |= DS_WRL;
+              if ((uptr->CMD & CS1_GO) == 0 && (uptr->STATUS & DS_PIP) == 0)
+                 temp |= DS_DRY;
+              if (sim_tape_bot(uptr))
+                 temp |= DS_BOT;
+              if (sim_tape_eot(uptr))
+                 temp |= DS_EOT;
+           }
         }
         break;
     case  014:  /* 772454 - error register 1 */
         temp = (uptr->STATUS >> 16) & 0177777;
         break;
     case  016:  /* 772456 - atten summary */
-        for (i = 0; i < 8; i++) {
+        for (i = 0; i < NUM_UNITS_TU; i++) {
             if (tua_unit[i].STATUS & DS_ATA)
                 temp |= 1;
         }
@@ -489,13 +491,15 @@ tu_read(t_addr addr, uint16 *data, int32 access)
         break;
     case  026:  /* 772466 -  drive type */
         if ((uptr->flags & UNIT_DIS) == 0)
-            temp = 042054;
+            temp = 0142054;
         break;
     case  030:  /* 772470 -  serial no */
-        temp = 020 + (tu_drive + 1);
+        if ((tu_cs2 & 07) == 0)
+            temp = 020 + (tu_drive + 1);
         break;
     case  032: /*  772472 - tape control register */
-        temp = tu_tcr;
+        if ((tu_cs2 & 07) == 0)
+            temp = tu_tcr;
         break;
     default:
         uptr->STATUS |= (ER1_ILR << 16);
@@ -503,8 +507,10 @@ tu_read(t_addr addr, uint16 *data, int32 access)
         tu_attn = 1;
     }
     *data = temp;
-    sim_debug(DEBUG_DETAIL, &tua_dev, "TU %o read %02o %06o\n", tu_tcr & 7,
-             addr & 036, *data);
+    sim_debug(DEBUG_DETAIL, &tua_dev, "TU %o read %02o %06o %06o %o\n", tu_tcr & 7,
+             addr & 036, *data, PC, tu_cs2);
+    if (tu_attn && tu_ie)
+        uba_set_irq(&tua_dib);
     return 0;
 }
 
@@ -697,9 +703,8 @@ t_stat tu_srv(UNIT * uptr)
                      tu_error(uptr, MTSE_OK);
                      return SCPE_OK;
                  }
-                 sim_debug(DEBUG_DATA, dptr, "%s%o read %012llo %d\n",
-                           dptr->name, unit, tu_cbuf, uptr->DATAPTR);
-                 tu_cbuf = 0;
+                 sim_debug(DEBUG_DATA, dptr, "%s%o read %012llo %d %06o\n",
+                           dptr->name, unit, tu_cbuf, uptr->DATAPTR, tu_tcr);
                  tu_cbuf = 0;
                  if ((tu_cs2 & CS2_UAI) == 0)
                      tu_ba += 4;
@@ -709,8 +714,8 @@ t_stat tu_srv(UNIT * uptr)
              }
          } else {
              if (uptr->CPOS != 0) {
-                 sim_debug(DEBUG_DATA, dptr, "%s%o readf %012llo\n",
-                              dptr->name, unit, tu_cbuf);
+                 sim_debug(DEBUG_DATA, dptr, "%s%o readf %012llo %d\n",
+                              dptr->name, unit, tu_cbuf, uptr->DATAPTR);
                  uba_write_npr(tu_ba, tua_dib.uba_ctl, tu_cbuf);
              }
 rd_end:
@@ -724,8 +729,7 @@ rd_end:
     case FNC_WRITE:
          if (BUF_EMPTY(uptr)) {
              if (tu_frame == 0) {
-                 uptr->STATUS |= ER1_NEF << 16;
-                 uptr->CMD |= DS_ATA;
+                 uptr->STATUS |= (ER1_NEF << 16) | DS_ATA;
                  tu_error(uptr, MTSE_OK);
                  return SCPE_OK;
              }
@@ -788,7 +792,7 @@ wr_end:
          break;
 
     case FNC_WTM:
-         uptr->CMD |= DS_ATA;
+         uptr->STATUS |= DS_ATA;
          if ((uptr->flags & MTUF_WLK) != 0) {
              tu_error(uptr, MTSE_WRP);
          } else {
@@ -860,7 +864,7 @@ tu_reset(DEVICE * dptr)
     tu_ba = tu_frame = tu_tcr = 0;
     tu_wc = 0177777;
     tu_cs2 = 0;
-    for (i = 0; i < 8; i++) {
+    for (i = 0; i < NUM_UNITS_TU; i++) {
         tua_unit[i].STATUS = 0;
     }
     return SCPE_OK;
@@ -917,7 +921,7 @@ tu_boot(int32 unit_num, DEVICE * dptr)
         addr ++;
     }
     M[036] = tua_dib.uba_addr | (tua_dib.uba_ctl << 18);
-    M[037] =  unit_num;
+    M[037] = 0;
     M[040] = tu_tcr;
     PC = 01000;
     return SCPE_OK;
