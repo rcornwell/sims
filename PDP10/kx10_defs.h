@@ -204,6 +204,9 @@ extern DEBTAB crd_debug[];
 #define FPMMASK  00000000000077777777777LL
 #define FPRBIT2  00000000000100000000000LL
 #define FPRBIT1  00000000000200000000000LL
+#if KS
+#define IOCTL    00000017000000LL
+#endif
 
 /* IRQ Flags in APR */
 #if KL
@@ -507,6 +510,7 @@ extern DEVICE   dpk_dev;
 extern DEVICE   wcnsls_dev;             /* MIT Spacewar Consoles */
 extern DEVICE   ocnsls_dev;             /* Old MIT Spacewar Consoles */
 extern DEVICE   ai_dev;
+extern DEVICE   dn_dev;
 extern DEVICE   dct_dev;                /* PDP6 devices. */
 extern DEVICE   dtc_dev;
 extern DEVICE   mtc_dev;
@@ -530,6 +534,8 @@ typedef struct pdp_dib DIB;
 
 void    cty_wakeup();
 void    cty_interrupt();
+t_stat  cty_reset (DEVICE *dptr);
+
 
 #define WORD     0
 #define BYTE     1
@@ -686,6 +692,7 @@ extern void ka10_lights_clear_aux (int);
 #define NUM_DEVS_TTY    1
 #define NUM_LINES_TTY   64
 #define NUM_DEVS_NIA    1
+#define NUM_DEVS_DN     0
 #elif KS
 #define NUM_DEVS_LP20   0
 #define NUM_DEVS_DZ     0
