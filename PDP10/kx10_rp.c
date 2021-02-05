@@ -977,7 +977,7 @@ wr_done:
            goto wr_end;
 
         if (sts) {
-            sim_activate(uptr, 10);
+            sim_activate(uptr, 100);
         } else {
 wr_end:
             sim_debug(DEBUG_DETAIL, dptr, "RP%o write done\n", unit);
