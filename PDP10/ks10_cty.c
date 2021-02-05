@@ -96,7 +96,7 @@ MTAB cty_mod[] = {
     };
 
 UNIT cty_unit[] = {
-    { UDATA (&ctyo_svc, TT_MODE_7B, 0), 100},
+    { UDATA (&ctyo_svc, TT_MODE_7B, 0), 500},
     { UDATA (&ctyi_svc, TT_MODE_7B|UNIT_DIS, 0), 1000 },
     { UDATA (&ctyrtc_srv, UNIT_IDLE|UNIT_DIS, 0), 1000 }
     };
@@ -143,7 +143,7 @@ t_stat ctyi_svc (UNIT *uptr)
             sim_debug(DEBUG_DETAIL, &cty_dev, "CTY char %o '%c'\n", ch,
                             ((ch > 040 && ch < 0177)? ch: '.'));
         } else
-            break;
+           break;
     }
 
     if (not_empty(&cty_in)) {
@@ -223,6 +223,9 @@ t_stat cty_reset (DEVICE *dptr)
     cty_out.in_ptr = cty_out.out_ptr = 0; 
     sim_activate(&cty_unit[1], cty_unit[1].wait);
     sim_activate(&cty_unit[2], cty_unit[2].wait);
+    M[STATUS] = 0;
+    M[CTY_IN] = 0;
+    M[CTY_OUT] = 0;
     return SCPE_OK;
 }
 

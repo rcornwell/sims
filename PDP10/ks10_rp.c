@@ -345,26 +345,24 @@ rp_write(t_addr addr, uint16 data, int32 access) {
     UNIT       *uptr = &rpa_unit[rp_unit];
     int         dtype = GET_DTYPE(uptr->flags);
    
-    if (access == BYTE && addr & 1)
-        data <<= 8;
-
     switch(addr & 076) {
 /* u3  low */
     case  000: /* RPC   - 176700 - control */
         if (access == BYTE && addr & 1)
-           return 0;
+           break;
 
         sim_debug(DEBUG_DETAIL, &rpa_dev, "RP%o Status=%06o\n", rp_unit, uptr->CMD);
         /* If drive not ready don't do anything */
         if ((rp_ie & CS1_GO) != 0|| (uptr->STATUS & DS_PIP) != 0) { 
            uptr->CMD |= (ER1_RMR << 16);
+           rp_cs2 |= CS2_PGE;
            sim_debug(DEBUG_DETAIL, &rpa_dev, "RP%o not ready\n", rp_unit);
            return 0;
         }
-        rp_ba = ((data << 7) & 0600000) | (rp_ba & 0177777);
-        rp_ie = data & (CS1_IE|CS1_GO);
-        /* Check if GO bit set */
+        rp_ba = ((data << 8) & 0600000) | (rp_ba & 0177777);
+        rp_ie = data & (CS1_IE);
         uptr->CMD = data & 076;
+        /* Check if GO bit set */
         if ((data & 1) == 0) {
            sim_debug(DEBUG_DETAIL, &rpa_dev, "RP%o no go %06o\n", rp_unit, data);
            return 0;                           /* No, nop */
@@ -415,8 +413,6 @@ rp_write(t_addr addr, uint16 data, int32 access) {
             rp_ie &= ~(CS1_GO);
             uptr->DA &= 003400177777;
             uptr->CCYL &= 0177777;
-//            uptr->ERR2 = 0;
-//            uptr->ERR3 = 0;
             rp_ie = 0;
             break;
 
@@ -434,7 +430,7 @@ rp_write(t_addr addr, uint16 data, int32 access) {
             uptr->CMD |= (ER1_ILF << 16);
         }
         if (GET_FNC(data) >= FNC_XFER)
-            uptr->STATUS = rp_cs2 = 0;
+            uptr->STATUS = 0;
         if (rp_ie & CS1_GO)
             sim_activate(uptr, 1000);
         sim_debug(DEBUG_DETAIL, &rpa_dev, "RP%o AStatus=%06o\n", rp_unit, uptr->CMD);
@@ -462,7 +458,7 @@ rp_write(t_addr addr, uint16 data, int32 access) {
             if (addr & 1)
                 data = data | ((uptr->DA >> 16) & 0377);
             else
-                data = ((uptr->DA >> 16) & 0177600) | data;
+                data = ((uptr->DA >> 16) & 0177600) | data; 
         }
         uptr->DA &= 0177777;
         uptr->DA |= data << 16;
@@ -471,10 +467,10 @@ rp_write(t_addr addr, uint16 data, int32 access) {
     case  010: /* RPCS2 - 176710 - Control and Status register 2 */
         if (access == BYTE) {
             if (addr & 1)
-               data = data | rp_cs2;
+               data = data | (rp_cs2 & 0377);
         }
         rp_cs2 = (CS2_UAI|CS2_PAT|07) & data;
-        if (data & 040) {
+        if (data & CS2_CLR) {
             rp_reset(&rpa_dev);
         }
         rp_cs2 |= CS2_IR;
@@ -492,13 +488,11 @@ rp_write(t_addr addr, uint16 data, int32 access) {
         }
         uptr->CMD &= 0177777;
         uptr->CMD |= data << 16;
-//        uptr->CMD &= ~DS_ERR;
-//        if ((((uptr->CMD >> 16) & 0177777) | uptr->ERR2 | uptr->ERR3)  != 0)
- //       if ((((uptr->CMD >> 16) & 0177777))  != 0)
-  //         uptr->CMD |= DS_ERR;
         break;
 
     case  016:  /* RPAS  - 176716 - attention summary */
+        if (access == BYTE && addr & 1)
+            break;
         for (i = 0; i < 8; i++) {
             if (data & (1<<i)) {
                 UNIT   *u = &rpa_unit[i];
@@ -532,19 +526,7 @@ rp_write(t_addr addr, uint16 data, int32 access) {
         uptr->DA |= data;
         break;
     case  040: /* RPER2 - 176740 - error status 2 - drive unsafe conditions */
-//        uptr->ERR2 = data;
-  //      uptr->CMD &= ~DS_ERR;
-//        if ((((uptr->CMD >> 16) & 0177777) | uptr->ERR2 | uptr->ERR3)  != 0)
-//        if ((((uptr->CMD >> 16) & 0177777))  != 0)
- //          uptr->CMD |= DS_ERR;
-        break;
     case  042:  /* RPER3 - 176742 - error status 3 - more unsafe conditions */
-//        uptr->ERR3 = data;
-   //     uptr->CMD &= ~DS_ERR;
-//        if ((((uptr->CMD >> 16) & 0177777) | uptr->ERR2 | uptr->ERR3)  != 0)
-     //   if ((((uptr->CMD >> 16) & 0177777))  != 0)
-    //       uptr->CMD |= DS_ERR;
-        break;
     case  030:  /* RPSN  - 176730 - serial number */
     case  036:  /* RPCC  - 176736 - current cylinder */
     case  044:  /* RPEC1 - 176744 - ECC status 1 - unimplemented */
@@ -566,9 +548,9 @@ rp_read(t_addr addr, uint16 *data, int32 access) {
 /* RPDB  - 176722 - data buffer */
     switch(addr & 076) {
     case  000:  /* RPC   - 176700 - control */
-        temp = uptr->CMD & 077;
+        temp = uptr->CMD & 076;
         temp |= (uint16)rp_ie;
-        temp |= (rp_ba & 0600000) >> 7;
+        temp |= (rp_ba & 0600000) >> 8;
         if (uptr->flags & UNIT_ATT) {
            temp |= CS1_DVA;
            if (rp_ie & CS1_GO)
@@ -847,7 +829,7 @@ t_stat rp_svc (UNIT *uptr)
                      uptr->STATUS |= DS_PIP;
                 }
             }
-            sim_activate(uptr, 10);
+            sim_activate(uptr, 250);
             return SCPE_OK;
         }
 rd_end:
@@ -933,7 +915,7 @@ wr_done:
         }
 
         if (sts) {
-            sim_activate(uptr, 10);
+            sim_activate(uptr, 250);
         } else {
             sim_debug(DEBUG_DETAIL, dptr, "RP%o write done\n", unit);
             uptr->STATUS &= ~DS_PIP;
@@ -1046,7 +1028,7 @@ rp_boot(int32 unit_num, DEVICE * rptr)
     PC = 01000;
     M[036] = rpa_dib.uba_addr | (rpa_dib.uba_ctl << 18);
     M[037] =  unit_num;
-    return SCPE_OK;
+    return cty_reset(&cty_dev);
 }
 
 /* Device attach */

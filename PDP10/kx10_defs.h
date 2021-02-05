@@ -516,6 +516,7 @@ extern DEVICE   dtc_dev;
 extern DEVICE   mtc_dev;
 extern DEVICE   dsk_dev;
 extern DEVICE   dcs_dev;
+extern DEVICE   dz_dev;
 
 #if KS
 /* Device context block */

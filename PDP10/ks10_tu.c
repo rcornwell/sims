@@ -265,9 +265,6 @@ tu_write(t_addr addr, uint16 data, int32 access) {
     int         unit = tu_tcr & 07;
     UNIT       *uptr = &tua_unit[unit];
 
-    if (access == BYTE && addr & 1)
-        data <<= 8;
-
     if (uptr->CMD & CS1_GO) {
        uptr->STATUS |= (ER1_RMR << 16);
        return 0;
@@ -280,7 +277,7 @@ tu_write(t_addr addr, uint16 data, int32 access) {
         if (access == BYTE && addr & 1)
            return 0;
 
-        tu_ba = ((data << 7) & 0600000) | (tu_ba & 0177777);
+        tu_ba = ((data << 8) & 0600000) | (tu_ba & 0177777);
         tu_ie = data & CS1_IE;
         uptr->CMD = data & 076;
 
@@ -427,7 +424,7 @@ tu_read(t_addr addr, uint16 *data, int32 access)
         if ((tu_cs2 & 07) == 0)
             temp |= CS1_DVA;
         temp |= (uint16)tu_ie;
-        temp |= (tu_ba & 0600000) << 7;
+        temp |= (tu_ba & 0600000) >> 8;
         if (uptr->CMD & CS1_GO)
            temp |= CS1_GO;
         else if ((uptr->STATUS & DS_PIP) == 0)
@@ -924,7 +921,7 @@ tu_boot(int32 unit_num, DEVICE * dptr)
     M[037] = 0;
     M[040] = tu_tcr;
     PC = 01000;
-    return SCPE_OK;
+    return cty_reset(&cty_dev);
 }
 
 

@@ -2073,9 +2073,9 @@ load_tlb(int uf, int page, int wr)
 
 #define PG_MASK  0000003777777LL
 #define PG_AGE   0770000000000LL
-#define PG_PAG   0003777
+#define PG_PAG   0017777
     if (t20_page) { /* Start with full access */
-         int acc_bits = PG_PUB|PG_WRT|PG_KEP|PG_CAC;
+         int acc_bits = PG_WRT|PG_CAC;
          uint64 cst_val = 0;
          int   index;
          int   pg;
@@ -2111,12 +2111,6 @@ sect_loop:
        case 3:      /* Indirect page */
             acc_bits &= (data >> 18) & RMASK;
             index = (data >> 18) & PG_IDX;
-            if ((index & 077) != 0) {
-                fault_data = 037LL << 30 | (data & PG_STG) | BIT8;
-                fault_data |= (data & RMASK) + (spt & PG_MASK);
-                page_fault = 1;
-                return 0;
-            }
             sim_interval--;
             data = M[(data & RMASK) + (spt & PG_MASK)];
             if ((data & PG_STG) != 0) {
@@ -2222,7 +2216,6 @@ pg_loop:
         }
         /* Now construct a TBL entry */
         /* A = accessable */
-        /* P = public */
         /* W = writable */
         /* S = user */
         /* C = cache */
@@ -2236,9 +2229,9 @@ pg_loop:
            data |= KL_PAG_C;
         /* And save it */
         if (uf)
-           u_tlb[page] = data & (SECTM|RMASK);
+           u_tlb[page] = data & RMASK;
         else
-           e_tlb[page] = data & (SECTM|RMASK);
+           e_tlb[page] = data & RMASK;
     } else {
 
        /* Map the page */
@@ -2275,7 +2268,6 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
     int      data;
     int      page = (RMASK & addr) >> 9;
     int      uf = (FLAGS & USER) != 0;
-    int      pub = (FLAGS & PUBLIC) != 0;
     int      upmp = 0;
 
     /* If paging is not enabled, address is direct */
@@ -2299,6 +2291,8 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
             uf = (FLAGS & USERIO) != 0;
         }
     }
+
+    wr |= modify;
 
     /* Handle KI paging odditiy */
     if (!uf && !t20_page && (page & 0740) == 0340) {
@@ -2329,7 +2323,7 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
             fault_data |= BIT8;
             if (fault_data & BIT1)
                 return 0;
-            if (wr | modify)             /* T */
+            if (wr)                      /* T */
                fault_data |= BIT5;       /* BIT5 */
             return 0;
         }
@@ -2397,7 +2391,7 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
         } else {
            e_tlb[page] = 0;
         }
-        if (wr | modify)               /* T */
+        if (wr)                      /* T */
            fault_data |= BIT5;       /* BIT5 */
         if (data & KL_PAG_A) {       /* A */
            fault_data |= BIT2;       /* BIT2 */
@@ -2720,9 +2714,9 @@ pg_loop:
            data |= (sect & 037) << 18;
         /* And save it */
         if (uf)
-           u_tlb[page] = data & (SECTM|RMASK);
+           u_tlb[page] = data;
         else
-           e_tlb[page] = data & (SECTM|RMASK);
+           e_tlb[page] = data;
     } else {
 
        /* Map the page */
@@ -3267,11 +3261,6 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
         return 1;
     }
 
-    /* If fetching byte data, use write access */
-//    if (BYF5 && (IR & 06) == 6)
- //       wr = 1;
-
-
     /* Figure out if this is a user space access */
     if (flag)
         uf = 0;
@@ -3492,10 +3481,6 @@ int page_lookup_its(t_addr addr, int flag, t_addr *loc, int wr, int cur_context,
         *loc = addr;
         return 1;
     }
-
-    /* If fetching byte data, use write access */
-//    if (BYF5 && (IR & 06) == 6)
- //       wr = 1;
 
     /* Figure out if this is a user space access */
     if (flag)
@@ -4534,7 +4519,6 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
     }
 #endif /* MAGIC_SWITCH */
 
-//    check_apr_irq();
     /* Normal instruction */
     if (f_load_pc) {
         modify = 0;
@@ -4673,6 +4657,11 @@ no_fetch:
              /* For KA & KI & PDP6 */
              AR = MB = (AB + get_reg(ix)) & FMASK;
 #endif
+#if KS
+             if (ind == 0 && (IR & 0700) == 0700)
+                 AB = MB & (IOCTL|RMASK);
+             else
+#endif
              AB = MB & RMASK;
          }
 #if KL
@@ -4761,21 +4750,12 @@ in_loop:
 #if KS
              /* I/O Instructions don't do repeat indirect */
              if ((IR & 0700) == 0700) {
-                 AB = AR = MB;
+                 AB = AR = MB & (IOCTL|RMASK);
                  ind = 0;
              }
 #endif
          }
     } while (ind & !pi_rq);
-
-#if KS
-    if ((IR & 0700) != 0700)
-#endif
-    /* If not a JRST clear the upper half of AR. */
-    if (IR != 0254) {
-       AR &= RMASK;
-    }
-
 
     /* If there is a interrupt handle it. */
     if (pi_rq) {
@@ -4904,6 +4884,11 @@ st_pi:
        goto last;
     }
 #endif
+    /* If not a JRST clear the upper half of AR. */
+    if (IR != 0254) {
+       AR &= RMASK;
+    }
+
     /* Load pseudo registers based on flags */
     if (i_flags & (FCEPSE|FCE)) {
         if (i_flags & FCEPSE)
@@ -5036,7 +5021,7 @@ unasign:
 #elif KS
               if (t20_page)
                   MB = (PC + (trap_flag == 0)) & RMASK;
-              else 
+              else
                   MB = (((uint64)(FLAGS) << 23) & LMASK) | ((PC + (trap_flag == 0)) & RMASK);
 #else
               MB = (((uint64)(FLAGS) << 23) & LMASK) | ((PC + (trap_flag == 0)) & RMASK);
@@ -5104,10 +5089,6 @@ unasign:
                   pc_sect = (MB >> 18) & 00037;
                   FLAGS = 0;
               } else
-//#elif KS
-//              if (t20_page)
-//                  FLAGS = 0;
-//              else
 #endif
               FLAGS = (MB >> 23) & 017777;
               /* If transistioning from user to executive adjust flags */
@@ -6005,19 +5986,15 @@ dpnorm:
 #if KL | KS
               MQ = get_reg(AC + 1);
 #endif
-#if KS
+#if KL | KS
               BR = AB;
               AB = (AB + 1) & RMASK;
-              MB = MQ;
-              if (Mem_write(0, 0))
+              modify = 1;
+              if (Mem_read(0, 0, 0))
                   goto last;
-              FLAGS |= BYTI;
               AB = BR;
-              MB = AR;
-              if (Mem_write(0, 0))
-                  goto last;
-              FLAGS &= ~BYTI;
-#else
+              modify = 0;
+#endif
               /* Handle each half as seperate instruction */
               if ((FLAGS & BYTI) == 0) {
                   MB = AR;
@@ -6025,9 +6002,7 @@ dpnorm:
                       goto last;
                   FLAGS |= BYTI;
               }
-#if !(KL)
               MQ = get_reg(AC + 1);
-#endif
               if ((FLAGS & BYTI)) {
                   AB = (AB + 1) & RMASK;
                   MB = MQ;
@@ -6035,7 +6010,6 @@ dpnorm:
                   if (Mem_write(0, 0))
                      goto last;
               }
-#endif
               break;
 
     case 0125: /* DMOVNM */
@@ -6067,6 +6041,15 @@ dpnorm:
                          FLAGS |= TRP1;
 #endif
                   }
+#if KL | KS
+                  BR = AB;
+                  modify = 1;
+                  AB = (AB + 1) & RMASK;
+                  if (Mem_read(0, 0, 0))
+                      goto last;
+                  AB = BR;
+                  modify = 0;
+#endif
                   AR &= FMASK;
                   MB = AR;
                   if (Mem_write(0, 0))
@@ -6484,7 +6467,7 @@ unasign:
     case 0136: /* IDPB */
               if ((FLAGS & BYTI) == 0) {      /* BYF6 */
                   modify = 1;
-#if KL
+#if KL | KS
                   if (Mem_read(0, 0, 0)) {
 #elif KI
                   if (Mem_read(0, 1, 0)) {
@@ -6632,11 +6615,12 @@ ldb_ptr:
                   }
 #endif
               } else {
-#if KL | KS
+#if KL
                   ptr_flg = 0;
 ld_exe:
 #endif
-#if !KS
+                  BYF5 = 1;
+#if KA | KL | KI
                   if ((IR & 06) == 6)
                       modify = 1;
 #endif
@@ -7789,23 +7773,23 @@ left:
               do {
                   AIO_CHECK_EVENT;                    /* queue async events */
                   if (sim_interval <= 0) {
-                       if ((reason = sim_process_event()) != SCPE_OK) {
-                           f_pc_inh = 1;
-                           f_load_pc = 0;
-                           f_inst_fetch = 0;
-                           set_reg(AC, AR);
-                           break;
-                       }
-                  }
-                  /* Allow for interrupt */
-                  if (pi_pending) {
-                      pi_rq = check_irq_level();
-                      if (pi_rq) {
+                      if ((reason = sim_process_event()) != SCPE_OK) {
                           f_pc_inh = 1;
                           f_load_pc = 0;
                           f_inst_fetch = 0;
                           set_reg(AC, AR);
                           break;
+                      }
+                      /* Allow for interrupt */
+                      if (pi_pending) {
+                          pi_rq = check_irq_level();
+                          if (pi_rq) {
+                              f_pc_inh = 1;
+                              f_load_pc = 0;
+                              f_inst_fetch = 0;
+                              set_reg(AC, AR);
+                              break;
+                          }
                       }
                   }
                   AB = (AR >> 18) & RMASK;
@@ -8216,7 +8200,7 @@ jrstf:
               f = AB >> 9;
               flag1 = (FLAGS & USER) != 0;
               flag3 = 0;
-#if KL 
+#if KL
               /* Invalid in user unless USERIO set, or not in supervisor mode */
               if ((FLAGS & (USER|USERIO)) == USER || (FLAGS & (USER|PUBLIC)) == PUBLIC)
                   goto muuo;
@@ -9265,9 +9249,9 @@ test_op:
                   goto muuo;
               } else {
 #if KS
-                  int ctl = (int)((AR >> 18) & 017);
+                  int ctl = (int)((MB >> 18) & 017);
                   double us;
-                  AR &= RMASK;
+                  AB = MB & RMASK;
 
                   switch (IR & 077) {
                   case 000:       /* APR0 */
@@ -9687,6 +9671,7 @@ test_op:
 
                   case 004:       /* UMOVE */
                            xct_flag = 4;
+                           AB &= RMASK;
                            if (Mem_read(pi_cycle, 0, 0))
                               goto last;
                            set_reg(AC, MB);
@@ -9695,6 +9680,7 @@ test_op:
 
                   case 005:       /* UMOVEM */
                            MB = get_reg(AC);
+                           AB &= RMASK;
                            xct_flag = 4;
                            if (Mem_write(pi_cycle, 0))
                               goto last;
@@ -9707,9 +9693,9 @@ test_op:
                                ctl = 3;
                                goto its_rd;
                            }
-#endif                           
+#endif
                            BR = get_reg(AC);
-                           if (uba_read(AR, ctl, &MB, WORD)) {
+                           if (uba_read(AB, ctl, &MB, WORD)) {
 io_fault:
                                fault_data = (020LL << 30) | BIT8 | BIT10 | AR;
                                fault_data |= (uint64)((020 & IR) << 18);
@@ -9728,7 +9714,7 @@ io_fault:
                            }
 #endif
                            BR = get_reg(AC);
-                           if (uba_read(AR, ctl, &MB, WORD))
+                           if (uba_read(AB, ctl, &MB, WORD))
                                goto io_fault;
                            if ((BR & MB) != 0)
                                PC = (PC + 1) & RMASK;
@@ -9739,12 +9725,12 @@ io_fault:
                            if (QITS) {
                                if (Mem_read(pi_cycle, 0, 0))
                                    goto last;
-                               AR = MB & RMASK;
+                               AB = MB & RMASK;
                                ctl = (int)((MB >> 18) & 017);
                            }
 its_rd:
 #endif
-                           if (uba_read(AR, ctl, &AR, WORD))
+                           if (uba_read(AB, ctl, &AR, WORD))
                                goto io_fault;
                            i_flags = SAC;
                            break;
@@ -9754,13 +9740,13 @@ its_rd:
                            if (QITS) {
                                if (Mem_read(pi_cycle, 0, 0))
                                    goto last;
-                               AR = MB & RMASK;
+                               AB = MB & RMASK;
                                ctl = (int)((MB >> 18) & 017);
                            }
 its_wr:
 #endif
                            MB = get_reg(AC);
-                           if (uba_write(AR, ctl, MB, WORD))
+                           if (uba_write(AB, ctl, MB, WORD))
                                goto io_fault;
                            break;
 
@@ -9772,10 +9758,10 @@ its_wr:
                            }
 #endif
                            BR = get_reg(AC);
-                           if (uba_read(AR, ctl, &MB, WORD))
+                           if (uba_read(AB, ctl, &MB, WORD))
                                goto io_fault;
                            MB |= BR;
-                           if (uba_write(AR, ctl, MB, WORD))
+                           if (uba_write(AB, ctl, MB, WORD))
                                goto io_fault;
                            break;
 
@@ -9787,16 +9773,16 @@ its_wr:
                            }
 #endif
                            BR = get_reg(AC);
-                           if (uba_read(AR, ctl, &MB, WORD))
+                           if (uba_read(AB, ctl, &MB, WORD))
                                goto io_fault;
                            MB &= ~BR;
-                           if (uba_write(AR, ctl, MB, WORD))
+                           if (uba_write(AB, ctl, MB, WORD))
                                goto io_fault;
                            break;
 
                   case 020:       /* TIOEB */
                            BR = get_reg(AC);
-                           if (uba_read(AR, ctl, &MB, BYTE))
+                           if (uba_read(AB, ctl, &MB, BYTE))
                                goto io_fault;
                            if ((BR & MB) == 0)
                                PC = (PC + 1) & RMASK;
@@ -9804,39 +9790,39 @@ its_wr:
 
                   case 021:       /* TIONB */
                            BR = get_reg(AC);
-                           if (uba_read(AR, ctl, &MB, BYTE))
+                           if (uba_read(AB, ctl, &MB, BYTE))
                                goto io_fault;
                            if ((BR & MB) != 0)
                                PC = (PC + 1) & RMASK;
                            break;
 
                   case 022:       /* RDIOB */
-                           if (uba_read(AR, ctl, &AR, BYTE))
+                           if (uba_read(AB, ctl, &AR, BYTE))
                                goto io_fault;
                            i_flags = SAC;
                            break;
-                          
+
                   case 023:       /* WRIOB */
                            MB = get_reg(AC);
-                           if (uba_write(AR, ctl, MB, BYTE))
+                           if (uba_write(AB, ctl, MB, BYTE))
                                goto io_fault;
                            break;
 
                   case 024:       /* BSIOB */
                            BR = get_reg(AC);
-                           if (uba_read(AR, ctl, &MB, BYTE))
+                           if (uba_read(AB, ctl, &MB, BYTE))
                                goto io_fault;
                            MB |= BR;
-                           if (uba_write(AR, ctl, MB, BYTE))
+                           if (uba_write(AB, ctl, MB, BYTE))
                                goto io_fault;
                            break;
 
                   case 025:       /* BCIOB */
                            BR = get_reg(AC);
-                           if (uba_read(AR, ctl, &MB, BYTE))
+                           if (uba_read(AB, ctl, &MB, BYTE))
                                goto io_fault;
                            MB &= ~BR;
-                           if (uba_write(AR, ctl, MB, BYTE))
+                           if (uba_write(AB, ctl, MB, BYTE))
                                goto io_fault;
                            break;
 
@@ -10194,7 +10180,7 @@ last:
         FLAGS |= trap_flag & (TRP1|TRP2);
         trap_flag = (TRP1|TRP2);
         MB = (((uint64)(FLAGS) << 23) & LMASK);
-        if (t20_page == 0) 
+        if (t20_page == 0)
             MB |= (PC & RMASK);
         Mem_write_nopage();
         if (t20_page) {
@@ -11888,14 +11874,14 @@ t_bool build_dev_tab (void)
     uint32  rh20;
 #endif
     int     rh_idx;
-    
+
     /* Set trap offset based on MAOFF flag */
     maoff = (cpu_unit[0].flags & UNIT_MAOFF)? 0100 : 0;
     max_dev = 2;
-    
+
 #if KA
     /* Set up memory access routines based on current CPU type. */
-    
+
     /* Default to KA */
     Mem_read = &Mem_read_ka;
     Mem_write = &Mem_write_ka;
@@ -11918,13 +11904,13 @@ t_bool build_dev_tab (void)
     }
 #endif
 #endif
-    
+
     /* Clear device and interrupt table */
     for (i = 0; i < 128; i++) {
         dev_tab[i] = &null_dev;
         dev_irqv[i] = NULL;
     }
-    
+
     /* Set up basic devices. */
     dev_tab[0] = &dev_apr;
     dev_tab[1] = &dev_pi;
@@ -11945,8 +11931,8 @@ t_bool build_dev_tab (void)
        max_dev = 024>>2;
     }
 #endif
-    
-#if !PDP6    
+
+#if !PDP6
     /* Assign all RH10 & RH20  devices */
 #if KL
     rh20 = 0540;
@@ -11990,7 +11976,7 @@ t_bool build_dev_tab (void)
         }
     }
 #endif
-    
+
     /* Assign all remaining devices */
     for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {
         dibp = (DIB *) dptr->ctxt;
