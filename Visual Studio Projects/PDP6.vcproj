@@ -35,6 +35,9 @@
 				Name="VCXMLDataGeneratorTool"
 			/>
 			<Tool
+				Name="VCWebServiceProxyGeneratorTool"
+			/>
+			<Tool
 				Name="VCMIDLTool"
 			/>
 			<Tool
@@ -95,7 +98,7 @@
 			<Tool
 				Name="VCPostBuildEventTool"
 				Description="Running Available Tests"
-				CommandLine="Post-Build-Event.cmd PDP10-KA &quot;$(TargetDir)$(TargetName).exe&quot;"
+				CommandLine="Post-Build-Event.cmd PDP6 &quot;$(TargetDir)$(TargetName).exe&quot;"
 			/>
 		</Configuration>
 		<Configuration
@@ -115,6 +118,9 @@
 			/>
 			<Tool
 				Name="VCXMLDataGeneratorTool"
+			/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"
 			/>
 			<Tool
 				Name="VCMIDLTool"
@@ -182,7 +188,7 @@
 			<Tool
 				Name="VCPostBuildEventTool"
 				Description="Running Available Tests"
-				CommandLine="Post-Build-Event.cmd PDP10-KA &quot;$(TargetDir)$(TargetName).exe&quot;"
+				CommandLine="Post-Build-Event.cmd PDP6 &quot;$(TargetDir)$(TargetName).exe&quot;"
 			/>
 		</Configuration>
 	</Configurations>
