@@ -36,7 +36,7 @@
 #if (NUM_DEVS_DZ > 0)
 
 
-#define DC10_LINES    8
+#define DZ11_LINES    8
 
 #define STATUS   u3
 

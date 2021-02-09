@@ -197,24 +197,28 @@ int
 uba_read_npr_byte(t_addr addr, uint16 ctl, uint16 *data)
 {
     int ubm = uba_device[ctl];
+    return 0;
 }
 
 int
 uba_write_npr_byte(t_addr addr, uint16 ctl, uint16 data)
 {
     int ubm = uba_device[ctl];
+    return 0;
 }
 
 int
 uba_read_npr_word(t_addr addr, uint16 ctl, uint16 *data)
 {
     int ubm = uba_device[ctl];
+    return 0;
 }
 
 int
 uba_write_npr_word(t_addr addr, uint16 ctl, uint16 data)
 {
     int ubm = uba_device[ctl];
+    return 0;
 }
 
 void
@@ -244,7 +248,7 @@ uba_get_vect(t_addr addr, int lvl)
     DEVICE *dptr;
     DIB    *idev = NULL;
     uint64  buffer;
-    uint8   ivect;
+    uint16  ivect;
     int     i;
     int     high = 0;
     int     ctl = 17;
@@ -331,7 +335,7 @@ uba_set_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 
     if (r != SCPE_OK)
         return r;
-    dibp->uba_addr = newaddr;
+    dibp->uba_addr = (uint32)(newaddr & RMASK);
     return SCPE_OK;
 }
 
@@ -339,7 +343,7 @@ t_stat
 uba_show_addr (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
     DEVICE  *dptr = find_dev_from_unit(uptr);
-    DIB *dibp = (DIB *) dptr->ctxt;
+    DIB     *dibp = (DIB *) dptr->ctxt;
     if (dibp == NULL)
         return SCPE_IERR;
     fprintf(st, "addr=%07o", dibp->uba_addr);
@@ -375,7 +379,7 @@ uba_set_br(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 
     if (br < 4 || br > 7)
         return SCPE_ARG;
-    dibp->uba_br = br;
+    dibp->uba_br = (uint16)br;
     return SCPE_OK;
 }
 
@@ -417,7 +421,7 @@ uba_set_vect(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
     if (r != SCPE_OK)
         return r;
 
-    dibp->uba_vect = vect;
+    dibp->uba_vect = (uint16)vect;
     return SCPE_OK;
 }
 
@@ -461,7 +465,7 @@ uba_set_ctl(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 
     if (ctl != 1 || ctl != 3)
        return SCPE_ARG;
-    dibp->uba_ctl = ctl;
+    dibp->uba_ctl = (uint16)ctl;
     return SCPE_OK;
 }
 

@@ -176,8 +176,10 @@ t_stat ctyo_svc (UNIT *uptr)
     sim_debug(DEBUG_DETAIL, &cty_dev, "CTY Write %012llo\n", buffer);
     if (buffer & CTY_CHAR) {
         if (!full(&cty_out)) {
-            buffer = sim_tt_outcvt ( buffer, TT_GET_MODE (uptr->flags));
-            cty_out.buff[cty_out.in_ptr] = (uint8)(buffer & 0377);
+            int32    ch;
+            ch = buffer & 0377;
+            ch = sim_tt_outcvt ( ch, TT_GET_MODE (uptr->flags));
+            cty_out.buff[cty_out.in_ptr] = (uint8)(ch & 0377);
             buffer = 0;
             if (Mem_write_word(CTY_OUT, &buffer, 0) == 0) {
                 inci(&cty_out);

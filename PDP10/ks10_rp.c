@@ -345,6 +345,14 @@ rp_write(t_addr addr, uint16 data, int32 access) {
     UNIT       *uptr = &rpa_unit[rp_unit];
     int         dtype = GET_DTYPE(uptr->flags);
    
+        /* If drive not ready don't do anything */
+        if ((rp_ie & CS1_GO) != 0|| (uptr->STATUS & DS_PIP) != 0) { 
+           uptr->CMD |= (ER1_RMR << 16);
+//           rp_cs2 |= CS2_PGE;
+           sim_debug(DEBUG_DETAIL, &rpa_dev, "RP%o not ready\n", rp_unit);
+           return 0;
+        }
+
     switch(addr & 076) {
 /* u3  low */
     case  000: /* RPC   - 176700 - control */
@@ -352,13 +360,6 @@ rp_write(t_addr addr, uint16 data, int32 access) {
            break;
 
         sim_debug(DEBUG_DETAIL, &rpa_dev, "RP%o Status=%06o\n", rp_unit, uptr->CMD);
-        /* If drive not ready don't do anything */
-        if ((rp_ie & CS1_GO) != 0|| (uptr->STATUS & DS_PIP) != 0) { 
-           uptr->CMD |= (ER1_RMR << 16);
-           rp_cs2 |= CS2_PGE;
-           sim_debug(DEBUG_DETAIL, &rpa_dev, "RP%o not ready\n", rp_unit);
-           return 0;
-        }
         rp_ba = ((data << 8) & 0600000) | (rp_ba & 0177777);
         rp_ie = data & (CS1_IE);
         uptr->CMD = data & 076;
@@ -551,12 +552,10 @@ rp_read(t_addr addr, uint16 *data, int32 access) {
         temp = uptr->CMD & 076;
         temp |= (uint16)rp_ie;
         temp |= (rp_ba & 0600000) >> 8;
+        if ((rp_ie & CS1_GO) == 0 && (uptr->STATUS & DS_PIP) == 0)
+           temp |= CS1_RDY;
         if (uptr->flags & UNIT_ATT) {
            temp |= CS1_DVA;
-           if (rp_ie & CS1_GO)
-              temp |= CS1_GO;
-           if ((rp_ie & CS1_GO) == 0 && (uptr->STATUS & DS_PIP) == 0)
-              temp |= CS1_RDY;
         }
         break;
     case  002:  /* RPWC  - 176702 - word count */
@@ -654,7 +653,6 @@ t_stat rp_svc (UNIT *uptr)
 {
     int           dtype = GET_DTYPE(uptr->flags);
     int           cyl = GET_CY(uptr->DA);
-    DIB          *dibp;
     int           unit;
     DEVICE       *dptr;
     int           diff, da;
@@ -968,9 +966,7 @@ rp_boot(int32 unit_num, DEVICE * rptr)
     uint32        addr;
     uint32        ptr = 0;
     uint64        len;
-    int           wc;
     int           i;
-    uint64        word;
     int           da;
     /* Read in block 1 and see if it is a home block */
     disk_read(uptr, &rp_buf[0], 1, RP_NUMWD);
@@ -985,25 +981,25 @@ rp_boot(int32 unit_num, DEVICE * rptr)
     }
 
     /* Word 103 and 102 contain pointer to SMFILE block */
-    uptr->DA = ((rp_buf[0103] & 077) << DA_V_SC) | 
-               (((rp_buf[0103] >> 8) & 077) << DA_V_SF) |
-               ((rp_buf[0103] >> 24) << DC_V_CY);
-    len = rp_buf[0102];
+    uptr->DA = (int32)((rp_buf[0103] & 077) << DA_V_SC) | 
+               (int32)(((rp_buf[0103] >> 8) & 077) << DA_V_SF) |
+               (int32)((rp_buf[0103] >> 24) << DC_V_CY);
+    len = (int)(rp_buf[0102] & RMASK);
     da = GET_DA(uptr->DA, dtype);
     disk_read(uptr, &rp_buf[0], da, RP_NUMWD);
     /* For diagnostics use locations 6 and 7 */
     if (sim_switches & SWMASK ('D')) {   
        sim_messagef(SCPE_OK, "Diags boot\n");
-       uptr->DA = ((rp_buf[06] & 077) << DA_V_SC) | 
-                  (((rp_buf[06] >> 8) & 077) << DA_V_SF) |
-                  ((rp_buf[06] >> 24) << DC_V_CY);
-       len = (rp_buf[07] & 077) * 4;
+       uptr->DA = (int32)((rp_buf[06] & 077) << DA_V_SC) | 
+                  (int32)(((rp_buf[06] >> 8) & 077) << DA_V_SF) |
+                  (int32)((rp_buf[06] >> 24) << DC_V_CY);
+       len = (int)(((rp_buf[07] & 077) * 4) & RMASK);
     } else {
     /* Normal is at 4 and 5*/
-       uptr->DA = ((rp_buf[04] & 077) << DA_V_SC) | 
-                  (((rp_buf[04] >> 8) & 077) << DA_V_SF) |
-                  ((rp_buf[04] >> 24) << DC_V_CY);
-       len = (rp_buf[05] & 077) * 4;
+       uptr->DA = (int32)((rp_buf[04] & 077) << DA_V_SC) | 
+                  (int32)(((rp_buf[04] >> 8) & 077) << DA_V_SF) |
+                  (int32)((rp_buf[04] >> 24) << DC_V_CY);
+       len = (int)(((rp_buf[05] & 077) * 4) & RMASK);
     }
 
     /* Read len sectors into address 1000 */
