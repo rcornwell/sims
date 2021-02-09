@@ -131,7 +131,7 @@ int     uuo_cycle;                            /* Uuo cycle in progress */
 int     SC;                                   /* Shift count */
 int     SCAD;                                 /* Shift count extension */
 int     FE;                                   /* Exponent */
-int     max_dev;                              /* Max dev number */
+uint32  max_dev;                              /* Max dev number */
 #if KA | PDP6
 t_addr  Pl, Ph, Rl, Rh, Pflag;                /* Protection registers */
 int     push_ovf;                             /* Push stack overflow */
@@ -1109,7 +1109,6 @@ void clr_interrupt(int dev) {
  * else set pi_enc to highest level and return 1.
  */
 int check_irq_level() {
-    DEVICE *dptr;
     int i, lvl;
     int pi_req;
 
@@ -1135,7 +1134,7 @@ int check_irq_level() {
     }
 
     /* Scan all devices */
-    for(i = lvl = 0; i <= max_dev; i++)
+    for(i = lvl = 0; i <= (int)max_dev; i++)
        lvl |= dev_irq[i];
     if (lvl == 0)
        pi_pending = 0;
@@ -1145,7 +1144,7 @@ int check_irq_level() {
     if (mpx_enable && cpu_unit[0].flags & UNIT_MPX &&
                 (pi_req & 0100) && (PIH & 0100) == 0) {
         pi_enc = 010;
-        for(i = lvl = 0; i <= max_dev; i++) {
+        for(i = lvl = 0; i <= (int)max_dev; i++) {
             if (dev_irq[i] & 0100) {
                int l = dev_irq[i] >> 8;
                if (l != 0 && l < pi_enc)
@@ -2714,9 +2713,9 @@ pg_loop:
            data |= (sect & 037) << 18;
         /* And save it */
         if (uf)
-           u_tlb[page] = data;
+           u_tlb[page] = data & (SECTM|RMASK);
         else
-           e_tlb[page] = data;
+           e_tlb[page] = data & (SECTM|RMASK);
     } else {
 
        /* Map the page */
@@ -4445,7 +4444,7 @@ int     f;                       /* Temporary variables */
 int     flag1;
 int     flag3;
 int     instr_count = 0;         /* Number of instructions to execute */
-uint32  IA;                      /* Initial address of first fetch */
+t_addr  IA;                      /* Initial address of first fetch */
 #if ITS | KL_ITS | KS_ITS
 char    one_p_arm = 0;           /* One proceed arm */
 #endif
@@ -4750,7 +4749,8 @@ in_loop:
 #if KS
              /* I/O Instructions don't do repeat indirect */
              if ((IR & 0700) == 0700) {
-                 AB = AR = MB & (IOCTL|RMASK);
+                 AR = MB & (IOCTL|RMASK);
+                 AB = (t_addr)AR;
                  ind = 0;
              }
 #endif
@@ -4788,7 +4788,7 @@ st_pi:
          * Scan through the devices and allow KI devices to have first
          * hit at a given level.
          */
-        for (f = 0; f <= max_dev; f++) {
+        for (f = 0; f <= (int)max_dev; f++) {
             if (dev_irqv[f] != 0 && dev_irq[f] & pi_mask) {
                 AB = dev_irqv[f](f << 2, AB);
                 sim_debug(DEBUG_IRQ, &cpu_dev, "vect irq %o %03o %06o\n",
@@ -5987,12 +5987,12 @@ dpnorm:
               MQ = get_reg(AC + 1);
 #endif
 #if KL | KS
-              BR = AB;
+              IA = AB;
               AB = (AB + 1) & RMASK;
               modify = 1;
               if (Mem_read(0, 0, 0))
                   goto last;
-              AB = BR;
+              AB = IA;
               modify = 0;
 #endif
               /* Handle each half as seperate instruction */
@@ -6042,12 +6042,12 @@ dpnorm:
 #endif
                   }
 #if KL | KS
-                  BR = AB;
+                  IA = AB;
                   modify = 1;
                   AB = (AB + 1) & RMASK;
                   if (Mem_read(0, 0, 0))
                       goto last;
-                  AB = BR;
+                  AB = IA;
                   modify = 0;
 #endif
                   AR &= FMASK;
@@ -9947,8 +9947,8 @@ fetch_opr:
                                     if (Mem_read(pi_cycle, 0, 0))
                                         goto last;
                                     AB = (AB + 1) & RMASK;
-                                    ctl = MB >> 31;
-                                    fcn = MB & 037;
+                                    ctl = (int)(MB >> 31);
+                                    fcn = (int)(MB & 037);
                                     if (ctl >= 010 && ctl < 030) {
                                         int mc = MEMSIZE / (512 * 1024);
                                         int c = (ctl - 010);
@@ -10952,7 +10952,9 @@ do_extend(uint32 ia)
     uint64     val1, val2;
     uint64     msk;
     uint64     reg;
+#if KL
     int        xlat_sect;
+#endif
     int        f, i;
 
 
@@ -11873,7 +11875,9 @@ t_bool build_dev_tab (void)
 #if KL
     uint32  rh20;
 #endif
+#if !PDP6
     int     rh_idx;
+#endif
 
     /* Set trap offset based on MAOFF flag */
     maoff = (cpu_unit[0].flags & UNIT_MAOFF)? 0100 : 0;

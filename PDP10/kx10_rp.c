@@ -956,7 +956,7 @@ rd_end:
         while (uptr->DATAPTR < RP_NUMWD) {
             rp_buf[ctlr][uptr->DATAPTR++] = 0;
         }
-wr_done:
+
         sim_debug(DEBUG_DETAIL, dptr, "%s%o write (%d,%d,%d)\n", dptr->name,
                unit, cyl, GET_SF(uptr->DA), GET_SC(uptr->DA));
         da = GET_DA(uptr->DA, dtype);

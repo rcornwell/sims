@@ -211,7 +211,7 @@ extern DEBTAB crd_debug[];
 /* IRQ Flags in APR */
 #if KL
 #define SWP_DONE        0000020         /* Cache sweep done */
-#define PWR_FAIL        0000040         /* Power failure */
+#define PFAIL           0000040         /* Power failure */
 #define ADDR_PAR        0000100         /* Address Parity error */
 #define CACHE_DIR       0000200         /* Cache Parity error */
 #define MB_PAR          0000400         /* Memory parity error */
@@ -225,7 +225,7 @@ extern DEBTAB crd_debug[];
 #define COR_MEM         0000100         /* Corrected memory error */
 #define MB_ERR          0000200         /* Uncorrectable memory error */
 #define NXM_MEM         0000400         /* No memory */
-#define PWR_FAIL        0001000         /* Power Failure */
+#define PFAIL           0001000         /* Power Failure */
 #define FLAG_24         0004000         /* Spare */
 #endif
 
