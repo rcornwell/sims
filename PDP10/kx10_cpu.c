@@ -4732,13 +4732,6 @@ in_loop:
                      goto in_loop;
              }
 #endif
-             /* Handle events during a indirect loop */
-             AIO_CHECK_EVENT;                                   /* queue async events */
-             if (--sim_interval <= 0) {
-                  if ((reason = sim_process_event()) != SCPE_OK) {
-                      return reason;
-                  }
-             }
              if ((!pi_cycle) & pi_pending
 #if KI | KL | KS
                              & (!trap_flag)
@@ -4754,6 +4747,13 @@ in_loop:
                  ind = 0;
              }
 #endif
+         }
+         /* Handle events during a indirect loop */
+         AIO_CHECK_EVENT;                                   /* queue async events */
+         if (--sim_interval <= 0) {
+              if ((reason = sim_process_event()) != SCPE_OK) {
+                  return reason;
+              }
          }
     } while (ind & !pi_rq);
 
