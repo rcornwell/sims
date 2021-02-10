@@ -4738,13 +4738,13 @@ in_loop:
                   if ((reason = sim_process_event()) != SCPE_OK) {
                       return reason;
                   }
-                  if ((!pi_cycle) & pi_pending
+             }
+             if ((!pi_cycle) & pi_pending
 #if KI | KL | KS
-                                  & (!trap_flag)
+                             & (!trap_flag)
 #endif
-                                   ) {
-                     pi_rq = check_irq_level();
-                  }
+                              ) {
+                pi_rq = check_irq_level();
              }
 #if KS
              /* I/O Instructions don't do repeat indirect */
