@@ -280,6 +280,7 @@ int     watch_stop;                           /* Stop at memory watch point */
 int     maoff = 0;                            /* Offset for traps */
 
 uint16  dev_irq[128];                         /* Pending irq by device */
+uint8   dev_map[128];                         /* Map device to irq slot */
 t_stat  (*dev_tab[128])(uint32 dev, uint64 *data);
 t_addr  (*dev_irqv[128])(uint32 dev, t_addr addr);
 t_stat  rtc_srv(UNIT * uptr);
@@ -1074,7 +1075,11 @@ get_quantum()
 void set_interrupt(int dev, int lvl) {
     lvl &= 07;
     if (lvl) {
-       dev_irq[dev>>2] = 0200 >> lvl;
+#if KS
+       dev_irq[dev>>2] |= 0200 >> lvl;
+#else
+       dev_irq[dev_map[dev>>2]] = 0200 >> lvl;
+#endif
        pi_pending = 1;
        sim_debug(DEBUG_IRQ, &cpu_dev, "set irq %o %o %03o %03o %03o\n",
               dev & 0774, lvl, PIE, PIR, PIH);
@@ -1085,9 +1090,9 @@ void set_interrupt(int dev, int lvl) {
 void set_interrupt_mpx(int dev, int lvl, int mpx) {
     lvl &= 07;
     if (lvl) {
-       dev_irq[dev>>2] = 0200 >> lvl;
+       dev_irq[dev_map[dev>>2]] = 0200 >> lvl;
        if (lvl == 1 && mpx != 0)
-          dev_irq[dev>>2] |= mpx << 8;
+          dev_irq[dev_map[dev>>2]] |= mpx << 8;
        pi_pending = 1;
        sim_debug(DEBUG_IRQ, &cpu_dev, "set mpx irq %o %o %o %03o %03o %03o\n",
               dev & 0774, lvl, mpx, PIE, PIR, PIH);
@@ -1099,7 +1104,7 @@ void set_interrupt_mpx(int dev, int lvl, int mpx) {
  * Clear the interrupt flag for a device
  */
 void clr_interrupt(int dev) {
-    dev_irq[dev>>2] = 0;
+    dev_irq[dev_map[dev>>2]] = 0;
     if (dev > 4)
         sim_debug(DEBUG_IRQ, &cpu_dev, "clear irq %o\n", dev & 0774);
 }
@@ -1134,7 +1139,7 @@ int check_irq_level() {
     }
 
     /* Scan all devices */
-    for(i = lvl = 0; i <= (int)max_dev; i++)
+    for(i = lvl = 0; i < (int)max_dev; i++)
        lvl |= dev_irq[i];
     if (lvl == 0)
        pi_pending = 0;
@@ -1144,7 +1149,7 @@ int check_irq_level() {
     if (mpx_enable && cpu_unit[0].flags & UNIT_MPX &&
                 (pi_req & 0100) && (PIH & 0100) == 0) {
         pi_enc = 010;
-        for(i = lvl = 0; i <= (int)max_dev; i++) {
+        for(i = lvl = 0; i < (int)max_dev; i++) {
             if (dev_irq[i] & 0100) {
                int l = dev_irq[i] >> 8;
                if (l != 0 && l < pi_enc)
@@ -4778,7 +4783,14 @@ st_pi:
         AB |= eb_ptr;
         extend = 0;
         if ((dev_irq[0] & pi_mask) == 0) {
-            AB = uba_get_vect(AB, pi_mask);
+            int new_lvl;
+            int dev;
+            AB = uba_get_vect(AB, pi_mask, &dev, &new_lvl);
+            if (dev != 0) {
+               dev_irq[dev] = new_lvl;
+               if (new_lvl != 0)
+                  pi_pending = 1;
+            }
             sim_debug(DEBUG_IRQ, &cpu_dev, "vect irq %o %06o\n", pi_enc, AB);
         }
         Mem_read_nopage();
@@ -4789,11 +4801,11 @@ st_pi:
          * Scan through the devices and allow KI devices to have first
          * hit at a given level.
          */
-        for (f = 0; f <= (int)max_dev; f++) {
-            if (dev_irqv[f] != 0 && dev_irq[f] & pi_mask) {
+        for (f = 0; f < 128; f++) {
+            if (dev_irqv[f] != 0 && dev_irq[dev_map[f]] & pi_mask) {
                 AB = dev_irqv[f](f << 2, AB);
                 sim_debug(DEBUG_IRQ, &cpu_dev, "vect irq %o %03o %06o\n",
-                         pi_enc, dev_irq[f], AB);
+                         pi_enc, dev_irq[dev_map[f]], AB);
                 break;
             }
         }
@@ -9688,7 +9700,7 @@ test_op:
                            xct_flag = 0;
                            break;
 
-                  case 010:       /* TIOE */
+                  case 010:       /* TIOE , ITS RDIOI */
 #if KS_ITS
                            if (QITS) {
                                ctl = 3;
@@ -9707,7 +9719,7 @@ io_fault:
                                PC = (PC + 1) & RMASK;
                            break;
 
-                  case 011:       /* TION */
+                  case 011:       /* TION, ITS RDIOQ  */
 #if KS_ITS
                            if (QITS) {
                                ctl = 1;
@@ -9751,7 +9763,7 @@ its_wr:
                                goto io_fault;
                            break;
 
-                  case 014:       /* BSIO */
+                  case 014:       /* BSIO, ITS WRIOI */
 #if KS_ITS
                            if (QITS) {
                                ctl = 3;
@@ -9766,7 +9778,7 @@ its_wr:
                                goto io_fault;
                            break;
 
-                  case 015:       /* BCIO */
+                  case 015:       /* BCIO, ITS WRIOQ */
 #if KS_ITS
                            if (QITS) {
                                ctl = 1;
@@ -9782,6 +9794,12 @@ its_wr:
                            break;
 
                   case 020:       /* TIOEB */
+#if KS_ITS
+                           if (QITS) {
+                               ctl = 3;
+                               goto its_rdb;
+                           }
+#endif
                            BR = get_reg(AC);
                            if (uba_read(AB, ctl, &MB, BYTE))
                                goto io_fault;
@@ -9790,6 +9808,12 @@ its_wr:
                            break;
 
                   case 021:       /* TIONB */
+#if KS_ITS
+                           if (QITS) {
+                               ctl = 1;
+                               goto its_rdb;
+                           }
+#endif
                            BR = get_reg(AC);
                            if (uba_read(AB, ctl, &MB, BYTE))
                                goto io_fault;
@@ -9798,18 +9822,42 @@ its_wr:
                            break;
 
                   case 022:       /* RDIOB */
+#if KS_ITS
+                           if (QITS) {
+                               if (Mem_read(pi_cycle, 0, 0))
+                                   goto last;
+                               AB = MB & RMASK;
+                               ctl = (int)((MB >> 18) & 017);
+                           }
+its_rdb:
+#endif
                            if (uba_read(AB, ctl, &AR, BYTE))
                                goto io_fault;
                            i_flags = SAC;
                            break;
 
                   case 023:       /* WRIOB */
+#if KS_ITS
+                           if (QITS) {
+                               if (Mem_read(pi_cycle, 0, 0))
+                                   goto last;
+                               AB = MB & RMASK;
+                               ctl = (int)((MB >> 18) & 017);
+                           }
+its_wrb:
+#endif
                            MB = get_reg(AC);
                            if (uba_write(AB, ctl, MB, BYTE))
                                goto io_fault;
                            break;
 
                   case 024:       /* BSIOB */
+#if KS_ITS
+                           if (QITS) {
+                               ctl = 3;
+                               goto its_wrb;
+                           }
+#endif
                            BR = get_reg(AC);
                            if (uba_read(AB, ctl, &MB, BYTE))
                                goto io_fault;
@@ -9819,6 +9867,12 @@ its_wr:
                            break;
 
                   case 025:       /* BCIOB */
+#if KS_ITS
+                           if (QITS) {
+                               ctl = 1;
+                               goto its_wrb;
+                           }
+#endif
                            BR = get_reg(AC);
                            if (uba_read(AB, ctl, &MB, BYTE))
                                goto io_fault;
@@ -11749,6 +11803,7 @@ max_dev = 16;
 #endif
 
 for(i=0; i < 128; dev_irq[i++] = 0);
+for(i=0; i < 128; dev_map[i++] = 0);
 sim_brk_types = SWMASK('E') | SWMASK('W') | SWMASK('R');
 sim_brk_dflt = SWMASK ('E');
 sim_clock_precalibrate_commands = pdp10_clock_precalibrate_commands;
@@ -11882,7 +11937,6 @@ t_bool build_dev_tab (void)
 
     /* Set trap offset based on MAOFF flag */
     maoff = (cpu_unit[0].flags & UNIT_MAOFF)? 0100 : 0;
-    max_dev = 2;
 
 #if KA
     /* Set up memory access routines based on current CPU type. */
@@ -11914,11 +11968,13 @@ t_bool build_dev_tab (void)
     for (i = 0; i < 128; i++) {
         dev_tab[i] = &null_dev;
         dev_irqv[i] = NULL;
+        dev_map[i] = 0;
     }
 
     /* Set up basic devices. */
     dev_tab[0] = &dev_apr;
     dev_tab[1] = &dev_pi;
+    max_dev = 2;
 #if KI | KL
     dev_tab[2] = &dev_pag;
     max_dev++;
@@ -11927,13 +11983,16 @@ t_bool build_dev_tab (void)
     dev_tab[4] = &dev_tim;
     dev_irqv[4] = &tim_irq;
     dev_tab[5] = &dev_mtr;
-    max_dev+=4;
+    max_dev+=3;
 #endif
 #endif
+    for (i = 0; i < max_dev; i++) {
+        dev_map[i] = i;
+    }
 #if BBN
     if (QBBN) {
        dev_tab[024>>2] = &dev_pag;
-       max_dev = 024>>2;
+       dev_map[024>>2] = max_dev++;
     }
 #endif
 
@@ -11970,13 +12029,12 @@ t_bool build_dev_tab (void)
 #endif
             }
             dev_tab[(d >> 2)] = dibp->io;
+            dev_map[(d >> 2)] = max_dev++;
             dev_irqv[(d >> 2)] = dibp->irq;
             rh[rh_idx].dev_num = d;
             rh[rh_idx].dev = dptr;
             rh[rh_idx].rh = dibp->rh;
             dibp->rh->devnum = d;
-            if ((d >> 2) > max_dev)
-               max_dev = d >> 2;
             rh_idx++;
         }
     }
@@ -11998,9 +12056,8 @@ t_bool build_dev_tab (void)
                         return TRUE;
                     }
                     dev_tab[(d >> 2) + j] = dibp->io;       /* fill */
+                    dev_map[(d >> 2) + j] = max_dev++;
                     dev_irqv[(d >> 2) + j] = dibp->irq;
-                    if (((d >> 2) + j)> max_dev)
-                       max_dev = (d >> 2) + j;
                 }
             }
         }

@@ -96,8 +96,8 @@ MTAB cty_mod[] = {
     };
 
 UNIT cty_unit[] = {
-    { UDATA (&ctyo_svc, TT_MODE_7B, 0), 500},
-    { UDATA (&ctyi_svc, TT_MODE_7B|UNIT_DIS, 0), 1000 },
+    { UDATA (&ctyo_svc, TT_MODE_7B, 0), 2000},
+    { UDATA (&ctyi_svc, TT_MODE_7B|UNIT_DIS, 0), 2000 },
     { UDATA (&ctyrtc_srv, UNIT_IDLE|UNIT_DIS, 0), 1000 }
     };
 
@@ -121,6 +121,7 @@ void
 cty_wakeup()
 {
     sim_debug(DEBUG_EXP, &cty_dev, "CTY wakeup\n");
+    sim_cancel(&cty_unit[0]);
     sim_activate(&cty_unit[0], cty_unit[0].wait);
 }
 
@@ -186,7 +187,16 @@ t_stat ctyo_svc (UNIT *uptr)
                 cty_interrupt();
             }
         } else {
-            sim_activate(uptr, uptr->wait);
+            sim_activate(uptr, tmxr_poll);
+        }
+    }
+
+    if (Mem_read_word(KLINK_OUT, &buffer, 0))
+        return SCPE_OK;
+    if (buffer != 0) {
+        buffer = 0;
+        if (Mem_write_word(CTY_OUT, &buffer, 0) == 0) {
+            cty_interrupt();
         }
     }
 
@@ -195,7 +205,7 @@ t_stat ctyo_svc (UNIT *uptr)
         char ch = cty_out.buff[cty_out.out_ptr];
         if (ch != 0) {
             if (sim_putchar_s(ch) != SCPE_OK) {
-                sim_activate(uptr, uptr->wait);
+                sim_activate(uptr, tmxr_poll);
                 return SCPE_OK;
             }
         }

@@ -80,6 +80,8 @@
 #define CS1_TRE         0040000         /* Set if CS2 0177400 */
 #define CS1_SC          0100000         /* Set if TRE or ATTN */
 
+#define CSX_BUSY        02              /* RH11 is doing a transfer */
+
 
 /* RPWC - 176702 - word count */
 
@@ -262,6 +264,8 @@ struct drvtyp rp_drv_tab[] = {
 
 int           rp_write(t_addr addr, uint16 data, int32 access);
 int           rp_read(t_addr addr, uint16 *data, int32 access);
+uint16        rp_vect(struct pdp_dib *dibp);
+
 t_stat        rp_svc(UNIT *);
 t_stat        rp_boot(int32, DEVICE *);
 void          rp_ini(UNIT *, t_bool);
@@ -300,7 +304,7 @@ UNIT                rpa_unit[] = {
                  UNIT_ROABLE+DTYPE(RP06_DTYPE), RP06_SIZE) },
 };
 
-DIB rpa_dib = {0776700, 077, 0254, 6, 1, &rp_read, &rp_write, 0};
+DIB rpa_dib = {0776700, 077, 0254, 6, 1, &rp_read, &rp_write, &rp_vect, 0};
 
 
 MTAB                rp_mod[] = {
@@ -345,23 +349,22 @@ rp_write(t_addr addr, uint16 data, int32 access) {
     UNIT       *uptr = &rpa_unit[rp_unit];
     int         dtype = GET_DTYPE(uptr->flags);
    
-        /* If drive not ready don't do anything */
-        if ((rp_ie & CS1_GO) != 0|| (uptr->STATUS & DS_PIP) != 0) { 
-           uptr->CMD |= (ER1_RMR << 16);
-//           rp_cs2 |= CS2_PGE;
-           sim_debug(DEBUG_DETAIL, &rpa_dev, "RP%o not ready\n", rp_unit);
-           return 0;
-        }
-
     switch(addr & 076) {
 /* u3  low */
     case  000: /* RPC   - 176700 - control */
+        sim_debug(DEBUG_DETAIL, &rpa_dev, "RP%o Status=%06o\n", rp_unit, uptr->CMD);
         if (access == BYTE && addr & 1)
            break;
 
-        sim_debug(DEBUG_DETAIL, &rpa_dev, "RP%o Status=%06o\n", rp_unit, uptr->CMD);
+        rp_ie &= ~(CS1_IE);
+        rp_ie |= data & (CS1_IE);
+        if ((uptr->CMD & CS1_GO) != 0) { 
+            uptr->CMD |= (ER1_RMR << 16);
+            sim_debug(DEBUG_DETAIL, &rpa_dev, "RP%o not ready %02o %06o\n", rp_unit,
+                    addr & 077, data);
+            return 0;
+        }
         rp_ba = ((data << 8) & 0600000) | (rp_ba & 0177777);
-        rp_ie = data & (CS1_IE);
         uptr->CMD = data & 076;
         /* Check if GO bit set */
         if ((data & 1) == 0) {
@@ -372,6 +375,7 @@ rp_write(t_addr addr, uint16 data, int32 access) {
            sim_debug(DEBUG_DETAIL, &rpa_dev, "RP%o unattached %06o\n", rp_unit, data);
            return 0;                           /* No, nop */
         }
+        uba_clr_irq(&rpa_dib);
         switch (GET_FNC(data)) {
         case FNC_NOP:
             break;
@@ -403,27 +407,28 @@ rp_write(t_addr addr, uint16 data, int32 access) {
                 break;
             }
 
-            rp_ie |= CS1_GO;
+            if (GET_FNC(data) >= FNC_XFER) 
+               rp_ie |= CSX_BUSY;
+            uptr->CMD |= CS1_GO;
             CLR_BUF(uptr);
             uptr->DATAPTR = 0;
             break;
 
 
         case FNC_DCLR:                        /* drive clear */
-            uptr->STATUS &= ~(DS_ATA);
-            rp_ie &= ~(CS1_GO);
+            uptr->STATUS &= DS_VV;
             uptr->DA &= 003400177777;
             uptr->CCYL &= 0177777;
-            rp_ie = 0;
             break;
 
         case FNC_PRESET:                      /* read-in preset */
             uptr->DA = 0;
             uptr->CCYL &= 0177777;
              /* Fall through */
-
-        case FNC_RELEASE:                     /* port release */
         case FNC_PACK:                        /* pack acknowledge */
+            uptr->STATUS |= DS_VV;
+             /* Fall through */
+        case FNC_RELEASE:                     /* port release */
             break;
 
         default:
@@ -431,12 +436,18 @@ rp_write(t_addr addr, uint16 data, int32 access) {
             uptr->CMD |= (ER1_ILF << 16);
         }
         if (GET_FNC(data) >= FNC_XFER)
-            uptr->STATUS = 0;
-        if (rp_ie & CS1_GO)
+            uptr->STATUS &= (DS_VV);
+        if (uptr->CMD & CS1_GO)
             sim_activate(uptr, 1000);
         sim_debug(DEBUG_DETAIL, &rpa_dev, "RP%o AStatus=%06o\n", rp_unit, uptr->CMD);
         break;
      case 002: /* RPWC  - 176702 - word count */
+        if ((rp_ie & (CSX_BUSY)) != 0) { 
+            uptr->CMD |= (ER1_RMR << 16);
+            sim_debug(DEBUG_DETAIL, &rpa_dev, "RP%o not ready %02o %06o\n", rp_unit,
+                    addr & 077, data);
+            return 0;
+        }
         if (access == BYTE) {
             if (addr & 1)
                 data = data | (rp_wc & 0377);
@@ -446,6 +457,12 @@ rp_write(t_addr addr, uint16 data, int32 access) {
         rp_wc = data;
         break;
      case 004: /* RPBA  - 176704 - base address */
+        if ((rp_ie & (CSX_BUSY)) != 0) { 
+            uptr->CMD |= (ER1_RMR << 16);
+            sim_debug(DEBUG_DETAIL, &rpa_dev, "RP%o not ready %02o %06o\n", rp_unit,
+                    addr & 077, data);
+            return 0;
+        }
         if (access == BYTE) {
             if (addr & 1)
                 data = data | (rp_ba & 0377);
@@ -466,6 +483,12 @@ rp_write(t_addr addr, uint16 data, int32 access) {
         break;
 
     case  010: /* RPCS2 - 176710 - Control and Status register 2 */
+//        if ((rp_ie & (CSX_BUSY)) != 0) { 
+//            uptr->CMD |= (ER1_RMR << 16);
+//            sim_debug(DEBUG_DETAIL, &rpa_dev, "RP%o not ready %02o %06o\n", rp_unit,
+//                    addr & 077, data);
+//            return 0;
+//        }
         if (access == BYTE) {
             if (addr & 1)
                data = data | (rp_cs2 & 0377);
@@ -549,13 +572,21 @@ rp_read(t_addr addr, uint16 *data, int32 access) {
 /* RPDB  - 176722 - data buffer */
     switch(addr & 076) {
     case  000:  /* RPC   - 176700 - control */
-        temp = uptr->CMD & 076;
-        temp |= (uint16)rp_ie;
+        temp = uptr->CMD & 077;
+        temp |= (uint16)(rp_ie & (CS1_IE));
         temp |= (rp_ba & 0600000) >> 8;
-        if ((rp_ie & CS1_GO) == 0 && (uptr->STATUS & DS_PIP) == 0)
+        if ((rp_ie & CSX_BUSY) == 0)
            temp |= CS1_RDY;
-        if (uptr->flags & UNIT_ATT) {
+        if (uptr->flags & UNIT_ATT)
            temp |= CS1_DVA;
+        if (rp_cs2 & (CS2_MDPE|CS2_MXF|CS2_PGE|CS2_NEM|CS2_NED|CS2_PE|CS2_WCE|CS2_DLT))
+           temp |= CS1_TRE|CS1_SC;
+        for (i = 0; i < 8; i++) {
+            UNIT   *u = &rpa_unit[i];
+            if (u->STATUS & DS_ATA) {
+                temp |= CS1_SC;
+                break;
+            }
         }
         break;
     case  002:  /* RPWC  - 176702 - word count */
@@ -579,10 +610,10 @@ rp_read(t_addr addr, uint16 *data, int32 access) {
         if ((uptr->flags & UNIT_DIS) == 0)
            temp |= DS_DPR;
         if ((uptr->flags & UNIT_ATT) != 0)
-           temp |= DS_VV|DS_MOL;
+           temp |= DS_MOL;
         if ((uptr->flags & UNIT_WLK) != 0)
            temp |= DS_WRL;
-        if ((rp_ie & CS1_GO) == 0 && (uptr->STATUS & DS_PIP) == 0)
+        if ((uptr->CMD & CS1_GO) == 0)
            temp |= DS_DRY;
         break;
     case  014:  /* RPER1 - 176714 - error status 1 */
@@ -639,11 +670,19 @@ rp_read(t_addr addr, uint16 *data, int32 access) {
     return 0;
 }
 
+uint16
+rp_vect(struct pdp_dib *dibp)
+{
+    rp_ie &= ~CS1_IE;
+    return dibp->uba_vect;
+}
 
 /* Set the attention flag for a unit */
-void rp_setattn(int unit)
+void rp_setattn(UNIT *uptr)
 {
-    if (rp_ie)
+    uptr->STATUS |= DS_ATA;
+    uptr->CMD &= ~CS1_GO;
+    if ((rp_ie & CSX_BUSY) == 0 && (rp_ie & CS1_IE) != 0)
         uba_set_irq(&rpa_dib);
 }
 
@@ -664,12 +703,13 @@ t_stat rp_svc (UNIT *uptr)
     if ((uptr->flags & UNIT_ATT) == 0) {                 /* not attached? */
         uptr->CMD |= (ER1_UNS << 16);                    /* set drive error */
         uptr->STATUS |= DS_ATA;
-        rp_ie &= ~(CS1_GO);
+        rp_ie &= ~(CSX_BUSY);
+        uptr->CMD &= ~CS1_GO;
         if (GET_FNC(uptr->CMD) >= FNC_XFER) {             /* xfr? set done */
-            if (rp_ie)
+            if ((rp_ie & CSX_BUSY) == 0 && (rp_ie & CS1_IE) != 0)
                 uba_set_irq(&rpa_dib);
         } else {
-            rp_setattn(unit);
+            rp_setattn(uptr);
         }
         return (SCPE_OK);
     }
@@ -679,10 +719,10 @@ t_stat rp_svc (UNIT *uptr)
         sim_debug(DEBUG_DETAIL, dptr, "%s%o seek %d %d\n", dptr->name, unit, cyl, uptr->CCYL);
         if (cyl >= rp_drv_tab[dtype].cyl) {
             uptr->STATUS &= ~DS_PIP;
-            uptr->STATUS |= DS_ATA;
+ //           uptr->STATUS |= DS_ATA;
             uptr->CMD |= (ER1_IAE << 16);
-            rp_ie &= ~CS1_GO;
-            rp_setattn(unit);
+//            uptr->CMD &= ~CS1_GO;
+            rp_setattn(uptr);
         }
         diff = cyl - (uptr->CCYL & 01777);
         if (diff < 0) {
@@ -733,9 +773,7 @@ t_stat rp_svc (UNIT *uptr)
         if (GET_SC(uptr->DA) >= rp_drv_tab[dtype].sect ||
             GET_SF(uptr->DA) >= rp_drv_tab[dtype].surf)
             uptr->CMD |= (ER1_IAE << 16);
-        uptr->STATUS |= DS_ATA;
-        rp_ie &= ~CS1_GO;
-        rp_setattn(unit);
+        rp_setattn(uptr);
         sim_debug(DEBUG_DETAIL, dptr, "%s%o seekdone %d %o\n", dptr->name, unit, cyl, uptr->CMD);
         break;
 
@@ -743,9 +781,7 @@ t_stat rp_svc (UNIT *uptr)
         if (GET_SC(uptr->DA) >= rp_drv_tab[dtype].sect ||
             GET_SF(uptr->DA) >= rp_drv_tab[dtype].surf)
             uptr->CMD |= (ER1_IAE << 16);
-        uptr->STATUS |= DS_ATA;
-        rp_ie &= ~CS1_GO;
-        rp_setattn(unit);
+        rp_setattn( uptr);
         sim_debug(DEBUG_DETAIL, dptr, "%s%o searchdone %d %o\n", dptr->name, unit, cyl, uptr->CMD);
         break;
 
@@ -757,8 +793,9 @@ t_stat rp_svc (UNIT *uptr)
             GET_SF(uptr->DA) >= rp_drv_tab[dtype].surf) {
             uptr->CMD |= (ER1_IAE << 16);
             uptr->STATUS |= DS_ATA;
-            rp_ie &= ~CS1_GO;
-            if (uptr->CMD & CS1_IE)
+            rp_ie &= ~(CSX_BUSY);
+            uptr->CMD &= ~CS1_GO;
+            if (rp_ie & CS1_IE)
                 uba_set_irq(&rpa_dib);
             sim_debug(DEBUG_DETAIL, dptr, "%s%o readx done\n", dptr->name, unit);
             return SCPE_OK;
@@ -832,8 +869,9 @@ t_stat rp_svc (UNIT *uptr)
         }
 rd_end:
         sim_debug(DEBUG_DETAIL, dptr, "%s%o read done\n", dptr->name, unit);
-        rp_ie &= ~CS1_GO;
-        if (rp_ie)
+        uptr->CMD &= ~CS1_GO;
+        rp_ie &= ~(CSX_BUSY);
+        if (rp_ie & CS1_IE)
             uba_set_irq(&rpa_dib);
         return SCPE_OK;
 
@@ -843,8 +881,10 @@ rd_end:
             GET_SF(uptr->DA) >= rp_drv_tab[dtype].surf) {
             uptr->CMD |= (ER1_IAE << 16);
             uptr->STATUS |= DS_ATA;
-            rp_ie &= ~CS1_GO;
-            uba_set_irq(&rpa_dib);
+            rp_ie &= ~(CSX_BUSY);
+            uptr->CMD &= ~CS1_GO;
+            if (rp_ie & CS1_IE)
+                uba_set_irq(&rpa_dib);
             sim_debug(DEBUG_DETAIL, dptr, "%s%o writex done\n", dptr->name, unit);
             return SCPE_OK;
         }
@@ -917,8 +957,9 @@ wr_done:
         } else {
             sim_debug(DEBUG_DETAIL, dptr, "RP%o write done\n", unit);
             uptr->STATUS &= ~DS_PIP;
-            rp_ie &= ~CS1_GO;
-            if (rp_ie)
+            rp_ie &= ~(CSX_BUSY);
+            uptr->CMD &= ~CS1_GO;
+            if (rp_ie & CS1_IE)
                 uba_set_irq(&rpa_dib);
         }
         return SCPE_OK;
@@ -947,11 +988,13 @@ rp_reset(DEVICE * dptr)
     int   i;
     rp_ba = 0;
     rp_wc = 0177777;
+    rp_ie = 0;
     rp_cs2 = CS2_IR;
     for (i = 0; i < 8; i++) {
         UNIT   *u = &rpa_unit[i];
-        u->STATUS = 0;
+        u->STATUS &= DS_VV;
     }
+    uba_clr_irq(&rpa_dib);
     sim_debug(DEBUG_DETAIL, dptr, "RP reset done\n");
     return SCPE_OK;
 }
@@ -968,6 +1011,10 @@ rp_boot(int32 unit_num, DEVICE * rptr)
     uint64        len;
     int           i;
     int           da;
+    t_stat        r;
+
+    if ((r = rp_reset(dptr) )!= SCPE_OK)
+        return r;
     /* Read in block 1 and see if it is a home block */
     disk_read(uptr, &rp_buf[0], 1, RP_NUMWD);
     if (rp_buf[0] != 0505755000000LL) {
@@ -1043,14 +1090,12 @@ t_stat rp_attach (UNIT *uptr, CONST char *cptr)
     if (rptr == 0)
         return SCPE_OK;
     dib = (DIB *) rptr->ctxt;
-//    if (uptr->flags & UNIT_WLK)
- //        uptr->CMD |= DS_WRL;
     if (sim_switches & SIM_SW_REST)
         return SCPE_OK;
     uptr->DA = 0;
-//    uptr->CMD &= ~DS_VV;
- //   uptr->CMD |= DS_DPR|DS_MOL|DS_DRY;
-    rp_setattn(uptr - &rpa_unit[0]);
+    uptr->STATUS = DS_ATA;
+    if ((rp_ie & CSX_BUSY) == 0 && (rp_ie & CS1_IE) != 0)
+        uba_set_irq(&rpa_dib);
     return SCPE_OK;
 }
 
@@ -1062,7 +1107,7 @@ t_stat rp_detach (UNIT *uptr)
         return SCPE_OK;
     if (sim_is_active (uptr))                              /* unit active? */
         sim_cancel (uptr);                                  /* cancel operation */
-//    uptr->CMD &= ~(DS_VV|DS_WRL|DS_DPR|DS_DRY);
+    uptr->STATUS = 0;
     return disk_detach (uptr);
 }
 

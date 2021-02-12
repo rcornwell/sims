@@ -528,7 +528,7 @@ struct pdp_dib {
     uint16              uba_ctl;                        /* Unibus controller number */
     t_stat              (*rd_io)(t_addr addr, uint16 *data, int32 access);
     t_stat              (*wr_io)(t_addr addr, uint16 data, int32 access);
-    uint8               (*irqv)(struct pdp_dib *dibp);
+    uint16              (*irqv)(struct pdp_dib *dibp);
     uint8               uba_irq_pend;                   /* Device has pending */
 };
 typedef struct pdp_dib DIB;
@@ -549,7 +549,8 @@ int     uba_write_npr_byte(t_addr addr, uint16 ctl, uint16 data);
 int     uba_read_npr_word(t_addr addr, uint16 ctl, uint16 *data);
 int     uba_write_npr_word(t_addr addr, uint16 ctl, uint16 data);
 void    uba_set_irq(DIB *dibp);
-t_addr  uba_get_vect(t_addr addr, int lvl);
+void    uba_clr_irq(DIB *dibp);
+t_addr  uba_get_vect(t_addr addr, int lvl, int *dev, int *new_lvl);
 
 t_stat  uba_set_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat  uba_show_addr (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
