@@ -40,6 +40,7 @@
 /* forward definitions */
 uint16  iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
 void    iop_ini(UNIT *uptr, t_bool f);
+uint16  iop_rschnlio(UNIT *uptr);
 t_stat  iop_srv(UNIT *uptr);
 t_stat  iop_reset(DEVICE *dptr);
 t_stat  iop_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
@@ -64,11 +65,11 @@ const char  *iop_desc(DEVICE *dptr);
 
 /* in u5 packs sense byte 0,1 and 3 */
 /* Sense byte 0 */
-#define SNS_CMDREJ  0x80000000    /* Command reject */
-#define SNS_INTVENT 0x40000000    /* Unit intervention required */
+#define SNS_CMDREJ  0x80000000              /* Command reject */
+#define SNS_INTVENT 0x40000000              /* Unit intervention required */
 /* sense byte 3 */
-#define SNS_RDY     0x80        /* device ready */
-#define SNS_ONLN    0x40        /* device online */
+#define SNS_RDY     0x80                    /* device ready */
+#define SNS_ONLN    0x40                    /* device online */
 
 /* std devices. data structures
     iop_dev     Console device descriptor
@@ -79,8 +80,8 @@ const char  *iop_desc(DEVICE *dptr);
 
 struct _iop_data
 {
-    uint8       ibuff[145];         /* Input line buffer */
-    uint8       incnt;              /* char count */
+    uint8       ibuff[145];                 /* Input line buffer */
+    uint8       incnt;                      /* char count */
 }
 iop_data[NUM_UNITS_IOP];
 
@@ -105,7 +106,7 @@ DIB             iop_dib = {
     NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O HIO */
     NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O TIO */
     NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
-    NULL,           /* uint16 (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
+    iop_rschnlio,   /* uint16 (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
     NULL,           /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     iop_ini,        /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     iop_unit,       /* UNIT* units */                           /* Pointer to units structure */
@@ -122,8 +123,8 @@ DIB             iop_dib = {
 DEVICE          iop_dev = {
     "IOP", iop_unit, NULL, iop_mod,
     NUM_UNITS_IOP, 8, 15, 1, 8, 8,
-    NULL, NULL, &iop_reset,                         /* examine, deposit, reset */
-    NULL, NULL, NULL,                               /* boot, attach, detach */
+    NULL, NULL, &iop_reset,                 /* examine, deposit, reset */
+    NULL, NULL, NULL,                       /* boot, attach, detach */
     /* dib ptr, dev flags, debug flags, debug */
     &iop_dib, DEV_CHAN|DEV_DIS|DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
 };
@@ -132,14 +133,27 @@ DEVICE          iop_dev = {
 /* initialize the console chan/unit */
 void iop_ini(UNIT *uptr, t_bool f)
 {
-    int     unit = (uptr - iop_unit);               /* unit 0 */
-    DEVICE *dptr = &iop_dev;                        /* one and only dummy device */
+    int     unit = (uptr - iop_unit);       /* unit 0 */
+    DEVICE *dptr = &iop_dev;                /* one and only dummy device */
 
+    iop_data[unit].incnt = 0;               /* no input data */
+    uptr->u5 = SNS_RDY|SNS_ONLN;            /* status is online & ready */
+    sim_cancel(uptr);                       /* stop any timers */
     sim_debug(DEBUG_CMD, &iop_dev,
         "IOP init device %s controller/device %04x\n",
         dptr->name, GET_UADDR(uptr->u3));
-    iop_data[unit].incnt = 0;                       /* no input data */
-    uptr->u5 = SNS_RDY|SNS_ONLN;                    /* status is online & ready */
+}
+
+/* handle rschnlio cmds for iop */
+uint16  iop_rschnlio(UNIT *uptr) {
+    DEVICE  *dptr = get_dev(uptr);
+    uint16  chsa = GET_UADDR(uptr->u3);
+    int     cmd = uptr->u3 & IOP_MSK;
+
+    sim_debug(DEBUG_EXP, dptr,
+        "iop_rschnl chsa %04x cmd = %02x\n", chsa, cmd);
+    iop_ini(uptr, 0);                       /* reset the unit */
+    return SCPE_OK;
 }
 
 /* start an I/O operation */
@@ -148,49 +162,49 @@ uint16 iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
     sim_debug(DEBUG_CMD, &iop_dev,
         "IOP startcmd %02x controller/device %04x\n",
         cmd, GET_UADDR(uptr->u3));
-    if ((uptr->u3 & IOP_MSK) != 0)                  /* is unit busy */
-        return SNS_BSY;                             /* yes, return busy */
+    if ((uptr->u3 & IOP_MSK) != 0)          /* is unit busy */
+        return SNS_BSY;                     /* yes, return busy */
 
     /* process the commands */
     switch (cmd & 0xFF) {
     /* UTX uses the INCH cmd to detect the IOP or MFP */
     /* IOP has INCH cmd of 0, while MFP uses 0x80 */
-    case IOP_INCH:                                  /* INCH command */
-        uptr->u5 = SNS_RDY|SNS_ONLN;                /* status is online & ready */
-        uptr->u3 &= LMASK;                          /* leave only chsa */
+    case IOP_INCH:                          /* INCH command */
+        uptr->u5 = SNS_RDY|SNS_ONLN;        /* status is online & ready */
+        uptr->u3 &= LMASK;                  /* leave only chsa */
         sim_debug(DEBUG_CMD, &iop_dev,
             "iop_startcmd %04x: Cmd INCH iptr %06x INCHa %06x\n",
-            chan, iop_chp[0].ccw_addr,              /* set inch buffer addr */
-            iop_chp[0].chan_inch_addr);             /* set inch buffer addr */
+            chan, iop_chp[0].ccw_addr,      /* set inch buffer addr */
+            iop_chp[0].chan_inch_addr);     /* set inch buffer addr */
 
         iop_chp[0].chan_inch_addr = iop_chp[0].ccw_addr;   /* set inch buffer addr */
 
-        uptr->u3 |= IOP_INCH2;                      /* save INCH command as 0xf0 */
-        sim_activate(uptr, 40);                     /* go on */
-        return 0;                                   /* no status change */
+        uptr->u3 |= IOP_INCH2;              /* save INCH command as 0xf0 */
+        sim_activate(uptr, 40);             /* go on */
+        return 0;                           /* no status change */
         break;
 
-    case IOP_NOP:                                   /* NOP command */
+    case IOP_NOP:                           /* NOP command */
         sim_debug(DEBUG_CMD, &iop_dev, "iop_startcmd %04x: Cmd NOP\n", chan);
-        uptr->u5 = SNS_RDY|SNS_ONLN;                /* status is online & ready */
-        uptr->u3 &= LMASK;                          /* leave only chsa */
-        uptr->u3 |= (cmd & IOP_MSK);                /* save NOP command */
-        sim_activate(uptr, 40);                     /* TRY 07-13-19 */
-        return 0;                                   /* no status change */
+        uptr->u5 = SNS_RDY|SNS_ONLN;        /* status is online & ready */
+        uptr->u3 &= LMASK;                  /* leave only chsa */
+        uptr->u3 |= (cmd & IOP_MSK);        /* save NOP command */
+        sim_activate(uptr, 40);             /* TRY 07-13-19 */
+        return 0;                           /* no status change */
         break;
 
-    default:                                        /* invalid command */
-        uptr->u5 |= SNS_CMDREJ;                     /* command rejected */
+    default:                                /* invalid command */
+        uptr->u5 |= SNS_CMDREJ;             /* command rejected */
         sim_debug(DEBUG_CMD, &iop_dev, "iop_startcmd %04x: Cmd Invalid %02x status %02x\n",
             chan, cmd, uptr->u5);
-        uptr->u3 &= LMASK;                          /* leave only chsa */
-        uptr->u3 |= (cmd & IOP_MSK);                /* save command */
-        sim_activate(uptr, 40);                     /* force interrupt */
-        return 0;                                   /* no status change */
+        uptr->u3 &= LMASK;                  /* leave only chsa */
+        uptr->u3 |= (cmd & IOP_MSK);        /* save command */
+        sim_activate(uptr, 40);             /* force interrupt */
+        return 0;                           /* no status change */
         break;
     }
 
-    return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;       /* not reachable for now */
+    return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* not reachable for now */
 }
 
 /* Handle transfers for other sub-channels on IOP */
@@ -198,36 +212,44 @@ t_stat iop_srv(UNIT *uptr)
 {
     uint16  chsa = GET_UADDR(uptr->u3);
     int     cmd = uptr->u3 & IOP_MSK;
-    CHANP   *chp = &iop_chp[0];                     /* find the chanp pointer */
-    uint32  mema = chp->ccw_addr;                   /* get inch or buffer addr */
+    CHANP   *chp = &iop_chp[0];             /* find the chanp pointer */
+    uint32  mema = chp->ccw_addr;           /* get inch or buffer addr */
+    uint32  tstart;
 
     /* test for NOP or INCH cmds */
     if ((cmd != IOP_NOP) && (cmd != IOP_INCH2)) {   /* NOP or INCH */
-        uptr->u3 &= LMASK;                          /* nothing left, command complete */
+        uptr->u3 &= LMASK;                  /* nothing left, command complete */
         sim_debug(DEBUG_CMD, &iop_dev,
             "iop_srv Unknown cmd %02x chan %02x: chnend|devend|unitexp\n", cmd, chsa);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);  /* done */
         return SCPE_OK;
     } else
 
-    if (cmd == IOP_NOP) {                           /* NOP do nothing */
-        uptr->u3 &= LMASK;                          /* nothing left, command complete */
+    if (cmd == IOP_NOP) {                   /* NOP do nothing */
+        uptr->u3 &= LMASK;                  /* nothing left, command complete */
         sim_debug(DEBUG_CMD, &iop_dev, "iop_srv INCH/NOP chan %02x: chnend|devend\n", chsa);
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* done */
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
         return SCPE_OK;
     } else
 
     /* test for INCH cmd */
-    if (cmd == IOP_INCH2) {                         /* INCH */
+    if (cmd == IOP_INCH2) {                 /* INCH */
         sim_debug(DEBUG_CMD, &iop_dev,
             "iop_srv starting INCH %06x cmd, chsa %04x MemBuf %06x cnt %04x\n",
             mema, chsa, chp->ccw_addr, chp->ccw_count);
 
+        /* now call set_inch() function to write and test inch buffer addresses */
         /* the chp->ccw_addr location contains the inch address */
-        /* call set_inch() to setup inch buffer */
-        set_inch(uptr, mema);                       /* new address */
-        uptr->u3 &= LMASK;                          /* clear the cmd */
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* we are done dev|chan end */
+        tstart = set_inch(uptr, mema);      /* new address */
+        if ((tstart == SCPE_MEM) || (tstart == SCPE_ARG)) { /* any error */
+            /* we have error, bail out */
+            uptr->u5 |= SNS_CMDREJ;
+            uptr->u3 &= LMASK;              /* nothing left, command complete */
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+            return SCPE_OK;
+        }
+        uptr->u3 &= LMASK;                  /* clear the cmd */
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
     }
     return SCPE_OK;
 }

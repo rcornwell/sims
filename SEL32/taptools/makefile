@@ -32,6 +32,7 @@ PROGS =			\
 	$(ROOT)/mkdiagtape \
 	$(ROOT)/tapdump	\
 	$(ROOT)/tape2disk \
+	$(ROOT)/disk2tap \
 	$(ROOT)/tapscan \
 	$(ROOT)/eomtap \
 	$(ROOT)/volmcopy \
@@ -108,6 +109,12 @@ $B/tapdump:	$D tapdump.c
 	@echo $(@F) installed in $B
 
 $B/tape2disk:	$D tape2disk.c
+	@-$(CC) $(CFLAGS) $(@F).c $(LFLAGS) -o $@
+	@chmod 755 $@
+	@cp $(@F) $B
+	@echo $(@F) installed in $B
+
+$B/disk2tap:	$D disk2tap.c
 	@-$(CC) $(CFLAGS) $(@F).c $(LFLAGS) -o $@
 	@chmod 755 $@
 	@cp $(@F) $B

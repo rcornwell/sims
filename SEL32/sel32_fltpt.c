@@ -160,35 +160,35 @@ t_uint64 s_nord(t_uint64 reg, uint32 *exp) {
 /* normalize the memory value when adding number to zero */
 uint32 s_normfw(uint32 num, uint32 *cc) {
     uint32      ret;
-    int32       val;                /* temp word */
-    int32       exp;                /* exponent */
-    int32       CCs;                /* condition codes */
-    uint8       sign;               /* original sign */
+    int32       val;                    /* temp word */
+    int32       exp;                    /* exponent */
+    int32       CCs;                    /* condition codes */
+    uint8       sign;                   /* original sign */
 
-    if (num == 0) {                 /* make sure we have a number */
-        *cc = CC4BIT;               /* set the cc's */
-        return 0;                   /* return zero */
+    if (num == 0) {                     /* make sure we have a number */
+        *cc = CC4BIT;                   /* set the cc's */
+        return 0;                       /* return zero */
     }
     sign = 0;
 
     /* special case 0x80000000 (-0) to set CCs to 1011 * value to 0x80000001 */
     if (num == 0x80000000) {
-        CCs = CC1BIT|CC3BIT|CC4BIT; /* we have AE, exp overflow, neg frac */
-        ret = 0x80000001;           /* return max neg value */
+        CCs = CC1BIT|CC3BIT|CC4BIT;     /* we have AE, exp overflow, neg frac */
+        ret = 0x80000001;               /* return max neg value */
 
         /* return normalized number */
-        *cc = CCs;                  /* set the cc's */
-        return ret;                 /* return result */
+        *cc = CCs;                      /* set the cc's */
+        return ret;                     /* return result */
     }
 
     /* special case pos exponent & zero mantissa to be 0 */
     if (((num & 0x80000000) == 0) && ((num & 0xff000000) > 0) && ((num & 0x00ffffff) == 0)) {
-        ret = 0;                    /* 0 to any power is still 0 */
-        CCs = CC4BIT;               /* set zero CC */
+        ret = 0;                        /* 0 to any power is still 0 */
+        CCs = CC4BIT;                   /* set zero CC */
 
         /* return normalized number */
-        *cc = CCs;                  /* set the cc's */
-        return ret;                 /* return result */
+        *cc = CCs;                      /* set the cc's */
+        return ret;                     /* return result */
     }
 
     /* if we have 1xxx xxxx 0000 0000 0000 0000 0000 0000 */
@@ -199,49 +199,49 @@ uint32 s_normfw(uint32 num, uint32 *cc) {
         num = 0x80000000 | (nexp & 0x7f000000) | 0x00f00000;
     }
 
-    exp = (num & 0x7f000000) >> 24; /* get exponent */
-    if (num & 0x80000000) {         /* test for neg */
-        sign = 1;                   /* we are neq */
-        num = NEGATE32(num);        /* two's complement */
-        exp ^= 0x7f;                /* complement exponent */
+    exp = (num & 0x7f000000) >> 24;     /* get exponent */
+    if (num & 0x80000000) {             /* test for neg */
+        sign = 1;                       /* we are neq */
+        num = NEGATE32(num);            /* two's complement */
+        exp ^= 0x7f;                    /* complement exponent */
     }
-    val = num & 0x00ffffff;         /* get mantissa */
+    val = num & 0x00ffffff;             /* get mantissa */
 
     /* now make sure number is normalized */
     while ((val != 0) && ((val & 0x00f00000) == 0)) {
-        val <<= 4;                  /* move up a nibble */
-        exp--;                      /* and decrease exponent */
+        val <<= 4;                      /* move up a nibble */
+        exp--;                          /* and decrease exponent */
     }
 
-    if (exp < 0) {                  /* check for underflow */
-        CCs = CC1BIT;               /* we have underflow */
-        if (sign & 1)               /* we are neq */
-            CCs |= CC3BIT;          /* set neg CC */
+    if (exp < 0) {                      /* check for underflow */
+        CCs = CC1BIT;                   /* we have underflow */
+        if (sign & 1)                   /* we are neq */
+            CCs |= CC3BIT;              /* set neg CC */
         else
-            CCs |= CC2BIT;          /* set pos CC */
-        ret = 0;                    /* number too small, make 0 */
-        exp = 0;                    /* exponent too */
+            CCs |= CC2BIT;              /* set pos CC */
+        ret = 0;                        /* number too small, make 0 */
+        exp = 0;                        /* exponent too */
 
         /* return normalized number */
-        *cc = CCs;                  /* set the cc's */
-        return ret;                 /* return result */
+        *cc = CCs;                      /* set the cc's */
+        return ret;                     /* return result */
     }
 
     /* rebuild normalized number */
     val = ((val & 0x00ffffff) | ((exp & 0x7f) << 24));
-    if (sign & 1)                   /* we are neq */
-        val = NEGATE32(val);        /* two's complement */
+    if (sign & 1)                       /* we are neq */
+        val = NEGATE32(val);            /* two's complement */
     if (val == 0)
-        CCs = CC4BIT;               /* show zero */
-    else if (val & 0x80000000)      /* neqative? */
-        CCs = CC3BIT;               /* show negative */
+        CCs = CC4BIT;                   /* show zero */
+    else if (val & 0x80000000)          /* neqative? */
+        CCs = CC3BIT;                   /* show negative */
     else
-        CCs = CC2BIT;               /* show positive */
-    ret = val;                      /* return normalized number */
+        CCs = CC2BIT;                   /* show positive */
+    ret = val;                          /* return normalized number */
 
     /* return normalized number */
-    *cc = CCs;                      /* set the cc's */
-    return ret;                     /* return result */
+    *cc = CCs;                          /* set the cc's */
+    return ret;                         /* return result */
 }
 
 #ifdef FOR_DEBUG
@@ -278,7 +278,7 @@ double dfpval(t_uint64 wd64)
         dbl *= -1.0;                    /* if negative, return negative num */
     return dbl;                         /* return value */
 }
-#endif
+#endif /* FOR_DEBUG */
 
 /* normalize the memory value when adding number to zero */
 t_uint64 s_normfd(t_uint64 num, uint32 *cc) {
@@ -601,7 +601,8 @@ t_uint64 s_fltd(t_uint64 intv, uint32 *cc) {
         /* gt 0, fall through */
     }
 
-    while ((val) && ((val & 0xf000000000000000ll) == 0)) {    /* see if normalized */
+    /* see if normalized */
+    while ((val) && ((val & 0xf000000000000000ll) == 0)) {
         val <<= 4;                      /* zero, shift in next nibble */
         exp--;                          /* decr exp value */
     }
@@ -641,7 +642,7 @@ t_uint64 s_fltd(t_uint64 intv, uint32 *cc) {
 
     /* return temp for destination regs */
     *cc = CC;                           /* return CC's */
-    return ret;                        /* return result */
+    return ret;                         /* return result */
 }
 
 #define CMASK   0x10000000              /* carry mask */
@@ -1095,7 +1096,6 @@ setcc:
     return temp;                        /* return result */
 }
 
-//#define DEXMASK 0x7f00000000000000LL    /* double exponent mask */
 #define DMMASK  0x00ffffffffffffffLL    /* double mantissa mask */
 #define DCMASK  0x1000000000000000LL    /* double carry mask */
 #define DIBMASK 0x0fffffffffffffffLL    /* double fp nibble mask */
@@ -1502,7 +1502,6 @@ t_uint64 s_dvfd(t_uint64 reg, t_uint64 mem, uint32 *cc) {
 
     mem ^= DIBMASK;                     /* change sign of mem val to do add */
     mem++;                              /* comp & incr */
-
 
     res = 0;                            /* zero result for multiply */
     /* do divide by using shift & add (subt) */

@@ -41,6 +41,7 @@
 /* forward definitions */
 uint16  mfp_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
 void    mfp_ini(UNIT *uptr, t_bool f);
+uint16  mfp_rschnlio(UNIT *uptr);
 t_stat  mfp_srv(UNIT *uptr);
 t_stat  mfp_reset(DEVICE *dptr);
 t_stat  mfp_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
@@ -66,11 +67,11 @@ const char  *mfp_desc(DEVICE *dptr);
 
 /* in u5 packs sense byte 0,1 and 3 */
 /* Sense byte 0 */
-#define SNS_CMDREJ  0x80000000    /* Command reject */
-#define SNS_INTVENT 0x40000000    /* Unit intervention required */
+#define SNS_CMDREJ  0x80000000              /* Command reject */
+#define SNS_INTVENT 0x40000000              /* Unit intervention required */
 /* sense byte 3 */
-#define SNS_RDY     0x80        /* device ready */
-#define SNS_ONLN    0x40        /* device online */
+#define SNS_RDY     0x80                    /* device ready */
+#define SNS_ONLN    0x40                    /* device online */
 
 /* std devices. data structures
 
@@ -82,8 +83,8 @@ const char  *mfp_desc(DEVICE *dptr);
 
 struct _mfp_data
 {
-    uint8       ibuff[145];         /* Input line buffer */
-    uint8       incnt;              /* char count */
+    uint8       ibuff[145];                 /* Input line buffer */
+    uint8       incnt;                      /* char count */
 }
 mfp_data[NUM_UNITS_MFP];
 
@@ -108,7 +109,7 @@ DIB             mfp_dib = {
     NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O HIO */
     NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O TIO */
     NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
-    NULL,           /* uint16 (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
+    mfp_rschnlio,   /* uint16 (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
     NULL,           /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     mfp_ini,        /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     mfp_unit,       /* UNIT* units */                           /* Pointer to units structure */
@@ -125,8 +126,8 @@ DIB             mfp_dib = {
 DEVICE          mfp_dev = {
     "MFP", mfp_unit, NULL, mfp_mod,
     NUM_UNITS_MFP, 8, 15, 1, 8, 8,
-    NULL, NULL, &mfp_reset,         /* examine, deposit, reset */
-    NULL, NULL, NULL,               /* boot, attach, detach */
+    NULL, NULL, &mfp_reset,                 /* examine, deposit, reset */
+    NULL, NULL, NULL,                       /* boot, attach, detach */
     /* dib ptr, dev flags, debug flags, debug */
     &mfp_dib, DEV_CHAN|DEV_DIS|DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
 };
@@ -135,14 +136,27 @@ DEVICE          mfp_dev = {
 /* initialize the console chan/unit */
 void mfp_ini(UNIT *uptr, t_bool f)
 {
-    int     unit = (uptr - mfp_unit);               /* unit 0 */
-    DEVICE *dptr = &mfp_dev;                        /* one and only dummy device */
+    int     unit = (uptr - mfp_unit);       /* unit 0 */
+    DEVICE *dptr = &mfp_dev;                /* one and only dummy device */
 
-    mfp_data[unit].incnt = 0;                       /* no input data */
-    uptr->u5 = SNS_RDY|SNS_ONLN;                    /* status is online & ready */
+    mfp_data[unit].incnt = 0;               /* no input data */
+    uptr->u5 = SNS_RDY|SNS_ONLN;            /* status is online & ready */
+    sim_cancel(uptr);                       /* stop any timers */
     sim_debug(DEBUG_CMD, &mfp_dev,
         "MFP init device %s controller/device %04x SNS %08x\n",
         dptr->name, GET_UADDR(uptr->u3), uptr->u5);
+}
+
+/* handle rschnlio cmds for disk */
+uint16  mfp_rschnlio(UNIT *uptr) {
+    DEVICE  *dptr = get_dev(uptr);
+    uint16  chsa = GET_UADDR(uptr->u3);
+    int     cmd = uptr->u3 & MFP_MSK;
+
+    sim_debug(DEBUG_EXP, dptr,
+        "mfp_rschnl chsa %04x cmd = %02x\n", chsa, cmd);
+    mfp_ini(uptr, 0);                       /* reset the unit */
+    return SCPE_OK;
 }
 
 /* start an I/O operation */
@@ -151,58 +165,58 @@ uint16 mfp_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
     sim_debug(DEBUG_CMD, &mfp_dev,
         "MFP startcmd %02x controller/device %04x\n",
         cmd, GET_UADDR(uptr->u3));
-    if ((uptr->u3 & MFP_MSK) != 0)                  /* is unit busy */
-        return SNS_BSY;                             /* yes, return busy */
+    if ((uptr->u3 & MFP_MSK) != 0)          /* is unit busy */
+        return SNS_BSY;                     /* yes, return busy */
 
     /* process the commands */
     switch (cmd & 0xFF) {
     /* UTX uses the INCH cmd to detect the MFP or MFP */
     /* MFP has INCH cmd of 0, while MFP uses 0x80 */
-    case MFP_INCH:                                  /* INCH command */
-        uptr->u5 = SNS_RDY|SNS_ONLN;                /* status is online & ready */
-        uptr->u3 &= LMASK;                          /* leave only chsa */
+    case MFP_INCH:                          /* INCH command */
+        uptr->u5 = SNS_RDY|SNS_ONLN;        /* status is online & ready */
+        uptr->u3 &= LMASK;                  /* leave only chsa */
         sim_debug(DEBUG_CMD, &mfp_dev,
             "mfp_startcmd %04x: Cmd INCH iptr %06x INCHa %06x\n",
-            chan, mfp_chp[0].ccw_addr,              /* set inch buffer addr */
-            mfp_chp[0].chan_inch_addr);             /* set inch buffer addr */
+            chan, mfp_chp[0].ccw_addr,      /* set inch buffer addr */
+            mfp_chp[0].chan_inch_addr);     /* set inch buffer addr */
 
         mfp_chp[0].chan_inch_addr = mfp_chp[0].ccw_addr;   /* set inch buffer addr */
 
-        uptr->u3 |= MFP_INCH2;                      /* save INCH command as 0xf0 */
-        sim_activate(uptr, 40);                     /* go on */
-        return 0;                                   /* no status change */
+        uptr->u3 |= MFP_INCH2;              /* save INCH command as 0xf0 */
+        sim_activate(uptr, 40);             /* go on */
+        return 0;                           /* no status change */
         break;
 
-    case MFP_NOP:                                   /* NOP command */
+    case MFP_NOP:                           /* NOP command */
         sim_debug(DEBUG_CMD, &mfp_dev, "mfp_startcmd %04x: Cmd NOP\n", chan);
-        uptr->u5 = SNS_RDY|SNS_ONLN;                /* status is online & ready */
-        uptr->u3 &= LMASK;                          /* leave only chsa */
-        uptr->u3 |= (cmd & MFP_MSK);                /* save NOP command */
-        sim_activate(uptr, 40);                     /* TRY 07-13-19 */
-        return 0;                                   /* no status change */
+        uptr->u5 = SNS_RDY|SNS_ONLN;        /* status is online & ready */
+        uptr->u3 &= LMASK;                  /* leave only chsa */
+        uptr->u3 |= (cmd & MFP_MSK);        /* save NOP command */
+        sim_activate(uptr, 40);             /* TRY 07-13-19 */
+        return 0;                           /* no status change */
         break;
 
-    case MFP_SID:                                   /* status ID command */
+    case MFP_SID:                           /* status ID command */
         sim_debug(DEBUG_CMD, &mfp_dev, "mfp_startcmd %04x: Cmd SID\n", chan);
-        uptr->u5 = SNS_RDY|SNS_ONLN;                /* status is online & ready */
-        uptr->u3 &= LMASK;                          /* leave only chsa */
-        uptr->u3 |= (cmd & MFP_MSK);                /* save SID command */
-        sim_activate(uptr, 40);                     /* TRY 07-13-19 */
-        return 0;                                   /* no status change */
+        uptr->u5 = SNS_RDY|SNS_ONLN;        /* status is online & ready */
+        uptr->u3 &= LMASK;                  /* leave only chsa */
+        uptr->u3 |= (cmd & MFP_MSK);        /* save SID command */
+        sim_activate(uptr, 40);             /* TRY 07-13-19 */
+        return 0;                           /* no status change */
         break;
 
-    default:                                        /* invalid command */
-        uptr->u5 |= SNS_CMDREJ;                     /* command rejected */
+    default:                                /* invalid command */
+        uptr->u5 |= SNS_CMDREJ;             /* command rejected */
         sim_debug(DEBUG_CMD, &mfp_dev, "mfp_startcmd %04x: Cmd Invalid %02x status %02x\n",
             chan, cmd, uptr->u5);
-        uptr->u3 &= LMASK;                          /* leave only chsa */
-        uptr->u3 |= (cmd & MFP_MSK);                /* save command */
-        sim_activate(uptr, 40);                     /* force interrupt */
-        return 0;                                   /* no status change */
+        uptr->u3 &= LMASK;                  /* leave only chsa */
+        uptr->u3 |= (cmd & MFP_MSK);        /* save command */
+        sim_activate(uptr, 40);             /* force interrupt */
+        return 0;                           /* no status change */
         break;
     }
 
-    return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;       /* not reachable for now */
+    return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* not reachable for now */
 }
 
 /* Handle transfers for other sub-channels on MFP */
@@ -210,22 +224,23 @@ t_stat mfp_srv(UNIT *uptr)
 {
     uint16  chsa = GET_UADDR(uptr->u3);
     int     cmd = uptr->u3 & MFP_MSK;
-    CHANP   *chp = &mfp_chp[0];                     /* find the chanp pointer */
-    uint32  mema = chp->ccw_addr;                   /* get inch or buffer addr */
+    CHANP   *chp = &mfp_chp[0];             /* find the chanp pointer */
+    uint32  mema = chp->ccw_addr;           /* get inch or buffer addr */
+    uint32  tstart;
 
     /* test for NOP or INCH cmds */
     if ((cmd != MFP_NOP) && (cmd != MFP_INCH2) && (cmd != MFP_SID)) {   /* NOP, SID or INCH */
-        uptr->u3 &= LMASK;                          /* nothing left, command complete */
+        uptr->u3 &= LMASK;                  /* nothing left, command complete */
         sim_debug(DEBUG_CMD, &mfp_dev,
             "mfp_srv Unknown cmd %02x chan %02x: chnend|devend|unitexp\n", cmd, chsa);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);  /* done */
         return SCPE_OK;
     } else
 
-    if (cmd == MFP_NOP) {                           /* NOP do nothing */
-        uptr->u3 &= LMASK;                          /* nothing left, command complete */
+    if (cmd == MFP_NOP) {                   /* NOP do nothing */
+        uptr->u3 &= LMASK;                  /* nothing left, command complete */
         sim_debug(DEBUG_CMD, &mfp_dev, "mfp_srv NOP chan %02x: chnend|devend\n", chsa);
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* done */
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
         return SCPE_OK;
     } else
 
@@ -233,57 +248,63 @@ t_stat mfp_srv(UNIT *uptr)
     /* Wd 1 MMXXXXXX board model # assume 00 00 08 02*/
     /* Wd 2 MMXXXXXX board firmware model # assume 00 00 08 02*/
     /* Wd 3 MMXXXXXX board firmware revision # assume 00 00 00 14*/
-    if (cmd == MFP_SID) {                           /* send 12 byte Status ID data */
+    if (cmd == MFP_SID) {                   /* send 12 byte Status ID data */
         uint8   ch;
 
         /* Word 0 */        /* board mod 4324724 = 0x0041fd74 */
         ch = 0x00;
-        chan_write_byte(chsa, &ch);                 /* write byte 0 */
+        chan_write_byte(chsa, &ch);         /* write byte 0 */
         ch = 0x00;
-        chan_write_byte(chsa, &ch);                 /* write byte 1 */
+        chan_write_byte(chsa, &ch);         /* write byte 1 */
         ch = 0x81;
-        chan_write_byte(chsa, &ch);                 /* write byte 2 */
+        chan_write_byte(chsa, &ch);         /* write byte 2 */
         ch = 0x02;
-        chan_write_byte(chsa, &ch);                 /* write byte 3 */
+        chan_write_byte(chsa, &ch);         /* write byte 3 */
 
         /* Word 1 */        /* firmware 4407519 = 0x004340df */
         ch = 0x00;
-        chan_write_byte(chsa, &ch);                 /* write byte 4 */
+        chan_write_byte(chsa, &ch);         /* write byte 4 */
         ch = 0x00;
-        chan_write_byte(chsa, &ch);                 /* write byte 5 */
+        chan_write_byte(chsa, &ch);         /* write byte 5 */
         ch = 0x80;
-        chan_write_byte(chsa, &ch);                 /* write byte 6 */
+        chan_write_byte(chsa, &ch);         /* write byte 6 */
         ch = 0x02;
-        chan_write_byte(chsa, &ch);                 /* write byte 7 */
+        chan_write_byte(chsa, &ch);         /* write byte 7 */
 
         /* Word 2 */        /* firmware rev 4259588 = 0x0040ff04 */
         ch = 0x00;
-        chan_write_byte(chsa, &ch);                 /* write byte 8 */
+        chan_write_byte(chsa, &ch);         /* write byte 8 */
         ch = 0x00;
-        chan_write_byte(chsa, &ch);                 /* write byte 9 */
+        chan_write_byte(chsa, &ch);         /* write byte 9 */
         ch = 0x00;
-        chan_write_byte(chsa, &ch);                 /* write byte 10 */
+        chan_write_byte(chsa, &ch);         /* write byte 10 */
         ch = 0x14;
-        chan_write_byte(chsa, &ch);                 /* write byte 11 */
+        chan_write_byte(chsa, &ch);         /* write byte 11 */
 
-        uptr->u3 &= LMASK;                          /* nothing left, command complete */
+        uptr->u3 &= LMASK;                  /* nothing left, command complete */
         sim_debug(DEBUG_CMD, &mfp_dev, "mfp_srv SID chan %02x: chnend|devend\n", chsa);
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* done */
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
         return SCPE_OK;
     } else
 
     /* test for INCH cmd */
-    if (cmd == MFP_INCH2) {                         /* INCH */
+    if (cmd == MFP_INCH2) {                 /* INCH */
         sim_debug(DEBUG_CMD, &mfp_dev,
             "mfp_srv starting INCH %06x cmd, chsa %04x MemBuf %06x cnt %04x\n",
             mema, chsa, chp->ccw_addr, chp->ccw_count);
 
+        /* now call set_inch() function to write and test inch buffer addresses */
         /* the chp->ccw_addr location contains the inch address */
-        /* call set_inch() to setup inch buffer */
-        //FIXME add code to test return
-        set_inch(uptr, mema);                       /* new address */
-        uptr->u3 &= LMASK;                          /* clear the cmd */
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* we are done dev|chan end */
+        tstart = set_inch(uptr, mema);      /* new address */
+        if ((tstart == SCPE_MEM) || (tstart == SCPE_ARG)) { /* any error */
+            /* we have error, bail out */
+            uptr->u5 |= SNS_CMDREJ;
+            uptr->u3 &= LMASK;              /* nothing left, command complete */
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+            return SCPE_OK;
+        }
+        uptr->u3 &= LMASK;                  /* clear the cmd */
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
     }
     return SCPE_OK;
 }

@@ -173,27 +173,32 @@ Support for the following units:
     Communications
     * 2703 with 16 lines of 1050.
 
-# SEL32 Development Simulator
+# SEL32 Concept/32 Simulator
 
 This is a working simulator for the SEL Concept/32 line of computers.  The
-current test version is for the SEL 32/27, 32/67, 32/87, 32/97, V6, and V9
+current version is for the SEL 32/27, 32/67, 32/87, 32/97, V6, and V9
 computers.  Support for 32/55, and 32/75 computers may be added in the future.
 This simulator is co-authors with James C. Bevier. I did the initial parts
 of the simulator, James took it to a working simulator, I am assisting him
-in maintaining and enhancing the simulator. This simulator is running a test
-version of MPX-32 1.5F.  It is capable of creating a disk image of the O/S
-from a SDT tape.  The disk image can be booted, initialized, and run many of
-the MPX utilities; including OPCOM & TSM.  Eight terminals can be used to
-access TSM via Telnet port 4747.  Initial support has been added for excess
-64 floating point arithmetic.  More testing is still required.  The sim32disk.gz
-can be uncompressed and booted with the sel32.27.sim32.disk.ini initialization
-file.  The sim32sdt.tap.gz file can also be uncompressed and started with the
-sel32.27.sim32.tape.ini initialization file to install from tape.
+in maintaining and enhancing the simulator. 
 
-The current version can also install and run UTX 2.1A from an install tape.
-It is the SEL version of System V Unix and BSD Unix ported to the V6 and V9
-processors.  It can run in single or multi user mode.  UTX utilizes the basemode
-instruction set and a virtual memory system provided by the V6 & V9 CPUs.
-There are still some random halts and panics.  The system needs further
-testing to solidify the SEL32 simulator code.
+All of the processors except for the 32/77 can run the Gould diags.  MPX 1.X
+support for the 32/77 computers may be added in the future.  The level one
+diags are run as part of the SIMH build of SEL32 to verify that the simulator
+is operating correctly.  The diags are located in the tests directory.  Diag.tap
+contains the diagnostic programs and diag.ini contains the directives to
+configure and run the SEL32 simulator.
+
+This simulator is capable of running UTX2.1A, UTX2.1B, MPX 1.5F, and a
+test version of MPX 3.4.  It is capable of creating a disk image for the
+O/S from a UTX or MPX SDT tape. The disk image can be booted, initialized,
+and can run many of the UTX and MPX utilities and programs. Ethernet is
+supported on UTX and may be added to MPX in the future.  Eight terminals
+can be used to access MPX via Telnet port 4747. The sumulator has support
+for excess 64 floating point arithmetic and passes the 32/27 and 32/67 FP
+diags.  UTX is the SEL version of System V Unix and BSD Unix ported to the
+V6 and V9 processors.  UTX utilizes the basemode instruction set and a
+virtual memory system supported by the V6 & V9 CPUs.  The system needs
+further testing to solidify the SEL32 simulator code in all of the
+supported environmenets.
 

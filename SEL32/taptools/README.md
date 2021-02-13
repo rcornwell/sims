@@ -162,7 +162,7 @@ tapdump -  This program reads a metadata .tap file and prints a side
            output - stdout
 
 tape2disk - This program reads a tape assigned as input device.  It
-           generated a .tap metadata file.  Stdout will contain a
+           generates a .tap metadata file.  Stdout will contain a
            listing of the files and sizes written to disk.  The define
            #define FILEMGR must be compiled in for tapes ending with
            two EOFs.  Unix and MPX 1.x filemgr tapes use that format.
@@ -173,6 +173,15 @@ tape2disk - This program reads a tape assigned as input device.  It
            input -  mag tape device being read
            output - list of files and sizes read from input tape
            output - metadata .tap file optionally specified
+
+disk2tap - This program reads a file assigned as input device.  It
+           generates a .tap formatted metadata file.  Stdout will
+           display the file name and size written to disk.
+
+           command: disk2tap file [dest.tap]
+           input -  input filename being read
+           output - filename and size read from input
+           output - metadata .tap file specified
 
 tapscan -  This program scans a metadata .tap file and prints the
            file count and sizes.  Used to determine the file

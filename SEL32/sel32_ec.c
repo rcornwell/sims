@@ -219,24 +219,25 @@ static CONST ETH_MAC broadcast_ethaddr = {0xff,0xff,0xff,0xff,0xff,0xff};
 
 /* channel program information */
 //CHANP           ec_chp[8] = {0};
-CHANP           ec_chp[NUM_UNITS_ETHER] = {0};
+CHANP       ec_chp[NUM_UNITS_ETHER] = {0};
 
-uint16         ec_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
-t_stat         ec_rec_srv(UNIT *uptr);
-t_stat         ec_srv(UNIT *uptr);
-uint16         ec_haltio(UNIT *uptr);
-uint16         ec_iocl(CHANP *chp, int32 tic_ok);
-void           ec_packet_debug(struct ec_device *ec, const char *action, ETH_PACK *packet);
-t_stat         ec_reset (DEVICE *dptr);
-void           ec_ini(UNIT *, t_bool);
-t_stat         ec_show_mac (FILE* st, UNIT* uptr, int32 val, CONST void* desc);
-t_stat         ec_set_mac (UNIT* uptr, int32 val, CONST char* cptr, void* desc);
-t_stat         ec_show_mode (FILE* st, UNIT* uptr, int32 val, CONST void* desc);
-t_stat         ec_set_mode (UNIT* uptr, int32 val, CONST char* cptr, void* desc);
-t_stat         ec_attach (UNIT * uptr, CONST char * cptr);
-t_stat         ec_detach (UNIT * uptr);
-t_stat         ec_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
-const char     *ec_description (DEVICE *dptr);
+uint16      ec_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
+t_stat      ec_rec_srv(UNIT *uptr);
+t_stat      ec_srv(UNIT *uptr);
+uint16      ec_haltio(UNIT *uptr);
+uint16      ec_iocl(CHANP *chp, int32 tic_ok);
+void        ec_packet_debug(struct ec_device *ec, const char *action, ETH_PACK *packet);
+t_stat      ec_reset (DEVICE *dptr);
+void        ec_ini(UNIT *, t_bool);
+uint16      ec_rschnlio(UNIT *uptr);
+t_stat      ec_show_mac (FILE* st, UNIT* uptr, int32 val, CONST void* desc);
+t_stat      ec_set_mac (UNIT* uptr, int32 val, CONST char* cptr, void* desc);
+t_stat      ec_show_mode (FILE* st, UNIT* uptr, int32 val, CONST void* desc);
+t_stat      ec_set_mode (UNIT* uptr, int32 val, CONST char* cptr, void* desc);
+t_stat      ec_attach (UNIT * uptr, CONST char * cptr);
+t_stat      ec_detach (UNIT * uptr);
+t_stat      ec_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
+const char  *ec_description (DEVICE *dptr);
 
 #define ec_master_uptr (&ec_unit[0])  /* Unit doing receive digestion */
 
@@ -271,7 +272,7 @@ DIB             ec_dib = {
     NULL,           /* uint16 (*stop_io)(UNIT *uptr) */ /* Stop I/O */
     NULL,           /* uint16 (*test_io)(UNIT *uptr) */ /* Test I/O */
     NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */    /* Reset Controller */
-    NULL,           /* uint16 (*rschnl_io)(UNIT *uptr) */   /* Reset Channel */
+    ec_rschnlio,    /* uint16 (*rschnl_io)(UNIT *uptr) */   /* Reset Channel */
     ec_iocl,        /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     ec_ini,         /* void (*dev_ini)(UNIT *uptr) */   /* init function */
     ec_unit,        /* UNIT *units */           /* Pointer to units structure */
@@ -285,7 +286,6 @@ DIB             ec_dib = {
     0,                                          /* fifo output index */
     {0},                                        /* interrupt status fifo for channel */
 };
-
 
 MTAB ec_mod[] = {
     { MTAB_XTD|MTAB_VDV|MTAB_VALR|MTAB_NC, 0, "MODE", "MODE=#",
@@ -337,7 +337,6 @@ uint16  ec_iocl(CHANP *chp, int32 tic_ok)
     uint32      word1 = 0;
     uint32      word2 = 0;
     int32       docmd = 0;
-//  DIB         *dibp = dib_unit[chp->chan_dev];/* get the DIB pointer */
     UNIT        *uptr = chp->unitptr;           /* get the unit ptr */
     uint16      chan = get_chan(chp->chan_dev); /* our channel */
     uint16      devstat = 0;
@@ -401,7 +400,6 @@ loop:
 
     if (!MEM_ADDR_OK(word1 & MASK24)) {         /* see if memory address invalid */
         chp->chan_status |= STATUS_PCHK;        /* bad, program check */
-//      uptr->SNS |= SNS_INAD;                  /* invalid address status */
         sim_debug(DEBUG_EXP, dptr,
             "ec_iocl bad IOCD1 chan_status[%04x] %04x\n", chan, chp->chan_status);
         return 1;                               /* error return */
@@ -416,7 +414,6 @@ loop:
     case 0x88: case 0x90: case 0x98: case 0xa0: case 0xa8: case 0xb0: case 0xb8:
     case 0xc0: case 0xc8: case 0xd0: case 0xd8: case 0xe0: case 0xe8: case 0xf0:
     case 0xf8:
-//      uptr->SNS |= SNS_CMDREJ;
         uptr->SNS &= ~SNS_CMDREJ;               /* remove CMD reject status */
         sim_debug(DEBUG_CMD, dptr,
             "ec_startcmd illegal at ec_startcmd %02x SNS %08x\n",
@@ -475,7 +472,6 @@ loop:
                 chp->chan_status |= STATUS_PCHK; /* program check for invalid tic */
                 chp->chan_caw = word1 & MASK24; /* get new IOCD address */
                 uptr->SNS |= SNS_CMDREJ;        /* cmd rejected status */
-//              uptr->SNS |= SNS_INAD;          /* invalid address status */
                 return 1;                       /* error return */
             }
             tic_ok = 0;                         /* another tic not allowed */
@@ -521,15 +517,14 @@ loop:
         if ((chp->ccw_cmd == EC_INCH) || (chp->ccw_cmd == EC_NOP) ||
             (chp->ccw_cmd == EC_CGA) || (chp->ccw_cmd == EC_CSTATS)) {
             chp->chan_status |= STATUS_PCHK;    /* program check for invalid DC */
-//          uptr->SNS |= SNS_CHER;              /* chaining error */
             sim_debug(DEBUG_EXP, dptr,
                 "ec_iocl DC ERROR chan_status[%04x] %04x\n", chan, chp->chan_status);
             return 1;                           /* error return */
         }
     }
 
-//    if (chp->ccw_cmd == EC_READ)                /* Force SLI on READ */
- //        chp->ccw_flags |= FLAG_SLI;
+//  if (chp->ccw_cmd == EC_READ)                /* Force SLI on READ */
+//      chp->ccw_flags |= FLAG_SLI;
 
     chp->chan_byte = BUFF_BUSY;                 /* busy & no bytes transferred yet */
 
@@ -634,8 +629,6 @@ uint16 ec_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     case EC_LIA:                                /* Load individual address */
     case EC_LGA:                                /* Load Multicast address */
         uptr->SNS &= 0xffff0000;                /* remove invalid cmd status */
-//      uptr->SNS &= 0x7fff0000;                /* remove invalid cmd status */
-//      uptr->SNS &= ~SNS_CMDREJ;               /* remove CMD reject status */
         /* Fall through */
     case EC_SNS:                                /* Sense 0x04 */
 #if 0
@@ -722,7 +715,6 @@ t_stat ec_srv(UNIT *uptr)
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             break;
         }
-#ifndef DIAG_WANTS_COUNT
         for (i=0; i < len; i++) {
             if (chan_read_byte(chsa, &buf[i])) {
                 /* we have error, bail out */
@@ -732,7 +724,6 @@ t_stat ec_srv(UNIT *uptr)
             }
             /* just dump data */
         }
-#endif
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
         break;
 
@@ -1213,8 +1204,8 @@ void ec_ini(UNIT *uptr, t_bool f)
 {
     DEVICE  *dptr = get_dev(uptr);
 
-    uptr->CMD &= LMASK;                         /* remove old status bits & cmd */
-    uptr->SNS = 0;                              /* save mode value */
+    uptr->CMD &= LMASK;                     /* remove old status bits & cmd */
+    uptr->SNS = 0;                          /* save mode value */
     memset(&ec_data.conf[0], 0, sizeof(ec_data.conf));
     ec_data.macs_n = 0;
     ec_data.tx_count = 0;
@@ -1231,6 +1222,18 @@ void ec_ini(UNIT *uptr, t_bool f)
         "EC init device %s on unit EC%04X\n", dptr->name, GET_UADDR(uptr->CMD));
 }
 
+/* handle rschnlio cmds for Ethernet */
+uint16  ec_rschnlio(UNIT *uptr) {
+    DEVICE  *dptr = get_dev(uptr);
+    uint16  chsa = GET_UADDR(uptr->CMD);
+    int     cmd = uptr->CMD & EC_CMDMSK;
+
+    sim_debug(DEBUG_EXP, dptr,
+        "ec_rschnl chsa %04x cmd = %02x\n", chsa, cmd);
+    ec_ini(uptr, 0);                        /* reset the unit */
+    return SCPE_OK;
+}
+
 static char *
 ipv4_inet_ntoa(struct in_addr ip)
 {
@@ -1243,9 +1246,9 @@ ipv4_inet_ntoa(struct in_addr ip)
                             (ip.s_addr >> 24) & 0xFF);
    else
        sprintf (str, "%d.%d.%d.%d", (ip.s_addr >> 24) & 0xFF,
-                              (ip.s_addr >> 16) & 0xFF,
-                              (ip.s_addr >> 8) & 0xFF,
-                               ip.s_addr & 0xFF);
+                            (ip.s_addr >> 16) & 0xFF,
+                            (ip.s_addr >> 8) & 0xFF,
+                             ip.s_addr & 0xFF);
    return str;
 }
 
@@ -1463,7 +1466,7 @@ t_stat ec_reset (DEVICE *dptr)
             break;
     }
     if (i == 6) {   /* First call to reset? */
-   /* Set a default MAC address in a BBN assigned OID range no longer in use */
+    /* Set a default MAC address in a BBN assigned OID range no longer in use */
         ec_set_mac (dptr->units, 0, "00:00:02:00:00:00/24", NULL);
     }
     memset(&ec_data.conf[0], 0, sizeof(ec_data.conf));
@@ -1534,16 +1537,12 @@ t_stat ec_attach(UNIT* uptr, CONST char* cptr)
     }
 
     eth_set_async (&ec_data.etherface, 0);
-        
-
     return SCPE_OK;
 }
 
 /* detach device: */
-
 t_stat ec_detach(UNIT* uptr)
 {
-
     if (uptr->flags & UNIT_ATT && (uptr->flags & UNIT_DIS) == 0) {
         eth_close (&ec_data.etherface);
         free(uptr->filename);
@@ -1555,17 +1554,16 @@ t_stat ec_detach(UNIT* uptr)
 
 t_stat ec_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-fprintf (st, "Ethernet interface\n\n");
-fprintf (st, "The ethernet interfaces to the network. Setting MAC defines default MAC address\n");
-fprint_set_help (st, dptr);
-fprint_show_help (st, dptr);
-eth_attach_help(st, dptr, uptr, flag, cptr);
-return SCPE_OK;
+    fprintf(st, "Ethernet interface\n\n");
+    fprintf(st, "The ethernet interfaces to the network. Setting MAC defines default MAC address\n");
+    fprint_set_help(st, dptr);
+    fprint_show_help(st, dptr);
+    eth_attach_help(st, dptr, uptr, flag, cptr);
+    return SCPE_OK;
 }
 
 const char *ec_description (DEVICE *dptr)
 {
     return "SEL32 8516 Ethernet interface";
 }
-
 #endif
