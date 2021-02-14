@@ -319,28 +319,16 @@ UNIT                rp_unit[] = {
 
 struct rh_if   rp_rh[NUM_DEVS_RP] = {
      { &rp_write, &rp_read, &rp_rst},
-#if (NUM_DEVS_RP > 1)
      { &rp_write, &rp_read, &rp_rst},
-#if (NUM_DEVS_RP > 2)
      { &rp_write, &rp_read, &rp_rst},
-#if (NUM_DEVS_RP > 3)
      { &rp_write, &rp_read, &rp_rst}
-#endif
-#endif
-#endif
 };
 
 DIB rp_dib[] = {
     {RH10_DEV, 1, &rh_devio, &rh_devirq, &rp_rh[0]},
-#if (NUM_DEVS_RP > 1)
     {RH10_DEV, 1, &rh_devio, &rh_devirq, &rp_rh[1]},
-#if (NUM_DEVS_RP > 2)
     {RH10_DEV, 1, &rh_devio, &rh_devirq, &rp_rh[2]},
-#if (NUM_DEVS_RP > 3)
     {RH10_DEV, 1, &rh_devio, &rh_devirq, &rp_rh[3]}};
-#endif
-#endif
-#endif
 
 
 MTAB                rp_mod[] = {
@@ -474,7 +462,6 @@ DEVICE              rpd_dev = {
 #endif
 #endif
 
-#if 0
 DEVICE *rp_devs[] = {
     &rpa_dev,
 #if (NUM_DEVS_RP > 1)
@@ -487,7 +474,7 @@ DEVICE *rp_devs[] = {
 #endif
 #endif
 };
-#endif
+
 
 void
 rp_rst(DEVICE *dptr)
@@ -757,7 +744,7 @@ t_stat rp_svc (UNIT *uptr)
     int           diff, da;
     int           sts;
 
-    dptr = uptr->dptr;
+    dptr = rp_devs[ctlr];
     rhc = &rp_rh[ctlr];
     unit = uptr - dptr->units;
     if ((uptr->flags & UNIT_ATT) == 0) {                 /* not attached? */
@@ -852,70 +839,70 @@ t_stat rp_svc (UNIT *uptr)
             goto rd_end;
         }
 
-        if (GET_SC(uptr->DA) >= rp_drv_tab[dtype].sect ||
-            GET_SF(uptr->DA) >= rp_drv_tab[dtype].surf) {
-            uptr->CMD |= (ER1_IAE << 16)|DS_ERR|DS_DRY|DS_ATA;
-            uptr->CMD &= ~CS1_GO;
-            rh_finish_op(rhc, 0);
-            sim_debug(DEBUG_DETAIL, dptr, "%s%o readx done\n", dptr->name, unit);
-            return SCPE_OK;
-        }
-        sim_debug(DEBUG_DETAIL, dptr, "%s%o read (%d,%d,%d)\n", dptr->name, unit, cyl,
-               GET_SF(uptr->DA), GET_SC(uptr->DA));
-        da = GET_DA(uptr->DA, dtype);
-        (void)disk_read(uptr, &rp_buf[ctlr][0], da, RP_NUMWD);
-        uptr->hwmark = RP_NUMWD;
-        uptr->DATAPTR = 0;
-        sts = 1;
-        /* On read headers, transfer 2 words to start */
-        if (GET_FNC(uptr->CMD) == FNC_READH) {
-            rhc->buf = (((uint64)cyl) << 18) | 
-                     ((uint64)((GET_SF(uptr->DA) << 8) | GET_SF(uptr->DA)));
-            sim_debug(DEBUG_DATA, dptr, "%s%o read word h1 %012llo %09o %06o\n",
-               dptr->name, unit, rhc->buf, rhc->cda, rhc->wcr);
-            if ((sts = rh_write(rhc)) == 0)
-                goto rd_end;
-            rhc->buf = ((uint64)((020 * ctlr) + (unit + 1)) << 18) | (uint64)(unit);
-            sim_debug(DEBUG_DATA, dptr, "%s%o read word h2 %012llo %09o %06o\n",
-               dptr->name, unit, rhc->buf, rhc->cda, rhc->wcr);
-            if ((sts = rh_write(rhc)) == 0)
-                goto rd_end;
-        }
-
-        while (uptr->DATAPTR < RP_NUMWD && sts != 0) {
-            rhc->buf = rp_buf[ctlr][uptr->DATAPTR++];
-            sim_debug(DEBUG_DATA, dptr, "%s%o read word %d %012llo %09o %06o\n",
-                   dptr->name, unit, uptr->DATAPTR, rhc->buf, rhc->cda, rhc->wcr);
-            sts = rh_write(rhc);
-        }
-
-        if (sts) {
-            /* Increment to next sector. Set Last Sector */
-            uptr->DATAPTR = 0;
-            CLR_BUF(uptr);
-            uptr->DA += 1 << DA_V_SC;
-            if (GET_SC(uptr->DA) >= rp_drv_tab[dtype].sect) {
-                uptr->DA &= (DA_M_SF << DA_V_SF) | (DC_M_CY << DC_V_CY);
-                uptr->DA += 1 << DA_V_SF;
-                if (GET_SF(uptr->DA) >= rp_drv_tab[dtype].surf) {
-                     uptr->DA &= (DC_M_CY << DC_V_CY);
-                     uptr->DA += 1 << DC_V_CY;
-                     uptr->CMD |= DS_PIP;
-                }
+        if (BUF_EMPTY(uptr)) {
+            if (GET_SC(uptr->DA) >= rp_drv_tab[dtype].sect ||
+                GET_SF(uptr->DA) >= rp_drv_tab[dtype].surf) {
+                uptr->CMD |= (ER1_IAE << 16)|DS_ERR|DS_DRY|DS_ATA;
+                uptr->CMD &= ~CS1_GO;
+                rh_finish_op(rhc, 0);
+                sim_debug(DEBUG_DETAIL, dptr, "%s%o readx done\n", dptr->name, unit);
+                return SCPE_OK;
             }
-            if (rh_blkend(rhc))
-                goto rd_end;
-            sim_activate(uptr, 100);
+            sim_debug(DEBUG_DETAIL, dptr, "%s%o read (%d,%d,%d)\n", dptr->name, unit, cyl,
+                   GET_SF(uptr->DA), GET_SC(uptr->DA));
+            da = GET_DA(uptr->DA, dtype);
+            (void)disk_read(uptr, &rp_buf[ctlr][0], da, RP_NUMWD);
+            uptr->hwmark = RP_NUMWD;
+            uptr->DATAPTR = 0;
+            /* On read headers, transfer 2 words to start */
+            if (GET_FNC(uptr->CMD) == FNC_READH) {
+                rhc->buf = (((uint64)cyl) << 18) | 
+                         ((uint64)((GET_SF(uptr->DA) << 8) | GET_SF(uptr->DA)));
+                sim_debug(DEBUG_DATA, dptr, "%s%o read word h1 %012llo %09o %06o\n",
+                   dptr->name, unit, rhc->buf, rhc->cda, rhc->wcr);
+                if (rh_write(rhc) == 0)
+                    goto rd_end;
+                rhc->buf = ((uint64)((020 * ctlr) + (unit + 1)) << 18) | (uint64)(unit);
+                sim_debug(DEBUG_DATA, dptr, "%s%o read word h2 %012llo %09o %06o\n",
+                   dptr->name, unit, rhc->buf, rhc->cda, rhc->wcr);
+                if (rh_write(rhc) == 0)
+                    goto rd_end;
+            }
+        }
+
+        rhc->buf = rp_buf[ctlr][uptr->DATAPTR++];
+        sim_debug(DEBUG_DATA, dptr, "%s%o read word %d %012llo %09o %06o\n",
+                   dptr->name, unit, uptr->DATAPTR, rhc->buf, rhc->cda, rhc->wcr);
+        if (rh_write(rhc)) {
+            if (uptr->DATAPTR == RP_NUMWD) {
+                /* Increment to next sector. Set Last Sector */
+                uptr->DATAPTR = 0;
+                CLR_BUF(uptr);
+                uptr->DA += 1 << DA_V_SC;
+                if (GET_SC(uptr->DA) >= rp_drv_tab[dtype].sect) {
+                    uptr->DA &= (DA_M_SF << DA_V_SF) | (DC_M_CY << DC_V_CY);
+                    uptr->DA += 1 << DA_V_SF;
+                    if (GET_SF(uptr->DA) >= rp_drv_tab[dtype].surf) {
+                         uptr->DA &= (DC_M_CY << DC_V_CY);
+                         uptr->DA += 1 << DC_V_CY;
+                         uptr->CMD |= DS_PIP;
+                    }
+                }
+                if (rh_blkend(rhc))
+                    goto rd_end;
+            }
+            sim_activate(uptr, 10);
+        } else {
+rd_end:
+            sim_debug(DEBUG_DETAIL, dptr, "%s%o read done\n", dptr->name, unit);
+            uptr->CMD |= DS_DRY;
+            uptr->CMD &= ~CS1_GO;
+            if (uptr->DATAPTR == RP_NUMWD) 
+               (void)rh_blkend(rhc);
+            rh_finish_op(rhc, 0);
             return SCPE_OK;
         }
-rd_end:
-        sim_debug(DEBUG_DETAIL, dptr, "%s%o read done\n", dptr->name, unit);
-        uptr->CMD |= DS_DRY;
-        uptr->CMD &= ~CS1_GO;
-        if (sts == 0)
-           (void)rh_blkend(rhc);
-        rh_finish_op(rhc, 0);
-        return SCPE_OK;
+        break;
 
     case FNC_WRITE:                      /* write */
     case FNC_WRITEH:                     /* write w/ headers */
@@ -924,68 +911,70 @@ rd_end:
             goto wr_end;
         }
 
-        if (GET_SC(uptr->DA) >= rp_drv_tab[dtype].sect ||
-            GET_SF(uptr->DA) >= rp_drv_tab[dtype].surf) {
-            uptr->CMD |= (ER1_IAE << 16)|DS_ERR|DS_DRY|DS_ATA;
-            uptr->CMD &= ~CS1_GO;
-            rh_finish_op(rhc, 0);
-            sim_debug(DEBUG_DETAIL, dptr, "%s%o writex done\n", dptr->name, unit);
-            return SCPE_OK;
-        }
-        sts = 1;
-        /* On Write headers, transfer 2 words to start */
-        if (GET_FNC(uptr->CMD) == FNC_WRITEH) {
-            if ((sts = rh_read(rhc)) == 0)
-                goto wr_end;
-            sim_debug(DEBUG_DATA, dptr, "%s%o write word h1 %012llo %06o\n",
-                  dptr->name, unit, rhc->buf, rhc->wcr);
-            if ((sts = rh_read(rhc)) == 0)
-                goto wr_end;
-            sim_debug(DEBUG_DATA, dptr, "%s%o write word h2 %012llo %06o\n",
-                  dptr->name, unit, rhc->buf, rhc->wcr);
-        }
-        uptr->DATAPTR = 0;
-        uptr->hwmark = 0;
-        rhc->buf = 0;
-        while (uptr->DATAPTR < RP_NUMWD && (sts = rh_read(rhc)) != 0) {
-             rp_buf[ctlr][uptr->DATAPTR++] = rhc->buf;
-             sim_debug(DEBUG_DATA, dptr, "%s%o write word %d %012llo %06o %06o\n",
-                     dptr->name, unit, uptr->DATAPTR, rhc->buf, rhc->cda, rhc->wcr);
-        }
-        rp_buf[ctlr][uptr->DATAPTR++] = rhc->buf;
-        while (uptr->DATAPTR < RP_NUMWD) {
-            rp_buf[ctlr][uptr->DATAPTR++] = 0;
-        }
-
-        sim_debug(DEBUG_DETAIL, dptr, "%s%o write (%d,%d,%d)\n", dptr->name,
-               unit, cyl, GET_SF(uptr->DA), GET_SC(uptr->DA));
-        da = GET_DA(uptr->DA, dtype);
-        (void)disk_write(uptr, &rp_buf[ctlr][0], da, RP_NUMWD);
-        uptr->DATAPTR = 0;
-        CLR_BUF(uptr);
-        uptr->DA += 1 << DA_V_SC;
-        if (GET_SC(uptr->DA) >= rp_drv_tab[dtype].sect) {
-            uptr->DA &= (DA_M_SF << DA_V_SF) | (DC_M_CY << DC_V_CY);
-            uptr->DA += 1 << DA_V_SF;
-            if (GET_SF(uptr->DA) >= rp_drv_tab[dtype].surf) {
-                 uptr->DA &= (DC_M_CY << DC_V_CY);
-                 uptr->DA += 1 << DC_V_CY;
-                 uptr->CMD |= DS_PIP;
+        if (BUF_EMPTY(uptr)) {
+            if (GET_SC(uptr->DA) >= rp_drv_tab[dtype].sect ||
+                GET_SF(uptr->DA) >= rp_drv_tab[dtype].surf) {
+                uptr->CMD |= (ER1_IAE << 16)|DS_ERR|DS_DRY|DS_ATA;
+                uptr->CMD &= ~CS1_GO;
+                rh_finish_op(rhc, 0);
+                sim_debug(DEBUG_DETAIL, dptr, "%s%o writex done\n", dptr->name, unit);
+                return SCPE_OK;
             }
+            /* On Write headers, transfer 2 words to start */
+            if (GET_FNC(uptr->CMD) == FNC_WRITEH) {
+                if (rh_read(rhc) == 0)
+                    goto wr_end;
+                sim_debug(DEBUG_DATA, dptr, "%s%o write word h1 %012llo %06o\n",
+                      dptr->name, unit, rhc->buf, rhc->wcr);
+                if (rh_read(rhc) == 0)
+                    goto wr_end;
+                sim_debug(DEBUG_DATA, dptr, "%s%o write word h2 %012llo %06o\n",
+                      dptr->name, unit, rhc->buf, rhc->wcr);
+            }
+            uptr->DATAPTR = 0;
+            uptr->hwmark = 0;
         }
-        if (rh_blkend(rhc))
-           goto wr_end;
-
+        sts = rh_read(rhc);
+        sim_debug(DEBUG_DATA, dptr, "%s%o write word %d %012llo %06o %06o\n",
+                      dptr->name, unit, uptr->DATAPTR, rhc->buf, rhc->cda, rhc->wcr);
+        rp_buf[ctlr][uptr->DATAPTR++] = rhc->buf;
+        if (sts == 0) {
+            while (uptr->DATAPTR < RP_NUMWD)
+                rp_buf[ctlr][uptr->DATAPTR++] = 0;
+        }
+        if (uptr->DATAPTR == RP_NUMWD) {
+            sim_debug(DEBUG_DETAIL, dptr, "%s%o write (%d,%d,%d)\n", dptr->name,
+                   unit, cyl, GET_SF(uptr->DA), GET_SC(uptr->DA));
+            da = GET_DA(uptr->DA, dtype);
+            (void)disk_write(uptr, &rp_buf[ctlr][0], da, RP_NUMWD);
+            uptr->DATAPTR = 0;
+            CLR_BUF(uptr);
+            if (sts) {
+                uptr->DA += 1 << DA_V_SC;
+                if (GET_SC(uptr->DA) >= rp_drv_tab[dtype].sect) {
+                    uptr->DA &= (DA_M_SF << DA_V_SF) | (DC_M_CY << DC_V_CY);
+                    uptr->DA += 1 << DA_V_SF;
+                    if (GET_SF(uptr->DA) >= rp_drv_tab[dtype].surf) {
+                         uptr->DA &= (DC_M_CY << DC_V_CY);
+                         uptr->DA += 1 << DC_V_CY;
+                         uptr->CMD |= DS_PIP;
+                    }
+                }
+            }
+            if (rh_blkend(rhc))
+               goto wr_end;
+        }
         if (sts) {
-            sim_activate(uptr, 100);
+            sim_activate(uptr, 10);
         } else {
 wr_end:
             sim_debug(DEBUG_DETAIL, dptr, "RP%o write done\n", unit);
             uptr->CMD |= DS_DRY;
             uptr->CMD &= ~CS1_GO;
             rh_finish_op(rhc, 0);
+            return SCPE_OK;
         }
-        return SCPE_OK;
+        break;
     }
     return SCPE_OK;
 }
@@ -1024,7 +1013,7 @@ rp_boot(int32 unit_num, DEVICE * rptr)
     UNIT         *uptr = &rptr->units[unit_num];
     int           ctlr = GET_CNTRL_RH(uptr->flags);
     struct rh_if *rhc = &rp_rh[ctlr];
-    DEVICE       *dptr = uptr->dptr;
+    DEVICE       *dptr = rp_devs[ctlr];
     uint32        addr;
     uint32        ptr = 0;
     int           wc;

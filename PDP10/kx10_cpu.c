@@ -131,7 +131,6 @@ int     uuo_cycle;                            /* Uuo cycle in progress */
 int     SC;                                   /* Shift count */
 int     SCAD;                                 /* Shift count extension */
 int     FE;                                   /* Exponent */
-uint32  max_dev;                              /* Max dev number */
 #if KA | PDP6
 t_addr  Pl, Ph, Rl, Rh, Pflag;                /* Protection registers */
 int     push_ovf;                             /* Push stack overflow */
@@ -280,7 +279,6 @@ int     watch_stop;                           /* Stop at memory watch point */
 int     maoff = 0;                            /* Offset for traps */
 
 uint16  dev_irq[128];                         /* Pending irq by device */
-uint8   dev_map[128];                         /* Map device to irq slot */
 t_stat  (*dev_tab[128])(uint32 dev, uint64 *data);
 t_addr  (*dev_irqv[128])(uint32 dev, t_addr addr);
 t_stat  rtc_srv(UNIT * uptr);
@@ -980,6 +978,11 @@ int opflags[] = {
 #else
 #define QSLAVE          0
 #endif
+#if KS
+#define MAX_DEV 16
+#else
+#define MAX_DEV 128
+#endif
 
 #if KL
 struct _byte {
@@ -1078,7 +1081,7 @@ void set_interrupt(int dev, int lvl) {
 #if KS
        dev_irq[dev>>2] |= 0200 >> lvl;
 #else
-       dev_irq[dev_map[dev>>2]] = 0200 >> lvl;
+       dev_irq[dev>>2] = 0200 >> lvl;
 #endif
        pi_pending = 1;
        sim_debug(DEBUG_IRQ, &cpu_dev, "set irq %o %o %03o %03o %03o\n",
@@ -1090,9 +1093,9 @@ void set_interrupt(int dev, int lvl) {
 void set_interrupt_mpx(int dev, int lvl, int mpx) {
     lvl &= 07;
     if (lvl) {
-       dev_irq[dev_map[dev>>2]] = 0200 >> lvl;
+       dev_irq[dev>>2] = 0200 >> lvl;
        if (lvl == 1 && mpx != 0)
-          dev_irq[dev_map[dev>>2]] |= mpx << 8;
+          dev_irq[dev>>2] |= mpx << 8;
        pi_pending = 1;
        sim_debug(DEBUG_IRQ, &cpu_dev, "set mpx irq %o %o %o %03o %03o %03o\n",
               dev & 0774, lvl, mpx, PIE, PIR, PIH);
@@ -1104,7 +1107,7 @@ void set_interrupt_mpx(int dev, int lvl, int mpx) {
  * Clear the interrupt flag for a device
  */
 void clr_interrupt(int dev) {
-    dev_irq[dev_map[dev>>2]] = 0;
+    dev_irq[dev>>2] = 0;
     if (dev > 4)
         sim_debug(DEBUG_IRQ, &cpu_dev, "clear irq %o\n", dev & 0774);
 }
@@ -1139,7 +1142,7 @@ int check_irq_level() {
     }
 
     /* Scan all devices */
-    for(i = lvl = 0; i < (int)max_dev; i++)
+    for(i = lvl = 0; i < MAX_DEV; i++)
        lvl |= dev_irq[i];
     if (lvl == 0)
        pi_pending = 0;
@@ -1149,7 +1152,7 @@ int check_irq_level() {
     if (mpx_enable && cpu_unit[0].flags & UNIT_MPX &&
                 (pi_req & 0100) && (PIH & 0100) == 0) {
         pi_enc = 010;
-        for(i = lvl = 0; i < (int)max_dev; i++) {
+        for(i = lvl = 0; i < MAX_DEV; i++) {
             if (dev_irq[i] & 0100) {
                int l = dev_irq[i] >> 8;
                if (l != 0 && l < pi_enc)
@@ -2938,7 +2941,7 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
 /*
  * Register access on KL 10
  */
-#if 0
+#if 1
 uint64 get_reg(int reg) {
      return FM[fm_sel|(reg & 017)];
 }
@@ -2946,9 +2949,10 @@ uint64 get_reg(int reg) {
 void   set_reg(int reg, uint64 value) {
      FM[fm_sel|(reg & 017)] = value;
 }
-#endif
+#else
 #define get_reg(reg) FM[fm_sel|((reg) & 017)]
 #define set_reg(reg, value) FM[fm_sel|((reg) & 017)] = (value)
+#endif
 
 int Mem_read(int flag, int cur_context, int fetch) {
     t_addr addr;
@@ -4625,20 +4629,20 @@ no_fetch:
     }
 
 #endif
-    if ((!pi_cycle) & pi_pending
-#if KI | KL | KS
-                    & (!trap_flag)
-#endif
-                     ) {
-       pi_rq = check_irq_level();
-    }
     /* Handle indirection repeat until no longer indirect */
     do {
-         ind = TST_IND(MB) != 0;
-         AR = MB;
-         AB = MB & RMASK;
-         ix = GET_XR(MB);
-         if (ix) {
+        if ((!pi_cycle) & pi_pending
+#if KI | KL | KS
+                        & (!trap_flag)
+#endif
+                         ) {
+           pi_rq = check_irq_level();
+        }
+        ind = TST_IND(MB) != 0;
+        AR = MB;
+        AB = MB & RMASK;
+        ix = GET_XR(MB);
+        if (ix) {
 #if KL | KS
              if (((xct_flag & 8) != 0 && !ptr_flg) ||
                  ((xct_flag & 2) != 0 && ptr_flg))
@@ -4745,15 +4749,16 @@ in_loop:
                  ind = 0;
              }
 #endif
+             /* Handle events during a indirect loop */
+             AIO_CHECK_EVENT;                                   /* queue async events */
+             if (sim_interval <= 0) {
+                  if ((reason = sim_process_event()) != SCPE_OK) {
+                      return reason;
+                  }
+             }
          }
 
-         /* Handle events during a indirect loop */
-         AIO_CHECK_EVENT;                                   /* queue async events */
-         if (--sim_interval <= 0) {
-              if ((reason = sim_process_event()) != SCPE_OK) {
-                  return reason;
-              }
-         }
+#if 0
          if ((!pi_cycle) & pi_pending
 #if KI | KL | KS
                          & (!trap_flag)
@@ -4761,6 +4766,7 @@ in_loop:
                           ) {
             pi_rq = check_irq_level();
          }
+#endif
     } while (ind & !pi_rq);
 
     /* If there is a interrupt handle it. */
@@ -4801,11 +4807,11 @@ st_pi:
          * Scan through the devices and allow KI devices to have first
          * hit at a given level.
          */
-        for (f = 0; f < 128; f++) {
-            if (dev_irqv[f] != 0 && dev_irq[dev_map[f]] & pi_mask) {
+        for (f = 0; f < MAX_DEV; f++) {
+            if (dev_irqv[f] != 0 && dev_irq[f] & pi_mask) {
                 AB = dev_irqv[f](f << 2, AB);
                 sim_debug(DEBUG_IRQ, &cpu_dev, "vect irq %o %03o %06o\n",
-                         pi_enc, dev_irq[dev_map[f]], AB);
+                         pi_enc, dev_irq[f], AB);
                 break;
             }
         }
@@ -5999,7 +6005,7 @@ dpnorm:
 #if KL | KS
               MQ = get_reg(AC + 1);
 #endif
-#if KL | KS
+#if KS
               IA = AB;
               AB = (AB + 1) & RMASK;
               modify = 1;
@@ -6054,7 +6060,7 @@ dpnorm:
                          FLAGS |= TRP1;
 #endif
                   }
-#if KL | KS
+#if KS
                   IA = AB;
                   modify = 1;
                   AB = (AB + 1) & RMASK;
@@ -6628,12 +6634,10 @@ ldb_ptr:
                   }
 #endif
               } else {
-#if KL
+#if KL | KS
                   ptr_flg = 0;
 ld_exe:
-#endif
-                  BYF5 = 1;
-#if KA | KL | KI
+#else
                   if ((IR & 06) == 6)
                       modify = 1;
 #endif
@@ -11797,13 +11801,11 @@ sect = cur_sect = pc_sect = 0;
 #if BBN
 exec_map = 0;
 #endif
+for(i=0; i < 128; dev_irq[i++] = 0);
 #if KS
 int_cur = int_val = 0;
-max_dev = 16;
 #endif
 
-for(i=0; i < 128; dev_irq[i++] = 0);
-for(i=0; i < 128; dev_map[i++] = 0);
 sim_brk_types = SWMASK('E') | SWMASK('W') | SWMASK('R');
 sim_brk_dflt = SWMASK ('E');
 sim_clock_precalibrate_commands = pdp10_clock_precalibrate_commands;
@@ -11968,31 +11970,23 @@ t_bool build_dev_tab (void)
     for (i = 0; i < 128; i++) {
         dev_tab[i] = &null_dev;
         dev_irqv[i] = NULL;
-        dev_map[i] = 0;
     }
 
     /* Set up basic devices. */
     dev_tab[0] = &dev_apr;
     dev_tab[1] = &dev_pi;
-    max_dev = 2;
 #if KI | KL
     dev_tab[2] = &dev_pag;
-    max_dev++;
 #if KL
     dev_tab[3] = &dev_cca;
     dev_tab[4] = &dev_tim;
     dev_irqv[4] = &tim_irq;
     dev_tab[5] = &dev_mtr;
-    max_dev+=3;
 #endif
 #endif
-    for (i = 0; i < max_dev; i++) {
-        dev_map[i] = i;
-    }
 #if BBN
     if (QBBN) {
        dev_tab[024>>2] = &dev_pag;
-       dev_map[024>>2] = max_dev++;
     }
 #endif
 
@@ -12029,7 +12023,6 @@ t_bool build_dev_tab (void)
 #endif
             }
             dev_tab[(d >> 2)] = dibp->io;
-            dev_map[(d >> 2)] = max_dev++;
             dev_irqv[(d >> 2)] = dibp->irq;
             rh[rh_idx].dev_num = d;
             rh[rh_idx].dev = dptr;
@@ -12056,7 +12049,6 @@ t_bool build_dev_tab (void)
                         return TRUE;
                     }
                     dev_tab[(d >> 2) + j] = dibp->io;       /* fill */
-                    dev_map[(d >> 2) + j] = max_dev++;
                     dev_irqv[(d >> 2) + j] = dibp->irq;
                 }
             }
