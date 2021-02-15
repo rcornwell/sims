@@ -74,18 +74,6 @@ const char *cty_description (DEVICE *dptr);
 
 static int32   rtc_tps = 1;
 
-struct _buffer {
-    int      in_ptr;     /* Insert pointer */
-    int      out_ptr;    /* Remove pointer */
-    char     buff[32];   /* Buffer */
-} cty_in, cty_out;
-
-#define full(q)       ((((q)->in_ptr + 1) & 0x1f) == (q)->out_ptr)
-#define empty(q)      ((q)->in_ptr == (q)->out_ptr)
-#define not_empty(q)  ((q)->in_ptr != (q)->out_ptr)
-#define inco(q)       (q)->out_ptr = ((q)->out_ptr + 1) & 0x1f
-#define inci(q)       (q)->in_ptr = ((q)->in_ptr + 1) & 0x1f
-
 MTAB cty_mod[] = {
     { UNIT_DUMMY, 0, NULL, "STOP", &cty_stop_os },
     { TT_MODE, TT_MODE_UC, "UC", "UC", &tty_set_mode },
@@ -96,14 +84,12 @@ MTAB cty_mod[] = {
     };
 
 UNIT cty_unit[] = {
-    { UDATA (&ctyo_svc, TT_MODE_7B, 0), 2000},
+    { UDATA (&ctyo_svc, TT_MODE_7B, 0), 1000},
     { UDATA (&ctyi_svc, TT_MODE_7B|UNIT_DIS, 0), 2000 },
     { UDATA (&ctyrtc_srv, UNIT_IDLE|UNIT_DIS, 0), 1000 }
     };
 
 REG  cty_reg[] = {
-    {SAVEDATA(IN, cty_in) },
-    {SAVEDATA(OUT, cty_out) },
     {HRDATAD(WRU, sim_int_char, 8, "interrupt character") },
     { 0 },
     };
@@ -121,7 +107,6 @@ void
 cty_wakeup()
 {
     sim_debug(DEBUG_EXP, &cty_dev, "CTY wakeup\n");
-    sim_cancel(&cty_unit[0]);
     sim_activate(&cty_unit[0], cty_unit[0].wait);
 }
 
@@ -134,35 +119,19 @@ t_stat ctyi_svc (UNIT *uptr)
 
     sim_clock_coschedule (uptr, tmxr_poll);
 
-    /* If we have room see if any new lines */
-    while (!full(&cty_in)) {
-        ch = sim_poll_kbd ();
-        if (ch & SCPE_KFLAG) {
-            ch = 0177 & sim_tt_inpcvt(ch, TT_GET_MODE (cty_unit[0].flags));
-            cty_in.buff[cty_in.in_ptr] =ch & 0377;
-            inci(&cty_in);
-            sim_debug(DEBUG_DETAIL, &cty_dev, "CTY char %o '%c'\n", ch,
-                            ((ch > 040 && ch < 0177)? ch: '.'));
-        } else
-           break;
-    }
-
-    if (not_empty(&cty_in)) {
-       if (Mem_read_word(CTY_IN, &buffer, 0))
-           return SCPE_OK;
-       if (buffer & CTY_CHAR)
-           return SCPE_OK;
-       sim_debug(DEBUG_DETAIL, &cty_dev, "CTY Read %012llo\n", buffer);
-       ch = cty_in.buff[cty_in.out_ptr];
-       if (ch != 0) {
-           buffer = (uint64)(ch) | CTY_CHAR;
-           if (Mem_write_word(CTY_IN, &buffer, 0))
-               return SCPE_OK;
-           inco(&cty_in);
-           cty_interrupt();
-       } else {
-           inco(&cty_in);
-       }
+    if (Mem_read_word(CTY_IN, &buffer, 0))
+        return SCPE_OK;
+    if (buffer & CTY_CHAR)
+        return SCPE_OK;
+    sim_debug(DEBUG_DETAIL, &cty_dev, "CTY Read %012llo\n", buffer);
+    ch = sim_poll_kbd ();
+    if (ch & SCPE_KFLAG) {
+        ch = 0177 & sim_tt_inpcvt(ch, TT_GET_MODE (cty_unit[0].flags));
+        sim_debug(DEBUG_DETAIL, &cty_dev, "CTY char %o '%c'\n", ch,
+                             ((ch > 040 && ch < 0177)? ch: '.'));
+        buffer = (uint64)(ch) | CTY_CHAR;
+        if (Mem_write_word(CTY_IN, &buffer, 0) == 0)
+            cty_interrupt();
     }
     return SCPE_OK;
 }
@@ -176,18 +145,17 @@ t_stat ctyo_svc (UNIT *uptr)
         return SCPE_OK;
     sim_debug(DEBUG_DETAIL, &cty_dev, "CTY Write %012llo\n", buffer);
     if (buffer & CTY_CHAR) {
-        if (!full(&cty_out)) {
-            int32    ch;
-            ch = buffer & 0377;
-            ch = sim_tt_outcvt ( ch, TT_GET_MODE (uptr->flags));
-            cty_out.buff[cty_out.in_ptr] = (uint8)(ch & 0377);
-            buffer = 0;
-            if (Mem_write_word(CTY_OUT, &buffer, 0) == 0) {
-                inci(&cty_out);
-                cty_interrupt();
-            }
-        } else {
-            sim_activate(uptr, tmxr_poll);
+        int32    ch;
+        ch = buffer & 0377;
+        ch = sim_tt_outcvt ( ch, TT_GET_MODE (uptr->flags));
+        if (sim_putchar_s(ch) != SCPE_OK) {
+            sim_activate(uptr, 2000);
+            return SCPE_OK;
+        }
+
+        buffer = 0;
+        if (Mem_write_word(CTY_OUT, &buffer, 0) == 0) {
+            cty_interrupt();
         }
     }
 
@@ -198,20 +166,6 @@ t_stat ctyo_svc (UNIT *uptr)
         if (Mem_write_word(CTY_OUT, &buffer, 0) == 0) {
             cty_interrupt();
         }
-    }
-
-    /* Flush out any pending CTY output */
-    while(not_empty(&cty_out)) {
-        char ch = cty_out.buff[cty_out.out_ptr];
-        if (ch != 0) {
-            if (sim_putchar_s(ch) != SCPE_OK) {
-                sim_activate(uptr, tmxr_poll);
-                return SCPE_OK;
-            }
-        }
-        inco(&cty_out);
-        sim_debug(DEBUG_DETAIL, &cty_dev, "CTY outch %o '%c'\n", ch,
-                            ((ch > 040 && ch < 0177)? ch: '.'));
     }
 
     return SCPE_OK;
@@ -231,13 +185,13 @@ ctyrtc_srv(UNIT * uptr)
 
 t_stat cty_reset (DEVICE *dptr)
 {
-    cty_in.in_ptr = cty_in.out_ptr = 0; 
-    cty_out.in_ptr = cty_out.out_ptr = 0; 
     sim_activate(&cty_unit[1], cty_unit[1].wait);
     sim_activate(&cty_unit[2], cty_unit[2].wait);
     M[STATUS] = 0;
     M[CTY_IN] = 0;
     M[CTY_OUT] = 0;
+    M[KLINK_IN] = 0;
+    M[KLINK_OUT] = 0;
     return SCPE_OK;
 }
 

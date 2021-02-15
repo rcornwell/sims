@@ -864,7 +864,7 @@ t_stat rp_svc (UNIT *uptr)
                      uptr->STATUS |= DS_PIP;
                 }
             }
-            sim_activate(uptr, 250);
+            sim_activate(uptr, 300);
             return SCPE_OK;
         }
 rd_end:
@@ -953,7 +953,7 @@ wr_done:
         }
 
         if (sts) {
-            sim_activate(uptr, 250);
+            sim_activate(uptr, 300);
         } else {
             sim_debug(DEBUG_DETAIL, dptr, "RP%o write done\n", unit);
             uptr->STATUS &= ~DS_PIP;

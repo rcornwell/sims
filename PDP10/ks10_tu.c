@@ -813,16 +813,16 @@ rd_end:
          uptr->CPOS = (uptr->CPOS & 010) | ((uptr->CPOS & 07) + 1);
          if ((uptr->CPOS & 7) == cc_max) {
             uptr->CPOS &= 010;
-         }
-         tu_frame = 0177777 & (tu_frame + 1);
          if (tu_wc == 0)
              uptr->CPOS = 010;
-         else if (tu_frame == 0) {
+         }
+         tu_frame = 0177777 & (tu_frame + 1);
+         if (tu_frame == 0) {
             uptr->CPOS = 010;
             tu_tcr &= ~(TC_FCS);
          }
 wr_end:
-         if (uptr->CPOS & 010) {
+         if (uptr->CPOS == 010) {
              /* Write out the block */
              reclen = uptr->hwmark;
              r = sim_tape_wrrecf(uptr, &tu_buf[0], reclen);
