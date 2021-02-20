@@ -45,7 +45,6 @@
 #define TYPE_RSX20      (1 << DEV_V_OS)
 
 
-
 /* DTE10 CONI bits */
 
 #define DTE_RM         00100000    /* Restricted mode */
@@ -292,7 +291,7 @@ t_stat dn_devio(uint32 dev, uint64 *data) {
      case CONI:
         *data = (uint64)(dn_unit[0].STATUS) & RMASK;
         *data |= DTE_RM;    /* Restricted mode */
-        sim_debug(DEBUG_CONI, &dn_dev, "CTY %03o CONI %06o\n", dev, (uint32)*data);
+        sim_debug(DEBUG_CONI, &dn_dev, "DN %03o CONI %06o\n", dev, (uint32)*data);
         break;
      case CONO:
          res = (uint32)(*data & RMASK);
@@ -314,21 +313,21 @@ t_stat dn_devio(uint32 dev, uint64 *data) {
          if (res & DTE_CO11SR)
              dn_unit[0].STATUS |= (DTE_11RELD);
          if (res & DTE_CO11DB) {
-             sim_debug(DEBUG_CONO, &dn_dev, "CTY Ring 11 DB\n");
+             sim_debug(DEBUG_CONO, &dn_dev, "DN Ring 11 DB\n");
              dn_unit[0].STATUS |= DTE_11DB;
              sim_activate(&dn_unit[0], 200);
          }
          if (dn_unit[0].STATUS & (DTE_10DB|DTE_11DN|DTE_10DN|DTE_11ER|DTE_10ER))
              set_interrupt(dev, dn_unit[0].STATUS);
-         sim_debug(DEBUG_CONO, &dn_dev, "CTY %03o CONO %06o %06o\n", dev,
+         sim_debug(DEBUG_CONO, &dn_dev, "DN %03o CONO %06o %06o\n", dev,
                       (uint32)*data, PC);
          break;
      case DATAI:
-         sim_debug(DEBUG_DATAIO, &dn_dev, "CTY %03o DATAI %06o\n", dev,
+         sim_debug(DEBUG_DATAIO, &dn_dev, "DN %03o DATAI %06o\n", dev,
                       (uint32)*data);
          break;
     case DATAO:
-         sim_debug(DEBUG_DATAIO, &dn_dev, "CTY %03o DATAO %06o\n", dev,
+         sim_debug(DEBUG_DATAIO, &dn_dev, "DN %03o DATAO %06o\n", dev,
                       (uint32)*data);
          if (*data == 01365) {
              dn_unit[0].STATUS |= DTE_SEC|DTE_10ER;
@@ -357,8 +356,7 @@ t_stat dn_svc (UNIT *uptr)
         /* If in secondary mode, do that protocol */
         if (uptr->STATUS & DTE_SEC)
             dn_second(uptr);
-        else
-            dn_primary(uptr);   /* Retrieve data */
+        dn_primary(uptr);   /* Retrieve data */
     } else if (uptr->STATUS & DTE_TO11) {
         /* Does 10 want us to send it what we have? */
         dn_transfer(uptr);
@@ -371,6 +369,7 @@ void dn_second(UNIT *uptr) {
     uint64   word;
     int32    ch;
     uint32   base = 0;
+int i;
 
 #if KI_22BIT
     base = eb_ptr;
@@ -378,7 +377,8 @@ void dn_second(UNIT *uptr) {
     /* read command */
     word = M[SEC_DTCMD + base];
     /* Do it */
-    sim_debug(DEBUG_DETAIL, &dn_dev, "CTY secondary %012llo\n", word);
+    sim_debug(DEBUG_DETAIL, &dn_dev, "DN secondary %012llo\n", word);
+#if 0
     switch(word & SEC_CMDMSK) {
     default:
     case SEC_MONO:  /* Ouput character in monitor mode */
@@ -398,8 +398,10 @@ void dn_second(UNIT *uptr) {
 
      case SEC_SETPRI:
 enter_pri:
+#endif
          if (Mem_examine_word(1, 0, &word))
-             break;
+             return;
+    sim_debug(DEBUG_DETAIL, &dn_dev, "DN word 0 %012llo\n", word);
          dn_proc_num = (word >> 24) & 037;
          dn_base = dn_proc_num + 1;
          dn_off = dn_base + (word & 0177777);
@@ -410,6 +412,13 @@ enter_pri:
          dn_in_ptr = dn_out_ptr = 0;
          dn_in_cmd = dn_out_res = 0;
          cty_done = 0;
+for (i = 1; i <100; i++) {
+   if (Mem_examine_word(1, i, &word))
+      break;
+    sim_debug(DEBUG_DETAIL, &dn_dev, "DN word %3o %012llo\n", i, word);
+}
+
+#if 0
          /* Start input process */
          M[SEC_DTCMD + base] = 0;
          M[SEC_DTFLG + base] = FMASK;
@@ -463,6 +472,7 @@ enter_pri:
      M[SEC_DTCMD + base] = 0;
      M[SEC_DTFLG + base] = FMASK;
      uptr->STATUS &= ~DTE_11DB;
+#endif
      if (dn_dev.flags & TYPE_RSX20) {
          uptr->STATUS |= DTE_10DB;
          set_interrupt(DTE_DEVNUM, dn_unit[0].STATUS);
@@ -509,6 +519,7 @@ error:
          return;
     }
 
+         sim_debug(DEBUG_DETAIL, &dn_dev, "DTE: status %012llo\n", word);
     if ((word & PRI_CMT_QP) == 0) {
         goto error;
     }
@@ -689,7 +700,7 @@ cty:
                                 return;
                             cty_out.buff[cty_out.in_ptr] = (char)(ch & 0xff);
                             inci(&cty_out);
-                            sim_debug(DEBUG_DATA, &dn_dev,"CTY queue %o\n",ch);
+                            sim_debug(DEBUG_DATA, &dn_dev,"DN queue %o\n",ch);
                         }
                         cmd->dptr++;
                    }
@@ -738,7 +749,7 @@ cty:
                             inci(&cty_out);
                             if (((cty_out.in_ptr + 1) & 0xff) == cty_out.out_ptr)
                                 return;
-                            sim_debug(DEBUG_DATA, &dn_dev, "CTY queue %o\n", ch);
+                            sim_debug(DEBUG_DATA, &dn_dev, "DN queue %o\n", ch);
                         }
                         cmd->dptr+=2;
                    }
@@ -927,6 +938,7 @@ dn_input()
     char    ch;
     UNIT    *uptr = &dn_unit[0];
 
+#if 0
     if ((uptr->STATUS & DTE_SEC) == 0) {
        /* Check if CTY done with input */
        if (cty_done) {
@@ -941,7 +953,7 @@ dn_input()
        while (not_empty(&cty_in) && n < 32) {
            ch = cty_in.buff[cty_in.out_ptr];
            inco(&cty_in);
-           sim_debug(DEBUG_DETAIL, &dn_dev, "CTY recieve %02x\n", ch);
+           sim_debug(DEBUG_DETAIL, &dn_dev, "DN recieve %02x\n", ch);
            dataq[n++] = (PRI_CTYDV << 8) | ch;
        }
        if (n > 0 && dn_queue(PRI_EMLNC, PRI_EMDLS, n, dataq) == 0) {
@@ -950,6 +962,7 @@ dn_input()
            return;
        }
     }
+#endif
 }
 
 /*
@@ -1093,7 +1106,7 @@ t_stat dno_svc (UNIT *uptr)
             }
         }
         inco(&cty_out);
-        sim_debug(DEBUG_DETAIL, &dn_dev, "CTY outch %o '%c'\n", ch,
+        sim_debug(DEBUG_DETAIL, &dn_dev, "DN outch %o '%c'\n", ch,
                             ((ch > 040 && ch < 0177)? ch: '.'));
     }
     cty_done++;
@@ -1111,7 +1124,7 @@ dnrtc_srv(UNIT * uptr)
 
     /* Update out keep alive timer if in secondary protocol */
     if ((optr->STATUS & DTE_SEC) == 0) {
-        int      addr = 0144 + eb_ptr;
+        int      addr = 0154 + eb_ptr;
         uint64   word;
 
         (void)Mem_examine_word(1, dn_et11_off + PRI_CMTW_STS, &word);
@@ -1119,7 +1132,7 @@ dnrtc_srv(UNIT * uptr)
         word = M[addr];
         word = (word + 1) & FMASK;
         M[addr] = word;
-      sim_debug(DEBUG_EXP, &dn_dev, "CTY keepalive %06o %012llo %06o\n",
+      sim_debug(DEBUG_EXP, &dn_dev, "DN keepalive %06o %012llo %06o\n",
                           addr, word, optr->STATUS);
     }
 
