@@ -673,7 +673,8 @@ void dte_second(UNIT *uptr) {
          if (ch != 0) {
              cty_out.buff[cty_out.in_ptr] = ch & 0x7f;
              inci(&cty_out);
-             sim_activate(&dte_unit[1], 200);
+             if (!sim_is_active(&dte_unit[1]))
+                 sim_activate(&dte_unit[1], 200);
          }
          M[SEC_DTCHR + base] = ch;
          M[SEC_DTMTD + base] = FMASK;

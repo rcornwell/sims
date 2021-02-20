@@ -28,9 +28,6 @@
 #endif
 
 #if (NUM_DEVS_RS > 0)
-
-#include "kx10_disk.h"
-
 #define BUF_EMPTY(u)  (u->hwmark == 0xFFFFFFFF)
 #define CLR_BUF(u)     u->hwmark = 0xFFFFFFFF
 
@@ -483,96 +480,101 @@ t_stat rs_svc (UNIT *uptr)
 
     case FNC_READ:                       /* read */
     case FNC_WCHK:                       /* write check */
-        if (GET_SC(uptr->DA) >= rs_drv_tab[dtype].sect ||
-            GET_SF(uptr->DA) >= rs_drv_tab[dtype].surf) {
-            uptr->CMD |= (ER1_IAE << 16)|DS_ERR|DS_DRY|DS_ATA;
+        if (BUF_EMPTY(uptr)) {
+            int wc;
+            if (GET_SC(uptr->DA) >= rs_drv_tab[dtype].sect ||
+                GET_SF(uptr->DA) >= rs_drv_tab[dtype].surf) {
+                uptr->CMD |= (ER1_IAE << 16)|DS_ERR|DS_DRY|DS_ATA;
+                uptr->CMD &= ~CS1_GO;
+                sim_debug(DEBUG_DETAIL, dptr, "%s%o readx done\n", dptr->name, unit);
+                rh_finish_op(rhc, 0);
+                return SCPE_OK;
+            }
+            sim_debug(DEBUG_DETAIL, dptr, "%s%o read (%d,%d)\n", dptr->name, unit,
+                   GET_SC(uptr->DA), GET_SF(uptr->DA));
+            da = GET_DA(uptr->DA, dtype) * RS_NUMWD;
+            (void)sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
+            wc = sim_fread (&rs_buf[ctlr][0], sizeof(uint64), RS_NUMWD,
+                                uptr->fileref);
+            while (wc < RS_NUMWD)
+                rs_buf[ctlr][wc++] = 0;
+            uptr->hwmark = RS_NUMWD;
+            uptr->DATAPTR = 0;
+        }
+
+        rhc->buf = rs_buf[ctlr][uptr->DATAPTR++];
+        sim_debug(DEBUG_DATA, dptr, "%s%o read word %d %012llo %09o %06o\n",
+                dptr->name, unit, uptr->DATAPTR, rhc->buf, rhc->cda, rhc->wcr);
+        if (rh_write(rhc)) {
+            if (uptr->DATAPTR == RS_NUMWD) {
+                /* Increment to next sector. Set Last Sector */
+                uptr->DATAPTR = 0;
+                CLR_BUF(uptr);
+                uptr->DA += 1 << DA_V_SC;
+                if (GET_SC(uptr->DA) >= rs_drv_tab[dtype].sect) {
+                    uptr->DA &= (DA_M_SF << DA_V_SF);
+                    uptr->DA += 1 << DA_V_SF;
+                    if (GET_SF(uptr->DA) >= rs_drv_tab[dtype].surf)
+                        uptr->CMD |= DS_LST;
+                }
+                if (rh_blkend(rhc))
+                   goto rd_end;
+            }
+            sim_activate(uptr, 10);
+        } else {
+rd_end:
+            sim_debug(DEBUG_DETAIL, dptr, "%s%o read done\n", dptr->name, unit);
+            uptr->CMD |= DS_DRY;
             uptr->CMD &= ~CS1_GO;
-            sim_debug(DEBUG_DETAIL, dptr, "%s%o readx done\n", dptr->name, unit);
+            if (uptr->DATAPTR == RS_NUMWD)
+               (void)rh_blkend(rhc);
             rh_finish_op(rhc, 0);
             return SCPE_OK;
         }
-        sim_debug(DEBUG_DETAIL, dptr, "%s%o read (%d,%d)\n", dptr->name, unit,
-               GET_SC(uptr->DA), GET_SF(uptr->DA));
-        da = GET_DA(uptr->DA, dtype) * RS_NUMWD;
-        (void)disk_read(uptr, &rs_buf[ctlr][0], da, RS_NUMWD); 
-        uptr->hwmark = RS_NUMWD;
-        uptr->DATAPTR = 0;
-        sts = 1;
-
-        while(uptr->DATAPTR < RS_NUMWD && sts != 0) {
-            rhc->buf = rs_buf[ctlr][uptr->DATAPTR++];
-            sim_debug(DEBUG_DATA, dptr, "%s%o read word %d %012llo %09o %06o\n",
-                dptr->name, unit, uptr->DATAPTR, rhc->buf, rhc->cda, rhc->wcr);
-            sts = rh_write(rhc);
-        }
-
-        /* If we hit end of sector before ran out of data, advance */
-        if (sts) {
-            /* Increment to next sector. Set Last Sector */
-            uptr->DATAPTR = 0;
-            CLR_BUF(uptr);
-            uptr->DA += 1 << DA_V_SC;
-            if (GET_SC(uptr->DA) >= rs_drv_tab[dtype].sect) {
-                uptr->DA &= (DA_M_SF << DA_V_SF);
-                uptr->DA += 1 << DA_V_SF;
-                if (GET_SF(uptr->DA) >= rs_drv_tab[dtype].surf)
-                    uptr->CMD |= DS_LST;
-            }
-            if (rh_blkend(rhc))
-              goto rd_end;
-            sim_activate(uptr, 10);
-            return SCPE_OK;
-        }
-
-rd_end:
-        sim_debug(DEBUG_DETAIL, dptr, "%s%o read done\n", dptr->name, unit);
-        uptr->CMD |= DS_DRY;
-        uptr->CMD &= ~CS1_GO;
-        if (sts == 0)
-           (void)rh_blkend(rhc);
-        rh_finish_op(rhc, 0);
-        return SCPE_OK;
+        break;
 
     case FNC_WRITE:                      /* write */
-        if (GET_SC(uptr->DA) >= rs_drv_tab[dtype].sect ||
-            GET_SF(uptr->DA) >= rs_drv_tab[dtype].surf) {
-            uptr->CMD |= (ER1_IAE << 16)|DS_ERR|DS_DRY|DS_ATA;
-            uptr->CMD &= ~CS1_GO;
-            sim_debug(DEBUG_DETAIL, dptr, "%s%o writex done\n", dptr->name, unit);
-            rh_finish_op(rhc, 0);
-            return SCPE_OK;
+        if (BUF_EMPTY(uptr)) {
+            if (GET_SC(uptr->DA) >= rs_drv_tab[dtype].sect ||
+                GET_SF(uptr->DA) >= rs_drv_tab[dtype].surf) {
+                uptr->CMD |= (ER1_IAE << 16)|DS_ERR|DS_DRY|DS_ATA;
+                uptr->CMD &= ~CS1_GO;
+                sim_debug(DEBUG_DETAIL, dptr, "%s%o writex done\n", dptr->name, unit);
+                rh_finish_op(rhc, 0);
+                return SCPE_OK;
+            }
+            uptr->DATAPTR = 0;
+            uptr->hwmark = 0;
         }
-        uptr->DATAPTR = 0;
-        uptr->hwmark = 0;
-        rhc->buf = 0;
-        while (uptr->DATAPTR < RS_NUMWD && (sts = rh_read(rhc)) != 0) {
-            rs_buf[ctlr][uptr->DATAPTR++] = rhc->buf;
-            sim_debug(DEBUG_DATA, dptr, "%s%o write word %d %012llo %09o %06o\n",
-                 dptr->name, unit, uptr->DATAPTR, rhc->buf, rhc->cda, rhc->wcr);
-        }
+        sts = rh_read(rhc);
         rs_buf[ctlr][uptr->DATAPTR++] = rhc->buf;
+        sim_debug(DEBUG_DATA, dptr, "%s%o write word %d %012llo %09o %06o\n",
+                 dptr->name, unit, uptr->DATAPTR, rhc->buf, rhc->cda, rhc->wcr);
         if (sts == 0) {
             while (uptr->DATAPTR < RS_NUMWD)
                 rs_buf[ctlr][uptr->DATAPTR++] = 0;
         }
-  
-        sim_debug(DEBUG_DETAIL, dptr, "%s%o write (%d,%d)\n", dptr->name, unit,
+        if (uptr->DATAPTR == RS_NUMWD) {
+            sim_debug(DEBUG_DETAIL, dptr, "%s%o write (%d,%d)\n", dptr->name, unit,
                    GET_SC(uptr->DA), GET_SF(uptr->DA));
-        da = GET_DA(uptr->DA, dtype) * RS_NUMWD;
-        (void)disk_write(uptr, &rs_buf[ctlr][0], da, RS_NUMWD);
-        uptr->DATAPTR = 0;
-        CLR_BUF(uptr);
-        if (sts) {
-            uptr->DA += 1 << DA_V_SC;
-            if (GET_SC(uptr->DA) >= rs_drv_tab[dtype].sect) {
-                uptr->DA &= (DA_M_SF << DA_V_SF);
-                uptr->DA += 1 << DA_V_SF;
-                if (GET_SF(uptr->DA) >= rs_drv_tab[dtype].surf)
-                    uptr->CMD |= DS_LST;
-            }
+            da = GET_DA(uptr->DA, dtype) * RS_NUMWD;
+            (void)sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
+            (void)sim_fwrite (&rs_buf[ctlr][0], sizeof(uint64), RS_NUMWD,
+                                uptr->fileref);
+            uptr->DATAPTR = 0;
+            CLR_BUF(uptr);
+            if (sts) {
+                uptr->DA += 1 << DA_V_SC;
+                if (GET_SC(uptr->DA) >= rs_drv_tab[dtype].sect) {
+                    uptr->DA &= (DA_M_SF << DA_V_SF);
+                    uptr->DA += 1 << DA_V_SF;
+                    if (GET_SF(uptr->DA) >= rs_drv_tab[dtype].surf)
+                        uptr->CMD |= DS_LST;
+                }
+             }
+             if (rh_blkend(rhc))
+                  goto wr_end;
         }
-        if (rh_blkend(rhc))
-            goto wr_end;
         if (sts) {
             sim_activate(uptr, 10);
         } else {
