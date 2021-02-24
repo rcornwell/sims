@@ -399,13 +399,27 @@ int dkb_keys (SIM_KEY_EVENT *kev, UNIT *uptr)
   }
 }
 
+uint32 dkb_line (SIM_KEY_EVENT *kev)
+{
+#if NUM_DEVS_III
+    if (kev->dev == &iii_dev)
+        return iii_keyboard_line ((void *)kev->vptr);
+#endif
+#if NUM_DEVS_DD
+    if (kev->dev == &dd_dev)
+        return dd_keyboard_line ((void *)kev->vptr);
+#endif
+    return ~0U;
+}
+
 int dkb_keyboard (SIM_KEY_EVENT *kev)
 {
     sim_debug(DEBUG_DETAIL, &dkb_dev, "DKB key %d %o\n", kev->key, kev->state);
     if (dkb_modifiers (kev))
       return 0;
 
-    if (dkb_keys (kev, &dkb_unit[0])) {
+    dkb_unit[0].LINE = dkb_line (kev);
+    if (dkb_unit[0].LINE != ~0U && dkb_keys (kev, &dkb_unit[0])) {
       dkb_unit[0].DATA |= VALID;
       dkb_unit[0].STATUS |= DONE;
       set_interrupt(DKB_DEVNUM, dkb_unit[0].PIA);
@@ -427,12 +441,12 @@ t_stat dkb_reset( DEVICE *dptr)
 
 t_stat dkb_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-    fprintf (stderr, "This is the keyboard input for the Stanford III display\n");
+    fprintf (stderr, "Keyboard input for the Stanford III and Data Disc displays\n");
     return SCPE_OK;
 }
 
 const char *dkb_description (DEVICE *dptr)
 {
-    return "Keyboard scanner for III display devices";
+    return "Keyboard scanner for III and DD display devices";
 }
 #endif
