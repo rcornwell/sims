@@ -546,7 +546,6 @@ tu_read(t_addr addr, uint16 *data, int32 access)
 uint16
 tu_vect(struct pdp_dib *dibp)
 {
-    tu_ie &= ~CS1_IE;
     return dibp->uba_vect;
 }
 

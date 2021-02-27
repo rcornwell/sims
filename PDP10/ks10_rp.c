@@ -673,7 +673,6 @@ rp_read(t_addr addr, uint16 *data, int32 access) {
 uint16
 rp_vect(struct pdp_dib *dibp)
 {
-    rp_ie &= ~CS1_IE;
     return dibp->uba_vect;
 }
 

@@ -59,6 +59,7 @@ uba_read(t_addr addr, int ctl, uint64 *data, int access)
 
     if (ubm == -1) {
         uba_status[ubm] |= UBST_TIM | UBST_NED;
+        sim_debug(DEBUG_EXP, &cpu_dev, "No UBA adaptor %02o %08o\n", ctl, addr);
         return 1;
     }
 
@@ -104,7 +105,7 @@ uba_read(t_addr addr, int ctl, uint64 *data, int access)
             return r;
         }
     }
-    sim_debug(DEBUG_EXP, &cpu_dev, "No UBA device %08o\n", addr);
+    sim_debug(DEBUG_EXP, &cpu_dev, "No UBA device  %02o %08o\n", ctl, addr);
     uba_status[ubm] |= UBST_TIM | UBST_NED;
     return 1;
 }
@@ -118,6 +119,7 @@ uba_write(t_addr addr, int ctl, uint64 data, int access)
 
     if (ubm == -1) {
         uba_status[ubm] |= UBST_TIM | UBST_NED;
+        sim_debug(DEBUG_EXP, &cpu_dev, "No UBA adaptor %02o %08o %012llo\n", ctl, addr, data);
         return 1;
     }
 
@@ -169,7 +171,7 @@ uba_write(t_addr addr, int ctl, uint64 data, int access)
             return dibp->wr_io(addr, buf, access);
         }
     }
-    sim_debug(DEBUG_EXP, &cpu_dev, "No UBA device write %08o %012llo\n", addr, data);
+    sim_debug(DEBUG_EXP, &cpu_dev, "No UBA device write %02o %08o %012llo\n", ctl, addr, data);
     uba_status[ubm] |= UBST_TIM | UBST_NED;
     return 1;
 }
