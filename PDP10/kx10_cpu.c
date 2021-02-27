@@ -1,6 +1,6 @@
 /* kx10_cpu.c: PDP-10 CPU simulator
 
-   Copyright (c) 2011-2020, Richard Cornwell
+   Copyright (c) 2011-2021, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -23,7 +23,7 @@
    used in advertising or otherwise to promote the sale, use or other dealings
    in this Software without prior written authorization from Richard Cornwell
 
-   cpu          KA10/KI10/KL10 central processor
+   cpu          KA10/KI10/KL10/KS10 central processor
 
 
    The 36b system family had six different implementions: PDP-6, KA10, KI10,
@@ -4602,7 +4602,7 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
     }
 
     if (f_inst_fetch) {
-#if !(KI|KL|KS)
+#if !(KI|KL)
 fetch:
 #endif
 #if ITS
@@ -4799,7 +4799,7 @@ in_loop:
          }
          /* Handle events during a indirect loop */
          AIO_CHECK_EVENT;                                   /* queue async events */
-         if (sim_interval <= 0) {
+         if (--sim_interval <= 0) {
               if ((reason = sim_process_event()) != SCPE_OK) {
                   return reason;
               }
@@ -4844,8 +4844,7 @@ st_pi:
             }
             sim_debug(DEBUG_IRQ, &cpu_dev, "vect irq %o %06o\n", pi_enc, AB);
         }
-        Mem_read_nopage();
-        goto no_fetch;
+        goto fetch;
 #endif
 #if KI | KL
         /*
