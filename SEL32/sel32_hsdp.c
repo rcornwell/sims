@@ -834,8 +834,6 @@ uint16 hsdp_preio(UNIT *uptr, uint16 chan)
     int32       cnt;
 
     sim_debug(DEBUG_CMD, dptr, "hsdp_preio CMD %08x unit %02x\n", uptr->CMD, unit);
-//1215  if (IOCLQ_Num(&dibp->ioclq_ptr[unit]) == IOCLQ_SIZE) {
-//1217  1f ((cnt = IOCLQ_Num(&dibp->ioclq_ptr[unit])) >= (IOCLQ_SIZE-2)) {
     if ((cnt = IOCLQ_Num(&dibp->ioclq_ptr[unit])) >= (IOCLQ_SIZE)) {
         sim_debug(DEBUG_CMD, dptr, "hsdp_preio CMD %08x unit %02x IOCLQ cnt %02x Full\n",
             uptr->CMD, unit, cnt);

@@ -98,7 +98,6 @@ UNIT            iop_unit[] = {
     {UDATA(&iop_srv, UNIT_IOP, 0), 0, UNIT_ADDR(0x7E00)}, /* Channel controller */
 };
 
-//DIB iop_dib = {NULL, iop_startcmd, NULL, NULL, NULL, iop_ini, iop_unit, iop_chp, NUM_UNITS_IOP, 0xff, 0x7e00,0,0,0};
 DIB             iop_dib = {
     NULL,           /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Start I/O */
     iop_startcmd,   /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command SIO */

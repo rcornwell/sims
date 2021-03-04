@@ -154,24 +154,23 @@ char *argv[];
  * This function computes and checks the checksum of a compressed file
  */
 int checksum(buf)
-char *buf;
+unsigned char *buf;
 {
     int i = 0;
-//  unsigned int ccs = 0;       /*zero checksum */
     short int ccs = 0;      /*zero checksum */
     unsigned int rcs = (((buf[2] << 8) & 0xff00) | (buf[3] & 0xff));    /* get checksum */
-    int cnt = buf[1];       /* record count */
-//  fprintf(stderr, "checksum data %x %x %x %x\n", buf[0], buf[1], buf[2], buf[3]);
+    int cnt = buf[1] & 0xff;    /* record count */
+//fprintf(stderr, "checksum cnt %x data %x %x %x %x %x %x %x %x\n",
+//      cnt, buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
 
     while (cnt > 0) {
-//      unsigned int v = buf[i+6];
-        short v = buf[i+6] & 0xff;
+        unsigned short v = buf[i+6] & 0xff;
         ccs += v;           /* add the byte */ 
-//  fprintf(stderr, "checksum cnt %x val %x sum %x\n", i, v, ccs);
+//fprintf(stderr, "checksum cnt %x val %x sum %x\n", i, v, ccs);
         i++;                /* bump address */
         cnt--;              /* reduce count */
     }
-//  fprintf(stderr, "checksum size %x read %x calc %x\n", buf[1], rcs, ccs);
+//fprintf(stderr, "checksum size %x read %x calc %x\n", buf[1], rcs, ccs);
     if (ccs == rcs)
         return 0;           /* return OK */
     return 1;               /* return error */
@@ -241,18 +240,25 @@ int getb(fp)
 FILE *fp;
 {
     int c;
+    static int goteof = 0;
 
     /* file is unblocked, get next record */
+    if (goteof) {
+        goteof = 0;
+//fprintf(stderr, "getb - returning EOF ubdc=%x\n", ubdc);
+        return (-1);            /* this means eof */
+    }
+    if (ubdp < ubdc)            /* is count exhausted */
+        c = si[ubdp++] & 0xff;  /* copy char */
     if (ubdp >= ubdc) {         /* is count exhausted */
         /* need to read next block, if not first time */
         /* we need a new buffer */
         /* read in 768 byte block of the file */
         if ((ubdc = fread(si, 1, BLKSIZE, fp)) <= 0)
-            return (-1);        /* this means eof */
-//fprintf(stderr, "getb - read unblocked file ubdc=%x\n", ubdc);
+            goteof = 1;         /* this means eof */
+//fprintf(stderr, "getb - read unblocked file goteof %x ubdc=%x\n", goteof, ubdc);
         ubdp = 0;
     }
-    c = si[ubdp++] & 0xff;      /* copy char */
     return (c);
 }
 
@@ -262,7 +268,7 @@ FILE *fp;
 unsigned char s[];
 int lim;
 {
-    int c, i, cc, rc = 0;
+    int c, i, cc, bc = 0, rc = 0;
 
     /* see how we are to process data */
     if (filetype & blocked) {
@@ -312,49 +318,64 @@ newbuf:
         if (filetype & compress) {
             cc = 120;
             rc = 0;
+            bc = 0;
             while ((c = getb(fp)) != -1) {
-                /* skip any optional newline from previous record */
-//              if ((rc == 0) && (c == '\n'))
-//                  continue;
                 /* make sure this is a compressed record */
                 if ((rc == 0) && ((c & 0x9f) != 0x9f)) {
-                    fprintf(stderr, "getloi - unblocked compressed file read error %x\n", c);
+                    fprintf(stderr, "getloi - unblocked compressed file read error %x rc %x\n", c, rc);
                     return (0);     /* this means error */
                 }
                 if (rc == 1)
                     cc = c + 6;     /* get 'real' record count */
                 s[rc++] = c;        /* save the char */
-                if (rc == cc)
-//              if (rc == 120)      /* compressed is always 120 char buffers */
+
+                if (rc == cc)       /* compressed record is always <= 120 char buffers */
                     break;          /* done */
             }
             if (c == -1)
                 return (0);         /* this means EOF */
 
             /* skip any extra chars from short records */
-            while ((c = getb(fp)) != '\n')
-                    ;
+            bc = rc;
+            while ((s[0] != 0x9f) && (bc < 120)) {
+                if ((c = getb(fp)) == -1)
+                    return (0);     /* this means EOF */
+                s[bc++] = c;        /* fill extra chars */
+//fprintf(stderr, "getloi - filling extra chars with char %x bc %x\n", c, bc);
+            }
+            /* next char should be bf/9f */
+            if ((si[ubdp] & 0x9f) != 0x9f) {    /* copy char */
+                if ((c = getb(fp)) == -1) {
+//fprintf(stderr, "getloi skipping exit char %0x at end of line, next %x s[0] %0x\n", c, si[ubdp], s[0]);
+                    if (s[0] != 0x9f)
+                        return (0); /* this means EOF */
+                }
+//fprintf(stderr, "getloi skipping char %0x at end of line, next %x s[0] %0x\n", c, si[ubdp], s[0]);
+            }
+
+//fprintf(stderr, "getloi unblked comp read done rc %x cc %x s[0] %x s[rc-1] %x next %x\n",
+//rc, cc, s[0], s[rc-1], si[ubdp]);
 
             /* checksum the record */
             if (checksum(s)) {
                 fprintf(stderr, "getloi - unblocked compressed file checksum error\n");
 //fprintf(stderr, "getloi A unblocked compressed read return rc=%x cc=%x %x %x\n", rc, cc, s[0], s[rc-1]);
 //fprintf(stderr, "getloi C unblocked compressed read return %x ubdc %x ubdp %x\n", rc, ubdc, ubdp);
-                return (0);     /* this means error */
+                return (0);         /* this means error */
             }
 //fprintf(stderr, "getloi B unblocked compressed read return rc=%x cc=%x %x\n", rc, cc, s[1]);
-            return (rc);        /* return data count */
+            return (rc);            /* return data count */
         }
         /* file is uncompressed, so copy UNIX records */
         while ((c = getb(fp)) != -1) {
-            s[rc++] = c;        /* save the char */
+            s[rc++] = c;            /* save the char */
             if (c == 0x0a) {
 //fprintf(stderr, "getloi C unblocked compressed read return %x ubdc %x ubdp %x\n", rc, ubdc, ubdp);
                 s[rc++] = 0;        /* terminate the line */
                 return (rc);        /* return data */
             }
         }
-        return (0);             /* EOF */
+        return (0);                 /* EOF */
     }
     return (0);
 #ifdef JUNK
@@ -405,6 +426,7 @@ unsigned char *s;
 }
 
 unsigned char line[BUFSIZ];
+unsigned char line2[BUFSIZ];
 int cmpop = 0;
 int cmpflg = 0;
 int bcnt = 0;
@@ -518,7 +540,7 @@ int n;
         }
     }
     if ((filetype & compress) && !cmpop) {      /* see if we tested for compressed */
-        cmpop = 1;              /* set comp tested flag */
+        cmpop = 1;              /* set compresse tested flag */
         /* read in the first record */
         if ((recl = getloi(fp, line, BUFSIZ)) == 0)
             return (0);         /* this means eof */
@@ -541,7 +563,7 @@ int n;
             if ((recl = getloi(fp, line, BUFSIZ)) == 0)
                 return (0);     /* this means eof */
             linadrs = line;
-//fprintf(stderr, "rbl re18 - read compressed record cnt %x %x\n", bcnt, linadrs[0]);
+//fprintf(stderr, "rbl re18 - read compressed record recl %x cnt %x 1st %x\n", recl, bcnt, linadrs[0]);
             if ((*linadrs & 0x9f) != 0x9f)  /* is this valid rec */
                 return (EOF);   /* error if not */
             bcnt = linadrs[1];  /* set record count */
@@ -553,6 +575,7 @@ int n;
         if (i = *bptr++) {      /* next buffer pointer */
             if (i == 0xff)
                 goto re60;      /* if eol, get out */
+            /* insert the required number of blanks */
             while (i--) {
                 if (count < n) {
                     *buf++ = ' ';   /* put blank in buffer */
@@ -565,6 +588,8 @@ int n;
 
         /* get character count */
         if (i = *bptr++) {      /* next buffer pointer */
+/*try*/     if (i == 0xff)
+/*0216*/        goto re60;      /* if eol, get out */
             while (i--) {
                 if (count < n)
                     *buf++ = *bptr; /* put char in buffer */
@@ -617,6 +642,6 @@ int n;
             buf[count++] = '\n';
         buf[count] = '\0';
     }
-//fprintf(stderr, "rbl - read return cnt %x %s\n", count, line);
+//fprintf(stderr, "rbl - read return cnt %x\n", count);
     return (count);
 }

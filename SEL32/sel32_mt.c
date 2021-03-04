@@ -148,6 +148,8 @@
 #define BUF_EMPTY(u)  (u->hwmark == 0xFFFFFFFF)
 #define CLR_BUF(u)     u->hwmark =  0xFFFFFFFF
 
+/* forward definitions */
+uint16      mt_preio(UNIT *uptr, uint16 chan);
 uint16      mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) ;
 t_stat      mt_srv(UNIT *uptr);
 t_stat      mt_boot(int32 unitnum, DEVICE *dptr);
@@ -292,7 +294,7 @@ UNIT                mta_unit[] = {
 CHANP           mta_chp[NUM_UNITS_MT] = {0};
 
 DIB             mta_dib = {
-    NULL,           /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
+    mt_preio,       /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
     mt_startcmd,    /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
     NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O */
     NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O */
@@ -340,7 +342,7 @@ UNIT            mtb_unit[] = {
 
 /* device information block */
 DIB             mtb_dib = {
-    NULL,           /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
+    mt_preio,       /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
     mt_startcmd,    /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
     NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O */
     NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O */
@@ -369,6 +371,30 @@ DEVICE          mtb_dev = {
 };
 #endif
 
+/* start a tape operation */
+uint16 mt_preio(UNIT *uptr, uint16 chan) {
+    DEVICE      *dptr = get_dev(uptr);
+    int         unit = (uptr - dptr->units);
+    uint16      chsa = GET_UADDR(uptr->CMD);
+
+    sim_debug(DEBUG_CMD, dptr, "mt_preio CMD %08x unit %02x chsa %04x\n",
+        uptr->CMD, unit, chsa);
+    if ((uptr->CMD & MT_CMDMSK) != 0) {             /* just return if busy */
+        sim_debug(DEBUG_CMD, dptr,
+            "mt_preio unit %02x chsa %04x BUSY\n", unit, chsa);
+        return SNS_BSY;
+    }
+    if ((uptr->flags & UNIT_ATT) == 0) {            /* unit attached status */
+        uptr->SNS |= SNS_INTVENT;                   /* unit intervention required */
+        uptr->SNS &= ~(SNS_RDY|SNS_ONLN);           /* unit not online or rdy */
+        uptr->SNS &= ~SNS_LOAD;                     /* reset BOT detected */
+        return SNS_BSY;
+    }
+
+    sim_debug(DEBUG_CMD, dptr, "mt_preio unit %02x chsa %04xOK\n", unit, chsa);
+    return SCPE_OK;                                 /* good to go */
+}
+
 /* start an I/O operation */
 uint16 mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 {
@@ -379,15 +405,16 @@ uint16 mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 
     sim_debug(DEBUG_EXP, dptr, "mt_startcmd entry chan %04x cmd %02x\n", chan, cmd);
     if (mt_busy[GET_DEV_BUF(dptr->flags)] != 0 || (uptr->CMD & MT_CMDMSK) != 0) {
-        sim_debug(DEBUG_EXP, dptr, "mt_startcmd busy chan %04x cmd %02x\n", chan, cmd);
-        uptr->flags |= MT_BUSY;                     /* Flag we need to send CUE */
+        sim_debug(DEBUG_EXP, dptr, "mt_startcmd busy %02x chan %04x flags %08x CMD %02x\n",
+            mt_busy[GET_DEV_BUF(dptr->flags)], chan, dptr->flags, uptr->CMD);
+        uptr->flags |= MT_BUSY;             /* Flag we need to send CUE */
         return SNS_BSY;
     }
 
     sim_debug(DEBUG_EXP, dptr, "mt_startcmd processing unit %01x cmd %02x\n", unit, cmd);
 
     switch (cmd & 0xFF) {
-    case 0x00:                                      /* INCH command */
+    case 0x00:                              /* INCH command */
         sim_debug(DEBUG_CMD, dptr, "start INCH command\n");
 
         sim_debug(DEBUG_CMD, dptr,
@@ -395,24 +422,24 @@ uint16 mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
             chsa, chp->ccw_addr, chp->ccw_count);
 
         /* UTX_needs_interrupt */
-        cmd = MT_CMDMSK;                            /* insert INCH cmd as 0xff */
+        cmd = MT_CMDMSK;                    /* insert INCH cmd as 0xff */
         /* fall through */
-    case 0x03:                                      /* Tape motion commands or NOP */
-    case 0x13:                                      /* Read and compare command */
-    case 0x23:                                      /* Rewind command */
-    case 0x33:                                      /* Rewind and unload */
-    case 0x43:                                      /* Advance record */
-    case 0x53:                                      /* Backspace record */
-    case 0x63:                                      /* Advance filemark  */
-    case 0x73:                                      /* Backspace filemark */
-    case 0x83:                                      /* Set Mode command */
-    case 0x93:                                      /* Write Tape filemark */
-    case 0xA3:                                      /* Erase 3.5 of tape */
+    case 0x03:                              /* Tape motion commands or NOP */
+    case 0x13:                              /* Read and compare command */
+    case 0x23:                              /* Rewind command */
+    case 0x33:                              /* Rewind and unload */
+    case 0x43:                              /* Advance record */
+    case 0x53:                              /* Backspace record */
+    case 0x63:                              /* Advance filemark  */
+    case 0x73:                              /* Backspace filemark */
+    case 0x83:                              /* Set Mode command */
+    case 0x93:                              /* Write Tape filemark */
+    case 0xA3:                              /* Erase 3.5 of tape */
         /* UTX_needs_interrupt on NOP or INCH */
         /* fall through */
-    case 0x01:                                      /* Write command */
-    case 0x02:                                      /* Read command */
-    case 0x0C:                                      /* Read backward */
+    case 0x01:                              /* Write command */
+    case 0x02:                              /* Read command */
+    case 0x0C:                              /* Read backward */
         if (cmd == 0x01)
         sim_debug(DEBUG_EXP, dptr,
             "mt_startcmd WRITE chan %04x addr %06x cnt %04x\n",
@@ -421,30 +448,30 @@ uint16 mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         sim_debug(DEBUG_EXP, dptr,
             "mt_startcmd READ chan %04x addr %06x cnt %04x\n",
             chan, chp->ccw_addr, chp->ccw_count);
-        if (cmd != 0x03)                            /* if this is a nop do not zero status */
+        if (cmd != 0x03)                    /* if this is a nop do not zero status */
             uptr->SNS = (uptr->SNS & 0x0000ff00);   /* clear all but byte 2 */
-        uptr->SNS |= (SNS_RDY|SNS_ONLN);            /* set ready status */
+        uptr->SNS |= (SNS_RDY|SNS_ONLN);    /* set ready status */
         /* Fall through */
         if (sim_tape_wrp(uptr))
-            uptr->SNS |= (SNS_WRP);                 /* write protected */
+            uptr->SNS |= (SNS_WRP);         /* write protected */
         if (sim_tape_bot(uptr))
-            uptr->SNS |= (SNS_LOAD);                /* tape at load point */
+            uptr->SNS |= (SNS_LOAD);        /* tape at load point */
         if (sim_tape_eot(uptr))
-            uptr->SNS |= (SNS_EOT);                 /* tape at EOM */
+            uptr->SNS |= (SNS_EOT);         /* tape at EOM */
         /* Fall through */
 
     case 0x04:             /* Sense */
-        uptr->CMD &= ~(MT_CMDMSK);                  /* clear out last cmd */
-        uptr->CMD |= cmd & MT_CMDMSK;               /* insert new cmd */
-        CLR_BUF(uptr);                              /* buffer is empty */
-        uptr->POS = 0;                              /* reset buffer position pointer */
-        mt_busy[GET_DEV_BUF(dptr->flags)] = 1;      /* show we are busy */
+        uptr->CMD &= ~(MT_CMDMSK);          /* clear out last cmd */
+        uptr->CMD |= cmd & MT_CMDMSK;       /* insert new cmd */
+        CLR_BUF(uptr);                      /* buffer is empty */
+        uptr->POS = 0;                      /* reset buffer position pointer */
+        mt_busy[GET_DEV_BUF(dptr->flags)] = 1;  /* show we are busy */
         sim_debug(DEBUG_EXP, dptr, "mt_startcmd sense %08x return 0 chan %04x cmd %02x\n",
             uptr->SNS, chan, cmd);
-        sim_activate(uptr, 100);                    /* Start unit off */
+        sim_activate(uptr, 100);            /* Start unit off */
         return 0;
 
-    default:                                        /* invalid command */
+    default:                                /* invalid command */
         sim_debug(DEBUG_EXP, dptr, "mt_startcmd CMDREJ return chan %04x cmd %02x\n",
             chan, cmd);
         uptr->SNS |= SNS_CMDREJ;
@@ -454,7 +481,7 @@ uint16 mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     }
 #if 0
     /* not reached */
-    if (uptr->SNS & 0xff000000)                     /* errors? */
+    if (uptr->SNS & 0xff000000)             /* errors? */
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     sim_debug(DEBUG_EXP, dptr,
         "mt_startcmd ret CHNEND|DEVEND chan %04x unit %04x cmd %02x\n", chan, unit, cmd);
@@ -466,47 +493,49 @@ uint16 mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 t_stat mt_error(UNIT *uptr, uint16 chsa, t_stat r, DEVICE *dptr)
 {
     sim_debug(DEBUG_CMD, dptr, "mt_error status %08x\n", r);
-    mt_busy[GET_DEV_BUF(dptr->flags)] &= ~1;        /* not busy anymore */
+    mt_busy[GET_DEV_BUF(dptr->flags)] &= ~1;    /* not busy anymore */
 
-    switch (r) {                                    /* switch on return value */
-    case MTSE_OK:                                   /* no error */
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* we are done with command */
+    switch (r) {                            /* switch on return value */
+    case MTSE_OK:                           /* no error */
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we are done with command */
         break;
 
-    case MTSE_TMK:                                  /* tape mark */
+    case MTSE_TMK:                          /* tape mark */
         sim_debug(DEBUG_CMD, dptr, "FILE MARK\n");
-        uptr->SNS |= SNS_FMRKDT;                    /* file mark detected */
+        uptr->SNS |= SNS_FMRKDT;            /* file mark detected */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
         break;
 
-    case MTSE_WRP:                                  /* write protected */
-        uptr->SNS |= SNS_WRP;                       /* write protected */
+    case MTSE_WRP:                          /* write protected */
+        uptr->SNS |= SNS_WRP;               /* write protected */
         sim_debug(DEBUG_CMD, dptr, "WRITE PROTECT %08x\n", r); /* operator intervention */
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* we are done with command */
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we are done with command */
         break;
 
-    case MTSE_UNATT:                                /* unattached */
-        uptr->SNS |= SNS_INTVENT;                   /* unit intervention required */
+    case MTSE_UNATT:                        /* unattached */
+        uptr->SNS |= SNS_INTVENT;           /* unit intervention required */
+        uptr->SNS &= ~(SNS_RDY|SNS_ONLN);   /* unit not online or rdy */
+        uptr->SNS &= ~SNS_LOAD;             /* reset BOT detected */
         sim_debug(DEBUG_CMD, dptr, "ATTENTION %08x\n", r); /* operator intervention */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
         break;
 
-    case MTSE_IOERR:                                /* IO error */
-    case MTSE_FMT:                                  /* invalid format */
-    case MTSE_RECE:                                 /* error in record */
+    case MTSE_IOERR:                        /* IO error */
+    case MTSE_FMT:                          /* invalid format */
+    case MTSE_RECE:                         /* error in record */
         sim_debug(DEBUG_CMD, dptr, "ERROR %08x\n", r);
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* we are done with command */
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we are done with command */
         break;
 
-    case MTSE_BOT:                                  /* beginning of tape */
-        uptr->SNS |= SNS_LOAD;                      /* tape at BOT */
+    case MTSE_BOT:                          /* beginning of tape */
+        uptr->SNS |= SNS_LOAD;              /* tape at BOT */
         sim_debug(DEBUG_CMD, dptr, "BOT\n");
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* we are done with command */
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we are done with command */
         break;
 
-    case MTSE_INVRL:                                /* invalid rec lnt */
-    case MTSE_EOM:                                  /* end of medium */
-        uptr->SNS |= SNS_EOT;                       /* tape at EOT */
+    case MTSE_INVRL:                        /* invalid rec lnt */
+    case MTSE_EOM:                          /* end of medium */
+        uptr->SNS |= SNS_EOT;               /* tape at EOT */
         sim_debug(DEBUG_CMD, dptr, "EOT\n");
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
         break;
@@ -524,7 +553,7 @@ t_stat mt_srv(UNIT *uptr)
     int         bufnum = GET_DEV_BUF(dptr->flags);
     CHANP       *chp = find_chanp_ptr(chsa);    /* find the chanp pointer */
     t_mtrlnt    reclen;
-    t_stat      r = SCPE_ARG;                   /* Force error if not set */
+    t_stat      r = SCPE_ARG;               /* Force error if not set */
     int         i;
     uint32      mema;
     uint16      len;
@@ -532,10 +561,13 @@ t_stat mt_srv(UNIT *uptr)
 //  uint8       buf[1024];
 
     sim_debug(DEBUG_DETAIL, dptr, "mt_srv unit %04x cmd %02x\n", unit, cmd);
-    if ((uptr->flags & UNIT_ATT) == 0) {        /* unit attached status */
-        uptr->SNS |= SNS_INTVENT;               /* unit intervention required */
-        mt_busy[bufnum] &= ~1;                  /* make our buffer not busy */
-        if (cmd != MT_SENSE) {                  /* we are completed with unit check status */
+    if ((uptr->flags & UNIT_ATT) == 0) {    /* unit attached status */
+        uptr->SNS |= SNS_INTVENT;           /* unit intervention required */
+        uptr->SNS &= ~(SNS_RDY|SNS_ONLN);   /* unit not online or rdy */
+        uptr->SNS &= ~SNS_LOAD;             /* reset BOT detected */
+        mt_busy[bufnum] &= ~1;              /* make our buffer not busy */
+        if (cmd != MT_SENSE) {              /* we are completed with unit check status */
+            uptr->CMD &= ~MT_CMDMSK;        /* clear the cmd */
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             return SCPE_OK;
         }
@@ -543,15 +575,15 @@ t_stat mt_srv(UNIT *uptr)
 
     switch (cmd) {
     case MT_CMDMSK:   /* 0x0ff for inch 0x00 */ /* INCH is for channel, nothing for us */
-        len = chp->ccw_count;                   /* INCH command count */
-        mema = chp->ccw_addr;                   /* get inch or buffer addr */
+        len = chp->ccw_count;               /* INCH command count */
+        mema = chp->ccw_addr;               /* get inch or buffer addr */
         sim_debug(DEBUG_CMD, dptr,
             "mt_srv starting INCH %06x cmd, chsa %04x MemBuf %06x cnt %04x\n",
             mema, chsa, chp->ccw_addr, chp->ccw_count);
 
         if (len == 0) {
                 /* we have invalid count, error, bail out */
-                uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
+                uptr->CMD &= ~(0xffff);     /* remove old status bits & cmd */
                 uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
@@ -560,7 +592,7 @@ t_stat mt_srv(UNIT *uptr)
         for (i=0; i < len; i++) {
             if (chan_read_byte(chsa, &buf[i])) {
                 /* we have error, bail out */
-                uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
+                uptr->CMD &= ~(0xffff);     /* remove old status bits & cmd */
                 uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
@@ -570,11 +602,11 @@ t_stat mt_srv(UNIT *uptr)
 #endif
         /* the chp->ccw_addr location contains the inch address */
         /* call set_inch() to setup inch buffer */
-        i = set_inch(uptr, mema);               /* new address */
+        i = set_inch(uptr, mema);           /* new address */
 
         if ((i == SCPE_MEM) || (i == SCPE_ARG)) {   /* any error */
             /* we have error, bail out */
-            uptr->CMD &= ~(0xffff);             /* remove old status bits & cmd */
+            uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
             uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             break;
@@ -582,81 +614,89 @@ t_stat mt_srv(UNIT *uptr)
         /* set halfwords 16 & 17 to 5 as default retry count in inch data */
         /* UTX uses this value to see if the device is a buffered tape processor */
         /* they must be non-zero and equal to be BTP */
-        WMH(mema+(16<<1),5);                    /* write left HW with count */
-        WMH(mema+(17<<1),5);                    /* write right HW with count */
+        WMH(mema+(16<<1),5);                /* write left HW with count */
+        WMH(mema+(17<<1),5);                /* write right HW with count */
         sim_debug(DEBUG_CMD, dptr,
             "mt_srv cmd INCH chsa %04x chsa %06x count %04x completed INCH16 %08x\n",
             chsa, mema, chp->ccw_count, RMW(mema+(8<<2)));
-        uptr->CMD &= ~MT_CMDMSK;                /* clear the cmd */
-        mt_busy[bufnum] &= ~1;                  /* make our buffer not busy */
+        uptr->CMD &= ~MT_CMDMSK;            /* clear the cmd */
+        mt_busy[bufnum] &= ~1;              /* make our buffer not busy */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
         break;
 
-    case 0x80:      /* other? */                    /* default to NOP */
+    case 0x80:      /* other? */            /* default to NOP */
         sim_debug(DEBUG_CMD, dptr, "mt_srv cmd 80 DIAG unit=%04x SNS %08x\n", unit, uptr->SNS);
-        ch = (uptr->SNS >> 24) & 0xff;              /* get sense byte 0 status */
+        ch = (uptr->SNS >> 24) & 0xff;      /* get sense byte 0 status */
         sim_debug(DEBUG_CMD, dptr, "sense unit %02x byte 0 %02x\n", unit, ch);
-        chan_write_byte(chsa, &ch);                 /* write byte 0 */
-        ch = (uptr->SNS >> 16) & 0xff;              /* get sense byte 1 status */
+        chan_write_byte(chsa, &ch);         /* write byte 0 */
+        ch = (uptr->SNS >> 16) & 0xff;      /* get sense byte 1 status */
         sim_debug(DEBUG_CMD, dptr, "sense unit %02x byte 1 %02x\n", unit, ch);
-        chan_write_byte(chsa, &ch);                 /* write byte 1 */
-        ch = (uptr->SNS >> 8) & 0xff;               /* get sense byte 2 status */
+        chan_write_byte(chsa, &ch);         /* write byte 1 */
+        ch = (uptr->SNS >> 8) & 0xff;       /* get sense byte 2 status */
         sim_debug(DEBUG_CMD, dptr, "sense unit %02x byte 2 %02x\n", unit, ch);
-        chan_write_byte(chsa, &ch);                 /* write byte 2 */
-        ch = (uptr->SNS >> 0) & 0xff;               /* get sense byte 3 status */
+        chan_write_byte(chsa, &ch);         /* write byte 2 */
+        ch = (uptr->SNS >> 0) & 0xff;       /* get sense byte 3 status */
         sim_debug(DEBUG_CMD, dptr, "sense unit %02x byte 3 %02x\n", unit, ch);
-        chan_write_byte(chsa, &ch);                 /* write byte 3 */
+        chan_write_byte(chsa, &ch);         /* write byte 3 */
         /* write zero extra status */
         for (ch=4; ch < 0xc; ch++) {
             uint8   zc = 0;
-            chan_write_byte(chsa, &zc);             /* write zero byte */
+            chan_write_byte(chsa, &zc);     /* write zero byte */
             sim_debug(DEBUG_CMD, dptr,
                 "sense unit %02x byte %1x %02x\n", unit, ch, zc);
         }
-        uptr->CMD &= ~MT_CMDMSK;                    /* clear the cmd */
-        mt_busy[bufnum] &= ~1;                      /* make our buffer not busy */
+        uptr->CMD &= ~MT_CMDMSK;            /* clear the cmd */
+        mt_busy[bufnum] &= ~1;              /* make our buffer not busy */
+        uptr->SNS = (uptr->SNS & 0x0000ff00);   /* clear all but byte 2 */
+        if ((uptr->flags & UNIT_ATT) == 0)  /* unit attached status */
+            uptr->SNS |= SNS_INTVENT;       /* unit intervention required */
+        else
+            uptr->SNS &= ~(SNS_RDY|SNS_ONLN);   /* unit not online or rdy */
         sim_debug(DEBUG_CMD, dptr, "mt_srv DIAG SNS %08x char complete unit=%02x\n",
             uptr->SNS, unit);
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* we are done dev|chan end */
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
         break;
 
-    case MT_NOP:    /* 0x03 */                      /* NOP motion command */
-        uptr->CMD &= ~MT_CMDMSK;                    /* clear the cmd */
-        mt_busy[bufnum] &= ~1;                      /* make our buffer not busy */
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* we are done dev|chan end */
+    case MT_NOP:    /* 0x03 */              /* NOP motion command */
+        uptr->CMD &= ~MT_CMDMSK;            /* clear the cmd */
+        mt_busy[bufnum] &= ~1;              /* make our buffer not busy */
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
         break;
 
-    case MT_SENSE:  /* 0x04 */                      /* get sense data */
+    case MT_SENSE:  /* 0x04 */              /* get sense data */
         /* write requested status */
-        len = chp->ccw_count;                       /* command count */
-//0905  for (i=0; i<len; i++) {
+        len = chp->ccw_count;               /* command count */
         for (i=0; i<4; i++) {
             ch = 0;
             if (i<4)
                 ch = (uptr->SNS >> (24-(i*8))) & 0xff;  /* get 8 bits of status */
-            chan_write_byte(chsa, &ch);             /* write zero byte */
+            chan_write_byte(chsa, &ch);     /* write zero byte */
             sim_debug(DEBUG_CMD, dptr,
                 "sense unit %02x byte %1x %02x\n", unit, i, ch);
         }
-        uptr->CMD &= ~MT_CMDMSK;                    /* clear the cmd */
-        mt_busy[bufnum] &= ~1;                      /* make our buffer not busy */
+        uptr->CMD &= ~MT_CMDMSK;            /* clear the cmd */
+        mt_busy[bufnum] &= ~1;              /* make our buffer not busy */
+        uptr->SNS = (uptr->SNS & 0x0000ff00);   /* clear all but byte 2 */
+        if ((uptr->flags & UNIT_ATT) == 0)  /* unit attached status */
+            uptr->SNS |= SNS_INTVENT;       /* unit intervention required */
+        else
+            uptr->SNS &= ~(SNS_RDY|SNS_ONLN);   /* unit not online or rdy */
         sim_debug(DEBUG_CMD, dptr, "mt_srv SENSE %08x char complete unit=%02x\n",
             uptr->SNS, unit);
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* we are done dev|chan end */
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
         break;
 
-    case MT_READ:   /* 0x02 */                      /* read a record from the device */
-//      sim_debug(DEBUG_DETAIL, dptr, "mt_srv cmd 2 READ unit=%02x\n", unit);
-        sim_debug(DEBUG_CMD, dptr, "mt_srv cmd 2 READ unit=%02x\n", unit);
-        if (uptr->CMD & MT_READDONE) {              /* is the read complete */
-            uptr->SNS &= ~(SNS_LOAD|SNS_EOT);       /* reset BOT & EOT */
-            if (sim_tape_eot(uptr)) {               /* see if at EOM */
-                uptr->SNS |= SNS_EOT;               /* set EOT status */
+    case MT_READ:   /* 0x02 */              /* read a record from the device */
+        sim_debug(DEBUG_DETAIL, dptr, "mt_srv cmd 2 READ unit=%02x\n", unit);
+        if (uptr->CMD & MT_READDONE) {      /* is the read complete */
+            uptr->SNS &= ~(SNS_LOAD|SNS_EOT);   /* reset BOT & EOT */
+            if (sim_tape_eot(uptr)) {       /* see if at EOM */
+                uptr->SNS |= SNS_EOT;       /* set EOT status */
             }
 
             uptr->CMD &= ~(MT_CMDMSK|MT_READDONE);  /* clear all but readdone & cmd */
-            uptr->CMD &= ~MT_CMDMSK;                /* clear the cmd */
-            mt_busy[bufnum] &= ~1;                  /* not busy anymore */
+            uptr->CMD &= ~MT_CMDMSK;        /* clear the cmd */
+            mt_busy[bufnum] &= ~1;          /* not busy anymore */
             sim_debug(DEBUG_CMD, dptr,
                 "mt_srv READ %04x char complete unit=%02x sense %08x\n",
                 uptr->POS, unit, uptr->SNS);
@@ -672,10 +712,9 @@ t_stat mt_srv(UNIT *uptr)
                 uptr->CMD &= ~(MT_CMDMSK|MT_READDONE);  /* clear all but readdone & cmd */
                 return mt_error(uptr, chsa, r, dptr);   /* process any error & return status */
             }
-            uptr->SNS &= ~(SNS_LOAD|SNS_EOT);       /* reset BOT & EOT */
-            uptr->POS = 0;                          /* reset buffer position */
-            uptr->hwmark = reclen;                  /* set buffer chars read in */
-//          sim_debug(DEBUG_DETAIL, dptr, "mt_srv READ fill buffer complete count %04x\n", reclen);
+            uptr->SNS &= ~(SNS_LOAD|SNS_EOT);   /* reset BOT & EOT */
+            uptr->POS = 0;                  /* reset buffer position */
+            uptr->hwmark = reclen;          /* set buffer chars read in */
             sim_debug(DEBUG_CMD, dptr, "mt_srv READ fill buffer complete count %04x\n", reclen);
             sim_debug(DEBUG_CMD, dptr,
                 "mt_srv READ MemBuf %06x cnt %04x %02x%02x%02x%02x\n",
@@ -692,20 +731,19 @@ t_stat mt_srv(UNIT *uptr)
             /* If not read whole record, skip till end */
             if ((uint32)uptr->POS < uptr->hwmark) {
                 /* Send dummy character to force SLI */
-                chan_write_byte(chsa, &ch);         /* write the byte */
+                chan_write_byte(chsa, &ch); /* write the byte */
                 sim_debug(DEBUG_CMD, dptr, "Read unit %02x send dump SLI\n", unit);
                 sim_activate(uptr, (uptr->hwmark-uptr->POS) * 10); /* wait again */
-                uptr->CMD |= MT_READDONE;           /* read is done */
+                uptr->CMD |= MT_READDONE;   /* read is done */
                 break;
             }
             sim_debug(DEBUG_CMD, dptr,
                 "Read data @1 unit %02x cnt %04x ch %02x hwm %04x\n",
                     unit, uptr->POS, ch, uptr->hwmark);
-            uptr->CMD &= ~MT_CMDMSK;                /* clear the cmd */
-            mt_busy[bufnum] &= ~1;                  /* set not busy */
+            uptr->CMD &= ~MT_CMDMSK;        /* clear the cmd */
+            mt_busy[bufnum] &= ~1;          /* set not busy */
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return end status */
         } else {
-//          sim_debug(DEBUG_CMD, dptr,
             sim_debug(DEBUG_DETAIL, dptr,
                 "Read data @2 unit %02x cnt %04x ch %02x hwm %04x\n",
                 unit, uptr->POS, ch, uptr->hwmark);
@@ -714,39 +752,39 @@ t_stat mt_srv(UNIT *uptr)
                 sim_debug(DEBUG_CMD, dptr,
                     "Read end of data unit %02x cnt %04x ch %02x hwm %04x\n",
                     unit, uptr->POS, ch, uptr->hwmark);
-                uptr->CMD |= MT_READDONE;           /* read is done */
-                sim_activate(uptr, 40);             /* wait again */
+                uptr->CMD |= MT_READDONE;   /* read is done */
+                sim_activate(uptr, 40);     /* wait again */
             } else
-                sim_activate(uptr, 40);             /* wait again */
+                sim_activate(uptr, 40);     /* wait again */
         }
         break;
 
-    case MT_SETM:   /* 0x83 */                      /* set mode byte */
+    case MT_SETM:   /* 0x83 */              /* set mode byte */
         sim_debug(DEBUG_CMD, dptr, "mt_srv cmd 0x83 SETM unit=%02x\n", unit);
         /* Grab data until channel has no more */
         if (chan_read_byte(chsa, &ch)) {
-            if (uptr->POS > 0) {                    /* Only if data in record */
-                reclen = uptr->hwmark;              /* set record length */
-                ch = mt_buffer[bufnum][0];          /* get the first byte read */
+            if (uptr->POS > 0) {            /* Only if data in record */
+                reclen = uptr->hwmark;      /* set record length */
+                ch = mt_buffer[bufnum][0];  /* get the first byte read */
                 sim_debug(DEBUG_CMD, dptr,
                     "Write mode data done unit %02x chars %02x mode %02x\n", unit, reclen, ch);
                 /* put mode bits into byte 2 of SNS */
                 uptr->SNS = (uptr->SNS & 0xffff00ff) | (ch << 8);
-                uptr->POS = 0;                      /* no bytes anymore */
-                uptr->CMD &= ~MT_CMDMSK;            /* no cmd to do */
-                mt_busy[bufnum] &= ~1;              /* set not busy */
+                uptr->POS = 0;              /* no bytes anymore */
+                uptr->CMD &= ~MT_CMDMSK;    /* no cmd to do */
+                mt_busy[bufnum] &= ~1;      /* set not busy */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return end status */
             }
         } else {
             mt_buffer[bufnum][uptr->POS++] = ch;    /* save the character read in */
             sim_debug(DEBUG_CMD, dptr, "Write mode data in unit %02x POS %04x mode %02x\n",
                   unit, uptr->POS, ch);
-            uptr->hwmark = uptr->POS;               /* set high water mark */
-            sim_activate(uptr, 40);                 /* wait time */
+            uptr->hwmark = uptr->POS;       /* set high water mark */
+            sim_activate(uptr, 40);         /* wait time */
         }
         break;
 
-    case MT_WRITE:  /* 0x01 */                      /* write record */
+    case MT_WRITE:  /* 0x01 */              /* write record */
         /* Check if write protected */
         if (sim_tape_wrp(uptr)) {
             uptr->SNS |= SNS_CMDREJ;
@@ -759,14 +797,14 @@ t_stat mt_srv(UNIT *uptr)
 
         /* Grab data until channel has no more */
         if (chan_read_byte(chsa, &ch)) {
-            if (uptr->POS > 0) {                   /* Only if data in record */
+            if (uptr->POS > 0) {            /* Only if data in record */
                 reclen = uptr->hwmark;
                 sim_debug(DEBUG_CMD, dptr, "Write unit=%02x Block %04x chars\n",
                     unit, reclen);
                 r = sim_tape_wrrecf(uptr, &mt_buffer[bufnum][0], reclen);
                 uptr->POS = 0;
                 uptr->CMD &= ~MT_CMDMSK;
-                mt_error(uptr, chsa, r, dptr);     /* Record errors */
+                mt_error(uptr, chsa, r, dptr);  /* Record errors */
             }
         } else {
             mt_buffer[bufnum][uptr->POS++] = ch;
@@ -777,7 +815,7 @@ t_stat mt_srv(UNIT *uptr)
         sim_activate(uptr, 40);
         break;
 
-    case MT_RDBK:   /* 0x0C */                      /* Read Backwards */
+    case MT_RDBK:   /* 0x0C */              /* Read Backwards */
         if (uptr->CMD & MT_READDONE) {
             uptr->CMD &= ~(MT_CMDMSK|MT_READDONE);
             mt_busy[bufnum] &= ~1;
@@ -820,7 +858,7 @@ t_stat mt_srv(UNIT *uptr)
         } else {
             sim_debug(DEBUG_DETAIL, dptr, "Read data unit=%02x %04x %02x\n",
                 unit, uptr->POS, ch);
-            if (uptr->POS == 0) {      /* In IRG */
+            if (uptr->POS == 0) {           /* In IRG */
                 uptr->CMD &= ~MT_CMDMSK;
                 mt_busy[bufnum] &= ~1;
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
@@ -829,7 +867,7 @@ t_stat mt_srv(UNIT *uptr)
         }
         break;
 
-    case MT_WTM:    /* 0x93 */                      /* Write tape filemark */
+    case MT_WTM:    /* 0x93 */              /* Write tape filemark */
         if (uptr->POS == 0) {
             if (sim_tape_wrp(uptr)) {
                 uptr->SNS |= SNS_CMDREJ;
@@ -849,7 +887,7 @@ t_stat mt_srv(UNIT *uptr)
         }
         break;
 
-    case MT_BSR:    /* 0x53 */                      /* Backspace record */
+    case MT_BSR:    /* 0x53 */              /* Backspace record */
         sim_debug(DEBUG_CMD, dptr, "mt_srv cmd 0x53 BSR unit %02x POS %04x\n",
             unit, uptr->POS);
         switch (uptr->POS ) {
@@ -890,19 +928,19 @@ t_stat mt_srv(UNIT *uptr)
         case 3:     /* EOF */
             uptr->CMD &= ~(MT_CMDMSK);
             mt_busy[bufnum] &= ~1;
-            uptr->SNS |= SNS_FMRKDT;            /* file mark detected */
+            uptr->SNS |= SNS_FMRKDT;        /* file mark detected */
             chan_end(chsa, SNS_DEVEND|SNS_UNITEXP);
             break;
         case 4:     /* BOT */
             uptr->CMD &= ~(MT_CMDMSK);
             mt_busy[bufnum] &= ~1;
-            uptr->SNS |= SNS_LOAD;              /* set BOT detected */
+            uptr->SNS |= SNS_LOAD;          /* set BOT detected */
             chan_end(chsa, SNS_DEVEND|SNS_UNITEXP);
             break;
         }
         break;
 
-    case MT_BSF:    /* 0x73 */          /* Backspace file */
+    case MT_BSF:    /* 0x73 */              /* Backspace file */
         sim_debug(DEBUG_CMD, dptr, "mt_srv cmd 0x73 BSF unit %02x\n", unit);
         switch(uptr->POS) {
         case 0:
@@ -932,20 +970,20 @@ t_stat mt_srv(UNIT *uptr)
             break;
         case 2:        /* File Mark */
             uptr->CMD &= ~(MT_CMDMSK);
-            uptr->SNS |= SNS_FMRKDT;                /* file mark detected */
+            uptr->SNS |= SNS_FMRKDT;        /* file mark detected */
             mt_busy[bufnum] &= ~1;
             chan_end(chsa, SNS_DEVEND);
             break;
         case 3:        /* BOT */
             uptr->CMD &= ~(MT_CMDMSK);
             mt_busy[bufnum] &= ~1;
-            uptr->SNS |= SNS_LOAD;                  /* set BOT */
+            uptr->SNS |= SNS_LOAD;          /* set BOT */
             chan_end(chsa, SNS_DEVEND);
             break;
         }
         break;
 
-    case MT_FSR:    /* 0x43 */          /* Advance record */
+    case MT_FSR:    /* 0x43 */              /* Advance record */
         switch(uptr->POS) {
         case 0:
             sim_debug(DEBUG_CMD, dptr, "Skip rec entry unit=%02x ", unit);
@@ -959,12 +997,12 @@ t_stat mt_srv(UNIT *uptr)
             r = sim_tape_sprecf(uptr, &reclen);
             if (r == MTSE_TMK) {
                 uptr->POS = 3;
-                uptr->SNS |= SNS_FMRKDT;            /* file mark detected */
+                uptr->SNS |= SNS_FMRKDT;    /* file mark detected */
                 sim_debug(DEBUG_CMD, dptr, "FSR MARK\n");
                 sim_activate(uptr, 50);
             } else if (r == MTSE_EOM) {
                 uptr->POS = 4;
-                uptr->SNS |= SNS_EOT;               /* set EOT status */
+                uptr->SNS |= SNS_EOT;       /* set EOT status */
                 sim_debug(DEBUG_CMD, dptr, "FSR EOT\n");
                 sim_activate(uptr, 50);
             } else {
@@ -994,7 +1032,7 @@ t_stat mt_srv(UNIT *uptr)
         }
         break;
 
-    case MT_FSF:    /* 0x63 */          /* advance filemark */
+    case MT_FSF:    /* 0x63 */              /* advance filemark */
         switch(uptr->POS) {
         case 0:
             sim_debug(DEBUG_CMD, dptr,
@@ -1008,11 +1046,11 @@ t_stat mt_srv(UNIT *uptr)
             r = sim_tape_sprecf(uptr, &reclen);
             if (r == MTSE_TMK) {
                 uptr->POS++;
-                uptr->SNS |= SNS_FMRKDT;            /* file mark detected */
+                uptr->SNS |= SNS_FMRKDT;    /* file mark detected */
                 sim_debug(DEBUG_CMD, dptr, "FSF EOF MARK sense %08x\n", uptr->SNS);
                 sim_activate(uptr, 50);
             } else if (r == MTSE_EOM) {
-                uptr->SNS |= SNS_EOT;               /* set EOT status */
+                uptr->SNS |= SNS_EOT;       /* set EOT status */
                 sim_debug(DEBUG_CMD, dptr, "FSF EOT sense %08x\n", uptr->SNS);
                 uptr->POS+= 2;
                 sim_activate(uptr, 50);
@@ -1030,7 +1068,7 @@ t_stat mt_srv(UNIT *uptr)
             break;
         case 3:
             uptr->CMD &= ~(MT_CMDMSK);
-            uptr->SNS |= SNS_EOT;                   /* set EOT status */
+            uptr->SNS |= SNS_EOT;           /* set EOT status */
             mt_busy[bufnum] &= ~1;
             sim_debug(DEBUG_CMD, dptr,
                 "Skip file got EOT sense %08x unit %02x\n", uptr->SNS, unit);
@@ -1039,7 +1077,7 @@ t_stat mt_srv(UNIT *uptr)
         }
         break;
 
-    case MT_ERG:    /* 0xA3 */                      /* Erace 3.5 in tape */
+    case MT_ERG:    /* 0xA3 */              /* Erace 3.5 in tape */
         switch (uptr->POS) {
         case 0:
             if (sim_tape_wrp(uptr)) {
@@ -1067,7 +1105,7 @@ t_stat mt_srv(UNIT *uptr)
         }
         break;
 
-    case MT_REW:    /* 0x23 */                      /* rewind tape */
+    case MT_REW:    /* 0x23 */              /* rewind tape */
         if (uptr->POS == 0) {
             uptr->POS++;
             sim_debug(DEBUG_CMD, dptr, "Start rewind unit %02x\n", unit);
@@ -1076,21 +1114,27 @@ t_stat mt_srv(UNIT *uptr)
             sim_debug(DEBUG_CMD, dptr, "Rewind complete unit %02x\n", unit);
             uptr->CMD &= ~(MT_CMDMSK);
             r = sim_tape_rewind(uptr);
-            uptr->SNS |= SNS_LOAD;                  /* set BOT */
+            uptr->SNS |= SNS_LOAD;          /* set BOT */
             mt_busy[bufnum] &= ~1;
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
          }
          break;
 
-    case MT_RUN:    /* 0x33 */                      /* Rewind and unload tape */
+    case MT_RUN:    /* 0x33 */              /* Rewind and unload tape */
          if (uptr->POS == 0) {
              uptr->POS++;
              mt_busy[bufnum] &= ~1;
+             sim_debug(DEBUG_CMD, dptr, "Start rewind/unload unit %02x\n", unit);
              sim_activate(uptr, 30000);
          } else {
-             sim_debug(DEBUG_CMD, dptr, "Unload unit=%02x\n", unit);
-             uptr->CMD &= ~(MT_CMDMSK);
+            sim_debug(DEBUG_CMD, dptr, "Unload unit=%02x\n", unit);
+            uptr->CMD &= ~(MT_CMDMSK);
+            uptr->SNS |= SNS_INTVENT;       /* unit intervention required */
+            uptr->SNS &= ~(SNS_RDY|SNS_ONLN);   /* unit not online or rdy */
+            uptr->SNS &= ~SNS_LOAD;         /* reset BOT detected */
              r = sim_tape_detach(uptr);
+//??        set_devattn(chsa, SNS_DEVEND);  /* ready int???? */
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
          }
          break;
     }
@@ -1104,11 +1148,11 @@ void mt_ini(UNIT *uptr, t_bool f)
     if (MT_DENS(uptr->dynflags) == 0)
         uptr->dynflags |= MT_DENS_6250 << UNIT_S_DF_TAPE;
 
-    uptr->CMD &= ~0xffff;                           /* clear out the flags but leave ch/sa */
-    uptr->SNS = 0;                                  /* clear sense data */
-    uptr->SNS |= (SNS_RDY|SNS_ONLN|SNS_LOAD);       /* set initial status */
-    mt_busy[GET_DEV_BUF(dptr->flags)] = 0;          /* set not busy */
-    sim_cancel(uptr);                               /* cancel any timers */
+    uptr->CMD &= ~0xffff;                   /* clear out the flags but leave ch/sa */
+    uptr->SNS = 0;                          /* clear sense data */
+    uptr->SNS |= (SNS_RDY|SNS_ONLN|SNS_LOAD);   /* set initial status */
+    mt_busy[GET_DEV_BUF(dptr->flags)] = 0;  /* set not busy */
+    sim_cancel(uptr);                       /* cancel any timers */
     sim_debug(DEBUG_EXP, dptr, "MT init device %s unit %02x\n",
         dptr->name, GET_UADDR(uptr->CMD));
 }
@@ -1118,10 +1162,9 @@ uint16  mt_rschnlio(UNIT *uptr) {
     DEVICE *dptr = get_dev(uptr);
     uint16  chsa = GET_UADDR(uptr->CMD);
     int     cmd = uptr->CMD & MT_CMDMSK;
-//  int     unit = (uptr - mt_unit);                /* unit 0 */
 
     sim_debug(DEBUG_EXP, dptr, "mt_rschnl chsa %04x cmd = %02x\n", chsa, cmd);
-    mt_ini(uptr, 0);                                /* reset the unit */
+    mt_ini(uptr, 0);                        /* reset the unit */
     return SCPE_OK;
 }
 
@@ -1136,64 +1179,65 @@ t_stat mt_reset(DEVICE *dptr)
 /* attach the specified file to the tape device */
 t_stat mt_attach(UNIT *uptr, CONST char *file)
 {
-    uint16      chsa = GET_UADDR(uptr->CMD);        /* get address of mt device */
-    CHANP       *chp = find_chanp_ptr(chsa);        /* get channel prog pointer */
-    DEVICE      *dptr = get_dev(uptr);              /* get device pointer */
+    uint16      chsa = GET_UADDR(uptr->CMD);    /* get address of mt device */
+    CHANP       *chp = find_chanp_ptr(chsa);    /* get channel prog pointer */
+    DEVICE      *dptr = get_dev(uptr);      /* get device pointer */
     t_stat      r;
     DIB         *dibp = 0;
 
     /* mount the specified file to the MT */
     if ((r = sim_tape_attach(uptr, file)) != SCPE_OK) {
        sim_debug(DEBUG_EXP, dptr, "mt_attach ERROR filename %s status %08x\n", file, r);
-       return r;                                    /* report any error */
+       return r;                            /* report any error */
     }
     sim_debug(DEBUG_EXP, dptr, "mt_attach complete filename %s\n", file);
-    uptr->CMD &= ~0xffff;                           /* clear out the flags but leave ch/sa */
-    uptr->POS = 0;                                  /* clear position data */
-    uptr->SNS = 0;                                  /* clear sense data */
+    uptr->CMD &= ~0xffff;                   /* clear out the flags but leave ch/sa */
+    uptr->POS = 0;                          /* clear position data */
+    uptr->SNS = 0;                          /* clear sense data */
+    uptr->SNS |= SNS_ONLN;                  /* 0x40 Drive Online */
 
     /* check for valid configured tape */
     /* must have valid DIB and Channel Program pointer */
-    dibp = (DIB *)dptr->ctxt;                       /* get the DIB pointer */
+    dibp = (DIB *)dptr->ctxt;               /* get the DIB pointer */
     if ((dib_unit[chsa] == NULL) || (dibp == NULL) || (chp == NULL)) {
         sim_debug(DEBUG_CMD, dptr,
             "ERROR===ERROR\nMT device %s not configured on system, aborting\n",
             dptr->name);
         printf("ERROR===ERROR\nMT device %s not configured on system, aborting\n",
             dptr->name);
-        detach_unit(uptr);                          /* detach if error */
-        return SCPE_UNATT;                          /* error */
+        detach_unit(uptr);                  /* detach if error */
+        return SCPE_UNATT;                  /* error */
     }
-    set_devattn(chsa, SNS_DEVEND);                  /* ready int???? */
-    return SCPE_OK;                                 /* return good status */
+    set_devattn(chsa, SNS_DEVEND);          /* ready int???? */
+    return SCPE_OK;                         /* return good status */
 }
 
 /* detach the MT device and unload any tape */
 t_stat mt_detach(UNIT *uptr)
 {
-    DEVICE      *dptr = get_dev(uptr);              /* get device pointer */
+    DEVICE      *dptr = get_dev(uptr);      /* get device pointer */
     sim_debug(DEBUG_EXP, dptr, "mt_detach\n");
-    uptr->CMD &= ~0xffff;                           /* clear out the flags but leave ch/sa */
-    uptr->POS = 0;                                  /* clear position data */
-    uptr->SNS = 0;                                  /* clear sense data */
+    uptr->CMD &= ~0xffff;                   /* clear out the flags but leave ch/sa */
+    uptr->POS = 0;                          /* clear position data */
+    uptr->SNS = 0;                          /* clear sense data */
     return sim_tape_detach(uptr);
 }
 
 /* boot from the specified tape unit */
 t_stat mt_boot(int32 unit_num, DEVICE *dptr)
 {
-    UNIT    *uptr = &dptr->units[unit_num];         /* find tape unit pointer */
+    UNIT    *uptr = &dptr->units[unit_num]; /* find tape unit pointer */
 
     sim_debug(DEBUG_EXP, dptr, "MT Boot dev/unit %04x\n", GET_UADDR(uptr->CMD));
-    if ((uptr->flags & UNIT_ATT) == 0) {            /* Is MT device already attached? */
+    if ((uptr->flags & UNIT_ATT) == 0) {    /* Is MT device already attached? */
         sim_debug(DEBUG_EXP, dptr,
             "MT Boot attach error dev/unit %04x\n", GET_UADDR(uptr->CMD));
-        return SCPE_UNATT;                          /* not attached, return error */
+        return SCPE_UNATT;                  /* not attached, return error */
     }
-    SPAD[0xf4] = GET_UADDR(uptr->CMD);              /* put boot device chan/sa into spad */
-    SPAD[0xf8] = 0xF000;                            /* show as F class device */
+    SPAD[0xf4] = GET_UADDR(uptr->CMD);      /* put boot device chan/sa into spad */
+    SPAD[0xf8] = 0xF000;                    /* show as F class device */
 
-    uptr->CMD &= ~0xffff;                           /* clear out old status */
+    uptr->CMD &= ~0xffff;                   /* clear out old status */
     return chan_boot(GET_UADDR(uptr->CMD), dptr);   /* boot the ch/sa */
 }
 

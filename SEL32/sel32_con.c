@@ -117,10 +117,8 @@ UNIT            con_unit[] = {
     {UDATA(&con_srvo, UNIT_CON, 0), 0, UNIT_ADDR(0x7EFD)},   /* Output */
 };
 
-//DIB   con_dib = {NULL,con_startcmd,NULL,NULL,NULL,con_ini,
-//con_unit,con_chp,NUM_UNITS_CON,0xf,0x7e00,0,0,0};
 DIB             con_dib = {
-    con_preio,      /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Start I/O */
+    con_preio,      /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
     con_startcmd,   /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
     con_haltio,     /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O */
     NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O */
@@ -535,8 +533,10 @@ t_stat con_srvi(UNIT *uptr) {
                 atbuf = (ch)<<8;            /* start anew */
                 uptr->CMD |= CON_ATAT;      /* show getting @ */
             }
+#ifndef TEST4MPX
             if (ch == '\n')                 /* convert newline */
                 ch = '\r';                  /* make newline into carriage return */ 
+#endif
             sim_debug(DEBUG_CMD, &con_dev,
                 "con_srvi handle readch unit %02x: CMD %08x read %02x u4 %02x incnt %02x r %x\n",
                 unit, uptr->CMD, ch, uptr->u4, con_data[unit].incnt, r);
