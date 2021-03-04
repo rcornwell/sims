@@ -608,8 +608,7 @@ loop:
             return 1;                           /* if none, error */
         }
 
-//      sim_debug(DEBUG_XIO, dptr,
-        sim_debug(DEBUG_DETAIL, dptr,
+        sim_debug(DEBUG_XIO, dptr,
             "scfi_iocl @%06x before start_cmd chan %04x status %04x count %04x SNS %08x\n",
             chp->chan_caw, chan, chp->chan_status, chp->ccw_count, uptr->u5);
 
@@ -619,8 +618,7 @@ loop:
         chp->chan_status = (chp->chan_status & 0xff00) | devstat;
         chp->chan_info &= ~INFO_SIOCD;          /* show not first IOCD in channel prog */
 
-//      sim_debug(DEBUG_XIO, dptr,
-        sim_debug(DEBUG_DETAIL, dptr,
+        sim_debug(DEBUG_XIO, dptr,
             "scfi_iocl @%06x after start_cmd chan %04x status %08x count %04x\n",
             chp->chan_caw, chan, chp->chan_status, chp->ccw_count);
 
@@ -651,16 +649,14 @@ loop:
         if (chp->chan_status & (STATUS_DEND|STATUS_CEND)) {
             uint16  chsa = GET_UADDR(uptr->u3); /* get channel & sub address */
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* show I/O complete */
-//          sim_debug(DEBUG_XIO, dptr,
-            sim_debug(DEBUG_DETAIL, dptr,
+            sim_debug(DEBUG_XIO, dptr,
                 "scfi_iocl @%06x FIFO #%1x cmd complete chan %04x status %04x count %04x\n",
                 chp->chan_caw, FIFO_Num(chsa), chan, chp->chan_status, chp->ccw_count);
         }
     }
     /* the device processor returned OK (0), so wait for I/O to complete */
     /* nothing happening, so return */
-//  sim_debug(DEBUG_XIO, dptr,
-    sim_debug(DEBUG_DETAIL, dptr,
+    sim_debug(DEBUG_XIO, dptr,
         "scfi_iocl @%06x return, chan %04x status %04x count %04x irq_pend %1x\n",
         chp->chan_caw, chan, chp->chan_status, chp->ccw_count, irq_pend);
     return 0;                                   /* good return */
@@ -673,8 +669,7 @@ uint16 scfi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     int32       unit = (uptr - dptr->units);
     CHANP       *chp = find_chanp_ptr(chsa);    /* find the chanp pointer */
 
-//  sim_debug(DEBUG_CMD, dptr,
-    sim_debug(DEBUG_DETAIL, dptr,
+    sim_debug(DEBUG_CMD, dptr,
         "scfi_startcmd chsa %04x unit %02x cmd %02x CMD %08x\n",
         chsa, unit, cmd, uptr->CMD);
     if ((uptr->flags & UNIT_ATT) == 0) {        /* unit attached status */
@@ -690,8 +685,7 @@ uint16 scfi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         return SNS_BSY;
     }
     uptr->SNS2 |= SNS_USEL;                     /* unit selected */
-//  sim_debug(DEBUG_CMD, dptr,
-    sim_debug(DEBUG_DETAIL, dptr,
+    sim_debug(DEBUG_CMD, dptr,
         "scfi_startcmd CMD continue unit=%02x cmd %02x iocla %06x cnt %04x\n",
         unit, cmd, chp->chan_caw, chp->ccw_count);
 
@@ -769,8 +763,7 @@ uint16  scfi_haltio(UNIT *uptr) {
     int         cmd = uptr->CMD & DSK_CMDMSK;
     CHANP       *chp = find_chanp_ptr(chsa);    /* find the chanp pointer */
 
-//  sim_debug(DEBUG_EXP, dptr,
-    sim_debug(DEBUG_DETAIL, dptr,
+    sim_debug(DEBUG_EXP, dptr,
         "scfi_haltio enter chsa %04x cmd = %02x\n", chsa, cmd);
 
     /* terminate any input command */
@@ -778,8 +771,7 @@ uint16  scfi_haltio(UNIT *uptr) {
     /* status must not have an error bit set */
     /* otherwise, UTX will panic with "bad status" */
     if ((uptr->CMD & DSK_CMDMSK) != 0) {        /* is unit busy */
-//      sim_debug(DEBUG_CMD, dptr,
-        sim_debug(DEBUG_DETAIL, dptr,
+        sim_debug(DEBUG_CMD, dptr,
             "scfi_haltio HIO chsa %04x cmd = %02x ccw_count %02x\n",
             chsa, cmd, chp->ccw_count);
         /* stop any I/O and post status and return error status */
@@ -787,16 +779,14 @@ uint16  scfi_haltio(UNIT *uptr) {
         uptr->CMD &= LMASK;                     /* make non-busy */
         uptr->SNS2 |= (SNS_ONC|SNS_UNR);        /* on cylinder & ready */
         sim_cancel(uptr);                       /* clear the input timer */
-//      sim_debug(DEBUG_CMD, dptr,
-        sim_debug(DEBUG_EXP, dptr,
+        sim_debug(DEBUG_CMD, dptr,
             "scfi_haltio HIO I/O stop chsa %04x cmd = %02x\n", chsa, cmd);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
         return SCPE_IOERR;
     }
     uptr->CMD &= LMASK;                         /* make non-busy */
     uptr->SNS2 |= (SNS_ONC|SNS_UNR);            /* on cylinder & ready */
-//  sim_debug(DEBUG_CMD, dptr,
-    sim_debug(DEBUG_DETAIL, dptr,
+    sim_debug(DEBUG_CMD, dptr,
         "scfi_haltio HIO I/O not busy chsa %04x cmd = %02x\n", chsa, cmd);
     return SCPE_OK;                             /* not busy */
 }
@@ -820,8 +810,7 @@ t_stat scfi_srv(UNIT *uptr)
     uint8           buf[1024];
     uint8           buf2[1024];
 
-//  sim_debug(DEBUG_CMD, dptr,
-    sim_debug(DEBUG_DETAIL, dptr,
+    sim_debug(DEBUG_CMD, dptr,
         "scfi_srv entry unit %02x CMD %08x chsa %04x count %04x %x/%x/%x \n",
         unit, uptr->CMD, chsa, chp->ccw_count,
         STAR2CYL(uptr->CHS), (uptr->CHS >> 8)&0xff, (uptr->CHS&0xff));
@@ -834,8 +823,7 @@ t_stat scfi_srv(UNIT *uptr)
         }
     }
 
-//  sim_debug(DEBUG_CMD, dptr,
-    sim_debug(DEBUG_DETAIL, dptr,
+    sim_debug(DEBUG_CMD, dptr,
         "scfi_srv cmd=%02x chsa %04x count %04x\n", cmd, chsa, chp->ccw_count);
 
     switch (cmd) {
@@ -1063,7 +1051,6 @@ t_stat scfi_srv(UNIT *uptr)
                 /* we have already seeked to the required sector */
                 /* we do not need to seek again, so move on */
                 chan_end(chsa, SNS_DEVEND|SNS_CHNEND);
-//              return SCPE_OK;
                 break;
             } else {
                 /* we have wasted enough time, we are there */
@@ -1546,7 +1533,6 @@ int scfi_format(UNIT *uptr) {
     uint32      laddr = CAP(type) - 1;          /* last sector of disk */
 
                 /* make up dummy defect map */
-//  uint32      dmap[4] = {0xf0000000 | (cap-1), 0x8a000000 | daddr,
     uint32      dmap[4] = {0xf0000000 | (cap-1), 0x8a000000,
                     0x9a000000 | (cap-1), 0xf4000000};
 
@@ -1640,9 +1626,7 @@ t_stat scfi_attach(UNIT *uptr, CONST char *file)
                     /* get sector address of utx diag map (DMAP) track 0 pointer */
                     /* put data = 0xf0000000 + (cyl-1), 0x8a000000 + daddr, */
                     /* 0x9a000000 + (cyl-1), 0xf4000000 */
-//  int32           daddr = (CYL(type)-4) * SPC(type) + (HDS(type)-2) * SPT(type);
                     /* defect map */
-//  uint32          dmap[4] = {0xf0000000 | (CAP(type)-1), 0x8a000000 | daddr,
     uint32          dmap[4] = {0xf0000000 | (CAP(type)-1), 0x8a000000,
                         0x9a000000 | (CAP(type)-1), 0xf4000000};
 
@@ -1687,7 +1671,8 @@ t_stat scfi_attach(UNIT *uptr, CONST char *file)
         printf("SCFI Disk attach ftell failed s=%06d\r\n", s);
         goto fmt;                               /* not setup, go format */
     }
-    sim_debug(DEBUG_CMD, dptr, "SCFI Disk attach ftell value s=%06d b=%06d CAP %06d\n", s/ssize, s, CAP(type));
+    sim_debug(DEBUG_CMD, dptr,
+            "SCFI Disk attach ftell value s=%06d b=%06d CAP %06d\n", s/ssize, s, CAP(type));
     printf("SCFI Disk attach ftell value s=%06d b=%06d CAP %06d\r\n", s/ssize, s, CAP(type));
 
     if (((int)s/(int)ssize) < ((int)CAP(type))) {   /* full sized disk? */
@@ -1706,8 +1691,10 @@ t_stat scfi_attach(UNIT *uptr, CONST char *file)
         }
         s = ftell(uptr->fileref);               /* get current file position */
         sim_debug(DEBUG_CMD, dptr,
-            "SCFI Disk attach MPX 1.X file extended & sized secs %06d bytes %06d\n", s/ssize, s);
-        printf("SCFI Disk attach MPX 1.X  file extended & sized secs %06d bytes %06d\r\n", s/ssize, s);
+            "SCFI Disk attach MPX 1.X file extended & sized secs %06d bytes %06d\n",
+            s/ssize, s);
+        printf("SCFI Disk attach MPX 1.X  file extended & sized secs %06d bytes %06d\r\n",
+            s/ssize, s);
     }
 
     /* seek last sector of disk */

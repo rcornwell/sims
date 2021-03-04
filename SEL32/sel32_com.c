@@ -184,6 +184,8 @@ TMXR com_desc = { COM_LINES_DFLT, 0, 0, com_ldsc }; /* com descr */
 
 /* u6 */
 
+/* forward definitions */
+uint16      com_preio(UNIT *uptr, uint16 chan);
 uint16      com_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd);
 uint16      com_haltio(UNIT *uptr);
 void        com_ini(UNIT *, t_bool);
@@ -197,7 +199,7 @@ t_stat      com_reset(DEVICE *dptr);
 t_stat      com_attach(UNIT *uptr, CONST char *cptr);
 t_stat      com_detach(UNIT *uptr);
 void        com_reset_ln(int32 ln);
-const char  *com_description(DEVICE *dptr);             /* device description */
+const char  *com_description(DEVICE *dptr); /* device description */
 
 /* COM data structures
     com_chp     COM channel program information
@@ -239,10 +241,8 @@ UNIT            com_unit[] = {
     {UDATA(&comi_srv, UNIT_ATTABLE|UNIT_IDLE, 0), COM_WAIT, UNIT_ADDR(0x0000)},       /* 0 */
 };
 
-//DIB com_dib = {NULL, com_startcmd, NULL, NULL, com_ini, com_unit, com_chp, COM_UNITS, 0x0f, 0x7e00, 0, 0, 0};
-
 DIB             com_dib = {
-    NULL,           /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
+    com_preio,      /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
     com_startcmd,   /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
     NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O */
     NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O */
@@ -298,26 +298,24 @@ CHANP           coml_chp[COM_LINES*2] = {0};
 
 UNIT            coml_unit[] = {
     /* 0-7 is input, 8-f is output */
-    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7EC0)},       /* 0 */
-    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7EC1)},       /* 1 */
-    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7EC2)},       /* 2 */
-    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7EC3)},       /* 3 */
-    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7EC4)},       /* 4 */
-    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7EC5)},       /* 5 */
-    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7EC6)},       /* 6 */
-    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7EC7)},       /* 7 */
-    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7EC8)},       /* 8 */
-    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7EC9)},       /* 9 */
-    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7ECA)},       /* A */
-    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7ECB)},       /* B */
-    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7ECC)},       /* C */
-    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7ECD)},       /* D */
-    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7ECE)},       /* E */
-    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7ECF)},       /* F */
+    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7EC0)},  /* 0 */
+    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7EC1)},  /* 1 */
+    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7EC2)},  /* 2 */
+    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7EC3)},  /* 3 */
+    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7EC4)},  /* 4 */
+    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7EC5)},  /* 5 */
+    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7EC6)},  /* 6 */
+    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7EC7)},  /* 7 */
+    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7EC8)},  /* 8 */
+    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7EC9)},  /* 9 */
+    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7ECA)},  /* A */
+    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7ECB)},  /* B */
+    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7ECC)},  /* C */
+    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7ECD)},  /* D */
+    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7ECE)},  /* E */
+    {UDATA(&como_srv, TT_MODE_UC|UNIT_COML, 0), COML_WAIT, UNIT_ADDR(0x7ECF)},  /* F */
 };
 
-//DIB coml_dib = { NULL, com_startcmd, NULL, NULL, NULL, coml_ini,
-//coml_unit, coml_chp, COM_LINES*2, 0x0f, 0x7E00};
 DIB             coml_dib = {
     NULL,           /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
     com_startcmd,   /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
@@ -342,6 +340,7 @@ REG             coml_reg[] = {
 };
 
 MTAB            coml_mod[] = {
+    {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "DEV", "DEV", &set_dev_addr, &show_dev_addr, NULL},
     { TT_MODE, TT_MODE_UC, "UC", "UC", NULL },
     { TT_MODE, TT_MODE_7B, "7b", "7B", NULL },
     { TT_MODE, TT_MODE_8B, "8b", "8B", NULL },
@@ -392,7 +391,8 @@ void com_ini(UNIT *uptr, t_bool f)
 {
     DEVICE *dptr = get_dev(uptr);
 
-    sim_debug(DEBUG_CMD, dptr, "COM init device %s controller 0x7e00\n", dptr->name);
+    sim_debug(DEBUG_CMD, dptr,
+        "COM init device %s controller 0x7e00\n", dptr->name);
     sim_cancel(uptr);                       /* stop input poll */
     sim_activate(uptr, 1000);               /* start input poll */
 }
@@ -409,6 +409,27 @@ uint16  com_rschnlio(UNIT *uptr) {
     return SCPE_OK;
 }
 
+/* start a com operation */
+uint16 com_preio(UNIT *uptr, uint16 chan) {
+    DEVICE      *dptr = get_dev(uptr);
+    int         unit = (uptr - dptr->units);
+    uint16      chsa = GET_UADDR(uptr->u3); /* get channel/sub-addr */
+//  int         cmd = uptr->u3 & 0xff;
+
+#ifdef WAIT_FOR_TESTING
+    sim_debug(DEBUG_CMD, dptr, "com_preio CMD %08x unit %02x chsa %04x\n",
+        uptr->u3, unit, chsa);
+    if ((uptr->u3 & COM_MSK) != 0) {        /* just return if busy */
+        sim_debug(DEBUG_CMD, dptr,
+            "com_preio unit %02x chsa %04x BUSY\n", unit, chsa);
+        return SNS_BSY;
+    }
+#endif
+
+    sim_debug(DEBUG_CMD, dptr, "t_preio unit %02x chsa %04xOK\n", unit, chsa);
+    return SCPE_OK;                         /* good to go */
+}
+
 /* called from sel32_chan to start an I/O operation */
 uint16  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 {
@@ -420,7 +441,8 @@ uint16  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         return SNS_BSY;                     /* yes, return busy */
     }
 
-    sim_debug(DEBUG_CMD, dptr, "CMD unit %04x chan %04x cmd %02x\n", unit, chan, cmd);
+    sim_debug(DEBUG_CMD, dptr,
+        "CMD unit %04x chan %04x cmd %02x\n", unit, chan, cmd);
 
     /* process the commands */
     switch (cmd & 0xFF) {
@@ -436,7 +458,8 @@ uint16  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
     case COM_WR:        /* 0x01 */          /* Write command */
     case COM_WRSCM:     /* 0x05 */          /* Write w/sub channel monitor */
     case COM_WRHFC:     /* 0x0D */          /* Write w/hardware flow control */
-        sim_debug(DEBUG_CMD, dptr, "com_startcmd %04x: Cmd WRITE %02x\n", chan, cmd);
+        sim_debug(DEBUG_CMD, dptr,
+            "com_startcmd %04x: Cmd WRITE %02x\n", chan, cmd);
 
         uptr->u3 &= LMASK;                  /* leave only chsa */
         uptr->u3 |= (cmd & COM_MSK);        /* save command */
@@ -466,12 +489,14 @@ uint16  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         uptr->u3 |= COM_READ;               /* show read mode */
         uptr->u5 = SNS_RDY|SNS_ONLN;        /* status is online & ready */
         sim_debug(DEBUG_CMD, dptr,
-            "com_startcmd %04x: input cnt = %04x\n", chan, coml_chp[unit].ccw_count);
+            "com_startcmd %04x: input cnt = %04x\n",
+            chan, coml_chp[unit].ccw_count);
         return 0;
         break;
 
     case COM_NOP:       /* 0x03 */          /* NOP has do nothing */
-        sim_debug(DEBUG_CMD, dptr, "com_startcmd %04x: Cmd %02x NOP\n", chan, cmd);
+        sim_debug(DEBUG_CMD, dptr,
+            "com_startcmd %04x: Cmd %02x NOP\n", chan, cmd);
         uptr->u5 = SNS_RDY|SNS_ONLN;        /* status is online & ready */
         uptr->u3 &= LMASK;                  /* leave only chsa */
         uptr->u3 |= (cmd & COM_MSK);        /* save command */
@@ -484,7 +509,8 @@ uint16  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         /* value 4 is Data Set Ready */
         /* value 5 is Data carrier detected n/u */
         sim_debug(DEBUG_CMD, dptr,
-            "com_startcmd %04x: unit %04x Cmd Sense %02x\n", chan, unit, uptr->u5);
+            "com_startcmd %04x: unit %04x Cmd Sense %02x\n",
+            chan, unit, uptr->u5);
 
         ch = (com_lstat[unit][0] >> 24) & 0xff;
         chan_write_byte(GET_UADDR(uptr->u3), &ch);  /* write status */
@@ -522,7 +548,8 @@ uint16  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         break;
 
     case COM_DEFSC:     /* 0x0B */          /* Define special char */
-        sim_debug(DEBUG_CMD, dptr, "com_startcmd %04x: Cmd %02x DEFSC\n", chan, cmd);
+        sim_debug(DEBUG_CMD, dptr,
+            "com_startcmd %04x: Cmd %02x DEFSC\n", chan, cmd);
         if (chan_read_byte(GET_UADDR(uptr->u3), &ch)) {  /* read char from memory */
             /* nothing to read, error */
             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* good return */
@@ -606,8 +633,9 @@ uint16  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 #define ACE_WAKE    0x0000FF00  /* 8 bit wake-up character */
 #endif
 
-    case COM_SACE:      /* 0xff */      /* Set ACE parameters (3 chars) */
-        sim_debug(DEBUG_CMD, dptr, "com_startcmd %04x: Cmd %02x SACE\n", chan, cmd);
+    case COM_SACE:      /* 0xff */          /* Set ACE parameters (3 chars) */
+        sim_debug(DEBUG_CMD, dptr,
+            "com_startcmd %04x: Cmd %02x SACE\n", chan, cmd);
         if (chan_read_byte(GET_UADDR(uptr->u3), &ch)) { /* read char 0 */
             /* nothing to read, error */
             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* good return */
@@ -623,7 +651,8 @@ uint16  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* good return */
         }
         uptr->u4 |= ((uint32)ch)<<8;        /* byte 2 of ACE data */
-        sim_debug(DEBUG_CMD, dptr, "com_startcmd %04x: Cmd %02x ACE bytes %08x\n",
+        sim_debug(DEBUG_CMD, dptr,
+            "com_startcmd %04x: Cmd %02x ACE bytes %08x\n",
             chan, cmd, uptr->u4);
         return SNS_CHNEND|SNS_DEVEND;       /* good return */
         break;
@@ -631,7 +660,8 @@ uint16  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 
     default:                                /* invalid command */
         uptr->u5 |= SNS_CMDREJ;             /* command rejected */
-        sim_debug(DEBUG_CMD, dptr, "com_startcmd %04x: Cmd Invald %02x status %02x\n",
+        sim_debug(DEBUG_CMD, dptr,
+            "com_startcmd %04x: Cmd Invald %02x status %02x\n",
             chan, cmd, uptr->u5);
         return SNS_CHNEND|STATUS_PCHK;      /* program check */
         break;
@@ -656,10 +686,12 @@ t_stat comi_srv(UNIT *uptr)
 
     ln = uptr - com_unit;                   /* line # */
     /* handle NOP and INCH cmds */
-    sim_debug(DEBUG_CMD, dptr, "comi_srv entry chsa %04x line %02x cmd %02x\n", chsa, ln, cmd);
+    sim_debug(DEBUG_CMD, dptr,
+        "comi_srv entry chsa %04x line %02x cmd %02x\n", chsa, ln, cmd);
     if (cmd == COM_NOP || cmd == 0x7f) {    /* check for NOP or INCH */
         uptr->u3 &= LMASK;                  /* leave only chsa */
-        sim_debug(DEBUG_CMD, dptr, "comi_srv NOP or INCH done chsa %04x line %02x cmd %02x\n",
+        sim_debug(DEBUG_CMD, dptr,
+            "comi_srv NOP or INCH done chsa %04x line %02x cmd %02x\n",
             chsa, ln, cmd);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
         return SCPE_OK;                     /* return */
@@ -729,7 +761,8 @@ t_stat comi_srv(UNIT *uptr)
                         if (((comlp->u4 & ACE_WAKE) >> 8) == ch) {
                             /* send attention to OS here for this channel */
                             /* need to get chsa here for the channel */
-                            set_devwake(chsa, SNS_ATTN|SNS_DEVEND|SNS_CHNEND);  /* tell user */
+                            /* tell user */
+                            set_devwake(chsa, SNS_ATTN|SNS_DEVEND|SNS_CHNEND);
                         }
                     }
                 }                           /* end else char */
@@ -752,10 +785,12 @@ t_stat como_srv(UNIT *uptr)
     uint8   ch;
 
     /* handle NOP and INCH cmds */
-    sim_debug(DEBUG_CMD, dptr, "como_srv entry chsa %04x line %04x cmd %02x\n", chsa, ln, cmd);
+    sim_debug(DEBUG_CMD, dptr,
+        "como_srv entry chsa %04x line %04x cmd %02x\n", chsa, ln, cmd);
     if (cmd == COM_NOP || cmd == 0x7f) {    /* check for NOP or INCH */
         uptr->u3 &= LMASK;                  /* leave only chsa */
-        sim_debug(DEBUG_CMD, &com_dev, "como_srv NOP or INCH done chsa %04x line %04x cmd %02x\n",
+        sim_debug(DEBUG_CMD, &com_dev,
+            "como_srv NOP or INCH done chsa %04x line %04x cmd %02x\n",
             chsa, ln, cmd);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
         return SCPE_OK;                     /* return */
@@ -771,7 +806,8 @@ t_stat como_srv(UNIT *uptr)
         return SCPE_OK;                     /* return */
     }
 
-    sim_debug(DEBUG_CMD, dptr, "como_srv entry 1 chsa %04x line %04x cmd %02x\n", chsa, ln, cmd);
+    sim_debug(DEBUG_CMD, dptr,
+        "como_srv entry 1 chsa %04x line %04x cmd %02x\n", chsa, ln, cmd);
     if (cmd) {
         /* get a user byte from memory */
         done = chan_read_byte(chsa, &ch);   /* get byte from memory */
@@ -781,28 +817,33 @@ t_stat como_srv(UNIT *uptr)
         return SCPE_OK;
 
     if (com_dev.flags & DEV_DIS) {          /* disabled */
-        sim_debug(DEBUG_CMD, dptr, "como_srv chsa %04x line %04x DEV_DIS set\n", chsa, ln);
+        sim_debug(DEBUG_CMD, dptr,
+            "como_srv chsa %04x line %04x DEV_DIS set\n", chsa, ln);
             if (done) {
-                sim_debug(DEBUG_CMD, dptr, "como_srv Write DONE %04x status %04x\n",
+                sim_debug(DEBUG_CMD, dptr,
+                    "como_srv Write DONE %04x status %04x\n",
                     ln, SNS_CHNEND|SNS_DEVEND);
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
             }
             return SCPE_OK;                 /* return */
     }
-    sim_debug(DEBUG_CMD, dptr, "como_srv poll chsa %04x line %04x DEV_DIS set\n", chsa, ln);
+    sim_debug(DEBUG_CMD, dptr,
+        "como_srv poll chsa %04x line %04x DEV_DIS set\n", chsa, ln);
 
     if (com_ldsc[ln].conn) {                /* connected? */
         if (com_ldsc[ln].xmte) {            /* xmt enabled? */
             if (done) {                     /* are we done writing */
 endit:
                 uptr->u3 &= LMASK;          /* nothing left, command complete */
-                sim_debug(DEBUG_CMD, dptr, "com_srvo write %04x: chnend|devend\n", ln);
+                sim_debug(DEBUG_CMD, dptr,
+                    "com_srvo write %04x: chnend|devend\n", ln);
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
                 return SCPE_OK;
             }
             /* send the next char out */
             tmxr_putc_ln(&com_ldsc[ln], ch);    /* output char */
-            sim_debug(DEBUG_CMD, dptr, "com_srvo writing char 0x%02x to ln %04x\n", ch, ln);
+            sim_debug(DEBUG_CMD, dptr,
+                "com_srvo writing char 0x%02x to ln %04x\n", ch, ln);
             tmxr_poll_tx(&com_desc);        /* poll xmt */
             sim_activate(uptr, uptr->wait); /* wait */
             return SCPE_OK;
@@ -810,7 +851,8 @@ endit:
             if (done)                       /* are we done writing */
                 goto endit;                 /* done */
             /* just dump the char */
-            sim_debug(DEBUG_CMD, dptr, "com_srvo write dumping char 0x%02x on line %04x\n", ch, ln);
+            sim_debug(DEBUG_CMD, dptr,
+                "com_srvo write dumping char 0x%02x on line %04x\n", ch, ln);
             tmxr_poll_tx(&com_desc);        /* poll xmt */
             sim_activate(uptr, uptr->wait); /* wait */
             return SCPE_OK;
@@ -818,7 +860,8 @@ endit:
     } else {
         /* not connected, so dump char on ground */
         if (done) {
-            sim_debug(DEBUG_CMD, dptr, "com_srvo write dump DONE line %04x status %04x\n",
+            sim_debug(DEBUG_CMD, dptr,
+                "com_srvo write dump DONE line %04x status %04x\n",
                 ln, SNS_CHNEND|SNS_DEVEND);
             uptr->u3 &= LMASK;              /* nothing left, command complete */
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
@@ -885,7 +928,7 @@ void com_reset_ln (int32 ln)
 
 t_stat com_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-fprintf (st, "SEL32 8-Line Async Controller Terminal Interfaces\n\n");
+fprintf (st, "SEL32 8512 8-Line Async Controller Terminal Interfaces\n\n");
 fprintf (st, "Terminals perform input and output through Telnet sessions connected to a \n");
 fprintf (st, "user-specified port.\n\n");
 fprintf (st, "The ATTACH command specifies the port to be used:\n\n");
@@ -926,7 +969,7 @@ fprintf (st, "are lost when the simulator shuts down or DCI is detached.\n");
 /* description of controller */
 const char *com_description (DEVICE *dptr)
 {
-    return "SEL 32 8-Line async communications controller";
+    return "SEL-32 8512 8-Line async communications controller";
 }
 
 #endif
