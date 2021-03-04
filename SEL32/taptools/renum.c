@@ -34,7 +34,9 @@ int lim;
         i = 72;
     for (; i<72; i++)
         s[i] = ' ';
-    sprintf(line, "%04d.000", ln++);
+//  sprintf(line, "%04d.000", ln++);
+    sprintf(line, "%04d.%01d00", ln/10, ln%10);
+    ln++;
     for (j=0; j<8; j++)
         s[72+j] = line[j];
     s[80] = '\n';

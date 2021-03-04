@@ -1024,8 +1024,6 @@ t_stat fprint_sym (FILE *of, t_addr addr, t_value *val, UNIT *uptr, int32 sw)
         rdx = 16;                           /* hex */
 
     if (sw & SWMASK ('M')) {                /* machine base mode? */
-//      sw &= ~ SWMASK('F');                /* Can't do F and M at same time */
-//      sw &= ~ SWMASK('W');                /* Can't do W and M at same time */
         sw &= ~ SWMASK('B');                /* Can't do B and M at same time */
         sw &= ~ SWMASK('C');                /* Can't do C and M at same time */
         if (addr & 0x02)

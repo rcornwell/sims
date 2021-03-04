@@ -320,9 +320,6 @@ UNIT    sba_unit[] = {
     {UDATA(&scsi_srv, UNIT_SCSI|SET_TYPE(0), 0), 0, UNIT_ADDR(0x7608)},  /* 1 */
 };
 
-//DIB sba_dib = {scsi_preio, scsi_startcmd, NULL, NULL, NULL, scsi_ini,
-//sba_unit, sba_chp, NUM_UNITS_SCSI, 0x0f, 0x0400, 0, 0, 0};
-
 DIB     sba_dib = {
     scsi_preio,     /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
     scsi_startcmd,  /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
@@ -481,7 +478,6 @@ uint16 scsi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         uptr->CMD |= cmd;                       /* save cmd */
         sim_debug(DEBUG_CMD, dptr,
             "scsi_startcmd starting disk seek r/w cmd %02x chsa %04x\n", cmd, chsa);
-//      sim_activate(uptr, 20);                 /* start things off */
         sim_activate(uptr, 100);                /* start things off */
         return 0;
         break;
@@ -491,7 +487,6 @@ uint16 scsi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         cmd, chsa, uptr->SNS);
     if (uptr->SNS & 0xff)                       /* any other cmd is error */
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
-//  sim_activate(uptr, 20);                     /* start things off */
     sim_activate(uptr, 100);                    /* start things off */
     return SNS_CHNEND|SNS_DEVEND;
 }
@@ -637,7 +632,6 @@ t_stat scsi_srv(UNIT *uptr)
         chan_write_byte(chsa, &ch);
 
         /* bytes 4 - mode reg, byte 0 of SNS */
-//      ch = (uptr->SNS >> 24) & 0xff;          /* return the sense data */
         /* skip the TCMD bit */
         ch = (uptr->SNS >> 24) & 0xfe;          /* return the sense data */
         sim_debug(DEBUG_DETAIL, dptr, "scsi_srv sense unit=%02x 1 %02x\n",
@@ -681,7 +675,6 @@ t_stat scsi_srv(UNIT *uptr)
                 sim_debug(DEBUG_CMD, dptr, "scsi_srv seek over on cylinder unit=%02x %04x %04x\n",
                     unit, uptr->STAR, uptr->CHS);
                 uptr->CHS = uptr->STAR;         /* we are there */
-//              sim_activate(uptr, 10);
                 sim_activate(uptr, 40);
                 break;
             }
@@ -1263,18 +1256,7 @@ read_cap:                                       /* merge point from TCMD process
 
         /* mema has IOCD word 1 contents. */
         /* len has the byte count from IOCD wd2 */
-
         len = chp->ccw_count;                   /* TCMD command count */
-
-#ifdef NOTNOW
-        if (len != 36) {
-            /* we have invalid count, error, bail out */
-            uptr->CMD &= LMASK;             /* remove old status bits & cmd */
-            uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
-            chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
-            break;
-        }
-#endif
 
         for (i=0; i < len; i++) {
             if (chan_read_byte(chsa, &buf[i])) {
@@ -1319,8 +1301,7 @@ read_cap:                                       /* merge point from TCMD process
         return SNS_CHNEND|STATUS_PCHK;
         break;
     }
-//  sim_debug(DEBUG_CMD, dptr,
-    sim_debug(DEBUG_DETAIL, dptr,
+    sim_debug(DEBUG_CMD, dptr,
         "scsi_srv done cmd %02x chsa %04x count %04x\n", cmd, chsa, chp->ccw_count);
     return SCPE_OK;
 }

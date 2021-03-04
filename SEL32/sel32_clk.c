@@ -268,6 +268,8 @@ DEVICE itm_dev = {
     1, 8, 8, 1, 8, 8,
     NULL, NULL, &itm_reset,                 /* examine, deposit, reset */
     NULL, NULL, NULL,                       /* boot, attach, detach */
+    /* dib, dev flags, debug flags, debug */
+//  NULL, DEV_DEBUG|DEV_DIS|DEV_DISABLE, 0, dev_debug,
     NULL, DEV_DEBUG, 0, dev_debug,          /* dib, dev flags, debug flags, debug */
     NULL, NULL, &itm_help,                  /* ?, ?, help */
     NULL, NULL, &itm_desc,                  /* ?, ?, description */
@@ -403,8 +405,14 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
                 sim_activate_after_abs_d(&itm_unit, ((double)cnt*1000000)/rtc_tps);
             else
                 /* use interval timer freq */
-//MPX3X         sim_activate_after_abs_d(&itm_unit, ((double)cnt*itm_tick_size_x_100)/100.0);
-                sim_activate_after_abs_d(&itm_unit, ((double)(cnt+1)*itm_tick_size_x_100)/100.0);
+#ifdef MAYBE_CHANGE_FOR_MPX3X
+                /* this fixes an extra interrupt being generated on context switch */
+                /* the value is load for the new task anyway */
+                /* need to verify that UTX likes it too */
+/*4MPX3X*/      sim_activate_after_abs_d(&itm_unit, ((double)(cnt+1)*itm_tick_size_x_100)/100.0);
+#else
+                sim_activate_after_abs_d(&itm_unit, ((double)cnt*itm_tick_size_x_100)/100.0);
+#endif
             itm_run = 1;                    /* set timer running */
         }
         sim_debug(DEBUG_CMD, &itm_dev,
@@ -579,7 +587,7 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
                 /* get simulated negative start time in counts */
                 temp = temp - itm_strt;     /* make into a negative number */
             } 
-//          sim_cancel (&itm_unit);         /* cancel timer */
+//extra     sim_cancel (&itm_unit);         /* cancel timer */
         }
         sim_debug(DEBUG_CMD, &itm_dev,
             "Intv 0x%02x temp value %08x (%08d)\n", cmd, temp, temp);

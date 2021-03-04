@@ -135,25 +135,27 @@ LPFCTBL  EQU       $
 
 struct _lpr_data
 {
-    uint8       lbuff[160];         /* Output line buffer */
+    uint8   lbuff[160];                     /* Output line buffer */
 };
 
 struct _lpr_data lpr_data[NUM_DEVS_LPR];
 
-uint16          lpr_startcmd(UNIT *, uint16, uint8);
-void            lpr_ini(UNIT *, t_bool);
-uint16          lpr_rschnlio(UNIT *uptr);
-t_stat          lpr_srv(UNIT *);
-t_stat          lpr_reset(DEVICE *);
-t_stat          lpr_attach(UNIT *, CONST char *);
-t_stat          lpr_detach(UNIT *);
-t_stat          lpr_setlpp(UNIT *, int32, CONST char *, void *);
-t_stat          lpr_getlpp(FILE *, UNIT *, int32, CONST void *);
+/* forward definitions */
+uint16      lpr_preio(UNIT *uptr, uint16 chan);
+uint16      lpr_startcmd(UNIT *, uint16, uint8);
+void        lpr_ini(UNIT *, t_bool);
+uint16      lpr_rschnlio(UNIT *uptr);
+t_stat      lpr_srv(UNIT *);
+t_stat      lpr_reset(DEVICE *);
+t_stat      lpr_attach(UNIT *, CONST char *);
+t_stat      lpr_detach(UNIT *);
+t_stat      lpr_setlpp(UNIT *, int32, CONST char *, void *);
+t_stat      lpr_getlpp(FILE *, UNIT *, int32, CONST void *);
 
 /* channel program information */
-CHANP           lpr_chp[NUM_DEVS_LPR] = {0};
+CHANP       lpr_chp[NUM_DEVS_LPR] = {0};
 
-MTAB            lpr_mod[] = {
+MTAB        lpr_mod[] = {
     {MTAB_XTD|MTAB_VUN|MTAB_VALR, 0, "LINESPERPAGE", "LINESPERPAGE",
         &lpr_setlpp, &lpr_getlpp, NULL, "Number of lines per page"},
     {MTAB_XTD|MTAB_VUN|MTAB_VALR, 0, "DEV", "DEV", &set_dev_addr,
@@ -161,7 +163,7 @@ MTAB            lpr_mod[] = {
     {0}
 };
 
-UNIT            lpr_unit[] = {
+UNIT        lpr_unit[] = {
     {UDATA(&lpr_srv, UNIT_LPR, 66), 300, UNIT_ADDR(0x7EF8)},    /* A */
 #if NUM_DEVS_LPR > 1
     {UDATA(&lpr_srv, UNIT_LPR, 66), 300, UNIT_ADDR(0x7EF9)},    /* B */
@@ -169,10 +171,8 @@ UNIT            lpr_unit[] = {
 };
 
 /* Device Information Block */
-//DIB lpr_dib = {NULL, lpr_startcmd, NULL, NULL, lpr_ini, lpr_unit,
-//lpr_chp, NUM_DEVS_LPR, 0xff, 0x7e00, 0, 0, 0};
-DIB             lpr_dib = {
-    NULL,           /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Start I/O */
+DIB         lpr_dib = {
+    lpr_preio,      /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
     lpr_startcmd,   /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
     NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O */
     NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O */
@@ -192,7 +192,7 @@ DIB             lpr_dib = {
     {0}             /* uint32 chan_fifo[FIFO_SIZE] */           /* interrupt status fifo for channel */
 };
 
-DEVICE          lpr_dev = {
+DEVICE      lpr_dev = {
     "LPR", lpr_unit, NULL, lpr_mod,
     NUM_DEVS_LPR, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, NULL, &lpr_attach, &lpr_detach,
@@ -219,6 +219,25 @@ uint16  lpr_rschnlio(UNIT *uptr) {
         "lpr_rschnl chsa %04x cmd = %02x\n", chsa, cmd);
     lpr_ini(uptr, 0);                       /* reset the unit */
     return SCPE_OK;
+}
+
+/* start a line printer operation */
+uint16 lpr_preio(UNIT *uptr, uint16 chan) {
+    DEVICE      *dptr = get_dev(uptr);
+    int         unit = (uptr - dptr->units);
+    uint16      chsa = GET_UADDR(uptr->CMD);
+
+    sim_debug(DEBUG_CMD, dptr, "lpr_preio CMD %08x unit %02x chsa %04x\n",
+        uptr->CMD, unit, chsa);
+    if ((uptr->CMD & LPR_CMDMSK) != 0) {    /* just return if busy */
+        sim_debug(DEBUG_CMD, dptr,
+            "lpr_preio unit %02x chsa %04x BUSY\n", unit, chsa);
+        return SNS_BSY;
+    }
+
+    sim_debug(DEBUG_CMD, dptr,
+        "lpr_preio unit %02x chsa %04xOK\n", unit, chsa);
+    return SCPE_OK;                         /* good to go */
 }
 
 /* start an I/O operation */
