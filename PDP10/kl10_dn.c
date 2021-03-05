@@ -762,23 +762,6 @@ cty:
                break;
 
         case PRI_EMRDS:            /* Request device status */
-               if (dev == PRI_EMLPT) {
-                   if (cmd->data[0] != 0) {
-                      data1[0] = 2 << 8;
-                      data1[1] = 0;
-                      data1[2] = 0;
-                      if (dn_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMLPT,
-                                         3, data1) == 0)
-                          return;
-                   } else {
-                      data1[0] = 2 << 8;
-                      data1[1] = 0;
-                      data1[2] = 0;
-                      if (dn_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMLPT,
-                                         3, data1) == 0)
-                          return;
-                   }
-               }
                if (dev == PRI_EMCTY) {
                    data1[0] = 0;
                    data1[1] = 0;
@@ -1145,9 +1128,7 @@ t_stat dn_reset (DEVICE *dptr)
     dn_unit[0].STATUS = DTE_SEC;
     dn_unit[1].STATUS = 0;
     dn_unit[2].STATUS = 0;
-    dn_unit[3].STATUS = 0;
     cty_done = 0;
-    sim_activate(&dn_unit[3], 1000);
     sim_activate(&dn_unit[2], 1000);
     return SCPE_OK;
 }
