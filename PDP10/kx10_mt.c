@@ -533,7 +533,7 @@ t_stat mt_error(UNIT * uptr, t_stat r, DEVICE * dptr)
 t_stat mt_srv(UNIT * uptr)
 {
     DEVICE             *dptr = uptr->dptr;
-    int                 unit = (uptr - dptr->units) & 7;
+    int                 unit;
     int                 cmd = (uptr->CNTRL & FUNCTION) >> 9;
     t_mtrlnt            reclen;
     t_stat              r = SCPE_ARG;   /* Force error if not set */
@@ -560,6 +560,7 @@ t_stat mt_srv(UNIT * uptr)
     if (dptr == NULL)
         dptr = find_dev_from_unit(uptr);
 
+    unit = (uptr - dptr->units) & 7;
     switch(cmd) {
     case NOP_IDLE:
         sim_debug(DEBUG_DETAIL, dptr, "MT%o Idle\n", unit);
