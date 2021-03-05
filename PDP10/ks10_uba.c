@@ -58,7 +58,6 @@ uba_read(t_addr addr, int ctl, uint64 *data, int access)
     int     ubm = uba_device[ctl];
 
     if (ubm == -1) {
-        uba_status[ubm] |= UBST_TIM | UBST_NED;
         sim_debug(DEBUG_EXP, &cpu_dev, "No UBA adaptor %02o %08o\n", ctl, addr);
         return 1;
     }
@@ -118,7 +117,6 @@ uba_write(t_addr addr, int ctl, uint64 data, int access)
     int     ubm = uba_device[ctl];
 
     if (ubm == -1) {
-        uba_status[ubm] |= UBST_TIM | UBST_NED;
         sim_debug(DEBUG_EXP, &cpu_dev, "No UBA adaptor %02o %08o %012llo\n", ctl, addr, data);
         return 1;
     }
@@ -359,8 +357,6 @@ uba_set_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
     t_value  newaddr;
     t_stat   r;
 
-    if (dibp == NULL)
-        return SCPE_IERR;
     if (cptr == NULL)
         return SCPE_ARG;
     if (uptr == NULL)
@@ -400,8 +396,6 @@ uba_set_br(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
     t_value  br;
     t_stat   r;
 
-    if (dibp == NULL)
-        return SCPE_IERR;
     if (cptr == NULL)
         return SCPE_ARG;
     if (uptr == NULL)
@@ -444,8 +438,6 @@ uba_set_vect(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
     t_value  vect;
     t_stat   r;
 
-    if (dibp == NULL)
-        return SCPE_IERR;
     if (cptr == NULL)
         return SCPE_ARG;
     if (uptr == NULL)
@@ -486,8 +478,6 @@ uba_set_ctl(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
     t_value  ctl;
     t_stat   r;
 
-    if (dibp == NULL)
-        return SCPE_IERR;
     if (cptr == NULL)
         return SCPE_ARG;
     if (uptr == NULL)
@@ -505,7 +495,7 @@ uba_set_ctl(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
     if (r != SCPE_OK)
         return r;
 
-    if (ctl != 1 || ctl != 3)
+    if (ctl != 1 && ctl != 3)
        return SCPE_ARG;
     dibp->uba_ctl = (uint16)ctl;
     return SCPE_OK;
