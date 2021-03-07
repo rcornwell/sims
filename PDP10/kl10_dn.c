@@ -278,7 +278,7 @@ REG  dn_reg[] = {
 
 DEVICE dn_dev = {
     "DN", dn_unit, dn_reg, dn_mod,
-    4, 10, 31, 1, 8, 8,
+    3, 10, 31, 1, 8, 8,
     NULL, NULL, &dn_reset,
     NULL, NULL, NULL, &dn_dib, DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &dn_help, NULL, NULL, &dn_description
