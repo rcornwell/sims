@@ -288,24 +288,20 @@ t_stat load_dmp (FILE *fileref)
    uint64  data;
    uint32  high = 0;
 
-   while (fgets((char *)buffer, 80, fileref) != 0) {
-        p = (char *)buffer;
-        while (*p >= '0' && *p <= '7') {
-           data = 0;
-           while (*p >= '0' && *p <= '7') {
-               data = (data << 3) + *p - '0';
-               p++;
-           }
-           if (addr == 0135 && data != 0)
-               high = (uint32)(data & RMASK);
-           if (high != 0 && high == addr) {
-               addr = 0400000;
-               high = 0;
-           }
-           M[addr++] = data;
-           if (*p == ' ' || *p == '\t')
-               p++;
-        }
+   while (fgets(&buffer[0], 80, fileref) != 0) {
+      data = 0;
+      p = &buffer[0];
+      if (*p >= '0' && *p <= '7') {
+          for (; *p >= '0' && *p <= '7'; p++)
+              data = (data << 3) + *p - '0';
+          if (addr == 0135 && data != 0)
+             high = (uint32)(data & RMASK);
+          if (high != 0 && high == addr) {
+             addr = 0400000;
+             high = 0;
+          }
+          M[addr++] = data;
+      }
    }
    return SCPE_OK;
 }

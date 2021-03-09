@@ -6687,6 +6687,8 @@ ldb_ptr:
               } else {
 #if KL | KS
                   ptr_flg = 0;
+#endif
+#if KL
 ld_exe:
 #endif
                   f = 0;
