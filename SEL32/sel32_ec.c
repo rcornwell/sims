@@ -259,6 +259,8 @@ UNIT ec_unit[] = {
     {UDATA(ec_srv, UNIT_IDLE|UNIT_DIS|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE05)},  /* 5 */
     {UDATA(ec_srv, UNIT_IDLE|UNIT_DIS|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE06)},  /* 6 */
     {UDATA(ec_srv, UNIT_IDLE|UNIT_DIS|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE07)},  /* 7 */
+    {UDATA(ec_srv, UNIT_IDLE|UNIT_DIS|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE08)},  /* 8 */
+    {UDATA(ec_srv, UNIT_IDLE|UNIT_DIS|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE09)},  /* 9 */
 #else
     {UDATA(ec_srv, UNIT_IDLE|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE01)},  /* 1 */
     {UDATA(ec_srv, UNIT_IDLE|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE02)},  /* 2 */
@@ -539,9 +541,6 @@ loop:
         }
     }
 
-//  if (chp->ccw_cmd == EC_READ)                /* Force SLI on READ */
-//      chp->ccw_flags |= FLAG_SLI;
-
     chp->chan_byte = BUFF_BUSY;                 /* busy & no bytes transferred yet */
 
     sim_debug(DEBUG_XIO, dptr,
@@ -589,6 +588,9 @@ loop:
                 sim_debug(DEBUG_EXP, dptr,
                     "ec_iocl continue wait chsa %04x status %08x\n",
                     chp->chan_dev, chp->chan_status);
+#ifndef CHANGE_03072021
+                chp->chan_qwait = QWAIT;        /* run 25 instructions before starting iocl */
+#endif
             }
         } else
 
@@ -1155,8 +1157,9 @@ wr_end:
         }
 
         len = ec_data.rec_buff[ec_data.xtr_ptr].len;
+/*JB*/  ec_data.rec_buff[ec_data.xtr_ptr].len = 0;  /* clear old count */
 //        if (ec_data.xtr_ptr == ec_data.rec_ptr)
- //           len = 0;
+//            len = 0;
         sim_debug(DEBUG_DETAIL, &ec_dev, "ec_srv SNS %d %d\n", ec_data.xtr_ptr,
                          ec_data.rec_ptr);
         ch = (uptr->SNS >> 24) & 0xfc;
@@ -1185,7 +1188,7 @@ wr_end:
             break;
         }
         uptr->SNS &= ~(SNS_CMDREJ|SNS_EQUCHK);  /* clear old status */
-
+/*JB*/  uptr->SNS &= 0xffff0000;                /* clear last count */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
         break;
 
@@ -1221,12 +1224,12 @@ uint16  ec_haltio(UNIT *uptr) {
         sim_debug(DEBUG_CMD, dptr,
             "ec_haltio HIO chsa %04x cmd = %02x ccw_count %02x\n", chsa, cmd, chp->ccw_count);
         // stop any I/O and post status and return error status */
-        chp->chan_byte = BUFF_EMPTY;            /* there is no data to read/store */
         chp->ccw_count = 0;                     /* zero the count */
         chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);   /* stop any chaining */
         uptr->CMD &= LMASK;                     /* make non-busy */
         uptr->SNS = SNS_RCV_RDY;                /* status is online & ready */
-        sim_cancel(uptr);                       /* clear the input timer */
+        if (chsa & 0x0f)                        /* no cancel for 0 */
+            sim_cancel(uptr);                   /* clear the input timer */
         sim_debug(DEBUG_CMD, dptr,
             "ec_haltio HIO I/O stop chsa %04x cmd = %02x\n", chsa, cmd);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
@@ -1254,12 +1257,18 @@ void ec_ini(UNIT *uptr, t_bool f)
     ec_data.xtr_ptr = 0;
     ec_data.drop_cnt = 0;
     ec_data.amc = 0;
-    if (ec_master_uptr->flags & UNIT_ATT)
+    if (ec_master_uptr->flags & UNIT_ATT) {
         /* multicast on means promiscous is too */
         eth_filter (&ec_data.etherface, ec_data.macs_n + 2, ec_data.macs,
                     ec_data.amc, ec_data.macs[0][0] & 1);
-    sim_debug(DEBUG_EXP, dptr,
-        "EC init device %s on unit EC%04X\n", dptr->name, GET_UADDR(uptr->CMD));
+        sim_debug(DEBUG_EXP, dptr,
+            "EC init device %s is attached on unit EC%04X\n",
+            dptr->name, GET_UADDR(uptr->CMD));
+    } else {
+        sim_debug(DEBUG_EXP, dptr,
+            "EC init device %s not attached on unit EC%04X\n",
+            dptr->name, GET_UADDR(uptr->CMD));
+    }
 }
 
 #ifdef FOR_TEST
@@ -1572,6 +1581,7 @@ t_stat ec_attach(UNIT* uptr, CONST char* cptr)
 
     /* init read queue (first time only) */
     status = ethq_init(&ec_data.ReadQ, 8);
+//  status = ethq_init(&ec_data.ReadQ, 16);     /* try 16 per device */
     if (status != SCPE_OK) {
         eth_close(&ec_data.etherface);
         uptr->filename = NULL;

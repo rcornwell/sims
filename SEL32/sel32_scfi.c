@@ -640,6 +640,9 @@ loop:
                 sim_debug(DEBUG_EXP, dptr,
                     "scfi_iocl continue wait chsa %04x status %08x\n",
                     chp->chan_dev, chp->chan_status);
+#ifndef CHANGE_03072021
+                chp->chan_qwait = QWAIT;        /* run 25 instructions before starting iocl */
+#endif
             }
         } else
 
@@ -1528,6 +1531,7 @@ int scfi_format(UNIT *uptr) {
     uint32      cylv = cyl;                     /* number of cylinders */
     uint8       *buff;
     int32       i;
+    t_stat      oldsw = sim_switches;           /* save switches */
 
                 /* last sector address of disk (cyl * hds * spt) - 1 */
     uint32      laddr = CAP(type) - 1;          /* last sector of disk */
@@ -1537,9 +1541,16 @@ int scfi_format(UNIT *uptr) {
                     0x9a000000 | (cap-1), 0xf4000000};
 
 
-    /* see if user wants to initialize the disk */
-    if (!get_yn("Initialize disk? [Y] ", TRUE)) {
-        return 1;
+    /* see if -i or -n specified on attach command */
+    if (!(sim_switches & SWMASK('N')) && !(sim_switches & SWMASK('I'))) {
+        sim_switches = 0;                       /* simh tests 'N' & 'Y' switches */
+        /* see if user wants to initialize the disk */
+        if (!get_yn("Initialize disk? [Y] ", TRUE)) {
+//          printf("disk_format init question is false\r\n");
+            sim_switches = oldsw;
+            return 1;
+        }
+        sim_switches = oldsw;                   /* restore switches */
     }
 
     /* seek to sector 0 */
@@ -1641,6 +1652,15 @@ t_stat scfi_attach(UNIT *uptr, CONST char *file)
         return SCPE_FMT;                        /* error */
     }
 
+    if (dptr->flags & DEV_DIS) {
+        fprintf(sim_deb,
+            "ERROR===ERROR\nSCFI Disk device %s disabled on system, aborting\r\n",
+            dptr->name);
+        printf("ERROR===ERROR\nSCFI Disk device %s disabled on system, aborting\r\n",
+            dptr->name);
+        return SCPE_UDIS;                       /* device disabled */
+    }
+
     /* have simulator attach the file to the unit */
     if ((r = attach_unit(uptr, file)) != SCPE_OK)
         return r;
@@ -1657,6 +1677,11 @@ t_stat scfi_attach(UNIT *uptr, CONST char *file)
     printf("SCFI Disk %s cyl %d hds %d sec %d ssiz %d capacity %d\r\n",
         scfi_type[type].name, scfi_type[type].cyl, scfi_type[type].nhds,
         scfi_type[type].spt, ssize, uptr->capac); /* disk capacity */
+
+    /* see if -i or -n specified on attach command */
+    if ((sim_switches & SWMASK('N')) || (sim_switches & SWMASK('I'))) {
+        goto fmt;                               /* user wants new disk */
+    }
 
     /* seek to end of disk */
     if ((sim_fseek(uptr->fileref, 0, SEEK_END)) != 0) {
@@ -1824,10 +1849,18 @@ t_stat scfi_boot(int32 unit_num, DEVICE *dptr) {
 
     sim_debug(DEBUG_CMD, dptr,
         "SCFI Disk Boot dev/unit %x\n", GET_UADDR(uptr->CMD));
+
+    /* see if device disabled */
+    if (dptr->flags & DEV_DIS) {
+        printf("ERROR===ERROR\r\nSCFI Disk device %s disabled on system, aborting\r\n",
+            dptr->name);
+        return SCPE_UDIS;                       /* device disabled */
+    }
+
     if ((uptr->flags & UNIT_ATT) == 0) {
         sim_debug(DEBUG_EXP, dptr,
-            "SCFI Disk Boot attach error dev/unit %04x\n",
-            GET_UADDR(uptr->CMD));
+            "SCFI Disk Boot attach error dev/unit %04x\n", GET_UADDR(uptr->CMD));
+        printf("SCFI Disk Boot attach error dev/unit %04x\n", GET_UADDR(uptr->CMD));
         return SCPE_UNATT;                      /* attached? */
     }
     SPAD[0xf4] = GET_UADDR(uptr->CMD);          /* put boot device chan/sa into spad */

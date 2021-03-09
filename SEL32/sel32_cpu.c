@@ -158,7 +158,9 @@ uint32          RDYQIN;                     /* fifo input index */
 uint32          RDYQOUT;                    /* fifo output index */
 uint32          RDYQ[128];                  /* channel ready queue */
 uint8           waitqcnt = 0;               /* # instructions before start */
+#ifdef REMOVE_03072021
 uint8           waitrdyq = 0;               /* # instructions before post interrupt */
+#endif
 
 struct InstHistory
 {
@@ -1453,7 +1455,7 @@ t_stat RealAddr(uint32 addr, uint32 *realaddr, uint32 *prot, uint32 access)
         if (CPU_MODEL >= MODEL_V6) {
             /* map is not valid, so we have map fault */
             sim_debug(DEBUG_EXP, &cpu_dev,
-                "AddrMa %06x RealAddr %06x Map0 HIT %04x, TLB[%3x] %08x MAPC[%03x] %08x\n",
+                "AddrMa %06x RealAddr %06x Map0 MISS %04x, TLB[%3x] %08x MAPC[%03x] %08x\n",
                 addr, word, map, nix, TLB[nix], nix/2, MAPC[nix/2]);
             /* do a demand page request for the required page */
             pfault = nix;                           /* save page number */
@@ -1674,7 +1676,7 @@ t_stat Mem_read(uint32 addr, uint32 *data)
             else
                 TRAPSTATUS |= BIT10;                /* set bit 10 of trap status */
         }
-        sim_debug(DEBUG_EXP, &cpu_dev, "Mem_read error %02x @ %06x TRAPSTATUS %08x\n",
+        sim_debug(DEBUG_EXP, &cpu_dev, "Mem_read MISS %02x @ %06x TRAPSTATUS %08x\n",
             status, addr, TRAPSTATUS);
     }
     return status;                                  /* return ALLOK or ERROR status */
@@ -1943,9 +1945,11 @@ wait_loop:
                 uint32  chsa;                       /* channel/sub adddress */
                 int32   stat;                       /* return status 0/1 from loadccw */
 
+#ifdef REMOVE_03072021
                 if (waitrdyq > 0) {                 /* see if we are waiting to start */
                     waitrdyq--;
                 } else
+#endif
                 /* we have entries, continue channel program */
                 if (RDYQ_Get(&chsa) == SCPE_OK) {   /* get chsa for program */
                     sim_debug(DEBUG_XIO, &cpu_dev,
@@ -2071,32 +2075,68 @@ wait_loop:
             }
         }
 
+#ifndef CHANGE_03072021
+        /* loop through the IOCL ready Q and decrement wait counts */
+        if ((int32c = RDYQ_Num())) {
+            int32   i, rqo = RDYQOUT;
+            for (i=0; i<int32c; i++) {
+                uint32  chsa;                       /* channel/sub adddress */
+                CHANP   *chp;                       /* get channel prog pointer */
+                if (rqo == RDYQIN)
+                    break;                          /* done with queue */
+                chsa = RDYQ[rqo];                   /* get the next entry */
+                chp = find_chanp_ptr(chsa);         /* get channel prog pointer */
+                if (chp->chan_qwait > 0)            /* still waiting? */
+                    chp->chan_qwait--;              /* decrement count */
+                rqo++;                              /* next queue entry */
+                rqo %= RDYQ_SIZE;                   /* don't overrun end */
+            }
+        }
+#endif
         /* process IOCL entries that are waiting */
         if (RDYQ_Num()) {
             uint32  chsa;                           /* channel/sub adddress */
             CHANP   *chp;                           /* get channel prog pointer */
             chsa = RDYQ[RDYQOUT];                   /* get the next entry */
             chp = find_chanp_ptr(chsa);             /* get channel prog pointer */
+            if (chp->chan_byte != BUFF_NEXT) {
+                /* chan_byte is not BUFF_NEXT */
+                sim_debug(DEBUG_XIO, &cpu_dev,
+                    "scan_chan Bad CPU RDYQ entry for chsa %04x chan_byte %02x\n",
+                    chsa, chp->chan_byte);
+            }
+#ifdef CHANGE_03072021
             if (chp->chan_byte == BUFF_NEXT) {
+#else
+            /* checking BUFF_NEXT hangs diag n keyboard termination */
+            if ((chp->chan_qwait == 0) || (chp->chan_byte != BUFF_NEXT)) {
+//          if ((chp->chan_qwait == 0) && (chp->chan_byte == BUFF_NEXT)) {
+//          if (chp->chan_qwait == 0) {
+#endif
+#ifdef REMOVE_03072021
                 /* we have entries, continue channel program */
                 if (waitrdyq > 0) {
                     waitrdyq--;
                 } else
+#endif
                 if (RDYQ_Get(&chsa) == SCPE_OK) {   /* get chsa for program */
                     int32 stat;
                     CHANP *chp = find_chanp_ptr(chsa);  /* get channel prog pointer */
                     sim_debug(DEBUG_XIO, &cpu_dev,
                         "scan_chan CPU RDYQ entry for chsa %04x starting byte %02x\n",
                         chsa, chp->chan_byte);
-                    stat = cont_chan(chsa);         /* resume the channel program */
-                    if (stat == SCPE_OK)
-                        sim_debug(DEBUG_XIO, &cpu_dev,
-                        "scan_chan CPU RDYQ entry for chsa %04x processed byte %04x\n",
-                        chsa, chp->chan_byte);
-                    else
-                        sim_debug(DEBUG_XIO, &cpu_dev,
-                        "scan_chan CPU RDYQ entry for chsa %04x processed w/error byte %04x\n",
-                        chsa, chp->chan_byte);
+                    /* if not BUFF_NEXT, channel has been stopped, just continue */
+                    if (chp->chan_byte == BUFF_NEXT) {
+                        stat = cont_chan(chsa);         /* resume the channel program */
+                        if (stat == SCPE_OK)
+                            sim_debug(DEBUG_XIO, &cpu_dev,
+                            "scan_chan CPU RDYQ entry for chsa %04x processed byte %04x\n",
+                            chsa, chp->chan_byte);
+                        else
+                            sim_debug(DEBUG_XIO, &cpu_dev,
+                            "scan_chan CPU RDYQ entry for chsa %04x processed w/error byte %04x\n",
+                            chsa, chp->chan_byte);
+                    }
                 }
             }
         }

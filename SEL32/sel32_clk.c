@@ -119,12 +119,16 @@ t_stat rtc_srv (UNIT *uptr)
             (SPAD[rtc_lvl+0x80] & SINT_ENAB)) &&    /* in spad too */
             (((INTS[rtc_lvl] & INTS_ACT) == 0) ||   /* and not active */
             ((SPAD[rtc_lvl+0x80] & SINT_ACT) == 0))) { /* in spad too */
+#if 0
             /* HACK for console I/O stopping */
             /* This reduces the number of console I/O stopping errors */
             /* need to find real cause of I/O stopping on clock interrupt */
             if ((outbusy==0) && (inbusy==0))    /* skip interrupt if con I/O in busy wait */
-                INTS[rtc_lvl] |= INTS_REQ;  /* request the interrupt */
-            irq_pend = 1;                   /* make sure we scan for int */
+                INTS[rtc_lvl] |= INTS_REQ;      /* request the interrupt */
+#else
+            INTS[rtc_lvl] |= INTS_REQ;          /* request the interrupt */
+#endif
+            irq_pend = 1;                       /* make sure we scan for int */
         }
         sim_debug(DEBUG_CMD, &rtc_dev,
             "RT Clock int INTS[%02x] %08x SPAD[%02x] %08x\n",

@@ -1066,6 +1066,9 @@ loop:
                 sim_debug(DEBUG_EXP, dptr,
                     "hsdp_iocl continue wait chsa %04x status %08x\n",
                     chp->chan_dev, chp->chan_status);
+#ifndef CHANGE_03072021
+                chp->chan_qwait = QWAIT;         /* run 25 instructions before starting iocl */
+#endif
             }
         } else
 
@@ -1202,7 +1205,6 @@ uint16  hsdp_haltio(UNIT *uptr) {
         sim_debug(DEBUG_CMD, dptr,
             "hsdp_haltio HIO chsa %04x cmd = %02x ccw_count %02x\n", chsa, cmd, chp->ccw_count);
         /* stop any I/O and post status and return error status */
-//      chp->chan_byte = BUFF_EMPTY;        /* there is no data to read/store */
         chp->ccw_count = 0;                 /* zero the count */
         chp->chan_caw = 0;                  /* zero iocd address for diags */
         chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);/* stop any chaining */
@@ -3296,7 +3298,8 @@ int hsdp_format(UNIT *uptr) {
     uint32      cylv = cyl;                     /* number of cylinders */
     uint8       *buff;
     int         i;
-    int         use_st_format = 1;
+    int         use_st_format = 1;              /* assume we use s/t replacement */
+    t_stat      oldsw = sim_switches;           /* save switches */
 
                 /* last sector address of disk (cyl * hds * spt) - 1 */
     uint32      laddr = CAP(type) - 1;          /* last sector of disk */
@@ -3359,14 +3362,20 @@ int hsdp_format(UNIT *uptr) {
                     0x9a000000 | loglta, 0xf4000000};
 #endif
 
-
-    /* see if user wants to initialize the disk */
-    if (!get_yn("Initialize disk? [Y] ", TRUE)) {
-        return 1;
+    /* see if -i or -n specified on attach command */
+    if (!(sim_switches & SWMASK('N')) && !(sim_switches & SWMASK('I'))) {
+        sim_switches = 0;                       /* simh tests 'N' & 'Y' switches */
+        /* see if user wants to initialize the disk */
+        if (!get_yn("Initialize disk? [Y] ", TRUE)) {
+//          printf("disk_format init question is false\r\n");
+            sim_switches = oldsw;
+            return 1;
+        }
     }
-    if (!get_yn("Use Sector/Track replacement format? [Y] ", TRUE)) {
-        use_st_format = 0;
+    if (!get_yn("Use Sector/Track replacement format? [N] ", FALSE)) {
+        use_st_format = 0;                      /* do not use s/t replacement */
     }
+    sim_switches = oldsw;                       /* restore switches */
 
     /* get physical sector address of media defect table */
     /* VDT  286965 (819/9/0) 0x460f5 for 8887 - 823/10/35 */ 
@@ -3579,6 +3588,15 @@ t_stat hsdp_attach(UNIT *uptr, CONST char *file)
         return SCPE_FMT;                        /* error */
     }
 
+    if (dptr->flags & DEV_DIS) {
+        fprintf(sim_deb,
+            "ERROR===ERROR\nHSDP device %s disabled on system, aborting\r\n",
+            dptr->name);
+        printf("ERROR===ERROR\nHSDP device %s disabled on system, aborting\r\n",
+            dptr->name);
+        return SCPE_UDIS;                       /* device disabled */
+    }
+
     /* have simulator attach the file to the unit */
     if ((r = attach_unit(uptr, file)) != SCPE_OK)
         return r;
@@ -3596,6 +3614,11 @@ t_stat hsdp_attach(UNIT *uptr, CONST char *file)
     printf("Disk %s cyl %d hds %d sec %d ssiz %d capacity %d\r\n",
         hsdp_type[type].name, hsdp_type[type].cyl, hsdp_type[type].nhds,
         hsdp_type[type].spt, ssize, uptr->capac); /* hsdp capacity */
+
+    /* see if -i or -n specified on attach command */
+    if ((sim_switches & SWMASK('N')) || (sim_switches & SWMASK('I'))) {
+        goto fmt;                               /* user wants new disk */
+    }
 
     /* seek to end of disk */
     if ((sim_fseek(uptr->fileref, 0, SEEK_END)) != 0) {
@@ -3798,11 +3821,15 @@ ldone:
         return SCPE_FMT;                        /* error */
     }
     info = (buff[0]<<24) | (buff[1]<<16) | (buff[2]<<8) | buff[3];
-    good = (0x4e<<24) | (0x55<<16) | (0x4d<<8) | 0x50;  /* NUMP */
+    good = 0x4e554d50;                          /* NUMP */
 //  printf("info %8x good %8x cnt %x\r\n", info, good, buff[35]);
     if (info == good) {
         /* we have a UTX umap, so fixup the data */
-        i = (16*8) + (buff[35]*3*4) - 1;        /* byte offset to where to put 0xf4 */
+        if (buff[35] <= SPT(type))
+//          i = (16*8) + (buff[35]*3*4) - 1;    /* byte offset to where to put 0xf4 */
+            i = (127) + (buff[35]*12);          /* byte offset to where to put 0xf4 */
+        else
+            i = 127;                            /* only 1 track of replacement */
 //      printf("Fixing umap i %x info %8x good %8x buff[%x] %02x\r\n", i, info, good, i, buff[i]);
         buff[i] = 0xf4;                         /* set stop for UTX search */
         if ((sim_fseek(uptr->fileref, umapaddr*ssize, SEEK_SET)) != 0) { /* seek umap */
@@ -3879,9 +3906,17 @@ t_stat hsdp_boot(int32 unit_num, DEVICE * dptr) {
 
     sim_debug(DEBUG_CMD, dptr, "HSDP Boot dev/unit %x\n", GET_UADDR(uptr->CMD));
 
+    /* see if device disabled */
+    if (dptr->flags & DEV_DIS) {
+        printf("ERROR===ERROR\r\nHSDP device %s disabled on system, aborting\r\n",
+            dptr->name);
+        return SCPE_UDIS;                       /* device disabled */
+    }
+
     if ((uptr->flags & UNIT_ATT) == 0) {
         sim_debug(DEBUG_EXP, dptr, "HSDP Boot attach error dev/unit %04x\n",
             GET_UADDR(uptr->CMD));
+        printf("HSDP Boot attach error dev/unit %04x\n", GET_UADDR(uptr->CMD));
         return SCPE_UNATT;                      /* attached? */
     }
     SPAD[0xf4] = GET_UADDR(uptr->CMD);          /* put boot device chan/sa into spad */

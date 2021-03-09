@@ -212,11 +212,25 @@ typedef struct chp {
     uint16      ccw_flags;              /* Channel flags */
     uint16      chan_status;            /* Channel status */
     uint16      chan_dev;               /* Device on channel */
+#ifndef CHANGE_03072021
+    uint16      chan_qwait;             /* Instr to xeq before iocl proccessing */
+#endif
     uint8       ccw_cmd;                /* Channel command and flags */
     uint8       chan_byte;              /* Current byte, empty/full */
     uint8       chan_int;               /* channel interrupt level */
     uint8       chan_info;              /* misc flags for channel */
 } CHANP;
+
+#define QWAIT0  0
+#define QWAIT5  5
+#define QWAIT10 10
+#define QWAIT15 15
+#define QWAIT20 20
+#define QWAIT25 25
+#define QWAIT30 30
+#define QWAIT35 35
+#define QWAIT40 40
+#define QWAIT   QWAIT0
 
 /* Device information block */
 #define FIFO_SIZE 256                   /* fifo to hold 128 double words of status */

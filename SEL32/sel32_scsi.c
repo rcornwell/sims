@@ -1355,6 +1355,7 @@ int scsi_format(UNIT *uptr) {
     uint32      cylv = cyl;                     /* number of cylinders */
     uint8       *buff;
     int         i;
+    t_stat      oldsw = sim_switches;           /* save switches */
 
                 /* last sector address of disk (cyl * hds * spt) - 1 */
     uint32      laddr = CAP(type) - 1;          /* last sector of disk */
@@ -1402,6 +1403,18 @@ int scsi_format(UNIT *uptr) {
                 /* utx flaw map */
     uint32      fmap[4] = {0xf0000000 | (cap-1), 0x8a000000 | daddr,
                     0x9a000000 | ltaddr, 0xf4000000};
+
+    /* see if -i or -n specified on attach command */
+    if (!(sim_switches & SWMASK('N')) && !(sim_switches & SWMASK('I'))) {
+        sim_switches = 0;                       /* simh tests 'N' & 'Y' switches */
+        /* see if user wants to initialize the disk */
+        if (!get_yn("Initialize disk? [Y] ", TRUE)) {
+//          printf("disk_format init question is false\r\n");
+            sim_switches = oldsw;
+            return 1;
+        }
+        sim_switches = oldsw;                   /* restore switches */
+    }
 
     /* see if user wants to initialize the disk */
     if (!get_yn("Initialize disk? [Y] ", TRUE)) {
@@ -1587,6 +1600,15 @@ t_stat scsi_attach(UNIT *uptr, CONST char *file) {
         return SCPE_FMT;                        /* error */
     }
 
+    if (dptr->flags & DEV_DIS) {
+        fprintf(sim_deb,
+            "ERROR===ERROR\nSCSI Disk device %s disabled on system, aborting\r\n",
+            dptr->name);
+        printf("ERROR===ERROR\nSCSI Disk device %s disabled on system, aborting\r\n",
+            dptr->name);
+        return SCPE_UDIS;                       /* device disabled */
+    }
+
     /* have simulator attach the file to the unit */
     if ((r = attach_unit(uptr, file)) != SCPE_OK)
         return r;
@@ -1602,6 +1624,11 @@ t_stat scsi_attach(UNIT *uptr, CONST char *file) {
     printf("SCSI Disk %s %04x cyl %d hds %d sec %d ssiz %d capacity %d\r\n",
         scsi_type[type].name, chsa, scsi_type[type].cyl, scsi_type[type].nhds, 
         scsi_type[type].spt, ssize, uptr->capac); /* disk capacity */
+
+    /* see if -i or -n specified on attach command */
+    if ((sim_switches & SWMASK('N')) || (sim_switches & SWMASK('I'))) {
+        goto fmt;                               /* user wants new disk */
+    }
 
     /* seek to end of disk */
     if ((sim_fseek(uptr->fileref, 0, SEEK_END)) != 0) {
@@ -1766,9 +1793,17 @@ t_stat scsi_boot(int32 unit_num, DEVICE *dptr) {
 
     sim_debug(DEBUG_CMD, dptr, "SCSI Disk Boot dev/unit %04x\n", GET_UADDR(uptr->CMD));
 
+    /* see if device disabled */
+    if (dptr->flags & DEV_DIS) {
+        printf("ERROR===ERROR\r\nSCSI Disk device %s disabled on system, aborting\r\n",
+            dptr->name);
+        return SCPE_UDIS;                       /* device disabled */
+    }
+
     if ((uptr->flags & UNIT_ATT) == 0) {
         sim_debug(DEBUG_EXP, dptr, "SCSI Disk Boot attach error dev/unit %04x\n",
             GET_UADDR(uptr->CMD));
+        printf("SCSI Disk Boot attach error dev/unit %04x\n", GET_UADDR(uptr->CMD));
         return SCPE_UNATT;                      /* attached? */
     }
 

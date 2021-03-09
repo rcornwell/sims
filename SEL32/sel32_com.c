@@ -96,6 +96,49 @@ TMXR com_desc = { COM_LINES_DFLT, 0, 0, com_ldsc }; /* com descr */
 #define COM_READ    0x2000                  /* Read mode selected */
 
 /* ACE data kept in u4 */
+/* ACE information in u4 */
+#if 0
+/* ACE byte 0  Modem Control/Operation status */
+/* stored in u4 bytes 0-3 */
+#define SNS_HALFD   0x80000000  /* Half-duplix operation set */
+#define SNS_MRINGE  0x40000000  /* Modem ring enabled */
+#define SNS_ACEFP   0x20000000  /* Forced parity 0=odd, 1=even */
+#define SNS_ACEP    0x10000000  /* Parity 0=odd, 1=even */
+#define SNS_ACEPE   0x08000000  /* Parity enable 0=dis, 1=enb */
+#define SNS_ACESTOP 0x04000000  /* Stop bit 0=1, 1=1.5 or 2 */
+#define SNS_ACECLEN 0x02000000  /* Character length 00=5, 01=6, 11=7, 11=8 */
+#define SNS_ACECL2  0x01000000  /* 2nd bit for above */
+
+/* ACE byte 1  Baud rate */
+#define SNS_NUB50   0x00800000  /* Zero N/U */
+#define SNS_NUB51   0x00400000  /* Zero N/U */
+#define SNS_RINGCR  0x00200000  /* Ring or wakeup character recognition 0=enb, 1=dis */
+#define SNS_DIAGL   0x00100000  /* Set diagnostic loopback */
+#define SNS_BAUD    0x000F0000  /* Baud rate bits 4-7 */
+#define BAUD50      0x00000000  /* 50 baud */
+#define BAUD75      0x00010000  /* 75 baud */
+#define BAUD110     0x00020000  /* 110 baud */
+#define BAUD114     0x00030000  /* 134 baud */
+#define BAUD150     0x00040000  /* 150 baud */
+#define BAUD300     0x00050000  /* 300 baud */
+#define BAUD600     0x00060000  /* 600 baud */
+#define BAUD1200    0x00070000  /* 1200 baud */
+#define BAUD1800    0x00080000  /* 1800 baud */
+#define BAUD2000    0x00090000  /* 2000 baud */
+#define BAUD2400    0x000A0000  /* 2400 baud */
+#define BAUD3600    0x000B0000  /* 3600 baud */
+#define BAUD4800    0x000C0000  /* 4800 baud */
+#define BAUD7200    0x000D0000  /* 7200 baud */
+#define BAUD9600    0x000E0000  /* 9600 baud */
+#define BAUD19200   0x000F0000  /* 19200 baud */
+
+/* ACE byte 2  Wake-up character */
+#define ACE_WAKE    0x0000FF00              /* 8 bit wake-up character */
+#endif
+#define ACE_WAKE    0x0000FF00              /* 8 bit wake-up character in byte 2 of ACE */
+
+/* in u5 packs sense byte 0,1 and 3 */
+/* sense byte 3 */
 
 /* in u5 packs sense byte 0, 1, 2 and 3 */
 /* Sense byte 0 */
@@ -126,6 +169,9 @@ TMXR com_desc = { COM_LINES_DFLT, 0, 0, com_ldsc }; /* com descr */
 #define SNS_DELDSR  0x00000200              /* Delta data set ready interrupt */
 #define SNS_DELCLR  0x00000100              /* Ring character interrupt */
 /* Sense byte 3  Modem Control/Operation status */
+#define SNS_RDY     0x80                    /* device ready */
+#define SNS_ONLN    0x40                    /* device online */
+//#define SNS_DSR     0x04                    /* data set ready */
 #define SNS_HALFD   0x00000080              /* Half-duplix operation set */
 #define SNS_MRINGE  0x00000040              /* Modem ring enabled (1) */
 #define SNS_ACEDEF  0x00000020              /* ACE parameters defined */
@@ -169,18 +215,6 @@ TMXR com_desc = { COM_LINES_DFLT, 0, 0, com_ldsc }; /* com descr */
 #define SNS_FID     0x00006200              /* ID part 1 */
 /* Sense byte 7  Firmware ID, Revision Level */
 #define SNS_REV     0x0000004f              /* ID part 2 plus 4 bit rev # */
-
-/* ACE information in u4 */
-#define ACE_WAKE    0x0000FF00              /* 8 bit wake-up character */
-
-/* in u5 packs sense byte 0,1 and 3 */
-/* Sense byte 0 */
-#define SNS_CMDREJ  0x80000000              /* Command reject */
-#define SNS_INTVENT 0x40000000              /* Unit intervention required */
-/* sense byte 3 */
-#define SNS_RDY     0x80                    /* device ready */
-#define SNS_ONLN    0x40                    /* device online */
-#define SNS_DSR     0x04                    /* data set ready */
 
 /* u6 */
 
@@ -416,7 +450,7 @@ uint16 com_preio(UNIT *uptr, uint16 chan) {
     uint16      chsa = GET_UADDR(uptr->u3); /* get channel/sub-addr */
 //  int         cmd = uptr->u3 & 0xff;
 
-#ifdef WAIT_FOR_TESTING
+#ifndef WAIT_FOR_TESTING
     sim_debug(DEBUG_CMD, dptr, "com_preio CMD %08x unit %02x chsa %04x\n",
         uptr->u3, unit, chsa);
     if ((uptr->u3 & COM_MSK) != 0) {        /* just return if busy */
@@ -435,6 +469,7 @@ uint16  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 {
     DEVICE      *dptr = get_dev(uptr);
     int         unit = (uptr - dptr->units);
+    uint16      chsa = (((uptr->u3 & LMASK) >> 16) | (chan << 8));
     uint8       ch;
 
     if ((uptr->u3 & COM_MSK) != 0) {        /* is unit busy */
@@ -476,6 +511,7 @@ uint16  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
     /* bit 3 P=1 Purge input buffer */
     case COM_RD:        /* 0x02 */          /* Read command */
     case COM_RDECHO:    /* 0x06 */          /* Read command w/ECHO */
+    case 0x32:          /* 0x32 */          /* Read command ASCII & Purge input */
     case 0x46:          /* 0x46 */          /* Read command w/ECHO & ASCII */
     case 0x56:          /* 0x56 */          /* Read command w/ECHO & ASCII & Purge input */
     /* if bit 0 set for COM_RDFC, use DTR for flow, else use RTS for flow control */
@@ -549,12 +585,17 @@ uint16  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 
     case COM_DEFSC:     /* 0x0B */          /* Define special char */
         sim_debug(DEBUG_CMD, dptr,
-            "com_startcmd %04x: Cmd %02x DEFSC\n", chan, cmd);
+            "com_startcmd %04x: Cmd %02x DEFSC\n", chsa, cmd);
         if (chan_read_byte(GET_UADDR(uptr->u3), &ch)) {  /* read char from memory */
             /* nothing to read, error */
             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* good return */
         }
+        uptr->u4 &= ~ACE_WAKE;              /* clear out old wake char */
+        uptr->u4 |= ((uint32)ch << 8);      /* insert special char */
         uptr->u5 = ~SNS_RTS;                /* Request to send not ready */
+        sim_debug(DEBUG_CMD, dptr,
+            "com_startcmd %04x: Cmd %02x DEFSC char %02x ACE %08x\n",
+            chsa, cmd, ch, uptr->u4);
         return SNS_CHNEND|SNS_DEVEND;       /* good return */
         break;
 
@@ -603,7 +644,7 @@ uint16  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 #define SNS_ACEP    0x10000000  /* Parity 0=odd, 1=even */
 #define SNS_ACEPE   0x08000000  /* Parity enable 0=dis, 1=enb */
 #define SNS_ACESTOP 0x04000000  /* Stop bit 0=1, 1=1.5 or 2 */
-#define SNS_ACECLEN 0x02000000  /* Character length 00=5, 01=6, 11=7, 11=8 */
+#define SNS_ACECLEN 0x02000000  /* Character length 00=5, 01=6, 10=7, 11=8 */
 #define SNS_ACECL2  0x01000000  /* 2nd bit for above */
 
 /* ACE byte 1  Baud rate */
@@ -635,25 +676,38 @@ uint16  com_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 
     case COM_SACE:      /* 0xff */          /* Set ACE parameters (3 chars) */
         sim_debug(DEBUG_CMD, dptr,
-            "com_startcmd %04x: Cmd %02x SACE\n", chan, cmd);
+            "com_startcmd %04x: Cmd %02x SACE\n", chsa, cmd);
+
         if (chan_read_byte(GET_UADDR(uptr->u3), &ch)) { /* read char 0 */
             /* nothing to read, error */
             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* good return */
         }
         uptr->u4 = ((uint32)ch)<<24;        /* byte 0 of ACE data */
+        sim_debug(DEBUG_CMD, dptr,
+            "com_startcmd %04x: Cmd %02x ACE byte 0 %02x\n",
+            chsa, cmd, ch);
+
         if (chan_read_byte(GET_UADDR(uptr->u3), &ch)) { /* read char 1 */
             /* nothing to read, error */
             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* good return */
         }
         uptr->u4 |= ((uint32)ch)<<16;       /* byte 1 of ACE data */
+        sim_debug(DEBUG_CMD, dptr,
+            "com_startcmd %04x: Cmd %02x ACE byte 1 %02x\n",
+            chsa, cmd, ch);
+
         if (chan_read_byte(GET_UADDR(uptr->u3), &ch)) { /* read char 2 */
             /* nothing to read, error */
             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* good return */
         }
         uptr->u4 |= ((uint32)ch)<<8;        /* byte 2 of ACE data */
         sim_debug(DEBUG_CMD, dptr,
+            "com_startcmd %04x: Cmd %02x ACE byte 2 %02x\n",
+            chsa, cmd, ch);
+        sim_debug(DEBUG_CMD, dptr,
             "com_startcmd %04x: Cmd %02x ACE bytes %08x\n",
             chan, cmd, uptr->u4);
+
         return SNS_CHNEND|SNS_DEVEND;       /* good return */
         break;
 
@@ -719,6 +773,9 @@ t_stat comi_srv(UNIT *uptr)
         com_sta[newln] &= ~COML_REP;        /* clr pending */
         /* send attention to OS here for this channel */
         /* need to get chsa here for the channel */
+        sim_debug(DEBUG_CMD, &com_dev,
+            "comi_srv wakeup on chsa %04x line %02x cmd %02x ACE %08x\n",
+            chsa, ln, cmd, uptr->u4);
         set_devwake(chsa, SNS_ATTN|SNS_DEVEND|SNS_CHNEND);  /* tell user */
     }
     /* poll all devices for input */
@@ -762,14 +819,19 @@ t_stat comi_srv(UNIT *uptr)
                             /* send attention to OS here for this channel */
                             /* need to get chsa here for the channel */
                             /* tell user */
+        sim_debug(DEBUG_CMD, &com_dev,
+            "comi_srv user wakeup on chsa %04x line %02x cmd %02x ACE %08x\n",
+            chsa, ln, cmd, uptr->u4);
                             set_devwake(chsa, SNS_ATTN|SNS_DEVEND|SNS_CHNEND);
                         }
                     }
                 }                           /* end else char */
             }                               /* end if char */
         }                                   /* end if conn */
-        else
+        else {
             com_sta[ln] &= ~COML_RBP;       /* disconnected */
+            com_sta[ln] |= COML_REP;        /* set pending */
+        }
     }                                       /* end for */
     return sim_clock_coschedule(uptr, 200); /* continue poll */
 }
@@ -920,6 +982,7 @@ void com_reset_ln (int32 ln)
 {
     sim_cancel(&coml_unit[ln]);
     com_sta[ln] = 0;
+    com_sta[ln] |= COML_REP;                /* set pending */
     com_rbuf[ln] = 0;                       /* clear read buffer */
     com_xbuf[ln] = 0;                       /* clear write buffer */
     com_ldsc[ln].rcve = 0;

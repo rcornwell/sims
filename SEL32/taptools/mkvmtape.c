@@ -193,8 +193,10 @@ char *argv[];
     int32_t filen;                          /* file number */
 //  u_int32_t *dirp = dir;                  /* directory entry pointer */
 //  u_int32_t *volp = vol;                  /* volume entry pointer */
-    char *dirp = dirname;                   /* directory entry pointer */
-    char *volp = volname;                   /* volume entry pointer */
+/// char *dirp = dirname;                   /* directory entry pointer */
+/// char *volp = volname;                   /* volume entry pointer */
+    char *dirp = sysname;                   /* directory entry pointer */
+    char *volp = sysname;                   /* volume entry pointer */
     int32_t totent;                         /* total smd entries */
     char    j_vfmt[] = {"!VOLSYST!DIRSYST!FIL    J.VFMT          "};
     char    j_mount[] = {"!VOLSYST!DIRSYST!FIL    J.MOUNT         "};
@@ -747,14 +749,17 @@ printf("image file %s n1 %x (%d) n2 %x (%d) blks %x (%d)\n",
         resdes[13]= dirlist[n+11];
         /* 16 word resource create block */
         resdes[14] = dirlist[n+8];              /* owner, system */
-        resdes[15] = dirlist[n+9];
-        resdes[16]= dirlist[n+10];
-        resdes[17]= dirlist[n+11];
-        resdes[18] = dirlist[n+8];              /* group, system */
-        resdes[19] = dirlist[n+9];
-        resdes[20]= dirlist[n+10];
-        resdes[21]= dirlist[n+11];
+        resdes[15] = dirlist[n+9];              /* only 8 bytes */
+//      resdes[16]= dirlist[n+10];
+//      resdes[17]= dirlist[n+11];
+///     resdes[18] = dirlist[n+8];              /* group, system */
+///     resdes[19] = dirlist[n+9];              /* only 8 bytes */
+        resdes[16] = dirlist[n+8];              /* group, system */
+        resdes[17] = dirlist[n+9];              /* only 8 bytes */
+//      resdes[20]= dirlist[n+10];
+//      resdes[21]= dirlist[n+11];
         n += 12;
+#ifdef OLDOLD
         resdes[22]=flip(0x80f00000);            /* owner rights */
         resdes[23]=flip(0x80b00000);            /* group rights */
         resdes[24]=flip(0x80800000);            /* other rights */
@@ -766,6 +771,19 @@ printf("image file %s n1 %x (%d) n2 %x (%d) blks %x (%d)\n",
         resdes[29]=flip(size);                  /* org file size */
         resdes[31]=flip(1000);                  /* file starting address n/u */
         resdes[33]=flip(0x00fbfeef);            /* option flags */
+#else
+        resdes[18]=flip(0x80f00000);            /* owner rights */
+        resdes[19]=flip(0x80b00000);            /* group rights */
+        resdes[20]=flip(0x80800000);            /* other rights */
+        if (typ == 0xca)
+            resdes[21]=flip(0x00040110);        /* res mgmt flags */
+        else
+            resdes[21]=flip(0x00040110);        /* res mgmt flags */
+//          resdes[21]=flip(0x0004011c);        /* res mgmt flags */
+        resdes[25]=flip(size);                  /* org file size */
+        resdes[27]=flip(1000);                  /* file starting address n/u */
+        resdes[29]=flip(0x00fbfeef);            /* option flags */
+#endif
         /* reset of block is zero */
 
         /* second block is resosurce descriptor from disk */
@@ -794,8 +812,8 @@ printf("image file %s n1 %x (%d) n2 %x (%d) blks %x (%d)\n",
         //210
         //211
 
-        resdes[212] = dirlist[n+8];             /* ownername last changer, system */
-        resdes[213] = dirlist[n+9];
+///     resdes[212] = dirlist[n+8];             /* ownername last changer, system */
+///     resdes[213] = dirlist[n+9];
         resdes[214] = dirlist[n+8];             /* ownername creator, system */
         resdes[215] = dirlist[n+9];
 
@@ -826,14 +844,18 @@ printf("image file %s n1 %x (%d) n2 %x (%d) blks %x (%d)\n",
         else
         if (typ == 0x00)
             resdes[256]=flip(0x001000f1);       /* space definition flags */
-        resdes[257]=flip(0x00000018);           /* max extends */
-        resdes[258]=flip(0x00000008);           /* min incr */
+//      resdes[257]=flip(0x00000018);           /* max extends */
+        resdes[257]=flip(0x00000040);           /* max extends */
+//      resdes[258]=flip(0x00000008);           /* min incr */
+        resdes[258]=flip(0x00000010);           /* min incr */
         //259
 
 //      resdes[260]=flip(size-1);               /* eof */
 //      resdes[261]=flip(size);                 /* eom */
-        resdes[260]=flip(size);                 /* eof */
-        resdes[261]=flip(size+1);               /* eom */
+///     resdes[260]=flip(size);                 /* eof */
+///     resdes[261]=flip(size+1);               /* eom */
+        resdes[260]=0;                          /* eof */
+        resdes[261]=flip(size);                 /* eom */
         resdes[262]=flip(0x00000001);           /* segment */
         //263
 

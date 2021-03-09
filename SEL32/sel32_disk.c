@@ -587,14 +587,20 @@ uint32 get_dmatrk(UNIT *uptr, uint32 star, uint8 buf[])
     int     unit = (uptr - dptr->units);        /* get the UNIT number */
     int     len, i, cn, found = -1;
 
-    /* zero the Track Label Buffer */
-    for (i = 0; i < 30; i++)
-        buf[i] = 0;
-
+#ifdef SPEEDUP
+    int ds = ((CYL(type) - 3) * HDS(type)) * SPT(type);  /* diag start */
     /* get file offset in sectors */
     tstart = STAR2SEC(star, SPT(type), SPC(type));
     /* convert sector number back to chs value to sync disk for diags */
     nstar = disksec2star(tstart, type);
+    if (ds >= tstart)
+        return nstar;                           /* not in diag track, return */
+#else
+    /* get file offset in sectors */
+    tstart = STAR2SEC(star, SPT(type), SPC(type));
+    /* convert sector number back to chs value to sync disk for diags */
+    nstar = disksec2star(tstart, type);
+#endif
 
     cyl = (nstar >> 16) & 0xffff;               /* get the cylinder */
     trk = (nstar >> 8) & 0xff;                  /* get the track */
@@ -609,6 +615,10 @@ uint32 get_dmatrk(UNIT *uptr, uint32 star, uint8 buf[])
 
     /* calc offset in file to track label */
     offset = CAPB(type) + (tstart * 30);
+
+    /* zero the Track Label Buffer */
+    for (i = 0; i < 30; i++)
+        buf[i] = 0;
 
     /* see if track label is in cache */
     for (cn=0; cn<TRK_CACHE; cn++) {
@@ -932,6 +942,9 @@ loop:
                 sim_debug(DEBUG_EXP, dptr,
                     "disk_iocl continue wait chsa %04x status %08x\n",
                     chp->chan_dev, chp->chan_status);
+#ifndef CHANGE_03072021
+                chp->chan_qwait = QWAIT;            /* run 25 instructions before starting iocl */
+#endif
             }
         } else
 
@@ -2951,6 +2964,7 @@ int disk_format(UNIT *uptr) {
     uint32      cylv = cyl;                     /* number of cylinders */
     uint8       *buff;
     int32       i;
+    t_stat      oldsw = sim_switches;           /* save switches */
 
                 /* last sector address of disk (cyl * hds * spt) - 1 */
     uint32      laddr = CAP(type) - 1;          /* last sector of disk */
@@ -2996,9 +3010,16 @@ int disk_format(UNIT *uptr) {
                     0x9a000000 | ltaddr, 0xf4000000};
 #endif
 
-    /* see if user wants to initialize the disk */
-    if (!get_yn("Initialize disk? [Y] ", TRUE)) {
-        return 1;
+    /* see if -i or -n specified on attach command */
+    if (!(sim_switches & SWMASK('N')) && !(sim_switches & SWMASK('I'))) {
+        sim_switches = 0;                       /* simh tests 'N' & 'Y' switches */
+        /* see if user wants to initialize the disk */
+        if (!get_yn("Initialize disk? [Y] ", TRUE)) {
+//          printf("disk_format init question is false\r\n");
+            sim_switches = oldsw;
+            return 1;
+        }
+        sim_switches = oldsw;                   /* restore switches */
     }
 
     /* VDT  249264 (819/18/0) 0x3cdb0 for 9346 - 823/19/16 vaddr */
@@ -3177,6 +3198,15 @@ t_stat disk_attach(UNIT *uptr, CONST char *file)
         return SCPE_FMT;                        /* error */
     }
 
+    if (dptr->flags & DEV_DIS) {
+        fprintf(sim_deb,
+            "ERROR===ERROR\nDisk device %s disabled on system, aborting\r\n",
+            dptr->name);
+        printf("ERROR===ERROR\nDisk device %s disabled on system, aborting\r\n",
+            dptr->name);
+        return SCPE_UDIS;                       /* device disabled */
+    }
+
     /* have simulator attach the file to the unit */
     if ((r = attach_unit(uptr, file)) != SCPE_OK)
         return r;
@@ -3194,6 +3224,11 @@ t_stat disk_attach(UNIT *uptr, CONST char *file)
         disk_type[type].name, disk_type[type].cyl, disk_type[type].nhds,
         disk_type[type].spt, ssize, uptr->capac);   /* disk capacity */
 
+    /* see if -i or -n specified on attach command */
+    if ((sim_switches & SWMASK('N')) || (sim_switches & SWMASK('I'))) {
+        goto fmt;                               /* user wants new disk */
+    }
+
     /* seek to end of disk */
     if ((sim_fseek(uptr->fileref, 0, SEEK_END)) != 0) {
         sim_debug(DEBUG_CMD, dptr, "UDP Disk attach SEEK end failed\n");
@@ -3207,8 +3242,8 @@ t_stat disk_attach(UNIT *uptr, CONST char *file)
         printf("Disk attach ftell failed s=%06d\r\n", s);
         goto fmt;                               /* not setup, go format */
     }
-//  sim_debug(DEBUG_CMD, dptr, "UDP Disk attach ftell value s=%06d b=%06d CAP %06d\n", s/ssize, s, CAP(type));
-//  printf("Disk attach ftell value s=%06d b=%06d CAP %06d\r\n", s/ssize, s, CAP(type));
+    sim_debug(DEBUG_CMD, dptr, "UDP Disk attach ftell value s=%06d b=%06d CAP %06d\n", s/ssize, s, CAP(type));
+    printf("Disk attach ftell value s=%06d b=%06d CAP %06d\r\n", s/ssize, s, CAP(type));
 
     if (((int)s/(int)ssize) < ((int)CAP(type))) {   /* full sized disk? */
         j = (CAP(type) - (s/ssize));            /* get # sectors to write */
@@ -3301,6 +3336,8 @@ fmt:
 ldone:
     /* see if disk has labels already, seek to sector past end of disk  */
     if ((sim_fseek(uptr->fileref, CAP(type)*ssize, SEEK_SET)) != 0) { /* seek end */
+        sim_debug(DEBUG_CMD, dptr, "UDP Disk attach SEEK last sector @ldone failed\n");
+        printf("UDP Disk attach SEEK last sector @ldone failed\r\n");
         detach_unit(uptr);                      /* detach if error */
         return SCPE_FMT;                        /* error */
     }
@@ -3398,12 +3435,20 @@ t_stat disk_boot(int32 unit_num, DEVICE *dptr) {
     sim_debug(DEBUG_CMD, dptr,
        "Disk Boot dev/unit %x\n", GET_UADDR(uptr->CMD));
 
+    /* see if device disabled */
+    if (dptr->flags & DEV_DIS) {
+        printf("ERROR===ERROR\r\nDisk device %s disabled on system, aborting\r\n",
+            dptr->name);
+        return SCPE_UDIS;                       /* device disabled */
+    }
+
     if ((uptr->flags & UNIT_ATT) == 0) {
         sim_debug(DEBUG_EXP, dptr,
             "Disk Boot attach error dev/unit %04x\n",
             GET_UADDR(uptr->CMD));
         return SCPE_UNATT;                      /* attached? */
     }
+
     SPAD[0xf4] = GET_UADDR(uptr->CMD);          /* put boot device chan/sa into spad */
     SPAD[0xf8] = 0xF000;                        /* show as F class device */
 
