@@ -3239,24 +3239,18 @@ load_tlb(int uf, int page)
     /* Map the page */
     sim_interval--;
     if (base) {
+        data = M[eb_ptr + (page >> 1)];
+        e_tlb[page & 0776] = RMASK & (data >> 18);
+        e_tlb[page | 1] = RMASK & data;
         data = e_tlb[page];
-        if (data == 0) {
-           data = M[eb_ptr + (page >> 1)];
-           e_tlb[page & 0776] = RMASK & (data >> 18);
-           e_tlb[page | 1] = RMASK & data;
-           data = e_tlb[page];
-           pag_reload = ((pag_reload + 1) & 037) | 040;
-        }
+        pag_reload = ((pag_reload + 1) & 037) | 040;
         last_page = ((page ^ 0777) << 1)|1;
     } else {
+        data = M[ub_ptr + (page >> 1)];
+        u_tlb[page & 01776] = RMASK & (data >> 18);
+        u_tlb[page | 1] = RMASK & data;
         data = u_tlb[page];
-        if (data == 0) {
-           data = M[ub_ptr + (page >> 1)];
-           u_tlb[page & 01776] = RMASK & (data >> 18);
-           u_tlb[page | 1] = RMASK & data;
-           data = u_tlb[page];
-           pag_reload = ((pag_reload + 1) & 037) | 040;
-        }
+        pag_reload = ((pag_reload + 1) & 037) | 040;
         if (upmp)
            last_page = (((page-0440) ^ 0777) << 1) | 1;
         else
