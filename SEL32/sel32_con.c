@@ -141,6 +141,7 @@ DIB             con_dib = {
 DEVICE  con_dev = {
     "CON", con_unit, NULL, con_mod,
     NUM_UNITS_CON, 8, 15, 1, 8, 8,
+//  NULL, NULL, &con_reset, NULL, &con_attach, &con_detach,
     NULL, NULL, &con_reset, NULL, NULL, NULL,
     &con_dib, DEV_DIS|DEV_DISABLE|DEV_DEBUG, 0, dev_debug
 };
@@ -647,11 +648,13 @@ uint16  con_haltio(UNIT *uptr) {
         chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);   /* reset chaining bits */
         uptr->CMD &= LMASK;                 /* make non-busy */
         uptr->u4 = 0;                       /* no I/O yet */
+        sim_cancel(uptr);                   /* stop timer */
         con_data[unit].incnt = 0;           /* no input data */
         uptr->SNS = SNS_RDY|SNS_ONLN;       /* status is online & ready */
         sim_debug(DEBUG_CMD, &con_dev,
             "con_haltio HIO I/O stop chsa %04x cmd = %02x\n", chsa, cmd);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
+//BAD   chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);  /* force end */
         return 1;                           /* tell chan code to post status */
     }
     uptr->u4 = 0;                           /* no I/O yet */

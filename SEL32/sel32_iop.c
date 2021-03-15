@@ -38,6 +38,7 @@
 #define UNIT_IOP    UNIT_IDLE | UNIT_DISABLE
 
 /* forward definitions */
+uint16  iop_preio(UNIT *uptr, uint16 chan);
 uint16  iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
 void    iop_ini(UNIT *uptr, t_bool f);
 uint16  iop_rschnlio(UNIT *uptr);
@@ -99,7 +100,7 @@ UNIT            iop_unit[] = {
 };
 
 DIB             iop_dib = {
-    NULL,           /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Start I/O */
+    iop_preio,      /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/ /* Pre Start I/O */
     iop_startcmd,   /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command SIO */
     NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O HIO */
     NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O HIO */
@@ -153,6 +154,25 @@ uint16  iop_rschnlio(UNIT *uptr) {
         "iop_rschnl chsa %04x cmd = %02x\n", chsa, cmd);
     iop_ini(uptr, 0);                       /* reset the unit */
     return SCPE_OK;
+}
+
+/* start an iop operation */
+uint16 iop_preio(UNIT *uptr, uint16 chan) {
+    DEVICE      *dptr = get_dev(uptr);
+    int         unit = (uptr - dptr->units);
+    uint16      chsa = GET_UADDR(uptr->u3);
+
+    sim_debug(DEBUG_CMD, dptr, "iop_preio CMD %08x unit %02x chsa %04x\n",
+        uptr->u3, unit, chsa);
+
+    if ((uptr->u3 & IOP_MSK) != 0) {        /* is unit busy */
+        sim_debug(DEBUG_CMD, dptr,
+            "iop_preio unit %02x chsa %04x BUSY\n", unit, chsa);
+        return SNS_BSY;                     /* yes, return busy */
+    }
+
+    sim_debug(DEBUG_CMD, dptr, "iop_preio unit %02x chsa %04x OK\n", unit, chsa);
+    return SCPE_OK;                         /* good to go */
 }
 
 /* start an I/O operation */

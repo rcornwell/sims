@@ -39,6 +39,7 @@
 #define UNIT_MFP    UNIT_IDLE | UNIT_DISABLE
 
 /* forward definitions */
+uint16  mfp_preio(UNIT *uptr, uint16 chan);
 uint16  mfp_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
 void    mfp_ini(UNIT *uptr, t_bool f);
 uint16  mfp_rschnlio(UNIT *uptr);
@@ -103,7 +104,7 @@ UNIT            mfp_unit[] = {
 
 //DIB mfp_dib = {NULL, mfp_startcmd, NULL, NULL, NULL, mfp_ini, mfp_unit, mfp_chp, NUM_UNITS_MFP, 0xff, 0x7600,0,0,0};
 DIB             mfp_dib = {
-    NULL,           /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Start I/O */
+    mfp_preio,      /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
     mfp_startcmd,   /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
     NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O HIO */
     NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O HIO */
@@ -157,6 +158,25 @@ uint16  mfp_rschnlio(UNIT *uptr) {
         "mfp_rschnl chsa %04x cmd = %02x\n", chsa, cmd);
     mfp_ini(uptr, 0);                       /* reset the unit */
     return SCPE_OK;
+}
+
+/* start an mfp operation */
+uint16 mfp_preio(UNIT *uptr, uint16 chan) {
+    DEVICE      *dptr = get_dev(uptr);
+    int         unit = (uptr - dptr->units);
+    uint16      chsa = GET_UADDR(uptr->u3);
+
+    sim_debug(DEBUG_CMD, dptr, "mfp_preio CMD %08x unit %02x chsa %04x\n",
+        uptr->u3, unit, chsa);
+
+    if ((uptr->u3 & MFP_MSK) != 0) {        /* is unit busy */
+        sim_debug(DEBUG_CMD, dptr,
+            "mfp_preio unit %02x chsa %04x BUSY\n", unit, chsa);
+        return SNS_BSY;                     /* yes, return busy */
+    }
+
+    sim_debug(DEBUG_CMD, dptr, "mfp_preio unit %02x chsa %04x OK\n", unit, chsa);
+    return SCPE_OK;                         /* good to go */
 }
 
 /* start an I/O operation */

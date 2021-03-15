@@ -1089,7 +1089,6 @@ uint16  disk_haltio(UNIT *uptr) {
     /* status must not have an error bit set */
     /* otherwise, UTX will panic with "bad status" */
     if ((uptr->CMD & DSK_CMDMSK) != 0) {        /* is unit busy */
-//      sim_debug(DEBUG_CMD, dptr,
         sim_debug(DEBUG_EXP, dptr,
             "disk_haltio HIO chsa %04x cmd = %02x ccw_count %02x\n",
             chsa, cmd, chp->ccw_count);
@@ -1098,11 +1097,9 @@ uint16  disk_haltio(UNIT *uptr) {
         uptr->CMD &= LMASK;                     /* make non-busy */
         uptr->SNS2 |= (SNS_ONC|SNS_UNR);        /* on cylinder & ready */
         sim_cancel(uptr);                       /* clear the input timer */
-//      sim_debug(DEBUG_CMD, dptr,
         sim_debug(DEBUG_EXP, dptr,
             "disk_haltio HIO I/O stop chsa %04x cmd = %02x CHS %08x STAR %08x\n",
             chsa, cmd, uptr->CHS, uptr->STAR);
-//1204  chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);  /* force end */
         return SCPE_IOERR;
     }

@@ -158,9 +158,6 @@ uint32          RDYQIN;                     /* fifo input index */
 uint32          RDYQOUT;                    /* fifo output index */
 uint32          RDYQ[128];                  /* channel ready queue */
 uint8           waitqcnt = 0;               /* # instructions before start */
-#ifdef REMOVE_03072021
-uint8           waitrdyq = 0;               /* # instructions before post interrupt */
-#endif
 
 struct InstHistory
 {
@@ -1945,11 +1942,6 @@ wait_loop:
                 uint32  chsa;                       /* channel/sub adddress */
                 int32   stat;                       /* return status 0/1 from loadccw */
 
-#ifdef REMOVE_03072021
-                if (waitrdyq > 0) {                 /* see if we are waiting to start */
-                    waitrdyq--;
-                } else
-#endif
                 /* we have entries, continue channel program */
                 if (RDYQ_Get(&chsa) == SCPE_OK) {   /* get chsa for program */
                     sim_debug(DEBUG_XIO, &cpu_dev,
@@ -2075,69 +2067,53 @@ wait_loop:
             }
         }
 
-#ifndef CHANGE_03072021
+        /* process IOCL entries that are waiting */
         /* loop through the IOCL ready Q and decrement wait counts */
         if ((int32c = RDYQ_Num())) {
             int32   i, rqo = RDYQOUT;
             for (i=0; i<int32c; i++) {
-                uint32  chsa;                       /* channel/sub adddress */
+                uint32  chsa = 0;                   /* channel/sub adddress */
                 CHANP   *chp;                       /* get channel prog pointer */
-                if (rqo == RDYQIN)
-                    break;                          /* done with queue */
-                chsa = RDYQ[rqo];                   /* get the next entry */
+                if (RDYQ_Get(&chsa) == SCPE_OK) {   /* get chsa for program */
+//                  chsa = RDYQ[rqo];               /* get the next entry */
+                }
+                if (chsa == 0)                      /* ignore unused entries */
+                    continue;
                 chp = find_chanp_ptr(chsa);         /* get channel prog pointer */
+                if (chp == NULL)                    /* ignore unused entries */
+                    continue;
+                if (chp->chan_byte != BUFF_NEXT) {
+                    /* if not BUFF_NEXT, channel has been stopped, do nothing */
+                    sim_debug(DEBUG_XIO, &cpu_dev,
+                        "scan_chan Bad CPU RDYQ entry for chsa %04x chan_byte %02x\n",
+                        chsa, chp->chan_byte);
+                    /* not BUFF_NEXT, just zero entry */
+                    continue;                       /* ignore the entry */
+                }
+                /* state is BUFF_NEXT, see if wait is over */
                 if (chp->chan_qwait > 0)            /* still waiting? */
                     chp->chan_qwait--;              /* decrement count */
-                rqo++;                              /* next queue entry */
-                rqo %= RDYQ_SIZE;                   /* don't overrun end */
-            }
-        }
-#endif
-        /* process IOCL entries that are waiting */
-        if (RDYQ_Num()) {
-            uint32  chsa;                           /* channel/sub adddress */
-            CHANP   *chp;                           /* get channel prog pointer */
-            chsa = RDYQ[RDYQOUT];                   /* get the next entry */
-            chp = find_chanp_ptr(chsa);             /* get channel prog pointer */
-            if (chp->chan_byte != BUFF_NEXT) {
-                /* chan_byte is not BUFF_NEXT */
-                sim_debug(DEBUG_XIO, &cpu_dev,
-                    "scan_chan Bad CPU RDYQ entry for chsa %04x chan_byte %02x\n",
-                    chsa, chp->chan_byte);
-            }
-#ifdef CHANGE_03072021
-            if (chp->chan_byte == BUFF_NEXT) {
-#else
-            /* checking BUFF_NEXT hangs diag n keyboard termination */
-            if ((chp->chan_qwait == 0) || (chp->chan_byte != BUFF_NEXT)) {
-//          if ((chp->chan_qwait == 0) && (chp->chan_byte == BUFF_NEXT)) {
-//          if (chp->chan_qwait == 0) {
-#endif
-#ifdef REMOVE_03072021
-                /* we have entries, continue channel program */
-                if (waitrdyq > 0) {
-                    waitrdyq--;
-                } else
-#endif
-                if (RDYQ_Get(&chsa) == SCPE_OK) {   /* get chsa for program */
+                /* process 0 wait entry */
+                if (chp->chan_qwait == 0)        {
                     int32 stat;
-                    CHANP *chp = find_chanp_ptr(chsa);  /* get channel prog pointer */
                     sim_debug(DEBUG_XIO, &cpu_dev,
                         "scan_chan CPU RDYQ entry for chsa %04x starting byte %02x\n",
                         chsa, chp->chan_byte);
-                    /* if not BUFF_NEXT, channel has been stopped, just continue */
-                    if (chp->chan_byte == BUFF_NEXT) {
-                        stat = cont_chan(chsa);         /* resume the channel program */
-                        if (stat == SCPE_OK)
-                            sim_debug(DEBUG_XIO, &cpu_dev,
-                            "scan_chan CPU RDYQ entry for chsa %04x processed byte %04x\n",
-                            chsa, chp->chan_byte);
-                        else
-                            sim_debug(DEBUG_XIO, &cpu_dev,
-                            "scan_chan CPU RDYQ entry for chsa %04x processed w/error byte %04x\n",
-                            chsa, chp->chan_byte);
-                    }
-                }
+                    /* if not BUFF_NEXT, channel has been stopped, do nothing */
+                    stat = cont_chan(chsa);         /* resume the channel program */
+                    if (stat == SCPE_OK)
+                        sim_debug(DEBUG_XIO, &cpu_dev,
+                        "scan_chan CPU RDYQ entry for chsa %04x processed byte %04x\n",
+                        chsa, chp->chan_byte);
+                    else
+                        sim_debug(DEBUG_XIO, &cpu_dev,
+                        "scan_chan CPU RDYQ entry for chsa %04x processed w/error byte %04x\n",
+                        chsa, chp->chan_byte);
+                    continue;
+                } else
+                    RDYQ_Put(chsa);                 /* requeue the non-zero entry */
+                rqo++;                              /* next queue entry */
+                rqo %= RDYQ_SIZE;                   /* don't overrun end */
             }
         }
 
@@ -5854,11 +5830,12 @@ doovr2:
                     dest = (D32RMASK & dest);       /* zero fill */
                 if (td == 0)
                     CC |= CC4BIT;                   /* word is zero, so CC4 */
-                else
+                else {
                     if (td & 0x80000000)
                         CC |= CC3BIT;               /* it is neg wd, so CC3  */
                     else
                         CC |= CC2BIT;               /* then td > 0, so CC2 */
+                }
                 break;
             case 2:                                 /* 64 bit double */
                 /* ARMD */
@@ -5873,12 +5850,13 @@ doovr2:
                     ovr = 1;
                 if (td == 0)
                     CC |= CC4BIT;                   /* dw is zero, so CC4 */
-                else
+                else {
                     if (td & DMSIGN)
                         CC |= CC3BIT;               /* it is neg dw, so CC3  */
                     else
                         CC |= CC2BIT;               /* then td > 0, so CC2 */
-                    break;
+                }
+                break;
             }
             if (ovr)
                 CC |= CC1BIT;                       /* set overflow CC */
@@ -6502,10 +6480,10 @@ sim_debug(DEBUG_IRQ, &cpu_dev,
             /* SPAD address F1 has interrupt table address */
             temp = SPAD[0xf1] + (ix<<2);            /* vector address in SPAD */
             sim_debug(DEBUG_XIO, &cpu_dev,
-                "$$ XIO lchan %02x sa %02x spad %08x BLK %1x INTS[%02x] %08x\n",
-                lchan, suba, t, CPUSTATUS&0x80?1:0, ix, INTS[ix]);
+                "$$ XIO chsa %04x spad %08x BLK %1x INTS[%02x] %08x\n",
+                rchsa, t, CPUSTATUS&0x80?1:0, ix, INTS[ix]);
             sim_debug(DEBUG_XIO, &cpu_dev,
-                "$$ XIO rchsa %04x PSD1 %08x PSD2 %08x IR %08x ICBA %06x\n",
+                "$$ XIO chsa %04x PSD1 %08x PSD2 %08x IR %08x ICBA %06x\n",
                 rchsa, PSD1, PSD2, IR, temp);
             if ((TRAPME = Mem_read(temp, &addr))) { /* get interrupt context block addr */
 mcheck:

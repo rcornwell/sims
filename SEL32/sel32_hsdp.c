@@ -3012,9 +3012,6 @@ int hsdp_label(UNIT *uptr, int use_strep) {
                 /* get sector address of vendor defect table VDT */
                 /* put data = 0xf0000004 0xf4000000 */
     int32       vaddr = (CYL(type)-4) * SPC(type) + (HDS(type)-1) * SPT(type);
-                /* make logical */
-    int32       logva = vaddr*(SPT(type)-1)/(SPT(type));
-
                 /* get sector address of utx diag map (DMAP) track 0 pointer */
                 /* put data = 0xf0000000 + (cyl-1), 0x8a000000 + daddr, */
                 /* 0x9a000000 + (cyl-1), 0xf4000000 */
@@ -3024,16 +3021,9 @@ int hsdp_label(UNIT *uptr, int use_strep) {
 
                 /* get sector address of utx flaw map sec 1 pointer */
                 /* use this address for sec 1 label pointer */
-#define NOT_NEEDED_0128
-#ifndef NOT_NEEDED_0128
-    int32       uaddr = (CYL(type)-4) * SPC(type) + (HDS(type)-4) * SPT(type);
-                /* make logical */
-    int32       logua = uaddr*(SPT(type)-1)/(SPT(type));
-#else
     int32       uaddr = (CYL(type)-4) * SPC(type) + (HDS(type)-3) * SPT(type);
                 /* make logical */
     int32       logua = uaddr*(SPT(type)-1)/(SPT(type));
-#endif
 
     /* write 30 byte track labels for all tracks on disk */
     /* tot_tracks entries will be created starting at end of disk */
@@ -3130,29 +3120,14 @@ int hsdp_label(UNIT *uptr, int use_strep) {
 
         /* write vaddr to track label for dmap */
         if ((i*SPT(type)) == daddr) {               /* get track address in sectors */
-//no_logical #if 1
-#if 0
-            if (use_strep) {
-                /* output logical vendor defect map address of disk */
-                label[12] = (logva >> 24) & 0xff;   /* Vaddr pointer vdt */
-                label[13] = (logva >> 16) & 0xff;
-                label[14] = (logva >> 8) & 0xff;
-                label[15] = (logva) & 0xff;
-                printf("hsdp_label WTL logva@vaddr %08x -> %08x\r\n", logva, vaddr);
-                sim_debug(DEBUG_CMD, dptr,
-                    "hsdp_label WTL logva@vaddr %08x -> %08x\n", logva, vaddr);
-            } else
-#endif
-            {
-                /* output physical vendor defect map address of disk */
-                label[12] = (vaddr >> 24) & 0xff;   /* Vaddr pointer vdt */
-                label[13] = (vaddr >> 16) & 0xff;
-                label[14] = (vaddr >> 8) & 0xff;
-                label[15] = (vaddr) & 0xff;
-                printf("hsdp_label WTL vaddr@vaddr %08x -> %08x\r\n", vaddr, vaddr);
-                sim_debug(DEBUG_CMD, dptr,
-                    "hsdp_label WTL vaddr@vaddr %08x -> %08x\n", vaddr, vaddr);
-            }
+            /* output physical vendor defect map address of disk */
+            label[12] = (vaddr >> 24) & 0xff;   /* Vaddr pointer vdt */
+            label[13] = (vaddr >> 16) & 0xff;
+            label[14] = (vaddr >> 8) & 0xff;
+            label[15] = (vaddr) & 0xff;
+            printf("hsdp_label WTL vaddr@vaddr %08x -> %08x\r\n", vaddr, vaddr);
+            sim_debug(DEBUG_CMD, dptr,
+                "hsdp_label WTL vaddr@vaddr %08x -> %08x\n", vaddr, vaddr);
         }
 
         /* the tech doc shows the cyl/trk/sec data is in the first 4 bytes */
@@ -3160,13 +3135,11 @@ int hsdp_label(UNIT *uptr, int use_strep) {
         /* area too.  Byte 27 is sectors/track and byte 28 is number of heads. */
         /* Byte 26 is mode. Byte 25 is copy of byte 27. */
         label[25] = SPT(type) & 0xff;               /* save sectors per track */
-//no_logical if ((use_strep) && (daddr == (i*SPT(type)) || (i == 0))) {
         if ((use_strep) && (i == 0)) {
             label[25] = (SPT(type)-1) & 0xff;
         }
         uptr->LSC = label[25];                      /* save logical/physical sector count from label */
         label[26] = hsdp_type[type].type & 0xfd;    /* zero bits 6 in type byte */
-//      label[26] = hsdp_type[type].type | 1;       /* mode data is 0x41 */
         label[27] = label[25];                      /* same as label[25] */
         label[28] = HDS(type) & 0xff;
 
@@ -3230,34 +3203,6 @@ int hsdp_label(UNIT *uptr, int use_strep) {
 
         /* if this is written, UTX will not be able to do a newfs */
         /* gets preposterous size 0 error */
-#ifdef XXXX_121720
-        /* maybe not needed, but left anyway */
-        /* uaddr has umap value for sector one label */
-        if (CHS == 1) {                         /* write umap address in sec 1 */
-#if 1
-            if (use_strep) {
-                /* output logical umap address */
-                label[12] = (logua >> 24) & 0xff;   /* lumapp UMAP logical pointer */
-                label[13] = (logua >> 16) & 0xff;
-                label[14] = (logua >> 8) & 0xff;
-                label[15] = (logua) & 0xff;
-                sim_debug(DEBUG_CMD, dptr,
-                    "hsdp_format WSL uaddr star %02x %02x %02x %02x\n",
-                    label[12], label[13], label[14], label[15]);
-            } else
-#endif
-            {
-                /* output physical umap address */
-                label[12] = (uaddr >> 24) & 0xff;   /* lumapp UMAP physical pointer */
-                label[13] = (uaddr >> 16) & 0xff;
-                label[14] = (uaddr >> 8) & 0xff;
-                label[15] = (uaddr) & 0xff;
-                sim_debug(DEBUG_CMD, dptr,
-                    "hsdp_format WSL uaddr star %02x %02x %02x %02x\n",
-                    label[12], label[13], label[14], label[15]);
-            }
-        }
-#endif
         /* the tech doc shows the cyl/trk/sec data is in the first 4 bytes */
         /* of the track label, BUT it is really in the configuration data */
         /* area too.  Byte 27 is sectors/track and byte 28 is number of heads. */
@@ -3303,22 +3248,10 @@ int hsdp_format(UNIT *uptr) {
 
                 /* last sector address of disk (cyl * hds * spt) - 1 */
     uint32      laddr = CAP(type) - 1;          /* last sector of disk */
-                /* make logical */
-    int32       logla = laddr*(SPT(type)-1)/(SPT(type));
-
-#ifndef NOT_NEEDED_0128
-                /* last track address of disk (cyl * hds * spt) - spt */
-    uint32      ltaddr = CAP(type)-SPT(type);       /* last track of disk */
-                /* make logical */
-    int32       loglta = ltaddr*(SPT(type)-1)/(SPT(type));
-#endif
 
                 /* get sector address of vendor defect table VDT */
                 /* put data = 0xf0000004 0xf4000000 */
     int32       vaddr = (CYL(type)-4) * SPC(type) + (HDS(type)-1) * SPT(type);
-                /* make logical */
-    int32       logva = vaddr*(SPT(type)-1)/(SPT(type));
-
                 /* get sector address of utx diag map (DMAP) track 0 pointer */
                 /* put data = 0xf0000000 + (cyl-1), 0x8a000000 + daddr, */
                 /* 0x9a000000 + (cyl-1), 0xf4000000 */
@@ -3327,19 +3260,7 @@ int hsdp_format(UNIT *uptr) {
                 /* make logical */
     int32       logda = daddr*(SPT(type)-1)/(SPT(type));
 
-#ifndef NOT_NEEDED_0128
-                /* get sector address of utx flaw data (1 track long) */
-                /* set trace data to zero */
-    int32       faddr = (CYL(type)-4) * SPC(type) + (HDS(type)-3) * SPT(type);
-                /* make logical */
-    int32       logfa = faddr*(SPT(type)-1)/(SPT(type));
-#endif
-
-#ifndef NOT_NEEDED_0128
-    int32       uaddr = (CYL(type)-4) * SPC(type) + (HDS(type)-4) * SPT(type);
-#else
     int32       uaddr = (CYL(type)-4) * SPC(type) + (HDS(type)-3) * SPT(type);
-#endif
 
                 /* NULL vendor flaw map */
     uint32      vmap[2] = {0xf0000004, 0xf4000000};
@@ -3351,23 +3272,12 @@ int hsdp_format(UNIT *uptr) {
     uint32      dmap[4] = {0xf0000000 | (((cap-1)*(SPT(type)-1))/(SPT(type))),
                     0x8a000000 | logda,
                     0x9a000000 | (((cap-1)*(SPT(type)-1))/(SPT(type))), 0xf4000000};
-#ifndef NOT_NEEDED_0128
-                /* utx flaw map */
-    uint32      pfmap[4] = {0xf0000000 | (cap-1), 0x8a000000 | daddr,
-                    0x9a000000 | ltaddr, 0xf4000000};
-
-                /* utx flaw map */
-    uint32      fmap[4] = {0xf0000000 | (((cap-1)*(SPT(type)-1))/(SPT(type))),
-                    0x8a000000 | logda,
-                    0x9a000000 | loglta, 0xf4000000};
-#endif
 
     /* see if -i or -n specified on attach command */
     if (!(sim_switches & SWMASK('N')) && !(sim_switches & SWMASK('I'))) {
         sim_switches = 0;                       /* simh tests 'N' & 'Y' switches */
         /* see if user wants to initialize the disk */
         if (!get_yn("Initialize disk? [Y] ", TRUE)) {
-//          printf("disk_format init question is false\r\n");
             sim_switches = oldsw;
             return 1;
         }
@@ -3434,16 +3344,6 @@ int hsdp_format(UNIT *uptr) {
         pdmap[i] = (((pdmap[i] & 0xff) << 24) | ((pdmap[i] & 0xff00) << 8) |
             ((pdmap[i] & 0xff0000) >> 8) | ((pdmap[i] >> 24) & 0xff));
     }
-#ifndef NOT_NEEDED_0128
-    for (i=0; i<4; i++) {
-        fmap[i] = (((fmap[i] & 0xff) << 24) | ((fmap[i] & 0xff00) << 8) |
-            ((fmap[i] & 0xff0000) >> 8) | ((fmap[i] >> 24) & 0xff));
-    }
-    for (i=0; i<4; i++) {
-        pfmap[i] = (((pfmap[i] & 0xff) << 24) | ((pfmap[i] & 0xff00) << 8) |
-            ((pfmap[i] & 0xff0000) >> 8) | ((pfmap[i] >> 24) & 0xff));
-    }
-#endif
 
     /* now seek to end of disk and write the dmap data */
     /* setup dmap pointed to by track label 0 wd[3] = (cyl-4) * spt + (spt - 1) */
@@ -3499,32 +3399,6 @@ int hsdp_format(UNIT *uptr) {
             return 1;
         }
     }
-#ifndef NOT_NEEDED_0128
-    /* write dummy UTX DMAP to faddr */
-    if ((sim_fseek(uptr->fileref, faddr*ssize, SEEK_SET)) != 0) { /* seek DMAP */
-        sim_debug(DEBUG_CMD, dptr,
-        "Error on media FMAP seek to sect %06x offset %06x\n",
-        faddr, faddr*ssize);
-        return 1;
-    }
-    if (use_st_format) {
-        if ((sim_fwrite((char *)&fmap, sizeof(uint32), 4, uptr->fileref)) != 4) {
-            sim_debug(DEBUG_CMD, dptr,
-            "Error writing UTX LFMAP to sect %06x offset %06x\n",
-            faddr, faddr*ssize);
-            return 1;
-        }
-    } else
-    {
-        if ((sim_fwrite((char *)&pfmap, sizeof(uint32), 4, uptr->fileref)) != 4) {
-            sim_debug(DEBUG_CMD, dptr,
-            "Error writing UTX FMAP to sect %06x offset %06x\n",
-            faddr, faddr*ssize);
-            return 1;
-        }
-    }
-#endif
-
     printf("Disk %s has %x (%d) cyl, %x (%d) hds, %x (%d) sec\r\n",
         hsdp_type[type].name, CYL(type), CYL(type), HDS(type), HDS(type),
         SPT(type), SPT(type));
@@ -3533,10 +3407,6 @@ int hsdp_format(UNIT *uptr) {
     printf("writing to dmap %x (%d) %x (%d) dmap to %x (%d) %x (%d)\r\n",
        cap-1, cap-1, (cap-1)*ssize, (cap-1)*ssize,
        daddr, daddr, daddr*ssize, daddr*ssize);
-#ifndef NOT_NEEDED_0128
-    printf("writing to fmap sec %x (%d) bytes %x (%d)\r\n",
-        faddr, faddr, (faddr)*ssize, (faddr)*ssize);
-#endif
     printf("writing to umap sec %x (%d) bytes %x (%d)\r\n",
         uaddr, uaddr, (uaddr)*ssize, (uaddr)*ssize);
 
@@ -3633,8 +3503,6 @@ t_stat hsdp_attach(UNIT *uptr, CONST char *file)
         printf("HSDP Disk attach ftell failed s=%06d\r\n", s);
         goto fmt;                                   /* not setup, go format */
     }
-//  sim_debug(DEBUG_CMD, dptr, "HSDP Disk attach ftell value s=%06d b=%06d CAP %06d\n", s/ssize, s, CAP(type));
-//  printf("HSDP Disk attach ftell value s=%06d b=%06d CAP %06d\r\n", s/ssize, s, CAP(type));
 
     if (((int)s/(int)ssize) < ((int)CAP(type))) {   /* full sized disk? */
         j = (CAP(type) - (s/ssize));            /* get # sectors to write */
@@ -3751,45 +3619,6 @@ ldone:
             return SCPE_FMT;                    /* error */
         }
     }
-#ifdef OLDWAY
-    else {
-#ifndef NOT_NEEDED_0128
-        int32   uaddr = (CYL(type)-4) * SPC(type) + (HDS(type)-4) * SPT(type);
-                /* make logical */
-        int32   logua = uaddr*(SPT(type)-1)/(SPT(type));
-#else
-        int32   uaddr = (CYL(type)-4) * SPC(type) + (HDS(type)-3) * SPT(type);
-                /* make logical */
-        int32   logua = uaddr*(SPT(type)-1)/(SPT(type));
-#endif
-        if (buff[25] == SPT(type)) {
-            /* uaddr has physical umap value for track zero label */
-            /* output physical umap address */
-            buff[16] = (uaddr >> 24) & 0xff;        /* lumapp DMAP pointer */
-            buff[17] = (uaddr >> 16) & 0xff;
-            buff[18] = (uaddr >> 8) & 0xff;
-            buff[19] = (uaddr) & 0xff;
-        } else {
-            /* logua has logical umap value for track zero label */
-            /* output logical umap address */
-            buff[16] = (logua >> 24) & 0xff;        /* lumapp DMAP pointer */
-            buff[17] = (logua >> 16) & 0xff;
-            buff[18] = (logua >> 8) & 0xff;
-            buff[19] = (logua) & 0xff;
-        }
-        if ((sim_fseek(uptr->fileref, CAP(type)*ssize, SEEK_SET)) != 0) { /* seek end */
-            detach_unit(uptr);                      /* detach if error */
-            return SCPE_FMT;                        /* error */
-        }
-        /* output updated umap address to track 0 for UTX21a */
-        if ((sim_fwrite(buff, sizeof(uint8), 30, uptr->fileref)) != 30) {
-            sim_debug(DEBUG_CMD, dptr,
-                "Error writing back track 0 label to sect %06x offset %06x\n",
-                CAP(type), CAP(type)*ssize);
-            return SCPE_FMT;                        /* error */
-        }
-    }
-#endif
 
     /* see if disk has labels already, seek to sector past end of disk  */
     if ((sim_fseek(uptr->fileref, CAP(type)*ssize, SEEK_SET)) != 0) { /* seek end */
@@ -3822,15 +3651,12 @@ ldone:
     }
     info = (buff[0]<<24) | (buff[1]<<16) | (buff[2]<<8) | buff[3];
     good = 0x4e554d50;                          /* NUMP */
-//  printf("info %8x good %8x cnt %x\r\n", info, good, buff[35]);
     if (info == good) {
         /* we have a UTX umap, so fixup the data */
         if (buff[35] <= SPT(type))
-//          i = (16*8) + (buff[35]*3*4) - 1;    /* byte offset to where to put 0xf4 */
             i = (127) + (buff[35]*12);          /* byte offset to where to put 0xf4 */
         else
             i = 127;                            /* only 1 track of replacement */
-//      printf("Fixing umap i %x info %8x good %8x buff[%x] %02x\r\n", i, info, good, i, buff[i]);
         buff[i] = 0xf4;                         /* set stop for UTX search */
         if ((sim_fseek(uptr->fileref, umapaddr*ssize, SEEK_SET)) != 0) { /* seek umap */
             detach_unit(uptr);                  /* detach if error */
@@ -3840,7 +3666,6 @@ ldone:
             detach_unit(uptr);                  /* detach if error */
             return SCPE_FMT;                    /* error */
         }
-//      printf("Fix Done i %x info %8x good %8x buff[%x] %02x\r\n", i, info, good, i, buff[i]);
     }
 
     if ((sim_fseek(uptr->fileref, 0, SEEK_SET)) != 0) { /* seek home */
