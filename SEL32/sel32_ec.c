@@ -642,7 +642,7 @@ uint16 ec_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 //      sim_activate(uptr, 3000);               /* start things off */
 //
 // This works most of the time & stops at test 30 with no len errors
-        sim_activate(uptr, 4800);               /* start things off */
+        sim_activate(uptr, 6000);               /* start things off */
 // This works some of the time, stops at test 30 with lots of len errors
 //      sim_activate(uptr, 4700);               /* start things off */
 // This works some of the time, stops at test 30 with lots of len errors
@@ -680,8 +680,8 @@ uint16 ec_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         }
 #endif
         uptr->CMD |= cmd|EC_BUSY;               /* save cmd */
-//JB    sim_activate(uptr, 100);                /* start things off */
-        sim_activate(uptr, 50);                 /* start things off */
+        sim_activate(uptr, 200);                /* start things off */
+//      sim_activate(uptr, 50);                 /* start things off */
         return 0;
     }
 
@@ -702,10 +702,10 @@ t_stat ec_rec_srv(UNIT *uptr)
     if ((ec_data.conf[0] & 0x40) == 0) {
         if (eth_read(&ec_data.etherface, &ec_data.rec_buff[ec_data.rec_ptr],
                    NULL) > 0) {
-            if (((ec_data.rec_ptr + 1) & 0xf) == ec_data.xtr_ptr) {
+            if (((ec_data.rec_ptr + 1) & 0x1f) == ec_data.xtr_ptr) {
                 ec_data.drop_cnt++;
             } else {
-                ec_data.rec_ptr = (ec_data.rec_ptr + 1) & 0xf;
+                ec_data.rec_ptr = (ec_data.rec_ptr + 1) & 0x1f;
                 ec_data.rx_count++;
                 sim_debug(DEBUG_DETAIL, dptr,
                     "ec_rec_srv received packet %08x\n", ec_data.rx_count);
@@ -903,13 +903,13 @@ wr_end:
         }
 
         if ((ec_data.conf[0] & 0x40) != 0) {
-            if (((ec_data.rec_ptr + 1) & 0xf) == ec_data.xtr_ptr) {
+            if (((ec_data.rec_ptr + 1) & 0x1f) == ec_data.xtr_ptr) {
                 ec_data.drop_cnt++;
             } else {
                 memcpy(&ec_data.rec_buff[ec_data.rec_ptr],
                   &ec_data.snd_buff, sizeof(ETH_PACK));
                 sim_debug(DEBUG_DETAIL, &ec_dev, "ec_srv queued %d\n",ec_data.rec_ptr);
-                ec_data.rec_ptr = (ec_data.rec_ptr + 1) & 0xf;
+                ec_data.rec_ptr = (ec_data.rec_ptr + 1) & 0x1f;
                 ec_data.rx_count++;
                 ec_data.tx_count++;
             }
@@ -954,7 +954,7 @@ wr_end:
             sim_debug(DEBUG_EXP, dptr,
                 "ec_srv iocd bad address caw %06x ccw %06x\n",
                 chp->chan_caw, chp->ccw_addr);
-            ec_data.xtr_ptr = (ec_data.xtr_ptr + 1) & 0xf;
+            ec_data.xtr_ptr = (ec_data.xtr_ptr + 1) & 0x1f;
 //            chp->ccw_flags &= ~FLAG_SLI;
             chp->ccw_count = 0;
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_LENGTH|STATUS_PCHK);
@@ -968,7 +968,7 @@ wr_end:
         if (len < ec_data.conf[9]) {
             sim_debug(DEBUG_DETAIL, &ec_dev, "ec_srv READ error short read len %x size %x %x\n",
                 len, chp->ccw_count, ec_data.conf[9]);
-            ec_data.xtr_ptr = (ec_data.xtr_ptr + 1) & 0xf;
+            ec_data.xtr_ptr = (ec_data.xtr_ptr + 1) & 0x1f;
             chp->ccw_count = 0;
             /* diags wants prog check instead of unit check test 4F */
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_PCHK);
@@ -1052,7 +1052,7 @@ wr_end:
 //              /* diags wants prog check instead of unit check */
 //              pirq = 1;
 //          }
-                ec_data.xtr_ptr = (ec_data.xtr_ptr + 1) & 0xf;
+                ec_data.xtr_ptr = (ec_data.xtr_ptr + 1) & 0x1f;
                 ec_data.rx_count++;
                 sim_debug(DEBUG_DETAIL, &ec_dev,
                     "ec_srv received bytes %d of %d count=%08x conf %x\n",
@@ -1062,7 +1062,7 @@ wr_end:
            }
         }
         chp->ccw_flags |= FLAG_SLI;
-        ec_data.xtr_ptr = (ec_data.xtr_ptr + 1) & 0xf;
+        ec_data.xtr_ptr = (ec_data.xtr_ptr + 1) & 0x1f;
         sim_debug(DEBUG_DETAIL, &ec_dev,
            "ec_srv received bytes %d count=%08x conf %x\n",
            len, ec_data.rx_count, ec_data.conf[9]);
