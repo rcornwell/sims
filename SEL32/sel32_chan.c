@@ -1,3 +1,4 @@
+/* sel32_chan.c: SEL 32 Channel functions.
 
    Copyright (c) 2018-2021, James C. Bevier
    Portions provided by Richard Cornwell, Geert Rolf and other SIMH contributers
