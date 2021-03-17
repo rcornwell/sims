@@ -4880,7 +4880,7 @@ st_pi:
 
     /* Check if possible idle loop */
     if (sim_idle_enab &&
-          (((FLAGS & USER) != 0 && PC < 020 && AB < 020 && (IR & 0760) == 0340) ||
+          (((FLAGS & USER) != 0 && PC < 020 && AB < 020 && (IR & 0740) == 0340) ||
            (uuo_cycle && (IR & 0740) == 0 && IA == 041))) {
        sim_idle (TMR_RTC, FALSE);
     }
