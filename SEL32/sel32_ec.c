@@ -197,7 +197,7 @@ struct ec_device {
     ETH_MAC           mac;                     /* Hardware MAC addresses */
     ETH_DEV           etherface;
     ETH_QUE           ReadQ;
-    ETH_PACK          rec_buff[64];            /* Buffer for received packet */
+    ETH_PACK          rec_buff[1024];            /* Buffer for received packet */
     ETH_PACK          snd_buff;                /* Buffer for sending packet */
     int               macs_n;                  /* Number of multi-cast addresses */
     ETH_MAC           macs[67];                /* Watched Multi-cast addresses */
@@ -212,6 +212,8 @@ struct ec_device {
     int               xtr_ptr;                 /* Extract pointer */
     uint8             conf[12];                /* user specified configuration */
 } ec_data;
+
+#define LOOP_MSK 0x3ff
 
 extern  int32 tmxr_poll;
 extern  uint32  readfull(CHANP *chp, uint32 maddr, uint32 *word);
@@ -232,7 +234,7 @@ uint16      ec_iocl(CHANP *chp, int32 tic_ok);
 void        ec_packet_debug(struct ec_device *ec, const char *action, ETH_PACK *packet);
 t_stat      ec_reset (DEVICE *dptr);
 void        ec_ini(UNIT *, t_bool);
-uint16      ec_rschnlio(UNIT *uptr);
+uint16      ec_rsctrl(UNIT *uptr);
 t_stat      ec_show_mac (FILE* st, UNIT* uptr, int32 val, CONST void* desc);
 t_stat      ec_set_mac (UNIT* uptr, int32 val, CONST char* cptr, void* desc);
 t_stat      ec_show_mode (FILE* st, UNIT* uptr, int32 val, CONST void* desc);
@@ -276,8 +278,8 @@ DIB             ec_dib = {
     ec_haltio,      /* uint16 (*halt_io)(UNIT *uptr) */ /* Halt I/O */
     NULL,           /* uint16 (*stop_io)(UNIT *uptr) */ /* Stop I/O */
     NULL,           /* uint16 (*test_io)(UNIT *uptr) */ /* Test I/O */
-    NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */    /* Reset Controller */
-    ec_rschnlio,    /* uint16 (*rschnl_io)(UNIT *uptr) */   /* Reset Channel */
+    ec_rsctrl,      /* uint16 (*rsctl_io)(UNIT *uptr) */    /* Reset Controller */
+    NULL,           /* uint16 (*rschnl_io)(UNIT *uptr) */   /* Reset Channel */
     ec_iocl,        /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     ec_ini,         /* void (*dev_ini)(UNIT *uptr) */   /* init function */
     ec_unit,        /* UNIT *units */           /* Pointer to units structure */
@@ -642,7 +644,7 @@ uint16 ec_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 //      sim_activate(uptr, 3000);               /* start things off */
 //
 // This works most of the time & stops at test 30 with no len errors
-        sim_activate(uptr, 6000);               /* start things off */
+        sim_activate(uptr, 7000);               /* start things off */
 // This works some of the time, stops at test 30 with lots of len errors
 //      sim_activate(uptr, 4700);               /* start things off */
 // This works some of the time, stops at test 30 with lots of len errors
@@ -702,10 +704,10 @@ t_stat ec_rec_srv(UNIT *uptr)
     if ((ec_data.conf[0] & 0x40) == 0) {
         if (eth_read(&ec_data.etherface, &ec_data.rec_buff[ec_data.rec_ptr],
                    NULL) > 0) {
-            if (((ec_data.rec_ptr + 1) & 0x1f) == ec_data.xtr_ptr) {
+            if (((ec_data.rec_ptr + 1) & LOOP_MSK) == ec_data.xtr_ptr) {
                 ec_data.drop_cnt++;
             } else {
-                ec_data.rec_ptr = (ec_data.rec_ptr + 1) & 0x1f;
+                ec_data.rec_ptr = (ec_data.rec_ptr + 1) & LOOP_MSK;
                 ec_data.rx_count++;
                 sim_debug(DEBUG_DETAIL, dptr,
                     "ec_rec_srv received packet %08x\n", ec_data.rx_count);
@@ -903,13 +905,13 @@ wr_end:
         }
 
         if ((ec_data.conf[0] & 0x40) != 0) {
-            if (((ec_data.rec_ptr + 1) & 0x1f) == ec_data.xtr_ptr) {
+            if (((ec_data.rec_ptr + 1) & LOOP_MSK) == ec_data.xtr_ptr) {
                 ec_data.drop_cnt++;
             } else {
                 memcpy(&ec_data.rec_buff[ec_data.rec_ptr],
                   &ec_data.snd_buff, sizeof(ETH_PACK));
                 sim_debug(DEBUG_DETAIL, &ec_dev, "ec_srv queued %d\n",ec_data.rec_ptr);
-                ec_data.rec_ptr = (ec_data.rec_ptr + 1) & 0x1f;
+                ec_data.rec_ptr = (ec_data.rec_ptr + 1) & LOOP_MSK;
                 ec_data.rx_count++;
                 ec_data.tx_count++;
             }
@@ -954,7 +956,7 @@ wr_end:
             sim_debug(DEBUG_EXP, dptr,
                 "ec_srv iocd bad address caw %06x ccw %06x\n",
                 chp->chan_caw, chp->ccw_addr);
-            ec_data.xtr_ptr = (ec_data.xtr_ptr + 1) & 0x1f;
+            ec_data.xtr_ptr = (ec_data.xtr_ptr + 1) & LOOP_MSK;
 //            chp->ccw_flags &= ~FLAG_SLI;
             chp->ccw_count = 0;
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_LENGTH|STATUS_PCHK);
@@ -968,7 +970,7 @@ wr_end:
         if (len < ec_data.conf[9]) {
             sim_debug(DEBUG_DETAIL, &ec_dev, "ec_srv READ error short read len %x size %x %x\n",
                 len, chp->ccw_count, ec_data.conf[9]);
-            ec_data.xtr_ptr = (ec_data.xtr_ptr + 1) & 0x1f;
+            ec_data.xtr_ptr = (ec_data.xtr_ptr + 1) & LOOP_MSK;
             chp->ccw_count = 0;
             /* diags wants prog check instead of unit check test 4F */
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_PCHK);
@@ -1052,7 +1054,7 @@ wr_end:
 //              /* diags wants prog check instead of unit check */
 //              pirq = 1;
 //          }
-                ec_data.xtr_ptr = (ec_data.xtr_ptr + 1) & 0x1f;
+                ec_data.xtr_ptr = (ec_data.xtr_ptr + 1) & LOOP_MSK;
                 ec_data.rx_count++;
                 sim_debug(DEBUG_DETAIL, &ec_dev,
                     "ec_srv received bytes %d of %d count=%08x conf %x\n",
@@ -1062,7 +1064,7 @@ wr_end:
            }
         }
         chp->ccw_flags |= FLAG_SLI;
-        ec_data.xtr_ptr = (ec_data.xtr_ptr + 1) & 0x1f;
+        ec_data.xtr_ptr = (ec_data.xtr_ptr + 1) & LOOP_MSK;
         sim_debug(DEBUG_DETAIL, &ec_dev,
            "ec_srv received bytes %d count=%08x conf %x\n",
            len, ec_data.rx_count, ec_data.conf[9]);
@@ -1271,15 +1273,17 @@ void ec_ini(UNIT *uptr, t_bool f)
     }
 }
 
-/* handle rschnlio cmds for Ethernet */
-uint16  ec_rschnlio(UNIT *uptr) {
+uint16      ec_rsctrl(UNIT *uptr) {
     DEVICE  *dptr = get_dev(uptr);
     uint16  chsa = GET_UADDR(uptr->CMD);
     int     cmd = uptr->CMD & EC_CMDMSK;
 
     sim_debug(DEBUG_EXP, dptr,
-        "ec_rschnl chsa %04x cmd = %02x\n", chsa, cmd);
-    ec_ini(uptr, 0);                            /* reset the unit */
+        "ec_rsctlr chsa %04x cmd = %02x\n", chsa, cmd);
+//    memset(&ec_data.conf[0], 0, sizeof(ec_data.conf));
+    ec_data.tx_count = 0;
+    ec_data.rx_count = 0;
+    ec_data.drop_cnt = 0;
     return SCPE_OK;
 }
 
