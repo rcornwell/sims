@@ -40,6 +40,15 @@ diskload - This program reads an MPX load module and stores it into
                      -  diskfile - simulated system disk
            output    - modified system disk
 
+eomtap -   This program reads a tape assigned as input device.  It
+           copies files until two EOFs are read and then makes sure
+           two EOFs are written followed by an EOM. This program
+           makes sure a .tap tape is readable without errors.
+
+           command: eomtap mt00 filename
+           input -  mag tape device or file being read
+           output - disk file containing tape file contents
+
 filelist - This program scans a metadata .tap file and prints the
            file count and sizes.  Used to determine the file
            format contained in the metadata .tap file.
@@ -159,6 +168,15 @@ tapdump -  This program reads a metadata .tap file and prints a side
            command: tapdump <file.tap >stdout
            input  - stdin <file to dump
            output - stdout
+
+tap2disk - This program reads a tape assigned as input device.  It
+           creates the specified output file and reads the tape
+           until an EOF is encountered.  Only one file is read from
+           the tape. Good to transfer tar files from SEL32 to Linux.
+
+           command: tap2disk mt00 filename
+           input -  mag tape device being read
+           output - disk file containing tape file contents
 
 tape2disk - This program reads a tape assigned as input device.  It
            generates a .tap metadata file.  Stdout will contain a

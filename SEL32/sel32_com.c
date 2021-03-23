@@ -923,8 +923,8 @@ endit:
         /* not connected, so dump char on ground */
         if (done) {
             sim_debug(DEBUG_CMD, dptr,
-                "com_srvo write dump DONE line %04x status %04x\n",
-                ln, SNS_CHNEND|SNS_DEVEND);
+                "com_srvo write dump DONE line %04x status %04x cmd %02x\n",
+                ln, SNS_CHNEND|SNS_DEVEND, cmd);
             uptr->u3 &= LMASK;              /* nothing left, command complete */
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
         }

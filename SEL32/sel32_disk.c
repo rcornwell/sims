@@ -1162,10 +1162,10 @@ t_stat disk_srv(UNIT *uptr)
             chp->chan_inch_addr, chsa, mema, chp->ccw_count);
         /* to use this inch method, byte count must be 897 */
         if (len != 896) {
-                /* we have invalid count, error, bail out */
-                uptr->SNS |= SNS_CMDREJ;
-                chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
-                break;
+            /* we have invalid count, error, bail out */
+            uptr->SNS |= SNS_CMDREJ;
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+            break;
         }
         /* now call set_inch() function to write and test inch buffer addresses */
         tstart = set_inch(uptr, mema);          /* new address */
@@ -1266,8 +1266,8 @@ t_stat disk_srv(UNIT *uptr)
         ch = ((2*SPT(type))-1) & 0x3f;          /* get index cnt */
         uptr->SNS2 = (uptr->SNS2 & 0xc0ff) | ((((uint32)ch) & 0x3f) << 8);
         sim_debug(DEBUG_CMD, dptr,
-           "disk_srv RAP %02x cyl %04x trk %02x sec %02x\n",
-           ch, cyl&0xffff, trk, sec);
+            "disk_srv RAP %02x cyl %04x trk %02x sec %02x\n",
+            ch, cyl&0xffff, trk, sec);
 
         if (chan_write_byte(chsa, &ch)) {       /* put a byte to memory */
             sim_debug(DEBUG_CMD, dptr,
@@ -1355,15 +1355,15 @@ iha_error:
         }
         /* create offset and mask */
         ecc = dmle_ecc32(obuf, ssize);          /* calc ecc for original sector */
-            sim_debug(DEBUG_DETAIL, dptr,
-                "disk_srv DEC old obuf data %02x%02x%02x%02x %02x%02x%02x%02x\n",
-                obuf[1016], obuf[1017], obuf[1018], obuf[1019],
-                obuf[1020], obuf[1021], obuf[1022], obuf[1023]);
+        sim_debug(DEBUG_DETAIL, dptr,
+            "disk_srv DEC old obuf data %02x%02x%02x%02x %02x%02x%02x%02x\n",
+            obuf[1016], obuf[1017], obuf[1018], obuf[1019],
+            obuf[1020], obuf[1021], obuf[1022], obuf[1023]);
         cecc = dmle_ecc32(bbuf, ssize);         /* calc ecc for bad sector */
-            sim_debug(DEBUG_DETAIL, dptr,
-                "disk_srv DEC bad bbuf data %02x%02x%02x%02x %02x%02x%02x%02x\n",
-                bbuf[1016], bbuf[1017], bbuf[1018], bbuf[1019],
-                bbuf[1020], bbuf[1021], bbuf[1022], bbuf[1023]);
+        sim_debug(DEBUG_DETAIL, dptr,
+            "disk_srv DEC bad bbuf data %02x%02x%02x%02x %02x%02x%02x%02x\n",
+            bbuf[1016], bbuf[1017], bbuf[1018], bbuf[1019],
+            bbuf[1020], bbuf[1021], bbuf[1022], bbuf[1023]);
         mema = 0;
         for (i=0, j=0; i<ssize; i++) {
             tcyl = bbuf[i]^obuf[i];             /* see if byte are different */
@@ -1700,7 +1700,6 @@ iha_error:
 //      return SCPE_OK;
 
     case DSK_XEZ:   /* 0x37 */                  /* Rezero & Read IPL record */
-
         sim_debug(DEBUG_CMD, dptr, "XEZ REZERO IPL unit=%02x seek 0\n", unit);
         /* Do a seek to 0 */
         uptr->STAR = 0;                         /* set STAR to 0, 0, 0 */

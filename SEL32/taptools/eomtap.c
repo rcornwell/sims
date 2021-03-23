@@ -161,7 +161,7 @@ int main (int argc, char *argv[])
     /* open output file */
     outfp = fopen(argv[2],"w");
     if (outfp == NULL) {
-        fprintf(stderr,"%s: fopen: unable to open input file %s\n", argv[0], argv[2]);
+        fprintf(stderr,"%s: fopen: unable to open output file %s\n", argv[0], argv[2]);
         exit(1);
     }
 

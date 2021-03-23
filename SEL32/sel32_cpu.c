@@ -1867,13 +1867,19 @@ wait_loop:
                         reason, sim_interval);
                     return reason;
                     break;
-                } else {
+                }
+#ifdef XXX
+                else {
                     sim_debug(DEBUG_EXP, &cpu_dev,
                         "Process Event other reason %08x interval %08x\n",
                         reason, sim_interval);
-                    return reason;
-                    break;                          /* process */
+            reason = STOP_IBKPT;
+            sim_interval= 0;                        /* count down */
+            break;
+//JB                return reason;
+//JB                break;                          /* process */
                 }
+#endif
             }
         }
 
@@ -1977,10 +1983,12 @@ wait_loop:
                 sim_debug(DEBUG_IRQ, &cpu_dev,
                     "<|>Normal int cpix %04x OPSD1 %08x OPSD2 %08x\n",
                     bc, PSD1, PSD2);
+#ifdef DUMP_REGS
                 for (ix=0; ix<8; ix+=2) {
                     sim_debug(DEBUG_IRQ, &cpu_dev,
                         "<|> GPR[%d] %.8x GPR[%d] %.8x\n", ix, GPR[ix], ix+1, GPR[ix+1]);
                 }
+#endif
                 PSD1 = M[(int_icb>>2)+2];           /* get new PSD 1 */
                 PSD2 = (M[(int_icb>>2)+3] & ~0x3fff) | bc;  /* get new PSD 2 w/old cpix */
 
@@ -2023,6 +2031,7 @@ wait_loop:
                             sim_debug(DEBUG_IRQ, &cpu_dev,
                                 "<|>Auto-reset interrupt INTS[%02x] %08x SPAD[%02x] %08x simi %02x\n",
                                 il, INTS[il], il+0x80, SPAD[il+0x80], sim_interval);
+#define LEAVE_ACTIVE
 #ifndef LEAVE_ACTIVE
 /*AIR*/                         INTS[irq_auto] &= ~INTS_ACT;  /* deactivate specified int level */
 /*AIR*/                         SPAD[irq_auto+0x80] &= ~SINT_ACT; /* deactivate in SPAD too */
@@ -2109,6 +2118,7 @@ wait_loop:
                         sim_debug(DEBUG_XIO, &cpu_dev,
                         "scan_chan CPU RDYQ entry for chsa %04x processed w/error byte %04x\n",
                         chsa, chp->chan_byte);
+                    irq_pend = 1;                   /* start scanning interrupts again */
                     continue;
                 } else
                     RDYQ_Put(chsa);                 /* requeue the non-zero entry */
@@ -7184,7 +7194,7 @@ t_stat cpu_reset(DEVICE *dptr)
     CMSMC = 0x00ff0a10;                             /* No V9 Cache/Shadow Memory Configuration */
     CSMCW = 0;                                      /* No V9 CPU Shadow Memory Configuration */
     ISMCW = 0;                                      /* No V9 IPU Shadow Memory Configuration */
-    RDYQIN = RDYQOUT = 0;                           /* initialize cheannel ready queue */
+    RDYQIN = RDYQOUT = 0;                           /* initialize channel ready queue */
 
     devs = chan_set_devs();                         /* set up the defined devices on the simulator */
 

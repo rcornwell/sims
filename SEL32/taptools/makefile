@@ -41,6 +41,7 @@ PROGS =			\
 	$(ROOT)/deblk \
 	$(ROOT)/mpxblk \
 	$(ROOT)/renum \
+	$(ROOT)/tap2disk \
 	$(ROOT)/cutostap \
 	$(ROOT)/small
 
@@ -169,6 +170,12 @@ $B/renum:	$D renum.c
 	@echo $(@F) installed in $B
 
 $B/cutostap:	$D cutostap.c
+	@-$(CC) $(CFLAGS) $(@F).c $(LFLAGS) -o $@
+	@chmod 755 $@
+	@cp $(@F) $B
+	@echo $(@F) installed in $B
+
+$B/tap2disk:	$D tap2disk.c
 	@-$(CC) $(CFLAGS) $(@F).c $(LFLAGS) -o $@
 	@chmod 755 $@
 	@cp $(@F) $B

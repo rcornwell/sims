@@ -20,64 +20,110 @@
 #   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #
 
+#	Test platforms:
+#
+#	Debian 10 (Buster)
+#	Raspbian Buster
+#	FreeBSD 12.1
+#	OpenBSD 6.7
+#	NetBSD 9.1
 
-# uncomment next line if you need more than one tap = run multiple SIMHs... edit the saved params file
+
+# uncomment next line if you need more than one tap = run multiple SIMHs...
 #OPSMODE="expert"
+# ... by editting the saved params file followed by rerun of this script
 
 PATH="/bin:/sbin:/etc:/usr/sbin:/usr/bin"
 export PATH
 
-# check brctl to exist
-L=`whereis brctl |
-	awk -F: '{ print $2 }' |
-	grep brctl |
-	wc -l`
-if test $L -eq 0
-then
-	echo 'No brctl program -- please install package bridge-utils'
-fi
+OS=`uname -s`
+case $OS in
+ "FreeBSD" | "OpenBSD" | "NetBSD")
+	# make list of all interfaces ignoring lo
+	AVL_IF=`ifconfig -a |
+		grep -v '^[ 	]' |
+		awk -F: '{ print $1 }' |
+		grep -v 'lo' |
+		sed '1,$s/^ //'`
 
-# check tunctl to exist
-LL=`whereis tunctl |
-	awk -F: '{ print $2 }' |
-	grep tunctl |
-	wc -l`
-if test $LL -eq 0
-then
-	echo 'No tunctl program -- please install package uml-utilities'
-fi
+	## echo $AVL_IF
 
-# quit when either not installed
-if test $L -eq 0 -o $LL -eq 0
-then
-	exit 1
-fi
+	# found bridge0 in active interfaces?
+	L=`echo $AVL_IF | grep bridge0 | wc -l`
+	if test $L -ne 0
+	then
+		echo "$0: bridge0 already configured."
+		echo "-- if you configured bridge0 statically don't use this script"
+		echo "-- otherwise if you do not want permanent settings"
+		echo "-- and want bridge0 configured differently reboot first"
+		exit 1
+	fi
 
-# make list of all interfaces ignoring lo
-AVL_IF=`ip link show |
-	grep '^[0-9]' |
-	awk -F: '{ print $2 }' |
-	grep -v 'lo' |
-	sed '1,$s/^ //'`
+	;;
+ "Linux")
+	# check brctl to exist
+	L=`whereis brctl |
+		awk -F: '{ print $2 }' |
+		grep brctl |
+		wc -l`
+	if test $L -eq 0
+	then
+		echo 'No brctl program -- please install package bridge-utils'
+	fi
 
-# found br0 in active interfaces?
-L=`echo $AVL_IF | grep br0 | wc -l`
-if test $L -ne 0
-then
-	echo "$0: br0 already configured."
-	echo "-- if you configured br0 statically don't use this script"
-	echo "-- otherwise if you do not want permanent settings"
-	echo "-- and want br0 configured differently reboot first"
-	exit 1
-fi
+	# check tunctl to exist
+	LL=`whereis tunctl |
+		awk -F: '{ print $2 }' |
+		grep tunctl |
+		wc -l`
+	if test $LL -eq 0
+	then
+		echo 'No tunctl program -- please install package uml-utilities'
+	fi
 
-# let user chose the interface he/she wants to usx
+	# quit when either not installed
+	if test $L -eq 0 -o $LL -eq 0
+	then
+		exit 1
+	fi
+
+	# make list of all interfaces ignoring lo
+	AVL_IF=`ip link show |
+		grep '^[0-9]' |
+		awk -F: '{ print $2 }' |
+		grep -v 'lo' |
+		sed '1,$s/^ //'`
+
+	# found br0 in active interfaces?
+	L=`echo $AVL_IF | grep br0 | wc -l`
+	if test $L -ne 0
+	then
+		echo "$0: br0 already configured."
+		echo "-- if you configured br0 statically don't use this script"
+		echo "-- otherwise if you do not want permanent settings"
+		echo "-- and want br0 configured differently reboot first"
+		exit 1
+	fi
+
+	;;
+esac
+
+# let user chose the interface he/she wants to use
 echo "  Available networkinterfaces"
 N=0
 for I in $AVL_IF
 do
 	N=`expr $N + 1`
-	L=`ip addr show $I |
+	case $OS in
+	 "FreeBSD" | "OpenBSD" | "NetBSD")
+		IPCMD="ifconfig $I "
+		;;
+	 "Linux")
+		IPCMD="ip addr show $I "
+		;;
+	esac
+
+	L=`$IPCMD |
 		grep 'inet' |
 		grep -v 'inet6' |
 		wc -l`
@@ -85,7 +131,7 @@ do
 	then
 		M="not configured"
 	else
-		M=`ip addr show $I |
+		M=`$IPCMD |
 			grep 'inet' |
 			grep -v 'inet6' |
 			awk '{ print $2 }' `
@@ -144,7 +190,16 @@ echo "Interface to use for SIMH......... " $ACT_IF
 
 if test "x$IPNR" = "x"
 then
-	L=`ip addr show $ACT_IF |
+	case $OS in
+	 "FreeBSD" | "OpenBSD" | "NetBSD")
+		IPCMD="ifconfig $ACT_IF "
+		;;
+	 "Linux")
+		IPCMD="ip addr show dev $ACT_IF "
+		;;
+	esac
+
+	L=`$IPCMD |
 		grep inet |
 		grep -v inet6 |
 		wc -l`
@@ -152,7 +207,7 @@ then
 	then
 		IPNR="not configured"
 	else
-		IPNR=`ip addr show dev $ACT_IF |
+		IPNR=`$IPCMD |
 			grep inet |
 			grep -v inet6 |
 			awk '{ print $2 }' `
@@ -162,21 +217,42 @@ echo "IPnumber on this interface........ " $IPNR
 
 if test "x$IPBRO" = "x"
 then
-	IPBRO=`ip addr show dev $ACT_IF |
+	case $OS in
+	 "FreeBSD" | "OpenBSD" | "NetBSD")
+		IPCMD="ifconfig $ACT_IF "
+		SEDBRO='1s/^.*broadcast //'
+		;;
+	 "Linux")
+		IPCMD="ip addr show dev $ACT_IF "
+		SEDBRO='1s/^.*brd //'
+		;;
+	esac
+
+	IPBRO=`$IPCMD |
 		grep inet |
 		grep -v inet6 |
-		sed '1s/^.*brd //' |
+		sed "$SEDBRO" |
 		sed '1s/[ 	].*$//'`
 fi
 echo "IP Broadcast on this interface.... " $IPBRO
 
 if test "x$DEFRT" = "x"
 then
-	DEFRT=`netstat -rn |
-		grep $ACT_IF |
-		grep '^0\.' |
-		uniq |
-		awk '{ print $2 }'` 
+	case $OS in
+	 "FreeBSD" | "OpenBSD" | "NetBSD")
+		DEFRT=`netstat -rn |
+			grep $ACT_IF |
+			grep 'default' |
+			awk '{ print $2 }'` 
+		;;
+	 "Linux")
+		DEFRT=`netstat -rn |
+			grep $ACT_IF |
+			grep '^0\.' |
+			uniq |
+			awk '{ print $2 }'` 
+		;;
+	esac
 fi
 if test "x$DEFRT" = "x"
 then
@@ -185,15 +261,18 @@ else
 	echo "Default Route set to Gateway...... " $DEFRT
 fi
 
-if test "x$IPFWD" = "x"
+if test "x$OS" = "xLinux"
 then
-	IPFWD=`cat /proc/sys/net/ipv4/ip_forward`
-fi
-if test $IPFWD -eq 1
-then
-	echo "IP forwarding is active........... " YES
-else
-	echo "IP forwarding is active........... " NO
+	if test "x$IPFWD" = "x"
+	then
+		IPFWD=`cat /proc/sys/net/ipv4/ip_forward`
+	fi
+	if test $IPFWD -eq 1
+	then
+		echo "IP forwarding is active........... " YES
+	else
+		echo "IP forwarding is active........... " NO
+	fi
 fi
 
 # nr of taps the user wants or 1 for default
@@ -207,12 +286,19 @@ echo "Number of taps to create.......... " $NrTaps
 # the user who needs access to the tap
 if test "x$SimhUser" = "x"
 then
-	if test "x${SUDO_USER}" != "x"
-	then
-		SimhUser=${SUDO_USER}
-	else
-		SimhUser=${USER}
-	fi
+	case $OS in
+	 "FreeBSD" | "OpenBSD" | "NetBSD")
+		SimhUser="root"
+		;;
+	 "Linux")
+		if test "x${SUDO_USER}" != "x"
+		then
+			SimhUser=${SUDO_USER}
+		else
+			SimhUser=${USER}
+		fi
+		;;
+	esac
 fi
 echo "User who runs SIMH on the taps.... " $SimhUser
 
@@ -246,7 +332,6 @@ EOF
 	fi
 fi
 
-
 JOBFILE="/tmp/SNjob.$$"
 TMPFILE="/tmp/SNtmp.$$"
 
@@ -270,80 +355,222 @@ fi
 
 EOF
 
-echo "CMD=\"ip link set ${ACT_IF} down\"" >> $JOBFILE
-cat $TMPFILE >> $JOBFILE
-
-echo "CMD=\"brctl addbr br0\"" >> $JOBFILE
-## echo "CMD=\"ip tuntap add mode tun name br0\"" >> $JOBFILE
-cat $TMPFILE >> $JOBFILE
-
-N=0
-while test $N -lt $NrTaps
-do
-	echo "CMD=\"tunctl -t tap${N} -u ${SimhUser}\"" >> $JOBFILE
-	## echo "CMD=\"ip tuntap add mode tap name tap${N} user ${SimhUser} dev br0\"" >> $JOBFILE
+case $OS in
+ "Linux")
+	echo "CMD=\"brctl addbr br0\"" >> $JOBFILE
 	cat $TMPFILE >> $JOBFILE
 
-	N=`expr $N + 1`
-done
+	N=0
+	while test $N -lt $NrTaps
+	do
+		echo "CMD=\"tunctl -t tap${N} -u ${SimhUser}\"" >> $JOBFILE
+		cat $TMPFILE >> $JOBFILE
 
-echo "CMD=\"brctl addif br0 ${ACT_IF}\"" >> $JOBFILE
-cat $TMPFILE >> $JOBFILE
+		N=`expr $N + 1`
+	done
 
-echo "CMD=\"brctl setfd br0 0\"" >> $JOBFILE
-cat $TMPFILE >> $JOBFILE
-
-if ! test "$IPNR" = "not configured"
-then
-	echo "CMD=\"ip addr del ${IPNR} dev ${ACT_IF}\"" >> $JOBFILE
-	cat $TMPFILE >> $JOBFILE
-fi
-
-echo "CMD=\"ip link set ${ACT_IF} up\"" >> $JOBFILE
-cat $TMPFILE >> $JOBFILE
-
-if ! test "$IPNR" = "not configured"
-then
-	echo "CMD=\"ip addr add ${IPNR} dev br0\"" >> $JOBFILE
-	cat $TMPFILE >> $JOBFILE
-fi
-
-echo "CMD=\"ip link set br0 up\"" >> $JOBFILE
-cat $TMPFILE >> $JOBFILE
-
-if test ! "x$DEFRT" = "x"
-then
-	## echo "CMD=\"ip route del default via ${DEFRT} dev ${ACT_IF}\"" >> $JOBFILE
-	## cat $TMPFILE >> $JOBFILE
-
-	echo "CMD=\"ip route add default via ${DEFRT} dev br0\"" >> $JOBFILE
-	cat $TMPFILE >> $JOBFILE
-fi
-
-ipfwd=`cat /proc/sys/net/ipv4/ip_forward`
-if test $IPFWD -ne $ipfwd
-then
-	echo "CMD=\"echo ${IPFWD} > /proc/sys/net/ipv4/ip_forward\"" >> $JOBFILE
-	cat $TMPFILE >> $JOBFILE
-fi
-
-N=0
-while test $N -lt $NrTaps
-do
-	echo "CMD=\"brctl addif br0 tap${N}\"" >> $JOBFILE
+	echo "CMD=\"brctl addif br0 ${ACT_IF}\"" >> $JOBFILE
 	cat $TMPFILE >> $JOBFILE
 
-	echo "CMD=\"ip link set tap${N} up\"" >> $JOBFILE
+	echo "CMD=\"brctl setfd br0 0\"" >> $JOBFILE
 	cat $TMPFILE >> $JOBFILE
 
-	N=`expr $N + 1`
-done
+	echo "CMD=\"ip link set ${ACT_IF} down\"" >> $JOBFILE
+	cat $TMPFILE >> $JOBFILE
 
-cat - >> $JOBFILE <<EOF
+	if ! test "$IPNR" = "not configured"
+	then
+		echo "CMD=\"ip addr add ${IPNR} dev br0\"" >> $JOBFILE
+		cat $TMPFILE >> $JOBFILE
+	fi
+
+	if ! test "$IPNR" = "not configured"
+	then
+		## if test ! "x$DEFRT" = "x"
+		## then
+			## echo "CMD=\"ip route del default via ${DEFRT} dev ${ACT_IF}\"" >> $JOBFILE
+			## cat $TMPFILE >> $JOBFILE
+		## fi
+		echo "CMD=\"ip addr del ${IPNR} dev ${ACT_IF}\"" >> $JOBFILE
+		cat $TMPFILE >> $JOBFILE
+	fi
+
+	echo "CMD=\"ip link set ${ACT_IF} up\"" >> $JOBFILE
+	cat $TMPFILE >> $JOBFILE
+
+	echo "CMD=\"ip link set br0 up\"" >> $JOBFILE
+	cat $TMPFILE >> $JOBFILE
+
+
+	if test ! "x$DEFRT" = "x"
+	then
+		echo "CMD=\"ip route add default via ${DEFRT} dev br0\"" >> $JOBFILE
+		cat $TMPFILE >> $JOBFILE
+	fi
+
+	ipfwd=`cat /proc/sys/net/ipv4/ip_forward`
+	if test $IPFWD -ne $ipfwd
+	then
+		echo "CMD=\"echo ${IPFWD} > /proc/sys/net/ipv4/ip_forward\"" >> $JOBFILE
+		cat $TMPFILE >> $JOBFILE
+	fi
+
+	N=0
+	while test $N -lt $NrTaps
+	do
+		echo "CMD=\"brctl addif br0 tap${N}\"" >> $JOBFILE
+		cat $TMPFILE >> $JOBFILE
+
+		echo "CMD=\"ip link set tap${N} up\"" >> $JOBFILE
+		cat $TMPFILE >> $JOBFILE
+
+		N=`expr $N + 1`
+	done
+	BRIDGE="br0"
+	EXAMPLE="tap:tap0"
+
+	;;
+  "FreeBSD")
+	N=0
+	while test $N -lt $NrTaps
+	do
+		echo "CMD=\"ifconfig tap${N} create\"" >> $JOBFILE
+		cat $TMPFILE >> $JOBFILE
+
+		echo "CMD=\"ifconfig tap${N} up\"" >> $JOBFILE
+		cat $TMPFILE >> $JOBFILE
+
+		N=`expr $N + 1`
+	done
+
+	echo "CMD=\"sysctl net.link.tap.up_on_open=1\"" >> $JOBFILE
+	cat $TMPFILE >> $JOBFILE
+
+	echo "CMD=\"ifconfig bridge0 create\"" >> $JOBFILE
+	cat $TMPFILE >> $JOBFILE
+
+	case $NrTaps in
+	  1 )
+		echo "CMD=\"ifconfig bridge0 addm ${ACT_IF} addm tap0\"" >> $JOBFILE
+		;;
+	  2 )
+		echo "CMD=\"ifconfig bridge0 addm ${ACT_IF} addm tap0 addm tap1\"" >> $JOBFILE
+		;;
+	  3 )
+		echo "CMD=\"ifconfig bridge0 addm ${ACT_IF} addm tap0 addm tap1 addm tap2\"" >> $JOBFILE
+		;;
+	  4 )
+		echo "CMD=\"ifconfig bridge0 addm ${ACT_IF} addm tap0 addm tap1 addm tap2 addm tap3\"" >> $JOBFILE
+		;;
+	  * )
+		echo "Sorry too many taps..."
+		exit
+	esac
+	cat $TMPFILE >> $JOBFILE
+
+	echo "CMD=\"ifconfig bridge0 up\"" >> $JOBFILE
+	cat $TMPFILE >> $JOBFILE
+	BRIDGE="bridge0"
+	EXAMPLE="tap:tap0"
+	;;
+  "OpenBSD")
+	N=0
+	while test $N -lt $NrTaps
+	do
+		echo "CMD=\"ifconfig tap${N} create\"" >> $JOBFILE
+		cat $TMPFILE >> $JOBFILE
+
+		echo "CMD=\"ifconfig tap${N} up\"" >> $JOBFILE
+		cat $TMPFILE >> $JOBFILE
+
+		N=`expr $N + 1`
+	done
+
+	echo "CMD=\"ifconfig bridge0 create\"" >> $JOBFILE
+	cat $TMPFILE >> $JOBFILE
+
+	echo "CMD=\"ifconfig bridge0 fwddelay 4\"" >> $JOBFILE
+	cat $TMPFILE >> $JOBFILE
+
+	case $NrTaps in
+	  1 )
+		echo "CMD=\"ifconfig bridge0 add ${ACT_IF} add tap0\"" >> $JOBFILE
+		;;
+	  2 )
+		echo "CMD=\"ifconfig bridge0 add ${ACT_IF} add tap0 add tap1\"" >> $JOBFILE
+		;;
+	  3 )
+		echo "CMD=\"ifconfig bridge0 add ${ACT_IF} add tap0 add tap1 add tap2\"" >> $JOBFILE
+		;;
+	  4 )
+		echo "CMD=\"ifconfig bridge0 add ${ACT_IF} add tap0 add tap1 add tap2 add tap3\"" >> $JOBFILE
+		;;
+	  * )
+		echo "Sorry too many taps..."
+		exit
+	esac
+	cat $TMPFILE >> $JOBFILE
+
+	echo "CMD=\"ifconfig bridge0 up\"" >> $JOBFILE
+	cat $TMPFILE >> $JOBFILE
+	BRIDGE="bridge0"
+	EXAMPLE="tap:tap0"
+	;;
+  "NetBSD")
+	N=0
+	while test $N -lt $NrTaps
+	do
+		echo "CMD=\"ifconfig tap${N} create\"" >> $JOBFILE
+		cat $TMPFILE >> $JOBFILE
+
+		echo "CMD=\"ifconfig tap${N} up\"" >> $JOBFILE
+		cat $TMPFILE >> $JOBFILE
+
+		N=`expr $N + 1`
+	done
+
+	echo "CMD=\"ifconfig bridge0 create\"" >> $JOBFILE
+	cat $TMPFILE >> $JOBFILE
+
+	echo "CMD=\"brconfig bridge0 fwddelay 1\"" >> $JOBFILE
+	cat $TMPFILE >> $JOBFILE
+
+	case $NrTaps in
+	  1 )
+		echo "CMD=\"brconfig bridge0 add ${ACT_IF} add tap0\"" >> $JOBFILE
+		;;
+	  2 )
+		echo "CMD=\"brconfig bridge0 add ${ACT_IF} add tap0 add tap1\"" >> $JOBFILE
+		;;
+	  3 )
+		echo "CMD=\"brconfig bridge0 add ${ACT_IF} add tap0 add tap1 add tap2\"" >> $JOBFILE
+		;;
+	  4 )
+		echo "CMD=\"brconfig bridge0 add ${ACT_IF} add tap0 add tap1 add tap2 add tap3\"" >> $JOBFILE
+		;;
+	  * )
+		echo "Sorry too many taps..."
+		exit
+	esac
+	cat $TMPFILE >> $JOBFILE
+
+	echo "CMD=\"brconfig bridge0 up\"" >> $JOBFILE
+	cat $TMPFILE >> $JOBFILE
+
+	echo "CMD=\"ifconfig bridge0 create\"" >> $JOBFILE
+	echo "CMD=\"brconfig bridge0 fwddelay 1\"" >> $JOBFILE
+	cat $TMPFILE >> $JOBFILE
+
+	BRIDGE="bridge0"
+	EXAMPLE="tap:tap0"
+	;;
+esac
+
+	cat - >> $JOBFILE <<EOF
 echo ""
 echo 'Network reconfigured for use by SIMH simulators'
-echo "Bridge br0 with access tap0 wired into interface ${ACT_IF}"
-echo 'Configure tap:tap0 for your 1st SIMH host'
+echo "Bridge ${BRIDGE} with accesspoint wired into interface ${ACT_IF}"
+echo "Attach ethernet interface to ${EXAMPLE} in SIMH ini file."
 echo ""
 echo 'Use unique IPnrs on your SIMH hosts within the'
 echo 'same network and set a default route if needed'
@@ -366,14 +593,14 @@ then
 	read ANSWER
 	if test "x$ANSWER" = "xn"
 	then
-		echo "-- To execute: bash $JOBFILE"
+		echo "-- To execute: sh $JOBFILE"
 		exit 0
 	fi
-	bash ${JOBFILE}
+	sh ${JOBFILE}
 else
 	echo ""
 	echo "-- Executing $JOBFILE requires root permission"
-	echo "-- Either use sudo or su to execute: bash $JOBFILE"
+	echo "-- Either use sudo or su to execute: sh $JOBFILE"
 fi
 
 rm -f $TMPFILE

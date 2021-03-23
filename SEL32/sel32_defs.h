@@ -136,7 +136,7 @@
 #define NUM_DEVS_LPR    1       /* 1 IOP Line printer */
 #define NUM_UNITS_LPR   1       /* 1 IOP Line printer device */
 #define NUM_DEVS_ETHER  1       /* 1 Ethernet controller */
-#define NUM_UNITS_ETHER 10      /* 10 Ethernet devices */
+#define NUM_UNITS_ETHER 16      /* 16 Ethernet devices */
 
 extern DEVICE cpu_dev;      /* cpu device */
 extern UNIT cpu_unit;       /* the cpu unit */
