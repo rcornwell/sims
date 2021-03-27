@@ -386,7 +386,15 @@ t_bool build_dev_tab (void);
    cpu_mod      CPU modifier list
 */
 
-UNIT cpu_unit[] = { { UDATA (&rtc_srv, UNIT_IDLE|UNIT_FIX|UNIT_BINK|UNIT_TWOSEG, 256 * 1024) },
+#if KL
+#define DEFMEM 4096
+#elif KS
+#define DEFMEM 512
+#else
+#define DEFMEM 256
+#endif
+
+UNIT cpu_unit[] = { { UDATA (&rtc_srv, UNIT_IDLE|UNIT_FIX|UNIT_BINK|UNIT_TWOSEG, DEFMEM * 1024) },
 #if ITS
                     { UDATA (&qua_srv, UNIT_IDLE|UNIT_DIS, 0) }
 #endif
@@ -4880,7 +4888,7 @@ st_pi:
 
     /* Check if possible idle loop */
     if (sim_idle_enab &&
-          (((FLAGS & USER) != 0 && PC < 020 && AB < 020 && (IR & 0760) == 0340) ||
+          (((FLAGS & USER) != 0 && PC < 020 && AB < 020 && (IR & 0740) == 0340) ||
            (uuo_cycle && (IR & 0740) == 0 && IA == 041))) {
        sim_idle (TMR_RTC, FALSE);
     }
@@ -9694,7 +9702,7 @@ test_op:
                            case 013:            /* WRCSTM */   /* ITS LDBR4 */
 #if KS_ITS
                                  if (QITS) {
-                                    dbr3 = AR;
+                                    dbr4 = AR;
                                     sim_debug(DEBUG_CONI, &cpu_dev, "WRSPD %012llo\n", dbr4);
                                     break;
                                  }
