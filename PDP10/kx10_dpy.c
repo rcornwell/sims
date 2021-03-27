@@ -357,7 +357,7 @@ static void dpy_joy_motion(int which, int axis, int value)
 static void dpy_joy_button(int which, int button, int state)
 {
   if (which < JOY_MAX_UNITS && button < JOY_MAX_BUTTONS) {
-    joy_buttons[which * JOY_MAX_UNITS + button] = state;
+    joy_buttons[which * JOY_MAX_BUTTONS + button] = state;
   }
 }
 
