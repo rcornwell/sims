@@ -436,10 +436,6 @@
 					>
 				</File>
 				<File
-					RelativePath="..\display\iii.c"
-					>
-				</File>
-				<File
 					RelativePath="..\display\sim_ws.c"
 					>
 				</File>
@@ -621,10 +617,6 @@
 			Name="Header Files"
 			Filter="h;hpp;hxx;hm;inl;inc"
 			>
-			<File
-				RelativePath="..\display\iii.h"
-				>
-			</File>
 			<File
 				RelativePath="..\PDP10\kx10_defs.h"
 				>

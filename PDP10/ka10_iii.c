@@ -32,7 +32,6 @@
 
 #if NUM_DEVS_III > 0
 #include "display/display.h"
-#include "display/iii.h"
 
 #define III_DEVNUM        0430
 
@@ -398,7 +397,7 @@ iii_svc (UNIT *uptr)
      float     ch_sz;
 
      if (uptr->CYCLE > 20) {
-         iii_cycle(300, 0);
+         display_age(300, 0);
          uptr->CYCLE = 0;
      } else {
          uptr->CYCLE++;
@@ -637,7 +636,7 @@ t_stat iii_reset (DEVICE *dptr)
     } else {
         display_reset();
         dptr->units[0].POS = 0;
-        iii_init(dptr, 1);
+        display_init(DIS_III, 1, dptr);
     }
     return SCPE_OK;
 }
@@ -649,7 +648,7 @@ draw_point(int x, int y, int b, UNIT *uptr)
 {
    if (x < -512 || x > 512 || y < -501 || y > 522)
        uptr->STATUS |= WRP_FBIT;
-   iii_point(x, y, b);
+   display_point(x + 512, y + 501, b, 0);
 }
 
 /* Draw a line between two points */
@@ -660,7 +659,7 @@ draw_line(int x1, int y1, int x2, int y2, int b, UNIT *uptr)
        uptr->STATUS |= WRP_FBIT;
     if (x2 < -512 || x2 > 512 || y2 < -501 || y2 > 522)
        uptr->STATUS |= WRP_FBIT;
-    iii_draw_line(x1, y1, x2, y2, b);
+    display_line(x1 + 512, y1 + 501, x2 + 512, y2 + 501, b);
 }
 
 t_stat iii_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
