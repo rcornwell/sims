@@ -153,12 +153,12 @@
 #define CLR_BUF(u)     u->hwmark =  0xFFFFFFFF
 
 /* forward definitions */
-uint16      mt_preio(UNIT *uptr, uint16 chan);
-uint16      mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) ;
+t_stat      mt_preio(UNIT *uptr, uint16 chan);
+t_stat      mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) ;
 t_stat      mt_srv(UNIT *uptr);
 t_stat      mt_boot(int32 unitnum, DEVICE *dptr);
 void        mt_ini(UNIT *uptr, t_bool);
-uint16      mt_rschnlio(UNIT *uptr);
+t_stat      mt_rschnlio(UNIT *uptr);
 t_stat      mt_reset(DEVICE *dptr);
 t_stat      mt_attach(UNIT *uptr, CONST char *);
 t_stat      mt_detach(UNIT *uptr);
@@ -298,14 +298,14 @@ UNIT                mta_unit[] = {
 CHANP           mta_chp[NUM_UNITS_MT] = {0};
 
 DIB             mta_dib = {
-    mt_preio,       /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
-    mt_startcmd,    /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O */
-    NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O */
-    NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
-    NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
-    mt_rschnlio,    /* uint16 (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
-    NULL,           /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
+    mt_preio,       /* t_stat (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
+    mt_startcmd,    /* t_stat (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
+    NULL,           /* t_stat (*halt_io)(UNIT *uptr) */         /* Halt I/O */
+    NULL,           /* t_stat (*stop_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* t_stat (*test_io)(UNIT *uptr) */         /* Test I/O */
+    NULL,           /* t_stat (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
+    mt_rschnlio,    /* t_stat (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
+    NULL,           /* t_stat (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     mt_ini,         /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     mta_unit,       /* UNIT* units */                           /* Pointer to units structure */
     mta_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
@@ -346,14 +346,14 @@ UNIT            mtb_unit[] = {
 
 /* device information block */
 DIB             mtb_dib = {
-    mt_preio,       /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
-    mt_startcmd,    /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O */
-    NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O */
-    NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
-    NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
-    mt_rschnlio,    /* uint16 (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
-    NULL,           /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
+    mt_preio,       /* t_stat (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
+    mt_startcmd,    /* t_stat (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
+    NULL,           /* t_stat (*halt_io)(UNIT *uptr) */         /* Halt I/O */
+    NULL,           /* t_stat (*stop_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* t_stat (*test_io)(UNIT *uptr) */         /* Test I/O */
+    NULL,           /* t_stat (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
+    mt_rschnlio,    /* t_stat (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
+    NULL,           /* t_stat (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     mt_ini,         /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     mtb_unit,       /* UNIT* units */                           /* Pointer to units structure */
     mtb_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
@@ -377,7 +377,7 @@ DEVICE          mtb_dev = {
 #endif
 
 /* start a tape operation */
-uint16 mt_preio(UNIT *uptr, uint16 chan) {
+t_stat mt_preio(UNIT *uptr, uint16 chan) {
     DEVICE      *dptr = get_dev(uptr);
     int         unit = (uptr - dptr->units);
     uint16      chsa = GET_UADDR(uptr->CMD);
@@ -403,7 +403,7 @@ uint16 mt_preio(UNIT *uptr, uint16 chan) {
 }
 
 /* start an I/O operation */
-uint16 mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
+t_stat mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 {
     uint16      chsa = GET_UADDR(uptr->CMD);
     DEVICE      *dptr = get_dev(uptr);
@@ -1172,7 +1172,7 @@ void mt_ini(UNIT *uptr, t_bool f)
 }
 
 /* handle rschnlio cmds for tape */
-uint16  mt_rschnlio(UNIT *uptr) {
+t_stat  mt_rschnlio(UNIT *uptr) {
     DEVICE *dptr = get_dev(uptr);
     uint16  chsa = GET_UADDR(uptr->CMD);
     int     cmd = uptr->CMD & MT_CMDMSK;

@@ -252,21 +252,21 @@ extern  int32   IOCLQ_Num(IOCLQ *qptr);
 
 typedef struct dib {
         /* Pre start I/O operation */
-        uint16      (*pre_io)(UNIT *uptr, uint16 chan);
+        t_stat      (*pre_io)(UNIT *uptr, uint16 chan);
         /* Start a channel command SIO */
-        uint16      (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd);
+        t_stat      (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd);
         /* Halt I/O HIO */
-        uint16      (*halt_io)(UNIT *uptr); /* Halt I/O */
+        t_stat      (*halt_io)(UNIT *uptr); /* Halt I/O */
         /* Test I/O STOPIO */
-        uint16      (*stop_io)(UNIT *uptr); /* Stop I/O */
+        t_stat      (*stop_io)(UNIT *uptr); /* Stop I/O */
         /* Test I/O TESTIO */
-        uint16      (*test_io)(UNIT *uptr); /* Test I/O */
+        t_stat      (*test_io)(UNIT *uptr); /* Test I/O */
         /* Reset Controller RSCTL */
-        uint16      (*rsctl_io)(UNIT *uptr);    /* Reset Controller */
+        t_stat      (*rsctl_io)(UNIT *uptr);    /* Reset Controller */
         /* Reset Controller RSCHNL */
-        uint16      (*rschnl_io)(UNIT *uptr);   /* Reset Channel */
+        t_stat      (*rschnl_io)(UNIT *uptr);   /* Reset Channel */
         /* Post I/O processing  */
-        uint16      (*iocl_io)(CHANP *chp, int32 tic_ok);   /* IOCL processing */
+        t_stat      (*iocl_io)(CHANP *chp, int32 tic_ok);   /* IOCL processing */
         /* Controller init */
         void        (*dev_ini)(UNIT *, t_bool); /* init function */
         UNIT        *units;             /* Pointer to units structure */

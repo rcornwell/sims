@@ -283,13 +283,13 @@ scsi_type[] =
     {NULL, 0}
 };
 
-uint16  scsi_preio(UNIT *uptr, uint16 chan);
-uint16  scsi_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
-uint16  scsi_haltio(UNIT *uptr);
+t_stat  scsi_preio(UNIT *uptr, uint16 chan);
+t_stat  scsi_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
+t_stat  scsi_haltio(UNIT *uptr);
 t_stat  scsi_srv(UNIT *);
 t_stat  scsi_boot(int32 unitnum, DEVICE *);
 void    scsi_ini(UNIT *, t_bool);
-uint16  scsi_rschnlio(UNIT *uptr);
+t_stat  scsi_rschnlio(UNIT *uptr);
 t_stat  scsi_reset(DEVICE *);
 t_stat  scsi_attach(UNIT *, CONST char *);
 t_stat  scsi_detach(UNIT *);
@@ -321,14 +321,14 @@ UNIT    sba_unit[] = {
 };
 
 DIB     sba_dib = {
-    scsi_preio,     /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
-    scsi_startcmd,  /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O */
-    NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O */
-    NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
-    NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
-    scsi_rschnlio,  /* uint16 (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
-    NULL,           /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
+    scsi_preio,     /* t_stat (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
+    scsi_startcmd,  /* t_stat (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
+    NULL,           /* t_stat (*halt_io)(UNIT *uptr) */         /* Halt I/O */
+    NULL,           /* t_stat (*stop_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* t_stat (*test_io)(UNIT *uptr) */         /* Test I/O */
+    NULL,           /* t_stat (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
+    scsi_rschnlio,  /* t_stat (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
+    NULL,           /* t_stat (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     scsi_ini,       /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     sba_unit,       /* UNIT* units */                           /* Pointer to units structure */
     sba_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
@@ -365,14 +365,14 @@ UNIT    sbb_unit[] = {
 //scsi_ini, sdb_unit, sdb_chp, NUM_UNITS_SCSI, 0x0f, 0x0c00, 0, 0, 0};
 
 DIB     sbb_dib = {
-    scsi_preio,     /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
-    scsi_startcmd,  /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O */
-    NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O */
-    NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
-    NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
-    scsi_rschnlio,  /* uint16 (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
-    NULL,           /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
+    scsi_preio,     /* t_stat (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
+    scsi_startcmd,  /* t_stat (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
+    NULL,           /* t_stat (*halt_io)(UNIT *uptr) */         /* Halt I/O */
+    NULL,           /* t_stat (*stop_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* t_stat (*test_io)(UNIT *uptr) */         /* Test I/O */
+    NULL,           /* t_stat (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
+    scsi_rschnlio,  /* t_stat (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
+    NULL,           /* t_stat (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     scsi_ini,       /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     sbb_unit,       /* UNIT* units */                           /* Pointer to units structure */
     sbb_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
@@ -408,7 +408,7 @@ uint32 scsisec2star(uint32 daddr, int type)
 }
 
 /* start a disk operation */
-uint16 scsi_preio(UNIT *uptr, uint16 chan)
+t_stat scsi_preio(UNIT *uptr, uint16 chan)
 {
     DEVICE      *dptr = get_dev(uptr);
     uint16      chsa = GET_UADDR(uptr->CMD);
@@ -422,7 +422,7 @@ uint16 scsi_preio(UNIT *uptr, uint16 chan)
     return 0;                                   /* good to go */
 }
 
-uint16 scsi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
+t_stat scsi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 {
     uint16      chsa = GET_UADDR(uptr->CMD);
     DEVICE      *dptr = get_dev(uptr);
@@ -1326,7 +1326,7 @@ void scsi_ini(UNIT *uptr, t_bool f)
 }
 
 /* handle rschnlio cmds for scsi */
-uint16  scsi_rschnlio(UNIT *uptr) {
+t_stat  scsi_rschnlio(UNIT *uptr) {
     DEVICE  *dptr = get_dev(uptr);
     uint16  chsa = GET_UADDR(uptr->CMD);
     int     cmd = uptr->CMD & DSK_CMDMSK;

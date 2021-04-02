@@ -204,7 +204,7 @@ struct ec_device {
     int               amc;                     /* Recieve all multicast packets */
     uint32            rx_count;                /* Packets received */
     uint32            tx_count;                /* Packets sent */
-    uint16            drop_cnt;                /* Packets dropped */
+    t_stat            drop_cnt;                /* Packets dropped */
     int               r_pkt;                   /* Packet pending */
     int               poll;                    /* Need to poll receiver */
     int               lp_rdy;                  /* Loop back packet ready */
@@ -224,17 +224,17 @@ static CONST ETH_MAC broadcast_ethaddr = {0xff,0xff,0xff,0xff,0xff,0xff};
 CHANP       ec_chp[NUM_UNITS_ETHER] = {0};
 
 /* forward definitions */
-uint16      ec_preio(UNIT *uptr, uint16 chan);
-uint16      ec_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
+t_stat      ec_preio(UNIT *uptr, uint16 chan);
+t_stat      ec_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
 t_stat      ec_rec_srv(UNIT *uptr);
 t_stat      ec_srv(UNIT *uptr);
-uint16      ec_haltio(UNIT *uptr);
-uint16      ec_iocl(CHANP *chp, int32 tic_ok);
+t_stat      ec_haltio(UNIT *uptr);
+t_stat      ec_iocl(CHANP *chp, int32 tic_ok);
 void        ec_packet_debug(struct ec_device *ec, const char *action, ETH_PACK *packet);
 t_stat      ec_reset (DEVICE *dptr);
 void        ec_ini(UNIT *, t_bool);
-uint16      ec_rsctrl(UNIT *uptr);
-uint16      ec_rschnlio(UNIT *uptr);
+t_stat      ec_rsctrl(UNIT *uptr);
+t_stat      ec_rschnlio(UNIT *uptr);
 t_stat      ec_show_mac (FILE* st, UNIT* uptr, int32 val, CONST void* desc);
 t_stat      ec_set_mac (UNIT* uptr, int32 val, CONST char* cptr, void* desc);
 t_stat      ec_show_mode (FILE* st, UNIT* uptr, int32 val, CONST void* desc);
@@ -278,14 +278,14 @@ UNIT ec_unit[] = {
 };
 
 DIB             ec_dib = {
-    ec_preio,       /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
-    ec_startcmd,    /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    ec_haltio,      /* uint16 (*halt_io)(UNIT *uptr) */     /* Halt I/O */
-    NULL,           /* uint16 (*stop_io)(UNIT *uptr) */     /* Stop I/O */
-    NULL,           /* uint16 (*test_io)(UNIT *uptr) */     /* Test I/O */
-    ec_rsctrl,      /* uint16 (*rsctl_io)(UNIT *uptr) */    /* Reset Controller */
-    ec_rschnlio,    /* uint16 (*rschnl_io)(UNIT *uptr) */   /* Reset Channel */
-    ec_iocl,        /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
+    ec_preio,       /* t_stat (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
+    ec_startcmd,    /* t_stat (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
+    ec_haltio,      /* t_stat (*halt_io)(UNIT *uptr) */     /* Halt I/O */
+    NULL,           /* t_stat (*stop_io)(UNIT *uptr) */     /* Stop I/O */
+    NULL,           /* t_stat (*test_io)(UNIT *uptr) */     /* Test I/O */
+    ec_rsctrl,      /* t_stat (*rsctl_io)(UNIT *uptr) */    /* Reset Controller */
+    ec_rschnlio,    /* t_stat (*rschnl_io)(UNIT *uptr) */   /* Reset Channel */
+    ec_iocl,        /* t_stat (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     ec_ini,         /* void (*dev_ini)(UNIT *uptr) */       /* init function */
     ec_unit,        /* UNIT *units */           /* Pointer to units structure */
     ec_chp,         /* CHANP *chan_prg */       /* Pointer to chan_prg structure */
@@ -342,7 +342,7 @@ DEVICE ec_dev = {
 /* load in the IOCD and process the commands */
 /* return = 0 OK */
 /* return = 1 error, chan_status will have reason */
-uint16  ec_iocl(CHANP *chp, int32 tic_ok)
+t_stat  ec_iocl(CHANP *chp, int32 tic_ok)
 {
     uint32      word1 = 0;
     uint32      word2 = 0;
@@ -664,7 +664,7 @@ loop:
 }
 
 /* start an ethernet operation */
-uint16 ec_preio(UNIT *uptr, uint16 chan) {
+t_stat ec_preio(UNIT *uptr, uint16 chan) {
     DEVICE      *dptr = get_dev(uptr);
     int         unit = (uptr - dptr->units);
     uint16      chsa = GET_UADDR(uptr->CMD);
@@ -683,7 +683,7 @@ uint16 ec_preio(UNIT *uptr, uint16 chan) {
 }
 
 /* Start ethernet command */
-uint16 ec_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
+t_stat ec_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 {
     DEVICE      *dptr = get_dev(uptr);
     uint16      chsa = GET_UADDR(uptr->CMD);
@@ -1350,7 +1350,7 @@ wr_end:
 }
 
 /* Handle haltio transfers for ethernet */
-uint16  ec_haltio(UNIT *uptr) {
+t_stat  ec_haltio(UNIT *uptr) {
     uint16      chsa = GET_UADDR(uptr->CMD);
     DEVICE      *dptr = get_dev(uptr);
     int         cmd = uptr->CMD & EC_CMDMSK;
@@ -1416,7 +1416,7 @@ void ec_ini(UNIT *uptr, t_bool f)
 }
 
 /* handle reset controller cmds for Ethernet */
-uint16      ec_rsctrl(UNIT *uptr) {
+t_stat      ec_rsctrl(UNIT *uptr) {
     DEVICE  *dptr = get_dev(uptr);
     uint16  chsa = GET_UADDR(uptr->CMD);
     int     cmd = uptr->CMD & EC_CMDMSK;
@@ -1434,7 +1434,7 @@ uint16      ec_rsctrl(UNIT *uptr) {
 }
 
 /* handle reset channel cmds for Ethernet */
-uint16  ec_rschnlio(UNIT *uptr) {
+t_stat  ec_rschnlio(UNIT *uptr) {
     DEVICE  *dptr = get_dev(uptr);
     uint16  chsa = GET_UADDR(uptr->CMD);
     int     cmd = uptr->CMD & EC_CMDMSK;

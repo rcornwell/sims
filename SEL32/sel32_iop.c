@@ -38,10 +38,10 @@
 #define UNIT_IOP    UNIT_IDLE | UNIT_DISABLE
 
 /* forward definitions */
-uint16  iop_preio(UNIT *uptr, uint16 chan);
-uint16  iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
+t_stat  iop_preio(UNIT *uptr, uint16 chan);
+t_stat  iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
 void    iop_ini(UNIT *uptr, t_bool f);
-uint16  iop_rschnlio(UNIT *uptr);
+t_stat  iop_rschnlio(UNIT *uptr);
 t_stat  iop_srv(UNIT *uptr);
 t_stat  iop_reset(DEVICE *dptr);
 t_stat  iop_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
@@ -100,14 +100,14 @@ UNIT            iop_unit[] = {
 };
 
 DIB             iop_dib = {
-    iop_preio,      /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/ /* Pre Start I/O */
-    iop_startcmd,   /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command SIO */
-    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O HIO */
-    NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O HIO */
-    NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O TIO */
-    NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
-    iop_rschnlio,   /* uint16 (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
-    NULL,           /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
+    iop_preio,      /* t_stat (*pre_io)(UNIT *uptr, uint16 chan)*/ /* Pre Start I/O */
+    iop_startcmd,   /* t_stat (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command SIO */
+    NULL,           /* t_stat (*halt_io)(UNIT *uptr) */         /* Halt I/O HIO */
+    NULL,           /* t_stat (*stop_io)(UNIT *uptr) */         /* Stop I/O HIO */
+    NULL,           /* t_stat (*test_io)(UNIT *uptr) */         /* Test I/O TIO */
+    NULL,           /* t_stat (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
+    iop_rschnlio,   /* t_stat (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
+    NULL,           /* t_stat (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     iop_ini,        /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     iop_unit,       /* UNIT* units */                           /* Pointer to units structure */
     iop_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
@@ -145,7 +145,7 @@ void iop_ini(UNIT *uptr, t_bool f)
 }
 
 /* handle rschnlio cmds for iop */
-uint16  iop_rschnlio(UNIT *uptr) {
+t_stat  iop_rschnlio(UNIT *uptr) {
     DEVICE  *dptr = get_dev(uptr);
     uint16  chsa = GET_UADDR(uptr->u3);
     int     cmd = uptr->u3 & IOP_MSK;
@@ -157,7 +157,7 @@ uint16  iop_rschnlio(UNIT *uptr) {
 }
 
 /* start an iop operation */
-uint16 iop_preio(UNIT *uptr, uint16 chan) {
+t_stat iop_preio(UNIT *uptr, uint16 chan) {
     DEVICE      *dptr = get_dev(uptr);
     int         unit = (uptr - dptr->units);
     uint16      chsa = GET_UADDR(uptr->u3);
@@ -176,7 +176,7 @@ uint16 iop_preio(UNIT *uptr, uint16 chan) {
 }
 
 /* start an I/O operation */
-uint16 iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
+t_stat iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 {
     sim_debug(DEBUG_CMD, &iop_dev,
         "IOP startcmd %02x controller/device %04x\n",

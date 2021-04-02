@@ -39,10 +39,10 @@
 #define UNIT_MFP    UNIT_IDLE | UNIT_DISABLE
 
 /* forward definitions */
-uint16  mfp_preio(UNIT *uptr, uint16 chan);
-uint16  mfp_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
+t_stat  mfp_preio(UNIT *uptr, uint16 chan);
+t_stat  mfp_startcmd(UNIT *uptr, uint16 chan, uint8 cmd);
 void    mfp_ini(UNIT *uptr, t_bool f);
-uint16  mfp_rschnlio(UNIT *uptr);
+t_stat  mfp_rschnlio(UNIT *uptr);
 t_stat  mfp_srv(UNIT *uptr);
 t_stat  mfp_reset(DEVICE *dptr);
 t_stat  mfp_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
@@ -104,14 +104,14 @@ UNIT            mfp_unit[] = {
 
 //DIB mfp_dib = {NULL, mfp_startcmd, NULL, NULL, NULL, mfp_ini, mfp_unit, mfp_chp, NUM_UNITS_MFP, 0xff, 0x7600,0,0,0};
 DIB             mfp_dib = {
-    mfp_preio,      /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
-    mfp_startcmd,   /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O HIO */
-    NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O HIO */
-    NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O TIO */
-    NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
-    mfp_rschnlio,   /* uint16 (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
-    NULL,           /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
+    mfp_preio,      /* t_stat (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
+    mfp_startcmd,   /* t_stat (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
+    NULL,           /* t_stat (*halt_io)(UNIT *uptr) */         /* Halt I/O HIO */
+    NULL,           /* t_stat (*stop_io)(UNIT *uptr) */         /* Stop I/O HIO */
+    NULL,           /* t_stat (*test_io)(UNIT *uptr) */         /* Test I/O TIO */
+    NULL,           /* t_stat (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
+    mfp_rschnlio,   /* t_stat (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
+    NULL,           /* t_stat (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     mfp_ini,        /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     mfp_unit,       /* UNIT* units */                           /* Pointer to units structure */
     mfp_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
@@ -149,7 +149,7 @@ void mfp_ini(UNIT *uptr, t_bool f)
 }
 
 /* handle rschnlio cmds for disk */
-uint16  mfp_rschnlio(UNIT *uptr) {
+t_stat  mfp_rschnlio(UNIT *uptr) {
     DEVICE  *dptr = get_dev(uptr);
     uint16  chsa = GET_UADDR(uptr->u3);
     int     cmd = uptr->u3 & MFP_MSK;
@@ -161,7 +161,7 @@ uint16  mfp_rschnlio(UNIT *uptr) {
 }
 
 /* start an mfp operation */
-uint16 mfp_preio(UNIT *uptr, uint16 chan) {
+t_stat mfp_preio(UNIT *uptr, uint16 chan) {
     DEVICE      *dptr = get_dev(uptr);
     int         unit = (uptr - dptr->units);
     uint16      chsa = GET_UADDR(uptr->u3);
@@ -180,7 +180,7 @@ uint16 mfp_preio(UNIT *uptr, uint16 chan) {
 }
 
 /* start an I/O operation */
-uint16 mfp_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
+t_stat mfp_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 {
     sim_debug(DEBUG_CMD, &mfp_dev,
         "MFP startcmd %02x controller/device %04x\n",

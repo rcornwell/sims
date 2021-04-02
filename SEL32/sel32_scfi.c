@@ -267,14 +267,14 @@ scfi_type[] =
     {NULL, 0}
 };
 
-uint16  scfi_preio(UNIT *uptr, uint16 chan);
-uint16  scfi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd);
-uint16  scfi_haltio(UNIT *uptr);
-uint16  scfi_iocl(CHANP *chp, int32 tic_ok);
+t_stat  scfi_preio(UNIT *uptr, uint16 chan);
+t_stat  scfi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd);
+t_stat  scfi_haltio(UNIT *uptr);
+t_stat  scfi_iocl(CHANP *chp, int32 tic_ok);
 t_stat  scfi_srv(UNIT *uptr);
 t_stat  scfi_boot(int32 unitnum, DEVICE *dptr);
 void    scfi_ini(UNIT *, t_bool);
-uint16  scfi_rschnlio(UNIT *uptr);
+t_stat  scfi_rschnlio(UNIT *uptr);
 t_stat  scfi_reset(DEVICE *);
 t_stat  scfi_attach(UNIT *, CONST char *);
 t_stat  scfi_detach(UNIT *);
@@ -313,14 +313,14 @@ UNIT            sda_unit[] = {
 };
 
 DIB             sda_dib = {
-    scfi_preio,     /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
-    scfi_startcmd,  /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    scfi_haltio,    /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O */
-    NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O */
-    NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
-    NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
-    scfi_rschnlio,  /* uint16 (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
-    scfi_iocl,      /* uint16 (*iocl_io)(CHANP *chp, int32 tik_ok)) */  /* Process IOCL */
+    scfi_preio,     /* t_stat (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
+    scfi_startcmd,  /* t_stat (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
+    scfi_haltio,    /* t_stat (*halt_io)(UNIT *uptr) */         /* Halt I/O */
+    NULL,           /* t_stat (*stop_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* t_stat (*test_io)(UNIT *uptr) */         /* Test I/O */
+    NULL,           /* t_stat (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
+    scfi_rschnlio,  /* t_stat (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
+    scfi_iocl,      /* t_stat (*iocl_io)(CHANP *chp, int32 tik_ok)) */  /* Process IOCL */
     scfi_ini,       /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     sda_unit,       /* UNIT* units */                           /* Pointer to units structure */
     sda_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
@@ -359,14 +359,14 @@ UNIT            sdb_unit[] = {
 };
 
 DIB             sdb_dib = {
-    scfi_preio,     /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
-    scfi_startcmd,  /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    scfi_haltio,    /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O */
-    NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O */
-    NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
-    NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
-    scfi_rschnlio,  /* uint16 (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
-    scfi_iocl,      /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
+    scfi_preio,     /* t_stat (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
+    scfi_startcmd,  /* t_stat (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
+    scfi_haltio,    /* t_stat (*halt_io)(UNIT *uptr) */         /* Halt I/O */
+    NULL,           /* t_stat (*stop_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* t_stat (*test_io)(UNIT *uptr) */         /* Test I/O */
+    NULL,           /* t_stat (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
+    scfi_rschnlio,  /* t_stat (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
+    scfi_iocl,      /* t_stat (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     scfi_ini,       /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     sdb_unit,       /* UNIT* units */                           /* Pointer to units structure */
     sdb_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
@@ -402,7 +402,7 @@ uint32 scfisec2star(uint32 daddr, int type)
 }
 
 /* start a disk operation */
-uint16 scfi_preio(UNIT *uptr, uint16 chan)
+t_stat scfi_preio(UNIT *uptr, uint16 chan)
 {
     DEVICE      *dptr = get_dev(uptr);
     uint16      chsa = GET_UADDR(uptr->CMD);
@@ -422,7 +422,7 @@ uint16 scfi_preio(UNIT *uptr, uint16 chan)
 /* load in the IOCD and process the commands */
 /* return = 0 OK */
 /* return = 1 error, chan_status will have reason */
-uint16  scfi_iocl(CHANP *chp, int32 tic_ok)
+t_stat  scfi_iocl(CHANP *chp, int32 tic_ok)
 {
     uint32      word1 = 0;
     uint32      word2 = 0;
@@ -665,7 +665,7 @@ loop:
     return 0;                                   /* good return */
 }
 
-uint16 scfi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
+t_stat scfi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 {
     uint16      chsa = GET_UADDR(uptr->CMD);
     DEVICE      *dptr = get_dev(uptr);
@@ -760,7 +760,7 @@ uint16 scfi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 }
 
 /* Handle haltio transfers for disk */
-uint16  scfi_haltio(UNIT *uptr) {
+t_stat  scfi_haltio(UNIT *uptr) {
     uint16      chsa = GET_UADDR(uptr->CMD);
     DEVICE      *dptr = get_dev(uptr);
     int         cmd = uptr->CMD & DSK_CMDMSK;
@@ -1484,7 +1484,7 @@ t_stat scfi_srv(UNIT *uptr)
 }
 
 /* handle rschnlio cmds for disk */
-uint16  scfi_rschnlio(UNIT *uptr) {
+t_stat  scfi_rschnlio(UNIT *uptr) {
     DEVICE  *dptr = get_dev(uptr);
     uint16  chsa = GET_UADDR(uptr->CMD);
     int     cmd = uptr->CMD & DSK_CMDMSK;

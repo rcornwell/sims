@@ -141,10 +141,10 @@ struct _lpr_data
 struct _lpr_data lpr_data[NUM_DEVS_LPR];
 
 /* forward definitions */
-uint16      lpr_preio(UNIT *uptr, uint16 chan);
-uint16      lpr_startcmd(UNIT *, uint16, uint8);
+t_stat      lpr_preio(UNIT *uptr, uint16 chan);
+t_stat      lpr_startcmd(UNIT *, uint16, uint8);
 void        lpr_ini(UNIT *, t_bool);
-uint16      lpr_rschnlio(UNIT *uptr);
+t_stat      lpr_rschnlio(UNIT *uptr);
 t_stat      lpr_srv(UNIT *);
 t_stat      lpr_reset(DEVICE *);
 t_stat      lpr_attach(UNIT *, CONST char *);
@@ -172,14 +172,14 @@ UNIT        lpr_unit[] = {
 
 /* Device Information Block */
 DIB         lpr_dib = {
-    lpr_preio,      /* uint16 (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
-    lpr_startcmd,   /* uint16 (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    NULL,           /* uint16 (*halt_io)(UNIT *uptr) */         /* Halt I/O */
-    NULL,           /* uint16 (*stop_io)(UNIT *uptr) */         /* Stop I/O */
-    NULL,           /* uint16 (*test_io)(UNIT *uptr) */         /* Test I/O */
-    NULL,           /* uint16 (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
-    lpr_rschnlio,   /* uint16 (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
-    NULL,           /* uint16 (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
+    lpr_preio,      /* t_stat (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
+    lpr_startcmd,   /* t_stat (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
+    NULL,           /* t_stat (*halt_io)(UNIT *uptr) */         /* Halt I/O */
+    NULL,           /* t_stat (*stop_io)(UNIT *uptr) */         /* Stop I/O */
+    NULL,           /* t_stat (*test_io)(UNIT *uptr) */         /* Test I/O */
+    NULL,           /* t_stat (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
+    lpr_rschnlio,   /* t_stat (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
+    NULL,           /* t_stat (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     lpr_ini,        /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     lpr_unit,       /* UNIT* units */                           /* Pointer to units structure */
     lpr_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
@@ -210,7 +210,7 @@ void lpr_ini(UNIT *uptr, t_bool f) {
 }
 
 /* handle rschnlio cmds for lpr */
-uint16  lpr_rschnlio(UNIT *uptr) {
+t_stat  lpr_rschnlio(UNIT *uptr) {
     DEVICE  *dptr = get_dev(uptr);          /* get device pointer */
     uint16  chsa = GET_UADDR(uptr->CMD);
     int     cmd = uptr->CMD & LPR_CMDMSK;
@@ -222,7 +222,7 @@ uint16  lpr_rschnlio(UNIT *uptr) {
 }
 
 /* start a line printer operation */
-uint16 lpr_preio(UNIT *uptr, uint16 chan) {
+t_stat lpr_preio(UNIT *uptr, uint16 chan) {
     DEVICE      *dptr = get_dev(uptr);
     int         unit = (uptr - dptr->units);
     uint16      chsa = GET_UADDR(uptr->CMD);
@@ -241,7 +241,7 @@ uint16 lpr_preio(UNIT *uptr, uint16 chan) {
 }
 
 /* start an I/O operation */
-uint16  lpr_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
+t_stat  lpr_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 {
     DEVICE  *dptr = get_dev(uptr);          /* get device pointer */
 

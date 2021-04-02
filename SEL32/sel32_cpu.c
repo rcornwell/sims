@@ -1879,6 +1879,14 @@ wait_loop:
 //JB                return reason;
 //JB                break;                          /* process */
                 }
+#else
+                else {
+                    sim_debug(DEBUG_EXP, &cpu_dev,
+                        "Process Event other reason %08x interval %08x\n",
+                        reason, sim_interval);
+                    return reason;
+                    break;                          /* process */
+                }
 #endif
             }
         }
@@ -1962,9 +1970,69 @@ wait_loop:
             goto wait_loop;                         /* continue waiting */
         }
 
+//#define NEW_WAIT
+#ifdef NEW_WAIT
+        /* process IOCL entries that are waiting */
+        /* loop through the IOCL ready Q and decrement wait counts */
+        if ((int32c = RDYQ_Num())) {
+            int32   i, rqo = RDYQOUT;
+            for (i=0; i<int32c; i++) {
+                uint32  chsa = 0;                   /* channel/sub adddress */
+                CHANP   *chp;                       /* get channel prog pointer */
+                if (RDYQ_Get(&chsa) == SCPE_OK) {   /* get chsa for program */
+//                  chsa = RDYQ[rqo];               /* get the next entry */
+                }
+                if (chsa == 0)                      /* ignore unused entries */
+                    continue;
+                chp = find_chanp_ptr(chsa);         /* get channel prog pointer */
+                if (chp == NULL)                    /* ignore unused entries */
+                    continue;
+                if (chp->chan_byte != BUFF_NEXT) {
+                    /* if not BUFF_NEXT, channel has been stopped, do nothing */
+                    sim_debug(DEBUG_XIO, &cpu_dev,
+                        "scan_chan Bad CPU RDYQ entry for chsa %04x chan_byte %02x\n",
+                        chsa, chp->chan_byte);
+                    /* not BUFF_NEXT, just zero entry */
+                    continue;                       /* ignore the entry */
+                }
+                /* state is BUFF_NEXT, see if wait is over */
+                if (wait4int)
+                    chp->chan_qwait = 0;            /* doing nothing, so do it now */
+                if (chp->chan_qwait > 0)            /* still waiting? */
+                    chp->chan_qwait--;              /* decrement count */
+                /* process 0 wait entry */
+                if (chp->chan_qwait == 0)        {
+                    int32 stat;
+                    sim_debug(DEBUG_XIO, &cpu_dev,
+                        "scan_chan CPU RDYQ entry for chsa %04x starting byte %02x\n",
+                        chsa, chp->chan_byte);
+                    /* if not BUFF_NEXT, channel has been stopped, do nothing */
+                    stat = cont_chan(chsa);         /* resume the channel program */
+                    if (stat == SCPE_OK)
+                        sim_debug(DEBUG_XIO, &cpu_dev,
+                        "scan_chan CPU RDYQ entry for chsa %04x processed byte %04x\n",
+                        chsa, chp->chan_byte);
+                    else
+                        sim_debug(DEBUG_XIO, &cpu_dev,
+                        "scan_chan CPU RDYQ entry for chsa %04x processed w/error byte %04x\n",
+                        chsa, chp->chan_byte);
+                    irq_pend = 1;                   /* start scanning interrupts again */
+                    continue;
+                } else
+                    RDYQ_Put(chsa);                 /* requeue the non-zero entry */
+                rqo++;                              /* next queue entry */
+                rqo %= RDYQ_SIZE;                   /* don't overrun end */
+            }
+        }
+#endif
         /* we get here when not booting */
         /* process any pending interrupts */
-        if ((irq_pend || wait4int) && (irq_auto == 0)) {    /* see if ints are pending */
+#ifdef NEW_WAIT
+        if ((irq_pend || wait4int) && (RDYQ_Num() == 0) && (irq_auto == 0)) {
+#else
+        if ((irq_pend || wait4int) && (irq_auto == 0)) {
+#endif
+            /* see if ints are pending */
             uint32 ilev;
             uint32 oldstatus = CPUSTATUS;           /* keep for retain blocking state */
             SPAD[0xf9] = CPUSTATUS;                 /* save the cpu status in SPAD */
@@ -2076,6 +2144,7 @@ wait_loop:
             }
         }
 
+#ifndef NEW_WAIT
         /* process IOCL entries that are waiting */
         /* loop through the IOCL ready Q and decrement wait counts */
         if ((int32c = RDYQ_Num())) {
@@ -2126,9 +2195,14 @@ wait_loop:
                 rqo %= RDYQ_SIZE;                   /* don't overrun end */
             }
         }
+#endif
 
         /* see if in wait instruction */
         if (wait4int) {                             /* keep waiting */
+#ifdef NEW_WAIT
+            if (RDYQ_Num())
+                goto wait_loop;                     /* continue waiting */
+#endif
             /* tell simh we will be waiting */
             sim_idle(TMR_RTC, 1);                   /* wait for clock tick */
             irq_pend = 1;                           /* start scanning interrupts again */
@@ -2651,9 +2725,11 @@ exec:
                         "Starting WAIT mode %08x\n", (uint32)result);
                 }
                 wait4int = 1;                       /* show we are waiting for interrupt */
+#ifndef NEW_WAIT
                 /* tell simh we will be waiting */
                 sim_idle(TMR_RTC, 0);               /* wait for next pending device event */
                 irq_pend = 1;                       /* start scanning interrupts again */
+#endif
                 i_flags |= BT;                      /* keep PC from being incremented while waiting */
                 break;
             case 0x2:   /* NOP */
