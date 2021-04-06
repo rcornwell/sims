@@ -34,7 +34,9 @@
 #define COM_INIT_POLL   8000
 //#define COML_WAIT       500
 #define COML_WAIT       500
-#define COM_WAIT        500
+//#define COM_WAIT        500
+//#define COM_WAIT        5000
+#define COM_WAIT        1000
 #define COM_NUMLIN      com_desc.lines      /* curr # lines */
 
 #define COMC            0                   /* channel thread */
@@ -61,11 +63,10 @@ com_data[COM_LINES];
 
 uint8 com_rbuf[COM_LINES];                  /* rcv buf */
 uint8 com_xbuf[COM_LINES];                  /* xmt buf */
-uint8 com_stat[COM_LINES];                   /* status */
+uint8 com_stat[COM_LINES];                  /* status */
 uint32 com_lstat[COM_LINES][2] = { 0 };     /* 8 bytes of line settings status */
-uint32 com_tps = 2;                         /* polls/second */
-uint32 com_scan = 0;                        /* scanner */
-uint32 com_slck = 0;                        /* scanner locked */
+uint32 com_sns[COM_LINES] = { 0 };          /* 4 bytes of line settings status */
+uint32 com_ace[COM_LINES] = { 0 };          /* 4 bytes of ACE settings */
 uint32 comi_cmd = COMC_IDLE;                /* channel state */
 
 TMLN com_ldsc[COM_LINES] = { 0 };           /* line descrs */
@@ -299,9 +300,6 @@ REG             com_reg[] = {
     { BRDATAD (STA, com_stat, 16, 8, COM_LINES, "status buffers, lines 0 to 7") },
     { BRDATAD (RBUF, com_rbuf, 16, 8, COM_LINES, "input buffer, lines 0 to 7") },
     { BRDATAD (XBUF, com_xbuf, 16, 8, COM_LINES, "output buffer, lines 0 to 7") },
-    { ORDATAD (SCAN, com_scan, 6, "scanner line number") },
-    { FLDATAD (SLCK, com_slck, 0, "scanner lock") },
-    { DRDATA (TPS, com_tps, 8), REG_HRO},
     { NULL }
     };
 
@@ -409,7 +407,9 @@ void coml_ini(UNIT *uptr, t_bool f)
 {
     /* maybe do something here on master channel init */
 //  uptr->SNS = 0;                              /* status is online & ready */
-    uptr->SNS = 0x00003003;                     /* status is online & ready */
+//1Xuptr->SNS = 0x00003003;                     /* status is online & ready */
+    /* set SNS_RLSDS SNS_DSRS SNS_CTSS SNS_RTS SNS_CTS */
+    uptr->SNS = 0x0000b003;                     /* status is online & ready */
     uptr->CMD &= LMASK;                         /* leave only chsa */
     sim_cancel(uptr);                           /* stop any timer */
 }
@@ -505,7 +505,7 @@ t_stat  coml_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         uptr->CMD &= LMASK;                     /* leave only chsa */
         uptr->CMD |= (0x7f & COM_MSK);          /* save 0x7f as INCH cmd command */
         uptr->SNS |= SNS_RDY;                   /* status is online & ready */
-        sim_activate(uptr, 200);                /* start us up */
+        sim_activate(uptr, 500);                /* start us up */
         break;
 
     /* write commands must use address 8-f */
@@ -517,23 +517,11 @@ t_stat  coml_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 
         /* see if DSR is set, if not give unit check error */
         if (((ruptr->SNS & SNS_DSRS) == 0)|| ((ruptr->SNS & SNS_CONN) == 0)) {
-//jj    if (!((ruptr->SNS & SNS_DSRS) || (ruptr->SNS & SNS_CONN))) {
 //YY    if ((com_ldsc[unit&7].conn == 0) ||
-//YY        !((ruptr->SNS & SNS_DSRS) || (ruptr->SNS & SNS_CONN))) {
-//XX    if (com_ldsc[unit&7].conn == 0) {
-//JJ        ruptr->SNS &= ~SNS_DSRS;            /* status is not ready */
-//JJ        wuptr->SNS &= ~SNS_DSRS;            /* status is not ready */
-//M         ruptr->SNS &= ~SNS_CONN;            /* status is not ready */
-//M         wuptr->SNS &= ~SNS_CONN;            /* status is not ready */
             ruptr->SNS &= ~SNS_RDY;             /* status is not ready */
             wuptr->SNS &= ~SNS_RDY;             /* status is not ready */
             ruptr->SNS |= SNS_CMDREJ;           /* command reject */
             wuptr->SNS |= SNS_CMDREJ;           /* command reject */
-            /* SNS_DSRS will be 0 */
-///*UTX*/     ruptr->SNS |= SNS_DELDSR;           /* set attention status */
-///*UTX*/     wuptr->SNS |= SNS_DELDSR;           /* set attention status */
-/*MPX*/     ruptr->SNS |= SNS_DELTA;            /* set attention status */
-/*MPX*/     wuptr->SNS |= SNS_DELTA;            /* set attention status */
             sim_debug(DEBUG_CMD, dptr,
                 "coml_startcmd chsa %04x: Cmd WRITE %02x unit check\n", chsa, cmd);
             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* good return */
@@ -541,7 +529,7 @@ t_stat  coml_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         uptr->CMD &= LMASK;                     /* leave only chsa */
         uptr->CMD |= (cmd & COM_MSK);           /* save command */
         uptr->SNS |= SNS_RDY;                   /* status is online & ready */
-        sim_activate(uptr, 150);                /* TRY 08-13-18 */
+        sim_activate(uptr, 250);                /* TRY 08-13-18 */
         return 0;                               /* no status change */
         break;
 
@@ -563,14 +551,7 @@ t_stat  coml_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 
         /* see if DSR is set, if not give unit check error */
         if (((ruptr->SNS & SNS_DSRS) == 0)|| ((ruptr->SNS & SNS_CONN) == 0)) {
-//jj    if (!((ruptr->SNS & SNS_DSRS) || (ruptr->SNS & SNS_CONN))) {
-//YY    if ((com_ldsc[unit&7].conn == 0) ||
-//YY        !((ruptr->SNS & SNS_DSRS) || (ruptr->SNS & SNS_CONN))) {
 //XX    if (com_ldsc[unit&7].conn == 0) {
-//M         ruptr->SNS &= ~SNS_DSRS;            /* status is not ready */
-//M         wuptr->SNS &= ~SNS_DSRS;            /* status is not ready */
-//M         ruptr->SNS &= ~SNS_CONN;            /* status is not ready */
-//M         wuptr->SNS &= ~SNS_CONN;            /* status is not ready */
             ruptr->SNS &= ~SNS_RDY;             /* status is not ready */
             wuptr->SNS &= ~SNS_RDY;             /* status is not ready */
             ruptr->SNS |= SNS_CMDREJ;           /* command reject */
@@ -578,8 +559,6 @@ t_stat  coml_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
             /* SNS_DSRS will be 0 */
 /*UTX*/     ruptr->SNS |= SNS_DELDSR;           /* set attention status */
 /*UTX*/     wuptr->SNS |= SNS_DELDSR;           /* set attention status */
-/*MPX*/     ruptr->SNS |= SNS_DELTA;            /* set attention status */
-/*MPX*/     wuptr->SNS |= SNS_DELTA;            /* set attention status */
             sim_debug(DEBUG_CMD, dptr,
                 "coml_startcmd chsa %04x: Cmd READ %02x unit check\n", chsa, cmd);
             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;   /* good return */
@@ -601,7 +580,7 @@ t_stat  coml_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         sim_debug(DEBUG_CMD, dptr,
             "coml_startcmd chsa %04x: input cnt = %04x\n",
             chsa, coml_chp[unit].ccw_count);
-        sim_activate(uptr, 150);                /* TRY 08-13-18 */
+        sim_activate(uptr, 250);                /* TRY 08-13-18 */
         return 0;
         break;
 
@@ -611,7 +590,7 @@ t_stat  coml_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         uptr->SNS |= SNS_RDY;                   /* status is online & ready */
         uptr->CMD &= LMASK;                     /* leave only chsa */
         uptr->CMD |= (cmd & COM_MSK);           /* save command */
-        sim_activate(uptr, 200);                /* start us up */
+        sim_activate(uptr, 250);                /* start us up */
         break;
 
     case COM_SNS:       /* 0x04 */              /* Sense (8 bytes) */
@@ -689,7 +668,7 @@ t_stat  coml_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         wuptr->SNS &= ~SNS_MRING;               /* reset ring attention status */
         wuptr->SNS &= ~SNS_ASCIICD;             /* reset ASCII attention status */
         wuptr->SNS &= ~SNS_DELDSR;              /* reset attention status */
-        wuptr->SNS &= ~SNS_RLSDS;               /* reset rec'd line signal detect */
+//1X    wuptr->SNS &= ~SNS_RLSDS;               /* reset rec'd line signal detect */
         wuptr->SNS &= ~SNS_CMDREJ;              /* command reject */
 /*MPX*/ wuptr->SNS &= ~SNS_DELTA;               /* reset attention status */
 
@@ -938,15 +917,11 @@ t_stat comc_srv(UNIT *uptr)
         nuptr->SNS |= SNS_CONN;                 /* status is now connected */
         /* UTX says this is an error if set, so do not set SNS_DELDSR */
 /*MPX*/ nuptr->SNS |= (SNS_DSRS | SNS_CTSS | SNS_RING);  /* set the read bits */
-//      nuptr->SNS |= (SNS_DSRS | SNS_CTSS);    /* set the read bits */
-//GG/*MM*/  nuptr->SNS |= (SNS_RTS | SNS_DTR);      /* set RTS & DTR */
-/*M*/   nuptr->SNS |= SNS_DTR;                  /* set DTR */
+        nuptr->SNS |= (SNS_RTS | SNS_DTR);      /* set RTS & DTR */
 /*MPX*/ nuptr->SNS |= SNS_MRING;                /* set RING interrupt */
-///*M*/   nuptr->SNS |= SNS_ASCIICD;              /* set ring attention status */
         if (nuptr->SNS & SNS_ACEDEF) {          /* ACE defined */
             /* this must be set to login for UTX after system is up */
 /*UTX*/     nuptr->SNS |= SNS_DELDSR;           /* set delta dsr status */
-//JJ        nuptr->SNS |= (SNS_DELTA);          /* status is not connected */
             nuptr->SNS |= SNS_RLSDS;            /* set rec'd line signal detect */
         } else {
             nuptr->SNS |= SNS_DELDSR;           /* set delta dsr status */
@@ -954,13 +929,11 @@ t_stat comc_srv(UNIT *uptr)
         }
         nuptr->SNS &= ~SNS_CMDREJ;              /* no command reject */
         wuptr->SNS = nuptr->SNS;                /* set write line too */
-        wuptr->SNS &= ~(SNS_RLSDS | SNS_RING);  /* not for write channel */
         wuptr->ACE = nuptr->ACE;                /* set write line too */
         sim_debug(DEBUG_CMD, &com_dev,
             "comc_srv conn wakeup on chsa %04x line %02x SNS %08x ACE %08x\n",
             chsa, newln, nuptr->SNS, nuptr->ACE);
         set_devwake(chsa, SNS_ATTN|SNS_DEVEND|SNS_CHNEND);  /* tell user */
-// /*MPX*/ sim_activate(nuptr, uptr->wait);         /* start input */
     }
     /* poll all devices for input */
     tmxr_poll_rx(&com_desc);                    /* poll for input */
@@ -1044,7 +1017,6 @@ t_stat comc_srv(UNIT *uptr)
             nuptr->SNS &= ~(SNS_RTS | SNS_DTR); /* reset RTS & DTR */
             nuptr->SNS &= ~(SNS_DSRS);          /* status is not connected */
             nuptr->SNS |= (SNS_DELDSR);         /* status is not connected */
-//TT        nuptr->SNS &= ~(SNS_DELDSR);        /* status is not connected */
             nuptr->SNS |= (SNS_DELTA);          /* status is not connected */
             nuptr->SNS &= ~(SNS_RDY|SNS_CONN);  /* status is not connected */
             wuptr->SNS = nuptr->SNS;            /* set write channel too */
@@ -1055,8 +1027,8 @@ t_stat comc_srv(UNIT *uptr)
     sim_debug(DEBUG_DETAIL, &com_dev,
         "comc_srv POLL DONE on chsa %04x\n", chsa);
     /* this says to use 200, but simh really uses 50000 for cnt */
-//  return sim_clock_coschedule(uptr, 200);     /* continue poll */
-    return sim_activate(uptr, 10000);           /* continue poll */
+    return sim_clock_coschedule(uptr, 200);     /* continue poll */
+//  return sim_activate(uptr, 10000);           /* continue poll */
 //  return sim_activate(uptr, 5000);            /* continue poll */
 }
 
@@ -1316,7 +1288,6 @@ t_stat coml_haltio(UNIT *uptr) {
         sim_debug(DEBUG_CMD, &coml_dev,
             "coml_haltio HIO I/O stop chsa %04x cmd = %02x\n", chsa, cmd);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
-//BAD   chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);  /* force end */
         return 1;                               /* tell chan code to post status */
     }
     uptr->CNT = 0;                              /* no I/O yet */
@@ -1353,7 +1324,7 @@ t_stat com_attach(UNIT *uptr, CONST char *cptr)
     if (r != SCPE_OK)                           /* error? */
         return r;                               /* return error */
     sim_debug(DEBUG_CMD, dptr, "com_srv comc is now attached\n");
-    sim_activate(uptr, 0);                      /* start poll at once */
+    sim_activate(uptr, 100);                    /* start poll at once */
     return SCPE_OK;
 }
 
