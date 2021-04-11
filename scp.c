@@ -311,14 +311,16 @@
     else *(((uint32 *) mb) + ((uint32) j)) = v;
 #endif
 
-#define SIM_DBG_EVENT_NEG   0x01000000      /* negative event dispatch activities */
-#define SIM_DBG_EVENT       0x02000000      /* event dispatch activities */
-#define SIM_DBG_ACTIVATE    0x04000000      /* queue insertion activities */
-#define SIM_DBG_AIO_QUEUE   0x08000000      /* asynch event queue activities */
-#define SIM_DBG_EXP_STACK   0x10000000      /* expression stack activities */
-#define SIM_DBG_EXP_EVAL    0x20000000      /* expression evaluation activities */
-#define SIM_DBG_BRK_ACTION  0x40000000      /* action activities */
-#define SIM_DBG_DO          0x80000000      /* do activities */
+#define SIM_DBG_EVENT_NEG   0x80000000      /* negative event dispatch activities */
+#define SIM_DBG_EVENT       0x40000000      /* event dispatch activities */
+#define SIM_DBG_ACTIVATE    0x20000000      /* queue insertion activities */
+#define SIM_DBG_AIO_QUEUE   0x10000000      /* asynch event queue activities */
+#define SIM_DBG_EXP_STACK   0x08000000      /* expression stack activities */
+#define SIM_DBG_EXP_EVAL    0x04000000      /* expression evaluation activities */
+#define SIM_DBG_BRK_ACTION  0x02000000      /* action activities */
+#define SIM_DBG_DO          0x01000000      /* do activities */
+#define SIM_DBG_SAVE        0x00800000      /* save activities */
+#define SIM_DBG_RESTORE     0x00400000      /* restore activities */
 
 static DEBTAB scp_debug[] = {
   {"EVENT",     SIM_DBG_EVENT,      "Event Dispatch Activities"},
@@ -329,6 +331,8 @@ static DEBTAB scp_debug[] = {
   {"EXPEVAL",   SIM_DBG_EXP_EVAL,   "Expression Evaluation Activities"},
   {"ACTION",    SIM_DBG_BRK_ACTION, "If/Breakpoint/Expect Action Activities"},
   {"DO",        SIM_DBG_DO,         "Do Command/Expansion Activities"},
+  {"SAVE",      SIM_DBG_SAVE,       "Save Activities"},
+  {"RESTORE",   SIM_DBG_RESTORE,    "Restore Activities"},
   {0}
 };
 
@@ -904,26 +908,26 @@ static const char simh_help1[] =
       " The \"object list\" consists of one or more of the following, separated by\n"
       " commas:\n\n"
        /***************** 80 character line width template *************************/
-      "++register               the specified register\n"
-      "++register[sub1-sub2]    the specified register array locations,\n"
-      "++                       starting at location sub1 up to and\n"
-      "++                       including location sub2\n"
-      "++register[sub1/length]  the specified register array locations,\n"
-      "++                       starting at location sub1 up to but\n"
-      "++                       not including sub1+length\n"
-      "++register[ALL]          all locations in the specified register\n"
-      "++                       array\n"
-      "++register1-register2    all the registers starting at register1\n"
-      "++                       up to and including register2\n"
-      "++address                the specified location\n"
-      "++address1-address2      all locations starting at address1 up to\n"
-      "++                       and including address2\n"
-      "++address/length         all location starting at address up to\n"
-      "++                       but not including address+length\n"
-      "++STATE                  all registers in the device\n"
-      "++ALL                    all locations in the unit\n"
-      "++$                      the last value displayed by an EXAMINE command\n"
-      "                         interpreted as an address\n"
+      "++register                the specified register\n"
+      "++register[sub1-sub2]     the specified register array locations,\n"
+      "++++++++                  starting at location sub1 up to and\n"
+      "++++++++                  including location sub2\n"
+      "++register[sub1/length]   the specified register array locations,\n"
+      "++++++++                  starting at location sub1 up to but\n"
+      "++++++++                  not including sub1+length\n"
+      "++register[ALL]           all locations in the specified register\n"
+      "++++++++                  array\n"
+      "++register1-register2     all the registers starting at register1\n"
+      "++++++++                  up to and including register2\n"
+      "++address                 the specified location\n"
+      "++address1-address2       all locations starting at address1 up to\n"
+      "++++++++                  and including address2\n"
+      "++address/length          all location starting at address up to\n"
+      "++++++++                  but not including address+length\n"
+      "++STATE                   all registers in the device\n"
+      "++ALL                     all locations in the unit\n"
+      "++$                       the last value displayed by an EXAMINE\n"
+      "++++++++                  command interpreted as an address\n"
       "3Switches\n"
       " Switches can be used to control the format of display information:\n\n"
        /***************** 80 character line width template *************************/
@@ -938,17 +942,17 @@ static const char simh_help1[] =
       " simulator).\n\n"
       "3Examples\n"
       " Examples:\n\n"
-      "++ex 1000-1100           examine 1000 to 1100\n"
-      "++de PC 1040             set PC to 1040\n"
-      "++ie 40-50               interactively examine 40:50\n"
-      "++ie >1000 40-50         interactively examine the subset\n"
-      "++                       of locations 40:50 that are >1000\n"
-      "++ex rx0 50060           examine 50060, RX unit 0\n"
-      "++ex rx sbuf[3-6]        examine SBUF[3] to SBUF[6] in RX\n"
-      "++de all 0               set main memory to 0\n"
-      "++de &77>0 0             set all addresses whose low order\n"
-      "++                       bits are non-zero to 0\n"
-      "++ex -m @memdump.txt 0-7777  dump memory to file\n\n"
+      "++ex 1000-1100                examine 1000 to 1100\n"
+      "++de PC 1040                  set PC to 1040\n"
+      "++ie 40-50                    interactively examine 40:50\n"
+      "++ie >1000 40-50              interactively examine the subset\n"
+      "+++++++++                     of locations 40:50 that are >1000\n"
+      "++ex rx0 50060                examine 50060, RX unit 0\n"
+      "++ex rx sbuf[3-6]             examine SBUF[3] to SBUF[6] in RX\n"
+      "++de all 0                    set main memory to 0\n"
+      "++de &77>0 0                  set all addresses whose low order\n"
+      "+++++++++                     bits are non-zero to 0\n"
+      "++ex -m @memdump.txt 0-7777   dump memory to file\n\n"
       " Note: to terminate an interactive command, simply type a bad value\n"
       "       (eg, XYZ) when input is requested.\n"
 #define HLP_EVALUATE    "*Commands Evaluating_Instructions"
@@ -8064,6 +8068,8 @@ REG *rptr;
 
 #define WRITE_I(xx) sim_fwrite (&(xx), sizeof (xx), 1, sfile)
 
+sim_debug(SIM_DBG_SAVE, &sim_scp_dev, "sim_save ()\n");
+
 /* Don't make changes below without also changing save_vercur above */
 
 fprintf (sfile, "%s\n%s\n%s\n%s\n%s\n%.0f\n",
@@ -8090,6 +8096,7 @@ for (i = 0; i < (device_count + sim_internal_device_count); i++) {/* loop thru d
         dptr = sim_internal_devices[i - device_count];
     if (dptr->flags & DEV_NOSAVE)
         continue;
+    sim_debug (SIM_DBG_SAVE, &sim_scp_dev, "Saving %s\n", dptr->name);
     fputs (dptr->name, sfile);                          /* device name */
     fputc ('\n', sfile);
     if (dptr->lname)                                    /* [V3.0] logical name */
@@ -8220,7 +8227,7 @@ char **attnames = NULL;
 UNIT **attunits = NULL;
 int32 *attswitches = NULL;
 int32 attcnt = 0;
-void *mbuf;
+void *mbuf = NULL;
 int32 j, blkcnt, limit, unitno, time, flg;
 uint32 us, depth;
 t_addr k, high, old_capac;
@@ -8237,6 +8244,7 @@ t_bool dont_detach_attach = ((sim_switches & SWMASK ('D')) != 0);
 t_bool suppress_warning = ((sim_switches & SWMASK ('Q')) != 0);
 t_bool warned = FALSE;
 
+sim_debug (SIM_DBG_RESTORE, &sim_scp_dev, "sim_rest (force=%d, dont_detach=%d, nowarnings=%d)\n", force_restore, dont_detach_attach, suppress_warning);
 sim_switches &= ~(SWMASK ('F') | SWMASK ('D') | SWMASK ('Q'));  /* remove digested switches */
 #define READ_S(xx) if (read_line ((xx), sizeof(xx), rfile) == NULL) {   \
     r = SCPE_IOERR;                                                     \
@@ -8252,6 +8260,7 @@ if (fstat (fileno (rfile), &rstat)) {
     goto Cleanup_Return;
     }
 READ_S (buf);                                           /* [V2.5+] read version */
+sim_debug (SIM_DBG_RESTORE, &sim_scp_dev, "version=%s\n", buf);
 v40 = v35 = v32 = FALSE;
 if (strcmp (buf, save_ver40) == 0)                      /* version 4.0? */
     v40 = v35 = v32 = TRUE;
@@ -8268,6 +8277,7 @@ if ((strcmp (buf, save_ver40) != 0) && (!sim_quiet) && (!suppress_warning)) {
     warned = TRUE;
     }
 READ_S (buf);                                           /* read sim name */
+sim_debug (SIM_DBG_RESTORE, &sim_scp_dev, "sim_name=%s\n", buf);
 if (strcmp (buf, sim_savename)) {                       /* name match? */
     sim_printf ("Wrong system type: %s\n", buf);
     return SCPE_INCOMP;
@@ -8326,12 +8336,15 @@ for ( ;; ) {                                            /* device loop */
     READ_S (buf);                                       /* read device name */
     if (buf[0] == 0)                                    /* last? */
         break;
+    sim_debug (SIM_DBG_RESTORE, &sim_scp_dev, "DEVICE=%s\n", buf);
     if ((dptr = find_dev (buf)) == NULL) {              /* locate device */
         sim_printf ("Invalid device name: %s\n", buf);
         r = SCPE_INCOMP;
         goto Cleanup_Return;
         }
     READ_S (buf);                                       /* [V3.0+] logical name */
+    if (buf[0] != '\0')
+        sim_debug (SIM_DBG_RESTORE, &sim_scp_dev, "logical name=%s\n", buf);
     deassign_device (dptr);                             /* delete old name */
     if ((buf[0] != 0) && 
         ((r = assign_device (dptr, buf)) != SCPE_OK)) {
@@ -8339,6 +8352,7 @@ for ( ;; ) {                                            /* device loop */
         goto Cleanup_Return;
         }
     READ_I (flg);                                       /* [V2.10+] ctlr flags */
+    sim_debug (SIM_DBG_RESTORE, &sim_scp_dev, "DEVICE.flags=%0X\n", flg);
     if (!v32)
         flg = ((flg & DEV_UFMASK_31) << (DEV_V_UF - DEV_V_UF_31)) |
             (flg & ~DEV_UFMASK_31);                     /* [V3.2+] flags moved */
@@ -8437,36 +8451,34 @@ for ( ;; ) {                                            /* device loop */
                 sim_printf ("\n");
                 }
             sz = SZ_D (dptr);                           /* allocate buffer */
-            if ((mbuf = calloc (SRBSIZ, sz)) == NULL) {
+            if ((mbuf = realloc (mbuf, SRBSIZ * sz)) == NULL) {
                 r = SCPE_MEM;
                 goto Cleanup_Return;
                 }
             for (k = 0; k < high; ) {                   /* loop thru mem */
                 if (sim_fread (&blkcnt, sizeof (blkcnt), 1, rfile) == 0) {/* block count */
-                    free (mbuf);
                     r = SCPE_IOERR;
                     goto Cleanup_Return;
                     }
                 if (blkcnt < 0)                         /* compressed? */
                     limit = -blkcnt;
-                else limit = (int32)sim_fread (mbuf, sz, blkcnt, rfile);
+                else
+                    limit = (int32)sim_fread (mbuf, sz, blkcnt, rfile);
                 if (limit <= 0) {                       /* invalid or err? */
-                    free (mbuf);
                     r = SCPE_IOERR;
                     goto Cleanup_Return;
                     }
                 for (j = 0; j < limit; j++, k = k + (dptr->aincr)) {
                     if (blkcnt < 0)                     /* compressed? */
                         val = 0;
-                    else SZ_LOAD (sz, val, mbuf, j);    /* saved value */
+                    else 
+                        SZ_LOAD (sz, val, mbuf, j);     /* saved value */
                     r = dptr->deposit (val, k, uptr, SIM_SW_REST);
                     if (r != SCPE_OK) {
-                        free (mbuf);
                         goto Cleanup_Return;
                         }
                     }                                   /* end for j */
                 }                                       /* end for k */
-            free (mbuf);                                /* dealloc buffer */
             }                                           /* end if high */
         }                                               /* end unit loop */
     for ( ;; ) {                                        /* register loop */
@@ -8474,6 +8486,7 @@ for ( ;; ) {                                            /* device loop */
         if (buf[0] == 0)                                /* last? */
             break;
         READ_I (depth);                                 /* [V2.10+] depth */
+        sim_debug (SIM_DBG_RESTORE, &sim_scp_dev, "REGISTER=%s, depth=%u\n", buf, depth);
         if ((rptr = find_reg (buf, NULL, dptr)) == NULL) {
             sim_printf ("Invalid register name: %s %s\n", sim_dname (dptr), buf);
             for (us = 0; us < depth; us++) {            /* skip values */
@@ -8493,8 +8506,10 @@ for ( ;; ) {                                            /* device loop */
             if (val > mask) {                           /* value ok? */
                 sim_printf ("Invalid register value: %s %s\n", sim_dname (dptr), buf);
                 }
-            else if (us < rptr->depth)                  /* in range? */
-                put_rval (rptr, us, val);
+            else {
+                if (us < rptr->depth)                   /* in range? */
+                    put_rval(rptr, us, val);
+                }
             }
         }                                               /* end register loop */
     }                                                   /* end device loop */
@@ -8506,6 +8521,7 @@ for (j=0, r = SCPE_OK; j<attcnt; j++) {
         struct stat fstat;
         t_addr saved_pos;
 
+        sim_debug (SIM_DBG_RESTORE, &sim_scp_dev, "ATTACHING=%s to %s\n", sim_uname (attunits[j]), attnames[j]);
         dptr = find_dev_from_unit (attunits[j]);
         if ((!force_restore) && 
             (!stat(attnames[j], &fstat)))
@@ -8539,6 +8555,7 @@ for (j=0, r = SCPE_OK; j<attcnt; j++) {
     attnames[j] = NULL;
     }
 Cleanup_Return:
+free (mbuf);
 for (j=0; j < attcnt; j++)
     free (attnames[j]);
 free (attnames);
@@ -9071,6 +9088,7 @@ if (sim_dfunit == NULL)                                 /* got a unit? */
     return SCPE_NXUN;
 cptr = get_glyph (cptr, gbuf, 0);                       /* get list */
 if ((flag == EX_D) && (*cptr == 0))                     /* deposit needs more */
+
     return SCPE_2FARG;
 ofile = sim_ofile? sim_ofile: stdout;                   /* no ofile? use stdout */
 
@@ -9474,7 +9492,7 @@ if ((rptr->depth > 1) && (rptr->flags & REG_UNIT)) {
 #endif
     }
 else if ((rptr->depth > 1) && (rptr->flags & REG_STRUCT)) {
-    ptr = (uint32 *)(((size_t) rptr->loc) + (idx * rptr->str_size));
+    ptr = (uint32 *)(((size_t)rptr->loc) + (idx * rptr->str_size));
 #if defined (USE_INT64)
     if (sz <= sizeof (uint32))
         *((uint32 *) ptr) = (*((uint32 *) ptr) &
@@ -15630,6 +15648,127 @@ MClose (f);
 return stat;
 }
 
+typedef const char *(*parse_function)(const char *input, char *output, char end_char);
+struct function_test_data {
+    char end_char;
+    const char *expected_result;
+    const char *expected_remainder;
+    };
+static struct parse_function_test {
+    const char *function_name;
+    parse_function function;
+    const char *input;
+    struct function_test_data test_data[10];
+    } parse_function_tests[] = {
+        {"get_glyph",        get_glyph,         "AbcDe",   {
+            {0,    "ABCDE",   ""}    } },
+        {"get_glyph",        get_glyph,         "AbcDe",   {
+            {'c',  "AB",      "De"},
+            {'c',  "DE",      ""}    } },
+        {"get_glyph",        get_glyph,         "Ab cde",  {
+            {0,    "AB",      "cde"},
+            {0,    "CDE",     ""}    } },
+        {"get_glyph_nc",     get_glyph_nc,      "AbcDe",   {
+            {0,    "AbcDe",   ""}    } },
+        {"get_glyph_nc",     get_glyph_nc,      "AbcDe",   {
+            {'c',  "Ab",      "De"},
+            {'c',  "De",      ""}    } },
+        {"get_glyph_nc",     get_glyph_nc,      "Ab cde",  {
+            {0,    "Ab",      "cde"},
+            {0,    "cde",     ""}    } },
+        {"get_glyph_quoted", get_glyph_quoted,  "AbcDe",   {
+            {0,    "AbcDe",   ""}    } },
+        {"get_glyph_quoted", get_glyph_quoted,  "AbcDe",   {
+            {'c',  "Ab",      "De"},
+            {'c',  "De",      ""}    } },
+        {"get_glyph_quoted", get_glyph_quoted,  "Abc De",   {
+            {0,    "Abc",     "De"},
+            {0,    "De",      ""}    } },
+        {"get_glyph_quoted", get_glyph_quoted,  "\'AbcDe\'",{
+            {0,    "\'AbcDe\'",   ""}    } },
+        {"get_glyph_quoted", get_glyph_quoted,  "\'AbcDe\'",{
+            {'c',  "\'AbcDe\'", ""}    } },
+        {"get_glyph_quoted", get_glyph_quoted,  "\'Abc De\'",{
+            {0,    "\'Abc De\'", ""}    } },
+        {"get_glyph_quoted", get_glyph_quoted,  "\"AbcDe\"",{
+            {0,    "\"AbcDe\"", ""}    } },
+        {"get_glyph_quoted", get_glyph_quoted,  "\"AbcDe\"",{
+            {'c',  "\"AbcDe\"", ""}    } },
+        {"get_glyph_quoted", get_glyph_quoted,  "\"Abc De\"",{
+            {0,    "\"Abc De\"",  ""}    } },
+        {"get_glyph_quoted", get_glyph_quoted,  "\"Abc\" De",{
+            {0,    "\"Abc\"", "De"},
+            {0,    "De",      ""}    } },
+        {"get_glyph_quoted", get_glyph_quoted,  "\'Abc\' De",{
+            {'c',  "\'Abc\'", "De"},
+            {'c',  "De",      ""}    } },
+        {"get_glyph_quoted", get_glyph_quoted,  "\'Abc\' \"De\"",{
+            {0,    "\'Abc\'", "\"De\""},
+            {'c',  "\"De\"",  ""}    } },
+        {"get_glyph_quoted", get_glyph_quoted,  "\'Ab\\c\' \"D\\e\"",{
+            {0,    "\'Ab\\c\'", "\"D\\e\""},
+            {'c',  "\"D\\e\"",  ""}    } },
+        {NULL}
+    };
+
+static t_stat test_scp_parsing (void)
+{
+struct parse_function_test *t = parse_function_tests;
+t_stat result = SCPE_OK;
+
+if (sim_switches & SWMASK ('T'))
+    sim_messagef (SCPE_OK, "test_scp_parsing - starting\n");
+while (t->function_name) {
+    struct function_test_data *d = t->test_data;
+    char gbuf[CBUFSIZE + 1];
+    const char *input = t->input;
+    const char *remainder;
+
+    memset (gbuf, 0xFF, sizeof (gbuf));
+    gbuf[sizeof (gbuf) - 1] = '\0';
+    remainder = t->function ("", gbuf, 0);
+    if (*remainder != '\0')
+        return sim_messagef (SCPE_IERR, "function: %s (\"\", gbuf, 0); returned a non empty string: \"%s\"\n", t->function_name, remainder);
+
+    while (*input) {
+        char end_char_string[32];
+
+        if (sim_isprint (d->end_char))
+            sprintf (end_char_string, "\'%c\'", d->end_char);
+        else
+            if (d->end_char == '\0')
+                strcpy (end_char_string, "0");
+            else
+                sprintf (end_char_string, "'\\%d'", d->end_char);
+        memset (gbuf, 0xFF, sizeof (gbuf));
+        gbuf[sizeof (gbuf) - 1] = '\0';
+        remainder = t->function (input, gbuf, d->end_char);
+        if (sim_switches & SWMASK ('T'))
+            sim_messagef (SCPE_OK, "%s (\"%s\", gbuf, %s);\n", t->function_name, input, end_char_string);
+        if ((0 != strcmp (gbuf, d->expected_result)) || 
+            (remainder == NULL) || (0 != strcmp (remainder, d->expected_remainder))) {
+            if (0 != strcmp (gbuf, d->expected_result))
+                result = sim_messagef (SCPE_IERR, "function: %s (\"%s\", gbuf, %s); returned an unexpected result string: \"%s\" instead of \"%s\"\n", t->function_name, input, end_char_string, gbuf, d->expected_result);
+            if (remainder == NULL)
+                result = sim_messagef (SCPE_IERR, "function: %s (\"%s\", gbuf, %s); returned a NULL pointer for a remnant instead of \"%s\"\n", t->function_name, input, end_char_string, d->expected_result);
+            else {
+                if (0 != strcmp (remainder, d->expected_remainder))
+                    result = sim_messagef (SCPE_IERR, "function: %s (\"%s\", gbuf, %s); returned a remnant of \"%s\" instead of \"%s\"\n", t->function_name, input, end_char_string, remainder, d->expected_result);
+                }
+            remainder = d->expected_result;
+            }
+        input = remainder;
+        ++d;
+        if (((input == NULL) || (*input != '\0')) && (d->expected_result == NULL))
+            return sim_messagef (SCPE_IERR, "Invalid test configuration detected\n");
+        }
+    ++t;
+    }
+if (sim_switches & SWMASK ('T'))
+    sim_messagef (SCPE_OK, "test_scp_parsing - done\n");
+return result;
+}
+
 static t_stat sim_scp_svc (UNIT *uptr)
 {
 sim_printf ("Unit %s fired at %.0f\n", sim_uname (uptr), sim_gtime ());
@@ -15756,7 +15895,7 @@ sim_switches = saved_switches;
 cptr = get_glyph (cptr, gbuf, 0);
 if (gbuf[0] == '\0')
     strcpy (gbuf, "ALL");
-if (strcmp (gbuf, "ALL") != 0) {
+if ((strcmp (gbuf, "ALL") != 0) && (strcmp (gbuf, "SCP") != 0)) {
     if (!find_dev (gbuf))
         return sim_messagef (SCPE_ARG, "No such device: %s\n", gbuf);
     }
@@ -15767,8 +15906,12 @@ if (sim_switches & SWMASK ('D')) {
     sim_set_debon (0, "STDOUT");
     sim_switches = saved_switches;
     }
-if (test_scp_event_sequencing () != SCPE_OK)
-    return sim_messagef (SCPE_IERR, "SCP event sequencing test failed\n");
+if ((strcmp (gbuf, "ALL") == 0) || (strcmp (gbuf, "SCP") == 0)) {
+    if (test_scp_parsing () != SCPE_OK)
+        return sim_messagef (SCPE_IERR, "SCP parsing test failed\n");
+    if (test_scp_event_sequencing () != SCPE_OK)
+        return sim_messagef (SCPE_IERR, "SCP event sequencing test failed\n");
+}
 for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {
     t_stat tstat = SCPE_OK;
     t_bool was_disabled = ((dptr->flags & DEV_DIS) != 0);
