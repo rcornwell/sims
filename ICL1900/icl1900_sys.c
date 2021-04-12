@@ -636,7 +636,7 @@ find_opcode(char *op, int *val)
             return v;
     }
     for(i = 0;  i <= 0177; i++) {
-        if (ops[i].name != '\0' && sim_strcasecmp(op, ops[i].name) == 0)
+        if (ops[i].name != NULL && sim_strcasecmp(op, ops[i].name) == 0)
             return i;
     }
     for(i = 0; i < 8; i++) {
