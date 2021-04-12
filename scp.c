@@ -15730,7 +15730,7 @@ while (t->function_name) {
     if (*remainder != '\0')
         return sim_messagef (SCPE_IERR, "function: %s (\"\", gbuf, 0); returned a non empty string: \"%s\"\n", t->function_name, remainder);
 
-    while (*input) {
+    while ((input != NULL) && (*input != '\0')) {
         char end_char_string[32];
 
         if (sim_isprint (d->end_char))
@@ -15759,7 +15759,7 @@ while (t->function_name) {
             }
         input = remainder;
         ++d;
-        if (((input == NULL) || (*input != '\0')) && (d->expected_result == NULL))
+        if ((*input != '\0') && (d->expected_result == NULL))
             return sim_messagef (SCPE_IERR, "Invalid test configuration detected\n");
         }
     ++t;
