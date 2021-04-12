@@ -590,7 +590,7 @@ t_stat load_sav (FILE *fileref, int ftype)
         wc = (int32)(data >> 18);
         pa = (uint32) (data & RMASK);
         if (wc == (OP_JRST << 9)) {
-            printf("Start addr=%06o\n", pa);
+            sim_printf("Start addr=%06o\n", pa);
             PC = pa;
             return SCPE_OK;
         }

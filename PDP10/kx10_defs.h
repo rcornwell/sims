@@ -298,7 +298,7 @@ extern DEBTAB crd_debug[];
 #if KI|KL
 #define PRV_PUB 020000        /* Overflow in excutive mode */
 #else
-#define PRV_PUB 000000        /* Not on KA or PDP6 */
+#define PRV_PUB 000000        /* Not on KA, KS or PDP6 */
 #endif
 #ifdef ITS
 #ifdef PURE
@@ -551,6 +551,7 @@ int     uba_write_npr_word(t_addr addr, uint16 ctl, uint16 data);
 void    uba_set_irq(DIB *dibp);
 void    uba_clr_irq(DIB *dibp);
 t_addr  uba_get_vect(t_addr addr, int lvl, int *dev, int *new_lvl);
+void    uba_set_parity(uint16 ctl);
 
 t_stat  uba_set_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat  uba_show_addr (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
