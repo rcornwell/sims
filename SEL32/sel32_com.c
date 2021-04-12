@@ -31,10 +31,7 @@
 
 /* Constants */
 #define COM_LINES       8                   /* lines defined */
-#define COM_INIT_POLL   8000
-//#define COML_WAIT       500
 #define COML_WAIT       500
-//#define COM_WAIT        500
 //#define COM_WAIT        5000
 #define COM_WAIT        1000
 #define COM_NUMLIN      com_desc.lines      /* curr # lines */
@@ -48,12 +45,6 @@
 #define COML_REP        0x04                /* rcv enable pend */
 #define COML_RBP        0x10                /* rcv break pend */
 
-/* Channel state */
-#define COMC_IDLE       0                   /* idle */
-#define COMC_INIT       1                   /* init */
-#define COMC_RCV        2                   /* receive */
-#define COMC_END        3                   /* end */
-
 struct _com_data
 {
     uint8   incnt;                          /* char count */
@@ -64,10 +55,6 @@ com_data[COM_LINES];
 uint8 com_rbuf[COM_LINES];                  /* rcv buf */
 uint8 com_xbuf[COM_LINES];                  /* xmt buf */
 uint8 com_stat[COM_LINES];                  /* status */
-uint32 com_lstat[COM_LINES][2] = { 0 };     /* 8 bytes of line settings status */
-uint32 com_sns[COM_LINES] = { 0 };          /* 4 bytes of line settings status */
-uint32 com_ace[COM_LINES] = { 0 };          /* 4 bytes of ACE settings */
-uint32 comi_cmd = COMC_IDLE;                /* channel state */
 
 TMLN com_ldsc[COM_LINES] = { 0 };           /* line descrs */
 TMXR com_desc = { COM_LINES, 0, 0, com_ldsc }; /* com descr */
@@ -252,7 +239,7 @@ const char  *com_description(DEVICE *dptr);     /* device description */
     com_dev     COM device descriptor
     com_unit    COM unit descriptor
     com_reg     COM register list
-    com_mod     COM modifieers list
+    com_mod     COM modifiers list
 */
 
 //#define COM_UNITS 2
@@ -309,8 +296,7 @@ DEVICE          com_dev = {
     COM_UNITS, 8, 15, 1, 8, 8,
     &tmxr_ex, &tmxr_dep, &com_reset, NULL, &com_attach, &com_detach,
     /* ctxt is the DIB pointer */
-    &com_dib, DEV_NET|DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
-//  &com_dib, DEV_NET|DEV_DIS|DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
+    &com_dib, DEV_MUX|DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
     NULL, NULL, NULL, NULL, NULL, &com_description
 };
 
@@ -318,7 +304,7 @@ DEVICE          com_dev = {
     coml_dev    COM device descriptor
     coml_unit   COM unit descriptor
     coml_reg    COM register list
-    coml_mod    COM modifieers list
+    coml_mod    COM modifiers list
 */
 
 /*#define UNIT_COML UNIT_ATTABLE|UNIT_DISABLE|UNIT_IDLE */
@@ -398,16 +384,12 @@ DEVICE          coml_dev = {
     NULL, NULL, NULL,
     /* ctxt is the DIB pointer */
     &coml_dib, DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
-//  &coml_dib, DEV_DIS|DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
     NULL, NULL, NULL, NULL, NULL, &com_description
 };
 
 /* 8-line serial routines */
 void coml_ini(UNIT *uptr, t_bool f)
 {
-    /* maybe do something here on master channel init */
-//  uptr->SNS = 0;                              /* status is online & ready */
-//1Xuptr->SNS = 0x00003003;                     /* status is online & ready */
     /* set SNS_RLSDS SNS_DSRS SNS_CTSS SNS_RTS SNS_CTS */
     uptr->SNS = 0x0000b003;                     /* status is online & ready */
     uptr->CMD &= LMASK;                         /* leave only chsa */
@@ -454,7 +436,6 @@ t_stat coml_preio(UNIT *uptr, uint16 chan) {
     DEVICE      *dptr = get_dev(uptr);
     int         unit = (uptr - dptr->units);
     uint16      chsa = GET_UADDR(uptr->CMD);    /* get channel/sub-addr */
-//  int         cmd = coml_chp[unit].ccw_cmd;
     UNIT        *ruptr = &dptr->units[unit&7];  /* read uptr */
     UNIT        *wuptr = &dptr->units[(unit&7)+8];  /* write uptr */
 
@@ -516,7 +497,7 @@ t_stat  coml_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
             "coml_startcmd chsa %04x: Cmd WRITE %02x\n", chsa, cmd);
 
         /* see if DSR is set, if not give unit check error */
-        if (((ruptr->SNS & SNS_DSRS) == 0)|| ((ruptr->SNS & SNS_CONN) == 0)) {
+        if (((ruptr->SNS & SNS_DSRS) == 0) || ((ruptr->SNS & SNS_CONN) == 0)) {
 //YY    if ((com_ldsc[unit&7].conn == 0) ||
             ruptr->SNS &= ~SNS_RDY;             /* status is not ready */
             wuptr->SNS &= ~SNS_RDY;             /* status is not ready */
@@ -550,7 +531,7 @@ t_stat  coml_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
     case COM_RDHFC:     /* 0x8E */              /* Read command w/hardware flow control only */
 
         /* see if DSR is set, if not give unit check error */
-        if (((ruptr->SNS & SNS_DSRS) == 0)|| ((ruptr->SNS & SNS_CONN) == 0)) {
+        if (((ruptr->SNS & SNS_DSRS) == 0) || ((ruptr->SNS & SNS_CONN) == 0)) {
 //XX    if (com_ldsc[unit&7].conn == 0) {
             ruptr->SNS &= ~SNS_RDY;             /* status is not ready */
             wuptr->SNS &= ~SNS_RDY;             /* status is not ready */
@@ -595,8 +576,6 @@ t_stat  coml_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 
     case COM_SNS:       /* 0x04 */              /* Sense (8 bytes) */
         unit &= 0x7;                            /* make unit 0-7 */
-        com_lstat[unit][0] = 0;                 /* Clear status wd 0 */
-        com_lstat[unit][1] = 0;                 /* Clear status wd 1 */
         /* status is in SNS (u5) */
         /* ACE is in ACE (u4) */
 ///*MPX*/ uptr->SNS = 0x03813401;
@@ -607,47 +586,35 @@ t_stat  coml_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 
         /* byte 0 device status */
         ch = (uptr->SNS >> 24) & 0xff;          /* no bits in byte 0 */
-//      ch = (com_lstat[unit][0] >> 24) & 0xff;
         chan_write_byte(chsa, &ch);             /* write status */
 
         /* byte 1 line status and error conditions */
         ch = (uptr->SNS >> 16) & 0xff;          /* no bits in byte 1 */
-//      com_lstat[unit][0] |= (SNS_RING);       /* set char detect status */
-//      com_lstat[unit][0] |= (SNS_ASCIICD);    /* set char detect status */
-//      ch = (com_lstat[unit][0] >> 16) & 0xff;
         chan_write_byte(chsa, &ch);             /* write status */
 
         /* byte 2 modem status */
-//      com_lstat[unit][0] |= (SNS_CTSS|SNS_DSRS);  /* set CTS & DSR status */
-//      com_lstat[unit][0] |= (SNS_MRING);      /* set char detect status */
 //      SNS_DELDSR will be set if just connected, clear at end
         ch = (uptr->SNS >> 8) & 0xff;           /* CTS & DSR bits in byte 2 */
         chan_write_byte(chsa, &ch);             /* write status */
 
         /* byte 3 modem control/operation mode */
-//      com_lstat[unit][0] |= (SNS_DTR);        /* set DTR status */
-//      ch = (com_lstat[unit][0]) & 0xff;       /* set current status */
         ch = uptr->SNS & 0xff;                  /* maybe DTR bit in byte 3 */
         chan_write_byte(chsa, &ch);             /* write status */
 
         /* byte 4 ACE byte 0 parameters (parity, stop bits, char len */
-//      ch = (com_lstat[unit][1] >> 24) & 0xff;
         ch = (uptr->ACE >> 24) & 0xff;          /* ACE byte 0 */
         chan_write_byte(chsa, &ch);             /* write status */
 
         /* byte 5 ACE byte 1 parameters (baud rate) */
-//      ch = (com_lstat[unit][1] >> 16) & 0xff;
         ch = (uptr->ACE >> 16) & 0xff;          /* ACE byte 1 */
         chan_write_byte(chsa, &ch);             /* write status */
 
         /* byte 6 ACE parameters (Firmware ID 0x62) */
-//      ch = (com_lstat[unit][1] >> 8) & 0xff;
         ch = 0x62;                              /* ACE IOP firmware byte 0 */
 //      ch = 0x19;                              /* ACE MFP firmware byte 0 */
         chan_write_byte(chsa, &ch);             /* write status */
 
         /* byte 7 ACE parameters (Revision Level 0x4?) */
-//      ch = (com_lstat[unit][1] >> 0) & 0xff;
 //      Firmware 0x44 supports RTS flow control */
 //      Firmware 0x45 supports DCD modem control */
 //      ch = 0x44;                              /* ACE firmware byte 1 */
@@ -690,7 +657,6 @@ t_stat  coml_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         uptr->ACE |= ((uint32)ch << 8);         /* insert special char */
         ruptr->ACE = uptr->ACE;                 /* set special char in read unit */
         wuptr->ACE = uptr->ACE;                 /* set special char in write unit */
-//      uptr->CMD = ~SNS_RTS;                   /* Request to send not ready */
         sim_debug(DEBUG_CMD, dptr,
             "coml_startcmd chsa %04x: Cmd %02x DEFSC char %02x SNS %08x ACE %08x\n",
             chsa, cmd, ch, uptr->SNS, uptr->ACE);
@@ -732,45 +698,6 @@ t_stat  coml_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         uptr->SNS |= SNS_DTR;                   /* Data terminal ready */
         return SNS_CHNEND|SNS_DEVEND;           /* good return */
         break;
-
-#if 0
-/* ACE byte 0  Modem Control/Operation status */
-/* stored in u4 bytes 0-3 */
-#define SNS_HALFD   0x80000000  /* Half-duplix operation set */
-#define SNS_MRINGE  0x40000000  /* Modem ring enabled */
-#define SNS_ACEFP   0x20000000  /* Forced parity 0=odd, 1=even */
-#define SNS_ACEP    0x10000000  /* Parity 0=odd, 1=even */
-#define SNS_ACEPE   0x08000000  /* Parity enable 0=dis, 1=enb */
-#define SNS_ACESTOP 0x04000000  /* Stop bit 0=1, 1=1.5 or 2 */
-#define SNS_ACECLEN 0x02000000  /* Character length 00=5, 01=6, 10=7, 11=8 */
-#define SNS_ACECL2  0x01000000  /* 2nd bit for above */
-
-/* ACE byte 1  Baud rate */
-#define SNS_NUB50   0x00800000  /* Zero N/U */
-#define SNS_NUB51   0x00400000  /* Zero N/U */
-#define SNS_RINGCR  0x00200000  /* Ring or wakeup character recognition 0=enb, 1=dis */
-#define SNS_DIAGL   0x00100000  /* Set diagnostic loopback */
-#define SNS_BAUD    0x000F0000  /* Baud rate bits 4-7 */
-#define BAUD50      0x00000000  /* 50 baud */
-#define BAUD75      0x00010000  /* 75 baud */
-#define BAUD110     0x00020000  /* 110 baud */
-#define BAUD114     0x00030000  /* 134 baud */
-#define BAUD150     0x00040000  /* 150 baud */
-#define BAUD300     0x00050000  /* 300 baud */
-#define BAUD600     0x00060000  /* 600 baud */
-#define BAUD1200    0x00070000  /* 1200 baud */
-#define BAUD1800    0x00080000  /* 1800 baud */
-#define BAUD2000    0x00090000  /* 2000 baud */
-#define BAUD2400    0x000A0000  /* 2400 baud */
-#define BAUD3600    0x000B0000  /* 3600 baud */
-#define BAUD4800    0x000C0000  /* 4800 baud */
-#define BAUD7200    0x000D0000  /* 7200 baud */
-#define BAUD9600    0x000E0000  /* 9600 baud */
-#define BAUD19200   0x000F0000  /* 19200 baud */
-
-/* ACE byte 2  Wake-up character */
-#define ACE_WAKE    0x0000FF00  /* 8 bit wake-up character */
-#endif
 
     case COM_SACE:      /* 0xff */              /* Set ACE parameters (3 chars) */
         sim_debug(DEBUG_CMD, dptr,
@@ -970,15 +897,8 @@ t_stat comc_srv(UNIT *uptr)
             ch = sim_tt_inpcvt(ch, TT_GET_MODE(coml_unit[ln].flags));
             com_rbuf[ln] = ch;                  /* save char */
 
-#if 1
             /* Special char detect? */
             if ((ch & 0x7f) == ((nuptr->ACE >> 8) & 0xff)) { /* is it spec char */
-#if 0
-                if (cmd == 0) {
-                    nuptr->CNT = 0;             /* no I/O yet */
-                    com_data[ln].incnt = 0;     /* no input data */
-                }
-#endif
                 nuptr->CMD |= COM_SCD;          /* set special char detected */
                 nuptr->SNS |= SNS_SPCLCD;       /* set special char detected */
 //              nuptr->SNS |= SNS_RLSDS;        /* set rec'd line signal detect */
@@ -989,7 +909,6 @@ t_stat comc_srv(UNIT *uptr)
                 set_devwake(chsa, SNS_ATTN|SNS_DEVEND|SNS_CHNEND);
                 continue;
             }
-#endif
 
             /* put char in buffer */
             com_data[ln].ibuff[com_data[ln].incnt++] = ch;

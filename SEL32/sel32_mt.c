@@ -45,8 +45,6 @@
 #define UNIT_MT         UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE
 #define DEV_BUF_NUM(x)  (((x) & 07) << DEV_V_UF2)
 #define GET_DEV_BUF(x)  (((x) >> DEV_V_UF2) & 07)
-//#define MTUF_V_WLK    (UNIT_V_UF + 0)         /* write lock */
-//#define MTUF_WLK      (1u << MTUF_V_WLK)
 
 #define CMD      u3
 /* BTP tape commands */
@@ -395,7 +393,6 @@ t_stat mt_preio(UNIT *uptr, uint16 chan) {
         uptr->SNS &= ~(SNS_RDY|SNS_ONLN);           /* unit not online or rdy */
         uptr->SNS &= ~SNS_LOAD;                     /* reset BOT detected */
         return SCPE_OK;                             /* good to go */
-//      return SNS_BSY;
     }
 
     sim_debug(DEBUG_CMD, dptr, "mt_preio unit %02x chsa %04x OK\n", unit, chsa);
@@ -457,7 +454,6 @@ t_stat mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
             chan, chp->ccw_addr, chp->ccw_count);
         if (cmd != 0x03) {                  /* if this is a nop do not zero status */
             uptr->SNS = (uptr->SNS & 0x0000ff00);   /* clear all but byte 2 */
-//          uptr->SNS |= (SNS_RDY|SNS_ONLN);    /* set ready status */
         }
         if ((uptr->flags & UNIT_ATT) == 0) {    /* unit attached status */
             uptr->SNS |= SNS_INTVENT;       /* unit intervention required */
@@ -497,14 +493,6 @@ t_stat mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         return SNS_CHNEND|SNS_DEVEND|STATUS_PCHK;   /* add DEVEND 08/16/20 */
         break;
     }
-#if 0
-    /* not reached */
-    if (uptr->SNS & 0xff000000)             /* errors? */
-        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
-    sim_debug(DEBUG_EXP, dptr,
-        "mt_startcmd ret CHNEND|DEVEND chan %04x unit %04x cmd %02x\n", chan, unit, cmd);
-    return SNS_CHNEND|SNS_DEVEND;
-#endif
 }
 
 /* Map simH errors into machine errors */
@@ -576,9 +564,7 @@ t_stat mt_srv(UNIT *uptr)
     uint32      mema;
     uint16      len;
     uint8       ch;
-//  uint8       buf[1024];
 
-//  sim_debug(DEBUG_DETAIL, dptr, "mt_srv unit %04x cmd %02x\n", unit, cmd);
     sim_debug(DEBUG_CMD, dptr, "mt_srv unit %04x cmd %02x\n", unit, cmd);
 
     switch (cmd) {
@@ -722,7 +708,6 @@ t_stat mt_srv(UNIT *uptr)
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
         return SCPE_OK;
     }
-//  uptr->SNS |= (SNS_RDY|SNS_ONLN);        /* set ready status */
 
     switch (cmd) {
     case MT_READ:   /* 0x02 */              /* read a record from the device */
@@ -1147,7 +1132,6 @@ t_stat mt_srv(UNIT *uptr)
             uptr->SNS &= ~(SNS_RDY|SNS_ONLN);   /* unit not online or rdy */
             uptr->SNS &= ~SNS_LOAD;         /* reset BOT detected */
              r = sim_tape_detach(uptr);
-//??        set_devattn(chsa, SNS_DEVEND);  /* ready int???? */
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
          }
          break;

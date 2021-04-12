@@ -673,7 +673,6 @@ uint32 get_dmatrk(UNIT *uptr, uint32 star, uint8 buf[])
         /* get the alternate track address */
         cyl = (buf[22] << 8) | buf[23];         /* get the cylinder */
         trk = buf[24];                          /* get the track */
-//bad   sec = 0;                                /* sec is zero */
         nstar = CHS2STAR(cyl, trk, sec);
         sim_debug(DEBUG_DETAIL, dptr,
             "Track %08x is defective, new track %08x\n", tstart, nstar);
@@ -942,9 +941,7 @@ loop:
                 sim_debug(DEBUG_EXP, dptr,
                     "disk_iocl continue wait chsa %04x status %08x\n",
                     chp->chan_dev, chp->chan_status);
-#ifndef CHANGE_03072021
                 chp->chan_qwait = QWAIT;            /* run 25 instructions before starting iocl */
-#endif
             }
         } else
 
@@ -1279,7 +1276,6 @@ t_stat disk_srv(UNIT *uptr)
             } else
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
             break;
-//          return SCPE_OK;
         }
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
         break;
@@ -1310,7 +1306,6 @@ t_stat disk_srv(UNIT *uptr)
                 uptr->SNS2 |= (SNS_SKER|SNS_SEND);
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);  /* error */
                 break;
-//              return SCPE_OK;
             }
         }
 
@@ -1494,7 +1489,6 @@ iha_error:
         /* TODO add drive status bits here */
         if ((test_write_byte_end(chsa)) == 0) {
             /* bytes 12 & 13 contain drive related status */
-//          ch = 0xc0;                          /* seek end and unit selected for now */
             uptr->SNS2 |= (SNS_SEND|SNS_USEL);  /* selected & seek end */
             /* bits 2-7 have sector pulse count */
             ch = ((sec * 2) % SPT(type)) & 0x3f;/* get index cnt */
@@ -1664,7 +1658,6 @@ iha_error:
             uptr->CMD &= LMASK;                   /* remove old status bits & cmd */
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             break;
-//          return SCPE_OK;
         }
 
         /* Check if already on correct cylinder */
@@ -1697,7 +1690,6 @@ iha_error:
             chan_end(chsa, SNS_DEVEND|SNS_CHNEND);
         }
         break;
-//      return SCPE_OK;
 
     case DSK_XEZ:   /* 0x37 */                  /* Rezero & Read IPL record */
         sim_debug(DEBUG_CMD, dptr, "XEZ REZERO IPL unit=%02x seek 0\n", unit);
@@ -1714,13 +1706,11 @@ iha_error:
             uptr->CMD &= LMASK;                 /* remove old status bits & cmd */
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             break;
-//          return SCPE_OK;
         }
         /* we are on cylinder/track/sector zero, so go on */
         sim_debug(DEBUG_DETAIL, dptr, "disk_srv done seek trk 0\n");
         uptr->CMD &= LMASK;                     /* remove old status bits & cmd */
         chan_end(chsa, SNS_DEVEND|SNS_CHNEND);
-//      return SCPE_OK;
         break;
 
     case DSK_LMR:   /* 0x1F */
@@ -1767,7 +1757,6 @@ iha_error:
         if (len <= 1) {
             uptr->SNS |= SNS_CMDREJ;            /* cmd rejected */
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_PCHK);
-//          return SCPE_OK;
             break;
         }
         /* Read in 2-4 character tess code */
@@ -1785,7 +1774,6 @@ iha_error:
                         chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_PCHK);
                     else
                         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
-//                  chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_PCHK);
                     return SCPE_OK;
                     break;
                 }
@@ -1820,7 +1808,6 @@ iha_error:
             unit, buf[0], buf[1], buf[2], buf[3]);
 
         chan_end(chsa, tstart);
-//      return SCPE_OK;
         break;
 
     case DSK_FNSK:                              /* 0x0B Format for no skip */
@@ -1851,7 +1838,6 @@ iha_error:
         }
         sim_debug(DEBUG_DETAIL, dptr, "\n");
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
-//      return SCPE_OK;
         break;
 
     case DSK_RD:                                /* Read Data command 0x02 */
@@ -1910,7 +1896,6 @@ iha_error:
                 uptr->CMD &= LMASK;             /* remove old status bits & cmd */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
-//              return SCPE_OK;
             }
 
             sim_debug(DEBUG_CMD, dptr,
@@ -1939,7 +1924,6 @@ iha_error:
             uptr->CHS++;                        /* next sector number */
             /* process the next sector of data */
             for (i=0; i<len; i++) {
-//0906      for (i=0; i<ssize; i++) {
                 ch = buf[i];                    /* get a char from buffer */
                 if (chan_write_byte(chsa, &ch)) {   /* put a byte to memory */
                     if (chp->chan_status & STATUS_PCHK) /* test for memory error */
@@ -2010,7 +1994,6 @@ iha_error:
                 ssize, chp->ccw_count, chp->ccw_addr,
                 ((uptr->CHS)>>16)&0xffff, ((uptr->CHS)>>8)&0xff, (uptr->CHS)&0xff);
 
-////        uptr->CHS++;                        /* next sector number */
             /* get sector offset */
             tstart = STAR2SEC(uptr->CHS, SPT(type), SPC(type));
 
@@ -2094,7 +2077,6 @@ iha_error:
 
             uptr->SNS &= ~SNS_DEFTRK;           /* remove defective flag */
             /* see if spare track */
-//was       if (lbuf[4] & 0x30) {               /* see if spare or reserved track */
             if (lbuf[4] & 0x20) {               /* see if spare track */
                 uptr->SNS |= SNS_DADE;          /* disk addr error */
                 chp->chan_status |= STATUS_PCHK; /* channel prog check */
@@ -2370,7 +2352,6 @@ iha_error:
         /* Write sector label to disk */
         /* write 30 bytes, b0-b1=cyl, b1=trk, b2=sec */
         len = chp->ccw_count;                   /* get number bytes to read */
-//      mema = uptr->CHS+(len/30);              /* save address */
         mema = uptr->CHS;                       /* save address */
 
         sim_debug(DEBUG_DETAIL, dptr, "before WSL Sector %x len %x\n", uptr->CHS, len);
@@ -2406,7 +2387,6 @@ iha_error:
                 chp->ccw_count = len;           /* restore number bytes to read */
                 uptr->CMD &= LMASK;             /* remove old status bits & cmd */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_PCHK);
-//              chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_LENGTH);
                 return SCPE_OK;
                 break;
             }

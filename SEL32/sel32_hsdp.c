@@ -795,7 +795,6 @@ uint32 get_dpatrk(UNIT *uptr, uint32 star, uint8 buf[])
         /* get the alternate track address */
         cyl = (buf[22] << 8) | buf[23];         /* get the cylinder */
         trk = buf[24];                          /* get the track */
-//bad   sec = 0;                                /* sec is zero */
         nstar = CHS2STAR(cyl, trk, sec);
         sim_debug(DEBUG_CMD, dptr,
             "Track %08x is defective, new track %08x\n", tstart, nstar);
@@ -961,7 +960,6 @@ loop:
                     "hsdp_iocl tic cmd bad address chan %02x tic caw %06x IOCD wd 1 %08x\n",
                     chan, chp->chan_caw, word1);
                 chp->chan_status |= STATUS_PCHK; /* program check for invalid tic */
-//              chp->chan_caw = word1;          /* get new IOCD address */
                 chp->chan_caw = word1 & MASK24; /* get new IOCD address */
                 uptr->SNS |= SNS_CMDREJ;        /* cmd rejected status */
                 uptr->SNS |= SNS_INAD;          /* invalid address status */
@@ -974,7 +972,6 @@ loop:
                 chan, chp->chan_caw, word1);
             goto loop;                          /* restart the IOCD processing */
         }
-//      chp->chan_caw = word1;                  /* get new IOCD address */
         chp->chan_caw = word1 & MASK24;         /* get new IOCD address */
         chp->chan_status |= STATUS_PCHK;        /* program check for invalid tic */
         uptr->SNS |= SNS_CMDREJ;                /* cmd rejected status */
@@ -1066,9 +1063,7 @@ loop:
                 sim_debug(DEBUG_EXP, dptr,
                     "hsdp_iocl continue wait chsa %04x status %08x\n",
                     chp->chan_dev, chp->chan_status);
-#ifndef CHANGE_03072021
                 chp->chan_qwait = QWAIT;         /* run 25 instructions before starting iocl */
-#endif
             }
         } else
 
@@ -1250,7 +1245,6 @@ t_stat hsdp_srv(UNIT *uptr)
 {
     uint16          chsa = GET_UADDR(uptr->CMD);
     DEVICE          *dptr = get_dev(uptr);
-//  UNIT            *uptr0 = dptr->units;           /* get unit 0 pointer */
     CHANP           *chp = find_chanp_ptr(chsa);    /* get channel prog pointer */
     int             cmd = uptr->CMD & DSK_CMDMSK;
     int             type = GET_TYPE(uptr->flags);
@@ -1485,7 +1479,6 @@ t_stat hsdp_srv(UNIT *uptr)
             } else
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
             break;
-//          return SCPE_OK;
         }
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
         break;
@@ -1516,7 +1509,6 @@ t_stat hsdp_srv(UNIT *uptr)
                 uptr->SNS2 |= (SNS_SKER|SNS_SEND);
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);  /* error */
                 break;
-//              return SCPE_OK;
             }
         }
 
@@ -1547,7 +1539,6 @@ iha_error:
             sim_debug(DEBUG_EXP, dptr, "hsdp_srv IHA error on seek to %04x\n", tstart);
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             break;
-//          return SCPE_OK;
         }
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
         break;
@@ -1666,7 +1657,6 @@ iha_error:
         if ((trk == (hsdp_type[type].nhds-1)) && /* see if last trk */
             ((cyl == hsdp_type[type].cyl-1)) &&  /* see if last cyl */
             (sec == 0)) {                   /* sec is zero */
-//          ch = 0xff;                      /* show last track */
             ch = 0;                         /* show last track */
         }
 #endif
@@ -1719,7 +1709,6 @@ iha_error:
         /* TODO add drive status bits here */
         if ((test_write_byte_end(chsa)) == 0) {
             /* bytes 12 & 13 contain drive related status */
-//          ch = 0xc0;                          /* seek end and unit selected for now */
             uptr->SNS2 |= (SNS_SEND|SNS_USEL);  /* selected & seek end */
             /* bits 2-7 have sector pulse count */
             ch = ((sec * 2) % SPT(type)) & 0x3f;/* get index cnt */
@@ -1730,7 +1719,6 @@ iha_error:
             chan_write_byte(chsa, &ch);
 
             ch = 0x30;                          /* drive on cylinder and ready for now */
-//          uptr->SNS2 &= ~uptr->SNS2;          /* clean out old status */
             uptr->SNS2 |= (SNS_ONC|SNS_UNR);    /* on cylinder & ready */
             ch = uptr->SNS2 & 0xff;             /* drive on cylinder and ready for now */
             sim_debug(DEBUG_CMD, dptr, "hsdp_srv dsr unit=%02x 2 %02x\n",
@@ -1738,7 +1726,6 @@ iha_error:
             chan_write_byte(chsa, &ch);
         }
         uptr->SNS &= 0xff000000;                /* reset status */
-//28    uptr->SNS2 = (SNS_UNR|SNS_ONC);         /* reset status to on cyl & ready */
         uptr->SNS2 = 0;                         /* reset status */
         uptr->CMD &= LMASK;                     /* remove old status bits & cmd */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
@@ -1759,7 +1746,6 @@ iha_error:
             /* we have already seeked to the required sector */
             /* we do not need to seek again, so move on */
             chan_end(chsa, SNS_DEVEND|SNS_CHNEND);
-//          return SCPE_OK;
             break;
         }
 
@@ -1809,7 +1795,6 @@ iha_error:
                 }
             }
         }
-//0106  chp->ccw_count = len;                   /* restore count for diag, huh? */
         /* else the cyl, trk, and sect are ready to update */
         sim_debug(DEBUG_CMD, dptr,
             "hsdp_srv STAR unit=%02x star %02x %02x %02x %02x\n",
@@ -1850,7 +1835,6 @@ iha_error:
         /* Check if seek valid */
         if (cyl >= hsdp_type[type].cyl ||
             trk >= hsdp_type[type].nhds ||
-//0118      buf[3] >= hsdp_type[type].spt)  {
             buf[3] >= uptr->LSC) {
 
             sim_debug(DEBUG_CMD, dptr,
@@ -1870,7 +1854,6 @@ iha_error:
         }
 
         /* get alternate track if this one is defective */
-//sim_debug(DEBUG_CMD, dptr, "Dpatrk2 %08x label\n", tempt);
         tempt = get_dpatrk(uptr, tstar, lbuf);
 
         if ((tempt == 0) && (tstar != 0)) {
@@ -1898,7 +1881,6 @@ iha_error:
             uptr->CMD &= LMASK;                 /* remove old status bits & cmd */
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             break;
-//          return SCPE_OK;
         }
 
         /* do a delay to slow things down */
@@ -1924,7 +1906,6 @@ iha_error:
 //          sim_activate(uptr, 400+k);          /* start us off */
 #endif
         break;
-//      return SCPE_OK;
 
     case DSK_XEZ:   /* 0x37 */                  /* Rezero & Read IPL record */
 
@@ -1941,13 +1922,11 @@ iha_error:
             uptr->CMD &= LMASK;                 /* remove old status bits & cmd */
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             break;
-//          return SCPE_OK;
         }
         /* we are on cylinder/track/sector zero, so go on */
         sim_debug(DEBUG_CMD, dptr, "hsdp_srv done seek trk 0\n");
         uptr->CMD &= LMASK;                     /* remove old status bits & cmd */
         chan_end(chsa, SNS_DEVEND|SNS_CHNEND);
-//      return SCPE_OK;
         break;
 
     case DSK_LMR:   /* 0x1F */
@@ -1986,7 +1965,6 @@ iha_error:
         /* now read sector label data */
         len = chp->ccw_count;
         for (i = 0; i < len; i++) {
-//0906  for (i = 0; i < 30; i++) {
             if (chan_read_byte(chsa, &buf[i])) {
                 if (chp->chan_status & STATUS_PCHK) /* test for memory error */
                     uptr->SNS |= SNS_INAD;      /* invalid address */
@@ -2002,8 +1980,6 @@ iha_error:
         }
         sim_debug(DEBUG_CMD, dptr, "\n");
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
-//      chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
-//      return SCPE_OK;
         break;
 
     case DSK_RD:                                /* Read Data */
@@ -2021,7 +1997,6 @@ iha_error:
             uptr->CHS = hsdpsec2star(tstart, type);
 
             /* get alternate track if this one is defective */
-//sim_debug(DEBUG_CMD, dptr, "Dpatrk3 %08x label\n", uptr->CHS);
             tempt = get_dpatrk(uptr, uptr->CHS, lbuf);
             /* file offset in bytes to std or alt track */
             tstart = STAR2SEC(tempt, SPT(type), SPC(type)) * SSB(type);
@@ -2051,7 +2026,6 @@ iha_error:
             /* see if reserved track */
             if (lbuf[4] & 0x10) {               /* see if reserved track */
                 uptr->SNS |= SNS_MOCK;          /* mode check error */
-//              uptr->SNS |= SNS_RTAE;          /* reserved track access error */
                 uptr->SNS |= SNS_RES8;          /* reserved track access error */
                 uptr->CMD &= LMASK;             /* remove old status bits & cmd */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_PCHK);
@@ -2064,7 +2038,6 @@ iha_error:
                 uptr->CMD &= LMASK;             /* remove old status bits & cmd */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
-//              return SCPE_OK;
             }
 
             sim_debug(DEBUG_CMD, dptr,
@@ -2246,7 +2219,6 @@ iha_error:
             tstart = tstart * SSB(type);
 
             /* get alternate track if this one is defective */
-//sim_debug(DEBUG_CMD, dptr, "Dpatrk4 %08x label\n", uptr->CHS);
             tempt = get_dpatrk(uptr, uptr->CHS, lbuf);
             /* file offset in bytes to std or alt track */
             tstart = STAR2SEC(tempt, SPT(type), SPC(type)) * SSB(type);
@@ -2265,7 +2237,6 @@ iha_error:
 
             uptr->SNS &= ~SNS_DEFTRK;           /* remove defective flag */
             /* see if spare track */
-//was       if (lbuf[4] & 0x30) {               /* see if spare or reserved track */
             if (lbuf[4] & 0x20) {               /* see if spare track */
                 uptr->SNS |= SNS_DADE;          /* disk addr error */
                 chp->chan_status |= STATUS_PCHK; /* channel prog check */
@@ -2276,7 +2247,6 @@ iha_error:
             /* see if reserved track */
             if (lbuf[4] & 0x10) {               /* see if reserved track */
                 uptr->SNS |= SNS_MOCK;          /* mode check error */
-//              uptr->SNS |= SNS_RTAE;          /* reserved track access error */
                 uptr->SNS |= SNS_RES8;          /* reserved track access error */
                 uptr->CMD &= LMASK;             /* remove old status bits & cmd */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_PCHK);
@@ -2556,7 +2526,6 @@ iha_error:
     case DSK_WTF:                               /* 0x41 Write track format */
     case DSK_WSL:                               /* WSL 0x31 */
         len = chp->ccw_count;                   /* get number bytes to read */
-//      mema = uptr->CHS+(len/30);              /* save address */
         mema = uptr->CHS;                       /* save address */
 
         sim_debug(DEBUG_CMD, dptr, "before WSL/WTF Sector %x len %x\n", uptr->CHS, len);
@@ -2592,7 +2561,6 @@ iha_error:
                 chp->ccw_count = len;           /* restore number bytes to read */
                 uptr->CMD &= LMASK;             /* remove old status bits & cmd */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_PCHK);
-//              chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_LENGTH);
                 return SCPE_OK;
                 break;
             }
@@ -3255,7 +3223,6 @@ int hsdp_format(UNIT *uptr) {
                 /* get sector address of utx diag map (DMAP) track 0 pointer */
                 /* put data = 0xf0000000 + (cyl-1), 0x8a000000 + daddr, */
                 /* 0x9a000000 + (cyl-1), 0xf4000000 */
-//  int32       daddr = vaddr - SPT(type);
     int32       daddr = (CYL(type)-4) * SPC(type) + (HDS(type)-2) * SPT(type);
                 /* make logical */
     int32       logda = daddr*(SPT(type)-1)/(SPT(type));
@@ -3639,7 +3606,6 @@ ldone:
     /* get umap sector address from umapaddr */
     info = (buff[16]<<24) | (buff[17]<<16) | (buff[18]<<8) | buff[19];
     daddr = umapaddr * ssize;                   /* byte offset in file */
-//  printf("info %8x daddr %8x\r\n", info, daddr);
     if ((sim_fseek(uptr->fileref, umapaddr*ssize, SEEK_SET)) != 0) { /* seek umap */
         detach_unit(uptr);                      /* detach if error */
         return SCPE_FMT;                        /* error */

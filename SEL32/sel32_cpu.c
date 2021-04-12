@@ -1705,7 +1705,8 @@ t_stat Mem_write(uint32 addr, uint32 *data)
                 case 0x0: case 0x2: case 0x6: case 0xa: case 0xe:
                     /* O/S or user has read/execute access, do protection violation */
                     sim_debug(DEBUG_DETAIL, &cpu_dev,
-                        "Mem_writeA protect error @ %06x prot %02x modes %08x\n", addr, prot, MODES);
+                        "Mem_writeA protect error @ %06x prot %02x modes %08x\n",
+                        addr, prot, MODES);
                     if (CPU_MODEL == MODEL_V9)
                         TRAPSTATUS |= BIT1;         /* set bit 1 of trap status */
                     else
@@ -1714,7 +1715,8 @@ t_stat Mem_write(uint32 addr, uint32 *data)
                 case 0x4: case 0x8: case 0xc:
                     /* O/S or user has write access, no protection violation */
                     sim_debug(DEBUG_DETAIL, &cpu_dev,
-                        "Mem_writeB protect is ok @ %06x prot %02x modes %08x\n", addr, prot, MODES);
+                        "Mem_writeB protect is ok @ %06x prot %02x modes %08x\n",
+                        addr, prot, MODES);
                 }
                 map = RMR((page<<1));               /* read the map reg contents */
                 raddr = TLB[page];                  /* get the base address & bits */
@@ -1868,18 +1870,6 @@ wait_loop:
                     return reason;
                     break;
                 }
-#ifdef XXX
-                else {
-                    sim_debug(DEBUG_EXP, &cpu_dev,
-                        "Process Event other reason %08x interval %08x\n",
-                        reason, sim_interval);
-            reason = STOP_IBKPT;
-            sim_interval= 0;                        /* count down */
-            break;
-//JB                return reason;
-//JB                break;                          /* process */
-                }
-#else
                 else {
                     sim_debug(DEBUG_EXP, &cpu_dev,
                         "Process Event other reason %08x interval %08x\n",
@@ -1887,7 +1877,6 @@ wait_loop:
                     return reason;
                     break;                          /* process */
                 }
-#endif
             }
         }
 
@@ -2947,7 +2936,6 @@ exec:
                 /*    7 - Read & Lock Enabled (=1)/Disabled (=0) */
                 /* 8-12 - Lower Bound of Shared Memory */
                 /* 3-31 - Reserved and must be zero */
-//              sim_debug(DEBUG_EXP, &cpu_dev,
                 sim_debug(DEBUG_CMD, &cpu_dev,
                     "SMC V6/67 GPR[%02x] = %08x SMCR = %08x CPU STATUS SPAD[f9] = %08x\n",
                     reg, GPR[reg], SMCR, SPAD[0xf9]);
@@ -6495,18 +6483,22 @@ sim_debug(DEBUG_IRQ, &cpu_dev,
                             /* insert status CCs */
                             PSD1 = ((PSD1 & 0x87fffffe) | (status & 0x78000000));
                         } else {
+#if 0
                             /* may want to handle class E someday */
-//                          if ((TRAPME = testEIO(device, testcode, &status)))
-//                              goto newpsd;        /* error returned, trap cpu */
+                            if ((TRAPME = testEIO(device, testcode, &status)))
+                                goto newpsd;        /* error returned, trap cpu */
                              /* return status has new CC's in bits 1-4 of status word */
-//                           /* insert status CCs */
-//                           PSD1 = ((PSD1 & 0x87fffffe) | (status & 0x78000000));
+                             /* insert status CCs */
+                             PSD1 = ((PSD1 & 0x87fffffe) | (status & 0x78000000));
+#endif
                              goto inv;               /* invalid instruction until I fix it */
                         }
                     } else {
                         /* TODO process a CD */
-//                      if ((TRAPME = startEIO(device, &status)))
-//                          goto newpsd;            /* error returned, trap cpu */
+#if 0
+                        if ((TRAPME = startEIO(device, &status)))
+                            goto newpsd;            /* error returned, trap cpu */
+#endif
                         if (device == 0x7f) {
                             temp = (IR & 0x7f);     /* get cmd from instruction */
                             status = itm_rdwr(temp, GPR[0], ix);    /* read/write the interval timer */
@@ -7348,7 +7340,7 @@ t_stat cpu_ex(t_value *vptr, t_addr baddr, UNIT *uptr, int32 sw)
         sim_debug(DEBUG_CMD, &cpu_dev, "cpu_ex Mem_read status = %02x\n", status);
         if (status == ALLOK) {
             *vptr = (M[realaddr] >> (8 * (3 - (baddr & 0x3))));  /* return memory contents */
-            return SCPE_OK;             /* we are all ok */
+            return SCPE_OK;                         /* we are all ok */
         }
         return SCPE_NXM;                            /* no, none existant memory error */
     }

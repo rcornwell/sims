@@ -1416,10 +1416,12 @@ int scsi_format(UNIT *uptr) {
         sim_switches = oldsw;                   /* restore switches */
     }
 
+#if 0
     /* see if user wants to initialize the disk */
     if (!get_yn("Initialize disk? [Y] ", TRUE)) {
         return 1;
     }
+#endif
 
     /* VDT  249264 (819/18/0) 0x3cdb0 for 9346 - 823/19/16 vaddr */
     /* MDT  249248 (819/17/0) 0x3cda0 for 9346 - 823/19/16 daddr */
