@@ -354,8 +354,8 @@ t_stat show_dev_addr(FILE * st, UNIT * uptr, int32 v, CONST void *desc);
 extern uint16 loading;
 extern int    irq_pend;
 
-extern const char ascii_to_ebcdic[128];
-extern const char ebcdic_to_ascii[256];
+extern const uint8 ascii_to_ebcdic[128];
+extern const uint8 ebcdic_to_ascii[256];
 
 /* Debuging controls */
 #define DEBUG_CMD       0x0000001       /* Show device commands */
