@@ -1038,7 +1038,7 @@ wr_end:
         }
         sim_debug(DEBUG_DETAIL, &ec_dev,
             "ec_srv sent packet %d bytes tx_count=%08x SNS %08x\n",
-		    ec_data.snd_buff.len, ec_data.tx_count, uptr->SNS);
+            ec_data.snd_buff.len, ec_data.tx_count, uptr->SNS);
 
         if (pirq)
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_PCHK);

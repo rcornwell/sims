@@ -2275,10 +2275,10 @@ void codedump(int sect)
         fprintf(stderr, "addr %0x - data %0x\n", (int32)tr_start, *memory);
 #else
         fprintf(stderr, "addr %0x - data %0.2x%0.2x%0.2x%0.2x\n", (int32)tr_start,
-        	(data >> 0) & 0xff,
-        	(data >> 8) & 0xff,
-        	(data >> 16) & 0xff,
-        	(data >> 24) & 0xff);
+            (data >> 0) & 0xff,
+            (data >> 8) & 0xff,
+            (data >> 16) & 0xff,
+            (data >> 24) & 0xff);
 #endif
 #ifdef NOBIGENDIAN
         byte = (data >> 24) & 0xff;

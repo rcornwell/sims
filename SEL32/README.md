@@ -14,9 +14,9 @@ test version of MPX 3.4.  It is capable of creating a disk image for the
 O/S from a UTX or MPX SDT tape. The disk image can be booted, initialized,
 and can run many of the UTX and MPX utilities and programs. Ethernet is
 supported on UTX and may be added to MPX in the future.  Eight terminals
-can be used to access MPX via Telnet port 4747. The sumulator has support
-for excess 64 floating point arithmetic and passes the 32/27 and 32/67 FP
-diags.
+can be used to access MPX or UTX via Telnet port 4747. The sumulator has
+support for excess 64 floating point arithmetic and passes the 32/27 and
+32/67 FP diags.
 
 The sim32disk.gz file is a prebuilt MPX 1.5F system disk.  It can be
 uncompressed and booted with the sel32.27.sim32.disk.ini initialization
@@ -33,8 +33,8 @@ UTX 2.1B system.  These files are only available from my sims project at
 https://github.com/AZBevier/sims.  A MPX 3.X test version will be added
 in the future when testing is complete.
 
-Available tap tools:
-taptools.tgz - set of tools to work with .tap formatted tapes.  Also tools
+Available tap tools in taptools directory:
+./taptools   - set of tools to work with .tap formatted tapes.  Also tools
                to convert between MPX and UNIX file formats.  See README
                file and source for descriptions.
 
@@ -56,14 +56,14 @@ sim32sdt.tap - MPX 1.5f user SDT install tape.  Uses 300mb disk, IOP 8-line
                FIL> RESTORE
                FIL> X
 
-Available Level One Diagnostic boot tape:
-diag.ini       command file to start diags. Type "./sel32 tests/diag.ini"
-diag.tap       bootable level one diagnostic tape w/auto testing.  Set
-               cpu type to 32/27, 32/67, 32/87, 32/97, V6 or V9.  All
+Available Level One Diagnostic boot tape in tests directory:
+diag.ini     - command file to start diags. Type "./sel32 tests/diag.ini"
+diag.tap     - bootable level one diagnostic tape w/auto testing.
+               Set cpu type to 32/27, 32/67, 32/87, 32/97, V6 or V9.  All
                cpu models now run all diagnostics provided on the
                diagnostic tape.  Running DEXP stand alone causes input
-               to stop after a few characters are entered.  More
-               testing is still required.
+               to stop after a few characters are entered.  More testing
+               is still required.
 
                CV.CSL - Firmware control diag.  Disabled in auto testing.
                CV.CP1 - CPU diag part 1 runs OK.
@@ -105,5 +105,5 @@ Other MPX verions support:
                disk image of a bootable MPX3.X system.
 
 James C. Bevier
-02/13/2021 
+04/14/2021 
 

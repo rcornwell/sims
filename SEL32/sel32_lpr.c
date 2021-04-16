@@ -1,4 +1,4 @@
-/* sel32_lpr.c: SEL 32 Line Printer
+/* sel32_lpr.c: SEL32 922x & 924x High Speed Line Printer
 
    Copyright (c) 2018-2021, James C. Bevier
    Portions provided by Richard Cornwell and other SIMH contributers
@@ -75,7 +75,7 @@ LPFCTBL  EQU       $
   
 #if NUM_DEVS_LPR > 0
 
-#define UNIT_LPR        UNIT_ATTABLE | UNIT_IDLE | UNIT_DISABLE
+#define UNIT_LPR    UNIT_ATTABLE | UNIT_IDLE | UNIT_DISABLE | UNIT_SEQ
 
 #define CMD u3
 /* u3 holds command and status information */
@@ -151,6 +151,8 @@ t_stat      lpr_attach(UNIT *, CONST char *);
 t_stat      lpr_detach(UNIT *);
 t_stat      lpr_setlpp(UNIT *, int32, CONST char *, void *);
 t_stat      lpr_getlpp(FILE *, UNIT *, int32, CONST void *);
+t_stat      lpr_help(FILE *, DEVICE *, UNIT *, int32, const char *);
+const char  *lpr_description (DEVICE *dptr);
 
 /* channel program information */
 CHANP       lpr_chp[NUM_DEVS_LPR] = {0};
@@ -197,8 +199,9 @@ DEVICE      lpr_dev = {
     NUM_DEVS_LPR, 8, 15, 1, 8, 8,
     NULL, NULL, NULL, NULL, &lpr_attach, &lpr_detach,
     /* ctxt is the DIB pointer */
-    &lpr_dib, DEV_DISABLE|DEV_DEBUG, 0, dev_debug
+    &lpr_dib, DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
 //  &lpr_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug
+    NULL, NULL, &lpr_help, NULL, NULL, &lpr_description,
 };
 
 /* initialize the line printer */
@@ -520,10 +523,28 @@ t_stat lpr_attach(UNIT *uptr, CONST char *file)
     return SCPE_OK;
 }
 
+/* help information for lpr */
+t_stat lpr_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
+{
+    fprintf (st, "SEL32 924x High Speed Line Printer\r\n");
+    fprintf (st, "The Line printer can be configured to any number of\n");
+    fprintf (st, "lines per page with the:\n");
+    fprintf (st, "sim> SET LPRn LINESPERPAGE=n\n\n");
+    fprintf (st, "The default is 66 lines per page.\n");
+    fprint_set_help(st, dptr);
+    fprint_show_help(st, dptr);
+    return SCPE_OK;
+}
+
 /* detach a file from the line printer */
 t_stat lpr_detach(UNIT * uptr)
 {
     return detach_unit(uptr);
+}
+
+const char *lpr_description (DEVICE *dptr)
+{
+    return "SEL32 924x High Speed Line Printer";
 }
 
 #endif

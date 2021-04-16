@@ -34,7 +34,7 @@
 
 /* useful conversions */
 /* Fill STAR value from cyl, trk, sec data */
-#define CHS2STAR(c,h,s)	        (((c<<16) & LMASK)|((h<<8) & 0xff00)|(s & 0xff))
+#define CHS2STAR(c,h,s)         (((c<<16) & LMASK)|((h<<8) & 0xff00)|(s & 0xff))
 /* convert STAR value to number of sectors */
 #define STAR2SEC(star,spt,spc)  ((star&0xff)+(((star>>8)&0xff)*spt)+(((star>>16)&0xffff)*spc))
 /* convert STAR value to number of heads or tracks */
@@ -197,9 +197,9 @@ Byte 1 bits 7-15
     /* for track 0, write max cyl/head/sec values in 0-3 */
     /* otherwise write current values */
 /*
-0   short lcyl;	        cylinder
-2   char ltkn;			head or track number
-3   char lid;			track label id (0xff means last track)
+0   short lcyl;         cylinder
+2   char ltkn;          head or track number
+3   char lid;           track label id (0xff means last track)
 4   char lflg1;         track status flags
         bit 0           good trk
             1           alternate trk
@@ -229,7 +229,7 @@ Byte 1 bits 7-15
 22  short laltcyl;      alternate cylinder number or return cyl num
 24  char lalttk;        alrernate track number or return track num
 25  char ldscnt;        data sector count 16/20
-26  char ldatrflg;		device attributes
+26  char ldatrflg;      device attributes
         bit 0           n/u
             1           disk is mhd
             2           n/u
@@ -248,9 +248,9 @@ Byte 1 bits 7-15
 /*************************************/
 /* sector label definations 34 bytes */
 /*
-0   short lcyl;	        cylinder number
-2   char lhd;			head number
-3   char lsec;		    sec # 0-15 or 0-19 for 16/20 format
+0   short lcyl;         cylinder number
+2   char lhd;           head number
+3   char lsec;          sec # 0-15 or 0-19 for 16/20 format
 4   char lflg1;         track/sector status flags
         bit 0           good sec
             1           alternate sec
@@ -277,7 +277,7 @@ Byte 1 bits 7-15
 22  short laltcyl;      alternate cylinder number or return cyl num
 24  char lalttk;        alrernate track number or return track num
 25  char ldscnt;        data sector count 16/20
-26  char ldatrflg;		device attributes
+26  char ldatrflg;      device attributes
         bit 0           n/u
             1           disk is mhd
             2           n/u
@@ -295,9 +295,9 @@ Byte 1 bits 7-15
 
 /* track label / sector label definations */
 /*
- 0  short lcyl;	        cylinder
- 2  char ltkn;			track
- 3  char lid;			sector id
+ 0  short lcyl;         cylinder
+ 2  char ltkn;          track
+ 3  char lid;           sector id
  4  char lflg1;         track/sector status flags
         bit 0           good
             1           alternate
@@ -311,12 +311,12 @@ Byte 1 bits 7-15
  8  short lspar2;
 10  short ldef1;
 12  int ldeallp;        DMAP block number trk0
-16  int lumapp;			UMAP block number sec1
+16  int lumapp;         UMAP block number sec1
 20  short ladef3;
 22  short laltcyl;
 24  char lalttk;        sectors per track
 25  char ldscnt;        number of heads
-26  char ldatrflg;		device attributes
+26  char ldatrflg;      device attributes
         bit 0           n/u
             1           disk is mhd
             2           n/u
@@ -1437,12 +1437,13 @@ t_stat hsdp_srv(UNIT *uptr)
 
     case DSK_NOP:                               /* NOP 0x03 */
         if ((uptr->CMD & DSK_WAITING) == 0) {
-            /* Do a fake wait to kill time */
+            /* Do a fake wait to kill some time */
             uptr->CMD |= DSK_WAITING;           /* show waiting for NOP */
             sim_debug(DEBUG_CMD, dptr, "hsdp_srv cmd NOP stalling for 50 cnts\n");
 //          sim_activate(uptr, 250);            /* start waiting */
 //          sim_activate(uptr, 50);             /* start waiting */
-            sim_activate(uptr, 20);             /* start waiting */
+//30        sim_activate(uptr, 350);             /* start waiting */
+            sim_activate(uptr, 350);             /* start waiting */
             break;
         }
         /* NOP drop through after wait */

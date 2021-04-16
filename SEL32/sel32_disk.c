@@ -34,7 +34,7 @@
 
 /* useful conversions */
 /* Fill STAR value from cyl, trk, sec data */
-#define CHS2STAR(c,h,s)	        (((c<<16) & LMASK)|((h<<8) & 0xff00)|(s & 0xff))
+#define CHS2STAR(c,h,s)         (((c<<16) & LMASK)|((h<<8) & 0xff00)|(s & 0xff))
 /* convert STAR value to number of sectors */
 #define STAR2SEC(star,spt,spc)  ((star&0xff)+(((star>>8)&0xff)*spt)+(((star>>16)&0xffff)*spc))
 /* convert STAR value to number of heads or tracks */
@@ -105,9 +105,9 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
     /* for track 0, write max cyl/head/sec values in 0-3 */
     /* otherwise write current values */
 /*
-0   short lcyl;	        cylinder
-2   char ltkn;			head or track number
-3   char lid;			track label id (0xff means last track)
+0   short lcyl;         cylinder
+2   char ltkn;          head or track number
+3   char lid;           track label id (0xff means last track)
 4   char lflg1;         track status flags
         bit 0           good trk
             1           alternate trk
@@ -137,7 +137,7 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 22  short laltcyl;      alternate cylinder number or return cyl num
 24  char lalttk;        alrernate track number or return track num
 25  char ldscnt;        data sector count 16/20
-26  char ldatrflg;		device attributes
+26  char ldatrflg;      device attributes
         bit 0           n/u
             1           disk is mhd
             2           n/u
@@ -156,9 +156,9 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 /*************************************/
 /* sector label definations 34 bytes */
 /*
-0   short lcyl;	        cylinder number
-2   char lhd;			head number
-3   char lsec;		    sec # 0-15 or 0-19 for 16/20 format
+0   short lcyl;         cylinder number
+2   char lhd;           head number
+3   char lsec;          sec # 0-15 or 0-19 for 16/20 format
 4   char lflg1;         track/sector status flags
         bit 0           good sec
             1           alternate sec
@@ -185,7 +185,7 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 22  short laltcyl;      alternate cylinder number or return cyl num
 24  char lalttk;        alrernate track number or return track num
 25  char ldscnt;        data sector count 16/20
-26  char ldatrflg;		device attributes
+26  char ldatrflg;      device attributes
         bit 0           n/u
             1           disk is mhd
             2           n/u
@@ -587,14 +587,18 @@ uint32 get_dmatrk(UNIT *uptr, uint32 star, uint8 buf[])
     int     unit = (uptr - dptr->units);        /* get the UNIT number */
     int     len, i, cn, found = -1;
 
+#define SPEEDUP
 #ifdef SPEEDUP
     int ds = ((CYL(type) - 3) * HDS(type)) * SPT(type);  /* diag start */
     /* get file offset in sectors */
     tstart = STAR2SEC(star, SPT(type), SPC(type));
     /* convert sector number back to chs value to sync disk for diags */
     nstar = disksec2star(tstart, type);
-    if (ds >= tstart)
+    if (ds >= (int)tstart) {
+        /* zero the Track Label flags */
+        buf[4] = 0;
         return nstar;                           /* not in diag track, return */
+    }
 #else
     /* get file offset in sectors */
     tstart = STAR2SEC(star, SPT(type), SPC(type));
@@ -610,8 +614,8 @@ uint32 get_dmatrk(UNIT *uptr, uint32 star, uint8 buf[])
     tstart = (cyl * HDS(type)) + trk;
 //  sim_debug(DEBUG_EXP, dptr,
     sim_debug(DEBUG_DETAIL, dptr,
-        "get_dmatrk RTL cyl %4x(%d) trk %x sec# %06x\n",
-        cyl, cyl, trk, tstart);
+        "get_dmatrk RTL star %08x nstar %08x cyl %4x(%d) trk %x sec# %06x\n",
+        star, nstar, cyl, cyl, trk, tstart);
 
     /* calc offset in file to track label */
     offset = CAPB(type) + (tstart * 30);
@@ -1862,7 +1866,7 @@ iha_error:
             if ((tempt == 0) && (uptr->STAR != 0)) {
                 /* we have error */
                 sim_debug(DEBUG_EXP, dptr,
-                    "disk_srv READ get_dmatrk return error tempt %06x tstart %06x\n", tempt, tstart);
+                    "disk_srv READ1 get_dmatrk return error tempt %06x tstart %06x\n", tempt, tstart);
                 uptr->CMD &= LMASK;             /* remove old status bits & cmd */
                 uptr->SNS |= SNS_DADE;          /* set error status */
                 uptr->SNS2 |= (SNS_SKER|SNS_SEND);
@@ -1876,7 +1880,7 @@ iha_error:
                 uptr->SNS |= SNS_DADE;          /* disk addr error */
                 uptr->CMD &= LMASK;             /* remove old status bits & cmd */
                 sim_debug(DEBUG_EXP, dptr,
-                    "disk_srv READ get_dmatrk return spare tempt %06x tstart %06x\n", tempt, tstart);
+                    "disk_srv READ2 get_dmatrk return spare tempt %06x tstart %06x\n", tempt, tstart);
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_PCHK);
                 break;
             }

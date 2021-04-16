@@ -1959,7 +1959,7 @@ wait_loop:
             goto wait_loop;                         /* continue waiting */
         }
 
-//#define NEW_WAIT
+#define NEW_WAIT
 #ifdef NEW_WAIT
         /* process IOCL entries that are waiting */
         /* loop through the IOCL ready Q and decrement wait counts */
@@ -1978,7 +1978,7 @@ wait_loop:
                     continue;
                 if (chp->chan_byte != BUFF_NEXT) {
                     /* if not BUFF_NEXT, channel has been stopped, do nothing */
-                    sim_debug(DEBUG_XIO, &cpu_dev,
+                    sim_debug(DEBUG_EXP, &cpu_dev,
                         "scan_chan Bad CPU RDYQ entry for chsa %04x chan_byte %02x\n",
                         chsa, chp->chan_byte);
                     /* not BUFF_NEXT, just zero entry */
@@ -1992,17 +1992,20 @@ wait_loop:
                 /* process 0 wait entry */
                 if (chp->chan_qwait == 0)        {
                     int32 stat;
-                    sim_debug(DEBUG_XIO, &cpu_dev,
+//                  sim_debug(DEBUG_XIO, &cpu_dev,
+                    sim_debug(DEBUG_EXP, &cpu_dev,
                         "scan_chan CPU RDYQ entry for chsa %04x starting byte %02x\n",
                         chsa, chp->chan_byte);
                     /* if not BUFF_NEXT, channel has been stopped, do nothing */
                     stat = cont_chan(chsa);         /* resume the channel program */
                     if (stat == SCPE_OK)
-                        sim_debug(DEBUG_XIO, &cpu_dev,
+//                      sim_debug(DEBUG_XIO, &cpu_dev,
+                        sim_debug(DEBUG_EXP, &cpu_dev,
                         "scan_chan CPU RDYQ entry for chsa %04x processed byte %04x\n",
                         chsa, chp->chan_byte);
                     else
-                        sim_debug(DEBUG_XIO, &cpu_dev,
+//                      sim_debug(DEBUG_XIO, &cpu_dev,
+                        sim_debug(DEBUG_EXP, &cpu_dev,
                         "scan_chan CPU RDYQ entry for chsa %04x processed w/error byte %04x\n",
                         chsa, chp->chan_byte);
                     irq_pend = 1;                   /* start scanning interrupts again */
@@ -2017,7 +2020,8 @@ wait_loop:
         /* we get here when not booting */
         /* process any pending interrupts */
 #ifdef NEW_WAIT
-        if ((irq_pend || wait4int) && (RDYQ_Num() == 0) && (irq_auto == 0)) {
+//041321if ((irq_pend || wait4int) && (RDYQ_Num() == 0) && (irq_auto == 0)) {
+        if ((irq_pend || wait4int) && (irq_auto == 0)) {
 #else
         if ((irq_pend || wait4int) && (irq_auto == 0)) {
 #endif
@@ -2151,7 +2155,8 @@ wait_loop:
                     continue;
                 if (chp->chan_byte != BUFF_NEXT) {
                     /* if not BUFF_NEXT, channel has been stopped, do nothing */
-                    sim_debug(DEBUG_XIO, &cpu_dev,
+//                  sim_debug(DEBUG_XIO, &cpu_dev,
+                    sim_debug(DEBUG_EXP, &cpu_dev,
                         "scan_chan Bad CPU RDYQ entry for chsa %04x chan_byte %02x\n",
                         chsa, chp->chan_byte);
                     /* not BUFF_NEXT, just zero entry */
@@ -2163,17 +2168,20 @@ wait_loop:
                 /* process 0 wait entry */
                 if (chp->chan_qwait == 0)        {
                     int32 stat;
-                    sim_debug(DEBUG_XIO, &cpu_dev,
+//                  sim_debug(DEBUG_XIO, &cpu_dev,
+                    sim_debug(DEBUG_EXP, &cpu_dev,
                         "scan_chan CPU RDYQ entry for chsa %04x starting byte %02x\n",
                         chsa, chp->chan_byte);
                     /* if not BUFF_NEXT, channel has been stopped, do nothing */
                     stat = cont_chan(chsa);         /* resume the channel program */
                     if (stat == SCPE_OK)
-                        sim_debug(DEBUG_XIO, &cpu_dev,
+//                      sim_debug(DEBUG_XIO, &cpu_dev,
+                        sim_debug(DEBUG_EXP, &cpu_dev,
                         "scan_chan CPU RDYQ entry for chsa %04x processed byte %04x\n",
                         chsa, chp->chan_byte);
                     else
-                        sim_debug(DEBUG_XIO, &cpu_dev,
+//                      sim_debug(DEBUG_XIO, &cpu_dev,
+                        sim_debug(DEBUG_EXP, &cpu_dev,
                         "scan_chan CPU RDYQ entry for chsa %04x processed w/error byte %04x\n",
                         chsa, chp->chan_byte);
                     irq_pend = 1;                   /* start scanning interrupts again */

@@ -32,7 +32,7 @@
 
 /* useful conversions */
 /* Fill STAR value from cyl, trk, sec data */
-#define CHS2STAR(c,h,s)	        (((c<<16) & LMASK)|((h<<8) & 0xff00)|(s & 0xff))
+#define CHS2STAR(c,h,s)         (((c<<16) & LMASK)|((h<<8) & 0xff00)|(s & 0xff))
 /* convert STAR value to number of sectors */
 #define STAR2SEC(star,spt,spc)  ((star&0xff)+(((star>>8)&0xff)*spt)+((star>>16)*spc))
 /* convert STAR value to number of heads or tracks */
@@ -97,9 +97,9 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 
 /* track label / sector label definations */
 /*
-    short lcyl;	        cylinder
-    char ltkn;			track
-    char lid;			sector id
+    short lcyl;         cylinder
+    char ltkn;          track
+    char lid;           sector id
     char lflg1;         track/sector status flags
         bit 0           good
             1           alternate
@@ -113,12 +113,12 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
     short lspar2;
     short ldef1;
     int ldeallp;        DMAP block number trk0
-    int lumapp;			UMAP block number sec1
+    int lumapp;         UMAP block number sec1
     short ladef3;
     short laltcyl;
     char lalttk;        sectors per track
     char ldscnt;        number of heads
-    char ldatrflg;		device attributes
+    char ldatrflg;      device attributes
         bit 0           n/u
             1           disk is mhd
             2           n/u
@@ -1387,8 +1387,8 @@ int scsi_format(UNIT *uptr) {
     uint32      umap[256] =
                 {
                     /* try to makeup a utx dmap */
-                    0x4e554d50,(cap-1),luaddr-1,0,0,0,0,0xe10,
-                    0,0x5320,0,0x4e60,0x46,luaddr,0,0xd360,
+                    0x4e554d50,(cap-1),(uint32)(luaddr-1),0,0,0,0,0xe10,
+                    0,0x5320,0,0x4e60,0x46,(uint32)luaddr,0,0xd360,
                     0x88,0x186b0,0x13a,0xd100,0x283,0,0,0,
                     0,0x22c2813e,0,0x06020000,0xf4,0,0x431b1c,0,
                 };

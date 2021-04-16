@@ -650,8 +650,8 @@ t_uint64 s_fltd(t_uint64 intv, uint32 *cc) {
 #define UMASK   0x0ffffff0              /* single fp mask */
 #define XMASK   0x0fffffff              /* single fp mask */
 #define MMASK   0x00ffffff              /* single mantissa mask */
-#define NMASK   0x0f000000  		    /* single nibble mask */
-#define ZMASK   0x00f00000  		    /* single nibble mask */
+#define NMASK   0x0f000000              /* single nibble mask */
+#define ZMASK   0x00f00000              /* single nibble mask */
 
 /* this new version is perfect against the diags, so good */
 /* do new SEL floating add derived from IBM370 code */

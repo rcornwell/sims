@@ -1406,6 +1406,7 @@ missing:
     }
 #endif
 
+#ifndef TEST_FOR_HSDP
     /* channel not busy and ready to go, check for any status ready */
     /* see if any status ready to post */
     if (FIFO_Num(chsa&0x7f00)) {
@@ -1438,6 +1439,7 @@ missing:
             return SCPE_OK;                     /* No CC's all OK  */
         }
     }
+#endif
 
     /* check for a Command or data chain operation in progresss */
     if ((chp->chan_byte & BUFF_BUSY) && (chp->chan_byte != BUFF_POST)) {
@@ -1464,15 +1466,19 @@ missing:
                 chp, chsa, chp->ccw_flags, tstat, tcnt);
             return SCPE_OK;                     /* just busy CC3&CC4 */
         }
+        /* see if controller has a IOCLQ defined to handle multiple SIO requests */
+        /* keep processing SIO and handle busy later */
+        if (dibp->ioclq_ptr == NULL) {          /* see if device has IOCL queue */
+            /* everyone else just gets a busy return */
+            *status = CC4BIT|CC3BIT;            /* busy, so CC3&CC4 */
+            sim_debug(DEBUG_XIO, &cpu_dev,
+                "startxio done2 BUSY chp %p chsa %04x ccw_flags %04x stat %04x cnt %04x\n",
+                chp, chsa, chp->ccw_flags, tstat, tcnt);
+            return SCPE_OK;                     /* just busy CC3&CC4 */
+        }
         sim_debug(DEBUG_EXP, &cpu_dev,
-            "startxio busy2 return CC3&CC4 chsa %04x chp %p cmd %02x flags %04x byte %02x\n",
+            "startxio busy ignored for IOCLQ chsa %04x chp %p cmd %02x flags %04x byte %02x\n",
             chsa, chp, chp->ccw_cmd, chp->ccw_flags, chp->chan_byte);
-        /* everyone else just gets a busy return */
-        *status = CC4BIT|CC3BIT;                /* busy, so CC3&CC4 */
-        sim_debug(DEBUG_XIO, &cpu_dev,
-            "startxio done2 BUSY chp %p chsa %04x ccw_flags %04x stat %04x cnt %04x\n",
-            chp, chsa, chp->ccw_flags, tstat, tcnt);
-        return SCPE_OK;                         /* just busy CC3&CC4 */
     }
 
     sim_debug(DEBUG_XIO, &cpu_dev,
