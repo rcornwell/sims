@@ -39,7 +39,7 @@ int iii_init(void *dev, int debug)
 
 void iii_point (int x, int y, int l)
 {
-  display_point(x + 512, y + 512, l, 0);
+  display_point(x + 512, y + 501, l, 0);
 }
 
 int iii_cycle(int us, int slowdown)
@@ -59,9 +59,9 @@ iii_draw_line(int x1, int y1, int x2, int y2, int l)
 
     /* Origin us to 0 */
     x1 += 512;
-    y1 += 512;
+    y1 += 501;
     x2 += 512;
-    y2 += 512;
+    y2 += 501;
 
     /* Always draw top to bottom */
     if (y1 > y2) {
