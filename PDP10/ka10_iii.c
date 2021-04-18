@@ -647,7 +647,7 @@ t_stat iii_reset (DEVICE *dptr)
 static void
 draw_point(int x, int y, int b, UNIT *uptr)
 {
-   if (x < -512 || x > 512 || y < -512 || y > 512)
+   if (x < -512 || x > 512 || y < -501 || y > 522)
        uptr->STATUS |= WRP_FBIT;
    iii_point(x, y, b);
 }
@@ -656,9 +656,9 @@ draw_point(int x, int y, int b, UNIT *uptr)
 static void
 draw_line(int x1, int y1, int x2, int y2, int b, UNIT *uptr)
 {
-    if (x1 < -512 || x1 > 512 || y1 < -512 || y1 > 512)
+    if (x1 < -512 || x1 > 512 || y1 < -501 || y1 > 522)
        uptr->STATUS |= WRP_FBIT;
-    if (x2 < -512 || x2 > 512 || y2 < -512 || y2 > 512)
+    if (x2 < -512 || x2 > 512 || y2 < -501 || y2 > 522)
        uptr->STATUS |= WRP_FBIT;
     iii_draw_line(x1, y1, x2, y2, b);
 }
