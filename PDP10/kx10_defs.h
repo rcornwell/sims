@@ -507,6 +507,7 @@ extern DEVICE   dkb_dev;
 extern DEVICE   auxcpu_dev;
 extern DEVICE   slave_dev;
 extern DEVICE   dpk_dev;
+extern DEVICE   tv_dev;
 extern DEVICE   wcnsls_dev;             /* MIT Spacewar Consoles */
 extern DEVICE   ocnsls_dev;             /* Old MIT Spacewar Consoles */
 extern DEVICE   ai_dev;
@@ -720,6 +721,7 @@ extern void ka10_lights_clear_aux (int);
 #define NUM_DEVS_PMP    WAITS
 #define NUM_DEVS_DKB    (WAITS * USE_DISPLAY)
 #define NUM_DEVS_III    (WAITS * USE_DISPLAY)
+#define NUM_DEVS_TV     (WAITS * USE_DISPLAY)
 #define NUM_DEVS_PD     ITS
 #define NUM_DEVS_PCLK   WAITS
 #define NUM_DEVS_IMX    ITS
