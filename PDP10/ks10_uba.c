@@ -58,8 +58,8 @@ uba_read(t_addr addr, int ctl, uint64 *data, int access)
     int     ubm = uba_device[ctl];
 
     if (ctl == 0 && addr == 0100000) {
-	*data = 0;
-	return 0;
+        *data = 0;
+        return 0;
     }
 
     if (ubm == -1) {
@@ -104,10 +104,10 @@ uba_read(t_addr addr, int ctl, uint64 *data, int access)
         if (ctl == dibp->uba_ctl && 
             dibp->uba_addr == (addr & (~dibp->uba_mask))) {
             uint16 buf;
-            int r = dibp->rd_io(addr, &buf, access);
+            int r = dibp->rd_io(dptr, addr, &buf, access);
             *data = (uint64)buf;
-	    if (r)
-               uba_status[ubm] |= UBST_TIM | UBST_NED;
+            if (r)
+                break;
             return r;
         }
     }
@@ -124,7 +124,7 @@ uba_write(t_addr addr, int ctl, uint64 data, int access)
     int     ubm = uba_device[ctl];
 
     if (ctl == 0 && addr == 0100000) {
-	return 1;
+        return 1;
     }
     if (ubm == -1) {
         sim_debug(DEBUG_EXP, &cpu_dev, "No UBA adaptor %02o %08o %012llo\n", ctl, addr, data);
@@ -177,9 +177,9 @@ uba_write(t_addr addr, int ctl, uint64 data, int access)
             continue;
         if (ctl == dibp->uba_ctl && dibp->uba_addr == (addr & (~dibp->uba_mask))) {
             uint16 buf = (uint16)(data & 0177777);
-	    int r = dibp->wr_io(addr, buf, access);
-	    if (r)
-               uba_status[ubm] |= UBST_TIM | UBST_NED;
+            int r = dibp->wr_io(dptr, addr, buf, access);
+            if (r)
+                break;
             return r;
         }
     }

@@ -520,6 +520,28 @@ extern DEVICE   dcs_dev;
 extern DEVICE   dz_dev;
 
 #if KS
+
+struct rh_if {
+      int            (*dev_write)(DEVICE *dptr, struct rh_if *rh, int reg, uint32 data);
+      int            (*dev_read)(DEVICE *dptr, struct rh_if *rh, int reg, uint32 *data);
+      void           (*dev_reset)(DEVICE *dptr);
+      struct pdp_dib *dib;       /* Pointer back to DIB */
+      int            drive;      /* Last drive selected */
+      t_uint64       buf;        /* Data buffer */
+      uint32         status;     /* Status word */
+      uint16         cs1;        /* Control register 1 */
+      uint16         cs2;        /* Control register 1 */
+      uint16         error;      /* Controller Error register */
+      uint32         wcr;        /* Current word count */
+      uint32         cda;        /* Current bus address */
+      uint16         dba;        /* Input data buffer */
+      uint16         dbb;        /* Output data buffer*/
+      int            rae;        /* Access register error */
+      int            attn;       /* Attention bits */
+      int            xfer_drive; /* Current transfering drive */
+      uint16         regs[16];   /* Space for TM03 formater */
+};
+
 /* Device context block */
 struct pdp_dib {
     uint32              uba_addr;                       /* device address, includes adaptor */
@@ -527,10 +549,11 @@ struct pdp_dib {
     uint16              uba_vect;                       /* Floating IRQ vector */
     uint16              uba_br;                         /* Unibus IRQ level */
     uint16              uba_ctl;                        /* Unibus controller number */
-    t_stat              (*rd_io)(t_addr addr, uint16 *data, int32 access);
-    t_stat              (*wr_io)(t_addr addr, uint16 data, int32 access);
+    t_stat              (*rd_io)(DEVICE *dptr, t_addr addr, uint16 *data, int32 access);
+    t_stat              (*wr_io)(DEVICE *dptr, t_addr addr, uint16 data, int32 access);
     uint16              (*irqv)(struct pdp_dib *dibp);
     uint8               uba_irq_pend;                   /* Device has pending */
+    struct rh_if       *rh11_if;
 };
 typedef struct pdp_dib DIB;
 
@@ -553,6 +576,9 @@ void    uba_set_irq(DIB *dibp);
 void    uba_clr_irq(DIB *dibp);
 t_addr  uba_get_vect(t_addr addr, int lvl, int *dev, int *new_lvl);
 void    uba_set_parity(uint16 ctl);
+uint16  uba_rh_vect(struct pdp_dib *dibp);
+int     uba_rh_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access);
+int     uba_rh_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access);
 
 t_stat  uba_set_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat  uba_show_addr (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
@@ -562,6 +588,17 @@ t_stat  uba_set_vect(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat  uba_show_vect (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat  uba_set_ctl(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat  uba_show_ctl (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+
+void    rh_reset(DEVICE *dptr, struct rh_if *rh);
+void    rh_setup(struct rh_if *rh, uint32 addr);
+void    rh_setattn(struct rh_if *rh, int unit);
+void    rh_error(struct rh_if *rh);
+int     rh_blkend(struct rh_if *rh);
+void    rh_setirq(struct rh_if *rh);
+void    rh_writecw(struct rh_if *rh, int nxm);
+void    rh_finish_op(struct rh_if *rh, int flags);
+int     rh_read(struct rh_if *rh);
+int     rh_write(struct rh_if *rh);
 #else
 extern t_stat (*dev_tab[128])(uint32 dev, t_uint64 *data);
 
@@ -604,6 +641,7 @@ struct rh_if {
       int            rae;        /* Access register error */
       int            attn;       /* Attention bits */
       int            xfer_drive; /* Current transfering drive */
+      uint16         regs[16];   /* Space for TM03 formater */
 };
 
 /* Device context block */
@@ -643,6 +681,7 @@ t_stat  rh_set_type(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat  rh_show_type (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat  rh_devio(uint32 dev, t_uint64 *data);
 t_addr  rh_devirq(uint32 dev, t_addr addr);
+void    rh_reset(DEVICE *dptr, struct rh_if *rh);
 #if KL
 void    rh20_setup(struct rh_if *rhc);
 #endif

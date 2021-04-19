@@ -296,8 +296,8 @@ struct drvtyp rp_drv_tab[] = {
     };
 
 
-int           rp_write(t_addr addr, uint16 data, int32 access);
-int           rp_read(t_addr addr, uint16 *data, int32 access);
+int           rp_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access);
+int           rp_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access);
 uint16        rp_vect(struct pdp_dib *dibp);
 void          rp_setattn(UNIT *uptr);
 
@@ -384,7 +384,7 @@ DEVICE              rpa_dev = {
 };
 
 int
-rp_write(t_addr addr, uint16 data, int32 access) {
+rp_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access) {
     int         i;
     int         rp_unit = rp_cs2 & 07;
     UNIT       *uptr = &rpa_unit[rp_unit];
@@ -669,7 +669,7 @@ rp_write(t_addr addr, uint16 data, int32 access) {
 }
 
 int
-rp_read(t_addr addr, uint16 *data, int32 access) {
+rp_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access) {
     int         rp_unit = rp_cs2 & 07;
     UNIT       *uptr = &rpa_unit[rp_unit];
     uint16      temp = 0;
