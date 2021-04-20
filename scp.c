@@ -1556,7 +1556,7 @@ static const char simh_help2[] =
       "+sh{ow} q{ueue}              show event queue\n"
       "+sh{ow} ti{me}               show simulated time\n"
       "+sh{ow} th{rottle}           show simulation rate\n"
-      "+sh{ow} a{synch}             show asynchronouse I/O state\n" 
+      "+sh{ow} a{synch}             show asynchronous I/O state\n" 
       "+sh{ow} ve{rsion}            show simulator version\n"
       "+sh{ow} def{ault}            show current directory\n" 
       "+sh{ow} re{mote}             show remote console configuration\n" 
@@ -2475,7 +2475,7 @@ static const char simh_help2[] =
       " curl is a utility to transfer a URL\n\n"
       " The quick and dirty help for the CURL command can be viewed with:\n\n"
       "++sim> curl --help\n\n"
-#define HLP_DISKINFO    "*Commands DISKINFO"
+#define HLP_DISKINFO    "*Commands Disk_Container_Information"
       "2Disk Container Information\n"
       " Information about a Disk Container can be displayed with the DISKINFO command:\n\n"
       "++DISKINFO container-spec    show information about a disk container\n\n";
@@ -3269,8 +3269,12 @@ for (unit=0; unit < dptr->numunits; unit++)
         --enabled_units;
     else
         found_unit = unit;
-if (enabled_units == 1)
-    snprintf (unit_spec, sizeof (unit_spec), "%s%u", sim_dname (dptr), found_unit);
+if (enabled_units == 1) {
+    if (found_unit == 0)
+        snprintf (unit_spec, sizeof (unit_spec), "%s", sim_dname (dptr));
+    else
+        snprintf (unit_spec, sizeof (unit_spec), "%s%u", sim_dname (dptr), found_unit);
+    }
 else
     snprintf (unit_spec, sizeof (unit_spec), "%sn", sim_dname (dptr));
 if (dptr->modifiers) {
@@ -3351,6 +3355,8 @@ if ((dptr->modifiers) && (dptr->units)) {   /* handle unit specific modifiers */
             continue;                                           /* skip device only modifiers */
         if ((!mptr->valid) && MODMASK(mptr,MTAB_XTD))
             continue;                                           /* skip show only modifiers */
+        if ((enabled_units == 1) && (found_unit == 0))
+            continue;
         if (mptr->mstring) {
             fprint_header (st, &found, header);
             sprintf (buf, "set %s %s%s", unit_spec, mptr->mstring, (strchr(mptr->mstring, '=')) ? "" : (MODMASK(mptr,MTAB_VALR) ? "=val" : (MODMASK(mptr,MTAB_VALO) ? "{=val}": "")));
@@ -7597,6 +7603,31 @@ sim_switches = old_sw;
 return r;
 }
 
+/* Set Hardware Write Lock */
+
+t_stat set_writelock (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+{
+if (((uptr->flags & UNIT_WPRT) != 0) == val)        /* Already set as desired? */
+    return SCPE_OK;                                 /* Do nothing */
+if (val)                                            /* Lock? */
+    uptr->flags |= UNIT_WLK;                        /* Do it. */
+else                                                /* Unlock */
+    if (((uptr->flags & UNIT_ATT) != 0) &&          /* Transition from Locked to Unlock while attached read-only? */
+        ((uptr->flags & UNIT_RO) != 0))
+        return sim_messagef (SCPE_ALATT, "%s: Can't enable write when attached read only\n", sim_uname (uptr));
+    else
+        uptr->flags &= ~UNIT_WLK;
+return SCPE_OK;
+}
+
+/* Show Write Lock */
+
+t_stat show_writelock (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+{
+fprintf (st, "write %s", (uptr->flags & UNIT_WPRT) ? "locked" : "enabled");
+return SCPE_OK;
+}
+
 /* Load and dump commands
 
    lo[ad] filename {arg}        load specified file
@@ -7732,7 +7763,7 @@ if ((sim_switches & SWMASK ('R')) ||                    /* read only? */
     if (uptr->fileref == NULL)                          /* open fail? */
         return attach_err (uptr, SCPE_OPENERR);         /* yes, error */
     if (!(uptr->flags & UNIT_RO))
-        sim_messagef (SCPE_OK, "%s: unit is read only\n", sim_dname (dptr));
+        sim_messagef (SCPE_OK, "%s: unit is read only\n", sim_uname (uptr));
     uptr->flags = uptr->flags | UNIT_RO;                /* set rd only */
     }
 else {
@@ -7740,7 +7771,7 @@ else {
         uptr->fileref = sim_fopen (cptr, "wb+");        /* open new file */
         if (uptr->fileref == NULL)                      /* open fail? */
             return attach_err (uptr, SCPE_OPENERR);     /* yes, error */
-        sim_messagef (SCPE_OK, "%s: creating new file: %s\n", sim_dname (dptr), cptr);
+        sim_messagef (SCPE_OK, "%s: creating new file: %s\n", sim_uname (uptr), cptr);
         }
     else {                                              /* normal */
         uptr->fileref = sim_fopen (cptr, "rb+");        /* open r/w */
@@ -7756,7 +7787,7 @@ else {
                 if (uptr->fileref == NULL)              /* open fail? */
                     return attach_err (uptr, SCPE_OPENERR); /* yes, error */
                 uptr->flags = uptr->flags | UNIT_RO;    /* set rd only */
-                sim_messagef (SCPE_OK, "%s: unit is read only\n", sim_dname (dptr));
+                sim_messagef (SCPE_OK, "%s: unit is read only\n", sim_uname (uptr));
                 }
             else {                                      /* doesn't exist */
                 if (sim_switches & SWMASK ('E'))        /* must exist? */
@@ -7764,7 +7795,7 @@ else {
                 uptr->fileref = sim_fopen (cptr, "wb+");/* open new file */
                 if (uptr->fileref == NULL)              /* open fail? */
                     return attach_err (uptr, SCPE_OPENERR); /* yes, error */
-                sim_messagef (SCPE_OK, "%s: creating new file\n", sim_dname (dptr));
+                sim_messagef (SCPE_OK, "%s: creating new file\n", sim_uname (uptr));
                 }
             }                                           /* end if null */
         else
@@ -7777,7 +7808,7 @@ if (uptr->flags & UNIT_BUFABLE) {                       /* buffer? */
         uptr->filebuf = calloc (cap, SZ_D (dptr));      /* allocate */
     if (uptr->filebuf == NULL)                          /* no buffer? */
         return attach_err (uptr, SCPE_MEM);             /* error */
-    sim_messagef (SCPE_OK, "%s: buffering file in memory\n", sim_dname (dptr));
+    sim_messagef (SCPE_OK, "%s: buffering file in memory\n", sim_uname (uptr));
     uptr->hwmark = (uint32)sim_fread (uptr->filebuf,    /* read file */
         SZ_D (dptr), cap, uptr->fileref);
     uptr->flags = uptr->flags | UNIT_BUF;               /* set buffered */
@@ -9145,6 +9176,9 @@ for (gptr = gbuf, reason = SCPE_OK;
         strlcpy (gbuf, ap, sizeof (gbuf));
         gptr = gbuf;
         }
+    /* Special handling of EXAMINE to cover the case of ALL (detected in 
+       get_range) so that all of memory isn't output at once without any
+       ability to interrupt that output */
     tptr = get_range (sim_dfdev, gptr, &low, &high, sim_dfdev->aradix,
         (((sim_dfunit->capac == 0) || (flag == EX_E))? 0:
         sim_dfunit->capac - sim_dfdev->aincr), 0);

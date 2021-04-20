@@ -347,8 +347,10 @@ DIB rpa_dib = {0776700, 077, 0254, 6, 1, &rp_read, &rp_write, &rp_vect, 0};
 
 
 MTAB                rp_mod[] = {
-    {UNIT_WLK, 0, "write enabled", "WRITEENABLED", NULL},
-    {UNIT_WLK, UNIT_WLK, "write locked", "LOCKED", NULL},
+    { MTAB_XTD|MTAB_VUN, 0, "write enabled", "WRITEENABLED", 
+        &set_writelock, &show_writelock,   NULL, "Write enable drive" },
+    { MTAB_XTD|MTAB_VUN, 1, NULL, "LOCKED", 
+        &set_writelock, NULL,   NULL, "Write lock drive" },
     {UNIT_DTYPE, (RP07_DTYPE << UNIT_V_DTYPE), "RP07", "RP07", &rp_set_type },
     {UNIT_DTYPE, (RP06_DTYPE << UNIT_V_DTYPE), "RP06", "RP06", &rp_set_type },
     {UNIT_DTYPE, (RP04_DTYPE << UNIT_V_DTYPE), "RP04", "RP04", &rp_set_type },
@@ -714,7 +716,7 @@ rp_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access) {
            temp |= DS_DPR;
         if ((uptr->flags & UNIT_ATT) != 0)
            temp |= DS_MOL;
-        if ((uptr->flags & UNIT_WLK) != 0)
+        if ((uptr->flags & UNIT_WPRT) != 0)
            temp |= DS_WRL;
         if ((uptr->CMD & CS1_GO) == 0)
            temp |= DS_DRY;

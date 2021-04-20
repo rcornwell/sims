@@ -28,8 +28,6 @@
 #include "icl1900_defs.h"
 
 #if (NUM_DEVS_EDS8 > 0)
-#define UNIT_V_WLK      (UNIT_V_UF + 0)                 /* write locked */
-#define UNIT_WLK        (1 << UNIT_V_WLK)
 #define UNIT_EDS8       UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE
 
 #define CMD          u3             /* Command */
@@ -113,8 +111,10 @@ DIB eds8_dib = {  WORD_DEV|MULT_DEV, &eds8_cmd, NULL, NULL };
 
 
 MTAB                eds8_mod[] = {
-    {UNIT_WLK, 0, "write enabled", "WRITEENABLED", NULL},
-    {UNIT_WLK, UNIT_WLK, "write locked", "LOCKED", NULL},
+    { MTAB_XTD|MTAB_VUN, 0, "write enabled", "WRITEENABLED", 
+        &set_writelock, &show_writelock,   NULL, "Write enable drive" },
+    { MTAB_XTD|MTAB_VUN, 1, NULL, "LOCKED", 
+        &set_writelock, NULL,   NULL, "Write lock drive" },
     {MTAB_XTD | MTAB_VDV | MTAB_VALR, 0, "DEV", "DEV",
          &set_chan, &get_chan, NULL, "Device Number"},
     {0}
@@ -482,7 +482,7 @@ t_stat eds8_svc (UNIT *uptr)
          /* Write the starting at head/sector, if check, then check
             that data can be read back at end of each track */
              /* Check if write protected */
-             if ((uptr->flags & (UNIT_RO|UNIT_WLK)) != 0) {
+             if ((uptr->flags & UNIT_WPRT) != 0) {
                      uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
                      uptr->CMD |= EDS8_TERM|EDS8_ERR;
                      eds8_busy = 0;
@@ -527,7 +527,7 @@ t_stat eds8_svc (UNIT *uptr)
             that data can be read back at end of each track */
          if ((uptr->CMD & EDS8_RUN) == 0) {
              /* Check if write protected */
-             if ((uptr->flags & (UNIT_RO|UNIT_WLK)) != 0) {
+             if ((uptr->flags & UNIT_WPRT) != 0) {
                  uptr->CMD &= ~(EDS8_RUN|EDS8_SK|EDS8_BUSY);
                  uptr->CMD |= EDS8_TERM|EDS8_ERR;
                  eds8_busy = 0;
