@@ -1,4 +1,4 @@
-/* ka10_iii.c: Triple III display processor.
+/* ka10_iii.c: Triple-I display processor.
 
    Copyright (c) 2019-2020, Richard Cornwell
 
@@ -670,6 +670,6 @@ return SCPE_OK;
 
 const char *iii_description (DEVICE *dptr)
 {
-    return "Triple III Display";
+    return "Triple-I Display";
 }
 #endif
