@@ -97,6 +97,11 @@
 #define CBRT_V     3
 #define CSIZE_V    0
 
+#define MIN_X   -512
+#define MAX_X    512
+#define MIN_Y   -501
+#define MAX_Y    522
+
 /*
  * Character map.
  * M(x,y) moves pointer to x,y.
@@ -448,7 +453,7 @@ iii_svc (UNIT *uptr)
                    if (ch == '\t' || ch == 0)
                       continue;
                    if (ch == '\r') {
-                      ox = -512;
+                      ox = MIN_X;
                       continue;
                    }
                    if (ch == '\n') {
@@ -493,7 +498,7 @@ iii_svc (UNIT *uptr)
                           nx, ny, sz, br);
                nx += ox;
                ny += oy;
-               if (nx < -512 || nx > 512 || ny < -512 || ny > 512)
+               if (nx < MIN_X || nx > MAX_X || ny < MIN_Y || ny > MAX_Y)
                    uptr->STATUS |= EDG_FBIT;
                i = (int)((iii_instr >> 18) & 3);
                if ((i & 02) == 0 && (iii_sel & 04000) != 0) { /* Check if visible */
@@ -516,7 +521,7 @@ iii_svc (UNIT *uptr)
                /* Compute relative position. */
                nx += ox;
                ny += oy;
-               if (nx < -512 || nx > 512 || ny < -512 || ny > 512)
+               if (nx < MIN_X || nx > MAX_X || ny < MIN_Y || ny > MAX_Y)
                    uptr->STATUS |= EDG_FBIT;
                /* Check if visible */
                if ((iii_instr & 040) == 0 && (iii_sel & 04000) != 0) {
@@ -561,7 +566,7 @@ iii_svc (UNIT *uptr)
                if ((iii_instr & 0100) == 0) { /* Relative mode */
                    nx += ox;
                    ny += oy;
-                   if (nx < -512 || nx > 512 || ny < -512 || ny > 512)
+                   if (nx < MIN_X || nx > MAX_X || ny < MIN_Y || ny > MAX_Y)
                        uptr->STATUS |= EDG_FBIT;
                }
                /* Check if visible */
@@ -647,20 +652,20 @@ t_stat iii_reset (DEVICE *dptr)
 static void
 draw_point(int x, int y, int b, UNIT *uptr)
 {
-   if (x < -512 || x > 512 || y < -501 || y > 522)
+   if (x < MIN_X || x > MAX_X || y < MIN_Y || y > MAX_X)
        uptr->STATUS |= WRP_FBIT;
-   display_point(x + 512, y + 501, b, 0);
+   display_point(x - MIN_X, y - MIN_Y, b, 0);
 }
 
 /* Draw a line between two points */
 static void
 draw_line(int x1, int y1, int x2, int y2, int b, UNIT *uptr)
 {
-    if (x1 < -512 || x1 > 512 || y1 < -501 || y1 > 522)
+    if (x1 < MIN_X || x1 > MAX_X || y1 < MIN_Y || y1 > MAX_Y)
        uptr->STATUS |= WRP_FBIT;
-    if (x2 < -512 || x2 > 512 || y2 < -501 || y2 > 522)
+    if (x2 < MIN_X || x2 > MAX_X || y2 < MIN_Y || y2 > MAX_Y)
        uptr->STATUS |= WRP_FBIT;
-    display_line(x1 + 512, y1 + 501, x2 + 512, y2 + 501, b);
+    display_line(x1 - MIN_X, y1 - MIN_Y, x2 - MIN_X, y2 - MIN_Y, b);
 }
 
 t_stat iii_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
