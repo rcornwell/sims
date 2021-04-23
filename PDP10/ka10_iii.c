@@ -379,7 +379,8 @@ t_stat iii_devio(uint32 dev, uint64 *data) {
              uptr->STATUS |= DATA_FLG;
          else {
              iii_instr = *data;
-             sim_activate(uptr, 10);
+             /* Process instruction right away to ensure MAR is updated. */
+             iii_svc(iii_unit);
          }
          sim_debug(DEBUG_DATAIO, &iii_dev, "III %03o DATAO %06o\n", dev, (uint32)*data);
          break;
