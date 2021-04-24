@@ -281,7 +281,7 @@ tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
     if (rhc->drive != 0 && reg != 04)   /* Only one unit at 0 */
        return -1;
 
-    if (uptr->CMD & CS1_GO) {
+    if ((uptr->CMD & CS1_GO) != 0 || (uptr->STATUS & DS_PIP) != 0) {
        regs[TUER1] |= ER1_RMR;
        return 0;
     }
@@ -365,6 +365,7 @@ tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
             regs[TUER1] |= ER1_ILF;
             uptr->STATUS = DS_ATA;
             rhc->attn = 1;
+            rh_setattn(rhc, 0);
         }
         sim_debug(DEBUG_DETAIL, dptr, "%s%o AStatus=%06o\n", dptr->name, unit,
                                   uptr->CMD);
@@ -426,8 +427,6 @@ tu_read(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 *data) {
         temp = uptr->CMD & 077;
         temp |= CS1_DVA;
 #if KS
-//        if ((regs[TUER1] & ER1_RMR) != 0)
- //          temp |= CS1_TRE;
         if (rhc->attn || temp & CS1_TRE)
            temp |= CS1_SC;
 #endif
@@ -582,14 +581,13 @@ t_stat tu_srv(UNIT * uptr)
 
     case FNC_REWIND:
          sim_debug(DEBUG_DETAIL, dptr, "%s%o rewind\n", dptr->name, unit);
-         if (uptr->CMD & CS1_GO) {
+         if (uptr->STATUS & CS1_GO) {
              sim_activate(uptr,40000);
              uptr->CMD &= ~(CS1_GO);
          } else {
-             uptr->STATUS &= ~(DS_PIP);
+             sim_debug(DEBUG_DETAIL, dptr, "%s%o rewind done\n", dptr->name, unit);
              uptr->STATUS |= DS_SSC|DS_ATA;
-             rh_setattn(rhc, 0);
-             (void)sim_tape_rewind(uptr);
+             tu_error(uptr, sim_tape_rewind(uptr));
          }
          return SCPE_OK;
 
@@ -789,6 +787,7 @@ t_stat tu_srv(UNIT * uptr)
     case FNC_ERASE:
          uptr->STATUS &= ~DS_PIP;
          uptr->STATUS |= DS_ATA;
+         sim_tape_sprecf(uptr, &reclen);
          if ((uptr->flags & MTUF_WLK) != 0) {
              tu_error(uptr, MTSE_WRP);
          } else {
@@ -860,6 +859,7 @@ tu_reset(DEVICE * dptr)
     uint16        *regs = &rhc->regs[0];
 
     rh_reset(dptr, &tu_rh[0]);
+    regs[TUER1] = 0;
     regs[TUTC] = TC_1600;
     return SCPE_OK;
 }

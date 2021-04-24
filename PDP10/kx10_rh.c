@@ -228,8 +228,14 @@ uba_rh_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access) {
 
     switch(addr) {
     case  000: /* CS1 */
-        if (access == BYTE && addr & 1)
-           break;
+        if (access == BYTE) {
+	   if (addr & 1) {
+               rhc->dev_read(dptr, rhc, 0, &temp);
+	       data = data | (rhc->cs1 & 0377) | (temp & 076);
+	   } else {
+	       data = ((rhc->cda & 0600000) >> 8) | data;
+	   }
+	}
         rhc->cs1 &= ~(CS1_IE);
         rhc->cs1 |= data & (CS1_IE);
         rhc->cda = ((data << 8) & 0600000) | (rhc->cda & 0177777);
@@ -302,8 +308,8 @@ uba_rh_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access) {
         rhc->cs2 |= CS2_NED;
         r = 0;
     }
-    sim_debug(DEBUG_DETAIL, dptr, "RH%o write %06o %06o\n", rhc->drive,
-             addr, data);
+    sim_debug(DEBUG_DETAIL, dptr, "RH%o write %06o %06o %o\n", rhc->drive,
+             addr, data, access);
     return r;
 }
 
