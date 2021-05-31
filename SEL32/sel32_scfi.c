@@ -260,10 +260,15 @@ scfi_type[] =
 {
     /* Class F Disc Devices */
     /* MPX SCSI disks for SCFI controller */
-    {"MH1GB", 1, 192, 40, 34960, 34960, 0x40},  /*0 69920 1000M */
-    {"SG038", 1, 192, 20, 21900, 21900, 0x40},  /*1 21900   38M */
-    {"SG120", 1, 192, 40, 34970, 34970, 0x40},  /*2 69940 1200M */
-    {"SG076", 1, 192, 20, 46725, 46725, 0x40},  /*3 46725  760M */
+    {"MH1GB",  1, 192, 40, 34960, 34960, 0x40},   /*0 69920 1000M */
+    {"SG038",  1, 192, 20, 21900, 21900, 0x40},   /*1 21900   38M */
+    {"SG120",  1, 192, 40, 34970, 34970, 0x40},   /*2 69940 1200M */
+    {"SG076",  1, 192, 20, 46725, 46725, 0x40},   /*3 46725  760M */
+    {"SG121",  1, 192, 20, 34970, 34970, 0x40},   /*4 69940 1210M */
+    {"SD150",  9, 192, 24,   963,   967, 0x40},   /*5  8820  150M  208872 sec */
+    {"SD300",  9, 192, 32,  1405,  1409, 0x40},   /*6  8828  300M  396674 sec */
+    {"SD700", 15, 192, 35,  1542,  1546, 0x40},   /*7  8833  700M  797129 sec */
+    {"SD1200",15, 192, 49,  1927,  1931, 0x40},   /*8  8835 1200M 1389584 sec */
     {NULL, 0}
 };
 
@@ -288,6 +293,7 @@ extern  uint32  readfull(CHANP *chp, uint32 maddr, uint32 *word);
 extern  int     irq_pend;                       /* go scan for pending int or I/O */
 extern  UNIT    itm_unit;
 extern  uint32  PSD[];                          /* PSD */
+extern  uint32  cont_chan(uint16 chsa);
 
 /* channel program information */
 CHANP           sda_chp[NUM_UNITS_SCFI] = {0};
@@ -326,7 +332,7 @@ DIB             sda_dib = {
     sda_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
     NULL,           /* IOCLQ *ioclq_ptr */                      /* IOCL entries, 1 per UNIT */
     NUM_UNITS_SCFI, /* uint8 numunits */                        /* number of units defined */
-    0x70,           /* uint8 mask */                            /* 16 devices - device mask */
+    0x70,           /* uint8 mask */                            /* 8 devices - device mask */
     0x0400,         /* uint16 chan_addr */                      /* parent channel address */
     0,              /* uint32 chan_fifo_in */                   /* fifo input index */
     0,              /* uint32 chan_fifo_out */                  /* fifo output index */
@@ -429,6 +435,7 @@ t_stat  scfi_iocl(CHANP *chp, int32 tic_ok)
     int32       docmd = 0;
     UNIT        *uptr = chp->unitptr;           /* get the unit ptr */
     uint16      chan = get_chan(chp->chan_dev); /* our channel */
+    uint16      chsa = chp->chan_dev;           /* our chan/sa */
     uint16      devstat = 0;
     DEVICE      *dptr = get_dev(uptr);
 
@@ -436,8 +443,8 @@ t_stat  scfi_iocl(CHANP *chp, int32 tic_ok)
     if (chp->chan_info & INFO_SIOCD) {          /* see if 1st IOCD in channel prog */
         if (chp->chan_caw & 0x3) {              /* must be word bounded */
             sim_debug(DEBUG_EXP, dptr,
-                "scfi_iocl iocd bad address chan %02x caw %06x\n",
-                chan, chp->chan_caw);
+                "scfi_iocl iocd bad address chsa %02x caw %06x\n",
+                chsa, chp->chan_caw);
             chp->ccw_addr = chp->chan_caw;      /* set the bad iocl address */
             chp->chan_status |= STATUS_PCHK;    /* program check for invalid iocd addr */
             uptr->SNS |= SNS_INAD;              /* invalid address status */
@@ -477,14 +484,16 @@ loop:
         chp->chan_caw, chan, word1, word2);
 
     chp->chan_caw = (chp->chan_caw & 0xfffffc) + 8; /* point to next IOCD */
+#ifdef BAD_05142021
     chp->ccw_cmd = (word1 >> 24) & 0xff;        /* set command from IOCD wd 1 */
+#endif
 
     /* Check if we had data chaining in previous iocd */
     /* if we did, use previous cmd value */
     if (((chp->chan_info & INFO_SIOCD) == 0) && /* see if 1st IOCD in channel prog */
        (chp->ccw_flags & FLAG_DC)) {            /* last IOCD have DC set? */
         sim_debug(DEBUG_CMD, dptr,
-            "ec_iocl @%06x DO DC, ccw_flags %04x cmd %02x\n",
+            "scfi_iocl @%06x DO DC, ccw_flags %04x cmd %02x\n",
             chp->chan_caw, chp->ccw_flags, chp->ccw_cmd);
     } else
         chp->ccw_cmd = (word1 >> 24) & 0xff;    /* set new command from IOCD wd 1 */
@@ -560,8 +569,14 @@ loop:
     }
 
     /* Check if we had data chaining in previous iocd */
+#ifdef BAD_05152021
     if ((chp->chan_info & INFO_SIOCD) ||        /* see if 1st IOCD in channel prog */
         ((chp->ccw_flags & FLAG_DC) == 0)) {    /* last IOCD have DC set? */
+#else
+    if ((chp->chan_info & INFO_SIOCD) ||        /* see if 1st IOCD in channel prog */
+        (((chp->chan_info & INFO_SIOCD) == 0) && /* see if 1st IOCD in channel prog */
+        ((chp->ccw_flags & FLAG_DC) == 0))) {   /* last IOCD have DC set? */
+#endif
         sim_debug(DEBUG_CMD, dptr,
             "scfi_iocl @%06x DO CMD No DC, ccw_flags %04x cmd %02x\n",
             chp->chan_caw, chp->ccw_flags, chp->ccw_cmd);
@@ -614,6 +629,7 @@ loop:
 
         /* call the device startcmd function to process the current command */
         /* just replace device status bits */
+        chp->chan_info &= ~INFO_CEND;           /* show chan_end not called yet */
         devstat = dibp->start_cmd(uptr, chan, chp->ccw_cmd);
         chp->chan_status = (chp->chan_status & 0xff00) | devstat;
         chp->chan_info &= ~INFO_SIOCD;          /* show not first IOCD in channel prog */
@@ -626,26 +642,16 @@ loop:
         if (chp->chan_status & (STATUS_ATTN|STATUS_ERROR)) {
             chp->chan_status |= STATUS_CEND;    /* channel end status */
             chp->ccw_flags = 0;                 /* no flags */
-            /* see if chan_end already called */
-            if (chp->chan_byte == BUFF_NEXT) {
-                sim_debug(DEBUG_EXP, dptr,
-                    "scfi_iocl BUFF_NEXT ERROR chp %p chan_byte %04x\n",
-                    chp, chp->chan_byte);
-            } else {
-                chp->chan_byte = BUFF_NEXT;     /* have main pick us up */
-                sim_debug(DEBUG_EXP, dptr,
-                    "scfi_iocl bad status chan %04x status %04x cmd %02x\n",
-                    chan, chp->chan_status, chp->ccw_cmd);
-                RDYQ_Put(chp->chan_dev);        /* queue us up */
-                sim_debug(DEBUG_EXP, dptr,
-                    "scfi_iocl continue wait chsa %04x status %08x\n",
-                    chp->chan_dev, chp->chan_status);
-#ifndef CHANGE_03072021
-                chp->chan_qwait = QWAIT;        /* run 25 instructions before starting iocl */
-#endif
-            }
-        } else
-
+            chp->chan_byte = BUFF_NEXT;         /* have main pick us up */
+            sim_debug(DEBUG_EXP, dptr,
+                "scfi_iocl bad status chsa %04x status %04x cmd %02x\n",
+                chsa, chp->chan_status, chp->ccw_cmd);
+            /* done with command */
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "scfi_iocl ERROR return chsa %04x status %08x\n",
+                chp->chan_dev, chp->chan_status);
+            return 1;                            /* error return */
+        }
         /* NOTE this code needed for MPX 1.X to run! */
         /* see if command completed */
         /* we have good status */

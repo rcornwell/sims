@@ -501,20 +501,20 @@ hsdp_type[] =
     /* Class F Disc Devices */
     /* For MPX */
     {"MH040",   5, 192, 20, 407, 411, 0x40},    /* 0  411   40M XXXX */
-//  {"MH080",   5, 192, 20, 819, 823, 0x40},    /* 1  823   80M 8138 */
     {"MH080",   5, 192, 22, 819, 823, 0x40},    /* 1  823   80M 8138 */
     {"MH160",  10, 192, 20, 819, 823, 0x40},    /* 2  823  160M 8148 */
     {"MH300",  19, 192, 20, 819, 823, 0x40},    /* 3  823  300M 9346 */
-    {"MH600",  40, 192, 20, 839, 843, 0x40},    /* 4  843  600M 8155 */
-    {"MH689",  16, 192, 54, 861, 865, 0x40},    /* 5  823  674M 8888 DP689 */
+    {"MH337",  10, 192, 45, 819, 823, 0x40},    /* 4  823  337M 8887 DP337 */
+    {"MH600",  40, 192, 20, 839, 843, 0x40},    /* 5  843  600M 8155 */
+    {"MH689",  16, 192, 54, 861, 865, 0x40},    /* 6  823  674M 8888 DP689 */
     /* For UTX */
-    {"9342",   5, 256, 16, 819, 823, 0x41},     /* 6  823   80M 9342 MH080 */
-    {"8148",  10, 256, 16, 819, 823, 0x41},     /* 7  823  160M 8146 MH160 */
-    {"9346",  19, 256, 16, 819, 823, 0x41},     /* 8  823  300M 9344 MH300 */
-    {"8858",  24, 256, 16, 707, 711, 0x41},     /* 9  711  340M 8858 DC340 */
-    {"8887",  10, 256, 35, 819, 823, 0x41},     /* 10 823  337M 8887 DP337 */
-    {"8155",  40, 256, 16, 839, 843, 0x41},     /* 11 843  600M 8155 MH600 */
-    {"8888",  16, 256, 43, 861, 865, 0x41},     /* 12 823  674M 8888 DP689 */
+    {"9342",   5, 256, 16, 819, 823, 0x41},     /* 7  823   80M 9342 MH080 */
+    {"8148",  10, 256, 16, 819, 823, 0x41},     /* 8  823  160M 8146 MH160 */
+    {"9346",  19, 256, 16, 819, 823, 0x41},     /* 9  823  300M 9344 MH300 */
+    {"8858",  24, 256, 16, 707, 711, 0x41},     /* 10 711  340M 8858 DC340 */
+    {"8887",  10, 256, 35, 819, 823, 0x41},     /* 11 823  337M 8887 DP337 */
+    {"8155",  40, 256, 16, 839, 843, 0x41},     /* 12 843  600M 8155 MH600 */
+    {"8888",  16, 256, 43, 861, 865, 0x41},     /* 13 823  674M 8888 DP689 */
     {NULL}
 };
 
@@ -539,6 +539,7 @@ extern  uint32  readfull(CHANP *chp, uint32 maddr, uint32 *word);
 extern  int     irq_pend;                       /* go scan for pending int or I/O */
 extern  UNIT    itm_unit;
 extern  uint32  PSD[];                          /* PSD */
+extern  uint32  cont_chan(uint16 chsa);
 
 /* channel program information */
 CHANP   dpa_chp[NUM_UNITS_HSDP] = {0};
@@ -572,6 +573,7 @@ MTAB            hsdp_mod[] = {
 UNIT            dpa_unit[] = {
 /* SET_TYPE(3) DM300 */
 /* SET_TYPE(10) 8887 */
+/* SET_TYPE(11) 8887 */
     {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(10), 0), 0, UNIT_ADDR(0x800)},  /* 0 */
     {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(10), 0), 0, UNIT_ADDR(0x802)},  /* 1 */
     {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(10), 0), 0, UNIT_ADDR(0x804)},  /* 2 */
@@ -859,6 +861,7 @@ t_stat  hsdp_iocl(CHANP *chp, int32 tic_ok)
 //  DIB         *dibp = dib_unit[chp->chan_dev];/* get the DIB pointer */
     UNIT        *uptr = chp->unitptr;           /* get the unit ptr */
     uint16      chan = get_chan(chp->chan_dev); /* our channel */
+    uint16      chsa = chp->chan_dev;           /* our chan/sa */
     uint16      devstat = 0;
     DEVICE      *dptr = get_dev(uptr);
 
@@ -866,8 +869,8 @@ t_stat  hsdp_iocl(CHANP *chp, int32 tic_ok)
     if (chp->chan_info & INFO_SIOCD) {          /* see if 1st IOCD in channel prog */
         if (chp->chan_caw & 0x3) {              /* must be word bounded */
             sim_debug(DEBUG_EXP, dptr,
-                "hsdp_iocl iocd bad address chan %02x caw %06x\n",
-                chan, chp->chan_caw);
+                "hsdp_iocl iocd bad address chsa %02x caw %06x\n",
+                chsa, chp->chan_caw);
             chp->ccw_addr = chp->chan_caw;      /* set the bad iocl address */
             chp->chan_status |= STATUS_PCHK;    /* program check for invalid iocd addr */
             uptr->SNS |= SNS_INAD;              /* invalid address status */
@@ -907,7 +910,19 @@ loop:
         chp->chan_caw, chan, word1, word2, uptr->SNS);
 
     chp->chan_caw = (chp->chan_caw & 0xfffffc) + 8; /* point to next IOCD */
+#ifdef BAD_05142021
     chp->ccw_cmd = (word1 >> 24) & 0xff;        /* set command from IOCD wd 1 */
+#endif
+
+    /* Check if we had data chaining in previous iocd */
+    /* if we did, use previous cmd value */
+    if (((chp->chan_info & INFO_SIOCD) == 0) && /* see if 1st IOCD in channel prog */
+       (chp->ccw_flags & FLAG_DC)) {            /* last IOCD have DC set? */
+        sim_debug(DEBUG_CMD, dptr,
+            "hsdp_iocl @%06x DO DC, ccw_flags %04x cmd %02x\n",
+            chp->chan_caw, chp->ccw_flags, chp->ccw_cmd);
+    } else
+        chp->ccw_cmd = (word1 >> 24) & 0xff;    /* set new command from IOCD wd 1 */
 
     if (!MEM_ADDR_OK(word1 & MASK24)) {         /* see if memory address invalid */
         chp->chan_status |= STATUS_PCHK;        /* bad, program check */
@@ -983,8 +998,14 @@ loop:
     }
 
     /* Check if we had data chaining in previous iocd */
+#ifdef BAD_05152021
     if ((chp->chan_info & INFO_SIOCD) ||        /* see if 1st IOCD in channel prog */
         ((chp->ccw_flags & FLAG_DC) == 0)) {    /* last IOCD have DC set? */
+#else
+    if ((chp->chan_info & INFO_SIOCD) ||        /* see if 1st IOCD in channel prog */
+        (((chp->chan_info & INFO_SIOCD) == 0) && /* see if 1st IOCD in channel prog */
+        ((chp->ccw_flags & FLAG_DC) == 0))) {    /* last IOCD have DC set? */
+#endif
         sim_debug(DEBUG_CMD, dptr,
             "hsdp_iocl @%06x DO CMD No DC, ccw_flags %04x cmd %02x\n",
             chp->chan_caw, chp->ccw_flags, chp->ccw_cmd);
@@ -1037,6 +1058,7 @@ loop:
 
         /* call the device startcmd function to process the current command */
         /* just replace device status bits */
+        chp->chan_info &= ~INFO_CEND;           /* show chan_end not called yet */
         devstat = dibp->start_cmd(uptr, chan, chp->ccw_cmd);
         chp->chan_status = (chp->chan_status & 0xff00) | devstat;
         chp->chan_info &= ~INFO_SIOCD;          /* show not first IOCD in channel prog */
@@ -1049,22 +1071,15 @@ loop:
         if (chp->chan_status & (STATUS_ATTN|STATUS_ERROR)) {
             chp->chan_status |= STATUS_CEND;    /* channel end status */
             chp->ccw_flags = 0;                 /* no flags */
-            /* see if chan_end already called */
-            if (chp->chan_byte == BUFF_NEXT) {
-                sim_debug(DEBUG_EXP, dptr,
-                    "hsdp_iocl BUFF_NEXT ERROR chp %p chan_byte %04x\n",
-                    chp, chp->chan_byte);
-            } else {
-                chp->chan_byte = BUFF_NEXT;     /* have main pick us up */
-                sim_debug(DEBUG_EXP, dptr,
-                    "hsdp_iocl bad status chan %04x status %04x cmd %02x\n",
-                    chan, chp->chan_status, chp->ccw_cmd);
-                RDYQ_Put(chp->chan_dev);        /* queue us up */
-                sim_debug(DEBUG_EXP, dptr,
-                    "hsdp_iocl continue wait chsa %04x status %08x\n",
-                    chp->chan_dev, chp->chan_status);
-                chp->chan_qwait = QWAIT;         /* run 25 instructions before starting iocl */
-            }
+            chp->chan_byte = BUFF_NEXT;         /* have main pick us up */
+            sim_debug(DEBUG_EXP, dptr,
+                "hsdp_iocl bad status chsa %04x status %04x cmd %02x\n",
+                chsa, chp->chan_status, chp->ccw_cmd);
+            /* done with command */
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "hsdp_iocl ERROR return chsa %04x status %08x\n",
+                chp->chan_dev, chp->chan_status);
+            return 1;                           /* error return */
         } else
 
         /* NOTE this code needed for MPX 1.X to run! */
@@ -1199,23 +1214,21 @@ t_stat  hsdp_haltio(UNIT *uptr) {
     if ((uptr->CMD & DSK_CMDMSK) != 0) {    /* is unit busy */
         sim_debug(DEBUG_CMD, dptr,
             "hsdp_haltio HIO chsa %04x cmd = %02x ccw_count %02x\n", chsa, cmd, chp->ccw_count);
-        /* stop any I/O and post status and return error status */
-        chp->ccw_count = 0;                 /* zero the count */
-        chp->chan_caw = 0;                  /* zero iocd address for diags */
-        chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);/* stop any chaining */
-        uptr->CMD &= LMASK;                 /* make non-busy */
-        uptr->SNS2 |= (SNS_ONC|SNS_UNR);    /* on cylinder & ready */
         sim_cancel(uptr);                   /* clear the input timer */
+    } else {
         sim_debug(DEBUG_CMD, dptr,
-            "hsdp_haltio HIO I/O stop chsa %04x cmd = %02x\n", chsa, cmd);
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
-        return SCPE_IOERR;
+            "hsdp_haltio HIO I/O not busy chsa %04x cmd = %02x\n", chsa, cmd);
     }
+    /* stop any I/O and post status and return error status */
+    chp->ccw_count = 0;                     /* zero the count */
+    chp->chan_caw = 0;                      /* zero iocd address for diags */
+    chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);/* stop any chaining */
     uptr->CMD &= LMASK;                     /* make non-busy */
     uptr->SNS2 |= (SNS_ONC|SNS_UNR);        /* on cylinder & ready */
     sim_debug(DEBUG_CMD, dptr,
-        "hsdp_haltio HIO I/O not busy chsa %04x cmd = %02x\n", chsa, cmd);
-    return SCPE_OK;                         /* not busy */
+        "hsdp_haltio HIO I/O stop chsa %04x cmd = %02x\n", chsa, cmd);
+    chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
+    return SCPE_IOERR;
 }
 
 /* Handle rsctl command for disk */

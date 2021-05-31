@@ -131,7 +131,7 @@ DIB             con_dib = {
     con_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
     NULL,           /* IOCLQ *ioclq_ptr */                      /* IOCL entries, 1 per UNIT */
     NUM_UNITS_CON,  /* uint8 numunits */                        /* number of units defined */
-    0x0f,           /* uint8 mask */                            /* 2 devices - device mask */
+    0x03,           /* uint8 mask */                            /* 2 devices - device mask */
     0x7e00,         /* uint16 chan_addr */                      /* parent channel address */
     0,              /* uint32 chan_fifo_in */                   /* fifo input index */
     0,              /* uint32 chan_fifo_out */                  /* fifo output index */
@@ -247,8 +247,8 @@ t_stat con_srvo(UNIT *uptr) {
     uint8       ch;
 
     sim_debug(DEBUG_CMD, dptr,
-        "con_srvo enter CMD %08x chsa %04x cmd = %02x uptr %p\n",
-        uptr->CMD, chsa, cmd, uptr);
+        "con_srvo enter CMD %08x chsa %04x cmd %02x iocla %06x cnt %04x\n",
+        uptr->CMD, chsa, cmd, chp->chan_caw, chp->ccw_count);
 
     switch (cmd) {
 
@@ -340,6 +340,9 @@ t_stat con_srvo(UNIT *uptr) {
             /* HACK HACK HACK */
             ch &= 0x7f;                     /* make 7 bit w/o parity */
             sim_putchar(ch);                /* output next char to device */
+            sim_debug(DEBUG_CMD, dptr,
+                "con_srvo write CMD %08x chsa %04x cmd %02x byte %d = %02x\n",
+                uptr->CMD, chsa, cmd, cnt, ch);
             cnt++;                          /* count chars output */
         }
         /* write is complete, post status */
@@ -507,8 +510,8 @@ t_stat con_srvi(UNIT *uptr) {
                 }
                 /* command is completed */
                 sim_debug(DEBUG_CMD, dptr,
-                    "con_srvi read done unit %02x uptr %p CMD %08x read %02x u4 %02x ccw_count %02x incnt %02x\n",
-                    unit, uptr, uptr->CMD, ch, uptr->u4, chp->ccw_count, con_data[unit].incnt);
+                    "con_srvi read done unit %02x CMD %08x read %02x u4 %02x ccw_count %02x incnt %02x\n",
+                    unit, uptr->CMD, ch, uptr->u4, chp->ccw_count, con_data[unit].incnt);
                 cmd = 0;                    /* no cmd now */
                 uptr->CMD &= LMASK;         /* nothing left, command complete */
                 if (uptr->u4 != con_data[unit].incnt) { /* input empty */
@@ -634,7 +637,8 @@ t_stat  con_haltio(UNIT *uptr) {
     int     unit = (uptr - con_unit);       /* unit # 0 is read, 1 is write */
     CHANP   *chp = find_chanp_ptr(chsa);    /* find the chanp pointer */
 
-    sim_debug(DEBUG_EXP, &con_dev, "con_haltio enter chsa %04x cmd = %02x\n", chsa, cmd);
+    sim_debug(DEBUG_EXP, &con_dev,
+        "con_haltio enter chsa %04x cmd = %02x\n", chsa, cmd);
 
     /* terminate any input command */
     /* UTX wants SLI bit, but no unit exception */
@@ -642,26 +646,25 @@ t_stat  con_haltio(UNIT *uptr) {
     /* otherwise, UTX will panic with "bad status" */
     if ((uptr->CMD & CON_MSK) != 0) {       /* is unit busy */
         sim_debug(DEBUG_CMD, &con_dev,
-            "con_haltio HIO chsa %04x cmd = %02x ccw_count %02x\n", chsa, cmd, chp->ccw_count);
-        /* stop any I/O and post status and return error status */
-        chp->ccw_count = 0;                 /* zero the count */
-        chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);   /* reset chaining bits */
-        uptr->CMD &= LMASK;                 /* make non-busy */
-        uptr->u4 = 0;                       /* no I/O yet */
+            "con_haltio HIO chsa %04x cmd = %02x ccw_count %02x\n",
+            chsa, cmd, chp->ccw_count);
         sim_cancel(uptr);                   /* stop timer */
-        con_data[unit].incnt = 0;           /* no input data */
-        uptr->SNS = SNS_RDY|SNS_ONLN;       /* status is online & ready */
+    } else {
         sim_debug(DEBUG_CMD, &con_dev,
-            "con_haltio HIO I/O stop chsa %04x cmd = %02x\n", chsa, cmd);
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
-//BAD   chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);  /* force end */
-        return 1;                           /* tell chan code to post status */
+            "con_haltio HIO not busy chsa %04x cmd = %02x ccw_count %02x\n",
+            chsa, cmd, chp->ccw_count);
     }
+    /* stop any I/O and post status and return error status */
+    chp->ccw_count = 0;                     /* zero the count */
+    chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);   /* reset chaining bits */
+    uptr->CMD &= LMASK;                     /* make non-busy */
     uptr->u4 = 0;                           /* no I/O yet */
     con_data[unit].incnt = 0;               /* no input data */
-    uptr->CMD &= LMASK;                     /* make non-busy */
     uptr->SNS = SNS_RDY|SNS_ONLN;           /* status is online & ready */
-    return SCPE_OK;                         /* not busy */
+    sim_debug(DEBUG_CMD, &con_dev,
+        "con_haltio HIO I/O stop chsa %04x cmd = %02x\n", chsa, cmd);
+    chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
+    return SCPE_IOERR;                      /* tell chan code to post status */
 }
 #endif
 

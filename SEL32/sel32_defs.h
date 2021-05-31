@@ -123,12 +123,14 @@
 #define NUM_DEVS_MT     1       /* 1 mag tape controllers */
 #define NUM_UNITS_MT    4       /* 4 of 8 devices */
 #define NUM_DEVS_HSDP   1       /* 1 hspd disk drive controller */
-#define NUM_UNITS_HSDP  2       /* 2 disk drive devices */
+//#define NUM_UNITS_HSDP  2       /* 2 disk drive devices */
+#define NUM_UNITS_HSDP  4       /* 4 disk drive devices */
 #define NUM_DEVS_DISK   1       /* 1 dp02 disk drive controller */
 //#define NUM_UNITS_DISK  2       /* 2 disk drive devices */
 #define NUM_UNITS_DISK  4       /* 4 disk drive devices */
 #define NUM_DEVS_SCFI   1       /* 1 scfi (SCSI) disk drive units */
-#define NUM_UNITS_SCFI  2       /* 1 of 4 disk drive devices */
+//#define NUM_UNITS_SCFI  2       /* 1 of 4 disk drive devices */
+#define NUM_UNITS_SCFI  4       /* 1 of 4 disk drive devices */
 #define NUM_DEVS_SCSI   2       /* 2 scsi (MFP SCSI) scsi buss units */
 #define NUM_UNITS_SCSI  2       /* 2 scsi disk drive devices */
 #define NUM_DEVS_RTOM   1       /* 1 IOP RTOM channel */
@@ -207,30 +209,21 @@ typedef struct chp {
     uint32      chan_inch_addr;         /* Channel status dw addr in memory */
     uint32      chan_caw;               /* Channel command address word */
     uint32      ccw_addr;               /* Channel address */
+#ifndef TRY_FOR_IOCL_CHANGE
+    uint32      new_iocla;              /* start iocl address */
+    uint32      new_iocd1;              /* start word 1 of iocd */
+    uint32      new_iocd2;              /* start word 2 of iocd */
+#endif
     uint32      chan_buf;               /* Channel data buffer */
     uint16      ccw_count;              /* Channel count */
     uint16      ccw_flags;              /* Channel flags */
     uint16      chan_status;            /* Channel status */
     uint16      chan_dev;               /* Device on channel */
-#ifndef CHANGE_03072021
-    uint16      chan_qwait;             /* Instr to xeq before iocl proccessing */
-#endif
     uint8       ccw_cmd;                /* Channel command and flags */
     uint8       chan_byte;              /* Current byte, empty/full */
     uint8       chan_int;               /* channel interrupt level */
     uint8       chan_info;              /* misc flags for channel */
 } CHANP;
-
-#define QWAIT0  0
-#define QWAIT5  5
-#define QWAIT10 10
-#define QWAIT15 15
-#define QWAIT20 20
-#define QWAIT25 25
-#define QWAIT30 30
-#define QWAIT35 35
-#define QWAIT40 40
-#define QWAIT   QWAIT0
 
 /* Device information block */
 #define FIFO_SIZE 256                   /* fifo to hold 128 double words of status */

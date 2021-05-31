@@ -1,52 +1,95 @@
 /*
+ * tape2disk.c
+ *
  * MPX uses 2 EOF in a row to separate sections of MPX3.x master SDT tapes.
  * It uses 3 EOF in a row to indicate the EOT on MPX 3.X tapes.  So we
- * cannot assume EOT is at the 1st or 2nd EOF in a row.  Keep looking
- * for a third one.  Comment out the #define FMGRTAPE below to read an
- * MPX 3.x master SDT.  For user SDT tapes or MPX 1.X master SDT tapes
- * leave the #define FMGRTAPE uncommented so it will be defined.  The
- * program will stop on two EOFs.  For non MPX tapes, the 2nd EOF means
- * EOT. Some tapes have only one EOT and will terminate on EOT detected.
- * Leave off the output file name to just scan the tape and output record
- * sizes and counts.
+ * cannot assume EOT is at the 1st or 2nd EOF in a row.  We keep looking
+ * for a third one.  For user SDT tapes or MPX 1.X master SDT tapes use
+ * option -f for 2 EOFs.  Use option -v for 3 eof's on VOLM tapes.  For
+ * non MPX tapes, the 2nd EOF means EOT. Some tapes (Unix) have only one
+ * EOF and will terminate on EOT detected. Leave off the output file name
+ * to just scan the tape and output record sizes and counts.
  */
 
 #include <stdio.h>
-#include <signal.h>
 #include <sys/types.h>
-#include <sys/file.h>
-#include <sys/fcntl.h>
-#include <sys/mtio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <limits.h>
-#include <errno.h>
+#include <sys/signal.h>
+//#include <sys/mtio.h>
+#include <stdlib.h>                 /* for exit() */
+#ifdef _WIN32
+#include <fcntl.h>                  /* for O_RDONLY, O_WRONLY, O_CREAT */
+#include <io.h>                     /* for _read, _open, _write, _close */
+#define open _open
+#define read _read
+#define write _write
+#define close _close
+#else
+#include <sys/fcntl.h>              /* for O_RDONLY, O_WRONLY, O_CREAT */
+#include <unistd.h>                 /* for open, read, write */
+#endif
 
-//#define FMGRTAPE              /* defined for filemgr tapes, undefined for volmgr tape */
+#if defined(_MSC_VER) && (_MSC_VER < 1600)
+typedef __int8           int8;
+typedef __int16          int16;
+typedef __int32          int32;
+typedef unsigned __int8  uint8;
+typedef unsigned __int16 uint16;
+typedef unsigned __int32 uint32;
+typedef signed __int64   t_int64;
+typedef unsigned __int64 t_uint64;
+//typedef t_int64          off_t;
+#else                                                   
+/* All modern/standard compiler environments */
+/* any other environment needa a special case above */
+#include <stdint.h>
+typedef int8_t          int8;
+typedef int16_t         int16;
+typedef int32_t         int32;
+typedef uint8_t         uint8;
+typedef uint16_t        uint16;
+typedef uint32_t        uint32;
+#endif                              /* end standard integers */
+//#define FMGRTAPE  /* defined for filemgr tapes, undefined for volmgr tape */
 
-char *buff;                     /* buffer for read/write */
-int filen = 1;                  /* file number being processed */
-long count=0, lcount=0;         /* number of blocks for file */
-extern void RUBOUT();           /* handle user DELETE key signal */
-off_t size=0, tsize=0;          /* number of bytes in file, total */
+int  usefmgr = 1;                   /* use fmgr format with 2 EOF's, else 3 EOF's */
+char *buff;                         /* buffer for read/write */
+int filen = 1;                      /* file number being processed */
+long count=0, lcount=0;             /* number of blocks for file */
+extern void RUBOUT();               /* handle user DELETE key signal */
+off_t size=0, tsize=0;              /* number of bytes in file, total */
 int ln;
 char *inf, *outf;
 int copy;
-int32_t size_128K = 128 * 1024;
-int32_t size_256K = 256 * 1024;
+int32 size_256K = 256 * 1024;
 
 int main(argc, argv)
 int argc;
 char **argv;
 {
     int n, nw, inp, outp;
-    struct mtop op;
-    int32_t buf_size = size_256K;
-    int EOFcnt = 0;     /* count the number of EOFs in a row. */
+//  struct mtop op;
+    int32 buf_size = size_256K;
+    int EOFcnt = 0;                 /* count the number of EOFs in a row. */
+    char *name = *argv;
+    char *p = *++argv;
 
-    if (argc <= 1 || argc > 3) {
-        (void)fprintf(stderr, "Usage: tape2disk src [dest]\n");
-        return (1);
+    if (argc <= 1 || argc > 4) {
+        fprintf(stderr, "Usage: tape2disk -vf src [dest]\n");
+        exit(1);
+    }
+    if (*p == '-') {
+        char ch = *++p;
+        argc--;                     /* one less arg */
+        if (ch == 'v')
+            usefmgr = 0;            /* use volmgr format */
+        else
+        if (ch == 'f')
+            usefmgr = 1;            /* use fmgr format */
+        else {
+            fprintf(stderr, "Invalid option %c\n", ch);
+            fprintf(stderr, "Usage: tape2disk -vf src [dest]\n");
+            exit(1);
+        }
     }
     inf = argv[1];
     if (argc == 3) {
@@ -54,20 +97,20 @@ char **argv;
         copy = 1;
     }
     if ((inp = open(inf, O_RDONLY, 0666)) < 0) {
-        (void)fprintf(stderr, "Can't open %s\n", inf);
-        return (1);
+        fprintf(stderr, "Can't open %s\n", inf);
+        exit(1);
     }
     if (copy) {
         /* open output file, create it if necessary */
         if ((outp = open(outf, O_WRONLY|O_CREAT, 0666)) < 0) {
-            (void)fprintf(stderr, "Can't open %s\n", outf);
-            return (3);
+            fprintf(stderr, "Can't open %s\n", outf);
+            exit(3);
         }
     }
-    /* get a 128k buffer */
+    /* get a 256k buffer */
     if ((buff = malloc(buf_size)) == NULL) {
-        (void)fprintf(stderr, "Can't allocate memory for tapecopy\n");
-        return (4);
+        fprintf(stderr, "Can't allocate memory for tapecopy\n");
+        exit(4);
     }
     if (signal(SIGINT, SIG_IGN) != SIG_IGN)
         (void)signal(SIGINT, RUBOUT);
@@ -75,60 +118,41 @@ char **argv;
     ln = -2;
     for (;;) {
         count++;
-        errno = 0;
-        /* read first record to get size for buffer, doubling each time unsuccessful */
+        /* read record */
         while ((n = read(inp, buff, buf_size)) < 0) {
-            if (errno == ENOMEM) {
-                if (buf_size < size_256K)
-                    buf_size = size_256K;
-                else
-                    buf_size *= 2;
-                free(buff);
-                if ((buff = malloc(buf_size)) == NULL) {
-                    (void)fprintf(stderr, "Can't allocate memory for tapecopy\n");
-                    return (4);
-                }
-                op.mt_op = MTFSF;   /* Rewind to start of file */
-                op.mt_count = (daddr_t) 0;
-                if (ioctl(inp, MTIOCTOP, (char *)&op) < 0) {
-                    perror("Read buffer size error");
-                    return (6);
-                }
-                errno = 0;
-                continue;
-            }
             perror("Unknown read error");
-            errno = 0;
-//          return (6);     /* abort on error, comment out to ignore taoe errors */
+//          errno = 0;
+            exit(6);                /* abort on error, comment out to ignore tape errors */
         }
         if (n > 0) {
             /* we read some data, see if scanning or writing */
-            EOFcnt = 0;     /* not at EOF anymore */
+            EOFcnt = 0;             /* not at EOF anymore */
             if (copy) {
-                int32_t n1, n2;
+                int32 n1, n2;
                 /* we have data to write */
-                int32_t hc = (n + 1) & ~1;      /* make byte count even */
-                int32_t wc = n;                 /* get actual byte count */
+                int32 hc = (n + 1) & ~1;  /* make byte count even */
+                int32 wc = n;       /* get actual byte count */
                 /* write actual byte count to 32 bit word as header */
-                n1 = write(outp, (char *)(&wc), (int32_t)4);
+                n1 = write(outp, (char *)(&wc), (int32)4);
                 /* write the data mod 2 */
-                nw = write(outp, buff, (int32_t)hc);
+                nw = write(outp, buff, (int32)hc);
                 /* write the byte count in 32 bit word as footer */
-                n2 = write(outp, (char *)(&wc), (int32_t)4);
+                n2 = write(outp, (char *)(&wc), (int32)4);
                 if (n1 != 4 || nw != hc || n2 != 4) {
                     fprintf(stderr, "write (%d) !=" " read (%d)\n", nw, n);
                     fprintf(stderr, "COPY " "Aborted\n");
-                    return (5);
+                    exit(5);
                 }
             }
-            size += n;      /* update bytes read */
-            if (n != ln) {  /* must be last record of file if different */
+            size += n;              /* update bytes read */
+            if (n != ln) {          /* must be last record of file if different */
                 if (ln > 0) {
                     /* we read something */
                     if ((count - lcount) > 1)
-                        (void)printf("file %d: records %ld to %ld: size %d\n", filen, lcount, count - 1, ln);
+                        printf("file %d: records %ld to %ld: size %d\n",
+                            filen, lcount, count - 1, ln);
                     else
-                        (void)printf("file %d: record %ld: size %d\n", filen, lcount, ln);
+                        printf("file %d: record %ld: size %d\n", filen, lcount, ln);
                 }
                 ln = n;             /* save last record size */
                 lcount = count;     /* also record count */
@@ -136,72 +160,75 @@ char **argv;
         } else {
             /* we did not read data, it must be an EOF */
             /* if ln is -1, last operation was EOF, now we have a second */
-#ifdef FMGRTAPE
-            /* filemgr has 2 EOF's at end of tape */
-            if (++EOFcnt > 1) {
-                /* two EOFs mean we are at EOT */
-                (void)printf("fmgr eot\n");
+            /* see if fmgr or volm */
+            if (usefmgr) {
+                /* filemgr has 2 EOF's at end of tape */
+                if (++EOFcnt > 1) {
+                    /* two EOFs mean we are at EOT */
+                    printf("fmgr eot\n");
                 break;
+                }
+            } else {
+                /* volmgr has 3 EOF's at end of tape */
+                if (++EOFcnt > 2) {
+                    /* three EOFs mean we are at EOT on MPX */
+                    printf("volm eot\n");
+                    break;
+                }
             }
-#else
-            /* volmgr has 3 EOF's at end of tape */
-            if (++EOFcnt > 2) {
-                /* three EOFs mean we are at EOT on MPX */
-                (void)printf("volm eot\n");
-                break;
-            }
-#endif
             if (ln > 0) {
-                if (count - lcount > 1)
-                    (void)printf("file %d: records %ld to %ld: size %d\n", filen, lcount, count - 1, ln);
+                if ((count - lcount) > 1)
+                    printf("file %d: records %ld to %ld: size %d\n",
+                        filen, lcount, count - 1, ln);
                 else
-                    (void)printf("file %d: record %ld: size %d\n", filen, lcount, ln);
+                    printf("file %d: record %ld: size %d\n", filen, lcount, ln);
             }
-#ifdef FMGRTAPE
-            (void)printf("file %d: eof after %ld records: %ld bytes\n", filen, count - 1, size);
-#else
-            if (EOFcnt == 2)        /* if 2nd EOF, print file info */
-                (void)printf("second eof after %d files: %ld bytes\n", filen, size);
-#endif
+            if (usefmgr) {
+                printf("file %d: eof after %ld records: %ld bytes\n",
+                    filen, count - 1, size);
+            } else {
+                if (EOFcnt == 2)    /* if 2nd EOF, print file info */
+                    printf("second eof after %d files: %ld bytes\n", filen, size);
+            }
+
             if (copy) {
                 /* write a sudo EOF to disk file as a zero 4 byte record */
                 int n1, hc = 0;
                 /* write the EOF */
                 /* write a zero as the byte count in 32 bit word as EOF */
-                n1 = write(outp, (char *)(&hc), (int32_t)4);
+                n1 = write(outp, (char *)(&hc), (int32)4);
                 if (n1 != 4) {
                     perror("Write EOF");
-                    return (6);
+                    exit(6);
                 }
             }
-#ifdef FMGRTAPE
-            filen++;            /* advance number of files */
-#else
-            if (EOFcnt < 2)     /* not really a file if 2nd EOF */
-                filen++;        /* advance number of files */
-#endif
-            count = 0;      /* file record count back to zero */
-            lcount = 0;     /* last record count back to zero */
-            tsize += size;  /* add to total tape size */
-            size = 0;       /* file size back to zero */
-            ln = n;         /* set ln to -1 showing we are at EOF */
+            if (usefmgr)
+                filen++;            /* advance number of files */
+            else 
+                if (EOFcnt < 2)     /* not really a file if 2nd EOF */
+                    filen++;        /* advance number of files */
+            count = 0;              /* file record count back to zero */
+            lcount = 0;             /* last record count back to zero */
+            tsize += size;          /* add to total tape size */
+            size = 0;               /* file size back to zero */
+            ln = n;                 /* set ln to -1 showing we are at EOF */
         }
     }
     if (copy) {
         /* write a sudo EOM to disk file as a -1 4 byte record */
-        int32_t n1, hc = 0xffffffff;
+        int32 n1, hc = 0xffffffff;
         /* write the EOM to disk */
         /* write a -1 as the byte count in 32 bit word as EOM */
-        n1 = write(outp, (char *)(&hc), (int32_t)4);
+        n1 = write(outp, (char *)(&hc), (size_t)sizeof(hc));
         if (n1 != 4) {
             perror("Write EOM");
-            return (6);
+            return(6);
         }
         (void)close(outp);
     }
     /* print out total tape size in bytes */
     (void)printf("total length: %ld bytes\n", tsize);
-    return (0);
+    exit(0);
 }
 
 /* entered when user hit the DELETE key */

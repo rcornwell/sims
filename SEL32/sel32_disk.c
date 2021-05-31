@@ -215,7 +215,6 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 #define DSK_BUSY        0x8000                  /* Disk is busy */
 /* commands */
 #define DSK_INCH        0x00                    /* Initialize channel */
-#define DSK_ICH         0xFF                    /* Initialize controller */
 #define DSK_INCH2       0xF0                    /* Initialize channel for processing */
 #define DSK_WD          0x01                    /* Write data */
 #define DSK_RD          0x02                    /* Read data */
@@ -240,7 +239,7 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 #define DSK_RAP         0xA2                    /* Read angular positions */
 #define DSK_TESS        0xAB                    /* Test STAR (subchannel target address register) */
 #define DSK_REC         0xB2                    /* Read ECC correction mask */
-#define DSK_ICH         0xFF                    /* Initialize Controller */
+#define DSK_ICH         0xFF                    /* Initialize controller */
 
 #define STAR    u4
 /* u4 - sector target address register (STAR) */
@@ -406,6 +405,7 @@ extern  uint32  readfull(CHANP *chp, uint32 maddr, uint32 *word);
 extern  int     irq_pend;                       /* go scan for pending int or I/O */
 extern  UNIT    itm_unit;
 extern  uint32  PSD[];                          /* PSD */
+extern  uint32  cont_chan(uint16 chsa);
 
 /* channel program information */
 CHANP           dda_chp[NUM_UNITS_DISK] = {0};
@@ -732,6 +732,7 @@ t_stat  disk_iocl(CHANP *chp, int32 tic_ok)
 //  DIB         *dibp = dib_unit[chp->chan_dev];/* get the DIB pointer */
     UNIT        *uptr = chp->unitptr;           /* get the unit ptr */
     uint16      chan = get_chan(chp->chan_dev); /* our channel */
+    uint16      chsa = chp->chan_dev;           /* our chan/sa */
     uint16      devstat = 0;
     DEVICE      *dptr = get_dev(uptr);
 
@@ -739,8 +740,8 @@ t_stat  disk_iocl(CHANP *chp, int32 tic_ok)
     if (chp->chan_info & INFO_SIOCD) {          /* see if 1st IOCD in channel prog */
         if (chp->chan_caw & 0x3) {              /* must be word bounded */
             sim_debug(DEBUG_EXP, dptr,
-                "disk_iocl iocd bad address chan %02x caw %06x\n",
-                chan, chp->chan_caw);
+                "disk_iocl iocd bad address chsa %02x caw %06x\n",
+                chsa, chp->chan_caw);
             chp->ccw_addr = chp->chan_caw;      /* set the bad iocl address */
             chp->chan_status |= STATUS_PCHK;    /* program check for invalid iocd addr */
             uptr->SNS |= SNS_INAD;              /* invalid address status */
@@ -780,14 +781,16 @@ loop:
         chp->chan_caw, chan, word1, word2);
 
     chp->chan_caw = (chp->chan_caw & 0xfffffc) + 8; /* point to next IOCD */
+#ifdef BAD_05142021
     chp->ccw_cmd = (word1 >> 24) & 0xff;        /* set command from IOCD wd 1 */
+#endif
 
     /* Check if we had data chaining in previous iocd */
     /* if we did, use previous cmd value */
     if (((chp->chan_info & INFO_SIOCD) == 0) && /* see if 1st IOCD in channel prog */
        (chp->ccw_flags & FLAG_DC)) {            /* last IOCD have DC set? */
         sim_debug(DEBUG_CMD, dptr,
-            "ec_iocl @%06x DO DC, ccw_flags %04x cmd %02x\n",
+            "disk_iocl @%06x DO DC, ccw_flags %04x cmd %02x\n",
             chp->chan_caw, chp->ccw_flags, chp->ccw_cmd);
     } else
         chp->ccw_cmd = (word1 >> 24) & 0xff;    /* set new command from IOCD wd 1 */
@@ -804,18 +807,23 @@ loop:
 
     /* validate the commands for the disk */
     switch (chp->ccw_cmd) {
-    case DSK_WD: case DSK_RD: case DSK_INCH: case DSK_NOP: case DSK_ICH:
+    case DSK_WD: case DSK_RD: case DSK_INCH: case DSK_NOP:
     case DSK_SCK: case DSK_XEZ: case DSK_LMR: case DSK_WSL: case DSK_RSL:
     case DSK_IHA: case DSK_WTL: case DSK_RTL: case DSK_RAP: case DSK_TESS:  
     case DSK_FNSK: case DSK_REL: case DSK_RES: case DSK_POR: case DSK_TIC:
     case DSK_REC:
     case DSK_SNS:   
         break;
+    case DSK_ICH:   
+        if (chp->ccw_count == 896)              /* count must be 896 to be valid */
+            break;
+        /* drop through */
     default:
         chp->chan_status |= STATUS_PCHK;        /* program check for invalid cmd */
         uptr->SNS |= SNS_CMDREJ;                /* cmd rejected */
         sim_debug(DEBUG_EXP, dptr,
-            "disk_iocl bad cmd chan_status[%04x] %04x\n", chan, chp->chan_status);
+            "disk_iocl bad cmd chan_status[%04x] %04x cmd %02x\n",
+            chan, chp->chan_status, chp->ccw_cmd);
         return 1;                               /* error return */
     }
 
@@ -825,8 +833,8 @@ loop:
             chp->chan_status |= STATUS_PCHK;    /* program check for invalid tic */
             uptr->SNS |= SNS_CMDREJ;            /* cmd rejected status */
             sim_debug(DEBUG_EXP, dptr,
-                "disk_iocl TIC/NOP bad cmd chan_status[%04x] %04x\n",
-                chan, chp->chan_status);
+                "disk_iocl TIC/NOP bad cmd chan_status[%04x] %04x cmd %02x\n",
+                chan, chp->chan_status, chp->ccw_cmd);
             return 1;                           /* error return */
         }
     }
@@ -863,8 +871,14 @@ loop:
     }
 
     /* Check if we had data chaining in previous iocd */
+#ifdef BAD_05152021
     if ((chp->chan_info & INFO_SIOCD) ||        /* see if 1st IOCD in channel prog */
         ((chp->ccw_flags & FLAG_DC) == 0)) {    /* last IOCD have DC set? */
+#else
+    if ((chp->chan_info & INFO_SIOCD) ||        /* see if 1st IOCD in channel prog */
+        (((chp->chan_info & INFO_SIOCD) == 0) && /* see if 1st IOCD in channel prog */
+        ((chp->ccw_flags & FLAG_DC) == 0))) {    /* last IOCD have DC set? */
+#endif
         sim_debug(DEBUG_CMD, dptr,
             "disk_iocl @%06x DO CMD No DC, ccw_flags %04x cmd %02x\n",
             chp->chan_caw, chp->ccw_flags, chp->ccw_cmd);
@@ -918,37 +932,30 @@ loop:
 
         /* call the device startcmd function to process the current command */
         /* just replace device status bits */
+        chp->chan_info &= ~INFO_CEND;           /* show chan_end not called yet */
         devstat = dibp->start_cmd(uptr, chan, chp->ccw_cmd);
         chp->chan_status = (chp->chan_status & 0xff00) | devstat;
         chp->chan_info &= ~INFO_SIOCD;          /* show not first IOCD in channel prog */
 
 //      sim_debug(DEBUG_XIO, dptr,
         sim_debug(DEBUG_DETAIL, dptr,
-            "disk_iocl @%06x after start_cmd chan %04x status %08x count %04x\n",
-            chp->chan_caw, chan, chp->chan_status, chp->ccw_count);
+            "disk_iocl @%06x after start_cmd chan %04x status %08x count %04x byte %02x\n",
+            chp->chan_caw, chan, chp->chan_status, chp->ccw_count, chp->chan_byte);
 
         /* see if bad status */
         if (chp->chan_status & (STATUS_ATTN|STATUS_ERROR)) {
             chp->chan_status |= STATUS_CEND;    /* channel end status */
             chp->ccw_flags = 0;                 /* no flags */
-            /* see if chan_end already called */
-            if (chp->chan_byte == BUFF_NEXT) {
-                sim_debug(DEBUG_EXP, dptr,
-                    "disk_iocl BUFF_NEXT ERROR chp %p chan_byte %04x\n",
-                    chp, chp->chan_byte);
-            } else {
-                chp->chan_byte = BUFF_NEXT;     /* have main pick us up */
-                sim_debug(DEBUG_EXP, dptr,
-                    "disk_iocl bad status chan %04x status %04x cmd %02x\n",
-                    chan, chp->chan_status, chp->ccw_cmd);
-                RDYQ_Put(chp->chan_dev);        /* queue us up */
-                sim_debug(DEBUG_EXP, dptr,
-                    "disk_iocl continue wait chsa %04x status %08x\n",
-                    chp->chan_dev, chp->chan_status);
-                chp->chan_qwait = QWAIT;            /* run 25 instructions before starting iocl */
-            }
-        } else
-
+            chp->chan_byte = BUFF_NEXT;         /* have main pick us up */
+            sim_debug(DEBUG_EXP, dptr,
+                "disk_iocl bad status chan %04x status %04x cmd %02x\n",
+                chan, chp->chan_status, chp->ccw_cmd);
+            /* done with command */
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "load_ccw ERROR return chsa %04x status %08x\n",
+                chp->chan_dev, chp->chan_status);
+            return 1;                           /* error return */
+        }
         /* NOTE this code needed for MPX 1.X to run! */
         /* see if command completed */
         /* we have good status */
@@ -1027,8 +1034,9 @@ t_stat disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         }
     case DSK_ICH:                               /* 0xFF Initialize controller */
         if ((cmd == DSK_ICH) &&
-            (chp->ccw_count != 896))            /* count must be 896 to be valid */
+            (chp->ccw_count != 896)) {          /* count must be 896 to be valid */
             break;
+        }
     case DSK_SCK:                               /* Seek command 0x07 */
     case DSK_XEZ:                               /* Rezero & Read IPL record 0x37 */
     case DSK_WD:                                /* Write command 0x01 */
@@ -1054,11 +1062,19 @@ t_stat disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
             cmd, chsa);
 #ifdef FAST_FOR_UTX
 //      sim_activate(uptr, 40);                 /* start things off */
+        /* when value was 50, UTX would get a spontainous interrupt */
         /* when value was 30, UTX would get a spontainous interrupt */
         /* when starting cron */
         /* changed to 25 from 30 121420 */
 //121420sim_activate(uptr, 30);                 /* start things off */
+#ifdef BAD_05142021
         sim_activate(uptr, 25);                 /* start things off */
+#else
+        sim_activate(uptr, 20);                 /* start things off */
+        /* when using 500, UTX gets "ioi: sio at 801 failed, cc3, retry=0" */
+//      sim_activate(uptr, 50);                 /* start things off */
+//      sim_activate(uptr, 500);                 /* start things off */
+#endif
 #else
 //      sim_activate(uptr, 250);                /* start things off */
         sim_activate(uptr, 500);                /* start things off */
@@ -1089,27 +1105,25 @@ t_stat  disk_haltio(UNIT *uptr) {
     /* UTX wants SLI bit, but no unit exception */
     /* status must not have an error bit set */
     /* otherwise, UTX will panic with "bad status" */
+    /* stop any I/O and post status and return error status */
+    chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);       /* stop any chaining */
+    uptr->CMD &= LMASK;                         /* make non-busy */
+    uptr->SNS2 |= (SNS_ONC|SNS_UNR);            /* on cylinder & ready */
     if ((uptr->CMD & DSK_CMDMSK) != 0) {        /* is unit busy */
         sim_debug(DEBUG_EXP, dptr,
             "disk_haltio HIO chsa %04x cmd = %02x ccw_count %02x\n",
             chsa, cmd, chp->ccw_count);
-        /* stop any I/O and post status and return error status */
-        chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);   /* stop any chaining */
-        uptr->CMD &= LMASK;                     /* make non-busy */
-        uptr->SNS2 |= (SNS_ONC|SNS_UNR);        /* on cylinder & ready */
         sim_cancel(uptr);                       /* clear the input timer */
-        sim_debug(DEBUG_EXP, dptr,
-            "disk_haltio HIO I/O stop chsa %04x cmd = %02x CHS %08x STAR %08x\n",
-            chsa, cmd, uptr->CHS, uptr->STAR);
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);  /* force end */
-        return SCPE_IOERR;
+    } else {
+        sim_debug(DEBUG_DETAIL, dptr,
+            "disk_haltio HIO I/O not busy chsa %04x cmd = %02x\n", chsa, cmd);
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
     }
-    uptr->CMD &= LMASK;                         /* make non-busy */
-    uptr->SNS2 |= (SNS_ONC|SNS_UNR);            /* on cylinder & ready */
-//  sim_debug(DEBUG_EXP, dptr,
-    sim_debug(DEBUG_DETAIL, dptr,
-        "disk_haltio HIO I/O not busy chsa %04x cmd = %02x\n", chsa, cmd);
-    return SCPE_OK;                             /* not busy */
+    sim_debug(DEBUG_EXP, dptr,
+        "disk_haltio HIO I/O stop chsa %04x cmd = %02x CHS %08x STAR %08x\n",
+        chsa, cmd, uptr->CHS, uptr->STAR);
+    return SCPE_IOERR;
 }
 
 /* Handle processing of disk requests. */
@@ -1132,8 +1146,8 @@ t_stat disk_srv(UNIT *uptr)
     uint8           buf[1024];
     uint8           buf2[1024];
 
-//  sim_debug(DEBUG_CMD, dptr,
-    sim_debug(DEBUG_DETAIL, dptr,
+    sim_debug(DEBUG_CMD, dptr,
+//  sim_debug(DEBUG_DETAIL, dptr,
         "disk_srv entry unit %02x CMD %08x chsa %04x count %04x %x/%x/%x \n",
         unit, uptr->CMD, chsa, chp->ccw_count,
         STAR2CYL(uptr->CHS), (uptr->CHS >> 8)&0xff, (uptr->CHS&0xff));
@@ -1161,7 +1175,7 @@ t_stat disk_srv(UNIT *uptr)
         sim_debug(DEBUG_CMD, dptr,
             "disk_srv cmd CONT INCH %06x chsa %04x addr %06x count %04x completed\n",
             chp->chan_inch_addr, chsa, mema, chp->ccw_count);
-        /* to use this inch method, byte count must be 897 */
+        /* to use this inch method, byte count must be 896 */
         if (len != 896) {
             /* we have invalid count, error, bail out */
             uptr->SNS |= SNS_CMDREJ;
@@ -1342,7 +1356,7 @@ iha_error:
         break;
 
     case DSK_REC: /* 0xB2 */                     /* Read ECC correction code */
-        sim_debug(DEBUG_CMD, dptr, "disk_startcmd CMD REC Read ECC\n");
+        sim_debug(DEBUG_CMD, dptr, "disk_srv CMD REC Read ECC\n");
         /* count must be 4, if not prog check */
         if (len != 4) {
             sim_debug(DEBUG_CMD, dptr,
@@ -1421,7 +1435,7 @@ iha_error:
         break;
 
     case DSK_SNS: /* 0x04 */                     /* Sense */
-        sim_debug(DEBUG_CMD, dptr, "disk_startcmd CMD sense\n");
+        sim_debug(DEBUG_CMD, dptr, "disk_srv CMD sense\n");
 
         /* count must be 12 or 14, if not prog check */
         if (len != 12 && len != 14) {
@@ -2029,7 +2043,13 @@ iha_error:
 #ifdef FAST_FOR_UTX
 //          sim_activate(uptr, 25);             /* start things off */
 //          sim_activate(uptr, 20);             /* start things off */
+#ifdef BAD_05142021
             sim_activate(uptr, 15);             /* start things off */
+#else
+//          sim_activate(uptr, 10);             /* start things off */
+//          sim_activate(uptr, 50);             /* start things off */
+            sim_activate(uptr, 10);             /* start things off */
+#endif
 #else
 //          sim_activate(uptr, 150);            /* wait to read next sector */
             sim_activate(uptr, 300);            /* wait to read next sector */

@@ -16,7 +16,7 @@ I =
 D =
 
 ##CFLAGS= $(OPTC) -I$I
-CFLAGS= $(OPTC) -I$I -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE
+CFLAGS= $(OPTC) -I$I -Wall -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE
 
 # For Linux
 #LFLAGS= -L$L
@@ -32,10 +32,12 @@ PROGS =			\
 	$(ROOT)/mkdiagtape \
 	$(ROOT)/tapdump	\
 	$(ROOT)/tape2disk \
+##	$(ROOT)/fileread \
 	$(ROOT)/disk2tap \
 	$(ROOT)/tapscan \
 	$(ROOT)/eomtap \
 	$(ROOT)/volmcopy \
+	$(ROOT)/instcopy \
 	$(ROOT)/diagcopy \
 	$(ROOT)/ddump \
 	$(ROOT)/deblk \
@@ -115,6 +117,12 @@ $B/tape2disk:	$D tape2disk.c
 	@cp $(@F) $B
 	@echo $(@F) installed in $B
 
+##$B/fileread:	$D fileread.c
+##	@-$(CC) $(CFLAGS) $(@F).c $(LFLAGS) -o $@
+##	@chmod 755 $@
+##	@cp $(@F) $B
+##	@echo $(@F) installed in $B
+
 $B/disk2tap:	$D disk2tap.c
 	@-$(CC) $(CFLAGS) $(@F).c $(LFLAGS) -o $@
 	@chmod 755 $@
@@ -134,6 +142,12 @@ $B/eomtap:	$D eomtap.c
 	@echo $(@F) installed in $B
 
 $B/volmcopy:	$D volmcopy.c
+	@-$(CC) $(CFLAGS) $(@F).c $(LFLAGS) -o $@
+	@chmod 755 $@
+	@cp $(@F) $B
+	@echo $(@F) installed in $B
+
+$B/instcopy:	$D instcopy.c
 	@-$(CC) $(CFLAGS) $(@F).c $(LFLAGS) -o $@
 	@chmod 755 $@
 	@cp $(@F) $B

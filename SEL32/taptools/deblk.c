@@ -5,7 +5,7 @@
  * deblocks blocked files and uncompresses compressed files and
  * deletes trailing blanks from a source file.  The program will
  * also process standard ASCII newline ('\n') terminated files.
- * input - stdin / filename  
+ * input - [filename] or stdin
  * output - stdout
  */
 
@@ -35,78 +35,78 @@
  * byte 1 - record count
  * byte 2 - high order byte of 16 bit checksum
  * byte 3 - low order byte of 16 bit checksum
- * 
+ *
  */
 
 /*
-*                                                                       
-* AN O.S. COMPRESSED RECORD CONSISTS OF 120 BYTES:                    
-*                                                                      
-*        6 CONTROL BYTES AND 114 BYTES OF COMPRESSED SOURCE            
-*                                                                      
-*        (THE LAST RECORD CAN BE LESS THAN 120 BYTES, ON THAT          
-*         RECORD THE COMPRESSED SOURCE WILL BE FROM 4-114 BYTES).     
-*                                                                     
-*        6 CONTROL BYTES                                               
-*                                                                      
-*        1 BYTE- DATA TYPE CODE BF OR 9F (9F MEANS THIS IS LAST RECORD)
-*        1 BYTE- SIZE OF COMPRESSED RECORD (- 6 FOR CONTROL BYTES)    
-*                  (USUALLY 114 (72(X)) IS THE SIZE EXCEPT LAST RECORD)
-*        2 BYTE- CHECKSUM                                            
-*        2 BYTE- RECORD SEQUENCE NUMBER (STARTING FROM ZERO)        
-*                                                                     
-*    4-114 BYTES OF ONE OR MORE GROUPS OF COMPRESSED SOURCE AS FOLLOWS:
-*                                                                     
-* A COMPRESSED GROUP CONSISTS OF:                                    
-* A BLANK COUNT BYTE, A DATA COUNT BYTE, DATA                       
-*                                                                  
-* COMPRESSED GROUPS ARE REPEATED AND TERMINATED BY AN FF CHAR.     
-* COMPRESSED GROUPS ARE USUALLY TERMINATED AT 114 CHARS BY         
-* THE FF CHAR UNLESS THIS IS THE LAST RECORD IN THE FILE           
+*
+* An O.S. compressed record consists of 120 bytes:
+*
+*        6 Control bytes and 114 bytes of compressed source
+*
+*        (The last record can be less than 120 bytes, on that
+*         record the compressed source will be from 4-114 bytes).
+*
+*        6 Control bytes
+*
+*        1 Byte- Data type code bf or 9f (9f means this is last record)
+*        1 Byte- Size of compressed record (- 6 for control bytes)
+*                (Usually 114 (72(x)) is the size except last record)
+*        2 Byte- Checksum
+*        2 Byte- Record sequence number (starting from zero)
+*
+*    4-114 Bytes of one or more groups of compressed source as follows:
+*
+* A compressed group consists of:
+* A blank count byte, a data count byte, data.
+*
+* Compressed groups are repeated and terminated by an ff char.
+* Compressed groups are usually terminated at 114 chars by
+* the ff char unless this is the last record in the file.
 *                                                                 
-* A LINE OF TEXT USUALLY IS COMPRESSED AS FOLLOWS:               
-* A BLANK COUNT BYTE, A DATA COUNT BYTE, COMPRESSED DATA            
-* (ONE OR MORE OF THESE COMPRESSED GROUPS FOR UP TO 72 CHARS OF SOURCE)
-* FOLLOWED BY A BLANK COUNT BYTE,A DATA COUNT BYTE (OF 8),          
-* DATA (8 CHAR SEQUENCE NUMBER), TERMINATED BY A FF CHAR          
-*                                                                 
-* A WORKFILE LOGICAL COMPRESSED LINE IS SIMILIAR TO THE O.S.         
-* LOGICAL COMPRESSED LINE EXCEPT THAT AN 8 CHAR SEQUENCE NUMBER     
-* ALWAYS EXISTS IN THE WORKFILE FORMAT AND IT IS ALWAYS FIRST      
-* RATHER THAN AT THE END OF THE RECORD (IF SEQUENCE NUMBERS DID    
-* NOT EXIST IN COLUMNS 73-80 IN THE O.S. ORIGINAL COMPRESSED          
-* RECORDS THAN THE EDITOR GENERATES THEM). PRECEDING THE WORKFILE    
-* COMPRESSED RECORD IS A 2 BYTE PREVIOUS RECORD IN THE PAGE POINTER. 
-* ALSO NOTE THAT WORKFILES ARE NOT BLOCKED BY THE O.S., BUT HAVE     
-* THEIR OWN STRUCTURE OF HEADERS, DATA SPACE, AND FREE SPACE.       
-*                                                                     
-* IF THE SEQUENCE NUMBER DOES NOT EXIST OR THE PERIOD IS NOT IN       
-* THE PROPER PLACE (NNNN.NNN) OR THE SEQUENCE NUMBER CONTAINS         
-* ANYTHING OTHER THAN NUMBERS, THEN THE EDITOR WILL GENERATE        
-* ITS OWN SEQUENCE NUMBER                                               
-*                                                                     
-* THE FIRST BLANK COUNT CAN RANGE FROM 0-80 BLANK CHARS              
-* SUBSEQUENT BLANK COUNTS CAN RANGE FROM 3-79 MAX.  THAT IS           
-* SINCE IT TAKES 2 BYTES TO DO BLANK COMPRESSION (A BLANK COUNT       
-* AND A DATA COUNT), ONLY 3 OR MORE BLANK CHARS AFTER THE FIRST        
-* NON-BLANK CHAR IN A LINE ARE COMPRESSED.                            
-* RECORDS TO BE COMPRESSED ARE ASSUMED TO BE 80 CHARS OR LESS        
-* (INCLUDING AN 8 CHAR SEQUENCE NUMBER).                             
+* A line of text usually is compressed as follows:
+* A blank count byte, a data count byte, compressed data
+* (one or more of these compressed groups for up to 72 chars of source)
+* followed by a blank count byte,a data count byte (of 8),
+* data (8 char sequence number), terminated by a ff char.
+*
+* A workfile logical compressed line is similiar to the O.S.
+* logical compressed line except that an 8 char sequence number
+* always exists in the workfile format and it is always first
+* rather than at the end of the record (if sequence numbers did
+* not exist in columns 73-80 in the O.S. original compressed
+* records than the editor generates them). Preceding the workfile
+* compressed record is a 2 byte previous record in the page pointer.
+* Also note that workfiles are not blocked by the O.S., but have
+* their own structure of headers, data space, and free space.
+*
+* If the sequence number does not exist or the period is not in
+* the proper place (nnnn.nnn) or the sequence number contains
+* anything other than numbers, then the editor will generate
+* its own sequence number.
+*
+* The first blank count can range from 0-80 blank chars
+* subsequent blank counts can range from 3-79 max.  That is
+* since it takes 2 bytes to do blank compression (a blank count
+* and a data count), only 3 or more blank chars after the first
+* non-blank char in a line are compressed.
+* Records to be compressed are assumed to be 80 chars or less
+* (including an 8 char sequence number).
+*
+* The checksum is simply the addition of all the 120 chars in the
+* compressed record except for the 6 control bytes.
+*
+* The smallest compressed line consists of 14 chars:
+* A blank count byte (of 71), a data count byte (of 8),
+* data (an 8 char sequence number, a blank count byte (of zero),
+* a data count byte (of 1), data (one char), and an ff terminator
+* compressed record format can be processed only by the following:    
 *                                                                    
-* THE CHECKSUM IS SIMPLY THE ADDITION OF ALL THE 120 CHARS IN THE    
-* COMPRESSED RECORD EXCEPT FOR THE 6 CONTROL BYTES                   
-*                                                                    
-* THE SMALLEST COMPRESSED LINE CONSISTS OF 14 CHARS :                 
-* A BLANK COUNT BYTE (OF 71), A DATA COUNT BYTE (OF 8),              
-* DATA (AN 8 CHAR SEQUENCE NUMBER, A BLANK COUNT BYTE (OF ZERO),      
-* A DATA COUNT BYTE (OF 1), DATA (ONE CHAR), AND AN FF TERMINATOR    
-* COMPRESSED RECORD FORMAT CAN BE PROCESSED ONLY BY THE FOLLOWING:    
-*                                                                    
-* ASSEMBLER,P4,SOURCE UPDATE,EDITOR AND SOME FUNCTIONS OF MEDIA      
-* AND OF COURSE SOME UTILITY PROGRAMS LIKE FLIP.                     
-*                                                                   
-* NOTE THAT A TEXT LINE CAN BE SPREAD ACROSS SEVERAL COMPRESSED     
-* RECORDS.                                                          
+* Assembler, P4, Source Update, Editor and some functions of Media
+* and of course some utility programs like flip.
+*
+* Note that a text line can be spread across several compressed
+* records.
 */
 
 #include <stdio.h>
@@ -126,8 +126,7 @@ char *argv[];
     FILE    *fp, *fopen();
     unsigned char s[BUFSIZ];
 
-    if(argc == 1)       /* no args; copy std in */
-    {
+    if(argc == 1) {             /* no args; copy std in */
         while (1) {
             if (rbl(stdin, s, BUFSIZ) <= 0) /* read til EOF */
                 exit(0);
@@ -157,32 +156,33 @@ int checksum(buf)
 unsigned char *buf;
 {
     int i = 0;
-    short int ccs = 0;      /*zero checksum */
-    unsigned int rcs = (((buf[2] << 8) & 0xff00) | (buf[3] & 0xff));    /* get checksum */
+    short int ccs = 0;          /*zero checksum */
+    /* get checksum */
+    unsigned int rcs = (((buf[2] << 8) & 0xff00) | (buf[3] & 0xff));
     int cnt = buf[1] & 0xff;    /* record count */
 //fprintf(stderr, "checksum cnt %x data %x %x %x %x %x %x %x %x\n",
 //      cnt, buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
 
     while (cnt > 0) {
         unsigned short v = buf[i+6] & 0xff;
-        ccs += v;           /* add the byte */ 
+        ccs += v;               /* add the byte */ 
 //fprintf(stderr, "checksum cnt %x val %x sum %x\n", i, v, ccs);
-        i++;                /* bump address */
-        cnt--;              /* reduce count */
+        i++;                    /* bump address */
+        cnt--;                  /* reduce count */
     }
 //fprintf(stderr, "checksum size %x read %x calc %x\n", buf[1], rcs, ccs);
     if (ccs == rcs)
-        return 0;           /* return OK */
-    return 1;               /* return error */
+        return 0;               /* return OK */
+    return 1;                   /* return error */
 }
 
 int bin = 0;
 unsigned char si[BLKSIZE];
 unsigned char bi[BLKSIZE];
-int ubdp = 0;   /* unblocked data pointer */
-int ubdc = 0;   /* unblocked data count */
-int bdp = 0;    /* blocked data pointer */
-int bdc = 0;    /* blocked data count */
+int ubdp = 0;                   /* unblocked data pointer */
+int ubdc = 0;                   /* unblocked data count */
+int bdp = 0;                    /* blocked data pointer */
+int bdc = 0;                    /* blocked data count */
 short filetype = 0;
 
 #define unknown 0x00
@@ -204,19 +204,19 @@ int cnt;
     if (bin == 0) {
 //fprintf(stderr, "read sector a\n");
         if (fread(si, 1, BLKSIZE, fp) <= 0)
-            return (0);     /* this means eof */
+            return (0);         /* this means eof */
         bin = 6;
     }
     /* check for EOF */
     if (si[bin] & 0x80) {
         bin = 0;
-        return(0);          /* we have EOF */
+        return(0);              /* we have EOF */
     }
     /* check for EOB in last record */
     if (si[bin - 2] & 0x20) {
 //fprintf(stderr, "read sector b\n");
         if (fread(si, 1, BLKSIZE, fp) <= 0)
-            return (0);     /* this means eof */
+            return (0);         /* this means eof */
         bin = 6;
     }
 //fprintf(stderr, "copy block from sector @ bin %x\n", bin);
@@ -275,7 +275,7 @@ int lim;
         /* file is blocked, get next record */
         if (bdp == 0) {
             /* we need a new buffer */
-newbuf:
+/*newbuf:*/
             if ((bdc = readbb(fp, bi, lim)) <= 0)
                 return (0);     /* this means eof */
 //fprintf(stderr, "getloi read blocked file %x\n", bdc);
@@ -322,25 +322,26 @@ newbuf:
             while ((c = getb(fp)) != -1) {
                 /* make sure this is a compressed record */
                 if ((rc == 0) && ((c & 0x9f) != 0x9f)) {
-                    fprintf(stderr, "getloi - unblocked compressed file read error %x rc %x\n", c, rc);
-                    return (0);     /* this means error */
+                    fprintf(stderr,
+            "getloi - unblocked compressed file read error %x rc %x\n", c, rc);
+                    return (0); /* this means error */
                 }
                 if (rc == 1)
-                    cc = c + 6;     /* get 'real' record count */
-                s[rc++] = c;        /* save the char */
+                    cc = c + 6; /* get 'real' record count */
+                s[rc++] = c;    /* save the char */
 
-                if (rc == cc)       /* compressed record is always <= 120 char buffers */
-                    break;          /* done */
+                if (rc == cc)   /* compressed record is always <= 120 char buffers */
+                    break;      /* done */
             }
             if (c == -1)
-                return (0);         /* this means EOF */
+                return (0);     /* this means EOF */
 
             /* skip any extra chars from short records */
             bc = rc;
             while ((s[0] != 0x9f) && (bc < 120)) {
                 if ((c = getb(fp)) == -1)
-                    return (0);     /* this means EOF */
-                s[bc++] = c;        /* fill extra chars */
+                    return (0); /* this means EOF */
+                s[bc++] = c;    /* fill extra chars */
 //fprintf(stderr, "getloi - filling extra chars with char %x bc %x\n", c, bc);
             }
             /* next char should be bf/9f */
@@ -361,59 +362,23 @@ newbuf:
                 fprintf(stderr, "getloi - unblocked compressed file checksum error\n");
 //fprintf(stderr, "getloi A unblocked compressed read return rc=%x cc=%x %x %x\n", rc, cc, s[0], s[rc-1]);
 //fprintf(stderr, "getloi C unblocked compressed read return %x ubdc %x ubdp %x\n", rc, ubdc, ubdp);
-                return (0);         /* this means error */
+                return (0);     /* this means error */
             }
 //fprintf(stderr, "getloi B unblocked compressed read return rc=%x cc=%x %x\n", rc, cc, s[1]);
-            return (rc);            /* return data count */
+            return (rc);        /* return data count */
         }
         /* file is uncompressed, so copy UNIX records */
         while ((c = getb(fp)) != -1) {
-            s[rc++] = c;            /* save the char */
+            s[rc++] = c;        /* save the char */
             if (c == 0x0a) {
 //fprintf(stderr, "getloi C unblocked compressed read return %x ubdc %x ubdp %x\n", rc, ubdc, ubdp);
-                s[rc++] = 0;        /* terminate the line */
-                return (rc);        /* return data */
+                s[rc++] = 0;    /* terminate the line */
+                return (rc);    /* return data */
             }
         }
-        return (0);                 /* EOF */
+        return (0);             /* EOF */
     }
     return (0);
-#ifdef JUNK
-    /* get chars until EOF or limit reached */
-    for (i = 0; (--lim > 0) && ((c = getchar()) != EOF)) {
-        if ((i >= 6) && ((c == 0xbf) || (c == 0x9f)))
-        {
-            ungetc(c, stdin);
-            return (i);
-        }
-        s[i++] = c;
-        if ((*s != 0xbf) && (*s != 0x9f))
-        {
-            if (c == '\n')
-            {
-                if ((s[i - 1] == '\n') && (i > 1))
-                {
-                    while ((s[i - 2] == ' ') && (i > 1))
-                        --i;
-                    s[i - 1] = '\n';
-                }
-                s[i] = '\0';
-                return (i);
-            }
-        }
-    }
-#ifdef JUNK
-    for (i = 0; --lim > 0 && (c = getchar()) != EOF && (s[i++] = c) != '\n';);
-    if ((s[i - 1] == '\n') && (i > 1))
-    {
-        while ((s[i - 2] == ' ') && (i > 1))
-            --i;
-        s[i - 1] = '\n';
-    }
-    s[i] = '\0';
-#endif
-    return (i);
-#endif
 }
 
 /*
@@ -423,6 +388,7 @@ int putloi(s)
 unsigned char *s;
 {
     printf("%s", s);
+    return(0);
 }
 
 unsigned char line[BUFSIZ];
@@ -445,12 +411,11 @@ unsigned char *buf;
 int n;
 {
     register int count = 0;
-    register unsigned char *cp;
+/*  register unsigned char *cp; */
     int i;
     unsigned char *linadrs = line;
 
-    if (filetype == unknown)    /* see if we know type of file to read */
-    {
+    if (filetype == unknown) {  /* see if we know type of file to read */
         bin = 0;
         ubin = 0;
         bdp = 0;
@@ -459,7 +424,7 @@ int n;
         ubdc = 0;
         /* read in 1st 768 Byte block of the file */
         if ((ubdc = fread(si, 1, BLKSIZE, fp)) <= 0)
-            return (0);             /* this means eof */
+            return (0);         /* this means eof */
         /* test 1st byte for 0x06 and bytes 2, 3, and 4 zero */
         if ((si[0] == 0x06) && (si[1] == 0) && (si[2] == 0) && (si[3] == 0)) {
             /* we have a library file, giver error and abort */
@@ -472,7 +437,7 @@ int n;
                 if (!isprint(si[i])) {
                     /* unknown file type, abort */
                     fprintf(stderr, "deblk - Unknown binary file type, aborting\n");
-                    return (0);         /* this means error exit */
+                    return (0); /* this means error exit */
                 }
             }
             /* must be directory, abort */
@@ -484,69 +449,61 @@ int n;
         if ((si[0] == 0) && (si[1] == 0) && (i < BLKSIZE)) {
             /* most likely blocked file if 1st 2 bytes 0 and next 2 bytes are less than 768 */
             filetype |= blocked;    /* we have blocked file */
-            bin = 6;                /* where we start for data block */
+            bin = 6;            /* where we start for data block */
 
             /* see if we have compressed data */
-            if ((si[bin + 2] == 0xbf) || (si[bin + 2] == 0x9f))
-            {
+            if ((si[bin + 2] == 0xbf) || (si[bin + 2] == 0x9f)) {
                 filetype |= compress;   /* data is compressed */
-                bcnt = 0;               /* no data in buffer */
+                bcnt = 0;       /* no data in buffer */
             }
-            else
-            {
+            else {
                 /* data is not compressed, just ascii without newlines */
-                filetype |= ascii;      /* blocked ascii data */
+                filetype |= ascii;  /* blocked ascii data */
             }
         }
         else
         /* test for a diag blocked ascii file */
         /* test 1st 2 byte of file for zero */
         if ((si[0] == 0) && (si[1] == 3) && (i == 0xf3b8)) {
-            filetype |= blocked;        /* we have blocked file */
-            bin = 6;                    /* where we start for data block */
+            filetype |= blocked;    /* we have blocked file */
+            bin = 6;            /* where we start for data block */
 
             /* see if we have compressed data */
-            if ((si[bin + 2] == 0xbf) || (si[bin + 2] == 0x9f))
-            {
+            if ((si[bin + 2] == 0xbf) || (si[bin + 2] == 0x9f)) {
                 filetype |= compress;   /* data is compressed */
-                bcnt = 0;               /* no data in buffer */
+                bcnt = 0;       /* no data in buffer */
             }
-            else
-            {
+            else {
                 /* data is not compressed, just ascii without newlines */
-                filetype |= ascii;      /* blocked ascii data */
+                filetype |= ascii;  /* blocked ascii data */
             }
         }
-        else
-        {
+        else {
             /* data is unblocked, see if compressed or not */
-            if ((si[ubin] == 0xbf) || (si[ubin] == 0x9f))
-            {
+            if ((si[ubin] == 0xbf) || (si[ubin] == 0x9f)) {
                 filetype |= compress;   /* data is compressed */
-                bcnt = 0;               /* no data in buffer */
+                bcnt = 0;       /* no data in buffer */
             }
             else
             if ((si[ubin] == 0xef) || (si[ubin] == 0xcf))
             {
                 /* file is an macro library, so abort */
                 fprintf(stderr, "deblk - Cannot list macro library file, aborting\n");
-                return (0);         /* this means error exit */
+                return (0);     /* this means error exit */
             }
-            else
-            {
+            else {
                 /* data is not compressed or blocked, just ascii with newlines */
-                filetype |= ascii;      /* blocked ascii data */
+                filetype |= ascii;  /* blocked ascii data */
             }
         }
     }
-    if ((filetype & compress) && !cmpop) {      /* see if we tested for compressed */
+    if ((filetype & compress) && !cmpop) {  /* see if we tested for compressed */
         cmpop = 1;              /* set compresse tested flag */
         /* read in the first record */
         if ((recl = getloi(fp, line, BUFSIZ)) == 0)
             return (0);         /* this means eof */
         linadrs = line;
-        if (*linadrs == 0xbf)
-        {                       /* is this file compressed */
+        if (*linadrs == 0xbf) { /* is this file compressed */
             cmpflg = 1;         /* set comp data flag */
             bcnt = linadrs[1];  /* set record count */
             bptr = &linadrs[6]; /* set data address */

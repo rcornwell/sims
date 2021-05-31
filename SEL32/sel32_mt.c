@@ -153,15 +153,21 @@
 /* forward definitions */
 t_stat      mt_preio(UNIT *uptr, uint16 chan);
 t_stat      mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd) ;
+t_stat      mt_iocl(CHANP *chp, int32 tic_ok);
 t_stat      mt_srv(UNIT *uptr);
 t_stat      mt_boot(int32 unitnum, DEVICE *dptr);
 void        mt_ini(UNIT *uptr, t_bool);
 t_stat      mt_rschnlio(UNIT *uptr);
+t_stat      mt_haltio(UNIT *uptr);
 t_stat      mt_reset(DEVICE *dptr);
 t_stat      mt_attach(UNIT *uptr, CONST char *);
 t_stat      mt_detach(UNIT *uptr);
 t_stat      mt_help(FILE *, DEVICE *dptr, UNIT *uptr, int32, const char *);
 const char  *mt_description(DEVICE *);
+extern      uint32  readfull(CHANP *chp, uint32 maddr, uint32 *word);
+extern      uint16  loading;            /* set when doing IPL */
+extern      int     irq_pend;           /* pending interrupt flag */
+extern      uint32  cont_chan(uint16 chsa);
 
 /* One buffer per channel */
 uint8       mt_buffer[NUM_DEVS_MT][BUFFSIZE];
@@ -298,11 +304,12 @@ CHANP           mta_chp[NUM_UNITS_MT] = {0};
 DIB             mta_dib = {
     mt_preio,       /* t_stat (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
     mt_startcmd,    /* t_stat (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    NULL,           /* t_stat (*halt_io)(UNIT *uptr) */         /* Halt I/O */
+    mt_haltio,      /* t_stat (*halt_io)(UNIT *uptr) */         /* Halt I/O */
     NULL,           /* t_stat (*stop_io)(UNIT *uptr) */         /* Stop I/O */
     NULL,           /* t_stat (*test_io)(UNIT *uptr) */         /* Test I/O */
     NULL,           /* t_stat (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
     mt_rschnlio,    /* t_stat (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
+/// mt_iocl,        /* t_stat (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     NULL,           /* t_stat (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     mt_ini,         /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     mta_unit,       /* UNIT* units */                           /* Pointer to units structure */
@@ -346,11 +353,12 @@ UNIT            mtb_unit[] = {
 DIB             mtb_dib = {
     mt_preio,       /* t_stat (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
     mt_startcmd,    /* t_stat (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    NULL,           /* t_stat (*halt_io)(UNIT *uptr) */         /* Halt I/O */
+    mt_haltio,      /* t_stat (*halt_io)(UNIT *uptr) */         /* Halt I/O */
     NULL,           /* t_stat (*stop_io)(UNIT *uptr) */         /* Stop I/O */
     NULL,           /* t_stat (*test_io)(UNIT *uptr) */         /* Test I/O */
     NULL,           /* t_stat (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
     mt_rschnlio,    /* t_stat (*rschnl_io)(UNIT *uptr) */       /* Reset Channel */
+/// mt_iocl,        /* t_stat (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     NULL,           /* t_stat (*iocl_io)(CHANP *chp, int32 tic_ok)) */  /* Process IOCL */
     mt_ini,         /* void  (*dev_ini)(UNIT *, t_bool) */      /* init function */
     mtb_unit,       /* UNIT* units */                           /* Pointer to units structure */
@@ -374,14 +382,279 @@ DEVICE          mtb_dev = {
 };
 #endif
 
+/* load in the IOCD and process the commands */
+/* return = 0 OK */
+/* return = 1 error, chan_status will have reason */
+t_stat  mt_iocl(CHANP *chp, int32 tic_ok)
+{
+    uint32      word1 = 0;
+    uint32      word2 = 0;
+    int32       docmd = 0;
+    UNIT        *uptr = chp->unitptr;           /* get the unit ptr */
+    uint16      chan = get_chan(chp->chan_dev); /* our channel */
+    uint16      chsa = chp->chan_dev;
+    uint16      devstat = 0;
+    DEVICE      *dptr = get_dev(uptr);
+
+    /* check for valid iocd address if 1st iocd */
+    if (chp->chan_info & INFO_SIOCD) {          /* see if 1st IOCD in channel prog */
+        if (chp->chan_caw & 0x3) {              /* must be word bounded */
+            sim_debug(DEBUG_EXP, dptr,
+                "mt_iocl iocd bad address chsa %02x caw %06x\n",
+                chsa, chp->chan_caw);
+            chp->ccw_addr = chp->chan_caw;      /* set the bad iocl address */
+            chp->chan_status |= STATUS_PCHK;    /* program check for invalid iocd addr */
+            return 1;                           /* error return */
+        }
+    }
+loop:
+    sim_debug(DEBUG_EXP, dptr,
+        "mt_iocl @%06x @loop chan_status[%04x] %04x SNS %08x\n",
+        chp->chan_caw, chan, chp->chan_status, uptr->SNS);
+
+    /* Abort if we have any errors */
+    if (chp->chan_status & STATUS_ERROR) {      /* check channel error status */
+        sim_debug(DEBUG_EXP, dptr,
+            "mt_iocl ERROR1 chan_status[%04x] %04x\n", chan, chp->chan_status);
+        return 1;                               /* return error */
+    }
+
+    /* Read in first CCW */
+    if (readfull(chp, chp->chan_caw, &word1) != 0) { /* read word1 from memory */
+        chp->chan_status |= STATUS_PCHK;        /* memory read error, program check */
+        sim_debug(DEBUG_EXP, dptr,
+            "mt_iocl ERROR2 chan_status[%04x] %04x\n", chan, chp->chan_status);
+        return 1;                               /* error return */
+    }
+
+    /* Read in second CCW */
+    if (readfull(chp, chp->chan_caw+4, &word2) != 0) { /* read word2 from memory */
+        chp->chan_status |= STATUS_PCHK;        /* memory read error, program check */
+        sim_debug(DEBUG_EXP, dptr,
+            "mt_iocl ERROR3 chan_status[%04x] %04x\n", chan, chp->chan_status);
+        return 1;                               /* error return */
+    }
+
+    sim_debug(DEBUG_CMD, dptr,
+        "mt_iocl @%06x read ccw chsa %04x IOCD wd 1 %08x wd 2 %08x SNS %08x\n",
+        chp->chan_caw, chp->chan_dev, word1, word2, uptr->SNS);
+
+    chp->chan_caw = (chp->chan_caw & 0xfffffc) + 8; /* point to next IOCD */
+#ifdef BAD_05142021
+    chp->ccw_cmd = (word1 >> 24) & 0xff;        /* set new command from IOCD wd 1 */
+#endif
+
+    /* Check if we had data chaining in previous iocd */
+    /* if we did, use previous cmd value */
+    if (((chp->chan_info & INFO_SIOCD) == 0) && /* see if 1st IOCD in channel prog */
+       (chp->ccw_flags & FLAG_DC)) {            /* last IOCD have DC set? */
+        sim_debug(DEBUG_CMD, dptr,
+            "mt_iocl @%06x DO DC, ccw_flags %04x cmd %02x\n",
+            chp->chan_caw, chp->ccw_flags, chp->ccw_cmd);
+    } else
+        chp->ccw_cmd = (word1 >> 24) & 0xff;    /* set new command from IOCD wd 1 */
+
+    if (!MEM_ADDR_OK(word1 & MASK24)) {         /* see if memory address invalid */
+        chp->chan_status |= STATUS_PCHK;        /* bad, program check */
+        sim_debug(DEBUG_EXP, dptr,
+            "mt_iocl mem error PCHK chan_status[%04x] %04x addr %08x\n",
+            chan, chp->chan_status, word1 & MASK24);
+        return 1;                               /* error return */
+    }
+
+    chp->ccw_count = word2 & 0xffff;            /* get 16 bit byte count from IOCD WD 2*/
+
+    /* validate the commands for the mt */
+    switch (chp->ccw_cmd) {
+    case MT_WRITE: case MT_READ: case MT_NOP: case MT_SENSE:
+    case MT_RDBK: case MT_RDCMP: case MT_REW: case MT_RUN: case MT_FSR:
+    case MT_BSR: case MT_FSF: case MT_BSF: case MT_SETM: case MT_WTM: case MT_ERG:  
+        /* the inch command must be first command issued */
+        if ((!loading) && (chp->chan_inch_addr == 0)) {
+            chp->chan_status |= STATUS_PCHK;    /* program check for invalid cmd */
+            uptr->SNS |= SNS_CMDREJ;            /* cmd rejected */
+            sim_debug(DEBUG_EXP, dptr,
+                "mt_iocl bad cmd %02x chan_status[%04x] %04x\n",
+                chp->ccw_cmd, chan, chp->chan_status);
+            return 1;                           /* error return */
+        }
+    case MT_INCH:
+        break;
+    default:
+        chp->chan_status |= STATUS_PCHK;        /* program check for invalid cmd */
+        uptr->SNS |= SNS_CMDREJ;                /* cmd rejected */
+        sim_debug(DEBUG_EXP, dptr,
+            "mt_iocl bad cmd %02x chan_status[%04x] %04x\n",
+            chp->ccw_cmd, chan, chp->chan_status);
+        return 1;                               /* error return */
+    }
+
+    if (chp->chan_info & INFO_SIOCD) {          /* see if 1st IOCD in channel prog */
+        /* 1st command can not be a TIC */
+        if (chp->ccw_cmd == CMD_TIC) {
+            chp->chan_status |= STATUS_PCHK;    /* program check for invalid tic */
+//??//      uptr->SNS |= SNS_CMDREJ;            /* cmd rejected status */
+            sim_debug(DEBUG_EXP, dptr,
+                "mt_iocl TIC bad cmd chan_status[%04x] %04x\n",
+                chan, chp->chan_status);
+            return 1;                           /* error return */
+        }
+    }
+
+    /* TIC can't follow TIC or be first in command chain */
+    /* diags send bad commands for testing.  Use all of op */
+    if (chp->ccw_cmd == CMD_TIC) {
+        if (tic_ok) {
+            if (((word1 & MASK24) == 0) || (word1 & 0x3)) {
+                sim_debug(DEBUG_EXP, dptr,
+                    "mt_iocl tic cmd bad address chan %02x tic caw %06x IOCD wd 1 %08x\n",
+                    chan, chp->chan_caw, word1);
+                chp->chan_status |= STATUS_PCHK; /* program check for invalid tic */
+                chp->chan_caw = word1 & MASK24; /* get new IOCD address */
+                uptr->SNS |= SNS_CMDREJ;        /* cmd rejected status */
+                return 1;                       /* error return */
+            }
+            tic_ok = 0;                         /* another tic not allowed */
+            chp->chan_caw = word1 & MASK24;     /* get new IOCD address */
+            sim_debug(DEBUG_CMD, dptr,
+                "mt_iocl tic cmd ccw chan %02x tic caw %06x IOCD wd 1 %08x\n",
+                chan, chp->chan_caw, word1);
+            goto loop;                          /* restart the IOCD processing */
+        }
+        chp->chan_caw = word1 & MASK24;         /* get new IOCD address */
+        chp->chan_status |= STATUS_PCHK;        /* program check for invalid tic */
+//??//  uptr->SNS |= SNS_CMDREJ;                /* cmd rejected status */
+        sim_debug(DEBUG_EXP, dptr,
+            "mt_iocl TIC ERROR chan_status[%04x] %04x\n", chan, chp->chan_status);
+        return 1;                               /* error return */
+    }
+
+    /* Check if we had data chaining in previous iocd */
+#ifdef BAD_05152021
+    if ((chp->chan_info & INFO_SIOCD) ||        /* see if 1st IOCD in channel prog */
+        ((chp->ccw_flags & FLAG_DC) == 0)) {    /* last IOCD have DC set? */
+#else
+    if ((chp->chan_info & INFO_SIOCD) ||        /* see if 1st IOCD in channel prog */
+        (((chp->chan_info & INFO_SIOCD) == 0) && /* see if 1st IOCD in channel prog */
+        ((chp->ccw_flags & FLAG_DC) == 0))) {    /* last IOCD have DC set? */
+#endif
+        sim_debug(DEBUG_CMD, dptr,
+            "mt_iocl @%06x DO CMD No DC, ccw_flags %04x cmd %02x\n",
+            chp->chan_caw, chp->ccw_flags, chp->ccw_cmd);
+        docmd = 1;                              /* show we have a command */
+    }
+
+    /* Set up for this command */
+//??//chp->ccw_flags = (word2 >> 16) & 0xf800;    /* get flags from bits 0-4 of WD 2 of IOCD */
+    chp->ccw_flags = (word2 >> 16) & 0xfc00;    /* get flags from bits 0-4 of WD 2 of IOCD */
+    chp->chan_status = 0;                       /* clear status for next IOCD */
+    /* make a 24 bit address */
+    chp->ccw_addr = word1 & MASK24;             /* set the data/seek address */
+
+    if (chp->ccw_flags & FLAG_PCI) {            /* do we have prog controlled int? */
+        chp->chan_status |= STATUS_PCI;         /* set PCI flag in status */
+        irq_pend = 1;                           /* interrupt pending */
+    }
+
+    /* validate parts of IOCD2 that are reserved */    
+    if (word2 & 0x07ff0000) {                   /* bits 5-15 must be zero */
+        chp->chan_status |= STATUS_PCHK;        /* program check for invalid iocd */
+        sim_debug(DEBUG_EXP, dptr,
+            "mt_iocl IOCD2 chan_status[%04x] %04x\n", chan, chp->chan_status);
+        return 1;                               /* error return */
+    }
+
+    /* DC can only be used with a read/write cmd */
+    if (chp->ccw_flags & FLAG_DC) {
+        if ((chp->ccw_cmd != MT_READ) && (chp->ccw_cmd != MT_WRITE) &&
+            (chp->ccw_cmd != MT_RDBK)) {
+            chp->chan_status |= STATUS_PCHK;    /* program check for invalid DC */
+            sim_debug(DEBUG_EXP, dptr,
+                "mt_iocl DC ERROR chan_status[%04x] %04x\n", chan, chp->chan_status);
+            return 1;                           /* error return */
+        }
+    }
+
+    chp->chan_byte = BUFF_BUSY;                 /* busy & no bytes transferred yet */
+
+    sim_debug(DEBUG_XIO, dptr,
+        "mt_iocl @%06x read docmd %01x addr %06x count %04x chan %04x ccw_flags %04x\n",
+        chp->chan_caw, docmd, chp->ccw_addr, chp->ccw_count, chan, chp->ccw_flags);
+
+    if (docmd) {                                /* see if we need to process a command */
+        DIB *dibp = dib_unit[chp->chan_dev];    /* get the DIB pointer */
+ 
+        uptr = chp->unitptr;                    /* get the unit ptr */
+        if (dibp == 0 || uptr == 0) {
+            chp->chan_status |= STATUS_PCHK;    /* program check if it is */
+            sim_debug(DEBUG_EXP, dptr,
+                "mt_iocl bad dibp or uptr chan_status[%04x] %04x\n", chan, chp->chan_status);
+            return 1;                           /* if none, error */
+        }
+
+        sim_debug(DEBUG_XIO, dptr,
+            "mt_iocl @%06x before start_cmd chan %04x status %04x count %04x SNS %08x\n",
+            chp->chan_caw, chan, chp->chan_status, chp->ccw_count, uptr->SNS);
+
+        /* call the device startcmd function to process the current command */
+        /* just replace device status bits */
+        chp->chan_info &= ~INFO_CEND;           /* show chan_end not called yet */
+        devstat = dibp->start_cmd(uptr, chan, chp->ccw_cmd);
+        chp->chan_status = (chp->chan_status & 0xff00) | devstat;
+        chp->chan_info &= ~INFO_SIOCD;          /* show not first IOCD in channel prog */
+
+        sim_debug(DEBUG_XIO, dptr,
+            "mt_iocl @%06x after start_cmd chsa %04x status %08x count %04x SNS %08x\n",
+            chp->chan_caw, chsa, chp->chan_status, chp->ccw_count, uptr->SNS);
+
+        /* see if bad status */
+        if (chp->chan_status & (STATUS_ATTN|STATUS_ERROR)) {
+            chp->chan_status |= STATUS_CEND;    /* channel end status */
+            chp->ccw_flags = 0;                 /* no flags */
+            chp->chan_byte = BUFF_NEXT;         /* have main pick us up */
+            sim_debug(DEBUG_EXP, dptr,
+                "mt_iocl bad status chsa %04x status %04x cmd %02x\n",
+                chsa, chp->chan_status, chp->ccw_cmd);
+            /* done with command */
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "mt_iocl ERROR return chsa %04x status %08x\n",
+                chp->chan_dev, chp->chan_status);
+            return 1;                           /* error return */
+        }
+        /* NOTE this code needed for MPX 1.X to run! */
+        /* see if command completed */
+        /* we have good status */
+        if (chp->chan_status & (STATUS_DEND|STATUS_CEND)) {
+            uint16  chsa = GET_UADDR(uptr->u3); /* get channel & sub address */
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* show I/O complete */
+            sim_debug(DEBUG_XIO, dptr,
+                "mt_iocl @%06x FIFO #%1x cmd complete chan %04x status %04x count %04x\n",
+                chp->chan_caw, FIFO_Num(chsa), chan, chp->chan_status, chp->ccw_count);
+        }
+    }
+    /* the device processor returned OK (0), so wait for I/O to complete */
+    /* nothing happening, so return */
+    sim_debug(DEBUG_XIO, dptr,
+        "mt_iocl @%06x return, chsa %04x status %04x count %04x\n",
+        chp->chan_caw, chsa, chp->chan_status, chp->ccw_count);
+    return 0;                                   /* good return */
+}
+
 /* start a tape operation */
 t_stat mt_preio(UNIT *uptr, uint16 chan) {
     DEVICE      *dptr = get_dev(uptr);
     int         unit = (uptr - dptr->units);
     uint16      chsa = GET_UADDR(uptr->CMD);
+    CHANP       *chp = find_chanp_ptr(chsa);    /* find the chanp pointer */
 
-    sim_debug(DEBUG_CMD, dptr, "mt_preio CMD %08x unit %02x chsa %04x\n",
-        uptr->CMD, unit, chsa);
+    sim_debug(DEBUG_CMD, dptr, "mt_preio CMD %08x unit %02x chsa %04x incha %08x\n",
+        uptr->CMD, unit, chsa, chp->chan_inch_addr);
+    if ((!loading) && (chp->chan_inch_addr == 0)) {
+        sim_debug(DEBUG_CMD, dptr,
+            "mt_preio unit %02x chsa %04x NO INCH\n", unit, chsa);
+        /* no INCH yet, so do nothing */
+        return SNS_CTLEND;
+    }
     if ((uptr->CMD & MT_CMDMSK) != 0) {             /* just return if busy */
         sim_debug(DEBUG_CMD, dptr,
             "mt_preio unit %02x chsa %04x BUSY\n", unit, chsa);
@@ -482,7 +755,8 @@ t_stat mt_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         mt_busy[GET_DEV_BUF(dptr->flags)] = 1;  /* show we are busy */
         sim_debug(DEBUG_EXP, dptr, "mt_startcmd sense %08x return OK chan %04x cmd %02x\n",
             uptr->SNS, chan, cmd);
-        sim_activate(uptr, 100);            /* Start unit off */
+//5     sim_activate(uptr, 100);            /* Start unit off */
+        sim_activate(uptr, 20);             /* Start unit off */
         return SCPE_OK;                     /* good to go */
 
     default:                                /* invalid command */
@@ -600,7 +874,7 @@ t_stat mt_srv(UNIT *uptr)
         WMH(mema+(16<<1),5);                /* write left HW with count */
         WMH(mema+(17<<1),5);                /* write right HW with count */
         sim_debug(DEBUG_CMD, dptr,
-            "mt_srv cmd INCH chsa %04x chsa %06x count %04x completed INCH16 %08x\n",
+            "mt_srv cmd INCH chsa %04x chsa %06x count %04x completed word 16 %08x\n",
             chsa, mema, chp->ccw_count, RMW(mema+(8<<2)));
         uptr->CMD &= ~MT_CMDMSK;            /* clear the cmd */
         mt_busy[bufnum] &= ~1;              /* make our buffer not busy */
@@ -690,7 +964,8 @@ t_stat mt_srv(UNIT *uptr)
             sim_debug(DEBUG_CMD, dptr, "Write mode data in unit %02x POS %04x mode %02x\n",
                   unit, uptr->POS, ch);
             uptr->hwmark = uptr->POS;       /* set high water mark */
-            sim_activate(uptr, 40);         /* wait time */
+//5         sim_activate(uptr, 40);         /* wait time */
+            sim_activate(uptr, 30);         /* wait time */
         }
         return SCPE_OK;
     default:
@@ -712,6 +987,9 @@ t_stat mt_srv(UNIT *uptr)
     switch (cmd) {
     case MT_READ:   /* 0x02 */              /* read a record from the device */
         sim_debug(DEBUG_DETAIL, dptr, "mt_srv cmd 2 READ unit=%02x\n", unit);
+#ifndef SPEED
+reread:
+#endif
         if (uptr->CMD & MT_READDONE) {      /* is the read complete */
             uptr->SNS &= ~(SNS_LOAD|SNS_EOT);   /* reset BOT & EOT */
             if (sim_tape_eot(uptr)) {       /* see if at EOM */
@@ -741,9 +1019,11 @@ t_stat mt_srv(UNIT *uptr)
             uptr->hwmark = reclen;          /* set buffer chars read in */
             sim_debug(DEBUG_CMD, dptr, "mt_srv READ fill buffer complete count %04x\n", reclen);
             sim_debug(DEBUG_CMD, dptr,
-                "mt_srv READ MemBuf %06x cnt %04x %02x%02x%02x%02x\n",
+                "mt_srv READ MemBuf %06x cnt %04x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x\n",
                 chp->ccw_addr, chp->ccw_count,
-                mt_buffer[0][0], mt_buffer[0][1], mt_buffer[0][2], mt_buffer[0][3]);
+                mt_buffer[0][0], mt_buffer[0][1], mt_buffer[0][2], mt_buffer[0][3],
+                mt_buffer[0][4], mt_buffer[0][5], mt_buffer[0][6], mt_buffer[0][7],
+                mt_buffer[0][8], mt_buffer[0][9], mt_buffer[0][10], mt_buffer[0][11]);
         }
         /* get a char from the buffer */
         ch = mt_buffer[bufnum][uptr->POS++];
@@ -757,7 +1037,8 @@ t_stat mt_srv(UNIT *uptr)
                 /* Send dummy character to force SLI */
                 chan_write_byte(chsa, &ch); /* write the byte */
                 sim_debug(DEBUG_CMD, dptr, "Read unit %02x send dump SLI\n", unit);
-                sim_activate(uptr, (uptr->hwmark-uptr->POS) * 10); /* wait again */
+//5             sim_activate(uptr, (uptr->hwmark-uptr->POS) * 10); /* wait again */
+                sim_activate(uptr, (uptr->hwmark-uptr->POS) * 4); /* wait again */
                 uptr->CMD |= MT_READDONE;   /* read is done */
                 break;
             }
@@ -777,9 +1058,17 @@ t_stat mt_srv(UNIT *uptr)
                     "Read end of data unit %02x cnt %04x ch %02x hwm %04x\n",
                     unit, uptr->POS, ch, uptr->hwmark);
                 uptr->CMD |= MT_READDONE;   /* read is done */
-                sim_activate(uptr, 40);     /* wait again */
+#ifdef SPEED
+//5             sim_activate(uptr, 40);     /* wait again */
+                sim_activate(uptr, 30);     /* wait again */
             } else
-                sim_activate(uptr, 40);     /* wait again */
+//5             sim_activate(uptr, 40);     /* wait again */
+                sim_activate(uptr, 30);     /* wait again */
+#else
+                goto reread;
+            } else
+                goto reread;
+#endif
         }
         break;
 
@@ -794,6 +1083,9 @@ t_stat mt_srv(UNIT *uptr)
             break;
         }
 
+#ifndef SPEED
+rewrite:
+#endif
         /* Grab data until channel has no more */
         if (chan_read_byte(chsa, &ch)) {
             if (uptr->POS > 0) {            /* Only if data in record */
@@ -810,8 +1102,14 @@ t_stat mt_srv(UNIT *uptr)
             sim_debug(DEBUG_DETAIL, dptr, "Write data unit=%02x %04x %02x\n",
                 unit, uptr->POS, ch);
             uptr->hwmark = uptr->POS;
+#ifndef SPEED
+            goto rewrite;
+#endif
         }
-        sim_activate(uptr, 40);
+#ifdef SPEED
+//5     sim_activate(uptr, 40);
+        sim_activate(uptr, 30);             /* wait again */
+#endif
         break;
 
     case MT_RDBK:   /* 0x0C */              /* Read Backwards */
@@ -847,7 +1145,8 @@ t_stat mt_srv(UNIT *uptr)
                 unit, uptr->POS);
             /* If not read whole record, skip till end */
             if (uptr->POS >= 0) {
-                sim_activate(uptr, (uptr->POS) * 20);
+//5             sim_activate(uptr, (uptr->POS) * 20);
+                sim_activate(uptr, (uptr->POS) * 10);
                 uptr->CMD |= MT_READDONE;
                 return SCPE_OK;
             }
@@ -862,7 +1161,8 @@ t_stat mt_srv(UNIT *uptr)
                 mt_busy[bufnum] &= ~1;
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
             } else
-                sim_activate(uptr, 40);
+//5             sim_activate(uptr, 40);
+                sim_activate(uptr, 30);
         }
         break;
 
@@ -876,7 +1176,8 @@ t_stat mt_srv(UNIT *uptr)
                 return SCPE_OK;
             }
             uptr->POS ++;
-            sim_activate(uptr, 500);
+//5         sim_activate(uptr, 500);
+            sim_activate(uptr, 100);
         } else {
             sim_debug(DEBUG_CMD, dptr, "Write Mark unit=%02x\n", unit);
             uptr->CMD &= ~(MT_CMDMSK);
@@ -898,7 +1199,8 @@ t_stat mt_srv(UNIT *uptr)
                  return SCPE_OK;
             }
             uptr->POS++;
-            sim_activate(uptr, 50);
+//5         sim_activate(uptr, 50);
+            sim_activate(uptr, 30);
             break;
         case 1:
             uptr->POS++;
@@ -909,14 +1211,17 @@ t_stat mt_srv(UNIT *uptr)
             if (r == MTSE_TMK) {            /* test for EOF */
                 uptr->POS++;
                 sim_debug(DEBUG_CMD, dptr, "BSR MARK\n");
-                sim_activate(uptr, 50);
+//5             sim_activate(uptr, 50);
+                sim_activate(uptr, 30);
             /* SEL requires Unit Except & BOT on BOT */
             } else if (r == MTSE_BOT) {
                 uptr->POS+= 2;
-                sim_activate(uptr, 50);
+//5             sim_activate(uptr, 50);
+                sim_activate(uptr, 30);
             } else {
                 sim_debug(DEBUG_CMD, dptr, "Backspace reclen %04x\n", reclen);
-                sim_activate(uptr, 50);
+//5             sim_activate(uptr, 50);
+                sim_activate(uptr, 30);
             }
             break;
         case 2:
@@ -950,7 +1255,8 @@ t_stat mt_srv(UNIT *uptr)
                  break;
             }
             uptr->POS++;
-            sim_activate(uptr, 500);
+//5         sim_activate(uptr, 500);
+            sim_activate(uptr, 100);
             break;
         case 1:
             sim_debug(DEBUG_CMD, dptr, "Backspace file unit=%02x\n", unit);
@@ -959,10 +1265,12 @@ t_stat mt_srv(UNIT *uptr)
             if (r == MTSE_TMK) {
                 uptr->POS++;
                 sim_debug(DEBUG_DETAIL, dptr, "BSF MARK\n");
-                sim_activate(uptr, 50);
+//5             sim_activate(uptr, 50);
+                sim_activate(uptr, 30);
             } else if (r == MTSE_BOT) {
                 uptr->POS+= 2;
-                sim_activate(uptr, 50);
+//5             sim_activate(uptr, 50);
+                sim_activate(uptr, 30);
             } else {
                 sim_activate(uptr, 20);
             }
@@ -987,7 +1295,8 @@ t_stat mt_srv(UNIT *uptr)
         case 0:
             sim_debug(DEBUG_CMD, dptr, "Skip rec entry unit=%02x ", unit);
             uptr->POS++;
-            sim_activate(uptr, 50);
+//5         sim_activate(uptr, 50);
+            sim_activate(uptr, 30);
             break;
         case 1:
             uptr->POS++;
@@ -998,16 +1307,19 @@ t_stat mt_srv(UNIT *uptr)
                 uptr->POS = 3;
                 uptr->SNS |= SNS_FMRKDT;    /* file mark detected */
                 sim_debug(DEBUG_CMD, dptr, "FSR MARK\n");
-                sim_activate(uptr, 50);
+//5             sim_activate(uptr, 50);
+                sim_activate(uptr, 30);
             } else if (r == MTSE_EOM) {
                 uptr->POS = 4;
                 uptr->SNS |= SNS_EOT;       /* set EOT status */
                 sim_debug(DEBUG_CMD, dptr, "FSR EOT\n");
-                sim_activate(uptr, 50);
+//5             sim_activate(uptr, 50);
+                sim_activate(uptr, 30);
             } else {
                 sim_debug(DEBUG_CMD, dptr, "FSR skipped %04x byte record\n",
                     reclen);
-                sim_activate(uptr, 10 + (10 * reclen));
+//5             sim_activate(uptr, 10 + (10 * reclen));
+                sim_activate(uptr, 30);
             }
             break;
         case 2:
@@ -1037,7 +1349,8 @@ t_stat mt_srv(UNIT *uptr)
             sim_debug(DEBUG_CMD, dptr,
                 "Skip file entry sense %08x unit %02x\n", uptr->SNS, unit);
             uptr->POS++;
-            sim_activate(uptr, 50);
+//5         sim_activate(uptr, 50);
+            sim_activate(uptr, 30);
             break;
         case 1:
             sim_debug(DEBUG_CMD, dptr, "Skip file unit=%02x\n", unit);
@@ -1047,15 +1360,18 @@ t_stat mt_srv(UNIT *uptr)
                 uptr->POS++;
                 uptr->SNS |= SNS_FMRKDT;    /* file mark detected */
                 sim_debug(DEBUG_CMD, dptr, "FSF EOF MARK sense %08x\n", uptr->SNS);
-                sim_activate(uptr, 50);
+//5             sim_activate(uptr, 50);
+                sim_activate(uptr, 30);
             } else if (r == MTSE_EOM) {
                 uptr->SNS |= SNS_EOT;       /* set EOT status */
                 sim_debug(DEBUG_CMD, dptr, "FSF EOT sense %08x\n", uptr->SNS);
                 uptr->POS+= 2;
-                sim_activate(uptr, 50);
+//5             sim_activate(uptr, 50);
+                sim_activate(uptr, 30);
             } else {
                 sim_debug(DEBUG_CMD, dptr, "FSF skipped %04x byte record\n", reclen);
-                sim_activate(uptr, 50);
+//5             sim_activate(uptr, 50);
+                sim_activate(uptr, 30);
             }
             break;
         case 2:
@@ -1086,13 +1402,15 @@ t_stat mt_srv(UNIT *uptr)
                 chan_end(chsa, SNS_DEVEND|SNS_UNITEXP);
             } else {
                 uptr->POS ++;
-                sim_activate(uptr, 500);
+//5             sim_activate(uptr, 500);
+                sim_activate(uptr, 50);
             }
             break;
         case 1:
             sim_debug(DEBUG_CMD, dptr, "Erase unit=%02x\n", unit);
             r = sim_tape_wrgap(uptr, 35);
-            sim_activate(uptr, 5000);
+//5         sim_activate(uptr, 5000);
+            sim_activate(uptr, 100);
             uptr->POS++;
             break;
         case 2:
@@ -1108,7 +1426,9 @@ t_stat mt_srv(UNIT *uptr)
         if (uptr->POS == 0) {
             uptr->POS++;
             sim_debug(DEBUG_CMD, dptr, "Start rewind unit %02x\n", unit);
-            sim_activate(uptr, 1500);
+            sim_activate(uptr, 2500);
+//5         sim_activate(uptr, 1500);
+//6         sim_activate(uptr, 150);
         } else {
             sim_debug(DEBUG_CMD, dptr, "Rewind complete unit %02x\n", unit);
             uptr->CMD &= ~(MT_CMDMSK);
@@ -1124,7 +1444,8 @@ t_stat mt_srv(UNIT *uptr)
              uptr->POS++;
              mt_busy[bufnum] &= ~1;
              sim_debug(DEBUG_CMD, dptr, "Start rewind/unload unit %02x\n", unit);
-             sim_activate(uptr, 30000);
+//5          sim_activate(uptr, 30000);
+             sim_activate(uptr, 300);
          } else {
             sim_debug(DEBUG_CMD, dptr, "Unload unit=%02x\n", unit);
             uptr->CMD &= ~(MT_CMDMSK);
@@ -1166,6 +1487,41 @@ t_stat  mt_rschnlio(UNIT *uptr) {
     return SCPE_OK;
 }
 
+/* Handle haltio transfers for mag tape */
+t_stat  mt_haltio(UNIT *uptr) {
+    uint16  chsa = GET_UADDR(uptr->CMD);
+    int     cmd = uptr->CMD & MT_CMDMSK;
+    CHANP   *chp = find_chanp_ptr(chsa);    /* find the chanp pointer */
+    DEVICE  *dptr = get_dev(uptr);
+
+    sim_debug(DEBUG_EXP, dptr,
+        "mt_haltio enter chsa %04x cmd = %02x\n", chsa, cmd);
+
+    /* terminate any input command */
+    /* UTX wants SLI bit, but no unit exception */
+    /* status must not have an error bit set */
+    /* otherwise, UTX will panic with "bad status" */
+    if (cmd != 0) {                         /* is unit busy */
+        sim_debug(DEBUG_CMD, dptr,
+            "mt_haltio HIO chsa %04x cmd = %02x ccw_count %02x\n",
+            chsa, cmd, chp->ccw_count);
+        sim_cancel(uptr);                   /* stop timer */
+    } else {
+        sim_debug(DEBUG_CMD, dptr,
+            "mt_haltio HIO not busy chsa %04x cmd = %02x ccw_count %02x\n",
+            chsa, cmd, chp->ccw_count);
+    }
+    /* stop any I/O and post status and return error status */
+    uptr->CMD &= LMASK;                     /* make non-busy */
+    uptr->POS = 0;                          /* clear position data */
+    uptr->SNS = SNS_RDY|SNS_ONLN;           /* status is online & ready */
+    chp->ccw_count = 0;                     /* zero the count */
+    chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);   /* reset chaining bits */
+    sim_debug(DEBUG_CMD, dptr,
+        "mt_haltio HIO I/O stop chsa %04x cmd = %02x\n", chsa, cmd);
+    chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
+    return SCPE_IOERR;                      /* tell chan code to post status */
+}
 /* reset the mag tape */
 t_stat mt_reset(DEVICE *dptr)
 {

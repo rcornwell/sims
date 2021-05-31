@@ -48,7 +48,7 @@ char *argv[];
     unsigned int smdudt;            /* smd udt index */
     unsigned int spau;              /* sectors per allocation unit */
     unsigned int fileau;            /* file size in allocation units */
-    unsigned int auptr;             /* pointer to allocation unit on disk */
+//  unsigned int auptr;             /* pointer to allocation unit on disk */
     unsigned int lsblk;             /* lowest block address of SMD entries */
 
     if (argc <= 1) {                    /* see if correct # args */
@@ -171,7 +171,7 @@ char *argv[];
     /* use lowest space definition from SMD entries */
     lsblk = smdd[0];                /* set lowest to start of SMD */
     /* loop through the SMD looking for a match to the load module name */
-    for (i=0; i<(smds*32); i+=32) {
+    for (i=0; i<((int)smds*32); i+=32) {
         unsigned int sblk, len, udt, pw;
         int yep = 0;
         for (j=0; j<8; j++) {
@@ -272,7 +272,7 @@ char *argv[];
     mptr[tmp+7] = 0;            /* not used */
 
     /* loop through the SMD looking for a match to the load module name */
-    for (i=0; i<(smds*32); i+=32) {
+    for (i=0; i<((int)smds*32); i+=32) {
         unsigned int sblk, len, udt, pw;
         int yep = 0;
         for (j=0; j<8; j++) {
@@ -331,7 +331,7 @@ char *argv[];
         /* rewind the load module */
         fseek(fp, 0, 0);                /* seek home */
         /* copy all of the sectors */
-        for (i=0; i<size; i++) {
+        for (i=0; i<(int)size; i++) {
             /* read a block of the load module */
             if  (fread(si, 1, BLKSIZE, fp) <= 0)
                 return (0);         /* this means eof */

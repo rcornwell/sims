@@ -11,12 +11,12 @@
  */
 
 #include <stdio.h>
-#include <sys/file.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
+//#include <sys/file.h>
+//#include <unistd.h>
+//#include <string.h>
 #include <ctype.h>
-#include <errno.h>
+//#include <errno.h>
 
 int lfilen, filen = 1;
 int EOFcnt = 0;
@@ -24,22 +24,20 @@ int count=0, lcount=0;
 int size=0, tsize=0;
 int size_512K = 512 * 1024;
 int ln;
-#ifdef USE_READ
-FILE *infp;
-#else
-int inp, outp;
-#endif
+//int inp, outp;
+FILE *infp, *outfp;
 #define PRINTABLE(x) ((x < 32) || (x > 126)) ? '.' : x
 
 /* get a line of input. */
 int getloi(char *s, int lim)
 {
-    int c, i;
-    int32_t n1, n2, hc, tc, n;
+//  int c, i;
+    int n1, n2, hc, tc, n;
 
-    errno = 0;
+//  errno = 0;
     /* read the byte count in 32 bit word as header */
-    n1 = read(inp, (char *)(&hc), (size_t)4);
+//  n1 = read(inp, (char *)(&hc), (size_t)4);
+    n1 = fread((char *)(&hc), (size_t)1, (size_t)4, infp);
     if (n1 <= 0)
         hc = -1;        /* at EOM on disk file */
 
@@ -67,17 +65,20 @@ int getloi(char *s, int lim)
         return -1;      /* at EOM on disk file */
 
     /* read the data */
-    n = read(inp, s, (size_t)hc);
+//  n = read(inp, s, (size_t)hc);
+    n = fread(s, (size_t)1, (size_t)hc, infp);
 
     /* if odd byte record, read extra byte and throw it away */
     if (n & 0x1) {
-        n2 = read(inp, (char *)(&tc), (size_t)1);
+//      n2 = read(inp, (char *)(&tc), (size_t)1);
+        n2 = fread((char *)(&tc), (size_t)1, (size_t)1, infp);
         if (n2 <= 0)
             return -1;          /* at EOM on disk file */
     }
 
     /* read the byte count in 32 bit word as trailer */
-    n2 = read(inp, (char *)(&tc), (size_t)4);
+//  n2 = read(inp, (char *)(&tc), (size_t)4);
+    n2 = fread((char *)(&tc), (size_t)1, (size_t)4, infp);
     count++;        /* bump record count */
     size += n;      /* update bytes read */
     EOFcnt = 0;     /* not an EOF */
@@ -94,7 +95,7 @@ int main (int argc, char *argv[])
     char *buf;
     size_t size_512K = 512 * 1024;
     size_t buf_size = 512 * 1024;
-    char *cp, *np;
+//  char *cp, *np;
     int ll;
     char path[64], command[128];
 
@@ -104,12 +105,14 @@ int main (int argc, char *argv[])
         exit(1);
     } /* end of if */
 
-    if ((inp = open(argv[1], O_RDONLY, 0666)) < 0) {
+//  if ((inp = open(argv[1], O_RDONLY, 0666)) < 0) {
+    if ((infp = fopen(argv[1], "r")) == NULL) {
         //fprintf(stderr,"%s: fopen: unable to open input file %s\n", argv[0], argv[1]);
         printf("%s: fopen: unable to open input file %s\n", argv[0], argv[1]);
         return (1);
     }
-    outp = -1;
+//  outp = -1;
+    outfp = NULL;
 
     /* get a 512k buffer */
     if ((buf = malloc(buf_size)) == NULL) {
@@ -134,7 +137,7 @@ int main (int argc, char *argv[])
             printf("\nfile %d:\n", filen);
         } else {
             int cc = 0;
-            unsigned int curchar;
+//          unsigned int curchar;
 
             /* filemgr smd entries are 8 words, and are in 1152 words (4608 bytes)
              * (6 sector) blocks.  Saved data files are modulo 1152 words also */
@@ -234,16 +237,21 @@ int main (int argc, char *argv[])
                     printf("command = %s\n", command);
                     system(command);
 
-                    if (outp >= 0)
-                        close(outp);
-                    outp = -1;
+//                  if (outp >= 0)
+                    if (outfp != NULL)
+//                      close(outp);
+                        fclose(outfp);
+//                  outp = -1;
+                    outfp = NULL;
 
 #ifndef DO_LATER
                     /* open output file, create it if necessary */
-                    if ((outp = open(path, O_WRONLY|O_CREAT|O_TRUNC, 0666)) < 0) {
+//                  if ((outp = open(path, O_WRONLY|O_CREAT|O_TRUNC, 0666)) < 0) {
+                    if ((outfp = fopen(path, "w")) == NULL) {
                         //fprintf(stderr, "Can't open %s\n", path);
                         printf("Can't open %s\n", path);
-                        close(inp);
+//                      close(inp);
+                        fclose(infp);
                         free(buf);
                         return (3);
                     }
@@ -268,7 +276,8 @@ int main (int argc, char *argv[])
                             /* only write number of sectors on save tape, not all 4608 */
                             /* if zero, just reading excess blocks */
                             if (bcnt != 0) {
-                                no = write(outp, data, bcnt);
+//                              no = write(outp, data, bcnt);
+                                no = fwrite(data, (size_t)1, (size_t)bcnt, outfp);
                                 if (no != bcnt)
                                     // fprintf(stderr, "write (%d) != read (%d) on file %s\n", no, bcnt, path);
                                     printf("write (%d) != read (%d) on file %s\n", no, bcnt, path);
@@ -288,9 +297,12 @@ int main (int argc, char *argv[])
         } /* process read of smd or sdt */
     } /* end of getloi read */
 dostop:
-    close(inp);
+//  close(inp);
+    fclose(infp);
     free(buf);
-    if (outp >= 0)
-        close(outp);
+//  if (outp >= 0)
+    if (outfp != NULL)
+//      close(outp);
+        fclose(outfp);
     exit(0);
 }

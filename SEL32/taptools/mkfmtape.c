@@ -21,8 +21,30 @@
 #include <ctype.h>
 #include <string.h>
 
+#if defined(_MSC_VER) && (_MSC_VER < 1600)
+typedef __int8           int8;
+typedef __int16          int16;
+typedef __int32          int32;
+typedef unsigned __int8  uint8;
+typedef unsigned __int16 uint16;
+typedef unsigned __int32 uint32;
+typedef signed __int64   t_int64;
+typedef unsigned __int64 t_uint64;
+typedef t_int64          off_t;
+#else                                                   
+/* All modern/standard compiler environments */
+/* any other environment needa a special case above */
+#include <stdint.h>
+typedef int8_t          int8;
+typedef int16_t         int16;
+typedef int32_t         int32;
+typedef uint8_t         uint8;
+typedef uint16_t        uint16;
+typedef uint32_t        uint32;
+#endif                                                  /* end standard integers */
+
 #define BLKSIZE 768                 /* MPX file sector size */
-u_int32_t dir[1152];                /* room for 144 8w smd entries */
+uint32    dir[1152];                /* room for 144 8w smd entries */
 unsigned char data[4608];           /* room for 6*768=(4608) 768 byte sectors per 4608 byte block */
 unsigned char bigdata[19200];       /* room for 6*768=(4608) 768 byte sectors per 4608 byte block */
 
@@ -51,9 +73,9 @@ char *argv[];
     unsigned char name[9];                  /* LM name */
     unsigned int typ;                       /* file type requested by user */
     char *userp = username;                 /* pointer to username */
-    int ofd;                                /* output file number */
+//  int ofd;                                /* output file number */
     int filen;                              /* file number */
-    u_int32_t *dirp;                        /* directory entry pointer */
+    uint32 *dirp;                           /* directory entry pointer */
     int totent;                             /* total smd entries */
 
     memset((char *)dir, 0, 4608);           /* zero smd storage */
@@ -231,9 +253,9 @@ getout:
     filen = 0;                                  /* no files yet */
     totent = 0;                                 /* no files yet */
     /* populate the 32 byte SMD entry */
-    dirp = (u_int32_t *)dir;                    /* get word pointer for smd data */
+    dirp = (uint32 *)dir;                       /* get word pointer for smd data */
     while (--argc > 0) {
-        u_int32_t smd[8];                       /* smd entry data */
+        uint32 smd[8];                          /* smd entry data */
         int blks;
 
         for (i=0; i<8; i++)                     /* zero smd entry */
@@ -288,8 +310,8 @@ getout:
         /* set username */
         smd[4] = name[3] << 24 | name[2] << 16 | name[1] << 8 | name[0];
         smd[5] = name[7] << 24 | name[6] << 16 | name[5] << 8 | name[4];
-        if ((smd[4] == 0x20202020 && smd[5] == 0x20202020) ||
-            (smd[4] == 0 & smd[5] == 0)) {
+        if (((smd[4] == 0x20202020) && (smd[5] == 0x20202020)) ||
+            ((smd[4] == 0) && (smd[5] == 0))) {
             smd[4] = smd[5] = 0;                /* use null for system */
         }
         smd[6] = 0x00080000;                    /* no password or udt index */
@@ -300,10 +322,10 @@ getout:
         totent++;                               /* bump total count */
         if (filen == 144) {                     /* see if entry is full */
             /* we need to write out the directory entries */
-            int32_t n1, nw;
+            int32 n1, nw;
             /* we have data to write */
-            int32_t hc = (4608 + 1) & ~1;       /* make byte count even */
-            int32_t n2 = 4608;                  /* get actual byte count */
+            int32 hc = (4608 + 1) & ~1;         /* make byte count even */
+            int32 n2 = 4608;                    /* get actual byte count */
             /* write actual byte count to 32 bit word as header */
             n1 = fwrite((char *)(&n2), 1, (size_t)4, dp);
             /* write the data mod 2 */
@@ -318,16 +340,16 @@ getout:
             }
             memset((char *)dir, 0, 4608);       /* zero smd storage */
             filen = 0;                          /* restart count */
-            dirp = (u_int32_t *)dir;            /* get word pointer for smd data */
+            dirp = (uint32 *)dir;               /* get word pointer for smd data */
         }
     }
     /* write out the directory entries for the files to save */
     if (filen != 0) {
         /* we need to write out the directory entries */
-        int32_t n1, nw;
+        int32 n1, nw;
         /* we have data to write */
-        int32_t hc = (4608 + 1) & ~1;           /* make byte count even */
-        int32_t n2 = 4608;                      /* get actual byte count */
+        int32 hc = (4608 + 1) & ~1;             /* make byte count even */
+        int32 n2 = 4608;                        /* get actual byte count */
         /* write actual byte count to 32 bit word as header */
         n1 = fwrite((char *)(&n2), 1, (size_t)4, dp);
         /* write the data mod 2 */
@@ -369,10 +391,10 @@ getout:
             blks++; 
 //      rewind(fp);                             /* back to beginning */
         while (fread((char *)data, 1, 4608, fp) > 0) {
-            int32_t n1, nw;
+            int32 n1, nw;
             /* we have data to write */
-            int32_t hc = (4608 + 1) & ~1;       /* make byte count even */
-            int32_t n2 = 4608;                  /* get actual byte count */
+            int32 hc = (4608 + 1) & ~1;         /* make byte count even */
+            int32 n2 = 4608;                    /* get actual byte count */
             /* write actual byte count to 32 bit word as header */
             n1 = fwrite((char *)(&n2), 1, (size_t)4, dp);
             /* write the data mod 2 */

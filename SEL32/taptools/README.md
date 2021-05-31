@@ -29,7 +29,7 @@ cutostap - This program scans a metadata .tap file and copies files
            output - stdout >file to be written with sdt image
 
 diskload - This program reads an MPX load module and stores it into
-           simulated diskfile.  The MPX 1.X SMD entry for the file
+           a simulated diskfile. The MPX 1.X SMD entry for the file
            is entered into the SMD for the file.  Will not work for
            MPX 3.X file systems.
 
@@ -169,14 +169,14 @@ tapdump -  This program reads a metadata .tap file and prints a side
            input  - stdin <file to dump
            output - stdout
 
-tap2disk - This program reads a tape assigned as input device.  It
-           creates the specified output file and reads the tape
-           until an EOF is encountered.  Only one file is read from
-           the tape. Good to transfer tar files from SEL32 to Linux.
+tap2disk - This program scans a metadata tape (.tap format) and copies
+           a file until EOF is found.  Only one file is read from the
+           the tape. This utility is used to transfer tar files from
+           SEL32 UTX to Linux.
 
-           command: tap2disk mt00 filename
-           input -  mag tape device being read
-           output - disk file containing tape file contents
+           command: tap2disk <input >output
+           input -  .tap formatted file being read
+           output - disk file containing .tap file contents
 
 tape2disk - This program reads a tape assigned as input device.  It
            generates a .tap metadata file.  Stdout will contain a
@@ -186,7 +186,7 @@ tape2disk - This program reads a tape assigned as input device.  It
            MPX 3.X volmgr save tapes contain three EOFs so comment out
            the define for that case. 
 
-           command: tape2disk mt00 [file.tap]
+           command: tape2disk /dev/mt00 [file.tap]
            input -  mag tape device being read
            output - list of files and sizes read from input tape
            output - metadata .tap file optionally specified

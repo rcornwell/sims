@@ -7,11 +7,11 @@
  */
 
 #include <stdio.h>
-#include <sys/file.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <errno.h>
+//#include <sys/file.h>
+//#include <unistd.h>
+//#include <string.h>
+//#include <errno.h>
 
 int filen = 1;
 int EOFcnt = 0;
@@ -19,21 +19,19 @@ int count=0, lcount=0;
 int size=0, tsize=0;
 int size_512K = 512 * 1024;
 int ln;
-#ifdef USE_READ
+//int inp;
 FILE *infp;
-#else
-int inp;
-#endif
 
 /* get a line of input. */
 int getloi(char *s, int lim)
 {
-    int c, i;
+//  int c, i;
     int n1, n2, hc, tc, n;
 
-    errno = 0;
+//  errno = 0;
     /* read the byte count in 32 bit word as header */
-    n1 = read(inp, (char *)(&hc), (size_t)4);
+//  n1 = read(inp, (char *)(&hc), (size_t)4);
+    n1 = fread((char *)(&hc), (size_t)1, (size_t)4, infp);
     if (n1 <= 0)
         hc = -1;        /* at EOM on disk file */
 
@@ -77,17 +75,20 @@ int getloi(char *s, int lim)
         return -1;      /* at EOM on disk file */
     }
     /* read the data */
-    n = read(inp, s, (size_t)hc);
+//  n = read(inp, s, (size_t)hc);
+    n = fread(s, (size_t)1, (size_t)hc, infp);
 
     /* if odd byte record, read extra byte and throw it away */
     if (n & 0x1) {
-        n2 = read(inp, (char *)(&tc), (size_t)1);
+//      n2 = read(inp, (char *)(&tc), (size_t)1);
+        n2 = fread((char *)(&tc), (size_t)1, (size_t)1, infp);
         if (n2 <= 0)
             return -1;          /* at EOM on disk file */
     }
 
     /* read the byte count in 32 bit word as trailer */
-    n2 = read(inp, (char *)(&tc), (size_t)4);
+//  n2 = read(inp, (char *)(&tc), (size_t)4);
+    n2 = fread((char *)(&tc), (size_t)1, (size_t)4, infp);
     count++;        /* bump record count */
     size += n;      /* update bytes read */
     EOFcnt = 0;     /* not an EOF */
@@ -113,7 +114,7 @@ int main (int argc, char *argv[])
     char *buf;
     size_t size_512K = 512 * 1024;
     size_t buf_size = 512 * 1024;
-    char *cp, *np;
+//  char *cp, *np;
     int ll, gotboth = 0;
 
     if (argc != 2) {
@@ -121,19 +122,12 @@ int main (int argc, char *argv[])
         exit(1);
     } /* end of if */
 
-#ifdef USE_READ
     /* open input file */
     infp = fopen(argv[1],"r");
     if (infp == NULL) {
         fprintf(stderr,"%s: fopen: unable to open input file %s\n", argv[0], argv[1]);
         exit(1);
     } /* end of if */
-#else
-    if ((inp = open(argv[1], O_RDONLY, 0666)) < 0) {
-        fprintf(stderr,"%s: fopen: unable to open input file %s\n", argv[0], argv[1]);
-        return (1);
-    }
-#endif
 
     /* get a 512k buffer */
     if ((buf = malloc(buf_size)) == NULL) {
@@ -152,7 +146,8 @@ int main (int argc, char *argv[])
     while (((ll=getloi(buf, buf_size)) != EOF)) {
         ;
     }
-    close(inp);
+//  close(inp);
+    fclose(infp);
     free(buf);
     exit(0);
 }

@@ -217,6 +217,7 @@ struct ec_device {
 
 extern  int32 tmxr_poll;
 extern  uint32  readfull(CHANP *chp, uint32 maddr, uint32 *word);
+extern  uint32  cont_chan(uint16 chsa);
 
 static CONST ETH_MAC broadcast_ethaddr = {0xff,0xff,0xff,0xff,0xff,0xff};
 
@@ -248,7 +249,7 @@ const char  *ec_description (DEVICE *dptr);
 
 UNIT ec_unit[] = {
     {UDATA(ec_rec_srv, UNIT_IDLE|UNIT_ATTABLE, 0), 0, UNIT_ADDR(0xE00)},  /* 0 */
-#ifdef FOR_DIAG
+#ifndef FOR_DIAG
     {UDATA(ec_srv, UNIT_IDLE|UNIT_DIS|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE01)},  /* 1 */
     {UDATA(ec_srv, UNIT_IDLE|UNIT_DIS|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE02)},  /* 2 */
     {UDATA(ec_srv, UNIT_IDLE|UNIT_DIS|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE03)},  /* 3 */
@@ -258,6 +259,12 @@ UNIT ec_unit[] = {
     {UDATA(ec_srv, UNIT_IDLE|UNIT_DIS|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE07)},  /* 7 */
     {UDATA(ec_srv, UNIT_IDLE|UNIT_DIS|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE08)},  /* 8 */
     {UDATA(ec_srv, UNIT_IDLE|UNIT_DIS|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE09)},  /* 9 */
+    {UDATA(ec_srv, UNIT_IDLE|UNIT_DIS|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE0A)},  /* A */
+    {UDATA(ec_srv, UNIT_IDLE|UNIT_DIS|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE0B)},  /* B */
+    {UDATA(ec_srv, UNIT_IDLE|UNIT_DIS|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE0C)},  /* C */
+    {UDATA(ec_srv, UNIT_IDLE|UNIT_DIS|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE0D)},  /* D */
+    {UDATA(ec_srv, UNIT_IDLE|UNIT_DIS|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE0E)},  /* E */
+    {UDATA(ec_srv, UNIT_IDLE|UNIT_DIS|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE0F)},  /* F */
 #else
     {UDATA(ec_srv, UNIT_IDLE|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE01)},  /* 1 */
     {UDATA(ec_srv, UNIT_IDLE|UNIT_SUBCHAN, 0), 0, UNIT_ADDR(0xE02)},  /* 2 */
@@ -397,6 +404,9 @@ loop:
         chp->chan_caw, chp->chan_dev, word1, word2, uptr->SNS);
 
     chp->chan_caw = (chp->chan_caw & 0xfffffc) + 8; /* point to next IOCD */
+#ifdef BAD_05142021
+    chp->ccw_cmd = (word1 >> 24) & 0xff;        /* set new command from IOCD wd 1 */
+#endif
 
     /* Check if we had data chaining in previous iocd */
     /* if we did, use previous cmd value */
@@ -558,8 +568,14 @@ loop:
     }
 
     /* Check if we had data chaining in previous iocd */
+#ifdef BAD_05152021
     if ((chp->chan_info & INFO_SIOCD) ||        /* see if 1st IOCD in channel prog */
         ((chp->ccw_flags & FLAG_DC) == 0)) {    /* last IOCD have DC set? */
+#else
+    if ((chp->chan_info & INFO_SIOCD) ||        /* see if 1st IOCD in channel prog */
+        (((chp->chan_info & INFO_SIOCD) == 0) && /* see if 1st IOCD in channel prog */
+        ((chp->ccw_flags & FLAG_DC) == 0))) {    /* last IOCD have DC set? */
+#endif
         sim_debug(DEBUG_CMD, dptr,
             "ec_iocl @%06x DO CMD No DC, ccw_flags %04x cmd %02x\n",
             chp->chan_caw, chp->ccw_flags, chp->ccw_cmd);
@@ -614,6 +630,7 @@ loop:
 
         /* call the device startcmd function to process the current command */
         /* just replace device status bits */
+        chp->chan_info &= ~INFO_CEND;           /* show chan_end not called yet */
         devstat = dibp->start_cmd(uptr, chan, chp->ccw_cmd);
         chp->chan_status = (chp->chan_status & 0xff00) | devstat;
         chp->chan_info &= ~INFO_SIOCD;          /* show not first IOCD in channel prog */
@@ -626,24 +643,16 @@ loop:
         if (chp->chan_status & (STATUS_ATTN|STATUS_ERROR)) {
             chp->chan_status |= STATUS_CEND;    /* channel end status */
             chp->ccw_flags = 0;                 /* no flags */
-            /* see if chan_end already called */
-            if (chp->chan_byte == BUFF_NEXT) {
-                sim_debug(DEBUG_EXP, dptr,
-                    "ec_iocl BUFF_NEXT ERROR chp %p chan_byte %04x\n",
-                    chp, chp->chan_byte);
-            } else {
-                chp->chan_byte = BUFF_NEXT;     /* have main pick us up */
-                sim_debug(DEBUG_EXP, dptr,
-                    "ec_iocl bad status chan %04x status %04x cmd %02x\n",
-                    chan, chp->chan_status, chp->ccw_cmd);
-                RDYQ_Put(chp->chan_dev);        /* queue us up */
-                sim_debug(DEBUG_EXP, dptr,
-                    "ec_iocl continue wait chsa %04x status %08x\n",
-                    chp->chan_dev, chp->chan_status);
-                chp->chan_qwait = QWAIT;        /* run 0 instructions before starting iocl */
-            }
-        } else
-
+            chp->chan_byte = BUFF_NEXT;         /* have main pick us up */
+            sim_debug(DEBUG_EXP, dptr,
+                "ec_iocl bad status chsa %04x status %04x cmd %02x\n",
+                chsa, chp->chan_status, chp->ccw_cmd);
+            /* done with command */
+            sim_debug(DEBUG_EXP, &cpu_dev,
+                "ec_iocl ERROR return chsa %04x status %08x\n",
+                chp->chan_dev, chp->chan_status);
+            return 1;                           /* error return */
+        }
         /* NOTE this code needed for MPX 1.X to run! */
         /* see if command completed */
         /* we have good status */
@@ -1759,7 +1768,7 @@ t_stat ec_attach(UNIT* uptr, CONST char* cptr)
 /* detach device: */
 t_stat ec_detach(UNIT* uptr)
 {
-    if (uptr->flags & UNIT_ATT && (uptr->flags & UNIT_DIS) == 0) {
+    if ((uptr->flags & UNIT_ATT) && (uptr->flags & UNIT_DIS) == 0) {
         eth_close (&ec_data.etherface);
         free(uptr->filename);
         uptr->filename = NULL;

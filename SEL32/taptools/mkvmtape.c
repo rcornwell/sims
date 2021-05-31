@@ -20,6 +20,7 @@
  *         - -b = bootfile name
  *         - -i = system image file
  *         - -j = j.vfmt filename
+ *         - -m = master sdt tape image
  * 04/11/2020 update for mpx3.x
  */
 
@@ -42,26 +43,51 @@
 /* write byte to memory */
 #define WMB(a,d) (M[(a)>>2]=(((M[(a)>>2])&(~(0xff<<(8*(3-(a&3))))))|((d&0xff)<<(8*(3-(a&3))))))
 
+#if defined(_MSC_VER) && (_MSC_VER < 1600)
+typedef __int8           int8;
+typedef __int16          int16;
+typedef __int32          int32;
+typedef unsigned __int8  uint8;
+typedef unsigned __int16 uint16;
+typedef unsigned __int32 uint32;
+typedef signed __int64   t_int64;
+typedef unsigned __int64 t_uint64;
+typedef t_int64          off_t;
+#else                                                   
+/* All modern/standard compiler environments */
+/* any other environment needa a special case above */
+#include <stdint.h>
+typedef int8_t          int8;
+typedef int16_t         int16;
+typedef int32_t         int32;
+typedef uint8_t         uint8;
+typedef uint16_t        uint16;
+typedef uint32_t        uint32;
+#endif                                                  /* end standard integers */
+
 #define BLKSIZE 768                     /* MPX file sector size */
-u_int32_t dir[32];                      /* directory name */
-u_int32_t vol[32];                      /* volume name */
+uint32 dir[32];                         /* directory name */
+uint32 vol[32];                         /* volume name */
 unsigned char data[6144];               /* room for 8*768=(6144) 768 byte sectors per 4608 byte block */
 unsigned char bigdata[19200];           /* room for 6*768=(4608) 768 byte sectors per 4608 byte block */
-u_int32_t M[768];                       /* fake memory */
+uint32 M[768];                          /* fake memory */
 unsigned char bootcode[2048];           /* room for bootcode */
-u_int32_t resdes[384];                  /* room for the 1536 char (two blks) resource descriptor */
-u_int32_t dirlist[1536];                /* 6144 byte directory listing */
-int16_t     savecnt = 0;                /* entries in save list */
+uint32 resdes[384];                     /* room for the 1536 char (two blks) resource descriptor */
+uint32 dirlist[1536];                   /* 6144 byte directory listing */
+int16  savecnt = 0;                     /* entries in save list */
 char sysname[16] = "SYSTEM          ";
+char mstrall[] = "mstrall";
+char mstrext[] = "mstrext";
+char mstrout[] = "mstrout";
 
 /* write 1 file to tape in 768 byte records */
 /* mblks is the maximum blockes to write from a file, 0=all */
 /* chunks is the number of sectors to wrote at a time 1-8 */
-int writefile(FILE *tp, char *fnp, u_int32_t mblks, int32_t chunks) {
-    u_int32_t word, blks=mblks;             /* just a temp word variable */         
-    u_int32_t size, bsize, csize;           /* size in 768 byte sectors */
+int writefile(FILE *tp, char *fnp, uint32 mblks, int32 chunks) {
+    uint32 word, blks=mblks;            /* just a temp word variable */         
+    uint32 size, bsize, csize;          /* size in 768 byte sectors */
     FILE *fp;
-    int32_t n1, n2, hc, nw, cs;
+    int32 n1, n2, hc, nw, cs;
 
     memset((char *)data, 0, sizeof(data));  /* zero data storage */
     /* write file to tape */
@@ -71,7 +97,7 @@ int writefile(FILE *tp, char *fnp, u_int32_t mblks, int32_t chunks) {
     }
     fseek(fp, 0, SEEK_END);                 /* seek to end */
     word = ftell(fp);                       /* get filesize in bytes */
-//printf("MPX file %s is %x (%d) bytes\n", fnp, word, word);
+printf("MPX file %s is %x (%d) bytes\n", fnp, word, word);
     fseek(fp, 0, SEEK_SET);                 /* rewind file */
     size = (word/768);                      /* filesize in sectors */
     if (word%768 != 0)                      /* see if byte left over */
@@ -87,12 +113,12 @@ int writefile(FILE *tp, char *fnp, u_int32_t mblks, int32_t chunks) {
 
     bsize = mblks;                          /* save # blks */
 
-//printf("MPX file %s is %x (%d) bytes blks %d chk %d\n",
-//        fnp, word, word, bsize, (bsize+1)/chunks);
+printf("MPX file %s is %x (%d) bytes blks %d chk %d\n",
+    fnp, word, word, bsize, (bsize+1)/chunks);
     csize = 0;
     /* read in the image file */
     while (bsize > 0) { 
-        if (bsize > chunks)                 /* see if there is a chunk left to read */
+        if ((int32)bsize > chunks)          /* see if there is a chunk left to read */
             csize = chunks;                 /* yes, do max chunk size */
         else
             csize = bsize;                  /* no, use what is left */
@@ -114,15 +140,16 @@ int writefile(FILE *tp, char *fnp, u_int32_t mblks, int32_t chunks) {
         bsize -= csize;                     /* do next chunk */
         memset((char *)data, 0, csize);     /* zero data storage */
     }
-//printf("write file %s (size %d bytes) (%d sect) (%d blocks) (%d chunks)\n",
-//      fnp, word, size, mblks, blks);
+printf("write file %s (size %d bytes) (%d sect) (%d blocks) (%d chunks)\n",
+    fnp, word, size, mblks, blks);
     fclose(fp);
+    return(0);
 }
 
-u_int32_t readboot(char *name, char *buf, u_int32_t start, u_int32_t end) {
-    u_int32_t word = end-start+4;           /* just a temp word variable */         
+uint32 readboot(char *name, char *buf, uint32 start, uint32 end) {
+    int32 word = end-start+4;               /* just a temp word variable */         
     FILE *fp;
-    int32_t n1, n2;
+    int32 n1, n2;
 
     memset((char *)bootcode, 0, sizeof(bootcode));  /* zero data storage */
     if ((fp = fopen(name, "r")) == NULL) {
@@ -133,7 +160,7 @@ u_int32_t readboot(char *name, char *buf, u_int32_t start, u_int32_t end) {
     n1 = fread(bootcode, 1, word, fp);      /* read bootcode */
     if (n1 <=0)                             /* check for read error */
         exit(1);                            /* bad tape format */
-//printf("MPX bootfile %s is %x (%d) bytes\n", name, word, word);
+printf("MPX bootfile %s is %x (%d) bytes\n", name, word, word);
     fclose(fp);
     fopen("volmboot", "w");
     fwrite(bootcode, 1, word, fp);
@@ -144,10 +171,47 @@ u_int32_t readboot(char *name, char *buf, u_int32_t start, u_int32_t end) {
 }
 
 /* byte swap the 32 bit word */
-u_int32_t flip(u_int32_t val) {
+uint32 flip(uint32 val) {
     /* byte swap the buffers for dmap and umap */
     return (((val & 0xff) << 24) | ((val & 0xff00) << 8) |
             ((val & 0xff0000) >> 8) | ((val >> 24) & 0xff));
+}
+
+/* get number of 768 byte blocks in file */
+uint32 getblks(char *imgp)
+{
+    unsigned int size;                      /* size in 768 byte sectors */
+    unsigned int word;                      /* just a temp word variable */         
+    FILE *fp;
+    int32 n1, n2, w2, blks;
+
+    memset((char *)M, 0, 192);              /* zero data storage */
+    if ((fp = fopen(imgp, "r")) == NULL) {
+        fprintf(stderr, "error: can't open image file %s\n", imgp);
+        exit(1);                            /* we are done here */
+    }
+    fseek(fp, 0, SEEK_END);                 /* seek to end */
+    word = ftell(fp);                       /* get filesize in bytes */
+printf("image file %s is %x (%d) bytes\n", imgp, word, word);
+    fseek(fp, 0, SEEK_SET);                 /* rewind file */
+    w2 = fread((char *)M, sizeof(uint32), 192, fp);  /* read the image file */
+    n1 = flip(M[0x68/4]);                   /* get PR.BYTDR bytes in dsect rel matrix */
+    n2 = flip(M[0x64/4]);                   /* get PR.SFADR sec addr of rel matrix */
+    if (n2 == 0) {                          /* if zero use PR.SFAD rel addr of dsect */
+        n1 = flip(M[0x5C/4]);               /* get PR.BYTED bytes in dsect */
+        n2 = flip(M[0x58/4]);               /* get PR.SFADR sec addr of dsect */
+        n2 += 1;                            /* add 1 blk for sys debug blk */
+    }
+    blks = n1/768;                          /* get #block rounded mod 768 */
+    if ((n1%768) != 0)                      /* round up blks if remainder */
+        blks++; 
+    blks += n2;                             /* get total blks to read */
+printf("image file %s n1 %x (%d) n2 %x (%d) blks %x (%d)\n",
+    imgp, n1, n1, n2, n2, blks, blks);
+    fseek(fp, 0, SEEK_SET);                 /* rewind file */
+    fclose(fp);
+
+    return blks;
 }
 
 /* read program file and output to a simulated mpx3.x volmgr savetape */
@@ -163,8 +227,8 @@ char *argv[];
     unsigned char bootname[32];
     unsigned char imgname[32];
     unsigned char vfmtname[32];
-    unsigned char volname[32];
-    unsigned char dirname[32];
+//  unsigned char volname[32];
+//  unsigned char dirname[32];
     char *p;
     int i, n, eof;
 #define DOPROG  1
@@ -178,6 +242,7 @@ char *argv[];
 #define DOVFMT 256
 #define DOVOL 512
 #define DODIR 1024
+#define DOMSTR 2048
 #define DOMASK (DOBOOT|DOIMG|DOVFMT)
     unsigned int option = DOTEXT;           /* what to do */
     unsigned char *fnp;                     /* file name pointer */
@@ -189,15 +254,15 @@ char *argv[];
     char *bootp = bootname;                 /* pointer to boot file name */
     char *imgp= imgname;                    /* pointer to image file name */
     char *vfmtp = vfmtname;                 /* pointer to j.vfmt file name */
-    int ofd;                                /* output file number */
-    int32_t filen;                          /* file number */
-//  u_int32_t *dirp = dir;                  /* directory entry pointer */
-//  u_int32_t *volp = vol;                  /* volume entry pointer */
-/// char *dirp = dirname;                   /* directory entry pointer */
-/// char *volp = volname;                   /* volume entry pointer */
+//  int ofd;                                /* output file number */
+    int32 filen;                            /* file number */
+//  uint32 *dirp = dir;                     /* directory entry pointer */
+//  uint32 *volp = vol;                     /* volume entry pointer */
+//  char *dirp = dirname;                   /* directory entry pointer */
+//  char *volp = volname;                   /* volume entry pointer */
     char *dirp = sysname;                   /* directory entry pointer */
     char *volp = sysname;                   /* volume entry pointer */
-    int32_t totent;                         /* total smd entries */
+    int32 totent;                           /* total smd entries */
     char    j_vfmt[] = {"!VOLSYST!DIRSYST!FIL    J.VFMT          "};
     char    j_mount[] = {"!VOLSYST!DIRSYST!FIL    J.MOUNT         "};
     char    j_swapr[] = {"!VOLSYST!DIRSYST!FIL    J.SWAPR         "};
@@ -268,6 +333,10 @@ char *argv[];
                             p++;
                         typ = 0xca;         /* set type */
                         break;
+                    case 'm':
+                    case 'M':
+                        option |= DOMSTR;   /* output master SDT */
+                        break;
                     case 'p':
                     case 'P':
                         option |= DOPROG;   /* save program modules */
@@ -334,7 +403,7 @@ char *argv[];
                         fprintf(stderr, "Error: no option specified\n");
 error1:
                         fprintf(stderr,
-            "Usage: %s [-ptloa] [-bboot] [-iimage] [-jj.vfmt] [-uusername] vmgrtape file1 file2 ...\n",
+            "Usage: %s [-ptloam] [-bboot] [-iimage] [-jj.vfmt] [-uusername] vmgrtape file1 file2 ...\n",
                             *argv);
                         exit(1);
                         break;
@@ -353,21 +422,21 @@ error1:
                         fprintf(stderr, "error: can't create/open simulated tape disk file %s\n", *argv);
                         exit(1);
                     }
-//                  printf("1 opened output in w mode, write at start\n");
+//printf("1 opened output in w mode, write at start\n");
                 }
-//              else
-//                  printf("2 opened output in r+ mode write at end\n");
+//else
+//printf("2 opened output in r+ mode write at end\n");
 
                 fseek(dp, 0, SEEK_END);             /* seek to end */
                 bytes = ftell(dp);                  /* get filesize in bytes */
-//printf("1 file length %ld %lx bytes\n", bytes, bytes);
-//printf("1 start writing at %ld %lx bytes offset\n", bytes-8, bytes-8);
+printf("1 file length %ld %lx bytes\n", bytes, bytes);
+printf("1 start writing at %ld %lx bytes offset\n", bytes-8, bytes-8);
                 fseek(dp, 0, SEEK_SET);             /* rewind file to beginning */
                 /* at this point, we are at the end of the tape */
                 /* we should see 3 EOF's w/ or w/o an EOM */
                 if (bytes > 8) {                    /* see if file written to already */
                     /* we need to find the EOT */
-                    int32_t n1, n2, hc, tc, n;
+                    int32 n1, n2, hc, tc, n;
                     int EOFcnt = 0;
 readmore:
                     fseek(dp, bytes-4, SEEK_SET);   /* seek back to EOF/EOM code */
@@ -384,7 +453,7 @@ readmore:
                         /* EOF found */
                         if (++EOFcnt == 2) {
                             /* we have second EOF, we need to backup 4 bytes */
-backup4:
+//backup4:
                             /* we are setting after 2nd EOF, start writing there */
 //                          bytes -= 4;             /* backup 4 bytes */
                             fseek(dp, bytes-4, SEEK_SET);   /* backspace over 2nd EOF */
@@ -451,10 +520,11 @@ getout:
     }
     /* process the bootfile first */
     if (option & DOBOOT) {
-        int32_t w2, n1, n2, nw, hc, blks;
+        int32 w2, n1, n2, nw, hc, blks;
         fnp = bootp;                                /* get file name pointer */
-#ifndef USE_FILENAME
         memset((char *)data, 0, 0x800);              /* zero data storage */
+#define USE_FILENAME
+#ifdef USE_FILENAME
         if ((fp = fopen(bootp, "r")) == NULL) {
             fprintf(stderr, "error: can't open boot file %s\n", bootp);
             exit(1);
@@ -469,10 +539,13 @@ printf("bootfile %s is %x (%d) bytes\n", bootp, word, word);
 //          exit(1);
 //      }
         w2 = fread((char *)data, 1, word, fp);      /* read the boot file */
+        fclose(fp);
 #else
         /* go cut the boot code from the volmgr load module */
-//      w2 = readboot("volmgr", (char *)data, 0x1c9a0, 0x1d144);
-        w2 = readboot("volmgr", (char *)data, 0x1c9a0, 0x1d140);
+//      w2 = readboot("volmgr", (char *)data, 0x1c9a0, 0x1d144);    /* 7a4 volmgr 3.4+ */
+//      w2 = readboot("volmgr", (char *)data, 0x1c9a0, 0x1d140);    /* 7a0 volmgr ?? */
+        w2 = readboot("volmgr", (char *)data, 0x24860, 0x24f48);    /* 6ec volmgr 3.5u02 */
+        word = w2;                                  /* get filesize in bytes */
 #endif
         /* we have data to write */
         hc = (w2 + 1) & ~1;                         /* make byte count even */
@@ -491,45 +564,43 @@ printf("bootfile %s is %x (%d) bytes\n", bootp, word, word);
 printf("write boot file %s (size %d bytes)\n", bootp, word, word);
         /* setup for mpx image file */
         memset((char *)data, 0, 0x800);              /* zero data storage */
-#ifdef USE_FILENAME
-        fclose(fp);
-#endif
 
-        memset((char *)M, 0, 192);                  /* zero data storage */
-        if ((fp = fopen(imgp, "r")) == NULL) {
-            fprintf(stderr, "error: can't open boot file %s\n", imgp);
-            goto error1;                            /* we are done here */
+        if (option & DOMSTR) {
+            /* get blocks in image file */
+            blks = getblks(mstrall);
+            /* write mpx image file */
+            writefile(dp, mstrall, blks, 1);            /* write max of "blks" blocks to file */
+
+            /* write EOF (zero) to file */
+            filen = 0;                                  /* zero count */
+            fwrite((char *)(&filen), 1, (size_t)sizeof(filen), dp);
+
+            blks = getblks(mstrext);
+            /* write mpx image file */
+            writefile(dp, mstrext, blks, 1);            /* write max of "blks" blocks to file */
+
+            /* write EOF (zero) to file */
+            filen = 0;                                  /* zero count */
+            fwrite((char *)(&filen), 1, (size_t)sizeof(filen), dp);
+
+            blks = getblks(mstrout);
+            /* write mpx image file */
+            writefile(dp, mstrout, blks, 1);            /* write max of "blks" blocks to file */
+
+            /* write EOF (zero) to file */
+            filen = 0;                                  /* zero count */
+            fwrite((char *)(&filen), 1, (size_t)sizeof(filen), dp);
+        } else {
+            /* get blocks in image file */
+            blks = getblks(imgp);
+
+            /* write mpx image file */
+            writefile(dp, imgp, blks, 1);               /* write max of "blks" blocks to file */
         }
-        fnp = imgp;                                 /* get file name pointer */
-        fseek(fp, 0, SEEK_END);                     /* seek to end */
-        word = ftell(fp);                           /* get filesize in bytes */
-printf("image file %s is %x (%d) bytes\n", imgp, word, word);
-        fseek(fp, 0, SEEK_SET);                     /* rewind file */
-        w2 = fread((char *)M, sizeof(u_int32_t), 192, fp);  /* read the image file */
-//      n1 = RMW(0x68);                             /* get PR.BYTDR bytes in dsect rel matrix */
-//      n2 = RMW(0x64);                             /* get PR.SFADR sec addr of rel matrix */
-        n1 = flip(M[0x68/4]);                       /* get PR.BYTDR bytes in dsect rel matrix */
-        n2 = flip(M[0x64/4]);                       /* get PR.SFADR sec addr of rel matrix */
-        if (n2 == 0) {                              /* if zero use PR.SFAD rel addr of dsect */
-//          n1 = RMW(0x5C);                         /* get PR.BYTED bytes in dsect */
-//          n2 = RMW(0x58);                         /* get PR.SFADR sec addr of dsect */
-            n1 = flip(M[0x5C/4]);                   /* get PR.BYTED bytes in dsect */
-            n2 = flip(M[0x58/4]);                   /* get PR.SFADR sec addr of dsect */
-            n2 += 1;                                /* add 1 blk for sys debug blk */
-        }
-        blks = n1/768;                              /* get #block rounded mod 768 */
-        if ((n1%768) != 0)                          /* round up blks if remainder */
-            blks++; 
-        blks += n2;                                 /* get total blks to read */
-printf("image file %s n1 %x (%d) n2 %x (%d) blks %x (%d)\n",
-   imgp, n1, n1, n2, n2, blks, blks);
-        fseek(fp, 0, SEEK_SET);                     /* rewind file */
-        fclose(fp);
-
-        /* write mpx image file */
-        writefile(dp, imgp, blks, 1);               /* write max of "blks" blocks to file */
-
+        /* get blocks in j.vfmt file */
+//      blks = getblks(vfmtp);
         /* write j.vfmt file */
+//      writefile(dp, vfmtp, blks, 1);              /* write 1 blk at a time */
         writefile(dp, vfmtp, 0, 1);                 /* write 1 blk at a time */
 
         /* write EOF (zero) to file */
@@ -537,12 +608,18 @@ printf("image file %s n1 %x (%d) n2 %x (%d) blks %x (%d)\n",
         fwrite((char *)(&filen), 1, (size_t)sizeof(filen), dp);
 
         /* write j.mount file */
+//      blks = getblks("j.mount");
+//      writefile(dp, "j.mount", blks, 1);          /* one blk at a time */
         writefile(dp, "j.mount", 0, 1);             /* one blk at a time */
 
         /* write j.swapr file */
+//      blks = getblks("j.swapr");
+//      writefile(dp, "j.swapr", blks, 1);          /* one blk at a time */
         writefile(dp, "j.swapr", 0, 1);             /* one blk at a time */
 
         /* write volmgr file */
+//      blks = getblks("volmgr");
+//      writefile(dp, "volmgr", blks, 1);           /* one blk at a time */
         writefile(dp, "volmgr", 0, 1);              /* all of file 1 blk at a time */
 
         /* write EOF (zero) to file */
@@ -554,7 +631,7 @@ printf("image file %s n1 %x (%d) n2 %x (%d) blks %x (%d)\n",
         filen = -1;                                 /* make in -1 for EOM */
         /* do EOM */
         fwrite((char *)(&filen), 1, (size_t)sizeof(filen), dp);
-//printf("setting at %ld bytes in file after EOM\n", ftell(dp));
+printf("setting at %ld bytes in file after EOM\n", ftell(dp));
         fclose(dp);
         exit(0);
     }
@@ -575,7 +652,7 @@ printf("image file %s n1 %x (%d) n2 %x (%d) blks %x (%d)\n",
     /* got tapefile and options, handle files now */
     targc = argc;                               /* save argc to reread list */
     targv = argv;                               /* save argv to reread list */
-//printf("AT 3 argc %d argv %s\n", argc, *argv);
+printf("AT 3 argc %d argv %s\n", argc, *argv);
     filen = 0;                                  /* no files yet */
     totent = 0;                                 /* no files yet */
 
@@ -590,17 +667,17 @@ printf("image file %s n1 %x (%d) n2 %x (%d) blks %x (%d)\n",
     memset((char *)dirlist, 0, sizeof(dirlist));    /* zero data storage */
 
     /* populate the 48 byte entry starting at byte 2 */
-//  dirp = (u_int32_t *)dir;                    /* get word pointer for directory */
-//  volp = (u_int32_t *)vol;                    /* get word pointer for volume */
+//  dirp = (uint32 *)dir;                       /* get word pointer for directory */
+//  volp = (uint32 *)vol;                       /* get word pointer for volume */
 //  dirp = dirname;                             /* get word pointer for directory */
 //  volp = volname;                             /* get word pointer for volume */
-/// dirp = sysname;                             /* get word pointer for directory */
+//  dirp = sysname;                             /* get word pointer for directory */
     volp = sysname;                             /* get word pointer for volume */
     n = 2;
     dirlist[0] = n << 24;                       /* set record type to 1 */
     while (--argc > 0) {
-        u_int32_t smd[32];                      /* dir entry data */
-        int blks, eof;
+        uint32 smd[32];                         /* dir entry data */
+//      int blks, eof;
 
         for (i=0; i<16; i++)                    /* zero smd entry */
             smd[i] = 0x20;                      /* make blank */
@@ -610,7 +687,7 @@ printf("image file %s n1 %x (%d) n2 %x (%d) blks %x (%d)\n",
             fprintf(stderr, "error: Filename too long (%d>16) %s, Aborting\n", i, p);
             exit(1);
         }
-//printf("argc %d argv3 %s\n", argc, p);
+printf("argc %d argv3 %s\n", argc, p);
         if ((fp = fopen(p, "r")) == NULL) {
             fprintf(stderr, "error: can't open user file %s\n", p);
             exit(1);
@@ -664,13 +741,13 @@ printf("image file %s n1 %x (%d) n2 %x (%d) blks %x (%d)\n",
         totent++;                               /* bump total count */
     }
 
-//printf("AT write file list with %d entries\n", filen);
+printf("AT write file list with %d entries\n", filen);
     /* dirlist now has 1-127 filename entries to save */
     /* write out the directory entries for the files to save */
     if (filen != 0) {
         /* we need to write out the directory entries */
-        int32_t n1, n2, nw;
-        int32_t hc = (6144 + 1) & ~1;           /* make byte count even */
+        int32 n1, n2, nw;
+        int32 hc = (6144 + 1) & ~1;             /* make byte count even */
         /* put record type 1 in dirlist[0] byte swapped */
         dirlist[0] = 0x01000000;                /* record type 1 */
         /* put the number of entries into dirlist[1] */
@@ -704,12 +781,13 @@ printf("image file %s n1 %x (%d) n2 %x (%d) blks %x (%d)\n",
     n = 2;
     /* read each file and output to save tape file in 6 sector blocks */
     while (--argc > 0) {
-        int32_t n1, n2, nw, k;
-        int32_t hc = (1536 + 1) & ~1;           /* make byte count even */
-        int blks;
+//      int32 n1, n2, nw, k;
+        int32 n1, n2, nw;
+        int32 hc = (1536 + 1) & ~1;             /* make byte count even */
+//      int blks;
 
         p = *argv++;
-//printf("at 4 argc %d argv %s\n", argc, p);
+printf("at 4 argc %d argv %s\n", argc, p);
 
         if ((fp = fopen(p, "r")) == NULL) {
             fprintf(stderr, "error: can't open user file %s\n", p);
@@ -845,8 +923,8 @@ printf("image file %s n1 %x (%d) n2 %x (%d) blks %x (%d)\n",
         if (typ == 0x00)
             resdes[256]=flip(0x001000f1);       /* space definition flags */
 //      resdes[257]=flip(0x00000018);           /* max extends */
-        resdes[257]=flip(0x00000040);           /* max extends */
 //      resdes[258]=flip(0x00000008);           /* min incr */
+        resdes[257]=flip(0x00000040);           /* max extends */
         resdes[258]=flip(0x00000010);           /* min incr */
         //259
 
@@ -903,29 +981,21 @@ printf("image file %s n1 %x (%d) n2 %x (%d) blks %x (%d)\n",
         /* write file up to 8 blks at a time */
         writefile(dp, fnp, 0, 8);               /* all of file 1 blk at a time */
 
-//printf("File written at 4 argc %d argv %s\n", argc, fnp);
+printf("File written at 4 argc %d argv %s\n", argc, fnp);
 
         /* write EOF (zero) to file */
         eof = 0;                                /* zero count */
         fwrite((char *)(&eof), 1, (size_t)sizeof(eof), dp);
     }
     /* we have saved the files in the image, write 2 eof's & 1 EOM */
-//  word = ftell(dp);                           /* get position in bytes */
-//  printf("setting after file EOF write pos %x %d\n", word, word);
     /* write EOF (zero) to file */
     filen = 0;                                  /* zero count */
     fwrite((char *)(&filen), 1, (size_t)sizeof(filen), dp);
-//  word = ftell(dp);                           /* get position in bytes */
-//  printf("setting after 1st EOF file pos %x %d\n", word, word);
     /* do second EOF */
     fwrite((char *)(&filen), 1, (size_t)sizeof(filen), dp);
     filen = -1;                                 /* make in -1 for EOM */
-//  word = ftell(dp);                           /* get position in bytes */
-//  printf("setting after 2st EOF file pos %x %d\n", word, word);
     /* do EOM */
     fwrite((char *)(&filen), 1, (size_t)sizeof(filen), dp);
-//  word = ftell(dp);                           /* get position in bytes */
-//  printf("setting after EOM file pos %x %d\n", word, word);
 printf("setting at %lx (%ld) bytes in file after EOM\n", ftell(dp), ftell(dp));
     fclose(dp);
     exit(0);

@@ -1,17 +1,18 @@
 /*
  * tap2disk.c
  *
- * This program scans a metatape file and copies a file until EOF is found.
- * input - specified filename  
- * output - specified filename
+ * This program scans a metadata tape (.tap format) and copies
+ * a file until EOF is found.  Only one file is read from the
+ * the tape. This utility is used to transfer tar files from
+ * SEL32 UTX to Linux.
+ *
+ * command: tap2disk <input >output
+ * input  - .tap formatted file being read
+ * output - disk file containing .tap file contents
  */
 
 #include <stdio.h>
-#include <sys/file.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <errno.h>
 
 int     filen = 1;
 int     EOFcnt = 0;
@@ -19,17 +20,19 @@ int     count=0, lcount=0;
 int     size=0, tsize=0;
 int     oldsize, newsize;
 FILE    *outfp;
-int     inp;
+//int     inp;
+FILE    *infp;
 int     ln;
 
 /* get a line of input. */
 int getloi(char *s, int lim)
 {
-    int     c, i;
+//  int     c, i;
     int     n1, n2, hc, tc, n;
 
     /* read the byte count in 32 bit word as header */
-    n1 = read(inp, (char *)(&hc), (size_t)4);
+//  n1 = read(inp, (char *)(&hc), (size_t)4);
+    n1 = fread((char *)(&hc), (size_t)1, (size_t)4, infp);
     if (n1 <= 0) {
         hc = -1;                /* at EOM on disk file */
         return hc;              /* return EOM */
@@ -44,7 +47,7 @@ int getloi(char *s, int lim)
     /* check for EOF & EOM on tape data */
     if (hc == 0) {
         /* we are at tape EOF */
-        if (++EOFcnt < 2) {     /* if 1st EOF, print32_t file info */
+        if (++EOFcnt < 2) {     /* if 1st EOF, print file info */
             if (ln > 0) {
                 if (count - lcount > 1)
                     fprintf(stderr, "file %d: records %d to %d: size %d\n", filen, lcount, count - 1, ln);
@@ -52,15 +55,15 @@ int getloi(char *s, int lim)
                     fprintf(stderr, "file %d: record %d: size %d\n", filen, lcount, ln);
             }
             fprintf(stderr, "file %d: EOF after %d records: %d bytes\n\n", filen, count, size);
-            filen++;    /* set next file number */
+            filen++;            /* set next file number */
         } else {
             fprintf(stderr, "second EOF after %d files: %d bytes\n", filen-1, tsize+size);
         }
-        count = 0;      /* file record count back to zero */
-        lcount = 0;     /* last record count back to zero */
-        tsize += size;  /* add to total tape size */
-        size = 0;       /* file size back to zero */
-        ln = -1;        /* set ln to -1 showing we are at EOF */
+        count = 0;              /* file record count back to zero */
+        lcount = 0;             /* last record count back to zero */
+        tsize += size;          /* add to total tape size */
+        size = 0;               /* file size back to zero */
+        ln = -1;                /* set ln to -1 showing we are at EOF */
         return 0;               /* return EOF on tape data */
     }
 
@@ -70,19 +73,22 @@ int getloi(char *s, int lim)
     }
 
     /* read the data */
-    n = read(inp, s, (size_t)hc);
+//  n = read(inp, s, (size_t)hc);
+    n = fread(s, (size_t)1, (size_t)hc, infp);
     if (n <= 0)
         return -1;              /* at EOM on disk file */
 
     /* if odd byte record, read extra byte and throw it away */
     if (n & 0x1) {
-        n2 = read(inp, (char *)(&tc), (size_t)1);
+//      n2 = read(inp, (char *)(&tc), (size_t)1);
+        n2 = fread((char *)(&tc), (size_t)1, (size_t)1, infp);
         if (n2 <= 0)
             return -1;          /* at EOM on disk file */
     }
 
     /* read the byte count in 32 bit word as trailer */
-    n2 = read(inp, (char *)(&tc), (size_t)4);
+//  n2 = read(inp, (char *)(&tc), (size_t)4);
+    n2 = fread((char *)(&tc), (size_t)1, (size_t)4, infp);
     if (n2 <= 0)
         return -1;              /* at EOM on disk file */
 
@@ -105,9 +111,10 @@ int getloi(char *s, int lim)
 
 void putrec(int cnt, char *buf)
 {
-    int  n1, n2, nw;
-    int  hc = (cnt + 1) & ~1;        /* make byte count even */
-    int  ac = cnt;                   /* get actual byte count */
+//  int  n1, n2, nw;
+    int  nw;
+    int  hc = (cnt + 1) & ~1;   /* make byte count even */
+    int  ac = cnt;              /* get actual byte count */
 
 //printf("writing %d chars\n", cnt);
 #if 0
@@ -129,7 +136,8 @@ void putrec(int cnt, char *buf)
         fprintf(stderr, "write (%d) failure\n", nw);
         fprintf(stderr, "Operation aborted\n");
         fclose(outfp);
-        close(inp);
+//      close(inp);
+        fclose(infp);
         free(buf);
         exit(1);
     }
@@ -148,19 +156,22 @@ int main (int argc, char *argv[])
     }
 
     /* open input file */
-    if ((inp = open(argv[1], O_RDONLY, 0666)) < 0) {
+//  if ((inp = open(argv[1], O_RDONLY, 0666)) < 0) {
+    if ((infp = fopen(argv[1],"r")) == NULL) {
         fprintf(stderr,"%s: fopen: unable to open input file %s\n", argv[0], argv[1]);
         return (1);
     }
 
-    close(inp);                             /* close input */
-    outfp = fopen(argv[1],"r");             /* reopen */
-    fseek(outfp, 0, SEEK_END);              /* seek to end */
-    oldsize = ftell(outfp);                 /* get filesize in bytes */
-    fclose(outfp);                          /* now close it */
+//  close(inp);                 /* close input */
+    fclose(infp);                /* close input */
+    outfp = fopen(argv[1],"r"); /* reopen */
+    fseek(outfp, 0, SEEK_END);  /* seek to end */
+    oldsize = ftell(outfp);     /* get filesize in bytes */
+    fclose(outfp);              /* now close it */
 
     /* open input file */
-    if ((inp = open(argv[1], O_RDONLY, 0666)) < 0) {
+//  if ((inp = open(argv[1], O_RDONLY, 0666)) < 0) {
+    if ((infp = fopen(argv[1],"r")) == NULL) {
         fprintf(stderr,"%s: fopen: unable to open input file %s\n", argv[0], argv[1]);
         return (1);
     }
@@ -190,7 +201,7 @@ domore:
     while ((ll=getloi(buf, buf_size)) > 0) {
 //printf("got %d char\n", ll);
         /* we have data to write */
-        putrec(ll, buf);            /* write the buffer */
+        putrec(ll, buf);        /* write the buffer */
         gotboth = 0;
     }
 //printf("we have EOF %d\n", gotboth+1);
@@ -198,37 +209,38 @@ domore:
     if (ll == 0) {
         /* we have EOF, write a zero */
         fwrite((char *)(&zero), (size_t)1, (size_t)4, outfp);
-        gotboth++;                  /* one more EOF */
+        gotboth++;              /* one more EOF */
         if (gotboth == 2) {
             /* we have written both EOF's, now write EOM */
             ll = -1;
         } else {
-            goto domore;            /* get more data */
+            goto domore;        /* get more data */
         }
     }
 
 //printf("we have EOM, DONE\n");
     /* We have EOM, see if EOF's needed */
     switch (gotboth) {
-    case 0:                 /* we have written no EOFs, so write two */
+    case 0:                     /* we have written no EOFs, so write two */
         fwrite((char *)(&zero), (size_t)1, (size_t)4, outfp);
         /* drop through */
-    case 1:                 /* we have written 1 EOF, so write one more */
+    case 1:                     /* we have written 1 EOF, so write one more */
         fwrite((char *)(&zero), (size_t)1, (size_t)4, outfp);
         /* drop through */
     default:
-    case 2:                 /* we have written 2 EOFs, now do EOM */
+    case 2:                     /* we have written 2 EOFs, now do EOM */
         zero = -1;
         fwrite((char *)(&zero), (size_t)1, (size_t)4, outfp);
     }
     fprintf(stderr, "EOM after 2 EOFs %d files: %d bytes\n", filen-1, tsize);
 
-    newsize = ftell(outfp);                 /* get filesize in bytes */
+    newsize = ftell(outfp);     /* get filesize in bytes */
     fprintf(stderr, "Size of file changed from %d to %d\n", oldsize, newsize);
 
     /* we done */
     fclose(outfp);
-    close(inp);
+//  close(inp);
+    fclose(infp);
     free(buf);
     exit(0);
 }

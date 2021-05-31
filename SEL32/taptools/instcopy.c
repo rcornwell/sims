@@ -1,14 +1,20 @@
 /*
- * volmcopy.c
+ * instcopy.c
  *
- * This program scans a metatape file and prints file count and sizes.
- * It is only for volmgr save images.  Save images have the following format:
+ * This program scans an ISC install metatape file and prints file count and
+ * sizes.  It is only for special ISC install save images.  The first set of
+ * files on the tape are in volmgr format and the second set of files on the
+ * tape are in filemgr format.  The files in filemgr format are prefixed with
+ * ./fm/ before being saved.  Volmgr save images have the following format:
  * One or more 6144 byte records containing a list of files saved 16 char file
  * name followed my 16 char directory name followed by 16 char volume name.
  * A 1536 byte file definition entry will be followed by 1 to 8 768 byte
  * file data records followed by an EOF for each file.  If the file size is
  * greater than 6144 bytes, 1 or more 6144 byte records are output followed
- * by last record modulo 768 bytes.  Two EOFs in a row define the EOT.
+ * by last record modulo 768 bytes.  Filemgr SMD entries are 8 words, and are
+ * in 1152 words (4608 bytes) (6 sector) blocks.  Saved data files are modulo
+ * 1152 words also; 8 wds per SMD entry, 24 entries per sector, 144 entries
+ * per 6 sector block.  Three EOFs in a row define the EOT.
  * input - stdin or specified filename  
  * output - stdout
  */
@@ -133,15 +139,181 @@ int main (int argc, char *argv[])
     filen = 1;
     lfilen = filen;
     printf("\nfile %d:\n", filen);
-    path[0] = '\0';
-    command[0] = '\0';
 
     /* get lines until eof */
     while ((ll=getloi(buf, buf_size)) != EOF) {
+//      printf("got ll = %d filen %d count %d size %d\n", ll, filen, count, size);
         if (ll == 0) {
             /* eof found, process new file */
-//          printf("\nfile %d:\n", filen);
-            printf("file %d:\n", filen);
+            printf("\nfile %d:\n", filen);
+        } else
+        if ((ll == 4608) && (count == 1)) {
+            int smd = 1;
+            /* see if ISC install tape with filemgr records */
+            /* ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+            /* filemgr smd entries are 8 words, and are in 1152 words (4608 bytes)
+             * (6 sector) blocks.  Saved data files are modulo 1152 words also */
+            /* 8 wds per SMD entry, 24 entries per sector, 144 entries per 6 sector
+             * block. */
+//      printf("gotx ll = %d filen %d count %d size %d\n", ll, filen, count, size);
+            if (smd == 1) {
+            /* check for SMD entry instead of SDT entry */
+                /* read smd entry */
+                char file[20], dir[20];
+                int j, m, i, l = 0;
+                int smddone = 0;
+                int totent = 0;
+                char *buf2 = buf;
+//              printf("\nfile %d: %d\n", filen, ll);
+                /* see how many entries here */
+                while(!smddone) {
+                    /* process entries in this record */
+                    for (j=0; j<144; j++) {
+                        int k = l++ * 32;
+                        int w1 = (buf[k+13] & 0xff) << 16 | (buf[k+14] & 0xff) << 8 | (buf[k+15] & 0xff);
+                        /* stop processing on first zero smd entry */
+                        if (w1 <= 0) {
+                            smddone = 1;
+                            break;
+                        }
+                        totent++;
+                        /* get file/dir name */
+                        for (i=0; i<8; i++) {
+                            file[i] = tolower(buf[k+0+i]);
+                            if (file[i] == ' ')
+                                file[i] = '\0';
+                        }
+                        file[8] = '\0';
+                        for (i=0; i<8; i++) {
+                            dir[i] = tolower(buf[k+0+16+i]);
+                            if (dir[i] == ' ')
+                                dir[i] = '\0';
+                        }
+                        dir[8] = '\0';
+                        if (dir[0] == '\0')
+                            sprintf(dir, "%s", "system");
+                        sprintf(path, "./%s/%s", dir, file);
+#if 0
+                        // see if active file
+                        if ((buf[k+12] & 0x80) == 0)
+                            // not active goon
+                            printf("inactive file: w1 = %d path = %s\n", w1, path);
+                        else
+                            printf("active file: w1 = %d path = %s\n", w1, path);
+#else
+                            printf("blks: %d file: path = %s\n", w1, path);
+#endif
+                    }
+                    if (smddone)
+                        break;
+                    buf2 += 4608;       /* next buffer */
+                    ll=getloi(buf2, 4608);
+                }
+//              printf("%d smd entries found\n", totent);
+                /* we have directory entries */
+                for (j=0; j<totent; j++) {
+                    int k = j * 32;
+                    /* get file size in blocks */
+                    int w1 = (buf[k+13] & 0xff) << 16 | (buf[k+14] & 0xff) << 8 | (buf[k+15] & 0xff);
+                    int blks = w1;      /* save block count */
+
+                    /* get file/dir name */
+                    for (i=0; i<8; i++) {
+                        file[i] = tolower(buf[k+0+i]);
+                        if (file[i] == ' ')
+                            file[i] = '\0';
+                    }
+                    file[8] = '\0';
+                    for (i=0; i<8; i++) {
+                        dir[i] = tolower(buf[k+0+16+i]);
+                        if (dir[i] == ' ')
+                            dir[i] = '\0';
+                    }
+                    dir[8] = '\0';
+                    if (dir[0] == '\0')
+//                      sprintf(dir, "%s", "system");
+                        sprintf(dir, "%s", "./fm/system");
+//                  sprintf(path, "./%s", dir);
+                    sprintf(path, "./fm/%s", dir);
+
+#if 0
+                    // see if active file
+                    if ((buf[k+12] & 0x80) == 0) {
+                        // not active goon
+                        printf("inactive file: w1 = %d\n", w1);
+                    }
+                    printf("active file: w1 = %d\n", w1);
+#endif
+                    if (w1 <= 0)
+                        break;
+                    /* create the directory/file */
+//                  printf("path = %s\n", path);
+                    sprintf(command, "mkdir -p %s", path);
+//                  printf("command = %s\n", command);
+                    system(command);
+//                  sprintf(path, "./%s/%s", dir, file);
+                    sprintf(path, "./fm/%s/%s", dir, file);
+                    printf("entry %d blks %d = %s\n", j+1, w1, path);
+                    sprintf(command, "touch %s", path);
+//                  printf("command = %s\n", command);
+                    system(command);
+
+//                  printf("blks: %d file: path = %s\n", w1, path);
+
+//                  if (outp >= 0)
+                    if (outfp != NULL)
+//                      close(outp);
+                        fclose(outfp);
+//                  outp = -1;
+                    outfp = NULL;
+
+                    /* open output file, create it if necessary */
+//                  if ((outp = open(path, O_WRONLY|O_CREAT|O_TRUNC, 0666)) < 0) {
+                    if ((outfp = fopen(path, "w")) == NULL) {
+                        //fprintf(stderr, "Can't open %s\n", path);
+                        printf("Can't open %s\n", path);
+//                      close(inp);
+                        fclose(infp);
+                        free(buf);
+                        return (3);
+                    }
+
+                    /* get the file data */
+                    for (m=0; m<((w1+5)/6); m++) {
+                        char data[5000];        /* data buffer */
+                        ll=getloi(data, 4608);
+
+                        /* process file data for file */
+                        if (ll == 4608) {
+                            /* blks/w1 have number of blocks to write */
+                            int bcnt, no;       /* block count */
+                            if (blks >= 6) {
+                                blks -= 6;      /* enough for 6 block, write them */
+                                bcnt = 6*768;   /* write all 6 blocks */
+                            } else {
+                                bcnt = blks*768;/* just write what we need */
+                                blks = 0;
+                            }
+                            /* only write number of sectors on save tape, not all 4608 */
+                            /* if zero, just reading excess blocks */
+                            if (bcnt != 0) {
+//                              no = write(outp, data, bcnt);
+                                no = fwrite(data, (size_t)1, (size_t)bcnt, outfp);
+                                if (no != bcnt)
+                                    //fprintf(stderr, "write (%d) != read (%d) on file %s\n", no, bcnt, path);
+                                    printf("write (%d) != read (%d) on file %s\n", no, bcnt, path);
+                            }
+                        } else {
+                            printf("Bad file size read! %d instead of 4608\n", ll);
+///                         if (ll == -1) break;
+                            if (ll == -1)
+                                goto dostop;
+                        }
+                    } /* end writing file */
+                } /* end of smd scan */
+            } /* read smd entries 4608 byte records */
+//      } /* process read of smd or sdt */
+            /* ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
         } else {
             int cc = 0;
 //          unsigned int curchar;
@@ -150,7 +322,7 @@ int main (int argc, char *argv[])
             int w1, w2, i, j;
             w1 = (buf[0] & 0xff) << 24 | buf[1] << 16 | buf[2] << 8 | (buf[3] & 0xff);
             w2 = (buf[4] & 0xff) << 24 | buf[5] << 16 | buf[6] << 8 | (buf[7] & 0xff);
-// printf("w1 = %x, w2 = %x count = %d\n", w1, w2, count);
+//   printf("w1 = %x, w2 = %d count = %d\n", w1, w2, count);
             if (count == 1 && w1 == 1) {
                 char file[20], dir[20], vol[20];
                 int off = 8;
@@ -164,7 +336,7 @@ printf("Directory with %d entries\n", w2);
                         off = 0;
                         l = 0;
                         k = 0;
-// printf("reread: got ll= %d\n", ll);
+//   printf("reread: got ll= %d\n", ll);
                     }
                     for (i=0; i<16; i++) {
                         file[i] = tolower(buf[k+off+i]);
@@ -185,7 +357,7 @@ printf("Directory with %d entries\n", w2);
                     }
                     vol[16] = '\0';
                     sprintf(path, "./%s/%s", vol, dir);
-#if 0
+#if  0
                     /* create the directory/file */
                     sprintf(command, "mkdir -p %s", path);
                     system(command);
@@ -195,7 +367,7 @@ printf("Directory with %d entries\n", w2);
                     sprintf(command, "touch %s", path);
                     system(command);
 #endif
-// printf("path0 = %s\n", path);
+//   printf("path0 = %s\n", path);
                 }
             } else
             if (count == 1 && w1 == 2 && w2 == 0) {
@@ -213,7 +385,7 @@ printf("Directory with %d entries\n", w2);
 //              outp = -1;
                 outfp = NULL;
                 /* process file definition */
-                /* we have a 1536 byte file definition entry */
+                /* we have a file definition entry */
                 for (i=0; i<16; i++) {
                     file[i] = tolower(buf[8+i]);
                     if (file[i] == ' ')
@@ -255,12 +427,11 @@ printf("Directory with %d entries\n", w2);
 
                 sprintf(path, "./%s/%s", vol, dir);
                 /* create the directory/file */
-// printf("dir path = %s\n", path);
+//              printf("dir path = %s\n", path);
                 sprintf(command, "mkdir -p %s", path);
                 system(command);
                 sprintf(path, "./%s/%s/%s", vol, dir, file);
-   printf("size bytes %d[0x%x] path = %s\n", ll, ll, path);
-// fflush(stdout);
+                printf("path = %s\n", path);
 
                 /* open output file, create it if necessary */
 //              if ((outp = open(path, O_WRONLY|O_CREAT|O_TRUNC, 0666)) < 0) {
@@ -271,8 +442,6 @@ printf("Directory with %d entries\n", w2);
                     free(buf);
                     return (3);
                 }
-// printf("opened path = %s ll = %d\n", path, ll);
-// fflush(stdout);
                 /* process file data for file */
                 if (ll > 1536) {
 //                  int no = write(outp, buf+1536, ll-1536);
@@ -288,8 +457,9 @@ printf("Directory with %d entries\n", w2);
                 if (no != ll)
                     fprintf(stderr, "write (%d) != read (%d) on file %s\n", no, ll, path);
             }
-        }
-    }
+        } /* end if */
+    } /* end while */
+dostop:
 //  close(inp);
     fclose(infp);
     free(buf);

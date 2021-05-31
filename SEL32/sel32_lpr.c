@@ -144,6 +144,7 @@ struct _lpr_data lpr_data[NUM_DEVS_LPR];
 t_stat      lpr_preio(UNIT *uptr, uint16 chan);
 t_stat      lpr_startcmd(UNIT *, uint16, uint8);
 void        lpr_ini(UNIT *, t_bool);
+t_stat      lpr_haltio(UNIT *uptr);
 t_stat      lpr_rschnlio(UNIT *uptr);
 t_stat      lpr_srv(UNIT *);
 t_stat      lpr_reset(DEVICE *);
@@ -176,7 +177,7 @@ UNIT        lpr_unit[] = {
 DIB         lpr_dib = {
     lpr_preio,      /* t_stat (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
     lpr_startcmd,   /* t_stat (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    NULL,           /* t_stat (*halt_io)(UNIT *uptr) */         /* Halt I/O */
+    lpr_haltio,     /* t_stat (*halt_io)(UNIT *uptr) */         /* Halt I/O */
     NULL,           /* t_stat (*stop_io)(UNIT *uptr) */         /* Stop I/O */
     NULL,           /* t_stat (*test_io)(UNIT *uptr) */         /* Test I/O */
     NULL,           /* t_stat (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
@@ -187,7 +188,7 @@ DIB         lpr_dib = {
     lpr_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
     NULL,           /* IOCLQ *ioclq_ptr */                      /* IOCL entries, 1 per UNIT */
     NUM_DEVS_LPR,   /* uint8 numunits */                        /* number of units defined */
-    0xff,           /* uint8 mask */                            /* 2 devices - device mask */
+    0x01,           /* uint8 mask */                            /* 2 devices - device mask */
     0x7e00,         /* uint16 chan_addr */                      /* parent channel address */
     0,              /* uint32 chan_fifo_in */                   /* fifo input index */
     0,              /* uint32 chan_fifo_out */                  /* fifo output index */
@@ -462,6 +463,40 @@ t_stat lpr_srv(UNIT *uptr) {
     return SCPE_OK;
 }
 
+/* Handle haltio transfers for printer */
+t_stat  lpr_haltio(UNIT *uptr) {
+    uint16  chsa = GET_UADDR(uptr->CMD);
+    int     cmd = uptr->CMD & LPR_CMDMSK;
+    CHANP   *chp = find_chanp_ptr(chsa);    /* find the chanp pointer */
+
+    sim_debug(DEBUG_EXP, &lpr_dev,
+        "lpr_haltio enter chsa %04x cmd = %02x\n", chsa, cmd);
+
+    /* terminate any input command */
+    /* UTX wants SLI bit, but no unit exception */
+    /* status must not have an error bit set */
+    /* otherwise, UTX will panic with "bad status" */
+    if ((uptr->CMD & LPR_CMDMSK) != 0) {    /* is unit busy */
+        sim_debug(DEBUG_CMD, &con_dev,
+            "lpr_haltio HIO chsa %04x cmd = %02x ccw_count %02x\n",
+            chsa, cmd, chp->ccw_count);
+        sim_cancel(uptr);                   /* stop timer */
+    } else {
+        sim_debug(DEBUG_CMD, &con_dev,
+            "lpr_haltio HIO not busy chsa %04x cmd = %02x ccw_count %02x\n",
+            chsa, cmd, chp->ccw_count);
+    }
+    /* stop any I/O and post status and return error status */
+    chp->ccw_count = 0;                     /* zero the count */
+    chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);   /* reset chaining bits */
+    uptr->CMD &= LMASK;                     /* make non-busy */
+    uptr->SNS = 0;                          /* no status */
+    uptr->CBP = 0;                          /* start of buffer */
+    sim_debug(DEBUG_CMD, &con_dev,
+        "lpr_haltio HIO I/O stop chsa %04x cmd = %02x\n", chsa, cmd);
+    chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
+    return SCPE_IOERR;                      /* tell chan code to post status */
+}
 /* Set the number of lines per page on printer */
 t_stat lpr_setlpp(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {

@@ -8,11 +8,11 @@
  */
 
 #include <stdio.h>
-#include <sys/file.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <errno.h>
+//#include <sys/file.h>
+//#include <unistd.h>
+//#include <string.h>
+//#include <errno.h>
 
 int     filen = 1;
 int     EOFcnt = 0;
@@ -20,17 +20,19 @@ int     count=0, lcount=0;
 int     size=0, tsize=0;
 int     oldsize, newsize;
 FILE    *outfp;
-int     inp;
+//int     inp;
+FILE    *infp;
 int     ln;
 
 /* get a line of input. */
 int getloi(char *s, int lim)
 {
-    int     c, i;
+//  int     c, i;
     int     n1, n2, hc, tc, n;
 
     /* read the byte count in 32 bit word as header */
-    n1 = read(inp, (char *)(&hc), (size_t)4);
+//  n1 = read(inp, (char *)(&hc), (size_t)4);
+    n1 = fread((char *)(&hc), (size_t)1, (size_t)4, infp);
     if (n1 <= 0) {
         hc = -1;                /* at EOM on disk file */
         return hc;              /* return EOM */
@@ -39,13 +41,15 @@ int getloi(char *s, int lim)
     /* check for EOF & EOM on tape data */
     if (hc & 0xffff0000) {      /* check for garbage, assume EOF */
         hc = -1;                /* at EOM on disk file */
+#if 0
         return hc;              /* return EOM */
+#endif
     }
 
     /* check for EOF & EOM on tape data */
     if (hc == 0) {
         /* we are at tape EOF */
-        if (++EOFcnt < 2) {     /* if 1st EOF, print32_t file info */
+        if (++EOFcnt < 2) {     /* if 1st EOF, print file info */
             if (ln > 0) {
                 if (count - lcount > 1)
                     fprintf(stderr, "file %d: records %d to %d: size %d\n", filen, lcount, count - 1, ln);
@@ -71,22 +75,26 @@ int getloi(char *s, int lim)
     }
 
     /* read the data */
-    n = read(inp, s, (size_t)hc);
+//  n = read(inp, s, (size_t)hc);
+    n = fread(s, (size_t)1, (size_t)hc, infp);
     if (n <= 0)
         return -1;              /* at EOM on disk file */
 
     /* if odd byte record, read extra byte and throw it away */
     if (n & 0x1) {
-        n2 = read(inp, (char *)(&tc), (size_t)1);
+//      n2 = read(inp, (char *)(&tc), (size_t)1);
+        n2 = fread((char *)(&tc), (size_t)1, (size_t)1, infp);
         if (n2 <= 0)
             return -1;          /* at EOM on disk file */
     }
 
     /* read the byte count in 32 bit word as trailer */
-    n2 = read(inp, (char *)(&tc), (size_t)4);
+//  n2 = read(inp, (char *)(&tc), (size_t)4);
+    n2 = fread((char *)(&tc), (size_t)1, (size_t)4, infp);
+#if 0
     if (n2 <= 0)
         return -1;              /* at EOM on disk file */
-
+#endif
     count++;                    /* bump record count */
     size += n;                  /* update bytes read */
     EOFcnt = 0;                 /* not an EOF */
@@ -122,7 +130,8 @@ void putrec(int cnt, char *buf)
         fprintf(stderr, "write (%d) failure\n", nw);
         fprintf(stderr, "Operation aborted\n");
         fclose(outfp);
-        close(inp);
+//      close(inp);
+        fclose(infp);
         free(buf);
         exit(1);
     }
@@ -141,25 +150,28 @@ int main (int argc, char *argv[])
     }
 
     /* open input file */
-    if ((inp = open(argv[1], O_RDONLY, 0666)) < 0) {
+//  if ((inp = open(argv[1], O_RDONLY, 0666)) < 0) {
+    if ((infp = fopen(argv[1], "r")) == NULL) {
         fprintf(stderr,"%s: fopen: unable to open input file %s\n", argv[0], argv[1]);
         return (1);
     }
 
-    close(inp);                             /* close input */
+//  close(inp);                             /* close input */
+    fclose(infp);                            /* close input */
     outfp = fopen(argv[1],"r");             /* reopen */
     fseek(outfp, 0, SEEK_END);              /* seek to end */
     oldsize = ftell(outfp);                 /* get filesize in bytes */
     fclose(outfp);                          /* now close it */
 
     /* open input file */
-    if ((inp = open(argv[1], O_RDONLY, 0666)) < 0) {
+//  if ((inp = open(argv[1], O_RDONLY, 0666)) < 0) {
+    if ((infp = fopen(argv[1], "r")) == NULL) {
         fprintf(stderr,"%s: fopen: unable to open input file %s\n", argv[0], argv[1]);
         return (1);
     }
 
     /* open output file */
-    outfp = fopen(argv[2],"w");
+    outfp = fopen(argv[2], "w");
     if (outfp == NULL) {
         fprintf(stderr,"%s: fopen: unable to open output file %s\n", argv[0], argv[2]);
         exit(1);
@@ -180,13 +192,14 @@ int main (int argc, char *argv[])
 
     /* get buffers until eof */
 domore:
-    while ((ll=getloi(buf, buf_size)) > 0) {
+//??while ((ll=getloi(buf, buf_size)) > 0) {
+    while ((ll=getloi(buf, buf_size)) != EOF) {
 //printf("got %d char\n", ll);
         /* we have data to write */
         putrec(ll, buf);            /* write the buffer */
         gotboth = 0;
     }
-//printf("we have EOF %d\n", gotboth+1);
+printf("we have EOF %d\n", gotboth+1);
     /* we have an EOF or an EOM */
     if (ll == 0) {
         /* we have EOF, write a zero */
@@ -200,7 +213,7 @@ domore:
         }
     }
 
-//printf("we have EOM, DONE\n");
+printf("we have EOM, DONE\n");
     /* We have EOM, see if EOF's needed */
     switch (gotboth) {
     case 0:                 /* we have written no EOFs, so write two */
@@ -221,7 +234,8 @@ domore:
 
     /* we done */
     fclose(outfp);
-    close(inp);
+//  close(inp);
+    fclose(infp);
     free(buf);
     exit(0);
 }

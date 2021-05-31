@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <unistd.h>
+//#include <unistd.h>
 #define MPXMAX 254
 int mpxbb();
 int getloi();
@@ -22,10 +22,12 @@ char *argv[];
 {
     char s[MPXMAX];
     int i;
-    int fn = fileno(stdout);
+//  int fn = fileno(stdout);
+    FILE *fn = stdout;
 
     while (1) {
-        if ((i = getloi(s, MPXMAX)) == 0) {
+//      if ((i = getloi(s, MPXMAX)) == 0) {
+        if ((i = getloi(stdin, s, MPXMAX)) == 0) {
             mpxbb(fn, s, 0, 1); /* last write to output */
             exit(0);
         }
@@ -44,28 +46,33 @@ char *argv[];
 /* terminate line on \n or \r\n */
 /* allow max of 254 chars in a line */
 
-int getloi(s, lim)
+//int getloi(s, lim)
+int getloi(ifp, s, lim)
+FILE *ifp;
 char s[];
 int lim;
 {
     int c, i;
 
     for(i = 0; --lim > 0; ) {
-        c = getchar();
+//      c = getchar();
+        c = fgetc(ifp);
         switch (c) {
         case '\n':
             /* terminate on \n */
             s[i++] = c;
             goto linedone;
         case '\r':
-            c = getchar();
+//          c = getchar();
+            c = fgetc(ifp);
             /* terminate on \r\n */
             if (c == '\n') {
                 s[i++] = c;
                 goto linedone;
             }
             /* put back the character */
-            ungetc(c, stdin);
+//          ungetc(c, stdin);
+            ungetc(c, ifp);
             /* output the \r to the stream */
             c = '\r';
             /* drop through */
@@ -92,12 +99,14 @@ static  char    first = 0;      /* 1st time thru flag */
  * mpxbb - make up mpx block file output
  * input - buffer address
  *   - byte count
- *       - last write flag
+ *   - last write flag
  */
 
 int
+// mpxbb(fd, buf, cnt, last)
 mpxbb(fd, buf, cnt, last)
-int fd;
+//int fd;
+FILE *fd;
 unsigned char   *buf;
 int cnt;
 int last;
@@ -120,7 +129,8 @@ int last;
     /* record size plus 4 (2 for this rec, 2 for last) */
     if ((boff + 2 + cnt + 4) >= BLKSIZE) {
         /* not enough space, write out this record */
-        if (write(fd, bb, BLKSIZE) < 0)
+//      if (write(fd, bb, BLKSIZE) < 0)
+        if (fwrite(bb, (size_t)1, BLKSIZE, fd) <= 0)
             return(-1);
         memset (bb, '\0', BLKSIZE); /* zero the buffer */
         bb[4] = 0x60;           /* set beg/end of block */
@@ -149,7 +159,8 @@ alldone:
     /* EOF record size of 4 (2 for this rec, 2 for last) */
     if ((boff + 2 + 4) >= BLKSIZE) {
         /* not enough space, write out this record */
-        if (write(fd, bb, BLKSIZE) < 0)
+//      if (write(fd, bb, BLKSIZE) < 0)
+        if (fwrite(bb, (size_t)1, BLKSIZE, fd) <= 0)
             return(-1);
         memset (bb, '\0', BLKSIZE); /* zero the buffer */
         bb[4] = 0x60;           /* set beg/end of block */
@@ -166,7 +177,8 @@ alldone:
     bb[2] = (boff & 0xff00) >> 8;   /* set hi byte of count */
     bb[3] = (boff & 0xff);      /* set lo byte of count */
     /* write out EOF record */
-    if (write(fd, bb, BLKSIZE) < 0)
+//  if (write(fd, bb, BLKSIZE) < 0)
+    if (fwrite(bb, (size_t)1, BLKSIZE, fd) <= 0)
         return(-1);
     first = 0;              /* reset 1st time flag */
     return(cnt);            /* get out, done */

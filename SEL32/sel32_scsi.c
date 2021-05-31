@@ -23,6 +23,11 @@
 
 #include "sel32_defs.h"
 
+/* uncomment to use fast sim_activate times when running UTX */
+/* UTX gets an ioi error for dm0801 if slow times are used */
+/* dm0801 is not even a valid unit number for UDP controller */
+#define FAST_FOR_UTX
+
 #if NUM_DEVS_SCSI > 0
 
 #define UNIT_SCSI   UNIT_ATTABLE | UNIT_IDLE | UNIT_DISABLE
@@ -271,14 +276,18 @@ scsi_type[] =
 {
     /* Class F Disc Devices */
     /* MPX SCSI disks for SCSI controller */
-    {"SD150",   9, 192, 24,   324,   967, 0x40},   /*0  8820  150M  208872 sec */
-    {"SD300",   9, 192, 32,   648,  1409, 0x40},   /*1  8828  300M  396674 sec */
-    {"SD700",  15, 192, 35,   648,  1546, 0x40},   /*2  8833  700M  797129 sec */
-    {"SD1200", 15, 192, 49,   648,  1931, 0x40},   /*3  8835 1200M 1389584 sec */
-    {"8820",    9, 256, 18,   324,   967, 0x41},   /*4  8820  150M */
-    {"8821",    9, 256, 36,   648,   967, 0x41},   /*5  8828  300M */
-    {"8833",   18, 256, 20,   648,  1546, 0x41},   /*6  8833  700M */
-    {"8835",   18, 256, 20,   648,  1931, 0x41},   /*7  8835 1200M */
+    {"SD150",   9, 192, 24,   963,   967, 0x40},   /*0  8820  150M  208872 sec */
+    {"SD300",   9, 192, 32,  1405,  1409, 0x40},   /*1  8828  300M  396674 sec */
+    {"SD700",  15, 192, 35,  1542,  1546, 0x40},   /*2  8833  700M  797129 sec */
+    {"SD1200", 15, 192, 49,  1927,  1931, 0x40},   /*3  8835 1200M 1389584 sec */
+    {"SD2400", 19, 192, 59,  2703,  2707, 0x40},   /*4  8842 2400M 2909128 sec */
+    {"SH1200", 15, 192, 50,  1868,  1872, 0x40},   /*5  8832 1200M 1395014 sec */
+    {"SH2550", 19, 192, 55,  2703,  2707, 0x40},   /*6  8834 2550M 2909128 sec */
+    {"SH5150", 21, 192, 83,  3707,  3711, 0x40},   /*7  0000 5150M 5581145 sec */
+    {"8820",    9, 256, 18,   963,   967, 0x41},   /*8  8820  150M  156654 sec */
+    {"8821",    9, 256, 36,   963,   967, 0x41},   /*9  8828  300M  313308 sec */
+    {"8833",   18, 256, 20,  1542,  1546, 0x41},   /*10 8833  700M  556560 sec */
+    {"8835",   18, 256, 20,  1927,  1931, 0x41},   /*11 8835 1200M  695160 sec */
     /* For UTX */
     {NULL, 0}
 };
@@ -299,7 +308,8 @@ t_stat  scsi_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *c
 const   char  *scsi_description (DEVICE *dptr);
 
 /* One buffer per unit */
-#define BUFFSIZE        (256)
+//#define BUFFSIZE        (256)
+#define BUFFSIZE        (512)
 uint8   scsi_buf[NUM_DEVS_SCSI][NUM_UNITS_SCSI][BUFFSIZE];
 uint8   scsi_pcmd[NUM_DEVS_SCSI][NUM_UNITS_SCSI];
 
@@ -323,7 +333,7 @@ UNIT    sba_unit[] = {
 DIB     sba_dib = {
     scsi_preio,     /* t_stat (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
     scsi_startcmd,  /* t_stat (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    NULL,           /* t_stat (*halt_io)(UNIT *uptr) */         /* Halt I/O */
+    scsi_haltio,    /* t_stat (*halt_io)(UNIT *uptr) */         /* Halt I/O */
     NULL,           /* t_stat (*stop_io)(UNIT *uptr) */         /* Stop I/O */
     NULL,           /* t_stat (*test_io)(UNIT *uptr) */         /* Test I/O */
     NULL,           /* t_stat (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
@@ -334,7 +344,7 @@ DIB     sba_dib = {
     sba_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
     NULL,           /* IOCLQ *ioclq_ptr */                      /* IOCL entries, 1 per UNIT */
     NUM_UNITS_SCSI, /* uint8 numunits */                        /* number of units defined */
-    0x0f,           /* uint8 mask */                            /* 8 devices - device mask */
+    0x38,           /* uint8 mask */                            /* 8 devices - device mask */
     0x7600,         /* uint16 chan_addr */                      /* parent channel address */
     0,              /* uint32 chan_fifo_in */                   /* fifo input index */
     0,              /* uint32 chan_fifo_out */                  /* fifo output index */
@@ -367,7 +377,7 @@ UNIT    sbb_unit[] = {
 DIB     sbb_dib = {
     scsi_preio,     /* t_stat (*pre_io)(UNIT *uptr, uint16 chan)*/  /* Pre Start I/O */
     scsi_startcmd,  /* t_stat (*start_cmd)(UNIT *uptr, uint16 chan, uint8 cmd)*/ /* Start command */
-    NULL,           /* t_stat (*halt_io)(UNIT *uptr) */         /* Halt I/O */
+    scsi_haltio,    /* t_stat (*halt_io)(UNIT *uptr) */         /* Halt I/O */
     NULL,           /* t_stat (*stop_io)(UNIT *uptr) */         /* Stop I/O */
     NULL,           /* t_stat (*test_io)(UNIT *uptr) */         /* Test I/O */
     NULL,           /* t_stat (*rsctl_io)(UNIT *uptr) */        /* Reset Controller */
@@ -378,7 +388,7 @@ DIB     sbb_dib = {
     sbb_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
     NULL,           /* IOCLQ *ioclq_ptr */                      /* IOCL entries, 1 per UNIT */
     NUM_UNITS_SCSI, /* uint8 numunits */                        /* number of units defined */
-    0x0f,           /* uint8 mask */                            /* 2 devices - device mask */
+    0x38,           /* uint8 mask */                            /* 2 devices - device mask */
     0x7600,         /* uint16 chan_addr */                      /* parent channel address */
     0,              /* uint32 chan_fifo_in */                   /* fifo input index */
     0,              /* uint32 chan_fifo_out */                  /* fifo output index */
@@ -458,7 +468,13 @@ t_stat scsi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         uptr->CMD |= DSK_INCH2;                 /* use 0xF0 for inch, just need int */
         /* leave the TCMD bit */
         uptr->SNS &= ~MASK24;                   /* clear all but old mode data */
+#ifdef FAST_FOR_UTX
+//XX    sim_activate(uptr, 30);                 /* start things off */
+//zz    sim_activate(uptr, 100);                /* start things off */
+        sim_activate(uptr, 30);                 /* start things off */
+#else
         sim_activate(uptr, 100);                /* start things off */
+#endif
         return 0;
         break;
 
@@ -477,7 +493,7 @@ t_stat scsi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     case DSK_SNS:                               /* Sense 0x04 */
         uptr->CMD |= cmd;                       /* save cmd */
         sim_debug(DEBUG_CMD, dptr,
-            "scsi_startcmd starting disk seek r/w cmd %02x chsa %04x\n", cmd, chsa);
+            "scsi_startcmd starting disk cmd %02x chsa %04x\n", cmd, chsa);
         sim_activate(uptr, 100);                /* start things off */
         return 0;
         break;
@@ -487,7 +503,13 @@ t_stat scsi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         cmd, chsa, uptr->SNS);
     if (uptr->SNS & 0xff)                       /* any other cmd is error */
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
-    sim_activate(uptr, 100);                    /* start things off */
+#ifdef FAST_FOR_UTX
+//XX    sim_activate(uptr, 20);                 /* start things off */
+//zz    sim_activate(uptr, 100);                /* start things off */
+        sim_activate(uptr, 20);                 /* start things off */
+#else
+        sim_activate(uptr, 100);                /* start things off */
+#endif
     return SNS_CHNEND|SNS_DEVEND;
 }
 
@@ -537,6 +559,9 @@ t_stat scsi_srv(UNIT *uptr)
             "scsi_srv starting INCH cmd, chsa %04x MemBuf %06x cnt %04x\n",
             chsa, chp->ccw_addr, chp->ccw_count);
 
+#if 0
+        cpu_dev.dctrl |= DEBUG_INST;            /* start instruction trace */
+#endif
         /* mema has IOCD word 1 contents.  For the MFP (scsi processor) */
         /* a pointer to the INCH buffer. The INCH buffer address must be */
         /* set for the parent channel as well as all other devices on the */
@@ -675,7 +700,12 @@ t_stat scsi_srv(UNIT *uptr)
                 sim_debug(DEBUG_CMD, dptr, "scsi_srv seek over on cylinder unit=%02x %04x %04x\n",
                     unit, uptr->STAR, uptr->CHS);
                 uptr->CHS = uptr->STAR;         /* we are there */
+#ifdef FAST_FOR_UTX
+//XX            sim_activate(uptr, 20);         /* start things off */
+                sim_activate(uptr, 20);
+#else
                 sim_activate(uptr, 40);
+#endif
                 break;
             }
         }
@@ -759,7 +789,13 @@ t_stat scsi_srv(UNIT *uptr)
             sim_debug(DEBUG_DETAIL, dptr,
                 "scsi_srv seeking unit=%02x to sector %06x\n",
                 unit, uptr->STAR);
+#ifdef FAST_FOR_UTX
+            /* making this value 40 or so create volume mount error on boot */
+//XX        sim_activate(uptr, 20);             /* start things off */
+            sim_activate(uptr, 20);
+#else
             sim_activate(uptr, 40);
+#endif
         } else {
             /* we are on cylinder/track/sector, so go on */
             sim_debug(DEBUG_DETAIL, dptr,
@@ -1076,8 +1112,14 @@ doread:
             sim_debug(DEBUG_DATA, dptr,
                 "SCSI sector read complete, %x bytes to go from diskfile sector %06x\n",
                 chp->ccw_count, uptr->CHS);
+#ifdef FAST_FOR_UTX
+//XX        sim_activate(uptr, 15);             /* start things off */
+//zz        sim_activate(uptr, 10);             /* start things off */
+            sim_activate(uptr, 15);             /* start things off */
+#else
             sim_activate(uptr, 10);             /* wait to read next sector */
 //BAD4MPX   sim_activate(uptr, 40);             /* wait to read next sector */
+#endif
             break;
         }
         break;
@@ -1085,7 +1127,9 @@ doread:
     case DSK_WD:            /* Write Data */
         if (uptr->SNS & SNS_TCMD) {
             /* we need to process a write TCMD data */
-            /* cnt has # bytes to return (0xf0) */
+//?         int cnt = scsi_buf[bufnum][unit][4];    /* byte count of status to read */
+            /* cnt has # bytes to read */
+            int cnt = chp->ccw_count;           /* byte count of status to read */
 
             ch = scsi_buf[bufnum][unit][0];     /* return TCMD cmd */
             uptr->SNS &= ~SNS_TCMD;             /* show not presessing TCMD cmd chain */
@@ -1094,6 +1138,71 @@ doread:
                 ch, chsa, chp->ccw_addr, chp->ccw_count);
 
             switch (ch) {
+
+            case 0x4:                           /* write 6 byte cmd, format disk  */
+                if (scsi_buf[bufnum][unit][2] == 10) {
+                    if ((--scsi_buf[bufnum][unit][3]) > 0) {
+                        uptr->SNS |= SNS_TCMD;   /* show still presessing TCMD cmd chain */
+                        sim_activate(uptr, 200000);  /* wait a while */
+                        return SCPE_OK;
+                        break;
+                    }
+                    scsi_buf[bufnum][unit][2] = 0;  /* show done */
+                }
+                /* MPX cmd data 04 18 00 00 00 00 */
+                /* Format unit */
+                len = 0;
+                for (i=0; i<cnt; i++) {
+                    if (chan_read_byte(chsa, &ch)) {/* get a byte from memory */
+                        /* if error on reading 1st byte, we are done writing */
+                        if (i == 0) {
+                            uptr->CMD &= LMASK; /* remove old status bits & cmd */
+                            sim_debug(DEBUG_CMD, dptr,
+                                "SCSI Read %04x bytes from MPX buffer\n", len);
+                            chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
+                            return SCPE_OK;
+                        }
+                        ch = 0;                 /* finish out the sector with zero */
+                        len++;                  /* show we have no more data to write */
+                    }
+                    buf2[i] = ch;               /* save the char */
+                }
+                sim_debug(DEBUG_CMD, dptr, "SCSI CMD 4 %04x bytes read from MPX buffer\n", cnt);
+                sim_debug(DEBUG_CMD, dptr,
+                "SCSI Disk format buf2 %02x%02x%02x%02x\n", buf2[0], buf2[1], buf2[2], buf2[3]);
+                uptr->CMD &= LMASK;             /* remove old status bits & cmd */
+                chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
+                return SCPE_OK;
+                break;
+
+            case 0x15:                          /* write 6 byte cmd, format disk  */
+                /* MODE select */
+                len = 0;
+                for (i=0; i<cnt; i++) {
+                    if (chan_read_byte(chsa, &ch)) {/* get a byte from memory */
+                        /* if error on reading 1st byte, we are done writing */
+                        if (i == 0) {
+                            uptr->CMD &= LMASK; /* remove old status bits & cmd */
+                            sim_debug(DEBUG_CMD, dptr,
+                                "SCSI Read %04x bytes from MPX buffer\n", len);
+                            chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
+                            return SCPE_OK;
+                        }
+                        ch = 0;                 /* finish out the sector with zero */
+                        len++;                  /* show we have no more data to write */
+                    }
+                    buf2[i] = ch;               /* save the char */
+                }
+                sim_debug(DEBUG_CMD, dptr, "SCSI Format %04x bytes to status buffer\n", cnt);
+                sim_debug(DEBUG_CMD, dptr,
+        "SCSI Disk format buf2 %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x\n",
+                buf2[0], buf2[1], buf2[2], buf2[3], buf2[4], buf2[5], buf2[6], buf2[7],
+                buf2[8], buf2[9], buf2[10], buf2[11], buf2[12], buf2[13], buf2[14], buf2[15]);
+                uptr->CMD &= LMASK;             /* remove old status bits & cmd */
+                chan_end(chsa, SNS_CHNEND|SNS_DEVEND);
+                return SCPE_OK;
+                break;
+
             case 0x2a:                          /* write 10 byte cmd */
                 tstart = (scsi_buf[bufnum][unit][2] << 24) |    /* get sector address */
                     (scsi_buf[bufnum][unit][3] << 16) |
@@ -1129,6 +1238,7 @@ doread:
                 return SCPE_OK;
                 break;
             }
+            break;
         }
 dowrite:
         /* tstart has file offset in sectors */
@@ -1194,11 +1304,17 @@ dowrite:
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                 break;
             }
+#ifdef FAST_FOR_UTX
+//XX        sim_activate(uptr, 20);             /* start things off */
+//zz        sim_activate(uptr, 10);             /* start things off */
+            sim_activate(uptr, 20);             /* start things off */
+#else
             sim_activate(uptr, 10);             /* keep writing */
 //BAD4MPX   sim_activate(uptr, 40);             /* keep writing */
+#endif
             break;
-         }
-         break;
+        }
+        break;
 
     case DSK_RCAP:                              /* Read Capacity 0x53 */
         /* return 8 bytes */
@@ -1206,6 +1322,9 @@ dowrite:
         /* wd 2 is sector size in bytes */
         /* cap has disk capacity */
 read_cap:                                       /* merge point from TCMD processing */
+#if 0
+        cpu_dev.dctrl |= DEBUG_INST;            /* start instruction trace */
+#endif
         for (i=0; i<4; i++) {
             /* I think they want cap-1, not cap?????????? */
             /* verified that MPX wants cap-1, else J.VFMT aborts */
@@ -1254,6 +1373,9 @@ read_cap:                                       /* merge point from TCMD process
             "scsi_srv starting TCMD cmd, chsa %04x tcma %06x cnt %04x\n",
             chsa, chp->ccw_addr, chp->ccw_count);
 
+#if 0
+        cpu_dev.dctrl |= DEBUG_INST;            /* start instruction trace */
+#endif
         /* mema has IOCD word 1 contents. */
         /* len has the byte count from IOCD wd2 */
         len = chp->ccw_count;                   /* TCMD command count */
@@ -1278,11 +1400,18 @@ read_cap:                                       /* merge point from TCMD process
             scsi_buf[bufnum][unit][i] = buf[i]; /* save the cmd */
         }
         scsi_pcmd[bufnum][unit] = buf[0];       /* save the cmd */
+
+        /* if this a disk format, do a big wait */
+        if ((buf[0] == 4) && (buf[1] == 0x18)) {
+            scsi_buf[bufnum][unit][2] = 10;     /* show Processing Format cmd */
+            scsi_buf[bufnum][unit][3] = 10;     /* show Processing cmd */
+        }
+
         /* see if just test unit ready */
         if ((buf[0] == 0) && (len == 6))
             uptr->SNS &= ~SNS_TCMD;             /* clear TCMD flag */
         else
-            uptr->SNS |= SNS_TCMD;              /* show Presessing CMD cmd chain */
+            uptr->SNS |= SNS_TCMD;              /* show Processing CMD cmd chain */
 
         /* command is completed */
         uptr->CMD &= LMASK;                     /* remove old status bits & cmd */
@@ -1787,6 +1916,42 @@ t_stat scsi_detach(UNIT *uptr) {
     uptr->SNS = 0;                              /* clear sense data */
     uptr->CMD &= LMASK;                         /* no cmd and flags */
     return detach_unit(uptr);                   /* tell simh we are done with disk */
+}
+
+/* Handle haltio transfers for disk */
+t_stat  scsi_haltio(UNIT *uptr) {
+    uint16      chsa = GET_UADDR(uptr->CMD);
+    DEVICE      *dptr = get_dev(uptr);
+    int         cmd = uptr->CMD & DSK_CMDMSK;
+    CHANP       *chp = find_chanp_ptr(chsa);    /* find the chanp pointer */
+
+//  sim_debug(DEBUG_EXP, dptr,
+    sim_debug(DEBUG_DETAIL, dptr,
+        "scsi_haltio enter chsa %04x cmd = %02x\n", chsa, cmd);
+
+    /* terminate any input command */
+    /* UTX wants SLI bit, but no unit exception */
+    /* status must not have an error bit set */
+    /* otherwise, UTX will panic with "bad status" */
+    if ((uptr->CMD & DSK_CMDMSK) != 0) {        /* is unit busy */
+        sim_debug(DEBUG_EXP, dptr,
+            "scsi_haltio HIO chsa %04x cmd = %02x ccw_count %02x\n",
+            chsa, cmd, chp->ccw_count);
+        sim_cancel(uptr);                       /* clear the input timer */
+    } else {
+        sim_debug(DEBUG_DETAIL, dptr,
+            "scsi_haltio HIO I/O not busy chsa %04x cmd = %02x\n", chsa, cmd);
+    }
+    /* stop any I/O and post status and return error status */
+    chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);       /* stop any chaining */
+    uptr->CMD &= LMASK;                         /* no cmd and flags */
+    uptr->SNS &= ~MASK24;                       /* clear all but old mode data */
+    sim_debug(DEBUG_EXP, dptr,
+        "scsi_haltio HIO I/O stop chsa %04x cmd = %02x CHS %08x STAR %08x\n",
+        chsa, cmd, uptr->CHS, uptr->STAR);
+    chan_end(chsa, SNS_CHNEND|SNS_DEVEND);      /* force end */
+//  chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);  /* force end */
+    return SCPE_IOERR;
 }
 
 /* boot from the specified disk unit */

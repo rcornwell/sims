@@ -276,7 +276,7 @@ DIB             com_dib = {
     com_chp,        /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
     NULL,           /* IOCLQ *ioclq_ptr */                      /* IOCL entries, 1 per UNIT */
     COM_UNITS,      /* uint8 numunits */                        /* number of units defined */
-    0xFF,           /* uint8 mask */                            /* 16 devices - device mask */
+    0x0f,           /* uint8 mask */                            /* 16 devices - device mask */
     0x7E00,         /* uint16 chan_addr */                      /* parent channel address */
     0,              /* uint32 chan_fifo_in */                   /* fifo input index */
     0,              /* uint32 chan_fifo_out */                  /* fifo output index */
@@ -350,7 +350,7 @@ DIB             coml_dib = {
     coml_chp,       /* CHANP* chan_prg */                       /* Pointer to chan_prg structure */
     NULL,           /* IOCLQ *ioclq_ptr */                      /* IOCL entries, 1 per UNIT */
     COM_LINES*2,    /* uint8 numunits */                        /* number of units defined */
-    0xff,           /* uint8 mask */                            /* 16 devices - device mask */
+    0x0f,           /* uint8 mask */                            /* 16 devices - device mask */
     0x7E00,         /* uint16 chan_addr */                      /* parent channel address */
     0,              /* uint32 chan_fifo_in */                   /* fifo input index */
     0,              /* uint32 chan_fifo_out */                  /* fifo output index */

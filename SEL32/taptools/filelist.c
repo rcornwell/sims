@@ -5,15 +5,16 @@
  * input - stdin or specified filename  
  * output - stdout
  */
-#define NOTDUMP
+//#define NOTDUMP
+#define DUMPFILES
 
 #include <stdio.h>
-#include <sys/file.h>
 #include <stdlib.h>
-#include <unistd.h>
+//#include <sys/file.h>
+//#include <unistd.h>
 #include <ctype.h>
-#include <string.h>
-#include <errno.h>
+//#include <string.h>
+//#include <errno.h>
 
 int filen = 1;
 int EOFcnt = 0;
@@ -21,22 +22,20 @@ int count=0, lcount=0;
 int size=0, tsize=0;
 int size_512K = 512 * 1024;
 int ln;
-#ifdef USE_READ
+//int inp;
 FILE *infp;
-#else
-int inp;
-#endif
 #define PRINTABLE(x) ((x < 32) || (x > 126)) ? '.' : x
 
 /* get a line of input. */
 int getloi(char *s, int lim)
 {
-    int c, i;
+//  int c, i;
     int n1, n2, hc, tc, n;
 
-    errno = 0;
+//  errno = 0;
     /* read the byte count in 32 bit word as header */
-    n1 = read(inp, (char *)(&hc), (size_t)4);
+//  n1 = read(inp, (char *)(&hc), (size_t)4);
+    n1 = fread((char *)(&hc), (size_t)1, (size_t)4, infp);
     if (n1 <= 0)
         hc = -1;        /* at EOM on disk file */
 
@@ -82,17 +81,20 @@ int getloi(char *s, int lim)
         return -1;      /* at EOM on disk file */
     }
     /* read the data */
-    n = read(inp, s, (size_t)hc);
+//  n = read(inp, s, (size_t)hc);
+    n = fread(s, (size_t)1, (size_t)hc, infp);
 
     /* if odd byte record, read extra byte and throw it away */
     if (n & 0x1) {
-        n2 = read(inp, (char *)(&tc), (size_t)1);
+//      n2 = read(inp, (char *)(&tc), (size_t)1);
+        n2 = fread((char *)(&tc), (size_t)1, (size_t)1, infp);
         if (n2 <= 0)
             return -1;          /* at EOM on disk file */
     }
 
     /* read the byte count in 32 bit word as trailer */
-    n2 = read(inp, (char *)(&tc), (size_t)4);
+//  n2 = read(inp, (char *)(&tc), (size_t)4);
+    n2 = fread((char *)(&tc), (size_t)1, (size_t)4, infp);
     count++;        /* bump record count */
     size += n;      /* update bytes read */
     EOFcnt = 0;     /* not an EOF */
@@ -118,10 +120,10 @@ int main (int argc, char *argv[])
     char *buf;
     size_t size_512K = 512 * 1024;
     size_t buf_size = 512 * 1024;
-    char *cp, *np;
+//  char *cp, *np;
     int ll, gotboth = 0;
     int lfilen = filen;
-    unsigned int fileaddr, file_byte_count=0, curchar, buffptr, bufflen;
+    unsigned int fileaddr, file_byte_count=0, /*curchar,*/ buffptr, bufflen;
     int skipfile = 0;
 
     if (argc != 2) {
@@ -129,7 +131,8 @@ int main (int argc, char *argv[])
         exit(1);
     } /* end of if */
 
-    if ((inp = open(argv[1], O_RDONLY, 0666)) < 0) {
+//  if ((inp = open(argv[1], O_RDONLY, 0666)) < 0) {
+    if ((infp = fopen(argv[1], "r")) == NULL) {
         fprintf(stderr,"%s: fopen: unable to open input file %s\n", argv[0], argv[1]);
         return (1);
     }
@@ -163,17 +166,19 @@ int main (int argc, char *argv[])
             printf("\nfile %d:\n", filen);
         } else {
             int cc = 0;
-            buffptr = 0;
-            char buff[257];
-            int ans;
+//          char buff[257];
+//          int ans;
             int w1, w2, i, j;
             char path[64], command[128];
+            buffptr = 0;
         {
             /* dump first 2 words */
             w1 = (buf[0] & 0xff) << 24 | buf[1] << 16 | buf[2] << 8 | (buf[3] & 0xff);
             w2 = (buf[4] & 0xff) << 24 | buf[5] << 16 | buf[6] << 8 | (buf[7] & 0xff);
+#ifdef NODATA
             if (filen > 480)
-            printf("w1 = %x, w2 = %d count = %d\n", w1, w2, count);
+                printf("w1 = %x, w2 = %x count = %d\n", w1, w2, count);
+#endif
             if (count == 1 && w1 == 1) {
                 char file[20], dir[20], vol[20];
                 int off = 8;
@@ -186,7 +191,9 @@ int main (int argc, char *argv[])
                         off = 0;
                         l = 0;
                         k = 0;
+#ifdef NODATA
                         printf("reread: got ll= %d\n", ll);
+#endif
                         for (i=0; i<16; i++) {
                             file[i] = tolower(buf[k+off+i]);
                             if (file[i] == ' ')
@@ -215,12 +222,16 @@ int main (int argc, char *argv[])
                     vol[16] = '\0';
                     sprintf(path, "./%s/%s", vol, dir);
                     /* create the directory/file */
-//                  sprintf(command, "mkdir -p %s", path);
-//                  system(command);
+#ifdef DUMPFILES
+                    sprintf(command, "mkdir -p %s", path);
+                    system(command);
+#endif
                     sprintf(path, "./%s/%s/%s", vol, dir, file);
                     printf("path %s\n", path);
+#ifdef DUMPFILES
                     sprintf(command, "touch %s", path);
-//                  system(command);
+                    system(command);
+#endif
                 }
             } else
             if (count == 1 && w1 == 2 && w2 == 0) {
@@ -274,7 +285,8 @@ int main (int argc, char *argv[])
                         printf("\n<cr> - continue, q = quit, s = skip > ");
                         ans = getchar();
                         if (ans == 'q') {
-                            close(inp);
+//                          close(inp);
+                            fclose(infp);
                             free(buf);
                             exit(1);
                         }
@@ -304,7 +316,8 @@ int main (int argc, char *argv[])
                 printf("\n<cr> - continue, q = quit > ");
                 ans = getchar();
                 if (ans == 'q') {
-                    close(inp);
+//                  close(inp);
+                    fclose(infp);
                     free(buf);
                     exit(1);
                 }
@@ -315,7 +328,8 @@ int main (int argc, char *argv[])
 #endif
         }
     }
-    close(inp);
+//  close(inp);
+    fclose(infp);
     free(buf);
     exit(0);
 }

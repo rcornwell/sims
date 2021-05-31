@@ -306,8 +306,8 @@ t_stat itm_srv (UNIT *uptr)
         /* if cmd BIT29 is set, reload & restart */
         if ((INTS[itm_lvl] & INTS_ENAB) && (itm_cmd & 0x04) && (itm_cnt != 0)) {
             sim_debug(DEBUG_CMD, &itm_dev,
-                "Intv Timer reload on expired int %02x value %08x\n",
-                itm_lvl, itm_cnt);
+                "Intv Timer reload on expired int %02x value %08x src %x\n",
+                itm_lvl, itm_cnt, itm_src);
             /* restart timer with value from user */
             if (itm_src)                    /* use specified src freq */
                 sim_activate_after_abs_d(&itm_unit, ((double)itm_cnt*350000)/rtc_tps);
@@ -322,8 +322,8 @@ t_stat itm_srv (UNIT *uptr)
             int32 cnt = itm_big;            /* 0x65ba TRY 1,000,000/38.4 10 secs */
             itm_strt = cnt;                 /* get negative start time */
             sim_debug(DEBUG_CMD, &itm_dev,
-                "Intv Timer reload for neg cnts on expired int %02x value %08x\n",
-                itm_lvl, cnt);
+                "Intv Timer reload for neg cnts on expired int %02x value %08x src %x\n",
+                itm_lvl, cnt, itm_src);
             /* restart timer with large value for negative timer value simulation */
             if (itm_src)                    /* use specified src freq */
                 sim_activate_after_abs_d(&itm_unit, ((double)cnt*1000000)/rtc_tps);
@@ -407,9 +407,12 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
             if (itm_src)                    /* use specified src freq */
                 /* use clock frequency */
                 sim_activate_after_abs_d(&itm_unit, ((double)cnt*1000000)/rtc_tps);
-            else
+            else {
                 /* use interval timer freq */
 #ifdef MAYBE_CHANGE_FOR_MPX3X
+                /* tsm does not run if fake time cnt is used */
+///             if (cnt == 0)
+///                 cnt = 0x52f0;
                 /* this fixes an extra interrupt being generated on context switch */
                 /* the value is load for the new task anyway */
                 /* need to verify that UTX likes it too */
@@ -417,6 +420,7 @@ int32 itm_rdwr(uint32 cmd, int32 cnt, uint32 level)
 #else
                 sim_activate_after_abs_d(&itm_unit, ((double)cnt*itm_tick_size_x_100)/100.0);
 #endif
+            }
             itm_run = 1;                    /* set timer running */
         }
         sim_debug(DEBUG_CMD, &itm_dev,
