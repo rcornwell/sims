@@ -250,6 +250,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\PDP10\ka10_tv.c"
+				>
+			</File>
+			<File
 				RelativePath="..\PDP10\kx10_cp.c"
 				>
 			</File>
@@ -291,6 +295,10 @@
 			</File>
 			<File
 				RelativePath="..\PDP10\kx10_dt.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_imp.c"
 				>
 			</File>
 			<File
