@@ -9056,7 +9056,7 @@ jrstf:
               }
 #endif
               PC_CHANGE
-              PC = AD;
+              PC = (t_addr)(AD & RMASK);
               f_pc_inh = 1;
               break;
 

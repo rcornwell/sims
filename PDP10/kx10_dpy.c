@@ -109,6 +109,7 @@
 
 #include "kx10_defs.h"
 #include "sim_video.h"
+#include <math.h>
 
 #ifndef NUM_DEVS_DPY
 #define NUM_DEVS_DPY 0

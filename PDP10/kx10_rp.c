@@ -507,7 +507,7 @@ rp_rst(DEVICE *dptr)
     UNIT     *uptr = dptr->units;
     uint16   *regs;
     int       ctlr = GET_CNTRL_RH(uptr->flags);
-    int       i;
+    uint32    i;
 
     rh_reset(dptr, &rp_rh[ctlr]);
     for (i = 0; i < dptr->numunits; i++) {
@@ -1067,7 +1067,7 @@ rp_reset(DEVICE * rptr)
     UNIT     *uptr = rptr->units;
     uint16   *regs;
     int       ctlr = GET_CNTRL_RH(uptr->flags);
-    int       i;
+    uint32    i;
 
     rh_reset(rptr, &rp_rh[ctlr]);
     for (i = 0; i < rptr->numunits; i++) {
@@ -1099,14 +1099,14 @@ rp_boot(int32 unit_num, DEVICE * rptr)
     DEVICE       *dptr = uptr->dptr;
     uint32        addr;
     uint32        ptr = 0;
-    uint64        len;
     int           wc;
     uint64        word;
-    int           i;
-    int           da;
-    t_stat        r;
 
 #if KS
+    int           da;
+    t_stat        r;
+    uint64        len;
+
     if ((r = rp_reset(dptr)) != SCPE_OK)
         return r;
     if ((r = cty_reset(&cty_dev)) != SCPE_OK)
@@ -1147,6 +1147,8 @@ rp_boot(int32 unit_num, DEVICE * rptr)
     /* Read len sectors into address 1000 */
     addr = 01000;
     for (; len > 0; len--) {
+        int           i;
+
         da = GET_DA(dtype);
         disk_read(uptr, &rp_buf[0][0], da, RP_NUMWD);
         for (i = 0; i < RP_NUMWD; i++) {
