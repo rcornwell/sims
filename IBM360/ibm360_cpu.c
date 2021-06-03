@@ -2025,6 +2025,7 @@ char_save:
                         cc = 3;
                     addr1--;
                 }
+                dest &= ~MSIGN;
                 dest |= src2;
                 if (cc == 3)
                     goto set_cc3;
@@ -2098,6 +2099,8 @@ char_save:
                            cc = 3;
                        addr1--;
                    }
+                   src1L &= ~MSIGNL;
+                   src1L |= src2L;
 save_dbl:
                    STDBL(reg1, src1L);
                    if (cc != 3 && src1L != 0)
@@ -2114,6 +2117,8 @@ save_dbl:
                        src1h <<= 1;
                        addr1--;
                    }
+                   src1 &= ~MSIGN;
+                   src1 |= dest;
 save_dbl:
                    STDBLx(reg1, src1);
                    if (cc != 3 && (src1 | src1h) != 0)
