@@ -82,13 +82,19 @@ char mstrout[] = "mstrout";
 
 /* write 1 file to tape in 768 byte records */
 /* mblks is the maximum blockes to write from a file, 0=all */
+/* mblks is rounded to next sector */
 /* chunks is the number of sectors to wrote at a time 1-8 */
-int writefile(FILE *tp, char *fnp, uint32 mblks, int32 chunks) {
+/* rem is byte excess in last sector based on program size */
+/* sysinit reads exact bytes from file.  If rounded we get RM82 error */
+int writefile(FILE *tp, char *fnp, uint32 mblks, int32 chunks, int32 rem) {
     uint32 word, blks=mblks;            /* just a temp word variable */         
     uint32 size, bsize, csize;          /* size in 768 byte sectors */
     FILE *fp;
     int32 n1, n2, hc, nw, cs;
 
+    /* setting rem to 0 will always write full sectors */
+    /* doing partial sectors did not fix anything */
+    rem = 0;                            /* do not use remainders */
     memset((char *)data, 0, sizeof(data));  /* zero data storage */
     /* write file to tape */
     if ((fp = fopen(fnp, "r")) == NULL) {
@@ -97,24 +103,36 @@ int writefile(FILE *tp, char *fnp, uint32 mblks, int32 chunks) {
     }
     fseek(fp, 0, SEEK_END);                 /* seek to end */
     word = ftell(fp);                       /* get filesize in bytes */
-printf("MPX file %s is %x (%d) bytes\n", fnp, word, word);
+printf("MPX file %s is %x (%d) bytes rem %x (%d) mblks %x (%d)\n", fnp, word, word, rem, rem, mblks, mblks);
     fseek(fp, 0, SEEK_SET);                 /* rewind file */
     size = (word/768);                      /* filesize in sectors */
-    if (word%768 != 0)                      /* see if byte left over */
+    if (word%768 != 0)                      /* see if bytes left over */
         size += 1;                          /* partial sector, add 1 */
+    /* size has #768 blocks in file */
     if (mblks == 0) {
-        mblks = (word/768);                 /* blocks */
-        if ((word%768) != 0)                /* round up blks if remainder */
-            mblks++;                        /* total block to write */
+//      mblks = (word/768);                 /* blocks */
+//      if ((word%768) != 0)                /* round up blks if remainder */
+//          mblks++;                        /* total block to write */
+        mblks = size;                       /* use file size */
+        rem = 0;                            /* no rem if no mblks */
     }
-    blks = mblks/chunks;                    /* chunks */
-    if (mblks%768 != 0)                     /* see if blks left over */
-        blks += 1;                          /* partial blks, add 1 */
+    if (rem != 0) {
+        mblks--;                            /* last block will be rem bytes */
+    }
+printf("MPX0 file %s is %x (%d) bytes mblks %d chunk %d rem %d\n",
+    fnp, word, word, mblks, chunks, rem);
+//  blks = mblks/chunks;                    /* chunks */
+//  if (mblks%768 != 0)                     /* see if blks left over */
+//      blks += 1;                          /* partial blks, add 1 */
+/// bsize = mblks/chunks;                   /* chunks */
+/// if (mblks%chunks != 0)                  /* see if blks left over */
+///     bsize += 1;                         /* partial blks, add 1 */
 
+/// blks = bsize;                           /* save # blks */
     bsize = mblks;                          /* save # blks */
 
-printf("MPX file %s is %x (%d) bytes blks %d chk %d\n",
-    fnp, word, word, bsize, (bsize+1)/chunks);
+printf("MPX1 file %s is %x (%d) bytes mblks %d bsize %d rem %d\n",
+    fnp, word, word, mblks, bsize, rem);
     csize = 0;
     /* read in the image file */
     while (bsize > 0) { 
@@ -138,10 +156,29 @@ printf("MPX file %s is %x (%d) bytes blks %d chk %d\n",
             exit(1);
         }
         bsize -= csize;                     /* do next chunk */
-        memset((char *)data, 0, csize);     /* zero data storage */
+        memset((char *)data, 0, csize*768); /* zero data storage */
+        if ((bsize <= 0) && (rem != 0)) {
+            fprintf(stderr, "writing last block to %s rem = %x (%d)\n", fnp, rem, rem);
+            cs = fread((char *)data, rem, 1, fp);   /* read last "real" bytes */
+            /* we have data to write */
+            hc = (rem + 1) & ~1;            /* make byte count even */
+            /* write actual byte count to 32 bit word as header */
+            n1 = fwrite((char *)(&hc), 1, (size_t)sizeof(hc), tp);
+            /* write the data mod 2 */
+            nw = fwrite((unsigned char *)data, 1, (size_t)hc, tp);
+            /* write the byte count in 32 bit word as footer */
+            n2 = fwrite((char *)(&hc), 1, (size_t)sizeof(hc), tp);
+            fprintf(stderr, "done with last block to %s rem %x n1 %x nw %x n2 %x\n", fnp, rem, n1, nw, n2);
+            if (n1 != sizeof(hc) || nw != hc || n2 != sizeof(hc))
+            {
+                fprintf(stderr, "write to %s failure\n", fnp);
+                fprintf(stderr, "Operation aborted\n");
+                exit(1);
+            }
+        }
     }
-printf("write file %s (size %d bytes) (%d sect) (%d blocks) (%d chunks)\n",
-    fnp, word, size, mblks, blks);
+printf("write file %s (size %d bytes) (%d sect) (%d blocks) (%d chunks) (%d rem)\n",
+    fnp, word, size, mblks, blks, rem);
     fclose(fp);
     return(0);
 }
@@ -178,14 +215,15 @@ uint32 flip(uint32 val) {
 }
 
 /* get number of 768 byte blocks in file */
-uint32 getblks(char *imgp)
+/* returned number of sectors is rounded up */
+/* rem is bytes in last sect */
+uint32 getblks(char *imgp, uint32 *rem)
 {
-    unsigned int size;                      /* size in 768 byte sectors */
     unsigned int word;                      /* just a temp word variable */         
     FILE *fp;
     int32 n1, n2, w2, blks;
 
-    memset((char *)M, 0, 192);              /* zero data storage */
+    memset((char *)M, 0, 768);              /* zero data storage */
     if ((fp = fopen(imgp, "r")) == NULL) {
         fprintf(stderr, "error: can't open image file %s\n", imgp);
         exit(1);                            /* we are done here */
@@ -199,15 +237,16 @@ printf("image file %s is %x (%d) bytes\n", imgp, word, word);
     n2 = flip(M[0x64/4]);                   /* get PR.SFADR sec addr of rel matrix */
     if (n2 == 0) {                          /* if zero use PR.SFAD rel addr of dsect */
         n1 = flip(M[0x5C/4]);               /* get PR.BYTED bytes in dsect */
-        n2 = flip(M[0x58/4]);               /* get PR.SFADR sec addr of dsect */
+        n2 = flip(M[0x58/4]);               /* get PR.SFAD sec addr of dsect */
         n2 += 1;                            /* add 1 blk for sys debug blk */
     }
     blks = n1/768;                          /* get #block rounded mod 768 */
+    *rem = n1%768;                          /* get excess bytes */
     if ((n1%768) != 0)                      /* round up blks if remainder */
         blks++; 
     blks += n2;                             /* get total blks to read */
-printf("image file %s n1 %x (%d) n2 %x (%d) blks %x (%d)\n",
-    imgp, n1, n1, n2, n2, blks, blks);
+printf("image file %s n1 %x (%d) n2 %x (%d) blks %x (%d) rem %x (%d)\n",
+    imgp, n1, n1, n2, n2, blks, blks, *rem, *rem);
     fseek(fp, 0, SEEK_SET);                 /* rewind file */
     fclose(fp);
 
@@ -430,7 +469,8 @@ error1:
                 fseek(dp, 0, SEEK_END);             /* seek to end */
                 bytes = ftell(dp);                  /* get filesize in bytes */
 printf("1 file length %ld %lx bytes\n", bytes, bytes);
-printf("1 start writing at %ld %lx bytes offset\n", bytes-8, bytes-8);
+//67 printf("1 start writing at %ld %lx bytes offset\n", bytes-8, bytes-8);
+printf("1 start writing at %ld %lx bytes offset\n", bytes-4, bytes-4);
                 fseek(dp, 0, SEEK_SET);             /* rewind file to beginning */
                 /* at this point, we are at the end of the tape */
                 /* we should see 3 EOF's w/ or w/o an EOM */
@@ -444,8 +484,9 @@ readmore:
                     if (n1 <=0)                     /* check for read error */
                         goto doabort;               /* bad tape format */
 
-//printf("2 file length %ld %lx bytes\n", bytes, bytes);
-//printf("2 start writing at %ld %lx bytes offset\n", bytes-8, bytes-8);
+printf("2 file length %ld %lx bytes\n", bytes, bytes);
+//67printf("2 start writing at %ld %lx bytes offset\n", bytes-8, bytes-8);
+printf("2 start writing at %ld %lx bytes offset\n", bytes-4, bytes-4);
                     if (hc & 0xffff0000)            /* check for garbage */
                         hc = 0;                     /* assume EOF on disk */
 
@@ -520,7 +561,7 @@ getout:
     }
     /* process the bootfile first */
     if (option & DOBOOT) {
-        int32 w2, n1, n2, nw, hc, blks;
+        int32 w2, n1, n2, nw, hc, blks, rem;
         fnp = bootp;                                /* get file name pointer */
         memset((char *)data, 0, 0x800);              /* zero data storage */
 #define USE_FILENAME
@@ -563,70 +604,73 @@ printf("bootfile %s is %x (%d) bytes\n", bootp, word, word);
         }
 printf("write boot file %s (size %d bytes)\n", bootp, word, word);
         /* setup for mpx image file */
-        memset((char *)data, 0, 0x800);              /* zero data storage */
+        memset((char *)data, 0, 0x800);             /* zero data storage */
 
         if (option & DOMSTR) {
             /* get blocks in image file */
-            blks = getblks(mstrall);
-            /* write mpx image file */
-            writefile(dp, mstrall, blks, 1);            /* write max of "blks" blocks to file */
+            blks = getblks(mstrall, &rem);
+            /* write 1st mpx image file */
+            writefile(dp, mstrall, blks, 1, rem);   /* write max of "blks" blocks to file */
 
             /* write EOF (zero) to file */
-            filen = 0;                                  /* zero count */
+            filen = 0;                              /* zero count */
             fwrite((char *)(&filen), 1, (size_t)sizeof(filen), dp);
 
-            blks = getblks(mstrext);
-            /* write mpx image file */
-            writefile(dp, mstrext, blks, 1);            /* write max of "blks" blocks to file */
+            blks = getblks(mstrext, &rem);
+            /* write 2nd mpx image file */
+            writefile(dp, mstrext, blks, 1, rem);   /* write max of "blks" blocks to file */
 
             /* write EOF (zero) to file */
-            filen = 0;                                  /* zero count */
+            filen = 0;                              /* zero count */
             fwrite((char *)(&filen), 1, (size_t)sizeof(filen), dp);
 
-            blks = getblks(mstrout);
-            /* write mpx image file */
-            writefile(dp, mstrout, blks, 1);            /* write max of "blks" blocks to file */
+            blks = getblks(mstrout, &rem);
+            /* write 3rd mpx image file */
+            writefile(dp, mstrout, blks, 1, rem);   /* write max of "blks" blocks to file */
 
             /* write EOF (zero) to file */
-            filen = 0;                                  /* zero count */
+            filen = 0;                              /* zero count */
             fwrite((char *)(&filen), 1, (size_t)sizeof(filen), dp);
         } else {
             /* get blocks in image file */
-            blks = getblks(imgp);
+            blks = getblks(imgp, &rem);
 
             /* write mpx image file */
-            writefile(dp, imgp, blks, 1);               /* write max of "blks" blocks to file */
+            writefile(dp, imgp, blks, 1, rem);      /* write max of "blks" blocks to file */
         }
         /* get blocks in j.vfmt file */
-//      blks = getblks(vfmtp);
+        blks = getblks(vfmtp, &rem);
         /* write j.vfmt file */
-//      writefile(dp, vfmtp, blks, 1);              /* write 1 blk at a time */
-        writefile(dp, vfmtp, 0, 1);                 /* write 1 blk at a time */
+        writefile(dp, vfmtp, blks, 1, rem);         /* write 1 blk at a time */
+//      writefile(dp, vfmtp, 0, 1);                 /* write 1 blk at a time */
 
         /* write EOF (zero) to file */
         filen = 0;                                  /* zero count */
         fwrite((char *)(&filen), 1, (size_t)sizeof(filen), dp);
 
         /* write j.mount file */
-//      blks = getblks("j.mount");
-//      writefile(dp, "j.mount", blks, 1);          /* one blk at a time */
-        writefile(dp, "j.mount", 0, 1);             /* one blk at a time */
+        blks = getblks("j.mount", &rem);
+        writefile(dp, "j.mount", blks, 1, rem);     /* one blk at a time */
+//      writefile(dp, "j.mount", 0, 1);             /* one blk at a time */
 
         /* write j.swapr file */
-//      blks = getblks("j.swapr");
-//      writefile(dp, "j.swapr", blks, 1);          /* one blk at a time */
-        writefile(dp, "j.swapr", 0, 1);             /* one blk at a time */
+        blks = getblks("j.swapr", &rem);
+        writefile(dp, "j.swapr", blks, 1, rem);     /* one blk at a time */
+//      writefile(dp, "j.swapr", 0, 1);             /* one blk at a time */
 
         /* write volmgr file */
-//      blks = getblks("volmgr");
-//      writefile(dp, "volmgr", blks, 1);           /* one blk at a time */
-        writefile(dp, "volmgr", 0, 1);              /* all of file 1 blk at a time */
+        blks = getblks("volmgr", &rem);
+        writefile(dp, "volmgr", blks, 1, rem);      /* one blk at a time */
+//      writefile(dp, "volmgr", 0, 1);              /* all of file 1 blk at a time */
 
         /* write EOF (zero) to file */
         filen = 0;                                  /* zero count */
         fwrite((char *)(&filen), 1, (size_t)sizeof(filen), dp);
 
         /* do second EOF */
+        fwrite((char *)(&filen), 1, (size_t)sizeof(filen), dp);
+
+        /* do third EOF */
         fwrite((char *)(&filen), 1, (size_t)sizeof(filen), dp);
         filen = -1;                                 /* make in -1 for EOM */
         /* do EOM */
@@ -647,7 +691,7 @@ printf("setting at %ld bytes in file after EOM\n", ftell(dp));
         goto error1;                            /* we are done here */
     }
 /*------------------------------------------------------------------------*/
-    savecnt = 0;                                /* no files yet */
+    savecnt = 0;                                /* no files "yet */
     /* make first pass over files and get filenames and sizes */
     /* got tapefile and options, handle files now */
     targc = argc;                               /* save argc to reread list */
@@ -784,10 +828,11 @@ printf("AT write file list with %d entries\n", filen);
 //      int32 n1, n2, nw, k;
         int32 n1, n2, nw;
         int32 hc = (1536 + 1) & ~1;             /* make byte count even */
-//      int blks;
+        int blks, rem;
 
         p = *argv++;
 printf("at 4 argc %d argv %s\n", argc, p);
+        blks = getblks(p, &rem);
 
         if ((fp = fopen(p, "r")) == NULL) {
             fprintf(stderr, "error: can't open user file %s\n", p);
@@ -795,14 +840,18 @@ printf("at 4 argc %d argv %s\n", argc, p);
         }
         fnp = p;                                /* get file name pointer */
 
-        /* we need to write the resource descriptor in 2 blks to file */
-        /* followed by file content is 8 blk chunks */
-        fseek(fp, 0, SEEK_END);                 /* seek to end */
-        word = ftell(fp);                       /* get filesize in bytes */
-        fseek(fp, 0, SEEK_SET);                 /* rewind file */
-        size = (word/768);                      /* filesize in sectors */
-        if (word%768 != 0)                      /* see if byte left over */
-            size += 1;                          /* partial sector, add 1 */
+        if (typ != 0xca) {
+            /* we need to write the resource descriptor in 2 blks to file */
+            /* followed by file content is 8 blk chunks */
+            fseek(fp, 0, SEEK_END);             /* seek to end */
+            word = ftell(fp);                   /* get filesize in bytes */
+            fseek(fp, 0, SEEK_SET);             /* rewind file */
+            size = (word/768);                  /* filesize in sectors */
+            if (word%768 != 0)                  /* see if byte left over */
+                size += 1;                      /* partial sector, add 1 */
+        } else {
+            size = blks;
+        }
         /* round up mod 4 */
         size += 3;
         size &= ~3;
@@ -813,156 +862,136 @@ printf("at 4 argc %d argv %s\n", argc, p);
         resdes[0] = 0x02000000;                 /* 2 byte swapped */
         /* 48 char file/directory/volume name (122 wds) */
         /* copy name from dirlist written earlier */
-        resdes[2] = dirlist[n+0];               /* file */
-        resdes[3] = dirlist[n+1];
-        resdes[4] = dirlist[n+2];
-        resdes[5] = dirlist[n+3];
-        resdes[6] = dirlist[n+4];               /* directory, system*/
-        resdes[7] = dirlist[n+5];
-        resdes[8] = dirlist[n+6];
-        resdes[9] = dirlist[n+7];
-        resdes[10] = dirlist[n+8];               /* volume, system */
-        resdes[11] = dirlist[n+9];
-        resdes[12]= dirlist[n+10];
-        resdes[13]= dirlist[n+11];
+        resdes[0+2] = dirlist[n+0];             /* file */
+        resdes[1+2] = dirlist[n+1];
+        resdes[2+2] = dirlist[n+2];
+        resdes[3+2] = dirlist[n+3];
+        resdes[4+2] = dirlist[n+4];             /* directory, system*/
+        resdes[5+2] = dirlist[n+5];
+        resdes[6+2] = dirlist[n+6];
+        resdes[7+2] = dirlist[n+7];
+        resdes[8+2] = dirlist[n+8];             /* volume, system */
+        resdes[9+2] = dirlist[n+9];
+        resdes[10+2]= dirlist[n+10];
+        resdes[11+2]= dirlist[n+11];
         /* 16 word resource create block */
-        resdes[14] = dirlist[n+8];              /* owner, system */
-        resdes[15] = dirlist[n+9];              /* only 8 bytes */
-//      resdes[16]= dirlist[n+10];
-//      resdes[17]= dirlist[n+11];
-///     resdes[18] = dirlist[n+8];              /* group, system */
-///     resdes[19] = dirlist[n+9];              /* only 8 bytes */
-        resdes[16] = dirlist[n+8];              /* group, system */
-        resdes[17] = dirlist[n+9];              /* only 8 bytes */
-//      resdes[20]= dirlist[n+10];
-//      resdes[21]= dirlist[n+11];
-        n += 12;
-#ifdef OLDOLD
-        resdes[22]=flip(0x80f00000);            /* owner rights */
-        resdes[23]=flip(0x80b00000);            /* group rights */
-        resdes[24]=flip(0x80800000);            /* other rights */
+        resdes[0+12+2] = dirlist[n+8];          /* RCB.OWNR owner, system */
+        resdes[1+12+2] = dirlist[n+9];          /* only 8 bytes */
+        resdes[2+12+2] = dirlist[n+8];          /* RCB.USER group, system */
+        resdes[3+12+2] = dirlist[n+9];          /* only 8 bytes */
+//SS    n += 12;
+        resdes[4+12+2]=flip(0x80f00000);        /* RCB.OWRI owner rights */
+        resdes[5+12+2]=flip(0x80b00000);        /* RCB.UGRI group rights */
+        resdes[6+12+2]=flip(0x80800000);        /* RCB.OTRI other rights */
         if (typ == 0xca)
-            resdes[25]=flip(0x00040110);        /* res mgmt flags */
+            resdes[7+12+2]=flip(0x00040110);    /* res mgmt flags */
         else
-            resdes[25]=flip(0x00040110);        /* res mgmt flags */
-//          resdes[25]=flip(0x0004011c);        /* res mgmt flags */
-        resdes[29]=flip(size);                  /* org file size */
-        resdes[31]=flip(1000);                  /* file starting address n/u */
-        resdes[33]=flip(0x00fbfeef);            /* option flags */
-#else
-        resdes[18]=flip(0x80f00000);            /* owner rights */
-        resdes[19]=flip(0x80b00000);            /* group rights */
-        resdes[20]=flip(0x80800000);            /* other rights */
-        if (typ == 0xca)
-            resdes[21]=flip(0x00040110);        /* res mgmt flags */
-        else
-            resdes[21]=flip(0x00040110);        /* res mgmt flags */
+            resdes[7+12+2]=flip(0x00040110);    /* res mgmt flags */
 //          resdes[21]=flip(0x0004011c);        /* res mgmt flags */
-        resdes[25]=flip(size);                  /* org file size */
-        resdes[27]=flip(1000);                  /* file starting address n/u */
-        resdes[29]=flip(0x00fbfeef);            /* option flags */
-#endif
-        /* reset of block is zero */
+        resdes[11+12+2]=flip(285);              /* RCB.OSIZ org dir (0x120) size */
+//      resdes[11+12+2]=flip(size);             /* org file size */
+        resdes[13+12+2]=flip(0x53480);          /* RCB.FAST Res ID buffer address n/u */
+//      resdes[27]=flip(1000);                  /* file starting address n/u */
+        resdes[15+12+2]=flip(0x00fbfeef);       /* RCB.OPTS option flags */
+//      resdes[29]=flip(0x00fbfeef);            /* RCB.OPTS option flags */
+        /* rest of block is zero */
 
-        /* second block is resosurce descriptor from disk */
-        resdes[192] = dirlist[n+8];             /* volume, system */
-        resdes[193] = dirlist[n+9];
-        resdes[194]= dirlist[n+10];
-        resdes[195]= dirlist[n+11];
+        /* second block is resosurce descriptor from disk M.RDCOM */
+        resdes[0+192] = dirlist[n+8];           /* RD.IDNAM volume, system */
+        resdes[1+192] = dirlist[n+9];
+        resdes[2+192]= dirlist[n+10];
+        resdes[3+192]= dirlist[n+11];
 
-        resdes[196]=flip(0x00003190);           /* creation date */
-        resdes[197]=flip(0x0e8c8000);           /* creation time */
-        resdes[198]=flip(0x000003c0);           /* abs blk if res des */
-        resdes[199]=flip(0x0000000a);           /* resource type, perm file */
+        resdes[4+192]=flip(0x00003190);         /* RD.DATE creation date */
+        resdes[5+192]=flip(0x0e8c8000);         /* RD.TIME creation time */
+        resdes[6+192]=flip(0x000003c0);         /* RD.DOFF abs blk of res des */
+        resdes[7+192]=flip(0x0000000a);         /* RD.RDFLG / RD.RTYPE resource type, perm file */
 
-        resdes[200]=flip(0x000029cf);           /* creation date */
-        resdes[201]=flip(0x1dd8e074);           /* creation time */
-        //202
-        //203
+        resdes[8+192]=flip(0x000029cf);         /* RD.CRDAT creation date */
+        resdes[9+192]=flip(0x1dd8e074);         /* RD.CRTIM creation time */
+        //202 10+192 RD.XPDAT
+        //203 11+192 RD.XPTIM
 
-        //204
-        //205
-        resdes[206]=flip(0x000029cf);           /* last chge date */
-        resdes[207]=flip(0x1dd8e074);           /* last chge time */
+        //204 12+192 RD.RDDAT
+        //205 13+192 RD.RDTIM
+        resdes[14+192]=flip(0x000029cf);        /* RD.CHDAT last chge date */
+        resdes[15+192]=flip(0x1dd8e074);        /* RD.CHTIM last chge time */
 
-        resdes[208]=flip(0x00003190);           /* creation date */
-        resdes[209]=flip(0x0e8c8000);           /* creation time */
-        //210
-        //211
+        resdes[16+192]=flip(0x00003190);        /* RD.SVDAT last save date */
+        resdes[17+192]=flip(0x0e8c8000);        /* RD.SVTIM last save time */
+        //210 18+192 RD.RSDAT
+        //211 19+192 RD.RSTIM
 
-///     resdes[212] = dirlist[n+8];             /* ownername last changer, system */
-///     resdes[213] = dirlist[n+9];
-        resdes[214] = dirlist[n+8];             /* ownername creator, system */
-        resdes[215] = dirlist[n+9];
+        resdes[20+192] = dirlist[n+8];          /* RD.CHOWN ownername last changer, system */
+        resdes[21+192] = dirlist[n+9];
+        resdes[22+192] = dirlist[n+8];          /* RD.CROWN ownername creator, system */
+        resdes[23+192] = dirlist[n+9];
 
-        //216
-        //217
-        resdes[218] = dirlist[n+8];             /* ownername of resource, system */
-        resdes[219] = dirlist[n+9];
+        //216 24+192 RD.RDCNT
+        //217 25+192 RD.AFLGS
+        resdes[26+192] = dirlist[n+8];          /* RD.OWNR ownername of resource, system */
+        resdes[27+192] = dirlist[n+9];
 
-        resdes[220] = dirlist[n+8];             /* group of resource, system */
-        resdes[221] = dirlist[n+9];
-        resdes[222]=flip(0xf8400000);           /* owner access */
-//      resdes[223]=flip(0xf8e00000);           /* group access */
-        resdes[223]=flip(0xf8400000);           /* group access */
+        resdes[28+192] = dirlist[n+8];          /* RD.UGRP group of resource, system */
+        resdes[29+192] = dirlist[n+9];
+        resdes[30+192]=flip(0xf8400000);        /* RD.AOWNR owner access */
+        resdes[31+192]=flip(0xf8400000);        /* RD.AUGRP group access */
+//      resdes[223]=flip(0xf8e00000);           /* RD.AUGRP group access */
+        resdes[32+192]=flip(0x80000000);        /* RD.AOTHR other access */
+        //225 33+192 reserved
+        resdes[34+192]=flip(0x00000001);        /* RD.LNKCT resource link count */
+        //227 35+192 Port numbers
 
-        resdes[224]=flip(0x80000000);           /* other access */
-        //225
-        resdes[226]=flip(0x00000001);           /* resource link count */
-        //227
+        //228-244  
+        resdes[52+192] = dirlist[n+8];          /* RD.RDOWN ownername at last access, system */
+        resdes[53+192] = dirlist[n+9];
+        //247-255  
 
-        //228-255
-
-        resdes[256]=flip(0xca100010);           /* space definition flags */
+        resdes[64+192]=flip(0xca1000f0);        /* RD.SFLGS space definition flags */
         if (typ == 0xca)
-            resdes[256]=flip(0xca100010);       /* space definition flags */
+            resdes[64+192]=flip(0xca1000f0);    /* RD.SFLGS space definition flags */
         else
         if (typ == 0xee)
-            resdes[256]=flip(0xee1000f1);       /* space definition flags */
+            resdes[64+192]=flip(0xee1000f1);    /* RD.SFLGS space definition flags */
         else
         if (typ == 0x00)
-            resdes[256]=flip(0x001000f1);       /* space definition flags */
-//      resdes[257]=flip(0x00000018);           /* max extends */
-//      resdes[258]=flip(0x00000008);           /* min incr */
-        resdes[257]=flip(0x00000040);           /* max extends */
-        resdes[258]=flip(0x00000010);           /* min incr */
-        //259
+            resdes[64+192]=flip(0x001000f1);    /* RD.SFLGS space definition flags */
+        resdes[65+192]=flip(0x00000040);        /* RD.MXEXT max extends */
+        resdes[66+192]=flip(0x00000010);        /* RD.MNEXT min incr */
+        //259 67+192 RD.MXSIZ
 
-//      resdes[260]=flip(size-1);               /* eof */
-//      resdes[261]=flip(size);                 /* eom */
-///     resdes[260]=flip(size);                 /* eof */
-///     resdes[261]=flip(size+1);               /* eom */
-        resdes[260]=0;                          /* eof */
-        resdes[261]=flip(size);                 /* eom */
-        resdes[262]=flip(0x00000001);           /* segment */
-        //263
+        resdes[68+192]=flip(size-1);            /* RD.EOFBL eof block */
+        resdes[69+192]=flip(size);              /* RD.EOMBL eom block */
+        resdes[70+192]=flip(0x00000001);        /* RD.NUMSG # of segment */
+        //263 71+192 RD.XSABA
 
-        resdes[264]=resdes[6];                  /* directory, system*/
-        resdes[265]=resdes[7];
-        resdes[266]=resdes[8];
-        resdes[267]=resdes[9];
+        resdes[72+192]=resdes[6];               /* RD.DNAME directory, system*/
+        resdes[73+192]=resdes[7];
+        resdes[74+192]=resdes[8];
+        resdes[75+192]=resdes[9];
 
-        resdes[268]=flip(0x00000100);           /* parent blk number */
-        resdes[269]=flip(0x00000001);           /* segments at creation  */
-        //270
-        //271
+        resdes[76+192]=flip(0x00000cd6);        /* RD.PAREN parent blk number */
+        resdes[77+192]=flip(0x00000001);        /* RD.NUMCR segments at creation  */
+        //270 78+192 reserved
+        //271 79+192 reserved
 
-        resdes[272]=resdes[2];                  /* filename*/
-        resdes[273]=resdes[3];
-        resdes[274]=resdes[4];
-        resdes[275]=resdes[5];
+        resdes[80+192]=resdes[2];               /* RD.DIRP filename*/
+        resdes[81+192]=resdes[3];
+        resdes[82+192]=resdes[4];
+        resdes[83+192]=resdes[5];
 
-        resdes[276]=flip(0x00000100);           /* parent blk number */
-        resdes[277]=flip(0x000005c0);           /* parent didr index number */
-        //277
-        //278
+        resdes[84+192]=flip(0x00000100);        /* RD.DADD parent blk number */
+        resdes[85+192]=flip(0x000005c0);        /* RD.DIDX parent dir index number */
+        //278 86+192 res
+        // to
+        //287 95+192 res
 
-        //279-286
-
-        resdes[288]=flip(0x0000fda8);           /* file blk number */
-        resdes[289]=flip(size);                 /* eom */
+        /* Segment definitions (RD.SEGDF) Wds 96/97 */ 
+        resdes[96+192]=flip(0x0000fda8);        /* file abs blk addr */
+        resdes[97+192]=flip(size);              /* eom block */
 
         /* all others are zero */
+        n += 12;                                /* next directory entry */
 
         /* we have data to write */
         /* write actual byte count to 32 bit word as header */
@@ -979,7 +1008,11 @@ printf("at 4 argc %d argv %s\n", argc, p);
         }
         /*******************************/
         /* write file up to 8 blks at a time */
-        writefile(dp, fnp, 0, 8);               /* all of file 1 blk at a time */
+        if (typ != 0xca) {
+            writefile(dp, fnp, 0, 8, 0);        /* all of file 8 blk at a time */
+        } else {
+            writefile(dp, fnp, size, 8, 0);     /* all of file 8 blk at a time */
+        }
 
 printf("File written at 4 argc %d argv %s\n", argc, fnp);
 

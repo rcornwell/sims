@@ -521,5 +521,8 @@ extern  int32   RDYQ_Put(uint32 entry);
 extern  int32   RDYQ_Get(uint32 *old);
 extern  int32   RDYQ_Num(void);
 
+extern  char *dump_mem(uint32 mp, int cnt);
+extern  char *dump_buf(uint8 *mp, int32 off, int cnt);
+
 #define get_chan(chsa)  ((chsa>>8)&0x7f)    /* get channel number from ch/sa */
 

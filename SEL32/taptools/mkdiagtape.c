@@ -14,17 +14,42 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
-#include <unistd.h>
+#ifdef _WIN32
+#include <stddef.h>
+#endif
+//#include <unistd.h>
 
-#define BLKSIZE 768                 /* MPX file sector size */
-unsigned char data[7680];           /* room for 10*768=(7680) 768 byte sectors per 7680 byte block */
+#if defined(_MSC_VER) && (_MSC_VER < 1600)
+typedef __int8           int8;
+typedef __int16          int16;
+typedef __int32          int32;
+typedef unsigned __int8  uint8;
+typedef unsigned __int16 uint16;
+typedef unsigned __int32 uint32;
+typedef signed __int64   t_int64;
+typedef unsigned __int64 t_uint64;
+typedef t_int64          off_t;
+#else                                                   
+/* All modern/standard compiler environments */
+/* any other environment needa a special case above */
+#include <stdint.h>
+typedef int8_t          int8;
+typedef int16_t         int16;
+typedef int32_t         int32;
+typedef uint8_t         uint8;
+typedef uint16_t        uint16;
+typedef uint32_t        uint32;
+#endif                                      /* end standard integers */
+
+#define BLKSIZE 768                         /* MPX file sector size */
+unsigned char data[7680];                   /* room for 10*768=(7680) 768 byte sectors per 7680 byte block */
 
 /* write 1 file to tape in 768 byte records */
 /* mblks is the maximum blockes to write from a file, 0=all */
 /* chunks is the number of sectors to wrote at a time 1-8 */
-int writefile(FILE *tp, char *fnp, u_int32_t mblks, int32_t chunks) {
-    u_int32_t word, blks=mblks;             /* just a temp word variable */         
-    u_int32_t size, bsize, csize;           /* size in 768 byte sectors */
+int writefile(FILE *tp, char *fnp, uint32 mblks, int32 chunks) {
+    int32 word, blks=mblks;                 /* just a temp word variable */         
+    int32 size, bsize, csize;               /* size in 768 byte sectors */
     FILE *fp;
     int32_t n1, n2, hc, nw, cs;
 
@@ -82,6 +107,7 @@ int writefile(FILE *tp, char *fnp, u_int32_t mblks, int32_t chunks) {
 //printf("write file %s (size %d bytes) (%d sect) (%d blocks) (%d chunks)\n",
 //      fnp, word, size, mblks, blks);
     fclose(fp);
+    exit(0);
 }
 
 /* read program file and output to a simulated diagnostic tape */
@@ -90,15 +116,12 @@ int main(argc, argv)
 int argc;
 char *argv[];
 {
-    FILE    *dp, *fp, *cp, *fopen();
-    int     targc;
+    FILE    *dp, *fp, *fopen();
     char    **targv;
     char    *p, *cmdp;
     int     i;
-    unsigned char *fnp;                     /* file name pointer */
-    unsigned int size;                      /* size in 768 byte sectors */
     unsigned int word;                      /* just a temp word variable */         
-    int goteof, goteom;                     /* end flags */
+    int goteof;                             /* end flags */
     int writing;                            /* writing output */
 
     memset((char *)data, 0, 4608);          /* zero data storage */
@@ -159,8 +182,6 @@ char *argv[];
     /* got input tapefile and options, handle output file now */
 //  printf("AT 3 argc %d argv %s\n", argc, *argv);
     if (--argc > 0) {
-        int blks;
-
         p = *argv++;
         printf("argc %d argv3 %s\n", argc, p);
         if ((fp = fopen(p, "w")) == NULL) {

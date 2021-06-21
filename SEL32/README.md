@@ -9,14 +9,18 @@ added in the future.
 
 # SEL Concept/32 
 
-This simulator is capable of running UTX2.1A, UTX2.1B, MPX 1.5F, and a
-test version of MPX 3.4.  It is capable of creating a disk image for the
+This simulator is capable of running UTX2.1A, UTX2.1B, MPX 1.5F, MPX 3.4,
+MPX 3.5, and MPX 3.6. It is capable of creating a disk image for the
 O/S from a UTX or MPX SDT tape. The disk image can be booted, initialized,
 and can run many of the UTX and MPX utilities and programs. Ethernet is
-supported on UTX and may be added to MPX in the future.  Eight terminals
+supported on UTX and will be added to MPX in the future.  Eight terminals
 can be used to access MPX or UTX via Telnet port 4747. The sumulator has
 support for excess 64 floating point arithmetic and passes the 32/27 and
-32/67 FP diags.
+32/67 FP diags.  UTX is the SEL version of System V Unix and BSD Unix
+ported to the V6 and V9 processors.  UTX utilizes the basemode instruction
+set and a virtual memory system supported by the V6 & V9 CPUs.  The system
+needs further testing to solidify the SEL32 simulator code in all of the
+supported environmenets.
 
 The sim32disk.gz file is a prebuilt MPX 1.5F system disk.  It can be
 uncompressed and booted with the sel32.27.sim32.disk.ini initialization
@@ -99,11 +103,14 @@ utx21a1.tap    bootable UTX install tape for testing basemode.  The current
                The virtual memory has been fully tested with the VM.MMM diag.
 
 Other MPX verions support:
-               I am still looking for an MPX 3.X user or master SDT tape.  I have
-               much of the source, but no loadable code to create a bootable system.
-               Please keep looking for anyone who can provide these tapes or a
-               disk image of a bootable MPX3.X system.
+               I have recently received some old MPX 3.X save tapes.  Using these
+               I have been able to hand build a MPX3.6 SDT tape that can be used
+               to install MPX3.6.  Once installed, the system can be used to build
+               a new user SDT tape and install it elsewhere.  Both based and non-
+               based O/S images can be created.  More images for installation will
+               be made available in the future as I work my way through the save
+               tapes. 
 
 James C. Bevier
-04/14/2021 
+06/20/2021 
 

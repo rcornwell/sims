@@ -13,6 +13,7 @@
 //#include <unistd.h>
 //#include <string.h>
 //#include <errno.h>
+#define NOTDUMP
 
 int filen = 1;
 int EOFcnt = 0;
@@ -123,7 +124,7 @@ int main (int argc, char *argv[])
     int ll, gotboth = 0;
     int lfilen = filen;
     unsigned int fileaddr, file_byte_count=0, curchar, buffptr, bufflen;
-    int skipfile = 0;
+    int skipfile = 0, skip, cc;
 
     if (argc != 2) {
         fprintf(stderr, "usage: %s infile\n", argv[0]);
@@ -152,6 +153,8 @@ int main (int argc, char *argv[])
     buffptr = 0;
     bufflen = 16;
     fileaddr = 0;
+    skip = 0;
+    cc = 0;
     file_byte_count = 0;
     printf("\nfile %d:\n", filen);
 
@@ -163,23 +166,37 @@ int main (int argc, char *argv[])
             file_byte_count = 0;
             fileaddr = 0;
             printf("\nfile %d:\n", filen);
+            buffptr = 0;
         } else {
-            int cc = 0;
+//          int cc = 0;
             char buff[257];
             int ans;
-            buffptr = 0;
+//          buffptr = 0;
 
             /* see if skipping to next file */
             if (skipfile == 1) {
+                buffptr = 0;
+                cc = 0;
+                skip = 0;
                 continue;
             }
 
             /* process the returned buffer */
             while (cc < ll) {
-                curchar = (unsigned int)buf[cc++] & 0xff;
-                file_byte_count++;
+                if (skip != 0) {
+                    printf(" %06x : ",fileaddr);
+                    while (buffptr < skip) {
+                        buff[buffptr++] = 0x20;
+                        printf("  ");
+                        if (!(buffptr % 4))
+                            printf(" ");
+                    } /* end of while */
+                    skip = 0;
+                }
                 if (!buffptr)
                     printf(" %06x : ",fileaddr);
+                curchar = (unsigned int)buf[cc++] & 0xff;
+                file_byte_count++;
                 printf("%02x", curchar & 0xff);
                 buff[buffptr++] = PRINTABLE(curchar);
                 if (!(buffptr % 4))
@@ -189,7 +206,8 @@ int main (int argc, char *argv[])
                     printf(" |%s|\n",buff);
                     buffptr = 0;
                     fileaddr += bufflen;
-                    if (!(file_byte_count % 256)) {
+                    if (!(fileaddr % 256)) {
+//                  if (!(file_byte_count % 256)) {
 //                  if (!(file_byte_count % 768)) {
                         printf("\n<cr> - continue, q = quit, s = skip > ");
                         ans = getchar();
@@ -199,8 +217,11 @@ int main (int argc, char *argv[])
                             free(buf);
                             exit(1);
                         }
-                        if (ans == 's')
+                        if (ans == 's') {
                             skipfile = 1;
+                            cc = 0;
+                            skip = 0;
+                        }
                         if (ans != '\n')
                             while ((ans=getchar()) != '\n' )
                                 ;
@@ -210,8 +231,14 @@ int main (int argc, char *argv[])
                 } /* end of if */
             } /* end of while */
 
+            if ((ll % 256) == 0) {
+                cc = 0;
+                continue;
+            }
             if (buffptr && !skipfile) {
                 buff[buffptr] = 0;
+//              fileaddr += buffptr;
+                skip = buffptr;
                 while (buffptr++ < bufflen) {
                     printf("  ");
                     if (!(buffptr % 4))
@@ -231,7 +258,13 @@ int main (int argc, char *argv[])
                 if (ans != '\n')
                     while ((ans=getchar()) != '\n' )
                         ;
+                buffptr = 0;
+                file_byte_count = 0;
+//              else
+//                  skipfile = 0;
             } /* end of if */
+            printf("ll %x buf_size %x skip %x skipfile %x fileaddr %x\n",
+                    ll, buf_size, skip, skipfile, fileaddr);
         }
     }
 //  close(inp);

@@ -1142,6 +1142,7 @@ t_stat disk_srv(UNIT *uptr)
     uint8           ch;
     uint16          ssize = disk_type[type].ssiz * 4;   /* disk sector size in bytes */
     uint32          tstart;
+    char            *bufp;
     uint8           lbuf[32];
     uint8           buf[1024];
     uint8           buf2[1024];
@@ -1933,11 +1934,41 @@ iha_error:
             sim_debug(DEBUG_CMD, dptr,
                 "disk_srv after READ chsa %04x buffer %06x count %04x\n",
                 chsa, chp->ccw_addr, chp->ccw_count);
+            bufp = dump_buf(buf, 0, 16);
+            sim_debug(DEBUG_CMD, dptr, "disk_srv READ buf %s\n", bufp);
+            bufp = dump_buf(buf, 16, 16);
+            sim_debug(DEBUG_CMD, dptr, "disk_srv READ buf %s\n", bufp);
+            bufp = dump_buf(buf, 32, 16);
+            sim_debug(DEBUG_CMD, dptr, "disk_srv READ buf %s\n", bufp);
+#ifdef EXTRA_WORDS
+            bufp = dump_buf(buf, 48, 16);
+            sim_debug(DEBUG_CMD, dptr, "disk_srv READ buf %s\n", bufp);
+if ((chp->ccw_addr == 0x3cde0) && (buf[0] == 0x4a)) {
+            bufp = dump_buf(buf, 64, 16);
+            sim_debug(DEBUG_CMD, dptr, "disk_srv READ buf %s\n", bufp);
+            bufp = dump_buf(buf, 80, 16);
+            sim_debug(DEBUG_CMD, dptr, "disk_srv READ buf %s\n", bufp);
+            bufp = dump_buf(buf, 96, 16);
+            sim_debug(DEBUG_CMD, dptr, "disk_srv READ buf %s\n", bufp);
+            bufp = dump_buf(buf, 112, 16);
+            sim_debug(DEBUG_CMD, dptr, "disk_srv READ buf %s\n", bufp);
+            bufp = dump_buf(buf, 128, 16);
+            sim_debug(DEBUG_CMD, dptr, "disk_srv READ buf %s\n", bufp);
+            bufp = dump_buf(buf, 144, 16);
+            sim_debug(DEBUG_CMD, dptr, "disk_srv READ buf %s\n", bufp);
+            bufp = dump_buf(buf, 160, 16);
+            sim_debug(DEBUG_CMD, dptr, "disk_srv READ buf %s\n", bufp);
+            bufp = dump_buf(buf, 176, 16);
+            sim_debug(DEBUG_CMD, dptr, "disk_srv READ buf %s\n", bufp);
+}
+#endif
+#if 0
             sim_debug(DEBUG_DETAIL, dptr,
                 "disk_srv READ data %02x%02x%02x%02x %02x%02x%02x%02x "
                 "%02x%02x%02x%02x %02x%02x%02x%02x\n",
                 buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7],
                 buf[8], buf[9], buf[10], buf[11], buf[12], buf[13], buf[14], buf[15]);
+#endif
 
             uptr->CHS++;                        /* next sector number */
             /* process the next sector of data */

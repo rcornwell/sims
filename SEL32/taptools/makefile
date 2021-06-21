@@ -32,7 +32,6 @@ PROGS =			\
 	$(ROOT)/mkdiagtape \
 	$(ROOT)/tapdump	\
 	$(ROOT)/tape2disk \
-##	$(ROOT)/fileread \
 	$(ROOT)/disk2tap \
 	$(ROOT)/tapscan \
 	$(ROOT)/eomtap \
@@ -46,6 +45,7 @@ PROGS =			\
 	$(ROOT)/tap2disk \
 	$(ROOT)/cutostap \
 	$(ROOT)/small
+##	$(ROOT)/fileread
 
 all:	$(PROGS)
 

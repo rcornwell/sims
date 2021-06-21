@@ -336,7 +336,11 @@ uint32 find_int_lev(uint16 chsa)
     /* get the device entry for channel in SPAD */
     uint32  spadent = SPAD[get_chan(chsa)];     /* get spad device entry for logical channel */
 
-    if (spadent == 0 || spadent == 0xffffffff) {    /* see if valid entry */
+#ifdef FIX3X
+    if ((spadent == 0) || (spadent == 0xffffffff)) {    /* see if valid entry */
+#else
+    if ((spadent == 0) || ((spadent&MASK24) == MASK24)) {   /* see if valid entry */
+#endif
         sim_debug(DEBUG_EXP, &cpu_dev,
             "find_int_lev ERR chsa %04x spadent %08x\n", chsa, spadent);
         return 0;                               /* not found */
@@ -701,11 +705,14 @@ loop:
     }
 
     /* DC can only be used with a read/write cmd */
-    if (chp->ccw_flags & FLAG_DC) {
+    /* TODO move ccw code to LPR processing */
+    /* TEMP FIX FOR LPR */
+//  if (chp->ccw_flags & FLAG_DC) {
+    if ((chp->ccw_flags & FLAG_DC) && (chsa != 0x7ef8)) {
         if ((chp->ccw_cmd != 0x02) && (chp->ccw_cmd != 0x01)) {
             chp->chan_status |= STATUS_PCHK;    /* program check for invalid DC */
             sim_debug(DEBUG_EXP, &cpu_dev,
-                "disk_iocl DC ERROR chan_status[%02x]=%04x\n", chan, chp->chan_status);
+                "load_ccw DC ERROR chan_status[%02x]=%04x\n", chan, chp->chan_status);
             return 1;                           /* error return */
         }
     }
@@ -942,7 +949,7 @@ void chan_end(uint16 chsa, uint16 flags) {
     uint16  tstat, tcnt;
     CHANP   *chp = find_chanp_ptr(chsa);        /* get channel prog pointer */
 
-    sim_debug(DEBUG_DETAIL, &cpu_dev,
+    sim_debug(DEBUG_CMD, &cpu_dev,
         "chan_end entry chsa %04x flags %04x status %04x cmd %02x\n",
         chsa, flags, chp->chan_status, chp->ccw_cmd);
 //  fflush(sim_deb);
@@ -1193,8 +1200,8 @@ void store_csw(CHANP *chp)
 /* store the device status into the first entry of the status FIFO for the channel */
 void push_csw(CHANP *chp)
 {
-    uint32  stwd1, stwd2;                       /* words 1&2 of stored status */
-    uint32  chsa = chp->chan_dev;               /* get ch/sa information */
+    int32  stwd1, stwd2;                       /* words 1&2 of stored status */
+    uint32  chsa = chp->chan_dev;              /* get ch/sa information */
 
     /* put sub address in byte 0 */
     stwd1 = ((chsa & 0xff) << 24) | chp->chan_caw;  /* subaddress and IOCD address to SW 1 */
@@ -2580,7 +2587,11 @@ uint32 scan_chan(uint32 *ilev) {
     for (i=0; i<112; i++) {
         if (SPAD[i+0x80] == 0)                  /* not initialize? */
             continue;                           /* skip this one */
+#ifdef FIX3X
         if (SPAD[i+0x80] == 0xffffffff)         /* not initialize? */
+#else
+        if ((SPAD[i+0x80]&MASK24) == MASK24)    /* not initialize? */
+#endif
             continue;                           /* skip this one */
         if (INTS[i] & INTS_REQ)                 /* if already requesting, skip */
             continue;                           /* skip this one */
@@ -2616,10 +2627,18 @@ uint32 scan_chan(uint32 *ilev) {
     for (i=0; i<112; i++) {
         if (SPAD[i+0x80] == 0)                  /* not initialize? */
             continue;                           /* skip this one */
+#ifdef FIX3X
         if (SPAD[i+0x80] == 0xffffffff)         /* not initialize? */
+#else
+        if ((SPAD[i+0x80]&MASK24) == MASK24)    /* not initialize? */
+#endif
             continue;                           /* skip this one */
         /* this is a bug fix for MPX 1.x restart command */
+#ifdef FIX3X
         if (SPAD[i+0x80] == 0xefffffff)         /* not initialize? */
+#else
+        if ((SPAD[i+0x80]&MASK24) == MASK24)    /* not initialize? */
+#endif
             continue;                           /* skip this one */
         if ((INTS[i]&INTS_ACT) || (SPAD[i+0x80]&SINT_ACT)) { /* look for level active */
             sim_debug(DEBUG_DETAIL, &cpu_dev,

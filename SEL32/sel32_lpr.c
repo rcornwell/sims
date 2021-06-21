@@ -240,7 +240,7 @@ t_stat lpr_preio(UNIT *uptr, uint16 chan) {
     }
 
     sim_debug(DEBUG_CMD, dptr,
-        "lpr_preio unit %02x chsa %04xOK\n", unit, chsa);
+        "lpr_preio unit %02x chsa %04x OK\n", unit, chsa);
     return SCPE_OK;                         /* good to go */
 }
 
@@ -298,8 +298,6 @@ t_stat  lpr_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         uptr->CMD &= ~(LPR_CMDMSK);         /* zero cmd */
         uptr->CMD |= (cmd & LPR_CMDMSK);    /* save new command in CMD */
         sim_activate(uptr, 100);            /* Start unit off */
-        uptr->SNS = 0;                      /* no status */
-        uptr->CBP = 0;                      /* start of buffer */
         return 0;                           /* we are good to go */
 
     case 0x4:                               /* Sense Status */
@@ -309,8 +307,6 @@ t_stat  lpr_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         uptr->CMD &= ~(LPR_CMDMSK);         /* zero cmd */
         uptr->CMD |= (cmd & LPR_CMDMSK);    /* save new command in CMD */
         sim_activate(uptr, 100);            /* Start unit off */
-        uptr->SNS = 0;                      /* no status */
-        uptr->CBP = 0;                      /* start of buffer */
         return 0;                           /* we are good to go */
 
     default:                                /* invalid command */
@@ -330,18 +326,41 @@ t_stat lpr_srv(UNIT *uptr) {
     int     chsa = GET_UADDR(uptr->CMD);
     int     u = (uptr - lpr_unit);
     int     cmd = (uptr->CMD & 0xff);
+    CHANP   *chp = find_chanp_ptr(chsa);    /* find the chanp pointer */
     DEVICE  *dptr = get_dev(uptr);          /* get device pointer */
 
     sim_debug(DEBUG_CMD, dptr,
-        "lpr_srv called chsa %04x cmd %02x CMD %08x cnt %04x\r\n",
-        chsa, cmd, uptr->CMD, uptr->CBP);
+        "lpr_srv called chsa %04x cmd %02x CMD %08x addr %06x cnt %04x\n",
+        chsa, cmd, uptr->CMD, chp->ccw_addr, chp->ccw_count);
 
     /* FIXME, need IOP lp status bit assignments */
     if (cmd == 0x04) {                      /* sense? */
-        uint8 ch = uptr->SNS;               /* get current status */
-        uptr->CMD &= ~(LPR_CMDMSK);         /* clear command */
-        chan_write_byte(chsa, &ch);         /* write the status to memory */
-        uptr->CBP = 0;                      /* reset to beginning of buffer */
+        uint8 ch;                           /* get current status */
+        ch = uptr->SNS & SNS_BOF;           /* BOF? */
+        if (chan_write_byte(chsa, &ch)) {   /* write the status to memory */
+            sim_debug(DEBUG_CMD, dptr,
+                "lpr_srv write1 error CMD %08x read %02x SNS %02x ccw_count %02x\n",
+                 uptr->CMD, ch, uptr->SNS, chp->ccw_count);
+            uptr->CMD &= ~(LPR_CMDMSK);     /* clear command */
+            uptr->SNS = 0;                  /* no status */
+            chan_end(chsa, SNS_DEVEND|SNS_CHNEND|SNS_UNITEXP);  /* we are done */
+            return SCPE_OK;
+        }
+        ch = uptr->SNS & SNS_BOF;           /* BOF? */
+        if (chan_write_byte(chsa, &ch)) {   /* write the status to memory */
+            sim_debug(DEBUG_CMD, dptr,
+                "lpr_srv write2 error CMD %08x read %02x SNS %02x ccw_count %02x\n",
+                 uptr->CMD, ch, uptr->SNS, chp->ccw_count);
+            uptr->CMD &= ~(LPR_CMDMSK);     /* clear command */
+            uptr->SNS = 0;                  /* no status */
+            chan_end(chsa, SNS_DEVEND|SNS_CHNEND|SNS_UNITEXP);  /* we are done */
+            return SCPE_OK;
+        }
+        sim_debug(DEBUG_CMD, dptr,
+            "lpr_srv sense write CMD %08x read %02x SNS %02x ccw_count %02x\n",
+             uptr->CMD, ch, uptr->SNS, chp->ccw_count);
+        uptr->CMD &= LMASK;                 /* make non-busy */
+        uptr->SNS = 0;                      /* no status */
         chan_end(chsa, SNS_DEVEND|SNS_CHNEND);  /* we are done */
         return SCPE_OK;
     }
@@ -446,13 +465,16 @@ t_stat lpr_srv(UNIT *uptr) {
     if (uptr->CMD & LPR_FULL || uptr->CBP >= 156) {
         lpr_data[u].lbuff[uptr->CBP] = 0x00;  /* NULL terminate */
         sim_fwrite(&lpr_data[u].lbuff, 1, uptr->CBP, uptr->fileref); /* Print our buffer */
-        sim_debug(DEBUG_DETAIL, dptr, "LPR %s", (char*)&lpr_data[u].lbuff);
+        sim_debug(DEBUG_DETAIL, dptr, "LPR %d %s\n", uptr->CNT, (char*)&lpr_data[u].lbuff);
         uptr->CMD &= ~(LPR_FULL|LPR_CMDMSK);    /* clear old status */
         uptr->CBP = 0;                      /* start at beginning of buffer */
-        uptr->CNT++;                        /* increment the line count */
+//      uptr->CNT++;                        /* increment the line count */
         if ((uint32)uptr->CNT > uptr->capac) {  /* see if at max lines/page */
             uptr->CNT = 0;                  /* yes, restart count */
-            chan_end(chsa, SNS_DEVEND|SNS_CHNEND|SNS_UNITEXP);  /* we are done */
+            uptr->SNS |= SNS_BOF;           /* set BOF for SENSE */
+            sim_debug(DEBUG_CMD, dptr, "lpr_srv Got BOF\n");
+//          chan_end(chsa, SNS_DEVEND|SNS_CHNEND|SNS_UNITEXP);  /* we are done */
+            chan_end(chsa, SNS_DEVEND|SNS_CHNEND);  /* we are done */
         } else
             chan_end(chsa, SNS_DEVEND|SNS_CHNEND);  /* we are done */
         /* done, so no time out */
@@ -541,6 +563,7 @@ t_stat lpr_attach(UNIT *uptr, CONST char *file)
     uptr->CMD &= ~(LPR_FULL|LPR_CMDMSK);
     uptr->CNT = 0;
     uptr->SNS = 0;
+    uptr->capac = 66;
 
     /* check for valid configured lpr */
     /* must have valid DIB and Channel Program pointer */
@@ -561,7 +584,7 @@ t_stat lpr_attach(UNIT *uptr, CONST char *file)
 /* help information for lpr */
 t_stat lpr_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-    fprintf (st, "SEL32 924x High Speed Line Printer\r\n");
+    fprintf (st, "SEL32 924x High Speed Line Printer\n");
     fprintf (st, "The Line printer can be configured to any number of\n");
     fprintf (st, "lines per page with the:\n");
     fprintf (st, "sim> SET LPRn LINESPERPAGE=n\n\n");

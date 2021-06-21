@@ -28,6 +28,8 @@ extern REG cpu_reg[];
 extern uint32 M[MAXMEMSIZE];
 extern uint32 SPAD[];
 extern uint32 PSD[];
+char *dump_mem(uint32 mp, int cnt);
+char *dump_buf(uint8 *mp, int32 off, int cnt);
 
 /* SCP data structures and interface routines
 
@@ -143,6 +145,93 @@ const char *sim_stop_messages[SCPE_BASE] = {
        "I/O Check opcode",
        "Memory management trap during trap",
 };
+
+#define PRINTABLE(x) ((x < 32) || (x > 126)) ? '.' : x
+
+static char line[257];
+/* function to dump SEL32 memory up to 16 bytes with side by side ascii values */
+char *dump_mem(uint32 mp, int cnt)
+{
+    char    buff[257];
+    uint32  ma = mp;                            /* save memory address */
+    char    *cp = &line[0];                     /* output buffer */
+    int     cc=0, ch, bp=0, bl=cnt;
+
+    if (cnt > 16)
+        bl = 16;                                /* stop at 16 chars */
+
+    while (bp < bl) {
+        if (!bp) {
+            cc = sprintf(cp, " %06x : ", ma);    /* output location address */
+            cp += cc;                           /* next print location */
+        }
+        ch = RMB(ma) & 0xff;                    /* get a char from memory */
+        ma++;                                   /* next loc */
+        cc += sprintf(cp, "%02x", ch);          /* print out current char */
+        cp += 2;                                /* next print location */
+        buff[bp++] = PRINTABLE(ch);             /* get printable version of char */
+        if (!(bp % 4)) {                        /* word boundry yet? */
+            cc += sprintf(cp, " ");             /* space between words */
+            cp += 1;                            /* next print location */
+        }
+    }
+
+    while (bp < 16) {
+        cc += sprintf(cp, " ");                 /* print out one space */
+        cp += 1;                                /* next print location */
+        buff[bp++] = 0x20;                      /* blank char buffer */
+        if (!(bp % 4)) {
+            cc += sprintf(cp, " ");             /* space between words */
+            cp += 1;                            /* next print location */
+        }
+    }
+    buff[bp] = 0;                               /* terminate line */
+    cc += sprintf(cp, "|%s|\n", buff);          /* print out ascii text */
+    return (line);                              /* return pointer to caller */
+}
+
+/* function to dump caller buffer upto 16 bytes with side by side ascii values */
+/* off is offset in buffer to start */
+char *dump_buf(uint8 *mp, int32 off, int cnt)
+{
+    char    buff[257];
+    uint32  ma = off;                           /* save memory address */
+    char    *cp = &line[0];                     /* output buffer */
+    int     cc=0, ch, bp=0, bl=cnt;
+
+    if (cnt > 16)
+        bl = 16;                                /* stop at 16 chars */
+
+    while (bp < bl) {
+        if (!bp) {
+            cc = sprintf(cp, " %06x : ", ma);    /* output location offset */
+            cp += cc;                           /* next print location */
+        }
+        ch = mp[ma++] & 0xff;                   /* get a char from memory */
+        cc += sprintf(cp, "%02x", ch);          /* print out current char */
+        cp += 2;                                /* next print location */
+        buff[bp++] = PRINTABLE(ch);             /* get printable version of char */
+        if (!(bp % 4)) {                        /* word boundry yet? */
+            cc += sprintf(cp, " ");             /* space between words */
+            cp += 1;                            /* next print location */
+        }
+    }
+
+    while (bp < 16) {
+        cc += sprintf(cp, " ");                 /* print out one space */
+        cp += 1;                                /* next print location */
+        buff[bp++] = 0x20;                      /* blank char buffer */
+        if (!(bp % 4)) {
+            cc += sprintf(cp, " ");             /* space between words */
+            cp += 1;                            /* next print location */
+        }
+    }
+    buff[bp] = 0;                               /* terminate line */
+    cc += sprintf(cp, "|%s|\n", buff);          /* print out ascii text */
+    return (line);                              /* return pointer to caller */
+}
+
+
 
 /*
  * get_word - function to load a 32 bit word from the input file 

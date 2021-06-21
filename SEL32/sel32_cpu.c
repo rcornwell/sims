@@ -1855,6 +1855,7 @@ t_stat sim_instr(void) {
     int32               int32b;                     /* temp int */
     int32               int32c;                     /* temp int */
 //#define MPXTEST
+//#define LOOK_MAP_05272021
 #ifdef MPXTEST
     int32               ii;                         /* temp int */
 #endif
@@ -3704,13 +3705,21 @@ skipit:
                 if ((PSD1 & 2) != 0)                /* is it lf hw instruction */
                     goto inv;                       /* invalid instr if in rt hw */
                 addr = SPAD[0xf0];                  /* get trap table memory address from SPAD (def 80) */
-                if (addr == 0 || addr == 0xffffffff) {  /* see if secondary vector table set up */
+#ifdef FIX3X
+                if ((addr == 0) || (addr == 0xffffffff)) {  /* see if secondary vector table set up */
+#else
+                if ((addr == 0) || ((addr&MASK24) == MASK24)) {  /* see if secondary vector table set up */
+#endif
                     TRAPME = ADDRSPEC_TRAP;         /* Not setup, error */
                     goto newpsd;                    /* program error */
                 }
                 addr = addr + (0x0A << 2);          /* addr has mem addr of CALM trap vector (def A8) */
                 t = M[addr >> 2];                   /* get the ICB address from memory */
-                if (t == 0 || t == 0xffffffff) {    /* see if ICB set up */
+#ifdef FIX3X
+                if ((t == 0) || (t == 0xffffffff)) {    /* see if ICB set up */
+#else
+                if ((t == 0) || ((t&MASK24) == MASK24)) {   /* see if ICB set up */
+#endif
                     TRAPME = ADDRSPEC_TRAP;         /* Not setup, error */
                     goto newpsd;                    /* program error */
                 }
@@ -5323,8 +5332,8 @@ doovr2:
                 uint32 sq59 = M[0x930>>2];          /* get C.SQ59 headcell */
                 uint32 dqe = M[0x8e8>>2];           /* get DQE of current task */
 
-//              sim_debug(DEBUG_IRQ, &cpu_dev,
-//                  "SVC start sq59 %04x dqe %04x\n",sq59, dqe);
+                sim_debug(DEBUG_IRQ, &cpu_dev,
+                    "SVC start sq59 %04x dqe %04x\n",sq59, dqe);
                 if (sq59 != 0x930)
                     goto skipdqe2;                  /* not running on mpx, skip */
                 for (j=0; j<8; j++) {               /* get the task name */
@@ -5338,19 +5347,31 @@ skipdqe2:
                 int32c = CPUSTATUS;                 /* keep for retain blocking state */
                 addr = SPAD[0xf0];                  /* get trap table memory address from SPAD (def 80) */
                 int32a = addr;
+#ifdef FIX3X
                 if (addr == 0 || addr == 0xffffffff) {  /* see if secondary vector table set up */
+#else
+                if (addr == 0 || ((addr&MASK24) == MASK24)) {  /* see if secondary vector table set up */
+#endif
                     TRAPME = ADDRSPEC_TRAP;         /* Not setup, error */
                     goto newpsd;                    /* program error */
                 }
                 addr = addr + (0x06 << 2);          /* addr has mem addr of SVC trap vector (def 98) */
                 temp = M[addr >> 2];                /* get the secondary trap table address from memory */
+#ifdef FIX3X
                 if (temp == 0 || temp == 0xffffffff) {  /* see if ICB set up */
+#else
+                if (temp == 0 || ((temp&MASK24) == MASK24)) {  /* see if ICB set up */
+#endif
                     TRAPME = ADDRSPEC_TRAP;         /* Not setup, error */
                     goto newpsd;                    /* program error */
                 }
                 temp2 = ((IR>>12) & 0x0f) << 2;     /* get SVC index from IR */
                 t = M[(temp+temp2)>>2];             /* get secondary trap vector address ICB address */
+#ifdef FIX3X
                 if (t == 0 || t == 0xffffffff) {    /* see if ICB set up */
+#else
+                if (temp == 0 || ((temp&MASK24) == MASK24)) {  /* see if ICB set up */
+#endif
                     TRAPME = ADDRSPEC_TRAP;         /* Not setup, error */
                     goto newpsd;                    /* program error */
                 }
@@ -5375,6 +5396,30 @@ skipdqe2:
         cpu_dev.dctrl |= DEBUG_INST;                /* start instruction trace */
     }
 #endif
+#endif
+#if DYNAMIC_DEBUG
+    if (((temp2>>2) == 0) && ((IR&0xFFF) == 0xb01)) {   /* SVC 0,VOMM,1 */
+        cpu_dev.dctrl |= DEBUG_INST;                /* start instruction trace */
+    }
+#endif
+#ifdef DO_DYNAMIC_DEBUG
+    if (((temp2>>2) == 0) && ((IR&0xFFF) == 0x303)) {   /* SVC 0,TAMM,1 */
+        if (GPR[3] == 0x3a000)
+            cpu_dev.dctrl |= DEBUG_INST;            /* start instruction trace */
+    }
+#endif
+#ifdef DO_DYNAMIC_DEBUG
+    if (((temp2>>2) == 2) && ((IR&0xFFF) == 0x028)) {   /* SVC 2,28 H.VOMM,9 */
+        if (cpu_dev.dctrl & DEBUG_INST)
+            cpu_dev.dctrl &= ~DEBUG_INST;           /* stop instruction trace */
+        else
+            cpu_dev.dctrl |= DEBUG_INST;            /* start instruction trace */
+    }
+#endif
+#ifdef DO_DYNAMIC_DEBUG
+    if (((temp2>>2) == 0) && ((IR&0xFFF) == 0xa11)) {   /* SVC 0,REMM,17 */
+        cpu_dev.dctrl |= DEBUG_INST;                /* start instruction trace */
+    }
 #endif
 #ifdef DO_DYNAMIC_DEBUG
     if (((temp2>>2) == 0) && ((IR&0xFFF) == 0x910)) {   /* SVC 0,REXS,16 */
@@ -6021,8 +6066,10 @@ skipdqe2:
                         ii, GPR[ii], ii+1, GPR[ii+1], ii+2, GPR[ii+2], ii+3, GPR[ii+3]);
                 }
                 /* DYNAMIC 05282021 */
+#if 0
 if ((GPR[0] == 0x840017f0) && (GPR[1] == 0x00004908))
 cpu_dev.dctrl |= DEBUG_INST;                        /* start instruction trace */
+#endif
 #endif
                 /* set the mode bits and CCs from the new PSD */
                 CC = PSD1 & 0x78000000;             /* extract bits 1-4 from PSD1 */
@@ -6121,7 +6168,6 @@ skipdqe:
                     if (PSD2 & MAPBIT) {
                         /* set mapped mode in cpu status */
                         CPUSTATUS |= BIT8;          /* set bit 8 of cpu status */
-//#define LOOK_MAP_05272021
 #ifdef LOOK_MAP_05272021
                         sim_debug(DEBUG_IRQ, &cpu_dev,
                             "B4 LPSDCM temp %06x TPSD %08x %08x PSD %08x %08x\n",
@@ -6155,7 +6201,7 @@ skipdqe:
                             uint32 cpix = PSD2 & 0x3ff8;    /* get cpix 11 bit offset from psd wd 2 */
                             uint32 midl = RMW(mpl+cpix);    /* get midl entry for given user cpix */
                             uint32 spc = midl & MASK16; /* get 16 bit user segment description count */
-#ifndef TRY_TEST_05182021
+#ifdef TRY_TEST_05182021
     /* output O/S and User MPL entries */
     sim_debug(DEBUG_EXP, &cpu_dev,
         "#LPSDCM MEM %06x MPL %06x MPL[0] %08x %06x MPL[%04x] %08x %06x\n",
@@ -6302,8 +6348,11 @@ skipdqe:
                         break;                      /* ignore */
                     /* SPAD entries for interrupts begin at 0x80 */
                     t = SPAD[prior+0x80];           /* get spad entry for interrupt */
-     
+#ifdef FIX3X
                     if ((t == 0) || (t == 0xffffffff)) /* if unused, ignore instruction */
+#else
+                    if ((t == 0) || ((t&MASK24) == MASK24))  /* if unused, ignore instruction */
+#endif
                         break;                      /* ignore */
       
                     if ((t & 0x0f800000) == 0x0f000000) /* if class F ignore instruction */
@@ -6337,7 +6386,11 @@ skipdqe:
                     /* SPAD entries for interrupts begin at 0x80 */
                     t = SPAD[prior+0x80];           /* get spad entry for interrupt */
      
+#ifdef FIX3X
                     if ((t == 0) || (t == 0xffffffff)) /* if unused, ignore instruction */
+#else
+                    if ((t == 0) || ((t&MASK24) == MASK24)) /* if unused, ignore instruction */
+#endif
                         break;                      /* ignore */
          
                     if ((t & 0x0f800000) == 0x0f000000) /* if class F ignore instruction */
@@ -6371,8 +6424,11 @@ skipdqe:
                         break;                      /* ignore */
                     /* SPAD entries for interrupts begin at 0x80 */
                     t = SPAD[prior+0x80];           /* get spad entry for interrupt */
-      
+#ifdef FIX3X
                     if ((t == 0) || (t == 0xffffffff)) /* if unused, ignore instruction */
+#else
+                    if ((t == 0) || ((t&MASK24) == MASK24))  /* if unused, ignore instruction */
+#endif
                         break;                      /* ignore */
            
                     if ((t & 0x0f800000) == 0x0f000000) /* if class F ignore instruction */
@@ -6387,8 +6443,11 @@ skipdqe:
                         break;                      /* ignore */
                     /* SPAD entries for interrupts begin at 0x80 */
                     t = SPAD[prior+0x80];           /* get spad entry for interrupt */
-     
+#ifdef FIX3X
                     if ((t == 0) || (t == 0xffffffff)) /* if unused, ignore instruction */
+#else
+                    if ((t == 0) || ((t&MASK24) == MASK24))  /* if unused, ignore instruction */
+#endif
                         break;                      /* ignore */
       
                     if ((t & 0x0f800000) == 0x0f000000) /* if class F ignore instruction */
@@ -6404,8 +6463,11 @@ skipdqe:
                         break;                      /* ignore */
                     /* SPAD entries for interrupts begin at 0x80 */
                     t = SPAD[prior+0x80];           /* get spad entry for interrupt */
-     
+#ifdef FIX3X
                     if ((t == 0) || (t == 0xffffffff)) /* if unused, ignore instruction */
+#else
+                    if ((t == 0) || ((t&MASK24) == MASK24))  /* if unused, ignore instruction */
+#endif
                         break;                      /* ignore */
         
                     if ((t & 0x0f800000) == 0x0f000000) /* if class F ignore instruction */
@@ -6511,7 +6573,11 @@ skipdqe:
             /* the channel must be defined as a class F I/O channel in SPAD */
             /* if not class F, the system will generate a system check trap */
             t = SPAD[lchan];                        /* get spad entry for channel */
-            if ((t == 0 || t == 0xffffffff) ||      /* if not set up, system check */
+#ifdef FIX3X
+            if ((t == 0) || (t == 0xffffffff) ||    /* if not set up, system check */
+#else
+            if ((t == 0) || ((t&MASK24) == MASK24) || /* if not set up, system check */
+#endif
                 ((t & 0x0f800000) != 0x0f000000)) {   /* class in bits 4-7 */
                 TRAPME = SYSTEMCHK_TRAP;            /* trap condition if F class */
                 TRAPSTATUS |= BIT0;                 /* class F error bit */
@@ -6966,7 +7032,11 @@ newpsd:
             /* SPAD location 0xf0 has trap vector base address */
             uint32 tta = SPAD[0xf0];                /* get trap table address in memory */
             uint32 tvl;                             /* trap vector location */
-            if (tta == 0 || tta == 0xffffffff)
+#ifdef FIX3X
+            if ((tta == 0) || (tta == 0xffffffff)
+#else
+            if ((tta == 0) || ((tta&MASK24) == MASK24))
+#endif
                 tta = 0x80;                         /* if not set, assume 0x80 FIXME */
             /* Trap Table Address in memory is pointed to by SPAD 0xF0 */
             /* TODO update cpu status and trap status words with reason too */

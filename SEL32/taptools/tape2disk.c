@@ -13,7 +13,6 @@
 
 #include <stdio.h>
 #include <sys/types.h>
-#include <sys/signal.h>
 //#include <sys/mtio.h>
 #include <stdlib.h>                 /* for exit() */
 #ifdef _WIN32
@@ -26,6 +25,7 @@
 #else
 #include <sys/fcntl.h>              /* for O_RDONLY, O_WRONLY, O_CREAT */
 #include <unistd.h>                 /* for open, read, write */
+#include <sys/signal.h>
 #endif
 
 #if defined(_MSC_VER) && (_MSC_VER < 1600)
@@ -55,7 +55,9 @@ int  usefmgr = 1;                   /* use fmgr format with 2 EOF's, else 3 EOF'
 char *buff;                         /* buffer for read/write */
 int filen = 1;                      /* file number being processed */
 long count=0, lcount=0;             /* number of blocks for file */
+#ifndef _WIN32
 extern void RUBOUT();               /* handle user DELETE key signal */
+#endif
 off_t size=0, tsize=0;              /* number of bytes in file, total */
 int ln;
 char *inf, *outf;
@@ -112,8 +114,10 @@ char **argv;
         fprintf(stderr, "Can't allocate memory for tapecopy\n");
         exit(4);
     }
+#ifndef _WIN32
     if (signal(SIGINT, SIG_IGN) != SIG_IGN)
         (void)signal(SIGINT, RUBOUT);
+#endif
 
     ln = -2;
     for (;;) {
@@ -231,6 +235,7 @@ char **argv;
     exit(0);
 }
 
+#ifndef _WIN32
 /* entered when user hit the DELETE key */
 void RUBOUT()
 {
@@ -245,3 +250,4 @@ void RUBOUT()
     (void)printf("total length: %ld bytes\n", tsize + size);
     exit(1);
 }
+#endif

@@ -189,11 +189,11 @@ is operating correctly.  The diags are located in the tests directory.  Diag.tap
 contains the diagnostic programs and diag.ini contains the directives to
 configure and run the SEL32 simulator.
 
-This simulator is capable of running UTX2.1A, UTX2.1B, MPX 1.5F, and a
-test version of MPX 3.4.  It is capable of creating a disk image for the
+This simulator is capable of running UTX2.1A, UTX2.1B, MPX 1.5F, MPX 3.4,
+MPX 3.5 and MPX 3.6.  It is capable of creating a disk image for the
 O/S from a UTX or MPX SDT tape. The disk image can be booted, initialized,
 and can run many of the UTX and MPX utilities and programs. Ethernet is
-supported on UTX and may be added to MPX in the future.  Eight terminals
+supported on UTX and will be added to MPX in the future.  Eight terminals
 can be used to access MPX via Telnet port 4747. The sumulator has support
 for excess 64 floating point arithmetic and passes the 32/27 and 32/67 FP
 diags.  UTX is the SEL version of System V Unix and BSD Unix ported to the
