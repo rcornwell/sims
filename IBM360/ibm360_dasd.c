@@ -1748,8 +1748,8 @@ wrckd:
              *da = ch;
              uptr->CMD |= DK_CYL_DIRTY;
              if (state == DK_POS_CNT && count == 7) {
-//                 if (cmd == DK_WR_SCKD)
- //                    rec[0] |= 0x80; /* Set overflow flag */
+                 if (cmd == DK_WR_SCKD)
+                     rec[0] |= 0x80; /* Set overflow flag */
                  data->klen = rec[5];
                  data->dlen = (rec[6] << 8) | rec[7];
                  sim_debug(DEBUG_DETAIL, dptr,

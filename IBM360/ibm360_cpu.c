@@ -395,7 +395,7 @@ void storepsw(uint32 addr, uint16 ircode) {
         ircode |= IRC_PER;
      if (ec_mode) {
          /* Generate first word */
-         if (Q370) { /* IBM 360/67 in EC mode */
+         if (Q370) { /* IBM 370 in EC mode */
               word = (((uint32)dat_en) << 26) |
                      ((per_en) ? 1<<30:0) |
                      ((irq_en) ? 1<<25:0) |
@@ -420,11 +420,11 @@ void storepsw(uint32 addr, uint16 ircode) {
                    M[0xB8 >> 2] = ircode;
                    break;
              }
-             if (per_en && per_code) {
-                M[150 >> 2] = (M[150 >> 2] & 0xFFFF0000) | per_code;
-                M[152 >> 2] = per_addr;
+             if (ircode & IRC_PER) {
+                M[150 >> 2] = ((uint32_t)per_code << 16) | (per_addr >> 16);
+                M[154 >> 2] = ((per_addr & 0xffff) << 16) | (M[154 >> 2] & 0xFFFF);
              }
-         } else {  /* IBM 370 under EC mode */
+         } else {  /* IBM 360/67 under EC mode */
              word = (((uint32)dat_en) << 26) |
                     ((irq_en) ? 1<<25:0) |
                     ((ext_en) ? 1<<24:0) |
@@ -1143,7 +1143,6 @@ wait_loop:
             sim_debug(DEBUG_DETAIL, &cpu_dev, "IRQ=%04x %08x\n", irq, PC);
             if (loading) {
                irqcode = irq;
-               (void)WriteHalf(0x2, irq);
                loading = 0;
                irqaddr = 0;
             } else
@@ -1547,22 +1546,12 @@ opr:
                         goto supress;
                     ext_en = (src1 & 01) != 0;
                     if (ec_mode) {
+                        irq_en = (src1 & 02) != 0;
+                        dat_en = (src1 & 04) != 0;
                         if (Q370) {
-                            if (src1 & 0xb8) {
-                                storepsw(OPPSW, IRC_SPEC);
-                                goto supress;
-                            }
-                            irq_en = (src1 & 02) != 0;
                             per_en = ((src1 & 0x40) != 0);
-                            dat_en = (src1 & 04) != 0;
                             sysmsk = irq_en ? (cregs[2] >> 16) : 0;
-                        } else {
-                            if (src1 & 0xf8) {
-                                storepsw(OPPSW, IRC_SPEC);
-                                goto supress;
-                            } else
-                                dat_en = (src1 & 04) != 0;
-                            irq_en = (src1 & 02) != 0;
+                        } else {  /* IBM 360/67 */
                             if (irq_en) {
                                 sysmsk = (cregs[4] >> 16) & 0xfe00;
                                 sysmsk |= (cregs[4] >> 15) & 0x01ff;
@@ -1570,10 +1559,13 @@ opr:
                                 sysmsk = 0;
                             }
                         }
+                        if (src1 & 0xb8) {
+                            storepsw(OPPSW, IRC_SPEC);
+                            goto supress;
+                        }
                     } else {
                         sysmsk = (src1 & 0xfc) << 8;
                         irq_en = (sysmsk != 0);
-                        ext_en = (src1 & 0x1) != 0;
                         dat_en = 0;
                         if (src1 & 0x2) {
                             if (Q370)
@@ -2395,7 +2387,7 @@ save_dbl:
                             per_mod |= 1 << reg1;
                             break;
                         }
-                    } else {
+                    } else {  /* IBM 360/67 */
                          addr2 = (entry >> 24);
                         /* Check if in correct length */
                          if (page > addr2) {
@@ -2412,6 +2404,7 @@ save_dbl:
                         goto supress;
                     }
 
+                    /* Fetch PTE entry */
                     entry = M[addr2 >> 2];
                     key[addr2 >> 11] |= 0x4;
                     entry >>= (addr2 & 2) ? 0 : 16;
@@ -2425,7 +2418,9 @@ save_dbl:
                         break;
                     }
 
-                    addr2 = (addr1 & page_mask) | ((entry & 0xfff8) << 8);
+                    /* Convert to address */
+                    entry >>= pte_shift;
+                    addr2 = (addr1 & page_mask) | (entry << page_shift);
                     cc = 0;
                     regs[reg1] = addr2;
                     per_mod |= 1 << reg1;
@@ -3218,19 +3213,23 @@ save_dbl:
                     dest = reg | src1;
                     if (WriteByte(addr1, src1))
                        break;
+                    ext_en = (dest & 1);
+                    irq_pend = 1;
                     if (ec_mode) {
                        dat_en = ((dest & 0x4) != 0);
                        irq_en = ((dest & 0x2) != 0);
                        per_en = ((dest & 0x40) != 0);
                        sysmsk = irq_en ? cregs[2] >> 16 : 0;
+                       if ((src1 & 0xb8) != 0) {
+                           storepsw(OPPSW, IRC_SPEC);
+                           goto supress;
+                       }
                     } else {
                        sysmsk = (dest << 8) & 0xfc00;
                        if (dest & 0x2)
                            sysmsk |= (cregs[2] >> 16) & 0x3ff;
                        irq_en = (sysmsk != 0);
                     }
-                    ext_en = (dest & 1);
-                    irq_pend = 1;
                 } else {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
@@ -5340,7 +5339,6 @@ fpnorm:
                 storepsw(OPPSW, IRC_OPR);
                 goto supress;
         }
-
         if (per_en && (cregs[9] & 0x10000000) != 0 && (cregs[9] & 0xffff & per_mod) != 0)
            per_code |= 0x1000;
 
@@ -5377,8 +5375,16 @@ fpnorm:
 
         if (irqaddr != 0) {
 supress:
-        sim_debug(DEBUG_TRACE, &cpu_dev, "suppress\n");
+             sim_debug(DEBUG_TRACE, &cpu_dev, "suppress\n");
              src1 = M[irqaddr>>2];
+             /* For IPL, save the device after reading the
+              * first part of the new PSW */
+             if (irqaddr == 0) {
+               (void)WriteHalf(0x2, irq);
+               if (Q370) {
+                  (void)WriteHalf(0xBA, irq);
+               }
+             }
              key[0] |= 0x4;
              if (hst_lnt) {
                  hst_p = hst_p + 1;
@@ -5393,6 +5399,7 @@ supress:
                   hst[hst_p].src2 = src2;
              }
 lpsw:
+             irqaddr = 0;
              if (Q370)
                  ec_mode = (src1 & 0x00080000) != 0;
              else if ((cpu_unit[0].flags & FEAT_DAT) != 0)
@@ -5402,15 +5409,13 @@ lpsw:
              ext_en = (src1 & 0x01000000) != 0;
              if (ec_mode) {
                  irq_en = (src1 & 0x02000000) != 0;
-                 dat_en = (src1 >> 26) & 1;
+                 dat_en = (src1 & 0x04000000) != 0;
                  cc = (src1 >> 12) & 3;
                  pmsk = (src1 >> 8) & 0xf;
                  if (Q370) {
                      per_en = (src1 & 0x40000000) != 0;
                      sysmsk = irq_en ? (cregs[2] >> 16) : 0;
-                     if (irqaddr == 4)
-                        (void)WriteHalf(0xBA, irq);
-                 } else {
+                 } else {  /* IBM 360/67 in EC mode */
                      if (irq_en) {
                          sysmsk = (cregs[4] >> 16) & 0xfe00;
                          sysmsk |= (cregs[4] >> 15) & 0x01ff;
@@ -5432,17 +5437,17 @@ lpsw:
                  pmsk = (src2 >> 24) & 0xf;
                  cc = (src2 >> 28) & 0x3;
              }
-             irqaddr = 0;
              irq_pend = 1;
              st_key = (src1 >> 16)  & 0xf0;
-             if (Q370)
+             if (Q370)  /* Don't allow ASCII bit to be set */
                 flags = (src1 >> 16) & 0x7;
              else
                 flags = (src1 >> 16) & 0xf;
              PC = src2 & AMASK;
              sim_debug(DEBUG_INST, &cpu_dev, "PSW=%08x %08x  ", src1, src2);
-             if (dat_en & 0x2)
+             if (ec_mode && ((src1 & 0xb800c0ff) != 0 || (src2 & 0xff000000) != 0)) {
                  storepsw(OPPSW, IRC_SPEC);
+             }
         }
         sim_interval--;
     }

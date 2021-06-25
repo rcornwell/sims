@@ -814,7 +814,7 @@ t_stat mt_srv(UNIT * uptr)
                    break;
               case 1:
                    r = sim_tape_sprecf(uptr, &reclen);
-                   sim_debug(DEBUG_DETAIL, dptr, "Skip frec unit=%d %d", unit, reclen);
+                   sim_debug(DEBUG_DETAIL, dptr, "Skip frec unit=%d %d ", unit, reclen);
                    if (r == MTSE_TMK) {
                        uptr->POS++;
                        sim_debug(DEBUG_DETAIL, dptr, "MARK\n");
