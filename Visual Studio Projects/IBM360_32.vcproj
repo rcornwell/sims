@@ -237,6 +237,10 @@
 				RelativePath="..\IBM360\ibm360_sys.c"
 				>
 			</File>
+			<File
+				RelativePath="..\IBM360\ibm360_vma.c"
+				>
+			</File>
  			<File
  				RelativePath="..\..\windows-build\pthreads\pthread.c"
  				>
