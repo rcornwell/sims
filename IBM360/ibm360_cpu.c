@@ -1,6 +1,6 @@
 /* ibm360_cpu.c: ibm 360 cpu simulator.
 
-   Copyright (c) 2019-2020, Richard Cornwell
+   Copyright (c) 2019-2021, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -242,6 +242,9 @@ int          timer_tics;           /* Interval Timer is ever 3 tics */
 #define Q360 (cpu_unit[0].flags & FEAT_370) == 0
 #define Q370 (cpu_unit[0].flags & FEAT_370) != 0
 
+#define QVMA ((cpu_unit[0].flags & (FEAT_370|FEAT_VMA)) == (FEAT_370|FEAT_VMA) && \
+              ((cregs[6] & 0xc0000000) == 0x80000000))
+
 int hst_lnt;
 int hst_p;
 struct InstHistory
@@ -277,6 +280,16 @@ void   dec_srp(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2);
 void   dec_add(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2);
 void   dec_mul(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2);
 void   dec_div(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2);
+extern int    vma_370(int reg, uint32 addr1);
+extern int    vma_ssm(uint32 addr1);
+extern int    vma_lpsw(uint32 addr1);
+extern int    vma_stssk(uint32 src1, uint32 addr1);
+extern int    vma_stisk(uint8  reg1, uint32 addr1);
+extern int    vma_stsvc(uint8 reg);
+extern int    vma_lra(uint8 reg, uint32 addr1);
+extern int    vma_stnsm(uint8 reg, uint32 addr1);
+extern int    vma_stosm(uint8 reg, uint32 addr1);
+extern int    vma_stctl(uint8 reg, uint32 addr1);
 void   check_tod_irq();
 
 t_bool build_dev_tab (void);
@@ -365,6 +378,8 @@ MTAB cpu_mod[] = {
     { FEAT_TIMER, 0, NULL,  "NOTIMER", NULL, NULL},
     { FEAT_DAT, FEAT_DAT, "DAT", "DAT", NULL, NULL, NULL, "DAT /67"},
     { FEAT_DAT, 0, NULL,  "NODAT", NULL, NULL},
+    { FEAT_VMA, FEAT_VMA, "VMA", "VMA", NULL, NULL, NULL, "Enable VM Assists"},
+    { FEAT_VMA, 0, NULL,  "NOVMA", NULL, NULL},
     { EXT_IRQ, 0, "NOEXT",  NULL, NULL, NULL},
     { EXT_IRQ, EXT_IRQ, "EXT", "EXT", NULL, NULL, NULL,
                       "SET CPU EXT causes external interrupt"},
@@ -377,16 +392,20 @@ DEVICE cpu_dev = {
     "CPU", cpu_unit, cpu_reg, cpu_mod,
     1, 16, 24, 1, 16, 8,
     &cpu_ex, &cpu_dep, &cpu_reset, NULL, NULL, NULL,
-    NULL, DEV_DEBUG, 0, dev_debug,
+    NULL, DEV_DEBUG, 0, cpu_debug,
     NULL, NULL, &cpu_help, NULL, NULL, &cpu_description
     };
 
-void post_extirq() {
+void
+post_extirq()
+{
      cpu_unit[0].flags |= EXT_IRQ;
 }
 
 
-void storepsw(uint32 addr, uint16 ircode) {
+void
+storepsw(uint32 addr, uint16 ircode)
+{
      uint32   word;
      uint32   word2;
      irqaddr = addr + 0x40;
@@ -508,7 +527,9 @@ void storepsw(uint32 addr, uint16 ircode) {
 /*
  * Translate an address from virtual to physical.
  */
-int  TransAddr(uint32 va, uint32 *pa) {
+int
+TransAddr(uint32 va, uint32 *pa)
+{
      uint32      seg;
      uint32      page;
      uint32      entry;
@@ -640,7 +661,9 @@ int  TransAddr(uint32 va, uint32 *pa) {
  * and alignment restrictions. Return 1 if failure, 0 if
  * success.
  */
-int  ReadFull(uint32 addr, uint32 *data) {
+int
+ReadFull(uint32 addr, uint32 *data)
+{
      uint32     pa;
      int        offset;
 
@@ -713,7 +736,9 @@ int  ReadFull(uint32 addr, uint32 *data) {
  * and alignment restrictions. Return 1 if failure, 0 if
  * success.
  */
-int ReadByte(uint32 addr, uint32 *data) {
+int
+ReadByte(uint32 addr, uint32 *data)
+{
 
      if (ReadFull(addr & (~0x3), data))
          return 1;
@@ -727,7 +752,9 @@ int ReadByte(uint32 addr, uint32 *data) {
  * and alignment restrictions. Return 1 if failure, 0 if
  * success.
  */
-int ReadHalf(uint32 addr, uint32 *data) {
+int
+ReadHalf(uint32 addr, uint32 *data)
+{
 
      /* Check if unaligned access */
      if (addr & 0x1) {
@@ -766,7 +793,9 @@ int ReadHalf(uint32 addr, uint32 *data) {
  * and alignment restrictions. Return 1 if failure, 0 if
  * success.
  */
-int WriteFull(uint32 addr, uint32 data) {
+int
+WriteFull(uint32 addr, uint32 data)
+{
      int        offset;
      uint32     pa;
      uint32     pa2;
@@ -877,7 +906,9 @@ int WriteFull(uint32 addr, uint32 data) {
  * and alignment restrictions. Return 1 if failure, 0 if
  * success.
  */
-int WriteByte(uint32 addr, uint32 data) {
+int
+WriteByte(uint32 addr, uint32 data)
+{
      uint32     mask;
      uint32     pa;
      int        offset;
@@ -934,7 +965,9 @@ int WriteByte(uint32 addr, uint32 data) {
  * and alignment restrictions. Return 1 if failure, 0 if
  * success.
  */
-int WriteHalf(uint32 addr, uint32 data) {
+int
+WriteHalf(uint32 addr, uint32 data)
+{
      uint32     mask;
      uint32     pa;
      uint32     pa2;
@@ -1492,6 +1525,9 @@ opr:
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 } else if (flags & PROBLEM) {
+                    /* Try to do quick SSK */
+                    if (QVMA && vma_stssk(src1, addr1))
+                        break;
                     storepsw(OPPSW, IRC_PRIV);
                     goto supress;
                 } else if ((addr1 & 0xF) != 0) {
@@ -1513,6 +1549,9 @@ opr:
                 if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
                     storepsw(OPPSW, IRC_PROT);
                 } if (flags & PROBLEM) {
+                    /* Try to do quick ISK */
+                    if (QVMA && vma_stisk(reg1, addr1))
+                        break;
                     storepsw(OPPSW, IRC_PRIV);
                 } else if ((addr1 & 0xF) != 0) {
                     storepsw(OPPSW, IRC_SPEC);
@@ -1530,11 +1569,19 @@ opr:
                 break;
 
         case OP_SVC:
+                /* Try to do quick SVC */
+                if ((flags & PROBLEM) != 0 && \
+                    (cpu_unit[0].flags & (FEAT_370|FEAT_VMA)) == (FEAT_370|FEAT_VMA) && \
+                    (cregs[6] & 0x88000000) == MSIGN && vma_stsvc(reg))
+                    break;
                 storepsw(OSPSW, reg);
                 break;
 
         case OP_SSM:
-                if (flags & PROBLEM) {
+                if ((flags & PROBLEM)) {
+                    sim_debug(DEBUG_VMA, &cpu_dev, "SSM  CR6 %08x\n", cregs[6]);
+                    if (QVMA && vma_ssm(addr1))
+                        break;
                     storepsw(OPPSW, IRC_PRIV);
                     goto supress;
                 } else {
@@ -1580,6 +1627,8 @@ opr:
 
         case OP_LPSW:
                 if (flags & PROBLEM) {
+                    if (QVMA && vma_lpsw(addr1))
+                        break;
                     storepsw(OPPSW, IRC_PRIV);
                     goto supress;
                 } else if ((addr1 & 0x7) != 0) {
@@ -2343,6 +2392,9 @@ save_dbl:
                 if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if (flags & PROBLEM) {
+                    /* Try to do quick LRA */
+                    if (QVMA && vma_lra(reg, addr1))
+                        break;
                     storepsw(OPPSW, IRC_PRIV);
                 } else {
                     uint32      seg;
@@ -2383,7 +2435,7 @@ save_dbl:
                         /* Check if over end of table */
                         if ((page >> pte_len_shift) >= addr2) {
                             cc = 3;
-                            regs[reg1] = addr1;
+                            regs[reg1] = addr2;
                             per_mod |= 1 << reg1;
                             break;
                         }
@@ -2982,6 +3034,9 @@ save_dbl:
                        goto supress;
                    }
                    if (reg != 5 && flags & PROBLEM) {
+                       /* Try to do quick IPK */
+                       if (QVMA && vma_370(reg, addr1))
+                           break;
                        storepsw(OPPSW, IRC_PRIV);
                        goto supress;
                    }
@@ -3104,7 +3159,7 @@ save_dbl:
                                   storepsw(OPPSW, IRC_OPR);
                                   goto supress;
                               }
-                              regs[2] = (regs[2] & 0xffffff00) | st_key;
+                              regs[2] = (regs[2] & 0xffffff00) | (st_key & 0xf0);
                               break;
                    case 0xd: /* PTLB */
                               if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
@@ -3145,6 +3200,9 @@ save_dbl:
         case OP_STNSM:
                 if (Q370) {
                     if (flags & PROBLEM) {
+                        /* Try to do quick STNSM */
+                        if (QVMA && vma_stnsm(reg, addr1))
+                            break;
                         storepsw(OPPSW, IRC_PRIV);
                         goto supress;
                     }
@@ -3190,6 +3248,9 @@ save_dbl:
         case OP_STOSM:
                 if (Q370) {
                     if (flags & PROBLEM) {
+                        /* Try to do quick STOSM */
+                        if (QVMA && vma_stosm(reg, addr1))
+                            break;
                         storepsw(OPPSW, IRC_PRIV);
                         goto supress;
                     }
@@ -3343,6 +3404,9 @@ save_dbl:
                                       sysmsk = irq_en ? (dest >> 16) : 0;
                                   irq_pend = 1;
                                   break;
+                        case 0x6:     /* Assist function */
+                                  sim_debug(DEBUG_VMA, &cpu_dev, "set CR6 %08x\n", dest);
+                                  break;
                         case 0x3:     /* Unassigned */
                         case 0x4:     /* Unassigned */
                         case 0x5:     /* Unassigned */
@@ -3372,6 +3436,9 @@ save_dbl:
                 } else if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if (flags & PROBLEM) {
+                    /* Try to do quick STCLT */
+                    if (QVMA && vma_stctl(reg, addr1))
+                        break;
                     storepsw(OPPSW, IRC_PRIV);
                 } else {
                     reg = R2(reg);
@@ -5434,8 +5501,8 @@ lpsw:
                  dat_en = 0;
                  irq_en = (sysmsk != 0);
                  per_en = 0;
-                 pmsk = (src2 >> 24) & 0xf;
                  cc = (src2 >> 28) & 0x3;
+                 pmsk = (src2 >> 24) & 0xf;
              }
              irq_pend = 1;
              st_key = (src1 >> 16)  & 0xf0;
@@ -5827,10 +5894,11 @@ dec_div(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
     dec_store(a, addr1, len, sa);
 }
 
-
+
 /* Reset */
 
-t_stat cpu_reset (DEVICE *dptr)
+t_stat
+cpu_reset (DEVICE *dptr)
 {
     int     i;
 
@@ -5941,7 +6009,8 @@ check_tod_irq()
 
 /* Memory examine */
 
-t_stat cpu_ex (t_value *vptr, t_addr exta, UNIT *uptr, int32 sw)
+t_stat
+cpu_ex (t_value *vptr, t_addr exta, UNIT *uptr, int32 sw)
 {
     uint32 addr = (uint32) exta;
     uint32 byte;
@@ -6016,7 +6085,8 @@ t_stat cpu_ex (t_value *vptr, t_addr exta, UNIT *uptr, int32 sw)
 
 /* Memory deposit */
 
-t_stat cpu_dep (t_value val, t_addr exta, UNIT *uptr, int32 sw)
+t_stat
+cpu_dep (t_value val, t_addr exta, UNIT *uptr, int32 sw)
 {
     uint32 addr = (uint32) exta;
     uint32 offset = 8 * (3 - (addr & 0x3));
@@ -6092,7 +6162,8 @@ t_stat cpu_dep (t_value val, t_addr exta, UNIT *uptr, int32 sw)
 
 /* Memory allocation */
 
-t_stat cpu_set_size (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+t_stat
+cpu_set_size (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
     int32 mc = 0;
     int32 i, clim;
@@ -6228,7 +6299,8 @@ cpu_show_hist(FILE * st, UNIT * uptr, int32 val, CONST void *desc)
 }
 
 
-t_stat              cpu_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
+t_stat
+cpu_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
     fprintf(st, "IBM360 CPU\n\n");
     fprint_set_help(st, dptr);

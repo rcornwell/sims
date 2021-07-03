@@ -105,7 +105,8 @@ typedef struct dib {
 #define FEAT_DAT     (1 << (UNIT_V_UF + 5))     /* Dynamic address translation */
 #define FEAT_EFP     (1 << (UNIT_V_UF + 6))     /* Extended floating point */
 #define FEAT_370     (1 << (UNIT_V_UF + 7))     /* Is a 370 */
-#define EXT_IRQ      (1 << (UNIT_V_UF + 8))     /* External interrupt */
+#define FEAT_VMA     (1 << (UNIT_V_UF + 8))     /* Enable VM assists */
+#define EXT_IRQ      (1 << (UNIT_V_UF + 9))     /* External interrupt */
 
 /* low addresses */
 #define IPSW              0x00        /* IPSW */
@@ -367,8 +368,10 @@ extern const uint8 ebcdic_to_ascii[256];
 #define DEBUG_IRQ       0x0000100       /* Show IRQ requests */
 #define DEBUG_CDATA     0x0000200       /* Show channel data */
 #define DEBUG_TRACE     0x0000400       /* Show instruction trace */
+#define DEBUG_VMA       0x0000800       /* Show VM Assist functions */
 
 extern DEBTAB dev_debug[];
+extern DEBTAB cpu_debug[];
 extern DEBTAB crd_debug[];
 
 extern DEVICE cpu_dev;

@@ -96,9 +96,19 @@ DEBTAB              dev_debug[] = {
     {"DETAIL", DEBUG_DETAIL, "Show details about device"},
     {"EXP", DEBUG_EXP, "Show exception information"},
     {"POS", DEBUG_POS, "Dasd positioning information"},
+    {0, 0}
+};
+
+/* Simulator debug controls */
+DEBTAB              cpu_debug[] = {
+    {"CMD", DEBUG_CMD, "Show command execution to devices"},
+    {"DATA", DEBUG_DATA, "Show data transfers"},
+    {"DETAIL", DEBUG_DETAIL, "Show details about device"},
+    {"EXP", DEBUG_EXP, "Show exception information"},
     {"INST", DEBUG_INST, "Show instruction execution"},
     {"CDATA", DEBUG_CDATA, "Show channel data"},
     {"TRACE", DEBUG_TRACE, "Show instruction history"},
+    {"VMA", DEBUG_VMA, "Show assist history"},
     {0, 0}
 };
 
