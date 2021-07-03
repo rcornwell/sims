@@ -440,7 +440,7 @@ storepsw(uint32 addr, uint16 ircode)
                    break;
              }
              if (ircode & IRC_PER) {
-                M[150 >> 2] = ((uint32_t)per_code << 16) | (per_addr >> 16);
+                M[150 >> 2] = ((uint32)per_code << 16) | (per_addr >> 16);
                 M[154 >> 2] = ((per_addr & 0xffff) << 16) | (M[154 >> 2] & 0xFFFF);
              }
          } else {  /* IBM 360/67 under EC mode */
