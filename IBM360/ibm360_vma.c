@@ -62,8 +62,6 @@ vma_rrb(uint32 addr1)
     uint32    pagswp;
     uint32    swpflg;
     uint32    pagcore;
-    uint32    micvpsw;
-    uint32    vpsw;
     uint8     stk;
 
     sim_debug(DEBUG_VMA, &cpu_dev, "RRB check %08x\n", addr1);
@@ -117,7 +115,7 @@ vma_rrb(uint32 addr1)
     if (addr1 & 0x800) {
        swpflg &= 0xfcfffffb;
     } else {
-       swpflg &  0xf3fffbff;
+       swpflg &= 0xf3fffbff;
     }
     M[((pagswp + (8 * page)) & AMASK) >> 2] = swpflg;
     /* Update the CC */
@@ -131,10 +129,7 @@ int
 vma_370(int reg, uint32 addr1)
 {
     uint32     micvpsw;
-    uint32     micseg;
     uint32     vpsw;
-    uint32     page;
-    uint32     seg;
 
     sim_debug(DEBUG_VMA, &cpu_dev, "B2%02x %08x check\n", reg, addr1);
     switch(reg) {
@@ -251,10 +246,8 @@ int
 vma_lpsw(uint32 addr1)
 {
     uint32    micblok;
-    uint32    miccreg;
     uint32    micvpsw;
     uint32    vpsw;
-    uint32    vpsw2;
     uint32    npsw1;
     uint32    npsw2;
 
@@ -604,7 +597,6 @@ vma_stnsm(uint8 reg, uint32 addr1)
     uint32    micvpsw;
     uint32    vpsw;
     uint32    temp;
-    int       flags;
 
     sim_debug(DEBUG_VMA, &cpu_dev, "STNSM check %02x %08x\n", reg, addr1);
     micblok = (cregs[6] & 0xfffff8) >> 2;
