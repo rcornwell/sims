@@ -8829,7 +8829,7 @@ jrstf:
               /* On KA or KI the AC is stored before Memory */
               MQ = BR;   /* Save original stack in case fault on write */
               BR = SOB(BR);
-	      AR = BR & FMASK;
+              AR = BR & FMASK;
               set_reg(AC, AR);
 #endif
 
@@ -8915,7 +8915,7 @@ jrstf:
                       AR = BR & FMASK;
                       set_reg(AC, AR);
                       break;
-		  }
+                  }
               }
 #endif
               if ((BR & C1) == 0) {
@@ -8932,7 +8932,7 @@ jrstf:
               break;
 
     case 0264: /* JSR */
-	      AR &= RMASK;
+              AR &= RMASK;
 #if KL
               if (QKLB && t20_page && pc_sect != 0)
                   MB = ((uint64)pc_sect << 18) + (PC + !pi_cycle);
@@ -9020,8 +9020,8 @@ jrstf:
               break;
 
     case 0266: /* JSA */ /* FBR|SCE */
-	      AR = ((AR & RMASK) << 18) | ((PC + 1) & RMASK);
-	      MB = BR;
+              AR = ((AR & RMASK) << 18) | ((PC + 1) & RMASK);
+              MB = BR;
               set_reg(AC, AR);
 #if !PDP6
               if (uuo_cycle | pi_cycle) {
@@ -9479,7 +9479,7 @@ skip_op:
               if (Mem_write(0, 0)) {
                   goto last;
               }
-	      AR = MB;
+              AR = MB;
               break;
 
     case 0417:    /* SETMB */ /* SAC|FCE */
@@ -10911,7 +10911,13 @@ skip_op:
                                     goto last;
                                  AR = MB;
                                  break;
-
+#if 0
+                           /* 70154 */
+                           case 011:
+                           case 013:
+                                 if (QITS)
+                                    break;
+#endif
                            default:
                                  goto muuo;
                            }
@@ -11000,60 +11006,60 @@ skip_op:
                            case 010:            /* WRSPB */   /* ITS LDBR1 */
 #if KS_ITS
                                  if (QITS) {
-                                    dbr1 = AR;
-                                    sim_debug(DEBUG_CONI, &cpu_dev, "WRSPD %012llo\n", dbr3);
+                                    dbr1 = AB;
+                                    sim_debug(DEBUG_CONI, &cpu_dev, "WRDBR1 %012llo\n", dbr1);
                                     break;
                                  }
 #endif
                                  if (Mem_read(0, 0, 0, 0))
                                     goto last;
                                  spt = MB;
-                                 sim_debug(DEBUG_CONI, &cpu_dev, "WRSPD %012llo\n", spt);
+                                 sim_debug(DEBUG_CONI, &cpu_dev, "WRSPB %012llo\n", spt);
                                  break;
 
                            /* 70244 */
                            case 011:            /* WRCSB */   /* ITS LDBR2 */
 #if KS_ITS
                                  if (QITS) {
-                                    dbr2 = AR;
-                                    sim_debug(DEBUG_CONI, &cpu_dev, "WRSPD %012llo\n", dbr3);
+                                    dbr2 = AB;
+                                    sim_debug(DEBUG_CONI, &cpu_dev, "WRDBR2 %012llo\n", dbr2);
                                     break;
                                  }
 #endif
                                  if (Mem_read(0, 0, 0, 0))
                                     goto last;
                                  cst = MB;
-                                 sim_debug(DEBUG_CONI, &cpu_dev, "WRSPD %012llo\n", cst);
+                                 sim_debug(DEBUG_CONI, &cpu_dev, "WRCSB %012llo\n", cst);
                                  break;
 
                            /* 70250 */
                            case 012:            /* WRPUR */   /* ITS LDBR3 */
 #if KS_ITS
                                  if (QITS) {
-                                    dbr3 = AR;
-                                    sim_debug(DEBUG_CONI, &cpu_dev, "WRSPD %012llo\n", dbr3);
+                                    dbr3 = AB;
+                                    sim_debug(DEBUG_CONI, &cpu_dev, "WRDBR3 %012llo\n", dbr3);
                                     break;
                                  }
 #endif
                                  if (Mem_read(0, 0, 0, 0))
                                     goto last;
                                  cst_dat = MB;
-                                 sim_debug(DEBUG_CONI, &cpu_dev, "WRSPD %012llo\n", cst_dat);
+                                 sim_debug(DEBUG_CONI, &cpu_dev, "WRPUR %012llo\n", cst_dat);
                                  break;
 
                            /* 70254 */
                            case 013:            /* WRCSTM */   /* ITS LDBR4 */
 #if KS_ITS
                                  if (QITS) {
-                                    dbr4 = AR;
-                                    sim_debug(DEBUG_CONI, &cpu_dev, "WRSPD %012llo\n", dbr4);
+                                    dbr4 = AB;
+                                    sim_debug(DEBUG_CONI, &cpu_dev, "WRDBR4 %012llo\n", dbr4);
                                     break;
                                  }
 #endif
                                  if (Mem_read(0, 0, 0, 0))
                                     goto last;
                                  cst_msk = MB;
-                                 sim_debug(DEBUG_CONI, &cpu_dev, "WRSPD %012llo\n", cst_msk);
+                                 sim_debug(DEBUG_CONI, &cpu_dev, "WRCSTM %012llo\n", cst_msk);
                                  break;
 
                            /* 70264 */
@@ -11130,13 +11136,13 @@ skip_op:
 io_fault:
                                fault_data = (020LL << 30) | BIT8 | BIT10;
                                fault_data |= (uint64)((020 & IR) << 18);
-			       fault_data |= AB | (ctl << 18);
+                               fault_data |= AB | (ctl << 18);
                                page_fault = 1;
                                goto last;
                            }
                            if ((BR & MB) == 0)
                                PC = (PC + 1) & RMASK;
-			   AR = MB;
+                           AR = MB;
                            break;
 
                   case 011:       /* TION, ITS RDIOQ  */
@@ -11150,7 +11156,7 @@ io_fault:
                                goto io_fault;
                            if ((BR & MB) != 0)
                                PC = (PC + 1) & RMASK;
-			   AR = MB;
+                           AR = MB;
                            break;
 
                   case 012:       /* RDIO */
@@ -11221,11 +11227,11 @@ its_wr:
 #endif
                            if (uba_read(AB, ctl, &MB, BYTE))
                                goto io_fault;
-			   if (AB & 1)
-			      BR >>= 8;
+                           if (AB & 1)
+                              BR >>= 8;
                            if ((BR & MB) == 0)
                                PC = (PC + 1) & RMASK;
-			   AR = MB;
+                           AR = MB;
                            break;
 
                   case 021:       /* TIONB */
@@ -11237,8 +11243,8 @@ its_wr:
 #endif
                            if (uba_read(AB, ctl, &MB, BYTE))
                                goto io_fault;
-			   if (AB & 1)
-			      BR >>= 8;
+                           if (AB & 1)
+                              BR >>= 8;
                            if ((BR & MB) != 0)
                                PC = (PC + 1) & RMASK;
                            break;
@@ -11255,8 +11261,8 @@ its_rdb:
 #endif
                            if (uba_read(AB, ctl, &AR, BYTE))
                                goto io_fault;
-			   if (AB & 1)
-			      AR >>= 8;
+                           if (AB & 1)
+                              AR >>= 8;
                            set_reg(AC, AR);
                            break;
 

@@ -1099,8 +1099,10 @@ rp_boot(int32 unit_num, DEVICE * rptr)
     DEVICE       *dptr = uptr->dptr;
     uint32        addr;
     uint32        ptr = 0;
-    int           wc;
     uint64        word;
+#if !KS
+    int           wc;
+#endif
 
 #if KS
     int           da;

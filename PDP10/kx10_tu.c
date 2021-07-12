@@ -800,14 +800,6 @@ t_stat tu_srv(UNIT * uptr)
     case FNC_SPACEB:
          sim_debug(DEBUG_DETAIL, dptr, "%s%o space %06o %o\n", dptr->name, unit, regs[TUDC], GET_FNC(uptr->CMD));
          uptr->STATUS &= ~DS_PIP;
-#if 0
-         if (regs[TUDC] == 0) {
-             regs[TUER1] |= ER1_NEF;
-             uptr->STATUS |= DS_ATA;
-             tu_error(uptr, MTSE_OK);
-             return SCPE_OK;
-         }
-#endif
          /* Always skip at least one record */
          if (GET_FNC(uptr->CMD) == FNC_SPACEF)
              r = sim_tape_sprecf(uptr, &reclen);
@@ -912,13 +904,15 @@ tu_boot(int32 unit_num, DEVICE * dptr)
         return r;
     uptr->DATAPTR = 0;
     uptr->hwmark = reclen;
+    wc = reclen;
 
     addr = 01000;
-    while ((uint32)uptr->DATAPTR < uptr->hwmark) {
+    while (uptr->DATAPTR < wc) {
         tu_read_word(uptr);
         M[addr] = tu_boot_buffer;
         addr ++;
     }
+    regs[TUTC] |= unit_num;
     M[036] = rhc->dib->uba_addr | (rhc->dib->uba_ctl << 18);
     M[037] = 0;
     M[040] = regs[TUTC];
@@ -955,8 +949,8 @@ tu_boot(int32 unit_num, DEVICE * dptr)
         M[addr] = tu_boot_buffer;
 
     PC = tu_boot_buffer & RMASK;
-#endif
     regs[TUTC] |= unit_num;
+#endif
     return SCPE_OK;
 }
 

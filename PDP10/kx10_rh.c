@@ -193,7 +193,6 @@ int rh_map[] = { 0,   /* 776700 */
 #if KS
 int
 uba_rh_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access) {
-    int             i;
     int             r = 0;
     struct pdp_dib  *dibp = (DIB *) dptr->ctxt;
     struct rh_if    *rhc;
@@ -223,7 +222,7 @@ uba_rh_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access) {
         if (addr & 1)
             data = data | (temp & 0377);
         else
-            data = (temp & 0177600) | data;
+            data = (temp & 0177400) | data;
     }
 
     switch(addr) {
@@ -253,7 +252,7 @@ uba_rh_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access) {
             if (addr & 1)
                 data = data | (rhc->wcr & 0377);
             else
-                data = (rhc->wcr & 0177600) | data;
+                data = (rhc->wcr & 0177400) | data;
         }
         rhc->wcr = data;
         break;
@@ -262,7 +261,7 @@ uba_rh_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access) {
             if (addr & 1)
                 data = data | (rhc->cda & 0377);
             else
-                data = (rhc->cda & 0177600) | data;
+                data = (rhc->cda & 0177400) | data;
         }
         rhc->cda = (rhc->cda & 0600000) | (data & 0177776);
         break;
@@ -315,7 +314,6 @@ uba_rh_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access) {
 
 int
 uba_rh_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access) {
-    int             i;
     int             r = 1;
     struct pdp_dib  *dibp = (DIB *) dptr->ctxt;
     struct rh_if    *rhc;
@@ -1045,7 +1043,7 @@ int rh_read(struct rh_if *rhc) {
         rhc->status &= ~BUSY;
         return 0;
      }
-     if ((rhc->cs2 & CS2_UAI) == 0)
+//     if ((rhc->cs2 & CS2_UAI) == 0)
         rhc->cda += 4;
      rhc->wcr = (rhc->wcr + 2) & 0177777;
      if (rhc->wcr == 0) {
@@ -1110,7 +1108,7 @@ int rh_write(struct rh_if *rhc) {
         rhc->status &= ~BUSY;
         return 0;
      }
-     if ((rhc->cs2 & CS2_UAI) == 0)
+//     if ((rhc->cs2 & CS2_UAI) == 0)
         rhc->cda += 4;
      rhc->wcr = (rhc->wcr + 2) & 0177777;
      if (rhc->wcr == 0) {

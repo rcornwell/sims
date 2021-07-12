@@ -84,8 +84,8 @@ MTAB cty_mod[] = {
     };
 
 UNIT cty_unit[] = {
-    { UDATA (&ctyo_svc, TT_MODE_7B, 0), 1000},
-    { UDATA (&ctyi_svc, TT_MODE_7B|UNIT_DIS, 0), 2000 },
+    { UDATA (&ctyo_svc, TT_MODE_7B, 0), 4000},
+    { UDATA (&ctyi_svc, TT_MODE_7B|UNIT_DIS, 0), 3000 },
     { UDATA (&ctyrtc_srv, UNIT_IDLE|UNIT_DIS, 0), 1000 }
     };
 
@@ -117,7 +117,7 @@ t_stat ctyi_svc (UNIT *uptr)
     uint64   buffer;
     int32    ch;
 
-    sim_clock_coschedule (uptr, tmxr_poll);
+    sim_clock_coschedule (uptr, tmxr_poll * 2);
 
     if (Mem_read_word(CTY_IN, &buffer, 0))
         return SCPE_OK;
