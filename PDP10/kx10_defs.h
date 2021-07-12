@@ -738,8 +738,7 @@ extern void ka10_lights_clear_aux (int);
 #define NUM_DEVS_DN     0
 #elif KS
 #define NUM_DEVS_LP20   0
-#define NUM_DEVS_DZ     0
-#define NUM_LINES_DZ    8 * NUM_DEVS_DZ
+#define NUM_DEVS_DZ     4
 #endif
 #if KA | KI
 #define NUM_DEVS_RC     1

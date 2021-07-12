@@ -198,11 +198,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\PDP10\ks10_rp.c"
-				>
-			</File>
-			<File
-				RelativePath="..\PDP10\ks10_tu.c"
+				RelativePath="..\PDP10\ks10_dz.c"
 				>
 			</File>
 			<File
@@ -215,6 +211,18 @@
 			</File>
 			<File
 				RelativePath="..\PDP10\kx10_disk.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_rh.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_rp.c"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\kx10_tu.c"
 				>
 			</File>
 			<File

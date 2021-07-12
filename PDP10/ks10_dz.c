@@ -36,54 +36,83 @@
 #if (NUM_DEVS_DZ > 0)
 
 
-#define DZ11_LINES    8
+#define DZ11_LINES    (8 * NUM_DEVS_DZ)
 
-#define STATUS   u3
+/* 0 CSR */
 
-#define DTS_LINE 007700         /* Scanner line number in STATUS */
-#define PI_CHN   000007         /* IN STATUS. */
-#define RCV_PI   000010         /* IN STATUS. */
-#define XMT_PI   000020         /* IN STATUS. */
-#define DTR_DIS  000040         /* DTR FLAG */
-#define RST_SCN  000010         /* CONO */
-#define DTR_SET  000020         /* CONO */
-#define CLR_SCN  000040         /* CONO */
+#define MAINT    0000010         /* Maintance mode */
+#define CLR      0000020
+#define MSE      0000040
+#define RIE      0000100
+#define RDONE    0000200
+#define TLINE    0003400
+#define TLINE_V  8
+#define SAE      0010000
+#define SA       0020000
+#define TIE      0040000
+#define TRDY     0100000
 
-#define DATA     0000377
-#define FLAG     0000400        /* Recieve data/ transmit disable */
-#define LINE     0000077        /* Line number in Left */
-#define LFLAG    0000100        /* Direct line number flag */
+/* 2 RBUF */
+#define RBUF     0000377
+#define RXLINE   0003400
+#define RXLINE_V 8
+#define PAR_ERR  0010000
+#define FRM_ERR  0020000
+#define OVRN     0040000
+#define VALID    0100000
 
-/* DC10E flags */
-#define CTS      0000004        /* Clear to send */
-#define RES_DET  0000002        /* Ring detect */
-#define DLO      0000040        /* (ACU) Data line occupied */
-#define PND      0000020        /* (ACU) Present next digit */
-#define ACR      0000010        /* (ACU) Abandon Call and retry */
-#define CRQ      0000040        /* (ACU) Call Request */
-#define DPR      0000020        /* (ACU) Digit Presented */
-#define NB       0000017        /* (ACU) Number */
-#define OFF_HOOK 0000100        /* Off Hook (CD) */
-#define CAUSE_PI 0000200        /* Cause PI */
+/* 2 LPR */
+#define LINE     0000007
+#define CHAR_LEN 0000030
+#define STOP     0000040
+#define PAR_ENB  0000100
+#define ODD_PAR  0000200
+#define FREQ     0007400
+#define RXON     0010000
 
-uint64   dz_l_status;                             /* Line status */
-int      dz_l_count = 0;                          /* Scan counter */
-int      dz_modem = DC10_MLINES;                  /* Modem base address */
-uint8    dcix_buf[DC10_MLINES] = { 0 };           /* Input buffers */
-uint8    dcox_buf[DC10_MLINES] = { 0 };           /* Output buffers */
-TMLN     dz_ldsc[DC10_MLINES] = { 0 };            /* Line descriptors */
-TMXR     dz_desc = { DC10_LINES, 0, 0, dz_ldsc };
-uint32   tx_enable, rx_rdy;                       /* Flags */
-uint32   dz_enable;                               /* Enable line */
-uint32   dz_ring;                                 /* Connection pending */
-uint32   rx_conn;                                 /* Connection flags */
+/* 4 TCR */
+#define LINE_ENB 0000001
+#define DTR      0000400
+
+/* 6 MSR */
+#define RO       0000001
+#define CO       0000400
+
+/* 6 TDR */
+#define TBUF     0000377
+#define BRK      0000400
+
+struct _buffer {
+    int      in_ptr;     /* Insert pointer */
+    int      out_ptr;    /* Remove pointer */
+    uint16   buff[64];   /* Buffer */
+    int      len;        /* Length */
+};
+
+#define full(q)       ((((q)->in_ptr + 1) & 0x3f) == (q)->out_ptr)
+#define empty(q)      ((q)->in_ptr == (q)->out_ptr)
+#define not_empty(q)  ((q)->in_ptr != (q)->out_ptr)
+#define inco(q)       (q)->out_ptr = ((q)->out_ptr + 1) & 0x3f
+#define inci(q)       (q)->in_ptr = ((q)->in_ptr + 1) & 0x3f
+
+#define LINE_EN   01
+#define DTR_FLAG  02
+
+uint16         dz_csr[NUM_DEVS_DZ];
+uint16         dz_xmit[DZ11_LINES];
+uint8          dz_flags[DZ11_LINES];
+uint8          dz_ring[NUM_DEVS_DZ];
+struct _buffer dz_recv[NUM_DEVS_DZ];
+TMLN           dz_ldsc[DZ11_LINES] = { 0 };     /* Line descriptors */
+TMXR           dz_desc = { DZ11_LINES, 0, 0, dz_ldsc };
 extern int32 tmxr_poll;
 
-int    dz_write(t_addr addr, uint16 data, int32 access);
-int    dz_read(t_addr addr, uint16 *data, int32 access);
+int    dz_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access);
+int    dz_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access);
 t_stat dz_svc (UNIT *uptr);
-t_stat dz_doscan (UNIT *uptr);
 t_stat dz_reset (DEVICE *dptr);
+void   dz_checkirq(struct pdp_dib   *dibp);
+uint16 dz_vect(struct pdp_dib *dibp);
 t_stat dz_set_modem (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat dz_show_modem (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat dz_setnl (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
@@ -95,15 +124,7 @@ t_stat dz_detach (UNIT *uptr);
 t_stat dz_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
         const char *cptr);
 const char *dz_description (DEVICE *dptr);
-
-/* DC10 data structures
-
-   dz_dev      DC10 device descriptor
-   dz_unit     DC10 unit descriptor
-   dz_reg      DC10 register list
-*/
-
-DIB dz_dib = { 0776000, 077, 0340, 5, 3, &dz_read, &dz_write, 0 }
+DIB dz_dib = { 0760000, 077, 0340, 5, 3, &dz_read, &dz_write, &dz_vect, 0, 0 };
 
 UNIT dz_unit = {
     UDATA (&dz_svc, TT_MODE_7B+UNIT_IDLE+UNIT_DISABLE+UNIT_ATTABLE, 0), KBD_POLL_WAIT
@@ -111,15 +132,18 @@ UNIT dz_unit = {
 
 REG dz_reg[] = {
     { DRDATA (TIME, dz_unit.wait, 24), REG_NZ + PV_LEFT },
-    { DRDATA (STATUS, dz_unit.STATUS, 18), PV_LEFT },
     { NULL }
     };
 
 MTAB dz_mod[] = {
-    { TT_MODE, TT_MODE_KSR, "KSR", "KSR", NULL },
-    { TT_MODE, TT_MODE_7B,  "7b",  "7B",  NULL },
-    { TT_MODE, TT_MODE_8B,  "8b",  "8B",  NULL },
-    { TT_MODE, TT_MODE_7P,  "7p",  "7P",  NULL },
+    {MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "addr", "addr",  &uba_set_addr, uba_show_addr,
+              NULL, "Sets address of RH11" },
+    {MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "vect", "vect",  &uba_set_vect, uba_show_vect,
+              NULL, "Sets vect of RH11" },
+    {MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "br", "br",  &uba_set_br, uba_show_br,
+              NULL, "Sets br of RH11" },
+    {MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "ctl", "ctl",  &uba_set_ctl, uba_show_ctl,
+              NULL, "Sets br of RH11" },
     { MTAB_XTD|MTAB_VDV|MTAB_VALR, 1, NULL, "DISCONNECT",
         &tmxr_dscln, NULL, &dz_desc, "Disconnect a specific line" },
     { UNIT_ATT, UNIT_ATT, "SUMMARY", NULL,
@@ -136,6 +160,7 @@ MTAB dz_mod[] = {
         &dz_set_nolog, NULL, (void *)&dz_desc, "Disable logging on designated line" },
     { MTAB_XTD|MTAB_VDV|MTAB_NMO, 0, "LOG", NULL,
         NULL, &dz_show_log, (void *)&dz_desc, "Display logging for all lines" },
+
     { 0 }
     };
 
@@ -149,257 +174,324 @@ DEVICE dz_dev = {
     };
 
 
+int
+dz_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
+{
+    struct pdp_dib   *dibp = (DIB *)dptr->ctxt;
+    int               base;
+    uint16            temp;
+    int               ln;
+    TMLN             *lp;
+    int               i;
 
-/* IOT routine */
-t_stat dz_devio(uint32 dev, uint64 *data) {
-    UNIT *uptr = &dz_unit;
-    TMLN *lp;
-    int   ln;
+    addr &= dibp->uba_mask;
+    if (addr < 010 || addr > 047)
+        return 1;
+    base = ((addr & 070) - 010) >> 3;
+    if ((int32)(addr & 070) >= dz_desc.lines)
+        return 1;
+    sim_debug(DEBUG_DETAIL, dptr, "DZ%o write %06o %06o %o\n", base,
+             addr, data, access);
 
-    switch(dev & 3) {
-    case CONI:
-         /* Check if we might have any interrupts pending */
-         if ((uptr->STATUS & (RCV_PI|XMT_PI)) == 0)
-             dz_doscan(uptr);
-         *data = uptr->STATUS & (PI_CHN|RCV_PI|XMT_PI);
-         sim_debug(DEBUG_CONI, &dz_dev, "DC %03o CONI %06o PC=%o\n",
-               dev, (uint32)*data, PC);
-         break;
-
-    case CONO:
-         /* Set PI */
-         uptr->STATUS &= ~PI_CHN;
-         uptr->STATUS |= PI_CHN & *data;
-         if (*data & RST_SCN)
-             dz_l_count = 0;
-         if (*data & DTR_SET)
-             uptr->STATUS |= DTR_SET;
-         if (*data & CLR_SCN) {
-             uptr->STATUS &= PI_CHN;
-             for (ln = 0; ln < dz_desc.lines; ln++) {
-                lp = &dz_ldsc[ln];
-                if (lp->conn) {
-                    tmxr_linemsg (lp, "\r\nLine Hangup\r\n");
-                    tmxr_reset_ln(lp);
-                }
-             }
-             tx_enable = 0;
-             dz_enable = 0;
-             rx_rdy = 0;                                /* Flags */
-             rx_conn = 0;
-             dz_ring = 0;
-             dz_l_status = 0;
-         }
-
-         sim_debug(DEBUG_CONO, &dz_dev, "DC %03o CONO %06o PC=%06o\n",
-               dev, (uint32)*data, PC);
-         dz_doscan(uptr);
-         break;
-
-    case DATAO:
-         if (*data & (LFLAG << 18))
-             ln = (*data >> 18) & 077;
-         else
-             ln = dz_l_count;
-         if (ln >= dz_modem) {
-             if (*data & CAUSE_PI)
-                dz_l_status |= (1LL << ln);
-             else
-                dz_l_status &= ~(1LL << ln);
-             ln -= dz_modem;
-             sim_debug(DEBUG_DETAIL, &dz_dev, "DC line modem %d %03o\n",
-                   ln, (uint32)(*data & 0777));
-             if ((*data & OFF_HOOK) == 0) {
-                uint32 mask = ~(1 << ln);
-                rx_rdy &= mask;
-                tx_enable &= mask;
-                dz_enable &= mask;
-                lp = &dz_ldsc[ln];
-                if (rx_conn & (1 << ln) && lp->conn) {
-                    sim_debug(DEBUG_DETAIL, &dz_dev, "DC line hangup %d\n", ln);
-                    tmxr_linemsg (lp, "\r\nLine Hangup\r\n");
-                    tmxr_reset_ln(lp);
-                    rx_conn &= mask;
-                }
-             } else {
-                sim_debug(DEBUG_DETAIL, &dz_dev, "DC line off-hook %d\n", ln);
-                dz_enable |= 1<<ln;
-                if (dz_ring & (1 << ln)) {
-                    dz_l_status |= (1LL << (ln + dz_modem));
-                    dz_ring &= ~(1 << ln);
-                    rx_conn |= (1 << ln);
-                }
-             }
-         } else if (ln < dz_desc.lines) {
-             lp = &dz_ldsc[ln];
-             if (*data & FLAG) {
-                tx_enable &= ~(1 << ln);
-                dz_l_status &= ~(1LL << ln);
-             } else if (lp->conn) {
-                int32 ch = *data & DATA;
-                ch = sim_tt_outcvt(ch, TT_GET_MODE (dz_unit.flags) | TTUF_KSR);
-                tmxr_putc_ln (lp, ch);
-                if (lp->xmte)
-                    tx_enable |= (1 << ln);
+    switch (addr & 06) {
+    case 0:
+            if (access == BYTE) {
+                temp = dz_csr[base];
+                if (addr & 1)
+                    data = data | (temp & 0377);
                 else
-                    tx_enable &= ~(1 << ln);
-                dz_l_status |= (1LL << ln);
-             }
-         }
-         dz_doscan(uptr);
-         sim_debug(DEBUG_DATAIO, &dz_dev, "DC %03o DATO %012llo PC=%06o\n",
-                    dev, *data, PC);
-         break;
+                    data = (temp & 0177400) | data;
+            }
+            if (data & CLR) {
+                dz_csr[base] = 0;
+                dz_recv[base].in_ptr = dz_recv[base].out_ptr = 0;
+                dz_recv[base].len = 0;
+                /* Set up the current status */
+		ln = base << 3;
+                for (i = 0; i < 8; i++) {
+                    dz_flags[ln + i] &= ~LINE_EN;
+                }
+                return 0;
+            }
+            dz_csr[base] &= ~(TIE|SAE|RIE|MSE|CLR|MAINT);
+            dz_csr[base] |= data & (TIE|SAE|RIE|MSE|MAINT);
+            break;
 
-    case DATAI:
-         ln = dz_l_count;
-         *data = (uint64)(ln) << 18;
-         if (ln >= dz_modem) {
-             dz_l_status &= ~(1LL << ln);
-             ln = ln - dz_modem;
-             lp = &dz_ldsc[ln];
-             if (dz_enable & (1 << ln))
-                *data |= FLAG|OFF_HOOK;
-             if (rx_conn & (1 << ln) && lp->conn)
-                *data |= FLAG|CTS;
-             if (dz_ring & (1 << ln))
-                *data |= FLAG|RES_DET;
-         } else if (ln < dz_desc.lines) {
-             /* Nothing happens if no recieve data, which is transmit ready */
-             lp = &dz_ldsc[ln];
-             if (tmxr_rqln (lp) > 0) {
-                int32 ch = tmxr_getc_ln (lp);
-                if (ch & SCPE_BREAK)                      /* break? */
-                    ch = 0;
+    case 2:
+            ln = (data & 07) + (base << 3);
+            dz_ldsc[ln].rcve = (data & RXON) != 0;
+            break;
+
+    case 4:
+            temp = 0;
+            ln = base << 3;
+            /* Set up the current status */
+            for (i = 0; i < 8; i++) {
+                if (dz_flags[ln + i] & LINE_EN)
+                    temp |= LINE_ENB << i;
+                if (dz_flags[ln + i] & DTR_FLAG)
+                    temp |= DTR << i;
+                dz_flags[ln + i] = 0;
+            }
+            if (access == BYTE) {
+                if (addr & 1)
+                    data = data | (temp & 0377);
                 else
-                    ch = sim_tt_inpcvt (ch, TT_GET_MODE(dz_unit.flags) | TTUF_KSR);
-                *data |= FLAG | (uint64)(ch & DATA);
+                    data = (temp & 0177400) | data;
+            }
+            for (i = 0; i < 8; i++) {
+                lp = &dz_ldsc[ln + i];
+                if ((data & (LINE_ENB << i)) != 0)
+                    dz_flags[ln + i] |= LINE_EN;
+                if ((data & (DTR << i)) != 0)
+                    dz_flags[ln + i] |= DTR_FLAG;
+                if (dz_flags[ln + i] & DTR_FLAG)
+                    tmxr_set_get_modem_bits(lp, TMXR_MDM_OUTGOING, 0, NULL);
+                else
+                    tmxr_set_get_modem_bits(lp, 0, TMXR_MDM_OUTGOING, NULL);
+       sim_debug(DEBUG_DETAIL, dptr, "DZ%o sstatus %07o %o %o\n", base, data, i, dz_flags[ln+i]);
+            }
+            break;
+
+    case 6:
+            if (access == BYTE && (addr & 1) != 0) {
+                break;
+            }
+
+            if ((dz_csr[base] & TRDY) == 0)
+                break;
+
+            ln = ((dz_csr[base] & TLINE) >> TLINE_V) + (base << 3);
+            lp = &dz_ldsc[ln];
+
+            if ((dz_flags[ln] & LINE_EN) != 0 && lp->conn) {
+                int32  ch = data & 0377;
+                /* Try and send character */
+                t_stat r = tmxr_putc_ln(lp, ch);
+                /* If character did not send, queue it */
+                if (r == SCPE_STALL)
+                    dz_xmit[ln] = TRDY | ch;
              }
-             if (tmxr_rqln (lp) > 0) {
-                rx_rdy |= 1 << ln;
-                dz_l_status |= (1LL << ln);
-             } else {
-                rx_rdy &= ~(1 << ln);
-                dz_l_status &= ~(1LL << ln);
-             }
-         }
-         dz_doscan(uptr);
-         sim_debug(DEBUG_DATAIO, &dz_dev, "DC %03o DATI %012llo PC=%06o\n",
-                    dev, *data, PC);
-         break;
+             break;
     }
-    return SCPE_OK;
+
+    dz_csr[base] &= ~TRDY;
+    if ((dz_csr[base] & MSE) == 0)
+        return 0;
+    ln = ((dz_csr[base] & TLINE) >> TLINE_V) + (base << 3);
+    /* See if there is another line ready */
+    for (i = 0; i < 8; i++) {
+        ln = (ln & 070) | ((ln + 1) & 07);
+        lp = &dz_ldsc[ln];
+        /* Connected and empty xmit_buffer */
+        if ((dz_flags[ln] & LINE_EN) != 0 && lp->conn && dz_xmit[ln] == 0) {
+            dz_csr[base] &= ~(TLINE);
+            dz_csr[base] |= TRDY | ((ln & 07) << TLINE_V);
+            break;
+        }
+    }
+    dz_checkirq(dibp);
+    return 0;
 }
 
+int
+dz_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
+{
+    struct pdp_dib   *dibp = (DIB *)dptr->ctxt;
+    int               base;
+    uint16            temp;
+    int               ln;
+    TMLN             *lp;
+    int               i;
+
+    addr &= dibp->uba_mask;
+    if (addr < 010 || addr > 047)
+        return 1;
+    base = ((addr & 070) - 010) >> 3;
+    if ((int32)(addr & 070) >= dz_desc.lines)
+        return 1;
+    switch (addr & 06) {
+    case 0:
+            *data = dz_csr[base];
+            break;
+
+    case 2:
+            *data = 0;
+            if ((dz_csr[base] & MSE) == 0)
+                return 0;
+            dz_csr[base] &= ~(SA|RDONE);
+            if (!empty(&dz_recv[base])) {
+                *data = dz_recv[base].buff[dz_recv[base].out_ptr];
+                inco(&dz_recv[base]);
+                dz_recv[base].len = 0;
+            }
+            if (!empty(&dz_recv[base]))
+                dz_csr[base] |= RDONE;
+            dz_checkirq(dibp);
+            break;
+
+    case 4:
+            temp = 0;
+            ln = base << 3;
+            /* Set up the current status */
+            for (i = 0; i < 8; i++) {
+     sim_debug(DEBUG_DETAIL, dptr, "DZ%o status %o %o\n", base, i, dz_flags[ln+i]);
+                if (dz_flags[ln + i] & LINE_EN)
+                    temp |= LINE_ENB << i;
+                if (dz_flags[ln + i] & DTR_FLAG)
+                    temp |= DTR << i;
+            }
+            *data = temp;
+            break;
+
+     case 6:
+            temp = (uint16)dz_ring[base];
+            ln = base << 3;
+            for (i = 0; i < 8; i++) {
+                lp = &dz_ldsc[ln + i];
+                if (lp->conn)
+                    temp |= CO << i;
+            }
+            dz_ring[base] = 0;
+            *data = temp;
+            break;
+     }
+     sim_debug(DEBUG_DETAIL, dptr, "DZ%o read %06o %06o %o\n", base,
+             addr, *data, access);
+     return 0;
+}
 
 /* Unit service */
-
 t_stat dz_svc (UNIT *uptr)
 {
-int32 ln;
+    int32             ln;
+    int               base;
+    uint16            temp;
+    DEVICE           *dptr = find_dev_from_unit (uptr);
+    struct pdp_dib   *dibp = (DIB *)dptr->ctxt;
+    TMLN             *lp;
 
     if ((uptr->flags & UNIT_ATT) == 0)                  /* attached? */
         return SCPE_OK;
     ln = tmxr_poll_conn (&dz_desc);                     /* look for connect */
     if (ln >= 0) {                                      /* got one? rcv enb*/
-        dz_ldsc[ln].rcve = 1;
-        dz_ring |= (1 << ln);
-        dz_l_status |= (1LL << (ln + dz_modem));        /* Flag modem line */
+        dz_ring[(ln & 030) >> 7] |= (1 << (ln & 7));
         sim_debug(DEBUG_DETAIL, &dz_dev, "DC line connect %d\n", ln);
     }
     tmxr_poll_tx(&dz_desc);
     tmxr_poll_rx(&dz_desc);
     for (ln = 0; ln < dz_desc.lines; ln++) {
-       /* Check if buffer empty */
-       if (dz_ldsc[ln].xmte && ((dz_l_status & (1ll << ln)) != 0)) {
-           tx_enable |= 1 << ln;
-       }
-
-       /* Check to see if any pending data for this line */
-       if (tmxr_rqln(&dz_ldsc[ln]) > 0) {
-           rx_rdy |= (1 << ln);
-           dz_l_status |= (1LL << ln);                  /* Flag line */
-           sim_debug(DEBUG_DETAIL, &dz_dev, "DC recieve %d\n", ln);
-       }
-       /* Check if disconnect */
-       if ((rx_conn & (1 << ln)) != 0 && dz_ldsc[ln].conn == 0) {
-           rx_conn &= ~(1 << ln);
-           dz_l_status |= (1LL << (ln + dz_modem));     /* Flag modem line */
-           sim_debug(DEBUG_DETAIL, &dz_dev, "DC line disconnect %d\n", ln);
-       }
+        lp = &dz_ldsc[ln];
+        base = (ln >> 3) & 03;
+        if (dz_xmit[ln] != 0) {
+            /* Try and send character */
+            t_stat r = tmxr_putc_ln(lp, dz_xmit[ln] & 0377);
+            /* If character did not send, queue it */
+            if (r == SCPE_OK)
+                dz_xmit[ln] = 0;
+        }
+        /* If silo full, skip to next */
+        while (!full(&dz_recv[base])) {
+            int32 ch = tmxr_getc_ln(lp);
+            if ((ch & TMXR_VALID) != 0) {
+                ch = sim_tt_inpcvt (ch, TTUF_KSR);
+                temp = VALID | ((ln & 07) << RXLINE_V) | (uint16)(ch & RBUF);
+                dz_recv[base].buff[dz_recv[base].in_ptr] = temp;
+                inci(&dz_recv[base]);
+                dz_recv[base].len++;
+                dz_csr[base] |= RDONE;
+                if (dz_recv[base].len > 16)
+                    dz_csr[base] |= SA;
+                sim_debug(DEBUG_DETAIL, dptr, "TTY recieve %d: %o\n",
+                               ln, ch);
+            } else
+                break;
+        }
     }
 
-    /* If any pending status request, raise the PI signal */
-    if (dz_l_status)
-        set_interrupt(DC_DEVNUM, uptr->STATUS);
+    dz_checkirq(dibp);
     sim_clock_coschedule(uptr, tmxr_poll);              /* continue poll */
     return SCPE_OK;
 }
 
-/* Scan to see if something to do */
-t_stat dz_doscan (UNIT *uptr) {
-   int32 lmask;
+/* Check if a device has an IRQ event ready */
+void
+dz_checkirq(struct pdp_dib   *dibp)
+{
+    int        i;
 
-   uptr->STATUS &= ~(RCV_PI|XMT_PI);
-   clr_interrupt(DC_DEVNUM);
-   for (;dz_l_status != 0; dz_l_count++) {
-      dz_l_count &= 077;
-      /* Check if we found it */
-      if (dz_l_status & (1LL << dz_l_count)) {
-         /* Check if modem control or data line */
-         if (dz_l_count >= dz_modem) {
-            uptr->STATUS |= RCV_PI;
-         } else {
-            /* Must be data line */
-            lmask = 1 << dz_l_count;
-            if (rx_rdy & lmask)
-                uptr->STATUS |= RCV_PI;
-            if (tx_enable & lmask)
-                uptr->STATUS |= XMT_PI;
+    for (i = 0; i < NUM_DEVS_DZ; i++) {
+         if ((dz_csr[i] & (TIE|TRDY)) == (TIE|TRDY) ||
+            (dz_csr[i] & (SA|SAE)) == (SA|SAE) ||
+            (dz_csr[i] & (RDONE|SAE|RIE)) == (RDONE|RIE)) {
+                sim_debug(DEBUG_DETAIL, &dz_dev, "Set irq %05o\n", dz_csr[i]);
+            uba_set_irq(dibp);
+            return;
          }
-         /* Stop scanner */
-         set_interrupt(DC_DEVNUM, uptr->STATUS);
-         return SCPE_OK;
-      }
-   }
-   return SCPE_OK;
+    }
+                sim_debug(DEBUG_DETAIL, &dz_dev, "Clr irq\n");
+    /* Nothing found, so clear any flags */
+    uba_clr_irq(dibp);
 }
+
+/* Return the vector of first ready device */
+uint16
+dz_vect(struct pdp_dib *dibp)
+{
+    int        i;
+    uint16     vect = dibp->uba_vect;
+    for (i = 0; i < NUM_DEVS_DZ; i++) {
+        if ((dz_csr[i] & (SA|SAE)) == (SA|SAE) ||
+            (dz_csr[i] & (RDONE|SAE|RIE)) == (RDONE|RIE))
+            return vect;
+        if ((dz_csr[i] & (TIE|TRDY)) == (TIE|TRDY))
+            return vect + 4;
+        vect += 010;
+    }
+    return 0;
+}
+
+
 
 /* Reset routine */
 
-t_stat dz_reset (DEVICE *dptr)
+t_stat
+dz_reset (DEVICE *dptr)
 {
+    int      i;
 
     if (dz_unit.flags & UNIT_ATT)                           /* if attached, */
         sim_activate (&dz_unit, tmxr_poll);                 /* activate */
     else
         sim_cancel (&dz_unit);                             /* else stop */
-    tx_enable = 0;
-    rx_rdy = 0;                             /* Flags */
-    rx_conn = 0;
-    dz_l_status = 0;
-    dz_l_count = 0;
-    dz_unit.STATUS = 0;
-    clr_interrupt(DC_DEVNUM);
+    for (i = 0; i < NUM_DEVS_DZ; i++) {
+        dz_csr[i] = 0;
+        dz_recv[i].in_ptr = dz_recv[i].out_ptr = 0;
+        dz_recv[i].len = 0;
+        dz_ring[i] = 0;
+        dz_xmit[i] = 0;
+    }
+    for (i = 0; i < DZ11_LINES; i++) {
+         dz_flags[i] = 0;
+    }
     return SCPE_OK;
 }
 
 
 /* SET LINES processor */
 
-t_stat dz_setnl (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+t_stat
+dz_setnl (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
     int32 newln, i, t;
     t_stat r;
 
     if (cptr == NULL)
         return SCPE_ARG;
-    newln = (int32) get_uint (cptr, 10, DC10_MLINES, &r);
+    newln = (int32) get_uint (cptr, 10, DZ11_LINES, &r);
     if ((r != SCPE_OK) || (newln == dz_desc.lines))
         return r;
-    if (newln > dz_modem)
-        return SCPE_ARG;
-    if ((newln == 0) || (newln > DC10_MLINES) || (newln % 8) != 0)
+    if ((newln == 0) || (newln > DZ11_LINES) || (newln % 8) != 0)
         return SCPE_ARG;
     if (newln < dz_desc.lines) {
         for (i = newln - 1, t = 0; i < dz_desc.lines; i++)
@@ -422,7 +514,8 @@ t_stat dz_setnl (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 
 /* SET LOG processor */
 
-t_stat dz_set_log (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+t_stat
+dz_set_log (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
     t_stat r;
     char gbuf[CBUFSIZE];
@@ -441,7 +534,8 @@ t_stat dz_set_log (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 
 /* SET NOLOG processor */
 
-t_stat dz_set_nolog (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+t_stat
+dz_set_nolog (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
     t_stat r;
     int32 ln;
@@ -471,28 +565,30 @@ t_stat dz_show_log (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 
 /* Attach routine */
 
-t_stat dz_attach (UNIT *uptr, CONST char *cptr)
+t_stat
+dz_attach (UNIT *uptr, CONST char *cptr)
 {
-t_stat reason;
+    t_stat reason;
 
-reason = tmxr_attach (&dz_desc, uptr, cptr);
-if (reason != SCPE_OK)
-  return reason;
-sim_activate (uptr, tmxr_poll);
-return SCPE_OK;
+    reason = tmxr_attach (&dz_desc, uptr, cptr);
+    if (reason != SCPE_OK)
+      return reason;
+    sim_activate (uptr, tmxr_poll);
+    return SCPE_OK;
 }
 
 /* Detach routine */
 
-t_stat dz_detach (UNIT *uptr)
+t_stat
+dz_detach (UNIT *uptr)
 {
-  int32  i;
-  t_stat reason;
-reason = tmxr_detach (&dz_desc, uptr);
-for (i = 0; i < dz_desc.lines; i++)
-    dz_ldsc[i].rcve = 0;
-sim_cancel (uptr);
-return reason;
+    int32  i;
+    t_stat reason;
+    reason = tmxr_detach (&dz_desc, uptr);
+    for (i = 0; i < dz_desc.lines; i++)
+        dz_ldsc[i].rcve = 0;
+    sim_cancel (uptr);
+    return reason;
 }
 
 t_stat dz_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)

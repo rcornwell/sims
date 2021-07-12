@@ -2149,7 +2149,7 @@ KL10_OPT = -DKL=1 -DUSE_INT64 -I $(KL10D) ${NETWORK_OPT}
 KS10D = ${SIMHD}/PDP10
 KS10 = ${KS10D}/kx10_cpu.c ${KS10D}/kx10_sys.c ${KS10D}/kx10_disk.c \
 	${KS10D}/ks10_cty.c ${KS10D}/ks10_uba.c ${KS10D}/kx10_rh.c \
-	${KS10D}/kx10_rp.c ${KS10D}/kx10_tu.c
+	${KS10D}/kx10_rp.c ${KS10D}/kx10_tu.c ${KS10D}/ks10_dz.c
 KS10_OPT = -DKS=1 -DUSE_INT64 -I $(KS10D) ${NETWORK_OPT} 
 
 ATT3B2D = ${SIMHD}/3B2
