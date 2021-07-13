@@ -274,6 +274,7 @@ uint64 cst_dat;
 #define dbr2    cst
 #define dbr3    cst_dat
 #define dbr4    cst_msk
+uint64 pcst;
 #endif
 
 int     watch_stop;                           /* Stop at memory watch point */
@@ -1802,7 +1803,7 @@ load_tlb(int uf, int page, int wr)
                  }
                  pg = KL_PAG_A;
                  if (data & 0400000)
-                    pg |= KL_PAG_S;     /* Indicate writable */
+                     pg |= KL_PAG_S;     /* Indicate writable */
                  break;
         case 3:  pg = KL_PAG_A|KL_PAG_W|KL_PAG_S;  break; /* R/W */
         }
@@ -10911,12 +10912,25 @@ skip_op:
                                     goto last;
                                  AR = MB;
                                  break;
-#if 0
+#if KS_ITS
+                           /* 70144 */
+                           case 011:        /* RDPCST */
+                                 if (QITS) {
+                                     MB = pcst;
+                                     if (Mem_write(0, 0))
+                                          goto last;
+                                     break;
+                                 }
+                                 /* Fall through */
+
                            /* 70154 */
-                           case 011:
-                           case 013:
-                                 if (QITS)
-                                    break;
+                           case 013:        /* WRPCST */
+                                 if (QITS) {
+                                     if (Mem_read(0, 0, 0, 0))
+                                          goto last;
+                                     pcst = MB;
+                                     break;
+                                 }
 #endif
                            default:
                                  goto muuo;
@@ -11097,6 +11111,12 @@ skip_op:
                                         goto last;
                                      dbr2 = MB;
                                      AB = (AB + 1) & RMASK;
+                                     for (f = 0; f < 512; f++) {
+                                        u_tlb[f] = 0;
+                                        e_tlb[f] = 0;
+                                     }
+                                     for (;f < 546; f++)
+                                        u_tlb[f] = 0;
                                      break;
                                  }
 #endif
