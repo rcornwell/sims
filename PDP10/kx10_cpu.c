@@ -2139,6 +2139,8 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
                    fault_data |= 002000LL << 18;
                 }
             }
+            if (wr)
+               fault_data |= 010000LL << 18;
             page_fault = 1;
             return 0;
         }
@@ -4814,7 +4816,7 @@ unasign:
               } else
 #endif
               MB = ((uint64)(IR) << 27) | ((uint64)(AC) << 23) | (uint64)(AB);
-              AB = ub_ptr | 0424;
+              AB = ub_ptr + 0424;
 #if KL
               /* If single sections KL10 UUO starts at 425 */
               if (!QKLB && !QITS && t20_page)
@@ -4885,11 +4887,21 @@ unasign:
                        ((uint64)(prev_ctx & 0160) << 20) |
                        (ub_ptr >> 9);
                   Mem_write_nopage();
+#if KS_ITS
+              } else if (QITS) {
+                  /* Save context */
+                  AB ++;
+                  MB = SMASK|BIT2|
+                       ((uint64)(fm_sel & 0160) << 23) |
+                       ((uint64)(prev_ctx & 0160) << 20) |
+                       ub_ptr & 03777777;
+                  Mem_write_nopage();
+#endif
               }
 #endif
               /* Read in new PC and flags */
               FLAGS &= ~ (PRV_PUB|BYTI|ADRFLT|TRP1|TRP2);
-              AB = ub_ptr | 0430;
+              AB = ub_ptr + 0430;
               if (trap_flag != 0)
                   AB |= 1;
 #if !KS
@@ -10837,6 +10849,11 @@ skip_op:
 
                            /* 70104 */
                            case 001:            /* RDUBR */
+#if KS_ITS
+                                 if (QITS)
+                                     MB = ub_ptr & 03777777;
+                                 else
+#endif
                                  MB = (ub_ptr >> 9);
                                  /* Set previous section */
                                  MB |= ((uint64)(prev_ctx & 0160)) << 20;
@@ -10872,6 +10889,11 @@ skip_op:
                                      prev_ctx = (uint8)(MB >> 20) & 0160;
                                  }
                                  if (MB & BIT2) {
+#if KS_ITS
+                                     if (QITS)
+                                        ub_ptr = MB & 03777777;
+                                     else
+#endif
                                      ub_ptr = (MB & 03777) << 9;
                                      for (f = 0; f < 512; f++) {
                                         u_tlb[f] = 0;
@@ -11651,10 +11673,10 @@ last:
         BYF5 = 0;
 #if KS_ITS
         if (QITS) {
-            AB = eb_ptr | 0440;
+            AB = eb_ptr + 0440;
         } else
 #endif
-        AB = ub_ptr | 0500;
+        AB = ub_ptr + 0500;
         MB = fault_data;
         Mem_write_nopage();
         AB++;
@@ -11773,7 +11795,7 @@ last:
         Mem_write_nopage();
         FLAGS |= trap_flag & (TRP1|TRP2);
         trap_flag = 1;
-        AB = ((FLAGS & USER) ? ub_ptr : eb_ptr) | 0420;
+        AB = ((FLAGS & USER) ? ub_ptr : eb_ptr) + 0420;
         f_pc_inh = 1;
         pi_cycle = 1;
         Mem_read_nopage();
