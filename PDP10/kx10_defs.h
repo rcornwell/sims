@@ -696,9 +696,6 @@ int     rh_read(struct rh_if *rh);
 int     rh_write(struct rh_if *rh);
 
 
-int ten11_read (t_addr addr, t_uint64 *data);
-int ten11_write (t_addr addr, t_uint64 data);
-
 /* Console lights. */
 extern void ka10_lights_init (void);
 extern void ka10_lights_main (t_uint64);
@@ -794,6 +791,12 @@ extern t_uint64   FM[];
 extern uint32   PC;
 extern uint32   FLAGS;
 
+#if NUM_DEVS_TEN11
+int ten11_read (t_addr addr, t_uint64 *data);
+int ten11_write (t_addr addr, t_uint64 data);
+extern t_addr ten11_base;
+extern t_addr ten11_end;
+#endif
 #if NUM_DEVS_AUXCPU
 extern t_addr   auxcpu_base;
 int auxcpu_read (t_addr addr, uint64 *);
