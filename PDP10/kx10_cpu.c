@@ -299,7 +299,7 @@ t_stat  tim_srv(UNIT * uptr);
 int32   tmxr_poll = 10000;
 
 /* Physical address range for Rubin 10-11 interface. */
-#define T11RANGE(addr)  ((addr) >= 03040000)
+#define T11RANGE(addr)  ((addr) >= ten11_base && (addr) < ten11_end)
 /* Physical address range for auxiliary PDP-6. */
 #define AUXCPURANGE(addr)  ((addr) >= auxcpu_base && (addr) < (auxcpu_base + 040000))
 
@@ -3410,6 +3410,15 @@ int Mem_read_its(int flag, int cur_context, int fetch, int mod) {
     } else {
         if (!page_lookup_its(AB, flag, &addr, 0, cur_context, fetch, mod))
             return 1;
+#if NUM_DEVS_AUXCPU > 0
+        if (AUXCPURANGE(addr) && QAUXCPU) {
+            if (auxcpu_read (addr, &MB)) {
+                nxm_flag = 1;
+                check_apr_irq();
+                return 1;
+            }
+        }
+#endif
 #if NUM_DEVS_TEN11 > 0
         if (T11RANGE(addr) && QTEN11) {
             if (ten11_read (addr, &MB)) {
@@ -3418,15 +3427,6 @@ int Mem_read_its(int flag, int cur_context, int fetch, int mod) {
                 return 1;
             }
             return 0;
-        }
-#endif
-#if NUM_DEVS_AUXCPU > 0
-        if (AUXCPURANGE(addr) && QAUXCPU) {
-            if (auxcpu_read (addr, &MB)) {
-                nxm_flag = 1;
-                check_apr_irq();
-                return 1;
-            }
         }
 #endif
         if (addr >= MEMSIZE) {
