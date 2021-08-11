@@ -195,6 +195,7 @@ MTAB dpy_mod[] = {
               "Display in fullscreen"},
     { FULLSCREEN, 0, NULL, "WINDOW", NULL, NULL, NULL,
               "Display in window"},
+    { 0 }
 };
 
 DEVICE dpy_dev = {
