@@ -31,7 +31,7 @@ extern uint32  cregs[16];            /* Control registers /67 or 370 only */
 extern uint8   cc;                   /* CC */
 extern uint8   pmsk;                 /* Program mask */
 extern uint8   st_key;               /* Storage key */
-extern uint8   per_en;               /* PER mode enable */
+extern int     per_en;               /* PER mode enable */
 
 #define AMASK       0x00ffffff     /* Mask address bits */
 #define MSIGN       0x80000000     /* Minus sign */
