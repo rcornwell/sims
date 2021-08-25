@@ -842,7 +842,7 @@ t_stat mt_srv(UNIT *uptr)
     uint16      len;
     uint8       ch;
 
-    sim_debug(DEBUG_DETAIL, dptr,
+    sim_debug(DEBUG_CMD, dptr,
         "mt_srv unit %02x cmd %02x POS %x hwmark %03x\n",
         unit, cmd, uptr->POS, uptr->hwmark);
 
@@ -1453,9 +1453,11 @@ rewrite:
             sim_activate(uptr, 30);
             break;
         case 1:
-            skip = 1;                       /* skip back 1 file */
+            skip = 1;                       /* skip forward 1 file */
+/*EE*/      uptr->POS++;
             uptr->SNS &= ~(SNS_LOAD|SNS_EOT|SNS_FMRKDT);    /* reset BOT, EOT, EOF */
-            r = sim_tape_sprecf(uptr, &reclen);
+//EE        r = sim_tape_sprecf(uptr, &reclen);
+/*EE*/      r = sim_tape_spfilef(uptr, skip, &reclen);
 //77        r = sim_tape_spfilef(uptr, skip, &reclen);
             sim_debug(DEBUG_CMD, dptr, "Skip file unit=%02x r %x\n", unit, r);
             if (r == MTSE_TMK) {
@@ -1471,7 +1473,7 @@ rewrite:
 //5             sim_activate(uptr, 50);
                 sim_activate(uptr, 30);
             } else {
-                sim_debug(DEBUG_CMD, dptr, "FSF skipped %04x byte record\n", reclen);
+                sim_debug(DEBUG_CMD, dptr, "FSF skipped %04x file\n", reclen);
 //5             sim_activate(uptr, 50);
                 sim_activate(uptr, 30);
             }
@@ -1483,9 +1485,18 @@ rewrite:
                 "Skip file done sense %08x unit %02x\n", uptr->SNS, unit);
 //88        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
 //00        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
-            chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
+//EE        chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
+/*EE*/      chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we are done dev|chan end */
             break;
-        case 3:
+/*EE*/  case 3:
+/*EE*/      uptr->CMD &= ~(MT_CMDMSK);
+/*EE*/      mt_busy[bufnum] &= ~1;
+/*EE*/      sim_debug(DEBUG_CMD, dptr,
+/*EE*/          "Skip file got EOF sense %08x unit %02x\n", uptr->SNS, unit);
+/*EE*/      chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
+/*EE*/      break;
+//EE    case 3:
+/*EE*/  case 4:
             uptr->CMD &= ~(MT_CMDMSK);
             uptr->SNS |= SNS_EOT;           /* set EOT status */
             mt_busy[bufnum] &= ~1;

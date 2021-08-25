@@ -33,9 +33,18 @@ UTX 2.1A system.  Utxtest1a.ini builds and loads the root filesystem on
 builds the usr file system on /dev/dk0d.  Utxtest1c.ini boots the UTX
 system from disk and enters multi-user mode.  Utxtest2[a-c].ini files
 do the same thing for UTX 2.1B.  Utxscsi[a-c].ini builds a MFP SCSI disk
-UTX 2.1B system.  These files are only available from my sims project at
-https://github.com/AZBevier/sims.  A MPX 3.X test version will be added
-in the future when testing is complete.
+UTX 2.1B system.  There is also auto installation command files to do
+an MPX/UTX installation from tape to disk without intervention.  For
+UTX21a use load21a.ini to install.  Use run21a.ini to run the installed
+system.  For UTX21b use load21b.ini to install.  Use run21b.ini to run
+the installed system.  For MPX1X use load1x67 to install MPX 1.5F.  Use
+run1x67.ini to run the installed system.  For MPX3X use load3x67.ini to
+install MPX 3.4.  Use run3x67.ini to run the installed system.  Another
+MPX install file is user36esdtp2.ini which will install an MPX 3.6
+system along with the current development NBC software. Use the file
+user36erunp2.ini to run the system.  These files are located in the
+tests directory in the https://github.com/AZBevier/sims archive.  The
+install tapes are in the tests/tapes directory.
 
 Available tap tools in taptools directory:
 ./taptools   - set of tools to work with .tap formatted tapes.  Also tools
@@ -112,5 +121,5 @@ Other MPX verions support:
                tapes. 
 
 James C. Bevier
-06/20/2021 
+08/25/2021 
 

@@ -103,7 +103,7 @@ int writefile(FILE *tp, char *fnp, uint32 mblks, int32 chunks, int32 rem) {
     }
     fseek(fp, 0, SEEK_END);                 /* seek to end */
     word = ftell(fp);                       /* get filesize in bytes */
-printf("MPX file %s is %x (%d) bytes rem %x (%d) mblks %x (%d)\n", fnp, word, word, rem, rem, mblks, mblks);
+//printf("MPX file %s is %x (%d) bytes rem %x (%d) mblks %x (%d)\n", fnp, word, word, rem, rem, mblks, mblks);
     fseek(fp, 0, SEEK_SET);                 /* rewind file */
     size = (word/768);                      /* filesize in sectors */
     if (word%768 != 0)                      /* see if bytes left over */
@@ -119,8 +119,8 @@ printf("MPX file %s is %x (%d) bytes rem %x (%d) mblks %x (%d)\n", fnp, word, wo
     if (rem != 0) {
         mblks--;                            /* last block will be rem bytes */
     }
-printf("MPX0 file %s is %x (%d) bytes mblks %d chunk %d rem %d\n",
-    fnp, word, word, mblks, chunks, rem);
+//printf("MPX0 file %s is %x (%d) bytes mblks %d chunk %d rem %d\n",
+//    fnp, word, word, mblks, chunks, rem);
 //  blks = mblks/chunks;                    /* chunks */
 //  if (mblks%768 != 0)                     /* see if blks left over */
 //      blks += 1;                          /* partial blks, add 1 */
@@ -131,8 +131,8 @@ printf("MPX0 file %s is %x (%d) bytes mblks %d chunk %d rem %d\n",
 /// blks = bsize;                           /* save # blks */
     bsize = mblks;                          /* save # blks */
 
-printf("MPX1 file %s is %x (%d) bytes mblks %d bsize %d rem %d\n",
-    fnp, word, word, mblks, bsize, rem);
+//printf("MPX1 file %s is %x (%d) bytes mblks %d bsize %d rem %d\n",
+//    fnp, word, word, mblks, bsize, rem);
     csize = 0;
     /* read in the image file */
     while (bsize > 0) { 
@@ -177,8 +177,8 @@ printf("MPX1 file %s is %x (%d) bytes mblks %d bsize %d rem %d\n",
             }
         }
     }
-printf("write file %s (size %d bytes) (%d sect) (%d blocks) (%d chunks) (%d rem)\n",
-    fnp, word, size, mblks, blks, rem);
+//printf("write file %s (size %d bytes) (%d sect) (%d blocks) (%d chunks) (%d rem)\n",
+//    fnp, word, size, mblks, blks, rem);
     fclose(fp);
     return(0);
 }
@@ -197,7 +197,7 @@ uint32 readboot(char *name, char *buf, uint32 start, uint32 end) {
     n1 = fread(bootcode, 1, word, fp);      /* read bootcode */
     if (n1 <=0)                             /* check for read error */
         exit(1);                            /* bad tape format */
-printf("MPX bootfile %s is %x (%d) bytes\n", name, word, word);
+//printf("MPX bootfile %s is %x (%d) bytes\n", name, word, word);
     fclose(fp);
     fopen("volmboot", "w");
     fwrite(bootcode, 1, word, fp);
@@ -230,7 +230,7 @@ uint32 getblks(char *imgp, uint32 *rem)
     }
     fseek(fp, 0, SEEK_END);                 /* seek to end */
     word = ftell(fp);                       /* get filesize in bytes */
-printf("image file %s is %x (%d) bytes\n", imgp, word, word);
+//printf("image file %s is %x (%d) bytes\n", imgp, word, word);
     fseek(fp, 0, SEEK_SET);                 /* rewind file */
     w2 = fread((char *)M, sizeof(uint32), 192, fp);  /* read the image file */
     n1 = flip(M[0x68/4]);                   /* get PR.BYTDR bytes in dsect rel matrix */
@@ -245,8 +245,8 @@ printf("image file %s is %x (%d) bytes\n", imgp, word, word);
     if ((n1%768) != 0)                      /* round up blks if remainder */
         blks++; 
     blks += n2;                             /* get total blks to read */
-printf("image file %s n1 %x (%d) n2 %x (%d) blks %x (%d) rem %x (%d)\n",
-    imgp, n1, n1, n2, n2, blks, blks, *rem, *rem);
+//printf("image file %s n1 %x (%d) n2 %x (%d) blks %x (%d) rem %x (%d)\n",
+//    imgp, n1, n1, n2, n2, blks, blks, *rem, *rem);
     fseek(fp, 0, SEEK_SET);                 /* rewind file */
     fclose(fp);
 
@@ -468,9 +468,9 @@ error1:
 
                 fseek(dp, 0, SEEK_END);             /* seek to end */
                 bytes = ftell(dp);                  /* get filesize in bytes */
-printf("1 file length %ld %lx bytes\n", bytes, bytes);
+//printf("1 file length %ld %lx bytes\n", bytes, bytes);
 //67 printf("1 start writing at %ld %lx bytes offset\n", bytes-8, bytes-8);
-printf("1 start writing at %ld %lx bytes offset\n", bytes-4, bytes-4);
+//printf("1 start writing at %ld %lx bytes offset\n", bytes-4, bytes-4);
                 fseek(dp, 0, SEEK_SET);             /* rewind file to beginning */
                 /* at this point, we are at the end of the tape */
                 /* we should see 3 EOF's w/ or w/o an EOM */
@@ -484,7 +484,7 @@ readmore:
                     if (n1 <=0)                     /* check for read error */
                         goto doabort;               /* bad tape format */
 
-printf("2 file length %ld %lx bytes\n", bytes, bytes);
+//printf("2 file length %ld %lx bytes\n", bytes, bytes);
 //67printf("2 start writing at %ld %lx bytes offset\n", bytes-8, bytes-8);
 printf("2 start writing at %ld %lx bytes offset\n", bytes-4, bytes-4);
                     if (hc & 0xffff0000)            /* check for garbage */
@@ -572,7 +572,7 @@ getout:
         }
         fseek(fp, 0, SEEK_END);                     /* seek to end */
         word = ftell(fp);                           /* get filesize in bytes */
-printf("bootfile %s is %x (%d) bytes\n", bootp, word, word);
+//printf("bootfile %s is %x (%d) bytes\n", bootp, word, word);
         fseek(fp, 0, SEEK_SET);                     /* rewind file */
         /* bootfile must be <= 0x780 chars */
 //      if (word > 0x780) {
@@ -602,7 +602,7 @@ printf("bootfile %s is %x (%d) bytes\n", bootp, word, word);
            fprintf(stderr, "Operation aborted\n");
            exit(1);
         }
-printf("write boot file %s (size %d bytes)\n", bootp, word, word);
+//printf("write boot file %s (size %d bytes)\n", bootp, word, word);
         /* setup for mpx image file */
         memset((char *)data, 0, 0x800);             /* zero data storage */
 
@@ -675,7 +675,7 @@ printf("write boot file %s (size %d bytes)\n", bootp, word, word);
         filen = -1;                                 /* make in -1 for EOM */
         /* do EOM */
         fwrite((char *)(&filen), 1, (size_t)sizeof(filen), dp);
-printf("setting at %ld bytes in file after EOM\n", ftell(dp));
+//printf("setting at %ld bytes in file after EOM\n", ftell(dp));
         fclose(dp);
         exit(0);
     }
@@ -696,7 +696,7 @@ printf("setting at %ld bytes in file after EOM\n", ftell(dp));
     /* got tapefile and options, handle files now */
     targc = argc;                               /* save argc to reread list */
     targv = argv;                               /* save argv to reread list */
-printf("AT 3 argc %d argv %s\n", argc, *argv);
+//printf("AT 3 argc %d argv %s\n", argc, *argv);
     filen = 0;                                  /* no files yet */
     totent = 0;                                 /* no files yet */
 
@@ -731,7 +731,7 @@ printf("AT 3 argc %d argv %s\n", argc, *argv);
             fprintf(stderr, "error: Filename too long (%d>16) %s, Aborting\n", i, p);
             exit(1);
         }
-printf("argc %d argv3 %s\n", argc, p);
+//printf("argc %d argv3 %s\n", argc, p);
         if ((fp = fopen(p, "r")) == NULL) {
             fprintf(stderr, "error: can't open user file %s\n", p);
             exit(1);
@@ -785,7 +785,7 @@ printf("argc %d argv3 %s\n", argc, p);
         totent++;                               /* bump total count */
     }
 
-printf("AT write file list with %d entries\n", filen);
+//printf("AT write file list with %d entries\n", filen);
     /* dirlist now has 1-127 filename entries to save */
     /* write out the directory entries for the files to save */
     if (filen != 0) {
@@ -831,7 +831,7 @@ printf("AT write file list with %d entries\n", filen);
         int blks, rem;
 
         p = *argv++;
-printf("at 4 argc %d argv %s\n", argc, p);
+//printf("at 4 argc %d argv %s\n", argc, p);
         blks = getblks(p, &rem);
 
         if ((fp = fopen(p, "r")) == NULL) {
@@ -1014,7 +1014,7 @@ printf("at 4 argc %d argv %s\n", argc, p);
             writefile(dp, fnp, size, 8, 0);     /* all of file 8 blk at a time */
         }
 
-printf("File written at 4 argc %d argv %s\n", argc, fnp);
+//printf("File written at 4 argc %d argv %s\n", argc, fnp);
 
         /* write EOF (zero) to file */
         eof = 0;                                /* zero count */
@@ -1029,7 +1029,7 @@ printf("File written at 4 argc %d argv %s\n", argc, fnp);
     filen = -1;                                 /* make in -1 for EOM */
     /* do EOM */
     fwrite((char *)(&filen), 1, (size_t)sizeof(filen), dp);
-printf("setting at %lx (%ld) bytes in file after EOM\n", ftell(dp), ftell(dp));
+//printf("setting at %lx (%ld) bytes in file after EOM\n", ftell(dp), ftell(dp));
     fclose(dp);
     exit(0);
 }
