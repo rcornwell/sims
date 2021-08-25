@@ -867,6 +867,24 @@ switch (DK_GET_FMT (uptr)) {                            /* case on format */
     }
 }
 
+t_stat sim_disk_erase (UNIT *uptr)
+{
+struct disk_context *ctx = (struct disk_context *)uptr->disk_ctx;
+uint8 *buf;
+t_lba lba;
+
+if (uptr->flags & UNIT_ATT)
+    return SCPE_UNATT;
+
+buf = (uint8 *)calloc (1, ctx->storage_sector_size);
+if (buf == NULL)
+    return SCPE_MEM;
+for (lba = 0; lba < ctx->container_size / ctx->sector_size; lba++)
+    sim_disk_wrsect (uptr, lba, buf, NULL, 1);          /* write sector */
+free (buf);
+return SCPE_OK;
+}
+
 /*
    This routine is called when the simulator stops and any time
    the asynch mode is changed (enabled or disabled)
@@ -2145,7 +2163,7 @@ sim_debug_unit (ctx->dbit, uptr, "get_disk_footer(%s)\n", sim_uname (uptr));
 switch (DK_GET_FMT (uptr)) {                            /* case on format */
     case DKUF_F_STD:                                    /* SIMH format */
         container_size = sim_fsize_ex (uptr->fileref);
-        if ((container_size != (t_offset)-1) && (container_size > sizeof (*f)) &&
+        if ((container_size != (t_offset)-1) && (container_size > (t_offset)sizeof (*f)) &&
             (sim_fseeko (uptr->fileref, container_size - sizeof (*f), SEEK_SET) == 0) &&
             (sizeof (*f) == sim_fread (f, 1, sizeof (*f), uptr->fileref)))
             break;
@@ -2154,7 +2172,7 @@ switch (DK_GET_FMT (uptr)) {                            /* case on format */
         break;
     case DKUF_F_RAW:                                    /* RAW format */
         container_size = sim_os_disk_size_raw (uptr->fileref);
-        if ((container_size != (t_offset)-1) && (container_size > sizeof (*f)) &&
+        if ((container_size != (t_offset)-1) && (container_size > (t_offset)sizeof (*f)) &&
             (sim_os_disk_read (uptr, container_size - sizeof (*f), (uint8 *)f, &bytesread, sizeof (*f)) == SCPE_OK) &&
             (bytesread == sizeof (*f)))
             break;
@@ -2597,9 +2615,9 @@ else {                                                  /* normal */
             uptr->flags = uptr->flags | UNIT_RO;        /* set rd only */
             sim_messagef (SCPE_OK, "%s: Unit is read only\n", sim_uname (uptr));
             }
-        else {                                          /* doesn't exist */
+        else {                                          /* other error? */
             if ((sim_switches & SWMASK ('E')) ||        /* must exist? */
-                (errno != ENOENT))                      /* or other error? */
+                (errno != ENOENT))                      /* or must not re-create? */
                 return sim_messagef (_err_return (uptr, SCPE_OPENERR), "%s: Cannot open '%s' - %s\n",
                                      sim_uname (uptr), cptr, strerror (errno));
             if (create_function)
@@ -3944,12 +3962,12 @@ while (bytestoread) {
     if (bytesread < 0) {
         return SCPE_IOERR;
         }
-    if (bytesread < bytestoread) {      /* read zeros at/past EOF */
+    if ((size_t)bytesread < bytestoread) {/* read zeros at/past EOF */
         memset (buf + bytesread, 0, bytestoread - bytesread);
         bytesread = bytestoread;
         }
     sectorbytes = (bytesread / ctx->sector_size) * ctx->sector_size;
-    if (bytesread > sectorbytes)
+    if ((size_t)bytesread > sectorbytes)
         sectorbytes += ctx->sector_size;
     if (sectsread)
         *sectsread += sectorbytes / ctx->sector_size;
@@ -6034,7 +6052,7 @@ if (info->flag) {        /* zap type */
         return;
         }
     container_size = sim_fsize_ex (container);
-    if ((container_size != (t_offset)-1) && (container_size > sizeof (*f)) &&
+    if ((container_size != (t_offset)-1) && (container_size > (t_offset)sizeof (*f)) &&
         (sim_fseeko (container, container_size - sizeof (*f), SEEK_SET) == 0) &&
         (sizeof (*f) == sim_fread (f, 1, sizeof (*f), container))) {
         if ((memcmp (f->Signature, "simh", 4) == 0) && 

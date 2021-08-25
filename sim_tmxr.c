@@ -5233,7 +5233,8 @@ if (set == NULL) {                                      /* if the allocation fai
 
 tbuf = (char *) calloc (strlen(cptr)+2, sizeof(*cptr));
 if (tbuf == NULL) {                                     /* if the allocation failed */
-    free (tbuf);                                        /*   then free the successful list allocation */
+    free (set);                                         /*   then free the line set tracking array */
+    free (list);                                        /*        and successful list allocation */
     return SCPE_MEM;                                    /*      and report a "Memory exhausted" error */
     }
 
@@ -5706,11 +5707,11 @@ return SCPE_OK;
 
 static t_stat sim_tmxr_test_lnorder (TMXR *tmxr)
 {
-int i;
+uint32 i;
 int32 *saved_lnorder = tmxr->lnorder;
 int32 saved_lines = tmxr->lines;
 
-tmxr->lnorder = calloc (tmxr->lines, sizeof (*tmxr->lnorder));
+tmxr->lnorder = (int32 *)calloc (tmxr->lines, sizeof (*tmxr->lnorder));
 if (tmxr->lines >= 8) {
     tmxr->lines = 8;
     for (i = 0; i < (sizeof (lnorders)/sizeof (lnorders[0])); ++i)
