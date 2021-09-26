@@ -79,13 +79,13 @@
 #define MT_CTL_MD3          0x38       /* Set density, odd, convert off, trans on */
 
 /* in u3 is device command code and status */
-#define MT_CMDMSK            0x003f       /* Command being run */
-#define MT_READDONE          0x0400       /* Read finished, end channel */
-#define MT_MARK              0x0800       /* Sensed tape mark in move command */
-#define MT_ODD               0x1000       /* Odd parity */
-#define MT_TRANS             0x2000       /* Translation turned on ignored 9 track  */
-#define MT_CONV              0x4000       /* Data converter on ignored 9 track  */
-#define MT_BUSY              0x8000       /* Flag to send a CUE */
+#define MT_CMDMSK           0x0003f       /* Command being run */
+#define MT_READDONE         0x00400       /* Read finished, end channel */
+#define MT_MARK             0x00800       /* Sensed tape mark in move command */
+#define MT_ODD              0x01000       /* Odd parity */
+#define MT_TRANS            0x02000       /* Translation turned on ignored 9 track  */
+#define MT_CONV             0x04000       /* Data converter on ignored 9 track  */
+#define MT_BUSY             0x00200       /* Flag to send a CUE */
 
 /* Upper 11 bits of u3 hold the device address */
 
@@ -257,12 +257,16 @@ uint8  mt_startio(UNIT *uptr) {
 uint8  mt_startcmd(UNIT *uptr,  uint8 cmd) {
     DEVICE         *dptr = find_dev_from_unit(uptr);
     int            unit = (uptr - dptr->units);
+    uint8          f = 0;
 
     if (mt_busy[GET_DEV_BUF(dptr->flags)] != 0 || (uptr->CMD & MT_CMDMSK) != 0) {
         sim_debug(DEBUG_CMD, dptr, "CMD busy unit=%d %x\n", unit, cmd);
         uptr->flags |= MT_BUSY;   /* Flag we need to send CUE */
         return SNS_BSY;
     }
+
+    if (uptr->flags & MT_BUSY)
+        f = SNS_CTLEND;
 
     sim_debug(DEBUG_CMD, dptr, "CMD unit=%d %x\n", unit, cmd);
 
@@ -291,13 +295,15 @@ uint8  mt_startcmd(UNIT *uptr,  uint8 cmd) {
     case 0xb:              /* Control */
          if ((uptr->flags & UNIT_ATT) == 0) {
              uptr->SNS |= SNS_INTVENT;
-             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
+             uptr->flags &= ~MT_BUSY;
+             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK|f;
          }
          if ((uptr->flags & MTUF_9TR) == 0)  {
              uptr->SNS |= (SNS_7TRACK << 8);
              if ((cmd & 0xc0) == 0xc0) {
                  uptr->SNS |= SNS_CMDREJ;
-                 return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
+                 uptr->flags &= ~MT_BUSY;
+                 return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK|f;
              }
              switch((cmd >> 3) & 07) {
              case 0:      /* NOP */
@@ -342,14 +348,22 @@ uint8  mt_startcmd(UNIT *uptr,  uint8 cmd) {
          uptr->SNS |= SNS_CMDREJ;
          break;
     }
+    uptr->flags &= ~MT_BUSY;
     if (uptr->SNS & 0xff)
-        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
-    return SNS_CHNEND|SNS_DEVEND;
+        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK|f;
+    return SNS_CHNEND|SNS_DEVEND|f;
 }
 
 /* Map simH errors into machine errors */
 t_stat mt_error(UNIT * uptr, uint16 addr, t_stat r, DEVICE * dptr)
 {
+    uint8     flags = SNS_CHNEND|SNS_DEVEND;
+
+    if (uptr->flags & MT_BUSY) {
+       flags |= SNS_CTLEND;
+       uptr->flags &= ~MT_BUSY;
+    }
+
     mt_busy[GET_DEV_BUF(dptr->flags)] &= ~1;
     switch (r) {
     case MTSE_OK:              /* no error */
@@ -357,7 +371,7 @@ t_stat mt_error(UNIT * uptr, uint16 addr, t_stat r, DEVICE * dptr)
 
     case MTSE_TMK:              /* tape mark */
        sim_debug(DEBUG_EXP, dptr, "MARK ");
-       chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
+       chan_end(addr, flags|SNS_UNITEXP);
        return SCPE_OK;
 
     case MTSE_WRP:              /* write protected */
@@ -378,10 +392,10 @@ t_stat mt_error(UNIT * uptr, uint16 addr, t_stat r, DEVICE * dptr)
     case MTSE_EOM:              /* end of medium */
        sim_debug(DEBUG_EXP, dptr, "EOT ");
        uptr->SNS = SNS_EQUCHK;
-       chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
+       chan_end(addr, flags|SNS_UNITEXP);
        return SCPE_OK;
     }
-    chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+    chan_end(addr, flags);
     return SCPE_OK;
 }
 
