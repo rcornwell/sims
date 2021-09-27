@@ -53,6 +53,7 @@
 #define LINE              u6
 
 t_stat dkb_devio(uint32 dev, uint64 *data);
+t_stat dkb_svc(UNIT *uptr);
 int dkb_keyboard (SIM_KEY_EVENT *kev);
 t_stat dkb_reset(DEVICE *dptr);
 t_stat dkb_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
@@ -64,8 +65,7 @@ int dkb_kmod = 0;
 DIB dkb_dib = { DKB_DEVNUM, 1, dkb_devio, NULL};
 
 UNIT dkb_unit[] = {
-    {UDATA (NULL, UNIT_IDLE, 0) },
-    { 0 }
+    {UDATA (&dkb_svc, UNIT_IDLE, 0) },
     };
 
 
@@ -75,7 +75,7 @@ MTAB dkb_mod[] = {
 
 DEVICE dkb_dev = {
     "DKB", dkb_unit, NULL, dkb_mod,
-    2, 10, 31, 1, 8, 8,
+    1, 10, 31, 1, 8, 8,
     NULL, NULL, dkb_reset,
     NULL, NULL, NULL, &dkb_dib, DEV_DEBUG | DEV_DISABLE | DEV_DIS, 0, dev_debug,
     NULL, NULL, &dkb_help, NULL, NULL, &dkb_description
@@ -429,11 +429,19 @@ int dkb_keyboard (SIM_KEY_EVENT *kev)
     return 1;
 }
 
+t_stat dkb_svc(UNIT *uptr)
+{
+    SIM_KEY_EVENT ev;
+    sim_activate_after (uptr, 10000);
+    if (vid_poll_kb (&ev) == SCPE_OK)
+        dkb_keyboard (&ev);
+    return SCPE_OK;
+}
 
 t_stat dkb_reset( DEVICE *dptr)
 {
     if ((dkb_dev.flags & DEV_DIS) == 0)
-        vid_display_kb_event_process = dkb_keyboard;
+        sim_activate_abs (dkb_unit, 0);
     dkb_kmod = SHFT|TOP|META|CTRL;
     return SCPE_OK;
 }
