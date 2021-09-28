@@ -129,6 +129,9 @@ uint8        clk_irq;              /* Clock compare IRQ */
 uint8        tod_irq;              /* TOD compare IRQ */
 int          clk_state;
 int          timer_tics;           /* Interval Timer is ever 3 tics */
+uint32       idle_stop_msec = 0;   // msec allowed after before stop cpu if idle
+uint32       idle_stop_tm0;        // sim_os_msec when start counting for idle time
+
 
 #define CLOCK_UNSET   0            /* Clock not set */
 #define CLOCK_SET     1            /* Clock set */
@@ -270,6 +273,7 @@ t_stat cpu_dep (t_value val, t_addr addr, UNIT *uptr, int32 sw);
 t_stat cpu_reset (DEVICE *dptr);
 t_bool cpu_fprint_stopped (FILE *st, t_stat v);
 t_stat cpu_set_size (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+t_stat cpu_set_idle_stop (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat cpu_set_hist (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat cpu_show_hist (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat cpu_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
@@ -383,6 +387,8 @@ MTAB cpu_mod[] = {
     { EXT_IRQ, 0, "NOEXT",  NULL, NULL, NULL},
     { EXT_IRQ, EXT_IRQ, "EXT", "EXT", NULL, NULL, NULL,
                       "SET CPU EXT causes external interrupt"},
+    { MTAB_XTD|MTAB_VDV|MTAB_NMO, 0, "IDLESTOP", "IDLESTOP", &cpu_set_idle_stop, NULL,
+        NULL, "SET CPU IDLESTOP stops cpu after waiting n seconds for IRQ"},
     { MTAB_XTD|MTAB_VDV|MTAB_NMO|MTAB_SHP, 0, "HISTORY", "HISTORY",
       &cpu_set_hist, &cpu_show_hist },
     { 0 }
@@ -1224,11 +1230,25 @@ wait_loop:
             /* CPU IDLE */
             if (flags & WAIT && irq_en == 0 && ext_en == 0)
                return STOP_HALT;
+            if (idle_stop_msec) {
+                /* check idle time */
+                if (idle_stop_tm0 == 0) {
+                    idle_stop_tm0 = sim_os_msec(); /* init idle time */
+                } else {
+                    if (sim_os_msec() - idle_stop_tm0 > idle_stop_msec) {
+                        /* reset idle countdown because max time expired */
+                        idle_stop_tm0=0;
+                        return STOP_IBKPT;
+                    }
+                }
+            }
             if (sim_idle_enab)
                sim_idle(TMR_RTC, FALSE);
             sim_interval--;
             goto wait_loop;
         }
+        /* reset idle countdown because some activity  */
+        idle_stop_tm0=0;
 
         if (sim_brk_summ && sim_brk_test(PC, SWMASK('E'))) {
            return STOP_IBKPT;
@@ -6188,6 +6208,29 @@ cpu_set_size (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
     fprintf(stderr, "Mem size=%x\n\r", val);
     MEMSIZE = val;
     reset_all (0);
+    return SCPE_OK;
+}
+
+/* RSV: Set CPU IDLESTOP=<val>
+ *      <val>=number of seconds.
+ *
+ *      Sets max time in secounds CPU is IDLE but waiting for interrupt
+ *      from device. if <val> not zero, simulated CPU will wait for this wallclock
+ *      number of seconds, then stop. This allows to script a BOOT command and the
+ *      continue automatically when IPL has finished. Set to zero to disable.
+ */
+
+t_stat cpu_set_idle_stop (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+{
+    int32               n;
+    t_stat              r;
+
+    if (cptr == NULL) {
+        return SCPE_ARG;
+    }
+    n = (int32) get_uint(cptr, 10, 60, &r);
+    if (r != SCPE_OK) return SCPE_ARG;
+    idle_stop_msec = n * 1000;
     return SCPE_OK;
 }
 
