@@ -2708,6 +2708,7 @@ int32 i, sw;
 t_bool lookswitch;
 t_bool register_check = FALSE;
 t_stat stat = SCPE_OK;
+CTAB *docmdp = NULL;
 
 #if defined (__MWERKS__) && defined (macintosh)
 argc = ccommand (&argv);
@@ -2896,14 +2897,15 @@ if (cptr == NULL) {
     }
 else
     cptr2 = NULL;
+docmdp = find_cmd ("DO");
 if (cptr && (sizeof (nbuf) > strlen (cptr) + strlen ("/simh.ini") + 3)) {
     snprintf(nbuf, sizeof (nbuf), "\"%s%s%ssimh.ini\"", cptr2 ? cptr2 : "", cptr, strchr (cptr, '/') ? "/" : "\\");
-    stat = do_cmd (-1, nbuf) & ~SCPE_NOMESSAGE;         /* simh.ini proc cmd file */
+    stat = docmdp->action (-1, nbuf) & ~SCPE_NOMESSAGE; /* simh.ini proc cmd file */
     }
 if (SCPE_BARE_STATUS(stat) == SCPE_OPENERR)
-    stat = do_cmd (-1, "simh.ini");                     /* simh.ini proc cmd file */
+    stat = docmdp->action (-1, "simh.ini");             /* simh.ini proc cmd file */
 if (*cbuf)                                              /* cmd file arg? */
-    stat = do_cmd (0, cbuf);                            /* proc cmd file */
+    stat = docmdp->action (0, cbuf);                    /* proc cmd file */
 else if (*argv[0]) {                                    /* sim name arg? */
     char *np;                                           /* "path.ini" */
     nbuf[0] = '"';                                      /* starting " */
@@ -2911,7 +2913,7 @@ else if (*argv[0]) {                                    /* sim name arg? */
     if ((np = (char *)match_ext (nbuf, "EXE")))         /* remove .exe */
         *np = 0;
     strlcat (nbuf, ".ini\"", sizeof (nbuf));            /* add .ini" */
-    stat = do_cmd (-1, nbuf) & ~SCPE_NOMESSAGE;         /* proc default cmd file */
+    stat = docmdp->action (-1, nbuf) & ~SCPE_NOMESSAGE; /* proc default cmd file */
     if (stat == SCPE_OPENERR) {                         /* didn't exist/can't open? */
         np = strrchr (nbuf, '/');                       /* stript path and try again in cwd */
         if (np == NULL)
@@ -2920,7 +2922,7 @@ else if (*argv[0]) {                                    /* sim name arg? */
             np = strrchr (nbuf, ']');                   /* VMS path separator */
         if (np != NULL) {
             *np = '"';
-            stat = do_cmd (-1, np) & ~SCPE_NOMESSAGE;   /* proc default cmd file */
+            stat = docmdp->action (-1, np) & ~SCPE_NOMESSAGE;/* proc default cmd file */
             }
         }
     }
@@ -3402,7 +3404,24 @@ if (dptr->modifiers) {
         if (mptr->mstring) {
             fprint_header (st, &found, header);
             snprintf (buf, sizeof (buf), "set %s %s%s", sim_dname (dptr), mptr->mstring, (strchr(mptr->mstring, '=')) ? "" : (MODMASK(mptr,MTAB_VALR) ? "=val" : (MODMASK(mptr,MTAB_VALO) ? "{=val}" : "")));
-            fprint_wrapped (st, buf, 30, gap, mptr->help, 80);
+            if ((mptr->valid != NULL) && (mptr->disp != NULL) && (mptr->help != NULL)) {
+                char gbuf[CBUFSIZE];
+                const char *rem;
+
+                rem = get_glyph (mptr->help, gbuf, 0);
+                if ((strcasecmp (gbuf, "Display") == 0) || 
+                    (strcasecmp (gbuf, "Show") == 0)) {
+                    char *thelp = (char *)malloc (9 + strlen (rem));
+
+                    sprintf (thelp, "Specify %s", rem);
+                    fprint_wrapped (st, buf, 30, gap, thelp, 80);
+                    free (thelp);
+                    }
+                else
+                    fprint_wrapped (st, buf, 30, gap, mptr->help, 80);
+                }
+            else
+                fprint_wrapped (st, buf, 30, gap, mptr->help, 80);
             }
         }
     }
@@ -3485,7 +3504,24 @@ if ((dptr->modifiers) && (dptr->units)) {   /* handle unit specific modifiers */
         if (mptr->mstring) {
             fprint_header (st, &found, header);
             snprintf (buf, sizeof (buf), "set %s %s%s", unit_spec, mptr->mstring, (strchr(mptr->mstring, '=')) ? "" : (MODMASK(mptr,MTAB_VALR) ? "=val" : (MODMASK(mptr,MTAB_VALO) ? "{=val}": "")));
-            fprint_wrapped (st, buf, 30, gap, mptr->help, 80);
+            if ((mptr->valid != NULL) && (mptr->disp != NULL) && (mptr->help != NULL)) {
+                char gbuf[CBUFSIZE];
+                const char *rem;
+
+                rem = get_glyph (mptr->help, gbuf, 0);
+                if ((strcasecmp (gbuf, "Display") == 0) || 
+                    (strcasecmp (gbuf, "Show") == 0)) {
+                    char *thelp = (char *)malloc (9 + strlen (rem));
+
+                    sprintf (thelp, "Specify %s", rem);
+                    fprint_wrapped (st, buf, 30, gap, thelp, 80);
+                    free (thelp);
+                    }
+                else
+                    fprint_wrapped (st, buf, 30, gap, mptr->help, 80);
+                }
+            else
+                fprint_wrapped (st, buf, 30, gap, mptr->help, 80);
             }
         }
     }
@@ -4129,11 +4165,11 @@ do {
     if ((cmdp = find_cmd (gbuf))) {                     /* lookup command */
         if (cmdp->action == &return_cmd)                /* RETURN command? */
             break;                                      /*    done! */
-        if (cmdp->action == &do_cmd) {                  /* DO command? */
+        if (strcmp (cmdp->name, "DO") == 0) {           /* DO command? */
             if (sim_do_depth >= MAX_DO_NEST_LVL)        /* nest too deep? */
                 stat = SCPE_NEST;
             else
-                stat = do_cmd (sim_do_depth+1, cptr);   /* exec DO cmd */
+                stat = cmdp->action (sim_do_depth+1, cptr);/* exec DO cmd */
             }
         else
             if (cmdp->action == &shift_cmd)             /* SHIFT command */
@@ -13772,7 +13808,7 @@ return stat | ((stat != SCPE_OK) ? SCPE_NOMESSAGE : 0);
    Callers should be calling sim_debug() which is a macro
    defined in scp.h which evaluates the action condition before 
    incurring call overhead. */
-static void _sim_vdebug (uint32 dbits, DEVICE* dptr, UNIT *uptr, const char* fmt, va_list arglist)
+void _sim_vdebug (uint32 dbits, DEVICE* dptr, UNIT *uptr, const char* fmt, va_list arglist)
 {
 if (sim_deb && dptr && ((dptr->dctrl | (uptr ? uptr->dctrl : 0)) & dbits)) {
     TMLN *saved_oline = sim_oline;
