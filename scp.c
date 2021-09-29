@@ -2779,6 +2779,8 @@ sim_on_inherit = sim_switches & SWMASK ('O');           /* -o means inherit on s
 sim_init_sock ();                                       /* init socket capabilities */
 AIO_INIT;                                               /* init Asynch I/O */
 sim_finit ();                                           /* init fio package */
+sim_disk_init ();                                       /* init disk package */
+sim_tape_init ();                                       /* init tape package */
 for (i = 0; cmd_table[i].name; i++) {
     size_t alias_len = strlen (cmd_table[i].name);
     char *cmd_name = (char *)calloc (1 + alias_len, sizeof (*cmd_name));
@@ -6405,13 +6407,15 @@ FILE *f;
 
 #if defined(_WIN32)
 #define FIND_CMD "where"
+#define FIND_CMD2 "2>NUL"
 #define popen _popen
 #define pclose _pclose
 #else
 #define FIND_CMD "which"
+#define FIND_CMD2 ""
 #endif
 memset (toolpath, 0, sizeof(toolpath));
-snprintf (findcmd, sizeof (findcmd), "%s %s", FIND_CMD, tool);
+snprintf (findcmd, sizeof (findcmd), "%s %s %s", FIND_CMD, tool, FIND_CMD2);
 if ((f = popen (findcmd, "r"))) {
     do {
         if (NULL == fgets (toolpath, sizeof(toolpath)-1, f))

@@ -804,8 +804,6 @@ switch (MT_GET_FMT (uptr)) {
                             error = TRUE;
                             }
                         }
-                    if (data_read > 0)
-                        error = memory_tape_add_block (tape, block, tape->block_size);
                     }
                 }
             else {                                              /* text file */
@@ -3838,6 +3836,11 @@ if (DEV_TYPE(dptr) != DEV_TAPE)
 return sim_add_debug_flags (dptr, tape_debug);
 }
 
+t_stat sim_tape_init (void)
+{
+return SCPE_OK;
+}
+
 static t_bool p7b_parity_inited = FALSE;
 static uint8 p7b_odd_parity[64];
 static uint8 p7b_even_parity[64];
@@ -4200,7 +4203,7 @@ static struct classify_test {
          "51251251251251251251251251251251251251251251251251251251251251255125125125125125"
          "12512512512512512512512512512512512512512512512551251251251251251251251251251251"
          "2512512512512512512512512512~~~~\r\n",
-         512, FALSE, TRUE, "-fb FIXED 516", "-fb ANSI-VMS 512"},
+         512, FALSE, TRUE, "-fb FIXED 512", "-fb ANSI-VMS 512"},
         {"TapeTest-Classify-82.bin",
          "Now is the time for all good men to come to the aid of their country.\001\002~~~~~~~~~\r\n"
          "Now is the time for all good men to come to the aid of their country.\001\002~~~~~~~~~\r\n",
@@ -4231,20 +4234,20 @@ for (t = classify_tests; t->testname != NULL; t++) {
         char args[CBUFSIZE*2];
         t_stat r;
 
-        snprintf (args, sizeof (args), "%s %s %s", sim_uname (uptr), t->success_attach_args, t->testname);
+        snprintf (args, sizeof (args), "%s -v %s %s", sim_uname (uptr), t->success_attach_args, t->testname);
         r = attach_cmd (0, args);
         if (r != SCPE_OK)
             return sim_messagef (r, "ATTACH %s failed\n", args);
-        detach_unit (uptr);
+        detach_cmd (0, sim_uname (uptr));
         }
     if (t->fail_attach_args) {
         char args[CBUFSIZE*2];
         t_stat r;
 
-        snprintf (args, sizeof (args), "%s %s %s", sim_uname (uptr), t->fail_attach_args, t->testname);
+        snprintf (args, sizeof (args), "%s -v %s %s", sim_uname (uptr), t->fail_attach_args, t->testname);
         r = attach_cmd (0, args);
         if (r == SCPE_OK) {
-            detach_unit (uptr);
+            detach_cmd (0, sim_uname (uptr));
             return sim_messagef (r, "** UNEXPECTED ATTACH SUCCESS ** %s\n", args);
             }
         }
