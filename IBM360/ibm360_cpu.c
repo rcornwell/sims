@@ -5970,6 +5970,7 @@ cpu_reset (DEVICE *dptr)
        sim_rtcn_init_unit (&cpu_unit[0], cpu_unit[0].wait, TMR_RTC);
        sim_activate(&cpu_unit[0], 10000);
     }
+    idle_stop_tm0 = 0;
     return SCPE_OK;
 }
 
@@ -6231,6 +6232,7 @@ t_stat cpu_set_idle_stop (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
     n = (int32) get_uint(cptr, 10, 60, &r);
     if (r != SCPE_OK) return SCPE_ARG;
     idle_stop_msec = n * 1000;
+    idle_stop_tm0 = 0;
     return SCPE_OK;
 }
 
