@@ -48,6 +48,7 @@
 #define CON_CR          0x200   /* Output at beginning of line */
 #define CON_REQ         0x400   /* Request key pressed */
 #define CON_OUTPUT      0x800   /* Output characters since R */
+#define CON_CANCEL      0x1000  /* Control C pressed */
 
 /* Upper 11 bits of u3 hold the device address */
 
@@ -219,7 +220,7 @@ uint8  con_haltio(UNIT *uptr) {
     case CON_WR:
     case CON_ACR:
     case CON_RD:
-         uptr->CMD &= ~(CON_MSK|CON_INPUT);
+         uptr->CMD &= ~(CON_MSK|CON_INPUT|CON_CANCEL);
          con_data[u].inptr = 0;
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          break;
@@ -291,7 +292,12 @@ con_srv(UNIT *uptr) {
                    cmd = 0;
                    uptr->CMD &= ~(CON_MSK);
                    sim_debug(DEBUG_CMD, &con_dev, "%d: devend\n", u);
-                   chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+                   if (uptr->CMD & CON_CANCEL) {
+                       uptr->CMD &= ~CON_CANCEL;
+                       chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
+                   } else {
+                       chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+                   }
                    break;
            }
 
@@ -304,7 +310,12 @@ con_srv(UNIT *uptr) {
                cmd = 0;
                uptr->CMD &= ~(CON_MSK);
                sim_debug(DEBUG_CMD, &con_dev, "%d: devend input\n", u);
-               chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+               if (uptr->CMD & CON_CANCEL) {
+                   uptr->CMD &= ~CON_CANCEL;
+                   chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
+               } else {
+                   chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+               }
             }
          }
          break;
@@ -345,6 +356,9 @@ con_srv(UNIT *uptr) {
                 post_extirq();
                 break;
            case 03:  /* ^C */
+                uptr->CMD |= CON_CANCEL|CON_INPUT;
+                break;
+
            case 025: /* ^U clear line */
                 for (i = con_data[u].inptr; i> 0; i--) {
                     sim_putchar('\b');
