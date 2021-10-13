@@ -375,6 +375,7 @@ t_opcode  optab[] = {
        { OP_TRT,       "TRT",  SS },
        { OP_ED,        "ED",   SS },
        { OP_EDMK,      "EDMK", SS },
+       { OP_MVCIN,     "MVCIN", SS },
        { OP_MVO,       "MVO",  SS|TWOOP },
        { OP_PACK,      "PACK", SS|TWOOP },
        { OP_UNPK,      "UNPK", SS|TWOOP },

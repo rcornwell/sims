@@ -286,6 +286,7 @@ typedef struct dib {
 #define OP_TRT            0xDD
 #define OP_ED             0xDE
 #define OP_EDMK           0xDF
+#define OP_MVCIN          0xE8   /* 370 Move inverse */
 #define OP_SRP            0xF0   /* 370 Shift and round decimal */
 #define OP_MVO            0xF1
 #define OP_PACK           0xF2

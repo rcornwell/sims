@@ -2499,6 +2499,34 @@ save_dbl:
                 }
                 break;
 
+        case OP_MVCIN:
+                if (Q370) {
+                    if ((cpu_unit[0].flags & FEAT_DAT) != 0) {
+                       /* Make sure we can access whole area */
+                       if (TransAddr(addr1, &src1) ||
+                           TransAddr(addr1+reg, &src1) ||
+                           TransAddr(addr2, &src1) ||
+                           TransAddr(addr2+reg, &src1)) {
+                          goto supress;
+                       }
+                    }
+                    addr2 += reg;
+                    do {
+                       if (ReadByte(addr2, &src1))
+                           goto supress;
+                       dest = src1;
+                       if (WriteByte(addr1, dest))
+                           goto supress;
+                       addr1++;
+                       addr2--;
+                       reg--;
+                    } while (reg != 0xff);
+                } else {
+                    storepsw(OPPSW, IRC_OPR);
+                    goto supress;
+                }
+                break;
+
         case OP_NC:
         case OP_OC:
         case OP_XC:
