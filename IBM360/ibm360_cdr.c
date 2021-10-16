@@ -147,8 +147,6 @@ uint8  cdr_startcmd(UNIT *uptr,  uint8 cmd) {
 
     switch (cmd & 0x7) {
     case 2:              /* Read command */
-         if ((cmd & 0xc0) != 0xc0)
-             uptr->CMD &= ~CDR_CARD;
          uptr->CMD &= ~(CDR_CMDMSK);
          uptr->CMD |= (cmd & CDR_CMDMSK);
          sim_activate(uptr, 1000);       /* Start unit off */
@@ -222,7 +220,7 @@ cdr_srv(UNIT *uptr) {
             return SCPE_OK;
        case CDSE_OK:
             uptr->CMD |= CDR_CARD;
-            if ((uptr->CMD & CDR_CMDMSK) == CDR_FEED) {
+            if ((uptr->CMD & 0xf) == CDR_FEED) {
                 chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                 uptr->CMD &= ~(CDR_CMDMSK);
                 return SCPE_OK;
@@ -247,6 +245,8 @@ cdr_srv(UNIT *uptr) {
         } else
             ch = (uint8)(xlat&0xff);
         if (chan_write_byte(addr, &ch)) {
+           if ((uptr->CMD & 0xc0) != 0xc0)
+                uptr->CMD &= ~CDR_CARD;
            uptr->CMD &= ~(CDR_CMDMSK);
            chan_end(addr, SNS_CHNEND|SNS_DEVEND|(uptr->SNS ? SNS_UNITCHK:0));
            return SCPE_OK;
@@ -255,11 +255,15 @@ cdr_srv(UNIT *uptr) {
            sim_debug(DEBUG_DATA, &cdr_dev, "%d: Char > %02o\n", u, ch);
         }
         if (uptr->COL == 80) {
+            if ((uptr->CMD & 0xc0) != 0xc0)
+                 uptr->CMD &= ~CDR_CARD;
             uptr->CMD &= ~(CDR_CMDMSK);
             chan_end(addr, SNS_CHNEND|SNS_DEVEND|(uptr->SNS ? SNS_UNITCHK:0));
+            return SCPE_OK;
         }
         sim_activate(uptr, 100);
     }
+
     return SCPE_OK;
 }
 
