@@ -638,8 +638,8 @@ sns_end:
     case DK_POS_INDEX:             /* At Index Mark */
          /* Read and multi-track advance to next head */
          if ((uptr->CMD & 0x83) == 0x82 || (uptr->CMD & 0x83) == 0x81) {
-             sim_debug(DEBUG_DETAIL, dptr, "adv head unit=%d %02x %d %d %02x\n",
-                   unit, state, data->tpos, uptr->CCH & 0xff, data->filemsk);
+             sim_debug(DEBUG_DETAIL, dptr, "adv head unit=%d %02x %d %d %02x %d\n",
+                   unit, state, data->tpos, uptr->CCH & 0xff, data->filemsk, data->ovfl);
              if ((data->filemsk & DK_MSK_SK) == DK_MSK_SKNONE) {
                  sim_debug(DEBUG_DETAIL, dptr, "end cyl skmsk unit=%d %02x %d %02x\n",
                            unit, state, data->tpos, data->filemsk);
@@ -880,7 +880,7 @@ ntrack:
                  ch = 0xc8;
              else
                  ch = 0x40;
-             if ((uptr->CCH >> 8) & SNS_ENDCYL)
+             if ((uptr->SNS >> 8) & SNS_ENDCYL)
                 ch |= 4;
              sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 3 %x\n", unit, ch);
              if (chan_write_byte(addr, &ch))
