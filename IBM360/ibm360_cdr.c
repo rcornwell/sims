@@ -156,13 +156,14 @@ uint8  cdr_startcmd(UNIT *uptr,  uint8 cmd) {
 
     case 3:              /* Control */
          uptr->SNS = 0;
-         uptr->CMD &= ~(CDR_CMDMSK|CDR_CARD);
+         uptr->CMD &= ~(CDR_CMDMSK);
          if (cmd == 0x3)
              return SNS_CHNEND|SNS_DEVEND;
          if ((cmd & 0x30) != 0x20 || (cmd & 0xc0) == 0xc0) {
              uptr->SNS |= SNS_CMDREJ;
              return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
          }
+         uptr->CMD &= ~(CDR_CARD);
          uptr->CMD |= (cmd & CDR_CMDMSK);
          uptr->COL = 0;
          sim_activate(uptr, 1000);       /* Start unit off */
