@@ -405,13 +405,13 @@ uint8  dasd_startcmd(UNIT *uptr,  uint8 cmd) {
 
     sim_debug(DEBUG_CMD, dptr, "CMD unit=%d %02x\n", unit, cmd);
     if ((uptr->flags & UNIT_ATT) == 0) {
-         if (cmd != 0) { //     if ((cmd & 0xF) == 0x4) {  /* Sense */
-            uptr->CMD |= cmd;
-            sim_activate(uptr, 10);
-            return 0;
+         if (cmd == 0) {
+            return SNS_UNITCHK;
          }
          sim_debug(DEBUG_CMD, dptr, "CMD unit=%d disco\n", unit);
-         return SNS_CHNEND|SNS_UNITCHK;
+         uptr->CMD |= cmd;
+         sim_activate(uptr, 10);
+         return 0;
     }
 
     switch (cmd & 0x3) {
@@ -435,7 +435,7 @@ uint8  dasd_startcmd(UNIT *uptr,  uint8 cmd) {
          }
          if (uptr->SNS & 0xff) {
              sim_debug(DEBUG_CMD, dptr, "CMD unit=%d test %08x\n", unit, uptr->SNS);
-             return SNS_CHNEND|SNS_UNITCHK;
+             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
          }
     }
     return SNS_CHNEND;
