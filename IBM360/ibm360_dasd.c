@@ -941,7 +941,7 @@ sense_end:
              if ((uptr->CCH >> 8) == data->cyl) {
                  uptr->LCMD = cmd;
                  uptr->CMD &= ~(0xff);
-                 set_devattn(addr, SNS_CHNEND | SNS_DEVEND);
+                 set_devattn(addr, SNS_DEVEND);
                  sim_debug(DEBUG_DETAIL, dptr, "seek end unit=%d %d %d %x\n", unit,
                       uptr->CCH >> 8, data->cyl, data->state);
               }

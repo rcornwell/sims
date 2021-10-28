@@ -1761,12 +1761,17 @@ set_cc:
                 dest = src1 + src2;
                 if ((((src1 & src2 & ~dest) |
                        (~src1 & ~src2 & dest)) & MSIGN) != 0) {
+                    if ((op & 0x1f) == 0x1b && src1 == MSIGN && src2 == MSIGN) {
+                        dest = 0;
+                        goto set_cc;
+                    }
 set_cc3:
                     regs[reg1] = dest;
                     per_mod |= 1 << reg1;
                     cc = 3;
-                    if (pmsk & FIXOVR)
+                    if (pmsk & FIXOVR) {
                        storepsw(OPPSW, IRC_FIXOVR);
+                    }
                     break;
                 }
                 goto set_cc;
@@ -2185,8 +2190,9 @@ save_dbl:
                    if (cc != 3 && (src1 | src1h) != 0)
                       cc = (src1 & MSIGN) ? 1 : 2;
 #endif
-                   if (cc == 3 && (pmsk & FIXOVR))
+                   if (cc == 3 && (pmsk & FIXOVR)) {
                       storepsw(OPPSW, IRC_FIXOVR);
+                   }
                    dest = regs[reg1];
                 }
                 break;

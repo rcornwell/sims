@@ -103,7 +103,7 @@ struct dib con_dib = { 0xFF, 1, NULL, con_startcmd, con_haltio, con_unit, con_in
 DEVICE              con_dev = {
     "INQ", con_unit, NULL, con_mod,
     NUM_DEVS_CON, 8, 15, 1, 8, 8,
-    NULL, NULL, NULL, NULL, NULL, con_detach,
+    NULL, NULL, NULL, NULL, NULL, &con_detach,
     &con_dib, DEV_UADDR | DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &con_help, NULL, NULL, &con_description
 };
