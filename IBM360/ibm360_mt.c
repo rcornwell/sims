@@ -535,7 +535,7 @@ t_stat mt_srv(UNIT * uptr)
 
          /* Send character over to channel */
          if (chan_write_byte(addr, &ch)) {
-             sim_debug(DEBUG_DATA, dptr, "Read unit=%d EOR\n\r", unit);
+             sim_debug(DEBUG_DATA, dptr, "Read unit=%d EOR\n", unit);
              /* If not read whole record, skip till end */
              if ((t_addr)uptr->POS < uptr->hwmark) {
                  /* Send dummy character to force SLI */
@@ -553,7 +553,7 @@ t_stat mt_srv(UNIT * uptr)
                 chan_end(addr, SNS_CHNEND|SNS_DEVEND);
              }
          } else {
-              sim_debug(DEBUG_DATA, dptr, "Read data unit=%d %d %02x\n\r",
+              sim_debug(DEBUG_DATA, dptr, "Read data unit=%d %d %02x\n",
                        unit, uptr->POS, ch);
               if ((t_addr)uptr->POS >= uptr->hwmark) {       /* In IRG */
                   /* Handle end of record */
@@ -639,7 +639,7 @@ t_stat mt_srv(UNIT * uptr)
                 ch |= parity_table[ch] ^ mode;
              }
              mt_buffer[bufnum][uptr->POS++] = ch;
-             sim_debug(DEBUG_DATA, dptr, "Write data unit=%d %d %02o\n\r",
+             sim_debug(DEBUG_DATA, dptr, "Write data unit=%d %d %02o\n",
                       unit, uptr->POS, ch);
              uptr->hwmark = uptr->POS;
          }
@@ -695,7 +695,7 @@ t_stat mt_srv(UNIT * uptr)
          }
 
          if (chan_write_byte(addr, &ch)) {
-                   sim_debug(DEBUG_DATA, dptr, "Read unit=%d EOR\n\r", unit);
+                   sim_debug(DEBUG_DATA, dptr, "Read unit=%d EOR\n", unit);
               /* If not read whole record, skip till end */
               if (uptr->POS >= 0) {
                   sim_activate(uptr, (uptr->POS) * 20);
@@ -711,7 +711,7 @@ t_stat mt_srv(UNIT * uptr)
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND);
               }
          } else {
-              sim_debug(DEBUG_DATA, dptr, "Read data unit=%d %d %02o\n\r",
+              sim_debug(DEBUG_DATA, dptr, "Read data unit=%d %d %02o\n",
                             unit, uptr->POS, ch);
               if (uptr->POS == 0) {      /* In IRG */
                   uptr->CMD &= ~MT_CMDMSK;

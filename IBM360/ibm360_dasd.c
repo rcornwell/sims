@@ -1981,8 +1981,8 @@ dasd_format(UNIT * uptr, int flag) {
         data->ccyl = 0;
         set_devattn(addr, SNS_DEVEND);
         sim_activate(uptr, 100);
-        fputc('\n', stderr);
         fputc('\r', stderr);
+        fputc('\n', stderr);
         return 0;
     } else
         return 1;
@@ -2014,7 +2014,7 @@ dasd_attach(UNIT * uptr, CONST char *file)
     }
 
     isize = sim_fsize(uptr->fileref);
-    sim_messagef(SCPE_OK, "Drive %03x=%d %d %02x %02x %d\n\r",  addr,
+    sim_messagef(SCPE_OK, "Drive %03x=%d %d %02x %02x %d\r\n",  addr,
              hdr.heads, hdr.tracksize, hdr.devtype, hdr.fileseq, hdr.highcyl);
     for (i = 0; disk_type[i].name != 0; i++) {
          tsize = (disk_type[i].bpt | 0x1ff) + 1;
@@ -2023,7 +2023,7 @@ dasd_attach(UNIT * uptr, CONST char *file)
              hdr.heads == disk_type[i].heads && dsize == isize) {
              if (GET_TYPE(uptr->flags) != i) {
                   /* Ask if we should change */
-                  fprintf(stderr, "Wrong type %s\n\r", disk_type[i].name);
+                  fprintf(stderr, "Wrong type %s\r\n", disk_type[i].name);
                   if (!get_yn("Update dasd type? [N] ", FALSE)) {
                       detach_unit(uptr);
                       return SCPE_FMT;
