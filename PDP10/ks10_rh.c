@@ -298,7 +298,7 @@ rh_devirq(uint32 dev, t_addr addr) {
         else if (rhc->imode == 2) /* RH20 style */
            addr = rhc->ivect;
     } else {
-       sim_printf("Unable to find device %03o\n\r", dev);
+       sim_printf("Unable to find device %03o\r\n", dev);
     }
     return  addr;
 }

@@ -528,7 +528,7 @@ error:
     if ((word & PRI_CMT_IP) != 0) {
         /* Transfer from 10 */
         if ((uptr->STATUS & DTE_IND) == 0) {
-            fprintf(stderr, "DTE out of sync\n\r");
+            fprintf(stderr, "DTE out of sync\r\n");
             return;
         }
         /* Get size of transfer */

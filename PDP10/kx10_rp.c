@@ -642,7 +642,7 @@ rp_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
                    regs[RPLA] = 0;
             }
             regs[RPMR] = data;
-            fprintf(stderr, "Write %o MR=%06o\n\r", unit, data);
+            fprintf(stderr, "Write %o MR=%06o\r\n", unit, data);
         } else
             regs[RPMR] = 0;
         break;

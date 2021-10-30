@@ -377,7 +377,7 @@ tu_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
         break;
     case  003:  /* maintenance */
         regs[TUMR] = data;
-        fprintf(stderr, "TU MR=%06o\n\r", data);
+        fprintf(stderr, "TU MR=%06o\r\n", data);
         break;
     case  004:  /* atten summary */
         rhc->attn = 0;

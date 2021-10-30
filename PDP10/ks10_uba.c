@@ -144,7 +144,7 @@ uba_write(t_addr addr, int ctl, uint64 data, int access)
            uint32 map = (uint32)(data & 03777) << 9;
            map |= (uint32)(data & 0740000) << 13;
            uba_map[ubm][addr & 077] = map;
-           sim_debug(DEBUG_EXP, &cpu_dev, "Wr MAP %02o %012llo %06o\n\r", 
+           sim_debug(DEBUG_EXP, &cpu_dev, "Wr MAP %02o %012llo %06o\n", 
                  addr & 077, data, map);
            return 0;
        } else if ((addr & 077) == 0) {
@@ -217,7 +217,7 @@ uba_write_npr(t_addr addr, uint16 ctl, uint64 data)
     addr = (map & PAGE_MASK) | (addr >> 2) & 0777;
     if (map & MAP_EN16)
         data &= 0177777177777;
-    sim_debug(DEBUG_DATA, &cpu_dev, "Wr NPR %08o %08o %012llo\n\r", oaddr, addr, data);
+    sim_debug(DEBUG_DATA, &cpu_dev, "Wr NPR %08o %08o %012llo\n", oaddr, addr, data);
     M[addr] = data;
     return 1;
 }

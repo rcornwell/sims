@@ -1214,7 +1214,7 @@ imp_send_packet (struct imp_device *imp, int len)
     case 1:      /* Error */
            break;
     case 2:      /* Host going down */
-fprintf(stderr, "IMP: Host shutdown\n\r");
+fprintf(stderr, "IMP: Host shutdown\r\n");
            break;
     case 4:      /* Nop */
            if (imp->init_state < 3)
@@ -2027,7 +2027,7 @@ imp_do_dhcp_client(struct imp_device *imp, ETH_PACK *read_buffer)
 
     ip_checksum((uint8 *)&sum, (uint8 *)ip_hdr, hl);
     if (sum != 0) {
-       sim_printf("IP checksum error %x\n\r", sum);
+       sim_printf("IP checksum error %x\r\n", sum);
        return;
     }
     ip_checksum((uint8 *)(&sum), (uint8 *)(upkt), ntohs(upkt->len));
@@ -2038,7 +2038,7 @@ imp_do_dhcp_client(struct imp_device *imp, ETH_PACK *read_buffer)
     udp_hdr.hlen = upkt->len;
     checksumadjust((uint8 *)&sum, 0, 0, (uint8 *)(&udp_hdr), sizeof(udp_hdr));
     if (sum != 0) {
-       sim_printf("UDP checksum error %x\n\r", sum);
+       sim_printf("UDP checksum error %x\r\n", sum);
        return;
     }
 
