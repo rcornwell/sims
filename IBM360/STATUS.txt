@@ -1,42 +1,21 @@
 Current status:
 
 Operating Systems:
-TOS/360:   Will IPL, and read IPL deck. Will run some jobs.
+BOS/360:   Works.
 
-DOS/360:   Will restore and run supervisor gen job on 2314.
+TOS/360:   Works.
+
+DOS/360:   Works.
 
 OS/360:    MVT can be generated. Fortran, Algol working.
 
-ibm360_cpu.c:
-    Floating point starting to work.
-    Decimal instructions need test.
-    Complete /67 support.
+TSS/370:   Works.
 
-ibm360_chan.c
-    Mostly working.
+VM/370:    Works.
 
-ibm360_cdp.c:
-    Add support for binary mode.
+OS/VS1:    Sysgen works.
 
-ibm360_cdr.c:
-    Add support for binary mode.
+MVS:       Errors during install of SMP.
 
-ibm360_com.c:
-    Not implemented.
-
-ibm360_con.c:
-    Appears to be working.
-
-ibm360_dasd.c:
-    Mostly working.
-
-ibm360_lpr.c:
-    Need to add in support for line skip and skip control.
-
-ibm360_mt.c:
-    Mostly working.
-
-ibm360_sys.c:
-    Working.
-
+MTS D2.0&D4.0:  Works.
 
