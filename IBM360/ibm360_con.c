@@ -117,7 +117,7 @@ void
 con_ini(UNIT *uptr, t_bool f) {
      int                 u = (uptr - con_unit);
      con_data[u].inptr = 0;
-     uptr->CMD &= ~(CON_MSK|CON_REQ|CON_INPUT|CON_CR);
+     uptr->CMD &= ~(CON_MSK|CON_REQ|CON_INPUT|CON_CR|CON_CANCEL);
      uptr->SNS = 0;
      sim_activate(uptr, 1000);
 }
@@ -384,10 +384,13 @@ con_srv(UNIT *uptr) {
         } else {
            if (cmd == CON_RD && ch == 03) { /* Cancel */
                chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
-               uptr->CMD &= ~CON_INPUT;
+               uptr->CMD &= ~(CON_INPUT|CON_CANCEL);
                con_data[u].inptr = 0;
                cmd = 0;
             } else {
+               sim_debug(DEBUG_CMD, &con_dev, "%d: error %x\n", u, cmd);
+               if (cmd == 0)
+                    uptr->CMD |= CON_REQ;
                sim_putchar('\007');
             }
         }
