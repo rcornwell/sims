@@ -182,7 +182,7 @@ ifneq ($(findstring Windows,${OS}),)
 endif
 
 find_exe = $(abspath $(strip $(firstword $(foreach dir,$(strip $(subst :, ,${PATH})),$(wildcard $(dir)/$(1))))))
-find_lib = $(abspath $(strip $(firstword $(foreach dir,$(strip ${LIBPATH}),$(wildcard $(dir)/lib$(1).${LIBEXT})))))
+find_lib = $(firstword $(abspath $(strip $(firstword $(foreach dir,$(strip ${LIBPATH}),$(foreach ext,$(strip ${LIBEXT}),$(wildcard $(dir)/lib$(1).$(ext))))))))
 find_include = $(abspath $(strip $(firstword $(foreach dir,$(strip ${INCPATH}),$(wildcard $(dir)/$(1).h)))))
 ifneq (0,$(TESTS))
   find_test = RegisterSanityCheck $(abspath $(wildcard $(1)/tests/$(2)_test.ini)) </dev/null
@@ -382,7 +382,8 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
             LIBPATH := $(sort $(foreach lib,$(shell /sbin/ldconfig -p | grep ' => /' | sed 's/^.* => //'),$(dir $(lib))))
           endif
         endif
-        LIBEXT = so
+        LIBSOEXT = so
+        LIBEXT = $(LIBSOEXT) a
       else
         ifeq (SunOS,$(OSTYPE))
           OSNAME = Solaris
@@ -441,7 +442,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
                   else
                     ifeq (,$(strip $(LPATH)))
                       $(info *** Warning ***)
-                      $(info *** Warning *** The library search path on your $(OSTYPE) platform can't be)
+                      $(info *** Warning *** The library search path on your $(OSTYPE) platform can not be)
                       $(info *** Warning *** determined.  This should be resolved before you can expect)
                       $(info *** Warning *** to have fully working simulators.)
                       $(info *** Warning ***)
@@ -486,6 +487,9 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
         endif
       endif
     endif
+    ifeq (,$(LIBSOEXT))
+      LIBSOEXT = $(LIBEXT)
+    endif
     ifeq (,$(filter /lib/,$(LIBPATH)))
       ifeq (existlib,$(shell if $(TEST) -d /lib/; then echo existlib; fi))
         LIBPATH += /lib/
@@ -496,6 +500,8 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
         LIBPATH += /usr/lib/
       endif
     endif
+    export CPATH = $(subst $() $(),:,$(INCPATH))
+    export LIBRARY_PATH = $(subst $() $(),:,$(LIBPATH))
     # Some gcc versions don't support LTO, so only use LTO when the compiler is known to support it
     ifeq (,$(NO_LTO))
       ifneq (,$(GCC_VERSION))
@@ -575,7 +581,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
   endif
   ifneq (,$(call find_include,dlfcn))
     ifneq (,$(call find_lib,dl))
-      OS_CCDEFS += -DHAVE_DLOPEN=${LIBEXT}
+      OS_CCDEFS += -DHAVE_DLOPEN=$(LIBSOEXT)
       OS_LDFLAGS += -ldl
       $(info using libdl: $(call find_lib,dl) $(call find_include,dlfcn))
     else
@@ -584,7 +590,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
         $(info using libdl: $(call find_include,dlfcn))
       else
         ifneq (,$(call find_lib,dld))
-          OS_CCDEFS += -DHAVE_DLOPEN=${LIBEXT}
+          OS_CCDEFS += -DHAVE_DLOPEN=$(LIBSOEXT)
           OS_LDFLAGS += -ldld
           $(info using libdld: $(call find_lib,dld) $(call find_include,dlfcn))
         else
@@ -1047,8 +1053,8 @@ else
       $(info ***********************************************************************)
       $(info ***********************************************************************)
       $(info **  This build could produce simulators with video capabilities.     **)
-      $(info **  However, the required files to achieve this can't be found on    **)
-      $(info **  this system.  Download the file:                                 **)
+      $(info **  However, the required files to achieve this can not be found on  **)
+      $(info **  on this system.  Download the file:                              **)
       $(info **  https://github.com/simh/windows-build/archive/windows-build.zip  **)
       $(info **  Extract the windows-build-windows-build folder it contains to    **)
       $(info **  $(abspath ..\)                                                   **)
