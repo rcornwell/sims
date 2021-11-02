@@ -6240,7 +6240,7 @@ cpu_set_size (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
         nM[i] = M[i];
     free (M);
     M = nM;
-    fprintf(stderr, "Mem size=%x\n\r", val);
+    fprintf(stderr, "Mem size=%x\r\n", val);
     MEMSIZE = val;
     reset_all (0);
     return SCPE_OK;

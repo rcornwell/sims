@@ -1581,9 +1581,9 @@ set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
         dev->dev_addr = devaddr;
         uptr->u3 &= ~UNIT_ADDR(0xfff);
         uptr->u3 |= UNIT_ADDR(devaddr);
-        sim_printf("Set dev %s %x\n\r", dptr->name, GET_UADDR(uptr->u3));
+        sim_printf("Set dev %s %x\r\n", dptr->name, GET_UADDR(uptr->u3));
     } else {
-        sim_printf("Set dev %s0 %x\n\r",  dptr->name, devaddr);
+        sim_printf("Set dev %s0 %x\r\n",  dptr->name, devaddr);
         for (i = 0; i < dibp->numunits; i++)  {
              dev = find_device(devaddr + i);
              uptr = &((dibp->units)[i]);
