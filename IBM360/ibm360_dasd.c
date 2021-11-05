@@ -219,11 +219,11 @@ disk_type[] =
        {"2305-2",96,   8, 14858,  6,  0x05},   /*  11.26 M */
        {"2311",  203, 10,  3717,  6,  0x11},   /*   7.32 M  156k/s 30 ms 145 full */
        {"2314",  203, 20,  7294,  6,  0x14},   /*  29.17 M */
-       {"3330",  411, 19, 13165, 24,  0x30},   /* 100.00 M */
+       {"3330",  410, 19, 13165, 24,  0x30},   /* 100.00 M */
        {"3330-2",815, 19, 13165, 24,  0x30},
        {"3340",  349, 12,  8535, 24,  0x40},   /*  34.94 M */
        {"3340-2",698, 12,  8535, 24,  0x40},   /*  69.89 M */
-       {"3350",  560, 30, 19254, 24,  0x50},   /* 304.80 M */
+       {"3350",  559, 30, 19254, 24,  0x50},   /* 304.80 M */
        {"5625",  403, 20,  7294,  6,  0x14},   /*  56.00 M */
        {NULL, 0}
 };
@@ -529,6 +529,7 @@ t_stat dasd_srv(UNIT * uptr)
     int                 state;
     int                 count;
     int                 trk;
+    int                 hd;
     int                 i;
     int                 rd = ((cmd & 0x3) == 0x1) | ((cmd & 0x3) == 0x2);
     uint8               *rec;
@@ -557,7 +558,7 @@ t_stat dasd_srv(UNIT * uptr)
                sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 3 %x\n", unit, ch);
                if (chan_write_byte(addr, &ch))
                    goto sns_end;
-               if (disk_type[type].dev_type == 0x30)
+               if (disk_type[type].dev_type >= 0x30)
                    ch = (unit & 0x7) | ((~unit & 0x7) << 3);
                else
                    ch = 0x80 >> (unit & 0x7);
@@ -851,7 +852,7 @@ ntrack:
              sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 3 %x\n", unit, ch);
              if (chan_write_byte(addr, &ch))
                  goto sense_end;
-             if (disk_type[type].dev_type == 0x30)
+             if (disk_type[type].dev_type >= 0x30)
                  ch = (unit & 0x7) | ((~unit & 0x7) << 3);
              else
                  ch = 0x80 >> (unit & 0x7);
@@ -977,7 +978,11 @@ sense_end:
              if (chan_read_byte(addr, &buf[i])) {
                  uptr->LCMD = cmd;
                  uptr->CMD &= ~(0xff);
-                 uptr->SNS |= SNS_CMDREJ|SNS_SEEKCK;
+                 if (disk_type[type].sen_cnt > 6) {
+                     uptr->SNS |= SNS_CMDREJ;
+                 } else {
+                     uptr->SNS |= SNS_CMDREJ|SNS_SEEKCK;
+                 }
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                  break;
              }
@@ -986,27 +991,41 @@ sense_end:
              "seek unit=%d %02x %02x %02x %02x %02x %02x\n", unit,
               buf[0], buf[1], buf[2], buf[3], buf[4], buf[5]);
          trk = (buf[2] << 8) | buf[3];
-         sim_debug(DEBUG_DETAIL, dptr, "seek unit=%d %d %d\n", unit, trk, buf[5]);
+         hd = (buf[4] << 8) | buf[5];
+         sim_debug(DEBUG_DETAIL, dptr, "seek unit=%d %d %d\n", unit, trk, hd);
+
+         if (cmd == DK_SEEKHD && hd >= disk_type[type].heads) {
+             uptr->LCMD = cmd;
+             uptr->CMD &= ~(0xff);
+             if (disk_type[type].sen_cnt > 6) {
+                 uptr->SNS |= SNS_CMDREJ;
+             } else {
+                 uptr->SNS |= SNS_CMDREJ|SNS_SEEKCK;
+             }
+             chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+             break;
+         }
+
+         /* For seek head, ignore cylinder */
+         if (cmd == DK_SEEKHD) {
+             trk = data->cyl;
+         }
 
          /* Check if seek valid */
          if ((buf[0] | buf[1] | buf[4]) != 0 || trk > disk_type[type].cyl
-                  || buf[5] >= disk_type[type].heads)  {
+                  || hd >= disk_type[type].heads)  {
              uptr->LCMD = cmd;
              uptr->CMD &= ~(0xff);
-             uptr->SNS |= SNS_CMDREJ|SNS_SEEKCK;
+             if (disk_type[type].sen_cnt > 6) {
+                 uptr->SNS |= SNS_CMDREJ;
+             } else {
+                 uptr->SNS |= SNS_CMDREJ|SNS_SEEKCK;
+             }
              chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
              break;
          }
 
-         if (cmd == DK_SEEKHD && ((uptr->CCH >> 8) & 0x7fff) != trk) {
-             uptr->LCMD = cmd;
-             uptr->CMD &= ~(0xff);
-             uptr->SNS |= SNS_CMDREJ|SNS_SEEKCK;
-             chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
-             break;
-         }
-
-         uptr->CCH = (trk << 8) | buf[5];
+         uptr->CCH = (trk << 8) | hd;
 
          /* Check if on correct cylinder */
          if (trk != data->cyl) {
@@ -1905,7 +1924,7 @@ dasd_format(UNIT * uptr, int flag) {
         data->tsize = hdr.tracksize;
         if ((data->cbuf = (uint8 *)calloc(tsize, sizeof(uint8))) == 0)
             return 1;
-        for (cyl = 0; cyl < disk_type[type].cyl; cyl++) {
+        for (cyl = 0; cyl <= disk_type[type].cyl; cyl++) {
             pos = 0;
             for (hd = 0; hd < disk_type[type].heads; hd++) {
                 int cpos = pos;
@@ -2018,7 +2037,7 @@ dasd_attach(UNIT * uptr, CONST char *file)
              hdr.heads, hdr.tracksize, hdr.devtype, hdr.fileseq, hdr.highcyl);
     for (i = 0; disk_type[i].name != 0; i++) {
          tsize = (disk_type[i].bpt | 0x1ff) + 1;
-         dsize = 512 + (tsize * disk_type[i].heads * disk_type[i].cyl);
+         dsize = 512 + (tsize * disk_type[i].heads * (disk_type[i].cyl + 1));
          if (hdr.devtype == disk_type[i].dev_type && hdr.tracksize == tsize &&
              hdr.heads == disk_type[i].heads && dsize == isize) {
              if (GET_TYPE(uptr->flags) != i) {
