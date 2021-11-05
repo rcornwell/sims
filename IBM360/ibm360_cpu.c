@@ -2429,7 +2429,7 @@ save_dbl:
 
                     /* RX in RS range */
                     if (X2(reg) != 0)
-                        addr1 = (addr1 + regs[X2(reg)]) & AMASK;
+                        addr1 += regs[X2(reg)];
 
                     addr1 &= AMASK;
                     /* Segment number to word address */
@@ -2498,7 +2498,7 @@ save_dbl:
 
                     /* Convert to address */
                     entry >>= pte_shift;
-                    addr2 = (addr1 & page_mask) | (entry << page_shift);
+                    addr2 = (addr1 & page_mask) | ((entry & TLB_PHY) << page_shift);
                     cc = 0;
                     regs[reg1] = addr2;
                     per_mod |= 1 << reg1;
