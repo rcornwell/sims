@@ -5750,7 +5750,8 @@ dec_add(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
 
     if (op & 1)
         sb = !sb;
-    len = 2*(len+1)+1;
+    /* Length is 1 plus number of digits times two, including the sign nibble. */
+    len = 2*(len+1)-1;
     /* On all but ZAP load first operand */
     if ((op & 3) != 0) {
         if (dec_load(a, addr1, (int)len1, &sa))
@@ -5765,7 +5766,7 @@ dec_add(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
     cy = addsub;
     zero = 1;
     /* Add numbers together */
-    for (i = 1; i < len; i++) {
+    for (i = 1; i <= len; i++) {
         acc = b[i] + ((addsub)? (0x9 - a[i]):a[i]) + cy;
         if (acc > 0x9)
            acc += 0x6;
@@ -5784,7 +5785,7 @@ dec_add(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
            /* We need to recomplent the result */
            cy = 1;
            zero = 1;
-           for (i = 1; i < len; i++) {
+           for (i = 1; i <= len; i++) {
                 acc = (0x9 - a[i]) + cy;
                 if (acc > 0x9)
                    acc += 0x6;
@@ -5803,7 +5804,7 @@ dec_add(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
     if ((op & 3) != 1) {
         if (!zero && !ov) {
            /* Start at len1 and go to len2 and see if any non-zero digits */
-           for (i = (len1+1)*2; i < len; i++) {
+           for (i = (len1+1)*2; i <= len; i++) {
                if (a[i] != 0) {
                   ov = 1;
                   break;
