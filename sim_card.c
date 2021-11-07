@@ -819,9 +819,10 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf, uint16 (*ima
                            temp = ascii_to_dec_029[(int)c];
                            break;
                     }
-                    if (temp & 0xf000)
-                        (*image)[0] |= CARD_ERR;
                     (*image)[col++] = temp & 0xfff;
+                    if (temp & 0xf000) {
+                        (*image)[0] |= CARD_ERR;
+                    }
                 }
             }
         }
@@ -1353,6 +1354,10 @@ sim_card_attach(UNIT * uptr, CONST char *cptr)
 
         /* Go read the deck */
         r = _sim_read_deck(uptr, eof);
+        /* Remove added eof from count */
+        if (eof) {
+            previous_cards++;
+        }
         uptr->pos = saved_pos;
         detach_unit(uptr);
         if (was_attached) {
