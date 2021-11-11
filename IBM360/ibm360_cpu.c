@@ -1399,7 +1399,7 @@ opr:
                  src1h = fpregs[reg1|1];
             else
                  src1h = 0;
-            if ((op & 0x48) == 0x48) {
+            if ((op & 0x40) != 0) {
                 if ((op & 0x10) == 0 && (addr1 & 0x3) != 0) {
                    storepsw(OPPSW, IRC_SPEC);
                    goto supress;
