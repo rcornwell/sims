@@ -2275,6 +2275,7 @@ t_stat ttyo_svc (UNIT *uptr)
     t_stat   r;
     int32    ln;
     TMLN     *lp;
+    int      f;
 
     if ((tty_unit[0].flags & UNIT_ATT) == 0)                  /* attached? */
         return SCPE_OK;
@@ -2293,7 +2294,8 @@ t_stat ttyo_svc (UNIT *uptr)
        }
        if (empty(optr))
            continue;
-       while (not_empty(optr)) {
+       f = 1;
+       while (f && not_empty(optr)) {
            int32 ch = optr->buff[optr->out_ptr];
            ch = sim_tt_outcvt(ch, TT_GET_MODE (tty_unit[0].flags) | TTUF_KSR);
            sim_debug(DEBUG_DATA, &tty_dev, "TTY: %d output %o\n", ln, ch);
@@ -2302,11 +2304,16 @@ t_stat ttyo_svc (UNIT *uptr)
                inco(optr);
            else if (r == SCPE_LOST) {
                optr->out_ptr = optr->in_ptr = 0;
-               continue;
-           } else
-               continue;
+               f = 0;
+           } else if (r == SCPE_STALL) {
+               f = 0;
+           } else {
+               break;
+           }
        }
-       tty_done[ln] = 1;
+       if (empty(optr)) {
+           tty_done[ln] = 1;
+       }
     }
     return SCPE_OK;
 }
