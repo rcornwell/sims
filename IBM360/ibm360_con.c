@@ -184,7 +184,7 @@ uint8  con_startcmd(UNIT *uptr, uint8 cmd) {
          return SNS_CHNEND|SNS_DEVEND;
 
     case 0:               /* Status */
-         break;
+         return 0;
 
     case 4:              /* Sense */
          uptr->CMD |= cmd & CON_MSK;
