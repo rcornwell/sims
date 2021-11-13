@@ -529,7 +529,7 @@ t_stat dasd_srv(UNIT * uptr)
     int                 state;
     int                 count;
     int                 trk;
-    int                 hd;
+    unsigned int        hd;
     int                 i;
     int                 rd = ((cmd & 0x3) == 0x1) | ((cmd & 0x3) == 0x2);
     uint8               *rec;
