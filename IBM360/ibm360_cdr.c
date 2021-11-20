@@ -318,8 +318,10 @@ cdr_attach(UNIT * uptr, CONST char *file)
 
     if ((r = sim_card_attach(uptr, file)) != SCPE_OK)
        return r;
-    if (uptr->up7 == 0)
+    if (uptr->up7 == NULL)
         uptr->up7 = malloc(sizeof(uint16)*80);
+    if (uptr->CMD & CDR_CARD)
+        return SCPE_OK;
     uptr->CMD &= ~(CDR_CARD|CDR_EOF|CDR_ERR);
     uptr->SNS = 0;
     uptr->COL = 0;

@@ -388,6 +388,12 @@ con_srv(UNIT *uptr) {
                con_data[u].inptr = 0;
                cmd = 0;
             } else {
+               if (ch == 030) { /* ^X Post external interrupt */
+                   sim_debug(DEBUG_CMD, &con_dev, "Console %d: ^X Key (external interrupt)\n", u);
+                   post_extirq();
+                   sim_activate(uptr, delay);
+                   return SCPE_OK;
+               }
                sim_debug(DEBUG_CMD, &con_dev, "%d: error %x\n", u, cmd);
                if (cmd == 0)
                     uptr->CMD |= CON_REQ;
