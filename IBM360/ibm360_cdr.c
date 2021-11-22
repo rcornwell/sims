@@ -320,8 +320,9 @@ cdr_attach(UNIT * uptr, CONST char *file)
        return r;
     if (uptr->up7 == NULL)
         uptr->up7 = malloc(sizeof(uint16)*80);
-    if (uptr->CMD & CDR_CARD)
+    if (uptr->CMD & CDR_CARD) {
         return SCPE_OK;
+    }
     uptr->CMD &= ~(CDR_CARD|CDR_EOF|CDR_ERR);
     uptr->SNS = 0;
     uptr->COL = 0;
@@ -350,6 +351,7 @@ cdr_detach(UNIT * uptr)
         free(uptr->up7);
     uptr->up7 = 0;
     uptr->SNS = 0;
+    uptr->CMD &= ~(CDR_CARD|CDR_EOF|CDR_ERR);
     return sim_card_detach(uptr);
 }
 
