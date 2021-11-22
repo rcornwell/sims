@@ -6006,7 +6006,9 @@ skipdqe2:
             case 0x3:       /* LPSD F980 */
                 /* fall through */;
             case 0x5:       /* LPSDCM FA80 */
+#ifdef MAYBE_NO
                 irq_pend = 1;                       /* start scanning interrupts again */
+#endif
                 if ((MODES & PRIVBIT) == 0) {       /* must be privileged */
                     TRAPME = PRIVVIOL_TRAP;         /* set the trap to take */
                     if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9))
@@ -6317,7 +6319,9 @@ skipdqe:
 /* |-----------+-----------+-----------+-----------+-----------+-----------+-----------+-----------| */
 /* */
         case 0xFC>>2:       /* 0xFC IMM - IMM */    /* XIO, CD, TD, Interrupt Control */
+#ifdef MAYBE_NO
             irq_pend = 1;                           /* start scanning interrupts again */
+#endif
             if ((MODES & PRIVBIT) == 0) {           /* must be privileged to do I/O */
                 TRAPME = PRIVVIOL_TRAP;             /* set the trap to take */
                 if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9))

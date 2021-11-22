@@ -255,7 +255,6 @@ int32 IOCLQ_Get(IOCLQ *qptr, uint32 *old)
 
     /* see if the IOCLQ is empty */
     if (qptr->ioclq_in == qptr->ioclq_out) {
-//      sim_debug(DEBUG_EXP, &cpu_dev, "IOCLQ_Get IOCLQ empty\n");
         return -1;                              /* IOCLQ is empty, tell caller */
     }
     *old = qptr->ioclq_fifo[qptr->ioclq_out];   /* get the next entry */
@@ -707,7 +706,6 @@ loop:
     /* DC can only be used with a read/write cmd */
     /* TODO move ccw code to LPR processing */
     /* TEMP FIX FOR LPR */
-//  if (chp->ccw_flags & FLAG_DC) {
     if ((chp->ccw_flags & FLAG_DC) && (chsa != 0x7ef8)) {
         if ((chp->ccw_cmd != 0x02) && (chp->ccw_cmd != 0x01)) {
             chp->chan_status |= STATUS_PCHK;    /* program check for invalid DC */
@@ -959,7 +957,6 @@ void chan_end(uint16 chsa, uint16 flags) {
         sim_debug(DEBUG_EXP, &cpu_dev,
             "chan_end INFO_CEND set chsa %04x ccw_flags %04x status %04x byte %02x\n",
             chsa, chp->ccw_flags, chp->chan_status, chp->chan_byte);
-///     return;                                 /* just return */
     }
     chp->chan_info |= INFO_CEND;                /* we have been here */
 
@@ -1284,7 +1281,6 @@ nothere:
         *status = 0;                            /* CCs = 0, OK return */
     else
         /* return CC1 for non iop/mfp devices */
-//1003  *status = CC1BIT;                       /* CCs = 1, not busy */
     *status = 0;                                /* CCs = 0, OK return */
     sim_debug(DEBUG_DETAIL, &cpu_dev,
         "checkxio lchsa %04x rchsa %04x done CC status %08x\n",
@@ -1449,7 +1445,6 @@ missing:
             /* handle an Ethernet controller busy by sending interrupt/status */
             chp->chan_status = STATUS_BUSY|STATUS_CEND|STATUS_DEND; /* set busy status */
             chp->ccw_count = 0;                 /* zero count */
-//0312      store_csw(chp);                     /* store the status */
             push_csw(chp);                      /* store the status */
             chp->chan_status = tstat;           /* restore status */
             chp->ccw_count = tcnt;              /* restore count */
@@ -1522,7 +1517,6 @@ missing:
                 "SIO pre_io call return NO INCH %04x chsa %04x cstat %02x cmd %02x cnt %02x\n",
                 incha, chsa, tempa, cmd, word2);
             if ((cmd != 0) || ((MASK16 & word2) == 0)) {
-//              *status = CC1BIT;               /* request accepted, no status, so CC1 */
                 *status = 0;                    /* request accepted, no status, so CC1 */
                 return SCPE_OK;                 /* just do nothing until inch */
             }
@@ -1776,8 +1770,6 @@ t_stat stopxio(uint16 lchsa, uint32 *status) {  /* stop XIO */
     itva = SPAD[0xf1] + (inta<<2);              /* int vector address */
     chan_icb = RMW(itva);                       /* Interrupt context block addr */
     iocla = RMW(chan_icb+16);                   /* iocla is in wd 4 of ICB */
-//  /* reset the DC or CC bits to force completion after current IOCD */
-//  chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);       /* reset chaining bits */
     /* reset the CC bit to force completion after current IOCD */
     chp->ccw_flags &= ~FLAG_CC;                 /* reset chaining bits */
     sim_debug(DEBUG_CMD, &cpu_dev,
@@ -1790,18 +1782,6 @@ t_stat stopxio(uint16 lchsa, uint32 *status) {  /* stop XIO */
         sim_debug(DEBUG_CMD, &cpu_dev,
             "STPIO not busy return rchsa %04x cmd %02x ccw_flags %04x status %04x byte %02x\n",
             rchsa, chp->ccw_cmd, chp->ccw_flags, *status, chp->chan_byte);
-#ifdef GIVE_STATUS_ON_NOT_BUSY_05112021
-// NOW off 05142021 */
-        chp->chan_byte = BUFF_DONE;             /* we are done */
-        chp->chan_status = (STATUS_DEND|STATUS_CEND);
-//      store_csw(chp);                         /* store the status */
-        push_csw(chp);                          /* store the status 1st in FIFO */
-        /* change chan_byte to BUFF_POST */
-        chp->chan_byte = BUFF_POST;             /* show done with data */
-        chp->chan_status = 0;                   /* no status anymore */
-        chp->ccw_cmd = 0;                       /* no command anymore */
-        irq_pend = 1;                           /* flag to test for int condition */
-#endif
         return SCPE_OK;                         /* No CC's all OK  */
     }
 
@@ -2071,7 +2051,6 @@ t_stat haltxio(uint16 lchsa, uint32 *status) {  /* halt XIO */
             irq_pend = 1;                       /* flag to test for int condition */
 
             /* see if any status ready to post */
-//          if (FIFO_Num(rchsa)) {
             if ((FIFO_Num(rchsa)) && (CPUSTATUS & BIT24)) {  /* interrupts blocked? */
                 sim_debug(DEBUG_IRQ, &cpu_dev,
                     "HIO rchsa %04x LOOK FIFO #%1x irq %02x inch %06x chp %p icba %06x chan_byte %02x\n",
@@ -2090,20 +2069,22 @@ t_stat haltxio(uint16 lchsa, uint32 *status) {  /* halt XIO */
                     sim_debug(DEBUG_XIO, &cpu_dev,
                         "HIO END incha %06x chan_icba+20 %08x rchsa %04x sw1 %08x sw2 %08x\n",
                         incha, RMW(chan_icb+20), rchsa, RMW(incha), RMW(incha+4));
-//                  if ((CPUSTATUS & BIT24) == 0)       /* interrupts blocked? */
-//                      INTS[inta] &= ~INTS_REQ;        /* clear any level request if no status */
-//                  INTS[inta] |= INTS_REQ;             /* set level request if status */
-                    *status = CC2BIT;                   /* status stored from SIO, so CC2 */
-                    return SCPE_OK;                     /* No CC's all OK  */
+                    /*ADDED 111921 to disable int request after data posted */
+                    INTS[inta] &= ~INTS_REQ;    /* clear any level request */
+                    *status = CC2BIT;           /* status stored from SIO, so CC2 */
+                    return SCPE_OK;             /* No CC's all OK  */
                 } else {
                     sim_debug(DEBUG_IRQ, &cpu_dev,
                         "HIO rchsa %04x NOT POSTED FIFO #%1x irq %02x inch %06x chan_icba %06x chan_byte %02x\n",
                         rchsa, FIFO_Num(rchsa), inta, chp->chan_inch_addr, chan_icb, chp->chan_byte);
                     /* now store the status dw address into word 5 of the ICB for the channel */
-                    WMW(chan_icb+20, 0);                /* post sw addr 0 in ICB+5w & reset CCs */
-                    *status = 0;                        /* no status stored from TIO, so no CC */
-                    return SCPE_OK;                     /* No CC's all OK  */
+                    WMW(chan_icb+20, 0);        /* post sw addr 0 in ICB+5w & reset CCs */
+                    *status = 0;                /* no status stored from HIO, so no CC */
+                    return SCPE_OK;             /* No CC's all OK  */
                 }
+            }
+            if ((CPUSTATUS & BIT24) == 0) {     /* interrupts blocked? */
+                sim_debug(DEBUG_DETAIL, &cpu_dev, "HIO after END2 INTS not blocked!\n");
             }
             return SCPE_OK;                     /* CC1 & all OK  */
         }
@@ -2121,7 +2102,6 @@ t_stat haltxio(uint16 lchsa, uint32 *status) {  /* halt XIO */
         sim_debug(DEBUG_EXP, &cpu_dev,
             "haltxio BUFF_DONE2 chp %p chan_byte %04x\n", chp, chp->chan_byte);
         chp->chan_status = (STATUS_DEND|STATUS_CEND);
-//      store_csw(chp);                         /* store the status */
         push_csw(chp);                          /* store the status 1st in FIFO */
         /* change chan_byte to BUFF_POST */
         chp->chan_byte = BUFF_POST;             /* show done with data */
@@ -2249,12 +2229,10 @@ t_stat grabxio(uint16 lchsa, uint32 *status) {  /* grab controller XIO n/u */
     // try using CC4 on MPX3X when still busy
     if (chp->chan_byte == BUFF_POST) {
         uint32  chan_icb;                       /* Interrupt level context block address */
-//      uint32  iocla;                          /* I/O channel IOCL address int ICB */
         uint32  inta = ((~spadent)>>16)&0x7f;   /* get channel interrupt level */
         /* get the address of the interrupt IVL in main memory */
         uint32  itva = SPAD[0xf1] + (inta<<2);  /* int vector address */
         chan_icb = RMW(itva);                   /* Interrupt context block addr */
-//      iocla = RMW(chan_icb+16);               /* iocla is in wd 4 of ICB */
         *status = CC1BIT;                       /* request accepted, no status, so CC1 */
         /* see if any status ready to post */
         if (FIFO_Num(rchsa)) {
@@ -2566,7 +2544,6 @@ uint32 scan_chan(uint32 *ilev) {
             TPSD[0] = M[0];                     /* save PSD from loc 0&4 */
             TPSD[1] = M[1];
             /* save the status double word to memory */
-//          WMW(tempa, sw1);                    /* save sa & IOCD address in status WD 1 loc */
             /* set BIT 1 to show status stored */
             WMW(tempa, sw1|BIT1);               /* save sa & IOCD address in status WD 1 loc */
             WMW(tempa+4, sw2);                  /* save status and residual cnt in status WD 2 loc */
@@ -2789,7 +2766,6 @@ t_stat chan_set_devs() {
         if ((dptr->flags & DEV_DIS) ||          /* Skip disabled devices */
             ((dibp->chan_prg) == NULL)) {       /* must have channel info for each device */
             chsa = GET_UADDR(uptr->u3);         /* ch/sa value */
-//printf("Device %s chsa %04x not set up dibp %p uptr %p\n", dptr->name, chsa, dibp, uptr);
             continue;
         }
 
@@ -2797,8 +2773,6 @@ t_stat chan_set_devs() {
         /* Check if address is in unit or dev entry */
         for (j = 0; j < dptr->numunits; j++) {  /* loop through unit entries */
             chsa = GET_UADDR(uptr->u3);         /* ch/sa value */
-//printf("Setup device %s%d chsa %04x type %02x dibp %p uptr %p\n",
-//dptr->name, j, chsa, GET_TYPE(uptr->flags), dibp, uptr);
             /* zero some channel data loc's for device */
             chp->unitptr = uptr;                /* set the unit back pointer */
             chp->chan_status = 0;               /* clear the channel status */
@@ -2819,10 +2793,8 @@ t_stat chan_set_devs() {
                     if (dptr->flags & DEV_CHAN) {
                         /* see if channel address already defined */
                         if (dib_chan[get_chan(chsa)] != 0) {
-//printf("Channel mux %04x already defined, aborting\n", chsa);
                             return SCPE_IERR;               /* no, arg error */
                         }
-//printf("Setting Channel mux %04x dibp %p\n", chsa, dibp);
                         /* channel mux, save dib for channel */
                         dib_chan[get_chan(chsa)] = dibp;
                         if (dibp->dev_ini != NULL)  /* if there is an init routine, call it now */
@@ -2830,13 +2802,11 @@ t_stat chan_set_devs() {
                     } else {
                         /* we have unit 0 of non-IOP/MFP device */
                         if (dib_unit[chsa] != 0) {
-//printf("Channel/Dev %04x already defined uptr %p\n", chsa, uptr);
                             return SCPE_IERR;   /* no, arg error */
                         } else {
                             /* channel mux, save dib for channel */
                             /* for now, save any zero dev as chan */
                             if (chsa) {
-//printf("Setting Channel zero unit 0 device %04x dibp %p uptr %p\n", chsa, dibp, uptr);
                                 dib_unit[chsa] = dibp;  /* no, save the dib address */
                                 if (dibp->dev_ini != NULL)  /* if there is an init routine, call it now */
                                     dibp->dev_ini(uptr, 1); /* init the channel */
@@ -2846,7 +2816,6 @@ t_stat chan_set_devs() {
                 } else {
                     /* see if address already defined */
                     if (dib_unit[chsa] != 0) {
-//printf("Channel/SubAddress %04x multiple defined, aborting\n", chsa);
                         return SCPE_IERR;       /* no, arg error */
                     }
                     dib_unit[chsa] = dibp;      /* no, save the dib address */
@@ -2868,10 +2837,8 @@ t_stat chan_set_devs() {
             if (dib_unit[i<<8]) {
                 /* write dibp to channel array */
                 dib_chan[i] = dib_unit[i<<8];   /* save the channel dib */
-//printf("Chan_set_dev new Channel %04x defined at dibp %p\n", i<<8, dib_unit[i<<8]);
             }
         } else {
-//printf("Chan_set_dev Channel %04x defined at dibp %p\n", i<<8, dib_chan[i]);
             /* channel is defined, see if defined in dib_unit array */
             if ((dib_unit[i<<8]) == 0) {
                 /* write dibp to units array */
@@ -2899,15 +2866,12 @@ t_stat set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc) {
     dptr = get_dev(uptr);                       /* find the device from unit pointer */
     if (dptr == NULL) {                         /* device not found, so error */
         fprintf(stderr, "Set dev no DEVICE cptr %s uptr %p\r\n", cptr, uptr);
-//printf("Set dev no DEVICE ptr %s\r\n", cptr);
         return SCPE_IERR;                       /* error */
     }
 
-//printf("Set dev DEVICE ptr %s uptr %p\r\n", cptr, uptr);
     dibp = (DIB *)dptr->ctxt;                   /* get dib pointer from device struct */
     if (dibp == NULL) {                         /* we need a DIB */
         fprintf(stderr, "Set dev no DIB ptr %s uptr %p\r\n", cptr, uptr);
-//printf("Set dev no DIB ptr %s\r\n", cptr);
         return SCPE_IERR;                       /* no DIB, so error */
     }
 
@@ -2915,7 +2879,6 @@ t_stat set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc) {
     if (r != SCPE_OK)                           /* need good number */
         return r;                               /* number error, return error */
 
-//printf("Set new dev DEVICE ptr %s chan %04x\r\n", cptr, chan);
     dibp->chan_addr = chan;                     /* set new parent channel addr */
 
     /* change all the unit addresses with the new channel, but keep sub address */
@@ -2926,21 +2889,12 @@ t_stat set_dev_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc) {
     for (i = 0; i < dibp->numunits; i++) {
         int mask=dibp->mask;                    /* sa bits that are used */
         ochsa = GET_UADDR(tuptr->u3);           /* get old chsa for this unit */
-//printf("Got unit %x old chsa %04x mask %04x\r\n", i, ochsa, mask);
         dib_unit[ochsa] = NULL;                 /* clear sa dib pointer */
         dib_unit[ochsa&0x7f00] = NULL;          /* clear the channel dib address */
         chan &= ~mask;                          /* remove the unit number */
         chsa = chan | (ochsa & mask);           /* put in new sa */
-//6     if (ochsa & 0xf0) {                     /* Is this a channel device IOP/MFP */
-//6         chan &= 0x7ff0;                     /* clean channel sub-address */
-//6         chsa = chan | (ochsa & 0xf);        /* merge new channel with old sa */
-//6     } else {
-//6         chan &= 0x7f00;                     /* clean channel address */
-//6         chsa = chan | (ochsa & 0xff);       /* merge new channel with old sa */
-//6     }
         if (chsa != ochsa) {
             fprintf(stderr, "Set unit %x new chsa %04x old chsa %04x\r\n", i, chsa, ochsa);
-//printf("Set unit %x new chsa %04x old chsa %04x\r\n", i, chsa, ochsa);
         }
         tuptr->u3 &= ~UNIT_ADDR_MASK;           /* clear old chsa for this unit */
         tuptr->u3 |= UNIT_ADDR(chsa);           /* set new chsa for this unit */

@@ -414,7 +414,7 @@ extern DEBTAB dev_debug[];
 /* general instruction decode equates */
 #define IND     0x00100000              /* indirect bit in instruction, bit 11 */
 #define F_BIT   0x00080000              /* byte flag addressing bit 11 in instruction */
-#define C_BITS  0x00000003              /* byte number or hw, dw, dw flags bits 20 & 31 */
+#define C_BITS  0x00000003              /* byte number or hw, dw, dw flags bits 30 & 31 */
 #define BIT0    0x80000000              /* general use for bit 0 testing */
 #define BIT1    0x40000000              /* general use for bit 1 testing */
 #define BIT2    0x20000000              /* general use for bit 2 testing */

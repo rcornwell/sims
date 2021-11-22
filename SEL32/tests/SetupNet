@@ -28,19 +28,48 @@
 #	OpenBSD 6.7
 #	NetBSD 9.1
 
+#		CHANGE HISTORY
+#	2021/4/8	avoid setting PATH in scripts for root
+#	2021/5/31	whereis used without -b in OpenBSD and NetBSD
+#			Corrected: bridge create and fwdelay done twice for NetBSD
+#			FreeBSD: tapX opened by userland program not by ifconfig
+#	2021/11/17	check for existance of br0 done too lousy. Done better.
+#
 
 # uncomment next line if you need more than one tap = run multiple SIMHs...
 #OPSMODE="expert"
 # ... by editting the saved params file followed by rerun of this script
 
-PATH="/bin:/sbin:/etc:/usr/sbin:/usr/bin"
-export PATH
-
 OS=`uname -s`
 case $OS in
  "FreeBSD" | "OpenBSD" | "NetBSD")
+	# List of Utils
+	LOU="ifconfig brconfig sysctl chown netstat"
+
+	# set $util to path of util for all in $LOU
+	for U in $LOU
+	do
+		# whereis -b in only FreeBSD as in Linux
+		if test $OS = "FreeBSD"
+		then
+			eval ${U}="`whereis -b $U |
+				awk '{ if($2 != "")
+					print $2;
+				else
+					print "void";
+				}'`"
+		else
+			eval ${U}="`whereis $U |
+				awk '{ if($1 != "")
+					print $1;
+				else
+					print "void";
+				}'`"
+		fi
+	done
+
 	# make list of all interfaces ignoring lo
-	AVL_IF=`ifconfig -a |
+	AVL_IF=`$ifconfig -a |
 		grep -v '^[ 	]' |
 		awk -F: '{ print $1 }' |
 		grep -v 'lo' |
@@ -61,41 +90,50 @@ case $OS in
 
 	;;
  "Linux")
+	# List of Utils
+	LOU="ip brctl tunctl netstat"
+
+	# set $util to path of util for all in $LOU
+	for U in $LOU
+	do
+		eval ${U}="`whereis -b $U |
+			awk '{ if($2 != "")
+					print $2;
+				else
+					print "void";
+			}'`"
+	done
+
+	ERR=0
 	# check brctl to exist
-	L=`whereis brctl |
-		awk -F: '{ print $2 }' |
-		grep brctl |
-		wc -l`
-	if test $L -eq 0
+	if test $brctl = "void"
 	then
 		echo 'No brctl program -- please install package bridge-utils'
+		ERR=1
 	fi
 
 	# check tunctl to exist
-	LL=`whereis tunctl |
-		awk -F: '{ print $2 }' |
-		grep tunctl |
-		wc -l`
-	if test $LL -eq 0
+	if test $tunctl = "void"
 	then
 		echo 'No tunctl program -- please install package uml-utilities'
+		ERR=1
 	fi
 
 	# quit when either not installed
-	if test $L -eq 0 -o $LL -eq 0
+	if test $ERR -eq 1
 	then
 		exit 1
 	fi
 
 	# make list of all interfaces ignoring lo
-	AVL_IF=`ip link show |
+	AVL_IF=`$ip link show |
 		grep '^[0-9]' |
 		awk -F: '{ print $2 }' |
 		grep -v 'lo' |
 		sed '1,$s/^ //'`
 
 	# found br0 in active interfaces?
-	L=`echo $AVL_IF | grep br0 | wc -l`
+	L=`echo $AVL_IF | tr ' ' '\012' | grep '^br0$' | wc -l`
 	if test $L -ne 0
 	then
 		echo "$0: br0 already configured."
@@ -116,10 +154,10 @@ do
 	N=`expr $N + 1`
 	case $OS in
 	 "FreeBSD" | "OpenBSD" | "NetBSD")
-		IPCMD="ifconfig $I "
+		IPCMD="$ifconfig $I "
 		;;
 	 "Linux")
-		IPCMD="ip addr show $I "
+		IPCMD="$ip addr show $I "
 		;;
 	esac
 
@@ -192,10 +230,10 @@ if test "x$IPNR" = "x"
 then
 	case $OS in
 	 "FreeBSD" | "OpenBSD" | "NetBSD")
-		IPCMD="ifconfig $ACT_IF "
+		IPCMD="$ifconfig $ACT_IF "
 		;;
 	 "Linux")
-		IPCMD="ip addr show dev $ACT_IF "
+		IPCMD="$ip addr show dev $ACT_IF "
 		;;
 	esac
 
@@ -219,11 +257,11 @@ if test "x$IPBRO" = "x"
 then
 	case $OS in
 	 "FreeBSD" | "OpenBSD" | "NetBSD")
-		IPCMD="ifconfig $ACT_IF "
+		IPCMD="$ifconfig $ACT_IF "
 		SEDBRO='1s/^.*broadcast //'
 		;;
 	 "Linux")
-		IPCMD="ip addr show dev $ACT_IF "
+		IPCMD="$ip addr show dev $ACT_IF "
 		SEDBRO='1s/^.*brd //'
 		;;
 	esac
@@ -240,13 +278,13 @@ if test "x$DEFRT" = "x"
 then
 	case $OS in
 	 "FreeBSD" | "OpenBSD" | "NetBSD")
-		DEFRT=`netstat -rn |
+		DEFRT=`$netstat -rn |
 			grep $ACT_IF |
 			grep 'default' |
 			awk '{ print $2 }'` 
 		;;
 	 "Linux")
-		DEFRT=`netstat -rn |
+		DEFRT=`$netstat -rn |
 			grep $ACT_IF |
 			grep '^0\.' |
 			uniq |
@@ -340,8 +378,6 @@ cat - > $JOBFILE <<\EOF
 
 # This script should be run under root permission
 
-PATH="/bin:/sbin:/etc:/usr/sbin:/usr/bin"
-export PATH
 EOF
 
 cat - > $TMPFILE <<\EOF
@@ -357,30 +393,30 @@ EOF
 
 case $OS in
  "Linux")
-	echo "CMD=\"brctl addbr br0\"" >> $JOBFILE
+	echo "CMD=\"$brctl addbr br0\"" >> $JOBFILE
 	cat $TMPFILE >> $JOBFILE
 
 	N=0
 	while test $N -lt $NrTaps
 	do
-		echo "CMD=\"tunctl -t tap${N} -u ${SimhUser}\"" >> $JOBFILE
+		echo "CMD=\"$tunctl -t tap${N} -u ${SimhUser}\"" >> $JOBFILE
 		cat $TMPFILE >> $JOBFILE
 
 		N=`expr $N + 1`
 	done
 
-	echo "CMD=\"brctl addif br0 ${ACT_IF}\"" >> $JOBFILE
+	echo "CMD=\"$brctl addif br0 ${ACT_IF}\"" >> $JOBFILE
 	cat $TMPFILE >> $JOBFILE
 
-	echo "CMD=\"brctl setfd br0 0\"" >> $JOBFILE
+	echo "CMD=\"$brctl setfd br0 0\"" >> $JOBFILE
 	cat $TMPFILE >> $JOBFILE
 
-	echo "CMD=\"ip link set ${ACT_IF} down\"" >> $JOBFILE
+	echo "CMD=\"$ip link set ${ACT_IF} down\"" >> $JOBFILE
 	cat $TMPFILE >> $JOBFILE
 
 	if ! test "$IPNR" = "not configured"
 	then
-		echo "CMD=\"ip addr add ${IPNR} dev br0\"" >> $JOBFILE
+		echo "CMD=\"$ip addr add ${IPNR} dev br0\"" >> $JOBFILE
 		cat $TMPFILE >> $JOBFILE
 	fi
 
@@ -388,23 +424,23 @@ case $OS in
 	then
 		## if test ! "x$DEFRT" = "x"
 		## then
-			## echo "CMD=\"ip route del default via ${DEFRT} dev ${ACT_IF}\"" >> $JOBFILE
+			## echo "CMD=\"$ip route del default via ${DEFRT} dev ${ACT_IF}\"" >> $JOBFILE
 			## cat $TMPFILE >> $JOBFILE
 		## fi
-		echo "CMD=\"ip addr del ${IPNR} dev ${ACT_IF}\"" >> $JOBFILE
+		echo "CMD=\"$ip addr del ${IPNR} dev ${ACT_IF}\"" >> $JOBFILE
 		cat $TMPFILE >> $JOBFILE
 	fi
 
-	echo "CMD=\"ip link set ${ACT_IF} up\"" >> $JOBFILE
+	echo "CMD=\"$ip link set ${ACT_IF} up\"" >> $JOBFILE
 	cat $TMPFILE >> $JOBFILE
 
-	echo "CMD=\"ip link set br0 up\"" >> $JOBFILE
+	echo "CMD=\"$ip link set br0 up\"" >> $JOBFILE
 	cat $TMPFILE >> $JOBFILE
 
 
 	if test ! "x$DEFRT" = "x"
 	then
-		echo "CMD=\"ip route add default via ${DEFRT} dev br0\"" >> $JOBFILE
+		echo "CMD=\"$ip route add default via ${DEFRT} dev br0\"" >> $JOBFILE
 		cat $TMPFILE >> $JOBFILE
 	fi
 
@@ -418,10 +454,10 @@ case $OS in
 	N=0
 	while test $N -lt $NrTaps
 	do
-		echo "CMD=\"brctl addif br0 tap${N}\"" >> $JOBFILE
+		echo "CMD=\"$brctl addif br0 tap${N}\"" >> $JOBFILE
 		cat $TMPFILE >> $JOBFILE
 
-		echo "CMD=\"ip link set tap${N} up\"" >> $JOBFILE
+		echo "CMD=\"$ip link set tap${N} up\"" >> $JOBFILE
 		cat $TMPFILE >> $JOBFILE
 
 		N=`expr $N + 1`
@@ -434,33 +470,30 @@ case $OS in
 	N=0
 	while test $N -lt $NrTaps
 	do
-		echo "CMD=\"ifconfig tap${N} create\"" >> $JOBFILE
-		cat $TMPFILE >> $JOBFILE
-
-		echo "CMD=\"ifconfig tap${N} up\"" >> $JOBFILE
+		echo "CMD=\"$ifconfig tap${N} create\"" >> $JOBFILE
 		cat $TMPFILE >> $JOBFILE
 
 		N=`expr $N + 1`
 	done
 
-	echo "CMD=\"sysctl net.link.tap.up_on_open=1\"" >> $JOBFILE
+	echo "CMD=\"$sysctl net.link.tap.up_on_open=1\"" >> $JOBFILE
 	cat $TMPFILE >> $JOBFILE
 
-	echo "CMD=\"ifconfig bridge0 create\"" >> $JOBFILE
+	echo "CMD=\"$ifconfig bridge0 create\"" >> $JOBFILE
 	cat $TMPFILE >> $JOBFILE
 
 	case $NrTaps in
 	  1 )
-		echo "CMD=\"ifconfig bridge0 addm ${ACT_IF} addm tap0\"" >> $JOBFILE
+		echo "CMD=\"$ifconfig bridge0 addm ${ACT_IF} addm tap0\"" >> $JOBFILE
 		;;
 	  2 )
-		echo "CMD=\"ifconfig bridge0 addm ${ACT_IF} addm tap0 addm tap1\"" >> $JOBFILE
+		echo "CMD=\"$ifconfig bridge0 addm ${ACT_IF} addm tap0 addm tap1\"" >> $JOBFILE
 		;;
 	  3 )
-		echo "CMD=\"ifconfig bridge0 addm ${ACT_IF} addm tap0 addm tap1 addm tap2\"" >> $JOBFILE
+		echo "CMD=\"$ifconfig bridge0 addm ${ACT_IF} addm tap0 addm tap1 addm tap2\"" >> $JOBFILE
 		;;
 	  4 )
-		echo "CMD=\"ifconfig bridge0 addm ${ACT_IF} addm tap0 addm tap1 addm tap2 addm tap3\"" >> $JOBFILE
+		echo "CMD=\"$ifconfig bridge0 addm ${ACT_IF} addm tap0 addm tap1 addm tap2 addm tap3\"" >> $JOBFILE
 		;;
 	  * )
 		echo "Sorry too many taps..."
@@ -468,7 +501,7 @@ case $OS in
 	esac
 	cat $TMPFILE >> $JOBFILE
 
-	echo "CMD=\"ifconfig bridge0 up\"" >> $JOBFILE
+	echo "CMD=\"$ifconfig bridge0 up\"" >> $JOBFILE
 	cat $TMPFILE >> $JOBFILE
 	BRIDGE="bridge0"
 	EXAMPLE="tap:tap0"
@@ -477,33 +510,33 @@ case $OS in
 	N=0
 	while test $N -lt $NrTaps
 	do
-		echo "CMD=\"ifconfig tap${N} create\"" >> $JOBFILE
+		echo "CMD=\"$ifconfig tap${N} create\"" >> $JOBFILE
 		cat $TMPFILE >> $JOBFILE
 
-		echo "CMD=\"ifconfig tap${N} up\"" >> $JOBFILE
+		echo "CMD=\"$ifconfig tap${N} up\"" >> $JOBFILE
 		cat $TMPFILE >> $JOBFILE
 
 		N=`expr $N + 1`
 	done
 
-	echo "CMD=\"ifconfig bridge0 create\"" >> $JOBFILE
+	echo "CMD=\"$ifconfig bridge0 create\"" >> $JOBFILE
 	cat $TMPFILE >> $JOBFILE
 
-	echo "CMD=\"ifconfig bridge0 fwddelay 4\"" >> $JOBFILE
+	echo "CMD=\"$ifconfig bridge0 fwddelay 4\"" >> $JOBFILE
 	cat $TMPFILE >> $JOBFILE
 
 	case $NrTaps in
 	  1 )
-		echo "CMD=\"ifconfig bridge0 add ${ACT_IF} add tap0\"" >> $JOBFILE
+		echo "CMD=\"$ifconfig bridge0 add ${ACT_IF} add tap0\"" >> $JOBFILE
 		;;
 	  2 )
-		echo "CMD=\"ifconfig bridge0 add ${ACT_IF} add tap0 add tap1\"" >> $JOBFILE
+		echo "CMD=\"$ifconfig bridge0 add ${ACT_IF} add tap0 add tap1\"" >> $JOBFILE
 		;;
 	  3 )
-		echo "CMD=\"ifconfig bridge0 add ${ACT_IF} add tap0 add tap1 add tap2\"" >> $JOBFILE
+		echo "CMD=\"$ifconfig bridge0 add ${ACT_IF} add tap0 add tap1 add tap2\"" >> $JOBFILE
 		;;
 	  4 )
-		echo "CMD=\"ifconfig bridge0 add ${ACT_IF} add tap0 add tap1 add tap2 add tap3\"" >> $JOBFILE
+		echo "CMD=\"$ifconfig bridge0 add ${ACT_IF} add tap0 add tap1 add tap2 add tap3\"" >> $JOBFILE
 		;;
 	  * )
 		echo "Sorry too many taps..."
@@ -511,7 +544,7 @@ case $OS in
 	esac
 	cat $TMPFILE >> $JOBFILE
 
-	echo "CMD=\"ifconfig bridge0 up\"" >> $JOBFILE
+	echo "CMD=\"$ifconfig bridge0 up\"" >> $JOBFILE
 	cat $TMPFILE >> $JOBFILE
 	BRIDGE="bridge0"
 	EXAMPLE="tap:tap0"
@@ -520,33 +553,33 @@ case $OS in
 	N=0
 	while test $N -lt $NrTaps
 	do
-		echo "CMD=\"ifconfig tap${N} create\"" >> $JOBFILE
+		echo "CMD=\"$ifconfig tap${N} create\"" >> $JOBFILE
 		cat $TMPFILE >> $JOBFILE
 
-		echo "CMD=\"ifconfig tap${N} up\"" >> $JOBFILE
+		echo "CMD=\"$ifconfig tap${N} up\"" >> $JOBFILE
 		cat $TMPFILE >> $JOBFILE
 
 		N=`expr $N + 1`
 	done
 
-	echo "CMD=\"ifconfig bridge0 create\"" >> $JOBFILE
+	echo "CMD=\"$ifconfig bridge0 create\"" >> $JOBFILE
 	cat $TMPFILE >> $JOBFILE
 
-	echo "CMD=\"brconfig bridge0 fwddelay 1\"" >> $JOBFILE
+	echo "CMD=\"$brconfig bridge0 fwddelay 1\"" >> $JOBFILE
 	cat $TMPFILE >> $JOBFILE
 
 	case $NrTaps in
 	  1 )
-		echo "CMD=\"brconfig bridge0 add ${ACT_IF} add tap0\"" >> $JOBFILE
+		echo "CMD=\"$brconfig bridge0 add ${ACT_IF} add tap0\"" >> $JOBFILE
 		;;
 	  2 )
-		echo "CMD=\"brconfig bridge0 add ${ACT_IF} add tap0 add tap1\"" >> $JOBFILE
+		echo "CMD=\"$brconfig bridge0 add ${ACT_IF} add tap0 add tap1\"" >> $JOBFILE
 		;;
 	  3 )
-		echo "CMD=\"brconfig bridge0 add ${ACT_IF} add tap0 add tap1 add tap2\"" >> $JOBFILE
+		echo "CMD=\"$brconfig bridge0 add ${ACT_IF} add tap0 add tap1 add tap2\"" >> $JOBFILE
 		;;
 	  4 )
-		echo "CMD=\"brconfig bridge0 add ${ACT_IF} add tap0 add tap1 add tap2 add tap3\"" >> $JOBFILE
+		echo "CMD=\"$brconfig bridge0 add ${ACT_IF} add tap0 add tap1 add tap2 add tap3\"" >> $JOBFILE
 		;;
 	  * )
 		echo "Sorry too many taps..."
@@ -554,11 +587,7 @@ case $OS in
 	esac
 	cat $TMPFILE >> $JOBFILE
 
-	echo "CMD=\"brconfig bridge0 up\"" >> $JOBFILE
-	cat $TMPFILE >> $JOBFILE
-
-	echo "CMD=\"ifconfig bridge0 create\"" >> $JOBFILE
-	echo "CMD=\"brconfig bridge0 fwddelay 1\"" >> $JOBFILE
+	echo "CMD=\"$brconfig bridge0 up\"" >> $JOBFILE
 	cat $TMPFILE >> $JOBFILE
 
 	BRIDGE="bridge0"
