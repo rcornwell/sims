@@ -3665,9 +3665,6 @@ tbr:                                                /* handle basemode TBR too *
                 t = (GPR[reg] >> 16) & 0xff;        /* get SPAD address from Rd (6-8) */
                 temp2 = SPAD[t];                    /* get old SPAD data */
                 SPAD[t] = GPR[sreg];                /* store Rs into SPAD */
-sim_debug(DEBUG_XIO, &cpu_dev,
-    "TRSC B4 spad[%d] %08x R[%d] %08x R[%d] %08x at PSD1 %08x\n",
-    t, temp2, sreg, GPR[sreg], reg, GPR[reg], PSD1);
                 break;
 
             case 0xF:       /* TSCR */              /* Transfer scratchpad to register */
@@ -3705,21 +3702,13 @@ skipit:
                 if ((PSD1 & 2) != 0)                /* is it lf hw instruction */
                     goto inv;                       /* invalid instr if in rt hw */
                 addr = SPAD[0xf0];                  /* get trap table memory address from SPAD (def 80) */
-#ifdef FIX3X
-                if ((addr == 0) || (addr == 0xffffffff)) {  /* see if secondary vector table set up */
-#else
                 if ((addr == 0) || ((addr&MASK24) == MASK24)) {  /* see if secondary vector table set up */
-#endif
                     TRAPME = ADDRSPEC_TRAP;         /* Not setup, error */
                     goto newpsd;                    /* program error */
                 }
                 addr = addr + (0x0A << 2);          /* addr has mem addr of CALM trap vector (def A8) */
                 t = M[addr >> 2];                   /* get the ICB address from memory */
-#ifdef FIX3X
-                if ((t == 0) || (t == 0xffffffff)) {    /* see if ICB set up */
-#else
                 if ((t == 0) || ((t&MASK24) == MASK24)) {   /* see if ICB set up */
-#endif
                     TRAPME = ADDRSPEC_TRAP;         /* Not setup, error */
                     goto newpsd;                    /* program error */
                 }
@@ -5347,31 +5336,19 @@ skipdqe2:
                 int32c = CPUSTATUS;                 /* keep for retain blocking state */
                 addr = SPAD[0xf0];                  /* get trap table memory address from SPAD (def 80) */
                 int32a = addr;
-#ifdef FIX3X
-                if (addr == 0 || addr == 0xffffffff) {  /* see if secondary vector table set up */
-#else
                 if (addr == 0 || ((addr&MASK24) == MASK24)) {  /* see if secondary vector table set up */
-#endif
                     TRAPME = ADDRSPEC_TRAP;         /* Not setup, error */
                     goto newpsd;                    /* program error */
                 }
                 addr = addr + (0x06 << 2);          /* addr has mem addr of SVC trap vector (def 98) */
                 temp = M[addr >> 2];                /* get the secondary trap table address from memory */
-#ifdef FIX3X
-                if (temp == 0 || temp == 0xffffffff) {  /* see if ICB set up */
-#else
                 if (temp == 0 || ((temp&MASK24) == MASK24)) {  /* see if ICB set up */
-#endif
                     TRAPME = ADDRSPEC_TRAP;         /* Not setup, error */
                     goto newpsd;                    /* program error */
                 }
                 temp2 = ((IR>>12) & 0x0f) << 2;     /* get SVC index from IR */
                 t = M[(temp+temp2)>>2];             /* get secondary trap vector address ICB address */
-#ifdef FIX3X
-                if (t == 0 || t == 0xffffffff) {    /* see if ICB set up */
-#else
                 if (temp == 0 || ((temp&MASK24) == MASK24)) {  /* see if ICB set up */
-#endif
                     TRAPME = ADDRSPEC_TRAP;         /* Not setup, error */
                     goto newpsd;                    /* program error */
                 }
@@ -6006,9 +5983,7 @@ skipdqe2:
             case 0x3:       /* LPSD F980 */
                 /* fall through */;
             case 0x5:       /* LPSDCM FA80 */
-#ifdef MAYBE_NO
                 irq_pend = 1;                       /* start scanning interrupts again */
-#endif
                 if ((MODES & PRIVBIT) == 0) {       /* must be privileged */
                     TRAPME = PRIVVIOL_TRAP;         /* set the trap to take */
                     if ((CPU_MODEL == MODEL_97) || (CPU_MODEL == MODEL_V9))
@@ -6216,7 +6191,6 @@ skipdqe:
                             /* if this code is not present, MPX3X will not boot correctly */
                             if (spc != CPIXPL) {
                                 PSD2 &= ~RETMBIT;   /* no, turn off retain bit in PSD2 */
-//      cpu_dev.dctrl |= DEBUG_INST;                /* start instruction trace */
                             }
                             /* if this code is not present MPX3X will abort */
                             /* when trying to mount a secondary disk */
@@ -6352,11 +6326,7 @@ skipdqe:
                         break;                      /* ignore */
                     /* SPAD entries for interrupts begin at 0x80 */
                     t = SPAD[prior+0x80];           /* get spad entry for interrupt */
-#ifdef FIX3X
-                    if ((t == 0) || (t == 0xffffffff)) /* if unused, ignore instruction */
-#else
                     if ((t == 0) || ((t&MASK24) == MASK24))  /* if unused, ignore instruction */
-#endif
                         break;                      /* ignore */
       
                     if ((t & 0x0f800000) == 0x0f000000) /* if class F ignore instruction */
@@ -6390,11 +6360,7 @@ skipdqe:
                     /* SPAD entries for interrupts begin at 0x80 */
                     t = SPAD[prior+0x80];           /* get spad entry for interrupt */
      
-#ifdef FIX3X
-                    if ((t == 0) || (t == 0xffffffff)) /* if unused, ignore instruction */
-#else
                     if ((t == 0) || ((t&MASK24) == MASK24)) /* if unused, ignore instruction */
-#endif
                         break;                      /* ignore */
          
                     if ((t & 0x0f800000) == 0x0f000000) /* if class F ignore instruction */
@@ -6428,11 +6394,7 @@ skipdqe:
                         break;                      /* ignore */
                     /* SPAD entries for interrupts begin at 0x80 */
                     t = SPAD[prior+0x80];           /* get spad entry for interrupt */
-#ifdef FIX3X
-                    if ((t == 0) || (t == 0xffffffff)) /* if unused, ignore instruction */
-#else
                     if ((t == 0) || ((t&MASK24) == MASK24))  /* if unused, ignore instruction */
-#endif
                         break;                      /* ignore */
            
                     if ((t & 0x0f800000) == 0x0f000000) /* if class F ignore instruction */
@@ -6447,11 +6409,7 @@ skipdqe:
                         break;                      /* ignore */
                     /* SPAD entries for interrupts begin at 0x80 */
                     t = SPAD[prior+0x80];           /* get spad entry for interrupt */
-#ifdef FIX3X
-                    if ((t == 0) || (t == 0xffffffff)) /* if unused, ignore instruction */
-#else
                     if ((t == 0) || ((t&MASK24) == MASK24))  /* if unused, ignore instruction */
-#endif
                         break;                      /* ignore */
       
                     if ((t & 0x0f800000) == 0x0f000000) /* if class F ignore instruction */
@@ -6467,11 +6425,7 @@ skipdqe:
                         break;                      /* ignore */
                     /* SPAD entries for interrupts begin at 0x80 */
                     t = SPAD[prior+0x80];           /* get spad entry for interrupt */
-#ifdef FIX3X
-                    if ((t == 0) || (t == 0xffffffff)) /* if unused, ignore instruction */
-#else
                     if ((t == 0) || ((t&MASK24) == MASK24))  /* if unused, ignore instruction */
-#endif
                         break;                      /* ignore */
         
                     if ((t & 0x0f800000) == 0x0f000000) /* if class F ignore instruction */
@@ -6577,11 +6531,7 @@ skipdqe:
             /* the channel must be defined as a class F I/O channel in SPAD */
             /* if not class F, the system will generate a system check trap */
             t = SPAD[lchan];                        /* get spad entry for channel */
-#ifdef FIX3X
-            if ((t == 0) || (t == 0xffffffff) ||    /* if not set up, system check */
-#else
             if ((t == 0) || ((t&MASK24) == MASK24) || /* if not set up, system check */
-#endif
                 ((t & 0x0f800000) != 0x0f000000)) {   /* class in bits 4-7 */
                 TRAPME = SYSTEMCHK_TRAP;            /* trap condition if F class */
                 TRAPSTATUS |= BIT0;                 /* class F error bit */
@@ -7036,11 +6986,7 @@ newpsd:
             /* SPAD location 0xf0 has trap vector base address */
             uint32 tta = SPAD[0xf0];                /* get trap table address in memory */
             uint32 tvl;                             /* trap vector location */
-#ifdef FIX3X
-            if ((tta == 0) || (tta == 0xffffffff)
-#else
             if ((tta == 0) || ((tta&MASK24) == MASK24))
-#endif
                 tta = 0x80;                         /* if not set, assume 0x80 FIXME */
             /* Trap Table Address in memory is pointed to by SPAD 0xF0 */
             /* TODO update cpu status and trap status words with reason too */
@@ -7111,7 +7057,7 @@ newpsd:
                     "##PAGEFAULT TRAPS %02x page# %04x LOAD MAPS PSD1 %08x PSD2 %08x CPUSTATUS %08x\n",
                     TRAPME, pfault, PSD1, PSD2, CPUSTATUS);
                 }
-                /* Moved here 05/28/2021 so PC does not get incremeneted incorrectly */
+                /* Moved here 05/28/2021 so PC gets incremented incorrectly */
                 /* This caused the 2nd instruction of an int service routine to be skipped */
                 /* The attn trap had to be on 2nd instruction */
             case CONSOLEATN_TRAP:                   /* 0xB4 PL0D Console Attention Trap */
@@ -7362,8 +7308,8 @@ t_stat cpu_reset(DEVICE *dptr)
         SPAD[0xf9] = CPUSTATUS;                     /* set default cpu type in cpu status word */
         SPAD[0xff] = 0x00ffffff;                    /* interrupt level 7f 1's complament */
     }
-    /* set low memory bootstrap code */
 #if 0
+    /* set low memory bootstrap code */
     /* moved to boot code in sel32_chan.c so we can reset system and not destroy memory */
     M[0] = 0x02000000;                              /* 0x00 IOCD 1 read into address 0 */
     M[1] = 0x60000078;                              /* 0x04 IOCD 1 CMD Chain, Suppress incor len, 120 bytes */

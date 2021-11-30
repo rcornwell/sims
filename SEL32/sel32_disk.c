@@ -294,6 +294,10 @@ bits 24-31 - FHD head count (number of heads on FHD or number head on FHD option
 /* us9 */
 /* us9 holds bytes 4 & 5 of the status for the drive */
 
+#define LASTCNT    us10
+/* us10 */
+/* us10 holds original read/write byte count from iocd */
+
 /* Sense byte 4 */
 #define SNS_SEND        0x8000                  /* Seek End */
 #define SNS_USEL        0x4000                  /* Unit Selected */
@@ -1029,9 +1033,10 @@ t_stat disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         uptr->SNS2 = (SNS_UNR|SNS_ONC|SNS_USEL);/* reset status to on cyl & ready */
     case DSK_SNS:                               /* Sense 0x04 */
         uptr->CMD |= cmd;                       /* save cmd */
+        uptr->LASTCNT = chp->ccw_count;         /* save cmd count for diags */
         sim_debug(DEBUG_CMD, dptr,
-            "disk_startcmd starting disk cmd %02x chsa %04x\n",
-            cmd, chsa);
+            "disk_startcmd starting disk cmd %02x chsa %04x cnt %04x \n",
+            cmd, chsa, chp->ccw_count);
 #ifdef FAST_FOR_UTX
         /* when value was 50, UTX would get a spontainous interrupt */
         /* when value was 30, UTX would get a spontainous interrupt */
@@ -1068,24 +1073,30 @@ t_stat  disk_haltio(UNIT *uptr) {
     /* status must not have an error bit set */
     /* otherwise, UTX will panic with "bad status" */
     /* stop any I/O and post status and return error status */
-    chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);       /* stop any chaining */
-    uptr->CMD &= LMASK;                         /* make non-busy */
-    uptr->SNS2 |= (SNS_ONC|SNS_UNR);            /* on cylinder & ready */
+    sim_debug(DEBUG_EXP, dptr,
+        "disk_haltio HIO I/O stop chsa %04x cmd = %02x CHS %08x STAR %08x\n",
+        chsa, cmd, uptr->CHS, uptr->STAR);
     if ((uptr->CMD & DSK_CMDMSK) != 0) {        /* is unit busy */
         sim_debug(DEBUG_EXP, dptr,
             "disk_haltio HIO chsa %04x cmd = %02x ccw_count %02x\n",
             chsa, cmd, chp->ccw_count);
         sim_cancel(uptr);                       /* clear the input timer */
+        chp->ccw_count = 0;                     /* zero the count */
+        chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);   /* stop any chaining */
+        uptr->CMD &= LMASK;                     /* make non-busy */
+//      chp->chan_caw = 0;                      /* zero iocd address for diags */
+        uptr->SNS2 |= (SNS_ONC|SNS_UNR);        /* on cylinder & ready */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);  /* force end */
-    } else {
-        sim_debug(DEBUG_DETAIL, dptr,
-            "disk_haltio HIO I/O not busy chsa %04x cmd = %02x\n", chsa, cmd);
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
+//      return CC2BIT | SCPE_IOERR;
+        return CC1BIT | SCPE_IOERR;             /* DIAGS want just an interrupt */
     }
-    sim_debug(DEBUG_EXP, dptr,
-        "disk_haltio HIO I/O stop chsa %04x cmd = %02x CHS %08x STAR %08x\n",
-        chsa, cmd, uptr->CHS, uptr->STAR);
-    return SCPE_IOERR;
+    sim_debug(DEBUG_DETAIL, dptr,
+        "disk_haltio HIO I/O not busy chsa %04x cmd = %02x\n", chsa, cmd);
+    uptr->CMD &= LMASK;                         /* make non-busy */
+    uptr->SNS2 |= (SNS_ONC|SNS_UNR);            /* on cylinder & ready */
+//  chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_ECHO);  /* post 0x80000000 to ICB */
+//  return CC4BIT | SCPE_OK;                    /* not busy return */
+    return CC1BIT | SCPE_OK;                    /* not busy return */
 }
 
 /* Handle processing of disk requests. */
@@ -1824,10 +1835,18 @@ iha_error:
             /* convert sector number back to chs value to sync disk for diags */
             uptr->CHS = disksec2star(tstart, type);
 
+            sim_debug(DEBUG_CMD, dptr,
+                "DISK B4READ reading CMD %08x chsa %04x tstart %04x buffer %06x count %04x\n",
+                uptr->CMD, chsa, tstart, chp->ccw_addr, chp->ccw_count);
+
             /* get alternate track if this one is defective */
             tempt = get_dmatrk(uptr, uptr->CHS, lbuf);
             /* file offset in bytes to std or alt track */
             tstart = STAR2SEC(tempt, SPT(type), SPC(type)) * SSB(type);
+
+            sim_debug(DEBUG_CMD, dptr,
+                "DISK FTRREAD reading CMD %08x chsa %04x tstart %04x buffer %06x count %04x\n",
+                uptr->CMD, chsa, tstart, chp->ccw_addr, chp->ccw_count);
 
             if ((tempt == 0) && (uptr->STAR != 0)) {
                 /* we have error */
@@ -1846,7 +1865,10 @@ iha_error:
                 uptr->SNS |= SNS_DADE;          /* disk addr error */
                 uptr->CMD &= LMASK;             /* remove old status bits & cmd */
                 sim_debug(DEBUG_EXP, dptr,
-                    "disk_srv READ2 get_dmatrk return spare tempt %06x tstart %06x\n", tempt, tstart);
+                    "disk_srv READ2 get_dmatrk return spare tempt %06x tstart %06x LASTCNT %04x\n",
+                    tempt, tstart, uptr->LASTCNT);
+                /* restore original transfer count */
+                chp->ccw_count = uptr->LASTCNT; /* restore original transfer count */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_PCHK);
                 break;
             }
@@ -1856,6 +1878,11 @@ iha_error:
                 uptr->SNS |= SNS_MOCK;          /* mode check error */
                 uptr->SNS |= SNS_RTAE;          /* reserved track access error */
                 uptr->CMD &= LMASK;             /* remove old status bits & cmd */
+                sim_debug(DEBUG_EXP, dptr,
+                    "disk_srv READ3 get_dmatrk return spare tempt %06x tstart %06x LASTCNT %04x\n",
+                    tempt, tstart, uptr->LASTCNT);
+                /* restore original transfer count */
+                chp->ccw_count = uptr->LASTCNT; /* restore original transfer count */
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_PCHK);
                 break;
             }
@@ -1921,7 +1948,7 @@ if ((chp->ccw_addr == 0x3cde0) && (buf[0] == 0x4a)) {
                     if (chp->chan_status & STATUS_PCHK) /* test for memory error */
                         uptr->SNS |= SNS_INAD;  /* invalid address */
                     sim_debug(DEBUG_EXP, dptr,
-                        "DISK Read %04x bytes leaving %04x from diskfile %04x/%02x/%02x\n",
+                        "DISK READ4 %04x bytes leaving %04x from diskfile %04x/%02x/%02x\n",
                         i, chp->ccw_count, ((uptr->CHS)>>16)&0xffff,
                         ((uptr->CHS)>>8)&0xff, (uptr->CHS)&0xff);
                     uptr->CMD &= LMASK;         /* remove old status bits & cmd */
@@ -2032,6 +2059,9 @@ if ((chp->ccw_addr == 0x3cde0) && (buf[0] == 0x4a)) {
                 ((uptr->CHS)>>16)&0xffff, ((uptr->CHS)>>8)&0xff, (uptr->CHS)&0xff);
 
             if (uptr->SNS & 0xf0000000) {       /* see if any mode bit 0-3 is set */
+            sim_debug(DEBUG_CMD, dptr,
+                "DISK WRITE2 starting CMD %08x chsa %04x buffer %06x count %04x\n",
+                uptr->CMD, chsa, chp->ccw_addr, chp->ccw_count);
                 uptr->SNS |= SNS_MOCK;          /* mode check error */
                 chp->chan_status |= STATUS_PCHK; /* channel prog check */
                 uptr->CMD &= LMASK;             /* remove old status bits & cmd */

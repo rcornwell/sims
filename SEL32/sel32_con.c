@@ -649,22 +649,24 @@ t_stat  con_haltio(UNIT *uptr) {
             "con_haltio HIO chsa %04x cmd = %02x ccw_count %02x\n",
             chsa, cmd, chp->ccw_count);
         sim_cancel(uptr);                   /* stop timer */
-    } else {
+        /* stop any I/O and post status and return error status */
+        chp->ccw_count = 0;                 /* zero the count */
+        chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);   /* reset chaining bits */
+        uptr->CMD &= LMASK;                 /* make non-busy */
+        uptr->u4 = 0;                       /* no I/O yet */
+        con_data[unit].incnt = 0;           /* no input data */
+        uptr->SNS = SNS_RDY|SNS_ONLN;       /* status is online & ready */
         sim_debug(DEBUG_CMD, &con_dev,
-            "con_haltio HIO not busy chsa %04x cmd = %02x ccw_count %02x\n",
-            chsa, cmd, chp->ccw_count);
+            "con_haltio HIO I/O stop chsa %04x cmd = %02x\n", chsa, cmd);
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
+        return CC2BIT | SCPE_IOERR;         /* tell chan code to post status */
     }
-    /* stop any I/O and post status and return error status */
-    chp->ccw_count = 0;                     /* zero the count */
-    chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);   /* reset chaining bits */
     uptr->CMD &= LMASK;                     /* make non-busy */
-    uptr->u4 = 0;                           /* no I/O yet */
-    con_data[unit].incnt = 0;               /* no input data */
     uptr->SNS = SNS_RDY|SNS_ONLN;           /* status is online & ready */
     sim_debug(DEBUG_CMD, &con_dev,
-        "con_haltio HIO I/O stop chsa %04x cmd = %02x\n", chsa, cmd);
-    chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
-    return SCPE_IOERR;                      /* tell chan code to post status */
+        "con_haltio HIO not busy chsa %04x cmd = %02x ccw_count %02x\n",
+        chsa, cmd, chp->ccw_count);
+    return CC1BIT | SCPE_OK;                /* not busy */
 }
 #endif
 

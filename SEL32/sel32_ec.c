@@ -1472,25 +1472,24 @@ t_stat  ec_haltio(UNIT *uptr) {
         sim_debug(DEBUG_CMD, dptr,
             "ec_haltio HIO chsa %04x cmd = %02x ccw_count %02x\n", chsa, cmd, chp->ccw_count);
         // stop any I/O and post status and return error status */
+        if (chsa & 0x0f)                        /* no cancel for 0 */
+            sim_cancel(uptr);                   /* clear the output timer */
         chp->ccw_count = 0;                     /* zero the count */
+//?     chp->chan_caw = 0;                      /* zero iocd address for diags */
         chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);   /* stop any chaining */
         uptr->CMD &= LMASK;                     /* make non-busy */
         uptr->SNS = SNS_RCV_RDY;                /* status is online & ready */
-        if (chsa & 0x0f)                        /* no cancel for 0 */
-            sim_cancel(uptr);                   /* clear the output timer */
         sim_debug(DEBUG_CMD, dptr,
             "ec_haltio HIO I/O stop chsa %04x cmd = %02x\n", chsa, cmd);
         /* No unit exception status for ethernet */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
-//      chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_LENGTH|STATUS_PCHK);
-//      chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_LENGTH);
-        return SCPE_IOERR;
+        return CC1BIT | SCPE_IOERR;
     }
-    uptr->CMD &= LMASK;                         /* make non-busy */
-    uptr->SNS = SNS_RCV_RDY;                    /* status is online & ready */
     sim_debug(DEBUG_CMD, dptr,
         "ec_haltio HIO I/O not busy chsa %04x cmd = %02x\n", chsa, cmd);
-    return SCPE_OK;                             /* not busy */
+    uptr->CMD &= LMASK;                         /* make non-busy */
+    uptr->SNS = SNS_RCV_RDY;                    /* status is online & ready */
+    return CC1BIT | SCPE_OK;                    /* not busy */
 }
 
 /* initialize the ethernet */

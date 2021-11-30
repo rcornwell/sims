@@ -571,9 +571,7 @@ MTAB            hsdp_mod[] = {
 };
 
 UNIT            dpa_unit[] = {
-/* SET_TYPE(3) DM300 */
 /* SET_TYPE(10) 8887 */
-/* SET_TYPE(11) 8887 */
     {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(10), 0), 0, UNIT_ADDR(0x800)},  /* 0 */
     {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(10), 0), 0, UNIT_ADDR(0x802)},  /* 1 */
     {UDATA(&hsdp_srv, UNIT_HSDP|SET_TYPE(10), 0), 0, UNIT_ADDR(0x804)},  /* 2 */
@@ -858,7 +856,6 @@ t_stat  hsdp_iocl(CHANP *chp, int32 tic_ok)
     uint32      word1 = 0;
     uint32      word2 = 0;
     int32       docmd = 0;
-//  DIB         *dibp = dib_unit[chp->chan_dev];/* get the DIB pointer */
     UNIT        *uptr = chp->unitptr;           /* get the unit ptr */
     uint16      chan = get_chan(chp->chan_dev); /* our channel */
     uint16      chsa = chp->chan_dev;           /* our chan/sa */
@@ -910,9 +907,6 @@ loop:
         chp->chan_caw, chan, word1, word2, uptr->SNS);
 
     chp->chan_caw = (chp->chan_caw & 0xfffffc) + 8; /* point to next IOCD */
-#ifdef BAD_05142021
-    chp->ccw_cmd = (word1 >> 24) & 0xff;        /* set command from IOCD wd 1 */
-#endif
 
     /* Check if we had data chaining in previous iocd */
     /* if we did, use previous cmd value */
@@ -941,8 +935,6 @@ loop:
     case DSK_IHA: case DSK_WTL: case DSK_RTL: case DSK_RAP: case DSK_WTF:  
     case DSK_FMT: case DSK_RE: case DSK_RENO: case DSK_REL: case DSK_RES:
     case DSK_RVL: case DSK_POR: case DSK_REC: case DSK_TIC:
-        /* reset status to on cyl & ready */
-//      uptr->SNS2 = (SNS_UNR|SNS_ONC|SNS_USEL);
     case DSK_SNS:   
         break;
     default:
@@ -998,14 +990,9 @@ loop:
     }
 
     /* Check if we had data chaining in previous iocd */
-#ifdef BAD_05152021
-    if ((chp->chan_info & INFO_SIOCD) ||        /* see if 1st IOCD in channel prog */
-        ((chp->ccw_flags & FLAG_DC) == 0)) {    /* last IOCD have DC set? */
-#else
     if ((chp->chan_info & INFO_SIOCD) ||        /* see if 1st IOCD in channel prog */
         (((chp->chan_info & INFO_SIOCD) == 0) && /* see if 1st IOCD in channel prog */
         ((chp->ccw_flags & FLAG_DC) == 0))) {    /* last IOCD have DC set? */
-#endif
         sim_debug(DEBUG_CMD, dptr,
             "hsdp_iocl @%06x DO CMD No DC, ccw_flags %04x cmd %02x\n",
             chp->chan_caw, chp->ccw_flags, chp->ccw_cmd);
@@ -1211,24 +1198,27 @@ t_stat  hsdp_haltio(UNIT *uptr) {
     /* UTX wants SLI bit, but no unit exception */
     /* status must not have an error bit set */
     /* otherwise, UTX will panic with "bad status" */
-    if ((uptr->CMD & DSK_CMDMSK) != 0) {    /* is unit busy */
+    /* stop any I/O and post status and return error status */
+    sim_debug(DEBUG_CMD, dptr,
+        "hsdp_haltio HIO I/O stop chsa %04x cmd = %02x\n", chsa, cmd);
+    if ((uptr->CMD & DSK_CMDMSK) != 0) {        /* is unit busy */
         sim_debug(DEBUG_CMD, dptr,
             "hsdp_haltio HIO chsa %04x cmd = %02x ccw_count %02x\n", chsa, cmd, chp->ccw_count);
-        sim_cancel(uptr);                   /* clear the input timer */
+        sim_cancel(uptr);                       /* clear the input timer */
+        chp->ccw_count = 0;                     /* zero the count */
+        chp->chan_caw = 0;                      /* zero iocd address for diags */
+        chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);   /* stop any chaining */
+        uptr->CMD &= LMASK;                     /* make non-busy */
+        uptr->SNS2 |= (SNS_ONC|SNS_UNR);        /* on cylinder & ready */
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
+        return CC2BIT | SCPE_IOERR;             /* busy return */
     } else {
         sim_debug(DEBUG_CMD, dptr,
             "hsdp_haltio HIO I/O not busy chsa %04x cmd = %02x\n", chsa, cmd);
+        uptr->CMD &= LMASK;                     /* make non-busy */
+        uptr->SNS2 |= (SNS_ONC|SNS_UNR);        /* on cylinder & ready */
+        return CC1BIT | SCPE_OK;                /* not busy */
     }
-    /* stop any I/O and post status and return error status */
-    chp->ccw_count = 0;                     /* zero the count */
-    chp->chan_caw = 0;                      /* zero iocd address for diags */
-    chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);/* stop any chaining */
-    uptr->CMD &= LMASK;                     /* make non-busy */
-    uptr->SNS2 |= (SNS_ONC|SNS_UNR);        /* on cylinder & ready */
-    sim_debug(DEBUG_CMD, dptr,
-        "hsdp_haltio HIO I/O stop chsa %04x cmd = %02x\n", chsa, cmd);
-    chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
-    return SCPE_IOERR;
 }
 
 /* Handle rsctl command for disk */
@@ -1838,7 +1828,7 @@ iha_error:
                 uptr->LSC, (tstar>>16)&0xffff, (tstar>>8)&0xff, tstar&0xff);
 //#define DO_DYNAMIC_DEBUG
 #ifdef DO_DYNAMIC_DEBUG
-//            cpu_dev.dctrl |= DEBUG_INST|DEBUG_TRAP|DEBUG_CMD|DEBUG_DETAIL;   /* start instruction trace */
+// cpu_dev.dctrl |= DEBUG_INST|DEBUG_TRAP|DEBUG_CMD|DEBUG_DETAIL;   /* start instruction trace */
 #endif
         }
 
