@@ -31,9 +31,14 @@
 
 /* Constants */
 #define COM_LINES       8                   /* lines defined */
-#define COML_WAIT       500
+//Change from 500 to 5000 12/02/2021
+//Change from 5000 to 4000 12/02/2021
+//#define COML_WAIT       500
+#define COML_WAIT       4000
+//Change from 1000 to 5000 12/02/2021
 //#define COM_WAIT        5000
-#define COM_WAIT        1000
+//#define COM_WAIT        1000
+#define COM_WAIT        5000
 #define COM_NUMLIN      com_desc.lines      /* curr # lines */
 
 #define COMC            0                   /* channel thread */
@@ -593,7 +598,7 @@ t_stat  coml_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
         chan_write_byte(chsa, &ch);             /* write status */
 
         /* byte 2 modem status */
-//      SNS_DELDSR will be set if just connected, clear at end
+        // SNS_DELDSR will be set if just connected, clear at end
         ch = (uptr->SNS >> 8) & 0xff;           /* CTS & DSR bits in byte 2 */
         chan_write_byte(chsa, &ch);             /* write status */
 
@@ -946,7 +951,9 @@ t_stat comc_srv(UNIT *uptr)
     sim_debug(DEBUG_DETAIL, &com_dev,
         "comc_srv POLL DONE on chsa %04x\n", chsa);
     /* this says to use 200, but simh really uses 50000 for cnt */
-    return sim_clock_coschedule(uptr, 200);     /* continue poll */
+    /* changed 12/02/2021 from 200 to 5000 */
+//  return sim_clock_coschedule(uptr, 200);     /* continue poll */
+    return sim_clock_coschedule(uptr, 5000);    /* continue poll */
 //  return sim_activate(uptr, 10000);           /* continue poll */
 //  return sim_activate(uptr, 5000);            /* continue poll */
 }
@@ -1049,7 +1056,8 @@ t_stat comi_srv(UNIT *uptr)
                     if (uptr->CNT == com_data[ln].incnt) {  /* input empty */
                         uptr->CMD &= ~COM_INPUT;    /* no input available */
                     }
-                    sim_activate(uptr, uptr->wait); /* wait */
+/* change 02DEC21*/ sim_activate(uptr, uptr->wait); /* wait */
+// change 02DEC21*/ sim_clock_coschedule(uptr, 1000);   /* continue poll */
                     return SCPE_OK;
                 }
                 /* command is completed */
@@ -1063,7 +1071,8 @@ t_stat comi_srv(UNIT *uptr)
                 chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* we done */
             }
         }
-        sim_activate(uptr, uptr->wait);         /* wait */
+// change 02DEC21   sim_activate(uptr, uptr->wait); /* wait */
+/* change 02DEC21*/ sim_clock_coschedule(uptr, 1000);   /* continue poll */
         return SCPE_OK;
     }
     /* not connected, so dump chars on ground */

@@ -1144,7 +1144,9 @@ wr_end:
 //XX        sim_clock_coschedule(uptr, 1500);   /* continue poll */
 //HH        sim_activate(uptr, 1511);           /* continue poll */
             /* this is OK for mode 0, 1, 2, 3 */
-            sim_activate(uptr, 2511);           /* continue poll */
+//12dec21   sim_activate(uptr, 2511);           /* continue poll */
+            /* this is really a 50000 cnt poll by simh */
+            sim_clock_coschedule(uptr, 1000);   /* continue poll */
             return SCPE_OK;
         }
         /* get queue length */
