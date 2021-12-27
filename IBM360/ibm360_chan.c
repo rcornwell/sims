@@ -473,9 +473,7 @@ loop:
          /* Check if immediate channel end */
          if (chan->chan_status & STATUS_CEND) {
              chan->ccw_cmd = 0;
-             if ((chan->chan_status & STATUS_DEND) != 0)
-                 chan->ccw_flags &= ~(FLAG_CD|FLAG_SLI);
-
+             chan->ccw_flags |= FLAG_SLI;  /* Force SLI for immediate command */
              sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end(%x load) %x %04x end\n", 
                           chan->daddr, chan->chan_status, chan->ccw_flags);
          }
