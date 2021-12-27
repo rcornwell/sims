@@ -1123,7 +1123,7 @@ sense_end:
          if (state == DK_POS_HA && count == 0) {
              sim_debug(DEBUG_DETAIL, dptr, "search HA unit=%d %x %d %x\n",
                   unit, state, count, uptr->CCH);
-             uptr->CMD &= ~DK_SRCOK;
+             uptr->CMD &= ~(DK_SRCOK|DK_SHORTSRC|DK_NOEQ|DK_HIGH);
              uptr->CMD |= DK_PARAM;
              break;
          }
@@ -1137,8 +1137,8 @@ sense_end:
                   uptr->CMD |= DK_NOEQ;
              }
              sim_debug(DEBUG_DETAIL, dptr,
-                 "search HA unit=%d %d %x %02x=%02x %d\n", unit,
-                 count, state, ch, *da, data->tpos);
+                 "search HA unit=%d %d %x %02x=%02x %d e=%d\n", unit,
+                 count, state, ch, *da, data->tpos, (uptr->CMD & DK_NOEQ) != 0);
              /* At end of count */
              if (count == 4 || uptr->CMD & DK_SHORTSRC) {
                 uptr->LCMD = cmd;
