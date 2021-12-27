@@ -189,7 +189,7 @@ uint8  cdr_startcmd(UNIT *uptr,  uint8 cmd) {
          return SNS_CHNEND;
 
     case 0:               /* Status */
-         break;
+         return 0;
 
     case 4:               /* Sense */
          uptr->CMD &= ~(0xff);
