@@ -1744,7 +1744,8 @@ t_stat testxio(uint16 lchsa, uint32 *status) {  /* test XIO */
     WMW(chan_icb+20, 0x80000000);               /* post CC1 & sw addr 0 in ICB+5w & reset CCs */
     *status = CC4BIT; /* FIX FOR DIAG */        /* request accepted, not busy, so CC4 */
 #else
-/// WMW(chan_icb+20, 0x80000001);               /* post sw addr 0 in ICB+5w & reset CCs */
+    /* MPX 1X requires CC1 to be returned instead of CC2 or CC4 */
+    /* MPX 1X will hang on boot if set to CC2 */
     WMW(chan_icb+20, 0x80000000);               /* post sw addr 0 in ICB+5w & reset CCs */
     *status = CC1BIT;                           /* request accepted, no status, so CC1 */
 #endif

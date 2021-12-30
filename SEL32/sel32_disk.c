@@ -1042,6 +1042,11 @@ t_stat disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         /* when value was 30, UTX would get a spontainous interrupt */
         /* when starting cron */
         /* changed to 25 from 30 121420 */
+//utx21asim_activate(uptr, 20);                 /* start things off */
+        /* changed to 15 from 20 12/17/2021 to fix utx21a getting */
+        /* "panic: ioi: tis_busy - bad cc" during root fsck on boot */
+        /* changed back to 20 from 15 12/18/2021 to refix utx21a getting */
+        /* "panic: ioi: tis_busy - bad cc" during root fsck on boot */
         sim_activate(uptr, 20);                 /* start things off */
         /* when using 500, UTX gets "ioi: sio at 801 failed, cc3, retry=0" */
 #else
@@ -1658,7 +1663,7 @@ iha_error:
                 "disk_srv seeking unit=%02x to %04x/%02x/%02x from cyl %04x (%04x)\n",
                 unit, cyl, trk, buf[3], tcyl, diff);
 #ifdef FAST_FOR_UTX
-            sim_activate(uptr, 15);             /* start things off */
+            sim_activate(uptr, 15);             /* start us off */
 #else
             sim_activate(uptr, 400+diff);       /* start us off */
 #endif
@@ -2042,7 +2047,7 @@ if ((chp->ccw_addr == 0x3cde0) && (buf[0] == 0x4a)) {
                 "DISK sector read complete, %x bytes to go from diskfile %04x/%02x/%02x\n",
                 chp->ccw_count, STAR2CYL(uptr->CHS), ((uptr->CHS) >> 8)&0xff, (uptr->CHS&0xff));
 #ifdef FAST_FOR_UTX
-            sim_activate(uptr, 10);             /* start things off */
+            sim_activate(uptr, 10);             /* wait to read next sector */
 #else
             sim_activate(uptr, 300);            /* wait to read next sector */
 #endif
@@ -2255,7 +2260,7 @@ if ((chp->ccw_addr == 0x3cde0) && (buf[0] == 0x4a)) {
             }
 
 #ifdef FAST_FOR_UTX
-            sim_activate(uptr, 15);             /* start things off */
+            sim_activate(uptr, 15);             /* wait to read next sector */
 #else
             sim_activate(uptr, 300);            /* wait to read next sector */
 #endif

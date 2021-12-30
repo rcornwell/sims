@@ -1054,6 +1054,15 @@ doread:
                 "SCSI READ reading CMD %08x chsa %04x tstart %04x buffer %06x count %04x\n",
                 uptr->CMD, chsa, tstart, chp->ccw_addr, chp->ccw_count);
 
+            /* just seek to the location where we will r/w data */
+            if ((sim_fseek(uptr->fileref, tstart*SSB(type), SEEK_SET)) != 0) {  /* seek r/w sec */
+                sim_debug(DEBUG_DETAIL, dptr,
+                    "scsi_srv READ, Error on seek to %08x\n", tstart*SSB(type));
+                uptr->CMD &= LMASK;             /* remove old status bits & cmd */
+                chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                return SCPE_OK;
+            }
+
             /* read in a sector of data from disk */
             if ((len=sim_fread(buf, 1, ssize, uptr->fileref)) != ssize) {
                 sim_debug(DEBUG_CMD, dptr,
@@ -1250,6 +1259,16 @@ dowrite:
         }
         if (uptr->CMD & DSK_WRITING) {          /* see if we are writing data */
             tstart = uptr->CHS;                 /* get sector offset */
+
+            /* just seek to the location where we will r/w data */
+            if ((sim_fseek(uptr->fileref, tstart*SSB(type), SEEK_SET)) != 0) {  /* seek r/w sec */
+                sim_debug(DEBUG_EXP, dptr,
+                    "scsi_srv WRITE, Error on seek to %08x\n", tstart*SSB(type));
+                uptr->CMD &= LMASK;             /* remove old status bits & cmd */
+                chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                return SCPE_OK;
+            }
+
             /* process the next sector of data */
             len = 0;                            /* used here as a flag for short read */
             for (i=0; i<ssize; i++) {
@@ -1466,9 +1485,14 @@ t_stat  scsi_rschnlio(UNIT *uptr) {
     return SCPE_OK;
 }
 
-t_stat scsi_reset(DEVICE * dptr)
+t_stat scsi_reset(DEVICE *dptr)
 {
+    UNIT    *uptr = dptr->units;
+    uint16  chsa = GET_UADDR(uptr->CMD);
+
     /* add reset code here */
+    sim_debug(DEBUG_EXP, dptr,
+        "scsi_reset chsa %04x\n", chsa);
     return SCPE_OK;
 }
 
@@ -1972,6 +1996,11 @@ t_stat scsi_boot(int32 unit_num, DEVICE *dptr) {
             GET_UADDR(uptr->CMD));
         printf("SCSI Disk Boot attach error dev/unit %04x\n", GET_UADDR(uptr->CMD));
         return SCPE_UNATT;                      /* attached? */
+    }
+
+    /* seek to sector 0 */
+    if ((sim_fseek(uptr->fileref, 0, SEEK_SET)) != 0) { /* seek home */
+        printf("SCSI Disk Boot Error on seek to 0\n");
     }
 
     SPAD[0xf4] = GET_UADDR(uptr->CMD);          /* put boot device chan/sa into spad */
