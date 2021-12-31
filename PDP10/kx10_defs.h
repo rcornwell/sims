@@ -518,6 +518,7 @@ extern DEVICE   mtc_dev;
 extern DEVICE   dsk_dev;
 extern DEVICE   dcs_dev;
 extern DEVICE   dz_dev;
+extern DEVICE   tcu_dev;
 
 #if KS
 
@@ -579,6 +580,7 @@ void    uba_set_parity(uint16 ctl);
 uint16  uba_rh_vect(struct pdp_dib *dibp);
 int     uba_rh_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access);
 int     uba_rh_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access);
+void    uba_reset();
 
 t_stat  uba_set_addr(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat  uba_show_addr (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
@@ -736,6 +738,7 @@ extern void ka10_lights_clear_aux (int);
 #elif KS
 #define NUM_DEVS_LP20   0
 #define NUM_DEVS_DZ     4
+#define NUM_DEVS_TCU    1
 #endif
 #if KA | KI
 #define NUM_DEVS_RC     1

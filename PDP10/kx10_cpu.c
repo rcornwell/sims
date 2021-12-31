@@ -1781,7 +1781,7 @@ load_tlb(int uf, int page, int wr)
         sim_interval--;
         data = M[dbr + pg];
         if ((page & 02) == 0)
-            data &= ~0020000000000LL;
+            data &= ~(0020000LL << 18);
         else
             data &= ~0020000LL;
         M[dbr + pg] = data;
@@ -1791,21 +1791,25 @@ load_tlb(int uf, int page, int wr)
         pg = 0;
         switch(data >> 16) {
         case 0:
-                 fault_data = (data >> 16) << 30;
+                 fault_data = (data >> 16) << 28;
+                 if (wr) {
+                    fault_data |= 010000LL << 18;
+                 }
                  page_fault = 1;
                  return 0;           /* No access */
         case 1:                      /* Read Only */
         case 2:                      /* R/W First */
                  if (wr) {
-                     fault_data = (data >> 16) << 30;
+                     fault_data = (data >> 16) << 28;
+                     fault_data |= 010000LL << 18;
                      page_fault = 1;
                      return 0;
                  }
                  pg = KL_PAG_A;
-                 if (data & 0400000)
+                 if (data & (2LL << 16))
                      pg |= KL_PAG_S;     /* Indicate writable */
                  break;
-        case 3:  pg = KL_PAG_A|KL_PAG_W|KL_PAG_S;  break; /* R/W */
+        case 3:  pg = KL_PAG_A|KL_PAG_W;  break; /* R/W */
         }
         pg |= (data & 001777) << 1;
         /* Create 2 page table entries. */
@@ -2071,8 +2075,6 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
     if (data == 0) {
         data = load_tlb(uf | upmp, page, wr);
         if (data == 0 && page_fault) {
-            if (fault_data != 0)
-                return 0;
             fault_data |= ((uint64)addr);
             if (uf)                      /* U */
                 fault_data |= SMASK;
@@ -2121,6 +2123,11 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
     /* Check for access error */
     if ((data & KL_PAG_A) == 0 || (wr & ((data & KL_PAG_W) == 0))) {
 #if KS_ITS
+        /* Access bits:
+         *    KL_PAG_A  means valid page.
+         *    KL_PAG_S  means read write first
+         *    KL_PAG_W  means read/write
+         */
         if (QITS) {
             /* Remap the flag bits */
             fault_data = (uint64)addr;
@@ -2130,13 +2137,14 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
             } else {
                e_tlb[page] = 0;
             }
-            if ((data & KL_PAG_A) != 0) {
-                if ((data & KL_PAG_S) != 0) {
-                   fault_data |= 004000LL << 18;
-                   if ((data & KL_PAG_W) != 0)
-                        fault_data |= 002000LL << 18;
-                } else {
-                   fault_data |= 002000LL << 18;
+            /* Check if accessable */
+            if (wr) {
+                if ((data & KL_PAG_A) != 0) {
+                   if ((data & KL_PAG_S) != 0) {
+                      fault_data |= 004000LL << 18;        /* PF2.9 */
+                   } else if ((data & KL_PAG_W) == 0) {
+                      fault_data |= 002000LL << 18;   /* PF2.8 */
+                   }
                 }
             }
             if (wr)
@@ -2170,15 +2178,6 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
 /*
  * Register access on KS 10
  */
-#if 0
-uint64 get_reg(int reg) {
-     return FM[fm_sel|(reg & 017)];
-}
-
-void   set_reg(int reg, uint64 value) {
-     FM[fm_sel|(reg & 017)] = value;
-}
-#endif
 #define get_reg(reg) FM[fm_sel|((reg) & 017)]
 
 #define set_reg(reg, value) FM[fm_sel|((reg) & 017)] = (value)
@@ -2709,18 +2708,9 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
 /*
  * Register access on KL 10
  */
-#if 0
-uint64 get_reg(int reg) {
-     return FM[fm_sel|(reg & 017)];
-}
-
-void   set_reg(int reg, uint64 value) {
-     FM[fm_sel|(reg & 017)] = value;
-}
-#else
 #define get_reg(reg) FM[fm_sel|((reg) & 017)]
+
 #define set_reg(reg, value) FM[fm_sel|((reg) & 017)] = (value)
-#endif
 
 int Mem_read(int flag, int cur_context, int fetch, int mod) {
     t_addr addr;
@@ -11403,6 +11393,9 @@ fetch_opr:
                                   /* BLKI RDERA */
                               case 2:    /* PAG */
                               case 3:    /* CCA */
+                                  MB = 0;
+                                  if (Mem_write(pi_cycle, 0))
+                                      goto last;
                                   break;
 
                               case 4:    /* TIM */
@@ -11674,6 +11667,14 @@ last:
 #if KS_ITS
         if (QITS) {
             AB = eb_ptr + 0440;
+            if (PIH != 0) {
+fprintf(stderr, "PIH = %03o\n\r", PIH);
+               for(f = 0100; f != 0; f >>= 1) {
+                   if (f & PIH)
+                      break;
+                   AB += 3;
+               }
+            }
         } else
 #endif
         AB = ub_ptr + 0500;
@@ -12105,12 +12106,10 @@ do_byte_setup(int n, int wr, int *pos, int *sz)
     set_reg(n+2, val2);
 
     /* Read final value */
-//    ptr_flg = 1;
     if (Mem_read(0, 0, 0, wr)) {
         ptr_flg = BYF5 = 0;
         return 1;
     }
- //   ptr_flg = 0;
     return 0;
 }
 
@@ -12129,7 +12128,7 @@ load_byte(int n, uint64 *data, uint64 fill, int cnt)
     }
 
     /* Fetch Pointer word */
-ptr_flg = 1;
+    ptr_flg = 1;
     if (do_byte_setup(n, 0, &p, &s))
         goto back;
 
@@ -13233,7 +13232,7 @@ pag_reload = ac_stack = 0;
 fm_sel = small_user = user_addr_cmp = page_enable = 0;
 #else
 fm_sel = prev_ctx = user_addr_cmp = page_enable = t20_page = 0;
-//irq_enable = irq_flags = 0;
+irq_enable = irq_flags = 0;
 #if KL
 sect = cur_sect = pc_sect = 0;
 #endif
@@ -13245,6 +13244,7 @@ exec_map = 0;
 for(i=0; i < 128; dev_irq[i++] = 0);
 #if KS
 int_cur = int_val = 0;
+uba_reset();
 #endif
 
 sim_brk_types = SWMASK('E') | SWMASK('W') | SWMASK('R');

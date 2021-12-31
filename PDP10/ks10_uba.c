@@ -303,6 +303,28 @@ uba_clr_irq(DIB *idev)
     clr_interrupt(idev->uba_ctl<<2);
 }
 
+void
+uba_reset()
+{
+    DEVICE *dptr;
+    int     i;
+
+    /* Clear the Unibus map */
+    for (i = 0; i < 64; i++) {
+        uba_map[0][i] = 0;
+        uba_map[1][i] = 0;
+    }
+    uba_status[0] = 0;
+    uba_status[1] = 0;
+
+    for(i = 0; (dptr = sim_devices[i]) != NULL; i++) {
+        DIB *dibp = (DIB *) dptr->ctxt;
+        if (dibp == NULL)
+            continue;
+        /* Clear any pending interrupt */
+        dibp->uba_irq_pend = 0;
+    }
+}
 
 t_addr
 uba_get_vect(t_addr addr, int lvl, int *dev, int *new_lvl)

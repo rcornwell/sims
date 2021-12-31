@@ -192,6 +192,7 @@ t_stat cty_reset (DEVICE *dptr)
     M[CTY_OUT] = 0;
     M[KLINK_IN] = 0;
     M[KLINK_OUT] = 0;
+    M[CTY_SWITCH] = 0;
     return SCPE_OK;
 }
 

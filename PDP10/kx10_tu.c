@@ -229,7 +229,7 @@ MTAB                tu_mod[] = {
     {MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "br", "br",  &uba_set_br, uba_show_br,
               NULL, "Sets br of RH11" },
     {MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "ctl", "ctl",  &uba_set_ctl, uba_show_ctl,
-              NULL, "Sets br of RH11" },
+              NULL, "Sets uba of RH11" },
 #endif
     {0}
 };

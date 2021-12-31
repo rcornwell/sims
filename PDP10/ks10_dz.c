@@ -137,13 +137,13 @@ REG dz_reg[] = {
 
 MTAB dz_mod[] = {
     {MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "addr", "addr",  &uba_set_addr, uba_show_addr,
-              NULL, "Sets address of RH11" },
+              NULL, "Sets address of DZ11" },
     {MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "vect", "vect",  &uba_set_vect, uba_show_vect,
-              NULL, "Sets vect of RH11" },
+              NULL, "Sets vect of DZ11" },
     {MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "br", "br",  &uba_set_br, uba_show_br,
-              NULL, "Sets br of RH11" },
+              NULL, "Sets br of DZ11" },
     {MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "ctl", "ctl",  &uba_set_ctl, uba_show_ctl,
-              NULL, "Sets br of RH11" },
+              NULL, "Sets uba of DZ11" },
     { MTAB_XTD|MTAB_VDV|MTAB_VALR, 1, NULL, "DISCONNECT",
         &tmxr_dscln, NULL, &dz_desc, "Disconnect a specific line" },
     { UNIT_ATT, UNIT_ATT, "SUMMARY", NULL,
@@ -184,11 +184,15 @@ dz_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
     TMLN             *lp;
     int               i;
 
+    if ((dptr->units[0].flags & UNIT_DIS) != 0)
+        return 1;
     addr &= dibp->uba_mask;
+    sim_debug(DEBUG_DETAIL, dptr, "DZ%o write %06o %06o %o l=%o\n", base,
+             addr, data, access, dz_desc.lines);
     if (addr < 010 || addr > 047)
         return 1;
     base = ((addr & 070) - 010) >> 3;
-    if ((int32)(addr & 070) >= dz_desc.lines)
+    if (((base + 1) * 8) > dz_desc.lines)
         return 1;
     sim_debug(DEBUG_DETAIL, dptr, "DZ%o write %06o %06o %o\n", base,
              addr, data, access);
@@ -304,11 +308,13 @@ dz_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
     TMLN             *lp;
     int               i;
 
+    if ((dptr->units[0].flags & UNIT_DIS) != 0)
+        return 1;
     addr &= dibp->uba_mask;
     if (addr < 010 || addr > 047)
         return 1;
     base = ((addr & 070) - 010) >> 3;
-    if ((int32)(addr & 070) >= dz_desc.lines)
+    if (((base + 1) * 8) > dz_desc.lines)
         return 1;
     switch (addr & 06) {
     case 0:

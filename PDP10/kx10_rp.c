@@ -365,7 +365,7 @@ MTAB                rp_mod[] = {
     {MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "br", "br",  &uba_set_br, uba_show_br,
               NULL, "Sets br of RH11" },
     {MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "ctl", "ctl",  &uba_set_ctl, uba_show_ctl,
-              NULL, "Sets br of RH11" },
+              NULL, "Sets uba of RH11" },
 #endif
     {0}
 };
@@ -1146,6 +1146,8 @@ rp_boot(int32 unit_num, DEVICE * rptr)
        regs[RPDC] =  (int32)((rp_buf[0][04] >> 24) << DC_V_CY);
        len = (int)(((rp_buf[0][05] & 077) * 4) & RMASK);
     }
+if (len == 0)
+    len = 4;
     /* Read len sectors into address 1000 */
     addr = 01000;
     for (; len > 0; len--) {
@@ -1165,7 +1167,7 @@ rp_boot(int32 unit_num, DEVICE * rptr)
             }
         }
     }
-    /* Start location, and set up load infor */
+    /* Start location, and set up load info */
     word = 01000;
     M[036] = rhc->dib->uba_addr | (rhc->dib->uba_ctl << 18);
     M[037] =  unit_num;
@@ -1216,7 +1218,6 @@ t_stat rp_attach (UNIT *uptr, CONST char *cptr)
 {
     t_stat         r;
     DEVICE        *rptr;
-//    DIB           *dib;
     int            ctlr;
     uint16        *regs = (uint16 *)(uptr->up7);
 
@@ -1230,7 +1231,6 @@ t_stat rp_attach (UNIT *uptr, CONST char *cptr)
 #if KS
     ctlr = 0;
 #else
-//    dib = (DIB *) rptr->ctxt;
     for (ctlr = 0; rh[ctlr].dev_num != 0; ctlr++) {
         if (rh[ctlr].dev == rptr)
             break;
