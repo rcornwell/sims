@@ -2277,15 +2277,13 @@ t_stat ttyo_svc (UNIT *uptr)
     TMLN     *lp;
     int      f;
 
-    if ((tty_unit[0].flags & UNIT_ATT) == 0)                  /* attached? */
-        return SCPE_OK;
 
     sim_clock_coschedule(uptr, tmxr_poll);              /* continue poll */
 
     for (ln = 0; ln < tty_desc.lines; ln++) {
        struct _buffer  *optr = &tty_out[ln];
        lp = &tty_ldsc[ln];
-       if (lp->conn == 0) {
+       if (lp->conn == 0 || (tty_unit[0].flags & UNIT_ATT) == 0) {
            if (not_empty(optr)) {
                optr->out_ptr = optr->in_ptr = 0;
                tty_done[ln] = 1;
