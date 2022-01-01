@@ -225,7 +225,7 @@ uba_rh_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access) {
             data = (temp & 0177400) | data;
     }
 
-    switch(addr) {
+    switch(addr & 076) {
     case  000: /* CS1 */
         if (access == BYTE) {
             if (addr & 1) {
@@ -334,7 +334,7 @@ uba_rh_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access) {
         }
     }
 
-    switch(addr) {
+    switch(addr & 076) {
     case  000:  /* RPC   - 176700 - control */
         temp |= (uint16)(rhc->cs1 & (CS1_IE));
         temp |= (rhc->cda & 0600000) >> 8;

@@ -520,7 +520,6 @@ rp_rst(DEVICE *dptr)
         regs[RPER1] = 0;
         regs[RPER2] = 0;
         regs[RPER3] = 0;
-        regs[RPDC] = 0;
         uptr++;
     }
 }
@@ -669,7 +668,7 @@ rp_write(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 data) {
         regs[RPOF] = data & 0016277;
         break;
     case  012:  /* desired cylinder */
-        regs[RPDC] = data & 01777;
+        regs[RPDC] = (data & DC_M_CY) << DC_V_CY;
         break;
     case  015:  /* error register 3 */
         regs[RPER3] = data & 076210;
