@@ -187,8 +187,6 @@ dz_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
     if ((dptr->units[0].flags & UNIT_DIS) != 0)
         return 1;
     addr &= dibp->uba_mask;
-    sim_debug(DEBUG_DETAIL, dptr, "DZ%o write %06o %06o %o l=%o\n", base,
-             addr, data, access, dz_desc.lines);
     if (addr < 010 || addr > 047)
         return 1;
     base = ((addr & 070) - 010) >> 3;
@@ -381,7 +379,7 @@ t_stat dz_svc (UNIT *uptr)
         return SCPE_OK;
     ln = tmxr_poll_conn (&dz_desc);                     /* look for connect */
     if (ln >= 0) {                                      /* got one? rcv enb*/
-        dz_ring[(ln & 030) >> 7] |= (1 << (ln & 7));
+        dz_ring[(ln & 030) >> 3] |= (1 << (ln & 7));
         sim_debug(DEBUG_DETAIL, &dz_dev, "DC line connect %d\n", ln);
     }
     tmxr_poll_tx(&dz_desc);
