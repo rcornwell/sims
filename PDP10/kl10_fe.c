@@ -236,7 +236,7 @@ struct _dte_queue {
     uint16      data[258]; /* Data packet */
     uint16      sdev;      /* Secondary device code */
     uint16      sz;        /* Byte size */
-} dte_in[32], dte_out[32];
+} dte_in[16], dte_out[16];
 
 int32 dte_in_ptr;
 int32 dte_in_cmd;
@@ -589,7 +589,7 @@ t_stat dte_devio(uint32 dev, uint64 *data) {
          if (res & DTE_CO11DB) {
              sim_debug(DEBUG_CONO, &dte_dev, "CTY Ring 11 DB\n");
              dte_unit[0].STATUS |= DTE_11DB;
-             sim_activate(&dte_unit[0], 200);
+             sim_activate(&dte_unit[0], 100);
          }
          if (dte_unit[0].STATUS & (DTE_10DB|DTE_11DN|DTE_10DN|DTE_11ER|DTE_10ER))
              set_interrupt(dev, dte_unit[0].STATUS);
@@ -858,7 +858,7 @@ void dte_primary(UNIT *uptr) {
         return;
 
     /* Check if there is room for another packet */
-    if (((dte_in_ptr + 1) & 0x1f) == dte_in_cmd) {
+    if (((dte_in_ptr + 1) & 0xf) == dte_in_cmd) {
         /* If not reschedule ourselves */
         sim_activate(uptr, 100);
         return;
@@ -921,7 +921,7 @@ error:
                cnt--;
         }
         uptr->STATUS &= ~DTE_IND;
-        dte_in_ptr = (dte_in_ptr + 1) & 0x1f;
+        dte_in_ptr = (dte_in_ptr + 1) & 0xf;
     } else {
         /* Transfer from 10 */
         in->dptr = 0;
@@ -966,7 +966,7 @@ error:
             if (Mem_deposit_word(0, dte_dt10_off + PRI_CMTW_STS, &word))
                 goto error;
         } else {
-            dte_in_ptr = (dte_in_ptr + 1) & 0x1f;
+            dte_in_ptr = (dte_in_ptr + 1) & 0xf;
         }
     }
     word &= ~PRI_CMT_TOT;
@@ -989,7 +989,7 @@ dte_function(UNIT *uptr)
 
     /* Check if queue is empty */
     while (dte_in_cmd != dte_in_ptr) {
-        if (((dte_out_res + 1) & 0x1f) == dte_out_ptr) {
+        if (((dte_out_res + 1) & 0xf) == dte_out_ptr) {
             sim_debug(DEBUG_DATA, &dte_dev, "DTE: func out full %d %d\n",
                           dte_out_res, dte_out_ptr);
             return;
@@ -1017,8 +1017,13 @@ dte_function(UNIT *uptr)
                break;
 
         case PRI_EM2TI:            /* Replay to initial message. */
-        case PRI_EMLBE:            /* Acknowledge line */
                /* Should never get these */
+               break;
+
+        case PRI_EMLBE:            /* Acknowledge line */
+               data1[0] = 0;
+               if (dte_queue(PRI_EMLBE, dev, 1, data1) == 0)
+                  return;
                break;
 
         case PRI_EMHDR:            /* Here is date and time */
@@ -1110,8 +1115,10 @@ cty:
                    data1[0] = 0;
                    if (cmd->sz > 8)
                        cmd->dcnt += cmd->dcnt;
+
                    while (cmd->dptr < cmd->dcnt) {
                         ch = (int32)(cmd->data[cmd->dptr >> 1]);
+                            sim_debug(DEBUG_DATA, &dte_dev,"CTY data %o\n", ch);
                         if ((cmd->dptr & 1) == 0)
                             ch >>= 8;
                         ch &= 0177;
@@ -1128,6 +1135,7 @@ cty:
                    if (cmd->dptr != cmd->dcnt)
                        return;
                }
+
                break;
 
         case PRI_EMSNA:            /* Send all (ttys) */
@@ -1399,7 +1407,7 @@ cty:
         }
         /* Mark command as finished */
         cmd->cnt = 0;
-        dte_in_cmd = (dte_in_cmd + 1) & 0x1F;
+        dte_in_cmd = (dte_in_cmd + 1) & 0xf;
     }
 }
 
@@ -1483,7 +1491,7 @@ void dte_transfer(UNIT *uptr) {
        }
     }
     out->cnt = 0;
-    dte_out_ptr = (dte_out_ptr + 1) & 0x1f;
+    dte_out_ptr = (dte_out_ptr + 1) & 0xf;
 done:
     uptr->STATUS |= DTE_10DN;
     set_interrupt(DTE_DEVNUM, uptr->STATUS);
@@ -1624,7 +1632,7 @@ dte_input()
        /* While we have room for one more packet,
         * grab as much input as we can */
        for (ln = 0; ln < tty_desc.lines &&
-               ((dte_out_res + 1) & 0x1f) != dte_out_ptr; ln++) {
+               ((dte_out_res + 1) & 0xf) != dte_out_ptr; ln++) {
            struct _buffer *itty = &tty_in[ln];
            while (not_empty(itty)) {
               ch = itty->buff[itty->out_ptr];
@@ -1672,7 +1680,7 @@ dte_queue(int func, int dev, int dcnt, uint16 *data)
     struct   _dte_queue *out;
 
     /* Check if room in queue for this packet. */
-    if (((dte_out_res + 1) & 0x1f) == dte_out_ptr) {
+    if (((dte_out_res + 1) & 0xf) == dte_out_ptr) {
         sim_debug(DEBUG_DATA, &dte_dev, "DTE: %d %d out full\n", dte_out_res, dte_out_ptr);
         return 0;
     }
@@ -1689,7 +1697,7 @@ dte_queue(int func, int dev, int dcnt, uint16 *data)
          *dp++ = *data++;
     }
    /* Advance pointer to next function */
-   dte_out_res = (dte_out_res + 1) & 0x1f;
+   dte_out_res = (dte_out_res + 1) & 0xf;
    return 1;
 }
 
