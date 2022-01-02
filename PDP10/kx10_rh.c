@@ -191,6 +191,11 @@ int rh_map[] = { 0,   /* 776700 */
 #define DS_ATA          0100000         /* attention active */
 
 #if KS
+
+DEVICE  *rh_boot_dev = NULL;
+int      rh_boot_num = 0;
+
+
 int
 uba_rh_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access) {
     int             r = 0;

@@ -41,6 +41,65 @@
 #define LPST     us9
 #define LPCNT    us10
 
+/* LPCSRA   (765400) */
+
+#define CS1_GO     0000001    /* Go command */
+#define CS1_PAR    0000002    /* Enable Parity interrupt */
+#define CS1_V_FNC    2        /* Function shift */
+#define CS1_M_FNC    03       /* Function mask */
+#define FNC_PRINT    0        /* Print */
+#define FNC_TEST     1        /* Test */
+#define FNC_DVU      2        /* Load DAVFU */
+#define FNC_RAM      2        /* Load translation RAM */
+#define CS1_UBA    0000060    /* Upper Unibus address */
+#define CS1_IE     0000100    /* Interrupt enable */
+#define CS1_DONE   0000200    /* Done flag */
+#define CS1_INIT   0000400    /* Init */
+#define CS1_ECLR   0001000    /* Clear errors */
+#define CS1_DHOLD  0002000    /* Delimiter hold */
+#define CS1_ONL    0004000    /* Online */
+#define CS1_DVON   0010000    /* DAVFU online */
+#define CS1_PZERO  0020000    /* Page counter zero */
+#define CS1_ERR    0100000    /* Errors */
+
+/* LPCSRB   (765402) */
+#define CS2_GOE    0000001    /* Go error */
+#define CS2_DTE    0000002    /* DEM timing error */
+#define CS2_MTE    0000004    /* MSYN error */
+#define CS2_RPE    0000010    /* RAM parity error */
+#define CS2_MPE    0000020    /* Memory parity error */
+#define CS2_LPE    0000040    /* LPT parity error */
+#define CS2_DVOF   0000100    /* DAVFU not ready */
+#define CS2_OFFL   0000200    /* Offline */
+#define CS2_TEST   0003400    /* Test mode */
+#define CS2_OVFU   0004000    /* Optical VFU */
+#define CS2_PBIT   0010000    /* data parity bit */
+#define CS2_NRDY   0020000    /* Printer error */
+#define CS2_LA180  0040000    /* LA180 printer */
+#define CS2_VLD    0100000    /* Valid data */
+
+/* LPBA    (765404) */
+/* Unibus address */
+#define LPBA       u4         /* Save address in u4 */
+
+/* LPBC    (765406) */
+/* byte count */
+#define LPBC       u5         /* Save byte count in u5 */
+
+/* LPPAGC  (765410) */
+/* Page count */
+#define LINE       u6         /* Save line counter in u6 */
+
+/* LPRDAT  (765412) */
+/* RAM Data register */
+
+/* LPCOLC/LPCBUF (765414) */
+/* Column counter / Character buffer */
+
+/* LPCSUM/LPPDAT (765416) */
+/* Checksum / Printer data */
+
+
 #define EOFFLG   001      /* Tops 20 wants EOF */
 #define HDSFLG   002      /* Tell Tops 20 The current device status */
 #define ACKFLG   004      /* Post an acknowwledge message */
@@ -155,6 +214,9 @@ uint16          lp20_dvfu[] = {   /* Default VFU */
    lp20_reg      LPT register list
 */
 
+DIB lp20_dib = { 0775400, 037, 0745, 5, 3, &lp20_read, &lp20_write, &lp20_vect, 0, 0 };
+
+
 UNIT lp20_unit = {
     UDATA (&lp20_svc, UNIT_SEQ+UNIT_ATTABLE+UNIT_TEXT, 66), 100
     };
@@ -188,12 +250,12 @@ DEVICE lp20_dev = {
     1, 10, 31, 1, 8, 8,
     NULL, NULL, &lp20_reset,
     NULL, &lp20_attach, &lp20_detach,
-    NULL, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &lp20_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &lp20_help, NULL, NULL, &lp20_description
 };
 
 int
-dz_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
+lp20_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
 {
     struct pdp_dib   *dibp = (DIB *)dptr->ctxt;
     int               base;
@@ -206,33 +268,72 @@ dz_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
     sim_debug(DEBUG_DETAIL, dptr, "DZ%o write %06o %06o %o\n", base,
              addr, data, access);
 
+    switch (addr & 016) {
+    case 000:  /* LPCSA */
+            break;
+
+    case 002:  /* LPCSB */
+            break;
+
+    case 004:  /* LPBA */
+            if (access == BYTE) {
+               if (addr & 1)
+                   data = data | (uptr->LPBA & 0377);
+               else
+                   data = (uptr->LPBA & 0177400) | data;
+            }
+            uptr->LPBA = (uptr->LPBA & 060000) | (data & 0177777);
+            break;
+
+     case 006:  /* LPBC */
+            if (access == BYTE) {
+               if (addr & 1)
+                   data = data | (uptr->LPBC & 0377);
+               else
+                   data = (uptr->LPBC & 0177400) | data;
+            }
+            uptr->LPBC = (data & 0177777);
+            break;
+
+     case 010: /* LPPAGC */
+            if (access == BYTE) {
+               if (addr & 1)
+                   data = data | (uptr->LINE & 0377);
+               else
+                   data = (uptr->LINE & 0177400) | data;
+            }
+            uptr->LINE = (data & 0177777);
+     case 012: /* LPRDAT */
+     case 014: /* LPCOL/LPCBUF */
+     case 016: /* LPCSUM/LPPDAT */
+     }
     switch (addr & 06) {
     case 0:
             if (access == BYTE) {
-                temp = dz_csr[base];
+                temp = lp20_csr[base];
                 if (addr & 1)
                     data = data | (temp & 0377);
                 else
                     data = (temp & 0177400) | data;
             }
             if (data & CLR) {
-                dz_csr[base] = 0;
-                dz_recv[base].in_ptr = dz_recv[base].out_ptr = 0;
-                dz_recv[base].len = 0;
+                lp20_csr[base] = 0;
+                lp20_recv[base].in_ptr = lp20_recv[base].out_ptr = 0;
+                lp20_recv[base].len = 0;
                 /* Set up the current status */
 		ln = base << 3;
                 for (i = 0; i < 8; i++) {
-                    dz_flags[ln + i] &= ~LINE_EN;
+                    lp20_flags[ln + i] &= ~LINE_EN;
                 }
                 return 0;
             }
-            dz_csr[base] &= ~(TIE|SAE|RIE|MSE|CLR|MAINT);
-            dz_csr[base] |= data & (TIE|SAE|RIE|MSE|MAINT);
+            lp20_csr[base] &= ~(TIE|SAE|RIE|MSE|CLR|MAINT);
+            lp20_csr[base] |= data & (TIE|SAE|RIE|MSE|MAINT);
             break;
 
     case 2:
             ln = (data & 07) + (base << 3);
-            dz_ldsc[ln].rcve = (data & RXON) != 0;
+            lp20_ldsc[ln].rcve = (data & RXON) != 0;
             break;
 
     case 4:
@@ -240,11 +341,11 @@ dz_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
             ln = base << 3;
             /* Set up the current status */
             for (i = 0; i < 8; i++) {
-                if (dz_flags[ln + i] & LINE_EN)
+                if (lp20_flags[ln + i] & LINE_EN)
                     temp |= LINE_ENB << i;
-                if (dz_flags[ln + i] & DTR_FLAG)
+                if (lp20_flags[ln + i] & DTR_FLAG)
                     temp |= DTR << i;
-                dz_flags[ln + i] = 0;
+                lp20_flags[ln + i] = 0;
             }
             if (access == BYTE) {
                 if (addr & 1)
@@ -253,16 +354,16 @@ dz_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
                     data = (temp & 0177400) | data;
             }
             for (i = 0; i < 8; i++) {
-                lp = &dz_ldsc[ln + i];
+                lp = &lp20_ldsc[ln + i];
                 if ((data & (LINE_ENB << i)) != 0)
-                    dz_flags[ln + i] |= LINE_EN;
+                    lp20_flags[ln + i] |= LINE_EN;
                 if ((data & (DTR << i)) != 0)
-                    dz_flags[ln + i] |= DTR_FLAG;
-                if (dz_flags[ln + i] & DTR_FLAG)
+                    lp20_flags[ln + i] |= DTR_FLAG;
+                if (lp20_flags[ln + i] & DTR_FLAG)
                     tmxr_set_get_modem_bits(lp, TMXR_MDM_OUTGOING, 0, NULL);
                 else
                     tmxr_set_get_modem_bits(lp, 0, TMXR_MDM_OUTGOING, NULL);
-       sim_debug(DEBUG_DETAIL, dptr, "DZ%o sstatus %07o %o %o\n", base, data, i, dz_flags[ln+i]);
+       sim_debug(DEBUG_DETAIL, dptr, "DZ%o sstatus %07o %o %o\n", base, data, i, lp20_flags[ln+i]);
             }
             break;
 
@@ -271,44 +372,44 @@ dz_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
                 break;
             }
 
-            if ((dz_csr[base] & TRDY) == 0)
+            if ((lp20_csr[base] & TRDY) == 0)
                 break;
 
-            ln = ((dz_csr[base] & TLINE) >> TLINE_V) + (base << 3);
-            lp = &dz_ldsc[ln];
+            ln = ((lp20_csr[base] & TLINE) >> TLINE_V) + (base << 3);
+            lp = &lp20_ldsc[ln];
 
-            if ((dz_flags[ln] & LINE_EN) != 0 && lp->conn) {
+            if ((lp20_flags[ln] & LINE_EN) != 0 && lp->conn) {
                 int32  ch = data & 0377;
                 /* Try and send character */
                 t_stat r = tmxr_putc_ln(lp, ch);
                 /* If character did not send, queue it */
                 if (r == SCPE_STALL)
-                    dz_xmit[ln] = TRDY | ch;
+                    lp20_xmit[ln] = TRDY | ch;
              }
              break;
     }
 
-    dz_csr[base] &= ~TRDY;
-    if ((dz_csr[base] & MSE) == 0)
+    lp20_csr[base] &= ~TRDY;
+    if ((lp20_csr[base] & MSE) == 0)
         return 0;
-    ln = ((dz_csr[base] & TLINE) >> TLINE_V) + (base << 3);
+    ln = ((lp20_csr[base] & TLINE) >> TLINE_V) + (base << 3);
     /* See if there is another line ready */
     for (i = 0; i < 8; i++) {
         ln = (ln & 070) | ((ln + 1) & 07);
-        lp = &dz_ldsc[ln];
+        lp = &lp20_ldsc[ln];
         /* Connected and empty xmit_buffer */
-        if ((dz_flags[ln] & LINE_EN) != 0 && lp->conn && dz_xmit[ln] == 0) {
-            dz_csr[base] &= ~(TLINE);
-            dz_csr[base] |= TRDY | ((ln & 07) << TLINE_V);
+        if ((lp20_flags[ln] & LINE_EN) != 0 && lp->conn && lp20_xmit[ln] == 0) {
+            lp20_csr[base] &= ~(TLINE);
+            lp20_csr[base] |= TRDY | ((ln & 07) << TLINE_V);
             break;
         }
     }
-    dz_checkirq(dibp);
+    lp20_checkirq(dibp);
     return 0;
 }
 
 int
-dz_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
+lp20_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
 {
     struct pdp_dib   *dibp = (DIB *)dptr->ctxt;
     int               base;
@@ -318,51 +419,27 @@ dz_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
     int               i;
 
     addr &= dibp->uba_mask;
-    switch (addr & 06) {
-    case 0:
-            *data = dz_csr[base];
+    switch (addr & 016) {
+    case 000:  /* LPCSA */
+            *data = lp20_csr;
             break;
 
-    case 2:
+    case 002:  /* LPCSB */
             *data = 0;
-            if ((dz_csr[base] & MSE) == 0)
-                return 0;
-            dz_csr[base] &= ~(SA|RDONE);
-            if (!empty(&dz_recv[base])) {
-                *data = dz_recv[base].buff[dz_recv[base].out_ptr];
-                inco(&dz_recv[base]);
-                dz_recv[base].len = 0;
-            }
-            if (!empty(&dz_recv[base]))
-                dz_csr[base] |= RDONE;
-            dz_checkirq(dibp);
             break;
 
-    case 4:
-            temp = 0;
-            ln = base << 3;
-            /* Set up the current status */
-            for (i = 0; i < 8; i++) {
-     sim_debug(DEBUG_DETAIL, dptr, "DZ%o status %o %o\n", base, i, dz_flags[ln+i]);
-                if (dz_flags[ln + i] & LINE_EN)
-                    temp |= LINE_ENB << i;
-                if (dz_flags[ln + i] & DTR_FLAG)
-                    temp |= DTR << i;
-            }
-            *data = temp;
+    case 004:  /* LPBA */
+            *data = uptr->LPBA & 0177777;
             break;
 
-     case 6:
-            temp = (uint16)dz_ring[base];
-            ln = base << 3;
-            for (i = 0; i < 8; i++) {
-                lp = &dz_ldsc[ln + i];
-                if (lp->conn)
-                    temp |= CO << i;
-            }
-            dz_ring[base] = 0;
-            *data = temp;
+     case 006:  /* LPBC */
+            *data = uptr->LPBC;
             break;
+
+     case 010: /* LPPAGC */
+     case 012: /* LPRDAT */
+     case 014: /* LPCOL/LPCBUF */
+     case 016: /* LPCSUM/LPPDAT */
      }
      sim_debug(DEBUG_DETAIL, dptr, "DZ%o read %06o %06o %o\n", base,
              addr, *data, access);

@@ -1170,6 +1170,8 @@ if (len == 0)
     word = 01000;
     M[036] = rhc->dib->uba_addr | (rhc->dib->uba_ctl << 18);
     M[037] =  unit_num;
+    rh_boot_dev = rptr;
+    rh_boot_unit = unit_num;
 #elif KL
     int           sect;
     /* KL does not support readin, so fake it by reading in sectors 4 to 7 */

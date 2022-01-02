@@ -917,6 +917,8 @@ tu_boot(int32 unit_num, DEVICE * dptr)
     M[037] = 0;
     M[040] = regs[TUTC];
     PC = 01000;
+    rh_boot_dev = dptr;
+    rh_boot_unit = unit_num;
 #else
     r = sim_tape_rdrecf(uptr, &tu_buf[0][0], &reclen, TU_NUMFR);
     if (r != SCPE_OK)

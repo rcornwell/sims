@@ -191,7 +191,7 @@ uba_write(t_addr addr, int ctl, uint64 data, int access)
 int
 uba_read_npr(t_addr addr, uint16 ctl, uint64 *data)
 {
-    int ubm = uba_device[ctl];
+    int     ubm = uba_device[ctl];
     uint32  map = uba_map[ubm][(077) & (addr >> 11)];
     if ((addr & 0400000) != 0)
         return 0;
@@ -207,8 +207,8 @@ uba_read_npr(t_addr addr, uint16 ctl, uint64 *data)
 int
 uba_write_npr(t_addr addr, uint16 ctl, uint64 data)
 {
-    int ubm = uba_device[ctl];
-    t_addr oaddr = addr;
+    int     ubm = uba_device[ctl];
+    t_addr  oaddr = addr;
     uint32  map = uba_map[ubm][(077) & (addr >> 11)];
     if ((addr & 0400000) != 0)
         return 0;
@@ -225,29 +225,95 @@ uba_write_npr(t_addr addr, uint16 ctl, uint64 data)
 int
 uba_read_npr_byte(t_addr addr, uint16 ctl, uint16 *data)
 {
-    int ubm = uba_device[ctl];
-    return 0;
+    int     ubm = uba_device[ctl];
+    uint32  map = uba_map[ubm][(077) & (addr >> 11)];
+    uint64  wd;
+    if ((addr & 0400000) != 0)
+        return 0;
+    if ((map & MAP_VALID) == 0)
+        return 0;
+    addr = (map & PAGE_MASK) | (addr >> 2) & 0777;
+    wd = M[addr];
+    if (addr & 02)
+        wd >>= 18;
+    if (addr & 01)
+        wd >>= 8;
+    *data = (uint16)(wd & 0377);
+    return 1;
 }
 
 int
 uba_write_npr_byte(t_addr addr, uint16 ctl, uint16 data)
 {
-    int ubm = uba_device[ctl];
-    return 0;
+    int     ubm = uba_device[ctl];
+    uint32  map = uba_map[ubm][(077) & (addr >> 11)];
+    uint64  wd;
+    uint64  msk;
+    uint64  buf;
+    if ((addr & 0400000) != 0)
+        return 0;
+    if ((map & MAP_VALID) == 0)
+        return 0;
+    addr = (map & PAGE_MASK) | (addr >> 2) & 0777;
+    msk = 0377;
+    buf = (uint64)(data & msk);
+    wd = M[addr];
+    if (addr & 02) {
+        buf <<= 18;
+        msk <<= 18;
+    }
+    if (addr & 01) {
+        buf <<= 8;
+        msk <<= 8;
+    }
+    wd &= ~msk;
+    wd |= buf;
+    M[addr] = wd;
+    return 1;
 }
 
 int
 uba_read_npr_word(t_addr addr, uint16 ctl, uint16 *data)
 {
-    int ubm = uba_device[ctl];
-    return 0;
+    int     ubm = uba_device[ctl];
+    uint32  map = uba_map[ubm][(077) & (addr >> 11)];
+    uint64  wd;
+    if ((addr & 0400000) != 0)
+        return 0;
+    if ((map & MAP_VALID) == 0)
+        return 0;
+    addr = (map & PAGE_MASK) | (addr >> 2) & 0777;
+    wd = M[addr];
+    if (addr & 02)
+        wd >>= 18;
+    *data = (uint16)(wd & 0177777);
+    return 1;
 }
 
 int
 uba_write_npr_word(t_addr addr, uint16 ctl, uint16 data)
 {
-    int ubm = uba_device[ctl];
-    return 0;
+    int     ubm = uba_device[ctl];
+    uint32  map = uba_map[ubm][(077) & (addr >> 11)];
+    uint64  wd;
+    uint64  msk;
+    uint64  buf;
+    if ((addr & 0400000) != 0)
+        return 0;
+    if ((map & MAP_VALID) == 0)
+        return 0;
+    addr = (map & PAGE_MASK) | (addr >> 2) & 0777;
+    msk = 0177777;
+    buf = (uint64)(data & msk);
+    wd = M[addr];
+    if (addr & 02) {
+        buf <<= 18;
+        msk <<= 18;
+    }
+    wd &= ~msk;
+    wd |= buf;
+    M[addr] = wd;
+    return 1;
 }
 
 void
@@ -273,9 +339,10 @@ void
 uba_clr_irq(DIB *idev)
 {
     DEVICE *dptr;
-    int ubm = uba_device[idev->uba_ctl];
-    int pi;
-    int i;
+    int     ubm = uba_device[idev->uba_ctl];
+    int     pi;
+    int     i;
+    int     j;
     int     high = 0;
     
     if (ubm < 0)
@@ -288,6 +355,7 @@ uba_clr_irq(DIB *idev)
     }
     /* Save in device temp the irq value */
     idev->uba_irq_pend = 0;
+    clr_interrupt(idev->uba_ctl<<2);
     for(i = 0; (dptr = sim_devices[i]) != NULL; i++) {
         DIB *dibp = (DIB *) dptr->ctxt;
         if (dibp == NULL)
@@ -295,12 +363,16 @@ uba_clr_irq(DIB *idev)
         /* If device is pending on this level save */
         if (dibp->uba_ctl == idev->uba_ctl &&
                 dibp->uba_irq_pend != 0) {
+            pi = 0;
+            for (j = 0200; j != 0; j>>=2, pi++) {
             /* At least one, no need to continue */
-            return;
+                 if ((dibp->uba_irq_pend & (0200 >> pi)) != 0) {
+                     set_interrupt(dibp->uba_ctl<<2, pi);
+                     return;
+                 }
+            }
         }
     }
-    /* Nothing, so clear it */
-    clr_interrupt(idev->uba_ctl<<2);
 }
 
 void

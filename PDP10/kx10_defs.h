@@ -560,6 +560,7 @@ typedef struct pdp_dib DIB;
 
 void    cty_wakeup();
 void    cty_interrupt();
+void    cty_execute(int addr);
 t_stat  cty_reset (DEVICE *dptr);
 
 
@@ -601,6 +602,8 @@ void    rh_writecw(struct rh_if *rh, int nxm);
 void    rh_finish_op(struct rh_if *rh, int flags);
 int     rh_read(struct rh_if *rh);
 int     rh_write(struct rh_if *rh);
+DEVICE  *rh_boot_dev;
+int     rh_boot_unit;
 #else
 extern t_stat (*dev_tab[128])(uint32 dev, t_uint64 *data);
 

@@ -42,25 +42,25 @@
 #define BOOT_DRIVE      037
 #define MAG_FMT         040
 
-#define KA_FAIL       0000000000001      /* Keep Alive failed to change */
-#define FORCE_RELOAD  0000000000002      /* Force reload */
-#define PWR_FAIL1     0000000000004      /* Power failure */
-#define BOOT_SW       0000000000010      /* Boot switch */
-#define KEEP_ALIVE    0000000077400      /* Keep alive */
-#define TRAPS_ENB     0000400000000      /* Traps enabled */
-#define ONE_MS        0001000000000      /* 1ms enabled */
-#define CACHE_ENB     0002000000000      /* Cache enable */
-#define DP_PAR_ENB    0004000000000      /* DP parity error enable */
-#define CRAM_PAR_ENB  0010000000000      /* CRAM parity error enable */
-#define PAR_ENB       0020000000000      /* Parity error detect enable */
-#define KLINK_ENB     0040000000000      /* Klink active */
-#define EX_KEEP_ALV   0100000000000      /* Examine Keep Alive */
-#define RELOAD        0200000000000      /* Reload */
+#define KA_FAIL       0000000000001LL      /* Keep Alive failed to change */
+#define FORCE_RELOAD  0000000000002LL      /* Force reload */
+#define PWR_FAIL1     0000000000004LL      /* Power failure */
+#define BOOT_SW       0000000000010LL      /* Boot switch */
+#define KEEP_ALIVE    0000000177400LL      /* Keep alive */
+#define TRAPS_ENB     0000040000000LL      /* Traps enabled */
+#define ONE_MS        0000100000000LL      /* 1ms enabled */
+#define CACHE_ENB     0000200000000LL      /* Cache enable */
+#define DP_PAR_ENB    0000400000000LL      /* DP parity error enable */
+#define CRAM_PAR_ENB  0001000000000LL      /* CRAM parity error enable */
+#define PAR_ENB       0002000000000LL      /* Parity error detect enable */
+#define KLINK_ENB     0004000000000LL      /* Klink active */
+#define EX_KEEP_ALV   0010000000000LL      /* Examine Keep Alive */
+#define RELOAD        0020000000000LL      /* Reload */
 
-#define CTY_CHAR      0000000000400      /* Character pending */
-#define KLINK_CHAR    0000000000400      /* Character pending */
-#define KLINK_ACT     0000000001000      /* KLINK ACTIVE */
-#define KLINK_HANG    0000000001400      /* KLINK HANGUP */
+#define CTY_CHAR      0000000000400LL      /* Character pending */
+#define KLINK_CHAR    0000000000400LL      /* Character pending */
+#define KLINK_ACT     0000000001000LL      /* KLINK ACTIVE */
+#define KLINK_HANG    0000000001400LL      /* KLINK HANGUP */
 
 extern int32 tmxr_poll;
 t_stat ctyi_svc (UNIT *uptr);
@@ -71,6 +71,8 @@ t_stat cty_stop_os (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat tty_set_mode (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat cty_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr);
 const char *cty_description (DEVICE *dptr);
+uint64 keep_alive = 0;
+int    keep_num = 0;
 
 static int32   rtc_tps = 1;
 
@@ -85,7 +87,7 @@ MTAB cty_mod[] = {
 
 UNIT cty_unit[] = {
     { UDATA (&ctyo_svc, TT_MODE_7B, 0), 4000},
-    { UDATA (&ctyi_svc, TT_MODE_7B|UNIT_DIS, 0), 3000 },
+    { UDATA (&ctyi_svc, TT_MODE_7B|UNIT_DIS, 0), 4000 },
     { UDATA (&ctyrtc_srv, UNIT_IDLE|UNIT_DIS, 0), 1000 }
     };
 
@@ -117,21 +119,25 @@ t_stat ctyi_svc (UNIT *uptr)
     uint64   buffer;
     int32    ch;
 
-    sim_clock_coschedule (uptr, tmxr_poll * 2);
+    sim_clock_coschedule (uptr, tmxr_poll * 3);
 
     if (Mem_read_word(CTY_IN, &buffer, 0))
         return SCPE_OK;
+    sim_debug(DEBUG_DETAIL, &cty_dev, "CTY Read %012llo\n", buffer);
     if (buffer & CTY_CHAR)
         return SCPE_OK;
-    sim_debug(DEBUG_DETAIL, &cty_dev, "CTY Read %012llo\n", buffer);
     ch = sim_poll_kbd ();
     if (ch & SCPE_KFLAG) {
         ch = 0177 & sim_tt_inpcvt(ch, TT_GET_MODE (cty_unit[0].flags));
         sim_debug(DEBUG_DETAIL, &cty_dev, "CTY char %o '%c'\n", ch,
                              ((ch > 040 && ch < 0177)? ch: '.'));
         buffer = (uint64)(ch) | CTY_CHAR;
-        if (Mem_write_word(CTY_IN, &buffer, 0) == 0)
+        if (Mem_write_word(CTY_IN, &buffer, 0) == 0) {
             cty_interrupt();
+        } else {
+            sim_debug(DEBUG_DETAIL, &cty_dev, "CTY write failed %o '%c'\n", ch,
+                             ((ch > 040 && ch < 0177)? ch: '.'));
+        }
     }
     return SCPE_OK;
 }
@@ -156,6 +162,9 @@ t_stat ctyo_svc (UNIT *uptr)
         buffer = 0;
         if (Mem_write_word(CTY_OUT, &buffer, 0) == 0) {
             cty_interrupt();
+        } else {
+            sim_debug(DEBUG_DETAIL, &cty_dev, "CTY write failed %o '%c'\n", ch,
+                             ((ch > 040 && ch < 0177)? ch: '.'));
         }
     }
 
@@ -176,9 +185,38 @@ t_stat ctyo_svc (UNIT *uptr)
 t_stat
 ctyrtc_srv(UNIT * uptr)
 {
+    uint64   buffer;
 
     sim_activate_after(uptr, 1000000/rtc_tps);
+    if (Mem_read_word(STATUS, &buffer, 0))
+        return SCPE_OK;
+    if (buffer & ONE_MS) {
+       fprintf(stderr, "1MS\n\r");
+    }
+    if (buffer & RELOAD && rh_boot_dev != NULL) {
+        reset_all(1);   /* Reset everybody */
+        if (rh_boot_dev->boot(rh_boot_unit, rh_boot_dev) != SCPE_OK)
+            return SCPE_STOP;
+    }
     /* Check if clock requested */
+    if (buffer & EX_KEEP_ALV) {
+        if (keep_alive != (buffer & KEEP_ALIVE)) {
+            keep_alive = buffer;
+            keep_num = 0;
+        } else {
+            if (++keep_num >= 15) {
+               keep_num = 0;
+               buffer &= ~0377LL;
+               buffer |= 1;
+               cty_execute(071);
+               M[STATUS] = buffer;
+               M[CTY_IN] = 0;
+               M[CTY_OUT] = 0;
+               M[KLINK_IN] = 0;
+               M[KLINK_OUT] = 0;
+            }
+        }
+    }
     return SCPE_OK;
 }
 

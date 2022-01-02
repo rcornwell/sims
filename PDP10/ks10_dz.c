@@ -209,7 +209,7 @@ dz_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
                 dz_recv[base].in_ptr = dz_recv[base].out_ptr = 0;
                 dz_recv[base].len = 0;
                 /* Set up the current status */
-		ln = base << 3;
+                ln = base << 3;
                 for (i = 0; i < 8; i++) {
                     dz_flags[ln + i] &= ~LINE_EN;
                 }
@@ -286,7 +286,7 @@ dz_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
         ln = (ln & 070) | ((ln + 1) & 07);
         lp = &dz_ldsc[ln];
         /* Connected and empty xmit_buffer */
-        if ((dz_flags[ln] & LINE_EN) != 0 && lp->conn && dz_xmit[ln] == 0) {
+        if ((dz_flags[ln] & LINE_EN) != 0 && dz_xmit[ln] == 0) {
             dz_csr[base] &= ~(TLINE);
             dz_csr[base] |= TRDY | ((ln & 07) << TLINE_V);
             break;

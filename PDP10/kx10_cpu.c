@@ -183,6 +183,7 @@ uint64  int_cur;                              /* Current interval */
 int     t20_page;                             /* Tops 20 paging selected */
 int     ptr_flg;                              /* Access to pointer value */
 int     extend = 0;                           /* Process extended instruction */
+int     fe_xct = 0;                           /* Execute instruction at address */
 #elif KL
 int     pi_vect;                              /* Last pi location used for IRQ */
 int     ext_ac;                               /* Extended instruction AC */
@@ -1762,7 +1763,16 @@ void check_apr_irq() {
 void cty_interrupt()
 {
      irq_flags |= CON_IRQ;
+        sim_debug(DEBUG_IRQ, &cpu_dev, "cty interrupt %06o\n", irq_enable);
      check_apr_irq();
+}
+
+/*
+ * Execute instruction at location 071.
+ */
+void cty_execute(int addr)
+{
+     fe_xct = addr;
 }
 
 int
@@ -4386,6 +4396,12 @@ fetch:
               one_p_arm = 1;
               FLAGS &= ~ONEP;
            }
+        }
+#endif
+#if KS
+        if (fe_xct != 0) {
+           AB = (t_addr)fe_xct;
+           fe_xct = 0;
         }
 #endif
        if (Mem_read(pi_cycle | uuo_cycle, 1, 1, 0)) {
@@ -10676,7 +10692,7 @@ skip_op:
                                  /* Bit 5 for TOPS-20 paging */
 #if KS_ITS
                                  if (QITS)
-                                     MB |= 00020000000000LL;
+                                     MB |= BIT2;
 #endif
                                  MB |= (uint64)((apr_serial == -1) ? DEF_SERIAL : apr_serial);
                                  sim_debug(DEBUG_DATAIO, &cpu_dev, "APRID %012llo\n", MB);
@@ -11137,6 +11153,7 @@ skip_op:
                            }
                            break;
 
+                          /* 70400 */
                   case 004:       /* UMOVE */
                            xct_flag = 4;
                            AB &= RMASK;
@@ -11147,6 +11164,7 @@ skip_op:
                            xct_flag = 0;
                            break;
 
+                          /* 70500 */
                   case 005:       /* UMOVEM */
                            MB = BR;
                            AB &= RMASK;
@@ -11248,6 +11266,67 @@ its_wr:
                            if (uba_write(AB, ctl, MB, WORD))
                                goto io_fault;
                            AR = MB;
+                           break;
+
+                  case 016:       /* BLTBU */
+                  case 017:       /* BLTUB */
+                           AR = get_reg(AC);
+                           BR = AB;
+                           /* Precompute end of transfer address */
+                           AD = (CM(AR) + BR + 1) & RMASK;
+                           AD = ((AR + (AD << 18)) & LMASK) | ((AR + AD) & RMASK);
+                           set_reg(AC, AOB(AD));
+                           do {
+                               AIO_CHECK_EVENT;                /* queue async events */
+                               if (sim_interval <= 0) {
+                                   if ((reason = sim_process_event()) != SCPE_OK) {
+                                       f_pc_inh = 1;
+                                       f_load_pc = 0;
+                                       f_inst_fetch = 0;
+                                       set_reg(AC, AR);
+                                       break;
+                                   }
+                                   /* Allow for interrupt */
+                                   if (pi_pending) {
+                                       pi_rq = check_irq_level();
+                                       if (pi_rq) {
+                                           f_pc_inh = 1;
+                                           f_load_pc = 0;
+                                           f_inst_fetch = 0;
+                                           set_reg(AC, AR);
+                                           break;
+                                       }
+                                   }
+                               }
+                               AB = (AR >> 18) & RMASK;
+                               BYF5 = 1;
+                               if (Mem_read(0, 0, 0, 0)) {
+                                    BYF5 = 0;
+                                    f_pc_inh = 1;
+                                    set_reg(AC, AR);
+                                    goto last;
+                               }
+#define BMASK1  0776000000000LL
+#define BMASK2  0001774000000LL
+#define BMASK3  0000003770000LL
+#define BMASK4  0000000007760LL
+                               if (IR & 1) {
+                                   MB = ((MB << 10) & BMASK1) | ((MB >> 6) & BMASK2) |
+                                        ((MB << 12) & BMASK3) | ((MB >> 4) & BMASK4);
+                               } else {
+                                   MB = ((MB & BMASK1) >> 10) | ((MB & BMASK2) << 6) |
+                                        ((MB & BMASK3) >> 12) | ((MB & BMASK4) << 4);
+                               }
+                               AB = (AR & RMASK);
+                               BYF5 = 0;
+                               if (Mem_write(0, 0)) {
+                                    f_pc_inh = 1;
+                                    set_reg(AC, AR);
+                                    goto last;
+                               }
+                               AD = (AR & RMASK) + CM(BR) + 1;
+                               AR = AOB(AR);
+                           } while ((AD & C1) == 0);
                            break;
 
                   case 020:       /* TIOEB */
