@@ -291,6 +291,12 @@ uint8  mt_startcmd(UNIT *uptr,  uint8 cmd) {
          return 0;
 
     case 0x3:              /* Control */
+         if (cmd == 0x03) {
+             uptr->SNS = 0;
+             return SNS_CHNEND|SNS_DEVEND;
+         }
+         /* Fall through */
+
     case 0xb:              /* Control */
          uptr->SNS = 0;
          if ((uptr->flags & UNIT_ATT) == 0) {
