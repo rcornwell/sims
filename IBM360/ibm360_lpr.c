@@ -35,7 +35,8 @@
 
 #ifdef NUM_DEVS_LPR
 #define UNIT_LPR       UNIT_ATTABLE | UNIT_DISABLE | UNIT_SEQ
-
+#define UNIT_V_FCB     (UNIT_V_UF + 0)
+#define UNIT_M_FCB     (3 << UNIT_V_FCB)
 
 /* u3 hold command and status information */
 #define CHN_SNS        0x04       /* Sense command */
@@ -85,6 +86,7 @@ struct _lpr_data
 {
     uint8               lbuff[145];       /* Output line buffer */
     uint8               fcs[256];         /* Form control buffer */
+    CONST uint16       *fcb;              /* Pointer to forms control */
 }
 lpr_data[NUM_DEVS_LPR];
 
@@ -97,6 +99,8 @@ t_stat              lpr_attach(UNIT *, CONST char *);
 t_stat              lpr_detach(UNIT *);
 t_stat              lpr_setlpp(UNIT *, int32, CONST char *, void *);
 t_stat              lpr_getlpp(FILE *, UNIT *, int32, CONST void *);
+t_stat              lpr_setfcb(UNIT *, int32, CONST char *, void *);
+t_stat              lpr_getfcb(FILE *, UNIT *, int32, CONST void *);
 t_stat              lpr_help(FILE *, DEVICE *, UNIT *, int32, const char *);
 const char         *lpr_description(DEVICE *dptr);
 
@@ -118,6 +122,8 @@ MTAB                lpr_mod[] = {
        &lpr_setlpp, &lpr_getlpp, NULL, "Number of lines per page"},
     {MTAB_XTD|MTAB_VUN|MTAB_VALR, 0, "DEV", "DEV", &set_dev_addr,
         &show_dev_addr, NULL},
+    {MTAB_XTD|MTAB_VDV|MTAB_VALR|MTAB_NC, 0, "FCB", "FCB={LEGACY|STD1)",
+       &lpr_setfcb, &lpr_getfcb, NULL, NULL },
     {0}
 };
 
@@ -130,6 +136,33 @@ DEVICE              lpr_dev = {
     &lpr_dib, DEV_UADDR | DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &lpr_help, NULL, NULL, &lpr_description
 };
+
+static CONST char *fcb_name[] = { "legacy", "std1", NULL};
+
+static CONST uint16 legacy[] = {
+/* 1      2      3      4      5      6      7      8      9     10       lines  */
+0x800, 0x000, 0x000, 0x000, 0x000, 0x000, 0x400, 0x000, 0x000, 0x000, /*  1 - 10 */
+0x000, 0x000, 0x200, 0x000, 0x000, 0x000, 0x000, 0x000, 0x100, 0x000, /* 11 - 20 */
+0x000, 0x000, 0x000, 0x000, 0x080, 0x000, 0x000, 0x000, 0x000, 0x000, /* 21 - 30 */
+0x040, 0x000, 0x000, 0x000, 0x000, 0x000, 0x020, 0x000, 0x000, 0x000, /* 31 - 40 */
+0x000, 0x000, 0x010, 0x000, 0x000, 0x000, 0x000, 0x000, 0x004, 0x000, /* 41 - 50 */
+0x000, 0x000, 0x000, 0x000, 0x002, 0x000, 0x000, 0x000, 0x000, 0x000, /* 51 - 60 */
+0x001, 0x000, 0x008, 0x000, 0x000, 0x000, 0x1000 };                   /* 61 - 66 */
+/*
+    PROGRAMMMING NOTE:  the below cctape value SHOULD match
+                        the same corresponding fcb value!
+*/
+static CONST uint16 std1[] = {
+/* 1      2      3      4      5      6      7      8      9     10       lines  */
+0x800, 0x000, 0x000, 0x000, 0x000, 0x000, 0x400, 0x000, 0x000, 0x000, /*  1 - 10 */
+0x000, 0x000, 0x200, 0x000, 0x000, 0x000, 0x000, 0x000, 0x100, 0x000, /* 11 - 20 */
+0x000, 0x000, 0x000, 0x000, 0x080, 0x000, 0x000, 0x000, 0x000, 0x000, /* 21 - 30 */
+0x040, 0x000, 0x000, 0x000, 0x000, 0x000, 0x020, 0x000, 0x000, 0x000, /* 31 - 40 */
+0x000, 0x000, 0x010, 0x000, 0x000, 0x000, 0x000, 0x000, 0x008, 0x000, /* 41 - 50 */
+0x000, 0x000, 0x000, 0x000, 0x004, 0x000, 0x000, 0x000, 0x000, 0x000, /* 51 - 60 */
+0x002, 0x000, 0x001, 0x000, 0x000, 0x000, 0x1000 };                   /* 61 - 66 */
+
+static CONST uint16 *fcb_ptr[] = { legacy, std1, NULL, NULL};
 
 
 /* Line printer routines
@@ -165,6 +198,54 @@ lpr_getlpp(FILE *st, UNIT *uptr, int32 v, CONST void *desc)
     return SCPE_OK;
 }
 
+t_stat
+lpr_setfcb (UNIT *uptr, int32 val, CONST char *gptr, void *desc)
+{
+    int      u = (uptr - lpr_unit);
+    char     gbuf[CBUFSIZE], *cptr;
+    char    *fname, *cp;
+    int      i, j;
+    CONST uint16   *fcb;
+
+    if (!gptr || !*gptr)
+        return SCPE_ARG;
+
+    gbuf[sizeof(gbuf)-1] = '\0';
+    strncpy (gbuf, gptr, sizeof(gbuf)-1);
+    cptr = gbuf;
+
+    fname = strchr (cptr, '=');
+    if (fname)
+        *fname++ = '\0';
+
+    for (cp = cptr; *cp; cp++)
+        *cp = (char)toupper (*cp);
+
+    for (i = 0; fcb_name[i] != NULL; i++) {
+        if (strncmp(cptr, fcb_name[i], strlen(cptr)) == 0) {
+            uptr->flags &= ~(UNIT_M_FCB);
+            uptr->flags |= i << UNIT_V_FCB;
+            fcb = fcb_ptr[i];
+            lpr_data[u].fcb = fcb;
+            for (j = 0; (fcb[j] & 0x1000) == 0; j++);
+            uptr->capac = j;
+            return SCPE_OK;
+        }
+    }
+    return SCPE_OK;
+}
+
+t_stat
+lpr_getfcb(FILE *st, UNIT *uptr, int32 v, CONST void *desc)
+{
+    int      u = (uptr - lpr_unit);
+
+    if (uptr == NULL)
+       return SCPE_IERR;
+    fprintf(st, "FCB=%s", fcb_name[(uptr->flags & UNIT_M_FCB) >> UNIT_V_FCB]);
+    return SCPE_OK;
+}
+
 void
 print_line(UNIT * uptr)
 {
@@ -173,7 +254,9 @@ print_line(UNIT * uptr)
     int                 i;
     int                 u = (uptr - lpr_unit);
     int                 l = (uptr->CMD >> 3) & 0x1f;
-    int                 f = 1;
+    int                 f;
+    int                 rows;
+    int                 mask;
 
     /* Dump buffer if full */
     if (uptr->CMD & LPR_FULL) {
@@ -199,96 +282,61 @@ print_line(UNIT * uptr)
         sim_fwrite(&out, 1, i, uptr->fileref);
         uptr->pos += i;
         sim_debug(DEBUG_DETAIL, &lpr_dev, "%s\n", out);
+        memset(&lpr_data[u].lbuff[0], 0, 144);
     }
 
     if (l < 4) {
         while(l != 0) {
             sim_fwrite("\r\n", 1, 2, uptr->fileref);
-            f = 0;
             uptr->pos += 2;
-            uptr->LINE++;
-            if (((uint32)uptr->LINE) > uptr->capac)
-                break;
+            if ((uptr->CMD & 03) == 0x1) {
+               if ((lpr_data[u].fcb[uptr->LINE] & (0x1000 >> 9)) != 0)
+                  uptr->SNS |= SNS_CHN9;
+               if ((lpr_data[u].fcb[uptr->LINE] & (0x1000 >> 12)) != 0)
+                  uptr->SNS |= SNS_CHN12;
+            }
+            if ((lpr_data[u].fcb[uptr->LINE] & 0x1000) != 0 ||
+                 ((uint32)uptr->LINE) >= uptr->capac) {
+               if (f)
+                   sim_fwrite("\r\n", 1, 2, uptr->fileref);
+               sim_fwrite("\f", 1, 1, uptr->fileref);
+               uptr->LINE = 0;
+            } else {
+               uptr->LINE++;
+            }
             l--;
-        }
-        if ((t_addr)uptr->LINE > uptr->capac) {
-           if (f)
-               sim_fwrite("\r\n", 1, 2, uptr->fileref);
-           sim_fwrite("\f", 1, 1, uptr->fileref);
-           uptr->LINE = 1;
         }
         return;
     }
 
-    switch (l & 0xf) {
-    case 0:     /* Not available */
-        break;
-    case 1:
-    case 2:     /* Skip to top of form */
-    case 12:
-        uptr->LINE = uptr->capac+1;
-        break;
+    mask = 0x1000 >> (1 & 0xf);
+    f = 0;     /* Flag if we skipped to new page */
+    l = 0;     /* What line we should be on */
 
-    case 3:     /* Even lines */
-        if ((uptr->LINE & 1) == 1) {
-            sim_fwrite("\r\n", 1, 2, uptr->fileref);
-            f = 0;
-            uptr->pos += 2;
-            uptr->LINE++;
-        }
-        break;
-    case 4:     /* Odd lines */
-        if ((uptr->LINE & 1) == 0) {
-            sim_fwrite("\r\n", 1, 2, uptr->fileref);
-            f = 0;
-            uptr->pos += 2;
-            uptr->LINE++;
-        }
-        break;
-    case 5:     /* Half page */
-        while((uptr->LINE != (int)(uptr->capac/2)) ||
-              (uptr->LINE != (int)(uptr->capac))) {
-            sim_fwrite("\r\n", 1, 2, uptr->fileref);
-            f = 0;
-            uptr->pos += 2;
-            uptr->LINE++;
-            if (uptr->LINE > (int)uptr->capac)
-                break;
-        }
-        break;
-    case 6:     /* 1/4 Page */
-        while((uptr->LINE != (int)(uptr->capac/4)) ||
-              (uptr->LINE != (int)(uptr->capac/2)) ||
-              (uptr->LINE != (int)(uptr->capac/2+uptr->capac/4)) ||
-              (uptr->LINE != (int)(uptr->capac))) {
-            sim_fwrite("\r\n", 1, 2, uptr->fileref);
-            f = 0;
-            uptr->pos += 2;
-            uptr->LINE++;
-            if (uptr->LINE > (int)uptr->capac)
-                break;
-        }
-        break;
-    case 7:     /* User defined, now 1 line */
-    case 8:
-    case 9:
-    case 10:
-    case 11:
-        sim_fwrite("\r\n", 1, 2, uptr->fileref);
-        f = 0;
-        uptr->pos += 2;
-        uptr->LINE++;
-        break;
+    for (i = uptr->LINE; (lpr_data[u].fcb[i] & mask) == 0 &&
+                            uptr->LINE != i; i++) {
+         l++;
+         if ((lpr_data[u].fcb[i] & 0x1000) != 0 ||
+               ((uint32)i) >= uptr->capac) {
+             sim_fwrite("\r\n\f", 1, 3, uptr->fileref);
+             uptr->pos += 3;
+             f = 0;
+             l = 0;
+         }
     }
 
-    if (uptr->LINE > (int)uptr->capac) {
-       if (f)
+    /* If past end of form clear row */
+    if (f) {
+       uptr->LINE = 0;
+    }
+
+    if ((lpr_data[u].fcb[i] & mask) != 0) {
+        while (l-- > 0) {
            sim_fwrite("\r\n", 1, 2, uptr->fileref);
-       sim_fwrite("\f", 1, 1, uptr->fileref);
-       uptr->LINE = 1;
+           uptr->pos += 2;
+           uptr->LINE++;
+        }
     }
-
-    memset(&lpr_data[u].lbuff[0], 0, 144);
 }
 
 
@@ -426,7 +474,10 @@ lpr_srv(UNIT *uptr) {
            set_devattn(addr, SNS_DEVEND|SNS_UNITEXP);
            uptr->SNS &= 0xff;
        } else {
-           set_devattn(addr, SNS_DEVEND);
+           if ((uptr->SNS & 0xff) != 0)
+              set_devattn(addr, SNS_DEVEND|SNS_UNITCHK);
+           else
+              set_devattn(addr, SNS_DEVEND);
        }
        return SCPE_OK;
     }
@@ -450,9 +501,18 @@ lpr_srv(UNIT *uptr) {
 
 void
 lpr_ini(UNIT *uptr, t_bool f) {
+    int             u = (uptr - lpr_unit);
+    int             i, j;
+    CONST uint16   *fcb;
+
     uptr->CMD &= ~(LPR_FULL|LPR_CMDMSK);
     uptr->LINE = 0;
     uptr->SNS = 0;
+    i = (uptr->flags & UNIT_M_FCB) >> UNIT_V_FCB;
+    fcb = fcb_ptr[i];
+    lpr_data[u].fcb = fcb;
+    for (j = 0; (fcb[j] & 0x1000) == 0; j++);
+    uptr->capac = j;
 }
 
 t_stat
