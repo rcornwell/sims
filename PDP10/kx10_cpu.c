@@ -1802,24 +1802,20 @@ load_tlb(int uf, int page, int wr)
         switch(data >> 16) {
         case 0:
                  fault_data = (data >> 16) << 28;
-                 if (wr) {
-                    fault_data |= 010000LL << 18;
-                 }
                  page_fault = 1;
                  return 0;           /* No access */
-        case 1:                      /* Read Only */
         case 2:                      /* R/W First */
+                 pg |= KL_PAG_S;     /* Indicate writable */
+                 /* Fall through */
+        case 1:                      /* Read Only */
                  if (wr) {
                      fault_data = (data >> 16) << 28;
-                     fault_data |= 010000LL << 18;
                      page_fault = 1;
                      return 0;
                  }
-                 pg = KL_PAG_A;
-                 if (data & (2LL << 16))
-                     pg |= KL_PAG_S;     /* Indicate writable */
+                 pg |= KL_PAG_A;
                  break;
-        case 3:  pg = KL_PAG_A|KL_PAG_W;  break; /* R/W */
+        case 3:  pg = KL_PAG_A|KL_PAG_W|KL_PAG_S;  break; /* R/W */
         }
         pg |= (data & 001777) << 1;
         /* Create 2 page table entries. */
@@ -1845,7 +1841,7 @@ load_tlb(int uf, int page, int wr)
 #define PG_AGE   0770000000000LL
 #define PG_PAG   0017777
     if (t20_page) { /* Start with full access */
-         int acc_bits = PG_WRT|PG_CAC;
+         int acc_bits = PG_WRT|PG_KEP|PG_CAC;
          uint64 cst_val = 0;
          int   index;
          int   pg;
@@ -2089,8 +2085,12 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
             if (uf)                      /* U */
                 fault_data |= SMASK;
 #if KS_ITS
-            if (QITS)
+            if (QITS) {
+                if (wr) {
+                   fault_data |= 010000LL << 18;
+                }
                 return 0;
+            }
 #endif
             fault_data |= BIT8;
             if (fault_data & BIT1)
@@ -2148,17 +2148,17 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
                e_tlb[page] = 0;
             }
             /* Check if accessable */
-            if (wr) {
-                if ((data & KL_PAG_A) != 0) {
-                   if ((data & KL_PAG_S) != 0) {
-                      fault_data |= 004000LL << 18;        /* PF2.9 */
-                   } else if ((data & KL_PAG_W) == 0) {
-                      fault_data |= 002000LL << 18;   /* PF2.8 */
-                   }
-                }
+            if ((data & KL_PAG_A) != 0) {
+               if ((data & KL_PAG_S) != 0) {
+                  fault_data |= 004000LL << 18;        /* PF2.9 */
+               } else
+               if ((data & KL_PAG_W) == 0) {
+                  fault_data |= 002000LL << 18;        /* PF2.8 */
+               }
             }
-            if (wr)
-               fault_data |= 010000LL << 18;
+            if (wr) {
+                fault_data |= 010000LL << 18;
+            }
             page_fault = 1;
             return 0;
         }
