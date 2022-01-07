@@ -136,6 +136,10 @@ REG dz_reg[] = {
     };
 
 MTAB dz_mod[] = {
+    { TT_MODE, TT_MODE_KSR, "KSR", "KSR", NULL },
+    { TT_MODE, TT_MODE_7B,  "7b",  "7B",  NULL },
+    { TT_MODE, TT_MODE_8B,  "8b",  "8B",  NULL },
+    { TT_MODE, TT_MODE_7P,  "7p",  "7P",  NULL },
     {MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "addr", "addr",  &uba_set_addr, uba_show_addr,
               NULL, "Sets address of DZ11" },
     {MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "vect", "vect",  &uba_set_vect, uba_show_vect,
@@ -268,8 +272,10 @@ dz_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
 
             if ((dz_flags[ln] & LINE_EN) != 0 && lp->conn) {
                 int32  ch = data & 0377;
+                t_stat r;
+                ch = sim_tt_outcvt(ch, TT_GET_MODE (dz_unit.flags) | TTUF_KSR);
                 /* Try and send character */
-                t_stat r = tmxr_putc_ln(lp, ch);
+                r = tmxr_putc_ln(lp, ch);
                 /* If character did not send, queue it */
                 if (r == SCPE_STALL)
                     dz_xmit[ln] = TRDY | ch;
@@ -280,18 +286,6 @@ dz_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
     dz_csr[base] &= ~TRDY;
     if ((dz_csr[base] & MSE) == 0)
         return 0;
-    ln = ((dz_csr[base] & TLINE) >> TLINE_V) + (base << 3);
-    /* See if there is another line ready */
-    for (i = 0; i < 8; i++) {
-        ln = (ln & 070) | ((ln + 1) & 07);
-        lp = &dz_ldsc[ln];
-        /* Connected and empty xmit_buffer */
-        if ((dz_flags[ln] & LINE_EN) != 0 && dz_xmit[ln] == 0) {
-            dz_csr[base] &= ~(TLINE);
-            dz_csr[base] |= TRDY | ((ln & 07) << TLINE_V);
-            break;
-        }
-    }
     dz_checkirq(dibp);
     return 0;
 }
@@ -339,7 +333,7 @@ dz_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
             ln = base << 3;
             /* Set up the current status */
             for (i = 0; i < 8; i++) {
-     sim_debug(DEBUG_DETAIL, dptr, "DZ%o status %o %o\n", base, i, dz_flags[ln+i]);
+                sim_debug(DEBUG_DETAIL, dptr, "DZ%o status %o %o\n", base, i, dz_flags[ln+i]);
                 if (dz_flags[ln + i] & LINE_EN)
                     temp |= LINE_ENB << i;
                 if (dz_flags[ln + i] & DTR_FLAG)
@@ -398,8 +392,12 @@ t_stat dz_svc (UNIT *uptr)
         while (!full(&dz_recv[base])) {
             int32 ch = tmxr_getc_ln(lp);
             if ((ch & TMXR_VALID) != 0) {
-                ch = sim_tt_inpcvt (ch, TTUF_KSR);
-                temp = VALID | ((ln & 07) << RXLINE_V) | (uint16)(ch & RBUF);
+               if (ch & SCPE_BREAK) {                    /* break? */ 
+                    temp = FRM_ERR;
+                } else {
+                    ch = sim_tt_inpcvt (ch, TT_GET_MODE(dz_unit.flags) | TTUF_KSR);
+                    temp = VALID | ((ln & 07) << RXLINE_V) | (uint16)(ch & RBUF);
+                }
                 dz_recv[base].buff[dz_recv[base].in_ptr] = temp;
                 inci(&dz_recv[base]);
                 dz_recv[base].len++;
@@ -422,9 +420,27 @@ t_stat dz_svc (UNIT *uptr)
 void
 dz_checkirq(struct pdp_dib   *dibp)
 {
+    int        j;
     int        i;
+    int        ln;
+    TMLN      *lp;
 
     for (i = 0; i < NUM_DEVS_DZ; i++) {
+         ln = ((dz_csr[i] & TLINE) >> TLINE_V) + (i << 3);
+         dz_csr[i] &= ~TRDY;
+         /* See if there is another line ready */
+         for (j = 0; j < 8; j++) {
+             ln = (ln & 070) | ((ln + 1) & 07);
+             lp = &dz_ldsc[ln];
+             /* Connected and empty xmit_buffer */
+             if ((dz_flags[ln] & LINE_EN) != 0 && dz_xmit[ln] == 0) {
+                 dz_csr[i] &= ~(TLINE);
+                 dz_csr[i] |= TRDY | ((ln & 07) << TLINE_V);
+                 break;
+             }
+         }
+
+         /* Check flags to see if anything would generate an interrupt */
          if ((dz_csr[i] & (TIE|TRDY)) == (TIE|TRDY) ||
             (dz_csr[i] & (SA|SAE)) == (SA|SAE) ||
             (dz_csr[i] & (RDONE|SAE|RIE)) == (RDONE|RIE)) {
@@ -433,7 +449,7 @@ dz_checkirq(struct pdp_dib   *dibp)
             return;
          }
     }
-                sim_debug(DEBUG_DETAIL, &dz_dev, "Clr irq\n");
+    sim_debug(DEBUG_DETAIL, &dz_dev, "Clr irq\n");
     /* Nothing found, so clear any flags */
     uba_clr_irq(dibp);
 }
