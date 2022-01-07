@@ -268,6 +268,7 @@ uint64 spt;
 uint64 cst;
 uint64 cst_msk;
 uint64 cst_dat;
+uint64 hsb;
 #endif
 
 #if KS_ITS
@@ -534,6 +535,8 @@ REG cpu_reg[] = {
     { ORDATAD (EXTEND, extend, 1, "Execute Extend"), REG_HRO},
     { ORDATAD (SPT, spt, 18, "Special Page table"),},
     { ORDATAD (CST, cst, 18, "Memory status table"),},
+    { ORDATAD (PU, cst_dat, 36, "User data"),},
+    { ORDATAD (CSTM, cst_msk, 36, "Status mask"),},
 #endif
 #if KL
     { ORDATAD (EXT_AC, ext_ac, 4, "Extended Instruction AC"), REG_HRO},
@@ -1801,7 +1804,7 @@ load_tlb(int uf, int page, int wr)
         pg = 0;
         switch(data >> 16) {
         case 0:
-                 fault_data = (data >> 16) << 28;
+                 fault_data = 0;
                  page_fault = 1;
                  return 0;           /* No access */
         case 2:                      /* R/W First */
@@ -1809,7 +1812,7 @@ load_tlb(int uf, int page, int wr)
                  /* Fall through */
         case 1:                      /* Read Only */
                  if (wr) {
-                     fault_data = (data >> 16) << 28;
+                     fault_data = ((data >> 16) << 28) | (010000LL << 18);
                      page_fault = 1;
                      return 0;
                  }
@@ -2086,9 +2089,6 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
                 fault_data |= SMASK;
 #if KS_ITS
             if (QITS) {
-                if (wr) {
-                   fault_data |= 010000LL << 18;
-                }
                 return 0;
             }
 #endif
@@ -2147,6 +2147,7 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
             } else {
                e_tlb[page] = 0;
             }
+            if (wr) {
             /* Check if accessable */
             if ((data & KL_PAG_A) != 0) {
                if ((data & KL_PAG_S) != 0) {
@@ -2158,6 +2159,7 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
             }
             if (wr) {
                 fault_data |= 010000LL << 18;
+            }
             }
             page_fault = 1;
             return 0;
@@ -4433,8 +4435,12 @@ no_fetch:
     /* Handle page fault and traps */
     if (page_enable && trap_flag == 0 && (FLAGS & (TRP1|TRP2))) {
         if (FLAGS & ADRFLT) {
-#if KL_ITS | KS_ITS
+#if KL_ITS
             if (QITS && (FLAGS & (TRP1|TRP2|ADRFLT)) == (TRP1|TRP2|ADRFLT))
+               one_p_arm = 1;
+#endif
+#if KS_ITS
+            if (QITS)
                one_p_arm = 1;
 #endif
             FLAGS &= ~ADRFLT;
@@ -6209,6 +6215,12 @@ unasign:
 #if ITS
               if (QITS && one_p_arm) {
                   FLAGS |= ONEP;
+                  one_p_arm = 0;
+              }
+#endif
+#if KS_ITS
+              if (QITS && one_p_arm) {
+                  FLAGS |= ADRFLT;
                   one_p_arm = 0;
               }
 #endif
@@ -10875,9 +10887,20 @@ skip_op:
                            case 002:            /* CLRPT */
                                  f = (RMASK & AB) >> 9;
 
+#if KS_ITS
+                                 if (QITS) {
+                                    u_tlb[f & ~1] = 0;
+                                    e_tlb[f & ~1] = 0;
+                                    u_tlb[f | 1] = 0;
+                                    e_tlb[f | 1] = 0;
+                                 } else {
+#endif
                                  /* Map the page */
                                  u_tlb[f] = 0;
                                  e_tlb[f] = 0;
+#if KS_ITS
+                                 }
+#endif
                                  /* If not user do exec mappping */
                                  if (!t20_page && (f & 0740) == 0340) {
                                     /* Pages 340-377 via UBT */
@@ -11029,6 +11052,12 @@ skip_op:
 
                            /* 70230 */
                            case 006:            /* RDHSB */
+                                 MB = hsb;
+                                 sim_debug(DEBUG_CONI, &cpu_dev, "RDHSB %012llo\n", MB);
+                                 if (Mem_write(0, 0))
+                                     goto last;
+                                 AR = MB;
+                                 break;
 
                            /* 70234 */
                            case 007:            /* ITS SPM */
@@ -11048,9 +11077,13 @@ skip_op:
                            case 010:            /* WRSPB */   /* ITS LDBR1 */
 #if KS_ITS
                                  if (QITS) {
-                                    dbr1 = AB;
-                                    sim_debug(DEBUG_CONI, &cpu_dev, "WRDBR1 %012llo\n", dbr1);
-                                    break;
+                                     dbr1 = AB;
+                                     for (f = 0; f < 512; f++) {
+                                        u_tlb[f] = 0;
+                                        e_tlb[f] = 0;
+                                     }
+                                     sim_debug(DEBUG_CONI, &cpu_dev, "WRDBR1 %012llo\n", dbr1);
+                                     break;
                                  }
 #endif
                                  if (Mem_read(0, 0, 0, 0))
@@ -11063,13 +11096,17 @@ skip_op:
                            case 011:            /* WRCSB */   /* ITS LDBR2 */
 #if KS_ITS
                                  if (QITS) {
-                                    dbr2 = AB;
-                                    sim_debug(DEBUG_CONI, &cpu_dev, "WRDBR2 %012llo\n", dbr2);
-                                    break;
+                                     dbr2 = AB;
+                                     for (f = 0; f < 512; f++) {
+                                        u_tlb[f] = 0;
+                                        e_tlb[f] = 0;
+                                     }
+                                     sim_debug(DEBUG_CONI, &cpu_dev, "WRDBR2 %012llo\n", dbr2);
+                                     break;
                                  }
 #endif
                                  if (Mem_read(0, 0, 0, 0))
-                                    goto last;
+                                     goto last;
                                  cst = MB;
                                  sim_debug(DEBUG_CONI, &cpu_dev, "WRCSB %012llo\n", cst);
                                  break;
@@ -11078,13 +11115,17 @@ skip_op:
                            case 012:            /* WRPUR */   /* ITS LDBR3 */
 #if KS_ITS
                                  if (QITS) {
-                                    dbr3 = AB;
-                                    sim_debug(DEBUG_CONI, &cpu_dev, "WRDBR3 %012llo\n", dbr3);
-                                    break;
+                                     dbr3 = AB;
+                                     for (f = 0; f < 512; f++) {
+                                        u_tlb[f] = 0;
+                                        e_tlb[f] = 0;
+                                     }
+                                     sim_debug(DEBUG_CONI, &cpu_dev, "WRDBR3 %012llo\n", dbr3);
+                                     break;
                                  }
 #endif
                                  if (Mem_read(0, 0, 0, 0))
-                                    goto last;
+                                     goto last;
                                  cst_dat = MB;
                                  sim_debug(DEBUG_CONI, &cpu_dev, "WRPUR %012llo\n", cst_dat);
                                  break;
@@ -11093,13 +11134,17 @@ skip_op:
                            case 013:            /* WRCSTM */   /* ITS LDBR4 */
 #if KS_ITS
                                  if (QITS) {
-                                    dbr4 = AB;
-                                    sim_debug(DEBUG_CONI, &cpu_dev, "WRDBR4 %012llo\n", dbr4);
-                                    break;
+                                     dbr4 = AB;
+                                     for (f = 0; f < 512; f++) {
+                                        u_tlb[f] = 0;
+                                        e_tlb[f] = 0;
+                                     }
+                                     sim_debug(DEBUG_CONI, &cpu_dev, "WRDBR4 %012llo\n", dbr4);
+                                     break;
                                  }
 #endif
                                  if (Mem_read(0, 0, 0, 0))
-                                    goto last;
+                                     goto last;
                                  cst_msk = MB;
                                  sim_debug(DEBUG_CONI, &cpu_dev, "WRCSTM %012llo\n", cst_msk);
                                  break;
@@ -11117,7 +11162,7 @@ skip_op:
                                  if (Mem_read(0, 0, 0, 0))
                                     goto last;
                                  tim_low = MB & ~07777;
-                                 sim_debug(DEBUG_CONI, &cpu_dev, "RDTIME %012llo %012llo\n", MB, tim_high);
+                                 sim_debug(DEBUG_CONI, &cpu_dev, "WRTIME %012llo %012llo\n", MB, tim_high);
                                  AB = (AB + 1) & RMASK;
                                  if (Mem_read(0, 0, 0, 0))
                                     goto last;
@@ -11125,6 +11170,10 @@ skip_op:
                                  break;
                            /* 70270 */
                            case 016:            /* WRHSB */
+                                 if (Mem_read(0, 0, 0, 0))
+                                    goto last;
+                                 hsb = MB;
+                                 sim_debug(DEBUG_CONI, &cpu_dev, "WRHSB %012llo\n", MB);
                                  break;
 
                            /* 70274 */
@@ -11754,6 +11803,9 @@ fprintf(stderr, "PIH = %03o\n\r", PIH);
                    AB += 3;
                }
             }
+            if (one_p_arm)
+                FLAGS |= ADRFLT;
+            one_p_arm = 0;
         } else
 #endif
         AB = ub_ptr + 0500;
@@ -13321,6 +13373,9 @@ sect = cur_sect = pc_sect = 0;
 exec_map = 0;
 #endif
 for(i=0; i < 128; dev_irq[i++] = 0);
+#if KS | KL
+cst = 0;
+#endif
 #if KS
 int_cur = int_val = 0;
 uba_reset();
