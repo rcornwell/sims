@@ -285,9 +285,11 @@ print_line(UNIT * uptr)
         memset(&lpr_data[u].lbuff[0], 0, 144);
     }
 
+    f = 0;
     if (l < 4) {
         while(l != 0) {
             sim_fwrite("\r\n", 1, 2, uptr->fileref);
+            f = 1;
             uptr->pos += 2;
             if ((uptr->CMD & 03) == 0x1) {
                if ((lpr_data[u].fcb[uptr->LINE] & (0x1000 >> 9)) != 0)
@@ -320,7 +322,7 @@ print_line(UNIT * uptr)
                ((uint32)i) >= uptr->capac) {
              sim_fwrite("\r\n\f", 1, 3, uptr->fileref);
              uptr->pos += 3;
-             f = 0;
+             f = 1;
              l = 0;
          }
     }
