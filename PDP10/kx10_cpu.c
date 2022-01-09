@@ -1842,7 +1842,7 @@ load_tlb(int uf, int page, int wr)
 
 #define PG_MASK  0000003777777LL
 #define PG_AGE   0770000000000LL
-#define PG_PAG   0017777
+#define PG_PAG   0003777
     if (t20_page) { /* Start with full access */
          int acc_bits = PG_WRT|PG_KEP|PG_CAC;
          uint64 cst_val = 0;
@@ -2389,7 +2389,7 @@ sect_loop:
             }
             pg = data & PG_PAG;
             sim_interval--;
-            data = M[(pg << 9) | index];
+            data = M[(pg << 9) + index];
             goto sect_loop;
         }
         if ((data & PG_STG) != 0) {
@@ -2448,7 +2448,7 @@ pg_loop:
              }
              pg = data & RMASK;
              sim_interval--;
-             data = M[(pg << 9) | index];
+             data = M[(pg << 9) + index];
              goto pg_loop;
         }
 
@@ -4526,7 +4526,7 @@ in_loop:
                  if (MB & SMASK || cur_sect == 0) {    /* Instruction format IFIW */
                      if (MB & BIT1 && cur_sect != 0) { /* Illegal index word */
                          fault_data = 024LL << 30 | (((FLAGS & USER) != 0)?SMASK:0) |
-                                      (AR & RMASK) | ((uint64)cur_sect << 18);
+                                      (MB & RMASK) | ((uint64)cur_sect << 18);
                          page_fault = 1;
                          goto last;
                      }
@@ -8272,6 +8272,10 @@ mul_done:
 #endif
               switch (AC) {
               case 000: /* JRST */
+#if KL
+                       if (QKLB && t20_page)
+                           pc_sect = sect;
+#endif
                        break;
               case 001: /* PORTAL */
                        FLAGS &= ~(PUBLIC|PRV_PUB);
@@ -8449,7 +8453,7 @@ jrstf:
               PC = AR & RMASK;
 #if KL
               if (QKLB && t20_page && glb_sect)
-                 pc_sect = (AR >> 18) & 07777;
+                  pc_sect = (AR >> 18) & 07777;
 #endif
 #else
               /* JRST for PDP6, KA and KI */
@@ -8707,9 +8711,11 @@ jrstf:
               /* Stack, JUMP */
     case 0260:  /* PUSHJ */  /* FAC|SAC */
 #if KL
-              if (QKLB && t20_page && pc_sect != 0)
+              if (QKLB && t20_page)
+                  AR = (sect << 18) | (AR & RMASK);;
+              if (QKLB && t20_page && pc_sect != 0) {
                   MB = ((uint64)pc_sect << 18) + (PC + !pi_cycle);
-              else {
+              } else {
 #endif
               MB = (((uint64)(FLAGS) << 23) & LMASK) | ((PC + !pi_cycle) & RMASK);
 #if KI | KL
@@ -8726,7 +8732,6 @@ jrstf:
               BYF5 = 1;
 #endif
 #if KL
-              f = glb_sect;
               if (QKLB && t20_page && pc_sect != 0 && (BR & SMASK) == 0 && (BR & SECTM) != 0) {
                   BR = (BR + 1) & FMASK;
                   sect = (BR >> 18) & 07777;
@@ -8771,8 +8776,8 @@ jrstf:
               }
 #endif
 #if KL
-              if (QKLB && t20_page && f)
-                  pc_sect = cur_sect;
+              if (QKLB && t20_page)
+                  pc_sect = AR >> 18;
 #endif
               PC = AR & RMASK;
               PC_CHANGE
@@ -13737,7 +13742,7 @@ for (k = 0; k < lnt; k++) {                             /* print specified */
         fputs ("  ", st);
 #if KL
         if (QKLB)
-            fprintf(st, "%08o ", h->ea & 0777777777);
+            fprintf(st, "%08o ", h->ea & 077777777);
         else
 #endif
 #if KS
