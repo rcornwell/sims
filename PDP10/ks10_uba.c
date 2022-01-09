@@ -343,6 +343,7 @@ uba_clr_irq(DIB *idev)
     int     pi;
     int     i;
     int     j;
+    int     lvl;
     int     high = 0;
     
     if (ubm < 0)
@@ -363,10 +364,10 @@ uba_clr_irq(DIB *idev)
         /* If device is pending on this level save */
         if (dibp->uba_ctl == idev->uba_ctl &&
                 dibp->uba_irq_pend != 0) {
-            pi = 0;
-            for (j = 0200; j != 0; j>>=2, pi++) {
+            lvl = 0;
+            for (j = 0200; j != 0; j>>=2) {
             /* At least one, no need to continue */
-                 if ((dibp->uba_irq_pend & (0200 >> pi)) != 0) {
+                 if ((dibp->uba_irq_pend & (0200 >> j)) != 0) {
                      set_interrupt(dibp->uba_ctl<<2, pi);
                      return;
                  }

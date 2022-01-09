@@ -4405,20 +4405,26 @@ fetch:
            AB = (t_addr)fe_xct;
            fe_xct = 0;
         }
+#if KS_ITS
+        if (QITS && pi_cycle == 0 && (FLAGS & ADRFLT) != 0) {
+           one_p_arm = 1;
+           FLAGS &= ~ADRFLT;
+        }
 #endif
-       if (Mem_read(pi_cycle | uuo_cycle, 1, 1, 0)) {
+#endif
+        if (Mem_read(pi_cycle | uuo_cycle, 1, 1, 0)) {
 #if KA | PDP6
-           pi_rq = check_irq_level();
-           if (pi_rq)
-              goto st_pi;
+            pi_rq = check_irq_level();
+            if (pi_rq)
+               goto st_pi;
 #endif
 #if KL
-           /* Handling for PUBLIC violation */
-           if (((fault_data >> 30) & 037) == 021)
-              PC = (PC + 1) & RMASK;
+            /* Handling for PUBLIC violation */
+            if (((fault_data >> 30) & 037) == 021)
+               PC = (PC + 1) & RMASK;
 #endif
-           goto last;
-       }
+            goto last;
+        }
 
 no_fetch:
        IR = (MB >> 27) & 0777;
@@ -4435,12 +4441,8 @@ no_fetch:
     /* Handle page fault and traps */
     if (page_enable && trap_flag == 0 && (FLAGS & (TRP1|TRP2))) {
         if (FLAGS & ADRFLT) {
-#if KL_ITS
+#if KL_ITS 
             if (QITS && (FLAGS & (TRP1|TRP2|ADRFLT)) == (TRP1|TRP2|ADRFLT))
-               one_p_arm = 1;
-#endif
-#if KS_ITS
-            if (QITS)
                one_p_arm = 1;
 #endif
             FLAGS &= ~ADRFLT;
@@ -6436,7 +6438,7 @@ ldb_ptr:
                   f_load_pc = 0;
                   f_inst_fetch = 0;
                   f_pc_inh = 1;
-#if KL_ITS | KS_ITS
+#if KL_ITS 
                   if (QITS && one_p_arm) {
                       FLAGS |= ADRFLT;
                       one_p_arm = 0;
@@ -11940,6 +11942,7 @@ fprintf(stderr, "PIH = %03o\n\r", PIH);
     }
 #endif
 
+
 #if KI | KL | KS
     if (!f_pc_inh && (trap_flag == 0)  && !pi_cycle) {
         FLAGS &= ~ADRFLT;
@@ -11950,11 +11953,38 @@ fprintf(stderr, "PIH = %03o\n\r", PIH);
     }
 
 #if ITS
+    /* Handle 1 proceed for KA ITS */
     if (QITS && one_p_arm && (FLAGS & BYTI) == 0) {
         fault_data |= 02000;
         mem_prot = 1;
         one_p_arm = 0;
         check_apr_irq();
+    }
+#endif
+
+#if KS_ITS
+    /* Handle 1 proceed for KS ITS */
+    if (QITS && one_p_arm && (FLAGS & BYTI) == 0) {
+        modify = 0;
+        extend = 0;
+        one_p_arm = 0;
+        AB = ub_ptr + 0432;
+        /* Save flags */
+        MB = (((uint64)(FLAGS) << 23) & LMASK) | (PC & RMASK);
+        Mem_write_nopage();
+        /* Read in new PC and flags */
+        AB ++;
+        f = 0;
+        if (FLAGS & USER)
+            f = 1;
+        Mem_read_nopage();
+
+        FLAGS = (MB >> 23) & 017777;
+        /* If transistioning from user to executive adjust flags */
+        if ((FLAGS & USER) == 0 && f) {
+            FLAGS |= USERIO;
+        }
+        PC = MB & RMASK;
     }
 #endif
 
