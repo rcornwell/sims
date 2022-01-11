@@ -996,6 +996,17 @@ fprint_show_help (st, dptr);
 fprintf (st, "\nThe type options can be used only when a unit is not attached to a file.\n");
 fprintf (st, "The TU device supports the BOOT command.\n");
 sim_tape_attach_help (st, dptr, uptr, flag, cptr);
+#if KS
+fprintf (st, "The RH11 is a unibus device, various parameters can be changed on these devices\n");
+fprintf (st, "\n The address of the device can be set with: \n");
+fprintf (st, "      sim> SET TUA ADDR=octal   default address= 772440\n");
+fprintf (st, "\n The interrupt vector can be set with: \n");
+fprintf (st, "      sim> SET TUA VECT=octal   default 224\n");
+fprintf (st, "\n The interrupt level can be set with: \n");
+fprintf (st, "      sim> SET TUA BR=#     # should be between 4 and 7.\n");
+fprintf (st, "\n The unibus addaptor that the DZ is on can be set with:\n");
+fprintf (st, "      sim> SET TUA CTL=#    # can be either 1 or 3\n");
+#endif
 fprint_reg_help (st, dptr);
 return SCPE_OK;
 }

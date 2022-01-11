@@ -613,15 +613,10 @@ dz_detach (UNIT *uptr)
 
 t_stat dz_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-fprintf (st, "DC10E Terminal Interfaces\n\n");
-fprintf (st, "The DC10 supported up to 8 blocks of 8 lines. Modem control was on a seperate\n");
-fprintf (st, "line. The simulator supports this by setting modem control to a fixed offset\n");
-fprintf (st, "from the given line. The number of lines is specified with a SET command:\n\n");
-fprintf (st, "   sim> SET DC LINES=n          set number of additional lines to n [8-32]\n\n");
+fprintf (st, "DZ11 Terminal Interfaces\n\n");
+fprintf (st, "Each DZ11 supports 8 serial lines. Up to 32 can be configured\n");
+fprintf (st, "   sim> SET DZ LINES=n          set number of additional lines to n [8-32]\n\n");
 fprintf (st, "Lines must be set in multiples of 8.\n");
-fprintf (st, "The default offset for modem lines is 32. This can be changed with\n\n");
-fprintf (st, "   sim> SET DC MODEM=n          set offset for modem control to n [8-32]\n\n");
-fprintf (st, "Modem control must be set larger then the number of lines\n");
 fprintf (st, "The ATTACH command specifies the port to be used:\n\n");
 tmxr_attach_help (st, dptr, uptr, flag, cptr);
 fprintf (st, "The additional terminals can be set to one of four modes: UC, 7P, 7B, or 8B.\n\n");
@@ -634,22 +629,31 @@ fprintf (st, "                                non-printing characters suppressed
 fprintf (st, "  7B    high-order bit cleared  high-order bit cleared\n");
 fprintf (st, "  8B    no changes              no changes\n\n");
 fprintf (st, "The default mode is 7P.\n");
-fprintf (st, "Finally, each line supports output logging.  The SET DCn LOG command enables\n");
+fprintf (st, "Finally, each line supports output logging.  The SET DZn LOG command enables\n");
 fprintf (st, "logging on a line:\n\n");
-fprintf (st, "   sim> SET DCn LOG=filename   log output of line n to filename\n\n");
-fprintf (st, "The SET DCn NOLOG command disables logging and closes the open log file,\n");
+fprintf (st, "   sim> SET DZn LOG=filename   log output of line n to filename\n\n");
+fprintf (st, "The SET DZn NOLOG command disables logging and closes the open log file,\n");
 fprintf (st, "if any.\n\n");
-fprintf (st, "Once DC is attached and the simulator is running, the terminals listen for\n");
+fprintf (st, "Once DZ is attached and the simulator is running, the terminals listen for\n");
 fprintf (st, "connections on the specified port.  They assume that the incoming connections\n");
 fprintf (st, "are Telnet connections.  The connections remain open until disconnected either\n");
-fprintf (st, "by the Telnet client, a SET DC DISCONNECT command, or a DETACH DC command.\n\n");
+fprintf (st, "by the Telnet client, a SET DZ DISCONNECT command, or a DETACH DC command.\n\n");
 fprintf (st, "Other special commands:\n\n");
-fprintf (st, "   sim> SHOW DC CONNECTIONS    show current connections\n");
-fprintf (st, "   sim> SHOW DC STATISTICS     show statistics for active connections\n");
-fprintf (st, "   sim> SET DCn DISCONNECT     disconnects the specified line.\n");
+fprintf (st, "   sim> SHOW DZ CONNECTIONS    show current connections\n");
+fprintf (st, "   sim> SHOW DZ STATISTICS     show statistics for active connections\n");
+fprintf (st, "   sim> SET DZn DISCONNECT     disconnects the specified line.\n\n");
+fprintf (st, "The DZ11 is a unibus device, various parameters can be changed on these devices\n");
+fprintf (st, "\n The address of the device can be set with: \n");
+fprintf (st, "      sim> SET DZ ADDR=octal   default address= 760000\n");
+fprintf (st, "\n The interrupt vector can be set with: \n");
+fprintf (st, "      sim> SET DZ VECT=octal   default 340\n");
+fprintf (st, "\n The interrupt level can be set with: \n");
+fprintf (st, "      sim> SET DZ BR=#     # should be between 4 and 7.\n");
+fprintf (st, "\n The unibus addaptor that the DZ is on can be set with:\n");
+fprintf (st, "      sim> SET DZ CTL=#    # can be either 1 or 3\n");
 fprint_reg_help (st, &dz_dev);
 fprintf (st, "\nThe additional terminals do not support save and restore.  All open connections\n");
-fprintf (st, "are lost when the simulator shuts down or DC is detached.\n");
+fprintf (st, "are lost when the simulator shuts down or DZ is detached.\n");
 return SCPE_OK;
 }
 

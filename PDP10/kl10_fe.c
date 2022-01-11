@@ -2206,15 +2206,11 @@ lp20_getlpp(FILE *st, UNIT *uptr, int32 v, CONST void *desc)
 t_stat lp20_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
         const char *cptr)
 {
-fprintf (st, "Line Printer (LPT)\n\n");
-fprintf (st, "The line printer (LPT) writes data to a disk file.  The POS register specifies\n");
-fprintf (st, "the number of the next data item to be written.  Thus, by changing POS, the\n");
-fprintf (st, "user can backspace or advance the printer.\n");
+fprintf (st, "Line Printer (LP20)\n\n");
+fprintf (st, "The line printer (LP20) writes data to a disk file.\n");
 fprintf (st, "The Line printer can be configured to any number of lines per page with the:\n");
-fprintf (st, "        sim> SET %s0 LINESPERPAGE=n\n\n", dptr->name);
+fprintf (st, "        sim> SET %s LINESPERPAGE=n\n\n", dptr->name);
 fprintf (st, "The default is 66 lines per page.\n\n");
-fprintf (st, "The device address of the Line printer can be changed\n");
-fprintf (st, "        sim> SET %s0 DEV=n\n\n", dptr->name);
 fprint_set_help (st, dptr);
 fprint_show_help (st, dptr);
 fprint_reg_help (st, dptr);
