@@ -460,6 +460,10 @@ extern void     restore_pi_hold();
 extern void     set_pi_hold();
 extern UNIT     cpu_unit[];
 extern UNIT     ten11_unit[];
+#if KS
+extern DEVICE   lp20_dev;
+extern DEVICE   ch11_dev;
+#endif
 #if KL
 extern DEVICE   dte_dev;
 extern DEVICE   lp20_dev;
@@ -739,9 +743,13 @@ extern void ka10_lights_clear_aux (int);
 #define NUM_DEVS_NIA    1
 #define NUM_DEVS_DN     0
 #elif KS
-#define NUM_DEVS_LP20   0
+#define NUM_DEVS_LP20   1
 #define NUM_DEVS_DZ     4
 #define NUM_DEVS_TCU    1
+#if KS_ITS
+#define NUM_DEVS_IMP    0   /* KS_ITS */
+#define NUM_DEVS_CH11   0   /* KS_ITS */
+#endif
 #endif
 #if KA | KI
 #define NUM_DEVS_RC     1

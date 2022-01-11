@@ -208,8 +208,8 @@ int
 uba_write_npr(t_addr addr, uint16 ctl, uint64 data)
 {
     int     ubm = uba_device[ctl];
-    t_addr  oaddr = addr;
     uint32  map = uba_map[ubm][(077) & (addr >> 11)];
+    t_addr  oaddr = addr;
     if ((addr & 0400000) != 0)
         return 0;
     if ((map & MAP_VALID) == 0)
@@ -227,6 +227,7 @@ uba_read_npr_byte(t_addr addr, uint16 ctl, uint16 *data)
 {
     int     ubm = uba_device[ctl];
     uint32  map = uba_map[ubm][(077) & (addr >> 11)];
+    t_addr  oaddr = addr;
     uint64  wd;
     if ((addr & 0400000) != 0)
         return 0;
@@ -234,10 +235,12 @@ uba_read_npr_byte(t_addr addr, uint16 ctl, uint16 *data)
         return 0;
     addr = (map & PAGE_MASK) | (addr >> 2) & 0777;
     wd = M[addr];
-    if (addr & 02)
+    sim_debug(DEBUG_DATA, &cpu_dev, "RD NPR B %08o %08o %012llo ", oaddr, addr, wd);
+    if ((oaddr & 02) == 0)
         wd >>= 18;
-    if (addr & 01)
+    if ((oaddr & 01))
         wd >>= 8;
+    sim_debug(DEBUG_DATA, &cpu_dev, "%03llo ", wd & 0377);
     *data = (uint16)(wd & 0377);
     return 1;
 }
@@ -247,6 +250,7 @@ uba_write_npr_byte(t_addr addr, uint16 ctl, uint16 data)
 {
     int     ubm = uba_device[ctl];
     uint32  map = uba_map[ubm][(077) & (addr >> 11)];
+    t_addr  oaddr = addr;
     uint64  wd;
     uint64  msk;
     uint64  buf;
@@ -258,11 +262,11 @@ uba_write_npr_byte(t_addr addr, uint16 ctl, uint16 data)
     msk = 0377;
     buf = (uint64)(data & msk);
     wd = M[addr];
-    if (addr & 02) {
+    if ((oaddr & 02) == 0) {
         buf <<= 18;
         msk <<= 18;
     }
-    if (addr & 01) {
+    if ((oaddr & 01)) {
         buf <<= 8;
         msk <<= 8;
     }
@@ -277,6 +281,7 @@ uba_read_npr_word(t_addr addr, uint16 ctl, uint16 *data)
 {
     int     ubm = uba_device[ctl];
     uint32  map = uba_map[ubm][(077) & (addr >> 11)];
+    t_addr  oaddr = addr;
     uint64  wd;
     if ((addr & 0400000) != 0)
         return 0;
@@ -284,7 +289,7 @@ uba_read_npr_word(t_addr addr, uint16 ctl, uint16 *data)
         return 0;
     addr = (map & PAGE_MASK) | (addr >> 2) & 0777;
     wd = M[addr];
-    if (addr & 02)
+    if ((oaddr & 02) == 0)
         wd >>= 18;
     *data = (uint16)(wd & 0177777);
     return 1;
@@ -295,6 +300,7 @@ uba_write_npr_word(t_addr addr, uint16 ctl, uint16 data)
 {
     int     ubm = uba_device[ctl];
     uint32  map = uba_map[ubm][(077) & (addr >> 11)];
+    t_addr  oaddr = addr;
     uint64  wd;
     uint64  msk;
     uint64  buf;
@@ -306,7 +312,7 @@ uba_write_npr_word(t_addr addr, uint16 ctl, uint16 data)
     msk = 0177777;
     buf = (uint64)(data & msk);
     wd = M[addr];
-    if (addr & 02) {
+    if ((oaddr & 02) == 0) {
         buf <<= 18;
         msk <<= 18;
     }
