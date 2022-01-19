@@ -4703,9 +4703,11 @@ st_pi:
             }
             hst[hst_p].pc = HIST_PC | ((BYF5)? (HIST_PC2|PC) : IA);
             hst[hst_p].ea = AB;
-#if KL
+#if KL | KS
             if (extend)
                hst[hst_p].pc |= HIST_PCE;
+#endif
+#if KL
             hst[hst_p].pc |= (pc_sect << 18);
             hst[hst_p].ea |= (sect << 18);
 #endif
@@ -5851,9 +5853,6 @@ dpnorm:
               if ((FLAGS & BYTI)) {
                   AB = (AB + 1) & RMASK;
                   MB = MQ;
-#if KL | KS
-                  FLAGS &= ~BYTI;
-#endif
                   if (Mem_write(0, 0))
                      goto last;
                   FLAGS &= ~BYTI;
@@ -5900,15 +5899,15 @@ dpnorm:
 #endif
                   AR &= FMASK;
                   MB = AR;
-                  FLAGS |= BYTI;
                   if (Mem_write(0, 0))
                       goto last;
+                  FLAGS |= BYTI;
 #if KL | KS
                   AB = (AB + 1) & RMASK;
                   MB = MQ & CMASK;
-                  FLAGS &= ~BYTI;
                   if (Mem_write(0, 0))
                      goto last;
+                  FLAGS &= ~BYTI;
                   break;
 #endif
               }
@@ -11237,7 +11236,6 @@ skip_op:
                                goto its_rd;
                            }
 #endif
-                           BR = get_reg(AC);
                            if (uba_read(AB, ctl, &MB, WORD)) {
 io_fault:
                                fault_data = (020LL << 30) | BIT8 | BIT10;
@@ -11246,6 +11244,7 @@ io_fault:
                                page_fault = 1;
                                goto last;
                            }
+                           BR &= 0177777;
                            if ((BR & MB) == 0)
                                PC = (PC + 1) & RMASK;
                            AR = MB;
@@ -11260,6 +11259,7 @@ io_fault:
 #endif
                            if (uba_read(AB, ctl, &MB, WORD))
                                goto io_fault;
+                           BR &= 0177777;
                            if ((BR & MB) != 0)
                                PC = (PC + 1) & RMASK;
                            AR = MB;
@@ -11394,8 +11394,7 @@ its_wr:
 #endif
                            if (uba_read(AB, ctl, &MB, BYTE))
                                goto io_fault;
-                           if (AB & 1)
-                              BR >>= 8;
+                           BR &= 0377;
                            if ((BR & MB) == 0)
                                PC = (PC + 1) & RMASK;
                            AR = MB;
@@ -11410,8 +11409,7 @@ its_wr:
 #endif
                            if (uba_read(AB, ctl, &MB, BYTE))
                                goto io_fault;
-                           if (AB & 1)
-                              BR >>= 8;
+                           BR &= 0377;
                            if ((BR & MB) != 0)
                                PC = (PC + 1) & RMASK;
                            break;
@@ -11428,8 +11426,6 @@ its_rdb:
 #endif
                            if (uba_read(AB, ctl, &AR, BYTE))
                                goto io_fault;
-                           if (AB & 1)
-                              AR >>= 8;
                            set_reg(AC, AR);
                            break;
 
@@ -11471,7 +11467,7 @@ its_wrb:
 #endif
                            if (uba_read(AB, ctl, &MB, BYTE))
                                goto io_fault;
-                           MB &= ~BR;
+                           MB &= ~(BR);
                            if (uba_write(AB, ctl, MB, BYTE))
                                goto io_fault;
                            AR = MB;

@@ -94,6 +94,9 @@ uba_read(t_addr addr, int ctl, uint64 *data, int access)
            *data = 0;
            return 0;
        }
+       *data = 0;
+       uba_status[ubm] |= UBST_TIM | UBST_NED;
+       return 1;
     }
 
     /* Look for device */
@@ -105,13 +108,19 @@ uba_read(t_addr addr, int ctl, uint64 *data, int access)
             dibp->uba_addr == (addr & (~dibp->uba_mask))) {
             uint16 buf;
             int r = dibp->rd_io(dptr, addr, &buf, access);
-            *data = (uint64)buf;
             if (r)
                 break;
+            if (access == BYTE) {
+                if ((addr & 1) != 0)
+                    buf >>= 8;
+                buf &= 0377;
+            }
+            *data = (uint64)buf;
             return r;
         }
     }
     sim_debug(DEBUG_EXP, &cpu_dev, "No UBA device  %02o %08o\n", ctl, addr);
+    *data = 0;
     uba_status[ubm] |= UBST_TIM | UBST_NED;
     return 1;
 }
@@ -131,6 +140,7 @@ uba_write(t_addr addr, int ctl, uint64 data, int access)
         return 1;
     }
 
+    sim_debug(DEBUG_EXP, &cpu_dev, "UBA device write %02o %08o %012llo %d\n", ctl, addr, data, access);
     if (access == BYTE) {
         if ((addr & 1) != 0)
             data = (data & 0377) << 8;
@@ -168,6 +178,7 @@ uba_write(t_addr addr, int ctl, uint64 data, int access)
            return 0;
        }
        uba_status[ubm] |= UBST_TIM | UBST_NED;
+       return 1;
     }
 
     /* Look for device */
@@ -177,6 +188,7 @@ uba_write(t_addr addr, int ctl, uint64 data, int access)
             continue;
         if (ctl == dibp->uba_ctl && dibp->uba_addr == (addr & (~dibp->uba_mask))) {
             uint16 buf = (uint16)(data & 0177777);
+    sim_debug(DEBUG_EXP, &cpu_dev, "UBA device write %02o %08o %012llo %06o\n", ctl, addr, data, buf);
             int r = dibp->wr_io(dptr, addr, buf, access);
             if (r)
                 break;
