@@ -193,7 +193,7 @@ int rh_map[] = { 0,   /* 776700 */
 #if KS
 
 DEVICE  *rh_boot_dev = NULL;
-int      rh_boot_num = 0;
+int      rh_boot_unit = 0;
 
 
 int
