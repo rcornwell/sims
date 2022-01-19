@@ -74,6 +74,9 @@ const char *cty_description (DEVICE *dptr);
 uint64 keep_alive = 0;
 int    keep_num = 0;
 
+extern DEVICE *rh_boot_dev;
+extern int     rh_boot_unit;
+
 static int32   rtc_tps = 1;
 
 MTAB cty_mod[] = {
@@ -158,6 +161,8 @@ t_stat ctyo_svc (UNIT *uptr)
             sim_activate(uptr, 2000);
             return SCPE_OK;
         }
+        sim_debug(DEBUG_DETAIL, &cty_dev, "CTY write %o '%c'\n", ch,
+                             ((ch > 040 && ch < 0177)? ch: '.'));
 
         buffer = 0;
         if (Mem_write_word(CTY_OUT, &buffer, 0) == 0) {

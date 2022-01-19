@@ -227,6 +227,9 @@ DEVICE *sim_devices[] = {
 #if NUM_DEVS_TCU > 0
     &tcu_dev,
 #endif
+#if NUM_DEVS_DUP > 0
+    &dup_dev,
+#endif
 #if NUM_DEVS_DN > 0
     &dn_dev,
 #endif

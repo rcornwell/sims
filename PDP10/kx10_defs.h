@@ -522,6 +522,7 @@ extern DEVICE   mtc_dev;
 extern DEVICE   dsk_dev;
 extern DEVICE   dcs_dev;
 extern DEVICE   dz_dev;
+extern DEVICE   dup_dev;
 extern DEVICE   tcu_dev;
 
 #if KS
@@ -606,8 +607,6 @@ void    rh_writecw(struct rh_if *rh, int nxm);
 void    rh_finish_op(struct rh_if *rh, int flags);
 int     rh_read(struct rh_if *rh);
 int     rh_write(struct rh_if *rh);
-DEVICE  *rh_boot_dev;
-int     rh_boot_unit;
 #else
 extern t_stat (*dev_tab[128])(uint32 dev, t_uint64 *data);
 
@@ -746,6 +745,7 @@ extern void ka10_lights_clear_aux (int);
 #define NUM_DEVS_LP20   1
 #define NUM_DEVS_DZ     4
 #define NUM_DEVS_TCU    1
+#define NUM_DEVS_DUP    0
 #if KS_ITS
 #define NUM_DEVS_IMP    0   /* KS_ITS */
 #define NUM_DEVS_CH11   0   /* KS_ITS */

@@ -174,6 +174,10 @@ t_stat        tu_detach(UNIT *);
 t_stat        tu_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
                     const char *cptr);
 const char    *tu_description (DEVICE *dptr);
+#if KS
+extern DEVICE *rh_boot_dev;
+extern int     rh_boot_unit;
+#endif
 
 
 UNIT                tu_unit[] = {
@@ -426,10 +430,6 @@ tu_read(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 *data) {
     case  000:  /* control */
         temp = uptr->CMD & 077;
         temp |= CS1_DVA;
-#if KS
-        if (rhc->attn || temp & CS1_TRE)
-           temp |= CS1_SC;
-#endif
         break;
     case  001:  /* status */
         temp = DS_DPR | uptr->STATUS;
