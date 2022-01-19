@@ -62,7 +62,7 @@
 #define CS1_ONL    0004000    /* Online */
 #define CS1_DVON   0010000    /* DAVFU online */
 #define CS1_UND    0020000    /* Undefined Character */
-#define CS1_PZERO  0030000    /* Page counter zero */
+#define CS1_PZERO  0040000    /* Page counter zero */
 #define CS1_ERR    0100000    /* Errors */
 #define CS1_MOD    (CS1_DHOLD|CS1_IE|(CS1_M_FNC << CS1_V_FNC)|CS1_PAR|CS1_GO)
 
@@ -287,9 +287,6 @@ lp20_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
     struct pdp_dib   *dibp = (DIB *)dptr->ctxt;
     int               base;
     uint16            temp;
-    int               ln;
-    TMLN             *lp;
-    int               i;
 
     addr &= dibp->uba_mask;
     sim_debug(DEBUG_DETAIL, dptr, "LP20 write %06o %06o %o\n",
@@ -338,11 +335,11 @@ lp20_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
     case 002:  /* LPCSB */
             if (access == BYTE) {
                if (addr & 1) {
-                   lp20_cs2 &= ~(CS2_GOE);
-                   lp20_cs2 |= data & CS2_GOE;
-               } else {
                    lp20_cs2 &= ~(CS2_TEST);
                    lp20_cs2 |= data & CS2_TEST;
+               } else {
+                   lp20_cs2 &= ~(CS2_GOE);
+                   lp20_cs2 |= data & CS2_GOE;
                }
             } else {
                lp20_cs2 &= ~(CS2_TEST|CS2_GOE);
@@ -376,9 +373,9 @@ lp20_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
     case 014: /* LPCOL/LPCBUF */
             if (access == BYTE) {
                if (addr & 1)
-                   lp20_buf = data & 0377;
-               else
                    lp20_col = (data >> 8) & 0377;
+               else
+                   lp20_buf = data & 0377;
             } else {
                 lp20_buf = data & 0377;
                 lp20_col = (data >> 8) & 0377;
@@ -386,14 +383,14 @@ lp20_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
             break;
 
     case 016: /* LPCSUM/LPPDAT */
-            temp = lp20_ram[(int)lp20_buf];
             if (access == BYTE) {
+               temp = lp20_ram[(int)lp20_buf];
                if (addr & 1)
                    data = data | (temp & 0377);
                else
                    data = (temp & 0177400) | data;
             }
-            lp20_ram[(int)lp20_buf] = data;
+            lp20_ram[(int)lp20_buf] = data & 07777;
             break;
     }
     lp20_update_chkirq(&lp20_unit, 0, 0);
@@ -406,9 +403,7 @@ lp20_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
     struct pdp_dib   *dibp = (DIB *)dptr->ctxt;
     int               base;
     uint16            temp;
-    int               ln;
-    TMLN             *lp;
-    int               i;
+    int               par;
 
     addr &= dibp->uba_mask;
     switch (addr & 016) {
@@ -437,7 +432,12 @@ lp20_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
             break;
 
      case 012: /* LPRDAT */
-            *data = lp20_ram[lp20_buf];
+            temp = lp20_ram[lp20_buf] & 07777;
+            par = (temp >> 8) ^ (temp >> 4) ^ temp;
+            par = (par >> 2) ^ par;
+            par ^= par >> 1;
+            if ((par & 1) != 0)
+               temp |= LP20_RAM_RAP;
             break;
 
      case 014: /* LPCOL/LPCBUF */
@@ -500,6 +500,7 @@ lp20_output(UNIT *uptr, char c) {
 
     if (c == 0)
        return;
+    lp20_data = c & 0377;
     if (lp20_col == 132)
         lp20_printline(uptr, 1);
     /* Map lower to upper case if uppercase only */
@@ -544,13 +545,11 @@ lp20_update_chkirq (UNIT *uptr, int done, int irq)
 
     if (uptr->flags & UNIT_ATT) {
        lp20_cs1 |= CS1_ONL;
-       lp20_cs2 &= ~CS2_OFFL;
+       lp20_cs2 &= ~(CS2_OFFL|CS2_NRDY);
     } else {
-       lp20_cs1 &= ~(CS1_DONE|CS1_ONL);
-       lp20_cs2 |= CS2_OFFL;
+       lp20_cs1 &= ~(CS1_ONL|CS1_DONE);
+       lp20_cs2 |= CS2_NRDY|CS2_OFFL;
     }
-    if (lp20_cs2 & CS2_ERR)
-       lp20_cs1 |= CS1_ERR;
     if ((lp20_cs1 & CS1_IE) && (irq || (lp20_cs1 & CS1_DONE)))
         uba_set_irq(dibp);
     else
@@ -569,8 +568,8 @@ lp20_update_ready(UNIT *uptr, uint16 setrdy, uint16 clrrdy)
     uint16  new_cs1 = (lp20_cs1 | setrdy) & ~clrrdy;
 
     if ((new_cs1 ^ lp20_cs1) & (CS1_ONL|CS1_DVON) && !sim_is_active(uptr)) {
-        if (new_cs1 & CS1_IE)
-           uba_set_irq(dibp);
+        if (new_cs1 & CS1_IE) 
+            uba_set_irq(dibp);
     }
     if (new_cs1 & CS1_DVON)
         lp20_cs2 &= ~CS2_DVOF;
@@ -591,7 +590,7 @@ lp20_svc (UNIT *uptr)
     uint16          ram_ch;
     uint16          par;
 
-    if (fnc != FNC_TEST && (uptr->flags & UNIT_ATT) == 0) {
+    if (fnc == FNC_PRINT && (uptr->flags & UNIT_ATT) == 0) {
         lp20_cs1 |= CS1_ERR;
         /* Set error */
         lp20_cs1 &= ~CS1_GO;
@@ -619,15 +618,6 @@ lp20_svc (UNIT *uptr)
     switch(fnc) {
     case FNC_PRINT:
         ram_ch = lp20_ram[(int)lp20_buf];
-        /* Check parity on RAM */
-        ram_ch &= ~(LP20_RAM_RAP);
-        par = (ram_ch >> 8) ^ (ram_ch >> 4) ^ ram_ch;
-        par = (par >> 2) ^ par;
-        par ^= par >> 1;
-        if ((par & 1) == 0)
-           ram_ch |= LP20_RAM_RAP;
-        if (ram_ch != lp20_ram[(int)lp20_buf])
-           lp20_cs2 |= CS2_RPE;
         /* If previous was delimiter or translation do it */
         if (lp20_cs1 & CS1_DHOLD || (ram_ch &(LP20_RAM_DEL|LP20_RAM_TRN)) != 0) {
             ch = ram_ch & LP20_RAM_CHR;
@@ -701,7 +691,7 @@ lp20_svc (UNIT *uptr)
         if (lp20_cs1 & CS1_GO)
             sim_activate(uptr, 600);
         else
-            lp20_update_chkirq (uptr, 1, 1);
+            lp20_update_chkirq (uptr, lp20_wcnt == 0, 1);
         return SCPE_OK;
 
     case FNC_TEST:
@@ -716,6 +706,7 @@ lp20_svc (UNIT *uptr)
             lp20_duvfa_state = 1;
             lp20_index = 0;
             lp20_odd = 0;
+            lp20_cs2 &= ~CS2_DVOF;
         } else if (lp20_buf == 0357) {               /* Stop DVU load */
             lp20_duvfa_state = 0;
             lp20_vfu[lp20_index] = 010000;
@@ -739,10 +730,10 @@ lp20_svc (UNIT *uptr)
 
     case FNC_RAM:
         if (lp20_odd) {
-          lp20_ram[lp20_index] = (lp20_ram[lp20_index] & 0377) | ((lp20_buf & 0377) << 8);
+          lp20_ram[lp20_index] = (lp20_ram[lp20_index] & 0377) | ((lp20_buf & 017) << 8);
           lp20_index++;
         } else {
-          lp20_ram[lp20_index] = (lp20_ram[lp20_index] & 0177400) | (lp20_buf & 0377);
+          lp20_ram[lp20_index] = (lp20_ram[lp20_index] & 07400) | (lp20_buf & 0377);
         }
         lp20_odd = !lp20_odd;
         break;
@@ -759,7 +750,7 @@ lp20_svc (UNIT *uptr)
 t_stat lp20_init (UNIT *uptr)
 {
     lp20_cs1 = (lp20_cs1 & CS1_DVON) | CS1_DONE;
-    lp20_cs2 = lp20_cs2 & (CS2_OVFU |CS2_DVOF);
+    lp20_cs2 = lp20_cs2 & (CS2_OFFL|CS2_DVOF);
     lp20_col = 0;
     lp20_ba = 0;
     lp20_wcnt = 0;
@@ -814,8 +805,10 @@ t_stat lp20_reset (DEVICE *dptr)
            lp20_ram[i] |= LP20_RAM_RAP;
     }
     sim_cancel (uptr);                                 /* deactivate unit */
-    if (uptr->flags & UNIT_ATT) 
+    if (uptr->flags & UNIT_ATT) {
+       lp20_update_ready(uptr, CS1_ONL, 0);
        lp20_update_chkirq (uptr, 1, 0);
+    }
     return SCPE_OK;
 }
 
@@ -827,8 +820,8 @@ t_stat lp20_attach (UNIT *uptr, CONST char *cptr)
     sim_switches |= SWMASK ('A');   /* Position to EOF */
     r = attach_unit (uptr, cptr);
     if (r == SCPE_OK) {
-       lp20_cs1 |= CS1_ONL;
-       lp20_cs2 &= ~CS2_OFFL;
+       lp20_update_ready(uptr, CS1_ONL, 0);
+       lp20_update_chkirq (uptr, 1, 1);
     }
     return r;
 }
@@ -838,9 +831,8 @@ t_stat lp20_attach (UNIT *uptr, CONST char *cptr)
 t_stat lp20_detach (UNIT *uptr)
 {
     sim_cancel (uptr);                                 /* deactivate unit */
-    lp20_cs1 &= ~(CS1_DONE|CS1_ONL|CS1_GO);
-    lp20_cs2 |= CS2_OFFL;
-    lp20_update_chkirq (uptr, 1, 0);
+    lp20_update_ready(uptr, 0, CS1_ONL);
+    lp20_update_chkirq (uptr, 1, 1);
     return detach_unit (uptr);
 }
 
