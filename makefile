@@ -305,7 +305,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
   LTO_EXCLUDE_VERSIONS = 
   PCAPLIB = pcap
   ifeq (agcc,$(findstring agcc,${GCC})) # Android target build?
-    OS_CCDEFS = -D_GNU_SOURCE -DSIM_ASYNCH_IO 
+    OS_CCDEFS += -D_GNU_SOURCE -DSIM_ASYNCH_IO 
     OS_LDFLAGS = -lm
   else # Non-Android (or Native Android) Builds
     ifeq (,$(INCLUDES)$(LIBRARIES))
@@ -1294,6 +1294,10 @@ endif
 CC_OUTSPEC = -o $@
 CC := ${GCC} ${CC_STD} -U__STRICT_ANSI__ ${CFLAGS_G} ${CFLAGS_O} ${CFLAGS_GIT} ${CFLAGS_I} -DSIM_COMPILER="${COMPILER_NAME}" -DSIM_BUILD_TOOL=simh-makefile -I . ${OS_CCDEFS} ${ROMS_OPT}
 LDFLAGS := ${OS_LDFLAGS} ${NETWORK_LDFLAGS} ${LDFLAGS_O}
+ifneq (,${SIM_VERSION_MODE})
+  CC += -DSIM_VERSION_MODE="${SIM_VERSION_MODE}"
+endif
+
 
 #
 # Common Libraries
