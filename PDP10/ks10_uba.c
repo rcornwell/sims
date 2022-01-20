@@ -383,9 +383,9 @@ uba_clr_irq(DIB *idev)
         if (dibp->uba_ctl == idev->uba_ctl &&
                 dibp->uba_irq_pend != 0) {
             lvl = 0;
-            for (j = 0200; j != 0; j>>=2) {
+            for (j = 0200; j != 0; j>>=1) {
             /* At least one, no need to continue */
-                 if ((dibp->uba_irq_pend & (0200 >> j)) != 0) {
+                 if ((dibp->uba_irq_pend & j) != 0) {
                      set_interrupt(dibp->uba_ctl<<2, pi);
                      return;
                  }

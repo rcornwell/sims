@@ -460,7 +460,7 @@ lp20_printline(UNIT *uptr, int nl) {
     int     trim = 0;
 
     /* Trim off trailing blanks */
-    while (lp20_col >= 0 && lp20_buffer[lp20_col - 1] == ' ') {
+    while (lp20_col != 0 && lp20_buffer[lp20_col - 1] == ' ') {
          lp20_col--;
          trim = 1;
     }
