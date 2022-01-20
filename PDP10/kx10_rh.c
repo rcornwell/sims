@@ -287,7 +287,7 @@ uba_rh_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access) {
         rhc->cs2 &= ~(CS2_PE|CS2_MXF|CS2_PAT|CS2_UNIT);
         if ((rhc->status & BUSY) == 0) {
             rhc->cs2 &= ~(CS2_UAI);
-            if( data & CS2_UAI) 
+            if( data & CS2_UAI)
             sim_debug(DEBUG_DETAIL, dptr, "RH%o set no UAI %06o\n", rhc->drive, PC);
             rhc->cs2 |= CS2_UAI & data;
         }
@@ -679,7 +679,10 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
                   rhc->status |= CR_DRE;
               *data = (uint64)(drdat & 077);
               *data |= ((uint64)(rhc->cia)) << 6;
-              *data |= ((uint64)(rhc->xfer_drive)) << 18;
+              if (rhc->xfer_drive != -1) 
+                  *data |= ((uint64)(rhc->xfer_drive)) << 18;
+              else
+                  *data |= ((uint64)(rhc->drive)) << 18;
         } else if (rhc->reg == 044) {
               *data = (uint64)rhc->ivect;
               if (rhc->imode)
@@ -735,12 +738,13 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
                        dptr->name, dev, *data, rhc->drive, PC, rhc->status);
                    return SCPE_OK;
                 }
+                rhc->drive = (int)(*data >> 18) & 07;
                 /* Check if access error */
                 if (rhc->rae & (1 << rhc->drive))
                     return SCPE_OK;
                 /* Start command */
                 rh_setup(rhc, (uint32)(*data >> 6));
-                rhc->xfer_drive = (int)(*data >> 18) & 07;
+                rhc->xfer_drive = rhc->drive;
                 if (rhc->dev_write(dptr, rhc, 0, (uint32)(*data & 077))) {
                     rhc->status |= CR_DRE;
                 }
@@ -826,16 +830,10 @@ void rh_setattn(struct rh_if *rhc, int unit)
 {
     rhc->attn |= 1<<unit;
 #if KS
-    if ((rhc->status & BUSY) == 0 && (rhc->cs1 & CS1_IE) != 0) 
+    if ((rhc->status & BUSY) == 0 && (rhc->cs1 & CS1_IE) != 0)
         uba_set_irq(rhc->dib);
 #else
-#if KL
-    if ((rhc->status & (RH20_SCR_FULL|RH20_PCR_FULL)) == (RH20_SCR_FULL)) {
-        rh20_setup(rhc);
-        return;
-    }
-#endif
-    if ((rhc->status & BUSY) == 0 && (rhc->status & IADR_ATTN) != 0) 
+    if ((rhc->status & BUSY) == 0 && (rhc->status & IADR_ATTN) != 0)
         set_interrupt(rhc->devnum, rhc->status);
 #endif
 }
@@ -867,7 +865,7 @@ int rh_blkend(struct rh_if *rhc)
 void rh_setirq(struct rh_if *rhc) {
    rhc->status |= PI_ENABLE;
 #if KS
-   if ((rhc->status & BUSY) == 0 && (rhc->cs1 & CS1_IE) != 0) 
+   if ((rhc->status & BUSY) == 0 && (rhc->cs1 & CS1_IE) != 0)
        uba_set_irq(rhc->dib);
 #else
    set_interrupt(rhc->devnum, rhc->status);
@@ -893,7 +891,7 @@ void rh_writecw(struct rh_if *rhc, int nxm) {
              if (nxm) {
                  wrd1 |= RH20_NXM_ERR;
                  rhc->status |= RH20_CHAN_ERR;
-             }  
+             }
              if (wc != 0) {
                  wrd1 |= RH20_NOT_WC0;
                  if (rhc->status & RH20_XEND) {
