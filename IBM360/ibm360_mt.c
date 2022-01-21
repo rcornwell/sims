@@ -85,6 +85,9 @@
 #define MT_ODD              0x01000       /* Odd parity */
 #define MT_TRANS            0x02000       /* Translation turned on ignored 9 track  */
 #define MT_CONV             0x04000       /* Data converter on ignored 9 track  */
+#define MT_CMDREW           0x10000       /* Rewind being done */
+#define MT_CMDRUN           0x20000       /* Unload being done */
+#define MT_CHAIN            0x40000       /* Start of command chain */
 
 /* Upper 11 bits of u3 hold the device address */
 
@@ -241,6 +244,11 @@ uint8  mt_startio(UNIT *uptr) {
         sim_debug(DEBUG_CMD, dptr, "busy\n");
         return SNS_BSY;
     }
+    if ((uptr->CMD & (MT_CMDREW|MT_CMDRUN)) != 0) {
+        sim_debug(DEBUG_CMD, dptr, "rew/run\n");
+        return SNS_BSY;
+    }
+
     /* Check if controller is free */
     for (i = 0; i < dptr->numunits; i++) {
        if ((dptr->units[i].CMD & MT_CMDMSK) != 0) {
@@ -248,6 +256,7 @@ uint8  mt_startio(UNIT *uptr) {
            return SNS_SMS|SNS_BSY;
        }
     }
+    uptr->CMD &= ~MT_CHAIN;   /* Clear start of chain flag */
     sim_debug(DEBUG_CMD, dptr, "start io\n");
     return 0;
 }
@@ -259,6 +268,7 @@ uint8  mt_startcmd(UNIT *uptr,  uint8 cmd) {
 
     if (mt_busy[GET_DEV_BUF(dptr->flags)] != 0 || (uptr->CMD & MT_CMDMSK) != 0) {
         sim_debug(DEBUG_CMD, dptr, "CMD busy unit=%d %x\n", unit, cmd);
+        uptr->flags |= MT_BUSY;
         return SNS_BSY;
     }
 
@@ -277,6 +287,16 @@ uint8  mt_startcmd(UNIT *uptr,  uint8 cmd) {
           /* Fall through */
 
     case 0x4:              /* Sense */
+         if ((uptr->CMD & MT_CMDREW) != 0) {
+            sim_debug(DEBUG_CMD, dptr, "CMD rewinding unit=%d %x\n", unit, cmd);
+            return SNS_BSY;
+         }
+         if ((uptr->CMD & MT_CMDRUN) != 0) {
+            sim_debug(DEBUG_CMD, dptr, "CMD unloading unit=%d %x\n", unit, cmd);
+             uptr->SNS |= SNS_INTVENT;
+             uptr->flags &= ~MT_BUSY;
+             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK|f;
+         }
          uptr->CMD &= ~(MT_CMDMSK);
          uptr->CMD |= cmd & MT_CMDMSK;
          sim_activate(uptr, 1000);       /* Start unit off */
@@ -291,19 +311,8 @@ uint8  mt_startcmd(UNIT *uptr,  uint8 cmd) {
          return 0;
 
     case 0x3:              /* Control */
-         if (cmd == 0x03) {
-             uptr->SNS = 0;
-             return SNS_CHNEND|SNS_DEVEND;
-         }
-         /* Fall through */
-
     case 0xb:              /* Control */
          uptr->SNS = 0;
-         if ((uptr->flags & UNIT_ATT) == 0) {
-             uptr->SNS |= SNS_INTVENT;
-             uptr->flags &= ~MT_BUSY;
-             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK|f;
-         }
          if ((uptr->flags & MTUF_9TR) == 0)  {
              uptr->SNS |= (SNS_7TRACK << 8);
              uptr->CMD |= MT_ODD;
@@ -431,6 +440,20 @@ t_stat mt_srv(UNIT * uptr)
             }
             return SCPE_OK;
         }
+    }
+
+    if ((uptr->CMD & MT_CMDREW) != 0) {
+        sim_debug(DEBUG_DETAIL, dptr, "Rewind unit=%d\n", unit);
+        uptr->CMD &= ~(MT_CMDREW);
+        r = sim_tape_rewind(uptr);
+        set_devattn(addr, SNS_DEVEND);
+        return SCPE_OK;
+    }
+
+    if ((uptr->CMD & MT_CMDRUN) != 0) {
+        sim_debug(DEBUG_DETAIL, dptr, "Unload unit=%d\n", unit);
+        uptr->CMD &= ~(MT_CMDRUN);
+        return sim_tape_detach(uptr);
     }
 
     switch (cmd & 0xf) {
@@ -602,7 +625,7 @@ t_stat mt_srv(UNIT * uptr)
                              int t = (uptr->CPOS & 0x3) << 4;
                              t ^= parity_table[t & 077] ^ mode;
                              mt_buffer[bufnum][uptr->POS++] = t;
-                        } else if ((uptr->CPOS & 0xc0) == MT_CONV2) { 
+                        } else if ((uptr->CPOS & 0xc0) == MT_CONV2) {
                              int  t = (uptr->CPOS & 0xf) << 2;
                              t ^= parity_table[t & 077] ^ mode;
                              mt_buffer[bufnum][uptr->POS++] = t;
@@ -952,29 +975,19 @@ t_stat mt_srv(UNIT * uptr)
               break;
 
          case MT_REW:
-              if (uptr->POS == 0) {
-                  uptr->POS ++;
-                  sim_activate(uptr, 30000);
-                  mt_busy[bufnum] &= ~1;
-              } else {
-                  sim_debug(DEBUG_DETAIL, dptr, "Rewind unit=%d\n", unit);
-                  uptr->CMD &= ~(MT_CMDMSK);
-                  r = sim_tape_rewind(uptr);
-                  set_devattn(addr, SNS_DEVEND);
-              }
+              mt_busy[bufnum] &= ~1;
+              uptr->CMD &= ~(MT_CMDMSK);
+              uptr->CMD |= MT_CMDREW;
+              sim_activate(uptr, 1000 + (20 * uptr->pos));
+              set_devattn(addr, SNS_DEVEND);
               break;
 
          case MT_RUN:
-              if (uptr->POS == 0) {
-                  uptr->POS ++;
-                  mt_busy[bufnum] &= ~1;
-                  sim_activate(uptr, 30000);
-              } else {
-                  sim_debug(DEBUG_DETAIL, dptr, "Unload unit=%d\n", unit);
-                  uptr->CMD &= ~(MT_CMDMSK);
-                  r = sim_tape_detach(uptr);
-                  set_devattn(addr, SNS_DEVEND);
-              }
+              mt_busy[bufnum] &= ~1;
+              uptr->CMD &= ~(MT_CMDMSK);
+              uptr->CMD |= MT_CMDRUN;
+              sim_activate(uptr, 1000 + (20 * uptr->pos));
+              set_devattn(addr, SNS_DEVEND);
               break;
          }
     }
