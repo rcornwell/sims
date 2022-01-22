@@ -297,6 +297,11 @@ uint8  mt_startcmd(UNIT *uptr,  uint8 cmd) {
              uptr->flags &= ~MT_BUSY;
              return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK|f;
          }
+         if ((uptr->flags & UNIT_ATT) == 0) {
+             uptr->SNS |= SNS_INTVENT;
+             uptr->flags &= ~MT_BUSY;
+             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK|f;
+         }
          uptr->CMD &= ~(MT_CMDMSK);
          uptr->CMD |= cmd & MT_CMDMSK;
          sim_activate(uptr, 1000);       /* Start unit off */
@@ -313,6 +318,11 @@ uint8  mt_startcmd(UNIT *uptr,  uint8 cmd) {
     case 0x3:              /* Control */
     case 0xb:              /* Control */
          uptr->SNS = 0;
+         if ((uptr->flags & UNIT_ATT) == 0) {
+             uptr->SNS |= SNS_INTVENT;
+             uptr->flags &= ~MT_BUSY;
+             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK|f;
+         }
          if ((uptr->flags & MTUF_9TR) == 0)  {
              uptr->SNS |= (SNS_7TRACK << 8);
              uptr->CMD |= MT_ODD;
