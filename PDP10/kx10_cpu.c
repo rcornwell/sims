@@ -4586,8 +4586,14 @@ in_loop:
              }
 #endif
 #if KS
+#if KS_ITS
+             /* ITS I/O instruction are standard */
+             /* Instructions don't do repeat indirect */
+             if (!QITS && (IR & 0700) == 0700) {
+#else
              /* I/O Instructions don't do repeat indirect */
              if ((IR & 0700) == 0700) {
+#endif
                  AR = MB & (IOCTL|RMASK);
                  AB = (t_addr)AR;
                  ind = 0;
@@ -5087,12 +5093,12 @@ unasign:
               goto unasign;
 #endif
 #if KS_ITS
-    case 0102: /* XCT */
-    case 0103: /* XCTI */
+    case 0102: /* XCTI */
+    case 0103: /* XCT */
               if (QITS && (FLAGS & USER) == 0) {
                    f_load_pc = 0;
                    f_pc_inh = 1;
-                   xct_flag = 020|AC;
+                   xct_flag = AC;
                    break;
               }
               goto unasign;
@@ -8561,7 +8567,15 @@ jrstf:
               if (QBBN && (FLAGS & USER) == 0)
                    xct_flag = AC;
 #endif
-#if KI | KL | KS
+#if KS
+#if KS_ITS
+              if (!QITS && (FLAGS & USER) == 0)
+#else
+              if ((FLAGS & USER) == 0)
+#endif
+                  xct_flag = AC;
+#endif
+#if KI | KL
               if ((FLAGS & USER) == 0)
                   xct_flag = AC;
 #endif
@@ -8585,6 +8599,10 @@ jrstf:
 
     case 0257:  /* MAP */
 #if KI | KL | KS
+#if KS_ITS
+              if (QITS)
+                  goto muuo;
+#endif
               f = AB >> 9;
               flag1 = (FLAGS & USER) != 0;
               flag3 = 0;
