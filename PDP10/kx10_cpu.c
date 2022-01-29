@@ -5816,6 +5816,11 @@ dpnorm:
 
     case 0123:  /* Extend */
 #if KL | KS
+#if KS_ITS
+              if (QITS) {
+                  goto unasign;
+              }
+#endif
               /* Handle like xct */
               f_load_pc = 0;
               f_pc_inh = 1;
@@ -8285,7 +8290,11 @@ mul_done:
 #endif
                        break;
               case 001: /* PORTAL */
+#if KL
+                       if (QKLB && t20_page)
+                           pc_sect = sect;
                        FLAGS &= ~(PUBLIC|PRV_PUB);
+#endif
                        break;
               case 005:  /* XJRSTF */
 xjrstf:
@@ -8327,7 +8336,7 @@ xjrstf:
               case 002: /* JRSTF */
                        BR = AR >> 23; /* Move into position */
 jrstf:
-#if KL_ITS | KS_ITS
+#if KL_ITS
                        if (QITS)
                            f = FLAGS & (TRP1|TRP2);
 #endif
@@ -8346,14 +8355,14 @@ jrstf:
                           FLAGS |= (BR & OVR) ? PRV_PUB : 0;
                        }
 #endif
-#if KL_ITS | KS_ITS
+#if KL_ITS
                        if (QITS)
                            FLAGS |= f;
 #endif
                        break;
 
               case 017:  /* Invalid */
-#if KL_ITS | KS_ITS
+#if KL_ITS
                        if (QITS) {
                            BR = AR >> 23; /* Move into position */
                            pi_enable = 1;
@@ -8405,6 +8414,11 @@ jrstf:
                        break;
 
               case 014:  /* SFM */
+#if KS
+                       if ((FLAGS & USER) != 0) {
+                          goto muuo;
+                       }
+#endif
                        MB = (((uint64)FLAGS) << 23) & FMASK;
 #if KL
                        if ((FLAGS & USER) == 0) {
@@ -8444,7 +8458,7 @@ jrstf:
                            (FLAGS & (USER|PUBLIC)) == PUBLIC) {
 #else
                        /* Restore interrupt level. */
-                       if ((FLAGS & (USER|USERIO)) == USER) {
+                       if ((FLAGS & (USER)) == USER) {
 #endif
                             goto muuo;
                        } else {
