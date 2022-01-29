@@ -747,7 +747,7 @@ extern void ka10_lights_clear_aux (int);
 #define NUM_DEVS_TCU    1
 #define NUM_DEVS_DUP    2
 #if KS_ITS
-#define NUM_DEVS_IMP    0     /* KS_ITS */
+#define NUM_DEVS_IMP    KS_ITS
 #define NUM_DEVS_CH11   KS_ITS
 #endif
 #endif

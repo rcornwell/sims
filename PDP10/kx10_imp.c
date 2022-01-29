@@ -44,6 +44,58 @@
 #define TYPE_BBN        1              /* BBN style interface TENEX */
 #define TYPE_WAITS      2              /* IMP connected to waits system. */
 
+#if KS
+/* IMP11 interface */
+
+/* CSR values */
+#define CSR_GO    0000001  /* Go transfer */
+#define CSR_RST   0000002  /* Reset interface */
+#define CSR_UBA   0000060  /* Unibus upper address */
+#define CSR_IE    0000100  /* Interrupt enable */
+#define CSR_RDY   0000200  /* Device ready */
+#define CSR_MRE   0001000  /* Master error */
+#define CSR_NXM   0040000  /* Non existant memory */
+#define CSR_ERR   0100000  /* Error present */
+
+/* Input CSR  0767600 */
+#define CSR_HRC   0000004  /* Host Ready Relay Control */
+#define CSR_SE    0000010  /* Store enable */
+#define CSR_IBF   0000400  /* Input Buffer full */
+#define CSR_INR   0002000  /* IMP not ready */
+#define CSR_HR    0004000  /* Host Rady */
+#define CSR_EOM   0020000  /* End of Message */
+
+/* Input data buffer   0767602 */
+/* Input Bus Address   0767604 */
+/* Input Word Count    0767606 */
+
+/* Output CSR  07676010 */
+#define CSR_ELB   0000004  /* Send EOM indication to IMP */
+#define CSR_BB    0000010  /* Bus Back */
+#define CSR_OBE   0000400  /* OUtput Buffer Empty */
+#define CSR_WC0   0020000  /* Output Word Count 0 */
+
+/* Output data buffer  0767612 */
+/* Output Bus Address  0767614 */
+/* Output Word Count   0767616 */
+
+/* Bits in STATUS */
+#define IMPID       010 /* Input done. */
+#define IMPI32      020 /* Input in 32 bit mode. */
+#define IMPIB       040 /* Input busy. */
+#define IMPOD      0100 /* Output done. */
+#define IMPO32     0200 /* Output in 32-bit mode. */
+#define IMPOB      0400 /* Output busy. */
+#define IMPERR    01000 /* IMP error. */
+#define IMPR      02000 /* IMP ready. */
+#define IMPIC     04000 /* IMP interrupt condition. */
+#define IMPHER   010000 /* Host error. */
+#define IMPHR    020000 /* Host ready. */
+#define IMPIHE   040000 /* Inhibit interrupt on host error. */
+#define IMPLW   0100000 /* Last IMP word. */
+#else
+
+
 /* ITS IMP Bits */
 
 /* CONI */
@@ -123,6 +175,7 @@
 /* CONI timeout.  If no CONI instruction is executed for 3-5 seconds,
    the interface will raise the host error signal. */
 #define CONI_TIMEOUT 3000000
+#endif
 
 #define STATUS     u3
 #define OPOS       u4    /* Output bit position */
@@ -435,8 +488,14 @@ static CONST ETH_MAC broadcast_ethaddr = {0xff,0xff,0xff,0xff,0xff,0xff};
 
 static CONST in_addr_T broadcast_ipaddr = {0xffffffff};
 
+#if KS
+int            imp_wr(DEVICE *dptr, t_addr addr, uint16 data, int32 access);
+int            imp_rd(DEVICE *dptr, t_addr addr, uint16 *data, int32 access);
+uint16         imp_vect(struct pdp_dib *dibp);
+#else
 t_stat         imp_devio(uint32 dev, uint64 *data);
 t_addr         imp_devirq(uint32 dev, t_addr addr);
+#endif
 t_stat         imp_srv(UNIT *);
 t_stat         imp_eth_srv(UNIT *);
 t_stat         imp_tim_srv(UNIT *);
@@ -480,15 +539,30 @@ const char     *imp_description (DEVICE *dptr);
 static char    *ipv4_inet_ntoa(struct in_addr ip);
 static int     ipv4_inet_aton(const char *str, struct in_addr *inp);
 
+#if KS
+uint16        imp_icsr;
+uint16        imp_idb;
+uint32        imp_iba;
+uint16        imp_iwcnt;
+uint16        imp_ocsr;
+uint16        imp_odb;
+uint32        imp_oba;
+uint16        imp_owcnt;
+#endif
+
 
 int       imp_mpx_lvl = 0;
 double    last_coni;
 
 UNIT imp_unit[] = {
     {UDATA(imp_srv,     UNIT_IDLE+UNIT_ATTABLE+UNIT_DHCP, 0)},  /* 0 */
-    {UDATA(imp_eth_srv, UNIT_IDLE+UNIT_DIS,     0)},  /* 0 */
-    {UDATA(imp_tim_srv, UNIT_IDLE+UNIT_DIS,     0)},  /* 0 */
+    {UDATA(imp_eth_srv, UNIT_IDLE+UNIT_DIS,     0)},  /* 1 */
+    {UDATA(imp_tim_srv, UNIT_IDLE+UNIT_DIS,     0)},  /* 2 */
 };
+
+#if KS
+DIB imp_dib = {0767600, 017, 0250, 6, 3, &imp_rd, &imp_wr, &imp_vect, 0, 0};
+#else
 DIB imp_dib = {IMP_DEVNUM, 1, &imp_devio, 
 #if KL
         &imp_devirq,
@@ -496,6 +570,7 @@ DIB imp_dib = {IMP_DEVNUM, 1, &imp_devio,
         NULL
 #endif
 };
+#endif
 
 MTAB imp_mod[] = {
     { MTAB_XTD|MTAB_VDV|MTAB_VALR|MTAB_NC, 0, "MAC", "MAC=xx:xx:xx:xx:xx:xx",
@@ -516,16 +591,28 @@ MTAB imp_mod[] = {
            "Use DHCP to set IP address"},
     { MTAB_XTD|MTAB_VDV, 0, "DHCPIP", NULL,
       NULL, &imp_show_dhcpip, NULL, "DHCP info" },
+#if !KS
     { UNIT_DTYPE, (TYPE_MIT << UNIT_V_DTYPE), "MIT", "MIT", NULL, NULL,  NULL,
            "ITS/MIT style interface"},
     { UNIT_DTYPE, (TYPE_BBN << UNIT_V_DTYPE), "BBN", "BBN", NULL, NULL,  NULL,
            "Tenex/BBN style interface"},
     { UNIT_DTYPE, (TYPE_WAITS << UNIT_V_DTYPE), "WAITS", "WAITS", NULL, NULL,  NULL,
            "WAITS style interface"},
+#endif
     { MTAB_XTD|MTAB_VDV|MTAB_NMO, 0, "ARP", NULL,
       NULL, &imp_show_arp, NULL, "ARP IP address->MAC address table" },
     { MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, NULL, "ARP=ddd.ddd.ddd.ddd=XX:XX:XX:XX:XX:XX",
       &imp_set_arp, NULL, NULL, "Create a static ARP Entry" },
+#if KS
+    {MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "addr", "addr",  &uba_set_addr, uba_show_addr,
+            NULL, "Sets address of CH11" },
+    {MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "vect", "vect",  &uba_set_vect, uba_show_vect,
+            NULL, "Sets vect of CH11" },
+    {MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "br", "br",  &uba_set_br, uba_show_br,
+            NULL, "Sets br of CH11" },
+    {MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "ctl", "ctl",  &uba_set_ctl, uba_show_ctl,
+            NULL, "Sets uba of CH11" },
+#endif
     { 0 }
     };
 
@@ -570,6 +657,182 @@ DEVICE imp_dev = {
 #define IMP_ICHN     0000070
 #define IMP_ECHN     0000700
 
+#if KS
+static void check_interrupts (UNIT *uptr)
+{
+    DEVICE         *dptr = find_dev_from_unit (uptr);
+    struct pdp_dib *dibp = (DIB *)dptr->ctxt;
+    int             irq = 0;
+
+    if ((uptr->STATUS & (IMPERR | IMPIC)) == IMPERR)
+        irq = 1;
+    if ((uptr->STATUS & (IMPR | IMPIC)) == (IMPR | IMPIC))
+        irq = 1;
+    if ((uptr->STATUS & (IMPHER | IMPIHE)) == IMPHER)
+        irq = 1;
+    if ((uptr->STATUS & (IMPID|IMPLW)) == (IMPID|IMPLW))
+        irq = 1;
+    if (uptr->STATUS & IMPOD)
+       irq = 1;
+    if (irq) 
+        uba_set_irq(dibp);
+    else
+        uba_clr_irq(dibp);
+}
+
+int
+imp_wr(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
+{
+    struct pdp_dib   *dibp = (DIB *)dptr->ctxt;
+    uint16            temp;
+    int               i;
+
+    addr &= dibp->uba_mask;
+    sim_debug(DEBUG_DETAIL, dptr, "IMP11 write %06o %06o %o\n",
+             addr, data, access);
+
+    switch (addr & 016) {
+    case 000:     /* Input CSR */
+            if (access == BYTE) {
+               if (addr & 1)
+                   data = data | (imp_icsr & 0377);
+               else
+                   data = (imp_icsr & 0177400) | data;
+            }
+            if (data & CSR_RST) {
+               imp_icsr = 0;
+               imp_iba = 0;
+               imp_iwcnt = 0;
+            }
+            imp_icsr = data;
+            break;
+
+    case 002:     /* Input Data Buffer */
+            if (access == BYTE) {
+               if (addr & 1)
+                   data = data | (imp_idb & 0377);
+               else
+                   data = (imp_idb & 0177400) | data;
+            }
+            imp_idb = data;
+            break;
+
+    case 004:     /* Input Bus Address */
+            imp_iba = (data & 0177777);
+            break;
+
+    case 006:     /* Input Word Count */
+            imp_iwcnt = (data & 0177777);
+            break;
+
+    case 010:     /* Output CSR */
+            if (access == BYTE) {
+               if (addr & 1)
+                   data = data | (imp_ocsr & 0377);
+               else
+                   data = (imp_ocsr & 0177400) | data;
+            }
+            if (data & CSR_RST) {
+               imp_ocsr = 0;
+               imp_oba = 0;
+               imp_owcnt = 0;
+            }
+            imp_ocsr = data;
+            break;
+
+    case 012:     /* Output Data Buffer */
+            if (access == BYTE) {
+               if (addr & 1)
+                   data = data | (imp_odb & 0377);
+               else
+                   data = (imp_odb & 0177400) | data;
+            }
+            imp_odb = data;
+            break;
+
+    case 014:     /* Output Bus Address */
+            imp_oba = (data & 0177777);
+            break;
+
+    case 016:     /* Output Word Count */
+            imp_iwcnt = (data & 0177777);
+            break;
+    }
+    return 0;
+}
+
+int
+imp_rd(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
+{
+    struct pdp_dib   *dibp = (DIB *)dptr->ctxt;
+    UNIT             *uptr = imp_unit;
+    uint16            temp;
+    int               i;
+
+    addr &= dibp->uba_mask;
+    sim_debug(DEBUG_DETAIL, dptr, "IMP11 write %06o %06o %o\n",
+             addr, *data, access);
+
+    switch (addr & 016) {
+    case 000:     /* Input CSR */
+            *data = imp_icsr;
+            if ((uptr->STATUS & (IMPR|IMPID)) == (IMPR|IMPID) && 
+                 (imp_icsr & CSR_GO) == 0)
+                *data |= CSR_RDY;
+            if ((uptr->STATUS & (IMPID)) != 0)
+                *data |= CSR_IBF;
+            break;
+    case 002:     /* Input Data Buffer */
+            *data = imp_idb;
+            break;
+
+    case 004:     /* Input Bus Address */
+            *data = imp_iba;
+            break;
+
+    case 006:     /* Input Word Count */
+            *data = imp_iwcnt;
+            break;
+
+    case 010:     /* Output CSR */
+            *data = imp_ocsr;
+            if ((uptr->STATUS & (IMPR|IMPOD)) == (IMPR|IMPOD) && 
+                 (imp_ocsr & CSR_GO) == 0)
+                *data |= CSR_RDY;
+            if ((uptr->STATUS & (IMPOD)) != 0)
+                *data |= CSR_OBE;
+            break;
+
+    case 012:     /* Output Data Buffer */
+            *data = imp_odb;
+            break;
+
+    case 014:     /* Output Bus Address */
+            *data = imp_oba;
+            break;
+
+    case 016:     /* Output Word Count */
+            *data = imp_owcnt;
+            break;
+    }
+    return 0;
+
+}
+
+
+uint16
+imp_vect(struct pdp_dib *dibp)
+{
+    uint16     vect = dibp->uba_vect;
+
+    if (imp_unit[0].STATUS & IMPID && (imp_unit[0].STATUS & IMPLW) == 0)
+        return vect;
+    if (imp_unit[0].STATUS & IMPOD)
+        return vect+4;
+    return 0;
+}
+
+#else
 static void check_interrupts (UNIT *uptr)
 {
     clr_interrupt (DEVNUM);
@@ -740,9 +1003,78 @@ imp_devirq(uint32 dev, t_addr addr) {
     return  addr;
 }
 #endif
+#endif
 
 t_stat imp_srv(UNIT * uptr)
 {
+#if KS
+    DEVICE         *dptr = find_dev_from_unit (uptr);
+    struct pdp_dib *dibp = (DIB *)dptr->ctxt;
+    t_addr          pa;
+    uint16          wd;
+
+    if (imp_ocsr & CSR_GO && imp_data.sendq == NULL) {
+        pa = ((imp_ocsr & CSR_UBA) << 12) | imp_oba;
+        if (uba_read_npr_word(pa, dibp->uba_ctl, &wd) == 0) {
+            imp_ocsr |= CSR_NXM;
+            imp_ocsr &= ~CSR_GO;
+            check_interrupts (uptr);
+            sim_debug(DEBUG_DETAIL, &imp_dev, "IMP out npr failed\n");
+            return SCPE_OK;
+        }
+
+        imp_oba ++;
+        imp_owcnt++;
+        if (imp_oba == 0) {
+            imp_ocsr |= CSR_ERR;
+            imp_ocsr &= ~CSR_GO;
+            check_interrupts (uptr);
+            sim_debug(DEBUG_DETAIL, &imp_dev, "IMP oba overflow\n");
+            return SCPE_OK;
+        }
+        imp_data.sbuffer[uptr->OPOS >> 3] = (wd & 0377);
+        uptr->OPOS += 8;
+        imp_data.sbuffer[uptr->OPOS >> 3] = ((wd >> 8) & 0377);
+        uptr->OPOS += 8;
+        if (imp_owcnt == 0) {
+            imp_ocsr |= CSR_RDY;
+            imp_ocsr &= ~CSR_GO;
+            if (imp_ocsr & CSR_ELB) {
+                imp_send_packet (&imp_data, uptr->OPOS >> 3);
+                memset(imp_data.sbuffer, 0, ETH_FRAME_SIZE);
+                uptr->OPOS = 0;
+            }
+            check_interrupts (uptr);
+        }
+    }
+    if (uptr->STATUS & IMPIB && imp_icsr & CSR_GO) {
+        pa = ((imp_icsr & CSR_UBA) << 12) | imp_iba;
+        imp_iba ++;
+        imp_iwcnt++;
+        if (imp_iba == 0) {
+            imp_icsr |= CSR_ERR;
+            imp_icsr &= ~CSR_GO;
+            check_interrupts (uptr);
+            sim_debug(DEBUG_DETAIL, &imp_dev, "IMP oba overflow\n");
+            return SCPE_OK;
+        }
+        wd = imp_data.rbuffer[uptr->IPOS >> 3];
+        uptr->IPOS += 8;
+        wd |= imp_data.rbuffer[uptr->IPOS >> 3] << 8;
+        uptr->IPOS += 8;
+        if (uptr->IPOS > uptr->ILEN) {
+             imp_icsr |= CSR_EOM|CSR_RDY;
+             imp_icsr &= ~CSR_GO;
+             uptr->STATUS &= ~IMPIB;
+             uptr->ILEN = 0;
+        }
+        if (imp_iwcnt == 0) {
+            imp_icsr |= CSR_RDY;
+            imp_icsr &= ~CSR_GO;
+        }
+        check_interrupts (uptr);
+    }
+#else
     int     i;
     int     l;
 
@@ -782,6 +1114,7 @@ t_stat imp_srv(UNIT * uptr)
         uptr->STATUS |= IMPID;
         check_interrupts (uptr);
     }
+#endif
     if (uptr->ILEN == 0 && (uptr->STATUS & (IMPIB|IMPID)) == 0)
         imp_packet_in(&imp_data);
     return SCPE_OK;
@@ -2659,6 +2992,7 @@ t_stat imp_attach(UNIT* uptr, CONST char* cptr)
     char* tptr;
     char buf[32];
 
+#if !KS
     /* Set to correct device number */
     switch(GET_DTYPE(imp_unit[0].flags)) {
     case TYPE_MIT:
@@ -2669,6 +3003,7 @@ t_stat imp_attach(UNIT* uptr, CONST char* cptr)
                    imp_dib.dev_num = WA_IMP_DEVNUM;
                    break;
     }
+#endif
     if (!(uptr->flags & UNIT_DHCP) && imp_data.ip == 0)
       return sim_messagef (SCPE_NOATT, "%s: An IP Address must be specified when DHCP is disabled\n", 
                imp_dev.name);
