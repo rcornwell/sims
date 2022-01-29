@@ -982,7 +982,7 @@ sim_debug(DBG_TRC, DUPDPTR, "dup_svc(dup=%d)\n", dup);
 if (!(dup_txcsr[dup] & TXCSR_M_TXDONE) && (!tmxr_tpbusyln (lp))) {
     uint8 data = dup_txdbuf[dup] & TXDBUF_M_TXDBUF;
 
-    dup_put_msg_bytes (dup, &data, (dup_txdbuf[dup] & TXDBUF_M_TEOM) && (dptr == &dup_dev) ? 0 : 1, dup_txdbuf[dup] & TXDBUF_M_TSOM, (dup_txdbuf[dup] & TXDBUF_M_TEOM));
+    dup_put_msg_bytes (dup, &data, 0, dup_txdbuf[dup] & TXDBUF_M_TSOM, (dup_txdbuf[dup] & TXDBUF_M_TEOM));
     if (tmxr_tpbusyln (lp)) { /* Packet ready to send? */
         sim_debug(DBG_TRC, DUPDPTR, "dup_svc(dup=%d) - Packet Done %d bytes\n", dup, dup_xmtpkoffset[dup]);
         }
@@ -1152,7 +1152,6 @@ return SCPE_OK;
 
 static t_stat dup_reset (DEVICE *dptr)
 {
-t_stat r;
 int32 i, ndev, attached = 0;
 
 sim_debug(DBG_TRC, dptr, "dup_reset()\n");
@@ -1190,7 +1189,7 @@ sim_cancel (dup_units+dup_desc.lines);                  /* stop poll */
 ndev = ((dptr->flags & DEV_DIS)? 0: dup_desc.lines );
 if (attached)
     sim_activate_after (dup_units+dup_desc.lines, DUP_CONNECT_POLL*1000000);/* start poll */
-return r;
+return SCPE_OK;
 }
 
 static t_stat dup_attach (UNIT *uptr, CONST char *cptr)

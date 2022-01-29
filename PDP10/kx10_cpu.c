@@ -495,7 +495,9 @@ REG cpu_reg[] = {
 #if KL | KI | ITS | BBN | KS
     { FLDATAD (PAGE_ENABLE, page_enable, 0, "Paging enabled")},
     { FLDATAD (PAGE_FAULT, page_fault, 0, "Page fault"), REG_RO},
+#if KI | ITS | BBN
     { ORDATAD (AC_STACK, ac_stack, 18, "AC Stack"), REG_RO},
+#endif
     { ORDATAD (PAGE_RELOAD, pag_reload, 18, "Page reload"), REG_HRO},
     { ORDATAD (FAULT_DATA, fault_data, 36, "Page fault data"), REG_RO},
     { FLDATAD (TRP_FLG, trap_flag, 0, "Trap flag"), REG_HRO},
@@ -8810,7 +8812,7 @@ jrstf:
 #endif
 #if KL
               if (QKLB && t20_page)
-                  pc_sect = AR >> 18;
+                  pc_sect = (AR >> 18) & 0037;
 #endif
               PC = AR & RMASK;
               PC_CHANGE
@@ -13419,9 +13421,12 @@ pi_pending = pi_enc = apr_irq = 0;
 ov_irq =fov_irq =clk_en =clk_irq = 0;
 pi_restore = pi_hold = 0;
 FLAGS = 0;
+#if KI | ITS | BBN
+ac_stack = 0;
+#endif
 #if KI | KL | KS
 ub_ptr = eb_ptr = 0;
-pag_reload = ac_stack = 0;
+pag_reload = 0;
 #if KI
 fm_sel = small_user = user_addr_cmp = page_enable = 0;
 #else
