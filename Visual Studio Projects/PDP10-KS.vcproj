@@ -201,6 +201,9 @@
 				RelativePath="..\PDP10\ks10_ch11.c"
 				>
 			<File
+				RelativePath="..\PDP10\ks10_dup.c"
+				>
+			<File
 				RelativePath="..\PDP10\ks10_dz.c"
 				>
 			</File>
@@ -482,6 +485,14 @@
 			</File>
 			<File
 				RelativePath="..\PDP10\kx10_disk.h"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\ks10_dup.h"
+				>
+			</File>
+			<File
+				RelativePath="..\PDP10\pdp11_ddcmp.h"
 				>
 			</File>
 			<File
