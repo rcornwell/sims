@@ -313,7 +313,7 @@ static BITFIELD dup_txdbuf_bits[] = {
 
 #define IOLN_DUP        010
 
-DIB dup_dib = { 760300, 017, 0570, 5, 3, &dup_rd, &dup_wr,  &dup_irq, 0, 0};
+DIB dup_dib = { 0760300, 017, 0570, 5, 3, &dup_rd, &dup_wr,  &dup_irq, 0, 0};
 
 static UNIT dup_unit_template = {
     UDATA (&dup_svc, UNIT_ATTABLE|UNIT_IDLE, 0), 
