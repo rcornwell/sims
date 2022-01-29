@@ -198,6 +198,9 @@
 				>
 			</File>
 			<File
+				RelativePath="..\PDP10\ks10_ch11.c"
+				>
+			<File
 				RelativePath="..\PDP10\ks10_dz.c"
 				>
 			</File>
