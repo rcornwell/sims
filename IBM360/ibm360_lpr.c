@@ -255,7 +255,6 @@ print_line(UNIT * uptr)
     int                 u = (uptr - lpr_unit);
     int                 l = (uptr->CMD >> 3) & 0x1f;
     int                 f;
-    int                 rows;
     int                 mask;
 
     /* Dump buffer if full */
