@@ -182,8 +182,9 @@ struct _chanctl {
     uint32      chan_buf;              /* Channel data buffer */
     uint16      ccw_flags;             /* Channel flags */
     uint16      chan_status;           /* Channel status */
-    uint16      daddr;              /* Device on channel */
+    uint16      daddr;                 /* Device on channel */
     uint8       chan_byte;             /* Current byte, dirty/full */
+    uint8       chain_flg;             /* Holding on chain */
 };
 
 uint8        dev_status[MAX_CHAN * 256]; /* Device status array */
@@ -372,8 +373,19 @@ int
 load_ccw(struct _chanctl *chan, int tic_ok) {
     uint32         word;
     int            cmd = 0;
+    int            cc = 0;
 
 loop:
+    /* If last chain, start command */
+    if (chan->chain_flg == 1 && (chan->ccw_flags & FLAG_CD) == 0) {
+       sim_debug(DEBUG_DETAIL, &cpu_dev, "Channel %03x chain restart\n",
+                     chan->daddr);
+       cc = 1;
+       chan->chain_flg = 0;
+       cmd = chan->ccw_cmd;
+       goto start_cmd;
+    }
+
     /* Abort if channel not on double boundry */
     if ((chan->caw & 0x7) != 0) {
         chan->chan_status |= STATUS_PCHK;
@@ -382,6 +394,10 @@ loop:
     /* Abort if we have any errors */
     if (chan->chan_status & 0x7f)
         return 1;
+
+    /* remember if we were chaining */
+    if ((chan->ccw_flags & FLAG_CC) != 0)
+       cc = 1;
     /* Check if we have status modifier set */
     if (chan->chan_status & STATUS_MOD) {
         chan->caw+=8;
@@ -436,6 +452,7 @@ loop:
         sim_debug(DEBUG_DETAIL, &cpu_dev, "Channel fetch idaw %03x %08x\n",
              chan->daddr, chan->ccw_iaddr);
     }
+start_cmd:
     if (cmd) {
          struct _dev  *dev = chan->dev;
          DIB          *dibp;
@@ -457,8 +474,12 @@ loop:
          chan->chan_status &= 0xff;
          chan->chan_status |= dibp->start_cmd(uptr, chan->ccw_cmd) << 8;
          if (chan->chan_status & STATUS_BUSY) {
-             sim_debug(DEBUG_DETAIL, &cpu_dev, "Channel %03x busy\n",
-                     chan->daddr);
+             sim_debug(DEBUG_DETAIL, &cpu_dev, "Channel %03x busy %d\n",
+                     chan->daddr, cc);
+             if (cc) {
+                chan->chain_flg = 1;
+             }
+             return 0;
          }
 
          if (chan->chan_status & (STATUS_ATTN|STATUS_CHECK|STATUS_EXPT)) {
@@ -476,14 +497,10 @@ loop:
              chan->ccw_flags |= FLAG_SLI;  /* Force SLI for immediate command */
              sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end(%x load) %x %04x end\n", 
                           chan->daddr, chan->chan_status, chan->ccw_flags);
+             if (chan->chan_status & (STATUS_DEND)) {
+                 irq_pend = 1;
+            }
          }
-         if (chan->chan_status & (STATUS_DEND|STATUS_CEND)) {
-             chan->chan_status |= STATUS_CEND;
-             chan->ccw_cmd = 0;
-             irq_pend = 1;
-             if ((chan->ccw_flags & (FLAG_CD|FLAG_CC)) == 0)
-                return 1;  /* No chain? Give imm. SIO response. */
-        }
     }
     if (chan->ccw_flags & FLAG_PCI) {
         chan->chan_status |= STATUS_PCI;
@@ -720,11 +737,18 @@ set_devattn(uint16 addr, uint8 flags) {
 
     if (chan == NULL)
         return;
+
+    /* Check if chain being held */
+    if (chan->daddr == addr && chan->chain_flg != 0 &&
+            (flags & SNS_DEVEND) != 0) {
+        chan->chan_status |= ((uint16)flags) << 8;
+    } else 
     /* Check if device is current on channel */
     if (chan->daddr == addr && (chan->chan_status & STATUS_CEND) != 0  &&
             (flags & SNS_DEVEND) != 0) {
         chan->chan_status |= ((uint16)flags) << 8;
-    } else {
+    } else /* Device reporting status change */
+    {
         dev_status[addr] = flags;
         chan_pend[(addr >> 8) & 0xf]= 1;
     }
@@ -1257,6 +1281,14 @@ scan_chan(uint16 mask, int irq_en) {
                     pend = chan->daddr;
                     break;
                  }
+             }
+
+             /* If chaining and device end continue */
+             if (chan->chain_flg && chan->chan_status & STATUS_DEND) {
+                     sim_debug(DEBUG_EXP, &cpu_dev, "Scan(%x %x %x %x) CC\n", i,
+                              chan->daddr, chan->chan_status, chan->ccw_flags);
+                 /* Restart command that was flaged as an issue */
+                 (void)load_ccw(chan, 1);
              }
 
              /* If channel end, check if we should continue */
