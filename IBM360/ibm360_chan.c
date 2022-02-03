@@ -473,6 +473,7 @@ start_cmd:
              return 1;
          chan->chan_status &= 0xff;
          chan->chan_status |= dibp->start_cmd(uptr, chan->ccw_cmd) << 8;
+         /* If device is busy, check if last was CC, then mark pending */
          if (chan->chan_status & STATUS_BUSY) {
              sim_debug(DEBUG_DETAIL, &cpu_dev, "Channel %03x busy %d\n",
                      chan->daddr, cc);
@@ -482,6 +483,7 @@ start_cmd:
              return 0;
          }
 
+         /* Check if any errors from initial command */
          if (chan->chan_status & (STATUS_ATTN|STATUS_CHECK|STATUS_EXPT)) {
              sim_debug(DEBUG_DETAIL, &cpu_dev, "Channel %03x abort %04x\n",
                      chan->daddr, chan->chan_status);
@@ -491,6 +493,7 @@ start_cmd:
              irq_pend = 1;
              return 1;
          }
+
          /* Check if immediate channel end */
          if (chan->chan_status & STATUS_CEND) {
              chan->ccw_cmd = 0;

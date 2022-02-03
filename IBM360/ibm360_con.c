@@ -139,7 +139,7 @@ uint8  con_startcmd(UNIT *uptr, uint8 cmd) {
          sim_debug(DEBUG_CMD, &con_dev, "%d: Cmd RD\n", u);
          if (uptr->CMD & CON_REQ) {
               uptr->CMD &= ~CON_REQ;
-              return SNS_ATTN|SNS_BSY;
+              return SNS_ATTN;
          }
 
          if ((uptr->CMD & CON_INPUT) == 0 &&
@@ -162,7 +162,7 @@ uint8  con_startcmd(UNIT *uptr, uint8 cmd) {
          sim_debug(DEBUG_CMD, &con_dev, "%d: Cmd WR\n", u);
          if (uptr->CMD & CON_REQ) {
               uptr->CMD &= ~CON_REQ;
-              return SNS_ATTN|SNS_BSY;
+              return SNS_ATTN;
          }
          uptr->CMD |= cmd & CON_MSK;
          uptr->SNS = 0;
@@ -178,7 +178,7 @@ uint8  con_startcmd(UNIT *uptr, uint8 cmd) {
          sim_debug(DEBUG_CMD, &con_dev, "%d: Cmd NOP\n", u);
          if (uptr->CMD & CON_REQ) {
               uptr->CMD &= ~CON_REQ;
-              return SNS_ATTN|SNS_BSY;
+              return SNS_ATTN;
          }
          uptr->SNS = 0;
          return SNS_CHNEND|SNS_DEVEND;
