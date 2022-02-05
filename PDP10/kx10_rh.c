@@ -679,10 +679,7 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
                   rhc->status |= CR_DRE;
               *data = (uint64)(drdat & 077);
               *data |= ((uint64)(rhc->cia)) << 6;
-              if (rhc->xfer_drive != -1) 
-                  *data |= ((uint64)(rhc->xfer_drive)) << 18;
-              else
-                  *data |= ((uint64)(rhc->drive)) << 18;
+              *data |= ((uint64)(rhc->xfer_drive)) << 18;
         } else if (rhc->reg == 044) {
               *data = (uint64)rhc->ivect;
               if (rhc->imode)
@@ -743,10 +740,11 @@ t_stat rh_devio(uint32 dev, uint64 *data) {
                 if (rhc->rae & (1 << rhc->drive))
                     return SCPE_OK;
                 /* Start command */
-                rh_setup(rhc, (uint32)(*data >> 6));
-                rhc->xfer_drive = rhc->drive;
                 if (rhc->dev_write(dptr, rhc, 0, (uint32)(*data & 077))) {
                     rhc->status |= CR_DRE;
+                } else {
+                   rh_setup(rhc, (uint32)(*data >> 6));
+                   rhc->xfer_drive = rhc->drive;
                 }
                 sim_debug(DEBUG_DATAIO, dptr,
                     "%s %03o command %012llo, %d PC=%06o %06o\n",
@@ -814,7 +812,7 @@ void rh_reset(DEVICE *dptr, struct rh_if *rhc)
     rhc->wcr = 0;
     rhc->cda = 0;
     rhc->drive = 0;
-    rhc->xfer_drive = -1;
+//    rhc->xfer_drive = -1;
 #if KS
     rhc->dib = (DIB *)dptr->ctxt;
     rhc->cs1 = 0;
@@ -931,10 +929,11 @@ void rh_writecw(struct rh_if *rhc, int nxm) {
 /* Finish off a DF10 transfer */
 void rh_finish_op(struct rh_if *rhc, int nxm) {
 #if KL
+     rhc->status &= ~(CC_CHAN_ACT);
      if (rhc->imode != 2)
 #endif
-     rhc->status &= ~BUSY;
-     rhc->xfer_drive = -1;
+     rhc->status &= ~(BUSY);
+//     rhc->xfer_drive = -1;
      rh_writecw(rhc, nxm);
      rh_setirq(rhc);
 #if KL
