@@ -11332,6 +11332,8 @@ its_wr:
 #if KS_ITS
                            if (QITS) {
                                ctl = 3;
+                               if (AB == 0777000)
+                                   break;
                                goto its_wr;
                            }
 #endif
@@ -11401,11 +11403,15 @@ its_wr:
 #define BMASK3  0000003770000LL
 #define BMASK4  0000000007760LL
                                if (IR & 1) {
-                                   MB = ((MB << 10) & BMASK1) | ((MB >> 6) & BMASK2) |
-                                        ((MB << 12) & BMASK3) | ((MB >> 4) & BMASK4);
+                                   MB = ((MB << 10) & BMASK1) |
+                                        ((MB >>  6) & BMASK2) |
+                                        ((MB << 12) & BMASK4) |
+                                        ((MB >>  4) & BMASK3);
                                } else {
-                                   MB = ((MB & BMASK1) >> 10) | ((MB & BMASK2) << 6) |
-                                        ((MB & BMASK3) >> 12) | ((MB & BMASK4) << 4);
+                                   MB = ((MB & BMASK1) >> 10) |
+                                        ((MB & BMASK2) <<  6) |
+                                        ((MB & BMASK4) >> 12) |
+                                        ((MB & BMASK3) <<  4);
                                }
                                AB = (AR & RMASK);
                                BYF5 = 0;

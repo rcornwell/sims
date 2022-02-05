@@ -44,6 +44,9 @@
 #define TYPE_BBN        1              /* BBN style interface TENEX */
 #define TYPE_WAITS      2              /* IMP connected to waits system. */
 
+#define TYPE_UNI        0              /* Unibus byte order */
+#define TYPE_SIMP       1              /* PDP10 string byte order */
+
 #if KS
 /* IMP11 interface */
 
@@ -62,7 +65,7 @@
 #define CSR_SE    0000010  /* Store enable */
 #define CSR_IBF   0000400  /* Input Buffer full */
 #define CSR_INR   0002000  /* IMP not ready */
-#define CSR_HR    0004000  /* Host Rady */
+#define CSR_HR    0004000  /* Host Ready */
 #define CSR_EOM   0020000  /* End of Message */
 
 /* Input data buffer   0767602 */
@@ -591,7 +594,12 @@ MTAB imp_mod[] = {
            "Use DHCP to set IP address"},
     { MTAB_XTD|MTAB_VDV, 0, "DHCPIP", NULL,
       NULL, &imp_show_dhcpip, NULL, "DHCP info" },
-#if !KS
+#if KS
+    { UNIT_DTYPE, (TYPE_UNI << UNIT_V_DTYPE), "UNI", "UNI", NULL, NULL,  NULL,
+           "Standard Unibus transfers"},
+    { UNIT_DTYPE, (TYPE_SIMP << UNIT_V_DTYPE), "SIMP", "SIMP", NULL, NULL,  NULL,
+           "PDP10 byte order transfers"},
+#else
     { UNIT_DTYPE, (TYPE_MIT << UNIT_V_DTYPE), "MIT", "MIT", NULL, NULL,  NULL,
            "ITS/MIT style interface"},
     { UNIT_DTYPE, (TYPE_BBN << UNIT_V_DTYPE), "BBN", "BBN", NULL, NULL,  NULL,
@@ -664,16 +672,14 @@ static void check_interrupts (UNIT *uptr)
     struct pdp_dib *dibp = (DIB *)dptr->ctxt;
     int             irq = 0;
 
-    if ((uptr->STATUS & (IMPERR | IMPIC)) == IMPERR)
-        irq = 1;
-    if ((uptr->STATUS & (IMPR | IMPIC)) == (IMPR | IMPIC))
-        irq = 1;
-    if ((uptr->STATUS & (IMPHER | IMPIHE)) == IMPHER)
-        irq = 1;
-    if ((uptr->STATUS & (IMPID|IMPLW)) == (IMPID|IMPLW))
-        irq = 1;
-    if (uptr->STATUS & IMPOD)
-       irq = 1;
+    if (imp_icsr & CSR_IE) {
+        if (imp_icsr & CSR_RDY)
+            irq = 1;
+    }
+    if (imp_ocsr & CSR_IE) {
+        if (imp_ocsr & CSR_RDY)
+            irq = 1;
+    }
     if (irq) 
         uba_set_irq(dibp);
     else
@@ -684,6 +690,7 @@ int
 imp_wr(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
 {
     struct pdp_dib   *dibp = (DIB *)dptr->ctxt;
+    UNIT             *uptr = imp_unit;
     uint16            temp;
     int               i;
 
@@ -700,11 +707,26 @@ imp_wr(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
                    data = (imp_icsr & 0177400) | data;
             }
             if (data & CSR_RST) {
-               imp_icsr = 0;
+               imp_icsr = CSR_INR|CSR_RDY;
                imp_iba = 0;
                imp_iwcnt = 0;
+               uba_clr_irq(dibp);
             }
-            imp_icsr = data;
+            data &= (CSR_GO|CSR_RST|CSR_UBA|CSR_IE|CSR_HRC|CSR_SE);
+            imp_icsr &= ~(CSR_GO|CSR_RST|CSR_UBA|CSR_IE|CSR_HRC|CSR_SE|CSR_ERR
+                         |CSR_NXM|CSR_MRE);
+            imp_icsr |= data;
+            if (data & CSR_HRC) {
+                imp_icsr |= CSR_HR;
+            } else {
+                imp_icsr &= ~CSR_HR;
+                imp_icsr |= CSR_INR;
+            }
+            if (data & CSR_GO) {
+                imp_icsr &= ~CSR_RDY;
+                uptr->STATUS &= ~IMPID;
+            }
+            sim_debug(DEBUG_DETAIL, dptr, "IMP11 icsr %06o\n", imp_icsr);
             break;
 
     case 002:     /* Input Data Buffer */
@@ -733,11 +755,20 @@ imp_wr(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
                    data = (imp_ocsr & 0177400) | data;
             }
             if (data & CSR_RST) {
-               imp_ocsr = 0;
+               imp_ocsr |= CSR_RDY;
                imp_oba = 0;
                imp_owcnt = 0;
+               uba_clr_irq(dibp);
             }
-            imp_ocsr = data;
+            data &= (CSR_GO|CSR_RST|CSR_UBA|CSR_IE|CSR_BB|CSR_ELB);
+            imp_ocsr &= ~(CSR_GO|CSR_RST|CSR_UBA|CSR_IE|CSR_BB|CSR_ELB|CSR_ERR
+                         |CSR_NXM|CSR_MRE);
+            imp_ocsr |= data;
+            if (data & CSR_GO) {
+                imp_ocsr &= ~CSR_RDY;
+                uptr->STATUS &= ~IMPOD;
+            }
+            sim_debug(DEBUG_DETAIL, dptr, "IMP11 ocsr %06o\n", imp_ocsr);
             break;
 
     case 012:     /* Output Data Buffer */
@@ -755,9 +786,12 @@ imp_wr(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
             break;
 
     case 016:     /* Output Word Count */
-            imp_iwcnt = (data & 0177777);
+            imp_owcnt = (data & 0177777);
             break;
     }
+    check_interrupts (uptr);
+    if (imp_ocsr & CSR_GO || imp_icsr & CSR_GO)
+        sim_activate(uptr, 100);
     return 0;
 }
 
@@ -770,15 +804,10 @@ imp_rd(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
     int               i;
 
     addr &= dibp->uba_mask;
-    sim_debug(DEBUG_DETAIL, dptr, "IMP11 write %06o %06o %o\n",
-             addr, *data, access);
 
     switch (addr & 016) {
     case 000:     /* Input CSR */
             *data = imp_icsr;
-            if ((uptr->STATUS & (IMPR|IMPID)) == (IMPR|IMPID) && 
-                 (imp_icsr & CSR_GO) == 0)
-                *data |= CSR_RDY;
             if ((uptr->STATUS & (IMPID)) != 0)
                 *data |= CSR_IBF;
             break;
@@ -796,9 +825,6 @@ imp_rd(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
 
     case 010:     /* Output CSR */
             *data = imp_ocsr;
-            if ((uptr->STATUS & (IMPR|IMPOD)) == (IMPR|IMPOD) && 
-                 (imp_ocsr & CSR_GO) == 0)
-                *data |= CSR_RDY;
             if ((uptr->STATUS & (IMPOD)) != 0)
                 *data |= CSR_OBE;
             break;
@@ -815,6 +841,8 @@ imp_rd(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
             *data = imp_owcnt;
             break;
     }
+    sim_debug(DEBUG_DETAIL, dptr, "IMP11 read %06o %06o %o\n",
+             addr, *data, access);
     return 0;
 
 }
@@ -1011,35 +1039,69 @@ t_stat imp_srv(UNIT * uptr)
     DEVICE         *dptr = find_dev_from_unit (uptr);
     struct pdp_dib *dibp = (DIB *)dptr->ctxt;
     t_addr          pa;
+    uint64          wd64;
     uint16          wd;
 
     if (imp_ocsr & CSR_GO && imp_data.sendq == NULL) {
         pa = ((imp_ocsr & CSR_UBA) << 12) | imp_oba;
-        if (uba_read_npr_word(pa, dibp->uba_ctl, &wd) == 0) {
-            imp_ocsr |= CSR_NXM;
-            imp_ocsr &= ~CSR_GO;
-            check_interrupts (uptr);
-            sim_debug(DEBUG_DETAIL, &imp_dev, "IMP out npr failed\n");
-            return SCPE_OK;
+        switch (GET_DTYPE(uptr->flags)) {
+        case TYPE_UNI:
+           if (uba_read_npr_word(pa, dibp->uba_ctl, &wd) == 0) {
+               imp_ocsr |= CSR_NXM;
+               imp_ocsr &= ~CSR_GO;
+               uptr->STATUS |= IMPOD;
+               check_interrupts (uptr);
+               sim_debug(DEBUG_DETAIL, &imp_dev, "IMP out npr failed\n");
+               return SCPE_OK;
+           }
+           imp_data.sbuffer[uptr->OPOS >> 3] = (wd & 0377);
+           uptr->OPOS += 8;
+           imp_data.sbuffer[uptr->OPOS >> 3] = ((wd >> 8) & 0377);
+           uptr->OPOS += 8;
+           sim_debug(DEBUG_DETAIL, &imp_dev, "IMP send %04x %07o %06o %06o\n",
+               wd, pa, imp_owcnt, imp_ocsr);
+           break;
+        case TYPE_SIMP:
+           if (uba_read_npr(pa, dibp->uba_ctl, &wd64) == 0) {
+               imp_ocsr |= CSR_NXM;
+               imp_ocsr &= ~CSR_GO;
+               uptr->STATUS |= IMPOD;
+               check_interrupts (uptr);
+               sim_debug(DEBUG_DETAIL, &imp_dev, "IMP out npr failed\n");
+               return SCPE_OK;
+           }
+           imp_data.sbuffer[uptr->OPOS >> 3] = (wd64 >> 28) & 0377;
+           uptr->OPOS += 8;
+           imp_data.sbuffer[uptr->OPOS >> 3] = (wd64 >> 20) & 0377;
+           uptr->OPOS += 8;
+           imp_data.sbuffer[uptr->OPOS >> 3] = (wd64 >> 12) & 0377;
+           uptr->OPOS += 8;
+           imp_data.sbuffer[uptr->OPOS >> 3] = (wd64 >> 4) & 0377;
+           uptr->OPOS += 8;
+           imp_oba += 2;
+           imp_owcnt++;
+           sim_debug(DEBUG_DETAIL, &imp_dev, "IMP send %08llx %07o %06o %06o\n",
+               (wd64 >> 4), pa, imp_owcnt, imp_ocsr);
+           break;
         }
-
-        imp_oba ++;
+        imp_oba += 2;
         imp_owcnt++;
         if (imp_oba == 0) {
             imp_ocsr |= CSR_ERR;
             imp_ocsr &= ~CSR_GO;
+            uptr->STATUS |= IMPOD;
             check_interrupts (uptr);
             sim_debug(DEBUG_DETAIL, &imp_dev, "IMP oba overflow\n");
             return SCPE_OK;
         }
-        imp_data.sbuffer[uptr->OPOS >> 3] = (wd & 0377);
-        uptr->OPOS += 8;
-        imp_data.sbuffer[uptr->OPOS >> 3] = ((wd >> 8) & 0377);
-        uptr->OPOS += 8;
         if (imp_owcnt == 0) {
             imp_ocsr |= CSR_RDY;
             imp_ocsr &= ~CSR_GO;
+            uptr->STATUS |= IMPOD;
             if (imp_ocsr & CSR_ELB) {
+                sim_debug(DEBUG_DETAIL, &imp_dev, "IMP send\n");
+
+    
                 imp_send_packet (&imp_data, uptr->OPOS >> 3);
                 memset(imp_data.sbuffer, 0, ETH_FRAME_SIZE);
                 uptr->OPOS = 0;
@@ -1049,31 +1111,72 @@ t_stat imp_srv(UNIT * uptr)
     }
     if (uptr->STATUS & IMPIB && imp_icsr & CSR_GO) {
         pa = ((imp_icsr & CSR_UBA) << 12) | imp_iba;
-        imp_iba ++;
-        imp_iwcnt++;
         if (imp_iba == 0) {
             imp_icsr |= CSR_ERR;
             imp_icsr &= ~CSR_GO;
+            uptr->STATUS |= IMPID;
             check_interrupts (uptr);
             sim_debug(DEBUG_DETAIL, &imp_dev, "IMP oba overflow\n");
             return SCPE_OK;
         }
-        wd = imp_data.rbuffer[uptr->IPOS >> 3];
-        uptr->IPOS += 8;
-        wd |= imp_data.rbuffer[uptr->IPOS >> 3] << 8;
-        uptr->IPOS += 8;
+        switch (GET_DTYPE(uptr->flags)) {
+        case TYPE_UNI:
+           wd = imp_data.rbuffer[uptr->IPOS >> 3] << 8;
+           uptr->IPOS += 8;
+           wd |= imp_data.rbuffer[uptr->IPOS >> 3];
+           uptr->IPOS += 8;
+           if (uba_write_npr_word(pa, dibp->uba_ctl, wd) == 0) {
+               imp_icsr |= CSR_NXM;
+               imp_icsr &= ~CSR_GO;
+               uptr->STATUS |= IMPID;
+               check_interrupts (uptr);
+               sim_debug(DEBUG_DETAIL, &imp_dev, "IMP in npr failed\n");
+               return SCPE_OK;
+           }
+           sim_debug(DEBUG_DETAIL, &imp_dev, "IMP rec %04x %07o %06o %06o\n",
+               wd, pa, imp_owcnt, imp_ocsr);
+           break;
+        case TYPE_SIMP:
+           wd64 = (uint64)imp_data.rbuffer[uptr->IPOS >> 3] << 28;
+           uptr->IPOS += 8;
+           wd64 |= (uint64)imp_data.rbuffer[uptr->IPOS >> 3] << 20;
+           uptr->IPOS += 8;
+           wd64 |= (uint64)imp_data.rbuffer[uptr->IPOS >> 3] << 12;
+           uptr->IPOS += 8;
+           wd64 |= (uint64)imp_data.rbuffer[uptr->IPOS >> 3] << 4;
+           uptr->IPOS += 8;
+           if (uba_write_npr(pa, dibp->uba_ctl, wd64) == 0) {
+               imp_ocsr |= CSR_NXM;
+               imp_ocsr &= ~CSR_GO;
+               uptr->STATUS |= IMPOD;
+               check_interrupts (uptr);
+               sim_debug(DEBUG_DETAIL, &imp_dev, "IMP out npr failed\n");
+               return SCPE_OK;
+           }
+           imp_iba += 2;
+           imp_iwcnt++;
+           sim_debug(DEBUG_DETAIL, &imp_dev, "IMP rec %08llx %07o %06o %06o\n",
+               (wd64 >> 4), pa, imp_owcnt, imp_ocsr);
+           break;
+        }
+        imp_iba += 2;
+        imp_iwcnt++;
         if (uptr->IPOS > uptr->ILEN) {
              imp_icsr |= CSR_EOM|CSR_RDY;
              imp_icsr &= ~CSR_GO;
+             uptr->STATUS |= IMPID;
              uptr->STATUS &= ~IMPIB;
              uptr->ILEN = 0;
         }
         if (imp_iwcnt == 0) {
             imp_icsr |= CSR_RDY;
             imp_icsr &= ~CSR_GO;
+            uptr->STATUS |= IMPID;
         }
         check_interrupts (uptr);
     }
+    if (imp_ocsr & CSR_GO || imp_icsr & CSR_GO)
+        sim_activate(uptr, 100);
 #else
     int     i;
     int     l;
@@ -1212,11 +1315,16 @@ t_stat imp_eth_srv(UNIT * uptr)
                  imp_data.init_state);
        if (imp_unit[0].ILEN == 0) {
               /* Queue up a nop packet */
-              imp_data.rbuffer[0] = 0x4;
-#if 0
+#if KS
               imp_data.rbuffer[0] = 0xf;
               imp_data.rbuffer[3] = 4;
+#else
+              imp_data.rbuffer[0] = 0x4;
 #endif
+              imp_data.rbuffer[1] = (ntohl(imp_data.ip) >> 24) & 0xff;
+              imp_data.rbuffer[5] = (ntohl(imp_data.ip) >> 16) & 0xff;
+              imp_data.rbuffer[6] = (ntohl(imp_data.ip) >> 8) & 0xff;
+              imp_data.rbuffer[7] = ntohl(imp_data.ip) & 0xff;
               imp_unit[0].STATUS |= IMPIB;
               imp_unit[0].IPOS = 0;
               imp_unit[0].ILEN = 12*8;
@@ -1271,6 +1379,9 @@ t_stat imp_tim_srv(UNIT * uptr)
 
     imp_dhcp_timer(&imp_data);
     imp_arp_age(&imp_data);
+#if KS
+    imp_icsr &= ~CSR_HR;
+#endif
     return SCPE_OK;
 }
 
@@ -1329,12 +1440,20 @@ imp_packet_in(struct imp_device *imp)
            memset(&imp->rbuffer[0], 0, 256);
            imp->rbuffer[0] = 0xf;
            imp->rbuffer[3] = 0;
+#if KS
+           imp->rbuffer[1] = (ntohl(ip_hdr->ip_src) >> 24) & 0xff;
            imp->rbuffer[5] = (ntohl(ip_hdr->ip_src) >> 16) & 0xff;
+           imp->rbuffer[6] = (ntohl(ip_hdr->ip_src) >> 8) & 0xff;
+           imp->rbuffer[7] = ntohl(ip_hdr->ip_src) & 0xff;
+#else
            imp->rbuffer[7] = 14;
+#endif
            imp->rbuffer[8] = 0233;
+#if !KS
            imp->rbuffer[18] = 0;
            imp->rbuffer[19] = 0x80;
            imp->rbuffer[21] = 0x30;
+#endif
 
            /* Copy message over */
            pad = 12 + (imp->padding / 8);
@@ -1477,6 +1596,12 @@ imp_packet_in(struct imp_device *imp)
                imp_unit[0].STATUS |= IMPIB;
                imp_unit[0].IPOS = 0;
                imp_unit[0].ILEN = n*8;
+               imp->rbuffer[1] = (ntohl(ip_hdr->ip_src) >> 24) & 0xff;
+               imp->rbuffer[5] = (ntohl(ip_hdr->ip_src) >> 16) & 0xff;
+               imp->rbuffer[6] = (ntohl(ip_hdr->ip_src) >> 8) & 0xff;
+               imp->rbuffer[7] = ntohl(ip_hdr->ip_src) & 0xff;
+               imp->rbuffer[10] = (n >> 8) & 0xff;
+               imp->rbuffer[11] = n & 0xff;
            }
            if (!sim_is_active(&imp_unit[0]))
                sim_activate(&imp_unit[0], 100);
@@ -1520,10 +1645,11 @@ imp_send_packet (struct imp_device *imp, int len)
        break;
     }
     sim_debug(DEBUG_DETAIL, &imp_dev,
-        "IMP packet Type=%d ht=%d dh=%d imp=%d lk=%d %d st=%d Len=%d\n",
+        "IMP packet H=%x Type=%d ht=%d dh=%d imp=%d lk=%d %d st=%d Len=%d mt=%d\n",
+       imp->sbuffer[0],
          imp->sbuffer[3], imp->sbuffer[4], imp->sbuffer[5],
          (imp->sbuffer[6] * 256) + imp->sbuffer[7],
-         lk, imp->sbuffer[9] >> 4, st, n);
+         lk, imp->sbuffer[9] >> 4, st, n, mt);
     switch(mt) {
     case 0:      /* Regular packet */
            switch(st) {
@@ -1538,6 +1664,15 @@ imp_send_packet (struct imp_device *imp, int len)
                      imp_packet_out(imp, &write_buffer);
                   }
                   break;
+           case 4:      /* Nop */
+                  if (imp->init_state < 3)
+                     imp->init_state++;
+                  imp->padding = 0;
+                  sim_debug(DEBUG_DETAIL, &imp_dev,
+                               "IMP recieve Nop %d padding= %d\n",
+                                imp->init_state, imp->padding);
+                  sim_activate(uptr, tmxr_poll); /* Start reciever task */
+                  break;
            case 2: /* Getting ready */
            case 3: /* Uncontrolled */
            default:
@@ -1547,7 +1682,6 @@ imp_send_packet (struct imp_device *imp, int len)
     case 1:      /* Error */
            break;
     case 2:      /* Host going down */
-fprintf(stderr, "IMP: Host shutdown\r\n");
            break;
     case 4:      /* Nop */
            if (imp->init_state < 3)
@@ -2980,6 +3114,10 @@ t_stat imp_reset (DEVICE *dptr)
     imp_data.freeq = p;
     imp_data.init_state = 0;
     last_coni = sim_gtime();
+#if KS
+    imp_icsr = CSR_RDY;
+    imp_ocsr = CSR_RDY;
+#endif
     if (imp_unit[0].flags & UNIT_ATT)
         sim_activate_after(&imp_unit[2], 1000000);    /* Start Timer service */
     return SCPE_OK;

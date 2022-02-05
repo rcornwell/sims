@@ -211,8 +211,6 @@ uba_read_npr(t_addr addr, uint16 ctl, uint64 *data)
         return 0;
     addr = (map & PAGE_MASK) | (addr >> 2) & 0777;
     *data = M[addr];
-    if (map & MAP_EN16)
-        *data &= 0177777177777;
     return 1;
 }
 
@@ -227,8 +225,6 @@ uba_write_npr(t_addr addr, uint16 ctl, uint64 data)
     if ((map & MAP_VALID) == 0)
         return 0;
     addr = (map & PAGE_MASK) | (addr >> 2) & 0777;
-    if (map & MAP_EN16)
-        data &= 0177777177777;
     sim_debug(DEBUG_DATA, &cpu_dev, "Wr NPR %08o %08o %012llo\n", oaddr, addr, data);
     M[addr] = data;
     return 1;
@@ -301,6 +297,7 @@ uba_read_npr_word(t_addr addr, uint16 ctl, uint16 *data)
         return 0;
     addr = (map & PAGE_MASK) | (addr >> 2) & 0777;
     wd = M[addr];
+    sim_debug(DEBUG_EXP, &cpu_dev, "RD NPR W %08o %08o %012llo m=%o\n", oaddr, addr, wd, map);
     if ((oaddr & 02) == 0)
         wd >>= 18;
     *data = (uint16)(wd & 0177777);
@@ -324,6 +321,7 @@ uba_write_npr_word(t_addr addr, uint16 ctl, uint16 data)
     msk = 0177777;
     buf = (uint64)(data & msk);
     wd = M[addr];
+    sim_debug(DEBUG_EXP, &cpu_dev, "WR NPR W %08o %08o %012llo m=%o\n", oaddr, addr, wd, map);
     if ((oaddr & 02) == 0) {
         buf <<= 18;
         msk <<= 18;
