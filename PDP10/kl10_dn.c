@@ -64,6 +64,7 @@
 #define DTE_SEC        04000000    /* In secondary protocol */
 #define DTE_IND        010000000   /* Next transfer will be indirect */
 #define DTE_SIND       020000000   /* Send indirect data next */
+#define DTE_INIT       040000000   /* Recieved an INIT signal last time */
 
 /* DTE CONO bits */
 #define DTE_CO11DB     0020000     /* Set TO11 Door bell */
@@ -315,6 +316,7 @@ t_stat dn_devio(uint32 dev, uint64 *data) {
          if (res & DTE_CO11DB) {
              sim_debug(DEBUG_CONO, &dn_dev, "DN Ring 11 DB\n");
              dn_unit[0].STATUS |= DTE_11DB;
+             dn_unit[0].STATUS &= ~(DTE_10DB);
              sim_activate(&dn_unit[0], 200);
          }
          if (dn_unit[0].STATUS & (DTE_10DB|DTE_11DN|DTE_10DN|DTE_11ER|DTE_10ER))
@@ -330,7 +332,7 @@ t_stat dn_devio(uint32 dev, uint64 *data) {
          sim_debug(DEBUG_DATAIO, &dn_dev, "DN %03o DATAO %06o\n", dev,
                       (uint32)*data);
          if (*data == 01365) {
-             dn_unit[0].STATUS |= DTE_SEC|DTE_10ER;
+             dn_unit[0].STATUS |= DTE_10ER;
              dn_unit[0].STATUS &= ~(DTE_10DB|DTE_IND|DTE_11DB);
              break;
          }
@@ -378,7 +380,13 @@ int i;
     word = M[SEC_DTCMD + base];
     /* Do it */
     sim_debug(DEBUG_DETAIL, &dn_dev, "DN secondary %012llo\n", word);
-#if 0
+for (i = 0; i < 8; i++)
+   sim_debug(DEBUG_DETAIL, &dn_dev, "EB word %o %012llo\n", i, M[eb_ptr + 0150+i]);
+for (i = 0; i <100; i++) {
+   if (Mem_examine_word(1, i, &word))
+      break;
+    sim_debug(DEBUG_DETAIL, &dn_dev, "DN1 word %3o %012llo\n", i, word);
+}
     switch(word & SEC_CMDMSK) {
     default:
     case SEC_MONO:  /* Ouput character in monitor mode */
@@ -398,7 +406,6 @@ int i;
 
      case SEC_SETPRI:
 enter_pri:
-#endif
          if (Mem_examine_word(1, 0, &word))
              return;
     sim_debug(DEBUG_DETAIL, &dn_dev, "DN word 0 %012llo\n", word);
@@ -412,19 +419,13 @@ enter_pri:
          dn_in_ptr = dn_out_ptr = 0;
          dn_in_cmd = dn_out_res = 0;
          cty_done = 0;
-for (i = 1; i <100; i++) {
-   if (Mem_examine_word(1, i, &word))
-      break;
-    sim_debug(DEBUG_DETAIL, &dn_dev, "DN word %3o %012llo\n", i, word);
-}
 
-#if 0
          /* Start input process */
          M[SEC_DTCMD + base] = 0;
          M[SEC_DTFLG + base] = FMASK;
          uptr->STATUS &= ~DTE_11DB;
          return;
-
+#if 0
      case SEC_SETDDT: /* Read character from console */
          if (empty(&cty_in)) {
              M[SEC_DTF11 + base] = 0;
@@ -467,12 +468,12 @@ for (i = 1; i <100; i++) {
 
      case SEC_CLKCTL: /* Clock control: Used by KLDCP */
          break;
+#endif
      }
      /* Acknowledge command */
      M[SEC_DTCMD + base] = 0;
      M[SEC_DTFLG + base] = FMASK;
      uptr->STATUS &= ~DTE_11DB;
-#endif
      if (dn_dev.flags & TYPE_RSX20) {
          uptr->STATUS |= DTE_10DB;
          set_interrupt(DTE_DEVNUM, dn_unit[0].STATUS);
@@ -487,6 +488,7 @@ void dn_primary(UNIT *uptr) {
     int      cnt;
     struct   _dn_queue *in;
     uint16   data1, *dp;
+int i;
 
     if ((uptr->STATUS & DTE_11DB) == 0)
         return;
@@ -499,6 +501,27 @@ void dn_primary(UNIT *uptr) {
     }
     uptr->STATUS &= ~(DTE_11DB);
     clr_interrupt(DTE_DEVNUM);
+         Mem_examine_word(1, 0, &word);
+         dn_proc_num = (word >> 24) & 037;
+    sim_debug(DEBUG_DETAIL, &dn_dev, "DN1 procnum %0o\n", dn_proc_num);
+         dn_base = dn_proc_num + 1;
+    sim_debug(DEBUG_DETAIL, &dn_dev, "DN1 base %0o\n", dn_base);
+         dn_off = dn_base + (word & 0177777);
+    sim_debug(DEBUG_DETAIL, &dn_dev, "DN1 dn_off %0o\n", dn_off);
+         dn_dt10_off = 020;
+    sim_debug(DEBUG_DETAIL, &dn_dev, "DN1 dn_dt_off %0o\n", dn_dt10_off);
+         dn_et10_off = dn_dt10_off + 16;
+    sim_debug(DEBUG_DETAIL, &dn_dev, "DN1 dn_et_off %0o\n", dn_et10_off);
+         dn_et11_off = dn_base + (8 * dn_base);
+    sim_debug(DEBUG_DETAIL, &dn_dev, "DN1 dn_et11_off %0o\n", dn_et11_off);
+
+for (i = 0; i < 8; i++)
+   sim_debug(DEBUG_DETAIL, &dn_dev, "EB word %o %012llo\n", i, M[eb_ptr + 0150+i]);
+for (i = 0; i <200; i++) {
+   if (Mem_examine_word(1, i, &word))
+      break;
+    sim_debug(DEBUG_DETAIL, &dn_dev, "DN1 word %3o %012llo\n", i, word);
+}
     /* Check status word to see if valid */
     if (Mem_examine_word(1, dn_et11_off + PRI_CMTW_STS, &word)) {
          uint32   base;
@@ -509,7 +532,7 @@ error:
 #endif
          /* If we can't read it, go back to secondary */
          M[SEC_DTFLG + base] = FMASK;
-         uptr->STATUS |= DTE_SEC;
+//         uptr->STATUS |= DTE_SEC;
          uptr->STATUS &= ~DTE_11DB;
          if (dn_dev.flags & TYPE_RSX20) {
              uptr->STATUS |= DTE_10DB;
@@ -519,10 +542,29 @@ error:
          return;
     }
 
-         sim_debug(DEBUG_DETAIL, &dn_dev, "DTE: status %012llo\n", word);
-    if ((word & PRI_CMT_QP) == 0) {
-        goto error;
+    sim_debug(DEBUG_DETAIL, &dn_dev, "DTE: status %06llo %012llo\n", dn_et11_off + PRI_CMTW_STS + M[0155 + eb_ptr], word);
+    if ((word & PRI_CMT_INI) != 0) {
+         word &= ~PRI_CMT_TOT;
+    sim_debug(DEBUG_DETAIL, &dn_dev, "DTE: istatus %06llo %012llo\n", dn_dt10_off + PRI_CMTW_STS + M[0157 + eb_ptr], word);
+         if (Mem_deposit_word(1, dn_dt10_off + PRI_CMTW_STS, &word))
+             goto error;
+         uptr->STATUS |= DTE_11DN|DTE_10DB|DTE_INIT;
+         set_interrupt(DTE_DEVNUM, uptr->STATUS);
+         return;
     }
+    if ((uptr->STATUS & DTE_INIT) != 0) {
+    sim_debug(DEBUG_DETAIL, &dn_dev, "DTE: dstatus %06llo %012llo\n", dn_dt10_off + PRI_CMTW_STS + M[0157 + eb_ptr], word);
+         if (Mem_deposit_word(1, dn_dt10_off + PRI_CMTW_STS, &word))
+             goto error;
+         uptr->STATUS |= DTE_11DN|DTE_10DB;
+         uptr->STATUS &= ~DTE_INIT;
+         set_interrupt(DTE_DEVNUM, uptr->STATUS);
+         return;
+    }
+//    if ((word & PRI_CMT_QP) == 0) {
+ //       goto error;
+  //  }
+        
     in = &dn_in[dn_in_ptr];
     /* Check if indirect */
     if ((word & PRI_CMT_IP) != 0) {
@@ -540,7 +582,7 @@ error:
         dp = &in->data[0];
         for (cnt = in->dcnt; cnt > 0; cnt --) {
             /* Read in data */
-            s = Mem_read_byte(0, dp, 0);
+            s = Mem_read_byte(1, dp, 0);
             if (s == 0)
                goto error;
             in->sz = s;
@@ -635,15 +677,13 @@ dn_function(UNIT *uptr)
                 cmd->dev, cmd->dcnt, cmd->dptr );
         switch (func) {
         case PRI_EM2EI:            /* Initial message to 11 */
-//               data1[0] = PRI_CTYDV;
- //              if (dn_queue(PRI_EM2TI, PRI_EMCTY, 1, data1) == 0)
-  //                 return;
-   //            data1[0] = 0;
-    //           if (dn_queue(PRI_EMAKA, PRI_EMCLK, 1, data1) == 0)
-     //              return;
                break;
 
         case PRI_EM2TI:            /* Replay to initial message. */
+               data1[0] = 5;
+               if (dn_queue(032, PRI_DN60, 1, data1) == 0)
+                   return;
+                break;
         case PRI_EMLBE:            /* Acknowledge line */
                /* Should never get these */
                break;
@@ -710,72 +750,15 @@ cty:
                break;
 
         case PRI_EMSNA:            /* Send all (ttys) */
-               /* Handle terminal data */
-               if (dev == PRI_EMDLS || dev == PRI_EMCTY) {
-                   struct _buffer *otty;
-                   int    ln;
-                   while (cmd->dptr < cmd->dcnt) {
-                       ch = (int32)(cmd->data[cmd->dptr >> 1]);
-                       if ((cmd->dptr & 1) == 0)
-                           ch >>= 8;
-                       ch &= 0177;
-                       if (ch != 0) {
-                           sim_debug(DEBUG_DATA, &dn_dev, "SNA queue %o\n", ch);
-                           ch = sim_tt_outcvt( ch, TT_GET_MODE(uptr->flags));
-                           if (!(full(&cty_out))) {
-                               cty_out.buff[cty_out.in_ptr] = (char)(ch & 0xff);
-                               inci(&cty_out);
-                           }
-                       }
-                       cmd->dptr++;
-                   }
-                   if (cmd->dptr != cmd->dcnt)
-                       return;
-                   data1[0] = 0;
-               }
                break;
 
         case PRI_EMLNC:            /* Line-Char */
-               if (dev == PRI_EMDLS) {
-                   sim_activate(&dn_unit[1], 100);
-                   while (cmd->dptr < cmd->dcnt) {
-                        int ln;
-                        ch = (int32)(cmd->data[cmd->dptr >> 1]);
-                        ln = (ch >> 8);
-                        ch &= 0177;
-                        if (ch != 0 && ln == PRI_CTYDV) {
-                            ch = sim_tt_outcvt( ch, TT_GET_MODE(uptr->flags));
-                            cty_out.buff[cty_out.in_ptr] = (char)(ch & 0xff);
-                            inci(&cty_out);
-                            if (((cty_out.in_ptr + 1) & 0xff) == cty_out.out_ptr)
-                                return;
-                            sim_debug(DEBUG_DATA, &dn_dev, "DN queue %o\n", ch);
-                        }
-                        cmd->dptr+=2;
-                   }
-                   if (cmd->dptr != cmd->dcnt)
-                       return;
-               }
                break;
 
         case PRI_EMOPS:
                break;
 
         case PRI_EMRDS:            /* Request device status */
-               if (dev == PRI_EMCTY) {
-                   data1[0] = 0;
-                   data1[1] = 0;
-                   if (dn_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMCTY,
-                                         3, data1) == 0)
-                       return;
-               }
-               if (dev == PRI_EMDH1) {
-                   data1[0] = 0;
-                   data1[1] = 0;
-                   if (dn_queue(PRI_EMHDS+PRI_IND_FLG, PRI_EMDH1,
-                                         3, data1) == 0)
-                       return;
-               }
                break;
 
         case PRI_EMHDS:            /* Here is device status */
@@ -830,6 +813,8 @@ void dn_transfer(UNIT *uptr) {
     uint16   scnt;
     struct   _dn_queue *out;
     uint16   *dp;
+int i;
+
 
     /* Check if Queue empty */
     if (dn_out_res == dn_out_ptr)
@@ -838,6 +823,14 @@ void dn_transfer(UNIT *uptr) {
     out = &dn_out[dn_out_ptr];
     uptr->STATUS &= ~DTE_TO11;
     clr_interrupt(DTE_DEVNUM);
+for (i = 0; i < 8; i++)
+   sim_debug(DEBUG_DETAIL, &dn_dev, "EB Sword %o %012llo\n", i, M[eb_ptr + 0150+i]);
+for (i = 0; i <200; i++) {
+uint64 word;
+   if (Mem_examine_word(1, i, &word))
+      break;
+    sim_debug(DEBUG_DETAIL, &dn_dev, "DN1 Sword %3o %012llo\n", i, word);
+}
 
     /* Compute how much 10 wants us to send */
     scnt = ((uptr->CNT ^ DTE_TO10BC) + 1) & DTE_TO10BC;
@@ -851,7 +844,7 @@ void dn_transfer(UNIT *uptr) {
        for (; cnt > 0; cnt -= 2) {
            sim_debug(DEBUG_DATA, &dn_dev, "DTE: Send Idata: %06o %03o %03o\n",
                           *dp, *dp >> 8, *dp & 0377);
-           if (Mem_write_byte(0, dp) == 0)
+           if (Mem_write_byte(1, dp) == 0)
               goto error;
            dp++;
        }
@@ -989,6 +982,7 @@ dn_start(UNIT *uptr)
 {
     uint64   word;
     int      dcnt;
+int i;
 
     /* Check if queue empty */
     if (dn_out_ptr == dn_out_res)
@@ -1020,8 +1014,16 @@ error:
     }
     sim_debug(DEBUG_DATA, &dn_dev, "DTE: start: %012llo %o\n", word, dcnt);
     word = (uint64)dcnt;
+    word |= (word << 18);
     if (Mem_deposit_word(1, dn_dt10_off + PRI_CMTW_CNT, &word))
         goto error;
+for (i = 0; i < 8; i++)
+   sim_debug(DEBUG_DETAIL, &dn_dev, "EB word %o %012llo\n", i, M[eb_ptr + 0150+i]);
+for (i = 0; i <200; i++) {
+   if (Mem_examine_word(1, i, &word))
+      break;
+    sim_debug(DEBUG_DETAIL, &dn_dev, "DN1 word %3o %012llo\n", i, word);
+}
     uptr->STATUS |= DTE_10DB;
     set_interrupt(DTE_DEVNUM, uptr->STATUS);
     return 1;
@@ -1125,9 +1127,15 @@ dnrtc_srv(UNIT * uptr)
 
 t_stat dn_reset (DEVICE *dptr)
 {
-    dn_unit[0].STATUS = DTE_SEC;
+    dn_unit[0].STATUS = 0; //DTE_SEC;
     dn_unit[1].STATUS = 0;
     dn_unit[2].STATUS = 0;
+    dn_proc_num = 0;
+    dn_base = dn_proc_num + 1;
+    dn_off = 0;
+    dn_dt10_off = 16;
+    dn_et10_off = 050;
+    dn_et11_off = 033;
     cty_done = 0;
     sim_activate(&dn_unit[2], 1000);
     return SCPE_OK;
