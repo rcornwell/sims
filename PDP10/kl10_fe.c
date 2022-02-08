@@ -660,6 +660,7 @@ void dte_second(UNIT *uptr) {
         return;
     }
 #endif
+
     /* Do it */
     sim_debug(DEBUG_DETAIL, &dte_dev, "CTY secondary %012llo\n", word);
     switch(word & SEC_CMDMSK) {
@@ -684,6 +685,7 @@ void dte_second(UNIT *uptr) {
 enter_pri:
          if (Mem_examine_word(0, 0, &word))
              break;
+
          dte_proc_num = (word >> 24) & 037;
          dte_base = dte_proc_num + 1;
          dte_off = dte_base + (word & 0177777);
@@ -698,6 +700,7 @@ enter_pri:
          M[SEC_DTCMD + base] = 0;
          M[SEC_DTFLG + base] = FMASK;
          uptr->STATUS &= ~DTE_11DB;
+         tty_reset(&tty_dev);
          return;
 
      case SEC_SETDDT: /* Read character from console */
@@ -887,6 +890,7 @@ error:
          sim_debug(DEBUG_DETAIL, &dte_dev, "DTE: error %012llo\n", word);
          return;
     }
+    sim_debug(DEBUG_DETAIL, &dte_dev, "DTE: status word %012llo\n", word);
 
     if ((word & PRI_CMT_QP) == 0) {
         goto error;
@@ -2324,6 +2328,12 @@ t_stat ttyo_svc (UNIT *uptr)
 
 t_stat tty_reset (DEVICE *dptr)
 {
+    int  i;
+    for (i = 0; i < tty_desc.lines; i++) {
+         tty_done[i] = 0;
+         tty_out[i].out_ptr = tty_out[i].in_ptr = 0;
+         tty_in[i].out_ptr = tty_in[i].in_ptr = 0;
+    }
     return SCPE_OK;
 }
 
