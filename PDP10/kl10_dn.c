@@ -617,10 +617,10 @@ error:
             goto error;
         in->spare = data1;
         cnt -= 2;
-        sim_debug(DEBUG_DATA, &dn_dev, "DTE: Read CMD: %o c=%o f=%o %s d=%o\n",
+        sim_debug(DEBUG_DATA, &dn_dev, "DTE: Read CMD: %o c=%o f=%o %s s=%o d=%o\n",
                   dn_in_ptr, in->cnt, in->func,
                   ((in->func & 0377) > PRI_EMLDV)?"***":
-                       pri_name[in->func & 0377], in->dev);
+                       pri_name[in->func & 0377], in->spare, in->dev);
         dp = &in->data[0];
         for (; cnt > 0; cnt -=2) {
             /* Read in data */

@@ -691,8 +691,6 @@ imp_wr(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
 {
     struct pdp_dib   *dibp = (DIB *)dptr->ctxt;
     UNIT             *uptr = imp_unit;
-    uint16            temp;
-    int               i;
 
     addr &= dibp->uba_mask;
     sim_debug(DEBUG_DETAIL, dptr, "IMP11 write %06o %06o %o\n",
@@ -800,8 +798,6 @@ imp_rd(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
 {
     struct pdp_dib   *dibp = (DIB *)dptr->ctxt;
     UNIT             *uptr = imp_unit;
-    uint16            temp;
-    int               i;
 
     addr &= dibp->uba_mask;
 

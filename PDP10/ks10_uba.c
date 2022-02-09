@@ -188,8 +188,8 @@ uba_write(t_addr addr, int ctl, uint64 data, int access)
             continue;
         if (ctl == dibp->uba_ctl && dibp->uba_addr == (addr & (~dibp->uba_mask))) {
             uint16 buf = (uint16)(data & 0177777);
-    sim_debug(DEBUG_EXP, &cpu_dev, "UBA device write %02o %08o %012llo %06o\n", ctl, addr, data, buf);
             int r = dibp->wr_io(dptr, addr, buf, access);
+    sim_debug(DEBUG_EXP, &cpu_dev, "UBA device write %02o %08o %012llo %06o\n", ctl, addr, data, buf);
             if (r)
                 break;
             return r;

@@ -138,6 +138,7 @@ MTAB ch11_mod[] = {
 DIB ch11_dib = { 0764140, 017, 0270, 6, 3, &ch11_read, &ch11_write, NULL, 0, 0 };
 
 DEBTAB ch11_debug[] = {
+    { "DETAIL",    DEBUG_DETAIL,"I/O operations"},
     { "TRC",       DBG_TRC,   "Detailed trace" },
     { "REG",       DBG_REG,   "Hardware registers" },
     { "PKT",       DBG_PKT,   "Packets" },
@@ -161,9 +162,6 @@ int
 ch11_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
 {
     struct pdp_dib   *dibp = (DIB *)dptr->ctxt;
-    uint16            temp;
-    int               ln;
-    TMLN             *lp;
     int               i;
 
     addr &= dibp->uba_mask;
@@ -219,9 +217,6 @@ int
 ch11_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
 {
     struct pdp_dib   *dibp = (DIB *)dptr->ctxt;
-    uint16            temp;
-    int               ln;
-    TMLN             *lp;
     int               i;
 
     addr &= dibp->uba_mask;

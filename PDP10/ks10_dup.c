@@ -472,8 +472,6 @@ if ((dptr->units[0].flags & UNIT_DIS) != 0)
     return 1;
 dup = ((PA - dup_dib.uba_addr) >> 3);                   /* get line num */
 PA &= dibp->uba_mask;
-sim_debug(DEBUG_DETAIL, DUPDPTR, "dup_rd(PA=%010o [%s], data=0x%X) ", PA, dup_rd_regs[(PA >> 1) & 03], *data);
-sim_debug_bits(DEBUG_DETAIL, DUPDPTR, bitdefs[(PA >> 1) & 03], (uint32)(orig_val), (uint32)(regs[(PA >> 1) & 03][dup]), TRUE);
 
 if (dup >= dup_desc.lines)                              /* validate line number */
     return 1;
@@ -518,7 +516,6 @@ int32  dup;
 int32  orig_val;
 
 sim_debug(DEBUG_DETAIL, DUPDPTR, "dup_wr(PA=%010o [%s], data=0x%X) ", PA, dup_wr_regs[(PA >> 1) & 03], data);
-sim_debug_bits(DEBUG_DETAIL, DUPDPTR, bitdefs[(PA >> 1) & 03], (uint32)orig_val, (uint32)regs[(PA >> 1) & 03][dup], TRUE);
 if ((dptr->units[0].flags & UNIT_DIS) != 0)
     return 1;
 dup = ((PA - dup_dib.uba_addr) >> 3);                   /* get line num */
