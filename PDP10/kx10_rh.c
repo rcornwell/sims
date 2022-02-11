@@ -933,7 +933,6 @@ void rh_finish_op(struct rh_if *rhc, int nxm) {
      if (rhc->imode != 2)
 #endif
      rhc->status &= ~(BUSY);
-//     rhc->xfer_drive = -1;
      rh_writecw(rhc, nxm);
      rh_setirq(rhc);
 #if KL
@@ -995,6 +994,8 @@ void rh20_setup(struct rh_if *rhc)
      rhc->wcr = 0;
      rhc->xfer_drive = rhc->drive;
      rhc->status &= ~RH20_CHAN_RDY;
+     rhc->status |= BUSY;
+     rhc->drive = drv;
 }
 #endif
 
