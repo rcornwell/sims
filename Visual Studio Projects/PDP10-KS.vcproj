@@ -214,6 +214,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\PDP10\ks10_kmc.c"
+				>
+			</File>
+			<File
 				RelativePath="..\PDP10\ks10_tcu.c"
 				>
 			</File>

@@ -227,6 +227,9 @@ DEVICE *sim_devices[] = {
 #if NUM_DEVS_TCU > 0
     &tcu_dev,
 #endif
+#if NUM_DEVS_KMC > 0
+    &kmc_dev,
+#endif
 #if NUM_DEVS_DUP > 0
     &dup_dev,
 #endif
@@ -786,6 +789,8 @@ t_stat load_exb (FILE *fileref, int ftype)
             return SCPE_FMT;
         addr |= byt << 24;
         /* Empty record gives start address */
+        if (addr > MEMSIZE)
+            return SCPE_FMT;
         if (wc == 0) {
             PC = addr;
             return SCPE_OK;
@@ -801,6 +806,8 @@ t_stat load_exb (FILE *fileref, int ftype)
             case 2: word |= ((uint64)byt) << 16; break;
             case 3: word |= ((uint64)byt) << 24; break;
             case 4: word |= ((uint64)(byt & 017)) << 32;
+                    if (addr > MEMSIZE)
+                        return SCPE_FMT;
                     M[addr++] = word;
                     pos = -1;
                     break;
