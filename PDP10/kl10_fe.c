@@ -1978,7 +1978,7 @@ lp20_printline(UNIT *uptr, int nl) {
     int     trim = 0;
 
     /* Trim off trailing blanks */
-    while (uptr->COL >= 0 && lp20_buffer[uptr->COL - 1] == ' ') {
+    while (uptr->COL > 0 && lp20_buffer[uptr->COL - 1] == ' ') {
          uptr->COL--;
          trim = 1;
     }
