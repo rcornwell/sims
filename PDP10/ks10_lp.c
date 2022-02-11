@@ -589,6 +589,7 @@ lp20_svc (UNIT *uptr)
     int             fnc = (lp20_cs1 >> CS1_V_FNC) & CS1_M_FNC;
     uint16          ram_ch;
     uint16          par;
+    uint8           data;
 
     if (fnc == FNC_PRINT && (uptr->flags & UNIT_ATT) == 0) {
         lp20_cs1 |= CS1_ERR;
@@ -598,7 +599,7 @@ lp20_svc (UNIT *uptr)
         return SCPE_OK;
     }
 
-    if (uba_read_npr_byte(lp20_ba, dibp->uba_ctl, &lp20_buf) == 0) {
+    if (uba_read_npr_byte(lp20_ba, dibp->uba_ctl, &data) == 0) {
         lp20_cs2 |= CS2_MTE;
         lp20_cs1 &= ~CS1_GO;
         lp20_update_chkirq (uptr, 0, 1);
@@ -606,7 +607,7 @@ lp20_svc (UNIT *uptr)
         return SCPE_OK;
     }
 
-    lp20_buf &= 0377;
+    lp20_buf = (uint16)(data & 0377);
     lp20_ba = (lp20_ba + 1) & 0777777;
     lp20_wcnt = (lp20_wcnt + 1) & 07777;
     if (lp20_wcnt == 0) {

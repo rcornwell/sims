@@ -522,6 +522,7 @@ extern DEVICE   mtc_dev;
 extern DEVICE   dsk_dev;
 extern DEVICE   dcs_dev;
 extern DEVICE   dz_dev;
+extern DEVICE   kmc_dev;
 extern DEVICE   dup_dev;
 extern DEVICE   tcu_dev;
 
@@ -575,8 +576,8 @@ int     uba_read(t_addr addr, int ctl, uint64 *data, int access);
 int     uba_write(t_addr addr, int ctl, uint64 data, int access);
 int     uba_read_npr(t_addr addr, uint16 ctl, uint64 *data);
 int     uba_write_npr(t_addr addr, uint16 ctl, uint64 data);
-int     uba_read_npr_byte(t_addr addr, uint16 ctl, uint16 *data);
-int     uba_write_npr_byte(t_addr addr, uint16 ctl, uint16 data);
+int     uba_read_npr_byte(t_addr addr, uint16 ctl, uint8 *data);
+int     uba_write_npr_byte(t_addr addr, uint16 ctl, uint8 data);
 int     uba_read_npr_word(t_addr addr, uint16 ctl, uint16 *data);
 int     uba_write_npr_word(t_addr addr, uint16 ctl, uint16 data);
 void    uba_set_irq(DIB *dibp);
@@ -746,6 +747,7 @@ extern void ka10_lights_clear_aux (int);
 #define NUM_DEVS_DZ     4
 #define NUM_DEVS_TCU    1
 #define NUM_DEVS_DUP    2
+#define NUM_DEVS_KMC    2
 #if KS_ITS
 #define NUM_DEVS_IMP    KS_ITS
 #define NUM_DEVS_CH11   KS_ITS

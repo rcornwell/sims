@@ -231,7 +231,7 @@ uba_write_npr(t_addr addr, uint16 ctl, uint64 data)
 }
 
 int
-uba_read_npr_byte(t_addr addr, uint16 ctl, uint16 *data)
+uba_read_npr_byte(t_addr addr, uint16 ctl, uint8 *data)
 {
     int     ubm = uba_device[ctl];
     uint32  map = uba_map[ubm][(077) & (addr >> 11)];
@@ -249,12 +249,12 @@ uba_read_npr_byte(t_addr addr, uint16 ctl, uint16 *data)
     if ((oaddr & 01))
         wd >>= 8;
     sim_debug(DEBUG_DATA, &cpu_dev, "%03llo ", wd & 0377);
-    *data = (uint16)(wd & 0377);
+    *data = (uint8)(wd & 0377);
     return 1;
 }
 
 int
-uba_write_npr_byte(t_addr addr, uint16 ctl, uint16 data)
+uba_write_npr_byte(t_addr addr, uint16 ctl, uint8 data)
 {
     int     ubm = uba_device[ctl];
     uint32  map = uba_map[ubm][(077) & (addr >> 11)];
