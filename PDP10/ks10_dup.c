@@ -465,13 +465,11 @@ static int dup_rd (DEVICE *dptr, t_addr PA, uint16 *data, int32 access)
 static BITFIELD* bitdefs[] = {dup_rxcsr_bits, dup_rxdbuf_bits, dup_txcsr_bits, dup_txdbuf_bits};
 static uint16 *regs[] = {dup_rxcsr, dup_rxdbuf, dup_txcsr, dup_txdbuf};
 struct pdp_dib   *dibp = (DIB *)dptr->ctxt;
-int32  dup;
+int32  dup = ((PA - dup_dib.uba_addr) >> 3);            /* get line num */
 int32  orig_val;
 
 if ((dptr->units[0].flags & UNIT_DIS) != 0)
     return 1;
-dup = ((PA - dup_dib.uba_addr) >> 3);                   /* get line num */
-PA &= dibp->uba_mask;
 
 if (dup >= dup_desc.lines)                              /* validate line number */
     return 1;
@@ -512,24 +510,23 @@ static int dup_wr (DEVICE *dptr, t_addr PA, uint16 data, int32 access)
 static BITFIELD* bitdefs[] = {dup_rxcsr_bits, dup_parcsr_bits, dup_txcsr_bits, dup_txdbuf_bits};
 static uint16 *regs[] = {dup_rxcsr, dup_parcsr, dup_txcsr, dup_txdbuf};
 struct pdp_dib   *dibp = (DIB *)dptr->ctxt;
-int32  dup;
+int32  dup = ((PA - dup_dib.uba_addr) >> 3);            /* get line num */
 int32  orig_val;
 
 sim_debug(DEBUG_DETAIL, DUPDPTR, "dup_wr(PA=%010o [%s], data=0x%X) ", PA, dup_wr_regs[(PA >> 1) & 03], data);
 if ((dptr->units[0].flags & UNIT_DIS) != 0)
     return 1;
-dup = ((PA - dup_dib.uba_addr) >> 3);                   /* get line num */
-PA &= dibp->uba_mask;
 
 if (dup >= dup_desc.lines)                              /* validate line number */
     return 1;
 
 orig_val = regs[(PA >> 1) & 03][dup];
-if (PA & 1)                                             /* unaligned byte access? */
-    data = (data | (orig_val & 0xFF)) & 0xFFFF;  /* Merge with original word */
-else
-    if (access == BYTE)                                 /* byte access? */
-        data = (orig_val & 0xFF00) | (data & 0xFF);     /* Merge with original high word */
+if (access == BYTE) {                                   /* byte access? */
+     if (PA & 1)                                        /* unaligned byte access? */
+         data = (data | (orig_val & 0xFF)) & 0xFFFF;    /* Merge with original word */
+     else
+         data = (orig_val & 0xFF00) | (data & 0xFF);    /* Merge with original high word */
+}
 
 switch ((PA >> 1) & 03) {                               /* case on PA<2:1> */
 
@@ -635,12 +632,12 @@ static uint16 dup_irq(struct pdp_dib *dibp)
 for (dup = 0; dup < dup_desc.lines; dup++) {            /* find 1st mux */
     if (dup_rxi & (1 << dup)) {
         sim_debug(DEBUG_IRQ, DUPDPTR, "dup_rxinta(dup=%d)\n", dup);
-        dup_clr_rxint (dup);                            /* clear intr */
+ //       dup_clr_rxint (dup);                            /* clear intr */
         return (dup_dib.uba_vect + (dup * 010));        /* return vector */
         }
     if (dup_txi & (1 << dup)) {
         sim_debug(DEBUG_IRQ, DUPDPTR, "dup_txinta(dup=%d)\n", dup);
-        dup_clr_txint (dup);                            /* clear intr */
+//        dup_clr_txint (dup);                            /* clear intr */
         return (dup_dib.uba_vect + 4 + (dup * 010));    /* return vector */
         }
     }
@@ -715,6 +712,19 @@ return SCPE_OK;
 /*
  * Public routines for use by other devices (i.e. KDP11)
  */
+int32 dup_csr_to_linenum (int32 CSRPA)
+{
+DEVICE *dptr = DUPDPTR;
+DIB *dib = (DIB *)dptr->ctxt;
+
+if ((dib->uba_addr < (uint32)CSRPA) || 
+    ((uint32)CSRPA > (dib->uba_addr + (IOLN_DUP * dup_desc.lines))) ||
+       (DUPDPTR->flags & DEV_DIS))
+    return -1;
+
+return ((uint32)CSRPA - dib->uba_addr)/IOLN_DUP;
+}
+
 
 
 void dup_set_callback_mode (int32 dup, PACKET_DATA_AVAILABLE_CALLBACK receive, PACKET_TRANSMIT_COMPLETE_CALLBACK transmit, MODEM_CHANGE_CALLBACK modem)
@@ -981,7 +991,8 @@ sim_debug(DBG_TRC, DUPDPTR, "dup_svc(dup=%d)\n", dup);
 if (!(dup_txcsr[dup] & TXCSR_M_TXDONE) && (!tmxr_tpbusyln (lp))) {
     uint8 data = dup_txdbuf[dup] & TXDBUF_M_TXDBUF;
 
-    dup_put_msg_bytes (dup, &data, 0, dup_txdbuf[dup] & TXDBUF_M_TSOM, (dup_txdbuf[dup] & TXDBUF_M_TEOM));
+    dup_put_msg_bytes (dup, &data, 0, (dup_txdbuf[dup] & TXDBUF_M_TSOM),
+                   (dup_txdbuf[dup] & TXDBUF_M_TEOM));
     if (tmxr_tpbusyln (lp)) { /* Packet ready to send? */
         sim_debug(DBG_TRC, DUPDPTR, "dup_svc(dup=%d) - Packet Done %d bytes\n", dup, dup_xmtpkoffset[dup]);
         }
@@ -1093,7 +1104,7 @@ return SCPE_OK;
 static void dup_clr_rxint (int32 dup)
 {
 dup_rxi = dup_rxi & ~(1 << dup);                        /* clr mux rcv int */
-if (dup_rxi == 0)                                       /* all clr? */
+if (dup_rxi == 0 && dup_txi == 0)                       /* all clr? */
     uba_clr_irq(&dup_dib);
 else uba_set_irq(&dup_dib);                             /* no, set intr */
 return;
@@ -1110,7 +1121,7 @@ return;
 static void dup_clr_txint (int32 dup)
 {
 dup_txi = dup_txi & ~(1 << dup);                        /* clr mux xmt int */
-if (dup_txi == 0)                                       /* all clr? */
+if (dup_txi == 0 && dup_rxi == 0)                       /* all clr? */
     uba_clr_irq (&dup_dib);
 else uba_set_irq (&dup_dib);                            /* no, set intr */
 return;
