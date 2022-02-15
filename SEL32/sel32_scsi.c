@@ -1,6 +1,6 @@
 /* sel32_scsi.c: SEL-32 MFP SCSI Disk controller
 
-   Copyright (c) 2018-2021, James C. Bevier
+   Copyright (c) 2018-2022, James C. Bevier
    Portions provided by Richard Cornwell and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
@@ -469,7 +469,6 @@ t_stat scsi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
         /* leave the TCMD bit */
         uptr->SNS &= ~MASK24;                   /* clear all but old mode data */
 #ifdef FAST_FOR_UTX
-//XX    sim_activate(uptr, 30);                 /* start things off */
 //zz    sim_activate(uptr, 100);                /* start things off */
         sim_activate(uptr, 30);                 /* start things off */
 #else
@@ -504,7 +503,6 @@ t_stat scsi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
     if (uptr->SNS & 0xff)                       /* any other cmd is error */
         return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
 #ifdef FAST_FOR_UTX
-//XX    sim_activate(uptr, 20);                 /* start things off */
 //zz    sim_activate(uptr, 100);                /* start things off */
         sim_activate(uptr, 20);                 /* start things off */
 #else
@@ -569,7 +567,8 @@ t_stat scsi_srv(UNIT *uptr)
         /* channel software will use the status buffer addr */
 
         /* now call set_inch() function to write and test inch buffer addresses */
-        i = set_inch(uptr, mema);               /* new address */
+        /* 1-256 wd buffer is provided for 128 status dbl words */
+        i = set_inch(uptr, mema, 128);          /* new address of 33 entries */
         if ((i == SCPE_MEM) || (i == SCPE_ARG)) {   /* any error */
             /* we have error, bail out */
             uptr->CMD &= LMASK;                 /* remove old status bits & cmd */
@@ -701,8 +700,7 @@ t_stat scsi_srv(UNIT *uptr)
                     unit, uptr->STAR, uptr->CHS);
                 uptr->CHS = uptr->STAR;         /* we are there */
 #ifdef FAST_FOR_UTX
-//XX            sim_activate(uptr, 20);         /* start things off */
-                sim_activate(uptr, 20);
+                sim_activate(uptr, 20);         /* start things off */
 #else
                 sim_activate(uptr, 40);
 #endif
@@ -791,8 +789,7 @@ t_stat scsi_srv(UNIT *uptr)
                 unit, uptr->STAR);
 #ifdef FAST_FOR_UTX
             /* making this value 40 or so create volume mount error on boot */
-//XX        sim_activate(uptr, 20);             /* start things off */
-            sim_activate(uptr, 20);
+            sim_activate(uptr, 20);             /* start things off */
 #else
             sim_activate(uptr, 40);
 #endif
@@ -1122,7 +1119,6 @@ doread:
                 "SCSI sector read complete, %x bytes to go from diskfile sector %06x\n",
                 chp->ccw_count, uptr->CHS);
 #ifdef FAST_FOR_UTX
-//XX        sim_activate(uptr, 15);             /* start things off */
 //zz        sim_activate(uptr, 10);             /* start things off */
             sim_activate(uptr, 15);             /* start things off */
 #else
@@ -1324,7 +1320,6 @@ dowrite:
                 break;
             }
 #ifdef FAST_FOR_UTX
-//XX        sim_activate(uptr, 20);             /* start things off */
 //zz        sim_activate(uptr, 10);             /* start things off */
             sim_activate(uptr, 20);             /* start things off */
 #else
@@ -1562,7 +1557,6 @@ int scsi_format(UNIT *uptr) {
         sim_switches = 0;                       /* simh tests 'N' & 'Y' switches */
         /* see if user wants to initialize the disk */
         if (!get_yn("Initialize disk? [Y] ", TRUE)) {
-//          printf("disk_format init question is false\r\n");
             sim_switches = oldsw;
             return 1;
         }

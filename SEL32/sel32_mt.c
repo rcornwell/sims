@@ -1,6 +1,6 @@
 /* sel32_mt.c: SEL-32 8051 Buffered Tape Processor
 
-   Copyright (c) 2018-2021, James C. Bevier
+   Copyright (c) 2018-2022, James C. Bevier
    Portions provided by Richard Cornwell and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
@@ -436,9 +436,6 @@ loop:
         chp->chan_caw, chp->chan_dev, word1, word2, uptr->SNS);
 
     chp->chan_caw = (chp->chan_caw & 0xfffffc) + 8; /* point to next IOCD */
-#ifdef BAD_05142021
-    chp->ccw_cmd = (word1 >> 24) & 0xff;        /* set new command from IOCD wd 1 */
-#endif
 
     /* Check if we had data chaining in previous iocd */
     /* if we did, use previous cmd value */
@@ -524,14 +521,9 @@ loop:
     }
 
     /* Check if we had data chaining in previous iocd */
-#ifdef BAD_05152021
-    if ((chp->chan_info & INFO_SIOCD) ||        /* see if 1st IOCD in channel prog */
-        ((chp->ccw_flags & FLAG_DC) == 0)) {    /* last IOCD have DC set? */
-#else
     if ((chp->chan_info & INFO_SIOCD) ||        /* see if 1st IOCD in channel prog */
         (((chp->chan_info & INFO_SIOCD) == 0) && /* see if 1st IOCD in channel prog */
         ((chp->ccw_flags & FLAG_DC) == 0))) {    /* last IOCD have DC set? */
-#endif
         sim_debug(DEBUG_CMD, dptr,
             "mt_iocl @%06x DO CMD No DC, ccw_flags %04x cmd %02x\n",
             chp->chan_caw, chp->ccw_flags, chp->ccw_cmd);
@@ -846,7 +838,7 @@ t_stat mt_srv(UNIT *uptr)
 
         if (len == 0) {
             /* we have invalid count, error, bail out */
-            uptr->CMD &= ~(0xffff);     /* remove old status bits & cmd */
+            uptr->CMD &= ~(0xffff);         /* remove old status bits & cmd */
             uptr->SNS |= SNS_CMDREJ|SNS_EQUCHK;
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             return SCPE_OK;
@@ -854,7 +846,8 @@ t_stat mt_srv(UNIT *uptr)
 
         /* the chp->ccw_addr location contains the inch address */
         /* call set_inch() to setup inch buffer */
-        i = set_inch(uptr, mema);           /* new address */
+        /* 4 wd buffer is provided for 2 status dbl words */
+        i = set_inch(uptr, mema, 2);        /* new address of 33 entries */
 
         if ((i == SCPE_MEM) || (i == SCPE_ARG)) {   /* any error */
             /* we have error, bail out */

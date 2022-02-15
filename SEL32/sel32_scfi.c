@@ -1,6 +1,6 @@
 /* sel32_scfi.c: SEL-32 SCFI SCSI Disk Controller
 
-   Copyright (c) 2018-2021, James C. Bevier
+   Copyright (c) 2018-2022, James C. Bevier
    Portions provided by Richard Cornwell and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
@@ -250,12 +250,14 @@ struct scfi_t
 }
 
 /*                         BM SIZ TOT AL U */
-/* DF0B, 1, 8, 20, 192, 1, 1712,  54760, SF336 */
-/* DF0C, 1, 8, 20, 192, 1, 4082, 130612, SG102 */
-/* DF0D, 1, 8, 20, 192, 1, 3491, 111705, SG654 */
-/* DF0B, 1, 8, 20, 192, 1, 1711,  54752, SG038 */
-/* DF0C, 1, 8, 20, 192, 1, 5464, 174848, SG120 */
-/* DF0D, 1, 8, 20, 192, 1, 3491, 111680, SG076 */
+/* DF0B, 1,  8, 20, 192, 1, 1712,  54760, SF336 */
+/* DF0C, 1,  8, 20, 192, 1, 4082, 130612, SG102 */
+/* DF0D, 1,  8, 20, 192, 1, 3491, 111705, SG654 */
+/* */
+/* DF0B, 1,  8, 20, 192, 1, 1711,  54752, SG038 */
+/* DF0C, 1, 16, 20, 192, 1, 2732,  87424, SG120 */
+/* DF0D, 1,  8, 20, 192, 1, 3491, 111680, SG076 */
+/* DF0E, 1, 16, 20, 192, 1, 2732,  87424, SG121 */
 scfi_type[] =
 {
     /* Class F Disc Devices */
@@ -484,9 +486,6 @@ loop:
         chp->chan_caw, chan, word1, word2);
 
     chp->chan_caw = (chp->chan_caw & 0xfffffc) + 8; /* point to next IOCD */
-#ifdef BAD_05142021
-    chp->ccw_cmd = (word1 >> 24) & 0xff;        /* set command from IOCD wd 1 */
-#endif
 
     /* Check if we had data chaining in previous iocd */
     /* if we did, use previous cmd value */
@@ -569,14 +568,9 @@ loop:
     }
 
     /* Check if we had data chaining in previous iocd */
-#ifdef BAD_05152021
-    if ((chp->chan_info & INFO_SIOCD) ||        /* see if 1st IOCD in channel prog */
-        ((chp->ccw_flags & FLAG_DC) == 0)) {    /* last IOCD have DC set? */
-#else
     if ((chp->chan_info & INFO_SIOCD) ||        /* see if 1st IOCD in channel prog */
         (((chp->chan_info & INFO_SIOCD) == 0) && /* see if 1st IOCD in channel prog */
         ((chp->ccw_flags & FLAG_DC) == 0))) {   /* last IOCD have DC set? */
-#endif
         sim_debug(DEBUG_CMD, dptr,
             "scfi_iocl @%06x DO CMD No DC, ccw_flags %04x cmd %02x\n",
             chp->chan_caw, chp->ccw_flags, chp->ccw_cmd);
@@ -650,7 +644,7 @@ loop:
             sim_debug(DEBUG_EXP, &cpu_dev,
                 "scfi_iocl ERROR return chsa %04x status %08x\n",
                 chp->chan_dev, chp->chan_status);
-            return 1;                            /* error return */
+            return 1;                           /* error return */
         }
         /* NOTE this code needed for MPX 1.X to run! */
         /* see if command completed */
@@ -723,9 +717,6 @@ t_stat scfi_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
             break;                              /* yes, can't be 1st */
         }
     case DSK_ICH:                               /* 0xFF Initialize controller */
-        if ((cmd == DSK_ICH) &&
-            (chp->ccw_count != 896))            /* count must be 896 to be valid */
-            break;
     case DSK_SCK:                               /* Seek command 0x07 */
     case DSK_XEZ:                               /* Rezero & Read IPL record 0x37 */
     case DSK_WD:                                /* Write command 0x01 */
@@ -784,20 +775,21 @@ t_stat  scfi_haltio(UNIT *uptr) {
             "scfi_haltio HIO chsa %04x cmd = %02x ccw_count %02x\n",
             chsa, cmd, chp->ccw_count);
         /* stop any I/O and post status and return error status */
+        sim_cancel(uptr);                       /* clear the input timer */
+        chp->ccw_count = 0;                     /* zero the count */
         chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);   /* stop any chaining */
         uptr->CMD &= LMASK;                     /* make non-busy */
         uptr->SNS2 |= (SNS_ONC|SNS_UNR);        /* on cylinder & ready */
-        sim_cancel(uptr);                       /* clear the input timer */
         sim_debug(DEBUG_CMD, dptr,
             "scfi_haltio HIO I/O stop chsa %04x cmd = %02x\n", chsa, cmd);
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
-        return SCPE_IOERR;
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);  /* force end */
+        return CC1BIT | SCPE_IOERR;             /* DIAGS want just an interrupt */
     }
     uptr->CMD &= LMASK;                         /* make non-busy */
     uptr->SNS2 |= (SNS_ONC|SNS_UNR);            /* on cylinder & ready */
     sim_debug(DEBUG_CMD, dptr,
         "scfi_haltio HIO I/O not busy chsa %04x cmd = %02x\n", chsa, cmd);
-    return SCPE_OK;                             /* not busy */
+    return CC1BIT | SCPE_OK;                    /* not busy return */
 }
 
 /* Handle processing of disk requests. */
@@ -844,9 +836,47 @@ t_stat scfi_srv(UNIT *uptr)
         len = chp->ccw_count;                   /* INCH command count */
         mema = chp->ccw_addr;                   /* get inch or buffer addr */
         sim_debug(DEBUG_CMD, dptr,
-            "scfi_srv cmd CONT INCH %06x chsa %04x addr %06x count %04x completed\n",
+            "scfi_srv cmd CONT ICH %06x chsa %04x addr %06x count %04x completed\n",
             chp->chan_inch_addr, chsa, mema, chp->ccw_count);
-        /* to use this inch method, byte count must be 897 */
+        if (len == 0x14) {
+            /* read all 20 bytes, stopping every 4 bytes to make words */
+            /* the first word has the inch buffer address */
+            /* the next 4 words have drive data for each unit */
+            /* WARNING 4 drives must be defined for this controller */
+            /* so we will not have a map fault */
+            for (i=0; i < 20; i++) {
+                if (chan_read_byte(chsa, &buf[i])) {
+                    if (chp->chan_status & STATUS_PCHK) /* test for memory error */
+                        uptr->SNS |= SNS_INAD;      /* invalid address */
+                    /* we have error, bail out */
+                    uptr->CMD &= LMASK;             /* remove old status bits & cmd */
+                    uptr->SNS |= SNS_CMDREJ;
+                    chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                    break;
+                }
+                if (((i+1)%4) == 0) {               /* see if we have a word yet */
+                    if (i == 3) {
+                        /* inch buffer address */
+                        mema = (buf[0]<<24) | (buf[1]<<16) | (buf[2]<<8) | (buf[3]);
+                        sim_debug(DEBUG_CMD, dptr,
+                            "scfi_srv cmd CONT ICH %06x chsa %04x mema %06x completed\n",
+                            chp->chan_inch_addr, chsa, mema);
+                    } else {
+                        /* drive attribute registers */
+                        /* may want to use this later */
+                        /* clear warning errors */
+                        tstart = (buf[i-3]<<24) | (buf[i-2]<<16) | (buf[i-1]<<8) | (buf[i]);
+                        sim_debug(DEBUG_CMD, dptr,
+                            "scfi_srv cmd CONT ICH %06x chsa %04x data %06x completed\n",
+                            chp->chan_inch_addr, chsa, tstart);
+                    }
+                }
+            }
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
+            break;
+        }
+
+        /* to use this inch method, byte count must be 896 */
         if (len != 896) {
                 /* we have invalid count, error, bail out */
                 uptr->SNS |= SNS_CMDREJ;
@@ -854,15 +884,15 @@ t_stat scfi_srv(UNIT *uptr)
                 break;
         }
         /* now call set_inch() function to write and test inch buffer addresses */
-        tstart = set_inch(uptr, mema);          /* new address */
+        /* 1-224 wd buffer is provided, status is 128 words offset from start */
+        mema += (128*4);                        /* offset to inch buffers */
+        tstart = set_inch(uptr, mema, 33);      /* new address of 33 entries */
         if ((tstart == SCPE_MEM) || (tstart == SCPE_ARG)) { /* any error */
             /* we have error, bail out */
             uptr->SNS |= SNS_CMDREJ;
             chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
             break;
         }
-        chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* return OK */
-        break;
 
     case DSK_INCH2:                             /* use 0xF0 for inch, just need int */
         len = chp->ccw_count;                   /* INCH command count */
@@ -878,6 +908,27 @@ t_stat scfi_srv(UNIT *uptr)
         /* the INCH buffer address must be set for the parent channel as well */
         /* as all other devices on the channel.  Call set_inch() to do this for us */
         /* just return OK and channel software will use u4 as status buffer addr */
+
+        /* see if New SCFI controller */
+        if (len == 4) {
+            /* get just the INCH addr */
+            for (i=0; i < 4; i++) {
+                if (chan_read_byte(chsa, &buf[i])) {
+                    if (chp->chan_status & STATUS_PCHK) /* test for memory error */
+                        uptr->SNS |= SNS_INAD;      /* invalid address */
+                    /* we have error, bail out */
+                    uptr->CMD &= LMASK;             /* remove old status bits & cmd */
+                    uptr->SNS |= SNS_CMDREJ;
+                    chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+                    break;
+                }
+            }
+            /* inch buffer address */
+            mema = (buf[0]<<24) | (buf[1]<<16) | (buf[2]<<8) | (buf[3]);
+            /* now call set_inch() function to write and test inch buffer addresses */
+            i = set_inch(uptr, mema, 1);           /* new address of 1 entry */
+            goto gohere;
+        }
 
         if (len != 36) {
             /* we have invalid count, error, bail out */
@@ -915,8 +966,11 @@ t_stat scfi_srv(UNIT *uptr)
                         | (buf[i-1]<<8) | (buf[i]);
             }
         }
+gohere:
         /* now call set_inch() function to write and test inch buffer addresses */
-        i = set_inch(uptr, mema);               /* new address */
+        /* 1-224 wd buffer is provided, status is 128 words offset from start */
+        mema += (128*4);                        /* offset to inch buffers */
+        i = set_inch(uptr, mema, 33);           /* new address of 33 entries */
         if ((i == SCPE_MEM) || (i == SCPE_ARG)) { /* any error */
             /* we have error, bail out */
             uptr->CMD &= LMASK;                 /* remove old status bits & cmd */
@@ -1552,7 +1606,6 @@ int scfi_format(UNIT *uptr) {
         sim_switches = 0;                       /* simh tests 'N' & 'Y' switches */
         /* see if user wants to initialize the disk */
         if (!get_yn("Initialize disk? [Y] ", TRUE)) {
-//          printf("disk_format init question is false\r\n");
             sim_switches = oldsw;
             return 1;
         }

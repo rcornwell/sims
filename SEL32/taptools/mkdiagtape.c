@@ -8,6 +8,7 @@
  * output - simulated newtape
  * option - -c = cmdfile
  * 08/22/2020
+ * 02/14/2022
  */
 
 #include <stdio.h>
@@ -78,7 +79,7 @@ int writefile(FILE *tp, char *fnp, uint32 mblks, int32 chunks) {
     bsize = mblks;                          /* save # blks */
 
 //printf("MPX file %s is %x (%d) bytes blks %d chk %d\n",
-//        fnp, word, word, bsize, (bsize+1)/chunks);
+//      fnp, word, word, bsize, (bsize+1)/chunks);
     csize = 0;
     /* read in the image file */
     while (bsize > 0) { 
@@ -105,9 +106,11 @@ int writefile(FILE *tp, char *fnp, uint32 mblks, int32 chunks) {
         memset((char *)data, 0, csize);     /* zero data storage */
     }
 //printf("write file %s (size %d bytes) (%d sect) (%d blocks) (%d chunks)\n",
-//      fnp, word, size, mblks, blks);
-    fclose(fp);
-    exit(0);
+//    fnp, word, size, mblks, blks);
+//HUH    fclose(fp);
+//HUH    exit(0);
+//printf("return from write file\n");
+    return (1);
 }
 
 /* read program file and output to a simulated diagnostic tape */
@@ -132,7 +135,7 @@ char *argv[];
         exit(1);
     }
     while(--argc > 0) {
-//      printf("argc %d argv %s\n", argc, *argv);
+      printf("argc %d argv %s\n", argc, *argv);
         p = *++argv;
         if (*p++ == '-') {
             if (*p == '\0') {
@@ -140,7 +143,7 @@ char *argv[];
                 fprintf(stderr, "Usage: %s -c cmdfile infile outfile\n", *targv);
                 exit(1);
             }
-//          printf("doing options %s\n", p);
+            printf("doing options %s\n", p);
             while (*p != '\0') {
                 switch (*p++) {
                     case 'c':
@@ -180,7 +183,7 @@ char *argv[];
         exit(1);
     }
     /* got input tapefile and options, handle output file now */
-//  printf("AT 3 argc %d argv %s\n", argc, *argv);
+//printf("AT 3 argc %d argv %s\n", argc, *argv);
     if (--argc > 0) {
         p = *argv++;
         printf("argc %d argv3 %s\n", argc, p);
@@ -280,6 +283,7 @@ char *argv[];
     while (1) {
         /* read the data to copy to output */
         i = fread(data, 1, (size_t)7680, dp);
+//printf("got i = %x after fread call\n", i);
         if (i <= 0) {
             fprintf(stderr, "EOM input file, done\n");
             break;

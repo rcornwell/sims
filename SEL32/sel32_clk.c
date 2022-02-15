@@ -112,6 +112,10 @@ t_stat rtc_srv (UNIT *uptr)
 #endif
     /* if clock disabled, do not do interrupts */
     if (((rtc_dev.flags & DEV_DIS) == 0) && rtc_pie) {
+        int lev = 0x13;
+        sim_debug(DEBUG_CMD, &rtc_dev,
+            "RT Clock mfp INTS[%02x] %08x SPAD[%02x] %08x\n",
+            lev, INTS[lev], lev+0x80, SPAD[lev+0x80]);
         sim_debug(DEBUG_CMD, &rtc_dev,
             "RT Clock int INTS[%02x] %08x SPAD[%02x] %08x\n",
             rtc_lvl, INTS[rtc_lvl], rtc_lvl+0x80, SPAD[rtc_lvl+0x80]);
@@ -125,6 +129,9 @@ t_stat rtc_srv (UNIT *uptr)
             /* need to find real cause of I/O stopping on clock interrupt */
             if ((outbusy==0) && (inbusy==0))    /* skip interrupt if con I/O in busy wait */
                 INTS[rtc_lvl] |= INTS_REQ;      /* request the interrupt */
+            else
+            sim_debug(DEBUG_CMD, &rtc_dev,
+                "RT Clock int console busy\n");
 #else
             INTS[rtc_lvl] |= INTS_REQ;          /* request the interrupt */
 #endif

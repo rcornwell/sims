@@ -144,7 +144,7 @@ The install is exited and @@A is used to login into MPX.  The username
 SYSTEM is used to login into TSM without a password.
 
 #runscsi3x.ini - dsk/mpx3xsba0.dsk & dsk/mpx3csbb0.dsk;
-#              - dsk/scsi35m1disk0 & dsk/scsi35m2disk0;
+               - dsk/scsi35m1disk0 & dsk/scsi35m2disk0;
 type "../sel32 rundscsi3x.ini" to run the installed MPX system.
 The disk is booted up to the MPX message "Press Attention for TSM".
 Use @@A to get login prompt.  Login as SYSTEM.  The WORK volume will
@@ -164,7 +164,7 @@ type "../sel32 user36esdtp2.ini" to install MPX 3.6 to HSDP disks.
 This is an automated installation of MPX 3.6 to disk.  A 300MB system
 disk volume (user36p2udp0) and a 600MB work disk volume (user36s1udp1)
 are initialized and then the file systems are created and loaded using
-the volumgr.  The user sdt tape contains system and user files that
+the volmgr.  The user sdt tape contains system and user files that
 are loaded to multiple directories.  The second disk is initialized
 and formatted and only a system directory defined.  The disk is mounted
 as the volume "work" as the 2nd disk drive.  The installed MPX system
@@ -225,7 +225,7 @@ diag.tap     - bootable level one diagnostic tape w/auto testing.
                Testing is extremely difficult without any source for the
                diagnostics.  Updates to follow as tests are corrected.
 
-Other MPX verions support:
+Other MPX versions support:
                I have recently received some old MPX 3.X save tapes.  Using these
                I have been able to hand build a MPX3.6 SDT tape that can be used
                to install MPX3.6.  Once installed, the system can be used to build
@@ -238,5 +238,5 @@ Other MPX verions support:
                SDT, I would be very thankfull.  Please keep looking.
 
 James C. Bevier
-12/29/2021 
+12/31/2021 
 

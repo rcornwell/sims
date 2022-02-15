@@ -1,6 +1,6 @@
 /* sel32_disk.c: SEL-32 2311/2314 Disk Processor II
 
-   Copyright (c) 2018-2021, James C. Bevier
+   Copyright (c) 2018-2022, James C. Bevier
    Portions provided by Richard Cornwell and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
@@ -1040,9 +1040,8 @@ t_stat disk_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 #ifdef FAST_FOR_UTX
         /* when value was 50, UTX would get a spontainous interrupt */
         /* when value was 30, UTX would get a spontainous interrupt */
-        /* when starting cron */
         /* changed to 25 from 30 121420 */
-//utx21asim_activate(uptr, 20);                 /* start things off */
+//utx21a sim_activate(uptr, 20);                /* start things off */
         /* changed to 15 from 20 12/17/2021 to fix utx21a getting */
         /* "panic: ioi: tis_busy - bad cc" during root fsck on boot */
         /* changed back to 20 from 15 12/18/2021 to refix utx21a getting */
@@ -1089,18 +1088,14 @@ t_stat  disk_haltio(UNIT *uptr) {
         chp->ccw_count = 0;                     /* zero the count */
         chp->ccw_flags &= ~(FLAG_DC|FLAG_CC);   /* stop any chaining */
         uptr->CMD &= LMASK;                     /* make non-busy */
-//      chp->chan_caw = 0;                      /* zero iocd address for diags */
         uptr->SNS2 |= (SNS_ONC|SNS_UNR);        /* on cylinder & ready */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);  /* force end */
-//      return CC2BIT | SCPE_IOERR;
         return CC1BIT | SCPE_IOERR;             /* DIAGS want just an interrupt */
     }
     sim_debug(DEBUG_DETAIL, dptr,
         "disk_haltio HIO I/O not busy chsa %04x cmd = %02x\n", chsa, cmd);
     uptr->CMD &= LMASK;                         /* make non-busy */
     uptr->SNS2 |= (SNS_ONC|SNS_UNR);            /* on cylinder & ready */
-//  chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_ECHO);  /* post 0x80000000 to ICB */
-//  return CC4BIT | SCPE_OK;                    /* not busy return */
     return CC1BIT | SCPE_OK;                    /* not busy return */
 }
 
@@ -1160,7 +1155,9 @@ t_stat disk_srv(UNIT *uptr)
             break;
         }
         /* now call set_inch() function to write and test inch buffer addresses */
-        tstart = set_inch(uptr, mema);          /* new address */
+        /* 1-224 wd buffer is provided, status is 128 words offset from start */
+        mema += (128*4);                        /* offset to inch buffers */
+        tstart = set_inch(uptr, mema, 33);      /* new address of 33 entries */
         if ((tstart == SCPE_MEM) || (tstart == SCPE_ARG)) { /* any error */
             /* we have error, bail out */
             uptr->SNS |= SNS_CMDREJ;
@@ -1222,7 +1219,9 @@ t_stat disk_srv(UNIT *uptr)
             }
         }
         /* now call set_inch() function to write and test inch buffer addresses */
-        i = set_inch(uptr, mema);               /* new address */
+        /* 1-224 wd buffer is provided, status is 128 words offset from start */
+        mema += (128*4);                        /* offset to inch buffers */
+        i = set_inch(uptr, mema, 33);           /* new address of 33 entries */
         if ((i == SCPE_MEM) || (i == SCPE_ARG)) { /* any error */
             /* we have error, bail out */
             uptr->CMD &= LMASK;                 /* remove old status bits & cmd */

@@ -1,6 +1,6 @@
 /* sel32_defs.h: SEL-32 Concept/32 simulator definitions 
 
-   Copyright (c) 2018-2021, James C. Bevier
+   Copyright (c) 2018-2022, James C. Bevier
    Portions provided by Richard Cornwell, Geert Rolf and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
@@ -206,10 +206,12 @@ extern DEVICE ec_dev;
 typedef struct chp {
     /* channel program values */
     UNIT        *unitptr;               /* Back pointer to units structure */
-    uint32      chan_inch_addr;         /* Channel status dw addr in memory */
+    uint32      chan_inch_addr;         /* Current channel status dw addr in memory */
+    uint32      base_inch_addr;         /* Original channel status dw addr in memory */
+    uint16      max_inch_addr;          /* maximum inch buffer pointer */
     uint32      chan_caw;               /* Channel command address word */
     uint32      ccw_addr;               /* Channel address */
-#ifndef TRY_FOR_IOCL_CHANGE
+#ifdef TEST_FOR_IOCL_CHANGE
     uint32      new_iocla;              /* start iocl address */
     uint32      new_iocd1;              /* start word 1 of iocd */
     uint32      new_iocd2;              /* start word 2 of iocd */
@@ -370,8 +372,8 @@ extern DEBTAB dev_debug[];
 
 #define MAPMODE  0x40                   /* Map mode, PSD 2 bit 0 */
 #define RETMODE  0x20                   /* Retain current maps, PSD 2 bit 15 */
-#define BLKMODE  0x10                   /* Set blocked mode, PSD 2 bit 17 */
-#define RETBLKM  0x08                   /* Set retain blocked mode, PSD 2 bit 16 */
+#define RETBLKM  0x10                   /* Set retain blocked mode, PSD 2 bit 16 */
+#define BLKMODE  0x08                   /* Set blocked mode, PSD 2 bit 17 */
 
 /* PSD mode bits in PSD words 1&2 variable */
 #define PRIVBIT  0x80000000             /* Privileged mode  PSD 1 bit 0 */
@@ -379,10 +381,10 @@ extern DEBTAB dev_debug[];
 #define BASEBIT  0x02000000             /* Base Mode PSD 1 bit 6 */
 #define AEXPBIT  0x01000000             /* Arithmetic exception PSD 1 bit 7 */
 
-#define SETBBIT  0x00004000             /* Set blocked mode, PSD 2 bit 17 */
-#define RETBBIT  0x00008000             /* Retain current blocking state, PSD 2 bit 16 */
-#define RETMBIT  0x00010000             /* Retain current maps, PSD 2 bit 15 */
 #define MAPBIT   0x80000000             /* Map mode, PSD 2 bit 0 */
+#define RETMBIT  0x00010000             /* Retain current maps, PSD 2 bit 15 */
+#define RETBBIT  0x00008000             /* Retain current blocking state, PSD 2 bit 16 */
+#define SETBBIT  0x00004000             /* Set blocked mode, PSD 2 bit 17 */
 
 /* Trap Table Address in memory is pointed to by SPAD 0xF0 */
 #define POWERFAIL_TRAP  0x80            /* Power fail trap */
@@ -507,7 +509,7 @@ extern  void    set_devwake(uint16 chsa, uint16 flags);
 extern  t_stat  chan_boot(uint16 addr, DEVICE *dptr);
 extern  int     test_write_byte_end(uint16 chsa);
 extern  DEVICE *get_dev(UNIT *uptr);
-extern  t_stat  set_inch(UNIT *uptr, uint32 inch_addr); /* set channel inch address */
+extern  t_stat  set_inch(UNIT *uptr, uint32 inch_addr, uint32 num_inch);    /* set inch addr */
 extern  CHANP  *find_chanp_ptr(uint16 chsa);    /* find chanp pointer */
 
 extern  uint32  M[];                    /* our memory */

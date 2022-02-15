@@ -1,6 +1,6 @@
 /* sel32_hsdp.c: SEL-32 8064 High Speed Disk Processor
 
-   Copyright (c) 2018-2021, James C. Bevier
+   Copyright (c) 2018-2022, James C. Bevier
    Portions provided by Richard Cornwell and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
@@ -1126,7 +1126,6 @@ t_stat hsdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 #ifdef FAST_FOR_UTX
 //      sim_activate(uptr, 20);                 /* start things off */
         sim_activate(uptr, 30);                 /* start things off */
-//0107  sim_activate(uptr, 30);                 /* start things off */
 #else
         sim_activate(uptr, 250);                /* start things off */
 //      sim_activate(uptr, 500);                /* start things off */
@@ -1165,7 +1164,6 @@ t_stat hsdp_startcmd(UNIT *uptr, uint16 chan,  uint8 cmd)
 #ifdef FAST_FOR_UTX
 //      sim_activate(uptr, 20);                 /* start things off */
 //      sim_activate(uptr, 30);                 /* start things off */
-//0107  sim_activate(uptr, 25);                 /* start things off */
         sim_activate(uptr, 25);                 /* start things off */
 #else
         sim_activate(uptr, 250);                /* start things off */
@@ -1423,7 +1421,9 @@ t_stat hsdp_srv(UNIT *uptr)
         sim_debug(DEBUG_CMD, dptr, "\n");
 
         /* now call set_inch() function to write and test inch buffer addresses */
-        i = set_inch(uptr, mema);               /* new address */
+        /* 1-224 wd buffer is provided, status is 128 words offset from start */
+        mema += (128*4);                        /* offset to inch buffers */
+        i = set_inch(uptr, mema, 33);           /* new address of 33 entries */
         if ((i == SCPE_MEM) || (i == SCPE_ARG)) {   /* any error */
             /* we have error, bail out */
             uptr->CMD &= LMASK;                 /* remove old status bits & cmd */
@@ -1445,7 +1445,6 @@ t_stat hsdp_srv(UNIT *uptr)
             sim_debug(DEBUG_CMD, dptr, "hsdp_srv cmd NOP stalling for 50 cnts\n");
 //          sim_activate(uptr, 250);            /* start waiting */
 //          sim_activate(uptr, 50);             /* start waiting */
-//30        sim_activate(uptr, 350);             /* start waiting */
             sim_activate(uptr, 350);             /* start waiting */
             break;
         }

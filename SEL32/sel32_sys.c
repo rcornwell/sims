@@ -1,6 +1,6 @@
 /* sel32_sys.c: SEL-32 Gould Concept/32 (orignal SEL-32) Simulator system interface.
 
-   Copyright (c) 2018-2021, James C. Bevier
+   Copyright (c) 2018-2022, James C. Bevier
    Portions provided by Richard Cornwell, Geert Rolf and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
@@ -1100,6 +1100,15 @@ t_stat fprint_sym (FILE *of, t_addr addr, t_value *val, UNIT *uptr, int32 sw)
     uint32      num;
 //  uint32      tmp=*val;                   /* for debug */
 
+    if (sw & SIM_SW_STOP) {                 /* special processing for step */
+        if (PSD[0] & 0x02000000) {          /* bit 6 is base mode */
+            sw |= SWMASK('M');              /* display basemode */
+            sw &= ~SWMASK('N');             /* no non-based display */
+        } else {
+            sw |= SWMASK('N');              /* display non-basemode */
+            sw &= ~SWMASK('M');             /* no basemode display */
+        }
+    }
     if (addr & 0x02)
         l = 2;
     /* determine base for number output */

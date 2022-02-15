@@ -1,6 +1,6 @@
 /* sel32_lpr.c: SEL32 922x & 924x High Speed Line Printer
 
-   Copyright (c) 2018-2021, James C. Bevier
+   Copyright (c) 2018-2022, James C. Bevier
    Portions provided by Richard Cornwell and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
@@ -111,17 +111,36 @@ LPFCTBL  EQU       $
 #define CNT u4
 /* u4 holds current line count */
 
+/* channel status bits 13-15 */
+/* 0x0c - normal completion - OK & carriage is not at bottom of form */
+/* 0x0e - Unit check - Sense error present with SNS_PRINTF status */
+/* 0x0d - Unit exception - OK & carriage is at bottom of form */
+
 #define SNS   u5
 /* in u5 packs sense byte 0,1 and 3 */
 /* Sense byte 0 */
-#define SNS_CMDREJ      0x80        /* Command reject */
-#define SNS_INTVENT     0x40        /* Unit intervention required */
-#define SNS_BUSCHK      0x20        /* Parity error on bus */
-#define SNS_EQUCHK      0x10        /* Equipment check */
-#define SNS_DATCHK      0x08        /* Data Check */
-#define SNS_OVRRUN      0x04        /* Data overrun */
-#define SNS_SEQUENCE    0x02        /* Unusual sequence */
-#define SNS_BOF         0x01        /* BOF on printer */
+#define SNS_CMDREJ      0x80000000  /* Command reject + Unit check */
+#define SNS_OPRINTR     0x40000000  /* Operator intervention required */
+                                    /* reason code is in status byte 1 */
+#define SNS_BUSCHK      0x20000000  /* Parity error on bus */
+/* bits 3-7 are unused */
+#define SNS_NU3         0x10000000  /* Not used */
+#define SNS_NU4         0x08000000  /* Not used */
+#define SNS_NU5         0x04000000  /* Not used */
+#define SNS_NU6         0x02000000  /* Not used */
+#define SNS_NU7         0x01000000  /* Not used */
+#define SNS_BOF         0x01000000  /* Not used, temp setting for paper at BOT */
+/* Sense byte 1 */
+#define SNS_DEVVFY      0x00800000  /* Device Verify Interface Cable Disconnected */
+                                    /* plus SNS_OPRINTR */
+#define SNS_DEVPWR      0x00400000  /* Device Powered Off + SNS_OPRINTR */
+#define SNS_DEVCHK      0x00200000  /* Device Check - Not Ready + SNS_OPRINTR */
+#define SNS_OFFLINE     0x00100000  /* Off Line + SNS_OPRINTR */
+#define SNS_NU2         0x00080000  /* Not used */
+#define SNS_NU1         0x00040000  /* Not used */
+#define SNS_BEGOF       0x00020000  /* Beginning of form */
+#define SNS_TOF         0x00010000  /* Top of form on printer */
+/* Sense byte 2-3 have remaining channel cnt of zero */
 
 #define CBP u6
 /* u6 hold buffer position */
@@ -201,7 +220,7 @@ DEVICE      lpr_dev = {
     NULL, NULL, NULL, NULL, &lpr_attach, &lpr_detach,
     /* ctxt is the DIB pointer */
     &lpr_dib, DEV_DISABLE|DEV_DEBUG, 0, dev_debug,
-//  &lpr_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug
+//  &lpr_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug,
     NULL, NULL, &lpr_help, NULL, NULL, &lpr_description,
 };
 
@@ -211,6 +230,7 @@ void lpr_ini(UNIT *uptr, t_bool f) {
     sim_cancel(uptr);                       /* stop any timers */
     uptr->SNS = 0;                          /* no status */
     uptr->CBP = 0;                          /* start of buffer */
+    uptr->CNT = 0;                          /* restart line count */
 }
 
 /* handle rschnlio cmds for lpr */
@@ -291,10 +311,10 @@ t_stat  lpr_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
     case 0x27:                              /* <LF> <LF> */
     case 0x37:                              /* <LF> <LF> <LF> */
     case 0x47:                              /* <FF> */
+
         /* process the command */
         sim_debug(DEBUG_CMD, dptr,
-            "lpr_startcmd %04x: Cmd %02x print\n",
-            chan, cmd&LPR_CMDMSK);
+            "lpr_startcmd %04x: Cmd %02x print\n", chan, cmd&LPR_CMDMSK);
         uptr->CMD &= ~(LPR_CMDMSK);         /* zero cmd */
         uptr->CMD |= (cmd & LPR_CMDMSK);    /* save new command in CMD */
         sim_activate(uptr, 100);            /* Start unit off */
@@ -302,8 +322,7 @@ t_stat  lpr_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 
     case 0x4:                               /* Sense Status */
         sim_debug(DEBUG_CMD, dptr,
-            "lpr_startcmd %04x: Cmd %02x sense\n",
-            chan, cmd&LPR_CMDMSK);
+            "lpr_startcmd %04x: Cmd %02x sense\n", chan, cmd&LPR_CMDMSK);
         uptr->CMD &= ~(LPR_CMDMSK);         /* zero cmd */
         uptr->CMD |= (cmd & LPR_CMDMSK);    /* save new command in CMD */
         sim_activate(uptr, 100);            /* Start unit off */
@@ -311,13 +330,12 @@ t_stat  lpr_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
 
     default:                                /* invalid command */
         sim_debug(DEBUG_EXP, dptr,
-            "lpr_startcmd %04x: Cmd %02x INVALID\n",
-            chan, cmd&LPR_CMDMSK);
+            "lpr_startcmd %04x: Cmd %02x INVALID\n", chan, cmd&LPR_CMDMSK);
         uptr->SNS |= SNS_CMDREJ;
         break;
     }
     if (uptr->SNS & 0xff)
-        return SNS_CHNEND|STATUS_PCHK;
+        return SNS_CHNEND|SNS_DEVEND|STATUS_PCHK;
     return SNS_CHNEND|SNS_DEVEND;
 }
 
@@ -333,35 +351,72 @@ t_stat lpr_srv(UNIT *uptr) {
         "lpr_srv called chsa %04x cmd %02x CMD %08x addr %06x cnt %04x\n",
         chsa, cmd, uptr->CMD, chp->ccw_addr, chp->ccw_count);
 
-    /* FIXME, need IOP lp status bit assignments */
+    /* using IOP lp status bit assignments */
     if (cmd == 0x04) {                      /* sense? */
         uint8 ch;                           /* get current status */
-        ch = uptr->SNS & SNS_BOF;           /* BOF? */
-        if (chan_write_byte(chsa, &ch)) {   /* write the status to memory */
+        ch = (uptr->SNS >> 24) & 0xff;      /* Get status */
+        ch &= ~SNS_BOF;                     /* remove BOF flag */
+        if (chan_write_byte(chsa, &ch)) {   /* write byte 0 status to memory */
             sim_debug(DEBUG_CMD, dptr,
                 "lpr_srv write1 error CMD %08x read %02x SNS %02x ccw_count %02x\n",
                  uptr->CMD, ch, uptr->SNS, chp->ccw_count);
             uptr->CMD &= ~(LPR_CMDMSK);     /* clear command */
             uptr->SNS = 0;                  /* no status */
-            chan_end(chsa, SNS_DEVEND|SNS_CHNEND|SNS_UNITEXP);  /* we are done */
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_PCHK);  /* 4 byte req'd */
             return SCPE_OK;
         }
-        ch = uptr->SNS & SNS_BOF;           /* BOF? */
+        ch = (uptr->SNS >> 16) & 0xff;      /* Get status */
         if (chan_write_byte(chsa, &ch)) {   /* write the status to memory */
             sim_debug(DEBUG_CMD, dptr,
                 "lpr_srv write2 error CMD %08x read %02x SNS %02x ccw_count %02x\n",
                  uptr->CMD, ch, uptr->SNS, chp->ccw_count);
             uptr->CMD &= ~(LPR_CMDMSK);     /* clear command */
             uptr->SNS = 0;                  /* no status */
-            chan_end(chsa, SNS_DEVEND|SNS_CHNEND|SNS_UNITEXP);  /* we are done */
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_PCHK);  /* 4 byte req'd */
             return SCPE_OK;
         }
+#ifdef MPX_WANTS_ONLY_2_BYTES
+        ch = 0;                             /* byte 2 is always zero */
+        if (chan_write_byte(chsa, &ch)) {   /* write the status to memory */
+            sim_debug(DEBUG_CMD, dptr,
+                "lpr_srv write3 error CMD %08x read %02x SNS %02x ccw_count %02x\n",
+                 uptr->CMD, ch, uptr->SNS, chp->ccw_count);
+            uptr->CMD &= ~(LPR_CMDMSK);     /* clear command */
+            uptr->SNS = 0;                  /* no status */
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_PCHK);  /* 4 byte req'd */
+            return SCPE_OK;
+        }
+        ch = 0;                             /* byte 3 is always zero */
+        if (chan_write_byte(chsa, &ch)) {   /* write the status to memory */
+            sim_debug(DEBUG_CMD, dptr,
+                "lpr_srv write4 error CMD %08x read %02x SNS %02x ccw_count %02x\n",
+                 uptr->CMD, ch, uptr->SNS, chp->ccw_count);
+            uptr->CMD &= ~(LPR_CMDMSK);     /* clear command */
+            uptr->SNS = 0;                  /* no status */
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_PCHK);  /* 4 byte req'd */
+            return SCPE_OK;
+        }
+#endif
         sim_debug(DEBUG_CMD, dptr,
             "lpr_srv sense write CMD %08x read %02x SNS %02x ccw_count %02x\n",
              uptr->CMD, ch, uptr->SNS, chp->ccw_count);
         uptr->CMD &= LMASK;                 /* make non-busy */
         uptr->SNS = 0;                      /* no status */
         chan_end(chsa, SNS_DEVEND|SNS_CHNEND);  /* we are done */
+        return SCPE_OK;
+    }
+
+    /* NEW_02092022 */
+    /* make sure we have a file attached, else give error */
+    if ((uptr->flags & UNIT_ATT) == 0) {
+        uptr->CMD &= LMASK;                 /* make non-busy */
+//      uptr->SNS |= SNS_DEVPWR;            /* show powered off */
+        uptr->SNS |= SNS_DEVCHK;            /* show device check */
+//      uptr->SNS |= SNS_OFFLINE;           /* show printer offline */
+        uptr->SNS |= SNS_OPRINTR;           /* operator intervention required */
+        sim_debug(DEBUG_CMD, dptr,
+            "lpr_startcmd Cmd %02x LPR not attached SNS %08x\n", cmd, uptr->SNS);
+        chan_end(chsa, SNS_CHNEND|SNS_DEVEND|STATUS_CHECK);
         return SCPE_OK;
     }
 
@@ -391,6 +446,8 @@ t_stat lpr_srv(UNIT *uptr) {
             lpr_data[u].lbuff[uptr->CBP++] = 0x0a;  /* add L/F */
             lpr_data[u].lbuff[uptr->CBP++] = 0x0c;  /* add FF */
             uptr->CNT = 0;                  /* restart line count */
+            /* set beginning of form and top of form */
+            uptr->SNS |= (SNS_TOF|SNS_BEGOF);
             break;
         }
     }
@@ -457,6 +514,8 @@ t_stat lpr_srv(UNIT *uptr) {
             lpr_data[u].lbuff[uptr->CBP++] = 0x0a;  /* add L/F */
             lpr_data[u].lbuff[uptr->CBP++] = 0x0c;  /* add FF */
             uptr->CNT = 0;                  /* restart line count */
+            /* set beginning of form and top of form */
+            uptr->SNS |= (SNS_TOF|SNS_BEGOF);
             break;
         }
     }
@@ -468,15 +527,20 @@ t_stat lpr_srv(UNIT *uptr) {
         sim_debug(DEBUG_DETAIL, dptr, "LPR %d %s\n", uptr->CNT, (char*)&lpr_data[u].lbuff);
         uptr->CMD &= ~(LPR_FULL|LPR_CMDMSK);    /* clear old status */
         uptr->CBP = 0;                      /* start at beginning of buffer */
-//      uptr->CNT++;                        /* increment the line count */
         if ((uint32)uptr->CNT > uptr->capac) {  /* see if at max lines/page */
             uptr->CNT = 0;                  /* yes, restart count */
             uptr->SNS |= SNS_BOF;           /* set BOF for SENSE */
             sim_debug(DEBUG_CMD, dptr, "lpr_srv Got BOF\n");
-//          chan_end(chsa, SNS_DEVEND|SNS_CHNEND|SNS_UNITEXP);  /* we are done */
+            /* IOP spec says to give unit exception if at BOF */
+            chan_end(chsa, SNS_DEVEND|SNS_CHNEND|SNS_UNITEXP);  /* we are done */
+        } else {
+            uptr->SNS &= ~SNS_BOF;          /* reset BOF for SENSE */
+            if (uptr->CNT == 0) {
+                /* set beginning of form and top of form */
+                uptr->SNS |= (SNS_TOF|SNS_BEGOF);
+            }
             chan_end(chsa, SNS_DEVEND|SNS_CHNEND);  /* we are done */
-        } else
-            chan_end(chsa, SNS_DEVEND|SNS_CHNEND);  /* we are done */
+        }
         /* done, so no time out */
         return SCPE_OK;
     }
@@ -519,6 +583,7 @@ t_stat  lpr_haltio(UNIT *uptr) {
     chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* force end */
     return SCPE_IOERR;                      /* tell chan code to post status */
 }
+
 /* Set the number of lines per page on printer */
 t_stat lpr_setlpp(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
@@ -537,6 +602,8 @@ t_stat lpr_setlpp(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
         return SCPE_ARG;
     uptr->capac = i;
     uptr->CNT = 0;
+    /* set beginning of form and top of form */
+    uptr->SNS |= (SNS_TOF|SNS_BEGOF);
     return SCPE_OK;
 }
 
@@ -563,6 +630,8 @@ t_stat lpr_attach(UNIT *uptr, CONST char *file)
     uptr->CMD &= ~(LPR_FULL|LPR_CMDMSK);
     uptr->CNT = 0;
     uptr->SNS = 0;
+    /* set beginning of form and top of form */
+    uptr->SNS |= (SNS_TOF|SNS_BEGOF);
     uptr->capac = 66;
 
     /* check for valid configured lpr */

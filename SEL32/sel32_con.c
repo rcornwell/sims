@@ -1,6 +1,6 @@
 /* sel32_con.c: SEL 32 Class F IOP processor console.
 
-   Copyright (c) 2018-2021, James C. Bevier
+   Copyright (c) 2018-2022, James C. Bevier
    Portions provided by Richard Cornwell, Geert Rolf and other SIMH contributers
 
    Permission is hereby granted, free of charge, to any person obtaining a
@@ -215,10 +215,16 @@ t_stat con_startcmd(UNIT *uptr, uint16 chan, uint8 cmd) {
     case CON_SNS:       /* 0x04 */          /* Sense */
         uptr->CMD &= ~CON_MSK;              /* remove old CMD */
         uptr->CMD |= (cmd & CON_MSK);       /* save command */
-        if (unit == 0)
+        if (unit == 0) {
             sim_cancel(uptr);               /* stop input poll */
-        sim_activate(uptr, 400);            /* start us off */
+            sim_activate(uptr, 300);        /* start us off */
+//          sim_activate(uptr, 1000);       /* start us off */
+        }
+        else
+        /* using value 500 or larger causes diag to fail on 32/27 */
 //      sim_activate(uptr, 500);            /* start us off */
+//      sim_activate(uptr, 200);            /* start us off */
+        sim_activate(uptr, 30);             /* start us off */
         return SCPE_OK;                     /* no status change */
         break;
 
@@ -243,8 +249,9 @@ t_stat con_srvo(UNIT *uptr) {
     int         len = chp->ccw_count;       /* INCH command count */
     uint32      mema = chp->ccw_addr;       /* get inch or buffer addr */
     uint32      tstart;
-    int         cnt = 0;
     uint8       ch;
+    static uint32 dexp;
+    static int    cnt = 0;
 
     sim_debug(DEBUG_CMD, dptr,
         "con_srvo enter CMD %08x chsa %04x cmd %02x iocla %06x cnt %04x\n",
@@ -287,7 +294,8 @@ t_stat con_srvo(UNIT *uptr) {
             unit, uptr->CMD, cmd, con_data[unit].incnt, uptr->u4);
 
         /* now call set_inch() function to write and test inch buffer addresses */
-        tstart = set_inch(uptr, mema);      /* new address */
+        /* 1-256 wd buffer is provided for 128 status dbl words */
+        tstart = set_inch(uptr, mema, 128); /* new address & 128 entries */
         if ((tstart == SCPE_MEM) || (tstart == SCPE_ARG)) { /* any error */
             /* we have error, bail out */
             uptr->SNS |= SNS_CMDREJ;
@@ -334,15 +342,87 @@ t_stat con_srvo(UNIT *uptr) {
 
     case CON_RWD:       /* 0x37 */          /* TOF and write line */
     case CON_WR:        /* 0x01 */          /* Write command */
+#ifdef DO_OLDWAY
+        /* see if write complete */
+        if (uptr->CMD & CON_OUTPUT) {
+            /* write is complete, post status */
+            sim_debug(DEBUG_CMD, &con_dev,
+                "con_srvo write CMD %08x chsa %04x cmd %02x complete\n",
+                uptr->CMD, chsa, cmd);
+            uptr->CMD &= ~CON_MSK;          /* remove old CMD */
+            uptr->CMD &= ~CON_OUTPUT;       /* remove output command */
+/*RTC*/     outbusy = 0;                    /* output done */
+            chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
+            break;
+        }
 /*RTC*/ outbusy = 1;                        /* tell clock output waiting */
+        if (chan_read_byte(chsa, &ch) == SCPE_OK) {  /* get byte from memory */
+            /* Write to device */
+            ch &= 0x7f;                     /* make 7 bit w/o parity */
+            dexp = dexp<<8;                 /* move up last chars */
+            dexp |= ch;                     /* insert new char */
+#ifdef DO_DYNAMIC_DEBUG
+//          if ((cnt == 3) && (dexp == 0x4458503e)) {   /* test for "DXP>" */
+            if ((cnt == 13) && (dexp == 0x4E542E48)) {   /* test for "NT.H" */
+                cpu_dev.dctrl |= (DEBUG_INST|DEBUG_TRAP|DEBUG_IRQ); /* start instruction trace */
+                con_dev.dctrl |= DEBUG_XIO|DEBUG_CMD;
+//              sim_debug(DEBUG_INST, &cpu_dev, "|con_srvo DXP> received|\n");
+                sim_debug(DEBUG_INST, &cpu_dev, "con_srvo CV.INT.H received start debug\n");
+            }
+            if ((cnt == 13) && (dexp == 0x52502E48)) {   /* test for "RP.H" */
+                /* turn of debug trace because we are already hung */
+                sim_debug(DEBUG_INST, &cpu_dev, "con_srvo got CV.TRP.H stopping debug\n");
+                cpu_dev.dctrl &= ~(DEBUG_INST|DEBUG_TRAP|DEBUG_IRQ); /* start instruction trace */
+                con_dev.dctrl &= ~(DEBUG_XIO|DEBUG_CMD);
+            }
+#endif
+            sim_putchar(ch);                /* output next char to device */
+            sim_debug(DEBUG_CMD, dptr,
+                "con_srvo write wait %03x CMD %08x chsa %04x cmd %02x byte %d = %02x\n",
+                1000, uptr->CMD, chsa, cmd, cnt, ch);
+            cnt++;                          /* count chars output */
+//01132022  sim_activate(uptr, 500);        /* wait for a while before next write */
+            sim_activate(uptr, 50);         /* wait for a while before next write */
+            break;
+        }
+        /* nothing left, finish up */
+        cnt = 0;                            /* zero for next output */
+        uptr->CMD |= CON_OUTPUT;            /* output command complete */
+        sim_debug(DEBUG_CMD, &con_dev,
+            "con_srvo write wait %03x CMD %08x chsa %04x cmd %02x to complete\n",
+            1000, uptr->CMD, chsa, cmd);
+        sim_activate(uptr, 500);            /* wait for a while */
+        break;
+#else
+        cnt = 0;                            /* zero count */
+/*RTC*/ outbusy = 1;                        /* tell clock output waiting */
+        mema = chp->ccw_addr;               /* get buffer addr */
         /* Write to device */
         while (chan_read_byte(chsa, &ch) == SCPE_OK) {  /* get byte from memory */
             /* HACK HACK HACK */
             ch &= 0x7f;                     /* make 7 bit w/o parity */
+            dexp = dexp<<8;                 /* move up last chars */
+            dexp |= ch;                     /* insert new char */
+#ifdef DO_DYNAMIC_DEBUG
+//          if ((cnt == 3) && (dexp == 0x4458503e)) {       /* test for "DXP>" */
+            if ((cnt == 3) && (dexp == 0x44454641)) {       /* test for "DEFA" */
+//              cpu_dev.dctrl |= (DEBUG_INST|DEBUG_IRQ);    /* start instruction trace */
+                cpu_dev.dctrl |= (DEBUG_INST|DEBUG_TRAP|DEBUG_IRQ); /* start instruction trace */
+//              con_dev.dctrl |= DEBUG_CMD;
+//              sim_debug(DEBUG_INST, &cpu_dev, "|con_srvo DXP> received|\n");
+                sim_debug(DEBUG_INST, &cpu_dev, "|con_srvo DEFA received|\n");
+            }
+#endif
             sim_putchar(ch);                /* output next char to device */
-            sim_debug(DEBUG_CMD, dptr,
-                "con_srvo write CMD %08x chsa %04x cmd %02x byte %d = %02x\n",
-                uptr->CMD, chsa, cmd, cnt, ch);
+            if (isprint(ch))
+                sim_debug(DEBUG_CMD, dptr,
+                "con_srvo write addr %06x chsa %04x cmd %02x byte %d = %02x [%c]\n",
+                mema, chsa, cmd, cnt, ch, ch);
+            else
+                sim_debug(DEBUG_CMD, dptr,
+                "con_srvo write addr %06x chsa %04x cmd %02x byte %d = %02x\n",
+                mema, chsa, cmd, cnt, ch);
+            mema = chp->ccw_addr;           /* get next buffer addr */
             cnt++;                          /* count chars output */
         }
         /* write is complete, post status */
@@ -353,6 +433,7 @@ t_stat con_srvo(UNIT *uptr) {
 /*RTC*/ outbusy = 0;                        /* output done */
         chan_end(chsa, SNS_CHNEND|SNS_DEVEND);  /* done */
         break;
+#endif
     }
     return SCPE_OK;
 }
@@ -387,11 +468,11 @@ t_stat con_srvi(UNIT *uptr) {
     case CON_INCH2:      /* 0xf0 */         /* INCH command */
         uptr->CMD &= LMASK;                 /* nothing left, command complete */
         sim_debug(DEBUG_CMD, dptr,
-            "con_srvi INCH unit %02x: CMD %08x cmd %02x incnt %02x u4 %02x\n",
-            unit, uptr->CMD, cmd, con_data[unit].incnt, uptr->u4);
+            "con_srvi INCH unit %02x: CMD %08x cmd %02x incnt %02x u4 %02x inch %06x\n",
+            unit, uptr->CMD, cmd, con_data[unit].incnt, uptr->u4, mema);
 
         /* now call set_inch() function to write and test inch buffer addresses */
-        tstart = set_inch(uptr, mema);      /* new address */
+        tstart = set_inch(uptr, mema, 128); /* new address & 128 entries */
         if ((tstart == SCPE_MEM) || (tstart == SCPE_ARG)) { /* any error */
             /* we have error, bail out */
             uptr->SNS |= SNS_CMDREJ;
@@ -462,9 +543,18 @@ t_stat con_srvi(UNIT *uptr) {
         if ((uptr->u4 != con_data[unit].incnt) ||  /* input empty */
             (uptr->CMD & CON_INPUT)) {      /* input waiting? */
             ch = con_data[unit].ibuff[uptr->u4]; /* get char from read buffer */
-            sim_debug(DEBUG_CMD, dptr,
+            if (isprint(ch))
+                sim_debug(DEBUG_IRQ, dptr,
+                "con_srvi readbuf unit %02x: CMD %08x read %02x [%c] incnt %02x u4 %02x len %02x\n",
+                unit, uptr->CMD, ch, ch, con_data[unit].incnt, uptr->u4, chp->ccw_count);
+            else
+                sim_debug(DEBUG_IRQ, dptr,
                 "con_srvi readbuf unit %02x: CMD %08x read %02x incnt %02x u4 %02x len %02x\n",
                 unit, uptr->CMD, ch, con_data[unit].incnt, uptr->u4, chp->ccw_count);
+#ifdef DO_DYNAMIC_DEBUG
+        /* turn on instruction trace */
+        cpu_dev.dctrl |= DEBUG_INST;        /* start instruction trace */
+#endif
 
             /* process any characters */
             if (uptr->u4 != con_data[unit].incnt) { /* input available */
@@ -509,9 +599,18 @@ t_stat con_srvi(UNIT *uptr) {
                     break;
                 }
                 /* command is completed */
-                sim_debug(DEBUG_CMD, dptr,
+                if (isprint(ch))
+                    sim_debug(DEBUG_CMD, dptr,
+                    "con_srvi read done unit %02x CMD %08x read %02x [%c] u4 %02x ccw_count %02x incnt %02x\n",
+                    unit, uptr->CMD, ch, ch, uptr->u4, chp->ccw_count, con_data[unit].incnt);
+                else
+                    sim_debug(DEBUG_CMD, dptr,
                     "con_srvi read done unit %02x CMD %08x read %02x u4 %02x ccw_count %02x incnt %02x\n",
                     unit, uptr->CMD, ch, uptr->u4, chp->ccw_count, con_data[unit].incnt);
+#ifdef DO_DYNAMIC_DEBUG
+        /* turn on instruction trace */
+        cpu_dev.dctrl |= DEBUG_INST;        /* start instruction trace */
+#endif
                 cmd = 0;                    /* no cmd now */
                 uptr->CMD &= LMASK;         /* nothing left, command complete */
                 if (uptr->u4 != con_data[unit].incnt) { /* input empty */
@@ -541,9 +640,18 @@ t_stat con_srvi(UNIT *uptr) {
             if (ch == '\n')                 /* convert newline */
                 ch = '\r';                  /* make newline into carriage return */ 
 #endif
-            sim_debug(DEBUG_CMD, dptr,
+            if (isprint(ch))
+                sim_debug(DEBUG_CMD, dptr,
+                "con_srvi handle readch unit %02x: CMD %08x read %02x [%c] u4 %02x incnt %02x r %x\n",
+                unit, uptr->CMD, ch, ch, uptr->u4, con_data[unit].incnt, r);
+            else
+                sim_debug(DEBUG_CMD, dptr,
                 "con_srvi handle readch unit %02x: CMD %08x read %02x u4 %02x incnt %02x r %x\n",
                 unit, uptr->CMD, ch, uptr->u4, con_data[unit].incnt, r);
+#ifdef DO_DYNAMIC_DEBUG
+        /* turn on instruction trace */
+        cpu_dev.dctrl |= DEBUG_INST;        /* start instruction trace */
+#endif
 
             /* put char in buffer */
             con_data[unit].ibuff[con_data[unit].incnt++] = ch;
@@ -553,10 +661,16 @@ t_stat con_srvi(UNIT *uptr) {
                 con_data[unit].incnt = 0;   /* reset buffer cnt */
 
             uptr->CMD |= CON_INPUT;         /* we have a char available */
-            sim_debug(DEBUG_CMD, dptr,
+            if (isprint(ch))
+                sim_debug(DEBUG_CMD, dptr,
+                "con_srvi readch unit %02x: CMD %08x read %02x [%c] u4 %02x incnt %02x\n",
+                unit, uptr->CMD, ch, ch, uptr->u4, con_data[unit].incnt);
+            else
+                sim_debug(DEBUG_CMD, dptr,
                 "con_srvi readch unit %02x: CMD %08x read %02x u4 %02x incnt %02x\n",
                 unit, uptr->CMD, ch, uptr->u4, con_data[unit].incnt);
-            sim_activate(uptr, 400);        /* do this again */
+            sim_activate(uptr, 30);         /* do this again */
+//01172021  sim_activate(uptr, 400);        /* do this again */
 //          sim_activate(uptr, 800);        /* do this again */
             return SCPE_OK;
         }
@@ -587,6 +701,7 @@ t_stat con_srvi(UNIT *uptr) {
                 }
 //              sim_activate(uptr, wait_time);  /* do this again */
                 sim_activate(uptr, 400);    /* do this again */
+//              sim_activate(uptr, 4000);   /* do this again */
                 return SCPE_OK;
             }
             /* char not for us, so keep looking */
@@ -608,9 +723,20 @@ t_stat con_srvi(UNIT *uptr) {
         con_data[unit].ibuff[con_data[unit].incnt++] = ch;
 
         uptr->CMD |= CON_INPUT;             /* we have a char available */
-        sim_debug(DEBUG_CMD, dptr,
+        if (isprint(ch))
+            sim_debug(DEBUG_CMD, dptr,
+            "con_srvi readch2 unit %02x: CMD %08x read %02x [%c] u4 %02x incnt %02x r %x\n",
+            unit, uptr->CMD, ch, ch, uptr->u4, con_data[unit].incnt, r);
+        else
+            sim_debug(DEBUG_CMD, dptr,
             "con_srvi readch2 unit %02x: CMD %08x read %02x u4 %02x incnt %02x r %x\n",
             unit, uptr->CMD, ch, uptr->u4, con_data[unit].incnt, r);
+#ifdef DO_DYNAMIC_DEBUG
+        /* turn off debug trace because we are already hung */
+        sim_debug(DEBUG_INST, &cpu_dev, "con_srvi readch3 stopping debug\n");
+        cpu_dev.dctrl &= ~(DEBUG_INST|DEBUG_TRAP|DEBUG_IRQ); /* start instruction trace */
+        con_dev.dctrl &= ~(DEBUG_XIO|DEBUG_CMD);
+#endif
     }
     sim_activate(uptr, wait_time);          /* do this again */
     return SCPE_OK;
@@ -627,6 +753,7 @@ t_stat  con_rschnlio(UNIT *uptr) {
     int     cmd = uptr->CMD & CON_MSK;
     con_ini(uptr, 0);                       /* reset the unit */
     sim_debug(DEBUG_EXP, &con_dev, "con_rschnl chsa %04x cmd = %02x\n", chsa, cmd);
+//  cpu_dev.dctrl |= (DEBUG_INST|DEBUG_TRAP|DEBUG_IRQ); /* start instruction trace */
     return SCPE_OK;
 }
 

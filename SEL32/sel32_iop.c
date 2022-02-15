@@ -1,6 +1,6 @@
 /* sel32_iop.c: SEL-32 Model 8000/8001/8002 IOP processor controller
 
-   Copyright (c) 2018-2021, James C. Bevier
+   Copyright (c) 2018-2022, James C. Bevier
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -197,6 +197,8 @@ t_stat iop_startcmd(UNIT *uptr, uint16 chan, uint8 cmd)
             iop_chp[0].chan_inch_addr);     /* set inch buffer addr */
 
         iop_chp[0].chan_inch_addr = iop_chp[0].ccw_addr;   /* set inch buffer addr */
+        iop_chp[0].base_inch_addr = iop_chp[0].ccw_addr;   /* set inch buffer addr */
+        iop_chp[0].max_inch_addr = iop_chp[0].ccw_addr + (128 * 8); /* set last inch buffer addr */
 
         uptr->u3 |= IOP_INCH2;              /* save INCH command as 0xf0 */
         sim_activate(uptr, 40);             /* go on */
@@ -259,7 +261,8 @@ t_stat iop_srv(UNIT *uptr)
 
         /* now call set_inch() function to write and test inch buffer addresses */
         /* the chp->ccw_addr location contains the inch address */
-        tstart = set_inch(uptr, mema);      /* new address */
+        /* 1-256 wd buffer is provided for 128 status dbl words */
+        tstart = set_inch(uptr, mema, 128); /* new address of 128 entries */
         if ((tstart == SCPE_MEM) || (tstart == SCPE_ARG)) { /* any error */
             /* we have error, bail out */
             uptr->u5 |= SNS_CMDREJ;
