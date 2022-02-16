@@ -1,4 +1,4 @@
-/* ks10_tcu.c: PDP-10 
+/* ks10_tcu.c: PDP-10
 
    Copyright (c) 2021, Richard Cornwell
 

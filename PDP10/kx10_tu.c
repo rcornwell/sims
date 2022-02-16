@@ -198,7 +198,7 @@ struct rh_if   tu_rh[NUM_DEVS_TU] = {
 };
 
 DIB tu_dib[NUM_DEVS_TU] = {
-     {0772440, 037, 0224, 6, 3, &uba_rh_read, &uba_rh_write, &uba_rh_vect, 0, &tu_rh[0]},
+     {0772440, 037, 0224, 6, 3, &uba_rh_read, &uba_rh_write, 0, 0, &tu_rh[0]},
 };
 #else
 struct rh_if  tu_rh[NUM_DEVS_TU] = {

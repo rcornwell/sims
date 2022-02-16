@@ -27,13 +27,13 @@
    dup          DUP11 Unibus/DPV11 Qbus bit synchronous interface
 
    This module implements a bit synchronous interface to support DDCMP.  Other
-   synchronous protocols which may have been supported on the DUP11/DPV11 bit 
+   synchronous protocols which may have been supported on the DUP11/DPV11 bit
    synchronous interface are explicitly not supported.
 
-   Connections are modeled with a tcp session with connection management and 
+   Connections are modeled with a tcp session with connection management and
    I/O provided by the tmxr library.
 
-   The wire protocol implemented is native DDCMP WITHOUT the DDCMP SYNC 
+   The wire protocol implemented is native DDCMP WITHOUT the DDCMP SYNC
    characters both initially and between DDCMP packets.
 
    15-May-13    MP      Initial implementation
@@ -82,7 +82,6 @@ static MODEM_CHANGE_CALLBACK dup_modem_change_callback[NUM_DEVS_DUP];
 
 static int    dup_rd (DEVICE *dptr, t_addr PA, uint16 *data, int32 access);
 static int    dup_wr (DEVICE *dptr, t_addr PA, uint16 data, int32 access);
-static uint16 dup_irq(struct pdp_dib *dibp);
 static t_stat dup_set_modem (int32 dup, int32 rxcsr_bits);
 static t_stat dup_get_modem (int32 dup);
 static t_stat dup_svc (UNIT *uptr);
@@ -313,14 +312,14 @@ static BITFIELD dup_txdbuf_bits[] = {
 
 #define IOLN_DUP        010
 
-DIB dup_dib = { 0760300, 017, 0570, 5, 3, &dup_rd, &dup_wr,  &dup_irq, 0, 0};
+DIB dup_dib = { 0760300, 017, 0570, 5, 3, &dup_rd, &dup_wr, 0, 0, 0};
 
 static UNIT dup_unit_template = {
-    UDATA (&dup_svc, UNIT_ATTABLE|UNIT_IDLE, 0), 
+    UDATA (&dup_svc, UNIT_ATTABLE|UNIT_IDLE, 0),
     };
 
 static UNIT dup_poll_unit_template = {
-    UDATA (&dup_poll_svc, UNIT_DIS|UNIT_IDLE, 0), 
+    UDATA (&dup_poll_svc, UNIT_DIS|UNIT_IDLE, 0),
     };
 
 static UNIT dup_units[NUM_DEVS_DUP+1];    /* One unit per line and a polling unit */
@@ -391,6 +390,8 @@ static MTAB dup_mod[] = {
     };
 
 /* debugging bitmaps */
+#define DBG_REG  0x0001                                 /* trace read/write registers */
+#define DBG_INT  0x0002                                 /* display transfer requests */
 #define DBG_PKT  (TMXR_DBG_PXMT|TMXR_DBG_PRCV)          /* display packets */
 #define DBG_XMT  TMXR_DBG_XMT                           /* display Transmitted Data */
 #define DBG_RCV  TMXR_DBG_RCV                           /* display Received Data */
@@ -400,8 +401,8 @@ static MTAB dup_mod[] = {
 #define DBG_ASY  TMXR_DBG_ASY                           /* display Asynchronous Activities */
 
 static DEBTAB dup_debug[] = {
-  {"DETAIL", DEBUG_DETAIL},
-  {"IRQ",    DEBUG_IRQ},
+  {"REG",    DBG_REG},
+  {"INT",    DBG_INT},
   {"PKT",    DBG_PKT},
   {"XMT",    DBG_XMT},
   {"RCV",    DBG_RCV},
@@ -413,20 +414,20 @@ static DEBTAB dup_debug[] = {
 };
 
 /*
-   We have two devices defined here (dup_dev and dpv_dev) which have the 
+   We have two devices defined here (dup_dev and dpv_dev) which have the
    same units.  This would normally never be allowed since two devices can't
-   actually share units.  This problem is avoided in this case since both 
-   devices start out as disabled and the logic in dup_reset allows only 
-   one of these devices to be enabled at a time.  The DUP device is allowed 
+   actually share units.  This problem is avoided in this case since both
+   devices start out as disabled and the logic in dup_reset allows only
+   one of these devices to be enabled at a time.  The DUP device is allowed
    on Unibus systems and the DPV device Qbus systems.
    This monkey business is necessary due to the fact that although both
    the DUP and DPV devices have almost the same functionality and almost
    the same register programming interface, they are different enough that
    they fall in different priorities in the autoconfigure address and vector
    rules.
-   This 'shared' unit model therefore means we can't call the 
-   find_dev_from_unit api to uniquely determine the device structure.  
-   We define the DUPDPTR macro to return the active device pointer when 
+   This 'shared' unit model therefore means we can't call the
+   find_dev_from_unit api to uniquely determine the device structure.
+   We define the DUPDPTR macro to return the active device pointer when
    necessary.
  */
 DEVICE dup_dev = {
@@ -435,7 +436,7 @@ DEVICE dup_dev = {
     NULL, NULL, &dup_reset,
     NULL, &dup_attach, &dup_detach,
     &dup_dib, DEV_DIS | DEV_DISABLE | DEV_DEBUG, 0,
-    dup_debug, NULL, NULL, &dup_help, dup_help_attach, &dup_desc, 
+    dup_debug, NULL, NULL, &dup_help, dup_help_attach, &dup_desc,
     &dup_description
     };
 
@@ -444,7 +445,7 @@ DEVICE dup_dev = {
 /* Register names for Debug tracing */
 static const char *dup_rd_regs[] =
     {"RXCSR ", "RXDBUF", "TXCSR ", "TXDBUF" };
-static const char *dup_wr_regs[] = 
+static const char *dup_wr_regs[] =
     {"RXCSR ", "PARCSR", "TXCSR ", "TXDBUF"};
 
 
@@ -547,19 +548,19 @@ switch ((PA >> 1) & 03) {                               /* case on PA<2:1> */
             if (dup_rxcsr[dup] & RXCSR_M_RXIE)
                 dup_set_rxint (dup);
             }
-        if ((dup_rxcsr[dup] & RXCSR_M_RCVEN) && 
+        if ((dup_rxcsr[dup] & RXCSR_M_RCVEN) &&
             (!(orig_val & RXCSR_M_RCVEN))) {            /* Upward transition of receiver enable */
             dup_rcv_byte (dup);                         /* start any pending receive */
             }
-        if ((!(dup_rxcsr[dup] & RXCSR_M_RCVEN)) && 
+        if ((!(dup_rxcsr[dup] & RXCSR_M_RCVEN)) &&
             (orig_val & RXCSR_M_RCVEN)) {               /* Downward transition of receiver enable */
             dup_rxdbuf[dup] &= ~RXDBUF_M_RXDBUF;
             dup_rxcsr[dup] &= ~RXCSR_M_RXACT;
-            if ((dup_rcvpkinoff[dup] != 0) || 
+            if ((dup_rcvpkinoff[dup] != 0) ||
                 (dup_rcvpkbytes[dup] != 0))
                 dup_rcvpkinoff[dup] = dup_rcvpkbytes[dup] = 0;
             }
-        if ((!(dup_rxcsr[dup] & RXCSR_M_RXIE)) && 
+        if ((!(dup_rxcsr[dup] & RXCSR_M_RXIE)) &&
             (orig_val & RXCSR_M_RXIE))                  /* Downward transition of receiver interrupt enable */
             dup_clr_rxint (dup);
         if ((dup_rxcsr[dup] & RXCSR_M_RXIE) && (dup_rxcsr[dup] & RXCSR_M_RXDONE))
@@ -591,20 +592,20 @@ switch ((PA >> 1) & 03) {                               /* case on PA<2:1> */
                     break;
                 }
             }
-        if ((dup_txcsr[dup] & TXCSR_M_TXACT) && 
-            (!(orig_val & TXCSR_M_TXACT))    && 
+        if ((dup_txcsr[dup] & TXCSR_M_TXACT) &&
+            (!(orig_val & TXCSR_M_TXACT))    &&
             (orig_val & TXCSR_M_TXDONE)) {
             dup_txcsr[dup] &= ~TXCSR_M_TXDONE;
             }
-        if ((!(dup_txcsr[dup] & TXCSR_M_SEND)) && 
+        if ((!(dup_txcsr[dup] & TXCSR_M_SEND)) &&
             (orig_val & TXCSR_M_SEND)) {
             dup_txcsr[dup] &= ~TXCSR_M_TXACT;
             dup_put_msg_bytes (dup, NULL, 0, FALSE, TRUE);
             }
         if ((dup_txcsr[dup] & TXCSR_M_HALFDUP) ^ (orig_val & TXCSR_M_HALFDUP))
             tmxr_set_line_halfduplex (dup_desc.ldsc+dup, dup_txcsr[dup] & TXCSR_M_HALFDUP);
-        if ((dup_txcsr[dup] & TXCSR_M_TXIE) && 
-            (!(orig_val & TXCSR_M_TXIE))    && 
+        if ((dup_txcsr[dup] & TXCSR_M_TXIE) &&
+            (!(orig_val & TXCSR_M_TXIE))    &&
             (dup_txcsr[dup] & TXCSR_M_TXDONE)) {
             dup_set_txint (dup);
             }
@@ -622,25 +623,6 @@ switch ((PA >> 1) & 03) {                               /* case on PA<2:1> */
     }
 
 dup_get_modem (dup);
-return 0;
-}
-
-static uint16 dup_irq(struct pdp_dib *dibp)
-{
-    int dup;
-
-for (dup = 0; dup < dup_desc.lines; dup++) {            /* find 1st mux */
-    if (dup_rxi & (1 << dup)) {
-        sim_debug(DEBUG_IRQ, DUPDPTR, "dup_rxinta(dup=%d)\n", dup);
- //       dup_clr_rxint (dup);                            /* clear intr */
-        return (dup_dib.uba_vect + (dup * 010));        /* return vector */
-        }
-    if (dup_txi & (1 << dup)) {
-        sim_debug(DEBUG_IRQ, DUPDPTR, "dup_txinta(dup=%d)\n", dup);
-//        dup_clr_txint (dup);                            /* clear intr */
-        return (dup_dib.uba_vect + 4 + (dup * 010));    /* return vector */
-        }
-    }
 return 0;
 }
 
@@ -717,7 +699,7 @@ int32 dup_csr_to_linenum (int32 CSRPA)
 DEVICE *dptr = DUPDPTR;
 DIB *dib = (DIB *)dptr->ctxt;
 
-if ((dib->uba_addr < (uint32)CSRPA) || 
+if ((dib->uba_addr < (uint32)CSRPA) ||
     ((uint32)CSRPA > (dib->uba_addr + (IOLN_DUP * dup_desc.lines))) ||
        (DUPDPTR->flags & DEV_DIS))
     return -1;
@@ -807,7 +789,7 @@ if ((dup < 0) || (dup >= dup_desc.lines) || (DUPDPTR->flags & DEV_DIS))
 orig_val = dup_rxcsr[dup];
 dup_rxcsr[dup] &= ~RXCSR_M_RCVEN;
 dup_rxcsr[dup] |= (state ? RXCSR_M_RCVEN : 0);
-if ((dup_rxcsr[dup] & RXCSR_M_RCVEN) && 
+if ((dup_rxcsr[dup] & RXCSR_M_RCVEN) &&
     (!(orig_val & RXCSR_M_RCVEN))) {            /* Upward transition of receiver enable */
     UNIT *uptr = dup_units + dup;
 
@@ -830,7 +812,7 @@ if (!protocol_DDCMP) {
 if (crc_inhibit) {
     return SCPE_ARG;                /* Must enable CRC for DDCMP */
     }
-/* These settings reflect how RSX operates a bare DUP when used for 
+/* These settings reflect how RSX operates a bare DUP when used for
    DECnet communications */
 dup_clear(dup, FALSE);
 dup_rxcsr[dup] |= RXCSR_M_STRSYN | RXCSR_M_RCVEN;
@@ -917,7 +899,7 @@ if (!tmxr_tpbusyln(&dup_ldsc[dup])) {  /* Not Busy sending? */
         }
     breturn = TRUE;
     }
-sim_debug (DBG_TRC, DUPDPTR, "dup_put_msg_bytes(dup=%d, len=%d, start=%s, end=%s) %s\n", 
+sim_debug (DBG_TRC, DUPDPTR, "dup_put_msg_bytes(dup=%d, len=%d, start=%s, end=%s) %s\n",
            dup, (int)len, start ? "TRUE" : "FALSE", end ? "TRUE" : "FALSE", breturn ? "Good" : "Busy");
 if (breturn && (tmxr_tpbusyln (&dup_ldsc[dup]) || dup_xmtpkbytes[dup])) {
     if (dup_xmt_complete_callback[dup])
@@ -941,20 +923,20 @@ if ((dup_rcvpkinoff[dup] == 0) && (dup_rcvpkbytes[dup] != 0)) {
     *pbuf = &dup_rcvpacket[dup][0];
     *psize = dup_rcvpkbytes[dup];
     }
-sim_debug (DBG_TRC, DUPDPTR, "dup_get_packet(dup=%d, psize=%d)\n", 
+sim_debug (DBG_TRC, DUPDPTR, "dup_get_packet(dup=%d, psize=%d)\n",
            dup, (int)*psize);
 return SCPE_OK;
 }
 
 static t_stat dup_rcv_byte (int32 dup)
 {
-sim_debug (DBG_TRC, DUPDPTR, "dup_rcv_byte(dup=%d) - %s, byte %d of %d\n", dup, 
+sim_debug (DBG_TRC, DUPDPTR, "dup_rcv_byte(dup=%d) - %s, byte %d of %d\n", dup,
            (dup_rxcsr[dup] & RXCSR_M_RCVEN) ? "enabled" : "disabled",
            dup_rcvpkinoff[dup], dup_rcvpkbytes[dup]);
 if (!(dup_rxcsr[dup] & RXCSR_M_RCVEN) || (dup_rcvpkbytes[dup] == 0) || (dup_rxcsr[dup] & RXCSR_M_RXDONE))
     return SCPE_OK;
 if (dup_rcv_packet_data_callback[dup]) {
-    sim_debug (DBG_TRC, DUPDPTR, "dup_rcv_byte(dup=%d, psize=%d) - Invoking Receive Data callback\n", 
+    sim_debug (DBG_TRC, DUPDPTR, "dup_rcv_byte(dup=%d, psize=%d) - Invoking Receive Data callback\n",
                dup, (int)dup_rcvpkbytes[dup]);
     dup_rcv_packet_data_callback[dup](dup, dup_rcvpkbytes[dup]);
     return SCPE_OK;
@@ -964,7 +946,7 @@ dup_rxdbuf[dup] &= ~RXDBUF_M_RCRCER;
 dup_rxdbuf[dup] &= ~RXDBUF_M_RXDBUF;
 dup_rxdbuf[dup] |= dup_rcvpacket[dup][dup_rcvpkinoff[dup]++];
 dup_rxcsr[dup] |= RXCSR_M_RXDONE;
-if (((dup_rcvpkinoff[dup] == 8) || 
+if (((dup_rcvpkinoff[dup] == 8) ||
      (dup_rcvpkinoff[dup] >= dup_rcvpkbytes[dup])) &&
     (0 == ddcmp_crc16 (0, dup_rcvpacket[dup], dup_rcvpkinoff[dup])))
     dup_rxdbuf[dup] |= RXDBUF_M_RCRCER;
@@ -1086,7 +1068,7 @@ if (active)
 else {
     for (dup=0; dup < dup_desc.lines; dup++) {
         if (dup_speed[dup]/8) {
-            dup_wait[dup] = (tmxr_poll)/(dup_speed[dup]/8);
+            dup_wait[dup] = (tmxr_poll*2)/(dup_speed[dup]/8);
             if (dup_wait[dup] < DUP_WAIT)
                 dup_wait[dup] = DUP_WAIT;
             }
@@ -1103,36 +1085,36 @@ return SCPE_OK;
 
 static void dup_clr_rxint (int32 dup)
 {
-dup_rxi = dup_rxi & ~(1 << dup);                        /* clr mux rcv int */
-if (dup_rxi == 0 && dup_txi == 0)                       /* all clr? */
-    uba_clr_irq(&dup_dib);
-else uba_set_irq(&dup_dib);                             /* no, set intr */
-return;
+   int vect;
+   vect = dup_dib.uba_vect + (dup * 010);            /* return vector */
+   uba_clr_irq(&dup_dib, vect);
+   return;
 }
 
 static void dup_set_rxint (int32 dup)
 {
-dup_rxi = dup_rxi | (1 << dup);                         /* set mux rcv int */
-uba_set_irq (&dup_dib);                                 /* set master intr */
-sim_debug(DEBUG_IRQ, DUPDPTR, "dup_set_rxint(dup=%d)\n", dup);
-return;
+   int vect;
+   vect = dup_dib.uba_vect + (dup * 010);            /* return vector */
+   uba_set_irq(&dup_dib, vect);
+   sim_debug(DEBUG_IRQ, DUPDPTR, "dup_set_rxint(dup=%d)\n", dup);
+   return;
 }
 
 static void dup_clr_txint (int32 dup)
 {
-dup_txi = dup_txi & ~(1 << dup);                        /* clr mux xmt int */
-if (dup_txi == 0 && dup_rxi == 0)                       /* all clr? */
-    uba_clr_irq (&dup_dib);
-else uba_set_irq (&dup_dib);                            /* no, set intr */
-return;
+   int vect;
+   vect = dup_dib.uba_vect + 4 + (dup * 010);         /* return vector */
+   uba_clr_irq(&dup_dib, vect);
+   return;
 }
 
 static void dup_set_txint (int32 dup)
 {
-dup_txi = dup_txi | (1 << dup);                         /* set mux xmt int */
-uba_set_irq (&dup_dib);                                 /* set master intr */
-sim_debug(DEBUG_IRQ, DUPDPTR, "dup_set_txint(dup=%d)\n", dup);
-return;
+   int vect;
+   vect = dup_dib.uba_vect + 4 + (dup * 010);         /* return vector */
+   uba_set_irq(&dup_dib, vect);
+   sim_debug(DEBUG_IRQ, DUPDPTR, "dup_set_txint(dup=%d)\n", dup);
+   return;
 }
 
 /* Device reset */
@@ -1189,8 +1171,12 @@ for (i = 0; i < dup_desc.lines; i++) {                  /* init each line */
     if (dup_units[i].flags & UNIT_ATT)
         ++attached;
     }
-dup_rxi = dup_txi = 0;                                  /* clr master int */
-uba_clr_irq (&dup_dib);
+for (i = 0; i < dup_desc.lines; i++) {                  /* Clear irq's */
+   int vect = dup_dib.uba_vect + (i * 010);
+   uba_clr_irq(&dup_dib, vect);
+   vect += 4;
+   uba_clr_irq(&dup_dib, vect);
+}
 tmxr_set_modem_control_passthru (&dup_desc);            /* We always want Modem Control */
 dup_desc.notelnet = TRUE;                               /* We always want raw tcp socket */
 dup_desc.dptr = DUPDPTR;                                /* Connect appropriate device */

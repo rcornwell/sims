@@ -184,6 +184,7 @@ int     t20_page;                             /* Tops 20 paging selected */
 int     ptr_flg;                              /* Access to pointer value */
 int     extend = 0;                           /* Process extended instruction */
 int     fe_xct = 0;                           /* Execute instruction at address */
+int     pi_vect;                              /* Last pi location used for IRQ */
 #elif KL
 int     pi_vect;                              /* Last pi location used for IRQ */
 int     ext_ac;                               /* Extended instruction AC */
@@ -725,11 +726,7 @@ DEVICE cpu_dev = {
 #else
 #define QSLAVE          0
 #endif
-#if KS
-#define MAX_DEV 16
-#else
 #define MAX_DEV 128
-#endif
 
 #if KL
 struct _byte {
@@ -825,11 +822,7 @@ get_quantum()
 void set_interrupt(int dev, int lvl) {
     lvl &= 07;
     if (lvl) {
-#if KS
-       dev_irq[dev>>2] |= 0200 >> lvl;
-#else
        dev_irq[dev>>2] = 0200 >> lvl;
-#endif
        pi_pending = 1;
 #if DEBUG
        sim_debug(DEBUG_IRQ, &cpu_dev, "set irq %o %o %03o %03o %03o\n",
@@ -4641,18 +4634,18 @@ st_pi:
         AB |= eb_ptr;
         extend = 0;
         if ((dev_irq[0] & pi_mask) == 0) {
-            int new_lvl;
-            int dev;
-            AB = uba_get_vect(AB, pi_mask, &dev, &new_lvl);
-            if (dev != 0) {
-               dev_irq[dev] = new_lvl;
-               if (new_lvl != 0)
-                  pi_pending = 1;
-            }
+            for (f = 1; f < MAX_DEV; f++) {
+                if (dev_irq[f] & pi_mask) {
+                    AB = uba_get_vect(AB, pi_mask, f);
+                    dev_irq[f] = 0;
+                    break;
+                }
 #if DEBUG
-            sim_debug(DEBUG_IRQ, &cpu_dev, "vect irq %o %06o\n", pi_enc, AB);
+                sim_debug(DEBUG_IRQ, &cpu_dev, "vect irq %o %06o\n", pi_enc, AB);
 #endif
+            }
         }
+        pi_vect = AB;
         goto fetch;
 #endif
 #if KI | KL
@@ -12038,7 +12031,7 @@ fprintf(stderr, "PIH = %03o\n\r", PIH);
            if ((!pi_hold) & f_inst_fetch) {
                 pi_cycle = 0;
            } else {
-#if KL
+#if KL | KS
                 AB = pi_vect | pi_ov;
 #else
                 AB = 040 | (pi_enc << 1) | maoff | pi_ov;
@@ -12056,7 +12049,7 @@ fprintf(stderr, "PIH = %03o\n\r", PIH);
             if ((IR & 0700) == 0700) {
                 (void)check_irq_level();
             }
-#if KL
+#if KL | KS
             AB = pi_vect | pi_ov;
 #else
             AB = 040 | (pi_enc << 1) | maoff | pi_ov;

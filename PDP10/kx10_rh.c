@@ -230,7 +230,7 @@ uba_rh_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access) {
         if ((rhc->status & BUSY) == 0)
            rhc->cda = ((data << 8) & 0600000) | (rhc->cda & 0177777);
         if ((data & CS1_GO) != 0 || (rhc->cs1 & CS1_IE) == 0)
-           uba_clr_irq(rhc->dib);
+           uba_clr_irq(rhc->dib, rhc->dib->uba_vect);
         if ((data & CS1_GO) != 0 && (rhc->status & BUSY) != 0 && GET_FNC(data) >= FNC_XFER) {
            rhc->cs2 |= CS2_PGE;
            break;
@@ -829,7 +829,7 @@ void rh_setattn(struct rh_if *rhc, int unit)
     rhc->attn |= 1<<unit;
 #if KS
     if ((rhc->status & BUSY) == 0 && (rhc->cs1 & CS1_IE) != 0)
-        uba_set_irq(rhc->dib);
+        uba_set_irq(rhc->dib, rhc->dib->uba_vect);
 #else
     if ((rhc->status & BUSY) == 0 && (rhc->status & IADR_ATTN) != 0)
         set_interrupt(rhc->devnum, rhc->status);
@@ -864,7 +864,7 @@ void rh_setirq(struct rh_if *rhc) {
    rhc->status |= PI_ENABLE;
 #if KS
    if ((rhc->status & BUSY) == 0 && (rhc->cs1 & CS1_IE) != 0)
-       uba_set_irq(rhc->dib);
+       uba_set_irq(rhc->dib, rhc->dib->uba_vect);
 #else
    set_interrupt(rhc->devnum, rhc->status);
 #endif

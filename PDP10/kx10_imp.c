@@ -84,10 +84,8 @@
 
 /* Bits in STATUS */
 #define IMPID       010 /* Input done. */
-#define IMPI32      020 /* Input in 32 bit mode. */
 #define IMPIB       040 /* Input busy. */
 #define IMPOD      0100 /* Output done. */
-#define IMPO32     0200 /* Output in 32-bit mode. */
 #define IMPOB      0400 /* Output busy. */
 #define IMPERR    01000 /* IMP error. */
 #define IMPR      02000 /* IMP ready. */
@@ -564,7 +562,7 @@ UNIT imp_unit[] = {
 };
 
 #if KS
-DIB imp_dib = {0767600, 017, 0250, 6, 3, &imp_rd, &imp_wr, &imp_vect, 0, 0};
+DIB imp_dib = {0767600, 017, 0250, 6, 3, &imp_rd, &imp_wr, 0, 0, 0};
 #else
 DIB imp_dib = {IMP_DEVNUM, 1, &imp_devio, 
 #if KL
@@ -668,22 +666,12 @@ DEVICE imp_dev = {
 #if KS
 static void check_interrupts (UNIT *uptr)
 {
-    DEVICE         *dptr = find_dev_from_unit (uptr);
-    struct pdp_dib *dibp = (DIB *)dptr->ctxt;
-    int             irq = 0;
+    DEVICE *dptr = &imp_dev;
+    struct pdp_dib   *dibp = (DIB *)dptr->ctxt;
 
-    if (imp_icsr & CSR_IE) {
-        if (imp_icsr & CSR_RDY)
-            irq = 1;
+    if ((uptr->STATUS & IMPID) != 0 && imp_icsr & CSR_IE) {
+       uba_set_irq(dibp, dibp->uba_vect);
     }
-    if (imp_ocsr & CSR_IE) {
-        if (imp_ocsr & CSR_RDY)
-            irq = 1;
-    }
-    if (irq) 
-        uba_set_irq(dibp);
-    else
-        uba_clr_irq(dibp);
 }
 
 int
@@ -708,7 +696,7 @@ imp_wr(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
                imp_icsr = CSR_INR|CSR_RDY;
                imp_iba = 0;
                imp_iwcnt = 0;
-               uba_clr_irq(dibp);
+               uba_clr_irq(dibp, dibp->uba_vect);
             }
             data &= (CSR_GO|CSR_RST|CSR_UBA|CSR_IE|CSR_HRC|CSR_SE);
             imp_icsr &= ~(CSR_GO|CSR_RST|CSR_UBA|CSR_IE|CSR_HRC|CSR_SE|CSR_ERR
@@ -722,7 +710,8 @@ imp_wr(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
             }
             if (data & CSR_GO) {
                 imp_icsr &= ~CSR_RDY;
-                uptr->STATUS &= ~IMPID;
+                uptr->STATUS &= ~(IMPID|IMPLW);
+                uba_clr_irq(dibp, dibp->uba_vect);
             }
             sim_debug(DEBUG_DETAIL, dptr, "IMP11 icsr %06o\n", imp_icsr);
             break;
@@ -739,6 +728,7 @@ imp_wr(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
 
     case 004:     /* Input Bus Address */
             imp_iba = (data & 0177777);
+            imp_icsr &= ~(CSR_ERR);
             break;
 
     case 006:     /* Input Word Count */
@@ -756,7 +746,7 @@ imp_wr(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
                imp_ocsr |= CSR_RDY;
                imp_oba = 0;
                imp_owcnt = 0;
-               uba_clr_irq(dibp);
+               uba_clr_irq(dibp, dibp->uba_vect + 4);
             }
             data &= (CSR_GO|CSR_RST|CSR_UBA|CSR_IE|CSR_BB|CSR_ELB);
             imp_ocsr &= ~(CSR_GO|CSR_RST|CSR_UBA|CSR_IE|CSR_BB|CSR_ELB|CSR_ERR
@@ -764,7 +754,8 @@ imp_wr(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
             imp_ocsr |= data;
             if (data & CSR_GO) {
                 imp_ocsr &= ~CSR_RDY;
-                uptr->STATUS &= ~IMPOD;
+                uptr->STATUS &= ~(IMPOD);
+                uba_clr_irq(dibp, dibp->uba_vect + 4);
             }
             sim_debug(DEBUG_DETAIL, dptr, "IMP11 ocsr %06o\n", imp_ocsr);
             break;
@@ -781,13 +772,13 @@ imp_wr(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
 
     case 014:     /* Output Bus Address */
             imp_oba = (data & 0177777);
+            imp_ocsr &= ~(CSR_ERR);
             break;
 
     case 016:     /* Output Word Count */
             imp_owcnt = (data & 0177777);
             break;
     }
-    check_interrupts (uptr);
     if (imp_ocsr & CSR_GO || imp_icsr & CSR_GO)
         sim_activate(uptr, 100);
     return 0;
@@ -806,6 +797,8 @@ imp_rd(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
             *data = imp_icsr;
             if ((uptr->STATUS & (IMPID)) != 0)
                 *data |= CSR_IBF;
+            if ((uptr->STATUS & (IMPLW)) != 0)
+                *data |= CSR_EOM;
             break;
     case 002:     /* Input Data Buffer */
             *data = imp_idb;
@@ -841,19 +834,6 @@ imp_rd(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
              addr, *data, access);
     return 0;
 
-}
-
-
-uint16
-imp_vect(struct pdp_dib *dibp)
-{
-    uint16     vect = dibp->uba_vect;
-
-    if (imp_unit[0].STATUS & IMPID && (imp_unit[0].STATUS & IMPLW) == 0)
-        return vect;
-    if (imp_unit[0].STATUS & IMPOD)
-        return vect+4;
-    return 0;
 }
 
 #else
@@ -1046,7 +1026,9 @@ t_stat imp_srv(UNIT * uptr)
                imp_ocsr |= CSR_NXM;
                imp_ocsr &= ~CSR_GO;
                uptr->STATUS |= IMPOD;
-               check_interrupts (uptr);
+               if (imp_ocsr & CSR_IE) {
+                  uba_set_irq(dibp, dibp->uba_vect + 4);
+               }
                sim_debug(DEBUG_DETAIL, &imp_dev, "IMP out npr failed\n");
                return SCPE_OK;
            }
@@ -1062,7 +1044,9 @@ t_stat imp_srv(UNIT * uptr)
                imp_ocsr |= CSR_NXM;
                imp_ocsr &= ~CSR_GO;
                uptr->STATUS |= IMPOD;
-               check_interrupts (uptr);
+               if (imp_ocsr & CSR_IE) {
+                  uba_set_irq(dibp, dibp->uba_vect + 4);
+               }
                sim_debug(DEBUG_DETAIL, &imp_dev, "IMP out npr failed\n");
                return SCPE_OK;
            }
@@ -1086,7 +1070,9 @@ t_stat imp_srv(UNIT * uptr)
             imp_ocsr |= CSR_ERR;
             imp_ocsr &= ~CSR_GO;
             uptr->STATUS |= IMPOD;
-            check_interrupts (uptr);
+            if (imp_ocsr & CSR_IE) {
+               uba_set_irq(dibp, dibp->uba_vect + 4);
+            }
             sim_debug(DEBUG_DETAIL, &imp_dev, "IMP oba overflow\n");
             return SCPE_OK;
         }
@@ -1094,6 +1080,9 @@ t_stat imp_srv(UNIT * uptr)
             imp_ocsr |= CSR_RDY;
             imp_ocsr &= ~CSR_GO;
             uptr->STATUS |= IMPOD;
+            if (imp_ocsr & CSR_IE) {
+               uba_set_irq(dibp, dibp->uba_vect + 4);
+            }
             if (imp_ocsr & CSR_ELB) {
                 sim_debug(DEBUG_DETAIL, &imp_dev, "IMP send\n");
 
@@ -1102,7 +1091,6 @@ t_stat imp_srv(UNIT * uptr)
                 memset(imp_data.sbuffer, 0, ETH_FRAME_SIZE);
                 uptr->OPOS = 0;
             }
-            check_interrupts (uptr);
         }
     }
     if (uptr->STATUS & IMPIB && imp_icsr & CSR_GO) {
@@ -1111,7 +1099,9 @@ t_stat imp_srv(UNIT * uptr)
             imp_icsr |= CSR_ERR;
             imp_icsr &= ~CSR_GO;
             uptr->STATUS |= IMPID;
-            check_interrupts (uptr);
+            if (imp_icsr & CSR_IE) {
+               uba_set_irq(dibp, dibp->uba_vect);
+            }
             sim_debug(DEBUG_DETAIL, &imp_dev, "IMP oba overflow\n");
             return SCPE_OK;
         }
@@ -1125,7 +1115,9 @@ t_stat imp_srv(UNIT * uptr)
                imp_icsr |= CSR_NXM;
                imp_icsr &= ~CSR_GO;
                uptr->STATUS |= IMPID;
-               check_interrupts (uptr);
+               if (imp_icsr & CSR_IE) {
+                  uba_set_irq(dibp, dibp->uba_vect);
+               }
                sim_debug(DEBUG_DETAIL, &imp_dev, "IMP in npr failed\n");
                return SCPE_OK;
            }
@@ -1144,8 +1136,10 @@ t_stat imp_srv(UNIT * uptr)
            if (uba_write_npr(pa, dibp->uba_ctl, wd64) == 0) {
                imp_ocsr |= CSR_NXM;
                imp_ocsr &= ~CSR_GO;
-               uptr->STATUS |= IMPOD;
-               check_interrupts (uptr);
+               uptr->STATUS |= IMPID;
+               if (imp_icsr & CSR_IE) {
+                  uba_set_irq(dibp, dibp->uba_vect);
+               }
                sim_debug(DEBUG_DETAIL, &imp_dev, "IMP out npr failed\n");
                return SCPE_OK;
            }
@@ -1158,18 +1152,23 @@ t_stat imp_srv(UNIT * uptr)
         imp_iba += 2;
         imp_iwcnt++;
         if (uptr->IPOS > uptr->ILEN) {
-             imp_icsr |= CSR_EOM|CSR_RDY;
-             imp_icsr &= ~CSR_GO;
-             uptr->STATUS |= IMPID;
-             uptr->STATUS &= ~IMPIB;
-             uptr->ILEN = 0;
+            imp_icsr |= CSR_EOM|CSR_RDY;
+            imp_icsr &= ~CSR_GO;
+            uptr->STATUS |= IMPID|IMPLW;
+            uptr->STATUS &= ~IMPIB;
+            if (imp_icsr & CSR_IE) {
+               uba_set_irq(dibp, dibp->uba_vect);
+            }
+            uptr->ILEN = 0;
         }
         if (imp_iwcnt == 0) {
             imp_icsr |= CSR_RDY;
             imp_icsr &= ~CSR_GO;
             uptr->STATUS |= IMPID;
-        }
-        check_interrupts (uptr);
+            if (imp_icsr & CSR_IE) {
+               uba_set_irq(dibp, dibp->uba_vect);
+            }
+        } 
     }
     if (imp_ocsr & CSR_GO || imp_icsr & CSR_GO)
         sim_activate(uptr, 100);

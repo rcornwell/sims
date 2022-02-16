@@ -124,7 +124,7 @@ t_stat dz_detach (UNIT *uptr);
 t_stat dz_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
         const char *cptr);
 const char *dz_description (DEVICE *dptr);
-DIB dz_dib = { 0760000, 077, 0340, 5, 3, &dz_read, &dz_write, &dz_vect, 0, 0 };
+DIB dz_dib = { 0760000, 077, 0340, 5, 3, &dz_read, &dz_write, 0, 0, 0 };
 
 UNIT dz_unit = {
     UDATA (&dz_svc, TT_MODE_7B+UNIT_IDLE+UNIT_DISABLE+UNIT_ATTABLE, 0), KBD_POLL_WAIT
@@ -188,6 +188,8 @@ dz_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
     TMLN             *lp;
     int               i;
 
+    if ((dptr->flags & DEV_DIS) != 0)
+        return 1;
     if ((dptr->units[0].flags & UNIT_DIS) != 0)
         return 1;
     addr &= dibp->uba_mask;
@@ -221,6 +223,15 @@ dz_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
             }
             dz_csr[base] &= ~(TIE|SAE|RIE|MSE|CLR|MAINT);
             dz_csr[base] |= data & (TIE|SAE|RIE|MSE|MAINT);
+            if (((dz_csr[base] & (RDONE|RIE)) == (RDONE|RIE)) ||
+                (dz_csr[base] & (SA|SAE)) == (SA|SAE))
+               uba_set_irq(dibp, dibp->uba_vect + (010 * base));
+            else
+               uba_clr_irq(dibp, dibp->uba_vect + (010 * base));
+            if ((dz_csr[base] & (TRDY|TIE)) == (TRDY|TIE))
+               uba_set_irq(dibp, dibp->uba_vect + 4 + (010 * base));
+            else
+               uba_clr_irq(dibp, dibp->uba_vect + 4 +  (010 * base));
             break;
 
     case 2:
@@ -245,6 +256,7 @@ dz_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
                 else
                     data = (temp & 0177400) | data;
             }
+            dz_csr[base] &= ~(TRDY);
             for (i = 0; i < 8; i++) {
                 lp = &dz_ldsc[ln + i];
                 if ((data & (LINE_ENB << i)) != 0)
@@ -255,8 +267,9 @@ dz_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
                     tmxr_set_get_modem_bits(lp, TMXR_MDM_OUTGOING, 0, NULL);
                 else
                     tmxr_set_get_modem_bits(lp, 0, TMXR_MDM_OUTGOING, NULL);
-       sim_debug(DEBUG_DETAIL, dptr, "DZ%o sstatus %07o %o %o\n", base, data, i, dz_flags[ln+i]);
+       sim_debug(DEBUG_EXP, dptr, "DZ%o sstatus %07o %o %o\n", base, data, i, dz_flags[ln+i]);
             }
+            uba_clr_irq(dibp, dibp->uba_vect + 4 +  (010 * base));
             break;
 
     case 6:
@@ -280,12 +293,11 @@ dz_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
                 if (r == SCPE_STALL)
                     dz_xmit[ln] = TRDY | ch;
              }
+             dz_csr[base] &= ~TRDY;
+             uba_clr_irq(dibp, dibp->uba_vect + 4 +  (010 * base));
              break;
     }
 
-    dz_csr[base] &= ~TRDY;
-    if ((dz_csr[base] & MSE) == 0)
-        return 0;
     dz_checkirq(dibp);
     return 0;
 }
@@ -300,6 +312,8 @@ dz_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
     TMLN             *lp;
     int               i;
 
+    if ((dptr->flags & DEV_DIS) != 0)
+        return 1;
     if ((dptr->units[0].flags & UNIT_DIS) != 0)
         return 1;
     addr &= dibp->uba_mask;
@@ -318,26 +332,29 @@ dz_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
             if ((dz_csr[base] & MSE) == 0)
                 return 0;
             dz_csr[base] &= ~(SA|RDONE);
+            uba_clr_irq(dibp, dibp->uba_vect + (010 * base));
             if (!empty(&dz_recv[base])) {
                 *data = dz_recv[base].buff[dz_recv[base].out_ptr];
                 inco(&dz_recv[base]);
                 dz_recv[base].len = 0;
             }
-            if (!empty(&dz_recv[base]))
+            if (!empty(&dz_recv[base])) {
                 dz_csr[base] |= RDONE;
-            dz_checkirq(dibp);
+                if (dz_csr[base] & RIE) {
+                   uba_set_irq(dibp, dibp->uba_vect + (010 * base));
+                }
+            }
             break;
 
     case 4:
             temp = 0;
-            ln = base << 3;
+            base <<= 3;
             /* Set up the current status */
-            for (i = 0; i < 8; i++) {
-                sim_debug(DEBUG_DETAIL, dptr, "DZ%o status %o %o\n", base, i, dz_flags[ln+i]);
-                if (dz_flags[ln + i] & LINE_EN)
-                    temp |= LINE_ENB << i;
-                if (dz_flags[ln + i] & DTR_FLAG)
-                    temp |= DTR << i;
+            for (ln = 0; ln < 8; ln++) {
+                if (dz_flags[base + ln] & LINE_EN)
+                    temp |= LINE_ENB << ln;
+                if (dz_flags[base + ln] & DTR_FLAG)
+                    temp |= DTR << ln;
             }
             *data = temp;
             break;
@@ -374,7 +391,8 @@ t_stat dz_svc (UNIT *uptr)
     ln = tmxr_poll_conn (&dz_desc);                     /* look for connect */
     if (ln >= 0) {                                      /* got one? rcv enb*/
         dz_ring[(ln & 030) >> 3] |= (1 << (ln & 7));
-        sim_debug(DEBUG_DETAIL, &dz_dev, "DC line connect %d\n", ln);
+        sim_debug(DEBUG_DETAIL, &dz_dev, "DZ line connect %d\n", ln);
+        dz_xmit[ln] = 0;
     }
     tmxr_poll_tx(&dz_desc);
     tmxr_poll_rx(&dz_desc);
@@ -392,7 +410,7 @@ t_stat dz_svc (UNIT *uptr)
         while (!full(&dz_recv[base])) {
             int32 ch = tmxr_getc_ln(lp);
             if ((ch & TMXR_VALID) != 0) {
-               if (ch & SCPE_BREAK) {                    /* break? */ 
+               if (ch & SCPE_BREAK) {                    /* break? */
                     temp = FRM_ERR;
                 } else {
                     ch = sim_tt_inpcvt (ch, TT_GET_MODE(dz_unit.flags) | TTUF_KSR);
@@ -402,10 +420,15 @@ t_stat dz_svc (UNIT *uptr)
                 inci(&dz_recv[base]);
                 dz_recv[base].len++;
                 dz_csr[base] |= RDONE;
-                if (dz_recv[base].len > 16)
+                if (dz_csr[base] & RIE)
+                    uba_set_irq(dibp, dibp->uba_vect + (010 * base));
+                if (dz_recv[base].len > 16) {
                     dz_csr[base] |= SA;
-                sim_debug(DEBUG_DETAIL, dptr, "TTY recieve %d: %o\n",
-                               ln, ch);
+                    if (dz_csr[base] & SAE) {
+                       uba_set_irq(dibp, dibp->uba_vect + (010 * base));
+                    }
+                }
+                sim_debug(DEBUG_DETAIL, dptr, "TTY recieve %d: %o\n", ln, ch);
             } else
                 break;
         }
@@ -423,55 +446,35 @@ dz_checkirq(struct pdp_dib   *dibp)
     int        j;
     int        i;
     int        ln;
+    int        stop;
     TMLN      *lp;
+    int        irq = 0;
 
     for (i = 0; i < NUM_DEVS_DZ; i++) {
+         if ((dz_csr[i] & MSE) == 0)
+             continue;
          ln = ((dz_csr[i] & TLINE) >> TLINE_V) + (i << 3);
-         dz_csr[i] &= ~TRDY;
-         /* See if there is another line ready */
-         for (j = 0; j < 8; j++) {
-             ln = (ln & 070) | ((ln + 1) & 07);
-             lp = &dz_ldsc[ln];
-             /* Connected and empty xmit_buffer */
-             if ((dz_flags[ln] & LINE_EN) != 0 && dz_xmit[ln] == 0) {
-                 dz_csr[i] &= ~(TLINE);
-                 dz_csr[i] |= TRDY | ((ln & 07) << TLINE_V);
-                 break;
-             }
-         }
+         stop = ln;
+         if ((dz_csr[i] & TRDY) == 0) {
+             /* See if there is another line ready */
+             do {
+                 ln = (ln & 070) | ((ln + 1) & 07);
+                 lp = &dz_ldsc[ln];
+                 /* Connected and empty xmit_buffer */
+                 if ((dz_flags[ln] & LINE_EN) != 0 && dz_xmit[ln] == 0) {
+                     sim_debug(DEBUG_DETAIL, &dz_dev, "DZ line ready %o\n", ln);
 
-         /* Check flags to see if anything would generate an interrupt */
-         if ((dz_csr[i] & (TIE|TRDY)) == (TIE|TRDY) ||
-            (dz_csr[i] & (SA|SAE)) == (SA|SAE) ||
-            (dz_csr[i] & (RDONE|SAE|RIE)) == (RDONE|RIE)) {
-                sim_debug(DEBUG_DETAIL, &dz_dev, "Set irq %05o\n", dz_csr[i]);
-            uba_set_irq(dibp);
-            return;
+                     dz_csr[i] &= ~(TRDY|TLINE);
+                     dz_csr[i] |= TRDY | ((ln & 07) << TLINE_V);
+                     if (dz_csr[i] & TIE) {
+                        uba_set_irq(dibp, dibp->uba_vect + 4 + (010 * i));
+                     }
+                     break;
+                 }
+             } while (ln != stop);
          }
     }
-    sim_debug(DEBUG_DETAIL, &dz_dev, "Clr irq\n");
-    /* Nothing found, so clear any flags */
-    uba_clr_irq(dibp);
 }
-
-/* Return the vector of first ready device */
-uint16
-dz_vect(struct pdp_dib *dibp)
-{
-    int        i;
-    uint16     vect = dibp->uba_vect;
-    for (i = 0; i < NUM_DEVS_DZ; i++) {
-        if ((dz_csr[i] & (SA|SAE)) == (SA|SAE) ||
-            (dz_csr[i] & (RDONE|SAE|RIE)) == (RDONE|RIE))
-            return vect;
-        if ((dz_csr[i] & (TIE|TRDY)) == (TIE|TRDY))
-            return vect + 4;
-        vect += 010;
-    }
-    return 0;
-}
-
-
 
 /* Reset routine */
 

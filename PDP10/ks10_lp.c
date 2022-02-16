@@ -551,9 +551,9 @@ lp20_update_chkirq (UNIT *uptr, int done, int irq)
        lp20_cs2 |= CS2_NRDY|CS2_OFFL;
     }
     if ((lp20_cs1 & CS1_IE) && (irq || (lp20_cs1 & CS1_DONE)))
-        uba_set_irq(dibp);
+        uba_set_irq(dibp, dibp->uba_vect);
     else
-        uba_clr_irq(dibp);
+        uba_clr_irq(dibp, dibp->uba_vect);
 }
 
 /*
@@ -568,8 +568,8 @@ lp20_update_ready(UNIT *uptr, uint16 setrdy, uint16 clrrdy)
     uint16  new_cs1 = (lp20_cs1 | setrdy) & ~clrrdy;
 
     if ((new_cs1 ^ lp20_cs1) & (CS1_ONL|CS1_DVON) && !sim_is_active(uptr)) {
-        if (new_cs1 & CS1_IE) 
-            uba_set_irq(dibp);
+        if (new_cs1 & CS1_IE)
+            uba_set_irq(dibp, dibp->uba_vect);
     }
     if (new_cs1 & CS1_DVON)
         lp20_cs2 &= ~CS2_DVOF;
@@ -871,7 +871,7 @@ t_stat lp20_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
         const char *cptr)
 {
 fprintf (st, "Line Printer (LPT)\n\n");
-fprintf (st, "The line printer (LPT) writes data to a disk file. \n"); 
+fprintf (st, "The line printer (LPT) writes data to a disk file. \n");
 fprintf (st, "The Line printer can be configured to any number of lines per page with the:\n");
 fprintf (st, "        sim> SET %s LINESPERPAGE=n\n\n", dptr->name);
 fprintf (st, "The default is 66 lines per page.\n\n");

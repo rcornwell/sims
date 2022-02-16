@@ -329,7 +329,7 @@ struct rh_if   rp_rh[NUM_DEVS_RP] = {
 };
 
 DIB rp_dib[] = {
-    {0776700, 077, 0254, 6, 1, &uba_rh_read, &uba_rh_write, &uba_rh_vect, 0, &rp_rh[0]},
+    {0776700, 077, 0254, 6, 1, &uba_rh_read, &uba_rh_write, 0, 0, &rp_rh[0]},
 };
 #else
 struct rh_if   rp_rh[NUM_DEVS_RP] = {

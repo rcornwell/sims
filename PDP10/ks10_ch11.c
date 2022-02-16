@@ -77,7 +77,6 @@
 int    ch11_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access);
 int    ch11_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access);
 uint16 ch11_checksum (const uint8 *p, int count);
-int    ch11_test_int (struct pdp_dib *dibp);
 void   ch11_validate (const uint8 *p, int count);
 t_stat ch11_transmit (struct pdp_dib *dibp);
 void   ch11_receive (struct pdp_dib *dibp);
@@ -95,7 +94,7 @@ t_stat ch11_help_attach (FILE *, DEVICE *, UNIT *, int32, const char *);
 const char *ch11_description (DEVICE *);
 
 static char peer[256];
-int address;
+static int address;
 static uint16 ch11_csr;
 static int rx_count;
 static int tx_count;
@@ -170,23 +169,26 @@ ch11_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
 
     switch (addr & 016) {
     case 000:  /* CSR */
+        if (data & CSR_RST) {
+            sim_debug (DBG_REG, &ch11_dev, "Reset\n");
+            ch11_clear (dibp);
+        }
+        ch11_csr &= ~(CSR_REN|CSR_TEN|CSR_SPY);
+        ch11_csr |= data & (CSR_REN|CSR_TEN|CSR_SPY);
         if (data & CSR_RCL) {
             sim_debug (DBG_REG, &ch11_dev, "Clear RX\n");
             ch11_csr &= ~CSR_RDN;
             rx_count = 0;
             ch11_lines[0].rcve = TRUE;
-        }
-        if (data & CSR_RST) {
-            sim_debug (DBG_REG, &ch11_dev, "Reset\n");
-            ch11_clear (dibp);
+            uba_clr_irq(dibp, dibp->uba_vect);
         }
         if (data & CSR_TCL) {
           sim_debug (DBG_REG, &ch11_dev, "Clear TX\n");
           tx_count = 0;
           ch11_csr |= CSR_TDN;
+          if (ch11_csr & CSR_TEN)
+            uba_set_irq(dibp, dibp->uba_vect);
         }
-        ch11_csr &= ~(CSR_REN|CSR_TEN);
-        ch11_csr |= data & (CSR_REN|CSR_TEN);
         break;
 
     case 002:  /* Write buffer */
@@ -237,6 +239,7 @@ ch11_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
         } else {
           i = 512-rx_count;
           ch11_csr &= ~CSR_RDN;
+          uba_clr_irq(dibp, dibp->uba_vect);
           *data = ((uint64)(rx_buffer[i]) & 0xff) << 8;
           *data |= ((uint64)(rx_buffer[i+1]) & 0xff);
           rx_count-=2;
@@ -281,25 +284,6 @@ ch11_checksum (const uint8 *p, int count)
     sum = (sum & 0xffff) + (sum >> 16);
 
   return (~sum) & 0xffff;
-}
-
-
-int
-ch11_test_int (struct pdp_dib *dibp)
-{
-  if ((ch11_csr & (CSR_RDN|CSR_REN)) == (CSR_RDN|CSR_REN) ||
-      (ch11_csr & (CSR_TDN|CSR_TEN)) == (CSR_TDN|CSR_TEN)) {
-     sim_debug (DBG_INT, &ch11_dev, "%s %s Interrupt\n",
-      ch11_csr & CSR_RDN ? "RX" : "",
-      ch11_csr & CSR_TDN ? "TX" : "");
-      uba_set_irq(dibp);
-  } else {
-    /* Nothing found, so clear any flags */
-    sim_debug(DEBUG_DETAIL, &dz_dev, "Clr irq\n");
-    uba_clr_irq(dibp);
-    return 0;
-  }
-  return 1;
 }
 
 void
@@ -363,7 +347,6 @@ ch11_transmit (struct pdp_dib *dibp)
     ch11_csr |= CSR_TAB;
   }
   tx_count = 0;
-  ch11_test_int (dibp);
   return SCPE_OK;
 }
 
@@ -395,9 +378,12 @@ ch11_receive (struct pdp_dib *dibp)
     sim_debug (DBG_TRC, &ch11_dev, "Rx count, %d\n", rx_count);
     ch11_validate (p + CHUDP_HEADER, count - CHUDP_HEADER);
     ch11_csr |= CSR_RDN;
+    if (ch11_csr & CSR_REN) {
+        sim_debug (DBG_INT, &ch11_dev, "RX Interrupt\n");
+        uba_set_irq(dibp, dibp->uba_vect);
+    }
     ch11_lines[0].rcve = FALSE;
     sim_debug (DBG_TRC, &ch11_dev, "Rx off\n");
-    ch11_test_int (dibp);
   } else {
     sim_debug (DBG_ERR, &ch11_dev, "Lost packet\n");
     if ((ch11_csr & CSR_LOS) != CSR_LOS)
@@ -418,7 +404,7 @@ ch11_clear (struct pdp_dib *dibp)
   tx_buffer[3] = 0;
   ch11_lines[0].rcve = TRUE;
 
-  ch11_test_int (dibp);
+  uba_clr_irq(dibp, dibp->uba_vect);
 }
 
 t_stat
@@ -432,9 +418,13 @@ ch11_svc(UNIT *uptr)
   if (ch11_lines[0].conn) {
     ch11_receive (dibp);
   }
-  if (tx_count == 0)
+  if (tx_count == 0) {
     ch11_csr |= CSR_TDN;
-  ch11_test_int (dibp);
+    if (ch11_csr & CSR_TEN) {
+        sim_debug (DBG_INT, &ch11_dev, "RX Interrupt\n");
+        uba_set_irq(dibp, dibp->uba_vect);
+    }
+  }
   return SCPE_OK;
 }
 
