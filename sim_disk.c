@@ -516,6 +516,37 @@ AIO_CALL(DOP_IAVL, 0, NULL, NULL, 0, callback);
 return r;
 }
 
+static t_bool sim_disk_no_autosize = FALSE;
+
+t_stat sim_disk_set_noautosize (int32 flag, CONST char *cptr)
+{
+DEVICE *dptr;
+uint32 dev, unit, count = 0;
+
+if (flag == sim_disk_no_autosize)
+    return sim_messagef (SCPE_ARG, "Autosizing is already %sabled!\n", 
+                                    sim_disk_no_autosize ? "dis" : "en");
+for (dev = 0; (dptr = sim_devices[dev]) != NULL; dev++) {
+    if ((DEV_TYPE (dptr) != DEV_DISK) ||
+        (dptr->flags & DEV_DIS))
+        continue;
+    ++count;
+    for (unit = 0; unit < dptr->numunits; unit++) {
+        char cmd[CBUFSIZE];
+        int32 saved_sim_show_message = sim_show_message;
+
+        sim_show_message = FALSE;
+        sprintf (cmd, "%s %sAUTOSIZE", sim_uname (&dptr->units[unit]), (flag != 0) ? "NO" : "");
+        set_cmd (0, cmd);
+        sim_show_message = saved_sim_show_message;
+        }
+    if (count == 0)
+        return sim_messagef (SCPE_ARG, "No disk devices support autosizing\n");
+    }
+sim_disk_no_autosize = flag;
+return SCPE_OK;
+}
+
 /* Test for write protect */
 
 t_bool sim_disk_wrp (UNIT *uptr)
@@ -2421,6 +2452,10 @@ t_bool auto_format = FALSE;
 t_offset container_size, filesystem_size, current_unit_size;
 size_t tmp_size = 1;
 
+if (sim_disk_no_autosize) {
+    dontchangecapac = TRUE;
+    drivetypes = NULL;
+    }
 if (uptr->flags & UNIT_DIS)                             /* disabled? */
     return SCPE_UDIS;
 if (!(uptr->flags & UNIT_ATTABLE))                      /* not attachable? */
@@ -2719,10 +2754,12 @@ if ((sim_switches & SWMASK ('R')) ||                    /* read only? */
     ((uptr->flags & UNIT_RO) != 0)) {
     if (((uptr->flags & UNIT_ROABLE) == 0) &&           /* allowed? */
         ((uptr->flags & UNIT_RO) == 0))
-        return _err_return (uptr, SCPE_NORO);           /* no, error */
+        return sim_messagef (_err_return (uptr, SCPE_NORO), "%s: Read Only operation not allowed\n", /* no, error */
+                                                        sim_uname (uptr));
     uptr->fileref = open_function (cptr, "rb");         /* open rd only */
     if (uptr->fileref == NULL)                          /* open fail? */
-        return _err_return (uptr, SCPE_OPENERR);        /* yes, error */
+        return sim_messagef (_err_return (uptr, SCPE_OPENERR), "%s: Can't open '%s': %s\n", /* yes, error */
+                                            sim_uname (uptr), cptr, strerror (errno));
     uptr->flags = uptr->flags | UNIT_RO;                /* set rd only */
     sim_messagef (SCPE_OK, "%s: Unit is read only\n", sim_uname (uptr));
     }
@@ -2731,10 +2768,12 @@ else {                                                  /* normal */
     if (uptr->fileref == NULL) {                        /* open fail? */
         if ((errno == EROFS) || (errno == EACCES)) {    /* read only? */
             if ((uptr->flags & UNIT_ROABLE) == 0)       /* allowed? */
-                return _err_return (uptr, SCPE_NORO);   /* no error */
+                return sim_messagef (_err_return (uptr, SCPE_NORO), "%s: Read Only operation not allowed\n", /* no, error */
+                                                                sim_uname (uptr));
             uptr->fileref = open_function (cptr, "rb"); /* open rd only */
             if (uptr->fileref == NULL)                  /* open fail? */
-                return _err_return (uptr, SCPE_OPENERR);/* yes, error */
+                return sim_messagef (_err_return (uptr, SCPE_OPENERR), "%s: Can't open '%s': %s\n", /* yes, error */
+                                                    sim_uname (uptr), cptr, strerror (errno));
             uptr->flags = uptr->flags | UNIT_RO;        /* set rd only */
             sim_messagef (SCPE_OK, "%s: Unit is read only\n", sim_uname (uptr));
             }
@@ -2796,7 +2835,7 @@ if ((DK_GET_FMT (uptr) == DKUF_F_VHD) || (ctx->footer)) {
                 }
             else { /* Type already matches, Need to confirm compatibility */
                 t_addr saved_capac = uptr->capac;
-                t_lba current_unit_sectors = (t_lba)((uptr->capac*ctx->capac_factor)/(ctx->sector_size/((dptr->flags & DEV_SECTORS) ? 512 : 1)));
+                t_lba current_unit_sectors = (t_lba)((dptr->flags & DEV_SECTORS) ? uptr->capac : (uptr->capac*ctx->capac_factor)/ctx->sector_size);
 
                 if ((container_sector_size != 0) && (sector_size != container_sector_size))
                     r = sim_messagef (SCPE_OPENERR, "%s: Incompatible Container Sector Size %d\n", sim_uname (uptr), container_sector_size);
@@ -2804,10 +2843,17 @@ if ((DK_GET_FMT (uptr) == DKUF_F_VHD) || (ctx->footer)) {
                     if (dontchangecapac && 
                         ((((t_lba)(ctx->container_size/sector_size) > current_unit_sectors)) ||
                          ((container_sectors != 0) && (container_sectors != current_unit_sectors)))) {
+                         r = sim_messagef (SCPE_OK, "%s: Container has %u sectors, drive has: %u sectors\n", sim_uname (uptr), container_sectors, current_unit_sectors);
                          if (container_sectors != 0)
                              r = sim_messagef (SCPE_INCOMPDSK, "%s: %s container created by the %s simulator is incompatible with the %s device on the %s simulator\n", sim_uname (uptr), container_dtype, created_name, uptr->dptr->name, sim_name);
                          else
                              r = sim_messagef (SCPE_INCOMPDSK, "%s: disk container %s is incompatible with the %s device\n", sim_uname (uptr), uptr->filename, uptr->dptr->name);
+                         if ((uptr->flags & UNIT_RO) != 0)
+                             r = sim_messagef (SCPE_OK, "%s: Read Only access to incompatible %s container '%s' allowed\n", sim_uname (uptr), container_dtype, uptr->filename);
+                         if (container_sectors < current_unit_sectors) {
+                             r = sim_messagef (SCPE_BARE_STATUS (r), "%s: Since the container is smaller than the drive, this might be useful:\n", sim_uname (uptr));
+                             r = sim_messagef (SCPE_BARE_STATUS (r), "%s:   sim> ATTACH %s -C New-%s %s\n", sim_uname (uptr), sim_uname (uptr), uptr->filename, uptr->filename);
+                             }
                         }
                     }
                 if (r == SCPE_OK) {
@@ -2976,6 +3022,9 @@ filesystem_size = get_filesystem_size (uptr);
 if (filesystem_size != (t_offset)-1)
     filesystem_size += reserved_sectors * sector_size;
 container_size = sim_disk_size (uptr);
+if ((filesystem_size == (t_offset)-1) &&
+    (ctx->footer != NULL))                      /* The presence of metadata means we already */
+    filesystem_size = ctx->container_size;      /* know the interesting disk size */
 current_unit_size = ((t_offset)uptr->capac)*ctx->capac_factor*((dptr->flags & DEV_SECTORS) ? ctx->sector_size : 1);
 if (container_size && (container_size != (t_offset)-1)) {
     if (dontchangecapac) {  /* autosize by changing drive type */
@@ -3015,7 +3064,7 @@ if (container_size && (container_size != (t_offset)-1)) {
                 autosized = TRUE;
             }
             else {
-                if (!created) {
+                if (!created && (ctx->footer == NULL)) {
                     sim_messagef (SCPE_OK, "%s: Amount of data in use in disk container '%s' cannot be determined, skipping autosizing\n", sim_uname (uptr), cptr);
                     if (container_size > current_unit_size) {
                         t_stat r = SCPE_FSSIZE;
@@ -3120,6 +3169,30 @@ sim_disk_set_async (uptr, completion_delay);
 #endif
 uptr->io_flush = _sim_disk_io_flush;
 
+if (uptr->flags & UNIT_BUFABLE) {                       /* buffer in memory? */
+    t_seccnt sectsread;
+    t_stat r = SCPE_OK;
+
+    if (uptr->flags & UNIT_MUSTBUF) {                   /* dyn alloc? */
+        uptr->filebuf = calloc ((size_t)(ctx->container_size / ctx->xfer_element_size), 
+                                    ctx->xfer_element_size);       /* allocate */
+        uptr->filebuf2 = calloc ((size_t)(ctx->container_size / ctx->xfer_element_size), 
+                                    ctx->xfer_element_size);       /* allocate copy */
+        if ((uptr->filebuf == NULL) ||                  /* either failed? */
+            (uptr->filebuf2 == NULL)) {
+            sim_disk_detach (uptr);
+            return SCPE_MEM;                            /* memory allocation error */
+            }
+        }
+    sim_messagef (SCPE_OK, "%s: buffering file in memory\n", sim_uname (uptr));
+    r = sim_disk_rdsect (uptr, 0, uptr->filebuf, &sectsread, (t_seccnt)(ctx->container_size / ctx->sector_size));
+    if (r != SCPE_OK)
+        return sim_disk_detach (uptr);
+    uptr->hwmark = (sectsread * ctx->sector_size) / ctx->xfer_element_size;
+    memcpy (uptr->filebuf2, uptr->filebuf, (size_t)ctx->container_size);/* save initial contents */
+    uptr->flags |= UNIT_BUF;                            /* mark as buffered */
+    }
+
 return SCPE_OK;
 }
 
@@ -3160,6 +3233,21 @@ if (!(uptr->flags & UNIT_ATT))                          /* attached? */
 if (NULL == find_dev_from_unit (uptr))
     return SCPE_OK;
 
+if ((uptr->flags & UNIT_BUF) && (uptr->filebuf)) {
+    uint32 cap = (uptr->hwmark + uptr->dptr->aincr - 1) / uptr->dptr->aincr;
+
+    if (((uptr->flags & UNIT_RO) == 0) && 
+        (memcmp (uptr->filebuf, uptr->filebuf2, (size_t)ctx->container_size) != 0)) {
+        sim_messagef (SCPE_OK, "%s: writing buffer to file: %s\n", sim_uname (uptr), uptr->filename);
+        sim_disk_wrsect (uptr, 0, uptr->filebuf, NULL, (cap + ctx->sector_size - 1) / ctx->sector_size);
+        }
+    uptr->flags = uptr->flags & ~UNIT_BUF;
+    }
+free (uptr->filebuf);                                   /* free buffers */
+uptr->filebuf = NULL;
+free (uptr->filebuf2);
+uptr->filebuf2 = NULL;
+
 update_disk_footer (uptr);                              /* Update meta data if highwater has changed */
 
 auto_format = ctx->auto_format;
@@ -3180,6 +3268,7 @@ uptr->disk_ctx = NULL;
 uptr->io_flush = NULL;
 if (auto_format)
     sim_disk_set_fmt (uptr, 0, "AUTO", NULL);           /* restore file format */
+
 if (close_function (fileref) == EOF)
     return SCPE_IOERR;
 return SCPE_OK;
@@ -3990,8 +4079,6 @@ while (bytestoread) {
     if (sectsread)
         *sectsread += sectorbytes / ctx->sector_size;
     bytestoread -= sectorbytes;
-    if (bytestoread == 0)
-        break;
     buf +=  sectorbytes;
     addr += sectorbytes;
     }
@@ -4192,8 +4279,6 @@ while (bytestoread) {
     if (sectsread)
         *sectsread += sectorbytes / ctx->sector_size;
     bytestoread -= sectorbytes;
-    if ((bytestoread == 0) || (bytesread == 0))
-        break;
     buf += sectorbytes;
     addr += sectorbytes;
     }
@@ -6236,6 +6321,12 @@ return WriteVirtualDiskSectors(hVHD, buf, sects, sectswritten, ctx->sector_size,
 
 t_stat sim_disk_init (void)
 {
+int32 saved_sim_show_message = sim_show_message;
+
+sim_show_message = FALSE;
+sim_disk_no_autosize = TRUE;
+sim_disk_set_noautosize (FALSE, NULL);
+sim_show_message = saved_sim_show_message;
 return SCPE_OK;
 }
 
