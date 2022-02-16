@@ -84,7 +84,7 @@ Use @@A to relogin to the console.
 #rundma1x67.ini - dsk/mpx1xdma0; type "../sel32 rundma1x67.ini" to run.
 The disk is booted up to the TSM> prompt and logged in as "SYSTEM".
 MPX can be accessed from a second Linux screen by using the command
-"telnet locallhost 4747".  This will bring up the "ENTER OWNERNAME
+"telnet localhost 4747".  This will bring up the "ENTER OWNERNAME
 AND KEY:".  Any name is valid, but SYSTEM should be used.  At the
 "TSM>" prompt, type "EXIT" to exit TSM.  Use ^G to get the login
 prompt when the "RING IN FOR SERVICE" message is displayed.
@@ -238,5 +238,5 @@ Other MPX versions support:
                SDT, I would be very thankfull.  Please keep looking.
 
 James C. Bevier
-12/31/2021 
+02/16/2022 
 

@@ -278,8 +278,10 @@ typedef struct dib {
 extern  DIB     *dib_unit[MAX_DEV];     /* Pointer to Device info block */
 extern  DIB     *dib_chan[MAX_CHAN];    /* Pointer to channel mux dib */
 
-#define DEV_CHAN          (1 << DEV_V_UF)   /* Device is channel mux if set */
-#define DEV_V_UF2         (DEV_V_UF+1)  /* current usage */
+#define DEV_CHAN        (1 << DEV_V_UF) /* Device is channel mux if set */
+#define SEL_DISK        (1 << (DEV_V_UF+1)) /* Device is channel mux if set */
+#define DEV_V_UF2       (DEV_V_UF+2)    /* current usage */
+#define GET_SEL_DISK(x) (((x) >> (DEV_V_UF+1)) & 0x1)   /* get SEL_DISK flag */
 
 #ifdef NOT_USED_NOW
 //#define DEV_V_ADDR        DEV_V_UF              /* Pointer to device address (16) */

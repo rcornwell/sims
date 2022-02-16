@@ -254,7 +254,7 @@ UNIT  cpu_unit =
     0,          /* uint32 dynflags */        /* dynamic flags */
     0x800000,   /* t_addr capac */           /* capacity */
     0,          /* t_addr pos */             /* file position */
-    NULL,       /* void (*io_flush) */       /* io flush routine */
+    0,          /* void (*io_flush) */       /* io flush routine */
     0,          /* uint32 iostarttime */     /* I/O start time */
     0,          /* int32 buf */              /* buffer */
     80,         /* int32 wait */             /* wait */

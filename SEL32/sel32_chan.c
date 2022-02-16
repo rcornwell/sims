@@ -1376,7 +1376,7 @@ t_stat startxio(uint16 lchsa, uint32 *status) {
     if (uptr != NULL) {
         dptr = get_dev(uptr);                   /* get device address */
         if ((dptr != NULL) &&
-            (DEV_TYPE(dptr) == DEV_DISK)) {     /* see if this is a disk */
+            (GET_SEL_DISK(dptr->flags))) {      /* see if this is a disk */
             chsa = chsa & 0x7ffe;               /* clear the odd subaddress */
         }
     }

@@ -346,7 +346,7 @@ DEVICE          sda_dev = {
     NUM_UNITS_SCFI, 16, 24, 4, 16, 32,
     NULL, NULL, &scfi_reset, &scfi_boot, &scfi_attach, &scfi_detach,
     /* ctxt is the DIB pointer */
-    &sda_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS|DEV_DISK, 0, dev_debug,
+    &sda_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS|SEL_DISK, 0, dev_debug,
     NULL, NULL, &scfi_help, NULL, NULL, &scfi_description
 };
 
@@ -392,7 +392,7 @@ DEVICE          sdb_dev = {
     NUM_UNITS_SCFI, 16, 24, 4, 16, 32,
     NULL, NULL, &scfi_reset, &scfi_boot, &scfi_attach, &scfi_detach,
     /* ctxt is the DIB pointer */
-    &sdb_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS|DEV_DISK, 0, dev_debug,
+    &sdb_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS|SEL_DISK, 0, dev_debug,
     NULL, NULL, &scfi_help, NULL, NULL, &scfi_description
 };
 #endif
@@ -925,8 +925,6 @@ t_stat scfi_srv(UNIT *uptr)
             }
             /* inch buffer address */
             mema = (buf[0]<<24) | (buf[1]<<16) | (buf[2]<<8) | (buf[3]);
-            /* now call set_inch() function to write and test inch buffer addresses */
-            i = set_inch(uptr, mema, 1);           /* new address of 1 entry */
             goto gohere;
         }
 

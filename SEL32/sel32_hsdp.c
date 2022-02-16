@@ -608,7 +608,7 @@ DEVICE          dpa_dev = {
     NUM_UNITS_HSDP, 16, 24, 4, 16, 32,
     NULL, NULL, &hsdp_reset, &hsdp_boot, &hsdp_attach, &hsdp_detach,
     /* ctxt is the DIB pointer */
-    &dpa_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS|DEV_DISK, 0, dev_debug,
+    &dpa_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS|SEL_DISK, 0, dev_debug,
     NULL, NULL, &hsdp_help, NULL, NULL, &hsdp_description
 };
 
@@ -657,7 +657,7 @@ DEVICE          dpb_dev = {
     NUM_UNITS_HSDP, 16, 24, 4, 16, 32,
     NULL, NULL, &hsdp_reset, &hsdp_boot, &hsdp_attach, &hsdp_detach,
     /* ctxt is the DIB pointer */
-    &dpb_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS|DEV_DISK, 0, dev_debug,
+    &dpb_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS|SEL_DISK, 0, dev_debug,
     NULL, NULL, &hsdp_help, NULL, NULL, &hsdp_description
 };
 #endif
