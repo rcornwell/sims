@@ -6629,6 +6629,8 @@ if (flag) {
         char osversion[PATH_MAX+1] = "";
         char tarversion[PATH_MAX+1] = "";
         char curlversion[PATH_MAX+1] = "";
+        char wmicpath[PATH_MAX+1] = "";
+        char proc_name[CBUFSIZE] = "";
         FILE *f;
 
         if ((f = _popen ("ver", "r"))) {
@@ -6643,6 +6645,23 @@ if (flag) {
         fprintf (st, "\n        OS: %s", osversion);
         fprintf (st, "\n        Architecture: %s%s%s, Processors: %s", arch, proc_arch3264 ? " on " : "", proc_arch3264 ? proc_arch3264  : "", procs);
         fprintf (st, "\n        Processor Id: %s, Level: %s, Revision: %s", proc_id ? proc_id : "", proc_level ? proc_level : "", proc_rev ? proc_rev : "");
+        strlcpy (wmicpath, sim_get_tool_path ("wmic"), sizeof (wmicpath));
+        if (wmicpath[0]) {
+            strlcat (wmicpath, " cpu get name", sizeof (wmicpath));
+            if ((f = _popen (wmicpath, "r"))) {
+                memset (proc_name, 0, sizeof(proc_name));
+                do {
+                    if (NULL == fgets (proc_name, sizeof(proc_name)-1, f))
+                        break;
+                    sim_trim_endspc (proc_name);
+                    if (0 == strcmp (proc_name, "Name"))    /* skip header line */
+                        memset (proc_name, 0, sizeof (proc_name));
+                    } while (proc_name[0] == '\0');
+                _pclose (f);
+                }
+            if (proc_name[0] != '\0')
+                fprintf (st, "\n        Processor Name: %s", proc_name);
+            }
         strlcpy (os_type, "Windows", sizeof (os_type));
         strlcpy (tarversion, _get_tool_version ("tar"), sizeof (tarversion));
         if (tarversion[0])
@@ -6677,6 +6696,41 @@ if (flag) {
                 } while (os_type[0] == '\0');
             pclose (f);
             }
+#if (defined(__linux) || defined(__linux__))
+        if ((f = popen ("lscpu 2>/dev/null | grep 'Model name:'", "r"))) {
+            char proc_name[PATH_MAX+1] = "";
+
+            memset (proc_name, 0, sizeof (proc_name));
+            do {
+                if (NULL == fgets (proc_name, sizeof (proc_name)-1, f))
+                    break;
+                sim_trim_endspc (proc_name);
+                if (0 == memcmp ("Model name:", proc_name, 11)) {
+                    size_t offset = 11 + strspn (proc_name + 11, " ");
+                    memmove (proc_name, &proc_name[offset], 1 + strlen (&proc_name[offset]));
+                    }
+                } while (proc_name[0] == '\0');
+            pclose (f);
+            if (proc_name[0] != '\0') {
+                
+                fprintf (st, "\n        Processor Name: %s", proc_name);
+                }
+            }
+#elif defined (__APPLE__)
+        if ((f = popen ("sysctl -n machdep.cpu.brand_string 2>/dev/null", "r"))) {
+            char proc_name[PATH_MAX+1] = "";
+
+            memset (proc_name, 0, sizeof (proc_name));
+            do {
+                if (NULL == fgets (proc_name, sizeof (proc_name)-1, f))
+                    break;
+                sim_trim_endspc (proc_name);
+                } while (proc_name[0] == '\0');
+            pclose (f);
+            if (proc_name[0] != '\0')
+                fprintf (st, "\n        Processor Name: %s", proc_name);
+            }
+#endif
         strlcpy (tarversion, _get_tool_version ("tar"), sizeof (tarversion));
         if (tarversion[0])
             fprintf (st, "\n        tar tool: %s", tarversion);
@@ -13553,7 +13607,7 @@ static const char *debtab_nomatch = "DEBTAB_NOMATCH";
 const char *some_match = NULL;
 int32 offset = 0;
 
-if (dptr->debflags == 0)
+if (dptr->debflags == NULL)
     return debtab_none;
 
 dbits &= (dptr->dctrl | (uptr ? uptr->dctrl : 0));/* Look for just the bits that matched */
@@ -13622,6 +13676,8 @@ uint32 value, beforevalue, mask;
 for (fields=offset=0; bitdefs[fields].name; ++fields) {
     if (bitdefs[fields].offset == 0xffffffff)       /* fixup uninitialized offsets */
         bitdefs[fields].offset = offset;
+    else
+        offset = bitdefs[fields].offset;
     offset += bitdefs[fields].width;
     }
 for (i = fields-1; i >= 0; i--) {                   /* print xlation, transition */
@@ -13677,6 +13733,7 @@ if (sim_deb && dptr && (dptr->dctrl & dbits)) {
     sim_oline = saved_oline;                                            /* restore original socket */
     }
 }
+
 void sim_debug_bits(uint32 dbits, DEVICE* dptr, BITFIELD* bitdefs,
     uint32 before, uint32 after, int terminate)
 {
@@ -13758,15 +13815,20 @@ char *buf = stackbuf;
 int32 len;
 va_list arglist;
 t_bool inhibit_message = (!sim_show_message || (stat & SCPE_NOMESSAGE));
+char msg_prefix[32] = "";
+size_t prefix_len;
 
 if ((stat == SCPE_OK) && (sim_quiet || (sim_switches & SWMASK ('Q'))))
     return stat;
+sprintf (msg_prefix, "%%SIM-%s: ", (stat == SCPE_OK) ? "INFO" : "ERROR");
+prefix_len = strlen (msg_prefix);
 while (1) {                                         /* format passed string, args */
     va_start (arglist, fmt);
+    strlcpy (buf, msg_prefix, bufsize);
 #if defined(NO_vsnprintf)
-    len = vsprintf (buf, fmt, arglist);
+    len = prefix_len + vsprintf (buf + prefix_len, fmt, arglist);
 #else                                               /* !defined(NO_vsnprintf) */
-    len = vsnprintf (buf, bufsize-1, fmt, arglist);
+    len = prefix_len + vsnprintf (buf + prefix_len, bufsize - (1 + prefix_len), fmt, arglist);
 #endif                                              /* NO_vsnprintf */
     va_end (arglist);
 
@@ -16294,20 +16356,20 @@ for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {
         switch (DEV_TYPE(dptr)) {
 #if defined(USE_SIM_CARD)
             case DEV_CARD:
-                tstat = sim_card_test (dptr);
+                tstat = sim_card_test (dptr, cptr);
                 break;
 #endif
             case DEV_DISK:
-                tstat = sim_disk_test (dptr);
+                tstat = sim_disk_test (dptr, cptr);
                 break;
             case DEV_ETHER:
-                tstat = sim_ether_test (dptr);
+                tstat = sim_ether_test (dptr, cptr);
                 break;
             case DEV_TAPE:
-                tstat = sim_tape_test (dptr);
+                tstat = sim_tape_test (dptr, cptr);
                 break;
             case DEV_MUX:
-                tstat = tmxr_sock_test (dptr);
+                tstat = tmxr_sock_test (dptr, cptr);
                 break;
             default:
                 break;

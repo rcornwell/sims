@@ -66,10 +66,11 @@ typedef struct SERPORT *SERHANDLE;
 #define TMXR_MODEM_RING_TIME 3                          /* seconds to wait for DTR for incoming connections */
 #define TMXR_DEFAULT_CONNECT_POLL_INTERVAL 1            /* seconds between connection polls */
 
-#define TMXR_DBG_XMT    0x00200000                       /* Debug Transmit Data */
-#define TMXR_DBG_RCV    0x00400000                       /* Debug Received Data */
-#define TMXR_DBG_RET    0x00800000                       /* Debug Returned Received Data */
-#define TMXR_DBG_MDM    0x01000000                       /* Debug Modem Signals */
+#define TMXR_DBG_XMT    0x00100000                       /* Debug Transmit Data */
+#define TMXR_DBG_RCV    0x00200000                       /* Debug Received Data */
+#define TMXR_DBG_RET    0x00400000                       /* Debug Returned Received Data */
+#define TMXR_DBG_MDM    0x00800000                       /* Debug Modem Signals */
+#define TMXR_DBG_CFG    0x01000000                       /* Debug Line Configuration Activities */
 #define TMXR_DBG_CON    0x02000000                       /* Debug Connection Activities */
 #define TMXR_DBG_ASY    0x04000000                       /* Debug Asynchronous Activities */
 #define TMXR_DBG_TRC    0x08000000                       /* Debug trace routine calls */
@@ -140,6 +141,9 @@ struct tmln {
     char                *ipad;                          /* IP address */
     SOCKET              master;                         /* line specific master socket */
     char                *port;                          /* line specific listening port */
+    char                *acl;                           /* Access control list (CIDR) to accept or reject connects from */
+    int32               acl_accepted_sessions;          /* count of ACL accepted tcp connections */
+    int32               acl_rejected_sessions;          /* count of ACL rejected tcp connections */
     int32               sessions;                       /* count of tcp connections received */
     uint32              cnms;                           /* conn time */
     int32               tsta;                           /* Telnet state */
@@ -217,6 +221,9 @@ struct tmxr {
     TMLN                *ldsc;                          /* line descriptors */
     int32               *lnorder;                       /* line connection order */
     DEVICE              *dptr;                          /* multiplexer device */
+    char                *acl;                           /* Access control list (CIDR) to accept or reject connects from */
+    int32               acl_accepted_sessions;          /* count of ACL accepted tcp connections */
+    int32               acl_rejected_sessions;          /* count of ACL rejected tcp connections */
     UNIT                *uptr;                          /* polling unit (connection) */
     char                logfiletmpl[FILENAME_MAX];      /* template logfile name */
     int32               txcount;                        /* count of transmit bytes */
@@ -318,7 +325,7 @@ const char *tmxr_send_line_name (const SEND *snd);
 const char *tmxr_expect_line_name (const EXPECT *exp);
 t_stat tmxr_startup (void);
 t_stat tmxr_shutdown (void);
-t_stat tmxr_sock_test (DEVICE *dptr);
+t_stat tmxr_sock_test (DEVICE *dptr, const char *cptr);
 t_stat tmxr_start_poll (void);
 t_stat tmxr_stop_poll (void);
 /* Framer support.  These are a NOP if called on a non-framer line. */
