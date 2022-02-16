@@ -409,7 +409,7 @@ DEVICE              pmp_dev = {
     "PMP", pmp_unit, NULL, pmp_mod,
     NUM_UNITS_PMP, 8, 15, 1, 8, 8,
     NULL, NULL, &pmp_reset, NULL, &pmp_attach, &pmp_detach,
-    &pmp_dib, DEV_DISABLE | DEV_DIS | DEV_DEBUG | DEV_DISK, 0, dev_debug,
+    &pmp_dib, DEV_DISABLE | DEV_DIS | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &pmp_help, NULL, NULL, &pmp_description
 };
 
