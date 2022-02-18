@@ -89,7 +89,7 @@ MTAB cty_mod[] = {
     };
 
 UNIT cty_unit[] = {
-    { UDATA (&ctyo_svc, TT_MODE_7B, 0), 4000},
+    { UDATA (&ctyo_svc, TT_MODE_7B, 0), 20000},
     { UDATA (&ctyi_svc, TT_MODE_7B|UNIT_DIS, 0), 4000 },
     { UDATA (&ctyrtc_srv, UNIT_IDLE|UNIT_DIS, 0), 1000 }
     };

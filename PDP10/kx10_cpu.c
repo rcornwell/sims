@@ -185,6 +185,9 @@ int     ptr_flg;                              /* Access to pointer value */
 int     extend = 0;                           /* Process extended instruction */
 int     fe_xct = 0;                           /* Execute instruction at address */
 int     pi_vect;                              /* Last pi location used for IRQ */
+#if KS_ITS
+uint64  qua_time;                             /* Quantum clock value */
+#endif
 #elif KL
 int     pi_vect;                              /* Last pi location used for IRQ */
 int     ext_ac;                               /* Extended instruction AC */
@@ -288,7 +291,7 @@ t_stat  (*dev_tab[128])(uint32 dev, uint64 *data);
 t_addr  (*dev_irqv[128])(uint32 dev, t_addr addr);
 t_stat  rtc_srv(UNIT * uptr);
 #if KS
-int32   rtc_tps = 100;
+int32   rtc_tps = 500;
 #else
 int32   rtc_tps = 60;
 #endif
@@ -814,6 +817,7 @@ get_quantum()
     return t;
 }
 #endif
+
 
 /*
  * Set device to interrupt on a given level 1-7
@@ -1811,6 +1815,7 @@ load_tlb(int uf, int page, int wr)
                      page_fault = 1;
                      return 0;
                  }
+                 /* Remap the flag bits */
                  pg |= KL_PAG_A;
                  break;
         case 3:  pg = KL_PAG_A|KL_PAG_W|KL_PAG_S;  break; /* R/W */
@@ -2126,48 +2131,43 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
     }
 
     /* Check for access error */
-    if ((data & KL_PAG_A) == 0 || (wr & ((data & KL_PAG_W) == 0))) {
-#if KS_ITS
-        /* Access bits:
-         *    KL_PAG_A  means valid page.
-         *    KL_PAG_S  means read write first
-         *    KL_PAG_W  means read/write
-         */
-        if (QITS) {
-            /* Remap the flag bits */
-            fault_data = (uint64)addr;
-            if (uf) {                    /* U */
-               fault_data |= SMASK;      /*  BIT0 */
-               u_tlb[page] = 0;
-            } else {
-               e_tlb[page] = 0;
-            }
-            if (wr) {
-            /* Check if accessable */
-            if ((data & KL_PAG_A) != 0) {
-               if ((data & KL_PAG_S) != 0) {
-                  fault_data |= 004000LL << 18;        /* PF2.9 */
-               } else
-               if ((data & KL_PAG_W) == 0) {
-                  fault_data |= 002000LL << 18;        /* PF2.8 */
-               }
-            }
-            if (wr) {
-                fault_data |= 010000LL << 18;
-            }
-            }
-            page_fault = 1;
-            return 0;
-        }
-#endif
-        fault_data = BIT8 | (uint64)addr;
-        /* Remap the flag bits */
+    if ((data & KL_PAG_A) == 0 || (wr != 0 && ((data & KL_PAG_W) == 0))) {
+        fault_data = (uint64)addr;
         if (uf) {                    /* U */
            fault_data |= SMASK;      /*  BIT0 */
            u_tlb[page] = 0;
         } else {
            e_tlb[page] = 0;
         }
+#if KS_ITS
+        if (QITS) {
+           /* Access bits:
+            *    KL_PAG_A  means valid page.
+            *    KL_PAG_S  means read write first
+            *    KL_PAG_W  means read/write
+            *
+            *    00 no access = 0
+            *    01 Read only = KL_PAG_A
+            *    10 Read write first = KL_PAG_A|KL_PAG_S
+            *    11 R/W = KL_PAG_A|KL_PAG_S|KL_PAG_W
+            */
+            /* Check if accessable */
+            if ((data & KL_PAG_A) != 0) {
+               if ((data & KL_PAG_S) != 0) {
+                  fault_data |= 004000LL << 18;        /* PF2.9 */
+               } 
+               if ((data & KL_PAG_W) != 0) {
+                  fault_data |= 002000LL << 18;        /* PF2.8 */
+               }
+            }
+            if (wr) {
+                fault_data |= 010000LL << 18;
+            }
+            page_fault = 1;
+            return 0;
+        }
+#endif
+        fault_data |= BIT8;
         if (wr)                      /* T */
            fault_data |= BIT5;       /* BIT5 */
         if (data & KL_PAG_A) {       /* A */
@@ -10919,21 +10919,9 @@ skip_op:
                            /* 70110 */
                            case 002:            /* CLRPT */
                                  f = (RMASK & AB) >> 9;
-
-#if KS_ITS
-                                 if (QITS) {
-                                    u_tlb[f & ~1] = 0;
-                                    e_tlb[f & ~1] = 0;
-                                    u_tlb[f | 1] = 0;
-                                    e_tlb[f | 1] = 0;
-                                 } else {
-#endif
                                  /* Map the page */
                                  u_tlb[f] = 0;
                                  e_tlb[f] = 0;
-#if KS_ITS
-                                 }
-#endif
                                  /* If not user do exec mappping */
                                  if (!t20_page && (f & 0740) == 0340) {
                                     /* Pages 340-377 via UBT */
@@ -11065,7 +11053,7 @@ skip_op:
                                  if (Mem_write(0, 0))
                                     goto last;
                                  us = sim_activate_time_usecs (&cpu_unit[0]);
-                                 f = 10000 - ((int)us);
+                                 f = 2000 - ((int)us);
                                  MB = tim_low | (f << 2);
                                  sim_debug(DEBUG_CONI, &cpu_dev, "RDTIME %012llo %012llo\n", MB, tim_high);
                                  AB = (AB + 1) & RMASK;
@@ -11103,6 +11091,9 @@ skip_op:
                                      if (Mem_write(0, 0))
                                         goto last;
                                      AB = (AB + 1) & RMASK;
+                                     MB = qua_time;
+                                     if (Mem_write(0, 0))
+                                        goto last;
                                  }
                                  break;
 
@@ -11221,6 +11212,9 @@ skip_op:
                                         goto last;
                                      dbr2 = MB;
                                      AB = (AB + 1) & RMASK;
+                                     if (Mem_read(0, 0, 0, 0))
+                                        goto last;
+                                     qua_time = MB;
                                      for (f = 0; f < 512; f++) {
                                         u_tlb[f] = 0;
                                         e_tlb[f] = 0;
@@ -13333,17 +13327,20 @@ rtc_srv(UNIT * uptr)
         set_interrupt(4, clk_irq);
     }
 #elif KS
-    int_cur -= 4096 * 10;
+    int_cur -= 2*4096;
     if (int_cur & C1) {
        irq_flags |= INT_DONE;
        int_cur = int_val;
        check_apr_irq();
     }
-    tim_low += 4096 * 10;
+    tim_low += 2*4096;
     if (tim_low & SMASK) {
        tim_high += 1;
        tim_low = 0;
     }
+#if KS_ITS
+    qua_time += 2*4096;
+#endif
 #elif KL
     update_times(rtc_tim);
     rtc_tim = (1000000/rtc_tps);
@@ -13400,69 +13397,77 @@ static const char *pdp10_clock_precalibrate_commands[] = {
 
 t_stat cpu_reset (DEVICE *dptr)
 {
-int     i;
-sim_debug(DEBUG_CONO, dptr, "CPU reset\n");
-BYF5 = uuo_cycle = 0;
+    int     i;
+    sim_debug(DEBUG_CONO, dptr, "CPU reset\n");
+    BYF5 = uuo_cycle = 0;
 #if KA | PDP6
-Pl = Ph = 01777;
-Rl = Rh = Pflag = 0;
-push_ovf = mem_prot = 0;
+    Pl = Ph = 01777;
+    Rl = Rh = Pflag = 0;
+    push_ovf = mem_prot = 0;
 #if PDP6
-user_io = 0;
+    user_io = 0;
 #endif
 #if ITS | BBN
-page_enable = 0;
+    page_enable = 0;
 #endif
 #endif
-nxm_flag = clk_flg = 0;
-PIR = PIH = PIE = pi_enable = parity_irq = 0;
-pi_pending = pi_enc = apr_irq = 0;
-ov_irq =fov_irq =clk_en =clk_irq = 0;
-pi_restore = pi_hold = 0;
-FLAGS = 0;
+    nxm_flag = clk_flg = 0;
+    PIR = PIH = PIE = pi_enable = parity_irq = 0;
+    pi_pending = pi_enc = apr_irq = 0;
+    ov_irq =fov_irq =clk_en =clk_irq = 0;
+    pi_restore = pi_hold = 0;
+    FLAGS = 0;
 #if KI | ITS | BBN
-ac_stack = 0;
+    ac_stack = 0;
 #endif
 #if KI | KL | KS
-ub_ptr = eb_ptr = 0;
-pag_reload = 0;
+    ub_ptr = eb_ptr = 0;
+    pag_reload = 0;
 #if KI
-fm_sel = small_user = user_addr_cmp = page_enable = 0;
+    fm_sel = small_user = user_addr_cmp = page_enable = 0;
 #else
-fm_sel = prev_ctx = user_addr_cmp = page_enable = t20_page = 0;
-irq_enable = irq_flags = 0;
+    fm_sel = prev_ctx = user_addr_cmp = page_enable = t20_page = 0;
+    irq_enable = irq_flags = 0;
 #if KL
-sect = cur_sect = pc_sect = 0;
+    sect = cur_sect = pc_sect = 0;
 #endif
 #endif
 #endif
 #if BBN
-exec_map = 0;
+    exec_map = 0;
 #endif
-for(i=0; i < 128; dev_irq[i++] = 0);
+    for(i=0; i < 128; dev_irq[i++] = 0);
 #if KS | KL
-cst = 0;
+    cst = 0;
 #endif
 #if KS
-int_cur = int_val = 0;
-uba_reset();
+    int_cur = int_val = 0;
+    uba_reset();
 #endif
-
-sim_brk_types = SWMASK('E') | SWMASK('W') | SWMASK('R');
-sim_brk_dflt = SWMASK ('E');
-sim_clock_precalibrate_commands = pdp10_clock_precalibrate_commands;
-sim_vm_initial_ips = 4 * SIM_INITIAL_IPS;
-sim_rtcn_init_unit (&cpu_unit[0], cpu_unit[0].wait, TMR_RTC);
-sim_activate(&cpu_unit[0], 1000);
+#if KI | KL | ITS | BBN | KS
+    for (i = 0; i < 512; i++) {
+        e_tlb[i] = 0;
+        u_tlb[i] = 0;
+    }
+    for (;i < 546; i++)
+        u_tlb[i] = 0;
+#endif
+    
+    sim_brk_types = SWMASK('E') | SWMASK('W') | SWMASK('R');
+    sim_brk_dflt = SWMASK ('E');
+    sim_clock_precalibrate_commands = pdp10_clock_precalibrate_commands;
+    sim_vm_initial_ips = 4 * SIM_INITIAL_IPS;
+    sim_rtcn_init_unit (&cpu_unit[0], cpu_unit[0].wait, TMR_RTC);
+    sim_activate(&cpu_unit[0], 1000);
 #if MPX_DEV
-mpx_enable = 0;
+    mpx_enable = 0;
 #endif
 #ifdef PANDA_LIGHTS
-ka10_lights_init ();
+    ka10_lights_init ();
 #endif
-sim_vm_interval_units = "cycles";
-sim_vm_step_unit = "instruction";
-return SCPE_OK;
+    sim_vm_interval_units = "cycles";
+    sim_vm_step_unit = "instruction";
+    return SCPE_OK;
 }
 
 /* Memory examine */
