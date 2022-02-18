@@ -443,7 +443,6 @@ t_stat dz_svc (UNIT *uptr)
 void
 dz_checkirq(struct pdp_dib   *dibp)
 {
-    int        j;
     int        i;
     int        ln;
     int        stop;

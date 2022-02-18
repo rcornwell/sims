@@ -343,13 +343,6 @@ static DEBTAB kmc_debug[] = {
     {0}
 };
 
-/* These count the total pending interrupts for each vector
- * across all KMCs.
- */
-
-static int32 AintPending = 0;
-static int32 BintPending = 0;
-
 /* Per-KMC state */
 
 /* To help make the code more readable, by convention the symbol 'k'
@@ -757,8 +750,8 @@ static t_stat kmc_reset(DEVICE* dptr) {
             sel2 = 0xa5a5;
             sel4 = 0xdead;
             sel6 = 0x5a5a;
-            memset (ucode, 0xcc, sizeof ucode);
-            memset (dram, 0xdd, sizeof dram);
+            memset ((uint8 *)&ucode[0], 0xcc, sizeof ucode);
+            memset ((uint8 *)&dram[0], 0xdd, sizeof dram);
             gflags |= FLG_INIT;
             gflags &= ~FLG_UCINI;
             sim_register_internal_device (&kmc_int_rxdev);
@@ -1302,7 +1295,7 @@ static t_stat kmc_rxService (UNIT *rxup) {
     dupstate *d = line2dup[rxup->unit_line];
     BDL *bdl;
     t_stat r;
-    uint16 xrem, seglen;
+    uint16 seglen;
     int    i;
     t_addr ba;
 
@@ -2474,7 +2467,6 @@ static t_bool kmc_bufferAddressOut (int32 k, uint16 flags, uint16 rx, uint8 line
  */
 
 static int32 kmc_updateBDCount(uint32 bda, uint16 *bd) {
-  int  i;
   bda+=2;
   if (uba_write_npr_word(bda, kmc_dib.uba_ctl, bd[1]) == 0) {
      return 1;

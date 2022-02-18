@@ -116,7 +116,7 @@
 int             lp20_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access);
 int             lp20_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access);
 void            lp20_printline(UNIT *uptr, int nl);
-void            lp20_output(UNIT *uptr, char c);
+void            lp20_output(UNIT *uptr, uint8 c);
 void            lp20_update_chkirq (UNIT *uptr, int done, int irq);
 void            lp20_update_ready(UNIT *uptr, uint16 setrdy, uint16 clrrdy);
 t_stat          lp20_svc (UNIT *uptr);
@@ -138,7 +138,7 @@ uint32          lp20_ba;
 uint16          lp20_wcnt;
 uint8           lp20_col;
 uint8           lp20_chksum;
-uint16          lp20_buf;
+uint8           lp20_buf;
 uint8           lp20_data;
 int             lp20_odd = 0;
 int             lp20_duvfa_state = 0;
@@ -285,7 +285,6 @@ int
 lp20_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
 {
     struct pdp_dib   *dibp = (DIB *)dptr->ctxt;
-    int               base;
     uint16            temp;
 
     addr &= dibp->uba_mask;
@@ -401,7 +400,6 @@ int
 lp20_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
 {
     struct pdp_dib   *dibp = (DIB *)dptr->ctxt;
-    int               base;
     uint16            temp;
     int               par;
 
@@ -432,7 +430,7 @@ lp20_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
             break;
 
      case 012: /* LPRDAT */
-            temp = lp20_ram[lp20_buf] & 07777;
+            temp = lp20_ram[(int)lp20_buf] & 07777;
             par = (temp >> 8) ^ (temp >> 4) ^ temp;
             par = (par >> 2) ^ par;
             par ^= par >> 1;
@@ -442,7 +440,7 @@ lp20_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
 
      case 014: /* LPCOL/LPCBUF */
             *data = ((uint16)lp20_col) << 8;
-            *data |= lp20_buf;
+            *data |= (uint16)lp20_buf;
             break;
 
      case 016: /* LPCSUM/LPPDAT */
@@ -496,7 +494,7 @@ lp20_printline(UNIT *uptr, int nl) {
 
 /* Unit service */
 void
-lp20_output(UNIT *uptr, char c) {
+lp20_output(UNIT *uptr, uint8 c) {
 
     if (c == 0)
        return;
@@ -588,7 +586,6 @@ lp20_svc (UNIT *uptr)
     char            ch;
     int             fnc = (lp20_cs1 >> CS1_V_FNC) & CS1_M_FNC;
     uint16          ram_ch;
-    uint16          par;
     uint8           data;
 
     if (fnc == FNC_PRINT && (uptr->flags & UNIT_ATT) == 0) {
@@ -607,13 +604,13 @@ lp20_svc (UNIT *uptr)
         return SCPE_OK;
     }
 
-    lp20_buf = (uint16)(data & 0377);
+    lp20_buf = data;
     lp20_ba = (lp20_ba + 1) & 0777777;
     lp20_wcnt = (lp20_wcnt + 1) & 07777;
     if (lp20_wcnt == 0) {
         lp20_cs1 &= ~CS1_GO;
     }
-    lp20_chksum += (uint8)(lp20_buf & 0377);
+    lp20_chksum += lp20_buf;
     sim_debug(DEBUG_DETAIL, &lp20_dev, "LP npr %08o %06o %03o %d\n", lp20_ba, lp20_wcnt,
               lp20_buf, fnc);
     switch(fnc) {
@@ -633,7 +630,7 @@ lp20_svc (UNIT *uptr)
         }
         /* Check if translate flag set */
         if (ram_ch & LP20_RAM_TRN) {
-            lp20_buf = ram_ch & 0377;
+            lp20_buf = (uint8)(ram_ch & 0377);
         }
         /* Check if paper motion */
         if (ram_ch & LP20_RAM_PI) {

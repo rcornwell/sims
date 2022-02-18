@@ -874,7 +874,7 @@ if (!tmxr_tpbusyln(&dup_ldsc[dup])) {  /* Not Busy sending? */
         dup_xmtpacket[dup] = (uint8 *)realloc (dup_xmtpacket[dup], dup_xmtpksize[dup]);
         }
     /* Strip sync bytes at the beginning of a message */
-    while (len && (dup_xmtpkoffset[dup] == 0) && (bytes[0] == DDCMP_SYN)) {
+    while (len > 0 && (dup_xmtpkoffset[dup] == 0) && (bytes[0] == DDCMP_SYN)) {
         --len;
         ++bytes;
         }

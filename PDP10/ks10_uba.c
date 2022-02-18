@@ -364,13 +364,7 @@ uba_set_irq(DIB *dibp, int vect)
 void
 uba_clr_irq(DIB *idev, int vect)
 {
-    DEVICE *dptr;
     int     ubm = uba_device[idev->uba_ctl];
-    int     pi;
-    int     i;
-    int     j;
-    int     lvl;
-    int     high = 0;
 
     if (ubm < 0)
        return;
@@ -383,7 +377,6 @@ uba_clr_irq(DIB *idev, int vect)
 void
 uba_reset()
 {
-    DEVICE *dptr;
     int     i;
 
     /* Clear the Unibus map */
