@@ -43,8 +43,6 @@
 
 #define BUFFSIZE        (64 * 1024)
 #define UNIT_MT         UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE
-#define DEV_BUF_NUM(x)  (((x) & 07) << DEV_V_UF2)
-#define GET_DEV_BUF(x)  (((x) >> DEV_V_UF2) & 07)
 
 #define CMD      u3
 /* BTP tape commands */

@@ -278,10 +278,11 @@ typedef struct dib {
 extern  DIB     *dib_unit[MAX_DEV];     /* Pointer to Device info block */
 extern  DIB     *dib_chan[MAX_CHAN];    /* Pointer to channel mux dib */
 
+/* defined in upper 16 bits of dptr->flags */
 #define DEV_CHAN        (1 << DEV_V_UF) /* Device is channel mux if set */
-#define SEL_DISK        (1 << (DEV_V_UF+1)) /* Device is channel mux if set */
-#define DEV_V_UF2       (DEV_V_UF+2)    /* current usage */
-#define GET_SEL_DISK(x) (((x) >> (DEV_V_UF+1)) & 0x1)   /* get SEL_DISK flag */
+#define DEV_V_UF2       (DEV_V_UF+1)    /* current usage */
+#define DEV_BUF_NUM(x)  (((x) & 07) << DEV_V_UF2)
+#define GET_DEV_BUF(x)  (((x) >> DEV_V_UF2) & 07)
 
 #ifdef NOT_USED_NOW
 //#define DEV_V_ADDR        DEV_V_UF              /* Pointer to device address (16) */
@@ -291,8 +292,11 @@ extern  DIB     *dib_chan[MAX_CHAN];    /* Pointer to channel mux dib */
 //#define DEV_UADDR         (1 << DEV_V_UADDR)
 //#define GET_DADDR(x)      (0x7f & ((x) >> DEV_V_ADDR))
 //#define DEV_ADDR(x)       ((x) << DEV_V_ADDR)
+//#define PROTECT_V         UNIT_V_UF+15
+//#define PROTECT           (1 << PROTECT_V)
 #endif
 
+/* defined in rightmost 8 bits of upper 16 bits of uptr->flags */
 /* allow 255 type disks */
 #define UNIT_SUBCHAN       (1 << (UNIT_V_UF_31))
 #define UNIT_V_TYPE        (UNIT_V_UF + 0)
@@ -301,14 +305,12 @@ extern  DIB     *dib_chan[MAX_CHAN];    /* Pointer to channel mux dib */
 #define GET_TYPE(x)        ((UNIT_TYPE & (x)) >> UNIT_V_TYPE)
 #define SET_TYPE(x)        (UNIT_TYPE & ((x) << UNIT_V_TYPE))
 
+/* defined in uptr->u3 upper 16 bits */
 /* DEV 0x7F000000 UNIT 0x00ff0000 */
 #define UNIT_V_ADDR       16
 #define UNIT_ADDR_MASK    (0x7fff << UNIT_V_ADDR)
 #define GET_UADDR(x)      ((UNIT_ADDR_MASK & x) >> UNIT_V_ADDR)
 #define UNIT_ADDR(x)      ((x) << UNIT_V_ADDR)
-
-#define PROTECT_V         UNIT_V_UF+15
-#define PROTECT           (1 << PROTECT_V)
 
 /* Debugging controls */
 #define DEBUG_CMD       0x0000001       /* Show device commands */
@@ -342,6 +344,7 @@ extern DEBTAB dev_debug[];
 #define DSEXT32(x)      (x&0x8000?(l_uint64)(((l_uint64)x&D32RMASK)|D32LMASK):(t_uint64)x)
 #define NEGATE32(val)   ((~val) + 1)    /* negate a value 16/32/64 bits */
 
+/* defined in rightmost 8 bits of upper 16 bits of uptr->flags */
 #define UNIT_V_MODEL    (UNIT_V_UF + 0)
 #define UNIT_MODEL      (7 << UNIT_V_MODEL)
 #define MODEL(x)        (x << UNIT_V_MODEL)

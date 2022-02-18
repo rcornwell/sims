@@ -346,7 +346,7 @@ DEVICE          sda_dev = {
     NUM_UNITS_SCFI, 16, 24, 4, 16, 32,
     NULL, NULL, &scfi_reset, &scfi_boot, &scfi_attach, &scfi_detach,
     /* ctxt is the DIB pointer */
-    &sda_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS|SEL_DISK, 0, dev_debug,
+    &sda_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug,
     NULL, NULL, &scfi_help, NULL, NULL, &scfi_description
 };
 
@@ -392,7 +392,7 @@ DEVICE          sdb_dev = {
     NUM_UNITS_SCFI, 16, 24, 4, 16, 32,
     NULL, NULL, &scfi_reset, &scfi_boot, &scfi_attach, &scfi_detach,
     /* ctxt is the DIB pointer */
-    &sdb_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS|SEL_DISK, 0, dev_debug,
+    &sdb_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug,
     NULL, NULL, &scfi_help, NULL, NULL, &scfi_description
 };
 #endif

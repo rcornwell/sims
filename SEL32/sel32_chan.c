@@ -1373,16 +1373,8 @@ t_stat startxio(uint16 lchsa, uint32 *status) {
 
     dibp = dib_unit[chsa & 0x7f00];             /* get the device information pointer */
     uptr = find_unit_ptr(chsa & 0x7f00);        /* get unit 0 unit pointer */
-    if (uptr != NULL) {
-        dptr = get_dev(uptr);                   /* get device address */
-        if ((dptr != NULL) &&
-            (GET_SEL_DISK(dptr->flags))) {      /* see if this is a disk */
-            chsa = chsa & 0x7ffe;               /* clear the odd subaddress */
-        }
-    }
     chan_icb = find_int_icb(lchsa);             /* Interrupt level context block address */
     incha = RMW(chan_icb+20);                   /* post inch addr in ICB+5w */
-//  WMW(chan_icb+20,0);                         /* zero incha in IOCB */
 
     /* check if we have a valid unit */
     chp = find_chanp_ptr(chsa);                 /* find the chanp pointer */

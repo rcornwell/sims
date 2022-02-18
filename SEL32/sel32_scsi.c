@@ -32,9 +32,6 @@
 
 #define UNIT_SCSI   UNIT_ATTABLE | UNIT_IDLE | UNIT_DISABLE
 
-#define DEV_BUF_NUM(x)  (((x) & 07) << DEV_V_UF2)
-#define GET_DEV_BUF(x)  (((x) >> DEV_V_UF2) & 07)
-
 /* useful conversions */
 /* Fill STAR value from cyl, trk, sec data */
 #define CHS2STAR(c,h,s)         (((c<<16) & LMASK)|((h<<8) & 0xff00)|(s & 0xff))
@@ -356,7 +353,7 @@ DEVICE  sba_dev = {
     NUM_UNITS_SCSI, 16, 24, 4, 16, 32,
     NULL, NULL, &scsi_reset, &scsi_boot, &scsi_attach, &scsi_detach,
     /* ctxt is the DIB pointer */
-    &sba_dib, DEV_BUF_NUM(0)|DEV_DISABLE|DEV_DEBUG|DEV_DIS|SEL_DISK, 0, dev_debug,
+    &sba_dib, DEV_BUF_NUM(0)|DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug,
     NULL, NULL, &scsi_help, NULL, NULL, &scsi_description
 };
 

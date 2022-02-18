@@ -476,7 +476,7 @@ DEVICE          dda_dev = {
     NUM_UNITS_DISK, 16, 24, 4, 16, 32,
     NULL, NULL, &disk_reset, &disk_boot, &disk_attach, &disk_detach,
     /* ctxt is the DIB pointer */
-    &dda_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS|SEL_DISK, 0, dev_debug,
+    &dda_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug,
     NULL, NULL, &disk_help, NULL, NULL, &disk_description
 };
 
@@ -522,7 +522,7 @@ DEVICE          ddb_dev = {
     NUM_UNITS_DISK, 16, 24, 4, 16, 32,
     NULL, NULL, &disk_reset, &disk_boot, &disk_attach, &disk_detach,
     /* ctxt is the DIB pointer */
-    &ddb_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS|SEL_DISK, 0, dev_debug,
+    &ddb_dib, DEV_DISABLE|DEV_DEBUG|DEV_DIS, 0, dev_debug,
     NULL, NULL, &disk_help, NULL, NULL, &disk_description
 };
 #endif
