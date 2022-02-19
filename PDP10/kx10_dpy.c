@@ -554,18 +554,18 @@ cscope_plot(int x, int y)
 {
     int i, j;
     for (i = 0; i < 7; i++) {
-      	 for (j = 0; j < 7; j++) {
-	     int dx = i - 3, dy = j - 3;
-	     int r2 = dx*dx + dy*dy;
-	     double focus = 0.2;
-	     double intensity = 0xFF/15.0;
-	     double alpha = 0xFF*exp(-focus*r2);
-	     dot[i + 7*j] = vid_map_rgba_window (cscope_display,
-						 (uint8)(intensity*(cscope_r << 4)),
-						 (uint8)(intensity*(cscope_g << 4)),
-						 (uint8)(intensity*(cscope_b << 4)),
-						 (uint8)alpha);
-	 }
+         for (j = 0; j < 7; j++) {
+         int dx = i - 3, dy = j - 3;
+         int r2 = dx*dx + dy*dy;
+         double focus = 0.2;
+         double intensity = 0xFF/15.0;
+         double alpha = 0xFF*exp(-focus*r2);
+         dot[i + 7*j] = vid_map_rgba_window (cscope_display,
+                                         (uint8)(intensity*(cscope_r << 4)),
+                                                 (uint8)(intensity*(cscope_g << 4)),
+                                                 (uint8)(intensity*(cscope_b << 4)),
+                                                 (uint8)alpha);
+         }
     }
 
     vid_draw_window (cscope_display, x - 3, 511 - y - 3, 7, 7, dot);
@@ -661,22 +661,22 @@ wcnsls_reset (DEVICE *dptr)
 {
     t_stat r;
     if (sim_switches & SWMASK('P') || dptr->flags & DEV_DIS ||
-	(wcnsls_unit->flags & UNIT_CSCOPE) == 0) {
+        (wcnsls_unit->flags & UNIT_CSCOPE) == 0) {
         sim_cancel (wcnsls_unit);
-	if (cscope_display != NULL)
-	    vid_close_window (cscope_display);
-	cscope_display = NULL;
+        if (cscope_display != NULL)
+            vid_close_window (cscope_display);
+        cscope_display = NULL;
     } else if (cscope_display == NULL) {
         r = vid_open_window (&cscope_display, dptr, "Color scope", 512, 512, 0);
-	if (r != SCPE_OK)
-	    return r;
-	/* Allow time for window to open and data structures to settle. */
+        if (r != SCPE_OK)
+            return r;
+        /* Allow time for window to open and data structures to settle. */
         sim_os_sleep (1);
-	r = vid_set_alpha_mode (cscope_display, SIM_ALPHA_BLEND);
-	if (r != SCPE_OK)
-	    return r;
-	sim_activate_abs (wcnsls_unit, 0);
-	cscope_init ();
+        r = vid_set_alpha_mode (cscope_display, SIM_ALPHA_BLEND);
+        if (r != SCPE_OK)
+            return r;
+        sim_activate_abs (wcnsls_unit, 0);
+        cscope_init ();
     }
     return SCPE_OK;
 }
