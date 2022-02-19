@@ -971,9 +971,10 @@ TMLN *lp = &dup_desc.ldsc[dup];
 
 sim_debug(DBG_TRC, DUPDPTR, "dup_svc(dup=%d)\n", dup);
 if (!(dup_txcsr[dup] & TXCSR_M_TXDONE) && (!tmxr_tpbusyln (lp))) {
-    uint8 data = dup_txdbuf[dup] & TXDBUF_M_TXDBUF;
+    uint8 data[1];   /* Make coverity happy */
+    data[0] = dup_txdbuf[dup] & TXDBUF_M_TXDBUF;
 
-    dup_put_msg_bytes (dup, &data, 0, (dup_txdbuf[dup] & TXDBUF_M_TSOM),
+    dup_put_msg_bytes (dup, &data[0], 0, (dup_txdbuf[dup] & TXDBUF_M_TSOM),
                    (dup_txdbuf[dup] & TXDBUF_M_TEOM));
     if (tmxr_tpbusyln (lp)) { /* Packet ready to send? */
         sim_debug(DBG_TRC, DUPDPTR, "dup_svc(dup=%d) - Packet Done %d bytes\n", dup, dup_xmtpkoffset[dup]);
