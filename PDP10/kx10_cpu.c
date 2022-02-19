@@ -187,6 +187,7 @@ int     fe_xct = 0;                           /* Execute instruction at address 
 int     pi_vect;                              /* Last pi location used for IRQ */
 #if KS_ITS
 uint64  qua_time;                             /* Quantum clock value */
+uint8   pi_act;                               /* Current active PI level */
 #endif
 #elif KL
 int     pi_vect;                              /* Last pi location used for IRQ */
@@ -944,6 +945,9 @@ void restore_pi_hold() {
             sim_debug(DEBUG_IRQ, &cpu_dev, "restore irq %o %03o\n", lvl, PIH);
 #endif
             PIH &= ~lvl;
+#if KS_ITS
+            pi_act &= ~lvl;
+#endif
             break;
          }
      }
@@ -4645,6 +4649,9 @@ st_pi:
 #endif
             }
         }
+#if KS_ITS
+        pi_act |= pi_mask;
+#endif
         pi_vect = AB;
         goto fetch;
 #endif
@@ -11185,12 +11192,12 @@ skip_op:
                            case 014:            /* WRTIME */
                                  if (Mem_read(0, 0, 0, 0))
                                     goto last;
-                                 tim_low = MB & ~07777;
-                                 sim_debug(DEBUG_CONI, &cpu_dev, "WRTIME %012llo %012llo\n", MB, tim_high);
+                                 tim_high = MB;
                                  AB = (AB + 1) & RMASK;
                                  if (Mem_read(0, 0, 0, 0))
                                     goto last;
-                                 tim_high = MB;
+                                 tim_low = MB & ~07777;
+                                 sim_debug(DEBUG_CONI, &cpu_dev, "WRTIME %012llo %012llo\n", tim_low, tim_high);
                                  break;
                            /* 70270 */
                            case 016:            /* WRHSB */
@@ -11825,10 +11832,9 @@ last:
 #if KS_ITS
         if (QITS) {
             AB = eb_ptr + 0440;
-            if (PIH != 0) {
-fprintf(stderr, "PIH = %03o\n\r", PIH);
-               for(f = 0100; f != 0; f >>= 1) {
-                   if (f & PIH)
+            if (pi_act != 0) {
+               for(f = 0200; f != 0; f >>= 1) {
+                   if (f & pi_act)
                       break;
                    AB += 3;
                }
