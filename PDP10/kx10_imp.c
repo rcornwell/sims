@@ -564,7 +564,7 @@ UNIT imp_unit[] = {
 #if KS
 DIB imp_dib = {0767600, 017, 0250, 6, 3, &imp_rd, &imp_wr, 0, 0, 0};
 #else
-DIB imp_dib = {IMP_DEVNUM, 1, &imp_devio, 
+DIB imp_dib = {IMP_DEVNUM, 1, &imp_devio,
 #if KL
         &imp_devirq,
 #else
@@ -927,7 +927,7 @@ t_stat imp_devio(uint32 dev, uint64 *data)
                      memset(imp_data.sbuffer, 0, ETH_FRAME_SIZE);
                      uptr->OPOS = 0;
                      uptr->STATUS &= ~(IMPLHW);
-                 } else 
+                 } else
                      uptr->STATUS |= IMPLHW;
              }
              if (*data & IMP_STROUT)
@@ -1086,7 +1086,6 @@ t_stat imp_srv(UNIT * uptr)
             if (imp_ocsr & CSR_ELB) {
                 sim_debug(DEBUG_DETAIL, &imp_dev, "IMP send\n");
 
-    
                 imp_send_packet (&imp_data, uptr->OPOS >> 3);
                 memset(imp_data.sbuffer, 0, ETH_FRAME_SIZE);
                 uptr->OPOS = 0;
@@ -1168,7 +1167,7 @@ t_stat imp_srv(UNIT * uptr)
             if (imp_icsr & CSR_IE) {
                uba_set_irq(dibp, dibp->uba_vect);
             }
-        } 
+        }
     }
     if (imp_ocsr & CSR_GO || imp_icsr & CSR_GO)
         sim_activate(uptr, 100);
@@ -1301,8 +1300,8 @@ t_stat imp_eth_srv(UNIT * uptr)
         imp_packet_in(&imp_data);
 
     if (imp_data.init_state >= 3 && imp_data.init_state < 6) {
-       if (imp_unit[0].flags & UNIT_DHCP && 
-           imp_data.dhcp_state != DHCP_STATE_BOUND && 
+       if (imp_unit[0].flags & UNIT_DHCP &&
+           imp_data.dhcp_state != DHCP_STATE_BOUND &&
            imp_data.dhcp_state != DHCP_STATE_REBINDING &&
            imp_data.dhcp_state != DHCP_STATE_RENEWING)
            return SCPE_OK;
@@ -1420,7 +1419,7 @@ imp_packet_in(struct imp_device *imp)
                                        (ip_hdr->ip_v_hl & 0xf) * 4]);
            struct udp *udp_hdr = (struct udp *)payload;
            /* Check for DHCP traffic */
-           if (ip_hdr->ip_p == UDP_PROTO && 
+           if (ip_hdr->ip_p == UDP_PROTO &&
                ntohs(udp_hdr->udp_dport) == DHCP_UDP_PORT_CLIENT &&
                ntohs(udp_hdr->udp_sport) == DHCP_UDP_PORT_SERVER) {
               imp_do_dhcp_client(imp, &read_buffer);
@@ -1961,7 +1960,7 @@ void imp_packet_debug(struct imp_device *imp, const char *action, ETH_PACK *pack
         memcpy(&in_addr, &arp->dipaddr, sizeof(in_addr));
         strlcpy(arp_dipaddr, ipv4_inet_ntoa(in_addr), sizeof(arp_dipaddr));
         sim_debug(DEBUG_ARP, &imp_dev,
-            "%s %s EthDst=%s EthSrc=%s shwaddr=%s sipaddr=%s dhwaddr=%s dipaddr=%s\n", 
+            "%s %s EthDst=%s EthSrc=%s shwaddr=%s sipaddr=%s dhwaddr=%s dipaddr=%s\n",
             action, arp_op, eth_dst, eth_src, arp_shwaddr, arp_sipaddr, arp_dhwaddr, arp_dipaddr);
         return;
     }
@@ -1981,17 +1980,17 @@ void imp_packet_debug(struct imp_device *imp, const char *action, ETH_PACK *pack
             snprintf(dst_port, sizeof(dst_port), "%d", ntohs(udp->udp_dport));
             sim_debug(DEBUG_UDP, &imp_dev, "%s %d byte packet from %s:%s to %s:%s\n", action,
                 ntohs(udp->len), src_ip, src_port, dst_ip, dst_port);
-            if ((imp_dev.dctrl & DEBUG_DHCP) && 
+            if ((imp_dev.dctrl & DEBUG_DHCP) &&
                 (((ntohs(udp->udp_sport) == DHCP_UDP_PORT_CLIENT) &&
-                  (ntohs(udp->udp_dport) == DHCP_UDP_PORT_SERVER)) || 
+                  (ntohs(udp->udp_dport) == DHCP_UDP_PORT_SERVER)) ||
                  ((ntohs(udp->udp_dport) == DHCP_UDP_PORT_CLIENT) &&
                   (ntohs(udp->udp_sport) == DHCP_UDP_PORT_SERVER)))) {
                 struct dhcp         *dhcp = (struct dhcp *)(payload + sizeof(struct udp));
                 uint8               *opt = &dhcp->options[0];
 
-                sim_debug(DEBUG_DHCP, &imp_dev, "%s XID=%08X", 
-                    (dhcp->op == DHCP_BOOTREQUEST) ? "REQUEST" : 
-                                                     (dhcp->op == DHCP_BOOTREPLY) ? "REPLY" : 
+                sim_debug(DEBUG_DHCP, &imp_dev, "%s XID=%08X",
+                    (dhcp->op == DHCP_BOOTREQUEST) ? "REQUEST" :
+                                                     (dhcp->op == DHCP_BOOTREPLY) ? "REPLY" :
                                                                                     "??????",
                     dhcp->xid);
                 if (dhcp->ciaddr) {
@@ -2081,7 +2080,7 @@ void imp_packet_debug(struct imp_device *imp, const char *action, ETH_PACK *pack
                 sim_debug(DEBUG_DHCP, &imp_dev, "\n");
             } else {
                 if (udp->len && (imp_dev.dctrl & DEBUG_UDP))
-                    sim_data_trace(&imp_dev, imp_unit, payload + sizeof(struct udp), "", 
+                    sim_data_trace(&imp_dev, imp_unit, payload + sizeof(struct udp), "",
                                                        ntohs(udp->len), "", DEBUG_DATA);
                 }
             break;
@@ -2140,7 +2139,7 @@ imp_arp_update(struct imp_device *imp, in_addr_T ipaddr, ETH_MAC *ethaddr, int a
                     memcpy(&tabptr->ethaddr, ethaddr, sizeof(ETH_MAC));
                     eth_mac_fmt(ethaddr, mac_buf);
                     sim_debug(DEBUG_ARP, &imp_dev,
-                              "updating entry for IP %s to %s\n", 
+                              "updating entry for IP %s to %s\n",
                               ipv4_inet_ntoa(*((struct in_addr *)&ipaddr)), mac_buf);
                     }
                 if (tabptr->age != ARP_DONT_AGE)
@@ -2178,7 +2177,7 @@ imp_arp_update(struct imp_device *imp, in_addr_T ipaddr, ETH_MAC *ethaddr, int a
     tabptr->age = age;
     eth_mac_fmt(ethaddr, mac_buf);
     sim_debug(DEBUG_ARP, &imp_dev,
-              "creating entry for IP %s to %s, initial age=%d\n", 
+              "creating entry for IP %s to %s, initial age=%d\n",
               ipv4_inet_ntoa(*((struct in_addr *)&ipaddr)), mac_buf, age);
 }
 
@@ -2200,8 +2199,8 @@ void imp_arp_age(struct imp_device *imp)
                 char mac_buf[20];
 
                 eth_mac_fmt(&tabptr->ethaddr, mac_buf);
-                sim_debug(DEBUG_ARP, &imp_dev, 
-                          "discarding ARP entry for IP %s %s after %d seconds\n", 
+                sim_debug(DEBUG_ARP, &imp_dev,
+                          "discarding ARP entry for IP %s %s after %d seconds\n",
                           ipv4_inet_ntoa(*((struct in_addr *)&tabptr->ipaddr)), mac_buf, IMP_ARP_MAX_AGE);
                 memset(tabptr, 0, sizeof(*tabptr));
             }
@@ -2455,7 +2454,7 @@ imp_do_send_dhcp(struct imp_device *imp,
     eth_mac_fmt (&pkt->ethhdr.dest, mac_buf);
     memcpy(&in_addr, &udp_hdr.ip_dst, sizeof(in_addr));
     sim_debug(DEBUG_DHCP, &imp_dev,
-        "client sent %s packet to: %s:%d(%s)\n", 
+        "client sent %s packet to: %s:%d(%s)\n",
         op, ipv4_inet_ntoa(in_addr), ntohs(udp->udp_dport), mac_buf);
 }
 
@@ -2572,8 +2571,8 @@ imp_do_dhcp_client(struct imp_device *imp, ETH_PACK *read_buffer)
     eth_mac_fmt(&eth->src, mac_buf);
     memcpy(&in_addr, &udp_hdr.ip_src, sizeof(in_addr));
     sim_debug(DEBUG_DHCP, &imp_dev,
-        "client incoming %s packet: dhcp_state=%s - wait_time=%d from: %s:%d(%s)\n", 
-                   (opr == -1) ? "" : dhcp_opr_names[opr], 
+        "client incoming %s packet: dhcp_state=%s - wait_time=%d from: %s:%d(%s)\n",
+                   (opr == -1) ? "" : dhcp_opr_names[opr],
                     dhcp_state_names[imp->dhcp_state], imp->dhcp_wait_time,
                     ipv4_inet_ntoa(in_addr), ntohs(upkt->udp_sport), mac_buf);
 
@@ -3036,7 +3035,7 @@ t_stat imp_show_dhcpip (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
             fprintf (st, ", Lease Expires in %d seconds", imp_data.dhcp_lease);
         } else {
             fprintf (st, ", State:%s, Waited %d seconds", dhcp_state_names[imp_data.dhcp_state],
-                  imp_data.dhcp_wait_time);            
+                  imp_data.dhcp_wait_time);
         }
     }
    return SCPE_OK;
@@ -3138,7 +3137,7 @@ t_stat imp_attach(UNIT* uptr, CONST char* cptr)
     }
 #endif
     if (!(uptr->flags & UNIT_DHCP) && imp_data.ip == 0)
-      return sim_messagef (SCPE_NOATT, "%s: An IP Address must be specified when DHCP is disabled\n", 
+      return sim_messagef (SCPE_NOATT, "%s: An IP Address must be specified when DHCP is disabled\n",
                imp_dev.name);
 
     tptr = (char *) malloc(strlen(cptr) + 1);
@@ -3178,7 +3177,7 @@ t_stat imp_attach(UNIT* uptr, CONST char* cptr)
       return sim_messagef (status, "%s: Can't initialize receive queue\n", imp_dev.name);
     }
 
-    /* Pick a relatively unique starting xid, presuming that the 
+    /* Pick a relatively unique starting xid, presuming that the
        MAC address has been verified unique on the LAN by eth_open */
     imp_data.dhcp_xid = (imp_data.mac[0] | (imp_data.mac[1] << 8) |
                         (imp_data.mac[2] << 16) | (imp_data.mac[3] << 24)) + (uint32)time(NULL);
@@ -3186,7 +3185,7 @@ t_stat imp_attach(UNIT* uptr, CONST char* cptr)
     memset(imp_data.arp_table, 0, sizeof(imp_data.arp_table));
 
     /* If we're not doing DHCP and a gateway is defined on the network
-       then define a static APR entry for the gateway to facilitate 
+       then define a static APR entry for the gateway to facilitate
        outbound routing */
     if (!(uptr->flags & UNIT_DHCP) && imp_data.gwip) {
       ETH_PACK                read_buffer;

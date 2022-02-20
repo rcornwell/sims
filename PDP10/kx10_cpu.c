@@ -2159,7 +2159,7 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
             if ((data & KL_PAG_A) != 0) {
                if ((data & KL_PAG_S) != 0) {
                   fault_data |= 004000LL << 18;        /* PF2.9 */
-               } 
+               }
                if ((data & KL_PAG_W) != 0) {
                   fault_data |= 002000LL << 18;        /* PF2.8 */
                }
@@ -4440,7 +4440,7 @@ no_fetch:
     /* Handle page fault and traps */
     if (page_enable && trap_flag == 0 && (FLAGS & (TRP1|TRP2))) {
         if (FLAGS & ADRFLT) {
-#if KL_ITS 
+#if KL_ITS
             if (QITS && (FLAGS & (TRP1|TRP2|ADRFLT)) == (TRP1|TRP2|ADRFLT))
                one_p_arm = 1;
 #endif
@@ -6450,7 +6450,7 @@ ldb_ptr:
                   f_load_pc = 0;
                   f_inst_fetch = 0;
                   f_pc_inh = 1;
-#if KL_ITS 
+#if KL_ITS
                   if (QITS && one_p_arm) {
                       FLAGS |= ADRFLT;
                       one_p_arm = 0;
@@ -13458,7 +13458,7 @@ t_stat cpu_reset (DEVICE *dptr)
     for (;i < 546; i++)
         u_tlb[i] = 0;
 #endif
-    
+
     sim_brk_types = SWMASK('E') | SWMASK('W') | SWMASK('R');
     sim_brk_dflt = SWMASK ('E');
     sim_clock_precalibrate_commands = pdp10_clock_precalibrate_commands;
