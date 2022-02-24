@@ -169,12 +169,6 @@ uba_write(t_addr addr, int ctl, uint64 data, int access)
                        (void)(dptr->reset)(dptr);
                }
            }
-           for (i = 0; i < 128; i++) {
-               if ((uba_irq_ctlr[i] & VECT_CTR) == ctl) {
-                   uba_irq_ctlr[i] = 0;
-                   clr_interrupt(i << 2);
-               }
-           }
            uba_status[ubm] |= (uint32)(0277 & data);
            return 0;
        } else if ((addr & 077) == 1) {
