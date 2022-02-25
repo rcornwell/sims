@@ -2160,8 +2160,7 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
             if ((data & KL_PAG_A) != 0) {
                if ((data & KL_PAG_S) != 0) {
                   fault_data |= 004000LL << 18;        /* PF2.9 */
-               }
-               if ((data & KL_PAG_W) != 0) {
+               } else if ((data & KL_PAG_W) == 0) {
                   fault_data |= 002000LL << 18;        /* PF2.8 */
                }
             }
