@@ -2600,7 +2600,7 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
         return 0;
     }
 
-#if KS_ITS
+#if KL_ITS
     if (!QITS) {     /* Do not do this on ITS */
 #endif
     /* Handle KI paging odditiy */
@@ -2609,7 +2609,7 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
         page += 01000 - 0340;
         upmp = 1;
     }
-#if KS_ITS
+#if KL_ITS
     }
 #endif
 
