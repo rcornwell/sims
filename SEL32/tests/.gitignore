@@ -1,0 +1,6 @@
+#ignore testcode and testcpu files.
+testcode0.l
+testcode0.mem
+testcode.mem
+testcpu.l
+testcpu.s
