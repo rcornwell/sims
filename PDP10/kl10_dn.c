@@ -229,8 +229,7 @@ struct _buffer {
     int      in_ptr;     /* Insert pointer */
     int      out_ptr;    /* Remove pointer */
     char     buff[256];  /* Buffer */
-} cty_in, cty_out;
-int32 cty_done;
+};
 
 #define full(q)       ((((q)->in_ptr + 1) & 0xff) == (q)->out_ptr)
 #define empty(q)      ((q)->in_ptr == (q)->out_ptr)
@@ -269,9 +268,6 @@ REG  dn_reg[] = {
     {HRDATA(ETOFF, dn_et10_off, 32), REG_HRO},
     {HRDATA(E1OFF, dn_et11_off, 32), REG_HRO},
     {HRDATA(PROC, dn_proc_num, 32), REG_HRO},
-    {SAVEDATA(CTYIN, cty_in) },
-    {SAVEDATA(CTYOUT, cty_out) },
-    {HRDATA(DONE, cty_done, 8), REG_HRO},
     {HRDATAD(WRU, sim_int_char, 8, "interrupt character") },
     { 0 },
     };
@@ -389,6 +385,7 @@ for (i = 0; i <100; i++) {
 }
     switch(word & SEC_CMDMSK) {
     default:
+#if 0
     case SEC_MONO:  /* Ouput character in monitor mode */
          ch = (int32)(word & 0177);
          if (full(&cty_out)) {
@@ -403,6 +400,7 @@ for (i = 0; i <100; i++) {
          M[SEC_DTCHR + base] = ch;
          M[SEC_DTMTD + base] = FMASK;
          break;
+#endif
 
      case SEC_SETPRI:
 enter_pri:
@@ -418,7 +416,6 @@ enter_pri:
          uptr->STATUS &= ~DTE_SEC;
          dn_in_ptr = dn_out_ptr = 0;
          dn_in_cmd = dn_out_res = 0;
-         cty_done = 0;
 
          /* Start input process */
          M[SEC_DTCMD + base] = 0;
@@ -725,6 +722,7 @@ dn_function(UNIT *uptr)
 
                if (dev == PRI_EMCTY) {
 cty:
+#if 0
                    sim_activate(&dn_unit[1], 100);
                    data1[0] = 0;
                    if (cmd->sz > 8)
@@ -744,6 +742,7 @@ cty:
                         }
                         cmd->dptr++;
                    }
+#endif
                    if (cmd->dptr != cmd->dcnt)
                        return;
                }
@@ -1081,6 +1080,7 @@ t_stat dni_svc (UNIT *uptr)
 /* Handle output of characters to CTY. Started whenever there is output pending */
 t_stat dno_svc (UNIT *uptr)
 {
+#if 0
     /* Flush out any pending CTY output */
     while(not_empty(&cty_out)) {
         char ch = cty_out.buff[cty_out.out_ptr];
@@ -1095,6 +1095,7 @@ t_stat dno_svc (UNIT *uptr)
                             ((ch > 040 && ch < 0177)? ch: '.'));
     }
     cty_done++;
+#endif
     return SCPE_OK;
 }
 
@@ -1136,7 +1137,6 @@ t_stat dn_reset (DEVICE *dptr)
     dn_dt10_off = 16;
     dn_et10_off = 050;
     dn_et11_off = 033;
-    cty_done = 0;
     sim_activate(&dn_unit[2], 1000);
     return SCPE_OK;
 }
