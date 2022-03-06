@@ -194,11 +194,11 @@
 			Filter="cpp;c;cxx;def;odl;idl;hpj;bat;asm"
 			>
 			<File
-				RelativePath="..\PDP10\ks10_cty.c"
+				RelativePath="..\PDP10\ks10_ch11.c"
 				>
 			</File>
 			<File
-				RelativePath="..\PDP10\ks10_ch11.c"
+				RelativePath="..\PDP10\ks10_cty.c"
 				>
 			</File>
 			<File
@@ -210,11 +210,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\PDP10\ks10_lp.c"
+				RelativePath="..\PDP10\ks10_kmc.c"
 				>
 			</File>
 			<File
-				RelativePath="..\PDP10\ks10_kmc.c"
+				RelativePath="..\PDP10\ks10_lp.c"
 				>
 			</File>
 			<File
@@ -246,11 +246,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\PDP10\kx10_tu.c"
+				RelativePath="..\PDP10\kx10_sys.c"
 				>
 			</File>
 			<File
-				RelativePath="..\PDP10\kx10_sys.c"
+				RelativePath="..\PDP10\kx10_tu.c"
 				>
 			</File>
 			<File
