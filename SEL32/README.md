@@ -95,13 +95,6 @@ diag.tap     - bootable level one diagnostic tape w/auto testing.
                Testing is extremely difficult without any source for the
                diagnostics.  Updates to follow as tests are corrected.
 
-# SEL32 tap tools available in the taptools directory:
-
-Available tap tools in taptools directory:
-./taptools   - set of tools to work with .tap formatted tapes.  Also tools
-               to convert between MPX and UNIX file formats.  See README
-               file in the taptools directory and source for descriptions.
-
 Other MPX versions support:
                I have recently received some old MPX 3.X save tapes.  Using
                these I have been able to hand build a MPX3.6 SDT tape that
@@ -116,5 +109,4 @@ Other MPX versions support:
                thankfull.  Please keep looking.
 
 James C. Bevier
-02/28/2022 
-
+03/10/2022 
