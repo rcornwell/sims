@@ -1306,7 +1306,7 @@ t_stat dev_mtr(uint32 dev, uint64 *data) {
         *data = mtr_irq;
         if (mtr_enable)
             *data |= 02000;
-        *data |= (uint64)(mtr_flags << 12);
+        *data |= (uint64)mtr_flags << 12;
         sim_debug(DEBUG_CONI, &cpu_dev, "CONI MTR %012llo\n", *data);
         break;
 
@@ -4581,7 +4581,7 @@ in_loop:
                          else
                             AR = get_reg(ix);
                          if ((AR & SMASK) != 0 || (AR & SECTM) == 0) { /* Local index word */
-                              AR = AB + (((AR & RSIGN) ? 0: 0)|(AR & RMASK));
+                              AR = AB + (AR & RMASK);
                          } else
                               AR = AR + AB;
                          AR &= FMASK;
@@ -5787,8 +5787,12 @@ dpnorm:
                   goto last;
               AR = MB;
               AB = (AB + 1) & RMASK;
+#if KI
+              FLAGS |= BYTI;
+#endif
               if (Mem_read(0, 0, 0, 0))
                    goto last;
+              FLAGS &= ~BYTI;
               MQ = MB;
               set_reg(AC, AR);
               set_reg(AC+1, MQ);
@@ -5799,8 +5803,12 @@ dpnorm:
                   goto last;
               AR = MB;
               AB = (AB + 1) & RMASK;
+#if KI
+              FLAGS |= BYTI;
+#endif
               if (Mem_read(0, 0, 0, 0))
                    goto last;
+              FLAGS &= ~BYTI;
               MQ = CCM(MB) + 1;   /* Low */
               /* High */
 #if KL | KS
@@ -5878,6 +5886,9 @@ dpnorm:
               if ((FLAGS & BYTI)) {
                   AB = (AB + 1) & RMASK;
                   MB = MQ;
+#if KL
+                  FLAGS &= ~BYTI;
+#endif
                   if (Mem_write(0, 0))
                      goto last;
                   FLAGS &= ~BYTI;
@@ -12262,7 +12273,7 @@ do_byte_setup(int n, int wr, int *pos, int *sz)
                  if (ix) {
                      temp = get_reg(ix);
                      if ((temp & SMASK) != 0 || (temp & SECTM) == 0) { /* Local index word */
-                          temp = AB + (((temp & RSIGN) ? 0: 0)|(temp & RMASK));
+                          temp = AB + (temp & RMASK);
                      } else
                           temp = temp + AB;
                      temp &= FMASK;
