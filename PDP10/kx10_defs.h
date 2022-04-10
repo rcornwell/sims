@@ -76,6 +76,11 @@
 #define BBN KA
 #endif
 
+/* Support for SUMEX */
+#ifndef TENEX
+#define TENEX KI
+#endif
+
 /* Support for WAITS mods */
 #ifndef WAITS
 #define WAITS KA
@@ -784,6 +789,9 @@ extern void ka10_lights_clear_aux (int);
 #define NUM_DEVS_CH10   ITS
 #define NUM_DEVS_DPK    ITS
 #define NUM_DEVS_AI     ITS
+#endif
+#if KI
+#define NUM_DEVS_IMP    TENEX
 #endif
 #if KL_ITS
 #define NUM_DEVS_PD     KL_ITS
