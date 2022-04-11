@@ -830,10 +830,10 @@ void set_interrupt(int dev, int lvl) {
     if (lvl) {
        dev_irq[dev>>2] = 0200 >> lvl;
        pi_pending = 1;
-#if DEBUG
+//#if DEBUG
        sim_debug(DEBUG_IRQ, &cpu_dev, "set irq %o %o %03o %03o %03o\n",
               dev & 0774, lvl, PIE, PIR, PIH);
-#endif
+//#endif
     }
 }
 
@@ -858,10 +858,10 @@ void set_interrupt_mpx(int dev, int lvl, int mpx) {
  */
 void clr_interrupt(int dev) {
     dev_irq[dev>>2] = 0;
-#if DEBUG
+//#if DEBUG
     if (dev > 4)
         sim_debug(DEBUG_IRQ, &cpu_dev, "clear irq %o\n", dev & 0774);
-#endif
+//#endif
 }
 
 /*
@@ -942,9 +942,9 @@ void restore_pi_hold() {
      for(lvl = 0100; lvl != 0; lvl >>= 1) {
         if (lvl & PIH) {
             PIR &= ~lvl;
-#if DEBUG
+//#if DEBUG
             sim_debug(DEBUG_IRQ, &cpu_dev, "restore irq %o %03o\n", lvl, PIH);
-#endif
+//#endif
             PIH &= ~lvl;
 #if KS_ITS
             pi_act &= ~lvl;
@@ -4633,10 +4633,10 @@ in_loop:
 #if KA | PDP6
 st_pi:
 #endif
-#if DEBUG
+//#if DEBUG
         sim_debug(DEBUG_IRQ, &cpu_dev, "trap irq %o %03o %03o \n",
                        pi_enc, PIR, PIH);
-#endif
+//#endif
         pi_cycle = 1;
         pi_rq = 0;
         pi_hold = 0;

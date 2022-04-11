@@ -34,6 +34,14 @@
 
 #if (NUM_DEVS_LP > 0)
 
+#if KL
+#define LP_DIS DEV_DIS
+#endif
+
+#ifndef LP_DIS
+#define LP_DIS 0
+#endif
+
 #define LP_DEVNUM 0124
 #define STATUS   u3
 #define COL      u4
@@ -114,7 +122,7 @@ DEVICE lpt_dev = {
     1, 10, 31, 1, 8, 8,
     NULL, NULL, &lpt_reset,
     NULL, &lpt_attach, &lpt_detach,
-    &lpt_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &lpt_dib, DEV_DISABLE | DEV_DEBUG | LP_DIS, 0, dev_debug,
     NULL, NULL, &lpt_help, NULL, NULL, &lpt_description
 };
 

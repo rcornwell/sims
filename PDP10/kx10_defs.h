@@ -715,7 +715,7 @@ extern void ka10_lights_clear_aux (int);
 #if !(PDP6 | KS)
 #define NUM_DEVS_LP     1
 #endif
-#if !(KL | KS)
+#if !(KS)
 #define NUM_DEVS_PT     1
 #define NUM_DEVS_CR     1
 #define NUM_DEVS_CP     1
@@ -748,24 +748,24 @@ extern void ka10_lights_clear_aux (int);
 #define NUM_DEVS_DUP    2
 #define NUM_DEVS_KMC    2
 #if KS_ITS
-#define NUM_DEVS_IMP    KS_ITS
 #define NUM_DEVS_CH11   KS_ITS
 #endif
 #endif
-#if KA | KI
+#if KA | KI 
 #define NUM_DEVS_RC     1
-#define NUM_DEVS_DT     1
 #define NUM_DEVS_DK     1
-#define NUM_DEVS_DP     2
 #endif
 #if KS
 #define NUM_DEVS_RP     1
 #elif KA | KI | KL
+#define NUM_DEVS_DT     1
+#define NUM_DEVS_DP     2
 #define NUM_DEVS_RP     4
 #define NUM_DEVS_RS     1
 #endif
 #if !(PDP6)
 #define NUM_DEVS_TU     1
+#define NUM_DEVS_IMP    1
 #endif
 #if KA
 #define NUM_DEVS_PMP    WAITS
@@ -780,14 +780,12 @@ extern void ka10_lights_clear_aux (int);
 #define NUM_DEVS_MTY    ITS
 #define NUM_DEVS_TEN11  ITS
 #define NUM_DEVS_AUXCPU ITS
-#define NUM_DEVS_IMP    ITS
 #define NUM_DEVS_CH10   ITS
 #define NUM_DEVS_DPK    ITS
 #define NUM_DEVS_AI     ITS
 #endif
 #if KL_ITS
 #define NUM_DEVS_PD     KL_ITS
-#define NUM_DEVS_IMP    KL_ITS
 #define NUM_DEVS_CH10   KL_ITS
 #endif
 #if MAGIC_SWITCH && !KA && !ITS

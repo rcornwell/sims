@@ -30,6 +30,14 @@
 
 #if (NUM_DEVS_DP > 0)
 
+#if KL
+#define DP_DIS DEV_DIS
+#endif
+
+#ifndef DP_DIS
+#define DP_DIS 0
+#endif
+
 #define BUF_EMPTY(u)  (u->hwmark == 0xFFFFFFFF)
 #define CLR_BUF(u)     u->hwmark = 0xFFFFFFFF
 
@@ -295,7 +303,7 @@ DEVICE              dpa_dev = {
     "DPA", dp_unit, dpa_reg, dp_mod,
     NUM_UNITS_DP, 8, 18, 1, 8, 36,
     NULL, NULL, &dp_reset, &dp_boot, &dp_attach, &dp_detach,
-    &dp_dib[0], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &dp_dib[0], DEV_DISABLE | DEV_DEBUG | DP_DIS, 0, dev_debug,
     NULL, NULL, &dp_help, NULL, NULL, &dp_description
 };
 
@@ -319,7 +327,7 @@ DEVICE              dpb_dev = {
     "DPB", &dp_unit[010], dpb_reg, dp_mod,
     NUM_UNITS_DP, 8, 18, 1, 8, 36,
     NULL, NULL, &dp_reset, &dp_boot, &dp_attach, &dp_detach,
-    &dp_dib[1], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &dp_dib[1], DEV_DISABLE | DEV_DEBUG | DP_DIS, 0, dev_debug,
     NULL, NULL, &dp_help, NULL, NULL, &dp_description
 };
 
@@ -343,7 +351,7 @@ DEVICE              dpc_dev = {
     "DPC", &dp_unit[020], dpc_reg, dp_mod,
     NUM_UNITS_DP, 8, 18, 1, 8, 36,
     NULL, NULL, &dp_reset, &dp_boot, &dp_attach, &dp_detach,
-    &dp_dib[2], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &dp_dib[2], DEV_DISABLE | DEV_DEBUG | DP_DIS, 0, dev_debug,
     NULL, NULL, &dp_help, NULL, NULL, &dp_description
 };
 
@@ -367,7 +375,7 @@ DEVICE              dpd_dev = {
     "DPD", &dp_unit[030], dpd_reg, dp_mod,
     NUM_UNITS_DP, 8, 18, 1, 8, 36,
     NULL, NULL, &dp_reset, &dp_boot, &dp_attach, &dp_detach,
-    &dp_dib[3], DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    &dp_dib[3], DEV_DISABLE | DEV_DEBUG | DP_DIS, 0, dev_debug,
     NULL, NULL, &dp_help, NULL, NULL, &dp_description
 };
 

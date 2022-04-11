@@ -89,6 +89,15 @@
 #endif
 
 #if (NUM_DEVS_DT > 0)
+
+#if KL
+#define DT_DIS DEV_DIS
+#endif
+
+#ifndef DT_DIS
+#define DT_DIS 0
+#endif
+
 #define DT_DEVNUM       0320
 #define DT_NUMDR        8                           /* #drives */
 #define UNIT_V_8FMT     (UNIT_V_UF + 0)             /* 12b format */
@@ -255,7 +264,7 @@
 
 #define ABS(x)          (((x) < 0)? (-(x)): (x))
 
-#define DT_WRDTIM       10000
+#define DT_WRDTIM       15000
 
 #define WRITTEN       u6          /* Set when tape modified */
 
@@ -350,7 +359,7 @@ DEVICE dt_dev = {
     "DT", dt_unit, dt_reg, dt_mod,
     DT_NUMDR, 8, 24, 1, 8, 18,
     NULL, NULL, &dt_reset, &dt_boot, &dt_attach, &dt_detach,
-    &dt_dib, DEV_DISABLE | DEV_DEBUG, 0,
+    &dt_dib, DEV_DISABLE | DEV_DEBUG | DT_DIS, 0,
     dt_deb, NULL, NULL
     };
 

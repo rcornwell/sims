@@ -28,8 +28,9 @@
 #include "sim_ether.h"
 
 #if NUM_DEVS_IMP > 0
-#define IMP_DEVNUM  0460
-#define WA_IMP_DEVNUM  0400
+#define IMP_DEVNUM      0460
+#define BBN_IMP_DEVNUM  0550
+#define WA_IMP_DEVNUM   0400
 
 #define DEVNUM imp_dib.dev_num
 
@@ -3132,8 +3133,10 @@ t_stat imp_attach(UNIT* uptr, CONST char* cptr)
     /* Set to correct device number */
     switch(GET_DTYPE(imp_unit[0].flags)) {
     case TYPE_MIT:
-    case TYPE_BBN:
                    imp_dib.dev_num = IMP_DEVNUM;
+                   break;
+    case TYPE_BBN:
+                   imp_dib.dev_num = BBN_IMP_DEVNUM;
                    break;
     case TYPE_WAITS:
                    imp_dib.dev_num = WA_IMP_DEVNUM;
