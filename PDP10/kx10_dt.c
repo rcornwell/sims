@@ -264,7 +264,7 @@
 
 #define ABS(x)          (((x) < 0)? (-(x)): (x))
 
-#define DT_WRDTIM       15000
+#define DT_WRDTIM       10000
 
 #define WRITTEN       u6          /* Set when tape modified */
 

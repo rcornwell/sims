@@ -419,7 +419,9 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
      case CONI:
         *data = (uint64)(df10->status | uptr->STATUS);
 #if KI_22BIT
-        *data |= B22_FLAG;
+        if (cpu_unit[0].flags & UNIT_DF10C) {
+            *data |= B22_FLAG;
+        }
 #endif
         sim_debug(DEBUG_CONI, dptr, "DP %03o CONI %012llo %d PC=%o\n", dev,
                            *data, ctlr, PC);
@@ -912,10 +914,7 @@ dp_reset(DEVICE * dptr)
          uptr++;
     }
     for (ctlr = 0; ctlr < NUM_DEVS_DP; ctlr++) {
-        dp_df10[ctlr].status = 0;
-        dp_df10[ctlr].devnum = dp_dib[ctlr].dev_num;
-        dp_df10[ctlr].nxmerr = 12;
-        dp_df10[ctlr].ccw_comp = 5;
+        df10_init(&dp_df10[ctlr], dp_dib[ctlr].dev_num, 12, 5);
     }
     return SCPE_OK;
 }

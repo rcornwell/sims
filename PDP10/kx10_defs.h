@@ -423,6 +423,10 @@ extern DEBTAB crd_debug[];
 #define UNIT_V_MPX      (UNIT_V_WAITS + 1)
 #define UNIT_M_MPX      (1 << UNIT_V_MPX)
 #define UNIT_MPX        (UNIT_M_MPX)          /* MPX Device for ITS */
+#define UNIT_V_DF10     (UNIT_V_MPX + 1)      /* DF10 18 bit or 22 bit */
+#define UNIT_M_DF10     (1 << UNIT_V_DF10)
+#define UNIT_DF10C      (UNIT_M_DF10)
+#define UNIT_DF10       0
 #define CNTRL_V_RH      (UNIT_V_UF + 4)
 #define CNTRL_M_RH      7
 #define GET_CNTRL_RH(x) (((x) >> CNTRL_V_RH) & CNTRL_M_RH)
@@ -525,6 +529,7 @@ extern DEVICE   dz_dev;
 extern DEVICE   kmc_dev;
 extern DEVICE   dup_dev;
 extern DEVICE   tcu_dev;
+extern DEVICE   ddc_dev;
 
 #if KS
 
@@ -620,9 +625,12 @@ struct df10 {
       uint32         wcr;        /* CUrrent word count */
       uint32         cda;        /* Current transfer address */
       uint32         devnum;     /* Device number */
-      t_uint64       buf;        /* Data buffer */
+      uint64         buf;        /* Data buffer */
       uint8          nxmerr;     /* Bit to set for NXM */
       uint8          ccw_comp;   /* Have we written out CCW */
+      uint64         amask;      /* Address mask */
+      uint64         wmask;      /* Word mask */
+      int            cshift;     /* Shift amount */
 } ;
 
 /* RH10/RH20 Interface */
@@ -678,6 +686,7 @@ void df10_setup(struct df10 *df, uint32 addr);
 int  df10_fetch(struct df10 *df);
 int  df10_read(struct df10 *df);
 int  df10_write(struct df10 *df);
+void df10_init(struct df10 *df, uint32 dev_num, uint8 nxmerr, uint8 ccw_comp);
 #if PDP6_DEV
 int  dct_read(int u, t_uint64 *data, int c);
 int  dct_write(int u, t_uint64 *data, int c);
@@ -754,6 +763,7 @@ extern void ka10_lights_clear_aux (int);
 #if KA | KI 
 #define NUM_DEVS_RC     1
 #define NUM_DEVS_DK     1
+#define NUM_DEVS_DDC    1
 #endif
 #if KS
 #define NUM_DEVS_RP     1

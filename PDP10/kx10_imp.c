@@ -901,7 +901,6 @@ t_stat imp_devio(uint32 dev, uint64 *data)
              check_interrupts(uptr);
              break;
         case TYPE_BBN:
-             break;
         case TYPE_WAITS:
              if (*data & IMP_ODPIEN) {
                  imp_data.pia &= ~07;
@@ -953,7 +952,6 @@ t_stat imp_devio(uint32 dev, uint64 *data)
              *data = (uint64)(uptr->STATUS | (imp_data.pia & 07));
              break;
         case TYPE_BBN:
-             break;
         case TYPE_WAITS:
              *data = (uint64)(imp_data.pia & 0777);
              if (uptr->STATUS & IMPOD)

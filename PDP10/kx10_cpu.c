@@ -404,7 +404,14 @@ t_bool build_dev_tab (void);
 #define DEFMEM 256
 #endif
 
-UNIT cpu_unit[] = { { UDATA (&rtc_srv, UNIT_IDLE|UNIT_FIX|UNIT_BINK|UNIT_TWOSEG, DEFMEM * 1024) },
+#if KI_22BIT
+#define DF_FLAG UNIT_DF10C
+#else
+#define DF_FLAG 0
+#endif
+
+UNIT cpu_unit[] = { { UDATA (&rtc_srv,
+            UNIT_IDLE|UNIT_FIX|UNIT_BINK|UNIT_TWOSEG|DF_FLAG, DEFMEM * 1024) },
 #if ITS
                     { UDATA (&qua_srv, UNIT_IDLE|UNIT_DIS, 0) }
 #endif
@@ -630,6 +637,12 @@ MTAB cpu_mod[] = {
     { UNIT_M_MPX, 0, NULL, "NOMPX", NULL, NULL, NULL,
               "Disables the MPX device"},
 #endif
+#if KI | KL
+    { UNIT_M_DF10, 0, "DF10", "DF10", NULL, NULL, NULL,
+              "18 bit DF10"},
+    { UNIT_M_DF10, UNIT_DF10C, "DF10C", "DF10C", NULL, NULL, NULL,
+              "22 bit DF10C"},
+#endif
 #if PDP6 | KA | KI
     { UNIT_MAOFF, UNIT_MAOFF, "MAOFF", "MAOFF", NULL, NULL,
               NULL, "Interrupts relocated to 140"},
@@ -655,6 +668,7 @@ DEBTAB              cpu_debug[] = {
 #endif
     {0, 0}
 };
+
 
 DEVICE cpu_dev = {
     "CPU", &cpu_unit[0], cpu_reg, cpu_mod,

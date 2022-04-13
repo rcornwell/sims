@@ -238,7 +238,9 @@ t_stat rc_devio(uint32 dev, uint64 *data) {
      case CONI:
         *data = df10->status;
 #if KI_22BIT
-        *data |= B22_FLAG;
+        if (cpu_unit[0].flags & UNIT_DF10C) {
+            *data |= B22_FLAG;
+        }
 #endif
         *data |= PRTLT;
         sim_debug(DEBUG_CONI, dptr, "HK %03o CONI %06o PC=%o\n", dev,
@@ -488,10 +490,7 @@ rc_reset(DEVICE * dptr)
     }
     for (ctlr = 0; ctlr < NUM_DEVS_RC; ctlr++) {
         rc_ipr[ctlr] = 0;
-        rc_df10[ctlr].status = 0;
-        rc_df10[ctlr].devnum = rc_dib[ctlr].dev_num;
-        rc_df10[ctlr].nxmerr = 8;
-        rc_df10[ctlr].ccw_comp = 5;
+        df10_init(&rc_df10[ctlr], rc_dib[ctlr].dev_num, 8, 5);
     }
     return SCPE_OK;
 }

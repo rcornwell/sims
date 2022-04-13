@@ -387,7 +387,7 @@ t_stat mt_devio(uint32 dev, uint64 *data) {
           if ((dptr->flags & MTDF_TYPEB) == 0)
               res |= WT_CW_DONE|DATA_PARITY|NXM_ERR|CW_PAR_ERR;
 #if KI_22BIT
-          if (dptr->flags & MTDF_TYPEB)
+          if (dptr->flags & MTDF_TYPEB && cpu_unit[0].flags & UNIT_DF10C)
               res |= B22_FLAG;
 #endif
           *data = res;
@@ -1035,9 +1035,7 @@ mt_reset(DEVICE * dptr)
         uptr->CNTRL = 0;
         sim_cancel(uptr);
     }
-    mt_df10.devnum = mt_dib.dev_num;
-    mt_df10.nxmerr = 24;
-    mt_df10.ccw_comp = 25;
+    df10_init(&mt_df10, mt_dib.dev_num, 24, 25);
     mt_pia = 0;
     mt_status = 0;
     mt_sel_unit = 0;
