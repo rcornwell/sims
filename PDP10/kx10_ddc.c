@@ -102,7 +102,7 @@
 #define DDC_SIZE        100000
 
 uint64          ddc_buf[NUM_DEVS_DDC][DDC10_WDS];
-uint32          ddc_cmd[NUM_DEVS_DDC][16];
+uint64          ddc_cmd[NUM_DEVS_DDC][16];
 int             ddc_cmdptr[NUM_DEVS_DDC];
 int             ddc_putptr[NUM_DEVS_DDC];
 
@@ -268,7 +268,7 @@ t_stat ddc_svc (UNIT *uptr)
    int           sec;
    int           seq;
    t_addr        adr;
-   uint64_t      word;
+   uint64        word;
    DEVICE       *dptr;
    t_stat        err, r;
    dptr = &ddc_dev;
@@ -280,6 +280,7 @@ t_stat ddc_svc (UNIT *uptr)
    seq = (ddc_cmd[0][ddc_cmdptr[0]] & DDC_SEQ) >> 24;
    word = ddc_cmd[0][ddc_cmdptr[0]+1];
    adr = word & RMASK;
+   uptr = &ddc_dev.units[dsk];
 
    if (uptr->POS == 0) {
        int da;
@@ -312,11 +313,11 @@ t_stat ddc_svc (UNIT *uptr)
           sim_debug(DEBUG_DETAIL, dptr, "DDC %d Write %d %d %d %d %d %o\n",
                dsk, da, trk, sec, func, pia, seq);
        }
-       sec += 4;
+       sec ++;
        ddc_cmd[0][ddc_cmdptr[0]] &= ~DDC_SEC;
-       ddc_cmd[0][ddc_cmdptr[0]] |= (DDC_SEC & sec);
+       ddc_cmd[0][ddc_cmdptr[0]] |= (DDC_SEC & (sec << 2));
        word += 0000100000000LL;
-       sim_debug(DEBUG_DETAIL, dptr, "DDC %d next sect %012lo %012llo\n", dsk, word, word & DDC_SECCNT);
+       sim_debug(DEBUG_DETAIL, dptr, "DDC %d next sect %012llo %012llo\n", dsk, word, ddc_cmd[0][ddc_cmdptr[0]]);
        if ((word & DDC_SECCNT) == 0) {
            ddc_cmd[0][ddc_cmdptr[0]+1] = (word & (DDC_SECCNT|DDC_PWB)) | (adr & RMASK);
            uptr->STATUS |= DDC_DON;
@@ -333,7 +334,6 @@ t_stat ddc_svc (UNIT *uptr)
                sim_activate(uptr, 100);
            return SCPE_OK;
        }
-       ddc_cmd[0][ddc_cmdptr[0]]++;
        uptr->POS = 0;
    }
    ddc_cmd[0][ddc_cmdptr[0]+1] = word;
