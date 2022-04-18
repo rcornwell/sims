@@ -504,7 +504,7 @@ t_stat dt_devio(uint32 dev, uint64 *data) {
 
      case CONI|04:
           *data = dtsb;
-          if (dtsb & 0770000) 
+          if (dtsb & 0770000 & (dtsb >> 18)) 
              *data |= DTB_FLGREQ;
           sim_debug(DEBUG_CONI, &dt_dev, "DTB %03o CONI %012llo PC=%o\n",
                dev, *data, PC);
