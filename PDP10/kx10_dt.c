@@ -375,8 +375,8 @@ t_stat dt_devio(uint32 dev, uint64 *data) {
           break;
 
      case CONO:
-          clr_interrupt(dev);
-          clr_interrupt(dev|4);
+          clr_interrupt(DT_DEVNUM);
+          clr_interrupt(DT_DEVNUM|4);
           /* Copy over command and priority */
           dtsa &= ~0777;
           dtsa |= (*data & 0777);
@@ -488,7 +488,7 @@ t_stat dt_devio(uint32 dev, uint64 *data) {
      case DATAI:
           *data = dtdb;
           dtsb &= ~DTB_DATREQ;
-          clr_interrupt(dev|4);
+          clr_interrupt(DT_DEVNUM|4);
           sim_debug(DEBUG_DATAIO, &dt_dev, "DTA %03o DATI %012llo PC=%06o\n",
                     dev, *data, PC);
 
@@ -497,14 +497,14 @@ t_stat dt_devio(uint32 dev, uint64 *data) {
      case DATAO:
           dtdb = *data;
           dtsb &= ~DTB_DATREQ;
-          clr_interrupt(dev|4);
+          clr_interrupt(DT_DEVNUM|4);
           sim_debug(DEBUG_DATAIO, &dt_dev, "DTA %03o DATO %012llo PC=%06o\n",
                     dev, *data, PC);
           break;
 
      case CONI|04:
           *data = dtsb;
-          if (dtsb & 0770000) 
+          if (dtsb & 0770000 & (dtsb >> 18)) 
              *data |= DTB_FLGREQ;
           sim_debug(DEBUG_CONI, &dt_dev, "DTB %03o CONI %012llo PC=%o\n",
                dev, *data, PC);
@@ -512,8 +512,8 @@ t_stat dt_devio(uint32 dev, uint64 *data) {
 
      case CONO|04:
           dtsb = 0;
-          clr_interrupt(dev);
-          clr_interrupt(dev|4);
+          clr_interrupt(DT_DEVNUM);
+          clr_interrupt(DT_DEVNUM|4);
           if (*data & DTS_STOP_ALL) {
               /* Stop all other drives */
               for (i = 0; i < DT_NUMDR; i++) {
@@ -546,7 +546,7 @@ t_stat dt_devio(uint32 dev, uint64 *data) {
 
 void dt_getword(uint64 *data, int req) {
     int dev = dt_dib.dev_num;
-    clr_interrupt(dev|4);
+    clr_interrupt(DT_DEVNUM|4);
     if (dtsb & DTB_DATREQ) {
         dtsb |= DTB_MIS;
         return;
@@ -554,20 +554,20 @@ void dt_getword(uint64 *data, int req) {
     *data = dtdb;
     if (req) {
         dtsb |= DTB_DATREQ;
-        set_interrupt_mpx(dev|4, dtsa >> 3, dt_mpx_lvl);
+        set_interrupt_mpx(DT_DEVNUM|4, dtsa >> 3, dt_mpx_lvl);
     }
 }
 
 void dt_putword(uint64 *data) {
     int dev = dt_dib.dev_num;
-    clr_interrupt(dev|4);
+    clr_interrupt(DT_DEVNUM|4);
     if (dtsb & DTB_DATREQ) {
         dtsb |= DTB_MIS;
         return;
     }
     dtdb = *data;
     dtsb |= DTB_DATREQ;
-    set_interrupt_mpx(dev|4, dtsa >> 3, dt_mpx_lvl);
+    set_interrupt_mpx(DT_DEVNUM|4, dtsa >> 3, dt_mpx_lvl);
 }
 
 /* Unit service
@@ -652,8 +652,9 @@ if (uptr->DSTATE & DTC_MOT) {
                uptr->DSTATE = DTC_RBLK|(word << DTC_V_BLK) | (DTC_MOTMASK & uptr->DSTATE);
            dtsb &= ~(DTB_CHK);
            dtsb |= DTB_IDL;
-           if (dtsb & DTB_STOP)
+           if (dtsb & DTB_STOP) {
                dtsa &= ~0700;          /* Clear command */
+           }
            sim_debug(DEBUG_DETAIL, &dt_dev, "DTA %o rev forward block\n", u);
            switch (DTC_GETFNC(uptr->CMD)) {
            case FNC_MOVE:
@@ -762,8 +763,9 @@ if (uptr->DSTATE & DTC_MOT) {
            word = (uptr->DSTATE >> DTC_V_BLK) & DTC_M_BLK;
            uptr->DSTATE = DTC_BLOCK|(word << DTC_V_BLK)|(DTC_M_WORD << DTC_V_WORD) | 
                                 (DTC_MOTMASK & uptr->DSTATE);
-           if (dtsb & DTB_STOP)
+           if (dtsb & DTB_STOP) {
                dtsa &= ~0700;          /* Clear command */
+           }
            if (DTC_GETUNI(dtsa) == u)  {
                uptr->CMD &= 077077;
                uptr->CMD |= dtsa & 0700;        /* Copy command */
@@ -891,8 +893,9 @@ if (uptr->DSTATE & DTC_MOT) {
            dtsb &= ~DTB_BLKRD;
            uptr->DSTATE &= ~7;
            uptr->DSTATE |= DTC_BLOCK;              /* Move to datablock */
-           if (dtsb & DTB_STOP)
+           if (dtsb & DTB_STOP) {
                dtsa &= ~0700;          /* Clear command */
+           }
            if (DTC_GETUNI(dtsa) == u)  {
                uptr->CMD &= 077077;
                uptr->CMD |= dtsa & 0700;          /* Copy command */
