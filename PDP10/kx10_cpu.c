@@ -162,6 +162,7 @@ int     pi_restore;                           /* Restore previous level */
 int     pi_hold;                              /* Hold onto interrupt */
 int     modify;                               /* Modify cycle */
 int     xct_flag;                             /* XCT flags */
+int     pi_vect;                              /* Last pi location used for IRQ */
 #if KI | KL | KS
 uint64  ARX;                                  /* Extension to AR */
 uint64  BRX;                                  /* Extension to BR */
@@ -184,13 +185,11 @@ int     t20_page;                             /* Tops 20 paging selected */
 int     ptr_flg;                              /* Access to pointer value */
 int     extend = 0;                           /* Process extended instruction */
 int     fe_xct = 0;                           /* Execute instruction at address */
-int     pi_vect;                              /* Last pi location used for IRQ */
 #if KS_ITS
 uint64  qua_time;                             /* Quantum clock value */
 uint8   pi_act;                               /* Current active PI level */
 #endif
 #elif KL
-int     pi_vect;                              /* Last pi location used for IRQ */
 int     ext_ac;                               /* Extended instruction AC */
 uint8   prev_ctx;                             /* Previous AC context */
 uint16  irq_enable;                           /* Apr IRQ enable bits */
@@ -1784,7 +1783,7 @@ void check_apr_irq() {
 void cty_interrupt()
 {
      irq_flags |= CON_IRQ;
-        sim_debug(DEBUG_IRQ, &cpu_dev, "cty interrupt %06o\n", irq_enable);
+     sim_debug(DEBUG_IRQ, &cpu_dev, "cty interrupt %06o\n", irq_enable);
      check_apr_irq();
 }
 
@@ -4700,8 +4699,8 @@ st_pi:
 #if KL
         sect = cur_sect = 0;
         extend = 0;
-        pi_vect = AB;
 #endif
+        pi_vect = AB;
         Mem_read_nopage();
         goto no_fetch;
 #elif PDP6 | KA
@@ -12063,16 +12062,13 @@ last:
             trap_flag = 0;
         }
 #endif
+       /* Check if I/O and BLKI/O or DATAI/O */
        if ((IR & 0700) == 0700 && ((AC & 04) == 0)) {
            pi_hold = pi_ov;
-           if ((!pi_hold) & f_inst_fetch) {
+           if ((!pi_hold) && f_inst_fetch) {
                 pi_cycle = 0;
            } else {
-#if KL | KS
                 AB = pi_vect | pi_ov;
-#else
-                AB = 040 | (pi_enc << 1) | maoff | pi_ov;
-#endif
 #if KI | KL
                 Mem_read_nopage();
 #elif KS
@@ -12083,14 +12079,11 @@ last:
                 goto no_fetch;
            }
        } else if (pi_hold && !f_pc_inh) {
+            /* Check if I/O, then check if IRQ was raised */
             if ((IR & 0700) == 0700) {
                 (void)check_irq_level();
             }
-#if KL | KS
             AB = pi_vect | pi_ov;
-#else
-            AB = 040 | (pi_enc << 1) | maoff | pi_ov;
-#endif
             pi_ov = 0;
             pi_hold = 0;
 #if KI | KL
