@@ -101,10 +101,10 @@
 
 #define DDC_SIZE        (7000 * DDC10_WDS)
 
-uint64          ddc_buf[NUM_DEVS_DDC][DDC10_WDS];
-uint64          ddc_cmd[NUM_DEVS_DDC][16];
-int             ddc_cmdptr[NUM_DEVS_DDC];
-int             ddc_putptr[NUM_DEVS_DDC];
+uint64          ddc_buf[DDC10_WDS];
+uint64          ddc_cmd[16];
+int             ddc_cmdptr;
+int             ddc_putptr;
 
 t_stat          ddc_devio(uint32 dev, uint64 *data);
 t_stat          ddc_svc(UNIT *);
@@ -141,19 +141,6 @@ MTAB                ddc_mod[] = {
 };
 
 REG                 ddc_reg[] = {
-#if 0
-    {BRDATA(BUFF, ddc_buf[0], 16, 64, RM10_WDS), REG_HRO},
-    {ORDATA(IPR, ddc_ipr[0], 2), REG_HRO},
-    {ORDATA(STATUS, ddc_df10[0].status, 18), REG_RO},
-    {ORDATA(CIA, ddc_df10[0].cia, 18)},
-    {ORDATA(CCW, ddc_df10[0].ccw, 18)},
-    {ORDATA(WCR, ddc_df10[0].wcr, 18)},
-    {ORDATA(CDA, ddc_df10[0].cda, 18)},
-    {ORDATA(DEVNUM, ddc_df10[0].devnum, 9), REG_HRO},
-    {ORDATA(BUF, ddc_df10[0].buf, 36), REG_HRO},
-    {ORDATA(NXM, ddc_df10[0].nxmerr, 8), REG_HRO},
-    {ORDATA(COMP, ddc_df10[0].ccw_comp, 8), REG_HRO},
-#endif
     {0}
 };
 
@@ -167,8 +154,6 @@ DEVICE              ddc_dev = {
 
 
 t_stat ddc_devio(uint32 dev, uint64 *data) {
-//     int          ctlr = (dev - DDC_DEVNUM) >> 2;
-//     struct df10 *df10;
      UNIT        *uptr;
      DEVICE      *dptr;
      int          unit;
@@ -177,10 +162,6 @@ t_stat ddc_devio(uint32 dev, uint64 *data) {
      int          cyl;
      int          dtype;
 
-//     if (ctlr < 0 || ctlr >= NUM_DEVS_DDC)
- //       return SCPE_OK;
-
-  //   df10 = &ddc_df10[ctlr];
      dptr = &ddc_dev;
      uptr = &dptr->units[0];
      switch(dev & 3) {
@@ -188,10 +169,10 @@ t_stat ddc_devio(uint32 dev, uint64 *data) {
         sim_debug(DEBUG_CONI, dptr, "DDC %03o CONI %06o PC=%o\n", dev,
                           (uint32)*data, PC);
         *data = uptr->STATUS;
-        if (ddc_cmdptr[0] != ((ddc_putptr[0] + 2) & 0xf)) {
+        if (ddc_cmdptr != ((ddc_putptr + 2) & 0xf)) {
             *data |= DDC_RDY;
         }
-        if (ddc_cmdptr[0] == ddc_putptr[0]) {
+        if (ddc_cmdptr == ddc_putptr) {
             *data |= DDC_BSY;
         }
         *data |= ((uint64_t)uptr->UFLAGS) << 25;
@@ -231,24 +212,24 @@ t_stat ddc_devio(uint32 dev, uint64 *data) {
          sim_debug(DEBUG_DATAIO, dptr, "DDC %03o DATO %012llo, PC=%o\n",
                   dev, *data, PC);
         /* Insert the command into the queue */
-        if (((ddc_putptr[0] + 1) & 0xf) != ddc_cmdptr[0]) {
+        if (((ddc_putptr + 1) & 0xf) != ddc_cmdptr) {
             int           func;
             int           pia;
             int           dsk;
             int           trk;
             int           sec;
             int           seq;
-            ddc_cmd[0][ddc_putptr[0]] = *data;
-            sec = ddc_cmd[0][ddc_putptr[0]] & DDC_SEC;
-            trk = (ddc_cmd[0][ddc_putptr[0]] & DDC_TRK) >> 7;
-            dsk = (ddc_cmd[0][ddc_putptr[0]] & DDC_DISK) >> 17;
-            func = (ddc_cmd[0][ddc_putptr[0]] & DDC_FUNC) >> 19;
-            pia = (ddc_cmd[0][ddc_putptr[0]] & DDC_PIA) >> 21;
-            seq = (ddc_cmd[0][ddc_putptr[0]] & DDC_SEQ) >> 24;
+            ddc_cmd[ddc_putptr] = *data;
+            sec = ddc_cmd[ddc_putptr] & DDC_SEC;
+            trk = (ddc_cmd[ddc_putptr] & DDC_TRK) >> 7;
+            dsk = (ddc_cmd[ddc_putptr] & DDC_DISK) >> 17;
+            func = (ddc_cmd[ddc_putptr] & DDC_FUNC) >> 19;
+            pia = (ddc_cmd[ddc_putptr] & DDC_PIA) >> 21;
+            seq = (ddc_cmd[ddc_putptr] & DDC_SEQ) >> 24;
        sim_debug(DEBUG_DETAIL, dptr, "DDC %d cmd %d %d %d %d %o\n",
             dsk, trk, sec, func, pia, seq);
 
-            ddc_putptr[0] = (ddc_putptr[0] + 1) & 0xf;
+            ddc_putptr = (ddc_putptr + 1) & 0xf;
         } else {
             uptr->STATUS |= DDC_QF;
         }
@@ -256,7 +237,6 @@ t_stat ddc_devio(uint32 dev, uint64 *data) {
     }
     return SCPE_OK;
 }
-
 
 t_stat ddc_svc (UNIT *uptr)
 {
@@ -270,56 +250,79 @@ t_stat ddc_svc (UNIT *uptr)
    t_addr        adr;
    uint64        word;
    DEVICE       *dptr;
+   UNIT         *duptr;
    t_stat        err, r;
    dptr = &ddc_dev;
-   sec = (ddc_cmd[0][ddc_cmdptr[0]] & DDC_SEC) >> 2;
-   trk = (ddc_cmd[0][ddc_cmdptr[0]] & DDC_TRK) >> 7;
-   dsk = (ddc_cmd[0][ddc_cmdptr[0]] & DDC_DISK) >> 17;
-   func = (ddc_cmd[0][ddc_cmdptr[0]] & DDC_FUNC) >> 19;
-   pia = (ddc_cmd[0][ddc_cmdptr[0]] & DDC_PIA) >> 21;
-   seq = (ddc_cmd[0][ddc_cmdptr[0]] & DDC_SEQ) >> 24;
-   word = ddc_cmd[0][ddc_cmdptr[0]+1];
+   sec = (ddc_cmd[ddc_cmdptr] & DDC_SEC) >> 2;
+   trk = (ddc_cmd[ddc_cmdptr] & DDC_TRK) >> 7;
+   dsk = (ddc_cmd[ddc_cmdptr] & DDC_DISK) >> 17;
+   func = (ddc_cmd[ddc_cmdptr] & DDC_FUNC) >> 19;
+   pia = (ddc_cmd[ddc_cmdptr] & DDC_PIA) >> 21;
+   seq = (ddc_cmd[ddc_cmdptr] & DDC_SEQ) >> 24;
+   word = ddc_cmd[ddc_cmdptr+1];
    adr = word & RMASK;
-   uptr = &ddc_dev.units[dsk];
+   duptr = &ddc_dev.units[dsk];
+
+   if ((duptr->flags & UNIT_ATT) == 0) {
+       uptr->STATUS |= DDC_DON|DDC_HUD;
+       uptr->UFLAGS = seq;
+       sim_debug(DEBUG_DETAIL, dptr, "DDC %d Set done %d %d\n", dsk, pia, seq);
+
+       set_interrupt(ddc_dib.dev_num, pia);
+       uptr->POS = 0;
+
+       ddc_cmdptr += 2;
+       ddc_cmdptr &= 0xf;
+       if (ddc_cmdptr != ddc_putptr)
+           sim_activate(uptr, 100);
+   }
 
    if (uptr->POS == 0) {
        int da;
        da = ((trk * 13) + sec) * DDC10_WDS;
-       err = sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
-       wc = sim_fread (&ddc_buf[0][0], sizeof(uint64),
-                    DDC10_WDS, uptr->fileref);
+       err = sim_fseek(duptr->fileref, da * sizeof(uint64), SEEK_SET);
+       wc = sim_fread (&ddc_buf[0], sizeof(uint64),
+                    DDC10_WDS, duptr->fileref);
        sim_debug(DEBUG_DETAIL, dptr, "DDC %d Read %d %d %d %d %d %o\n",
             dsk, da, trk, sec, func, pia, seq);
        for (; wc < DDC10_WDS; wc++)
-            ddc_buf[0][wc] = 0;
+            ddc_buf[wc] = 0;
    }
+
    if (func == 2) {
-       M[adr] = ddc_buf[0][uptr->POS];
+       if (Mem_write_word(adr, &ddc_buf[uptr->POS], 0)) {
+           uptr->STATUS |= DDC_NXM;
+           goto done;
+       }
    } else if (func == 1) {
-       ddc_buf[0][uptr->POS] = M[adr];
+       if (Mem_read_word(adr, &ddc_buf[uptr->POS], 0)) {
+          uptr->STATUS |= DDC_NXM;
+          goto done;
+       }
    }
    sim_debug(DEBUG_DATA, dptr, "DDC %d xfer %06o %012llo\n",
-               dsk, adr, ddc_buf[0][uptr->POS]);
+               dsk, adr, ddc_buf[uptr->POS]);
    uptr->POS++;
    word = (word & LMASK) | ((adr + 1) & RMASK);
 
    if (uptr->POS == DDC10_WDS) {
+done:
        if (func == 2) {
           int da;
           da = ((trk * 13) + sec) * DDC10_WDS;
-          err = sim_fseek(uptr->fileref, da * sizeof(uint64), SEEK_SET);
-          wc = sim_fwrite (&ddc_buf[0][0], sizeof(uint64),
-                       DDC10_WDS, uptr->fileref);
+          err = sim_fseek(duptr->fileref, da * sizeof(uint64), SEEK_SET);
+          wc = sim_fwrite (&ddc_buf[0], sizeof(uint64),
+                       DDC10_WDS, duptr->fileref);
           sim_debug(DEBUG_DETAIL, dptr, "DDC %d Write %d %d %d %d %d %o\n",
                dsk, da, trk, sec, func, pia, seq);
        }
        sec ++;
-       ddc_cmd[0][ddc_cmdptr[0]] &= ~DDC_SEC;
-       ddc_cmd[0][ddc_cmdptr[0]] |= (DDC_SEC & (sec << 2));
+       ddc_cmd[ddc_cmdptr] &= ~DDC_SEC;
+       ddc_cmd[ddc_cmdptr] |= (DDC_SEC & (sec << 2));
        word += 0000100000000LL;
-       sim_debug(DEBUG_DETAIL, dptr, "DDC %d next sect %012llo %012llo\n", dsk, word, ddc_cmd[0][ddc_cmdptr[0]]);
+       sim_debug(DEBUG_DETAIL, dptr, "DDC %d next sect %012llo %012llo\n", dsk, word, ddc_cmd[ddc_cmdptr]);
        if ((word & DDC_SECCNT) == 0) {
-           ddc_cmd[0][ddc_cmdptr[0]+1] = (word & (DDC_SECCNT|DDC_PWB)) | (adr & RMASK);
+           ddc_cmd[ddc_cmdptr+1] = (word & (DDC_SECCNT|DDC_PWB)) | (adr & RMASK);
            uptr->STATUS |= DDC_DON;
            uptr->UFLAGS = seq;
            uptr->SEC = sec << 2;
@@ -328,15 +331,15 @@ t_stat ddc_svc (UNIT *uptr)
            set_interrupt(ddc_dib.dev_num, pia);
            uptr->POS = 0;
 
-           ddc_cmdptr[0] += 2;
-           ddc_cmdptr[0] &= 0xf;
-           if (ddc_cmdptr[0] != ddc_putptr[0])
+           ddc_cmdptr += 2;
+           ddc_cmdptr &= 0xf;
+           if (ddc_cmdptr != ddc_putptr)
                sim_activate(uptr, 100);
            return SCPE_OK;
        }
        uptr->POS = 0;
    }
-   ddc_cmd[0][ddc_cmdptr[0]+1] = word;
+   ddc_cmd[ddc_cmdptr+1] = word;
    sim_activate(uptr, 100);
    return SCPE_OK;
 }
@@ -347,23 +350,15 @@ t_stat ddc_svc (UNIT *uptr)
 t_stat
 ddc_reset(DEVICE * dptr)
 {
-    int unit;
-    int ctlr;
-#if 0
-    UNIT *uptr = dptr->units;
-    for(unit = 0; unit < NUM_UNITS_DDC; unit++) {
-         uptr->UFLAGS  = 0;
-         uptr->CUR_CYL = 0;
-         uptr++;
+    UNIT   *uptr;
+    int    i;
+    ddc_cmdptr = ddc_putptr = 0;
+    for (i = 0; i < NUM_UNITS_DDC; i++) {
+        uptr = &dptr->units[i];
+        uptr->SEC = 0;
+        uptr->UFLAGS = 0;
+        uptr->STATUS = 0;
     }
-    for (ctlr = 0; ctlr < NUM_DEVS_DDC; ctlr++) {
-        ddc_ipr[ctlr] = 0;
-        ddc_df10[ctlr].status = 0;
-        ddc_df10[ctlr].devnum = ddc_dib[ctlr].dev_num;
-        ddc_df10[ctlr].nxmerr = 8;
-        ddc_df10[ctlr].ccw_comp = 5;
-    }
-#endif
     return SCPE_OK;
 }
 
@@ -371,31 +366,28 @@ ddc_reset(DEVICE * dptr)
 
 t_stat ddc_attach (UNIT *uptr, CONST char *cptr)
 {
-t_stat r;
+    t_stat r;
 
-//uptr->capac = ddc_drv_tab[GET_DTYPE (uptr->flags)].size;
-r = attach_unit (uptr, cptr);
-if (r != SCPE_OK || (sim_switches & SIM_SW_REST) != 0)
-    return r;
-//uptr->CUR_CYL = 0;
-//uptr->UFLAGS = 0;
-return SCPE_OK;
+    r = attach_unit (uptr, cptr);
+    if (r != SCPE_OK || (sim_switches & SIM_SW_REST) != 0)
+        return r;
+    return SCPE_OK;
 }
 
 /* Device detach */
 
 t_stat ddc_detach (UNIT *uptr)
 {
-if (!(uptr->flags & UNIT_ATT))                          /* attached? */
-    return SCPE_OK;
-if (sim_is_active (uptr))                              /* unit active? */
-    sim_cancel (uptr);                                  /* cancel operation */
-return detach_unit (uptr);
+    if (!(uptr->flags & UNIT_ATT))             /* attached? */
+        return SCPE_OK;
+    if (sim_is_active (uptr))                  /* unit active? */
+        sim_cancel (uptr);                     /* cancel operation */
+    return detach_unit (uptr);
 }
 
 t_stat ddc_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
-fprintf (st, "RES-10  Drum  Drives (DDC)\n\n");
+fprintf (st, "DDC-10  Drum  Drives (DDC)\n\n");
 fprintf (st, "The DDC controller implements the RES-10 disk controller that talked\n");
 fprintf (st, "to drum drives.\n");
 fprintf (st, "Options include the ability to set units write enabled or write locked, to\n");
@@ -409,7 +401,7 @@ return SCPE_OK;
 
 const char *ddc_description (DEVICE *dptr)
 {
-return "RES-10 disk controller";
+return "DDC-10 disk controller";
 }
 
 #endif
