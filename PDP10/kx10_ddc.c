@@ -1,6 +1,6 @@
 /* kx10_ddc.c: Drum RES-10 Disk Controller.
 
-   Copyright (c) 2013-2020, Richard Cornwell
+   Copyright (c) 2013-2022, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -99,7 +99,7 @@
 
 #define DDC10_WDS       0200
 
-#define DDC_SIZE        100000
+#define DDC_SIZE        (7000 * DDC10_WDS)
 
 uint64          ddc_buf[NUM_DEVS_DDC][DDC10_WDS];
 uint64          ddc_cmd[NUM_DEVS_DDC][16];
