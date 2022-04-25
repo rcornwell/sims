@@ -35,7 +35,6 @@ df10_setirq(struct df10 *df) {
 void
 df10_writecw(struct df10 *df) {
       uint64  wrd;
-      df->status |= 1 << df->ccw_comp;
       if (df->wcr != 0)
           df->cda++;
       wrd = ((uint64)(df->ccw & df->wmask) << df->cshift) | ((uint64)(df->cda) & df->amask);
@@ -58,7 +57,6 @@ df10_setup(struct df10 *df, uint32 addr) {
       df->ccw = df->cia;
       df->wcr = 0;
       df->status |= BUSY;
-      df->status &= ~(1 << df->ccw_comp);
 }
 
 /* Fetch the next IO control word */
@@ -161,12 +159,11 @@ df10_write(struct df10 *df) {
 
 /* Initialize a DF10 to default values */
 void
-df10_init(struct df10 *df, uint32 dev_num, uint8 nxmerr, uint8 ccw_comp)
+df10_init(struct df10 *df, uint32 dev_num, uint8 nxmerr)
 {
     df->status = 0;
     df->devnum = dev_num;    /* Set device number link */
     df->nxmerr = nxmerr;     /* Set bit in status for NXM */
-    df->ccw_comp = ccw_comp; /* Set bit number indicating CCW wanted */
 #if KI_22BIT
     if (cpu_unit[0].flags & UNIT_DF10C) {
         df->amask = 00000017777777LL;

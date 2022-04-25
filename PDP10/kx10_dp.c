@@ -68,6 +68,7 @@
 
 
 /* CONI/CONO Flags */
+#define CCW_COMP        0000000000040LL
 #define SUF_ERR         0000000000100LL
 #define SEC_ERR         0000000000200LL
 #define ILL_CMD         0000000000400LL
@@ -295,7 +296,6 @@ REG                 dpa_reg[] = {
     {ORDATA(DEVNUM, dp_df10[0].devnum, 9), REG_HRO},
     {ORDATA(BUF, dp_df10[0].buf, 36), REG_HRO},
     {ORDATA(NXM, dp_df10[0].nxmerr, 8), REG_HRO},
-    {ORDATA(COMP, dp_df10[0].ccw_comp, 8), REG_HRO},
     {0}
 };
 
@@ -319,7 +319,6 @@ REG                 dpb_reg[] = {
     {ORDATA(DEVNUM, dp_df10[1].devnum, 9), REG_HRO},
     {ORDATA(BUF, dp_df10[1].buf, 36), REG_HRO},
     {ORDATA(NXM, dp_df10[1].nxmerr, 8), REG_HRO},
-    {ORDATA(COMP, dp_df10[1].ccw_comp, 8), REG_HRO},
     {0}
 };
 
@@ -343,7 +342,6 @@ REG                 dpc_reg[] = {
     {ORDATA(DEVNUM, dp_df10[2].devnum, 9), REG_HRO},
     {ORDATA(BUF, dp_df10[2].buf, 36), REG_HRO},
     {ORDATA(NXM, dp_df10[2].nxmerr, 8), REG_HRO},
-    {ORDATA(COMP, dp_df10[2].ccw_comp, 8), REG_HRO},
     {0}
 };
 
@@ -367,7 +365,6 @@ REG                 dpd_reg[] = {
     {ORDATA(DEVNUM, dp_df10[3].devnum, 9), REG_HRO},
     {ORDATA(BUF, dp_df10[3].buf, 36), REG_HRO},
     {ORDATA(NXM, dp_df10[3].nxmerr, 8), REG_HRO},
-    {ORDATA(COMP, dp_df10[3].ccw_comp, 8), REG_HRO},
     {0}
 };
 
@@ -443,7 +440,7 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
             uptr->STATUS &= ~(CLRMSK2);
          if (*data & CCW_COMP) {
             df10_writecw(df10);
-            df10->status &= ~CCW_COMP;
+            df10->status |= CCW_COMP;
          }
          if (*data & PI_ENABLE) {
              uptr->UFLAGS &= ~DONE;
@@ -914,7 +911,7 @@ dp_reset(DEVICE * dptr)
          uptr++;
     }
     for (ctlr = 0; ctlr < NUM_DEVS_DP; ctlr++) {
-        df10_init(&dp_df10[ctlr], dp_dib[ctlr].dev_num, 12, 5);
+        df10_init(&dp_df10[ctlr], dp_dib[ctlr].dev_num, 12);
     }
     return SCPE_OK;
 }

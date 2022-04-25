@@ -346,11 +346,9 @@ extern DEBTAB crd_debug[];
 #define API_MASK        0000000007
 #define PI_ENABLE       0000000010      /* Clear DONE */
 #define BUSY            0000000020      /* STOP */
-#define CCW_COMP        0000000040      /* Write Final CCW */
 /* RH10 / RH20 interrupt */
 #define IADR_ATTN       0000000000040LL   /* Interrupt on attention */
 #define IARD_RAE        0000000000100LL   /* Interrupt on register access error */
-#define CCW_COMP_1      0000000040000LL   /* Control word written. */
 
 #if KI
 #define DEF_SERIAL      514             /* Default DEC test machine */
@@ -627,7 +625,6 @@ struct df10 {
       uint32         devnum;     /* Device number */
       uint64         buf;        /* Data buffer */
       uint8          nxmerr;     /* Bit to set for NXM */
-      uint8          ccw_comp;   /* Have we written out CCW */
       uint64         amask;      /* Address mask */
       uint64         wmask;      /* Word mask */
       int            cshift;     /* Shift amount */
@@ -686,7 +683,7 @@ void df10_setup(struct df10 *df, uint32 addr);
 int  df10_fetch(struct df10 *df);
 int  df10_read(struct df10 *df);
 int  df10_write(struct df10 *df);
-void df10_init(struct df10 *df, uint32 dev_num, uint8 nxmerr, uint8 ccw_comp);
+void df10_init(struct df10 *df, uint32 dev_num, uint8 nxmerr);
 #if PDP6_DEV
 int  dct_read(int u, t_uint64 *data, int c);
 int  dct_write(int u, t_uint64 *data, int c);
