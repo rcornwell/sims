@@ -528,6 +528,7 @@ extern DEVICE   kmc_dev;
 extern DEVICE   dup_dev;
 extern DEVICE   tcu_dev;
 extern DEVICE   ddc_dev;
+extern DEVICE   tym_dev;
 
 #if KS
 
@@ -797,6 +798,9 @@ extern void ka10_lights_clear_aux (int);
 #endif
 #if MAGIC_SWITCH && !KA && !ITS
 #error "Magic switch only valid on KA10 with ITS mods"
+#endif
+#if KI
+#define NUM_DEVS_TYM    1
 #endif
 
 /* Global data */
