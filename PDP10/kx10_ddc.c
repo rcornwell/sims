@@ -156,11 +156,6 @@ DEVICE              ddc_dev = {
 t_stat ddc_devio(uint32 dev, uint64 *data) {
      UNIT        *uptr;
      DEVICE      *dptr;
-     int          unit;
-     int          tmp;
-     int          drv;
-     int          cyl;
-     int          dtype;
 
      dptr = &ddc_dev;
      uptr = &dptr->units[0];
@@ -175,7 +170,7 @@ t_stat ddc_devio(uint32 dev, uint64 *data) {
         if (ddc_cmdptr == ddc_putptr) {
             *data |= DDC_BSY;
         }
-        *data |= ((uint64_t)uptr->UFLAGS) << 25;
+        *data |= ((t_uint64)uptr->UFLAGS) << 25;
         break;
      case CONO:
         if (*data & DDC_CLR) {  /* Clear irq */
@@ -199,7 +194,7 @@ t_stat ddc_devio(uint32 dev, uint64 *data) {
                    (uint32)*data, PC);
          break;
      case DATAI:
-         *data = (uint64_t)(uptr->SEC++);
+         *data = (t_uint64)(uptr->SEC++);
          uptr->SEC &= 0177;
          if (uptr->SEC > (13 << 2))
             uptr->SEC = 0;
@@ -240,7 +235,7 @@ t_stat ddc_devio(uint32 dev, uint64 *data) {
 
 t_stat ddc_svc (UNIT *uptr)
 {
-   int           tmp, wc;
+   int           wc;
    int           func;
    int           pia;
    int           dsk;
@@ -251,7 +246,7 @@ t_stat ddc_svc (UNIT *uptr)
    uint64        word;
    DEVICE       *dptr;
    UNIT         *duptr;
-   t_stat        err, r;
+   t_stat        err;
    dptr = &ddc_dev;
    sec = (ddc_cmd[ddc_cmdptr] & DDC_SEC) >> 2;
    trk = (ddc_cmd[ddc_cmdptr] & DDC_TRK) >> 7;
