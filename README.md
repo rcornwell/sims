@@ -148,7 +148,7 @@ and transfering to the loaded value. RC10, RH10, TM10 support readin mode.
 
 This is a new simulator. Will pass 1904E/1905E CPU diagnostics (FLIT). Will boot paper
 tape executive E4BM and tape executive E6RM. Still need to add more devices and test
-with Goerge 2 and 3.
+with George 2 and 3.
 
   The CPU can be configured for model A, B or C type system. Or models 1901 throgh 1909. 
 Paging is currently not supported. Both standard interface and older non-standard interface
