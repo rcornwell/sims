@@ -152,7 +152,6 @@ DEVICE tym_dev = {
 
 static t_stat tym_reset(DEVICE *dptr)
 {
-    int i;
     if (tym_unit[0].flags & UNIT_ATT) {
         sim_activate(&tym_unit[2], 1000);
         sim_activate(&tym_unit[3], 1000);
@@ -657,7 +656,7 @@ static t_stat tym_input_srv(UNIT *uptr)
 static t_stat tym_output_srv(UNIT *uptr)
 {
     uint64 data;
-    int i, c;
+    int c;
 
     if (!tmxr_txdone_ln(&tym_ldsc[output_port])) {
         sim_activate(&tym_unit[1], 1000);
