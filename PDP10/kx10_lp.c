@@ -98,8 +98,8 @@ UNIT lpt_unit = {
     };
 
 REG lpt_reg[] = {
-    { DRDATA (STATUS, lpt_unit.STATUS, 18), PV_LEFT | REG_UNIT },
-    { DRDATA (TIME, lpt_unit.wait, 24), PV_LEFT | REG_UNIT },
+    { URDATA (STATUS, lpt_unit.STATUS, 8, 18, 0, 1, PV_LEFT) },
+    { URDATA (TIME, lpt_unit.wait, 10, 24, 0, 1, PV_LEFT) },
     { BRDATA(BUFF, lpt_buffer, 16, 8, sizeof(lpt_buffer)), REG_HRO},
     { BRDATA(CBUFF, lpt_chbuf, 16, 8, sizeof(lpt_chbuf)), REG_HRO},
     { NULL }
