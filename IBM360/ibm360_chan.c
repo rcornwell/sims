@@ -55,7 +55,7 @@
 #define STATUS_CHECK     0x0200             /* Unit check */
 #define STATUS_EXPT      0x0100             /* Unit excpetion */
 #define STATUS_PCI       0x0080             /* Program interupt */
-#define STATUS_LENGTH    0x0040             /* Incorrect lenght */
+#define STATUS_LENGTH    0x0040             /* Incorrect length */
 #define STATUS_PCHK      0x0020             /* Program check */
 #define STATUS_PROT      0x0010             /* Protection check */
 #define STATUS_CDATA     0x0008             /* Channel data check */
@@ -1025,6 +1025,12 @@ int testio(uint16 addr) {
         sim_debug(DEBUG_CMD, &cpu_dev, "TIO %03x %03x %02x %x %x cc=1d\n", addr,
               chan->daddr, chan->ccw_cmd, chan->ccw_flags, status);
         return 1;
+    }
+
+    if (status & STATUS_BUSY) {             /* Device busy */
+        sim_debug(DEBUG_CMD, &cpu_dev, "TIO %03x %03x %02x %x %x cc=2\n", addr,
+              chan->daddr, chan->ccw_cmd, chan->ccw_flags, status);
+        return 2;
     }
 
     /* Everything ok, return cc=0 */
