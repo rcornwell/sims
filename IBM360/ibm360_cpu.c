@@ -1752,19 +1752,20 @@ set_cc:
         case OP_S:
         case OP_SR:
         case OP_SH:
-                src2 = NEG(src2);
-                /* Fall through */
+                src2 ^= FMASK;
+                dest = src1 + src2 + 1;
+                src1h = (src1 & src2) | ((src1 ^ src2) & ~dest);
+                if ((((src1h << 1) ^ src1h) & MSIGN) != 0) {
+                    goto set_cc3;
+                }
+                goto set_cc;
 
         case OP_A:
         case OP_AR:
         case OP_AH:
                 dest = src1 + src2;
-                if ((((src1 & src2 & ~dest) |
-                       (~src1 & ~src2 & dest)) & MSIGN) != 0) {
-                    if ((op & 0x1f) == 0x1b && src1 == MSIGN && src2 == MSIGN) {
-                        dest = 0;
-                        goto set_cc;
-                    }
+                src1h = (src1 & src2) | ((src1 ^ src2) & ~dest);
+                if ((((src1h << 1) ^ src1h) & MSIGN) != 0) {
 set_cc3:
                     regs[reg1] = dest;
                     per_mod |= 1 << reg1;
@@ -1778,17 +1779,25 @@ set_cc3:
 
         case OP_SL:
         case OP_SLR:
-                src2 = NEG(src2);
-                /* Fall through */
+                src2 ^= FMASK;
+                dest = src1 + src2 + 1;
+                src1h = ((src1 & src2) | ((src1 ^ src2) & ~dest)) & MSIGN;
+                src1h = (src1h != 0);
+                cc = (dest != 0);
+                if (src1h != 0)
+                   cc |= 2;
+                regs[reg1] = dest;
+                per_mod |= 1 << reg1;
+                break;
 
         case OP_AL:
         case OP_ALR:
                 dest = src1 + src2;
-                cc = 0;
-                if ((uint32)dest < (uint32)src1)
+                src1h = ((src1 & src2) | ((src1 ^ src2) & ~dest)) & MSIGN;
+                src1h = (src1h != 0);
+                cc = (dest != 0);
+                if (src1h != 0)
                    cc |= 2;
-                if (dest != 0)
-                   cc |= 1;
                 regs[reg1] = dest;
                 per_mod |= 1 << reg1;
                 break;
@@ -1872,7 +1881,6 @@ set_cc3:
                 fill = 0;
 #ifdef USE_64BIT
                 LDDBL(reg1, src1L);
-
                 if (src1L & MSIGNL) {
                     fill = 3;
                     src1L = NEG(src1L);
@@ -3144,8 +3152,9 @@ save_dbl:
                                   dest = src1h + (((int)us) << 12);
                                   if (dest < src1h)
                                      src1++;
-                                  src1h = dest & ~0xfff;
+                                  src1h = dest;
                               }
+                              src1h &= ~0xfff;
                               if (WriteFull(addr1, src1))
                                  goto supress;
                               if (WriteFull(addr1+4, src1h))
