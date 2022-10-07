@@ -126,6 +126,9 @@ uint64  MI;                                   /* Monitor lights */
 uint32  FLAGS;                                /* Flags */
 uint32  AC;                                   /* Operand accumulator */
 uint64  SW;                                   /* Switch register */
+#if PDP6 | KA | KI
+t_addr  AS;                                   /* Address switches */
+#endif
 int     BYF5;                                 /* Flag for second half of LDB/DPB instruction */
 int     uuo_cycle;                            /* Uuo cycle in progress */
 int     SC;                                   /* Shift count */
@@ -451,6 +454,9 @@ REG cpu_reg[] = {
     { ORDATAD (PIENB, pi_enable, 7, "Enable Priority System") },
     { ORDATAD (SW, SW, 36, "Console SW Register"), REG_FIT},
     { ORDATAD (MI, MI, 36, "Memory Indicators"), REG_FIT},
+#if PDP6 | KA | KI
+    { ORDATAD (AS, AS, 18, "Console AS Register"), REG_FIT},
+#endif
     { FLDATAD (BYF5, BYF5, 0, "Byte Flag") },
     { FLDATAD (UUO, uuo_cycle, 0, "UUO Cycle") },
 #if KA | PDP6
