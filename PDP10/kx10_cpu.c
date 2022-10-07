@@ -450,7 +450,7 @@ REG cpu_reg[] = {
     { ORDATAD (PIE, PIE, 8, "Priority Interrupt Enable") },
     { ORDATAD (PIENB, pi_enable, 7, "Enable Priority System") },
     { ORDATAD (SW, SW, 36, "Console SW Register"), REG_FIT},
-    { ORDATAD (MI, MI, 36, "Monitor Display"), REG_FIT},
+    { ORDATAD (MI, MI, 36, "Memory Indicators"), REG_FIT},
     { FLDATAD (BYF5, BYF5, 0, "Byte Flag") },
     { FLDATAD (UUO, uuo_cycle, 0, "UUO Cycle") },
 #if KA | PDP6
