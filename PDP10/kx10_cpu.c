@@ -3357,6 +3357,10 @@ int page_lookup_its(t_addr addr, int flag, t_addr *loc, int wr, int cur_context,
         return 1;
     }
 
+    /* If DPB and IDPB force write */
+    if (BYF5 && (IR & 0776) == 0136)
+        wr = 1;
+
     /* Figure out if this is a user space access */
     if (flag)
         uf = 0;
@@ -4610,6 +4614,9 @@ in_loop:
          if (ind & !pi_rq) {
              if (Mem_read(pi_cycle | uuo_cycle, 1, 0, 0))
                  goto last;
+             if (AB < 020) {
+                --sim_interval;
+             }
 #if KL
              /* Check if extended indexing */
              if (QKLB && t20_page && (cur_sect != 0 || glb_sect)) {
@@ -4691,7 +4698,7 @@ in_loop:
          }
          /* Handle events during a indirect loop */
          AIO_CHECK_EVENT;                                   /* queue async events */
-         if (--sim_interval <= 0) {
+         if (sim_interval <= 0) {
               if ((reason = sim_process_event()) != SCPE_OK) {
                   return reason;
               }
