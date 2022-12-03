@@ -1341,7 +1341,7 @@ t_stat dev_mtr(uint32 dev, uint64 *data) {
         *data = mtr_irq;
         if (mtr_enable)
             *data |= 02000;
-        *data |= (uint64)mtr_flags << 12;
+        *data |= ((uint64)mtr_flags) << 12;
         sim_debug(DEBUG_CONI, &cpu_dev, "CONI MTR %012llo\n", *data);
         break;
 
@@ -3217,6 +3217,7 @@ int Mem_read(int flag, int cur_context, int fetch, int mod) {
                     MB = FM[fm_sel|AB];
                 } else {
                     MB = M[ub_ptr + ac_stack + AB];
+                    --sim_interval;
                 }
                 if (fetch == 0 && hst_lnt) {
                     hst[hst_p].mb = MB;
@@ -3356,10 +3357,6 @@ int page_lookup_its(t_addr addr, int flag, t_addr *loc, int wr, int cur_context,
         *loc = addr;
         return 1;
     }
-
-    /* If DPB and IDPB force write */
-    if (BYF5 && (IR & 0776) == 0136)
-        wr = 1;
 
     /* Figure out if this is a user space access */
     if (flag)
@@ -4614,9 +4611,6 @@ in_loop:
          if (ind & !pi_rq) {
              if (Mem_read(pi_cycle | uuo_cycle, 1, 0, 0))
                  goto last;
-             if (AB < 020) {
-                --sim_interval;
-             }
 #if KL
              /* Check if extended indexing */
              if (QKLB && t20_page && (cur_sect != 0 || glb_sect)) {
@@ -4698,7 +4692,7 @@ in_loop:
          }
          /* Handle events during a indirect loop */
          AIO_CHECK_EVENT;                                   /* queue async events */
-         if (sim_interval <= 0) {
+         if (--sim_interval <= 0) {
               if ((reason = sim_process_event()) != SCPE_OK) {
                   return reason;
               }
