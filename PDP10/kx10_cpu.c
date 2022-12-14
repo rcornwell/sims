@@ -8884,6 +8884,11 @@ jrstf:
                   glb_sect = 0;
 #endif
               BR = AOB(BR);
+#if KL_ITS
+              if (QITS && one_p_arm)    /* Don't clear traps if 1proc */
+                 FLAGS &= ~ (BYTI);
+              else
+#endif
               FLAGS &= ~ (BYTI|ADRFLT|TRP1|TRP2);
               if (BR & C1) {
 #if KI | KL | KS
