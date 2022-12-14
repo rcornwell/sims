@@ -1690,8 +1690,8 @@ static const char simh_help2[] =
       " %%CTIME%%, %%DATE_YYYY%%, %%DATE_YY%%, %%DATE_YC%%, %%DATE_MM%%, %%DATE_MMM%%,\n"
       " %%DATE_MONTH%%, %%DATE_DD%%, %%DATE_D%%, %%DATE_WYYYY%%, %%DATE_WW%%,\n"
       " %%TIME_HH%%, %%TIME_MM%%, %%TIME_SS%%, %%TIME_MSEC%%, %%STATUS%%, %%TSTATUS%%,\n"
-      " %%SIM_VERIFY%%, %%SIM_QUIET%%, %%SIM_MESSAGE%% %%SIM_MESSAGE%%\n"
-      " %%SIM_NAME%%, %%SIM_BIN_NAME%%, %%SIM_BIN_PATH%%m %%SIM_OSTYPE%%\n\n"
+      " %%SIM_VERIFY%%, %%SIM_QUIET%%, %%SIM_MESSAGE%%, %%SIM_NAME%%, %%SIM_BIN_NAME%%,\n"
+      " %%SIM_BIN_PATH%%, %%SIM_OSTYPE%%\n\n"
       "+Token %%0 expands to the command file name.\n"
       "+Token %%n (n being a single digit) expands to the n'th argument\n"
       "+Token %%* expands to the whole set of arguments (%%1 ... %%9)\n\n"
@@ -1934,10 +1934,20 @@ static const char simh_help2[] =
       " the ON command.\n"
       "4Enabling Error Traps\n"
       " Error trapping is enabled with:\n\n"
-      "++set on                   enable error traps\n"
+      "++set on                   enable error traps\n\n"
       "4Disabling Error Traps\n"
       " Error trapping is disabled with:\n\n"
-      "++set noon                 disable error traps\n"
+      "++set noon                 disable error traps\n\n"
+      " Disables error traps for the currently running command file.\n\n"
+      "4Inheritance of Error Traps\n"
+      " Error traps can be local the current command file or inherited into\n"
+      " nested command file invocations:\n\n"
+      "++set on INHERIT|NOINHERIT enable/disable inheritance\n\n"
+      " By default, ON state is NOINHERIT which means that the scope of pending ON\n"
+      " actions is bound to the currently executing command file.  If INHERIT is\n"
+      " enabled, the currently defined ON actions are inherited by nested command\n"
+      " files that may be invoked.\n\n"
+      "4ON\n"
       "4ON\n"
       " To set the action(s) to take when a specific error status is returned by\n"
       " a command in the currently running do command file:\n\n"
@@ -4698,7 +4708,11 @@ if (!ap) {                              /* no environment variable found? */
         ap = rbuf;
         }
     else if (!strcmp ("TSTATUS", gbuf)) {
-        sprintf (rbuf, "%s", sim_error_text (sim_last_cmd_stat));
+        t_stat stat = SCPE_BARE_STATUS(sim_last_cmd_stat);
+        if ((stat > SCPE_OK) && (stat < SCPE_BASE) && (sim_stop_messages[stat] != NULL))
+            sprintf (rbuf, "%s", sim_stop_messages[stat]);
+        else
+            sprintf (rbuf, "%s", sim_error_text (stat));
         ap = rbuf;
         }
     else if (!strcmp ("SIM_VERIFY", gbuf)) {
@@ -7292,7 +7306,7 @@ gbuf[sizeof(gbuf)-1] = '\0';
 strlcpy (gbuf, cptr, sizeof(gbuf));
 sim_trim_endspc(gbuf);
 if (sim_chdir(gbuf) != 0)
-    return sim_messagef(SCPE_IOERR, "Unable to directory change to: %s\n", gbuf);
+    return sim_messagef(SCPE_IOERR, "Unable to change directory to: %s\n", gbuf);
 return SCPE_OK;
 }
 
@@ -9435,7 +9449,7 @@ t_value pcval;
 
 fputc ('\n', st);                                       /* start on a new line */
 
-if (v >= SCPE_BASE)                                     /* SCP error? */
+if (v == SCPE_OK || v >= SCPE_BASE)                                     /* SCP error? */
     fputs (sim_error_text (v), st);                     /* print it from the SCP list */
 else {                                                  /* VM error */
     if (sim_stop_messages [v])
@@ -16030,17 +16044,9 @@ for (i = 0; (dptr = devices[i]) != NULL; i++) {
     REG *rptr;
 
     for (rptr = dptr->registers; (rptr != NULL) && (rptr->name != NULL); rptr++) {
-        uint32 bytes = 1;
         uint32 rsz = SZ_R(rptr);
         uint32 memsize = ((rptr->flags & REG_FIT) || (rptr->depth > 1)) ? rptr->depth * rsz : 4;
-        DEVICE *udptr = NULL;
         t_bool Bad;
-
-        while ((bytes << 3) < rptr->offset + rptr->width)
-            bytes <<= 1;
-
-        if (rptr->depth > 1)
-            bytes = rptr->size;
 
         if (((rptr->width + rptr->offset + CHAR_BIT - 1) / CHAR_BIT) >= sizeof(size_map) / sizeof(size_map[0])) {
             Bad = TRUE;
