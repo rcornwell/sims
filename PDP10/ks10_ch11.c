@@ -97,6 +97,7 @@ static char peer[256];
 static int address;
 static uint16 ch11_csr;
 static int rx_count;
+static int rx_pos;
 static int tx_count;
 static uint8 rx_buffer[512+100];
 static uint8 tx_buffer[512+100];
@@ -111,6 +112,7 @@ UNIT ch11_unit[] = {
 REG ch11_reg[] = {
   { ORDATA(CSR,   ch11_csr,     16)},
   { GRDATAD(RXCNT,  rx_count,   16, 16, 0, "Receive word count"), REG_FIT|REG_RO},
+  { GRDATAD(RXPOS,  rx_pos,     16, 16, 0, "Receive Position"), REG_FIT|REG_RO},
   { GRDATAD(TXCNT,  tx_count,   16, 16, 0, "Transmit word count"), REG_FIT|REG_RO},
   { BRDATAD(RXBUF,  rx_buffer,  16,  8, sizeof rx_buffer, "Receive packet buffer"), REG_FIT},
   { BRDATAD(TXBUF,  tx_buffer,  16,  8, sizeof tx_buffer, "Transmit packet buffer"), REG_FIT},
@@ -179,6 +181,7 @@ ch11_write(DEVICE *dptr, t_addr addr, uint16 data, int32 access)
             sim_debug (DBG_REG, &ch11_dev, "Clear RX\n");
             ch11_csr &= ~CSR_RDN;
             rx_count = 0;
+            rx_pos = 0;
             ch11_lines[0].rcve = TRUE;
             uba_clr_irq(dibp, dibp->uba_vect);
         }
@@ -237,19 +240,19 @@ ch11_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
           *data = 0;
           sim_debug (DBG_ERR, &ch11_dev, "Read empty buffer\n");
         } else {
-          i = 512-rx_count;
           ch11_csr &= ~CSR_RDN;
           uba_clr_irq(dibp, dibp->uba_vect);
-          *data = ((uint64)(rx_buffer[i]) & 0xff) << 8;
-          *data |= ((uint64)(rx_buffer[i+1]) & 0xff);
-          rx_count-=2;
+          *data = ((uint64)(rx_buffer[rx_pos]) & 0xff) << 8;
+          *data |= ((uint64)(rx_buffer[rx_pos+1]) & 0xff);
           sim_debug (DBG_DAT, &ch11_dev, "Read buffer word %d:%02x %02x %06o %06o\n",
-                     rx_count, rx_buffer[i], rx_buffer[i+1], *data, ch11_csr);
+                     rx_count, rx_buffer[rx_pos], rx_buffer[rx_pos+1], *data, ch11_csr);
+          rx_count-=2;
+          rx_pos+=2;
         }
         break;
 
     case 006:  /* Bit count */
-        *data = ((512 - rx_count) - 1) & 07777;
+        *data = ((rx_count * 8) - 1) & 07777;
         break;
     case 012:  /* Start transmission */
         sim_debug (DBG_REG, &ch11_dev, "XMIT TX\n");
@@ -373,8 +376,9 @@ ch11_receive (struct pdp_dib *dibp)
 
   if ((CSR_RDN & ch11_csr) == 0) {
     count = (count + 1) & 0776;
-    memcpy (rx_buffer + (512 - count), p, count);
-    rx_count = count;
+    memcpy (rx_buffer, p, count);
+    rx_count = count - CHUDP_HEADER;
+    rx_pos = CHUDP_HEADER;
     sim_debug (DBG_TRC, &ch11_dev, "Rx count, %d\n", rx_count);
     ch11_validate (p + CHUDP_HEADER, count - CHUDP_HEADER);
     ch11_csr |= CSR_RDN;
@@ -397,6 +401,7 @@ ch11_clear (struct pdp_dib *dibp)
   ch11_csr = CSR_TDN;
   rx_count = 0;
   tx_count = 0;
+  rx_pos = 0;
 
   tx_buffer[0] = 1; /* CHUDP header */
   tx_buffer[1] = 1;
