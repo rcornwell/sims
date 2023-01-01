@@ -99,8 +99,8 @@ static uint16 ch11_csr;
 static int rx_count;
 static int rx_pos;
 static int tx_count;
-static uint8 rx_buffer[512+100];
-static uint8 tx_buffer[512+100];
+static uint8 rx_buffer[514+100];
+static uint8 tx_buffer[514+100];
 
 TMLN ch11_lines[1] = { {0} };
 TMXR ch11_tmxr = { 1, NULL, 0, ch11_lines};
@@ -343,7 +343,7 @@ ch11_transmit (struct pdp_dib *dibp)
   len = CHUDP_HEADER + (size_t)tx_count;
   r = tmxr_put_packet_ln (&ch11_lines[0], (const uint8 *)&tx_buffer, len);
   if (r == SCPE_OK) {
-    sim_debug (DBG_PKT, &ch11_dev, "Sent UDP packet, %d bytes.\n", (int)len);
+    sim_debug (DBG_PKT, &ch11_dev, "Sent UDP packet, %d bytes. %04x checksum.\n", (int)len, chk);
     tmxr_poll_tx (&ch11_tmxr);
   } else {
     sim_debug (DBG_ERR, &ch11_dev, "Sending UDP failed: %d.\n", r);
@@ -375,10 +375,10 @@ ch11_receive (struct pdp_dib *dibp)
     return;
 
   if ((CSR_RDN & ch11_csr) == 0) {
-    count = (count + 1) & 0776;
-    memcpy (rx_buffer, p, count);
+    count = (count + 1) & 01776;
+    memcpy (rx_buffer, p + CHUDP_HEADER, count);
     rx_count = count - CHUDP_HEADER;
-    rx_pos = CHUDP_HEADER;
+    rx_pos = 0;
     sim_debug (DBG_TRC, &ch11_dev, "Rx count, %d\n", rx_count);
     ch11_validate (p + CHUDP_HEADER, count - CHUDP_HEADER);
     ch11_csr |= CSR_RDN;
