@@ -4799,7 +4799,7 @@ st_pi:
             if (PC >= 020)
                 hst_p = hst_p + 1;
             if (hst_p >= hst_lnt) {
-                    hst_p = 0;
+                hst_p = 0;
             }
             hst[hst_p].pc = HIST_PC | ((BYF5)? (HIST_PC2|PC) : IA);
             hst[hst_p].ea = AB;
@@ -5937,8 +5937,8 @@ dpnorm:
 #endif
 
     case 0124: /* DMOVEM */
-#if KS
               MQ = get_reg(AC + 1);
+#if KS
               if ((FLAGS & BYTI) == 0) {
                   IA = AB;
                   AB = (AB + 1) & RMASK;
@@ -5962,13 +5962,9 @@ dpnorm:
                       goto last;
                   FLAGS |= BYTI;
               }
-              MQ = get_reg(AC + 1);
               if ((FLAGS & BYTI)) {
                   AB = (AB + 1) & RMASK;
                   MB = MQ;
-#if KL
-                  FLAGS &= ~BYTI;
-#endif
                   if (Mem_write(0, 0))
                      goto last;
                   FLAGS &= ~BYTI;
@@ -6588,11 +6584,11 @@ ldb_ptr:
                   }
 #endif
               } else {
-#if KL | KS
-                  ptr_flg = 0;
-#endif
 #if KL
 ld_exe:
+#endif
+#if KL | KS
+                  ptr_flg = 0;
 #endif
                   f = 0;
 #if !KS
