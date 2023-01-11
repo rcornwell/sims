@@ -1316,10 +1316,10 @@ t_stat imp_eth_srv(UNIT * uptr)
 #else
               imp_data.rbuffer[0] = 0x4;
 #endif
-              imp_data.rbuffer[1] = (ntohl(imp_data.ip) >> 24) & 0xff;
-              imp_data.rbuffer[5] = (ntohl(imp_data.ip) >> 16) & 0xff;
-              imp_data.rbuffer[6] = (ntohl(imp_data.ip) >> 8) & 0xff;
-              imp_data.rbuffer[7] = ntohl(imp_data.ip) & 0xff;
+              imp_data.rbuffer[1] = (ntohl(imp_data.hostip) >> 24) & 0xff;
+              imp_data.rbuffer[5] = (ntohl(imp_data.hostip) >> 16) & 0xff;
+              imp_data.rbuffer[6] = (ntohl(imp_data.hostip) >> 8) & 0xff;
+              imp_data.rbuffer[7] = ntohl(imp_data.hostip) & 0xff;
               imp_unit[0].STATUS |= IMPIB;
               imp_unit[0].IPOS = 0;
               imp_unit[0].ILEN = 12*8;
