@@ -3347,7 +3347,7 @@ int page_lookup_its(t_addr addr, int flag, t_addr *loc, int wr, int cur_context,
     int      page = (RMASK & addr) >> 10;
     int      acc;
     int      uf = (FLAGS & USER) != 0;
-    int      ofd = (int)fault_data;
+    int      fstr = (fault_data & 0770) == 0;
 
     if (adr_cond && addr == AS)
         address_conditions (fetch, wr);
@@ -3377,7 +3377,7 @@ int page_lookup_its(t_addr addr, int flag, t_addr *loc, int wr, int cur_context,
     /* AC & 8 = Inhibit mem protect, skip */
 
     /* Add in MAR checking */
-    if (addr == (mar & RMASK)) {
+    if (addr == (mar & RMASK) && uf == (((mar >> 18) & 04) != 0)) {
        switch((mar >> 18) & 03) {
        case 0: break;
        case 1: if (fetch) {
@@ -3457,15 +3457,15 @@ int page_lookup_its(t_addr addr, int flag, t_addr *loc, int wr, int cur_context,
     }
 fault:
     /* Update fault data, fault address only if new fault */
-    if ((ofd & 00770) == 0)
+    if (fstr)
         fault_addr = (page) | ((uf)? 0400 : 0) | ((data & 01777) << 9);
     if ((xct_flag & 04) == 0) {
         mem_prot = 1;
         fault_data |= 01000;
+        check_apr_irq();
     } else {
         PC = (PC + 1) & RMASK;
     }
-    check_apr_irq();
     return 0;
 }
 
@@ -4232,6 +4232,7 @@ int Mem_read(int flag, int cur_context, int fetch, int mod) {
             return 1;
         if (addr >= MEMSIZE) {
             nxm_flag = 1;
+            check_apr_irq();
             return 1;
         }
         if (sim_brk_summ && sim_brk_test(AB, SWMASK('R')))
@@ -4261,6 +4262,7 @@ int Mem_write(int flag, int cur_context) {
             return 1;
         if (addr >= MEMSIZE) {
             nxm_flag = 1;
+            check_apr_irq();
             return 1;
         }
         if (sim_brk_summ && sim_brk_test(AB, SWMASK('W')))
@@ -4796,7 +4798,7 @@ st_pi:
 
     /* Update history */
     if (hst_lnt) {
-            if (PC >= 020)
+            if (PC != 017)
                 hst_p = hst_p + 1;
             if (hst_p >= hst_lnt) {
                 hst_p = 0;
@@ -6114,6 +6116,7 @@ dpnorm:
                       if ((AB + 8) >= MEMSIZE) {
                          fault_data |= 0400;
                          mem_prot = 1;
+                         check_apr_irq();
                          break;
                       }
                       MB = ((uint64)age) << 27 |
@@ -6147,6 +6150,7 @@ dpnorm:
                       if ((AB + 8) >= MEMSIZE) {
                          fault_data |= 0400;
                          mem_prot = 1;
+                         check_apr_irq();
                          break;
                       }
                       MB = M[AB];                /* WD 0 */
@@ -6184,6 +6188,7 @@ dpnorm:
                       MB = M[AB];                /* WD 7 */
                       ac_stack = (uint32)MB;
                       page_enable = 1;
+                      check_apr_irq();
                   }
                   /* AC & 2 = Clear TLB */
                   if (AC & 2) {
@@ -6194,7 +6199,7 @@ dpnorm:
                   /* AC & 4 = Set Prot Interrupt */
                   if (AC & 4) {
                       mem_prot = 1;
-                      set_interrupt(0, apr_irq);
+                      check_apr_irq();
                   }
                   break;
               }
@@ -13461,6 +13466,7 @@ qua_srv(UNIT * uptr)
 {
     if ((fault_data & 1) == 0 && pi_enable && !pi_pending && (FLAGS & USER) != 0) {
        mem_prot = 1;
+       check_apr_irq();
     }
     qua_time = BIT17;
     return SCPE_OK;
