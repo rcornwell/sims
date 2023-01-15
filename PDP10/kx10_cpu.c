@@ -144,11 +144,6 @@ int     nxm_flag;                             /* Non-existant memory flag */
 #if KA | KI
 int     adr_flag;                             /* Address break flag */
 int     adr_cond;                             /* Address condition swiches */
-#define ADR_IFETCH  020
-#define ADR_DFETCH  010
-#define ADR_WRITE   004
-#define ADR_STOP    002
-#define ADR_BREAK   001
 #endif
 int     clk_flg;                              /* Clock flag */
 int     ov_irq;                               /* Trap overflow */
@@ -1392,7 +1387,9 @@ t_stat dev_tim(uint32 dev, uint64 *data) {
        else
            tim_val = (tim_val & 0070000) + 010000 - (int)us;
     }
+    /* Interval counter */
     clr_interrupt(4 << 2);
+    sim_cancel(uptr);
     switch(dev & 03) {
     case CONI:
         /* Interval counter */
@@ -1401,11 +1398,9 @@ t_stat dev_tim(uint32 dev, uint64 *data) {
         res |= ((uint64)(tim_val & 07777)) << 18;
         *data = res;
         sim_debug(DEBUG_CONI, &cpu_dev, "CONI TIM %012llo\n", *data);
-        return SCPE_OK;
+        break;
 
      case CONO:
-        /* Interval counter */
-        sim_cancel(uptr);
         tim_val &= 037777;   /* Clear run bit */
         tim_per = *data & 07777;
         if (*data & 020000)  /* Clear overflow and done */
@@ -1418,10 +1413,10 @@ t_stat dev_tim(uint32 dev, uint64 *data) {
         break;
 
     case DATAO:
-        return SCPE_OK;
+        break;
 
     case DATAI:
-        return SCPE_OK;
+        break;
     }
     /* If timer is on, figure out when it will go off */
     if (tim_val & 040000) {
@@ -4214,6 +4209,7 @@ int page_lookup(t_addr addr, int flag, t_addr *loc, int wr, int cur_context, int
              return 1;
           }
           mem_prot = 1;
+          check_apr_irq();
           return 0;
       } else {
          *loc = addr;
@@ -6192,9 +6188,10 @@ dpnorm:
                   }
                   /* AC & 2 = Clear TLB */
                   if (AC & 2) {
-                     for (f = 0; f < 512; f++)
-                        e_tlb[f] = u_tlb[f] = 0;
-                     mem_prot = 0;
+                      for (f = 0; f < 512; f++)
+                         e_tlb[f] = u_tlb[f] = 0;
+                      mem_prot = 0;
+                      check_apr_irq();
                   }
                   /* AC & 4 = Set Prot Interrupt */
                   if (AC & 4) {

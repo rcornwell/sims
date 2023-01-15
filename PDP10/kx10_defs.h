@@ -159,6 +159,7 @@ typedef t_uint64     uint64;
 #define DEBUG_CONO      0x0000040       /* Show CONO instructions */
 #define DEBUG_DATAIO    0x0000100       /* Show DATAI/O instructions */
 #define DEBUG_IRQ       0x0000200       /* Show IRQ requests */
+#define DEBUG_TRACE     0x0000400       /* Trace cpu instruction execution */
 
 extern DEBTAB dev_debug[];
 extern DEBTAB crd_debug[];
@@ -207,6 +208,12 @@ extern DEBTAB crd_debug[];
 #if KS
 #define IOCTL    00000017000000LL
 #endif
+
+#define ADR_IFETCH  020 
+#define ADR_DFETCH  010 
+#define ADR_WRITE   004 
+#define ADR_STOP    002 
+#define ADR_BREAK   001 
 
 /* IRQ Flags in APR */
 #if KL
@@ -831,6 +838,11 @@ extern UNIT     auxcpu_unit[];
 //int slave_read (t_addr addr);
 //int slave_write (t_addr addr, uint64);
 //extern UNIT     slave_unit[];
+#endif
+
+#if PIDP10
+void pi_panel_start();
+void pi_panel_stop();
 #endif
 
 #endif
