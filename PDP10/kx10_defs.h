@@ -99,6 +99,10 @@
 #define MAGIC_SWITCH 0
 #endif
 
+#ifndef PIDP10        /* PiDP10 front panel support. */
+#define PIDP10 0
+#endif
+
 
 /* MPX interrupt multiplexer for ITS systems */
 #define MPX_DEV ITS

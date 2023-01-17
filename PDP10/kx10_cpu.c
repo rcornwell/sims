@@ -123,9 +123,23 @@ t_addr  AB;                                   /* Memory address buffer */
 t_addr  PC;                                   /* Program counter */
 uint32  IR;                                   /* Instruction register */
 uint64  MI;                                   /* Monitor lights */
+uint8   MI_flag;                              /* Monitor flags */
+uint8   MI_disable;                           /* Monitor flag disable */
 uint32  FLAGS;                                /* Flags */
 uint32  AC;                                   /* Operand accumulator */
 uint64  SW;                                   /* Switch register */
+uint8   RUN;                                  /* Run flag */
+uint8   prog_stop;                            /* Programmed stop */
+#if PIDP10
+uint8   sing_inst_sw;                         /* Execute single inst */
+uint8   examine_sw;                           /* Examine memory */
+uint8   deposit_sw;                           /* Deposit memory */
+uint8   xct_sw;                               /* Execute SW */
+uint8   stop_sw;                              /* Stop simulation */
+uint32  rdrin_dev;                            /* Read in device */
+uint8   IX;                                   /* Index register */
+uint8   IND;                                  /* Indirect flag */
+#endif
 #if PDP6 | KA | KI
 t_addr  AS;                                   /* Address switches */
 #endif
@@ -142,6 +156,7 @@ int     mem_prot;                             /* Memory protection flag */
 #endif
 int     nxm_flag;                             /* Non-existant memory flag */
 #if KA | KI
+int     nxm_stop;                             /* Non-existant memory stop flag */
 int     adr_flag;                             /* Address break flag */
 int     adr_cond;                             /* Address condition swiches */
 #endif
@@ -154,6 +169,7 @@ int     ill_op;                               /* Illegal opcode */
 int     user_io;                              /* User IO flag */
 int     ex_uuo_sync;                          /* Execute a UUO op */
 #endif
+uint16  IOB_PI;                               /* Input bus PI signals */
 uint8   PIR;                                  /* Current priority level */
 uint8   PIH;                                  /* Highest priority */
 uint8   PIE;                                  /* Priority enable mask */
@@ -296,6 +312,7 @@ int     maoff = 0;                            /* Offset for traps */
 uint16  dev_irq[128];                         /* Pending irq by device */
 t_stat  (*dev_tab[128])(uint32 dev, uint64 *data);
 t_addr  (*dev_irqv[128])(uint32 dev, t_addr addr);
+t_stat  cpu_detach(UNIT *uptr);
 t_stat  rtc_srv(UNIT * uptr);
 #if KS
 int32   rtc_tps = 500;
@@ -458,6 +475,8 @@ REG cpu_reg[] = {
     { ORDATAD (PIENB, pi_enable, 7, "Enable Priority System") },
     { ORDATAD (SW, SW, 36, "Console SW Register"), REG_FIT},
     { ORDATAD (MI, MI, 36, "Memory Indicators"), REG_FIT},
+    { FLDATAD (MIFLAG, MI_flag, 0, "Memory indicator flag") },
+    { FLDATAD (MIDISABLE, MI_disable, 0, "Memory indicator disable") },
 #if PDP6 | KA | KI
     { ORDATAD (AS, AS, 18, "Console AS Register"), REG_FIT},
 #endif
@@ -474,6 +493,7 @@ REG cpu_reg[] = {
 #endif
     { FLDATAD (NXM, nxm_flag, 0, "Non-existing memory access") },
 #if KA | KI
+    { FLDATAD (NXMSTOP, nxm_stop, 0, "Stop on non-existing memory") },
     { FLDATAD (ABRK, adr_flag, 0, "Address break") },
     { ORDATAD (ACOND, adr_cond, 5, "Address condition switches") },
 #endif
@@ -591,6 +611,9 @@ REG cpu_reg[] = {
     { BRDATA (ETLB, e_tlb, 8, 32, 512), REG_HRO},
     { BRDATA (UTLB, u_tlb, 8, 32, 546), REG_HRO},
 #endif
+#if PIDP10
+    { ORDATAD (READIN, rdrin_dev, 9, "Readin device")},
+#endif
     { NULL }
     };
 
@@ -687,7 +710,7 @@ DEVICE cpu_dev = {
     "CPU", &cpu_unit[0], cpu_reg, cpu_mod,
     1+ITS+KL, 8, 22, 1, 8, 36,
     &cpu_ex, &cpu_dep, &cpu_reset,
-    NULL, NULL, NULL, NULL, DEV_DEBUG, 0, cpu_debug,
+    NULL, NULL, &cpu_detach, NULL, DEV_DEBUG, 0, cpu_debug,
     NULL, NULL, &cpu_help, NULL, NULL, &cpu_description
     };
 
@@ -857,6 +880,7 @@ void set_interrupt(int dev, int lvl) {
     if (lvl) {
        dev_irq[dev>>2] = 0200 >> lvl;
        pi_pending = 1;
+       IOB_PI |= 0200 >> lvl;
 #if DEBUG
        sim_debug(DEBUG_IRQ, &cpu_dev, "set irq %o %o %03o %03o %03o\n",
               dev & 0774, lvl, PIE, PIR, PIH);
@@ -872,6 +896,7 @@ void set_interrupt_mpx(int dev, int lvl, int mpx) {
        if (lvl == 1 && mpx != 0)
           dev_irq[dev>>2] |= mpx << 8;
        pi_pending = 1;
+       IOB_PI |= 0200 >> lvl;
 #if DEBUG
        sim_debug(DEBUG_IRQ, &cpu_dev, "set mpx irq %o %o %o %03o %03o %03o\n",
               dev & 0774, lvl, mpx, PIE, PIR, PIH);
@@ -884,7 +909,13 @@ void set_interrupt_mpx(int dev, int lvl, int mpx) {
  * Clear the interrupt flag for a device
  */
 void clr_interrupt(int dev) {
+    uint16   lvl;
+    int      i;
     dev_irq[dev>>2] = 0;
+    /* Update bus PI flags */
+    for (lvl = i = 0; i < MAX_DEV; i++)
+        lvl |= dev_irq[i];
+    IOB_PI = lvl;
 #if DEBUG
     if (dev > 4)
         sim_debug(DEBUG_IRQ, &cpu_dev, "clear irq %o\n", dev & 0774);
@@ -919,10 +950,7 @@ int check_irq_level() {
 #endif
        return 0;
     }
-
-    /* Scan all devices */
-    for(i = lvl = 0; i < MAX_DEV; i++)
-       lvl |= dev_irq[i];
+    lvl = IOB_PI;
     if (lvl == 0)
        pi_pending = 0;
     pi_req = (lvl & PIE) | PIR;
@@ -1095,6 +1123,7 @@ t_stat dev_pi(uint32 dev, uint64 *data) {
         }
 #else
         MI = *data;
+        MI_flag = !MI_disable;
 #ifdef PANDA_LIGHTS
         /* Set lights */
         ka10_lights_main (*data);
@@ -1515,6 +1544,9 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
  * Check if the last operation caused a APR IRQ to be generated.
  */
 void check_apr_irq() {
+     if (nxm_stop && nxm_flag) {
+         RUN = 0;
+     }
      if (pi_enable && apr_irq) {
          int flg = 0;
          clr_interrupt(0);
@@ -1664,6 +1696,9 @@ t_stat dev_pag(uint32 dev, uint64 *data) {
  * Check if the last operation caused a APR IRQ to be generated.
  */
 void check_apr_irq() {
+     if (nxm_stop && nxm_flag) {
+         RUN = 0;
+     }
      if (pi_enable && apr_irq) {
          int flg = 0;
          clr_interrupt(0);
@@ -4395,6 +4430,8 @@ if (sim_step != 0) {
     sim_cancel_step();
 }
 
+RUN = 1;
+prog_stop = 0;
 #if KS
 reason = SCPE_OK;
 #else
@@ -4438,23 +4475,58 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
              if (QITS)
                  load_quantum();
 #endif
+             RUN = 0;
              return reason;
          }
     }
 
     if (sim_brk_summ && f_load_pc && sim_brk_test(PC, SWMASK('E'))) {
          reason = STOP_IBKPT;
+         RUN = 0;
          break;
     }
 
     if (watch_stop) {
          reason = STOP_IBKPT;
+         RUN = 0;
          break;
     }
+
+#if PIDP10
+    if (examine_sw) {   /* Examine memory switch */
+        AB = AS;
+        (void)Mem_read(1, 0, 0, 0);
+        examine_sw = 0;
+    }
+    if (deposit_sw) {   /* Deposit memory switch */
+        AB = AS;
+        MB = SW;
+        (void)Mem_write(1, 0);
+        deposit_sw = 0;
+    }
+    if (xct_sw) {    /* Handle Front panel xct switch */
+        modify = 0;
+        xct_flag = 0;
+        uuo_cycle = 1;
+        f_pc_inh = 1;
+        MB = SW;
+        xct_sw = 0;
+        goto no_fetch;
+    }
+    if (stop_sw) {    /* Stop switch set */
+        RUN = 0;
+        stop_sw = 0;
+    }
+    if (sing_inst_sw) {  /* Handle Front panel single instruction */
+        instr_count = 1;
+    }
+#endif
+
 
 #if MAGIC_SWITCH
     if (!MAGIC) {
          reason = STOP_MAGIC;
+         RUN = 0;
          break;
     }
 #endif /* MAGIC_SWITCH */
@@ -4573,6 +4645,10 @@ no_fetch:
         AR = MB;
         AB = MB & RMASK;
         ix = GET_XR(MB);
+#if PIDP10
+        IX = ix;   /* Save these in variable so display can show them */
+        IND = ind;
+#endif
         if (ix) {
 #if KL | KS
              if (((xct_flag & 8) != 0 && !ptr_flg) ||
@@ -4730,7 +4806,7 @@ st_pi:
             for (f = 1; f < MAX_DEV; f++) {
                 if (dev_irq[f] & pi_mask) {
                     AB = uba_get_vect(AB, pi_mask, f);
-                    dev_irq[f] = 0;
+                    clr_interrupt(f << 2);
                     break;
                 }
             }
@@ -8556,6 +8632,8 @@ jrstf:
 #endif
                             goto muuo;
                        } else {
+                            RUN = 0;
+                            prog_stop = 1;
                             reason = STOP_HALT;
                        }
                        break;
@@ -8618,6 +8696,8 @@ jrstf:
 #endif
                       goto muuo;
                  } else {
+                      RUN = 0;
+                      prog_stop = 1;
                       reason = STOP_HALT;
                  }
               }
@@ -12200,6 +12280,7 @@ last:
     }
 }
 /* Should never get here */
+RUN = 0;
 #if ITS
 if (QITS)
     load_quantum();
@@ -13508,8 +13589,16 @@ static const char *pdp10_clock_precalibrate_commands[] = {
 t_stat cpu_reset (DEVICE *dptr)
 {
     int     i;
+    static  int  initialized = 0;
+
+    if (!initialized) {
+         initialized = 1;
+#if PIDP10
+         pi_panel_start();
+#endif
+    }
     sim_debug(DEBUG_CONO, dptr, "CPU reset\n");
-    BYF5 = uuo_cycle = 0;
+    RUN = BYF5 = uuo_cycle = 0;
 #if KA | PDP6
     Pl = Ph = 01777;
     Rl = Rh = Pflag = 0;
@@ -13524,8 +13613,8 @@ t_stat cpu_reset (DEVICE *dptr)
 #if KA | KI
     adr_flag = 0;
 #endif
-    nxm_flag = clk_flg = 0;
-    PIR = PIH = PIE = pi_enable = parity_irq = 0;
+    MI_flag = prog_stop = nxm_flag = clk_flg = 0;
+    IOB_PI = PIR = PIH = PIE = pi_enable = parity_irq = 0;
     pi_pending = pi_enc = apr_irq = 0;
     ov_irq =fov_irq =clk_en =clk_irq = 0;
     pi_restore = pi_hold = 0;
@@ -13658,6 +13747,14 @@ else {
     M[ea] = val & FMASK;
     }
 return SCPE_OK;
+}
+
+/* Called at close of simulator */
+t_stat cpu_detach (UNIT *uptr)
+{
+#if PIDP10
+    pi_panel_stop();
+#endif
 }
 
 /* Memory size change */
