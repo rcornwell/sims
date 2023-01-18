@@ -191,8 +191,8 @@ static t_stat tym_detach(UNIT *uptr)
 
 static uint64 word(int pointer, int base)
 {
-    int address = M[tym_base + base] >> 4;
-    address += M[tym_base + pointer];
+    t_addr address = (M[tym_base + base] >> 4) & RMASK;
+    address += M[tym_base + pointer] & RMASK;
     return M[address];
 }
 
@@ -204,12 +204,12 @@ static void next(int pointer, int size)
 
 static void tym_input(uint64 data)
 {
-    int address = M[tym_base + IRNG] >> 4;
-    address += M[tym_base + IBP];
+    t_addr address = (M[tym_base + IRNG] >> 4) & RMASK;
+    address += M[tym_base + IBP] & RMASK;
     M[address] = data;
 }
 
-static unsigned room (int h, int t, int s)
+static uint64 room (int h, int t, int s)
 {
     uint64 head = M[tym_base + h];
     uint64 tail = M[tym_base + t];
@@ -528,8 +528,7 @@ static void output_data(int port, int n)
         data = word(OBP, ORNG);
     start:
         for (; i < 4 && n > 0; i++, n--) {
-            c = data >> 28;
-            c &= 0177;
+            c = (data >> 28) & 0177;
             data <<= 8;
             sim_debug(DEBUG_DATA, &tym_dev,
                       "Host: send port %d %03o '%c'.\n", port, c, c);
@@ -665,8 +664,7 @@ static t_stat tym_output_srv(UNIT *uptr)
 
     data = word(OBP, ORNG);
 
-    c = data >> 28;
-    c &= 0177;
+    c = (data >> 28) & 0177;
     data <<= 8;
     sim_debug(DEBUG_DATA, &tym_dev,
                "Host: send port %d %03o '%c'.\n", output_port, c, c);

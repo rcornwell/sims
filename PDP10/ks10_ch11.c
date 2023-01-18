@@ -222,7 +222,6 @@ int
 ch11_read(DEVICE *dptr, t_addr addr, uint16 *data, int32 access)
 {
     struct pdp_dib   *dibp = (DIB *)dptr->ctxt;
-    int               i;
 
     addr &= dibp->uba_mask;
     *data = 0;

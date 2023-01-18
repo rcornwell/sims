@@ -13755,6 +13755,7 @@ t_stat cpu_detach (UNIT *uptr)
 #if PIDP10
     pi_panel_stop();
 #endif
+    return SCPE_OK;
 }
 
 /* Memory size change */
