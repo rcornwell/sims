@@ -1457,6 +1457,10 @@ KA10_OPT += -DPANDA_LIGHTS
 KA10 += ${KA10D}/kx10_lights.c
 KA10_LDFLAGS += -lusb-1.0
 endif
+ifneq (${PIDP10},)
+KA10_OPT += -DPIDP10=1
+KA10 += ${KA10D}/ka10_pipanel.c
+endif
 
 KI10D = ${SIMHD}/PDP10
 ifneq (,${DISPLAY_OPT})
