@@ -290,7 +290,7 @@ extern int    vma_lpsw(uint32 addr1);
 extern int    vma_stssk(uint32 src1, uint32 addr1);
 extern int    vma_stisk(uint8  reg1, uint32 addr1);
 extern int    vma_stsvc(uint8 reg);
-extern int    vma_lra(uint8 reg, uint32 addr1);
+extern int    vma_lra(uint8 reg, uint32 addr1, uint8 *cc);
 extern int    vma_stnsm(uint8 reg, uint32 addr1);
 extern int    vma_stosm(uint8 reg, uint32 addr1);
 extern int    vma_stctl(uint8 reg, uint32 addr1);
@@ -571,7 +571,7 @@ TransAddr(uint32 va, uint32 *pa)
      seg = (va >> seg_shift) & seg_mask;   /* Segment number to word address */
      page = (va >> page_shift) & page_index;
 
-     /* Check address against lenght of segment table */
+     /* Check address against length of segment table */
      if (seg > seg_len) {
          if (Q370) {
              M[0x90 >> 2] = va;
@@ -1782,7 +1782,6 @@ set_cc3:
                 src2 ^= FMASK;
                 dest = src1 + src2 + 1;
                 src1h = ((src1 & src2) | ((src1 ^ src2) & ~dest)) & MSIGN;
-                src1h = (src1h != 0);
                 cc = (dest != 0);
                 if (src1h != 0)
                    cc |= 2;
@@ -1794,7 +1793,6 @@ set_cc3:
         case OP_ALR:
                 dest = src1 + src2;
                 src1h = ((src1 & src2) | ((src1 ^ src2) & ~dest)) & MSIGN;
-                src1h = (src1h != 0);
                 cc = (dest != 0);
                 if (src1h != 0)
                    cc |= 2;
@@ -2108,7 +2106,7 @@ char_save:
                 break;
 
         case OP_SRDL:
-                if (reg & 1) {
+                if (reg1 & 1) {
                     storepsw(OPPSW, IRC_SPEC);
                     goto supress;
                 } else {
@@ -2133,7 +2131,7 @@ char_save:
                 break;
 
         case OP_SLDL:
-                if (reg & 1) {
+                if (reg1 & 1) {
                     storepsw(OPPSW, IRC_SPEC);
                     goto supress;
                 } else {
@@ -2158,7 +2156,7 @@ char_save:
                 break;
 
         case OP_SLDA:
-                if (reg & 1) {
+                if (reg1 & 1) {
                     storepsw(OPPSW, IRC_SPEC);
                     goto supress;
                 } else {
@@ -2206,7 +2204,7 @@ save_dbl:
                 break;
 
         case OP_SRDA:
-                if (reg & 1) {
+                if (reg1 & 1) {
                     storepsw(OPPSW, IRC_SPEC);
                     goto supress;
                 } else {
@@ -2426,8 +2424,12 @@ save_dbl:
                 if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if (flags & PROBLEM) {
+                    /* RX in RS range */
+                    if (X2(reg) != 0)
+                        addr1 += regs[X2(reg)];
+
                     /* Try to do quick LRA */
-                    if (QVMA && vma_lra(reg, addr1))
+                    if (QVMA && vma_lra(R1(reg), addr1, &cc))
                         break;
                     storepsw(OPPSW, IRC_PRIV);
                 } else {
@@ -2497,7 +2499,7 @@ save_dbl:
                     entry &= 0xffff;
 
                     /* Check if entry valid */
-                    if (entry & pte_avail) {
+                    if (entry & (pte_avail|pte_mbz)) {
                         cc = 2;
                         regs[reg1] = addr2;
                         per_mod |= 1 << reg1;
@@ -2819,6 +2821,7 @@ save_dbl:
                 /* Check if too big */
                 if (dest & MSIGN) {
                     storepsw(OPPSW, IRC_FIXDIV);
+                    regs[reg1] = dest;
                     goto supress;
                 }
                 /* Twos compliment if needed */
@@ -2998,23 +3001,31 @@ save_dbl:
                 if (Q370) {
                     int i, j;
 
+                    /* Fetch register */
                     dest = regs[reg1];
+                    /* If no bits, just read byte and trap if needed */
                     if (R2(reg) == 0) {
                        if(ReadByte(addr1, &src1))
                           goto supress;
                        cc = 0;
                        break;
                     }
+                    /* Set flag to check first bit */
                     fill = 0x80;
                     digit = 0;
+                    /* Scan from Bit 12 to bit 15 */
                     for (i = 0x8, j=24; i != 0; i >>= 1, j-=8) {
+                        /* If the bit is one, read in byte */
                         if ((R2(reg) & i) != 0) {
                             if(ReadByte(addr1, &src1))
                                goto supress;
                             addr1++;
+                            /* Make mask */
                             src2 = 0xff << j;
+                            /* Put byte into place */
                             dest = (dest & ~src2) | ((src1 & 0xff) << j);
-                            if (src1) {
+                            /* If byte not zero, compute new CC */
+                            if (src1 != 0) {
                                 if ((src1 & fill) != 0)
                                     digit = 1;
                                 else if (digit == 0)
@@ -3751,7 +3762,7 @@ save_dbl:
                 if ((op & 0x1))       /* LN, LC */
                     src2 ^= MSIGN;
                 cc = 0;
-                src1 = src2 & MMASK;
+                src1 = src2 & (~MSIGN);
                 if ((op & 0x10) == 0) {
                     fpregs[reg1|1] = src2h;
                     src1 |= src2h;
@@ -4504,7 +4515,7 @@ fpnorm:
                 dest |= (e1 << 24) & EMASK;
                 if (fill)
                    dest |= MSIGN;
-                if ((op & 0x10) == 0 || (op & 0xF) == 0xC)
+                if ((op & 0x10) == 0)
                     fpregs[reg1|1] = desth;
                 fpregs[reg1] = dest;
                 break;
@@ -4517,7 +4528,6 @@ fpnorm:
                 /* Extract numbers and adjust */
                 e1 = (src1 & EMASK) >> 24;
                 e2 = (src2 & EMASK) >> 24;
-                fill = 0;
                 fill = 0;
                 if ((src1 & MSIGN) != (src2 & MSIGN))
                    fill = 1;
@@ -5842,8 +5852,12 @@ dec_mul(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
     int      mul;
     int      len;
 
-    if (len2 > 7 || len2 >= len1) {
+    if (len2 == len1) {
         storepsw(OPPSW, IRC_SPEC);
+        return;
+    }
+    if (len2 > 7 || len2 >= len1) {
+        storepsw(OPPSW, IRC_DATA);
         return;
     }
     if (dec_load(b, addr2, (int)len2, &sb))
