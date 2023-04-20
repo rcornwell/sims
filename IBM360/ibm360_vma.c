@@ -580,9 +580,127 @@ vma_stsvc(uint8 reg)
 /* Handle VM Assists for LRA instructions
  * return 0 if assist could not be completed. Return 1 if successful */
 int
-vma_lra(uint8 reg, uint32 addr1)
+vma_lra(uint8 reg, uint32 addr1, uint8 *cc)
 {
+#if 0
+    uint32    micblok;
+    uint32    micrseg;
+    uint32    miccreg;
+    uint32    extcr0;
+    uint32    extcr1;
+    uint32    page;
+    uint32    seg;
+    uint32    v_seg_len;
+    uint32    r_seg_len;
+    uint32    v_seg_tbl;
+    uint32    r_seg_tbl;
+    uint32    segpage;
+    uint32    pagswp;
+    uint32    swpflg;
+    uint32    pagcore;
+    uint32    micvpsw;
+    uint32    temp;
+    uint32    addr2;
+    uint8     stk;
+    int       page_shift;
+    int       page_mask;
+    int       page_index;
+    int       pte_avail;
+    int       pte_mbz;
+    int       pte_shift;
+    int       pte_len_shift;
+    int       seg_shift;
+    int       seg_mask;
+
     sim_debug(DEBUG_VMA, &cpu_dev, "LRA check %02x %08x\n", reg, addr1);
+    /* Check if enabled */
+    if ((cregs[6] & 0xd0000000) != MSIGN)
+       return 0;
+    micblok = (cregs[6] & 0xfffff8) >> 2;
+    /* Fetch SEGPAGE */
+    micrseg = M[micblok];
+    miccreg = M[micblok + 4];
+    sim_debug(DEBUG_VMA, &cpu_dev, "Micrseg %08x\n", micrseg);
+    extcr0 = M[miccreg];
+    extcr1 = M[miccreg + 1];
+    v_seg_len = (((extcr1 >> 24) & 0xff) + 1) << 4;
+    r_seg_len = (((micrseg >> 24) & 0xff) + 1) << 4;
+    v_seg_tbl = extcr1 & AMASK;
+    r_seg_tbl = micrseg & AMASK;
+    /* CR0 values
+             |    |     |     |   |   |   |   |
+      0 0 0 00000 00 1 11 111 1111222222222231|
+      0 1 2 34567 89 0 12 345 6789012345678901|
+      b s t xxxxx ps 0 ss xxx iiiiiixxiiixxxxx|
+      m s d                   mmmmct  iIE     |
+    */
+    page_shift = 0;
+    seg_shift = 0;
+    switch((extcr0 >> 22) & 03) {
+    default:  /* Let operating system handle this. */
+             return 0;
+    case 1:  /* 2K pages */
+             page_shift = 11;
+             page_mask = 0x7ff;
+             pte_avail = 0x4;
+             pte_mbz = 0x2;
+             pte_shift = 3;
+             pte_len_shift = 1;
+             break;
+    case 2:  /* 4K pages */
+             page_shift = 12;
+             page_mask = 0xfff;
+             pte_avail = 0x8;
+             pte_mbz = 0x6;
+             pte_shift = 4;
+             pte_len_shift = 0;
+             break;
+    }
+    switch((extcr0 >> 19) & 07) {
+    default:  /* Let operating system handle this. */
+             return 0;
+    case 0:  /* 64K segments  */
+             seg_shift = 16;
+             seg_mask = AMASK >> 16;
+             break;
+    case 2:  /* 1M segments */
+             seg_shift = 20;
+             seg_mask = AMASK >> 20;
+             pte_len_shift += 4;
+             break;
+    }
+    /* Generate pte index mask */
+    page_index = ((~(seg_mask << seg_shift) &
+                    ~page_mask) & AMASK) >> page_shift;
+
+    addr1 &= AMASK;
+    /* Segment number to word address */
+    seg = (addr1 >> seg_shift) & seg_mask;
+    if (seg > v_seg_len) {
+        *cc = 3;
+        regs[reg] = addr1;
+        return 1;
+    }
+    addr2 = (((seg << 2) + r_seg_tbl) & AMASK);
+    if (ReadFull(addr2, &temp))
+        return 0;
+    /* Check if entry valid */
+    if (temp & 0xf000007) {
+        return 0;  /* Nope, let OS handle it */
+    }
+    page = (addr1 >> page_shift) & page_index;
+    addr2 = (temp >> 28) + 1;
+    /* Check if over end of table */
+    if ((page >> pte_len_shift) >= addr2) {
+        return 0; /* Let OS handle it */
+    }
+
+    /* Now we need to fetch the actual entry */
+    addr2 = (temp & 0x00fffffe) + (page << 1);
+    addr2 &= AMASK;
+
+    sim_debug(DEBUG_VMA, &cpu_dev, "Segpage %08x s=%x p=%x\n", segpage, seg, page);
+#endif
     return 0;
 }
 
