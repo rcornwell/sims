@@ -88,7 +88,7 @@ uint8        key[MAXMEMSIZE/2048];
 uint32       regs[16];             /* CPU Registers */
 uint32       PC;                   /* Program counter */
 uint32       iPC;                  /* Initial PC for instruction */
-uint32       fpregs[8];            /* Floating point registers */
+t_uint64     fpregs[8];            /* Floating point registers */
 uint32       cregs[16];            /* Control registers /67 or 370 only */
 uint16       sysmsk;               /* Interupt mask */
 uint8        ext_en;               /* Enable external and timer IRQ's */
@@ -204,9 +204,10 @@ uint32       idle_stop_tm0;        // sim_os_msec when start counting for idle t
 #define NMASK       0x00f00000     /* Normalize mask */
 #define SNMASK      0x0f000000     /* Short normal mask */
 
-#ifdef USE_64BIT
+#define HMASKL      0xffffffff00000000LL
+#define LMASKL      0x00000000ffffffffLL
 #define MSIGNL      0x8000000000000000LL
-#define MMASKL      0x00ffffff00000000LL
+#define MMASKL      0x00ffffffffffffffLL
 #define CMASKL      0x1000000000000000LL
 #define EMASKL      0x7f00000000000000LL
 #define XMASKL      0x0fffffffffffffffLL
@@ -219,11 +220,6 @@ uint32       idle_stop_tm0;        // sim_os_msec when start counting for idle t
 #define STDBL(r,x)   regs[r|1] = (uint32)((x) & FMASK); \
                      regs[r] = (uint32)(((x) >> 32) & FMASK); \
                      per_mod |= 3 << r;
-#else
-#define LDDBLx(r,x)  x = regs[r]; x##h = regs[r|1]; \
-                    if (hst_lnt) { hst[hst_p].src1 = x; hst[hst_p].src2 = x##h ; }
-#define STDBLx(r,x)   regs[r|1] = x##h; regs[r] = x; per_mod |= 3 << r;
-#endif
 
 #define R1(x)   (((x)>>4) & 0xf)
 #define R2(x)   ((x) & 0xf)
@@ -337,11 +333,11 @@ REG cpu_reg[] = {
     { HRDATA (R14, regs[016], 32) },
     { HRDATA (R15, regs[017], 32) },
     { BRDATA (R, regs, 16, 32, 16) },
-    { HRDATA (FP0, fpregs[00], 32) },
-    { HRDATA (FP2, fpregs[02], 32) },
-    { HRDATA (FP4, fpregs[04], 32) },
-    { HRDATA (FP6, fpregs[06], 32) },
-    { BRDATA (FP, fpregs, 16, 32, 8) },
+    { HRDATA (FP0, fpregs[00], 64) },
+    { HRDATA (FP2, fpregs[02], 64) },
+    { HRDATA (FP4, fpregs[04], 64) },
+    { HRDATA (FP6, fpregs[06], 64) },
+    { BRDATA (FP, fpregs, 16, 64, 8) },
     { BRDATA (CR, cregs, 16, 32, 16) },
     { NULL }
     };
@@ -1106,12 +1102,10 @@ sim_instr(void)
     uint16          irq;         /* Holds current irq code */
     int             e1, e2;      /* Exponent 1 & 2 and various flags */
     int             temp;
-#ifdef USE_64BIT
     t_uint64        src1L;       /* 64 bit source 1 and 2 */
     t_uint64        src2L;
     t_uint64        destL;       /* 64 bit destination */
     t_uint64        dest2L;      /* Upper 64 bit for product */
-#endif
 
     /* Initialize DAT translation values */
     if (Q370) {
@@ -1394,34 +1388,33 @@ opr:
                 goto supress;
             }
             /* Load operands */
-            src1 = fpregs[reg1];
-            if ((op & 0x10)  == 0)
-                 src1h = fpregs[reg1|1];
-            else
-                 src1h = 0;
+            src1L = fpregs[reg1];
+            if ((op & 0x10) != 0) {
+                src1L = src1L & HMASKL;
+            }
             if ((op & 0x40) != 0) {
-                if ((op & 0x10) == 0 && (addr1 & 0x3) != 0) {
-                   storepsw(OPPSW, IRC_SPEC);
-                   goto supress;
-                }
-
                 if (ReadFull(addr1, &src2))
                    goto supress;
                 if ((op & 0x10) == 0) {
+                   if ((addr1 & 0x3) != 0 && (cpu_unit[0].flags & FEAT_STOR) == 0) {
+                      storepsw(OPPSW, IRC_SPEC);
+                      goto supress;
+                   }
                    if (ReadFull(addr1 + 4, &src2h))
                        goto supress;
-                } else
+                } else {
                    src2h = 0;
-            } else if ((op & 0xe0) == 0x20) {
+                }
+                src2L = (((t_uint64)src2) << 32) | ((t_uint64)src2h);
+            } else {
                 if (reg & 0x9) {
                    storepsw(OPPSW, IRC_SPEC);
                    goto supress;
                 }
-                src2 = fpregs[R2(reg)];
-                if ((op & 0x10) == 0)
-                    src2h = fpregs[R2(reg)|1];
-                else
-                    src2h = 0;
+                src2L = fpregs[R2(reg)];
+                if ((op & 0x10) != 0) {
+                   src2L = src2L & HMASKL;
+                }
             }
                 /* All RR opcodes */
         } else if ((op & 0xe0) == 0) {
@@ -1818,7 +1811,6 @@ set_cc3:
                 }
                 src1 = regs[reg1|1];
         case OP_MH:
-#ifdef USE_64BIT
                 src1L = (((t_int64) ((t_uint64)src1 << 32)) >> 32) * (int32)src2;
                 if (op != OP_MH) {
                     STDBL(reg1, src1L);
@@ -1826,44 +1818,6 @@ set_cc3:
                     regs[reg1] = (uint32)(src1L & FMASK);
                     per_mod |= 1 << reg1;
                 }
-#else
-                fill = 0;
-
-                if (src1 & MSIGN) {
-                    fill = 1;
-                    src1 = NEG(src1);
-                }
-                if (src2 & MSIGN) {
-                    fill ^= 1;
-                    src2 = NEG(src2);
-                }
-                src1h = 0;
-                if (src1 != 0 || src2 != 0) {
-                    for (reg = 32; reg > 0; reg--) {
-                         if (src1 & 1)
-                            src1h += src2;
-                         src1 >>= 1;
-                         if (src1h & 1)
-                             src1 |= MSIGN;
-                         src1h >>= 1;
-                    }
-                }
-                if (fill) {
-                    src1h ^= FMASK;
-                    src1 ^= FMASK;
-                    if (src1 == FMASK)
-                        src1h ++;
-                    src1++;
-                }
-                if (op != OP_MH) {
-                    regs[reg1] = src1h;
-                    regs[reg1|1] = src1;
-                    per_mod |= 3 << reg1;
-                } else {
-                    regs[reg1] = src1;
-                    per_mod |= 1 << reg1;
-                }
-#endif
                 break;
 
         case OP_D:
@@ -1877,7 +1831,6 @@ set_cc3:
                     goto supress;
                 }
                 fill = 0;
-#ifdef USE_64BIT
                 LDDBL(reg1, src1L);
                 if (src1L & MSIGNL) {
                     fill = 3;
@@ -1898,45 +1851,6 @@ set_cc3:
 
                 src1 = (uint32)(src2L & FMASK);
                 dest = (uint32)(src1L & FMASK);
-#else
-                LDDBLx(reg1, src1);
-                if (src1 & MSIGN) {
-                    fill = 3;
-                    src1h ^= FMASK;
-                    src1 ^= FMASK;
-                    if (src1h == FMASK)
-                       src1 ++;
-                    src1h++;
-                }
-                if (src2 & MSIGN) {
-                    fill ^= 1;
-                    src2 = NEG(src2);
-                }
-                dest = 0;
-                for (reg = 0; reg < 32; reg++) {
-                    /* Shift left by one */
-                    src1 <<= 1;
-                    if (src1h & MSIGN)
-                        src1 |= 1;
-                    src1h <<= 1;
-                    /* Subtract remainder from divisor */
-                    desth = src1 - src2;
-
-                    /* Shift quotent left one bit */
-                    dest <<= 1;
-
-                    /* If remainder larger then divisor replace */
-                    if ((desth & MSIGN) == 0) {
-                        src1 = desth;
-                        dest |= 1;
-                    }
-                }
-                /* Check for overflow */
-                if ((dest & MSIGN) != 0) {
-                    storepsw(OPPSW, IRC_FIXDIV);
-                    goto supress;
-                }
-#endif
                 if (fill & 1)
                     dest = NEG(dest);
                 if (fill & 2)
@@ -2111,21 +2025,9 @@ char_save:
                     goto supress;
                 } else {
                    addr1 &= 0x3f;
-#ifdef USE_64BIT
                    LDDBL(reg1, src1L);
                    src1L >>= addr1;
                    STDBL(reg1, src1L);
-#else
-                   LDDBLx(reg1, src1);
-                   while(addr1 > 0) {
-                       src1h >>= 1;
-                       if (src1 & 1)
-                           src1h |= MSIGN;
-                       src1 >>= 1;
-                       addr1--;
-                   }
-                   STDBLx(reg1, src1);
-#endif
                    dest = regs[reg1];
                 }
                 break;
@@ -2136,21 +2038,9 @@ char_save:
                     goto supress;
                 } else {
                    addr1 &= 0x3f;
-#ifdef USE_64BIT
                    LDDBL(reg1, src1L);
                    src1L <<= addr1;
                    STDBL(reg1, src1L);
-#else
-                   LDDBLx(reg1, src1);
-                   while(addr1 > 0) {
-                       src1 <<= 1;
-                       if (src1h & MSIGN)
-                           src1 |= 1;
-                       src1h <<= 1;
-                       addr1--;
-                   }
-                   STDBLx(reg1, src1);
-#endif
                    dest = regs[reg1];
                 }
                 break;
@@ -2162,7 +2052,6 @@ char_save:
                 } else {
                    addr1 &= 0x3f;
                    cc = 0;
-#ifdef USE_64BIT
                    LDDBL(reg1, src1L);
                    src2L = src1L & MSIGNL;
                    while (addr1 > 0) {
@@ -2177,25 +2066,6 @@ save_dbl:
                    STDBL(reg1, src1L);
                    if (cc != 3 && src1L != 0)
                       cc = (src1L & MSIGNL) ? 1 : 2;
-#else
-                   LDDBLx(reg1, src1);
-                   dest = src1 & MSIGN;
-                   while(addr1 > 0) {
-                       src1 <<= 1;
-                       if ((src1 & MSIGN) != dest)
-                           cc = 3;
-                       if (src1h & MSIGN)
-                           src1 |= 1;
-                       src1h <<= 1;
-                       addr1--;
-                   }
-                   src1 &= ~MSIGN;
-                   src1 |= dest;
-save_dbl:
-                   STDBLx(reg1, src1);
-                   if (cc != 3 && (src1 | src1h) != 0)
-                      cc = (src1 & MSIGN) ? 1 : 2;
-#endif
                    if (cc == 3 && (pmsk & FIXOVR)) {
                       storepsw(OPPSW, IRC_FIXOVR);
                    }
@@ -2210,7 +2080,6 @@ save_dbl:
                 } else {
                    addr1 &= 0x3f;
                    cc = 0;
-#ifdef USE_64BIT
                    LDDBL(reg1, src1L);
                    src2L = src1L & MSIGNL;
                    while (addr1 > 0) {
@@ -2218,18 +2087,6 @@ save_dbl:
                        src1L |= src2L;
                        addr1--;
                    }
-#else
-                   LDDBLx(reg1, src1);
-                   dest = src1 & MSIGN;
-                   while(addr1 > 0) {
-                       src1h >>= 1;
-                       if (src1 & 1)
-                           src1h |= MSIGN;
-                       src1 >>= 1;
-                       src1 |= dest;
-                       addr1--;
-                   }
-#endif
                    goto save_dbl;
                 }
                 break;
@@ -3709,32 +3566,36 @@ save_dbl:
         case OP_HDR:
         case OP_HER:
                 /* Split number apart */
-                e1 = (src2 & EMASK) >> 24;
-                dest = src2 & MSIGN;  /* Save sign */
-                src2h >>= 1;
-                if (src2 & 1)
-                    src2h |= MSIGN;
-                src2 = (src2 & MMASK) >> 1;
+                e1 = (src2L & EMASKL) >> 56;
+                destL = src2L & MSIGNL;
+                /* Create guard digit */
+                src2L = (src2L & MMASKL) << 4;
+                /* Divide by 2 */
+                src2L >>= 1;
                 /* If not zero, normalize result */
-                if ((src2 | src2h) != 0) {
-                    while ((src2 & NMASK) == 0) {
-                       src2 = (src2 << 4) | ((src2h >> 28) & 0xf);
-                       src2h <<= 4;
-                       e1 --;
+                if (src2L != 0) {
+                    while((src2L & SNMASKL) == 0) {
+                         src2L <<= 4;
+                         e1--;
                     }
                     /* Check if underflow */
                     if (e1 < 0) {
                         if (pmsk & EXPUND) {
                            storepsw(OPPSW, IRC_EXPUND);
                         } else {
-                           dest = e1 = 0;
+                           destL = e1 = 0;
                         }
-                   }
-                } else {
-                   dest = e1 = 0;
+                    }
+                    /* Remove guard digit */
+                    src2L >>= 4;
                 }
+
+                /* Check for zero */
+                if (src2L == 0)
+                   destL = e1 = 0;
+
                 /* Restore result */
-                src2 |= ((e1 << 24) & EMASK) | dest;
+                src2L |= (((t_uint64)e1 << 56) & EMASKL) | destL;
 
                 /* Fall through */
 
@@ -3743,9 +3604,11 @@ save_dbl:
         case OP_LDR:
         case OP_LE:
         case OP_LD:
-                if ((op & 0x10) == 0)
-                    fpregs[reg1|1] = src2h;
-                fpregs[reg1] = src2;
+                if ((op & 0x10) == 0) {
+                    fpregs[reg1] = src2L;
+                } else {
+                    fpregs[reg1] = (src2L & HMASKL) | (fpregs[reg1] & LMASKL);
+                }
                 break;
 
                  /* Floating Load register change sign */
@@ -3758,18 +3621,18 @@ save_dbl:
         case OP_LTER:
         case OP_LCER:
                 if ((op & 0x2) == 0)  /* LP, LN */
-                    src2 &= ~MSIGN;
+                    src2L &= ~MSIGNL;
                 if ((op & 0x1))       /* LN, LC */
-                    src2 ^= MSIGN;
+                    src2L ^= MSIGNL;
                 cc = 0;
-                src1 = src2 & (~MSIGN);
+                src1L = src2L & (~MSIGNL);
                 if ((op & 0x10) == 0) {
-                    fpregs[reg1|1] = src2h;
-                    src1 |= src2h;
+                    fpregs[reg1] = src2L;
+                } else {
+                    fpregs[reg1] = (src2L & HMASKL) | (fpregs[reg1] & LMASKL);
                 }
-                if (src1 != 0)
-                    cc = (src2 & MSIGN) ? 1 : 2;
-                fpregs[reg1] = src2;
+                if (src1L != 0)
+                    cc = (src2L & MSIGNL) ? 1 : 2;
                 break;
 
                   /* Floating Store register */
@@ -3778,11 +3641,13 @@ save_dbl:
                    storepsw(OPPSW, IRC_SPEC);
                    goto supress;
                 }
+                src1h = (uint32)(src1L & LMASKL);
                 if (WriteFull(addr1 + 4, src1h))
                     break;
                 /* Fall through */
 
         case OP_STE:
+                src1 = (uint32)((src1L >> 32) & LMASKL);
                 WriteFull(addr1, src1);
                 break;
 
@@ -3790,39 +3655,30 @@ save_dbl:
         case OP_CE:      /* 79 */
         case OP_CER:     /* 39 */
                 /* Extract numbers and adjust */
-                e1 = (src1 & EMASK) >> 24;
-                e2 = (src2 & EMASK) >> 24;
+                e1 = (src1L & EMASKL) >> 56;
+                e2 = (src2L & EMASKL) >> 56;
                 fill = 0;
-                if (src1 & MSIGN)
+                if (src1L & MSIGNL)
                    fill |= 2;
-                if (src2 & MSIGN)
+                if (src2L & MSIGNL)
                    fill |= 1;
-                src2 &= MMASK;
-                src1 &= MMASK;
+                /* Make 32 bit and create guard digit */
+                src1 = (uint32)((src1L >> 28) & XMASK);
+                src2 = (uint32)((src2L >> 28) & XMASK);
                 temp = e1 - e2;
-                /* Create guard digit */
-                src2 <<= 4;
-                src1 <<= 4;
                 if (temp > 0) {
                     if (temp > 8) {
                         src2 = 0;
                     } else {
                         /* Shift src2 right if src1 larger expo - expo */
-                        while (temp-- != 0) {
-                            src2 >>= 4;
-                            e2 ++;
-                        }
+                        src2 >>= 4 * temp;
                     }
                 } else if (temp < 0) {
                     if (temp < -8) {
                         src1 = 0;
-                        e1 = e2;
                     } else {
                     /* Shift src1 right if src2 larger expo - expo */
-                        while (temp++ != 0) {
-                            src1 >>= 4;
-                            e1 ++;
-                        }
+                        src1 >>= 4 * -temp;
                     }
                 }
 
@@ -3858,7 +3714,7 @@ save_dbl:
         case OP_SU:      /* 7F */
         case OP_SER:     /* 3B */
         case OP_SUR:     /* 3F */
-                src2 ^= MSIGN;
+                src2L ^= MSIGNL;
                    /* Fall through */
 
                    /* Floating Add */
@@ -3867,40 +3723,32 @@ save_dbl:
         case OP_AER:     /* 3A */
         case OP_AUR:     /* 3E */
                 /* Extract numbers and adjust */
-                e1 = (src1 & EMASK) >> 24;
-                e2 = (src2 & EMASK) >> 24;
+                e1 = (src1L & EMASKL) >> 56;
+                e2 = (src2L & EMASKL) >> 56;
                 fill = 0;
-                if (src1 & MSIGN)
+                if (src1L & MSIGNL)
                    fill |= 2;
-                if (src2 & MSIGN)
+                if (src2L & MSIGNL)
                    fill |= 1;
-                src2 &= MMASK;
-                src1 &= MMASK;
+                /* Make 32 bit and create guard digit */
+                src1 = (uint32)((src1L >> 28) & (MMASK << 4));
+                src2 = (uint32)((src2L >> 28) & (MMASK << 4));
                 temp = e1 - e2;
-                /* Create guard digit */
-                src2 <<= 4;
-                src1 <<= 4;
                 if (temp > 0) {
                     if (temp > 8) {
                         src2 = 0;
                     } else {
                         /* Shift src2 right if src1 larger expo - expo */
-                        while (temp-- != 0) {
-                            src2 >>= 4;
-                            e2 ++;
-                        }
+                        src2 >>= 4 * temp;
                     }
                 } else if (temp < 0) {
                     if (temp < -8) {
                         src1 = 0;
-                        e1 = e2;
                     } else {
                         /* Shift src1 right if src2 larger expo - expo */
-                        while (temp++ != 0) {
-                           src1 >>= 4;
-                           e1 ++;
-                        }
+                        src1 >>= 4 * -temp;
                     }
+                    e1 = e2;
                 }
 
                 /* Exponents should be equal now. */
@@ -3935,7 +3783,7 @@ save_dbl:
                     if (dest != 0)
                         cc = (fill & 2) ? 1 : 2;
                     else
-                        e1 = fill = 0;
+                        dest = e1 = fill = 0;
                 } else {
                     if ((dest & 0xffffff0) != 0)
                         cc = (fill & 2) ? 1 : 2;
@@ -3945,15 +3793,15 @@ save_dbl:
 
                 /* Check signifigance exception */
                 if (cc == 0 && pmsk & SIGMSK) {
-                    storepsw(OPPSW, IRC_EXPOVR);
-                    goto fpstore;
+                    storepsw(OPPSW, IRC_SIGNIF);
+                    goto fpstore1;
                 }
 
                 /* Check if we are normalized addition */
                 if ((op & 0xE) != 0xE) {
                    if (cc != 0) {   /* Only if non-zero result */
                        while ((dest & SNMASK) == 0) {
-                          dest = dest << 4;
+                          dest <<= 4;
                           e1 --;
                        }
                        /* Check if underflow */
@@ -3971,39 +3819,39 @@ save_dbl:
                 /* Remove DP Guard bit */
                 dest >>= 4;
 
+fpstore1:
                 /* Store result */
                 dest |= (e1 << 24) & EMASK;
                 if (cc != 0 && fill & 2)
                    dest |= MSIGN;
-                fpregs[reg1] = dest;
+                fpregs[reg1] = ((t_uint64)dest << 32) | (fpregs[reg1] & LMASKL);
                 break;
 
                   /* Floating Compare */
         case OP_CD:      /* 69 */
         case OP_CDR:     /* 29 */
                 /* Extract numbers and adjust */
-                e1 = (src1 & EMASK) >> 24;
-                e2 = (src2 & EMASK) >> 24;
+                e1 = (src1L & EMASKL) >> 56;
+                e2 = (src2L & EMASKL) >> 56;
                 fill = 0;
-                if (src1 & MSIGN)
+                if (src1L & MSIGNL)
                    fill |= 2;
-                if (src2 & MSIGN)
+                if (src2L & MSIGNL)
                    fill |= 1;
-                src1 &= MMASK;
-                src2 &= MMASK;
+                src1L &= MMASKL;
+                src2L &= MMASKL;
                 temp = e1 - e2;
-#ifdef USE_64BIT
-                src1L = (((t_uint64)(src1)) << 36) | (((t_uint64)src1h) << 4);
-                src2L = (((t_uint64)(src2)) << 36) | (((t_uint64)src2h) << 4);
+                src1L <<= 4;
+                src2L <<= 4;
                 if (temp > 0) {
-                    if (temp > 15) {
+                    if (temp > 17) {
                         src2L  = 0;
                     } else {
                         /* Shift src2 right if src1 larger expo - expo */
                         src2L >>= 4 * temp;
                     }
                 } else if (temp < 0) {
-                    if (temp < -15) {
+                    if (temp < -17) {
                         src1L = 0;
                     } else {
                     /* Shift src1 right if src2 larger expo - expo */
@@ -4018,8 +3866,7 @@ save_dbl:
                 if (fill == 3 || fill == 0) {
                      /* Different signs do subtract */
                      src2L ^= XMASKL;
-                     src2L++;
-                     destL = src1L + src2L;
+                     destL = src1L + src2L + 1;
                      if (destL & CMASKL)
                          destL &= XMASKL;
                      else {
@@ -4037,81 +3884,6 @@ save_dbl:
                 cc = 0;
                 if (destL != 0)
                      cc = (fill & 2) ? 1 : 2;
-#else
-                /* Create guard digit by shifting left 4 bits */
-                src1 = (src1 << 4) | ((src1h >> 28) & 0xf);
-                src2 = (src2 << 4) | ((src2h >> 28) & 0xf);
-                src1h <<= 4;
-                src2h <<= 4;
-
-                if (temp > 0) {
-                    if (temp > 15) {
-                        src2 = src2h = 0;
-                    } else {
-                        /* Shift src2 right if src1 larger expo - expo */
-                        while (temp-- != 0) {
-                            src2h >>= 4;
-                            src2h |= (src2 & 0xf) << 28;
-                            src2 >>= 4;
-                        }
-                    }
-                } else if (temp < 0) {
-                    if (temp < -15) {
-                        src1 = src1h = 0;
-                    } else {
-                    /* Shift src1 right if src2 larger expo - expo */
-                        while (temp++ != 0) {
-                            src1h >>= 4;
-                            src1h |= (src1 & 0xf) << 28;
-                            src1 >>= 4;
-                        }
-                    }
-                    e1 = e2;
-                }
-
-                /* Exponents should be equal now. */
-
-                /* Add results */
-                if (fill == 3 || fill == 0) {
-                     /* Different signs do subtract */
-                     src2 ^= XMASK;
-                     src2h ^= FMASK;
-                     if (src2h == FMASK) {
-                        src2++;
-                     }
-                     src2h++;
-                     desth = src1h + src2h;
-                     dest = src1 + src2;
-                     if (desth < src2h)
-                         dest ++;
-                     if (dest & CMASK)
-                         dest &= XMASK;
-                     else {
-                         fill ^= 2;
-                         dest ^= XMASK;
-                         desth ^= FMASK;
-                         if (desth == FMASK)
-                            dest++;
-                         desth++;
-                     }
-                } else {
-                     desth = src1h + src2h;
-                     dest = src1 + src2;
-                     if (desth < src2h)
-                         dest ++;
-                }
-
-                /* If overflow, shift right 4 bits */
-                if (dest & CMASK) {
-                    desth >>= 4;
-                    desth |= (dest & 0xf) << 28;
-                    dest >>= 4;
-                }
-                /* Set condition codes */
-                cc = 0;
-                if ((desth | dest) != 0)
-                     cc = (fill & 2) ? 1 : 2;
-#endif
                 break;
 
                   /* Floating Subtract */
@@ -4119,7 +3891,7 @@ save_dbl:
         case OP_SW:      /* 6F */
         case OP_SDR:     /* 2B */
         case OP_SWR:     /* 2F */
-                src2 ^= MSIGN;
+                src2L ^= MSIGNL;
                    /* Fall through */
 
                    /* Floating Add */
@@ -4128,28 +3900,27 @@ save_dbl:
         case OP_ADR:     /* 2A */
         case OP_AWR:     /* 2E */
                 /* Extract numbers and adjust */
-                e1 = (src1 & EMASK) >> 24;
-                e2 = (src2 & EMASK) >> 24;
+                e1 = (src1L & EMASKL) >> 56;
+                e2 = (src2L & EMASKL) >> 56;
                 fill = 0;
-                if (src1 & MSIGN)
+                if (src1L & MSIGNL)
                    fill |= 2;
-                if (src2 & MSIGN)
+                if (src2L & MSIGNL)
                    fill |= 1;
-                src1 &= MMASK;
-                src2 &= MMASK;
+                src1L &= MMASKL;
+                src2L &= MMASKL;
+                src1L <<= 4;
+                src2L <<= 4;
                 temp = e1 - e2;
-#ifdef USE_64BIT
-                src1L = (((t_uint64)(src1)) << 36) | (((t_uint64)src1h) << 4);
-                src2L = (((t_uint64)(src2)) << 36) | (((t_uint64)src2h) << 4);
                 if (temp > 0) {
-                    if (temp > 15) {
+                    if (temp > 17) {
                         src2L  = 0;
                     } else {
                         /* Shift src2 right if src1 larger expo - expo */
                         src2L >>= 4 * temp;
                     }
                 } else if (temp < 0) {
-                    if (temp < -15) {
+                    if (temp < -17) {
                         src1L = 0;
                     } else {
                     /* Shift src1 right if src2 larger expo - expo */
@@ -4201,9 +3972,10 @@ save_dbl:
 
                 /* Check signifigance exception */
                 if (cc == 0 && pmsk & SIGMSK) {
-                    storepsw(OPPSW, IRC_EXPOVR);
+                           printf(" sig ");
+                    storepsw(OPPSW, IRC_SIGNIF);
                     e1 = fill = 0;
-                    dest = desth = 0;
+                    destL = 0;
                     goto fpstore;
                 }
 
@@ -4233,159 +4005,27 @@ save_dbl:
 
                 /* Remmove the guard digit */
                 destL >>= 4;
-                dest = ((uint32)(destL >> 32)) & MMASK;
-                desth = (uint32)(destL & FMASK);
-#else
-
-                /* Create guard digit by shifting left 4 bits */
-                src1 = ((src1 & MMASK) << 4) | ((src1h >> 28) & 0xf);
-                src2 = ((src2 & MMASK) << 4) | ((src2h >> 28) & 0xf);
-                src1h <<= 4;
-                src2h <<= 4;
-
-                /* Make exponents the same */
-                if (temp > 0) {
-                    if (temp > 15) {
-                        src2 = src2h = 0;
-                    } else {
-                        /* Shift src2 right if src1 larger expo - expo */
-                        while (temp-- != 0) {
-                            src2h >>= 4;
-                            src2h |= (src2 & 0xf) << 28;
-                            src2 >>= 4;
-                        }
-                    }
-                } else if (temp < 0) {
-                    if (temp < -15) {
-                        src1 = src1h = 0;
-                    } else {
-                    /* Shift src1 right if src2 larger expo - expo */
-                        while (temp++ != 0) {
-                            src1h >>= 4;
-                            src1h |= (src1 & 0xf) << 28;
-                            src1 >>= 4;
-                        }
-                    }
-                    e1 = e2;
-                }
-
-                /* Exponents should be equal now. */
-
-                /* Add results */
-                if (fill == 2 || fill == 1) {
-                     /* Different signs do subtract */
-                     src2 ^= XMASK;
-                     src2h ^= FMASK;
-                     if (src2h == FMASK)
-                        src2++;
-                     src2h++;
-                     desth = src1h + src2h;
-                     dest = src1 + src2;
-                     if (desth < src2h || desth < src1h)
-                         dest++;
-                     if (dest & CMASK)
-                         dest &= XMASK;
-                     else {
-                         fill ^= 2;
-                         dest ^= XMASK;
-                         desth ^= FMASK;
-                         if (desth == FMASK)
-                            dest++;
-                         desth++;
-                     }
-                } else {
-                     desth = src1h + src2h;
-                     dest = src1 + src2;
-                     if (desth < src2h || desth < src1h)
-                         dest ++;
-                }
-
-                /* If overflow, shift right 4 bits */
-                if (dest & CMASK) {
-                    desth >>= 4;
-                    desth |= (dest & 0xf) << 28;
-                    dest >>= 4;
-                    e1 ++;
-                    if (e1 >= 128) {
-                        storepsw(OPPSW, IRC_EXPOVR);
-                    }
-                }
-
-                /* Set condition codes */
-                cc = 0;
-                if ((op & 0xE) != 0xE) {
-                    if ((dest | desth) != 0)
-                        cc = (fill & 2) ? 1 : 2;
-                    else
-                        e1 = fill = 0;
-                } else {
-                    if ((dest | (desth & 0xfffffff0)) != 0)
-                        cc = (fill & 2) ? 1 : 2;
-                    else
-                        desth = e1 = fill = 0;
-                }
-
-                /* Check signifigance exception */
-                if (cc == 0 && pmsk & SIGMSK) {
-                    storepsw(OPPSW, IRC_EXPOVR);
-                    e1 = fill = 0;
-                    goto fpstore;
-                }
-
-                /* Check if we are normalized addition */
-                if ((op & 0xE) != 0xE) {
-                   if (cc != 0) {   /* Only if non-zero result */
-                       while ((dest & SNMASK) == 0) {
-                          dest = (dest << 4) | ((desth >> 28) & 0xf);
-                          desth <<= 4;
-                          e1 --;
-                       }
-                       /* Check if underflow */
-                       if (e1 < 0) {
-                           if (pmsk & EXPUND) {
-                              storepsw(OPPSW, IRC_EXPUND);
-                           } else {
-                              desth = dest = 0;
-                              fill = e1 = 0;
-                           }
-                       }
-                   } else {
-                       fill = e1 = 0;   /* Return true zero */
-                   }
-                } else {
-                   if (cc == 0)
-                      fill = e1 = 0;    /* Return true zero */
-                }
-
-                /* Remmove the guard digit */
-                desth = (desth >> 4) | ((dest & 0xf) << 28);
-                dest >>= 4;
-#endif
 fpstore:
                 /* Store result */
-                dest |= (e1 << 24) & EMASK;
+                destL |= (((t_uint64)e1) << 56) & EMASKL;
                 if (cc != 0 && fill & 2)
-                   dest |= MSIGN;
-                fpregs[reg1|1] = desth;
-                fpregs[reg1] = dest;
+                   destL |= MSIGNL;
+                fpregs[reg1] = destL;
                 break;
 
                   /* Multiply */
-        case OP_MDR:
-        case OP_MER:
-        case OP_ME:
-        case OP_MD:
+        case OP_MDR: /* 2c */
+        case OP_MER: /* 3c */
+        case OP_ME:  /* 7c */
+        case OP_MD:  /* 6c */
                 /* Extract numbers and adjust */
-                e1 = (src1 & EMASK) >> 24;
-                e2 = (src2 & EMASK) >> 24;
+                e1 = (src1L & EMASKL) >> 56;
+                e2 = (src2L & EMASKL) >> 56;
                 fill = 0;
-                if ((src1 & MSIGN) != (src2 & MSIGN))
+                if ((src1L & MSIGNL) != (src2L & MSIGNL))
                    fill = 1;
-                src1 &= MMASK;
-                src2 &= MMASK;
-#ifdef USE_64BIT
-                src1L = (((t_uint64)(src1)) << 32) | ((t_uint64)src1h);
-                src2L = (((t_uint64)(src2)) << 32) | ((t_uint64)src2h);
+                src1L &= MMASKL;
+                src2L &= MMASKL;
 
                 /* Pre-nomalize src2 and src1 */
                 if (src2L != 0) {
@@ -4440,106 +4080,33 @@ fpnorm:
                     }
                 } else
                     e1 = fill = 0;
-                dest = ((uint32)(destL >> 32)) & MMASK;
-                desth = (uint32)(destL & FMASK);
-#else
-                /* Pre-nomalize src2 and src1 */
-                if ((src2 | src2h) != 0) {
-                    while ((src2 & NMASK) == 0) {
-                       src2 = ((src2 & MMASK) << 4) | ((src2h >> 28) & 0xf);
-                       src2h <<= 4;
-                       e2 --;
-                    }
-                }
-                if ((src1 | src1h) != 0) {
-                    while ((src1 | src1h) != 0 && (src1 & NMASK) == 0) {
-                       src1 = ((src1 & MMASK) << 4) | ((src1h >> 28) & 0xf);
-                       src1h <<= 4;
-                       e1 --;
-                    }
-                }
-
-                /* Compute exponent */
-                e1 = e1 + e2 - 64;
-
-                dest = desth = 0;
-                /* Do multiply */
-                for (temp = 0; temp < 56; temp++) {
-                     /* Add if we need too */
-                     if (src1h & 1) {
-                         desth += src2h;
-                         dest += src2;
-                         if (desth < src2h)
-                             dest ++;
-                     }
-                     /* Shift right by one */
-                     src1h >>= 1;
-                     if (src1 & 1)
-                        src1h |= MSIGN;
-                     src1 >>= 1;
-                     desth >>= 1;
-                     if (dest & 1)
-                        desth |= MSIGN;
-                     dest >>= 1;
-                }
-fpnorm:
-                /* If overflow, shift right 4 bits */
-                if (dest & EMASK) {
-                   desth >>= 4;
-                   desth |= (dest & 0xf) << 28;
-                   dest >>= 4;
-                   e1 ++;
-                   if (e1 >= 128) {
-                       storepsw(OPPSW, IRC_EXPOVR);
-                   }
-                }
-                /* Align the results */
-                if ((dest | desth) != 0) {
-                    while ((dest & NMASK) == 0) {
-                        dest = (dest << 4) | ((desth >> 28) & 0xf);
-                        desth <<= 4;
-                        e1 --;
-                    }
-                    /* Check if underflow */
-                    if (e1 < 0) {
-                        if (pmsk & EXPUND) {
-                            storepsw(OPPSW, IRC_EXPUND);
-                        } else {
-                            desth = dest = 0;
-                            fill = e1 = 0;
-                        }
-                    }
-                } else
-                    e1 = fill = 0;
-#endif
-                dest |= (e1 << 24) & EMASK;
+                destL |= (((t_uint64)e1) << 56) & EMASKL;
                 if (fill)
-                   dest |= MSIGN;
-                if ((op & 0x10) == 0)
-                    fpregs[reg1|1] = desth;
-                fpregs[reg1] = dest;
+                   destL |= MSIGNL;
+                if ((op & 0x10) == 0 || (op & 0xf) == 0xc) {
+                    fpregs[reg1] = destL;
+                } else {
+                    fpregs[reg1] = (destL & HMASKL) | (fpregs[reg1] & LMASKL);
+                }
                 break;
 
                   /* Divide */
-        case OP_DER:
-        case OP_DDR:
-        case OP_DD:
-        case OP_DE:
+        case OP_DER:  /* 3d */
+        case OP_DDR:  /* 2d */
+        case OP_DD:   /* 6d */
+        case OP_DE:   /* 7d */
                 /* Extract numbers and adjust */
-                e1 = (src1 & EMASK) >> 24;
-                e2 = (src2 & EMASK) >> 24;
+                e1 = (src1L & EMASKL) >> 56;
+                e2 = (src2L & EMASKL) >> 56;
                 fill = 0;
-                if ((src1 & MSIGN) != (src2 & MSIGN))
+                if ((src1L & MSIGNL) != (src2L & MSIGNL))
                    fill = 1;
-                src1 &= MMASK;
-                src2 &= MMASK;
-                if ((src2 | src2h) == 0) {
+                src1L &= MMASKL;
+                src2L &= MMASKL;
+                if (src2L == 0) {
                     storepsw(OPPSW, IRC_FPDIV);
                     break;
                 }
-#ifdef USE_64BIT
-                src1L = (((t_uint64)(src1)) << 32) | ((t_uint64)src1h);
-                src2L = (((t_uint64)(src2)) << 32) | ((t_uint64)src2h);
 
                 /* Pre-nomalize src2 and src1 */
                 if (src2L != 0) {
@@ -4602,89 +4169,6 @@ fpnorm:
                 if ((src1L & MSIGNL) != 0) {
                     destL++;
                 }
-#else
-                /* Pre-nomalize src2 and src1 */
-                while ((src2 | src2h) != 0 && (src2 & NMASK) == 0) {
-                    src2 = ((src2 & MMASK) << 4) | ((src2h >> 28) & 0xf);
-                    src2h <<= 4;
-                    e2 --;
-                }
-                while ((src1 | src1h) != 0 && (src1 & NMASK) == 0) {
-                    src1 = ((src1 & MMASK) << 4) | ((src1h >> 28) & 0xf);
-                    src1h <<= 4;
-                    e1 --;
-                }
-                e1 = e1 - e2 + 64;
-
-                /* Shift numbers up 4 bits so as not to lose precision below */
-                src2 = ((src2 & MMASK) << 4) | ((src2h >> 28) & 0xf);
-                src2h <<= 4;
-                src1 = ((src1 & MMASK) << 4) | ((src1h >> 28) & 0xf);
-                src1h <<= 4;
-
-                /* Check if we need to adjust divsor it larger then dividend */
-                if (src1 > src2 || (src1 == src2 && src1h > src2h)) {
-                    src1h >>= 4;
-                    src1h |= (src1 & 0xf) <<28;
-                    src1 >>= 4;
-                    e1++;
-                }
-
-                /* Change sign of src2 so we can add */
-                src2h ^= FMASK;
-                src2 ^= XMASK;
-                if (src2h == FMASK)
-                   src2 ++;
-                src2h ++;
-                dest = desth = 0;
-                /* Do divide */
-                for (temp = 56; temp > 0; temp--) {
-                     uint32    tlow, thigh;
-
-                     /* Shift left by one */
-                     src1 <<= 1;
-                     if (src1h & MSIGN)
-                         src1 |= 1;
-                     src1h <<= 1;
-                     /* Subtract dividend from remainder */
-                     thigh = src1h + src2h;
-                     tlow = src1 + src2;
-                     if (thigh < src2h)
-                         tlow ++;
-
-                     /* Shift quotent left one bit */
-                     dest <<= 1;
-                     if (desth & MSIGN)
-                         dest |= 1;
-                     desth <<= 1;
-
-                     /* If remainder larger then divisor replace */
-                     if ((tlow & CMASK) != 0) {
-                         src1 = tlow;
-                         src1h = thigh;
-                         desth |= 1;
-                     }
-                }
-
-                /* Compute one final set to see if rounding needed */
-                /* Shift left by one */
-                src1 <<= 1;
-                if (src1h & MSIGN)
-                    src1 |= 1;
-                src1h <<= 1;
-                /* Subtract remainder to dividend */
-                src1h += src2h;
-                src1 += src2;
-                if (src1h <  src2h)
-                    src1++;
-
-                /* If .5 off, round */
-                if (src1 & MSIGN) {
-                    if (desth == FMASK)
-                        dest++;
-                    desth++;
-                }
-#endif
                 goto fpnorm;
 
                   /* Decimal operations */
@@ -4721,12 +4205,12 @@ fpnorm:
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
-                if (fpregs[(reg & 0xf)|1] & MSIGN) {
-                    e1 = (src2 & EMASK) >> 24;
+                if (fpregs[R2(reg)] & (t_uint64)MSIGN) {
+                    e1 = (src2L & EMASKL) >> 56;
                     fill = 0;
-                    if (src2 & MSIGN)
+                    if (src2L & MSIGNL)
                        fill = 1;
-                    src2 &= MMASK;
+                    src2 = (uint32)((src2L >> 32) & MMASK);
                     dest = src2 + 1;
                     /* If overflow, shift right 4 bits */
                     if (dest & CMASK) {
@@ -4743,8 +4227,8 @@ fpnorm:
                        dest |= MSIGN;
                  } else
                     dest = src2;
-                 fpregs[reg1] = dest;
-                break;
+                 fpregs[reg1] = (((t_uint64)dest) << 32) | (fpregs[reg1] & LMASKL);
+                 break;
 
         case OP_LRDR:
                 if ((cpu_unit[0].flags & FEAT_EFP) == 0) {
@@ -4755,35 +4239,33 @@ fpnorm:
                     storepsw(OPPSW, IRC_SPEC);
                     goto supress;
                 }
-                if (fpregs[(reg & 0xf)|2] & 0x00800000) {
+                if (fpregs[R2(reg)|2] & 0x0080000000000000LL) {
                     /* Extract numbers and adjust */
-                    e1 = (src2 & EMASK) >> 24;
+                    e1 = (src2L & EMASKL) >> 56;
                     fill = 0;
-                    if (src2 & MSIGN)
+                    if (src2L & MSIGNL)
                        fill = 2;
-                    src2 &= MMASK;
+                    src2L &= MMASKL;
 
                     /* Add round */
-                    desth = src2h + 1;
-                    dest = src2;
-                    if (desth == 0)
-                        dest ++;
+                    destL = src2L + 1;
 
                     /* If overflow, shift right 4 bits */
-                    if (dest & CMASK) {
-                        desth >>= 4;
-                        desth |= (dest & 0xf) << 28;
-                        dest >>= 4;
+                    if (destL & CMASKL) {
+                        destL >>= 4;
                         e1 ++;
                         if (e1 >= 128) {
                             storepsw(OPPSW, IRC_EXPOVR);
                         }
                     }
-                    goto fpstore;
+                    /* Store result */
+                    destL |= ((t_uint64)e1 << 56) & EMASKL;
+                    if (fill)
+                       destL |= MSIGNL;
                 } else {
-                    fpregs[reg1|1] = src2h;
-                    fpregs[reg1] = src2;
+                    destL = src2L;
                 }
+                fpregs[reg1] = destL;
                 break;
 
         case OP_MXD:
@@ -4791,15 +4273,12 @@ fpnorm:
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 }
-                if ((reg1 & 0xB) != 0 || (addr1 & 0x3) != 0) {
+                if ((reg1 & 0xB) != 0) {
                     storepsw(OPPSW, IRC_SPEC);
                     goto supress;
                 }
 
-                if (ReadFull(addr1, &src2))
-                   goto supress;
-                if (ReadFull(addr1 + 4, &src2h))
-                   goto supress;
+                /* src2L already has DP number */
 
                 /* Fall through */
         case OP_MXDR:
@@ -4813,16 +4292,13 @@ fpnorm:
                 }
 
                 /* Extract numbers and adjust */
-                e1 = (src1 & EMASK) >> 24;
-                e2 = (src2 & EMASK) >> 24;
+                e1 = (src1L & EMASKL) >> 56;
+                e2 = (src2L & EMASKL) >> 56;
                 fill = 0;
-                if ((src1 & MSIGN) != (src2 & MSIGN))
+                if ((src1L & MSIGNL) != (src2L & MSIGNL))
                    fill = 1;
-                src1 &= MMASK;
-                src2 &= MMASK;
-#ifdef USE_64BIT
-                src1L = (((t_uint64)(src1)) << 32) | ((t_uint64)src1h);
-                src2L = (((t_uint64)(src2)) << 32) | ((t_uint64)src2h);
+                src1L &= MMASKL;
+                src2L &= MMASKL;
 
                 /* Pre-nomalize src2 and src1 */
                 if (src2L != 0) {
@@ -4884,106 +4360,19 @@ fpnorm:
                     }
                 } else
                     e1 = fill = 0;
-                dest = ((uint32)(destL >> 32)) & MMASK;
-                desth = (uint32)(destL & FMASK);
-                src1 = ((uint32)(src1L >> 40)) & MMASK;
-                src1h = ((uint32)(src1L >> 8)) & MMASK;
-#else
-                /* Pre-nomalize src2 and src1 */
-                if ((src2 | src2h) != 0) {
-                    while ((src2 & NMASK) == 0) {
-                       src2 = ((src2 & MMASK) << 4) | ((src2h >> 28) & 0xf);
-                       src2h <<= 4;
-                       e2 --;
-                    }
-                }
-                if ((src1 | src1h) != 0) {
-                    while ((src1 | src1h) != 0 && (src1 & NMASK) == 0) {
-                       src1 = ((src1 & MMASK) << 4) | ((src1h >> 28) & 0xf);
-                       src1h <<= 4;
-                       e1 --;
-                    }
-                }
-
-                /* Compute exponent */
-                e1 = e1 + e2 - 64;
-
-                dest = desth = 0;
-                /* Do multiply */
-                for (temp = 0; temp < 56; temp++) {
-                     /* Add if we need too */
-                     if (src1h & 1) {
-                         desth += src2h;
-                         dest += src2;
-                         if (desth < src2h)
-                             dest ++;
-                     }
-                     /* Shift right by one */
-                     src1h >>= 1;
-                     if (src1 & 1)
-                        src1h |= MSIGN;
-                     src1 >>= 1;
-                     if (desth & 1)
-                        src1 |= MSIGN;
-                     desth >>= 1;
-                     if (dest & 1)
-                        desth |= MSIGN;
-                     dest >>= 1;
-                }
-
-                /* If overflow, shift right 4 bits */
-                if (dest & EMASK) {
-                   src1h >>= 4;     /* Fix lower product bits */
-                   src1h |= (src1 & 0xf) << 28;
-                   src1 >>= 4;
-                   src1 |= (desth & 0xf) << 20;
-                   desth >>= 4;
-                   desth |= (dest & 0xf) << 28;
-                   dest >>= 4;
-                   e1 ++;
-                   if (e1 >= 128) {
-                       storepsw(OPPSW, IRC_EXPOVR);
-                   }
-                }
-
-                /* Align the results */
-                if ((dest | desth | src1 | src1h) != 0) {
-                    while ((dest & NMASK) == 0) {
-                        dest = (dest << 4) | ((desth >> 28) & 0xf);
-                        desth = (desth << 4) | ((src1 >> 20) & 0xf);
-                        src1 = ((src1 << 4) | ((src1h >> 28) & 0xf)) & MMASK;
-                        src1h <<= 4;;
-                        e1 --;
-                    }
-                    /* Check if underflow */
-                    if (e1 < 0) {
-                        if (pmsk & EXPUND) {
-                            storepsw(OPPSW, IRC_EXPUND);
-                        } else {
-                            desth = dest = src1 = src1h = 0;
-                            fill = e1 = 0;
-                        }
-                    }
-                } else
-                    e1 = fill = 0;
-#endif
                 if (e1) {
-                    dest |= (e1 << 24) & EMASK;
-                    src1 |= ((e1 - 14) << 24) & EMASK;
+                    destL |= (((t_uint64)e1) << 56) & EMASKL;
+                    src1L |= ((t_uint64)(e1 - 14) << 56) & EMASKL;
                     if (fill) {
-                       dest |= MSIGN;
-                       src1 |= MSIGN;
+                       destL |= MSIGNL;
+                       src1L |= MSIGNL;
                     }
                 }
-                fpregs[reg1|3] = src1h;
-                fpregs[reg1|2] = src1;
-                fpregs[reg1|1] = desth;
-                fpregs[reg1] = dest;
+                fpregs[reg1] = destL;
+                fpregs[reg1|2] = src1L;
                 break;
 
         case OP_SXR:
-                src1 ^= MSIGN;
-                /* Fall through */
         case OP_AXR:
                 if ((cpu_unit[0].flags & FEAT_EFP) == 0) {
                     storepsw(OPPSW, IRC_OPR);
@@ -4994,56 +4383,51 @@ fpnorm:
                     goto supress;
                 }
 
+                src1L = fpregs[reg1];
+                src2L = fpregs[R2(reg)];
+
                 /* Extract numbers and adjust */
-                e1 = (src1 & EMASK) >> 24;
-                e2 = (src2 & EMASK) >> 24;
+                e1 = (src1L & EMASKL) >> 56;
+                e2 = (src2L & EMASKL) >> 56;
                 fill = 0;
-                if (src1 & MSIGN)
+                if (src1L & MSIGNL)
                    fill |= 2;
-                if (src2 & MSIGN)
+                if (src2L & MSIGNL)
                    fill |= 1;
-                src1 &= MMASK;
-                src2 &= MMASK;
+                if (op & 1)
+                   fill ^= 1;
+                src1L &= MMASKL;
+                src2L &= MMASKL;
                 temp = e1 - e2;
-#ifdef USE_64BIT
                 if (temp > 0) {
                     if (temp > 15) {
                         src1L = src2L = 0;
                     } else {
-                        src1L = (((t_uint64)(src2)) << 36) | (((t_uint64)src2h) << 4);
-                        src2L = (((t_uint64)(fpregs[R2(reg)|2] & MMASK) << 36)) |
-                                      (((t_uint64)fpregs[R2(reg)|3]) << 4);
+                        src1L = src2L;
+                        src2L = (fpregs[R2(reg)|2] << 4) & UMASKL;
                         /* Shift src2 right if src1 larger expo - expo */
                         while (temp-- != 0) {
                             src2L >>= 4;
-                            src2L |= ((src1L >> 8) & 0xf) << 60;
+                            src2L |= (src1L & 0xf) << 60;
                             src1L >>= 4;
-                            src1L &= UMASKL;
                         }
                     }
                 } else {
                     /* Flip operands around */
-                    src1L = (((t_uint64)(src1)) << 36) | (((t_uint64)src1h) << 4);
-                    src2L = (((t_uint64)(fpregs[reg1|2] & MMASK) << 36)) |
-                          (((t_uint64)fpregs[reg1|3]) << 4);
+                    src2L = (fpregs[reg1|2] << 4) & UMASKL;
                     fill = ((fill & 2) >> 1) | ((fill & 1) << 1);
                     if (temp < -15) {
                         fpregs[reg1] = 0;
-                        fpregs[reg1|1] = 0;
                         fpregs[reg1|2] = 0;
-                        fpregs[reg1|3] = 0;
                         e1 = e2;
                     } else {
                     /* Shift src1 right if src2 larger expo - expo */
                         fpregs[reg1] = fpregs[R2(reg)];
-                        fpregs[reg1|1] = fpregs[R2(reg)|1];
                         fpregs[reg1|2] = fpregs[R2(reg)|2];
-                        fpregs[reg1|3] = fpregs[R2(reg)|3];
                         while (temp++ != 0) {
                             src2L >>= 4;
-                            src2L |= ((src1L >> 8) & 0xf) << 60;
+                            src2L |= (src1L & 0xf) << 60;
                             src1L >>= 4;
-                            src1L &= UMASKL;
                         }
                     }
                     e1 = e2;
@@ -5058,17 +4442,15 @@ fpnorm:
                      src2L ^= XMASKL;
                      src1L ^= XMASKL;
                      if (src2L == XMASKL)
-                         src1L += 0x10LL;
+                         src1L++;
                      src2L++;
-                     tl = (((t_uint64)(fpregs[reg1] & MMASK) << 36)) |
-                                      (((t_uint64)fpregs[reg1|1]) << 4);
-                     th = (((t_uint64)(fpregs[reg1|2] & MMASK) << 36)) |
-                                      (((t_uint64)fpregs[reg1|3]) << 4);
+                     tl = fpregs[reg1];
+                     th = fpregs[reg1|2];
                      destL = tl + src2L;
                      src1L = th + src1L;
                      if (destL & CMASKL) {
                          destL &= XMASKL;
-                         src1L += 0x10LL;
+                         src1L++;
                      }
                      if (src1L & CMASKL)
                          src1L &= XMASKL;
@@ -5077,28 +4459,25 @@ fpnorm:
                          destL ^= XMASKL;
                          src1L ^= XMASKL;
                          if (destL == XMASKL)
-                            src1L += 0x10LL;
-                         destL ++;
+                            src1L++;
+                         destL++;
                      }
                 } else {
                      t_uint64    th, tl;
-                     tl = (((t_uint64)(fpregs[reg1] & MMASK) << 36)) |
-                                      (((t_uint64)fpregs[reg1|1]) << 4);
-                     th = (((t_uint64)(fpregs[reg1|2] & MMASK) << 36)) |
-                                      (((t_uint64)fpregs[reg1|3]) << 4);
+                     tl = fpregs[reg1];
+                     th = fpregs[reg1|2];
                      destL = tl + src2L;
                      src1L = th + src1L;
                      if (destL & CMASKL) {
                          destL &= XMASKL;
-                         src1L += 0x10LL;
+                         src1L ++;
                      }
                 }
                 /* If overflow, shift right 4 bits */
-                if (src1L & CMASKL) {
+                if (src1L & NMASKL) {
                     destL >>= 4;
-                    destL |= ((src1L >> 8) & 0xf) << 60;
+                    destL |= (src1L & 0xf) << 60;
                     src1L >>= 4;
-                    src1L &= UMASKL;
                     e1 ++;
                     if (e1 >= 128) {
                         storepsw(OPPSW, IRC_EXPOVR);
@@ -5116,225 +4495,25 @@ fpnorm:
                 if (cc == 0 && pmsk & SIGMSK) {
                     storepsw(OPPSW, IRC_EXPOVR);
                     fpregs[reg1] = 0;
-                    fpregs[reg1|1] = 0;
                     fpregs[reg1|2] = 0;
-                    fpregs[reg1|3] = 0;
                     break;
                 }
 
                 /* Check if we are normalized addition */
                 if (cc != 0) {   /* Only if non-zero result */
-                    while ((src1L & SNMASKL) == 0) {
+                    while ((src1L & NMASKL) == 0) {
                           src1L <<= 4;
-                          src1L |= ((destL >> 60) & 0xf) << 8;
+                          src1L |= (destL >> 60) & 0xf;
                           destL <<= 4;
-                          e1 --;
-                       }
-                       /* Check if underflow */
-                       if (e1 < 0) {
-                           if (pmsk & EXPUND) {
-                              storepsw(OPPSW, IRC_EXPUND);
-                           } else {
-                              src2L = destL = 0;
-                              fill = e1 = 0;
-                           }
-                       }
-                   } else {
-                       fill = e1 = 0;   /* Return true zero */
-                   }
-
-                /* Remmove the guard digit */
-                destL >>= 4;
-                src1L >>= 4;
-                dest = ((uint32)(destL >> 32)) & MMASK;
-                desth = (uint32)(destL & FMASK);
-                src1 = ((uint32)(src1L >> 40)) & MMASK;
-                src1h = ((uint32)(src1L >> 8)) & MMASK;
-#else
-                /* Create guard digit by shifting left 4 bits */
-                if (temp > 0) {
-                    if (temp > 15) {
-                        src1 = src1h = src2 = src2h = 0;
-                    } else {
-                        src1 = (src2 << 4) | ((src2h >> 28) & 0xf);
-                        src1h = (src2h << 4) & XMASK;;
-                        src2 = ((fpregs[R2(reg)|2] & MMASK) << 4) | ((fpregs[R2(reg)|3] >> 28) & 0xf);
-                        src2h = (fpregs[R2(reg)|3] << 4) & XMASK;
-                        /* Shift src2 right if src1 larger expo - expo */
-                        while (temp-- != 0) {
-                            src2h >>= 4;
-                            src2h |= (src2 & 0xf) << 24;
-                            src2  >>= 4;
-                            src2  |= (src1h & 0xf) << 24;
-                            src1h >>= 4;
-                            src1h |= (src1 & 0xf) << 24;
-                            src1h &= 0xfffffff0;
-                            src1  >>= 4;
-                        }
-                    }
-                } else if (temp < 0) {
-                    /* Flip operands around */
-                    src1 = (src1 << 4) | ((src1h >> 28) & 0xf);
-                    src1h = (src1h << 4) & XMASK;;
-                    src2 = ((fpregs[reg1|2] & MMASK) << 4) | ((fpregs[reg1|3] >> 28) & 0xf);
-                    src2h = (fpregs[reg1|3] << 4) & XMASK;
-                    fill = ((fill & 2) >> 1) | ((fill & 1) << 1);
-                    if (temp < -15) {
-                        fpregs[reg1] = 0;
-                        fpregs[reg1|1] = 0;
-                        fpregs[reg1|2] = 0;
-                        fpregs[reg1|3] = 0;
-                        e1 = e2;
-                    } else {
-                    /* Shift src1 right if src2 larger expo - expo */
-                        fpregs[reg1] = fpregs[R2(reg)];
-                        fpregs[reg1|1] = fpregs[R2(reg)|1];
-                        fpregs[reg1|2] = fpregs[R2(reg)|2];
-                        fpregs[reg1|3] = fpregs[R2(reg)|3];
-                        while (temp++ != 0) {
-                            src2h >>= 4;
-                            src2h |= (src2 & 0xf) << 24;
-                            src2  >>= 4;
-                            src2  |= (src1h & 0xf) << 24;
-                            src1h >>= 4;
-                            src1h |= (src1 & 0xf) << 24;
-                            src1h &= 0xfffffff0;
-                            src1  >>= 4;
-                        }
-                    }
-                    e1 = e2;
-                }
-
-                /* Exponents should be equal now. */
-
-                /* Add results */
-                if (fill == 2 || fill == 1) {
-                     uint32     th, tl;
-                     /* Different signs do subtract */
-                     src2 ^= XMASK;
-                     src2h ^= FMASK;
-                     src1 ^= XMASK;
-                     src1h ^= FMASK;
-                     if (src2h == FMASK) {
-                        if (src2 == CMASK) {
-                           src2h &= XMASK;
-                           if (src1h == FMASK)
-                              src1++;
-                           src1h++;
-                        }
-                        src2++;
-                     }
-                     src2h++;
-                     th = (fpregs[reg1|3] << 4) & FMASK;
-                     tl = ((fpregs[reg1|2] & MMASK) << 4) |
-                            ((fpregs[reg1|3] >> 28) & 0xf);
-                     th = th + src2h;
-                     tl = tl + src2;
-                     if (th < src2h)
-                         tl++;
-                     src2h = (fpregs[reg1|1] << 4) & FMASK;
-                     src2 = ((fpregs[reg1] & MMASK) << 4) |
-                            ((fpregs[reg1|1] >> 28) & 0xf);
-                     desth = src2h + src1h;
-                     dest = src2 + src1;
-                     if (desth < src2h || desth < src1h)
-                         dest ++;
-                     if (src2 & CMASK) {
-                         if (desth & 0xfffffff0)
-                            dest++;
-                         desth += 0x10;
-                         src2 &= XMASK;
-                     }
-                     if (dest & CMASK)
-                         dest &= XMASK;
-                     else {
-                         fill ^= 2;
-                         src1 ^= XMASK;
-                         src1h ^= FMASK;
-                         dest ^= XMASK;
-                         desth ^= FMASK;
-                         if (src1h == FMASK) {
-                            if (src1 == CMASK) {
-                               desth &= XMASK;
-                               if (desth == FMASK)
-                                  dest++;
-                               desth++;
-                            }
-                            src1++;
-                         }
-                         src1h++;
-                     }
-                } else {
-                     uint32     th, tl;
-                     th = (fpregs[reg1|3] << 4) & FMASK;
-                     tl = ((fpregs[reg1|2] & MMASK) << 4) |
-                            ((fpregs[reg1|3] >> 28) & 0xf);
-                     th = th + src2h;
-                     tl = tl + src2;
-                     if (th < src2h)
-                         tl++;
-                     src2h = (fpregs[reg1|1] << 4) & FMASK;
-                     src2 = ((fpregs[reg1] & MMASK) << 4) |
-                            ((fpregs[reg1|1] >> 28) & 0xf);
-                     desth = src2h + src1h;
-                     dest = src2 + src1;
-                     if (desth < src2h || desth < src1h)
-                         dest ++;
-                     if (src2 & CMASK) {
-                         if (desth & 0xfffffff0)
-                            dest++;
-                         desth += 0x10;
-                         src2 &= XMASK;
-                     }
-                }
-
-                /* If overflow, shift right 4 bits */
-                if (dest & CMASK) {
-                    src1h >>= 4;
-                    src1h |= (src1 & 0xf) << 24;
-                    src1  >>= 4;
-                    src1  |= (desth & 0xf) << 24;
-                    desth >>= 4;
-                    desth |= (dest & 0xf) << 24;
-                    desth &= 0xfffffff0;
-                    e1 ++;
-                    if (e1 >= 128) {
-                        storepsw(OPPSW, IRC_EXPOVR);
-                    }
-                }
-
-                /* Set condition codes */
-                cc = 0;
-                if ((dest | desth | src1 | src1h) != 0)
-                    cc = (fill & 2) ? 1 : 2;
-                else
-                    e1 = fill = 0;
-
-                /* Check signifigance exception */
-                if (cc == 0 && pmsk & SIGMSK) {
-                    storepsw(OPPSW, IRC_EXPOVR);
-                    fpregs[reg1] = 0;
-                    fpregs[reg1|1] = 0;
-                    fpregs[reg1|2] = 0;
-                    fpregs[reg1|3] = 0;
-                    break;
-                }
-
-                /* Check if we are normalized addition */
-                if (cc != 0) {   /* Only if non-zero result */
-                    while ((dest & SNMASK) == 0) {
-                          dest = (dest << 4) | ((desth >> 28) & 0xf);
-                          desth = (desth << 4) | ((src1 >> 24) & 0xf);
-                          src1 = (src1 << 4) | ((src1h >> 28) & 0xf);
-                          src1h <<= 4;
+                          destL &= UMASKL;
                           e1 --;
                     }
-                       /* Check if underflow */
+                    /* Check if underflow */
                     if (e1 < 0) {
                         if (pmsk & EXPUND) {
-                            storepsw(OPPSW, IRC_EXPUND);
+                           storepsw(OPPSW, IRC_EXPUND);
                         } else {
-                           desth = dest = 0;
+                           src2L = destL = 0;
                            fill = e1 = 0;
                         }
                     }
@@ -5343,24 +4522,18 @@ fpnorm:
                 }
 
                 /* Remmove the guard digit */
-                src1h = (src1h >> 4) | ((src1 & 0xf) << 28);
-                src1  = (src1  >> 4) | ((desth & 0xf0) << 24);
-                desth = (desth >> 4) | ((dest & 0xf) << 28);
-                dest >>= 4;
-#endif
+                destL >>= 4;
                 /* Store result */
                 if (e1) {
-                    dest |= (e1 << 24) & EMASK;
-                    src1 |= ((e1 - 14) << 24) & EMASK;
+                    src1L |= (((t_uint64)e1) << 56) & EMASKL;
+                    destL |= ((t_uint64)(e1 - 14) << 56) & EMASKL;
                     if (fill) {
-                       dest |= MSIGN;
-                       src1 |= MSIGN;
+                       destL |= MSIGNL;
+                       src1L |= MSIGNL;
                     }
                 }
-                fpregs[reg1|3] = src1h;
-                fpregs[reg1|2] = src1;
-                fpregs[reg1|1] = desth;
-                fpregs[reg1] = dest;
+                fpregs[reg1] = src1L;
+                fpregs[reg1|2] = destL;
                 break;
 
         case OP_MXR:
@@ -5374,43 +4547,38 @@ fpnorm:
                 }
 
                 /* Extract numbers and adjust */
-                e1 = (src1 & EMASK) >> 24;
-                e2 = (src2 & EMASK) >> 24;
+                e1 = (src1L & EMASKL) >> 56;
+                e2 = (src2L & EMASKL) >> 56;
                 fill = 0;
-                if ((src1 & MSIGN) != (src2 & MSIGN))
+                if ((src1L & MSIGNL) != (src2L & MSIGNL))
                    fill = 1;
-                src1 &= MMASK;
-#ifdef USE_64BIT
-                src1L = (((t_uint64)(src1)) << 36) | (((t_uint64)fpregs[reg1|1]) << 4);
-                src2L = (((t_uint64)(fpregs[reg1|2] & MMASK) << 36)) |
-                         (((t_uint64)fpregs[reg1|3]) << 4);
+                src1L &= MMASKL;
+                src2L = fpregs[reg1|2] & MMASKL;
                 /* Normalize first operand */
                 if (src1L != 0) {
                     while ((src1L & NMASKL) == 0) {
                        src1L <<= 4;
-                       src1L |= (src2L >> 56) & 0xf0;
+                       src1L |= (src2L >> 56) & 0xf;
                        src2L <<= 4;
                        e1 --;
                     }
                 }
-                src1L &= UMASKL;
+                src2L <<= 4;
                 src2L &= UMASKL;
 
                 /* Normalize second operand. */
-                fpregs[reg1|3] = fpregs[reg|3];
-                fpregs[reg1|2] = (fpregs[reg|2] & MMASK) | ((fpregs[reg|1] & 0xff) << 24);
-                fpregs[reg1|1] = (fpregs[reg|1] >> 8) | ((fpregs[reg] & 0xff) << 24);
-                fpregs[reg1] = (fpregs[reg] & MMASK) >> 8;
+                fpregs[reg1|2] = fpregs[R2(reg)|2] & MMASKL;
+                fpregs[reg1] = fpregs[R2(reg)] & MMASKL;
                 /* Save second operand in result */
-                temp = fpregs[reg1] | fpregs[reg1|1] | fpregs[reg1|2] | fpregs[reg1|3];
-                if (temp != 0) {
-                    while ((fpregs[reg1] & 0x00f000) == 0) {
-                       fpregs[reg1] = (fpregs[reg1] << 4) | ((fpregs[reg1|1] >> 28) & 0xf);
-                       fpregs[reg1|1] = (fpregs[reg1|1] << 4) | ((fpregs[reg1|2] >> 28) & 0xf);
-                       fpregs[reg1|2] = (fpregs[reg1|2] << 4) | ((fpregs[reg1|3] >> 28) & 0xf);
-                       fpregs[reg1|3] <<= 4;
-                       e2 --;
+                destL = fpregs[reg1] | fpregs[reg1|2];
+                if (destL != 0) {
+                    while ((fpregs[reg1] & 0x00f00000000000LL) == 0) {
+                       fpregs[reg1] <<= 4;
+                       fpregs[reg1|2] <<= 4;
+                       fpregs[reg1] |= fpregs[reg1|2] >> 56;
+                       e2--;
                     }
+                    fpregs[reg1|2] &= MMASKL;
                 }
 
                 /* Compute exponent */
@@ -5421,12 +4589,12 @@ fpnorm:
                 dest2L = 0;
                 for (temp = 0; temp < 112; temp++) {
                      /* Add if we need too */
-                     if (fpregs[reg1|3] & 1) {
+                     if (fpregs[reg1|2] & 1) {
                          destL += src1L;
                          dest2L += src2L;
                          if (dest2L & CMASKL)
-                             destL += 0x10;
-                         dest2L &= UMASKL;
+                             destL ++;
+                         dest2L &= XMASKL;
                       }
                       /* Shift right by one */
                       dest2L >>= 1;
@@ -5434,15 +4602,11 @@ fpnorm:
                       if (destL & 0x8) {
                           dest2L |= 0x0800000000000000LL;
                       }
-                      fpregs[reg1|3] >>= 1;
-                      if (fpregs[reg1|2] & 1)
-                         fpregs[reg1|3] |= MSIGN;
+                      if (fpregs[reg1] & 1) {
+                          fpregs[reg1|2] |= CMASKL >> 4;
+                      }
                       fpregs[reg1|2] >>= 1;
-                      if (fpregs[reg1|1] & 1)
-                         fpregs[reg1|2] |= MSIGN;
-                      fpregs[reg1|1] >>= 1;
-                      if (fpregs[reg1] & 1)
-                         fpregs[reg1|1] |= MSIGN;
+                      fpregs[reg1] >>= 1;
                 }
                 /* If overflow, shift right 4 bits */
                 if (destL & EMASKL) {
@@ -5454,25 +4618,17 @@ fpnorm:
                        storepsw(OPPSW, IRC_EXPOVR);
                    }
                 }
-
-                dest = (uint32)((dest2L >> 36) & MMASK);
-                desth = (uint32)((dest2L >> 4) & FMASK);
-                src1 = (uint32)((destL >> 36) & MMASK);
-                src1h = (uint32)((destL >> 4) & MMASK);
-#else
-#endif
+                src1L >>= 4;
                 if (e1) {
-                    dest |= (e1 << 24) & EMASK;
-                    src1 |= ((e1 - 14) << 24) & EMASK;
+                    destL |= (((t_uint64)e1) << 56) & EMASKL;
+                    src1L |= ((t_uint64)(e1 - 14) << 56) & EMASKL;
                     if (fill) {
-                       dest |= MSIGN;
-                       src1 |= MSIGN;
+                       destL |= MSIGNL;
+                       src1L |= MSIGNL;
                     }
                 }
-                fpregs[reg1|3] = src1h;
-                fpregs[reg1|2] = src1;
-                fpregs[reg1|1] = desth;
-                fpregs[reg1] = dest;
+                fpregs[reg1] = destL;
+                fpregs[reg1|2] = src1L;
                 break;
 
         default:   /* Unknown op code */
@@ -5503,11 +4659,8 @@ fpnorm:
                        regs[12], regs[13], regs[14], regs[15]);
             if ((op & 0xA0) == 0x20) {
                 sim_debug(DEBUG_INST, &cpu_dev,
-                      "FP00=%08x FP01=%08x FP02=%08x FP03=%08x\n",
-                       fpregs[0], fpregs[1], fpregs[2], fpregs[3]);
-                sim_debug(DEBUG_INST, &cpu_dev,
-                      "FP04=%08x FP05=%08x FP06=%08x FP07=%08x\n",
-                       fpregs[4], fpregs[5], fpregs[6], fpregs[7]);
+                      "FP00=%016llx FP02=%016llx\nFP04=%016llx FP06=%016llx\n",
+                       fpregs[0], fpregs[2], fpregs[4], fpregs[6]);
             }
         }
         if (per_en && per_code)
@@ -6003,7 +5156,6 @@ cpu_reset (DEVICE *dptr)
        cregs[i] = 0;
     clk_cmp[0] = clk_cmp[1] = 0xffffffff;
     if (Q370) {
-#ifdef USE_64BIT
         if (clk_state == CLOCK_UNSET) {
             /* Set TOD to current time */
             time_t seconds = sim_get_time(NULL);
@@ -6017,7 +5169,6 @@ cpu_reset (DEVICE *dptr)
             tod_clock[1] = (uint32)(lsec & FMASK);
             clk_state = CLOCK_SET;
         }
-#endif
         cregs[0]  = 0x000000e0;
         cregs[2]  = 0xffffffff;
         cregs[14] = 0xc2000000;

@@ -1410,8 +1410,7 @@ IBM360 = ${IBM360D}/ibm360_cpu.c ${IBM360D}/ibm360_sys.c ${IBM360D}/ibm360_con.c
 	${IBM360D}/ibm360_chan.c ${IBM360D}/ibm360_cdr.c ${IBM360D}/ibm360_cdp.c \
 	${IBM360D}/ibm360_mt.c ${IBM360D}/ibm360_lpr.c ${IBM360D}/ibm360_dasd.c \
 	${IBM360D}/ibm360_com.c ${IBM360D}/ibm360_scom.c ${IBM360D}/ibm360_vma.c
-IBM360_OPT = -I $(IBM360D) -DIBM360 -DUSE_64BIT -DUSE_SIM_CARD
-IBM360_OPT32 = -I $(IBM360D) -DIBM360 -DUSE_SIM_CARD
+IBM360_OPT = -I $(IBM360D) -DIBM360 -DUSE_INT64 -DUSE_SIM_CARD
 
 PDP6D = ${SIMHD}/PDP10
 ifneq (,${DISPLAY_OPT})
@@ -1506,7 +1505,7 @@ KS10_OPT = -DKS=1 -DUSE_INT64 -I $(KS10D) ${NETWORK_OPT}
 # Build everything (not the unsupported/incomplete or experimental simulators)
 #
 
-ALL = b5500 i701 i704 i7010 i7070 i7080 i7090 pdp10-ka pdp10-ki pdp10-kl pdp10-ks pdp6 ibm360 ibm360_32 icl1900 sel32
+ALL = b5500 i701 i704 i7010 i7070 i7080 i7090 pdp10-ka pdp10-ki pdp10-kl pdp10-ks pdp6 ibm360 icl1900 sel32
 
 all : ${ALL}
 
@@ -1526,16 +1525,6 @@ ${BIN}ibm360${EXE}: ${IBM360} ${SIM}
 ifneq (,$(call find_test,${IBM360D},ibm360))
 	$@ $(call find_test,${IBM360D},ibm360) $(TEST_ARG)
 endif
-
-ibm360_32: $(BIN)ibm360_32$(EXE)
-
-${BIN}ibm360_32${EXE}: ${IBM360} ${SIM}
-	${MKDIRBIN}
-	${CC} ${IBM360} ${SIM} ${IBM360_OPT32} $(CC_OUTSPEC) ${LDFLAGS}
-ifneq (,$(call find_test,${IBM360D},ibm360))
-	$@ $(call find_test,${IBM360D},ibm360) $(TEST_ARG)
-endif
-
 
 icl1900: $(BIN)icl1900$(EXE)
 
