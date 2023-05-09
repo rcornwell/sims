@@ -156,7 +156,7 @@ static const uint16          ascii_to_hol_026[128] = {
    /*   p      q      r      s      t      u      v      w */
     0xC04, 0xC02, 0xC01, 0x680, 0x640, 0x620, 0x610, 0x608,
    /*   x      y      z      {      |      }      ~    del */
-   /*                     T79     X78   Y79     79         */
+   /*                     T79     X78   X79     79         */
     0x604, 0x602, 0x601, 0x406, 0x806, 0x805, 0x005, 0xf000
 };
 
