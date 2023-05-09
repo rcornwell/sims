@@ -904,6 +904,7 @@ startio(uint16 addr) {
     chan->daddr = addr;
     chan->dev = dev;
 
+    sim_debug(DEBUG_CMD, &cpu_dev, "SIO start %03x %03x\n", addr, chan->daddr);
     /* Try to load first command */
     if (load_ccw(chan, 0)) {
         M[0x44 >> 2] = ((uint32)chan->chan_status<<16) | (M[0x44 >> 2] & 0xffff);

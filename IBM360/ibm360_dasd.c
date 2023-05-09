@@ -373,14 +373,17 @@ uint8  dasd_startio(UNIT *uptr) {
 
     /* Check if unit is busy */
     if ((uptr->CMD & 0xff) != 0) {
+       sim_debug(DEBUG_CMD, dptr, "busy io unit=%d\n", unit);
        return SNS_BSY;
     }
 
     /* Check if controller is free */
     for (i = 0; i < dptr->numunits; i++) {
        int cmd = (dptr->units[i].CMD) & 0xff;
-       if (cmd != 0 && cmd != DK_SEEK)
+       if (cmd != 0 && cmd != DK_SEEK) {
+           sim_debug(DEBUG_CMD, dptr, "busy io unit=%d %d busy\n", unit, i);
            return SNS_BSY;
+       }
     }
 
     /* Set up for command to start */
@@ -1480,6 +1483,7 @@ rd:
                      uptr->CMD &= ~(DK_PARAM);  /* Start a new search */
                      uptr->CMD |= DK_OVFLOW;
                  }
+                 data->state = DK_POS_AM;
                  break;
              }
              ch = *da;
@@ -1754,6 +1758,7 @@ wrckd:
                            "WCKD end unit=%d %d %d %04x %x\n",
                           unit, data->tpos+8, count, data->tpos - data->rpos,
                            data->ovfl);
+                 data->state = DK_POS_AM;
                  break;
              }
              if (uptr->CMD & DK_DONE || chan_read_byte(addr, &ch)) {
