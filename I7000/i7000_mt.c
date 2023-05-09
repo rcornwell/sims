@@ -798,6 +798,7 @@ t_stat mt_srv(UNIT * uptr)
     switch (cmd) {
     case 0:                     /* No command, stop tape */
         uptr->u5 |= MT_RDY;     /* Ready since command is done */
+            mt_chan[chan] &= ~MTC_BSY;
         sim_debug(DEBUG_DETAIL, dptr, "Idle unit=%d\n", unit);
         return SCPE_OK;
 
@@ -1171,6 +1172,7 @@ t_stat mt_srv(UNIT * uptr)
             sim_activate(uptr, T2_us);
         } else {
             uptr->u3 -= reclen;
+            sim_debug(DEBUG_DETAIL, dptr, "Backspace file record unit=%d\n", unit);
             sim_activate(uptr, T2_us + (reclen * T1_us));
         }
         return SCPE_OK;
