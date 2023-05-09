@@ -23,6 +23,17 @@
    used in advertising or otherwise to promote the sale, use or other dealings
    in this Software without prior written authorization from Robert M Supnik.
 
+   06-Jun-22    RMS     Deprecated UNIT_TEXT, deleted UNIT_RAW
+   10-Mar-22    JDB     Modified REG macros to fix "stringizing" problem
+   12-Nov-21    JDB     Added UNIT_EXTEND dynamic flag
+   17-Mar-21    JDB     Added UNIT_PIPE dynamic flag
+   16-Feb-21    JDB     Added "stride" to REG to support arrays of structures
+                        Modified REG macros to initialize strides
+   21-Jan-21    JDB     Added "size" and "maxval" fields to the REG structure
+                        Modified REG macros to initialize access sizes
+   09-Nov-20    RMS     More V4.X compatibility hooks (Mark Pizzolato)
+   26-Oct-19    RMS     Removed MTAB_VAL definition
+   23-Jun-17    RMS     Added #include sim_rev.h (Mark Pizzolato)
    25-Sep-16    RMS     Removed KBD_WAIT and friends
    08-Mar-16    RMS     Added shutdown invisible switch
    24-Dec-14    JDB     Added T_ADDR_FMT
@@ -93,7 +104,7 @@
         sim_devices[]           array of pointers to simulated devices
         sim_PC                  pointer to saved PC register descriptor
         sim_interval            simulator interval to next event
-        sim_stop_messages[SCPE_BASE]     
+        sim_stop_messages[SCPE_BASE]
                                 array of pointers to stop messages
         sim_instr()             instruction execution routine
         sim_load()              binary loader routine
@@ -125,6 +136,9 @@ extern int sim_vax_snprintf(char *buf, size_t buf_size, const char *fmt, ...);
 #include <errno.h>
 #include <limits.h>
 #include <ctype.h>
+#include <math.h>
+#include <setjmp.h>
+
 
 #ifndef EXIT_FAILURE
 #define EXIT_FAILURE 1
@@ -152,7 +166,7 @@ extern int sim_vax_snprintf(char *buf, size_t buf_size, const char *fmt, ...);
 #define USE_REGEX 1
 #endif
 
-#if (defined (__MWERKS__) && defined (macintosh)) || defined(__DECC)
+#if defined(__DECC)
 #define __FUNCTION__ __FILE__
 #endif
 
@@ -207,7 +221,7 @@ typedef __int32          int32;
 typedef unsigned __int8  uint8;
 typedef unsigned __int16 uint16;
 typedef unsigned __int32 uint32;
-#else                                                   
+#else
 /* All modern/standard compiler environments */
 /* any other environment needa a special case above */
 #include <stdint.h>
@@ -316,7 +330,7 @@ typedef uint32          t_addr;
 #define SIM_INLINE inline
 #define SIM_NOINLINE  __attribute__ ((noinline))
 #else
-#define SIM_INLINE 
+#define SIM_INLINE
 #define SIM_NOINLINE
 #endif
 
@@ -513,7 +527,7 @@ struct DEVICE {
                                                         /* mem size routine */
     char                *lname;                         /* logical name */
     t_stat              (*help)(FILE *st, DEVICE *dptr,
-                            UNIT *uptr, int32 flag, const char *cptr); 
+                            UNIT *uptr, int32 flag, const char *cptr);
                                                         /* help */
     t_stat              (*attach_help)(FILE *st, DEVICE *dptr,
                             UNIT *uptr, int32 flag, const char *cptr);
@@ -647,8 +661,10 @@ struct UNIT {
 #define UNIT_WLK        0100000         /* hardware write lock */
 #define UNIT_WPRT     (UNIT_WLK|UNIT_RO)/* write protect */
 
-/* Unused/meaningless flags */
-#define UNIT_TEXT       0000000         /* text mode - no effect */
+/* Deleted or deprecated */
+
+// #define UNIT_RAW        000000                          /* raw mode */
+#define UNIT_TEXT       000000                          /* text mode */
 
 #define UNIT_UFMASK_31  (((1u << UNIT_V_RSV) - 1) & ~((1u << UNIT_V_UF_31) - 1))
 #define UNIT_UFMASK     (((1u << UNIT_V_RSV) - 1) & ~((1u << UNIT_V_UF) - 1))
@@ -892,10 +908,10 @@ struct MEMFILE {
     size_t              pos;                         /* data used */
     };
 
-/* 
+/*
    The following macros exist to help populate structure contents
 
-   They are dependent on the declaration order of the fields 
+   They are dependent on the declaration order of the fields
    of the structures they exist to populate.
 
  */
@@ -965,14 +981,14 @@ struct MEMFILE {
    This specifies a arrayed register whose elements are array[0].field,
    array[1].field, etc.
 
-   All above macro names from ORDATA through XRDATA have two additional 
-   precisely related macros.  The first it the above name with D appended and 
-   has an additional parameter which is a quoted string describing the purpose 
-   of the register which is visible when displaying HELP about a device's 
+   All above macro names from ORDATA through XRDATA have two additional
+   precisely related macros.  The first it the above name with D appended and
+   has an additional parameter which is a quoted string describing the purpose
+   of the register which is visible when displaying HELP about a device's
    registers.  The second related macro has the above name with DF appended
-   and has two additional parameters.  The first parameter is the register 
+   and has two additional parameters.  The first parameter is the register
    description, and the second is the name of a BITFIELD array which describes
-   the fields in the register's contents.  This info is used to display the 
+   the fields in the register's contents.  This info is used to display the
    register contents (via EXAMINE) along with the detailed bitfield data.
    For example:
 
@@ -997,7 +1013,7 @@ struct MEMFILE {
        will occur before stringization, resulting in the wrong register name.
 
     3. Additional REG initialization values may be supplied after a macro
-       invocation.  If present, these begin with the "flags" field which is, 
+       invocation.  If present, these begin with the "flags" field which is,
        for the most part, not specified as a macro parameter.
 
     4. The URDATA macro is obsolescent and present for backward-compatibility.
@@ -1014,8 +1030,8 @@ struct MEMFILE {
 #define _RegCheck(nm,loc,rdx,wd,off,dep,desc,flds,qptr,siz,elesiz,macro) \
     nm, (loc), (rdx), (wd), (off), (dep), (desc), (flds), (qptr), (siz), sizeof(*(loc)), (elesiz), #macro
 
-/* Generic Register declaration for all fields.  
-   If the register structure is extended, this macro will be retained and a 
+/* Generic Register declaration for all fields.
+   If the register structure is extended, this macro will be retained and a
    new internal macro will be provided that populates the new register structure */
 #define REGDATA(nm,loc,rdx,wd,off,dep,desc,flds,fl,qptr,siz) \
     _RegCheck(#nm,&(loc),rdx,wd,off,dep,desc,flds,qptr,siz,sizeof((loc)),REGDATA),(fl)
