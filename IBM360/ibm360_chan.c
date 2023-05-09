@@ -1537,11 +1537,11 @@ set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     DEVICE             *dptr;
     struct _dev        *dev;
     DIB                *dibp;
-    t_value             newdev;
+    uint16              newdev;
     struct _dev        *ndev;
     t_stat              r;
     unsigned int        i;
-    t_value             devaddr;
+    uint16              devaddr;
 
     if (cptr == NULL)
         return SCPE_ARG;
@@ -1555,7 +1555,7 @@ set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     if (dibp == NULL)
         return SCPE_IERR;
 
-    newdev = get_uint (cptr, 16, 0xfff, &r);
+    newdev = (uint16)(get_uint (cptr, 16, 0xfff, &r) & 0xfff);
 
     if (r != SCPE_OK)
         return r;
