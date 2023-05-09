@@ -113,6 +113,7 @@ enum jump_type { DJP=2, DJS=3, DDS=1 }; /* type 347 */
 #define CH_SUB    0011   /* Subscript. */
 #define CH_SUP    0012   /* Superscript. */
 
+
 /* put all the state in a struct "just in case" */
 static struct type340 {
     ty340word DAC;              /* Display Address Counter */
@@ -204,10 +205,7 @@ ty340_reset(void *dptr)
 {
     struct type340 *u = UNIT(0);
 #ifndef TY340_NODISPLAY
-    if (!u->initialized) {
-        display_init(DIS_TYPE340, 1, dptr); /* XXX check return? */
-        u->initialized = 1;
-    }
+    display_init(DIS_TYPE340, 1, dptr); /* XXX check return? */
 #endif
     u->xpos = u->ypos = 0;
     u->mode = PARAM;
