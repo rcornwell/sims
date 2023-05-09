@@ -23,6 +23,9 @@
    used in advertising or otherwise to promote the sale, use or other dealings
    in this Software without prior written authorization from Robert M Supnik.
 
+   01-Oct-22    RMS     Replaced readline with editline due to licensing issues (Paul Koning)
+   15-Aug-22    RMS     Fixed inconsistent SIM_HAVE_DLOPEN naming (Walter Mueller)
+   06-Mar-22    RMS     Removed UNIT_RAW support
    21-Oct-21    RMS     Fixed bug in byte deposits if aincr > 1
    16-Feb-21    JDB     Rewrote get_rval, put_rval to support arrays of structures
    25-Jan-21    JDB     REG "size" field now determines access size
@@ -2734,10 +2737,6 @@ t_bool register_check = FALSE;
 t_stat stat = SCPE_OK;
 CTAB *docmdp = NULL;
 
-#if defined (__MWERKS__) && defined (macintosh)
-argc = ccommand (&argv);
-#endif
-
 /* Make sure that argv has at least 10 elements and that it ends in a NULL pointer */
 targv = (char **)calloc (1+MAX(10, argc), sizeof(*targv));
 for (i=0; i<argc; i++)
@@ -2962,7 +2961,6 @@ if (docmdp) {
     }
 if (SCPE_BARE_STATUS(stat) == SCPE_OPENERR)             /* didn't exist/can't open? */
     stat = SCPE_OK;
-
 if (SCPE_BARE_STATUS(stat) != SCPE_EXIT)
     process_stdin_commands (SCPE_BARE_STATUS(stat), argv, FALSE);
 
@@ -4341,7 +4339,7 @@ strlcpy (argline, cptr, arg_size);
 cp = argline + (arg_size / 2);
 strlcpy (cp, cptr, arg_size / 2);
 argv[0] = argline;                  /* argv[0] points to unparsed arguments */
-argv[argc + 1] = NULL;              /* make sure the argument list always ends with a NULL */
+argv[argc] = NULL;                  /* make sure the argument list always ends with a NULL */
 while (*cp) {
     while (sim_isspace (*cp))       /* skip blanks */
         cp++;
@@ -6625,7 +6623,7 @@ sprintf (vmin_s, "%d", vmin);
 setenv ("SIM_MINOR", vmin_s, 1);
 sprintf (vpat_s, "%d", vpat);
 setenv ("SIM_PATCH", vpat_s, 1);
-fprintf (st, "%s simulator V%d.%d-%d", sim_name, vmaj, vmin, vpat);
+fprintf (st, "%s simulator Open SIMH V%d.%d-%d", sim_name, vmaj, vmin, vpat);
 if (sim_vm_release != NULL) {                           /* if a release string is defined */
     setenv ("SIM_VM_RELEASE", sim_vm_release, 1);
     fprintf (st, " Release %s", sim_vm_release);        /*   then display it */
@@ -6639,10 +6637,10 @@ if (vdelt) {
 if (1) {
     char mode[] = S_xstr(SIM_VERSION_MODE);
 
-	if (NULL != strchr (mode, '\"')) {              /* Quoted String? */
-		mode[strlen (mode) - 1] = '\0';				/* strip quotes */
-		memmove (mode, mode + 1, strlen (mode));
-		}
+    if (NULL != strchr (mode, '\"')) {              /* Quoted String? */
+        mode[strlen (mode) - 1] = '\0';             /* strip quotes */
+        memmove (mode, mode + 1, strlen (mode));
+        }
     fprintf (st, " %s", mode);
     setenv ("SIM_VERSION_MODE", mode, 1);
     }
@@ -10287,6 +10285,7 @@ return read_line_p (NULL, cptr, size, stream);
 char *read_line_p (const char *prompt, char *cptr, int32 size, FILE *stream)
 {
 char *tptr;
+
 #if defined(HAVE_EDITLINE)
 if (prompt) {                                           /* interactive? */
     char *tmpc = readline (prompt);                     /* get cmd line */
@@ -10295,8 +10294,8 @@ if (prompt) {                                           /* interactive? */
     else {
         strlcpy (cptr, tmpc, size);                     /* copy result */
         free (tmpc) ;                                   /* free temp */
+        }
     }
-}
 else cptr = fgets (cptr, size, stream);                 /* get cmd line */
 #else
 if (prompt) {                                           /* interactive? */
@@ -10332,7 +10331,6 @@ if ((*cptr == ';') || (*cptr == '#')) {                 /* ignore comment */
 if (prompt && *cptr)                   /* Save non blank lines in history */
     add_history (cptr);
 #endif
-
 return cptr;
 }
 
@@ -10431,7 +10429,7 @@ return (CONST char *)get_glyph_gen (iptr, optr, 0, TRUE, FALSE, 0);
         result  =       true if yes, false if no
 */
 
-t_stat get_yn (const char *ques, t_stat deflt)
+t_bool get_yn (const char *ques, t_bool deflt)
 {
 char cbuf[CBUFSIZE];
 const char *cptr;
@@ -16517,7 +16515,7 @@ for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {
         stat = tstat;
         sim_printf ("%s device tests returned: %d - %s\n", dptr->name, SCPE_BARE_STATUS (tstat), sim_error_text (tstat));
         if (sim_ttisatty()) {
-            if (get_yn ("Continue with additional tests? [N] ", SCPE_STOP) == SCPE_STOP)
+            if (get_yn ("Continue with additional tests? [N] ", FALSE) == FALSE)
                 break;
             }
         else
