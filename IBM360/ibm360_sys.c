@@ -517,7 +517,7 @@ t_opcode        *tab;
 t_stat fprint_sym (FILE *of, t_addr addr, t_value *val,
        UNIT *uptr, int32 sw)
 {
-    uint8           inst = *val;
+    uint8           inst = (uint8)(*val & 0xff);
     uint16          sval[4];
     int             i;
     int             l = 1;
@@ -894,7 +894,7 @@ t_stat parse_sym (CONST char *cptr, t_addr addr, UNIT *uptr, t_value *val, int32
                return -5;
         }
     }
-    num = get_uint(cptr, rdx, max[l], &r);
+    num = (uint32)(get_uint(cptr, rdx, max[l], &r) & 0xffffffff);
     for (i = 0; i < l && i < 4; i++)
         val[i] = (num >> (((l - 1) - i) * 8)) & 0xff;
     return -(l-1);

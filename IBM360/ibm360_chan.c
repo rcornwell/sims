@@ -1541,7 +1541,7 @@ set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     struct _dev        *ndev;
     t_stat              r;
     unsigned int        i;
-    int                 devaddr;
+    t_value             devaddr;
 
     if (cptr == NULL)
         return SCPE_ARG;
@@ -1621,9 +1621,9 @@ set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
         dev->dev_addr = devaddr;
         uptr->u3 &= ~UNIT_ADDR(0xfff);
         uptr->u3 |= UNIT_ADDR(devaddr);
-        sim_printf("Set dev %s %x\r\n", dptr->name, GET_UADDR(uptr->u3));
+        sim_printf("Set dev %s %x\r\n", dptr->name, GET_UADDR(uptr->u3) & 0xfff);
     } else {
-        sim_printf("Set dev %s0 %x\r\n",  dptr->name, devaddr);
+        sim_printf("Set dev %s0 %x\r\n",  dptr->name, (uint32)(devaddr & 0xfff));
         for (i = 0; i < dibp->numunits; i++)  {
              dev = find_device(devaddr + i);
              uptr = &((dibp->units)[i]);
