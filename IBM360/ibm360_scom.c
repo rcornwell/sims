@@ -27,7 +27,7 @@
 #include "sim_tmxr.h"
 
 #ifdef NUM_DEVS_COM
-#define UNIT_COM           0
+#define UNIT_COM           UNIT_DISABLE
 
 
 
@@ -144,7 +144,7 @@ MTAB                scoml_mod[] = {
 };
 
 UNIT                scom_unit[] = {
-    {UDATA(&scom_scan, UNIT_ATTABLE | UNIT_IDLE, 0)},        /* Line scanner */
+    {UDATA(&scom_scan, UNIT_ATTABLE | UNIT_DISABLE | UNIT_IDLE, 0)},        /* Line scanner */
 };
 
 UNIT                scoml_unit[] = {
@@ -186,7 +186,7 @@ DEVICE              scoml_dev = {
 
 
 /*
- * Issue a scommand to the 2701 controller.
+ * Issue a scommand to the 3271 controller.
  */
 uint8  scoml_startcmd(UNIT *uptr,  uint8 cmd) {
     DEVICE         *dptr = find_dev_from_unit(uptr);
