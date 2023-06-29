@@ -66,7 +66,7 @@
 /* std devices. data structures
 
    con_dev       Console device descriptor
-   con_unit       Console unit descriptor
+   con_unit      Console unit descriptor
    con_reg       Console register list
    con_mod       Console modifiers list
 */
@@ -74,7 +74,7 @@
 
 struct _con_data
 {
-    uint8               ibuff[145];       /* Input line buffer */
+    uint8              ibuff[145];       /* Input line buffer */
     uint8              inptr;
 }
 con_data[NUM_DEVS_CON];
@@ -83,13 +83,12 @@ uint8  con_startcmd(UNIT *, uint8);
 uint8  con_haltio(UNIT *);
 void                con_ini(UNIT *, t_bool);
 t_stat              con_srv(UNIT *);
-t_stat              con_attach(UNIT *, char *);
 t_stat              con_detach(UNIT *);
 t_stat              con_help(FILE *, DEVICE *, UNIT *, int32, const char *);
 const char         *con_description(DEVICE *d);
 
 UNIT                con_unit[] = {
-    {UDATA(con_srv, UNIT_ATT, 0), 0, UNIT_ADDR(0x1F)},       /* A */
+    {UDATA(con_srv,  UNIT_ATT, 0), 0, UNIT_ADDR(0x1F)},       /* A */
 };
 
 MTAB                con_mod[] = {
@@ -138,17 +137,17 @@ uint8  con_startcmd(UNIT *uptr, uint8 cmd) {
     case 2:                        /* Read command */
          sim_debug(DEBUG_CMD, &con_dev, "%d: Cmd RD\n", u);
          if (uptr->CMD & CON_REQ) {
-              uptr->CMD &= ~CON_REQ;
-              return SNS_ATTN;
+             uptr->CMD &= ~CON_REQ;
+             return SNS_ATTN;
          }
 
          if ((uptr->CMD & CON_INPUT) == 0 &&
                 (con_data[u].inptr == 0 || uptr->CMD & CON_CR)) {
              /* Activate input so we can get response */
              if ((uptr->CMD & CON_OUTPUT) != 0) {
-                sim_putchar('\r');
-                sim_putchar('\n');
-                uptr->CMD &= ~CON_OUTPUT;
+                 sim_putchar('\r');
+                 sim_putchar('\n');
+                 uptr->CMD &= ~CON_OUTPUT;
              }
              sim_putchar('I');
              sim_putchar(' ');
@@ -161,24 +160,24 @@ uint8  con_startcmd(UNIT *uptr, uint8 cmd) {
     case 1:                    /* Write command */
          sim_debug(DEBUG_CMD, &con_dev, "%d: Cmd WR\n", u);
          if (uptr->CMD & CON_REQ) {
-              uptr->CMD &= ~CON_REQ;
-              return SNS_ATTN;
+             uptr->CMD &= ~CON_REQ;
+             return SNS_ATTN;
          }
          uptr->CMD |= cmd & CON_MSK;
          uptr->SNS = 0;
          if (uptr->CMD & CON_CR) {
-            sim_putchar('R');
-            sim_putchar(' ');
-            uptr->CMD &= ~CON_CR;
-            uptr->CMD |= CON_OUTPUT;
+             sim_putchar('R');
+             sim_putchar(' ');
+             uptr->CMD &= ~CON_CR;
+             uptr->CMD |= CON_OUTPUT;
          }
          return 0;
 
     case 3:              /* Control */
          sim_debug(DEBUG_CMD, &con_dev, "%d: Cmd NOP\n", u);
          if (uptr->CMD & CON_REQ) {
-              uptr->CMD &= ~CON_REQ;
-              return SNS_ATTN;
+             uptr->CMD &= ~CON_REQ;
+             return SNS_ATTN;
          }
          uptr->SNS = 0;
          return SNS_CHNEND|SNS_DEVEND;
@@ -412,9 +411,9 @@ con_srv(UNIT *uptr) {
 }
 
 t_stat
-con_detach(UNIT *uptr)
+con_detach(UNIT * uptr)
 {
-   return SCPE_OK;
+    return SCPE_OK;
 }
 
 t_stat
