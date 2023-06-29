@@ -62,6 +62,7 @@
 #define NUM_DEVS_CDP        4
 #define NUM_DEVS_CDR        4
 #define NUM_DEVS_CON        1
+#define NUM_DEVS_SCON       2
 #define NUM_DEVS_LPR        4
 #define NUM_DEVS_MT         2
 #define NUM_UNITS_MT        8
@@ -381,6 +382,7 @@ extern DEVICE cdp_dev;
 extern DEVICE cdr_dev;
 extern DEVICE lpr_dev;
 extern DEVICE con_dev;
+extern DEVICE scon_dev;
 extern DEVICE mta_dev;
 extern DEVICE mtb_dev;
 extern DEVICE dda_dev;

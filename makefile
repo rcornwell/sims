@@ -1409,7 +1409,8 @@ IBM360D = ${SIMHD}/IBM360
 IBM360 = ${IBM360D}/ibm360_cpu.c ${IBM360D}/ibm360_sys.c ${IBM360D}/ibm360_con.c \
 	${IBM360D}/ibm360_chan.c ${IBM360D}/ibm360_cdr.c ${IBM360D}/ibm360_cdp.c \
 	${IBM360D}/ibm360_mt.c ${IBM360D}/ibm360_lpr.c ${IBM360D}/ibm360_dasd.c \
-	${IBM360D}/ibm360_com.c ${IBM360D}/ibm360_scom.c ${IBM360D}/ibm360_vma.c
+	${IBM360D}/ibm360_com.c ${IBM360D}/ibm360_scom.c ${IBM360D}/ibm360_scon.c \
+    ${IBM360D}/ibm360_vma.c
 IBM360_OPT = -I $(IBM360D) -DIBM360 -DUSE_INT64 -DUSE_SIM_CARD
 
 PDP6D = ${SIMHD}/PDP10

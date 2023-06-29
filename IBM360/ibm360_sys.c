@@ -51,6 +51,9 @@ DEVICE *sim_devices[] = {
 #ifdef NUM_DEVS_CON
        &con_dev,
 #endif
+#ifdef NUM_DEVS_SCON
+       &scon_dev,
+#endif
 #ifdef NUM_DEVS_CDR
        &cdr_dev,
 #endif
