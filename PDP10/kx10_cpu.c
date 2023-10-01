@@ -6420,7 +6420,7 @@ unasign:
                   SC = (AR >> 24) & 077;   /* S */
                   FE = (AR >> 30) & 077;   /* P */
 #if KL
-                  if (SC || (QKLB && t20_page && pc_sect != 0 && FE > 36)) {
+                  if (SC || (QKLB && t20_page && FE > 36)) {
 #else
                   if (SC) {
 #endif
@@ -6428,7 +6428,7 @@ unasign:
 
                       f = 0;
 #if KL
-                      if (QKLB && t20_page && pc_sect != 0 && FE > 36) {
+                      if (QKLB && t20_page && FE > 36) {
                           if (FE == 077)
                               goto muuo;
                           f = 1;
@@ -6517,7 +6517,7 @@ unasign:
                   AR = MB;
                   SCAD = (AR >> 30) & 077;
 #if KL
-                  if (QKLB && t20_page && pc_sect != 0 && SCAD > 36) {  /* Extended pointer */
+                  if (QKLB && t20_page && SCAD > 36) {  /* Extended pointer */
                       f = SCAD - 37;
                       if (SCAD == 077)
                           goto muuo;
@@ -6612,7 +6612,7 @@ unasign:
                   SC = (AR >> 24) & 077;
                   SCAD = (AR >> 30) & 077;
 #if KL
-                  if (QKLB && t20_page && pc_sect != 0 && SCAD > 36) {   /* Extended pointer */
+                  if (QKLB && t20_page && SCAD > 36) {   /* Extended pointer */
                       f = SCAD - 37;
                       if (SCAD == 077)
                           goto muuo;
@@ -12300,7 +12300,7 @@ do_byte_setup(int n, int wr, int *pos, int *sz)
     np = (p + (0777 ^ s) + 1) & 0777;
     /* Advance pointer */
 #if KL
-    if (QKLB && t20_page && pc_sect != 0) {
+    if (QKLB && t20_page) {
         if (p > 36) {  /* Extended pointer */
             int i = p - 37;
             *sz = s = _byte_adj[i].s;
@@ -12591,7 +12591,7 @@ adj_byte(int n)
     /* Advance pointer */
     np = (p + (0777 ^ s) + 1) & 0777;
 #if KL
-    if (QKLB && t20_page && pc_sect != 0) {
+    if (QKLB && t20_page) {
         if (p > 36) {  /* Extended pointer */
             int i = p - 37;
             s = _byte_adj[i].s;
@@ -12652,7 +12652,7 @@ adv_byte(int n)
     /* Advance pointer */
     np = (p + (0777 ^ s) + 1) & 0777;
 #if KL
-    if (QKLB && t20_page && pc_sect != 0) {
+    if (QKLB && t20_page) {
         if (p > 36) {  /* Extended pointer */
             int i = p - 37;
             s = _byte_adj[i].s;
