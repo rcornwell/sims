@@ -6418,10 +6418,14 @@ unasign:
                       goto last;
                   AR = MB;
                   SC = (AR >> 24) & 077;   /* S */
+                  FE = (AR >> 30) & 077;   /* P */
+#if KL
+                  if (SC || (QKLB && t20_page && pc_sect != 0 && FE > 36)) {
+#else
                   if (SC) {
+#endif
                       int  bpw, left, newb, adjw, adjb;
 
-                      FE = (AR >> 30) & 077;  /* P */
                       f = 0;
 #if KL
                       if (QKLB && t20_page && pc_sect != 0 && FE > 36) {
@@ -6590,9 +6594,6 @@ unasign:
                   if ((IR & 04) == 0)
                       break;
                   goto ldb_ptr;
-              } else {
-                  if ((IR & 04) == 0)
-                      break;
               }
               /* Fall through */
 
