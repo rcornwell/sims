@@ -65,9 +65,10 @@ extern uint8  IX;         /* Index register */
 extern uint8  IND;        /* Indirect flag */
 extern t_addr AB;         /* Memory address register */
 extern t_addr PC;         /* Program counter register */
+#if KA | KI
 extern int    nxm_stop;   /* Stop if non-existent memory access */
-extern int    adr_flag;   /* Address stop flags */
 extern int    adr_cond;   /* Address stop condition */
+#endif
 extern uint8  IOB_PI;     /* Pending Interrupt requests */
 extern uint8  PIR;        /* Current Interrupt requests */
 extern uint8  PIH;        /* Currently held interrupts */
@@ -532,8 +533,10 @@ void *blink(void *ptr)
                 break;
          case 2:
                 new_sw |= (((uint64)sw) << SR_V2) | SR_MASK_2;
+#if KA | KI
                 adr_cond = sw & (INST_FETCH|DATA_FETCH|WRITE_SW|ADR_STOP_SW|ADR_BRK_SW);
                 nxm_stop = (sw & NXM_STOP) != 0;
+#endif
                 sing_inst_sw = (sw & SING_INST) != 0;
                 /* PAR_STOP handle special features */
                 /* SING_CYCL no function yet */
@@ -699,9 +702,11 @@ void *blink(void *ptr)
                         break;
                 case 2:
                         new_sw |= (((uint64)sw) << SR_V2) & SR_MASK_2;
+#if KA | KI
                         adr_cond = sw & (INST_FETCH|DATA_FETCH|WRITE_SW|
                                                 ADR_STOP_SW|ADR_BRK_SW);
                         nxm_stop = (sw & NXM_STOP) != 0;
+#endif
                         sing_inst_sw = (sw & SING_INST) != 0;
                         /* PAR_STOP handle special features */
                         par_stop = (sw & PAR_STOP) != 0;
@@ -736,9 +741,11 @@ void *blink(void *ptr)
                 if (switch_state[col].changed && switch_state[col].state) {
                    switch_state[col].changed = 0;
                    switch (col) {
+#if KA | KI
                    case 7:      /* ReadIN */
                            rdrin_dev = 0774 & new_as;
                            break;
+#endif
 
                    case 5:      /* Continue */
                            MI_disable = !MI_disable;
@@ -923,6 +930,7 @@ vm_read(char *cptr, int32 sz, FILE *file)
                             }
                             break;
 
+#if KA | KI
                     case 7:      /* ReadIN */
                             if ((input_buffer = (char *)malloc(20)) != 0) {
                                 DEVICE         *dptr;
@@ -952,6 +960,7 @@ vm_read(char *cptr, int32 sz, FILE *file)
                                                 rdrin_dev);
                             }
                             break;
+#endif
 
                     case 10:     /* Deposit next */
                            AB++;

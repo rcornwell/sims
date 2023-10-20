@@ -140,9 +140,7 @@ uint32  rdrin_dev;                            /* Read in device */
 uint8   IX;                                   /* Index register */
 uint8   IND;                                  /* Indirect flag */
 #endif
-#if PDP6 | KA | KI
 t_addr  AS;                                   /* Address switches */
-#endif
 int     BYF5;                                 /* Flag for second half of LDB/DPB instruction */
 int     uuo_cycle;                            /* Uuo cycle in progress */
 int     SC;                                   /* Shift count */
