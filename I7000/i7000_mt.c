@@ -90,8 +90,8 @@
 #define IPS             75      /* Inches per second 75 or 112 */
 #define HS_IPS         500      /* High speed rewind Inches per second */
 
-#define LD             200
-#define HD             400
+#define LD             300
+#define HD             150
 
 #define LT_GAP_LEN     ((3 * LD)/ 4)   /* Gap length for low density */
 #define HT_GAP_LEN     ((3 * HD)/ 4)   /* Gap length for high density */
