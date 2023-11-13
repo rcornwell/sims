@@ -251,6 +251,7 @@ t_stat ch10_transmit ()
     ch10_status |= OVER;
   }
   tx_count = 0;
+  ch10_status |= TXD;
   ch10_test_int ();
   return SCPE_OK;
 }
@@ -415,9 +416,6 @@ t_stat ch10_svc(UNIT *uptr)
   if (ch10_lines[0].conn) {
     ch10_receive ();
   }
-  if (tx_count == 0)
-    ch10_status |= TXD;
-  ch10_test_int ();
   return SCPE_OK;
 }
 
