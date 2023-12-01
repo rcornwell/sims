@@ -663,7 +663,6 @@ endcyl:
                  if (data->ovfl)
                     uptr->SNS |= (SNS_OVRINC << 8) | ((uptr->CMD & 0x3) | 0x4) << 16;
                  data->tstart = 0;
-                 uptr->CCH &= ~0xff;
                  uptr->CMD &= ~0xff;
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                  goto index;
@@ -874,7 +873,7 @@ ntrack:
              sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 6 %x\n", unit, ch);
              if (chan_write_byte(addr, &ch))
                  goto sense_end;
-             ch = 0;              /* Compute message code */
+             ch = (uptr->SNS >> 24) & 0xff;      /* Compute message code */
              sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 7 %x\n", unit, ch);
              if (chan_write_byte(addr, &ch))
                  goto sense_end;
@@ -964,7 +963,7 @@ sense_end:
          }
 
          if (i != DK_MSK_SKALLSKR) { /* Some restrictions */
-             if ((cmd == DK_SEEKHD && i == DK_MSK_SKNONE) || 
+             if ((cmd == DK_SEEKHD && i == DK_MSK_SKNONE) ||
                  (cmd == DK_SEEKCYL && (i & DK_MSK_SKALLHD) != 0) ||
                  (cmd == DK_SEEK)) {
                  sim_debug(DEBUG_DETAIL, dptr, "seek unit=%d not allow\n", unit);
@@ -982,7 +981,7 @@ sense_end:
                  uptr->LCMD = cmd;
                  uptr->CMD &= ~(0xff);
                  if (disk_type[type].sen_cnt > 6) {
-                     uptr->SNS |= SNS_CMDREJ;
+                     uptr->SNS |= SNS_CMDREJ | (0 << 28) | (3 << 24);
                  } else {
                      uptr->SNS |= SNS_CMDREJ|SNS_SEEKCK;
                  }
@@ -1001,7 +1000,7 @@ sense_end:
              uptr->LCMD = cmd;
              uptr->CMD &= ~(0xff);
              if (disk_type[type].sen_cnt > 6) {
-                 uptr->SNS |= SNS_CMDREJ;
+                 uptr->SNS |= SNS_CMDREJ | (0 << 28) | (4 << 24);
              } else {
                  uptr->SNS |= SNS_CMDREJ|SNS_SEEKCK;
              }
@@ -1020,7 +1019,7 @@ sense_end:
              uptr->LCMD = cmd;
              uptr->CMD &= ~(0xff);
              if (disk_type[type].sen_cnt > 6) {
-                 uptr->SNS |= SNS_CMDREJ;
+                 uptr->SNS |= SNS_CMDREJ | (0 << 28) | (4 << 24);
              } else {
                  uptr->SNS |= SNS_CMDREJ|SNS_SEEKCK;
              }
@@ -1062,7 +1061,7 @@ sense_end:
          sim_debug(DEBUG_DETAIL, dptr, "restore unit=%d\n", unit);
          /* Check if restore is valid */
          if ((data->filemsk & DK_MSK_SK) != DK_MSK_SKALLSKR) {
-             uptr->SNS |= SNS_CMDREJ;
+             uptr->SNS = SNS_CMDREJ | (0 << 28) | (2 << 24);
              uptr->LCMD = 0;
              uptr->CMD &= ~(0xff|DK_PARAM);
              chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -1097,7 +1096,7 @@ sense_end:
          if (chan_read_byte(addr, &ch)) {
              sim_debug(DEBUG_DETAIL, dptr, "setmsk rdr\n");
              uptr->LCMD = 0;
-             uptr->SNS |= SNS_CMDREJ;
+             uptr->SNS |= SNS_CMDREJ | (0 << 28) | (3 << 24);
              chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
              break;
          }
@@ -1109,7 +1108,7 @@ sense_end:
          if ((ch & ~(DK_MSK_SK|DK_MSK_WRT)) != 0) {
              sim_debug(DEBUG_DETAIL, dptr, "setmsk inv\n");
              uptr->LCMD = 0;
-             uptr->SNS |= SNS_CMDREJ;
+             uptr->SNS |= SNS_CMDREJ | (0 << 28) | (4 << 24);
              chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
              break;
          }
@@ -1337,6 +1336,15 @@ sense_end:
          if (data->cyl != 0)
              break;
 
+         /* If file mask set, reject IPL */
+         if ((uptr->CMD & DK_MSET) != 0) {
+             uptr->LCMD = cmd;
+             uptr->CMD &= ~(0xff);
+             uptr->SNS = SNS_CMDREJ | (0 << 28) | (2 << 24);
+             chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+             break;
+         }
+
          /* Read in the first record on track zero */
          if (count == 0 && state == DK_POS_DATA && data->rec == 1) {
              uptr->CMD |= DK_PARAM;
@@ -1510,7 +1518,7 @@ rd:
              ch = data->tpos / 110;
              if (chan_write_byte(addr, &ch)) {
                  sim_debug(DEBUG_DETAIL, dptr, "readsector rdr\n");
-                 uptr->SNS |= SNS_CMDREJ;
+                 uptr->SNS = SNS_CMDREJ | (0 << 28) | (2 << 24);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
              } else {
                  /* Nothing more to do */
@@ -1520,7 +1528,7 @@ rd:
              }
          } else {
              /* Otherwise report as invalid command */
-             uptr->SNS |= SNS_CMDREJ;
+             uptr->SNS = SNS_CMDREJ | (0 << 28) | (2 << 24);
              chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
          }
          uptr->CMD &= ~(0xff);
@@ -1534,7 +1542,7 @@ rd:
                     unit, dax[0], dax[1], dax[2], dax[3], dax[4]);
              /* Check if command ok based on mask */
              if ((data->filemsk & DK_MSK_WRT) != DK_MSK_ALLWRT) {
-                 uptr->SNS |= SNS_CMDREJ;
+                 uptr->SNS = SNS_CMDREJ | (0 << 28) | (2 << 24);
                  uptr->LCMD = 0;
                  uptr->CMD &= ~(0xff);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -1588,7 +1596,7 @@ rd:
                    state, count);
              /* Check if command ok based on mask */
              if ((data->filemsk & DK_MSK_WRT) != DK_MSK_ALLWRT) {
-                 uptr->SNS |= SNS_CMDREJ | (SNS_WRP << 8);
+                 uptr->SNS = SNS_CMDREJ | (SNS_WRP << 8) | (0 << 28) | (2 << 24);
                  uptr->LCMD = 0;
                  uptr->CMD &= ~(0xff);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -1603,7 +1611,7 @@ rd:
                  state = data->state = DK_POS_CNT;
                  uptr->CMD |= DK_PARAM;
              } else {
-                 uptr->SNS |= SNS_CMDREJ | (SNS_INVSEQ << 8);
+                 uptr->SNS = SNS_CMDREJ | (SNS_INVSEQ << 8) | (0 << 28) | (2 << 24);
                  uptr->LCMD = 0;
                  uptr->CMD &= ~(0xff);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -1622,7 +1630,7 @@ rd:
              i = data->filemsk & DK_MSK_WRT;
              if (i == DK_MSK_INHWRT || i == DK_MSK_ALLWRU) {
                  sim_debug(DEBUG_DETAIL, dptr, "WR CKD unit=%d mask\n", unit);
-                 uptr->SNS |= SNS_CMDREJ | (SNS_WRP << 8);
+                 uptr->SNS = SNS_CMDREJ | (SNS_WRP << 8) | (0 << 28) | (2 << 24);
                  uptr->LCMD = 0;
                  uptr->CMD &= ~(0xff);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -1640,7 +1648,7 @@ rd:
                  uptr->CMD &= ~DK_DONE;
              } else {
                  sim_debug(DEBUG_DETAIL, dptr, "WR CKD unit=%d seq\n", unit);
-                 uptr->SNS |= SNS_CMDREJ | (SNS_INVSEQ << 8);
+                 uptr->SNS = SNS_CMDREJ | (SNS_INVSEQ << 8) | (0 << 28) | (2 << 24);
                  uptr->LCMD = 0;
                  uptr->CMD &= ~(0xff);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -1664,7 +1672,7 @@ rd:
                             (data->klen == 0 && state == DK_POS_DATA))) {
              /* Check if command ok based on mask */
              if ((data->filemsk & DK_MSK_WRT) == DK_MSK_INHWRT) {
-                 uptr->SNS |= SNS_CMDREJ | (SNS_WRP << 8);
+                 uptr->SNS = SNS_CMDREJ | (SNS_WRP << 8) | (0 << 28) | (2 << 24);
                  uptr->LCMD = 0;
                  uptr->CMD &= ~(0xff);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -1678,7 +1686,7 @@ rd:
                  unit, data->rec, data->klen, data->dlen, data->state,
                  8 + data->klen + data->dlen, count);
              } else {
-                 uptr->SNS |= SNS_CMDREJ | (SNS_INVSEQ << 8);
+                 uptr->SNS = SNS_CMDREJ | (SNS_INVSEQ << 8) | (0 << 28) | (2 << 24);
                  uptr->LCMD = 0;
                  uptr->CMD &= ~(0xff);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -1701,7 +1709,7 @@ rd:
          if ((state == DK_POS_DATA) && count == 0) {
              /* Check if command ok based on mask */
              if ((data->filemsk & DK_MSK_WRT) == DK_MSK_INHWRT) {
-                 uptr->SNS |= SNS_CMDREJ | (SNS_WRP << 8);
+                 uptr->SNS = SNS_CMDREJ | (SNS_WRP << 8) | (0 << 28) | (2 << 24);
                  uptr->LCMD = 0;
                  uptr->CMD &= ~(0xff);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -1715,7 +1723,7 @@ rd:
                  unit, data->rec, data->klen, data->dlen, data->state,
                  8 + data->klen + data->dlen, count);
              } else {
-                 uptr->SNS |= SNS_CMDREJ | (SNS_INVSEQ << 8);
+                 uptr->SNS = SNS_CMDREJ | (SNS_INVSEQ << 8) | (0 << 28) | (2 << 24);
                  uptr->LCMD = 0;
                  uptr->CMD &= ~(0xff);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -1796,7 +1804,7 @@ wrckd:
              /* Check if command ok based on mask */
              i = data->filemsk & DK_MSK_WRT;
              if (i == DK_MSK_INHWRT || i == DK_MSK_ALLWRU) {
-                 uptr->SNS |= SNS_CMDREJ;
+                 uptr->SNS |= SNS_CMDREJ | (0 << 28) | (2 << 24);
                  uptr->LCMD = 0;
                  uptr->CMD &= ~(0xff);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -1819,7 +1827,7 @@ wrckd:
                  uptr->CMD |= DK_CYL_DIRTY;
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND);
              } else {
-                 uptr->SNS |= SNS_CMDREJ | (SNS_INVSEQ << 8);
+                 uptr->SNS |= SNS_CMDREJ | (SNS_INVSEQ << 8) | (0 << 28) | (2 << 24);
                  uptr->LCMD = 0;
                  uptr->CMD &= ~(0xff);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -1895,11 +1903,11 @@ static uint8  volrec[84] = {0xE5,0xD6,0xD3,0xF1,    /* VOL1, key */
                             0x40,0x00,0x00,0x00,0x01,0x01,  /* CCHHR */
                             0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,
                             0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,
-                            0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,  
+                            0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,
                             0x40,0xE2,0xC9,0xD4,0xC8,0x40,  /* SIMH */
                             0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,
                             0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,
-                            0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40, 
+                            0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,
                             0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,
                             0x40,0x40};
 
@@ -1958,7 +1966,7 @@ dasd_format(UNIT * uptr, int flag) {
                     data->cbuf[pos++] = 4;              /* keylen */
                     data->cbuf[pos++] = 0;              /* dlen */
                     data->cbuf[pos++] = 24;              /*  */
-                    for (p = 0; p < sizeof (ipl1rec); p++) 
+                    for (p = 0; p < sizeof (ipl1rec); p++)
                         data->cbuf[pos++] = ipl1rec[p];
                     data->cbuf[pos++] = (cyl >> 8);   /* R2 */
                     data->cbuf[pos++] = (cyl & 0xff);
@@ -1969,7 +1977,7 @@ dasd_format(UNIT * uptr, int flag) {
                     data->cbuf[pos++] = 4;              /* keylen */
                     data->cbuf[pos++] = 0;              /* dlen */
                     data->cbuf[pos++] = 144;            /*  */
-                    for (p = 0; p < sizeof (ipl2key); p++) 
+                    for (p = 0; p < sizeof (ipl2key); p++)
                         data->cbuf[pos++] = ipl2key[p];
                     pos += 144;
                     data->cbuf[pos++] = (cyl >> 8);   /* R3 */
@@ -1981,7 +1989,7 @@ dasd_format(UNIT * uptr, int flag) {
                     data->cbuf[pos++] = 4;              /* keylen */
                     data->cbuf[pos++] = 0;              /* dlen */
                     data->cbuf[pos++] = 80;             /*  */
-                    for (p = 0; p < sizeof (volrec); p++) 
+                    for (p = 0; p < sizeof (volrec); p++)
                         data->cbuf[pos++] = volrec[p];
                 } else {
                     data->cbuf[pos++] = 0;              /* keylen */

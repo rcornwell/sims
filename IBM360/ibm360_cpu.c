@@ -730,6 +730,7 @@ ReadFull(uint32 addr, uint32 *data)
          temp >>= 8 * (4 - offset);
          *data |= temp;
      }
+/*     sim_debug(DEBUG_DATA, &cpu_dev, "RD A=%08x %08x\n", addr, *data); */
      return 0;
 }
 
@@ -900,6 +901,7 @@ WriteFull(uint32 addr, uint32 data)
           M[pa2] |= 0xffffff00 & (data << 8);
           break;
      }
+     /* sim_debug(DEBUG_DATA, &cpu_dev, "WR A=%08x %08x\n", addr, data); */
      return 0;
 }
 
@@ -955,6 +957,7 @@ WriteByte(uint32 addr, uint32 data)
      pa >>= 2;
      mask = 0xff;
      data &= mask;
+     /* sim_debug(DEBUG_DATA, &cpu_dev, "WR A=%08x %02x\n", addr, data); */
      data <<= offset;
      mask <<= offset;
      M[pa] &= ~mask;
@@ -1062,6 +1065,7 @@ WriteHalf(uint32 addr, uint32 data)
 
      mask = 0xffff;
      data &= mask;
+     /* sim_debug(DEBUG_DATA, &cpu_dev, "WR A=%08x %04x\n", addr, data); */
      switch (offset) {
      case 0:
           M[pa] &= ~(mask << 16);
@@ -3091,6 +3095,7 @@ save_dbl:
                                   goto supress;
                               }
                               regs[2] = (regs[2] & 0xffffff00) | (st_key & 0xf0);
+                              per_mod |= 1 << 2;
                               break;
                    case 0xd: /* PTLB */
                               if ((cpu_unit[0].flags & FEAT_DAT) == 0) {
@@ -3212,7 +3217,7 @@ save_dbl:
                        irq_en = ((dest & 0x2) != 0);
                        per_en = ((dest & 0x40) != 0);
                        sysmsk = irq_en ? cregs[2] >> 16 : 0;
-                       if ((src1 & 0xb8) != 0) {
+                       if ((dest & 0xb8) != 0) {
                            storepsw(OPPSW, IRC_SPEC);
                            goto supress;
                        }
@@ -3972,7 +3977,6 @@ fpstore1:
 
                 /* Check signifigance exception */
                 if (cc == 0 && pmsk & SIGMSK) {
-                           printf(" sig ");
                     storepsw(OPPSW, IRC_SIGNIF);
                     e1 = fill = 0;
                     destL = 0;

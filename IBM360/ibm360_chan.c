@@ -265,7 +265,6 @@ readfull(struct _chanctl *chan, uint32 addr, uint32 *word) {
         irq_pend = 1;
         return 1;
     }
-    addr >>= 2;
     if (chan->ccw_key != 0) {
         int k;
         if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
@@ -274,7 +273,7 @@ readfull(struct _chanctl *chan, uint32 addr, uint32 *word) {
             irq_pend = 1;
             return 1;
         }
-        k = key[addr >> 9];
+        k = key[addr >> 11];
         if ((k & 0x8) != 0 && (k & 0xf0) != chan->ccw_key) {
             chan->chan_status |= STATUS_PROT;
             *word = 0;
@@ -282,8 +281,8 @@ readfull(struct _chanctl *chan, uint32 addr, uint32 *word) {
             return 1;
         }
     }
-    key[addr >> 9] |= 0x4;
-    *word = M[addr];
+    key[addr >> 11] |= 0x4;
+    *word = M[addr >> 2];
     return 0;
 }
 
@@ -336,7 +335,6 @@ writebuff(struct _chanctl *chan) {
         irq_pend = 1;
         return 1;
     }
-    addr >>= 2;
     if (chan->ccw_key != 0) {
         if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
             chan->chan_status |= STATUS_PROT;
@@ -344,7 +342,7 @@ writebuff(struct _chanctl *chan) {
             irq_pend = 1;
             return 1;
         }
-        k = key[addr >> 9];
+        k = key[addr >> 11];
         if ((k & 0xf0) != chan->ccw_key) {
             chan->chan_status |= STATUS_PROT;
             chan->chan_byte = BUFF_CHNEND;
@@ -352,10 +350,10 @@ writebuff(struct _chanctl *chan) {
             return 1;
         }
     }
-    key[addr >> 9] |= 0x6;
-    M[addr] = chan->chan_buf;
+    key[addr >> 11] |= 0x6;
+    M[addr >> 2] = chan->chan_buf;
     sim_debug(DEBUG_CDATA, &cpu_dev, "Channel readf %03x %06x %08x %08x '",
-          chan->daddr, addr << 2, chan->chan_buf, chan->ccw_count);
+          chan->daddr, addr, chan->chan_buf, chan->ccw_count);
     for(k = 24; k >= 0; k -= 8) {
         unsigned char ch = ebcdic_to_ascii[(chan->chan_buf >> k) & 0xFF];
         if (ch < 0x20 || ch == 0xff)
@@ -896,7 +894,7 @@ startio(uint16 addr) {
 
     /* All ok, get caw address */
     chan->chan_status = 0;
-    chan->caw = M[0x48>>2];
+    chan->caw = M[0x48 >> 2];
     chan->ccw_key = (chan->caw & PMASK) >> 24;
     chan->caw &= AMASK;
     key[0] |= 0x4;
@@ -1355,7 +1353,7 @@ scan_chan(uint16 mask, int irq_en) {
                       chan_pend[j] = 1;
                       irq_pend = 1;
                       M[0x44 >> 2] = (((uint32)dev_status[nchan|i]) << 24);
-                      M[0x40>>2] = 0;
+                      M[0x40 >> 2] = 0;
                       key[0] |= 0x6;
                       sim_debug(DEBUG_EXP, &cpu_dev,
                                "Set atten %03x %02x [%08x] %08x\n", nchan|i,
