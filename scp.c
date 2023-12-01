@@ -249,6 +249,10 @@
 #include <editline/readline.h>
 #endif
 
+#if defined(SIM_NEED_GIT_COMMIT_ID)
+#include ".git-commit-id.h"
+#endif
+
 #ifndef MAX
 #define MAX(a,b)  (((a) >= (b)) ? (a) : (b))
 #endif
@@ -2932,6 +2936,8 @@ if (docmdp) {
         snprintf(nbuf, sizeof (nbuf), "\"%s%s%ssimh.ini\"", cptr2 ? cptr2 : "", cptr, strchr (cptr, '/') ? "/" : "\\");
         stat = docmdp->action (-1, nbuf);                   /* simh.ini proc cmd file */
         }
+    else
+        stat = SCPE_OPENERR;
     if (SCPE_BARE_STATUS(stat) == SCPE_OPENERR)
         stat = docmdp->action (-1, "simh.ini");             /* simh.ini proc cmd file */
     if (*cbuf)                                              /* cmd file arg? */
