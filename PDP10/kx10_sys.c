@@ -246,6 +246,10 @@ DEVICE *sim_devices[] = {
 #if NUM_DEVS_TYM > 0
     &tym_dev,
 #endif
+#if NUM_DEVS_GE > 0
+    &ge_dev,
+    &gtyo_dev,
+#endif
     NULL
     };
 
