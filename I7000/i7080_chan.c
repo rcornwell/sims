@@ -360,8 +360,8 @@ int chan_zero_reccnt(int chan) {
 
 /* Return next channel data address, advance address by 5 if channel */
 uint32  chan_next_addr(int chan) {
-    int         unit = 0;
-    int         s_unit = 0;
+    uint32      unit = 0;
+    uint32      s_unit = 0;
     uint32      addr = 0;
     switch(CHAN_G_TYPE(chan_unit[chan].flags)) {
     case CHAN_754:
@@ -910,7 +910,7 @@ chan_cmd(uint16 dev, uint16 dcmd, uint32 addr)
         chan_flags[chan] &= ~(CHS_EOF|CHS_ERR|CHS_ATTN);
     /* Activate channel if select raised */
     if (r == SCPE_OK && chan_flags[chan] & DEV_SEL) {
-        int    t_unit;
+        uint32    t_unit;
         chan_flags[chan] |= STA_ACTIVE;
         irqdev[chan] = dev;
         irqflags &= ~(1 << chan);
