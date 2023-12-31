@@ -120,8 +120,8 @@ const char          *cpu_description (DEVICE *dptr);
 
 uint32 read_addr(uint8 *reg, uint8 *zone);
 void write_addr(uint32 addr, uint8 reg, uint8 zone);
-uint32 load_addr(int *loc);
-void store_addr(uint32 addr, int *loc);
+uint32 load_addr(uint32 *loc);
+void store_addr(uint32 addr, uint32 *loc);
 void store_cpu(uint32 addr, int full);
 void load_cpu(uint32 addr, int full);
 uint16 get_acstart(uint8 reg);
@@ -2405,7 +2405,7 @@ void write_addr(uint32 addr, uint8 reg, uint8 zone) {
 }
 
 /* Store converted address in storage */
-void store_addr(uint32 addr, int *loc) {
+void store_addr(uint32 addr, uint32 *loc) {
     uint8       value[4];
     int         i;
 
@@ -2454,7 +2454,7 @@ void store_addr(uint32 addr, int *loc) {
 
 
 /* Read address from storage */
-uint32 load_addr(int *loc) {
+uint32 load_addr(uint32 *loc) {
     uint8       t;
     uint8       f;
     uint8       zone;
@@ -2507,7 +2507,7 @@ uint32 load_addr(int *loc) {
 }
 
 /* Store converted hex address in storage */
-void store_hex(uint32 addr, int *loc) {
+void store_hex(uint32 addr, uint32 *loc) {
    /* Convert address into BCD first */
     AC[*loc] = bin_bcd[addr & 0xf];
     *loc = next_addr[*loc];
@@ -2520,7 +2520,7 @@ void store_hex(uint32 addr, int *loc) {
 }
 
 /* Read hex address from storage */
-uint32 load_hex(int *loc) {
+uint32 load_hex(uint32 *loc) {
     uint8       t;
     uint8       f;
     uint32      addr;
