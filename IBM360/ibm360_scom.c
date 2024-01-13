@@ -38,7 +38,9 @@
 #define CMD_WRER           0x05       /* Erase and write data */
 #define CMD_RDMD           0x06       /* Read modified */
 #define CMD_SEL            0x0B       /* Select */
+#define CMD_WRERALT        0x0D       /* Write erase alternative */
 #define CMD_EAU            0x0F       /* Erase all un protected */
+#define CMD_WSF            0x11       /* Writye structured field */
 
 /* u3 second byte */
 #define RECV               0x00100    /* Recieving data */
@@ -102,12 +104,14 @@
 #define TS_DO        4                 /* Have seen IAC DO */
 #define TS_DONT      5                 /* Have seen IAC DONT */
 
-/* Remove orders */
+/* Remote orders */
 #define REMOTE_EAU      0x6F           /* Erase all unprotected */
 #define REMOTE_EW       0xF5           /* Erase/Write */
 #define REMOTE_RB       0xF2           /* Read Buffer */
 #define REMOTE_RM       0x6e           /* Read Modified */
+#define REMOTE_WRERALT  0x7e           /* Write erase alternative */
 #define REMOTE_WRT      0xF1           /* Write */
+#define REMOTE_WSF      0xF3           /* Write structured field */
 
 struct _line {
     uint16        option_state[256];   /* Current telnet state */
@@ -247,6 +251,8 @@ uint8  scoml_haltio(UNIT *uptr) {
     case CMD_WRER:       /* Erase and write data */
     case CMD_RDMD:       /* Read modified */
     case CMD_EAU:        /* Erase all un protected */
+    case CMD_WSF:        /* Write Structured field */
+    case CMD_WRERALT:    /* Write erase alternative */
          uptr->CMD |= HALT;
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          sim_activate(uptr, 20);
@@ -324,6 +330,14 @@ t_stat scoml_srv(UNIT * uptr)
          }
          break;
 
+
+    case CMD_WRERALT:   /* Write erase alternative */
+         ch = REMOTE_WRERALT;
+         goto write;
+
+    case CMD_WSF:       /* Write structured field */
+         ch = REMOTE_WSF;
+         goto write;
 
     case CMD_WRER:       /* Erase and write data */
          ch = REMOTE_EW;
