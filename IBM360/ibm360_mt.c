@@ -43,6 +43,7 @@
 #define DEV_BUF_NUM(x)  (((x) & 07) << DEV_V_UF)
 #define GET_DEV_BUF(x)  (((x) >> DEV_V_UF) & 07)
 #define MT_BUSY         (1 << (MTUF_V_UF + 1))    /* Flag to send a CUE */
+#define MTUF_3400       (1 << (MTUF_V_UF + 2))
 #define UNIT_MT(x)     UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE | MTUF_9TR | \
                           DEV_BUF_NUM(x)
 
@@ -59,14 +60,19 @@
 #define MT_BSF              0x2f       /* Back space file */
 #define MT_FSR              0x37       /* Forward space record */
 #define MT_FSF              0x3f       /* Forward space file */
+#define MT_SECURE_ERA       0x97       /* 3400 Security erase */
+#define MT_SENSE_RES        0xf4       /* 3400 Sense reserve */
+#define MT_SENSE_REL        0xb4       /* 3400 Sense release */
+#define MT_RTIE             0x1b       /* Request track in error */
 #define MT_MODE             0x03       /* Mode command */
 #define MT_MODEMSK          0x07       /* Mode Mask */
 
-#define MT_MDEN_200         0x00       /* 200 BPI mode 7 track only */
-#define MT_MDEN_556         0x40       /* 556 BPI mode 7 track only */
-#define MT_MDEN_800         0x80       /* 800 BPI mode 7 track only */
-#define MT_MDEN_1600        0xc0       /* 1600 BPI mode 9 track only */
-#define MT_MDEN_MSK         0xc0       /* Density mask */
+#define MT_MDEN_200         0x000       /* 200 BPI mode 7 track only */
+#define MT_MDEN_556         0x040       /* 556 BPI mode 7 track only */
+#define MT_MDEN_800         0x080       /* 800 BPI mode 7 track only */
+#define MT_MDEN_1600        0x0c0       /* 1600 BPI mode 9 track only */
+#define MT_MDEN_6520        0x1c0       /* 6520 BPI mode 9 track only */
+#define MT_MDEN_MSK         0x1c0       /* Density mask */
 
 #define MT_CTL_MSK          0x38       /* Mask for control flags */
 #define MT_CTL_NOP          0x00       /* Nop control mode */
@@ -163,6 +169,8 @@ MTAB                mt_mod[] = {
     {MTUF_WLK, MTUF_WLK, "write locked", "LOCKED", NULL},
     {MTUF_9TR, 0, "7 track", "7T", NULL},
     {MTUF_9TR, MTUF_9TR, "9 track", "9T", NULL},
+    {MTUF_3400, 0, "2400", "2400", NULL},
+    {MTUF_3400, MTUF_3400, "3400", "3400", NULL},
     {MTAB_XTD | MTAB_VUN, 0, "FORMAT", "FORMAT",
      &sim_tape_set_fmt, &sim_tape_show_fmt, NULL},
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "DEV", "DEV", &set_dev_addr,
@@ -284,9 +292,15 @@ uint8  mt_startcmd(UNIT *uptr,  uint8 cmd) {
     case 0x2:              /* Read command */
     case 0xc:              /* Read backward */
          uptr->SNS = 0;
-          /* Fall through */
+         goto do_cmd;
 
     case 0x4:              /* Sense */
+         if ((cmd & 0xf0) != 0) {
+            uptr->SNS |= SNS_CMDREJ;
+             uptr->flags &= ~MT_BUSY;
+             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK|f;
+         }
+do_cmd:
          if ((uptr->CMD & MT_CMDREW) != 0) {
             sim_debug(DEBUG_CMD, dptr, "CMD rewinding unit=%d %x\n", unit, cmd);
             return SNS_BSY;
@@ -361,6 +375,8 @@ uint8  mt_startcmd(UNIT *uptr,  uint8 cmd) {
              uptr->CMD &= ~MT_MDEN_MSK;
              if (cmd & 0x8)
                  uptr->CMD |= MT_MDEN_800;
+             else if (cmd & 0x10)
+                 uptr->CMD |= MT_MDEN_6520;
              else
                  uptr->CMD |= MT_MDEN_1600;
          }
@@ -499,6 +515,65 @@ t_stat mt_srv(UNIT * uptr)
          chan_write_byte(addr, &ch) ;
          ch = SNS_BYTE5;
          chan_write_byte(addr, &ch);
+         if ((uptr->flags & MTUF_3400) != 0) {
+             /* Sense byte 6 */
+             ch = 0x23;        /* Model 3, Support dual density */
+             if ((uptr->flags & MTUF_9TR) == 0) {
+                 ch |= 0x80;   /* Indicate 7 track */
+             } 
+             chan_write_byte(addr, &ch);
+             /* Sense byte 7 */
+             ch = 0;
+             chan_write_byte(addr, &ch);
+             /* Sense byte 8 */
+             ch = 0;
+             chan_write_byte(addr, &ch);
+             /* Sense byte 9 */
+             ch = 0;
+             chan_write_byte(addr, &ch);
+             /* Sense byte 10 */
+             ch = (uptr->CMD & SNS_CMDREJ);
+             chan_write_byte(addr, &ch);
+             /* Sense byte 11 */
+             ch = 0;
+             chan_write_byte(addr, &ch);
+             /* Sense byte 12 */
+             ch = 0;
+             chan_write_byte(addr, &ch);
+             /* Sense byte 13 */
+             ch = (uptr->flags & MTUF_9TR) ? 0x80 : 0x40;
+             chan_write_byte(addr, &ch);
+             /* Sense byte 14 */
+             ch = 0;
+             chan_write_byte(addr, &ch);
+             /* Sense byte 15 */
+             ch = 0;
+             chan_write_byte(addr, &ch);
+             /* Sense byte 16 */
+             ch = 0;
+             chan_write_byte(addr, &ch);
+             /* Sense byte 17 */
+             ch = 0;  /* No features */
+             chan_write_byte(addr, &ch);
+             /* Sense byte 18 */
+             ch = 0;
+             chan_write_byte(addr, &ch);
+             /* Sense byte 19 */
+             ch = 0;
+             chan_write_byte(addr, &ch);
+             /* Sense byte 20 */
+             ch = 0;
+             chan_write_byte(addr, &ch);
+             /* Sense byte 21 */
+             ch = 0;
+             chan_write_byte(addr, &ch);
+             /* Sense byte 22 */
+             ch = 0;
+             chan_write_byte(addr, &ch);
+             /* Sense byte 23 */
+             ch = 0;
+             chan_write_byte(addr, &ch);
+         }
          uptr->CMD &= ~MT_CMDMSK;
          mt_busy[bufnum] &= ~1;
          if (uptr->flags & MT_BUSY) {
