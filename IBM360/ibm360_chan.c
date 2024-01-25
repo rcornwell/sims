@@ -84,13 +84,7 @@
 extern uint32  *M;
 extern uint8   key[MAXMEMSIZE / 2048];
 
-#define UNIT_V_TYPE        (UNIT_V_UF + 0)
-#define UNIT_SEL           (1 << UNIT_V_TYPE)   /* Selector channel */
-#define UNIT_MUX           (0 << UNIT_V_TYPE)   /* Multiplexer channel */
-#define UNIT_BMUX          (2 << UNIT_V_TYPE)   /* Multiplexer channel */
-#define UNIT_M_TYPE        (3 << UNIT_V_TYPE)
-
-#define UNIT_V_SUBCHAN     (UNIT_V_UF + 2)
+#define UNIT_V_SUBCHAN     (UNIT_V_CTYPE + 2)
 #define UNIT_M_SUBCHAN     0xff
 #define UNIT_G_SCHAN(x)    ((((x) >> UNIT_V_SUBCHAN) & UNIT_M_SUBCHAN) + 1)
 #define UNIT_SCHAN(x)      (((x - 1) & UNIT_M_SUBCHAN) << UNIT_V_SUBCHAN)
@@ -103,9 +97,9 @@ t_stat      chan_help(FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char
 const char *chan_description (DEVICE *dptr);
 
 MTAB                chan_mod[] = {
-    { UNIT_M_TYPE, UNIT_MUX,  NULL, "MUX", NULL, NULL, NULL, "Multiplexer channel"},
-    { UNIT_M_TYPE, UNIT_SEL,  NULL, "SEL", NULL, NULL, NULL, "Selector channel"},
-    { UNIT_M_TYPE, UNIT_BMUX, NULL, "BMUX", NULL, NULL, NULL, "Block Multiplexer channel"},
+    { UNIT_M_CTYPE, UNIT_MUX,  NULL, "MUX", NULL, NULL, NULL, "Multiplexer channel"},
+    { UNIT_M_CTYPE, UNIT_SEL,  NULL, "SEL", NULL, NULL, NULL, "Selector channel"},
+    { UNIT_M_CTYPE, UNIT_BMUX, NULL, "BMUX", NULL, NULL, NULL, "Block Multiplexer channel"},
     { MTAB_XTD|MTAB_VUN|MTAB_VALR, 0, "SUB", "SUB", set_subchan, show_subchan, NULL,
                                     "Number of subchannels"},
     {0}
@@ -231,11 +225,11 @@ find_subchan(uint16 device) {
     uptr = &chan_unit[chan];
     if ((uptr->flags & UNIT_DIS) != 0)
        return NULL;
-    if ((uptr->flags & UNIT_M_TYPE) == UNIT_SEL) {
+    if ((uptr->flags & UNIT_M_CTYPE) == UNIT_SEL) {
        return &(chan_ctl[0]);
     }
     device &= 0xff;
-    if ((uptr->flags & UNIT_M_TYPE) == UNIT_BMUX) {
+    if ((uptr->flags & UNIT_M_CTYPE) == UNIT_BMUX) {
         extern uint32    cregs[16];
         if ((cpu_unit[0].flags & FEAT_370) != 0 &&
             (cregs[0] & 0x80000000) != 0) {
@@ -1150,13 +1144,13 @@ int testchan(uint16 channel) {
      }
 
     /* Multiplexer channels return channel is available */
-    if ((uptr->flags & UNIT_M_TYPE) == UNIT_MUX) {
+    if ((uptr->flags & UNIT_M_CTYPE) == UNIT_MUX) {
         sim_debug(DEBUG_CMD, &cpu_dev, "TCH CC %x cc=0, mux\n", channel);
         return 0;
     }
 
     /* Block Multiplexer channels operating in select mode */
-    if ((uptr->flags & UNIT_M_TYPE) == UNIT_BMUX) {
+    if ((uptr->flags & UNIT_M_CTYPE) == UNIT_BMUX) {
         extern uint32    cregs[16];
         if ((cpu_unit[0].flags & FEAT_370) != 0 &&
             (cregs[0] & 0x80000000) != 0) {
@@ -1267,13 +1261,13 @@ scan_chan(uint16 mask, int irq_en) {
          if ((uptr->flags & UNIT_DIS) != 0)
             continue;
          nchan = 1;
-         if ((uptr->flags & UNIT_M_TYPE) == UNIT_BMUX) {
+         if ((uptr->flags & UNIT_M_CTYPE) == UNIT_BMUX) {
              extern uint32    cregs[16];
              if ((cpu_unit[0].flags & FEAT_370) != 0 &&
                  (cregs[0] & 0x80000000) != 0) {
                    nchan = 32;
              }
-         } else if ((uptr->flags & UNIT_M_TYPE) == UNIT_MUX) {
+         } else if ((uptr->flags & UNIT_M_CTYPE) == UNIT_MUX) {
              nchan = UNIT_G_SCHAN(uptr->flags);
          }
          /* Scan all subchannels on this channel */
@@ -1386,9 +1380,9 @@ chan_reset(DEVICE * dptr)
          if (uptr->flags & UNIT_DIS)
              continue;
          n = 1;
-         if ((uptr->flags & UNIT_M_TYPE) == UNIT_MUX)
+         if ((uptr->flags & UNIT_M_CTYPE) == UNIT_MUX)
              n = UNIT_G_SCHAN(uptr->flags)+1;
-         if ((uptr->flags & UNIT_M_TYPE) == UNIT_BMUX)
+         if ((uptr->flags & UNIT_M_CTYPE) == UNIT_BMUX)
              n = 32;
          uptr->schans = n;
          uptr->up7 = calloc(n, sizeof(struct _chanctl));
@@ -1425,9 +1419,9 @@ chan_set_devs()
              continue;
          }
          n = 1;
-         if ((uptr->flags & UNIT_M_TYPE) == UNIT_MUX)
+         if ((uptr->flags & UNIT_M_CTYPE) == UNIT_MUX)
              n = UNIT_G_SCHAN(uptr->flags)+1;
-         if ((uptr->flags & UNIT_M_TYPE) == UNIT_BMUX)
+         if ((uptr->flags & UNIT_M_CTYPE) == UNIT_BMUX)
              n = 32;
          /* If no device array, create one */
          if (uptr->up8 == NULL)
@@ -1516,9 +1510,9 @@ show_subchan(FILE * st, UNIT * uptr, int32 v, CONST void *desc)
 
     if (uptr == NULL)
         return SCPE_IERR;
-    if ((uptr->flags & UNIT_M_TYPE) == UNIT_SEL) {
+    if ((uptr->flags & UNIT_M_CTYPE) == UNIT_SEL) {
         fprintf(st, "SEL");
-    } else if ((uptr->flags & UNIT_M_TYPE) == UNIT_BMUX) {
+    } else if ((uptr->flags & UNIT_M_CTYPE) == UNIT_BMUX) {
         fprintf(st, "BMUX");
     } else {
         n = UNIT_G_SCHAN(uptr->flags);
