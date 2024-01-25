@@ -1609,11 +1609,12 @@ stop_cpu:
 
              case OP_RWW:    /* RWW  705 only */
                      MAC2 = MAC;
-                     if (CPU_MODEL == CPU_7080 &&
+                     if (iowait == 0 && CPU_MODEL == CPU_7080 &&
                          (cpu_unit.flags & IOIRQ) != 0 &&
                          (flags & EIGHTMODE) == 0 &&
                          ((selreg >> 8) & 0xff) != 5) {
                          flags |= ANYFLAG|INSTFLAG;
+                         selreg2 = 0;
                      } else {
                          selreg2 = selreg | 0x8000;
                      }
@@ -2567,8 +2568,6 @@ uint16 get_acstart(uint8 reg) {
 /* Store CPU state in CASU 15 */
 void store_cpu(uint32 addr, int full) {
     uint8      t;
-    int        j;
-    uint32     ta;
 
     store_addr(IC, &addr);
     /* Save status characters */
@@ -2625,8 +2624,6 @@ void store_cpu(uint32 addr, int full) {
 void load_cpu(uint32 addr, int full) {
     uint8       t;
     uint8       f;
-    int         j;
-    uint32      ta;
 
     flags = 0;
     IC = load_addr(&addr);
@@ -3378,6 +3375,18 @@ cpu_reset(DEVICE * dptr)
     selreg2 = 0;
     IC = 4;
     sim_brk_types = sim_brk_dflt = SWMASK('E');
+    /* Leave 80 mode */
+    if (CPU_MODEL == CPU_7080) {
+        cpu_type = (cpu_unit.flags & EMULATE3)?  CPU_7053:CPU_705;
+        EMEMSIZE = MEMSIZE;
+        if (cpu_unit.flags & EMULATE2 && EMEMSIZE > 40000)
+          EMEMSIZE = 40000;
+        if (cpu_type == CPU_705 && (cpu_unit.flags & EMULATE2) == 0 &&
+             EMEMSIZE > 20000)
+            EMEMSIZE = 20000;
+        if (EMEMSIZE > 80000)
+            EMEMSIZE = 80000;
+    }
     return SCPE_OK;
 }
 
