@@ -299,6 +299,13 @@ typedef struct dib {
 #define OP_MP             0xFC
 #define OP_DP             0xFD
 
+/* Channel type selection */
+#define UNIT_V_CTYPE       (UNIT_V_UF + 0)
+#define UNIT_SEL           (0 << UNIT_V_CTYPE)   /* Selector channel */
+#define UNIT_MUX           (1 << UNIT_V_CTYPE)   /* Multiplexer channel */
+#define UNIT_BMUX          (2 << UNIT_V_CTYPE)   /* Multiplexer channel */
+#define UNIT_M_CTYPE       (3 << UNIT_V_CTYPE)
+
 /* Channel sense bytes */
 #define     SNS_ATTN      0x80                /* Unit attention */
 #define     SNS_SMS       0x40                /* Status modifier */
@@ -393,6 +400,7 @@ extern DEVICE coml_dev;
 extern DEVICE com_dev;
 extern DEVICE scoml_dev;
 extern DEVICE scom_dev;
-extern UNIT cpu_unit[];
+extern UNIT   cpu_unit[];
+extern UNIT   chan_unit[];
 
 extern void fprint_inst(FILE *, uint16 *);

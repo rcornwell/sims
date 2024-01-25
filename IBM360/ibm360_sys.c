@@ -407,6 +407,8 @@ t_opcode  optab[] = {
 };
 
 t_opcode  soptab[] = {
+       { 0x00,        "CONCS", RS },
+       { 0x01,        "DISCS", RS },
        { 0x02,        "STIDP", RS },
        { 0x03,        "STIDC", RS },
        { 0x04,        "SCK",   RS },

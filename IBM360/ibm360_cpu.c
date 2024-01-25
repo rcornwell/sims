@@ -609,8 +609,7 @@ TransAddr(uint32 va, uint32 *pa)
      }
 
      /* Now we need to fetch the actual entry */
-     addr = (entry & PTE_ADR) + (page << 1);
-     addr &= AMASK;
+     addr = ((entry & PTE_ADR) + (page << 1)) & AMASK;
      if (addr >= MEMSIZE) {
          storepsw(OPPSW, IRC_ADDR);
          return 1;
@@ -650,7 +649,7 @@ TransAddr(uint32 va, uint32 *pa)
      page = (va >> page_shift);
      entry |= ((page & 0x1f00) << 4) | TLB_VALID;
      tlb[page & 0xff] = entry;
-     *pa = (va & page_mask) | ((entry & TLB_PHY) << page_shift);
+     *pa = ((va & page_mask) | ((entry & TLB_PHY) << page_shift)) & AMASK;
      if (*pa >= MEMSIZE) {
         storepsw(OPPSW, IRC_ADDR);
         return 1;
@@ -687,9 +686,6 @@ ReadFull(uint32 addr, uint32 *data)
              return 1;
          }
      }
-
-     /* Update access flag */
-     key[pa >> 11] |= 0x4;
 
      offset = pa & 0x3;
 
@@ -730,6 +726,10 @@ ReadFull(uint32 addr, uint32 *data)
          temp >>= 8 * (4 - offset);
          *data |= temp;
      }
+
+     /* Update access flag */
+     key[pa >> 11] |= 0x4;
+
 /*     sim_debug(DEBUG_DATA, &cpu_dev, "RD A=%08x %08x\n", addr, *data); */
      return 0;
 }
@@ -840,7 +840,6 @@ WriteFull(uint32 addr, uint32 data)
              return 1;
          }
      }
-     key[pa >> 11] |= 0x6;
 
      pa2 = pa + 4;
      /* Check if we handle unaligned access */
@@ -874,6 +873,9 @@ WriteFull(uint32 addr, uint32 data)
          }
          key[pa2 >> 11] |= 0x6;
      }
+
+     key[pa >> 11] |= 0x6;
+
      pa >>= 2;
      pa2 >>= 2;
 
@@ -1017,9 +1019,6 @@ WriteHalf(uint32 addr, uint32 data)
         }
      }
 
-     /* Flag as modified */
-     key[pa >> 11] |= 0x6;
-
      if (offset == 3) {
          addr += 4;
          /* Check if in storage area */
@@ -1051,8 +1050,10 @@ WriteHalf(uint32 addr, uint32 data)
                     return 1;
                 }
             }
-            key[pa2 >> 11] |= 0x6;
         }
+
+        key[pa >> 11] |= 0x6;
+        key[pa2 >> 11] |= 0x6;
         pa >>= 2;
         pa2 >>= 2;
         M[pa] &= 0xffffff00;
@@ -1061,6 +1062,10 @@ WriteHalf(uint32 addr, uint32 data)
         M[pa2] |= 0xff000000 & (data << 24);
         return 0;
      }
+
+     /* Flag as modified */
+     key[pa >> 11] |= 0x6;
+
      pa >>= 2;
 
      mask = 0xffff;
@@ -2346,8 +2351,7 @@ save_dbl:
                     }
 
                     /* Now we need to fetch the actual entry */
-                    addr2 = (entry & PTE_ADR) + (page << 1);
-                    addr2 &= AMASK;
+                    addr2 = ((entry & PTE_ADR) + (page << 1)) & AMASK;
                     if (addr2 >= MEMSIZE) {
                         storepsw(OPPSW, IRC_ADDR);
                         goto supress;
@@ -2369,7 +2373,7 @@ save_dbl:
 
                     /* Convert to address */
                     entry >>= pte_shift;
-                    addr2 = (addr1 & page_mask) | ((entry & TLB_PHY) << page_shift);
+                    addr2 = ((addr1 & page_mask) | ((entry & TLB_PHY) << page_shift)) & AMASK;
                     cc = 0;
                     regs[reg1] = addr2;
                     per_mod |= 1 << reg1;
@@ -2963,7 +2967,7 @@ save_dbl:
 
         case OP_370:
                 if (Q370) {
-                   if (reg < 2 || reg > 0x13) {
+                   if (reg > 0x13) {
                        storepsw(OPPSW, IRC_OPR);
                        goto supress;
                    }
@@ -2975,6 +2979,13 @@ save_dbl:
                        goto supress;
                    }
                    switch(reg) {
+                   case 0x0: /* CONCS */
+                             /* Connect channel set */
+                   case 0x1: /* DISCS */
+                             /* Disconnect channel set */
+                              cc = 3;
+                              break;
+
                    case 0x2: /* STIDP */
                               /* Store CPUID in double word */
                               dest = 100;
@@ -2987,15 +2998,18 @@ save_dbl:
 
                    case 0x3: /* STIDC */
                               /* Store channel id */
-                              dest = (addr1 >> 8) & 0xff;
-                              if (dest > MAX_CHAN) {
+                              src1 = (addr1 >> 8) & 0xff;
+                              if (src1 > MAX_CHAN) {
                                   cc = 3;
                                   break;
                               }
-                              if (dest == 0 || dest == 4)
+                              dest = 0;
+                              if ((chan_unit[src1].flags & UNIT_M_CTYPE) == UNIT_MUX) {
                                   dest = 0x10000000;
-                              else
-                                  dest = 0;
+                              }
+                              if ((chan_unit[src1].flags & UNIT_M_CTYPE) == UNIT_BMUX) {
+                                  dest = 0x20000000;
+                              }
                               addr1 = 0xA8;
                               if (WriteFull(addr1, dest))
                                  goto supress;
@@ -3102,9 +3116,7 @@ save_dbl:
                                   storepsw(OPPSW, IRC_OPR);
                                   goto supress;
                               }
-                              for (addr2 = 0;
-                                   addr2 < sizeof(tlb)/sizeof(uint32);
-                                   addr2++)
+                              for (addr2 = 0; addr2 < sizeof(tlb)/sizeof(uint32); addr2++)
                                    tlb[addr2] = 0;
                               break;
                    case 0x10: /* SPX */
@@ -3118,6 +3130,7 @@ save_dbl:
                               goto supress;
                    case 0x13: /* RRB */
                               /* Set storage block reference bit to zero */
+                              addr1 &= AMASK;
                               addr1 >>= 11;
                               dest = key[addr1];
                               key[addr1] &= 0xfb;  /* Clear reference bit */
@@ -3266,6 +3279,7 @@ save_dbl:
                 break;
 
         case OP_LCTL:
+                temp = 0;
                 if (Q360) {
                     storepsw(OPPSW, IRC_OPR);
                 } else if (flags & PROBLEM) {
@@ -3326,12 +3340,10 @@ save_dbl:
                                                   ~page_mask) & AMASK) >> page_shift;
                                   intval_en = ((dest & 0x400) != 0);
                                   tod_en = ((dest & 0x800) != 0);
+//                                  temp = 1;
                                   break;
                         case 0x1:     /* Segment table address and length */
-                                  for (addr2 = 0;
-                                       addr2 < sizeof(tlb)/sizeof(uint32);
-                                       addr2++)
-                                       tlb[addr2] = 0;
+                                  temp = 1;
                                   seg_addr = dest & AMASK;
                                   seg_len = (((dest >> 24) & 0xff) + 1) << 4;
                                   break;
@@ -3363,6 +3375,11 @@ save_dbl:
                         reg1 &= 0xf;
                         addr1 += 4;
                     };
+                    /* Purge TLB if segment pointer updated */
+                    if (temp) {
+                        for (addr2 = 0; addr2 < sizeof(tlb)/sizeof(uint32); addr2++)
+                             tlb[addr2] = 0;
+                    }
                 }
                 break;
 

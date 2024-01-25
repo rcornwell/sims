@@ -42,6 +42,7 @@
 #define CON_WR          0x01    /* Write console */
 #define CON_ACR         0x09    /* Auto carrage return */
 #define CON_RD          0x0a    /* Read console */
+#define CON_ALR         0x0b    /* Control Alarm */
 #define CON_NOP         0x03    /* No op command */
 #define CON_MSK         0x0f    /* Command mask */
 
@@ -185,6 +186,9 @@ uint8  scon_startcmd(UNIT *uptr, uint8 cmd) {
          return 0;
 
     case 3:              /* Control */
+         if (cmd == CON_ALR) {
+             tmxr_putc_ln(&scon_ldsc[u], '\a');
+         }
          sim_debug(DEBUG_CMD, &scon_dev, "%d: Cmd NOP\n", u);
          if (uptr->CMD & CON_REQ) {
              uptr->CMD &= ~CON_REQ;
