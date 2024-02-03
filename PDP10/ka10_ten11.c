@@ -236,6 +236,8 @@ static int transaction (unsigned char *request, unsigned char *response)
   do {
     tmxr_poll_rx (&ten11_desc);
     stat = tmxr_get_packet_ln (&ten11_ldsc, &ten11_request, &size);
+    if (!ten11_ldsc.conn)
+      return error ("Connection lost");
   } while (stat != SCPE_OK || size == 0);
 
   if (size > 7)
