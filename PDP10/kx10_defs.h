@@ -542,6 +542,8 @@ extern DEVICE   dup_dev;
 extern DEVICE   tcu_dev;
 extern DEVICE   ddc_dev;
 extern DEVICE   tym_dev;
+extern DEVICE   ge_dev;
+extern DEVICE   gtyo_dev;
 
 #if KS
 
@@ -750,6 +752,7 @@ extern void ka10_lights_clear_aux (int);
 #define NUM_DEVS_DSK    1
 #define NUM_DEVS_DCS    1
 #define NUM_DEVS_SLAVE  PDP6
+#define NUM_DEVS_GE     PDP6
 #endif
 #if !(PDP6 | KS)
 #define NUM_DEVS_DC     1
