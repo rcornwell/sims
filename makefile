@@ -44,6 +44,22 @@
 # If debugging is desired, then GNU make can be invoked with
 # DEBUG=1 on the command line.
 #
+# When building compiler optimized binaries with the gcc or clang 
+# compilers, invoking GNU make with LTO=1 on the command line will 
+# cause the build to use Link Time Optimization to maximally optimize 
+# the results.  Link Time Optimization can report errors which aren't 
+# otherwise detected and will also take significantly longer to 
+# complete.  Additionally, non debug builds default to build with an
+# optimization level of -O2.  This optimization level can be changed 
+# by invoking GNU OPTIMIZE=-O3 (or whatever optimize value you want) 
+# on the command line if desired.
+#
+# The default setup will fail simulator build(s) if the compile 
+# produces any warnings.  These should be cleaned up before new 
+# or changd code is accepted into the code base.  This option 
+# can be overridden if GNU make is invoked with WARNINGS=ALLOWED
+# on the command line.
+#
 # The default build will run per simulator tests if they are 
 # available.  If building without running tests is desired, 
 # then GNU make should be invoked with TESTS=0 on the command 
@@ -82,10 +98,14 @@
 #
 # CC Command (and platform available options).  (Poor man's autoconf)
 #
+
+OS_CCDEFS=
+AIO_CCDEFS=
+
 ifneq (,${GREP_OPTIONS})
   $(info GREP_OPTIONS is defined in your environment.)
   $(info )
-  $(info This variable interfers with the proper operation of this script.)
+  $(info This variable interferes with the proper operation of this script.)
   $(info )
   $(info The GREP_OPTIONS environment variable feature of grep is deprecated)
   $(info for exactly this reason and will be removed from future versions of)
@@ -95,12 +115,35 @@ ifneq (,${GREP_OPTIONS})
   $(info unset the GREP_OPTIONS environment variable to use this makefile)
   $(error 1)
 endif
-ifeq (old,$(shell gmake --version /dev/null 2>&1 | grep 'GNU Make' | awk '{ if ($$3 < "3.81") {print "old"} }'))
-  GMAKE_VERSION = $(shell gmake --version /dev/null 2>&1 | grep 'GNU Make' | awk '{ print $$3 }')
+ifneq ($(findstring Windows,${OS}),)
+  # Cygwin can return SHELL := C:/cygwin/bin/sh.exe  cygwin is OK & NOT WIN32
+  ifeq ($(findstring /cygwin/,$(SHELL)),)
+    ifeq ($(findstring .exe,${SHELL}),.exe)
+      # MinGW
+      WIN32 := 1
+      # Tests don't run under MinGW
+      TESTS := 0
+    else # Msys or cygwin
+      ifeq (MINGW,$(findstring MINGW,$(shell uname)))
+        $(info *** This makefile can not be used with the Msys bash shell)
+        $(error Use build_mingw.bat ${MAKECMDGOALS} from a Windows command prompt)
+      endif
+    endif
+  endif
+endif
+ifeq ($(WIN32),)
+  SIM_MAJOR=$(shell grep SIM_MAJOR sim_rev.h | awk '{ print $$3 }')
+  GMAKE_VERSION = $(shell $(MAKE) --version /dev/null 2>&1 | grep 'GNU Make' | awk '{ print $$3 }')
+  OLD = $(shell echo $(GMAKE_VERSION) | awk '{ if ($$1 < "3.81") {print "old"} }')
+else
+  SIM_MAJOR=$(shell for /F "tokens=3" %%i in ('findstr /c:"SIM_MAJOR" sim_rev.h') do echo %%i)
+  GMAKE_VERSION = $(shell for /F "tokens=3" %%i in ('$(MAKE) --version ^| findstr /c:"GNU Make"') do echo %%i)
+  OLD = $(shell cmd /e:on /c "if $(GMAKE_VERSION) LSS 3.81 echo old")
+endif
+ifeq ($(OLD),old)
   $(warning *** Warning *** GNU Make Version $(GMAKE_VERSION) is too old to)
   $(warning *** Warning *** fully process this makefile)
 endif
-SIM_MAJOR=$(shell grep SIM_MAJOR sim_rev.h | awk '{ print $$3 }')
 BUILD_SINGLE := ${MAKECMDGOALS} $(BLANK_SUFFIX)
 BUILD_MULTIPLE_VERB = is
 # building the pdp1, pdp11, tx-0, or any microvax simulator could use video support
@@ -125,6 +168,14 @@ ifneq (3,${SIM_MAJOR})
   ifneq (,$(or $(findstring pdp6,${MAKECMDGOALS}),$(findstring pdp10-ka,${MAKECMDGOALS}),$(findstring pdp10-ki,${MAKECMDGOALS})))
     VIDEO_USEFUL = true
   endif
+  # building the AltairZ80 could use video support
+  ifneq (,$(findstring altairz80,${MAKECMDGOALS}))
+    VIDEO_USEFUL = true
+  endif
+endif
+# building the SEL32 networking can be used
+ifneq (,$(findstring sel32,${MAKECMDGOALS}))
+  NETWORK_USEFUL = true
 endif
 # building the PDP-7 needs video support
 ifneq (,$(findstring pdp7,${MAKECMDGOALS}))
@@ -163,17 +214,23 @@ ifneq ($(NOVIDEO),)
   VIDEO_USEFUL =
 endif
 ifneq ($(findstring Windows,${OS}),)
-  ifeq ($(findstring .exe,${SHELL}),.exe)
-    # MinGW
-    WIN32 := 1
-    # Tests don't run under MinGW
-    TESTS := 0
-  else # Msys or cygwin
-    ifeq (MINGW,$(findstring MINGW,$(shell uname)))
-      $(info *** This makefile can not be used with the Msys bash shell)
-      $(error Use build_mingw.bat ${MAKECMDGOALS} from a Windows command prompt)
+  ifeq ($(findstring /cygwin/,$(SHELL)),)
+    ifeq ($(findstring .exe,${SHELL}),.exe)
+      # MinGW
+      WIN32 := 1
+      # Tests don't run under MinGW
+      TESTS := 0
+    else # Msys or cygwin
+      ifeq (MINGW,$(findstring MINGW,$(shell uname)))
+        $(info *** This makefile can not be used with the Msys bash shell)
+        $(error Use build_mingw.bat ${MAKECMDGOALS} from a Windows command prompt)
+      endif
     endif
   endif
+endif
+ifeq (3,${SIM_MAJOR})
+  # simh v3 DOES not have any video support
+  VIDEO_USEFUL =
 endif
 
 find_exe = $(abspath $(strip $(firstword $(foreach dir,$(strip $(subst :, ,${PATH})),$(wildcard $(dir)/$(1))))))
@@ -253,6 +310,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
         endif
       endif
     else
+      OS_CCDEFS += $(if $(findstring ALLOWED,$(WARNINGS)),,-Werror)
       ifeq (,$(findstring ++,${GCC}))
         CC_STD = -std=gnu99
       else
@@ -260,6 +318,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
       endif
     endif
   else
+    OS_CCDEFS += $(if $(findstring ALLOWED,$(WARNINGS)),,-Werror)
     ifeq (Apple,$(shell ${GCC} -v /dev/null 2>&1 | grep 'Apple' | awk '{ print $$1 }'))
       COMPILER_NAME = $(shell ${GCC} -v /dev/null 2>&1 | grep 'Apple' | awk '{ print $$1 " " $$2 " " $$3 " " $$4 }')
       CLANG_VERSION = $(word 4,$(COMPILER_NAME))
@@ -306,7 +365,8 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
   LTO_EXCLUDE_VERSIONS = 
   PCAPLIB = pcap
   ifeq (agcc,$(findstring agcc,${GCC})) # Android target build?
-    OS_CCDEFS += -D_GNU_SOURCE -DSIM_ASYNCH_IO 
+    OS_CCDEFS += -D_GNU_SOURCE
+    AIO_CCDEFS += -DSIM_ASYNCH_IO
     OS_LDFLAGS = -lm
   else # Non-Android (or Native Android) Builds
     ifeq (,$(INCLUDES)$(LIBRARIES))
@@ -479,7 +539,7 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
                 endif
                 OS_CCDEFS += -D_HPUX_SOURCE -D_LARGEFILE64_SOURCE
                 OS_LDFLAGS += -Wl,+b:
-                NO_LTO = 1
+                override LTO =
               else
                 LIBEXT = a
               endif
@@ -503,14 +563,6 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
     endif
     export CPATH = $(subst $() $(),:,$(INCPATH))
     export LIBRARY_PATH = $(subst $() $(),:,$(LIBPATH))
-    # Some gcc versions don't support LTO, so only use LTO when the compiler is known to support it
-    ifeq (,$(NO_LTO))
-      ifneq (,$(GCC_VERSION))
-        ifeq (,$(shell ${GCC} -v /dev/null 2>&1 | grep '\-\-enable-lto'))
-          LTO_EXCLUDE_VERSIONS += $(GCC_VERSION)
-        endif
-      endif
-    endif
   endif
   $(info lib paths are: ${LIBPATH})
   $(info include paths are: ${INCPATH})
@@ -526,23 +578,23 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
   endif
   ifneq (,$(call find_include,pthread))
     ifneq (,$(call find_lib,pthread))
-      OS_CCDEFS += -DUSE_READER_THREAD -DSIM_ASYNCH_IO 
+      AIO_CCDEFS += -DUSE_READER_THREAD -DSIM_ASYNCH_IO
       OS_LDFLAGS += -lpthread
       $(info using libpthread: $(call find_lib,pthread) $(call find_include,pthread))
     else
       LIBEXTSAVE := ${LIBEXT}
       LIBEXT = a
       ifneq (,$(call find_lib,pthread))
-        OS_CCDEFS += -DUSE_READER_THREAD -DSIM_ASYNCH_IO 
+        AIO_CCDEFS += -DUSE_READER_THREAD -DSIM_ASYNCH_IO 
         OS_LDFLAGS += -lpthread
         $(info using libpthread: $(call find_lib,pthread) $(call find_include,pthread))
       else
         ifneq (,$(findstring Haiku,$(OSTYPE)))
-          OS_CCDEFS += -DUSE_READER_THREAD -DSIM_ASYNCH_IO 
+          AIO_CCDEFS += -DUSE_READER_THREAD -DSIM_ASYNCH_IO 
           $(info using libpthread: $(call find_include,pthread))
         else
           ifeq (Darwin,$(OSTYPE))
-            OS_CCDEFS += -DUSE_READER_THREAD -DSIM_ASYNCH_IO 
+            AIO_CCDEFS += -DUSE_READER_THREAD -DSIM_ASYNCH_IO 
             OS_LDFLAGS += -lpthread
             $(info using macOS libpthread: $(call find_include,pthread))
           endif
@@ -650,19 +702,15 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
       endif
     endif
   endif
+  ifeq (cygwin,$(OSTYPE))
+    LIBEXTSAVE := ${LIBEXT}
+    LIBEXT = dll.a
+  endif
   ifneq (,$(VIDEO_USEFUL))
-    ifeq (cygwin,$(OSTYPE))
-      LIBEXTSAVE := ${LIBEXT}
-      LIBEXT = dll.a
-    endif
     ifneq (,$(call find_include,SDL2/SDL))
       ifneq (,$(call find_lib,SDL2))
-        ifneq (,$(findstring Haiku,$(OSTYPE)))
-          ifneq (,$(shell which sdl2-config))
-            SDLX_CONFIG = sdl2-config
-          endif
-        else
-          SDLX_CONFIG = $(realpath $(dir $(call find_include,SDL2/SDL))../../bin/sdl2-config)
+        ifneq (,$(shell which sdl2-config))
+          SDLX_CONFIG = sdl2-config
         endif
         ifneq (,$(SDLX_CONFIG))
           VIDEO_CCDEFS += -DHAVE_LIBSDL -DUSE_SIM_VIDEO `$(SDLX_CONFIG) --cflags`
@@ -672,18 +720,72 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
           DISPLAYVT = ${DISPLAYD}/vt11.c
           DISPLAY340 = ${DISPLAYD}/type340.c
           DISPLAYNG = ${DISPLAYD}/ng.c
-          DISPLAYIMLAC = ${DISPLAYD}/imlac.c
-          DISPLAYTT2500 = ${DISPLAYD}/tt2500.c
+          DISPLAYIII = ${DISPLAYD}/iii.c
           DISPLAY_OPT += -DUSE_DISPLAY $(VIDEO_CCDEFS) $(VIDEO_LDFLAGS)
           $(info using libSDL2: $(call find_include,SDL2/SDL))
           ifeq (Darwin,$(OSTYPE))
             VIDEO_CCDEFS += -DSDL_MAIN_AVAILABLE
           endif
+          ifneq (,$(and $(BESM6_BUILD), $(or $(and $(call find_include,SDL2/SDL_ttf),$(call find_lib,SDL2_ttf)), $(and $(call find_include,SDL/SDL_ttf),$(call find_lib,SDL_ttf)))))
+            FONTPATH += /usr/share/fonts /Library/Fonts /usr/lib/jvm /System/Library/Frameworks/JavaVM.framework/Versions /System/Library/Fonts C:/Windows/Fonts
+            FONTPATH := $(dir $(foreach dir,$(strip $(FONTPATH)),$(wildcard $(dir)/.)))
+            FONTNAME += DejaVuSans.ttf LucidaSansRegular.ttf FreeSans.ttf AppleGothic.ttf tahoma.ttf
+            $(info font paths are: $(FONTPATH))
+            $(info font names are: $(FONTNAME))
+            find_fontfile = $(strip $(firstword $(foreach dir,$(strip $(FONTPATH)),$(wildcard $(dir)/$(1))$(wildcard $(dir)/*/$(1))$(wildcard $(dir)/*/*/$(1))$(wildcard $(dir)/*/*/*/$(1)))))
+            find_font = $(abspath $(strip $(firstword $(foreach font,$(strip $(FONTNAME)),$(call find_fontfile,$(font))))))
+            ifneq (,$(call find_font))
+              FONTFILE=$(call find_font)
+            else
+              $(info ***)
+              $(info *** No font file available, BESM-6 video panel disabled.)
+              $(info ***)
+              $(info *** To enable the panel display please specify one of:)
+              $(info ***          a font path with FONTPATH=path)
+              $(info ***          a font name with FONTNAME=fontname.ttf)
+              $(info ***          a font file with FONTFILE=path/fontname.ttf)
+              $(info ***)
+            endif
+          endif
+          ifeq (,$(and ${VIDEO_LDFLAGS}, ${FONTFILE}, $(BESM6_BUILD)))
+            $(info *** No SDL ttf support available.  BESM-6 video panel disabled.)
+            $(info ***)
+            ifeq (Darwin,$(OSTYPE))
+              ifeq (/opt/local/bin/port,$(shell which port))
+                $(info *** Info *** Install the MacPorts libSDL2-ttf development package to provide this)
+                $(info *** Info *** functionality for your OS X system:)
+                $(info *** Info ***       # port install libsdl2-ttf-dev)
+              endif
+              ifeq (/usr/local/bin/brew,$(shell which brew))
+                ifeq (/opt/local/bin/port,$(shell which port))
+                  $(info *** Info ***)
+                  $(info *** Info *** OR)
+                  $(info *** Info ***)
+                endif
+                $(info *** Info *** Install the HomeBrew sdl2_ttf package to provide this)
+                $(info *** Info *** functionality for your OS X system:)
+                $(info *** Info ***       $$ brew install sdl2_ttf)
+              endif
+            else
+              ifneq (,$(and $(findstring Linux,$(OSTYPE)),$(call find_exe,apt-get)))
+                $(info *** Info *** Install the development components of libSDL2-ttf)
+                $(info *** Info *** packaged for your Linux operating system distribution:)
+                $(info *** Info ***        $$ sudo apt-get install libsdl2-ttf-dev)
+              else
+                $(info *** Info *** Install the development components of libSDL2-ttf packaged by your)
+                $(info *** Info *** operating system distribution and rebuild your simulator to)
+                $(info *** Info *** enable this extra functionality.)
+              endif
+            endif
+          else
+            ifneq (,$(call find_include,SDL2/SDL_ttf),$(call find_lib,SDL2_ttf))
+              $(info using libSDL2_ttf: $(call find_lib,SDL2_ttf) $(call find_include,SDL2/SDL_ttf))
+              $(info ***)
+              BESM6_PANEL_OPT = -DFONTFILE=${FONTFILE} $(filter-out -DSDL_MAIN_AVAILABLE,${VIDEO_CCDEFS}) ${VIDEO_LDFLAGS} -lSDL2_ttf
+            endif
+          endif
         endif
       endif
-    endif
-    ifeq (cygwin,$(OSTYPE))
-      LIBEXT = $(LIBEXTSAVE)
     endif
     ifeq (,$(findstring HAVE_LIBSDL,$(VIDEO_CCDEFS)))
       $(info *** Info ***)
@@ -724,6 +826,14 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
         endif
       endif
       $(info *** Info ***)
+    endif
+  endif
+  ifeq (cygwin,$(OSTYPE))
+    LIBEXT = $(LIBEXTSAVE)
+    LIBPATH += /usr/lib/w32api
+    ifneq (,$(call find_lib,winmm))
+      OS_CCDEFS += -DHAVE_WINMM
+      OS_LDFLAGS += -lwinmm
     endif
   endif
   ifneq (,$(NETWORK_USEFUL))
@@ -987,12 +1097,12 @@ ifeq (${WIN32},)  #*nix Environments (&& cygwin)
         $(info *** Error *** There are ONLY two supported ways to acquire and build)
         $(info *** Error *** the simh source code:)
         $(info *** Error ***   1: directly with git via:)
-        $(info *** Error ***      $$ git clone https://github.com/simh/simh)
+        $(info *** Error ***      $$ git clone https://github.com/rcornwell/sims)
         $(info *** Error ***      $$ cd simh)
         $(info *** Error ***      $$ make {simulator-name})
         $(info *** Error *** OR)
         $(info *** Error ***   2: download the source code zip archive from:)
-        $(info *** Error ***      $$ wget(or via browser) https://github.com/simh/simh/archive/master.zip)
+        $(info *** Error ***      $$ wget(or via browser) https://github.com/rcornwell/sims/archive/master.zip)
         $(info *** Error ***      $$ unzip master.zip)
         $(info *** Error ***      $$ cd simh-master)
         $(info *** Error ***      $$ make {simulator-name})
@@ -1026,11 +1136,13 @@ else
   $(info include paths are: ${INCPATH})
   # Give preference to any MinGW provided threading (if available)
   ifneq (,$(call find_include,pthread))
-    PTHREADS_CCDEFS = -DUSE_READER_THREAD -DSIM_ASYNCH_IO
+    PTHREADS_CCDEFS =
+    AIO_CCDEFS = -DUSE_READER_THREAD -DSIM_ASYNCH_IO
     PTHREADS_LDFLAGS = -lpthread
   else
     ifeq (pthreads,$(shell if exist ..\windows-build\pthreads\Pre-built.2\include\pthread.h echo pthreads))
-      PTHREADS_CCDEFS = -DUSE_READER_THREAD -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE -I../windows-build/pthreads/Pre-built.2/include -DSIM_ASYNCH_IO
+      PTHREADS_CCDEFS = -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE -I../windows-build/pthreads/Pre-built.2/include
+      AIO_CCDEFS = -DUSE_READER_THREAD -DSIM_ASYNCH_IO
       PTHREADS_LDFLAGS = -lpthreadGC2 -L..\windows-build\pthreads\Pre-built.2\lib
     endif
   endif
@@ -1134,18 +1246,20 @@ else
       $(info Cloning the windows-build dependencies into $(abspath ..)/windows-build)
       $(shell git clone https://github.com/simh/windows-build ../windows-build)
     else
-      $(info ***********************************************************************)
-      $(info ***********************************************************************)
-      $(info **  This build is operating without the required windows-build       **)
-      $(info **  components and therefore will produce less than optimal          **)
-      $(info **  simulator operation and features.                                **)
-      $(info **  Download the file:                                               **)
-      $(info **  https://github.com/simh/windows-build/archive/windows-build.zip  **)
-      $(info **  Extract the windows-build-windows-build folder it contains to    **)
-      $(info **  $(abspath ..\)                                                   **)
-      $(info ***********************************************************************)
-      $(info ***********************************************************************)
-      $(info .)
+      ifneq (3,${SIM_MAJOR})
+        $(info ***********************************************************************)
+        $(info ***********************************************************************)
+        $(info **  This build is operating without the required windows-build       **)
+        $(info **  components and therefore will produce less than optimal          **)
+        $(info **  simulator operation and features.                                **)
+        $(info **  Download the file:                                               **)
+        $(info **  https://github.com/simh/windows-build/archive/windows-build.zip  **)
+        $(info **  Extract the windows-build-windows-build folder it contains to    **)
+        $(info **  $(abspath ..\)                                                   **)
+        $(info ***********************************************************************)
+        $(info ***********************************************************************)
+        $(info .)
+      endif
     endif
   else
     # Version check on windows-build
@@ -1205,23 +1319,18 @@ endif
 ifneq (,$(UNSUPPORTED_BUILD))
   CFLAGS_GIT += -DSIM_BUILD=Unsupported=$(UNSUPPORTED_BUILD)
 endif
+OPTIMIZE ?= -O2 -DNDEBUG=1
 ifneq ($(DEBUG),)
-  CFLAGS_G = -g -ggdb -g3
+  CFLAGS_G = -g -ggdb -g3 -D_DEBUG=1
   CFLAGS_O = -O0
   BUILD_FEATURES = - debugging support
+  LTO =
 else
   ifneq (,$(findstring clang,$(COMPILER_NAME))$(findstring LLVM,$(COMPILER_NAME)))
-    CFLAGS_O = -O2 -fno-strict-overflow
-    GCC_OPTIMIZERS_CMD = ${GCC} --help
-    NO_LTO = 1
+    CFLAGS_O = $(OPTIMIZE) -fno-strict-overflow
+    GCC_OPTIMIZERS_CMD = ${GCC} --help 2>&1
   else
-    NO_LTO = 1
-    ifeq (Darwin,$(OSTYPE))
-      CFLAGS_O += -O4 -flto -fwhole-program
-    else
-#     CFLAGS_O := -O2 -fprofile-arcs -ftest-coverage
-      CFLAGS_O := -O2
-    endif
+    CFLAGS_O := $(OPTIMIZE)
   endif
   LDFLAGS_O = 
   GCC_MAJOR_VERSION = $(firstword $(subst  ., ,$(GCC_VERSION)))
@@ -1236,9 +1345,6 @@ else
   endif
   ifneq (,$(GCC_COMMON_CMD))
     GCC_OPTIMIZERS += $(shell $(GCC_COMMON_CMD))
-  endif
-  ifneq (,$(findstring $(GCC_VERSION),$(LTO_EXCLUDE_VERSIONS)))
-    NO_LTO = 1
   endif
   ifneq (,$(findstring -finline-functions,$(GCC_OPTIMIZERS)))
     CFLAGS_O += -finline-functions
@@ -1258,13 +1364,16 @@ else
   ifneq (,$(findstring -fstrict-overflow,$(GCC_OPTIMIZERS)))
     CFLAGS_O += -fno-strict-overflow
   endif
-  ifeq (,$(NO_LTO))
+  ifneq (,$(findstring $(GCC_VERSION),$(LTO_EXCLUDE_VERSIONS)))
+    override LTO =
+  endif
+  ifneq (,$(LTO))
     ifneq (,$(findstring -flto,$(GCC_OPTIMIZERS)))
-      CFLAGS_O += -flto -fwhole-program
-      LDFLAGS_O += -flto -fwhole-program
+      CFLAGS_O += -flto
+      LTO_FEATURE = , with Link Time Optimization,
     endif
   endif
-  BUILD_FEATURES = - compiler optimizations and no debugging support
+  BUILD_FEATURES = - compiler optimizations$(LTO_FEATURE) and no debugging support
 endif
 ifneq (3,$(GCC_MAJOR_VERSION))
   ifeq (,$(GCC_WARNINGS_CMD))
@@ -1394,7 +1503,6 @@ SEL32 = ${SEL32D}/sel32_cpu.c ${SEL32D}/sel32_sys.c ${SEL32D}/sel32_chan.c \
 	${SEL32D}/sel32_hsdp.c ${SEL32D}/sel32_mfp.c ${SEL32D}/sel32_scsi.c \
 	${SEL32D}/sel32_ec.c ${SEL32D}/sel32_ipu.c
 SEL32_OPT = -I $(SEL32D) -DSEL32  ${NETWORK_OPT}
-#SEL32_OPT = -I $(SEL32D) -DUSE_INT64 -DSEL32 
 
 ICL1900D = ${SIMHD}/ICL1900
 ICL1900 = ${ICL1900D}/icl1900_cpu.c ${ICL1900D}/icl1900_sys.c \
@@ -1411,7 +1519,7 @@ IBM360 = ${IBM360D}/ibm360_cpu.c ${IBM360D}/ibm360_sys.c ${IBM360D}/ibm360_con.c
 	${IBM360D}/ibm360_mt.c ${IBM360D}/ibm360_lpr.c ${IBM360D}/ibm360_dasd.c \
 	${IBM360D}/ibm360_com.c ${IBM360D}/ibm360_scom.c ${IBM360D}/ibm360_scon.c \
     ${IBM360D}/ibm360_vma.c
-IBM360_OPT = -I $(IBM360D) -DIBM360 -DUSE_INT64 -DUSE_SIM_CARD
+IBM360_OPT = -I $(IBM360D) -DIBM360 -DUSE_INT64 -DUSE_SIM_CARD -DDONT_USE_AIO_INTRINSICS
 
 PDP6D = ${SIMHD}/PDP10
 ifneq (,${DISPLAY_OPT})
@@ -1423,12 +1531,16 @@ PDP6 = ${PDP6D}/kx10_cpu.c ${PDP6D}/kx10_sys.c ${PDP6D}/kx10_cty.c \
 	${PDP6D}/pdp6_mtc.c ${PDP6D}/pdp6_dsk.c ${PDP6D}/pdp6_dcs.c \
 	${PDP6D}/kx10_dpy.c ${PDP6D}/pdp6_slave.c ${PDP6D}/pdp6_ge.c \
 	${DISPLAYL} ${DISPLAY340}
-PDP6_OPT = -DPDP6=1 -DUSE_INT64 -I ${PDP6D} -DUSE_SIM_CARD ${DISPLAY_OPT} ${PDP6_DISPLAY_OPT}
+PDP6_OPT = -DPDP6=1 -DUSE_INT64 -I ${PDP6D} -DUSE_SIM_CARD ${DISPLAY_OPT} ${PDP6_DISPLAY_OPT} ${AIO_CCDEFS}
 ifneq (${PANDA_LIGHTS},)
 # ONLY for Panda display.
 PDP6_OPT += -DPANDA_LIGHTS
 PDP6 += ${PDP6D}/kx10_lights.c
 PDP6_LDFLAGS += -lusb-1.0
+endif
+ifneq (${PIDP10},)
+PDP6_OPT += -DPIDP10=1
+PDP6 += ${PDP6D}/ka10_pipanel.c
 endif
 
 PDP10D = ${SIMHD}/PDP10
@@ -1483,6 +1595,10 @@ KI10_OPT += -DPANDA_LIGHTS
 KI10 += ${KA10D}/kx10_lights.c
 KI10_LDFLAGS = -lusb-1.0
 endif
+ifneq (${PIDP10},)
+KI10_OPT += -DPIDP10=1
+KI10 += ${KI10D}/ka10_pipanel.c
+endif
 
 KL10D = ${SIMHD}/PDP10
 KL10 = ${KL10D}/kx10_cpu.c ${KL10D}/kx10_sys.c ${KL10D}/kx10_df.c \
@@ -1492,8 +1608,12 @@ KL10 = ${KL10D}/kx10_cpu.c ${KL10D}/kx10_sys.c ${KL10D}/kx10_df.c \
 	${KL10D}/kx10_rp.c ${KL10D}/kx10_tu.c ${KL10D}/kx10_rs.c \
 	${KL10D}/kx10_imp.c ${KL10D}/kl10_fe.c ${KL10D}/ka10_pd.c \
 	${KL10D}/ka10_ch10.c ${KL10D}/kl10_nia.c ${KL10D}/kx10_disk.c \
-    ${KL10D}/kl10_dn.c
+    ${KL10D}/kl10_dn.c ${KL10D}/kl10_ci.c
 KL10_OPT = -DKL=1 -DUSE_INT64 -I $(KL10D) -DUSE_SIM_CARD ${NETWORK_OPT} 
+ifneq (${PIDP10},)
+KS10_OPT += -DPIDP10=1
+KS10 += ${KS10D}/ka10_pipanel.c
+endif
 
 KS10D = ${SIMHD}/PDP10
 KS10 = ${KS10D}/kx10_cpu.c ${KS10D}/kx10_sys.c ${KS10D}/kx10_disk.c \
@@ -1502,6 +1622,10 @@ KS10 = ${KS10D}/kx10_cpu.c ${KS10D}/kx10_sys.c ${KS10D}/kx10_disk.c \
     ${KS10D}/ks10_tcu.c ${KS10D}/ks10_lp.c ${KS10D}/ks10_ch11.c \
     ${KS10D}/ks10_kmc.c ${KS10D}/ks10_dup.c ${KS10D}/kx10_imp.c
 KS10_OPT = -DKS=1 -DUSE_INT64 -I $(KS10D) ${NETWORK_OPT} 
+ifneq (${PIDP10},)
+KS10_OPT += -DPIDP10=1
+KS10 += ${KS10D}/ka10_pipanel.c
+endif
 
 
 #
