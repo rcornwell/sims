@@ -3405,14 +3405,16 @@ prottrap:
                     ihold = 1;  /* Hold interupts for one cycle */
                     break;
                 case SCPE_OK:
-                    temp = (MA >> 9) & 017;
-                    if (temp == 0) {
-                        if (opcode==IO_RDS)
-                            MQ = 0;
-                        chan_clear(0, CHS_EOF|CHS_EOT|DEV_REOR);
-                    } else {
-                        iotraps &= ~(1 << temp);
-                        chan_clear(temp, CHS_EOF|CHS_EOT|DEV_REOR);
+                    {   uint16 temp16;
+                        temp16 = (MA >> 9) & 017;
+                        if (temp16 == 0) {
+                            if (opcode==IO_RDS)
+                                MQ = 0;
+                            chan_clear(0, CHS_EOF|CHS_EOT|DEV_REOR);
+                        } else {
+                            iotraps &= ~(1 << temp16);
+                            chan_clear(temp16, CHS_EOF|CHS_EOT|DEV_REOR);
+                        }
                     }
                     ihold = 1;  /* Hold interupts for one cycle */
                     break;
