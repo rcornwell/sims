@@ -190,7 +190,7 @@ DEVICE              scoml_dev = {
 
 
 /*
- * Issue a scommand to the 3271 controller.
+ * Issue a command to the 3271 controller.
  */
 uint8  scoml_startcmd(UNIT *uptr,  uint8 cmd) {
     DEVICE         *dptr = find_dev_from_unit(uptr);
@@ -382,7 +382,7 @@ write:
                  sim_debug(DEBUG_CMD, dptr, "COM: unit=%d send %02x '%c'\n",
                               unit, ch, isprint(data)? data: '^');
                  tmxr_putc_ln( &scom_ldsc[unit], ch);
-                 if (ch == IAC) 
+                 if (ch == IAC)
                      tmxr_putc_ln( &scom_ldsc[unit], ch);
                  sim_activate(uptr, 200);
              }
@@ -430,6 +430,7 @@ t_stat scom_scan(UNIT * uptr)
         line->CMD |= ENAB|DATA|INIT1;
         line->CMD &= ~(RECV|SEND);
         line->SNS = 0;
+        set_devattn(GET_UADDR(line->CMD), SNS_ATTN);
         sim_activate(line, 20000);
     }
 

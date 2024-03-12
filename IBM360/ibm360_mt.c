@@ -520,7 +520,7 @@ t_stat mt_srv(UNIT * uptr)
              ch = 0x23;        /* Model 3, Support dual density */
              if ((uptr->flags & MTUF_9TR) == 0) {
                  ch |= 0x80;   /* Indicate 7 track */
-             } 
+             }
              chan_write_byte(addr, &ch);
              /* Sense byte 7 */
              ch = 0;
@@ -885,7 +885,6 @@ t_stat mt_srv(UNIT * uptr)
                            unit, reclen);
                    /* We don't set EOF on BSR */
                    if (r == MTSE_TMK) {
-                       uptr->POS++;
                        sim_debug(DEBUG_DETAIL, dptr, "MARK\n");
                        sim_activate(uptr, 50);
                    } else {

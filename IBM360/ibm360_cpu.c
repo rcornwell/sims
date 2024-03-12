@@ -129,8 +129,8 @@ uint8        clk_irq;              /* Clock compare IRQ */
 uint8        tod_irq;              /* TOD compare IRQ */
 int          clk_state;
 int          timer_tics;           /* Interval Timer is ever 3 tics */
-uint32       idle_stop_msec = 0;   // msec allowed after before stop cpu if idle
-uint32       idle_stop_tm0;        // sim_os_msec when start counting for idle time
+uint32       idle_stop_msec = 0;   /* msec allowed after before stop cpu if idle */
+uint32       idle_stop_tm0;        /* sim_os_msec when start counting for idle time */
 
 
 #define CLOCK_UNSET   0            /* Clock not set */
@@ -194,6 +194,7 @@ uint32       idle_stop_tm0;        // sim_os_msec when start counting for idle t
 #define IRC_PER     0x0080         /* Per event */
 
 #define AMASK       0x00ffffff     /* Mask address bits */
+#define WMASK       0x00fffffc     /* Mask address to word boundry */
 #define MSIGN       0x80000000     /* Minus sign */
 #define MMASK       0x00ffffff     /* Mantissa mask */
 #define EMASK       0x7f000000     /* Exponent mask */
@@ -214,6 +215,8 @@ uint32       idle_stop_tm0;        // sim_os_msec when start counting for idle t
 #define NMASKL      0x00f0000000000000LL
 #define UMASKL      0x0ffffffffffffff0LL
 #define SNMASKL     0x0f00000000000000LL
+#define DMASKL      0x0080000000000000LL
+#define OMASKL      0xffffffff80000000LL
 #define LDDBL(r,x)  x = (((t_uint64)regs[r]) << 32) | ((t_uint64)regs[r|1]); \
                     if (hst_lnt) { hst[hst_p].src1 = ((x) >> 32);  \
                     hst[hst_p].src2 = (x) & FMASK; }
@@ -311,7 +314,7 @@ int32               rtc_tps = 300;
 UNIT cpu_unit[] = { {UDATA (&rtc_srv, UNIT_IDLE|UNIT_BINK|UNIT_FIX, MAXMEMSIZE)} };
 
 REG cpu_reg[] = {
-    { HRDATA (PC, PC, 24) },
+    { HRDATA (PC, PC, 32) },
     { HRDATA (CC, cc, 2) },
     { HRDATA (PMASK, pmsk, 4) },
     { HRDATA (FLAGS, flags, 4) },
@@ -358,10 +361,17 @@ MTAB cpu_mod[] = {
     { MTAB_VDV, MEMAMOUNT(128), NULL, "2M", &cpu_set_size },
     { MTAB_VDV, MEMAMOUNT(256), NULL, "4M", &cpu_set_size },
     { MTAB_VDV, MEMAMOUNT(512), NULL, "8M", &cpu_set_size },
-    { FEAT_370, FEAT_370, "IBM370", "IBM370", NULL, NULL, NULL, "Sets CPU to be a IBM370"},
-    { FEAT_370, 0, "IBM360", "IBM360", NULL, NULL, NULL, "Sets CPU to be a IBM360"},
+    { MTAB_VDV, MEMAMOUNT(768), NULL, "12M", &cpu_set_size },
+    { MTAB_VDV, MEMAMOUNT(1024), NULL, "16M", &cpu_set_size },
+    { FEAT_370, FEAT_370, "IBM370", "IBM370", NULL, NULL, NULL,
+                       "Sets CPU to be a IBM370"},
+    { FEAT_370, 0, "IBM360", "IBM360", NULL, NULL, NULL,
+                       "Sets CPU to be a IBM360"},
     { FEAT_PROT, 0, NULL, "NOPROT", NULL, NULL, NULL, "No Storage protection"},
     { FEAT_PROT, FEAT_PROT, "PROT", "PROT", NULL, NULL, NULL, "Storage protection"},
+    { FEAT_FPROT, 0, NULL, "NOFPROT", NULL, NULL, NULL, "No Fetch protection"},
+    { FEAT_FPROT|FEAT_PROT, FEAT_FPROT|FEAT_PROT, "FPROT", "FPROT", NULL, NULL,
+                           NULL, "Fetch protection"},
     { FEAT_UNIV, FEAT_UNIV, "UNIV", "UNIV", NULL, NULL, NULL, "Universal instruction"},
     { FEAT_UNIV, 0, NULL, "NOUNIV", NULL, NULL, NULL, "Basic instructions"},
     { FEAT_UNIV, FEAT_FLOAT, "FLOAT", "FLOAT", NULL, NULL, NULL,
@@ -674,16 +684,18 @@ ReadFull(uint32 addr, uint32 *data)
 
      /* Check storage key */
      if (st_key != 0) {
-         uint8      k;
-
-         if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
+         if ((cpu_unit[0].flags & (FEAT_PROT|FEAT_DAT)) == 0) {
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
-         k = key[pa >> 11];
-         if ((k & 0x8) != 0 && (k & 0xf0) != st_key) {
-             storepsw(OPPSW, IRC_PROT);
-             return 1;
+
+         if ((cpu_unit[0].flags & (FEAT_FPROT|FEAT_DAT)) != 0) {
+             uint8      k = key[pa >> 11];
+
+             if ((k & 0x8) != 0 && (k & 0xf0) != st_key) {
+                 storepsw(OPPSW, IRC_PROT);
+                 return 1;
+             }
          }
      }
 
@@ -710,10 +722,12 @@ ReadFull(uint32 addr, uint32 *data)
                  return 1;
             /* Check access protection */
             if (st_key != 0) {
-                k = key[temp >> 11];
-                if ((k & 0x8) != 0 && (k & 0xf0) != st_key) {
-                    storepsw(OPPSW, IRC_PROT);
-                    return 1;
+                if ((cpu_unit[0].flags & (FEAT_FPROT|FEAT_DAT)) != 0) {
+                    uint8      k = key[temp >> 11];
+                    if ((k & 0x8) != 0 && (k & 0xf0) != st_key) {
+                        storepsw(OPPSW, IRC_PROT);
+                        return 1;
+                    }
                 }
             }
          }
@@ -730,7 +744,7 @@ ReadFull(uint32 addr, uint32 *data)
      /* Update access flag */
      key[pa >> 11] |= 0x4;
 
-/*     sim_debug(DEBUG_DATA, &cpu_dev, "RD A=%08x %08x\n", addr, *data); */
+     sim_debug(DEBUG_DATA, &cpu_dev, "RD A=%08x %08x\n", addr, *data);
      return 0;
 }
 
@@ -830,7 +844,7 @@ WriteFull(uint32 addr, uint32 data)
      if (st_key != 0) {
          uint8      k;
 
-         if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
+         if ((cpu_unit[0].flags & (FEAT_PROT|FEAT_DAT)) == 0) {
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
@@ -903,7 +917,7 @@ WriteFull(uint32 addr, uint32 data)
           M[pa2] |= 0xffffff00 & (data << 8);
           break;
      }
-     /* sim_debug(DEBUG_DATA, &cpu_dev, "WR A=%08x %08x\n", addr, data); */
+     sim_debug(DEBUG_DATA, &cpu_dev, "WR A=%08x %08x\n", addr, data);
      return 0;
 }
 
@@ -940,7 +954,7 @@ WriteByte(uint32 addr, uint32 data)
      if (st_key != 0) {
          uint8      k;
 
-         if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
+         if ((cpu_unit[0].flags & (FEAT_PROT|FEAT_DAT)) == 0) {
              storepsw(OPPSW, IRC_PROT);
              return 1;
          }
@@ -959,7 +973,7 @@ WriteByte(uint32 addr, uint32 data)
      pa >>= 2;
      mask = 0xff;
      data &= mask;
-     /* sim_debug(DEBUG_DATA, &cpu_dev, "WR A=%08x %02x\n", addr, data); */
+     sim_debug(DEBUG_DATA, &cpu_dev, "WR A=%08x %02x\n", addr, data);
      data <<= offset;
      mask <<= offset;
      M[pa] &= ~mask;
@@ -1006,17 +1020,17 @@ WriteHalf(uint32 addr, uint32 data)
 
      /* Check storage key */
      if (st_key != 0) {
-        uint8      k;
+         uint8      k;
 
-        if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
-            storepsw(OPPSW, IRC_PROT);
-            return 1;
-        }
-        k = key[pa >> 11];
-        if ((k & 0xf0) != st_key) {
-            storepsw(OPPSW, IRC_PROT);
-            return 1;
-        }
+         if ((cpu_unit[0].flags & (FEAT_PROT|FEAT_DAT)) == 0) {
+             storepsw(OPPSW, IRC_PROT);
+             return 1;
+         }
+         k = key[pa >> 11];
+         if ((k & 0xf0) != st_key) {
+             storepsw(OPPSW, IRC_PROT);
+             return 1;
+         }
      }
 
      if (offset == 3) {
@@ -1070,7 +1084,7 @@ WriteHalf(uint32 addr, uint32 data)
 
      mask = 0xffff;
      data &= mask;
-     /* sim_debug(DEBUG_DATA, &cpu_dev, "WR A=%08x %04x\n", addr, data); */
+     sim_debug(DEBUG_DATA, &cpu_dev, "WR A=%08x %04x\n", addr, data);
      switch (offset) {
      case 0:
           M[pa] &= ~(mask << 16);
@@ -1115,7 +1129,6 @@ sim_instr(void)
     t_uint64        src2L;
     t_uint64        destL;       /* 64 bit destination */
     t_uint64        dest2L;      /* Upper 64 bit for product */
-
     /* Initialize DAT translation values */
     if (Q370) {
         switch((cregs[0] >> 22) & 03) {
@@ -1233,6 +1246,7 @@ wait_loop:
             /* CPU IDLE */
             if (flags & WAIT && irq_en == 0 && ext_en == 0)
                return STOP_HALT;
+
             if (idle_stop_msec) {
                 /* check idle time */
                 if (idle_stop_tm0 == 0) {
@@ -1543,7 +1557,7 @@ opr:
 
         case OP_SSK:
                 dest = src1;
-                if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
+                if ((cpu_unit[0].flags & (FEAT_DAT|FEAT_PROT)) == 0) {
                     storepsw(OPPSW, IRC_OPR);
                     goto supress;
                 } else if (flags & PROBLEM) {
@@ -1561,14 +1575,16 @@ opr:
                 } else {
                     if ((cpu_unit[0].flags & FEAT_DAT) != 0)
                         key[addr1 >> 11] = src1 & 0xfe;
-                    else
+                    else if ((cpu_unit[0].flags & FEAT_FPROT) != 0)
                         key[addr1 >> 11] = src1 & 0xf8;
+                    else
+                        key[addr1 >> 11] = src1 & 0xf0;
                 }
                 break;
 
         case OP_ISK:
                 dest = src1;
-                if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
+                if ((cpu_unit[0].flags & (FEAT_DAT|FEAT_PROT)) == 0) {
                     storepsw(OPPSW, IRC_PROT);
                 } if (flags & PROBLEM) {
                     /* Try to do quick ISK */
@@ -1583,8 +1599,12 @@ opr:
                     dest &= 0xffffff00;
                     if (ec_mode)
                         dest |= key[addr1 >> 11] & 0xfe;
-                    else
-                        dest |= key[addr1 >> 11] & 0xf8;
+                    else {
+                        if ((cpu_unit[0].flags & FEAT_FPROT) != 0)
+                           dest |= key[addr1 >> 11] & 0xf8;
+                        else
+                           dest |= key[addr1 >> 11] & 0xf0;
+                    }
                     regs[reg1] = dest;
                     per_mod |= 1 << reg1;
                 }
@@ -1840,26 +1860,46 @@ set_cc3:
                     goto supress;
                 }
                 fill = 0;
-                LDDBL(reg1, src1L);
-                if (src1L & MSIGNL) {
+                src1 = regs[reg1];
+                src1h = regs[reg1|1];
+                if (src1 & MSIGN) {
                     fill = 3;
-                    src1L = NEG(src1L);
+                    src1h ^= FMASK;
+                    src1 ^= FMASK;
+                    if (src1h == FMASK)
+                       src1 ++;
+                    src1h++;
                 }
                 if (src2 & MSIGN) {
                     fill ^= 1;
                     src2 = NEG(src2);
                 }
-                src2L = src1L % (t_uint64)src2;
-                src1L = src1L / (t_uint64)src2;
+                dest = 0;
+                for (reg = 0; reg < 32; reg++) {
+                    /* Shift left by one */
+                    src1 <<= 1;
+                    if (src1h & MSIGN)
+                        src1 |= 1;
+                    src1h <<= 1;
+                    /* Subtract remainder from divisor */
+                    desth = src1 - src2;
+
+                    /* Shift quotent left one bit */
+                    dest <<= 1;
+
+                    /* If remainder larger then divisor replace */
+                    if ((desth & MSIGN) == 0) {
+                        src1 = desth;
+                        dest |= 1;
+                    }
+                }
 
                 /* Check for overflow */
-                if ((src1L & 0xFFFFFFFF80000000LL) != 0) {
+                if ((dest & MSIGN) != 0 && dest != MSIGN) {
                     storepsw(OPPSW, IRC_FIXDIV);
                     goto supress;
                 }
 
-                src1 = (uint32)(src2L & FMASK);
-                dest = (uint32)(src1L & FMASK);
                 if (fill & 1)
                     dest = NEG(dest);
                 if (fill & 2)
@@ -1985,7 +2025,11 @@ char_save:
                 dest = regs[reg1];
                 if (hst_lnt)
                     hst[hst_p].src1 = dest;
-                dest = ((uint32)dest) >> (addr1 & 0x3f);
+                addr1 &= 0x3f;
+                if (addr1 > 31)
+                    dest = 0;
+                else
+                    dest = dest >> (addr1);
                 regs[reg1] = dest;
                 per_mod |= 1 << reg1;
                 break;
@@ -1994,7 +2038,11 @@ char_save:
                 dest = regs[reg1];
                 if (hst_lnt)
                     hst[hst_p].src1 = dest;
-                dest = ((uint32)dest) << (addr1 & 0x3f);
+                addr1 &= 0x3f;
+                if (addr1 > 31)
+                    dest = 0;
+                else
+                    dest = dest << addr1;
                 regs[reg1] = dest;
                 per_mod |= 1 << reg1;
                 break;
@@ -2003,7 +2051,12 @@ char_save:
                 dest = regs[reg1];
                 if (hst_lnt)
                     hst[hst_p].src1 = dest;
-                dest = (int32)dest >> (addr1 & 0x3f);
+                addr1 &= 0x3f;
+                if (addr1 > 31) {
+                     dest = ((dest & MSIGN) != 0) ? FMASK : 0;
+                } else {
+                     dest = (int32)dest >> (addr1 & 0x3f);
+                }
                 goto set_cc;
 
         case OP_SLA:
@@ -2387,11 +2440,10 @@ save_dbl:
                        if (TransAddr(addr1, &src1) ||
                            TransAddr(addr1+reg, &src1) ||
                            TransAddr(addr2, &src1) ||
-                           TransAddr(addr2+reg, &src1)) {
+                           TransAddr(addr2-reg, &src1)) {
                           goto supress;
                        }
                     }
-                    addr2 += reg;
                     do {
                        if (ReadByte(addr2, &src1))
                            goto supress;
@@ -2655,6 +2707,11 @@ save_dbl:
 
                 /* Convert packed decimal to binary */
         case OP_CVB:
+                /* If not on double word boundry and store feature not set */
+                if ((addr1 & 07) != 0 && (cpu_unit[0].flags & FEAT_STOR) == 0) {
+                     storepsw(OPPSW, IRC_SPEC);
+                     goto supress;
+                }
                 if (ReadFull(addr1, &src1))
                     goto supress;
                 if (ReadFull(addr1+4, &src1h))
@@ -2664,7 +2721,7 @@ save_dbl:
                     storepsw(OPPSW, IRC_DATA);
                     goto supress;
                 }
-                dest = 0;
+                destL = 0;
                 /* Convert upper first */
                 for(temp = 28; temp >= 0; temp-=4) {
                     int d = (src1 >> temp) & 0xf;
@@ -2672,7 +2729,7 @@ save_dbl:
                         storepsw(OPPSW, IRC_DATA);
                         goto supress;
                     }
-                    dest = (dest * 10) + d;
+                    destL = (destL * 10) + d;
                 }
                 /* Convert lower */
                 for(temp = 28; temp > 0; temp-=4) {
@@ -2681,22 +2738,26 @@ save_dbl:
                         storepsw(OPPSW, IRC_DATA);
                         goto supress;
                     }
-                    dest = (dest * 10) + d;
+                    destL = (destL * 10) + d;
                 }
                 /* Check if too big */
-                if (dest & MSIGN) {
+                if ((destL & OMASKL) != 0 && destL != (uint64_t)MSIGN) {
                     storepsw(OPPSW, IRC_FIXDIV);
-                    regs[reg1] = dest;
-                    goto supress;
                 }
+
                 /* Twos compliment if needed */
                 if (fill == 0xB || fill == 0xD)
-                    dest = NEG(dest);
-                regs[reg1] = dest;
+                    destL = ~destL + 1;
+                regs[reg1] = (uint32)(destL & FMASK);
                 break;
 
                 /* Convert binary to packed decimal */
         case OP_CVD:
+                /* If not on double word boundry and store feature not set */
+                if ((addr1 & 07) != 0 && (cpu_unit[0].flags & FEAT_STOR) == 0) {
+                     storepsw(OPPSW, IRC_SPEC);
+                     goto supress;
+                }
                 dest = regs[reg1];
                 src1 = 0;
                 src1h = 0;
@@ -2730,14 +2791,19 @@ save_dbl:
                 /* Edit string, mark saves address of significant digit */
         case OP_ED:
         case OP_EDMK:
-                if (ReadByte(addr1, &src1))
+                if (ReadFull(addr1 & WMASK, &src1h))
                     goto supress;
                 zone = (flags & ASCII) ? 0x50: 0xf0;
+                src1 = (src1h >> (8 * (3 - (addr1 & 0x3)))) & 0xff;
                 fill = digit = (uint8)src1;
                 temp = 0;    /* Hold zero flag */
                 e2 = 0;      /* Significance indicator */
                 e1 = 1;      /* Need another source char */
                 cc = 0;
+                if (ReadFull(addr2 & WMASK, &src2h)) {
+                    goto supress;
+                }
+                src2 = (src2h >> (8 * (3 - (addr2 & 0x3)))) & 0xff;
                 for (;;) {
                     uint8       t;
                     switch(digit) {
@@ -2745,11 +2811,15 @@ save_dbl:
                     case 0x20:  /* Digit selector */
                          /* If we have not run out of source, grab next pair */
                          if (e1) {
-                             if (ReadByte(addr2, &src2))
-                                 goto supress;
+                             if ((addr2 & 0x3) == 0) {
+                                 if (ReadFull(addr2, &src2h)) {
+                                     goto supress;
+                                  }
+                             }
+                             src2 = (src2h >> (8 * (3 - (addr2 & 0x3)))) & 0xff;
                              addr2++;
                              /* Check if valid */
-                             if (src2 > 0xa0) {
+                             if (src2 >= 0xa0) {
                                  storepsw(OPPSW, IRC_DATA);
                                  goto supress;
                              }
@@ -2798,14 +2868,19 @@ save_dbl:
                          if (!e2)
                             digit = fill;
                     }
-                    if (WriteByte(addr1, digit))
+                    if (WriteByte(addr1, digit)) {
                         goto supress;
+                    }
                     addr1++;
                     if (reg == 0)
                         break;
                     reg --;
-                    if (ReadByte(addr1, &src1))
-                        goto supress;
+                    if ((addr1 & 0x3) == 0) {
+                        if (ReadFull(addr1, &src1h)) {
+                            goto supress;
+                        }
+                    }
+                    src1 = (src1h >> (8 * (3 - (addr1 & 0x3)))) & 0xff;
                     digit = src1;
                 }
                 cc = temp;
@@ -2968,6 +3043,7 @@ save_dbl:
         case OP_370:
                 if (Q370) {
                    if (reg > 0x13) {
+                   printf("Invalid 0xb2%02x %08x\n\r", reg, addr1);
                        storepsw(OPPSW, IRC_OPR);
                        goto supress;
                    }
@@ -3097,14 +3173,14 @@ save_dbl:
                                  goto supress;
                               break;
                    case 0xa:  /* SPKA */
-                              if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
+                              if ((cpu_unit[0].flags & (FEAT_DAT|FEAT_PROT)) == 0) {
                                   storepsw(OPPSW, IRC_OPR);
                                   goto supress;
                               }
                               st_key = 0xf0 & addr1;
                               break;
                    case 0xb:  /* IPK */
-                              if ((cpu_unit[0].flags & FEAT_PROT) == 0) {
+                              if ((cpu_unit[0].flags & (FEAT_DAT|FEAT_PROT)) == 0) {
                                   storepsw(OPPSW, IRC_OPR);
                                   goto supress;
                               }
@@ -3340,7 +3416,6 @@ save_dbl:
                                                   ~page_mask) & AMASK) >> page_shift;
                                   intval_en = ((dest & 0x400) != 0);
                                   tod_en = ((dest & 0x800) != 0);
-//                                  temp = 1;
                                   break;
                         case 0x1:     /* Segment table address and length */
                                   temp = 1;
@@ -3589,6 +3664,9 @@ save_dbl:
         case OP_HER:
                 /* Split number apart */
                 e1 = (src2L & EMASKL) >> 56;
+                if ((op & 0x10) != 0) {
+                    src2L &= HMASKL;
+                }
                 destL = src2L & MSIGNL;
                 /* Create guard digit */
                 src2L = (src2L & MMASKL) << 4;
@@ -3605,7 +3683,8 @@ save_dbl:
                         if (pmsk & EXPUND) {
                            storepsw(OPPSW, IRC_EXPUND);
                         } else {
-                           destL = e1 = 0;
+                           destL = src2L = 0;
+                           e1 = 0;
                         }
                     }
                     /* Remove guard digit */
@@ -3613,8 +3692,10 @@ save_dbl:
                 }
 
                 /* Check for zero */
-                if (src2L == 0)
-                   destL = e1 = 0;
+                if (src2L == 0) {
+                    destL = 0;
+                    e1 = 0;
+                }
 
                 /* Restore result */
                 src2L |= (((t_uint64)e1 << 56) & EMASKL) | destL;
@@ -3653,7 +3734,7 @@ save_dbl:
                 } else {
                     fpregs[reg1] = (src2L & HMASKL) | (fpregs[reg1] & LMASKL);
                 }
-                if (src1L != 0)
+                if ((src1L & MMASKL) != 0)
                     cc = (src2L & MSIGNL) ? 1 : 2;
                 break;
 
@@ -3745,101 +3826,112 @@ save_dbl:
         case OP_AER:     /* 3A */
         case OP_AUR:     /* 3E */
                 /* Extract numbers and adjust */
-                e1 = (src1L & EMASKL) >> 56;
-                e2 = (src2L & EMASKL) >> 56;
-                fill = 0;
-                if (src1L & MSIGNL)
-                   fill |= 2;
-                if (src2L & MSIGNL)
-                   fill |= 1;
-                /* Make 32 bit and create guard digit */
-                src1 = (uint32)((src1L >> 28) & (MMASK << 4));
-                src2 = (uint32)((src2L >> 28) & (MMASK << 4));
-                temp = e1 - e2;
-                if (temp > 0) {
-                    if (temp > 8) {
-                        src2 = 0;
-                    } else {
-                        /* Shift src2 right if src1 larger expo - expo */
-                        src2 >>= 4 * temp;
-                    }
-                } else if (temp < 0) {
-                    if (temp < -8) {
-                        src1 = 0;
-                    } else {
-                        /* Shift src1 right if src2 larger expo - expo */
-                        src1 >>= 4 * -temp;
-                    }
-                    e1 = e2;
-                }
-
-                /* Exponents should be equal now. */
-
-                /* Add results */
-                if (fill == 2 || fill == 1) {
-                    /* Different signs do subtract */
-                    src2 ^= XMASK;
-                    dest = src1 + src2 + 1;
-                    if (dest & CMASK)
-                        dest &= XMASK;
-                    else {
-                        fill ^= 2;
-                        dest ^= XMASK;
-                        dest++;
-                    }
+            e1 = (src1L & EMASKL) >> 56;
+            e2 = (src2L & EMASKL) >> 56;
+            fill = 0;
+            if (src1L & MSIGNL)
+               fill |= 2;
+            if (src2L & MSIGNL)
+               fill |= 1;
+            /* Make 32 bit and create guard digit */
+            src1 = (uint32)((src1L >> 28) & (MMASK << 4));
+            src2 = (uint32)((src2L >> 28) & (MMASK << 4));
+            temp = e1 - e2;
+            if (temp > 0) {
+                if (temp > 7) {
+                    src2 = 0;
                 } else {
-                    dest = src1 + src2;
+                    /* Shift src2 right if src1 larger expo - expo */
+                    src2 >>= 4 * temp;
                 }
-                /* If overflow, shift right 4 bits */
-                if (dest & CMASK) {
-                    dest >>= 4;
-                    e1 ++;
-                    if (e1 >= 128) {
-                        storepsw(OPPSW, IRC_EXPOVR);
-                    }
-                }
-
-                /* Set condition codes */
-                cc = 0;
-                if ((op & 0xE) != 0xE) {
-                    if (dest != 0)
-                        cc = (fill & 2) ? 1 : 2;
-                    else
-                        dest = e1 = fill = 0;
+            } else if (temp < 0) {
+                temp = -temp;
+                if (temp > 7) {
+                    src1 = 0;
                 } else {
-                    if ((dest & 0xffffff0) != 0)
-                        cc = (fill & 2) ? 1 : 2;
-                    else
-                        dest = e1 = fill = 0;
+                    /* Shift src1 right if src2 larger expo - expo */
+                    src1 >>= 4 * temp;
                 }
+                e1 = e2;
+            }
 
-                /* Check signifigance exception */
-                if (cc == 0 && pmsk & SIGMSK) {
-                    storepsw(OPPSW, IRC_SIGNIF);
-                    goto fpstore1;
+            /* Exponents should be equal now. */
+
+            /* Add results */
+            if (fill == 2 || fill == 1) {
+                /* Different signs do subtract */
+                src2 ^= XMASK;
+                dest = src1 + src2 + 1;
+                if (dest & CMASK)
+                    dest &= XMASK;
+                else {
+                    fill ^= 2;
+                    dest ^= XMASK;
+                    dest++;
                 }
+            } else {
+                dest = src1 + src2;
+            }
 
-                /* Check if we are normalized addition */
-                if ((op & 0xE) != 0xE) {
-                   if (cc != 0) {   /* Only if non-zero result */
-                       while ((dest & SNMASK) == 0) {
-                          dest <<= 4;
-                          e1 --;
-                       }
-                       /* Check if underflow */
-                       if (e1 < 0) {
-                           if (pmsk & EXPUND) {
-                              storepsw(OPPSW, IRC_EXPUND);
-                           } else {
-                              dest = 0;
-                              fill = e1 = 0;
-                           }
+            /* If overflow, shift right 4 bits */
+            if (dest & CMASK) {
+                dest >>= 4;
+                e1 ++;
+                if (e1 >= 128) {
+                    storepsw(OPPSW, IRC_EXPOVR);
+                }
+            }
+
+            /* Set condition codes */
+            cc = 0;
+            if ((op & 0xE) != 0xE) {
+                if (dest != 0) {
+                    cc = (fill & 2) ? 1 : 2;
+                } else {
+                    if ((pmsk & SIGMSK) == 0) {
+                        e1 = 0;
+                    }
+                    fill = 0;
+                }
+            } else {
+                if ((dest & 0xffffff0) != 0) {
+                    cc = (fill & 2) ? 1 : 2;
+                } else {
+                    if ((pmsk & SIGMSK) == 0) {
+                        e1 = 0;
+                    }
+                    dest = 0;
+                    fill = 0;
+                }
+            }
+
+            /* Check signifigance exception */
+            if (cc == 0 && pmsk & SIGMSK) {
+                storepsw(OPPSW, IRC_SIGNIF);
+                goto fpstore1;
+            }
+
+            /* Check if we are normalized addition */
+            if ((op & 0xE) != 0xE) {
+               if (cc != 0) {   /* Only if non-zero result */
+                   while ((dest & SNMASK) == 0) {
+                      dest <<= 4;
+                      e1 --;
+                   }
+                   /* Check if underflow */
+                   if (e1 < 0) {
+                       if (pmsk & EXPUND) {
+                          storepsw(OPPSW, IRC_EXPUND);
+                       } else {
+                          dest = 0;
+                          fill = e1 = 0;
                        }
                    }
-                }
+               }
+            }
 
-                /* Remove DP Guard bit */
-                dest >>= 4;
+            /* Remove DP Guard bit */
+            dest >>= 4;
 
 fpstore1:
                 /* Store result */
@@ -3935,18 +4027,19 @@ fpstore1:
                 src2L <<= 4;
                 temp = e1 - e2;
                 if (temp > 0) {
-                    if (temp > 17) {
+                    if (temp > 15) {
                         src2L  = 0;
                     } else {
                         /* Shift src2 right if src1 larger expo - expo */
                         src2L >>= 4 * temp;
                     }
                 } else if (temp < 0) {
-                    if (temp < -17) {
+                    temp = -temp;
+                    if (temp > 15) {
                         src1L = 0;
                     } else {
                     /* Shift src1 right if src2 larger expo - expo */
-                        src1L >>= 4 * (-temp);
+                        src1L >>= 4 * temp;
                     }
                     e1 = e2;
                 }
@@ -3981,22 +4074,29 @@ fpstore1:
                 /* Set condition codes */
                 cc = 0;
                 if ((op & 0xE) != 0xE) {
-                    if (destL != 0)
+                    if (destL != 0) {
                         cc = (fill & 2) ? 1 : 2;
-                    else
-                        e1 = fill = 0;
+                    } else {
+                        if ((pmsk & SIGMSK) == 0) {
+                            e1 = 0;
+                        }
+                        fill = 0;
+                    }
                 } else {
-                    if ((destL & UMASKL) != 0)
+                    if ((destL & UMASKL) != 0) {
                         cc = (fill & 2) ? 1 : 2;
-                    else
-                        destL = e1 = fill = 0;
+                    } else {
+                        if ((pmsk & SIGMSK) == 0) {
+                            e1 = 0;
+                        }
+                        destL = 0;
+                        fill = 0;
+                    }
                 }
 
                 /* Check signifigance exception */
                 if (cc == 0 && pmsk & SIGMSK) {
                     storepsw(OPPSW, IRC_SIGNIF);
-                    e1 = fill = 0;
-                    destL = 0;
                     goto fpstore;
                 }
 
@@ -4063,11 +4163,14 @@ fpstore:
                 }
 
                 /* Compute exponent */
-                e1 = e1 + e2 - 64;
+                e1 = e1 + e2 - 65;
 
+                /* Add in guard digits */
+                src1L <<= 4;
+                src2L <<= 4;
                 destL = 0;
                 /* Do multiply */
-                for (temp = 0; temp < 56; temp++) {
+                for (temp = 0; temp < 60; temp++) {
                      /* Add if we need too */
                      if (src1L & 1)
                          destL += src2L;
@@ -4080,9 +4183,11 @@ fpnorm:
                 if (destL & EMASKL) {
                    destL >>= 4;
                    e1 ++;
-                   if (e1 >= 128) {
-                       storepsw(OPPSW, IRC_EXPOVR);
-                   }
+                }
+
+                /* Check for overflow */
+                if (e1 >= 128) {
+                    storepsw(OPPSW, IRC_EXPOVR);
                 }
                 /* Align the results */
                 if ((destL) != 0) {
@@ -4162,13 +4267,13 @@ fpnorm:
                 src2L++;
                 destL = 0;
                 /* Do divide */
-                for (temp = 56; temp > 0; temp--) {
+                for (temp = 57; temp > 0; temp--) {
                      t_uint64    t;
 
                      /* Shift left by one */
                      src1L <<= 1;
                      /* Subtract remainder to dividend */
-                     t= src1L + src2L;
+                     t = src1L + src2L;
 
                      /* Shift quotent left one bit */
                      destL <<= 1;
@@ -4178,18 +4283,13 @@ fpnorm:
                          src1L = t;
                          destL |= 1;
                      }
+                     src1L &= XMASKL;
                 }
 
-                /* Compute one final set to see if rounding needed */
-                /* Shift left by one */
-                src1L <<= 1;
-                /* Subtract remainder to dividend */
-                src1L += src2L;
-
-                /* If .5 off, round */
-                if ((src1L & MSIGNL) != 0) {
+                if (destL == 0x01ffffffffffffff) {
                     destL++;
                 }
+                destL >>= 1;
                 goto fpnorm;
 
                   /* Decimal operations */
@@ -4788,20 +4888,23 @@ int dec_load(uint8 *data, uint32 addr, int len, int *sign)
         if (ReadByte(addr, &temp))
             return 1;
         t = temp & 0xf;
-        if (j != 0 && t > 0x9)
+        if (j != 0 && t > 0x9) {
             err = 1;
+        }
         data[j++] = t;
         t = (temp >> 4) & 0xf;
-        if (t > 0x9)
+        if (t > 0x9) {
             err = 1;
+        }
         data[j++] = t;
         addr--;
     }
     /* Check if sign valid and return it */
     if (data[0] == 0xB || data[0] == 0xD)
         *sign = 1;
-    else if (data[0] < 0xA)
+    else if (data[0] < 0xA) {
         err = 1;
+}
     else
         *sign = 0;
     if (err) {
@@ -4906,7 +5009,8 @@ dec_srp(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
     cc = 0;
     if (!zero)  /* Really not zero */
        cc = (sa)? 1: 2;
-    dec_store(a, addr1, (int)len1, sa);
+    if (dec_store(a, addr1, (int)len1, sa))
+        return;
     if (ov)
         cc = 3;
     if (ov && pmsk & DECOVR)
@@ -5004,7 +5108,8 @@ dec_add(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
                }
            }
         }
-        dec_store(a, addr1, (int)len1, sa);
+        if (dec_store(a, addr1, (int)len1, sa))
+            return;
         if (ov)
             cc = 3;
         if (ov && pmsk & DECOVR)
@@ -5036,6 +5141,33 @@ dec_mul(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
     }
     if (dec_load(b, addr2, (int)len2, &sb))
         return;
+    /* Check if we can store the result back in place */
+    if (st_key != 0 && (cpu_unit[0].flags & FEAT_PROT) != 0) {
+        uint8      k;
+        uint32     pa;
+
+        /* Validate address */
+        if (TransAddr(addr1 + len, &pa))
+            return;
+
+        k = key[pa >> 11];
+        if ((k & 0xf0) != 0 && (k & 0xf0) != st_key) {
+            storepsw(OPPSW, IRC_PROT);
+            return;
+        }
+        /* Check if start on another page */
+        if (((addr1 & 0x3ff) + len) > 0x3ff) {
+            /* Validate address */
+            if (TransAddr(addr1, &pa))
+                return;
+
+            k = key[pa >> 11];
+            if ((k & 0xf0) != 0 && (k & 0xf0) != st_key) {
+                storepsw(OPPSW, IRC_PROT);
+                return;
+            }
+        }
+    }
     if (dec_load(a, addr1, (int)len1, &sa))
         return;
     len = (int)len1;
@@ -5066,7 +5198,7 @@ dec_mul(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
             mul--;
         }
     }
-    dec_store(a, addr1, len, sa);
+    (void)dec_store(a, addr1, len, sa);
 }
 
 void
@@ -5090,6 +5222,33 @@ dec_div(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
     }
     if (dec_load(b, addr2, (int)len2, &sb))
        return;
+    /* Check if we can store the result back in place */
+    if (st_key != 0 && (cpu_unit[0].flags & FEAT_PROT) != 0) {
+        uint8      k;
+        uint32     pa;
+
+        /* Validate address */
+        if (TransAddr(addr1 + len, &pa))
+            return;
+
+        k = key[pa >> 11];
+        if ((k & 0xf0) != 0 && (k & 0xf0) != st_key) {
+            storepsw(OPPSW, IRC_PROT);
+            return;
+        }
+        /* Check if start on another page */
+        if (((addr1 & 0x3ff) + len) > 0x3ff) {
+            /* Validate address */
+            if (TransAddr(addr1, &pa))
+                return;
+
+            k = key[pa >> 11];
+            if ((k & 0xf0) != 0 && (k & 0xf0) != st_key) {
+                storepsw(OPPSW, IRC_PROT);
+                return;
+            }
+        }
+    }
     if (dec_load(a, addr1, (int)len1, &sa))
        return;
     memset(c, 0, 32);
@@ -5143,7 +5302,7 @@ dec_div(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
     } else {
         a[len2] = ((flags & ASCII)? 0xa : 0xc);
     }
-    dec_store(a, addr1, len, sa);
+    (void)dec_store(a, addr1, len, sa);
 }
 
 
@@ -5154,6 +5313,8 @@ cpu_reset (DEVICE *dptr)
 {
     int     i;
 
+    /* Make sure devices are mapped correctly */
+    chan_set_devs();
     sim_vm_fprint_stopped = &cpu_fprint_stopped;
     /* Create memory array if it does not exist. */
     if (M == NULL) {                        /* first time init? */
@@ -5197,8 +5358,8 @@ cpu_reset (DEVICE *dptr)
     }
 
     if (cpu_unit[0].flags & (FEAT_370|FEAT_TIMER)) {
-       sim_rtcn_init_unit (&cpu_unit[0], cpu_unit[0].wait, TMR_RTC);
-       sim_activate(&cpu_unit[0], 10000);
+       sim_rtcn_init_unit (&cpu_unit[0], 1000, TMR_RTC);
+       sim_activate(&cpu_unit[0], 100);
     }
     idle_stop_tm0 = 0;
     return SCPE_OK;
@@ -5211,11 +5372,11 @@ rtc_srv(UNIT * uptr)
 {
     (void)sim_rtcn_calb (rtc_tps, TMR_RTC);
     sim_activate_after(uptr, 1000000/rtc_tps);
+    M[0x50>>2] -= 0x100;
     if ((M[0x50>>2] & 0xfffff00) == 0)  {
         sim_debug(DEBUG_INST, &cpu_dev, "TIMER IRQ %08x\n", M[0x50>>2]);
         interval_irq = 1;
     }
-    M[0x50>>2] -= 0x100;
     key[0] |= 0x6;
     sim_debug(DEBUG_INST, &cpu_dev, "TIMER = %08x\n", M[0x50>>2]);
     /* Time of day clock and timer on IBM 370 */

@@ -107,7 +107,8 @@ typedef struct dib {
 #define FEAT_EFP     (1 << (UNIT_V_UF + 6))     /* Extended floating point */
 #define FEAT_370     (1 << (UNIT_V_UF + 7))     /* Is a 370 */
 #define FEAT_VMA     (1 << (UNIT_V_UF + 8))     /* Enable VM assists */
-#define EXT_IRQ      (1 << (UNIT_V_UF + 9))     /* External interrupt */
+#define FEAT_FPROT   (1 << (UNIT_V_UF + 9))     /* Fetch protection */
+#define EXT_IRQ      (1 << (UNIT_V_UF + 10))    /* External interrupt */
 
 /* low addresses */
 #define IPSW              0x00        /* IPSW */
@@ -358,7 +359,7 @@ int haltio(uint16 addr);
 int testchan(uint16 channel);
 uint16 scan_chan(uint16 mask, int irq_en);
 t_stat chan_boot(uint16 addr, DEVICE *dptr);
-t_stat chan_set_devs();
+void chan_set_devs();
 t_stat set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc);
 t_stat show_dev_addr(FILE * st, UNIT * uptr, int32 v, CONST void *desc);
 extern uint16 loading;

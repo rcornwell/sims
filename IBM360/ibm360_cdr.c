@@ -104,7 +104,7 @@ UNIT                cdr_unit[] = {
 
 MTAB                cdr_mod[] = {
     {MTAB_XTD | MTAB_VUN, 0, "FORMAT", "FORMAT",
-               &sim_card_set_fmt, &sim_card_show_fmt, NULL, 
+               &sim_card_set_fmt, &sim_card_show_fmt, NULL,
                "Set defualt format for reading cards in"},
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "DEV", "DEV", &set_dev_addr,
         &show_dev_addr, NULL, "Set device address"},

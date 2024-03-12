@@ -154,7 +154,7 @@ UNIT                chan_unit[] = {
 DEVICE              chan_dev = {
     "CH", chan_unit, NULL, chan_mod,
     MAX_CHAN, 8, 15, 1, 8, 8,
-    NULL, NULL, &chan_reset, NULL, NULL, NULL,
+    NULL, NULL, NULL /*&chan_reset*/, NULL, NULL, NULL,
     NULL, DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &chan_help, NULL, NULL, &chan_description
 };
@@ -490,7 +490,7 @@ start_cmd:
          if (chan->chan_status & STATUS_CEND) {
              chan->ccw_cmd = 0;
              chan->ccw_flags |= FLAG_SLI;  /* Force SLI for immediate command */
-             sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end(%x load) %x %04x end\n", 
+             sim_debug(DEBUG_DETAIL, &cpu_dev, "chan_end(%x load) %x %04x end\n",
                           chan->daddr, chan->chan_status, chan->ccw_flags);
              if (chan->chan_status & (STATUS_DEND)) {
                  irq_pend = 1;
@@ -856,10 +856,11 @@ startio(uint16 addr) {
         return 2;
     }
 
+    if (dev_status[addr] == SNS_DEVEND || 
+        dev_status[addr] == (SNS_DEVEND|SNS_CHNEND))
+        dev_status[addr] = 0;
     /* Check for any pending status for this device */
     if (dev_status[addr] != 0) {
-        if (dev_status[addr] & SNS_DEVEND)
-            dev_status[addr] |= SNS_BSY;
         M[0x44 >> 2] = (((uint32)dev_status[addr]) << 24);
         M[0x40 >> 2] = 0;
         key[0] |= 0x6;
@@ -921,6 +922,18 @@ startio(uint16 addr) {
         dev_status[addr] = 0;
         chan->daddr = NO_DEV;
         chan->dev = NULL;
+        sim_debug(DEBUG_EXP, &cpu_dev, "Channel store csw  %03x %08x\n",
+                   addr, M[0x44 >> 2]);
+        return 1;
+    }
+
+    /* If immediate command and not command chaining */
+    if ((chan->chan_status & (STATUS_CEND)) != 0
+       && (chan->ccw_flags & FLAG_CC) == 0) {
+        M[0x40 >> 2] = 0;
+        M[0x44 >> 2] = ((uint32)chan->chan_status<<16);
+        key[0] |= 0x6;
+        chan->chan_status = 0;
         sim_debug(DEBUG_EXP, &cpu_dev, "Channel store csw  %03x %08x\n",
                    addr, M[0x44 >> 2]);
         return 1;
@@ -1167,12 +1180,6 @@ int testchan(uint16 channel) {
         return 2;
     }
 
-    /* If channel has pending status, return 1 */
-    if (chan->chan_status != 0) {
-        sim_debug(DEBUG_CMD, &cpu_dev, "TCH CC %x cc=1, error\n", channel);
-        return 1;
-    }
-
     /* Otherwise return 0. */
     sim_debug(DEBUG_CMD, &cpu_dev, "TCH CC %x cc=0, ok\n", channel);
     return 0;
@@ -1192,7 +1199,6 @@ t_stat chan_boot(uint16 addr, DEVICE *dptyr) {
 
     for (i = 0; i < (MAX_CHAN * 256); i++)
         dev_status[i] = 0;
-    chan_set_devs();
     dev = find_device(addr);
     chan = find_subchan(addr);
     if (dev == NULL || chan == NULL) {
@@ -1307,8 +1313,7 @@ scan_chan(uint16 mask, int irq_en) {
                      /* Disconnect from device */
                      sim_debug(DEBUG_EXP, &cpu_dev, "Scan(%x %x %x %x %x) end\n", i,
                               chan->daddr, chan->chan_status, imask, mask);
-                     if (//(chan->chan_status & STATUS_CEND) != 0 &&
-                          ((imask & mask) != 0 || loading != 0)) {
+                     if (((imask & mask) != 0 || loading != 0)) {
                         pend = chan->daddr;
                         break;
                      }
@@ -1398,7 +1403,7 @@ chan_reset(DEVICE * dptr)
 /*
  * Scan all devices and create the device mapping.
  */
-t_stat
+void
 chan_set_devs()
 {
     unsigned          i, j;
@@ -1423,19 +1428,20 @@ chan_set_devs()
              n = UNIT_G_SCHAN(uptr->flags)+1;
          if ((uptr->flags & UNIT_M_CTYPE) == UNIT_BMUX)
              n = 32;
-         /* If no device array, create one */
-         if (uptr->up8 == NULL)
-             uptr->up8 = calloc(256, sizeof(struct _dev));
-         if (uptr->up7 == NULL || (uint32)uptr->schans != n) {
-             if (uptr->up7 != NULL)
-                free(uptr->up7);
-             uptr->up7 = calloc(n, sizeof(struct _chanctl));
-             for (j = 0; j < n; j++) {
-                 struct _chanctl *chan = &(chan_ctl[j]);
-                 chan->daddr = NO_DEV;
-             }
+         /* Create device table */
+         if (uptr->up8 != NULL)
+             free(uptr->up8);
+         uptr->up8 = calloc(256, sizeof(struct _dev));
+         /* Create subchannel controls */
+         if (uptr->up7 != NULL)
+            free(uptr->up7);
+         uptr->up7 = calloc(n, sizeof(struct _chanctl));
+         for (j = 0; j < n; j++) {
+             struct _chanctl *chan = &(chan_ctl[j]);
+             chan->daddr = NO_DEV;
          }
          uptr->schans = n;
+         /* Initialize channel device address table to empty */
          for (j = 0; j < 256; j++) {
              struct _dev  *dev = &(dev_tab[j]);
              dev->dibp = NULL;
@@ -1473,7 +1479,7 @@ chan_set_devs()
 
         }
     }
-    return SCPE_OK;
+    return;
 }
 
 /* Sets the number of subchannels for a channel */

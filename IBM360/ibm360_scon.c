@@ -100,7 +100,7 @@ const char         *scon_description(DEVICE *d);
 UNIT                scon_unit[] = {
     {UDATA(scon_srv,  UNIT_ATTABLE|UNIT_DISABLE|UNIT_DIS|UNIT_IDLE, 0), 0, UNIT_ADDR(0x09)},       /* B */
     {UDATA(scon_srv,  UNIT_ATTABLE|UNIT_DISABLE|UNIT_DIS|UNIT_IDLE, 0), 0, UNIT_ADDR(0x2F)},       /* C */
-    {UDATA(scon_srvo, UNIT_DISABLE|UNIT_DIS|UNIT_IDLE, 0) }, 
+    {UDATA(scon_srvo, UNIT_DISABLE|UNIT_DIS|UNIT_IDLE, 0) },
 };
 
 MTAB                scon_mod[] = {
@@ -319,7 +319,7 @@ scon_srv(UNIT *uptr) {
                      }
                      break;
              }
-        
+
              /* Grab next character and send it to CPU */
              data = scon_data[u].ibuff[uptr->IPTR++];
              sim_debug(DEBUG_CMD, &scon_dev, "%d: rd %02x\n", u, data);
