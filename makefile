@@ -1502,7 +1502,7 @@ SEL32 = ${SEL32D}/sel32_cpu.c ${SEL32D}/sel32_sys.c ${SEL32D}/sel32_chan.c \
 	${SEL32D}/sel32_scfi.c ${SEL32D}/sel32_fltpt.c ${SEL32D}/sel32_disk.c \
 	${SEL32D}/sel32_hsdp.c ${SEL32D}/sel32_mfp.c ${SEL32D}/sel32_scsi.c \
 	${SEL32D}/sel32_ec.c ${SEL32D}/sel32_ipu.c
-SEL32_OPT = -I $(SEL32D) -DSEL32  ${NETWORK_OPT}
+SEL32_OPT = -I ${SEL32D} -DSEL32  ${NETWORK_OPT}
 
 ICL1900D = ${SIMHD}/ICL1900
 ICL1900 = ${ICL1900D}/icl1900_cpu.c ${ICL1900D}/icl1900_sys.c \
@@ -1511,7 +1511,7 @@ ICL1900 = ${ICL1900D}/icl1900_cpu.c ${ICL1900D}/icl1900_sys.c \
 	${ICL1900D}/icl1900_cr.c ${ICL1900D}/icl1900_cp.c \
 	${ICL1900D}/icl1900_lp.c ${ICL1900D}/icl1900_mta.c \
 	${ICL1900D}/icl1900_mt.c ${ICL1900D}/icl1900_eds8.c
-ICL1900_OPT = -I $(ICL1900D) -DICL1900 -DUSE_SIM_CARD
+ICL1900_OPT = -I ${ICL1900D} -DICL1900 -DUSE_SIM_CARD
 
 IBM360D = ${SIMHD}/IBM360
 IBM360 = ${IBM360D}/ibm360_cpu.c ${IBM360D}/ibm360_sys.c ${IBM360D}/ibm360_con.c \
@@ -1519,7 +1519,7 @@ IBM360 = ${IBM360D}/ibm360_cpu.c ${IBM360D}/ibm360_sys.c ${IBM360D}/ibm360_con.c
 	${IBM360D}/ibm360_mt.c ${IBM360D}/ibm360_lpr.c ${IBM360D}/ibm360_dasd.c \
 	${IBM360D}/ibm360_com.c ${IBM360D}/ibm360_scom.c ${IBM360D}/ibm360_scon.c \
     ${IBM360D}/ibm360_vma.c
-IBM360_OPT = -I $(IBM360D) -DIBM360 -DUSE_INT64 -DUSE_SIM_CARD -DDONT_USE_AIO_INTRINSICS
+IBM360_OPT = -I ${IBM360D} -DIBM360 -DUSE_INT64 -DUSE_SIM_CARD 
 
 PDP6D = ${SIMHD}/PDP10
 ifneq (,${DISPLAY_OPT})
@@ -1557,7 +1557,7 @@ KA10 = ${KA10D}/kx10_cpu.c ${KA10D}/kx10_sys.c ${KA10D}/kx10_df.c \
 	${KA10D}/kx10_rh.c ${KA10D}/kx10_imp.c ${KA10D}/ka10_tk10.c \
 	${KA10D}/ka10_mty.c ${KA10D}/ka10_imx.c ${KA10D}/ka10_ch10.c \
 	${KA10D}/ka10_stk.c ${KA10D}/ka10_ten11.c ${KA10D}/ka10_auxcpu.c \
-	$(KA10D)/ka10_pmp.c ${KA10D}/ka10_dkb.c ${KA10D}/pdp6_dct.c \
+	${KA10D}/ka10_pmp.c ${KA10D}/ka10_dkb.c ${KA10D}/pdp6_dct.c \
 	${KA10D}/pdp6_dtc.c ${KA10D}/pdp6_mtc.c ${KA10D}/pdp6_dsk.c \
 	${KA10D}/pdp6_dcs.c ${KA10D}/ka10_dpk.c ${KA10D}/kx10_dpy.c \
 	${PDP10D}/ka10_ai.c ${KA10D}/ka10_iii.c ${KA10D}/kx10_disk.c \
@@ -1609,7 +1609,7 @@ KL10 = ${KL10D}/kx10_cpu.c ${KL10D}/kx10_sys.c ${KL10D}/kx10_df.c \
 	${KL10D}/kx10_imp.c ${KL10D}/kl10_fe.c ${KL10D}/ka10_pd.c \
 	${KL10D}/ka10_ch10.c ${KL10D}/kl10_nia.c ${KL10D}/kx10_disk.c \
     ${KL10D}/kl10_dn.c
-KL10_OPT = -DKL=1 -DUSE_INT64 -I $(KL10D) -DUSE_SIM_CARD ${NETWORK_OPT} 
+KL10_OPT = -DKL=1 -DUSE_INT64 -I ${KL10D} -DUSE_SIM_CARD ${NETWORK_OPT} 
 ifneq (${PIDP10},)
 KS10_OPT += -DPIDP10=1
 KS10 += ${KS10D}/ka10_pipanel.c
@@ -1621,7 +1621,7 @@ KS10 = ${KS10D}/kx10_cpu.c ${KS10D}/kx10_sys.c ${KS10D}/kx10_disk.c \
 	${KS10D}/kx10_rp.c ${KS10D}/kx10_tu.c ${KS10D}/ks10_dz.c \
     ${KS10D}/ks10_tcu.c ${KS10D}/ks10_lp.c ${KS10D}/ks10_ch11.c \
     ${KS10D}/ks10_kmc.c ${KS10D}/ks10_dup.c ${KS10D}/kx10_imp.c
-KS10_OPT = -DKS=1 -DUSE_INT64 -I $(KS10D) ${NETWORK_OPT} 
+KS10_OPT = -DKS=1 -DUSE_INT64 -I ${KS10D} ${NETWORK_OPT} 
 ifneq (${PIDP10},)
 KS10_OPT += -DPIDP10=1
 KS10 += ${KS10D}/ka10_pipanel.c
@@ -1644,31 +1644,31 @@ else
 	if exist BIN rmdir /s /q BIN
 endif
 
-ibm360: $(BIN)ibm360$(EXE)
+ibm360: ${BIN}ibm360${EXE}
 
 ${BIN}ibm360${EXE}: ${IBM360} ${SIM}
 	${MKDIRBIN}
-	${CC} ${IBM360} ${SIM} ${IBM360_OPT} $(CC_OUTSPEC) ${LDFLAGS}
+	${CC} ${IBM360} ${SIM} ${IBM360_OPT} ${CC_OUTSPEC} ${LDFLAGS}
 ifneq (,$(call find_test,${IBM360D},ibm360))
-	$@ $(call find_test,${IBM360D},ibm360) $(TEST_ARG)
+	$@ $(call find_test,${IBM360D},ibm360) ${TEST_ARG}
 endif
 
-icl1900: $(BIN)icl1900$(EXE)
+icl1900: ${BIN}icl1900${EXE}
 
 ${BIN}icl1900${EXE}: ${ICL1900} ${SIM}
 	${MKDIRBIN}
-	${CC} ${ICL1900} ${SIM} ${ICL1900_OPT} $(CC_OUTSPEC) ${LDFLAGS}
+	${CC} ${ICL1900} ${SIM} ${ICL1900_OPT} ${CC_OUTSPEC} ${LDFLAGS}
 ifneq (,$(call find_test,${ICL1900D},icl1900))
-	$@ $(call find_test,${ICL1900D},icl1900) $(TEST_ARG)
+	$@ $(call find_test,${ICL1900D},icl1900) ${TEST_ARG}
 endif
 
-sel32: $(BIN)sel32$(EXE)
+sel32: ${BIN}sel32${EXE}
 
 ${BIN}sel32${EXE}: ${SEL32} ${SIM}
 	${MKDIRBIN}
-	${CC} ${SEL32} ${SIM} ${SEL32_OPT} $(CC_OUTSPEC) ${LDFLAGS}
+	${CC} ${SEL32} ${SIM} ${SEL32_OPT} ${CC_OUTSPEC} ${LDFLAGS}
 ifneq (,$(call find_test,${SEL32D},sel32))
-	$@ $(call find_test,${SEL32D},sel32) $(TEST_ARG)
+	$@ $(call find_test,${SEL32D},sel32) ${TEST_ARG}
 endif
 
 b5500 : ${BIN}b5500${EXE}
