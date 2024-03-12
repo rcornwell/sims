@@ -246,7 +246,7 @@ t_stat ddc_svc (UNIT *uptr)
    uint64        word;
    DEVICE       *dptr;
    UNIT         *duptr;
-   t_stat        err;
+
    dptr = &ddc_dev;
    sec = (ddc_cmd[ddc_cmdptr] & DDC_SEC) >> 2;
    trk = (ddc_cmd[ddc_cmdptr] & DDC_TRK) >> 7;
@@ -275,7 +275,7 @@ t_stat ddc_svc (UNIT *uptr)
    if (uptr->POS == 0) {
        int da;
        da = ((trk * 13) + sec) * DDC10_WDS;
-       err = sim_fseek(duptr->fileref, da * sizeof(uint64), SEEK_SET);
+       (void)sim_fseek(duptr->fileref, da * sizeof(uint64), SEEK_SET);
        wc = sim_fread (&ddc_buf[0], sizeof(uint64),
                     DDC10_WDS, duptr->fileref);
        sim_debug(DEBUG_DETAIL, dptr, "DDC %d Read %d %d %d %d %d %o\n",
@@ -305,7 +305,7 @@ done:
        if (func == 2) {
           int da;
           da = ((trk * 13) + sec) * DDC10_WDS;
-          err = sim_fseek(duptr->fileref, da * sizeof(uint64), SEEK_SET);
+          (void)sim_fseek(duptr->fileref, da * sizeof(uint64), SEEK_SET);
           wc = sim_fwrite (&ddc_buf[0], sizeof(uint64),
                        DDC10_WDS, duptr->fileref);
           sim_debug(DEBUG_DETAIL, dptr, "DDC %d Write %d %d %d %d %d %o\n",
