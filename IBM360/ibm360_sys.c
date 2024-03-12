@@ -27,7 +27,7 @@
 
 extern DEVICE cpu_dev;
 extern REG cpu_reg[];
-extern uint32 M[MAXMEMSIZE];
+extern uint32 *M;
 
 /* SCP data structures and interface routines
 
@@ -206,11 +206,212 @@ const uint8 ebcdic_to_ascii[256] = {
 
 
 
+/* ESID entries from modules */
+struct _esid {
+   uint8     name[8];
+   uint32    addr; /* Address */
+   uint8     flag;
+} ESID[256];
+
+/* Relocation information for external symbols */
+struct _rld {
+   uint16    rel;  /* Points to ESID base address */
+   uint16    pos;  /* Points to ESID of address */
+   uint32    addr; /* Address */
+   uint8     flag;
+} rld[256];
+
+/* Current symbol numbers for current module */
+uint16 esid_dir[256];
+
+static void
+relocate(uint32 addr, uint8 flag, uint16 esid)
+{
+    uint32    data;
+    uint32    temp;
+    uint32    mask;
+    int       cnt;
+    int       i;
+    int       offset;
+
+    /* Read out data at addr */
+    cnt = ((flag >> 2) & 3) + 1;
+    data = 0;
+    for (i = 0; i < cnt; i++) {
+        offset = 8 * (3 - ((addr + i) & 0x3));
+        mask = 0xff << offset;
+        if ((addr + i) > MEMSIZE) {
+            printf("Mem size %06x\n\r", addr + i);
+        } else {
+            temp = ((M[(addr + i) >> 2] & mask) >> offset);
+            data |= temp << (8 * (3 - i));
+        }
+    }
+
+    /* Do relocation */
+    if (flag & 2) {
+       data -= ESID[esid].addr;
+    } else {
+       data += ESID[esid].addr;
+    }
+
+    /* Store value back */
+    for (i = 0; i < cnt; i++) {
+        offset = 8 * (3 - ((addr + i) & 0x3));
+        mask = 0xff << offset;
+        temp = (data >> (8 * (3 - i))) << offset;
+        if ((addr + i) <= MEMSIZE) {
+            M[(addr + i)>>2] &= ~mask;
+            M[(addr + i)>>2] |= temp;
+        }
+    }
+}
+
 /* Load a card image file into memory.  */
 
 t_stat sim_load (FILE *fileref, CONST char *cptr, CONST char *fnam, int flag)
 {
-    return SCPE_NOFNC;
+    int       rel = 0;
+    uint8_t   buffer[80];
+    int       done = 0;
+    uint32    addr;
+    uint32    data;
+    uint32    mask;
+    int       offset;
+    uint16    cnt;
+    int       i, j, k;
+    uint16    esid;
+
+    if (sim_switches & SWMASK ('R'))     /* Relocate deck */
+        rel = 1;
+
+    for(i = 0; i < 256; i++) {
+        ESID[i].name[0] = 0;
+        rld[i].pos = 0;
+        esid_dir[i] = 0;
+    }
+
+    do {
+       if ((i = sim_fread(&buffer, 1, sizeof(buffer), fileref)) != sizeof(buffer)) {
+           done = 1;
+           break;
+       }
+       if (buffer[0] == 0x02) {
+           /* Check if ESD card */
+           if (buffer[1] == 0xc5 && buffer[2] == 0xe2 && buffer[3] == 0xc4) {
+               cnt = (buffer[10] << 8) | buffer[11];
+               if (buffer[14] != 0x40 && buffer[15] != 0x40) {
+                   esid = (buffer[14] << 8) | buffer[15];
+               }
+               for (i = 0; i < cnt; i+=16) {
+                   addr = (buffer[i+25] << 16) | (buffer[i+26] << 8) | buffer[i+27];
+                   for (k = 1; k < 255; k++) {
+                      int ok;
+                      if (ESID[k].name[0] == 0) {
+                          for (j = 0; j < 8; j++) {
+                              ESID[k].name[j] = buffer[16 + i + j];
+                          }
+                          ESID[k].addr = addr;
+                          ESID[k].flag = buffer[i+24];
+                          esid_dir[esid] = k;
+                          break;
+                      }
+                      ok = 1;
+                      for (j = 0; j < 8; j++) {
+                          if (ESID[k].name[j] != buffer[16 + i + j]) {
+                             ok = 0;
+                             break;
+                          }
+                      }
+                      if (ok) {
+                          if (buffer[i+24] <= 1) {
+                              ESID[k].addr = addr;
+                              /* relocate symbols */
+                              for (j = 0; j < 256; j++) {
+                                  if (rld[j].pos == k) {
+                                      /* Relocate address set pos = 0 */
+                                      relocate(rld[j].addr, rld[j].flag, k);
+                                      rld[j].pos = 0;
+                                  }
+                              }
+                          }
+                          esid_dir[esid] = k;
+                          break;
+                      }
+                   }
+                   esid++;
+               }
+           }
+           /* Check if TXT card */
+           if (buffer[1] == 0xe3 && buffer[2] == 0xe7 && buffer[3] == 0xe3) {
+               addr = (buffer[5] << 16) | (buffer[6] << 8) | buffer[7];
+               cnt = (buffer[10] << 8) | buffer[11];
+               esid = (buffer[14] << 8) | buffer[15];
+               for (i = 0; i < cnt; i++) {
+                   offset = 8 * (3 - (addr & 0x3));
+                   mask = 0xff << offset;
+                   data = (uint32_t)buffer[16 + i] << offset;
+                   if (addr > MEMSIZE) {
+                       printf("Mem size %06x\n\r", addr);
+                   }
+                   M[addr>>2] &= ~mask;
+                   M[addr>>2] |= data;
+                   addr++;
+               }
+           }
+           /* Check if RLD card */
+           if (buffer[1] == 0xd9 && buffer[2] == 0xd3 && buffer[3] == 0xc4) {
+               uint8  flg = 0;
+               uint16 rel = 0;
+               uint16 pos = 0;
+
+               cnt = (buffer[10] << 8) | buffer[11];
+               for (i = 0; i < cnt;) {
+                   if ((flg & 1) == 0) {
+                       pos = (buffer[16+i] << 8) | buffer[17+i];
+                       rel = (buffer[18+i] << 8) | buffer[19+i];
+                       i += 4;
+                   }
+                   flg = buffer[16+i];
+                   addr = (buffer[17+i] << 16) | (buffer[18+i] << 8) |
+                                                            buffer[19+i];
+                   if (pos != 1) {
+                       if (ESID[esid_dir[pos]].flag <= 1) {
+                           /* Relocate address by addr amount */
+                           relocate(addr, flg, esid_dir[pos]);
+                       } else {
+                           /* Insert into rld */
+                           for (k = 1; k < 255; k++) {
+                               if (rld[k].pos == 0) {
+                                   rld[k].rel = esid_dir[rel];
+                                   rld[k].pos = esid_dir[pos];
+                                   rld[k].addr = addr;
+                                   rld[k].flag = flg;
+                                   break;
+                                }
+                            }
+                       }
+                   }
+                   i += 4;
+               }
+           }
+           /* Check if END card */
+           if (buffer[1] == 0xc5 && buffer[2] == 0xd5 && buffer[3] == 0xc4) {
+               esid = (buffer[14] << 8) | buffer[15];
+               addr = (buffer[29] << 16) | (buffer[30] << 8) | buffer[31];
+           }
+       }
+    } while (!done);
+    /* Print symbol table */
+    for (k = 1; k < 255; k++) {
+       if (ESID[k].name[0] != 0) {
+           for (j = 0; j < 8; j++) {
+              printf("%c", ebcdic_to_ascii[ESID[k].name[j]]);
+           }
+           printf(" %02x %06x\n", ESID[k].flag, ESID[k].addr);
+       }
+    }
+    return SCPE_OK;
 }
 
 /* Symbol tables */
