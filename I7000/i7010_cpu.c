@@ -409,10 +409,6 @@ void WriteP(uint32 MA, uint8 v) {
       if (fault)
         return;
 
-
-      if (MA == 275) {
-          int x = v+1;
-      }
       if (reloc && (MA & BBIT) == 0 && MAR > 100) {
           if (low_addr > 0) {
               MAR += low_addr;
