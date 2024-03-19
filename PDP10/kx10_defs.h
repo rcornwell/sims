@@ -857,7 +857,7 @@ extern uint32 dd_keyboard_line (void *);
 #endif
 
 #if PIDP10
-void pi_panel_start();
+t_stat pi_panel_start();
 void pi_panel_stop();
 #endif
 

@@ -4484,13 +4484,13 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
 #if PIDP10
     if (examine_sw) {   /* Examine memory switch */
         AB = AS;
-        (void)Mem_read(1, 0, 0, 0);
+        (void)Mem_read_nopage();
         examine_sw = 0;
     }
     if (deposit_sw) {   /* Deposit memory switch */
         AB = AS;
         MB = SW;
-        (void)Mem_write(1, 0);
+        (void)Mem_write_nopage();
         deposit_sw = 0;
     }
     if (xct_sw) {    /* Handle Front panel xct switch */
@@ -4505,6 +4505,7 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
     if (stop_sw) {    /* Stop switch set */
         RUN = 0;
         stop_sw = 0;
+        reason = STOP_HALT;
     }
     if (sing_inst_sw) {  /* Handle Front panel single instruction */
         instr_count = 1;
@@ -12261,6 +12262,7 @@ last:
         if (QITS)
             load_quantum();
 #endif
+        RUN = 0;
         return SCPE_STEP;
     }
 }
@@ -13573,13 +13575,17 @@ static const char *pdp10_clock_precalibrate_commands[] = {
 
 t_stat cpu_reset (DEVICE *dptr)
 {
-    int     i;
-    static  int  initialized = 0;
+    int          i;
+    t_stat       r = SCPE_OK;
+    static int   initialized = 0;
 
     if (!initialized) {
          initialized = 1;
 #if PIDP10
-         pi_panel_start();
+         r = pi_panel_start();
+         if (r != SCPE_OK) {
+             return r;
+         }
 #endif
     }
     sim_debug(DEBUG_CONO, dptr, "CPU reset\n");
@@ -13654,7 +13660,7 @@ t_stat cpu_reset (DEVICE *dptr)
 #endif
     sim_vm_interval_units = "cycles";
     sim_vm_step_unit = "instruction";
-    return SCPE_OK;
+    return r;
 }
 
 /* Memory examine */
