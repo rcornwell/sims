@@ -280,7 +280,7 @@ t_stat sim_load (FILE *fileref, CONST char *cptr, CONST char *fnam, int flag)
     int       offset;
     uint16    cnt;
     int       i, j, k;
-    uint16    esid;
+    uint16    esid = 0;
 
     if (sim_switches & SWMASK ('R'))     /* Relocate deck */
         rel = 1;

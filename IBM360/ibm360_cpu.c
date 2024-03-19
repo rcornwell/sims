@@ -713,7 +713,6 @@ ReadFull(uint32 addr, uint32 *data)
      /* Handle unaligned access */
      if (offset != 0) {
          uint32     temp;
-         uint8      k;
 
          temp = pa + 4;
          if ((temp & 0x7FC) == 0) {
@@ -5147,7 +5146,7 @@ dec_mul(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
         uint32     pa;
 
         /* Validate address */
-        if (TransAddr(addr1 + len, &pa))
+        if (TransAddr(addr1 + len1, &pa))
             return;
 
         k = key[pa >> 11];
@@ -5156,7 +5155,7 @@ dec_mul(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
             return;
         }
         /* Check if start on another page */
-        if (((addr1 & 0x3ff) + len) > 0x3ff) {
+        if (((addr1 & 0x3ff) + len1) > 0x3ff) {
             /* Validate address */
             if (TransAddr(addr1, &pa))
                 return;
@@ -5228,7 +5227,7 @@ dec_div(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
         uint32     pa;
 
         /* Validate address */
-        if (TransAddr(addr1 + len, &pa))
+        if (TransAddr(addr1 + len1, &pa))
             return;
 
         k = key[pa >> 11];
@@ -5237,7 +5236,7 @@ dec_div(int op, uint32 addr1, uint8 len1, uint32 addr2, uint8 len2)
             return;
         }
         /* Check if start on another page */
-        if (((addr1 & 0x3ff) + len) > 0x3ff) {
+        if (((addr1 & 0x3ff) + len1) > 0x3ff) {
             /* Validate address */
             if (TransAddr(addr1, &pa))
                 return;
