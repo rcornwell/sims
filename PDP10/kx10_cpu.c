@@ -4498,8 +4498,8 @@ if ((reason = build_dev_tab ()) != SCPE_OK)            /* build, chk dib_tab */
         xct_flag = 0;
         uuo_cycle = 1;
         f_pc_inh = 1;
+        f_load_pc = 0;
         MB = SW;
-        xct_sw = 0;
         goto no_fetch;
     }
     if (stop_sw) {    /* Stop switch set */
@@ -4905,6 +4905,11 @@ st_pi:
     nrf = 0;
     fxu_hold_set = 0;
     modify = 0;
+#if PIDP10
+    if (xct_sw) {    /* Handle Front panel xct switch */
+        xct_sw = 0;
+    } else 
+#endif
     f_pc_inh = 0;
 #if KL | KS
     if (extend) {
@@ -12262,7 +12267,7 @@ last:
         if (QITS)
             load_quantum();
 #endif
-        RUN = 0;
+	RUN = 0;
         return SCPE_STEP;
     }
 }
@@ -13499,7 +13504,11 @@ rtc_srv(UNIT * uptr)
     tmxr_poll = t/2;
 #if PDP6 | KA | KI
     clk_flg = 1;
+#if PIDP10
+    if (clk_en && !sing_inst_sw) {
+#else
     if (clk_en) {
+#endif
         sim_debug(DEBUG_CONO, &cpu_dev, "CONO timmer\n");
         set_interrupt(4, clk_irq);
     }

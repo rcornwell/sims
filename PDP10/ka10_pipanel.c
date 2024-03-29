@@ -278,7 +278,8 @@ read_sw()
                 adr_cond |= ((sw & ADR_BRK_SW) == 0) ? ADR_BREAK : 0;
                 nxm_stop = (sw & NXM_STOP) == 0;
 #endif         
-                sing_inst_sw = (sw & SING_INST) == 0;
+                sing_inst_sw = ((sw & SING_INST) == 0) ||
+                               ((sw & SING_CYCL) == 0);
                 /* PAR_STOP handle special features */
                 par_stop = (sw & PAR_STOP) == 0;
                 /* SING_CYCL no function yet */
@@ -483,12 +484,14 @@ void *blink(void *ptr)
        } else {
            AS = new_as;
        }
+
        /* Check repeat count */
        if (rep_count > 0 && --rep_count == 0) {
-           for (col = 0; col < 12; col++) {
+           for (col = 0; col < 10; col++) {
                switch_state[col].changed = switch_state[col].state;
            }
        }
+
        /* Process switch changes if running */
        if (RUN) {
             for (col = 0; col < 10; col++) {
@@ -536,6 +539,7 @@ void *blink(void *ptr)
                 }
             }
        }
+
        /* done with reading the switches, 
         * so start the next cycle of lighting up LEDs
         */
@@ -554,7 +558,7 @@ void *blink(void *ptr)
 }
 
 volatile int    input_wait;
-static char  *input_buffer;
+static char  *input_buffer = NULL;
 
 /*
  * Handler for EditLine package when line is complete.
@@ -565,6 +569,7 @@ read_line_handler(char *line)
     if (line != NULL) {
        input_buffer = line;
        input_wait = 0;
+       add_history(line);
     }
 }
 
@@ -579,6 +584,9 @@ vm_read(char *cptr, int32 sz, FILE *file)
     int            fd = fileno(file);  /* What to wait on */
     int            col;
 
+    if (input_buffer != NULL)
+        free(input_buffer);
+    rl_callback_handler_install(sim_prompt, (rl_vcpfunc_t*) &read_line_handler);
     input_wait = 1;
     input_buffer = NULL;
     while (input_wait) {
@@ -592,7 +600,7 @@ vm_read(char *cptr, int32 sz, FILE *file)
        } else {
            if (pwr_off) {
                if ((input_buffer = (char *)malloc(20)) != 0) {
-                   strcpy(input_buffer, "quit");
+                   strcpy(input_buffer, "quit\r");
                    stop_sw = 1;
                    pwr_off = 0;
                    input_wait = 0;
@@ -618,20 +626,19 @@ vm_read(char *cptr, int32 sz, FILE *file)
                             AB = AS;
                             MB = (AS < 020) ? FM[AS] : M[AS];
                             MI_flag = 0;
-			   printf("Examime %06o %012llo\r\n", AS, SW);
                             break;
 
                     case 2:      /* Execute function */
                             if ((input_buffer = (char *)malloc(20)) != 0) {
-                                strcpy(input_buffer, "step");
+                                strcpy(input_buffer, "step\r");
                                 xct_sw = 1;
                                 input_wait = 0;
                             }
                             break;
 
                     case 3:      /* Reset function */
-                            if ((input_buffer = (char *)malloc(10)) != 0) {
-                                strcpy(input_buffer, "reset all");
+                            if ((input_buffer = (char *)malloc(20)) != 0) {
+                                strcpy(input_buffer, "reset all\r");
                                 input_wait = 0;
                             }
                             break;
@@ -642,14 +649,14 @@ vm_read(char *cptr, int32 sz, FILE *file)
                     case 5:      /* Continue */
                             if ((input_buffer = (char *)malloc(10)) != 0) {
                                strcpy(input_buffer,
-                                        (sing_inst_sw) ? "step" : "cont");
+                                        (sing_inst_sw) ? "step\r" : "cont\r");
                                input_wait = 0;
                             }
                             break;
 
                     case 6:      /* Start */
                             if ((input_buffer = (char *)malloc(20)) != 0) {
-                                sprintf(input_buffer, "run %06o", AS);
+                                sprintf(input_buffer, "run %06o\r", AS);
                                 input_wait = 0;
                             }
                             break;
@@ -666,10 +673,10 @@ vm_read(char *cptr, int32 sz, FILE *file)
                                     if (dibp && !(dptr->flags & DEV_DIS) &&
                                         (dibp->dev_num == (rdrin_dev & 0774))) {
                                         if (dptr->numunits > 1)
-                                            sprintf(input_buffer, "boot %s0",
+                                            sprintf(input_buffer, "boot %s0\r",
                                                       dptr->name);
                                         else
-                                            sprintf(input_buffer, "boot %s",
+                                            sprintf(input_buffer, "boot %s\r",
                                                       dptr->name);
                                         input_wait = 0;
                                         break;
@@ -700,7 +707,6 @@ vm_read(char *cptr, int32 sz, FILE *file)
 
                     case 9:      /* Deposit this */
                            AB = AS;
-			   printf("Deposit %06o %012llo\r\n", AS, SW);
                            if (AS < 020) {
                                FM[AS] = SW;
                                MB = FM[AS];
@@ -716,6 +722,7 @@ vm_read(char *cptr, int32 sz, FILE *file)
             }
        }
     }
+    rl_callback_handler_remove();
     return input_buffer;
 }
 
@@ -737,7 +744,6 @@ t_stat pi_panel_start(void)
     r = gpio_mux_thread_start();
     sim_vm_read = &vm_read;
     sim_vm_post = &vm_post;
-    rl_callback_handler_install("", (rl_vcpfunc_t*) &read_line_handler);
     return r;
 }
 
@@ -748,7 +754,6 @@ void pi_panel_stop(void)
 {
     if (blink_thread_terminate == 0) {
         blink_thread_terminate=1;
-        rl_callback_handler_remove();
         sim_vm_read = NULL;
 
         sleep (2);      /* allow threads to close down */
