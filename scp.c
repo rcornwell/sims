@@ -3014,7 +3014,6 @@ while (stat != SCPE_EXIT) {                             /* in case exit */
         }
     else {
         if (sim_vm_read != NULL) {                      /* sim routine? */
-            printf ("%s", sim_prompt);                  /* prompt */
             cptr = (*sim_vm_read) (cbuf, sizeof(cbuf), stdin);
             }
         else
