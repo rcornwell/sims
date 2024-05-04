@@ -40,7 +40,8 @@
 #define CMD_SEL            0x0B       /* Select */
 #define CMD_WRERALT        0x0D       /* Write erase alternative */
 #define CMD_EAU            0x0F       /* Erase all un protected */
-#define CMD_WSF            0x11       /* Writye structured field */
+#define CMD_WSF            0x11       /* Write structured field */
+#define CMD_SNSID          0xE4       /* Sense ID */
 
 /* u3 second byte */
 #define RECV               0x00100    /* Recieving data */
@@ -213,7 +214,7 @@ uint8  scoml_startcmd(UNIT *uptr,  uint8 cmd) {
          return 0;
 
     case 0x0:               /* Status */
-         if (cmd == 0x4) {  /* Sense */
+         if (cmd == 0x4 || cmd == CMD_SNSID) {  /* Sense */
             uptr->CMD |= cmd;
             sim_activate(uptr, 200);
             return 0;
@@ -241,6 +242,7 @@ uint8  scoml_haltio(UNIT *uptr) {
     switch (cmd) {
     case 0:
     case 0x4:
+    case CMD_SNSID:      /* Sense ID */
     case CMD_SEL:        /* Select */
     case CMD_NOP:        /* Nop scommand */
          /* Short scommands nothing to do */
@@ -291,6 +293,20 @@ t_stat scoml_srv(UNIT * uptr)
     case 0x4:
          ch = uptr->SNS & 0xff;
          sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 1 %x\n", unit, ch);
+         chan_write_byte(addr, &ch) ;
+         uptr->CMD &= ~0xff;
+         chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+         break;
+
+    case CMD_SNSID:      /* Sense ID */
+         sim_debug(DEBUG_DETAIL, dptr, "sense id=%d\n", unit);
+         ch = 0xFF;
+         chan_write_byte(addr, &ch) ;
+         ch = 0x32;
+         chan_write_byte(addr, &ch) ;
+         ch = 0x74;
+         chan_write_byte(addr, &ch) ;
+         ch = 0x1B;
          chan_write_byte(addr, &ch) ;
          uptr->CMD &= ~0xff;
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
