@@ -209,23 +209,24 @@ struct disk_t
     int                 bpt;          /* Max bytes per track */
     uint8               sen_cnt;      /* Number of sense bytes */
     uint8               dev_type;     /* Device type code */
+    uint8               dev_model;    /* Device model */
 }
 disk_type[] =
 {
-       {"2301",    1, 200, 20483,  6,  0x01},   /*    4.1  M */
-       {"2302",  250,  46,  4984,  6,  0x02},   /*   57.32 M 50ms, 120ms/10, 180ms> 10 */
-       {"2303",   80,  10,  4984,  6,  0x03},   /*    4.00 M */
-       {"2305",   48,   8, 14568,  6,  0x05},   /*    5.43 M */
-       {"2305-2" ,96,   8, 14858,  6,  0x05},   /*   11.26 M */
-       {"2311",   203, 10,  3717,  6,  0x11},   /*    7.32 M  156k/s 30 ms 145 full */
-       {"2314",   202, 20,  7294,  6,  0x14},   /*   29.17 M */
-       {"3330",   410, 19, 13165, 24,  0x30},   /*  100.00 M */
-       {"3330-2" ,815, 19, 13165, 24,  0x30},   /*  194.00 M */
-       {"3340",   349, 12,  8535, 24,  0x40},   /*   34.94 M */
-       {"3340-2" ,698, 12,  8535, 24,  0x40},   /*   69.89 M */
-       {"3350",   559, 30, 19254, 24,  0x50},   /*  304.80 M */
-       {"3375",   962, 12, 36000, 24,  0x75},   /*  369.30 M */
-       {"5625",   403, 20,  7294,  6,  0x14},   /*   56.00 M */
+       {"2301",    1, 200, 20483,  6,  0x01, 0x00},   /*   4.1  M */
+       {"2302",  250,  46,  4984,  6,  0x02, 0x00},   /*  57.32 M 50ms, 120ms/10, 180ms> 10 */
+       {"2303",   80,  10,  4984,  6,  0x03, 0x00},   /*   4.00 M */
+       {"2305",   48,   8, 14568,  6,  0x05, 0x00},   /*   5.43 M */
+       {"2305-2" ,96,   8, 14858,  6,  0x05, 0x00},   /*  11.26 M */
+       {"2311",   203, 10,  3717,  6,  0x11, 0x00},   /*   7.32 M  156k/s 30 ms 145 full */
+       {"2314",   202, 20,  7294,  6,  0x14, 0x00},   /*  29.17 M */
+       {"3330",   410, 19, 13165, 24,  0x30, 0x01},   /* 100.00 M */
+       {"3330-2" ,815, 19, 13165, 24,  0x30, 0x11},   /* 194.00 M */
+       {"3340",   349, 12,  8535, 24,  0x40, 0x01},   /*  34.94 M */
+       {"3340-2" ,698, 12,  8535, 24,  0x40, 0x02},   /*  69.89 M */
+       {"3350",   559, 30, 19290, 24,  0x50, 0x00},   /* 304.80 M */
+       {"3375",   962, 12, 36000, 24,  0x75, 0x00},   /* 369.30 M */
+       {"5625",   403, 20,  7294,  6,  0x14, 0x00},   /*  56.00 M */
        {NULL, 0}
 };
 
@@ -835,6 +836,46 @@ ntrack:
     switch (cmd) {
     case 0:                               /* No command */
          break;
+    case 0x64:                /* Sense ID */
+         if ((uptr->CMD & 0xff) == 0xe4 && disk_type[type].sen_cnt > 6) {
+             ch = 0xff;
+             sim_debug(DEBUG_DETAIL, dptr, "sense ID=%d 0 %x\n", unit, ch);
+             if (chan_write_byte(addr, &ch))
+                 goto sense_end;
+             ch = 0x38;
+             sim_debug(DEBUG_DETAIL, dptr, "sense ID=%d 1 %x\n", unit, ch);
+             if (chan_write_byte(addr, &ch))
+                 goto sense_end;
+             ch = 0x80;
+             sim_debug(DEBUG_DETAIL, dptr, "sense ID=%d 2 %x\n", unit, ch);
+             if (chan_write_byte(addr, &ch))
+                 goto sense_end;
+             ch = 0x01;
+             sim_debug(DEBUG_DETAIL, dptr, "sense ID=%d 3 %x\n", unit, ch);
+             if (chan_write_byte(addr, &ch))
+                 goto sense_end;
+             ch = 0x33;
+             sim_debug(DEBUG_DETAIL, dptr, "sense ID=%d 4 %x\n", unit, ch);
+             if (chan_write_byte(addr, &ch))
+                 goto sense_end;
+             ch = disk_type[type].dev_type;
+             sim_debug(DEBUG_DETAIL, dptr, "sense ID=%d 5 %x\n", unit, ch);
+             if (chan_write_byte(addr, &ch))
+                 goto sense_end;
+             ch = disk_type[type].dev_model;
+             sim_debug(DEBUG_DETAIL, dptr, "sense ID=%d 6 %x\n", unit, ch);
+             if (chan_write_byte(addr, &ch))
+                 goto sense_end;
+             goto sense_end;
+         } else {
+             sim_debug(DEBUG_DETAIL, dptr, "invalid command=%d %x\n", unit, cmd);
+             uptr->SNS |= SNS_CMDREJ;
+             uptr->LCMD = 0;
+             uptr->CMD &= ~(0xff);
+             chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+         }
+         break;
+
     case 0x14:
     case 0x34:
     case 0x4:                 /* Sense */
@@ -1372,9 +1413,9 @@ sense_end:
              if (count == 0 && state == DK_POS_DATA && data->rec != 0) {
                 uptr->CMD |= DK_PARAM;
                 uptr->CMD &= ~DK_OVFLOW;
-                sim_debug(DEBUG_DETAIL, dptr, "RD CKD ov unit=%d %d k=%d d=%d %02x %04x %04x\n",
+                sim_debug(DEBUG_DETAIL, dptr, "RD CKD ov unit=%d %d k=%d d=%d %02x %04x %04x %04x\n",
                  unit, data->rec, data->klen, data->dlen, data->state, data->dlen,
-                 8 + data->klen + data->dlen);
+                 8 + data->klen + data->dlen, uptr->CCH);
               }
               if (data->ovfl == 0 && state == DK_POS_END) {
                 uptr->CMD |= DK_PARAM;
@@ -1558,6 +1599,14 @@ rd:
              uptr->CMD &= ~(DK_INDEX|DK_INDEX2);
              sim_debug(DEBUG_DETAIL, dptr, "WR HA unit=%d %x %d %d\n", unit,
                          state, count, data->rec);
+             if (disk_type[type].sen_cnt > 6 &&
+                    disk_type[type].dev_type > 0x30) {
+                  int skip = (disk_type[type].dev_type == 0x40) ? 4 : 9;
+                  /* Skip first few bytes bytes */
+                  for (i = 0; i < skip; i++) {
+                      (void)chan_read_byte(addr, &ch);
+                  }
+             }
              if (chan_read_byte(addr, &ch)) {
                  ch = 0;
              }
@@ -2043,6 +2092,7 @@ dasd_attach(UNIT * uptr, CONST char *file)
             detach_unit(uptr);
             return SCPE_FMT;
         }
+        sim_messagef(SCPE_OK, "Drive %03x\r\n",  addr);
         return SCPE_OK;
     }
 
