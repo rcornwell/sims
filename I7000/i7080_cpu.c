@@ -711,6 +711,7 @@ stop_cpu:
                              case SCPE_BUSY:
                              case SCPE_NODEV:
                              case SCPE_IOERR:
+                             case SCPE_EOF:
                                  break;
                              }
                              break;
@@ -1525,6 +1526,7 @@ stop_cpu:
                          case SCPE_NODEV:
                              reason = STOP_IOCHECK;
                              break;
+                         case SCPE_EOF:
                          case SCPE_IOERR:
                              flags |= ANYFLAG|INSTFLAG;
                              break;
@@ -1549,6 +1551,7 @@ stop_cpu:
                      case SCPE_NODEV:
                          reason = STOP_IOCHECK;
                          break;
+                     case SCPE_EOF:
                      case SCPE_IOERR:
                          flags |= ANYFLAG|INSTFLAG;
                          break;
@@ -1572,6 +1575,7 @@ stop_cpu:
                      case SCPE_NODEV:
                          reason = STOP_IOCHECK;
                          break;
+                     case SCPE_EOF:
                      case SCPE_IOERR:
                          flags |= ANYFLAG|INSTFLAG;
                          break;
@@ -1595,6 +1599,7 @@ stop_cpu:
                      case SCPE_NODEV:
                          reason = STOP_IOCHECK;
                          break;
+                     case SCPE_EOF:
                      case SCPE_IOERR:
                          flags |= ANYFLAG|INSTFLAG;
                          break;
