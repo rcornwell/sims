@@ -68,117 +68,112 @@
                              UNIT_FIX | SET_TYPE(6)
 
 
-#define DK_NOP             0x03       /* Nop operation */
-#define DK_RELEASE         0x17       /* Release from channel */
-#define DK_RESTORE         0x13       /* Restore */
-#define DK_SEEK            0x07       /* Seek */
-#define DK_SEEKCYL         0x0B       /* Seek Cylinder */
-#define DK_SEEKHD          0x1B       /* Seek Head */
-#define DK_SETMSK          0x1f       /* Set file mask */
-#define DK_SPACE           0x0f       /* Space record */
-#define DK_SRCH_HAEQ       0x39       /* Search HA equal */
-#define DK_SRCH_IDEQ       0x31       /* Search ID equal */
-#define DK_SRCH_IDGT       0x51       /* Search ID greater */
-#define DK_SRCH_IDGE       0x71       /* Search ID greater or equal */
-#define DK_SRCH_KYEQ       0x29       /* Search Key equal */
-#define DK_SRCH_KYGT       0x49       /* Search Key greater */
-#define DK_SRCH_KYGE       0x69       /* Search Key greater or equal */
-#define DK_RD_IPL          0x02       /* Read IPL record */
-#define DK_RD_HA           0x1A       /* Read home address */
-#define DK_RD_CNT          0x12       /* Read count */
-#define DK_RD_R0           0x16       /* Read R0 */
-#define DK_RD_D            0x06       /* Read Data */
-#define DK_RD_KD           0x0e       /* Read key and data */
-#define DK_RD_CKD          0x1e       /* Read count, key and data */
-#define DK_WR_HA           0x19       /* Write home address */
-#define DK_WR_R0           0x15       /* Write R0 */
-#define DK_WR_D            0x05       /* Write Data */
-#define DK_WR_KD           0x0d       /* Write key and data */
-#define DK_WR_CKD          0x1d       /* Write count, key and data */
-#define DK_WR_SCKD         0x01       /* Write special count, key and data */
-#define DK_ERASE           0x11       /* Erase to end of track */
-#define DK_RD_SECT         0x22       /* Read sector counter */
-#define DK_SETSECT         0x23       /* Set sector */
-#define DK_RD_BUFF         0xA4       /* Read and reset record log */
-#define DK_MT              0x80       /* Multi track flag */
+/* Held in u3 */
+#define CMD    u3
+
+#define DK_NOP             0x03        /* Nop operation */
+#define DK_RELEASE         0x17        /* Release from channel */
+#define DK_RESTORE         0x13        /* Restore */
+#define DK_SEEK            0x07        /* Seek */
+#define DK_SEEKCYL         0x0B        /* Seek Cylinder */
+#define DK_SEEKHD          0x1B        /* Seek Head */
+#define DK_SETMSK          0x1f        /* Set file mask */
+#define DK_SPACE           0x0f        /* Space record */
+#define DK_SRCH_HAEQ       0x39        /* Search HA equal */
+#define DK_SRCH_IDEQ       0x31        /* Search ID equal */
+#define DK_SRCH_IDGT       0x51        /* Search ID greater */
+#define DK_SRCH_IDGE       0x71        /* Search ID greater or equal */
+#define DK_SRCH_KYEQ       0x29        /* Search Key equal */
+#define DK_SRCH_KYGT       0x49        /* Search Key greater */
+#define DK_SRCH_KYGE       0x69        /* Search Key greater or equal */
+#define DK_RD_IPL          0x02        /* Read IPL record */
+#define DK_RD_HA           0x1A        /* Read home address */
+#define DK_RD_CNT          0x12        /* Read count */
+#define DK_RD_R0           0x16        /* Read R0 */
+#define DK_RD_D            0x06        /* Read Data */
+#define DK_RD_KD           0x0e        /* Read key and data */
+#define DK_RD_CKD          0x1e        /* Read count, key and data */
+#define DK_WR_HA           0x19        /* Write home address */
+#define DK_WR_R0           0x15        /* Write R0 */
+#define DK_WR_D            0x05        /* Write Data */
+#define DK_WR_KD           0x0d        /* Write key and data */
+#define DK_WR_CKD          0x1d        /* Write count, key and data */
+#define DK_WR_SCKD         0x01        /* Write special count, key and data */
+#define DK_ERASE           0x11        /* Erase to end of track */
+#define DK_RD_SECT         0x22        /* Read sector counter */
+#define DK_SETSECT         0x23        /* Set sector */
+#define DK_RD_BUFF         0xA4        /* Read and reset record log */
+#define DK_MT              0x80        /* Multi track flag */
 
 /* u3 */
-#define DK_INDEX           0x00100    /* Index seen in command */
-#define DK_NOEQ            0x00200    /* Not equal compare */
-#define DK_HIGH            0x00400    /* High compare */
-#define DK_PARAM           0x00800    /* Parameter in u4 */
-#define DK_MSET            0x01000    /* Mode set command already */
-#define DK_SHORTSRC        0x02000    /* Last search was short */
-#define DK_SRCOK           0x04000    /* Last search good */
-#define DK_CYL_DIRTY       0x08000    /* Current cylinder dirty */
-#define DK_DONE            0x10000    /* Write command done, zero fill */
-#define DK_INDEX2          0x20000    /* Second index seen */
-#define DK_OVFLOW          0x40000    /* Reading in overflow */
+#define DK_INDEX           0x00100     /* Index seen in command */
+#define DK_NOEQ            0x00200     /* Not equal compare */
+#define DK_HIGH            0x00400     /* High compare */
+#define DK_PARAM           0x00800     /* Parameter in u4 */
+#define DK_MSET            0x01000     /* Mode set command already */
+#define DK_SHORTSRC        0x02000     /* Last search was short */
+#define DK_SRCOK           0x04000     /* Last search good */
+#define DK_CYL_DIRTY       0x08000     /* Current cylinder dirty */
+#define DK_DONE            0x10000     /* Write command done, zero fill */
+#define DK_INDEX2          0x20000     /* Second index seen */
+#define DK_OVFLOW          0x40000     /* Reading in overflow */
 
-#define DK_MSK_INHWR0      0x00       /* Inhbit writing of HA/R0 */
-#define DK_MSK_INHWRT      0x40       /* Inhbit all writes */
-#define DK_MSK_ALLWRU      0x80       /* Allow all updates */
-#define DK_MSK_ALLWRT      0xc0       /* Allow all writes */
-#define DK_MSK_WRT         0xc0       /* Write mask */
+#define DK_MSK_INHWR0      0x00        /* Inhbit writing of HA/R0 */
+#define DK_MSK_INHWRT      0x40        /* Inhbit all writes */
+#define DK_MSK_ALLWRU      0x80        /* Allow all updates */
+#define DK_MSK_ALLWRT      0xc0        /* Allow all writes */
+#define DK_MSK_WRT         0xc0        /* Write mask */
 
-#define DK_MSK_SKALLSKR    0x00       /* Allow all seek/recal */
-#define DK_MSK_SKALLCLY    0x08       /* Allow cyl/head only */
-#define DK_MSK_SKALLHD     0x10       /* Allow head only */
-#define DK_MSK_SKNONE      0x18       /* Allow no seeks */
-#define DK_MSK_SK          0x18       /* Seek mask */
+#define DK_MSK_SKALLSKR    0x00        /* Allow all seek/recal */
+#define DK_MSK_SKALLCLY    0x08        /* Allow cyl/head only */
+#define DK_MSK_SKALLHD     0x10        /* Allow head only */
+#define DK_MSK_SKNONE      0x18        /* Allow no seeks */
+#define DK_MSK_SK          0x18        /* Seek mask */
 
 /* Top 11 bits of u3 hold the device address */
 
 /* u4 */
 /* Holds the current track and head */
+#define CCH                u4
 #define DK_V_TRACK         8
-#define DK_M_TRACK         0x3ff00    /* Max 1024 cylinders */
+#define DK_M_TRACK         0x3ff00     /* Max 1024 cylinders */
 #define DK_V_HEAD          0
-#define DK_M_HEAD          0xff       /* Max 256 heads */
+#define DK_M_HEAD          0xff        /* Max 256 heads */
+#define DK_IDLE            0x80000     /* Drive is idle */
 
 /* u5 */
+/* Sense bytes 0,1,2,3, rest generated */
+#define SNS    u5
 /* Sense byte 0 */
-#define SNS_CMDREJ         0x80       /* Command reject */
-#define SNS_INTVENT        0x40       /* Unit intervention required */
-#define SNS_BUSCHK         0x20       /* Parity error on bus */
-#define SNS_EQUCHK         0x10       /* Equipment check */
-#define SNS_DATCHK         0x08       /* Data Check */
-#define SNS_OVRRUN         0x04       /* Data overrun */
-#define SNS_TRKCND         0x02       /* Track Condition */
-#define SNS_SEEKCK         0x01       /* Seek Check */
 
 /* Sense byte 1 */
-#define SNS_DCCNT          0x80       /* Data Check Count */
-#define SNS_TRKOVR         0x40       /* Track Overrun */
-#define SNS_ENDCYL         0x20       /* End of Cylinder */
-#define SNS_INVSEQ         0x10       /* Invalid Sequence */
-#define SNS_NOREC          0x08       /* No record found */
-#define SNS_WRP            0x04       /* Write Protect */
-#define SNS_ADDR           0x02       /* Missing Address Mark */
-#define SNS_OVRINC         0x01       /* Overflow Incomplete */
+#define SNS_DCCNT          0x80        /* Data Check Count */
+#define SNS_TRKOVR         0x40        /* Track Overrun */
+#define SNS_ENDCYL         0x20        /* End of Cylinder */
+#define SNS_INVSEQ         0x10        /* Invalid Sequence */
+#define SNS_NOREC          0x08        /* No record found */
+#define SNS_WRP            0x04        /* Write Protect */
+#define SNS_ADDR           0x02        /* Missing Address Mark */
+#define SNS_OVRINC         0x01        /* Overflow Incomplete */
 
 /* Sense byte 2 */
-#define SNS_BYTE2          0x00       /* Diags Use */
+#define SNS_BYTE2          0x00        /* Diags Use */
 /* Sense byte 3 */
-#define SNS_BYTE3          0x00       /* Diags Use */
+#define SNS_BYTE3          0x00        /* Diags Use */
 
 /* saved in state field of data */
 /* Record position, high 4 bits, low internal short count */
-#define DK_POS_INDEX       0x0        /* At Index Mark */
-#define DK_POS_HA          0x1        /* In home address (c) */
-#define DK_POS_CNT         0x2        /* In count (c) */
-#define DK_POS_KEY         0x3        /* In Key area */
-#define DK_POS_DATA        0x4        /* In Data area */
-#define DK_POS_AM          0x5        /* Address mark before record */
-#define DK_POS_END         0x8        /* Past end of data */
-#define DK_POS_SEEK        0xF        /* In seek */
+#define DK_POS_INDEX       0x0         /* At Index Mark */
+#define DK_POS_HA          0x1         /* In home address (c) */
+#define DK_POS_CNT         0x2         /* In count (c) */
+#define DK_POS_KEY         0x3         /* In Key area */
+#define DK_POS_DATA        0x4         /* In Data area */
+#define DK_POS_AM          0x5         /* Address mark before record */
+#define DK_POS_END         0x8         /* Past end of data */
+#define DK_POS_SEEK        0xF         /* In seek */
 
 /* u6 holds last command */
 /* Held in ccyl entry */
-
-#define CMD    u3
-#define CCH    u4
-#define SNS    u5
 #define LCMD   u6
 
 /* Pointer held in up7 */
@@ -199,6 +194,7 @@ struct dasd_t
      uint8              rec;     /* Current record number */
      uint8              ovfl;    /* Current record overflow record */
      uint16             count;   /* Remaining in current operation */
+     int                rcount;  /* Number of rotations without command */
 };
 
 struct disk_t
@@ -395,6 +391,10 @@ uint8  dasd_startio(UNIT *uptr) {
         data->filemsk = 0;
         sim_debug(DEBUG_CMD, dptr, "start io unit=%d %d %d %d\n", unit, data->tstart,
             data->tpos, data->rpos);
+    }
+    if ((uptr->CCH & DK_IDLE) != 0) {
+        uptr->CCH &= ~DK_IDLE;
+        sim_activate(uptr, 100);
     }
     sim_debug(DEBUG_CMD, dptr, "start io unit=%d\n", unit);
     return 0;
@@ -700,6 +700,15 @@ ntrack:
          uptr->CMD &= ~DK_SRCOK;
          data->tstart = data->tsize * (uptr->CCH & 0xff);
          data->tpos = data->rpos = 0;
+         if (cmd == 0) {
+             if (++data->rcount == 10) {
+                 uptr->CCH |= DK_IDLE;
+                 break;
+             }
+         } else {
+             data->rcount = 0;
+             uptr->CCH &= ~DK_IDLE;
+         }
          rec = &data->cbuf[data->rpos + data->tstart];
          da = &data->cbuf[data->tpos + data->tstart];
          data->state = DK_POS_HA;
@@ -1025,7 +1034,7 @@ sense_end:
                  if (disk_type[type].sen_cnt > 6) {
                      uptr->SNS |= SNS_CMDREJ | (0 << 28) | (3 << 24);
                  } else {
-                     uptr->SNS |= SNS_CMDREJ|SNS_SEEKCK;
+                     uptr->SNS |= SNS_CMDREJ|SNS_OPRCHK;
                  }
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
                  break;
@@ -1044,7 +1053,7 @@ sense_end:
              if (disk_type[type].sen_cnt > 6) {
                  uptr->SNS |= SNS_CMDREJ | (0 << 28) | (4 << 24);
              } else {
-                 uptr->SNS |= SNS_CMDREJ|SNS_SEEKCK;
+                 uptr->SNS |= SNS_CMDREJ|SNS_OPRCHK;
              }
              chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
              break;
@@ -1063,7 +1072,7 @@ sense_end:
              if (disk_type[type].sen_cnt > 6) {
                  uptr->SNS |= SNS_CMDREJ | (0 << 28) | (4 << 24);
              } else {
-                 uptr->SNS |= SNS_CMDREJ|SNS_SEEKCK;
+                 uptr->SNS |= SNS_CMDREJ|SNS_OPRCHK;
              }
              chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
              break;

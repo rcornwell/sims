@@ -3099,11 +3099,18 @@ save_dbl:
                    }
                    switch(reg) {
                    case 0x0: /* CONCS */
-                             /* Connect channel set */
+                              /* Connect channel set */
                    case 0x1: /* DISCS */
-                             /* Disconnect channel set */
-                              cc = 3;
+                              /* Disconnect channel set */
+                              if (addr1 == 0) {
+                                 cc = 0;
+                              } else {
+                                 cc = 3;
+                              }
                               break;
+//                              cc = 3;
+//                              storepsw(OPPSW, IRC_OPR);
+//                              goto supress;
 
                    case 0x2: /* STIDP */
                               /* Store CPUID in double word */

@@ -37,9 +37,8 @@
 #define UNIT_CDP       UNIT_ATTABLE | UNIT_DISABLE | UNIT_SEQ | MODE_029
 
 
-#define CHN_SNS        0x04       /* Sense command */
-
 /* Device status information stored in u3 */
+#define CMD            u3
 #define CDR_RD         0x02       /* Read command */
 #define CDR_FEED       0x03       /* Feed next card */
 #define CDP_CMDMSK     0x27       /* Mask command part. */
@@ -51,21 +50,11 @@
 /* Upper 11 bits of u3 hold the device address */
 
 /* u4 holds current column, */
+#define COL            u4
 
-/* in u5 packs sense byte 0,1 and 3 */
+/* in u5 packs sense byte 0 */
 /* Sense byte 0 */
-#define SNS_CMDREJ     0x80       /* Command reject */
-#define SNS_INTVENT    0x40       /* Unit intervention required */
-#define SNS_BUSCHK     0x20       /* Parity error on bus */
-#define SNS_EQUCHK     0x10       /* Equipment check */
-#define SNS_DATCHK     0x08       /* Data Check */
-#define SNS_OVRRUN     0x04       /* Data overrun */
-#define SNS_SEQUENCE   0x02       /* Unusual sequence */
-#define SNS_CHN9       0x01       /* Channel 9 on printer */
-
-#define CMD    u3
-#define COL    u4
-#define SNS    u5
+#define SNS            u5
 
 
 
@@ -92,9 +81,9 @@ UNIT                cdp_unit[] = {
 #if NUM_DEVS_CDP > 1
     {UDATA(cdp_srv, UNIT_CDP | UNIT_DIS, 0), 600, UNIT_ADDR(0x01D)},
 #if NUM_DEVS_CDP > 2
-    {UDATA(cdp_srv, UNIT_CDP | UNIT_DIS, 0), 600, UNIT_ADDR(0x40D)},
+    {UDATA(cdp_srv, UNIT_CDP | UNIT_DIS, 0), 600, UNIT_ADDR(0x02D)},
 #if NUM_DEVS_CDP > 3
-    {UDATA(cdp_srv, UNIT_CDP | UNIT_DIS, 0), 600, UNIT_ADDR(0x41D)},
+    {UDATA(cdp_srv, UNIT_CDP | UNIT_DIS, 0), 600, UNIT_ADDR(0x03D)},
 #endif
 #endif
 #endif
@@ -149,7 +138,7 @@ uint8  cdp_startcmd(UNIT *uptr,  uint8 cmd) {
 
     sim_debug(DEBUG_CMD, dptr, "CMD unit=%d %x\n", unit, cmd);
     switch (cmd & 0x7) {
-    case 1:              /* Write command */
+    case CMD_WRITE:      /* Write command */
          uptr->CMD &= ~(CDP_CMDMSK);
          uptr->CMD |= (cmd & CDP_CMDMSK);
          sim_activate(uptr, 100);       /* Start unit off */
@@ -157,7 +146,7 @@ uint8  cdp_startcmd(UNIT *uptr,  uint8 cmd) {
          uptr->SNS = 0;
          return 0;
 
-    case 3:
+    case CMD_CTL:
          if (cmd != 0x3) {
              uptr->SNS |= SNS_CMDREJ;
              return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
@@ -167,7 +156,7 @@ uint8  cdp_startcmd(UNIT *uptr,  uint8 cmd) {
     case 0:                /* Status */
          break;
 
-    case 4:                /* Sense */
+    case CMD_SENSE:        /* Sense */
          uptr->CMD &= ~(CDP_CMDMSK);
          uptr->CMD |= (cmd & CDP_CMDMSK);
          sim_activate(uptr, 100);

@@ -308,43 +308,54 @@ typedef struct dib {
 #define UNIT_M_CTYPE       (3 << UNIT_V_CTYPE)
 
 /* Channel sense bytes */
-#define     SNS_ATTN      0x80                /* Unit attention */
-#define     SNS_SMS       0x40                /* Status modifier */
-#define     SNS_CTLEND    0x20                /* Control unit end */
-#define     SNS_BSY       0x10                /* Unit Busy */
-#define     SNS_CHNEND    0x08                /* Channel end */
-#define     SNS_DEVEND    0x04                /* Device end */
-#define     SNS_UNITCHK   0x02                /* Unit check */
-#define     SNS_UNITEXP   0x01                /* Unit exception */
+#define     SNS_ATTN      0x80            /* Unit attention */
+#define     SNS_SMS       0x40            /* Status modifier */
+#define     SNS_CTLEND    0x20            /* Control unit end */
+#define     SNS_BSY       0x10            /* Unit Busy */
+#define     SNS_CHNEND    0x08            /* Channel end */
+#define     SNS_DEVEND    0x04            /* Device end */
+#define     SNS_UNITCHK   0x02            /* Unit check */
+#define     SNS_UNITEXP   0x01            /* Unit exception */
 
 /* Command masks */
-#define     CMD_TYPE      0x3                 /* Type mask */
-#define     CMD_CHAN      0x0                 /* Channel command */
-#define     CMD_WRITE     0x1                 /* Write command */
-#define     CMD_READ      0x2                 /* Read command */
-#define     CMD_CTL       0x3                 /* Control command */
-#define     CMD_SENSE     0x4                 /* Sense channel command */
-#define     CMD_TIC       0x8                 /* Transfer in channel */
-#define     CMD_RDBWD     0xc                 /* Read backward */
+#define     CMD_TYPE      0x3             /* Type mask */
+#define     CMD_CHAN      0x0             /* Channel command */
+#define     CMD_WRITE     0x1             /* Write command */
+#define     CMD_READ      0x2             /* Read command */
+#define     CMD_CTL       0x3             /* Control command */
+#define     CMD_SENSE     0x4             /* Sense channel command */
+#define     CMD_TIC       0x8             /* Transfer in channel */
+#define     CMD_RDBWD     0xc             /* Read backward */
 
-#define     STATUS_ATTN   0x8000               /* Device raised attention */
-#define     STATUS_MOD    0x4000               /* Status modifier */
-#define     STATUS_CTLEND 0x2000               /* Control end */
-#define     STATUS_BUSY   0x1000               /* Device busy */
-#define     STATUS_CEND   0x0800               /* Channel end */
-#define     STATUS_DEND   0x0400               /* Device end */
-#define     STATUS_CHECK  0x0200               /* Unit check */
-#define     STATUS_EXPT   0x0100               /* Unit excpetion */
-#define     STATUS_PCI    0x0080               /* Program interupt */
-#define     STATUS_LENGTH 0x0040               /* Incorrect lenght */
-#define     STATUS_PCHK   0x0020               /* Program check */
-#define     STATUS_PROT   0x0010               /* Protection check */
-#define     STATUS_CDATA  0x0008               /* Channel data check */
-#define     STATUS_CCNTL  0x0004               /* Channel control check */
-#define     STATUS_INTER  0x0002               /* Channel interface check */
-#define     STATUS_CHAIN  0x0001               /* Channel chain check */
+#define     STATUS_ATTN   0x8000          /* Device raised attention */
+#define     STATUS_MOD    0x4000          /* Status modifier */
+#define     STATUS_CTLEND 0x2000          /* Control end */
+#define     STATUS_BUSY   0x1000          /* Device busy */
+#define     STATUS_CEND   0x0800          /* Channel end */
+#define     STATUS_DEND   0x0400          /* Device end */
+#define     STATUS_CHECK  0x0200          /* Unit check */
+#define     STATUS_EXPT   0x0100          /* Unit excpetion */
+#define     STATUS_PCI    0x0080          /* Program interupt */
+#define     STATUS_LENGTH 0x0040          /* Incorrect lenght */
+#define     STATUS_PCHK   0x0020          /* Program check */
+#define     STATUS_PROT   0x0010          /* Protection check */
+#define     STATUS_CDATA  0x0008          /* Channel data check */
+#define     STATUS_CCNTL  0x0004          /* Channel control check */
+#define     STATUS_INTER  0x0002          /* Channel interface check */
+#define     STATUS_CHAIN  0x0001          /* Channel chain check */
 
-#define     NO_DEV        0xffff               /* Code for no device */
+#define     NO_DEV        0xffff          /* Code for no device */
+
+/* Basic sense information */
+#define     SNS_CMDREJ    0x80            /* Command reject */
+#define     SNS_INTVENT   0x40            /* Unit intervention required */
+#define     SNS_BUSCHK    0x20            /* Parity error on bus */
+#define     SNS_EQUCHK    0x10            /* Equipment check */
+#define     SNS_DATCHK    0x08            /* Data Check */
+#define     SNS_UNITSPC   0x04            /* Specific to unit */
+#define     SNS_CTLCHK    0x02            /* Timeout on device */
+#define     SNS_OVRRUN    0x02            /* Data Overrun */
+#define     SNS_OPRCHK    0x01            /* Invalid operation to device */
 
 void post_extirq();
 

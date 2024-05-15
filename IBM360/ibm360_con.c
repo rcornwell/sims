@@ -36,7 +36,8 @@
 #ifdef NUM_DEVS_CON
 
 /* Held in u3 */
-#define CHN_SNS         0x04    /* Sense command */
+#define CMD             u3
+
 #define CON_WR          0x01    /* Write console */
 #define CON_ACR         0x09    /* Auto carrage return */
 #define CON_RD          0x0a    /* Read console */
@@ -54,15 +55,12 @@
 /* Upper 11 bits of u3 hold the device address */
 
 /* Input buffer pointer held in u4 */
+#define IPTR            u4
 
-/* in u5 packs sense byte 0,1 and 3 */
+/* in u5 packs sense byte 0 */
 /* Sense byte 0 */
-#define SNS_CMDREJ      0x80    /* Command reject */
-#define SNS_INTVENT     0x40    /* Unit intervention required */
+#define SNS             u5
 
-#define CMD     u3
-#define IPTR    u4
-#define SNS     u5
 
 /* std devices. data structures
 
@@ -135,7 +133,7 @@ uint8  con_startcmd(UNIT *uptr, uint8 cmd) {
     }
 
     switch (cmd & 0x7) {
-    case 2:                        /* Read command */
+    case CMD_READ:                 /* Read command */
          sim_debug(DEBUG_CMD, &con_dev, "%d: Cmd RD\n", u);
          if (uptr->CMD & CON_REQ) {
              uptr->CMD &= ~CON_REQ;
@@ -158,7 +156,7 @@ uint8  con_startcmd(UNIT *uptr, uint8 cmd) {
          uptr->SNS = 0;
          return 0;
 
-    case 1:                    /* Write command */
+    case CMD_WRITE:            /* Write command */
          sim_debug(DEBUG_CMD, &con_dev, "%d: Cmd WR\n", u);
          if (uptr->CMD & CON_REQ) {
              uptr->CMD &= ~CON_REQ;
@@ -174,7 +172,7 @@ uint8  con_startcmd(UNIT *uptr, uint8 cmd) {
          }
          return 0;
 
-    case 3:              /* Control */
+    case CMD_CTL:        /* Control */
          if (cmd == 0xb) {
              sim_putchar('\a');
          }
@@ -189,7 +187,7 @@ uint8  con_startcmd(UNIT *uptr, uint8 cmd) {
     case 0:               /* Status */
          return 0;
 
-    case 4:              /* Sense */
+    case CMD_SENSE:      /* Sense */
          uptr->CMD |= cmd & CON_MSK;
          return 0;
 
@@ -216,7 +214,7 @@ uint8  con_haltio(UNIT *uptr) {
 
     switch (cmd) {
     case 0:
-    case 0x4:
+    case CMD_SENSE:
          /* Short commands nothing to do */
          break;
 
@@ -245,7 +243,7 @@ con_srv(UNIT *uptr) {
 
 
     switch (cmd) {
-    case 4:              /* Sense */
+    case CMD_SENSE:      /* Sense */
          sim_debug(DEBUG_CMD, &con_dev, "%d: Cmd SNS %02x\n", u, uptr->SNS);
          /* Check if request pending */
          ch = uptr->SNS;

@@ -38,7 +38,8 @@
 #ifdef NUM_DEVS_SCON
 
 /* Held in u3 */
-#define CHN_SNS         0x04    /* Sense command */
+/* For 1052/3215 type console */
+#define CON_SNS         0x04    /* Sense command */
 #define CON_WR          0x01    /* Write console */
 #define CON_ACR         0x09    /* Auto carrage return */
 #define CON_RD          0x0a    /* Read console */
@@ -46,12 +47,72 @@
 #define CON_NOP         0x03    /* No op command */
 #define CON_MSK         0x0f    /* Command mask */
 
+/* For 3277 type console */
+#define CMD_WR             0x01       /* Write data to com line */
+#define CMD_RD             0x02       /* Read buffer */
+#define CMD_NOP            0x03       /* Nop scommand */
+#define CMD_WRER           0x05       /* Erase and write data */
+#define CMD_RDMD           0x06       /* Read modified */
+#define CMD_SEL            0x0B       /* Select */
+#define CMD_WRERALT        0x0D       /* Write erase alternative */
+#define CMD_EAU            0x0F       /* Erase all un protected */
+#define CMD_WSF            0x11       /* Write structured field */
+#define CMD_SNSID          0xE4       /* Sense ID */
+
 /* Status held in u3 */
+/* For 1052/3215 type console */
 #define CON_INPUT       0x100   /* Input ready for unit */
 #define CON_CR          0x200   /* Output at beginning of line */
 #define CON_REQ         0x400   /* Request key pressed */
 #define CON_OUTPUT      0x800   /* Output characters since R */
 #define CON_CANCEL      0x1000  /* Control C pressed */
+
+/* For 3277 type console */
+#define RECV               0x00100    /* Recieving data */
+#define SEND               0x00200    /* Sending data */
+#define ENAB               0x00400    /* Line enabled */
+#define DATA               0x00800    /* Data available */
+#define INIT1              0x01000    /* Send DO EOR, waiting WILL EOR */
+#define INPUT              0x02000    /* Input ready */
+#define ATTN               0x04000    /* Send attention signal */
+#define HALT               0x08000    /* Halt operation */
+
+#define TC_WILL    0x1                 /* Option in will state */
+#define TC_WONT    0x2                 /* Wont do option */
+#define TC_DO      0x4                 /* Will do option. */
+#define TC_DONT    0x8                 /* Dont do option  */
+
+#define IAC        255                 /* Interpret as command */
+#define DONT       254                 /* Dont use option */
+#define DO         253                 /* Use this option */
+#define WONT       252                 /* I wont use this option */
+#define WILL       251                 /* I will use this option */
+#define IP         244                 /* Interrupt pending */
+#define BREAK      243                 /* Break */
+#define EOR        239                 /* End of record */
+
+/* Telnet options we care about */
+#define OPTION_BINARY    0             /* Send 8 bit data */
+#define OPTION_ECHO      1             /* Echo */
+#define OPTION_SGA       3             /* Set go ahead */
+#define OPTION_TERMINAL  24            /* Request terminal type */
+#define OPTION_EOR       25            /* Handle end of record */
+
+#define TS_DATA      0                 /* Regular state */
+#define TS_IAC       1                 /* Have seen IAC */
+#define TS_WILL      2                 /* Have seen IAC WILL */
+#define TS_WONT      3                 /* Have seen IAC WONT */
+#define TS_DO        4                 /* Have seen IAC DO */
+#define TS_DONT      5                 /* Have seen IAC DONT */
+
+/* Remote orders */
+#define REMOTE_EAU      0x6F           /* Erase all unprotected */
+#define REMOTE_EW       0xF5           /* Erase/Write */
+#define REMOTE_RB       0xF2           /* Read Buffer */
+#define REMOTE_RM       0x6e           /* Read Modified */
+#define REMOTE_WRERALT  0x7e           /* Write erase alternative */
+#define REMOTE_WRT      0xF1           /* Write */
+#define REMOTE_WSF      0xF3           /* Write structured field */
 
 /* Upper 11 bits of u3 hold the device address */
 
@@ -146,7 +207,7 @@ uint8  scon_startcmd(UNIT *uptr, uint8 cmd) {
     }
 
     switch (cmd & 0x7) {
-    case 2:                        /* Read command */
+    case CMD_READ:                 /* Read command */
          sim_debug(DEBUG_CMD, &scon_dev, "%d: Cmd RD\n", u);
          if (uptr->CMD & CON_REQ) {
              uptr->CMD &= ~CON_REQ;
@@ -169,7 +230,7 @@ uint8  scon_startcmd(UNIT *uptr, uint8 cmd) {
          uptr->SNS = 0;
          return 0;
 
-    case 1:                    /* Write command */
+    case CMD_WRITE:            /* Write command */
          sim_debug(DEBUG_CMD, &scon_dev, "%d: Cmd WR\n", u);
          if (uptr->CMD & CON_REQ) {
              uptr->CMD &= ~CON_REQ;
@@ -185,7 +246,7 @@ uint8  scon_startcmd(UNIT *uptr, uint8 cmd) {
          }
          return 0;
 
-    case 3:              /* Control */
+    case CMD_CTL:        /* Control */
          if (cmd == CON_ALR) {
              tmxr_putc_ln(&scon_ldsc[u], '\a');
          }
@@ -200,7 +261,7 @@ uint8  scon_startcmd(UNIT *uptr, uint8 cmd) {
     case 0:               /* Status */
          return 0;
 
-    case 4:              /* Sense */
+    case CMD_SENSE:      /* Sense */
          uptr->CMD |= cmd & CON_MSK;
          return 0;
 
@@ -255,7 +316,7 @@ scon_srv(UNIT *uptr) {
     int                 delay = 1000;
 
     switch (cmd) {
-    case 4:              /* Sense */
+    case CMD_SENSE:      /* Sense */
          sim_debug(DEBUG_CMD, &scon_dev, "%d: Cmd SNS %02x\n", u, uptr->SNS);
          /* Check if request pending */
          data = uptr->SNS;

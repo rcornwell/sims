@@ -36,33 +36,6 @@
 #define PCI              0x08000000         /* Program controlled interuption */
 #define IDA              0x04000000         /* Indirect Channel addressing */
 
-/* Command masks */
-#define CMD_TYPE         0x3                /* Type mask */
-#define CMD_CHAN         0x0                /* Channel command */
-#define CMD_WRITE        0x1                /* Write command */
-#define CMD_READ         0x2                /* Read command */
-#define CMD_CTL          0x3                /* Control command */
-#define CMD_SENSE        0x4                /* Sense channel command */
-#define CMD_TIC          0x8                /* Transfer in channel */
-#define CMD_RDBWD        0xc                /* Read backward */
-
-#define STATUS_ATTN      0x8000             /* Device raised attention */
-#define STATUS_MOD       0x4000             /* Status modifier */
-#define STATUS_CTLEND    0x2000             /* Control end */
-#define STATUS_BUSY      0x1000             /* Device busy */
-#define STATUS_CEND      0x0800             /* Channel end */
-#define STATUS_DEND      0x0400             /* Device end */
-#define STATUS_CHECK     0x0200             /* Unit check */
-#define STATUS_EXPT      0x0100             /* Unit excpetion */
-#define STATUS_PCI       0x0080             /* Program interupt */
-#define STATUS_LENGTH    0x0040             /* Incorrect length */
-#define STATUS_PCHK      0x0020             /* Program check */
-#define STATUS_PROT      0x0010             /* Protection check */
-#define STATUS_CDATA     0x0008             /* Channel data check */
-#define STATUS_CCNTL     0x0004             /* Channel control check */
-#define STATUS_INTER     0x0002             /* Channel interface check */
-#define STATUS_CHAIN     0x0001             /* Channel chain check */
-
 #define ERROR_STATUS         (STATUS_ATTN|STATUS_PCI|STATUS_EXPT|STATUS_CHECK| \
                               STATUS_PROT|STATUS_CDATA|STATUS_CCNTL|STATUS_INTER| \
                               STATUS_CHAIN)
@@ -479,7 +452,7 @@ start_cmd:
          if (chan->chan_status & (STATUS_ATTN|STATUS_CHECK|STATUS_EXPT)) {
              sim_debug(DEBUG_DETAIL, &cpu_dev, "Channel %03x abort %04x\n",
                      chan->daddr, chan->chan_status);
-             chan->chan_status |= STATUS_CEND;
+//             chan->chan_status |= STATUS_CEND;
              chan->ccw_flags = 0;
              chan->ccw_cmd = 0;
              irq_pend = 1;
@@ -737,7 +710,7 @@ set_devattn(uint16 addr, uint8 flags) {
     if (chan->daddr == addr && chan->chain_flg != 0 &&
             (flags & SNS_DEVEND) != 0) {
         chan->chan_status |= ((uint16)flags) << 8;
-    } else 
+    } else
     /* Check if device is current on channel */
     if (chan->daddr == addr && (chan->chan_status & STATUS_CEND) != 0  &&
             (flags & SNS_DEVEND) != 0) {
@@ -855,12 +828,13 @@ startio(uint16 addr) {
         sim_debug(DEBUG_CMD, &cpu_dev, "SIO %03x %08x cc=2\n", addr, chan->chan_status);
         return 2;
     }
-
-    if (dev_status[addr] == SNS_DEVEND || 
+    if (dev_status[addr] == SNS_DEVEND ||
         dev_status[addr] == (SNS_DEVEND|SNS_CHNEND))
         dev_status[addr] = 0;
     /* Check for any pending status for this device */
     if (dev_status[addr] != 0) {
+//        if (dev_status[addr] & SNS_DEVEND)
+//            dev_status[addr] |= SNS_BSY;
         M[0x44 >> 2] = (((uint32)dev_status[addr]) << 24);
         M[0x40 >> 2] = 0;
         key[0] |= 0x6;
@@ -927,6 +901,7 @@ startio(uint16 addr) {
         return 1;
     }
 
+//#if 0
     /* If immediate command and not command chaining */
     if ((chan->chan_status & (STATUS_CEND)) != 0
        && (chan->ccw_flags & FLAG_CC) == 0) {
@@ -938,6 +913,7 @@ startio(uint16 addr) {
                    addr, M[0x44 >> 2]);
         return 1;
     }
+//#endif
 
     return 0;
 }
@@ -1178,6 +1154,12 @@ int testchan(uint16 channel) {
     if (chan->ccw_cmd != 0 || (chan->ccw_flags & (FLAG_CD|FLAG_CC)) != 0) {
         sim_debug(DEBUG_CMD, &cpu_dev, "TCH CC %x cc=2, sel busy\n", channel);
         return 2;
+    }
+
+    /* If channel has pending status, return 1 */
+    if (chan->chan_status != 0) {
+        sim_debug(DEBUG_CMD, &cpu_dev, "TCH CC %x cc=1, error\n", channel);
+        return 1;
     }
 
     /* Otherwise return 0. */
@@ -1582,6 +1564,7 @@ set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
                 dev->dibp = NULL;
                 dev->unit = NULL;
             } else {
+fprintf(stderr, "not found %x\n\r", devaddr + i);
                 r = SCPE_ARG;
             }
         }
@@ -1591,17 +1574,21 @@ set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
 
     if (ndev == NULL) {
         r = SCPE_ARG;
+fprintf(stderr, "not found2\n\r");
     } else {
         /* Check if device already at newdev */
         if (dptr->flags & DEV_UADDR) {
-            if (dev->unit != NULL)
+            if (dev->unit != NULL && dev->unit != uptr) {
                 r = SCPE_ARG;
+fprintf(stderr, "not same\n\r");
+            }
         } else {
             newdev &= dibp->mask | 0xf00;
             for (i = 0; i < dibp->numunits; i++) {
                  ndev = find_device(newdev + i);
                  if (dev == NULL || dev->unit != NULL) {
                     r = SCPE_ARG;
+fprintf(stderr, "not same2\n\r");
                  }
             }
         }
@@ -1614,14 +1601,15 @@ set_dev_addr(UNIT * uptr, int32 val, CONST char *cptr, void *desc)
     dev = find_device(devaddr);
     /* Update device entry */
     if (dptr->flags & DEV_UADDR) {
+        int         unit = uptr - dptr->units;
         dev->dibp = dibp;
         dev->unit = uptr;
         dev->dev_addr = devaddr;
         uptr->u3 &= ~UNIT_ADDR(0xfff);
         uptr->u3 |= UNIT_ADDR(devaddr);
-        sim_printf("Set dev %s %x\r\n", dptr->name, GET_UADDR(uptr->u3) & 0xfff);
+        sim_printf("Set dev %s%d %x\r\n", dptr->name, unit, GET_UADDR(uptr->u3) & 0xfff);
     } else {
-        sim_printf("Set dev %s0 %x\r\n",  dptr->name, (uint32)(devaddr & 0xfff));
+        sim_printf("Set dev %s %x\r\n",  dptr->name, (uint32)(devaddr & 0xfff));
         for (i = 0; i < dibp->numunits; i++)  {
              dev = find_device(devaddr + i);
              uptr = &((dibp->units)[i]);

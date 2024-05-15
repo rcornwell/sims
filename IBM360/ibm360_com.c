@@ -27,59 +27,90 @@
 #include "sim_tmxr.h"
 
 #ifdef NUM_DEVS_COM
-#define UNIT_COM           0
+#define UNIT_COM           UNIT_DISABLE
 
 #define UNIT_V_DIRECT      (UNIT_V_UF + 0)
 #define UNIT_DIRECT        (1 << UNIT_V_DIRECT)
+#define UNIT_V_UTYPE       (UNIT_V_UF + 1) /* 2741 - ni */
+#define UNIT_2741          (0 << UNIT_V_UTYPE)
+#define UNIT_1052          (1 << UNIT_V_UTYPE)
+#define UNIT_2780          (2 << UNIT_V_UTYPE)
+#define UNIT_UTYPE         (3 << UNIT_V_UTYPE)
 
 
 /* u3 */
-#define CMD_WR             0x01       /* Write data to com line */
-#define CMD_RD             0x02       /* Read in data from com line */
-#define CMD_NOP            0x03       /* Nop command */
-#define CMD_PREP           0x06       /* Wait for incoming data  */
-#define CMD_INH            0x0A       /* Read data without timeout  */
-#define CMD_BRK            0x0D       /* Send break signal  */
-#define CMD_SRCH           0x0E       /* Wait for EOT character  */
-#define CMD_ENB            0x27       /* Enable line */
-#define CMD_DIAL           0x29       /* Dial call */
-#define CMD_DIS            0x2F       /* Disable line */
+#define CMD                u3
+
+#define CMD_WR             0x01        /* Write data to com line */
+#define CMD_RD             0x02        /* Read in data from com line */
+#define CMD_NOP            0x03        /* Nop command */
+#define CMD_PREP           0x06        /* Wait for incoming data  */
+#define CMD_POLL           0x09        /* Poll (BSC) */
+#define CMD_INH            0x0A        /* Read data without timeout  */
+#define CMD_BRK            0x0D        /* Send break signal  */
+#define CMD_SRCH           0x0E        /* Wait for EOT character  */
+#define CMD_SETM           0x23        /* Set Mode (BSC) */
+#define CMD_ENB            0x27        /* Enable line */
+#define CMD_DIAL           0x29        /* Dial call */
+#define CMD_DIS            0x2F        /* Disable line */
 
 /* u3 second byte */
-#define RECV               0x00100    /* Recieving data */
-#define SEND               0x00200    /* Sending data */
-#define ENAB               0x00400    /* Line enabled */
-#define POLL               0x00800    /* Waiting for connection */
-#define ADDR               0x01000    /* Address request recieved. */
-#define INPUT              0x02000    /* Input ready */
-#define ATTN               0x04000    /* Send attention signal */
-#define ADDR9              0x08000    /* Address char 9 recieved */
-#define BYPASS             0x10000    /* Don't echo output */
-#define BREAK              0x20000    /* Return unit exception */
+#define RECV               0x00100     /* Recieving data */
+#define SEND               0x00200     /* Sending data */
+#define ENAB               0x00400     /* Line enabled */
+#define POLL               0x00800     /* Waiting for connection */
+#define ADDR               0x01000     /* Address request recieved. */
+#define INPUT              0x02000     /* Input ready */
+#define ATTN               0x04000     /* Send attention signal */
+#define ADDR9              0x08000     /* Address char 9 recieved */
+#define BYPASS             0x10000     /* Don't echo output */
+#define BREAK              0x20000     /* Return unit exception */
 
 /* Upper 11 bits of u3 hold the device address */
 
 /* u4 */
 /* Where we are reading from */
+#define IPTR               u4
 
 /* u5 */
 /* Sense byte 0 */
-#define SNS_CMDREJ         0x80       /* Command reject */
-#define SNS_INTVENT        0x40       /* Unit intervention required */
-#define SNS_BUSCHK         0x20       /* Parity error on bus */
-#define SNS_EQUCHK         0x10       /* Equipment check */
-#define SNS_DATCHK         0x08       /* Data Check */
-#define SNS_OVRRUN         0x04       /* Data overrun */
-#define SNS_RECV           0x02       /* Receiving */
-#define SNS_TIMEOUT        0x01       /* Timeout */
+#define SNS                u5
 
 /* u6 */
 /* Pointer into buffer */
 
-#define CMD        u3
-#define IPTR       u4
-#define SNS        u5
+/* us9 */
+/* BSC status */
+#define BSCDLE             0x0001      /* BSC DLE Char output */
+#define BSCTXT             0x0002      /* BSC Text mode */
+#define BSCXPR             0x0004      /* BSC transparent mode */
+#define BSCEIB             0x0008      /* BSC EIB byte after ITB/EBT/ETX */
+#define BSCCC2             0x0010      /* BSC CC Character 2 */
+#define BSCCC1             0x0020      /* BSC CC Character 1 */
+#define BSCSYN1            0x0100      /* One SYNC Char recieved */
+#define BSCSYN2            0x0200      /* Second SYNC Char recieved */
+#define BSCSYN             0x0400      /* Sync recieved */
+#define BSCIDLE            0x1000      /* Input DLE recieved */
+
 #define BPTR       u6
+#define BSCSTATE   us9
+
+/* BSC characters */
+#define SOH  0x01
+#define STX  0x02
+#define ETX  0x03
+#define HT   0x05
+#define DLE  0x10
+#define EOM  0x19
+#define IBC  0x1f
+#define ETB  0x26
+#define ESC  0x27
+#define ENQ  0x2d
+#define SYN  0x32
+#define EOT  0x37
+#define NAK  0x3d
+#define ACK0 0x61
+#define ACK1 0x70
 
 uint8       coml_startcmd(UNIT *uptr, uint8 cmd) ;
 uint8       coml_haltio(UNIT *uptr);
@@ -104,6 +135,9 @@ MTAB                com_mod[] = {
 MTAB                coml_mod[] = {
     {MTAB_XTD | MTAB_VUN | MTAB_VALR, 0, "DEV", "DEV", &set_dev_addr,
         &show_dev_addr, NULL},
+    {UNIT_UTYPE, UNIT_2741, "2741", "2741", NULL, NULL, NULL, "IBM 2741 terminal"},
+    {UNIT_UTYPE, UNIT_1052, "1052", "1052", NULL, NULL, NULL, "IBM 1052 terminal"},
+    {UNIT_UTYPE, UNIT_2780, "2780", "2780", NULL, NULL, NULL, "IBM 2780 RJE station"},
     {UNIT_DIRECT, 0, "DIALUP", "DIALUP", NULL, NULL, NULL, "Dailup line" },
     {UNIT_DIRECT, UNIT_DIRECT, "NODIAL", "NODIAL", NULL, NULL, NULL,
                "Hard wired line" },
@@ -111,7 +145,7 @@ MTAB                coml_mod[] = {
 };
 
 UNIT                com_unit[] = {
-    {UDATA(&com_scan, UNIT_ATTABLE | UNIT_IDLE, 0)},        /* Line scanner */
+    {UDATA(&com_scan, UNIT_ATTABLE | UNIT_DISABLE | UNIT_IDLE, 0)},        /* Line scanner */
 };
 
 UNIT                coml_unit[] = {
@@ -270,18 +304,18 @@ uint8  coml_startcmd(UNIT *uptr,  uint8 cmd) {
 
 
     switch (cmd & 0x3) {
-    case 0x3:              /* Control */
+    case CMD_CTL:          /* Control */
          if ((cmd == CMD_NOP) || (cmd & 0x10) != 0)
              return SNS_CHNEND|SNS_DEVEND;
-    case 0x2:              /* Read command */
-    case 0x1:              /* Write command */
+    case CMD_READ:         /* Read command */
+    case CMD_WRITE:        /* Write command */
          uptr->CMD |= cmd;
          uptr->SNS = 0;
          sim_activate(uptr, 200);
          return 0;
 
     case 0x0:               /* Status */
-         if (cmd == 0x4) {  /* Sense */
+         if (cmd == CMD_SENSE) {  /* Sense */
             uptr->CMD |= cmd;
             sim_activate(uptr, 200);
             return 0;
@@ -310,7 +344,8 @@ uint8  coml_haltio(UNIT *uptr) {
     case 0:
     case CMD_DIS:        /* Disable line */
     case CMD_DIAL:       /* Dial call */
-    case 0x4:
+    case CMD_SENSE:
+    case CMD_SETM:       /* Set mode */
          /* Short commands nothing to do */
          break;
 
@@ -319,6 +354,7 @@ uint8  coml_haltio(UNIT *uptr) {
          chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
          break;
 
+    case CMD_POLL:       /* Poll command */
     case CMD_INH:        /* Read data without timeout  */
     case CMD_RD:         /* Read in data from com line */
     case CMD_WR:         /* Write data to com line */
@@ -345,13 +381,14 @@ t_stat coml_srv(UNIT * uptr)
     int                 unit = (uptr - dptr->units);
     int                 cmd = uptr->CMD & 0xff;
     uint8               ch;
+    int                 bsc = (uptr->flags & UNIT_UTYPE) == UNIT_2780;
 
 
     switch (cmd) {
     case 0:
          break;
 
-    case 0x4:
+    case CMD_SENSE:
          ch = uptr->SNS & 0xff;
          sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 1 %x\n", unit, ch);
          chan_write_byte(addr, &ch) ;
@@ -377,7 +414,7 @@ t_stat coml_srv(UNIT * uptr)
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
                  return SCPE_OK;
              }
-             if ((uptr->CMD & ADDR) != 0 && uptr->BPTR == 0) {
+             if (!bsc && (uptr->CMD & ADDR) != 0 && uptr->BPTR == 0) {
                  ch = 0x16;
                  sim_debug(DEBUG_CMD, dptr, "COM: unit=%d addr %02x\n", unit, ch);
                  uptr->CMD &= ~ADDR;
@@ -400,6 +437,8 @@ t_stat coml_srv(UNIT * uptr)
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK|SNS_UNITEXP);
                  return SCPE_OK;
              } else if (uptr->CMD & INPUT) {
+                 int  ack = bsc && ((uptr->BSCSTATE & BSCIDLE) != 0);
+
                  if (uptr->BPTR == uptr->IPTR) {
                      uptr->CMD &= ~(0xff|INPUT|RECV);
                      uptr->BPTR = 0;
@@ -408,6 +447,21 @@ t_stat coml_srv(UNIT * uptr)
                      return SCPE_OK;
                  }
                  ch = com_buf[unit][uptr->IPTR++];
+                 if (!bsc && ch == 0x1f) {
+                     uptr->CMD |= ADDR;
+                 }
+                 if (ack && ((ch == ACK0) || (ch == ACK1))) {
+                     uptr->CMD &= ~(0xff|INPUT|RECV);
+                     uptr->IPTR = 0;
+                     uptr->BPTR = 0;
+                     chan_end(addr, SNS_CHNEND|SNS_DEVEND|(ch == ACK1 ? SNS_UNITEXP:0));
+                     return SCPE_OK;
+                 }
+                 if (bsc && ch == DLE) {
+                     uptr->BSCSTATE |= BSCIDLE;
+                 } else {
+                     uptr->BSCSTATE &= ~BSCIDLE;
+                 }
                  if (chan_write_byte( addr, &ch)) {
                      uptr->CMD &= ~(0xff|INPUT|RECV);
                      uptr->IPTR = 0;
@@ -424,6 +478,36 @@ t_stat coml_srv(UNIT * uptr)
          }
          break;
 
+    case CMD_SETM:       /* Set mode */
+         if (bsc) {
+             uptr->SNS = 0;
+             uptr->CMD &= ~(0xff|BSCTXT|BSCXPR|BSCDLE|BSCEIB);
+             if (!chan_read_byte (addr, &ch))
+                 ch = 0;
+             uptr->CMD |= ch & 0x40 ? BSCEIB : 0;
+             if (uptr->CMD & ENAB) {
+                 /* bisync: If line already enabled, set mode CCW is restart of
+                    device.  Tell 2780 that previous transmission ends.  */
+                 tmxr_putc_ln( &com_ldsc[unit], SYN);
+                 tmxr_putc_ln( &com_ldsc[unit], EOT);
+             }
+             sim_debug(DEBUG_CMD, dptr, "COM: unit=%d set mode (%02x)\n", unit, ch);
+             chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+         } else {
+             uptr->SNS = SNS_CMDREJ;
+             chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+         }
+         break;
+
+    case CMD_POLL:
+         if (!bsc) {
+             uptr->SNS = SNS_CMDREJ;
+             uptr->CMD &= ~(0xff|BREAK|INPUT|RECV|SEND|POLL);
+             chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+             break;
+         }
+         /* Fall through */
+
     case CMD_WR:         /* Write data to com line */
          uptr->SNS = 0;
          if (uptr->CMD & ENAB) {
@@ -435,7 +519,7 @@ t_stat coml_srv(UNIT * uptr)
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
                  return SCPE_OK;
              }
-             if (uptr->CMD & BREAK) {
+             if (!bsc && uptr->CMD & BREAK) {
                  sim_debug(DEBUG_CMD, dptr, "COM: unit=%d attn write\n", unit);
                  uptr->CMD &= ~(0xff|BREAK);
                  uptr->SNS |= SNS_INTVENT;
@@ -446,6 +530,26 @@ t_stat coml_srv(UNIT * uptr)
              if (chan_read_byte (addr, &ch)) {
                  uptr->CMD &= ~0xff;
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND);
+                 if (bsc) {
+                     tmxr_send_buffered_data(&com_ldsc[unit]); /* Flush data */
+                 }
+             } else if (bsc) {
+                 if (uptr->CMD & BSCXPR) {
+                     if (ch == DLE) {
+                         tmxr_putc_ln(&com_ldsc[unit], DLE);
+                     } else if (ch == DLE) {
+                         uptr->CMD |= BSCDLE;
+                     } else {
+                         if ((uptr->CMD & BSCDLE) && (ch == ETX)) {
+                             uptr->CMD |= BSCXPR;
+                         }
+                         uptr->CMD &= ~BSCDLE;
+                     }
+                     sim_debug(DEBUG_CMD, dptr, "COM: unit=%d BSC send %02x\n",
+                           unit, ch);
+                     tmxr_putc_ln(&com_ldsc[unit], ch);
+                     sim_activate(uptr, 200);
+                 }
              } else {
                  int32 data;
                  data = com_2741_out[ch];
@@ -537,70 +641,155 @@ t_stat coml_srv(UNIT * uptr)
          uptr->CMD &= ~(0xff|POLL|ENAB) ;
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          break;
+
+    default:
+         uptr->SNS = SNS_CMDREJ;
+         uptr->CMD &= ~(0xff|BREAK|INPUT|RECV|SEND|POLL);
+         chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
+         break;
     }
 
     if ((uptr->CMD & (ENAB|RECV)) == (ENAB|RECV)) {
        int32 data = tmxr_getc_ln(&com_ldsc[unit]);
        if ((data & TMXR_VALID) != 0) {
-           ch = com_2741_in[data & 0x7f];
-           sim_debug(DEBUG_DATA, dptr, "COML: unit=%d read '%c' %02x\n", unit, data, ch);
-           if (data & SCPE_BREAK) {
-                uptr->CMD |= BREAK;
-                return SCPE_OK;
-           }
-           /* Handle end of buffer */
-           switch (data & 0x7f) {
-           case '\r':
-           case '\n':
-                 com_buf[unit][uptr->BPTR++] = 0x5b;
-                 com_buf[unit][uptr->BPTR++] = 0x1f;
-                 uptr->CMD |= INPUT;
-                 uptr->CMD &= ~RECV;
-                 uptr->IPTR = 0;
-                 tmxr_putc_ln( &com_ldsc[unit], '\r');
-                 tmxr_putc_ln( &com_ldsc[unit], '\n');
-                 break;
+           if (bsc) {
+               int gotdle = (uptr->CMD & BSCDLE) != 0;
+               ch = data & 0xff;
+               if (ch == DLE) {
+                    uptr->CMD |= BSCDLE;
+               } else {
+                    uptr->CMD &= ~(BSCDLE);
+               }
+               if ((uptr->CMD & BSCTXT) != 0) {
+                    /* Text mode */
+                   if ((uptr->CMD & BSCXPR) != 0) {
+                       switch (ch) {
+                       case DLE:
+                               if (gotdle) {
+                                   com_buf[unit][uptr->BPTR++] = ch;
+                               }
+                               break;
+                       case SYN:
+                               break;
+                       case ETB:
+                               (void) tmxr_getc_ln(&com_ldsc[unit]); /* BCC */
+                               (void) tmxr_getc_ln(&com_ldsc[unit]); /* BCC */
+                               /* Fall through */
+                       case EOT:
+                       case ETX:
+                               /* End transparent mode, end read */
+                       case IBC:
+                               /* End transparent mode, continue read */
+                               if (gotdle) {
+                                   uptr->CMD &= ~(BSCXPR);
+                                   com_buf[unit][uptr->BPTR++] = DLE;
+                                   com_buf[unit][uptr->BPTR++] = ch;
+                               }
+                               if ((uptr->CMD & BSCEIB) != 0) {
+                                   com_buf[unit][uptr->BPTR++] = 0;
+                               }
+                               if (ch != IBC) {
+                                   com_buf[unit][uptr->BPTR++] = ACK0;
+                                   uptr->CMD |= INPUT;
+                                   uptr->CMD &= ~RECV;
+                                   sim_activate( uptr, 200);
+                                   return SCPE_OK;
+                               }
+                               break;
+                       case ENQ:
+                               if (gotdle) {
+                                   uptr->CMD &= ~(BSCXPR|BSCTXT);
+                                   com_buf[unit][uptr->BPTR++] = DLE;
+                                   com_buf[unit][uptr->BPTR++] = ch;
+                                   com_buf[unit][uptr->BPTR++] = ACK0;
+                                   uptr->CMD |= INPUT;
+                                   uptr->CMD &= ~RECV;
+                                   sim_activate(uptr, 200);
+                                   return SCPE_OK;
+                               } else {
+                                   if ((uptr->CMD & BSCEIB) != 0) {
+                                       com_buf[unit][uptr->BPTR++] = 0;
+                                   }
+                                   if (ch != IBC) {
+                                       com_buf[unit][uptr->BPTR++] = ACK0;
+                                       uptr->CMD |= INPUT;
+                                       uptr->CMD &= ~RECV;
+                                   }
+                               }
+                               sim_activate( uptr, 200);
+                               return SCPE_OK;
 
-           case 0177:
-           case '\b':
-                 if (uptr->BPTR != 0) {
-                      uptr->BPTR--;
-                      tmxr_putc_ln( &com_ldsc[unit], '\b');
-                      tmxr_putc_ln( &com_ldsc[unit], ' ');
-                      tmxr_putc_ln( &com_ldsc[unit], '\b');
-                 }
-                 break;
+                       default:
+                               if (gotdle) {
+                                   com_buf[unit][uptr->BPTR++] = DLE;
+                               }
+                               com_buf[unit][uptr->BPTR++] = ch;
+                               break;
+                       }
 
-           case 025: /* ^U clear line */
-                 while(uptr->BPTR > 0) {
-                     tmxr_putc_ln( &com_ldsc[unit], '\b');
-                     tmxr_putc_ln( &com_ldsc[unit], ' ');
-                     tmxr_putc_ln( &com_ldsc[unit], '\b');
-                     uptr->BPTR--;
-                 }
-                 break;
-
-           case 03:  /* ^C */
-                 uptr->CMD |= BREAK;
-                 uptr->CMD &= ~RECV;
-                 break;
-
-           default:
-                 if (uptr->BPTR < 253) {
-                     if (ch == 0x00) {
-                        sim_putchar('\007');
-                     } else {
-                        com_buf[unit][uptr->BPTR++] = ch;
-                        if ((uptr->CMD & BYPASS) == 0)
-                            tmxr_putc_ln( &com_ldsc[unit], data);
-                     }
-                 } else {
+               }
+           } else {
+               ch = com_2741_in[data & 0x7f];
+               sim_debug(DEBUG_DATA, dptr, "COML: unit=%d read '%c' %02x\n", unit, data, ch);
+               if (data & SCPE_BREAK) {
+                    uptr->CMD |= BREAK;
+                    return SCPE_OK;
+               }
+               /* Handle end of buffer */
+               switch (data & 0x7f) {
+               case '\r':
+               case '\n':
                      com_buf[unit][uptr->BPTR++] = 0x5b;
                      com_buf[unit][uptr->BPTR++] = 0x1f;
                      uptr->CMD |= INPUT;
                      uptr->CMD &= ~RECV;
-                     uptr->BPTR &= 0xff;
-                 }
+                     uptr->IPTR = 0;
+                     tmxr_putc_ln( &com_ldsc[unit], '\r');
+                     tmxr_putc_ln( &com_ldsc[unit], '\n');
+                     break;
+
+               case 0177:
+               case '\b':
+                     if (uptr->BPTR != 0) {
+                          uptr->BPTR--;
+                          tmxr_putc_ln( &com_ldsc[unit], '\b');
+                          tmxr_putc_ln( &com_ldsc[unit], ' ');
+                          tmxr_putc_ln( &com_ldsc[unit], '\b');
+                     }
+                     break;
+
+               case 025: /* ^U clear line */
+                     while(uptr->BPTR > 0) {
+                         tmxr_putc_ln( &com_ldsc[unit], '\b');
+                         tmxr_putc_ln( &com_ldsc[unit], ' ');
+                         tmxr_putc_ln( &com_ldsc[unit], '\b');
+                         uptr->BPTR--;
+                     }
+                     break;
+
+               case 03:  /* ^C */
+                     uptr->CMD |= BREAK;
+                     uptr->CMD &= ~RECV;
+                     break;
+
+               default:
+                     if (uptr->BPTR < 253) {
+                         if (ch == 0x00) {
+                            sim_putchar('\007');
+                         } else {
+                            com_buf[unit][uptr->BPTR++] = ch;
+                            if ((uptr->CMD & BYPASS) == 0)
+                                tmxr_putc_ln( &com_ldsc[unit], data);
+                         }
+                     } else {
+                         com_buf[unit][uptr->BPTR++] = 0x5b;
+                         com_buf[unit][uptr->BPTR++] = 0x1f;
+                         uptr->CMD |= INPUT;
+                         uptr->CMD &= ~RECV;
+                         uptr->BPTR &= 0xff;
+                     }
+                  }
+               }
            }
        }
     }

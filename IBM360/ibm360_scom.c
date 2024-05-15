@@ -32,6 +32,8 @@
 
 
 /* u3 */
+#define CMD        u3
+
 #define CMD_WR             0x01       /* Write data to com line */
 #define CMD_RD             0x02       /* Read buffer */
 #define CMD_NOP            0x03       /* Nop scommand */
@@ -43,7 +45,7 @@
 #define CMD_WSF            0x11       /* Write structured field */
 #define CMD_SNSID          0xE4       /* Sense ID */
 
-/* u3 second byte */
+/* u3 second byte, status */
 #define RECV               0x00100    /* Recieving data */
 #define SEND               0x00200    /* Sending data */
 #define ENAB               0x00400    /* Line enabled */
@@ -57,25 +59,17 @@
 
 /* u4 */
 /* Where we are reading from */
+#define IPTR       u4
 
 /* u5 */
+#define SNS        u5
 /* Sense byte 0 */
-#define SNS_CMDREJ         0x80       /* Command reject */
-#define SNS_INTVENT        0x40       /* Unit intervention required */
-#define SNS_BUSCHK         0x20       /* Parity error on bus */
-#define SNS_EQUCHK         0x10       /* Equipment check */
-#define SNS_DATCHK         0x08       /* Data Check */
-#define SNS_UNITSPC        0x04       /* Specific to unit */
-#define SNS_CTLCHK         0x02       /* Timeout on device */
-#define SNS_OPRCHK         0x01       /* Invalid operation to device */
+#define CONN               0x100      /* Unit connected */
 
 /* u6 */
 /* Pointer into buffer */
-
-#define CMD        u3
-#define IPTR       u4
-#define SNS        u5
 #define BPTR       u6
+
 
 #define TC_WILL    0x1                 /* Option in will state */
 #define TC_WONT    0x2                 /* Wont do option */
@@ -207,14 +201,25 @@ uint8  scoml_startcmd(UNIT *uptr,  uint8 cmd) {
     case 0x2:              /* Read scommand */
     case 0x1:              /* Write scommand */
     case 0x3:              /* Control */
-         if (cmd != CMD_NOP)
-             uptr->SNS = 0;
+         if (cmd != CMD_NOP) {
+             if ((uptr->SNS & CONN) == 0) {
+         /* If no connection yet, pretend unit is powered off.
+            ATTN & DE at connection will revive activity.  */
+//         uptr->CMD &= ~0xff;
+ //        if ((uptr->SNS & SNS_INTVENT) == 0) {
+ //            set_devattn(addr, SNS_UNITCHK);
+ //        }
+            uptr->SNS |= SNS_INTVENT;
+            return SNS_UNITCHK;
+         }
+             uptr->SNS &= CONN;
+         }
          uptr->CMD |= cmd;
          sim_activate(uptr, 200);
          return 0;
 
     case 0x0:               /* Status */
-         if (cmd == 0x4 || cmd == CMD_SNSID) {  /* Sense */
+         if (cmd == CMD_SENSE || cmd == CMD_SNSID) {  /* Sense */
             uptr->CMD |= cmd;
             sim_activate(uptr, 200);
             return 0;
@@ -241,7 +246,7 @@ uint8  scoml_haltio(UNIT *uptr) {
 
     switch (cmd) {
     case 0:
-    case 0x4:
+    case CMD_SENSE:
     case CMD_SNSID:      /* Sense ID */
     case CMD_SEL:        /* Select */
     case CMD_NOP:        /* Nop scommand */
@@ -272,14 +277,22 @@ t_stat scoml_srv(UNIT * uptr)
     int                 cmd = uptr->CMD & 0xff;
     uint8               ch;
 
-    if (scom_ldsc[unit].conn == 0 && cmd != 0x4) {
+
+#if 0
+    if (scom_ldsc[unit].conn == 0 &&
+         cmd != CMD_SENSE && cmd != CMD_SNSID && cmd != CMD_NOP) {
+         sim_debug(DEBUG_DETAIL, dptr, "unit=%d disco\n", unit);
          /* If no connection yet, pretend unit is powered off.
             ATTN & DE at connection will revive activity.  */
-         uptr->SNS |= SNS_INTVENT;
          uptr->CMD &= ~0xff;
+ //        if ((uptr->SNS & SNS_INTVENT) == 0) {
+ //            set_devattn(addr, SNS_UNITCHK);
+ //        }
+//         uptr->SNS |= SNS_INTVENT;
          chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
          return SCPE_OK;
     }
+#endif
 
     if ((uptr->CMD & (RECV|DATA)) != 0) {
         sim_activate(uptr, 200);
@@ -290,7 +303,7 @@ t_stat scoml_srv(UNIT * uptr)
     case 0:
          break;
 
-    case 0x4:
+    case CMD_SENSE:
          ch = uptr->SNS & 0xff;
          sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 1 %x\n", unit, ch);
          chan_write_byte(addr, &ch) ;
@@ -314,7 +327,6 @@ t_stat scoml_srv(UNIT * uptr)
 
     case CMD_RDMD:       /* Read modified */
     case CMD_RD:         /* Read in data from scom line */
-         uptr->SNS = 0;
          if (uptr->CMD & HALT) {
              uptr->CMD &= ~(0xFF|RECV);
              return SCPE_OK;
@@ -323,7 +335,7 @@ t_stat scoml_srv(UNIT * uptr)
              if (scom_ldsc[unit].conn == 0) {
                  sim_debug(DEBUG_DETAIL, dptr, "unit=%d disco\n", unit);
                  uptr->CMD &= ~(0xff|INPUT|ENAB|RECV|INIT1|SEND|DATA);
-                 uptr->SNS = SNS_CTLCHK;
+                 uptr->SNS = SNS_UNITCHK;
                  uptr->BPTR = 0;
                  uptr->IPTR = 0;
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
@@ -366,7 +378,6 @@ t_stat scoml_srv(UNIT * uptr)
     case CMD_WR:         /* Write data to com line */
          ch = REMOTE_WRT;
 write:
-         uptr->SNS = 0;
          if (uptr->CMD & HALT) {
              uptr->CMD &= ~(0xFF|SEND);
              return SCPE_OK;
@@ -380,7 +391,7 @@ write:
              if (scom_ldsc[unit].conn == 0) {
                  sim_debug(DEBUG_DETAIL, dptr, "unit=%d disco\n", unit);
                  uptr->CMD &= ~(0xff|INPUT|ENAB|RECV|INIT1|SEND|DATA);
-                 uptr->SNS = SNS_CTLCHK;
+                 uptr->SNS = SNS_UNITCHK;
                  uptr->BPTR = 0;
                  uptr->IPTR = 0;
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
@@ -412,7 +423,7 @@ write:
 
     case CMD_SEL:        /* Select */
          uptr->CMD &= ~0xff;
-         uptr->SNS = 0;
+         uptr->SNS &= CONN;
          sim_debug(DEBUG_CMD, dptr, "COM: unit=%d select done\n", unit);
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          break;
@@ -445,8 +456,8 @@ t_stat scom_scan(UNIT * uptr)
         scom_sendoption(line, ln, DO, OPTION_EOR);
         line->CMD |= ENAB|DATA|INIT1;
         line->CMD &= ~(RECV|SEND);
-        line->SNS = 0;
-        set_devattn(GET_UADDR(line->CMD), SNS_ATTN);
+        line->SNS = CONN;
+        set_devattn(GET_UADDR(line->CMD), SNS_DEVEND);
         sim_activate(line, 20000);
     }
 
@@ -454,10 +465,18 @@ t_stat scom_scan(UNIT * uptr)
     for (ln = 0; ln < scom_desc.lines; ln++) {
         line = &scoml_unit[ln];
         if ((line->CMD & (SEND|RECV|ENAB)) == ENAB && tmxr_rqln(&scom_ldsc[ln]) > 0) {
-            if ((line->CMD & (DATA|INIT1)) != 0 || (line->CMD & 0xff) != 0)
+            if ((line->CMD & (DATA|INIT1)) != 0 || (line->CMD & 0xff) != 0) {
                 sim_activate(line, 200);
-            else
-                set_devattn(GET_UADDR(line->CMD), SNS_ATTN);
+//            } else {
+//                tmxr_reset_ln(&scom_ldsc[ln]);
+ //               sim_debug(DEBUG_DETAIL, &scom_dev, "SCOM line disconnect %d\n", ln);
+  //              set_devattn(GET_UADDR(line->CMD), SNS_ATTN);
+            }
+        }
+        if (scom_ldsc[ln].conn == 0 && (line->SNS & CONN) != 0) {
+                sim_debug(DEBUG_DETAIL, &scom_dev, "SCOM line disconnect %d\n", ln);
+                set_devattn(GET_UADDR(line->CMD), SNS_ATTN); 
+//                tmxr_reset_ln(&scom_ldsc[ln]);
         }
     }
     tmxr_poll_tx(&scom_desc);
@@ -545,7 +564,7 @@ scom_readinput(UNIT *uptr)
                          scom_sendoption(uptr, unit, DO, OPTION_BINARY);
                      }
                  }
-              
+
                  break;
              default:
                  if ((data->option_state[ch] & TC_DONT) == 0)

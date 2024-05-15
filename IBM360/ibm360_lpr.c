@@ -39,37 +39,29 @@
 #define UNIT_M_FCB     (3 << UNIT_V_FCB)
 
 /* u3 hold command and status information */
-#define CHN_SNS        0x04       /* Sense command */
+#define CMD            u3
 
-#define LPR_WR         0x01       /* Write command */
-#define LPR_SPKCMD     0x03       /* Skip command */
-#define LPR_SPCMSK     0x18       /* Space after printing */
-#define LPR_SKIP       0x80       /* Skip Flag */
-#define LPR_SKPCHN     0x78       /* Skip Channel */
-#define LPR_CMDMSK     0xff       /* Mask command part. */
-#define LPR_FULL       0x100      /* Buffer full */
-#define LPR_DATCHK     0x200      /* Don't return data-check */
+#define LPR_WR         0x01        /* Write command */
+#define LPR_SPKCMD     0x03        /* Skip command */
+#define LPR_SPCMSK     0x18        /* Space after printing */
+#define LPR_SKIP       0x80        /* Skip Flag */
+#define LPR_SKPCHN     0x78        /* Skip Channel */
+#define LPR_CMDMSK     0xff        /* Mask command part. */
+#define LPR_FULL       0x100       /* Buffer full */
+#define LPR_DATCHK     0x200       /* Don't return data-check */
 
 /* Upper 11 bits of u3 hold the device address */
 
 /* u4 holds current line */
-/* in u5 packs sense byte 0,1 and 3 */
+#define LINE           u4
+
+/* in u5 packs sense byte 0 */
 /* Sense byte 0 */
-#define SNS_CMDREJ      0x80      /* Command reject */
-#define SNS_INTVENT     0x40      /* Unit intervention required */
-#define SNS_BUSCHK      0x20      /* Parity error on bus */
-#define SNS_EQUCHK      0x10      /* Equipment check */
-#define SNS_DATCHK      0x08      /* Data Check */
-#define SNS_OVRRUN      0x04      /* Data overrun */
-#define SNS_SEQUENCE    0x02      /* Unusual sequence */
-#define SNS_CHN9        0x01      /* Channel 9 on printer */
-#define SNS_CHN12       0x100
+#define SNS            u5
+#define SNS_CHN9       SNS_OPRCHK  /* Channel 9 on printer, 0x1 */
+#define SNS_CHN12      0x100
 
 /* u6 hold buffer position */
-
-#define CMD    u3
-#define LINE   u4
-#define SNS    u5
 #define POS    u6
 
 
@@ -109,9 +101,9 @@ UNIT                lpr_unit[] = {
 #if NUM_DEVS_LPR > 1
     {UDATA(lpr_srv, UNIT_LPR | UNIT_DIS, 66), 300, UNIT_ADDR(0x1E)},
 #if NUM_DEVS_LPR > 2
-    {UDATA(lpr_srv, UNIT_LPR | UNIT_DIS, 66), 300, UNIT_ADDR(0x40E)},
+    {UDATA(lpr_srv, UNIT_LPR | UNIT_DIS, 66), 300, UNIT_ADDR(0x2E)},
 #if NUM_DEVS_LPR > 3
-    {UDATA(lpr_srv, UNIT_LPR | UNIT_DIS, 66), 300, UNIT_ADDR(0x41E)},
+    {UDATA(lpr_srv, UNIT_LPR | UNIT_DIS, 66), 300, UNIT_ADDR(0x3E)},
 #endif
 #endif
 #endif
@@ -147,7 +139,7 @@ static CONST uint16 legacy[] = {
 0x040, 0x000, 0x000, 0x000, 0x000, 0x000, 0x020, 0x000, 0x000, 0x000, /* 31 - 40 */
 0x000, 0x000, 0x010, 0x000, 0x000, 0x000, 0x000, 0x000, 0x004, 0x000, /* 41 - 50 */
 0x000, 0x000, 0x000, 0x000, 0x002, 0x000, 0x000, 0x000, 0x000, 0x000, /* 51 - 60 */
-0x001, 0x000, 0x008, 0x000, 0x000, 0x000, 0x1000 };                   /* 61 - 66 */
+0x001, 0x000, 0x008, 0x000, 0x000, 0x001, 0x1000 };                   /* 61 - 66 */
 /*
     PROGRAMMMING NOTE:  the below cctape value SHOULD match
                         the same corresponding fcb value!
@@ -160,7 +152,7 @@ static CONST uint16 std1[] = {
 0x040, 0x000, 0x000, 0x000, 0x000, 0x000, 0x020, 0x000, 0x000, 0x000, /* 31 - 40 */
 0x000, 0x000, 0x010, 0x000, 0x000, 0x000, 0x000, 0x000, 0x008, 0x000, /* 41 - 50 */
 0x000, 0x000, 0x000, 0x000, 0x004, 0x000, 0x000, 0x000, 0x000, 0x000, /* 51 - 60 */
-0x002, 0x000, 0x001, 0x000, 0x000, 0x000, 0x1000 };                   /* 61 - 66 */
+0x002, 0x000, 0x001, 0x000, 0x000, 0x001, 0x1000 };                   /* 61 - 66 */
 
 static CONST uint16 none[] = {
 /* 1      2      3      4      5      6      7      8      9     10       lines  */
@@ -170,7 +162,7 @@ static CONST uint16 none[] = {
 0x040, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, /* 31 - 40 */
 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, /* 41 - 50 */
 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, /* 51 - 60 */
-0x002, 0x000, 0x000, 0x000, 0x000, 0x000, 0x1000 };                   /* 61 - 66 */
+0x002, 0x000, 0x000, 0x000, 0x000, 0x001, 0x1000 };                   /* 61 - 66 */
 static CONST uint16 *fcb_ptr[] = { legacy, std1, none, NULL};
 
 
@@ -262,8 +254,9 @@ print_line(UNIT * uptr)
     char                out[150];       /* Temp conversion buffer */
     int                 i;
     int                 u = (uptr - lpr_unit);
-    int                 l = (uptr->CMD >> 3) & 0x1f;
-    int                 f;
+    int                 space = (uptr->CMD >> 3) & 0x1f;
+    int                 flag;
+    int                 line;
     int                 mask;
 
     /* Dump buffer if full */
@@ -293,12 +286,12 @@ print_line(UNIT * uptr)
         memset(&lpr_data[u].lbuff[0], 0, 144);
     }
 
-    f = 0;
-    if (l < 4) {
-        while(l != 0) {
+    flag = 0;
+    if (space < 4) {
+        while(space != 0) {
             sim_fwrite("\r\n", 1, 2, uptr->fileref);
-            f = 1;
             uptr->pos += 2;
+            flag = 1;
             if ((uptr->CMD & 03) == 0x1) {
                if ((lpr_data[u].fcb[uptr->LINE] & (0x1000 >> 9)) != 0) {
                   uptr->SNS |= SNS_CHN9;
@@ -309,41 +302,46 @@ print_line(UNIT * uptr)
             }
             if ((lpr_data[u].fcb[uptr->LINE] & 0x1000) != 0 ||
                  ((uint32)uptr->LINE) >= uptr->capac) {
-               if (f)
+               if (flag) {
                    sim_fwrite("\r\n", 1, 2, uptr->fileref);
+                   uptr->pos += 2;
+               }
                sim_fwrite("\f\r\n", 1, 3, uptr->fileref);
+               uptr->SNS |= SNS_CHN12;
+               uptr->pos += 3;
                uptr->LINE = 0;
             } else {
                uptr->LINE++;
             }
-            l--;
+            space--;
         }
         return;
     }
 
-    mask = 0x1000 >> (1 & 0xf);
-    f = 0;     /* Flag if we skipped to new page */
-    l = 0;     /* What line we should be on */
+    mask = 0x1000 >> (space & 0xf);
+    flag = 0;     /* Flag if we skipped to new page */
+    line = 0;     /* What line we should be on */
 
-    for (i = uptr->LINE; (lpr_data[u].fcb[i] & mask) == 0 &&
-                            uptr->LINE != i; i++) {
-         l++;
+    for (i = uptr->LINE; (lpr_data[u].fcb[i] & mask) == 0; i++) {
+         line++;
          if ((lpr_data[u].fcb[i] & 0x1000) != 0 ||
                ((uint32)i) >= uptr->capac) {
              sim_fwrite("\r\n\f\r\n", 1, 5, uptr->fileref);
-             uptr->pos += 3;
-             f = 1;
-             l = 0;
+             uptr->pos += 5;
+             uptr->SNS |= SNS_CHN12;
+             flag = 1;
+             line = 0;
+             break;
          }
     }
 
     /* If past end of form clear row */
-    if (f) {
+    if (flag) {
        uptr->LINE = 0;
     }
 
     if ((lpr_data[u].fcb[i] & mask) != 0) {
-        while (l-- > 0) {
+        while (line-- > 0) {
            sim_fwrite("\r\n", 1, 2, uptr->fileref);
            uptr->pos += 2;
            uptr->LINE++;

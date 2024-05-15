@@ -36,10 +36,8 @@
 #ifdef NUM_DEVS_CDR
 #define UNIT_CDR       UNIT_ATTABLE | UNIT_RO | UNIT_DISABLE | MODE_029
 
-
-#define CHN_SNS        0x04       /* Sense command */
-
 /* Device status information stored in u3 */
+#define CMD            u3
 #define CDR_RD         0x02       /* Read command */
 #define CDR_FEED       0x03       /* Feed next card */
 #define CDR_CMDMSK     0x27       /* Mask command part. */
@@ -53,21 +51,11 @@
 /* Upper 11 bits of u3 hold the device address */
 
 /* u4 holds current column, */
+#define COL            u4
 
-/* in u5 packs sense byte 0,1 and 3 */
+/* in u5 packs sense byte 0 */
 /* Sense byte 0 */
-#define SNS_CMDREJ     0x80       /* Command reject */
-#define SNS_INTVENT    0x40       /* Unit intervention required */
-#define SNS_BUSCHK     0x20       /* Parity error on bus */
-#define SNS_EQUCHK     0x10       /* Equipment check */
-#define SNS_DATCHK     0x08       /* Data Check */
-#define SNS_OVRRUN     0x04       /* Data overrun */
-#define SNS_SEQUENCE   0x02       /* Unusual sequence */
-#define SNS_CHN9       0x01       /* Channel 9 on printer */
-
-#define CMD    u3
-#define COL    u4
-#define SNS    u5
+#define SNS            u5
 
 
 /* std devices. data structures
@@ -94,9 +82,9 @@ UNIT                cdr_unit[] = {
 #if NUM_DEVS_CDR > 1
    {UDATA(cdr_srv, UNIT_CDR | UNIT_DIS, 0), 300, UNIT_ADDR(0x1C)},
 #if NUM_DEVS_CDR > 2
-   {UDATA(cdr_srv, UNIT_CDR | UNIT_DIS, 0), 300, UNIT_ADDR(0x40C)},
+   {UDATA(cdr_srv, UNIT_CDR | UNIT_DIS, 0), 300, UNIT_ADDR(0x2C)},
 #if NUM_DEVS_CDR > 3
-   {UDATA(cdr_srv, UNIT_CDR | UNIT_DIS, 0), 300, UNIT_ADDR(0x41C)},
+   {UDATA(cdr_srv, UNIT_CDR | UNIT_DIS, 0), 300, UNIT_ADDR(0x3C)},
 #endif
 #endif
 #endif
@@ -140,7 +128,7 @@ uint8  cdr_startcmd(UNIT *uptr,  uint8 cmd) {
     }
 
     switch (cmd & 0x7) {
-    case 2:              /* Read command */
+    case CMD_READ:       /* Read command */
          uptr->SNS = 0;
          uptr->COL = 0;
          /* Check if there was End of file */
@@ -173,7 +161,7 @@ uint8  cdr_startcmd(UNIT *uptr,  uint8 cmd) {
          sim_activate(uptr, 100);       /* Start unit off */
          return 0;
 
-    case 3:              /* Control */
+    case CMD_CTL:        /* Control */
          uptr->SNS = 0;
          uptr->CMD &= ~(0xff);
          if (cmd == 0x3)
@@ -191,7 +179,7 @@ uint8  cdr_startcmd(UNIT *uptr,  uint8 cmd) {
     case 0:               /* Status */
          return 0;
 
-    case 4:               /* Sense */
+    case CMD_SENSE:       /* Sense */
          uptr->CMD &= ~(0xff);
          uptr->CMD |= (cmd & 0xff);
          sim_activate(uptr, 10);
@@ -214,7 +202,7 @@ cdr_srv(UNIT *uptr) {
     uint16   *image = (uint16 *)(uptr->up7);
     int       fl = 0;
 
-    if ((uptr->CMD & CDR_CMDMSK) == CHN_SNS) {
+    if ((uptr->CMD & CDR_CMDMSK) == CMD_SENSE) {
          uint8 ch = uptr->SNS;
          if (ch == 0 && (uptr->flags & UNIT_ATT) == 0)
              ch = SNS_INTVENT;

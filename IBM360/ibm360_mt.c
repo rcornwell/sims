@@ -48,6 +48,9 @@
                           DEV_BUF_NUM(x)
 
 
+/* u3 hold command and status information */
+#define CMD    u3
+
 #define MT_WRITE            0x01       /* Write command */
 #define MT_READ             0x02       /* Read command */
 #define MT_RDBK             0x0c       /* Read Backward */
@@ -98,17 +101,11 @@
 /* Upper 11 bits of u3 hold the device address */
 
 /* in u4 is current buffer position */
+#define POS    u4
 
 /* in u5 packs sense byte 0,1 and 3 */
+#define SNS    u5
 /* Sense byte 0 */
-#define SNS_CMDREJ       0x80       /* Command reject */
-#define SNS_INTVENT      0x40       /* Unit intervention required */
-#define SNS_BUSCHK       0x20       /* Parity error on bus */
-#define SNS_EQUCHK       0x10       /* Equipment check */
-#define SNS_DATCHK       0x08       /* Data Check */
-#define SNS_OVRRUN       0x04       /* Data overrun */
-#define SNS_WCZERO       0x02       /* Write with no data */
-#define SNS_CVTCHK       0x01       /* Data conversion error */
 
 /* Sense byte 1 */
 #define SNS_NOISE        0x80       /* Noise record */
@@ -140,13 +137,10 @@
 #define MT_CONV3         0xc0
 
 /* u6 holds the packed characters and unpack counter */
+#define CPOS   u6
 #define BUF_EMPTY(u)  (u->hwmark == 0xFFFFFFFF)
 #define CLR_BUF(u)     u->hwmark =  0xFFFFFFFF
 
-#define CMD    u3
-#define POS    u4
-#define SNS    u5
-#define CPOS   u6
 
 uint8               mt_startio(UNIT *uptr);
 uint8               mt_startcmd(UNIT *uptr, uint8 cmd);
@@ -726,7 +720,7 @@ t_stat mt_srv(UNIT * uptr)
                  uptr->CMD &= ~MT_CMDMSK;
                  mt_error(uptr, addr, r, dptr);       /* Record errors */
              } else {
-                 uptr->SNS |= SNS_WCZERO;              /* Write with no data */
+                 uptr->SNS |= SNS_UNITCHK;            /* Write with no data */
              }
          } else {
              if ((uptr->flags & MTUF_9TR) == 0) {
