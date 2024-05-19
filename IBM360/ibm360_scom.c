@@ -32,8 +32,6 @@
 
 
 /* u3 */
-#define CMD        u3
-
 #define CMD_WR             0x01       /* Write data to com line */
 #define CMD_RD             0x02       /* Read buffer */
 #define CMD_NOP            0x03       /* Nop scommand */
@@ -45,7 +43,7 @@
 #define CMD_WSF            0x11       /* Write structured field */
 #define CMD_SNSID          0xE4       /* Sense ID */
 
-/* u3 second byte, status */
+/* u4 second byte */
 #define RECV               0x00100    /* Recieving data */
 #define SEND               0x00200    /* Sending data */
 #define ENAB               0x00400    /* Line enabled */
@@ -54,36 +52,46 @@
 #define INPUT              0x02000    /* Input ready */
 #define ATTN               0x04000    /* Send attention signal */
 #define HALT               0x08000    /* Halt operation */
+#define CONN               0x10000    /* Device connected */
+
+#define NEG_DONE           0          /* Negotiation done */
+#define NEG_TERM           1          /* Terminal option sent */
+#define NEG_TERM_TYPE      2          /* Terminal type sent */
+#define NEG_EOR            3          /* EOR Sent */
+#define NEG_BINARY         4          /* Binary sent */
+
 
 /* Upper 11 bits of u3 hold the device address */
 
 /* u4 */
 /* Where we are reading from */
-#define IPTR       u4
 
 /* u5 */
-#define SNS        u5
 /* Sense byte 0 */
-#define CONN               0x100      /* Unit connected */
-
 /* u6 */
 /* Pointer into buffer */
-#define BPTR       u6
 
+#define CMD        u3
+#define STATUS     u4
+#define SNS        u5
+#define BPTR       u6
 
 #define TC_WILL    0x1                 /* Option in will state */
 #define TC_WONT    0x2                 /* Wont do option */
 #define TC_DO      0x4                 /* Will do option. */
 #define TC_DONT    0x8                 /* Dont do option  */
 
-#define IAC        255                 /* Interpret as command */
-#define DONT       254                 /* Dont use option */
-#define DO         253                 /* Use this option */
-#define WONT       252                 /* I wont use this option */
-#define WILL       251                 /* I will use this option */
-#define IP         244                 /* Interrupt pending */
-#define BREAK      243                 /* Break */
 #define EOR        239                 /* End of record */
+#define SE         240                 /* End of negotiation */
+#define BREAK      243                 /* Break */
+#define IP         244                 /* Interrupt pending */
+#define SB         250                 /* Subnegotation */
+#define WILL       251                 /* I will use this option */
+#define WONT       252                 /* I wont use this option */
+#define DO         253                 /* Use this option */
+#define DONT       254                 /* Dont use option */
+#define IAC        255                 /* Interpret as command */
+
 
 /* Telnet options we care about */
 #define OPTION_BINARY    0             /* Send 8 bit data */
@@ -98,6 +106,7 @@
 #define TS_WONT      3                 /* Have seen IAC WONT */
 #define TS_DO        4                 /* Have seen IAC DO */
 #define TS_DONT      5                 /* Have seen IAC DONT */
+#define TS_SB        6                 /* Have seen SB */
 
 /* Remote orders */
 #define REMOTE_EAU      0x6F           /* Erase all unprotected */
@@ -111,6 +120,7 @@
 struct _line {
     uint16        option_state[256];   /* Current telnet state */
     uint8         state;               /* Current line status */
+    char          term_type[50];       /* Current terminal type */
 } line_data[NUM_UNITS_SCOM];
 
 extern int32     tmxr_poll;
@@ -196,34 +206,46 @@ uint8  scoml_startcmd(UNIT *uptr,  uint8 cmd) {
        return SNS_BSY;
     }
 
+    if (cmd == 0)
+         return 0;
+    if (scom_ldsc[unit].conn == 0 && cmd != CMD_SENSE) {
+       uptr->SNS = SNS_INTVENT;
+       return SNS_UNITCHK;
+    }
 
-    switch (cmd & 0x3) {
-    case 0x2:              /* Read scommand */
-    case 0x1:              /* Write scommand */
-    case 0x3:              /* Control */
-         if (cmd != CMD_NOP) {
-             if ((uptr->SNS & CONN) == 0) {
-         /* If no connection yet, pretend unit is powered off.
-            ATTN & DE at connection will revive activity.  */
-//         uptr->CMD &= ~0xff;
- //        if ((uptr->SNS & SNS_INTVENT) == 0) {
- //            set_devattn(addr, SNS_UNITCHK);
- //        }
-            uptr->SNS |= SNS_INTVENT;
-            return SNS_UNITCHK;
-         }
-             uptr->SNS &= CONN;
-         }
+    switch (cmd) {
+    case CMD_WR:            /* Write data to com line */
+    case CMD_RD:            /* Read buffer */
+    case CMD_WRER:          /* Erase and write data */
+    case CMD_RDMD:          /* Read modified */
+    case CMD_WRERALT:       /* Write erase alternative */
+    case CMD_WSF:           /* Write structured field */
+    case CMD_SNSID:         /* Sense ID */
+         uptr->SNS = 0;
          uptr->CMD |= cmd;
          sim_activate(uptr, 200);
          return 0;
 
-    case 0x0:               /* Status */
-         if (cmd == CMD_SENSE || cmd == CMD_SNSID) {  /* Sense */
-            uptr->CMD |= cmd;
-            sim_activate(uptr, 200);
-            return 0;
-         }
+    case CMD_SENSE:
+         uptr->CMD |= cmd;
+         sim_activate(uptr, 200);
+         return 0;
+
+    case CMD_NOP:           /* Nop scommand */
+         break;
+
+    case CMD_SEL:           /* Select */
+    case CMD_EAU:           /* Erase all un protected */
+         uptr->SNS = 0;
+         uptr->CMD |= cmd;
+         sim_activate(uptr, 200);
+         return SNS_CHNEND;
+
+    case 0:
+         return 0;
+
+    default:
+         uptr->SNS = SNS_CMDREJ;
          break;
     }
     if (uptr->SNS & 0xff)
@@ -246,7 +268,7 @@ uint8  scoml_haltio(UNIT *uptr) {
 
     switch (cmd) {
     case 0:
-    case CMD_SENSE:
+    case 0x4:
     case CMD_SNSID:      /* Sense ID */
     case CMD_SEL:        /* Select */
     case CMD_NOP:        /* Nop scommand */
@@ -278,23 +300,7 @@ t_stat scoml_srv(UNIT * uptr)
     uint8               ch;
 
 
-#if 0
-    if (scom_ldsc[unit].conn == 0 &&
-         cmd != CMD_SENSE && cmd != CMD_SNSID && cmd != CMD_NOP) {
-         sim_debug(DEBUG_DETAIL, dptr, "unit=%d disco\n", unit);
-         /* If no connection yet, pretend unit is powered off.
-            ATTN & DE at connection will revive activity.  */
-         uptr->CMD &= ~0xff;
- //        if ((uptr->SNS & SNS_INTVENT) == 0) {
- //            set_devattn(addr, SNS_UNITCHK);
- //        }
-//         uptr->SNS |= SNS_INTVENT;
-         chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
-         return SCPE_OK;
-    }
-#endif
-
-    if ((uptr->CMD & (RECV|DATA)) != 0) {
+    if ((uptr->STATUS & (RECV|DATA|INIT1)) != 0) {
         sim_activate(uptr, 200);
         return scom_readinput(uptr);
     }
@@ -305,6 +311,9 @@ t_stat scoml_srv(UNIT * uptr)
 
     case CMD_SENSE:
          ch = uptr->SNS & 0xff;
+         if (scom_ldsc[unit].conn == 0) {
+            uptr->SNS |= SNS_INTVENT;
+         }
          sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 1 %x\n", unit, ch);
          chan_write_byte(addr, &ch) ;
          uptr->CMD &= ~0xff;
@@ -327,24 +336,18 @@ t_stat scoml_srv(UNIT * uptr)
 
     case CMD_RDMD:       /* Read modified */
     case CMD_RD:         /* Read in data from scom line */
-         if (uptr->CMD & HALT) {
-             uptr->CMD &= ~(0xFF|RECV);
+         uptr->SNS = 0;
+         if ((uptr->STATUS & HALT) != 0) {
+             uptr->CMD &= ~(0xff);
+             uptr->STATUS &= ~(RECV);
              return SCPE_OK;
          }
-         if (uptr->CMD & ENAB) {
-             if (scom_ldsc[unit].conn == 0) {
-                 sim_debug(DEBUG_DETAIL, dptr, "unit=%d disco\n", unit);
-                 uptr->CMD &= ~(0xff|INPUT|ENAB|RECV|INIT1|SEND|DATA);
-                 uptr->SNS = SNS_UNITCHK;
-                 uptr->BPTR = 0;
-                 uptr->IPTR = 0;
-                 chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
-                 return SCPE_OK;
-             }
-             if ((uptr->CMD & RECV) == 0) {
+         if ((uptr->STATUS & ENAB) != 0) {
+             if ((uptr->STATUS & RECV) == 0) {
                   /* Send cmd IAC EOR */
                  if (tmxr_rqln(&scom_ldsc[unit]) == 0) {
-                     sim_debug(DEBUG_DETAIL, dptr, "unit=%d Send read cmd %x\n", unit, cmd);
+                     sim_debug(DEBUG_DETAIL, dptr, "unit=%d Send read cmd %x\n",
+                                  unit, cmd);
                      if (cmd == CMD_RD)
                          tmxr_putc_ln( &scom_ldsc[unit], REMOTE_RB);
                      else
@@ -352,7 +355,7 @@ t_stat scoml_srv(UNIT * uptr)
                      tmxr_putc_ln( &scom_ldsc[unit], IAC);
                      tmxr_putc_ln( &scom_ldsc[unit], EOR);
                  }
-                 uptr->CMD |= RECV;
+                 uptr->STATUS |= RECV;
              }
              sim_activate(uptr, 200);
          }
@@ -378,29 +381,24 @@ t_stat scoml_srv(UNIT * uptr)
     case CMD_WR:         /* Write data to com line */
          ch = REMOTE_WRT;
 write:
-         if (uptr->CMD & HALT) {
-             uptr->CMD &= ~(0xFF|SEND);
+         uptr->SNS = 0;
+         if ((uptr->STATUS & HALT) != 0) {
+             uptr->CMD &= ~(0xFF);
+             uptr->STATUS &= ~(SEND);
              return SCPE_OK;
          }
-         if (uptr->CMD & ENAB) {
-             if ((uptr->CMD & SEND) == 0) {
-                 sim_debug(DEBUG_DETAIL, dptr, "unit=%d send write %x\n", unit, ch);
+         if ((uptr->STATUS & ENAB) != 0) {
+             if ((uptr->STATUS & SEND) == 0) {
+                 sim_debug(DEBUG_DETAIL, dptr, "unit=%d send write %x\n", unit,
+                         ch);
                  tmxr_putc_ln( &scom_ldsc[unit], ch);
-                 uptr->CMD |= SEND;
-             }
-             if (scom_ldsc[unit].conn == 0) {
-                 sim_debug(DEBUG_DETAIL, dptr, "unit=%d disco\n", unit);
-                 uptr->CMD &= ~(0xff|INPUT|ENAB|RECV|INIT1|SEND|DATA);
-                 uptr->SNS = SNS_UNITCHK;
-                 uptr->BPTR = 0;
-                 uptr->IPTR = 0;
-                 chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITEXP);
-                 return SCPE_OK;
+                 uptr->STATUS |= SEND;
              }
              if (chan_read_byte (addr, &ch)) {
                  tmxr_putc_ln( &scom_ldsc[unit], IAC);
                  tmxr_putc_ln( &scom_ldsc[unit], EOR);
-                 uptr->CMD &= ~(0xff| SEND);
+                 uptr->CMD &= ~(0xff);
+                 uptr->STATUS &= ~(SEND);
                  sim_debug(DEBUG_CMD, dptr, "COM: unit=%d eor\n", unit);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND);
              } else {
@@ -417,13 +415,11 @@ write:
          break;
 
     case CMD_NOP:        /* Nop scommand */
-         uptr->CMD &= ~0xff;
-         chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          break;
 
     case CMD_SEL:        /* Select */
          uptr->CMD &= ~0xff;
-         uptr->SNS &= CONN;
+         uptr->SNS = 0;
          sim_debug(DEBUG_CMD, dptr, "COM: unit=%d select done\n", unit);
          chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          break;
@@ -453,30 +449,25 @@ t_stat scom_scan(UNIT * uptr)
         for (i = 0; i < 256; i++)
             data->option_state[i] = 0;
         scom_sendoption(line, ln, DO, OPTION_TERMINAL);
-        scom_sendoption(line, ln, DO, OPTION_EOR);
-        line->CMD |= ENAB|DATA|INIT1;
-        line->CMD &= ~(RECV|SEND);
-        line->SNS = CONN;
-        set_devattn(GET_UADDR(line->CMD), SNS_DEVEND);
-        sim_activate(line, 20000);
+        line->STATUS |= ENAB|DATA|INIT1|CONN;
+        line->STATUS &= ~(RECV|SEND);
+        line->SNS = 0;
+        sim_activate(line, 2000);
     }
 
     /* See if a line is disconnected with no scommand on it. */
     for (ln = 0; ln < scom_desc.lines; ln++) {
         line = &scoml_unit[ln];
-        if ((line->CMD & (SEND|RECV|ENAB)) == ENAB && tmxr_rqln(&scom_ldsc[ln]) > 0) {
-            if ((line->CMD & (DATA|INIT1)) != 0 || (line->CMD & 0xff) != 0) {
-                sim_activate(line, 200);
-//            } else {
-//                tmxr_reset_ln(&scom_ldsc[ln]);
- //               sim_debug(DEBUG_DETAIL, &scom_dev, "SCOM line disconnect %d\n", ln);
-  //              set_devattn(GET_UADDR(line->CMD), SNS_ATTN);
-            }
+        if ((line->STATUS & (SEND|ENAB)) == ENAB &&
+                  tmxr_rqln(&scom_ldsc[ln]) > 0) {
+            set_devattn(GET_UADDR(line->CMD), SNS_ATTN);
         }
-        if (scom_ldsc[ln].conn == 0 && (line->SNS & CONN) != 0) {
-                sim_debug(DEBUG_DETAIL, &scom_dev, "SCOM line disconnect %d\n", ln);
-                set_devattn(GET_UADDR(line->CMD), SNS_ATTN); 
-//                tmxr_reset_ln(&scom_ldsc[ln]);
+        if (scom_ldsc[ln].conn == 0 && (line->STATUS & CONN) != 0) {
+            line->STATUS = 0;
+            line->CMD &= ~0xff;
+            sim_debug(DEBUG_DETAIL, &scom_dev, "set disconnect %d\n", ln);
+            line->SNS |= SNS_INTVENT;
+            set_devattn(GET_UADDR(line->CMD), SNS_ATTN);
         }
     }
     tmxr_poll_tx(&scom_desc);
@@ -504,112 +495,201 @@ scom_readinput(UNIT *uptr)
                  data->state = TS_IAC;
                  break;
              }
-             if (uptr->CMD & RECV) {
+             if (uptr->STATUS & RECV) {
+                 sim_debug(DEBUG_DETAIL, dptr, "unit=%d sent %x\n", unit, ch);
                  if (chan_write_byte( addr, &ch)) {
-                     uptr->CMD &= ~(0xff|RECV);
+                     uptr->CMD &= ~(0xff);
+                     uptr->STATUS &= ~(RECV);
                      chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                      return SCPE_OK;
                  }
              }
              break;
+        case TS_SB:
+             if (ch == IAC) {
+                 data->state = TS_IAC;
+             } else {
+                 data->term_type[uptr->BPTR++] = ch;
+             }
+             break;
+
         case TS_IAC:
              switch (ch) {
              case WILL:
                   data->state = TS_WILL;
                   break;
+
              case WONT:
                   data->state = TS_WONT;
                   break;
+
              case DO:
                   data->state = TS_DO;
                   break;
+
              case DONT:
                   data->state = TS_DONT;
                   break;
+
              case IAC:
                   data->state = TS_DATA;
-                  if (uptr->CMD & RECV) {
+                  if (uptr->STATUS & RECV) {
+                      sim_debug(DEBUG_DETAIL, dptr, "unit=%d sent %x\n", unit,
+                                  ch);
                       if (chan_write_byte( addr, &ch)) {
-                          uptr->CMD &= ~(0xff|RECV);
+                          uptr->CMD &= ~(0xff);
+                          uptr->STATUS &= ~(RECV);
                           chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                           return SCPE_OK;
                       }
                   }
                   break;
+
+             case SB:
+                  data->state = TS_SB;
+                  sim_debug(DEBUG_DETAIL, dptr, "unit=%d SB\n", unit);
+                  uptr->BPTR = 0;
+                  break;
+
+             case SE:
+                  data->term_type[uptr->BPTR++] = '\0';
+                  data->state = TS_DATA;
+                  sim_debug(DEBUG_DETAIL, dptr, "unit=%d term = %s\n", unit,
+                       &data->term_type[2]);
+                  scom_sendoption(uptr, unit, WILL, OPTION_EOR);
+                  /* Clear WILL flag, because we have not recieved on yet */
+                  data->option_state[OPTION_EOR] &= ~TC_WILL;
+                  scom_sendoption(uptr, unit, DO, OPTION_EOR);
+                  break;
+
              case IP:
              case BREAK:
              case EOR:
                   data->state = TS_DATA;
-                  if (uptr->CMD & RECV) {
-                      uptr->CMD &= ~(0xff|RECV);
+                  if (uptr->STATUS & RECV) {
+                      uptr->CMD &= ~(0xff);
+                      uptr->STATUS &= ~(RECV);
                       chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                   }
                   break;
              }
              break;
 
-         case TS_WILL:
+        case TS_WILL:
              switch (ch) {
              case OPTION_TERMINAL:   /* Ignore terminal option */
-                 data->option_state[ch] |= TC_WILL|TC_DONT;
-                 break;
+                  if ((data->option_state[ch] & TC_WILL) == 0) {
+                      sim_debug(DEBUG_DETAIL, dptr,
+                               "unit=%d Will terminal %d\n", unit, ch);
+                      data->option_state[ch] |= TC_WILL;
+                      tmxr_putc_ln( &scom_ldsc[unit], IAC);
+                      tmxr_putc_ln( &scom_ldsc[unit], SB);
+                      tmxr_putc_ln( &scom_ldsc[unit], OPTION_TERMINAL);
+                      tmxr_putc_ln( &scom_ldsc[unit], 1);
+                      tmxr_putc_ln( &scom_ldsc[unit], IAC);
+                      tmxr_putc_ln( &scom_ldsc[unit], SE);
+                      tmxr_send_buffered_data(&scom_ldsc[unit]);
+                  }
+                  break;
+
+             case OPTION_EOR:
+                  sim_debug(DEBUG_DETAIL, dptr, "unit=%d Will EOR %d %x\n",
+                          unit, ch, data->option_state[ch]);
+                  if ((data->option_state[ch] & TC_WILL) == 0) {
+                      data->option_state[ch] |= TC_WILL;
+                      scom_sendoption(uptr, unit, WILL, OPTION_BINARY);
+                      data->option_state[OPTION_BINARY] &= ~TC_WILL;
+                      scom_sendoption(uptr, unit, DO, OPTION_BINARY);
+                  }
+                  break;
 
              case OPTION_BINARY:
+                  if ((data->option_state[ch] & TC_WILL) == 0) {
+                      data->option_state[ch] |= TC_WILL;
+                      tmxr_putc_ln( &scom_ldsc[unit], REMOTE_EW);
+                      tmxr_putc_ln( &scom_ldsc[unit], 0xc1);
+                      tmxr_putc_ln( &scom_ldsc[unit], IAC);
+                      tmxr_putc_ln( &scom_ldsc[unit], EOR);
+                      tmxr_send_buffered_data(&scom_ldsc[unit]);
+                      if ((uptr->CMD & 0xff) == 0) {
+                          sim_debug(DEBUG_DETAIL, dptr, "end arb %d\n", unit);
+                          uptr->SNS = 0;
+                          uptr->STATUS &= ~(DATA|INIT1);
+                          set_devattn(addr, SNS_DEVEND);
+                      } else {
+                          sim_debug(DEBUG_DETAIL, dptr, "arb  %d\n", unit);
+                      }
+                  }
+                  break;
+
              case OPTION_ECHO:
              case OPTION_SGA:
-             case OPTION_EOR:
-                 if ((data->option_state[ch] & TC_WILL) == 0) {
-                     scom_sendoption(uptr, unit, WILL, ch);
-                     if (ch == OPTION_EOR && (uptr->CMD & INIT1) != 0) {
-                         scom_sendoption(uptr, unit, DO, OPTION_BINARY);
-                     }
-                 }
+                  if ((data->option_state[ch] & TC_WILL) == 0) {
+                      sim_debug(DEBUG_DETAIL, dptr, "unit=%d Will Binary %d\n",
+                                    unit, ch);
+                      data->option_state[ch] |= TC_WILL;
+                      scom_sendoption(uptr, unit, DO, OPTION_EOR);
+                  }
+                  break;
 
-                 break;
              default:
-                 if ((data->option_state[ch] & TC_DONT) == 0)
-                     scom_sendoption(uptr, unit, DONT, ch);
-                 break;
+                  sim_debug(DEBUG_DETAIL, dptr, "unit=%d Will default %d\n",
+                                 unit, ch);
+                  if ((data->option_state[ch] & TC_DONT) == 0)
+                      scom_sendoption(uptr, unit, DONT, ch);
+                  break;
              }
              data->state = TS_DATA;
              break;
 
-         case TS_WONT:
+        case TS_WONT:
+             sim_debug(DEBUG_DETAIL, dptr, "unit=%d wont %d\n", unit, ch);
              if ((data->option_state[ch] & TC_WONT) == 0)
                  scom_sendoption(uptr, unit, WONT, ch);
              break;
 
-         case TS_DO:
+        case TS_DO:
              switch (ch) {
-             case OPTION_BINARY:
-             case OPTION_ECHO:
+             case OPTION_TERMINAL:
+                  break;
+
              case OPTION_SGA:
+             case OPTION_ECHO:
+                  if ((data->option_state[ch] & TC_WILL) != 0) {
+                      if ((data->option_state[ch] & TC_DO) == 0) {
+                          data->option_state[ch] |= TC_DO;
+                      }
+                  }
+                  break;
+
              case OPTION_EOR:
-                 if ((data->option_state[ch] & TC_WILL) != 0) {
-                    if (ch == OPTION_BINARY) {
-                       uptr->CMD &= ~(DATA|INIT1);
-                       uptr->CMD |= ENAB;
-                       tmxr_putc_ln( &scom_ldsc[unit], REMOTE_EW);
-                       tmxr_putc_ln( &scom_ldsc[unit], 0xc1);
-                       tmxr_putc_ln( &scom_ldsc[unit], IAC);
-                       tmxr_putc_ln( &scom_ldsc[unit], EOR);
-                       if ((uptr->CMD & 0xff) == 0)
-                           set_devattn(addr, SNS_ATTN);
-                       else
-                           sim_activate(uptr, 200);
-                    }
-                 }
-                 if ((data->option_state[ch] & TC_DO) == 0)
-                     scom_sendoption(uptr, unit, DO, ch);
-                 break;
+                  sim_debug(DEBUG_DETAIL, dptr, "unit=%d eor %d\n", unit, ch);
+                  if ((data->option_state[ch] & TC_DO) == 0) {
+                      data->option_state[ch] |= TC_DO;
+                  }
+                  break;
+
+             case OPTION_BINARY:
+                  sim_debug(DEBUG_DETAIL, dptr, "unit=%d do %d\n", unit, ch);
+                  if ((data->option_state[ch] & TC_DO) == 0) {
+                      data->option_state[ch] |= TC_DO;
+                      scom_sendoption(uptr, unit, DO, ch);
+                  }
+                  break;
+
              default:
-                 if ((data->option_state[ch] & TC_WONT) == 0)
+                 sim_debug(DEBUG_DETAIL, dptr, "unit=%d do %d\n", unit, ch);
+                 if ((data->option_state[ch] & TC_WONT) == 0) {
+                     data->option_state[ch] |= TC_WONT;
                      scom_sendoption(uptr, unit, WONT, ch);
+                 }
                  break;
              }
              data->state = TS_DATA;
              break;
-         case TS_DONT:
+
+        case TS_DONT:
+             sim_debug(DEBUG_DETAIL, dptr, "unit=%d dont %d\n", unit, ch);
              if ((data->option_state[ch] & TC_WILL) != 0) {
                 /* send IAC WONT option */
                 data->option_state[ch] &= ~TC_WILL;
@@ -627,6 +707,7 @@ scom_sendoption(UNIT *uptr, int unit, uint8 state, uint8 opt)
 {
     struct _line        *data = (struct _line *)(uptr->up7);
 
+    sim_debug(DEBUG_DETAIL, &scom_dev, "send %d %d opt=%d\n", unit, state, opt);
     tmxr_putc_ln( &scom_ldsc[unit], IAC);
     tmxr_putc_ln( &scom_ldsc[unit], state);
     tmxr_putc_ln( &scom_ldsc[unit], opt);
