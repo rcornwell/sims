@@ -77,6 +77,12 @@ DEVICE *sim_devices[] = {
        &ddc_dev,
 #if NUM_DEVS_DASD > 3
        &ddd_dev,
+#if NUM_DEVS_DASD > 4
+       &dde_dev,
+#if NUM_DEVS_DASD > 5
+       &ddf_dev,
+#endif
+#endif
 #endif
 #endif
 #endif

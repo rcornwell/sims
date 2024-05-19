@@ -360,6 +360,52 @@ DEVICE              ddd_dev = {
     &ddd_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &dasd_help, NULL, NULL, &dasd_description
 };
+#if NUM_DEVS_DASD > 4
+UNIT                dde_unit[] = {
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x350)},       /* 0 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x351)},       /* 1 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x352)},       /* 2 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x353)},       /* 3 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x354)},       /* 4 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x355)},       /* 5 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x356)},       /* 6 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x357)},       /* 7 */
+};
+
+struct dib dde_dib = { 0xF8, NUM_UNITS_MT, dasd_startio, dasd_startcmd, NULL,
+                        dde_unit, dasd_ini};
+
+DEVICE              dde_dev = {
+    "DE", dde_unit, NULL, dasd_mod,
+    NUM_UNITS_DASD, 8, 15, 1, 8, 8,
+    NULL, NULL, &dasd_reset, &dasd_boot, &dasd_attach, &dasd_detach,
+    &dde_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    NULL, NULL, &dasd_help, NULL, NULL, &dasd_description
+};
+#if NUM_DEVS_DASD > 5
+UNIT                ddf_unit[] = {
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x358)},       /* 0 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x359)},       /* 1 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x35A)},       /* 2 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x35B)},       /* 3 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x35C)},       /* 4 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x35D)},       /* 5 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x35E)},       /* 6 */
+    {UDATA(&dasd_srv, UNIT_DASD, 0), 0, UNIT_ADDR(0x35F)},       /* 7 */
+};
+
+struct dib ddf_dib = { 0xF8, NUM_UNITS_MT, dasd_startio, dasd_startcmd, NULL,
+                        ddf_unit, dasd_ini};
+
+DEVICE              ddf_dev = {
+    "DF", ddf_unit, NULL, dasd_mod,
+    NUM_UNITS_DASD, 8, 15, 1, 8, 8,
+    NULL, NULL, &dasd_reset, &dasd_boot, &dasd_attach, &dasd_detach,
+    &ddf_dib, DEV_DISABLE | DEV_DEBUG, 0, dev_debug,
+    NULL, NULL, &dasd_help, NULL, NULL, &dasd_description
+};
+#endif
+#endif
 #endif
 #endif
 #endif

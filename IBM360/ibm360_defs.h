@@ -66,7 +66,7 @@
 #define NUM_DEVS_LPR        4
 #define NUM_DEVS_MT         2
 #define NUM_UNITS_MT        8
-#define NUM_DEVS_DASD       4
+#define NUM_DEVS_DASD       6
 #define NUM_UNITS_DASD      8
 #define NUM_DEVS_COM        1
 #define NUM_UNITS_COM       16
@@ -408,6 +408,8 @@ extern DEVICE dda_dev;
 extern DEVICE ddb_dev;
 extern DEVICE ddc_dev;
 extern DEVICE ddd_dev;
+extern DEVICE dde_dev;
+extern DEVICE ddf_dev;
 extern DEVICE coml_dev;
 extern DEVICE com_dev;
 extern DEVICE scoml_dev;
