@@ -1354,7 +1354,6 @@ t_stat dev_apr(uint32 dev, uint64 *data) {
  * MTR device for KL10.
  */
 t_stat dev_mtr(uint32 dev, uint64 *data) {
-    uint64 res = 0;
 
     switch(dev & 03) {
     case CONI:
@@ -7188,9 +7187,6 @@ fnormx:
                       SC--;
                   } else {
                       AR = BR;
-#if KS
-                      FLAGS |= NODIV|TRP1;
-#endif
                       break;
                   }
               }
@@ -7249,10 +7245,8 @@ fnormx:
                       SC--;
                   }
                   AR &= FMASK;
-#if KL | KS
                   if ((SC & 01600) != 01600)
                       fxu_hold_set = 1;
-#endif
                   if (AR == (SMASK|EXPO)) {
                       AR = (AR >> 1) | (AR & SMASK);
                       SC ++;
@@ -11781,7 +11775,7 @@ fetch_opr:
                                   MB = BR;
                                   if (Mem_write(pi_cycle, 0))
                                       goto last;
-                                      MB = AR;
+                                  MB = AR;
                                   break;
                               }
                               break;
@@ -13874,6 +13868,7 @@ t_bool build_dev_tab (void)
                 if ((nia_dev.flags & DEV_DIS) == 0 && dptr != &nia_dev &&
                     rh20 == (((DIB *)nia_dev.ctxt)->dev_num & 0777))
                     rh20 += 4;
+                else
                 /* If NIA20, then assign it to it's requested address */
                 if ((nia_dev.flags & DEV_DIS) == 0 && dptr == &nia_dev)
                     d = dibp->dev_num & 0777;

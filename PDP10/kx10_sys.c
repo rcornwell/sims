@@ -734,6 +734,8 @@ t_stat load_exe (FILE *fileref, int ftype)
             }
             if ((sim_switches & SWMASK ('M')) == 0) {   /* -m? */
                 ma = mpage << PAG_V_PN;                 /* mem addr */
+            } else {
+                ma = mpage;
             }
             for (k = 0; k < PAG_SIZE; k++, ma++) {      /* copy buf to mem */
                 if (ma > MEMSIZE)

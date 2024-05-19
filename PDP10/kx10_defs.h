@@ -213,11 +213,11 @@ extern DEBTAB crd_debug[];
 #define IOCTL    00000017000000LL
 #endif
 
-#define ADR_IFETCH  020 
-#define ADR_DFETCH  010 
-#define ADR_WRITE   004 
-#define ADR_STOP    002 
-#define ADR_BREAK   001 
+#define ADR_IFETCH  020
+#define ADR_DFETCH  010
+#define ADR_WRITE   004
+#define ADR_STOP    002
+#define ADR_BREAK   001
 
 /* IRQ Flags in APR */
 #if KL
@@ -681,7 +681,7 @@ struct pdp_dib {
     t_addr              (*irq)(uint32 dev, t_addr addr);
     struct rh_if        *rh;
 };
- 
+
 #define RH10_DEV        01000
 #define RH20_DEV        02000
 struct rh_dev {
@@ -733,6 +733,7 @@ extern void ka10_lights_set_aux (int);
 extern void ka10_lights_clear_aux (int);
 #endif
 
+
 /* I/O system parameters */
 #if !(PDP6 | KS)
 #define NUM_DEVS_LP     1
@@ -774,7 +775,7 @@ extern void ka10_lights_clear_aux (int);
 #define NUM_DEVS_CH11   KS_ITS
 #endif
 #endif
-#if KA | KI 
+#if KA | KI
 #define NUM_DEVS_RC     1
 #define NUM_DEVS_DK     1
 #define NUM_DEVS_DDC    1
