@@ -175,7 +175,7 @@ UNIT                scoml_unit[] = {
     {UDATA(&scoml_srv, UNIT_COM, 0), 0, UNIT_ADDR(0x05F)},       /* F */
 };
 
-struct dib scom_dib = { 0xF0, NUM_UNITS_SCOM, NULL, scoml_startcmd,
+struct dib scom_dib = { 0xF8, NUM_UNITS_SCOM, NULL, scoml_startcmd,
     scoml_haltio, scoml_unit, NULL};
 
 DEVICE              scom_dev = {
@@ -206,12 +206,13 @@ uint8  scoml_startcmd(UNIT *uptr,  uint8 cmd) {
        return SNS_BSY;
     }
 
-    if (cmd == 0)
-         return 0;
     if (scom_ldsc[unit].conn == 0 && cmd != CMD_SENSE) {
        uptr->SNS = SNS_INTVENT;
        return SNS_UNITCHK;
     }
+
+    if (cmd == 0)
+         return 0;
 
     switch (cmd) {
     case CMD_WR:            /* Write data to com line */
@@ -226,13 +227,14 @@ uint8  scoml_startcmd(UNIT *uptr,  uint8 cmd) {
          sim_activate(uptr, 200);
          return 0;
 
-    case CMD_SENSE:
-         uptr->CMD |= cmd;
-         sim_activate(uptr, 200);
-         return 0;
-
     case CMD_NOP:           /* Nop scommand */
          break;
+
+    case CMD_SENSE:
+         uptr->CMD |= cmd;
+         sim_activate(uptr, 20);
+         return 0;
+
 
     case CMD_SEL:           /* Select */
     case CMD_EAU:           /* Erase all un protected */
@@ -299,6 +301,11 @@ t_stat scoml_srv(UNIT * uptr)
     int                 cmd = uptr->CMD & 0xff;
     uint8               ch;
 
+    if (scom_ldsc[unit].conn == 0 && cmd != CMD_SENSE) {
+       uptr->SNS = SNS_INTVENT;
+       set_devattn(addr, SNS_UNITCHK);
+       return SCPE_OK;
+    }
 
     if ((uptr->STATUS & (RECV|DATA|INIT1)) != 0) {
         sim_activate(uptr, 200);
@@ -306,7 +313,9 @@ t_stat scoml_srv(UNIT * uptr)
     }
 
     switch (cmd) {
-    case 0:
+    case CMD_NOP:
+         uptr->CMD &= ~0xff;
+         chan_end(addr, SNS_CHNEND|SNS_DEVEND);
          break;
 
     case CMD_SENSE:
@@ -414,8 +423,8 @@ write:
          }
          break;
 
-    case CMD_NOP:        /* Nop scommand */
-         break;
+//    case CMD_NOP:        /* Nop scommand */
+//         break;
 
     case CMD_SEL:        /* Select */
          uptr->CMD &= ~0xff;
