@@ -12263,7 +12263,7 @@ last:
         if (QITS)
             load_quantum();
 #endif
-	RUN = 0;
+        RUN = 0;
         return SCPE_STEP;
     }
 }
@@ -13931,6 +13931,8 @@ if (cptr == NULL) {
     }
 #if KI
 lnt = (int32) get_uint (cptr, 10, 001777, &r);
+#elif KS
+lnt = (int32) get_uint (cptr, 10, 077777, &r);
 #else
 lnt = (int32) get_uint (cptr, 10, 007777, &r);
 #endif
