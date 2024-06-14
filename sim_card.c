@@ -163,7 +163,7 @@ static const uint16          ascii_to_hol_026[128] = {
 /* Set for Burrough codes */
 static const uint16          ascii_to_hol_029[128] = {
    /* Control                              */
-    0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,    /*0-37*/
+    0xf000,0xf000,0x0881,0xf000,0xf000,0xf000,0xf000,0xf000,    /*0-37*/
    /*Control*/
     0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,
    /*Control*/
@@ -614,7 +614,8 @@ sim_read_card(UNIT * uptr, uint16 image[80])
              int          ok = 1;
              for (i = 0; i < 80; i++) {
                  out[i] = data->hol_to_ascii[(int)(*img)[i]];
-                 if (out[i] == 0xff) {
+                 /* Handle case where table entry is 0 or invalid */
+                 if (out[i] == 0 || out[i] == 0xff) {
                     ok = 0;
                  }
              }
@@ -686,7 +687,7 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf, uint16 (*ima
     unsigned int          mode;
     uint16                temp;
     size_t                i;
-    char                  c;
+    unsigned char         c;
     size_t                col;
 
     sim_debug(DEBUG_CARD, dptr, "Read card ");
@@ -817,6 +818,9 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf, uint16 (*ima
                     col = 80;
                     i--;
                     break;
+                case 0xac:              /* Handle EBCDIC not symbol */
+                    (*image)[col++] = 0x406;
+                    break;
                 default:
                     sim_debug(DEBUG_CARD, dptr, "%c", c);
                     if ((uptr->flags & MODE_LOWER) == 0)
@@ -833,8 +837,10 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf, uint16 (*ima
                            temp = ascii_to_dec_029[(int)c];
                            break;
                     }
-                    if (temp & 0xf000)
+                    if (temp & 0xf000) {
                         (*image)[0] |= CARD_ERR;
+                        sim_debug(DEBUG_CARD, dptr, "<<");
+                    }
                     (*image)[col++] = temp & 0xfff;
                 }
             }
