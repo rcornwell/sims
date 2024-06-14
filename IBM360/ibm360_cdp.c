@@ -139,19 +139,31 @@ uint8  cdp_startcmd(UNIT *uptr,  uint8 cmd) {
     sim_debug(DEBUG_CMD, dptr, "CMD unit=%d %x\n", unit, cmd);
     switch (cmd & 0x7) {
     case CMD_WRITE:      /* Write command */
+         /* If nothing attached, return intervention */
+         if ((uptr->flags & UNIT_ATT) == 0) {
+             uptr->SNS |= SNS_INTVENT;
+             break;
+         }
          uptr->CMD &= ~(CDP_CMDMSK);
          uptr->CMD |= (cmd & CDP_CMDMSK);
-         sim_activate(uptr, 100);       /* Start unit off */
          uptr->COL = 0;
          uptr->SNS = 0;
+         sim_activate(uptr, 100);       /* Start unit off */
          return 0;
 
     case CMD_CTL:
+         uptr->SNS = 0;
+         uptr->CMD &= ~(CDP_CMDMSK);
          if (cmd != 0x3) {
              uptr->SNS |= SNS_CMDREJ;
-             return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
+             break;
          }
-         return SNS_CHNEND|SNS_DEVEND;
+         /* If nothing attached, return intervention */
+         if ((uptr->flags & UNIT_ATT) == 0) {
+             uptr->SNS |= SNS_INTVENT;
+             break;
+         }
+         break;
 
     case 0:                /* Status */
          break;

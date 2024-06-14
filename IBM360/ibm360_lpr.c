@@ -139,7 +139,7 @@ static CONST uint16 legacy[] = {
 0x040, 0x000, 0x000, 0x000, 0x000, 0x000, 0x020, 0x000, 0x000, 0x000, /* 31 - 40 */
 0x000, 0x000, 0x010, 0x000, 0x000, 0x000, 0x000, 0x000, 0x004, 0x000, /* 41 - 50 */
 0x000, 0x000, 0x000, 0x000, 0x002, 0x000, 0x000, 0x000, 0x000, 0x000, /* 51 - 60 */
-0x001, 0x000, 0x008, 0x000, 0x000, 0x001, 0x1000 };                   /* 61 - 66 */
+0x001, 0x000, 0x008, 0x000, 0x000, 0x000, 0x1000 };                   /* 61 - 66 */
 /*
     PROGRAMMMING NOTE:  the below cctape value SHOULD match
                         the same corresponding fcb value!
@@ -152,7 +152,7 @@ static CONST uint16 std1[] = {
 0x040, 0x000, 0x000, 0x000, 0x000, 0x000, 0x020, 0x000, 0x000, 0x000, /* 31 - 40 */
 0x000, 0x000, 0x010, 0x000, 0x000, 0x000, 0x000, 0x000, 0x008, 0x000, /* 41 - 50 */
 0x000, 0x000, 0x000, 0x000, 0x004, 0x000, 0x000, 0x000, 0x000, 0x000, /* 51 - 60 */
-0x002, 0x000, 0x001, 0x000, 0x000, 0x001, 0x1000 };                   /* 61 - 66 */
+0x002, 0x000, 0x001, 0x000, 0x000, 0x000, 0x1000 };                   /* 61 - 66 */
 
 static CONST uint16 none[] = {
 /* 1      2      3      4      5      6      7      8      9     10       lines  */
@@ -162,7 +162,7 @@ static CONST uint16 none[] = {
 0x040, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, /* 31 - 40 */
 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, /* 41 - 50 */
 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, /* 51 - 60 */
-0x002, 0x000, 0x000, 0x000, 0x000, 0x001, 0x1000 };                   /* 61 - 66 */
+0x002, 0x000, 0x000, 0x000, 0x000, 0x000, 0x1000 };                   /* 61 - 66 */
 static CONST uint16 *fcb_ptr[] = { legacy, std1, none, NULL};
 
 
@@ -255,9 +255,9 @@ print_line(UNIT * uptr)
     int                 i;
     int                 u = (uptr - lpr_unit);
     int                 space = (uptr->CMD >> 3) & 0x1f;
-    int                 flag;
     int                 line;
     int                 mask;
+    int                 flag;
 
     /* Dump buffer if full */
     if (uptr->CMD & LPR_FULL) {
@@ -282,7 +282,7 @@ print_line(UNIT * uptr)
         /* Print out buffer */
         sim_fwrite(&out, 1, i, uptr->fileref);
         uptr->pos += i;
-        sim_debug(DEBUG_DETAIL, &lpr_dev, "%s\n", out);
+        sim_debug(DEBUG_DETAIL, &lpr_dev, "]%s\n", out);
         memset(&lpr_data[u].lbuff[0], 0, 144);
     }
 
@@ -293,6 +293,10 @@ print_line(UNIT * uptr)
             uptr->pos += 2;
             flag = 1;
             if ((uptr->CMD & 03) == 0x1) {
+               uint16 fcb = lpr_data[u].fcb[uptr->LINE];
+        sim_debug(DEBUG_DETAIL, &lpr_dev, "%d FCB %d %03x %d %d\n", u, uptr->LINE, fcb,
+                                   ((0x1000 >> 9) & fcb) != 0,
+                                   ((0x1000 >> 12) & fcb) != 0);
                if ((lpr_data[u].fcb[uptr->LINE] & (0x1000 >> 9)) != 0) {
                   uptr->SNS |= SNS_CHN9;
                }
@@ -306,8 +310,8 @@ print_line(UNIT * uptr)
                    sim_fwrite("\r\n", 1, 2, uptr->fileref);
                    uptr->pos += 2;
                }
+        sim_debug(DEBUG_DETAIL, &lpr_dev, "%d form %d\n", u, uptr->LINE);
                sim_fwrite("\f\r\n", 1, 3, uptr->fileref);
-               uptr->SNS |= SNS_CHN12;
                uptr->pos += 3;
                uptr->LINE = 0;
             } else {
@@ -319,25 +323,18 @@ print_line(UNIT * uptr)
     }
 
     mask = 0x1000 >> (space & 0xf);
-    flag = 0;     /* Flag if we skipped to new page */
     line = 0;     /* What line we should be on */
 
     for (i = uptr->LINE; (lpr_data[u].fcb[i] & mask) == 0; i++) {
          line++;
          if ((lpr_data[u].fcb[i] & 0x1000) != 0 ||
                ((uint32)i) >= uptr->capac) {
+        sim_debug(DEBUG_DETAIL, &lpr_dev, "%d form1 %d %d %d\n", u, uptr->LINE, i, uptr->capac);
              sim_fwrite("\r\n\f\r\n", 1, 5, uptr->fileref);
              uptr->pos += 5;
-             uptr->SNS |= SNS_CHN12;
-             flag = 1;
              line = 0;
-             break;
+             return;
          }
-    }
-
-    /* If past end of form clear row */
-    if (flag) {
-       uptr->LINE = 0;
     }
 
     if ((lpr_data[u].fcb[i] & mask) != 0) {
@@ -371,24 +368,35 @@ uint8 lpr_startcmd(UNIT * uptr, uint8 cmd)
        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
     }
 
+
     sim_debug(DEBUG_CMD, &lpr_dev, "Cmd %02x %02x\n", cmd, (cmd >> 3) & 0x1f);
 
     switch (cmd & 0x3) {
     case 1:              /* Write command */
+         uptr->SNS = 0;
+         uptr->POS = 0;
+         /* If nothing attached, return intervention */
+         if ((uptr->flags & UNIT_ATT) == 0) {
+             uptr->SNS |= SNS_INTVENT;
+             break;
+         }
          uptr->CMD &= ~(LPR_CMDMSK);
          uptr->CMD |= (cmd & LPR_CMDMSK);
          sim_activate(uptr, 10);          /* Start unit off */
-         uptr->SNS = 0;
-         uptr->POS = 0;
          return 0;
 
     case 3:              /* Carrage control */
          uptr->SNS = 0;
          uptr->POS = 0;
-         uptr->CMD &= ~(LPR_CMDMSK);
          /* Nop is immediate command */
          if (cmd == 0x3)
              return SNS_CHNEND|SNS_DEVEND;
+         /* If nothing attached, return intervention */
+         if (cmd != CMD_SENSE && (uptr->flags & UNIT_ATT) == 0) {
+             uptr->SNS |= SNS_INTVENT;
+             break;
+         }
+         uptr->CMD &= ~(LPR_CMDMSK);
          uptr->CMD |= (cmd & LPR_CMDMSK);
          sim_activate(uptr, 10);          /* Start unit off */
          /* Motion and not load UCS */
@@ -403,6 +411,7 @@ uint8 lpr_startcmd(UNIT * uptr, uint8 cmd)
              sim_activate(uptr, 10);       /* Start unit off */
              return 0;
          }
+         uptr->SNS |= SNS_CMDREJ;
          break;
 
     default:              /* invalid command */
@@ -423,6 +432,7 @@ lpr_srv(UNIT *uptr) {
     int             l = (uptr->CMD >> 3) & 0x1f;
     uint8           ch;
 
+    /* Handle sense */
     if (cmd == 4) {
          ch = uptr->SNS;
          uptr->CMD &= ~(LPR_CMDMSK);
@@ -481,7 +491,12 @@ lpr_srv(UNIT *uptr) {
        uptr->CMD &= ~(LPR_FULL|LPR_CMDMSK);
        uptr->POS = 0;
        if (uptr->SNS & SNS_CHN12) {
-           set_devattn(addr, SNS_DEVEND|SNS_UNITEXP);
+        sim_debug(DEBUG_DETAIL, &lpr_dev, "%d channel 12", u);
+           uint8 f = SNS_DEVEND|SNS_UNITEXP;
+           if ((uptr->SNS & 0xff) != 0) {
+               f |= SNS_UNITCHK;
+           }
+           set_devattn(addr, f);
            uptr->SNS &= 0xff;
        } else {
            if ((uptr->SNS & 0xff) != 0)

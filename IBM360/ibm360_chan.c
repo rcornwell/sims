@@ -127,7 +127,7 @@ UNIT                chan_unit[] = {
 DEVICE              chan_dev = {
     "CH", chan_unit, NULL, chan_mod,
     MAX_CHAN, 8, 15, 1, 8, 8,
-    NULL, NULL, NULL /*&chan_reset*/, NULL, NULL, NULL,
+    NULL, NULL, &chan_reset, NULL, NULL, NULL,
     NULL, DEV_DEBUG, 0, dev_debug,
     NULL, NULL, &chan_help, NULL, NULL, &chan_description
 };
@@ -366,7 +366,7 @@ loop:
     /* Check if we have status modifier set */
     if (chan->chan_status & STATUS_MOD) {
         chan->caw+=8;
-        chan->caw &= PMASK|AMASK;         /* Mask overflow bits */
+        chan->caw &= AMASK;         /* Mask overflow bits */
         chan->chan_status &= ~STATUS_MOD;
     }
     /* Read in next CCW */
@@ -376,7 +376,7 @@ loop:
     /* TIC can't follow TIC nor be first in chain */
     if (((word >> 24) & 0xf) == CMD_TIC) {
         if (tic_ok) {
-            chan->caw = (chan->caw & PMASK) | (word & AMASK);
+            chan->caw = word & AMASK;
             tic_ok = 0;
             goto loop;
         }
@@ -773,7 +773,7 @@ chan_end(uint16 addr, uint8 flags) {
  */
 void
 store_csw(struct _chanctl *chan) {
-    M[0x40 >> 2] = chan->caw;
+    M[0x40 >> 2] = ((uint32)(chan->ccw_key) << 24) | chan->caw;
     M[0x44 >> 2] = (((uint32)chan->ccw_count)) | ((uint32)chan->chan_status<<16);
     key[0] |= 0x6;
     if (chan->chan_status & STATUS_PCI) {
@@ -786,6 +786,7 @@ store_csw(struct _chanctl *chan) {
     sim_debug(DEBUG_EXP, &cpu_dev, "Channel store csw  %03x %06x %08x\n",
           chan->daddr, M[0x40>>2], M[0x44 >> 2]);
 }
+
 
 /*
  * Handle SIO instruction.
@@ -833,8 +834,6 @@ startio(uint16 addr) {
         dev_status[addr] = 0;
     /* Check for any pending status for this device */
     if (dev_status[addr] != 0) {
-//        if (dev_status[addr] & SNS_DEVEND)
-//            dev_status[addr] |= SNS_BSY;
         M[0x44 >> 2] = (((uint32)dev_status[addr]) << 24);
         M[0x40 >> 2] = 0;
         key[0] |= 0x6;
@@ -872,6 +871,7 @@ startio(uint16 addr) {
     chan->dev = dev;
 
     sim_debug(DEBUG_CMD, &cpu_dev, "SIO start %03x %03x\n", addr, chan->daddr);
+
     /* Try to load first command */
     if (load_ccw(chan, 0)) {
         M[0x44 >> 2] = ((uint32)chan->chan_status<<16) | (M[0x44 >> 2] & 0xffff);
@@ -883,7 +883,7 @@ startio(uint16 addr) {
         dev_status[addr] = 0;
         chan->daddr = NO_DEV;
         chan->dev = NULL;
-        return ((uptr->flags & UNIT_ATT) == 0) ? 3 : 1;
+        return 1;
     }
 
     /* If channel returned busy save CSW and return cc=1 */
@@ -901,7 +901,6 @@ startio(uint16 addr) {
         return 1;
     }
 
-//#if 0
     /* If immediate command and not command chaining */
     if ((chan->chan_status & (STATUS_CEND)) != 0
        && (chan->ccw_flags & FLAG_CC) == 0) {
@@ -913,10 +912,10 @@ startio(uint16 addr) {
                    addr, M[0x44 >> 2]);
         return 1;
     }
-//#endif
 
     return 0;
 }
+
 
 /*
  * Handle TIO instruction.
@@ -984,7 +983,7 @@ int testio(uint16 addr) {
     if (chan_pend[ch]) {
         int dev;
         /* Check if might be false */
-        for (dev = (addr & 0xf00); dev < (addr | 0xfff); dev++) {
+        for (dev = (addr & 0xf00); dev < (addr | 0x0ff); dev++) {
             if (dev_status[dev] != 0) {
                 /* Check if same subchannel */
                 if (find_subchan(dev) == chan) {
@@ -1117,9 +1116,8 @@ int testchan(uint16 channel) {
     attached.  Channels 0, 4, 8 (0 on CC 1) & 12 (4 on CC 1) are multiplexer
     channels. */
 
-    cc = (channel >> 11) & 0x03;
     channel = (channel >> 8) & 0x0f;
-    if (cc > 1 || channel > chan_dev.numunits) {
+    if (channel > chan_dev.numunits) {
         sim_debug(DEBUG_CMD, &cpu_dev, "TCH CC %x %x cc=3\n", cc, channel);
         return 3;
     }
@@ -1181,6 +1179,7 @@ t_stat chan_boot(uint16 addr, DEVICE *dptyr) {
 
     for (i = 0; i < (MAX_CHAN * 256); i++)
         dev_status[i] = 0;
+    chan_set_devs();
     dev = find_device(addr);
     chan = find_subchan(addr);
     if (dev == NULL || chan == NULL) {
@@ -1282,7 +1281,7 @@ scan_chan(uint16 mask, int irq_en) {
              }
 
              /* If channel end, check if we should continue */
-             if (chan->chan_status & STATUS_CEND) {
+             if (chan->chan_status & STATUS_DEND) {
                      sim_debug(DEBUG_EXP, &cpu_dev, "Scan(%x %x %x %x) Cend\n", i,
                               chan->daddr, chan->chan_status, chan->ccw_flags);
                  /* Grab another command if command chainging in effect */
@@ -1410,6 +1409,24 @@ chan_set_devs()
              n = UNIT_G_SCHAN(uptr->flags)+1;
          if ((uptr->flags & UNIT_M_CTYPE) == UNIT_BMUX)
              n = 32;
+         /* If no device array, create one */
+         if (uptr->up8 == NULL)
+             uptr->up8 = calloc(256, sizeof(struct _dev));
+         if (uptr->up7 == NULL || (uint32)uptr->schans != n) {
+             if (uptr->up7 != NULL)
+                free(uptr->up7);
+             uptr->up7 = calloc(n, sizeof(struct _chanctl));
+             for (j = 0; j < n; j++) {
+                 struct _chanctl *chan = &(chan_ctl[j]);
+                 chan->daddr = NO_DEV;
+             }
+         }
+#if 0
+         n = 1;
+         if ((uptr->flags & UNIT_M_CTYPE) == UNIT_MUX)
+             n = UNIT_G_SCHAN(uptr->flags)+1;
+         if ((uptr->flags & UNIT_M_CTYPE) == UNIT_BMUX)
+             n = 32;
          /* Create device table */
          if (uptr->up8 != NULL)
              free(uptr->up8);
@@ -1422,6 +1439,7 @@ chan_set_devs()
              struct _chanctl *chan = &(chan_ctl[j]);
              chan->daddr = NO_DEV;
          }
+#endif
          uptr->schans = n;
          /* Initialize channel device address table to empty */
          for (j = 0; j < 256; j++) {

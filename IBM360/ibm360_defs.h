@@ -148,8 +148,8 @@ typedef struct dib {
 #define OP_CLR            0x15     /* src1 = R1, src2 = R2 */
 #define OP_OR             0x16     /* src1 = R1, src2 = R2 */
 #define OP_XR             0x17     /* src1 = R1, src2 = R2 */
-#define OP_CR             0x19     /* src1 = R1, src2 = R2 */
 #define OP_LR             0x18     /* src1 = R1, src2 = R2 */
+#define OP_CR             0x19     /* src1 = R1, src2 = R2 */
 #define OP_AR             0x1A     /* src1 = R1, src2 = R2 */
 #define OP_SR             0x1B     /* src1 = R1, src2 = R2 */
 #define OP_MR             0x1C     /* src1 = R1, src2 = R2 */
@@ -364,7 +364,7 @@ int  chan_read_byte(uint16 addr, uint8 *data);
 int  chan_write_byte(uint16 addr, uint8 *data);
 void set_devattn(uint16 addr, uint8 flags);
 void chan_end(uint16 addr, uint8 flags);
-int  startio(uint16 addr) ;
+int  startio(uint16 addr);
 int testio(uint16 addr);
 int haltio(uint16 addr);
 int testchan(uint16 channel);

@@ -383,11 +383,7 @@ t_stat coml_srv(UNIT * uptr)
     uint8               ch;
     int                 bsc = (uptr->flags & UNIT_UTYPE) == UNIT_2780;
 
-
     switch (cmd) {
-    case 0:
-         break;
-
     case CMD_SENSE:
          ch = uptr->SNS & 0xff;
          sim_debug(DEBUG_DETAIL, dptr, "sense unit=%d 1 %x\n", unit, ch);
@@ -420,6 +416,7 @@ t_stat coml_srv(UNIT * uptr)
                  uptr->CMD &= ~ADDR;
                  if (chan_write_byte( addr, &ch)) {
                      uptr->CMD &= ~(ADDR9|0xff);
+                 sim_debug(DEBUG_CMD, dptr, "COM: unit=%d send err\n", unit);
                      chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                      return SCPE_OK;
                  }
@@ -434,6 +431,7 @@ t_stat coml_srv(UNIT * uptr)
                  uptr->SNS = SNS_INTVENT;
                  uptr->BPTR = 0;
                  uptr->IPTR = 0;
+                 sim_debug(DEBUG_DETAIL, dptr, "COM: unit=%d break\n", unit);
                  chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK|SNS_UNITEXP);
                  return SCPE_OK;
              } else if (uptr->CMD & INPUT) {
@@ -443,26 +441,32 @@ t_stat coml_srv(UNIT * uptr)
                      uptr->CMD &= ~(0xff|INPUT|RECV);
                      uptr->BPTR = 0;
                      uptr->IPTR = 0;
+
                      chan_end(addr, SNS_CHNEND|SNS_DEVEND);
                      return SCPE_OK;
                  }
                  ch = com_buf[unit][uptr->IPTR++];
-                 if (!bsc && ch == 0x1f) {
-                     uptr->CMD |= ADDR;
-                 }
-                 if (ack && ((ch == ACK0) || (ch == ACK1))) {
-                     uptr->CMD &= ~(0xff|INPUT|RECV);
-                     uptr->IPTR = 0;
-                     uptr->BPTR = 0;
-                     chan_end(addr, SNS_CHNEND|SNS_DEVEND|(ch == ACK1 ? SNS_UNITEXP:0));
-                     return SCPE_OK;
-                 }
-                 if (bsc && ch == DLE) {
-                     uptr->BSCSTATE |= BSCIDLE;
-                 } else {
-                     uptr->BSCSTATE &= ~BSCIDLE;
+                 sim_debug(DEBUG_DETAIL, dptr, "COM: unit=%d read %02x\n", unit, ch);
+                 if (bsc) {
+                     if (ch == 0x1f) {
+                         uptr->CMD |= ADDR;
+                     }
+                     if (ack && ((ch == ACK0) || (ch == ACK1))) {
+                         uptr->CMD &= ~(0xff|INPUT|RECV);
+                         uptr->IPTR = 0;
+                         uptr->BPTR = 0;
+                 sim_debug(DEBUG_DETAIL, dptr, "COM: unit=%d ack\n", unit);
+                         chan_end(addr, SNS_CHNEND|SNS_DEVEND|(ch == ACK1 ? SNS_UNITEXP:0));
+                         return SCPE_OK;
+                     }
+                     if (ch == DLE) {
+                         uptr->BSCSTATE |= BSCIDLE;
+                     } else {
+                         uptr->BSCSTATE &= ~BSCIDLE;
+                     }
                  }
                  if (chan_write_byte( addr, &ch)) {
+                 sim_debug(DEBUG_DETAIL, dptr, "COM: unit=%d send\n", unit);
                      uptr->CMD &= ~(0xff|INPUT|RECV);
                      uptr->IPTR = 0;
                      uptr->BPTR = 0;
@@ -500,7 +504,7 @@ t_stat coml_srv(UNIT * uptr)
          break;
 
     case CMD_POLL:
-         if (!bsc) {
+         if (bsc) {
              uptr->SNS = SNS_CMDREJ;
              uptr->CMD &= ~(0xff|BREAK|INPUT|RECV|SEND|POLL);
              chan_end(addr, SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK);
@@ -726,7 +730,7 @@ t_stat coml_srv(UNIT * uptr)
                                com_buf[unit][uptr->BPTR++] = ch;
                                break;
                        }
-
+                   }
                }
            } else {
                ch = com_2741_in[data & 0x7f];
@@ -788,10 +792,9 @@ t_stat coml_srv(UNIT * uptr)
                          uptr->CMD &= ~RECV;
                          uptr->BPTR &= 0xff;
                      }
-                  }
                }
-           }
-       }
+            }
+        }
     }
     return SCPE_OK;
 }
@@ -829,7 +832,7 @@ t_stat com_scan(UNIT * uptr)
         }
     }
 
-    /* See if a line is disconnected with no command on it. */
+    /* See if any input on line with no command on it */
     for (ln = 0; ln < com_desc.lines; ln++) {
         line = &coml_unit[ln];
         if ((line->CMD & (RECV|ENAB)) == ENAB && tmxr_rqln(&com_ldsc[ln]) > 0) {

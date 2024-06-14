@@ -121,16 +121,17 @@ uint8  cdr_startcmd(UNIT *uptr,  uint8 cmd) {
 
     sim_debug(DEBUG_CMD, dptr, "CMD unit=%d %x\n", unit, cmd);
 
-    /* If not attached and not sense, return error */
-    if (cmd != 4 && (uptr->flags & UNIT_ATT) == 0) {
-        uptr->SNS = SNS_INTVENT;
-        return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
-    }
 
     switch (cmd & 0x7) {
     case CMD_READ:       /* Read command */
          uptr->SNS = 0;
          uptr->COL = 0;
+         uptr->CMD &= ~(0xff);
+         /* If not attached return error */
+         if ((uptr->flags & UNIT_ATT) == 0) {
+             uptr->SNS |= SNS_INTVENT;
+             break;
+         }
          /* Check if there was End of file */
          if ((uptr->CMD & CDR_EOF) != 0) {
              uint16   *image = (uint16 *)(uptr->up7);
@@ -156,7 +157,6 @@ uint8  cdr_startcmd(UNIT *uptr,  uint8 cmd) {
              uptr->SNS = SNS_INTVENT;
              return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
          }
-         uptr->CMD &= ~(0xff);
          uptr->CMD |= (cmd & 0xff);
          sim_activate(uptr, 100);       /* Start unit off */
          return 0;
@@ -164,8 +164,16 @@ uint8  cdr_startcmd(UNIT *uptr,  uint8 cmd) {
     case CMD_CTL:        /* Control */
          uptr->SNS = 0;
          uptr->CMD &= ~(0xff);
-         if (cmd == 0x3)
-             return SNS_CHNEND|SNS_DEVEND;
+         /* If not attached return error */
+         if ((uptr->flags & UNIT_ATT) == 0) {
+             uptr->SNS |= SNS_INTVENT;
+             break;
+         }
+         /* Nop quick return */
+         if (cmd == 0x3) {
+             break;
+         }
+         /* Check if illegal command */
          if ((cmd & 0x30) != 0x20 || (cmd & 0xc0) == 0xc0) {
              uptr->SNS |= SNS_CMDREJ;
              return SNS_CHNEND|SNS_DEVEND|SNS_UNITCHK;
