@@ -491,8 +491,8 @@ lpr_srv(UNIT *uptr) {
        uptr->CMD &= ~(LPR_FULL|LPR_CMDMSK);
        uptr->POS = 0;
        if (uptr->SNS & SNS_CHN12) {
-        sim_debug(DEBUG_DETAIL, &lpr_dev, "%d channel 12", u);
            uint8 f = SNS_DEVEND|SNS_UNITEXP;
+           sim_debug(DEBUG_DETAIL, &lpr_dev, "%d channel 12", u);
            if ((uptr->SNS & 0xff) != 0) {
                f |= SNS_UNITCHK;
            }
