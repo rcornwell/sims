@@ -764,7 +764,7 @@ extern void ka10_lights_clear_aux (int);
 #define NUM_DEVS_TTY    1
 #define NUM_LINES_TTY   64
 #define NUM_DEVS_NIA    1
-#define NUM_DEVS_DN     1
+#define NUM_DEVS_DN     0
 #elif KS
 #define NUM_DEVS_LP20   1
 #define NUM_DEVS_DZ     4
