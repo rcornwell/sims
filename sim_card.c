@@ -22,7 +22,7 @@
    This is the standard card reader.
    This is the standard card punch.
 
-   Input formats are accepted in a variaty of formats:
+   Input formats are accepted in a variety of formats:
         Standard ASCII: one record per line.
                 returns are ignored.
                 tabs are expanded to modules 8 characters.
@@ -44,7 +44,7 @@
                 Bits 5-0 are character.
 
         CBN Format:
-                Each record 160 charaters.
+                Each record 160 characters.
                 First char has bit 7 set. Rest set to 0.
                 Bit 6 is odd parity.
                 Bit 5-0 of first character are top 6 bits
@@ -60,7 +60,7 @@
     is not enough octal numbers to span a full card the remainder of the
     card will not be punched.
 
-    Also ~eor, will generate a 7/8/9 punch card. An ~eof will gernerate a
+    Also ~eor, will generate a 7/8/9 punch card. An ~eof will generate a
     6/7/9 punch card, and a ~eoi will generate a 6/7/8/9 punch.
 
     A single line of ~ will set the EOF flag when that card is read.
@@ -163,7 +163,7 @@ static const uint16          ascii_to_hol_026[128] = {
 /* Set for Burrough codes */
 static const uint16          ascii_to_hol_029[128] = {
    /* Control                              */
-    0xf000,0xf000,0x0881,0xf000,0xf000,0xf000,0xf000,0xf000,    /*0-37*/
+    0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,    /*0-37*/
    /*Control*/
     0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,0xf000,
    /*Control*/
@@ -252,7 +252,7 @@ static const uint16          ascii_to_dec_029[128] = {
 
 #if SIMH_EVER_USES_THIS
 /* This is a static const that isn't referenced in this code.
- * Kept for historical refernce.
+ * Kept for historical reference.
  */
 static const uint16          ascii_to_hol_ebcdic[128] = {
    /* Control                              */
@@ -434,7 +434,7 @@ static struct card_formats fmts[] = {
 
 /* Conversion routines */
 
-/* Convert BCD character into hollerith code */
+/* Convert BCD character into Hollerith code */
 uint16
 sim_bcd_to_hol(uint8 bcd) {
     uint16      hol;
@@ -479,7 +479,7 @@ sim_bcd_to_hol(uint8 bcd) {
     return hol;
 }
 
-/* Returns the BCD of the hollerith code or 0x7f if error */
+/* Returns the BCD of the Hollerith code or 0x7f if error */
 uint8
 sim_hol_to_bcd(uint16 hol) {
     uint8                bcd;
@@ -529,7 +529,7 @@ sim_hol_to_bcd(uint16 hol) {
     return bcd;
 }
 
-/* Convert EBCDIC character into hollerith code */
+/* Convert EBCDIC character into Hollerith code */
 uint16
 sim_ebcdic_to_hol(uint8 ebcdic) {
    return ebcdic_to_hol[ebcdic];
@@ -537,7 +537,7 @@ sim_ebcdic_to_hol(uint8 ebcdic) {
 
 
 
-/* Returns the BCD of the hollerith code or 0x7f if error */
+/* Returns the BCD of the Hollerith code or 0x7f if error */
 uint16
 sim_hol_to_ebcdic(uint16 hol) {
     return hol_to_ebcdic[hol];
@@ -614,8 +614,7 @@ sim_read_card(UNIT * uptr, uint16 image[80])
              int          ok = 1;
              for (i = 0; i < 80; i++) {
                  out[i] = data->hol_to_ascii[(int)(*img)[i]];
-                 /* Handle case where table entry is 0 or invalid */
-                 if (out[i] == 0 || out[i] == 0xff) {
+                 if (out[i] == 0xff) {
                     ok = 0;
                  }
              }
@@ -687,7 +686,7 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf, uint16 (*ima
     unsigned int          mode;
     uint16                temp;
     size_t                i;
-    unsigned char         c;
+    char                  c;
     size_t                col;
 
     sim_debug(DEBUG_CARD, dptr, "Read card ");
@@ -818,9 +817,6 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf, uint16 (*ima
                     col = 80;
                     i--;
                     break;
-                case 0xac:              /* Handle EBCDIC not symbol */
-                    (*image)[col++] = 0x406;
-                    break;
                 default:
                     sim_debug(DEBUG_CARD, dptr, "%c", c);
                     if ((uptr->flags & MODE_LOWER) == 0)
@@ -837,10 +833,8 @@ _sim_parse_card(UNIT *uptr, DEVICE *dptr, struct _card_buffer *buf, uint16 (*ima
                            temp = ascii_to_dec_029[(int)c];
                            break;
                     }
-                    if (temp & 0xf000) {
+                    if (temp & 0xf000)
                         (*image)[0] |= CARD_ERR;
-                        sim_debug(DEBUG_CARD, dptr, "<<");
-                    }
                     (*image)[col++] = temp & 0xfff;
                 }
             }
@@ -993,7 +987,7 @@ _sim_read_deck(UNIT * uptr, int eof)
 
     buf.len = 0;
     buf.size = 0;
-    buf.buffer[0] = 0; /* Initialize bufer to empty */
+    buf.buffer[0] = 0; /* Initialize buffer to empty */
 
     /* Slurp up current file */
     do {
@@ -1020,7 +1014,7 @@ _sim_read_deck(UNIT * uptr, int eof)
                    sim_uname(uptr), uptr->filename, sim_error_text(r), cards);
         }
         data->hopper_cards++;
-        /* Move data to start at begining of buffer */
+        /* Move data to start at beginning of buffer */
         /* Data is moved down to simplify the decoding of one card */
         l = buf.len - buf.size;
         j = buf.size;
@@ -1065,7 +1059,7 @@ sim_punch_card(UNIT * uptr, uint16 image[80])
 /* Convert word record into column image */
 /* Check output type, if auto or text, try and convert record to bcd first */
 /* If failed and text report error and dump what we have */
-/* Else if binary or not convertable, dump as image */
+/* Else if binary or not convertible, dump as image */
 
     /* Try to convert to text */
     uint8                out[512];
