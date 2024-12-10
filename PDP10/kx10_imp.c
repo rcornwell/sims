@@ -40,6 +40,8 @@
 #define UNIT_M_DTYPE    3
 #define UNIT_DTYPE      (UNIT_M_DTYPE << UNIT_V_DTYPE)
 #define GET_DTYPE(x)    (((x) >> UNIT_V_DTYPE) & UNIT_M_DTYPE)
+#define UNIT_V_NCP      (UNIT_V_UF + 3)                 /* NCP flag */
+#define UNIT_NCP        (1 << UNIT_V_NCP)
 
 #define TYPE_MIT        0              /* MIT Style KAIMP ITS */
 #define TYPE_BBN        1              /* BBN style interface TENEX */
@@ -475,6 +477,7 @@ struct imp_device {
     struct imp_stats  stats;
     uint8             sbuffer[ETH_FRAME_SIZE]; /* Temp send buffer */
     uint8             rbuffer[ETH_FRAME_SIZE]; /* Temp receive buffer */
+    int               rpos;
     ETH_DEV           etherface;
     ETH_QUE           ReadQ;
     int               imp_error;
@@ -482,6 +485,7 @@ struct imp_device {
     int               rfnm_count;              /* Number of pending RFNM packets */
     int               pia;                     /* PIA channels */
     struct arp_entry  arp_table[IMP_ARPTAB_SIZE];
+    int32             link;                    /* Link for UDP. */
 } imp_data;
 
 extern int32 tmxr_poll;
@@ -541,6 +545,16 @@ const char     *imp_description (DEVICE *dptr);
 static char    *ipv4_inet_ntoa(struct in_addr ip);
 static int     ipv4_inet_aton(const char *str, struct in_addr *inp);
 
+#define MAXDATA 16348
+extern t_stat udp_create (DEVICE *dptr, const char *premote, int32 *pln);
+extern t_stat udp_release (DEVICE *dptr, int32 link);
+extern t_stat udp_send (DEVICE *dptr, int32 link, uint16 *pdata, uint16 count);
+extern int32 udp_receive (DEVICE *dptr, int32 link, uint16 *pdata, uint16 maxbuf);
+// Last-IMP-Bit is implemented as an out-of-band flag in UDP_PACKET
+#define PFLG_FINAL 00001
+// Host or IMP Ready bit.
+#define PFLG_READY 00002
+
 #if KS
 uint16        imp_icsr;
 uint16        imp_idb;
@@ -595,6 +609,10 @@ MTAB imp_mod[] = {
            "Use DHCP to set IP address"},
     { MTAB_XTD|MTAB_VDV, 0, "DHCPIP", NULL,
       NULL, &imp_show_dhcpip, NULL, "DHCP info" },
+    { UNIT_NCP, 0, "TCP", "TCP", NULL, NULL, NULL,
+           "Use TCP/IP protocol"},
+    { UNIT_NCP, UNIT_NCP, "NCP", "NCP", NULL, NULL, NULL,
+           "Use NCP protocol"},
 #if KS
     { UNIT_DTYPE, (TYPE_UNI << UNIT_V_DTYPE), "UNI", "UNI", NULL, NULL,  NULL,
            "Standard Unibus transfers"},
@@ -860,6 +878,13 @@ static void check_interrupts (UNIT *uptr)
        set_interrupt_mpx(DEVNUM, imp_data.pia >> 3, imp_mpx_lvl + 1);
 }
 
+static void imp_send_host_ready(DEVICE *dptr, struct imp_device *imp)
+{
+    t_stat r;
+    uint16 data = PFLG_READY;
+    r = udp_send (dptr, imp->link, &data, 1);
+}
+
 t_stat imp_devio(uint32 dev, uint64 *data)
 {
     DEVICE *dptr = &imp_dev;
@@ -893,8 +918,12 @@ t_stat imp_devio(uint32 dev, uint64 *data)
              }
              if (*data & IMPHEC) { /* Clear host error. */
                  /* Only if there has been a CONI lately. */
-                 if (last_coni - sim_gtime() < CONI_TIMEOUT)
+                 if (last_coni - sim_gtime() < CONI_TIMEOUT) {
                      uptr->STATUS &= ~IMPHER;
+                     uptr->STATUS |= IMPHR;
+                     if (uptr->flags & UNIT_NCP)
+                         imp_send_host_ready(dptr, &imp_data);
+                 }
              }
              if (*data & IMIIHE) /* Inhibit interrupt on host error. */
                  uptr->STATUS |= IMPIHE;
@@ -1381,6 +1410,35 @@ t_stat imp_tim_srv(UNIT * uptr)
 }
 
 void
+imp_receive_udp (DEVICE *dev, struct imp_device *imp)
+{
+    static uint16 data[MAXDATA];
+    int i;
+    int32 count;
+
+    count = udp_receive(dev, imp->link, data, MAXDATA);
+    if (count == 0)
+        return;
+    if (data[0] & PFLG_READY)
+        imp_unit[0].STATUS |= IMPR;
+    else
+        imp_unit[0].STATUS &= IMPR;
+    for (i = 1; i < count; i++) {
+        imp->rbuffer[imp->rpos++] = data[i] >> 8;
+        imp->rbuffer[imp->rpos++] = data[i] & 0xFF;
+    }
+    if ((data[0] & PFLG_FINAL) == 0 || imp->rpos == 0)
+        return;
+    imp_unit[0].STATUS |= IMPIB;
+    imp_unit[0].IPOS = 0;
+    imp_unit[0].ILEN = 8*imp->rpos;
+    imp->rpos = 0;
+    if (!sim_is_active(&imp_unit[0]))
+        sim_activate(&imp_unit[0], 100);
+    return;
+}
+
+void
 imp_packet_in(struct imp_device *imp)
 {
    ETH_PACK                read_buffer;
@@ -1388,6 +1446,11 @@ imp_packet_in(struct imp_device *imp)
    int                     type;
    int                     n;
    int                     pad;
+
+   if (imp_unit[0].flags & UNIT_NCP) {
+       imp_receive_udp (&imp_dev, imp);
+       return;
+   }
 
    if (eth_read (&imp_data.etherface, &read_buffer, NULL) <= 0) {
        /* Any pending packet notifications? */
@@ -1609,6 +1672,24 @@ imp_packet_in(struct imp_device *imp)
 }
 
 void
+imp_send_udp (struct imp_device *imp, int len)
+{
+    static uint16 data[MAXDATA];
+    t_stat r;
+    int i, j;
+
+    data[0] = PFLG_FINAL;
+    if ((imp_unit[0].STATUS & IMPHER) == 0)
+        data[0] |= PFLG_READY;
+
+    for (i = 0, j = 0; i < len/2; i++, j+=2)
+        data[i+1] = (imp->sbuffer[j] << 8) + imp->sbuffer[j+1];
+    if (len&1)
+        data[i+1] = imp->sbuffer[j] << 8;
+    r = udp_send (&imp_dev, imp->link, data, ((uint16)len+3)/2);
+}
+
+void
 imp_send_packet (struct imp_device *imp, int len)
 {
     ETH_PACK   write_buffer;
@@ -1618,6 +1699,12 @@ imp_send_packet (struct imp_device *imp, int len)
     int        st;
     int        lk;
     int        mt;
+
+    if (imp_unit[0].flags & UNIT_NCP) {
+        imp_send_udp(imp, len);
+        sim_activate(uptr, tmxr_poll);
+        return;
+    }
 
     lk = 0;
     n = len;
@@ -3132,6 +3219,16 @@ t_stat imp_attach(UNIT* uptr, CONST char* cptr)
     char* tptr;
     char buf[32];
 
+    if (cptr == NULL || *cptr == 0)
+        return SCPE_ARG;
+
+    if (uptr->flags & UNIT_NCP) {
+        status = udp_create (&imp_dev, cptr, &imp_data.link);
+        if (status != SCPE_OK)
+            return status;
+        imp_data.rpos = 0;
+    }
+
 #if !KS
     /* Set to correct device number */
     switch(GET_DTYPE(imp_unit[0].flags)) {
@@ -3146,6 +3243,16 @@ t_stat imp_attach(UNIT* uptr, CONST char* cptr)
                    break;
     }
 #endif
+
+    /* Start out in a "host not ready" state. */
+    uptr->STATUS &= ~IMPHR;
+
+    if (uptr->flags & UNIT_NCP) {
+        /* Don't do the Ethernet stuff below. */
+        uptr->flags |= UNIT_ATT;
+        return SCPE_OK;
+    }
+
     if (!(uptr->flags & UNIT_DHCP) && imp_data.ip == 0)
       return sim_messagef (SCPE_NOATT, "%s: An IP Address must be specified when DHCP is disabled\n",
                imp_dev.name);
@@ -3227,17 +3334,20 @@ t_stat imp_attach(UNIT* uptr, CONST char* cptr)
 
 t_stat imp_detach(UNIT* uptr)
 {
-
     if (uptr->flags & UNIT_ATT) {
+        if (uptr->flags & UNIT_NCP)
+            udp_release (&imp_dev, imp_data.link);
         /* If DHCP, release our IP address */
-        if (uptr->flags & UNIT_DHCP) {
+        else if (uptr->flags & UNIT_DHCP) {
           imp_dhcp_release(&imp_data);
         }
         sim_cancel (uptr+1);                /* stop the packet timing services */
         sim_cancel (uptr+2);                /* stop the clock timer services */
-        eth_close (&imp_data.etherface);
-        free(uptr->filename);
-        uptr->filename = NULL;
+        if (!(uptr->flags & UNIT_NCP)) {
+            eth_close (&imp_data.etherface);
+            free(uptr->filename);
+            uptr->filename = NULL;
+        }
         uptr->flags &= ~UNIT_ATT;
     }
     return SCPE_OK;
@@ -3260,6 +3370,13 @@ fprintf (st, "GW points to the default\nrouter. If DHCP is enabled these ");
 fprintf (st, "will be set from DHCP when the IMP is attached.\nIf IP is set ");
 fprintf (st, "and DHCP is enabled, when the IMP is attached it will inform\n");
 fprintf (st, "the local DHCP server of it's address.\n\n");
+fprintf (st, "There is a second way to interact with a network.\n");
+fprintf (st, "If the NCP modifier is enabled, you must ATTACH\n");
+fprintf (st, "the IMP device to <local port>:<host>:<remote port>\n");
+fprintf (st, "It is expected that there is an IMP emulator at <host>\n");
+fprintf (st, "listening to <remote port> and talking to the PDP-10\n");
+fprintf (st, "at <local port>.  This network will only accept the NCP\n");
+fprintf (st, "protocol that existed before TCP/IP.\n");
 fprint_set_help (st, dptr);
 fprint_show_help (st, dptr);
 eth_attach_help(st, dptr, uptr, flag, cptr);

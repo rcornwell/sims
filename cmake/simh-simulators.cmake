@@ -9,6 +9,7 @@
 ##
 ## ------------------------------------------------------------
 set(B5500D     "${CMAKE_SOURCE_DIR}/B5500")
+set(H316D      "${CMAKE_SOURCE_DIR}/H316")
 set(I7000D     "${CMAKE_SOURCE_DIR}/I7000")
 set(I7010D     "${CMAKE_SOURCE_DIR}/I7000")
 set(IBM360D    "${CMAKE_SOURCE_DIR}/IBM360")
