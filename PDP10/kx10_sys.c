@@ -181,6 +181,9 @@ DEVICE *sim_devices[] = {
     &dd_dev,
     &vds_dev,
 #endif
+#if (NUM_DEVS_CART > 0)
+    &cart_dev,
+#endif
 #if NUM_DEVS_IMP > 0
     &imp_dev,
 #endif
