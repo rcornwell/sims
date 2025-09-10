@@ -367,10 +367,10 @@ void *blink(void *ptr)
             switch (row) {
             default:
             case 0:
-                    leds = (((MI_flag)? MI : MB) & MB_MASK0) >> MB_V_0;
+                    leds = (MI & MB_MASK0) >> MB_V_0;
                     break;
             case 1:
-                    leds = (((MI_flag)? MI : MB) & MB_MASK1) >> MB_V_1;
+                    leds = (MI & MB_MASK1) >> MB_V_1;
                     break;
             case 2:
                     if (par_stop) {
