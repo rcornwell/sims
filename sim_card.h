@@ -30,12 +30,12 @@
 
         Binary Card format:
                 Each record 160 characters.
-                First character   21012345
-                                  111
-                Second characters 6789----
+                First characters 6789----
+                Second character 21012345
+                                 111
                 Top 4 bits of second character are 0.
-                It is unlikely that ascii text or BCD format
-                text could produce similar profile.
+                It is unlikely that any other format could
+                look like this.
 
         BCD Format:
                 Each record variable length (80 chars or less).
