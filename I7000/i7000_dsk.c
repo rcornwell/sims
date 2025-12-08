@@ -47,7 +47,7 @@
 #include "i7000_defs.h"
 
 #ifdef NUM_DEVS_DSK
-#define UNIT_DSK        UNIT_ATTABLE | UNIT_DISABLE | UNIT_FIX
+#define UNIT_DSK        UNIT_ATTABLE | ((NUM_DEVS_DSK > 1) ? UNIT_DISABLE : 0) | UNIT_FIX
 #define FORMAT_OK       (1 << (UNIT_V_LOCAL+0))
 #define HA2_OK          (1 << (UNIT_V_LOCAL+1))
 #define CTSS_BOOT       (1 << (UNIT_V_MODE))

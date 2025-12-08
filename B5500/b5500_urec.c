@@ -31,9 +31,9 @@
 #include "sim_defs.h"
 #include "sim_console.h"
 
-#define UNIT_CDR        UNIT_ATTABLE | UNIT_RO | UNIT_DISABLE | MODE_029
-#define UNIT_CDP        UNIT_ATTABLE | UNIT_SEQ | UNIT_DISABLE | MODE_029
-#define UNIT_LPR        UNIT_ATTABLE | UNIT_SEQ | UNIT_DISABLE
+#define UNIT_CDR        UNIT_ATTABLE | UNIT_RO | ((NUM_DEVS_CDR > 1) ? UNIT_DISABLE : 0) | MODE_029
+#define UNIT_CDP        UNIT_ATTABLE | UNIT_SEQ | ((NUM_DEVS_CDP > 1) ? UNIT_DISABLE : 0) | MODE_029
+#define UNIT_LPR        UNIT_ATTABLE | UNIT_SEQ | ((NUM_DEVS_LPR > 1) ? UNIT_DISABLE : 0)
 
 #define TMR_RTC         0
 

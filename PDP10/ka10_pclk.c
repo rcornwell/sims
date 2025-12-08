@@ -44,7 +44,7 @@ t_stat         pclk_set_off(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 t_stat         pclk_show_on(FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 
 UNIT pclk_unit[] = {
-    {UDATA(pclk_srv, UNIT_IDLE|UNIT_DISABLE, 0)},  /* 0 */
+    {UDATA(pclk_srv, UNIT_IDLE, 0)},  /* 0 */
 };
 DIB pclk_dib = {PCLK_DEVNUM, 1, &pclk_devio, NULL};
 MTAB pclk_mod[] = {
