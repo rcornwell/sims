@@ -34,7 +34,7 @@
 #include "sim_defs.h"
 #if (NUM_DEVS_CR > 0)
 
-#define UNIT_CDR        UNIT_ATTABLE | UNIT_RO | UNIT_DISABLE | MODE_DEC29 | MODE_LOWER
+#define UNIT_CDR        UNIT_ATTABLE | UNIT_RO | MODE_DEC29 | MODE_LOWER
 
 #define CR_DEVNUM        0150
 

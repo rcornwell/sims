@@ -34,7 +34,7 @@
 #include "sim_defs.h"
 #if (NUM_DEVS_CP > 0)
 
-#define UNIT_CDP        UNIT_ATTABLE | UNIT_DISABLE | UNIT_SEQ | MODE_DEC29 
+#define UNIT_CDP        UNIT_ATTABLE | UNIT_SEQ | MODE_DEC29 
 
 #define CP_DEVNUM        0110
 

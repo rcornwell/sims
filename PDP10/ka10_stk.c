@@ -52,7 +52,7 @@ static uint64 status = 0;
 static int key_code = 0;
 
 UNIT                stk_unit[] = {
-    {UDATA(stk_svc, UNIT_DISABLE, 0)},  /* 0 */
+    {UDATA(stk_svc, 0, 0)},  /* 0 */
 };
 DIB stk_dib = {STK_DEVNUM, 1, &stk_devio, NULL};
 
