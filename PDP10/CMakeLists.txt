@@ -14,6 +14,11 @@ if (HAVE_UNITY_FRAMEWORK AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/unit-tests/CMak
   add_subdirectory(unit-tests)
 endif ()
 
+
+set(IMPUDP
+    ${H316D}/h316_udp.c)
+
+
 add_simulator(pdp10-ka
     SOURCES
         ${KA10D}/kx10_cpu.c
@@ -60,10 +65,13 @@ add_simulator(pdp10-ka
         ${KA10D}/kx10_ddc.c
         ka10_dd.c
         ${DISPLAY340}
+        ${IMPUDP}
     INCLUDES
         ${KA10D}
+        ${H316D}
     DEFINES
         KA=1
+        VM_IMPTIP
     FEATURE_INT64
     FEATURE_VIDEO
     FEATURE_DISPLAY
@@ -103,10 +111,12 @@ add_simulator(pdp10-ki
         ${KI10D}/kx10_ddc.c
         ${KI10D}/kx10_tym.c
         ${DISPLAY340}
+        ${IMPUDP}
     INCLUDES
         ${KI10D}
     DEFINES
         KI=1
+        VM_IMPTIP
     FEATURE_INT64
     FEATURE_VIDEO
     FEATURE_DISPLAY
@@ -138,10 +148,12 @@ add_simulator(pdp10-kl
         ${KL10D}/kl10_nia.c
         ${KL10D}/kx10_disk.c
         ${KL10D}/kl10_dn.c
+        ${IMPUDP}
     INCLUDES
         ${KL10D}
     DEFINES
         KL=1
+        VM_IMPTIP
     FEATURE_INT64
     LABEL PDP10
     PKG_FAMILY pdp10_family
@@ -164,10 +176,12 @@ add_simulator(pdp10-ks
         ${KS10D}/ks10_kmc.c
         ${KS10D}/ks10_dup.c
         ${KS10D}/kx10_imp.c
+        ${IMPUDP}
     INCLUDES
         ${KS10D}
     DEFINES
         KS=1
+        VM_IMPTIP
     FEATURE_INT64
     LABEL PDP10
     PKG_FAMILY pdp10_family
