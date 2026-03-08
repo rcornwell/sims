@@ -447,13 +447,11 @@ t_stat dp_devio(uint32 dev, uint64 *data) {
              uptr->UFLAGS &= ~DONE;
              /* Check if any drives still reporting seek done */
              tmp = 1;
-             uptr = &dp_unit[ctlr * NUM_UNITS_DP];
              for(unit = 0; unit < NUM_UNITS_DP; unit++) {
-                if (uptr->UFLAGS & SEEK_DONE) {
+                if (dp_unit[(ctlr * NUM_UNITS_DP) + unit].UFLAGS & SEEK_DONE) {
                      tmp = 0;
                      break;
                 }
-                uptr++;
              }
              if (tmp)
                  df10->status &= ~PI_ENABLE;
