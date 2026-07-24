@@ -21,15 +21,15 @@
 
    cpu          701 central processor
 
-   The IBM 701 also know as "Defense Calculator" was introduced by IBM
-   on April 7, 1953. This computer was start of IBM 700 and 7000 line.
+   The IBM 701 also known as "Defense Calculator" was introduced by IBM
+   on April 7, 1953. This computer was the start of the IBM 700 and 7000 lines.
    Memory was 2048 36 bit words. Each instruction could be signed plus
-   or minus, plus would access memory as 18 bit words, minus as 36 bit
+   or minus, plus would access memory as 18-bit words, minus as 36-bit
    words. There was a expansion option to add another 2048 words of
    memory, but I can't find documentation on how it worked. Memory cycle
-   time was 12 microseconds. The 701 was withdrawn from the market
-   October 1, 1954 replaced by 704 and 702. A total of 19 machines were
-   installed.
+   time was 12 microseconds. The 701 was withdrawn from the market on
+   October 1, 1954 and replaced by the 704 and 702 models. A total of
+   19 machines were installed.
 
    The system state for the IBM 701 is:
 
@@ -63,7 +63,7 @@
         illegal instruction
         illegal I/O operation for device
         illegal I/O operation for channel
-        breakpoint encountered
+        break point encountered
         nested XEC's exceeding limit
         divide check
         I/O error in I/O simulator
@@ -784,19 +784,23 @@ cpu_reset(DEVICE * dptr)
 t_stat
 cpu_ex(t_value * vptr, t_addr addr, UNIT * uptr, int32 sw)
 {
-    if (addr >= (MEMSIZE * 2))
+    if (addr > 013777)
         return SCPE_NXM;
     if (vptr == NULL)
         return SCPE_OK;
 
-    *vptr = M[(addr & 07777) >> 1];
-    if ((addr & 0400000) == 0) {
-        if ( addr & 1)
-           *vptr <<= 18;
+    if ((addr & 010000) == 0) { /* process for half-words only... */
+        *vptr = M[addr >> 1] & 0777777777777L;
+        if (addr & 1)
+          *vptr &= RMASK;
         else
-           *vptr &= LMASK;
+          *vptr >>= 18;
+    } else { /* swap the half-words in place... */
+        *vptr = M[addr & 03777] & 0777777777777L;
+        *vptr ^= (*vptr << 18) & LMASK;
+        *vptr ^= (*vptr >> 18) & RMASK;
+        *vptr ^= (*vptr << 18) & LMASK;
     }
-    *vptr &= 0777777777777L;
 
     return SCPE_OK;
 }
@@ -804,22 +808,25 @@ cpu_ex(t_value * vptr, t_addr addr, UNIT * uptr, int32 sw)
 /* Memory deposit */
 
 t_stat
-cpu_dep(t_value val, t_addr addr, UNIT * uptr, int32 sw)
-{
-    t_addr      a = (addr >> 1) & 03777;
+cpu_dep(t_value val, t_addr addr, UNIT * uptr, int32 sw){
 
-    if (addr >= (MEMSIZE * 2))
+    if (addr > 013777) /* allow the extra "sign" bit */
         return SCPE_NXM;
-    if ((addr & 0400000) == 0) {
+    if ((addr & 010000) == 0) { /* set by half words... */
+        t_addr a = (addr >> 1) & 03777; /* full word address */
         if (addr & 1) {
-           M[a] &= LMASK;
-           M[a] |= (val >> 18) & RMASK;
+          M[a] &= LMASK;
+          M[a] |= val & RMASK;
         } else {
-           M[a] &= RMASK;
-           M[a] |= val & LMASK;
+          M[a] &= RMASK;
+          M[a] |= (val << 18) & LMASK;
         }
-    } else
-        M[a] = val & 0777777777777L;
+    } else { /* swap the half-words in place... */
+        val ^= (val << 18) & LMASK;
+        val ^= (val >> 18) & RMASK;
+        val ^= (val << 18) & LMASK;
+        M[addr & 03777] = val & 0777777777777L; /* set only full word */
+    }
     return SCPE_OK;
 }
 
@@ -950,7 +957,6 @@ cpu_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
     fprintf (st, "The CPU behaves as a IBM 701\n");
     fprintf (st, "These switches are recognized when examining or depositing in CPU memory:\n\n");
     fprintf (st, "      -c      examine/deposit characters, 6 per word\n");
-    fprintf (st, "      -l      examine/deposit half words\n");
     fprintf (st, "      -m      examine/deposit IBM 701 instructions\n\n");
     fprintf (st, "The CPU can maintain a history of the most recently executed instructions.\n");
     fprintf (st, "This is controlled by the SET CPU HISTORY and SHOW CPU HISTORY commands:\n\n");
@@ -963,4 +969,3 @@ cpu_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 
 return SCPE_OK;
 }
-
