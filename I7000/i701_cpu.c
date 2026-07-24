@@ -977,4 +977,3 @@ cpu_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 
 return SCPE_OK;
 }
-
