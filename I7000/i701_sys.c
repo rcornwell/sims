@@ -317,10 +317,10 @@ parse_addr(DEVICE *dptr, const char *cptr, const char **tptr) {
         v <<= 3;
         v += *cptr++ - '0';
     }
-    if (v >= 8192) /* greater than half-word size of MEMSIZE * 2 with sign  */
+    if (v >= 6144) /* >= half-word size of MEMSIZE * 1.5 (with sign)  */
         return 0; /* indicate error?  */
     if (s)
-        v |= 0400000; /* signin instruction format sign bit! */
+        v |= 0400000; /* sign in instruction format sign bit! */
     /* if valid characters have been processed, *tptr == cptr means success! */
     *tptr = cptr;
     return v;
@@ -476,9 +476,15 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
             d <<= 3;
             d |= *cptr++ - '0';
         }
-        d &= 0377777777777; /* in case of too many digits, take right ones! */
-        if (sign)
-            d |= 00400000000000L;
+        if (addr & 010000) { /* full word... */
+            d &= 0777777777777; /* if too many digits, take right ones! */
+            if (sign)
+                d |= 00400000000000L;
+        } else { /* half word... */
+            d &= 0777777; /* if too many digits, take right ones! */
+            if (sign)
+                d |= 00400000L;
+        }
     }
     *val = d;
     return SCPE_OK;
