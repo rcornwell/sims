@@ -167,38 +167,57 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
             for (; i < 24 && dlen > 0; i++) {
                 if (addr >= MAXMEMSIZE) /* safety check! */
                     break;
-                M[addr++] = lbuff[i];
+                wd = lbuff[i]; /* swap half words!... */
+                wd ^= (wd << 18) & LMASK;
+                wd ^= (wd >> 18) & RMASK;
+                wd ^= (wd << 18) & LMASK;
+                M[addr++] = wd;
                 dlen--;
             }
         }
     } else if (match_ext(fnam, "oct")) {
         while (fgets((char *)buf, 80, fileref) != 0) {
+            /* Grab address; these are may be half or full word addresses! */
+            /* advance past white space... */
             for(p = (char *)buf; *p == ' ' || *p == '\t'; p++);
             /* any lines with first meaningful char of ';' are comment lines */
             if (*p == ';' || *p == '\n' || *p == '\r')
                 continue; /* skip lines with no meaningful content! */
-            /* Grab address; these are half-word addresses! */
+            /* Grab address; these are may be half or full word addresses! */
             for (addr = 0; *p >= '0' && *p <= '7'; p++)
                 addr = (addr << 3) + *p - '0';
-            while (*p != '\n' && *p != '\0') {
-                for(; *p == ' ' || *p == '\t'; p++);
-                /* any lines containing ';' after a data field
-                   ignore the rest of the line as a comment */
-                if (*p == ';' || *p == '\n' || *p == '\r' || *p == '\0')
-                    break; /* advance line when no meaningful content! */
+            /* advance past white space... */
+            for(; *p == ' ' || *p == '\t'; p++);
+            /* any lines containing ';' after a data field
+               ignore the rest of the line as a comment */
+            while (*p == ';' || *p == '\n' || *p == '\r' || *p == '\0') {
                 for (wd = 0; *p >= '0' && *p <= '7'; p++)
                     wd = (wd << 3) + *p - '0';
-                /* `addr` is half-word address! */
-                dlen = addr >> 1; /* `dlen` is full-word address! */
-                if (dlen < MAXMEMSIZE)
-                    if (addr & 1) {
-                        M[dlen] &= LMASK;
-                        M[dlen] |= wd & RMASK;
+                if (addr > 07777) {
+                    /* `addr` & 03777 is full-word address!... */
+                    dlen = addr & 03777;
+                    if (dlen < MAXMEMSIZE) {
+                        wd ^= (wd << 18) & LMASK; /* swap half words!... */
+                        wd ^= (wd >> 18) & RMASK;
+                        wd ^= (wd << 18) & LMASK;
+                        M[dlen] = wd & 0777777777777;
                         addr++;
-                    } else {
-                        M[dlen] &= RMASK;
-                        M[dlen] |= (wd << 18) & LMASK;
                     }
+                } else {
+                    /* `addr` is half-word address! */
+                    dlen = addr >> 1; /* `dlen` is now a full-word address! */
+                    if (dlen < MAXMEMSIZE)
+                        if (addr & 1) {
+                            M[dlen] &= LMASK;
+                            M[dlen] |= wd & RMASK;
+                            addr++;
+                        } else {
+                            M[dlen] &= RMASK;
+                            M[dlen] |= (wd << 18) & LMASK;
+                        }
+                }
+                /* advance past white space... */
+                for(; *p == ' ' || *p == '\t'; p++);
             }
         }
     } else if (match_ext(fnam, "sym")) {
