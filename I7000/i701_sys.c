@@ -206,15 +206,16 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
                 } else {
                     /* `addr` is half-word address! */
                     dlen = addr >> 1; /* `dlen` is now a full-word address! */
-                    if (dlen < MAXMEMSIZE)
+                    if (dlen < MAXMEMSIZE) {
                         if (addr & 1) {
                             M[dlen] &= LMASK;
                             M[dlen] |= wd & RMASK;
-                            addr++;
                         } else {
                             M[dlen] &= RMASK;
                             M[dlen] |= (wd << 18) & LMASK;
                         }
+                        addr++;
+                   }
                 }
                 /* advance past white space... */
                 for(; *p == ' ' || *p == '\t'; p++);
