@@ -351,7 +351,7 @@ fprint_sym(FILE * of, t_addr addr, t_value * val, UNIT * uptr, int32 sw)
 
 /* Print value in octal first */
     fputc(' ', of);
-    fprint_val(of, inst, 8, 36, PV_RZRO);
+    fprint_val(of, inst, 8, addr > 07777 ? 36 : 18, PV_RZRO);
 
     if (sw & SWMASK('M')) {
         int     op = (int)(inst >> 12);
@@ -379,7 +379,7 @@ fprint_sym(FILE * of, t_addr addr, t_value * val, UNIT * uptr, int32 sw)
         int                 i;
 
         fputs("   '", of);
-        for (i = 5; i >= 0; i--) {
+        for (i = addr > 07777 ? 5 : 2; i >= 0; i--) {
             int                 ch;
 
             ch = (int)(inst >> (6 * i)) & 077;
