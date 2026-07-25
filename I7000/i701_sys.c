@@ -190,7 +190,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
             for(; *p == ' ' || *p == '\t'; p++);
             /* any lines containing ';' after a data field
                ignore the rest of the line as a comment */
-            while (*p == ';' || *p == '\n' || *p == '\r' || *p == '\0') {
+            while (*p != ';' && *p != '\n' && *p != '\r' && *p != '\0') {
                 for (wd = 0; *p >= '0' && *p <= '7'; p++)
                     wd = (wd << 3) + *p - '0';
                 if (addr > 07777) {
