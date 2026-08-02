@@ -199,7 +199,8 @@ static uint64 word(int pointer, int base)
 static void next(int pointer, int size)
 {
     uint64 modulo = M[tym_base + size] >> 4;
-    M[tym_base + pointer] = (M[tym_base + pointer] + 1) % modulo;
+    if (modulo != 0)
+        M[tym_base + pointer] = (M[tym_base + pointer] + 1) % modulo;
 }
 
 static void tym_input(uint64 data)
@@ -214,7 +215,10 @@ static uint64 room (int h, int t, int s)
     uint64 head = M[tym_base + h];
     uint64 tail = M[tym_base + t];
     uint64 size = M[tym_base + s] >> 4;
-    return size - (head - tail) % size;
+    if (size == 0)
+        return 0;
+    else
+        return size - (head - tail) % size;
 }
 
 static void send_word(int type, int port, int data1, int data2)
