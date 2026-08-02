@@ -210,7 +210,7 @@ static void tym_input(uint64 data)
     M[address] = data;
 }
 
-static uint64 room (int h, int t, int s)
+static uint64 room(int h, int t, int s)
 {
     uint64 head = M[tym_base + h];
     uint64 tail = M[tym_base + t];
@@ -228,7 +228,7 @@ static void send_word(int type, int port, int data1, int data2)
                "Input from base: %03o %03o %03o %03o\n",
                type, port, data1, data2);
     /* The input ring buffer must have at least one word free. */
-    if (room (IBP, IHP, ISIZ) <= 1)
+    if (room(IBP, IHP, ISIZ) <= 1)
         return;
     data = (uint64)type << 28;
     data |= (uint64)port << 20;
@@ -285,7 +285,7 @@ static void send_zap(int port)
     send_word(TYMBAS_ZAP, port, 0, 0);
 }
 
-static void send_orange (int port)
+static void send_orange(int port)
 {
     sim_debug(DEBUG_CMD, &tym_dev, "Base: send orange ball %d.\n", port);
     send_word(TYMBAS_ORG, port, 0, 0);
@@ -347,7 +347,7 @@ static void recv_gob(int port, int subtype, int data)
 static void recv_zap(int port, int subtype, int data)
 {
     sim_debug(DEBUG_CMD, &tym_dev, "Zap circuit, port %d\n", port);
-    tmxr_reset_ln (&tym_ldsc[port]);
+    tmxr_reset_ln(&tym_ldsc[port]);
     tym_ldsc[port].rcve = 0;
     tym_ldsc[port].xmte = 0;
 }
@@ -375,7 +375,7 @@ static void recv_red(int port, int subtype, int data)
 static void recv_yel(int port, int subtype, int data)
 {
     sim_debug(DEBUG_CMD, &tym_dev, " yellow ball\n");
-    send_orange (port);
+    send_orange(port);
 }
 
 static void recv_org(int port, int subtype, int data)
@@ -475,11 +475,11 @@ static void recv_hsi(int port, int subtype, int data)
     if (tym_desc.lines > MAX_LINES)
         tym_desc.lines = MAX_LINES;
     for (port = tym_desc.lines; port < MAX_LINES; port++)
-        tmxr_reset_ln (&tym_ldsc[port]);
+        tmxr_reset_ln(&tym_ldsc[port]);
     sim_activate(&tym_unit[0], 1000);
 }
 
-typedef void (*msgfn) (int, int, int);
+typedef void (*msgfn)(int, int, int);
 static msgfn output[] = {
     NULL,
     recv_ans,
@@ -558,7 +558,7 @@ static void tym_output(void)
                    "Type %03o, port %03o, subtype %03o, data %03o\n",
                    type, port, subtype, data);
         if (type >= 1 && type <= 41) {
-            output[type] (port, subtype, data);
+            output[type](port, subtype, data);
             next(OBP, OSIZ);
         } else if (type & 0200)
             output_data(port, type & 0177);
@@ -623,7 +623,7 @@ static t_stat tym_input_srv(UNIT *uptr)
     int32 ch;
     int i;
 
-    if (room (IBP, IHP, ISIZ) > 1) {
+    if (room(IBP, IHP, ISIZ) > 1) {
         i = tmxr_poll_conn(&tym_desc);
         if (i >= 0) {
             tym_ldsc[i].rcve = 1;
@@ -636,7 +636,7 @@ static t_stat tym_input_srv(UNIT *uptr)
 
     for (i = 0; i < tym_desc.lines; i++) {
         if (tym_ldsc[i].xmte && tym_ldsc[i].conn == 0) {
-            tmxr_reset_ln (&tym_ldsc[i]);
+            tmxr_reset_ln(&tym_ldsc[i]);
             tym_ldsc[i].rcve = 0;
             tym_ldsc[i].xmte = 0;
             send_zap(i);
@@ -644,7 +644,7 @@ static t_stat tym_input_srv(UNIT *uptr)
         }
 
         /* The input ring buffer must have at least one word free. */
-        if (room (IBP, IHP, ISIZ) <= 1)
+        if (room(IBP, IHP, ISIZ) <= 1)
             continue;
 
         ch = tmxr_getc_ln(&tym_ldsc[i]);
