@@ -246,14 +246,16 @@ t_stat dc_devio(uint32 dev, uint64 *data) {
              if (*data & FLAG) {
                 tx_enable &= ~(1 << ln);
                 dc_l_status &= ~(1LL << ln);
-             } else if (lp->conn) {
-                int32 ch = *data & DATA;
-                ch = sim_tt_outcvt(ch, TT_GET_MODE (dc_unit.flags) | TTUF_KSR);
-                tmxr_putc_ln (lp, ch);
-                if (lp->xmte)
-                    tx_enable |= (1 << ln);
+             } else {
+                if (lp->conn) {
+                   int32 ch = *data & DATA;
+                   ch = sim_tt_outcvt(ch, TT_GET_MODE (dc_unit.flags) | TTUF_KSR);
+                   tmxr_putc_ln (lp, ch);
+                }
+                if (lp->xmte || !lp->conn)
+                   tx_enable |= (1 << ln);
                 else
-                    tx_enable &= ~(1 << ln);
+                   tx_enable &= ~(1 << ln);
                 dc_l_status |= (1LL << ln);
              }
          }
