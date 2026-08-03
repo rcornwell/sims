@@ -1,25 +1,31 @@
 /* i701_cpu.c: IBM 701 CPU simulator
 
+
    Copyright (c) 2005-2016, Richard Cornwell
+
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
    to deal in the Software without restriction, including without limitation
    the rights to use, copy, modify, merge, publish, distribute, sublicense,
    and/or sell copies of the Software, and to permit persons to whom the
+
    Software is furnished to do so, subject to the following conditions:
 
    The above copyright notice and this permission notice shall be included in
    all copies or substantial portions of the Software.
 
+
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
    RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
    cpu          701 central processor
+
 
    The IBM 701 also known as "Defense Calculator" was introduced by IBM
    on April 7, 1953. This computer was the start of the IBM 700 and 7000 lines.
@@ -33,24 +39,29 @@
 
    The system state for the IBM 701 is:
 
+
    AC<S,P,Q,1:35>       AC register
    MQ<S,1:35>           MQ register
    IC<0:15>             program counter
    SSW<0:5>             sense switches
    SLT<0:3>             sense lights
+
    ACOVF                AC overflow
    DVC                  divide check
    IOC                  I/O check
+
 
    The 701 had one instruction format: memory reference,
 
        00000 000011111111
      S 12345 678901234567
     +-+-----+------------+
+
     | |opcod|  address   | memory reference
     +-+-----+------------+
 
    This routine is the instruction decode routine for the 701.
+
    It is called from the simulator control program to execute
    instructions in simulated memory, starting at the simulated PC.
    It runs until a stop condition occurs.
@@ -60,10 +71,12 @@
    1. Reasons to stop.  The simulator can be stopped by:
 
         HALT instruction
+
         illegal instruction
         illegal I/O operation for device
         illegal I/O operation for channel
         break point encountered
+
         nested XEC's exceeding limit
         divide check
         I/O error in I/O simulator
@@ -73,6 +86,7 @@
       arithmetic for indexing calculations.
 
    4. Adding I/O devices.  These modules must be modified:
+
 
         i7090_defs.h    add device definitions
         i7090_chan.c    add channel subsystem
@@ -145,10 +159,12 @@ extern UNIT         chan_unit[];
 
 /* CPU data structures
 
+
    cpu_dev      CPU device descriptor
    cpu_unit     CPU unit descriptor
    cpu_reg      CPU register list
    cpu_mod      CPU modifiers list
+
 */
 
 UNIT                cpu_unit =
@@ -795,12 +811,8 @@ cpu_ex(t_value * vptr, t_addr addr, UNIT * uptr, int32 sw)
           *vptr &= RMASK;
         else
           *vptr >>= 18;
-    } else { /* swap the half-words in place... */
+    } else /* no swap necessary... */
         *vptr = M[addr & 03777] & 0777777777777L;
-        *vptr ^= (*vptr << 18) & LMASK;
-        *vptr ^= (*vptr >> 18) & RMASK;
-        *vptr ^= (*vptr << 18) & LMASK;
-    }
 
     return SCPE_OK;
 }
@@ -821,12 +833,8 @@ cpu_dep(t_value val, t_addr addr, UNIT * uptr, int32 sw){
           M[a] &= RMASK;
           M[a] |= (val << 18) & LMASK;
         }
-    } else { /* swap the half-words in place... */
-        val ^= (val << 18) & LMASK;
-        val ^= (val >> 18) & RMASK;
-        val ^= (val << 18) & LMASK;
+    } else /* no swap necessary... */
         M[addr & 03777] = val & 0777777777777L; /* set only full word */
-    }
     return SCPE_OK;
 }
 
@@ -969,3 +977,4 @@ cpu_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 
 return SCPE_OK;
 }
+
