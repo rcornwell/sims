@@ -1,10 +1,13 @@
 /* i701_sys.c: IBM 701 Simulator system interface.
 
+
+
    Copyright (c) 2005-2016, Richard Cornwell
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
    to deal in the Software without restriction, including without limitation
+
    the rights to use, copy, modify, merge, publish, distribute, sublicense,
    and/or sell copies of the Software, and to permit persons to whom the
    Software is furnished to do so, subject to the following conditions:
@@ -13,6 +16,7 @@
    all copies or substantial portions of the Software.
 
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
    RICHARD CORNWELL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
@@ -167,11 +171,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
             for (; i < 24 && dlen > 0; i++) {
                 if (addr >= MAXMEMSIZE) /* safety check! */
                     break;
-                wd = lbuff[i]; /* swap half words!... */
-                wd ^= (wd << 18) & LMASK;
-                wd ^= (wd >> 18) & RMASK;
-                wd ^= (wd << 18) & LMASK;
-                M[addr++] = wd;
+                M[addr++] = lbuff[i]; /* no swap necessary... */
                 dlen--;
             }
         }
@@ -194,15 +194,9 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
                 for (wd = 0; *p >= '0' && *p <= '7'; p++)
                     wd = (wd << 3) + *p - '0';
                 if (addr > 07777) {
-                    /* `addr` & 03777 is full-word address!... */
-                    dlen = addr & 03777;
-                    if (dlen < MAXMEMSIZE) {
-                        wd ^= (wd << 18) & LMASK; /* swap half words!... */
-                        wd ^= (wd >> 18) & RMASK;
-                        wd ^= (wd << 18) & LMASK;
-                        M[dlen] = wd & 0777777777777;
-                        addr++;
-                    }
+                    if (dlen < MAXMEMSIZE)
+                        /* `addr` & 03777 is full-word address!... */
+                        M[addr++ & 03777] = wd & 0777777777777; /* no swap necessary... */
                 } else {
                     /* `addr` is half-word address! */
                     dlen = addr >> 1; /* `dlen` is now a full-word address! */
