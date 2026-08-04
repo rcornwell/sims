@@ -214,9 +214,16 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
                 /* advance past white space... */
                 for(; *p == ' ' || *p == '\t'; p++);
             }
+
+            /* ignore line content longer than 80 characters... */
+            while (strchr((char *)buf, '\n') == 0) { /* loop until newline */ 
+                if (fgets((char *)buf, 80, fileref) == 0) {
+                    break; /* Exit if we hit End-of-File mid-line */
+                }
+            }
         }
     } else if (match_ext(fnam, "sym")) {
-        while (fgets((char *)buf, 80, fileref) != 0) {
+        while (fgets((char *)buf, 80, fileref) != 0) { /* must be whole lines */
             for (p = (char *)buf; *p == ' ' || *p == '\t'; p++);
             /* any lines with first meaningful char of ';' are comment lines */
             if (*p == ';' || *p == '\n' || *p == '\r' || *p == '\0')
@@ -235,16 +242,26 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
             } else {
                 parse_sym(p, addr, &cpu_unit, &wd, SWMASK('M'));
             }
-            /* `addr` is half-word address! */
-            dlen = addr >> 1; /* `dlen` is full-word address! */
-            if (dlen < MAXMEMSIZE)
-                if (addr & 1) {
-                    M[dlen] &= LMASK;
-                    M[dlen] |= wd & RMASK;
-                } else {
-                    M[dlen] &= RMASK;
-                    M[dlen] |= (wd << 18) & LMASK;
+            /* `addr` is half-word or full-word address with BCD/OCT address! */
+            if (addr < 014000)
+                if (addr < 07777) { /* for half-word data */
+                    dlen = addr >> 1; /* `dlen` is full-word address! */
+                    if (addr & 1) {
+                        M[dlen] &= LMASK;
+                        M[dlen] |= wd & RMASK;
+                    } else {
+                        M[dlen] &= RMASK;
+                        M[dlen] |= (wd << 18) & LMASK;
+                    }
+                } else /* for full-word data */
+                    M[addr & 03777] = wd & 0777777;
+
+            /* ignore line content longer than 80 characters... */
+            while (strchr((char *)buf, '\n') == 0) { /* loop until newline */ 
+                if (fgets((char *)buf, 80, fileref) == 0) {
+                    break; /* Exit if we hit End-of-File mid-line */
                 }
+            }
         }
     } else
         return SCPE_ARG;
