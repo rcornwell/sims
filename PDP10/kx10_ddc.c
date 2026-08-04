@@ -184,7 +184,9 @@ t_stat ddc_devio(uint32 dev, uint64 *data) {
         if (*data & DDC_EXF) {  /* Execute FR */
         }
         if (*data & DDC_EXQ) {  /* Execute Queue */
-           if (!sim_is_active(uptr)) {
+           if ((uptr->flags & UNIT_ATT) == 0)
+              uptr->STATUS |= DDC_HUD;
+           else if (!sim_is_active(uptr)) {
                sim_activate(uptr, 100);
                uptr->POS = 0;
            }
