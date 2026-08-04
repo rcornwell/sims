@@ -415,6 +415,37 @@ find_opcode(char *op, t_opcode * tab)
     return NULL;
 }
 
+/* extract opcode string that may contain spaces
+
+   Inputs:
+        iptr        =   pointer to input string
+        optr        =   pointer to output string
+
+   Outputs
+        result      =   pointer to next character in input string
+*/
+
+CONST char        *
+get_opcode(CONST char *iptr, char *optr)
+{
+
+while ((*iptr != 0) && (*iptr != ',') &&
+       (*iptr == ' ' || ((*iptr >= 'A') && (*iptr <= 'Z')) ||
+                        ((*iptr >= 'a') && (*iptr <= 'z')))) {
+    if (*iptr >= 'a')                   /* force to be upper case */
+        *optr++ = *iptr++ - 32;
+    else *optr++ = *iptr++;
+    }
+if (*iptr == ',')                       /* skip input terminator */
+    iptr++;
+while (*--optr == ' ');                 /* remove trailing spaces */
+optr++;
+*optr = 0;                              /* terminate result string */
+while (isspace (*iptr))                 /* absorb additional input spaces */
+    iptr++;
+return iptr;
+}
+
 /* Symbolic input
 
    Inputs:
@@ -447,7 +478,7 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
         sign = 0;
         
         /* Grab opcode */
-        cptr = get_glyph(cptr, opcode, ',');
+        cptr = get_opcode(cptr, opcode);
 
         if ((op = find_opcode(opcode, base_ops)) != 0) {
             d |= (t_uint64) op->opbase << 12;
