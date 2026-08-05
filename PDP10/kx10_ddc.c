@@ -74,8 +74,8 @@
 #define DDC_SEQ         0003700000000LL    /* Sequence number */
 #define DDC_PIA         0000070000000LL    /* PIA */
 #define DDC_FUNC        0000006000000LL    /* Function */
-#define DDC_READ        0000002000000LL
-#define DDC_WRITE       0000004000000LL
+#define DDC_WRITE       1
+#define DDC_READ        2
 #define DDC_DISK        0000001400000LL    /* Logical Disc */
 #define DDC_TRK         0000000377600LL    /* Track */
 #define DDC_SEC         0000000000177LL    /* Sector */
@@ -286,12 +286,12 @@ t_stat ddc_svc (UNIT *uptr)
             ddc_buf[wc] = 0;
    }
 
-   if (func == 2) {
+   if (func == DDC_READ) {
        if (Mem_write_word(adr, &ddc_buf[uptr->POS], 0)) {
            uptr->STATUS |= DDC_NXM;
            goto done;
        }
-   } else if (func == 1) {
+   } else if (func == DDC_WRITE) {
        if (Mem_read_word(adr, &ddc_buf[uptr->POS], 0)) {
           uptr->STATUS |= DDC_NXM;
           goto done;
@@ -304,7 +304,7 @@ t_stat ddc_svc (UNIT *uptr)
 
    if (uptr->POS == DDC10_WDS) {
 done:
-       if (func == 2) {
+       if (func == DDC_WRITE) {
           int da;
           da = ((trk * 13) + sec) * DDC10_WDS;
           (void)sim_fseek(duptr->fileref, da * sizeof(uint64), SEEK_SET);
