@@ -186,8 +186,8 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
             /* Grab address; these are may be half or full word addresses! */
             for (addr = 0; *p >= '0' && *p <= '7'; p++)
                 addr = (addr << 3) + *p - '0';
-            /* advance past white space... */
-            for(; *p == ' ' || *p == '\t'; p++);
+            /* advance past ':' (colon) or white space... */
+            for(; *p == ':' || *p == ' ' || *p == '\t'; p++);
             /* any lines containing ';' after a data field
                ignore the rest of the line as a comment */
             while (*p != ';' && *p != '\n' && *p != '\r' && *p != '\0') {
@@ -231,7 +231,8 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
             /* Grab address; this is a half-word address! */
             for (addr = 0; *p >= '0' && *p <= '7'; p++)
                addr = (addr << 3) + *p - '0';
-            while (*p == ' ' || *p == '\t') p++;
+            /* skip over ':' (colon) or white space... */
+            while (*p == ':' || *p == ' ' || *p == '\t') p++;
             if (sim_strncasecmp(p, "BCD", 3) == 0) {
                 p += 3;
                 parse_sym(++p, addr, &cpu_unit, &wd, SWMASK('C'));
@@ -244,7 +245,7 @@ sim_load(FILE * fileref, CONST char *cptr, CONST char *fnam, int flag)
             }
             /* `addr` is half-word or full-word address with BCD/OCT address! */
             if (addr < 014000)
-                if (addr < 07777) { /* for half-word data */
+                if (addr < 010000) { /* for half-word data */
                     dlen = addr >> 1; /* `dlen` is full-word address! */
                     if (addr & 1) {
                         M[dlen] &= LMASK;
