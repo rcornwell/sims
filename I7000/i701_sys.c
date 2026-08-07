@@ -509,18 +509,18 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
         if (*arg != opcode[0])
             d += (t_value)tag;
         /* ignore any following characters, which can be any form of comments */
-        *val = d & 0777777; /* safety - exactly one instructions per line! */
+        *val = d & 0777777; /* safety - exactly one instruction per line! */
         return SCPE_OK;
     } else if (sw & SWMASK('C')) { /* character string... */
         i = 0;
-        while (*cptr != '\0' && i < 6) {
+        while (*cptr != '\0' && i < (addr < 010000 ? 3 : 6)) {
             d <<= 6;
             if (sim_ascii_to_six[0177 & *cptr] != (const char)-1)
                 d |= sim_ascii_to_six[0177 & *cptr];
             cptr++;
             i++;
         }
-        while (i < 6) {
+        while (i < (addr < 010000 ? 3 : 6)) {
             d <<= 6;
             d |= 060;
             i++;
@@ -539,7 +539,7 @@ parse_sym(CONST char *cptr, t_addr addr, UNIT * uptr, t_value * val, int32 sw)
             d <<= 3;
             d |= *cptr++ - '0';
         }
-        if (addr & 010000) { /* full word... */
+        if (addr > 07777) { /* full word... */
             d &= 0777777777777; /* if too many digits, take right ones! */
             if (sign)
                 d |= 00400000000000L;
