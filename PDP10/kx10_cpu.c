@@ -778,14 +778,6 @@ DEVICE cpu_dev = {
 #else
 #define QSLAVE          0
 #endif
-#if PIDP10
-                        /* Update MI register if address matches */
-#define UPDATE_MI(a)    if (!MI_flag && a == AS) { \
-                             MI = MB; \
-                        }
-#else
-#define UPDATE_MI(a)
-#endif
 #define MAX_DEV 128
 
 #if KL
