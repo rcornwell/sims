@@ -226,6 +226,7 @@ cdr_srv(UNIT *uptr) {
              sim_debug(DEBUG_DETAIL, &cdr_dev, "%d: ERF\n", u);
              uptr->u5 |= URCSTA_ERR;
              uptr->u5 &= ~(URCSTA_BUSY|URCSTA_READ);
+             chan_set_error(chan);
              chan_set_attn(chan);
              chan_clear(chan, DEV_SEL);
              return SCPE_OK;
