@@ -2249,10 +2249,13 @@ sim_instr(void)
                 case SCPE_EOF:
                         chan_io_status[ch & 07] |= IO_CHS_COND;
                         break;
+                case SCPE_IOERR:
+                        chan_io_status[ch & 07] |= IO_CHS_CHECK;
+                        break;
+                default:
+                case SCPE_UNATT:
                 case SCPE_NODEV:
 fprintf(stderr, "No device %d %d\n\r", ch, temp);
-                        /* Fall through */
-                case SCPE_IOERR:
                         chan_io_status[ch & 07] |= IO_CHS_NORDY;
                         break;
                 }
@@ -2280,8 +2283,12 @@ fprintf(stderr, "No device %d %d\n\r", ch, temp);
                 case SCPE_EOF:
                         chan_io_status[ch & 07] |= IO_CHS_COND;
                         break;
-                case SCPE_NODEV:
                 case SCPE_IOERR:
+                        chan_io_status[ch & 07] |= IO_CHS_CHECK;
+                        break;
+                default:
+                case SCPE_UNATT:
+                case SCPE_NODEV:
                         chan_io_status[ch & 07] |= IO_CHS_NORDY;
                         break;
                 }
@@ -2377,8 +2384,12 @@ fprintf(stderr, "No device %d %d\n\r", ch, temp);
                 case SCPE_EOF:
                         chan_io_status[ch & 07] |= IO_CHS_COND;
                         break;
-                case SCPE_NODEV:
                 case SCPE_IOERR:
+                        chan_io_status[ch & 07] |= IO_CHS_CHECK;
+                        break;
+                default:
+                case SCPE_UNATT:
+                case SCPE_NODEV:
                         chan_io_status[ch & 07] |= IO_CHS_NORDY;
                         break;
                 }

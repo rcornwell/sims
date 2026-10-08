@@ -453,7 +453,7 @@ chan_cmd(uint16 dev, uint16 dcmd, uint32 addr)
     chan = (dev >> 12) & 0x7;
     /* If no channel device, quick exit */
     if (chan_unit[chan].flags & UNIT_DIS)
-        return SCPE_IOERR;
+        return SCPE_NODEV;
     /* Unit is busy doing something, wait */
     if (chan_flags[chan] & (DEV_SEL|DEV_DISCO|STA_TWAIT|STA_WAIT|STA_ACTIVE))
         return SCPE_BUSY;

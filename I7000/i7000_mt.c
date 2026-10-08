@@ -395,8 +395,7 @@ uint32 mt_cmd(UNIT * uptr, uint16 cmd, uint16 dev)
     /* If drive is offline or not attached return not ready */
     if ((uptr->flags & (UNIT_ATT | MTUF_ONLINE)) !=
         (UNIT_ATT | MTUF_ONLINE)) {
-        sim_messagef(SCPE_OK, "Attempt to access offline unit %s%d\n\r", dptr->name, unit);
-        return SCPE_IOERR;
+        return SCPE_UNATT;
     }
     /* Check if drive is ready to recieve a command */
     if ((uptr->u5 & MT_RDY) == 0) {
@@ -1027,6 +1026,12 @@ t_stat mt_srv(UNIT * uptr)
                 ch ^= (ch & 020) << 1;
                 if (ch == 0)
                     ch = 012;
+            }
+#endif
+#ifdef I7010
+            if (mode) {
+                if (ch == 0)
+                    ch = 020;
             }
 #endif
             ch |= mode ^ parity_table[ch] ^ 0100;
