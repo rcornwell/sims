@@ -709,6 +709,7 @@ stop_cpu:
                                  t = 1;
                                  break;
                              case SCPE_BUSY:
+                             case SCPE_UNATT:
                              case SCPE_NODEV:
                              case SCPE_IOERR:
                              case SCPE_EOF:
@@ -1523,6 +1524,7 @@ stop_cpu:
                          case SCPE_BUSY:
                              iowait = 1;
                              break;
+                         case SCPE_UNATT:
                          case SCPE_NODEV:
                              reason = STOP_IOCHECK;
                              break;
@@ -1548,6 +1550,7 @@ stop_cpu:
                      case SCPE_BUSY:
                          iowait = 1;
                          break;
+                     case SCPE_UNATT:
                      case SCPE_NODEV:
                          reason = STOP_IOCHECK;
                          break;
@@ -1572,6 +1575,7 @@ stop_cpu:
                      case SCPE_BUSY:
                          iowait = 1;
                          break;
+                     case SCPE_UNATT:
                      case SCPE_NODEV:
                          reason = STOP_IOCHECK;
                          break;
@@ -1596,6 +1600,7 @@ stop_cpu:
                      case SCPE_BUSY:
                          iowait = 1;
                          break;
+                     case SCPE_UNATT:
                      case SCPE_NODEV:
                          reason = STOP_IOCHECK;
                          break;

@@ -738,6 +738,7 @@ store:
                 case SCPE_IOERR:
                     iocheck = 1;
                     break;
+                case SCPE_UNATT:
                 case SCPE_NODEV:
                     reason = STOP_IOCHECK;
                     break;
