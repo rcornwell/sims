@@ -860,6 +860,12 @@ extern uint32 dd_keyboard_line (void *);
 #if PIDP10
 t_stat pi_panel_start();
 void pi_panel_stop();
+                        /* Update MI register if address matches */
+#define UPDATE_MI(a)    if (!MI_flag && a == AS) { \
+                             MI = MB; \
+                        }
+#else
+#define UPDATE_MI(a)
 #endif
 
 #endif

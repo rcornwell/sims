@@ -483,6 +483,7 @@ void *blink(void *ptr)
            }
        } else {
            AS = new_as;
+           UPDATE_MI(AB);
        }
 
        /* Check repeat count */
@@ -620,12 +621,14 @@ vm_read(char *cptr, int32 sz, FILE *file)
                             AB++;
                             MB = (AB < 020) ? FM[AB] : M[AB];
                             MI_flag = 0;
+                            UPDATE_MI(AB);
                             break;
 
                     case 1:      /* Examine this */
                             AB = AS;
                             MB = (AS < 020) ? FM[AS] : M[AS];
                             MI_flag = 0;
+                            UPDATE_MI(AB);
                             break;
 
                     case 2:      /* Execute function */
@@ -703,6 +706,7 @@ vm_read(char *cptr, int32 sz, FILE *file)
                                MB = M[AB];
                            }
                            MI_flag = 0;
+                           UPDATE_MI(AB);
                            break;
 
                     case 9:      /* Deposit this */
@@ -715,6 +719,7 @@ vm_read(char *cptr, int32 sz, FILE *file)
                                MB = M[AS];
                            }
                            MI_flag = 0;
+                           UPDATE_MI(AB);
                            break;
                     }
                     switch_state[col].changed = 0;
