@@ -148,7 +148,7 @@ DIB                 dly_dib =
 
 UNIT                chan_unit[] = {
     /* Puesdo channel for 704 devices */
-    {UDATA(NULL, UNIT_DISABLE | CHAN_SET |
+    {UDATA(NULL, ((NUM_CHAN > 1) ? UNIT_DISABLE : 0) | CHAN_SET |
                         CHAN_S_TYPE(CHAN_PIO)|UNIT_S_CHAN(0), 0)},
     /* Normal channels */
 #if NUM_CHAN > 1
@@ -215,7 +215,7 @@ DEVICE              chan_dev = {
     "CH", chan_unit, chan_reg, chan_mod,
     NUM_CHAN, 8, 15, 1, 8, 36,
     NULL, NULL, &chan_reset, NULL, NULL, NULL,
-    &dly_dib, DEV_DEBUG, 0, chn_debug,
+    &dly_dib, DEV_DISABLE | DEV_DEBUG, 0, chn_debug,
     NULL, NULL, &chan_help, NULL, NULL, &chan_description
 };
 

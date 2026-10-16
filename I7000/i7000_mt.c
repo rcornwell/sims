@@ -44,7 +44,7 @@
 #if (NUM_DEVS_MT > 0) || defined(MT_CHANNEL_ZERO)
 
 #define BUFFSIZE        (MAXMEMSIZE * CHARSPERWORD)
-#define UNIT_MT(x)      UNIT_ATTABLE | UNIT_DISABLE | UNIT_ROABLE | \
+#define UNIT_MT(x)      UNIT_ATTABLE | ((NUM_DEVS_MT > 1) ? UNIT_DISABLE : 0) | UNIT_ROABLE | \
                         UNIT_S_CHAN(x)
 #define MTUF_LDN        (1 << MTUF_V_UF)
 #define MTUF_ONLINE     (1 << UNIT_V_UF_31)

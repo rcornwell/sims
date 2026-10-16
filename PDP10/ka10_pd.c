@@ -56,7 +56,7 @@ t_stat         pd_set_off(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat         pd_show_on(FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 
 UNIT                pd_unit[] = {
-    {UDATA(pd_srv, UNIT_IDLE|UNIT_DISABLE, 0)},  /* 0 */
+    {UDATA(pd_srv, UNIT_IDLE, 0)},  /* 0 */
 };
 DIB pd_dib = {PD_DEVNUM, 1, &pd_devio, NULL};
 
