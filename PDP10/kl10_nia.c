@@ -755,8 +755,10 @@ int nia_getq(t_addr head, t_addr *entry)
         /* Decrement lock here */
         return 1;
     }
-    /* Get link to next entry */
-    if (Mem_read_word(flink + 1, &temp, 0)) {
+    /* Get link to next entry. The forward link is word 0 of the entry; word 1
+       is the back link.  Reading word 1 emptied the whole queue after a single
+       removal, losing queued commands and free receive buffers. */
+    if (Mem_read_word(flink, &temp, 0)) {
         nia_error(EBSERR);
         return 0;
     }
@@ -1330,9 +1332,11 @@ t_stat nia_cmd_srv(UNIT * uptr)
          nia_data.h4000 = (int)((word1 & 2) != 0);
          nia_data.amc = (int)((word1 & 4) != 0);
          eth_copy_mac(nia_data.macs[0], nia_data.mac);
+         /* Pass the mode bits just written (all-multicast / promiscuous);
+            passing 0,0 here silently cancelled them. */
          if (nia_recv_uptr->flags & UNIT_ATT)
              eth_filter (&nia_data.etherface, nia_data.macs_n + 2,
-                         nia_data.macs, 0, 0);
+                         nia_data.macs, nia_data.amc, nia_data.prmsc);
          break;
 
     case NIA_CMD_RCV:  /* Received datagram */
@@ -1421,6 +1425,13 @@ nia_rec_pkt()
     /* Get some information about packet */
     len = nia_data.rec_buff.len - sizeof(struct nia_eth_hdr);
     data = &nia_data.rec_buff.msg[sizeof(struct nia_eth_hdr)];
+    /* sim_ether appends the Ethernet CRC after the data (eth_setcrc is on) and
+       reports the length including it in crc_len.  A real NIA20 hands each
+       frame to the monitor with its 4-byte frame check sequence, and TOPS-20
+       discards frames that arrive without it (any frame whose data fills the
+       60-byte minimum, e.g. a DECnet Connect Initiate), so deliver it. */
+    if (nia_data.rec_buff.crc_len > nia_data.rec_buff.len)
+        len = nia_data.rec_buff.crc_len - sizeof(struct nia_eth_hdr);
 
     /* Got one, now fill in data */
     word = (uint64)(NIA_CMD_RCV << 12);
@@ -1450,6 +1461,9 @@ nia_rec_pkt()
     bsd = (t_addr)(word & AMASK);
     while (len > 0) {
         int  blen;
+        /* Buffer chain exhausted: frame too long, truncate (do not run off the end) */
+        if (bsd == 0)
+            break;
         /* Get length of segment */
         if (Mem_read_word(bsd+2, &word, 0)) {
             nia_error(EBSERR);
