@@ -3408,7 +3408,11 @@ prottrap:
                     {   uint16 temp16;
                         temp16 = (MA >> 9) & 017;
                         if (temp16 == 0) {
-                            if (opcode==IO_RDS)
+                            /* 704 manual p. 27: RDS clears MQ only when
+                               Y is a tape unit (0201-0212 BCD, 0221-0232
+                               binary). Card reader and drum reads leave
+                               MQ alone until the first word arrives. */
+                            if (opcode==IO_RDS && (MA & 0740) == 0200)
                                 MQ = 0;
                             chan_clear(0, CHS_EOF|CHS_EOT|DEV_REOR);
                         } else {
