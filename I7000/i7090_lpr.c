@@ -40,7 +40,7 @@
 
 #ifdef NUM_DEVS_LPR
 
-#define UNIT_LPR        UNIT_ATTABLE | UNIT_DISABLE | UNIT_SEQ
+#define UNIT_LPR        UNIT_ATTABLE | ((NUM_DEVS_LPR > 1) ? UNIT_DISABLE : 0) | UNIT_SEQ
 #define ECHO            (1 << UNIT_V_LOCAL)
 
 

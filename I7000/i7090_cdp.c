@@ -26,7 +26,7 @@
 #include "i7090_defs.h"
 #include "sim_card.h"
 #ifdef NUM_DEVS_CDP
-#define UNIT_CDP        UNIT_ATTABLE | UNIT_DISABLE | UNIT_SEQ
+#define UNIT_CDP        UNIT_ATTABLE | ((NUM_DEVS_CDP > 1) ? UNIT_DISABLE : 0) | UNIT_SEQ
 
 
 /* std devices. data structures

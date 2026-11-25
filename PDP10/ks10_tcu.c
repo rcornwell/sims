@@ -46,7 +46,7 @@ t_stat tcu_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
 const char *tcu_description (DEVICE *dptr);
 DIB tcu_dib = { 0760770, 07, 0, 0, 3, &tcu_read, &tcu_write, NULL, 0, 0 };
 
-UNIT tcu_unit = {UDATA (NULL, UNIT_IDLE+UNIT_DISABLE, 0)};
+UNIT tcu_unit = {UDATA (NULL, UNIT_IDLE, 0)};
 
 MTAB tcu_mod[] = {
     {MTAB_XTD|MTAB_VDV|MTAB_VALR, 0, "addr", "addr",  &uba_set_addr, uba_show_addr,

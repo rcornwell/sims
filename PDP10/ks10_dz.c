@@ -127,7 +127,7 @@ const char *dz_description (DEVICE *dptr);
 DIB dz_dib = { 0760000, 077, 0340, 5, 3, &dz_read, &dz_write, 0, 0, 0 };
 
 UNIT dz_unit = {
-    UDATA (&dz_svc, TT_MODE_7B+UNIT_IDLE+UNIT_DISABLE+UNIT_ATTABLE, 0), KBD_POLL_WAIT
+    UDATA (&dz_svc, TT_MODE_7B+UNIT_IDLE+UNIT_ATTABLE, 0), KBD_POLL_WAIT
     };
 
 REG dz_reg[] = {

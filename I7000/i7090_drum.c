@@ -26,7 +26,7 @@
 #include "i7090_defs.h"
 
 #ifdef NUM_DEVS_DR
-#define UNIT_DRM        UNIT_ATTABLE | UNIT_DISABLE | UNIT_FIX | \
+#define UNIT_DRM        UNIT_ATTABLE | ((NUM_DEVS_DR > 1) ? UNIT_DISABLE : 0) | UNIT_FIX | \
                         UNIT_BUFABLE | UNIT_MUSTBUF
 
 /* Device status information stored in u5 */

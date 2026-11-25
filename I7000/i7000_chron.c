@@ -27,7 +27,7 @@
 #ifdef NUM_DEVS_CHRON
 #define BUFFSIZE        (12)
 
-#define UNIT_MT(x)      UNIT_DISABLE | UNIT_ROABLE | \
+#define UNIT_MT(x)      ((NUM_DEVS_CHRON > 1) ? UNIT_DISABLE : 0) | UNIT_ROABLE | \
                         UNIT_S_CHAN(x)
 
 /* in u3 is device address */

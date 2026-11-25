@@ -28,7 +28,7 @@
 
 #ifdef NUM_DEVS_CDR
 
-#define UNIT_CDR        UNIT_ATTABLE | UNIT_RO | UNIT_DISABLE | MODE_026
+#define UNIT_CDR        UNIT_ATTABLE | UNIT_RO | ((NUM_DEVS_CDR > 1) ? UNIT_DISABLE : 0) | MODE_026
 
 
 /* std devices. data structures

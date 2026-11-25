@@ -34,7 +34,7 @@
 #include "sim_defs.h"
 #ifdef NUM_DEVS_CDP
 
-#define UNIT_CDP        UNIT_ATTABLE | UNIT_DISABLE | UNIT_SEQ | MODE_026
+#define UNIT_CDP        UNIT_ATTABLE | ((NUM_DEVS_CDP > 1) ? UNIT_DISABLE : 0) | UNIT_SEQ | MODE_026
 
 
 /* Flags for punch and reader. */
